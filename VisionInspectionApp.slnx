@@ -1,0 +1,7 @@
+<Solution>
+  <Project Path="VisionInspectionApp.Application/VisionInspectionApp.Application.csproj" />
+  <Project Path="VisionInspectionApp.Models/VisionInspectionApp.Models.csproj" />
+  <Project Path="VisionInspectionApp.Persistence/VisionInspectionApp.Persistence.csproj" />
+  <Project Path="VisionInspectionApp.UI/VisionInspectionApp.UI.csproj" />
+  <Project Path="VisionInspectionApp.VisionEngine/VisionInspectionApp.VisionEngine.csproj" />
+</Solution>

@@ -1,0 +1,15 @@
+G:\NODEJS\Vision2026\VisionInspectionApp.VisionEngine\bin\Debug\net8.0\VisionInspectionApp.VisionEngine.deps.json
+G:\NODEJS\Vision2026\VisionInspectionApp.VisionEngine\bin\Debug\net8.0\VisionInspectionApp.VisionEngine.dll
+G:\NODEJS\Vision2026\VisionInspectionApp.VisionEngine\bin\Debug\net8.0\VisionInspectionApp.VisionEngine.pdb
+G:\NODEJS\Vision2026\VisionInspectionApp.VisionEngine\bin\Debug\net8.0\VisionInspectionApp.Models.dll
+G:\NODEJS\Vision2026\VisionInspectionApp.VisionEngine\bin\Debug\net8.0\VisionInspectionApp.Models.pdb
+G:\NODEJS\Vision2026\VisionInspectionApp.VisionEngine\obj\Debug\net8.0\VisionInspectionApp.VisionEngine.csproj.AssemblyReference.cache
+G:\NODEJS\Vision2026\VisionInspectionApp.VisionEngine\obj\Debug\net8.0\VisionInspectionApp.VisionEngine.GeneratedMSBuildEditorConfig.editorconfig
+G:\NODEJS\Vision2026\VisionInspectionApp.VisionEngine\obj\Debug\net8.0\VisionInspectionApp.VisionEngine.AssemblyInfoInputs.cache
+G:\NODEJS\Vision2026\VisionInspectionApp.VisionEngine\obj\Debug\net8.0\VisionInspectionApp.VisionEngine.AssemblyInfo.cs
+G:\NODEJS\Vision2026\VisionInspectionApp.VisionEngine\obj\Debug\net8.0\VisionInspectionApp.VisionEngine.csproj.CoreCompileInputs.cache
+G:\NODEJS\Vision2026\VisionInspectionApp.VisionEngine\obj\Debug\net8.0\VisionIn.C3917022.Up2Date
+G:\NODEJS\Vision2026\VisionInspectionApp.VisionEngine\obj\Debug\net8.0\VisionInspectionApp.VisionEngine.dll
+G:\NODEJS\Vision2026\VisionInspectionApp.VisionEngine\obj\Debug\net8.0\refint\VisionInspectionApp.VisionEngine.dll
+G:\NODEJS\Vision2026\VisionInspectionApp.VisionEngine\obj\Debug\net8.0\VisionInspectionApp.VisionEngine.pdb
+G:\NODEJS\Vision2026\VisionInspectionApp.VisionEngine\obj\Debug\net8.0\ref\VisionInspectionApp.VisionEngine.dll

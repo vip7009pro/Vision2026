@@ -1,0 +1,144 @@
+{
+  "format": 1,
+  "restore": {
+    "G:\\NODEJS\\Vision2026\\VisionInspectionApp.VisionEngine\\VisionInspectionApp.VisionEngine.csproj": {}
+  },
+  "projects": {
+    "G:\\NODEJS\\Vision2026\\VisionInspectionApp.Models\\VisionInspectionApp.Models.csproj": {
+      "version": "1.0.0",
+      "restore": {
+        "projectUniqueName": "G:\\NODEJS\\Vision2026\\VisionInspectionApp.Models\\VisionInspectionApp.Models.csproj",
+        "projectName": "VisionInspectionApp.Models",
+        "projectPath": "G:\\NODEJS\\Vision2026\\VisionInspectionApp.Models\\VisionInspectionApp.Models.csproj",
+        "packagesPath": "C:\\Users\\vip70\\.nuget\\packages\\",
+        "outputPath": "G:\\NODEJS\\Vision2026\\VisionInspectionApp.Models\\obj\\",
+        "projectStyle": "PackageReference",
+        "configFilePaths": [
+          "C:\\Users\\vip70\\AppData\\Roaming\\NuGet\\NuGet.Config",
+          "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.Offline.config"
+        ],
+        "originalTargetFrameworks": [
+          "net8.0"
+        ],
+        "sources": {
+          "C:\\Program Files (x86)\\Microsoft SDKs\\NuGetPackages\\": {},
+          "https://api.nuget.org/v3/index.json": {}
+        },
+        "frameworks": {
+          "net8.0": {
+            "targetAlias": "net8.0",
+            "projectReferences": {}
+          }
+        },
+        "warningProperties": {
+          "warnAsError": [
+            "NU1605"
+          ]
+        },
+        "restoreAuditProperties": {
+          "enableAudit": "true",
+          "auditLevel": "low",
+          "auditMode": "direct"
+        },
+        "SdkAnalysisLevel": "10.0.100"
+      },
+      "frameworks": {
+        "net8.0": {
+          "targetAlias": "net8.0",
+          "imports": [
+            "net461",
+            "net462",
+            "net47",
+            "net471",
+            "net472",
+            "net48",
+            "net481"
+          ],
+          "assetTargetFallback": true,
+          "warn": true,
+          "frameworkReferences": {
+            "Microsoft.NETCore.App": {
+              "privateAssets": "all"
+            }
+          },
+          "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\10.0.103/PortableRuntimeIdentifierGraph.json"
+        }
+      }
+    },
+    "G:\\NODEJS\\Vision2026\\VisionInspectionApp.VisionEngine\\VisionInspectionApp.VisionEngine.csproj": {
+      "version": "1.0.0",
+      "restore": {
+        "projectUniqueName": "G:\\NODEJS\\Vision2026\\VisionInspectionApp.VisionEngine\\VisionInspectionApp.VisionEngine.csproj",
+        "projectName": "VisionInspectionApp.VisionEngine",
+        "projectPath": "G:\\NODEJS\\Vision2026\\VisionInspectionApp.VisionEngine\\VisionInspectionApp.VisionEngine.csproj",
+        "packagesPath": "C:\\Users\\vip70\\.nuget\\packages\\",
+        "outputPath": "G:\\NODEJS\\Vision2026\\VisionInspectionApp.VisionEngine\\obj\\",
+        "projectStyle": "PackageReference",
+        "configFilePaths": [
+          "C:\\Users\\vip70\\AppData\\Roaming\\NuGet\\NuGet.Config",
+          "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.Offline.config"
+        ],
+        "originalTargetFrameworks": [
+          "net8.0"
+        ],
+        "sources": {
+          "C:\\Program Files (x86)\\Microsoft SDKs\\NuGetPackages\\": {},
+          "https://api.nuget.org/v3/index.json": {}
+        },
+        "frameworks": {
+          "net8.0": {
+            "targetAlias": "net8.0",
+            "projectReferences": {
+              "G:\\NODEJS\\Vision2026\\VisionInspectionApp.Models\\VisionInspectionApp.Models.csproj": {
+                "projectPath": "G:\\NODEJS\\Vision2026\\VisionInspectionApp.Models\\VisionInspectionApp.Models.csproj"
+              }
+            }
+          }
+        },
+        "warningProperties": {
+          "warnAsError": [
+            "NU1605"
+          ]
+        },
+        "restoreAuditProperties": {
+          "enableAudit": "true",
+          "auditLevel": "low",
+          "auditMode": "direct"
+        },
+        "SdkAnalysisLevel": "10.0.100"
+      },
+      "frameworks": {
+        "net8.0": {
+          "targetAlias": "net8.0",
+          "dependencies": {
+            "OpenCvSharp4": {
+              "target": "Package",
+              "version": "[4.10.0.20240616, )"
+            },
+            "OpenCvSharp4.runtime.win": {
+              "target": "Package",
+              "version": "[4.10.0.20240616, )"
+            }
+          },
+          "imports": [
+            "net461",
+            "net462",
+            "net47",
+            "net471",
+            "net472",
+            "net48",
+            "net481"
+          ],
+          "assetTargetFallback": true,
+          "warn": true,
+          "frameworkReferences": {
+            "Microsoft.NETCore.App": {
+              "privateAssets": "all"
+            }
+          },
+          "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\10.0.103/PortableRuntimeIdentifierGraph.json"
+        }
+      }
+    }
+  }
+}

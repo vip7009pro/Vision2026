@@ -1,0 +1,14 @@
+<UserControl x:Class="VisionInspectionApp.UI.Controls.ImageViewerControl"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <Grid Background="#111" ClipToBounds="True">
+        <Viewbox x:Name="PART_Viewbox" Stretch="Uniform">
+            <Grid x:Name="PART_Content">
+                <Image x:Name="PART_Image"
+                       Source="{Binding ImageSource, RelativeSource={RelativeSource AncestorType=UserControl}}" />
+                <Canvas x:Name="PART_Overlay" Background="Transparent" />
+            </Grid>
+        </Viewbox>
+    </Grid>
+</UserControl>

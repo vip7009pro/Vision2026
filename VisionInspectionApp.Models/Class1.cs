@@ -1,0 +1,87 @@
+﻿namespace VisionInspectionApp.Models;
+
+public sealed class VisionConfig
+{
+    public string ProductCode { get; set; } = string.Empty;
+
+    public double PixelsPerMm { get; set; } = 1.0;
+
+    public PreprocessSettings Preprocess { get; set; } = new();
+
+    public PointDefinition Origin { get; set; } = new();
+
+    public List<PointDefinition> Points { get; set; } = new();
+
+    public List<LineDistance> Distances { get; set; } = new();
+
+    public DefectInspectionConfig DefectConfig { get; set; } = new();
+}
+
+public sealed class PreprocessSettings
+{
+    public bool UseGray { get; set; } = true;
+
+    public bool UseGaussianBlur { get; set; }
+    public int BlurKernel { get; set; } = 3;
+
+    public bool UseThreshold { get; set; }
+    public int ThresholdValue { get; set; } = 128;
+
+    public bool UseCanny { get; set; }
+    public int Canny1 { get; set; } = 50;
+    public int Canny2 { get; set; } = 150;
+
+    public bool UseMorphology { get; set; }
+}
+
+public sealed class PointDefinition
+{
+    public string Name { get; set; } = string.Empty;
+
+    public Roi SearchRoi { get; set; } = new();
+
+    public Roi TemplateRoi { get; set; } = new();
+
+    public string TemplateImageFile { get; set; } = string.Empty;
+
+    public double MatchScoreThreshold { get; set; } = 0.8;
+
+    public Point2dModel WorldPosition { get; set; } = new();
+}
+
+public sealed class Roi
+{
+    public int X { get; set; }
+    public int Y { get; set; }
+    public int Width { get; set; }
+    public int Height { get; set; }
+}
+
+public sealed class LineDistance
+{
+    public string Name { get; set; } = string.Empty;
+
+    public string PointA { get; set; } = string.Empty;
+    public string PointB { get; set; } = string.Empty;
+
+    public double Nominal { get; set; }
+    public double TolerancePlus { get; set; }
+    public double ToleranceMinus { get; set; }
+}
+
+public sealed class DefectInspectionConfig
+{
+    public Roi InspectRoi { get; set; } = new();
+
+    public int ThresholdWhite { get; set; } = 220;
+    public int ThresholdBlack { get; set; } = 30;
+
+    public int MinBlobSize { get; set; } = 10;
+    public int MaxBlobSize { get; set; } = 5000;
+}
+
+public sealed class Point2dModel
+{
+    public double X { get; set; }
+    public double Y { get; set; }
+}

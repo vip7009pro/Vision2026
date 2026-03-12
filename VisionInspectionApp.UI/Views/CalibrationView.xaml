@@ -1,0 +1,81 @@
+<UserControl x:Class="VisionInspectionApp.UI.Views.CalibrationView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
+             xmlns:controls="clr-namespace:VisionInspectionApp.UI.Controls"
+             mc:Ignorable="d">
+
+    <Grid Margin="8">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <DockPanel Grid.Row="0" LastChildFill="False">
+            <TextBlock Text="Config" VerticalAlignment="Center" Margin="0,0,6,0" />
+            <ComboBox Width="160" ItemsSource="{Binding AvailableConfigs}" SelectedItem="{Binding SelectedConfig}" Margin="0,0,6,0" />
+            <Button Content="Refresh" Command="{Binding RefreshConfigsCommand}" Margin="0,0,6,0" />
+            <Button Content="Load" Command="{Binding LoadConfigCommand}" Margin="0,0,12,0" />
+
+            <TextBlock Text="Product Code" VerticalAlignment="Center" Margin="0,0,6,0" />
+            <TextBox Width="120" Text="{Binding ProductCode, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,12,0" />
+
+            <Button Content="Load Image" Command="{Binding LoadImageCommand}" Margin="0,0,6,0" />
+            <Button Content="Save Pixels/mm" Command="{Binding SavePixelsPerMmCommand}" />
+        </DockPanel>
+
+        <Grid Grid.Row="1" Margin="0,8,0,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="320" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+
+            <StackPanel Grid.Column="0" Margin="0,0,8,0">
+                <Border BorderBrush="#CCC" BorderThickness="1" Padding="8" Margin="0,0,0,8">
+                    <StackPanel>
+                        <TextBlock FontWeight="Bold" Text="Current Selection" Margin="0,0,0,6" />
+
+                        <TextBlock Text="Distance (px)" />
+                        <TextBox Text="{Binding CurrentDistancePx, StringFormat=0.0}" IsReadOnly="True" />
+
+                        <TextBlock Text="Real Distance (mm)" Margin="0,6,0,0" />
+                        <TextBox Text="{Binding RealDistanceMm, UpdateSourceTrigger=PropertyChanged}" />
+
+                        <Button Content="Add Measurement" Command="{Binding AddMeasurementCommand}" Margin="0,8,0,0" />
+                        <Button Content="Clear" Command="{Binding ClearMeasurementsCommand}" Margin="0,6,0,0" />
+                    </StackPanel>
+                </Border>
+
+                <Border BorderBrush="#CCC" BorderThickness="1" Padding="8">
+                    <StackPanel>
+                        <TextBlock FontWeight="Bold" Text="Measurements" Margin="0,0,0,6" />
+                        <ListBox Height="180" ItemsSource="{Binding Measurements}">
+                            <ListBox.ItemTemplate>
+                                <DataTemplate>
+                                    <TextBlock>
+                                        <Run Text="{Binding DistancePx, StringFormat=0.0}" />
+                                        <Run Text=" px / " />
+                                        <Run Text="{Binding RealMm, StringFormat=0.###}" />
+                                        <Run Text=" mm = " />
+                                        <Run Text="{Binding PixelsPerMm, StringFormat=0.###}" />
+                                        <Run Text=" px/mm" />
+                                    </TextBlock>
+                                </DataTemplate>
+                            </ListBox.ItemTemplate>
+                        </ListBox>
+
+                        <TextBlock Text="Average Pixels/mm" Margin="0,8,0,0" />
+                        <TextBox Text="{Binding AveragePixelsPerMm, StringFormat=0.###}" IsReadOnly="True" />
+                    </StackPanel>
+                </Border>
+            </StackPanel>
+
+            <controls:ImageViewerControl Grid.Column="1"
+                                        ImageSource="{Binding Image}"
+                                        OverlayItems="{Binding OverlayItems}"
+                                        EnableLineSelection="True"
+                                        LineSelectedCommand="{Binding LineSelectedCommand}" />
+        </Grid>
+    </Grid>
+</UserControl>

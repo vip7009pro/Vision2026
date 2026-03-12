@@ -1,0 +1,102 @@
+{
+  "ProductCode": "ProductA",
+  "PixelsPerMm": 1,
+  "Preprocess": {
+    "UseGray": true,
+    "UseGaussianBlur": false,
+    "BlurKernel": 11,
+    "UseThreshold": true,
+    "ThresholdValue": 108,
+    "UseCanny": false,
+    "Canny1": 132,
+    "Canny2": 46,
+    "UseMorphology": true
+  },
+  "Origin": {
+    "Name": "Origin",
+    "SearchRoi": {
+      "X": 495,
+      "Y": 330,
+      "Width": 866,
+      "Height": 515
+    },
+    "TemplateRoi": {
+      "X": 659,
+      "Y": 513,
+      "Width": 576,
+      "Height": 241
+    },
+    "TemplateImageFile": "origin.png",
+    "MatchScoreThreshold": 0.8,
+    "WorldPosition": {
+      "X": 947,
+      "Y": 633.5
+    }
+  },
+  "Points": [
+    {
+      "Name": "P1",
+      "SearchRoi": {
+        "X": 42,
+        "Y": 161,
+        "Width": 835,
+        "Height": 515
+      },
+      "TemplateRoi": {
+        "X": 383,
+        "Y": 345,
+        "Width": 134,
+        "Height": 97
+      },
+      "TemplateImageFile": "P1.png",
+      "MatchScoreThreshold": 0.8,
+      "WorldPosition": {
+        "X": 450,
+        "Y": 393.5
+      }
+    },
+    {
+      "Name": "P2",
+      "SearchRoi": {
+        "X": 1237,
+        "Y": 232,
+        "Width": 794,
+        "Height": 780
+      },
+      "TemplateRoi": {
+        "X": 1531,
+        "Y": 568,
+        "Width": 406,
+        "Height": 203
+      },
+      "TemplateImageFile": "P2.png",
+      "MatchScoreThreshold": 0.8,
+      "WorldPosition": {
+        "X": 1734,
+        "Y": 669.5
+      }
+    }
+  ],
+  "Distances": [
+    {
+      "Name": "D1",
+      "PointA": "P1",
+      "PointB": "P2",
+      "Nominal": 1200,
+      "TolerancePlus": 100,
+      "ToleranceMinus": 100
+    }
+  ],
+  "DefectConfig": {
+    "InspectRoi": {
+      "X": 0,
+      "Y": 0,
+      "Width": 0,
+      "Height": 0
+    },
+    "ThresholdWhite": 220,
+    "ThresholdBlack": 30,
+    "MinBlobSize": 10,
+    "MaxBlobSize": 5000
+  }
+}

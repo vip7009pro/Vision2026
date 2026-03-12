@@ -1,0 +1,13 @@
+{
+  "version": 2,
+  "dgSpecHash": "URfoTUpIVQA=",
+  "success": true,
+  "projectFilePath": "G:\\NODEJS\\Vision2026\\VisionInspectionApp.VisionEngine\\VisionInspectionApp.VisionEngine.csproj",
+  "expectedPackageFiles": [
+    "C:\\Users\\vip70\\.nuget\\packages\\opencvsharp4\\4.10.0.20240616\\opencvsharp4.4.10.0.20240616.nupkg.sha512",
+    "C:\\Users\\vip70\\.nuget\\packages\\opencvsharp4.runtime.win\\4.10.0.20240616\\opencvsharp4.runtime.win.4.10.0.20240616.nupkg.sha512",
+    "C:\\Users\\vip70\\.nuget\\packages\\system.memory\\4.5.5\\system.memory.4.5.5.nupkg.sha512",
+    "C:\\Users\\vip70\\.nuget\\packages\\system.runtime.compilerservices.unsafe\\6.0.0\\system.runtime.compilerservices.unsafe.6.0.0.nupkg.sha512"
+  ],
+  "logs": []
+}
