@@ -1,10 +1,26 @@
 ﻿namespace VisionInspectionApp.Models;
 
+public enum LineLineDistanceMode
+{
+    ClosestPointsOnSegments = 0,
+    MidpointToMidpoint = 1,
+    NearestEndpoints = 2,
+    FarthestEndpoints = 3
+}
+
+public enum PointLineDistanceMode
+{
+    PointToSegment = 0,
+    PointToInfiniteLine = 1
+}
+
 public sealed class VisionConfig
 {
     public string ProductCode { get; set; } = string.Empty;
 
     public double PixelsPerMm { get; set; } = 1.0;
+
+    public ToolGraph ToolGraph { get; set; } = new();
 
     public PreprocessSettings Preprocess { get; set; } = new();
 
@@ -12,9 +28,46 @@ public sealed class VisionConfig
 
     public List<PointDefinition> Points { get; set; } = new();
 
+    public List<LineToolDefinition> Lines { get; set; } = new();
+
     public List<LineDistance> Distances { get; set; } = new();
 
+    public List<LineToLineDistance> LineToLineDistances { get; set; } = new();
+
+    public List<PointToLineDistance> PointToLineDistances { get; set; } = new();
+
     public DefectInspectionConfig DefectConfig { get; set; } = new();
+}
+
+public sealed class ToolGraph
+{
+    public List<ToolGraphNode> Nodes { get; set; } = new();
+
+    public List<ToolGraphEdge> Edges { get; set; } = new();
+}
+
+public sealed class ToolGraphNode
+{
+    public string Id { get; set; } = string.Empty;
+
+    public string Type { get; set; } = string.Empty;
+
+    public string RefName { get; set; } = string.Empty;
+
+    public double X { get; set; }
+
+    public double Y { get; set; }
+}
+
+public sealed class ToolGraphEdge
+{
+    public string FromNodeId { get; set; } = string.Empty;
+
+    public string ToNodeId { get; set; } = string.Empty;
+
+    public string FromPort { get; set; } = string.Empty;
+
+    public string ToPort { get; set; } = string.Empty;
 }
 
 public sealed class PreprocessSettings
@@ -49,6 +102,23 @@ public sealed class PointDefinition
     public Point2dModel WorldPosition { get; set; } = new();
 }
 
+public sealed class LineToolDefinition
+{
+    public string Name { get; set; } = string.Empty;
+
+    public Roi SearchRoi { get; set; } = new();
+
+    public int Canny1 { get; set; } = 50;
+
+    public int Canny2 { get; set; } = 150;
+
+    public int HoughThreshold { get; set; } = 50;
+
+    public int MinLineLength { get; set; } = 30;
+
+    public int MaxLineGap { get; set; } = 10;
+}
+
 public sealed class Roi
 {
     public int X { get; set; }
@@ -67,6 +137,40 @@ public sealed class LineDistance
     public double Nominal { get; set; }
     public double TolerancePlus { get; set; }
     public double ToleranceMinus { get; set; }
+}
+
+public sealed class LineToLineDistance
+{
+    public string Name { get; set; } = string.Empty;
+
+    public string LineA { get; set; } = string.Empty;
+
+    public string LineB { get; set; } = string.Empty;
+
+    public double Nominal { get; set; }
+
+    public double TolerancePlus { get; set; }
+
+    public double ToleranceMinus { get; set; }
+
+    public LineLineDistanceMode Mode { get; set; } = LineLineDistanceMode.ClosestPointsOnSegments;
+}
+
+public sealed class PointToLineDistance
+{
+    public string Name { get; set; } = string.Empty;
+
+    public string Point { get; set; } = string.Empty;
+
+    public string Line { get; set; } = string.Empty;
+
+    public double Nominal { get; set; }
+
+    public double TolerancePlus { get; set; }
+
+    public double ToleranceMinus { get; set; }
+
+    public PointLineDistanceMode Mode { get; set; } = PointLineDistanceMode.PointToSegment;
 }
 
 public sealed class DefectInspectionConfig

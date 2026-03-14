@@ -31,13 +31,18 @@ public partial class App : System.Windows.Application
                 services.AddSingleton<ImagePreprocessor>();
                 services.AddSingleton<PatternMatcher>();
                 services.AddSingleton<DistanceCalculator>();
+                services.AddSingleton<LineDetector>();
                 services.AddSingleton<IDefectDetector, DefectDetector>();
                 services.AddSingleton<IInspectionService, InspectionService>();
 
                 services.AddSingleton<UndoRedoManager>();
+                services.AddSingleton<GlobalAppSettingsService>();
+                services.AddSingleton<SharedImageContext>();
 
                 services.AddSingleton<TeachViewModel>();
+                services.AddSingleton<ToolEditorViewModel>();
                 services.AddSingleton<CalibrationViewModel>();
+                services.AddSingleton<ManualInspectionViewModel>();
                 services.AddSingleton<InspectionViewModel>();
                 services.AddSingleton<MainWindowViewModel>();
                 services.AddSingleton<MainWindow>();

@@ -1,0 +1,51 @@
+<UserControl x:Class="VisionInspectionApp.UI.Views.ManualInspectionView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
+             xmlns:controls="clr-namespace:VisionInspectionApp.UI.Controls"
+             mc:Ignorable="d">
+
+    <Grid Margin="8">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="260" />
+        </Grid.RowDefinitions>
+
+        <DockPanel Grid.Row="0" LastChildFill="False">
+            <Button Content="Load Image" Command="{Binding LoadImageCommand}" Margin="0,0,12,0" />
+
+            <TextBlock Text="Calibration (px/mm)" VerticalAlignment="Center" Margin="0,0,6,0" />
+            <TextBox Width="120" Text="{Binding CalibrationPixelsPerMm, Converter={StaticResource DoubleConv}, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,12,0" />
+
+            <Button Content="Clear" Command="{Binding ClearMeasurementsCommand}" />
+        </DockPanel>
+
+        <controls:ImageViewerControl Grid.Row="1"
+                                    ImageSource="{Binding Image}"
+                                    OverlayItems="{Binding OverlayItems}"
+                                    EnableLineSelection="True"
+                                    LineSelectedCommand="{Binding LineSelectedCommand}" />
+
+        <Border Grid.Row="2" BorderThickness="1" BorderBrush="#CCC" Padding="8" Margin="0,8,0,0">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+
+                <TextBlock Grid.Row="0" FontWeight="Bold" Text="Manual Measurements" />
+
+                <DataGrid Grid.Row="1" ItemsSource="{Binding Measurements}" AutoGenerateColumns="False" CanUserAddRows="False">
+                    <DataGrid.Columns>
+                        <DataGridTextColumn Header="P1" Binding="{Binding P1Text}" Width="160" />
+                        <DataGridTextColumn Header="P2" Binding="{Binding P2Text}" Width="160" />
+                        <DataGridTextColumn Header="Distance (px)" Binding="{Binding DistancePx, StringFormat={}{0:0.0}}" Width="120" />
+                        <DataGridTextColumn Header="Distance (mm)" Binding="{Binding DistanceMm, StringFormat={}{0:0.000}}" Width="120" />
+                    </DataGrid.Columns>
+                </DataGrid>
+            </Grid>
+        </Border>
+    </Grid>
+</UserControl>

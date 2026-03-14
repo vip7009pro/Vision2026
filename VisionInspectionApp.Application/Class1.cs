@@ -26,7 +26,13 @@ public sealed class InspectionResult
 
     public List<PointMatchResult> Points { get; } = new();
 
+    public List<LineDetectResult> Lines { get; } = new();
+
     public List<DistanceCheckResult> Distances { get; } = new();
+
+    public List<SegmentDistanceResult> LineToLineDistances { get; } = new();
+
+    public List<SegmentDistanceResult> PointToLineDistances { get; } = new();
 
     public DefectDetectionResult? Defects { get; set; }
 }
@@ -41,17 +47,20 @@ public sealed class InspectionService : IInspectionService
     private readonly ImagePreprocessor _preprocessor;
     private readonly PatternMatcher _matcher;
     private readonly DistanceCalculator _distanceCalculator;
+    private readonly LineDetector _lineDetector;
     private readonly IDefectDetector _defectDetector;
 
     public InspectionService(
         ImagePreprocessor preprocessor,
         PatternMatcher matcher,
         DistanceCalculator distanceCalculator,
+        LineDetector lineDetector,
         IDefectDetector defectDetector)
     {
         _preprocessor = preprocessor;
         _matcher = matcher;
         _distanceCalculator = distanceCalculator;
+        _lineDetector = lineDetector;
         _defectDetector = defectDetector;
     }
 
@@ -99,6 +108,16 @@ public sealed class InspectionService : IInspectionService
             foundPoints[p.Name] = m.Position;
         }
 
+        var foundLines = new Dictionary<string, LineDetectResult>(StringComparer.OrdinalIgnoreCase);
+        foreach (var l in config.Lines)
+        {
+            var roi = TransformRoiKeepSize(l.SearchRoi, originTeach, originFound, angleDeg);
+            var det = _lineDetector.DetectLongestLine(processed, roi, l.Canny1, l.Canny2, l.HoughThreshold, l.MinLineLength, l.MaxLineGap);
+            var named = det with { Name = l.Name };
+            result.Lines.Add(named);
+            foundLines[l.Name] = named;
+        }
+
         foreach (var d in config.Distances)
         {
             if (!foundPoints.TryGetValue(d.PointA, out var a) || !foundPoints.TryGetValue(d.PointB, out var b))
@@ -107,7 +126,35 @@ public sealed class InspectionService : IInspectionService
                 continue;
             }
 
-            result.Distances.Add(_distanceCalculator.CheckDistance(d, a, b));
+            result.Distances.Add(_distanceCalculator.CheckDistance(d, a, b, config.PixelsPerMm));
+        }
+
+        foreach (var dd in config.LineToLineDistances)
+        {
+            if (!foundLines.TryGetValue(dd.LineA, out var la) || !foundLines.TryGetValue(dd.LineB, out var lb) || !la.Found || !lb.Found)
+            {
+                result.LineToLineDistances.Add(new SegmentDistanceResult(dd.Name, dd.LineA, dd.LineB, double.NaN, dd.Nominal, dd.TolerancePlus, dd.ToleranceMinus, false, default, default));
+                continue;
+            }
+
+            var (distPx, ca, cb) = CalculateLineLineDistance(la, lb, dd.Mode);
+            var value = config.PixelsPerMm > 0 ? distPx / config.PixelsPerMm : distPx;
+            var pass = value >= (dd.Nominal - dd.ToleranceMinus) && value <= (dd.Nominal + dd.TolerancePlus);
+            result.LineToLineDistances.Add(new SegmentDistanceResult(dd.Name, dd.LineA, dd.LineB, value, dd.Nominal, dd.TolerancePlus, dd.ToleranceMinus, pass, ca, cb));
+        }
+
+        foreach (var dd in config.PointToLineDistances)
+        {
+            if (!foundPoints.TryGetValue(dd.Point, out var p) || !foundLines.TryGetValue(dd.Line, out var l) || !l.Found)
+            {
+                result.PointToLineDistances.Add(new SegmentDistanceResult(dd.Name, dd.Point, dd.Line, double.NaN, dd.Nominal, dd.TolerancePlus, dd.ToleranceMinus, false, default, default));
+                continue;
+            }
+
+            var (distPx, closest) = CalculatePointLineDistance(p, l, dd.Mode);
+            var value = config.PixelsPerMm > 0 ? distPx / config.PixelsPerMm : distPx;
+            var pass = value >= (dd.Nominal - dd.ToleranceMinus) && value <= (dd.Nominal + dd.TolerancePlus);
+            result.PointToLineDistances.Add(new SegmentDistanceResult(dd.Name, dd.Point, dd.Line, value, dd.Nominal, dd.TolerancePlus, dd.ToleranceMinus, pass, p, closest));
         }
 
         var defectConfig = TransformDefectConfig(config.DefectConfig, originTeach, originFound, angleDeg);
@@ -116,9 +163,86 @@ public sealed class InspectionService : IInspectionService
         result.Pass = originPass
             && result.Points.All(x => x.Pass)
             && result.Distances.All(x => x.Pass)
+            && result.LineToLineDistances.All(x => x.Pass)
+            && result.PointToLineDistances.All(x => x.Pass)
             && (result.Defects.Defects.Count == 0);
 
         return result;
+    }
+
+    private static (double DistPx, Point2d A, Point2d B) CalculateLineLineDistance(LineDetectResult la, LineDetectResult lb, LineLineDistanceMode mode)
+    {
+        // Default / legacy
+        if (mode == LineLineDistanceMode.ClosestPointsOnSegments)
+        {
+            return Geometry2D.SegmentToSegmentDistance(la.P1, la.P2, lb.P1, lb.P2);
+        }
+
+        if (mode == LineLineDistanceMode.MidpointToMidpoint)
+        {
+            var ma = new Point2d((la.P1.X + la.P2.X) * 0.5, (la.P1.Y + la.P2.Y) * 0.5);
+            var mb = new Point2d((lb.P1.X + lb.P2.X) * 0.5, (lb.P1.Y + lb.P2.Y) * 0.5);
+            return (Geometry2D.Distance(ma, mb), ma, mb);
+        }
+
+        // Endpoints based
+        var aEnds = new[] { la.P1, la.P2 };
+        var bEnds = new[] { lb.P1, lb.P2 };
+
+        var bestDist = mode == LineLineDistanceMode.FarthestEndpoints ? double.NegativeInfinity : double.PositiveInfinity;
+        var bestA = la.P1;
+        var bestB = lb.P1;
+
+        foreach (var a in aEnds)
+        {
+            foreach (var b in bEnds)
+            {
+                var d = Geometry2D.Distance(a, b);
+                if (mode == LineLineDistanceMode.NearestEndpoints)
+                {
+                    if (d < bestDist)
+                    {
+                        bestDist = d;
+                        bestA = a;
+                        bestB = b;
+                    }
+                }
+                else if (mode == LineLineDistanceMode.FarthestEndpoints)
+                {
+                    if (d > bestDist)
+                    {
+                        bestDist = d;
+                        bestA = a;
+                        bestB = b;
+                    }
+                }
+            }
+        }
+
+        return (bestDist, bestA, bestB);
+    }
+
+    private static (double DistPx, Point2d Closest) CalculatePointLineDistance(Point2d p, LineDetectResult l, PointLineDistanceMode mode)
+    {
+        if (mode == PointLineDistanceMode.PointToInfiniteLine)
+        {
+            var a = l.P1;
+            var b = l.P2;
+            var ab = b - a;
+            var ap = p - a;
+            var ab2 = ab.X * ab.X + ab.Y * ab.Y;
+            if (ab2 <= 1e-12)
+            {
+                return (Geometry2D.Distance(p, a), a);
+            }
+
+            var t = (ap.X * ab.X + ap.Y * ab.Y) / ab2;
+            var proj = new Point2d(a.X + t * ab.X, a.Y + t * ab.Y);
+            return (Geometry2D.Distance(p, proj), proj);
+        }
+
+        // Default / legacy
+        return Geometry2D.PointToSegmentDistance(p, l.P1, l.P2);
     }
 
     private static Point2d Rotate(Point2d p, Point2d origin, double angleDeg)

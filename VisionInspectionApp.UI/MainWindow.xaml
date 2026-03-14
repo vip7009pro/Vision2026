@@ -19,12 +19,20 @@
             <views:TeachView />
         </DataTemplate>
 
+        <DataTemplate DataType="{x:Type viewModels:ToolEditorViewModel}">
+            <views:ToolEditorView />
+        </DataTemplate>
+
         <DataTemplate DataType="{x:Type viewModels:InspectionViewModel}">
             <views:InspectionView />
         </DataTemplate>
 
         <DataTemplate DataType="{x:Type viewModels:CalibrationViewModel}">
             <views:CalibrationView />
+        </DataTemplate>
+
+        <DataTemplate DataType="{x:Type viewModels:ManualInspectionViewModel}">
+            <views:ManualInspectionView />
         </DataTemplate>
     </Window.Resources>
 
@@ -34,8 +42,16 @@
                 <ContentControl Content="{Binding Teach}" />
             </TabItem>
 
+            <TabItem Header="Tool Editor">
+                <ContentControl Content="{Binding ToolEditor}" />
+            </TabItem>
+
             <TabItem Header="Calibration">
                 <ContentControl Content="{Binding Calibration}" />
+            </TabItem>
+
+            <TabItem Header="Manual Inspection">
+                <ContentControl Content="{Binding ManualInspection}" />
             </TabItem>
 
             <TabItem Header="Inspection">

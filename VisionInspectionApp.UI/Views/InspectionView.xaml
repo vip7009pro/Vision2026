@@ -55,10 +55,10 @@
                             <DataGridTextColumn Header="Name" Binding="{Binding Name}" Width="120" />
                             <DataGridTextColumn Header="A" Binding="{Binding PointA}" Width="100" />
                             <DataGridTextColumn Header="B" Binding="{Binding PointB}" Width="100" />
-                            <DataGridTextColumn Header="Value" Binding="{Binding Value}" Width="120" />
-                            <DataGridTextColumn Header="Nominal" Binding="{Binding Nominal}" Width="120" />
-                            <DataGridTextColumn Header="+Tol" Binding="{Binding TolPlus}" Width="90" />
-                            <DataGridTextColumn Header="-Tol" Binding="{Binding TolMinus}" Width="90" />
+                            <DataGridTextColumn Header="Value (mm)" Binding="{Binding Value, StringFormat={}{0:0.000}}" Width="120" />
+                            <DataGridTextColumn Header="Nominal (mm)" Binding="{Binding Nominal, StringFormat={}{0:0.000}}" Width="120" />
+                            <DataGridTextColumn Header="+Tol (mm)" Binding="{Binding TolPlus, StringFormat={}{0:0.000}}" Width="90" />
+                            <DataGridTextColumn Header="-Tol (mm)" Binding="{Binding TolMinus, StringFormat={}{0:0.000}}" Width="90" />
                             <DataGridCheckBoxColumn Header="Pass" Binding="{Binding Pass}" Width="80" />
                         </DataGrid.Columns>
                     </DataGrid>

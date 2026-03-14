@@ -10,6 +10,7 @@ G:\NODEJS\Vision2026\VisionInspectionApp.Application\obj\Debug\net8.0\VisionInsp
 G:\NODEJS\Vision2026\VisionInspectionApp.Application\obj\Debug\net8.0\VisionInspectionApp.Application.AssemblyInfoInputs.cache
 G:\NODEJS\Vision2026\VisionInspectionApp.Application\obj\Debug\net8.0\VisionInspectionApp.Application.AssemblyInfo.cs
 G:\NODEJS\Vision2026\VisionInspectionApp.Application\obj\Debug\net8.0\VisionInspectionApp.Application.csproj.CoreCompileInputs.cache
+G:\NODEJS\Vision2026\VisionInspectionApp.Application\obj\Debug\net8.0\VisionInspectionApp.Application.sourcelink.json
 G:\NODEJS\Vision2026\VisionInspectionApp.Application\obj\Debug\net8.0\VisionIn.27F6860E.Up2Date
 G:\NODEJS\Vision2026\VisionInspectionApp.Application\obj\Debug\net8.0\VisionInspectionApp.Application.dll
 G:\NODEJS\Vision2026\VisionInspectionApp.Application\obj\Debug\net8.0\refint\VisionInspectionApp.Application.dll

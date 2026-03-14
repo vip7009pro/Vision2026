@@ -26,16 +26,20 @@ public sealed partial class TeachViewModel : ObservableObject
     private readonly IConfigService _configService;
     private readonly ConfigStoreOptions _storeOptions;
     private readonly ImagePreprocessor _preprocessor;
+    private readonly LineDetector _lineDetector;
     private readonly UndoRedoManager _undo;
+    private readonly SharedImageContext _sharedImage;
 
     private Mat? _imageMat;
 
-    public TeachViewModel(IConfigService configService, ConfigStoreOptions storeOptions, ImagePreprocessor preprocessor, UndoRedoManager undo)
+    public TeachViewModel(IConfigService configService, ConfigStoreOptions storeOptions, ImagePreprocessor preprocessor, LineDetector lineDetector, UndoRedoManager undo, SharedImageContext sharedImage)
     {
         _configService = configService;
         _storeOptions = storeOptions;
         _preprocessor = preprocessor;
+        _lineDetector = lineDetector;
         _undo = undo;
+        _sharedImage = sharedImage;
 
         VisionConfig = new VisionConfig { ProductCode = "ProductA" };
 
@@ -45,15 +49,26 @@ public sealed partial class TeachViewModel : ObservableObject
         SelectedTarget = TeachTarget.Origin;
 
         Points = new ObservableCollection<string>();
+        Lines = new ObservableCollection<string>();
         Distances = new ObservableCollection<LineDistance>();
+        LineToLineDistances = new ObservableCollection<LineToLineDistance>();
+        PointToLineDistances = new ObservableCollection<PointToLineDistance>();
 
         LoadImageCommand = new RelayCommand(LoadImage);
         RoiSelectedCommand = new RelayCommand<Roi?>(OnRoiSelected);
         RoiEditedCommand = new RelayCommand<RoiSelection?>(OnRoiEdited);
         AddPointCommand = new RelayCommand(AddPoint);
+        AddLineToolCommand = new RelayCommand(AddLineTool);
         AddDistanceCommand = new RelayCommand(AddDistance);
         UpdateDistanceCommand = new RelayCommand(UpdateDistance);
+        AddLineToLineDistanceCommand = new RelayCommand(AddLineToLineDistance);
+        UpdateLineToLineDistanceCommand = new RelayCommand(UpdateLineToLineDistance);
+        DeleteLineToLineDistanceCommand = new RelayCommand(DeleteLineToLineDistance);
+        AddPointToLineDistanceCommand = new RelayCommand(AddPointToLineDistance);
+        UpdatePointToLineDistanceCommand = new RelayCommand(UpdatePointToLineDistance);
+        DeletePointToLineDistanceCommand = new RelayCommand(DeletePointToLineDistance);
         DeletePointCommand = new RelayCommand(DeletePoint);
+        DeleteLineToolCommand = new RelayCommand(DeleteLineTool);
         DeleteDistanceCommand = new RelayCommand(DeleteDistance);
         RefreshConfigsCommand = new RelayCommand(RefreshConfigs);
         LoadConfigCommand = new RelayCommand(LoadConfig);
@@ -72,6 +87,8 @@ public sealed partial class TeachViewModel : ObservableObject
                 ((RelayCommand)RedoCommand).NotifyCanExecuteChanged();
             }
         };
+
+        RefreshLinesFromConfig();
 
         RefreshConfigs();
     }
@@ -105,6 +122,7 @@ public sealed partial class TeachViewModel : ObservableObject
     partial void OnIsPreprocessPreviewEnabledChanged(bool value)
     {
         RefreshDisplayedImage();
+        RefreshLinePreview();
     }
 
     [ObservableProperty]
@@ -123,10 +141,182 @@ public sealed partial class TeachViewModel : ObservableObject
     [ObservableProperty]
     private string _newPointName = "P1";
 
+    [ObservableProperty]
+    private string _newLineToolName = "L1";
+
     public ObservableCollection<string> Points { get; }
+
+    public ObservableCollection<string> Lines { get; }
 
     [ObservableProperty]
     private string? _selectedPoint;
+
+    [ObservableProperty]
+    private string? _selectedLineTool;
+
+    partial void OnSelectedLineToolChanged(string? value)
+    {
+        OnPropertyChanged(nameof(LineCanny1));
+        OnPropertyChanged(nameof(LineCanny2));
+        OnPropertyChanged(nameof(LineHoughThreshold));
+        OnPropertyChanged(nameof(LineMinLineLength));
+        OnPropertyChanged(nameof(LineMaxLineGap));
+        RefreshLinePreview();
+    }
+
+    private LineToolDefinition? SelectedLineDef
+    {
+        get
+        {
+            var name = SelectedLineTool;
+            if (string.IsNullOrWhiteSpace(name))
+            {
+                return null;
+            }
+
+            return VisionConfig.Lines.FirstOrDefault(x => string.Equals(x.Name, name, StringComparison.OrdinalIgnoreCase));
+        }
+    }
+
+    public int LineCanny1
+    {
+        get => SelectedLineDef?.Canny1 ?? 50;
+        set
+        {
+            var def = SelectedLineDef;
+            if (def is null || def.Canny1 == value)
+            {
+                return;
+            }
+
+            def.Canny1 = value;
+            OnPropertyChanged();
+            RefreshLinePreview();
+        }
+    }
+
+    public int LineCanny2
+    {
+        get => SelectedLineDef?.Canny2 ?? 150;
+        set
+        {
+            var def = SelectedLineDef;
+            if (def is null || def.Canny2 == value)
+            {
+                return;
+            }
+
+            def.Canny2 = value;
+            OnPropertyChanged();
+            RefreshLinePreview();
+        }
+    }
+
+    public int LineHoughThreshold
+    {
+        get => SelectedLineDef?.HoughThreshold ?? 50;
+        set
+        {
+            var def = SelectedLineDef;
+            if (def is null || def.HoughThreshold == value)
+            {
+                return;
+            }
+
+            def.HoughThreshold = value;
+            OnPropertyChanged();
+            RefreshLinePreview();
+        }
+    }
+
+    public int LineMinLineLength
+    {
+        get => SelectedLineDef?.MinLineLength ?? 30;
+        set
+        {
+            var def = SelectedLineDef;
+            if (def is null || def.MinLineLength == value)
+            {
+                return;
+            }
+
+            def.MinLineLength = value;
+            OnPropertyChanged();
+            RefreshLinePreview();
+        }
+    }
+
+    public int LineMaxLineGap
+    {
+        get => SelectedLineDef?.MaxLineGap ?? 10;
+        set
+        {
+            var def = SelectedLineDef;
+            if (def is null || def.MaxLineGap == value)
+            {
+                return;
+            }
+
+            def.MaxLineGap = value;
+            OnPropertyChanged();
+            RefreshLinePreview();
+        }
+    }
+
+    [ObservableProperty]
+    private bool _isLinePreviewEnabled;
+
+    partial void OnIsLinePreviewEnabledChanged(bool value)
+    {
+        RefreshLinePreview();
+    }
+
+    [ObservableProperty]
+    private ImageSource? _linePreviewImage;
+
+    private void RefreshLinePreview()
+    {
+        if (!IsLinePreviewEnabled)
+        {
+            LinePreviewImage = null;
+            return;
+        }
+
+        if (_imageMat is null)
+        {
+            LinePreviewImage = null;
+            return;
+        }
+
+        var def = SelectedLineDef;
+        if (def is null || def.SearchRoi.Width <= 0 || def.SearchRoi.Height <= 0)
+        {
+            LinePreviewImage = null;
+            return;
+        }
+
+        var r = new OpenCvSharp.Rect(def.SearchRoi.X, def.SearchRoi.Y, def.SearchRoi.Width, def.SearchRoi.Height);
+        r = r.Intersect(new OpenCvSharp.Rect(0, 0, _imageMat.Width, _imageMat.Height));
+        if (r.Width <= 0 || r.Height <= 0)
+        {
+            LinePreviewImage = null;
+            return;
+        }
+
+        using var processed = _preprocessor.Run(_imageMat, VisionConfig.Preprocess);
+        using var crop = new Mat(processed, r);
+        using var view = crop.Channels() == 1 ? crop.Clone() : crop.CvtColor(ColorConversionCodes.BGR2GRAY);
+
+        var det = _lineDetector.DetectLongestLine(processed, def.SearchRoi, def.Canny1, def.Canny2, def.HoughThreshold, def.MinLineLength, def.MaxLineGap);
+        if (det.Found)
+        {
+            var p1 = new Point((int)Math.Round(det.P1.X) - r.X, (int)Math.Round(det.P1.Y) - r.Y);
+            var p2 = new Point((int)Math.Round(det.P2.X) - r.X, (int)Math.Round(det.P2.Y) - r.Y);
+            Cv2.Line(view, p1, p2, Scalar.White, 2);
+        }
+
+        LinePreviewImage = view.ToBitmapSource();
+    }
 
     [ObservableProperty]
     private LineDistance? _selectedDistance;
@@ -324,7 +514,95 @@ public sealed partial class TeachViewModel : ObservableObject
     [ObservableProperty]
     private double _distanceTolMinus;
 
+    [ObservableProperty]
+    private LineToLineDistance? _selectedLineToLineDistance;
+
+    partial void OnSelectedLineToLineDistanceChanged(LineToLineDistance? value)
+    {
+        if (value is null)
+        {
+            return;
+        }
+
+        LineToLineName = value.Name;
+        LineToLineLineA = value.LineA;
+        LineToLineLineB = value.LineB;
+        LineToLineNominal = value.Nominal;
+        LineToLineTolPlus = value.TolerancePlus;
+        LineToLineTolMinus = value.ToleranceMinus;
+    }
+
+    [ObservableProperty]
+    private string _lineToLineName = "LL1";
+
+    [ObservableProperty]
+    private string? _lineToLineLineA;
+
+    [ObservableProperty]
+    private string? _lineToLineLineB;
+
+    [ObservableProperty]
+    private double _lineToLineNominal;
+
+    [ObservableProperty]
+    private double _lineToLineTolPlus;
+
+    [ObservableProperty]
+    private double _lineToLineTolMinus;
+
+    [ObservableProperty]
+    private PointToLineDistance? _selectedPointToLineDistance;
+
+    partial void OnSelectedPointToLineDistanceChanged(PointToLineDistance? value)
+    {
+        if (value is null)
+        {
+            return;
+        }
+
+        PointToLineName = value.Name;
+        PointToLinePoint = value.Point;
+        PointToLineLine = value.Line;
+        PointToLineNominal = value.Nominal;
+        PointToLineTolPlus = value.TolerancePlus;
+        PointToLineTolMinus = value.ToleranceMinus;
+    }
+
+    [ObservableProperty]
+    private string _pointToLineName = "PL1";
+
+    [ObservableProperty]
+    private string? _pointToLinePoint;
+
+    [ObservableProperty]
+    private string? _pointToLineLine;
+
+    [ObservableProperty]
+    private double _pointToLineNominal;
+
+    [ObservableProperty]
+    private double _pointToLineTolPlus;
+
+    [ObservableProperty]
+    private double _pointToLineTolMinus;
+
+    private void RefreshLinesFromConfig()
+    {
+        Lines.Clear();
+        foreach (var l in VisionConfig.Lines)
+        {
+            if (!string.IsNullOrWhiteSpace(l.Name) && !Lines.Contains(l.Name))
+            {
+                Lines.Add(l.Name);
+            }
+        }
+    }
+
     public ObservableCollection<LineDistance> Distances { get; }
+
+    public ObservableCollection<LineToLineDistance> LineToLineDistances { get; }
+
+    public ObservableCollection<PointToLineDistance> PointToLineDistances { get; }
 
     public ObservableCollection<OverlayItem> OverlayItems { get; } = new();
 
@@ -342,11 +620,27 @@ public sealed partial class TeachViewModel : ObservableObject
 
     public ICommand AddPointCommand { get; }
 
+    public ICommand AddLineToolCommand { get; }
+
     public ICommand AddDistanceCommand { get; }
 
     public ICommand UpdateDistanceCommand { get; }
 
+    public ICommand AddLineToLineDistanceCommand { get; }
+
+    public ICommand UpdateLineToLineDistanceCommand { get; }
+
+    public ICommand DeleteLineToLineDistanceCommand { get; }
+
+    public ICommand AddPointToLineDistanceCommand { get; }
+
+    public ICommand UpdatePointToLineDistanceCommand { get; }
+
+    public ICommand DeletePointToLineDistanceCommand { get; }
+
     public ICommand DeletePointCommand { get; }
+
+    public ICommand DeleteLineToolCommand { get; }
 
     public ICommand DeleteDistanceCommand { get; }
 
@@ -512,6 +806,38 @@ public sealed partial class TeachViewModel : ObservableObject
             }));
     }
 
+    private void TeachLineTool(Roi roi)
+    {
+        SelectedRoiMode = RoiTeachMode.Search;
+
+        var name = SelectedLineTool;
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            name = NewLineToolName?.Trim();
+            if (string.IsNullOrWhiteSpace(name))
+            {
+                return;
+            }
+
+            if (!Lines.Contains(name))
+            {
+                Lines.Add(name);
+            }
+
+            SelectedLineTool = name;
+        }
+
+        var def = VisionConfig.Lines.FirstOrDefault(x => string.Equals(x.Name, name, StringComparison.OrdinalIgnoreCase));
+        if (def is null)
+        {
+            def = new LineToolDefinition { Name = name };
+            VisionConfig.Lines.Add(def);
+        }
+
+        def.SearchRoi = roi;
+        RefreshLinePreview();
+    }
+
     private void ApplyRoiEdit(string label, Roi roi)
     {
         if (string.Equals(label, "DefectROI", StringComparison.OrdinalIgnoreCase))
@@ -600,6 +926,29 @@ public sealed partial class TeachViewModel : ObservableObject
                     RefreshOverlayItems();
                     return;
                 }
+            }
+
+            if (!string.IsNullOrWhiteSpace(pointName) && string.Equals(mode, "L", StringComparison.OrdinalIgnoreCase))
+            {
+                SelectedTarget = TeachTarget.LineTool;
+                SelectedLineTool = pointName;
+                SelectedRoiMode = RoiTeachMode.Search;
+
+                var def = VisionConfig.Lines.FirstOrDefault(x => string.Equals(x.Name, pointName, StringComparison.OrdinalIgnoreCase));
+                if (def is null)
+                {
+                    def = new LineToolDefinition { Name = pointName };
+                    VisionConfig.Lines.Add(def);
+                }
+
+                if (!Lines.Contains(pointName))
+                {
+                    Lines.Add(pointName);
+                }
+
+                def.SearchRoi = roi;
+                RefreshOverlayItems();
+                return;
             }
         }
 
@@ -691,11 +1040,17 @@ public sealed partial class TeachViewModel : ObservableObject
         VisionConfig.PixelsPerMm = 1.0;
         VisionConfig.Origin = new PointDefinition { Name = "Origin" };
         VisionConfig.Points.Clear();
+        VisionConfig.Lines.Clear();
         VisionConfig.Distances.Clear();
+        VisionConfig.LineToLineDistances.Clear();
+        VisionConfig.PointToLineDistances.Clear();
         VisionConfig.DefectConfig = new DefectInspectionConfig();
 
         Points.Clear();
         Distances.Clear();
+        LineToLineDistances.Clear();
+        PointToLineDistances.Clear();
+        RefreshLinesFromConfig();
 
         RaisePreprocessPropertiesChanged();
         RefreshDisplayedImage();
@@ -707,6 +1062,7 @@ public sealed partial class TeachViewModel : ObservableObject
         _undo.Clear();
         ProductCode = cfg.ProductCode;
         VisionConfig.ProductCode = cfg.ProductCode;
+        VisionConfig.PixelsPerMm = cfg.PixelsPerMm;
         VisionConfig.Preprocess = cfg.Preprocess;
         VisionConfig.Origin = cfg.Origin;
         VisionConfig.DefectConfig = cfg.DefectConfig;
@@ -717,10 +1073,28 @@ public sealed partial class TeachViewModel : ObservableObject
             VisionConfig.Points.Add(p);
         }
 
+        VisionConfig.Lines.Clear();
+        foreach (var l in cfg.Lines)
+        {
+            VisionConfig.Lines.Add(l);
+        }
+
         VisionConfig.Distances.Clear();
         foreach (var d in cfg.Distances)
         {
             VisionConfig.Distances.Add(d);
+        }
+
+        VisionConfig.LineToLineDistances.Clear();
+        foreach (var d in cfg.LineToLineDistances)
+        {
+            VisionConfig.LineToLineDistances.Add(d);
+        }
+
+        VisionConfig.PointToLineDistances.Clear();
+        foreach (var d in cfg.PointToLineDistances)
+        {
+            VisionConfig.PointToLineDistances.Add(d);
         }
 
         Points.Clear();
@@ -732,25 +1106,49 @@ public sealed partial class TeachViewModel : ObservableObject
             }
         }
 
+        RefreshLinesFromConfig();
+
         Distances.Clear();
         foreach (var d in VisionConfig.Distances)
         {
             Distances.Add(d);
         }
 
+        LineToLineDistances.Clear();
+        foreach (var d in VisionConfig.LineToLineDistances)
+        {
+            LineToLineDistances.Add(d);
+        }
+
+        PointToLineDistances.Clear();
+        foreach (var d in VisionConfig.PointToLineDistances)
+        {
+            PointToLineDistances.Add(d);
+        }
+
         SelectedConfig = cfg.ProductCode;
         SelectedPoint = Points.Count > 0 ? Points[0] : null;
+        SelectedLineTool = Lines.Count > 0 ? Lines[0] : null;
+        SelectedDistance = Distances.Count > 0 ? Distances[0] : null;
+        SelectedLineToLineDistance = LineToLineDistances.Count > 0 ? LineToLineDistances[0] : null;
+        SelectedPointToLineDistance = PointToLineDistances.Count > 0 ? PointToLineDistances[0] : null;
         OnPropertyChanged(nameof(PixelsPerMm));
+        OnPropertyChanged(nameof(LineCanny1));
+        OnPropertyChanged(nameof(LineCanny2));
+        OnPropertyChanged(nameof(LineHoughThreshold));
+        OnPropertyChanged(nameof(LineMinLineLength));
+        OnPropertyChanged(nameof(LineMaxLineGap));
 
         RaisePreprocessPropertiesChanged();
         RefreshDisplayedImage();
+        RefreshLinePreview();
     }
 
     private void LoadImage()
     {
         var dlg = new OpenFileDialog
         {
-            Filter = "Image Files|*.png;*.jpg;*.jpeg;*.bmp|All Files|*.*"
+            Filter = "Image Files|*.bmp;*.png;*.jpg;*.jpeg;*.tif;*.tiff|All Files|*.*"
         };
 
         if (dlg.ShowDialog() != true)
@@ -760,7 +1158,10 @@ public sealed partial class TeachViewModel : ObservableObject
 
         _imageMat?.Dispose();
         _imageMat = Cv2.ImRead(dlg.FileName, ImreadModes.Color);
+        _sharedImage.SetImage(_imageMat);
         RefreshDisplayedImage();
+
+        RefreshLinePreview();
 
         RefreshOverlayItems();
     }
@@ -817,6 +1218,9 @@ public sealed partial class TeachViewModel : ObservableObject
                         break;
                     case TeachTarget.Point:
                         TeachPoint(roi);
+                        break;
+                    case TeachTarget.LineTool:
+                        TeachLineTool(roi);
                         break;
                     case TeachTarget.DefectRoi:
                         VisionConfig.DefectConfig.InspectRoi = roi;
@@ -1019,6 +1423,211 @@ public sealed partial class TeachViewModel : ObservableObject
             }));
     }
 
+    private void AddLineTool()
+    {
+        var name = NewLineToolName?.Trim();
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            return;
+        }
+
+        var beforeSelectedTarget = SelectedTarget;
+        var beforeSelectedLine = SelectedLineTool;
+
+        var existedInList = Lines.Contains(name);
+        var existedInCfg = VisionConfig.Lines.Any(x => string.Equals(x.Name, name, StringComparison.OrdinalIgnoreCase));
+
+        _undo.Execute(new UndoRedoManager.DelegateAction(
+            () =>
+            {
+                if (!existedInList)
+                {
+                    Lines.Add(name);
+                }
+
+                if (!existedInCfg)
+                {
+                    VisionConfig.Lines.Add(new LineToolDefinition { Name = name });
+                }
+
+                SelectedLineTool = name;
+                SelectedTarget = TeachTarget.LineTool;
+                SelectedRoiMode = RoiTeachMode.Search;
+                RefreshOverlayItems();
+            },
+            () =>
+            {
+                SelectedTarget = beforeSelectedTarget;
+                SelectedLineTool = beforeSelectedLine;
+
+                if (!existedInCfg)
+                {
+                    var existing = VisionConfig.Lines.FirstOrDefault(x => string.Equals(x.Name, name, StringComparison.OrdinalIgnoreCase));
+                    if (existing is not null)
+                    {
+                        VisionConfig.Lines.Remove(existing);
+                    }
+                }
+
+                if (!existedInList && Lines.Contains(name))
+                {
+                    Lines.Remove(name);
+                }
+
+                RefreshOverlayItems();
+            }));
+    }
+
+    private void DeleteLineTool()
+    {
+        var name = SelectedLineTool;
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            return;
+        }
+
+        var beforeSelectedTarget = SelectedTarget;
+        var beforeSelectedLine = SelectedLineTool;
+
+        var def = VisionConfig.Lines.FirstOrDefault(x => string.Equals(x.Name, name, StringComparison.OrdinalIgnoreCase));
+        if (def is null)
+        {
+            return;
+        }
+
+        var idxCfg = VisionConfig.Lines.IndexOf(def);
+        var idxVm = Lines.IndexOf(name);
+
+        var removedCfgLL = VisionConfig.LineToLineDistances
+            .Select((d, i) => (Item: d, Index: i))
+            .Where(x => string.Equals(x.Item.LineA, name, StringComparison.OrdinalIgnoreCase) || string.Equals(x.Item.LineB, name, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+
+        var removedVmLL = LineToLineDistances
+            .Select((d, i) => (Item: d, Index: i))
+            .Where(x => string.Equals(x.Item.LineA, name, StringComparison.OrdinalIgnoreCase) || string.Equals(x.Item.LineB, name, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+
+        var removedCfgPL = VisionConfig.PointToLineDistances
+            .Select((d, i) => (Item: d, Index: i))
+            .Where(x => string.Equals(x.Item.Line, name, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+
+        var removedVmPL = PointToLineDistances
+            .Select((d, i) => (Item: d, Index: i))
+            .Where(x => string.Equals(x.Item.Line, name, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+
+        _undo.Execute(new UndoRedoManager.DelegateAction(
+            () =>
+            {
+                VisionConfig.Lines.Remove(def);
+                if (idxVm >= 0 && Lines.Contains(name))
+                {
+                    Lines.Remove(name);
+                }
+
+                for (var i = VisionConfig.LineToLineDistances.Count - 1; i >= 0; i--)
+                {
+                    var d = VisionConfig.LineToLineDistances[i];
+                    if (string.Equals(d.LineA, name, StringComparison.OrdinalIgnoreCase) || string.Equals(d.LineB, name, StringComparison.OrdinalIgnoreCase))
+                    {
+                        VisionConfig.LineToLineDistances.RemoveAt(i);
+                    }
+                }
+
+                for (var i = LineToLineDistances.Count - 1; i >= 0; i--)
+                {
+                    var d = LineToLineDistances[i];
+                    if (string.Equals(d.LineA, name, StringComparison.OrdinalIgnoreCase) || string.Equals(d.LineB, name, StringComparison.OrdinalIgnoreCase))
+                    {
+                        LineToLineDistances.RemoveAt(i);
+                    }
+                }
+
+                for (var i = VisionConfig.PointToLineDistances.Count - 1; i >= 0; i--)
+                {
+                    var d = VisionConfig.PointToLineDistances[i];
+                    if (string.Equals(d.Line, name, StringComparison.OrdinalIgnoreCase))
+                    {
+                        VisionConfig.PointToLineDistances.RemoveAt(i);
+                    }
+                }
+
+                for (var i = PointToLineDistances.Count - 1; i >= 0; i--)
+                {
+                    var d = PointToLineDistances[i];
+                    if (string.Equals(d.Line, name, StringComparison.OrdinalIgnoreCase))
+                    {
+                        PointToLineDistances.RemoveAt(i);
+                    }
+                }
+
+                SelectedLineTool = Lines.Count > 0 ? Lines[0] : null;
+                if (SelectedTarget == TeachTarget.LineTool && SelectedLineTool is null)
+                {
+                    SelectedTarget = TeachTarget.Origin;
+                }
+
+                SelectedLineToLineDistance = LineToLineDistances.Count > 0 ? LineToLineDistances[0] : null;
+                SelectedPointToLineDistance = PointToLineDistances.Count > 0 ? PointToLineDistances[0] : null;
+
+                RefreshOverlayItems();
+            },
+            () =>
+            {
+                SelectedTarget = beforeSelectedTarget;
+
+                if (!VisionConfig.Lines.Contains(def))
+                {
+                    if (idxCfg >= 0 && idxCfg <= VisionConfig.Lines.Count) VisionConfig.Lines.Insert(idxCfg, def); else VisionConfig.Lines.Add(def);
+                }
+
+                if (!Lines.Contains(name))
+                {
+                    if (idxVm >= 0 && idxVm <= Lines.Count) Lines.Insert(idxVm, name); else Lines.Add(name);
+                }
+
+                SelectedLineTool = beforeSelectedLine;
+
+                foreach (var item in removedCfgLL.OrderBy(x => x.Index))
+                {
+                    if (!VisionConfig.LineToLineDistances.Contains(item.Item))
+                    {
+                        if (item.Index >= 0 && item.Index <= VisionConfig.LineToLineDistances.Count) VisionConfig.LineToLineDistances.Insert(item.Index, item.Item); else VisionConfig.LineToLineDistances.Add(item.Item);
+                    }
+                }
+
+                foreach (var item in removedVmLL.OrderBy(x => x.Index))
+                {
+                    if (!LineToLineDistances.Contains(item.Item))
+                    {
+                        if (item.Index >= 0 && item.Index <= LineToLineDistances.Count) LineToLineDistances.Insert(item.Index, item.Item); else LineToLineDistances.Add(item.Item);
+                    }
+                }
+
+                foreach (var item in removedCfgPL.OrderBy(x => x.Index))
+                {
+                    if (!VisionConfig.PointToLineDistances.Contains(item.Item))
+                    {
+                        if (item.Index >= 0 && item.Index <= VisionConfig.PointToLineDistances.Count) VisionConfig.PointToLineDistances.Insert(item.Index, item.Item); else VisionConfig.PointToLineDistances.Add(item.Item);
+                    }
+                }
+
+                foreach (var item in removedVmPL.OrderBy(x => x.Index))
+                {
+                    if (!PointToLineDistances.Contains(item.Item))
+                    {
+                        if (item.Index >= 0 && item.Index <= PointToLineDistances.Count) PointToLineDistances.Insert(item.Index, item.Item); else PointToLineDistances.Add(item.Item);
+                    }
+                }
+
+                SelectedLineToLineDistance = LineToLineDistances.FirstOrDefault();
+                SelectedPointToLineDistance = PointToLineDistances.FirstOrDefault();
+                RefreshOverlayItems();
+            }));
+    }
+
     private void DeletePoint()
     {
         var name = SelectedPoint;
@@ -1043,6 +1652,16 @@ public sealed partial class TeachViewModel : ObservableObject
         var removedVmDistances = Distances
             .Select((d, i) => (Item: d, Index: i))
             .Where(x => string.Equals(x.Item.PointA, name, StringComparison.OrdinalIgnoreCase) || string.Equals(x.Item.PointB, name, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+
+        var removedCfgPL = VisionConfig.PointToLineDistances
+            .Select((d, i) => (Item: d, Index: i))
+            .Where(x => string.Equals(x.Item.Point, name, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+
+        var removedVmPL = PointToLineDistances
+            .Select((d, i) => (Item: d, Index: i))
+            .Where(x => string.Equals(x.Item.Point, name, StringComparison.OrdinalIgnoreCase))
             .ToList();
 
         _undo.Execute(new UndoRedoManager.DelegateAction(
@@ -1074,8 +1693,27 @@ public sealed partial class TeachViewModel : ObservableObject
                     }
                 }
 
+                for (var i = VisionConfig.PointToLineDistances.Count - 1; i >= 0; i--)
+                {
+                    var d = VisionConfig.PointToLineDistances[i];
+                    if (string.Equals(d.Point, name, StringComparison.OrdinalIgnoreCase))
+                    {
+                        VisionConfig.PointToLineDistances.RemoveAt(i);
+                    }
+                }
+
+                for (var i = PointToLineDistances.Count - 1; i >= 0; i--)
+                {
+                    var d = PointToLineDistances[i];
+                    if (string.Equals(d.Point, name, StringComparison.OrdinalIgnoreCase))
+                    {
+                        PointToLineDistances.RemoveAt(i);
+                    }
+                }
+
                 SelectedPoint = Points.Count > 0 ? Points[0] : null;
                 SelectedDistance = Distances.Count > 0 ? Distances[0] : null;
+                SelectedPointToLineDistance = PointToLineDistances.Count > 0 ? PointToLineDistances[0] : null;
                 RefreshOverlayItems();
             },
             () =>
@@ -1120,9 +1758,226 @@ public sealed partial class TeachViewModel : ObservableObject
                     }
                 }
 
+                foreach (var item in removedCfgPL.OrderBy(x => x.Index))
+                {
+                    if (!VisionConfig.PointToLineDistances.Contains(item.Item))
+                    {
+                        if (item.Index >= 0 && item.Index <= VisionConfig.PointToLineDistances.Count) VisionConfig.PointToLineDistances.Insert(item.Index, item.Item); else VisionConfig.PointToLineDistances.Add(item.Item);
+                    }
+                }
+
+                foreach (var item in removedVmPL.OrderBy(x => x.Index))
+                {
+                    if (!PointToLineDistances.Contains(item.Item))
+                    {
+                        if (item.Index >= 0 && item.Index <= PointToLineDistances.Count) PointToLineDistances.Insert(item.Index, item.Item); else PointToLineDistances.Add(item.Item);
+                    }
+                }
+
                 SelectedPoint = beforeSelectedPoint;
                 SelectedDistance = beforeSelectedDistance;
+                SelectedPointToLineDistance = PointToLineDistances.FirstOrDefault();
                 RefreshOverlayItems();
+            }));
+    }
+
+    private void AddLineToLineDistance()
+    {
+        if (string.IsNullOrWhiteSpace(LineToLineName) || string.IsNullOrWhiteSpace(LineToLineLineA) || string.IsNullOrWhiteSpace(LineToLineLineB))
+        {
+            return;
+        }
+
+        var spec = new LineToLineDistance
+        {
+            Name = LineToLineName.Trim(),
+            LineA = LineToLineLineA.Trim(),
+            LineB = LineToLineLineB.Trim(),
+            Nominal = LineToLineNominal,
+            TolerancePlus = LineToLineTolPlus,
+            ToleranceMinus = LineToLineTolMinus
+        };
+
+        _undo.Execute(new UndoRedoManager.DelegateAction(
+            () =>
+            {
+                VisionConfig.LineToLineDistances.Add(spec);
+                LineToLineDistances.Add(spec);
+                SelectedLineToLineDistance = spec;
+            },
+            () =>
+            {
+                VisionConfig.LineToLineDistances.Remove(spec);
+                LineToLineDistances.Remove(spec);
+                SelectedLineToLineDistance = LineToLineDistances.Count > 0 ? LineToLineDistances[0] : null;
+            }));
+    }
+
+    private void UpdateLineToLineDistance()
+    {
+        var selected = SelectedLineToLineDistance;
+        if (selected is null)
+        {
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(LineToLineName) || string.IsNullOrWhiteSpace(LineToLineLineA) || string.IsNullOrWhiteSpace(LineToLineLineB))
+        {
+            return;
+        }
+
+        var before = selected;
+        var updated = new LineToLineDistance
+        {
+            Name = LineToLineName.Trim(),
+            LineA = LineToLineLineA.Trim(),
+            LineB = LineToLineLineB.Trim(),
+            Nominal = LineToLineNominal,
+            TolerancePlus = LineToLineTolPlus,
+            ToleranceMinus = LineToLineTolMinus
+        };
+
+        var idxVm = LineToLineDistances.IndexOf(selected);
+        var idxCfg = VisionConfig.LineToLineDistances.IndexOf(selected);
+
+        _undo.Execute(new UndoRedoManager.DelegateAction(
+            () =>
+            {
+                if (idxVm >= 0) LineToLineDistances[idxVm] = updated; else LineToLineDistances.Add(updated);
+                if (idxCfg >= 0) VisionConfig.LineToLineDistances[idxCfg] = updated; else VisionConfig.LineToLineDistances.Add(updated);
+                SelectedLineToLineDistance = updated;
+            },
+            () =>
+            {
+                if (idxVm >= 0) LineToLineDistances[idxVm] = before; else LineToLineDistances.Remove(updated);
+                if (idxCfg >= 0) VisionConfig.LineToLineDistances[idxCfg] = before; else VisionConfig.LineToLineDistances.Remove(updated);
+                SelectedLineToLineDistance = before;
+            }));
+    }
+
+    private void DeleteLineToLineDistance()
+    {
+        var d = SelectedLineToLineDistance;
+        if (d is null)
+        {
+            return;
+        }
+
+        var idxVm = LineToLineDistances.IndexOf(d);
+        var idxCfg = VisionConfig.LineToLineDistances.IndexOf(d);
+
+        _undo.Execute(new UndoRedoManager.DelegateAction(
+            () =>
+            {
+                LineToLineDistances.Remove(d);
+                VisionConfig.LineToLineDistances.Remove(d);
+                SelectedLineToLineDistance = LineToLineDistances.Count > 0 ? LineToLineDistances[0] : null;
+            },
+            () =>
+            {
+                if (idxVm >= 0 && idxVm <= LineToLineDistances.Count) LineToLineDistances.Insert(idxVm, d); else LineToLineDistances.Add(d);
+                if (idxCfg >= 0 && idxCfg <= VisionConfig.LineToLineDistances.Count) VisionConfig.LineToLineDistances.Insert(idxCfg, d); else VisionConfig.LineToLineDistances.Add(d);
+                SelectedLineToLineDistance = d;
+            }));
+    }
+
+    private void AddPointToLineDistance()
+    {
+        if (string.IsNullOrWhiteSpace(PointToLineName) || string.IsNullOrWhiteSpace(PointToLinePoint) || string.IsNullOrWhiteSpace(PointToLineLine))
+        {
+            return;
+        }
+
+        var spec = new PointToLineDistance
+        {
+            Name = PointToLineName.Trim(),
+            Point = PointToLinePoint.Trim(),
+            Line = PointToLineLine.Trim(),
+            Nominal = PointToLineNominal,
+            TolerancePlus = PointToLineTolPlus,
+            ToleranceMinus = PointToLineTolMinus
+        };
+
+        _undo.Execute(new UndoRedoManager.DelegateAction(
+            () =>
+            {
+                VisionConfig.PointToLineDistances.Add(spec);
+                PointToLineDistances.Add(spec);
+                SelectedPointToLineDistance = spec;
+            },
+            () =>
+            {
+                VisionConfig.PointToLineDistances.Remove(spec);
+                PointToLineDistances.Remove(spec);
+                SelectedPointToLineDistance = PointToLineDistances.Count > 0 ? PointToLineDistances[0] : null;
+            }));
+    }
+
+    private void UpdatePointToLineDistance()
+    {
+        var selected = SelectedPointToLineDistance;
+        if (selected is null)
+        {
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(PointToLineName) || string.IsNullOrWhiteSpace(PointToLinePoint) || string.IsNullOrWhiteSpace(PointToLineLine))
+        {
+            return;
+        }
+
+        var before = selected;
+        var updated = new PointToLineDistance
+        {
+            Name = PointToLineName.Trim(),
+            Point = PointToLinePoint.Trim(),
+            Line = PointToLineLine.Trim(),
+            Nominal = PointToLineNominal,
+            TolerancePlus = PointToLineTolPlus,
+            ToleranceMinus = PointToLineTolMinus
+        };
+
+        var idxVm = PointToLineDistances.IndexOf(selected);
+        var idxCfg = VisionConfig.PointToLineDistances.IndexOf(selected);
+
+        _undo.Execute(new UndoRedoManager.DelegateAction(
+            () =>
+            {
+                if (idxVm >= 0) PointToLineDistances[idxVm] = updated; else PointToLineDistances.Add(updated);
+                if (idxCfg >= 0) VisionConfig.PointToLineDistances[idxCfg] = updated; else VisionConfig.PointToLineDistances.Add(updated);
+                SelectedPointToLineDistance = updated;
+            },
+            () =>
+            {
+                if (idxVm >= 0) PointToLineDistances[idxVm] = before; else PointToLineDistances.Remove(updated);
+                if (idxCfg >= 0) VisionConfig.PointToLineDistances[idxCfg] = before; else VisionConfig.PointToLineDistances.Remove(updated);
+                SelectedPointToLineDistance = before;
+            }));
+    }
+
+    private void DeletePointToLineDistance()
+    {
+        var d = SelectedPointToLineDistance;
+        if (d is null)
+        {
+            return;
+        }
+
+        var idxVm = PointToLineDistances.IndexOf(d);
+        var idxCfg = VisionConfig.PointToLineDistances.IndexOf(d);
+
+        _undo.Execute(new UndoRedoManager.DelegateAction(
+            () =>
+            {
+                PointToLineDistances.Remove(d);
+                VisionConfig.PointToLineDistances.Remove(d);
+                SelectedPointToLineDistance = PointToLineDistances.Count > 0 ? PointToLineDistances[0] : null;
+            },
+            () =>
+            {
+                if (idxVm >= 0 && idxVm <= PointToLineDistances.Count) PointToLineDistances.Insert(idxVm, d); else PointToLineDistances.Add(d);
+                if (idxCfg >= 0 && idxCfg <= VisionConfig.PointToLineDistances.Count) VisionConfig.PointToLineDistances.Insert(idxCfg, d); else VisionConfig.PointToLineDistances.Add(d);
+                SelectedPointToLineDistance = d;
             }));
     }
 
@@ -1260,6 +2115,115 @@ public sealed partial class TeachViewModel : ObservableObject
                 Y = p.WorldPosition.Y,
                 Stroke = Brushes.DeepSkyBlue,
                 Label = p.Name
+            });
+        }
+
+        foreach (var l in VisionConfig.Lines)
+        {
+            if (l.SearchRoi.Width <= 0 || l.SearchRoi.Height <= 0)
+            {
+                continue;
+            }
+
+            OverlayItems.Add(new OverlayRectItem
+            {
+                X = l.SearchRoi.X,
+                Y = l.SearchRoi.Y,
+                Width = l.SearchRoi.Width,
+                Height = l.SearchRoi.Height,
+                Stroke = Brushes.MediumPurple,
+                Label = $"{l.Name} L"
+            });
+        }
+
+        var detectedLines = new Dictionary<string, LineDetectResult>(StringComparer.OrdinalIgnoreCase);
+        if (_imageMat is not null)
+        {
+            using var processed = _preprocessor.Run(_imageMat, VisionConfig.Preprocess);
+            foreach (var l in VisionConfig.Lines)
+            {
+                if (l.SearchRoi.Width <= 0 || l.SearchRoi.Height <= 0)
+                {
+                    continue;
+                }
+
+                var det = _lineDetector.DetectLongestLine(processed, l.SearchRoi, l.Canny1, l.Canny2, l.HoughThreshold, l.MinLineLength, l.MaxLineGap);
+                var named = det with { Name = l.Name };
+                detectedLines[l.Name] = named;
+
+                if (named.Found)
+                {
+                    OverlayItems.Add(new OverlayLineItem
+                    {
+                        X1 = named.P1.X,
+                        Y1 = named.P1.Y,
+                        X2 = named.P2.X,
+                        Y2 = named.P2.Y,
+                        Stroke = Brushes.MediumPurple,
+                        Label = named.Name
+                    });
+                }
+            }
+        }
+
+        foreach (var dd in VisionConfig.LineToLineDistances)
+        {
+            if (string.IsNullOrWhiteSpace(dd.Name) || string.IsNullOrWhiteSpace(dd.LineA) || string.IsNullOrWhiteSpace(dd.LineB))
+            {
+                continue;
+            }
+
+            if (!detectedLines.TryGetValue(dd.LineA, out var la) || !detectedLines.TryGetValue(dd.LineB, out var lb) || !la.Found || !lb.Found)
+            {
+                continue;
+            }
+
+            var (distPx, ca, cb) = Geometry2D.SegmentToSegmentDistance(la.P1, la.P2, lb.P1, lb.P2);
+            var mm = VisionConfig.PixelsPerMm > 0 ? distPx / VisionConfig.PixelsPerMm : distPx;
+            var pass = mm >= (dd.Nominal - dd.ToleranceMinus) && mm <= (dd.Nominal + dd.TolerancePlus);
+
+            OverlayItems.Add(new OverlayLineItem
+            {
+                X1 = ca.X,
+                Y1 = ca.Y,
+                X2 = cb.X,
+                Y2 = cb.Y,
+                Stroke = pass ? Brushes.Lime : Brushes.Red,
+                Label = $"{dd.Name}: {mm:0.00} mm"
+            });
+        }
+
+        foreach (var dd in VisionConfig.PointToLineDistances)
+        {
+            if (string.IsNullOrWhiteSpace(dd.Name) || string.IsNullOrWhiteSpace(dd.Point) || string.IsNullOrWhiteSpace(dd.Line))
+            {
+                continue;
+            }
+
+            var p = VisionConfig.Points.FirstOrDefault(x => string.Equals(x.Name, dd.Point, StringComparison.OrdinalIgnoreCase));
+            if (p is null)
+            {
+                continue;
+            }
+
+            if (!detectedLines.TryGetValue(dd.Line, out var l) || !l.Found)
+            {
+                continue;
+            }
+
+            var pp = new Point2d(p.WorldPosition.X, p.WorldPosition.Y);
+            var (distPx, closest) = Geometry2D.PointToSegmentDistance(pp, l.P1, l.P2);
+            var mm = VisionConfig.PixelsPerMm > 0 ? distPx / VisionConfig.PixelsPerMm : distPx;
+            var pass = mm >= (dd.Nominal - dd.ToleranceMinus) && mm <= (dd.Nominal + dd.TolerancePlus);
+
+            OverlayItems.Add(new OverlayLineItem
+            {
+                X1 = pp.X,
+                Y1 = pp.Y,
+                X2 = closest.X,
+                Y2 = closest.Y,
+                Stroke = pass ? Brushes.Lime : Brushes.Red,
+                Label = $"{dd.Name}: {mm:0.00} mm"
             });
         }
 

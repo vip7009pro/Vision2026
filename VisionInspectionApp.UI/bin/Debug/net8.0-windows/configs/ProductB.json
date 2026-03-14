@@ -1,6 +1,6 @@
 {
   "ProductCode": "ProductB",
-  "PixelsPerMm": 1,
+  "PixelsPerMm": 17.755021295723033,
   "Preprocess": {
     "UseGray": true,
     "UseGaussianBlur": false,

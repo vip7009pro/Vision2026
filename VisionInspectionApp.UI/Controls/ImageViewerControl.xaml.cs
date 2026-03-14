@@ -1,9 +1,13 @@
+using System;
+using System.Collections.Generic;
+using System.Collections.Specialized;
+using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
-using System.Windows.Shapes;
 using System.Windows.Media.Imaging;
+using System.Windows.Shapes;
 using VisionInspectionApp.Models;
 
 namespace VisionInspectionApp.UI.Controls;
@@ -50,7 +54,7 @@ public partial class ImageViewerControl : UserControl
         nameof(OverlayItems),
         typeof(IEnumerable<OverlayItem>),
         typeof(ImageViewerControl),
-        new PropertyMetadata(null, (_, __) => ((ImageViewerControl)_).RedrawOverlays()));
+        new PropertyMetadata(null, OnOverlayItemsChanged));
 
     public ImageViewerControl()
     {
@@ -107,10 +111,32 @@ public partial class ImageViewerControl : UserControl
         set => SetValue(LineSelectedCommandProperty, value);
     }
 
+    private int _lastPixelWidth;
+    private int _lastPixelHeight;
+
     private static void OnImageSourceChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
     {
         var c = (ImageViewerControl)d;
-        c.ResetView();
+
+        // Keep zoom/pan when the preview refreshes with the same-sized image.
+        // Reset only when the actual image size changes (or when switching from/to null).
+        var newBmp = e.NewValue as BitmapSource;
+        if (newBmp is null)
+        {
+            c._lastPixelWidth = 0;
+            c._lastPixelHeight = 0;
+            c.ResetView();
+        }
+        else
+        {
+            var changed = c._lastPixelWidth != newBmp.PixelWidth || c._lastPixelHeight != newBmp.PixelHeight;
+            c._lastPixelWidth = newBmp.PixelWidth;
+            c._lastPixelHeight = newBmp.PixelHeight;
+            if (changed)
+            {
+                c.ResetView();
+            }
+        }
         c.RedrawOverlays();
     }
 
@@ -233,9 +259,120 @@ public partial class ImageViewerControl : UserControl
         set => SetValue(OverlayItemsProperty, value);
     }
 
+    private INotifyCollectionChanged? _overlayNotify;
+
+    private static void OnOverlayItemsChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+    {
+        var c = (ImageViewerControl)d;
+
+        if (c._overlayNotify is not null)
+        {
+            c._overlayNotify.CollectionChanged -= c.OverlayItems_CollectionChanged;
+            c._overlayNotify = null;
+        }
+
+        c._overlayNotify = e.NewValue as INotifyCollectionChanged;
+        if (c._overlayNotify is not null)
+        {
+            c._overlayNotify.CollectionChanged += c.OverlayItems_CollectionChanged;
+        }
+
+        c.RedrawOverlays();
+    }
+
+    private void OverlayItems_CollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
+    {
+        RedrawOverlays();
+    }
+
+    private string? GetDesiredRoiLabelForDraw(RoiDrawKind kind)
+    {
+        if (OverlayItems is null)
+        {
+            return _activeRoiLabel;
+        }
+
+        var rectLabels = OverlayItems
+            .OfType<OverlayRectItem>()
+            .Select(x => x.Label)
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .Select(x => x!.Trim())
+            .ToList();
+
+        bool EndsWith(string label, string suffix) => label.EndsWith(suffix, StringComparison.OrdinalIgnoreCase);
+
+        // Helper: if active label is for the same tool name, try swapping suffix.
+        // Important: when teaching a brand-new Template ROI, the "... T" overlay may not exist yet.
+        // In that case we still return the expected label so the VM can create/update it.
+        string? TrySwapSuffix(string? active, string toSuffix)
+        {
+            if (string.IsNullOrWhiteSpace(active)) return null;
+            var parts = active.Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            if (parts.Length != 2) return null;
+            return $"{parts[0]} {toSuffix}";
+        }
+
+        if (kind == RoiDrawKind.Template)
+        {
+            // Prefer active T; otherwise swap S->T; otherwise any T in overlays.
+            if (!string.IsNullOrWhiteSpace(_activeRoiLabel) && EndsWith(_activeRoiLabel!, " T")) return _activeRoiLabel;
+
+            var swapped = TrySwapSuffix(_activeRoiLabel, "T");
+            if (!string.IsNullOrWhiteSpace(swapped)) return swapped;
+
+            var t = rectLabels.FirstOrDefault(x => EndsWith(x, " T"));
+            if (!string.IsNullOrWhiteSpace(t)) return t;
+
+            // If we only have a Search ROI overlay, synthesize a matching Template label.
+            var s = rectLabels.FirstOrDefault(x => EndsWith(x, " S"));
+            if (!string.IsNullOrWhiteSpace(s))
+            {
+                var parts = s.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+                if (parts.Length == 2)
+                {
+                    return $"{parts[0]} T";
+                }
+            }
+
+            if (rectLabels.Any(x => string.Equals(x, "Origin S", StringComparison.OrdinalIgnoreCase)))
+            {
+                return "Origin T";
+            }
+
+            return _activeRoiLabel;
+        }
+
+        if (kind == RoiDrawKind.Search)
+        {
+            // For Search: Point uses " S", Line uses " L", Origin uses "Origin S".
+            // Prefer active S/L; otherwise swap T->S; otherwise any S; otherwise any L.
+            if (!string.IsNullOrWhiteSpace(_activeRoiLabel) && (EndsWith(_activeRoiLabel!, " S") || EndsWith(_activeRoiLabel!, " L"))) return _activeRoiLabel;
+
+            var swapped = TrySwapSuffix(_activeRoiLabel, "S");
+            if (!string.IsNullOrWhiteSpace(swapped)) return swapped;
+
+            var s = rectLabels.FirstOrDefault(x => EndsWith(x, " S"));
+            if (!string.IsNullOrWhiteSpace(s)) return s;
+
+            var l = rectLabels.FirstOrDefault(x => EndsWith(x, " L"));
+            if (!string.IsNullOrWhiteSpace(l)) return l;
+        }
+
+        return _activeRoiLabel;
+    }
+
     private bool _dragging;
     private Point _start;
     private Rectangle? _rect;
+
+    private enum RoiDrawKind
+    {
+        None = 0,
+        Search = 1,
+        Template = 2
+    }
+
+    private RoiDrawKind _roiDrawKind;
 
     private bool _lineDragging;
     private Point _lineStart;
@@ -525,6 +662,14 @@ public partial class ImageViewerControl : UserControl
             return;
         }
 
+        // Deterministic ROI teaching gesture:
+        // - Ctrl + drag => Search ROI
+        // - Shift + drag => Template ROI
+        // If both are held, prefer Template (Shift).
+        _roiDrawKind = Keyboard.Modifiers.HasFlag(ModifierKeys.Shift)
+            ? RoiDrawKind.Template
+            : RoiDrawKind.Search;
+
         _dragging = true;
         _start = ViewToContent(e.GetPosition(PART_Overlay));
 
@@ -682,9 +827,19 @@ public partial class ImageViewerControl : UserControl
 
         var roi = ConvertContentRoiToPixelRoi(bmp, x, y, w, h);
 
-        if (RoiSelectedCommand?.CanExecute(roi) == true)
+        object arg = roi;
+        if (EnableRoiEditing)
         {
-            RoiSelectedCommand.Execute(roi);
+            var desiredLabel = GetDesiredRoiLabelForDraw(_roiDrawKind);
+            if (!string.IsNullOrWhiteSpace(desiredLabel))
+            {
+                arg = new RoiSelection(desiredLabel, roi);
+            }
+        }
+
+        if (RoiSelectedCommand?.CanExecute(arg) == true)
+        {
+            RoiSelectedCommand.Execute(arg);
         }
 
         RedrawOverlays();

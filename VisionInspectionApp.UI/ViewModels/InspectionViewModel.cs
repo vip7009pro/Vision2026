@@ -273,6 +273,26 @@ public sealed partial class InspectionViewModel : ObservableObject
                 }
             }
 
+            foreach (var l in _config.Lines)
+            {
+                if (hasPose)
+                {
+                    AddRotatedRoiOverlay(l.SearchRoi, $"{l.Name} L", Brushes.MediumPurple, originTeach, originFound, angleDeg);
+                }
+                else if (l.SearchRoi.Width > 0 && l.SearchRoi.Height > 0)
+                {
+                    OverlayItems.Add(new OverlayRectItem
+                    {
+                        X = l.SearchRoi.X,
+                        Y = l.SearchRoi.Y,
+                        Width = l.SearchRoi.Width,
+                        Height = l.SearchRoi.Height,
+                        Stroke = Brushes.MediumPurple,
+                        Label = $"{l.Name} L"
+                    });
+                }
+            }
+
             foreach (var p in _config.Points)
             {
                 if (hasPose)
@@ -352,6 +372,24 @@ public sealed partial class InspectionViewModel : ObservableObject
 
         if (LastResult is not null)
         {
+            foreach (var l in LastResult.Lines)
+            {
+                if (!l.Found)
+                {
+                    continue;
+                }
+
+                OverlayItems.Add(new OverlayLineItem
+                {
+                    X1 = l.P1.X,
+                    Y1 = l.P1.Y,
+                    X2 = l.P2.X,
+                    Y2 = l.P2.Y,
+                    Stroke = Brushes.MediumPurple,
+                    Label = l.Name
+                });
+            }
+
             foreach (var p in LastResult.Points)
             {
                 var pTeach = hasPose
@@ -385,8 +423,8 @@ public sealed partial class InspectionViewModel : ObservableObject
                     Y2 = b.Y,
                     Stroke = d.Pass ? Brushes.Lime : Brushes.Red,
                     Label = _config?.PixelsPerMm > 0
-                        ? $"{d.Name}: {d.Value / _config.PixelsPerMm:0.00} mm ({d.Value:0.0} px)"
-                        : $"{d.Name}: {d.Value:0.0} px"
+                        ? $"{d.Name}: {d.Value:0.00} mm ({d.Value * _config.PixelsPerMm:0.0} px)"
+                        : $"{d.Name}: {d.Value:0.00}"
                 });
             }
 
@@ -404,6 +442,51 @@ public sealed partial class InspectionViewModel : ObservableObject
                         Label = def.Type
                     });
                 }
+            }
+        }
+
+        if (LastResult is not null)
+        {
+            foreach (var l in LastResult.Lines)
+            {
+                if (!l.Found) continue;
+                OverlayItems.Add(new OverlayLineItem
+                {
+                    X1 = l.P1.X,
+                    Y1 = l.P1.Y,
+                    X2 = l.P2.X,
+                    Y2 = l.P2.Y,
+                    Stroke = Brushes.MediumPurple,
+                    Label = l.Name
+                });
+            }
+
+            foreach (var d in LastResult.LineToLineDistances)
+            {
+                if (double.IsNaN(d.Value)) continue;
+                OverlayItems.Add(new OverlayLineItem
+                {
+                    X1 = d.ClosestA.X,
+                    Y1 = d.ClosestA.Y,
+                    X2 = d.ClosestB.X,
+                    Y2 = d.ClosestB.Y,
+                    Stroke = d.Pass ? Brushes.Lime : Brushes.Red,
+                    Label = $"{d.Name}: {d.Value:0.00} mm"
+                });
+            }
+
+            foreach (var d in LastResult.PointToLineDistances)
+            {
+                if (double.IsNaN(d.Value)) continue;
+                OverlayItems.Add(new OverlayLineItem
+                {
+                    X1 = d.ClosestA.X,
+                    Y1 = d.ClosestA.Y,
+                    X2 = d.ClosestB.X,
+                    Y2 = d.ClosestB.Y,
+                    Stroke = d.Pass ? Brushes.Lime : Brushes.Red,
+                    Label = $"{d.Name}: {d.Value:0.00} mm"
+                });
             }
         }
     }

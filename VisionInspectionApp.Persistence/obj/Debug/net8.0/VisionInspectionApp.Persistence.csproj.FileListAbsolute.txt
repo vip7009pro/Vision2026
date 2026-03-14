@@ -12,6 +12,7 @@ G:\NODEJS\Vision2026\VisionInspectionApp.Persistence\obj\Debug\net8.0\VisionInsp
 G:\NODEJS\Vision2026\VisionInspectionApp.Persistence\obj\Debug\net8.0\VisionInspectionApp.Persistence.AssemblyInfoInputs.cache
 G:\NODEJS\Vision2026\VisionInspectionApp.Persistence\obj\Debug\net8.0\VisionInspectionApp.Persistence.AssemblyInfo.cs
 G:\NODEJS\Vision2026\VisionInspectionApp.Persistence\obj\Debug\net8.0\VisionInspectionApp.Persistence.csproj.CoreCompileInputs.cache
+G:\NODEJS\Vision2026\VisionInspectionApp.Persistence\obj\Debug\net8.0\VisionInspectionApp.Persistence.sourcelink.json
 G:\NODEJS\Vision2026\VisionInspectionApp.Persistence\obj\Debug\net8.0\VisionIn.58EEDD96.Up2Date
 G:\NODEJS\Vision2026\VisionInspectionApp.Persistence\obj\Debug\net8.0\VisionInspectionApp.Persistence.dll
 G:\NODEJS\Vision2026\VisionInspectionApp.Persistence\obj\Debug\net8.0\refint\VisionInspectionApp.Persistence.dll

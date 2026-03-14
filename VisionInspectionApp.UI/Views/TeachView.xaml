@@ -77,7 +77,7 @@
                         <StackPanel>
                             <TextBlock FontWeight="Bold" Text="Calibration" Margin="0,0,0,6" />
                             <TextBlock Text="Pixels / mm" />
-                            <TextBox Text="{Binding PixelsPerMm, UpdateSourceTrigger=PropertyChanged}" />
+                            <TextBox Text="{Binding PixelsPerMm, Converter={StaticResource DoubleConv}, UpdateSourceTrigger=PropertyChanged}" />
                         </StackPanel>
                     </Border>
 
@@ -86,6 +86,44 @@
                         <Button DockPanel.Dock="Right" Content="Delete" Command="{Binding DeletePointCommand}" Margin="6,0,0,0" />
                         <ListBox Height="160" Width="220" ItemsSource="{Binding Points}" SelectedItem="{Binding SelectedPoint}" />
                     </DockPanel>
+
+                    <TextBlock FontWeight="Bold" Text="Lines" Margin="0,8,0,6" />
+                    <DockPanel LastChildFill="False">
+                        <Button DockPanel.Dock="Right" Content="Delete" Command="{Binding DeleteLineToolCommand}" Margin="6,0,0,0" />
+                        <ListBox Height="120" Width="220" ItemsSource="{Binding Lines}" SelectedItem="{Binding SelectedLineTool}" />
+                    </DockPanel>
+
+                    <DockPanel LastChildFill="False" Margin="0,6,0,0">
+                        <TextBox Width="120" Text="{Binding NewLineToolName, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,6,0" />
+                        <Button Content="Add" Command="{Binding AddLineToolCommand}" />
+                    </DockPanel>
+
+                    <Border BorderBrush="#CCC" BorderThickness="1" Padding="8" Margin="0,8,0,0">
+                        <StackPanel>
+                            <TextBlock FontWeight="Bold" Text="Line Params" Margin="0,0,0,6" />
+
+                            <CheckBox Content="Preview" IsChecked="{Binding IsLinePreviewEnabled}" Margin="0,0,0,6" />
+
+                            <Border BorderBrush="#DDD" BorderThickness="1" Padding="4" Margin="0,0,0,6">
+                                <Image Source="{Binding LinePreviewImage}" Stretch="Uniform" Height="120" />
+                            </Border>
+
+                            <TextBlock Text="Canny 1" />
+                            <Slider Minimum="0" Maximum="255" Value="{Binding LineCanny1, UpdateSourceTrigger=PropertyChanged}" IsSnapToTickEnabled="True" TickFrequency="1" />
+
+                            <TextBlock Text="Canny 2" Margin="0,6,0,0" />
+                            <Slider Minimum="0" Maximum="255" Value="{Binding LineCanny2, UpdateSourceTrigger=PropertyChanged}" IsSnapToTickEnabled="True" TickFrequency="1" />
+
+                            <TextBlock Text="Hough Threshold" Margin="0,6,0,0" />
+                            <Slider Minimum="1" Maximum="200" Value="{Binding LineHoughThreshold, UpdateSourceTrigger=PropertyChanged}" IsSnapToTickEnabled="True" TickFrequency="1" />
+
+                            <TextBlock Text="Min Line Length" Margin="0,6,0,0" />
+                            <Slider Minimum="1" Maximum="500" Value="{Binding LineMinLineLength, UpdateSourceTrigger=PropertyChanged}" IsSnapToTickEnabled="True" TickFrequency="1" />
+
+                            <TextBlock Text="Max Line Gap" Margin="0,6,0,0" />
+                            <Slider Minimum="0" Maximum="200" Value="{Binding LineMaxLineGap, UpdateSourceTrigger=PropertyChanged}" IsSnapToTickEnabled="True" TickFrequency="1" />
+                        </StackPanel>
+                    </Border>
 
                     <Border BorderBrush="#CCC" BorderThickness="1" Padding="8" Margin="0,8,0,0">
                         <StackPanel>
@@ -101,13 +139,13 @@
                             <ComboBox ItemsSource="{Binding Points}" SelectedItem="{Binding DistancePointB}" />
 
                             <TextBlock Text="Nominal" Margin="0,6,0,0" />
-                            <TextBox Text="{Binding DistanceNominal, UpdateSourceTrigger=PropertyChanged}" />
+                            <TextBox Text="{Binding DistanceNominal, Converter={StaticResource DoubleConv}, UpdateSourceTrigger=PropertyChanged}" />
 
                             <TextBlock Text="Tol +" Margin="0,6,0,0" />
-                            <TextBox Text="{Binding DistanceTolPlus, UpdateSourceTrigger=PropertyChanged}" />
+                            <TextBox Text="{Binding DistanceTolPlus, Converter={StaticResource DoubleConv}, UpdateSourceTrigger=PropertyChanged}" />
 
                             <TextBlock Text="Tol -" Margin="0,6,0,0" />
-                            <TextBox Text="{Binding DistanceTolMinus, UpdateSourceTrigger=PropertyChanged}" />
+                            <TextBox Text="{Binding DistanceTolMinus, Converter={StaticResource DoubleConv}, UpdateSourceTrigger=PropertyChanged}" />
 
                             <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
                                 <Button Content="Add" Command="{Binding AddDistanceCommand}" MinWidth="80" Margin="0,0,6,0" />
@@ -132,6 +170,102 @@
                                 </TextBlock>
                             </DataTemplate>
                         </ListBox.ItemTemplate>
+                        </ListBox>
+                    </DockPanel>
+
+                    <Border BorderBrush="#CCC" BorderThickness="1" Padding="8" Margin="0,8,0,0">
+                        <StackPanel>
+                            <TextBlock FontWeight="Bold" Text="Line-Line Distance" Margin="0,0,0,6" />
+
+                            <TextBlock Text="Name" />
+                            <TextBox Text="{Binding LineToLineName, UpdateSourceTrigger=PropertyChanged}" />
+
+                            <TextBlock Text="Line A" Margin="0,6,0,0" />
+                            <ComboBox ItemsSource="{Binding Lines}" SelectedItem="{Binding LineToLineLineA}" />
+
+                            <TextBlock Text="Line B" Margin="0,6,0,0" />
+                            <ComboBox ItemsSource="{Binding Lines}" SelectedItem="{Binding LineToLineLineB}" />
+
+                            <TextBlock Text="Nominal" Margin="0,6,0,0" />
+                            <TextBox Text="{Binding LineToLineNominal, Converter={StaticResource DoubleConv}, UpdateSourceTrigger=PropertyChanged}" />
+
+                            <TextBlock Text="Tol +" Margin="0,6,0,0" />
+                            <TextBox Text="{Binding LineToLineTolPlus, Converter={StaticResource DoubleConv}, UpdateSourceTrigger=PropertyChanged}" />
+
+                            <TextBlock Text="Tol -" Margin="0,6,0,0" />
+                            <TextBox Text="{Binding LineToLineTolMinus, Converter={StaticResource DoubleConv}, UpdateSourceTrigger=PropertyChanged}" />
+
+                            <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                                <Button Content="Add" Command="{Binding AddLineToLineDistanceCommand}" MinWidth="80" Margin="0,0,6,0" />
+                                <Button Content="Update" Command="{Binding UpdateLineToLineDistanceCommand}" MinWidth="80" />
+                            </StackPanel>
+                        </StackPanel>
+                    </Border>
+
+                    <TextBlock FontWeight="Bold" Text="Line-Line Distances" Margin="0,8,0,6" />
+                    <DockPanel LastChildFill="False">
+                        <Button DockPanel.Dock="Right" Content="Delete" Command="{Binding DeleteLineToLineDistanceCommand}" Margin="6,0,0,0" />
+                        <ListBox Height="110" Width="220" ItemsSource="{Binding LineToLineDistances}" SelectedItem="{Binding SelectedLineToLineDistance}">
+                            <ListBox.ItemTemplate>
+                                <DataTemplate>
+                                    <TextBlock>
+                                        <Run Text="{Binding Name}" />
+                                        <Run Text=" (" />
+                                        <Run Text="{Binding LineA}" />
+                                        <Run Text=" - " />
+                                        <Run Text="{Binding LineB}" />
+                                        <Run Text=")" />
+                                    </TextBlock>
+                                </DataTemplate>
+                            </ListBox.ItemTemplate>
+                        </ListBox>
+                    </DockPanel>
+
+                    <Border BorderBrush="#CCC" BorderThickness="1" Padding="8" Margin="0,8,0,0">
+                        <StackPanel>
+                            <TextBlock FontWeight="Bold" Text="Point-Line Distance" Margin="0,0,0,6" />
+
+                            <TextBlock Text="Name" />
+                            <TextBox Text="{Binding PointToLineName, UpdateSourceTrigger=PropertyChanged}" />
+
+                            <TextBlock Text="Point" Margin="0,6,0,0" />
+                            <ComboBox ItemsSource="{Binding Points}" SelectedItem="{Binding PointToLinePoint}" />
+
+                            <TextBlock Text="Line" Margin="0,6,0,0" />
+                            <ComboBox ItemsSource="{Binding Lines}" SelectedItem="{Binding PointToLineLine}" />
+
+                            <TextBlock Text="Nominal" Margin="0,6,0,0" />
+                            <TextBox Text="{Binding PointToLineNominal, Converter={StaticResource DoubleConv}, UpdateSourceTrigger=PropertyChanged}" />
+
+                            <TextBlock Text="Tol +" Margin="0,6,0,0" />
+                            <TextBox Text="{Binding PointToLineTolPlus, Converter={StaticResource DoubleConv}, UpdateSourceTrigger=PropertyChanged}" />
+
+                            <TextBlock Text="Tol -" Margin="0,6,0,0" />
+                            <TextBox Text="{Binding PointToLineTolMinus, Converter={StaticResource DoubleConv}, UpdateSourceTrigger=PropertyChanged}" />
+
+                            <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                                <Button Content="Add" Command="{Binding AddPointToLineDistanceCommand}" MinWidth="80" Margin="0,0,6,0" />
+                                <Button Content="Update" Command="{Binding UpdatePointToLineDistanceCommand}" MinWidth="80" />
+                            </StackPanel>
+                        </StackPanel>
+                    </Border>
+
+                    <TextBlock FontWeight="Bold" Text="Point-Line Distances" Margin="0,8,0,6" />
+                    <DockPanel LastChildFill="False">
+                        <Button DockPanel.Dock="Right" Content="Delete" Command="{Binding DeletePointToLineDistanceCommand}" Margin="6,0,0,0" />
+                        <ListBox Height="110" Width="220" ItemsSource="{Binding PointToLineDistances}" SelectedItem="{Binding SelectedPointToLineDistance}">
+                            <ListBox.ItemTemplate>
+                                <DataTemplate>
+                                    <TextBlock>
+                                        <Run Text="{Binding Name}" />
+                                        <Run Text=" (" />
+                                        <Run Text="{Binding Point}" />
+                                        <Run Text=" - " />
+                                        <Run Text="{Binding Line}" />
+                                        <Run Text=")" />
+                                    </TextBlock>
+                                </DataTemplate>
+                            </ListBox.ItemTemplate>
                         </ListBox>
                     </DockPanel>
 

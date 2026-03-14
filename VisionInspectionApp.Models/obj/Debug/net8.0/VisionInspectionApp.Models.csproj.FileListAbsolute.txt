@@ -5,6 +5,7 @@ G:\NODEJS\Vision2026\VisionInspectionApp.Models\obj\Debug\net8.0\VisionInspectio
 G:\NODEJS\Vision2026\VisionInspectionApp.Models\obj\Debug\net8.0\VisionInspectionApp.Models.AssemblyInfoInputs.cache
 G:\NODEJS\Vision2026\VisionInspectionApp.Models\obj\Debug\net8.0\VisionInspectionApp.Models.AssemblyInfo.cs
 G:\NODEJS\Vision2026\VisionInspectionApp.Models\obj\Debug\net8.0\VisionInspectionApp.Models.csproj.CoreCompileInputs.cache
+G:\NODEJS\Vision2026\VisionInspectionApp.Models\obj\Debug\net8.0\VisionInspectionApp.Models.sourcelink.json
 G:\NODEJS\Vision2026\VisionInspectionApp.Models\obj\Debug\net8.0\VisionInspectionApp.Models.dll
 G:\NODEJS\Vision2026\VisionInspectionApp.Models\obj\Debug\net8.0\refint\VisionInspectionApp.Models.dll
 G:\NODEJS\Vision2026\VisionInspectionApp.Models\obj\Debug\net8.0\VisionInspectionApp.Models.pdb

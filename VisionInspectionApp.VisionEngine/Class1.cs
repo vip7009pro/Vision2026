@@ -8,6 +8,199 @@ public interface IMeasurement
     string Name { get; }
 }
 
+public static class Geometry2D
+{
+    private static double Dot(Point2d a, Point2d b)
+    {
+        return a.X * b.X + a.Y * b.Y;
+    }
+
+    public static double Distance(Point2d a, Point2d b)
+    {
+        var dx = b.X - a.X;
+        var dy = b.Y - a.Y;
+        return Math.Sqrt(dx * dx + dy * dy);
+    }
+
+    public static (double Dist, Point2d ClosestOnSegment) PointToSegmentDistance(Point2d p, Point2d a, Point2d b)
+    {
+        var ab = b - a;
+        var ap = p - a;
+        var ab2 = Dot(ab, ab);
+        if (ab2 <= 1e-12)
+        {
+            return (Distance(p, a), a);
+        }
+
+        var t = Dot(ap, ab) / ab2;
+        if (t < 0) t = 0;
+        if (t > 1) t = 1;
+        var proj = new Point2d(a.X + t * ab.X, a.Y + t * ab.Y);
+        return (Distance(p, proj), proj);
+    }
+
+    public static (double Dist, Point2d ClosestA, Point2d ClosestB) SegmentToSegmentDistance(Point2d a1, Point2d a2, Point2d b1, Point2d b2)
+    {
+        // Compute minimum of point-to-segment distances (good enough for 2D segments for our use case).
+        var (d1, c1) = PointToSegmentDistance(a1, b1, b2);
+        var (d2, c2) = PointToSegmentDistance(a2, b1, b2);
+        var (d3, c3) = PointToSegmentDistance(b1, a1, a2);
+        var (d4, c4) = PointToSegmentDistance(b2, a1, a2);
+
+        var min = d1;
+        var ca = a1;
+        var cb = c1;
+
+        if (d2 < min)
+        {
+            min = d2;
+            ca = a2;
+            cb = c2;
+        }
+
+        if (d3 < min)
+        {
+            min = d3;
+            ca = c3;
+            cb = b1;
+        }
+
+        if (d4 < min)
+        {
+            min = d4;
+            ca = c4;
+            cb = b2;
+        }
+
+        return (min, ca, cb);
+    }
+}
+
+public sealed class LineDetector
+{
+    public LineDetectResult DetectLongestLine(Mat image, Roi searchRoi, int canny1, int canny2, int houghThreshold, int minLineLength, int maxLineGap)
+    {
+        if (image is null)
+        {
+            throw new ArgumentNullException(nameof(image));
+        }
+
+        var roiRect = new Rect(searchRoi.X, searchRoi.Y, searchRoi.Width, searchRoi.Height)
+            .Intersect(new Rect(0, 0, image.Width, image.Height));
+        if (roiRect.Width <= 0 || roiRect.Height <= 0)
+        {
+            return new LineDetectResult(string.Empty, default, default, 0.0, false);
+        }
+
+        using var roi = new Mat(image, roiRect);
+        using var gray = roi.Channels() == 1 ? roi.Clone() : roi.CvtColor(ColorConversionCodes.BGR2GRAY);
+        using var edges = new Mat();
+
+        Cv2.Canny(gray, edges, canny1, canny2);
+
+        var lines = Cv2.HoughLinesP(
+            edges,
+            1,
+            Math.PI / 180.0,
+            houghThreshold,
+            minLineLength: minLineLength,
+            maxLineGap: maxLineGap);
+
+        if (lines is null || lines.Length == 0)
+        {
+            return new LineDetectResult(string.Empty, default, default, 0.0, false);
+        }
+
+        LineSegmentPoint best = lines[0];
+        var bestLen = 0.0;
+        foreach (var l in lines)
+        {
+            var p1 = new Point2d(l.P1.X, l.P1.Y);
+            var p2 = new Point2d(l.P2.X, l.P2.Y);
+            var len = Geometry2D.Distance(p1, p2);
+            if (len > bestLen)
+            {
+                bestLen = len;
+                best = l;
+            }
+        }
+
+        var gp1 = new Point2d(best.P1.X + roiRect.X, best.P1.Y + roiRect.Y);
+        var gp2 = new Point2d(best.P2.X + roiRect.X, best.P2.Y + roiRect.Y);
+        var (cp1, cp2, clipped) = ClipInfiniteLineToRect(gp1, gp2, roiRect);
+        if (clipped)
+        {
+            var len = Geometry2D.Distance(cp1, cp2);
+            return new LineDetectResult(string.Empty, cp1, cp2, len, true);
+        }
+
+        return new LineDetectResult(string.Empty, gp1, gp2, bestLen, true);
+    }
+
+    private static (Point2d P1, Point2d P2, bool Ok) ClipInfiniteLineToRect(Point2d p1, Point2d p2, Rect rect)
+    {
+        var xmin = rect.X;
+        var xmax = rect.X + rect.Width;
+        var ymin = rect.Y;
+        var ymax = rect.Y + rect.Height;
+
+        var dx = p2.X - p1.X;
+        var dy = p2.Y - p1.Y;
+        if (Math.Abs(dx) < 1e-12 && Math.Abs(dy) < 1e-12)
+        {
+            return (p1, p2, false);
+        }
+
+        var pts = new System.Collections.Generic.List<Point2d>(4);
+
+        if (Math.Abs(dx) > 1e-12)
+        {
+            var t = (xmin - p1.X) / dx;
+            var y = p1.Y + t * dy;
+            if (y >= ymin && y <= ymax) pts.Add(new Point2d(xmin, y));
+
+            t = (xmax - p1.X) / dx;
+            y = p1.Y + t * dy;
+            if (y >= ymin && y <= ymax) pts.Add(new Point2d(xmax, y));
+        }
+
+        if (Math.Abs(dy) > 1e-12)
+        {
+            var t = (ymin - p1.Y) / dy;
+            var x = p1.X + t * dx;
+            if (x >= xmin && x <= xmax) pts.Add(new Point2d(x, ymin));
+
+            t = (ymax - p1.Y) / dy;
+            x = p1.X + t * dx;
+            if (x >= xmin && x <= xmax) pts.Add(new Point2d(x, ymax));
+        }
+
+        if (pts.Count < 2)
+        {
+            return (p1, p2, false);
+        }
+
+        var bestA = pts[0];
+        var bestB = pts[1];
+        var bestDist = Geometry2D.Distance(bestA, bestB);
+        for (int i = 0; i < pts.Count; i++)
+        {
+            for (int j = i + 1; j < pts.Count; j++)
+            {
+                var d = Geometry2D.Distance(pts[i], pts[j]);
+                if (d > bestDist)
+                {
+                    bestDist = d;
+                    bestA = pts[i];
+                    bestB = pts[j];
+                }
+            }
+        }
+
+        return (bestA, bestB, true);
+    }
+}
+
 public interface IDefectDetector
 {
     DefectDetectionResult Detect(Mat image, DefectInspectionConfig config);
@@ -16,6 +209,20 @@ public interface IDefectDetector
 public sealed record MatchResult(Point2d Position, double Score, double AngleDeg);
 
 public sealed record DistanceCheckResult(string Name, string PointA, string PointB, double Value, double Nominal, double TolPlus, double TolMinus, bool Pass);
+
+public sealed record LineDetectResult(string Name, Point2d P1, Point2d P2, double LengthPx, bool Found);
+
+public sealed record SegmentDistanceResult(
+    string Name,
+    string RefA,
+    string RefB,
+    double Value,
+    double Nominal,
+    double TolPlus,
+    double TolMinus,
+    bool Pass,
+    Point2d ClosestA,
+    Point2d ClosestB);
 
 public sealed record DefectBlob(Rect BoundingBox, double Area, string Type);
 
@@ -487,9 +694,10 @@ public sealed class DistanceCalculator
         return Math.Sqrt(dx * dx + dy * dy);
     }
 
-    public DistanceCheckResult CheckDistance(LineDistance spec, Point2d a, Point2d b)
+    public DistanceCheckResult CheckDistance(LineDistance spec, Point2d a, Point2d b, double pixelsPerMm)
     {
-        var value = Distance(a, b);
+        var distPx = Distance(a, b);
+        var value = pixelsPerMm > 0 ? distPx / pixelsPerMm : distPx;
         var min = spec.Nominal - spec.ToleranceMinus;
         var max = spec.Nominal + spec.TolerancePlus;
         var pass = value >= min && value <= max;
