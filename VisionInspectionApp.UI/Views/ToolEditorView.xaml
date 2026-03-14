@@ -36,7 +36,8 @@
         <Grid Grid.Row="1">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="260" />
-                <ColumnDefinition Width="3*" />
+                <ColumnDefinition Width="4*" />
+                <ColumnDefinition Width="6" />
                 <ColumnDefinition Width="7*" />
             </Grid.ColumnDefinitions>
 
@@ -105,6 +106,14 @@
                             </StackPanel>
 
                             <CheckBox Content="Morphology" IsChecked="{Binding UseMorphology, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,6" />
+
+                            <StackPanel Visibility="{Binding IsToolWithPreprocessInput, Converter={StaticResource BoolToVis}}">
+                                <TextBlock Text="Tool Preprocess" FontWeight="SemiBold" Margin="0,8,0,6" />
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                                    <TextBlock Text="Pre" Width="60" VerticalAlignment="Center" />
+                                    <ComboBox Width="160" ItemsSource="{Binding AvailablePreprocessChoices}" SelectedItem="{Binding SelectedToolPreprocessChoice, UpdateSourceTrigger=PropertyChanged}" />
+                                </StackPanel>
+                            </StackPanel>
 
                             <StackPanel Visibility="{Binding IsLineNode, Converter={StaticResource BoolToVis}}">
                                 <TextBlock Text="Line Params" FontWeight="SemiBold" Margin="0,8,0,6" />
@@ -243,6 +252,39 @@
                                 <TextBox Text="{Binding Condition_Expression, UpdateSourceTrigger=PropertyChanged}" AcceptsReturn="True" Height="80" TextWrapping="Wrap" />
                             </StackPanel>
 
+                            <StackPanel Visibility="{Binding IsBlobDetectionNode, Converter={StaticResource BoolToVis}}">
+                                <TextBlock Text="Blob Detection" FontWeight="SemiBold" Margin="0,8,0,6" />
+
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                                    <TextBlock Text="Polarity" Width="60" VerticalAlignment="Center" />
+                                    <ComboBox Width="160" ItemsSource="{Binding AvailableBlobPolarities}" SelectedItem="{Binding Blob_Polarity, UpdateSourceTrigger=PropertyChanged}" />
+                                </StackPanel>
+
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,2">
+                                    <TextBlock Text="Thr" Width="60" VerticalAlignment="Center" />
+                                    <TextBlock Text="{Binding Blob_Threshold}" Width="40" />
+                                </StackPanel>
+                                <Slider Minimum="0" Maximum="255" Value="{Binding Blob_Threshold, UpdateSourceTrigger=PropertyChanged}" IsSnapToTickEnabled="True" TickFrequency="1" Margin="0,0,0,6" />
+
+                                <Border BorderBrush="#CCC" BorderThickness="1" Padding="2" Margin="0,0,0,6">
+                                    <Image Source="{Binding BlobThresholdPreviewImage}" Stretch="Uniform" Height="120" />
+                                </Border>
+
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,2">
+                                    <TextBlock Text="MinA" Width="60" VerticalAlignment="Center" />
+                                    <TextBox Width="80" Text="{Binding Blob_MinBlobArea, UpdateSourceTrigger=PropertyChanged}" />
+                                </StackPanel>
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                                    <TextBlock Text="MaxA" Width="60" VerticalAlignment="Center" />
+                                    <TextBox Width="80" Text="{Binding Blob_MaxBlobArea, UpdateSourceTrigger=PropertyChanged}" />
+                                </StackPanel>
+
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                                    <TextBlock Text="Count" Width="60" VerticalAlignment="Center" />
+                                    <TextBlock Text="{Binding Blob_LastRunCount, TargetNullValue='-'}" Width="80" />
+                                </StackPanel>
+                            </StackPanel>
+
                             <Button Content="Delete Node" Command="{Binding DeleteSelectedNodeCommand}" />
                             </StackPanel>
                         </ScrollViewer>
@@ -259,8 +301,12 @@
 
                     <TextBlock FontWeight="Bold" Text="Canvas" Margin="0,0,0,6" />
 
-                    <ScrollViewer Grid.Row="1" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto">
-                        <Canvas x:Name="EditorCanvas" Background="#11111111" Width="1200" Height="800" AllowDrop="True" Drop="EditorCanvas_Drop" MouseMove="EditorCanvas_MouseMove" MouseLeftButtonUp="EditorCanvas_MouseLeftButtonUp">
+                    <ScrollViewer x:Name="CanvasScrollViewer" Grid.Row="1" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto">
+                        <Canvas x:Name="EditorCanvas" Background="#11111111" Width="2000" Height="2000" AllowDrop="True" Drop="EditorCanvas_Drop" MouseMove="EditorCanvas_MouseMove" MouseLeftButtonUp="EditorCanvas_MouseLeftButtonUp"
+                                Focusable="True" PreviewKeyDown="EditorCanvas_PreviewKeyDown" PreviewMouseWheel="EditorCanvas_PreviewMouseWheel">
+                            <Canvas.LayoutTransform>
+                                <ScaleTransform ScaleX="{Binding CanvasZoom}" ScaleY="{Binding CanvasZoom}" />
+                            </Canvas.LayoutTransform>
 
                             <ItemsControl ItemsSource="{Binding Edges}">
                                 <ItemsControl.ItemsPanel>
@@ -270,12 +316,17 @@
                                 </ItemsControl.ItemsPanel>
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate>
-                                        <Path Data="{Binding PathData}" Stroke="#2E7DFF" StrokeThickness="2" />
+                                        <Path Data="{Binding PathData}" Stroke="#2E7DFF" StrokeThickness="2"
+                                              MouseLeftButtonDown="Edge_MouseLeftButtonDown" />
                                     </DataTemplate>
                                 </ItemsControl.ItemTemplate>
                             </ItemsControl>
 
                             <Path x:Name="WirePreviewPath" Stroke="#FF9800" StrokeThickness="2" Visibility="Collapsed" />
+
+                            <Rectangle x:Name="SelectionRect" Visibility="Collapsed" IsHitTestVisible="False"
+                                       Stroke="#FF9800" StrokeThickness="1" StrokeDashArray="4 2"
+                                       Fill="#33FF9800" />
 
                             <ItemsControl ItemsSource="{Binding Nodes}">
                                 <ItemsControl.ItemsPanel>
@@ -291,45 +342,74 @@
                                 </ItemsControl.ItemContainerStyle>
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate>
-                                        <Thumb DragDelta="NodeThumb_DragDelta" MouseLeftButtonDown="NodeThumb_MouseLeftButtonDown">
+                                        <Thumb DragStarted="NodeThumb_DragStarted" DragDelta="NodeThumb_DragDelta" DragCompleted="NodeThumb_DragCompleted" MouseLeftButtonDown="NodeThumb_MouseLeftButtonDown">
                                             <Thumb.Template>
                                                 <ControlTemplate TargetType="Thumb">
                                                     <Grid Width="160" Height="{Binding NodeHeight}">
-                                                        <Border BorderBrush="#666" BorderThickness="1" Background="#FFF" CornerRadius="4" Padding="8" Margin="0">
-                                                            <StackPanel>
-                                                                <TextBlock FontWeight="Bold" Text="{Binding Type}" />
-                                                                <TextBlock Text="{Binding RefName}" Foreground="#555" />
-                                                            </StackPanel>
+                                                        <Border CornerRadius="4" Padding="8" Margin="0">
+                                                            <Border.Style>
+                                                                <Style TargetType="Border">
+                                                                    <Setter Property="BorderBrush" Value="#666" />
+                                                                    <Setter Property="BorderThickness" Value="1" />
+                                                                    <Setter Property="Background" Value="#FFF" />
+                                                                    <Style.Triggers>
+                                                                        <DataTrigger Binding="{Binding IsSelected}" Value="True">
+                                                                            <Setter Property="BorderBrush" Value="#FF9800" />
+                                                                            <Setter Property="BorderThickness" Value="2" />
+                                                                            <Setter Property="Background" Value="#FFF8E1" />
+                                                                        </DataTrigger>
+                                                                    </Style.Triggers>
+                                                                </Style>
+                                                            </Border.Style>
+                                                            <DockPanel LastChildFill="True">
+                                                                <StackPanel DockPanel.Dock="Top" Margin="0,0,0,6">
+                                                                    <TextBlock FontWeight="Bold" Text="{Binding Type}" />
+                                                                    <TextBlock Text="{Binding RefName}" Foreground="#555" />
+                                                                </StackPanel>
+
+                                                                <Grid>
+                                                                    <Grid.ColumnDefinitions>
+                                                                        <ColumnDefinition Width="*" />
+                                                                        <ColumnDefinition Width="*" />
+                                                                    </Grid.ColumnDefinitions>
+
+                                                                    <ItemsControl Grid.Column="0" ItemsSource="{Binding InPorts}" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="-6,0,0,0">
+                                                                        <ItemsControl.ItemsPanel>
+                                                                            <ItemsPanelTemplate>
+                                                                                <StackPanel Orientation="Vertical" />
+                                                                            </ItemsPanelTemplate>
+                                                                        </ItemsControl.ItemsPanel>
+                                                                        <ItemsControl.ItemTemplate>
+                                                                            <DataTemplate>
+                                                                                <Grid Tag="{Binding Tag}" Margin="0,4,0,4">
+                                                                                    <Grid.ColumnDefinitions>
+                                                                                        <ColumnDefinition Width="12" />
+                                                                                        <ColumnDefinition Width="Auto" />
+                                                                                    </Grid.ColumnDefinitions>
+                                                                                    <Ellipse Width="12" Height="12" Fill="#2ECC71" Stroke="#1B5E20" StrokeThickness="1" />
+                                                                                    <TextBlock Grid.Column="1" Text="{Binding Name}" Margin="6,0,0,0" VerticalAlignment="Center" Foreground="#333" FontSize="11" />
+                                                                                </Grid>
+                                                                            </DataTemplate>
+                                                                        </ItemsControl.ItemTemplate>
+                                                                    </ItemsControl>
+
+                                                                    <ItemsControl Grid.Column="1" ItemsSource="{Binding OutPorts}" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,0,-6,0">
+                                                                        <ItemsControl.ItemsPanel>
+                                                                            <ItemsPanelTemplate>
+                                                                                <StackPanel Orientation="Vertical" />
+                                                                            </ItemsPanelTemplate>
+                                                                        </ItemsControl.ItemsPanel>
+                                                                        <ItemsControl.ItemTemplate>
+                                                                            <DataTemplate>
+                                                                                <Ellipse Width="12" Height="12" Fill="#2E7DFF" Stroke="#0D47A1" StrokeThickness="1"
+                                                                                         Tag="{Binding Tag}" Margin="0,4,0,4"
+                                                                                         MouseLeftButtonDown="OutPort_MouseLeftButtonDown" />
+                                                                            </DataTemplate>
+                                                                        </ItemsControl.ItemTemplate>
+                                                                    </ItemsControl>
+                                                                </Grid>
+                                                            </DockPanel>
                                                         </Border>
-
-                                                        <ItemsControl ItemsSource="{Binding InPorts}" HorizontalAlignment="Left" VerticalAlignment="Center" Margin="-6,0,0,0">
-                                                            <ItemsControl.ItemsPanel>
-                                                                <ItemsPanelTemplate>
-                                                                    <StackPanel Orientation="Vertical" />
-                                                                </ItemsPanelTemplate>
-                                                            </ItemsControl.ItemsPanel>
-                                                            <ItemsControl.ItemTemplate>
-                                                                <DataTemplate>
-                                                                    <Ellipse Width="12" Height="12" Fill="#2ECC71" Stroke="#1B5E20" StrokeThickness="1"
-                                                                             Tag="{Binding Tag}" Margin="0,4,0,4" />
-                                                                </DataTemplate>
-                                                            </ItemsControl.ItemTemplate>
-                                                        </ItemsControl>
-
-                                                        <ItemsControl ItemsSource="{Binding OutPorts}" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,-6,0">
-                                                            <ItemsControl.ItemsPanel>
-                                                                <ItemsPanelTemplate>
-                                                                    <StackPanel Orientation="Vertical" />
-                                                                </ItemsPanelTemplate>
-                                                            </ItemsControl.ItemsPanel>
-                                                            <ItemsControl.ItemTemplate>
-                                                                <DataTemplate>
-                                                                    <Ellipse Width="12" Height="12" Fill="#2E7DFF" Stroke="#0D47A1" StrokeThickness="1"
-                                                                             Tag="{Binding Tag}" Margin="0,4,0,4"
-                                                                             MouseLeftButtonDown="OutPort_MouseLeftButtonDown" />
-                                                                </DataTemplate>
-                                                            </ItemsControl.ItemTemplate>
-                                                        </ItemsControl>
                                                     </Grid>
                                                 </ControlTemplate>
                                             </Thumb.Template>
@@ -342,7 +422,9 @@
                 </Grid>
             </Border>
 
-            <Border Grid.Column="2" BorderBrush="#CCC" BorderThickness="1" Padding="8">
+            <GridSplitter Grid.Column="2" Width="6" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Background="#DDD" />
+
+            <Border Grid.Column="3" BorderBrush="#CCC" BorderThickness="1" Padding="8">
                 <Grid>
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />
@@ -358,7 +440,8 @@
                                                   OverlayItems="{Binding SelectedNodeOverlayItems}"
                                                   EnableRoiEditing="True"
                                                   RoiSelectedCommand="{Binding RoiSelectedCommand}"
-                                                  RoiEditedCommand="{Binding RoiEditedCommand}" />
+                                                  RoiEditedCommand="{Binding RoiEditedCommand}"
+                                                  RoiDeletedCommand="{Binding RoiDeletedCommand}" />
                     </Border>
 
                     <TextBlock Grid.Row="2" FontWeight="Bold" Text="Preview - Final Output" Margin="0,10,0,6" />

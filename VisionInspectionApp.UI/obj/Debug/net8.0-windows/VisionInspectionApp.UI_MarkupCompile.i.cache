@@ -16,5 +16,5 @@ G:\NODEJS\Vision2026\VisionInspectionApp.UI\App.xaml
 234-365208830
 Controls\ImageViewerControl.xaml;MainWindow.xaml;Views\CalibrationView.xaml;Views\InspectionView.xaml;Views\ManualInspectionView.xaml;Views\TeachView.xaml;Views\ToolEditorView.xaml;
 
-True
+False
 

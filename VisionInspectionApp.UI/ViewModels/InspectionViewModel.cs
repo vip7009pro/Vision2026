@@ -21,6 +21,8 @@ public sealed partial class InspectionViewModel : ObservableObject
 
     private Mat? _imageMat;
 
+    private const int MaxBlobOverlayCount = 300;
+
     public InspectionViewModel(IConfigService configService, IInspectionService inspectionService, ConfigStoreOptions storeOptions)
     {
         _configService = configService;
@@ -34,9 +36,21 @@ public sealed partial class InspectionViewModel : ObservableObject
 
         OverlayItems = new ObservableCollection<OverlayItem>();
         AvailableConfigs = new ObservableCollection<string>();
+        SpecResults = new ObservableCollection<SpecResultRow>();
 
         RefreshConfigs();
     }
+
+    public sealed record SpecResultRow(
+        string Tool,
+        string Name,
+        string RefA,
+        string RefB,
+        double Value,
+        double Nominal,
+        double TolPlus,
+        double TolMinus,
+        bool Pass);
 
     [ObservableProperty]
     private string _productCode = "ProductA";
@@ -52,6 +66,11 @@ public sealed partial class InspectionViewModel : ObservableObject
     [ObservableProperty]
     private InspectionResult? _lastResult;
 
+    partial void OnLastResultChanged(InspectionResult? value)
+    {
+        RefreshSpecResults();
+    }
+
     [ObservableProperty]
     private bool _showRois = true;
 
@@ -61,6 +80,8 @@ public sealed partial class InspectionViewModel : ObservableObject
     }
 
     public ObservableCollection<OverlayItem> OverlayItems { get; }
+
+    public ObservableCollection<SpecResultRow> SpecResults { get; }
 
     public ICommand LoadImageCommand { get; }
 
@@ -230,6 +251,31 @@ public sealed partial class InspectionViewModel : ObservableObject
         RefreshOverlayItems();
     }
 
+    private void RefreshSpecResults()
+    {
+        SpecResults.Clear();
+
+        if (LastResult is null)
+        {
+            return;
+        }
+
+        foreach (var d in LastResult.Distances)
+        {
+            SpecResults.Add(new SpecResultRow("Distance", d.Name, d.PointA, d.PointB, d.Value, d.Nominal, d.TolPlus, d.TolMinus, d.Pass));
+        }
+
+        foreach (var d in LastResult.LineToLineDistances)
+        {
+            SpecResults.Add(new SpecResultRow("LLD", d.Name, d.RefA, d.RefB, d.Value, d.Nominal, d.TolPlus, d.TolMinus, d.Pass));
+        }
+
+        foreach (var d in LastResult.PointToLineDistances)
+        {
+            SpecResults.Add(new SpecResultRow("PLD", d.Name, d.RefA, d.RefB, d.Value, d.Nominal, d.TolPlus, d.TolMinus, d.Pass));
+        }
+    }
+
     private void RefreshOverlayItems()
     {
         OverlayItems.Clear();
@@ -364,6 +410,61 @@ public sealed partial class InspectionViewModel : ObservableObject
                     Label = "DefectROI"
                 });
             }
+
+            foreach (var b in _config.BlobDetections)
+            {
+                if (b.InspectRoi.Width > 0 && b.InspectRoi.Height > 0)
+                {
+                    if (hasPose)
+                    {
+                        AddRotatedRoiOverlay(b.InspectRoi, $"{b.Name} B", Brushes.Gold, originTeach, originFound, angleDeg);
+                    }
+                    else
+                    {
+                        OverlayItems.Add(new OverlayRectItem
+                        {
+                            X = b.InspectRoi.X,
+                            Y = b.InspectRoi.Y,
+                            Width = b.InspectRoi.Width,
+                            Height = b.InspectRoi.Height,
+                            Stroke = Brushes.Gold,
+                            Label = $"{b.Name} B"
+                        });
+                    }
+                }
+
+                if (b.Rois is null || b.Rois.Count == 0)
+                {
+                    continue;
+                }
+
+                var includeIdx = 0;
+                var excludeIdx = 0;
+                foreach (var rr in b.Rois)
+                {
+                    var isExclude = rr.Mode == BlobRoiMode.Exclude;
+                    var idx = isExclude ? ++excludeIdx : ++includeIdx;
+                    var label = isExclude ? $"{b.Name} BX{idx}" : $"{b.Name} B{idx}";
+                    var stroke = isExclude ? Brushes.Red : Brushes.Gold;
+
+                    if (hasPose)
+                    {
+                        AddRotatedRoiOverlay(rr.Roi, label, stroke, originTeach, originFound, angleDeg);
+                    }
+                    else if (rr.Roi.Width > 0 && rr.Roi.Height > 0)
+                    {
+                        OverlayItems.Add(new OverlayRectItem
+                        {
+                            X = rr.Roi.X,
+                            Y = rr.Roi.Y,
+                            Width = rr.Roi.Width,
+                            Height = rr.Roi.Height,
+                            Stroke = stroke,
+                            Label = label
+                        });
+                    }
+                }
+            }
         }
 
         if (LastResult?.Origin is not null)
@@ -473,6 +574,45 @@ public sealed partial class InspectionViewModel : ObservableObject
                         Stroke = Brushes.OrangeRed,
                         Label = def.Type
                     });
+                }
+            }
+
+            if (LastResult.BlobDetections is not null)
+            {
+                foreach (var bd in LastResult.BlobDetections)
+                {
+                    if (bd.Blobs is null || bd.Blobs.Count == 0)
+                    {
+                        continue;
+                    }
+
+                    var n = Math.Min(bd.Blobs.Count, MaxBlobOverlayCount);
+                    for (var i = 0; i < n; i++)
+                    {
+                        var bi = bd.Blobs[i];
+                        var br = bi.BoundingBox;
+                        if (br.Width > 0 && br.Height > 0)
+                        {
+                            OverlayItems.Add(new OverlayRectItem
+                            {
+                                X = br.X,
+                                Y = br.Y,
+                                Width = br.Width,
+                                Height = br.Height,
+                                Stroke = Brushes.Gold,
+                                Label = string.Empty
+                            });
+                        }
+
+                        OverlayItems.Add(new OverlayPointItem
+                        {
+                            X = bi.Centroid.X,
+                            Y = bi.Centroid.Y,
+                            Radius = 3.0,
+                            Stroke = Brushes.Gold,
+                            Label = string.Empty
+                        });
+                    }
                 }
             }
         }

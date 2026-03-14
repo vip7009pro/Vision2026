@@ -10,6 +10,7 @@
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
+            <RowDefinition Height="6" />
             <RowDefinition Height="260" />
         </Grid.RowDefinitions>
 
@@ -32,7 +33,9 @@
                                     ImageSource="{Binding Image}"
                                     OverlayItems="{Binding OverlayItems}" />
 
-        <Border Grid.Row="2" BorderThickness="1" BorderBrush="#CCC" Padding="8" Margin="0,8,0,0">
+        <GridSplitter Grid.Row="2" Height="6" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Background="#DDD" />
+
+        <Border Grid.Row="3" BorderThickness="1" BorderBrush="#CCC" Padding="8" Margin="0,8,0,0">
             <Grid>
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto" />
@@ -59,11 +62,12 @@
                             <RowDefinition Height="*" />
                         </Grid.RowDefinitions>
 
-                        <DataGrid Grid.Row="0" ItemsSource="{Binding LastResult.Distances}" AutoGenerateColumns="False" CanUserAddRows="False">
+                        <DataGrid Grid.Row="0" ItemsSource="{Binding SpecResults}" AutoGenerateColumns="False" CanUserAddRows="False">
                             <DataGrid.Columns>
+                                <DataGridTextColumn Header="Tool" Binding="{Binding Tool}" Width="70" />
                                 <DataGridTextColumn Header="Name" Binding="{Binding Name}" Width="120" />
-                                <DataGridTextColumn Header="A" Binding="{Binding PointA}" Width="100" />
-                                <DataGridTextColumn Header="B" Binding="{Binding PointB}" Width="100" />
+                                <DataGridTextColumn Header="A" Binding="{Binding RefA}" Width="100" />
+                                <DataGridTextColumn Header="B" Binding="{Binding RefB}" Width="100" />
                                 <DataGridTextColumn Header="Value (mm)" Binding="{Binding Value, StringFormat={}{0:0.000}}" Width="120" />
                                 <DataGridTextColumn Header="Nominal (mm)" Binding="{Binding Nominal, StringFormat={}{0:0.000}}" Width="120" />
                                 <DataGridTextColumn Header="+Tol (mm)" Binding="{Binding TolPlus, StringFormat={}{0:0.000}}" Width="90" />

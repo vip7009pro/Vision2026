@@ -7,7 +7,7 @@
             <Grid x:Name="PART_Content">
                 <Image x:Name="PART_Image"
                        Source="{Binding ImageSource, RelativeSource={RelativeSource AncestorType=UserControl}}" />
-                <Canvas x:Name="PART_Overlay" Background="Transparent" />
+                <Canvas x:Name="PART_Overlay" Background="Transparent" Focusable="True" />
             </Grid>
         </Viewbox>
     </Grid>

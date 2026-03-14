@@ -36,10 +36,16 @@ public sealed class InspectionResult
 
     public List<ConditionResult> Conditions { get; } = new();
 
+    public List<BlobDetectionResult> BlobDetections { get; } = new();
+
     public DefectDetectionResult? Defects { get; set; }
 }
 
 public sealed record ConditionResult(string Name, string Expression, bool Pass, string? Error);
+
+public sealed record BlobInfo(Rect BoundingBox, Point2d Centroid, double Area);
+
+public sealed record BlobDetectionResult(string Name, int Count, List<BlobInfo> Blobs);
 
 public interface IInspectionService
 {
@@ -80,48 +86,276 @@ public sealed class InspectionService : IInspectionService
             throw new ArgumentNullException(nameof(config));
         }
 
-        using var processed = _preprocessor.Run(image, config.Preprocess);
-
         var result = new InspectionResult();
 
-        var originMatch = _matcher.MatchWithRotation(processed, config.Origin, config.Preprocess, -60.0, 60.0, 2.0);
-        var templateAngleDeg = originMatch.AngleDeg;
-        var poseAngleDeg = -templateAngleDeg;
-        var originPass = originMatch.Score >= config.Origin.MatchScoreThreshold;
-        result.Origin = new PointMatchResult(
-            config.Origin.Name,
-            originMatch.Position,
-            originMatch.MatchRect,
-            originMatch.Score,
-            config.Origin.MatchScoreThreshold,
-            originPass,
-            poseAngleDeg);
+        var matsToDispose = new List<Mat>();
+        try
+        {
+            var nodesById = (config.ToolGraph?.Nodes ?? new List<ToolGraphNode>())
+                .Where(n => !string.IsNullOrWhiteSpace(n.Id))
+                .ToDictionary(n => n.Id, StringComparer.OrdinalIgnoreCase);
 
-        var originTeach = new Point2d(config.Origin.WorldPosition.X, config.Origin.WorldPosition.Y);
-        var originFound = originMatch.Position;
-        var angleDeg = poseAngleDeg;
+            var preprocessSettingsByName = (config.PreprocessNodes ?? new List<PreprocessNodeDefinition>())
+                .Where(p => !string.IsNullOrWhiteSpace(p.Name))
+                .ToDictionary(p => p.Name, p => p.Settings ?? new PreprocessSettings(), StringComparer.OrdinalIgnoreCase);
+
+            var edges = config.ToolGraph?.Edges ?? new List<ToolGraphEdge>();
+
+            // Default (backward-compatible) processing path.
+            var processedDefault = _preprocessor.Run(image, config.Preprocess);
+            matsToDispose.Add(processedDefault);
+
+            var preprocessMatCache = new Dictionary<string, Mat>(StringComparer.OrdinalIgnoreCase);
+
+            Mat GetPreprocessNodeOutput(string preprocessNodeId)
+            {
+                if (preprocessMatCache.TryGetValue(preprocessNodeId, out var cached))
+                {
+                    return cached;
+                }
+
+                if (!nodesById.TryGetValue(preprocessNodeId, out var node)
+                    || !string.Equals(node.Type, "Preprocess", StringComparison.OrdinalIgnoreCase))
+                {
+                    preprocessMatCache[preprocessNodeId] = image;
+                    return image;
+                }
+
+                preprocessSettingsByName.TryGetValue(node.RefName ?? string.Empty, out var settings);
+                settings ??= new PreprocessSettings();
+
+                // Preprocess node input: either raw image or another preprocess output connected to "In".
+                var inEdge = edges.FirstOrDefault(e => string.Equals(e.ToNodeId, preprocessNodeId, StringComparison.OrdinalIgnoreCase)
+                                                      && string.Equals(e.ToPort, "In", StringComparison.OrdinalIgnoreCase));
+                Mat baseMat = image;
+                if (inEdge is not null
+                    && nodesById.TryGetValue(inEdge.FromNodeId, out var fromNode)
+                    && string.Equals(fromNode.Type, "Preprocess", StringComparison.OrdinalIgnoreCase))
+                {
+                    baseMat = GetPreprocessNodeOutput(fromNode.Id);
+                }
+
+                var m = _preprocessor.Run(baseMat, settings);
+                matsToDispose.Add(m);
+                preprocessMatCache[preprocessNodeId] = m;
+                return m;
+            }
+
+            (Mat ImageMat, PreprocessSettings Settings) ResolveToolPreprocess(string toolType, string toolRefName)
+            {
+                // Default.
+                var settings = config.Preprocess;
+                var mat = processedDefault;
+
+                var toolNode = nodesById.Values.FirstOrDefault(n => string.Equals(n.Type, toolType, StringComparison.OrdinalIgnoreCase)
+                                                                    && string.Equals(n.RefName, toolRefName, StringComparison.OrdinalIgnoreCase));
+                if (toolNode is null)
+                {
+                    return (mat, settings);
+                }
+
+                var preEdge = edges.FirstOrDefault(e => string.Equals(e.ToNodeId, toolNode.Id, StringComparison.OrdinalIgnoreCase)
+                                                       && string.Equals(e.ToPort, "Pre", StringComparison.OrdinalIgnoreCase));
+                if (preEdge is null)
+                {
+                    return (mat, settings);
+                }
+
+                if (!nodesById.TryGetValue(preEdge.FromNodeId, out var ppNode)
+                    || !string.Equals(ppNode.Type, "Preprocess", StringComparison.OrdinalIgnoreCase))
+                {
+                    return (mat, settings);
+                }
+
+                preprocessSettingsByName.TryGetValue(ppNode.RefName ?? string.Empty, out var ppSettings);
+                ppSettings ??= new PreprocessSettings();
+                var ppMat = GetPreprocessNodeOutput(ppNode.Id);
+                return (ppMat, ppSettings);
+            }
+
+            static List<BlobInfo> DetectBlobs(Mat matBgrOrGray, Roi roi, List<BlobRoiDefinition>? rois, BlobPolarity polarity, int threshold, int minArea, int maxArea)
+            {
+                var blobs = new List<BlobInfo>();
+
+                if (matBgrOrGray is null || roi.Width <= 0 || roi.Height <= 0)
+                {
+                    return blobs;
+                }
+
+                // If multi-ROIs are provided, compute a working bounding box from INCLUDE ROIs.
+                // This keeps performance reasonable while allowing masking for include/exclude.
+                var hasMulti = rois is not null && rois.Count > 0;
+                if (hasMulti)
+                {
+                    var inc = rois!.Where(x => x is not null && x.Mode == BlobRoiMode.Include && x.Roi.Width > 0 && x.Roi.Height > 0)
+                        .Select(x => x.Roi)
+                        .ToList();
+
+                    if (inc.Count > 0)
+                    {
+                        var minX = inc.Min(x => x.X);
+                        var minY = inc.Min(x => x.Y);
+                        var maxX = inc.Max(x => x.X + x.Width);
+                        var maxY = inc.Max(x => x.Y + x.Height);
+                        roi = new Roi { X = minX, Y = minY, Width = Math.Max(1, maxX - minX), Height = Math.Max(1, maxY - minY) };
+                    }
+                }
+
+                var rect = new Rect(roi.X, roi.Y, roi.Width, roi.Height);
+                rect = rect.Intersect(new Rect(0, 0, matBgrOrGray.Width, matBgrOrGray.Height));
+                if (rect.Width <= 0 || rect.Height <= 0)
+                {
+                    return blobs;
+                }
+
+                using var crop = new Mat(matBgrOrGray, rect);
+                using var gray = crop.Channels() == 1 ? crop.Clone() : crop.CvtColor(ColorConversionCodes.BGR2GRAY);
+
+                threshold = Math.Clamp(threshold, 0, 255);
+                using var bw = new Mat();
+                var thrType = polarity == BlobPolarity.DarkOnLight ? ThresholdTypes.BinaryInv : ThresholdTypes.Binary;
+                Cv2.Threshold(gray, bw, threshold, 255, thrType);
+
+                if (hasMulti)
+                {
+                    using var mask = new Mat(bw.Rows, bw.Cols, MatType.CV_8UC1, Scalar.Black);
+
+                    var anyInclude = false;
+                    foreach (var rr in rois!)
+                    {
+                        if (rr.Roi.Width <= 0 || rr.Roi.Height <= 0)
+                        {
+                            continue;
+                        }
+
+                        var rx = rr.Roi.X - rect.X;
+                        var ry = rr.Roi.Y - rect.Y;
+                        var r = new Rect(rx, ry, rr.Roi.Width, rr.Roi.Height);
+                        r = r.Intersect(new Rect(0, 0, bw.Cols, bw.Rows));
+                        if (r.Width <= 0 || r.Height <= 0)
+                        {
+                            continue;
+                        }
+
+                        if (rr.Mode == BlobRoiMode.Include)
+                        {
+                            anyInclude = true;
+                            using var sub = new Mat(mask, r);
+                            sub.SetTo(Scalar.White);
+                        }
+                    }
+
+                    if (!anyInclude)
+                    {
+                        mask.SetTo(Scalar.White);
+                    }
+
+                    foreach (var rr in rois!)
+                    {
+                        if (rr.Mode != BlobRoiMode.Exclude || rr.Roi.Width <= 0 || rr.Roi.Height <= 0)
+                        {
+                            continue;
+                        }
+
+                        var rx = rr.Roi.X - rect.X;
+                        var ry = rr.Roi.Y - rect.Y;
+                        var r = new Rect(rx, ry, rr.Roi.Width, rr.Roi.Height);
+                        r = r.Intersect(new Rect(0, 0, bw.Cols, bw.Rows));
+                        if (r.Width <= 0 || r.Height <= 0)
+                        {
+                            continue;
+                        }
+
+                        using var sub = new Mat(mask, r);
+                        sub.SetTo(Scalar.Black);
+                    }
+
+                    Cv2.BitwiseAnd(bw, mask, bw);
+                }
+
+                minArea = Math.Max(0, minArea);
+                maxArea = Math.Max(minArea, maxArea);
+
+                // Use connected components so very small dots (even 1 pixel) have stable pixel area.
+                // stats: [label, CC_STAT_LEFT, TOP, WIDTH, HEIGHT, AREA]
+                using var labels = new Mat();
+                using var stats = new Mat();
+                using var centroids = new Mat();
+                var nLabels = Cv2.ConnectedComponentsWithStats(
+                    bw,
+                    labels,
+                    stats,
+                    centroids,
+                    PixelConnectivity.Connectivity8,
+                    MatType.CV_32S);
+
+                for (var i = 1; i < nLabels; i++) // 0 is background
+                {
+                    var left = stats.Get<int>(i, (int)ConnectedComponentsTypes.Left);
+                    var top = stats.Get<int>(i, (int)ConnectedComponentsTypes.Top);
+                    var width = stats.Get<int>(i, (int)ConnectedComponentsTypes.Width);
+                    var height = stats.Get<int>(i, (int)ConnectedComponentsTypes.Height);
+                    var areaPx = stats.Get<int>(i, (int)ConnectedComponentsTypes.Area);
+
+                    if (areaPx < minArea || areaPx > maxArea)
+                    {
+                        continue;
+                    }
+
+                    var cx = centroids.Get<double>(i, 0);
+                    var cy = centroids.Get<double>(i, 1);
+
+                    // Convert from crop coordinates to full image coordinates
+                    var fullRect = new Rect(left + rect.X, top + rect.Y, width, height);
+                    var centroid = new Point2d(cx + rect.X, cy + rect.Y);
+                    blobs.Add(new BlobInfo(fullRect, centroid, areaPx));
+                }
+                return blobs;
+            }
+
+            // Origin
+            var (originMat, originPre) = ResolveToolPreprocess("Origin", config.Origin.Name);
+            var originMatch = _matcher.MatchWithRotation(originMat, config.Origin, originPre, -60.0, 60.0, 2.0);
+            var templateAngleDeg = originMatch.AngleDeg;
+            var poseAngleDeg = -templateAngleDeg;
+            var originPass = originMatch.Score >= config.Origin.MatchScoreThreshold;
+            result.Origin = new PointMatchResult(
+                config.Origin.Name,
+                originMatch.Position,
+                originMatch.MatchRect,
+                originMatch.Score,
+                config.Origin.MatchScoreThreshold,
+                originPass,
+                poseAngleDeg);
+
+            var originTeach = new Point2d(config.Origin.WorldPosition.X, config.Origin.WorldPosition.Y);
+            var originFound = originMatch.Position;
+            var angleDeg = poseAngleDeg;
 
         var foundPoints = new Dictionary<string, Point2d>(StringComparer.OrdinalIgnoreCase);
 
-        foreach (var p in config.Points)
-        {
-            var def = TransformPointDefinition(p, originTeach, originFound, angleDeg);
-            var m = _matcher.MatchWithFixedRotation(processed, def, templateAngleDeg, config.Preprocess);
-            var pass = m.Score >= p.MatchScoreThreshold;
+            foreach (var p in config.Points)
+            {
+                var def = TransformPointDefinition(p, originTeach, originFound, angleDeg);
 
-            result.Points.Add(new PointMatchResult(p.Name, m.Position, m.MatchRect, m.Score, p.MatchScoreThreshold, pass, 0.0));
-            foundPoints[p.Name] = m.Position;
-        }
+                var (matForPoint, preForPoint) = ResolveToolPreprocess("Point", p.Name);
+                var m = _matcher.MatchWithFixedRotation(matForPoint, def, templateAngleDeg, preForPoint);
+                var pass = m.Score >= p.MatchScoreThreshold;
 
-        var foundLines = new Dictionary<string, LineDetectResult>(StringComparer.OrdinalIgnoreCase);
-        foreach (var l in config.Lines)
-        {
-            var roi = TransformRoiKeepSize(l.SearchRoi, originTeach, originFound, angleDeg);
-            var det = _lineDetector.DetectLongestLine(processed, roi, l.Canny1, l.Canny2, l.HoughThreshold, l.MinLineLength, l.MaxLineGap);
-            var named = det with { Name = l.Name };
-            result.Lines.Add(named);
-            foundLines[l.Name] = named;
-        }
+                result.Points.Add(new PointMatchResult(p.Name, m.Position, m.MatchRect, m.Score, p.MatchScoreThreshold, pass, 0.0));
+                foundPoints[p.Name] = m.Position;
+            }
+
+            var foundLines = new Dictionary<string, LineDetectResult>(StringComparer.OrdinalIgnoreCase);
+            foreach (var l in config.Lines)
+            {
+                var roi = TransformRoiKeepSize(l.SearchRoi, originTeach, originFound, angleDeg);
+                var (matForLine, _) = ResolveToolPreprocess("Line", l.Name);
+                var det = _lineDetector.DetectLongestLine(matForLine, roi, l.Canny1, l.Canny2, l.HoughThreshold, l.MinLineLength, l.MaxLineGap);
+                var named = det with { Name = l.Name };
+                result.Lines.Add(named);
+                foundLines[l.Name] = named;
+            }
 
         foreach (var d in config.Distances)
         {
@@ -162,12 +396,34 @@ public sealed class InspectionService : IInspectionService
             result.PointToLineDistances.Add(new SegmentDistanceResult(dd.Name, dd.Point, dd.Line, value, dd.Nominal, dd.TolerancePlus, dd.ToleranceMinus, pass, p, closest));
         }
 
-        EvaluateConditions(config, result);
+            foreach (var b in config.BlobDetections)
+            {
+                if (string.IsNullOrWhiteSpace(b.Name) || b.InspectRoi.Width <= 0 || b.InspectRoi.Height <= 0)
+                {
+                    continue;
+                }
 
-        var defectConfig = TransformDefectConfig(config.DefectConfig, originTeach, originFound, angleDeg);
-        result.Defects = _defectDetector.Detect(processed, defectConfig);
+                var roi = TransformRoiKeepSize(b.InspectRoi, originTeach, originFound, angleDeg);
+                var (matForBlob, _) = ResolveToolPreprocess("BlobDetection", b.Name);
+                var rois = b.Rois;
+                if (rois is not null && rois.Count > 0)
+                {
+                    rois = rois
+                        .Select(x => new BlobRoiDefinition { Mode = x.Mode, Roi = TransformRoiKeepSize(x.Roi, originTeach, originFound, angleDeg) })
+                        .ToList();
+                }
 
-        result.Pass = originPass
+                var blobs = DetectBlobs(matForBlob, roi, rois, b.Polarity, b.Threshold, b.MinBlobArea, b.MaxBlobArea);
+                result.BlobDetections.Add(new BlobDetectionResult(b.Name, blobs.Count, blobs));
+            }
+
+            EvaluateConditions(config, result);
+
+            var defectConfig = TransformDefectConfig(config.DefectConfig, originTeach, originFound, angleDeg);
+            // Defects remain on default preprocess for now (backward compatible).
+            result.Defects = _defectDetector.Detect(processedDefault, defectConfig);
+
+            result.Pass = originPass
             && result.Points.All(x => x.Pass)
             && result.Distances.All(x => x.Pass)
             && result.LineToLineDistances.All(x => x.Pass)
@@ -175,7 +431,15 @@ public sealed class InspectionService : IInspectionService
             && result.Conditions.All(x => x.Pass)
             && (result.Defects.Defects.Count == 0);
 
-        return result;
+            return result;
+        }
+        finally
+        {
+            foreach (var m in matsToDispose)
+            {
+                m.Dispose();
+            }
+        }
     }
 
     private static void EvaluateConditions(VisionConfig config, InspectionResult result)
@@ -454,6 +718,11 @@ internal static class ConditionEvaluator
         foreach (var c in result.Conditions)
         {
             vars[c.Name] = new Variable(c.Pass);
+        }
+
+        foreach (var b in result.BlobDetections)
+        {
+            vars[b.Name] = new Variable(true, value: b.Count);
         }
 
         return vars;

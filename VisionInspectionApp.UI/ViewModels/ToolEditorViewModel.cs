@@ -35,7 +35,16 @@ public sealed partial class ToolEditorViewModel : ObservableObject
     private readonly DispatcherTimer _autoSaveTimer;
     private bool _autoSavePending;
 
+    private readonly DispatcherTimer _blobThresholdPreviewTimer;
+
     private bool _syncingInputs;
+
+    private const int MaxBlobOverlayCount = 300;
+
+    private const string DefaultPreprocessChoice = "None (Default)";
+
+    [ObservableProperty]
+    private double _canvasZoom = 1.0;
 
     public ToolEditorViewModel(IConfigService configService, ConfigStoreOptions storeOptions, SharedImageContext sharedImage, ImagePreprocessor preprocessor, LineDetector lineDetector, IInspectionService inspectionService)
     {
@@ -49,9 +58,13 @@ public sealed partial class ToolEditorViewModel : ObservableObject
         _autoSaveTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(400) };
         _autoSaveTimer.Tick += (_, __) => AutoSaveNow();
 
+        _blobThresholdPreviewTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(150) };
+        _blobThresholdPreviewTimer.Tick += (_, __) => UpdateBlobThresholdPreviewFromSnapshot();
+
         AvailableConfigs = new ObservableCollection<string>();
         ToolboxItems = new ObservableCollection<string>
         {
+            "Preprocess",
             "Origin",
             "Point",
             "Line",
@@ -59,11 +72,13 @@ public sealed partial class ToolEditorViewModel : ObservableObject
             "LineLineDistance",
             "PointLineDistance",
             "Condition",
+            "BlobDetection",
             "DefectRoi"
         };
 
         Nodes = new ObservableCollection<ToolGraphNodeViewModel>();
         Edges = new ObservableCollection<ToolGraphEdgeViewModel>();
+        AvailablePreprocessChoices = new ObservableCollection<string>();
         SelectedNodeOverlayItems = new ObservableCollection<OverlayItem>();
         FinalOverlayItems = new ObservableCollection<OverlayItem>();
 
@@ -72,14 +87,305 @@ public sealed partial class ToolEditorViewModel : ObservableObject
         SaveConfigCommand = new RelayCommand(SaveConfig);
         NewGraphCommand = new RelayCommand(NewGraph);
         DeleteSelectedNodeCommand = new RelayCommand(DeleteSelectedNode);
+        DeleteSelectedEdgeCommand = new RelayCommand(DeleteSelectedEdge);
         LoadPreviewImageCommand = new RelayCommand(LoadPreviewImage);
         RunFlowCommand = new RelayCommand(RunFlow);
         RoiSelectedCommand = new RelayCommand<object?>(OnRoiSelected);
         RoiEditedCommand = new RelayCommand<RoiSelection?>(OnRoiEdited);
+        RoiDeletedCommand = new RelayCommand<string?>(OnRoiDeleted);
 
         _sharedImage.ImageChanged += (_, __) => RefreshPreviews();
 
         RefreshConfigs();
+    }
+
+    private void OnRoiDeleted(string? labelRaw)
+    {
+        if (string.IsNullOrWhiteSpace(labelRaw) || _config is null)
+        {
+            return;
+        }
+
+        var label = labelRaw.Trim();
+
+        // Defect / Origin / Point / Line deletes are not supported (for safety).
+        // For BlobDetection we allow deleting: B (legacy inspect roi) and B#/BX# (multi rois).
+        var parts = label.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length != 2)
+        {
+            return;
+        }
+
+        var name = parts[0];
+        var kind = parts[1];
+
+        if (!kind.StartsWith("B", StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        var b = _config.BlobDetections.FirstOrDefault(x => string.Equals(x.Name, name, StringComparison.OrdinalIgnoreCase));
+        if (b is null)
+        {
+            return;
+        }
+
+        if (string.Equals(kind, "B", StringComparison.OrdinalIgnoreCase))
+        {
+            b.InspectRoi = new Roi();
+            b.Rois.Clear();
+            RunFlow();
+            RequestAutoSave();
+            return;
+        }
+
+        // Multi ROI edit labels are index-based: B1,B2,... and BX1,BX2,...
+        var isExclude = kind.StartsWith("BX", StringComparison.OrdinalIgnoreCase);
+        var numPart = isExclude ? kind.Substring(2) : kind.Substring(1);
+        if (!int.TryParse(numPart, out var idx1) || idx1 <= 0)
+        {
+            return;
+        }
+
+        var idx = idx1 - 1;
+        if (idx < 0 || idx >= b.Rois.Count)
+        {
+            return;
+        }
+
+        b.Rois.RemoveAt(idx);
+        b.InspectRoi = ComputeBlobInspectRoi(b);
+
+        RunFlow();
+        RequestAutoSave();
+    }
+
+    private void BuildFinalOverlayFromRunWithConfig(InspectionResult run, ObservableCollection<OverlayItem> dst)
+    {
+        BuildFinalOverlayFromRun(run, dst);
+
+        if (_config is null)
+        {
+            return;
+        }
+
+        foreach (var b in _config.BlobDetections)
+        {
+            if (b.InspectRoi.Width <= 0 || b.InspectRoi.Height <= 0)
+            {
+                continue;
+            }
+
+            var r = run.BlobDetections.FirstOrDefault(x => string.Equals(x.Name, b.Name, StringComparison.OrdinalIgnoreCase));
+            if (r is null)
+            {
+                continue;
+            }
+
+            dst.Add(new OverlayPointItem
+            {
+                X = b.InspectRoi.X + 2,
+                Y = b.InspectRoi.Y + 2,
+                Radius = 1.0,
+                Stroke = Brushes.Gold,
+                Label = $"{b.Name}: {r.Count}"
+            });
+
+            if (r.Blobs is null || r.Blobs.Count == 0)
+            {
+                continue;
+            }
+
+            var n = Math.Min(r.Blobs.Count, MaxBlobOverlayCount);
+            for (var i = 0; i < n; i++)
+            {
+                var bi = r.Blobs[i];
+                var br = bi.BoundingBox;
+                if (br.Width > 0 && br.Height > 0)
+                {
+                    dst.Add(new OverlayRectItem
+                    {
+                        X = br.X,
+                        Y = br.Y,
+                        Width = br.Width,
+                        Height = br.Height,
+                        Stroke = Brushes.Gold,
+                        Label = string.Empty
+                    });
+                }
+
+                dst.Add(new OverlayPointItem
+                {
+                    X = bi.Centroid.X,
+                    Y = bi.Centroid.Y,
+                    Radius = 3.0,
+                    Stroke = Brushes.Gold,
+                    Label = string.Empty
+                });
+            }
+
+            if (r.Blobs.Count > MaxBlobOverlayCount)
+            {
+                dst.Add(new OverlayPointItem
+                {
+                    X = b.InspectRoi.X + 2,
+                    Y = b.InspectRoi.Y + 16,
+                    Radius = 1.0,
+                    Stroke = Brushes.Gold,
+                    Label = $"+{r.Blobs.Count - MaxBlobOverlayCount}"
+                });
+            }
+        }
+    }
+
+    public ObservableCollection<string> AvailablePreprocessChoices { get; }
+
+    public bool IsToolWithPreprocessInput => SelectedNode is not null
+                                            && (string.Equals(SelectedNode.Type, "Origin", StringComparison.OrdinalIgnoreCase)
+                                                || string.Equals(SelectedNode.Type, "Point", StringComparison.OrdinalIgnoreCase)
+                                                || string.Equals(SelectedNode.Type, "Line", StringComparison.OrdinalIgnoreCase)
+                                                || string.Equals(SelectedNode.Type, "BlobDetection", StringComparison.OrdinalIgnoreCase));
+
+    public bool IsBlobDetectionNode => SelectedNode is not null
+                                       && string.Equals(SelectedNode.Type, "BlobDetection", StringComparison.OrdinalIgnoreCase);
+
+    public ObservableCollection<BlobPolarity> AvailableBlobPolarities { get; }
+        = new ObservableCollection<BlobPolarity>((BlobPolarity[])Enum.GetValues(typeof(BlobPolarity)));
+
+    [ObservableProperty]
+    private string _selectedToolPreprocessChoice = DefaultPreprocessChoice;
+
+    partial void OnSelectedToolPreprocessChoiceChanged(string value)
+    {
+        if (_syncingInputs)
+        {
+            return;
+        }
+
+        if (_config is null || SelectedNode is null || !IsToolWithPreprocessInput)
+        {
+            return;
+        }
+
+        // Remove existing Pre edge to this tool.
+        for (var i = Edges.Count - 1; i >= 0; i--)
+        {
+            var e = Edges[i];
+            if (string.Equals(e.ToNodeId, SelectedNode.Id, StringComparison.OrdinalIgnoreCase)
+                && string.Equals(e.ToPort, "Pre", StringComparison.OrdinalIgnoreCase))
+            {
+                Edges.RemoveAt(i);
+            }
+        }
+
+        if (!string.IsNullOrWhiteSpace(value)
+            && !string.Equals(value, DefaultPreprocessChoice, StringComparison.OrdinalIgnoreCase))
+        {
+            // Find preprocess node by RefName.
+            var from = Nodes.FirstOrDefault(n => string.Equals(n.Type, "Preprocess", StringComparison.OrdinalIgnoreCase)
+                                                 && string.Equals(n.RefName, value, StringComparison.OrdinalIgnoreCase));
+            if (from is not null)
+            {
+                // Create edge directly; this also syncs to config.
+                CreateEdge(from, SelectedNode, fromPort: "Out", toPort: "Pre");
+                return;
+            }
+        }
+
+        // No connection => fallback to default preprocess.
+        SyncEdgesToConfig();
+        RefreshPreviews();
+        RequestAutoSave();
+    }
+
+    private Mat ResolveToolPreprocessForPreview(Mat raw, ToolGraphNodeViewModel toolNode)
+    {
+        if (_config is null)
+        {
+            return raw.Clone();
+        }
+
+        // Determine if tool has a Pre connection from a Preprocess node.
+        var edges = _config.ToolGraph?.Edges ?? new();
+        var preEdge = edges.FirstOrDefault(e => string.Equals(e.ToNodeId, toolNode.Id, StringComparison.OrdinalIgnoreCase)
+                                               && string.Equals(e.ToPort, "Pre", StringComparison.OrdinalIgnoreCase));
+
+        if (preEdge is null)
+        {
+            return _preprocessor.Run(raw, _config.Preprocess);
+        }
+
+        var nodesById = Nodes
+            .Where(n => !string.IsNullOrWhiteSpace(n.Id))
+            .ToDictionary(n => n.Id, StringComparer.OrdinalIgnoreCase);
+
+        if (!nodesById.TryGetValue(preEdge.FromNodeId, out var preNode)
+            || !string.Equals(preNode.Type, "Preprocess", StringComparison.OrdinalIgnoreCase))
+        {
+            return _preprocessor.Run(raw, _config.Preprocess);
+        }
+
+        var preprocessSettingsByName = (_config.PreprocessNodes ?? new())
+            .Where(p => !string.IsNullOrWhiteSpace(p.Name))
+            .ToDictionary(p => p.Name, p => p.Settings ?? new PreprocessSettings(), StringComparer.OrdinalIgnoreCase);
+
+        var cache = new System.Collections.Generic.Dictionary<string, Mat>(StringComparer.OrdinalIgnoreCase);
+        var matsToDispose = new System.Collections.Generic.List<Mat>();
+
+        try
+        {
+            Mat GetPreprocessNodeOutput(string preprocessNodeId)
+            {
+                if (cache.TryGetValue(preprocessNodeId, out var cached))
+                {
+                    return cached;
+                }
+
+                if (!nodesById.TryGetValue(preprocessNodeId, out var node)
+                    || !string.Equals(node.Type, "Preprocess", StringComparison.OrdinalIgnoreCase))
+                {
+                    var fallback = _preprocessor.Run(raw, _config.Preprocess);
+                    matsToDispose.Add(fallback);
+                    cache[preprocessNodeId] = fallback;
+                    return fallback;
+                }
+
+                var settings = preprocessSettingsByName.TryGetValue(node.RefName, out var s) ? s : new PreprocessSettings();
+
+                var inEdge = edges.FirstOrDefault(e => string.Equals(e.ToNodeId, preprocessNodeId, StringComparison.OrdinalIgnoreCase)
+                                                      && string.Equals(e.ToPort, "In", StringComparison.OrdinalIgnoreCase));
+
+                Mat inputMat;
+                if (inEdge is null)
+                {
+                    inputMat = raw;
+                }
+                else if (!nodesById.TryGetValue(inEdge.FromNodeId, out var fromNode)
+                         || !string.Equals(fromNode.Type, "Preprocess", StringComparison.OrdinalIgnoreCase))
+                {
+                    inputMat = raw;
+                }
+                else
+                {
+                    inputMat = GetPreprocessNodeOutput(fromNode.Id);
+                }
+
+                var output = _preprocessor.Run(inputMat, settings);
+                matsToDispose.Add(output);
+                cache[preprocessNodeId] = output;
+                return output;
+            }
+
+            // Clone so caller owns returned Mat.
+            return GetPreprocessNodeOutput(preNode.Id).Clone();
+        }
+        finally
+        {
+            foreach (var m in matsToDispose)
+            {
+                m.Dispose();
+            }
+        }
     }
 
     public ObservableCollection<LineLineDistanceMode> AvailableLineLineDistanceModes { get; }
@@ -87,6 +393,114 @@ public sealed partial class ToolEditorViewModel : ObservableObject
 
     public ObservableCollection<PointLineDistanceMode> AvailablePointLineDistanceModes { get; }
         = new ObservableCollection<PointLineDistanceMode>((PointLineDistanceMode[])Enum.GetValues(typeof(PointLineDistanceMode)));
+
+    private BlobDetectionDefinition? SelectedBlobDetectionDef()
+    {
+        if (_config is null || SelectedNode is null) return null;
+        if (!string.Equals(SelectedNode.Type, "BlobDetection", StringComparison.OrdinalIgnoreCase)) return null;
+        return _config.BlobDetections.FirstOrDefault(x => string.Equals(x.Name, SelectedNode.RefName, StringComparison.OrdinalIgnoreCase));
+    }
+
+    public BlobPolarity Blob_Polarity
+    {
+        get => SelectedBlobDetectionDef()?.Polarity ?? BlobPolarity.DarkOnLight;
+        set
+        {
+            var def = SelectedBlobDetectionDef();
+            if (def is null) return;
+            if (def.Polarity == value) return;
+            def.Polarity = value;
+            RequestBlobThresholdPreviewUpdate();
+            RequestAutoSave();
+            OnPropertyChanged();
+        }
+    }
+
+    public int Blob_Threshold
+    {
+        get => SelectedBlobDetectionDef()?.Threshold ?? 128;
+        set
+        {
+            var def = SelectedBlobDetectionDef();
+            if (def is null) return;
+            var v = Math.Clamp(value, 0, 255);
+            if (def.Threshold == v) return;
+            def.Threshold = v;
+            RequestBlobThresholdPreviewUpdate();
+            RequestAutoSave();
+            OnPropertyChanged();
+        }
+    }
+
+    public int Blob_MinBlobArea
+    {
+        get => SelectedBlobDetectionDef()?.MinBlobArea ?? 0;
+        set
+        {
+            var def = SelectedBlobDetectionDef();
+            if (def is null) return;
+            var v = Math.Max(0, value);
+            if (def.MinBlobArea == v) return;
+            def.MinBlobArea = v;
+            if (def.MaxBlobArea < def.MinBlobArea) def.MaxBlobArea = def.MinBlobArea;
+            RequestAutoSave();
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(Blob_MaxBlobArea));
+        }
+    }
+
+    public int Blob_MaxBlobArea
+    {
+        get => SelectedBlobDetectionDef()?.MaxBlobArea ?? 0;
+        set
+        {
+            var def = SelectedBlobDetectionDef();
+            if (def is null) return;
+            var v = Math.Max(0, value);
+            if (v < def.MinBlobArea) v = def.MinBlobArea;
+            if (def.MaxBlobArea == v) return;
+            def.MaxBlobArea = v;
+            RequestAutoSave();
+            OnPropertyChanged();
+        }
+    }
+
+    private void RequestBlobThresholdPreviewUpdate()
+    {
+        if (!_blobThresholdPreviewTimer.IsEnabled)
+        {
+            _blobThresholdPreviewTimer.Start();
+            return;
+        }
+
+        _blobThresholdPreviewTimer.Stop();
+        _blobThresholdPreviewTimer.Start();
+    }
+
+    private void UpdateBlobThresholdPreviewFromSnapshot()
+    {
+        _blobThresholdPreviewTimer.Stop();
+
+        using var snap = _sharedImage.GetSnapshot();
+        if (snap is null)
+        {
+            BlobThresholdPreviewImage = null;
+            return;
+        }
+
+        UpdateBlobThresholdPreview(snap);
+    }
+
+    public int? Blob_LastRunCount
+    {
+        get
+        {
+            if (_lastRun is null || SelectedNode is null) return null;
+            if (!string.Equals(SelectedNode.Type, "BlobDetection", StringComparison.OrdinalIgnoreCase)) return null;
+            var r = _lastRun.BlobDetections.FirstOrDefault(x => string.Equals(x.Name, SelectedNode.RefName, StringComparison.OrdinalIgnoreCase));
+            return r is null ? null : r.Count;
+        }
+    }
 
     private void OnRoiSelected(object? arg)
     {
@@ -98,7 +512,36 @@ public sealed partial class ToolEditorViewModel : ObservableObject
         if (arg is RoiSelection rs)
         {
             // Treat drawing as "set this ROI" for the active label (S/T/L/DefectROI)
-            ApplyRoiForLabel(rs.Label, rs.Roi);
+            // Special case: BlobDetection supports multi ROI include/exclude
+            if (SelectedNode is not null
+                && string.Equals(SelectedNode.Type, "BlobDetection", StringComparison.OrdinalIgnoreCase)
+                && !string.IsNullOrWhiteSpace(SelectedNode.RefName))
+            {
+                var def = _config.BlobDetections.FirstOrDefault(x => string.Equals(x.Name, SelectedNode.RefName, StringComparison.OrdinalIgnoreCase));
+                if (def is not null)
+                {
+                    if (rs.Modifiers.HasFlag(ModifierKeys.Control))
+                    {
+                        def.Rois.Add(new BlobRoiDefinition { Mode = BlobRoiMode.Include, Roi = rs.Roi });
+                        def.InspectRoi = ComputeBlobInspectRoi(def);
+                    }
+                    else if (rs.Modifiers.HasFlag(ModifierKeys.Shift))
+                    {
+                        def.Rois.Add(new BlobRoiDefinition { Mode = BlobRoiMode.Exclude, Roi = rs.Roi });
+                        def.InspectRoi = ComputeBlobInspectRoi(def);
+                    }
+                    else
+                    {
+                        ApplyRoiForLabel(rs.Label, rs.Roi);
+                        def.InspectRoi = ComputeBlobInspectRoi(def);
+                    }
+                }
+            }
+            else
+            {
+                ApplyRoiForLabel(rs.Label, rs.Roi);
+            }
+
             RefreshPreviews();
             RaiseToolPropertyPanelsChanged();
             RequestAutoSave();
@@ -130,6 +573,11 @@ public sealed partial class ToolEditorViewModel : ObservableObject
             else if (string.Equals(SelectedNode.Type, "DefectRoi", StringComparison.OrdinalIgnoreCase))
             {
                 _config.DefectConfig.InspectRoi = roi;
+            }
+            else if (string.Equals(SelectedNode.Type, "BlobDetection", StringComparison.OrdinalIgnoreCase))
+            {
+                var b = _config.BlobDetections.FirstOrDefault(x => string.Equals(x.Name, SelectedNode.RefName, StringComparison.OrdinalIgnoreCase));
+                if (b is not null) b.InspectRoi = roi;
             }
 
             RefreshPreviews();
@@ -325,6 +773,151 @@ public sealed partial class ToolEditorViewModel : ObservableObject
             if (l is not null) l.SearchRoi = roi;
             return;
         }
+
+        if (kind.StartsWith("B", StringComparison.OrdinalIgnoreCase))
+        {
+            var b = _config.BlobDetections.FirstOrDefault(x => string.Equals(x.Name, name, StringComparison.OrdinalIgnoreCase));
+            if (b is null)
+            {
+                return;
+            }
+
+            if (string.Equals(kind, "B", StringComparison.OrdinalIgnoreCase))
+            {
+                b.InspectRoi = roi;
+                return;
+            }
+
+            // Multi ROI edit labels:
+            // - Include:  B1, B2, ...
+            // - Exclude:  BX1, BX2, ...
+            var isExclude = kind.StartsWith("BX", StringComparison.OrdinalIgnoreCase);
+            var numPart = isExclude ? kind.Substring(2) : kind.Substring(1);
+            if (!int.TryParse(numPart, out var idx1) || idx1 <= 0)
+            {
+                return;
+            }
+
+            var idx = idx1 - 1;
+            if (idx < 0)
+            {
+                return;
+            }
+
+            while (b.Rois.Count <= idx)
+            {
+                b.Rois.Add(new BlobRoiDefinition());
+            }
+
+            b.Rois[idx].Mode = isExclude ? BlobRoiMode.Exclude : BlobRoiMode.Include;
+            b.Rois[idx].Roi = roi;
+            b.InspectRoi = ComputeBlobInspectRoi(b);
+            return;
+        }
+    }
+
+    private static Roi ComputeBlobInspectRoi(BlobDetectionDefinition b)
+    {
+        if (b.Rois is null || b.Rois.Count == 0)
+        {
+            return b.InspectRoi;
+        }
+
+        var inc = b.Rois.Where(x => x.Mode == BlobRoiMode.Include && x.Roi.Width > 0 && x.Roi.Height > 0)
+            .Select(x => x.Roi)
+            .ToList();
+
+        if (inc.Count == 0)
+        {
+            return b.InspectRoi;
+        }
+
+        var minX = inc.Min(x => x.X);
+        var minY = inc.Min(x => x.Y);
+        var maxX = inc.Max(x => x.X + x.Width);
+        var maxY = inc.Max(x => x.Y + x.Height);
+        return new Roi { X = minX, Y = minY, Width = Math.Max(1, maxX - minX), Height = Math.Max(1, maxY - minY) };
+    }
+
+    private void BuildOverlayForNodeFromRunWithConfig(ToolGraphNodeViewModel node, InspectionResult run, ObservableCollection<OverlayItem> dst)
+    {
+        BuildOverlayForNodeFromRun(node, run, dst);
+
+        if (_config is null)
+        {
+            return;
+        }
+
+        if (!string.Equals(node.Type, "BlobDetection", StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        var def = _config.BlobDetections.FirstOrDefault(x => string.Equals(x.Name, node.RefName, StringComparison.OrdinalIgnoreCase));
+        if (def is null || def.InspectRoi.Width <= 0 || def.InspectRoi.Height <= 0)
+        {
+            return;
+        }
+
+        var r = run.BlobDetections.FirstOrDefault(x => string.Equals(x.Name, node.RefName, StringComparison.OrdinalIgnoreCase));
+        if (r is null)
+        {
+            return;
+        }
+
+        dst.Add(new OverlayPointItem
+        {
+            X = def.InspectRoi.X + 2,
+            Y = def.InspectRoi.Y + 2,
+            Radius = 1.0,
+            Stroke = Brushes.Gold,
+            Label = $"{def.Name}: {r.Count}"
+        });
+
+        if (r.Blobs is null || r.Blobs.Count == 0)
+        {
+            return;
+        }
+
+        var n = Math.Min(r.Blobs.Count, MaxBlobOverlayCount);
+        for (var i = 0; i < n; i++)
+        {
+            var bi = r.Blobs[i];
+            var br = bi.BoundingBox;
+            if (br.Width > 0 && br.Height > 0)
+            {
+                dst.Add(new OverlayRectItem
+                {
+                    X = br.X,
+                    Y = br.Y,
+                    Width = br.Width,
+                    Height = br.Height,
+                    Stroke = Brushes.Gold,
+                    Label = string.Empty
+                });
+            }
+
+            dst.Add(new OverlayPointItem
+            {
+                X = bi.Centroid.X,
+                Y = bi.Centroid.Y,
+                Radius = 3.0,
+                Stroke = Brushes.Gold,
+                Label = string.Empty
+            });
+        }
+
+        if (r.Blobs.Count > MaxBlobOverlayCount)
+        {
+            dst.Add(new OverlayPointItem
+            {
+                X = def.InspectRoi.X + 2,
+                Y = def.InspectRoi.Y + 16,
+                Radius = 1.0,
+                Stroke = Brushes.Gold,
+                Label = $"+{r.Blobs.Count - MaxBlobOverlayCount}"
+            });
+        }
     }
 
     private void OnRoiEdited(RoiSelection? sel)
@@ -345,7 +938,7 @@ public sealed partial class ToolEditorViewModel : ObservableObject
         if (string.Equals(label, "DefectROI", StringComparison.OrdinalIgnoreCase))
         {
             _config.DefectConfig.InspectRoi = roi;
-            RefreshPreviews();
+            RunFlow();
             RequestAutoSave();
             return;
         }
@@ -358,7 +951,7 @@ public sealed partial class ToolEditorViewModel : ObservableObject
                 _config.Origin.TemplateRoi = roi;
                 _config.Origin.WorldPosition = RoiCenterToWorld(roi);
             }
-            RefreshPreviews();
+            RunFlow();
             RequestAutoSave();
             return;
         }
@@ -368,7 +961,7 @@ public sealed partial class ToolEditorViewModel : ObservableObject
             _config.Origin.TemplateRoi = roi;
             _config.Origin.WorldPosition = RoiCenterToWorld(roi);
             TrySaveTemplateImage("origin", roi, isOrigin: true, pointName: null);
-            RefreshPreviews();
+            RunFlow();
             RequestAutoSave();
             return;
         }
@@ -389,7 +982,7 @@ public sealed partial class ToolEditorViewModel : ObservableObject
                         p.TemplateRoi = roi;
                         p.WorldPosition = RoiCenterToWorld(roi);
                     }
-                    RefreshPreviews();
+                    RunFlow();
                     RequestAutoSave();
                     return;
                 }
@@ -403,7 +996,7 @@ public sealed partial class ToolEditorViewModel : ObservableObject
                     p.TemplateRoi = roi;
                     p.WorldPosition = RoiCenterToWorld(roi);
                     TrySaveTemplateImage(name, roi, isOrigin: false, pointName: name);
-                    RefreshPreviews();
+                    RunFlow();
                     RequestAutoSave();
                     return;
                 }
@@ -415,14 +1008,22 @@ public sealed partial class ToolEditorViewModel : ObservableObject
                 if (l is not null)
                 {
                     l.SearchRoi = roi;
-                    RefreshPreviews();
+                    RunFlow();
                     RequestAutoSave();
                     return;
                 }
             }
+
+            if (kind.StartsWith("B", StringComparison.OrdinalIgnoreCase))
+            {
+                ApplyRoiForLabel(label, roi);
+                RunFlow();
+                RequestAutoSave();
+                return;
+            }
         }
 
-        RefreshPreviews();
+        RunFlow();
         RaiseToolPropertyPanelsChanged();
         RequestAutoSave();
     }
@@ -548,6 +1149,8 @@ public sealed partial class ToolEditorViewModel : ObservableObject
 
     public ObservableCollection<ToolGraphNodeViewModel> Nodes { get; }
 
+    public ObservableCollection<ToolGraphNodeViewModel> SelectedNodes { get; } = new();
+
     public ObservableCollection<ToolGraphEdgeViewModel> Edges { get; }
 
     [ObservableProperty]
@@ -555,6 +1158,7 @@ public sealed partial class ToolEditorViewModel : ObservableObject
 
     partial void OnSelectedNodeChanged(ToolGraphNodeViewModel? value)
     {
+        SelectedEdge = null;
         if (_selectedNodeHook is not null)
         {
             _selectedNodeHook.PropertyChanged -= SelectedNode_PropertyChanged;
@@ -568,9 +1172,84 @@ public sealed partial class ToolEditorViewModel : ObservableObject
 
         _selectedNodePrevRefName = value?.RefName;
 
+        if (value is null)
+        {
+            ClearNodeSelection();
+        }
+        else
+        {
+            // If selection is empty or this node isn't part of multi-selection, treat it as a single-select.
+            if (SelectedNodes.Count == 0 || !value.IsSelected)
+            {
+                SetSingleNodeSelection(value);
+            }
+            else if (!SelectedNodes.Contains(value))
+            {
+                // Safety: keep SelectedNodes consistent.
+                SelectedNodes.Add(value);
+            }
+        }
+
+        SyncPreprocessChoices();
+        SyncSelectedToolPreprocessChoiceFromGraph();
         RaiseToolPropertyPanelsChanged();
         RefreshPreviews();
+        OnPropertyChanged(nameof(Blob_LastRunCount));
     }
+
+    public void ClearNodeSelection()
+    {
+        foreach (var n in SelectedNodes)
+        {
+            n.IsSelected = false;
+        }
+        SelectedNodes.Clear();
+    }
+
+    public void SetSingleNodeSelection(ToolGraphNodeViewModel node)
+    {
+        if (node is null)
+        {
+            return;
+        }
+
+        ClearNodeSelection();
+        node.IsSelected = true;
+        SelectedNodes.Add(node);
+    }
+
+    public void ToggleNodeSelection(ToolGraphNodeViewModel node)
+    {
+        if (node is null)
+        {
+            return;
+        }
+
+        if (node.IsSelected)
+        {
+            node.IsSelected = false;
+            SelectedNodes.Remove(node);
+
+            if (ReferenceEquals(SelectedNode, node))
+            {
+                SelectedNode = SelectedNodes.Count > 0 ? SelectedNodes[0] : null;
+            }
+        }
+        else
+        {
+            node.IsSelected = true;
+            SelectedNodes.Add(node);
+
+            // Keep the first-selected node as the primary for properties/preview.
+            if (SelectedNode is null)
+            {
+                SelectedNode = node;
+            }
+        }
+    }
+
+    [ObservableProperty]
+    private ToolGraphEdgeViewModel? _selectedEdge;
 
     [ObservableProperty]
     private ImageSource? _selectedNodePreviewImage;
@@ -580,6 +1259,9 @@ public sealed partial class ToolEditorViewModel : ObservableObject
 
     [ObservableProperty]
     private ImageSource? _linePreviewImage;
+
+    [ObservableProperty]
+    private ImageSource? _blobThresholdPreviewImage;
 
     public ObservableCollection<OverlayItem> SelectedNodeOverlayItems { get; }
 
@@ -595,6 +1277,8 @@ public sealed partial class ToolEditorViewModel : ObservableObject
 
     public ICommand DeleteSelectedNodeCommand { get; }
 
+    public ICommand DeleteSelectedEdgeCommand { get; }
+
     public ICommand LoadPreviewImageCommand { get; }
 
     public ICommand RunFlowCommand { get; }
@@ -603,9 +1287,142 @@ public sealed partial class ToolEditorViewModel : ObservableObject
 
     public ICommand RoiEditedCommand { get; }
 
+    public ICommand RoiDeletedCommand { get; }
+
     private VisionConfig? _config;
 
     private InspectionResult? _lastRun;
+
+    public void SelectEdge(ToolGraphEdgeViewModel? edge)
+    {
+        SelectedNode = null;
+        SelectedEdge = edge;
+    }
+
+    private void DeleteSelectedEdge()
+    {
+        if (SelectedEdge is null)
+        {
+            return;
+        }
+
+        DeleteEdge(SelectedEdge);
+    }
+
+    public void DeleteEdge(ToolGraphEdgeViewModel edge)
+    {
+        if (edge is null)
+        {
+            return;
+        }
+
+        Edges.Remove(edge);
+        SelectedEdge = null;
+        SyncEdgesToConfig();
+        SyncSelectedToolPreprocessChoiceFromGraph();
+        RaiseToolPropertyPanelsChanged();
+        RefreshPreviews();
+        RequestAutoSave();
+    }
+
+    private void SyncEdgesToConfig()
+    {
+        if (_config?.ToolGraph is null)
+        {
+            return;
+        }
+
+        _config.ToolGraph.Edges = Edges
+            .Select(e => new ToolGraphEdge
+            {
+                FromNodeId = e.FromNodeId,
+                ToNodeId = e.ToNodeId,
+                FromPort = e.FromPort,
+                ToPort = e.ToPort
+            })
+            .ToList();
+    }
+
+    private void SyncPreprocessChoices()
+    {
+        // IMPORTANT: don't let ComboBox list refresh reset SelectedItem and trigger graph mutations.
+        _syncingInputs = true;
+        try
+        {
+            var prev = SelectedToolPreprocessChoice;
+
+            AvailablePreprocessChoices.Clear();
+            AvailablePreprocessChoices.Add(DefaultPreprocessChoice);
+
+            if (_config is not null)
+            {
+                foreach (var n in (_config.PreprocessNodes ?? new())
+                             .Select(x => x.Name)
+                             .Where(x => !string.IsNullOrWhiteSpace(x))
+                             .Distinct(StringComparer.OrdinalIgnoreCase)
+                             .OrderBy(x => x, StringComparer.OrdinalIgnoreCase))
+                {
+                    AvailablePreprocessChoices.Add(n);
+                }
+            }
+
+            // Restore selection (no graph change because _syncingInputs is true)
+            if (string.IsNullOrWhiteSpace(prev) || !AvailablePreprocessChoices.Contains(prev))
+            {
+                SelectedToolPreprocessChoice = DefaultPreprocessChoice;
+            }
+            else
+            {
+                SelectedToolPreprocessChoice = prev;
+            }
+
+            OnPropertyChanged(nameof(IsToolWithPreprocessInput));
+        }
+        finally
+        {
+            _syncingInputs = false;
+        }
+    }
+
+    private void SyncSelectedToolPreprocessChoiceFromGraph()
+    {
+        _syncingInputs = true;
+        try
+        {
+            if (!IsToolWithPreprocessInput || SelectedNode is null)
+            {
+                SelectedToolPreprocessChoice = DefaultPreprocessChoice;
+                OnPropertyChanged(nameof(IsToolWithPreprocessInput));
+                return;
+            }
+
+            var edge = Edges.FirstOrDefault(e => string.Equals(e.ToNodeId, SelectedNode.Id, StringComparison.OrdinalIgnoreCase)
+                                                && string.Equals(e.ToPort, "Pre", StringComparison.OrdinalIgnoreCase));
+            if (edge is null)
+            {
+                SelectedToolPreprocessChoice = DefaultPreprocessChoice;
+                return;
+            }
+
+            var from = Nodes.FirstOrDefault(n => string.Equals(n.Id, edge.FromNodeId, StringComparison.OrdinalIgnoreCase));
+            if (from is null || !string.Equals(from.Type, "Preprocess", StringComparison.OrdinalIgnoreCase))
+            {
+                SelectedToolPreprocessChoice = DefaultPreprocessChoice;
+                return;
+            }
+
+            if (!AvailablePreprocessChoices.Contains(from.RefName))
+            {
+                SyncPreprocessChoices();
+            }
+
+            SelectedToolPreprocessChoice = string.IsNullOrWhiteSpace(from.RefName) ? DefaultPreprocessChoice : from.RefName;
+        }
+        finally
+        {
+            _syncingInputs = false;
+        }
+    }
 
     [ObservableProperty]
     private bool _linePreviewEnabled = true;
@@ -651,6 +1468,8 @@ public sealed partial class ToolEditorViewModel : ObservableObject
         OnPropertyChanged(nameof(IsPointLineDistanceNode));
         OnPropertyChanged(nameof(IsAnyDistanceNode));
         OnPropertyChanged(nameof(IsConditionNode));
+        OnPropertyChanged(nameof(IsPreprocessNode));
+        OnPropertyChanged(nameof(IsBlobDetectionNode));
 
         OnPropertyChanged(nameof(AvailablePointNames));
         OnPropertyChanged(nameof(AvailableLineNames));
@@ -691,6 +1510,13 @@ public sealed partial class ToolEditorViewModel : ObservableObject
         OnPropertyChanged(nameof(SelectedRunValue));
         OnPropertyChanged(nameof(SelectedRunPass));
 
+        OnPropertyChanged(nameof(AvailableBlobPolarities));
+        OnPropertyChanged(nameof(Blob_Polarity));
+        OnPropertyChanged(nameof(Blob_Threshold));
+        OnPropertyChanged(nameof(Blob_MinBlobArea));
+        OnPropertyChanged(nameof(Blob_MaxBlobArea));
+        OnPropertyChanged(nameof(Blob_LastRunCount));
+
         OnPropertyChanged(nameof(ShowRoisInSelectedPreview));
         OnPropertyChanged(nameof(ShowRoisInFinalPreview));
     }
@@ -705,7 +1531,198 @@ public sealed partial class ToolEditorViewModel : ObservableObject
 
     public bool IsConditionNode => string.Equals(SelectedNode?.Type, "Condition", StringComparison.OrdinalIgnoreCase);
 
+    public bool IsPreprocessNode => string.Equals(SelectedNode?.Type, "Preprocess", StringComparison.OrdinalIgnoreCase);
+
     public bool IsAnyDistanceNode => IsDistanceNode || IsLineLineDistanceNode || IsPointLineDistanceNode;
+
+    private PreprocessNodeDefinition? SelectedPreprocessNodeDef()
+    {
+        if (_config is null || SelectedNode is null) return null;
+        if (!string.Equals(SelectedNode.Type, "Preprocess", StringComparison.OrdinalIgnoreCase)) return null;
+        return _config.PreprocessNodes.FirstOrDefault(x => string.Equals(x.Name, SelectedNode.RefName, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private PreprocessSettings? GetActivePreprocessSettingsForUi()
+    {
+        if (_config is null)
+        {
+            return null;
+        }
+
+        var def = SelectedPreprocessNodeDef();
+        return def?.Settings ?? _config.Preprocess;
+    }
+
+    public bool UseGray
+    {
+        get
+        {
+            var s = GetActivePreprocessSettingsForUi();
+            return s?.UseGray ?? true;
+        }
+        set
+        {
+            var s = GetActivePreprocessSettingsForUi();
+            if (s is null) return;
+            if (s.UseGray == value) return;
+            s.UseGray = value;
+            RefreshPreviews();
+            OnPropertyChanged();
+            RequestAutoSave();
+        }
+    }
+
+    public bool UseGaussianBlur
+    {
+        get
+        {
+            var s = GetActivePreprocessSettingsForUi();
+            return s?.UseGaussianBlur ?? false;
+        }
+        set
+        {
+            var s = GetActivePreprocessSettingsForUi();
+            if (s is null) return;
+            if (s.UseGaussianBlur == value) return;
+            s.UseGaussianBlur = value;
+            RefreshPreviews();
+            OnPropertyChanged();
+            RequestAutoSave();
+        }
+    }
+
+    public int BlurKernel
+    {
+        get
+        {
+            var s = GetActivePreprocessSettingsForUi();
+            return s?.BlurKernel ?? 3;
+        }
+        set
+        {
+            var s = GetActivePreprocessSettingsForUi();
+            if (s is null) return;
+            if (s.BlurKernel == value) return;
+            s.BlurKernel = value;
+            RefreshPreviews();
+            OnPropertyChanged();
+            RequestAutoSave();
+        }
+    }
+
+    public bool UseThreshold
+    {
+        get
+        {
+            var s = GetActivePreprocessSettingsForUi();
+            return s?.UseThreshold ?? false;
+        }
+        set
+        {
+            var s = GetActivePreprocessSettingsForUi();
+            if (s is null) return;
+            if (s.UseThreshold == value) return;
+            s.UseThreshold = value;
+            RefreshPreviews();
+            OnPropertyChanged();
+            RequestAutoSave();
+        }
+    }
+
+    public int ThresholdValue
+    {
+        get
+        {
+            var s = GetActivePreprocessSettingsForUi();
+            return s?.ThresholdValue ?? 128;
+        }
+        set
+        {
+            var s = GetActivePreprocessSettingsForUi();
+            if (s is null) return;
+            if (s.ThresholdValue == value) return;
+            s.ThresholdValue = value;
+            RefreshPreviews();
+            OnPropertyChanged();
+            RequestAutoSave();
+        }
+    }
+
+    public bool UseCanny
+    {
+        get
+        {
+            var s = GetActivePreprocessSettingsForUi();
+            return s?.UseCanny ?? false;
+        }
+        set
+        {
+            var s = GetActivePreprocessSettingsForUi();
+            if (s is null) return;
+            if (s.UseCanny == value) return;
+            s.UseCanny = value;
+            RefreshPreviews();
+            OnPropertyChanged();
+            RequestAutoSave();
+        }
+    }
+
+    public int Canny1
+    {
+        get
+        {
+            var s = GetActivePreprocessSettingsForUi();
+            return s?.Canny1 ?? 50;
+        }
+        set
+        {
+            var s = GetActivePreprocessSettingsForUi();
+            if (s is null) return;
+            if (s.Canny1 == value) return;
+            s.Canny1 = value;
+            RefreshPreviews();
+            OnPropertyChanged();
+            RequestAutoSave();
+        }
+    }
+
+    public int Canny2
+    {
+        get
+        {
+            var s = GetActivePreprocessSettingsForUi();
+            return s?.Canny2 ?? 150;
+        }
+        set
+        {
+            var s = GetActivePreprocessSettingsForUi();
+            if (s is null) return;
+            if (s.Canny2 == value) return;
+            s.Canny2 = value;
+            RefreshPreviews();
+            OnPropertyChanged();
+            RequestAutoSave();
+        }
+    }
+
+    public bool UseMorphology
+    {
+        get
+        {
+            var s = GetActivePreprocessSettingsForUi();
+            return s?.UseMorphology ?? false;
+        }
+        set
+        {
+            var s = GetActivePreprocessSettingsForUi();
+            if (s is null) return;
+            if (s.UseMorphology == value) return;
+            s.UseMorphology = value;
+            RefreshPreviews();
+            OnPropertyChanged();
+            RequestAutoSave();
+        }
+    }
 
     public int Condition_InputCount
     {
@@ -1022,123 +2039,6 @@ public sealed partial class ToolEditorViewModel : ObservableObject
             {
                 Edges.RemoveAt(i);
             }
-        }
-    }
-
-    public bool UseGray
-    {
-        get => _config?.Preprocess.UseGray ?? true;
-        set
-        {
-            if (_config is null) return;
-            if (_config.Preprocess.UseGray == value) return;
-            _config.Preprocess.UseGray = value;
-            RefreshPreviews();
-            OnPropertyChanged();
-        }
-    }
-
-    public bool UseGaussianBlur
-    {
-        get => _config?.Preprocess.UseGaussianBlur ?? false;
-        set
-        {
-            if (_config is null) return;
-            if (_config.Preprocess.UseGaussianBlur == value) return;
-            _config.Preprocess.UseGaussianBlur = value;
-            RefreshPreviews();
-            OnPropertyChanged();
-        }
-    }
-
-    public int BlurKernel
-    {
-        get => _config?.Preprocess.BlurKernel ?? 3;
-        set
-        {
-            if (_config is null) return;
-            if (_config.Preprocess.BlurKernel == value) return;
-            _config.Preprocess.BlurKernel = value;
-            RefreshPreviews();
-            OnPropertyChanged();
-        }
-    }
-
-    public bool UseThreshold
-    {
-        get => _config?.Preprocess.UseThreshold ?? false;
-        set
-        {
-            if (_config is null) return;
-            if (_config.Preprocess.UseThreshold == value) return;
-            _config.Preprocess.UseThreshold = value;
-            RefreshPreviews();
-            OnPropertyChanged();
-        }
-    }
-
-    public int ThresholdValue
-    {
-        get => _config?.Preprocess.ThresholdValue ?? 128;
-        set
-        {
-            if (_config is null) return;
-            if (_config.Preprocess.ThresholdValue == value) return;
-            _config.Preprocess.ThresholdValue = value;
-            RefreshPreviews();
-            OnPropertyChanged();
-        }
-    }
-
-    public bool UseCanny
-    {
-        get => _config?.Preprocess.UseCanny ?? false;
-        set
-        {
-            if (_config is null) return;
-            if (_config.Preprocess.UseCanny == value) return;
-            _config.Preprocess.UseCanny = value;
-            RefreshPreviews();
-            OnPropertyChanged();
-        }
-    }
-
-    public int Canny1
-    {
-        get => _config?.Preprocess.Canny1 ?? 50;
-        set
-        {
-            if (_config is null) return;
-            if (_config.Preprocess.Canny1 == value) return;
-            _config.Preprocess.Canny1 = value;
-            RefreshPreviews();
-            OnPropertyChanged();
-        }
-    }
-
-    public int Canny2
-    {
-        get => _config?.Preprocess.Canny2 ?? 150;
-        set
-        {
-            if (_config is null) return;
-            if (_config.Preprocess.Canny2 == value) return;
-            _config.Preprocess.Canny2 = value;
-            RefreshPreviews();
-            OnPropertyChanged();
-        }
-    }
-
-    public bool UseMorphology
-    {
-        get => _config?.Preprocess.UseMorphology ?? false;
-        set
-        {
-            if (_config is null) return;
-            if (_config.Preprocess.UseMorphology == value) return;
-            _config.Preprocess.UseMorphology = value;
-            RefreshPreviews();
-            OnPropertyChanged();
         }
     }
 
@@ -1567,6 +2467,19 @@ public sealed partial class ToolEditorViewModel : ObservableObject
         _config ??= new VisionConfig { ProductCode = code };
         _config.ProductCode = ProductCode;
 
+        SyncToolGraphToConfig();
+
+        _configService.SaveConfig(_config);
+        RefreshPreviews();
+    }
+
+    private void SyncToolGraphToConfig()
+    {
+        if (_config?.ToolGraph is null)
+        {
+            return;
+        }
+
         _config.ToolGraph.Nodes.Clear();
         foreach (var n in Nodes)
         {
@@ -1592,9 +2505,6 @@ public sealed partial class ToolEditorViewModel : ObservableObject
                 ToPort = e.ToPort
             });
         }
-
-        _configService.SaveConfig(_config);
-        RefreshPreviews();
     }
 
     private void RunFlow()
@@ -1607,12 +2517,14 @@ public sealed partial class ToolEditorViewModel : ObservableObject
             return;
         }
 
+        SyncToolGraphToConfig();
         EnsureTemplatePathsAbsolute(_config);
 
         _lastRun = _inspectionService.Inspect(snap, _config);
 
         RefreshPreviews();
         RaiseToolPropertyPanelsChanged();
+        OnPropertyChanged(nameof(Blob_LastRunCount));
     }
 
     private void NewGraph()
@@ -1648,6 +2560,14 @@ public sealed partial class ToolEditorViewModel : ObservableObject
             return;
         }
 
+        if (_config is not null && !string.IsNullOrWhiteSpace(toRemove.RefName))
+        {
+            if (string.Equals(toRemove.Type, "BlobDetection", StringComparison.OrdinalIgnoreCase))
+            {
+                _config.BlobDetections.RemoveAll(x => string.Equals(x.Name, toRemove.RefName, StringComparison.OrdinalIgnoreCase));
+            }
+        }
+
         Nodes.RemoveAt(idx);
         toRemove.PropertyChanged -= Node_PropertyChanged;
 
@@ -1662,7 +2582,11 @@ public sealed partial class ToolEditorViewModel : ObservableObject
         }
 
         SelectedNode = Nodes.Count > 0 ? Nodes[Math.Clamp(idx, 0, Nodes.Count - 1)] : null;
-        RefreshPreviews();
+
+        _lastRun = null;
+        SyncToolGraphToConfig();
+        RunFlow();
+        RequestAutoSave();
     }
 
     public void AddNode(string type, System.Windows.Point canvasPosition)
@@ -1721,6 +2645,16 @@ public sealed partial class ToolEditorViewModel : ObservableObject
             node.RefName = GenerateDefaultRefName(node.Type);
         }
 
+        if (string.Equals(node.Type, "Preprocess", StringComparison.OrdinalIgnoreCase))
+        {
+            var existed = _config.PreprocessNodes.Any(x => string.Equals(x.Name, node.RefName, StringComparison.OrdinalIgnoreCase));
+            if (!existed)
+            {
+                _config.PreprocessNodes.Add(new PreprocessNodeDefinition { Name = node.RefName, Settings = new PreprocessSettings() });
+            }
+            return;
+        }
+
         if (string.Equals(node.Type, "Origin", StringComparison.OrdinalIgnoreCase))
         {
             _config.Origin.Name = "Origin";
@@ -1767,6 +2701,18 @@ public sealed partial class ToolEditorViewModel : ObservableObject
             if (!existed)
             {
                 _config.Distances.Add(new LineDistance { Name = node.RefName });
+            }
+            return;
+        }
+
+        if (string.Equals(node.Type, "BlobDetection", StringComparison.OrdinalIgnoreCase))
+        {
+            var existed = _config.BlobDetections.Any(x => string.Equals(x.Name, node.RefName, StringComparison.OrdinalIgnoreCase));
+            if (!existed)
+            {
+                var def = new BlobDetectionDefinition { Name = node.RefName };
+                def.InspectRoi = DefaultRoi();
+                _config.BlobDetections.Add(def);
             }
             return;
         }
@@ -1854,10 +2800,20 @@ public sealed partial class ToolEditorViewModel : ObservableObject
             baseName = "C";
             exists = n => _config.Conditions.Any(x => string.Equals(x.Name, n, StringComparison.OrdinalIgnoreCase));
         }
+        else if (string.Equals(type, "Preprocess", StringComparison.OrdinalIgnoreCase))
+        {
+            baseName = "PP";
+            exists = n => _config.PreprocessNodes.Any(x => string.Equals(x.Name, n, StringComparison.OrdinalIgnoreCase));
+        }
         else if (string.Equals(type, "DefectRoi", StringComparison.OrdinalIgnoreCase))
         {
             baseName = "Defect";
             exists = _ => false;
+        }
+        else if (string.Equals(type, "BlobDetection", StringComparison.OrdinalIgnoreCase))
+        {
+            baseName = "BLD";
+            exists = n => _config.BlobDetections.Any(x => string.Equals(x.Name, n, StringComparison.OrdinalIgnoreCase));
         }
         else
         {
@@ -1889,6 +2845,20 @@ public sealed partial class ToolEditorViewModel : ObservableObject
             return;
         }
 
+        // Enforce single incoming connection for certain ports.
+        if (string.Equals(toPort, "Pre", StringComparison.OrdinalIgnoreCase))
+        {
+            for (var i = Edges.Count - 1; i >= 0; i--)
+            {
+                var e = Edges[i];
+                if (string.Equals(e.ToNodeId, toNode.Id, StringComparison.OrdinalIgnoreCase)
+                    && string.Equals(e.ToPort, toPort, StringComparison.OrdinalIgnoreCase))
+                {
+                    Edges.RemoveAt(i);
+                }
+            }
+        }
+
         var existed = Edges.Any(x => string.Equals(x.FromNodeId, fromNode.Id, StringComparison.OrdinalIgnoreCase)
                                      && string.Equals(x.ToNodeId, toNode.Id, StringComparison.OrdinalIgnoreCase)
                                      && string.Equals(x.FromPort, fromPort, StringComparison.OrdinalIgnoreCase)
@@ -1899,6 +2869,7 @@ public sealed partial class ToolEditorViewModel : ObservableObject
         }
 
         Edges.Add(new ToolGraphEdgeViewModel(fromNode, toNode, fromPort, toPort));
+        SyncEdgesToConfig();
 
         // Auto-fill tool inputs based on graph wiring (VisionPro-like).
         if (_config is null)
@@ -1981,14 +2952,48 @@ public sealed partial class ToolEditorViewModel : ObservableObject
             SelectedNodePreviewImage = null;
             FinalPreviewImage = null;
             LinePreviewImage = null;
+            BlobThresholdPreviewImage = null;
             return;
         }
 
         if (_config is not null && PreprocessPreviewEnabled)
         {
-            using var processed = _preprocessor.Run(snap, _config.Preprocess);
-            SelectedNodePreviewImage = processed.ToBitmapSource();
-            FinalPreviewImage = processed.ToBitmapSource();
+            if (SelectedNode is not null && string.Equals(SelectedNode.Type, "Preprocess", StringComparison.OrdinalIgnoreCase))
+            {
+                var def = SelectedPreprocessNodeDef();
+                if (def is not null)
+                {
+                    using var processedSel = _preprocessor.Run(snap, def.Settings);
+                    SelectedNodePreviewImage = processedSel.ToBitmapSource();
+                }
+                else
+                {
+                    using var processedSel = _preprocessor.Run(snap, _config.Preprocess);
+                    SelectedNodePreviewImage = processedSel.ToBitmapSource();
+                }
+
+                using var processedFinal = _preprocessor.Run(snap, _config.Preprocess);
+                FinalPreviewImage = processedFinal.ToBitmapSource();
+            }
+            else
+            {
+                using var processedFinal = _preprocessor.Run(snap, _config.Preprocess);
+                FinalPreviewImage = processedFinal.ToBitmapSource();
+
+                if (SelectedNode is not null
+                    && (string.Equals(SelectedNode.Type, "Origin", StringComparison.OrdinalIgnoreCase)
+                        || string.Equals(SelectedNode.Type, "Point", StringComparison.OrdinalIgnoreCase)
+                        || string.Equals(SelectedNode.Type, "Line", StringComparison.OrdinalIgnoreCase)
+                        || string.Equals(SelectedNode.Type, "BlobDetection", StringComparison.OrdinalIgnoreCase)))
+                {
+                    using var processedSel = ResolveToolPreprocessForPreview(snap, SelectedNode);
+                    SelectedNodePreviewImage = processedSel.ToBitmapSource();
+                }
+                else
+                {
+                    SelectedNodePreviewImage = processedFinal.ToBitmapSource();
+                }
+            }
         }
         else
         {
@@ -1996,9 +3001,12 @@ public sealed partial class ToolEditorViewModel : ObservableObject
             FinalPreviewImage = snap.ToBitmapSource();
         }
 
+        UpdateBlobThresholdPreview(snap);
+
         if (_config is null)
         {
             LinePreviewImage = null;
+            BlobThresholdPreviewImage = null;
             return;
         }
 
@@ -2008,11 +3016,11 @@ public sealed partial class ToolEditorViewModel : ObservableObject
         if (_lastRun is not null)
         {
             AddConfigRois(FinalOverlayItems);
-            BuildFinalOverlayFromRun(_lastRun, FinalOverlayItems);
+            BuildFinalOverlayFromRunWithConfig(_lastRun, FinalOverlayItems);
             if (SelectedNode is not null)
             {
                 AddConfigRoisForNode(SelectedNode, SelectedNodeOverlayItems);
-                BuildOverlayForNodeFromRun(SelectedNode, _lastRun, SelectedNodeOverlayItems);
+                BuildOverlayForNodeFromRunWithConfig(SelectedNode, _lastRun, SelectedNodeOverlayItems);
             }
         }
         else
@@ -2023,6 +3031,125 @@ public sealed partial class ToolEditorViewModel : ObservableObject
             }
 
             BuildFinalOverlay(snap, FinalOverlayItems);
+        }
+    }
+
+    private void UpdateBlobThresholdPreview(Mat snap)
+    {
+        if (_config is null || SelectedNode is null || !string.Equals(SelectedNode.Type, "BlobDetection", StringComparison.OrdinalIgnoreCase))
+        {
+            BlobThresholdPreviewImage = null;
+            return;
+        }
+
+        var def = SelectedBlobDetectionDef();
+        if (def is null || def.InspectRoi.Width <= 0 || def.InspectRoi.Height <= 0)
+        {
+            BlobThresholdPreviewImage = null;
+            return;
+        }
+
+        using var matForBlob = ResolveToolPreprocessForPreview(snap, SelectedNode);
+
+        var previewRoi = def.InspectRoi;
+        if (def.Rois is not null && def.Rois.Count > 0)
+        {
+            previewRoi = ComputeBlobInspectRoi(def);
+        }
+
+        var rect = new OpenCvSharp.Rect(previewRoi.X, previewRoi.Y, previewRoi.Width, previewRoi.Height);
+        rect = rect.Intersect(new OpenCvSharp.Rect(0, 0, matForBlob.Width, matForBlob.Height));
+        if (rect.Width <= 0 || rect.Height <= 0)
+        {
+            BlobThresholdPreviewImage = null;
+            return;
+        }
+
+        using var crop = new Mat(matForBlob, rect);
+        using var gray = crop.Channels() == 1 ? crop.Clone() : crop.CvtColor(ColorConversionCodes.BGR2GRAY);
+        using var bw = new Mat();
+
+        var thr = Math.Clamp(def.Threshold, 0, 255);
+        var thrType = def.Polarity == BlobPolarity.DarkOnLight ? ThresholdTypes.BinaryInv : ThresholdTypes.Binary;
+        Cv2.Threshold(gray, bw, thr, 255, thrType);
+
+        if (def.Rois is not null && def.Rois.Count > 0)
+        {
+            using var mask = new Mat(bw.Rows, bw.Cols, MatType.CV_8UC1, Scalar.Black);
+            var anyInclude = false;
+
+            foreach (var rr in def.Rois)
+            {
+                if (rr.Roi.Width <= 0 || rr.Roi.Height <= 0)
+                {
+                    continue;
+                }
+
+                var rx = rr.Roi.X - rect.X;
+                var ry = rr.Roi.Y - rect.Y;
+                var r = new OpenCvSharp.Rect(rx, ry, rr.Roi.Width, rr.Roi.Height);
+                r = r.Intersect(new OpenCvSharp.Rect(0, 0, bw.Cols, bw.Rows));
+                if (r.Width <= 0 || r.Height <= 0)
+                {
+                    continue;
+                }
+
+                if (rr.Mode == BlobRoiMode.Include)
+                {
+                    anyInclude = true;
+                    using var sub = new Mat(mask, r);
+                    sub.SetTo(Scalar.White);
+                }
+            }
+
+            if (!anyInclude)
+            {
+                mask.SetTo(Scalar.White);
+            }
+
+            foreach (var rr in def.Rois)
+            {
+                if (rr.Mode != BlobRoiMode.Exclude || rr.Roi.Width <= 0 || rr.Roi.Height <= 0)
+                {
+                    continue;
+                }
+
+                var rx = rr.Roi.X - rect.X;
+                var ry = rr.Roi.Y - rect.Y;
+                var r = new OpenCvSharp.Rect(rx, ry, rr.Roi.Width, rr.Roi.Height);
+                r = r.Intersect(new OpenCvSharp.Rect(0, 0, bw.Cols, bw.Rows));
+                if (r.Width <= 0 || r.Height <= 0)
+                {
+                    continue;
+                }
+
+                using var sub = new Mat(mask, r);
+                sub.SetTo(Scalar.Black);
+            }
+
+            Cv2.BitwiseAnd(bw, mask, bw);
+        }
+
+        Mat view = bw;
+        if (bw.Width > 260)
+        {
+            var scale = 260.0 / bw.Width;
+            var h = Math.Max(1, (int)Math.Round(bw.Height * scale));
+            var resized = new Mat();
+            Cv2.Resize(bw, resized, new OpenCvSharp.Size(260, h), 0, 0, InterpolationFlags.Nearest);
+            view = resized;
+        }
+
+        try
+        {
+            BlobThresholdPreviewImage = view.ToBitmapSource();
+        }
+        finally
+        {
+            if (!ReferenceEquals(view, bw))
+            {
+                view.Dispose();
+            }
         }
     }
 
@@ -2113,6 +3240,78 @@ public sealed partial class ToolEditorViewModel : ObservableObject
             });
         }
 
+        foreach (var b in _config.BlobDetections)
+        {
+            if (b.Rois is not null && b.Rois.Count > 0)
+            {
+                var hasValidInclude = false;
+                for (var i = 0; i < b.Rois.Count; i++)
+                {
+                    var rr = b.Rois[i];
+                    if (rr.Roi.Width <= 0 || rr.Roi.Height <= 0)
+                    {
+                        continue;
+                    }
+
+                    if (rr.Mode == BlobRoiMode.Exclude)
+                    {
+                        dst.Add(new OverlayRectItem
+                        {
+                            X = rr.Roi.X,
+                            Y = rr.Roi.Y,
+                            Width = rr.Roi.Width,
+                            Height = rr.Roi.Height,
+                            Stroke = Brushes.Red,
+                            Label = $"{b.Name} BX{i + 1}"
+                        });
+                    }
+                    else
+                    {
+                        hasValidInclude = true;
+                        dst.Add(new OverlayRectItem
+                        {
+                            X = rr.Roi.X,
+                            Y = rr.Roi.Y,
+                            Width = rr.Roi.Width,
+                            Height = rr.Roi.Height,
+                            Stroke = Brushes.Gold,
+                            Label = $"{b.Name} B{i + 1}"
+                        });
+                    }
+                }
+
+                if (!hasValidInclude && b.InspectRoi.Width > 0 && b.InspectRoi.Height > 0)
+                {
+                    dst.Add(new OverlayRectItem
+                    {
+                        X = b.InspectRoi.X,
+                        Y = b.InspectRoi.Y,
+                        Width = b.InspectRoi.Width,
+                        Height = b.InspectRoi.Height,
+                        Stroke = Brushes.Gold,
+                        Label = $"{b.Name} B"
+                    });
+                }
+
+                continue;
+            }
+
+            if (b.InspectRoi.Width <= 0 || b.InspectRoi.Height <= 0)
+            {
+                continue;
+            }
+
+            dst.Add(new OverlayRectItem
+            {
+                X = b.InspectRoi.X,
+                Y = b.InspectRoi.Y,
+                Width = b.InspectRoi.Width,
+                Height = b.InspectRoi.Height,
+                Stroke = Brushes.Gold,
+                Label = $"{b.Name} B"
+            });
+        }
+
         if (_config.DefectConfig.InspectRoi.Width > 0 && _config.DefectConfig.InspectRoi.Height > 0)
         {
             dst.Add(new OverlayRectItem
@@ -2193,6 +3392,87 @@ public sealed partial class ToolEditorViewModel : ObservableObject
             }
         }
 
+        void AddBlobRoi(string blobName)
+        {
+            var b = _config.BlobDetections.FirstOrDefault(x => string.Equals(x.Name, blobName, StringComparison.OrdinalIgnoreCase));
+            if (b is null)
+            {
+                return;
+            }
+
+            if (!showRois)
+            {
+                return;
+            }
+
+            if (b.Rois is not null && b.Rois.Count > 0)
+            {
+                var hasValidInclude = false;
+                for (var i = 0; i < b.Rois.Count; i++)
+                {
+                    var rr = b.Rois[i];
+                    if (rr.Roi.Width <= 0 || rr.Roi.Height <= 0)
+                    {
+                        continue;
+                    }
+
+                    if (rr.Mode == BlobRoiMode.Exclude)
+                    {
+                        dst.Add(new OverlayRectItem
+                        {
+                            X = rr.Roi.X,
+                            Y = rr.Roi.Y,
+                            Width = rr.Roi.Width,
+                            Height = rr.Roi.Height,
+                            Stroke = Brushes.Red,
+                            Label = $"{b.Name} BX{i + 1}"
+                        });
+                    }
+                    else
+                    {
+                        hasValidInclude = true;
+                        dst.Add(new OverlayRectItem
+                        {
+                            X = rr.Roi.X,
+                            Y = rr.Roi.Y,
+                            Width = rr.Roi.Width,
+                            Height = rr.Roi.Height,
+                            Stroke = Brushes.Gold,
+                            Label = $"{b.Name} B{i + 1}"
+                        });
+                    }
+                }
+
+                if (!hasValidInclude && b.InspectRoi.Width > 0 && b.InspectRoi.Height > 0)
+                {
+                    dst.Add(new OverlayRectItem
+                    {
+                        X = b.InspectRoi.X,
+                        Y = b.InspectRoi.Y,
+                        Width = b.InspectRoi.Width,
+                        Height = b.InspectRoi.Height,
+                        Stroke = Brushes.Gold,
+                        Label = $"{b.Name} B"
+                    });
+                }
+
+                return;
+            }
+
+            if (b.InspectRoi.Width > 0 && b.InspectRoi.Height > 0)
+            {
+                dst.Add(new OverlayRectItem
+                {
+                    X = b.InspectRoi.X,
+                    Y = b.InspectRoi.Y,
+                    Width = b.InspectRoi.Width,
+                    Height = b.InspectRoi.Height,
+                    Stroke = Brushes.Gold,
+                    Label = $"{b.Name} B"
+                });
+            }
+        }
+
         if (string.Equals(node.Type, "Origin", StringComparison.OrdinalIgnoreCase))
         {
             if (showRois && _config.Origin.SearchRoi.Width > 0 && _config.Origin.SearchRoi.Height > 0)
@@ -2245,6 +3525,12 @@ public sealed partial class ToolEditorViewModel : ObservableObject
             }
 
             if (showRois) AddLineRoi(l.Name);
+            return;
+        }
+
+        if (string.Equals(node.Type, "BlobDetection", StringComparison.OrdinalIgnoreCase))
+        {
+            if (showRois) AddBlobRoi(node.RefName);
             return;
         }
 
@@ -3079,6 +4365,22 @@ public sealed partial class ToolEditorViewModel : ObservableObject
             }
         }
 
+        foreach (var b in _config.BlobDetections)
+        {
+            if (showRois && b.InspectRoi.Width > 0 && b.InspectRoi.Height > 0)
+            {
+                dst.Add(new OverlayRectItem
+                {
+                    X = b.InspectRoi.X,
+                    Y = b.InspectRoi.Y,
+                    Width = b.InspectRoi.Width,
+                    Height = b.InspectRoi.Height,
+                    Stroke = Brushes.Gold,
+                    Label = $"{b.Name} B"
+                });
+            }
+        }
+
         if (showRois && _config.DefectConfig.InspectRoi.Width > 0 && _config.DefectConfig.InspectRoi.Height > 0)
         {
             dst.Add(new OverlayRectItem
@@ -3222,6 +4524,11 @@ public sealed partial class ToolEditorViewModel : ObservableObject
 
 public sealed partial class ToolGraphNodeViewModel : ObservableObject
 {
+    // Keep this aligned with ToolEditorView.xaml node template:
+    // Border Padding=8, header StackPanel with 2 lines + Margin bottom=6.
+    private const double NodeHeaderHeight = 46.0;
+    private const double PortItemHeight = 20.0;
+    private const double NodeBottomPadding = 16.0;
     [ObservableProperty]
     private string _id = string.Empty;
 
@@ -3246,6 +4553,9 @@ public sealed partial class ToolGraphNodeViewModel : ObservableObject
     [ObservableProperty]
     private int _inputCount = 1;
 
+    [ObservableProperty]
+    private bool _isSelected;
+
     partial void OnInputCountChanged(int value)
     {
         RebuildPorts();
@@ -3261,8 +4571,8 @@ public sealed partial class ToolGraphNodeViewModel : ObservableObject
         get
         {
             var count = Math.Max(1, InPorts.Count);
-            // Base 52 for 1 port, grow by 18px per extra port.
-            return 52 + (count - 1) * 18;
+            // Header + ports (top-aligned) + bottom padding.
+            return Math.Max(100, NodeHeaderHeight + count * PortItemHeight + NodeBottomPadding);
         }
     }
 
@@ -3294,30 +4604,18 @@ public sealed partial class ToolGraphNodeViewModel : ObservableObject
 
     public double GetInPortCenterY(string portName)
     {
-        if (InPorts.Count <= 1)
-        {
-            return 26;
-        }
+        EnsurePortsInitialized();
 
         var idx = GetInPortIndex(portName);
-        var spacing = 18.0;
-        var total = (InPorts.Count - 1) * spacing;
-        var start = 26 - total / 2.0;
-        return start + idx * spacing;
+        return NodeHeaderHeight + idx * PortItemHeight + PortItemHeight / 2.0;
     }
 
     public double GetOutPortCenterY(string portName)
     {
-        if (OutPorts.Count <= 1)
-        {
-            return 26;
-        }
+        EnsurePortsInitialized();
 
         var idx = GetOutPortIndex(portName);
-        var spacing = 18.0;
-        var total = (OutPorts.Count - 1) * spacing;
-        var start = 26 - total / 2.0;
-        return start + idx * spacing;
+        return NodeHeaderHeight + idx * PortItemHeight + PortItemHeight / 2.0;
     }
 
     public void EnsurePortsInitialized()
@@ -3336,7 +4634,19 @@ public sealed partial class ToolGraphNodeViewModel : ObservableObject
         // Single output for now.
         OutPorts.Add(new NodePortViewModel(this, "Out", isInput: false));
 
-        if (string.Equals(Type, "Distance", StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(Type, "Preprocess", StringComparison.OrdinalIgnoreCase))
+        {
+            InPorts.Add(new NodePortViewModel(this, "In", isInput: true));
+        }
+        else if (string.Equals(Type, "Origin", StringComparison.OrdinalIgnoreCase)
+                 || string.Equals(Type, "Point", StringComparison.OrdinalIgnoreCase)
+                 || string.Equals(Type, "Line", StringComparison.OrdinalIgnoreCase)
+                 || string.Equals(Type, "BlobDetection", StringComparison.OrdinalIgnoreCase))
+        {
+            InPorts.Add(new NodePortViewModel(this, "In", isInput: true));
+            InPorts.Add(new NodePortViewModel(this, "Pre", isInput: true));
+        }
+        else if (string.Equals(Type, "Distance", StringComparison.OrdinalIgnoreCase))
         {
             InPorts.Add(new NodePortViewModel(this, "A", isInput: true));
             InPorts.Add(new NodePortViewModel(this, "B", isInput: true));
@@ -3412,14 +4722,15 @@ public sealed class ToolGraphEdgeViewModel : ObservableObject
             var p1 = GetFromPortPosition();
             var p2 = GetToPortPosition();
 
-            var dx = Math.Abs(p2.X - p1.X);
-            var c = Math.Max(40.0, dx * 0.5);
-
-            var c1 = new System.Windows.Point(p1.X + c, p1.Y);
-            var c2 = new System.Windows.Point(p2.X - c, p2.Y);
+            // Orthogonal (right-angle) edge: horizontal -> vertical -> horizontal.
+            var midX = (p1.X + p2.X) * 0.5;
+            if (midX < p1.X + 30) midX = p1.X + 30;
+            if (midX > p2.X - 30) midX = p2.X - 30;
 
             var fig = new PathFigure { StartPoint = p1, IsClosed = false, IsFilled = false };
-            fig.Segments.Add(new BezierSegment(c1, c2, p2, true));
+            fig.Segments.Add(new LineSegment(new System.Windows.Point(midX, p1.Y), true));
+            fig.Segments.Add(new LineSegment(new System.Windows.Point(midX, p2.Y), true));
+            fig.Segments.Add(new LineSegment(p2, true));
             return new PathGeometry(new[] { fig });
         }
     }
@@ -3433,7 +4744,8 @@ public sealed class ToolGraphEdgeViewModel : ObservableObject
     {
         _from.EnsurePortsInitialized();
         var cy = _from.GetOutPortCenterY(FromPort);
-        return new System.Windows.Point(_from.X + 160, _from.Y + cy);
+        // Out port ellipse is pushed outwards by Margin="0,0,-6,0" in XAML.
+        return new System.Windows.Point(_from.X + 166, _from.Y + cy);
     }
 
     private System.Windows.Point GetToPortPosition()

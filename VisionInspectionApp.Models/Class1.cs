@@ -14,6 +14,18 @@ public enum PointLineDistanceMode
     PointToInfiniteLine = 1
 }
 
+public enum BlobPolarity
+{
+    DarkOnLight = 0,
+    LightOnDark = 1
+}
+
+public enum BlobRoiMode
+{
+    Include = 0,
+    Exclude = 1
+}
+
 public sealed class VisionConfig
 {
     public string ProductCode { get; set; } = string.Empty;
@@ -23,6 +35,8 @@ public sealed class VisionConfig
     public ToolGraph ToolGraph { get; set; } = new();
 
     public PreprocessSettings Preprocess { get; set; } = new();
+
+    public List<PreprocessNodeDefinition> PreprocessNodes { get; set; } = new();
 
     public PointDefinition Origin { get; set; } = new();
 
@@ -38,7 +52,16 @@ public sealed class VisionConfig
 
     public List<ConditionDefinition> Conditions { get; set; } = new();
 
+    public List<BlobDetectionDefinition> BlobDetections { get; set; } = new();
+
     public DefectInspectionConfig DefectConfig { get; set; } = new();
+}
+
+public sealed class PreprocessNodeDefinition
+{
+    public string Name { get; set; } = string.Empty;
+
+    public PreprocessSettings Settings { get; set; } = new();
 }
 
 public sealed class ConditionDefinition
@@ -48,6 +71,30 @@ public sealed class ConditionDefinition
     public int InputCount { get; set; } = 2;
 
     public string Expression { get; set; } = string.Empty;
+}
+
+public sealed class BlobDetectionDefinition
+{
+    public string Name { get; set; } = string.Empty;
+
+    public Roi InspectRoi { get; set; } = new();
+
+    public List<BlobRoiDefinition> Rois { get; set; } = new();
+
+    public BlobPolarity Polarity { get; set; } = BlobPolarity.DarkOnLight;
+
+    public int Threshold { get; set; } = 128;
+
+    public int MinBlobArea { get; set; } = 10;
+
+    public int MaxBlobArea { get; set; } = 5000;
+}
+
+public sealed class BlobRoiDefinition
+{
+    public Roi Roi { get; set; } = new();
+
+    public BlobRoiMode Mode { get; set; } = BlobRoiMode.Include;
 }
 
 public sealed class ToolGraph

@@ -50,6 +50,12 @@ public partial class ImageViewerControl : UserControl
         typeof(ImageViewerControl),
         new PropertyMetadata(null));
 
+    public static readonly DependencyProperty RoiDeletedCommandProperty = DependencyProperty.Register(
+        nameof(RoiDeletedCommand),
+        typeof(ICommand),
+        typeof(ImageViewerControl),
+        new PropertyMetadata(null));
+
     public static readonly DependencyProperty OverlayItemsProperty = DependencyProperty.Register(
         nameof(OverlayItems),
         typeof(IEnumerable<OverlayItem>),
@@ -63,6 +69,8 @@ public partial class ImageViewerControl : UserControl
         PART_Overlay.MouseLeftButtonDown += OverlayOnMouseLeftButtonDown;
         PART_Overlay.MouseMove += OverlayOnMouseMove;
         PART_Overlay.MouseLeftButtonUp += OverlayOnMouseLeftButtonUp;
+
+        PART_Overlay.KeyDown += OverlayOnKeyDown;
 
         PART_Overlay.MouseWheel += OverlayOnMouseWheel;
         PART_Overlay.MouseDown += OverlayOnMouseDown;
@@ -253,6 +261,12 @@ public partial class ImageViewerControl : UserControl
         set => SetValue(RoiEditedCommandProperty, value);
     }
 
+    public ICommand? RoiDeletedCommand
+    {
+        get => (ICommand?)GetValue(RoiDeletedCommandProperty);
+        set => SetValue(RoiDeletedCommandProperty, value);
+    }
+
     public IEnumerable<OverlayItem>? OverlayItems
     {
         get => (IEnumerable<OverlayItem>?)GetValue(OverlayItemsProperty);
@@ -416,6 +430,31 @@ public partial class ImageViewerControl : UserControl
 
     private string? _activeRoiLabel;
     private string? _hoverRoiLabel;
+
+    private void OverlayOnKeyDown(object sender, KeyEventArgs e)
+    {
+        if (!EnableRoiEditing)
+        {
+            return;
+        }
+
+        if (e.Key != Key.Delete)
+        {
+            return;
+        }
+
+        var label = _activeRoiLabel;
+        if (string.IsNullOrWhiteSpace(label))
+        {
+            return;
+        }
+
+        if (RoiDeletedCommand?.CanExecute(label) == true)
+        {
+            RoiDeletedCommand.Execute(label);
+            e.Handled = true;
+        }
+    }
 
     private void RedrawOverlays()
     {
@@ -618,6 +657,8 @@ public partial class ImageViewerControl : UserControl
             return;
         }
 
+        PART_Overlay.Focus();
+
         if (_panning)
         {
             return;
@@ -679,7 +720,12 @@ public partial class ImageViewerControl : UserControl
         // - Ctrl + drag => Search ROI
         // - Shift + drag => Template ROI
         // If both are held, prefer Template (Shift).
-        _roiDrawKind = Keyboard.Modifiers.HasFlag(ModifierKeys.Shift)
+        // Exception: for BlobDetection ROI labels ("... B" or "... B#"), keep label stable regardless of Shift.
+        var isBlobLabel = !string.IsNullOrWhiteSpace(_activeRoiLabel)
+            && _activeRoiLabel!.Split(' ', StringSplitOptions.RemoveEmptyEntries) is { Length: 2 } parts
+            && parts[1].StartsWith("B", StringComparison.OrdinalIgnoreCase);
+
+        _roiDrawKind = (!isBlobLabel && Keyboard.Modifiers.HasFlag(ModifierKeys.Shift))
             ? RoiDrawKind.Template
             : RoiDrawKind.Search;
 
@@ -795,7 +841,7 @@ public partial class ImageViewerControl : UserControl
                         || startRoi.Width != editedRoi.Width
                         || startRoi.Height != editedRoi.Height;
 
-                    var sel = new RoiSelection(_roiEditLabel, editedRoi);
+                    var sel = new RoiSelection(_roiEditLabel, editedRoi, ModifierKeys.None);
                     if (changed && RoiEditedCommand?.CanExecute(sel) == true)
                     {
                         RoiEditedCommand.Execute(sel);
@@ -877,7 +923,7 @@ public partial class ImageViewerControl : UserControl
             var desiredLabel = GetDesiredRoiLabelForDraw(_roiDrawKind);
             if (!string.IsNullOrWhiteSpace(desiredLabel))
             {
-                arg = new RoiSelection(desiredLabel, roi);
+                arg = new RoiSelection(desiredLabel, roi, Keyboard.Modifiers);
             }
         }
 
