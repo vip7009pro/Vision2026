@@ -58,6 +58,7 @@ public sealed partial class ToolEditorViewModel : ObservableObject
             "Distance",
             "LineLineDistance",
             "PointLineDistance",
+            "Condition",
             "DefectRoi"
         };
 
@@ -612,6 +613,24 @@ public sealed partial class ToolEditorViewModel : ObservableObject
     [ObservableProperty]
     private bool _preprocessPreviewEnabled = true;
 
+    [ObservableProperty]
+    private bool _showRoisInSelectedPreview = true;
+
+    [ObservableProperty]
+    private bool _showRoisInFinalPreview = true;
+
+    partial void OnShowRoisInSelectedPreviewChanged(bool value)
+    {
+        RefreshPreviews();
+        RaiseToolPropertyPanelsChanged();
+    }
+
+    partial void OnShowRoisInFinalPreviewChanged(bool value)
+    {
+        RefreshPreviews();
+        RaiseToolPropertyPanelsChanged();
+    }
+
     partial void OnLinePreviewEnabledChanged(bool value)
     {
         RefreshPreviews();
@@ -631,6 +650,7 @@ public sealed partial class ToolEditorViewModel : ObservableObject
         OnPropertyChanged(nameof(IsLineLineDistanceNode));
         OnPropertyChanged(nameof(IsPointLineDistanceNode));
         OnPropertyChanged(nameof(IsAnyDistanceNode));
+        OnPropertyChanged(nameof(IsConditionNode));
 
         OnPropertyChanged(nameof(AvailablePointNames));
         OnPropertyChanged(nameof(AvailableLineNames));
@@ -645,6 +665,9 @@ public sealed partial class ToolEditorViewModel : ObservableObject
         OnPropertyChanged(nameof(AvailablePointLineDistanceModes));
         OnPropertyChanged(nameof(LineLineDistance_Mode));
         OnPropertyChanged(nameof(PointLineDistance_Mode));
+
+        OnPropertyChanged(nameof(Condition_InputCount));
+        OnPropertyChanged(nameof(Condition_Expression));
 
         OnPropertyChanged(nameof(UseGray));
         OnPropertyChanged(nameof(UseGaussianBlur));
@@ -667,6 +690,9 @@ public sealed partial class ToolEditorViewModel : ObservableObject
         OnPropertyChanged(nameof(Distance_TolMinus));
         OnPropertyChanged(nameof(SelectedRunValue));
         OnPropertyChanged(nameof(SelectedRunPass));
+
+        OnPropertyChanged(nameof(ShowRoisInSelectedPreview));
+        OnPropertyChanged(nameof(ShowRoisInFinalPreview));
     }
 
     public bool IsLineNode => string.Equals(SelectedNode?.Type, "Line", StringComparison.OrdinalIgnoreCase);
@@ -677,7 +703,79 @@ public sealed partial class ToolEditorViewModel : ObservableObject
 
     public bool IsPointLineDistanceNode => string.Equals(SelectedNode?.Type, "PointLineDistance", StringComparison.OrdinalIgnoreCase);
 
+    public bool IsConditionNode => string.Equals(SelectedNode?.Type, "Condition", StringComparison.OrdinalIgnoreCase);
+
     public bool IsAnyDistanceNode => IsDistanceNode || IsLineLineDistanceNode || IsPointLineDistanceNode;
+
+    public int Condition_InputCount
+    {
+        get
+        {
+            var def = SelectedConditionDef();
+            return def?.InputCount ?? 2;
+        }
+        set
+        {
+            var def = SelectedConditionDef();
+            if (def is null || SelectedNode is null) return;
+            var v = Math.Clamp(value, 1, 16);
+            if (def.InputCount == v) return;
+            def.InputCount = v;
+            SelectedNode.InputCount = v;
+            RemoveEdgesToSelectedNodePortsBeyondConditionCount(v);
+            RaiseToolPropertyPanelsChanged();
+            RefreshPreviews();
+            RequestAutoSave();
+        }
+    }
+
+    public string Condition_Expression
+    {
+        get
+        {
+            var def = SelectedConditionDef();
+            return def?.Expression ?? string.Empty;
+        }
+        set
+        {
+            var def = SelectedConditionDef();
+            if (def is null) return;
+            value ??= string.Empty;
+            if (string.Equals(def.Expression, value, StringComparison.Ordinal)) return;
+            def.Expression = value;
+            RaiseToolPropertyPanelsChanged();
+            RefreshPreviews();
+            RequestAutoSave();
+        }
+    }
+
+    private ConditionDefinition? SelectedConditionDef()
+    {
+        if (_config is null || SelectedNode is null) return null;
+        if (!string.Equals(SelectedNode.Type, "Condition", StringComparison.OrdinalIgnoreCase)) return null;
+        return _config.Conditions.FirstOrDefault(x => string.Equals(x.Name, SelectedNode.RefName, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private void RemoveEdgesToSelectedNodePortsBeyondConditionCount(int inputCount)
+    {
+        if (SelectedNode is null) return;
+
+        for (var i = Edges.Count - 1; i >= 0; i--)
+        {
+            var e = Edges[i];
+            if (!string.Equals(e.ToNodeId, SelectedNode.Id, StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            if (e.ToPort.StartsWith("In", StringComparison.OrdinalIgnoreCase)
+                && int.TryParse(e.ToPort.Substring(2), out var idx)
+                && idx > inputCount)
+            {
+                Edges.RemoveAt(i);
+            }
+        }
+    }
 
     public ObservableCollection<string> AvailablePointNames
     {
@@ -1433,7 +1531,8 @@ public sealed partial class ToolEditorViewModel : ObservableObject
                 Type = n.Type,
                 RefName = n.RefName,
                 X = n.X,
-                Y = n.Y
+                Y = n.Y,
+                InputCount = n.InputCount
             };
             vm.PropertyChanged += Node_PropertyChanged;
             Nodes.Add(vm);
@@ -1477,7 +1576,8 @@ public sealed partial class ToolEditorViewModel : ObservableObject
                 Type = n.Type,
                 RefName = n.RefName,
                 X = n.X,
-                Y = n.Y
+                Y = n.Y,
+                InputCount = n.InputCount
             });
         }
 
@@ -1691,6 +1791,22 @@ public sealed partial class ToolEditorViewModel : ObservableObject
             return;
         }
 
+        if (string.Equals(node.Type, "Condition", StringComparison.OrdinalIgnoreCase))
+        {
+            var existed = _config.Conditions.Any(x => string.Equals(x.Name, node.RefName, StringComparison.OrdinalIgnoreCase));
+            if (!existed)
+            {
+                var def = new ConditionDefinition { Name = node.RefName, InputCount = Math.Clamp(node.InputCount, 1, 16), Expression = string.Empty };
+                _config.Conditions.Add(def);
+            }
+
+            if (node.InputCount <= 0)
+            {
+                node.InputCount = 2;
+            }
+            return;
+        }
+
         if (string.Equals(node.Type, "DefectRoi", StringComparison.OrdinalIgnoreCase))
         {
             // Defect config already exists; ROI can be taught to DefectROI label.
@@ -1732,6 +1848,11 @@ public sealed partial class ToolEditorViewModel : ObservableObject
         {
             baseName = "PLD";
             exists = n => _config.PointToLineDistances.Any(x => string.Equals(x.Name, n, StringComparison.OrdinalIgnoreCase));
+        }
+        else if (string.Equals(type, "Condition", StringComparison.OrdinalIgnoreCase))
+        {
+            baseName = "C";
+            exists = n => _config.Conditions.Any(x => string.Equals(x.Name, n, StringComparison.OrdinalIgnoreCase));
         }
         else if (string.Equals(type, "DefectRoi", StringComparison.OrdinalIgnoreCase))
         {
@@ -1912,6 +2033,11 @@ public sealed partial class ToolEditorViewModel : ObservableObject
             return;
         }
 
+        if (!ShowRoisInFinalPreview)
+        {
+            return;
+        }
+
         if (_config.Origin.SearchRoi.Width > 0 && _config.Origin.SearchRoi.Height > 0)
         {
             dst.Add(new OverlayRectItem
@@ -2008,6 +2134,8 @@ public sealed partial class ToolEditorViewModel : ObservableObject
             return;
         }
 
+        var showRois = ShowRoisInSelectedPreview;
+
         void AddPointRoi(string pointName)
         {
             var p = _config.Points.FirstOrDefault(x => string.Equals(x.Name, pointName, StringComparison.OrdinalIgnoreCase));
@@ -2067,7 +2195,7 @@ public sealed partial class ToolEditorViewModel : ObservableObject
 
         if (string.Equals(node.Type, "Origin", StringComparison.OrdinalIgnoreCase))
         {
-            if (_config.Origin.SearchRoi.Width > 0 && _config.Origin.SearchRoi.Height > 0)
+            if (showRois && _config.Origin.SearchRoi.Width > 0 && _config.Origin.SearchRoi.Height > 0)
             {
                 dst.Add(new OverlayRectItem
                 {
@@ -2080,7 +2208,7 @@ public sealed partial class ToolEditorViewModel : ObservableObject
                 });
             }
 
-            if (_config.Origin.TemplateRoi.Width > 0 && _config.Origin.TemplateRoi.Height > 0)
+            if (showRois && _config.Origin.TemplateRoi.Width > 0 && _config.Origin.TemplateRoi.Height > 0)
             {
                 dst.Add(new OverlayRectItem
                 {
@@ -2104,8 +2232,7 @@ public sealed partial class ToolEditorViewModel : ObservableObject
                 return;
             }
 
-            AddPointRoi(p.Name);
-
+            if (showRois) AddPointRoi(p.Name);
             return;
         }
 
@@ -2117,8 +2244,7 @@ public sealed partial class ToolEditorViewModel : ObservableObject
                 return;
             }
 
-            AddLineRoi(l.Name);
-
+            if (showRois) AddLineRoi(l.Name);
             return;
         }
 
@@ -2130,8 +2256,11 @@ public sealed partial class ToolEditorViewModel : ObservableObject
                 return;
             }
 
-            AddPointRoi(d.PointA);
-            AddPointRoi(d.PointB);
+            if (showRois)
+            {
+                AddPointRoi(d.PointA);
+                AddPointRoi(d.PointB);
+            }
             return;
         }
 
@@ -2143,8 +2272,11 @@ public sealed partial class ToolEditorViewModel : ObservableObject
                 return;
             }
 
-            AddLineRoi(dd.LineA);
-            AddLineRoi(dd.LineB);
+            if (showRois)
+            {
+                AddLineRoi(dd.LineA);
+                AddLineRoi(dd.LineB);
+            }
             return;
         }
 
@@ -2156,14 +2288,17 @@ public sealed partial class ToolEditorViewModel : ObservableObject
                 return;
             }
 
-            AddPointRoi(dd.Point);
-            AddLineRoi(dd.Line);
+            if (showRois)
+            {
+                AddPointRoi(dd.Point);
+                AddLineRoi(dd.Line);
+            }
             return;
         }
 
         if (string.Equals(node.Type, "DefectRoi", StringComparison.OrdinalIgnoreCase))
         {
-            if (_config.DefectConfig.InspectRoi.Width > 0 && _config.DefectConfig.InspectRoi.Height > 0)
+            if (showRois && _config.DefectConfig.InspectRoi.Width > 0 && _config.DefectConfig.InspectRoi.Height > 0)
             {
                 dst.Add(new OverlayRectItem
                 {
@@ -2184,10 +2319,20 @@ public sealed partial class ToolEditorViewModel : ObservableObject
     {
         if (run.Origin is not null)
         {
+            var mr = run.Origin.MatchRect;
+            if (mr.Width > 0 && mr.Height > 0)
+            {
+                var cx = mr.X + mr.Width / 2.0;
+                var cy = mr.Y + mr.Height / 2.0;
+
+                dst.Add(new OverlayLineItem { X1 = mr.X, Y1 = cy, X2 = mr.X + mr.Width, Y2 = cy, Stroke = run.Origin.Pass ? Brushes.Lime : Brushes.Red });
+                dst.Add(new OverlayLineItem { X1 = cx, Y1 = mr.Y, X2 = cx, Y2 = mr.Y + mr.Height, Stroke = run.Origin.Pass ? Brushes.Lime : Brushes.Red });
+            }
+
             dst.Add(new OverlayPointItem
             {
-                X = run.Origin.Position.X,
-                Y = run.Origin.Position.Y,
+                X = mr.Width > 0 && mr.Height > 0 ? mr.X + mr.Width / 2.0 : run.Origin.Position.X,
+                Y = mr.Width > 0 && mr.Height > 0 ? mr.Y + mr.Height / 2.0 : run.Origin.Position.Y,
                 Stroke = run.Origin.Pass ? Brushes.Lime : Brushes.Red,
                 Label = $"Origin: {run.Origin.Score:0.00}"
             });
@@ -2195,10 +2340,20 @@ public sealed partial class ToolEditorViewModel : ObservableObject
 
         foreach (var p in run.Points)
         {
+            var mr = p.MatchRect;
+            if (mr.Width > 0 && mr.Height > 0)
+            {
+                var cx = mr.X + mr.Width / 2.0;
+                var cy = mr.Y + mr.Height / 2.0;
+
+                dst.Add(new OverlayLineItem { X1 = mr.X, Y1 = cy, X2 = mr.X + mr.Width, Y2 = cy, Stroke = p.Pass ? Brushes.DeepSkyBlue : Brushes.Red });
+                dst.Add(new OverlayLineItem { X1 = cx, Y1 = mr.Y, X2 = cx, Y2 = mr.Y + mr.Height, Stroke = p.Pass ? Brushes.DeepSkyBlue : Brushes.Red });
+            }
+
             dst.Add(new OverlayPointItem
             {
-                X = p.Position.X,
-                Y = p.Position.Y,
+                X = mr.Width > 0 && mr.Height > 0 ? mr.X + mr.Width / 2.0 : p.Position.X,
+                Y = mr.Width > 0 && mr.Height > 0 ? mr.Y + mr.Height / 2.0 : p.Position.Y,
                 Stroke = p.Pass ? Brushes.DeepSkyBlue : Brushes.Red,
                 Label = p.Name
             });
@@ -2267,6 +2422,24 @@ public sealed partial class ToolEditorViewModel : ObservableObject
                 Label = $"{dd.Name}: {dd.Value:0.00}"
             });
         }
+
+        if (run.Conditions.Count > 0)
+        {
+            var y = 14.0;
+            foreach (var c in run.Conditions)
+            {
+                var okText = c.Pass ? "OK" : "NG";
+                dst.Add(new OverlayPointItem
+                {
+                    X = 12,
+                    Y = y,
+                    Radius = 1.0,
+                    Stroke = c.Pass ? Brushes.Lime : Brushes.Red,
+                    Label = $"{c.Name}: {okText}" + (string.IsNullOrWhiteSpace(c.Error) ? string.Empty : $" ({c.Error})")
+                });
+                y += 16.0;
+            }
+        }
     }
 
     private static void BuildOverlayForNodeFromRun(ToolGraphNodeViewModel node, InspectionResult run, ObservableCollection<OverlayItem> dst)
@@ -2278,10 +2451,20 @@ public sealed partial class ToolEditorViewModel : ObservableObject
                 return;
             }
 
+            var mr = run.Origin.MatchRect;
+            if (mr.Width > 0 && mr.Height > 0)
+            {
+                var cx = mr.X + mr.Width / 2.0;
+                var cy = mr.Y + mr.Height / 2.0;
+
+                dst.Add(new OverlayLineItem { X1 = mr.X, Y1 = cy, X2 = mr.X + mr.Width, Y2 = cy, Stroke = run.Origin.Pass ? Brushes.Lime : Brushes.Red });
+                dst.Add(new OverlayLineItem { X1 = cx, Y1 = mr.Y, X2 = cx, Y2 = mr.Y + mr.Height, Stroke = run.Origin.Pass ? Brushes.Lime : Brushes.Red });
+            }
+
             dst.Add(new OverlayPointItem
             {
-                X = run.Origin.Position.X,
-                Y = run.Origin.Position.Y,
+                X = mr.Width > 0 && mr.Height > 0 ? mr.X + mr.Width / 2.0 : run.Origin.Position.X,
+                Y = mr.Width > 0 && mr.Height > 0 ? mr.Y + mr.Height / 2.0 : run.Origin.Position.Y,
                 Stroke = run.Origin.Pass ? Brushes.Lime : Brushes.Red,
                 Label = $"Origin: {run.Origin.Score:0.00}"
             });
@@ -2296,10 +2479,20 @@ public sealed partial class ToolEditorViewModel : ObservableObject
                 return;
             }
 
+            var mr = p.MatchRect;
+            if (mr.Width > 0 && mr.Height > 0)
+            {
+                var cx = mr.X + mr.Width / 2.0;
+                var cy = mr.Y + mr.Height / 2.0;
+
+                dst.Add(new OverlayLineItem { X1 = mr.X, Y1 = cy, X2 = mr.X + mr.Width, Y2 = cy, Stroke = p.Pass ? Brushes.DeepSkyBlue : Brushes.Red });
+                dst.Add(new OverlayLineItem { X1 = cx, Y1 = mr.Y, X2 = cx, Y2 = mr.Y + mr.Height, Stroke = p.Pass ? Brushes.DeepSkyBlue : Brushes.Red });
+            }
+
             dst.Add(new OverlayPointItem
             {
-                X = p.Position.X,
-                Y = p.Position.Y,
+                X = mr.Width > 0 && mr.Height > 0 ? mr.X + mr.Width / 2.0 : p.Position.X,
+                Y = mr.Width > 0 && mr.Height > 0 ? mr.Y + mr.Height / 2.0 : p.Position.Y,
                 Stroke = p.Pass ? Brushes.DeepSkyBlue : Brushes.Red,
                 Label = p.Name
             });
@@ -2463,6 +2656,26 @@ public sealed partial class ToolEditorViewModel : ObservableObject
 
             return;
         }
+
+        if (string.Equals(node.Type, "Condition", StringComparison.OrdinalIgnoreCase))
+        {
+            var c = run.Conditions.FirstOrDefault(x => string.Equals(x.Name, node.RefName, StringComparison.OrdinalIgnoreCase));
+            if (c is null)
+            {
+                return;
+            }
+
+            var okText = c.Pass ? "OK" : "NG";
+            dst.Add(new OverlayPointItem
+            {
+                X = 12,
+                Y = 12,
+                Radius = 1.0,
+                Stroke = c.Pass ? Brushes.Lime : Brushes.Red,
+                Label = $"{c.Name}: {okText}" + (string.IsNullOrWhiteSpace(c.Error) ? string.Empty : $" ({c.Error})")
+            });
+            return;
+        }
     }
 
     private void BuildOverlayForNode(ToolGraphNodeViewModel node, Mat image, ObservableCollection<OverlayItem> dst)
@@ -2472,9 +2685,11 @@ public sealed partial class ToolEditorViewModel : ObservableObject
             return;
         }
 
+        var showRois = ShowRoisInSelectedPreview;
+
         if (string.Equals(node.Type, "Origin", StringComparison.OrdinalIgnoreCase))
         {
-            if (_config.Origin.SearchRoi.Width > 0 && _config.Origin.SearchRoi.Height > 0)
+            if (showRois && _config.Origin.SearchRoi.Width > 0 && _config.Origin.SearchRoi.Height > 0)
             {
                 dst.Add(new OverlayRectItem
                 {
@@ -2487,7 +2702,7 @@ public sealed partial class ToolEditorViewModel : ObservableObject
                 });
             }
 
-            if (_config.Origin.TemplateRoi.Width > 0 && _config.Origin.TemplateRoi.Height > 0)
+            if (showRois && _config.Origin.TemplateRoi.Width > 0 && _config.Origin.TemplateRoi.Height > 0)
             {
                 dst.Add(new OverlayRectItem
                 {
@@ -2511,7 +2726,7 @@ public sealed partial class ToolEditorViewModel : ObservableObject
                 return;
             }
 
-            if (p.SearchRoi.Width > 0 && p.SearchRoi.Height > 0)
+            if (showRois && p.SearchRoi.Width > 0 && p.SearchRoi.Height > 0)
             {
                 dst.Add(new OverlayRectItem
                 {
@@ -2524,7 +2739,7 @@ public sealed partial class ToolEditorViewModel : ObservableObject
                 });
             }
 
-            if (p.TemplateRoi.Width > 0 && p.TemplateRoi.Height > 0)
+            if (showRois && p.TemplateRoi.Width > 0 && p.TemplateRoi.Height > 0)
             {
                 dst.Add(new OverlayRectItem
                 {
@@ -2556,7 +2771,7 @@ public sealed partial class ToolEditorViewModel : ObservableObject
                 return;
             }
 
-            if (l.SearchRoi.Width > 0 && l.SearchRoi.Height > 0)
+            if (showRois && l.SearchRoi.Width > 0 && l.SearchRoi.Height > 0)
             {
                 dst.Add(new OverlayRectItem
                 {
@@ -2783,7 +2998,9 @@ public sealed partial class ToolEditorViewModel : ObservableObject
             return;
         }
 
-        if (_config.Origin.SearchRoi.Width > 0 && _config.Origin.SearchRoi.Height > 0)
+        var showRois = ShowRoisInFinalPreview;
+
+        if (showRois && _config.Origin.SearchRoi.Width > 0 && _config.Origin.SearchRoi.Height > 0)
         {
             dst.Add(new OverlayRectItem
             {
@@ -2796,7 +3013,7 @@ public sealed partial class ToolEditorViewModel : ObservableObject
             });
         }
 
-        if (_config.Origin.TemplateRoi.Width > 0 && _config.Origin.TemplateRoi.Height > 0)
+        if (showRois && _config.Origin.TemplateRoi.Width > 0 && _config.Origin.TemplateRoi.Height > 0)
         {
             dst.Add(new OverlayRectItem
             {
@@ -2811,7 +3028,7 @@ public sealed partial class ToolEditorViewModel : ObservableObject
 
         foreach (var p in _config.Points)
         {
-            if (p.SearchRoi.Width > 0 && p.SearchRoi.Height > 0)
+            if (showRois && p.SearchRoi.Width > 0 && p.SearchRoi.Height > 0)
             {
                 dst.Add(new OverlayRectItem
                 {
@@ -2824,7 +3041,7 @@ public sealed partial class ToolEditorViewModel : ObservableObject
                 });
             }
 
-            if (p.TemplateRoi.Width > 0 && p.TemplateRoi.Height > 0)
+            if (showRois && p.TemplateRoi.Width > 0 && p.TemplateRoi.Height > 0)
             {
                 dst.Add(new OverlayRectItem
                 {
@@ -2848,7 +3065,7 @@ public sealed partial class ToolEditorViewModel : ObservableObject
 
         foreach (var l in _config.Lines)
         {
-            if (l.SearchRoi.Width > 0 && l.SearchRoi.Height > 0)
+            if (showRois && l.SearchRoi.Width > 0 && l.SearchRoi.Height > 0)
             {
                 dst.Add(new OverlayRectItem
                 {
@@ -2860,6 +3077,19 @@ public sealed partial class ToolEditorViewModel : ObservableObject
                     Label = $"{l.Name} L"
                 });
             }
+        }
+
+        if (showRois && _config.DefectConfig.InspectRoi.Width > 0 && _config.DefectConfig.InspectRoi.Height > 0)
+        {
+            dst.Add(new OverlayRectItem
+            {
+                X = _config.DefectConfig.InspectRoi.X,
+                Y = _config.DefectConfig.InspectRoi.Y,
+                Width = _config.DefectConfig.InspectRoi.Width,
+                Height = _config.DefectConfig.InspectRoi.Height,
+                Stroke = Brushes.Orange,
+                Label = "DefectROI"
+            });
         }
 
         using var processed = _preprocessor.Run(image, _config.Preprocess);
@@ -3013,6 +3243,15 @@ public sealed partial class ToolGraphNodeViewModel : ObservableObject
     [ObservableProperty]
     private double _y;
 
+    [ObservableProperty]
+    private int _inputCount = 1;
+
+    partial void OnInputCountChanged(int value)
+    {
+        RebuildPorts();
+        OnPropertyChanged(nameof(NodeHeight));
+    }
+
     public ObservableCollection<NodePortViewModel> InPorts { get; } = new();
 
     public ObservableCollection<NodePortViewModel> OutPorts { get; } = new();
@@ -3111,6 +3350,14 @@ public sealed partial class ToolGraphNodeViewModel : ObservableObject
         {
             InPorts.Add(new NodePortViewModel(this, "P", isInput: true));
             InPorts.Add(new NodePortViewModel(this, "L", isInput: true));
+        }
+        else if (string.Equals(Type, "Condition", StringComparison.OrdinalIgnoreCase))
+        {
+            var n = Math.Clamp(InputCount, 1, 16);
+            for (var i = 1; i <= n; i++)
+            {
+                InPorts.Add(new NodePortViewModel(this, $"In{i}", isInput: true));
+            }
         }
         else
         {

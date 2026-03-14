@@ -364,12 +364,25 @@ public partial class ImageViewerControl : UserControl
     private bool _dragging;
     private Point _start;
     private Rectangle? _rect;
+    private Line? _dragCrosshairH;
+    private Line? _dragCrosshairV;
 
     private enum RoiDrawKind
     {
         None = 0,
         Search = 1,
         Template = 2
+    }
+
+    private static bool IsTemplateRoiLabel(string? label)
+    {
+        if (string.IsNullOrWhiteSpace(label))
+        {
+            return false;
+        }
+
+        return label.EndsWith(" T", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(label, "Origin T", StringComparison.OrdinalIgnoreCase);
     }
 
     private RoiDrawKind _roiDrawKind;
@@ -686,6 +699,14 @@ public partial class ImageViewerControl : UserControl
         Canvas.SetLeft(_rect, _start.X);
         Canvas.SetTop(_rect, _start.Y);
         PART_Overlay.Children.Add(_rect);
+
+        if (_roiDrawKind == RoiDrawKind.Template)
+        {
+            _dragCrosshairH = new Line { Stroke = Brushes.Lime, StrokeThickness = 2 };
+            _dragCrosshairV = new Line { Stroke = Brushes.Lime, StrokeThickness = 2 };
+            PART_Overlay.Children.Add(_dragCrosshairH);
+            PART_Overlay.Children.Add(_dragCrosshairV);
+        }
     }
 
     private void OverlayOnMouseMove(object sender, MouseEventArgs e)
@@ -732,8 +753,28 @@ public partial class ImageViewerControl : UserControl
 
         Canvas.SetLeft(_rect, x);
         Canvas.SetTop(_rect, y);
-        _rect.Width = w;
-        _rect.Height = h;
+        _rect.Width = Math.Max(1, w);
+        _rect.Height = Math.Max(1, h);
+
+        if (_roiDrawKind == RoiDrawKind.Template && _dragCrosshairH is not null && _dragCrosshairV is not null)
+        {
+            var left = x;
+            var top = y;
+            var right = x + _rect.Width;
+            var bottom = y + _rect.Height;
+            var cx = (left + right) / 2.0;
+            var cy = (top + bottom) / 2.0;
+
+            _dragCrosshairH.X1 = left;
+            _dragCrosshairH.Y1 = cy;
+            _dragCrosshairH.X2 = right;
+            _dragCrosshairH.Y2 = cy;
+
+            _dragCrosshairV.X1 = cx;
+            _dragCrosshairV.Y1 = top;
+            _dragCrosshairV.X2 = cx;
+            _dragCrosshairV.Y2 = bottom;
+        }
     }
 
     private void OverlayOnMouseLeftButtonUp(object sender, MouseButtonEventArgs e)
@@ -805,6 +846,9 @@ public partial class ImageViewerControl : UserControl
         _dragging = false;
         PART_Overlay.ReleaseMouseCapture();
 
+        _dragCrosshairH = null;
+        _dragCrosshairV = null;
+
         if (_rect is null)
         {
             return;
@@ -855,10 +899,18 @@ public partial class ImageViewerControl : UserControl
         var pw = (int)Math.Round(contentW * scaleX);
         var ph = (int)Math.Round(contentH * scaleY);
 
-        px = Math.Clamp(px, 0, Math.Max(0, bmp.PixelWidth - 1));
-        py = Math.Clamp(py, 0, Math.Max(0, bmp.PixelHeight - 1));
-        pw = Math.Clamp(pw, 1, bmp.PixelWidth - px);
-        ph = Math.Clamp(ph, 1, bmp.PixelHeight - py);
+        var maxX = Math.Max(0, bmp.PixelWidth - 1);
+        var maxY = Math.Max(0, bmp.PixelHeight - 1);
+        px = Math.Clamp(px, 0, maxX);
+        py = Math.Clamp(py, 0, maxY);
+
+        var maxW = bmp.PixelWidth - px;
+        var maxH = bmp.PixelHeight - py;
+        if (maxW < 1) maxW = 1;
+        if (maxH < 1) maxH = 1;
+
+        pw = pw < 1 ? 1 : (pw > maxW ? maxW : pw);
+        ph = ph < 1 ? 1 : (ph > maxH ? maxH : ph);
 
         return new Roi
         {
@@ -1159,53 +1211,72 @@ public partial class ImageViewerControl : UserControl
     {
         var dx = current.X - _roiEditStart.X;
         var dy = current.Y - _roiEditStart.Y;
-        var r = _roiEditRectStart;
+        var start = _roiEditRectStart;
+
+        var left = start.Left;
+        var right = start.Right;
+        var top = start.Top;
+        var bottom = start.Bottom;
 
         switch (_roiEditMode)
         {
             case RoiEditMode.Move:
-                r = new Rect(r.X + dx, r.Y + dy, r.Width, r.Height);
+                left += dx;
+                right += dx;
+                top += dy;
+                bottom += dy;
                 break;
             case RoiEditMode.Left:
-                r = new Rect(r.X + dx, r.Y, r.Width - dx, r.Height);
+                left += dx;
                 break;
             case RoiEditMode.Right:
-                r = new Rect(r.X, r.Y, r.Width + dx, r.Height);
+                right += dx;
                 break;
             case RoiEditMode.Top:
-                r = new Rect(r.X, r.Y + dy, r.Width, r.Height - dy);
+                top += dy;
                 break;
             case RoiEditMode.Bottom:
-                r = new Rect(r.X, r.Y, r.Width, r.Height + dy);
+                bottom += dy;
                 break;
             case RoiEditMode.TopLeft:
-                r = new Rect(r.X + dx, r.Y + dy, r.Width - dx, r.Height - dy);
+                left += dx;
+                top += dy;
                 break;
             case RoiEditMode.TopRight:
-                r = new Rect(r.X, r.Y + dy, r.Width + dx, r.Height - dy);
+                right += dx;
+                top += dy;
                 break;
             case RoiEditMode.BottomLeft:
-                r = new Rect(r.X + dx, r.Y, r.Width - dx, r.Height + dy);
+                left += dx;
+                bottom += dy;
                 break;
             case RoiEditMode.BottomRight:
-                r = new Rect(r.X, r.Y, r.Width + dx, r.Height + dy);
+                right += dx;
+                bottom += dy;
                 break;
         }
 
-        if (r.Width < 2) r.Width = 2;
-        if (r.Height < 2) r.Height = 2;
+        // Normalize and enforce minimum size without ever creating a Rect with negative width/height.
+        if (right < left) (left, right) = (right, left);
+        if (bottom < top) (top, bottom) = (bottom, top);
 
-        if (r.Width < 0)
+        const double minSize = 2.0;
+
+        if (right - left < minSize)
         {
-            r = new Rect(r.X + r.Width, r.Y, -r.Width, r.Height);
+            var mid = (left + right) / 2.0;
+            left = mid - minSize / 2.0;
+            right = mid + minSize / 2.0;
         }
 
-        if (r.Height < 0)
+        if (bottom - top < minSize)
         {
-            r = new Rect(r.X, r.Y + r.Height, r.Width, -r.Height);
+            var mid = (top + bottom) / 2.0;
+            top = mid - minSize / 2.0;
+            bottom = mid + minSize / 2.0;
         }
 
-        _roiEditRect = r;
+        _roiEditRect = new Rect(left, top, right - left, bottom - top);
     }
 
     private void ClearRoiEditVisuals()
@@ -1240,6 +1311,36 @@ public partial class ImageViewerControl : UserControl
         _roiEditRectShape.Width = _roiEditRect.Width;
         _roiEditRectShape.Height = _roiEditRect.Height;
         PART_Overlay.Children.Add(_roiEditRectShape);
+
+        if (IsTemplateRoiLabel(_roiEditLabel))
+        {
+            var left = _roiEditRect.Left;
+            var top = _roiEditRect.Top;
+            var right = _roiEditRect.Right;
+            var bottom = _roiEditRect.Bottom;
+            var cx = (left + right) / 2.0;
+            var cy = (top + bottom) / 2.0;
+
+            PART_Overlay.Children.Add(new Line
+            {
+                Stroke = Brushes.Cyan,
+                StrokeThickness = 2,
+                X1 = left,
+                Y1 = cy,
+                X2 = right,
+                Y2 = cy
+            });
+
+            PART_Overlay.Children.Add(new Line
+            {
+                Stroke = Brushes.Cyan,
+                StrokeThickness = 2,
+                X1 = cx,
+                Y1 = top,
+                X2 = cx,
+                Y2 = bottom
+            });
+        }
 
         const double hs = 6.0;
         AddHandle(_roiEditRect.Left, _roiEditRect.Top);

@@ -52,6 +52,14 @@ public sealed partial class InspectionViewModel : ObservableObject
     [ObservableProperty]
     private InspectionResult? _lastResult;
 
+    [ObservableProperty]
+    private bool _showRois = true;
+
+    partial void OnShowRoisChanged(bool value)
+    {
+        RefreshOverlayItems();
+    }
+
     public ObservableCollection<OverlayItem> OverlayItems { get; }
 
     public ICommand LoadImageCommand { get; }
@@ -226,6 +234,8 @@ public sealed partial class InspectionViewModel : ObservableObject
     {
         OverlayItems.Clear();
 
+        var showRois = ShowRois;
+
         var hasPose = _config is not null && LastResult?.Origin is not null;
         var originTeach = _config is null
             ? new Point2d(0, 0)
@@ -237,7 +247,7 @@ public sealed partial class InspectionViewModel : ObservableObject
             ? new Dictionary<string, Point2d>(StringComparer.OrdinalIgnoreCase)
             : LastResult.Points.ToDictionary(x => x.Name, x => x.Position, StringComparer.OrdinalIgnoreCase);
 
-        if (_config is not null)
+        if (_config is not null && showRois)
         {
             if (hasPose)
             {
@@ -361,6 +371,17 @@ public sealed partial class InspectionViewModel : ObservableObject
             var originPos = LastResult.Origin.Position;
             var angle = LastResult.Origin.AngleDeg;
 
+            var mr = LastResult.Origin.MatchRect;
+            if (mr.Width > 0 && mr.Height > 0)
+            {
+                var cx = mr.X + mr.Width / 2.0;
+                var cy = mr.Y + mr.Height / 2.0;
+                OverlayItems.Add(new OverlayLineItem { X1 = mr.X, Y1 = cy, X2 = mr.X + mr.Width, Y2 = cy, Stroke = LastResult.Origin.Pass ? Brushes.Lime : Brushes.Red });
+                OverlayItems.Add(new OverlayLineItem { X1 = cx, Y1 = mr.Y, X2 = cx, Y2 = mr.Y + mr.Height, Stroke = LastResult.Origin.Pass ? Brushes.Lime : Brushes.Red });
+
+                originPos = new Point2d(cx, cy);
+            }
+
             OverlayItems.Add(new OverlayPointItem
             {
                 X = originPos.X,
@@ -392,18 +413,29 @@ public sealed partial class InspectionViewModel : ObservableObject
 
             foreach (var p in LastResult.Points)
             {
+                var mr = p.MatchRect;
+                var pos = p.Position;
+                if (mr.Width > 0 && mr.Height > 0)
+                {
+                    var cx = mr.X + mr.Width / 2.0;
+                    var cy = mr.Y + mr.Height / 2.0;
+                    OverlayItems.Add(new OverlayLineItem { X1 = mr.X, Y1 = cy, X2 = mr.X + mr.Width, Y2 = cy, Stroke = p.Pass ? Brushes.DeepSkyBlue : Brushes.Red });
+                    OverlayItems.Add(new OverlayLineItem { X1 = cx, Y1 = mr.Y, X2 = cx, Y2 = mr.Y + mr.Height, Stroke = p.Pass ? Brushes.DeepSkyBlue : Brushes.Red });
+                    pos = new Point2d(cx, cy);
+                }
+
                 var pTeach = hasPose
-                    ? InverseTransformPose(p.Position, originTeach, originFound, angleDeg)
+                    ? InverseTransformPose(pos, originTeach, originFound, angleDeg)
                     : new Point2d(double.NaN, double.NaN);
 
                 OverlayItems.Add(new OverlayPointItem
                 {
-                    X = p.Position.X,
-                    Y = p.Position.Y,
+                    X = pos.X,
+                    Y = pos.Y,
                     Stroke = p.Pass ? Brushes.DeepSkyBlue : Brushes.Red,
                     Label = hasPose
-                        ? $"{p.Name} ({p.Position.X:0},{p.Position.Y:0})  w({pTeach.X:0},{pTeach.Y:0})"
-                        : $"{p.Name} ({p.Position.X:0},{p.Position.Y:0})"
+                        ? $"{p.Name} ({pos.X:0},{pos.Y:0})  w({pTeach.X:0},{pTeach.Y:0})"
+                        : $"{p.Name} ({pos.X:0},{pos.Y:0})"
                 });
             }
 

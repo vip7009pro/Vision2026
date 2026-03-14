@@ -6,5 +6,6 @@
              >
     <Application.Resources>
         <converters:FlexibleDoubleConverter x:Key="DoubleConv" />
+        <converters:BoolToOkNgConverter x:Key="OkNgConv" />
     </Application.Resources>
 </Application>

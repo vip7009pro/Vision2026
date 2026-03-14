@@ -22,6 +22,8 @@
             <TextBlock Text="Product Code" VerticalAlignment="Center" Margin="0,0,6,0" />
             <TextBox Width="120" Text="{Binding ProductCode, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,12,0" />
 
+            <CheckBox Content="Show ROI" IsChecked="{Binding ShowRois, UpdateSourceTrigger=PropertyChanged}" VerticalAlignment="Center" Margin="0,0,12,0" />
+
             <Button Content="Load Image" Command="{Binding LoadImageCommand}" Margin="0,0,6,0" />
             <Button Content="Run" Command="{Binding RunInspectionCommand}" />
         </DockPanel>
@@ -50,18 +52,37 @@
                         <TextBlock Text="{Binding LastResult.Defects.Defects.Count, StringFormat=Defects: {0}}" />
                     </StackPanel>
 
-                    <DataGrid Grid.Row="1" ItemsSource="{Binding LastResult.Distances}" AutoGenerateColumns="False" CanUserAddRows="False">
-                        <DataGrid.Columns>
-                            <DataGridTextColumn Header="Name" Binding="{Binding Name}" Width="120" />
-                            <DataGridTextColumn Header="A" Binding="{Binding PointA}" Width="100" />
-                            <DataGridTextColumn Header="B" Binding="{Binding PointB}" Width="100" />
-                            <DataGridTextColumn Header="Value (mm)" Binding="{Binding Value, StringFormat={}{0:0.000}}" Width="120" />
-                            <DataGridTextColumn Header="Nominal (mm)" Binding="{Binding Nominal, StringFormat={}{0:0.000}}" Width="120" />
-                            <DataGridTextColumn Header="+Tol (mm)" Binding="{Binding TolPlus, StringFormat={}{0:0.000}}" Width="90" />
-                            <DataGridTextColumn Header="-Tol (mm)" Binding="{Binding TolMinus, StringFormat={}{0:0.000}}" Width="90" />
-                            <DataGridCheckBoxColumn Header="Pass" Binding="{Binding Pass}" Width="80" />
-                        </DataGrid.Columns>
-                    </DataGrid>
+                    <Grid Grid.Row="1">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="*" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                        </Grid.RowDefinitions>
+
+                        <DataGrid Grid.Row="0" ItemsSource="{Binding LastResult.Distances}" AutoGenerateColumns="False" CanUserAddRows="False">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="Name" Binding="{Binding Name}" Width="120" />
+                                <DataGridTextColumn Header="A" Binding="{Binding PointA}" Width="100" />
+                                <DataGridTextColumn Header="B" Binding="{Binding PointB}" Width="100" />
+                                <DataGridTextColumn Header="Value (mm)" Binding="{Binding Value, StringFormat={}{0:0.000}}" Width="120" />
+                                <DataGridTextColumn Header="Nominal (mm)" Binding="{Binding Nominal, StringFormat={}{0:0.000}}" Width="120" />
+                                <DataGridTextColumn Header="+Tol (mm)" Binding="{Binding TolPlus, StringFormat={}{0:0.000}}" Width="90" />
+                                <DataGridTextColumn Header="-Tol (mm)" Binding="{Binding TolMinus, StringFormat={}{0:0.000}}" Width="90" />
+                                <DataGridCheckBoxColumn Header="Pass" Binding="{Binding Pass}" Width="80" />
+                            </DataGrid.Columns>
+                        </DataGrid>
+
+                        <TextBlock Grid.Row="1" Text="Conditions" FontWeight="SemiBold" Margin="0,8,0,6" />
+
+                        <DataGrid Grid.Row="2" ItemsSource="{Binding LastResult.Conditions}" AutoGenerateColumns="False" CanUserAddRows="False">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="Name" Binding="{Binding Name}" Width="120" />
+                                <DataGridTextColumn Header="Expression" Binding="{Binding Expression}" Width="*" />
+                                <DataGridTextColumn Header="Result" Binding="{Binding Pass, Converter={StaticResource OkNgConv}}" Width="80" />
+                                <DataGridTextColumn Header="Error" Binding="{Binding Error}" Width="200" />
+                            </DataGrid.Columns>
+                        </DataGrid>
+                    </Grid>
                 </Grid>
             </Grid>
         </Border>

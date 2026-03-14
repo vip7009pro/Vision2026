@@ -36,7 +36,18 @@ public sealed class VisionConfig
 
     public List<PointToLineDistance> PointToLineDistances { get; set; } = new();
 
+    public List<ConditionDefinition> Conditions { get; set; } = new();
+
     public DefectInspectionConfig DefectConfig { get; set; } = new();
+}
+
+public sealed class ConditionDefinition
+{
+    public string Name { get; set; } = string.Empty;
+
+    public int InputCount { get; set; } = 2;
+
+    public string Expression { get; set; } = string.Empty;
 }
 
 public sealed class ToolGraph
@@ -57,6 +68,8 @@ public sealed class ToolGraphNode
     public double X { get; set; }
 
     public double Y { get; set; }
+
+    public int InputCount { get; set; } = 1;
 }
 
 public sealed class ToolGraphEdge

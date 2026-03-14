@@ -206,7 +206,7 @@ public interface IDefectDetector
     DefectDetectionResult Detect(Mat image, DefectInspectionConfig config);
 }
 
-public sealed record MatchResult(Point2d Position, double Score, double AngleDeg);
+public sealed record MatchResult(Point2d Position, double Score, double AngleDeg, Rect MatchRect);
 
 public sealed record DistanceCheckResult(string Name, string PointA, string PointB, double Value, double Nominal, double TolPlus, double TolMinus, bool Pass);
 
@@ -365,7 +365,7 @@ public sealed class PatternMatcher
         if (roiGray.Width < templPrep.Width || roiGray.Height < templPrep.Height)
         {
             var centerFallback = new Point2d(roiRect.X + roiRect.Width / 2.0, roiRect.Y + roiRect.Height / 2.0);
-            return new MatchResult(centerFallback, 0.0, 0.0);
+            return new MatchResult(centerFallback, 0.0, 0.0, roiRect);
         }
 
         using var result = new Mat();
@@ -374,7 +374,8 @@ public sealed class PatternMatcher
 
         var centerInRoi = new Point2d(maxLoc.X + templPrep.Width / 2.0, maxLoc.Y + templPrep.Height / 2.0);
         var global = new Point2d(centerInRoi.X + roiRect.X, centerInRoi.Y + roiRect.Y);
-        return new MatchResult(global, maxVal, 0.0);
+        var matchRect = new Rect(roiRect.X + maxLoc.X, roiRect.Y + maxLoc.Y, templPrep.Width, templPrep.Height);
+        return new MatchResult(global, maxVal, 0.0, matchRect);
     }
 
     public MatchResult MatchWithFixedRotation(Mat image, PointDefinition definition, double angleDeg, PreprocessSettings? preprocess)
@@ -412,14 +413,14 @@ public sealed class PatternMatcher
         if (crop.Width <= 0 || crop.Height <= 0)
         {
             var centerFallback = new Point2d(roiRect.X + roiRect.Width / 2.0, roiRect.Y + roiRect.Height / 2.0);
-            return new MatchResult(centerFallback, 0.0, angleDeg);
+            return new MatchResult(centerFallback, 0.0, angleDeg, roiRect);
         }
 
         using var templGrayRot = RotateWithPadding(templPrep0, angleDeg);
         if (crop.X < 0 || crop.Y < 0 || crop.X + crop.Width > templGrayRot.Width || crop.Y + crop.Height > templGrayRot.Height)
         {
             var centerFallback = new Point2d(roiRect.X + roiRect.Width / 2.0, roiRect.Y + roiRect.Height / 2.0);
-            return new MatchResult(centerFallback, 0.0, angleDeg);
+            return new MatchResult(centerFallback, 0.0, angleDeg, roiRect);
         }
 
         using var templ = new Mat(templGrayRot, crop);
@@ -427,7 +428,7 @@ public sealed class PatternMatcher
         if (roiGray.Width < templ.Width || roiGray.Height < templ.Height)
         {
             var centerFallback = new Point2d(roiRect.X + roiRect.Width / 2.0, roiRect.Y + roiRect.Height / 2.0);
-            return new MatchResult(centerFallback, 0.0, angleDeg);
+            return new MatchResult(centerFallback, 0.0, angleDeg, roiRect);
         }
 
         using var result = new Mat();
@@ -436,7 +437,8 @@ public sealed class PatternMatcher
 
         var centerInRoi = new Point2d(maxLoc.X + templ.Width / 2.0, maxLoc.Y + templ.Height / 2.0);
         var global = new Point2d(centerInRoi.X + roiRect.X, centerInRoi.Y + roiRect.Y);
-        return new MatchResult(global, maxVal, angleDeg);
+        var matchRect = new Rect(roiRect.X + maxLoc.X, roiRect.Y + maxLoc.Y, templ.Width, templ.Height);
+        return new MatchResult(global, maxVal, angleDeg, matchRect);
     }
 
     public MatchResult MatchWithRotation(Mat image, PointDefinition definition, PreprocessSettings? preprocess, double minAngleDeg = -10.0, double maxAngleDeg = 10.0, double stepDeg = 2.0)
@@ -476,7 +478,7 @@ public sealed class PatternMatcher
         if (roiGray.Width < templPrep0.Width || roiGray.Height < templPrep0.Height)
         {
             var centerFallback = new Point2d(roiRect.X + roiRect.Width / 2.0, roiRect.Y + roiRect.Height / 2.0);
-            return new MatchResult(centerFallback, 0.0, 0.0);
+            return new MatchResult(centerFallback, 0.0, 0.0, roiRect);
         }
 
         var bestAngleScore = double.NegativeInfinity;
@@ -524,7 +526,7 @@ public sealed class PatternMatcher
         if (double.IsNegativeInfinity(bestAngleScore))
         {
             var centerFallback = new Point2d(roiRect.X + roiRect.Width / 2.0, roiRect.Y + roiRect.Height / 2.0);
-            return new MatchResult(centerFallback, 0.0, 0.0);
+            return new MatchResult(centerFallback, 0.0, 0.0, roiRect);
         }
 
         using var bestTemplGrayRot = RotateWithPadding(templPrep0, bestAngle);
@@ -534,14 +536,14 @@ public sealed class PatternMatcher
             || bestCrop.Y + bestCrop.Height > bestTemplGrayRot.Height)
         {
             var centerFallback = new Point2d(roiRect.X + roiRect.Width / 2.0, roiRect.Y + roiRect.Height / 2.0);
-            return new MatchResult(centerFallback, 0.0, bestAngle);
+            return new MatchResult(centerFallback, 0.0, bestAngle, roiRect);
         }
 
         using var bestTemplGray = new Mat(bestTemplGrayRot, bestCrop);
         if (roiGray.Width < bestTemplGray.Width || roiGray.Height < bestTemplGray.Height)
         {
             var centerFallback = new Point2d(roiRect.X + roiRect.Width / 2.0, roiRect.Y + roiRect.Height / 2.0);
-            return new MatchResult(centerFallback, 0.0, bestAngle);
+            return new MatchResult(centerFallback, 0.0, bestAngle, roiRect);
         }
 
         using var resultGray = new Mat();
@@ -550,7 +552,8 @@ public sealed class PatternMatcher
 
         var centerInRoi = new Point2d(maxLocGray.X + bestTemplGray.Width / 2.0, maxLocGray.Y + bestTemplGray.Height / 2.0);
         var global = new Point2d(centerInRoi.X + roiRect.X, centerInRoi.Y + roiRect.Y);
-        return new MatchResult(global, maxValGray, bestAngle);
+        var matchRect = new Rect(roiRect.X + maxLocGray.X, roiRect.Y + maxLocGray.Y, bestTemplGray.Width, bestTemplGray.Height);
+        return new MatchResult(global, maxValGray, bestAngle, matchRect);
     }
 
     private static Mat EnsureGray(Mat src)
