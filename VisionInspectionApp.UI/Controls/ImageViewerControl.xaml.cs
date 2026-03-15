@@ -358,9 +358,16 @@ public partial class ImageViewerControl : UserControl
 
         if (kind == RoiDrawKind.Search)
         {
-            // For Search: Point uses " S", Line uses " L", Origin uses "Origin S".
-            // Prefer active S/L; otherwise swap T->S; otherwise any S; otherwise any L.
-            if (!string.IsNullOrWhiteSpace(_activeRoiLabel) && (EndsWith(_activeRoiLabel!, " S") || EndsWith(_activeRoiLabel!, " L"))) return _activeRoiLabel;
+            // For Search: Point uses " S", Line uses " L", LPD uses " LP", CDT uses " C", Origin uses "Origin S".
+            // Prefer active S/L/LP/C; otherwise swap T->S; otherwise any S; otherwise any L/LP/C.
+            if (!string.IsNullOrWhiteSpace(_activeRoiLabel)
+                && (EndsWith(_activeRoiLabel!, " S")
+                    || EndsWith(_activeRoiLabel!, " L")
+                    || EndsWith(_activeRoiLabel!, " LP")
+                    || EndsWith(_activeRoiLabel!, " C")))
+            {
+                return _activeRoiLabel;
+            }
 
             var swapped = TrySwapSuffix(_activeRoiLabel, "S");
             if (!string.IsNullOrWhiteSpace(swapped)) return swapped;
@@ -370,6 +377,12 @@ public partial class ImageViewerControl : UserControl
 
             var l = rectLabels.FirstOrDefault(x => EndsWith(x, " L"));
             if (!string.IsNullOrWhiteSpace(l)) return l;
+
+            var lp = rectLabels.FirstOrDefault(x => EndsWith(x, " LP"));
+            if (!string.IsNullOrWhiteSpace(lp)) return lp;
+
+            var c = rectLabels.FirstOrDefault(x => EndsWith(x, " C"));
+            if (!string.IsNullOrWhiteSpace(c)) return c;
         }
 
         return _activeRoiLabel;

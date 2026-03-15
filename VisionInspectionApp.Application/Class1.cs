@@ -1,6 +1,11 @@
 ﻿using OpenCvSharp;
 using VisionInspectionApp.Models;
 using VisionInspectionApp.VisionEngine;
+using System.Diagnostics;
+using System.Runtime.InteropServices;
+using System.Collections.Concurrent;
+using ZXing;
+using ZXing.Common;
 
 namespace VisionInspectionApp.Application;
 
@@ -18,9 +23,25 @@ public sealed class ConfigStoreOptions
 
 public sealed record PointMatchResult(string Name, Point2d Position, Rect MatchRect, double Score, double Threshold, bool Pass, double AngleDeg);
 
+public sealed class InspectionTimings
+{
+    public int TotalMs { get; set; }
+    public int OriginMs { get; set; }
+    public int PointsMs { get; set; }
+    public int LinesMs { get; set; }
+    public int BlobsMs { get; set; }
+    public int LpdMs { get; set; }
+    public int DistancesMs { get; set; }
+    public int ConditionsMs { get; set; }
+    public int DefectsMs { get; set; }
+    public int CdtMs { get; set; }
+}
+
 public sealed class InspectionResult
 {
     public bool Pass { get; set; }
+
+    public InspectionTimings Timings { get; } = new();
 
     public PointMatchResult? Origin { get; set; }
 
@@ -38,6 +59,10 @@ public sealed class InspectionResult
 
     public List<BlobDetectionResult> BlobDetections { get; } = new();
 
+    public List<LinePairDetectionResult> LinePairDetections { get; } = new();
+
+    public List<CodeDetectionResult> CodeDetections { get; } = new();
+
     public DefectDetectionResult? Defects { get; set; }
 }
 
@@ -46,6 +71,23 @@ public sealed record ConditionResult(string Name, string Expression, bool Pass, 
 public sealed record BlobInfo(Rect BoundingBox, Point2d Centroid, double Area);
 
 public sealed record BlobDetectionResult(string Name, int Count, List<BlobInfo> Blobs);
+
+public sealed record LinePairDetectionResult(
+    string Name,
+    bool Found,
+    Point2d L1P1,
+    Point2d L1P2,
+    Point2d L2P1,
+    Point2d L2P2,
+    double Value,
+    double Nominal,
+    double TolPlus,
+    double TolMinus,
+    bool Pass,
+    Point2d ClosestA,
+    Point2d ClosestB);
+
+public sealed record CodeDetectionResult(string Name, bool Found, string Text, Rect BoundingBox);
 
 public interface IInspectionService
 {
@@ -88,7 +130,10 @@ public sealed class InspectionService : IInspectionService
 
         var result = new InspectionResult();
 
+        var swTotal = Stopwatch.StartNew();
+
         var matsToDispose = new List<Mat>();
+        var matsLock = new object();
         try
         {
             var nodesById = (config.ToolGraph?.Nodes ?? new List<ToolGraphNode>())
@@ -101,51 +146,70 @@ public sealed class InspectionService : IInspectionService
 
             var edges = config.ToolGraph?.Edges ?? new List<ToolGraphEdge>();
 
-            // Default (backward-compatible) processing path.
-            var processedDefault = _preprocessor.Run(image, config.Preprocess);
-            matsToDispose.Add(processedDefault);
+            // Default (backward-compatible) processing path (lazy + thread-safe).
+            var processedDefault = new Lazy<Mat>(() =>
+            {
+                var m = _preprocessor.Run(image, config.Preprocess);
+                lock (matsLock) matsToDispose.Add(m);
+                return m;
+            });
 
-            var preprocessMatCache = new Dictionary<string, Mat>(StringComparer.OrdinalIgnoreCase);
+            Mat GetProcessedDefault() => processedDefault.Value;
+
+            var preprocessMatCache = new ConcurrentDictionary<string, Mat>(StringComparer.OrdinalIgnoreCase);
+
+            var templateCache = new ConcurrentDictionary<string, Mat>(StringComparer.OrdinalIgnoreCase);
+
+            Mat GetTemplateGray(string? templatePath)
+            {
+                if (string.IsNullOrWhiteSpace(templatePath))
+                {
+                    return new Mat();
+                }
+
+                return templateCache.GetOrAdd(templatePath, p =>
+                {
+                    var t = Cv2.ImRead(p, ImreadModes.Grayscale);
+                    lock (matsLock) matsToDispose.Add(t);
+                    return t;
+                });
+            }
 
             Mat GetPreprocessNodeOutput(string preprocessNodeId)
             {
-                if (preprocessMatCache.TryGetValue(preprocessNodeId, out var cached))
+                return preprocessMatCache.GetOrAdd(preprocessNodeId, id =>
                 {
-                    return cached;
-                }
+                    if (!nodesById.TryGetValue(id, out var node)
+                        || !string.Equals(node.Type, "Preprocess", StringComparison.OrdinalIgnoreCase))
+                    {
+                        return image;
+                    }
 
-                if (!nodesById.TryGetValue(preprocessNodeId, out var node)
-                    || !string.Equals(node.Type, "Preprocess", StringComparison.OrdinalIgnoreCase))
-                {
-                    preprocessMatCache[preprocessNodeId] = image;
-                    return image;
-                }
+                    preprocessSettingsByName.TryGetValue(node.RefName ?? string.Empty, out var settings);
+                    settings ??= new PreprocessSettings();
 
-                preprocessSettingsByName.TryGetValue(node.RefName ?? string.Empty, out var settings);
-                settings ??= new PreprocessSettings();
+                    // Preprocess node input: either raw image or another preprocess output connected to "In".
+                    var inEdge = edges.FirstOrDefault(e => string.Equals(e.ToNodeId, id, StringComparison.OrdinalIgnoreCase)
+                                                          && string.Equals(e.ToPort, "In", StringComparison.OrdinalIgnoreCase));
+                    Mat baseMat = image;
+                    if (inEdge is not null
+                        && nodesById.TryGetValue(inEdge.FromNodeId, out var fromNode)
+                        && string.Equals(fromNode.Type, "Preprocess", StringComparison.OrdinalIgnoreCase))
+                    {
+                        baseMat = GetPreprocessNodeOutput(fromNode.Id);
+                    }
 
-                // Preprocess node input: either raw image or another preprocess output connected to "In".
-                var inEdge = edges.FirstOrDefault(e => string.Equals(e.ToNodeId, preprocessNodeId, StringComparison.OrdinalIgnoreCase)
-                                                      && string.Equals(e.ToPort, "In", StringComparison.OrdinalIgnoreCase));
-                Mat baseMat = image;
-                if (inEdge is not null
-                    && nodesById.TryGetValue(inEdge.FromNodeId, out var fromNode)
-                    && string.Equals(fromNode.Type, "Preprocess", StringComparison.OrdinalIgnoreCase))
-                {
-                    baseMat = GetPreprocessNodeOutput(fromNode.Id);
-                }
-
-                var m = _preprocessor.Run(baseMat, settings);
-                matsToDispose.Add(m);
-                preprocessMatCache[preprocessNodeId] = m;
-                return m;
+                    var m = _preprocessor.Run(baseMat, settings);
+                    lock (matsLock) matsToDispose.Add(m);
+                    return m;
+                });
             }
 
             (Mat ImageMat, PreprocessSettings Settings) ResolveToolPreprocess(string toolType, string toolRefName)
             {
                 // Default.
                 var settings = config.Preprocess;
-                var mat = processedDefault;
+                var mat = GetProcessedDefault();
 
                 var toolNode = nodesById.Values.FirstOrDefault(n => string.Equals(n.Type, toolType, StringComparison.OrdinalIgnoreCase)
                                                                     && string.Equals(n.RefName, toolRefName, StringComparison.OrdinalIgnoreCase));
@@ -209,7 +273,12 @@ public sealed class InspectionService : IInspectionService
                 }
 
                 using var crop = new Mat(matBgrOrGray, rect);
-                using var gray = crop.Channels() == 1 ? crop.Clone() : crop.CvtColor(ColorConversionCodes.BGR2GRAY);
+                Mat gray = crop;
+                using var grayOwned = crop.Channels() == 1 ? null : crop.CvtColor(ColorConversionCodes.BGR2GRAY);
+                if (grayOwned is not null)
+                {
+                    gray = grayOwned;
+                }
 
                 threshold = Math.Clamp(threshold, 0, 255);
                 using var bw = new Mat();
@@ -314,8 +383,10 @@ public sealed class InspectionService : IInspectionService
             }
 
             // Origin
+            var tOrigin0 = swTotal.ElapsedMilliseconds;
             var (originMat, originPre) = ResolveToolPreprocess("Origin", config.Origin.Name);
-            var originMatch = _matcher.MatchWithRotation(originMat, config.Origin, originPre, -60.0, 60.0, 2.0);
+            var originTempl = GetTemplateGray(config.Origin.TemplateImageFile);
+            var originMatch = _matcher.MatchWithRotation(originMat, config.Origin, originTempl, originPre, -60.0, 60.0, 2.0);
             var templateAngleDeg = originMatch.AngleDeg;
             var poseAngleDeg = -templateAngleDeg;
             var originPass = originMatch.Score >= config.Origin.MatchScoreThreshold;
@@ -327,101 +398,332 @@ public sealed class InspectionService : IInspectionService
                 config.Origin.MatchScoreThreshold,
                 originPass,
                 poseAngleDeg);
+            result.Timings.OriginMs = (int)Math.Max(0, swTotal.ElapsedMilliseconds - tOrigin0);
 
             var originTeach = new Point2d(config.Origin.WorldPosition.X, config.Origin.WorldPosition.Y);
             var originFound = originMatch.Position;
             var angleDeg = poseAngleDeg;
 
-        var foundPoints = new Dictionary<string, Point2d>(StringComparer.OrdinalIgnoreCase);
+            var tTools0 = swTotal.ElapsedMilliseconds;
+            var pointTasks = (config.Points ?? new List<PointDefinition>())
+                .Where(p => p is not null && !string.IsNullOrWhiteSpace(p.Name))
+                .Select(p => Task.Run(() =>
+                {
+                    var def = TransformPointDefinition(p, originTeach, originFound, angleDeg);
+                    var (matForPoint, preForPoint) = ResolveToolPreprocess("Point", p.Name);
+                    var templ = GetTemplateGray(def.TemplateImageFile);
+                    var m = _matcher.MatchWithFixedRotation(matForPoint, def, templ, templateAngleDeg, preForPoint);
+                    var pass = m.Score >= p.MatchScoreThreshold;
+                    return new PointMatchResult(p.Name, m.Position, m.MatchRect, m.Score, p.MatchScoreThreshold, pass, 0.0);
+                }))
+                .ToArray();
 
-            foreach (var p in config.Points)
+            var tPointsQueued = swTotal.ElapsedMilliseconds;
+
+            var lineTasks = (config.Lines ?? new List<LineToolDefinition>())
+                .Where(l => l is not null && !string.IsNullOrWhiteSpace(l.Name) && l.SearchRoi.Width > 0 && l.SearchRoi.Height > 0)
+                .Select(l => Task.Run(() =>
+                {
+                    var roi = TransformRoiKeepSize(l.SearchRoi, originTeach, originFound, angleDeg);
+                    var (matForLine, _) = ResolveToolPreprocess("Line", l.Name);
+                    var det = _lineDetector.DetectLongestLine(matForLine, roi, l.Canny1, l.Canny2, l.HoughThreshold, l.MinLineLength, l.MaxLineGap);
+                    return det with { Name = l.Name };
+                }))
+                .ToArray();
+
+            var tLinesQueued = swTotal.ElapsedMilliseconds;
+
+            var blobTasks = (config.BlobDetections ?? new List<BlobDetectionDefinition>())
+                .Where(b => b is not null && !string.IsNullOrWhiteSpace(b.Name) && b.InspectRoi.Width > 0 && b.InspectRoi.Height > 0)
+                .Select(b => Task.Run(() =>
+                {
+                    var roi = TransformRoiKeepSize(b.InspectRoi, originTeach, originFound, angleDeg);
+                    var (matForBlob, _) = ResolveToolPreprocess("BlobDetection", b.Name);
+                    var rois = b.Rois;
+                    if (rois is not null && rois.Count > 0)
+                    {
+                        rois = rois
+                            .Select(x => new BlobRoiDefinition { Mode = x.Mode, Roi = TransformRoiKeepSize(x.Roi, originTeach, originFound, angleDeg) })
+                            .ToList();
+                    }
+
+                    var blobs = DetectBlobs(matForBlob, roi, rois, b.Polarity, b.Threshold, b.MinBlobArea, b.MaxBlobArea);
+                    return new BlobDetectionResult(b.Name, blobs.Count, blobs);
+                }))
+                .ToArray();
+
+            var tBlobsQueued = swTotal.ElapsedMilliseconds;
+
+            var lpdTasks = (config.LinePairDetections ?? new List<LinePairDetectionDefinition>())
+                .Where(lpd => lpd is not null && !string.IsNullOrWhiteSpace(lpd.Name) && lpd.SearchRoi.Width > 0 && lpd.SearchRoi.Height > 0)
+                .Select(lpd => Task.Run(() =>
+                {
+                    var roi = TransformRoiKeepSize(lpd.SearchRoi, originTeach, originFound, angleDeg);
+                    var (matForLpd, _) = ResolveToolPreprocess("LinePairDetection", lpd.Name);
+                    var top = _lineDetector.DetectTopLines(matForLpd, roi, lpd.Canny1, lpd.Canny2, lpd.HoughThreshold, lpd.MinLineLength, lpd.MaxLineGap, topN: 2);
+                    if (top.Count < 2)
+                    {
+                        return new LinePairDetectionResult(
+                            lpd.Name,
+                            Found: false,
+                            default, default, default, default,
+                            double.NaN,
+                            lpd.Nominal,
+                            lpd.TolerancePlus,
+                            lpd.ToleranceMinus,
+                            Pass: false,
+                            default,
+                            default);
+                    }
+
+                    var l1 = top[0];
+                    var l2 = top[1];
+                    var (distPx, ca, cb) = Geometry2D.SegmentToSegmentDistance(l1.P1, l1.P2, l2.P1, l2.P2);
+                    var value = config.PixelsPerMm > 0 ? distPx / config.PixelsPerMm : distPx;
+                    var pass = value >= (lpd.Nominal - lpd.ToleranceMinus) && value <= (lpd.Nominal + lpd.TolerancePlus);
+
+                    return new LinePairDetectionResult(
+                        lpd.Name,
+                        Found: true,
+                        l1.P1, l1.P2,
+                        l2.P1, l2.P2,
+                        value,
+                        lpd.Nominal,
+                        lpd.TolerancePlus,
+                        lpd.ToleranceMinus,
+                        pass,
+                        ca,
+                        cb);
+                }))
+                .ToArray();
+
+            var tLpdQueued = swTotal.ElapsedMilliseconds;
+
+            Task.WaitAll(pointTasks);
+            var tPointsDone = swTotal.ElapsedMilliseconds;
+
+            Task.WaitAll(lineTasks);
+            var tLinesDone = swTotal.ElapsedMilliseconds;
+
+            Task.WaitAll(blobTasks);
+            var tBlobsDone = swTotal.ElapsedMilliseconds;
+
+            Task.WaitAll(lpdTasks);
+            var tLpdDone = swTotal.ElapsedMilliseconds;
+
+            result.Timings.PointsMs = (int)Math.Max(0, tPointsDone - tPointsQueued);
+            result.Timings.LinesMs = (int)Math.Max(0, tLinesDone - tLinesQueued);
+            result.Timings.BlobsMs = (int)Math.Max(0, tBlobsDone - tBlobsQueued);
+            result.Timings.LpdMs = (int)Math.Max(0, tLpdDone - tLpdQueued);
+
+            var foundPoints = new Dictionary<string, Point2d>(StringComparer.OrdinalIgnoreCase);
+            foreach (var t in pointTasks)
             {
-                var def = TransformPointDefinition(p, originTeach, originFound, angleDeg);
-
-                var (matForPoint, preForPoint) = ResolveToolPreprocess("Point", p.Name);
-                var m = _matcher.MatchWithFixedRotation(matForPoint, def, templateAngleDeg, preForPoint);
-                var pass = m.Score >= p.MatchScoreThreshold;
-
-                result.Points.Add(new PointMatchResult(p.Name, m.Position, m.MatchRect, m.Score, p.MatchScoreThreshold, pass, 0.0));
-                foundPoints[p.Name] = m.Position;
+                var pr = t.Result;
+                result.Points.Add(pr);
+                foundPoints[pr.Name] = pr.Position;
             }
 
             var foundLines = new Dictionary<string, LineDetectResult>(StringComparer.OrdinalIgnoreCase);
-            foreach (var l in config.Lines)
+            foreach (var t in lineTasks)
             {
-                var roi = TransformRoiKeepSize(l.SearchRoi, originTeach, originFound, angleDeg);
-                var (matForLine, _) = ResolveToolPreprocess("Line", l.Name);
-                var det = _lineDetector.DetectLongestLine(matForLine, roi, l.Canny1, l.Canny2, l.HoughThreshold, l.MinLineLength, l.MaxLineGap);
-                var named = det with { Name = l.Name };
-                result.Lines.Add(named);
-                foundLines[l.Name] = named;
+                var lr = t.Result;
+                result.Lines.Add(lr);
+                foundLines[lr.Name] = lr;
             }
 
-        foreach (var d in config.Distances)
-        {
-            if (!foundPoints.TryGetValue(d.PointA, out var a) || !foundPoints.TryGetValue(d.PointB, out var b))
+            foreach (var t in blobTasks)
             {
-                result.Distances.Add(new DistanceCheckResult(d.Name, d.PointA, d.PointB, double.NaN, d.Nominal, d.TolerancePlus, d.ToleranceMinus, false));
-                continue;
+                result.BlobDetections.Add(t.Result);
             }
 
-            result.Distances.Add(_distanceCalculator.CheckDistance(d, a, b, config.PixelsPerMm));
-        }
-
-        foreach (var dd in config.LineToLineDistances)
-        {
-            if (!foundLines.TryGetValue(dd.LineA, out var la) || !foundLines.TryGetValue(dd.LineB, out var lb) || !la.Found || !lb.Found)
+            foreach (var t in lpdTasks)
             {
-                result.LineToLineDistances.Add(new SegmentDistanceResult(dd.Name, dd.LineA, dd.LineB, double.NaN, dd.Nominal, dd.TolerancePlus, dd.ToleranceMinus, false, default, default));
-                continue;
+                result.LinePairDetections.Add(t.Result);
             }
 
-            var (distPx, ca, cb) = CalculateLineLineDistance(la, lb, dd.Mode);
-            var value = config.PixelsPerMm > 0 ? distPx / config.PixelsPerMm : distPx;
-            var pass = value >= (dd.Nominal - dd.ToleranceMinus) && value <= (dd.Nominal + dd.TolerancePlus);
-            result.LineToLineDistances.Add(new SegmentDistanceResult(dd.Name, dd.LineA, dd.LineB, value, dd.Nominal, dd.TolerancePlus, dd.ToleranceMinus, pass, ca, cb));
-        }
-
-        foreach (var dd in config.PointToLineDistances)
-        {
-            if (!foundPoints.TryGetValue(dd.Point, out var p) || !foundLines.TryGetValue(dd.Line, out var l) || !l.Found)
+            var tDistances0 = swTotal.ElapsedMilliseconds;
+            foreach (var d in config.Distances)
             {
-                result.PointToLineDistances.Add(new SegmentDistanceResult(dd.Name, dd.Point, dd.Line, double.NaN, dd.Nominal, dd.TolerancePlus, dd.ToleranceMinus, false, default, default));
-                continue;
+                if (!foundPoints.TryGetValue(d.PointA, out var a) || !foundPoints.TryGetValue(d.PointB, out var b))
+                {
+                    result.Distances.Add(new DistanceCheckResult(d.Name, d.PointA, d.PointB, double.NaN, d.Nominal, d.TolerancePlus, d.ToleranceMinus, false));
+                    continue;
+                }
+
+                result.Distances.Add(_distanceCalculator.CheckDistance(d, a, b, config.PixelsPerMm));
             }
 
-            var (distPx, closest) = CalculatePointLineDistance(p, l, dd.Mode);
-            var value = config.PixelsPerMm > 0 ? distPx / config.PixelsPerMm : distPx;
-            var pass = value >= (dd.Nominal - dd.ToleranceMinus) && value <= (dd.Nominal + dd.TolerancePlus);
-            result.PointToLineDistances.Add(new SegmentDistanceResult(dd.Name, dd.Point, dd.Line, value, dd.Nominal, dd.TolerancePlus, dd.ToleranceMinus, pass, p, closest));
-        }
-
-            foreach (var b in config.BlobDetections)
+            foreach (var dd in config.LineToLineDistances)
             {
-                if (string.IsNullOrWhiteSpace(b.Name) || b.InspectRoi.Width <= 0 || b.InspectRoi.Height <= 0)
+                if (!foundLines.TryGetValue(dd.LineA, out var la) || !foundLines.TryGetValue(dd.LineB, out var lb) || !la.Found || !lb.Found)
+                {
+                    result.LineToLineDistances.Add(new SegmentDistanceResult(dd.Name, dd.LineA, dd.LineB, double.NaN, dd.Nominal, dd.TolerancePlus, dd.ToleranceMinus, false, default, default));
+                    continue;
+                }
+
+                var (distPx, ca, cb) = CalculateLineLineDistance(la, lb, dd.Mode);
+                var value = config.PixelsPerMm > 0 ? distPx / config.PixelsPerMm : distPx;
+                var pass = value >= (dd.Nominal - dd.ToleranceMinus) && value <= (dd.Nominal + dd.TolerancePlus);
+                result.LineToLineDistances.Add(new SegmentDistanceResult(dd.Name, dd.LineA, dd.LineB, value, dd.Nominal, dd.TolerancePlus, dd.ToleranceMinus, pass, ca, cb));
+            }
+
+            foreach (var dd in config.PointToLineDistances)
+            {
+                if (!foundPoints.TryGetValue(dd.Point, out var p) || !foundLines.TryGetValue(dd.Line, out var l) || !l.Found)
+                {
+                    result.PointToLineDistances.Add(new SegmentDistanceResult(dd.Name, dd.Point, dd.Line, double.NaN, dd.Nominal, dd.TolerancePlus, dd.ToleranceMinus, false, default, default));
+                    continue;
+                }
+
+                var (distPx, closest) = CalculatePointLineDistance(p, l, dd.Mode);
+                var value = config.PixelsPerMm > 0 ? distPx / config.PixelsPerMm : distPx;
+                var pass = value >= (dd.Nominal - dd.ToleranceMinus) && value <= (dd.Nominal + dd.TolerancePlus);
+                result.PointToLineDistances.Add(new SegmentDistanceResult(dd.Name, dd.Point, dd.Line, value, dd.Nominal, dd.TolerancePlus, dd.ToleranceMinus, pass, p, closest));
+            }
+            result.Timings.DistancesMs = (int)Math.Max(0, swTotal.ElapsedMilliseconds - tDistances0);
+
+            var tCdt0 = swTotal.ElapsedMilliseconds;
+            static BarcodeFormat[] ResolveFormats(List<CodeSymbology> sym)
+            {
+                if (sym is null || sym.Count == 0)
+                {
+                    return Array.Empty<BarcodeFormat>();
+                }
+
+                var fmts = new HashSet<BarcodeFormat>();
+                foreach (var s in sym)
+                {
+                    switch (s)
+                    {
+                        case CodeSymbology.Qr:
+                            fmts.Add(BarcodeFormat.QR_CODE);
+                            break;
+                        case CodeSymbology.DataMatrix:
+                            fmts.Add(BarcodeFormat.DATA_MATRIX);
+                            break;
+                        case CodeSymbology.Pdf417:
+                            fmts.Add(BarcodeFormat.PDF_417);
+                            break;
+                        case CodeSymbology.Aztec:
+                            fmts.Add(BarcodeFormat.AZTEC);
+                            break;
+                        case CodeSymbology.Barcode1D:
+                            fmts.Add(BarcodeFormat.CODE_128);
+                            fmts.Add(BarcodeFormat.CODE_39);
+                            fmts.Add(BarcodeFormat.CODE_93);
+                            fmts.Add(BarcodeFormat.EAN_13);
+                            fmts.Add(BarcodeFormat.EAN_8);
+                            fmts.Add(BarcodeFormat.UPC_A);
+                            fmts.Add(BarcodeFormat.UPC_E);
+                            fmts.Add(BarcodeFormat.ITF);
+                            fmts.Add(BarcodeFormat.CODABAR);
+                            break;
+                        default:
+                            break;
+                    }
+                }
+
+                return fmts.ToArray();
+            }
+
+            foreach (var cdt in config.CodeDetections)
+            {
+                if (string.IsNullOrWhiteSpace(cdt.Name) || cdt.SearchRoi.Width <= 0 || cdt.SearchRoi.Height <= 0)
                 {
                     continue;
                 }
 
-                var roi = TransformRoiKeepSize(b.InspectRoi, originTeach, originFound, angleDeg);
-                var (matForBlob, _) = ResolveToolPreprocess("BlobDetection", b.Name);
-                var rois = b.Rois;
-                if (rois is not null && rois.Count > 0)
+                var roi = TransformRoiKeepSize(cdt.SearchRoi, originTeach, originFound, angleDeg);
+                var (matForCode, _) = ResolveToolPreprocess("CodeDetection", cdt.Name);
+
+                var rect = new Rect(roi.X, roi.Y, roi.Width, roi.Height)
+                    .Intersect(new Rect(0, 0, matForCode.Width, matForCode.Height));
+
+                if (rect.Width <= 0 || rect.Height <= 0)
                 {
-                    rois = rois
-                        .Select(x => new BlobRoiDefinition { Mode = x.Mode, Roi = TransformRoiKeepSize(x.Roi, originTeach, originFound, angleDeg) })
-                        .ToList();
+                    result.CodeDetections.Add(new CodeDetectionResult(cdt.Name, Found: false, Text: string.Empty, BoundingBox: default));
+                    continue;
                 }
 
-                var blobs = DetectBlobs(matForBlob, roi, rois, b.Polarity, b.Threshold, b.MinBlobArea, b.MaxBlobArea);
-                result.BlobDetections.Add(new BlobDetectionResult(b.Name, blobs.Count, blobs));
+                using var crop = new Mat(matForCode, rect);
+                Mat gray0;
+                if (crop.Channels() == 1)
+                {
+                    gray0 = crop;
+                }
+                else
+                {
+                    gray0 = crop.CvtColor(ColorConversionCodes.BGR2GRAY);
+                    matsToDispose.Add(gray0);
+                }
+
+                var options = new DecodingOptions
+                {
+                    TryHarder = cdt.TryHarder,
+                    PossibleFormats = ResolveFormats(cdt.Symbologies).ToList()
+                };
+
+                var reader = new BarcodeReaderGeneric
+                {
+                    AutoRotate = true,
+                    Options = options
+                };
+
+                options.TryInverted = true;
+
+                // Convert gray Mat to byte[] and decode via LuminanceSource (no System.Drawing dependency).
+                var gray = gray0.IsContinuous() ? gray0 : gray0.Clone();
+                if (!ReferenceEquals(gray, gray0))
+                {
+                    matsToDispose.Add(gray);
+                }
+
+                var w0 = gray.Cols;
+                var h0 = gray.Rows;
+                var buf = new byte[w0 * h0];
+                Marshal.Copy(gray.Data, buf, 0, buf.Length);
+                var source = new RGBLuminanceSource(buf, w0, h0, RGBLuminanceSource.BitmapFormat.Gray8);
+
+                var decoded = reader.Decode(source);
+                if (decoded is null || string.IsNullOrWhiteSpace(decoded.Text))
+                {
+                    result.CodeDetections.Add(new CodeDetectionResult(cdt.Name, Found: false, Text: string.Empty, BoundingBox: default));
+                    continue;
+                }
+
+                // Bounding box: ROI rect by default. If ZXing returns points, compute a tighter box.
+                var bb = rect;
+                if (decoded.ResultPoints is not null && decoded.ResultPoints.Length > 0)
+                {
+                    var xs = decoded.ResultPoints.Select(p => p.X).ToArray();
+                    var ys = decoded.ResultPoints.Select(p => p.Y).ToArray();
+                    var minX = xs.Min();
+                    var maxX = xs.Max();
+                    var minY = ys.Min();
+                    var maxY = ys.Max();
+                    var w = Math.Max(1, maxX - minX);
+                    var h = Math.Max(1, maxY - minY);
+                    bb = new Rect(
+                        rect.X + (int)Math.Round(minX),
+                        rect.Y + (int)Math.Round(minY),
+                        (int)Math.Round(w),
+                        (int)Math.Round(h));
+                }
+
+                result.CodeDetections.Add(new CodeDetectionResult(cdt.Name, Found: true, Text: decoded.Text, BoundingBox: bb));
             }
+            result.Timings.CdtMs = (int)Math.Max(0, swTotal.ElapsedMilliseconds - tCdt0);
 
+            var tCond0 = swTotal.ElapsedMilliseconds;
             EvaluateConditions(config, result);
+            result.Timings.ConditionsMs = (int)Math.Max(0, swTotal.ElapsedMilliseconds - tCond0);
 
+            var tDef0 = swTotal.ElapsedMilliseconds;
             var defectConfig = TransformDefectConfig(config.DefectConfig, originTeach, originFound, angleDeg);
             // Defects remain on default preprocess for now (backward compatible).
-            result.Defects = _defectDetector.Detect(processedDefault, defectConfig);
+            result.Defects = _defectDetector.Detect(GetProcessedDefault(), defectConfig);
+            result.Timings.DefectsMs = (int)Math.Max(0, swTotal.ElapsedMilliseconds - tDef0);
 
             result.Pass = originPass
             && result.Points.All(x => x.Pass)
@@ -430,6 +732,8 @@ public sealed class InspectionService : IInspectionService
             && result.PointToLineDistances.All(x => x.Pass)
             && result.Conditions.All(x => x.Pass)
             && (result.Defects.Defects.Count == 0);
+
+            result.Timings.TotalMs = (int)Math.Max(0, swTotal.ElapsedMilliseconds);
 
             return result;
         }

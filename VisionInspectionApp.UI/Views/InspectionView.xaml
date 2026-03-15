@@ -53,6 +53,16 @@
                     <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,8">
                         <TextBlock Text="{Binding LastResult.Pass, StringFormat=PASS: {0}}" Margin="0,0,12,0" />
                         <TextBlock Text="{Binding LastResult.Defects.Defects.Count, StringFormat=Defects: {0}}" />
+                        <TextBlock Text="{Binding LastResult.Timings.TotalMs, StringFormat=Total: {0} ms}" Margin="12,0,0,0" />
+                        <TextBlock Text="{Binding LastResult.Timings.OriginMs, StringFormat=O: {0}}" Margin="12,0,0,0" />
+                        <TextBlock Text="{Binding LastResult.Timings.PointsMs, StringFormat=P: {0}}" Margin="6,0,0,0" />
+                        <TextBlock Text="{Binding LastResult.Timings.LinesMs, StringFormat=L: {0}}" Margin="6,0,0,0" />
+                        <TextBlock Text="{Binding LastResult.Timings.BlobsMs, StringFormat=B: {0}}" Margin="6,0,0,0" />
+                        <TextBlock Text="{Binding LastResult.Timings.LpdMs, StringFormat=LPD: {0}}" Margin="6,0,0,0" />
+                        <TextBlock Text="{Binding LastResult.Timings.CdtMs, StringFormat=CDT: {0}}" Margin="6,0,0,0" />
+                        <TextBlock Text="{Binding LastResult.Timings.DistancesMs, StringFormat=D: {0}}" Margin="6,0,0,0" />
+                        <TextBlock Text="{Binding LastResult.Timings.ConditionsMs, StringFormat=Cnd: {0}}" Margin="6,0,0,0" />
+                        <TextBlock Text="{Binding LastResult.Timings.DefectsMs, StringFormat=Def: {0}}" Margin="6,0,0,0" />
                     </StackPanel>
 
                     <Grid Grid.Row="1">

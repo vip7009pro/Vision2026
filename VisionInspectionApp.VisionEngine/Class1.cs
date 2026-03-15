@@ -137,6 +137,58 @@ public sealed class LineDetector
         return new LineDetectResult(string.Empty, gp1, gp2, bestLen, true);
     }
 
+    public List<LineDetectResult> DetectTopLines(Mat image, Roi searchRoi, int canny1, int canny2, int houghThreshold, int minLineLength, int maxLineGap, int topN)
+    {
+        if (image is null)
+        {
+            throw new ArgumentNullException(nameof(image));
+        }
+
+        topN = Math.Clamp(topN, 1, 20);
+
+        var roiRect = new Rect(searchRoi.X, searchRoi.Y, searchRoi.Width, searchRoi.Height)
+            .Intersect(new Rect(0, 0, image.Width, image.Height));
+        if (roiRect.Width <= 0 || roiRect.Height <= 0)
+        {
+            return new List<LineDetectResult>();
+        }
+
+        using var roi = new Mat(image, roiRect);
+        using var gray = roi.Channels() == 1 ? roi.Clone() : roi.CvtColor(ColorConversionCodes.BGR2GRAY);
+        using var edges = new Mat();
+        Cv2.Canny(gray, edges, canny1, canny2);
+
+        var lines = Cv2.HoughLinesP(
+            edges,
+            1,
+            Math.PI / 180.0,
+            houghThreshold,
+            minLineLength: minLineLength,
+            maxLineGap: maxLineGap);
+
+        if (lines is null || lines.Length == 0)
+        {
+            return new List<LineDetectResult>();
+        }
+
+        var tmp = new List<LineDetectResult>(lines.Length);
+        foreach (var l in lines)
+        {
+            var gp1 = new Point2d(l.P1.X + roiRect.X, l.P1.Y + roiRect.Y);
+            var gp2 = new Point2d(l.P2.X + roiRect.X, l.P2.Y + roiRect.Y);
+            var (cp1, cp2, clipped) = ClipInfiniteLineToRect(gp1, gp2, roiRect);
+            var p1 = clipped ? cp1 : gp1;
+            var p2 = clipped ? cp2 : gp2;
+            var len = Geometry2D.Distance(p1, p2);
+            tmp.Add(new LineDetectResult(string.Empty, p1, p2, len, true));
+        }
+
+        return tmp
+            .OrderByDescending(x => x.LengthPx)
+            .Take(topN)
+            .ToList();
+    }
+
     private static (Point2d P1, Point2d P2, bool Ok) ClipInfiniteLineToRect(Point2d p1, Point2d p2, Rect rect)
     {
         var xmin = rect.X;
@@ -233,6 +285,8 @@ public sealed class DefectDetectionResult
 
 public sealed class ImagePreprocessor
 {
+    private static readonly Mat MorphKernel3x3 = Cv2.GetStructuringElement(MorphShapes.Rect, new Size(3, 3));
+
     public Mat Run(Mat inputBgrOrGray, PreprocessSettings settings)
     {
         if (inputBgrOrGray is null)
@@ -247,6 +301,7 @@ public sealed class ImagePreprocessor
 
         var current = inputBgrOrGray;
         var disposeList = new List<Mat>();
+        Mat? ret = null;
 
         try
         {
@@ -312,17 +367,21 @@ public sealed class ImagePreprocessor
                     current = gray;
                 }
 
-                var kernel = Cv2.GetStructuringElement(MorphShapes.Rect, new Size(3, 3));
                 var mor = new Mat();
-                Cv2.MorphologyEx(current, mor, MorphTypes.Close, kernel);
+                Cv2.MorphologyEx(current, mor, MorphTypes.Close, MorphKernel3x3);
                 disposeList.Add(mor);
                 current = mor;
             }
 
-            return current.Clone();
+            ret = current;
+            return ret;
         }
         finally
         {
+            if (ret is not null)
+            {
+                disposeList.Remove(ret);
+            }
             foreach (var m in disposeList)
             {
                 m.Dispose();
@@ -333,6 +392,23 @@ public sealed class ImagePreprocessor
 
 public sealed class PatternMatcher
 {
+    private readonly struct GrayMat : IDisposable
+    {
+        public GrayMat(Mat mat, Mat? owned)
+        {
+            Mat = mat;
+            _owned = owned;
+        }
+
+        public Mat Mat { get; }
+        private readonly Mat? _owned;
+
+        public void Dispose()
+        {
+            _owned?.Dispose();
+        }
+    }
+
     public MatchResult Match(Mat image, PointDefinition definition, PreprocessSettings? preprocess)
     {
         if (image is null)
@@ -356,20 +432,47 @@ public sealed class PatternMatcher
             throw new FileNotFoundException($"Template file not found for point '{definition.Name}'.", definition.TemplateImageFile);
         }
 
-        using var roi = new Mat(image, roiRect);
         using var templ = Cv2.ImRead(definition.TemplateImageFile, ImreadModes.Grayscale);
+        using var templGray = EnsureGrayBorrowed(templ);
+        return Match(image, definition, templGray.Mat, preprocess);
+    }
 
-        using var roiGray = EnsureGray(roi);
-        using var templPrep = PreprocessTemplateForMatch(templ, preprocess);
+    public MatchResult Match(Mat image, PointDefinition definition, Mat templateGray, PreprocessSettings? preprocess)
+    {
+        if (image is null)
+        {
+            throw new ArgumentNullException(nameof(image));
+        }
 
-        if (roiGray.Width < templPrep.Width || roiGray.Height < templPrep.Height)
+        if (definition is null)
+        {
+            throw new ArgumentNullException(nameof(definition));
+        }
+
+        if (templateGray is null)
+        {
+            throw new ArgumentNullException(nameof(templateGray));
+        }
+
+        var roiRect = ToRect(definition.SearchRoi, image.Width, image.Height);
+        if (roiRect.Width <= 0 || roiRect.Height <= 0)
+        {
+            throw new ArgumentException($"Invalid SearchRoi for point '{definition.Name}'.");
+        }
+
+        using var roi = new Mat(image, roiRect);
+
+        using var roiGray = EnsureGrayBorrowed(roi);
+        using var templPrep = PreprocessTemplateForMatch(templateGray, preprocess);
+
+        if (roiGray.Mat.Width < templPrep.Width || roiGray.Mat.Height < templPrep.Height)
         {
             var centerFallback = new Point2d(roiRect.X + roiRect.Width / 2.0, roiRect.Y + roiRect.Height / 2.0);
             return new MatchResult(centerFallback, 0.0, 0.0, roiRect);
         }
 
         using var result = new Mat();
-        Cv2.MatchTemplate(roiGray, templPrep, result, TemplateMatchModes.CCoeffNormed);
+        Cv2.MatchTemplate(roiGray.Mat, templPrep, result, TemplateMatchModes.CCoeffNormed);
         Cv2.MinMaxLoc(result, out _, out var maxVal, out _, out var maxLoc);
 
         var centerInRoi = new Point2d(maxLoc.X + templPrep.Width / 2.0, maxLoc.Y + templPrep.Height / 2.0);
@@ -401,10 +504,38 @@ public sealed class PatternMatcher
             throw new FileNotFoundException($"Template file not found for point '{definition.Name}'.", definition.TemplateImageFile);
         }
 
-        using var roi = new Mat(image, roiRect);
         using var templ0 = Cv2.ImRead(definition.TemplateImageFile, ImreadModes.Grayscale);
-        using var roiGray = EnsureGray(roi);
-        using var templPrep0 = PreprocessTemplateForMatch(templ0, preprocess);
+        using var templGray0 = EnsureGrayBorrowed(templ0);
+        return MatchWithFixedRotation(image, definition, templGray0.Mat, angleDeg, preprocess);
+    }
+
+    public MatchResult MatchWithFixedRotation(Mat image, PointDefinition definition, Mat templateGray, double angleDeg, PreprocessSettings? preprocess)
+    {
+        if (image is null)
+        {
+            throw new ArgumentNullException(nameof(image));
+        }
+
+        if (definition is null)
+        {
+            throw new ArgumentNullException(nameof(definition));
+        }
+
+        if (templateGray is null)
+        {
+            throw new ArgumentNullException(nameof(templateGray));
+        }
+
+        var roiRect = ToRect(definition.SearchRoi, image.Width, image.Height);
+        if (roiRect.Width <= 0 || roiRect.Height <= 0)
+        {
+            throw new ArgumentException($"Invalid SearchRoi for point '{definition.Name}'.");
+        }
+
+        using var roi = new Mat(image, roiRect);
+
+        using var roiGray = EnsureGrayBorrowed(roi);
+        using var templPrep0 = PreprocessTemplateForMatch(templateGray, preprocess);
 
         using var templEdges0 = new Mat();
         Cv2.Canny(templPrep0, templEdges0, 50, 150);
@@ -425,14 +556,14 @@ public sealed class PatternMatcher
 
         using var templ = new Mat(templGrayRot, crop);
 
-        if (roiGray.Width < templ.Width || roiGray.Height < templ.Height)
+        if (roiGray.Mat.Width < templ.Width || roiGray.Mat.Height < templ.Height)
         {
             var centerFallback = new Point2d(roiRect.X + roiRect.Width / 2.0, roiRect.Y + roiRect.Height / 2.0);
             return new MatchResult(centerFallback, 0.0, angleDeg, roiRect);
         }
 
         using var result = new Mat();
-        Cv2.MatchTemplate(roiGray, templ, result, TemplateMatchModes.CCoeffNormed);
+        Cv2.MatchTemplate(roiGray.Mat, templ, result, TemplateMatchModes.CCoeffNormed);
         Cv2.MinMaxLoc(result, out _, out var maxVal, out _, out var maxLoc);
 
         var centerInRoi = new Point2d(maxLoc.X + templ.Width / 2.0, maxLoc.Y + templ.Height / 2.0);
@@ -464,18 +595,45 @@ public sealed class PatternMatcher
             throw new FileNotFoundException($"Template file not found for point '{definition.Name}'.", definition.TemplateImageFile);
         }
 
-        using var roi = new Mat(image, roiRect);
         using var templ0 = Cv2.ImRead(definition.TemplateImageFile, ImreadModes.Grayscale);
+        using var templGray0 = EnsureGrayBorrowed(templ0);
+        return MatchWithRotation(image, definition, templGray0.Mat, preprocess, minAngleDeg, maxAngleDeg, stepDeg);
+    }
 
-        using var roiGray = EnsureGray(roi);
-        using var templPrep0 = PreprocessTemplateForMatch(templ0, preprocess);
+    public MatchResult MatchWithRotation(Mat image, PointDefinition definition, Mat templateGray, PreprocessSettings? preprocess, double minAngleDeg = -10.0, double maxAngleDeg = 10.0, double stepDeg = 2.0)
+    {
+        if (image is null)
+        {
+            throw new ArgumentNullException(nameof(image));
+        }
+
+        if (definition is null)
+        {
+            throw new ArgumentNullException(nameof(definition));
+        }
+
+        if (templateGray is null)
+        {
+            throw new ArgumentNullException(nameof(templateGray));
+        }
+
+        var roiRect = ToRect(definition.SearchRoi, image.Width, image.Height);
+        if (roiRect.Width <= 0 || roiRect.Height <= 0)
+        {
+            throw new ArgumentException($"Invalid SearchRoi for point '{definition.Name}'.");
+        }
+
+        using var roi = new Mat(image, roiRect);
+
+        using var roiGray = EnsureGrayBorrowed(roi);
+        using var templPrep0 = PreprocessTemplateForMatch(templateGray, preprocess);
 
         using var roiEdges = new Mat();
         using var templEdges0 = new Mat();
-        Cv2.Canny(roiGray, roiEdges, 50, 150);
+        Cv2.Canny(roiGray.Mat, roiEdges, 50, 150);
         Cv2.Canny(templPrep0, templEdges0, 50, 150);
 
-        if (roiGray.Width < templPrep0.Width || roiGray.Height < templPrep0.Height)
+        if (roiGray.Mat.Width < templPrep0.Width || roiGray.Mat.Height < templPrep0.Height)
         {
             var centerFallback = new Point2d(roiRect.X + roiRect.Width / 2.0, roiRect.Y + roiRect.Height / 2.0);
             return new MatchResult(centerFallback, 0.0, 0.0, roiRect);
@@ -540,14 +698,14 @@ public sealed class PatternMatcher
         }
 
         using var bestTemplGray = new Mat(bestTemplGrayRot, bestCrop);
-        if (roiGray.Width < bestTemplGray.Width || roiGray.Height < bestTemplGray.Height)
+        if (roiGray.Mat.Width < bestTemplGray.Width || roiGray.Mat.Height < bestTemplGray.Height)
         {
             var centerFallback = new Point2d(roiRect.X + roiRect.Width / 2.0, roiRect.Y + roiRect.Height / 2.0);
             return new MatchResult(centerFallback, 0.0, bestAngle, roiRect);
         }
 
         using var resultGray = new Mat();
-        Cv2.MatchTemplate(roiGray, bestTemplGray, resultGray, TemplateMatchModes.CCoeffNormed);
+        Cv2.MatchTemplate(roiGray.Mat, bestTemplGray, resultGray, TemplateMatchModes.CCoeffNormed);
         Cv2.MinMaxLoc(resultGray, out _, out var maxValGray, out _, out var maxLocGray);
 
         var centerInRoi = new Point2d(maxLocGray.X + bestTemplGray.Width / 2.0, maxLocGray.Y + bestTemplGray.Height / 2.0);
@@ -556,28 +714,28 @@ public sealed class PatternMatcher
         return new MatchResult(global, maxValGray, bestAngle, matchRect);
     }
 
-    private static Mat EnsureGray(Mat src)
+    private static GrayMat EnsureGrayBorrowed(Mat src)
     {
         if (src.Channels() == 1)
         {
-            return src.Clone();
+            return new GrayMat(src, owned: null);
         }
 
         var gray = new Mat();
         Cv2.CvtColor(src, gray, ColorConversionCodes.BGR2GRAY);
-        return gray;
+        return new GrayMat(gray, owned: gray);
     }
 
     private static Mat PreprocessTemplateForMatch(Mat templGrayOrBgr, PreprocessSettings? settings)
     {
-        using var gray = EnsureGray(templGrayOrBgr);
+        using var gray = EnsureGrayBorrowed(templGrayOrBgr);
         if (settings is null)
         {
-            return gray.Clone();
+            return gray.Mat.Clone();
         }
 
         var prep = new ImagePreprocessor();
-        using var processed = prep.Run(gray, settings);
+        using var processed = prep.Run(gray.Mat, settings);
 
         if (processed.Channels() == 1)
         {

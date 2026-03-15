@@ -85,3 +85,4 @@ G:\NODEJS\Vision2026\VisionInspectionApp.UI\obj\Debug\net8.0-windows\refint\Visi
 G:\NODEJS\Vision2026\VisionInspectionApp.UI\obj\Debug\net8.0-windows\VisionInspectionApp.UI.pdb
 G:\NODEJS\Vision2026\VisionInspectionApp.UI\obj\Debug\net8.0-windows\VisionInspectionApp.UI.genruntimeconfig.cache
 G:\NODEJS\Vision2026\VisionInspectionApp.UI\obj\Debug\net8.0-windows\ref\VisionInspectionApp.UI.dll
+g:\NODEJS\Vision2026\VisionInspectionApp.UI\bin\Debug\net8.0-windows\zxing.dll

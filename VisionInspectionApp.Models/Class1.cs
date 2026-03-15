@@ -26,6 +26,15 @@ public enum BlobRoiMode
     Exclude = 1
 }
 
+public enum CodeSymbology
+{
+    Qr = 0,
+    Barcode1D = 1,
+    DataMatrix = 2,
+    Pdf417 = 3,
+    Aztec = 4
+}
+
 public sealed class VisionConfig
 {
     public string ProductCode { get; set; } = string.Empty;
@@ -54,7 +63,45 @@ public sealed class VisionConfig
 
     public List<BlobDetectionDefinition> BlobDetections { get; set; } = new();
 
+    public List<LinePairDetectionDefinition> LinePairDetections { get; set; } = new();
+
+    public List<CodeDetectionDefinition> CodeDetections { get; set; } = new();
+
     public DefectInspectionConfig DefectConfig { get; set; } = new();
+}
+
+public sealed class LinePairDetectionDefinition
+{
+    public string Name { get; set; } = string.Empty;
+
+    public Roi SearchRoi { get; set; } = new();
+
+    public int Canny1 { get; set; } = 50;
+
+    public int Canny2 { get; set; } = 150;
+
+    public int HoughThreshold { get; set; } = 60;
+
+    public int MinLineLength { get; set; } = 50;
+
+    public int MaxLineGap { get; set; } = 20;
+
+    public double Nominal { get; set; }
+
+    public double TolerancePlus { get; set; }
+
+    public double ToleranceMinus { get; set; }
+}
+
+public sealed class CodeDetectionDefinition
+{
+    public string Name { get; set; } = string.Empty;
+
+    public Roi SearchRoi { get; set; } = new();
+
+    public List<CodeSymbology> Symbologies { get; set; } = new();
+
+    public bool TryHarder { get; set; } = true;
 }
 
 public sealed class PreprocessNodeDefinition

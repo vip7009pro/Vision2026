@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "dgSpecHash": "FZTY5H1GL8g=",
+  "dgSpecHash": "EKrG1uuiegg=",
   "success": true,
   "projectFilePath": "G:\\NODEJS\\Vision2026\\VisionInspectionApp.UI\\VisionInspectionApp.UI.csproj",
   "expectedPackageFiles": [
@@ -43,7 +43,8 @@
     "C:\\Users\\vip70\\.nuget\\packages\\system.memory\\4.5.5\\system.memory.4.5.5.nupkg.sha512",
     "C:\\Users\\vip70\\.nuget\\packages\\system.runtime.compilerservices.unsafe\\6.0.0\\system.runtime.compilerservices.unsafe.6.0.0.nupkg.sha512",
     "C:\\Users\\vip70\\.nuget\\packages\\system.text.encodings.web\\9.0.0\\system.text.encodings.web.9.0.0.nupkg.sha512",
-    "C:\\Users\\vip70\\.nuget\\packages\\system.text.json\\9.0.0\\system.text.json.9.0.0.nupkg.sha512"
+    "C:\\Users\\vip70\\.nuget\\packages\\system.text.json\\9.0.0\\system.text.json.9.0.0.nupkg.sha512",
+    "C:\\Users\\vip70\\.nuget\\packages\\zxing.net\\0.16.9\\zxing.net.0.16.9.nupkg.sha512"
   ],
   "logs": []
 }

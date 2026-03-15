@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("VisionInspectionApp.Models")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+9d4fe7edbfb51e6219cc93e787011e34be8af2f1")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+8fa71dabd2333df1a7dfbd6c3361a1aac2c7abb8")]
 [assembly: System.Reflection.AssemblyProductAttribute("VisionInspectionApp.Models")]
 [assembly: System.Reflection.AssemblyTitleAttribute("VisionInspectionApp.Models")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

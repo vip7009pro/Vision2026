@@ -68,11 +68,13 @@ public sealed partial class ToolEditorViewModel : ObservableObject
             "Origin",
             "Point",
             "Line",
+            "LinePairDetection",
             "Distance",
             "LineLineDistance",
             "PointLineDistance",
             "Condition",
             "BlobDetection",
+            "CodeDetection",
             "DefectRoi"
         };
 
@@ -244,10 +246,18 @@ public sealed partial class ToolEditorViewModel : ObservableObject
                                             && (string.Equals(SelectedNode.Type, "Origin", StringComparison.OrdinalIgnoreCase)
                                                 || string.Equals(SelectedNode.Type, "Point", StringComparison.OrdinalIgnoreCase)
                                                 || string.Equals(SelectedNode.Type, "Line", StringComparison.OrdinalIgnoreCase)
-                                                || string.Equals(SelectedNode.Type, "BlobDetection", StringComparison.OrdinalIgnoreCase));
+                                                || string.Equals(SelectedNode.Type, "LinePairDetection", StringComparison.OrdinalIgnoreCase)
+                                                || string.Equals(SelectedNode.Type, "BlobDetection", StringComparison.OrdinalIgnoreCase)
+                                                || string.Equals(SelectedNode.Type, "CodeDetection", StringComparison.OrdinalIgnoreCase));
 
     public bool IsBlobDetectionNode => SelectedNode is not null
                                        && string.Equals(SelectedNode.Type, "BlobDetection", StringComparison.OrdinalIgnoreCase);
+
+    public bool IsLinePairDetectionNode => SelectedNode is not null
+                                           && string.Equals(SelectedNode.Type, "LinePairDetection", StringComparison.OrdinalIgnoreCase);
+
+    public bool IsCodeDetectionNode => SelectedNode is not null
+                                       && string.Equals(SelectedNode.Type, "CodeDetection", StringComparison.OrdinalIgnoreCase);
 
     public ObservableCollection<BlobPolarity> AvailableBlobPolarities { get; }
         = new ObservableCollection<BlobPolarity>((BlobPolarity[])Enum.GetValues(typeof(BlobPolarity)));
@@ -774,6 +784,20 @@ public sealed partial class ToolEditorViewModel : ObservableObject
             return;
         }
 
+        if (string.Equals(kind, "LP", StringComparison.OrdinalIgnoreCase))
+        {
+            var l = _config.LinePairDetections.FirstOrDefault(x => string.Equals(x.Name, name, StringComparison.OrdinalIgnoreCase));
+            if (l is not null) l.SearchRoi = roi;
+            return;
+        }
+
+        if (string.Equals(kind, "C", StringComparison.OrdinalIgnoreCase))
+        {
+            var c = _config.CodeDetections.FirstOrDefault(x => string.Equals(x.Name, name, StringComparison.OrdinalIgnoreCase));
+            if (c is not null) c.SearchRoi = roi;
+            return;
+        }
+
         if (kind.StartsWith("B", StringComparison.OrdinalIgnoreCase))
         {
             var b = _config.BlobDetections.FirstOrDefault(x => string.Equals(x.Name, name, StringComparison.OrdinalIgnoreCase));
@@ -1008,6 +1032,30 @@ public sealed partial class ToolEditorViewModel : ObservableObject
                 if (l is not null)
                 {
                     l.SearchRoi = roi;
+                    RunFlow();
+                    RequestAutoSave();
+                    return;
+                }
+            }
+
+            if (string.Equals(kind, "LP", StringComparison.OrdinalIgnoreCase))
+            {
+                var l = _config.LinePairDetections.FirstOrDefault(x => string.Equals(x.Name, name, StringComparison.OrdinalIgnoreCase));
+                if (l is not null)
+                {
+                    l.SearchRoi = roi;
+                    RunFlow();
+                    RequestAutoSave();
+                    return;
+                }
+            }
+
+            if (string.Equals(kind, "C", StringComparison.OrdinalIgnoreCase))
+            {
+                var c = _config.CodeDetections.FirstOrDefault(x => string.Equals(x.Name, name, StringComparison.OrdinalIgnoreCase));
+                if (c is not null)
+                {
+                    c.SearchRoi = roi;
                     RunFlow();
                     RequestAutoSave();
                     return;
@@ -1463,6 +1511,7 @@ public sealed partial class ToolEditorViewModel : ObservableObject
     private void RaiseToolPropertyPanelsChanged()
     {
         OnPropertyChanged(nameof(IsLineNode));
+        OnPropertyChanged(nameof(IsLinePairDetectionNode));
         OnPropertyChanged(nameof(IsDistanceNode));
         OnPropertyChanged(nameof(IsLineLineDistanceNode));
         OnPropertyChanged(nameof(IsPointLineDistanceNode));
@@ -1470,6 +1519,7 @@ public sealed partial class ToolEditorViewModel : ObservableObject
         OnPropertyChanged(nameof(IsConditionNode));
         OnPropertyChanged(nameof(IsPreprocessNode));
         OnPropertyChanged(nameof(IsBlobDetectionNode));
+        OnPropertyChanged(nameof(IsCodeDetectionNode));
 
         OnPropertyChanged(nameof(AvailablePointNames));
         OnPropertyChanged(nameof(AvailableLineNames));
@@ -1504,11 +1554,18 @@ public sealed partial class ToolEditorViewModel : ObservableObject
         OnPropertyChanged(nameof(Line_MinLineLength));
         OnPropertyChanged(nameof(Line_MaxLineGap));
 
+        OnPropertyChanged(nameof(Lpd_Canny1));
+        OnPropertyChanged(nameof(Lpd_Canny2));
+        OnPropertyChanged(nameof(Lpd_HoughThreshold));
+        OnPropertyChanged(nameof(Lpd_MinLineLength));
+        OnPropertyChanged(nameof(Lpd_MaxLineGap));
+
         OnPropertyChanged(nameof(Distance_Nominal));
         OnPropertyChanged(nameof(Distance_TolPlus));
         OnPropertyChanged(nameof(Distance_TolMinus));
         OnPropertyChanged(nameof(SelectedRunValue));
         OnPropertyChanged(nameof(SelectedRunPass));
+        OnPropertyChanged(nameof(SelectedRunText));
 
         OnPropertyChanged(nameof(AvailableBlobPolarities));
         OnPropertyChanged(nameof(Blob_Polarity));
@@ -1534,6 +1591,159 @@ public sealed partial class ToolEditorViewModel : ObservableObject
     public bool IsPreprocessNode => string.Equals(SelectedNode?.Type, "Preprocess", StringComparison.OrdinalIgnoreCase);
 
     public bool IsAnyDistanceNode => IsDistanceNode || IsLineLineDistanceNode || IsPointLineDistanceNode;
+
+    private LinePairDetectionDefinition? SelectedLinePairDef()
+    {
+        if (_config is null || SelectedNode is null) return null;
+        if (!string.Equals(SelectedNode.Type, "LinePairDetection", StringComparison.OrdinalIgnoreCase)) return null;
+        return _config.LinePairDetections.FirstOrDefault(x => string.Equals(x.Name, SelectedNode.RefName, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private CodeDetectionDefinition? SelectedCodeDetectionDef()
+    {
+        if (_config is null || SelectedNode is null) return null;
+        if (!string.Equals(SelectedNode.Type, "CodeDetection", StringComparison.OrdinalIgnoreCase)) return null;
+        return _config.CodeDetections.FirstOrDefault(x => string.Equals(x.Name, SelectedNode.RefName, StringComparison.OrdinalIgnoreCase));
+    }
+
+    public int Lpd_Canny1
+    {
+        get => SelectedLinePairDef()?.Canny1 ?? 0;
+        set
+        {
+            var d = SelectedLinePairDef();
+            if (d is null) return;
+            if (d.Canny1 == value) return;
+            d.Canny1 = value;
+            RefreshPreviews();
+            OnPropertyChanged();
+            RequestAutoSave();
+        }
+    }
+
+    public int Lpd_Canny2
+    {
+        get => SelectedLinePairDef()?.Canny2 ?? 0;
+        set
+        {
+            var d = SelectedLinePairDef();
+            if (d is null) return;
+            if (d.Canny2 == value) return;
+            d.Canny2 = value;
+            RefreshPreviews();
+            OnPropertyChanged();
+            RequestAutoSave();
+        }
+    }
+
+    public int Lpd_HoughThreshold
+    {
+        get => SelectedLinePairDef()?.HoughThreshold ?? 0;
+        set
+        {
+            var d = SelectedLinePairDef();
+            if (d is null) return;
+            if (d.HoughThreshold == value) return;
+            d.HoughThreshold = value;
+            RefreshPreviews();
+            OnPropertyChanged();
+            RequestAutoSave();
+        }
+    }
+
+    public int Lpd_MinLineLength
+    {
+        get => SelectedLinePairDef()?.MinLineLength ?? 0;
+        set
+        {
+            var d = SelectedLinePairDef();
+            if (d is null) return;
+            if (d.MinLineLength == value) return;
+            d.MinLineLength = value;
+            RefreshPreviews();
+            OnPropertyChanged();
+            RequestAutoSave();
+        }
+    }
+
+    public int Lpd_MaxLineGap
+    {
+        get => SelectedLinePairDef()?.MaxLineGap ?? 0;
+        set
+        {
+            var d = SelectedLinePairDef();
+            if (d is null) return;
+            if (d.MaxLineGap == value) return;
+            d.MaxLineGap = value;
+            RefreshPreviews();
+            OnPropertyChanged();
+            RequestAutoSave();
+        }
+    }
+
+    public bool Cdt_TryHarder
+    {
+        get => SelectedCodeDetectionDef()?.TryHarder ?? true;
+        set
+        {
+            var d = SelectedCodeDetectionDef();
+            if (d is null) return;
+            if (d.TryHarder == value) return;
+            d.TryHarder = value;
+            RefreshPreviews();
+            OnPropertyChanged();
+            RequestAutoSave();
+        }
+    }
+
+    private bool GetCdtSym(CodeSymbology sym)
+    {
+        var d = SelectedCodeDetectionDef();
+        return d?.Symbologies?.Contains(sym) ?? false;
+    }
+
+    private void SetCdtSym(CodeSymbology sym, bool value)
+    {
+        var d = SelectedCodeDetectionDef();
+        if (d is null) return;
+        d.Symbologies ??= new();
+        var has = d.Symbologies.Contains(sym);
+        if (value && !has) d.Symbologies.Add(sym);
+        if (!value && has) d.Symbologies.Remove(sym);
+        RefreshPreviews();
+        RequestAutoSave();
+        RaiseToolPropertyPanelsChanged();
+    }
+
+    public bool Cdt_EnableQr
+    {
+        get => GetCdtSym(CodeSymbology.Qr);
+        set => SetCdtSym(CodeSymbology.Qr, value);
+    }
+
+    public bool Cdt_EnableBarcode1D
+    {
+        get => GetCdtSym(CodeSymbology.Barcode1D);
+        set => SetCdtSym(CodeSymbology.Barcode1D, value);
+    }
+
+    public bool Cdt_EnableDataMatrix
+    {
+        get => GetCdtSym(CodeSymbology.DataMatrix);
+        set => SetCdtSym(CodeSymbology.DataMatrix, value);
+    }
+
+    public bool Cdt_EnablePdf417
+    {
+        get => GetCdtSym(CodeSymbology.Pdf417);
+        set => SetCdtSym(CodeSymbology.Pdf417, value);
+    }
+
+    public bool Cdt_EnableAztec
+    {
+        get => GetCdtSym(CodeSymbology.Aztec);
+        set => SetCdtSym(CodeSymbology.Aztec, value);
+    }
 
     private PreprocessNodeDefinition? SelectedPreprocessNodeDef()
     {
@@ -2147,6 +2357,7 @@ public sealed partial class ToolEditorViewModel : ObservableObject
             if (SelectedDistanceDef() is { } d) return d.Nominal;
             if (SelectedLineLineDistanceDef() is { } ll) return ll.Nominal;
             if (SelectedPointLineDistanceDef() is { } pl) return pl.Nominal;
+            if (SelectedLinePairDef() is { } lpd) return lpd.Nominal;
             return 0.0;
         }
         set
@@ -2166,6 +2377,11 @@ public sealed partial class ToolEditorViewModel : ObservableObject
                 if (Math.Abs(pl.Nominal - value) < 0.0000001) return;
                 pl.Nominal = value;
             }
+            else if (SelectedLinePairDef() is { } lpd)
+            {
+                if (Math.Abs(lpd.Nominal - value) < 0.0000001) return;
+                lpd.Nominal = value;
+            }
             else
             {
                 return;
@@ -2183,6 +2399,7 @@ public sealed partial class ToolEditorViewModel : ObservableObject
             if (SelectedDistanceDef() is { } d) return d.TolerancePlus;
             if (SelectedLineLineDistanceDef() is { } ll) return ll.TolerancePlus;
             if (SelectedPointLineDistanceDef() is { } pl) return pl.TolerancePlus;
+            if (SelectedLinePairDef() is { } lpd) return lpd.TolerancePlus;
             return 0.0;
         }
         set
@@ -2202,6 +2419,11 @@ public sealed partial class ToolEditorViewModel : ObservableObject
                 if (Math.Abs(pl.TolerancePlus - value) < 0.0000001) return;
                 pl.TolerancePlus = value;
             }
+            else if (SelectedLinePairDef() is { } lpd)
+            {
+                if (Math.Abs(lpd.TolerancePlus - value) < 0.0000001) return;
+                lpd.TolerancePlus = value;
+            }
             else
             {
                 return;
@@ -2219,6 +2441,7 @@ public sealed partial class ToolEditorViewModel : ObservableObject
             if (SelectedDistanceDef() is { } d) return d.ToleranceMinus;
             if (SelectedLineLineDistanceDef() is { } ll) return ll.ToleranceMinus;
             if (SelectedPointLineDistanceDef() is { } pl) return pl.ToleranceMinus;
+            if (SelectedLinePairDef() is { } lpd) return lpd.ToleranceMinus;
             return 0.0;
         }
         set
@@ -2237,6 +2460,11 @@ public sealed partial class ToolEditorViewModel : ObservableObject
             {
                 if (Math.Abs(pl.ToleranceMinus - value) < 0.0000001) return;
                 pl.ToleranceMinus = value;
+            }
+            else if (SelectedLinePairDef() is { } lpd)
+            {
+                if (Math.Abs(lpd.ToleranceMinus - value) < 0.0000001) return;
+                lpd.ToleranceMinus = value;
             }
             else
             {
@@ -2271,6 +2499,27 @@ public sealed partial class ToolEditorViewModel : ObservableObject
                 return d?.Value;
             }
 
+            if (string.Equals(SelectedNode.Type, "LinePairDetection", StringComparison.OrdinalIgnoreCase))
+            {
+                var d = _lastRun.LinePairDetections.FirstOrDefault(x => string.Equals(x.Name, SelectedNode.RefName, StringComparison.OrdinalIgnoreCase));
+                return d?.Value;
+            }
+
+            return null;
+        }
+    }
+
+    public string? SelectedRunText
+    {
+        get
+        {
+            if (_lastRun is null || SelectedNode is null) return null;
+            if (string.Equals(SelectedNode.Type, "CodeDetection", StringComparison.OrdinalIgnoreCase))
+            {
+                var r = _lastRun.CodeDetections.FirstOrDefault(x => string.Equals(x.Name, SelectedNode.RefName, StringComparison.OrdinalIgnoreCase));
+                return r is not null && r.Found ? r.Text : null;
+            }
+
             return null;
         }
     }
@@ -2295,6 +2544,12 @@ public sealed partial class ToolEditorViewModel : ObservableObject
             if (string.Equals(SelectedNode.Type, "PointLineDistance", StringComparison.OrdinalIgnoreCase))
             {
                 var d = _lastRun.PointToLineDistances.FirstOrDefault(x => string.Equals(x.Name, SelectedNode.RefName, StringComparison.OrdinalIgnoreCase));
+                return d?.Pass;
+            }
+
+            if (string.Equals(SelectedNode.Type, "LinePairDetection", StringComparison.OrdinalIgnoreCase))
+            {
+                var d = _lastRun.LinePairDetections.FirstOrDefault(x => string.Equals(x.Name, SelectedNode.RefName, StringComparison.OrdinalIgnoreCase));
                 return d?.Pass;
             }
 
@@ -2360,6 +2615,21 @@ public sealed partial class ToolEditorViewModel : ObservableObject
         else if (string.Equals(SelectedNode.Type, "Origin", StringComparison.OrdinalIgnoreCase))
         {
             _config.Origin.Name = "Origin";
+        }
+        else if (string.Equals(SelectedNode.Type, "BlobDetection", StringComparison.OrdinalIgnoreCase))
+        {
+            var def = _config.BlobDetections.FirstOrDefault(x => string.Equals(x.Name, oldName, StringComparison.OrdinalIgnoreCase));
+            if (def is not null) def.Name = newName;
+        }
+        else if (string.Equals(SelectedNode.Type, "LinePairDetection", StringComparison.OrdinalIgnoreCase))
+        {
+            var def = _config.LinePairDetections.FirstOrDefault(x => string.Equals(x.Name, oldName, StringComparison.OrdinalIgnoreCase));
+            if (def is not null) def.Name = newName;
+        }
+        else if (string.Equals(SelectedNode.Type, "CodeDetection", StringComparison.OrdinalIgnoreCase))
+        {
+            var def = _config.CodeDetections.FirstOrDefault(x => string.Equals(x.Name, oldName, StringComparison.OrdinalIgnoreCase));
+            if (def is not null) def.Name = newName;
         }
 
         _selectedNodePrevRefName = newName;
@@ -2520,7 +2790,34 @@ public sealed partial class ToolEditorViewModel : ObservableObject
         SyncToolGraphToConfig();
         EnsureTemplatePathsAbsolute(_config);
 
-        _lastRun = _inspectionService.Inspect(snap, _config);
+        // Guard: auto-run may happen while templates are not taught yet.
+        // In that case, do not attempt to inspect (PatternMatcher may throw); just refresh previews.
+        bool HasTemplate(PointDefinition p)
+        {
+            if (p.TemplateRoi.Width <= 0 || p.TemplateRoi.Height <= 0) return false;
+            if (string.IsNullOrWhiteSpace(p.TemplateImageFile)) return false;
+            return File.Exists(p.TemplateImageFile);
+        }
+
+        var originOk = HasTemplate(_config.Origin);
+        var anyPointNeedsTemplate = _config.Points.Any(p => (p.SearchRoi.Width > 0 && p.SearchRoi.Height > 0) && !HasTemplate(p));
+        if (!originOk || anyPointNeedsTemplate)
+        {
+            _lastRun = null;
+            RefreshPreviews();
+            RaiseToolPropertyPanelsChanged();
+            OnPropertyChanged(nameof(Blob_LastRunCount));
+            return;
+        }
+
+        try
+        {
+            _lastRun = _inspectionService.Inspect(snap, _config);
+        }
+        catch
+        {
+            _lastRun = null;
+        }
 
         RefreshPreviews();
         RaiseToolPropertyPanelsChanged();
@@ -2565,6 +2862,16 @@ public sealed partial class ToolEditorViewModel : ObservableObject
             if (string.Equals(toRemove.Type, "BlobDetection", StringComparison.OrdinalIgnoreCase))
             {
                 _config.BlobDetections.RemoveAll(x => string.Equals(x.Name, toRemove.RefName, StringComparison.OrdinalIgnoreCase));
+            }
+
+            if (string.Equals(toRemove.Type, "LinePairDetection", StringComparison.OrdinalIgnoreCase))
+            {
+                _config.LinePairDetections.RemoveAll(x => string.Equals(x.Name, toRemove.RefName, StringComparison.OrdinalIgnoreCase));
+            }
+
+            if (string.Equals(toRemove.Type, "CodeDetection", StringComparison.OrdinalIgnoreCase))
+            {
+                _config.CodeDetections.RemoveAll(x => string.Equals(x.Name, toRemove.RefName, StringComparison.OrdinalIgnoreCase));
             }
         }
 
@@ -2717,6 +3024,31 @@ public sealed partial class ToolEditorViewModel : ObservableObject
             return;
         }
 
+        if (string.Equals(node.Type, "LinePairDetection", StringComparison.OrdinalIgnoreCase))
+        {
+            var existed = _config.LinePairDetections.Any(x => string.Equals(x.Name, node.RefName, StringComparison.OrdinalIgnoreCase));
+            if (!existed)
+            {
+                var def = new LinePairDetectionDefinition { Name = node.RefName };
+                def.SearchRoi = DefaultRoi();
+                _config.LinePairDetections.Add(def);
+            }
+            return;
+        }
+
+        if (string.Equals(node.Type, "CodeDetection", StringComparison.OrdinalIgnoreCase))
+        {
+            var existed = _config.CodeDetections.Any(x => string.Equals(x.Name, node.RefName, StringComparison.OrdinalIgnoreCase));
+            if (!existed)
+            {
+                var def = new CodeDetectionDefinition { Name = node.RefName };
+                def.SearchRoi = DefaultRoi();
+                def.Symbologies = new List<CodeSymbology> { CodeSymbology.Qr, CodeSymbology.Barcode1D, CodeSymbology.DataMatrix, CodeSymbology.Pdf417, CodeSymbology.Aztec };
+                _config.CodeDetections.Add(def);
+            }
+            return;
+        }
+
         if (string.Equals(node.Type, "LineLineDistance", StringComparison.OrdinalIgnoreCase))
         {
             var existed = _config.LineToLineDistances.Any(x => string.Equals(x.Name, node.RefName, StringComparison.OrdinalIgnoreCase));
@@ -2780,6 +3112,11 @@ public sealed partial class ToolEditorViewModel : ObservableObject
             baseName = "L";
             exists = n => _config.Lines.Any(x => string.Equals(x.Name, n, StringComparison.OrdinalIgnoreCase));
         }
+        else if (string.Equals(type, "LinePairDetection", StringComparison.OrdinalIgnoreCase))
+        {
+            baseName = "LPD";
+            exists = n => _config.LinePairDetections.Any(x => string.Equals(x.Name, n, StringComparison.OrdinalIgnoreCase));
+        }
         else if (string.Equals(type, "Distance", StringComparison.OrdinalIgnoreCase))
         {
             baseName = "D";
@@ -2814,6 +3151,11 @@ public sealed partial class ToolEditorViewModel : ObservableObject
         {
             baseName = "BLD";
             exists = n => _config.BlobDetections.Any(x => string.Equals(x.Name, n, StringComparison.OrdinalIgnoreCase));
+        }
+        else if (string.Equals(type, "CodeDetection", StringComparison.OrdinalIgnoreCase))
+        {
+            baseName = "CDT";
+            exists = n => _config.CodeDetections.Any(x => string.Equals(x.Name, n, StringComparison.OrdinalIgnoreCase));
         }
         else
         {
@@ -2984,6 +3326,7 @@ public sealed partial class ToolEditorViewModel : ObservableObject
                     && (string.Equals(SelectedNode.Type, "Origin", StringComparison.OrdinalIgnoreCase)
                         || string.Equals(SelectedNode.Type, "Point", StringComparison.OrdinalIgnoreCase)
                         || string.Equals(SelectedNode.Type, "Line", StringComparison.OrdinalIgnoreCase)
+                        || string.Equals(SelectedNode.Type, "LinePairDetection", StringComparison.OrdinalIgnoreCase)
                         || string.Equals(SelectedNode.Type, "BlobDetection", StringComparison.OrdinalIgnoreCase)))
                 {
                     using var processedSel = ResolveToolPreprocessForPreview(snap, SelectedNode);
@@ -3528,6 +3871,52 @@ public sealed partial class ToolEditorViewModel : ObservableObject
             return;
         }
 
+        if (string.Equals(node.Type, "LinePairDetection", StringComparison.OrdinalIgnoreCase))
+        {
+            var l = _config.LinePairDetections.FirstOrDefault(x => string.Equals(x.Name, node.RefName, StringComparison.OrdinalIgnoreCase));
+            if (l is null)
+            {
+                return;
+            }
+
+            if (showRois && l.SearchRoi.Width > 0 && l.SearchRoi.Height > 0)
+            {
+                dst.Add(new OverlayRectItem
+                {
+                    X = l.SearchRoi.X,
+                    Y = l.SearchRoi.Y,
+                    Width = l.SearchRoi.Width,
+                    Height = l.SearchRoi.Height,
+                    Stroke = Brushes.MediumPurple,
+                    Label = $"{l.Name} LP"
+                });
+            }
+            return;
+        }
+
+        if (string.Equals(node.Type, "CodeDetection", StringComparison.OrdinalIgnoreCase))
+        {
+            var c = _config.CodeDetections.FirstOrDefault(x => string.Equals(x.Name, node.RefName, StringComparison.OrdinalIgnoreCase));
+            if (c is null)
+            {
+                return;
+            }
+
+            if (showRois && c.SearchRoi.Width > 0 && c.SearchRoi.Height > 0)
+            {
+                dst.Add(new OverlayRectItem
+                {
+                    X = c.SearchRoi.X,
+                    Y = c.SearchRoi.Y,
+                    Width = c.SearchRoi.Width,
+                    Height = c.SearchRoi.Height,
+                    Stroke = Brushes.Lime,
+                    Label = $"{c.Name} C"
+                });
+            }
+            return;
+        }
+
         if (string.Equals(node.Type, "BlobDetection", StringComparison.OrdinalIgnoreCase))
         {
             if (showRois) AddBlobRoi(node.RefName);
@@ -3663,6 +4052,33 @@ public sealed partial class ToolEditorViewModel : ObservableObject
                 Stroke = Brushes.MediumPurple,
                 Label = l.Name
             });
+        }
+
+        foreach (var lpd in run.LinePairDetections)
+        {
+            if (!lpd.Found)
+            {
+                continue;
+            }
+
+            dst.Add(new OverlayLineItem { X1 = lpd.L1P1.X, Y1 = lpd.L1P1.Y, X2 = lpd.L1P2.X, Y2 = lpd.L1P2.Y, Stroke = Brushes.MediumPurple, Label = lpd.Name });
+            dst.Add(new OverlayLineItem { X1 = lpd.L2P1.X, Y1 = lpd.L2P1.Y, X2 = lpd.L2P2.X, Y2 = lpd.L2P2.Y, Stroke = Brushes.MediumPurple, Label = string.Empty });
+            dst.Add(new OverlayLineItem { X1 = lpd.ClosestA.X, Y1 = lpd.ClosestA.Y, X2 = lpd.ClosestB.X, Y2 = lpd.ClosestB.Y, Stroke = lpd.Pass ? Brushes.Lime : Brushes.Red, Label = $"{lpd.Name}: {lpd.Value:0.###}" });
+        }
+
+        foreach (var cdt in run.CodeDetections)
+        {
+            if (!cdt.Found)
+            {
+                continue;
+            }
+
+            var bb = cdt.BoundingBox;
+            if (bb.Width > 0 && bb.Height > 0)
+            {
+                dst.Add(new OverlayRectItem { X = bb.X, Y = bb.Y, Width = bb.Width, Height = bb.Height, Stroke = Brushes.Lime, Label = cdt.Name });
+                dst.Add(new OverlayPointItem { X = bb.X + 2, Y = bb.Y + 2, Radius = 1.0, Stroke = Brushes.Lime, Label = cdt.Text });
+            }
         }
 
         foreach (var d in run.Distances)
@@ -4641,7 +5057,9 @@ public sealed partial class ToolGraphNodeViewModel : ObservableObject
         else if (string.Equals(Type, "Origin", StringComparison.OrdinalIgnoreCase)
                  || string.Equals(Type, "Point", StringComparison.OrdinalIgnoreCase)
                  || string.Equals(Type, "Line", StringComparison.OrdinalIgnoreCase)
-                 || string.Equals(Type, "BlobDetection", StringComparison.OrdinalIgnoreCase))
+                 || string.Equals(Type, "LinePairDetection", StringComparison.OrdinalIgnoreCase)
+                 || string.Equals(Type, "BlobDetection", StringComparison.OrdinalIgnoreCase)
+                 || string.Equals(Type, "CodeDetection", StringComparison.OrdinalIgnoreCase))
         {
             InPorts.Add(new NodePortViewModel(this, "In", isInput: true));
             InPorts.Add(new NodePortViewModel(this, "Pre", isInput: true));

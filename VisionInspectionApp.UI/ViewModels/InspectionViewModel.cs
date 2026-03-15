@@ -274,6 +274,11 @@ public sealed partial class InspectionViewModel : ObservableObject
         {
             SpecResults.Add(new SpecResultRow("PLD", d.Name, d.RefA, d.RefB, d.Value, d.Nominal, d.TolPlus, d.TolMinus, d.Pass));
         }
+
+        foreach (var d in LastResult.LinePairDetections)
+        {
+            SpecResults.Add(new SpecResultRow("LPD", d.Name, "L1", "L2", d.Value, d.Nominal, d.TolPlus, d.TolMinus, d.Pass));
+        }
     }
 
     private void RefreshOverlayItems()
@@ -463,6 +468,56 @@ public sealed partial class InspectionViewModel : ObservableObject
                             Label = label
                         });
                     }
+                }
+            }
+
+            foreach (var lpd in _config.LinePairDetections)
+            {
+                if (lpd.SearchRoi.Width <= 0 || lpd.SearchRoi.Height <= 0)
+                {
+                    continue;
+                }
+
+                if (hasPose)
+                {
+                    AddRotatedRoiOverlay(lpd.SearchRoi, $"{lpd.Name} LP", Brushes.MediumPurple, originTeach, originFound, angleDeg);
+                }
+                else
+                {
+                    OverlayItems.Add(new OverlayRectItem
+                    {
+                        X = lpd.SearchRoi.X,
+                        Y = lpd.SearchRoi.Y,
+                        Width = lpd.SearchRoi.Width,
+                        Height = lpd.SearchRoi.Height,
+                        Stroke = Brushes.MediumPurple,
+                        Label = $"{lpd.Name} LP"
+                    });
+                }
+            }
+
+            foreach (var cdt in _config.CodeDetections)
+            {
+                if (cdt.SearchRoi.Width <= 0 || cdt.SearchRoi.Height <= 0)
+                {
+                    continue;
+                }
+
+                if (hasPose)
+                {
+                    AddRotatedRoiOverlay(cdt.SearchRoi, $"{cdt.Name} C", Brushes.Lime, originTeach, originFound, angleDeg);
+                }
+                else
+                {
+                    OverlayItems.Add(new OverlayRectItem
+                    {
+                        X = cdt.SearchRoi.X,
+                        Y = cdt.SearchRoi.Y,
+                        Width = cdt.SearchRoi.Width,
+                        Height = cdt.SearchRoi.Height,
+                        Stroke = Brushes.Lime,
+                        Label = $"{cdt.Name} C"
+                    });
                 }
             }
         }
