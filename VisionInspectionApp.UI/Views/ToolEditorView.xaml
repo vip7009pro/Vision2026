@@ -180,22 +180,22 @@
 
                                 <StackPanel Orientation="Horizontal" Margin="0,0,0,2">
                                     <TextBlock Text="Strips" Width="60" VerticalAlignment="Center" />
-                                    <TextBox Width="80" Text="{Binding Caliper_StripCount, UpdateSourceTrigger=PropertyChanged}" />
+                                    <TextBox Width="80" Text="{Binding Caliper_StripCount, UpdateSourceTrigger=PropertyChanged, Delay=250}" />
                                 </StackPanel>
 
                                 <StackPanel Orientation="Horizontal" Margin="0,0,0,2">
                                     <TextBlock Text="Width" Width="60" VerticalAlignment="Center" />
-                                    <TextBox Width="80" Text="{Binding Caliper_StripWidth, UpdateSourceTrigger=PropertyChanged}" />
+                                    <TextBox Width="80" Text="{Binding Caliper_StripWidth, UpdateSourceTrigger=PropertyChanged, Delay=250}" />
                                 </StackPanel>
 
                                 <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
                                     <TextBlock Text="Length" Width="60" VerticalAlignment="Center" />
-                                    <TextBox Width="80" Text="{Binding Caliper_StripLength, UpdateSourceTrigger=PropertyChanged}" />
+                                    <TextBox Width="80" Text="{Binding Caliper_StripLength, UpdateSourceTrigger=PropertyChanged, Delay=250}" />
                                 </StackPanel>
 
                                 <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
                                     <TextBlock Text="MinStr" Width="60" VerticalAlignment="Center" />
-                                    <TextBox Width="80" Text="{Binding Caliper_MinEdgeStrength, UpdateSourceTrigger=PropertyChanged}" />
+                                    <TextBox Width="80" Text="{Binding Caliper_MinEdgeStrength, UpdateSourceTrigger=PropertyChanged, Delay=250}" />
                                 </StackPanel>
 
                                 <StackPanel Orientation="Horizontal" Margin="0,0,0,2">
@@ -260,17 +260,30 @@
                                     </StackPanel>
                                 </StackPanel>
 
+                                <StackPanel Visibility="{Binding IsAngleNode, Converter={StaticResource BoolToVis}}">
+                                    <TextBlock Text="Inputs" FontWeight="SemiBold" Margin="0,0,0,6" />
+
+                                    <StackPanel Orientation="Horizontal" Margin="0,0,0,2">
+                                        <TextBlock Text="A" Width="60" VerticalAlignment="Center" />
+                                        <ComboBox Width="160" ItemsSource="{Binding AvailableLineNames}" SelectedItem="{Binding Angle_LineA, UpdateSourceTrigger=PropertyChanged}" />
+                                    </StackPanel>
+                                    <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                                        <TextBlock Text="B" Width="60" VerticalAlignment="Center" />
+                                        <ComboBox Width="160" ItemsSource="{Binding AvailableLineNames}" SelectedItem="{Binding Angle_LineB, UpdateSourceTrigger=PropertyChanged}" />
+                                    </StackPanel>
+                                </StackPanel>
+
                                 <StackPanel Orientation="Horizontal" Margin="0,0,0,2">
                                     <TextBlock Text="Nom" Width="60" VerticalAlignment="Center" />
-                                    <TextBox Width="80" Text="{Binding Distance_Nominal, UpdateSourceTrigger=PropertyChanged}" />
+                                    <TextBox Width="80" Text="{Binding Distance_Nominal, UpdateSourceTrigger=PropertyChanged, Delay=250}" />
                                 </StackPanel>
                                 <StackPanel Orientation="Horizontal" Margin="0,0,0,2">
                                     <TextBlock Text="Tol+" Width="60" VerticalAlignment="Center" />
-                                    <TextBox Width="80" Text="{Binding Distance_TolPlus, UpdateSourceTrigger=PropertyChanged}" />
+                                    <TextBox Width="80" Text="{Binding Distance_TolPlus, UpdateSourceTrigger=PropertyChanged, Delay=250}" />
                                 </StackPanel>
                                 <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
                                     <TextBlock Text="Tol-" Width="60" VerticalAlignment="Center" />
-                                    <TextBox Width="80" Text="{Binding Distance_TolMinus, UpdateSourceTrigger=PropertyChanged}" />
+                                    <TextBox Width="80" Text="{Binding Distance_TolMinus, UpdateSourceTrigger=PropertyChanged, Delay=250}" />
                                 </StackPanel>
 
                                 <StackPanel Orientation="Horizontal" Margin="0,0,0,2">
@@ -288,7 +301,7 @@
 
                                 <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
                                     <TextBlock Text="Inputs" Width="60" VerticalAlignment="Center" />
-                                    <TextBox Width="60" Text="{Binding Condition_InputCount, UpdateSourceTrigger=PropertyChanged}" />
+                                    <TextBox Width="60" Text="{Binding Condition_InputCount, UpdateSourceTrigger=PropertyChanged, Delay=250}" />
                                 </StackPanel>
 
                                 <TextBlock Text="Expression" Margin="0,0,0,2" />
@@ -315,11 +328,11 @@
 
                                 <StackPanel Orientation="Horizontal" Margin="0,0,0,2">
                                     <TextBlock Text="MinA" Width="60" VerticalAlignment="Center" />
-                                    <TextBox Width="80" Text="{Binding Blob_MinBlobArea, UpdateSourceTrigger=PropertyChanged}" />
+                                    <TextBox Width="80" Text="{Binding Blob_MinBlobArea, UpdateSourceTrigger=PropertyChanged, Delay=250}" />
                                 </StackPanel>
                                 <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
                                     <TextBlock Text="MaxA" Width="60" VerticalAlignment="Center" />
-                                    <TextBox Width="80" Text="{Binding Blob_MaxBlobArea, UpdateSourceTrigger=PropertyChanged}" />
+                                    <TextBox Width="80" Text="{Binding Blob_MaxBlobArea, UpdateSourceTrigger=PropertyChanged, Delay=250}" />
                                 </StackPanel>
 
                                 <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
@@ -374,15 +387,15 @@
                                 <TextBlock Text="Spec" FontWeight="SemiBold" Margin="0,6,0,6" />
                                 <StackPanel Orientation="Horizontal" Margin="0,0,0,2">
                                     <TextBlock Text="Nom" Width="60" VerticalAlignment="Center" />
-                                    <TextBox Width="80" Text="{Binding Distance_Nominal, UpdateSourceTrigger=PropertyChanged}" />
+                                    <TextBox Width="80" Text="{Binding Distance_Nominal, UpdateSourceTrigger=PropertyChanged, Delay=250}" />
                                 </StackPanel>
                                 <StackPanel Orientation="Horizontal" Margin="0,0,0,2">
                                     <TextBlock Text="Tol+" Width="60" VerticalAlignment="Center" />
-                                    <TextBox Width="80" Text="{Binding Distance_TolPlus, UpdateSourceTrigger=PropertyChanged}" />
+                                    <TextBox Width="80" Text="{Binding Distance_TolPlus, UpdateSourceTrigger=PropertyChanged, Delay=250}" />
                                 </StackPanel>
                                 <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
                                     <TextBlock Text="Tol-" Width="60" VerticalAlignment="Center" />
-                                    <TextBox Width="80" Text="{Binding Distance_TolMinus, UpdateSourceTrigger=PropertyChanged}" />
+                                    <TextBox Width="80" Text="{Binding Distance_TolMinus, UpdateSourceTrigger=PropertyChanged, Delay=250}" />
                                 </StackPanel>
 
                                 <StackPanel Orientation="Horizontal" Margin="0,0,0,2">

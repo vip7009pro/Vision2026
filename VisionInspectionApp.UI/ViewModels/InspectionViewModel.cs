@@ -76,7 +76,15 @@ public sealed partial class InspectionViewModel : ObservableObject
     [ObservableProperty]
     private bool _showRois = true;
 
+    [ObservableProperty]
+    private bool _showOverlay = true;
+
     partial void OnShowRoisChanged(bool value)
+    {
+        RefreshOverlayItems();
+    }
+
+    partial void OnShowOverlayChanged(bool value)
     {
         RefreshOverlayItems();
     }
@@ -292,6 +300,11 @@ public sealed partial class InspectionViewModel : ObservableObject
             SpecResults.Add(new SpecResultRow("PLD", d.Name, d.RefA, d.RefB, d.Value, d.Nominal, d.TolPlus, d.TolMinus, d.Pass));
         }
 
+        foreach (var a in LastResult.Angles)
+        {
+            SpecResults.Add(new SpecResultRow("Angle", a.Name, a.LineA, a.LineB, a.ValueDeg, a.Nominal, a.TolPlus, a.TolMinus, a.Pass));
+        }
+
         foreach (var d in LastResult.LinePairDetections)
         {
             SpecResults.Add(new SpecResultRow("LPD", d.Name, "L1", "L2", d.Value, d.Nominal, d.TolPlus, d.TolMinus, d.Pass));
@@ -301,6 +314,11 @@ public sealed partial class InspectionViewModel : ObservableObject
     private void RefreshOverlayItems()
     {
         OverlayItems.Clear();
+
+        if (!ShowOverlay)
+        {
+            return;
+        }
 
         var showRois = ShowRois;
 
@@ -805,6 +823,49 @@ public sealed partial class InspectionViewModel : ObservableObject
                     Label = $"{d.Name}: {d.Value:0.00} mm"
                 });
             }
+
+            foreach (var a in LastResult.Angles)
+            {
+                if (double.IsNaN(a.ValueDeg)) continue;
+
+                if (a.Found)
+                {
+                    var bmp = Image as System.Windows.Media.Imaging.BitmapSource;
+                    var imgW = bmp?.PixelWidth ?? 0;
+                    var imgH = bmp?.PixelHeight ?? 0;
+
+                    var ip = new System.Windows.Point(a.Intersection.X, a.Intersection.Y);
+                    var aDir = new System.Windows.Point(a.ADir.X, a.ADir.Y);
+                    var bDir = new System.Windows.Point(a.BDir.X, a.BDir.Y);
+
+                    if (TryClipInfiniteLineToImage(ip, aDir, imgW, imgH, out var a1, out var a2))
+                    {
+                        OverlayItems.Add(new OverlayLineItem { X1 = a1.X, Y1 = a1.Y, X2 = a2.X, Y2 = a2.Y, Stroke = Brushes.MediumPurple, Label = a.LineA });
+                    }
+                    else
+                    {
+                        var len = 60.0;
+                        OverlayItems.Add(new OverlayLineItem { X1 = a.Intersection.X, Y1 = a.Intersection.Y, X2 = a.Intersection.X + a.ADir.X * len, Y2 = a.Intersection.Y + a.ADir.Y * len, Stroke = Brushes.MediumPurple, Label = a.LineA });
+                    }
+
+                    if (TryClipInfiniteLineToImage(ip, bDir, imgW, imgH, out var b1, out var b2))
+                    {
+                        OverlayItems.Add(new OverlayLineItem { X1 = b1.X, Y1 = b1.Y, X2 = b2.X, Y2 = b2.Y, Stroke = Brushes.Gold, Label = a.LineB });
+                    }
+                    else
+                    {
+                        var len = 60.0;
+                        OverlayItems.Add(new OverlayLineItem { X1 = a.Intersection.X, Y1 = a.Intersection.Y, X2 = a.Intersection.X + a.BDir.X * len, Y2 = a.Intersection.Y + a.BDir.Y * len, Stroke = Brushes.Gold, Label = a.LineB });
+                    }
+
+                    AddAngleArc(OverlayItems, a.Intersection.X, a.Intersection.Y, a.ADir.X, a.ADir.Y, a.BDir.X, a.BDir.Y, radius: 35.0, stroke: a.Pass ? Brushes.Lime : Brushes.Red);
+                    OverlayItems.Add(new OverlayPointItem { X = a.Intersection.X, Y = a.Intersection.Y, Radius = 3.0, Stroke = a.Pass ? Brushes.Lime : Brushes.Red, Label = $"{a.Name}: {a.ValueDeg:0.###}°" });
+                }
+                else
+                {
+                    OverlayItems.Add(new OverlayPointItem { X = 12, Y = 12, Radius = 1.0, Stroke = a.Pass ? Brushes.Lime : Brushes.Red, Label = $"{a.Name}: {a.ValueDeg:0.###}°" });
+                }
+            }
         }
 
         if (LastResult is not null)
@@ -856,6 +917,84 @@ public sealed partial class InspectionViewModel : ObservableObject
                     }
                 }
             }
+        }
+    }
+
+    private static bool TryClipInfiniteLineToImage(System.Windows.Point p, System.Windows.Point dir, int width, int height, out System.Windows.Point p1, out System.Windows.Point p2)
+    {
+        p1 = default;
+        p2 = default;
+
+        if (width <= 0 || height <= 0)
+        {
+            return false;
+        }
+
+        var dx = dir.X;
+        var dy = dir.Y;
+        if (Math.Abs(dx) < 1e-9 && Math.Abs(dy) < 1e-9)
+        {
+            return false;
+        }
+
+        var ts = new List<double>(4);
+
+        if (Math.Abs(dx) > 1e-9)
+        {
+            var t = (0.0 - p.X) / dx;
+            var y = p.Y + t * dy;
+            if (y >= 0 && y <= height) ts.Add(t);
+
+            t = (width - p.X) / dx;
+            y = p.Y + t * dy;
+            if (y >= 0 && y <= height) ts.Add(t);
+        }
+
+        if (Math.Abs(dy) > 1e-9)
+        {
+            var t = (0.0 - p.Y) / dy;
+            var x = p.X + t * dx;
+            if (x >= 0 && x <= width) ts.Add(t);
+
+            t = (height - p.Y) / dy;
+            x = p.X + t * dx;
+            if (x >= 0 && x <= width) ts.Add(t);
+        }
+
+        if (ts.Count < 2)
+        {
+            return false;
+        }
+
+        ts.Sort();
+        var t1 = ts.First();
+        var t2 = ts.Last();
+
+        p1 = new System.Windows.Point(p.X + t1 * dx, p.Y + t1 * dy);
+        p2 = new System.Windows.Point(p.X + t2 * dx, p.Y + t2 * dy);
+        return true;
+    }
+
+    private static void AddAngleArc(ObservableCollection<OverlayItem> dst, double cx, double cy, double ax, double ay, double bx, double by, double radius, System.Windows.Media.Brush stroke)
+    {
+        var a0 = Math.Atan2(ay, ax);
+        var a1 = Math.Atan2(by, bx);
+        var d = a1 - a0;
+        while (d <= -Math.PI) d += 2 * Math.PI;
+        while (d > Math.PI) d -= 2 * Math.PI;
+
+        var steps = Math.Clamp((int)Math.Ceiling(Math.Abs(d) / (Math.PI / 18.0)), 4, 36);
+        var prevX = cx + Math.Cos(a0) * radius;
+        var prevY = cy + Math.Sin(a0) * radius;
+        for (var i = 1; i <= steps; i++)
+        {
+            var t = (double)i / steps;
+            var aa = a0 + d * t;
+            var x = cx + Math.Cos(aa) * radius;
+            var y = cy + Math.Sin(aa) * radius;
+            dst.Add(new OverlayLineItem { X1 = prevX, Y1 = prevY, X2 = x, Y2 = y, Stroke = stroke, StrokeThickness = 2.0, Label = string.Empty });
+            prevX = x;
+            prevY = y;
         }
     }
 }

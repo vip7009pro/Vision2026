@@ -32,6 +32,7 @@ public sealed class InspectionTimings
     public int BlobsMs { get; set; }
     public int LpdMs { get; set; }
     public int CalipersMs { get; set; }
+    public int AnglesMs { get; set; }
     public int DistancesMs { get; set; }
     public int ConditionsMs { get; set; }
     public int DefectsMs { get; set; }
@@ -55,6 +56,8 @@ public sealed class InspectionResult
     public List<SegmentDistanceResult> LineToLineDistances { get; } = new();
 
     public List<SegmentDistanceResult> PointToLineDistances { get; } = new();
+
+    public List<AngleResult> Angles { get; } = new();
 
     public List<ConditionResult> Conditions { get; } = new();
 
@@ -99,6 +102,20 @@ public sealed record CaliperResult(
     Point2d LineP1,
     Point2d LineP2,
     double AvgStrength);
+
+public sealed record AngleResult(
+    string Name,
+    string LineA,
+    string LineB,
+    double ValueDeg,
+    double Nominal,
+    double TolPlus,
+    double TolMinus,
+    bool Pass,
+    bool Found,
+    Point2d Intersection,
+    Point2d ADir,
+    Point2d BDir);
 
 public sealed record CodeDetectionResult(string Name, bool Found, string Text, Rect BoundingBox);
 
@@ -897,6 +914,60 @@ public sealed class InspectionService : IInspectionService
                 foundLines[cal.Name] = new LineDetectResult(cal.Name, cal.LineP1, cal.LineP2, len, Found: true);
             }
 
+            static bool TryIntersectInfiniteLines(LineDetectResult a, LineDetectResult b, out Point2d inter)
+            {
+                var ax = a.P2.X - a.P1.X;
+                var ay = a.P2.Y - a.P1.Y;
+                var bx = b.P2.X - b.P1.X;
+                var by = b.P2.Y - b.P1.Y;
+                var denom = ax * by - ay * bx;
+                if (Math.Abs(denom) < 1e-9)
+                {
+                    inter = default;
+                    return false;
+                }
+
+                var cx = b.P1.X - a.P1.X;
+                var cy = b.P1.Y - a.P1.Y;
+                var t = (cx * by - cy * bx) / denom;
+                inter = new Point2d(a.P1.X + t * ax, a.P1.Y + t * ay);
+                return double.IsFinite(inter.X) && double.IsFinite(inter.Y);
+            }
+
+            var tAngles0 = swTotal.ElapsedMilliseconds;
+            foreach (var a in config.Angles)
+            {
+                if (string.IsNullOrWhiteSpace(a.Name) || string.IsNullOrWhiteSpace(a.LineA) || string.IsNullOrWhiteSpace(a.LineB))
+                {
+                    continue;
+                }
+
+                if (!foundLines.TryGetValue(a.LineA, out var la) || !foundLines.TryGetValue(a.LineB, out var lb) || !la.Found || !lb.Found)
+                {
+                    result.Angles.Add(new AngleResult(a.Name, a.LineA, a.LineB, double.NaN, a.Nominal, a.TolerancePlus, a.ToleranceMinus, Pass: false, Found: false, default, default, default));
+                    continue;
+                }
+
+                var v1 = new Point2d(la.P2.X - la.P1.X, la.P2.Y - la.P1.Y);
+                var v2 = new Point2d(lb.P2.X - lb.P1.X, lb.P2.Y - lb.P1.Y);
+                var n1 = Math.Sqrt(v1.X * v1.X + v1.Y * v1.Y);
+                var n2 = Math.Sqrt(v2.X * v2.X + v2.Y * v2.Y);
+                if (n1 < 1e-9 || n2 < 1e-9)
+                {
+                    result.Angles.Add(new AngleResult(a.Name, a.LineA, a.LineB, double.NaN, a.Nominal, a.TolerancePlus, a.ToleranceMinus, Pass: false, Found: false, default, default, default));
+                    continue;
+                }
+
+                var dot = (v1.X * v2.X + v1.Y * v2.Y) / (n1 * n2);
+                dot = Math.Clamp(dot, -1.0, 1.0);
+                var angle = Math.Acos(dot) * 180.0 / Math.PI;
+
+                var pass = angle >= (a.Nominal - a.ToleranceMinus) && angle <= (a.Nominal + a.TolerancePlus);
+                var found = TryIntersectInfiniteLines(la, lb, out var inter);
+                result.Angles.Add(new AngleResult(a.Name, a.LineA, a.LineB, angle, a.Nominal, a.TolerancePlus, a.ToleranceMinus, pass, found, inter, new Point2d(v1.X / n1, v1.Y / n1), new Point2d(v2.X / n2, v2.Y / n2)));
+            }
+            result.Timings.AnglesMs = (int)Math.Max(0, swTotal.ElapsedMilliseconds - tAngles0);
+
             var tDistances0 = swTotal.ElapsedMilliseconds;
             foreach (var d in config.Distances)
             {
@@ -1386,6 +1457,11 @@ internal static class ConditionEvaluator
         foreach (var dd in result.PointToLineDistances)
         {
             vars[dd.Name] = new Variable(dd.Pass, value: dd.Value);
+        }
+
+        foreach (var a in result.Angles)
+        {
+            vars[a.Name] = new Variable(a.Pass, value: a.ValueDeg);
         }
 
         foreach (var c in result.Conditions)

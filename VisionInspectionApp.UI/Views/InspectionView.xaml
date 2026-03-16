@@ -25,6 +25,8 @@
 
             <CheckBox Content="Show ROI" IsChecked="{Binding ShowRois, UpdateSourceTrigger=PropertyChanged}" VerticalAlignment="Center" Margin="0,0,12,0" />
 
+            <CheckBox Content="Show Overlay" IsChecked="{Binding ShowOverlay, UpdateSourceTrigger=PropertyChanged}" VerticalAlignment="Center" Margin="0,0,12,0" />
+
             <Button Content="Load Image" Command="{Binding LoadImageCommand}" Margin="0,0,6,0" />
             <Button Content="Run" Command="{Binding RunInspectionCommand}" />
         </DockPanel>

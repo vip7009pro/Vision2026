@@ -77,7 +77,7 @@
                         <StackPanel>
                             <TextBlock FontWeight="Bold" Text="Calibration" Margin="0,0,0,6" />
                             <TextBlock Text="Pixels / mm" />
-                            <TextBox Text="{Binding PixelsPerMm, Converter={StaticResource DoubleConv}, UpdateSourceTrigger=PropertyChanged}" />
+                            <TextBox Text="{Binding PixelsPerMm, Converter={StaticResource DoubleConv}, UpdateSourceTrigger=PropertyChanged, Delay=250}" />
                         </StackPanel>
                     </Border>
 
@@ -139,13 +139,13 @@
                             <ComboBox ItemsSource="{Binding Points}" SelectedItem="{Binding DistancePointB}" />
 
                             <TextBlock Text="Nominal" Margin="0,6,0,0" />
-                            <TextBox Text="{Binding DistanceNominal, Converter={StaticResource DoubleConv}, UpdateSourceTrigger=PropertyChanged}" />
+                            <TextBox Text="{Binding DistanceNominal, Converter={StaticResource DoubleConv}, UpdateSourceTrigger=PropertyChanged, Delay=250}" />
 
                             <TextBlock Text="Tol +" Margin="0,6,0,0" />
-                            <TextBox Text="{Binding DistanceTolPlus, Converter={StaticResource DoubleConv}, UpdateSourceTrigger=PropertyChanged}" />
+                            <TextBox Text="{Binding DistanceTolPlus, Converter={StaticResource DoubleConv}, UpdateSourceTrigger=PropertyChanged, Delay=250}" />
 
                             <TextBlock Text="Tol -" Margin="0,6,0,0" />
-                            <TextBox Text="{Binding DistanceTolMinus, Converter={StaticResource DoubleConv}, UpdateSourceTrigger=PropertyChanged}" />
+                            <TextBox Text="{Binding DistanceTolMinus, Converter={StaticResource DoubleConv}, UpdateSourceTrigger=PropertyChanged, Delay=250}" />
 
                             <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
                                 <Button Content="Add" Command="{Binding AddDistanceCommand}" MinWidth="80" Margin="0,0,6,0" />
@@ -187,13 +187,13 @@
                             <ComboBox ItemsSource="{Binding Lines}" SelectedItem="{Binding LineToLineLineB}" />
 
                             <TextBlock Text="Nominal" Margin="0,6,0,0" />
-                            <TextBox Text="{Binding LineToLineNominal, Converter={StaticResource DoubleConv}, UpdateSourceTrigger=PropertyChanged}" />
+                            <TextBox Text="{Binding LineToLineNominal, Converter={StaticResource DoubleConv}, UpdateSourceTrigger=PropertyChanged, Delay=250}" />
 
                             <TextBlock Text="Tol +" Margin="0,6,0,0" />
-                            <TextBox Text="{Binding LineToLineTolPlus, Converter={StaticResource DoubleConv}, UpdateSourceTrigger=PropertyChanged}" />
+                            <TextBox Text="{Binding LineToLineTolPlus, Converter={StaticResource DoubleConv}, UpdateSourceTrigger=PropertyChanged, Delay=250}" />
 
                             <TextBlock Text="Tol -" Margin="0,6,0,0" />
-                            <TextBox Text="{Binding LineToLineTolMinus, Converter={StaticResource DoubleConv}, UpdateSourceTrigger=PropertyChanged}" />
+                            <TextBox Text="{Binding LineToLineTolMinus, Converter={StaticResource DoubleConv}, UpdateSourceTrigger=PropertyChanged, Delay=250}" />
 
                             <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
                                 <Button Content="Add" Command="{Binding AddLineToLineDistanceCommand}" MinWidth="80" Margin="0,0,6,0" />
@@ -235,13 +235,13 @@
                             <ComboBox ItemsSource="{Binding Lines}" SelectedItem="{Binding PointToLineLine}" />
 
                             <TextBlock Text="Nominal" Margin="0,6,0,0" />
-                            <TextBox Text="{Binding PointToLineNominal, Converter={StaticResource DoubleConv}, UpdateSourceTrigger=PropertyChanged}" />
+                            <TextBox Text="{Binding PointToLineNominal, Converter={StaticResource DoubleConv}, UpdateSourceTrigger=PropertyChanged, Delay=250}" />
 
                             <TextBlock Text="Tol +" Margin="0,6,0,0" />
-                            <TextBox Text="{Binding PointToLineTolPlus, Converter={StaticResource DoubleConv}, UpdateSourceTrigger=PropertyChanged}" />
+                            <TextBox Text="{Binding PointToLineTolPlus, Converter={StaticResource DoubleConv}, UpdateSourceTrigger=PropertyChanged, Delay=250}" />
 
                             <TextBlock Text="Tol -" Margin="0,6,0,0" />
-                            <TextBox Text="{Binding PointToLineTolMinus, Converter={StaticResource DoubleConv}, UpdateSourceTrigger=PropertyChanged}" />
+                            <TextBox Text="{Binding PointToLineTolMinus, Converter={StaticResource DoubleConv}, UpdateSourceTrigger=PropertyChanged, Delay=250}" />
 
                             <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
                                 <Button Content="Add" Command="{Binding AddPointToLineDistanceCommand}" MinWidth="80" Margin="0,0,6,0" />

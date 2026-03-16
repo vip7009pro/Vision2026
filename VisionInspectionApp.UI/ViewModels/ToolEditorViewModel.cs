@@ -35,9 +35,14 @@ public sealed partial class ToolEditorViewModel : ObservableObject
     private readonly DispatcherTimer _autoSaveTimer;
     private bool _autoSavePending;
 
+    private readonly DispatcherTimer _specEditPreviewTimer;
+
     private readonly DispatcherTimer _blobThresholdPreviewTimer;
 
     private bool _syncingInputs;
+
+    private int _lastPreviewImageWidth;
+    private int _lastPreviewImageHeight;
 
     private const int MaxBlobOverlayCount = 300;
 
@@ -58,6 +63,13 @@ public sealed partial class ToolEditorViewModel : ObservableObject
         _autoSaveTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(400) };
         _autoSaveTimer.Tick += (_, __) => AutoSaveNow();
 
+        _specEditPreviewTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(250) };
+        _specEditPreviewTimer.Tick += (_, __) =>
+        {
+            _specEditPreviewTimer.Stop();
+            RefreshPreviews();
+        };
+
         _blobThresholdPreviewTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(150) };
         _blobThresholdPreviewTimer.Tick += (_, __) => UpdateBlobThresholdPreviewFromSnapshot();
 
@@ -73,6 +85,7 @@ public sealed partial class ToolEditorViewModel : ObservableObject
             "Distance",
             "LineLineDistance",
             "PointLineDistance",
+            "Angle",
             "Condition",
             "BlobDetection",
             "CodeDetection",
@@ -166,6 +179,34 @@ public sealed partial class ToolEditorViewModel : ObservableObject
     private void BuildFinalOverlayFromRunWithConfig(InspectionResult run, ObservableCollection<OverlayItem> dst)
     {
         BuildFinalOverlayFromRun(run, dst);
+
+        // Angle overlays need image bounds for full infinite-line rendering.
+        if (_lastPreviewImageWidth > 0 && _lastPreviewImageHeight > 0)
+        {
+            foreach (var a in run.Angles)
+            {
+                if (double.IsNaN(a.ValueDeg) || !a.Found)
+                {
+                    continue;
+                }
+
+                var ip = new System.Windows.Point(a.Intersection.X, a.Intersection.Y);
+                var aDir = new System.Windows.Point(a.ADir.X, a.ADir.Y);
+                var bDir = new System.Windows.Point(a.BDir.X, a.BDir.Y);
+
+                if (TryClipInfiniteLineToImage(ip, aDir, _lastPreviewImageWidth, _lastPreviewImageHeight, out var a1, out var a2))
+                {
+                    dst.Add(new OverlayLineItem { X1 = a1.X, Y1 = a1.Y, X2 = a2.X, Y2 = a2.Y, Stroke = Brushes.MediumPurple, Label = a.LineA });
+                }
+                if (TryClipInfiniteLineToImage(ip, bDir, _lastPreviewImageWidth, _lastPreviewImageHeight, out var b1, out var b2))
+                {
+                    dst.Add(new OverlayLineItem { X1 = b1.X, Y1 = b1.Y, X2 = b2.X, Y2 = b2.Y, Stroke = Brushes.Gold, Label = a.LineB });
+                }
+
+                AddAngleArc(dst, a.Intersection.X, a.Intersection.Y, a.ADir.X, a.ADir.Y, a.BDir.X, a.BDir.Y, radius: 35.0, stroke: a.Pass ? Brushes.Lime : Brushes.Red);
+                dst.Add(new OverlayPointItem { X = a.Intersection.X, Y = a.Intersection.Y, Radius = 3.0, Stroke = a.Pass ? Brushes.Lime : Brushes.Red, Label = $"{a.Name}: {a.ValueDeg:0.###}°" });
+            }
+        }
 
         if (_config is null)
         {
@@ -499,6 +540,9 @@ public sealed partial class ToolEditorViewModel : ObservableObject
             BlobThresholdPreviewImage = null;
             return;
         }
+
+        _lastPreviewImageWidth = snap.Width;
+        _lastPreviewImageHeight = snap.Height;
 
         UpdateBlobThresholdPreview(snap);
     }
@@ -1104,6 +1148,12 @@ public sealed partial class ToolEditorViewModel : ObservableObject
         _autoSaveTimer.Start();
     }
 
+    private void RequestSpecEditPreviewRefresh()
+    {
+        _specEditPreviewTimer.Stop();
+        _specEditPreviewTimer.Start();
+    }
+
     private void AutoSaveNow()
     {
         _autoSaveTimer.Stop();
@@ -1377,7 +1427,13 @@ public sealed partial class ToolEditorViewModel : ObservableObject
             return;
         }
 
-        DeleteEdge(SelectedEdge);
+        ClearToolInputByEdge(SelectedEdge);
+        Edges.Remove(SelectedEdge);
+        SelectedEdge = null;
+        SyncEdgesToConfig();
+        RaiseToolPropertyPanelsChanged();
+        RefreshPreviews();
+        RequestAutoSave();
     }
 
     public void DeleteEdge(ToolGraphEdgeViewModel edge)
@@ -1387,10 +1443,10 @@ public sealed partial class ToolEditorViewModel : ObservableObject
             return;
         }
 
+        ClearToolInputByEdge(edge);
         Edges.Remove(edge);
         SelectedEdge = null;
         SyncEdgesToConfig();
-        SyncSelectedToolPreprocessChoiceFromGraph();
         RaiseToolPropertyPanelsChanged();
         RefreshPreviews();
         RequestAutoSave();
@@ -1539,6 +1595,7 @@ public sealed partial class ToolEditorViewModel : ObservableObject
         OnPropertyChanged(nameof(IsDistanceNode));
         OnPropertyChanged(nameof(IsLineLineDistanceNode));
         OnPropertyChanged(nameof(IsPointLineDistanceNode));
+        OnPropertyChanged(nameof(IsAngleNode));
         OnPropertyChanged(nameof(IsAnyDistanceNode));
         OnPropertyChanged(nameof(IsConditionNode));
         OnPropertyChanged(nameof(IsPreprocessNode));
@@ -1553,6 +1610,8 @@ public sealed partial class ToolEditorViewModel : ObservableObject
         OnPropertyChanged(nameof(LineLineDistance_LineB));
         OnPropertyChanged(nameof(PointLineDistance_Point));
         OnPropertyChanged(nameof(PointLineDistance_Line));
+        OnPropertyChanged(nameof(Angle_LineA));
+        OnPropertyChanged(nameof(Angle_LineB));
 
         OnPropertyChanged(nameof(AvailableLineLineDistanceModes));
         OnPropertyChanged(nameof(AvailablePointLineDistanceModes));
@@ -1623,11 +1682,79 @@ public sealed partial class ToolEditorViewModel : ObservableObject
 
     public bool IsPointLineDistanceNode => string.Equals(SelectedNode?.Type, "PointLineDistance", StringComparison.OrdinalIgnoreCase);
 
+    public bool IsAngleNode => string.Equals(SelectedNode?.Type, "Angle", StringComparison.OrdinalIgnoreCase);
+
     public bool IsConditionNode => string.Equals(SelectedNode?.Type, "Condition", StringComparison.OrdinalIgnoreCase);
 
     public bool IsPreprocessNode => string.Equals(SelectedNode?.Type, "Preprocess", StringComparison.OrdinalIgnoreCase);
 
-    public bool IsAnyDistanceNode => IsDistanceNode || IsLineLineDistanceNode || IsPointLineDistanceNode;
+    public bool IsAnyDistanceNode => IsDistanceNode || IsLineLineDistanceNode || IsPointLineDistanceNode || IsAngleNode;
+
+    private AngleDefinition? SelectedAngleDef()
+    {
+        if (_config is null || SelectedNode is null) return null;
+        if (!string.Equals(SelectedNode.Type, "Angle", StringComparison.OrdinalIgnoreCase)) return null;
+        return _config.Angles.FirstOrDefault(x => string.Equals(x.Name, SelectedNode.RefName, StringComparison.OrdinalIgnoreCase));
+    }
+
+    public string? Angle_LineA
+    {
+        get => SelectedAngleDef()?.LineA;
+        set
+        {
+            var def = SelectedAngleDef();
+            if (def is null) return;
+            if (string.Equals(def.LineA, value, StringComparison.OrdinalIgnoreCase)) return;
+            def.LineA = value ?? string.Empty;
+            SyncInputEdgeForAnglePort("A", value);
+            RaiseToolPropertyPanelsChanged();
+            RefreshPreviews();
+            RequestAutoSave();
+        }
+    }
+
+    public string? Angle_LineB
+    {
+        get => SelectedAngleDef()?.LineB;
+        set
+        {
+            var def = SelectedAngleDef();
+            if (def is null) return;
+            if (string.Equals(def.LineB, value, StringComparison.OrdinalIgnoreCase)) return;
+            def.LineB = value ?? string.Empty;
+            SyncInputEdgeForAnglePort("B", value);
+            RaiseToolPropertyPanelsChanged();
+            RefreshPreviews();
+            RequestAutoSave();
+        }
+    }
+
+    private void SyncInputEdgeForAnglePort(string port, string? lineName)
+    {
+        if (_syncingInputs) return;
+        if (_config is null || SelectedNode is null) return;
+        if (!string.Equals(SelectedNode.Type, "Angle", StringComparison.OrdinalIgnoreCase)) return;
+
+        _syncingInputs = true;
+        try
+        {
+            RemoveEdgesToSelectedNodePort(port);
+            if (!string.IsNullOrWhiteSpace(lineName))
+            {
+                var from = Nodes.FirstOrDefault(n => (string.Equals(n.Type, "Line", StringComparison.OrdinalIgnoreCase)
+                                                      || string.Equals(n.Type, "Caliper", StringComparison.OrdinalIgnoreCase))
+                                                     && string.Equals(n.RefName, lineName, StringComparison.OrdinalIgnoreCase));
+                if (from is not null)
+                {
+                    CreateEdge(from, SelectedNode, "Out", port);
+                }
+            }
+        }
+        finally
+        {
+            _syncingInputs = false;
+        }
+    }
 
     private LinePairDetectionDefinition? SelectedLinePairDef()
     {
@@ -2437,6 +2564,83 @@ public sealed partial class ToolEditorViewModel : ObservableObject
         }
     }
 
+    private static bool TryClipInfiniteLineToImage(System.Windows.Point p, System.Windows.Point dir, int width, int height, out System.Windows.Point p1, out System.Windows.Point p2)
+    {
+        p1 = default;
+        p2 = default;
+
+        var dx = dir.X;
+        var dy = dir.Y;
+        if (Math.Abs(dx) < 1e-9 && Math.Abs(dy) < 1e-9)
+        {
+            return false;
+        }
+
+        var ts = new List<double>(4);
+
+        // x = 0
+        if (Math.Abs(dx) > 1e-9)
+        {
+            var t = (0.0 - p.X) / dx;
+            var y = p.Y + t * dy;
+            if (y >= 0 && y <= height) ts.Add(t);
+
+            // x = width
+            t = (width - p.X) / dx;
+            y = p.Y + t * dy;
+            if (y >= 0 && y <= height) ts.Add(t);
+        }
+
+        // y = 0
+        if (Math.Abs(dy) > 1e-9)
+        {
+            var t = (0.0 - p.Y) / dy;
+            var x = p.X + t * dx;
+            if (x >= 0 && x <= width) ts.Add(t);
+
+            // y = height
+            t = (height - p.Y) / dy;
+            x = p.X + t * dx;
+            if (x >= 0 && x <= width) ts.Add(t);
+        }
+
+        if (ts.Count < 2)
+        {
+            return false;
+        }
+
+        ts.Sort();
+        var t1 = ts.First();
+        var t2 = ts.Last();
+
+        p1 = new System.Windows.Point(p.X + t1 * dx, p.Y + t1 * dy);
+        p2 = new System.Windows.Point(p.X + t2 * dx, p.Y + t2 * dy);
+        return true;
+    }
+
+    private static void AddAngleArc(ObservableCollection<OverlayItem> dst, double cx, double cy, double ax, double ay, double bx, double by, double radius, System.Windows.Media.Brush stroke)
+    {
+        var a0 = Math.Atan2(ay, ax);
+        var a1 = Math.Atan2(by, bx);
+        var d = a1 - a0;
+        while (d <= -Math.PI) d += 2 * Math.PI;
+        while (d > Math.PI) d -= 2 * Math.PI;
+
+        var steps = Math.Clamp((int)Math.Ceiling(Math.Abs(d) / (Math.PI / 18.0)), 4, 36);
+        var prevX = cx + Math.Cos(a0) * radius;
+        var prevY = cy + Math.Sin(a0) * radius;
+        for (var i = 1; i <= steps; i++)
+        {
+            var t = (double)i / steps;
+            var aa = a0 + d * t;
+            var x = cx + Math.Cos(aa) * radius;
+            var y = cy + Math.Sin(aa) * radius;
+            dst.Add(new OverlayLineItem { X1 = prevX, Y1 = prevY, X2 = x, Y2 = y, Stroke = stroke, StrokeThickness = 2.0, Label = string.Empty });
+            prevX = x;
+            prevY = y;
+        }
+    }
+
     public int Line_Canny2
     {
         get => SelectedLineDef()?.Canny2 ?? 0;
@@ -2521,6 +2725,7 @@ public sealed partial class ToolEditorViewModel : ObservableObject
             if (SelectedDistanceDef() is { } d) return d.Nominal;
             if (SelectedLineLineDistanceDef() is { } ll) return ll.Nominal;
             if (SelectedPointLineDistanceDef() is { } pl) return pl.Nominal;
+            if (SelectedAngleDef() is { } a) return a.Nominal;
             if (SelectedLinePairDef() is { } lpd) return lpd.Nominal;
             return 0.0;
         }
@@ -2541,6 +2746,11 @@ public sealed partial class ToolEditorViewModel : ObservableObject
                 if (Math.Abs(pl.Nominal - value) < 0.0000001) return;
                 pl.Nominal = value;
             }
+            else if (SelectedAngleDef() is { } a)
+            {
+                if (Math.Abs(a.Nominal - value) < 0.0000001) return;
+                a.Nominal = value;
+            }
             else if (SelectedLinePairDef() is { } lpd)
             {
                 if (Math.Abs(lpd.Nominal - value) < 0.0000001) return;
@@ -2551,7 +2761,7 @@ public sealed partial class ToolEditorViewModel : ObservableObject
                 return;
             }
 
-            RefreshPreviews();
+            RequestSpecEditPreviewRefresh();
             OnPropertyChanged();
         }
     }
@@ -2563,6 +2773,7 @@ public sealed partial class ToolEditorViewModel : ObservableObject
             if (SelectedDistanceDef() is { } d) return d.TolerancePlus;
             if (SelectedLineLineDistanceDef() is { } ll) return ll.TolerancePlus;
             if (SelectedPointLineDistanceDef() is { } pl) return pl.TolerancePlus;
+            if (SelectedAngleDef() is { } a) return a.TolerancePlus;
             if (SelectedLinePairDef() is { } lpd) return lpd.TolerancePlus;
             return 0.0;
         }
@@ -2583,6 +2794,11 @@ public sealed partial class ToolEditorViewModel : ObservableObject
                 if (Math.Abs(pl.TolerancePlus - value) < 0.0000001) return;
                 pl.TolerancePlus = value;
             }
+            else if (SelectedAngleDef() is { } a)
+            {
+                if (Math.Abs(a.TolerancePlus - value) < 0.0000001) return;
+                a.TolerancePlus = value;
+            }
             else if (SelectedLinePairDef() is { } lpd)
             {
                 if (Math.Abs(lpd.TolerancePlus - value) < 0.0000001) return;
@@ -2593,7 +2809,7 @@ public sealed partial class ToolEditorViewModel : ObservableObject
                 return;
             }
 
-            RefreshPreviews();
+            RequestSpecEditPreviewRefresh();
             OnPropertyChanged();
         }
     }
@@ -2605,6 +2821,7 @@ public sealed partial class ToolEditorViewModel : ObservableObject
             if (SelectedDistanceDef() is { } d) return d.ToleranceMinus;
             if (SelectedLineLineDistanceDef() is { } ll) return ll.ToleranceMinus;
             if (SelectedPointLineDistanceDef() is { } pl) return pl.ToleranceMinus;
+            if (SelectedAngleDef() is { } a) return a.ToleranceMinus;
             if (SelectedLinePairDef() is { } lpd) return lpd.ToleranceMinus;
             return 0.0;
         }
@@ -2625,6 +2842,11 @@ public sealed partial class ToolEditorViewModel : ObservableObject
                 if (Math.Abs(pl.ToleranceMinus - value) < 0.0000001) return;
                 pl.ToleranceMinus = value;
             }
+            else if (SelectedAngleDef() is { } a)
+            {
+                if (Math.Abs(a.ToleranceMinus - value) < 0.0000001) return;
+                a.ToleranceMinus = value;
+            }
             else if (SelectedLinePairDef() is { } lpd)
             {
                 if (Math.Abs(lpd.ToleranceMinus - value) < 0.0000001) return;
@@ -2635,7 +2857,7 @@ public sealed partial class ToolEditorViewModel : ObservableObject
                 return;
             }
 
-            RefreshPreviews();
+            RequestSpecEditPreviewRefresh();
             OnPropertyChanged();
         }
     }
@@ -2663,6 +2885,12 @@ public sealed partial class ToolEditorViewModel : ObservableObject
                 return d?.Value;
             }
 
+            if (string.Equals(SelectedNode.Type, "Angle", StringComparison.OrdinalIgnoreCase))
+            {
+                var a = _lastRun.Angles.FirstOrDefault(x => string.Equals(x.Name, SelectedNode.RefName, StringComparison.OrdinalIgnoreCase));
+                return a?.ValueDeg;
+            }
+
             if (string.Equals(SelectedNode.Type, "LinePairDetection", StringComparison.OrdinalIgnoreCase))
             {
                 var d = _lastRun.LinePairDetections.FirstOrDefault(x => string.Equals(x.Name, SelectedNode.RefName, StringComparison.OrdinalIgnoreCase));
@@ -2678,10 +2906,17 @@ public sealed partial class ToolEditorViewModel : ObservableObject
         get
         {
             if (_lastRun is null || SelectedNode is null) return null;
+
             if (string.Equals(SelectedNode.Type, "CodeDetection", StringComparison.OrdinalIgnoreCase))
             {
-                var r = _lastRun.CodeDetections.FirstOrDefault(x => string.Equals(x.Name, SelectedNode.RefName, StringComparison.OrdinalIgnoreCase));
-                return r is not null && r.Found ? r.Text : null;
+                var d = _lastRun.CodeDetections.FirstOrDefault(x => string.Equals(x.Name, SelectedNode.RefName, StringComparison.OrdinalIgnoreCase));
+                return d?.Text;
+            }
+
+            if (string.Equals(SelectedNode.Type, "Angle", StringComparison.OrdinalIgnoreCase))
+            {
+                var a = _lastRun.Angles.FirstOrDefault(x => string.Equals(x.Name, SelectedNode.RefName, StringComparison.OrdinalIgnoreCase));
+                return a is null || double.IsNaN(a.ValueDeg) ? null : $"{a.ValueDeg:0.###}°";
             }
 
             return null;
@@ -2709,6 +2944,12 @@ public sealed partial class ToolEditorViewModel : ObservableObject
             {
                 var d = _lastRun.PointToLineDistances.FirstOrDefault(x => string.Equals(x.Name, SelectedNode.RefName, StringComparison.OrdinalIgnoreCase));
                 return d?.Pass;
+            }
+
+            if (string.Equals(SelectedNode.Type, "Angle", StringComparison.OrdinalIgnoreCase))
+            {
+                var a = _lastRun.Angles.FirstOrDefault(x => string.Equals(x.Name, SelectedNode.RefName, StringComparison.OrdinalIgnoreCase));
+                return a?.Pass;
             }
 
             if (string.Equals(SelectedNode.Type, "LinePairDetection", StringComparison.OrdinalIgnoreCase))
@@ -2774,6 +3015,11 @@ public sealed partial class ToolEditorViewModel : ObservableObject
         else if (string.Equals(SelectedNode.Type, "PointLineDistance", StringComparison.OrdinalIgnoreCase))
         {
             var def = _config.PointToLineDistances.FirstOrDefault(x => string.Equals(x.Name, oldName, StringComparison.OrdinalIgnoreCase));
+            if (def is not null) def.Name = newName;
+        }
+        else if (string.Equals(SelectedNode.Type, "Angle", StringComparison.OrdinalIgnoreCase))
+        {
+            var def = _config.Angles.FirstOrDefault(x => string.Equals(x.Name, oldName, StringComparison.OrdinalIgnoreCase));
             if (def is not null) def.Name = newName;
         }
         else if (string.Equals(SelectedNode.Type, "Origin", StringComparison.OrdinalIgnoreCase))
@@ -3058,6 +3304,11 @@ public sealed partial class ToolEditorViewModel : ObservableObject
                 _config.PointToLineDistances.RemoveAll(x => string.Equals(x.Name, toRemove.RefName, StringComparison.OrdinalIgnoreCase));
             }
 
+            if (string.Equals(toRemove.Type, "Angle", StringComparison.OrdinalIgnoreCase))
+            {
+                _config.Angles.RemoveAll(x => string.Equals(x.Name, toRemove.RefName, StringComparison.OrdinalIgnoreCase));
+            }
+
             if (string.Equals(toRemove.Type, "Condition", StringComparison.OrdinalIgnoreCase))
             {
                 _config.Conditions.RemoveAll(x => string.Equals(x.Name, toRemove.RefName, StringComparison.OrdinalIgnoreCase));
@@ -3285,6 +3536,16 @@ public sealed partial class ToolEditorViewModel : ObservableObject
             return;
         }
 
+        if (string.Equals(node.Type, "Angle", StringComparison.OrdinalIgnoreCase))
+        {
+            var existed = _config.Angles.Any(x => string.Equals(x.Name, node.RefName, StringComparison.OrdinalIgnoreCase));
+            if (!existed)
+            {
+                _config.Angles.Add(new AngleDefinition { Name = node.RefName });
+            }
+            return;
+        }
+
         if (string.Equals(node.Type, "Condition", StringComparison.OrdinalIgnoreCase))
         {
             var existed = _config.Conditions.Any(x => string.Equals(x.Name, node.RefName, StringComparison.OrdinalIgnoreCase));
@@ -3352,6 +3613,11 @@ public sealed partial class ToolEditorViewModel : ObservableObject
         {
             baseName = "PLD";
             exists = n => _config.PointToLineDistances.Any(x => string.Equals(x.Name, n, StringComparison.OrdinalIgnoreCase));
+        }
+        else if (string.Equals(type, "Angle", StringComparison.OrdinalIgnoreCase))
+        {
+            baseName = "ANG";
+            exists = n => _config.Angles.Any(x => string.Equals(x.Name, n, StringComparison.OrdinalIgnoreCase));
         }
         else if (string.Equals(type, "Condition", StringComparison.OrdinalIgnoreCase))
         {
@@ -3479,11 +3745,50 @@ public sealed partial class ToolEditorViewModel : ObservableObject
                 }
             }
         }
+        else if (string.Equals(toNode.Type, "Angle", StringComparison.OrdinalIgnoreCase)
+                 && (string.Equals(fromNode.Type, "Line", StringComparison.OrdinalIgnoreCase)
+                     || string.Equals(fromNode.Type, "Caliper", StringComparison.OrdinalIgnoreCase)))
+        {
+            var def = _config.Angles.FirstOrDefault(x => string.Equals(x.Name, toNode.RefName, StringComparison.OrdinalIgnoreCase));
+            if (def is not null)
+            {
+                if (string.Equals(toPort, "A", StringComparison.OrdinalIgnoreCase)) def.LineA = fromNode.RefName;
+                else if (string.Equals(toPort, "B", StringComparison.OrdinalIgnoreCase)) def.LineB = fromNode.RefName;
+            }
+        }
 
         if (!_syncingInputs)
         {
             RaiseToolPropertyPanelsChanged();
             RefreshPreviews();
+        }
+    }
+
+    private void ClearToolInputByEdge(ToolGraphEdgeViewModel edge)
+    {
+        if (_config is null) return;
+
+        var to = Nodes.FirstOrDefault(n => string.Equals(n.Id, edge.ToNodeId, StringComparison.OrdinalIgnoreCase));
+        var from = Nodes.FirstOrDefault(n => string.Equals(n.Id, edge.FromNodeId, StringComparison.OrdinalIgnoreCase));
+        if (to is null || from is null) return;
+
+        if (string.Equals(to.Type, "Angle", StringComparison.OrdinalIgnoreCase))
+        {
+            var def = _config.Angles.FirstOrDefault(x => string.Equals(x.Name, to.RefName, StringComparison.OrdinalIgnoreCase));
+            if (def is null) return;
+
+            if (string.Equals(edge.ToPort, "A", StringComparison.OrdinalIgnoreCase)
+                && string.Equals(def.LineA, from.RefName, StringComparison.OrdinalIgnoreCase))
+            {
+                def.LineA = string.Empty;
+            }
+            else if (string.Equals(edge.ToPort, "B", StringComparison.OrdinalIgnoreCase)
+                     && string.Equals(def.LineB, from.RefName, StringComparison.OrdinalIgnoreCase))
+            {
+                def.LineB = string.Empty;
+            }
+
+            return;
         }
     }
 
@@ -4290,6 +4595,22 @@ public sealed partial class ToolEditorViewModel : ObservableObject
             return;
         }
 
+        if (string.Equals(node.Type, "Angle", StringComparison.OrdinalIgnoreCase))
+        {
+            var ad = _config.Angles.FirstOrDefault(x => string.Equals(x.Name, node.RefName, StringComparison.OrdinalIgnoreCase));
+            if (ad is null)
+            {
+                return;
+            }
+
+            if (showRois)
+            {
+                AddLineRoi(ad.LineA);
+                AddLineRoi(ad.LineB);
+            }
+            return;
+        }
+
         if (string.Equals(node.Type, "PointLineDistance", StringComparison.OrdinalIgnoreCase))
         {
             var dd = _config.PointToLineDistances.FirstOrDefault(x => string.Equals(x.Name, node.RefName, StringComparison.OrdinalIgnoreCase));
@@ -4483,6 +4804,27 @@ public sealed partial class ToolEditorViewModel : ObservableObject
                 Stroke = dd.Pass ? Brushes.Lime : Brushes.Red,
                 Label = $"{dd.Name}: {dd.Value:0.00}"
             });
+        }
+
+        foreach (var a in run.Angles)
+        {
+            if (double.IsNaN(a.ValueDeg))
+            {
+                continue;
+            }
+
+            if (!a.Found)
+            {
+                dst.Add(new OverlayPointItem { X = 12, Y = 12, Radius = 1.0, Stroke = a.Pass ? Brushes.Lime : Brushes.Red, Label = $"{a.Name}: {a.ValueDeg:0.###}°" });
+                continue;
+            }
+
+            // In final overlay we may not know the current preview image size, so draw short rays.
+            var len = 60.0;
+            dst.Add(new OverlayLineItem { X1 = a.Intersection.X, Y1 = a.Intersection.Y, X2 = a.Intersection.X + a.ADir.X * len, Y2 = a.Intersection.Y + a.ADir.Y * len, Stroke = Brushes.MediumPurple, Label = a.LineA });
+            dst.Add(new OverlayLineItem { X1 = a.Intersection.X, Y1 = a.Intersection.Y, X2 = a.Intersection.X + a.BDir.X * len, Y2 = a.Intersection.Y + a.BDir.Y * len, Stroke = Brushes.Gold, Label = a.LineB });
+            AddAngleArc(dst, a.Intersection.X, a.Intersection.Y, a.ADir.X, a.ADir.Y, a.BDir.X, a.BDir.Y, radius: 35.0, stroke: a.Pass ? Brushes.Lime : Brushes.Red);
+            dst.Add(new OverlayPointItem { X = a.Intersection.X, Y = a.Intersection.Y, Radius = 3.0, Stroke = a.Pass ? Brushes.Lime : Brushes.Red, Label = $"{a.Name}: {a.ValueDeg:0.###}°" });
         }
 
         if (run.Conditions.Count > 0)
@@ -5503,6 +5845,11 @@ public sealed partial class ToolGraphNodeViewModel : ObservableObject
             InPorts.Add(new NodePortViewModel(this, "B", isInput: true));
         }
         else if (string.Equals(Type, "LineLineDistance", StringComparison.OrdinalIgnoreCase))
+        {
+            InPorts.Add(new NodePortViewModel(this, "A", isInput: true));
+            InPorts.Add(new NodePortViewModel(this, "B", isInput: true));
+        }
+        else if (string.Equals(Type, "Angle", StringComparison.OrdinalIgnoreCase))
         {
             InPorts.Add(new NodePortViewModel(this, "A", isInput: true));
             InPorts.Add(new NodePortViewModel(this, "B", isInput: true));

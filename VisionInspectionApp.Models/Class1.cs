@@ -61,6 +61,8 @@ public sealed class VisionConfig
 
     public List<PointToLineDistance> PointToLineDistances { get; set; } = new();
 
+    public List<AngleDefinition> Angles { get; set; } = new();
+
     public List<ConditionDefinition> Conditions { get; set; } = new();
 
     public List<BlobDetectionDefinition> BlobDetections { get; set; } = new();
@@ -70,6 +72,21 @@ public sealed class VisionConfig
     public List<CodeDetectionDefinition> CodeDetections { get; set; } = new();
 
     public DefectInspectionConfig DefectConfig { get; set; } = new();
+}
+
+public sealed class AngleDefinition
+{
+    public string Name { get; set; } = string.Empty;
+
+    public string LineA { get; set; } = string.Empty;
+
+    public string LineB { get; set; } = string.Empty;
+
+    public double Nominal { get; set; }
+
+    public double TolerancePlus { get; set; }
+
+    public double ToleranceMinus { get; set; }
 }
 
 public enum CaliperOrientation

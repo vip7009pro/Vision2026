@@ -40,7 +40,7 @@
                         <TextBox Text="{Binding CurrentDistancePx, StringFormat=0.0}" IsReadOnly="True" />
 
                         <TextBlock Text="Real Distance (mm)" Margin="0,6,0,0" />
-                        <TextBox Text="{Binding RealDistanceMm, Converter={StaticResource DoubleConv}, UpdateSourceTrigger=PropertyChanged}" />
+                        <TextBox Text="{Binding RealDistanceMm, Converter={StaticResource DoubleConv}, UpdateSourceTrigger=PropertyChanged, Delay=250}" />
 
                         <Button Content="Add Measurement" Command="{Binding AddMeasurementCommand}" Margin="0,8,0,0" />
                         <Button Content="Clear" Command="{Binding ClearMeasurementsCommand}" Margin="0,6,0,0" />
