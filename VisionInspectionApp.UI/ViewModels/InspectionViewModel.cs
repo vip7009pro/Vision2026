@@ -364,6 +364,69 @@ public sealed partial class InspectionViewModel : ObservableObject
                 }
             }
 
+            foreach (var cal in _config.Calipers)
+            {
+                if (cal.SearchRoi.Width <= 0 || cal.SearchRoi.Height <= 0)
+                {
+                    continue;
+                }
+
+                if (hasPose)
+                {
+                    AddRotatedRoiOverlay(cal.SearchRoi, $"{cal.Name} Cal", Brushes.Lime, originTeach, originFound, angleDeg);
+                }
+                else
+                {
+                    OverlayItems.Add(new OverlayRectItem
+                    {
+                        X = cal.SearchRoi.X,
+                        Y = cal.SearchRoi.Y,
+                        Width = cal.SearchRoi.Width,
+                        Height = cal.SearchRoi.Height,
+                        Stroke = Brushes.Lime,
+                        Label = $"{cal.Name} Cal"
+                    });
+                }
+
+                var stripCount = Math.Clamp(cal.StripCount, 1, 100);
+                var stripLength = Math.Max(3, cal.StripLength);
+
+                if (cal.Orientation == CaliperOrientation.Vertical)
+                {
+                    var y1 = cal.SearchRoi.Y + (cal.SearchRoi.Height - stripLength) / 2.0;
+                    var y2 = y1 + stripLength;
+                    for (var i = 0; i < stripCount; i++)
+                    {
+                        var x = cal.SearchRoi.X + (i + 0.5) * cal.SearchRoi.Width / stripCount;
+                        var p1 = new Point2d(x, y1);
+                        var p2 = new Point2d(x, y2);
+                        if (hasPose)
+                        {
+                            p1 = TransformPose(p1, originTeach, originFound, angleDeg);
+                            p2 = TransformPose(p2, originTeach, originFound, angleDeg);
+                        }
+                        OverlayItems.Add(new OverlayLineItem { X1 = p1.X, Y1 = p1.Y, X2 = p2.X, Y2 = p2.Y, Stroke = Brushes.Lime, StrokeThickness = 1.0 });
+                    }
+                }
+                else
+                {
+                    var x1 = cal.SearchRoi.X + (cal.SearchRoi.Width - stripLength) / 2.0;
+                    var x2 = x1 + stripLength;
+                    for (var i = 0; i < stripCount; i++)
+                    {
+                        var y = cal.SearchRoi.Y + (i + 0.5) * cal.SearchRoi.Height / stripCount;
+                        var p1 = new Point2d(x1, y);
+                        var p2 = new Point2d(x2, y);
+                        if (hasPose)
+                        {
+                            p1 = TransformPose(p1, originTeach, originFound, angleDeg);
+                            p2 = TransformPose(p2, originTeach, originFound, angleDeg);
+                        }
+                        OverlayItems.Add(new OverlayLineItem { X1 = p1.X, Y1 = p1.Y, X2 = p2.X, Y2 = p2.Y, Stroke = Brushes.Lime, StrokeThickness = 1.0 });
+                    }
+                }
+            }
+
             foreach (var p in _config.Points)
             {
                 if (hasPose)
@@ -724,6 +787,57 @@ public sealed partial class InspectionViewModel : ObservableObject
                     Stroke = d.Pass ? Brushes.Lime : Brushes.Red,
                     Label = $"{d.Name}: {d.Value:0.00} mm"
                 });
+            }
+        }
+
+        if (LastResult is not null)
+        {
+            foreach (var c in LastResult.Calipers)
+            {
+                if (c.Found)
+                {
+                    OverlayItems.Add(new OverlayLineItem { X1 = c.LineP1.X, Y1 = c.LineP1.Y, X2 = c.LineP2.X, Y2 = c.LineP2.Y, Stroke = Brushes.Gold, StrokeThickness = 2.0, Label = c.Name });
+                }
+
+                if (c.Points is not null)
+                {
+                    var n = Math.Min(c.Points.Count, 80);
+                    for (var i = 0; i < n; i++)
+                    {
+                        var p = c.Points[i];
+                        OverlayItems.Add(new OverlayPointItem { X = p.X, Y = p.Y, Radius = 2.0, Stroke = Brushes.Gold, Label = string.Empty });
+                    }
+                }
+            }
+        }
+
+        if (LastResult is not null)
+        {
+            foreach (var c in LastResult.Calipers)
+            {
+                if (c.Found)
+                {
+                    OverlayItems.Add(new OverlayLineItem
+                    {
+                        X1 = c.LineP1.X,
+                        Y1 = c.LineP1.Y,
+                        X2 = c.LineP2.X,
+                        Y2 = c.LineP2.Y,
+                        Stroke = Brushes.Gold,
+                        StrokeThickness = 2.0,
+                        Label = c.Name
+                    });
+                }
+
+                if (c.Points is not null)
+                {
+                    var n = Math.Min(c.Points.Count, 80);
+                    for (var i = 0; i < n; i++)
+                    {
+                        var p = c.Points[i];
+                        OverlayItems.Add(new OverlayPointItem { X = p.X, Y = p.Y, Radius = 2.0, Stroke = Brushes.Gold, Label = string.Empty });
+                    }
+                }
             }
         }
     }

@@ -165,6 +165,49 @@
                                 </StackPanel>
                             </StackPanel>
 
+                            <StackPanel Visibility="{Binding IsCaliperNode, Converter={StaticResource BoolToVis}}">
+                                <TextBlock Text="Caliper Params" FontWeight="SemiBold" Margin="0,8,0,6" />
+
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                                    <TextBlock Text="Ori" Width="60" VerticalAlignment="Center" />
+                                    <ComboBox Width="160" ItemsSource="{Binding AvailableCaliperOrientations}" SelectedItem="{Binding Caliper_Orientation, UpdateSourceTrigger=PropertyChanged}" />
+                                </StackPanel>
+
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                                    <TextBlock Text="Pol" Width="60" VerticalAlignment="Center" />
+                                    <ComboBox Width="160" ItemsSource="{Binding AvailableEdgePolarities}" SelectedItem="{Binding Caliper_Polarity, UpdateSourceTrigger=PropertyChanged}" />
+                                </StackPanel>
+
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,2">
+                                    <TextBlock Text="Strips" Width="60" VerticalAlignment="Center" />
+                                    <TextBox Width="80" Text="{Binding Caliper_StripCount, UpdateSourceTrigger=PropertyChanged}" />
+                                </StackPanel>
+
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,2">
+                                    <TextBlock Text="Width" Width="60" VerticalAlignment="Center" />
+                                    <TextBox Width="80" Text="{Binding Caliper_StripWidth, UpdateSourceTrigger=PropertyChanged}" />
+                                </StackPanel>
+
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                                    <TextBlock Text="Length" Width="60" VerticalAlignment="Center" />
+                                    <TextBox Width="80" Text="{Binding Caliper_StripLength, UpdateSourceTrigger=PropertyChanged}" />
+                                </StackPanel>
+
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                                    <TextBlock Text="MinStr" Width="60" VerticalAlignment="Center" />
+                                    <TextBox Width="80" Text="{Binding Caliper_MinEdgeStrength, UpdateSourceTrigger=PropertyChanged}" />
+                                </StackPanel>
+
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,2">
+                                    <TextBlock Text="Found" Width="60" VerticalAlignment="Center" />
+                                    <TextBlock Text="{Binding Caliper_LastRunFound, TargetNullValue='-'}" Width="80" />
+                                </StackPanel>
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                                    <TextBlock Text="Avg" Width="60" VerticalAlignment="Center" />
+                                    <TextBlock Text="{Binding Caliper_LastRunAvgStrength, TargetNullValue='-'}" Width="80" />
+                                </StackPanel>
+                            </StackPanel>
+
                             <StackPanel Visibility="{Binding IsAnyDistanceNode, Converter={StaticResource BoolToVis}}">
                                 <TextBlock Text="Distance Spec" FontWeight="SemiBold" Margin="0,8,0,6" />
 

@@ -53,6 +53,8 @@ public sealed class VisionConfig
 
     public List<LineToolDefinition> Lines { get; set; } = new();
 
+    public List<CaliperDefinition> Calipers { get; set; } = new();
+
     public List<LineDistance> Distances { get; set; } = new();
 
     public List<LineToLineDistance> LineToLineDistances { get; set; } = new();
@@ -68,6 +70,38 @@ public sealed class VisionConfig
     public List<CodeDetectionDefinition> CodeDetections { get; set; } = new();
 
     public DefectInspectionConfig DefectConfig { get; set; } = new();
+}
+
+public enum CaliperOrientation
+{
+    Vertical = 0,
+    Horizontal = 1
+}
+
+public enum EdgePolarity
+{
+    Any = 0,
+    DarkToLight = 1,
+    LightToDark = 2
+}
+
+public sealed class CaliperDefinition
+{
+    public string Name { get; set; } = string.Empty;
+
+    public Roi SearchRoi { get; set; } = new();
+
+    public CaliperOrientation Orientation { get; set; } = CaliperOrientation.Vertical;
+
+    public EdgePolarity Polarity { get; set; } = EdgePolarity.Any;
+
+    public int StripCount { get; set; } = 10;
+
+    public int StripWidth { get; set; } = 7;
+
+    public int StripLength { get; set; } = 60;
+
+    public double MinEdgeStrength { get; set; } = 10.0;
 }
 
 public sealed class LinePairDetectionDefinition

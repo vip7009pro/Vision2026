@@ -68,6 +68,7 @@ public sealed partial class ToolEditorViewModel : ObservableObject
             "Origin",
             "Point",
             "Line",
+            "Caliper",
             "LinePairDetection",
             "Distance",
             "LineLineDistance",
@@ -246,6 +247,7 @@ public sealed partial class ToolEditorViewModel : ObservableObject
                                             && (string.Equals(SelectedNode.Type, "Origin", StringComparison.OrdinalIgnoreCase)
                                                 || string.Equals(SelectedNode.Type, "Point", StringComparison.OrdinalIgnoreCase)
                                                 || string.Equals(SelectedNode.Type, "Line", StringComparison.OrdinalIgnoreCase)
+                                                || string.Equals(SelectedNode.Type, "Caliper", StringComparison.OrdinalIgnoreCase)
                                                 || string.Equals(SelectedNode.Type, "LinePairDetection", StringComparison.OrdinalIgnoreCase)
                                                 || string.Equals(SelectedNode.Type, "BlobDetection", StringComparison.OrdinalIgnoreCase)
                                                 || string.Equals(SelectedNode.Type, "CodeDetection", StringComparison.OrdinalIgnoreCase));
@@ -784,6 +786,13 @@ public sealed partial class ToolEditorViewModel : ObservableObject
             return;
         }
 
+        if (string.Equals(kind, "Cal", StringComparison.OrdinalIgnoreCase))
+        {
+            var c = _config.Calipers.FirstOrDefault(x => string.Equals(x.Name, name, StringComparison.OrdinalIgnoreCase));
+            if (c is not null) c.SearchRoi = roi;
+            return;
+        }
+
         if (string.Equals(kind, "LP", StringComparison.OrdinalIgnoreCase))
         {
             var l = _config.LinePairDetections.FirstOrDefault(x => string.Equals(x.Name, name, StringComparison.OrdinalIgnoreCase));
@@ -1044,6 +1053,18 @@ public sealed partial class ToolEditorViewModel : ObservableObject
                 if (l is not null)
                 {
                     l.SearchRoi = roi;
+                    RunFlow();
+                    RequestAutoSave();
+                    return;
+                }
+            }
+
+            if (string.Equals(kind, "Cal", StringComparison.OrdinalIgnoreCase))
+            {
+                var c = _config.Calipers.FirstOrDefault(x => string.Equals(x.Name, name, StringComparison.OrdinalIgnoreCase));
+                if (c is not null)
+                {
+                    c.SearchRoi = roi;
                     RunFlow();
                     RequestAutoSave();
                     return;
@@ -1513,6 +1534,7 @@ public sealed partial class ToolEditorViewModel : ObservableObject
     private void RaiseToolPropertyPanelsChanged()
     {
         OnPropertyChanged(nameof(IsLineNode));
+        OnPropertyChanged(nameof(IsCaliperNode));
         OnPropertyChanged(nameof(IsLinePairDetectionNode));
         OnPropertyChanged(nameof(IsDistanceNode));
         OnPropertyChanged(nameof(IsLineLineDistanceNode));
@@ -1576,11 +1598,24 @@ public sealed partial class ToolEditorViewModel : ObservableObject
         OnPropertyChanged(nameof(Blob_MaxBlobArea));
         OnPropertyChanged(nameof(Blob_LastRunCount));
 
+        OnPropertyChanged(nameof(AvailableCaliperOrientations));
+        OnPropertyChanged(nameof(AvailableEdgePolarities));
+        OnPropertyChanged(nameof(Caliper_Orientation));
+        OnPropertyChanged(nameof(Caliper_Polarity));
+        OnPropertyChanged(nameof(Caliper_StripCount));
+        OnPropertyChanged(nameof(Caliper_StripWidth));
+        OnPropertyChanged(nameof(Caliper_StripLength));
+        OnPropertyChanged(nameof(Caliper_MinEdgeStrength));
+        OnPropertyChanged(nameof(Caliper_LastRunFound));
+        OnPropertyChanged(nameof(Caliper_LastRunAvgStrength));
+
         OnPropertyChanged(nameof(ShowRoisInSelectedPreview));
         OnPropertyChanged(nameof(ShowRoisInFinalPreview));
     }
 
     public bool IsLineNode => string.Equals(SelectedNode?.Type, "Line", StringComparison.OrdinalIgnoreCase);
+
+    public bool IsCaliperNode => string.Equals(SelectedNode?.Type, "Caliper", StringComparison.OrdinalIgnoreCase);
 
     public bool IsDistanceNode => string.Equals(SelectedNode?.Type, "Distance", StringComparison.OrdinalIgnoreCase);
 
@@ -2030,6 +2065,14 @@ public sealed partial class ToolEditorViewModel : ObservableObject
             {
                 list.Add(l);
             }
+
+            foreach (var c in _config.Calipers.Select(x => x.Name).Where(x => !string.IsNullOrWhiteSpace(x)))
+            {
+                if (!list.Contains(c))
+                {
+                    list.Add(c);
+                }
+            }
             return list;
         }
     }
@@ -2198,7 +2241,8 @@ public sealed partial class ToolEditorViewModel : ObservableObject
             RemoveEdgesToSelectedNodePort(port);
             if (!string.IsNullOrWhiteSpace(lineName))
             {
-                var from = Nodes.FirstOrDefault(n => string.Equals(n.Type, "Line", StringComparison.OrdinalIgnoreCase)
+                var from = Nodes.FirstOrDefault(n => (string.Equals(n.Type, "Line", StringComparison.OrdinalIgnoreCase)
+                                                      || string.Equals(n.Type, "Caliper", StringComparison.OrdinalIgnoreCase))
                                                      && string.Equals(n.RefName, lineName, StringComparison.OrdinalIgnoreCase));
                 if (from is not null)
                 {
@@ -2224,9 +2268,14 @@ public sealed partial class ToolEditorViewModel : ObservableObject
             RemoveEdgesToSelectedNodePort(port);
             if (!string.IsNullOrWhiteSpace(refName))
             {
-                var expectedType = string.Equals(port, "P", StringComparison.OrdinalIgnoreCase) ? "Point" : "Line";
-                var from = Nodes.FirstOrDefault(n => string.Equals(n.Type, expectedType, StringComparison.OrdinalIgnoreCase)
-                                                     && string.Equals(n.RefName, refName, StringComparison.OrdinalIgnoreCase));
+                var from = Nodes.FirstOrDefault(n =>
+                    string.Equals(n.RefName, refName, StringComparison.OrdinalIgnoreCase)
+                    && (
+                        (string.Equals(port, "P", StringComparison.OrdinalIgnoreCase) && string.Equals(n.Type, "Point", StringComparison.OrdinalIgnoreCase))
+                        || (string.Equals(port, "L", StringComparison.OrdinalIgnoreCase)
+                            && (string.Equals(n.Type, "Line", StringComparison.OrdinalIgnoreCase)
+                                || string.Equals(n.Type, "Caliper", StringComparison.OrdinalIgnoreCase)))
+                    ));
                 if (from is not null)
                 {
                     CreateEdge(from, SelectedNode, "Out", port);
@@ -2260,6 +2309,119 @@ public sealed partial class ToolEditorViewModel : ObservableObject
         if (!string.Equals(SelectedNode.Type, "Line", StringComparison.OrdinalIgnoreCase)) return null;
         return _config.Lines.FirstOrDefault(x => string.Equals(x.Name, SelectedNode.RefName, StringComparison.OrdinalIgnoreCase));
     }
+
+    private CaliperDefinition? SelectedCaliperDef()
+    {
+        if (_config is null || SelectedNode is null) return null;
+        if (!string.Equals(SelectedNode.Type, "Caliper", StringComparison.OrdinalIgnoreCase)) return null;
+        return _config.Calipers.FirstOrDefault(x => string.Equals(x.Name, SelectedNode.RefName, StringComparison.OrdinalIgnoreCase));
+    }
+
+    public ObservableCollection<CaliperOrientation> AvailableCaliperOrientations { get; }
+        = new ObservableCollection<CaliperOrientation>((CaliperOrientation[])Enum.GetValues(typeof(CaliperOrientation)));
+
+    public ObservableCollection<EdgePolarity> AvailableEdgePolarities { get; }
+        = new ObservableCollection<EdgePolarity>((EdgePolarity[])Enum.GetValues(typeof(EdgePolarity)));
+
+    public CaliperOrientation Caliper_Orientation
+    {
+        get => SelectedCaliperDef()?.Orientation ?? CaliperOrientation.Vertical;
+        set
+        {
+            var d = SelectedCaliperDef();
+            if (d is null) return;
+            if (d.Orientation == value) return;
+            d.Orientation = value;
+            RunFlow();
+            RequestAutoSave();
+            OnPropertyChanged();
+        }
+    }
+
+    public EdgePolarity Caliper_Polarity
+    {
+        get => SelectedCaliperDef()?.Polarity ?? EdgePolarity.Any;
+        set
+        {
+            var d = SelectedCaliperDef();
+            if (d is null) return;
+            if (d.Polarity == value) return;
+            d.Polarity = value;
+            RunFlow();
+            RequestAutoSave();
+            OnPropertyChanged();
+        }
+    }
+
+    public int Caliper_StripCount
+    {
+        get => SelectedCaliperDef()?.StripCount ?? 0;
+        set
+        {
+            var d = SelectedCaliperDef();
+            if (d is null) return;
+            var v = Math.Clamp(value, 1, 200);
+            if (d.StripCount == v) return;
+            d.StripCount = v;
+            RunFlow();
+            RequestAutoSave();
+            OnPropertyChanged();
+        }
+    }
+
+    public int Caliper_StripWidth
+    {
+        get => SelectedCaliperDef()?.StripWidth ?? 0;
+        set
+        {
+            var d = SelectedCaliperDef();
+            if (d is null) return;
+            var v = Math.Max(1, value);
+            if (d.StripWidth == v) return;
+            d.StripWidth = v;
+            RunFlow();
+            RequestAutoSave();
+            OnPropertyChanged();
+        }
+    }
+
+    public int Caliper_StripLength
+    {
+        get => SelectedCaliperDef()?.StripLength ?? 0;
+        set
+        {
+            var d = SelectedCaliperDef();
+            if (d is null) return;
+            var v = Math.Max(3, value);
+            if (d.StripLength == v) return;
+            d.StripLength = v;
+            RunFlow();
+            RequestAutoSave();
+            OnPropertyChanged();
+        }
+    }
+
+    public double Caliper_MinEdgeStrength
+    {
+        get => SelectedCaliperDef()?.MinEdgeStrength ?? 0.0;
+        set
+        {
+            var d = SelectedCaliperDef();
+            if (d is null) return;
+            var v = Math.Max(0.0, value);
+            if (Math.Abs(d.MinEdgeStrength - v) < 0.0000001) return;
+            d.MinEdgeStrength = v;
+            RunFlow();
+            RequestAutoSave();
+            OnPropertyChanged();
+        }
+    }
+
+    public bool? Caliper_LastRunFound
+        => _lastRun?.Calipers.FirstOrDefault(x => string.Equals(x.Name, SelectedNode?.RefName, StringComparison.OrdinalIgnoreCase))?.Found;
+
+    public double? Caliper_LastRunAvgStrength
+        => _lastRun?.Calipers.FirstOrDefault(x => string.Equals(x.Name, SelectedNode?.RefName, StringComparison.OrdinalIgnoreCase))?.AvgStrength;
 
     public int Line_Canny1
     {
@@ -2876,6 +3038,11 @@ public sealed partial class ToolEditorViewModel : ObservableObject
                 _config.Lines.RemoveAll(x => string.Equals(x.Name, toRemove.RefName, StringComparison.OrdinalIgnoreCase));
             }
 
+            if (string.Equals(toRemove.Type, "Caliper", StringComparison.OrdinalIgnoreCase))
+            {
+                _config.Calipers.RemoveAll(x => string.Equals(x.Name, toRemove.RefName, StringComparison.OrdinalIgnoreCase));
+            }
+
             if (string.Equals(toRemove.Type, "Distance", StringComparison.OrdinalIgnoreCase))
             {
                 _config.Distances.RemoveAll(x => string.Equals(x.Name, toRemove.RefName, StringComparison.OrdinalIgnoreCase));
@@ -3039,6 +3206,18 @@ public sealed partial class ToolEditorViewModel : ObservableObject
             return;
         }
 
+        if (string.Equals(node.Type, "Caliper", StringComparison.OrdinalIgnoreCase))
+        {
+            var existed = _config.Calipers.Any(x => string.Equals(x.Name, node.RefName, StringComparison.OrdinalIgnoreCase));
+            if (!existed)
+            {
+                var def = new CaliperDefinition { Name = node.RefName };
+                def.SearchRoi = DefaultRoi();
+                _config.Calipers.Add(def);
+            }
+            return;
+        }
+
         if (string.Equals(node.Type, "Distance", StringComparison.OrdinalIgnoreCase))
         {
             var existed = _config.Distances.Any(x => string.Equals(x.Name, node.RefName, StringComparison.OrdinalIgnoreCase));
@@ -3148,6 +3327,11 @@ public sealed partial class ToolEditorViewModel : ObservableObject
         {
             baseName = "L";
             exists = n => _config.Lines.Any(x => string.Equals(x.Name, n, StringComparison.OrdinalIgnoreCase));
+        }
+        else if (string.Equals(type, "Caliper", StringComparison.OrdinalIgnoreCase))
+        {
+            baseName = "CAL";
+            exists = n => _config.Calipers.Any(x => string.Equals(x.Name, n, StringComparison.OrdinalIgnoreCase));
         }
         else if (string.Equals(type, "LinePairDetection", StringComparison.OrdinalIgnoreCase))
         {
@@ -3267,7 +3451,8 @@ public sealed partial class ToolEditorViewModel : ObservableObject
             }
         }
         else if (string.Equals(toNode.Type, "LineLineDistance", StringComparison.OrdinalIgnoreCase)
-                 && string.Equals(fromNode.Type, "Line", StringComparison.OrdinalIgnoreCase))
+                 && (string.Equals(fromNode.Type, "Line", StringComparison.OrdinalIgnoreCase)
+                     || string.Equals(fromNode.Type, "Caliper", StringComparison.OrdinalIgnoreCase)))
         {
             var def = _config.LineToLineDistances.FirstOrDefault(x => string.Equals(x.Name, toNode.RefName, StringComparison.OrdinalIgnoreCase));
             if (def is not null)
@@ -3287,15 +3472,19 @@ public sealed partial class ToolEditorViewModel : ObservableObject
                     def.Point = fromNode.RefName;
                 }
                 else if (string.Equals(toPort, "L", StringComparison.OrdinalIgnoreCase)
-                         && string.Equals(fromNode.Type, "Line", StringComparison.OrdinalIgnoreCase))
+                         && (string.Equals(fromNode.Type, "Line", StringComparison.OrdinalIgnoreCase)
+                             || string.Equals(fromNode.Type, "Caliper", StringComparison.OrdinalIgnoreCase)))
                 {
                     def.Line = fromNode.RefName;
                 }
             }
         }
 
-        RaiseToolPropertyPanelsChanged();
-        RefreshPreviews();
+        if (!_syncingInputs)
+        {
+            RaiseToolPropertyPanelsChanged();
+            RefreshPreviews();
+        }
     }
 
     private void Node_PropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
@@ -3363,6 +3552,7 @@ public sealed partial class ToolEditorViewModel : ObservableObject
                     && (string.Equals(SelectedNode.Type, "Origin", StringComparison.OrdinalIgnoreCase)
                         || string.Equals(SelectedNode.Type, "Point", StringComparison.OrdinalIgnoreCase)
                         || string.Equals(SelectedNode.Type, "Line", StringComparison.OrdinalIgnoreCase)
+                        || string.Equals(SelectedNode.Type, "Caliper", StringComparison.OrdinalIgnoreCase)
                         || string.Equals(SelectedNode.Type, "LinePairDetection", StringComparison.OrdinalIgnoreCase)
                         || string.Equals(SelectedNode.Type, "BlobDetection", StringComparison.OrdinalIgnoreCase)))
                 {
@@ -3620,6 +3810,50 @@ public sealed partial class ToolEditorViewModel : ObservableObject
             });
         }
 
+        foreach (var c in _config.Calipers)
+        {
+            if (c.SearchRoi.Width <= 0 || c.SearchRoi.Height <= 0)
+            {
+                continue;
+            }
+
+            dst.Add(new OverlayRectItem
+            {
+                X = c.SearchRoi.X,
+                Y = c.SearchRoi.Y,
+                Width = c.SearchRoi.Width,
+                Height = c.SearchRoi.Height,
+                Stroke = Brushes.Lime,
+                Label = $"{c.Name} Cal"
+            });
+
+            var stripCount = Math.Clamp(c.StripCount, 1, 100);
+            var stripLength = Math.Max(3, c.StripLength);
+            if (stripCount > 0)
+            {
+                if (c.Orientation == CaliperOrientation.Vertical)
+                {
+                    var y1 = c.SearchRoi.Y + (c.SearchRoi.Height - stripLength) / 2.0;
+                    var y2 = y1 + stripLength;
+                    for (var i = 0; i < stripCount; i++)
+                    {
+                        var x = c.SearchRoi.X + (i + 0.5) * c.SearchRoi.Width / stripCount;
+                        dst.Add(new OverlayLineItem { X1 = x, Y1 = y1, X2 = x, Y2 = y2, Stroke = Brushes.Lime, StrokeThickness = 1.0 });
+                    }
+                }
+                else
+                {
+                    var x1 = c.SearchRoi.X + (c.SearchRoi.Width - stripLength) / 2.0;
+                    var x2 = x1 + stripLength;
+                    for (var i = 0; i < stripCount; i++)
+                    {
+                        var y = c.SearchRoi.Y + (i + 0.5) * c.SearchRoi.Height / stripCount;
+                        dst.Add(new OverlayLineItem { X1 = x1, Y1 = y, X2 = x2, Y2 = y, Stroke = Brushes.Lime, StrokeThickness = 1.0 });
+                    }
+                }
+            }
+        }
+
         foreach (var b in _config.BlobDetections)
         {
             if (b.Rois is not null && b.Rois.Count > 0)
@@ -3753,21 +3987,39 @@ public sealed partial class ToolEditorViewModel : ObservableObject
         void AddLineRoi(string lineName)
         {
             var l = _config.Lines.FirstOrDefault(x => string.Equals(x.Name, lineName, StringComparison.OrdinalIgnoreCase));
-            if (l is null)
+            if (l is not null)
+            {
+                if (l.SearchRoi.Width > 0 && l.SearchRoi.Height > 0)
+                {
+                    dst.Add(new OverlayRectItem
+                    {
+                        X = l.SearchRoi.X,
+                        Y = l.SearchRoi.Y,
+                        Width = l.SearchRoi.Width,
+                        Height = l.SearchRoi.Height,
+                        Stroke = Brushes.MediumPurple,
+                        Label = $"{l.Name} L"
+                    });
+                }
+                return;
+            }
+
+            var c = _config.Calipers.FirstOrDefault(x => string.Equals(x.Name, lineName, StringComparison.OrdinalIgnoreCase));
+            if (c is null)
             {
                 return;
             }
 
-            if (l.SearchRoi.Width > 0 && l.SearchRoi.Height > 0)
+            if (c.SearchRoi.Width > 0 && c.SearchRoi.Height > 0)
             {
                 dst.Add(new OverlayRectItem
                 {
-                    X = l.SearchRoi.X,
-                    Y = l.SearchRoi.Y,
-                    Width = l.SearchRoi.Width,
-                    Height = l.SearchRoi.Height,
-                    Stroke = Brushes.MediumPurple,
-                    Label = $"{l.Name} L"
+                    X = c.SearchRoi.X,
+                    Y = c.SearchRoi.Y,
+                    Width = c.SearchRoi.Width,
+                    Height = c.SearchRoi.Height,
+                    Stroke = Brushes.Gold,
+                    Label = $"{c.Name} Cal"
                 });
             }
         }
@@ -3905,6 +4157,52 @@ public sealed partial class ToolEditorViewModel : ObservableObject
             }
 
             if (showRois) AddLineRoi(l.Name);
+            return;
+        }
+
+        if (string.Equals(node.Type, "Caliper", StringComparison.OrdinalIgnoreCase))
+        {
+            var c = _config.Calipers.FirstOrDefault(x => string.Equals(x.Name, node.RefName, StringComparison.OrdinalIgnoreCase));
+            if (c is null)
+            {
+                return;
+            }
+
+            if (showRois && c.SearchRoi.Width > 0 && c.SearchRoi.Height > 0)
+            {
+                dst.Add(new OverlayRectItem
+                {
+                    X = c.SearchRoi.X,
+                    Y = c.SearchRoi.Y,
+                    Width = c.SearchRoi.Width,
+                    Height = c.SearchRoi.Height,
+                    Stroke = Brushes.Lime,
+                    Label = $"{c.Name} Cal"
+                });
+
+                var stripCount = Math.Clamp(c.StripCount, 1, 100);
+                var stripLength = Math.Max(3, c.StripLength);
+                if (c.Orientation == CaliperOrientation.Vertical)
+                {
+                    var y1 = c.SearchRoi.Y + (c.SearchRoi.Height - stripLength) / 2.0;
+                    var y2 = y1 + stripLength;
+                    for (var i = 0; i < stripCount; i++)
+                    {
+                        var x = c.SearchRoi.X + (i + 0.5) * c.SearchRoi.Width / stripCount;
+                        dst.Add(new OverlayLineItem { X1 = x, Y1 = y1, X2 = x, Y2 = y2, Stroke = Brushes.Lime, StrokeThickness = 1.0 });
+                    }
+                }
+                else
+                {
+                    var x1 = c.SearchRoi.X + (c.SearchRoi.Width - stripLength) / 2.0;
+                    var x2 = x1 + stripLength;
+                    for (var i = 0; i < stripCount; i++)
+                    {
+                        var y = c.SearchRoi.Y + (i + 0.5) * c.SearchRoi.Height / stripCount;
+                        dst.Add(new OverlayLineItem { X1 = x1, Y1 = y, X2 = x2, Y2 = y, Stroke = Brushes.Lime, StrokeThickness = 1.0 });
+                    }
+                }
+            }
             return;
         }
 
@@ -4103,6 +4401,31 @@ public sealed partial class ToolEditorViewModel : ObservableObject
             dst.Add(new OverlayLineItem { X1 = lpd.ClosestA.X, Y1 = lpd.ClosestA.Y, X2 = lpd.ClosestB.X, Y2 = lpd.ClosestB.Y, Stroke = lpd.Pass ? Brushes.Lime : Brushes.Red, Label = $"{lpd.Name}: {lpd.Value:0.###}" });
         }
 
+        foreach (var cal in run.Calipers)
+        {
+            if (!cal.Found)
+            {
+                continue;
+            }
+
+            dst.Add(new OverlayLineItem
+            {
+                X1 = cal.LineP1.X,
+                Y1 = cal.LineP1.Y,
+                X2 = cal.LineP2.X,
+                Y2 = cal.LineP2.Y,
+                Stroke = Brushes.Gold,
+                Label = cal.Name
+            });
+
+            var step = Math.Max(1, cal.Points.Count / 60);
+            for (var i = 0; i < cal.Points.Count; i += step)
+            {
+                var p = cal.Points[i];
+                dst.Add(new OverlayPointItem { X = p.X, Y = p.Y, Radius = 2.0, Stroke = Brushes.Gold, Label = string.Empty });
+            }
+        }
+
         foreach (var cdt in run.CodeDetections)
         {
             if (!cdt.Found)
@@ -4181,7 +4504,7 @@ public sealed partial class ToolEditorViewModel : ObservableObject
         }
     }
 
-    private static void BuildOverlayForNodeFromRun(ToolGraphNodeViewModel node, InspectionResult run, ObservableCollection<OverlayItem> dst)
+    private void BuildOverlayForNodeFromRun(ToolGraphNodeViewModel node, InspectionResult run, ObservableCollection<OverlayItem> dst)
     {
         if (string.Equals(node.Type, "Origin", StringComparison.OrdinalIgnoreCase))
         {
@@ -4258,6 +4581,40 @@ public sealed partial class ToolEditorViewModel : ObservableObject
             return;
         }
 
+        if (string.Equals(node.Type, "Caliper", StringComparison.OrdinalIgnoreCase))
+        {
+            var r = run.Calipers.FirstOrDefault(x => string.Equals(x.Name, node.RefName, StringComparison.OrdinalIgnoreCase));
+            if (r is null)
+            {
+                return;
+            }
+
+            if (r.Found)
+            {
+                dst.Add(new OverlayLineItem
+                {
+                    X1 = r.LineP1.X,
+                    Y1 = r.LineP1.Y,
+                    X2 = r.LineP2.X,
+                    Y2 = r.LineP2.Y,
+                    Stroke = Brushes.Lime,
+                    Label = r.Name
+                });
+            }
+
+            if (r.Points is not null)
+            {
+                var n = Math.Min(r.Points.Count, 60);
+                for (var i = 0; i < n; i++)
+                {
+                    var p = r.Points[i];
+                    dst.Add(new OverlayPointItem { X = p.X, Y = p.Y, Radius = 2.0, Stroke = Brushes.Gold, Label = string.Empty });
+                }
+            }
+
+            return;
+        }
+
         if (string.Equals(node.Type, "Distance", StringComparison.OrdinalIgnoreCase))
         {
             var d = run.Distances.FirstOrDefault(x => string.Equals(x.Name, node.RefName, StringComparison.OrdinalIgnoreCase));
@@ -4310,8 +4667,25 @@ public sealed partial class ToolEditorViewModel : ObservableObject
                 return;
             }
 
-            var la = run.Lines.FirstOrDefault(x => string.Equals(x.Name, dd.RefA, StringComparison.OrdinalIgnoreCase));
-            var lb = run.Lines.FirstOrDefault(x => string.Equals(x.Name, dd.RefB, StringComparison.OrdinalIgnoreCase));
+            static LineDetectResult? ResolveLineRef(InspectionResult r, string name)
+            {
+                var l = r.Lines.FirstOrDefault(x => string.Equals(x.Name, name, StringComparison.OrdinalIgnoreCase));
+                if (l is not null) return l;
+
+                var c = r.Calipers.FirstOrDefault(x => string.Equals(x.Name, name, StringComparison.OrdinalIgnoreCase));
+                if (c is not null && c.Found)
+                {
+                    var dx = c.LineP2.X - c.LineP1.X;
+                    var dy = c.LineP2.Y - c.LineP1.Y;
+                    var len = Math.Sqrt(dx * dx + dy * dy);
+                    return new LineDetectResult(c.Name, c.LineP1, c.LineP2, len, Found: true);
+                }
+
+                return null;
+            }
+
+            var la = ResolveLineRef(run, dd.RefA);
+            var lb = ResolveLineRef(run, dd.RefB);
             if (la is null || lb is null || !la.Found || !lb.Found)
             {
                 return;
@@ -4359,7 +4733,28 @@ public sealed partial class ToolEditorViewModel : ObservableObject
             }
 
             var p = run.Points.FirstOrDefault(x => string.Equals(x.Name, dd.RefA, StringComparison.OrdinalIgnoreCase));
-            var l = run.Lines.FirstOrDefault(x => string.Equals(x.Name, dd.RefB, StringComparison.OrdinalIgnoreCase));
+
+            LineDetectResult? l;
+            {
+                var ll = run.Lines.FirstOrDefault(x => string.Equals(x.Name, dd.RefB, StringComparison.OrdinalIgnoreCase));
+                if (ll is not null) l = ll;
+                else
+                {
+                    var c = run.Calipers.FirstOrDefault(x => string.Equals(x.Name, dd.RefB, StringComparison.OrdinalIgnoreCase));
+                    if (c is not null && c.Found)
+                    {
+                        var dx = c.LineP2.X - c.LineP1.X;
+                        var dy = c.LineP2.Y - c.LineP1.Y;
+                        var len = Math.Sqrt(dx * dx + dy * dy);
+                        l = new LineDetectResult(c.Name, c.LineP1, c.LineP2, len, Found: true);
+                    }
+                    else
+                    {
+                        l = null;
+                    }
+                }
+            }
+
             if (p is null || l is null || !l.Found)
             {
                 return;
@@ -5094,6 +5489,7 @@ public sealed partial class ToolGraphNodeViewModel : ObservableObject
         else if (string.Equals(Type, "Origin", StringComparison.OrdinalIgnoreCase)
                  || string.Equals(Type, "Point", StringComparison.OrdinalIgnoreCase)
                  || string.Equals(Type, "Line", StringComparison.OrdinalIgnoreCase)
+                 || string.Equals(Type, "Caliper", StringComparison.OrdinalIgnoreCase)
                  || string.Equals(Type, "LinePairDetection", StringComparison.OrdinalIgnoreCase)
                  || string.Equals(Type, "BlobDetection", StringComparison.OrdinalIgnoreCase)
                  || string.Equals(Type, "CodeDetection", StringComparison.OrdinalIgnoreCase))
