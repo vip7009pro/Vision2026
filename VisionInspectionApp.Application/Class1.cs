@@ -16,6 +16,42 @@ public interface IConfigService
     void SaveConfig(VisionConfig config);
 }
 
+public sealed record EdgePairDetectResult(
+    string Name,
+    bool Found,
+    Point2d L1P1,
+    Point2d L1P2,
+    Point2d L2P1,
+    Point2d L2P2,
+    double Value,
+    double Nominal,
+    double TolPlus,
+    double TolMinus,
+    bool Pass,
+    Point2d ClosestA,
+    Point2d ClosestB,
+    List<CaliperEdgePoint> Edge1Points,
+    List<CaliperEdgePoint> Edge2Points);
+
+public sealed record CircleFinderResult(
+    string Name,
+    bool Found,
+    Point2d Center,
+    double RadiusPx,
+    double Score);
+
+public sealed record DiameterResult(
+    string Name,
+    string CircleRef,
+    bool Found,
+    double Value,
+    double Nominal,
+    double TolPlus,
+    double TolMinus,
+    bool Pass,
+    Point2d Center,
+    double RadiusPx);
+
 public sealed class ConfigStoreOptions
 {
     public string ConfigRootDirectory { get; set; } = "configs";
@@ -32,8 +68,10 @@ public sealed class InspectionTimings
     public int BlobsMs { get; set; }
     public int LpdMs { get; set; }
     public int CalipersMs { get; set; }
+    public int EdgePairDetectMs { get; set; }
     public int AnglesMs { get; set; }
     public int DistancesMs { get; set; }
+    public int EdgePairsMs { get; set; }
     public int ConditionsMs { get; set; }
     public int DefectsMs { get; set; }
     public int CdtMs { get; set; }
@@ -65,12 +103,37 @@ public sealed class InspectionResult
 
     public List<LinePairDetectionResult> LinePairDetections { get; } = new();
 
+    public List<EdgePairResult> EdgePairs { get; } = new();
+
+    public List<EdgePairDetectResult> EdgePairDetections { get; } = new();
+
+    public List<CircleFinderResult> CircleFinders { get; } = new();
+
+    public List<DiameterResult> Diameters { get; } = new();
+
     public List<CaliperResult> Calipers { get; } = new();
 
     public List<CodeDetectionResult> CodeDetections { get; } = new();
 
     public DefectDetectionResult? Defects { get; set; }
 }
+
+public sealed record EdgePairResult(
+    string Name,
+    string RefA,
+    string RefB,
+    bool Found,
+    Point2d L1P1,
+    Point2d L1P2,
+    Point2d L2P1,
+    Point2d L2P2,
+    double Value,
+    double Nominal,
+    double TolPlus,
+    double TolMinus,
+    bool Pass,
+    Point2d ClosestA,
+    Point2d ClosestB);
 
 public sealed record ConditionResult(string Name, string Expression, bool Pass, string? Error);
 
@@ -864,6 +927,460 @@ public sealed class InspectionService : IInspectionService
             Task.WaitAll(caliperTasks);
             var tCalDone = swTotal.ElapsedMilliseconds;
 
+            var tEpdQueued = swTotal.ElapsedMilliseconds;
+
+            static EdgePairDetectResult DetectEdgePair(Mat matBgrOrGray, Roi roi, EdgePairDetectDefinition def, double pixelsPerMm)
+            {
+                if (matBgrOrGray is null || roi.Width <= 0 || roi.Height <= 0)
+                {
+                    return new EdgePairDetectResult(def.Name, Found: false, default, default, default, default, double.NaN, def.Nominal, def.TolerancePlus, def.ToleranceMinus, Pass: false, default, default,
+                        new List<CaliperEdgePoint>(), new List<CaliperEdgePoint>());
+                }
+
+                var rect = new Rect(roi.X, roi.Y, roi.Width, roi.Height)
+                    .Intersect(new Rect(0, 0, matBgrOrGray.Width, matBgrOrGray.Height));
+                if (rect.Width <= 0 || rect.Height <= 0)
+                {
+                    return new EdgePairDetectResult(def.Name, Found: false, default, default, default, default, double.NaN, def.Nominal, def.TolerancePlus, def.ToleranceMinus, Pass: false, default, default,
+                        new List<CaliperEdgePoint>(), new List<CaliperEdgePoint>());
+                }
+
+                using var crop = new Mat(matBgrOrGray, rect);
+                Mat gray = crop;
+                using var grayOwned = crop.Channels() == 1 ? null : crop.CvtColor(ColorConversionCodes.BGR2GRAY);
+                if (grayOwned is not null) gray = grayOwned;
+
+                var stripCount = Math.Clamp(def.StripCount, 1, 200);
+                var stripWidth = Math.Clamp(def.StripWidth, 1, Math.Max(1, Math.Min(rect.Width, rect.Height)));
+                var stripLength = Math.Clamp(def.StripLength, 3, Math.Max(3, Math.Max(rect.Width, rect.Height)));
+                var minSep = Math.Clamp(def.MinEdgeSeparationPx, 1, Math.Max(1, Math.Max(rect.Width, rect.Height)));
+
+                var e1 = new List<CaliperEdgePoint>(stripCount);
+                var e2 = new List<CaliperEdgePoint>(stripCount);
+
+                static double InterpPeak(double a, double b, double c)
+                {
+                    var denom = (a - 2 * b + c);
+                    if (Math.Abs(denom) < 1e-12) return 0.0;
+                    return 0.5 * (a - c) / denom;
+                }
+
+                for (var i = 0; i < stripCount; i++)
+                {
+                    if (def.Orientation == CaliperOrientation.Vertical)
+                    {
+                        var xCenter = (i + 0.5) * rect.Width / stripCount;
+                        var x0 = (int)Math.Round(xCenter - stripWidth / 2.0);
+                        var y0 = (int)Math.Round((rect.Height - stripLength) / 2.0);
+                        var sr = new Rect(x0, y0, stripWidth, stripLength)
+                            .Intersect(new Rect(0, 0, rect.Width, rect.Height));
+                        if (sr.Width <= 0 || sr.Height <= 2) continue;
+
+                        using var s = new Mat(gray, sr);
+                        using var prof = new Mat();
+                        Cv2.Reduce(s, prof, dim: ReduceDimension.Column, ReduceTypes.Avg, MatType.CV_64F);
+                        var n = prof.Rows;
+                        if (n < 3) continue;
+
+                        double Sm(int y)
+                        {
+                            if (y <= 0) return prof.Get<double>(0, 0);
+                            if (y >= n - 1) return prof.Get<double>(n - 1, 0);
+                            return (prof.Get<double>(y - 1, 0) + prof.Get<double>(y, 0) + prof.Get<double>(y + 1, 0)) / 3.0;
+                        }
+
+                        var candidates = new List<(int idx, double g)>(n);
+                        var maxG = 0.0;
+                        for (var y = 1; y < n - 1; y++)
+                        {
+                            var v0 = Sm(y - 1);
+                            var v2 = Sm(y + 1);
+                            var g = (v2 - v0) * 0.5;
+                            if (def.Polarity == EdgePolarity.DarkToLight) { if (g <= 0) continue; }
+                            else if (def.Polarity == EdgePolarity.LightToDark) { if (g >= 0) continue; g = -g; }
+                            else { g = Math.Abs(g); }
+
+                            if (g > maxG) maxG = g;
+                            candidates.Add((y, g));
+                        }
+
+                        if (candidates.Count < 2) continue;
+
+                        var effMin = Math.Max(0.0, Math.Min(def.MinEdgeStrength, maxG * 0.5));
+                        candidates.Sort((a, b) => b.g.CompareTo(a.g));
+                        if (candidates.Count > 40) candidates.RemoveRange(40, candidates.Count - 40);
+
+                        var bestA = (-1, 0.0);
+                        var bestB = (-1, 0.0);
+                        var bestScore = double.NegativeInfinity;
+                        for (var a = 0; a < candidates.Count; a++)
+                        {
+                            for (var b = a + 1; b < candidates.Count; b++)
+                            {
+                                var candA = candidates[a];
+                                var candB = candidates[b];
+                                if (Math.Abs(candA.idx - candB.idx) < minSep) continue;
+                                var score = candA.g + candB.g;
+                                if (score > bestScore)
+                                {
+                                    bestScore = score;
+                                    bestA = candA;
+                                    bestB = candB;
+                                }
+                            }
+                        }
+
+                        if (bestA.Item1 < 1 || bestB.Item1 < 1) continue;
+                        if (bestA.Item2 < effMin || bestB.Item2 < effMin) continue;
+
+                        // order by coordinate: edge1 smaller y, edge2 larger y
+                        var idxA = bestA.Item1;
+                        var idxB = bestB.Item1;
+                        var valA = bestA.Item2;
+                        var valB = bestB.Item2;
+                        if (idxA > idxB)
+                        {
+                            (idxA, idxB) = (idxB, idxA);
+                            (valA, valB) = (valB, valA);
+                        }
+
+                        double SubAt(int idx)
+                        {
+                            var gL = Math.Abs(prof.Get<double>(idx, 0) - prof.Get<double>(idx - 1, 0));
+                            var gC = Math.Abs(prof.Get<double>(idx + 1, 0) - prof.Get<double>(idx - 1, 0)) * 0.5;
+                            var gR = Math.Abs(prof.Get<double>(idx + 1, 0) - prof.Get<double>(idx, 0));
+                            return InterpPeak(gL, gC, gR);
+                        }
+
+                        var ySubA = idxA + SubAt(idxA);
+                        var ySubB = idxB + SubAt(idxB);
+                        var xGlobal = rect.X + sr.X + sr.Width / 2.0;
+                        e1.Add(new CaliperEdgePoint(xGlobal, rect.Y + sr.Y + ySubA, valA));
+                        e2.Add(new CaliperEdgePoint(xGlobal, rect.Y + sr.Y + ySubB, valB));
+                    }
+                    else
+                    {
+                        var yCenter = (i + 0.5) * rect.Height / stripCount;
+                        var y0 = (int)Math.Round(yCenter - stripWidth / 2.0);
+                        var x0 = (int)Math.Round((rect.Width - stripLength) / 2.0);
+                        var sr = new Rect(x0, y0, stripLength, stripWidth)
+                            .Intersect(new Rect(0, 0, rect.Width, rect.Height));
+                        if (sr.Width <= 2 || sr.Height <= 0) continue;
+
+                        using var s = new Mat(gray, sr);
+                        using var prof = new Mat();
+                        Cv2.Reduce(s, prof, dim: ReduceDimension.Row, ReduceTypes.Avg, MatType.CV_64F);
+                        var n = prof.Cols;
+                        if (n < 3) continue;
+
+                        double Sm(int x)
+                        {
+                            if (x <= 0) return prof.Get<double>(0, 0);
+                            if (x >= n - 1) return prof.Get<double>(0, n - 1);
+                            return (prof.Get<double>(0, x - 1) + prof.Get<double>(0, x) + prof.Get<double>(0, x + 1)) / 3.0;
+                        }
+
+                        var candidates = new List<(int idx, double g)>(n);
+                        var maxG = 0.0;
+                        for (var x = 1; x < n - 1; x++)
+                        {
+                            var v0 = Sm(x - 1);
+                            var v2 = Sm(x + 1);
+                            var g = (v2 - v0) * 0.5;
+                            if (def.Polarity == EdgePolarity.DarkToLight) { if (g <= 0) continue; }
+                            else if (def.Polarity == EdgePolarity.LightToDark) { if (g >= 0) continue; g = -g; }
+                            else { g = Math.Abs(g); }
+
+                            if (g > maxG) maxG = g;
+                            candidates.Add((x, g));
+                        }
+
+                        if (candidates.Count < 2) continue;
+
+                        var effMin = Math.Max(0.0, Math.Min(def.MinEdgeStrength, maxG * 0.5));
+                        candidates.Sort((a, b) => b.g.CompareTo(a.g));
+                        if (candidates.Count > 40) candidates.RemoveRange(40, candidates.Count - 40);
+
+                        var bestA = (-1, 0.0);
+                        var bestB = (-1, 0.0);
+                        var bestScore = double.NegativeInfinity;
+                        for (var a = 0; a < candidates.Count; a++)
+                        {
+                            for (var b = a + 1; b < candidates.Count; b++)
+                            {
+                                var candA = candidates[a];
+                                var candB = candidates[b];
+                                if (Math.Abs(candA.idx - candB.idx) < minSep) continue;
+                                var score = candA.g + candB.g;
+                                if (score > bestScore)
+                                {
+                                    bestScore = score;
+                                    bestA = candA;
+                                    bestB = candB;
+                                }
+                            }
+                        }
+
+                        if (bestA.Item1 < 1 || bestB.Item1 < 1) continue;
+                        if (bestA.Item2 < effMin || bestB.Item2 < effMin) continue;
+
+                        var idxA = bestA.Item1;
+                        var idxB = bestB.Item1;
+                        var valA = bestA.Item2;
+                        var valB = bestB.Item2;
+                        if (idxA > idxB)
+                        {
+                            (idxA, idxB) = (idxB, idxA);
+                            (valA, valB) = (valB, valA);
+                        }
+
+                        double SubAt(int idx)
+                        {
+                            var gL = Math.Abs(prof.Get<double>(0, idx) - prof.Get<double>(0, idx - 1));
+                            var gC = Math.Abs(prof.Get<double>(0, idx + 1) - prof.Get<double>(0, idx - 1)) * 0.5;
+                            var gR = Math.Abs(prof.Get<double>(0, idx + 1) - prof.Get<double>(0, idx));
+                            return InterpPeak(gL, gC, gR);
+                        }
+
+                        var xSubA = idxA + SubAt(idxA);
+                        var xSubB = idxB + SubAt(idxB);
+                        var yGlobal = rect.Y + sr.Y + sr.Height / 2.0;
+                        e1.Add(new CaliperEdgePoint(rect.X + sr.X + xSubA, yGlobal, valA));
+                        e2.Add(new CaliperEdgePoint(rect.X + sr.X + xSubB, yGlobal, valB));
+                    }
+                }
+
+                if (e1.Count < 2 || e2.Count < 2)
+                {
+                    return new EdgePairDetectResult(def.Name, Found: false, default, default, default, default, double.NaN, def.Nominal, def.TolerancePlus, def.ToleranceMinus, Pass: false, default, default, e1, e2);
+                }
+
+                static (Point2d p1, Point2d p2) FitLineFromPoints(List<CaliperEdgePoint> pts)
+                {
+                    var meanX = pts.Average(p => p.X);
+                    var meanY = pts.Average(p => p.Y);
+                    var sxx = 0.0;
+                    var syy = 0.0;
+                    var sxy = 0.0;
+                    foreach (var p in pts)
+                    {
+                        var dx = p.X - meanX;
+                        var dy = p.Y - meanY;
+                        sxx += dx * dx;
+                        syy += dy * dy;
+                        sxy += dx * dy;
+                    }
+                    var theta = 0.5 * Math.Atan2(2 * sxy, (sxx - syy));
+                    var dir = new Point2d(Math.Cos(theta), Math.Sin(theta));
+                    var minT = double.PositiveInfinity;
+                    var maxT = double.NegativeInfinity;
+                    foreach (var p in pts)
+                    {
+                        var t = (p.X - meanX) * dir.X + (p.Y - meanY) * dir.Y;
+                        if (t < minT) minT = t;
+                        if (t > maxT) maxT = t;
+                    }
+                    return (new Point2d(meanX + minT * dir.X, meanY + minT * dir.Y), new Point2d(meanX + maxT * dir.X, meanY + maxT * dir.Y));
+                }
+
+                var (l1p1, l1p2) = FitLineFromPoints(e1);
+                var (l2p1, l2p2) = FitLineFromPoints(e2);
+                var (distPx, ca, cb) = Geometry2D.SegmentToSegmentDistance(l1p1, l1p2, l2p1, l2p2);
+                var value = pixelsPerMm > 0 ? distPx / pixelsPerMm : distPx;
+                var pass = value >= (def.Nominal - def.ToleranceMinus) && value <= (def.Nominal + def.TolerancePlus);
+
+                return new EdgePairDetectResult(def.Name, Found: true, l1p1, l1p2, l2p1, l2p2, value, def.Nominal, def.TolerancePlus, def.ToleranceMinus, pass, ca, cb, e1, e2);
+            }
+
+            var epdTasks = (config.EdgePairDetections ?? new List<EdgePairDetectDefinition>())
+                .Where(epd => epd is not null && !string.IsNullOrWhiteSpace(epd.Name) && epd.SearchRoi.Width > 0 && epd.SearchRoi.Height > 0)
+                .Select(epd => Task.Run(() =>
+                {
+                    var roi = TransformRoiKeepSize(epd.SearchRoi, originTeach, originFound, angleDeg);
+                    var (matForEpd, _) = ResolveToolPreprocess("EdgePairDetect", epd.Name);
+                    return DetectEdgePair(matForEpd, roi, epd, config.PixelsPerMm);
+                }))
+                .ToArray();
+
+            static CircleFinderResult DetectCircle(Mat matBgrOrGray, Roi roi, CircleFinderDefinition def)
+            {
+                var name = def.Name ?? string.Empty;
+                if (matBgrOrGray is null || roi.Width <= 0 || roi.Height <= 0)
+                {
+                    return new CircleFinderResult(name, Found: false, default, 0.0, 0.0);
+                }
+
+                var rect = new Rect(roi.X, roi.Y, roi.Width, roi.Height)
+                    .Intersect(new Rect(0, 0, matBgrOrGray.Width, matBgrOrGray.Height));
+                if (rect.Width <= 2 || rect.Height <= 2)
+                {
+                    return new CircleFinderResult(name, Found: false, default, 0.0, 0.0);
+                }
+
+                using var crop = new Mat(matBgrOrGray, rect);
+                Mat gray = crop;
+                using var grayOwned = crop.Channels() == 1 ? null : crop.CvtColor(ColorConversionCodes.BGR2GRAY);
+                if (grayOwned is not null) gray = grayOwned;
+
+                var minR = Math.Max(0, def.MinRadiusPx);
+                var maxR = Math.Max(0, def.MaxRadiusPx);
+
+                if (def.Algorithm == CircleFindAlgorithm.HoughCircles)
+                {
+                    using var blur = new Mat();
+                    Cv2.GaussianBlur(gray, blur, new Size(0, 0), 1.2);
+                    var dp = Math.Max(1.0, def.HoughDp);
+                    var minDist = Math.Max(1.0, def.HoughMinDistPx);
+                    var p1 = Math.Max(1.0, def.HoughParam1);
+                    var p2 = Math.Max(1.0, def.HoughParam2);
+                    var circles = Cv2.HoughCircles(blur, HoughModes.Gradient, dp, minDist, p1, p2, minR, maxR);
+                    if (circles is null || circles.Length == 0)
+                    {
+                        return new CircleFinderResult(name, Found: false, default, 0.0, 0.0);
+                    }
+
+                    var best = circles.OrderByDescending(c => c.Radius).First();
+                    var center = new Point2d(rect.X + best.Center.X, rect.Y + best.Center.Y);
+                    return new CircleFinderResult(name, Found: true, center, best.Radius, Score: 1.0);
+                }
+
+                if (def.Algorithm == CircleFindAlgorithm.ContourFit)
+                {
+                    using var edges = new Mat();
+                    Cv2.Canny(gray, edges, def.Canny1, def.Canny2);
+                    Cv2.FindContours(edges, out var contours, out _, RetrievalModes.External, ContourApproximationModes.ApproxSimple);
+
+                    var bestScore = double.NegativeInfinity;
+                    var bestCenter = new Point2d();
+                    var bestR = 0.0;
+
+                    foreach (var cnt in contours)
+                    {
+                        if (cnt is null || cnt.Length < 20) continue;
+                        var area = Math.Abs(Cv2.ContourArea(cnt));
+                        if (area <= 1.0) continue;
+
+                        var peri = Cv2.ArcLength(cnt, closed: true);
+                        if (peri <= 1e-9) continue;
+                        var circ = 4.0 * Math.PI * area / (peri * peri);
+                        if (circ < def.MinCircularity) continue;
+
+                        Cv2.MinEnclosingCircle(cnt, out var c, out var r);
+                        if (minR > 0 && r < minR) continue;
+                        if (maxR > 0 && r > maxR) continue;
+
+                        var score = circ * Math.Sqrt(area);
+                        if (score > bestScore)
+                        {
+                            bestScore = score;
+                            bestCenter = new Point2d(rect.X + c.X, rect.Y + c.Y);
+                            bestR = r;
+                        }
+                    }
+
+                    if (bestScore <= double.NegativeInfinity)
+                    {
+                        return new CircleFinderResult(name, Found: false, default, 0.0, 0.0);
+                    }
+
+                    return new CircleFinderResult(name, Found: true, bestCenter, bestR, Score: bestScore);
+                }
+
+                // RANSAC (simple): reuse contour edges as points (if any). If none, fail.
+                {
+                    using var edges = new Mat();
+                    Cv2.Canny(gray, edges, def.Canny1, def.Canny2);
+                    var pts = new List<Point2f>();
+                    for (var y = 0; y < edges.Rows; y++)
+                    {
+                        for (var x = 0; x < edges.Cols; x++)
+                        {
+                            if (edges.Get<byte>(y, x) != 0) pts.Add(new Point2f(x, y));
+                        }
+                    }
+
+                    if (pts.Count < 50)
+                    {
+                        return new CircleFinderResult(name, Found: false, default, 0.0, 0.0);
+                    }
+
+                    var rnd = new Random(def.Name?.GetHashCode() ?? 0);
+                    var bestInliers = -1;
+                    var bestCenter = new Point2d();
+                    var bestR = 0.0;
+                    var thresh = 2.5;
+                    var iters = 80;
+
+                    static bool TryCircleFrom3(Point2f a, Point2f b, Point2f c, out Point2d center, out double r)
+                    {
+                        center = default;
+                        r = 0;
+                        var ax = a.X; var ay = a.Y;
+                        var bx = b.X; var by = b.Y;
+                        var cx = c.X; var cy = c.Y;
+                        var d = 2.0 * (ax * (by - cy) + bx * (cy - ay) + cx * (ay - by));
+                        if (Math.Abs(d) < 1e-9) return false;
+                        var ax2ay2 = ax * ax + ay * ay;
+                        var bx2by2 = bx * bx + by * by;
+                        var cx2cy2 = cx * cx + cy * cy;
+                        var ux = (ax2ay2 * (by - cy) + bx2by2 * (cy - ay) + cx2cy2 * (ay - by)) / d;
+                        var uy = (ax2ay2 * (cx - bx) + bx2by2 * (ax - cx) + cx2cy2 * (bx - ax)) / d;
+                        center = new Point2d(ux, uy);
+                        r = Math.Sqrt((ux - ax) * (ux - ax) + (uy - ay) * (uy - ay));
+                        return double.IsFinite(r) && r > 0;
+                    }
+
+                    for (var k = 0; k < iters; k++)
+                    {
+                        var ia = rnd.Next(pts.Count);
+                        var ib = rnd.Next(pts.Count);
+                        var ic = rnd.Next(pts.Count);
+                        if (ia == ib || ia == ic || ib == ic) continue;
+
+                        if (!TryCircleFrom3(pts[ia], pts[ib], pts[ic], out var c0, out var r0)) continue;
+                        if (minR > 0 && r0 < minR) continue;
+                        if (maxR > 0 && r0 > maxR) continue;
+
+                        var inl = 0;
+                        for (var i = 0; i < pts.Count; i += 2)
+                        {
+                            var p = pts[i];
+                            var dx = p.X - c0.X;
+                            var dy = p.Y - c0.Y;
+                            var d0 = Math.Abs(Math.Sqrt(dx * dx + dy * dy) - r0);
+                            if (d0 <= thresh) inl++;
+                        }
+
+                        if (inl > bestInliers)
+                        {
+                            bestInliers = inl;
+                            bestCenter = c0;
+                            bestR = r0;
+                        }
+                    }
+
+                    if (bestInliers < 0)
+                    {
+                        return new CircleFinderResult(name, Found: false, default, 0.0, 0.0);
+                    }
+
+                    var center = new Point2d(rect.X + bestCenter.X, rect.Y + bestCenter.Y);
+                    return new CircleFinderResult(name, Found: true, center, bestR, Score: bestInliers);
+                }
+            }
+
+            var circleTasks = (config.CircleFinders ?? new List<CircleFinderDefinition>())
+                .Where(c => c is not null && !string.IsNullOrWhiteSpace(c.Name) && c.SearchRoi.Width > 0 && c.SearchRoi.Height > 0)
+                .Select(c => Task.Run(() =>
+                {
+                    var roi = TransformRoiKeepSize(c.SearchRoi, originTeach, originFound, angleDeg);
+                    var (matForCircle, _) = ResolveToolPreprocess("CircleFinder", c.Name);
+                    return DetectCircle(matForCircle, roi, c);
+                }))
+                .ToArray();
+
+            var tEpdDone = swTotal.ElapsedMilliseconds;
+
             result.Timings.PointsMs = (int)Math.Max(0, tPointsDone - tPointsQueued);
             result.Timings.LinesMs = (int)Math.Max(0, tLinesDone - tLinesQueued);
             result.Timings.BlobsMs = (int)Math.Max(0, tBlobsDone - tBlobsQueued);
@@ -901,6 +1418,20 @@ public sealed class InspectionService : IInspectionService
                 result.Calipers.Add(t.Result);
             }
 
+            Task.WaitAll(epdTasks);
+            foreach (var t in epdTasks)
+            {
+                result.EdgePairDetections.Add(t.Result);
+            }
+
+            Task.WaitAll(circleTasks);
+            foreach (var t in circleTasks)
+            {
+                result.CircleFinders.Add(t.Result);
+            }
+
+            result.Timings.EdgePairDetectMs = (int)Math.Max(0, swTotal.ElapsedMilliseconds - tEpdQueued);
+
             foreach (var cal in result.Calipers)
             {
                 if (!cal.Found)
@@ -913,6 +1444,78 @@ public sealed class InspectionService : IInspectionService
                 var len = Math.Sqrt(dx * dx + dy * dy);
                 foundLines[cal.Name] = new LineDetectResult(cal.Name, cal.LineP1, cal.LineP2, len, Found: true);
             }
+
+            var foundCircles = new Dictionary<string, CircleFinderResult>(StringComparer.OrdinalIgnoreCase);
+            foreach (var c in result.CircleFinders)
+            {
+                foundCircles[c.Name] = c;
+            }
+
+            foreach (var d in (config.Diameters ?? new List<DiameterDefinition>()))
+            {
+                if (d is null || string.IsNullOrWhiteSpace(d.Name) || string.IsNullOrWhiteSpace(d.CircleRef))
+                {
+                    continue;
+                }
+
+                if (!foundCircles.TryGetValue(d.CircleRef, out var c) || !c.Found)
+                {
+                    result.Diameters.Add(new DiameterResult(d.Name, d.CircleRef, Found: false, double.NaN, d.Nominal, d.TolerancePlus, d.ToleranceMinus, Pass: false, default, 0.0));
+                    continue;
+                }
+
+                var diameterPx = 2.0 * c.RadiusPx;
+                var value = config.PixelsPerMm > 0 ? diameterPx / config.PixelsPerMm : diameterPx;
+                var pass = value >= (d.Nominal - d.ToleranceMinus) && value <= (d.Nominal + d.TolerancePlus);
+                result.Diameters.Add(new DiameterResult(d.Name, d.CircleRef, Found: true, value, d.Nominal, d.TolerancePlus, d.ToleranceMinus, pass, c.Center, c.RadiusPx));
+            }
+
+            var tEdgePairs0 = swTotal.ElapsedMilliseconds;
+            foreach (var ep in config.EdgePairs)
+            {
+                if (string.IsNullOrWhiteSpace(ep.Name) || string.IsNullOrWhiteSpace(ep.RefA) || string.IsNullOrWhiteSpace(ep.RefB))
+                {
+                    continue;
+                }
+
+                if (!foundLines.TryGetValue(ep.RefA, out var la) || !foundLines.TryGetValue(ep.RefB, out var lb) || !la.Found || !lb.Found)
+                {
+                    result.EdgePairs.Add(new EdgePairResult(
+                        ep.Name,
+                        ep.RefA,
+                        ep.RefB,
+                        Found: false,
+                        default, default, default, default,
+                        double.NaN,
+                        ep.Nominal,
+                        ep.TolerancePlus,
+                        ep.ToleranceMinus,
+                        Pass: false,
+                        default,
+                        default));
+                    continue;
+                }
+
+                var (distPx, ca, cb) = Geometry2D.SegmentToSegmentDistance(la.P1, la.P2, lb.P1, lb.P2);
+                var value = config.PixelsPerMm > 0 ? distPx / config.PixelsPerMm : distPx;
+                var pass = value >= (ep.Nominal - ep.ToleranceMinus) && value <= (ep.Nominal + ep.TolerancePlus);
+
+                result.EdgePairs.Add(new EdgePairResult(
+                    ep.Name,
+                    ep.RefA,
+                    ep.RefB,
+                    Found: true,
+                    la.P1, la.P2,
+                    lb.P1, lb.P2,
+                    value,
+                    ep.Nominal,
+                    ep.TolerancePlus,
+                    ep.ToleranceMinus,
+                    pass,
+                    ca,
+                    cb));
+            }
+            result.Timings.EdgePairsMs = (int)Math.Max(0, swTotal.ElapsedMilliseconds - tEdgePairs0);
 
             static bool TryIntersectInfiniteLines(LineDetectResult a, LineDetectResult b, out Point2d inter)
             {
@@ -1464,6 +2067,18 @@ internal static class ConditionEvaluator
             vars[a.Name] = new Variable(a.Pass, value: a.ValueDeg);
         }
 
+        foreach (var ep in result.EdgePairs)
+        {
+            vars[$"EP.{ep.Name}"] = new Variable(ep.Pass, value: ep.Value, found: ep.Found);
+            vars[$"EdgePair.{ep.Name}"] = new Variable(ep.Pass, value: ep.Value, found: ep.Found);
+        }
+
+        foreach (var epd in result.EdgePairDetections)
+        {
+            vars[$"EPD.{epd.Name}"] = new Variable(epd.Pass, value: epd.Value, found: epd.Found);
+            vars[$"EdgePairDetect.{epd.Name}"] = new Variable(epd.Pass, value: epd.Value, found: epd.Found);
+        }
+
         foreach (var c in result.Conditions)
         {
             vars[c.Name] = new Variable(c.Pass);
@@ -1477,6 +2092,12 @@ internal static class ConditionEvaluator
         foreach (var c in result.Calipers)
         {
             vars[c.Name] = new Variable(c.Found, found: c.Found);
+        }
+
+        foreach (var d in result.Diameters)
+        {
+            vars[$"CIR.{d.Name}"] = new Variable(d.Pass, value: d.Value, found: d.Found);
+            vars[$"Diameter.{d.Name}"] = new Variable(d.Pass, value: d.Value, found: d.Found);
         }
 
         return vars;

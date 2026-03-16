@@ -82,10 +82,14 @@ public sealed partial class ToolEditorViewModel : ObservableObject
             "Line",
             "Caliper",
             "LinePairDetection",
+            "EdgePairDetect",
+            "CircleFinder",
+            "Diameter",
             "Distance",
             "LineLineDistance",
             "PointLineDistance",
             "Angle",
+            "EdgePair",
             "Condition",
             "BlobDetection",
             "CodeDetection",
@@ -134,6 +138,20 @@ public sealed partial class ToolEditorViewModel : ObservableObject
 
         var name = parts[0];
         var kind = parts[1];
+
+        if (string.Equals(kind, "CIR", StringComparison.OrdinalIgnoreCase))
+        {
+            var c = _config.CircleFinders.FirstOrDefault(x => string.Equals(x.Name, name, StringComparison.OrdinalIgnoreCase));
+            if (c is null)
+            {
+                return;
+            }
+
+            c.SearchRoi = new Roi();
+            RunFlow();
+            RequestAutoSave();
+            return;
+        }
 
         if (!kind.StartsWith("B", StringComparison.OrdinalIgnoreCase))
         {
@@ -213,6 +231,68 @@ public sealed partial class ToolEditorViewModel : ObservableObject
             return;
         }
 
+        foreach (var c in _config.CircleFinders)
+        {
+            if (c.SearchRoi.Width <= 0 || c.SearchRoi.Height <= 0)
+            {
+                continue;
+            }
+
+            dst.Add(new OverlayRectItem
+            {
+                X = c.SearchRoi.X,
+                Y = c.SearchRoi.Y,
+                Width = c.SearchRoi.Width,
+                Height = c.SearchRoi.Height,
+                Stroke = Brushes.MediumPurple,
+                Label = $"{c.Name} CIR"
+            });
+        }
+
+        foreach (var e in _config.EdgePairDetections)
+        {
+            if (e.SearchRoi.Width <= 0 || e.SearchRoi.Height <= 0)
+            {
+                continue;
+            }
+
+            dst.Add(new OverlayRectItem
+            {
+                X = e.SearchRoi.X,
+                Y = e.SearchRoi.Y,
+                Width = e.SearchRoi.Width,
+                Height = e.SearchRoi.Height,
+                Stroke = Brushes.MediumPurple,
+                Label = $"{e.Name} EPD"
+            });
+
+            var stripCount = Math.Clamp(e.StripCount, 1, 100);
+            var stripLength = Math.Max(3, e.StripLength);
+            if (stripCount > 0)
+            {
+                if (e.Orientation == CaliperOrientation.Vertical)
+                {
+                    var y1 = e.SearchRoi.Y + (e.SearchRoi.Height - stripLength) / 2.0;
+                    var y2 = y1 + stripLength;
+                    for (var i = 0; i < stripCount; i++)
+                    {
+                        var x = e.SearchRoi.X + (i + 0.5) * e.SearchRoi.Width / stripCount;
+                        dst.Add(new OverlayLineItem { X1 = x, Y1 = y1, X2 = x, Y2 = y2, Stroke = Brushes.MediumPurple, StrokeThickness = 1.0 });
+                    }
+                }
+                else
+                {
+                    var x1 = e.SearchRoi.X + (e.SearchRoi.Width - stripLength) / 2.0;
+                    var x2 = x1 + stripLength;
+                    for (var i = 0; i < stripCount; i++)
+                    {
+                        var y = e.SearchRoi.Y + (i + 0.5) * e.SearchRoi.Height / stripCount;
+                        dst.Add(new OverlayLineItem { X1 = x1, Y1 = y, X2 = x2, Y2 = y, Stroke = Brushes.MediumPurple, StrokeThickness = 1.0 });
+                    }
+                }
+            }
+        }
+
         foreach (var b in _config.BlobDetections)
         {
             if (b.InspectRoi.Width <= 0 || b.InspectRoi.Height <= 0)
@@ -290,6 +370,7 @@ public sealed partial class ToolEditorViewModel : ObservableObject
                                                 || string.Equals(SelectedNode.Type, "Line", StringComparison.OrdinalIgnoreCase)
                                                 || string.Equals(SelectedNode.Type, "Caliper", StringComparison.OrdinalIgnoreCase)
                                                 || string.Equals(SelectedNode.Type, "LinePairDetection", StringComparison.OrdinalIgnoreCase)
+                                                || string.Equals(SelectedNode.Type, "EdgePairDetect", StringComparison.OrdinalIgnoreCase)
                                                 || string.Equals(SelectedNode.Type, "BlobDetection", StringComparison.OrdinalIgnoreCase)
                                                 || string.Equals(SelectedNode.Type, "CodeDetection", StringComparison.OrdinalIgnoreCase));
 
@@ -298,6 +379,18 @@ public sealed partial class ToolEditorViewModel : ObservableObject
 
     public bool IsLinePairDetectionNode => SelectedNode is not null
                                            && string.Equals(SelectedNode.Type, "LinePairDetection", StringComparison.OrdinalIgnoreCase);
+
+    public bool IsEdgePairDetectNode => SelectedNode is not null
+                                        && string.Equals(SelectedNode.Type, "EdgePairDetect", StringComparison.OrdinalIgnoreCase);
+
+    public bool IsCircleFinderNode => SelectedNode is not null
+                                      && string.Equals(SelectedNode.Type, "CircleFinder", StringComparison.OrdinalIgnoreCase);
+
+    public bool IsDiameterNode => SelectedNode is not null
+                                  && string.Equals(SelectedNode.Type, "Diameter", StringComparison.OrdinalIgnoreCase);
+
+    public bool IsEdgePairNode => SelectedNode is not null
+                                  && string.Equals(SelectedNode.Type, "EdgePair", StringComparison.OrdinalIgnoreCase);
 
     public bool IsCodeDetectionNode => SelectedNode is not null
                                        && string.Equals(SelectedNode.Type, "CodeDetection", StringComparison.OrdinalIgnoreCase);
@@ -844,6 +937,20 @@ public sealed partial class ToolEditorViewModel : ObservableObject
             return;
         }
 
+        if (string.Equals(kind, "EPD", StringComparison.OrdinalIgnoreCase))
+        {
+            var e = _config.EdgePairDetections.FirstOrDefault(x => string.Equals(x.Name, name, StringComparison.OrdinalIgnoreCase));
+            if (e is not null) e.SearchRoi = roi;
+            return;
+        }
+
+        if (string.Equals(kind, "CIR", StringComparison.OrdinalIgnoreCase))
+        {
+            var c = _config.CircleFinders.FirstOrDefault(x => string.Equals(x.Name, name, StringComparison.OrdinalIgnoreCase));
+            if (c is not null) c.SearchRoi = roi;
+            return;
+        }
+
         if (string.Equals(kind, "C", StringComparison.OrdinalIgnoreCase))
         {
             var c = _config.CodeDetections.FirstOrDefault(x => string.Equals(x.Name, name, StringComparison.OrdinalIgnoreCase));
@@ -890,6 +997,65 @@ public sealed partial class ToolEditorViewModel : ObservableObject
             b.Rois[idx].Roi = roi;
             b.InspectRoi = ComputeBlobInspectRoi(b);
             return;
+        }
+    }
+
+    public string? EdgePair_RefA
+    {
+        get => SelectedEdgePairDef()?.RefA;
+        set
+        {
+            var def = SelectedEdgePairDef();
+            if (def is null) return;
+            if (string.Equals(def.RefA, value, StringComparison.OrdinalIgnoreCase)) return;
+            def.RefA = value ?? string.Empty;
+            SyncInputEdgeForEdgePairPort("A", value);
+            RaiseToolPropertyPanelsChanged();
+            RefreshPreviews();
+            RequestAutoSave();
+        }
+    }
+
+    public string? EdgePair_RefB
+    {
+        get => SelectedEdgePairDef()?.RefB;
+        set
+        {
+            var def = SelectedEdgePairDef();
+            if (def is null) return;
+            if (string.Equals(def.RefB, value, StringComparison.OrdinalIgnoreCase)) return;
+            def.RefB = value ?? string.Empty;
+            SyncInputEdgeForEdgePairPort("B", value);
+            RaiseToolPropertyPanelsChanged();
+            RefreshPreviews();
+            RequestAutoSave();
+        }
+    }
+
+    private void SyncInputEdgeForEdgePairPort(string port, string? lineName)
+    {
+        if (_syncingInputs) return;
+        if (_config is null || SelectedNode is null) return;
+        if (!string.Equals(SelectedNode.Type, "EdgePair", StringComparison.OrdinalIgnoreCase)) return;
+
+        _syncingInputs = true;
+        try
+        {
+            RemoveEdgesToSelectedNodePort(port);
+            if (!string.IsNullOrWhiteSpace(lineName))
+            {
+                var from = Nodes.FirstOrDefault(n => (string.Equals(n.Type, "Line", StringComparison.OrdinalIgnoreCase)
+                                                      || string.Equals(n.Type, "Caliper", StringComparison.OrdinalIgnoreCase))
+                                                     && string.Equals(n.RefName, lineName, StringComparison.OrdinalIgnoreCase));
+                if (from is not null)
+                {
+                    CreateEdge(from, SelectedNode, "Out", port);
+                }
+            }
+        }
+        finally
+        {
+            _syncingInputs = false;
         }
     }
 
@@ -1115,9 +1281,33 @@ public sealed partial class ToolEditorViewModel : ObservableObject
                 }
             }
 
+            if (string.Equals(kind, "EPD", StringComparison.OrdinalIgnoreCase))
+            {
+                var e = _config.EdgePairDetections.FirstOrDefault(x => string.Equals(x.Name, name, StringComparison.OrdinalIgnoreCase));
+                if (e is not null)
+                {
+                    e.SearchRoi = roi;
+                    RunFlow();
+                    RequestAutoSave();
+                    return;
+                }
+            }
+
             if (string.Equals(kind, "C", StringComparison.OrdinalIgnoreCase))
             {
                 var c = _config.CodeDetections.FirstOrDefault(x => string.Equals(x.Name, name, StringComparison.OrdinalIgnoreCase));
+                if (c is not null)
+                {
+                    c.SearchRoi = roi;
+                    RunFlow();
+                    RequestAutoSave();
+                    return;
+                }
+            }
+
+            if (string.Equals(kind, "CIR", StringComparison.OrdinalIgnoreCase))
+            {
+                var c = _config.CircleFinders.FirstOrDefault(x => string.Equals(x.Name, name, StringComparison.OrdinalIgnoreCase));
                 if (c is not null)
                 {
                     c.SearchRoi = roi;
@@ -1592,6 +1782,10 @@ public sealed partial class ToolEditorViewModel : ObservableObject
         OnPropertyChanged(nameof(IsLineNode));
         OnPropertyChanged(nameof(IsCaliperNode));
         OnPropertyChanged(nameof(IsLinePairDetectionNode));
+        OnPropertyChanged(nameof(IsEdgePairDetectNode));
+        OnPropertyChanged(nameof(IsCircleFinderNode));
+        OnPropertyChanged(nameof(IsDiameterNode));
+        OnPropertyChanged(nameof(IsEdgePairNode));
         OnPropertyChanged(nameof(IsDistanceNode));
         OnPropertyChanged(nameof(IsLineLineDistanceNode));
         OnPropertyChanged(nameof(IsPointLineDistanceNode));
@@ -1601,6 +1795,9 @@ public sealed partial class ToolEditorViewModel : ObservableObject
         OnPropertyChanged(nameof(IsPreprocessNode));
         OnPropertyChanged(nameof(IsBlobDetectionNode));
         OnPropertyChanged(nameof(IsCodeDetectionNode));
+
+        OnPropertyChanged(nameof(AvailableCircleFindAlgorithms));
+        OnPropertyChanged(nameof(AvailableCircleFinderNames));
 
         OnPropertyChanged(nameof(AvailablePointNames));
         OnPropertyChanged(nameof(AvailableLineNames));
@@ -1612,6 +1809,8 @@ public sealed partial class ToolEditorViewModel : ObservableObject
         OnPropertyChanged(nameof(PointLineDistance_Line));
         OnPropertyChanged(nameof(Angle_LineA));
         OnPropertyChanged(nameof(Angle_LineB));
+        OnPropertyChanged(nameof(EdgePair_RefA));
+        OnPropertyChanged(nameof(EdgePair_RefB));
 
         OnPropertyChanged(nameof(AvailableLineLineDistanceModes));
         OnPropertyChanged(nameof(AvailablePointLineDistanceModes));
@@ -1668,6 +1867,14 @@ public sealed partial class ToolEditorViewModel : ObservableObject
         OnPropertyChanged(nameof(Caliper_LastRunFound));
         OnPropertyChanged(nameof(Caliper_LastRunAvgStrength));
 
+        OnPropertyChanged(nameof(Epd_Orientation));
+        OnPropertyChanged(nameof(Epd_Polarity));
+        OnPropertyChanged(nameof(Epd_StripCount));
+        OnPropertyChanged(nameof(Epd_StripWidth));
+        OnPropertyChanged(nameof(Epd_StripLength));
+        OnPropertyChanged(nameof(Epd_MinEdgeStrength));
+        OnPropertyChanged(nameof(Epd_MinEdgeSeparationPx));
+
         OnPropertyChanged(nameof(ShowRoisInSelectedPreview));
         OnPropertyChanged(nameof(ShowRoisInFinalPreview));
     }
@@ -1688,13 +1895,41 @@ public sealed partial class ToolEditorViewModel : ObservableObject
 
     public bool IsPreprocessNode => string.Equals(SelectedNode?.Type, "Preprocess", StringComparison.OrdinalIgnoreCase);
 
-    public bool IsAnyDistanceNode => IsDistanceNode || IsLineLineDistanceNode || IsPointLineDistanceNode || IsAngleNode;
+    public bool IsAnyDistanceNode => IsDistanceNode || IsLineLineDistanceNode || IsPointLineDistanceNode || IsAngleNode || IsEdgePairNode || IsEdgePairDetectNode || IsDiameterNode;
 
     private AngleDefinition? SelectedAngleDef()
     {
         if (_config is null || SelectedNode is null) return null;
         if (!string.Equals(SelectedNode.Type, "Angle", StringComparison.OrdinalIgnoreCase)) return null;
         return _config.Angles.FirstOrDefault(x => string.Equals(x.Name, SelectedNode.RefName, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private EdgePairDefinition? SelectedEdgePairDef()
+    {
+        if (_config is null || SelectedNode is null) return null;
+        if (!string.Equals(SelectedNode.Type, "EdgePair", StringComparison.OrdinalIgnoreCase)) return null;
+        return _config.EdgePairs.FirstOrDefault(x => string.Equals(x.Name, SelectedNode.RefName, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private EdgePairDetectDefinition? SelectedEdgePairDetectDef()
+    {
+        if (_config is null || SelectedNode is null) return null;
+        if (!string.Equals(SelectedNode.Type, "EdgePairDetect", StringComparison.OrdinalIgnoreCase)) return null;
+        return _config.EdgePairDetections.FirstOrDefault(x => string.Equals(x.Name, SelectedNode.RefName, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private CircleFinderDefinition? SelectedCircleFinderDef()
+    {
+        if (_config is null || SelectedNode is null) return null;
+        if (!string.Equals(SelectedNode.Type, "CircleFinder", StringComparison.OrdinalIgnoreCase)) return null;
+        return _config.CircleFinders.FirstOrDefault(x => string.Equals(x.Name, SelectedNode.RefName, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private DiameterDefinition? SelectedDiameterDef()
+    {
+        if (_config is null || SelectedNode is null) return null;
+        if (!string.Equals(SelectedNode.Type, "Diameter", StringComparison.OrdinalIgnoreCase)) return null;
+        return _config.Diameters.FirstOrDefault(x => string.Equals(x.Name, SelectedNode.RefName, StringComparison.OrdinalIgnoreCase));
     }
 
     public string? Angle_LineA
@@ -2450,6 +2685,225 @@ public sealed partial class ToolEditorViewModel : ObservableObject
     public ObservableCollection<EdgePolarity> AvailableEdgePolarities { get; }
         = new ObservableCollection<EdgePolarity>((EdgePolarity[])Enum.GetValues(typeof(EdgePolarity)));
 
+    public ObservableCollection<CircleFindAlgorithm> AvailableCircleFindAlgorithms { get; }
+        = new ObservableCollection<CircleFindAlgorithm>((CircleFindAlgorithm[])Enum.GetValues(typeof(CircleFindAlgorithm)));
+
+    public ObservableCollection<string> AvailableCircleFinderNames
+    {
+        get
+        {
+            var list = new ObservableCollection<string>();
+            if (_config is null) return list;
+            foreach (var c in _config.CircleFinders.Select(x => x.Name).Where(x => !string.IsNullOrWhiteSpace(x)))
+            {
+                list.Add(c);
+            }
+            return list;
+        }
+    }
+
+    public CircleFindAlgorithm Cf_Algorithm
+    {
+        get => SelectedCircleFinderDef()?.Algorithm ?? CircleFindAlgorithm.ContourFit;
+        set
+        {
+            var d = SelectedCircleFinderDef();
+            if (d is null) return;
+            if (d.Algorithm == value) return;
+            d.Algorithm = value;
+            RunFlow();
+            RequestAutoSave();
+            OnPropertyChanged();
+        }
+    }
+
+    public int Cf_MinRadiusPx
+    {
+        get => SelectedCircleFinderDef()?.MinRadiusPx ?? 0;
+        set
+        {
+            var d = SelectedCircleFinderDef();
+            if (d is null) return;
+            var v = Math.Max(0, value);
+            if (d.MinRadiusPx == v) return;
+            d.MinRadiusPx = v;
+            RunFlow();
+            RequestAutoSave();
+            OnPropertyChanged();
+        }
+    }
+
+    public int Cf_MaxRadiusPx
+    {
+        get => SelectedCircleFinderDef()?.MaxRadiusPx ?? 0;
+        set
+        {
+            var d = SelectedCircleFinderDef();
+            if (d is null) return;
+            var v = Math.Max(0, value);
+            if (d.MaxRadiusPx == v) return;
+            d.MaxRadiusPx = v;
+            RunFlow();
+            RequestAutoSave();
+            OnPropertyChanged();
+        }
+    }
+
+    public double Cf_HoughDp
+    {
+        get => SelectedCircleFinderDef()?.HoughDp ?? 1.2;
+        set
+        {
+            var d = SelectedCircleFinderDef();
+            if (d is null) return;
+            var v = Math.Max(0.1, value);
+            if (Math.Abs(d.HoughDp - v) < 0.0000001) return;
+            d.HoughDp = v;
+            RunFlow();
+            RequestAutoSave();
+            OnPropertyChanged();
+        }
+    }
+
+    public double Cf_HoughMinDistPx
+    {
+        get => SelectedCircleFinderDef()?.HoughMinDistPx ?? 20;
+        set
+        {
+            var d = SelectedCircleFinderDef();
+            if (d is null) return;
+            var v = Math.Max(1.0, value);
+            if (Math.Abs(d.HoughMinDistPx - v) < 0.0000001) return;
+            d.HoughMinDistPx = v;
+            RunFlow();
+            RequestAutoSave();
+            OnPropertyChanged();
+        }
+    }
+
+    public double Cf_HoughParam1
+    {
+        get => SelectedCircleFinderDef()?.HoughParam1 ?? 120;
+        set
+        {
+            var d = SelectedCircleFinderDef();
+            if (d is null) return;
+            var v = Math.Max(1.0, value);
+            if (Math.Abs(d.HoughParam1 - v) < 0.0000001) return;
+            d.HoughParam1 = v;
+            RunFlow();
+            RequestAutoSave();
+            OnPropertyChanged();
+        }
+    }
+
+    public double Cf_HoughParam2
+    {
+        get => SelectedCircleFinderDef()?.HoughParam2 ?? 30;
+        set
+        {
+            var d = SelectedCircleFinderDef();
+            if (d is null) return;
+            var v = Math.Max(1.0, value);
+            if (Math.Abs(d.HoughParam2 - v) < 0.0000001) return;
+            d.HoughParam2 = v;
+            RunFlow();
+            RequestAutoSave();
+            OnPropertyChanged();
+        }
+    }
+
+    public int Cf_Canny1
+    {
+        get => SelectedCircleFinderDef()?.Canny1 ?? 80;
+        set
+        {
+            var d = SelectedCircleFinderDef();
+            if (d is null) return;
+            var v = Math.Max(0, value);
+            if (d.Canny1 == v) return;
+            d.Canny1 = v;
+            RunFlow();
+            RequestAutoSave();
+            OnPropertyChanged();
+        }
+    }
+
+    public int Cf_Canny2
+    {
+        get => SelectedCircleFinderDef()?.Canny2 ?? 200;
+        set
+        {
+            var d = SelectedCircleFinderDef();
+            if (d is null) return;
+            var v = Math.Max(0, value);
+            if (d.Canny2 == v) return;
+            d.Canny2 = v;
+            RunFlow();
+            RequestAutoSave();
+            OnPropertyChanged();
+        }
+    }
+
+    public double Cf_MinCircularity
+    {
+        get => SelectedCircleFinderDef()?.MinCircularity ?? 0.6;
+        set
+        {
+            var d = SelectedCircleFinderDef();
+            if (d is null) return;
+            var v = Math.Clamp(value, 0.0, 1.0);
+            if (Math.Abs(d.MinCircularity - v) < 0.0000001) return;
+            d.MinCircularity = v;
+            RunFlow();
+            RequestAutoSave();
+            OnPropertyChanged();
+        }
+    }
+
+    public string? Dia_CircleRef
+    {
+        get => SelectedDiameterDef()?.CircleRef;
+        set
+        {
+            var d = SelectedDiameterDef();
+            if (d is null) return;
+            if (string.Equals(d.CircleRef, value, StringComparison.OrdinalIgnoreCase)) return;
+            d.CircleRef = value ?? string.Empty;
+            SyncInputEdgeForDiameterPort("C", value);
+            RaiseToolPropertyPanelsChanged();
+            RefreshPreviews();
+            RequestAutoSave();
+            OnPropertyChanged();
+        }
+    }
+
+    private void SyncInputEdgeForDiameterPort(string port, string? circleName)
+    {
+        if (_syncingInputs) return;
+        if (_config is null || SelectedNode is null) return;
+        if (!string.Equals(SelectedNode.Type, "Diameter", StringComparison.OrdinalIgnoreCase)) return;
+
+        _syncingInputs = true;
+        try
+        {
+            RemoveEdgesToSelectedNodePort(port);
+            if (!string.IsNullOrWhiteSpace(circleName))
+            {
+                var from = Nodes.FirstOrDefault(n => string.Equals(n.Type, "CircleFinder", StringComparison.OrdinalIgnoreCase)
+                                                     && string.Equals(n.RefName, circleName, StringComparison.OrdinalIgnoreCase));
+                if (from is not null)
+                {
+                    CreateEdge(from, SelectedNode, "Out", port);
+                }
+            }
+        }
+        finally
+        {
+            _syncingInputs = false;
+        }
+    }
+
     public CaliperOrientation Caliper_Orientation
     {
         get => SelectedCaliperDef()?.Orientation ?? CaliperOrientation.Vertical;
@@ -2538,6 +2992,116 @@ public sealed partial class ToolEditorViewModel : ObservableObject
             var v = Math.Max(0.0, value);
             if (Math.Abs(d.MinEdgeStrength - v) < 0.0000001) return;
             d.MinEdgeStrength = v;
+            RunFlow();
+            RequestAutoSave();
+            OnPropertyChanged();
+        }
+    }
+
+    public CaliperOrientation Epd_Orientation
+    {
+        get => SelectedEdgePairDetectDef()?.Orientation ?? CaliperOrientation.Vertical;
+        set
+        {
+            var d = SelectedEdgePairDetectDef();
+            if (d is null) return;
+            if (d.Orientation == value) return;
+            d.Orientation = value;
+            RunFlow();
+            RequestAutoSave();
+            OnPropertyChanged();
+        }
+    }
+
+    public EdgePolarity Epd_Polarity
+    {
+        get => SelectedEdgePairDetectDef()?.Polarity ?? EdgePolarity.Any;
+        set
+        {
+            var d = SelectedEdgePairDetectDef();
+            if (d is null) return;
+            if (d.Polarity == value) return;
+            d.Polarity = value;
+            RunFlow();
+            RequestAutoSave();
+            OnPropertyChanged();
+        }
+    }
+
+    public int Epd_StripCount
+    {
+        get => SelectedEdgePairDetectDef()?.StripCount ?? 0;
+        set
+        {
+            var d = SelectedEdgePairDetectDef();
+            if (d is null) return;
+            var v = Math.Clamp(value, 1, 200);
+            if (d.StripCount == v) return;
+            d.StripCount = v;
+            RunFlow();
+            RequestAutoSave();
+            OnPropertyChanged();
+        }
+    }
+
+    public int Epd_StripWidth
+    {
+        get => SelectedEdgePairDetectDef()?.StripWidth ?? 0;
+        set
+        {
+            var d = SelectedEdgePairDetectDef();
+            if (d is null) return;
+            var v = Math.Max(1, value);
+            if (d.StripWidth == v) return;
+            d.StripWidth = v;
+            RunFlow();
+            RequestAutoSave();
+            OnPropertyChanged();
+        }
+    }
+
+    public int Epd_StripLength
+    {
+        get => SelectedEdgePairDetectDef()?.StripLength ?? 0;
+        set
+        {
+            var d = SelectedEdgePairDetectDef();
+            if (d is null) return;
+            var v = Math.Max(3, value);
+            if (d.StripLength == v) return;
+            d.StripLength = v;
+            RunFlow();
+            RequestAutoSave();
+            OnPropertyChanged();
+        }
+    }
+
+    public double Epd_MinEdgeStrength
+    {
+        get => SelectedEdgePairDetectDef()?.MinEdgeStrength ?? 0.0;
+        set
+        {
+            var d = SelectedEdgePairDetectDef();
+            if (d is null) return;
+            var v = Math.Max(0.0, value);
+            if (Math.Abs(d.MinEdgeStrength - v) < 0.0000001) return;
+            d.MinEdgeStrength = v;
+            RunFlow();
+            RequestAutoSave();
+            OnPropertyChanged();
+        }
+    }
+
+    public int Epd_MinEdgeSeparationPx
+    {
+        get => SelectedEdgePairDetectDef()?.MinEdgeSeparationPx ?? 0;
+        set
+        {
+            var d = SelectedEdgePairDetectDef();
+            if (d is null) return;
+            var v = Math.Max(0, value);
+            if (d.MinEdgeSeparationPx == v) return;
+            d.MinEdgeSeparationPx = v;
             RunFlow();
             RequestAutoSave();
             OnPropertyChanged();
@@ -2641,6 +3205,34 @@ public sealed partial class ToolEditorViewModel : ObservableObject
         }
     }
 
+    private static void AddCircle(ObservableCollection<OverlayItem> dst, double cx, double cy, double radius, System.Windows.Media.Brush stroke, double strokeThickness)
+    {
+        if (radius <= 0.0)
+        {
+            return;
+        }
+
+        const int steps = 72;
+        var prevX = cx + radius;
+        var prevY = cy;
+        for (var i = 1; i <= steps; i++)
+        {
+            var a = 2.0 * Math.PI * i / steps;
+            var x = cx + Math.Cos(a) * radius;
+            var y = cy + Math.Sin(a) * radius;
+            dst.Add(new OverlayLineItem { X1 = prevX, Y1 = prevY, X2 = x, Y2 = y, Stroke = stroke, StrokeThickness = strokeThickness, Label = string.Empty });
+            prevX = x;
+            prevY = y;
+        }
+    }
+
+    private static void AddCross(ObservableCollection<OverlayItem> dst, double cx, double cy, double size, System.Windows.Media.Brush stroke, double strokeThickness)
+    {
+        var s = Math.Max(1.0, size);
+        dst.Add(new OverlayLineItem { X1 = cx - s, Y1 = cy, X2 = cx + s, Y2 = cy, Stroke = stroke, StrokeThickness = strokeThickness, Label = string.Empty });
+        dst.Add(new OverlayLineItem { X1 = cx, Y1 = cy - s, X2 = cx, Y2 = cy + s, Stroke = stroke, StrokeThickness = strokeThickness, Label = string.Empty });
+    }
+
     public int Line_Canny2
     {
         get => SelectedLineDef()?.Canny2 ?? 0;
@@ -2727,6 +3319,9 @@ public sealed partial class ToolEditorViewModel : ObservableObject
             if (SelectedPointLineDistanceDef() is { } pl) return pl.Nominal;
             if (SelectedAngleDef() is { } a) return a.Nominal;
             if (SelectedLinePairDef() is { } lpd) return lpd.Nominal;
+            if (SelectedEdgePairDef() is { } ep) return ep.Nominal;
+            if (SelectedEdgePairDetectDef() is { } epd) return epd.Nominal;
+            if (SelectedDiameterDef() is { } dia) return dia.Nominal;
             return 0.0;
         }
         set
@@ -2756,6 +3351,21 @@ public sealed partial class ToolEditorViewModel : ObservableObject
                 if (Math.Abs(lpd.Nominal - value) < 0.0000001) return;
                 lpd.Nominal = value;
             }
+            else if (SelectedEdgePairDef() is { } ep)
+            {
+                if (Math.Abs(ep.Nominal - value) < 0.0000001) return;
+                ep.Nominal = value;
+            }
+            else if (SelectedEdgePairDetectDef() is { } epd)
+            {
+                if (Math.Abs(epd.Nominal - value) < 0.0000001) return;
+                epd.Nominal = value;
+            }
+            else if (SelectedDiameterDef() is { } dia)
+            {
+                if (Math.Abs(dia.Nominal - value) < 0.0000001) return;
+                dia.Nominal = value;
+            }
             else
             {
                 return;
@@ -2775,6 +3385,9 @@ public sealed partial class ToolEditorViewModel : ObservableObject
             if (SelectedPointLineDistanceDef() is { } pl) return pl.TolerancePlus;
             if (SelectedAngleDef() is { } a) return a.TolerancePlus;
             if (SelectedLinePairDef() is { } lpd) return lpd.TolerancePlus;
+            if (SelectedEdgePairDef() is { } ep) return ep.TolerancePlus;
+            if (SelectedEdgePairDetectDef() is { } epd) return epd.TolerancePlus;
+            if (SelectedDiameterDef() is { } dia) return dia.TolerancePlus;
             return 0.0;
         }
         set
@@ -2804,6 +3417,21 @@ public sealed partial class ToolEditorViewModel : ObservableObject
                 if (Math.Abs(lpd.TolerancePlus - value) < 0.0000001) return;
                 lpd.TolerancePlus = value;
             }
+            else if (SelectedEdgePairDef() is { } ep)
+            {
+                if (Math.Abs(ep.TolerancePlus - value) < 0.0000001) return;
+                ep.TolerancePlus = value;
+            }
+            else if (SelectedEdgePairDetectDef() is { } epd)
+            {
+                if (Math.Abs(epd.TolerancePlus - value) < 0.0000001) return;
+                epd.TolerancePlus = value;
+            }
+            else if (SelectedDiameterDef() is { } dia)
+            {
+                if (Math.Abs(dia.TolerancePlus - value) < 0.0000001) return;
+                dia.TolerancePlus = value;
+            }
             else
             {
                 return;
@@ -2823,6 +3451,9 @@ public sealed partial class ToolEditorViewModel : ObservableObject
             if (SelectedPointLineDistanceDef() is { } pl) return pl.ToleranceMinus;
             if (SelectedAngleDef() is { } a) return a.ToleranceMinus;
             if (SelectedLinePairDef() is { } lpd) return lpd.ToleranceMinus;
+            if (SelectedEdgePairDef() is { } ep) return ep.ToleranceMinus;
+            if (SelectedEdgePairDetectDef() is { } epd) return epd.ToleranceMinus;
+            if (SelectedDiameterDef() is { } dia) return dia.ToleranceMinus;
             return 0.0;
         }
         set
@@ -2851,6 +3482,21 @@ public sealed partial class ToolEditorViewModel : ObservableObject
             {
                 if (Math.Abs(lpd.ToleranceMinus - value) < 0.0000001) return;
                 lpd.ToleranceMinus = value;
+            }
+            else if (SelectedEdgePairDef() is { } ep)
+            {
+                if (Math.Abs(ep.ToleranceMinus - value) < 0.0000001) return;
+                ep.ToleranceMinus = value;
+            }
+            else if (SelectedEdgePairDetectDef() is { } epd)
+            {
+                if (Math.Abs(epd.ToleranceMinus - value) < 0.0000001) return;
+                epd.ToleranceMinus = value;
+            }
+            else if (SelectedDiameterDef() is { } dia)
+            {
+                if (Math.Abs(dia.ToleranceMinus - value) < 0.0000001) return;
+                dia.ToleranceMinus = value;
             }
             else
             {
@@ -2894,6 +3540,30 @@ public sealed partial class ToolEditorViewModel : ObservableObject
             if (string.Equals(SelectedNode.Type, "LinePairDetection", StringComparison.OrdinalIgnoreCase))
             {
                 var d = _lastRun.LinePairDetections.FirstOrDefault(x => string.Equals(x.Name, SelectedNode.RefName, StringComparison.OrdinalIgnoreCase));
+                return d?.Value;
+            }
+
+            if (string.Equals(SelectedNode.Type, "EdgePair", StringComparison.OrdinalIgnoreCase))
+            {
+                var d = _lastRun.EdgePairs.FirstOrDefault(x => string.Equals(x.Name, SelectedNode.RefName, StringComparison.OrdinalIgnoreCase));
+                return d?.Value;
+            }
+
+            if (string.Equals(SelectedNode.Type, "EdgePairDetect", StringComparison.OrdinalIgnoreCase))
+            {
+                var d = _lastRun.EdgePairDetections.FirstOrDefault(x => string.Equals(x.Name, SelectedNode.RefName, StringComparison.OrdinalIgnoreCase));
+                return d?.Value;
+            }
+
+            if (string.Equals(SelectedNode.Type, "CircleFinder", StringComparison.OrdinalIgnoreCase))
+            {
+                var d = _lastRun.CircleFinders.FirstOrDefault(x => string.Equals(x.Name, SelectedNode.RefName, StringComparison.OrdinalIgnoreCase));
+                return d?.RadiusPx;
+            }
+
+            if (string.Equals(SelectedNode.Type, "Diameter", StringComparison.OrdinalIgnoreCase))
+            {
+                var d = _lastRun.Diameters.FirstOrDefault(x => string.Equals(x.Name, SelectedNode.RefName, StringComparison.OrdinalIgnoreCase));
                 return d?.Value;
             }
 
@@ -2955,6 +3625,30 @@ public sealed partial class ToolEditorViewModel : ObservableObject
             if (string.Equals(SelectedNode.Type, "LinePairDetection", StringComparison.OrdinalIgnoreCase))
             {
                 var d = _lastRun.LinePairDetections.FirstOrDefault(x => string.Equals(x.Name, SelectedNode.RefName, StringComparison.OrdinalIgnoreCase));
+                return d?.Pass;
+            }
+
+            if (string.Equals(SelectedNode.Type, "EdgePair", StringComparison.OrdinalIgnoreCase))
+            {
+                var d = _lastRun.EdgePairs.FirstOrDefault(x => string.Equals(x.Name, SelectedNode.RefName, StringComparison.OrdinalIgnoreCase));
+                return d?.Pass;
+            }
+
+            if (string.Equals(SelectedNode.Type, "EdgePairDetect", StringComparison.OrdinalIgnoreCase))
+            {
+                var d = _lastRun.EdgePairDetections.FirstOrDefault(x => string.Equals(x.Name, SelectedNode.RefName, StringComparison.OrdinalIgnoreCase));
+                return d?.Pass;
+            }
+
+            if (string.Equals(SelectedNode.Type, "CircleFinder", StringComparison.OrdinalIgnoreCase))
+            {
+                var d = _lastRun.CircleFinders.FirstOrDefault(x => string.Equals(x.Name, SelectedNode.RefName, StringComparison.OrdinalIgnoreCase));
+                return d?.Found;
+            }
+
+            if (string.Equals(SelectedNode.Type, "Diameter", StringComparison.OrdinalIgnoreCase))
+            {
+                var d = _lastRun.Diameters.FirstOrDefault(x => string.Equals(x.Name, SelectedNode.RefName, StringComparison.OrdinalIgnoreCase));
                 return d?.Pass;
             }
 
@@ -3034,6 +3728,26 @@ public sealed partial class ToolEditorViewModel : ObservableObject
         else if (string.Equals(SelectedNode.Type, "LinePairDetection", StringComparison.OrdinalIgnoreCase))
         {
             var def = _config.LinePairDetections.FirstOrDefault(x => string.Equals(x.Name, oldName, StringComparison.OrdinalIgnoreCase));
+            if (def is not null) def.Name = newName;
+        }
+        else if (string.Equals(SelectedNode.Type, "EdgePairDetect", StringComparison.OrdinalIgnoreCase))
+        {
+            var def = _config.EdgePairDetections.FirstOrDefault(x => string.Equals(x.Name, oldName, StringComparison.OrdinalIgnoreCase));
+            if (def is not null) def.Name = newName;
+        }
+        else if (string.Equals(SelectedNode.Type, "CircleFinder", StringComparison.OrdinalIgnoreCase))
+        {
+            var def = _config.CircleFinders.FirstOrDefault(x => string.Equals(x.Name, oldName, StringComparison.OrdinalIgnoreCase));
+            if (def is not null) def.Name = newName;
+        }
+        else if (string.Equals(SelectedNode.Type, "Diameter", StringComparison.OrdinalIgnoreCase))
+        {
+            var def = _config.Diameters.FirstOrDefault(x => string.Equals(x.Name, oldName, StringComparison.OrdinalIgnoreCase));
+            if (def is not null) def.Name = newName;
+        }
+        else if (string.Equals(SelectedNode.Type, "EdgePair", StringComparison.OrdinalIgnoreCase))
+        {
+            var def = _config.EdgePairs.FirstOrDefault(x => string.Equals(x.Name, oldName, StringComparison.OrdinalIgnoreCase));
             if (def is not null) def.Name = newName;
         }
         else if (string.Equals(SelectedNode.Type, "CodeDetection", StringComparison.OrdinalIgnoreCase))
@@ -3211,7 +3925,10 @@ public sealed partial class ToolEditorViewModel : ObservableObject
 
         var originOk = HasTemplate(_config.Origin);
         var anyPointNeedsTemplate = _config.Points.Any(p => (p.SearchRoi.Width > 0 && p.SearchRoi.Height > 0) && !HasTemplate(p));
-        if (!originOk || anyPointNeedsTemplate)
+
+        var graphNeedsOrigin = Nodes.Any(n => string.Equals(n.Type, "Origin", StringComparison.OrdinalIgnoreCase));
+        var graphNeedsPoint = Nodes.Any(n => string.Equals(n.Type, "Point", StringComparison.OrdinalIgnoreCase));
+        if ((graphNeedsOrigin && !originOk) || (graphNeedsPoint && anyPointNeedsTemplate))
         {
             _lastRun = null;
             RefreshPreviews();
@@ -3322,6 +4039,26 @@ public sealed partial class ToolEditorViewModel : ObservableObject
             if (string.Equals(toRemove.Type, "LinePairDetection", StringComparison.OrdinalIgnoreCase))
             {
                 _config.LinePairDetections.RemoveAll(x => string.Equals(x.Name, toRemove.RefName, StringComparison.OrdinalIgnoreCase));
+            }
+
+            if (string.Equals(toRemove.Type, "EdgePairDetect", StringComparison.OrdinalIgnoreCase))
+            {
+                _config.EdgePairDetections.RemoveAll(x => string.Equals(x.Name, toRemove.RefName, StringComparison.OrdinalIgnoreCase));
+            }
+
+            if (string.Equals(toRemove.Type, "CircleFinder", StringComparison.OrdinalIgnoreCase))
+            {
+                _config.CircleFinders.RemoveAll(x => string.Equals(x.Name, toRemove.RefName, StringComparison.OrdinalIgnoreCase));
+            }
+
+            if (string.Equals(toRemove.Type, "Diameter", StringComparison.OrdinalIgnoreCase))
+            {
+                _config.Diameters.RemoveAll(x => string.Equals(x.Name, toRemove.RefName, StringComparison.OrdinalIgnoreCase));
+            }
+
+            if (string.Equals(toRemove.Type, "EdgePair", StringComparison.OrdinalIgnoreCase))
+            {
+                _config.EdgePairs.RemoveAll(x => string.Equals(x.Name, toRemove.RefName, StringComparison.OrdinalIgnoreCase));
             }
 
             if (string.Equals(toRemove.Type, "CodeDetection", StringComparison.OrdinalIgnoreCase))
@@ -3503,6 +4240,40 @@ public sealed partial class ToolEditorViewModel : ObservableObject
             return;
         }
 
+        if (string.Equals(node.Type, "EdgePairDetect", StringComparison.OrdinalIgnoreCase))
+        {
+            var existed = _config.EdgePairDetections.Any(x => string.Equals(x.Name, node.RefName, StringComparison.OrdinalIgnoreCase));
+            if (!existed)
+            {
+                var def = new EdgePairDetectDefinition { Name = node.RefName };
+                def.SearchRoi = DefaultRoi();
+                _config.EdgePairDetections.Add(def);
+            }
+            return;
+        }
+
+        if (string.Equals(node.Type, "CircleFinder", StringComparison.OrdinalIgnoreCase))
+        {
+            var existed = _config.CircleFinders.Any(x => string.Equals(x.Name, node.RefName, StringComparison.OrdinalIgnoreCase));
+            if (!existed)
+            {
+                var def = new CircleFinderDefinition { Name = node.RefName };
+                def.SearchRoi = DefaultRoi();
+                _config.CircleFinders.Add(def);
+            }
+            return;
+        }
+
+        if (string.Equals(node.Type, "Diameter", StringComparison.OrdinalIgnoreCase))
+        {
+            var existed = _config.Diameters.Any(x => string.Equals(x.Name, node.RefName, StringComparison.OrdinalIgnoreCase));
+            if (!existed)
+            {
+                _config.Diameters.Add(new DiameterDefinition { Name = node.RefName });
+            }
+            return;
+        }
+
         if (string.Equals(node.Type, "CodeDetection", StringComparison.OrdinalIgnoreCase))
         {
             var existed = _config.CodeDetections.Any(x => string.Equals(x.Name, node.RefName, StringComparison.OrdinalIgnoreCase));
@@ -3542,6 +4313,16 @@ public sealed partial class ToolEditorViewModel : ObservableObject
             if (!existed)
             {
                 _config.Angles.Add(new AngleDefinition { Name = node.RefName });
+            }
+            return;
+        }
+
+        if (string.Equals(node.Type, "EdgePair", StringComparison.OrdinalIgnoreCase))
+        {
+            var existed = _config.EdgePairs.Any(x => string.Equals(x.Name, node.RefName, StringComparison.OrdinalIgnoreCase));
+            if (!existed)
+            {
+                _config.EdgePairs.Add(new EdgePairDefinition { Name = node.RefName });
             }
             return;
         }
@@ -3599,6 +4380,21 @@ public sealed partial class ToolEditorViewModel : ObservableObject
             baseName = "LPD";
             exists = n => _config.LinePairDetections.Any(x => string.Equals(x.Name, n, StringComparison.OrdinalIgnoreCase));
         }
+        else if (string.Equals(type, "EdgePairDetect", StringComparison.OrdinalIgnoreCase))
+        {
+            baseName = "EPD";
+            exists = n => _config.EdgePairDetections.Any(x => string.Equals(x.Name, n, StringComparison.OrdinalIgnoreCase));
+        }
+        else if (string.Equals(type, "CircleFinder", StringComparison.OrdinalIgnoreCase))
+        {
+            baseName = "CIR";
+            exists = n => _config.CircleFinders.Any(x => string.Equals(x.Name, n, StringComparison.OrdinalIgnoreCase));
+        }
+        else if (string.Equals(type, "Diameter", StringComparison.OrdinalIgnoreCase))
+        {
+            baseName = "DIA";
+            exists = n => _config.Diameters.Any(x => string.Equals(x.Name, n, StringComparison.OrdinalIgnoreCase));
+        }
         else if (string.Equals(type, "Distance", StringComparison.OrdinalIgnoreCase))
         {
             baseName = "D";
@@ -3618,6 +4414,11 @@ public sealed partial class ToolEditorViewModel : ObservableObject
         {
             baseName = "ANG";
             exists = n => _config.Angles.Any(x => string.Equals(x.Name, n, StringComparison.OrdinalIgnoreCase));
+        }
+        else if (string.Equals(type, "EdgePair", StringComparison.OrdinalIgnoreCase))
+        {
+            baseName = "EP";
+            exists = n => _config.EdgePairs.Any(x => string.Equals(x.Name, n, StringComparison.OrdinalIgnoreCase));
         }
         else if (string.Equals(type, "Condition", StringComparison.OrdinalIgnoreCase))
         {
@@ -3756,6 +4557,26 @@ public sealed partial class ToolEditorViewModel : ObservableObject
                 else if (string.Equals(toPort, "B", StringComparison.OrdinalIgnoreCase)) def.LineB = fromNode.RefName;
             }
         }
+        else if (string.Equals(toNode.Type, "EdgePair", StringComparison.OrdinalIgnoreCase)
+                 && (string.Equals(fromNode.Type, "Line", StringComparison.OrdinalIgnoreCase)
+                     || string.Equals(fromNode.Type, "Caliper", StringComparison.OrdinalIgnoreCase)))
+        {
+            var def = _config.EdgePairs.FirstOrDefault(x => string.Equals(x.Name, toNode.RefName, StringComparison.OrdinalIgnoreCase));
+            if (def is not null)
+            {
+                if (string.Equals(toPort, "A", StringComparison.OrdinalIgnoreCase)) def.RefA = fromNode.RefName;
+                else if (string.Equals(toPort, "B", StringComparison.OrdinalIgnoreCase)) def.RefB = fromNode.RefName;
+            }
+        }
+        else if (string.Equals(toNode.Type, "Diameter", StringComparison.OrdinalIgnoreCase)
+                 && string.Equals(fromNode.Type, "CircleFinder", StringComparison.OrdinalIgnoreCase))
+        {
+            var def = _config.Diameters.FirstOrDefault(x => string.Equals(x.Name, toNode.RefName, StringComparison.OrdinalIgnoreCase));
+            if (def is not null)
+            {
+                if (string.Equals(toPort, "C", StringComparison.OrdinalIgnoreCase)) def.CircleRef = fromNode.RefName;
+            }
+        }
 
         if (!_syncingInputs)
         {
@@ -3859,6 +4680,8 @@ public sealed partial class ToolEditorViewModel : ObservableObject
                         || string.Equals(SelectedNode.Type, "Line", StringComparison.OrdinalIgnoreCase)
                         || string.Equals(SelectedNode.Type, "Caliper", StringComparison.OrdinalIgnoreCase)
                         || string.Equals(SelectedNode.Type, "LinePairDetection", StringComparison.OrdinalIgnoreCase)
+                        || string.Equals(SelectedNode.Type, "EdgePairDetect", StringComparison.OrdinalIgnoreCase)
+                        || string.Equals(SelectedNode.Type, "EdgePair", StringComparison.OrdinalIgnoreCase)
                         || string.Equals(SelectedNode.Type, "BlobDetection", StringComparison.OrdinalIgnoreCase)))
                 {
                     using var processedSel = ResolveToolPreprocessForPreview(snap, SelectedNode);
@@ -4563,6 +5386,77 @@ public sealed partial class ToolEditorViewModel : ObservableObject
             return;
         }
 
+        if (string.Equals(node.Type, "EdgePairDetect", StringComparison.OrdinalIgnoreCase))
+        {
+            var e = _config.EdgePairDetections.FirstOrDefault(x => string.Equals(x.Name, node.RefName, StringComparison.OrdinalIgnoreCase));
+            if (e is null)
+            {
+                return;
+            }
+
+            if (showRois && e.SearchRoi.Width > 0 && e.SearchRoi.Height > 0)
+            {
+                dst.Add(new OverlayRectItem
+                {
+                    X = e.SearchRoi.X,
+                    Y = e.SearchRoi.Y,
+                    Width = e.SearchRoi.Width,
+                    Height = e.SearchRoi.Height,
+                    Stroke = Brushes.MediumPurple,
+                    Label = $"{e.Name} EPD"
+                });
+
+                var stripCount = Math.Clamp(e.StripCount, 1, 100);
+                var stripLength = Math.Max(3, e.StripLength);
+                if (e.Orientation == CaliperOrientation.Vertical)
+                {
+                    var y1 = e.SearchRoi.Y + (e.SearchRoi.Height - stripLength) / 2.0;
+                    var y2 = y1 + stripLength;
+                    for (var i = 0; i < stripCount; i++)
+                    {
+                        var x = e.SearchRoi.X + (i + 0.5) * e.SearchRoi.Width / stripCount;
+                        dst.Add(new OverlayLineItem { X1 = x, Y1 = y1, X2 = x, Y2 = y2, Stroke = Brushes.MediumPurple, StrokeThickness = 1.0 });
+                    }
+                }
+                else
+                {
+                    var x1 = e.SearchRoi.X + (e.SearchRoi.Width - stripLength) / 2.0;
+                    var x2 = x1 + stripLength;
+                    for (var i = 0; i < stripCount; i++)
+                    {
+                        var y = e.SearchRoi.Y + (i + 0.5) * e.SearchRoi.Height / stripCount;
+                        dst.Add(new OverlayLineItem { X1 = x1, Y1 = y, X2 = x2, Y2 = y, Stroke = Brushes.MediumPurple, StrokeThickness = 1.0 });
+                    }
+                }
+            }
+
+            return;
+        }
+
+        if (string.Equals(node.Type, "CircleFinder", StringComparison.OrdinalIgnoreCase))
+        {
+            var c = _config.CircleFinders.FirstOrDefault(x => string.Equals(x.Name, node.RefName, StringComparison.OrdinalIgnoreCase));
+            if (c is null)
+            {
+                return;
+            }
+
+            if (showRois && c.SearchRoi.Width > 0 && c.SearchRoi.Height > 0)
+            {
+                dst.Add(new OverlayRectItem
+                {
+                    X = c.SearchRoi.X,
+                    Y = c.SearchRoi.Y,
+                    Width = c.SearchRoi.Width,
+                    Height = c.SearchRoi.Height,
+                    Stroke = Brushes.MediumPurple,
+                    Label = $"{c.Name} CIR"
+                });
+            }
+
+            return;
+        }
+
         if (string.Equals(node.Type, "Distance", StringComparison.OrdinalIgnoreCase))
         {
             var d = _config.Distances.FirstOrDefault(x => string.Equals(x.Name, node.RefName, StringComparison.OrdinalIgnoreCase));
@@ -4623,6 +5517,22 @@ public sealed partial class ToolEditorViewModel : ObservableObject
             {
                 AddPointRoi(dd.Point);
                 AddLineRoi(dd.Line);
+            }
+            return;
+        }
+
+        if (string.Equals(node.Type, "EdgePair", StringComparison.OrdinalIgnoreCase))
+        {
+            var ep = _config.EdgePairs.FirstOrDefault(x => string.Equals(x.Name, node.RefName, StringComparison.OrdinalIgnoreCase));
+            if (ep is null)
+            {
+                return;
+            }
+
+            if (showRois)
+            {
+                AddLineRoi(ep.RefA);
+                AddLineRoi(ep.RefB);
             }
             return;
         }
@@ -4722,6 +5632,30 @@ public sealed partial class ToolEditorViewModel : ObservableObject
             dst.Add(new OverlayLineItem { X1 = lpd.ClosestA.X, Y1 = lpd.ClosestA.Y, X2 = lpd.ClosestB.X, Y2 = lpd.ClosestB.Y, Stroke = lpd.Pass ? Brushes.Lime : Brushes.Red, Label = $"{lpd.Name}: {lpd.Value:0.###}" });
         }
 
+        foreach (var epd in run.EdgePairDetections)
+        {
+            if (!epd.Found || double.IsNaN(epd.Value))
+            {
+                continue;
+            }
+
+            dst.Add(new OverlayLineItem { X1 = epd.L1P1.X, Y1 = epd.L1P1.Y, X2 = epd.L1P2.X, Y2 = epd.L1P2.Y, Stroke = Brushes.MediumPurple, Label = $"{epd.Name} E1" });
+            dst.Add(new OverlayLineItem { X1 = epd.L2P1.X, Y1 = epd.L2P1.Y, X2 = epd.L2P2.X, Y2 = epd.L2P2.Y, Stroke = Brushes.MediumPurple, Label = $"{epd.Name} E2" });
+            dst.Add(new OverlayLineItem { X1 = epd.ClosestA.X, Y1 = epd.ClosestA.Y, X2 = epd.ClosestB.X, Y2 = epd.ClosestB.Y, Stroke = epd.Pass ? Brushes.Lime : Brushes.Red, Label = $"{epd.Name}: {epd.Value:0.###}" });
+        }
+
+        foreach (var ep in run.EdgePairs)
+        {
+            if (!ep.Found || double.IsNaN(ep.Value))
+            {
+                continue;
+            }
+
+            dst.Add(new OverlayLineItem { X1 = ep.L1P1.X, Y1 = ep.L1P1.Y, X2 = ep.L1P2.X, Y2 = ep.L1P2.Y, Stroke = Brushes.MediumPurple, Label = ep.RefA });
+            dst.Add(new OverlayLineItem { X1 = ep.L2P1.X, Y1 = ep.L2P1.Y, X2 = ep.L2P2.X, Y2 = ep.L2P2.Y, Stroke = Brushes.MediumPurple, Label = ep.RefB });
+            dst.Add(new OverlayLineItem { X1 = ep.ClosestA.X, Y1 = ep.ClosestA.Y, X2 = ep.ClosestB.X, Y2 = ep.ClosestB.Y, Stroke = ep.Pass ? Brushes.Lime : Brushes.Red, Label = $"{ep.Name}: {ep.Value:0.###}" });
+        }
+
         foreach (var cal in run.Calipers)
         {
             if (!cal.Found)
@@ -4804,6 +5738,31 @@ public sealed partial class ToolEditorViewModel : ObservableObject
                 Stroke = dd.Pass ? Brushes.Lime : Brushes.Red,
                 Label = $"{dd.Name}: {dd.Value:0.00}"
             });
+        }
+
+        foreach (var c in run.CircleFinders)
+        {
+            if (!c.Found || c.RadiusPx <= 0)
+            {
+                continue;
+            }
+
+            AddCircle(dst, c.Center.X, c.Center.Y, c.RadiusPx, stroke: Brushes.MediumPurple, strokeThickness: 2.0);
+            AddCross(dst, c.Center.X, c.Center.Y, size: 10.0, stroke: Brushes.MediumPurple, strokeThickness: 2.0);
+            dst.Add(new OverlayPointItem { X = c.Center.X, Y = c.Center.Y, Radius = 1.0, Stroke = Brushes.MediumPurple, Label = c.Name });
+        }
+
+        foreach (var d in run.Diameters)
+        {
+            if (!d.Found || double.IsNaN(d.Value) || d.RadiusPx <= 0)
+            {
+                continue;
+            }
+
+            var stroke = d.Pass ? Brushes.Lime : Brushes.Red;
+            AddCircle(dst, d.Center.X, d.Center.Y, d.RadiusPx, stroke: stroke, strokeThickness: 2.0);
+            AddCross(dst, d.Center.X, d.Center.Y, size: 12.0, stroke: stroke, strokeThickness: 2.0);
+            dst.Add(new OverlayPointItem { X = d.Center.X, Y = d.Center.Y, Radius = 1.0, Stroke = stroke, Label = $"{d.Name}: {d.Value:0.###} mm" });
         }
 
         foreach (var a in run.Angles)
@@ -4952,6 +5911,103 @@ public sealed partial class ToolEditorViewModel : ObservableObject
                     var p = r.Points[i];
                     dst.Add(new OverlayPointItem { X = p.X, Y = p.Y, Radius = 2.0, Stroke = Brushes.Gold, Label = string.Empty });
                 }
+            }
+
+            return;
+        }
+
+        if (string.Equals(node.Type, "EdgePairDetect", StringComparison.OrdinalIgnoreCase))
+        {
+            var r = run.EdgePairDetections.FirstOrDefault(x => string.Equals(x.Name, node.RefName, StringComparison.OrdinalIgnoreCase));
+            if (r is null || !r.Found || double.IsNaN(r.Value))
+            {
+                return;
+            }
+
+            dst.Add(new OverlayLineItem { X1 = r.L1P1.X, Y1 = r.L1P1.Y, X2 = r.L1P2.X, Y2 = r.L1P2.Y, Stroke = Brushes.MediumPurple, Label = $"{r.Name} E1" });
+            dst.Add(new OverlayLineItem { X1 = r.L2P1.X, Y1 = r.L2P1.Y, X2 = r.L2P2.X, Y2 = r.L2P2.Y, Stroke = Brushes.MediumPurple, Label = $"{r.Name} E2" });
+            dst.Add(new OverlayLineItem { X1 = r.ClosestA.X, Y1 = r.ClosestA.Y, X2 = r.ClosestB.X, Y2 = r.ClosestB.Y, Stroke = r.Pass ? Brushes.Lime : Brushes.Red, Label = $"{r.Name}: {r.Value:0.###}" });
+            return;
+        }
+
+        if (string.Equals(node.Type, "CircleFinder", StringComparison.OrdinalIgnoreCase))
+        {
+            var c = run.CircleFinders.FirstOrDefault(x => string.Equals(x.Name, node.RefName, StringComparison.OrdinalIgnoreCase));
+            if (c is null || !c.Found || c.RadiusPx <= 0)
+            {
+                return;
+            }
+
+            AddCircle(dst, c.Center.X, c.Center.Y, c.RadiusPx, stroke: Brushes.MediumPurple, strokeThickness: 2.0);
+            AddCross(dst, c.Center.X, c.Center.Y, size: 12.0, stroke: Brushes.MediumPurple, strokeThickness: 2.0);
+            dst.Add(new OverlayPointItem { X = c.Center.X, Y = c.Center.Y, Radius = 1.0, Stroke = Brushes.MediumPurple, Label = c.Name });
+            return;
+        }
+
+        if (string.Equals(node.Type, "Diameter", StringComparison.OrdinalIgnoreCase))
+        {
+            var d = run.Diameters.FirstOrDefault(x => string.Equals(x.Name, node.RefName, StringComparison.OrdinalIgnoreCase));
+            if (d is null || !d.Found || double.IsNaN(d.Value) || d.RadiusPx <= 0)
+            {
+                return;
+            }
+
+            var stroke = d.Pass ? Brushes.Lime : Brushes.Red;
+            AddCircle(dst, d.Center.X, d.Center.Y, d.RadiusPx, stroke: stroke, strokeThickness: 2.0);
+            AddCross(dst, d.Center.X, d.Center.Y, size: 12.0, stroke: stroke, strokeThickness: 2.0);
+            dst.Add(new OverlayPointItem { X = d.Center.X, Y = d.Center.Y, Radius = 1.0, Stroke = stroke, Label = $"{d.Name}: {d.Value:0.###} mm" });
+            return;
+        }
+
+        if (string.Equals(node.Type, "Angle", StringComparison.OrdinalIgnoreCase))
+        {
+            var a = run.Angles.FirstOrDefault(x => string.Equals(x.Name, node.RefName, StringComparison.OrdinalIgnoreCase));
+            if (a is null || double.IsNaN(a.ValueDeg))
+            {
+                return;
+            }
+
+            if (a.Found)
+            {
+                if (_lastPreviewImageWidth > 0 && _lastPreviewImageHeight > 0)
+                {
+                    var ip = new System.Windows.Point(a.Intersection.X, a.Intersection.Y);
+                    var aDir = new System.Windows.Point(a.ADir.X, a.ADir.Y);
+                    var bDir = new System.Windows.Point(a.BDir.X, a.BDir.Y);
+
+                    if (TryClipInfiniteLineToImage(ip, aDir, _lastPreviewImageWidth, _lastPreviewImageHeight, out var a1, out var a2))
+                    {
+                        dst.Add(new OverlayLineItem { X1 = a1.X, Y1 = a1.Y, X2 = a2.X, Y2 = a2.Y, Stroke = Brushes.MediumPurple, Label = a.LineA });
+                    }
+                    else
+                    {
+                        var len = 60.0;
+                        dst.Add(new OverlayLineItem { X1 = a.Intersection.X, Y1 = a.Intersection.Y, X2 = a.Intersection.X + a.ADir.X * len, Y2 = a.Intersection.Y + a.ADir.Y * len, Stroke = Brushes.MediumPurple, Label = a.LineA });
+                    }
+
+                    if (TryClipInfiniteLineToImage(ip, bDir, _lastPreviewImageWidth, _lastPreviewImageHeight, out var b1, out var b2))
+                    {
+                        dst.Add(new OverlayLineItem { X1 = b1.X, Y1 = b1.Y, X2 = b2.X, Y2 = b2.Y, Stroke = Brushes.Gold, Label = a.LineB });
+                    }
+                    else
+                    {
+                        var len = 60.0;
+                        dst.Add(new OverlayLineItem { X1 = a.Intersection.X, Y1 = a.Intersection.Y, X2 = a.Intersection.X + a.BDir.X * len, Y2 = a.Intersection.Y + a.BDir.Y * len, Stroke = Brushes.Gold, Label = a.LineB });
+                    }
+                }
+                else
+                {
+                    var len = 60.0;
+                    dst.Add(new OverlayLineItem { X1 = a.Intersection.X, Y1 = a.Intersection.Y, X2 = a.Intersection.X + a.ADir.X * len, Y2 = a.Intersection.Y + a.ADir.Y * len, Stroke = Brushes.MediumPurple, Label = a.LineA });
+                    dst.Add(new OverlayLineItem { X1 = a.Intersection.X, Y1 = a.Intersection.Y, X2 = a.Intersection.X + a.BDir.X * len, Y2 = a.Intersection.Y + a.BDir.Y * len, Stroke = Brushes.Gold, Label = a.LineB });
+                }
+
+                AddAngleArc(dst, a.Intersection.X, a.Intersection.Y, a.ADir.X, a.ADir.Y, a.BDir.X, a.BDir.Y, radius: 35.0, stroke: a.Pass ? Brushes.Lime : Brushes.Red);
+                dst.Add(new OverlayPointItem { X = a.Intersection.X, Y = a.Intersection.Y, Radius = 3.0, Stroke = a.Pass ? Brushes.Lime : Brushes.Red, Label = $"{a.Name}: {a.ValueDeg:0.###}°" });
+            }
+            else
+            {
+                dst.Add(new OverlayPointItem { X = 12, Y = 12, Radius = 1.0, Stroke = a.Pass ? Brushes.Lime : Brushes.Red, Label = $"{a.Name}: {a.ValueDeg:0.###}°" });
             }
 
             return;
@@ -5571,6 +6627,38 @@ public sealed partial class ToolEditorViewModel : ObservableObject
             }
         }
 
+        foreach (var c in _config.CircleFinders)
+        {
+            if (showRois && c.SearchRoi.Width > 0 && c.SearchRoi.Height > 0)
+            {
+                dst.Add(new OverlayRectItem
+                {
+                    X = c.SearchRoi.X,
+                    Y = c.SearchRoi.Y,
+                    Width = c.SearchRoi.Width,
+                    Height = c.SearchRoi.Height,
+                    Stroke = Brushes.MediumPurple,
+                    Label = $"{c.Name} CIR"
+                });
+            }
+        }
+
+        foreach (var e in _config.EdgePairDetections)
+        {
+            if (showRois && e.SearchRoi.Width > 0 && e.SearchRoi.Height > 0)
+            {
+                dst.Add(new OverlayRectItem
+                {
+                    X = e.SearchRoi.X,
+                    Y = e.SearchRoi.Y,
+                    Width = e.SearchRoi.Width,
+                    Height = e.SearchRoi.Height,
+                    Stroke = Brushes.MediumPurple,
+                    Label = $"{e.Name} EPD"
+                });
+            }
+        }
+
         if (showRois && _config.DefectConfig.InspectRoi.Width > 0 && _config.DefectConfig.InspectRoi.Height > 0)
         {
             dst.Add(new OverlayRectItem
@@ -5833,11 +6921,17 @@ public sealed partial class ToolGraphNodeViewModel : ObservableObject
                  || string.Equals(Type, "Line", StringComparison.OrdinalIgnoreCase)
                  || string.Equals(Type, "Caliper", StringComparison.OrdinalIgnoreCase)
                  || string.Equals(Type, "LinePairDetection", StringComparison.OrdinalIgnoreCase)
+                 || string.Equals(Type, "EdgePairDetect", StringComparison.OrdinalIgnoreCase)
+                 || string.Equals(Type, "CircleFinder", StringComparison.OrdinalIgnoreCase)
                  || string.Equals(Type, "BlobDetection", StringComparison.OrdinalIgnoreCase)
                  || string.Equals(Type, "CodeDetection", StringComparison.OrdinalIgnoreCase))
         {
             InPorts.Add(new NodePortViewModel(this, "In", isInput: true));
             InPorts.Add(new NodePortViewModel(this, "Pre", isInput: true));
+        }
+        else if (string.Equals(Type, "Diameter", StringComparison.OrdinalIgnoreCase))
+        {
+            InPorts.Add(new NodePortViewModel(this, "C", isInput: true));
         }
         else if (string.Equals(Type, "Distance", StringComparison.OrdinalIgnoreCase))
         {
@@ -5853,6 +6947,12 @@ public sealed partial class ToolGraphNodeViewModel : ObservableObject
         {
             InPorts.Add(new NodePortViewModel(this, "A", isInput: true));
             InPorts.Add(new NodePortViewModel(this, "B", isInput: true));
+        }
+        else if (string.Equals(Type, "EdgePair", StringComparison.OrdinalIgnoreCase))
+        {
+            InPorts.Add(new NodePortViewModel(this, "A", isInput: true));
+            InPorts.Add(new NodePortViewModel(this, "B", isInput: true));
+            InPorts.Add(new NodePortViewModel(this, "Pre", isInput: true));
         }
         else if (string.Equals(Type, "PointLineDistance", StringComparison.OrdinalIgnoreCase))
         {

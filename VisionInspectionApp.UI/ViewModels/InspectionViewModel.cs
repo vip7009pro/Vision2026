@@ -309,6 +309,21 @@ public sealed partial class InspectionViewModel : ObservableObject
         {
             SpecResults.Add(new SpecResultRow("LPD", d.Name, "L1", "L2", d.Value, d.Nominal, d.TolPlus, d.TolMinus, d.Pass));
         }
+
+        foreach (var ep in LastResult.EdgePairs)
+        {
+            SpecResults.Add(new SpecResultRow("EdgePair", ep.Name, ep.RefA, ep.RefB, ep.Value, ep.Nominal, ep.TolPlus, ep.TolMinus, ep.Pass));
+        }
+
+        foreach (var epd in LastResult.EdgePairDetections)
+        {
+            SpecResults.Add(new SpecResultRow("EdgePairDetect", epd.Name, "E1", "E2", epd.Value, epd.Nominal, epd.TolPlus, epd.TolMinus, epd.Pass));
+        }
+
+        foreach (var d in LastResult.Diameters)
+        {
+            SpecResults.Add(new SpecResultRow("Diameter", d.Name, d.CircleRef, string.Empty, d.Value, d.Nominal, d.TolPlus, d.TolMinus, d.Pass));
+        }
     }
 
     private void RefreshOverlayItems()
@@ -375,6 +390,56 @@ public sealed partial class InspectionViewModel : ObservableObject
                         Height = _config.Origin.TemplateRoi.Height,
                         Stroke = Brushes.Yellow,
                         Label = "Origin T"
+                    });
+                }
+            }
+
+            foreach (var cir in _config.CircleFinders)
+            {
+                if (cir.SearchRoi.Width <= 0 || cir.SearchRoi.Height <= 0)
+                {
+                    continue;
+                }
+
+                if (hasPose)
+                {
+                    AddRotatedRoiOverlay(cir.SearchRoi, $"{cir.Name} CIR", Brushes.MediumPurple, originTeach, originFound, angleDeg);
+                }
+                else
+                {
+                    OverlayItems.Add(new OverlayRectItem
+                    {
+                        X = cir.SearchRoi.X,
+                        Y = cir.SearchRoi.Y,
+                        Width = cir.SearchRoi.Width,
+                        Height = cir.SearchRoi.Height,
+                        Stroke = Brushes.MediumPurple,
+                        Label = $"{cir.Name} CIR"
+                    });
+                }
+            }
+
+            foreach (var epd in _config.EdgePairDetections)
+            {
+                if (epd.SearchRoi.Width <= 0 || epd.SearchRoi.Height <= 0)
+                {
+                    continue;
+                }
+
+                if (hasPose)
+                {
+                    AddRotatedRoiOverlay(epd.SearchRoi, $"{epd.Name} EPD", Brushes.MediumPurple, originTeach, originFound, angleDeg);
+                }
+                else
+                {
+                    OverlayItems.Add(new OverlayRectItem
+                    {
+                        X = epd.SearchRoi.X,
+                        Y = epd.SearchRoi.Y,
+                        Width = epd.SearchRoi.Width,
+                        Height = epd.SearchRoi.Height,
+                        Stroke = Brushes.MediumPurple,
+                        Label = $"{epd.Name} EPD"
                     });
                 }
             }
@@ -628,6 +693,34 @@ public sealed partial class InspectionViewModel : ObservableObject
                     });
                 }
             }
+
+            if (LastResult is not null)
+            {
+                foreach (var cir in LastResult.CircleFinders)
+                {
+                    if (!cir.Found || cir.RadiusPx <= 0)
+                    {
+                        continue;
+                    }
+
+                    AddCircle(OverlayItems, cir.Center.X, cir.Center.Y, cir.RadiusPx, stroke: Brushes.MediumPurple, strokeThickness: 2.0);
+                    AddCross(OverlayItems, cir.Center.X, cir.Center.Y, size: 12.0, stroke: Brushes.MediumPurple, strokeThickness: 2.0);
+                    OverlayItems.Add(new OverlayPointItem { X = cir.Center.X, Y = cir.Center.Y, Radius = 1.0, Stroke = Brushes.MediumPurple, Label = cir.Name });
+                }
+
+                foreach (var dia in LastResult.Diameters)
+                {
+                    if (!dia.Found || double.IsNaN(dia.Value) || dia.RadiusPx <= 0)
+                    {
+                        continue;
+                    }
+
+                    var stroke = dia.Pass ? Brushes.Lime : Brushes.Red;
+                    AddCircle(OverlayItems, dia.Center.X, dia.Center.Y, dia.RadiusPx, stroke: stroke, strokeThickness: 2.0);
+                    AddCross(OverlayItems, dia.Center.X, dia.Center.Y, size: 12.0, stroke: stroke, strokeThickness: 2.0);
+                    OverlayItems.Add(new OverlayPointItem { X = dia.Center.X, Y = dia.Center.Y, Radius = 1.0, Stroke = stroke, Label = $"{dia.Name}: {dia.Value:0.###} mm" });
+                }
+            }
         }
 
         if (LastResult?.Origin is not null)
@@ -870,6 +963,31 @@ public sealed partial class InspectionViewModel : ObservableObject
 
         if (LastResult is not null)
         {
+            foreach (var dd in LastResult.PointToLineDistances)
+            {
+                OverlayItems.Add(new OverlayLineItem
+                {
+                    X1 = dd.ClosestA.X,
+                    Y1 = dd.ClosestA.Y,
+                    X2 = dd.ClosestB.X,
+                    Y2 = dd.ClosestB.Y,
+                    Stroke = dd.Pass ? Brushes.Lime : Brushes.Red,
+                    Label = $"{dd.Name}: {dd.Value:0.00} mm"
+                });
+            }
+
+            foreach (var epd in LastResult.EdgePairDetections)
+            {
+                if (!epd.Found || double.IsNaN(epd.Value))
+                {
+                    continue;
+                }
+
+                OverlayItems.Add(new OverlayLineItem { X1 = epd.L1P1.X, Y1 = epd.L1P1.Y, X2 = epd.L1P2.X, Y2 = epd.L1P2.Y, Stroke = Brushes.MediumPurple, Label = $"{epd.Name} E1" });
+                OverlayItems.Add(new OverlayLineItem { X1 = epd.L2P1.X, Y1 = epd.L2P1.Y, X2 = epd.L2P2.X, Y2 = epd.L2P2.Y, Stroke = Brushes.MediumPurple, Label = $"{epd.Name} E2" });
+                OverlayItems.Add(new OverlayLineItem { X1 = epd.ClosestA.X, Y1 = epd.ClosestA.Y, X2 = epd.ClosestB.X, Y2 = epd.ClosestB.Y, Stroke = epd.Pass ? Brushes.Lime : Brushes.Red, Label = $"{epd.Name}: {epd.Value:0.###}" });
+            }
+
             foreach (var c in LastResult.Calipers)
             {
                 if (c.Found)
@@ -996,5 +1114,33 @@ public sealed partial class InspectionViewModel : ObservableObject
             prevX = x;
             prevY = y;
         }
+    }
+
+    private static void AddCircle(ObservableCollection<OverlayItem> dst, double cx, double cy, double radius, Brush stroke, double strokeThickness)
+    {
+        if (radius <= 0 || double.IsNaN(radius) || double.IsInfinity(radius))
+        {
+            return;
+        }
+
+        var steps = Math.Clamp((int)Math.Ceiling(2.0 * Math.PI * radius / 12.0), 24, 240);
+        var prevX = cx + radius;
+        var prevY = cy;
+        for (var i = 1; i <= steps; i++)
+        {
+            var a = (double)i / steps * 2.0 * Math.PI;
+            var x = cx + Math.Cos(a) * radius;
+            var y = cy + Math.Sin(a) * radius;
+            dst.Add(new OverlayLineItem { X1 = prevX, Y1 = prevY, X2 = x, Y2 = y, Stroke = stroke, StrokeThickness = strokeThickness, Label = string.Empty });
+            prevX = x;
+            prevY = y;
+        }
+    }
+
+    private static void AddCross(ObservableCollection<OverlayItem> dst, double cx, double cy, double size, Brush stroke, double strokeThickness)
+    {
+        var s = Math.Max(1.0, size);
+        dst.Add(new OverlayLineItem { X1 = cx - s, Y1 = cy, X2 = cx + s, Y2 = cy, Stroke = stroke, StrokeThickness = strokeThickness, Label = string.Empty });
+        dst.Add(new OverlayLineItem { X1 = cx, Y1 = cy - s, X2 = cx, Y2 = cy + s, Stroke = stroke, StrokeThickness = strokeThickness, Label = string.Empty });
     }
 }

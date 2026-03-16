@@ -4,6 +4,7 @@
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
              xmlns:controls="clr-namespace:VisionInspectionApp.UI.Controls"
+             xmlns:models="clr-namespace:VisionInspectionApp.Models;assembly=VisionInspectionApp.Models"
              mc:Ignorable="d">
 
     <UserControl.Resources>
@@ -273,6 +274,19 @@
                                     </StackPanel>
                                 </StackPanel>
 
+                                <StackPanel Visibility="{Binding IsEdgePairNode, Converter={StaticResource BoolToVis}}">
+                                    <TextBlock Text="Inputs" FontWeight="SemiBold" Margin="0,0,0,6" />
+
+                                    <StackPanel Orientation="Horizontal" Margin="0,0,0,2">
+                                        <TextBlock Text="A" Width="60" VerticalAlignment="Center" />
+                                        <ComboBox Width="160" ItemsSource="{Binding AvailableLineNames}" SelectedItem="{Binding EdgePair_RefA, UpdateSourceTrigger=PropertyChanged}" />
+                                    </StackPanel>
+                                    <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                                        <TextBlock Text="B" Width="60" VerticalAlignment="Center" />
+                                        <ComboBox Width="160" ItemsSource="{Binding AvailableLineNames}" SelectedItem="{Binding EdgePair_RefB, UpdateSourceTrigger=PropertyChanged}" />
+                                    </StackPanel>
+                                </StackPanel>
+
                                 <StackPanel Orientation="Horizontal" Margin="0,0,0,2">
                                     <TextBlock Text="Nom" Width="60" VerticalAlignment="Center" />
                                     <TextBox Width="80" Text="{Binding Distance_Nominal, UpdateSourceTrigger=PropertyChanged, Delay=250}" />
@@ -382,6 +396,182 @@
                                         <TextBlock Text="{Binding Lpd_MaxLineGap}" Width="40" />
                                     </StackPanel>
                                     <Slider Minimum="0" Maximum="100" Value="{Binding Lpd_MaxLineGap, UpdateSourceTrigger=PropertyChanged}" IsSnapToTickEnabled="True" TickFrequency="1" />
+                                </StackPanel>
+
+                                <TextBlock Text="Spec" FontWeight="SemiBold" Margin="0,6,0,6" />
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,2">
+                                    <TextBlock Text="Nom" Width="60" VerticalAlignment="Center" />
+                                    <TextBox Width="80" Text="{Binding Distance_Nominal, UpdateSourceTrigger=PropertyChanged, Delay=250}" />
+                                </StackPanel>
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,2">
+                                    <TextBlock Text="Tol+" Width="60" VerticalAlignment="Center" />
+                                    <TextBox Width="80" Text="{Binding Distance_TolPlus, UpdateSourceTrigger=PropertyChanged, Delay=250}" />
+                                </StackPanel>
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                                    <TextBlock Text="Tol-" Width="60" VerticalAlignment="Center" />
+                                    <TextBox Width="80" Text="{Binding Distance_TolMinus, UpdateSourceTrigger=PropertyChanged, Delay=250}" />
+                                </StackPanel>
+
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,2">
+                                    <TextBlock Text="Value" Width="60" VerticalAlignment="Center" />
+                                    <TextBlock Text="{Binding SelectedRunValue, TargetNullValue='-'}" Width="120" />
+                                </StackPanel>
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                                    <TextBlock Text="Pass" Width="60" VerticalAlignment="Center" />
+                                    <TextBlock Text="{Binding SelectedRunPass, TargetNullValue='-'}" Width="120" />
+                                </StackPanel>
+                            </StackPanel>
+
+                            <StackPanel Visibility="{Binding IsCircleFinderNode, Converter={StaticResource BoolToVis}}">
+                                <TextBlock Text="Circle Finder" FontWeight="SemiBold" Margin="0,8,0,6" />
+
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                                    <TextBlock Text="Algo" Width="60" VerticalAlignment="Center" />
+                                    <ComboBox Width="160" ItemsSource="{Binding AvailableCircleFindAlgorithms}" SelectedItem="{Binding Cf_Algorithm, UpdateSourceTrigger=PropertyChanged}" />
+                                </StackPanel>
+
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,2">
+                                    <TextBlock Text="MinR" Width="60" VerticalAlignment="Center" />
+                                    <TextBox Width="80" Text="{Binding Cf_MinRadiusPx, UpdateSourceTrigger=PropertyChanged, Delay=250}" />
+                                </StackPanel>
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                                    <TextBlock Text="MaxR" Width="60" VerticalAlignment="Center" />
+                                    <TextBox Width="80" Text="{Binding Cf_MaxRadiusPx, UpdateSourceTrigger=PropertyChanged, Delay=250}" />
+                                </StackPanel>
+
+                                <StackPanel Margin="0,0,0,6">
+                                    <StackPanel.Style>
+                                        <Style TargetType="StackPanel">
+                                            <Setter Property="Visibility" Value="Collapsed" />
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding Cf_Algorithm}" Value="{x:Static models:CircleFindAlgorithm.HoughCircles}">
+                                                    <Setter Property="Visibility" Value="Visible" />
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </StackPanel.Style>
+
+                                    <TextBlock Text="Hough" FontWeight="SemiBold" Margin="0,0,0,6" />
+
+                                    <StackPanel Orientation="Horizontal" Margin="0,0,0,2">
+                                        <TextBlock Text="Dp" Width="60" VerticalAlignment="Center" />
+                                        <TextBox Width="80" Text="{Binding Cf_HoughDp, UpdateSourceTrigger=PropertyChanged, Delay=250}" />
+                                    </StackPanel>
+                                    <StackPanel Orientation="Horizontal" Margin="0,0,0,2">
+                                        <TextBlock Text="MinDist" Width="60" VerticalAlignment="Center" />
+                                        <TextBox Width="80" Text="{Binding Cf_HoughMinDistPx, UpdateSourceTrigger=PropertyChanged, Delay=250}" />
+                                    </StackPanel>
+                                    <StackPanel Orientation="Horizontal" Margin="0,0,0,2">
+                                        <TextBlock Text="P1" Width="60" VerticalAlignment="Center" />
+                                        <TextBox Width="80" Text="{Binding Cf_HoughParam1, UpdateSourceTrigger=PropertyChanged, Delay=250}" />
+                                    </StackPanel>
+                                    <StackPanel Orientation="Horizontal" Margin="0,0,0,2">
+                                        <TextBlock Text="P2" Width="60" VerticalAlignment="Center" />
+                                        <TextBox Width="80" Text="{Binding Cf_HoughParam2, UpdateSourceTrigger=PropertyChanged, Delay=250}" />
+                                    </StackPanel>
+                                </StackPanel>
+
+                                <StackPanel Margin="0,0,0,6">
+                                    <StackPanel.Style>
+                                        <Style TargetType="StackPanel">
+                                            <Setter Property="Visibility" Value="Collapsed" />
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding Cf_Algorithm}" Value="{x:Static models:CircleFindAlgorithm.ContourFit}">
+                                                    <Setter Property="Visibility" Value="Visible" />
+                                                </DataTrigger>
+                                                <DataTrigger Binding="{Binding Cf_Algorithm}" Value="{x:Static models:CircleFindAlgorithm.Ransac}">
+                                                    <Setter Property="Visibility" Value="Visible" />
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </StackPanel.Style>
+
+                                    <TextBlock Text="Edges" FontWeight="SemiBold" Margin="0,0,0,6" />
+
+                                    <StackPanel Orientation="Horizontal" Margin="0,0,0,2">
+                                        <TextBlock Text="C1" Width="60" VerticalAlignment="Center" />
+                                        <TextBox Width="80" Text="{Binding Cf_Canny1, UpdateSourceTrigger=PropertyChanged, Delay=250}" />
+                                    </StackPanel>
+                                    <StackPanel Orientation="Horizontal" Margin="0,0,0,2">
+                                        <TextBlock Text="C2" Width="60" VerticalAlignment="Center" />
+                                        <TextBox Width="80" Text="{Binding Cf_Canny2, UpdateSourceTrigger=PropertyChanged, Delay=250}" />
+                                    </StackPanel>
+                                </StackPanel>
+
+                                <StackPanel Margin="0,0,0,6">
+                                    <StackPanel.Style>
+                                        <Style TargetType="StackPanel">
+                                            <Setter Property="Visibility" Value="Collapsed" />
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding Cf_Algorithm}" Value="{x:Static models:CircleFindAlgorithm.ContourFit}">
+                                                    <Setter Property="Visibility" Value="Visible" />
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </StackPanel.Style>
+
+                                    <StackPanel Orientation="Horizontal" Margin="0,0,0,2">
+                                        <TextBlock Text="Circ" Width="60" VerticalAlignment="Center" />
+                                        <TextBox Width="80" Text="{Binding Cf_MinCircularity, UpdateSourceTrigger=PropertyChanged, Delay=250}" />
+                                    </StackPanel>
+                                </StackPanel>
+
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,2">
+                                    <TextBlock Text="Value" Width="60" VerticalAlignment="Center" />
+                                    <TextBlock Text="{Binding SelectedRunValue, TargetNullValue='-'}" Width="120" />
+                                </StackPanel>
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                                    <TextBlock Text="Found" Width="60" VerticalAlignment="Center" />
+                                    <TextBlock Text="{Binding SelectedRunPass, TargetNullValue='-'}" Width="120" />
+                                </StackPanel>
+                            </StackPanel>
+
+                            <StackPanel Visibility="{Binding IsDiameterNode, Converter={StaticResource BoolToVis}}">
+                                <TextBlock Text="Diameter" FontWeight="SemiBold" Margin="0,8,0,6" />
+
+                                <TextBlock Text="Inputs" FontWeight="SemiBold" Margin="0,0,0,6" />
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                                    <TextBlock Text="Circle" Width="60" VerticalAlignment="Center" />
+                                    <ComboBox Width="160" ItemsSource="{Binding AvailableCircleFinderNames}" SelectedItem="{Binding Dia_CircleRef, UpdateSourceTrigger=PropertyChanged}" />
+                                </StackPanel>
+                            </StackPanel>
+
+                            <StackPanel Visibility="{Binding IsEdgePairDetectNode, Converter={StaticResource BoolToVis}}">
+                                <TextBlock Text="Edge Pair Detect" FontWeight="SemiBold" Margin="0,8,0,6" />
+
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                                    <TextBlock Text="Ori" Width="60" VerticalAlignment="Center" />
+                                    <ComboBox Width="160" ItemsSource="{Binding AvailableCaliperOrientations}" SelectedItem="{Binding Epd_Orientation, UpdateSourceTrigger=PropertyChanged}" />
+                                </StackPanel>
+
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                                    <TextBlock Text="Pol" Width="60" VerticalAlignment="Center" />
+                                    <ComboBox Width="160" ItemsSource="{Binding AvailableEdgePolarities}" SelectedItem="{Binding Epd_Polarity, UpdateSourceTrigger=PropertyChanged}" />
+                                </StackPanel>
+
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,2">
+                                    <TextBlock Text="Strips" Width="60" VerticalAlignment="Center" />
+                                    <TextBox Width="80" Text="{Binding Epd_StripCount, UpdateSourceTrigger=PropertyChanged, Delay=250}" />
+                                </StackPanel>
+
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,2">
+                                    <TextBlock Text="Width" Width="60" VerticalAlignment="Center" />
+                                    <TextBox Width="80" Text="{Binding Epd_StripWidth, UpdateSourceTrigger=PropertyChanged, Delay=250}" />
+                                </StackPanel>
+
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,2">
+                                    <TextBlock Text="Length" Width="60" VerticalAlignment="Center" />
+                                    <TextBox Width="80" Text="{Binding Epd_StripLength, UpdateSourceTrigger=PropertyChanged, Delay=250}" />
+                                </StackPanel>
+
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,2">
+                                    <TextBlock Text="MinStr" Width="60" VerticalAlignment="Center" />
+                                    <TextBox Width="80" Text="{Binding Epd_MinEdgeStrength, UpdateSourceTrigger=PropertyChanged, Delay=250}" />
+                                </StackPanel>
+
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                                    <TextBlock Text="MinSep" Width="60" VerticalAlignment="Center" />
+                                    <TextBox Width="80" Text="{Binding Epd_MinEdgeSeparationPx, UpdateSourceTrigger=PropertyChanged, Delay=250}" />
                                 </StackPanel>
 
                                 <TextBlock Text="Spec" FontWeight="SemiBold" Margin="0,6,0,6" />

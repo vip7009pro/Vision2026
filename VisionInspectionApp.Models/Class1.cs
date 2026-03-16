@@ -8,6 +8,83 @@ public enum LineLineDistanceMode
     FarthestEndpoints = 3
 }
 
+public sealed class EdgePairDetectDefinition
+{
+    public string Name { get; set; } = string.Empty;
+
+    public Roi SearchRoi { get; set; } = new();
+
+    public CaliperOrientation Orientation { get; set; } = CaliperOrientation.Vertical;
+
+    public EdgePolarity Polarity { get; set; } = EdgePolarity.Any;
+
+    public int StripCount { get; set; } = 10;
+
+    public int StripWidth { get; set; } = 7;
+
+    public int StripLength { get; set; } = 60;
+
+    public double MinEdgeStrength { get; set; } = 10.0;
+
+    public int MinEdgeSeparationPx { get; set; } = 10;
+
+    public double Nominal { get; set; }
+
+    public double TolerancePlus { get; set; }
+
+    public double ToleranceMinus { get; set; }
+}
+
+public enum CircleFindAlgorithm
+{
+    HoughCircles = 0,
+    ContourFit = 1,
+    Ransac = 2
+}
+
+public sealed class CircleFinderDefinition
+{
+    public string Name { get; set; } = string.Empty;
+
+    public Roi SearchRoi { get; set; } = new();
+
+    public CircleFindAlgorithm Algorithm { get; set; } = CircleFindAlgorithm.ContourFit;
+
+    // Common constraints
+    public int MinRadiusPx { get; set; } = 0;
+
+    public int MaxRadiusPx { get; set; } = 0;
+
+    // HoughCircles params
+    public double HoughDp { get; set; } = 1.2;
+
+    public double HoughMinDistPx { get; set; } = 20;
+
+    public double HoughParam1 { get; set; } = 120;
+
+    public double HoughParam2 { get; set; } = 30;
+
+    // ContourFit params
+    public int Canny1 { get; set; } = 80;
+
+    public int Canny2 { get; set; } = 200;
+
+    public double MinCircularity { get; set; } = 0.6;
+}
+
+public sealed class DiameterDefinition
+{
+    public string Name { get; set; } = string.Empty;
+
+    public string CircleRef { get; set; } = string.Empty;
+
+    public double Nominal { get; set; }
+
+    public double TolerancePlus { get; set; }
+
+    public double ToleranceMinus { get; set; }
+}
+
 public enum PointLineDistanceMode
 {
     PointToSegment = 0,
@@ -69,9 +146,32 @@ public sealed class VisionConfig
 
     public List<LinePairDetectionDefinition> LinePairDetections { get; set; } = new();
 
+    public List<EdgePairDefinition> EdgePairs { get; set; } = new();
+
+    public List<EdgePairDetectDefinition> EdgePairDetections { get; set; } = new();
+
+    public List<CircleFinderDefinition> CircleFinders { get; set; } = new();
+
+    public List<DiameterDefinition> Diameters { get; set; } = new();
+
     public List<CodeDetectionDefinition> CodeDetections { get; set; } = new();
 
     public DefectInspectionConfig DefectConfig { get; set; } = new();
+}
+
+public sealed class EdgePairDefinition
+{
+    public string Name { get; set; } = string.Empty;
+
+    public string RefA { get; set; } = string.Empty;
+
+    public string RefB { get; set; } = string.Empty;
+
+    public double Nominal { get; set; }
+
+    public double TolerancePlus { get; set; }
+
+    public double ToleranceMinus { get; set; }
 }
 
 public sealed class AngleDefinition
