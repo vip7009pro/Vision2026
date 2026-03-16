@@ -1164,6 +1164,7 @@ public sealed partial class ToolEditorViewModel : ObservableObject
         if (isOrigin)
         {
             _config.Origin.TemplateImageFile = fileName;
+            _config.Origin.ShapeModel = ShapeModelTrainer.Train(gray);
         }
         else if (!string.IsNullOrWhiteSpace(pointName))
         {
@@ -1171,6 +1172,7 @@ public sealed partial class ToolEditorViewModel : ObservableObject
             if (p is not null)
             {
                 p.TemplateImageFile = fileName;
+                p.ShapeModel = ShapeModelTrainer.Train(gray);
             }
         }
     }

@@ -721,6 +721,7 @@ public sealed partial class TeachViewModel : ObservableObject
         var beforeOriginSearch = VisionConfig.Origin.SearchRoi;
         var beforeOriginTemplate = VisionConfig.Origin.TemplateRoi;
         var beforeOriginTemplateFile = VisionConfig.Origin.TemplateImageFile;
+        var beforeOriginShapeModel = VisionConfig.Origin.ShapeModel;
         var beforeOriginWorld = VisionConfig.Origin.WorldPosition;
         var beforeDefectRoi = VisionConfig.DefectConfig.InspectRoi;
 
@@ -730,6 +731,7 @@ public sealed partial class TeachViewModel : ObservableObject
         Roi beforePointSearch = new();
         Roi beforePointTemplate = new();
         string beforePointTemplateFile = string.Empty;
+        ShapeModelDefinition? beforePointShapeModel = null;
         Point2dModel beforePointWorld = new();
 
         var parts = label.Split(' ', StringSplitOptions.RemoveEmptyEntries);
@@ -746,6 +748,7 @@ public sealed partial class TeachViewModel : ObservableObject
             beforePointSearch = pointDef.SearchRoi;
             beforePointTemplate = pointDef.TemplateRoi;
             beforePointTemplateFile = pointDef.TemplateImageFile;
+            beforePointShapeModel = pointDef.ShapeModel;
             beforePointWorld = pointDef.WorldPosition;
         }
 
@@ -764,10 +767,17 @@ public sealed partial class TeachViewModel : ObservableObject
                 VisionConfig.Origin.SearchRoi = beforeOriginSearch;
                 VisionConfig.Origin.TemplateRoi = beforeOriginTemplate;
                 VisionConfig.Origin.TemplateImageFile = beforeOriginTemplateFile;
+                VisionConfig.Origin.ShapeModel = beforeOriginShapeModel;
                 VisionConfig.Origin.WorldPosition = beforeOriginWorld;
                 if (beforeOriginTemplate.Width > 0 && beforeOriginTemplate.Height > 0)
                 {
                     VisionConfig.Origin.TemplateImageFile = SaveTemplateImage("origin", beforeOriginTemplate);
+                    using var t = Cv2.ImRead(VisionConfig.Origin.TemplateImageFile, ImreadModes.Grayscale);
+                    VisionConfig.Origin.ShapeModel = ShapeModelTrainer.Train(t);
+                }
+                else
+                {
+                    VisionConfig.Origin.ShapeModel = null;
                 }
 
                 if (parts.Length == 2 && !string.IsNullOrWhiteSpace(pointName) && pointDef is not null)
@@ -788,10 +798,17 @@ public sealed partial class TeachViewModel : ObservableObject
                             existing.SearchRoi = beforePointSearch;
                             existing.TemplateRoi = beforePointTemplate;
                             existing.TemplateImageFile = beforePointTemplateFile;
+                            existing.ShapeModel = beforePointShapeModel;
                             existing.WorldPosition = beforePointWorld;
                             if (beforePointTemplate.Width > 0 && beforePointTemplate.Height > 0)
                             {
                                 existing.TemplateImageFile = SaveTemplateImage(pointName.ToLowerInvariant(), beforePointTemplate);
+                                using var t = Cv2.ImRead(existing.TemplateImageFile, ImreadModes.Grayscale);
+                                existing.ShapeModel = ShapeModelTrainer.Train(t);
+                            }
+                            else
+                            {
+                                existing.ShapeModel = null;
                             }
                         }
                     }
@@ -1195,6 +1212,7 @@ public sealed partial class TeachViewModel : ObservableObject
         var beforeOriginSearch = VisionConfig.Origin.SearchRoi;
         var beforeOriginTemplate = VisionConfig.Origin.TemplateRoi;
         var beforeOriginTemplateFile = VisionConfig.Origin.TemplateImageFile;
+        var beforeOriginShapeModel = VisionConfig.Origin.ShapeModel;
         var beforeOriginWorld = VisionConfig.Origin.WorldPosition;
         var beforeDefectRoi = VisionConfig.DefectConfig.InspectRoi;
 
@@ -1206,6 +1224,7 @@ public sealed partial class TeachViewModel : ObservableObject
         var beforePointSearch = pointDef?.SearchRoi ?? new Roi();
         var beforePointTemplate = pointDef?.TemplateRoi ?? new Roi();
         var beforePointTemplateFile = pointDef?.TemplateImageFile ?? string.Empty;
+        var beforePointShapeModel = pointDef?.ShapeModel;
         var beforePointWorld = pointDef?.WorldPosition ?? new Point2dModel();
 
         _undo.Execute(new UndoRedoManager.DelegateAction(
@@ -1239,10 +1258,17 @@ public sealed partial class TeachViewModel : ObservableObject
                 VisionConfig.Origin.SearchRoi = beforeOriginSearch;
                 VisionConfig.Origin.TemplateRoi = beforeOriginTemplate;
                 VisionConfig.Origin.TemplateImageFile = beforeOriginTemplateFile;
+                VisionConfig.Origin.ShapeModel = beforeOriginShapeModel;
                 VisionConfig.Origin.WorldPosition = beforeOriginWorld;
                 if (beforeOriginTemplate.Width > 0 && beforeOriginTemplate.Height > 0)
                 {
                     VisionConfig.Origin.TemplateImageFile = SaveTemplateImage("origin", beforeOriginTemplate);
+                    using var t = Cv2.ImRead(VisionConfig.Origin.TemplateImageFile, ImreadModes.Grayscale);
+                    VisionConfig.Origin.ShapeModel = ShapeModelTrainer.Train(t);
+                }
+                else
+                {
+                    VisionConfig.Origin.ShapeModel = null;
                 }
 
                 if (pointDef is not null)
@@ -1250,10 +1276,17 @@ public sealed partial class TeachViewModel : ObservableObject
                     pointDef.SearchRoi = beforePointSearch;
                     pointDef.TemplateRoi = beforePointTemplate;
                     pointDef.TemplateImageFile = beforePointTemplateFile;
+                    pointDef.ShapeModel = beforePointShapeModel;
                     pointDef.WorldPosition = beforePointWorld;
                     if (beforePointTemplate.Width > 0 && beforePointTemplate.Height > 0 && !string.IsNullOrWhiteSpace(pointDef.Name))
                     {
                         pointDef.TemplateImageFile = SaveTemplateImage(pointDef.Name.ToLowerInvariant(), beforePointTemplate);
+                        using var t = Cv2.ImRead(pointDef.TemplateImageFile, ImreadModes.Grayscale);
+                        pointDef.ShapeModel = ShapeModelTrainer.Train(t);
+                    }
+                    else
+                    {
+                        pointDef.ShapeModel = null;
                     }
                 }
 
@@ -1279,6 +1312,10 @@ public sealed partial class TeachViewModel : ObservableObject
         EnsureTemplateInsideSearch(VisionConfig.Origin.SearchRoi, roi, VisionConfig.Origin.Name);
         VisionConfig.Origin.TemplateRoi = roi;
         VisionConfig.Origin.TemplateImageFile = SaveTemplateImage("origin", roi);
+        using (var t = Cv2.ImRead(VisionConfig.Origin.TemplateImageFile, ImreadModes.Grayscale))
+        {
+            VisionConfig.Origin.ShapeModel = ShapeModelTrainer.Train(t);
+        }
         VisionConfig.Origin.WorldPosition = new Point2dModel
         {
             X = roi.X + roi.Width / 2.0,
@@ -1326,6 +1363,10 @@ public sealed partial class TeachViewModel : ObservableObject
         EnsureTemplateInsideSearch(p.SearchRoi, roi, p.Name);
         p.TemplateRoi = roi;
         p.TemplateImageFile = SaveTemplateImage(pointName, roi);
+        using (var t = Cv2.ImRead(p.TemplateImageFile, ImreadModes.Grayscale))
+        {
+            p.ShapeModel = ShapeModelTrainer.Train(t);
+        }
 
         p.WorldPosition = new Point2dModel
         {

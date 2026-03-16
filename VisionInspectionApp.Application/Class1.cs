@@ -102,6 +102,15 @@ public sealed class InspectionService : IInspectionService
     private readonly LineDetector _lineDetector;
     private readonly IDefectDetector _defectDetector;
 
+    private sealed class TrackState
+    {
+        public Point2d? LastOriginPos { get; set; }
+        public double LastAngleDeg { get; set; }
+        public ConcurrentDictionary<string, Point2d> LastPointPos { get; } = new(StringComparer.OrdinalIgnoreCase);
+    }
+
+    private readonly ConcurrentDictionary<string, TrackState> _trackByProductCode = new(StringComparer.OrdinalIgnoreCase);
+
     public InspectionService(
         ImagePreprocessor preprocessor,
         PatternMatcher matcher,
@@ -136,6 +145,52 @@ public sealed class InspectionService : IInspectionService
         var matsLock = new object();
         try
         {
+            const int guidedRadiusPx = 50;
+            var track = _trackByProductCode.GetOrAdd(config.ProductCode ?? string.Empty, _ => new TrackState());
+
+            static Roi IntersectRoi(Roi a, Roi b)
+            {
+                if (a.Width <= 0 || a.Height <= 0) return new Roi();
+                if (b.Width <= 0 || b.Height <= 0) return new Roi();
+
+                var ax2 = a.X + a.Width;
+                var ay2 = a.Y + a.Height;
+                var bx2 = b.X + b.Width;
+                var by2 = b.Y + b.Height;
+
+                var x1 = Math.Max(a.X, b.X);
+                var y1 = Math.Max(a.Y, b.Y);
+                var x2 = Math.Min(ax2, bx2);
+                var y2 = Math.Min(ay2, by2);
+
+                var w = x2 - x1;
+                var h = y2 - y1;
+                if (w <= 0 || h <= 0) return new Roi();
+                return new Roi { X = x1, Y = y1, Width = w, Height = h };
+            }
+
+            static Roi ClampRoiToImage(Roi roi, Mat img)
+            {
+                if (roi.Width <= 0 || roi.Height <= 0) return new Roi();
+
+                var x1 = Math.Clamp(roi.X, 0, Math.Max(0, img.Width - 1));
+                var y1 = Math.Clamp(roi.Y, 0, Math.Max(0, img.Height - 1));
+                var x2 = Math.Clamp(roi.X + roi.Width, 0, img.Width);
+                var y2 = Math.Clamp(roi.Y + roi.Height, 0, img.Height);
+
+                var w = x2 - x1;
+                var h = y2 - y1;
+                if (w <= 0 || h <= 0) return new Roi();
+                return new Roi { X = x1, Y = y1, Width = w, Height = h };
+            }
+
+            static Roi WindowRoi(Point2d center, int radius)
+            {
+                var x = (int)Math.Round(center.X - radius);
+                var y = (int)Math.Round(center.Y - radius);
+                var s = radius * 2;
+                return new Roi { X = x, Y = y, Width = s, Height = s };
+            }
             var nodesById = (config.ToolGraph?.Nodes ?? new List<ToolGraphNode>())
                 .Where(n => !string.IsNullOrWhiteSpace(n.Id))
                 .ToDictionary(n => n.Id, StringComparer.OrdinalIgnoreCase);
@@ -386,7 +441,39 @@ public sealed class InspectionService : IInspectionService
             var tOrigin0 = swTotal.ElapsedMilliseconds;
             var (originMat, originPre) = ResolveToolPreprocess("Origin", config.Origin.Name);
             var originTempl = GetTemplateGray(config.Origin.TemplateImageFile);
-            var originMatch = _matcher.MatchWithRotation(originMat, config.Origin, originTempl, originPre, -60.0, 60.0, 2.0);
+
+            var originDefBase = config.Origin;
+            var originDef = originDefBase;
+            var usedGuidedOrigin = false;
+            if (track.LastOriginPos is not null)
+            {
+                var guide = ClampRoiToImage(WindowRoi(track.LastOriginPos.Value, guidedRadiusPx), originMat);
+                var shrunk = IntersectRoi(originDefBase.SearchRoi, guide);
+                if (shrunk.Width > 0 && shrunk.Height > 0)
+                {
+                    usedGuidedOrigin = true;
+                    originDef = new PointDefinition
+                    {
+                        Name = originDefBase.Name,
+                        MatchScoreThreshold = originDefBase.MatchScoreThreshold,
+                        TemplateImageFile = originDefBase.TemplateImageFile,
+                        TemplateRoi = originDefBase.TemplateRoi,
+                        SearchRoi = shrunk,
+                        WorldPosition = originDefBase.WorldPosition,
+                        ShapeModel = originDefBase.ShapeModel
+                    };
+                }
+            }
+
+            var originMatch = _matcher.MatchWithRotation(originMat, originDef, originTempl, originPre, -60.0, 60.0, 2.0);
+            if (usedGuidedOrigin && originMatch.Score < originDefBase.MatchScoreThreshold)
+            {
+                var retry = _matcher.MatchWithRotation(originMat, originDefBase, originTempl, originPre, -60.0, 60.0, 2.0);
+                if (retry.Score > originMatch.Score)
+                {
+                    originMatch = retry;
+                }
+            }
             var templateAngleDeg = originMatch.AngleDeg;
             var poseAngleDeg = -templateAngleDeg;
             var originPass = originMatch.Score >= config.Origin.MatchScoreThreshold;
@@ -409,10 +496,48 @@ public sealed class InspectionService : IInspectionService
                 .Where(p => p is not null && !string.IsNullOrWhiteSpace(p.Name))
                 .Select(p => Task.Run(() =>
                 {
-                    var def = TransformPointDefinition(p, originTeach, originFound, angleDeg);
+                    var defBase = TransformPointDefinition(p, originTeach, originFound, angleDeg);
+                    var def = defBase;
+
                     var (matForPoint, preForPoint) = ResolveToolPreprocess("Point", p.Name);
+
+                    // Guided ROI (B): prioritize last known point position; otherwise use expected center from transformed SearchRoi.
+                    Point2d center;
+                    if (track.LastPointPos.TryGetValue(p.Name, out var lastP))
+                    {
+                        center = lastP;
+                    }
+                    else
+                    {
+                        center = new Point2d(def.SearchRoi.X + def.SearchRoi.Width / 2.0, def.SearchRoi.Y + def.SearchRoi.Height / 2.0);
+                    }
+
+                    var guide = ClampRoiToImage(WindowRoi(center, guidedRadiusPx), matForPoint);
+                    var shrunk = IntersectRoi(def.SearchRoi, guide);
+                    if (shrunk.Width > 0 && shrunk.Height > 0)
+                    {
+                        def = new PointDefinition
+                        {
+                            Name = def.Name,
+                            MatchScoreThreshold = def.MatchScoreThreshold,
+                            TemplateImageFile = def.TemplateImageFile,
+                            TemplateRoi = def.TemplateRoi,
+                            SearchRoi = shrunk,
+                            WorldPosition = def.WorldPosition,
+                            ShapeModel = def.ShapeModel
+                        };
+                    }
                     var templ = GetTemplateGray(def.TemplateImageFile);
                     var m = _matcher.MatchWithFixedRotation(matForPoint, def, templ, templateAngleDeg, preForPoint);
+                    if (!ReferenceEquals(def, defBase) && m.Score < defBase.MatchScoreThreshold)
+                    {
+                        var templ2 = GetTemplateGray(defBase.TemplateImageFile);
+                        var retry = _matcher.MatchWithFixedRotation(matForPoint, defBase, templ2, templateAngleDeg, preForPoint);
+                        if (retry.Score > m.Score)
+                        {
+                            m = retry;
+                        }
+                    }
                     var pass = m.Score >= p.MatchScoreThreshold;
                     return new PointMatchResult(p.Name, m.Position, m.MatchRect, m.Score, p.MatchScoreThreshold, pass, 0.0);
                 }))
@@ -732,6 +857,20 @@ public sealed class InspectionService : IInspectionService
             && result.PointToLineDistances.All(x => x.Pass)
             && result.Conditions.All(x => x.Pass)
             && (result.Defects.Defects.Count == 0);
+
+            if (originPass)
+            {
+                track.LastOriginPos = originMatch.Position;
+                track.LastAngleDeg = poseAngleDeg;
+
+                foreach (var pr in result.Points)
+                {
+                    if (pr.Pass)
+                    {
+                        track.LastPointPos[pr.Name] = pr.Position;
+                    }
+                }
+            }
 
             result.Timings.TotalMs = (int)Math.Max(0, swTotal.ElapsedMilliseconds);
 

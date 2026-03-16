@@ -204,9 +204,33 @@ public sealed class PointDefinition
 
     public string TemplateImageFile { get; set; } = string.Empty;
 
+    public ShapeModelDefinition? ShapeModel { get; set; }
+
     public double MatchScoreThreshold { get; set; } = 0.8;
 
     public Point2dModel WorldPosition { get; set; } = new();
+}
+
+public sealed class ShapeModelDefinition
+{
+    public int TemplateWidth { get; set; }
+    public int TemplateHeight { get; set; }
+
+    public int BinCount { get; set; } = 16;
+
+    public int FeatureCount { get; set; }
+
+    public List<ShapeFeatureDefinition> Features { get; set; } = new();
+}
+
+public sealed class ShapeFeatureDefinition
+{
+    public int Dx { get; set; }
+    public int Dy { get; set; }
+
+    public int Bin { get; set; }
+
+    public int Weight { get; set; }
 }
 
 public sealed class LineToolDefinition

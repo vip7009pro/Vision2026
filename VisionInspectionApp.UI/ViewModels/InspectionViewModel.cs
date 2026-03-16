@@ -100,7 +100,7 @@ public sealed partial class InspectionViewModel : ObservableObject
             return p;
         }
 
-        var a = angleDeg * Math.PI / 180.0;
+        var a = -angleDeg * Math.PI / 180.0;
         var cos = Math.Cos(a);
         var sin = Math.Sin(a);
 
@@ -303,7 +303,17 @@ public sealed partial class InspectionViewModel : ObservableObject
             if (hasPose)
             {
                 AddRotatedRoiOverlay(_config.Origin.SearchRoi, "Origin S", Brushes.Lime, originTeach, originFound, angleDeg);
-                AddRotatedRoiOverlay(_config.Origin.TemplateRoi, "Origin T", Brushes.Yellow, originTeach, originFound, angleDeg);
+                if (LastResult?.Origin is not null && _config.Origin.TemplateRoi.Width > 0 && _config.Origin.TemplateRoi.Height > 0)
+                {
+                    var originPosForTemplate = LastResult.Origin.Position;
+                    var mr = LastResult.Origin.MatchRect;
+                    if (mr.Width > 0 && mr.Height > 0)
+                    {
+                        originPosForTemplate = new Point2d(mr.X + mr.Width / 2.0, mr.Y + mr.Height / 2.0);
+                    }
+
+                    AddRotatedTemplateAtPoint(originPosForTemplate, _config.Origin.TemplateRoi.Width, _config.Origin.TemplateRoi.Height, "Origin T", Brushes.Yellow, angleDeg);
+                }
             }
             else
             {

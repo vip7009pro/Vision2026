@@ -260,6 +260,95 @@ public interface IDefectDetector
 
 public sealed record MatchResult(Point2d Position, double Score, double AngleDeg, Rect MatchRect);
 
+public static class ShapeModelTrainer
+{
+    public static ShapeModelDefinition Train(Mat templateGray, int featureCount = 300, int binCount = 16)
+    {
+        if (templateGray is null) throw new ArgumentNullException(nameof(templateGray));
+        if (templateGray.Empty()) return new ShapeModelDefinition();
+
+        featureCount = Math.Clamp(featureCount, 50, 2000);
+        binCount = Math.Clamp(binCount, 8, 64);
+
+        using var gx = new Mat();
+        using var gy = new Mat();
+        Cv2.Sobel(templateGray, gx, MatType.CV_32F, 1, 0, ksize: 3);
+        Cv2.Sobel(templateGray, gy, MatType.CV_32F, 0, 1, ksize: 3);
+
+        var w = templateGray.Width;
+        var h = templateGray.Height;
+        if (w <= 0 || h <= 0) return new ShapeModelDefinition();
+
+        var cx = (w - 1) / 2.0;
+        var cy = (h - 1) / 2.0;
+
+        var candidates = new List<(float Mag, int X, int Y, int Bin)>(w * h / 8);
+
+        for (var y = 1; y < h - 1; y++)
+        {
+            for (var x = 1; x < w - 1; x++)
+            {
+                var dx = gx.At<float>(y, x);
+                var dy = gy.At<float>(y, x);
+                var mag = MathF.Sqrt(dx * dx + dy * dy);
+                if (mag < 20.0f) continue;
+
+                var a = MathF.Atan2(dy, dx);
+                if (a < 0) a += MathF.Tau;
+                var bin = (int)MathF.Floor(a * binCount / MathF.Tau);
+                if (bin < 0) bin = 0;
+                if (bin >= binCount) bin = binCount - 1;
+                candidates.Add((mag, x, y, bin));
+            }
+        }
+
+        candidates.Sort((a, b) => b.Mag.CompareTo(a.Mag));
+
+        var model = new ShapeModelDefinition
+        {
+            TemplateWidth = w,
+            TemplateHeight = h,
+            BinCount = binCount
+        };
+
+        var minDist2 = 9;
+        for (var i = 0; i < candidates.Count && model.Features.Count < featureCount; i++)
+        {
+            var c = candidates[i];
+            var keep = true;
+            for (var j = 0; j < model.Features.Count; j++)
+            {
+                var f = model.Features[j];
+                var fx = f.Dx + (int)Math.Round(cx);
+                var fy = f.Dy + (int)Math.Round(cy);
+                var ddx = c.X - fx;
+                var ddy = c.Y - fy;
+                if (ddx * ddx + ddy * ddy < minDist2)
+                {
+                    keep = false;
+                    break;
+                }
+            }
+
+            if (!keep) continue;
+
+            var dx0 = c.X - cx;
+            var dy0 = c.Y - cy;
+            var weight = (int)Math.Clamp(c.Mag, 1.0f, 255.0f);
+            model.Features.Add(new ShapeFeatureDefinition
+            {
+                Dx = (int)Math.Round(dx0),
+                Dy = (int)Math.Round(dy0),
+                Bin = c.Bin,
+                Weight = weight
+            });
+        }
+
+        model.FeatureCount = model.Features.Count;
+        return model;
+    }
+}
+
 public sealed record DistanceCheckResult(string Name, string PointA, string PointB, double Value, double Nominal, double TolPlus, double TolMinus, bool Pass);
 
 public sealed record LineDetectResult(string Name, Point2d P1, Point2d P2, double LengthPx, bool Found);
@@ -300,6 +389,7 @@ public sealed class ImagePreprocessor
         }
 
         var current = inputBgrOrGray;
+        var anyOp = false;
         var disposeList = new List<Mat>();
         Mat? ret = null;
 
@@ -311,6 +401,7 @@ public sealed class ImagePreprocessor
                 Cv2.CvtColor(current, gray, ColorConversionCodes.BGR2GRAY);
                 disposeList.Add(gray);
                 current = gray;
+                anyOp = true;
             }
 
             if (settings.UseGaussianBlur)
@@ -323,6 +414,7 @@ public sealed class ImagePreprocessor
                 Cv2.GaussianBlur(current, blur, new Size(k, k), 0);
                 disposeList.Add(blur);
                 current = blur;
+                anyOp = true;
             }
 
             if (settings.UseThreshold)
@@ -333,12 +425,14 @@ public sealed class ImagePreprocessor
                     Cv2.CvtColor(current, gray, ColorConversionCodes.BGR2GRAY);
                     disposeList.Add(gray);
                     current = gray;
+                    anyOp = true;
                 }
 
                 var thr = new Mat();
                 Cv2.Threshold(current, thr, settings.ThresholdValue, 255, ThresholdTypes.Binary);
                 disposeList.Add(thr);
                 current = thr;
+                anyOp = true;
             }
 
             if (settings.UseCanny)
@@ -349,12 +443,14 @@ public sealed class ImagePreprocessor
                     Cv2.CvtColor(current, gray, ColorConversionCodes.BGR2GRAY);
                     disposeList.Add(gray);
                     current = gray;
+                    anyOp = true;
                 }
 
                 var edges = new Mat();
                 Cv2.Canny(current, edges, settings.Canny1, settings.Canny2);
                 disposeList.Add(edges);
                 current = edges;
+                anyOp = true;
             }
 
             if (settings.UseMorphology)
@@ -365,12 +461,20 @@ public sealed class ImagePreprocessor
                     Cv2.CvtColor(current, gray, ColorConversionCodes.BGR2GRAY);
                     disposeList.Add(gray);
                     current = gray;
+                    anyOp = true;
                 }
 
                 var mor = new Mat();
                 Cv2.MorphologyEx(current, mor, MorphTypes.Close, MorphKernel3x3);
                 disposeList.Add(mor);
                 current = mor;
+                anyOp = true;
+            }
+
+            if (!anyOp)
+            {
+                ret = inputBgrOrGray.Clone();
+                return ret;
             }
 
             ret = current;
@@ -471,9 +575,7 @@ public sealed class PatternMatcher
             return new MatchResult(centerFallback, 0.0, 0.0, roiRect);
         }
 
-        using var result = new Mat();
-        Cv2.MatchTemplate(roiGray.Mat, templPrep, result, TemplateMatchModes.CCoeffNormed);
-        Cv2.MinMaxLoc(result, out _, out var maxVal, out _, out var maxLoc);
+        var (maxVal, maxLoc) = MatchTemplatePyramid(roiGray.Mat, templPrep, TemplateMatchModes.CCoeffNormed);
 
         var centerInRoi = new Point2d(maxLoc.X + templPrep.Width / 2.0, maxLoc.Y + templPrep.Height / 2.0);
         var global = new Point2d(centerInRoi.X + roiRect.X, centerInRoi.Y + roiRect.Y);
@@ -497,6 +599,16 @@ public sealed class PatternMatcher
         if (roiRect.Width <= 0 || roiRect.Height <= 0)
         {
             throw new ArgumentException($"Invalid SearchRoi for point '{definition.Name}'.");
+        }
+
+        if (definition.ShapeModel is not null
+            && definition.ShapeModel.TemplateWidth > 0
+            && definition.ShapeModel.TemplateHeight > 0
+            && definition.ShapeModel.Features is not null
+            && definition.ShapeModel.Features.Count > 0)
+        {
+            using var dummyTemplate = new Mat(1, 1, MatType.CV_8UC1, Scalar.All(0));
+            return MatchWithFixedRotation(image, definition, dummyTemplate, angleDeg, preprocess);
         }
 
         if (string.IsNullOrWhiteSpace(definition.TemplateImageFile) || !File.Exists(definition.TemplateImageFile))
@@ -535,6 +647,23 @@ public sealed class PatternMatcher
         using var roi = new Mat(image, roiRect);
 
         using var roiGray = EnsureGrayBorrowed(roi);
+
+        if (definition.ShapeModel is not null
+            && definition.ShapeModel.TemplateWidth > 0
+            && definition.ShapeModel.TemplateHeight > 0
+            && definition.ShapeModel.Features is not null
+            && definition.ShapeModel.Features.Count > 0)
+        {
+            var m = MatchByShapeModel(roiGray.Mat, definition.ShapeModel, angleDeg);
+            var globalPos = new Point2d(m.Position.X + roiRect.X, m.Position.Y + roiRect.Y);
+            var mr = new Rect(
+                roiRect.X + m.MatchRect.X,
+                roiRect.Y + m.MatchRect.Y,
+                m.MatchRect.Width,
+                m.MatchRect.Height);
+            return new MatchResult(globalPos, m.Score, angleDeg, mr);
+        }
+
         using var templPrep0 = PreprocessTemplateForMatch(templateGray, preprocess);
 
         using var templEdges0 = new Mat();
@@ -562,14 +691,244 @@ public sealed class PatternMatcher
             return new MatchResult(centerFallback, 0.0, angleDeg, roiRect);
         }
 
-        using var result = new Mat();
-        Cv2.MatchTemplate(roiGray.Mat, templ, result, TemplateMatchModes.CCoeffNormed);
-        Cv2.MinMaxLoc(result, out _, out var maxVal, out _, out var maxLoc);
+        var (maxVal, maxLoc) = MatchTemplatePyramid(roiGray.Mat, templ, TemplateMatchModes.CCoeffNormed);
 
         var centerInRoi = new Point2d(maxLoc.X + templ.Width / 2.0, maxLoc.Y + templ.Height / 2.0);
         var global = new Point2d(centerInRoi.X + roiRect.X, centerInRoi.Y + roiRect.Y);
         var matchRect = new Rect(roiRect.X + maxLoc.X, roiRect.Y + maxLoc.Y, templ.Width, templ.Height);
         return new MatchResult(global, maxVal, angleDeg, matchRect);
+    }
+
+    private static MatchResult MatchByShapeModel(Mat roiGray, ShapeModelDefinition model, double angleDeg)
+    {
+        if (roiGray is null) throw new ArgumentNullException(nameof(roiGray));
+        if (model is null) throw new ArgumentNullException(nameof(model));
+
+        var tplW = model.TemplateWidth;
+        var tplH = model.TemplateHeight;
+        if (tplW <= 0 || tplH <= 0) return new MatchResult(new Point2d(roiGray.Width / 2.0, roiGray.Height / 2.0), 0.0, angleDeg, new Rect(0, 0, 0, 0));
+
+        var maxX = roiGray.Width - tplW;
+        var maxY = roiGray.Height - tplH;
+        if (maxX < 0 || maxY < 0) return new MatchResult(new Point2d(roiGray.Width / 2.0, roiGray.Height / 2.0), 0.0, angleDeg, new Rect(0, 0, 0, 0));
+
+        var binCount = Math.Clamp(model.BinCount, 8, 64);
+        var binShift = (int)Math.Round(angleDeg / 360.0 * binCount);
+        binShift %= binCount;
+        if (binShift < 0) binShift += binCount;
+
+        var a = angleDeg * Math.PI / 180.0;
+        var cos = Math.Cos(a);
+        var sin = Math.Sin(a);
+
+        var rotated = new List<(int Dx, int Dy, int Bin, int Weight)>(model.Features.Count);
+        var totalWeight = 0;
+        foreach (var f in model.Features)
+        {
+            var rdx = (int)Math.Round(f.Dx * cos - f.Dy * sin);
+            var rdy = (int)Math.Round(f.Dx * sin + f.Dy * cos);
+            var b = (f.Bin + binShift) % binCount;
+            var w = Math.Max(1, f.Weight);
+            rotated.Add((rdx, rdy, b, w));
+            totalWeight += w;
+        }
+
+        if (totalWeight <= 0) totalWeight = 1;
+
+        using var gx = new Mat();
+        using var gy = new Mat();
+        Cv2.Sobel(roiGray, gx, MatType.CV_32F, 1, 0, ksize: 3);
+        Cv2.Sobel(roiGray, gy, MatType.CV_32F, 0, 1, ksize: 3);
+
+        var edgeByBin = new List<Point>[binCount];
+        for (var i = 0; i < binCount; i++) edgeByBin[i] = new List<Point>(1024);
+
+        for (var y = 1; y < roiGray.Height - 1; y++)
+        {
+            for (var x = 1; x < roiGray.Width - 1; x++)
+            {
+                var dx = gx.At<float>(y, x);
+                var dy = gy.At<float>(y, x);
+                var mag = MathF.Sqrt(dx * dx + dy * dy);
+                if (mag < 20.0f) continue;
+
+                var ang = MathF.Atan2(dy, dx);
+                if (ang < 0) ang += MathF.Tau;
+                var bin = (int)MathF.Floor(ang * binCount / MathF.Tau);
+                if (bin < 0) bin = 0;
+                if (bin >= binCount) bin = binCount - 1;
+                edgeByBin[bin].Add(new Point(x, y));
+            }
+        }
+
+        var accW = maxX + 1;
+        var accH = maxY + 1;
+        var acc = new int[accW * accH];
+
+        var cx = tplW / 2;
+        var cy = tplH / 2;
+
+        for (var i = 0; i < rotated.Count; i++)
+        {
+            var rf = rotated[i];
+            var tx = cx + rf.Dx;
+            var ty = cy + rf.Dy;
+
+            if (tx < 0 || ty < 0 || tx >= tplW || ty >= tplH) continue;
+
+            var pts = edgeByBin[rf.Bin];
+            for (var p = 0; p < pts.Count; p++)
+            {
+                var ip = pts[p];
+                var ox = ip.X - tx;
+                var oy = ip.Y - ty;
+                if ((uint)ox > (uint)maxX || (uint)oy > (uint)maxY) continue;
+                acc[oy * accW + ox] += rf.Weight;
+            }
+        }
+
+        var best = -1;
+        var bestIdx = 0;
+        for (var i = 0; i < acc.Length; i++)
+        {
+            var v = acc[i];
+            if (v > best)
+            {
+                best = v;
+                bestIdx = i;
+            }
+        }
+
+        var bestX = bestIdx % accW;
+        var bestY = bestIdx / accW;
+        var score = (double)best / totalWeight;
+        var center = new Point2d(bestX + tplW / 2.0, bestY + tplH / 2.0);
+        var rect = new Rect(bestX, bestY, tplW, tplH);
+        return new MatchResult(center, score, angleDeg, rect);
+    }
+
+    private static List<Point>[] BuildEdgeByBinFromSobel(Mat roiGray, int binCount, float magThreshold)
+    {
+        if (roiGray is null) throw new ArgumentNullException(nameof(roiGray));
+        if (binCount < 1) throw new ArgumentOutOfRangeException(nameof(binCount));
+
+        using var gx = new Mat();
+        using var gy = new Mat();
+        Cv2.Sobel(roiGray, gx, MatType.CV_32F, 1, 0, ksize: 3);
+        Cv2.Sobel(roiGray, gy, MatType.CV_32F, 0, 1, ksize: 3);
+
+        var edgeByBin = new List<Point>[binCount];
+        for (var i = 0; i < binCount; i++) edgeByBin[i] = new List<Point>(1024);
+
+        for (var y = 1; y < roiGray.Height - 1; y++)
+        {
+            for (var x = 1; x < roiGray.Width - 1; x++)
+            {
+                var dx = gx.At<float>(y, x);
+                var dy = gy.At<float>(y, x);
+                var mag = MathF.Sqrt(dx * dx + dy * dy);
+                if (mag < magThreshold) continue;
+
+                var ang = MathF.Atan2(dy, dx);
+                if (ang < 0) ang += MathF.Tau;
+                var bin = (int)MathF.Floor(ang * binCount / MathF.Tau);
+                if (bin < 0) bin = 0;
+                if (bin >= binCount) bin = binCount - 1;
+                edgeByBin[bin].Add(new Point(x, y));
+            }
+        }
+
+        return edgeByBin;
+    }
+
+    private static (double Score, Point2d Center, Rect MatchRect) ScoreByShapeModel(
+        List<Point>[] edgeByBin,
+        int roiWidth,
+        int roiHeight,
+        ShapeModelDefinition model,
+        double angleDeg,
+        int[] accScratch)
+    {
+        var tplW = model.TemplateWidth;
+        var tplH = model.TemplateHeight;
+        if (tplW <= 0 || tplH <= 0) return (0.0, new Point2d(roiWidth / 2.0, roiHeight / 2.0), new Rect(0, 0, 0, 0));
+
+        var maxX = roiWidth - tplW;
+        var maxY = roiHeight - tplH;
+        if (maxX < 0 || maxY < 0) return (0.0, new Point2d(roiWidth / 2.0, roiHeight / 2.0), new Rect(0, 0, 0, 0));
+
+        var binCount = Math.Clamp(model.BinCount, 8, 64);
+        var binShift = (int)Math.Round(angleDeg / 360.0 * binCount);
+        binShift %= binCount;
+        if (binShift < 0) binShift += binCount;
+
+        var a = angleDeg * Math.PI / 180.0;
+        var cos = Math.Cos(a);
+        var sin = Math.Sin(a);
+
+        var accW = maxX + 1;
+        var accH = maxY + 1;
+        var accLen = accW * accH;
+        if (accScratch.Length < accLen)
+        {
+            accScratch = new int[accLen];
+        }
+        else
+        {
+            Array.Clear(accScratch, 0, accLen);
+        }
+
+        var cx = tplW / 2;
+        var cy = tplH / 2;
+
+        var totalWeight = 0;
+        foreach (var f in model.Features)
+        {
+            var w = Math.Max(1, f.Weight);
+            totalWeight += w;
+        }
+        if (totalWeight <= 0) totalWeight = 1;
+
+        foreach (var f in model.Features)
+        {
+            var rdx = (int)Math.Round(f.Dx * cos - f.Dy * sin);
+            var rdy = (int)Math.Round(f.Dx * sin + f.Dy * cos);
+            var b = (f.Bin + binShift) % binCount;
+            var w = Math.Max(1, f.Weight);
+
+            var tx = cx + rdx;
+            var ty = cy + rdy;
+            if (tx < 0 || ty < 0 || tx >= tplW || ty >= tplH) continue;
+
+            var pts = edgeByBin[b];
+            for (var p = 0; p < pts.Count; p++)
+            {
+                var ip = pts[p];
+                var ox = ip.X - tx;
+                var oy = ip.Y - ty;
+                if ((uint)ox > (uint)maxX || (uint)oy > (uint)maxY) continue;
+                accScratch[oy * accW + ox] += w;
+            }
+        }
+
+        var best = -1;
+        var bestIdx = 0;
+        for (var i = 0; i < accLen; i++)
+        {
+            var v = accScratch[i];
+            if (v > best)
+            {
+                best = v;
+                bestIdx = i;
+            }
+        }
+
+        var bestX = bestIdx % accW;
+        var bestY = bestIdx / accW;
+        var score = (double)best / totalWeight;
+        var center = new Point2d(bestX + tplW / 2.0, bestY + tplH / 2.0);
+        var rect = new Rect(bestX, bestY, tplW, tplH);
+        return (score, center, rect);
     }
 
     public MatchResult MatchWithRotation(Mat image, PointDefinition definition, PreprocessSettings? preprocess, double minAngleDeg = -10.0, double maxAngleDeg = 10.0, double stepDeg = 2.0)
@@ -626,6 +985,102 @@ public sealed class PatternMatcher
         using var roi = new Mat(image, roiRect);
 
         using var roiGray = EnsureGrayBorrowed(roi);
+
+        if (definition.ShapeModel is not null
+            && definition.ShapeModel.TemplateWidth > 0
+            && definition.ShapeModel.TemplateHeight > 0
+            && definition.ShapeModel.Features is not null
+            && definition.ShapeModel.Features.Count > 0)
+        {
+            var model = definition.ShapeModel;
+            var binCount = Math.Clamp(model.BinCount, 8, 64);
+            var edgeByBin = BuildEdgeByBinFromSobel(roiGray.Mat, binCount, magThreshold: 20.0f);
+
+            var bestScoreSm = double.NegativeInfinity;
+            var bestAngleSm = 0.0;
+            var bestCenter = new Point2d(roiRect.Width / 2.0, roiRect.Height / 2.0);
+            var bestRect = new Rect(0, 0, model.TemplateWidth, model.TemplateHeight);
+
+            if (stepDeg <= 0.000001)
+            {
+                stepDeg = 1.0;
+            }
+
+            var maxX = roiRect.Width - model.TemplateWidth;
+            var maxY = roiRect.Height - model.TemplateHeight;
+            if (maxX < 0 || maxY < 0)
+            {
+                var centerFallback = new Point2d(roiRect.X + roiRect.Width / 2.0, roiRect.Y + roiRect.Height / 2.0);
+                return new MatchResult(centerFallback, 0.0, 0.0, roiRect);
+            }
+
+            var accScratch = new int[(maxX + 1) * (maxY + 1)];
+
+            const double earlyExitScore = 0.97;
+            var searchMin = minAngleDeg;
+            var searchMax = maxAngleDeg;
+            if (searchMax < searchMin)
+            {
+                (searchMin, searchMax) = (searchMax, searchMin);
+            }
+
+            var coarseStepDeg = Math.Max(stepDeg * 3.0, 4.0);
+            if ((searchMax - searchMin) < coarseStepDeg * 1.5)
+            {
+                coarseStepDeg = stepDeg;
+            }
+
+            var bestAngleCoarse = 0.0;
+            var ang = searchMin;
+            while (ang <= searchMax + 0.000001)
+            {
+                var (score, center, rect) = ScoreByShapeModel(edgeByBin, roiRect.Width, roiRect.Height, model, ang, accScratch);
+                if (score > bestScoreSm)
+                {
+                    bestScoreSm = score;
+                    bestAngleSm = ang;
+                    bestAngleCoarse = ang;
+                    bestCenter = center;
+                    bestRect = rect;
+                    if (bestScoreSm >= earlyExitScore)
+                    {
+                        break;
+                    }
+                }
+
+                ang += coarseStepDeg;
+            }
+
+            if (bestScoreSm < earlyExitScore && coarseStepDeg > stepDeg + 0.000001)
+            {
+                var refineMin = Math.Max(searchMin, bestAngleCoarse - coarseStepDeg);
+                var refineMax = Math.Min(searchMax, bestAngleCoarse + coarseStepDeg);
+
+                ang = refineMin;
+                while (ang <= refineMax + 0.000001)
+                {
+                    var (score, center, rect) = ScoreByShapeModel(edgeByBin, roiRect.Width, roiRect.Height, model, ang, accScratch);
+                    if (score > bestScoreSm)
+                    {
+                        bestScoreSm = score;
+                        bestAngleSm = ang;
+                        bestCenter = center;
+                        bestRect = rect;
+                        if (bestScoreSm >= earlyExitScore)
+                        {
+                            break;
+                        }
+                    }
+
+                    ang += stepDeg;
+                }
+            }
+
+            var globalPos = new Point2d(bestCenter.X + roiRect.X, bestCenter.Y + roiRect.Y);
+            var mr = new Rect(roiRect.X + bestRect.X, roiRect.Y + bestRect.Y, bestRect.Width, bestRect.Height);
+            return new MatchResult(globalPos, bestScoreSm, bestAngleSm, mr);
+        }
+
         using var templPrep0 = PreprocessTemplateForMatch(templateGray, preprocess);
 
         using var roiEdges = new Mat();
@@ -667,9 +1122,7 @@ public sealed class PatternMatcher
                 continue;
             }
 
-            using var result = new Mat();
-            Cv2.MatchTemplate(roiEdges, templEdges, result, TemplateMatchModes.CCoeffNormed);
-            Cv2.MinMaxLoc(result, out _, out var maxVal, out _, out var maxLoc);
+            var (maxVal, _) = MatchTemplatePyramid(roiEdges, templEdges, TemplateMatchModes.CCoeffNormed);
 
             if (maxVal > bestAngleScore)
             {
@@ -704,14 +1157,83 @@ public sealed class PatternMatcher
             return new MatchResult(centerFallback, 0.0, bestAngle, roiRect);
         }
 
-        using var resultGray = new Mat();
-        Cv2.MatchTemplate(roiGray.Mat, bestTemplGray, resultGray, TemplateMatchModes.CCoeffNormed);
-        Cv2.MinMaxLoc(resultGray, out _, out var maxValGray, out _, out var maxLocGray);
+        var (maxValGray, maxLocGray) = MatchTemplatePyramid(roiGray.Mat, bestTemplGray, TemplateMatchModes.CCoeffNormed);
 
         var centerInRoi = new Point2d(maxLocGray.X + bestTemplGray.Width / 2.0, maxLocGray.Y + bestTemplGray.Height / 2.0);
         var global = new Point2d(centerInRoi.X + roiRect.X, centerInRoi.Y + roiRect.Y);
         var matchRect = new Rect(roiRect.X + maxLocGray.X, roiRect.Y + maxLocGray.Y, bestTemplGray.Width, bestTemplGray.Height);
         return new MatchResult(global, maxValGray, bestAngle, matchRect);
+    }
+
+    private static (double MaxVal, Point MaxLoc) MatchTemplatePyramid(Mat imageGray, Mat templGray, TemplateMatchModes mode)
+    {
+        if (imageGray is null) throw new ArgumentNullException(nameof(imageGray));
+        if (templGray is null) throw new ArgumentNullException(nameof(templGray));
+        if (imageGray.Empty() || templGray.Empty()) return (0.0, new Point(0, 0));
+
+        // Heuristic pyramid settings:
+        // - 2 levels typically give large speedups while preserving accuracy.
+        // - Refine windows are small to reduce total scanned pixels.
+        const int levels = 2;
+        const int refineRadius = 32;
+
+        var pred = new Point(0, 0);
+
+        for (var level = levels; level >= 0; level--)
+        {
+            var scale = 1.0 / (1 << level);
+
+            using var imgL = new Mat();
+            using var tplL = new Mat();
+            var imgSize = new Size(Math.Max(1, (int)Math.Round(imageGray.Width * scale)), Math.Max(1, (int)Math.Round(imageGray.Height * scale)));
+            var tplSize = new Size(Math.Max(1, (int)Math.Round(templGray.Width * scale)), Math.Max(1, (int)Math.Round(templGray.Height * scale)));
+            Cv2.Resize(imageGray, imgL, imgSize, 0, 0, InterpolationFlags.Area);
+            Cv2.Resize(templGray, tplL, tplSize, 0, 0, InterpolationFlags.Area);
+
+            if (imgL.Width < tplL.Width || imgL.Height < tplL.Height)
+            {
+                return (0.0, new Point(0, 0));
+            }
+
+            Rect search;
+            if (level == levels)
+            {
+                search = new Rect(0, 0, imgL.Width, imgL.Height);
+            }
+            else
+            {
+                var px = pred.X * 2;
+                var py = pred.Y * 2;
+                var r = refineRadius;
+
+                var sx = Math.Clamp(px - r, 0, Math.Max(0, imgL.Width - 1));
+                var sy = Math.Clamp(py - r, 0, Math.Max(0, imgL.Height - 1));
+
+                // Ensure search window large enough to fit template.
+                var sw = Math.Min(imgL.Width - sx, tplL.Width + 2 * r);
+                var sh = Math.Min(imgL.Height - sy, tplL.Height + 2 * r);
+
+                if (sw < tplL.Width) sw = tplL.Width;
+                if (sh < tplL.Height) sh = tplL.Height;
+
+                search = new Rect(sx, sy, sw, sh);
+                search = search.Intersect(new Rect(0, 0, imgL.Width, imgL.Height));
+            }
+
+            using var searchMat = new Mat(imgL, search);
+            using var res = new Mat();
+            Cv2.MatchTemplate(searchMat, tplL, res, mode);
+            Cv2.MinMaxLoc(res, out _, out var maxVal, out _, out var maxLoc);
+
+            pred = new Point(maxLoc.X + search.X, maxLoc.Y + search.Y);
+
+            if (level == 0)
+            {
+                return (maxVal, pred);
+            }
+        }
+
+        return (0.0, new Point(0, 0));
     }
 
     private static GrayMat EnsureGrayBorrowed(Mat src)

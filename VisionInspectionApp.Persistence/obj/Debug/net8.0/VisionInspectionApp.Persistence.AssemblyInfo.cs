@@ -14,7 +14,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("VisionInspectionApp.Persistence")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+8fa71dabd2333df1a7dfbd6c3361a1aac2c7abb8")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+6d2c9cdea1bd9cd0d546b3f65389469bb55c9df3")]
 [assembly: System.Reflection.AssemblyProductAttribute("VisionInspectionApp.Persistence")]
 [assembly: System.Reflection.AssemblyTitleAttribute("VisionInspectionApp.Persistence")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]
