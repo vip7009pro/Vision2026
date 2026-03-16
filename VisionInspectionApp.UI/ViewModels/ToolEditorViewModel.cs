@@ -2861,6 +2861,41 @@ public sealed partial class ToolEditorViewModel : ObservableObject
 
         if (_config is not null && !string.IsNullOrWhiteSpace(toRemove.RefName))
         {
+            if (string.Equals(toRemove.Type, "Preprocess", StringComparison.OrdinalIgnoreCase))
+            {
+                _config.PreprocessNodes.RemoveAll(x => string.Equals(x.Name, toRemove.RefName, StringComparison.OrdinalIgnoreCase));
+            }
+
+            if (string.Equals(toRemove.Type, "Point", StringComparison.OrdinalIgnoreCase))
+            {
+                _config.Points.RemoveAll(x => string.Equals(x.Name, toRemove.RefName, StringComparison.OrdinalIgnoreCase));
+            }
+
+            if (string.Equals(toRemove.Type, "Line", StringComparison.OrdinalIgnoreCase))
+            {
+                _config.Lines.RemoveAll(x => string.Equals(x.Name, toRemove.RefName, StringComparison.OrdinalIgnoreCase));
+            }
+
+            if (string.Equals(toRemove.Type, "Distance", StringComparison.OrdinalIgnoreCase))
+            {
+                _config.Distances.RemoveAll(x => string.Equals(x.Name, toRemove.RefName, StringComparison.OrdinalIgnoreCase));
+            }
+
+            if (string.Equals(toRemove.Type, "LineLineDistance", StringComparison.OrdinalIgnoreCase))
+            {
+                _config.LineToLineDistances.RemoveAll(x => string.Equals(x.Name, toRemove.RefName, StringComparison.OrdinalIgnoreCase));
+            }
+
+            if (string.Equals(toRemove.Type, "PointLineDistance", StringComparison.OrdinalIgnoreCase))
+            {
+                _config.PointToLineDistances.RemoveAll(x => string.Equals(x.Name, toRemove.RefName, StringComparison.OrdinalIgnoreCase));
+            }
+
+            if (string.Equals(toRemove.Type, "Condition", StringComparison.OrdinalIgnoreCase))
+            {
+                _config.Conditions.RemoveAll(x => string.Equals(x.Name, toRemove.RefName, StringComparison.OrdinalIgnoreCase));
+            }
+
             if (string.Equals(toRemove.Type, "BlobDetection", StringComparison.OrdinalIgnoreCase))
             {
                 _config.BlobDetections.RemoveAll(x => string.Equals(x.Name, toRemove.RefName, StringComparison.OrdinalIgnoreCase));
