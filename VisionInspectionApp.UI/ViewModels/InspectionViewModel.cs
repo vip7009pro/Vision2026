@@ -19,6 +19,8 @@ public sealed partial class InspectionViewModel : ObservableObject
     private readonly IInspectionService _inspectionService;
     private readonly ConfigStoreOptions _storeOptions;
 
+    private bool _isRunning;
+
     private Mat? _imageMat;
 
     private const int MaxBlobOverlayCount = 300;
@@ -30,7 +32,7 @@ public sealed partial class InspectionViewModel : ObservableObject
         _storeOptions = storeOptions;
 
         LoadImageCommand = new RelayCommand(LoadImage);
-        RunInspectionCommand = new RelayCommand(RunInspection);
+        RunInspectionCommand = new AsyncRelayCommand(RunInspectionAsync);
         LoadConfigCommand = new RelayCommand(LoadConfig);
         RefreshConfigsCommand = new RelayCommand(RefreshConfigs);
 
@@ -233,8 +235,13 @@ public sealed partial class InspectionViewModel : ObservableObject
         RefreshOverlayItems();
     }
 
-    private void RunInspection()
+    private async Task RunInspectionAsync()
     {
+        if (_isRunning)
+        {
+            return;
+        }
+
         if (_imageMat is null)
         {
             return;
@@ -246,9 +253,19 @@ public sealed partial class InspectionViewModel : ObservableObject
             _config = _configService.LoadConfig(code);
         }
 
-        LastResult = _inspectionService.Inspect(_imageMat, _config);
-
-        RefreshOverlayItems();
+        _isRunning = true;
+        try
+        {
+            var img = _imageMat;
+            var cfg = _config;
+            var result = await Task.Run(() => _inspectionService.Inspect(img, cfg)).ConfigureAwait(true);
+            LastResult = result;
+            RefreshOverlayItems();
+        }
+        finally
+        {
+            _isRunning = false;
+        }
     }
 
     private void RefreshSpecResults()
