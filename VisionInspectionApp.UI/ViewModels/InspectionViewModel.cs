@@ -155,6 +155,27 @@ public sealed partial class InspectionViewModel : ObservableObject
         OverlayItems.Add(new OverlayLineItem { X1 = p4.X, Y1 = p4.Y, X2 = p1.X, Y2 = p1.Y, Stroke = stroke });
     }
 
+    private void AddRotatedCrosshair(Point2d center, double halfW, double halfH, string? label, Brush stroke, double angleDeg)
+    {
+        halfW = Math.Max(1.0, halfW);
+        halfH = Math.Max(1.0, halfH);
+
+        var a = angleDeg * Math.PI / 180.0;
+        var cos = Math.Cos(a);
+        var sin = Math.Sin(a);
+
+        var hx = new Point2d(halfW * cos, halfW * sin);
+        var hy = new Point2d(-halfH * sin, halfH * cos);
+
+        var p1 = new Point2d(center.X - hx.X, center.Y - hx.Y);
+        var p2 = new Point2d(center.X + hx.X, center.Y + hx.Y);
+        var p3 = new Point2d(center.X - hy.X, center.Y - hy.Y);
+        var p4 = new Point2d(center.X + hy.X, center.Y + hy.Y);
+
+        OverlayItems.Add(new OverlayLineItem { X1 = p1.X, Y1 = p1.Y, X2 = p2.X, Y2 = p2.Y, Stroke = stroke, Label = label });
+        OverlayItems.Add(new OverlayLineItem { X1 = p3.X, Y1 = p3.Y, X2 = p4.X, Y2 = p4.Y, Stroke = stroke });
+    }
+
     private void AddRotatedTemplateAtPoint(Point2d center, int width, int height, string label, Brush stroke, double angleDeg)
     {
         if (width <= 0 || height <= 0)
@@ -843,10 +864,13 @@ public sealed partial class InspectionViewModel : ObservableObject
                 var pos = p.Position;
                 if (mr.Width > 0 && mr.Height > 0)
                 {
-                    var cx = mr.X + mr.Width / 2.0;
-                    var cy = mr.Y + mr.Height / 2.0;
-                    OverlayItems.Add(new OverlayLineItem { X1 = mr.X, Y1 = cy, X2 = mr.X + mr.Width, Y2 = cy, Stroke = p.Pass ? Brushes.DeepSkyBlue : Brushes.Red });
-                    OverlayItems.Add(new OverlayLineItem { X1 = cx, Y1 = mr.Y, X2 = cx, Y2 = mr.Y + mr.Height, Stroke = p.Pass ? Brushes.DeepSkyBlue : Brushes.Red });
+                    var halfW = mr.Width / 2.0;
+                    var halfH = mr.Height / 2.0;
+                    AddRotatedCrosshair(pos, halfW, halfH, label: null, p.Pass ? Brushes.DeepSkyBlue : Brushes.Red, angleDeg);
+                }
+                else
+                {
+                    AddRotatedCrosshair(pos, 14.0, 14.0, label: null, p.Pass ? Brushes.DeepSkyBlue : Brushes.Red, angleDeg);
                 }
 
                 var pTeach = hasPose

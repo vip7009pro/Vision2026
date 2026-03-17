@@ -6500,17 +6500,17 @@ public sealed partial class ToolEditorViewModel : ObservableObject
             var mr = p.MatchRect;
             if (mr.Width > 0 && mr.Height > 0)
             {
-                var cx = mr.X + mr.Width / 2.0;
-                var cy = mr.Y + mr.Height / 2.0;
+                var cx = p.Position.X;
+                var cy = p.Position.Y;
 
-                dst.Add(new OverlayLineItem { X1 = mr.X, Y1 = cy, X2 = mr.X + mr.Width, Y2 = cy, Stroke = p.Pass ? Brushes.DeepSkyBlue : Brushes.Red });
-                dst.Add(new OverlayLineItem { X1 = cx, Y1 = mr.Y, X2 = cx, Y2 = mr.Y + mr.Height, Stroke = p.Pass ? Brushes.DeepSkyBlue : Brushes.Red });
+                dst.Add(new OverlayLineItem { X1 = cx - mr.Width / 2.0, Y1 = cy, X2 = cx + mr.Width / 2.0, Y2 = cy, Stroke = p.Pass ? Brushes.DeepSkyBlue : Brushes.Red });
+                dst.Add(new OverlayLineItem { X1 = cx, Y1 = cy - mr.Height / 2.0, X2 = cx, Y2 = cy + mr.Height / 2.0, Stroke = p.Pass ? Brushes.DeepSkyBlue : Brushes.Red });
             }
 
             dst.Add(new OverlayPointItem
             {
-                X = mr.Width > 0 && mr.Height > 0 ? mr.X + mr.Width / 2.0 : p.Position.X,
-                Y = mr.Width > 0 && mr.Height > 0 ? mr.Y + mr.Height / 2.0 : p.Position.Y,
+                X = p.Position.X,
+                Y = p.Position.Y,
                 Stroke = p.Pass ? Brushes.DeepSkyBlue : Brushes.Red,
                 Label = p.Name
             });
@@ -6779,11 +6779,11 @@ public sealed partial class ToolEditorViewModel : ObservableObject
             var mr = p.MatchRect;
             if (mr.Width > 0 && mr.Height > 0)
             {
-                var cx = mr.X + mr.Width / 2.0;
-                var cy = mr.Y + mr.Height / 2.0;
+                var cx = p.Position.X;
+                var cy = p.Position.Y;
 
-                dst.Add(new OverlayLineItem { X1 = mr.X, Y1 = cy, X2 = mr.X + mr.Width, Y2 = cy, Stroke = p.Pass ? Brushes.DeepSkyBlue : Brushes.Red });
-                dst.Add(new OverlayLineItem { X1 = cx, Y1 = mr.Y, X2 = cx, Y2 = mr.Y + mr.Height, Stroke = p.Pass ? Brushes.DeepSkyBlue : Brushes.Red });
+                dst.Add(new OverlayLineItem { X1 = cx - mr.Width / 2.0, Y1 = cy, X2 = cx + mr.Width / 2.0, Y2 = cy, Stroke = p.Pass ? Brushes.DeepSkyBlue : Brushes.Red });
+                dst.Add(new OverlayLineItem { X1 = cx, Y1 = cy - mr.Height / 2.0, X2 = cx, Y2 = cy + mr.Height / 2.0, Stroke = p.Pass ? Brushes.DeepSkyBlue : Brushes.Red });
             }
 
             dst.Add(new OverlayPointItem
