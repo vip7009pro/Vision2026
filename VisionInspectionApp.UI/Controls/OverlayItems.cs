@@ -40,3 +40,5 @@ public sealed class OverlayLineItem : OverlayItem
 public sealed record LineSelection(double X1, double Y1, double X2, double Y2);
 
 public sealed record RoiSelection(string Label, VisionInspectionApp.Models.Roi Roi, System.Windows.Input.ModifierKeys Modifiers);
+
+public sealed record PointClickSelection(double X, double Y, System.Windows.Input.ModifierKeys Modifiers);

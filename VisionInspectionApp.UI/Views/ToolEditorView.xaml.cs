@@ -3,6 +3,7 @@ using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Threading;
 using VisionInspectionApp.UI.ViewModels;
 
 namespace VisionInspectionApp.UI.Views;
@@ -514,8 +515,35 @@ public partial class ToolEditorView : UserControl
             return;
         }
 
+        if (CanvasScrollViewer is null)
+        {
+            return;
+        }
+
+        var oldZoom = vm.CanvasZoom;
         var delta = e.Delta > 0 ? 0.1 : -0.1;
-        vm.CanvasZoom = Math.Clamp(vm.CanvasZoom + delta, 0.2, 3.0);
+        var newZoom = Math.Clamp(oldZoom + delta, 0.2, 3.0);
+        if (Math.Abs(newZoom - oldZoom) < 0.0000001)
+        {
+            return;
+        }
+
+        var mouse = e.GetPosition(CanvasScrollViewer);
+
+        // ScrollViewer offsets are in *scaled* coordinates because EditorCanvas uses LayoutTransform.
+        // Keep the logical canvas point under the cursor stable.
+        var worldX = (CanvasScrollViewer.HorizontalOffset + mouse.X) / oldZoom;
+        var worldY = (CanvasScrollViewer.VerticalOffset + mouse.Y) / oldZoom;
+
+        vm.CanvasZoom = newZoom;
+
+        // Defer scrolling until layout has applied the new scale.
+        Dispatcher.BeginInvoke(() =>
+        {
+            CanvasScrollViewer.ScrollToHorizontalOffset(worldX * newZoom - mouse.X);
+            CanvasScrollViewer.ScrollToVerticalOffset(worldY * newZoom - mouse.Y);
+        }, DispatcherPriority.Loaded);
+
         e.Handled = true;
     }
 

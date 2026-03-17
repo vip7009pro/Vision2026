@@ -376,6 +376,13 @@ public sealed class ImagePreprocessor
 {
     private static readonly Mat MorphKernel3x3 = Cv2.GetStructuringElement(MorphShapes.Rect, new Size(3, 3));
 
+    private static int MakeOddAtLeast3(int k)
+    {
+        if (k < 3) k = 3;
+        if (k % 2 == 0) k += 1;
+        return k;
+    }
+
     public Mat Run(Mat inputBgrOrGray, PreprocessSettings settings)
     {
         if (inputBgrOrGray is null)
@@ -395,6 +402,85 @@ public sealed class ImagePreprocessor
 
         try
         {
+            // Illumination correction should run early (before threshold/canny) and can work on gray.
+            if (settings.IlluminationCorrection != IlluminationCorrectionPreset.None)
+            {
+                if (current.Channels() > 1)
+                {
+                    var gray0 = new Mat();
+                    Cv2.CvtColor(current, gray0, ColorConversionCodes.BGR2GRAY);
+                    disposeList.Add(gray0);
+                    current = gray0;
+                    anyOp = true;
+                }
+
+                var k = MakeOddAtLeast3(settings.IlluminationKernel);
+
+                if (settings.IlluminationCorrection == IlluminationCorrectionPreset.BackgroundSubtract)
+                {
+                    // Remove low-frequency background via strong blur and subtract.
+                    var bg = new Mat();
+                    Cv2.GaussianBlur(current, bg, new Size(k, k), 0);
+                    disposeList.Add(bg);
+
+                    var sub = new Mat();
+                    Cv2.Subtract(current, bg, sub);
+                    disposeList.Add(sub);
+
+                    var norm = new Mat();
+                    Cv2.Normalize(sub, norm, 0, 255, NormTypes.MinMax);
+                    disposeList.Add(norm);
+
+                    current = norm;
+                    anyOp = true;
+                }
+                else if (settings.IlluminationCorrection == IlluminationCorrectionPreset.FlatFieldNormalize)
+                {
+                    // Approximate flat-field correction: divide by blurred background then normalize.
+                    var bg = new Mat();
+                    Cv2.GaussianBlur(current, bg, new Size(k, k), 0);
+                    disposeList.Add(bg);
+
+                    using var cur32 = new Mat();
+                    using var bg32 = new Mat();
+                    current.ConvertTo(cur32, MatType.CV_32F);
+                    bg.ConvertTo(bg32, MatType.CV_32F);
+
+                    // Avoid division by zero by adding epsilon.
+                    var bgEps = new Mat();
+                    Cv2.Add(bg32, Scalar.All(1.0), bgEps);
+                    disposeList.Add(bgEps);
+
+                    var div = new Mat();
+                    Cv2.Divide(cur32, bgEps, div);
+                    disposeList.Add(div);
+
+                    var norm = new Mat();
+                    Cv2.Normalize(div, norm, 0, 255, NormTypes.MinMax);
+                    disposeList.Add(norm);
+
+                    var u8 = new Mat();
+                    norm.ConvertTo(u8, MatType.CV_8U);
+                    disposeList.Add(u8);
+
+                    current = u8;
+                    anyOp = true;
+                }
+                else if (settings.IlluminationCorrection == IlluminationCorrectionPreset.Clahe)
+                {
+                    var clip = Math.Clamp(settings.ClaheClipLimit, 0.1, 40.0);
+                    var grid = Math.Clamp(settings.ClaheTileGrid, 2, 32);
+                    using var clahe = Cv2.CreateCLAHE(clipLimit: clip, tileGridSize: new Size(grid, grid));
+
+                    var dstClahe = new Mat();
+                    clahe.Apply(current, dstClahe);
+                    disposeList.Add(dstClahe);
+
+                    current = dstClahe;
+                    anyOp = true;
+                }
+            }
+
             if (settings.UseGray && current.Channels() > 1)
             {
                 var gray = new Mat();

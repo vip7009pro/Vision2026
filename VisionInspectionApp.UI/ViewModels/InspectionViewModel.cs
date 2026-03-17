@@ -110,7 +110,7 @@ public sealed partial class InspectionViewModel : ObservableObject
             return p;
         }
 
-        var a = -angleDeg * Math.PI / 180.0;
+        var a = angleDeg * Math.PI / 180.0;
         var cos = Math.Cos(a);
         var sin = Math.Sin(a);
 
@@ -391,6 +391,75 @@ public sealed partial class InspectionViewModel : ObservableObject
                         Stroke = Brushes.Yellow,
                         Label = "Origin T"
                     });
+                }
+            }
+
+            foreach (var sc in _config.SurfaceCompares)
+            {
+                if (sc.InspectRoi.Width > 0 && sc.InspectRoi.Height > 0)
+                {
+                    if (hasPose)
+                    {
+                        AddRotatedRoiOverlay(sc.InspectRoi, $"{sc.Name} SC", Brushes.DeepSkyBlue, originTeach, originFound, angleDeg);
+                        AddRotatedRoiOverlay(sc.TemplateRoi, $"{sc.Name} SCT", Brushes.DeepSkyBlue, originTeach, originFound, angleDeg);
+                    }
+                    else
+                    {
+                        OverlayItems.Add(new OverlayRectItem
+                        {
+                            X = sc.InspectRoi.X,
+                            Y = sc.InspectRoi.Y,
+                            Width = sc.InspectRoi.Width,
+                            Height = sc.InspectRoi.Height,
+                            Stroke = Brushes.DeepSkyBlue,
+                            Label = $"{sc.Name} SC"
+                        });
+
+                        if (sc.TemplateRoi.Width > 0 && sc.TemplateRoi.Height > 0)
+                        {
+                            OverlayItems.Add(new OverlayRectItem
+                            {
+                                X = sc.TemplateRoi.X,
+                                Y = sc.TemplateRoi.Y,
+                                Width = sc.TemplateRoi.Width,
+                                Height = sc.TemplateRoi.Height,
+                                Stroke = Brushes.DeepSkyBlue,
+                                Label = $"{sc.Name} SCT"
+                            });
+                        }
+                    }
+                }
+
+                if (sc.Rois is null || sc.Rois.Count == 0)
+                {
+                    continue;
+                }
+
+                var includeIdx = 0;
+                var excludeIdx = 0;
+                foreach (var rr in sc.Rois)
+                {
+                    var isExclude = rr.Mode == BlobRoiMode.Exclude;
+                    var idx = isExclude ? ++excludeIdx : ++includeIdx;
+                    var label = isExclude ? $"{sc.Name} SCX{idx}" : $"{sc.Name} SC{idx}";
+                    var stroke = isExclude ? Brushes.Red : Brushes.DeepSkyBlue;
+
+                    if (hasPose)
+                    {
+                        AddRotatedRoiOverlay(rr.Roi, label, stroke, originTeach, originFound, angleDeg);
+                    }
+                    else if (rr.Roi.Width > 0 && rr.Roi.Height > 0)
+                    {
+                        OverlayItems.Add(new OverlayRectItem
+                        {
+                            X = rr.Roi.X,
+                            Y = rr.Roi.Y,
+                            Width = rr.Roi.Width,
+                            Height = rr.Roi.Height,
+                            Stroke = stroke,
+                            Label = label
+                        });
+                    }
                 }
             }
 
@@ -778,7 +847,6 @@ public sealed partial class InspectionViewModel : ObservableObject
                     var cy = mr.Y + mr.Height / 2.0;
                     OverlayItems.Add(new OverlayLineItem { X1 = mr.X, Y1 = cy, X2 = mr.X + mr.Width, Y2 = cy, Stroke = p.Pass ? Brushes.DeepSkyBlue : Brushes.Red });
                     OverlayItems.Add(new OverlayLineItem { X1 = cx, Y1 = mr.Y, X2 = cx, Y2 = mr.Y + mr.Height, Stroke = p.Pass ? Brushes.DeepSkyBlue : Brushes.Red });
-                    pos = new Point2d(cx, cy);
                 }
 
                 var pTeach = hasPose
@@ -885,6 +953,75 @@ public sealed partial class InspectionViewModel : ObservableObject
                             Radius = 3.0,
                             Stroke = Brushes.Gold,
                             Label = string.Empty
+                        });
+                    }
+                }
+            }
+
+            if (LastResult.SurfaceCompares is not null)
+            {
+                foreach (var sc in LastResult.SurfaceCompares)
+                {
+                    OverlayItems.Add(new OverlayPointItem
+                    {
+                        X = 2,
+                        Y = 2,
+                        Radius = 1.0,
+                        Stroke = Brushes.Transparent,
+                        Label = string.Empty
+                    });
+
+                    if (sc.Defects is null || sc.Defects.Count == 0)
+                    {
+                        continue;
+                    }
+
+                    var n = Math.Min(sc.Defects.Count, MaxBlobOverlayCount);
+                    for (var i = 0; i < n; i++)
+                    {
+                        var d = sc.Defects[i];
+                        var r = d.BoundingBox;
+                        if (r.Width > 0 && r.Height > 0)
+                        {
+                            OverlayItems.Add(new OverlayRectItem
+                            {
+                                X = r.X,
+                                Y = r.Y,
+                                Width = r.Width,
+                                Height = r.Height,
+                                Stroke = Brushes.DeepSkyBlue,
+                                Label = string.Empty
+                            });
+                        }
+
+                        OverlayItems.Add(new OverlayPointItem
+                        {
+                            X = d.Centroid.X,
+                            Y = d.Centroid.Y,
+                            Radius = 3.0,
+                            Stroke = Brushes.DeepSkyBlue,
+                            Label = string.Empty
+                        });
+                    }
+
+                    OverlayItems.Add(new OverlayPointItem
+                    {
+                        X = 2,
+                        Y = 16,
+                        Radius = 1.0,
+                        Stroke = Brushes.DeepSkyBlue,
+                        Label = $"{sc.Name}: {sc.Count} / {sc.MaxArea:0}"
+                    });
+
+                    if (sc.Defects.Count > MaxBlobOverlayCount)
+                    {
+                        OverlayItems.Add(new OverlayPointItem
+                        {
+                            X = 2,
+                            Y = 30,
+                            Radius = 1.0,
+                            Stroke = Brushes.DeepSkyBlue,
+                            Label = $"+{sc.Defects.Count - MaxBlobOverlayCount}"
                         });
                     }
                 }

@@ -95,6 +95,7 @@ public sealed partial class ToolEditorViewModel : ObservableObject
             "EdgePair",
             "Condition",
             "BlobDetection",
+            "SurfaceCompare",
             "CodeDetection",
             "DefectRoi"
         };
@@ -116,10 +117,91 @@ public sealed partial class ToolEditorViewModel : ObservableObject
         RoiSelectedCommand = new RelayCommand<object?>(OnRoiSelected);
         RoiEditedCommand = new RelayCommand<RoiSelection?>(OnRoiEdited);
         RoiDeletedCommand = new RelayCommand<string?>(OnRoiDeleted);
+        PointClickedCommand = new RelayCommand<PointClickSelection?>(OnPointClicked);
 
         _sharedImage.ImageChanged += (_, __) => RefreshPreviews();
 
         RefreshConfigs();
+    }
+
+    public IlluminationCorrectionPreset IlluminationCorrection
+    {
+        get
+        {
+            var s = GetActivePreprocessSettingsForUi();
+            return s?.IlluminationCorrection ?? IlluminationCorrectionPreset.None;
+        }
+        set
+        {
+            var s = GetActivePreprocessSettingsForUi();
+            if (s is null) return;
+            if (s.IlluminationCorrection == value) return;
+            s.IlluminationCorrection = value;
+            RefreshPreviews();
+            OnPropertyChanged();
+            RequestAutoSave();
+        }
+    }
+
+    public int IlluminationKernel
+    {
+        get
+        {
+            var s = GetActivePreprocessSettingsForUi();
+            return s?.IlluminationKernel ?? 51;
+        }
+        set
+        {
+            var s = GetActivePreprocessSettingsForUi();
+            if (s is null) return;
+            var v = Math.Clamp(value, 3, 401);
+            if (v % 2 == 0) v += 1;
+            if (s.IlluminationKernel == v) return;
+            s.IlluminationKernel = v;
+            RefreshPreviews();
+            OnPropertyChanged();
+            RequestAutoSave();
+        }
+    }
+
+    public double ClaheClipLimit
+    {
+        get
+        {
+            var s = GetActivePreprocessSettingsForUi();
+            return s?.ClaheClipLimit ?? 2.0;
+        }
+        set
+        {
+            var s = GetActivePreprocessSettingsForUi();
+            if (s is null) return;
+            var v = Math.Clamp(value, 0.1, 40.0);
+            if (Math.Abs(s.ClaheClipLimit - v) < 0.0000001) return;
+            s.ClaheClipLimit = v;
+            RefreshPreviews();
+            OnPropertyChanged();
+            RequestAutoSave();
+        }
+    }
+
+    public int ClaheTileGrid
+    {
+        get
+        {
+            var s = GetActivePreprocessSettingsForUi();
+            return s?.ClaheTileGrid ?? 8;
+        }
+        set
+        {
+            var s = GetActivePreprocessSettingsForUi();
+            if (s is null) return;
+            var v = Math.Clamp(value, 2, 32);
+            if (s.ClaheTileGrid == v) return;
+            s.ClaheTileGrid = v;
+            RefreshPreviews();
+            OnPropertyChanged();
+            RequestAutoSave();
+        }
     }
 
     private void OnRoiDeleted(string? labelRaw)
@@ -151,6 +233,45 @@ public sealed partial class ToolEditorViewModel : ObservableObject
             }
 
             c.SearchRoi = new Roi();
+            RunFlow();
+            RequestAutoSave();
+            return;
+        }
+
+        if (kind.StartsWith("SC", StringComparison.OrdinalIgnoreCase))
+        {
+            var sc = _config.SurfaceCompares.FirstOrDefault(x => string.Equals(x.Name, name, StringComparison.OrdinalIgnoreCase));
+            if (sc is null)
+            {
+                return;
+            }
+
+            if (string.Equals(kind, "SC", StringComparison.OrdinalIgnoreCase))
+            {
+                sc.InspectRoi = new Roi();
+                sc.Rois.Clear();
+                RunFlow();
+                RequestAutoSave();
+                return;
+            }
+
+            // Multi ROI edit labels are index-based: SC1,SC2,... and SCX1,SCX2,...
+            var scIsExclude = kind.StartsWith("SCX", StringComparison.OrdinalIgnoreCase);
+            var scNumPart = scIsExclude ? kind.Substring(3) : kind.Substring(2);
+            if (!int.TryParse(scNumPart, out var scIdx1) || scIdx1 <= 0)
+            {
+                return;
+            }
+
+            var scIdx = scIdx1 - 1;
+            if (scIdx < 0 || scIdx >= sc.Rois.Count)
+            {
+                return;
+            }
+
+            sc.Rois.RemoveAt(scIdx);
+            sc.InspectRoi = ComputeSurfaceCompareInspectRoi(sc);
+
             RunFlow();
             RequestAutoSave();
             return;
@@ -195,6 +316,29 @@ public sealed partial class ToolEditorViewModel : ObservableObject
 
         RunFlow();
         RequestAutoSave();
+    }
+
+    private static Roi ComputeSurfaceCompareInspectRoi(SurfaceCompareDefinition sc)
+    {
+        if (sc.Rois is null || sc.Rois.Count == 0)
+        {
+            return sc.InspectRoi;
+        }
+
+        var inc = sc.Rois.Where(x => x.Mode == BlobRoiMode.Include && x.Roi.Width > 0 && x.Roi.Height > 0)
+            .Select(x => x.Roi)
+            .ToList();
+
+        if (inc.Count == 0)
+        {
+            return sc.InspectRoi;
+        }
+
+        var minX = inc.Min(x => x.X);
+        var minY = inc.Min(x => x.Y);
+        var maxX = inc.Max(x => x.X + x.Width);
+        var maxY = inc.Max(x => x.Y + x.Height);
+        return new Roi { X = minX, Y = minY, Width = Math.Max(1, maxX - minX), Height = Math.Max(1, maxY - minY) };
     }
 
     private void BuildFinalOverlayFromRunWithConfig(InspectionResult run, ObservableCollection<OverlayItem> dst)
@@ -363,6 +507,74 @@ public sealed partial class ToolEditorViewModel : ObservableObject
                 });
             }
         }
+
+        foreach (var sc in _config.SurfaceCompares)
+        {
+            if (sc.InspectRoi.Width <= 0 || sc.InspectRoi.Height <= 0)
+            {
+                continue;
+            }
+
+            var r = run.SurfaceCompares.FirstOrDefault(x => string.Equals(x.Name, sc.Name, StringComparison.OrdinalIgnoreCase));
+            if (r is null)
+            {
+                continue;
+            }
+
+            dst.Add(new OverlayPointItem
+            {
+                X = sc.InspectRoi.X + 2,
+                Y = sc.InspectRoi.Y + 2,
+                Radius = 1.0,
+                Stroke = Brushes.DeepSkyBlue,
+                Label = $"{sc.Name}: {r.Count} / {r.MaxArea:0}"
+            });
+
+            if (r.Defects is null || r.Defects.Count == 0)
+            {
+                continue;
+            }
+
+            var n = Math.Min(r.Defects.Count, MaxBlobOverlayCount);
+            for (var i = 0; i < n; i++)
+            {
+                var d = r.Defects[i];
+                var br = d.BoundingBox;
+                if (br.Width > 0 && br.Height > 0)
+                {
+                    dst.Add(new OverlayRectItem
+                    {
+                        X = br.X,
+                        Y = br.Y,
+                        Width = br.Width,
+                        Height = br.Height,
+                        Stroke = Brushes.DeepSkyBlue,
+                        Label = string.Empty
+                    });
+                }
+
+                dst.Add(new OverlayPointItem
+                {
+                    X = d.Centroid.X,
+                    Y = d.Centroid.Y,
+                    Radius = 3.0,
+                    Stroke = Brushes.DeepSkyBlue,
+                    Label = string.Empty
+                });
+            }
+
+            if (r.Defects.Count > MaxBlobOverlayCount)
+            {
+                dst.Add(new OverlayPointItem
+                {
+                    X = sc.InspectRoi.X + 2,
+                    Y = sc.InspectRoi.Y + 16,
+                    Radius = 1.0,
+                    Stroke = Brushes.DeepSkyBlue,
+                    Label = $"+{r.Defects.Count - MaxBlobOverlayCount}"
+                });
+            }
+        }
     }
 
     public ObservableCollection<string> AvailablePreprocessChoices { get; }
@@ -375,10 +587,14 @@ public sealed partial class ToolEditorViewModel : ObservableObject
                                                 || string.Equals(SelectedNode.Type, "LinePairDetection", StringComparison.OrdinalIgnoreCase)
                                                 || string.Equals(SelectedNode.Type, "EdgePairDetect", StringComparison.OrdinalIgnoreCase)
                                                 || string.Equals(SelectedNode.Type, "BlobDetection", StringComparison.OrdinalIgnoreCase)
+                                                || string.Equals(SelectedNode.Type, "SurfaceCompare", StringComparison.OrdinalIgnoreCase)
                                                 || string.Equals(SelectedNode.Type, "CodeDetection", StringComparison.OrdinalIgnoreCase));
 
     public bool IsBlobDetectionNode => SelectedNode is not null
                                        && string.Equals(SelectedNode.Type, "BlobDetection", StringComparison.OrdinalIgnoreCase);
+
+    public bool IsSurfaceCompareNode => SelectedNode is not null
+                                        && string.Equals(SelectedNode.Type, "SurfaceCompare", StringComparison.OrdinalIgnoreCase);
 
     public bool IsLinePairDetectionNode => SelectedNode is not null
                                            && string.Equals(SelectedNode.Type, "LinePairDetection", StringComparison.OrdinalIgnoreCase);
@@ -550,6 +766,13 @@ public sealed partial class ToolEditorViewModel : ObservableObject
         return _config.BlobDetections.FirstOrDefault(x => string.Equals(x.Name, SelectedNode.RefName, StringComparison.OrdinalIgnoreCase));
     }
 
+    private SurfaceCompareDefinition? SelectedSurfaceCompareDef()
+    {
+        if (_config is null || SelectedNode is null) return null;
+        if (!string.Equals(SelectedNode.Type, "SurfaceCompare", StringComparison.OrdinalIgnoreCase)) return null;
+        return _config.SurfaceCompares.FirstOrDefault(x => string.Equals(x.Name, SelectedNode.RefName, StringComparison.OrdinalIgnoreCase));
+    }
+
     public BlobPolarity Blob_Polarity
     {
         get => SelectedBlobDetectionDef()?.Polarity ?? BlobPolarity.DarkOnLight;
@@ -651,6 +874,95 @@ public sealed partial class ToolEditorViewModel : ObservableObject
             if (!string.Equals(SelectedNode.Type, "BlobDetection", StringComparison.OrdinalIgnoreCase)) return null;
             var r = _lastRun.BlobDetections.FirstOrDefault(x => string.Equals(x.Name, SelectedNode.RefName, StringComparison.OrdinalIgnoreCase));
             return r is null ? null : r.Count;
+        }
+    }
+
+    public int SurfaceCompare_DiffThreshold
+    {
+        get => SelectedSurfaceCompareDef()?.DiffThreshold ?? 25;
+        set
+        {
+            var def = SelectedSurfaceCompareDef();
+            if (def is null) return;
+            var v = Math.Clamp(value, 0, 255);
+            if (def.DiffThreshold == v) return;
+            def.DiffThreshold = v;
+            RaiseToolPropertyPanelsChanged();
+            RefreshPreviews();
+            RequestAutoSave();
+        }
+    }
+
+    public int SurfaceCompare_MorphKernel
+    {
+        get => SelectedSurfaceCompareDef()?.MorphKernel ?? 3;
+        set
+        {
+            var def = SelectedSurfaceCompareDef();
+            if (def is null) return;
+            var v = Math.Clamp(value, 1, 99);
+            if (v % 2 == 0) v += 1;
+            if (def.MorphKernel == v) return;
+            def.MorphKernel = v;
+            RaiseToolPropertyPanelsChanged();
+            RefreshPreviews();
+            RequestAutoSave();
+        }
+    }
+
+    public int SurfaceCompare_MinBlobArea
+    {
+        get => SelectedSurfaceCompareDef()?.MinBlobArea ?? 0;
+        set
+        {
+            var def = SelectedSurfaceCompareDef();
+            if (def is null) return;
+            var v = Math.Max(0, value);
+            if (def.MinBlobArea == v) return;
+            def.MinBlobArea = v;
+            if (def.MaxBlobArea < def.MinBlobArea) def.MaxBlobArea = def.MinBlobArea;
+            RaiseToolPropertyPanelsChanged();
+            RefreshPreviews();
+            RequestAutoSave();
+        }
+    }
+
+    public int SurfaceCompare_MaxBlobArea
+    {
+        get => SelectedSurfaceCompareDef()?.MaxBlobArea ?? 0;
+        set
+        {
+            var def = SelectedSurfaceCompareDef();
+            if (def is null) return;
+            var v = Math.Max(0, value);
+            if (v < def.MinBlobArea) v = def.MinBlobArea;
+            if (def.MaxBlobArea == v) return;
+            def.MaxBlobArea = v;
+            RaiseToolPropertyPanelsChanged();
+            RefreshPreviews();
+            RequestAutoSave();
+        }
+    }
+
+    public int? SurfaceCompare_LastRunCount
+    {
+        get
+        {
+            if (_lastRun is null || SelectedNode is null) return null;
+            if (!string.Equals(SelectedNode.Type, "SurfaceCompare", StringComparison.OrdinalIgnoreCase)) return null;
+            var r = _lastRun.SurfaceCompares.FirstOrDefault(x => string.Equals(x.Name, SelectedNode.RefName, StringComparison.OrdinalIgnoreCase));
+            return r is null ? null : r.Count;
+        }
+    }
+
+    public double? SurfaceCompare_LastRunMaxArea
+    {
+        get
+        {
+            if (_lastRun is null || SelectedNode is null) return null;
+            if (!string.Equals(SelectedNode.Type, "SurfaceCompare", StringComparison.OrdinalIgnoreCase)) return null;
+            var r = _lastRun.SurfaceCompares.FirstOrDefault(x => string.Equals(x.Name, SelectedNode.RefName, StringComparison.OrdinalIgnoreCase));
+            return r is null ? null : r.MaxArea;
         }
     }
 
@@ -1001,6 +1313,106 @@ public sealed partial class ToolEditorViewModel : ObservableObject
             b.InspectRoi = ComputeBlobInspectRoi(b);
             return;
         }
+
+        if (kind.StartsWith("SC", StringComparison.OrdinalIgnoreCase))
+        {
+            var sc = _config.SurfaceCompares.FirstOrDefault(x => string.Equals(x.Name, name, StringComparison.OrdinalIgnoreCase));
+            if (sc is null)
+            {
+                return;
+            }
+
+            if (string.Equals(kind, "SC", StringComparison.OrdinalIgnoreCase))
+            {
+                sc.InspectRoi = roi;
+                if (sc.TemplateRoi.Width <= 0 || sc.TemplateRoi.Height <= 0)
+                {
+                    sc.TemplateRoi = roi;
+                }
+
+                if (string.IsNullOrWhiteSpace(sc.TemplateImageFile))
+                {
+                    TrySaveSurfaceCompareTemplateImage(name, sc.TemplateRoi);
+                }
+                return;
+            }
+
+            if (string.Equals(kind, "SCT", StringComparison.OrdinalIgnoreCase))
+            {
+                sc.TemplateRoi = roi;
+                TrySaveSurfaceCompareTemplateImage(name, roi);
+                return;
+            }
+
+            // Multi ROI edit labels:
+            // - Include:  SC1, SC2, ...
+            // - Exclude:  SCX1, SCX2, ...
+            var isExclude = kind.StartsWith("SCX", StringComparison.OrdinalIgnoreCase);
+            var numPart = isExclude ? kind.Substring(3) : kind.Substring(2);
+            if (!int.TryParse(numPart, out var idx1) || idx1 <= 0)
+            {
+                return;
+            }
+
+            var idx = idx1 - 1;
+            if (idx < 0)
+            {
+                return;
+            }
+
+            while (sc.Rois.Count <= idx)
+            {
+                sc.Rois.Add(new SurfaceCompareRoiDefinition());
+            }
+
+            sc.Rois[idx].Mode = isExclude ? BlobRoiMode.Exclude : BlobRoiMode.Include;
+            sc.Rois[idx].Roi = roi;
+            sc.InspectRoi = ComputeSurfaceCompareInspectRoi(sc);
+            return;
+        }
+    }
+
+    private void TrySaveSurfaceCompareTemplateImage(string surfaceCompareName, Roi roi)
+    {
+        if (_config is null)
+        {
+            return;
+        }
+
+        using var snap = _sharedImage.GetSnapshot();
+        if (snap is null || snap.Empty())
+        {
+            return;
+        }
+
+        var sc = _config.SurfaceCompares.FirstOrDefault(x => string.Equals(x.Name, surfaceCompareName, StringComparison.OrdinalIgnoreCase));
+        if (sc is null)
+        {
+            return;
+        }
+
+        var templateDir = Path.Combine(Path.GetFullPath(_storeOptions.ConfigRootDirectory), _config.ProductCode, "templates");
+        Directory.CreateDirectory(templateDir);
+        var fileName = Path.Combine(templateDir, $"{surfaceCompareName.ToLowerInvariant()}_sc.png");
+
+        var r = new OpenCvSharp.Rect(roi.X, roi.Y, roi.Width, roi.Height)
+            .Intersect(new OpenCvSharp.Rect(0, 0, snap.Width, snap.Height));
+        if (r.Width <= 0 || r.Height <= 0)
+        {
+            return;
+        }
+
+        using var crop = new Mat(snap, r);
+        Mat gray = crop;
+        using var grayOwned = crop.Channels() == 1 ? null : crop.CvtColor(ColorConversionCodes.BGR2GRAY);
+        if (grayOwned is not null)
+        {
+            gray = grayOwned;
+        }
+
+        Cv2.ImWrite(fileName, gray);
+        sc.TemplateImageFile = fileName;
+        RequestAutoSave();
     }
 
     public string? EdgePair_RefA
@@ -1094,75 +1506,147 @@ public sealed partial class ToolEditorViewModel : ObservableObject
             return;
         }
 
-        if (!string.Equals(node.Type, "BlobDetection", StringComparison.OrdinalIgnoreCase))
-        {
-            return;
-        }
 
-        var def = _config.BlobDetections.FirstOrDefault(x => string.Equals(x.Name, node.RefName, StringComparison.OrdinalIgnoreCase));
-        if (def is null || def.InspectRoi.Width <= 0 || def.InspectRoi.Height <= 0)
+        if (string.Equals(node.Type, "BlobDetection", StringComparison.OrdinalIgnoreCase))
         {
-            return;
-        }
-
-        var r = run.BlobDetections.FirstOrDefault(x => string.Equals(x.Name, node.RefName, StringComparison.OrdinalIgnoreCase));
-        if (r is null)
-        {
-            return;
-        }
-
-        dst.Add(new OverlayPointItem
-        {
-            X = def.InspectRoi.X + 2,
-            Y = def.InspectRoi.Y + 2,
-            Radius = 1.0,
-            Stroke = Brushes.Gold,
-            Label = $"{def.Name}: {r.Count}"
-        });
-
-        if (r.Blobs is null || r.Blobs.Count == 0)
-        {
-            return;
-        }
-
-        var n = Math.Min(r.Blobs.Count, MaxBlobOverlayCount);
-        for (var i = 0; i < n; i++)
-        {
-            var bi = r.Blobs[i];
-            var br = bi.BoundingBox;
-            if (br.Width > 0 && br.Height > 0)
+            var def = _config.BlobDetections.FirstOrDefault(x => string.Equals(x.Name, node.RefName, StringComparison.OrdinalIgnoreCase));
+            if (def is null || def.InspectRoi.Width <= 0 || def.InspectRoi.Height <= 0)
             {
-                dst.Add(new OverlayRectItem
+                return;
+            }
+
+            var r = run.BlobDetections.FirstOrDefault(x => string.Equals(x.Name, node.RefName, StringComparison.OrdinalIgnoreCase));
+            if (r is null)
+            {
+                return;
+            }
+
+            dst.Add(new OverlayPointItem
+            {
+                X = def.InspectRoi.X + 2,
+                Y = def.InspectRoi.Y + 2,
+                Radius = 1.0,
+                Stroke = Brushes.Gold,
+                Label = $"{def.Name}: {r.Count}"
+            });
+
+            if (r.Blobs is null || r.Blobs.Count == 0)
+            {
+                return;
+            }
+
+            var n = Math.Min(r.Blobs.Count, MaxBlobOverlayCount);
+            for (var i = 0; i < n; i++)
+            {
+                var bi = r.Blobs[i];
+                var br = bi.BoundingBox;
+                if (br.Width > 0 && br.Height > 0)
                 {
-                    X = br.X,
-                    Y = br.Y,
-                    Width = br.Width,
-                    Height = br.Height,
+                    dst.Add(new OverlayRectItem
+                    {
+                        X = br.X,
+                        Y = br.Y,
+                        Width = br.Width,
+                        Height = br.Height,
+                        Stroke = Brushes.Gold,
+                        Label = string.Empty
+                    });
+                }
+
+                dst.Add(new OverlayPointItem
+                {
+                    X = bi.Centroid.X,
+                    Y = bi.Centroid.Y,
+                    Radius = 3.0,
                     Stroke = Brushes.Gold,
                     Label = string.Empty
                 });
             }
 
-            dst.Add(new OverlayPointItem
+            if (r.Blobs.Count > MaxBlobOverlayCount)
             {
-                X = bi.Centroid.X,
-                Y = bi.Centroid.Y,
-                Radius = 3.0,
-                Stroke = Brushes.Gold,
-                Label = string.Empty
-            });
+                dst.Add(new OverlayPointItem
+                {
+                    X = def.InspectRoi.X + 2,
+                    Y = def.InspectRoi.Y + 16,
+                    Radius = 1.0,
+                    Stroke = Brushes.Gold,
+                    Label = $"+{r.Blobs.Count - MaxBlobOverlayCount}"
+                });
+            }
+
+            return;
         }
 
-        if (r.Blobs.Count > MaxBlobOverlayCount)
+        if (string.Equals(node.Type, "SurfaceCompare", StringComparison.OrdinalIgnoreCase))
         {
+            var def = _config.SurfaceCompares.FirstOrDefault(x => string.Equals(x.Name, node.RefName, StringComparison.OrdinalIgnoreCase));
+            if (def is null || def.InspectRoi.Width <= 0 || def.InspectRoi.Height <= 0)
+            {
+                return;
+            }
+
+            var r = run.SurfaceCompares.FirstOrDefault(x => string.Equals(x.Name, node.RefName, StringComparison.OrdinalIgnoreCase));
+            if (r is null)
+            {
+                return;
+            }
+
             dst.Add(new OverlayPointItem
             {
                 X = def.InspectRoi.X + 2,
-                Y = def.InspectRoi.Y + 16,
+                Y = def.InspectRoi.Y + 2,
                 Radius = 1.0,
-                Stroke = Brushes.Gold,
-                Label = $"+{r.Blobs.Count - MaxBlobOverlayCount}"
+                Stroke = Brushes.DeepSkyBlue,
+                Label = $"{def.Name}: {r.Count} / {r.MaxArea:0}"
             });
+
+            if (r.Defects is null || r.Defects.Count == 0)
+            {
+                return;
+            }
+
+            var n = Math.Min(r.Defects.Count, MaxBlobOverlayCount);
+            for (var i = 0; i < n; i++)
+            {
+                var d = r.Defects[i];
+                var br = d.BoundingBox;
+                if (br.Width > 0 && br.Height > 0)
+                {
+                    dst.Add(new OverlayRectItem
+                    {
+                        X = br.X,
+                        Y = br.Y,
+                        Width = br.Width,
+                        Height = br.Height,
+                        Stroke = Brushes.DeepSkyBlue,
+                        Label = string.Empty
+                    });
+                }
+
+                dst.Add(new OverlayPointItem
+                {
+                    X = d.Centroid.X,
+                    Y = d.Centroid.Y,
+                    Radius = 3.0,
+                    Stroke = Brushes.DeepSkyBlue,
+                    Label = string.Empty
+                });
+            }
+
+            if (r.Defects.Count > MaxBlobOverlayCount)
+            {
+                dst.Add(new OverlayPointItem
+                {
+                    X = def.InspectRoi.X + 2,
+                    Y = def.InspectRoi.Y + 16,
+                    Radius = 1.0,
+                    Stroke = Brushes.DeepSkyBlue,
+                    Label = $"+{r.Defects.Count - MaxBlobOverlayCount}"
+                });
+            }
+
+            return;
         }
     }
 
@@ -1327,6 +1811,14 @@ public sealed partial class ToolEditorViewModel : ObservableObject
                 RequestAutoSave();
                 return;
             }
+
+            if (kind.StartsWith("SC", StringComparison.OrdinalIgnoreCase))
+            {
+                ApplyRoiForLabel(label, roi);
+                RunFlow();
+                RequestAutoSave();
+                return;
+            }
         }
 
         RunFlow();
@@ -1383,8 +1875,18 @@ public sealed partial class ToolEditorViewModel : ObservableObject
             }
         }
 
+        void NormalizeSurfaceCompare(SurfaceCompareDefinition sc)
+        {
+            if (string.IsNullOrWhiteSpace(sc.TemplateImageFile)) return;
+            if (!Path.IsPathRooted(sc.TemplateImageFile))
+            {
+                sc.TemplateImageFile = Path.GetFullPath(Path.Combine(templateDir, sc.TemplateImageFile));
+            }
+        }
+
         NormalizePoint(config.Origin);
         foreach (var p in config.Points) NormalizePoint(p);
+        foreach (var sc in config.SurfaceCompares) NormalizeSurfaceCompare(sc);
     }
 
     private void TrySaveTemplateImage(string name, Roi roi, bool isOrigin, string? pointName)
@@ -1603,6 +2105,8 @@ public sealed partial class ToolEditorViewModel : ObservableObject
 
     public ICommand RoiDeletedCommand { get; }
 
+    public ICommand PointClickedCommand { get; }
+
     private VisionConfig? _config;
 
     private InspectionResult? _lastRun;
@@ -1785,23 +2289,29 @@ public sealed partial class ToolEditorViewModel : ObservableObject
     {
         OnPropertyChanged(nameof(IsLineNode));
         OnPropertyChanged(nameof(IsCaliperNode));
-        OnPropertyChanged(nameof(IsLinePairDetectionNode));
-        OnPropertyChanged(nameof(IsEdgePairDetectNode));
-        OnPropertyChanged(nameof(IsCircleFinderNode));
-        OnPropertyChanged(nameof(IsDiameterNode));
-        OnPropertyChanged(nameof(IsEdgePairNode));
+        OnPropertyChanged(nameof(IsPointNode));
+        OnPropertyChanged(nameof(IsAnyDistanceNode));
         OnPropertyChanged(nameof(IsDistanceNode));
         OnPropertyChanged(nameof(IsLineLineDistanceNode));
         OnPropertyChanged(nameof(IsPointLineDistanceNode));
         OnPropertyChanged(nameof(IsAngleNode));
-        OnPropertyChanged(nameof(IsAnyDistanceNode));
+        OnPropertyChanged(nameof(IsEdgePairNode));
+        OnPropertyChanged(nameof(IsEdgePairDetectNode));
+        OnPropertyChanged(nameof(IsDiameterNode));
         OnPropertyChanged(nameof(IsConditionNode));
-        OnPropertyChanged(nameof(IsPreprocessNode));
         OnPropertyChanged(nameof(IsBlobDetectionNode));
+        OnPropertyChanged(nameof(IsSurfaceCompareNode));
+
+        OnPropertyChanged(nameof(Point_OffsetX));
+        OnPropertyChanged(nameof(Point_OffsetY));
+        OnPropertyChanged(nameof(IsBlobDetectionNode));
+        OnPropertyChanged(nameof(IsSurfaceCompareNode));
         OnPropertyChanged(nameof(IsCodeDetectionNode));
 
         OnPropertyChanged(nameof(AvailableCircleFindAlgorithms));
         OnPropertyChanged(nameof(AvailableCircleFinderNames));
+
+        OnPropertyChanged(nameof(AvailableIlluminationCorrectionPresets));
 
         OnPropertyChanged(nameof(AvailablePointNames));
         OnPropertyChanged(nameof(AvailableDistanceRefNames));
@@ -1826,6 +2336,10 @@ public sealed partial class ToolEditorViewModel : ObservableObject
         OnPropertyChanged(nameof(Condition_Expression));
 
         OnPropertyChanged(nameof(UseGray));
+        OnPropertyChanged(nameof(IlluminationCorrection));
+        OnPropertyChanged(nameof(IlluminationKernel));
+        OnPropertyChanged(nameof(ClaheClipLimit));
+        OnPropertyChanged(nameof(ClaheTileGrid));
         OnPropertyChanged(nameof(UseGaussianBlur));
         OnPropertyChanged(nameof(BlurKernel));
         OnPropertyChanged(nameof(UseThreshold));
@@ -1887,6 +2401,89 @@ public sealed partial class ToolEditorViewModel : ObservableObject
     public bool IsLineNode => string.Equals(SelectedNode?.Type, "Line", StringComparison.OrdinalIgnoreCase);
 
     public bool IsCaliperNode => string.Equals(SelectedNode?.Type, "Caliper", StringComparison.OrdinalIgnoreCase);
+
+    public bool IsPointNode => string.Equals(SelectedNode?.Type, "Point", StringComparison.OrdinalIgnoreCase);
+
+    private PointDefinition? SelectedPointDef()
+    {
+        if (_config is null || SelectedNode is null) return null;
+        if (!string.Equals(SelectedNode.Type, "Point", StringComparison.OrdinalIgnoreCase)) return null;
+        return _config.Points.FirstOrDefault(x => string.Equals(x.Name, SelectedNode.RefName, StringComparison.OrdinalIgnoreCase));
+    }
+
+    public double Point_OffsetX
+    {
+        get => SelectedPointDef()?.OffsetPx.X ?? 0.0;
+        set
+        {
+            var def = SelectedPointDef();
+            if (def is null) return;
+            if (Math.Abs(def.OffsetPx.X - value) < 0.0000001) return;
+            def.OffsetPx.X = value;
+            RefreshPreviews();
+            RequestAutoSave();
+            OnPropertyChanged();
+        }
+    }
+
+    public double Point_OffsetY
+    {
+        get => SelectedPointDef()?.OffsetPx.Y ?? 0.0;
+        set
+        {
+            var def = SelectedPointDef();
+            if (def is null) return;
+            if (Math.Abs(def.OffsetPx.Y - value) < 0.0000001) return;
+            def.OffsetPx.Y = value;
+            RefreshPreviews();
+            RequestAutoSave();
+            OnPropertyChanged();
+        }
+    }
+
+    private void OnPointClicked(PointClickSelection? click)
+    {
+        if (click is null)
+        {
+            return;
+        }
+
+        if (_config is null || SelectedNode is null)
+        {
+            return;
+        }
+
+        if (!string.Equals(SelectedNode.Type, "Point", StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        if (!click.Modifiers.HasFlag(ModifierKeys.Control) || !click.Modifiers.HasFlag(ModifierKeys.Shift))
+        {
+            return;
+        }
+
+        var p = _config.Points.FirstOrDefault(x => string.Equals(x.Name, SelectedNode.RefName, StringComparison.OrdinalIgnoreCase));
+        if (p is null)
+        {
+            return;
+        }
+
+        if (p.TemplateRoi.Width <= 0 || p.TemplateRoi.Height <= 0)
+        {
+            return;
+        }
+
+        var cx = p.TemplateRoi.X + p.TemplateRoi.Width / 2.0;
+        var cy = p.TemplateRoi.Y + p.TemplateRoi.Height / 2.0;
+
+        p.OffsetPx.X = click.X - cx;
+        p.OffsetPx.Y = click.Y - cy;
+
+        RaiseToolPropertyPanelsChanged();
+        RefreshPreviews();
+        RequestAutoSave();
+    }
 
     public bool IsDistanceNode => string.Equals(SelectedNode?.Type, "Distance", StringComparison.OrdinalIgnoreCase);
 
@@ -2715,6 +3312,9 @@ public sealed partial class ToolEditorViewModel : ObservableObject
 
     public ObservableCollection<CaliperOrientation> AvailableCaliperOrientations { get; }
         = new ObservableCollection<CaliperOrientation>((CaliperOrientation[])Enum.GetValues(typeof(CaliperOrientation)));
+
+    public ObservableCollection<IlluminationCorrectionPreset> AvailableIlluminationCorrectionPresets { get; }
+        = new ObservableCollection<IlluminationCorrectionPreset>((IlluminationCorrectionPreset[])Enum.GetValues(typeof(IlluminationCorrectionPreset)));
 
     public ObservableCollection<EdgePolarity> AvailableEdgePolarities { get; }
         = new ObservableCollection<EdgePolarity>((EdgePolarity[])Enum.GetValues(typeof(EdgePolarity)));
@@ -4070,6 +4670,11 @@ public sealed partial class ToolEditorViewModel : ObservableObject
                 _config.BlobDetections.RemoveAll(x => string.Equals(x.Name, toRemove.RefName, StringComparison.OrdinalIgnoreCase));
             }
 
+            if (string.Equals(toRemove.Type, "SurfaceCompare", StringComparison.OrdinalIgnoreCase))
+            {
+                _config.SurfaceCompares.RemoveAll(x => string.Equals(x.Name, toRemove.RefName, StringComparison.OrdinalIgnoreCase));
+            }
+
             if (string.Equals(toRemove.Type, "LinePairDetection", StringComparison.OrdinalIgnoreCase))
             {
                 _config.LinePairDetections.RemoveAll(x => string.Equals(x.Name, toRemove.RefName, StringComparison.OrdinalIgnoreCase));
@@ -4258,6 +4863,19 @@ public sealed partial class ToolEditorViewModel : ObservableObject
                 var def = new BlobDetectionDefinition { Name = node.RefName };
                 def.InspectRoi = DefaultRoi();
                 _config.BlobDetections.Add(def);
+            }
+            return;
+        }
+
+        if (string.Equals(node.Type, "SurfaceCompare", StringComparison.OrdinalIgnoreCase))
+        {
+            var existed = _config.SurfaceCompares.Any(x => string.Equals(x.Name, node.RefName, StringComparison.OrdinalIgnoreCase));
+            if (!existed)
+            {
+                var def = new SurfaceCompareDefinition { Name = node.RefName };
+                def.InspectRoi = DefaultRoi();
+                def.TemplateRoi = DefaultRoi();
+                _config.SurfaceCompares.Add(def);
             }
             return;
         }
@@ -4473,6 +5091,11 @@ public sealed partial class ToolEditorViewModel : ObservableObject
         {
             baseName = "BLD";
             exists = n => _config.BlobDetections.Any(x => string.Equals(x.Name, n, StringComparison.OrdinalIgnoreCase));
+        }
+        else if (string.Equals(type, "SurfaceCompare", StringComparison.OrdinalIgnoreCase))
+        {
+            baseName = "SC";
+            exists = n => _config.SurfaceCompares.Any(x => string.Equals(x.Name, n, StringComparison.OrdinalIgnoreCase));
         }
         else if (string.Equals(type, "CodeDetection", StringComparison.OrdinalIgnoreCase))
         {
@@ -4936,38 +5559,40 @@ public sealed partial class ToolEditorViewModel : ObservableObject
             return;
         }
 
+        var config = _config;
+
         if (!ShowRoisInFinalPreview)
         {
             return;
         }
 
-        if (_config.Origin.SearchRoi.Width > 0 && _config.Origin.SearchRoi.Height > 0)
+        if (config.Origin.SearchRoi.Width > 0 && config.Origin.SearchRoi.Height > 0)
         {
             dst.Add(new OverlayRectItem
             {
-                X = _config.Origin.SearchRoi.X,
-                Y = _config.Origin.SearchRoi.Y,
-                Width = _config.Origin.SearchRoi.Width,
-                Height = _config.Origin.SearchRoi.Height,
+                X = config.Origin.SearchRoi.X,
+                Y = config.Origin.SearchRoi.Y,
+                Width = config.Origin.SearchRoi.Width,
+                Height = config.Origin.SearchRoi.Height,
                 Stroke = Brushes.Lime,
                 Label = "Origin S"
             });
         }
 
-        if (_config.Origin.TemplateRoi.Width > 0 && _config.Origin.TemplateRoi.Height > 0)
+        if (config.Origin.TemplateRoi.Width > 0 && config.Origin.TemplateRoi.Height > 0)
         {
             dst.Add(new OverlayRectItem
             {
-                X = _config.Origin.TemplateRoi.X,
-                Y = _config.Origin.TemplateRoi.Y,
-                Width = _config.Origin.TemplateRoi.Width,
-                Height = _config.Origin.TemplateRoi.Height,
+                X = config.Origin.TemplateRoi.X,
+                Y = config.Origin.TemplateRoi.Y,
+                Width = config.Origin.TemplateRoi.Width,
+                Height = config.Origin.TemplateRoi.Height,
                 Stroke = Brushes.Lime,
                 Label = "Origin T"
             });
         }
 
-        foreach (var p in _config.Points)
+        foreach (var p in config.Points)
         {
             if (p.SearchRoi.Width <= 0 || p.SearchRoi.Height <= 0)
             {
@@ -4998,7 +5623,7 @@ public sealed partial class ToolEditorViewModel : ObservableObject
             }
         }
 
-        foreach (var l in _config.Lines)
+        foreach (var l in config.Lines)
         {
             if (l.SearchRoi.Width <= 0 || l.SearchRoi.Height <= 0)
             {
@@ -5016,7 +5641,7 @@ public sealed partial class ToolEditorViewModel : ObservableObject
             });
         }
 
-        foreach (var c in _config.Calipers)
+        foreach (var c in config.Calipers)
         {
             if (c.SearchRoi.Width <= 0 || c.SearchRoi.Height <= 0)
             {
@@ -5132,6 +5757,83 @@ public sealed partial class ToolEditorViewModel : ObservableObject
             });
         }
 
+        void AddSurfaceCompareRoi(string surfaceCompareName)
+        {
+            var sc = config.SurfaceCompares.FirstOrDefault(x => string.Equals(x.Name, surfaceCompareName, StringComparison.OrdinalIgnoreCase));
+            if (sc is null)
+            {
+                return;
+            }
+
+            if (sc.InspectRoi.Width > 0 && sc.InspectRoi.Height > 0)
+            {
+                dst.Add(new OverlayRectItem
+                {
+                    X = sc.InspectRoi.X,
+                    Y = sc.InspectRoi.Y,
+                    Width = sc.InspectRoi.Width,
+                    Height = sc.InspectRoi.Height,
+                    Stroke = Brushes.DeepSkyBlue,
+                    Label = $"{sc.Name} SC"
+                });
+            }
+
+            if (sc.TemplateRoi.Width > 0 && sc.TemplateRoi.Height > 0)
+            {
+                dst.Add(new OverlayRectItem
+                {
+                    X = sc.TemplateRoi.X,
+                    Y = sc.TemplateRoi.Y,
+                    Width = sc.TemplateRoi.Width,
+                    Height = sc.TemplateRoi.Height,
+                    Stroke = Brushes.DeepSkyBlue,
+                    Label = $"{sc.Name} SCT"
+                });
+            }
+
+            if (sc.Rois is not null && sc.Rois.Count > 0)
+            {
+                for (var i = 0; i < sc.Rois.Count; i++)
+                {
+                    var rr = sc.Rois[i];
+                    if (rr.Roi.Width <= 0 || rr.Roi.Height <= 0)
+                    {
+                        continue;
+                    }
+
+                    if (rr.Mode == BlobRoiMode.Exclude)
+                    {
+                        dst.Add(new OverlayRectItem
+                        {
+                            X = rr.Roi.X,
+                            Y = rr.Roi.Y,
+                            Width = rr.Roi.Width,
+                            Height = rr.Roi.Height,
+                            Stroke = Brushes.Red,
+                            Label = $"{sc.Name} SCX{i + 1}"
+                        });
+                    }
+                    else
+                    {
+                        dst.Add(new OverlayRectItem
+                        {
+                            X = rr.Roi.X,
+                            Y = rr.Roi.Y,
+                            Width = rr.Roi.Width,
+                            Height = rr.Roi.Height,
+                            Stroke = Brushes.DeepSkyBlue,
+                            Label = $"{sc.Name} SC{i + 1}"
+                        });
+                    }
+                }
+            }
+        }
+
+        foreach (var sc in config.SurfaceCompares)
+        {
+            AddSurfaceCompareRoi(sc.Name);
+        }
+
         if (_config.DefectConfig.InspectRoi.Width > 0 && _config.DefectConfig.InspectRoi.Height > 0)
         {
             dst.Add(new OverlayRectItem
@@ -5152,6 +5854,8 @@ public sealed partial class ToolEditorViewModel : ObservableObject
         {
             return;
         }
+
+        var config = _config;
 
         var showRois = ShowRoisInSelectedPreview;
 
@@ -5283,7 +5987,7 @@ public sealed partial class ToolEditorViewModel : ObservableObject
 
         void AddBlobRoi(string blobName)
         {
-            var b = _config.BlobDetections.FirstOrDefault(x => string.Equals(x.Name, blobName, StringComparison.OrdinalIgnoreCase));
+            var b = config.BlobDetections.FirstOrDefault(x => string.Equals(x.Name, blobName, StringComparison.OrdinalIgnoreCase));
             if (b is null)
             {
                 return;
@@ -5359,6 +6063,83 @@ public sealed partial class ToolEditorViewModel : ObservableObject
                     Stroke = Brushes.Gold,
                     Label = $"{b.Name} B"
                 });
+            }
+        }
+
+        void AddSurfaceCompareRoi(string surfaceCompareName)
+        {
+            var sc = config.SurfaceCompares.FirstOrDefault(x => string.Equals(x.Name, surfaceCompareName, StringComparison.OrdinalIgnoreCase));
+            if (sc is null)
+            {
+                return;
+            }
+
+            if (!showRois)
+            {
+                return;
+            }
+
+            if (sc.InspectRoi.Width > 0 && sc.InspectRoi.Height > 0)
+            {
+                dst.Add(new OverlayRectItem
+                {
+                    X = sc.InspectRoi.X,
+                    Y = sc.InspectRoi.Y,
+                    Width = sc.InspectRoi.Width,
+                    Height = sc.InspectRoi.Height,
+                    Stroke = Brushes.DeepSkyBlue,
+                    Label = $"{sc.Name} SC"
+                });
+            }
+
+            if (sc.TemplateRoi.Width > 0 && sc.TemplateRoi.Height > 0)
+            {
+                dst.Add(new OverlayRectItem
+                {
+                    X = sc.TemplateRoi.X,
+                    Y = sc.TemplateRoi.Y,
+                    Width = sc.TemplateRoi.Width,
+                    Height = sc.TemplateRoi.Height,
+                    Stroke = Brushes.DeepSkyBlue,
+                    Label = $"{sc.Name} SCT"
+                });
+            }
+
+            if (sc.Rois is not null && sc.Rois.Count > 0)
+            {
+                for (var i = 0; i < sc.Rois.Count; i++)
+                {
+                    var rr = sc.Rois[i];
+                    if (rr.Roi.Width <= 0 || rr.Roi.Height <= 0)
+                    {
+                        continue;
+                    }
+
+                    if (rr.Mode == BlobRoiMode.Exclude)
+                    {
+                        dst.Add(new OverlayRectItem
+                        {
+                            X = rr.Roi.X,
+                            Y = rr.Roi.Y,
+                            Width = rr.Roi.Width,
+                            Height = rr.Roi.Height,
+                            Stroke = Brushes.Red,
+                            Label = $"{sc.Name} SCX{i + 1}"
+                        });
+                    }
+                    else
+                    {
+                        dst.Add(new OverlayRectItem
+                        {
+                            X = rr.Roi.X,
+                            Y = rr.Roi.Y,
+                            Width = rr.Roi.Width,
+                            Height = rr.Roi.Height,
+                            Stroke = Brushes.DeepSkyBlue,
+                            Label = $"{sc.Name} SC{i + 1}"
+                        });
+                    }
+                }
             }
         }
 
@@ -5512,6 +6293,12 @@ public sealed partial class ToolEditorViewModel : ObservableObject
         if (string.Equals(node.Type, "BlobDetection", StringComparison.OrdinalIgnoreCase))
         {
             if (showRois) AddBlobRoi(node.RefName);
+            return;
+        }
+
+        if (string.Equals(node.Type, "SurfaceCompare", StringComparison.OrdinalIgnoreCase))
+        {
+            if (showRois) AddSurfaceCompareRoi(node.RefName);
             return;
         }
 
@@ -6001,8 +6788,8 @@ public sealed partial class ToolEditorViewModel : ObservableObject
 
             dst.Add(new OverlayPointItem
             {
-                X = mr.Width > 0 && mr.Height > 0 ? mr.X + mr.Width / 2.0 : p.Position.X,
-                Y = mr.Width > 0 && mr.Height > 0 ? mr.Y + mr.Height / 2.0 : p.Position.Y,
+                X = p.Position.X,
+                Y = p.Position.Y,
                 Stroke = p.Pass ? Brushes.DeepSkyBlue : Brushes.Red,
                 Label = p.Name
             });
@@ -6474,13 +7261,19 @@ public sealed partial class ToolEditorViewModel : ObservableObject
                 });
             }
 
-            dst.Add(new OverlayPointItem
+            if (p.TemplateRoi.Width > 0 && p.TemplateRoi.Height > 0)
             {
-                X = p.WorldPosition.X,
-                Y = p.WorldPosition.Y,
-                Stroke = Brushes.DeepSkyBlue,
-                Label = p.Name
-            });
+                var cx = p.TemplateRoi.X + p.TemplateRoi.Width / 2.0;
+                var cy = p.TemplateRoi.Y + p.TemplateRoi.Height / 2.0;
+
+                dst.Add(new OverlayPointItem
+                {
+                    X = cx + p.OffsetPx.X,
+                    Y = cy + p.OffsetPx.Y,
+                    Stroke = Brushes.DeepSkyBlue,
+                    Label = p.Name
+                });
+            }
 
             return;
         }

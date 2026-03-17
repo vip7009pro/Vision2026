@@ -49,10 +49,15 @@
                         <RowDefinition Height="2*" />
                     </Grid.RowDefinitions>
 
-                    <StackPanel>
-                        <TextBlock FontWeight="Bold" Text="Toolbox" Margin="0,0,0,6" />
-                        <ListBox x:Name="ToolboxList" ItemsSource="{Binding ToolboxItems}" PreviewMouseMove="ToolboxList_PreviewMouseMove" />
-                    </StackPanel>
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                        </Grid.RowDefinitions>
+
+                        <TextBlock Grid.Row="0" FontWeight="Bold" Text="Toolbox" Margin="0,0,0,6" />
+                        <ListBox Grid.Row="1" x:Name="ToolboxList" ItemsSource="{Binding ToolboxItems}" PreviewMouseMove="ToolboxList_PreviewMouseMove" />
+                    </Grid>
 
                     <Border Grid.Row="1" BorderBrush="#EEE" BorderThickness="1,1,0,0" Padding="8" Margin="0,8,0,0">
                         <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
@@ -70,6 +75,34 @@
                             <TextBlock Text="Preprocess" FontWeight="SemiBold" Margin="0,8,0,6" />
 
                             <CheckBox Content="Preview" IsChecked="{Binding PreprocessPreviewEnabled, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,6" />
+
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                                <TextBlock Text="Illum" Width="60" VerticalAlignment="Center" />
+                                <ComboBox Width="160" ItemsSource="{Binding AvailableIlluminationCorrectionPresets}" SelectedItem="{Binding IlluminationCorrection, UpdateSourceTrigger=PropertyChanged}" />
+                            </StackPanel>
+
+                            <StackPanel Margin="0,0,0,6">
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,2">
+                                    <TextBlock Text="Illum K" Width="60" VerticalAlignment="Center" />
+                                    <TextBlock Text="{Binding IlluminationKernel}" Width="40" />
+                                </StackPanel>
+                                <Slider Minimum="3" Maximum="401" Value="{Binding IlluminationKernel, UpdateSourceTrigger=PropertyChanged}" IsSnapToTickEnabled="True" TickFrequency="2" />
+                            </StackPanel>
+
+                            <StackPanel Margin="0,0,0,2">
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,2">
+                                    <TextBlock Text="CLAHE" Width="60" VerticalAlignment="Center" />
+                                    <TextBlock Text="{Binding ClaheClipLimit}" Width="60" />
+                                </StackPanel>
+                                <Slider Minimum="0.1" Maximum="10" Value="{Binding ClaheClipLimit, UpdateSourceTrigger=PropertyChanged}" TickFrequency="0.1" />
+                            </StackPanel>
+                            <StackPanel Margin="0,0,0,6">
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,2">
+                                    <TextBlock Text="Tile" Width="60" VerticalAlignment="Center" />
+                                    <TextBlock Text="{Binding ClaheTileGrid}" Width="40" />
+                                </StackPanel>
+                                <Slider Minimum="2" Maximum="32" Value="{Binding ClaheTileGrid, UpdateSourceTrigger=PropertyChanged}" IsSnapToTickEnabled="True" TickFrequency="1" />
+                            </StackPanel>
 
                             <CheckBox Content="Gray" IsChecked="{Binding UseGray, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,2" />
                             <CheckBox Content="Gaussian Blur" IsChecked="{Binding UseGaussianBlur, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,2" />
@@ -113,6 +146,21 @@
                                 <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
                                     <TextBlock Text="Pre" Width="60" VerticalAlignment="Center" />
                                     <ComboBox Width="160" ItemsSource="{Binding AvailablePreprocessChoices}" SelectedItem="{Binding SelectedToolPreprocessChoice, UpdateSourceTrigger=PropertyChanged}" />
+                                </StackPanel>
+                            </StackPanel>
+
+                            <StackPanel Visibility="{Binding IsPointNode, Converter={StaticResource BoolToVis}}">
+                                <TextBlock Text="Point Params" FontWeight="SemiBold" Margin="0,8,0,6" />
+
+                                <TextBlock Text="Ctrl+Shift+Click to set offset" Margin="0,0,0,6" />
+
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,2">
+                                    <TextBlock Text="OffX" Width="60" VerticalAlignment="Center" />
+                                    <TextBox Width="80" Text="{Binding Point_OffsetX, UpdateSourceTrigger=PropertyChanged, Delay=150}" />
+                                </StackPanel>
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                                    <TextBlock Text="OffY" Width="60" VerticalAlignment="Center" />
+                                    <TextBox Width="80" Text="{Binding Point_OffsetY, UpdateSourceTrigger=PropertyChanged, Delay=150}" />
                                 </StackPanel>
                             </StackPanel>
 
@@ -352,6 +400,38 @@
                                 <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
                                     <TextBlock Text="Count" Width="60" VerticalAlignment="Center" />
                                     <TextBlock Text="{Binding Blob_LastRunCount, TargetNullValue='-'}" Width="80" />
+                                </StackPanel>
+                            </StackPanel>
+
+                            <StackPanel Visibility="{Binding IsSurfaceCompareNode, Converter={StaticResource BoolToVis}}">
+                                <TextBlock Text="Surface Compare" FontWeight="SemiBold" Margin="0,8,0,6" />
+
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                                    <TextBlock Text="Thr" Width="60" VerticalAlignment="Center" />
+                                    <TextBox Width="80" Text="{Binding SurfaceCompare_DiffThreshold, UpdateSourceTrigger=PropertyChanged, Delay=150}" />
+                                </StackPanel>
+
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                                    <TextBlock Text="Morph" Width="60" VerticalAlignment="Center" />
+                                    <TextBox Width="80" Text="{Binding SurfaceCompare_MorphKernel, UpdateSourceTrigger=PropertyChanged, Delay=150}" />
+                                </StackPanel>
+
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,2">
+                                    <TextBlock Text="MinA" Width="60" VerticalAlignment="Center" />
+                                    <TextBox Width="80" Text="{Binding SurfaceCompare_MinBlobArea, UpdateSourceTrigger=PropertyChanged, Delay=150}" />
+                                </StackPanel>
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                                    <TextBlock Text="MaxA" Width="60" VerticalAlignment="Center" />
+                                    <TextBox Width="80" Text="{Binding SurfaceCompare_MaxBlobArea, UpdateSourceTrigger=PropertyChanged, Delay=150}" />
+                                </StackPanel>
+
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,2">
+                                    <TextBlock Text="Count" Width="60" VerticalAlignment="Center" />
+                                    <TextBlock Text="{Binding SurfaceCompare_LastRunCount, TargetNullValue='-'}" Width="80" />
+                                </StackPanel>
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                                    <TextBlock Text="MaxArea" Width="60" VerticalAlignment="Center" />
+                                    <TextBlock Text="{Binding SurfaceCompare_LastRunMaxArea, TargetNullValue='-'}" Width="80" />
                                 </StackPanel>
                             </StackPanel>
 
@@ -771,6 +851,7 @@
                                                   OverlayItems="{Binding SelectedNodeOverlayItems}"
                                                   EnableRoiEditing="True"
                                                   RoiSelectedCommand="{Binding RoiSelectedCommand}"
+                                                  PointClickedCommand="{Binding PointClickedCommand}"
                                                   RoiEditedCommand="{Binding RoiEditedCommand}"
                                                   RoiDeletedCommand="{Binding RoiDeletedCommand}" />
                     </Border>

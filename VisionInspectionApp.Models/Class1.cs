@@ -156,6 +156,8 @@ public sealed class VisionConfig
 
     public List<CodeDetectionDefinition> CodeDetections { get; set; } = new();
 
+    public List<SurfaceCompareDefinition> SurfaceCompares { get; set; } = new();
+
     public DefectInspectionConfig DefectConfig { get; set; } = new();
 }
 
@@ -295,6 +297,34 @@ public sealed class BlobRoiDefinition
     public BlobRoiMode Mode { get; set; } = BlobRoiMode.Include;
 }
 
+public sealed class SurfaceCompareDefinition
+{
+    public string Name { get; set; } = string.Empty;
+
+    public Roi TemplateRoi { get; set; } = new();
+
+    public string TemplateImageFile { get; set; } = string.Empty;
+
+    public Roi InspectRoi { get; set; } = new();
+
+    public List<SurfaceCompareRoiDefinition> Rois { get; set; } = new();
+
+    public int DiffThreshold { get; set; } = 25;
+
+    public int MinBlobArea { get; set; } = 10;
+
+    public int MaxBlobArea { get; set; } = 5000;
+
+    public int MorphKernel { get; set; } = 3;
+}
+
+public sealed class SurfaceCompareRoiDefinition
+{
+    public Roi Roi { get; set; } = new();
+
+    public BlobRoiMode Mode { get; set; } = BlobRoiMode.Include;
+}
+
 public sealed class ToolGraph
 {
     public List<ToolGraphNode> Nodes { get; set; } = new();
@@ -330,6 +360,14 @@ public sealed class ToolGraphEdge
 
 public sealed class PreprocessSettings
 {
+    public IlluminationCorrectionPreset IlluminationCorrection { get; set; } = IlluminationCorrectionPreset.None;
+
+    public int IlluminationKernel { get; set; } = 51;
+
+    public double ClaheClipLimit { get; set; } = 2.0;
+
+    public int ClaheTileGrid { get; set; } = 8;
+
     public bool UseGray { get; set; } = true;
 
     public bool UseGaussianBlur { get; set; }
@@ -343,6 +381,14 @@ public sealed class PreprocessSettings
     public int Canny2 { get; set; } = 150;
 
     public bool UseMorphology { get; set; }
+}
+
+public enum IlluminationCorrectionPreset
+{
+    None = 0,
+    BackgroundSubtract = 1,
+    FlatFieldNormalize = 2,
+    Clahe = 3
 }
 
 public sealed class PointDefinition
@@ -360,6 +406,8 @@ public sealed class PointDefinition
     public double MatchScoreThreshold { get; set; } = 0.8;
 
     public Point2dModel WorldPosition { get; set; } = new();
+
+    public Point2dModel OffsetPx { get; set; } = new();
 }
 
 public sealed class ShapeModelDefinition

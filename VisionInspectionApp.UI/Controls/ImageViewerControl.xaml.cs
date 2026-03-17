@@ -50,6 +50,12 @@ public partial class ImageViewerControl : UserControl
         typeof(ImageViewerControl),
         new PropertyMetadata(null));
 
+    public static readonly DependencyProperty PointClickedCommandProperty = DependencyProperty.Register(
+        nameof(PointClickedCommand),
+        typeof(ICommand),
+        typeof(ImageViewerControl),
+        new PropertyMetadata(null));
+
     public static readonly DependencyProperty RoiDeletedCommandProperty = DependencyProperty.Register(
         nameof(RoiDeletedCommand),
         typeof(ICommand),
@@ -259,6 +265,12 @@ public partial class ImageViewerControl : UserControl
     {
         get => (ICommand?)GetValue(RoiEditedCommandProperty);
         set => SetValue(RoiEditedCommandProperty, value);
+    }
+
+    public ICommand? PointClickedCommand
+    {
+        get => (ICommand?)GetValue(PointClickedCommandProperty);
+        set => SetValue(PointClickedCommandProperty, value);
     }
 
     public ICommand? RoiDeletedCommand
@@ -727,6 +739,18 @@ public partial class ImageViewerControl : UserControl
         if (!Keyboard.Modifiers.HasFlag(ModifierKeys.Control) && !Keyboard.Modifiers.HasFlag(ModifierKeys.Shift))
         {
             return;
+        }
+
+        if (Keyboard.Modifiers.HasFlag(ModifierKeys.Control) && Keyboard.Modifiers.HasFlag(ModifierKeys.Shift))
+        {
+            var viewPos = ViewToContent(e.GetPosition(PART_Overlay));
+            var payload = new PointClickSelection(viewPos.X, viewPos.Y, Keyboard.Modifiers);
+            if (PointClickedCommand is not null && PointClickedCommand.CanExecute(payload))
+            {
+                PointClickedCommand.Execute(payload);
+                e.Handled = true;
+                return;
+            }
         }
 
         // Deterministic ROI teaching gesture:

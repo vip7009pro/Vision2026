@@ -4,6 +4,7 @@ using VisionInspectionApp.VisionEngine;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Collections.Concurrent;
+using System.IO;
 using ZXing;
 using ZXing.Common;
 
@@ -66,6 +67,7 @@ public sealed class InspectionTimings
     public int PointsMs { get; set; }
     public int LinesMs { get; set; }
     public int BlobsMs { get; set; }
+    public int SurfaceCompareMs { get; set; }
     public int LpdMs { get; set; }
     public int CalipersMs { get; set; }
     public int EdgePairDetectMs { get; set; }
@@ -100,6 +102,8 @@ public sealed class InspectionResult
     public List<ConditionResult> Conditions { get; } = new();
 
     public List<BlobDetectionResult> BlobDetections { get; } = new();
+
+    public List<SurfaceCompareResult> SurfaceCompares { get; } = new();
 
     public List<LinePairDetectionResult> LinePairDetections { get; } = new();
 
@@ -140,6 +144,10 @@ public sealed record ConditionResult(string Name, string Expression, bool Pass, 
 public sealed record BlobInfo(Rect BoundingBox, Point2d Centroid, double Area);
 
 public sealed record BlobDetectionResult(string Name, int Count, List<BlobInfo> Blobs);
+
+public sealed record SurfaceCompareDefect(Rect BoundingBox, Point2d Centroid, double Area);
+
+public sealed record SurfaceCompareResult(string Name, int Count, double MaxArea, List<SurfaceCompareDefect> Defects);
 
 public sealed record LinePairDetectionResult(
     string Name,
@@ -530,6 +538,235 @@ public sealed class InspectionService : IInspectionService
                 return blobs;
             }
 
+            static SurfaceCompareResult RunSurfaceCompare(Mat matBgrOrGray, Point2d originTeach, Point2d originFound, double angleDeg, SurfaceCompareDefinition def)
+            {
+                if (matBgrOrGray is null)
+                {
+                    return new SurfaceCompareResult(def.Name, 0, 0.0, new List<SurfaceCompareDefect>());
+                }
+
+                if (def is null || string.IsNullOrWhiteSpace(def.Name))
+                {
+                    return new SurfaceCompareResult(string.Empty, 0, 0.0, new List<SurfaceCompareDefect>());
+                }
+
+                var templateRoiTeach = def.TemplateRoi;
+                var inspectRoiTeach = def.InspectRoi;
+
+                if (templateRoiTeach.Width <= 0 || templateRoiTeach.Height <= 0)
+                {
+                    templateRoiTeach = inspectRoiTeach;
+                }
+
+                if (inspectRoiTeach.Width <= 0 || inspectRoiTeach.Height <= 0)
+                {
+                    inspectRoiTeach = templateRoiTeach;
+                }
+
+                if (templateRoiTeach.Width <= 0 || templateRoiTeach.Height <= 0 || inspectRoiTeach.Width <= 0 || inspectRoiTeach.Height <= 0)
+                {
+                    return new SurfaceCompareResult(def.Name, 0, 0.0, new List<SurfaceCompareDefect>());
+                }
+
+                if (string.IsNullOrWhiteSpace(def.TemplateImageFile) || !File.Exists(def.TemplateImageFile))
+                {
+                    return new SurfaceCompareResult(def.Name, 0, 0.0, new List<SurfaceCompareDefect>());
+                }
+
+                // Convert input to grayscale.
+                Mat testGray = matBgrOrGray;
+                using var testGrayOwned = matBgrOrGray.Channels() == 1 ? null : matBgrOrGray.CvtColor(ColorConversionCodes.BGR2GRAY);
+                if (testGrayOwned is not null)
+                {
+                    testGray = testGrayOwned;
+                }
+
+                // Build a full-size template canvas by placing the stored template crop back into TemplateRoi.
+                using var templCrop0 = Cv2.ImRead(def.TemplateImageFile, ImreadModes.Grayscale);
+                if (templCrop0.Empty())
+                {
+                    return new SurfaceCompareResult(def.Name, 0, 0.0, new List<SurfaceCompareDefect>());
+                }
+
+                using var templateCanvas = new Mat(testGray.Rows, testGray.Cols, MatType.CV_8UC1, Scalar.Black);
+                var tplRect = new Rect(templateRoiTeach.X, templateRoiTeach.Y, templateRoiTeach.Width, templateRoiTeach.Height)
+                    .Intersect(new Rect(0, 0, templateCanvas.Cols, templateCanvas.Rows));
+                if (tplRect.Width <= 0 || tplRect.Height <= 0)
+                {
+                    return new SurfaceCompareResult(def.Name, 0, 0.0, new List<SurfaceCompareDefect>());
+                }
+
+                using (var dst = new Mat(templateCanvas, tplRect))
+                {
+                    // If stored crop size doesn't exactly match (older data), resize to fit.
+                    if (templCrop0.Width != tplRect.Width || templCrop0.Height != tplRect.Height)
+                    {
+                        using var resized = new Mat();
+                        Cv2.Resize(templCrop0, resized, new Size(tplRect.Width, tplRect.Height), 0, 0, InterpolationFlags.Area);
+                        resized.CopyTo(dst);
+                    }
+                    else
+                    {
+                        templCrop0.CopyTo(dst);
+                    }
+                }
+
+                // Warp template canvas from teach pose to found pose.
+                var dx = originFound.X - originTeach.X;
+                var dy = originFound.Y - originTeach.Y;
+                using var m = Cv2.GetRotationMatrix2D(new Point2f((float)originTeach.X, (float)originTeach.Y), angleDeg, 1.0);
+                m.Set(0, 2, m.Get<double>(0, 2) + dx);
+                m.Set(1, 2, m.Get<double>(1, 2) + dy);
+
+                using var templWarp = new Mat(testGray.Rows, testGray.Cols, MatType.CV_8UC1, Scalar.Black);
+                Cv2.WarpAffine(templateCanvas, templWarp, m, new Size(testGray.Cols, testGray.Rows), InterpolationFlags.Linear, BorderTypes.Constant, Scalar.Black);
+
+                // Inspect ROI is defined in teach space; transform to current pose (keep size).
+                var inspectRoi = TransformRoiKeepSize(inspectRoiTeach, originTeach, originFound, angleDeg);
+                if (inspectRoi.Width <= 0 || inspectRoi.Height <= 0)
+                {
+                    return new SurfaceCompareResult(def.Name, 0, 0.0, new List<SurfaceCompareDefect>());
+                }
+
+                var rect = new Rect(inspectRoi.X, inspectRoi.Y, inspectRoi.Width, inspectRoi.Height)
+                    .Intersect(new Rect(0, 0, testGray.Cols, testGray.Rows));
+                if (rect.Width <= 0 || rect.Height <= 0)
+                {
+                    return new SurfaceCompareResult(def.Name, 0, 0.0, new List<SurfaceCompareDefect>());
+                }
+
+                // Compute diff in ROI.
+                using var testCrop = new Mat(testGray, rect);
+                using var tplCrop = new Mat(templWarp, rect);
+                using var diff = new Mat();
+                Cv2.Absdiff(testCrop, tplCrop, diff);
+
+                var thr = Math.Clamp(def.DiffThreshold, 0, 255);
+                using var bw = new Mat();
+                Cv2.Threshold(diff, bw, thr, 255, ThresholdTypes.Binary);
+
+                // Apply include/exclude multi-ROI mask (definitions are in teach space).
+                var rois = def.Rois;
+                if (rois is not null && rois.Count > 0)
+                {
+                    using var mask = new Mat(bw.Rows, bw.Cols, MatType.CV_8UC1, Scalar.Black);
+
+                    var anyInclude = false;
+                    foreach (var rr0 in rois)
+                    {
+                        if (rr0 is null || rr0.Roi.Width <= 0 || rr0.Roi.Height <= 0)
+                        {
+                            continue;
+                        }
+
+                        var rr = TransformRoiKeepSize(rr0.Roi, originTeach, originFound, angleDeg);
+                        if (rr.Width <= 0 || rr.Height <= 0)
+                        {
+                            continue;
+                        }
+
+                        var rx = rr.X - rect.X;
+                        var ry = rr.Y - rect.Y;
+                        var r = new Rect(rx, ry, rr.Width, rr.Height)
+                            .Intersect(new Rect(0, 0, bw.Cols, bw.Rows));
+                        if (r.Width <= 0 || r.Height <= 0)
+                        {
+                            continue;
+                        }
+
+                        if (rr0.Mode == BlobRoiMode.Include)
+                        {
+                            anyInclude = true;
+                            using var sub = new Mat(mask, r);
+                            sub.SetTo(Scalar.White);
+                        }
+                    }
+
+                    if (!anyInclude)
+                    {
+                        mask.SetTo(Scalar.White);
+                    }
+
+                    foreach (var rr0 in rois)
+                    {
+                        if (rr0 is null || rr0.Mode != BlobRoiMode.Exclude || rr0.Roi.Width <= 0 || rr0.Roi.Height <= 0)
+                        {
+                            continue;
+                        }
+
+                        var rr = TransformRoiKeepSize(rr0.Roi, originTeach, originFound, angleDeg);
+                        if (rr.Width <= 0 || rr.Height <= 0)
+                        {
+                            continue;
+                        }
+
+                        var rx = rr.X - rect.X;
+                        var ry = rr.Y - rect.Y;
+                        var r = new Rect(rx, ry, rr.Width, rr.Height)
+                            .Intersect(new Rect(0, 0, bw.Cols, bw.Rows));
+                        if (r.Width <= 0 || r.Height <= 0)
+                        {
+                            continue;
+                        }
+
+                        using var sub = new Mat(mask, r);
+                        sub.SetTo(Scalar.Black);
+                    }
+
+                    Cv2.BitwiseAnd(bw, mask, bw);
+                }
+
+                var k = Math.Max(1, def.MorphKernel);
+                if (k % 2 == 0) k += 1;
+                if (k >= 3)
+                {
+                    using var kernel = Cv2.GetStructuringElement(MorphShapes.Rect, new Size(k, k));
+                    Cv2.MorphologyEx(bw, bw, MorphTypes.Close, kernel);
+                    Cv2.MorphologyEx(bw, bw, MorphTypes.Open, kernel);
+                }
+
+                var minArea = Math.Max(0, def.MinBlobArea);
+                var maxArea = Math.Max(minArea, def.MaxBlobArea);
+
+                var defects = new List<SurfaceCompareDefect>();
+                double maxFoundArea = 0.0;
+
+                using var labels = new Mat();
+                using var stats = new Mat();
+                using var centroids = new Mat();
+                var nLabels = Cv2.ConnectedComponentsWithStats(
+                    bw,
+                    labels,
+                    stats,
+                    centroids,
+                    PixelConnectivity.Connectivity8,
+                    MatType.CV_32S);
+
+                for (var i = 1; i < nLabels; i++)
+                {
+                    var left = stats.Get<int>(i, (int)ConnectedComponentsTypes.Left);
+                    var top = stats.Get<int>(i, (int)ConnectedComponentsTypes.Top);
+                    var width = stats.Get<int>(i, (int)ConnectedComponentsTypes.Width);
+                    var height = stats.Get<int>(i, (int)ConnectedComponentsTypes.Height);
+                    var areaPx = stats.Get<int>(i, (int)ConnectedComponentsTypes.Area);
+
+                    if (areaPx < minArea || areaPx > maxArea)
+                    {
+                        continue;
+                    }
+
+                    var cx = centroids.Get<double>(i, 0);
+                    var cy = centroids.Get<double>(i, 1);
+
+                    var fullRect = new Rect(left + rect.X, top + rect.Y, width, height);
+                    var centroid = new Point2d(cx + rect.X, cy + rect.Y);
+                    defects.Add(new SurfaceCompareDefect(fullRect, centroid, areaPx));
+                    if (areaPx > maxFoundArea) maxFoundArea = areaPx;
+                }
+
+                return new SurfaceCompareResult(def.Name, defects.Count, maxFoundArea, defects);
+            }
+
             static CaliperResult DetectCaliper(Mat matBgrOrGray, Roi roi, CaliperDefinition def)
             {
                 if (matBgrOrGray is null || roi.Width <= 0 || roi.Height <= 0)
@@ -736,6 +973,7 @@ public sealed class InspectionService : IInspectionService
                         TemplateRoi = originDefBase.TemplateRoi,
                         SearchRoi = shrunk,
                         WorldPosition = originDefBase.WorldPosition,
+                        OffsetPx = originDefBase.OffsetPx,
                         ShapeModel = originDefBase.ShapeModel
                     };
                 }
@@ -751,7 +989,7 @@ public sealed class InspectionService : IInspectionService
                 }
             }
             var templateAngleDeg = originMatch.AngleDeg;
-            var poseAngleDeg = -templateAngleDeg;
+            var poseAngleDeg = templateAngleDeg;
             var originPass = originMatch.Score >= config.Origin.MatchScoreThreshold;
             result.Origin = new PointMatchResult(
                 config.Origin.Name,
@@ -800,6 +1038,7 @@ public sealed class InspectionService : IInspectionService
                             TemplateRoi = def.TemplateRoi,
                             SearchRoi = shrunk,
                             WorldPosition = def.WorldPosition,
+                            OffsetPx = def.OffsetPx,
                             ShapeModel = def.ShapeModel
                         };
                     }
@@ -815,7 +1054,10 @@ public sealed class InspectionService : IInspectionService
                         }
                     }
                     var pass = m.Score >= p.MatchScoreThreshold;
-                    return new PointMatchResult(p.Name, m.Position, m.MatchRect, m.Score, p.MatchScoreThreshold, pass, 0.0);
+                    var off = new Point2d(p.OffsetPx.X, p.OffsetPx.Y);
+                    var offRot = Rotate(off, new Point2d(0, 0), templateAngleDeg);
+                    var pos = new Point2d(m.Position.X + offRot.X, m.Position.Y + offRot.Y);
+                    return new PointMatchResult(p.Name, pos, m.MatchRect, m.Score, p.MatchScoreThreshold, pass, 0.0);
                 }))
                 .ToArray();
 
@@ -854,6 +1096,17 @@ public sealed class InspectionService : IInspectionService
                 .ToArray();
 
             var tBlobsQueued = swTotal.ElapsedMilliseconds;
+
+            var surfaceCompareTasks = (config.SurfaceCompares ?? new List<SurfaceCompareDefinition>())
+                .Where(sc => sc is not null && !string.IsNullOrWhiteSpace(sc.Name) && sc.InspectRoi.Width > 0 && sc.InspectRoi.Height > 0)
+                .Select(sc => Task.Run(() =>
+                {
+                    var (matForSc, _) = ResolveToolPreprocess("SurfaceCompare", sc.Name);
+                    return RunSurfaceCompare(matForSc, originTeach, originFound, angleDeg, sc);
+                }))
+                .ToArray();
+
+            var tScQueued = swTotal.ElapsedMilliseconds;
 
             var lpdTasks = (config.LinePairDetections ?? new List<LinePairDetectionDefinition>())
                 .Where(lpd => lpd is not null && !string.IsNullOrWhiteSpace(lpd.Name) && lpd.SearchRoi.Width > 0 && lpd.SearchRoi.Height > 0)
@@ -920,6 +1173,9 @@ public sealed class InspectionService : IInspectionService
 
             Task.WaitAll(blobTasks);
             var tBlobsDone = swTotal.ElapsedMilliseconds;
+
+            Task.WaitAll(surfaceCompareTasks);
+            var tScDone = swTotal.ElapsedMilliseconds;
 
             Task.WaitAll(lpdTasks);
             var tLpdDone = swTotal.ElapsedMilliseconds;
@@ -1384,6 +1640,7 @@ public sealed class InspectionService : IInspectionService
             result.Timings.PointsMs = (int)Math.Max(0, tPointsDone - tPointsQueued);
             result.Timings.LinesMs = (int)Math.Max(0, tLinesDone - tLinesQueued);
             result.Timings.BlobsMs = (int)Math.Max(0, tBlobsDone - tBlobsQueued);
+            result.Timings.SurfaceCompareMs = (int)Math.Max(0, tScDone - tScQueued);
             result.Timings.LpdMs = (int)Math.Max(0, tLpdDone - tLpdQueued);
             result.Timings.CalipersMs = (int)Math.Max(0, tCalDone - tCalQueued);
 
@@ -1406,6 +1663,11 @@ public sealed class InspectionService : IInspectionService
             foreach (var t in blobTasks)
             {
                 result.BlobDetections.Add(t.Result);
+            }
+
+            foreach (var t in surfaceCompareTasks)
+            {
+                result.SurfaceCompares.Add(t.Result);
             }
 
             foreach (var t in lpdTasks)
@@ -2009,7 +2271,8 @@ public sealed class InspectionService : IInspectionService
             TemplateImageFile = p.TemplateImageFile,
             TemplateRoi = p.TemplateRoi,
             SearchRoi = TransformRoiKeepSize(p.SearchRoi, originTeach, originFound, angleDeg),
-            WorldPosition = p.WorldPosition
+            WorldPosition = p.WorldPosition,
+            OffsetPx = p.OffsetPx
         };
     }
 
@@ -2109,6 +2372,14 @@ internal static class ConditionEvaluator
         foreach (var b in result.BlobDetections)
         {
             vars[b.Name] = new Variable(true, value: b.Count);
+        }
+
+        foreach (var sc in result.SurfaceCompares)
+        {
+            vars[$"SC.{sc.Name}"] = new Variable(true, value: sc.Count);
+            vars[$"SurfaceCompare.{sc.Name}"] = new Variable(true, value: sc.Count);
+            vars[$"SC.{sc.Name}.MaxArea"] = new Variable(true, value: sc.MaxArea);
+            vars[$"SurfaceCompare.{sc.Name}.MaxArea"] = new Variable(true, value: sc.MaxArea);
         }
 
         foreach (var c in result.Calipers)
