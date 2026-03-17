@@ -1572,9 +1572,31 @@ public sealed class InspectionService : IInspectionService
             result.Timings.AnglesMs = (int)Math.Max(0, swTotal.ElapsedMilliseconds - tAngles0);
 
             var tDistances0 = swTotal.ElapsedMilliseconds;
+            var distanceAnchors = new Dictionary<string, Point2d>(StringComparer.OrdinalIgnoreCase);
+            foreach (var kv in foundPoints)
+            {
+                distanceAnchors[kv.Key] = kv.Value;
+            }
+
+            foreach (var c in result.CircleFinders)
+            {
+                if (c is not null && c.Found)
+                {
+                    distanceAnchors[c.Name] = c.Center;
+                }
+            }
+
+            foreach (var d in result.Diameters)
+            {
+                if (d is not null && d.Found)
+                {
+                    distanceAnchors[d.Name] = d.Center;
+                }
+            }
+
             foreach (var d in config.Distances)
             {
-                if (!foundPoints.TryGetValue(d.PointA, out var a) || !foundPoints.TryGetValue(d.PointB, out var b))
+                if (!distanceAnchors.TryGetValue(d.PointA, out var a) || !distanceAnchors.TryGetValue(d.PointB, out var b))
                 {
                     result.Distances.Add(new DistanceCheckResult(d.Name, d.PointA, d.PointB, double.NaN, d.Nominal, d.TolerancePlus, d.ToleranceMinus, false));
                     continue;

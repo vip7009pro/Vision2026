@@ -217,11 +217,11 @@
 
                                     <StackPanel Orientation="Horizontal" Margin="0,0,0,2">
                                         <TextBlock Text="A" Width="60" VerticalAlignment="Center" />
-                                        <ComboBox Width="160" ItemsSource="{Binding AvailablePointNames}" SelectedItem="{Binding Distance_PointA, UpdateSourceTrigger=PropertyChanged}" />
+                                        <ComboBox Width="160" ItemsSource="{Binding AvailableDistanceRefNames}" SelectedItem="{Binding Distance_PointA, UpdateSourceTrigger=PropertyChanged}" />
                                     </StackPanel>
                                     <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
                                         <TextBlock Text="B" Width="60" VerticalAlignment="Center" />
-                                        <ComboBox Width="160" ItemsSource="{Binding AvailablePointNames}" SelectedItem="{Binding Distance_PointB, UpdateSourceTrigger=PropertyChanged}" />
+                                        <ComboBox Width="160" ItemsSource="{Binding AvailableDistanceRefNames}" SelectedItem="{Binding Distance_PointB, UpdateSourceTrigger=PropertyChanged}" />
                                     </StackPanel>
                                 </StackPanel>
 

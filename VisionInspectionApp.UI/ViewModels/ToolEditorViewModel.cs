@@ -32,6 +32,9 @@ public sealed partial class ToolEditorViewModel : ObservableObject
     private ToolGraphNodeViewModel? _selectedNodeHook;
     private string? _selectedNodePrevRefName;
 
+    private bool _finalPreviewDirty = true;
+    private BitmapSource? _cachedFinalPreviewImage;
+
     private readonly DispatcherTimer _autoSaveTimer;
     private bool _autoSavePending;
 
@@ -1504,7 +1507,7 @@ public sealed partial class ToolEditorViewModel : ObservableObject
         SyncPreprocessChoices();
         SyncSelectedToolPreprocessChoiceFromGraph();
         RaiseToolPropertyPanelsChanged();
-        RefreshPreviews();
+        RefreshSelectedPreview();
         OnPropertyChanged(nameof(Blob_LastRunCount));
     }
 
@@ -1755,13 +1758,14 @@ public sealed partial class ToolEditorViewModel : ObservableObject
 
     partial void OnShowRoisInSelectedPreviewChanged(bool value)
     {
-        RefreshPreviews();
+        RefreshSelectedPreview();
         RaiseToolPropertyPanelsChanged();
     }
 
     partial void OnShowRoisInFinalPreviewChanged(bool value)
     {
-        RefreshPreviews();
+        _finalPreviewDirty = true;
+        RefreshFinalPreview();
         RaiseToolPropertyPanelsChanged();
     }
 
@@ -1800,6 +1804,7 @@ public sealed partial class ToolEditorViewModel : ObservableObject
         OnPropertyChanged(nameof(AvailableCircleFinderNames));
 
         OnPropertyChanged(nameof(AvailablePointNames));
+        OnPropertyChanged(nameof(AvailableDistanceRefNames));
         OnPropertyChanged(nameof(AvailableLineNames));
         OnPropertyChanged(nameof(Distance_PointA));
         OnPropertyChanged(nameof(Distance_PointB));
@@ -2417,6 +2422,32 @@ public sealed partial class ToolEditorViewModel : ObservableObject
         }
     }
 
+    public ObservableCollection<string> AvailableDistanceRefNames
+    {
+        get
+        {
+            var list = new ObservableCollection<string>();
+            if (_config is null) return list;
+
+            foreach (var p in _config.Points.Select(x => x.Name).Where(x => !string.IsNullOrWhiteSpace(x)))
+            {
+                list.Add(p);
+            }
+
+            foreach (var c in _config.CircleFinders.Select(x => x.Name).Where(x => !string.IsNullOrWhiteSpace(x)))
+            {
+                if (!list.Contains(c)) list.Add(c);
+            }
+
+            foreach (var d in _config.Diameters.Select(x => x.Name).Where(x => !string.IsNullOrWhiteSpace(x)))
+            {
+                if (!list.Contains(d)) list.Add(d);
+            }
+
+            return list;
+        }
+    }
+
     public ObservableCollection<string> AvailableLineNames
     {
         get
@@ -2577,8 +2608,11 @@ public sealed partial class ToolEditorViewModel : ObservableObject
             RemoveEdgesToSelectedNodePort(port);
             if (!string.IsNullOrWhiteSpace(pointName))
             {
-                var from = Nodes.FirstOrDefault(n => string.Equals(n.Type, "Point", StringComparison.OrdinalIgnoreCase)
-                                                     && string.Equals(n.RefName, pointName, StringComparison.OrdinalIgnoreCase));
+                var from = Nodes.FirstOrDefault(n =>
+                    string.Equals(n.RefName, pointName, StringComparison.OrdinalIgnoreCase)
+                    && (string.Equals(n.Type, "Point", StringComparison.OrdinalIgnoreCase)
+                        || string.Equals(n.Type, "CircleFinder", StringComparison.OrdinalIgnoreCase)
+                        || string.Equals(n.Type, "Diameter", StringComparison.OrdinalIgnoreCase)));
                 if (from is not null)
                 {
                     CreateEdge(from, SelectedNode, "Out", port);
@@ -4508,7 +4542,9 @@ public sealed partial class ToolEditorViewModel : ObservableObject
         }
 
         if (string.Equals(toNode.Type, "Distance", StringComparison.OrdinalIgnoreCase)
-            && string.Equals(fromNode.Type, "Point", StringComparison.OrdinalIgnoreCase))
+            && (string.Equals(fromNode.Type, "Point", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(fromNode.Type, "CircleFinder", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(fromNode.Type, "Diameter", StringComparison.OrdinalIgnoreCase)))
         {
             var def = _config.Distances.FirstOrDefault(x => string.Equals(x.Name, toNode.RefName, StringComparison.OrdinalIgnoreCase));
             if (def is not null)
@@ -4637,14 +4673,68 @@ public sealed partial class ToolEditorViewModel : ObservableObject
 
     private void RefreshPreviews()
     {
-        SelectedNodeOverlayItems.Clear();
+        _finalPreviewDirty = true;
+        RefreshFinalPreview();
+        RefreshSelectedPreview();
+    }
+
+    private void RefreshFinalPreview()
+    {
+        if (!_finalPreviewDirty)
+        {
+            return;
+        }
+
         FinalOverlayItems.Clear();
 
         using var snap = _sharedImage.GetSnapshot();
         if (snap is null)
         {
-            SelectedNodePreviewImage = null;
             FinalPreviewImage = null;
+            _cachedFinalPreviewImage = null;
+            return;
+        }
+
+        if (_config is not null && PreprocessPreviewEnabled)
+        {
+            using var processedFinal = _preprocessor.Run(snap, _config.Preprocess);
+            _cachedFinalPreviewImage = processedFinal.ToBitmapSource();
+            FinalPreviewImage = _cachedFinalPreviewImage;
+        }
+        else
+        {
+            _cachedFinalPreviewImage = snap.ToBitmapSource();
+            FinalPreviewImage = _cachedFinalPreviewImage;
+        }
+
+        if (_config is null)
+        {
+            _finalPreviewDirty = false;
+            return;
+        }
+
+        // If user ran the flow, prefer showing overlays from the inspection result
+        if (_lastRun is not null)
+        {
+            AddConfigRois(FinalOverlayItems);
+            BuildFinalOverlayFromRunWithConfig(_lastRun, FinalOverlayItems);
+        }
+        else
+        {
+            BuildFinalOverlay(snap, FinalOverlayItems);
+        }
+
+        _finalPreviewDirty = false;
+    }
+
+    private void RefreshSelectedPreview()
+    {
+        SelectedNodeOverlayItems.Clear();
+
+        using var snap = _sharedImage.GetSnapshot();
+        if (snap is null)
+        {
+            SelectedNodePreviewImage = null;
             LinePreviewImage = null;
             BlobThresholdPreviewImage = null;
             return;
@@ -4665,15 +4755,9 @@ public sealed partial class ToolEditorViewModel : ObservableObject
                     using var processedSel = _preprocessor.Run(snap, _config.Preprocess);
                     SelectedNodePreviewImage = processedSel.ToBitmapSource();
                 }
-
-                using var processedFinal = _preprocessor.Run(snap, _config.Preprocess);
-                FinalPreviewImage = processedFinal.ToBitmapSource();
             }
             else
             {
-                using var processedFinal = _preprocessor.Run(snap, _config.Preprocess);
-                FinalPreviewImage = processedFinal.ToBitmapSource();
-
                 if (SelectedNode is not null
                     && (string.Equals(SelectedNode.Type, "Origin", StringComparison.OrdinalIgnoreCase)
                         || string.Equals(SelectedNode.Type, "Point", StringComparison.OrdinalIgnoreCase)
@@ -4689,14 +4773,13 @@ public sealed partial class ToolEditorViewModel : ObservableObject
                 }
                 else
                 {
-                    SelectedNodePreviewImage = processedFinal.ToBitmapSource();
+                    SelectedNodePreviewImage = _cachedFinalPreviewImage ?? snap.ToBitmapSource();
                 }
             }
         }
         else
         {
             SelectedNodePreviewImage = snap.ToBitmapSource();
-            FinalPreviewImage = snap.ToBitmapSource();
         }
 
         UpdateBlobThresholdPreview(snap);
@@ -4710,11 +4793,8 @@ public sealed partial class ToolEditorViewModel : ObservableObject
 
         RefreshLineRoiPreview(snap);
 
-        // If user ran the flow, prefer showing overlays from the inspection result
         if (_lastRun is not null)
         {
-            AddConfigRois(FinalOverlayItems);
-            BuildFinalOverlayFromRunWithConfig(_lastRun, FinalOverlayItems);
             if (SelectedNode is not null)
             {
                 AddConfigRoisForNode(SelectedNode, SelectedNodeOverlayItems);
@@ -4727,8 +4807,6 @@ public sealed partial class ToolEditorViewModel : ObservableObject
             {
                 BuildOverlayForNode(SelectedNode, snap, SelectedNodeOverlayItems);
             }
-
-            BuildFinalOverlay(snap, FinalOverlayItems);
         }
     }
 
@@ -5152,6 +5230,57 @@ public sealed partial class ToolEditorViewModel : ObservableObject
             }
         }
 
+        void AddCircleRoi(string circleName)
+        {
+            var c = _config.CircleFinders.FirstOrDefault(x => string.Equals(x.Name, circleName, StringComparison.OrdinalIgnoreCase));
+            if (c is null)
+            {
+                return;
+            }
+
+            if (c.SearchRoi.Width > 0 && c.SearchRoi.Height > 0)
+            {
+                dst.Add(new OverlayRectItem
+                {
+                    X = c.SearchRoi.X,
+                    Y = c.SearchRoi.Y,
+                    Width = c.SearchRoi.Width,
+                    Height = c.SearchRoi.Height,
+                    Stroke = Brushes.MediumPurple,
+                    Label = $"{c.Name} CIR"
+                });
+            }
+        }
+
+        void AddDistanceAnchorRoi(string anchorName)
+        {
+            if (string.IsNullOrWhiteSpace(anchorName))
+            {
+                return;
+            }
+
+            // Point
+            if (_config.Points.Any(x => string.Equals(x.Name, anchorName, StringComparison.OrdinalIgnoreCase)))
+            {
+                AddPointRoi(anchorName);
+                return;
+            }
+
+            // CircleFinder
+            if (_config.CircleFinders.Any(x => string.Equals(x.Name, anchorName, StringComparison.OrdinalIgnoreCase)))
+            {
+                AddCircleRoi(anchorName);
+                return;
+            }
+
+            // Diameter -> CircleFinder
+            var dia = _config.Diameters.FirstOrDefault(x => string.Equals(x.Name, anchorName, StringComparison.OrdinalIgnoreCase));
+            if (dia is not null && !string.IsNullOrWhiteSpace(dia.CircleRef))
+            {
+                AddCircleRoi(dia.CircleRef);
+            }
+        }
+
         void AddBlobRoi(string blobName)
         {
             var b = _config.BlobDetections.FirstOrDefault(x => string.Equals(x.Name, blobName, StringComparison.OrdinalIgnoreCase));
@@ -5467,8 +5596,8 @@ public sealed partial class ToolEditorViewModel : ObservableObject
 
             if (showRois)
             {
-                AddPointRoi(d.PointA);
-                AddPointRoi(d.PointB);
+                AddDistanceAnchorRoi(d.PointA);
+                AddDistanceAnchorRoi(d.PointB);
             }
             return;
         }
@@ -5600,7 +5729,25 @@ public sealed partial class ToolEditorViewModel : ObservableObject
             });
         }
 
-        var detectedPointMap = run.Points.ToDictionary(x => x.Name, x => x, StringComparer.OrdinalIgnoreCase);
+        var distanceAnchorMap = new System.Collections.Generic.Dictionary<string, Point2d>(StringComparer.OrdinalIgnoreCase);
+        foreach (var p in run.Points)
+        {
+            distanceAnchorMap[p.Name] = p.Position;
+        }
+        foreach (var c in run.CircleFinders)
+        {
+            if (c.Found)
+            {
+                distanceAnchorMap[c.Name] = c.Center;
+            }
+        }
+        foreach (var d in run.Diameters)
+        {
+            if (d.Found)
+            {
+                distanceAnchorMap[d.Name] = d.Center;
+            }
+        }
 
         foreach (var l in run.Lines)
         {
@@ -5698,17 +5845,17 @@ public sealed partial class ToolEditorViewModel : ObservableObject
 
         foreach (var d in run.Distances)
         {
-            if (!detectedPointMap.TryGetValue(d.PointA, out var pa) || !detectedPointMap.TryGetValue(d.PointB, out var pb))
+            if (!distanceAnchorMap.TryGetValue(d.PointA, out var pa) || !distanceAnchorMap.TryGetValue(d.PointB, out var pb))
             {
                 continue;
             }
 
             dst.Add(new OverlayLineItem
             {
-                X1 = pa.Position.X,
-                Y1 = pa.Position.Y,
-                X2 = pb.Position.X,
-                Y2 = pb.Position.Y,
+                X1 = pa.X,
+                Y1 = pa.Y,
+                X2 = pb.X,
+                Y2 = pb.Y,
                 Stroke = d.Pass ? Brushes.Lime : Brushes.Red,
                 Label = $"{d.Name}: {d.Value:0.###}"
             });
@@ -6021,39 +6168,82 @@ public sealed partial class ToolEditorViewModel : ObservableObject
                 return;
             }
 
-            var pa = run.Points.FirstOrDefault(x => string.Equals(x.Name, d.PointA, StringComparison.OrdinalIgnoreCase));
-            var pb = run.Points.FirstOrDefault(x => string.Equals(x.Name, d.PointB, StringComparison.OrdinalIgnoreCase));
-            if (pa is null || pb is null)
+            var anchorMap = new Dictionary<string, Point2d>(StringComparer.OrdinalIgnoreCase);
+            foreach (var p in run.Points)
+            {
+                anchorMap[p.Name] = p.Position;
+            }
+            foreach (var c in run.CircleFinders)
+            {
+                if (c.Found)
+                {
+                    anchorMap[c.Name] = c.Center;
+                }
+            }
+            foreach (var dia in run.Diameters)
+            {
+                if (dia.Found)
+                {
+                    anchorMap[dia.Name] = dia.Center;
+                }
+            }
+
+            if (!anchorMap.TryGetValue(d.PointA, out var a) || !anchorMap.TryGetValue(d.PointB, out var b))
             {
                 return;
             }
 
-            dst.Add(new OverlayPointItem
+            void AddAnchorOverlay(string anchorName)
             {
-                X = pa.Position.X,
-                Y = pa.Position.Y,
-                Stroke = pa.Pass ? Brushes.DeepSkyBlue : Brushes.Red,
-                Label = pa.Name
-            });
+                if (string.IsNullOrWhiteSpace(anchorName))
+                {
+                    return;
+                }
 
-            dst.Add(new OverlayPointItem
-            {
-                X = pb.Position.X,
-                Y = pb.Position.Y,
-                Stroke = pb.Pass ? Brushes.DeepSkyBlue : Brushes.Red,
-                Label = pb.Name
-            });
+                var p = run.Points.FirstOrDefault(x => string.Equals(x.Name, anchorName, StringComparison.OrdinalIgnoreCase));
+                if (p is not null)
+                {
+                    dst.Add(new OverlayPointItem
+                    {
+                        X = p.Position.X,
+                        Y = p.Position.Y,
+                        Stroke = p.Pass ? Brushes.DeepSkyBlue : Brushes.Red,
+                        Label = p.Name
+                    });
+                    return;
+                }
+
+                var c = run.CircleFinders.FirstOrDefault(x => string.Equals(x.Name, anchorName, StringComparison.OrdinalIgnoreCase));
+                if (c is not null && c.Found && c.RadiusPx > 0)
+                {
+                    AddCircle(dst, c.Center.X, c.Center.Y, c.RadiusPx, stroke: Brushes.MediumPurple, strokeThickness: 2.0);
+                    AddCross(dst, c.Center.X, c.Center.Y, size: 12.0, stroke: Brushes.MediumPurple, strokeThickness: 2.0);
+                    dst.Add(new OverlayPointItem { X = c.Center.X, Y = c.Center.Y, Radius = 1.0, Stroke = Brushes.MediumPurple, Label = c.Name });
+                    return;
+                }
+
+                var dia = run.Diameters.FirstOrDefault(x => string.Equals(x.Name, anchorName, StringComparison.OrdinalIgnoreCase));
+                if (dia is not null && dia.Found && dia.RadiusPx > 0)
+                {
+                    var stroke = dia.Pass ? Brushes.Lime : Brushes.Red;
+                    AddCircle(dst, dia.Center.X, dia.Center.Y, dia.RadiusPx, stroke: stroke, strokeThickness: 2.0);
+                    AddCross(dst, dia.Center.X, dia.Center.Y, size: 12.0, stroke: stroke, strokeThickness: 2.0);
+                    dst.Add(new OverlayPointItem { X = dia.Center.X, Y = dia.Center.Y, Radius = 1.0, Stroke = stroke, Label = $"{dia.Name}: {dia.Value:0.###} mm" });
+                }
+            }
+
+            AddAnchorOverlay(d.PointA);
+            AddAnchorOverlay(d.PointB);
 
             dst.Add(new OverlayLineItem
             {
-                X1 = pa.Position.X,
-                Y1 = pa.Position.Y,
-                X2 = pb.Position.X,
-                Y2 = pb.Position.Y,
+                X1 = a.X,
+                Y1 = a.Y,
+                X2 = b.X,
+                Y2 = b.Y,
                 Stroke = d.Pass ? Brushes.Lime : Brushes.Red,
                 Label = $"{d.Name}: {d.Value:0.###}"
             });
-
             return;
         }
 

@@ -796,10 +796,28 @@ public sealed partial class InspectionViewModel : ObservableObject
                 });
             }
 
-            var pointMap = LastResult.Points.ToDictionary(x => x.Name, x => x.Position, StringComparer.OrdinalIgnoreCase);
+            var distanceAnchorMap = new Dictionary<string, Point2d>(StringComparer.OrdinalIgnoreCase);
+            foreach (var p in LastResult.Points)
+            {
+                distanceAnchorMap[p.Name] = p.Position;
+            }
+            foreach (var c in LastResult.CircleFinders)
+            {
+                if (c.Found)
+                {
+                    distanceAnchorMap[c.Name] = c.Center;
+                }
+            }
+            foreach (var d2 in LastResult.Diameters)
+            {
+                if (d2.Found)
+                {
+                    distanceAnchorMap[d2.Name] = d2.Center;
+                }
+            }
             foreach (var d in LastResult.Distances)
             {
-                if (!pointMap.TryGetValue(d.PointA, out var a) || !pointMap.TryGetValue(d.PointB, out var b))
+                if (!distanceAnchorMap.TryGetValue(d.PointA, out var a) || !distanceAnchorMap.TryGetValue(d.PointB, out var b))
                 {
                     continue;
                 }
