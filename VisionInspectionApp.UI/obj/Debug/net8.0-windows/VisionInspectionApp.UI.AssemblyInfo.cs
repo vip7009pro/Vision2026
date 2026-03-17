@@ -14,7 +14,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("VisionInspectionApp.UI")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+d62662fbc8d0e59a1c0f7d4c7344f8259b7354ba")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+a9f99f5ef709eb1119d2b68df3b4a86d7bdf3d86")]
 [assembly: System.Reflection.AssemblyProductAttribute("VisionInspectionApp.UI")]
 [assembly: System.Reflection.AssemblyTitleAttribute("VisionInspectionApp.UI")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]
