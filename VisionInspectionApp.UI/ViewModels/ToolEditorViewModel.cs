@@ -1282,6 +1282,13 @@ public sealed partial class ToolEditorViewModel : ObservableObject
 
     private static (double DistPx, Point2d A, Point2d B) CalculateLineLineDistance(LineDetectResult la, LineDetectResult lb, LineLineDistanceMode mode)
     {
+        if (mode == LineLineDistanceMode.ExtendToOtherEndpoints)
+        {
+            var (ea1, ea2) = ExtendSegmentToCoverOtherEndpoints(la.P1, la.P2, lb.P1, lb.P2);
+            var (eb1, eb2) = ExtendSegmentToCoverOtherEndpoints(lb.P1, lb.P2, la.P1, la.P2);
+            return Geometry2D.SegmentToSegmentDistance(ea1, ea2, eb1, eb2);
+        }
+
         if (mode == LineLineDistanceMode.MidpointToMidpoint)
         {
             var ma = new Point2d((la.P1.X + la.P2.X) * 0.5, (la.P1.Y + la.P2.Y) * 0.5);
@@ -1326,6 +1333,26 @@ public sealed partial class ToolEditorViewModel : ObservableObject
 
         // Default / legacy
         return Geometry2D.SegmentToSegmentDistance(la.P1, la.P2, lb.P1, lb.P2);
+    }
+
+    private static (Point2d P1, Point2d P2) ExtendSegmentToCoverOtherEndpoints(Point2d s1, Point2d s2, Point2d o1, Point2d o2)
+    {
+        var d = s2 - s1;
+        var len2 = d.X * d.X + d.Y * d.Y;
+        if (len2 <= 1e-12)
+        {
+            return (s1, s2);
+        }
+
+        var tO1 = ((o1.X - s1.X) * d.X + (o1.Y - s1.Y) * d.Y) / len2;
+        var tO2 = ((o2.X - s1.X) * d.X + (o2.Y - s1.Y) * d.Y) / len2;
+
+        var tMin = Math.Min(0.0, Math.Min(tO1, tO2));
+        var tMax = Math.Max(1.0, Math.Max(tO1, tO2));
+
+        var p1 = new Point2d(s1.X + tMin * d.X, s1.Y + tMin * d.Y);
+        var p2 = new Point2d(s1.X + tMax * d.X, s1.Y + tMax * d.Y);
+        return (p1, p2);
     }
 
     private static (double DistPx, Point2d ClosestOnLine) CalculatePointLineDistance(Point2d p, LineDetectResult l, PointLineDistanceMode mode)

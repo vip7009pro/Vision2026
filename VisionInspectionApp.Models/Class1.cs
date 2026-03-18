@@ -5,7 +5,8 @@ public enum LineLineDistanceMode
     ClosestPointsOnSegments = 0,
     MidpointToMidpoint = 1,
     NearestEndpoints = 2,
-    FarthestEndpoints = 3
+    FarthestEndpoints = 3,
+    ExtendToOtherEndpoints = 4
 }
 
 public sealed class EdgePairDetectDefinition
