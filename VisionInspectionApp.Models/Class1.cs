@@ -391,6 +391,27 @@ public enum IlluminationCorrectionPreset
     Clahe = 3
 }
 
+public enum PointFindAlgorithm
+{
+    TemplateMatch = 0,
+    EdgePoint = 1
+}
+
+public sealed class EdgePointSettings
+{
+    public CaliperOrientation Orientation { get; set; } = CaliperOrientation.Vertical;
+
+    public EdgePolarity Polarity { get; set; } = EdgePolarity.Any;
+
+    public int StripCount { get; set; } = 10;
+
+    public int StripWidth { get; set; } = 7;
+
+    public int StripLength { get; set; } = 60;
+
+    public double MinEdgeStrength { get; set; } = 10.0;
+}
+
 public sealed class PointDefinition
 {
     public string Name { get; set; } = string.Empty;
@@ -404,6 +425,10 @@ public sealed class PointDefinition
     public ShapeModelDefinition? ShapeModel { get; set; }
 
     public double MatchScoreThreshold { get; set; } = 0.8;
+
+    public PointFindAlgorithm Algorithm { get; set; } = PointFindAlgorithm.TemplateMatch;
+
+    public EdgePointSettings EdgePoint { get; set; } = new();
 
     public Point2dModel WorldPosition { get; set; } = new();
 

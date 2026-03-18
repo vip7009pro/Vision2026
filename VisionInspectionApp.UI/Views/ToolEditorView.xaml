@@ -152,6 +152,11 @@
                             <StackPanel Visibility="{Binding IsPointNode, Converter={StaticResource BoolToVis}}">
                                 <TextBlock Text="Point Params" FontWeight="SemiBold" Margin="0,8,0,6" />
 
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                                    <TextBlock Text="Algo" Width="60" VerticalAlignment="Center" />
+                                    <ComboBox Width="160" ItemsSource="{Binding AvailablePointFindAlgorithms}" SelectedItem="{Binding Point_Algorithm, UpdateSourceTrigger=PropertyChanged}" />
+                                </StackPanel>
+
                                 <TextBlock Text="Ctrl+Shift+Click to set offset" Margin="0,0,0,6" />
 
                                 <StackPanel Orientation="Horizontal" Margin="0,0,0,2">
@@ -161,6 +166,43 @@
                                 <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
                                     <TextBlock Text="OffY" Width="60" VerticalAlignment="Center" />
                                     <TextBox Width="80" Text="{Binding Point_OffsetY, UpdateSourceTrigger=PropertyChanged, Delay=150}" />
+                                </StackPanel>
+
+                                <StackPanel Visibility="{Binding IsPointEdgePointAlgorithm, Converter={StaticResource BoolToVis}}">
+                                    <TextBlock Text="Edge Point" FontWeight="SemiBold" Margin="0,8,0,6" />
+
+                                    <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                                        <TextBlock Text="Ori" Width="60" VerticalAlignment="Center" />
+                                        <ComboBox Width="160" ItemsSource="{Binding AvailableCaliperOrientations}" SelectedItem="{Binding Point_Edge_Orientation, UpdateSourceTrigger=PropertyChanged}" />
+                                    </StackPanel>
+
+                                    <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                                        <TextBlock Text="Pol" Width="60" VerticalAlignment="Center" />
+                                        <ComboBox Width="160" ItemsSource="{Binding AvailableEdgePolarities}" SelectedItem="{Binding Point_Edge_Polarity, UpdateSourceTrigger=PropertyChanged}" />
+                                    </StackPanel>
+
+                                    <StackPanel Orientation="Horizontal" Margin="0,0,0,2">
+                                        <TextBlock Text="N" Width="60" VerticalAlignment="Center" />
+                                        <TextBox Width="80" Text="{Binding Point_Edge_StripCount, UpdateSourceTrigger=PropertyChanged, Delay=150}" />
+                                    </StackPanel>
+                                    <StackPanel Orientation="Horizontal" Margin="0,0,0,2">
+                                        <TextBlock Text="W" Width="60" VerticalAlignment="Center" />
+                                        <TextBox Width="80" Text="{Binding Point_Edge_StripWidth, UpdateSourceTrigger=PropertyChanged, Delay=150}" />
+                                    </StackPanel>
+                                    <StackPanel Orientation="Horizontal" Margin="0,0,0,2">
+                                        <TextBlock Text="L" Width="60" VerticalAlignment="Center" />
+                                        <TextBox Width="80" Text="{Binding Point_Edge_StripLength, UpdateSourceTrigger=PropertyChanged, Delay=150}" />
+                                    </StackPanel>
+                                    <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                                        <TextBlock Text="MinG" Width="60" VerticalAlignment="Center" />
+                                        <TextBox Width="80" Text="{Binding Point_Edge_MinEdgeStrength, UpdateSourceTrigger=PropertyChanged, Delay=150}" />
+                                    </StackPanel>
+
+                                    <CheckBox Content="Preview" IsChecked="{Binding PointEdgePreviewEnabled, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,6" />
+
+                                    <Border BorderBrush="#DDD" BorderThickness="1" Padding="4" Margin="0,0,0,6">
+                                        <Image Source="{Binding PointEdgePreviewImage}" Stretch="Uniform" Height="120" />
+                                    </Border>
                                 </StackPanel>
                             </StackPanel>
 

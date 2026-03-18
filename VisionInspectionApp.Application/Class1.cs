@@ -974,6 +974,8 @@ public sealed class InspectionService : IInspectionService
                         SearchRoi = shrunk,
                         WorldPosition = originDefBase.WorldPosition,
                         OffsetPx = originDefBase.OffsetPx,
+                        Algorithm = originDefBase.Algorithm,
+                        EdgePoint = originDefBase.EdgePoint,
                         ShapeModel = originDefBase.ShapeModel
                     };
                 }
@@ -1039,25 +1041,208 @@ public sealed class InspectionService : IInspectionService
                             SearchRoi = shrunk,
                             WorldPosition = def.WorldPosition,
                             OffsetPx = def.OffsetPx,
+                            Algorithm = def.Algorithm,
+                            EdgePoint = def.EdgePoint,
                             ShapeModel = def.ShapeModel
                         };
                     }
-                    var templ = GetTemplateGray(def.TemplateImageFile);
-                    var m = _matcher.MatchWithFixedRotation(matForPoint, def, templ, templateAngleDeg, preForPoint);
-                    if (!ReferenceEquals(def, defBase) && m.Score < defBase.MatchScoreThreshold)
+
+                    static (bool Found, Point2d Position, double Score, Rect MatchRect) FindPointByEdge(Mat matBgrOrGray, Roi roi, EdgePointSettings ep)
                     {
-                        var templ2 = GetTemplateGray(defBase.TemplateImageFile);
-                        var retry = _matcher.MatchWithFixedRotation(matForPoint, defBase, templ2, templateAngleDeg, preForPoint);
-                        if (retry.Score > m.Score)
+                        if (matBgrOrGray is null || roi.Width <= 0 || roi.Height <= 0)
                         {
-                            m = retry;
+                            return (false, default, 0.0, default);
                         }
+
+                        var rect = new Rect(roi.X, roi.Y, roi.Width, roi.Height)
+                            .Intersect(new Rect(0, 0, matBgrOrGray.Width, matBgrOrGray.Height));
+                        if (rect.Width <= 0 || rect.Height <= 0)
+                        {
+                            return (false, default, 0.0, default);
+                        }
+
+                        using var crop = new Mat(matBgrOrGray, rect);
+                        Mat gray = crop;
+                        using var grayOwned = crop.Channels() == 1 ? null : crop.CvtColor(ColorConversionCodes.BGR2GRAY);
+                        if (grayOwned is not null)
+                        {
+                            gray = grayOwned;
+                        }
+
+                        var stripCount = Math.Clamp(ep.StripCount, 1, 200);
+                        var stripWidth = Math.Clamp(ep.StripWidth, 1, Math.Max(1, Math.Min(rect.Width, rect.Height)));
+                        var stripLength = Math.Clamp(ep.StripLength, 3, Math.Max(3, Math.Max(rect.Width, rect.Height)));
+
+                        var sumX = 0.0;
+                        var sumY = 0.0;
+                        var sumG = 0.0;
+                        var foundN = 0;
+
+                        static double InterpPeak(double a, double b, double c)
+                        {
+                            var denom = (a - 2 * b + c);
+                            if (Math.Abs(denom) < 1e-12) return 0.0;
+                            return 0.5 * (a - c) / denom;
+                        }
+
+                        for (var i = 0; i < stripCount; i++)
+                        {
+                            if (ep.Orientation == CaliperOrientation.Vertical)
+                            {
+                                var xCenter = (i + 0.5) * rect.Width / stripCount;
+                                var x0 = (int)Math.Round(xCenter - stripWidth / 2.0);
+                                var y0 = (int)Math.Round((rect.Height - stripLength) / 2.0);
+                                var sr = new Rect(x0, y0, stripWidth, stripLength)
+                                    .Intersect(new Rect(0, 0, rect.Width, rect.Height));
+                                if (sr.Width <= 0 || sr.Height <= 2) continue;
+
+                                using var s = new Mat(gray, sr);
+                                using var prof = new Mat();
+                                Cv2.Reduce(s, prof, dim: ReduceDimension.Column, ReduceTypes.Avg, MatType.CV_64F);
+
+                                var n = prof.Rows;
+                                if (n < 3) continue;
+
+                                var bestIdx = -1;
+                                var bestVal = 0.0;
+                                for (var y = 1; y < n - 1; y++)
+                                {
+                                    var v0 = prof.Get<double>(y - 1, 0);
+                                    var v1 = prof.Get<double>(y, 0);
+                                    var v2 = prof.Get<double>(y + 1, 0);
+                                    var g = (v2 - v0) * 0.5;
+                                    if (ep.Polarity == EdgePolarity.DarkToLight) { if (g <= 0) continue; }
+                                    else if (ep.Polarity == EdgePolarity.LightToDark) { if (g >= 0) continue; g = -g; }
+                                    else { g = Math.Abs(g); }
+
+                                    if (g > bestVal)
+                                    {
+                                        bestVal = g;
+                                        bestIdx = y;
+                                    }
+                                }
+
+                                if (bestIdx < 1 || bestIdx >= n - 1) continue;
+                                if (bestVal < ep.MinEdgeStrength) continue;
+
+                                var gL = Math.Abs(prof.Get<double>(bestIdx, 0) - prof.Get<double>(bestIdx - 1, 0));
+                                var gC = Math.Abs(prof.Get<double>(bestIdx + 1, 0) - prof.Get<double>(bestIdx - 1, 0)) * 0.5;
+                                var gR = Math.Abs(prof.Get<double>(bestIdx + 1, 0) - prof.Get<double>(bestIdx, 0));
+                                var sub = InterpPeak(gL, gC, gR);
+
+                                var ySub = bestIdx + sub;
+                                var xGlobal = rect.X + sr.X + sr.Width / 2.0;
+                                var yGlobal = rect.Y + sr.Y + ySub;
+
+                                sumX += xGlobal;
+                                sumY += yGlobal;
+                                sumG += bestVal;
+                                foundN++;
+                            }
+                            else
+                            {
+                                var yCenter = (i + 0.5) * rect.Height / stripCount;
+                                var y0 = (int)Math.Round(yCenter - stripWidth / 2.0);
+                                var x0 = (int)Math.Round((rect.Width - stripLength) / 2.0);
+                                var sr = new Rect(x0, y0, stripLength, stripWidth)
+                                    .Intersect(new Rect(0, 0, rect.Width, rect.Height));
+                                if (sr.Width <= 2 || sr.Height <= 0) continue;
+
+                                using var s = new Mat(gray, sr);
+                                using var prof = new Mat();
+                                Cv2.Reduce(s, prof, dim: ReduceDimension.Row, ReduceTypes.Avg, MatType.CV_64F);
+
+                                var n = prof.Cols;
+                                if (n < 3) continue;
+
+                                var bestIdx = -1;
+                                var bestVal = 0.0;
+                                for (var x = 1; x < n - 1; x++)
+                                {
+                                    var v0 = prof.Get<double>(0, x - 1);
+                                    var v1 = prof.Get<double>(0, x);
+                                    var v2 = prof.Get<double>(0, x + 1);
+                                    var g = (v2 - v0) * 0.5;
+                                    if (ep.Polarity == EdgePolarity.DarkToLight) { if (g <= 0) continue; }
+                                    else if (ep.Polarity == EdgePolarity.LightToDark) { if (g >= 0) continue; g = -g; }
+                                    else { g = Math.Abs(g); }
+
+                                    if (g > bestVal)
+                                    {
+                                        bestVal = g;
+                                        bestIdx = x;
+                                    }
+                                }
+
+                                if (bestIdx < 1 || bestIdx >= n - 1) continue;
+                                if (bestVal < ep.MinEdgeStrength) continue;
+
+                                var gL = Math.Abs(prof.Get<double>(0, bestIdx) - prof.Get<double>(0, bestIdx - 1));
+                                var gC = Math.Abs(prof.Get<double>(0, bestIdx + 1) - prof.Get<double>(0, bestIdx - 1)) * 0.5;
+                                var gR = Math.Abs(prof.Get<double>(0, bestIdx + 1) - prof.Get<double>(0, bestIdx));
+                                var sub = InterpPeak(gL, gC, gR);
+
+                                var xSub = bestIdx + sub;
+                                var xGlobal = rect.X + sr.X + xSub;
+                                var yGlobal = rect.Y + sr.Y + sr.Height / 2.0;
+
+                                sumX += xGlobal;
+                                sumY += yGlobal;
+                                sumG += bestVal;
+                                foundN++;
+                            }
+                        }
+
+                        if (foundN <= 0)
+                        {
+                            return (false, default, foundN == 0 ? 0.0 : sumG / foundN, rect);
+                        }
+
+                        var pos = new Point2d(sumX / foundN, sumY / foundN);
+                        var score = sumG / foundN;
+                        return (true, pos, score, rect);
                     }
-                    var pass = m.Score >= p.MatchScoreThreshold;
+
+                    Point2d basePos;
+                    Rect matchRect;
+                    double score;
+                    double thr;
+                    bool pass;
+
+                    if (p.Algorithm == PointFindAlgorithm.EdgePoint)
+                    {
+                        var r = FindPointByEdge(matForPoint, def.SearchRoi, p.EdgePoint);
+                        basePos = r.Position;
+                        matchRect = r.MatchRect;
+                        score = r.Score;
+                        thr = p.EdgePoint.MinEdgeStrength;
+                        pass = r.Found;
+                    }
+                    else
+                    {
+                        var templ = GetTemplateGray(def.TemplateImageFile);
+                        var m = _matcher.MatchWithFixedRotation(matForPoint, def, templ, templateAngleDeg, preForPoint);
+                        if (!ReferenceEquals(def, defBase) && m.Score < defBase.MatchScoreThreshold)
+                        {
+                            var templ2 = GetTemplateGray(defBase.TemplateImageFile);
+                            var retry = _matcher.MatchWithFixedRotation(matForPoint, defBase, templ2, templateAngleDeg, preForPoint);
+                            if (retry.Score > m.Score)
+                            {
+                                m = retry;
+                            }
+                        }
+
+                        basePos = m.Position;
+                        matchRect = m.MatchRect;
+                        score = m.Score;
+                        thr = p.MatchScoreThreshold;
+                        pass = score >= thr;
+                    }
+
                     var off = new Point2d(p.OffsetPx.X, p.OffsetPx.Y);
                     var offRot = Rotate(off, new Point2d(0, 0), templateAngleDeg);
-                    var pos = new Point2d(m.Position.X + offRot.X, m.Position.Y + offRot.Y);
-                    return new PointMatchResult(p.Name, pos, m.MatchRect, m.Score, p.MatchScoreThreshold, pass, 0.0);
+                    var pos = new Point2d(basePos.X + offRot.X, basePos.Y + offRot.Y);
+                    return new PointMatchResult(p.Name, pos, matchRect, score, thr, pass, 0.0);
                 }))
                 .ToArray();
 

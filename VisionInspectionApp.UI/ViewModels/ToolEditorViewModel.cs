@@ -617,6 +617,9 @@ public sealed partial class ToolEditorViewModel : ObservableObject
     public ObservableCollection<BlobPolarity> AvailableBlobPolarities { get; }
         = new ObservableCollection<BlobPolarity>((BlobPolarity[])Enum.GetValues(typeof(BlobPolarity)));
 
+    public ObservableCollection<PointFindAlgorithm> AvailablePointFindAlgorithms { get; }
+        = new ObservableCollection<PointFindAlgorithm>((PointFindAlgorithm[])Enum.GetValues(typeof(PointFindAlgorithm)));
+
     [ObservableProperty]
     private string _selectedToolPreprocessChoice = DefaultPreprocessChoice;
 
@@ -1086,6 +1089,195 @@ public sealed partial class ToolEditorViewModel : ObservableObject
         }
 
         LinePreviewImage = view.ToBitmapSource();
+    }
+
+    private void RefreshPointEdgePreview(Mat snap)
+    {
+        if (!PointEdgePreviewEnabled)
+        {
+            PointEdgePreviewImage = null;
+            return;
+        }
+
+        if (_config is null || SelectedNode is null || !string.Equals(SelectedNode.Type, "Point", StringComparison.OrdinalIgnoreCase))
+        {
+            PointEdgePreviewImage = null;
+            return;
+        }
+
+        var def = SelectedPointDef();
+        if (def is null || def.SearchRoi.Width <= 0 || def.SearchRoi.Height <= 0)
+        {
+            PointEdgePreviewImage = null;
+            return;
+        }
+
+        if (def.Algorithm != PointFindAlgorithm.EdgePoint)
+        {
+            PointEdgePreviewImage = null;
+            return;
+        }
+
+        using var matForPoint = ResolveToolPreprocessForPreview(snap, SelectedNode);
+
+        var rect = new OpenCvSharp.Rect(def.SearchRoi.X, def.SearchRoi.Y, def.SearchRoi.Width, def.SearchRoi.Height);
+        rect = rect.Intersect(new OpenCvSharp.Rect(0, 0, matForPoint.Width, matForPoint.Height));
+        if (rect.Width <= 0 || rect.Height <= 0)
+        {
+            PointEdgePreviewImage = null;
+            return;
+        }
+
+        using var crop = new Mat(matForPoint, rect);
+        using var gray = crop.Channels() == 1 ? crop.Clone() : crop.CvtColor(ColorConversionCodes.BGR2GRAY);
+        using var view = crop.Clone();
+
+        var n = Math.Clamp(def.EdgePoint.StripCount, 1, 200);
+        var stripW = Math.Max(1, def.EdgePoint.StripWidth);
+        var stripL = Math.Max(3, def.EdgePoint.StripLength);
+        var minG = Math.Max(0.0, def.EdgePoint.MinEdgeStrength);
+
+        var foundPts = new System.Collections.Generic.List<Point2d>();
+
+        if (def.EdgePoint.Orientation == CaliperOrientation.Vertical)
+        {
+            var y0 = (int)Math.Round((gray.Rows - (n - 1) * stripW) / 2.0);
+            var xMid = gray.Cols / 2;
+
+            for (var i = 0; i < n; i++)
+            {
+                var y = y0 + i * stripW;
+                var rr = new OpenCvSharp.Rect(Math.Max(0, xMid - stripL / 2), Math.Max(0, y), Math.Min(stripL, gray.Cols), Math.Min(stripW, gray.Rows - y));
+                if (rr.Width <= 1 || rr.Height <= 0) continue;
+
+                Cv2.Rectangle(view, rr, new Scalar(255, 200, 0), 1);
+
+                var edge = FindEdgeOnStrip(gray, rr, scanAlongX: true, def.EdgePoint.Polarity, minG);
+                if (edge.HasValue)
+                {
+                    foundPts.Add(new Point2d(edge.Value.X, edge.Value.Y));
+                    Cv2.Circle(view, new OpenCvSharp.Point((int)Math.Round(edge.Value.X), (int)Math.Round(edge.Value.Y)), 3, new Scalar(0, 255, 0), 2);
+                }
+            }
+        }
+        else
+        {
+            var x0 = (int)Math.Round((gray.Cols - (n - 1) * stripW) / 2.0);
+            var yMid = gray.Rows / 2;
+
+            for (var i = 0; i < n; i++)
+            {
+                var x = x0 + i * stripW;
+                var rr = new OpenCvSharp.Rect(Math.Max(0, x), Math.Max(0, yMid - stripL / 2), Math.Min(stripW, gray.Cols - x), Math.Min(stripL, gray.Rows));
+                if (rr.Width <= 0 || rr.Height <= 1) continue;
+
+                Cv2.Rectangle(view, rr, new Scalar(255, 200, 0), 1);
+
+                var edge = FindEdgeOnStrip(gray, rr, scanAlongX: false, def.EdgePoint.Polarity, minG);
+                if (edge.HasValue)
+                {
+                    foundPts.Add(new Point2d(edge.Value.X, edge.Value.Y));
+                    Cv2.Circle(view, new OpenCvSharp.Point((int)Math.Round(edge.Value.X), (int)Math.Round(edge.Value.Y)), 3, new Scalar(0, 255, 0), 2);
+                }
+            }
+        }
+
+        if (foundPts.Count > 0)
+        {
+            var avgX = foundPts.Average(p => p.X);
+            var avgY = foundPts.Average(p => p.Y);
+            Cv2.DrawMarker(view, new OpenCvSharp.Point((int)Math.Round(avgX), (int)Math.Round(avgY)), new Scalar(0, 0, 255), MarkerTypes.Cross, 20, 2);
+        }
+
+        PointEdgePreviewImage = view.ToBitmapSource();
+    }
+
+    private static Point2d? FindEdgeOnStrip(Mat gray, OpenCvSharp.Rect strip, bool scanAlongX, EdgePolarity polarity, double minG)
+    {
+        var len = scanAlongX ? strip.Width : strip.Height;
+        if (len < 3) return null;
+
+        var prof = new double[len];
+        if (scanAlongX)
+        {
+            var y = strip.Y + strip.Height / 2;
+            for (var k = 0; k < len; k++)
+            {
+                prof[k] = gray.At<byte>(y, strip.X + k);
+            }
+        }
+        else
+        {
+            var x = strip.X + strip.Width / 2;
+            for (var k = 0; k < len; k++)
+            {
+                prof[k] = gray.At<byte>(strip.Y + k, x);
+            }
+        }
+
+        var bestIdx = -1;
+        var bestG = 0.0;
+
+        for (var k = 0; k < len - 1; k++)
+        {
+            var g = prof[k + 1] - prof[k];
+            var score = polarity switch
+            {
+                EdgePolarity.DarkToLight => g,
+                EdgePolarity.LightToDark => -g,
+                _ => Math.Abs(g)
+            };
+
+            if (score > bestG)
+            {
+                bestG = score;
+                bestIdx = k;
+            }
+        }
+
+        if (bestIdx < 1 || bestIdx >= len - 2) return null;
+        if (bestG < minG) return null;
+
+        var g0 = (prof[bestIdx] - prof[bestIdx - 1]);
+        var g1 = (prof[bestIdx + 1] - prof[bestIdx]);
+        var g2 = (prof[bestIdx + 2] - prof[bestIdx + 1]);
+
+        var p0 = polarity switch
+        {
+            EdgePolarity.DarkToLight => g0,
+            EdgePolarity.LightToDark => -g0,
+            _ => Math.Abs(g0)
+        };
+        var p1 = polarity switch
+        {
+            EdgePolarity.DarkToLight => g1,
+            EdgePolarity.LightToDark => -g1,
+            _ => Math.Abs(g1)
+        };
+        var p2 = polarity switch
+        {
+            EdgePolarity.DarkToLight => g2,
+            EdgePolarity.LightToDark => -g2,
+            _ => Math.Abs(g2)
+        };
+
+        var denom = (p0 - 2.0 * p1 + p2);
+        var dx = Math.Abs(denom) < 1e-9 ? 0.0 : 0.5 * (p0 - p2) / denom;
+        dx = Math.Clamp(dx, -1.0, 1.0);
+        var idx = bestIdx + 0.5 + dx;
+
+        if (scanAlongX)
+        {
+            var x = strip.X + idx;
+            var y = strip.Y + strip.Height / 2.0;
+            return new Point2d(x, y);
+        }
+        else
+        {
+            var x = strip.X + strip.Width / 2.0;
+            var y = strip.Y + idx;
+            return new Point2d(x, y);
+        }
     }
 
     private static (double DistPx, Point2d A, Point2d B) CalculateLineLineDistance(LineDetectResult la, LineDetectResult lb, LineLineDistanceMode mode)
@@ -2077,6 +2269,9 @@ public sealed partial class ToolEditorViewModel : ObservableObject
     private ImageSource? _linePreviewImage;
 
     [ObservableProperty]
+    private ImageSource? _pointEdgePreviewImage;
+
+    [ObservableProperty]
     private ImageSource? _blobThresholdPreviewImage;
 
     public ObservableCollection<OverlayItem> SelectedNodeOverlayItems { get; }
@@ -2252,6 +2447,9 @@ public sealed partial class ToolEditorViewModel : ObservableObject
     private bool _linePreviewEnabled = true;
 
     [ObservableProperty]
+    private bool _pointEdgePreviewEnabled = true;
+
+    [ObservableProperty]
     private bool _preprocessPreviewEnabled = true;
 
     [ObservableProperty]
@@ -2274,6 +2472,12 @@ public sealed partial class ToolEditorViewModel : ObservableObject
     }
 
     partial void OnLinePreviewEnabledChanged(bool value)
+    {
+        RefreshPreviews();
+        RaiseToolPropertyPanelsChanged();
+    }
+
+    partial void OnPointEdgePreviewEnabledChanged(bool value)
     {
         RefreshPreviews();
         RaiseToolPropertyPanelsChanged();
@@ -2307,6 +2511,19 @@ public sealed partial class ToolEditorViewModel : ObservableObject
         OnPropertyChanged(nameof(IsBlobDetectionNode));
         OnPropertyChanged(nameof(IsSurfaceCompareNode));
         OnPropertyChanged(nameof(IsCodeDetectionNode));
+
+        OnPropertyChanged(nameof(AvailablePointFindAlgorithms));
+        OnPropertyChanged(nameof(Point_Algorithm));
+        OnPropertyChanged(nameof(IsPointEdgePointAlgorithm));
+
+        OnPropertyChanged(nameof(Point_Edge_Orientation));
+        OnPropertyChanged(nameof(Point_Edge_Polarity));
+        OnPropertyChanged(nameof(Point_Edge_StripCount));
+        OnPropertyChanged(nameof(Point_Edge_StripWidth));
+        OnPropertyChanged(nameof(Point_Edge_StripLength));
+        OnPropertyChanged(nameof(Point_Edge_MinEdgeStrength));
+        OnPropertyChanged(nameof(PointEdgePreviewEnabled));
+        OnPropertyChanged(nameof(PointEdgePreviewImage));
 
         OnPropertyChanged(nameof(AvailableCircleFindAlgorithms));
         OnPropertyChanged(nameof(AvailableCircleFinderNames));
@@ -2404,11 +2621,124 @@ public sealed partial class ToolEditorViewModel : ObservableObject
 
     public bool IsPointNode => string.Equals(SelectedNode?.Type, "Point", StringComparison.OrdinalIgnoreCase);
 
+    public bool IsPointEdgePointAlgorithm => Point_Algorithm == PointFindAlgorithm.EdgePoint;
+
     private PointDefinition? SelectedPointDef()
     {
         if (_config is null || SelectedNode is null) return null;
         if (!string.Equals(SelectedNode.Type, "Point", StringComparison.OrdinalIgnoreCase)) return null;
         return _config.Points.FirstOrDefault(x => string.Equals(x.Name, SelectedNode.RefName, StringComparison.OrdinalIgnoreCase));
+    }
+
+    public PointFindAlgorithm Point_Algorithm
+    {
+        get => SelectedPointDef()?.Algorithm ?? PointFindAlgorithm.TemplateMatch;
+        set
+        {
+            var def = SelectedPointDef();
+            if (def is null) return;
+            if (def.Algorithm == value) return;
+            def.Algorithm = value;
+            RaiseToolPropertyPanelsChanged();
+            RefreshPreviews();
+            RequestAutoSave();
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(IsPointEdgePointAlgorithm));
+        }
+    }
+
+    public CaliperOrientation Point_Edge_Orientation
+    {
+        get => SelectedPointDef()?.EdgePoint.Orientation ?? CaliperOrientation.Vertical;
+        set
+        {
+            var def = SelectedPointDef();
+            if (def is null) return;
+            if (def.EdgePoint.Orientation == value) return;
+            def.EdgePoint.Orientation = value;
+            RefreshPreviews();
+            RequestAutoSave();
+            OnPropertyChanged();
+        }
+    }
+
+    public EdgePolarity Point_Edge_Polarity
+    {
+        get => SelectedPointDef()?.EdgePoint.Polarity ?? EdgePolarity.Any;
+        set
+        {
+            var def = SelectedPointDef();
+            if (def is null) return;
+            if (def.EdgePoint.Polarity == value) return;
+            def.EdgePoint.Polarity = value;
+            RefreshPreviews();
+            RequestAutoSave();
+            OnPropertyChanged();
+        }
+    }
+
+    public int Point_Edge_StripCount
+    {
+        get => SelectedPointDef()?.EdgePoint.StripCount ?? 0;
+        set
+        {
+            var def = SelectedPointDef();
+            if (def is null) return;
+            var v = Math.Clamp(value, 1, 200);
+            if (def.EdgePoint.StripCount == v) return;
+            def.EdgePoint.StripCount = v;
+            RefreshPreviews();
+            RequestAutoSave();
+            OnPropertyChanged();
+        }
+    }
+
+    public int Point_Edge_StripWidth
+    {
+        get => SelectedPointDef()?.EdgePoint.StripWidth ?? 0;
+        set
+        {
+            var def = SelectedPointDef();
+            if (def is null) return;
+            var v = Math.Max(1, value);
+            if (def.EdgePoint.StripWidth == v) return;
+            def.EdgePoint.StripWidth = v;
+            RefreshPreviews();
+            RequestAutoSave();
+            OnPropertyChanged();
+        }
+    }
+
+    public int Point_Edge_StripLength
+    {
+        get => SelectedPointDef()?.EdgePoint.StripLength ?? 0;
+        set
+        {
+            var def = SelectedPointDef();
+            if (def is null) return;
+            var v = Math.Max(3, value);
+            if (def.EdgePoint.StripLength == v) return;
+            def.EdgePoint.StripLength = v;
+            RefreshPreviews();
+            RequestAutoSave();
+            OnPropertyChanged();
+        }
+    }
+
+    public double Point_Edge_MinEdgeStrength
+    {
+        get => SelectedPointDef()?.EdgePoint.MinEdgeStrength ?? 0.0;
+        set
+        {
+            var def = SelectedPointDef();
+            if (def is null) return;
+            var v = Math.Max(0.0, value);
+            if (Math.Abs(def.EdgePoint.MinEdgeStrength - v) < 0.0000001) return;
+            def.EdgePoint.MinEdgeStrength = v;
+            RefreshPreviews();
+            RequestAutoSave();
+            OnPropertyChanged();
+        }
     }
 
     public double Point_OffsetX
@@ -4558,7 +4888,10 @@ public sealed partial class ToolEditorViewModel : ObservableObject
         }
 
         var originOk = HasTemplate(_config.Origin);
-        var anyPointNeedsTemplate = _config.Points.Any(p => (p.SearchRoi.Width > 0 && p.SearchRoi.Height > 0) && !HasTemplate(p));
+        var anyPointNeedsTemplate = _config.Points.Any(p =>
+            p.Algorithm == PointFindAlgorithm.TemplateMatch
+            && (p.SearchRoi.Width > 0 && p.SearchRoi.Height > 0)
+            && !HasTemplate(p));
 
         var graphNeedsOrigin = Nodes.Any(n => string.Equals(n.Type, "Origin", StringComparison.OrdinalIgnoreCase));
         var graphNeedsPoint = Nodes.Any(n => string.Equals(n.Type, "Point", StringComparison.OrdinalIgnoreCase));
@@ -5359,6 +5692,7 @@ public sealed partial class ToolEditorViewModel : ObservableObject
         {
             SelectedNodePreviewImage = null;
             LinePreviewImage = null;
+            PointEdgePreviewImage = null;
             BlobThresholdPreviewImage = null;
             return;
         }
@@ -5410,11 +5744,13 @@ public sealed partial class ToolEditorViewModel : ObservableObject
         if (_config is null)
         {
             LinePreviewImage = null;
+            PointEdgePreviewImage = null;
             BlobThresholdPreviewImage = null;
             return;
         }
 
         RefreshLineRoiPreview(snap);
+        RefreshPointEdgePreview(snap);
 
         if (_lastRun is not null)
         {
@@ -8036,3 +8372,4 @@ public sealed class ToolGraphEdgeViewModel : ObservableObject
         return new System.Windows.Point(_to.X, _to.Y + cy);
     }
 }
+
