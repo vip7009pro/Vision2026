@@ -247,6 +247,7 @@ public partial class ImageViewerControl : UserControl
         var dy = p.Y - _panStart.Y;
         _translate.X = _panStartX + dx;
         _translate.Y = _panStartY + dy;
+        e.Handled = true;
     }
 
     public ICommand? RoiSelectedCommand
@@ -309,6 +310,29 @@ public partial class ImageViewerControl : UserControl
     private void OverlayItems_CollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
     {
         RedrawOverlays();
+    }
+
+    private string? FindHoverRoiLabel(BitmapSource bmp, Point contentPos)
+    {
+        if (OverlayItems is null)
+        {
+            return null;
+        }
+
+        // Prefer last (top-most) ROI if multiple overlap.
+        var rects = OverlayItems.OfType<OverlayRectItem>().ToList();
+        for (var i = rects.Count - 1; i >= 0; i--)
+        {
+            var r = rects[i];
+            if (r.Width <= 0 || r.Height <= 0) continue;
+            if (contentPos.X >= r.X && contentPos.X <= r.X + r.Width
+                && contentPos.Y >= r.Y && contentPos.Y <= r.Y + r.Height)
+            {
+                return r.Label;
+            }
+        }
+
+        return null;
     }
 
     private string? GetDesiredRoiLabelForDraw(RoiDrawKind kind)
@@ -483,6 +507,11 @@ public partial class ImageViewerControl : UserControl
 
     private void RedrawOverlays()
     {
+        if (_panning)
+        {
+            return;
+        }
+
         if (_dragging)
         {
             return;
@@ -794,11 +823,17 @@ public partial class ImageViewerControl : UserControl
 
     private void OverlayOnMouseMove(object sender, MouseEventArgs e)
     {
+        if (_panning)
+        {
+            return;
+        }
+
         if (EnableRoiEditing && !_roiEditing && !_dragging && !_lineDragging && ImageSource is BitmapSource bmp && OverlayItems is not null)
         {
-            var viewPos = ViewToContent(e.GetPosition(PART_Overlay));
-            var hover = FindTopRoiLabelAt(bmp, viewPos);
-            UpdateCursorForRoiHover(bmp, viewPos, hover);
+            var viewPos = e.GetPosition(PART_Overlay);
+            var contentPos = ViewToContent(viewPos);
+            var hover = FindHoverRoiLabel(bmp, contentPos);
+            UpdateCursorForRoiHover(bmp, contentPos, hover);
             if (!string.Equals(_hoverRoiLabel, hover, StringComparison.OrdinalIgnoreCase))
             {
                 _hoverRoiLabel = hover;
