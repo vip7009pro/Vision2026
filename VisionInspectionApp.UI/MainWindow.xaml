@@ -34,6 +34,14 @@
         <DataTemplate DataType="{x:Type viewModels:ManualInspectionViewModel}">
             <views:ManualInspectionView />
         </DataTemplate>
+
+        <DataTemplate DataType="{x:Type viewModels:LiveCameraViewModel}">
+            <views:LiveCameraView />
+        </DataTemplate>
+
+        <DataTemplate DataType="{x:Type viewModels:BatchProcessingViewModel}">
+            <views:BatchProcessingView />
+        </DataTemplate>
     </Window.Resources>
 
     <Grid>
@@ -56,6 +64,14 @@
 
             <TabItem Header="Inspection">
                 <ContentControl Content="{Binding Inspection}" />
+            </TabItem>
+
+            <TabItem Header="Live Camera">
+                <ContentControl Content="{Binding LiveCamera}" />
+            </TabItem>
+
+            <TabItem Header="Batch Processing">
+                <ContentControl Content="{Binding BatchProcessing}" />
             </TabItem>
         </TabControl>
     </Grid>

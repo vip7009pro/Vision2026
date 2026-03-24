@@ -47,11 +47,17 @@ public partial class App : System.Windows.Application
                 services.AddSingleton<GlobalAppSettingsService>();
                 services.AddSingleton<SharedImageContext>();
 
+                // Camera & Batch Processing Services
+                services.AddSingleton<CameraService>();
+                services.AddSingleton<BatchProcessingService>();
+
                 services.AddSingleton<TeachViewModel>();
                 services.AddSingleton<ToolEditorViewModel>();
                 services.AddSingleton<CalibrationViewModel>();
                 services.AddSingleton<ManualInspectionViewModel>();
                 services.AddSingleton<InspectionViewModel>();
+                services.AddSingleton<LiveCameraViewModel>();
+                services.AddSingleton<BatchProcessingViewModel>();
                 services.AddSingleton<MainWindowViewModel>();
                 services.AddSingleton<MainWindow>();
             })

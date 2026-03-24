@@ -7,5 +7,8 @@
     <Application.Resources>
         <converters:FlexibleDoubleConverter x:Key="DoubleConv" />
         <converters:BoolToOkNgConverter x:Key="OkNgConv" />
+        <converters:InverseBoolConverter x:Key="InverseBoolConverter" />
+        <converters:PassFailColorConverter x:Key="PassFailColorConverter" />
+        <converters:PassRateConverter x:Key="PassRateConverter" />
     </Application.Resources>
 </Application>

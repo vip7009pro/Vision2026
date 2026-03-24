@@ -1,0 +1,159 @@
+<UserControl x:Class="VisionInspectionApp.UI.Views.BatchProcessingView"
+         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+         xmlns:local="clr-namespace:VisionInspectionApp.UI.Controls">
+    <Grid Background="#F0F0F0">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <!-- Control Panel -->
+        <Border Grid.Row="0" Background="White" BorderBrush="#DDD" BorderThickness="0,0,0,1" Padding="10">
+            <StackPanel Orientation="Vertical">
+                <TextBlock Text="Batch Image Processing" FontSize="16" FontWeight="Bold" Margin="0,0,0,10" />
+
+            <!-- Folder Selection -->
+            <Grid Margin="0,0,0,10">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <TextBlock Grid.Column="0" Text="Folder:" VerticalAlignment="Center" FontWeight="Bold" Margin="0,0,10,0" />
+                <TextBlock Grid.Column="1" Text="{Binding FolderPath}" VerticalAlignment="Center" Foreground="#666" />
+                <Button Grid.Column="2" Command="{Binding BrowseFolderCommand}" Padding="10,8" Background="#2196F3" Foreground="White"
+                       IsEnabled="{Binding IsProcessing, Converter={StaticResource InverseBoolConverter}}" Margin="10,0,0,0">
+                    <TextBlock Text="Browse..." />
+                </Button>
+            </Grid>
+
+            <TextBlock Text="{Binding FileInfo}" FontSize="12" Foreground="#666" Margin="0,0,0,10" />
+
+            <!-- Config Selection -->
+            <Grid Margin="0,0,0,10">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="200" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+
+                <TextBlock Grid.Column="0" Text="Config:" VerticalAlignment="Center" FontWeight="Bold" Margin="0,0,10,0" />
+                <ComboBox Grid.Column="1" ItemsSource="{Binding AvailableConfigs}" SelectedItem="{Binding SelectedConfig}"
+                         IsEnabled="{Binding IsProcessing, Converter={StaticResource InverseBoolConverter}}" />
+            </Grid>
+
+            <!-- Progress Bar -->
+            <ProgressBar Height="20" Value="{Binding Progress}" Maximum="100" Margin="0,0,0,10" 
+                        Foreground="#4CAF50" Background="#E0E0E0" />
+            <TextBlock Text="{Binding Progress, StringFormat='Progress: {0}%'}" HorizontalAlignment="Center" FontSize="12" Margin="0,0,0,10" />
+
+            <!-- Control Buttons -->
+            <StackPanel Orientation="Horizontal">
+                <Button Command="{Binding StartBatchCommand}" Padding="15,10" Background="#4CAF50" Foreground="White" Margin="0,0,10,0"
+                       IsEnabled="{Binding IsProcessing, Converter={StaticResource InverseBoolConverter}}" FontWeight="Bold">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="▶" Margin="0,0,5,0" />
+                        <TextBlock Text="Start Processing" />
+                    </StackPanel>
+                </Button>
+
+                <Button Command="{Binding CancelBatchCommand}" Padding="15,10" Background="#F44336" Foreground="White" Margin="0,0,10,0"
+                       IsEnabled="{Binding IsProcessing}" FontWeight="Bold">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="⏹" Margin="0,0,5,0" />
+                        <TextBlock Text="Cancel" />
+                    </StackPanel>
+                </Button>
+
+                <Button Command="{Binding ExportResultsCommand}" Padding="15,10" Background="#FF9800" Foreground="White"
+                       IsEnabled="{Binding IsProcessing, Converter={StaticResource InverseBoolConverter}}" FontWeight="Bold">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="💾" Margin="0,0,5,0" />
+                        <TextBlock Text="Export CSV" />
+                    </StackPanel>
+                </Button>
+            </StackPanel>
+
+            <TextBlock Text="{Binding StatusMessage}" Foreground="#666" Margin="0,10,0,0" FontSize="12" FontWeight="Bold" />
+        </StackPanel>
+        </Border>
+
+        <!-- Results Area -->
+        <Grid Grid.Row="1">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+
+            <!-- Results Summary -->
+            <StackPanel Grid.Column="0" Margin="5">
+                <Border Background="White" Padding="10">
+                    <TextBlock Text="Processing Results" FontSize="14" FontWeight="Bold" />
+                </Border>
+                
+                <Grid Background="White" Margin="0,5,5,0">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
+
+                    <TextBlock Grid.Row="0" Text="{Binding TotalFiles, StringFormat='Total Files: {0}'}" FontSize="12" Margin="0,5" />
+                    <TextBlock Grid.Row="1" Text="{Binding TotalPass, StringFormat='✓ Passed: {0}'}" FontSize="12" Margin="0,5" Foreground="Green" FontWeight="Bold" />
+                    <TextBlock Grid.Row="2" Text="{Binding TotalFail, StringFormat='✗ Failed: {0}'}" FontSize="12" Margin="0,5" Foreground="Red" FontWeight="Bold" />
+                    
+                    <Border Grid.Row="3" Background="#F5F5F5" CornerRadius="5" Padding="10" Margin="0,10,0,0">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="0" Text="Pass Rate:" FontWeight="Bold" />
+                            <TextBlock Grid.Column="1" Text="{Binding TotalPass, StringFormat='Pass Count: {0}'}" 
+                                      HorizontalAlignment="Right" FontWeight="Bold" Foreground="Green" />
+                        </Grid>
+                    </Border>
+                </Grid>
+
+                <!-- Result Table -->
+                <ListBox Grid.Row="4" ItemsSource="{Binding ResultSummary}" Margin="0,10,5,0" Background="White" Padding="10">
+                    <ListBox.ItemTemplate>
+                        <DataTemplate>
+                            <Grid Margin="5">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="60" />
+                                    <ColumnDefinition Width="60" />
+                                    <ColumnDefinition Width="80" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Grid.Column="0" Text="{Binding FileName}" FontSize="11" Margin="5,0" />
+                                <TextBlock Grid.Column="1" Text="{Binding TotalMeasurements}" FontSize="11" />
+                                <TextBlock Grid.Column="2" Text="{Binding PassCount}" FontSize="11" Foreground="Green" FontWeight="Bold" />
+                                <TextBlock Grid.Column="3" Text="{Binding Status}" FontSize="11" Foreground="Green" FontWeight="Bold" />
+                            </Grid>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+            </StackPanel>
+
+            <!-- Processing Log -->
+            <StackPanel Grid.Column="1" Margin="0,5,5,5">
+                <Border Background="White" Padding="10">
+                    <TextBlock Text="Processing Log" FontSize="14" FontWeight="Bold" />
+                </Border>
+                <ListBox ItemsSource="{Binding ProcessingLog}" Background="White" Padding="10" Margin="0,5,0,0">
+                    <ListBox.ItemTemplate>
+                        <DataTemplate>
+                            <TextBlock Text="{Binding}" FontSize="11" Foreground="#555" FontFamily="Courier New" TextWrapping="Wrap" />
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+            </StackPanel>
+        </Grid>
+    </Grid>
+</UserControl>
