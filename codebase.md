@@ -44,6 +44,7 @@
   - Line selection
   - Multiple interaction modes
   - Transform support (scale, translate)
+- **GridSplitter** - Resizable vertical divider between toolbox and canvas
 
 **Overlay Items:**
 - OverlayRectItem (rectangles with labels)
@@ -59,6 +60,7 @@
 **Converters:**
 - BoolToOkNgConverter (boolean → "OK"/"NG" strings)
 - FlexibleDoubleConverter (flexible number parsing/formatting)
+- HexToBrushConverter (hex string → SolidColorBrush for swatches)
 
 ### Application Layer (VisionInspectionApp.Application)
 **Interfaces:**
@@ -98,6 +100,7 @@
 18. DefectRoi - Defect region marking
 19. Preprocess - Image preprocessing node
 20. ToolGraph - Node-based flow graph
+21. TextNode - Text rendering with variable substitution and color conditions
 
 **Algorithms & Modes:**
 - CircleFindAlgorithm: HoughCircles, ContourFit, RANSAC
@@ -207,3 +210,5 @@
 - Region of Interest interactive editing
 - Flexible number input converters
 - Pass/fail status visualization
+- Resizable UI layout with GridSplitter
+- Native Color Picker dialog integration
