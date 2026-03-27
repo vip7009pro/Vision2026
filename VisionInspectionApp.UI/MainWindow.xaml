@@ -1,4 +1,4 @@
-﻿<Window x:Class="VisionInspectionApp.UI.MainWindow"
+<Window x:Class="VisionInspectionApp.UI.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
@@ -10,14 +10,9 @@
         Title="Vision Inspection" Height="900" Width="1400">
 
     <Window.InputBindings>
-        <KeyBinding Key="Z" Modifiers="Control" Command="{Binding Teach.UndoCommand}" />
-        <KeyBinding Key="Y" Modifiers="Control" Command="{Binding Teach.RedoCommand}" />
     </Window.InputBindings>
 
     <Window.Resources>
-        <DataTemplate DataType="{x:Type viewModels:TeachViewModel}">
-            <views:TeachView />
-        </DataTemplate>
 
         <DataTemplate DataType="{x:Type viewModels:ToolEditorViewModel}">
             <views:ToolEditorView />
@@ -46,9 +41,6 @@
 
     <Grid>
         <TabControl>
-            <TabItem Header="Teach">
-                <ContentControl Content="{Binding Teach}" />
-            </TabItem>
 
             <TabItem Header="Tool Editor">
                 <ContentControl Content="{Binding ToolEditor}" />

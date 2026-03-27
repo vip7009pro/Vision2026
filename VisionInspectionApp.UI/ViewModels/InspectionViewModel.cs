@@ -66,11 +66,21 @@ public sealed partial class InspectionViewModel : ObservableObject
     private System.Windows.Media.ImageSource? _image;
 
     [ObservableProperty]
+    private System.Windows.Media.ImageSource? _debugTemplate;
+    [ObservableProperty]
+    private System.Windows.Media.ImageSource? _debugCurrent;
+    [ObservableProperty]
+    private System.Windows.Media.ImageSource? _debugBinary;
+    [ObservableProperty]
+    private System.Windows.Media.ImageSource? _debugDiff;
+
+    [ObservableProperty]
     private InspectionResult? _lastResult;
 
     partial void OnLastResultChanged(InspectionResult? value)
     {
         RefreshSpecResults();
+        UpdateDebugImages();
     }
 
     [ObservableProperty]
@@ -344,6 +354,45 @@ public sealed partial class InspectionViewModel : ObservableObject
         foreach (var d in LastResult.Diameters)
         {
             SpecResults.Add(new SpecResultRow("Diameter", d.Name, d.CircleRef, string.Empty, d.Value, d.Nominal, d.TolPlus, d.TolMinus, d.Pass));
+        }
+    }
+
+    private void UpdateDebugImages()
+    {
+        if (LastResult?.SurfaceCompares is null || LastResult.SurfaceCompares.Count == 0)
+        {
+            DebugTemplate = null;
+            DebugCurrent = null;
+            DebugBinary = null;
+            DebugDiff = null;
+            return;
+        }
+
+        // For now, take the first SurfaceCompare result to show debug previews.
+        var sc = LastResult.SurfaceCompares[0];
+        DebugTemplate = ByteArrayToImageSource(sc.TemplateImage);
+        DebugCurrent = ByteArrayToImageSource(sc.CurrentImage);
+        DebugBinary = ByteArrayToImageSource(sc.BinaryImage);
+        DebugDiff = ByteArrayToImageSource(sc.DiffImage);
+    }
+
+    private System.Windows.Media.ImageSource? ByteArrayToImageSource(byte[]? data)
+    {
+        if (data is null || data.Length == 0) return null;
+        try
+        {
+            using var ms = new System.IO.MemoryStream(data);
+            var image = new System.Windows.Media.Imaging.BitmapImage();
+            image.BeginInit();
+            image.StreamSource = ms;
+            image.CacheOption = System.Windows.Media.Imaging.BitmapCacheOption.OnLoad;
+            image.EndInit();
+            image.Freeze();
+            return image;
+        }
+        catch
+        {
+            return null;
         }
     }
 
@@ -986,65 +1035,59 @@ public sealed partial class InspectionViewModel : ObservableObject
             {
                 foreach (var sc in LastResult.SurfaceCompares)
                 {
-                    OverlayItems.Add(new OverlayPointItem
-                    {
-                        X = 2,
-                        Y = 2,
-                        Radius = 1.0,
-                        Stroke = Brushes.Transparent,
-                        Label = string.Empty
-                    });
+                    var scDef = _config?.SurfaceCompares.FirstOrDefault(x => string.Equals(x.Name, sc.Name, StringComparison.OrdinalIgnoreCase));
+                    var stroke = sc.Pass ? Brushes.Lime : Brushes.Red;
+                    var status = sc.Pass ? "OK" : "NG";
 
-                    if (sc.Defects is null || sc.Defects.Count == 0)
+                    if (sc.Defects is not null && sc.Defects.Count > 0)
                     {
-                        continue;
-                    }
-
-                    var n = Math.Min(sc.Defects.Count, MaxBlobOverlayCount);
-                    for (var i = 0; i < n; i++)
-                    {
-                        var d = sc.Defects[i];
-                        var r = d.BoundingBox;
-                        if (r.Width > 0 && r.Height > 0)
+                        var n = Math.Min(sc.Defects.Count, MaxBlobOverlayCount);
+                        for (var i = 0; i < n; i++)
                         {
-                            OverlayItems.Add(new OverlayRectItem
+                            var d = sc.Defects[i];
+                            var r = d.BoundingBox;
+                            if (r.Width > 0 && r.Height > 0)
                             {
-                                X = r.X,
-                                Y = r.Y,
-                                Width = r.Width,
-                                Height = r.Height,
-                                Stroke = Brushes.DeepSkyBlue,
-                                Label = string.Empty
-                            });
+                                OverlayItems.Add(new OverlayRectItem
+                                {
+                                    X = r.X,
+                                    Y = r.Y,
+                                    Width = r.Width,
+                                    Height = r.Height,
+                                    Stroke = stroke,
+                                    StrokeThickness = 2.0,
+                                    Label = string.Empty
+                                });
+                            }
                         }
+                    }
 
-                        OverlayItems.Add(new OverlayPointItem
-                        {
-                            X = d.Centroid.X,
-                            Y = d.Centroid.Y,
-                            Radius = 3.0,
-                            Stroke = Brushes.DeepSkyBlue,
-                            Label = string.Empty
-                        });
+                    // Position label at the transformed Search ROI if available.
+                    double lx = 2, ly = 16;
+                    if (scDef is not null)
+                    {
+                        var tr = TransformPose(new Point2d(scDef.InspectRoi.X, scDef.InspectRoi.Y), originTeach, originFound, angleDeg);
+                        lx = tr.X + 2;
+                        ly = tr.Y + 2;
                     }
 
                     OverlayItems.Add(new OverlayPointItem
                     {
-                        X = 2,
-                        Y = 16,
+                        X = lx,
+                        Y = ly,
                         Radius = 1.0,
-                        Stroke = Brushes.DeepSkyBlue,
-                        Label = $"{sc.Name}: {sc.Count} / {sc.MaxArea:0}"
+                        Stroke = stroke,
+                        Label = $"{sc.Name} [{status}]: Số lỗi: {sc.Count}, S.Lớn nhất: {sc.MaxArea:0}"
                     });
 
-                    if (sc.Defects.Count > MaxBlobOverlayCount)
+                    if (sc.Defects is not null && sc.Defects.Count > MaxBlobOverlayCount)
                     {
                         OverlayItems.Add(new OverlayPointItem
                         {
-                            X = 2,
-                            Y = 30,
+                            X = lx,
+                            Y = ly + 14,
                             Radius = 1.0,
-                            Stroke = Brushes.DeepSkyBlue,
+                            Stroke = stroke,
                             Label = $"+{sc.Defects.Count - MaxBlobOverlayCount}"
                         });
                     }

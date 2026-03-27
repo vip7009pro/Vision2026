@@ -1,4 +1,4 @@
-﻿using System.Text.Json;
+using System.Text.Json;
 using VisionInspectionApp.Application;
 using VisionInspectionApp.Models;
 
@@ -103,8 +103,12 @@ public sealed class JsonConfigService : IConfigService
         {
             NormalizePointTemplatePathForSave(p, templateDir);
         }
-    }
 
+        foreach (var sc in config.SurfaceCompares)
+        {
+            NormalizeSurfaceCompareTemplatePathForSave(sc, templateDir);
+        }
+    }
     private void NormalizePointTemplatePathForSave(PointDefinition point, string templateDir)
     {
         if (string.IsNullOrWhiteSpace(point.TemplateImageFile))
@@ -127,6 +131,28 @@ public sealed class JsonConfigService : IConfigService
         }
     }
 
+    private void NormalizeSurfaceCompareTemplatePathForSave(SurfaceCompareDefinition sc, string templateDir)
+    {
+        if (string.IsNullOrWhiteSpace(sc.TemplateImageFile))
+        {
+            return;
+        }
+
+        var full = Path.IsPathRooted(sc.TemplateImageFile)
+            ? sc.TemplateImageFile
+            : Path.GetFullPath(Path.Combine(templateDir, sc.TemplateImageFile));
+
+        if (full.StartsWith(templateDir, StringComparison.OrdinalIgnoreCase))
+        {
+            var relative = Path.GetRelativePath(templateDir, full);
+            sc.TemplateImageFile = relative;
+        }
+        else
+        {
+            sc.TemplateImageFile = full;
+        }
+    }
+
     private void NormalizeTemplatePathsForLoad(VisionConfig config)
     {
         var templateDir = GetTemplateDirectory(config.ProductCode);
@@ -135,6 +161,11 @@ public sealed class JsonConfigService : IConfigService
         foreach (var p in config.Points)
         {
             NormalizePointTemplatePathForLoad(p, templateDir);
+        }
+
+        foreach (var sc in config.SurfaceCompares)
+        {
+            NormalizeSurfaceCompareTemplatePathForLoad(sc, templateDir);
         }
     }
 
@@ -148,6 +179,19 @@ public sealed class JsonConfigService : IConfigService
         if (!Path.IsPathRooted(point.TemplateImageFile))
         {
             point.TemplateImageFile = Path.GetFullPath(Path.Combine(templateDir, point.TemplateImageFile));
+        }
+    }
+
+    private void NormalizeSurfaceCompareTemplatePathForLoad(SurfaceCompareDefinition sc, string templateDir)
+    {
+        if (string.IsNullOrWhiteSpace(sc.TemplateImageFile))
+        {
+            return;
+        }
+
+        if (!Path.IsPathRooted(sc.TemplateImageFile))
+        {
+            sc.TemplateImageFile = Path.GetFullPath(Path.Combine(templateDir, sc.TemplateImageFile));
         }
     }
 

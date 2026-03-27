@@ -29,6 +29,9 @@ public sealed partial class ToolEditorViewModel : ObservableObject
     private readonly LineDetector _lineDetector;
     private readonly IInspectionService _inspectionService;
 
+    [ObservableProperty]
+    private string? _activeRoiLabel;
+
     private ToolGraphNodeViewModel? _selectedNodeHook;
     private string? _selectedNodePrevRefName;
 
@@ -119,9 +122,27 @@ public sealed partial class ToolEditorViewModel : ObservableObject
         RoiDeletedCommand = new RelayCommand<string?>(OnRoiDeleted);
         PointClickedCommand = new RelayCommand<PointClickSelection?>(OnPointClicked);
 
+        SurfaceCompare_SetSearchRoiCommand = new RelayCommand(SurfaceCompare_SetSearchRoi);
+        SurfaceCompare_SetTemplateRoiCommand = new RelayCommand(SurfaceCompare_SetTemplateRoi);
+
         _sharedImage.ImageChanged += (_, __) => RefreshPreviews();
 
         RefreshConfigs();
+    }
+
+    public ICommand SurfaceCompare_SetSearchRoiCommand { get; }
+    public ICommand SurfaceCompare_SetTemplateRoiCommand { get; }
+
+    private void SurfaceCompare_SetSearchRoi()
+    {
+        if (SelectedNode is null || !string.Equals(SelectedNode.Type, "SurfaceCompare", StringComparison.OrdinalIgnoreCase)) return;
+        ActiveRoiLabel = $"{SelectedNode.RefName} SC";
+    }
+
+    private void SurfaceCompare_SetTemplateRoi()
+    {
+        if (SelectedNode is null || !string.Equals(SelectedNode.Type, "SurfaceCompare", StringComparison.OrdinalIgnoreCase)) return;
+        ActiveRoiLabel = $"{SelectedNode.RefName} SCT";
     }
 
     public IlluminationCorrectionPreset IlluminationCorrection
@@ -343,7 +364,7 @@ public sealed partial class ToolEditorViewModel : ObservableObject
 
     private void BuildFinalOverlayFromRunWithConfig(InspectionResult run, ObservableCollection<OverlayItem> dst)
     {
-        BuildFinalOverlayFromRun(run, dst);
+        BuildFinalOverlayFromRun(run, dst, _config);
 
         // Angle overlays need image bounds for full infinite-line rendering.
         if (_lastPreviewImageWidth > 0 && _lastPreviewImageHeight > 0)
@@ -941,6 +962,38 @@ public sealed partial class ToolEditorViewModel : ObservableObject
             if (v < def.MinBlobArea) v = def.MinBlobArea;
             if (def.MaxBlobArea == v) return;
             def.MaxBlobArea = v;
+            RaiseToolPropertyPanelsChanged();
+            RefreshPreviews();
+            RequestAutoSave();
+        }
+    }
+
+    public int SurfaceCompare_MinCount
+    {
+        get => SelectedSurfaceCompareDef()?.MinCount ?? 0;
+        set
+        {
+            var def = SelectedSurfaceCompareDef();
+            if (def is null) return;
+            var v = Math.Max(0, value);
+            if (def.MinCount == v) return;
+            def.MinCount = v;
+            RaiseToolPropertyPanelsChanged();
+            RefreshPreviews();
+            RequestAutoSave();
+        }
+    }
+
+    public int SurfaceCompare_MaxCount
+    {
+        get => SelectedSurfaceCompareDef()?.MaxCount ?? 0;
+        set
+        {
+            var def = SelectedSurfaceCompareDef();
+            if (def is null) return;
+            var v = Math.Max(0, value);
+            if (def.MaxCount == v) return;
+            def.MaxCount = v;
             RaiseToolPropertyPanelsChanged();
             RefreshPreviews();
             RequestAutoSave();
@@ -1811,13 +1864,16 @@ public sealed partial class ToolEditorViewModel : ObservableObject
                 return;
             }
 
+            var stroke = r.Pass ? Brushes.Lime : Brushes.Red;
+            var status = r.Pass ? "OK" : "NG";
+
             dst.Add(new OverlayPointItem
             {
                 X = def.InspectRoi.X + 2,
                 Y = def.InspectRoi.Y + 2,
                 Radius = 1.0,
-                Stroke = Brushes.DeepSkyBlue,
-                Label = $"{def.Name}: {r.Count} / {r.MaxArea:0}"
+                Stroke = stroke,
+                Label = $"{def.Name} [{status}]: Số lỗi: {r.Count}, S.Lớn nhất: {r.MaxArea:0}"
             });
 
             if (r.Defects is null || r.Defects.Count == 0)
@@ -1838,19 +1894,11 @@ public sealed partial class ToolEditorViewModel : ObservableObject
                         Y = br.Y,
                         Width = br.Width,
                         Height = br.Height,
-                        Stroke = Brushes.DeepSkyBlue,
+                        Stroke = stroke,
+                        StrokeThickness = 2.0, // Thicker boxes for better visibility
                         Label = string.Empty
                     });
                 }
-
-                dst.Add(new OverlayPointItem
-                {
-                    X = d.Centroid.X,
-                    Y = d.Centroid.Y,
-                    Radius = 3.0,
-                    Stroke = Brushes.DeepSkyBlue,
-                    Label = string.Empty
-                });
             }
 
             if (r.Defects.Count > MaxBlobOverlayCount)
@@ -1860,7 +1908,7 @@ public sealed partial class ToolEditorViewModel : ObservableObject
                     X = def.InspectRoi.X + 2,
                     Y = def.InspectRoi.Y + 16,
                     Radius = 1.0,
-                    Stroke = Brushes.DeepSkyBlue,
+                    Stroke = stroke,
                     Label = $"+{r.Defects.Count - MaxBlobOverlayCount}"
                 });
             }
@@ -2172,6 +2220,7 @@ public sealed partial class ToolEditorViewModel : ObservableObject
         if (!string.IsNullOrWhiteSpace(value))
         {
             ProductCode = value;
+            LoadConfig(); // Auto-load when config is selected
         }
 
         RefreshPreviews();
@@ -2618,6 +2667,13 @@ public sealed partial class ToolEditorViewModel : ObservableObject
         OnPropertyChanged(nameof(Blob_MinBlobArea));
         OnPropertyChanged(nameof(Blob_MaxBlobArea));
         OnPropertyChanged(nameof(Blob_LastRunCount));
+
+        OnPropertyChanged(nameof(SurfaceCompare_DiffThreshold));
+        OnPropertyChanged(nameof(SurfaceCompare_MinBlobArea));
+        OnPropertyChanged(nameof(SurfaceCompare_MaxBlobArea));
+        OnPropertyChanged(nameof(SurfaceCompare_MinCount));
+        OnPropertyChanged(nameof(SurfaceCompare_MaxCount));
+        OnPropertyChanged(nameof(SurfaceCompare_MorphKernel));
 
         OnPropertyChanged(nameof(AvailableCaliperOrientations));
         OnPropertyChanged(nameof(AvailableEdgePolarities));
@@ -5236,6 +5292,7 @@ public sealed partial class ToolEditorViewModel : ObservableObject
                 def.InspectRoi = DefaultRoi();
                 def.TemplateRoi = DefaultRoi();
                 _config.SurfaceCompares.Add(def);
+                ActiveRoiLabel = $"{node.RefName} SC";
             }
             return;
         }
@@ -5338,6 +5395,7 @@ public sealed partial class ToolEditorViewModel : ObservableObject
             }
             return;
         }
+
 
         if (string.Equals(node.Type, "Condition", StringComparison.OrdinalIgnoreCase))
         {
@@ -6835,7 +6893,33 @@ public sealed partial class ToolEditorViewModel : ObservableObject
         }
     }
 
-    private static void BuildFinalOverlayFromRun(InspectionResult run, ObservableCollection<OverlayItem> dst)
+    private static Point2d Rotate(Point2d p, Point2d origin, double angleDeg)
+    {
+        if (Math.Abs(angleDeg) < 0.000001)
+        {
+            return p;
+        }
+
+        var a = angleDeg * Math.PI / 180.0;
+        var cos = Math.Cos(a);
+        var sin = Math.Sin(a);
+
+        var dx = p.X - origin.X;
+        var dy = p.Y - origin.Y;
+        var x = dx * cos - dy * sin;
+        var y = dx * sin + dy * cos;
+        return new Point2d(x + origin.X, y + origin.Y);
+    }
+
+    private static Point2d TransformPose(Point2d p, Point2d originTeach, Point2d originFound, double angleDeg)
+    {
+        var pr = Rotate(p, originTeach, angleDeg);
+        var dx = originFound.X - originTeach.X;
+        var dy = originFound.Y - originTeach.Y;
+        return new Point2d(pr.X + dx, pr.Y + dy);
+    }
+
+    private static void BuildFinalOverlayFromRun(InspectionResult run, ObservableCollection<OverlayItem> dst, VisionConfig? config)
     {
         if (run.Origin is not null)
         {
@@ -7081,6 +7165,69 @@ public sealed partial class ToolEditorViewModel : ObservableObject
             dst.Add(new OverlayLineItem { X1 = a.Intersection.X, Y1 = a.Intersection.Y, X2 = a.Intersection.X + a.BDir.X * len, Y2 = a.Intersection.Y + a.BDir.Y * len, Stroke = Brushes.Gold, Label = a.LineB });
             AddAngleArc(dst, a.Intersection.X, a.Intersection.Y, a.ADir.X, a.ADir.Y, a.BDir.X, a.BDir.Y, radius: 35.0, stroke: a.Pass ? Brushes.Lime : Brushes.Red);
             dst.Add(new OverlayPointItem { X = a.Intersection.X, Y = a.Intersection.Y, Radius = 3.0, Stroke = a.Pass ? Brushes.Lime : Brushes.Red, Label = $"{a.Name}: {a.ValueDeg:0.###}°" });
+        }
+
+        if (run.SurfaceCompares is not null)
+        {
+            foreach (var sc in run.SurfaceCompares)
+            {
+                var stroke = sc.Pass ? Brushes.Lime : Brushes.Red;
+                var status = sc.Pass ? "OK" : "NG";
+
+                if (sc.Defects is not null && sc.Defects.Count > 0)
+                {
+                    var n = Math.Min(sc.Defects.Count, 300);
+                    for (var i = 0; i < n; i++)
+                    {
+                        var d = sc.Defects[i];
+                        var r = d.BoundingBox;
+                        if (r.Width > 0 && r.Height > 0)
+                        {
+                            dst.Add(new OverlayRectItem
+                            {
+                                X = r.X,
+                                Y = r.Y,
+                                Width = r.Width,
+                                Height = r.Height,
+                                Stroke = stroke,
+                                StrokeThickness = 2.0,
+                                Label = string.Empty
+                            });
+                        }
+                    }
+                }
+
+                var lx = 12.0;
+                var ly = 12.0;
+                if (config is not null)
+                {
+                    var scDef = config.SurfaceCompares.FirstOrDefault(x => string.Equals(x.Name, sc.Name, StringComparison.OrdinalIgnoreCase));
+                    if (scDef is not null && scDef.InspectRoi.Width > 0 && scDef.InspectRoi.Height > 0)
+                    {
+                        if (run.Origin is not null)
+                        {
+                            var originTeach = new Point2d(config.Origin.WorldPosition.X, config.Origin.WorldPosition.Y);
+                            var tr = TransformPose(new Point2d(scDef.InspectRoi.X, scDef.InspectRoi.Y), originTeach, run.Origin.Position, run.Origin.AngleDeg);
+                            lx = tr.X + 2;
+                            ly = tr.Y + 2;
+                        }
+                        else
+                        {
+                            lx = scDef.InspectRoi.X + 2;
+                            ly = scDef.InspectRoi.Y + 2;
+                        }
+                    }
+                }
+
+                dst.Add(new OverlayPointItem
+                {
+                    X = lx,
+                    Y = ly,
+                    Radius = 1.0,
+                    Stroke = stroke,
+                    Label = $"{sc.Name} [{status}]: Số lỗi: {sc.Count}, S.Lớn nhất: {sc.MaxArea:0}"
+                });
+            }
         }
 
         if (run.Conditions.Count > 0)
@@ -7526,6 +7673,59 @@ public sealed partial class ToolEditorViewModel : ObservableObject
                 Label = $"{dd.Name}: {dd.Value:0.###}"
             });
 
+            return;
+        }
+
+        if (string.Equals(node.Type, "SurfaceCompare", StringComparison.OrdinalIgnoreCase))
+        {
+            var sc = run.SurfaceCompares.FirstOrDefault(x => string.Equals(x.Name, node.RefName, StringComparison.OrdinalIgnoreCase));
+            if (sc is null)
+            {
+                return;
+            }
+
+            var scDef = _config?.SurfaceCompares.FirstOrDefault(x => string.Equals(x.Name, sc.Name, StringComparison.OrdinalIgnoreCase));
+            var stroke = sc.Pass ? Brushes.Lime : Brushes.Red;
+            var status = sc.Pass ? "OK" : "NG";
+
+            if (sc.Defects is not null && sc.Defects.Count > 0)
+            {
+                var n = Math.Min(sc.Defects.Count, 300);
+                for (var i = 0; i < n; i++)
+                {
+                    var d = sc.Defects[i];
+                    var r = d.BoundingBox;
+                    if (r.Width > 0 && r.Height > 0)
+                    {
+                        dst.Add(new OverlayRectItem
+                        {
+                            X = r.X,
+                            Y = r.Y,
+                            Width = r.Width,
+                            Height = r.Height,
+                            Stroke = stroke,
+                            StrokeThickness = 2.0,
+                            Label = string.Empty
+                        });
+                    }
+                }
+            }
+
+            double lx = 12, ly = 12;
+            if (scDef is not null)
+            {
+                lx = scDef.InspectRoi.X + 2;
+                ly = scDef.InspectRoi.Y + 2;
+            }
+
+            dst.Add(new OverlayPointItem
+            {
+                X = lx,
+                Y = ly,
+                Radius = 1.0,
+                Stroke = stroke,
+                Label = $"{sc.Name} [{status}]: Số lỗi: {sc.Count}, S.Lớn nhất: {sc.MaxArea:0}"
+            });
             return;
         }
 

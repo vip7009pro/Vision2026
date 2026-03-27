@@ -1,4 +1,4 @@
-﻿using OpenCvSharp;
+using OpenCvSharp;
 using VisionInspectionApp.Models;
 using VisionInspectionApp.VisionEngine;
 using System.Diagnostics;
@@ -147,7 +147,16 @@ public sealed record BlobDetectionResult(string Name, int Count, List<BlobInfo> 
 
 public sealed record SurfaceCompareDefect(Rect BoundingBox, Point2d Centroid, double Area);
 
-public sealed record SurfaceCompareResult(string Name, int Count, double MaxArea, List<SurfaceCompareDefect> Defects);
+public sealed record SurfaceCompareResult(
+    string Name, 
+    int Count, 
+    double MaxArea, 
+    List<SurfaceCompareDefect> Defects, 
+    bool Pass,
+    byte[]? TemplateImage = null,
+    byte[]? CurrentImage = null,
+    byte[]? BinaryImage = null,
+    byte[]? DiffImage = null);
 
 public sealed record LinePairDetectionResult(
     string Name,
@@ -538,16 +547,23 @@ public sealed class InspectionService : IInspectionService
                 return blobs;
             }
 
-            static SurfaceCompareResult RunSurfaceCompare(Mat matBgrOrGray, Point2d originTeach, Point2d originFound, double angleDeg, SurfaceCompareDefinition def)
+            static SurfaceCompareResult RunSurfaceCompare(
+                Mat matBgrOrGray, 
+                Point2d originTeach, 
+                Point2d originFound, 
+                double angleDeg, 
+                SurfaceCompareDefinition def,
+                ImagePreprocessor preprocessor,
+                PreprocessSettings settings)
             {
                 if (matBgrOrGray is null)
                 {
-                    return new SurfaceCompareResult(def.Name, 0, 0.0, new List<SurfaceCompareDefect>());
+                    return new SurfaceCompareResult(def.Name, 0, 0.0, new List<SurfaceCompareDefect>(), false);
                 }
 
                 if (def is null || string.IsNullOrWhiteSpace(def.Name))
                 {
-                    return new SurfaceCompareResult(string.Empty, 0, 0.0, new List<SurfaceCompareDefect>());
+                    return new SurfaceCompareResult(string.Empty, 0, 0.0, new List<SurfaceCompareDefect>(), false);
                 }
 
                 var templateRoiTeach = def.TemplateRoi;
@@ -565,12 +581,12 @@ public sealed class InspectionService : IInspectionService
 
                 if (templateRoiTeach.Width <= 0 || templateRoiTeach.Height <= 0 || inspectRoiTeach.Width <= 0 || inspectRoiTeach.Height <= 0)
                 {
-                    return new SurfaceCompareResult(def.Name, 0, 0.0, new List<SurfaceCompareDefect>());
+                    return new SurfaceCompareResult(def.Name, 0, 0.0, new List<SurfaceCompareDefect>(), false);
                 }
 
                 if (string.IsNullOrWhiteSpace(def.TemplateImageFile) || !File.Exists(def.TemplateImageFile))
                 {
-                    return new SurfaceCompareResult(def.Name, 0, 0.0, new List<SurfaceCompareDefect>());
+                    return new SurfaceCompareResult(def.Name, 0, 0.0, new List<SurfaceCompareDefect>(), false);
                 }
 
                 // Convert input to grayscale.
@@ -581,19 +597,22 @@ public sealed class InspectionService : IInspectionService
                     testGray = testGrayOwned;
                 }
 
-                // Build a full-size template canvas by placing the stored template crop back into TemplateRoi.
-                using var templCrop0 = Cv2.ImRead(def.TemplateImageFile, ImreadModes.Grayscale);
-                if (templCrop0.Empty())
+                // Load and Preprocess template exactly like the current image.
+                using var templRaw = Cv2.ImRead(def.TemplateImageFile, ImreadModes.Grayscale);
+                if (templRaw.Empty())
                 {
-                    return new SurfaceCompareResult(def.Name, 0, 0.0, new List<SurfaceCompareDefect>());
+                    return new SurfaceCompareResult(def.Name, 0, 0.0, new List<SurfaceCompareDefect>(), false);
                 }
+
+                // Apply the same preprocessing steps to the template crop.
+                using var templCrop0 = preprocessor.Run(templRaw, settings);
 
                 using var templateCanvas = new Mat(testGray.Rows, testGray.Cols, MatType.CV_8UC1, Scalar.Black);
                 var tplRect = new Rect(templateRoiTeach.X, templateRoiTeach.Y, templateRoiTeach.Width, templateRoiTeach.Height)
                     .Intersect(new Rect(0, 0, templateCanvas.Cols, templateCanvas.Rows));
                 if (tplRect.Width <= 0 || tplRect.Height <= 0)
                 {
-                    return new SurfaceCompareResult(def.Name, 0, 0.0, new List<SurfaceCompareDefect>());
+                    return new SurfaceCompareResult(def.Name, 0, 0.0, new List<SurfaceCompareDefect>(), false);
                 }
 
                 using (var dst = new Mat(templateCanvas, tplRect))
@@ -623,27 +642,28 @@ public sealed class InspectionService : IInspectionService
 
                 // Inspect ROI is defined in teach space; transform to current pose (keep size).
                 var inspectRoi = TransformRoiKeepSize(inspectRoiTeach, originTeach, originFound, angleDeg);
-                if (inspectRoi.Width <= 0 || inspectRoi.Height <= 0)
-                {
-                    return new SurfaceCompareResult(def.Name, 0, 0.0, new List<SurfaceCompareDefect>());
-                }
+                var templateRoi = TransformRoiKeepSize(templateRoiTeach, originTeach, originFound, angleDeg);
 
-                var rect = new Rect(inspectRoi.X, inspectRoi.Y, inspectRoi.Width, inspectRoi.Height)
+                // We will perform the inspection focused on the templateRoi area (to avoid mismatch with search ROI size).
+                // However, we still use the Search ROI as a bounding container if needed.
+                var rect = new Rect(templateRoi.X, templateRoi.Y, templateRoi.Width, templateRoi.Height)
                     .Intersect(new Rect(0, 0, testGray.Cols, testGray.Rows));
+
                 if (rect.Width <= 0 || rect.Height <= 0)
                 {
-                    return new SurfaceCompareResult(def.Name, 0, 0.0, new List<SurfaceCompareDefect>());
+                    return new SurfaceCompareResult(def.Name, 0, 0.0, new List<SurfaceCompareDefect>(), false);
                 }
 
-                // Compute diff in ROI.
+                // Compute diff in the template area using Grayscale Subtraction (more robust for noise)
                 using var testCrop = new Mat(testGray, rect);
                 using var tplCrop = new Mat(templWarp, rect);
-                using var diff = new Mat();
-                Cv2.Absdiff(testCrop, tplCrop, diff);
+
+                using var diffGray = new Mat();
+                Cv2.Absdiff(testCrop, tplCrop, diffGray);
 
                 var thr = Math.Clamp(def.DiffThreshold, 0, 255);
                 using var bw = new Mat();
-                Cv2.Threshold(diff, bw, thr, 255, ThresholdTypes.Binary);
+                Cv2.Threshold(diffGray, bw, thr, 255, ThresholdTypes.Binary);
 
                 // Apply include/exclude multi-ROI mask (definitions are in teach space).
                 var rois = def.Rois;
@@ -715,6 +735,28 @@ public sealed class InspectionService : IInspectionService
 
                     Cv2.BitwiseAnd(bw, mask, bw);
                 }
+                else
+                {
+                    // If no sub-ROIs are defined, default to masking with the TemplateRoi transformed.
+                    using var mask = new Mat(bw.Rows, bw.Cols, MatType.CV_8UC1, Scalar.Black);
+                    var tr0 = def.TemplateRoi;
+                    if (tr0.Width <= 0 || tr0.Height <= 0) tr0 = def.InspectRoi;
+
+                    var tr = TransformRoiKeepSize(tr0, originTeach, originFound, angleDeg);
+                    var rx = tr.X - rect.X;
+                    var ry = tr.Y - rect.Y;
+                    var r = new Rect(rx, ry, tr.Width, tr.Height).Intersect(new Rect(0, 0, bw.Cols, bw.Rows));
+                    if (r.Width > 0 && r.Height > 0)
+                    {
+                        using var sub = new Mat(mask, r);
+                        sub.SetTo(Scalar.White);
+                    }
+                    Cv2.BitwiseAnd(bw, mask, bw);
+                }
+
+                // Capture debug previews (Raw Diff)
+                byte[]? imgBin = null;
+                try { Cv2.ImEncode(".png", bw, out imgBin); } catch { }
 
                 var k = Math.Max(1, def.MorphKernel);
                 if (k % 2 == 0) k += 1;
@@ -750,6 +792,9 @@ public sealed class InspectionService : IInspectionService
                     var height = stats.Get<int>(i, (int)ConnectedComponentsTypes.Height);
                     var areaPx = stats.Get<int>(i, (int)ConnectedComponentsTypes.Area);
 
+                    // Track max area found before filtering (for debug/tuning)
+                    if (areaPx > maxFoundArea) maxFoundArea = areaPx;
+
                     if (areaPx < minArea || areaPx > maxArea)
                     {
                         continue;
@@ -761,10 +806,23 @@ public sealed class InspectionService : IInspectionService
                     var fullRect = new Rect(left + rect.X, top + rect.Y, width, height);
                     var centroid = new Point2d(cx + rect.X, cy + rect.Y);
                     defects.Add(new SurfaceCompareDefect(fullRect, centroid, areaPx));
-                    if (areaPx > maxFoundArea) maxFoundArea = areaPx;
                 }
 
-                return new SurfaceCompareResult(def.Name, defects.Count, maxFoundArea, defects);
+                var pass = defects.Count >= def.MinCount && defects.Count <= def.MaxCount;
+
+                // Capture debug previews if needed (for troubleshooting)
+                byte[]? imgTpl = null;
+                byte[]? imgCur = null;
+                byte[]? imgDif = null;
+                try
+                {
+                    Cv2.ImEncode(".png", tplCrop, out imgTpl);
+                    Cv2.ImEncode(".png", testCrop, out imgCur);
+                    Cv2.ImEncode(".png", bw, out imgDif);      // Resulting diff after morphology
+                }
+                catch { /* Ignore encoding errors */ }
+
+                return new SurfaceCompareResult(def.Name, defects.Count, maxFoundArea, defects, pass, imgTpl, imgCur, imgBin, imgDif);
             }
 
             static CaliperResult DetectCaliper(Mat matBgrOrGray, Roi roi, CaliperDefinition def)
@@ -1282,14 +1340,14 @@ public sealed class InspectionService : IInspectionService
 
             var tBlobsQueued = swTotal.ElapsedMilliseconds;
 
-            var surfaceCompareTasks = (config.SurfaceCompares ?? new List<SurfaceCompareDefinition>())
-                .Where(sc => sc is not null && !string.IsNullOrWhiteSpace(sc.Name) && sc.InspectRoi.Width > 0 && sc.InspectRoi.Height > 0)
-                .Select(sc => Task.Run(() =>
-                {
-                    var (matForSc, _) = ResolveToolPreprocess("SurfaceCompare", sc.Name);
-                    return RunSurfaceCompare(matForSc, originTeach, originFound, angleDeg, sc);
-                }))
-                .ToArray();
+                var surfaceCompareTasks = (config.SurfaceCompares ?? new List<SurfaceCompareDefinition>())
+                    .Where(sc => sc is not null && !string.IsNullOrWhiteSpace(sc.Name) && sc.InspectRoi.Width > 0 && sc.InspectRoi.Height > 0)
+                    .Select(sc => Task.Run(() =>
+                    {
+                        var (matForSc, scSettings) = ResolveToolPreprocess("SurfaceCompare", sc.Name);
+                        return RunSurfaceCompare(matForSc, originTeach, originFound, angleDeg, sc, _preprocessor, scSettings);
+                    }))
+                    .ToArray();
 
             var tScQueued = swTotal.ElapsedMilliseconds;
 
@@ -2589,10 +2647,11 @@ internal static class ConditionEvaluator
 
         foreach (var sc in result.SurfaceCompares)
         {
-            vars[$"SC.{sc.Name}"] = new Variable(true, value: sc.Count);
-            vars[$"SurfaceCompare.{sc.Name}"] = new Variable(true, value: sc.Count);
-            vars[$"SC.{sc.Name}.MaxArea"] = new Variable(true, value: sc.MaxArea);
-            vars[$"SurfaceCompare.{sc.Name}.MaxArea"] = new Variable(true, value: sc.MaxArea);
+            vars[sc.Name] = new Variable(sc.Pass, value: sc.Count, score: sc.MaxArea);
+            vars[$"SC.{sc.Name}"] = new Variable(sc.Pass, value: sc.Count, score: sc.MaxArea);
+            vars[$"SurfaceCompare.{sc.Name}"] = new Variable(sc.Pass, value: sc.Count, score: sc.MaxArea);
+            vars[$"SC.{sc.Name}.MaxArea"] = new Variable(sc.Pass, value: sc.MaxArea);
+            vars[$"SurfaceCompare.{sc.Name}.MaxArea"] = new Variable(sc.Pass, value: sc.MaxArea);
         }
 
         foreach (var c in result.Calipers)
@@ -2881,12 +2940,15 @@ internal static class ConditionEvaluator
             }
 
             if (string.Equals(member, "PASS", StringComparison.OrdinalIgnoreCase)) return ConditionValue.FromBool(v.Pass);
-            if (string.Equals(member, "VALUE", StringComparison.OrdinalIgnoreCase))
+            if (string.Equals(member, "VALUE", StringComparison.OrdinalIgnoreCase) || 
+                string.Equals(member, "COUNT", StringComparison.OrdinalIgnoreCase))
             {
                 if (v.Value is null) throw new InvalidOperationException($"{name}.Value is not available");
                 return ConditionValue.FromNumber(v.Value.Value);
             }
-            if (string.Equals(member, "SCORE", StringComparison.OrdinalIgnoreCase))
+            if (string.Equals(member, "SCORE", StringComparison.OrdinalIgnoreCase) || 
+                string.Equals(member, "MAXAREA", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(member, "AREA", StringComparison.OrdinalIgnoreCase))
             {
                 if (v.Score is null) throw new InvalidOperationException($"{name}.Score is not available");
                 return ConditionValue.FromNumber(v.Score.Value);

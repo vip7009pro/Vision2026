@@ -1,4 +1,4 @@
-﻿namespace VisionInspectionApp.Models;
+namespace VisionInspectionApp.Models;
 
 public enum LineLineDistanceMode
 {
@@ -315,6 +315,10 @@ public sealed class SurfaceCompareDefinition
     public int MinBlobArea { get; set; } = 10;
 
     public int MaxBlobArea { get; set; } = 5000;
+    
+    public int MinCount { get; set; } = 0;
+
+    public int MaxCount { get; set; } = 0;
 
     public int MorphKernel { get; set; } = 3;
 }

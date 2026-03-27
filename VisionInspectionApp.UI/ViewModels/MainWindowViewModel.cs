@@ -5,7 +5,6 @@ namespace VisionInspectionApp.UI.ViewModels;
 public sealed class MainWindowViewModel : ObservableObject
 {
     public MainWindowViewModel(
-        TeachViewModel teach,
         ToolEditorViewModel toolEditor,
         CalibrationViewModel calibration,
         ManualInspectionViewModel manualInspection,
@@ -13,7 +12,6 @@ public sealed class MainWindowViewModel : ObservableObject
         LiveCameraViewModel liveCamera,
         BatchProcessingViewModel batchProcessing)
     {
-        Teach = teach;
         ToolEditor = toolEditor;
         Calibration = calibration;
         ManualInspection = manualInspection;
@@ -22,7 +20,6 @@ public sealed class MainWindowViewModel : ObservableObject
         BatchProcessing = batchProcessing;
     }
 
-    public TeachViewModel Teach { get; }
 
     public ToolEditorViewModel ToolEditor { get; }
 

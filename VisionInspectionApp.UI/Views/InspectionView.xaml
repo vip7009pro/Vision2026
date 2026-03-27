@@ -31,9 +31,44 @@
             <Button Content="Run" Command="{Binding RunInspectionCommand}" />
         </DockPanel>
 
-        <controls:ImageViewerControl Grid.Row="1"
-                                    ImageSource="{Binding Image}"
-                                    OverlayItems="{Binding OverlayItems}" />
+        <Grid Grid.Row="1">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+
+            <controls:ImageViewerControl Grid.Column="0"
+                                        ImageSource="{Binding Image}"
+                                        OverlayItems="{Binding OverlayItems}" />
+
+            <Border Grid.Column="1" Width="220" Margin="8,0,0,0" BorderThickness="1" BorderBrush="#CCC" Background="#F9F9F9">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel Margin="8">
+                        <TextBlock Text="SurfaceCompare Debug" FontWeight="Bold" Margin="0,0,0,8" HorizontalAlignment="Center" />
+
+                        <TextBlock Text="Mẫu (Xám)" Margin="0,4,0,2" FontSize="10" Foreground="#666" />
+                        <Border BorderThickness="1" BorderBrush="#AAA" Background="Black">
+                            <Image Source="{Binding DebugTemplate}" Stretch="Uniform" Height="100" />
+                        </Border>
+
+                        <TextBlock Text="Hiện tại (Xám)" Margin="0,8,0,2" FontSize="10" Foreground="#666" />
+                        <Border BorderThickness="1" BorderBrush="#AAA" Background="Black">
+                            <Image Source="{Binding DebugCurrent}" Stretch="Uniform" Height="100" />
+                        </Border>
+
+                        <TextBlock Text="Sai khác thô" Margin="0,8,0,2" FontSize="10" Foreground="#666" />
+                        <Border BorderThickness="1" BorderBrush="#AAA" Background="Black">
+                            <Image Source="{Binding DebugBinary}" Stretch="Uniform" Height="100" />
+                        </Border>
+
+                        <TextBlock Text="Sai khác cuối (Morphed)" Margin="0,8,0,2" FontSize="10" Foreground="#666" />
+                        <Border BorderThickness="1" BorderBrush="#AAA" Background="Black">
+                            <Image Source="{Binding DebugDiff}" Stretch="Uniform" Height="100" />
+                        </Border>
+                    </StackPanel>
+                </ScrollViewer>
+            </Border>
+        </Grid>
 
         <GridSplitter Grid.Row="2" Height="6" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Background="#DDD" />
 

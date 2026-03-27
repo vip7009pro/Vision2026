@@ -186,11 +186,11 @@
   "project": {
     "version": "1.0.0",
     "restore": {
-      "projectUniqueName": "G:\\NODEJS\\Vision2026\\VisionInspectionApp.VisionEngine\\VisionInspectionApp.VisionEngine.csproj",
+      "projectUniqueName": "g:\\NODEJS\\Vision2026\\VisionInspectionApp.VisionEngine\\VisionInspectionApp.VisionEngine.csproj",
       "projectName": "VisionInspectionApp.VisionEngine",
-      "projectPath": "G:\\NODEJS\\Vision2026\\VisionInspectionApp.VisionEngine\\VisionInspectionApp.VisionEngine.csproj",
+      "projectPath": "g:\\NODEJS\\Vision2026\\VisionInspectionApp.VisionEngine\\VisionInspectionApp.VisionEngine.csproj",
       "packagesPath": "C:\\Users\\vip70\\.nuget\\packages\\",
-      "outputPath": "G:\\NODEJS\\Vision2026\\VisionInspectionApp.VisionEngine\\obj\\",
+      "outputPath": "g:\\NODEJS\\Vision2026\\VisionInspectionApp.VisionEngine\\obj\\",
       "projectStyle": "PackageReference",
       "configFilePaths": [
         "C:\\Users\\vip70\\AppData\\Roaming\\NuGet\\NuGet.Config",

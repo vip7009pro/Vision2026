@@ -449,6 +449,11 @@
                                 <TextBlock Text="Surface Compare" FontWeight="SemiBold" Margin="0,8,0,6" />
 
                                 <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                                    <Button Content="Set Search ROI" Command="{Binding SurfaceCompare_SetSearchRoiCommand}" Width="100" Margin="0,0,6,0" />
+                                    <Button Content="Set Template ROI" Command="{Binding SurfaceCompare_SetTemplateRoiCommand}" Width="100" />
+                                </StackPanel>
+
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
                                     <TextBlock Text="Thr" Width="60" VerticalAlignment="Center" />
                                     <TextBox Width="80" Text="{Binding SurfaceCompare_DiffThreshold, UpdateSourceTrigger=PropertyChanged, Delay=150}" />
                                 </StackPanel>
@@ -465,6 +470,15 @@
                                 <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
                                     <TextBlock Text="MaxA" Width="60" VerticalAlignment="Center" />
                                     <TextBox Width="80" Text="{Binding SurfaceCompare_MaxBlobArea, UpdateSourceTrigger=PropertyChanged, Delay=150}" />
+                                </StackPanel>
+
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,2">
+                                    <TextBlock Text="MinCount" Width="60" VerticalAlignment="Center" />
+                                    <TextBox Width="80" Text="{Binding SurfaceCompare_MinCount, UpdateSourceTrigger=PropertyChanged, Delay=150}" />
+                                </StackPanel>
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                                    <TextBlock Text="MaxCount" Width="60" VerticalAlignment="Center" />
+                                    <TextBox Width="80" Text="{Binding SurfaceCompare_MaxCount, UpdateSourceTrigger=PropertyChanged, Delay=150}" />
                                 </StackPanel>
 
                                 <StackPanel Orientation="Horizontal" Margin="0,0,0,2">
@@ -891,7 +905,7 @@
                     <Border Grid.Row="1" BorderBrush="#EEE" BorderThickness="1" Background="#11111111">
                         <controls:ImageViewerControl ImageSource="{Binding SelectedNodePreviewImage}"
                                                   OverlayItems="{Binding SelectedNodeOverlayItems}"
-                                                  EnableRoiEditing="True"
+                                                  EnableRoiEditing="True" ActiveRoiLabel="{Binding ActiveRoiLabel, Mode=TwoWay}"
                                                   RoiSelectedCommand="{Binding RoiSelectedCommand}"
                                                   PointClickedCommand="{Binding PointClickedCommand}"
                                                   RoiEditedCommand="{Binding RoiEditedCommand}"
