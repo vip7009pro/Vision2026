@@ -2560,7 +2560,7 @@ public sealed class InspectionService : IInspectionService
     }
 }
 
-internal static class ConditionEvaluator
+public static class ConditionEvaluator
 {
     internal readonly record struct ConditionValue(bool IsBool, bool Bool, double Number)
     {
@@ -2568,7 +2568,7 @@ internal static class ConditionEvaluator
         public static ConditionValue FromNumber(double v) => new(false, false, v);
     }
 
-    internal sealed class Variable
+    public sealed class Variable
     {
         public Variable(bool pass, double? value = null, double? score = null, bool? found = null)
         {

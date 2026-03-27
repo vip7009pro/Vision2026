@@ -1,10 +1,62 @@
-.vs/
-**/.vs/
 # Build outputs
 **/bin/
 **/obj/
+
+# IDE / editor
+.vs/
+**/.vs/
+.idea/
+**/.idea/
+*.sln.iml
+.vscode/
+
 # User-specific files
 *.user
 *.suo
 *.userosscache
 *.sln.docstates
+
+# NuGet packages
+**/packages/
+*.nupkg
+project.lock.json
+project.fragment.lock.json
+artifacts/
+
+# Build logs
+build.log
+build_errors.txt
+**/build_log.txt
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# macOS
+.DS_Store
+
+# Debug files
+*.pdb
+
+# Generated docs (kept in source for now)
+# codebase.md
+# LIVE_CAMERA_BATCH_PROCESSING_FEATURE.md
+
+# Rider
+.idea/
+
+# JetBrains
+*.DotSettings.user
+
+# NCrunch
+*.ncrunchsolution
+*.ncrunchproject
+
+# Publish output
+publish/
+**/publish/
+
+# Local settings
+appsettings.Local.json
+launchSettings.json

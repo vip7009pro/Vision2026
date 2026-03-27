@@ -1258,6 +1258,47 @@ public sealed partial class InspectionViewModel : ObservableObject
                 }
             }
         }
+
+        // TextNode overlays
+        if (_config?.TextNodes is not null && _config.TextNodes.Count > 0 && LastResult is not null)
+        {
+            Dictionary<string, ConditionEvaluator.Variable>? vars = null;
+            try { vars = ConditionEvaluator.BuildVariableMap(LastResult); } catch { vars = null; }
+
+            foreach (var t in _config.TextNodes)
+            {
+                if (t is null || string.IsNullOrWhiteSpace(t.Name)) continue;
+
+                var text = ToolEditorViewModel.EvaluateTextTemplate(t.Text ?? string.Empty, vars);
+
+                var brush = ToolEditorViewModel.TryParseHexBrush(t.DefaultColor) ?? Brushes.White;
+                if (vars is not null && t.Conditions is not null)
+                {
+                    foreach (var c in t.Conditions)
+                    {
+                        if (c is null || string.IsNullOrWhiteSpace(c.Expression)) continue;
+                        try
+                        {
+                            if (ConditionEvaluator.Evaluate(c.Expression, vars))
+                            {
+                                brush = ToolEditorViewModel.TryParseHexBrush(c.Color) ?? brush;
+                                break;
+                            }
+                        }
+                        catch { /* ignore bad expressions */ }
+                    }
+                }
+
+                OverlayItems.Add(new OverlayTextItem
+                {
+                    X = t.X,
+                    Y = t.Y,
+                    Text = text,
+                    Foreground = brush,
+                    Background = new SolidColorBrush(System.Windows.Media.Color.FromArgb(80, 0, 0, 0))
+                });
+            }
+        }
     }
 
     private static bool TryClipInfiniteLineToImage(System.Windows.Point p, System.Windows.Point dir, int width, int height, out System.Windows.Point p1, out System.Windows.Point p2)

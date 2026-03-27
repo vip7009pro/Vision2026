@@ -56,6 +56,12 @@ public partial class ImageViewerControl : UserControl
         typeof(ImageViewerControl),
         new PropertyMetadata(null));
 
+    public static readonly DependencyProperty PointDoubleClickedCommandProperty = DependencyProperty.Register(
+        nameof(PointDoubleClickedCommand),
+        typeof(ICommand),
+        typeof(ImageViewerControl),
+        new PropertyMetadata(null));
+
     public static readonly DependencyProperty RoiDeletedCommandProperty = DependencyProperty.Register(
         nameof(RoiDeletedCommand),
         typeof(ICommand),
@@ -278,6 +284,12 @@ public partial class ImageViewerControl : UserControl
     {
         get => (ICommand?)GetValue(PointClickedCommandProperty);
         set => SetValue(PointClickedCommandProperty, value);
+    }
+
+    public ICommand? PointDoubleClickedCommand
+    {
+        get => (ICommand?)GetValue(PointDoubleClickedCommandProperty);
+        set => SetValue(PointDoubleClickedCommandProperty, value);
     }
 
     public ICommand? RoiDeletedCommand
@@ -613,8 +625,36 @@ public partial class ImageViewerControl : UserControl
                 case OverlayLineItem l:
                     DrawLine(bmp, l);
                     break;
+                case OverlayTextItem t:
+                    DrawText(bmp, t);
+                    break;
             }
         }
+    }
+
+    private void DrawText(BitmapSource bmp, OverlayTextItem t)
+    {
+        if (t is null || string.IsNullOrWhiteSpace(t.Text))
+        {
+            return;
+        }
+
+        var sx = bmp.Width / bmp.PixelWidth;
+        var sy = bmp.Height / bmp.PixelHeight;
+        var vx = t.X * sx;
+        var vy = t.Y * sy;
+
+        var tb = new TextBlock
+        {
+            Text = t.Text,
+            Foreground = t.Foreground,
+            Background = t.Background,
+            Padding = new Thickness(2, 0, 2, 0)
+        };
+
+        Canvas.SetLeft(tb, vx);
+        Canvas.SetTop(tb, vy);
+        PART_Overlay.Children.Add(tb);
     }
 
     private void DrawRect(BitmapSource bmp, OverlayRectItem r)
@@ -745,6 +785,18 @@ public partial class ImageViewerControl : UserControl
         if (ImageSource is null)
         {
             return;
+        }
+
+        if (e.ClickCount >= 2)
+        {
+            var viewPos = ViewToContent(e.GetPosition(PART_Overlay));
+            var payload = new PointClickSelection(viewPos.X, viewPos.Y, Keyboard.Modifiers);
+            if (PointDoubleClickedCommand is not null && PointDoubleClickedCommand.CanExecute(payload))
+            {
+                PointDoubleClickedCommand.Execute(payload);
+                e.Handled = true;
+                return;
+            }
         }
 
         PART_Overlay.Focus();

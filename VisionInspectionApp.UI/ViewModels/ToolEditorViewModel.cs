@@ -1,7 +1,9 @@
 using System;
 using System.Collections.ObjectModel;
+using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Text.RegularExpressions;
 using System.Windows;
 using System.Windows.Input;
 using System.Windows.Media;
@@ -22,6 +24,39 @@ namespace VisionInspectionApp.UI.ViewModels;
 
 public sealed partial class ToolEditorViewModel : ObservableObject
 {
+    public sealed partial class TextColorConditionRow : ObservableObject
+    {
+        private readonly Action _onChanged;
+
+        public TextColorConditionDefinition Model { get; }
+
+        [ObservableProperty]
+        private string _expression;
+
+        [ObservableProperty]
+        private string _color;
+
+        public TextColorConditionRow(TextColorConditionDefinition model, Action onChanged)
+        {
+            Model = model;
+            _onChanged = onChanged;
+            _expression = model.Expression ?? string.Empty;
+            _color = model.Color ?? "#FF00FF00";
+        }
+
+        partial void OnExpressionChanged(string value)
+        {
+            Model.Expression = value ?? string.Empty;
+            _onChanged();
+        }
+
+        partial void OnColorChanged(string value)
+        {
+            Model.Color = value ?? "#FF00FF00";
+            _onChanged();
+        }
+    }
+
     private readonly IConfigService _configService;
     private readonly ConfigStoreOptions _storeOptions;
     private readonly SharedImageContext _sharedImage;
@@ -97,6 +132,7 @@ public sealed partial class ToolEditorViewModel : ObservableObject
             "Angle",
             "EdgePair",
             "Condition",
+            "Text",
             "BlobDetection",
             "SurfaceCompare",
             "CodeDetection",
@@ -108,6 +144,7 @@ public sealed partial class ToolEditorViewModel : ObservableObject
         AvailablePreprocessChoices = new ObservableCollection<string>();
         SelectedNodeOverlayItems = new ObservableCollection<OverlayItem>();
         FinalOverlayItems = new ObservableCollection<OverlayItem>();
+        TextNode_ConditionRows = new ObservableCollection<TextColorConditionRow>();
 
         RefreshConfigsCommand = new RelayCommand(RefreshConfigs);
         LoadConfigCommand = new RelayCommand(LoadConfig);
@@ -121,6 +158,10 @@ public sealed partial class ToolEditorViewModel : ObservableObject
         RoiEditedCommand = new RelayCommand<RoiSelection?>(OnRoiEdited);
         RoiDeletedCommand = new RelayCommand<string?>(OnRoiDeleted);
         PointClickedCommand = new RelayCommand<PointClickSelection?>(OnPointClicked);
+        PointDoubleClickedCommand = new RelayCommand<PointClickSelection?>(OnPointDoubleClicked);
+
+        TextNode_AddConditionCommand = new RelayCommand(TextNode_AddCondition);
+        TextNode_RemoveConditionCommand = new RelayCommand<TextColorConditionRow?>(TextNode_RemoveCondition);
 
         SurfaceCompare_SetSearchRoiCommand = new RelayCommand(SurfaceCompare_SetSearchRoi);
         SurfaceCompare_SetTemplateRoiCommand = new RelayCommand(SurfaceCompare_SetTemplateRoi);
@@ -132,6 +173,11 @@ public sealed partial class ToolEditorViewModel : ObservableObject
 
     public ICommand SurfaceCompare_SetSearchRoiCommand { get; }
     public ICommand SurfaceCompare_SetTemplateRoiCommand { get; }
+
+    public ObservableCollection<TextColorConditionRow> TextNode_ConditionRows { get; }
+
+    public ICommand TextNode_AddConditionCommand { get; }
+    public ICommand TextNode_RemoveConditionCommand { get; }
 
     private void SurfaceCompare_SetSearchRoi()
     {
@@ -336,6 +382,37 @@ public sealed partial class ToolEditorViewModel : ObservableObject
         b.InspectRoi = ComputeBlobInspectRoi(b);
 
         RunFlow();
+        RequestAutoSave();
+    }
+
+    private void OnPointDoubleClicked(PointClickSelection? click)
+    {
+        if (click is null)
+        {
+            return;
+        }
+
+        if (_config is null || SelectedNode is null)
+        {
+            return;
+        }
+
+        if (!string.Equals(SelectedNode.Type, "Text", StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        var t = _config.TextNodes.FirstOrDefault(x => string.Equals(x.Name, SelectedNode.RefName, StringComparison.OrdinalIgnoreCase));
+        if (t is null)
+        {
+            return;
+        }
+
+        t.X = (int)Math.Round(click.X);
+        t.Y = (int)Math.Round(click.Y);
+
+        RaiseToolPropertyPanelsChanged();
+        RefreshPreviews();
         RequestAutoSave();
     }
 
@@ -2276,9 +2353,74 @@ public sealed partial class ToolEditorViewModel : ObservableObject
 
         SyncPreprocessChoices();
         SyncSelectedToolPreprocessChoiceFromGraph();
+        SyncTextNodeConditionRows();
         RaiseToolPropertyPanelsChanged();
         RefreshSelectedPreview();
         OnPropertyChanged(nameof(Blob_LastRunCount));
+    }
+
+    private void SyncTextNodeConditionRows()
+    {
+        TextNode_ConditionRows.Clear();
+
+        var def = SelectedTextNodeDef();
+        if (def?.Conditions is null)
+        {
+            return;
+        }
+
+        foreach (var c in def.Conditions)
+        {
+            if (c is null) continue;
+            TextNode_ConditionRows.Add(new TextColorConditionRow(c, OnTextNodeConditionEdited));
+        }
+    }
+
+    private void OnTextNodeConditionEdited()
+    {
+        RefreshPreviews();
+        RequestAutoSave();
+    }
+
+    private void TextNode_AddCondition()
+    {
+        var def = SelectedTextNodeDef();
+        if (def is null)
+        {
+            return;
+        }
+
+        def.Conditions ??= new();
+        var c = new TextColorConditionDefinition
+        {
+            Expression = string.Empty,
+            Color = "#FF00FF00"
+        };
+        def.Conditions.Add(c);
+        TextNode_ConditionRows.Add(new TextColorConditionRow(c, OnTextNodeConditionEdited));
+        RaiseToolPropertyPanelsChanged();
+        RefreshPreviews();
+        RequestAutoSave();
+    }
+
+    private void TextNode_RemoveCondition(TextColorConditionRow? row)
+    {
+        if (row is null)
+        {
+            return;
+        }
+
+        var def = SelectedTextNodeDef();
+        if (def is null || def.Conditions is null)
+        {
+            return;
+        }
+
+        def.Conditions.Remove(row.Model);
+        TextNode_ConditionRows.Remove(row);
+        RaiseToolPropertyPanelsChanged();
+        RefreshPreviews();
+        RequestAutoSave();
     }
 
     public void ClearNodeSelection()
@@ -2377,6 +2519,8 @@ public sealed partial class ToolEditorViewModel : ObservableObject
     public ICommand RoiDeletedCommand { get; }
 
     public ICommand PointClickedCommand { get; }
+
+    public ICommand PointDoubleClickedCommand { get; }
 
     private VisionConfig? _config;
 
@@ -2579,6 +2723,7 @@ public sealed partial class ToolEditorViewModel : ObservableObject
         OnPropertyChanged(nameof(IsEdgePairDetectNode));
         OnPropertyChanged(nameof(IsDiameterNode));
         OnPropertyChanged(nameof(IsConditionNode));
+        OnPropertyChanged(nameof(IsTextNode));
         OnPropertyChanged(nameof(IsBlobDetectionNode));
         OnPropertyChanged(nameof(IsSurfaceCompareNode));
 
@@ -2627,6 +2772,11 @@ public sealed partial class ToolEditorViewModel : ObservableObject
 
         OnPropertyChanged(nameof(Condition_InputCount));
         OnPropertyChanged(nameof(Condition_Expression));
+
+        OnPropertyChanged(nameof(TextNode_Text));
+        OnPropertyChanged(nameof(TextNode_X));
+        OnPropertyChanged(nameof(TextNode_Y));
+        OnPropertyChanged(nameof(TextNode_DefaultColor));
 
         OnPropertyChanged(nameof(UseGray));
         OnPropertyChanged(nameof(IlluminationCorrection));
@@ -2866,6 +3016,28 @@ public sealed partial class ToolEditorViewModel : ObservableObject
             return;
         }
 
+        if (string.Equals(SelectedNode.Type, "Text", StringComparison.OrdinalIgnoreCase))
+        {
+            if (!click.Modifiers.HasFlag(ModifierKeys.Control) || !click.Modifiers.HasFlag(ModifierKeys.Shift))
+            {
+                return;
+            }
+
+            var t = _config.TextNodes.FirstOrDefault(x => string.Equals(x.Name, SelectedNode.RefName, StringComparison.OrdinalIgnoreCase));
+            if (t is null)
+            {
+                return;
+            }
+
+            t.X = (int)Math.Round(click.X);
+            t.Y = (int)Math.Round(click.Y);
+
+            RaiseToolPropertyPanelsChanged();
+            RefreshPreviews();
+            RequestAutoSave();
+            return;
+        }
+
         if (!string.Equals(SelectedNode.Type, "Point", StringComparison.OrdinalIgnoreCase))
         {
             return;
@@ -2908,6 +3080,8 @@ public sealed partial class ToolEditorViewModel : ObservableObject
 
     public bool IsConditionNode => string.Equals(SelectedNode?.Type, "Condition", StringComparison.OrdinalIgnoreCase);
 
+    public bool IsTextNode => string.Equals(SelectedNode?.Type, "Text", StringComparison.OrdinalIgnoreCase);
+
     public bool IsPreprocessNode => string.Equals(SelectedNode?.Type, "Preprocess", StringComparison.OrdinalIgnoreCase);
 
     public bool IsAnyDistanceNode => IsDistanceNode || IsLineLineDistanceNode || IsPointLineDistanceNode || IsAngleNode || IsEdgePairNode || IsEdgePairDetectNode || IsDiameterNode;
@@ -2917,6 +3091,75 @@ public sealed partial class ToolEditorViewModel : ObservableObject
         if (_config is null || SelectedNode is null) return null;
         if (!string.Equals(SelectedNode.Type, "Angle", StringComparison.OrdinalIgnoreCase)) return null;
         return _config.Angles.FirstOrDefault(x => string.Equals(x.Name, SelectedNode.RefName, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private TextNodeDefinition? SelectedTextNodeDef()
+    {
+        if (_config is null || SelectedNode is null) return null;
+        if (!string.Equals(SelectedNode.Type, "Text", StringComparison.OrdinalIgnoreCase)) return null;
+        return _config.TextNodes.FirstOrDefault(x => string.Equals(x.Name, SelectedNode.RefName, StringComparison.OrdinalIgnoreCase));
+    }
+
+    public string TextNode_Text
+    {
+        get => SelectedTextNodeDef()?.Text ?? string.Empty;
+        set
+        {
+            var def = SelectedTextNodeDef();
+            if (def is null) return;
+            value ??= string.Empty;
+            if (string.Equals(def.Text, value, StringComparison.Ordinal)) return;
+            def.Text = value;
+            RaiseToolPropertyPanelsChanged();
+            RefreshPreviews();
+            RequestAutoSave();
+        }
+    }
+
+    public int TextNode_X
+    {
+        get => SelectedTextNodeDef()?.X ?? 0;
+        set
+        {
+            var def = SelectedTextNodeDef();
+            if (def is null) return;
+            if (def.X == value) return;
+            def.X = value;
+            RaiseToolPropertyPanelsChanged();
+            RefreshPreviews();
+            RequestAutoSave();
+        }
+    }
+
+    public int TextNode_Y
+    {
+        get => SelectedTextNodeDef()?.Y ?? 0;
+        set
+        {
+            var def = SelectedTextNodeDef();
+            if (def is null) return;
+            if (def.Y == value) return;
+            def.Y = value;
+            RaiseToolPropertyPanelsChanged();
+            RefreshPreviews();
+            RequestAutoSave();
+        }
+    }
+
+    public string TextNode_DefaultColor
+    {
+        get => SelectedTextNodeDef()?.DefaultColor ?? "#FFFFFFFF";
+        set
+        {
+            var def = SelectedTextNodeDef();
+            if (def is null) return;
+            value ??= "#FFFFFFFF";
+            if (string.Equals(def.DefaultColor, value, StringComparison.Ordinal)) return;
+            def.DefaultColor = value;
+            RaiseToolPropertyPanelsChanged();
+            RefreshPreviews();
+            RequestAutoSave();
+        }
     }
 
     private EdgePairDefinition? SelectedEdgePairDef()
@@ -4280,6 +4523,128 @@ public sealed partial class ToolEditorViewModel : ObservableObject
         dst.Add(new OverlayLineItem { X1 = cx, Y1 = cy - s, X2 = cx, Y2 = cy + s, Stroke = stroke, StrokeThickness = strokeThickness, Label = string.Empty });
     }
 
+    internal static System.Windows.Media.Brush? TryParseHexBrush(string? hex)
+    {
+        if (string.IsNullOrWhiteSpace(hex)) return null;
+        try
+        {
+            var obj = System.Windows.Media.ColorConverter.ConvertFromString(hex);
+            if (obj is System.Windows.Media.Color c)
+            {
+                var b = new System.Windows.Media.SolidColorBrush(c);
+                b.Freeze();
+                return b;
+            }
+        }
+        catch
+        {
+            return null;
+        }
+
+        return null;
+    }
+
+    internal static string EvaluateTextTemplate(string text, Dictionary<string, ConditionEvaluator.Variable>? vars)
+    {
+        if (string.IsNullOrEmpty(text) || vars is null || vars.Count == 0)
+        {
+            return text ?? string.Empty;
+        }
+
+        return TextTemplateRegex().Replace(text, m =>
+        {
+            var inner = m.Groups[1].Value?.Trim() ?? string.Empty;
+            if (inner.Length == 0) return string.Empty;
+
+            var fmt = string.Empty;
+            var colonIdx = inner.IndexOf(':');
+            if (colonIdx >= 0)
+            {
+                fmt = inner[(colonIdx + 1)..].Trim();
+                inner = inner[..colonIdx].Trim();
+            }
+
+            var varName = inner;
+            var prop = string.Empty;
+            var dotIdx = inner.IndexOf('.');
+            if (dotIdx >= 0)
+            {
+                varName = inner[..dotIdx].Trim();
+                prop = inner[(dotIdx + 1)..].Trim();
+            }
+
+            if (string.IsNullOrWhiteSpace(varName) || !vars.TryGetValue(varName, out var v) || v is null)
+            {
+                return string.Empty;
+            }
+
+            object? valueObj = null;
+            if (string.IsNullOrWhiteSpace(prop))
+            {
+                valueObj = v.Value ?? (object)v.Pass;
+            }
+            else if (string.Equals(prop, "Pass", StringComparison.OrdinalIgnoreCase))
+            {
+                valueObj = v.Pass;
+            }
+            else if (string.Equals(prop, "Value", StringComparison.OrdinalIgnoreCase))
+            {
+                valueObj = v.Value;
+            }
+            else if (string.Equals(prop, "Score", StringComparison.OrdinalIgnoreCase))
+            {
+                valueObj = v.Score;
+            }
+            else if (string.Equals(prop, "Found", StringComparison.OrdinalIgnoreCase))
+            {
+                valueObj = v.Found;
+            }
+            else
+            {
+                return string.Empty;
+            }
+
+            if (valueObj is null)
+            {
+                return string.Empty;
+            }
+
+            if (valueObj is double d)
+            {
+                return string.IsNullOrWhiteSpace(fmt)
+                    ? d.ToString("0.###", CultureInfo.InvariantCulture)
+                    : d.ToString(fmt, CultureInfo.InvariantCulture);
+            }
+
+            if (valueObj is bool b)
+            {
+                return b ? "True" : "False";
+            }
+
+            if (valueObj is bool bn)
+            {
+                return bn ? "True" : "False";
+            }
+
+            if (valueObj is double dn)
+            {
+                return string.IsNullOrWhiteSpace(fmt)
+                    ? dn.ToString("0.###", CultureInfo.InvariantCulture)
+                    : dn.ToString(fmt, CultureInfo.InvariantCulture);
+            }
+
+            if (valueObj is IFormattable f && !string.IsNullOrWhiteSpace(fmt))
+            {
+                return f.ToString(fmt, CultureInfo.InvariantCulture);
+            }
+
+            return Convert.ToString(valueObj, CultureInfo.InvariantCulture) ?? string.Empty;
+        });
+    }
+
+    [GeneratedRegex(@"\$\{([^}]+)\}", RegexOptions.Compiled)]
+    internal static partial Regex TextTemplateRegex();
+
     public int Line_Canny2
     {
         get => SelectedLineDef()?.Canny2 ?? 0;
@@ -5081,6 +5446,11 @@ public sealed partial class ToolEditorViewModel : ObservableObject
                 _config.Conditions.RemoveAll(x => string.Equals(x.Name, toRemove.RefName, StringComparison.OrdinalIgnoreCase));
             }
 
+            if (string.Equals(toRemove.Type, "Text", StringComparison.OrdinalIgnoreCase))
+            {
+                _config.TextNodes.RemoveAll(x => string.Equals(x.Name, toRemove.RefName, StringComparison.OrdinalIgnoreCase));
+            }
+
             if (string.Equals(toRemove.Type, "BlobDetection", StringComparison.OrdinalIgnoreCase))
             {
                 _config.BlobDetections.RemoveAll(x => string.Equals(x.Name, toRemove.RefName, StringComparison.OrdinalIgnoreCase));
@@ -5297,6 +5667,24 @@ public sealed partial class ToolEditorViewModel : ObservableObject
             return;
         }
 
+        if (string.Equals(node.Type, "Text", StringComparison.OrdinalIgnoreCase))
+        {
+            var existed = _config.TextNodes.Any(x => string.Equals(x.Name, node.RefName, StringComparison.OrdinalIgnoreCase));
+            if (!existed)
+            {
+                // Default position roughly near top-left; user can set by Ctrl+Shift click.
+                _config.TextNodes.Add(new TextNodeDefinition
+                {
+                    Name = node.RefName,
+                    Text = node.RefName,
+                    X = 10,
+                    Y = 10,
+                    DefaultColor = "#FFFFFFFF"
+                });
+            }
+            return;
+        }
+
         if (string.Equals(node.Type, "LinePairDetection", StringComparison.OrdinalIgnoreCase))
         {
             var existed = _config.LinePairDetections.Any(x => string.Equals(x.Name, node.RefName, StringComparison.OrdinalIgnoreCase));
@@ -5494,6 +5882,11 @@ public sealed partial class ToolEditorViewModel : ObservableObject
         {
             baseName = "C";
             exists = n => _config.Conditions.Any(x => string.Equals(x.Name, n, StringComparison.OrdinalIgnoreCase));
+        }
+        else if (string.Equals(type, "Text", StringComparison.OrdinalIgnoreCase))
+        {
+            baseName = "T";
+            exists = n => _config.TextNodes.Any(x => string.Equals(x.Name, n, StringComparison.OrdinalIgnoreCase));
         }
         else if (string.Equals(type, "Preprocess", StringComparison.OrdinalIgnoreCase))
         {
@@ -7247,6 +7640,59 @@ public sealed partial class ToolEditorViewModel : ObservableObject
                 y += 16.0;
             }
         }
+
+        if (config is not null && config.TextNodes is not null && config.TextNodes.Count > 0)
+        {
+            Dictionary<string, ConditionEvaluator.Variable>? vars = null;
+            try
+            {
+                vars = ConditionEvaluator.BuildVariableMap(run);
+            }
+            catch
+            {
+                vars = null;
+            }
+
+            foreach (var t in config.TextNodes)
+            {
+                if (t is null || string.IsNullOrWhiteSpace(t.Name))
+                {
+                    continue;
+                }
+
+                var text = EvaluateTextTemplate(t.Text ?? string.Empty, vars);
+
+                var brush = TryParseHexBrush(t.DefaultColor) ?? Brushes.White;
+                if (vars is not null && t.Conditions is not null)
+                {
+                    foreach (var c in t.Conditions)
+                    {
+                        if (c is null || string.IsNullOrWhiteSpace(c.Expression)) continue;
+                        try
+                        {
+                            if (ConditionEvaluator.Evaluate(c.Expression, vars))
+                            {
+                                brush = TryParseHexBrush(c.Color) ?? brush;
+                                break;
+                            }
+                        }
+                        catch
+                        {
+                            // ignore bad expressions
+                        }
+                    }
+                }
+
+                dst.Add(new OverlayTextItem
+                {
+                    X = t.X,
+                    Y = t.Y,
+                    Text = text,
+                    Foreground = brush,
+                    Background = new SolidColorBrush(Color.FromArgb(80, 0, 0, 0))
+                });
+            }
+        }
     }
 
     private void BuildOverlayForNodeFromRun(ToolGraphNodeViewModel node, InspectionResult run, ObservableCollection<OverlayItem> dst)
@@ -7745,6 +8191,47 @@ public sealed partial class ToolEditorViewModel : ObservableObject
                 Radius = 1.0,
                 Stroke = c.Pass ? Brushes.Lime : Brushes.Red,
                 Label = $"{c.Name}: {okText}" + (string.IsNullOrWhiteSpace(c.Error) ? string.Empty : $" ({c.Error})")
+            });
+            return;
+        }
+
+        if (string.Equals(node.Type, "Text", StringComparison.OrdinalIgnoreCase))
+        {
+            if (_config is null) return;
+
+            var t = _config.TextNodes.FirstOrDefault(x => string.Equals(x.Name, node.RefName, StringComparison.OrdinalIgnoreCase));
+            if (t is null) return;
+
+            Dictionary<string, ConditionEvaluator.Variable>? vars = null;
+            try { vars = ConditionEvaluator.BuildVariableMap(run); } catch { vars = null; }
+
+            var text = EvaluateTextTemplate(t.Text ?? string.Empty, vars);
+
+            var brush = TryParseHexBrush(t.DefaultColor) ?? Brushes.White;
+            if (vars is not null && t.Conditions is not null)
+            {
+                foreach (var c in t.Conditions)
+                {
+                    if (c is null || string.IsNullOrWhiteSpace(c.Expression)) continue;
+                    try
+                    {
+                        if (ConditionEvaluator.Evaluate(c.Expression, vars))
+                        {
+                            brush = TryParseHexBrush(c.Color) ?? brush;
+                            break;
+                        }
+                    }
+                    catch { /* ignore bad expressions */ }
+                }
+            }
+
+            dst.Add(new OverlayTextItem
+            {
+                X = t.X,
+                Y = t.Y,
+                Text = text,
+                Foreground = brush,
+                Background = new SolidColorBrush(Color.FromArgb(80, 0, 0, 0))
             });
             return;
         }

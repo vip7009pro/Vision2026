@@ -5,10 +5,12 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
              xmlns:controls="clr-namespace:VisionInspectionApp.UI.Controls"
              xmlns:models="clr-namespace:VisionInspectionApp.Models;assembly=VisionInspectionApp.Models"
+             xmlns:converters="clr-namespace:VisionInspectionApp.UI.Converters"
              mc:Ignorable="d">
 
     <UserControl.Resources>
         <BooleanToVisibilityConverter x:Key="BoolToVis" />
+        <converters:HexToBrushConverter x:Key="HexToBrush" />
     </UserControl.Resources>
 
     <Grid Margin="8">
@@ -36,7 +38,8 @@
 
         <Grid Grid.Row="1">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="260" />
+                <ColumnDefinition Width="260" MinWidth="180" />
+                <ColumnDefinition Width="5" />
                 <ColumnDefinition Width="4*" />
                 <ColumnDefinition Width="6" />
                 <ColumnDefinition Width="7*" />
@@ -412,6 +415,56 @@
                                 <TextBox Text="{Binding Condition_Expression, UpdateSourceTrigger=PropertyChanged}" AcceptsReturn="True" Height="80" TextWrapping="Wrap" />
                             </StackPanel>
 
+                            <StackPanel Visibility="{Binding IsTextNode, Converter={StaticResource BoolToVis}}">
+                                <TextBlock Text="Text Params" FontWeight="SemiBold" Margin="0,8,0,6" />
+
+                                <TextBlock Text="Text" Margin="0,0,0,2" />
+                                <TextBox Text="{Binding TextNode_Text, UpdateSourceTrigger=PropertyChanged}" AcceptsReturn="True" Height="60" TextWrapping="Wrap" Margin="0,0,0,6" />
+
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,2">
+                                    <TextBlock Text="X" Width="60" VerticalAlignment="Center" />
+                                    <TextBox Width="80" Text="{Binding TextNode_X, UpdateSourceTrigger=PropertyChanged, Delay=150}" />
+                                </StackPanel>
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                                    <TextBlock Text="Y" Width="60" VerticalAlignment="Center" />
+                                    <TextBox Width="80" Text="{Binding TextNode_Y, UpdateSourceTrigger=PropertyChanged, Delay=150}" />
+                                </StackPanel>
+
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                                    <TextBlock Text="Color" Width="60" VerticalAlignment="Center" />
+                                    <Rectangle Width="20" Height="20" Margin="0,0,4,0" Stroke="#999" StrokeThickness="1"
+                                               Fill="{Binding TextNode_DefaultColor, Converter={StaticResource HexToBrush}}" />
+                                    <TextBox Width="130" Text="{Binding TextNode_DefaultColor, UpdateSourceTrigger=PropertyChanged, Delay=150}" />
+                                </StackPanel>
+
+                                <TextBlock Text="Color Rules" FontWeight="SemiBold" Margin="0,8,0,6" />
+
+                                <Button Content="Add Rule" Command="{Binding TextNode_AddConditionCommand}" Width="90" Margin="0,0,0,6" />
+
+                                <ItemsControl ItemsSource="{Binding TextNode_ConditionRows}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <Border BorderBrush="#DDD" BorderThickness="1" Padding="4" Margin="0,0,0,6">
+                                                <StackPanel>
+                                                    <TextBlock Text="Expression" Margin="0,0,0,2" />
+                                                    <TextBox Text="{Binding Expression, UpdateSourceTrigger=PropertyChanged}" AcceptsReturn="True" Height="50" TextWrapping="Wrap" Margin="0,0,0,6" />
+
+                                                    <StackPanel Orientation="Horizontal">
+                                                        <TextBlock Text="Color" Width="60" VerticalAlignment="Center" />
+                                                        <Rectangle Width="20" Height="20" Margin="0,0,4,0" Stroke="#999" StrokeThickness="1"
+                                                                   Fill="{Binding Color, Converter={StaticResource HexToBrush}}" />
+                                                        <TextBox Width="80" Text="{Binding Color, UpdateSourceTrigger=PropertyChanged, Delay=150}" Margin="0,0,6,0" />
+                                                        <Button Content="Remove" Width="60"
+                                                                Command="{Binding DataContext.TextNode_RemoveConditionCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                                CommandParameter="{Binding}" />
+                                                    </StackPanel>
+                                                </StackPanel>
+                                            </Border>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </StackPanel>
+
                             <StackPanel Visibility="{Binding IsBlobDetectionNode, Converter={StaticResource BoolToVis}}">
                                 <TextBlock Text="Blob Detection" FontWeight="SemiBold" Margin="0,8,0,6" />
 
@@ -759,7 +812,9 @@
                 </Grid>
             </Border>
 
-            <Border Grid.Column="1" BorderBrush="#CCC" BorderThickness="1" Padding="8" Margin="0,0,8,0">
+            <GridSplitter Grid.Column="1" Width="5" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Background="#DDD" />
+
+            <Border Grid.Column="2" BorderBrush="#CCC" BorderThickness="1" Padding="8" Margin="0,0,8,0">
                 <Grid>
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />
@@ -889,9 +944,9 @@
                 </Grid>
             </Border>
 
-            <GridSplitter Grid.Column="2" Width="6" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Background="#DDD" />
+            <GridSplitter Grid.Column="3" Width="6" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Background="#DDD" />
 
-            <Border Grid.Column="3" BorderBrush="#CCC" BorderThickness="1" Padding="8">
+            <Border Grid.Column="4" BorderBrush="#CCC" BorderThickness="1" Padding="8">
                 <Grid>
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />
@@ -908,6 +963,7 @@
                                                   EnableRoiEditing="True" ActiveRoiLabel="{Binding ActiveRoiLabel, Mode=TwoWay}"
                                                   RoiSelectedCommand="{Binding RoiSelectedCommand}"
                                                   PointClickedCommand="{Binding PointClickedCommand}"
+                                                  PointDoubleClickedCommand="{Binding PointDoubleClickedCommand}"
                                                   RoiEditedCommand="{Binding RoiEditedCommand}"
                                                   RoiDeletedCommand="{Binding RoiDeletedCommand}" />
                     </Border>

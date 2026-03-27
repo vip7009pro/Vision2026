@@ -159,7 +159,31 @@ public sealed class VisionConfig
 
     public List<SurfaceCompareDefinition> SurfaceCompares { get; set; } = new();
 
+    public List<TextNodeDefinition> TextNodes { get; set; } = new();
+
     public DefectInspectionConfig DefectConfig { get; set; } = new();
+}
+
+public sealed class TextColorConditionDefinition
+{
+    public string Expression { get; set; } = string.Empty;
+
+    public string Color { get; set; } = "#FF00FF00";
+}
+
+public sealed class TextNodeDefinition
+{
+    public string Name { get; set; } = string.Empty;
+
+    public string Text { get; set; } = string.Empty;
+
+    public int X { get; set; }
+
+    public int Y { get; set; }
+
+    public string DefaultColor { get; set; } = "#FFFFFFFF";
+
+    public List<TextColorConditionDefinition> Conditions { get; set; } = new();
 }
 
 public sealed class EdgePairDefinition

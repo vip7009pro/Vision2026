@@ -37,6 +37,18 @@ public sealed class OverlayLineItem : OverlayItem
     public double Y2 { get; init; }
 }
 
+public sealed class OverlayTextItem : OverlayItem
+{
+    public double X { get; init; }
+    public double Y { get; init; }
+
+    public string Text { get; init; } = string.Empty;
+
+    public Brush Foreground { get; init; } = Brushes.White;
+
+    public Brush? Background { get; init; }
+}
+
 public sealed record LineSelection(double X1, double Y1, double X2, double Y2);
 
 public sealed record RoiSelection(string Label, VisionInspectionApp.Models.Roi Roi, System.Windows.Input.ModifierKeys Modifiers);

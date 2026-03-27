@@ -12,9 +12,9 @@ TRACE;DEBUG;NET;NET8_0;NETCOREAPP;WINDOWS;WINDOWS7_0;NET5_0_OR_GREATER;NET6_0_OR
 G:\NODEJS\Vision2026\VisionInspectionApp.UI\App.xaml
 9-541383744
 
-34-1977307404
+3560714349
 235313426460
 Controls\ImageViewerControl.xaml;MainWindow.xaml;Views\BatchProcessingView.xaml;Views\CalibrationView.xaml;Views\InspectionView.xaml;Views\LiveCameraView.xaml;Views\ManualInspectionView.xaml;Views\TeachView.xaml;Views\ToolEditorView.xaml;
 
-True
+False
 
