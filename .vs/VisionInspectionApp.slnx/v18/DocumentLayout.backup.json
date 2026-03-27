@@ -3,16 +3,16 @@
   "WorkspaceRootPath": "G:\\NODEJS\\Vision2026\\",
   "Documents": [
     {
+      "AbsoluteMoniker": "D:0:0:{5C308827-6589-FB41-8A81-53B0C0BF7147}|VisionInspectionApp.UI\\VisionInspectionApp.UI.csproj|g:\\nodejs\\vision2026\\visioninspectionapp.ui\\viewmodels\\teachviewmodel.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{5C308827-6589-FB41-8A81-53B0C0BF7147}|VisionInspectionApp.UI\\VisionInspectionApp.UI.csproj|solutionrelative:visioninspectionapp.ui\\viewmodels\\teachviewmodel.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
       "AbsoluteMoniker": "D:0:0:{5C308827-6589-FB41-8A81-53B0C0BF7147}|VisionInspectionApp.UI\\VisionInspectionApp.UI.csproj|g:\\nodejs\\vision2026\\visioninspectionapp.ui\\mainwindow.xaml||{F11ACC28-31D1-4C80-A34B-F4E09D3D753C}",
       "RelativeMoniker": "D:0:0:{5C308827-6589-FB41-8A81-53B0C0BF7147}|VisionInspectionApp.UI\\VisionInspectionApp.UI.csproj|solutionrelative:visioninspectionapp.ui\\mainwindow.xaml||{F11ACC28-31D1-4C80-A34B-F4E09D3D753C}"
     },
     {
       "AbsoluteMoniker": "D:0:0:{5C308827-6589-FB41-8A81-53B0C0BF7147}|VisionInspectionApp.UI\\VisionInspectionApp.UI.csproj|g:\\nodejs\\vision2026\\visioninspectionapp.ui\\views\\tooleditorview.xaml||{F11ACC28-31D1-4C80-A34B-F4E09D3D753C}",
       "RelativeMoniker": "D:0:0:{5C308827-6589-FB41-8A81-53B0C0BF7147}|VisionInspectionApp.UI\\VisionInspectionApp.UI.csproj|solutionrelative:visioninspectionapp.ui\\views\\tooleditorview.xaml||{F11ACC28-31D1-4C80-A34B-F4E09D3D753C}"
-    },
-    {
-      "AbsoluteMoniker": "D:0:0:{5C308827-6589-FB41-8A81-53B0C0BF7147}|VisionInspectionApp.UI\\VisionInspectionApp.UI.csproj|g:\\nodejs\\vision2026\\visioninspectionapp.ui\\viewmodels\\teachviewmodel.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
-      "RelativeMoniker": "D:0:0:{5C308827-6589-FB41-8A81-53B0C0BF7147}|VisionInspectionApp.UI\\VisionInspectionApp.UI.csproj|solutionrelative:visioninspectionapp.ui\\viewmodels\\teachviewmodel.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
     },
     {
       "AbsoluteMoniker": "D:0:0:{5C308827-6589-FB41-8A81-53B0C0BF7147}|VisionInspectionApp.UI\\VisionInspectionApp.UI.csproj|g:\\nodejs\\vision2026\\visioninspectionapp.ui\\controls\\imageviewercontrol.xaml.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
@@ -34,7 +34,7 @@
       "DocumentGroups": [
         {
           "DockedWidth": 200,
-          "SelectedChildIndex": 6,
+          "SelectedChildIndex": 5,
           "Children": [
             {
               "$type": "Bookmark",
@@ -42,15 +42,14 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 1,
+              "DocumentIndex": 2,
               "Title": "ToolEditorView.xaml",
               "DocumentMoniker": "G:\\NODEJS\\Vision2026\\VisionInspectionApp.UI\\Views\\ToolEditorView.xaml",
               "RelativeDocumentMoniker": "VisionInspectionApp.UI\\Views\\ToolEditorView.xaml",
               "ToolTip": "G:\\NODEJS\\Vision2026\\VisionInspectionApp.UI\\Views\\ToolEditorView.xaml",
               "RelativeToolTip": "VisionInspectionApp.UI\\Views\\ToolEditorView.xaml",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.003549|",
-              "WhenOpened": "2026-03-14T06:36:35.237Z",
-              "EditorCaption": ""
+              "WhenOpened": "2026-03-14T06:36:35.237Z"
             },
             {
               "$type": "Document",
@@ -62,8 +61,7 @@
               "RelativeToolTip": "VisionInspectionApp.UI\\Controls\\ImageViewerControl.xaml.cs",
               "ViewState": "AgIAAKkFAAAAAAAAAAAwwMEFAAAJAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2026-03-14T03:09:18.622Z",
-              "EditorCaption": ""
+              "WhenOpened": "2026-03-14T03:09:18.622Z"
             },
             {
               "$type": "Document",
@@ -90,20 +88,20 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 2,
+              "DocumentIndex": 0,
               "Title": "TeachViewModel.cs",
               "DocumentMoniker": "G:\\NODEJS\\Vision2026\\VisionInspectionApp.UI\\ViewModels\\TeachViewModel.cs",
               "RelativeDocumentMoniker": "VisionInspectionApp.UI\\ViewModels\\TeachViewModel.cs",
               "ToolTip": "G:\\NODEJS\\Vision2026\\VisionInspectionApp.UI\\ViewModels\\TeachViewModel.cs",
               "RelativeToolTip": "VisionInspectionApp.UI\\ViewModels\\TeachViewModel.cs",
-              "ViewState": "AgIAADMBAAAAAAAAAAAqwEgBAAAJAAAAAAAAAA==",
+              "ViewState": "AgIAAOQAAACAzczMzAwmwPcAAAAAAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
               "WhenOpened": "2026-03-11T09:19:19.571Z",
               "EditorCaption": ""
             },
             {
               "$type": "Document",
-              "DocumentIndex": 0,
+              "DocumentIndex": 1,
               "Title": "MainWindow.xaml",
               "DocumentMoniker": "G:\\NODEJS\\Vision2026\\VisionInspectionApp.UI\\MainWindow.xaml",
               "RelativeDocumentMoniker": "VisionInspectionApp.UI\\MainWindow.xaml",
