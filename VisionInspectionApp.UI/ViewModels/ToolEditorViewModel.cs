@@ -162,6 +162,8 @@ public sealed partial class ToolEditorViewModel : ObservableObject
 
         TextNode_AddConditionCommand = new RelayCommand(TextNode_AddCondition);
         TextNode_RemoveConditionCommand = new RelayCommand<TextColorConditionRow?>(TextNode_RemoveCondition);
+        TextNode_PickDefaultColorCommand = new RelayCommand(TextNode_PickDefaultColor);
+        TextNode_PickConditionColorCommand = new RelayCommand<TextColorConditionRow?>(TextNode_PickConditionColor);
 
         SurfaceCompare_SetSearchRoiCommand = new RelayCommand(SurfaceCompare_SetSearchRoi);
         SurfaceCompare_SetTemplateRoiCommand = new RelayCommand(SurfaceCompare_SetTemplateRoi);
@@ -178,6 +180,8 @@ public sealed partial class ToolEditorViewModel : ObservableObject
 
     public ICommand TextNode_AddConditionCommand { get; }
     public ICommand TextNode_RemoveConditionCommand { get; }
+    public ICommand TextNode_PickDefaultColorCommand { get; }
+    public ICommand TextNode_PickConditionColorCommand { get; }
 
     private void SurfaceCompare_SetSearchRoi()
     {
@@ -3161,6 +3165,47 @@ public sealed partial class ToolEditorViewModel : ObservableObject
             RequestAutoSave();
         }
     }
+
+    private void TextNode_PickDefaultColor()
+    {
+        using var dlg = new System.Windows.Forms.ColorDialog();
+        if (TryParseHexBrush(TextNode_DefaultColor) is System.Windows.Media.SolidColorBrush scb)
+        {
+            dlg.Color = System.Drawing.Color.FromArgb(scb.Color.A, scb.Color.R, scb.Color.G, scb.Color.B);
+        }
+        else
+        {
+            dlg.Color = System.Drawing.Color.White;
+        }
+
+        if (dlg.ShowDialog() == System.Windows.Forms.DialogResult.OK)
+        {
+            TextNode_DefaultColor = $"#{dlg.Color.A:X2}{dlg.Color.R:X2}{dlg.Color.G:X2}{dlg.Color.B:X2}";
+        }
+    }
+
+    private void TextNode_PickConditionColor(TextColorConditionRow? row)
+    {
+        if (row is null) return;
+        using var dlg = new System.Windows.Forms.ColorDialog();
+        if (TryParseHexBrush(row.Color) is System.Windows.Media.SolidColorBrush scb)
+        {
+            dlg.Color = System.Drawing.Color.FromArgb(scb.Color.A, scb.Color.R, scb.Color.G, scb.Color.B);
+        }
+        else
+        {
+            dlg.Color = System.Drawing.Color.White;
+        }
+
+        if (dlg.ShowDialog() == System.Windows.Forms.DialogResult.OK)
+        {
+            row.Color = $"#{dlg.Color.A:X2}{dlg.Color.R:X2}{dlg.Color.G:X2}{dlg.Color.B:X2}";
+            RaiseToolPropertyPanelsChanged();
+            RefreshPreviews();
+            RequestAutoSave();
+        }
+    }
+
 
     private EdgePairDefinition? SelectedEdgePairDef()
     {

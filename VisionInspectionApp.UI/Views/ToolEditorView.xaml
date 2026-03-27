@@ -432,8 +432,10 @@
 
                                 <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
                                     <TextBlock Text="Color" Width="60" VerticalAlignment="Center" />
-                                    <Rectangle Width="20" Height="20" Margin="0,0,4,0" Stroke="#999" StrokeThickness="1"
-                                               Fill="{Binding TextNode_DefaultColor, Converter={StaticResource HexToBrush}}" />
+                                    <Button Command="{Binding TextNode_PickDefaultColorCommand}" Margin="0,0,4,0" Padding="0" BorderThickness="0" Background="Transparent" ToolTip="Click to pick a color">
+                                        <Rectangle Width="20" Height="20" Stroke="#999" StrokeThickness="1"
+                                                   Fill="{Binding TextNode_DefaultColor, Converter={StaticResource HexToBrush}}" />
+                                    </Button>
                                     <TextBox Width="130" Text="{Binding TextNode_DefaultColor, UpdateSourceTrigger=PropertyChanged, Delay=150}" />
                                 </StackPanel>
 
@@ -451,8 +453,12 @@
 
                                                     <StackPanel Orientation="Horizontal">
                                                         <TextBlock Text="Color" Width="60" VerticalAlignment="Center" />
-                                                        <Rectangle Width="20" Height="20" Margin="0,0,4,0" Stroke="#999" StrokeThickness="1"
-                                                                   Fill="{Binding Color, Converter={StaticResource HexToBrush}}" />
+                                                        <Button Command="{Binding DataContext.TextNode_PickConditionColorCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                                CommandParameter="{Binding}"
+                                                                Margin="0,0,4,0" Padding="0" BorderThickness="0" Background="Transparent" ToolTip="Click to pick a color">
+                                                            <Rectangle Width="20" Height="20" Stroke="#999" StrokeThickness="1"
+                                                                       Fill="{Binding Color, Converter={StaticResource HexToBrush}}" />
+                                                        </Button>
                                                         <TextBox Width="80" Text="{Binding Color, UpdateSourceTrigger=PropertyChanged, Delay=150}" Margin="0,0,6,0" />
                                                         <Button Content="Remove" Width="60"
                                                                 Command="{Binding DataContext.TextNode_RemoveConditionCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
