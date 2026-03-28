@@ -90,3 +90,5 @@ G:\NODEJS\Vision2026\VisionInspectionApp.UI\obj\Debug\net8.0-windows\Views\LiveC
 G:\NODEJS\Vision2026\VisionInspectionApp.UI\obj\Debug\net8.0-windows\Views\BatchProcessingView.g.cs
 G:\NODEJS\Vision2026\VisionInspectionApp.UI\obj\Debug\net8.0-windows\Views\BatchProcessingView.baml
 G:\NODEJS\Vision2026\VisionInspectionApp.UI\obj\Debug\net8.0-windows\Views\LiveCameraView.baml
+g:\NODEJS\Vision2026\VisionInspectionApp.UI\obj\Debug\net8.0-windows\Views\PlcView.baml
+g:\NODEJS\Vision2026\VisionInspectionApp.UI\obj\Debug\net8.0-windows\Views\PlcView.g.cs

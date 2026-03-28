@@ -39,6 +39,7 @@ public sealed partial class InspectionViewModel : ObservableObject
         OverlayItems = new ObservableCollection<OverlayItem>();
         AvailableConfigs = new ObservableCollection<string>();
         SpecResults = new ObservableCollection<SpecResultRow>();
+        SurfaceCompareDebugItems = new ObservableCollection<SurfaceCompareDebugPick>();
 
         RefreshConfigs();
     }
@@ -53,6 +54,9 @@ public sealed partial class InspectionViewModel : ObservableObject
         double TolPlus,
         double TolMinus,
         bool Pass);
+
+    /// <summary>Combo item for switching SurfaceCompare debug previews.</summary>
+    public sealed record SurfaceCompareDebugPick(int Index, string DisplayName);
 
     [ObservableProperty]
     private string _productCode = "ProductA";
@@ -77,10 +81,33 @@ public sealed partial class InspectionViewModel : ObservableObject
     [ObservableProperty]
     private InspectionResult? _lastResult;
 
+    public ObservableCollection<SurfaceCompareDebugPick> SurfaceCompareDebugItems { get; }
+
+    [ObservableProperty]
+    private SurfaceCompareDebugPick? _selectedSurfaceCompareDebugPick;
+
+    private bool _surfaceCompareDebugRebuildInProgress;
+
     partial void OnLastResultChanged(InspectionResult? value)
     {
         RefreshSpecResults();
-        UpdateDebugImages();
+        RebuildSurfaceCompareDebugSelector();
+    }
+
+    partial void OnSelectedSurfaceCompareDebugPickChanged(SurfaceCompareDebugPick? value)
+    {
+        if (_surfaceCompareDebugRebuildInProgress)
+        {
+            return;
+        }
+
+        if (value is null)
+        {
+            ClearSurfaceCompareDebugImages();
+            return;
+        }
+
+        ApplySurfaceCompareDebugAtIndex(value.Index);
     }
 
     [ObservableProperty]
@@ -357,23 +384,59 @@ public sealed partial class InspectionViewModel : ObservableObject
         }
     }
 
-    private void UpdateDebugImages()
+    private void RebuildSurfaceCompareDebugSelector()
     {
-        if (LastResult?.SurfaceCompares is null || LastResult.SurfaceCompares.Count == 0)
+        _surfaceCompareDebugRebuildInProgress = true;
+        try
         {
-            DebugTemplate = null;
-            DebugCurrent = null;
-            DebugBinary = null;
-            DebugDiff = null;
+            SurfaceCompareDebugItems.Clear();
+
+            if (LastResult?.SurfaceCompares is null || LastResult.SurfaceCompares.Count == 0)
+            {
+                SelectedSurfaceCompareDebugPick = null;
+                ClearSurfaceCompareDebugImages();
+                return;
+            }
+
+            var list = LastResult.SurfaceCompares;
+            for (var i = 0; i < list.Count; i++)
+            {
+                var sc = list[i];
+                var baseName = string.IsNullOrWhiteSpace(sc.Name) ? "SurfaceCompare" : sc.Name.Trim();
+                var display = list.Count == 1 ? baseName : $"{baseName} ({i + 1})";
+                SurfaceCompareDebugItems.Add(new SurfaceCompareDebugPick(i, display));
+            }
+
+            SelectedSurfaceCompareDebugPick = SurfaceCompareDebugItems[0];
+            ApplySurfaceCompareDebugAtIndex(SelectedSurfaceCompareDebugPick.Index);
+        }
+        finally
+        {
+            _surfaceCompareDebugRebuildInProgress = false;
+        }
+    }
+
+    private void ApplySurfaceCompareDebugAtIndex(int index)
+    {
+        if (LastResult?.SurfaceCompares is null || index < 0 || index >= LastResult.SurfaceCompares.Count)
+        {
+            ClearSurfaceCompareDebugImages();
             return;
         }
 
-        // For now, take the first SurfaceCompare result to show debug previews.
-        var sc = LastResult.SurfaceCompares[0];
+        var sc = LastResult.SurfaceCompares[index];
         DebugTemplate = ByteArrayToImageSource(sc.TemplateImage);
         DebugCurrent = ByteArrayToImageSource(sc.CurrentImage);
         DebugBinary = ByteArrayToImageSource(sc.BinaryImage);
         DebugDiff = ByteArrayToImageSource(sc.DiffImage);
+    }
+
+    private void ClearSurfaceCompareDebugImages()
+    {
+        DebugTemplate = null;
+        DebugCurrent = null;
+        DebugBinary = null;
+        DebugDiff = null;
     }
 
     private System.Windows.Media.ImageSource? ByteArrayToImageSource(byte[]? data)

@@ -44,7 +44,13 @@
             <Border Grid.Column="1" Width="220" Margin="8,0,0,0" BorderThickness="1" BorderBrush="#CCC" Background="#F9F9F9">
                 <ScrollViewer VerticalScrollBarVisibility="Auto">
                     <StackPanel Margin="8">
-                        <TextBlock Text="SurfaceCompare Debug" FontWeight="Bold" Margin="0,0,0,8" HorizontalAlignment="Center" />
+                        <TextBlock Text="SurfaceCompare Debug" FontWeight="Bold" Margin="0,0,0,6" HorizontalAlignment="Center" />
+
+                        <TextBlock Text="Tool SC" FontSize="10" Foreground="#666" Margin="0,0,0,2" />
+                        <ComboBox ItemsSource="{Binding SurfaceCompareDebugItems}"
+                                  SelectedItem="{Binding SelectedSurfaceCompareDebugPick}"
+                                  DisplayMemberPath="DisplayName"
+                                  Margin="0,0,0,8" />
 
                         <TextBlock Text="Mẫu (Xám)" Margin="0,4,0,2" FontSize="10" Foreground="#666" />
                         <Border BorderThickness="1" BorderBrush="#AAA" Background="Black">

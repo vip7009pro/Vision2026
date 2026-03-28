@@ -15,6 +15,8 @@ public sealed class CameraService : IDisposable
     private Task? _captureTask;
     private bool _isRunning;
     private int _currentCameraIndex = 0;
+    private readonly object _lastFrameGate = new();
+    private Mat? _lastFrame;
 
     public event EventHandler<Mat>? FrameCaptured;
     public event EventHandler<string>? ErrorOccurred;
@@ -102,6 +104,13 @@ public sealed class CameraService : IDisposable
                     continue;
                 }
 
+                // Store last frame for background consumers (e.g., PLC trigger).
+                lock (_lastFrameGate)
+                {
+                    _lastFrame?.Dispose();
+                    _lastFrame = frameMat.Clone();
+                }
+
                 // Fire event với frame mới
                 FrameCaptured?.Invoke(this, frameMat.Clone());
                 frameCount++;
@@ -157,6 +166,18 @@ public sealed class CameraService : IDisposable
     }
 
     /// <summary>
+    /// Lấy frame mới nhất (clone) theo kiểu thread-safe.
+    /// Caller phải Dispose Mat trả về.
+    /// </summary>
+    public Mat? TryGetLatestFrameClone()
+    {
+        lock (_lastFrameGate)
+        {
+            return _lastFrame?.Clone();
+        }
+    }
+
+    /// <summary>
     /// Kiểm tra camera đang chạy hay không
     /// </summary>
     public bool IsRunning => _isRunning;
@@ -172,5 +193,10 @@ public sealed class CameraService : IDisposable
         _cancellationTokenSource?.Dispose();
         _camera?.Dispose();
         _camera = null;
+        lock (_lastFrameGate)
+        {
+            _lastFrame?.Dispose();
+            _lastFrame = null;
+        }
     }
 }

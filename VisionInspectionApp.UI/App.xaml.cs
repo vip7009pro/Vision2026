@@ -1,4 +1,4 @@
-﻿using System.Configuration;
+using System.Configuration;
 using System.Data;
 using System.Globalization;
 using System.Threading;
@@ -8,6 +8,7 @@ using Microsoft.Extensions.Hosting;
 using VisionInspectionApp.Application;
 using VisionInspectionApp.Persistence;
 using VisionInspectionApp.UI.Services;
+using VisionInspectionApp.UI.Services.Plc;
 using VisionInspectionApp.UI.ViewModels;
 using VisionInspectionApp.VisionEngine;
 
@@ -50,6 +51,11 @@ public partial class App : System.Windows.Application
                 // Camera & Batch Processing Services
                 services.AddSingleton<CameraService>();
                 services.AddSingleton<BatchProcessingService>();
+
+                // PLC (MX Component)
+                services.AddSingleton<IPlcClient, MxComponentPlcClient>();
+                services.AddSingleton<PlcOrchestratorService>();
+                services.AddSingleton<PlcViewModel>();
 
                 services.AddSingleton<TeachViewModel>();
                 services.AddSingleton<ToolEditorViewModel>();

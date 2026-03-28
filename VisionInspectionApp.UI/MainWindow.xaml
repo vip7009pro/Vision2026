@@ -37,6 +37,10 @@
         <DataTemplate DataType="{x:Type viewModels:BatchProcessingViewModel}">
             <views:BatchProcessingView />
         </DataTemplate>
+
+        <DataTemplate DataType="{x:Type viewModels:PlcViewModel}">
+            <views:PlcView />
+        </DataTemplate>
     </Window.Resources>
 
     <Grid>
@@ -64,6 +68,10 @@
 
             <TabItem Header="Batch Processing">
                 <ContentControl Content="{Binding BatchProcessing}" />
+            </TabItem>
+
+            <TabItem Header="PLC">
+                <ContentControl Content="{Binding Plc}" />
             </TabItem>
         </TabControl>
     </Grid>

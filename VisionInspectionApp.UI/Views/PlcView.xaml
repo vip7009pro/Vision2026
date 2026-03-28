@@ -1,0 +1,103 @@
+<UserControl x:Class="VisionInspectionApp.UI.Views.PlcView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <Grid Background="#F0F0F0">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <Border Grid.Row="0" Background="White" BorderBrush="#DDD" BorderThickness="0,0,0,1" Padding="10">
+            <StackPanel>
+                <TextBlock Text="PLC Communication (Mitsubishi - MX Component)" FontSize="16" FontWeight="Bold" Margin="0,0,0,10" />
+
+                <WrapPanel Margin="0,0,0,10">
+                    <TextBlock Text="LogicalStation:" VerticalAlignment="Center" FontWeight="Bold" Margin="0,0,8,0"/>
+                    <TextBox Width="60" Text="{Binding LogicalStationNumber}" Margin="0,0,20,0"/>
+
+                    <TextBlock Text="ProductCode:" VerticalAlignment="Center" FontWeight="Bold" Margin="0,0,8,0"/>
+                    <TextBox Width="160" Text="{Binding ProductCode}" Margin="0,0,20,0"/>
+
+                    <TextBlock Text="Poll(ms):" VerticalAlignment="Center" FontWeight="Bold" Margin="0,0,8,0"/>
+                    <TextBox Width="60" Text="{Binding PollIntervalMs}" Margin="0,0,20,0"/>
+
+                    <Button Content="Save Settings" Command="{Binding SaveSettingsCommand}" Padding="10,6" Margin="0,0,10,0"/>
+                    <Button Content="Connect + Start" Command="{Binding ConnectCommand}" Padding="10,6" Background="#4CAF50" Foreground="White" Margin="0,0,10,0"/>
+                    <Button Content="Stop + Disconnect" Command="{Binding DisconnectCommand}" Padding="10,6" Background="#F44336" Foreground="White"/>
+                </WrapPanel>
+
+                <TextBlock Text="{Binding StatusLine}" Foreground="#333" FontWeight="Bold" />
+                <TextBlock Text="{Binding LastError}" Foreground="#B00020" TextWrapping="Wrap" />
+            </StackPanel>
+        </Border>
+
+        <Grid Grid.Row="1" Margin="10">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="2*" />
+                <ColumnDefinition Width="3*" />
+            </Grid.ColumnDefinitions>
+
+            <Border Grid.Column="0" Background="White" BorderBrush="#DDD" BorderThickness="1" Padding="10" Margin="0,0,10,0">
+                <StackPanel>
+                    <TextBlock Text="PLC Address Mapping" FontWeight="Bold" Margin="0,0,0,10"/>
+
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="160"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+
+                        <TextBlock Grid.Row="0" Grid.Column="0" Text="TriggerBit" VerticalAlignment="Center"/>
+                        <TextBox Grid.Row="0" Grid.Column="1" Text="{Binding TriggerBitDevice}"/>
+
+                        <TextBlock Grid.Row="1" Grid.Column="0" Text="ClearErrorBit" VerticalAlignment="Center"/>
+                        <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding ClearErrorBitDevice}"/>
+
+                        <TextBlock Grid.Row="2" Grid.Column="0" Text="BusyBit" VerticalAlignment="Center"/>
+                        <TextBox Grid.Row="2" Grid.Column="1" Text="{Binding BusyBitDevice}"/>
+
+                        <TextBlock Grid.Row="3" Grid.Column="0" Text="DoneBit" VerticalAlignment="Center"/>
+                        <TextBox Grid.Row="3" Grid.Column="1" Text="{Binding DoneBitDevice}"/>
+
+                        <TextBlock Grid.Row="4" Grid.Column="0" Text="ResultCodeWord" VerticalAlignment="Center"/>
+                        <TextBox Grid.Row="4" Grid.Column="1" Text="{Binding ResultCodeWordDevice}"/>
+
+                        <TextBlock Grid.Row="5" Grid.Column="0" Text="AppStateWord" VerticalAlignment="Center"/>
+                        <TextBox Grid.Row="5" Grid.Column="1" Text="{Binding AppStateWordDevice}"/>
+
+                        <TextBlock Grid.Row="6" Grid.Column="0" Text="DonePulse(ms)" VerticalAlignment="Center"/>
+                        <TextBox Grid.Row="6" Grid.Column="1" Text="{Binding DonePulseMs}"/>
+                    </Grid>
+                </StackPanel>
+            </Border>
+
+            <Border Grid.Column="1" Background="White" BorderBrush="#DDD" BorderThickness="1" Padding="10">
+                <StackPanel>
+                    <TextBlock Text="Runtime Monitor" FontWeight="Bold" Margin="0,0,0,10"/>
+
+                    <WrapPanel Margin="0,0,0,10">
+                        <TextBlock Text="Connected:" FontWeight="Bold" Margin="0,0,6,0"/>
+                        <TextBlock Text="{Binding IsConnected}"/>
+                        <TextBlock Text="   Running:" FontWeight="Bold" Margin="20,0,6,0"/>
+                        <TextBlock Text="{Binding IsRunning}"/>
+                        <TextBlock Text="   State:" FontWeight="Bold" Margin="20,0,6,0"/>
+                        <TextBlock Text="{Binding AppState}"/>
+                    </WrapPanel>
+
+                    <TextBlock Text="Log" FontWeight="Bold" Margin="0,0,0,6"/>
+                    <ListBox ItemsSource="{Binding Logs}" />
+                </StackPanel>
+            </Border>
+        </Grid>
+    </Grid>
+</UserControl>
+
