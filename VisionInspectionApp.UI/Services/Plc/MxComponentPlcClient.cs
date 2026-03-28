@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Threading;
@@ -21,6 +22,7 @@ public sealed class MxComponentPlcClient : IPlcClient
     private object? _actUtlType;
     private bool _isConnected;
     private int _logicalStationNumber;
+    private int _disposeState;
 
     public MxComponentPlcClient()
     {
@@ -57,7 +59,7 @@ public sealed class MxComponentPlcClient : IPlcClient
             if (rc != 0)
             {
                 DisconnectInternal();
-                throw new PlcException($"MX Component Open() failed. RC={rc}");
+                throw new PlcException(MxComponentOpenErrorFormatter.Format(rc));
             }
 
             _isConnected = true;
@@ -136,6 +138,11 @@ public sealed class MxComponentPlcClient : IPlcClient
 
     public async ValueTask DisposeAsync()
     {
+        if (Interlocked.Exchange(ref _disposeState, 1) != 0)
+        {
+            return;
+        }
+
         try
         {
             await DisconnectAsync().ConfigureAwait(false);
@@ -145,7 +152,14 @@ public sealed class MxComponentPlcClient : IPlcClient
             // ignore during dispose
         }
 
-        _queue.CompleteAdding();
+        try
+        {
+            _queue.CompleteAdding();
+        }
+        catch (InvalidOperationException)
+        {
+            // already completed
+        }
     }
 
     private void StaWorkerLoop()
@@ -225,21 +239,61 @@ public sealed class MxComponentPlcClient : IPlcClient
 
     private static object CreateActUtlTypeInstance()
     {
-        // ProgID for ActUtlType: "ActUtlType.ActUtlType"
-        var t = Type.GetTypeFromProgID("ActUtlType.ActUtlType");
-        if (t is null)
+        var is64BitProcess = Environment.Is64BitProcess;
+        // 64-bit MX Component 5 uses a different coclass; typical install is still 32-bit ActUtlTypeLib.ActUtlType (requires x86 process).
+        string[] progIds = is64BitProcess
+            ? ["ActUtlType64Lib.ActUtlType64", "ActUtlTypeLib.ActUtlType", "ActUtlType.ActUtlType"]
+            : ["ActUtlTypeLib.ActUtlType", "ActUtlType.ActUtlType"];
+
+        var tried = new List<string>();
+        Exception? last = null;
+
+        foreach (var progId in progIds)
         {
-            throw new PlcException("MX Component is not installed or ActUtlType ProgID not registered.");
+            Type? t;
+            try
+            {
+                t = Type.GetTypeFromProgID(progId);
+            }
+            catch (Exception ex)
+            {
+                last = ex;
+                tried.Add($"{progId}: GetTypeFromProgID — {ex.Message}");
+                continue;
+            }
+
+            if (t is null)
+            {
+                tried.Add($"{progId}: ProgID không có trong registry của process này (sai bề rộng 32/64 hoặc chưa cài MX).");
+                continue;
+            }
+
+            try
+            {
+                var obj = Activator.CreateInstance(t);
+                if (obj is not null)
+                {
+                    return obj;
+                }
+
+                tried.Add($"{progId}: CreateInstance trả về null.");
+            }
+            catch (Exception ex)
+            {
+                last = ex;
+                tried.Add($"{progId}: {ex.GetType().Name} — {ex.Message}");
+            }
         }
 
-        try
-        {
-            return Activator.CreateInstance(t) ?? throw new PlcException("Failed to create ActUtlType instance.");
-        }
-        catch (Exception ex)
-        {
-            throw new PlcException("Failed to create ActUtlType instance.", ex);
-        }
+        var bitness = is64BitProcess ? "64-bit" : "32-bit (x86)";
+        var detail = string.Join(" | ", tried);
+        var hint =
+            "MX Component COM phải khớp bề rộng process: COM 32-bit (mặc định) cần build Platform=x86; MX Component 64-bit cần build x64 và ProgID ActUtlType64Lib.ActUtlType64. " +
+            $"Process hiện tại: {bitness}.";
+
+        throw new PlcException(
+            $"Không tạo được ActUtlType. {hint} Chi tiết: {detail}",
+            last ?? new InvalidOperationException("No ProgID attempted successfully."));
     }
 
     private static object InvokeComMethod(object target, string methodName, params object?[]? args)

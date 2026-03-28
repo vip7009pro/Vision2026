@@ -144,15 +144,19 @@
             <!-- Processing Log -->
             <StackPanel Grid.Column="1" Margin="0,5,5,5">
                 <Border Background="White" Padding="10">
-                    <TextBlock Text="Processing Log" FontSize="14" FontWeight="Bold" />
+                    <TextBlock Text="Processing Log (Ctrl+A, Ctrl+C để copy)" FontSize="14" FontWeight="Bold" />
                 </Border>
-                <ListBox ItemsSource="{Binding ProcessingLog}" Background="White" Padding="10" Margin="0,5,0,0">
-                    <ListBox.ItemTemplate>
-                        <DataTemplate>
-                            <TextBlock Text="{Binding}" FontSize="11" Foreground="#555" FontFamily="Courier New" TextWrapping="Wrap" />
-                        </DataTemplate>
-                    </ListBox.ItemTemplate>
-                </ListBox>
+                <TextBox Text="{Binding ProcessingLogText, Mode=OneWay}"
+                         IsReadOnly="True"
+                         TextWrapping="Wrap"
+                         VerticalScrollBarVisibility="Auto"
+                         Background="White"
+                         Padding="10"
+                         Margin="0,5,0,0"
+                         FontSize="11"
+                         Foreground="#555"
+                         FontFamily="Consolas"
+                         MinHeight="120" />
             </StackPanel>
         </Grid>
     </Grid>

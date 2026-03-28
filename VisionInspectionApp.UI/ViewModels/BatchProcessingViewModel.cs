@@ -1,3 +1,4 @@
+using System;
 using System.Collections.ObjectModel;
 using System.IO;
 using System.Windows.Input;
@@ -92,6 +93,10 @@ public sealed partial class BatchProcessingViewModel : ObservableObject
 
     public ObservableCollection<string> ProcessingLog { get; }
 
+    /// <summary>Flat text for read-only TextBox (copy/paste).</summary>
+    [ObservableProperty]
+    private string _processingLogText = string.Empty;
+
     public ObservableCollection<BatchResultRow> ResultSummary { get; }
 
     public ICommand BrowseFolderCommand { get; }
@@ -150,6 +155,7 @@ public sealed partial class BatchProcessingViewModel : ObservableObject
         IsProcessing = true;
         Progress = 0;
         ProcessingLog.Clear();
+        ProcessingLogText = string.Empty;
         ResultSummary.Clear();
         _batchResults.Clear();
         TotalPass = 0;
@@ -341,5 +347,7 @@ public sealed partial class BatchProcessingViewModel : ObservableObject
         {
             ProcessingLog.RemoveAt(0);
         }
+
+        ProcessingLogText = string.Join(Environment.NewLine, ProcessingLog);
     }
 }

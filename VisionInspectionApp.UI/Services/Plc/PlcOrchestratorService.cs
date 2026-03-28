@@ -18,6 +18,7 @@ public sealed class PlcOrchestratorService : IAsyncDisposable
 
     private bool _lastTrigger;
     private DateTime _lastTriggerEdgeTime = DateTime.MinValue;
+    private int _disposedState;
 
     public PlcOrchestratorService(
         GlobalAppSettingsService globalSettings,
@@ -57,6 +58,31 @@ public sealed class PlcOrchestratorService : IAsyncDisposable
 
         _cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         _loopTask = Task.Run(() => PollLoopAsync(_cts.Token), _cts.Token);
+    }
+
+    /// <summary>
+    /// Open PLC connection without starting the trigger poll loop (for bench read/write tests).
+    /// </summary>
+    public async Task ConnectPlcForTestAsync(CancellationToken cancellationToken = default)
+    {
+        if (IsRunning)
+        {
+            WriteLog("Orchestrator is running — use the test panel on the current connection, or Stop + Disconnect first.");
+            return;
+        }
+
+        if (_plc.IsConnected)
+        {
+            WriteLog("PLC already connected.");
+            return;
+        }
+
+        var s = _globalSettings.Settings.Plc;
+        await _plc.ConnectAsync(s.LogicalStationNumber, cancellationToken).ConfigureAwait(false);
+        CurrentState = PlcAppState.Idle;
+        LastError = null;
+        OnStateChanged();
+        WriteLog($"PLC connected (manual test, no trigger poll). Station={s.LogicalStationNumber}");
     }
 
     public async Task StopAndDisconnectAsync(CancellationToken cancellationToken = default)
@@ -248,6 +274,11 @@ public sealed class PlcOrchestratorService : IAsyncDisposable
 
     public async ValueTask DisposeAsync()
     {
+        if (Interlocked.Exchange(ref _disposedState, 1) != 0)
+        {
+            return;
+        }
+
         try
         {
             await StopAndDisconnectAsync().ConfigureAwait(false);

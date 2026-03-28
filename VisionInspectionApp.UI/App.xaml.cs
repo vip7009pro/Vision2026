@@ -75,15 +75,70 @@ public partial class App : System.Windows.Application
         mainWindow.Show();
     }
 
-    protected override async void OnExit(ExitEventArgs e)
+    protected override void OnExit(ExitEventArgs e)
     {
-        if (_host is not null)
+        // Must shut down COM / background work synchronously: async void OnExit returns before await,
+        // which previously left the MX Component STA thread and host running (zombie process).
+        try
         {
-            await _host.StopAsync();
-            _host.Dispose();
+            if (_host is not null)
+            {
+                ShutdownGracefullyAsync().GetAwaiter().GetResult();
+            }
+        }
+        catch
+        {
+            // ignore — process is exiting
         }
 
         base.OnExit(e);
     }
-}
 
+    private async Task ShutdownGracefullyAsync()
+    {
+        var host = _host;
+        if (host is null)
+        {
+            return;
+        }
+
+        var services = host.Services;
+
+        try
+        {
+            if (services.GetService<PlcOrchestratorService>() is { } orchestrator)
+            {
+                await orchestrator.DisposeAsync().ConfigureAwait(false);
+            }
+
+            if (services.GetService<CameraService>() is { } camera)
+            {
+                await camera.StopCameraAsync().ConfigureAwait(false);
+            }
+        }
+        catch
+        {
+            // ignore
+        }
+
+        try
+        {
+            await host.StopAsync().ConfigureAwait(false);
+        }
+        catch
+        {
+            // ignore
+        }
+
+        try
+        {
+            host.Dispose();
+        }
+        catch
+        {
+            // ignore
+        }
+
+        _host = null;
+    }
+}
