@@ -84,8 +84,7 @@
               "ToolTip": "G:\\NODEJS\\Vision2026\\VisionInspectionApp.UI\\App.xaml",
               "RelativeToolTip": "VisionInspectionApp.UI\\App.xaml",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.003549|",
-              "WhenOpened": "2026-03-11T10:04:32.386Z",
-              "EditorCaption": ""
+              "WhenOpened": "2026-03-11T10:04:32.386Z"
             },
             {
               "$type": "Document",
@@ -95,7 +94,7 @@
               "RelativeDocumentMoniker": "VisionInspectionApp.UI\\ViewModels\\TeachViewModel.cs",
               "ToolTip": "G:\\NODEJS\\Vision2026\\VisionInspectionApp.UI\\ViewModels\\TeachViewModel.cs",
               "RelativeToolTip": "VisionInspectionApp.UI\\ViewModels\\TeachViewModel.cs",
-              "ViewState": "AgIAAFUBAACAzczMzAwswC8BAAAJAAAAAAAAAA==",
+              "ViewState": "AgIAAGoBAAAAbGZmZmbwv3YBAAAJAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
               "WhenOpened": "2026-03-11T09:19:19.571Z",
               "EditorCaption": ""
@@ -109,8 +108,7 @@
               "ToolTip": "G:\\NODEJS\\Vision2026\\VisionInspectionApp.UI\\MainWindow.xaml",
               "RelativeToolTip": "VisionInspectionApp.UI\\MainWindow.xaml",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.003549|",
-              "WhenOpened": "2026-03-11T07:36:18.282Z",
-              "EditorCaption": ""
+              "WhenOpened": "2026-03-11T07:36:18.282Z"
             }
           ]
         }

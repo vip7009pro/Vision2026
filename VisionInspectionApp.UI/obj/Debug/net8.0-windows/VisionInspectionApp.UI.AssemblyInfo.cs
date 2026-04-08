@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("VisionInspectionApp.UI")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+326f8b68d729c112e55a5b6b12ef25cc83956396")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+8fdb84529b4d5ca5ef0264ca3c09f8a08d87a448")]
 [assembly: System.Reflection.AssemblyProductAttribute("VisionInspectionApp.UI")]
 [assembly: System.Reflection.AssemblyTitleAttribute("VisionInspectionApp.UI")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]
