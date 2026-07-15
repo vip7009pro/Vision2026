@@ -55,26 +55,43 @@ public sealed partial class LiveCameraViewModel : ObservableObject
     {
         public int Index { get; set; }
         public string Name { get; set; } = string.Empty;
+        public bool IsRtsp { get; set; }
 
-        public override string ToString() => $"Camera {Index}: {Name}";
+        public override string ToString() => IsRtsp ? Name : $"Camera {Index}: {Name}";
     }
 
     [ObservableProperty]
-    private string _productCode = "ProductA";
+    private string _productCode = "";
 
     [ObservableProperty]
     private string? _selectedConfig;
 
     partial void OnSelectedConfigChanged(string? value)
     {
-        if (value != null)
+        if (!string.IsNullOrWhiteSpace(value))
         {
             LoadConfig();
+        }
+        else
+        {
+            _config = null;
+            StatusMessage = "Chưa chọn cấu hình";
         }
     }
 
     [ObservableProperty]
     private CameraInfo? _selectedCamera;
+
+    partial void OnSelectedCameraChanged(CameraInfo? value)
+    {
+        IsRtspSelected = value?.IsRtsp ?? false;
+    }
+
+    [ObservableProperty]
+    private string _rtspUrl = "rtsp://192.168.1.100:554/stream1";
+
+    [ObservableProperty]
+    private bool _isRtspSelected = false;
 
     [ObservableProperty]
     private ImageSource? _liveImage;
@@ -133,7 +150,19 @@ public sealed partial class LiveCameraViewModel : ObservableObject
         try
         {
             StatusMessage = "Đang khởi động camera...";
-            await _cameraService.StartCameraCaptureAsync(SelectedCamera.Index);
+            if (SelectedCamera.IsRtsp)
+            {
+                if (string.IsNullOrWhiteSpace(RtspUrl))
+                {
+                    StatusMessage = "Vui lòng nhập địa chỉ RTSP URL";
+                    return;
+                }
+                await _cameraService.StartCameraCaptureAsync(fps: 30, rtspUrl: RtspUrl);
+            }
+            else
+            {
+                await _cameraService.StartCameraCaptureAsync(cameraIndex: SelectedCamera.Index);
+            }
             IsCameraRunning = true;
             StatusMessage = "Camera đang chạy";
         }
@@ -167,27 +196,47 @@ public sealed partial class LiveCameraViewModel : ObservableObject
     /// </summary>
     private void OnFrameCaptured(object? sender, Mat frame)
     {
-        _currentFrame?.Dispose();
-        _currentFrame = frame.Clone();
-
-        // Convert Mat to ImageSource
-        LiveImage = _currentFrame.ToWriteableBitmap();
-
-        // Tính FPS
-        _frameCount++;
-        var now = DateTime.Now;
-        var elapsed = (now - _lastFrameTime).TotalSeconds;
-        if (elapsed >= 1.0)
+        try
         {
-            Fps = (int)(_frameCount / elapsed);
-            _frameCount = 0;
-            _lastFrameTime = now;
+            if (frame == null || frame.Empty()) return;
+
+            _currentFrame?.Dispose();
+            _currentFrame = frame.Clone();
+
+            // Chuyển đổi Mat sang BitmapSource và Freeze để thread-safe
+            var bitmap = _currentFrame.ToBitmapSource();
+            bitmap.Freeze();
+
+            // Gán thuộc tính Image trên UI Thread
+            System.Windows.Application.Current.Dispatcher.BeginInvoke(() =>
+            {
+                LiveImage = bitmap;
+            });
+
+            // Tính FPS
+            _frameCount++;
+            var now = DateTime.Now;
+            var elapsed = (now - _lastFrameTime).TotalSeconds;
+            if (elapsed >= 1.0)
+            {
+                var fps = (int)(_frameCount / elapsed);
+                _frameCount = 0;
+                _lastFrameTime = now;
+                System.Windows.Application.Current.Dispatcher.BeginInvoke(() =>
+                {
+                    Fps = fps;
+                });
+            }
+
+            // Chạy live inspection nếu enabled
+            if (IsLiveInspectionEnabled && _config != null)
+            {
+                RunLiveInspection();
+            }
         }
-
-        // Chạy live inspection nếu enabled
-        if (IsLiveInspectionEnabled && _config != null)
+        catch
         {
-            RunLiveInspection();
+            // Bỏ qua lỗi hiển thị frame
         }
     }
 
@@ -225,6 +274,10 @@ public sealed partial class LiveCameraViewModel : ObservableObject
         {
             StatusMessage = $"Lỗi load config: {ex.Message}";
         }
+
+        SelectedConfig = null;
+        ProductCode = "";
+        _config = null;
     }
 
     /// <summary>
@@ -252,20 +305,74 @@ public sealed partial class LiveCameraViewModel : ObservableObject
     private void RefreshAvailableCameras()
     {
         AvailableCameras.Clear();
-        var cameraIndices = CameraService.GetAvailableCameras();
 
-        foreach (var index in cameraIndices)
+        try
         {
-            AvailableCameras.Add(new CameraInfo
+            var dsCameras = DirectShowDeviceEnumerator.GetDevices();
+            for (int i = 0; i < dsCameras.Count; i++)
             {
-                Index = index,
-                Name = $"Webcam {index}"
-            });
+                AvailableCameras.Add(new CameraInfo
+                {
+                    Index = i,
+                    Name = dsCameras[i],
+                    IsRtsp = false
+                });
+            }
+        }
+        catch
+        {
+            // Bỏ qua lỗi quét bằng COM DirectShow
         }
 
+        // Nếu không quét được camera nào từ DirectShow, chạy OpenCV check
+        if (AvailableCameras.Count == 0)
+        {
+            var cameraIndices = CameraService.GetAvailableCameras();
+            foreach (var index in cameraIndices)
+            {
+                AvailableCameras.Add(new CameraInfo
+                {
+                    Index = index,
+                    Name = $"Webcam {index}",
+                    IsRtsp = false
+                });
+            }
+        }
+
+        // LUÔN LUÔN bổ sung thêm các Camera Port tĩnh từ 0 tới 4 để dự phòng cho camera ảo (như DroidCam) hoặc thiết bị ngoại vi offline lúc quét
+        for (int i = 0; i < 5; i++)
+        {
+            if (!AvailableCameras.Any(c => c.Index == i && !c.IsRtsp))
+            {
+                AvailableCameras.Add(new CameraInfo
+                {
+                    Index = i,
+                    Name = $"Camera Port {i} (Fallback)",
+                    IsRtsp = false
+                });
+            }
+        }
+
+        // Thêm tùy chọn Custom RTSP cho camera công nghiệp hoặc IP
+        AvailableCameras.Add(new CameraInfo
+        {
+            Index = -1,
+            Name = "Custom RTSP / IP Camera",
+            IsRtsp = true
+        });
+
+        // Tự động khôi phục cấu hình camera đã lưu lần trước từ CameraService
         if (AvailableCameras.Count > 0)
         {
-            SelectedCamera = AvailableCameras[0];
+            if (_cameraService.SavedIsRtsp)
+            {
+                SelectedCamera = AvailableCameras.FirstOrDefault(c => c.IsRtsp);
+                RtspUrl = _cameraService.SavedRtspUrl;
+            }
+            else
+            {
+                SelectedCamera = AvailableCameras.FirstOrDefault(c => !c.IsRtsp && c.Index == _cameraService.SavedCameraIndex) ?? AvailableCameras[0];
+            }
         }
     }
 
@@ -309,34 +416,40 @@ public sealed partial class LiveCameraViewModel : ObservableObject
         {
             var result = _inspectionService.Inspect(_currentFrame, _config);
 
-            // Update kết quả
-            OverlayItems.Clear();
-            LiveResults.Clear();
+            // Dispatch việc thay đổi UI và ObservableCollection lên UI Thread
+            System.Windows.Application.Current.Dispatcher.BeginInvoke(() =>
+            {
+                OverlayItems.Clear();
+                LiveResults.Clear();
 
-            // Thêm kết quả tóm tắt
-            LiveResults.Add($"Status: {(result.Pass ? "✓ PASS" : "✗ FAIL")}");
-            LiveResults.Add("");
+                // Thêm kết quả tóm tắt
+                LiveResults.Add($"Status: {(result.Pass ? "✓ PASS" : "✗ FAIL")}");
+                LiveResults.Add("");
 
-            var totalMeasurements = result.Points.Count + result.Lines.Count + result.Distances.Count + 
-                                   result.Angles.Count + result.Conditions.Count;
-            
-            LiveResults.Add($"Total Measurements: {totalMeasurements}");
-            LiveResults.Add($"  - Points: {result.Points.Count}");
-            LiveResults.Add($"  - Lines: {result.Lines.Count}");
-            LiveResults.Add($"  - Distances: {result.Distances.Count}");
-            LiveResults.Add($"  - Angles: {result.Angles.Count}");
+                var totalMeasurements = result.Points.Count + result.Lines.Count + result.Distances.Count + 
+                                       result.Angles.Count + result.Conditions.Count;
+                
+                LiveResults.Add($"Total Measurements: {totalMeasurements}");
+                LiveResults.Add($"  - Points: {result.Points.Count}");
+                LiveResults.Add($"  - Lines: {result.Lines.Count}");
+                LiveResults.Add($"  - Distances: {result.Distances.Count}");
+                LiveResults.Add($"  - Angles: {result.Angles.Count}");
 
-            if (result.BlobDetections.Count > 0)
-                LiveResults.Add($"  - Blobs: {result.BlobDetections.Count}");
+                if (result.BlobDetections.Count > 0)
+                    LiveResults.Add($"  - Blobs: {result.BlobDetections.Count}");
 
-            if (result.CodeDetections.Count > 0)
-                LiveResults.Add($"  - Codes: {result.CodeDetections.Count}");
+                if (result.CodeDetections.Count > 0)
+                    LiveResults.Add($"  - Codes: {result.CodeDetections.Count}");
 
-            LastInspectionResult = $"Status: {(result.Pass ? "✓ PASS" : "✗ FAIL")}";
+                LastInspectionResult = $"Status: {(result.Pass ? "✓ PASS" : "✗ FAIL")}";
+            });
         }
         catch (Exception ex)
         {
-            StatusMessage = $"Lỗi inspection: {ex.Message}";
+            System.Windows.Application.Current.Dispatcher.BeginInvoke(() =>
+            {
+                StatusMessage = $"Lỗi inspection: {ex.Message}";
+            });
         }
     }
 

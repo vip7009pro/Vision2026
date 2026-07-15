@@ -7,12 +7,123 @@
         xmlns:viewModels="clr-namespace:VisionInspectionApp.UI.ViewModels"
         xmlns:views="clr-namespace:VisionInspectionApp.UI.Views"
         mc:Ignorable="d"
-        Title="Vision Inspection" Height="900" Width="1400">
+    Title="CMS VINA VISION SYSTEM"
+    Height="900"
+    Width="1400"
+    FontFamily="Segoe UI"
+    Background="#F3F6FB"
+    Foreground="#132238"
+    Icon="pack://application:,,,/VisionInspectionApp.UI;component/Assets/cms-vina-vision-system.ico">
 
     <Window.InputBindings>
     </Window.InputBindings>
 
     <Window.Resources>
+        <SolidColorBrush x:Key="ShellBg" Color="#F3F6FB" />
+        <SolidColorBrush x:Key="ShellSurface" Color="#FFFFFF" />
+        <SolidColorBrush x:Key="ShellSurfaceSoft" Color="#F8FAFD" />
+        <SolidColorBrush x:Key="ShellBorder" Color="#D9E2EC" />
+        <SolidColorBrush x:Key="ShellAccent" Color="#0F5FA8" />
+        <SolidColorBrush x:Key="ShellAccentDark" Color="#0A3C6D" />
+        <SolidColorBrush x:Key="ShellAccentTeal" Color="#18A6A3" />
+        <SolidColorBrush x:Key="ShellText" Color="#132238" />
+        <SolidColorBrush x:Key="ShellTextMuted" Color="#5F6B7A" />
+
+        <Style TargetType="Button">
+            <Setter Property="Background" Value="{StaticResource ShellAccent}" />
+            <Setter Property="Foreground" Value="White" />
+            <Setter Property="BorderBrush" Value="{StaticResource ShellAccentDark}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Padding" Value="8,4" />
+            <Setter Property="Margin" Value="0" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="SnapsToDevicePixels" Value="True" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bd"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="12"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="Opacity" Value="0.92" />
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="Bd" Property="RenderTransform">
+                                    <Setter.Value>
+                                        <ScaleTransform ScaleX="0.985" ScaleY="0.985" />
+                                    </Setter.Value>
+                                </Setter>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="Bd" Property="Opacity" Value="0.45" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style TargetType="TextBox">
+            <Setter Property="BorderBrush" Value="{StaticResource ShellBorder}" />
+            <Setter Property="Background" Value="White" />
+            <Setter Property="Foreground" Value="{StaticResource ShellText}" />
+            <Setter Property="Padding" Value="9,5" />
+            <Setter Property="BorderThickness" Value="1" />
+        </Style>
+
+        <Style TargetType="ComboBox">
+            <Setter Property="BorderBrush" Value="{StaticResource ShellBorder}" />
+            <Setter Property="Background" Value="White" />
+            <Setter Property="Foreground" Value="{StaticResource ShellText}" />
+            <Setter Property="Padding" Value="7,4" />
+        </Style>
+
+        <Style TargetType="TabControl">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Padding" Value="0" />
+        </Style>
+
+        <Style TargetType="TabItem">
+            <Setter Property="Margin" Value="0,0,6,0" />
+            <Setter Property="Padding" Value="10,5" />
+            <Setter Property="Background" Value="{StaticResource ShellSurfaceSoft}" />
+            <Setter Property="BorderBrush" Value="{StaticResource ShellBorder}" />
+            <Setter Property="Foreground" Value="{StaticResource ShellTextMuted}" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="TabItem">
+                        <Border x:Name="TabBorder"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="1"
+                                        CornerRadius="10,10,0,0"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter ContentSource="Header"
+                                              HorizontalAlignment="Center"
+                                              VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter TargetName="TabBorder" Property="Background" Value="{StaticResource ShellAccent}" />
+                                <Setter TargetName="TabBorder" Property="BorderBrush" Value="{StaticResource ShellAccentDark}" />
+                                <Setter Property="Foreground" Value="White" />
+                            </Trigger>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="TabBorder" Property="Opacity" Value="0.95" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
 
         <DataTemplate DataType="{x:Type viewModels:ToolEditorViewModel}">
             <views:ToolEditorView />
@@ -41,38 +152,98 @@
         <DataTemplate DataType="{x:Type viewModels:PlcViewModel}">
             <views:PlcView />
         </DataTemplate>
+
+        <DataTemplate DataType="{x:Type viewModels:CameraSettingsViewModel}">
+            <views:CameraSettingsView />
+        </DataTemplate>
     </Window.Resources>
 
-    <Grid>
-        <TabControl>
+    <Grid Background="{StaticResource ShellBg}">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
 
-            <TabItem Header="Tool Editor">
-                <ContentControl Content="{Binding ToolEditor}" />
-            </TabItem>
+        <Border Grid.Row="0"
+                Background="{StaticResource ShellAccentDark}"
+                Padding="14,6"
+                CornerRadius="0,0,18,18"
+                Margin="0,0,0,6">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
 
-            <TabItem Header="Calibration">
-                <ContentControl Content="{Binding Calibration}" />
-            </TabItem>
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <TextBlock Text="CMS VINA VISION SYSTEM"
+                               FontSize="20"
+                               FontWeight="Bold"
+                               Foreground="White"
+                               VerticalAlignment="Center" />
+                    <TextBlock Text="Industrial machine vision inspection suite"
+                               FontSize="12"
+                               Margin="12,0,0,0"
+                               Foreground="#DCE9F6"
+                               VerticalAlignment="Center" />
+                </StackPanel>
 
-            <TabItem Header="Manual Inspection">
-                <ContentControl Content="{Binding ManualInspection}" />
-            </TabItem>
+                <Border Grid.Column="1"
+                        Background="#1AFFFFFF"
+                        BorderBrush="#40FFFFFF"
+                        BorderThickness="1"
+                        CornerRadius="12"
+                        Padding="10,6"
+                        VerticalAlignment="Center">
+                    <StackPanel Orientation="Horizontal">
+                        <Ellipse Width="8" Height="8" Fill="#31D07D" Margin="0,0,8,0" />
+                        <TextBlock Text="Ready" Foreground="White" FontSize="12" FontWeight="SemiBold" />
+                    </StackPanel>
+                </Border>
+            </Grid>
+        </Border>
 
-            <TabItem Header="Inspection">
-                <ContentControl Content="{Binding Inspection}" />
-            </TabItem>
+        <Border Grid.Row="1"
+                Background="{StaticResource ShellSurface}"
+                BorderBrush="{StaticResource ShellBorder}"
+                BorderThickness="1"
+                CornerRadius="18"
+                Margin="18,0,18,14"
+                Padding="6">
+            <TabControl>
 
-            <TabItem Header="Live Camera">
-                <ContentControl Content="{Binding LiveCamera}" />
-            </TabItem>
+                <TabItem Header="Tool Editor">
+                    <ContentControl Content="{Binding ToolEditor}" />
+                </TabItem>
 
-            <TabItem Header="Batch Processing">
-                <ContentControl Content="{Binding BatchProcessing}" />
-            </TabItem>
+                <TabItem Header="Calibration">
+                    <ContentControl Content="{Binding Calibration}" />
+                </TabItem>
 
-            <TabItem Header="PLC">
-                <ContentControl Content="{Binding Plc}" />
-            </TabItem>
-        </TabControl>
+                <TabItem Header="Manual Inspection">
+                    <ContentControl Content="{Binding ManualInspection}" />
+                </TabItem>
+
+                <TabItem Header="Inspection">
+                    <ContentControl Content="{Binding Inspection}" />
+                </TabItem>
+
+                <TabItem Header="Live Camera">
+                    <ContentControl Content="{Binding LiveCamera}" />
+                </TabItem>
+
+                <TabItem Header="Camera Settings">
+                    <ContentControl Content="{Binding CameraSettings}" />
+                </TabItem>
+
+                <TabItem Header="Batch Processing">
+                    <ContentControl Content="{Binding BatchProcessing}" />
+                </TabItem>
+
+                <TabItem Header="PLC">
+                    <ContentControl Content="{Binding Plc}" />
+                </TabItem>
+            </TabControl>
+        </Border>
     </Grid>
 </Window>

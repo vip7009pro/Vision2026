@@ -63,6 +63,7 @@ public sealed partial class ToolEditorViewModel : ObservableObject
     private readonly ImagePreprocessor _preprocessor;
     private readonly LineDetector _lineDetector;
     private readonly IInspectionService _inspectionService;
+    private readonly CameraService _cameraService;
 
     [ObservableProperty]
     private string? _activeRoiLabel;
@@ -92,7 +93,7 @@ public sealed partial class ToolEditorViewModel : ObservableObject
     [ObservableProperty]
     private double _canvasZoom = 1.0;
 
-    public ToolEditorViewModel(IConfigService configService, ConfigStoreOptions storeOptions, SharedImageContext sharedImage, ImagePreprocessor preprocessor, LineDetector lineDetector, IInspectionService inspectionService)
+    public ToolEditorViewModel(IConfigService configService, ConfigStoreOptions storeOptions, SharedImageContext sharedImage, ImagePreprocessor preprocessor, LineDetector lineDetector, IInspectionService inspectionService, CameraService cameraService)
     {
         _configService = configService;
         _storeOptions = storeOptions;
@@ -100,6 +101,7 @@ public sealed partial class ToolEditorViewModel : ObservableObject
         _preprocessor = preprocessor;
         _lineDetector = lineDetector;
         _inspectionService = inspectionService;
+        _cameraService = cameraService;
 
         _autoSaveTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(400) };
         _autoSaveTimer.Tick += (_, __) => AutoSaveNow();
@@ -153,6 +155,7 @@ public sealed partial class ToolEditorViewModel : ObservableObject
         DeleteSelectedNodeCommand = new RelayCommand(DeleteSelectedNode);
         DeleteSelectedEdgeCommand = new RelayCommand(DeleteSelectedEdge);
         LoadPreviewImageCommand = new RelayCommand(LoadPreviewImage);
+        CaptureCameraImageCommand = new AsyncRelayCommand(CaptureCameraImageAsync);
         RunFlowCommand = new RelayCommand(RunFlow);
         RoiSelectedCommand = new RelayCommand<object?>(OnRoiSelected);
         RoiEditedCommand = new RelayCommand<RoiSelection?>(OnRoiEdited);
@@ -168,7 +171,15 @@ public sealed partial class ToolEditorViewModel : ObservableObject
         SurfaceCompare_SetSearchRoiCommand = new RelayCommand(SurfaceCompare_SetSearchRoi);
         SurfaceCompare_SetTemplateRoiCommand = new RelayCommand(SurfaceCompare_SetTemplateRoi);
 
-        _sharedImage.ImageChanged += (_, __) => RefreshPreviews();
+        _sharedImage.ImageChanged += (_, __) =>
+        {
+            System.Windows.Application.Current.Dispatcher.BeginInvoke(new Action(() =>
+            {
+                RefreshPreviews();
+            }));
+        };
+
+        _cameraService.FrameCaptured += OnCameraFrameCaptured;
 
         RefreshConfigs();
     }
@@ -1744,18 +1755,24 @@ public sealed partial class ToolEditorViewModel : ObservableObject
             return;
         }
 
-        var templateDir = Path.Combine(Path.GetFullPath(_storeOptions.ConfigRootDirectory), _config.ProductCode, "templates");
+        var toolNode = Nodes.FirstOrDefault(n => string.Equals(n.Type, "SurfaceCompare", StringComparison.OrdinalIgnoreCase) 
+                                                 && string.Equals(n.RefName, surfaceCompareName, StringComparison.OrdinalIgnoreCase));
+        using var processedMat = toolNode != null 
+            ? ResolveToolPreprocessForPreview(snap, toolNode) 
+            : (_config != null ? _preprocessor.Run(snap, _config.Preprocess) : snap.Clone());
+
+        var templateDir = Path.Combine(Path.GetFullPath(_storeOptions.ConfigRootDirectory), _config?.ProductCode ?? "", "templates");
         Directory.CreateDirectory(templateDir);
         var fileName = Path.Combine(templateDir, $"{surfaceCompareName.ToLowerInvariant()}_sc.png");
 
         var r = new OpenCvSharp.Rect(roi.X, roi.Y, roi.Width, roi.Height)
-            .Intersect(new OpenCvSharp.Rect(0, 0, snap.Width, snap.Height));
+            .Intersect(new OpenCvSharp.Rect(0, 0, processedMat.Width, processedMat.Height));
         if (r.Width <= 0 || r.Height <= 0)
         {
             return;
         }
 
-        using var crop = new Mat(snap, r);
+        using var crop = new Mat(processedMat, r);
         Mat gray = crop;
         using var grayOwned = crop.Channels() == 1 ? null : crop.CvtColor(ColorConversionCodes.BGR2GRAY);
         if (grayOwned is not null)
@@ -2250,6 +2267,21 @@ public sealed partial class ToolEditorViewModel : ObservableObject
             return;
         }
 
+        ToolGraphNodeViewModel? toolNode = null;
+        if (isOrigin)
+        {
+            toolNode = Nodes.FirstOrDefault(n => string.Equals(n.Type, "Origin", StringComparison.OrdinalIgnoreCase));
+        }
+        else if (!string.IsNullOrWhiteSpace(pointName))
+        {
+            toolNode = Nodes.FirstOrDefault(n => string.Equals(n.Type, "Point", StringComparison.OrdinalIgnoreCase) 
+                                                 && string.Equals(n.RefName, pointName, StringComparison.OrdinalIgnoreCase));
+        }
+
+        using var processedMat = toolNode != null 
+            ? ResolveToolPreprocessForPreview(snap, toolNode) 
+            : (_config != null ? _preprocessor.Run(snap, _config.Preprocess) : snap.Clone());
+
         var templateDir = Path.Combine(Path.GetFullPath(_storeOptions.ConfigRootDirectory), ProductCode, "templates");
         Directory.CreateDirectory(templateDir);
 
@@ -2258,13 +2290,13 @@ public sealed partial class ToolEditorViewModel : ObservableObject
         var fullPath = Path.Combine(templateDir, fileName);
 
         var rect = new OpenCvSharp.Rect(roi.X, roi.Y, roi.Width, roi.Height);
-        rect = rect.Intersect(new OpenCvSharp.Rect(0, 0, snap.Width, snap.Height));
+        rect = rect.Intersect(new OpenCvSharp.Rect(0, 0, processedMat.Width, processedMat.Height));
         if (rect.Width <= 0 || rect.Height <= 0)
         {
             return;
         }
 
-        using var cropped = new OpenCvSharp.Mat(snap, rect);
+        using var cropped = new OpenCvSharp.Mat(processedMat, rect);
         using var gray = cropped.Channels() == 1
             ? cropped.Clone()
             : cropped.CvtColor(OpenCvSharp.ColorConversionCodes.BGR2GRAY);
@@ -2303,12 +2335,22 @@ public sealed partial class ToolEditorViewModel : ObservableObject
             ProductCode = value;
             LoadConfig(); // Auto-load when config is selected
         }
+        else
+        {
+            ClearActiveGraph();
+        }
 
         RefreshPreviews();
     }
 
     [ObservableProperty]
-    private string _productCode = "ProductA";
+    private string _productCode = "";
+
+    [ObservableProperty]
+    private bool _isLivePreviewMode = true;
+
+    [ObservableProperty]
+    private string _captureButtonText = "Capture Camera";
 
     public ObservableCollection<string> ToolboxItems { get; }
 
@@ -2513,6 +2555,8 @@ public sealed partial class ToolEditorViewModel : ObservableObject
     public ICommand DeleteSelectedEdgeCommand { get; }
 
     public ICommand LoadPreviewImageCommand { get; }
+
+    public ICommand CaptureCameraImageCommand { get; }
 
     public ICommand RunFlowCommand { get; }
 
@@ -4644,6 +4688,10 @@ public sealed partial class ToolEditorViewModel : ObservableObject
             {
                 valueObj = v.Found;
             }
+            else if (string.Equals(prop, "Text", StringComparison.OrdinalIgnoreCase))
+            {
+                valueObj = v.Text;
+            }
             else
             {
                 return string.Empty;
@@ -4687,7 +4735,7 @@ public sealed partial class ToolEditorViewModel : ObservableObject
         });
     }
 
-    [GeneratedRegex(@"\$\{([^}]+)\}", RegexOptions.Compiled)]
+    [GeneratedRegex(@"(?:\$\{|\{)([^{}]+)\}", RegexOptions.Compiled)]
     internal static partial Regex TextTemplateRegex();
 
     public int Line_Canny2
@@ -5232,33 +5280,101 @@ public sealed partial class ToolEditorViewModel : ObservableObject
         _sharedImage.SetImage(mat);
     }
 
+    private void OnCameraFrameCaptured(object? sender, Mat frame)
+    {
+        if (IsLivePreviewMode && _cameraService.IsRunning)
+        {
+            if (frame != null && !frame.Empty())
+            {
+                _sharedImage.SetImage(frame);
+            }
+        }
+    }
+
+    private void ClearActiveGraph()
+    {
+        foreach (var n in Nodes)
+        {
+            n.PropertyChanged -= Node_PropertyChanged;
+        }
+
+        Nodes.Clear();
+        Edges.Clear();
+        SelectedNode = null;
+        _config = null;
+        _lastRun = null;
+        _sharedImage.SetImage(null); // Clear ảnh preview
+        SelectedNodeOverlayItems.Clear();
+        FinalOverlayItems.Clear();
+        TextNode_ConditionRows.Clear();
+        RaiseToolPropertyPanelsChanged();
+    }
+
+    private async Task CaptureCameraImageAsync()
+    {
+        if (IsLivePreviewMode)
+        {
+            // ĐANG LIVE -> Bấm nút để CHUYP VÀ GIỮ ẢNH TĨNH
+            try
+            {
+                var mat = await _cameraService.CaptureSnapshotAsync();
+                if (mat != null && !mat.Empty())
+                {
+                    IsLivePreviewMode = false;
+                    CaptureButtonText = "Live Preview"; // Nhấn lần sau để quay lại chế độ Live
+                    _sharedImage.SetImage(mat);
+                    mat.Dispose();
+                }
+                else
+                {
+                    MessageBox.Show("Không thể chụp ảnh từ camera. Vui lòng kiểm tra lại kết nối camera trong tab Live Camera.", "Lỗi camera", MessageBoxButton.OK, MessageBoxImage.Error);
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Lỗi chụp ảnh: {ex.Message}", "Lỗi", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+        else
+        {
+            // ĐANG TĨNH -> Bấm nút để QUAY LẠI LIVE PREVIEW
+            IsLivePreviewMode = true;
+            CaptureButtonText = "Capture Camera";
+
+            if (!_cameraService.IsRunning)
+            {
+                MessageBox.Show("Camera đang tắt. Vui lòng bật camera ở tab Live Camera trước để xem hình ảnh trực tiếp.", "Thông báo", MessageBoxButton.OK, MessageBoxImage.Warning);
+            }
+        }
+    }
+
     private void RefreshConfigs()
     {
         AvailableConfigs.Clear();
-
-        var root = Path.GetFullPath(_storeOptions.ConfigRootDirectory);
-        if (!Directory.Exists(root))
+        try
         {
-            Directory.CreateDirectory(root);
-        }
-
-        foreach (var file in Directory.EnumerateFiles(root, "*.json", SearchOption.TopDirectoryOnly))
-        {
-            var name = Path.GetFileNameWithoutExtension(file);
-            if (!string.IsNullOrWhiteSpace(name))
+            var configRoot = _storeOptions.ConfigRootDirectory;
+            if (Directory.Exists(configRoot))
             {
-                AvailableConfigs.Add(name);
+                foreach (var file in Directory.EnumerateFiles(configRoot, "*.json"))
+                {
+                    var productCode = Path.GetFileNameWithoutExtension(file);
+                    if (!string.IsNullOrEmpty(productCode))
+                    {
+                        AvailableConfigs.Add(productCode);
+                    }
+                }
             }
         }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Lỗi load config: {ex.Message}");
+        }
 
-        if (!string.IsNullOrWhiteSpace(ProductCode) && AvailableConfigs.Contains(ProductCode))
-        {
-            SelectedConfig = ProductCode;
-        }
-        else if (AvailableConfigs.Count > 0)
-        {
-            SelectedConfig ??= AvailableConfigs[0];
-        }
+        // Đảm bảo ban đầu không chọn bất kỳ cấu hình nào (tất cả rỗng)
+        SelectedConfig = null;
+        ProductCode = "";
+        ClearActiveGraph();
     }
 
     private void LoadConfig()
@@ -5266,44 +5382,56 @@ public sealed partial class ToolEditorViewModel : ObservableObject
         var code = SelectedConfig ?? ProductCode;
         if (string.IsNullOrWhiteSpace(code))
         {
+            ClearActiveGraph();
             return;
         }
 
-        _config = _configService.LoadConfig(code);
-        ProductCode = _config.ProductCode;
+        // Dọn sạch cấu hình cũ khỏi bộ nhớ trước khi nạp cấu hình mới
+        ClearActiveGraph();
 
-        Nodes.Clear();
-        Edges.Clear();
-        foreach (var n in _config.ToolGraph.Nodes)
+        try
         {
-            var vm = new ToolGraphNodeViewModel
-            {
-                Id = n.Id,
-                Type = n.Type,
-                RefName = n.RefName,
-                X = n.X,
-                Y = n.Y,
-                InputCount = n.InputCount
-            };
-            vm.PropertyChanged += Node_PropertyChanged;
-            Nodes.Add(vm);
-        }
+            _config = _configService.LoadConfig(code);
+            ProductCode = _config.ProductCode;
 
-        foreach (var e in _config.ToolGraph.Edges)
-        {
-            var from = Nodes.FirstOrDefault(x => string.Equals(x.Id, e.FromNodeId, StringComparison.OrdinalIgnoreCase));
-            var to = Nodes.FirstOrDefault(x => string.Equals(x.Id, e.ToNodeId, StringComparison.OrdinalIgnoreCase));
-            if (from is null || to is null)
+            Nodes.Clear();
+            Edges.Clear();
+            foreach (var n in _config.ToolGraph.Nodes)
             {
-                continue;
+                var vm = new ToolGraphNodeViewModel
+                {
+                    Id = n.Id,
+                    Type = n.Type,
+                    RefName = n.RefName,
+                    X = n.X,
+                    Y = n.Y,
+                    InputCount = n.InputCount
+                };
+                vm.PropertyChanged += Node_PropertyChanged;
+                Nodes.Add(vm);
             }
 
-            Edges.Add(new ToolGraphEdgeViewModel(from, to, e.FromPort, e.ToPort));
-        }
+            foreach (var e in _config.ToolGraph.Edges)
+            {
+                var from = Nodes.FirstOrDefault(x => string.Equals(x.Id, e.FromNodeId, StringComparison.OrdinalIgnoreCase));
+                var to = Nodes.FirstOrDefault(x => string.Equals(x.Id, e.ToNodeId, StringComparison.OrdinalIgnoreCase));
+                if (from is null || to is null)
+                {
+                    continue;
+                }
 
-        SelectedNode = Nodes.Count > 0 ? Nodes[0] : null;
-        RaiseToolPropertyPanelsChanged();
-        RefreshPreviews();
+                Edges.Add(new ToolGraphEdgeViewModel(from, to, e.FromPort, e.ToPort));
+            }
+
+            SelectedNode = Nodes.Count > 0 ? Nodes[0] : null;
+            RaiseToolPropertyPanelsChanged();
+            RefreshPreviews();
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Lỗi load config: {ex.Message}");
+            ClearActiveGraph();
+        }
     }
 
     private void SaveConfig()
@@ -5330,6 +5458,28 @@ public sealed partial class ToolEditorViewModel : ObservableObject
         {
             return;
         }
+
+        // Dọn dẹp các config mồ côi (không còn node tương ứng trong graph)
+        var validRefNames = new HashSet<string>(Nodes.Select(n => n.RefName).Where(x => !string.IsNullOrWhiteSpace(x)), StringComparer.OrdinalIgnoreCase);
+        
+        _config.PreprocessNodes.RemoveAll(x => !validRefNames.Contains(x.Name));
+        _config.Points.RemoveAll(x => !validRefNames.Contains(x.Name));
+        _config.Lines.RemoveAll(x => !validRefNames.Contains(x.Name));
+        _config.Calipers.RemoveAll(x => !validRefNames.Contains(x.Name));
+        _config.Distances.RemoveAll(x => !validRefNames.Contains(x.Name));
+        _config.LineToLineDistances.RemoveAll(x => !validRefNames.Contains(x.Name));
+        _config.PointToLineDistances.RemoveAll(x => !validRefNames.Contains(x.Name));
+        _config.Angles.RemoveAll(x => !validRefNames.Contains(x.Name));
+        _config.Conditions.RemoveAll(x => !validRefNames.Contains(x.Name));
+        _config.TextNodes.RemoveAll(x => !validRefNames.Contains(x.Name));
+        _config.BlobDetections.RemoveAll(x => !validRefNames.Contains(x.Name));
+        _config.SurfaceCompares.RemoveAll(x => !validRefNames.Contains(x.Name));
+        _config.LinePairDetections.RemoveAll(x => !validRefNames.Contains(x.Name));
+        _config.EdgePairs.RemoveAll(x => !validRefNames.Contains(x.Name));
+        _config.EdgePairDetections.RemoveAll(x => !validRefNames.Contains(x.Name));
+        _config.CircleFinders.RemoveAll(x => !validRefNames.Contains(x.Name));
+        _config.Diameters.RemoveAll(x => !validRefNames.Contains(x.Name));
+        _config.CodeDetections.RemoveAll(x => !validRefNames.Contains(x.Name));
 
         _config.ToolGraph.Nodes.Clear();
         foreach (var n in Nodes)
@@ -5413,21 +5563,11 @@ public sealed partial class ToolEditorViewModel : ObservableObject
 
     private void NewGraph()
     {
-        foreach (var n in Nodes)
-        {
-            n.PropertyChanged -= Node_PropertyChanged;
-        }
-
-        Nodes.Clear();
-        Edges.Clear();
-        SelectedNode = null;
-        SelectedNodePreviewImage = null;
-        FinalPreviewImage = null;
-        SelectedNodeOverlayItems.Clear();
-        FinalOverlayItems.Clear();
-
-        _config ??= new VisionConfig { ProductCode = ProductCode };
-        _config.ToolGraph = new ToolGraph();
+        ClearActiveGraph();
+        _config = new VisionConfig { ProductCode = "NewProduct" };
+        ProductCode = "NewProduct";
+        SelectedConfig = null;
+        RefreshPreviews();
     }
 
     private void DeleteSelectedNode()

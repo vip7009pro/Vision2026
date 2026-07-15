@@ -22,6 +22,7 @@
             <TextBox Width="120" Text="{Binding ProductCode, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,12,0" />
 
             <Button Content="Load Image" Command="{Binding LoadImageCommand}" Margin="0,0,6,0" />
+            <Button Content="Capture Camera" Command="{Binding CaptureCameraImageCommand}" Margin="0,0,6,0" />
             <Button Content="Save Pixels/mm" Command="{Binding SavePixelsPerMmCommand}" />
         </DockPanel>
 

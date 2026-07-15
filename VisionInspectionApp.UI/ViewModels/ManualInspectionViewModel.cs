@@ -27,17 +27,20 @@ public sealed record ManualDistanceMeasurement(
 public sealed partial class ManualInspectionViewModel : ObservableObject
 {
     private readonly GlobalAppSettingsService _settings;
+    private readonly CameraService _cameraService;
 
     private Mat? _imageMat;
 
-    public ManualInspectionViewModel(GlobalAppSettingsService settings)
+    public ManualInspectionViewModel(GlobalAppSettingsService settings, CameraService cameraService)
     {
         _settings = settings;
+        _cameraService = cameraService;
 
         OverlayItems = new ObservableCollection<OverlayItem>();
         Measurements = new ObservableCollection<ManualDistanceMeasurement>();
 
         LoadImageCommand = new RelayCommand(LoadImage);
+        CaptureCameraImageCommand = new AsyncRelayCommand(CaptureCameraImageAsync);
         ClearMeasurementsCommand = new RelayCommand(ClearMeasurements);
         LineSelectedCommand = new RelayCommand<LineSelection?>(OnLineSelected);
 
@@ -68,6 +71,8 @@ public sealed partial class ManualInspectionViewModel : ObservableObject
 
     public ICommand LoadImageCommand { get; }
 
+    public ICommand CaptureCameraImageCommand { get; }
+
     public ICommand ClearMeasurementsCommand { get; }
 
     public ICommand LineSelectedCommand { get; }
@@ -88,6 +93,29 @@ public sealed partial class ManualInspectionViewModel : ObservableObject
         _imageMat = Cv2.ImRead(dlg.FileName, ImreadModes.Color);
         Image = _imageMat.ToBitmapSource();
         RefreshOverlays();
+    }
+
+    private async Task CaptureCameraImageAsync()
+    {
+        try
+        {
+            var mat = await _cameraService.CaptureSnapshotAsync();
+            if (mat != null && !mat.Empty())
+            {
+                _imageMat?.Dispose();
+                _imageMat = mat;
+                Image = _imageMat.ToBitmapSource();
+                RefreshOverlays();
+            }
+            else
+            {
+                System.Windows.MessageBox.Show("Không thể chụp ảnh từ camera. Vui lòng kiểm tra lại kết nối camera trong tab Live Camera.", "Lỗi camera", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            System.Windows.MessageBox.Show($"Lỗi chụp ảnh: {ex.Message}", "Lỗi", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Error);
+        }
     }
 
     private void ClearMeasurements()

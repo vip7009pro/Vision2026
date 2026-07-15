@@ -202,6 +202,7 @@ public sealed record CodeDetectionResult(string Name, bool Found, string Text, R
 public interface IInspectionService
 {
     InspectionResult Inspect(Mat image, VisionConfig config);
+    void ResetTracking(string? productCode = null);
 }
 
 public sealed class InspectionService : IInspectionService
@@ -318,7 +319,6 @@ public sealed class InspectionService : IInspectionService
                 lock (matsLock) matsToDispose.Add(m);
                 return m;
             });
-
             Mat GetProcessedDefault() => processedDefault.Value;
 
             var preprocessMatCache = new ConcurrentDictionary<string, Mat>(StringComparer.OrdinalIgnoreCase);
@@ -2248,7 +2248,7 @@ public sealed class InspectionService : IInspectionService
                     continue;
                 }
 
-                // Bounding box: ROI rect by default. If ZXing returns points, compute a tighter box.
+                // Bounding box: start from decoded points, then pad slightly so the overlay covers the full symbol.
                 var bb = rect;
                 if (decoded.ResultPoints is not null && decoded.ResultPoints.Length > 0)
                 {
@@ -2258,13 +2258,17 @@ public sealed class InspectionService : IInspectionService
                     var maxX = xs.Max();
                     var minY = ys.Min();
                     var maxY = ys.Max();
-                    var w = Math.Max(1, maxX - minX);
-                    var h = Math.Max(1, maxY - minY);
-                    bb = new Rect(
-                        rect.X + (int)Math.Round(minX),
-                        rect.Y + (int)Math.Round(minY),
-                        (int)Math.Round(w),
-                        (int)Math.Round(h));
+                    var baseW = Math.Max(1.0, maxX - minX);
+                    var baseH = Math.Max(1.0, maxY - minY);
+                    var padX = Math.Max(2.0, baseW * 0.12);
+                    var padY = Math.Max(2.0, baseH * 0.12);
+
+                    var x = rect.X + (int)Math.Floor(minX - padX);
+                    var y = rect.Y + (int)Math.Floor(minY - padY);
+                    var w = (int)Math.Ceiling(baseW + padX * 2);
+                    var h = (int)Math.Ceiling(baseH + padY * 2);
+
+                    bb = new Rect(x, y, w, h).Intersect(rect);
                 }
 
                 result.CodeDetections.Add(new CodeDetectionResult(cdt.Name, Found: true, Text: decoded.Text, BoundingBox: bb));
@@ -2314,6 +2318,17 @@ public sealed class InspectionService : IInspectionService
                 m.Dispose();
             }
         }
+    }
+
+    public void ResetTracking(string? productCode = null)
+    {
+        if (string.IsNullOrWhiteSpace(productCode))
+        {
+            _trackByProductCode.Clear();
+            return;
+        }
+
+        _trackByProductCode.TryRemove(productCode, out _);
     }
 
     private static void EvaluateConditions(VisionConfig config, InspectionResult result)
@@ -2562,26 +2577,29 @@ public sealed class InspectionService : IInspectionService
 
 public static class ConditionEvaluator
 {
-    internal readonly record struct ConditionValue(bool IsBool, bool Bool, double Number)
+    internal readonly record struct ConditionValue(bool IsBool, bool Bool, double Number, string? Text)
     {
-        public static ConditionValue FromBool(bool v) => new(true, v, 0.0);
-        public static ConditionValue FromNumber(double v) => new(false, false, v);
+        public static ConditionValue FromBool(bool v) => new(true, v, 0.0, null);
+        public static ConditionValue FromNumber(double v) => new(false, false, v, null);
+        public static ConditionValue FromString(string v) => new(false, false, 0.0, v);
     }
 
     public sealed class Variable
     {
-        public Variable(bool pass, double? value = null, double? score = null, bool? found = null)
+        public Variable(bool pass, double? value = null, double? score = null, bool? found = null, string? text = null)
         {
             Pass = pass;
             Value = value;
             Score = score;
             Found = found;
+            Text = text;
         }
 
         public bool Pass { get; }
         public double? Value { get; }
         public double? Score { get; }
         public bool? Found { get; }
+        public string? Text { get; }
     }
 
     public static Dictionary<string, Variable> BuildVariableMap(InspectionResult result)
@@ -2659,6 +2677,11 @@ public static class ConditionEvaluator
             vars[c.Name] = new Variable(c.Found, found: c.Found);
         }
 
+        foreach (var cdt in result.CodeDetections)
+        {
+            vars[cdt.Name] = new Variable(cdt.Found, found: cdt.Found, text: cdt.Text);
+        }
+
         foreach (var d in result.Diameters)
         {
             vars[$"CIR.{d.Name}"] = new Variable(d.Pass, value: d.Value, found: d.Found);
@@ -2687,6 +2710,7 @@ public static class ConditionEvaluator
         Eof,
         Identifier,
         Number,
+        String,
         LParen,
         RParen,
         Dot,
@@ -2748,6 +2772,40 @@ public static class ConditionEvaluator
                     throw new InvalidOperationException($"Invalid number '{t}'");
                 }
                 return new Token(TokenKind.Number, t, n);
+            }
+
+            if (ch == '"')
+            {
+                _i++;
+                var start = _i;
+                var sb = new System.Text.StringBuilder();
+                while (_i < _s.Length)
+                {
+                    var c = _s[_i++];
+                    if (c == '"')
+                    {
+                        return new Token(TokenKind.String, sb.Length == 0 ? _s.Substring(start, (_i - 1) - start) : sb.ToString(), 0);
+                    }
+
+                    if (c == '\\' && _i < _s.Length)
+                    {
+                        var next = _s[_i++];
+                        sb.Append(next switch
+                        {
+                            '"' => '"',
+                            '\\' => '\\',
+                            'n' => '\n',
+                            'r' => '\r',
+                            't' => '\t',
+                            _ => next
+                        });
+                        continue;
+                    }
+
+                    sb.Append(c);
+                }
+
+                throw new InvalidOperationException("Unterminated string literal");
             }
 
             _i++;
@@ -2877,6 +2935,18 @@ public static class ConditionEvaluator
                 };
             }
 
+            if (a.Text is not null || b.Text is not null)
+            {
+                var sa = a.Text ?? throw new InvalidOperationException("Left side is not a string");
+                var sb = b.Text ?? throw new InvalidOperationException("Right side is not a string");
+                return op switch
+                {
+                    TokenKind.Eq => string.Equals(sa, sb, StringComparison.Ordinal),
+                    TokenKind.Ne => !string.Equals(sa, sb, StringComparison.Ordinal),
+                    _ => throw new InvalidOperationException("Only == and != are allowed for strings")
+                };
+            }
+
             var na = a.Number;
             var nb = b.Number;
             return op switch
@@ -2924,6 +2994,13 @@ public static class ConditionEvaluator
                 return Resolve(name, member);
             }
 
+            if (_t.Kind == TokenKind.String)
+            {
+                var text = _t.Text;
+                Expect(TokenKind.String);
+                return ConditionValue.FromString(text);
+            }
+
             throw new InvalidOperationException($"Unexpected token '{_t.Text}'");
         }
 
@@ -2957,6 +3034,12 @@ public static class ConditionEvaluator
             {
                 if (v.Found is null) throw new InvalidOperationException($"{name}.Found is not available");
                 return ConditionValue.FromBool(v.Found.Value);
+            }
+
+            if (string.Equals(member, "TEXT", StringComparison.OrdinalIgnoreCase))
+            {
+                if (v.Text is null) throw new InvalidOperationException($"{name}.Text is not available");
+                return ConditionValue.FromString(v.Text);
             }
 
             throw new InvalidOperationException($"Unknown member '{member}' on '{name}'");

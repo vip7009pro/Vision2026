@@ -10,6 +10,7 @@ using VisionInspectionApp.Models;
 using VisionInspectionApp.UI.Controls;
 using System.Collections.ObjectModel;
 using System.Windows.Media;
+using VisionInspectionApp.UI.Services;
 
 namespace VisionInspectionApp.UI.ViewModels;
 
@@ -18,6 +19,7 @@ public sealed partial class InspectionViewModel : ObservableObject
     private readonly IConfigService _configService;
     private readonly IInspectionService _inspectionService;
     private readonly ConfigStoreOptions _storeOptions;
+    private readonly CameraService _cameraService;
 
     private bool _isRunning;
 
@@ -25,13 +27,15 @@ public sealed partial class InspectionViewModel : ObservableObject
 
     private const int MaxBlobOverlayCount = 300;
 
-    public InspectionViewModel(IConfigService configService, IInspectionService inspectionService, ConfigStoreOptions storeOptions)
+    public InspectionViewModel(IConfigService configService, IInspectionService inspectionService, ConfigStoreOptions storeOptions, CameraService cameraService)
     {
         _configService = configService;
         _inspectionService = inspectionService;
         _storeOptions = storeOptions;
+        _cameraService = cameraService;
 
         LoadImageCommand = new RelayCommand(LoadImage);
+        CaptureCameraImageCommand = new AsyncRelayCommand(CaptureCameraImageAsync);
         RunInspectionCommand = new AsyncRelayCommand(RunInspectionAsync);
         LoadConfigCommand = new RelayCommand(LoadConfig);
         RefreshConfigsCommand = new RelayCommand(RefreshConfigs);
@@ -55,16 +59,59 @@ public sealed partial class InspectionViewModel : ObservableObject
         double TolMinus,
         bool Pass);
 
+    public sealed record CodeDetectionRow(string Name, bool Found, string Text);
+
     /// <summary>Combo item for switching SurfaceCompare debug previews.</summary>
     public sealed record SurfaceCompareDebugPick(int Index, string DisplayName);
 
     [ObservableProperty]
-    private string _productCode = "ProductA";
+    private string _productCode = "";
 
     public ObservableCollection<string> AvailableConfigs { get; }
 
     [ObservableProperty]
     private string? _selectedConfig;
+
+    partial void OnSelectedConfigChanged(string? value)
+    {
+        if (!string.IsNullOrWhiteSpace(value))
+        {
+            ProductCode = value;
+            LoadConfig();
+        }
+        else
+        {
+            _config = null;
+            ProductCode = "";
+            OverlayItems.Clear();
+            SpecResults.Clear();
+            Image = null;
+            ResultStatusText = "Chờ kiểm tra";
+            ResultBackgroundBrush = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(240, 240, 240));
+            ResultBorderBrush = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(220, 220, 220));
+            ResultForegroundBrush = System.Windows.Media.Brushes.Gray;
+            NgReasonsText = "";
+            IsNg = false;
+        }
+    }
+
+    [ObservableProperty]
+    private string _resultStatusText = "Chờ kiểm tra";
+
+    [ObservableProperty]
+    private System.Windows.Media.Brush _resultBackgroundBrush = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(240, 240, 240));
+
+    [ObservableProperty]
+    private System.Windows.Media.Brush _resultBorderBrush = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(220, 220, 220));
+
+    [ObservableProperty]
+    private System.Windows.Media.Brush _resultForegroundBrush = System.Windows.Media.Brushes.Gray;
+
+    [ObservableProperty]
+    private string _ngReasonsText = "";
+
+    [ObservableProperty]
+    private bool _isNg = false;
 
     [ObservableProperty]
     private System.Windows.Media.ImageSource? _image;
@@ -81,6 +128,8 @@ public sealed partial class InspectionViewModel : ObservableObject
     [ObservableProperty]
     private InspectionResult? _lastResult;
 
+    public ObservableCollection<CodeDetectionRow> CodeDetectionResults { get; } = new();
+
     public ObservableCollection<SurfaceCompareDebugPick> SurfaceCompareDebugItems { get; }
 
     [ObservableProperty]
@@ -91,7 +140,102 @@ public sealed partial class InspectionViewModel : ObservableObject
     partial void OnLastResultChanged(InspectionResult? value)
     {
         RefreshSpecResults();
+        RefreshCodeDetectionResults();
         RebuildSurfaceCompareDebugSelector();
+        UpdateResultSummary(value);
+    }
+
+    [ObservableProperty]
+    private string _originScoreText = "";
+
+    private void UpdateResultSummary(InspectionResult? result)
+    {
+        if (result == null)
+        {
+            ResultStatusText = "Chờ kiểm tra";
+            ResultBackgroundBrush = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(240, 240, 240));
+            ResultBorderBrush = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(220, 220, 220));
+            ResultForegroundBrush = System.Windows.Media.Brushes.Gray;
+            NgReasonsText = "";
+            IsNg = false;
+            OriginScoreText = "";
+            return;
+        }
+
+        var reasons = new System.Collections.Generic.List<string>();
+
+        // 1. Kiểm tra Origin
+        if (_config != null && _config.Origin != null && (_config.Origin.TemplateRoi.Width > 0 || _config.Origin.SearchRoi.Width > 0))
+        {
+            if (result.Origin != null)
+            {
+                OriginScoreText = $"Origin Score: {result.Origin.Score:F3} / {result.Origin.Threshold:F2} {(result.Origin.Pass ? "(OK)" : "(NG)")}";
+                if (!result.Origin.Pass)
+                {
+                    reasons.Add($"• Không bắt được origin (Score: {result.Origin.Score:F3} < Yêu cầu: {result.Origin.Threshold:F2})");
+                }
+            }
+            else
+            {
+                OriginScoreText = "Origin Score: Không bắt được";
+                reasons.Add("• Không bắt được origin");
+            }
+        }
+        else
+        {
+            OriginScoreText = "";
+        }
+
+        // 2. Kiểm tra các phép đo trong SpecResults
+        foreach (var spec in SpecResults)
+        {
+            if (!spec.Pass)
+            {
+                reasons.Add($"• Phép đo NG: {spec.Name} (Giá trị: {spec.Value:F3} mm, Tol: [{spec.TolMinus:F3}, {spec.TolPlus:F3}])");
+            }
+        }
+
+        // 3. Kiểm tra các điều kiện (Conditions)
+        foreach (var cond in result.Conditions)
+        {
+            if (!cond.Pass)
+            {
+                reasons.Add($"• Điều kiện NG: {cond.Name}");
+            }
+        }
+
+        // 4. Kiểm tra SurfaceCompares (ngoại quan)
+        foreach (var sc in result.SurfaceCompares)
+        {
+            if (!sc.Pass)
+            {
+                reasons.Add($"• Ngoại quan NG: {sc.Name} (Số lỗi: {sc.Count})");
+            }
+        }
+
+        if (result.Pass && reasons.Count == 0)
+        {
+            ResultStatusText = "OK";
+            ResultBackgroundBrush = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(230, 245, 230)); // Nhạt xanh lá
+            ResultBorderBrush = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(100, 200, 100));     // Viền xanh lá
+            ResultForegroundBrush = System.Windows.Media.Brushes.ForestGreen;                              // Chữ xanh lá
+            NgReasonsText = "";
+            IsNg = false;
+        }
+        else
+        {
+            ResultStatusText = "NG";
+            ResultBackgroundBrush = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(255, 235, 235)); // Nhạt đỏ
+            ResultBorderBrush = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(230, 100, 100));     // Viền đỏ
+            ResultForegroundBrush = System.Windows.Media.Brushes.Crimson;                                  // Chữ đỏ
+
+            if (reasons.Count == 0)
+            {
+                reasons.Add("• Không đạt tiêu chí đánh giá chung.");
+            }
+            NgReasonsText = string.Join("\n", reasons);
+            IsNg = true;
+        }
     }
 
     partial void OnSelectedSurfaceCompareDebugPickChanged(SurfaceCompareDebugPick? value)
@@ -116,6 +260,23 @@ public sealed partial class InspectionViewModel : ObservableObject
     [ObservableProperty]
     private bool _showOverlay = true;
 
+    [ObservableProperty]
+    private double _originScoreThreshold = 0.8;
+
+    partial void OnOriginScoreThresholdChanged(double value)
+    {
+        if (_config != null && _config.Origin != null)
+        {
+            _config.Origin.MatchScoreThreshold = value;
+            var code = SelectedConfig ?? ProductCode;
+            if (!string.IsNullOrWhiteSpace(code))
+            {
+                _config.ProductCode = code; // Ensure ProductCode is set
+                _configService.SaveConfig(_config);
+            }
+        }
+    }
+
     partial void OnShowRoisChanged(bool value)
     {
         RefreshOverlayItems();
@@ -131,6 +292,8 @@ public sealed partial class InspectionViewModel : ObservableObject
     public ObservableCollection<SpecResultRow> SpecResults { get; }
 
     public ICommand LoadImageCommand { get; }
+
+    public ICommand CaptureCameraImageCommand { get; }
 
     public ICommand RefreshConfigsCommand { get; }
 
@@ -258,14 +421,18 @@ public sealed partial class InspectionViewModel : ObservableObject
             }
         }
 
-        if (!string.IsNullOrWhiteSpace(ProductCode) && AvailableConfigs.Contains(ProductCode))
-        {
-            SelectedConfig = ProductCode;
-        }
-        else if (AvailableConfigs.Count > 0)
-        {
-            SelectedConfig ??= AvailableConfigs[0];
-        }
+        SelectedConfig = null;
+        ProductCode = "";
+        _config = null;
+        OverlayItems.Clear();
+        SpecResults.Clear();
+        Image = null;
+        ResultStatusText = "Chờ kiểm tra";
+        ResultBackgroundBrush = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(240, 240, 240));
+        ResultBorderBrush = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(220, 220, 220));
+        ResultForegroundBrush = System.Windows.Media.Brushes.Gray;
+        NgReasonsText = "";
+        IsNg = false;
     }
 
     private void LoadImage()
@@ -287,6 +454,33 @@ public sealed partial class InspectionViewModel : ObservableObject
         RefreshOverlayItems();
     }
 
+    private async Task CaptureCameraImageAsync()
+    {
+        try
+        {
+            var mat = await _cameraService.CaptureSnapshotAsync();
+            if (mat != null && !mat.Empty())
+            {
+                _imageMat?.Dispose();
+                _imageMat = mat;
+                Image = _imageMat.ToBitmapSource();
+                RefreshOverlayItems();
+                
+                // Tự động chạy inspection sau khi chụp ảnh
+                ResetInspectionTracking();
+                await RunInspectionAsync();
+            }
+            else
+            {
+                System.Windows.MessageBox.Show("Không thể chụp ảnh từ camera. Vui lòng kiểm tra lại kết nối camera trong tab Live Camera.", "Lỗi camera", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            System.Windows.MessageBox.Show($"Lỗi chụp ảnh: {ex.Message}", "Lỗi", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Error);
+        }
+    }
+
     private void LoadConfig()
     {
         var code = SelectedConfig ?? ProductCode;
@@ -296,8 +490,17 @@ public sealed partial class InspectionViewModel : ObservableObject
         }
 
         ProductCode = code;
+        _inspectionService.ResetTracking(code);
         _config = _configService.LoadConfig(code);
+        if (_config != null && _config.Origin != null)
+        {
+            OriginScoreThreshold = _config.Origin.MatchScoreThreshold;
+        }
 
+        LastResult = null;
+        OverlayItems.Clear();
+        SpecResults.Clear();
+        UpdateResultSummary(null);
         RefreshOverlayItems();
     }
 
@@ -314,11 +517,17 @@ public sealed partial class InspectionViewModel : ObservableObject
         }
 
         var code = SelectedConfig ?? ProductCode;
-        if (_config is null || !string.Equals(_config.ProductCode, code, StringComparison.OrdinalIgnoreCase))
+        if (!string.IsNullOrWhiteSpace(code))
         {
             _config = _configService.LoadConfig(code);
         }
 
+        if (_config is null)
+        {
+            return;
+        }
+
+        ResetInspectionTracking();
         _isRunning = true;
         try
         {
@@ -332,6 +541,12 @@ public sealed partial class InspectionViewModel : ObservableObject
         {
             _isRunning = false;
         }
+    }
+
+    private void ResetInspectionTracking()
+    {
+        var code = SelectedConfig ?? ProductCode;
+        _inspectionService.ResetTracking(string.IsNullOrWhiteSpace(code) ? null : code);
     }
 
     private void RefreshSpecResults()
@@ -381,6 +596,21 @@ public sealed partial class InspectionViewModel : ObservableObject
         foreach (var d in LastResult.Diameters)
         {
             SpecResults.Add(new SpecResultRow("Diameter", d.Name, d.CircleRef, string.Empty, d.Value, d.Nominal, d.TolPlus, d.TolMinus, d.Pass));
+        }
+    }
+
+    private void RefreshCodeDetectionResults()
+    {
+        CodeDetectionResults.Clear();
+
+        if (LastResult?.CodeDetections is null)
+        {
+            return;
+        }
+
+        foreach (var cdt in LastResult.CodeDetections)
+        {
+            CodeDetectionResults.Add(new CodeDetectionRow(cdt.Name, cdt.Found, cdt.Text));
         }
     }
 

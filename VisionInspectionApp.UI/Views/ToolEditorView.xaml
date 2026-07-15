@@ -27,6 +27,7 @@
             <Button Content="New Graph" Command="{Binding NewGraphCommand}" Margin="0,0,12,0" />
 
             <Button Content="Load Image" Command="{Binding LoadPreviewImageCommand}" Margin="0,0,12,0" />
+            <Button Content="{Binding CaptureButtonText}" Command="{Binding CaptureCameraImageCommand}" Margin="0,0,12,0" />
 
             <Button Content="Run Flow" Command="{Binding RunFlowCommand}" Margin="0,0,12,0" />
 
@@ -80,28 +81,28 @@
                             <CheckBox Content="Preview" IsChecked="{Binding PreprocessPreviewEnabled, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,6" />
 
                             <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
-                                <TextBlock Text="Illum" Width="60" VerticalAlignment="Center" />
+                                <TextBlock Text="Illum" Width="60" VerticalAlignment="Center" ToolTip="Illumination Correction Profile" />
                                 <ComboBox Width="160" ItemsSource="{Binding AvailableIlluminationCorrectionPresets}" SelectedItem="{Binding IlluminationCorrection, UpdateSourceTrigger=PropertyChanged}" />
                             </StackPanel>
 
-                            <StackPanel Margin="0,0,0,6">
+                            <StackPanel Margin="0,0,0,6" ToolTip="Illumination Kernel Size">
                                 <StackPanel Orientation="Horizontal" Margin="0,0,0,2">
-                                    <TextBlock Text="Illum K" Width="60" VerticalAlignment="Center" />
+                                    <TextBlock Text="Illum Kernel" Width="70" VerticalAlignment="Center" />
                                     <TextBlock Text="{Binding IlluminationKernel}" Width="40" />
                                 </StackPanel>
                                 <Slider Minimum="3" Maximum="401" Value="{Binding IlluminationKernel, UpdateSourceTrigger=PropertyChanged}" IsSnapToTickEnabled="True" TickFrequency="2" />
                             </StackPanel>
 
-                            <StackPanel Margin="0,0,0,2">
+                            <StackPanel Margin="0,0,0,2" ToolTip="CLAHE Clip Limit (Contrast Limit)">
                                 <StackPanel Orientation="Horizontal" Margin="0,0,0,2">
-                                    <TextBlock Text="CLAHE" Width="60" VerticalAlignment="Center" />
+                                    <TextBlock Text="CLAHE Clip" Width="70" VerticalAlignment="Center" />
                                     <TextBlock Text="{Binding ClaheClipLimit}" Width="60" />
                                 </StackPanel>
                                 <Slider Minimum="0.1" Maximum="10" Value="{Binding ClaheClipLimit, UpdateSourceTrigger=PropertyChanged}" TickFrequency="0.1" />
                             </StackPanel>
-                            <StackPanel Margin="0,0,0,6">
+                            <StackPanel Margin="0,0,0,6" ToolTip="CLAHE Tile Grid Size">
                                 <StackPanel Orientation="Horizontal" Margin="0,0,0,2">
-                                    <TextBlock Text="Tile" Width="60" VerticalAlignment="Center" />
+                                    <TextBlock Text="CLAHE Tile" Width="70" VerticalAlignment="Center" />
                                     <TextBlock Text="{Binding ClaheTileGrid}" Width="40" />
                                 </StackPanel>
                                 <Slider Minimum="2" Maximum="32" Value="{Binding ClaheTileGrid, UpdateSourceTrigger=PropertyChanged}" IsSnapToTickEnabled="True" TickFrequency="1" />
@@ -109,34 +110,34 @@
 
                             <CheckBox Content="Gray" IsChecked="{Binding UseGray, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,2" />
                             <CheckBox Content="Gaussian Blur" IsChecked="{Binding UseGaussianBlur, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,2" />
-                            <StackPanel Margin="0,0,0,6">
+                            <StackPanel Margin="0,0,0,6" ToolTip="Gaussian Blur Kernel Size">
                                 <StackPanel Orientation="Horizontal" Margin="0,0,0,2">
-                                    <TextBlock Text="Blur K" Width="60" VerticalAlignment="Center" />
+                                    <TextBlock Text="Blur Kernel" Width="70" VerticalAlignment="Center" />
                                     <TextBlock Text="{Binding BlurKernel}" Width="40" />
                                 </StackPanel>
                                 <Slider Minimum="1" Maximum="21" Value="{Binding BlurKernel, UpdateSourceTrigger=PropertyChanged}" IsSnapToTickEnabled="True" TickFrequency="2" />
                             </StackPanel>
 
                             <CheckBox Content="Threshold" IsChecked="{Binding UseThreshold, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,2" />
-                            <StackPanel Margin="0,0,0,6">
+                            <StackPanel Margin="0,0,0,6" ToolTip="Binarization Threshold">
                                 <StackPanel Orientation="Horizontal" Margin="0,0,0,2">
-                                    <TextBlock Text="Thr" Width="60" VerticalAlignment="Center" />
+                                    <TextBlock Text="Threshold" Width="70" VerticalAlignment="Center" />
                                     <TextBlock Text="{Binding ThresholdValue}" Width="40" />
                                 </StackPanel>
                                 <Slider Minimum="0" Maximum="255" Value="{Binding ThresholdValue, UpdateSourceTrigger=PropertyChanged}" IsSnapToTickEnabled="True" TickFrequency="1" />
                             </StackPanel>
 
-                            <CheckBox Content="Canny" IsChecked="{Binding UseCanny, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,2" />
-                            <StackPanel Margin="0,0,0,2">
+                            <CheckBox Content="Canny Edge" IsChecked="{Binding UseCanny, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,2" />
+                            <StackPanel Margin="0,0,0,2" ToolTip="Canny Threshold 1 (Lower)">
                                 <StackPanel Orientation="Horizontal" Margin="0,0,0,2">
-                                    <TextBlock Text="Canny1" Width="60" VerticalAlignment="Center" />
+                                    <TextBlock Text="Canny Th1" Width="70" VerticalAlignment="Center" />
                                     <TextBlock Text="{Binding Canny1}" Width="40" />
                                 </StackPanel>
                                 <Slider Minimum="0" Maximum="255" Value="{Binding Canny1, UpdateSourceTrigger=PropertyChanged}" IsSnapToTickEnabled="True" TickFrequency="1" />
                             </StackPanel>
-                            <StackPanel Margin="0,0,0,6">
+                            <StackPanel Margin="0,0,0,6" ToolTip="Canny Threshold 2 (Upper)">
                                 <StackPanel Orientation="Horizontal" Margin="0,0,0,2">
-                                    <TextBlock Text="Canny2" Width="60" VerticalAlignment="Center" />
+                                    <TextBlock Text="Canny Th2" Width="70" VerticalAlignment="Center" />
                                     <TextBlock Text="{Binding Canny2}" Width="40" />
                                 </StackPanel>
                                 <Slider Minimum="0" Maximum="255" Value="{Binding Canny2, UpdateSourceTrigger=PropertyChanged}" IsSnapToTickEnabled="True" TickFrequency="1" />
@@ -412,14 +413,51 @@
                                 </StackPanel>
 
                                 <TextBlock Text="Expression" Margin="0,0,0,2" />
-                                <TextBox Text="{Binding Condition_Expression, UpdateSourceTrigger=PropertyChanged}" AcceptsReturn="True" Height="80" TextWrapping="Wrap" />
+                                <TextBox Text="{Binding Condition_Expression, UpdateSourceTrigger=PropertyChanged}"
+                                         AcceptsReturn="True"
+                                         Height="80"
+                                         TextWrapping="Wrap"
+                                         ToolTip="Ví dụ số: Caliper1 &gt; 10 &amp;&amp; Origin.Pass&#x0a;Ví dụ chữ: QR1.Text == &quot;ABC123&quot; || QR1.Text == &quot;LOT-01&quot;&#x0a;Biến trong Condition lấy theo đúng tên tool: Origin, Caliper1, QR1, EP.MyEdge, SC.MySurface, ...&#x0a;So sánh chữ hỗ trợ == và !=; so sánh số hỗ trợ &gt;, &lt;, &gt;=, &lt;=, ==, !=" />
+                                <TextBlock Text="Ví dụ: Caliper1 &gt; 10 || QR1.Text == &quot;ABC123&quot; | biến theo tên tool: Origin, Caliper1, QR1, EP.*, SC.*"
+                                           FontSize="11"
+                                           Foreground="#777"
+                                           Margin="0,2,0,0"
+                                           TextWrapping="Wrap" />
+                                <Border BorderBrush="#D9D9D9" BorderThickness="1" CornerRadius="4" Padding="6" Margin="0,6,0,0" Background="#FAFAFA">
+                                    <StackPanel>
+                                        <TextBlock Text="Condition cheatsheet" FontWeight="SemiBold" Margin="0,0,0,4" />
+                                        <TextBlock Text="{}/ Caliper1 &gt; 10  - số" FontSize="11" Foreground="#555" TextWrapping="Wrap" />
+                                        <TextBlock Text="{}/ Origin.Pass &amp;&amp; QR1.Pass  - bool" FontSize="11" Foreground="#555" TextWrapping="Wrap" />
+                                        <TextBlock Text="{}/ QR1.Text == &quot;ABC123&quot;  - text từ CodeDetection" FontSize="11" Foreground="#555" TextWrapping="Wrap" />
+                                    </StackPanel>
+                                </Border>
                             </StackPanel>
 
                             <StackPanel Visibility="{Binding IsTextNode, Converter={StaticResource BoolToVis}}">
                                 <TextBlock Text="Text Params" FontWeight="SemiBold" Margin="0,8,0,6" />
 
                                 <TextBlock Text="Text" Margin="0,0,0,2" />
-                                <TextBox Text="{Binding TextNode_Text, UpdateSourceTrigger=PropertyChanged}" AcceptsReturn="True" Height="60" TextWrapping="Wrap" Margin="0,0,0,6" />
+                                <TextBox Text="{Binding TextNode_Text, UpdateSourceTrigger=PropertyChanged}"
+                                         AcceptsReturn="True"
+                                         Height="60"
+                                         TextWrapping="Wrap"
+                                         Margin="0,0,0,6"
+                                         ToolTip="Dùng placeholder để ghép kết quả từ tool khác vào text. Hỗ trợ cả {ToolName.Value} và ${ToolName.Value}. Ví dụ: Kết quả Caliper: {Caliper1.Value:0.000} mm | QR: {QR1.Text} | Origin pass: {Origin.Pass}" />
+                                <TextBlock Text="Ví dụ: Kết quả Caliper: {Caliper1.Value:0.000} mm | QR: {QR1.Text} | Origin pass: {Origin.Pass}"
+                                           FontSize="11"
+                                           Foreground="#777"
+                                           Margin="0,0,0,6"
+                                           TextWrapping="Wrap" />
+
+                                <Border BorderBrush="#D9D9D9" BorderThickness="1" CornerRadius="4" Padding="6" Margin="0,0,0,8" Background="#FAFAFA">
+                                    <StackPanel>
+                                        <TextBlock Text="Placeholder cheatsheet" FontWeight="SemiBold" Margin="0,0,0,4" />
+                                        <TextBlock Text="{}{Caliper1.Value}  - giá trị đo của Caliper" FontSize="11" Foreground="#555" TextWrapping="Wrap" />
+                                        <TextBlock Text="{}{Origin.Pass}  - trạng thái pass/fail của Origin" FontSize="11" Foreground="#555" TextWrapping="Wrap" />
+                                        <TextBlock Text="{}{QR1.Text}  - text đọc được từ QR/Barcode" FontSize="11" Foreground="#555" TextWrapping="Wrap" />
+                                        <TextBlock Text="{}{SC.Surface1.Score}  - score/area của SurfaceCompare" FontSize="11" Foreground="#555" TextWrapping="Wrap" />
+                                    </StackPanel>
+                                </Border>
 
                                 <StackPanel Orientation="Horizontal" Margin="0,0,0,2">
                                     <TextBlock Text="X" Width="60" VerticalAlignment="Center" />
@@ -449,7 +487,17 @@
                                             <Border BorderBrush="#DDD" BorderThickness="1" Padding="4" Margin="0,0,0,6">
                                                 <StackPanel>
                                                     <TextBlock Text="Expression" Margin="0,0,0,2" />
-                                                    <TextBox Text="{Binding Expression, UpdateSourceTrigger=PropertyChanged}" AcceptsReturn="True" Height="50" TextWrapping="Wrap" Margin="0,0,0,6" />
+                                                    <TextBox Text="{Binding Expression, UpdateSourceTrigger=PropertyChanged}"
+                                                             AcceptsReturn="True"
+                                                             Height="50"
+                                                             TextWrapping="Wrap"
+                                                             Margin="0,0,0,6"
+                                                             ToolTip="Ví dụ: text.Contains(&quot;OK&quot;) || text.Contains(&quot;FAIL&quot;)&#x0a;Trong Text rule, biến thường là text và có thể ghép nhiều điều kiện bằng &amp;&amp; / ||.&#x0a;Nếu muốn đổi màu theo kết quả tool khác, hãy đưa kết quả đó vào placeholder của Text rồi dùng expression ở đây." />
+                                                    <TextBlock Text="Ví dụ: text.Contains(&quot;OK&quot;) || text.Contains(&quot;FAIL&quot;)"
+                                                               FontSize="11"
+                                                               Foreground="#777"
+                                                               Margin="0,0,0,6"
+                                                               TextWrapping="Wrap" />
 
                                                     <StackPanel Orientation="Horizontal">
                                                         <TextBlock Text="Color" Width="60" VerticalAlignment="Center" />

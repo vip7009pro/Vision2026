@@ -11,7 +11,8 @@ public sealed class MainWindowViewModel : ObservableObject
         InspectionViewModel inspection,
         LiveCameraViewModel liveCamera,
         BatchProcessingViewModel batchProcessing,
-        PlcViewModel plc)
+        PlcViewModel plc,
+        CameraSettingsViewModel cameraSettings)
     {
         ToolEditor = toolEditor;
         Calibration = calibration;
@@ -20,6 +21,7 @@ public sealed class MainWindowViewModel : ObservableObject
         LiveCamera = liveCamera;
         BatchProcessing = batchProcessing;
         Plc = plc;
+        CameraSettings = cameraSettings;
     }
 
 
@@ -36,4 +38,6 @@ public sealed class MainWindowViewModel : ObservableObject
     public BatchProcessingViewModel BatchProcessing { get; }
 
     public PlcViewModel Plc { get; }
+
+    public CameraSettingsViewModel CameraSettings { get; }
 }

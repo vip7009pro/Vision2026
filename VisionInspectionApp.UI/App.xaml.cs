@@ -63,6 +63,7 @@ public partial class App : System.Windows.Application
                 services.AddSingleton<ManualInspectionViewModel>();
                 services.AddSingleton<InspectionViewModel>();
                 services.AddSingleton<LiveCameraViewModel>();
+                services.AddSingleton<CameraSettingsViewModel>();
                 services.AddSingleton<BatchProcessingViewModel>();
                 services.AddSingleton<MainWindowViewModel>();
                 services.AddSingleton<MainWindow>();
@@ -73,6 +74,9 @@ public partial class App : System.Windows.Application
 
         var mainWindow = _host.Services.GetRequiredService<MainWindow>();
         mainWindow.Show();
+
+        var cameraService = _host.Services.GetRequiredService<CameraService>();
+        _ = cameraService.StartSavedCameraAsync();
     }
 
     protected override void OnExit(ExitEventArgs e)

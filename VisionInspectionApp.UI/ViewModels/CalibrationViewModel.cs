@@ -10,6 +10,7 @@ using OpenCvSharp.WpfExtensions;
 using VisionInspectionApp.Application;
 using VisionInspectionApp.Models;
 using VisionInspectionApp.UI.Controls;
+using VisionInspectionApp.UI.Services;
 
 namespace VisionInspectionApp.UI.ViewModels;
 
@@ -17,20 +18,23 @@ public sealed partial class CalibrationViewModel : ObservableObject
 {
     private readonly IConfigService _configService;
     private readonly ConfigStoreOptions _storeOptions;
+    private readonly CameraService _cameraService;
 
     private Mat? _imageMat;
     private VisionConfig? _config;
 
-    public CalibrationViewModel(IConfigService configService, ConfigStoreOptions storeOptions)
+    public CalibrationViewModel(IConfigService configService, ConfigStoreOptions storeOptions, CameraService cameraService)
     {
         _configService = configService;
         _storeOptions = storeOptions;
+        _cameraService = cameraService;
 
         OverlayItems = new ObservableCollection<OverlayItem>();
         Measurements = new ObservableCollection<CalibrationMeasurement>();
         AvailableConfigs = new ObservableCollection<string>();
 
         LoadImageCommand = new RelayCommand(LoadImage);
+        CaptureCameraImageCommand = new AsyncRelayCommand(CaptureCameraImageAsync);
         RefreshConfigsCommand = new RelayCommand(RefreshConfigs);
         LoadConfigCommand = new RelayCommand(LoadConfig);
         SavePixelsPerMmCommand = new RelayCommand(SavePixelsPerMm);
@@ -48,16 +52,23 @@ public sealed partial class CalibrationViewModel : ObservableObject
 
     partial void OnSelectedConfigChanged(string? value)
     {
-        if (string.IsNullOrWhiteSpace(value))
+        if (!string.IsNullOrWhiteSpace(value))
         {
-            return;
+            ProductCode = value;
+            LoadConfig();
         }
-
-        ProductCode = value;
+        else
+        {
+            _config = null;
+            ProductCode = "";
+            OverlayItems.Clear();
+            Measurements.Clear();
+            Image = null;
+        }
     }
 
     [ObservableProperty]
-    private string _productCode = "ProductA";
+    private string _productCode = "";
 
     [ObservableProperty]
     private ImageSource? _image;
@@ -76,6 +87,8 @@ public sealed partial class CalibrationViewModel : ObservableObject
     private double _averagePixelsPerMm;
 
     public ICommand LoadImageCommand { get; }
+
+    public ICommand CaptureCameraImageCommand { get; }
 
     public ICommand RefreshConfigsCommand { get; }
 
@@ -108,14 +121,12 @@ public sealed partial class CalibrationViewModel : ObservableObject
             }
         }
 
-        if (!string.IsNullOrWhiteSpace(ProductCode) && AvailableConfigs.Contains(ProductCode))
-        {
-            SelectedConfig = ProductCode;
-        }
-        else if (AvailableConfigs.Count > 0)
-        {
-            SelectedConfig ??= AvailableConfigs[0];
-        }
+        SelectedConfig = null;
+        ProductCode = "";
+        _config = null;
+        OverlayItems.Clear();
+        Measurements.Clear();
+        Image = null;
     }
 
     private void LoadConfig()
@@ -148,6 +159,30 @@ public sealed partial class CalibrationViewModel : ObservableObject
         Image = _imageMat.ToBitmapSource();
         OverlayItems.Clear();
         CurrentDistancePx = 0.0;
+    }
+
+    private async Task CaptureCameraImageAsync()
+    {
+        try
+        {
+            var mat = await _cameraService.CaptureSnapshotAsync();
+            if (mat != null && !mat.Empty())
+            {
+                _imageMat?.Dispose();
+                _imageMat = mat;
+                Image = _imageMat.ToBitmapSource();
+                OverlayItems.Clear();
+                CurrentDistancePx = 0.0;
+            }
+            else
+            {
+                System.Windows.MessageBox.Show("Không thể chụp ảnh từ camera. Vui lòng kiểm tra lại kết nối camera trong tab Live Camera.", "Lỗi camera", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            System.Windows.MessageBox.Show($"Lỗi chụp ảnh: {ex.Message}", "Lỗi", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Error);
+        }
     }
 
     private void OnLineSelected(LineSelection? sel)

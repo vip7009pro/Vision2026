@@ -6,6 +6,10 @@
              xmlns:controls="clr-namespace:VisionInspectionApp.UI.Controls"
              mc:Ignorable="d">
 
+    <UserControl.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVis" />
+    </UserControl.Resources>
+
     <Grid Margin="8">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
@@ -27,7 +31,11 @@
 
             <CheckBox Content="Show Overlay" IsChecked="{Binding ShowOverlay, UpdateSourceTrigger=PropertyChanged}" VerticalAlignment="Center" Margin="0,0,12,0" />
 
+            <TextBlock Text="Origin OK Thresh:" VerticalAlignment="Center" Margin="0,0,6,0" FontWeight="SemiBold" />
+            <TextBox Width="40" Text="{Binding OriginScoreThreshold, UpdateSourceTrigger=PropertyChanged, StringFormat=F2, Delay=500}" VerticalAlignment="Center" Margin="0,0,12,0" ToolTip="Ngưỡng điểm score để pass bước tìm gốc (Origin). Sẽ tự động lưu lại khi sửa." />
+
             <Button Content="Load Image" Command="{Binding LoadImageCommand}" Margin="0,0,6,0" />
+            <Button Content="Capture Camera" Command="{Binding CaptureCameraImageCommand}" Margin="0,0,6,0" />
             <Button Content="Run" Command="{Binding RunInspectionCommand}" />
         </DockPanel>
 
@@ -88,58 +96,136 @@
                 <TextBlock Grid.Row="0" FontWeight="Bold" Text="Result" />
 
                 <Grid Grid.Row="1">
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto" />
-                        <RowDefinition Height="*" />
-                    </Grid.RowDefinitions>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="3*" />
+                        <ColumnDefinition Width="1*" />
+                    </Grid.ColumnDefinitions>
 
-                    <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,8">
-                        <TextBlock Text="{Binding LastResult.Pass, StringFormat=PASS: {0}}" Margin="0,0,12,0" />
-                        <TextBlock Text="{Binding LastResult.Defects.Defects.Count, StringFormat=Defects: {0}}" />
-                        <TextBlock Text="{Binding LastResult.Timings.TotalMs, StringFormat=Total: {0} ms}" Margin="12,0,0,0" />
-                        <TextBlock Text="{Binding LastResult.Timings.OriginMs, StringFormat=O: {0}}" Margin="12,0,0,0" />
-                        <TextBlock Text="{Binding LastResult.Timings.PointsMs, StringFormat=P: {0}}" Margin="6,0,0,0" />
-                        <TextBlock Text="{Binding LastResult.Timings.LinesMs, StringFormat=L: {0}}" Margin="6,0,0,0" />
-                        <TextBlock Text="{Binding LastResult.Timings.BlobsMs, StringFormat=B: {0}}" Margin="6,0,0,0" />
-                        <TextBlock Text="{Binding LastResult.Timings.LpdMs, StringFormat=LPD: {0}}" Margin="6,0,0,0" />
-                        <TextBlock Text="{Binding LastResult.Timings.CdtMs, StringFormat=CDT: {0}}" Margin="6,0,0,0" />
-                        <TextBlock Text="{Binding LastResult.Timings.DistancesMs, StringFormat=D: {0}}" Margin="6,0,0,0" />
-                        <TextBlock Text="{Binding LastResult.Timings.ConditionsMs, StringFormat=Cnd: {0}}" Margin="6,0,0,0" />
-                        <TextBlock Text="{Binding LastResult.Timings.DefectsMs, StringFormat=Def: {0}}" Margin="6,0,0,0" />
-                    </StackPanel>
-
-                    <Grid Grid.Row="1">
+                    <!-- Left: Detail Lists -->
+                    <Grid Grid.Column="0" Margin="0,0,8,0">
                         <Grid.RowDefinitions>
-                            <RowDefinition Height="*" />
                             <RowDefinition Height="Auto" />
                             <RowDefinition Height="*" />
                         </Grid.RowDefinitions>
 
-                        <DataGrid Grid.Row="0" ItemsSource="{Binding SpecResults}" AutoGenerateColumns="False" CanUserAddRows="False">
-                            <DataGrid.Columns>
-                                <DataGridTextColumn Header="Tool" Binding="{Binding Tool}" Width="70" />
-                                <DataGridTextColumn Header="Name" Binding="{Binding Name}" Width="120" />
-                                <DataGridTextColumn Header="A" Binding="{Binding RefA}" Width="100" />
-                                <DataGridTextColumn Header="B" Binding="{Binding RefB}" Width="100" />
-                                <DataGridTextColumn Header="Value (mm)" Binding="{Binding Value, StringFormat={}{0:0.000}}" Width="120" />
-                                <DataGridTextColumn Header="Nominal (mm)" Binding="{Binding Nominal, StringFormat={}{0:0.000}}" Width="120" />
-                                <DataGridTextColumn Header="+Tol (mm)" Binding="{Binding TolPlus, StringFormat={}{0:0.000}}" Width="90" />
-                                <DataGridTextColumn Header="-Tol (mm)" Binding="{Binding TolMinus, StringFormat={}{0:0.000}}" Width="90" />
-                                <DataGridCheckBoxColumn Header="Pass" Binding="{Binding Pass}" Width="80" />
-                            </DataGrid.Columns>
-                        </DataGrid>
+                        <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,8">
+                            <TextBlock Text="{Binding LastResult.Pass, StringFormat=PASS: {0}}" Margin="0,0,12,0" />
+                            <TextBlock Text="{Binding LastResult.Defects.Defects.Count, StringFormat=Defects: {0}}" />
+                            <TextBlock Text="{Binding LastResult.Timings.TotalMs, StringFormat=Total: {0} ms}" Margin="12,0,0,0" />
+                            <TextBlock Text="{Binding LastResult.Timings.OriginMs, StringFormat=O: {0}}" Margin="12,0,0,0" />
+                            <TextBlock Text="{Binding LastResult.Timings.PointsMs, StringFormat=P: {0}}" Margin="6,0,0,0" />
+                            <TextBlock Text="{Binding LastResult.Timings.LinesMs, StringFormat=L: {0}}" Margin="6,0,0,0" />
+                            <TextBlock Text="{Binding LastResult.Timings.BlobsMs, StringFormat=B: {0}}" Margin="6,0,0,0" />
+                            <TextBlock Text="{Binding LastResult.Timings.LpdMs, StringFormat=LPD: {0}}" Margin="6,0,0,0" />
+                            <TextBlock Text="{Binding LastResult.Timings.CdtMs, StringFormat=CDT: {0}}" Margin="6,0,0,0" />
+                            <TextBlock Text="{Binding LastResult.Timings.DistancesMs, StringFormat=D: {0}}" Margin="6,0,0,0" />
+                            <TextBlock Text="{Binding LastResult.Timings.ConditionsMs, StringFormat=Cnd: {0}}" Margin="6,0,0,0" />
+                            <TextBlock Text="{Binding LastResult.Timings.DefectsMs, StringFormat=Def: {0}}" Margin="6,0,0,0" />
+                        </StackPanel>
 
-                        <TextBlock Grid.Row="1" Text="Conditions" FontWeight="SemiBold" Margin="0,8,0,6" />
+                        <Grid Grid.Row="1">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="*" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="*" />
+                            </Grid.RowDefinitions>
 
-                        <DataGrid Grid.Row="2" ItemsSource="{Binding LastResult.Conditions}" AutoGenerateColumns="False" CanUserAddRows="False">
-                            <DataGrid.Columns>
-                                <DataGridTextColumn Header="Name" Binding="{Binding Name}" Width="120" />
-                                <DataGridTextColumn Header="Expression" Binding="{Binding Expression}" Width="*" />
-                                <DataGridTextColumn Header="Result" Binding="{Binding Pass, Converter={StaticResource OkNgConv}}" Width="80" />
-                                <DataGridTextColumn Header="Error" Binding="{Binding Error}" Width="200" />
-                            </DataGrid.Columns>
-                        </DataGrid>
+                            <DataGrid Grid.Row="0" ItemsSource="{Binding SpecResults}" AutoGenerateColumns="False" CanUserAddRows="False">
+                                <DataGrid.Columns>
+                                    <DataGridTextColumn Header="Tool" Binding="{Binding Tool}" Width="70" />
+                                    <DataGridTextColumn Header="Name" Binding="{Binding Name}" Width="120" />
+                                    <DataGridTextColumn Header="A" Binding="{Binding RefA}" Width="100" />
+                                    <DataGridTextColumn Header="B" Binding="{Binding RefB}" Width="100" />
+                                    <DataGridTextColumn Header="Value (mm)" Binding="{Binding Value, StringFormat={}{0:0.000}}" Width="120" />
+                                    <DataGridTextColumn Header="Nominal (mm)" Binding="{Binding Nominal, StringFormat={}{0:0.000}}" Width="120" />
+                                    <DataGridTextColumn Header="+Tol (mm)" Binding="{Binding TolPlus, StringFormat={}{0:0.000}}" Width="90" />
+                                    <DataGridTextColumn Header="-Tol (mm)" Binding="{Binding TolMinus, StringFormat={}{0:0.000}}" Width="90" />
+                                    <DataGridCheckBoxColumn Header="Pass" Binding="{Binding Pass}" Width="80" />
+                                </DataGrid.Columns>
+                            </DataGrid>
+
+                            <TextBlock Grid.Row="1" Text="Conditions" FontWeight="SemiBold" Margin="0,8,0,6" />
+
+                            <DataGrid Grid.Row="2" ItemsSource="{Binding LastResult.Conditions}" AutoGenerateColumns="False" CanUserAddRows="False">
+                                <DataGrid.Columns>
+                                    <DataGridTextColumn Header="Name" Binding="{Binding Name}" Width="120" />
+                                    <DataGridTextColumn Header="Expression" Binding="{Binding Expression}" Width="*" />
+                                    <DataGridTextColumn Header="Result" Binding="{Binding Pass, Converter={StaticResource OkNgConv}}" Width="80" />
+                                    <DataGridTextColumn Header="Error" Binding="{Binding Error}" Width="200" />
+                                </DataGrid.Columns>
+                            </DataGrid>
+                        </Grid>
                     </Grid>
+
+                    <!-- Right: Large OK/NG and Reasons -->
+                    <Border Grid.Column="1" Padding="12" CornerRadius="8" BorderThickness="2"
+                            Background="{Binding ResultBackgroundBrush}"
+                            BorderBrush="{Binding ResultBorderBrush}">
+                        <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                            <StackPanel HorizontalAlignment="Stretch" VerticalAlignment="Top">
+                                <TextBlock Text="{Binding ResultStatusText}"
+                                           FontSize="72"
+                                           FontWeight="Bold"
+                                           Foreground="{Binding ResultForegroundBrush}"
+                                           HorizontalAlignment="Center" />
+
+                                <TextBlock Text="{Binding OriginScoreText}"
+                                           FontSize="16"
+                                           FontWeight="SemiBold"
+                                           Foreground="#555"
+                                           HorizontalAlignment="Center"
+                                           Margin="0,8,0,0" />
+
+                                <TextBlock Text="Code Detection"
+                                           FontWeight="SemiBold"
+                                           FontSize="12"
+                                           Foreground="#888"
+                                           Margin="0,14,0,4"
+                                           HorizontalAlignment="Left" />
+
+                                <ItemsControl ItemsSource="{Binding CodeDetectionResults}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <Border BorderBrush="#DDD" BorderThickness="1" CornerRadius="4" Padding="6" Margin="0,0,0,6" Background="#FAFAFA">
+                                                <StackPanel>
+                                                    <TextBlock>
+                                                        <Run Text="Name: " FontWeight="SemiBold" />
+                                                        <Run Text="{Binding Name}" />
+                                                    </TextBlock>
+                                                    <TextBlock>
+                                                        <Run Text="Result: " FontWeight="SemiBold" />
+                                                        <Run Text="{Binding Found, Converter={StaticResource OkNgConv}}" />
+                                                    </TextBlock>
+                                                    <TextBlock TextWrapping="Wrap" FontWeight="SemiBold" Foreground="#222">
+                                                        <Run Text="Text: " FontWeight="SemiBold" />
+                                                        <Run Text="{Binding Text, TargetNullValue='-'}" />
+                                                    </TextBlock>
+                                                </StackPanel>
+                                            </Border>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                                
+                                <TextBlock Text="CHI TIẾT LỖI / LÝ DO NG:"
+                                           FontWeight="SemiBold"
+                                           FontSize="12"
+                                           Foreground="#888"
+                                           Margin="0,16,0,4"
+                                           HorizontalAlignment="Left"
+                                           Visibility="{Binding IsNg, Converter={StaticResource BoolToVis}}" />
+                                
+                                <TextBlock Text="{Binding NgReasonsText}"
+                                           FontSize="13"
+                                           Foreground="#D32F2F"
+                                           HorizontalAlignment="Left"
+                                           TextAlignment="Left"
+                                           TextWrapping="Wrap"
+                                           LineHeight="18"
+                                           Margin="0,0,0,0"
+                                           Visibility="{Binding IsNg, Converter={StaticResource BoolToVis}}" />
+                            </StackPanel>
+                        </ScrollViewer>
+                    </Border>
                 </Grid>
             </Grid>
         </Border>

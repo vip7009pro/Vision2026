@@ -52,16 +52,21 @@ public sealed partial class BatchProcessingViewModel : ObservableObject
         string Status);
 
     [ObservableProperty]
-    private string _productCode = "ProductA";
+    private string _productCode = "";
 
     [ObservableProperty]
     private string? _selectedConfig;
 
     partial void OnSelectedConfigChanged(string? value)
     {
-        if (value != null)
+        if (!string.IsNullOrWhiteSpace(value))
         {
             LoadConfig();
+        }
+        else
+        {
+            _productCode = "";
+            StatusMessage = "Chưa chọn cấu hình";
         }
     }
 
@@ -300,6 +305,9 @@ public sealed partial class BatchProcessingViewModel : ObservableObject
         {
             StatusMessage = $"Lỗi load config: {ex.Message}";
         }
+
+        SelectedConfig = null;
+        ProductCode = "";
     }
 
     /// <summary>

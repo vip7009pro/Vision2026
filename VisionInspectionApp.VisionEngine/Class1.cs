@@ -1,4 +1,4 @@
-﻿using OpenCvSharp;
+using OpenCvSharp;
 using VisionInspectionApp.Models;
 
 namespace VisionInspectionApp.VisionEngine;
@@ -279,8 +279,8 @@ public static class ShapeModelTrainer
         var h = templateGray.Height;
         if (w <= 0 || h <= 0) return new ShapeModelDefinition();
 
-        var cx = (w - 1) / 2.0;
-        var cy = (h - 1) / 2.0;
+        var cx = w / 2;
+        var cy = h / 2;
 
         var candidates = new List<(float Mag, int X, int Y, int Bin)>(w * h / 8);
 
@@ -319,8 +319,8 @@ public static class ShapeModelTrainer
             for (var j = 0; j < model.Features.Count; j++)
             {
                 var f = model.Features[j];
-                var fx = f.Dx + (int)Math.Round(cx);
-                var fy = f.Dy + (int)Math.Round(cy);
+                var fx = f.Dx + cx;
+                var fy = f.Dy + cy;
                 var ddx = c.X - fx;
                 var ddy = c.Y - fy;
                 if (ddx * ddx + ddy * ddy < minDist2)
@@ -337,8 +337,8 @@ public static class ShapeModelTrainer
             var weight = (int)Math.Clamp(c.Mag, 1.0f, 255.0f);
             model.Features.Add(new ShapeFeatureDefinition
             {
-                Dx = (int)Math.Round(dx0),
-                Dy = (int)Math.Round(dy0),
+                Dx = dx0,
+                Dy = dy0,
                 Bin = c.Bin,
                 Weight = weight
             });
