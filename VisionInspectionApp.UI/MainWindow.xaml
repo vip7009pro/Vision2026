@@ -72,7 +72,7 @@
 
         <Style TargetType="TextBox">
             <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
-            <Setter Property="Background" Value="White" />
+            <Setter Property="Background" Value="{DynamicResource InputBackgroundBrush}" />
             <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
             <Setter Property="Padding" Value="9,5" />
             <Setter Property="BorderThickness" Value="1" />
@@ -80,7 +80,7 @@
 
         <Style TargetType="ComboBox">
             <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
-            <Setter Property="Background" Value="White" />
+            <Setter Property="Background" Value="{DynamicResource InputBackgroundBrush}" />
             <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
             <Setter Property="Padding" Value="7,4" />
         </Style>

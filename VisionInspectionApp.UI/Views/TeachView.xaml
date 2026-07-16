@@ -47,7 +47,7 @@
 
             <ScrollViewer Grid.Column="0" Margin="0,0,8,0" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
                 <StackPanel>
-                    <Border BorderBrush="#CCC" BorderThickness="1" Padding="8" Margin="0,0,0,8">
+                    <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" Padding="8" Margin="0,0,0,8">
                         <StackPanel>
                             <TextBlock FontWeight="Bold" Text="Preprocess" Margin="0,0,0,6" />
 
@@ -73,7 +73,7 @@
                         </StackPanel>
                     </Border>
 
-                    <Border BorderBrush="#CCC" BorderThickness="1" Padding="8" Margin="0,0,0,8">
+                    <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" Padding="8" Margin="0,0,0,8">
                         <StackPanel>
                             <TextBlock FontWeight="Bold" Text="Calibration" Margin="0,0,0,6" />
                             <TextBlock Text="Pixels / mm" />
@@ -98,13 +98,13 @@
                         <Button Content="Add" Command="{Binding AddLineToolCommand}" />
                     </DockPanel>
 
-                    <Border BorderBrush="#CCC" BorderThickness="1" Padding="8" Margin="0,8,0,0">
+                    <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" Padding="8" Margin="0,8,0,0">
                         <StackPanel>
                             <TextBlock FontWeight="Bold" Text="Line Params" Margin="0,0,0,6" />
 
                             <CheckBox Content="Preview" IsChecked="{Binding IsLinePreviewEnabled}" Margin="0,0,0,6" />
 
-                            <Border BorderBrush="#DDD" BorderThickness="1" Padding="4" Margin="0,0,0,6">
+                            <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" Padding="4" Margin="0,0,0,6">
                                 <Image Source="{Binding LinePreviewImage}" Stretch="Uniform" Height="120" />
                             </Border>
 
@@ -125,7 +125,7 @@
                         </StackPanel>
                     </Border>
 
-                    <Border BorderBrush="#CCC" BorderThickness="1" Padding="8" Margin="0,8,0,0">
+                    <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" Padding="8" Margin="0,8,0,0">
                         <StackPanel>
                             <TextBlock FontWeight="Bold" Text="Distance" Margin="0,0,0,6" />
 
@@ -173,7 +173,7 @@
                         </ListBox>
                     </DockPanel>
 
-                    <Border BorderBrush="#CCC" BorderThickness="1" Padding="8" Margin="0,8,0,0">
+                    <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" Padding="8" Margin="0,8,0,0">
                         <StackPanel>
                             <TextBlock FontWeight="Bold" Text="Line-Line Distance" Margin="0,0,0,6" />
 
@@ -221,7 +221,7 @@
                         </ListBox>
                     </DockPanel>
 
-                    <Border BorderBrush="#CCC" BorderThickness="1" Padding="8" Margin="0,8,0,0">
+                    <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" Padding="8" Margin="0,8,0,0">
                         <StackPanel>
                             <TextBlock FontWeight="Bold" Text="Point-Line Distance" Margin="0,0,0,6" />
 

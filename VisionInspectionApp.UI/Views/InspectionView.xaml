@@ -49,7 +49,7 @@
                                         ImageSource="{Binding Image}"
                                         OverlayItems="{Binding OverlayItems}" />
 
-            <Border Grid.Column="1" Width="220" Margin="8,0,0,0" BorderThickness="1" BorderBrush="#CCC" Background="#F9F9F9">
+            <Border Grid.Column="1" Width="220" Margin="8,0,0,0" BorderThickness="1" BorderBrush="{DynamicResource BorderBrush}" Background="{DynamicResource PanelBackgroundBrush}">
                 <ScrollViewer VerticalScrollBarVisibility="Auto">
                     <StackPanel Margin="8">
                         <TextBlock Text="SurfaceCompare Debug" FontWeight="Bold" Margin="0,0,0,6" HorizontalAlignment="Center" />
@@ -86,7 +86,7 @@
 
         <GridSplitter Grid.Row="2" Height="6" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Background="#DDD" />
 
-        <Border Grid.Row="3" BorderThickness="1" BorderBrush="#CCC" Padding="8" Margin="0,8,0,0">
+        <Border Grid.Row="3" BorderThickness="1" BorderBrush="{DynamicResource BorderBrush}" Padding="8" Margin="0,8,0,0">
             <Grid>
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto" />
@@ -186,7 +186,7 @@
                                 <ItemsControl ItemsSource="{Binding CodeDetectionResults}">
                                     <ItemsControl.ItemTemplate>
                                         <DataTemplate>
-                                            <Border BorderBrush="#DDD" BorderThickness="1" CornerRadius="4" Padding="6" Margin="0,0,0,6" Background="#FAFAFA">
+                                            <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="4" Padding="6" Margin="0,0,0,6" Background="{DynamicResource PanelBackgroundBrush}">
                                                 <StackPanel>
                                                     <TextBlock>
                                                         <Run Text="Name: " FontWeight="SemiBold" />

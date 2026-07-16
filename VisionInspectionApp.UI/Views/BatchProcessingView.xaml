@@ -2,7 +2,7 @@
          xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
          xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
          xmlns:local="clr-namespace:VisionInspectionApp.UI.Controls">
-    <Grid Background="#F0F0F0">
+    <Grid Background="{DynamicResource WindowBackgroundBrush}">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
@@ -10,7 +10,7 @@
         </Grid.RowDefinitions>
 
         <!-- Control Panel -->
-        <Border Grid.Row="0" Background="{DynamicResource PanelBackgroundBrush}" BorderBrush="#DDD" BorderThickness="0,0,0,1" Padding="10">
+        <Border Grid.Row="0" Background="{DynamicResource PanelBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1" Padding="10">
             <StackPanel Orientation="Vertical">
                 <TextBlock Text="Batch Image Processing" FontSize="16" FontWeight="Bold" Margin="0,0,0,10" />
 
@@ -47,7 +47,7 @@
 
             <!-- Progress Bar -->
             <ProgressBar Height="20" Value="{Binding Progress}" Maximum="100" Margin="0,0,0,10" 
-                        Foreground="#4CAF50" Background="#E0E0E0" />
+                        Foreground="#4CAF50" Background="{DynamicResource BorderBrush}" />
             <TextBlock Text="{Binding Progress, StringFormat='Progress: {0}%'}" HorizontalAlignment="Center" FontSize="12" Margin="0,0,0,10" />
 
             <!-- Control Buttons -->
@@ -107,7 +107,7 @@
                     <TextBlock Grid.Row="1" Text="{Binding TotalPass, StringFormat='✓ Passed: {0}'}" FontSize="12" Margin="0,5" Foreground="Green" FontWeight="Bold" />
                     <TextBlock Grid.Row="2" Text="{Binding TotalFail, StringFormat='✗ Failed: {0}'}" FontSize="12" Margin="0,5" Foreground="Red" FontWeight="Bold" />
                     
-                    <Border Grid.Row="3" Background="#F5F5F5" CornerRadius="5" Padding="10" Margin="0,10,0,0">
+                    <Border Grid.Row="3" Background="{DynamicResource PanelAltBackgroundBrush}" CornerRadius="5" Padding="10" Margin="0,10,0,0">
                         <Grid>
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*" />

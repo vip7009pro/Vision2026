@@ -33,7 +33,7 @@
             </Grid.ColumnDefinitions>
 
             <StackPanel Grid.Column="0" Margin="0,0,8,0">
-                <Border BorderBrush="#CCC" BorderThickness="1" Padding="8" Margin="0,0,0,8">
+                <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" Padding="8" Margin="0,0,0,8">
                     <StackPanel>
                         <TextBlock FontWeight="Bold" Text="Current Selection" Margin="0,0,0,6" />
 
@@ -48,7 +48,7 @@
                     </StackPanel>
                 </Border>
 
-                <Border BorderBrush="#CCC" BorderThickness="1" Padding="8">
+                <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" Padding="8">
                     <StackPanel>
                         <TextBlock FontWeight="Bold" Text="Measurements" Margin="0,0,0,6" />
                         <ListBox Height="180" ItemsSource="{Binding Measurements}">

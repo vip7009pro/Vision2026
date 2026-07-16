@@ -9,14 +9,14 @@
     <UserControl.Resources>
         <converters:NullToVisibilityConverter x:Key="NullToVisibilityConverter" />
     </UserControl.Resources>
-    <Grid Background="#F5F5F5">
+    <Grid Background="{DynamicResource PanelAltBackgroundBrush}">
         <Grid.ColumnDefinitions>
             <ColumnDefinition Width="*" />
             <ColumnDefinition Width="350" />
         </Grid.ColumnDefinitions>
 
         <!-- Left Panel: Live Stream View -->
-        <Border Grid.Column="0" Background="#1E1E1E" Margin="10" CornerRadius="8" BorderThickness="1" BorderBrush="#DDD" ClipToBounds="True">
+        <Border Grid.Column="0" Background="#1E1E1E" Margin="10" CornerRadius="8" BorderThickness="1" BorderBrush="{DynamicResource BorderBrush}" ClipToBounds="True">
             <Grid>
                 <!-- Live Image Display -->
                 <Image Source="{Binding LiveImage}" Stretch="Uniform" />
@@ -38,7 +38,7 @@
         </Border>
 
         <!-- Right Panel: Adjustment Settings -->
-        <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}" Margin="0,10,10,10" CornerRadius="8" BorderThickness="1" BorderBrush="#DDD" Padding="15">
+        <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}" Margin="0,10,10,10" CornerRadius="8" BorderThickness="1" BorderBrush="{DynamicResource BorderBrush}" Padding="15">
             <Grid>
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto" />
@@ -48,7 +48,7 @@
 
                 <!-- Header Title -->
                 <StackPanel Grid.Row="0" Margin="0,0,0,15">
-                    <TextBlock Text="Camera Settings" FontSize="18" FontWeight="Bold" Foreground="#333" />
+                    <TextBlock Text="Camera Settings" FontSize="18" FontWeight="Bold" Foreground="{DynamicResource TextBrush}" />
                     <TextBlock Text="Căn chỉnh các bộ lọc hình ảnh đầu vào" FontSize="12" Foreground="#888" Margin="0,2,0,0" />
                     <Separator Margin="0,10,0,0" />
                 </StackPanel>
@@ -104,7 +104,7 @@
                 <!-- Footer Status and Reset -->
                 <StackPanel Grid.Row="2">
                     <Separator Margin="0,0,0,10" />
-                    <Button Command="{Binding ResetSettingsCommand}" Content="Khôi phục mặc định" Padding="8" Background="#F5F5F5" BorderBrush="#CCC" Foreground="#333" FontWeight="SemiBold" Margin="0,0,0,10" />
+                    <Button Command="{Binding ResetSettingsCommand}" Content="Khôi phục mặc định" Padding="8" Background="{DynamicResource PanelAltBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" Foreground="{DynamicResource TextBrush}" FontWeight="SemiBold" Margin="0,0,0,10" />
                     <TextBlock Text="{Binding StatusMessage}" Foreground="#666" FontSize="11" TextWrapping="Wrap" TextAlignment="Center" />
                 </StackPanel>
             </Grid>

@@ -1,24 +1,8 @@
-<Application x:Class="VisionInspectionApp.UI.App"
-             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:local="clr-namespace:VisionInspectionApp.UI"
-             xmlns:converters="clr-namespace:VisionInspectionApp.UI.Converters"
-             >
-    <Application.Resources>
-        <ResourceDictionary>
-            <ResourceDictionary.MergedDictionaries>
-                <ResourceDictionary Source="Themes/LightTheme.xaml" />
-            </ResourceDictionary.MergedDictionaries>
-            
-            <converters:FlexibleDoubleConverter x:Key="DoubleConv" />
-            <converters:BoolToOkNgConverter x:Key="OkNgConv" />
-            <converters:InverseBoolConverter x:Key="InverseBoolConverter" />
-            <converters:PassFailColorConverter x:Key="PassFailColorConverter" />
-            <converters:PassRateConverter x:Key="PassRateConverter" />
-            
-            
-            
-            
+import re
+with open(r'g:\NODEJS\Vision2026\VisionInspectionApp.UI\App.xaml', 'r', encoding='utf-8') as f:
+    text = f.read()
+
+new_styles = '''
             <Style TargetType="TextBox">
                 <Setter Property="Background" Value="{DynamicResource InputBackgroundBrush}"/>
                 <Setter Property="Foreground" Value="{DynamicResource InputTextBrush}"/>
@@ -127,10 +111,13 @@
                     </Setter.Value>
                 </Setter>
             </Style>
+'''
+import re
+text = re.sub(r'<Style TargetType="TextBox">.*?</Style>', '', text, flags=re.DOTALL)
+text = re.sub(r'<Style TargetType="ComboBox">.*?</Style>', '', text, flags=re.DOTALL)
 
-            <Style TargetType="CheckBox">
-                <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
-            </Style>
-        </ResourceDictionary>
-    </Application.Resources>
-</Application>
+text = text.replace('<Style TargetType="CheckBox">', new_styles + '\n            <Style TargetType="CheckBox">')
+
+with open(r'g:\NODEJS\Vision2026\VisionInspectionApp.UI\App.xaml', 'w', encoding='utf-8') as f:
+    f.write(text)
+print('App.xaml updated with flat ControlTemplates')
