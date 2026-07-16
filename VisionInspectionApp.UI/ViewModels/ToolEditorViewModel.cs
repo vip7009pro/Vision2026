@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.ObjectModel;
 using System.Globalization;
 using System.IO;
@@ -28,7 +28,8 @@ public sealed partial class ToolEditorViewModel : ObservableObject
     {
         if (_lastRun is null)
         {
-            System.Windows.MessageBox.Show("Vui lòng chạy luồng (Run Flow) trước khi xem giá trị Output.", "Không có dữ liệu", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Information);
+            var msg = _lastRunError ?? "Vui lòng chạy luồng (Run Flow) trước khi xem giá trị Output.";
+            System.Windows.MessageBox.Show(msg, "Không có dữ liệu", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Information);
             return;
         }
 
@@ -847,7 +848,7 @@ public sealed partial class ToolEditorViewModel : ObservableObject
         {
             var e = Edges[i];
             if (string.Equals(e.ToNodeId, SelectedNode.Id, StringComparison.OrdinalIgnoreCase)
-                && string.Equals(e.ToPort, "Pre", StringComparison.OrdinalIgnoreCase))
+                && string.Equals(e.ToPort, "Preprocess", StringComparison.OrdinalIgnoreCase))
             {
                 Edges.RemoveAt(i);
             }
@@ -863,7 +864,7 @@ public sealed partial class ToolEditorViewModel : ObservableObject
             {
                 // Create edge directly; this also syncs to config.
                 from.EnsurePortsInitialized();
-                CreateEdge(from, SelectedNode, fromPort: from.OutPorts.FirstOrDefault()?.Name ?? "Out", toPort: "Pre");
+                CreateEdge(from, SelectedNode, fromPort: from.OutPorts.FirstOrDefault()?.Name ?? "Out", toPort: "Preprocess");
                 return;
             }
         }
@@ -884,7 +885,7 @@ public sealed partial class ToolEditorViewModel : ObservableObject
         // Determine if tool has a Pre connection from a Preprocess node.
         var edges = _config.ToolGraph?.Edges ?? new();
         var preEdge = edges.FirstOrDefault(e => string.Equals(e.ToNodeId, toolNode.Id, StringComparison.OrdinalIgnoreCase)
-                                               && string.Equals(e.ToPort, "Pre", StringComparison.OrdinalIgnoreCase));
+                                               && string.Equals(e.ToPort, "Preprocess", StringComparison.OrdinalIgnoreCase));
 
         if (preEdge is null)
         {
@@ -1885,12 +1886,13 @@ public sealed partial class ToolEditorViewModel : ObservableObject
         get => SelectedEdgePairDef()?.RefA;
         set
         {
+            if (string.IsNullOrEmpty(value)) return;
             var def = SelectedEdgePairDef();
             if (def is null) return;
             if (string.Equals(def.RefA ?? "", value ?? "", StringComparison.OrdinalIgnoreCase)) return;
             def.RefA = value ?? string.Empty;
-            SyncInputEdgeForEdgePairPort("InputE1", value);
-            RaiseToolPropertyPanelsChanged();
+            SyncInputEdgeForEdgePairPort("E1", value);
+            OnPropertyChanged();
             RefreshPreviews();
             RequestAutoSave();
         }
@@ -1901,12 +1903,13 @@ public sealed partial class ToolEditorViewModel : ObservableObject
         get => SelectedEdgePairDef()?.RefB;
         set
         {
+            if (string.IsNullOrEmpty(value)) return;
             var def = SelectedEdgePairDef();
             if (def is null) return;
             if (string.Equals(def.RefB ?? "", value ?? "", StringComparison.OrdinalIgnoreCase)) return;
             def.RefB = value ?? string.Empty;
-            SyncInputEdgeForEdgePairPort("InputE2", value);
-            RaiseToolPropertyPanelsChanged();
+            SyncInputEdgeForEdgePairPort("E2", value);
+            OnPropertyChanged();
             RefreshPreviews();
             RequestAutoSave();
         }
@@ -2669,6 +2672,7 @@ public sealed partial class ToolEditorViewModel : ObservableObject
     private VisionConfig? _config;
 
     private InspectionResult? _lastRun;
+    private string? _lastRunError;
 
     public void SelectEdge(ToolGraphEdgeViewModel? edge)
     {
@@ -2780,7 +2784,7 @@ public sealed partial class ToolEditorViewModel : ObservableObject
             }
 
             var edge = Edges.FirstOrDefault(e => string.Equals(e.ToNodeId, SelectedNode.Id, StringComparison.OrdinalIgnoreCase)
-                                                && string.Equals(e.ToPort, "Pre", StringComparison.OrdinalIgnoreCase));
+                                                && string.Equals(e.ToPort, "Preprocess", StringComparison.OrdinalIgnoreCase));
             if (edge is null)
             {
                 SelectedToolPreprocessChoice = DefaultPreprocessChoice;
@@ -3380,12 +3384,13 @@ public sealed partial class ToolEditorViewModel : ObservableObject
         get => SelectedAngleDef()?.LineA;
         set
         {
+            if (string.IsNullOrEmpty(value)) return;
             var def = SelectedAngleDef();
             if (def is null) return;
             if (string.Equals(def.LineA ?? "", value ?? "", StringComparison.OrdinalIgnoreCase)) return;
             def.LineA = value ?? string.Empty;
-            SyncInputEdgeForAnglePort("InputL1", value);
-            RaiseToolPropertyPanelsChanged();
+            SyncInputEdgeForAnglePort("L1", value);
+            OnPropertyChanged();
             RefreshPreviews();
             RequestAutoSave();
         }
@@ -3396,12 +3401,13 @@ public sealed partial class ToolEditorViewModel : ObservableObject
         get => SelectedAngleDef()?.LineB;
         set
         {
+            if (string.IsNullOrEmpty(value)) return;
             var def = SelectedAngleDef();
             if (def is null) return;
             if (string.Equals(def.LineB ?? "", value ?? "", StringComparison.OrdinalIgnoreCase)) return;
             def.LineB = value ?? string.Empty;
-            SyncInputEdgeForAnglePort("InputL2", value);
-            RaiseToolPropertyPanelsChanged();
+            SyncInputEdgeForAnglePort("L2", value);
+            OnPropertyChanged();
             RefreshPreviews();
             RequestAutoSave();
         }
@@ -3914,12 +3920,13 @@ public sealed partial class ToolEditorViewModel : ObservableObject
         get => SelectedDistanceDef()?.PointA;
         set
         {
+            if (string.IsNullOrEmpty(value)) return;
             var def = SelectedDistanceDef();
             if (def is null) return;
             if (string.Equals(def.PointA ?? "", value ?? "", StringComparison.OrdinalIgnoreCase)) return;
             def.PointA = value ?? string.Empty;
-            SyncInputEdgeForDistancePort("InputP1", value);
-            RaiseToolPropertyPanelsChanged();
+            SyncInputEdgeForDistancePort("P1", value);
+            OnPropertyChanged();
             RefreshPreviews();
             RequestAutoSave();
         }
@@ -3930,12 +3937,13 @@ public sealed partial class ToolEditorViewModel : ObservableObject
         get => SelectedDistanceDef()?.PointB;
         set
         {
+            if (string.IsNullOrEmpty(value)) return;
             var def = SelectedDistanceDef();
             if (def is null) return;
             if (string.Equals(def.PointB ?? "", value ?? "", StringComparison.OrdinalIgnoreCase)) return;
             def.PointB = value ?? string.Empty;
-            SyncInputEdgeForDistancePort("InputP2", value);
-            RaiseToolPropertyPanelsChanged();
+            SyncInputEdgeForDistancePort("P2", value);
+            OnPropertyChanged();
             RefreshPreviews();
             RequestAutoSave();
         }
@@ -3946,12 +3954,13 @@ public sealed partial class ToolEditorViewModel : ObservableObject
         get => SelectedLineLineDistanceDef()?.LineA;
         set
         {
+            if (string.IsNullOrEmpty(value)) return;
             var def = SelectedLineLineDistanceDef();
             if (def is null) return;
             if (string.Equals(def.LineA ?? "", value ?? "", StringComparison.OrdinalIgnoreCase)) return;
             def.LineA = value ?? string.Empty;
-            SyncInputEdgeForLineLineDistancePort("InputL1", value);
-            RaiseToolPropertyPanelsChanged();
+            SyncInputEdgeForLineLineDistancePort("L1", value);
+            OnPropertyChanged();
             RefreshPreviews();
             RequestAutoSave();
         }
@@ -3962,12 +3971,13 @@ public sealed partial class ToolEditorViewModel : ObservableObject
         get => SelectedLineLineDistanceDef()?.LineB;
         set
         {
+            if (string.IsNullOrEmpty(value)) return;
             var def = SelectedLineLineDistanceDef();
             if (def is null) return;
             if (string.Equals(def.LineB ?? "", value ?? "", StringComparison.OrdinalIgnoreCase)) return;
             def.LineB = value ?? string.Empty;
-            SyncInputEdgeForLineLineDistancePort("InputL2", value);
-            RaiseToolPropertyPanelsChanged();
+            SyncInputEdgeForLineLineDistancePort("L2", value);
+            OnPropertyChanged();
             RefreshPreviews();
             RequestAutoSave();
         }
@@ -3978,12 +3988,13 @@ public sealed partial class ToolEditorViewModel : ObservableObject
         get => SelectedPointLineDistanceDef()?.Point;
         set
         {
+            if (string.IsNullOrEmpty(value)) return;
             var def = SelectedPointLineDistanceDef();
             if (def is null) return;
             if (string.Equals(def.Point ?? "", value ?? "", StringComparison.OrdinalIgnoreCase)) return;
             def.Point = value ?? string.Empty;
-            SyncInputEdgeForPointLineDistancePort("InputP", value);
-            RaiseToolPropertyPanelsChanged();
+            SyncInputEdgeForPointLineDistancePort("P1", value);
+            OnPropertyChanged();
             RefreshPreviews();
             RequestAutoSave();
         }
@@ -3994,12 +4005,13 @@ public sealed partial class ToolEditorViewModel : ObservableObject
         get => SelectedPointLineDistanceDef()?.Line;
         set
         {
+            if (string.IsNullOrEmpty(value)) return;
             var def = SelectedPointLineDistanceDef();
             if (def is null) return;
             if (string.Equals(def.Line ?? "", value ?? "", StringComparison.OrdinalIgnoreCase)) return;
             def.Line = value ?? string.Empty;
-            SyncInputEdgeForPointLineDistancePort("InputL", value);
-            RaiseToolPropertyPanelsChanged();
+            SyncInputEdgeForPointLineDistancePort("L1", value);
+            OnPropertyChanged();
             RefreshPreviews();
             RequestAutoSave();
         }
@@ -4108,8 +4120,8 @@ public sealed partial class ToolEditorViewModel : ObservableObject
                 var from = Nodes.FirstOrDefault(n =>
                     string.Equals(n.RefName, refName, StringComparison.OrdinalIgnoreCase)
                     && (
-                        (string.Equals(port, "InputP", StringComparison.OrdinalIgnoreCase) && string.Equals(n.Type, "Point", StringComparison.OrdinalIgnoreCase))
-                        || (string.Equals(port, "InputL", StringComparison.OrdinalIgnoreCase)
+                        (string.Equals(port, "P1", StringComparison.OrdinalIgnoreCase) && string.Equals(n.Type, "Point", StringComparison.OrdinalIgnoreCase))
+                        || (string.Equals(port, "L1", StringComparison.OrdinalIgnoreCase)
                             && (string.Equals(n.Type, "Line", StringComparison.OrdinalIgnoreCase)
                                 || string.Equals(n.Type, "Caliper", StringComparison.OrdinalIgnoreCase)))
                     ));
@@ -4349,8 +4361,8 @@ public sealed partial class ToolEditorViewModel : ObservableObject
             if (d is null) return;
             if (string.Equals(d.CircleRef, value, StringComparison.OrdinalIgnoreCase)) return;
             d.CircleRef = value ?? string.Empty;
-            SyncInputEdgeForDiameterPort("InputC", value);
-            RaiseToolPropertyPanelsChanged();
+            SyncInputEdgeForDiameterPort("C1", value);
+            OnPropertyChanged();
             RefreshPreviews();
             RequestAutoSave();
             OnPropertyChanged();
@@ -5192,7 +5204,7 @@ public sealed partial class ToolEditorViewModel : ObservableObject
             if (string.Equals(SelectedNode.Type, "Angle", StringComparison.OrdinalIgnoreCase))
             {
                 var a = _lastRun.Angles.FirstOrDefault(x => string.Equals(x.Name, SelectedNode.RefName, StringComparison.OrdinalIgnoreCase));
-                return a is null || double.IsNaN(a.ValueDeg) ? null : $"{a.ValueDeg:0.###}�";
+                return a is null || double.IsNaN(a.ValueDeg) ? null : $"{a.ValueDeg:0.###}";
             }
 
             return null;
@@ -5404,6 +5416,7 @@ public sealed partial class ToolEditorViewModel : ObservableObject
         SelectedNode = null;
         _config = null;
         _lastRun = null;
+        _lastRunError = null;
         _sharedImage.SetImage(null); // Clear ?nh preview
         SelectedNodeOverlayItems.Clear();
         FinalOverlayItems.Clear();
@@ -5415,7 +5428,7 @@ public sealed partial class ToolEditorViewModel : ObservableObject
     {
         if (IsLivePreviewMode)
         {
-            // �ANG LIVE -> B?m n�t d? CHUYP V� GI? ?NH TINH
+            // ANG LIVE -> B?m nt d? CHUYP V GI? ?NH TINH
             try
             {
                 var mat = await _cameraService.CaptureSnapshotAsync();
@@ -5428,7 +5441,7 @@ public sealed partial class ToolEditorViewModel : ObservableObject
                 }
                 else
                 {
-                    MessageBox.Show("Kh�ng th? ch?p ?nh t? camera. Vui l�ng ki?m tra l?i k?t n?i camera trong tab Live Camera.", "L?i camera", MessageBoxButton.OK, MessageBoxImage.Error);
+                    MessageBox.Show("Khng th? ch?p ?nh t? camera. Vui lng ki?m tra l?i k?t n?i camera trong tab Live Camera.", "L?i camera", MessageBoxButton.OK, MessageBoxImage.Error);
                 }
             }
             catch (Exception ex)
@@ -5438,13 +5451,13 @@ public sealed partial class ToolEditorViewModel : ObservableObject
         }
         else
         {
-            // �ANG TINH -> B?m n�t d? QUAY L?I LIVE PREVIEW
+            // ANG TINH -> B?m nt d? QUAY L?I LIVE PREVIEW
             IsLivePreviewMode = true;
             CaptureButtonText = "Capture Camera";
 
             if (!_cameraService.IsRunning)
             {
-                MessageBox.Show("Camera dang t?t. Vui l�ng b?t camera ? tab Live Camera tru?c d? xem h�nh ?nh tr?c ti?p.", "Th�ng b�o", MessageBoxButton.OK, MessageBoxImage.Warning);
+                MessageBox.Show("Camera dang t?t. Vui lng b?t camera ? tab Live Camera tru?c d? xem hnh ?nh tr?c ti?p.", "Thng bo", MessageBoxButton.OK, MessageBoxImage.Warning);
             }
         }
     }
@@ -5472,7 +5485,7 @@ public sealed partial class ToolEditorViewModel : ObservableObject
             System.Diagnostics.Debug.WriteLine($"L?i load config: {ex.Message}");
         }
 
-        // �?m b?o ban d?u kh�ng ch?n b?t k? c?u h�nh n�o (t?t c? r?ng)
+        // ?m b?o ban d?u khng ch?n b?t k? c?u hnh no (t?t c? r?ng)
         SelectedConfig = null;
         ProductCode = "";
         ClearActiveGraph();
@@ -5487,7 +5500,7 @@ public sealed partial class ToolEditorViewModel : ObservableObject
             return;
         }
 
-        // D?n s?ch c?u h�nh cu kh?i b? nh? tru?c khi n?p c?u h�nh m?i
+        // D?n s?ch c?u hnh cu kh?i b? nh? tru?c khi n?p c?u hnh m?i
         ClearActiveGraph();
 
         try
@@ -5560,7 +5573,7 @@ public sealed partial class ToolEditorViewModel : ObservableObject
             return;
         }
 
-        // D?n d?p c�c config m? c�i (kh�ng c�n node tuong ?ng trong graph)
+        // D?n d?p cc config m? ci (khng cn node tuong ?ng trong graph)
         var validRefNames = new HashSet<string>(Nodes.Select(n => n.RefName).Where(x => !string.IsNullOrWhiteSpace(x)), StringComparer.OrdinalIgnoreCase);
         
         _config.PreprocessNodes.RemoveAll(x => !validRefNames.Contains(x.Name));
@@ -5615,6 +5628,7 @@ public sealed partial class ToolEditorViewModel : ObservableObject
         if (snap is null || _config is null)
         {
             _lastRun = null;
+            _lastRunError = "Không có ảnh hoặc cấu hình (config).";
             RefreshPreviews();
             return;
         }
@@ -5642,6 +5656,7 @@ public sealed partial class ToolEditorViewModel : ObservableObject
         if ((graphNeedsOrigin && !originOk) || (graphNeedsPoint && anyPointNeedsTemplate))
         {
             _lastRun = null;
+            _lastRunError = "Flow bị dừng vì node Origin hoặc Point đang chờ khởi tạo Template ảnh.";
             RefreshPreviews();
             RaiseToolPropertyPanelsChanged();
             OnPropertyChanged(nameof(Blob_LastRunCount));
@@ -5650,11 +5665,13 @@ public sealed partial class ToolEditorViewModel : ObservableObject
 
         try
         {
+            _lastRunError = null;
             _lastRun = _inspectionService.Inspect(snap, _config);
         }
-        catch
+        catch (Exception ex)
         {
             _lastRun = null;
+            _lastRunError = "Lỗi khi chạy Flow: " + ex.Message;
         }
 
         RefreshPreviews();
@@ -5794,6 +5811,7 @@ public sealed partial class ToolEditorViewModel : ObservableObject
         SelectedNode = Nodes.Count > 0 ? Nodes[Math.Clamp(idx, 0, Nodes.Count - 1)] : null;
 
         _lastRun = null;
+        _lastRunError = null;
         SyncToolGraphToConfig();
         RunFlow();
         RequestAutoSave();
@@ -6230,7 +6248,7 @@ public sealed partial class ToolEditorViewModel : ObservableObject
         }
 
         // Enforce single incoming connection for certain ports.
-        if (string.Equals(toPort, "Pre", StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(toPort, "Preprocess", StringComparison.OrdinalIgnoreCase))
         {
             for (var i = Edges.Count - 1; i >= 0; i--)
             {
@@ -6269,8 +6287,8 @@ public sealed partial class ToolEditorViewModel : ObservableObject
             var def = _config.Distances.FirstOrDefault(x => string.Equals(x.Name, toNode.RefName, StringComparison.OrdinalIgnoreCase));
             if (def is not null)
             {
-                if (string.Equals(toPort, "InputP1", StringComparison.OrdinalIgnoreCase)) def.PointA = fromNode.RefName;
-                else if (string.Equals(toPort, "InputP2", StringComparison.OrdinalIgnoreCase)) def.PointB = fromNode.RefName;
+                if (string.Equals(toPort, "P1", StringComparison.OrdinalIgnoreCase)) def.PointA = fromNode.RefName;
+                else if (string.Equals(toPort, "P2", StringComparison.OrdinalIgnoreCase)) def.PointB = fromNode.RefName;
             }
         }
         else if (string.Equals(toNode.Type, "LineLineDistance", StringComparison.OrdinalIgnoreCase)
@@ -6280,8 +6298,8 @@ public sealed partial class ToolEditorViewModel : ObservableObject
             var def = _config.LineToLineDistances.FirstOrDefault(x => string.Equals(x.Name, toNode.RefName, StringComparison.OrdinalIgnoreCase));
             if (def is not null)
             {
-                if (string.Equals(toPort, "InputL1", StringComparison.OrdinalIgnoreCase)) def.LineA = fromNode.RefName;
-                else if (string.Equals(toPort, "InputL2", StringComparison.OrdinalIgnoreCase)) def.LineB = fromNode.RefName;
+                if (string.Equals(toPort, "L1", StringComparison.OrdinalIgnoreCase)) def.LineA = fromNode.RefName;
+                else if (string.Equals(toPort, "L2", StringComparison.OrdinalIgnoreCase)) def.LineB = fromNode.RefName;
             }
         }
         else if (string.Equals(toNode.Type, "PointLineDistance", StringComparison.OrdinalIgnoreCase))
@@ -6289,12 +6307,12 @@ public sealed partial class ToolEditorViewModel : ObservableObject
             var def = _config.PointToLineDistances.FirstOrDefault(x => string.Equals(x.Name, toNode.RefName, StringComparison.OrdinalIgnoreCase));
             if (def is not null)
             {
-                if (string.Equals(toPort, "InputP", StringComparison.OrdinalIgnoreCase)
+                if (string.Equals(toPort, "P1", StringComparison.OrdinalIgnoreCase)
                     && string.Equals(fromNode.Type, "Point", StringComparison.OrdinalIgnoreCase))
                 {
                     def.Point = fromNode.RefName;
                 }
-                else if (string.Equals(toPort, "InputL", StringComparison.OrdinalIgnoreCase)
+                else if (string.Equals(toPort, "L1", StringComparison.OrdinalIgnoreCase)
                          && (string.Equals(fromNode.Type, "Line", StringComparison.OrdinalIgnoreCase)
                              || string.Equals(fromNode.Type, "Caliper", StringComparison.OrdinalIgnoreCase)))
                 {
@@ -6309,8 +6327,8 @@ public sealed partial class ToolEditorViewModel : ObservableObject
             var def = _config.Angles.FirstOrDefault(x => string.Equals(x.Name, toNode.RefName, StringComparison.OrdinalIgnoreCase));
             if (def is not null)
             {
-                if (string.Equals(toPort, "InputL1", StringComparison.OrdinalIgnoreCase)) def.LineA = fromNode.RefName;
-                else if (string.Equals(toPort, "InputL2", StringComparison.OrdinalIgnoreCase)) def.LineB = fromNode.RefName;
+                if (string.Equals(toPort, "L1", StringComparison.OrdinalIgnoreCase)) def.LineA = fromNode.RefName;
+                else if (string.Equals(toPort, "L2", StringComparison.OrdinalIgnoreCase)) def.LineB = fromNode.RefName;
             }
         }
         else if (string.Equals(toNode.Type, "EdgePair", StringComparison.OrdinalIgnoreCase)
@@ -6320,8 +6338,8 @@ public sealed partial class ToolEditorViewModel : ObservableObject
             var def = _config.EdgePairs.FirstOrDefault(x => string.Equals(x.Name, toNode.RefName, StringComparison.OrdinalIgnoreCase));
             if (def is not null)
             {
-                if (string.Equals(toPort, "InputE1", StringComparison.OrdinalIgnoreCase)) def.RefA = fromNode.RefName;
-                else if (string.Equals(toPort, "InputE2", StringComparison.OrdinalIgnoreCase)) def.RefB = fromNode.RefName;
+                if (string.Equals(toPort, "E1", StringComparison.OrdinalIgnoreCase)) def.RefA = fromNode.RefName;
+                else if (string.Equals(toPort, "E2", StringComparison.OrdinalIgnoreCase)) def.RefB = fromNode.RefName;
             }
         }
         else if (string.Equals(toNode.Type, "Diameter", StringComparison.OrdinalIgnoreCase)
@@ -6330,7 +6348,7 @@ public sealed partial class ToolEditorViewModel : ObservableObject
             var def = _config.Diameters.FirstOrDefault(x => string.Equals(x.Name, toNode.RefName, StringComparison.OrdinalIgnoreCase));
             if (def is not null)
             {
-                if (string.Equals(toPort, "InputC", StringComparison.OrdinalIgnoreCase)) def.CircleRef = fromNode.RefName;
+                if (string.Equals(toPort, "C1", StringComparison.OrdinalIgnoreCase)) def.CircleRef = fromNode.RefName;
             }
         }
 
@@ -6354,12 +6372,12 @@ public sealed partial class ToolEditorViewModel : ObservableObject
             var def = _config.Angles.FirstOrDefault(x => string.Equals(x.Name, to.RefName, StringComparison.OrdinalIgnoreCase));
             if (def is null) return;
 
-            if (string.Equals(edge.ToPort, "InputL1", StringComparison.OrdinalIgnoreCase)
+            if (string.Equals(edge.ToPort, "L1", StringComparison.OrdinalIgnoreCase)
                 && string.Equals(def.LineA, from.RefName, StringComparison.OrdinalIgnoreCase))
             {
                 def.LineA = string.Empty;
             }
-            else if (string.Equals(edge.ToPort, "InputL2", StringComparison.OrdinalIgnoreCase)
+            else if (string.Equals(edge.ToPort, "L2", StringComparison.OrdinalIgnoreCase)
                      && string.Equals(def.LineB, from.RefName, StringComparison.OrdinalIgnoreCase))
             {
                 def.LineB = string.Empty;
@@ -9230,23 +9248,23 @@ public sealed partial class ToolGraphNodeViewModel : ObservableObject
 
         // Output port based on node type
         string outName = $"Out";
-        if (string.Equals(Type, "LineLineDistance", StringComparison.OrdinalIgnoreCase)) outName = "OutLLD";
-        else if (string.Equals(Type, "PointLineDistance", StringComparison.OrdinalIgnoreCase)) outName = "OutPLD";
-        else if (string.Equals(Type, "EdgePairDetect", StringComparison.OrdinalIgnoreCase)) outName = "OutEP";
-        else if (string.Equals(Type, "LinePairDetection", StringComparison.OrdinalIgnoreCase)) outName = "OutLP";
-        else if (string.Equals(Type, "Distance", StringComparison.OrdinalIgnoreCase)) outName = "OutDist";
-        else if (string.Equals(Type, "Condition", StringComparison.OrdinalIgnoreCase)) outName = "OutCond";
-        else if (string.Equals(Type, "Preprocess", StringComparison.OrdinalIgnoreCase)) outName = "OutPre";
-        else if (string.Equals(Type, "BlobDetection", StringComparison.OrdinalIgnoreCase)) outName = "OutBlob";
-        else if (string.Equals(Type, "CodeDetection", StringComparison.OrdinalIgnoreCase)) outName = "OutCode";
-        else if (string.Equals(Type, "CircleFinder", StringComparison.OrdinalIgnoreCase)) outName = "OutCircle";
+        if (string.Equals(Type, "LineLineDistance", StringComparison.OrdinalIgnoreCase)) outName = "Distance";
+        else if (string.Equals(Type, "PointLineDistance", StringComparison.OrdinalIgnoreCase)) outName = "Distance";
+        else if (string.Equals(Type, "EdgePairDetect", StringComparison.OrdinalIgnoreCase)) outName = "EdgePair";
+        else if (string.Equals(Type, "LinePairDetection", StringComparison.OrdinalIgnoreCase)) outName = "LinePair";
+        else if (string.Equals(Type, "Distance", StringComparison.OrdinalIgnoreCase)) outName = "Distance";
+        else if (string.Equals(Type, "Condition", StringComparison.OrdinalIgnoreCase)) outName = "Result";
+        else if (string.Equals(Type, "Preprocess", StringComparison.OrdinalIgnoreCase)) outName = "Image";
+        else if (string.Equals(Type, "BlobDetection", StringComparison.OrdinalIgnoreCase)) outName = "Blobs";
+        else if (string.Equals(Type, "CodeDetection", StringComparison.OrdinalIgnoreCase)) outName = "Code";
+        else if (string.Equals(Type, "CircleFinder", StringComparison.OrdinalIgnoreCase)) outName = "Circle";
         else outName = $"Out{Type}";
 
         OutPorts.Add(new NodePortViewModel(this, outName, isInput: false));
 
         if (string.Equals(Type, "Preprocess", StringComparison.OrdinalIgnoreCase))
         {
-            InPorts.Add(new NodePortViewModel(this, "InImg", isInput: true));
+            InPorts.Add(new NodePortViewModel(this, "Image", isInput: true));
         }
         else if (string.Equals(Type, "Origin", StringComparison.OrdinalIgnoreCase)
                  || string.Equals(Type, "Point", StringComparison.OrdinalIgnoreCase)
@@ -9258,38 +9276,38 @@ public sealed partial class ToolGraphNodeViewModel : ObservableObject
                  || string.Equals(Type, "BlobDetection", StringComparison.OrdinalIgnoreCase)
                  || string.Equals(Type, "CodeDetection", StringComparison.OrdinalIgnoreCase))
         {
-            InPorts.Add(new NodePortViewModel(this, "InImg", isInput: true));
-            InPorts.Add(new NodePortViewModel(this, "Pre", isInput: true));
+            InPorts.Add(new NodePortViewModel(this, "Image", isInput: true));
+            InPorts.Add(new NodePortViewModel(this, "Preprocess", isInput: true));
         }
         else if (string.Equals(Type, "Diameter", StringComparison.OrdinalIgnoreCase))
         {
-            InPorts.Add(new NodePortViewModel(this, "InputC", isInput: true));
+            InPorts.Add(new NodePortViewModel(this, "C1", isInput: true));
         }
         else if (string.Equals(Type, "Distance", StringComparison.OrdinalIgnoreCase))
         {
-            InPorts.Add(new NodePortViewModel(this, "InputP1", isInput: true));
-            InPorts.Add(new NodePortViewModel(this, "InputP2", isInput: true));
+            InPorts.Add(new NodePortViewModel(this, "P1", isInput: true));
+            InPorts.Add(new NodePortViewModel(this, "P2", isInput: true));
         }
         else if (string.Equals(Type, "LineLineDistance", StringComparison.OrdinalIgnoreCase))
         {
-            InPorts.Add(new NodePortViewModel(this, "InputL1", isInput: true));
-            InPorts.Add(new NodePortViewModel(this, "InputL2", isInput: true));
+            InPorts.Add(new NodePortViewModel(this, "L1", isInput: true));
+            InPorts.Add(new NodePortViewModel(this, "L2", isInput: true));
         }
         else if (string.Equals(Type, "Angle", StringComparison.OrdinalIgnoreCase))
         {
-            InPorts.Add(new NodePortViewModel(this, "InputL1", isInput: true));
-            InPorts.Add(new NodePortViewModel(this, "InputL2", isInput: true));
+            InPorts.Add(new NodePortViewModel(this, "L1", isInput: true));
+            InPorts.Add(new NodePortViewModel(this, "L2", isInput: true));
         }
         else if (string.Equals(Type, "EdgePair", StringComparison.OrdinalIgnoreCase))
         {
-            InPorts.Add(new NodePortViewModel(this, "InputE1", isInput: true));
-            InPorts.Add(new NodePortViewModel(this, "InputE2", isInput: true));
-            InPorts.Add(new NodePortViewModel(this, "Pre", isInput: true));
+            InPorts.Add(new NodePortViewModel(this, "E1", isInput: true));
+            InPorts.Add(new NodePortViewModel(this, "E2", isInput: true));
+            InPorts.Add(new NodePortViewModel(this, "Preprocess", isInput: true));
         }
         else if (string.Equals(Type, "PointLineDistance", StringComparison.OrdinalIgnoreCase))
         {
-            InPorts.Add(new NodePortViewModel(this, "InputP", isInput: true));
-            InPorts.Add(new NodePortViewModel(this, "InputL", isInput: true));
+            InPorts.Add(new NodePortViewModel(this, "P1", isInput: true));
+            InPorts.Add(new NodePortViewModel(this, "L1", isInput: true));
         }
         else if (string.Equals(Type, "Condition", StringComparison.OrdinalIgnoreCase))
         {
@@ -9301,7 +9319,7 @@ public sealed partial class ToolGraphNodeViewModel : ObservableObject
         }
         else
         {
-            InPorts.Add(new NodePortViewModel(this, "InImg", isInput: true));
+            InPorts.Add(new NodePortViewModel(this, "Image", isInput: true));
         }
     }
 

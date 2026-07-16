@@ -62,16 +62,69 @@
                         </Grid.RowDefinitions>
 
                         <TextBlock Grid.Row="0" FontWeight="Bold" Text="Toolbox" Margin="0,0,0,6" />
-                        <ListBox Grid.Row="1" x:Name="ToolboxList" ItemsSource="{Binding ToolboxItems}" PreviewMouseMove="ToolboxList_PreviewMouseMove" BorderThickness="0" Background="Transparent">
+                        <ListBox Grid.Row="1" x:Name="ToolboxList" ItemsSource="{Binding ToolboxItems}" 
+                                 PreviewMouseLeftButtonDown="ToolboxList_PreviewMouseLeftButtonDown" 
+                                 PreviewMouseMove="ToolboxList_PreviewMouseMove" 
+                                 BorderThickness="0" Background="Transparent">
                             <ListBox.ItemTemplate>
                                 <DataTemplate>
                                     <StackPanel Orientation="Horizontal" Margin="2,6">
-                                        <TextBlock FontFamily="Segoe MDL2 Assets" 
-                                                   Text="{Binding Converter={StaticResource ToolToIcon}}" 
-                                                   Foreground="{Binding Converter={StaticResource ToolToColor}}"
-                                                   FontSize="16" VerticalAlignment="Center" Width="24" TextAlignment="Center" />
-                                        <TextBlock Text="{Binding}" VerticalAlignment="Center" Foreground="{DynamicResource TextBrush}" FontSize="13" Margin="6,0,0,0" />
+                                        <TextBlock x:Name="IconTxt" Text="&#x1F527;" Margin="0,0,8,0" FontFamily="Segoe UI Emoji" FontSize="14" VerticalAlignment="Center" />
+                                        <TextBlock Text="{Binding}" FontWeight="Medium" Foreground="{DynamicResource TextBrush}" VerticalAlignment="Center" />
                                     </StackPanel>
+                                    <DataTemplate.Triggers>
+                                        <DataTrigger Binding="{Binding}" Value="Preprocess">
+                                            <Setter TargetName="IconTxt" Property="Text" Value="&#x2699;" />
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding}" Value="Origin">
+                                            <Setter TargetName="IconTxt" Property="Text" Value="&#x1F3AF;" />
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding}" Value="Point">
+                                            <Setter TargetName="IconTxt" Property="Text" Value="&#x1F4CD;" />
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding}" Value="Line">
+                                            <Setter TargetName="IconTxt" Property="Text" Value="&#x1F4CF;" />
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding}" Value="Caliper">
+                                            <Setter TargetName="IconTxt" Property="Text" Value="&#x1F4D0;" />
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding}" Value="Distance">
+                                            <Setter TargetName="IconTxt" Property="Text" Value="&#x2194;" />
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding}" Value="LineLineDistance">
+                                            <Setter TargetName="IconTxt" Property="Text" Value="&#x23F8;" />
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding}" Value="PointLineDistance">
+                                            <Setter TargetName="IconTxt" Property="Text" Value="&#x23EF;" />
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding}" Value="Angle">
+                                            <Setter TargetName="IconTxt" Property="Text" Value="&#x2220;" />
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding}" Value="Diameter">
+                                            <Setter TargetName="IconTxt" Property="Text" Value="&#x2B55;" />
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding}" Value="EdgePairDetect">
+                                            <Setter TargetName="IconTxt" Property="Text" Value="&#x23F8;" />
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding}" Value="LinePairDetection">
+                                            <Setter TargetName="IconTxt" Property="Text" Value="&#x23F8;" />
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding}" Value="BlobDetection">
+                                            <Setter TargetName="IconTxt" Property="Text" Value="&#x1F9A0;" />
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding}" Value="CodeDetection">
+                                            <Setter TargetName="IconTxt" Property="Text" Value="&#x1F532;" />
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding}" Value="CircleFinder">
+                                            <Setter TargetName="IconTxt" Property="Text" Value="&#x1F518;" />
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding}" Value="Condition">
+                                            <Setter TargetName="IconTxt" Property="Text" Value="&#x2753;" />
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding}" Value="Text">
+                                            <Setter TargetName="IconTxt" Property="Text" Value="&#x1F524;" />
+                                        </DataTrigger>
+                                    </DataTemplate.Triggers>
                                 </DataTemplate>
                             </ListBox.ItemTemplate>
                         </ListBox>

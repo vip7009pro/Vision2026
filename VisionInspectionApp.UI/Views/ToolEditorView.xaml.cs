@@ -161,9 +161,23 @@ public partial class ToolEditorView : UserControl
         e.Handled = true;
     }
 
+    private System.Windows.Point _dragStartPoint;
+
+    private void ToolboxList_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        _dragStartPoint = e.GetPosition(null);
+    }
+
     private void ToolboxList_PreviewMouseMove(object sender, MouseEventArgs e)
     {
         if (e.LeftButton != MouseButtonState.Pressed)
+        {
+            return;
+        }
+
+        var diff = _dragStartPoint - e.GetPosition(null);
+        if (Math.Abs(diff.X) < SystemParameters.MinimumHorizontalDragDistance &&
+            Math.Abs(diff.Y) < SystemParameters.MinimumVerticalDragDistance)
         {
             return;
         }

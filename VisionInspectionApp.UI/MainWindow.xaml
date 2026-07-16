@@ -31,7 +31,7 @@
 
         <Style TargetType="Button">
             <Setter Property="Background" Value="{StaticResource ShellAccent}" />
-            <Setter Property="Foreground" Value="White" />
+            <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
             <Setter Property="BorderBrush" Value="{StaticResource ShellAccentDark}" />
             <Setter Property="BorderThickness" Value="1" />
             <Setter Property="Padding" Value="8,4" />
@@ -92,6 +92,8 @@
         </Style>
 
         <Style TargetType="TabItem">
+            <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
+            <Setter Property="Background" Value="{DynamicResource PanelAltBackgroundBrush}" />
             <Setter Property="Margin" Value="0,0,6,0" />
             <Setter Property="Padding" Value="10,5" />
             <Setter Property="Background" Value="{DynamicResource WindowBackgroundBrush}" />
@@ -114,7 +116,7 @@
                             <Trigger Property="IsSelected" Value="True">
                                 <Setter TargetName="TabBorder" Property="Background" Value="{StaticResource ShellAccent}" />
                                 <Setter TargetName="TabBorder" Property="BorderBrush" Value="{StaticResource ShellAccentDark}" />
-                                <Setter Property="Foreground" Value="White" />
+                                <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
                             </Trigger>
                             <Trigger Property="IsMouseOver" Value="True">
                                 <Setter TargetName="TabBorder" Property="Opacity" Value="0.95" />
