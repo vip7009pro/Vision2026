@@ -15,6 +15,17 @@
             <converters:InverseBoolConverter x:Key="InverseBoolConverter" />
             <converters:PassFailColorConverter x:Key="PassFailColorConverter" />
             <converters:PassRateConverter x:Key="PassRateConverter" />
+            
+            <Style TargetType="TextBox">
+                <Setter Property="Background" Value="{DynamicResource WindowBackgroundBrush}"/>
+                <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
+                <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
+            </Style>
+            <Style TargetType="ComboBox">
+                <Setter Property="Background" Value="{DynamicResource WindowBackgroundBrush}"/>
+                <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
+                <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
+            </Style>
         </ResourceDictionary>
     </Application.Resources>
 </Application>

@@ -168,6 +168,13 @@ public partial class ToolEditorView : UserControl
             return;
         }
 
+        var d = e.OriginalSource as DependencyObject;
+        while (d != null)
+        {
+            if (d is System.Windows.Controls.Primitives.ScrollBar) return;
+            d = VisualTreeHelper.GetParent(d);
+        }
+
         if (sender is not ListBox lb)
         {
             return;

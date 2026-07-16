@@ -70,7 +70,7 @@
                                                    Text="{Binding Converter={StaticResource ToolToIcon}}" 
                                                    Foreground="{Binding Converter={StaticResource ToolToColor}}"
                                                    FontSize="16" VerticalAlignment="Center" Width="24" TextAlignment="Center" />
-                                        <TextBlock Text="{Binding}" VerticalAlignment="Center" FontSize="13" Margin="6,0,0,0" />
+                                        <TextBlock Text="{Binding}" VerticalAlignment="Center" Foreground="{DynamicResource TextBrush}" FontSize="13" Margin="6,0,0,0" />
                                     </StackPanel>
                                 </DataTemplate>
                             </ListBox.ItemTemplate>
@@ -91,6 +91,9 @@
                                     <Style TargetType="ComboBox">
                                         <Setter Property="Padding" Value="4,2"/>
                                         <Setter Property="VerticalContentAlignment" Value="Center"/>
+                                    </Style>
+                                    <Style TargetType="CheckBox">
+                                        <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
                                     </Style>
                                     <Style TargetType="StackPanel">
                                         <Style.Triggers>
@@ -1668,9 +1671,15 @@
                                                                         </ItemsControl.ItemsPanel>
                                                                         <ItemsControl.ItemTemplate>
                                                                             <DataTemplate>
-                                                                                <Ellipse Width="12" Height="12" Fill="#2E7DFF" Stroke="#0D47A1" StrokeThickness="1"
-                                                                                         Tag="{Binding Tag}" Margin="0,4,0,4"
-                                                                                         MouseLeftButtonDown="OutPort_MouseLeftButtonDown" />
+                                                                                <Grid Tag="{Binding Tag}" Margin="0,4,0,4">
+                                                                                    <Grid.ColumnDefinitions>
+                                                                                        <ColumnDefinition Width="Auto" />
+                                                                                        <ColumnDefinition Width="12" />
+                                                                                    </Grid.ColumnDefinitions>
+                                                                                    <TextBlock Grid.Column="0" Text="{Binding Name}" Margin="0,0,6,0" VerticalAlignment="Center" Foreground="{DynamicResource TextBrush}" FontSize="11" />
+                                                                                    <Ellipse Grid.Column="1" Width="12" Height="12" Fill="#2E7DFF" Stroke="#0D47A1" StrokeThickness="1"
+                                                                                             MouseLeftButtonDown="OutPort_MouseLeftButtonDown" />
+                                                                                </Grid>
                                                                             </DataTemplate>
                                                                         </ItemsControl.ItemTemplate>
                                                                     </ItemsControl>
