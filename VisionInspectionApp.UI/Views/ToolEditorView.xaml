@@ -69,7 +69,7 @@
                             <ListBox.ItemTemplate>
                                 <DataTemplate>
                                     <StackPanel Orientation="Horizontal" Margin="2,6">
-                                        <TextBlock x:Name="IconTxt" Text="&#x1F527;" Margin="0,0,8,0" FontFamily="Segoe UI Emoji" FontSize="14" VerticalAlignment="Center" />
+                                        <TextBlock x:Name="IconTxt" Text="&#x1F527;" Margin="0,0,8,0" FontFamily="Segoe UI Emoji" FontSize="14" VerticalAlignment="Center" Foreground="{DynamicResource TextBrush}" />
                                         <TextBlock Text="{Binding}" FontWeight="Medium" Foreground="{DynamicResource TextBrush}" VerticalAlignment="Center" />
                                     </StackPanel>
                                     <DataTemplate.Triggers>

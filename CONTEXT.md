@@ -8,7 +8,7 @@ This project is an advanced industrial machine vision inspection suite built on 
 ### 1. Tool Editor UI & Graph Logic
 - **Node Ports Visualization**: Redesigned ports for logical clarity. Ports are now named contextually based on function (e.g. `L1`, `L2`, `P1`, `Preprocess`, `Distance`, `Angle`) instead of generic system names.
 - **Port Synchronization**: Fixed a bug where assigning inputs manually from property dropdowns (`Distance`, `LineLineDistance`) failed to sync with the canvas. The UI now dynamically mirrors dropdown selections to edges correctly without locking up interactions.
-- **Toolbox UI/UX**: Added intuitive Unicode/Emoji icons to the Toolbox List using DataTriggers for easy tool differentiation. Drag & drop now works cleanly with the scrollbar because a minimum drag distance is enforced before initiating a drag-drop operation.
+- **Toolbox UI/UX**: Added intuitive Unicode/Emoji icons to the Toolbox List using DataTriggers for easy tool differentiation. Fixed the color rendering of Unicode text-mode icons in Dark mode by binding Foreground to the dynamic TextBrush. Drag & drop now works cleanly with the scrollbar because a minimum drag distance is enforced before initiating a drag-drop operation.
 - **Port Value Debugger**: Implemented a double-click feature on Output ports to spawn a dialog box displaying computed values directly from memory, which speeds up the development/debugging of processing pipelines.
 
 ### 2. Global Theming (Dark Mode)
