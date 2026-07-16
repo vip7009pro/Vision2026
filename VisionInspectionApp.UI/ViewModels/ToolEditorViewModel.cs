@@ -824,6 +824,9 @@ public sealed partial class ToolEditorViewModel : ObservableObject
 
     public ObservableCollection<BlobPolarity> AvailableBlobPolarities { get; }
         = new ObservableCollection<BlobPolarity>((BlobPolarity[])Enum.GetValues(typeof(BlobPolarity)));
+    public ObservableCollection<OriginAlgorithm> AvailableOriginAlgorithms { get; }
+        = new ObservableCollection<OriginAlgorithm>((OriginAlgorithm[])Enum.GetValues(typeof(OriginAlgorithm)));
+
 
     public ObservableCollection<PointFindAlgorithm> AvailablePointFindAlgorithms { get; }
         = new ObservableCollection<PointFindAlgorithm>((PointFindAlgorithm[])Enum.GetValues(typeof(PointFindAlgorithm)));
@@ -2861,6 +2864,10 @@ public sealed partial class ToolEditorViewModel : ObservableObject
     {
         OnPropertyChanged(nameof(IsLineNode));
         OnPropertyChanged(nameof(IsCaliperNode));
+        OnPropertyChanged(nameof(IsOriginNode));
+        OnPropertyChanged(nameof(AvailableOriginAlgorithms));
+        OnPropertyChanged(nameof(Origin_Algorithm));
+
         OnPropertyChanged(nameof(IsPointNode));
         OnPropertyChanged(nameof(IsAnyDistanceNode));
         OnPropertyChanged(nameof(IsDistanceNode));
@@ -2999,6 +3006,8 @@ public sealed partial class ToolEditorViewModel : ObservableObject
     public bool IsLineNode => string.Equals(SelectedNode?.Type, "Line", StringComparison.OrdinalIgnoreCase);
 
     public bool IsCaliperNode => string.Equals(SelectedNode?.Type, "Caliper", StringComparison.OrdinalIgnoreCase);
+    public bool IsOriginNode => SelectedNode != null && string.Equals(SelectedNode.Type, "Origin", StringComparison.OrdinalIgnoreCase);
+
 
     public bool IsPointNode => string.Equals(SelectedNode?.Type, "Point", StringComparison.OrdinalIgnoreCase);
 
@@ -3010,6 +3019,19 @@ public sealed partial class ToolEditorViewModel : ObservableObject
         if (!string.Equals(SelectedNode.Type, "Point", StringComparison.OrdinalIgnoreCase)) return null;
         return _config.Points.FirstOrDefault(x => string.Equals(x.Name, SelectedNode.RefName, StringComparison.OrdinalIgnoreCase));
     }
+    public OriginAlgorithm Origin_Algorithm
+    {
+        get => _config?.Origin?.OriginAlgorithm ?? OriginAlgorithm.ShapeBased;
+        set
+        {
+            if (_config?.Origin != null)
+            {
+                _config.Origin.OriginAlgorithm = value;
+                OnPropertyChanged();
+            }
+        }
+    }
+
 
     public PointFindAlgorithm Point_Algorithm
     {

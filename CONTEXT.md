@@ -18,6 +18,13 @@ This project is an advanced industrial machine vision inspection suite built on 
 ### 3. Font and Localization Fixes
 - Addressed font corruption and encoding glitches (Vietnamese characters) affecting tooltips across `ToolEditorView.xaml`. The file has been updated to UTF-8 and tooltips re-translated to clear, legible instructions.
 
+### 4. Advanced Vision Engine Algorithms (Origin Tool)
+- **Origin Tool Tech Expansion**: Upgraded the `Origin` tool to match industrial vision platforms (Cognex, Halcon, Hikvision). Users can now select the core matching algorithm directly in the Properties Panel.
+- **Algorithms Supported**:
+  - `ShapeBased` (GPM - Default): Edge-based generalized hough transform for finding shape outlines, highly robust to lighting variation.
+  - `TemplateMatch` (NCC): Fast normalized cross-correlation for pixel-perfect texture matching.
+  - `FeatureBased` (ORB/RANSAC): New algorithm implemented to extract scale & rotation invariant keypoints. Uses `BFMatcher` and Homography (`RANSAC`) to find complex, textured, or heavily warped objects reliably.
+
 ## Remaining Roadmap
 
 ### High Priority

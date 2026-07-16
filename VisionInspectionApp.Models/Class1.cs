@@ -420,6 +420,13 @@ public enum IlluminationCorrectionPreset
     Clahe = 3
 }
 
+public enum OriginAlgorithm
+{
+    ShapeBased = 0,
+    TemplateMatch = 1,
+    FeatureBased = 2
+}
+
 public enum PointFindAlgorithm
 {
     TemplateMatch = 0,
@@ -456,6 +463,8 @@ public sealed class PointDefinition
     public double MatchScoreThreshold { get; set; } = 0.8;
 
     public PointFindAlgorithm Algorithm { get; set; } = PointFindAlgorithm.TemplateMatch;
+
+    public OriginAlgorithm OriginAlgorithm { get; set; } = OriginAlgorithm.ShapeBased;
 
     public EdgePointSettings EdgePoint { get; set; } = new();
 
