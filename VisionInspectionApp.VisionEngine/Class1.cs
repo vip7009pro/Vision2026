@@ -870,7 +870,11 @@ public sealed class PatternMatcher
         
         var matchRect = new Rect((int)(roiRect.X + minX), (int)(roiRect.Y + minY), (int)(maxX - minX), (int)(maxY - minY));
         
-        return new MatchResult(global, 1.0, angleDeg, matchRect);
+        var h11 = H.At<double>(0, 0);
+        var h21 = H.At<double>(1, 0);
+        var actualAngleDeg = Math.Atan2(h21, h11) * 180.0 / Math.PI;
+        
+        return new MatchResult(global, 1.0, actualAngleDeg, matchRect);
     }
 
     private static MatchResult MatchByShapeModel(Mat roiGray, ShapeModelDefinition model, double angleDeg)

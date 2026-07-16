@@ -3032,6 +3032,32 @@ public sealed partial class ToolEditorViewModel : ObservableObject
         }
     }
 
+    public double Origin_MinAngle
+    {
+        get => _config?.Origin?.MinAngle ?? -20.0;
+        set
+        {
+            if (_config?.Origin != null)
+            {
+                _config.Origin.MinAngle = value;
+                OnPropertyChanged();
+            }
+        }
+    }
+
+    public double Origin_MaxAngle
+    {
+        get => _config?.Origin?.MaxAngle ?? 20.0;
+        set
+        {
+            if (_config?.Origin != null)
+            {
+                _config.Origin.MaxAngle = value;
+                OnPropertyChanged();
+            }
+        }
+    }
+
 
     public PointFindAlgorithm Point_Algorithm
     {

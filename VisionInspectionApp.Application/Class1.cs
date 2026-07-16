@@ -1039,10 +1039,10 @@ public sealed class InspectionService : IInspectionService
                 }
             }
 
-            var originMatch = _matcher.MatchWithRotation(originMat, originDef, originTempl, originPre, -60.0, 60.0, 2.0);
+            var originMatch = _matcher.MatchWithRotation(originMat, originDef, originTempl, originPre, originDef.MinAngle, originDef.MaxAngle, 2.0);
             if (usedGuidedOrigin && originMatch.Score < originDefBase.MatchScoreThreshold)
             {
-                var retry = _matcher.MatchWithRotation(originMat, originDefBase, originTempl, originPre, -60.0, 60.0, 2.0);
+                var retry = _matcher.MatchWithRotation(originMat, originDefBase, originTempl, originPre, originDefBase.MinAngle, originDefBase.MaxAngle, 2.0);
                 if (retry.Score > originMatch.Score)
                 {
                     originMatch = retry;

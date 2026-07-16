@@ -25,6 +25,10 @@ This project is an advanced industrial machine vision inspection suite built on 
   - `TemplateMatch` (NCC): Fast normalized cross-correlation for pixel-perfect texture matching.
   - `FeatureBased` (ORB/RANSAC): New algorithm implemented to extract scale & rotation invariant keypoints. Uses `BFMatcher` and Homography (`RANSAC`) to find complex, textured, or heavily warped objects reliably.
 
+### 5. Enhancements to Origin Tool
+- **Angle Constraints**: Added `MinAngle` and `MaxAngle` bounds to `PointDefinition`. This allows the user to limit the search space strictly to a customized angular range (e.g., -20° to 20° or 0° to 360°) via the Tool Editor properties panel.
+- **Rotation Fixes**: Extracted exact orientation angles from the Homography matrix (`Cv2.FindHomography`) when using `FeatureBased` matching. Enhanced UI rendering in `ToolEditorViewModel` and `InspectionViewModel` to properly draw rotated bounding box center lines (crosshairs) that rotate alongside the matched template correctly.
+
 ## Remaining Roadmap
 
 ### High Priority

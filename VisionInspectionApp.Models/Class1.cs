@@ -466,6 +466,9 @@ public sealed class PointDefinition
 
     public OriginAlgorithm OriginAlgorithm { get; set; } = OriginAlgorithm.ShapeBased;
 
+    public double MinAngle { get; set; } = -20.0;
+    public double MaxAngle { get; set; } = 20.0;
+
     public EdgePointSettings EdgePoint { get; set; } = new();
 
     public Point2dModel WorldPosition { get; set; } = new();
