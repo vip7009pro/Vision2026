@@ -24,6 +24,100 @@ namespace VisionInspectionApp.UI.ViewModels;
 
 public sealed partial class ToolEditorViewModel : ObservableObject
 {
+    public void ShowPortValueDialog(ToolGraphNodeViewModel node, string portName)
+    {
+        if (_lastRun is null)
+        {
+            System.Windows.MessageBox.Show("Vui lòng chạy luồng (Run Flow) trước khi xem giá trị Output.", "Không có dữ liệu", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Information);
+            return;
+        }
+
+        string val = "Chưa có giá trị.";
+
+        try
+        {
+            if (string.Equals(node.Type, "Point", StringComparison.OrdinalIgnoreCase))
+            {
+                var res = _lastRun.Points?.FirstOrDefault(x => string.Equals(x.Name, node.RefName, StringComparison.OrdinalIgnoreCase));
+                if (res is not null) val = $"Found: {res.Pass}\r\nX: {res.Position.X:F3}\r\nY: {res.Position.Y:F3}\r\nAngle: {res.AngleDeg:F3} deg\r\nScore: {res.Score:F3}";
+            }
+            else if (string.Equals(node.Type, "Line", StringComparison.OrdinalIgnoreCase))
+            {
+                var res = _lastRun.Lines?.FirstOrDefault(x => string.Equals(x.Name, node.RefName, StringComparison.OrdinalIgnoreCase));
+                if (res is not null) val = $"Found: {res.Found}\r\nP1: ({res.P1.X:F3}, {res.P1.Y:F3})\r\nP2: ({res.P2.X:F3}, {res.P2.Y:F3})\r\nLengthPx: {res.LengthPx:F3}";
+            }
+            else if (string.Equals(node.Type, "Distance", StringComparison.OrdinalIgnoreCase))
+            {
+                var res = _lastRun.Distances?.FirstOrDefault(x => string.Equals(x.Name, node.RefName, StringComparison.OrdinalIgnoreCase));
+                if (res is not null) val = $"Pass: {res.Pass}\r\nDistance: {res.Value:F3}\r\nNominal: {res.Nominal:F3}";
+            }
+            else if (string.Equals(node.Type, "LineLineDistance", StringComparison.OrdinalIgnoreCase))
+            {
+                var res = _lastRun.LineToLineDistances?.FirstOrDefault(x => string.Equals(x.Name, node.RefName, StringComparison.OrdinalIgnoreCase));
+                if (res is not null) val = $"Pass: {res.Pass}\r\nDistance: {res.Value:F3}\r\nClosestA: ({res.ClosestA.X:F3}, {res.ClosestA.Y:F3})\r\nClosestB: ({res.ClosestB.X:F3}, {res.ClosestB.Y:F3})";
+            }
+            else if (string.Equals(node.Type, "PointLineDistance", StringComparison.OrdinalIgnoreCase))
+            {
+                var res = _lastRun.PointToLineDistances?.FirstOrDefault(x => string.Equals(x.Name, node.RefName, StringComparison.OrdinalIgnoreCase));
+                if (res is not null) val = $"Pass: {res.Pass}\r\nDistance: {res.Value:F3}\r\nClosestA: ({res.ClosestA.X:F3}, {res.ClosestA.Y:F3})\r\nClosestB: ({res.ClosestB.X:F3}, {res.ClosestB.Y:F3})";
+            }
+            else if (string.Equals(node.Type, "Angle", StringComparison.OrdinalIgnoreCase))
+            {
+                var res = _lastRun.Angles?.FirstOrDefault(x => string.Equals(x.Name, node.RefName, StringComparison.OrdinalIgnoreCase));
+                if (res is not null) val = $"Pass: {res.Pass}\r\nAngle: {res.ValueDeg:F3} deg\r\nIntersection: ({res.Intersection.X:F3}, {res.Intersection.Y:F3})";
+            }
+            else if (string.Equals(node.Type, "EdgePair", StringComparison.OrdinalIgnoreCase))
+            {
+                var res = _lastRun.EdgePairs?.FirstOrDefault(x => string.Equals(x.Name, node.RefName, StringComparison.OrdinalIgnoreCase));
+                if (res is not null) val = $"Found: {res.Found}\r\nPass: {res.Pass}\r\nDistance: {res.Value:F3}\r\nClosestA: ({res.ClosestA.X:F3}, {res.ClosestA.Y:F3})\r\nClosestB: ({res.ClosestB.X:F3}, {res.ClosestB.Y:F3})";
+            }
+            else if (string.Equals(node.Type, "Diameter", StringComparison.OrdinalIgnoreCase))
+            {
+                var res = _lastRun.Diameters?.FirstOrDefault(x => string.Equals(x.Name, node.RefName, StringComparison.OrdinalIgnoreCase));
+                if (res is not null) val = $"Found: {res.Found}\r\nPass: {res.Pass}\r\nDiameter: {res.Value:F3}\r\nCenter: ({res.Center.X:F3}, {res.Center.Y:F3})";
+            }
+            else if (string.Equals(node.Type, "Caliper", StringComparison.OrdinalIgnoreCase))
+            {
+                var res = _lastRun.Calipers?.FirstOrDefault(x => string.Equals(x.Name, node.RefName, StringComparison.OrdinalIgnoreCase));
+                if (res is not null) val = $"Found: {res.Found}\r\nEdges Count: {res.Points?.Count ?? 0}\r\nLineP1: ({res.LineP1.X:F3}, {res.LineP1.Y:F3})\r\nLineP2: ({res.LineP2.X:F3}, {res.LineP2.Y:F3})\r\nAvgStrength: {res.AvgStrength:F3}";
+            }
+            else if (string.Equals(node.Type, "EdgePairDetect", StringComparison.OrdinalIgnoreCase))
+            {
+                var res = _lastRun.EdgePairDetections?.FirstOrDefault(x => string.Equals(x.Name, node.RefName, StringComparison.OrdinalIgnoreCase));
+                if (res is not null) val = $"Found: {res.Found}\r\nPass: {res.Pass}\r\nDistance: {res.Value:F3}\r\nEdge1Points Count: {res.Edge1Points?.Count ?? 0}\r\nEdge2Points Count: {res.Edge2Points?.Count ?? 0}";
+            }
+            else if (string.Equals(node.Type, "CircleFinder", StringComparison.OrdinalIgnoreCase))
+            {
+                var res = _lastRun.CircleFinders?.FirstOrDefault(x => string.Equals(x.Name, node.RefName, StringComparison.OrdinalIgnoreCase));
+                if (res is not null) val = $"Found: {res.Found}\r\nCenter: ({res.Center.X:F3}, {res.Center.Y:F3})\r\nRadius: {res.RadiusPx:F3}\r\nScore: {res.Score:F3}";
+            }
+            else if (string.Equals(node.Type, "BlobDetection", StringComparison.OrdinalIgnoreCase))
+            {
+                var res = _lastRun.BlobDetections?.FirstOrDefault(x => string.Equals(x.Name, node.RefName, StringComparison.OrdinalIgnoreCase));
+                if (res is not null) val = $"Count: {res.Count}";
+            }
+            else if (string.Equals(node.Type, "SurfaceCompare", StringComparison.OrdinalIgnoreCase))
+            {
+                var res = _lastRun.SurfaceCompares?.FirstOrDefault(x => string.Equals(x.Name, node.RefName, StringComparison.OrdinalIgnoreCase));
+                if (res is not null) val = $"Pass: {res.Pass}\r\nDefect Count: {res.Count}\r\nMax Area: {res.MaxArea:F3}";
+            }
+            else if (string.Equals(node.Type, "Condition", StringComparison.OrdinalIgnoreCase))
+            {
+                var res = _lastRun.Conditions?.FirstOrDefault(x => string.Equals(x.Name, node.RefName, StringComparison.OrdinalIgnoreCase));
+                if (res is not null) val = $"Pass: {res.Pass}\r\nExpression: {res.Expression}\r\nError: {res.Error ?? "None"}";
+            }
+        }
+        catch (Exception ex)
+        {
+            val = $"Lỗi khi lấy giá trị: {ex.Message}";
+        }
+
+        var dlg = new VisionInspectionApp.UI.Views.PortValueDialog(node.RefName ?? node.Type, portName, val);
+        dlg.ShowDialog();
+    }
+
+    
+
     public sealed partial class TextColorConditionRow : ObservableObject
     {
         private readonly Action _onChanged;
@@ -768,6 +862,7 @@ public sealed partial class ToolEditorViewModel : ObservableObject
             if (from is not null)
             {
                 // Create edge directly; this also syncs to config.
+                from.EnsurePortsInitialized();
                 CreateEdge(from, SelectedNode, fromPort: from.OutPorts.FirstOrDefault()?.Name ?? "Out", toPort: "Pre");
                 return;
             }
@@ -1834,6 +1929,7 @@ public sealed partial class ToolEditorViewModel : ObservableObject
                                                      && string.Equals(n.RefName, lineName, StringComparison.OrdinalIgnoreCase));
                 if (from is not null)
                 {
+                    from.EnsurePortsInitialized();
                     CreateEdge(from, SelectedNode, from.OutPorts.FirstOrDefault()?.Name ?? "Out", port);
                 }
             }
@@ -3328,6 +3424,7 @@ public sealed partial class ToolEditorViewModel : ObservableObject
                                                      && string.Equals(n.RefName, lineName, StringComparison.OrdinalIgnoreCase));
                 if (from is not null)
                 {
+                    from.EnsurePortsInitialized();
                     CreateEdge(from, SelectedNode, from.OutPorts.FirstOrDefault()?.Name ?? "Out", port);
                 }
             }
@@ -3957,6 +4054,7 @@ public sealed partial class ToolEditorViewModel : ObservableObject
                         || string.Equals(n.Type, "Diameter", StringComparison.OrdinalIgnoreCase)));
                 if (from is not null)
                 {
+                    from.EnsurePortsInitialized();
                     CreateEdge(from, SelectedNode, from.OutPorts.FirstOrDefault()?.Name ?? "Out", port);
                 }
             }
@@ -3984,6 +4082,7 @@ public sealed partial class ToolEditorViewModel : ObservableObject
                                                      && string.Equals(n.RefName, lineName, StringComparison.OrdinalIgnoreCase));
                 if (from is not null)
                 {
+                    from.EnsurePortsInitialized();
                     CreateEdge(from, SelectedNode, from.OutPorts.FirstOrDefault()?.Name ?? "Out", port);
                 }
             }
@@ -4016,6 +4115,7 @@ public sealed partial class ToolEditorViewModel : ObservableObject
                     ));
                 if (from is not null)
                 {
+                    from.EnsurePortsInitialized();
                     CreateEdge(from, SelectedNode, from.OutPorts.FirstOrDefault()?.Name ?? "Out", port);
                 }
             }
@@ -4273,6 +4373,7 @@ public sealed partial class ToolEditorViewModel : ObservableObject
                                                      && string.Equals(n.RefName, circleName, StringComparison.OrdinalIgnoreCase));
                 if (from is not null)
                 {
+                    from.EnsurePortsInitialized();
                     CreateEdge(from, SelectedNode, from.OutPorts.FirstOrDefault()?.Name ?? "Out", port);
                 }
             }
@@ -9203,6 +9304,8 @@ public sealed partial class ToolGraphNodeViewModel : ObservableObject
             InPorts.Add(new NodePortViewModel(this, "InImg", isInput: true));
         }
     }
+
+    
 }
 
 public sealed class NodePortViewModel

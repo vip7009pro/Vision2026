@@ -1,4 +1,4 @@
-using System.Windows;
+﻿using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
@@ -379,6 +379,13 @@ public partial class ToolEditorView : UserControl
         }
 
         var n = port.Node;
+
+        if (e.ClickCount == 2)
+        {
+            vm.ShowPortValueDialog(n, port.Name);
+            e.Handled = true;
+            return;
+        }
 
         vm.SelectedNode = n;
 

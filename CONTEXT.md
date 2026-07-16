@@ -133,5 +133,6 @@
 - Không có tiến trình nào bị treo và các COM Object được giải phóng hợp lý khi thoát ứng dụng.
 
 ## Bug Fixes (2026-07-16)
+- Implemented double-click to view output port values (PortValueDialog).
 - Fixed application crash caused by an infinite loop in edge syncing (ToolEditorViewModel).
 - Repaired automatic data binding between canvas nodes and properties panel by updating hardcoded port names to match the new UI port standard.
