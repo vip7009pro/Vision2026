@@ -10,7 +10,7 @@
         </Grid.RowDefinitions>
 
         <!-- Control Panel -->
-        <Border Grid.Row="0" Background="White" BorderBrush="#DDD" BorderThickness="0,0,0,1" Padding="10">
+        <Border Grid.Row="0" Background="{DynamicResource PanelBackgroundBrush}" BorderBrush="#DDD" BorderThickness="0,0,0,1" Padding="10">
             <StackPanel Orientation="Vertical">
                 <TextBlock Text="Batch Image Processing" FontSize="16" FontWeight="Bold" Margin="0,0,0,10" />
 
@@ -90,11 +90,11 @@
 
             <!-- Results Summary -->
             <StackPanel Grid.Column="0" Margin="5">
-                <Border Background="White" Padding="10">
+                <Border Background="{DynamicResource PanelBackgroundBrush}" Padding="10">
                     <TextBlock Text="Processing Results" FontSize="14" FontWeight="Bold" />
                 </Border>
                 
-                <Grid Background="White" Margin="0,5,5,0">
+                <Grid Background="{DynamicResource PanelBackgroundBrush}" Margin="0,5,5,0">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="Auto" />
@@ -121,7 +121,7 @@
                 </Grid>
 
                 <!-- Result Table -->
-                <ListBox Grid.Row="4" ItemsSource="{Binding ResultSummary}" Margin="0,10,5,0" Background="White" Padding="10">
+                <ListBox Grid.Row="4" ItemsSource="{Binding ResultSummary}" Margin="0,10,5,0" Background="{DynamicResource PanelBackgroundBrush}" Padding="10">
                     <ListBox.ItemTemplate>
                         <DataTemplate>
                             <Grid Margin="5">
@@ -143,14 +143,14 @@
 
             <!-- Processing Log -->
             <StackPanel Grid.Column="1" Margin="0,5,5,5">
-                <Border Background="White" Padding="10">
+                <Border Background="{DynamicResource PanelBackgroundBrush}" Padding="10">
                     <TextBlock Text="Processing Log (Ctrl+A, Ctrl+C để copy)" FontSize="14" FontWeight="Bold" />
                 </Border>
                 <TextBox Text="{Binding ProcessingLogText, Mode=OneWay}"
                          IsReadOnly="True"
                          TextWrapping="Wrap"
                          VerticalScrollBarVisibility="Auto"
-                         Background="White"
+                         Background="{DynamicResource PanelBackgroundBrush}"
                          Padding="10"
                          Margin="0,5,0,0"
                          FontSize="11"
@@ -161,3 +161,4 @@
         </Grid>
     </Grid>
 </UserControl>
+

@@ -20,6 +20,7 @@ namespace VisionInspectionApp.UI;
 public partial class App : System.Windows.Application
 {
     private IHost? _host;
+    public IServiceProvider ServiceProvider => _host!.Services;
 
     protected override void OnStartup(StartupEventArgs e)
     {
@@ -46,6 +47,7 @@ public partial class App : System.Windows.Application
 
                 services.AddSingleton<UndoRedoManager>();
                 services.AddSingleton<GlobalAppSettingsService>();
+                services.AddSingleton<ThemeService>();
                 services.AddSingleton<SharedImageContext>();
 
                 // Camera & Batch Processing Services
@@ -71,6 +73,9 @@ public partial class App : System.Windows.Application
             .Build();
 
         _host.Start();
+
+        var themeService = _host.Services.GetRequiredService<ThemeService>();
+        themeService.ApplyTheme();
 
         var mainWindow = _host.Services.GetRequiredService<MainWindow>();
         mainWindow.Show();

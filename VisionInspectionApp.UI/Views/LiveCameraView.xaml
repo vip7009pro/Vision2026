@@ -13,7 +13,7 @@
         </Grid.RowDefinitions>
 
         <!-- Control Panel -->
-        <Border Grid.Row="0" Background="White" BorderBrush="#DDD" BorderThickness="0,0,0,1" Padding="10">
+        <Border Grid.Row="0" Background="{DynamicResource PanelBackgroundBrush}" BorderBrush="#DDD" BorderThickness="0,0,0,1" Padding="10">
             <StackPanel Orientation="Vertical">
                 <TextBlock Text="Live Camera Inspection" FontSize="16" FontWeight="Bold" Margin="0,0,0,10" />
 
@@ -93,13 +93,13 @@
             </Border>
 
             <!-- Results Panel -->
-            <Border Grid.Column="1" Width="300" Background="White" Margin="0,5,5,5" BorderBrush="#DDD" BorderThickness="1">
+            <Border Grid.Column="1" Width="300" Background="{DynamicResource PanelBackgroundBrush}" Margin="0,5,5,5" BorderBrush="#DDD" BorderThickness="1">
                 <StackPanel>
                     <TextBlock Text="Live Results" FontWeight="Bold" Padding="10" Background="#F5F5F5" />
 
                     <TextBlock Text="{Binding LastInspectionResult}" Padding="10,5" FontSize="12" Foreground="#333" />
 
-                    <ListBox ItemsSource="{Binding LiveResults}" Background="White" Padding="10" MaxHeight="400">
+                    <ListBox ItemsSource="{Binding LiveResults}" Background="{DynamicResource PanelBackgroundBrush}" Padding="10" MaxHeight="400">
                         <ListBox.ItemTemplate>
                             <DataTemplate>
                                 <TextBlock Text="{Binding}" FontSize="11" TextWrapping="Wrap" Margin="0,2" />
@@ -111,3 +111,4 @@
         </Grid>
     </Grid>
 </UserControl>
+

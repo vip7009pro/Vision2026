@@ -1,14 +1,20 @@
-﻿<Application x:Class="VisionInspectionApp.UI.App"
+<Application x:Class="VisionInspectionApp.UI.App"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:local="clr-namespace:VisionInspectionApp.UI"
              xmlns:converters="clr-namespace:VisionInspectionApp.UI.Converters"
              >
     <Application.Resources>
-        <converters:FlexibleDoubleConverter x:Key="DoubleConv" />
-        <converters:BoolToOkNgConverter x:Key="OkNgConv" />
-        <converters:InverseBoolConverter x:Key="InverseBoolConverter" />
-        <converters:PassFailColorConverter x:Key="PassFailColorConverter" />
-        <converters:PassRateConverter x:Key="PassRateConverter" />
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="Themes/LightTheme.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+            
+            <converters:FlexibleDoubleConverter x:Key="DoubleConv" />
+            <converters:BoolToOkNgConverter x:Key="OkNgConv" />
+            <converters:InverseBoolConverter x:Key="InverseBoolConverter" />
+            <converters:PassFailColorConverter x:Key="PassFailColorConverter" />
+            <converters:PassRateConverter x:Key="PassRateConverter" />
+        </ResourceDictionary>
     </Application.Resources>
 </Application>

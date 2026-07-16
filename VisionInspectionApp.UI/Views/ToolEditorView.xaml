@@ -11,6 +11,8 @@
     <UserControl.Resources>
         <BooleanToVisibilityConverter x:Key="BoolToVis" />
         <converters:HexToBrushConverter x:Key="HexToBrush" />
+        <converters:ToolToIconConverter x:Key="ToolToIcon" />
+        <converters:ToolToColorConverter x:Key="ToolToColor" />
     </UserControl.Resources>
 
     <Grid Margin="8">
@@ -46,7 +48,7 @@
                 <ColumnDefinition Width="7*" />
             </Grid.ColumnDefinitions>
 
-            <Border Grid.Column="0" BorderBrush="#CCC" BorderThickness="1" Padding="8" Margin="0,0,8,0">
+            <Border Grid.Column="0" BorderBrush="{DynamicResource DarkBorderBrush}" BorderThickness="1" Padding="8" Margin="0,0,8,0">
                 <Grid>
                     <Grid.RowDefinitions>
                         <RowDefinition Height="*" />
@@ -60,168 +62,255 @@
                         </Grid.RowDefinitions>
 
                         <TextBlock Grid.Row="0" FontWeight="Bold" Text="Toolbox" Margin="0,0,0,6" />
-                        <ListBox Grid.Row="1" x:Name="ToolboxList" ItemsSource="{Binding ToolboxItems}" PreviewMouseMove="ToolboxList_PreviewMouseMove" />
+                        <ListBox Grid.Row="1" x:Name="ToolboxList" ItemsSource="{Binding ToolboxItems}" PreviewMouseMove="ToolboxList_PreviewMouseMove" BorderThickness="0" Background="Transparent">
+                            <ListBox.ItemTemplate>
+                                <DataTemplate>
+                                    <StackPanel Orientation="Horizontal" Margin="2,6">
+                                        <TextBlock FontFamily="Segoe MDL2 Assets" 
+                                                   Text="{Binding Converter={StaticResource ToolToIcon}}" 
+                                                   Foreground="{Binding Converter={StaticResource ToolToColor}}"
+                                                   FontSize="16" VerticalAlignment="Center" Width="24" TextAlignment="Center" />
+                                        <TextBlock Text="{Binding}" VerticalAlignment="Center" FontSize="13" Margin="6,0,0,0" />
+                                    </StackPanel>
+                                </DataTemplate>
+                            </ListBox.ItemTemplate>
+                        </ListBox>
                     </Grid>
 
-                    <Border Grid.Row="1" BorderBrush="#EEE" BorderThickness="1,1,0,0" Padding="8" Margin="0,8,0,0">
+                    <Border Grid.Row="1" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1,1,0,0" Padding="8" Margin="0,8,0,0">
                         <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
                             <StackPanel>
-                            <TextBlock FontWeight="Bold" Text="Properties" Margin="0,0,0,6" />
-
-                            <TextBlock Text="Selected Node" FontWeight="SemiBold" />
-                            <TextBlock Text="{Binding SelectedNode.Type}" Margin="0,0,0,6" />
-
-                            <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
-                                <TextBlock Text="RefName" Width="60" VerticalAlignment="Center" />
-                                <TextBox Width="160" Text="{Binding SelectedNode.RefName, UpdateSourceTrigger=PropertyChanged}" />
-                            </StackPanel>
-
-                            <TextBlock Text="Preprocess" FontWeight="SemiBold" Margin="0,8,0,6" />
-
-                            <CheckBox Content="Preview" IsChecked="{Binding PreprocessPreviewEnabled, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,6" />
-
-                            <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
-                                <TextBlock Text="Illum" Width="60" VerticalAlignment="Center" ToolTip="Illumination Correction Profile" />
-                                <ComboBox Width="160" ItemsSource="{Binding AvailableIlluminationCorrectionPresets}" SelectedItem="{Binding IlluminationCorrection, UpdateSourceTrigger=PropertyChanged}" />
-                            </StackPanel>
-
-                            <StackPanel Margin="0,0,0,6" ToolTip="Illumination Kernel Size">
-                                <StackPanel Orientation="Horizontal" Margin="0,0,0,2">
-                                    <TextBlock Text="Illum Kernel" Width="70" VerticalAlignment="Center" />
-                                    <TextBlock Text="{Binding IlluminationKernel}" Width="40" />
+                                <StackPanel.Resources>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="FontSize" Value="12"/>
+                                    </Style>
+                                    <Style TargetType="TextBox">
+                                        <Setter Property="Padding" Value="4,2"/>
+                                        <Setter Property="VerticalContentAlignment" Value="Center"/>
+                                    </Style>
+                                    <Style TargetType="ComboBox">
+                                        <Setter Property="Padding" Value="4,2"/>
+                                        <Setter Property="VerticalContentAlignment" Value="Center"/>
+                                    </Style>
+                                    <Style TargetType="StackPanel">
+                                        <Style.Triggers>
+                                            <Trigger Property="Orientation" Value="Horizontal">
+                                                <Setter Property="Margin" Value="0,0,0,4"/>
+                                            </Trigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </StackPanel.Resources>
+                            
+                            <!-- Properties Header and Global Preprocessor Button -->
+                            <Border Background="{DynamicResource PanelBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="4" Padding="8" Margin="0,0,0,12">
+                                <StackPanel>
+                                    <TextBlock FontWeight="Bold" Text="Selected Properties" Margin="0,0,0,8" />
+                                    
+                                    <Grid Margin="0,0,0,6">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="65" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Text="Type:" FontWeight="SemiBold" VerticalAlignment="Center" Foreground="{DynamicResource TextMutedBrush}" />
+                                        <TextBlock Grid.Column="1" Text="{Binding SelectedNode.Type}" FontWeight="SemiBold" VerticalAlignment="Center" />
+                                    </Grid>
+                                    
+                                    <Grid Margin="0,0,0,6">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="65" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Text="Type:" FontWeight="SemiBold" VerticalAlignment="Center" Foreground="{DynamicResource TextMutedBrush}" />
+                                        <TextBlock Grid.Column="1" Text="{Binding SelectedNode.Type}" FontWeight="SemiBold" VerticalAlignment="Center" />
+                                    </Grid>
                                 </StackPanel>
-                                <Slider Minimum="3" Maximum="401" Value="{Binding IlluminationKernel, UpdateSourceTrigger=PropertyChanged}" IsSnapToTickEnabled="True" TickFrequency="2" />
-                            </StackPanel>
-
-                            <StackPanel Margin="0,0,0,2" ToolTip="CLAHE Clip Limit (Contrast Limit)">
-                                <StackPanel Orientation="Horizontal" Margin="0,0,0,2">
-                                    <TextBlock Text="CLAHE Clip" Width="70" VerticalAlignment="Center" />
-                                    <TextBlock Text="{Binding ClaheClipLimit}" Width="60" />
-                                </StackPanel>
-                                <Slider Minimum="0.1" Maximum="10" Value="{Binding ClaheClipLimit, UpdateSourceTrigger=PropertyChanged}" TickFrequency="0.1" />
-                            </StackPanel>
-                            <StackPanel Margin="0,0,0,6" ToolTip="CLAHE Tile Grid Size">
-                                <StackPanel Orientation="Horizontal" Margin="0,0,0,2">
-                                    <TextBlock Text="CLAHE Tile" Width="70" VerticalAlignment="Center" />
-                                    <TextBlock Text="{Binding ClaheTileGrid}" Width="40" />
-                                </StackPanel>
-                                <Slider Minimum="2" Maximum="32" Value="{Binding ClaheTileGrid, UpdateSourceTrigger=PropertyChanged}" IsSnapToTickEnabled="True" TickFrequency="1" />
-                            </StackPanel>
-
-                            <CheckBox Content="Gray" IsChecked="{Binding UseGray, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,2" />
-                            <CheckBox Content="Gaussian Blur" IsChecked="{Binding UseGaussianBlur, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,2" />
-                            <StackPanel Margin="0,0,0,6" ToolTip="Gaussian Blur Kernel Size">
-                                <StackPanel Orientation="Horizontal" Margin="0,0,0,2">
-                                    <TextBlock Text="Blur Kernel" Width="70" VerticalAlignment="Center" />
-                                    <TextBlock Text="{Binding BlurKernel}" Width="40" />
-                                </StackPanel>
-                                <Slider Minimum="1" Maximum="21" Value="{Binding BlurKernel, UpdateSourceTrigger=PropertyChanged}" IsSnapToTickEnabled="True" TickFrequency="2" />
-                            </StackPanel>
-
-                            <CheckBox Content="Threshold" IsChecked="{Binding UseThreshold, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,2" />
-                            <StackPanel Margin="0,0,0,6" ToolTip="Binarization Threshold">
-                                <StackPanel Orientation="Horizontal" Margin="0,0,0,2">
-                                    <TextBlock Text="Threshold" Width="70" VerticalAlignment="Center" />
-                                    <TextBlock Text="{Binding ThresholdValue}" Width="40" />
-                                </StackPanel>
-                                <Slider Minimum="0" Maximum="255" Value="{Binding ThresholdValue, UpdateSourceTrigger=PropertyChanged}" IsSnapToTickEnabled="True" TickFrequency="1" />
-                            </StackPanel>
-
-                            <CheckBox Content="Canny Edge" IsChecked="{Binding UseCanny, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,2" />
-                            <StackPanel Margin="0,0,0,2" ToolTip="Canny Threshold 1 (Lower)">
-                                <StackPanel Orientation="Horizontal" Margin="0,0,0,2">
-                                    <TextBlock Text="Canny Th1" Width="70" VerticalAlignment="Center" />
-                                    <TextBlock Text="{Binding Canny1}" Width="40" />
-                                </StackPanel>
-                                <Slider Minimum="0" Maximum="255" Value="{Binding Canny1, UpdateSourceTrigger=PropertyChanged}" IsSnapToTickEnabled="True" TickFrequency="1" />
-                            </StackPanel>
-                            <StackPanel Margin="0,0,0,6" ToolTip="Canny Threshold 2 (Upper)">
-                                <StackPanel Orientation="Horizontal" Margin="0,0,0,2">
-                                    <TextBlock Text="Canny Th2" Width="70" VerticalAlignment="Center" />
-                                    <TextBlock Text="{Binding Canny2}" Width="40" />
-                                </StackPanel>
-                                <Slider Minimum="0" Maximum="255" Value="{Binding Canny2, UpdateSourceTrigger=PropertyChanged}" IsSnapToTickEnabled="True" TickFrequency="1" />
-                            </StackPanel>
-
-                            <CheckBox Content="Morphology" IsChecked="{Binding UseMorphology, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,6" />
+                            </Border>
 
                             <StackPanel Visibility="{Binding IsToolWithPreprocessInput, Converter={StaticResource BoolToVis}}">
-                                <TextBlock Text="Tool Preprocess" FontWeight="SemiBold" Margin="0,8,0,6" />
-                                <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
-                                    <TextBlock Text="Pre" Width="60" VerticalAlignment="Center" />
-                                    <ComboBox Width="160" ItemsSource="{Binding AvailablePreprocessChoices}" SelectedItem="{Binding SelectedToolPreprocessChoice, UpdateSourceTrigger=PropertyChanged}" />
-                                </StackPanel>
+                                <Border Background="{DynamicResource BorderBrush}" Padding="4,2" Margin="0,8,0,0">
+                                    <TextBlock Text="Tool Preprocess" FontWeight="Bold" Foreground="{DynamicResource TextBrush}" />
+                                </Border>
+                                <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="120" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <Border Background="{DynamicResource WindowBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
+                                            <TextBlock Text="Pre" VerticalAlignment="Center" Margin="8,4" Foreground="{DynamicResource TextBrush}"/>
+                                        </Border>
+                                        <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
+                                            <ComboBox ItemsSource="{Binding AvailablePreprocessChoices}" SelectedItem="{Binding SelectedToolPreprocessChoice, UpdateSourceTrigger=PropertyChanged}" Margin="4" />
+                                        </Border>
+                                    </Grid>
+                                </Border>
                             </StackPanel>
 
                             <StackPanel Visibility="{Binding IsPointNode, Converter={StaticResource BoolToVis}}">
-                                <TextBlock Text="Point Params" FontWeight="SemiBold" Margin="0,8,0,6" />
+                                <Border Background="{DynamicResource BorderBrush}" Padding="4,2" Margin="0,8,0,0">
+                                    <TextBlock Text="Point Params" FontWeight="Bold" Foreground="{DynamicResource TextBrush}" />
+                                </Border>
 
-                                <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
-                                    <TextBlock Text="Algo" Width="60" VerticalAlignment="Center" />
-                                    <ComboBox Width="160" ItemsSource="{Binding AvailablePointFindAlgorithms}" SelectedItem="{Binding Point_Algorithm, UpdateSourceTrigger=PropertyChanged}" />
-                                </StackPanel>
+                                <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="120" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <Border Background="{DynamicResource WindowBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
+                                            <TextBlock Text="Algorithm" VerticalAlignment="Center" Margin="8,4" Foreground="{DynamicResource TextBrush}"/>
+                                        </Border>
+                                        <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
+                                            <ComboBox ItemsSource="{Binding AvailablePointFindAlgorithms}" SelectedItem="{Binding Point_Algorithm, UpdateSourceTrigger=PropertyChanged}" Margin="4" />
+                                        </Border>
+                                    </Grid>
+                                </Border>
 
                                 <TextBlock Text="Ctrl+Shift+Click to set offset" Margin="0,0,0,6" />
 
-                                <StackPanel Orientation="Horizontal" Margin="0,0,0,2">
-                                    <TextBlock Text="OffX" Width="60" VerticalAlignment="Center" />
-                                    <TextBox Width="80" Text="{Binding Point_OffsetX, UpdateSourceTrigger=PropertyChanged, Delay=150}" />
-                                </StackPanel>
-                                <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
-                                    <TextBlock Text="OffY" Width="60" VerticalAlignment="Center" />
-                                    <TextBox Width="80" Text="{Binding Point_OffsetY, UpdateSourceTrigger=PropertyChanged, Delay=150}" />
-                                </StackPanel>
+                                <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="120" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <Border Background="{DynamicResource WindowBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
+                                            <TextBlock Text="Offset X" VerticalAlignment="Center" Margin="8,4" Foreground="{DynamicResource TextBrush}"/>
+                                        </Border>
+                                        <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
+                                            <TextBox Text="{Binding Point_OffsetX, UpdateSourceTrigger=PropertyChanged, Delay=150}" Margin="4" />
+                                        </Border>
+                                    </Grid>
+                                </Border>
+                                <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="120" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <Border Background="{DynamicResource WindowBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
+                                            <TextBlock Text="Offset Y" VerticalAlignment="Center" Margin="8,4" Foreground="{DynamicResource TextBrush}"/>
+                                        </Border>
+                                        <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
+                                            <TextBox Text="{Binding Point_OffsetY, UpdateSourceTrigger=PropertyChanged, Delay=150}" Margin="4" />
+                                        </Border>
+                                    </Grid>
+                                </Border>
 
                                 <StackPanel Visibility="{Binding IsPointEdgePointAlgorithm, Converter={StaticResource BoolToVis}}">
-                                    <TextBlock Text="Edge Point" FontWeight="SemiBold" Margin="0,8,0,6" />
+                                    <Border Background="{DynamicResource BorderBrush}" Padding="4,2" Margin="0,8,0,0">
+                                    <TextBlock Text="Edge Point" FontWeight="Bold" Foreground="{DynamicResource TextBrush}" />
+                                </Border>
 
-                                    <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
-                                        <TextBlock Text="Ori" Width="60" VerticalAlignment="Center" />
-                                        <ComboBox Width="160" ItemsSource="{Binding AvailableCaliperOrientations}" SelectedItem="{Binding Point_Edge_Orientation, UpdateSourceTrigger=PropertyChanged}" />
-                                    </StackPanel>
+                                    <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="120" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <Border Background="{DynamicResource WindowBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
+                                            <TextBlock Text="Orientation" VerticalAlignment="Center" Margin="8,4" Foreground="{DynamicResource TextBrush}"/>
+                                        </Border>
+                                        <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
+                                            <ComboBox ItemsSource="{Binding AvailableCaliperOrientations}" SelectedItem="{Binding Point_Edge_Orientation, UpdateSourceTrigger=PropertyChanged}" Margin="4" />
+                                        </Border>
+                                    </Grid>
+                                </Border>
 
-                                    <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
-                                        <TextBlock Text="Pol" Width="60" VerticalAlignment="Center" />
-                                        <ComboBox Width="160" ItemsSource="{Binding AvailableEdgePolarities}" SelectedItem="{Binding Point_Edge_Polarity, UpdateSourceTrigger=PropertyChanged}" />
-                                    </StackPanel>
+                                    <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="120" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <Border Background="{DynamicResource WindowBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
+                                            <TextBlock Text="Polarity" VerticalAlignment="Center" Margin="8,4" Foreground="{DynamicResource TextBrush}"/>
+                                        </Border>
+                                        <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
+                                            <ComboBox ItemsSource="{Binding AvailableEdgePolarities}" SelectedItem="{Binding Point_Edge_Polarity, UpdateSourceTrigger=PropertyChanged}" Margin="4" />
+                                        </Border>
+                                    </Grid>
+                                </Border>
 
-                                    <StackPanel Orientation="Horizontal" Margin="0,0,0,2">
-                                        <TextBlock Text="N" Width="60" VerticalAlignment="Center" />
-                                        <TextBox Width="80" Text="{Binding Point_Edge_StripCount, UpdateSourceTrigger=PropertyChanged, Delay=150}" />
-                                    </StackPanel>
-                                    <StackPanel Orientation="Horizontal" Margin="0,0,0,2">
-                                        <TextBlock Text="W" Width="60" VerticalAlignment="Center" />
-                                        <TextBox Width="80" Text="{Binding Point_Edge_StripWidth, UpdateSourceTrigger=PropertyChanged, Delay=150}" />
-                                    </StackPanel>
-                                    <StackPanel Orientation="Horizontal" Margin="0,0,0,2">
-                                        <TextBlock Text="L" Width="60" VerticalAlignment="Center" />
-                                        <TextBox Width="80" Text="{Binding Point_Edge_StripLength, UpdateSourceTrigger=PropertyChanged, Delay=150}" />
-                                    </StackPanel>
-                                    <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
-                                        <TextBlock Text="MinG" Width="60" VerticalAlignment="Center" />
-                                        <TextBox Width="80" Text="{Binding Point_Edge_MinEdgeStrength, UpdateSourceTrigger=PropertyChanged, Delay=150}" />
-                                    </StackPanel>
+                                    <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="120" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <Border Background="{DynamicResource WindowBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
+                                            <TextBlock Text="Strip Count" VerticalAlignment="Center" Margin="8,4" Foreground="{DynamicResource TextBrush}"/>
+                                        </Border>
+                                        <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
+                                            <TextBox Text="{Binding Point_Edge_StripCount, UpdateSourceTrigger=PropertyChanged, Delay=150}" Margin="4" />
+                                        </Border>
+                                    </Grid>
+                                </Border>
+                                    <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="120" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <Border Background="{DynamicResource WindowBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
+                                            <TextBlock Text="Strip Width" VerticalAlignment="Center" Margin="8,4" Foreground="{DynamicResource TextBrush}"/>
+                                        </Border>
+                                        <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
+                                            <TextBox Text="{Binding Point_Edge_StripWidth, UpdateSourceTrigger=PropertyChanged, Delay=150}" Margin="4" />
+                                        </Border>
+                                    </Grid>
+                                </Border>
+                                    <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="120" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <Border Background="{DynamicResource WindowBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
+                                            <TextBlock Text="Strip Length" VerticalAlignment="Center" Margin="8,4" Foreground="{DynamicResource TextBrush}"/>
+                                        </Border>
+                                        <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
+                                            <TextBox Text="{Binding Point_Edge_StripLength, UpdateSourceTrigger=PropertyChanged, Delay=150}" Margin="4" />
+                                        </Border>
+                                    </Grid>
+                                </Border>
+                                    <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="120" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <Border Background="{DynamicResource WindowBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
+                                            <TextBlock Text="Min Gradient" VerticalAlignment="Center" Margin="8,4" Foreground="{DynamicResource TextBrush}"/>
+                                        </Border>
+                                        <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
+                                            <TextBox Text="{Binding Point_Edge_MinEdgeStrength, UpdateSourceTrigger=PropertyChanged, Delay=150}" Margin="4" />
+                                        </Border>
+                                    </Grid>
+                                </Border>
 
                                     <CheckBox Content="Preview" IsChecked="{Binding PointEdgePreviewEnabled, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,6" />
 
-                                    <Border BorderBrush="#DDD" BorderThickness="1" Padding="4" Margin="0,0,0,6">
+                                    <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" Padding="4" Margin="0,0,0,6">
                                         <Image Source="{Binding PointEdgePreviewImage}" Stretch="Uniform" Height="120" />
                                     </Border>
                                 </StackPanel>
                             </StackPanel>
 
                             <StackPanel Visibility="{Binding IsLineNode, Converter={StaticResource BoolToVis}}">
-                                <TextBlock Text="Line Params" FontWeight="SemiBold" Margin="0,8,0,6" />
+                                <Border Background="{DynamicResource BorderBrush}" Padding="4,2" Margin="0,8,0,0">
+                                    <TextBlock Text="Line Params" FontWeight="Bold" Foreground="{DynamicResource TextBrush}" />
+                                </Border>
 
                                 <CheckBox Content="Preview" IsChecked="{Binding LinePreviewEnabled, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,6" />
 
-                                <Border BorderBrush="#DDD" BorderThickness="1" Padding="4" Margin="0,0,0,6">
+                                <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" Padding="4" Margin="0,0,0,6">
                                     <Image Source="{Binding LinePreviewImage}" Stretch="Uniform" Height="120" />
                                 </Border>
 
                                 <StackPanel Margin="0,0,0,2">
                                     <StackPanel Orientation="Horizontal" Margin="0,0,0,2">
-                                        <TextBlock Text="C1" Width="60" VerticalAlignment="Center" />
+                                        <TextBlock Text="Canny Thresh 1" Width="100" VerticalAlignment="Center" />
                                         <TextBlock Text="{Binding Line_Canny1}" Width="40" />
                                     </StackPanel>
                                     <Slider Minimum="0" Maximum="255" Value="{Binding Line_Canny1, UpdateSourceTrigger=PropertyChanged}" IsSnapToTickEnabled="True" TickFrequency="1" />
@@ -229,7 +318,7 @@
 
                                 <StackPanel Margin="0,0,0,2">
                                     <StackPanel Orientation="Horizontal" Margin="0,0,0,2">
-                                        <TextBlock Text="C2" Width="60" VerticalAlignment="Center" />
+                                        <TextBlock Text="Canny Thresh 2" Width="100" VerticalAlignment="Center" />
                                         <TextBlock Text="{Binding Line_Canny2}" Width="40" />
                                     </StackPanel>
                                     <Slider Minimum="0" Maximum="255" Value="{Binding Line_Canny2, UpdateSourceTrigger=PropertyChanged}" IsSnapToTickEnabled="True" TickFrequency="1" />
@@ -237,7 +326,7 @@
 
                                 <StackPanel Margin="0,0,0,2">
                                     <StackPanel Orientation="Horizontal" Margin="0,0,0,2">
-                                        <TextBlock Text="Hough" Width="60" VerticalAlignment="Center" />
+                                        <TextBlock Text="Hough Thresh" Width="100" VerticalAlignment="Center" />
                                         <TextBlock Text="{Binding Line_HoughThreshold}" Width="40" />
                                     </StackPanel>
                                     <Slider Minimum="1" Maximum="200" Value="{Binding Line_HoughThreshold, UpdateSourceTrigger=PropertyChanged}" IsSnapToTickEnabled="True" TickFrequency="1" />
@@ -245,7 +334,7 @@
 
                                 <StackPanel Margin="0,0,0,2">
                                     <StackPanel Orientation="Horizontal" Margin="0,0,0,2">
-                                        <TextBlock Text="MinLen" Width="60" VerticalAlignment="Center" />
+                                        <TextBlock Text="Min Line Length" Width="100" VerticalAlignment="Center" />
                                         <TextBlock Text="{Binding Line_MinLineLength}" Width="40" />
                                     </StackPanel>
                                     <Slider Minimum="1" Maximum="400" Value="{Binding Line_MinLineLength, UpdateSourceTrigger=PropertyChanged}" IsSnapToTickEnabled="True" TickFrequency="1" />
@@ -253,7 +342,7 @@
 
                                 <StackPanel Margin="0,0,0,6">
                                     <StackPanel Orientation="Horizontal" Margin="0,0,0,2">
-                                        <TextBlock Text="MaxGap" Width="60" VerticalAlignment="Center" />
+                                        <TextBlock Text="Max Line Gap" Width="100" VerticalAlignment="Center" />
                                         <TextBlock Text="{Binding Line_MaxLineGap}" Width="40" />
                                     </StackPanel>
                                     <Slider Minimum="0" Maximum="100" Value="{Binding Line_MaxLineGap, UpdateSourceTrigger=PropertyChanged}" IsSnapToTickEnabled="True" TickFrequency="1" />
@@ -261,37 +350,99 @@
                             </StackPanel>
 
                             <StackPanel Visibility="{Binding IsCaliperNode, Converter={StaticResource BoolToVis}}">
-                                <TextBlock Text="Caliper Params" FontWeight="SemiBold" Margin="0,8,0,6" />
+                                <Border Background="{DynamicResource BorderBrush}" Padding="4,2" Margin="0,8,0,0">
+                                    <TextBlock Text="Caliper Params" FontWeight="Bold" Foreground="{DynamicResource TextBrush}" />
+                                </Border>
 
-                                <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
-                                    <TextBlock Text="Ori" Width="60" VerticalAlignment="Center" />
-                                    <ComboBox Width="160" ItemsSource="{Binding AvailableCaliperOrientations}" SelectedItem="{Binding Caliper_Orientation, UpdateSourceTrigger=PropertyChanged}" />
-                                </StackPanel>
+                                <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="120" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <Border Background="{DynamicResource WindowBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
+                                            <TextBlock Text="Ori" VerticalAlignment="Center" Margin="8,4" Foreground="{DynamicResource TextBrush}"/>
+                                        </Border>
+                                        <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
+                                            <ComboBox ItemsSource="{Binding AvailableCaliperOrientations}" SelectedItem="{Binding Caliper_Orientation, UpdateSourceTrigger=PropertyChanged}" Margin="4" />
+                                        </Border>
+                                    </Grid>
+                                </Border>
 
-                                <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
-                                    <TextBlock Text="Pol" Width="60" VerticalAlignment="Center" />
-                                    <ComboBox Width="160" ItemsSource="{Binding AvailableEdgePolarities}" SelectedItem="{Binding Caliper_Polarity, UpdateSourceTrigger=PropertyChanged}" />
-                                </StackPanel>
+                                <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="120" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <Border Background="{DynamicResource WindowBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
+                                            <TextBlock Text="Pol" VerticalAlignment="Center" Margin="8,4" Foreground="{DynamicResource TextBrush}"/>
+                                        </Border>
+                                        <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
+                                            <ComboBox ItemsSource="{Binding AvailableEdgePolarities}" SelectedItem="{Binding Caliper_Polarity, UpdateSourceTrigger=PropertyChanged}" Margin="4" />
+                                        </Border>
+                                    </Grid>
+                                </Border>
 
-                                <StackPanel Orientation="Horizontal" Margin="0,0,0,2">
-                                    <TextBlock Text="Strips" Width="60" VerticalAlignment="Center" />
-                                    <TextBox Width="80" Text="{Binding Caliper_StripCount, UpdateSourceTrigger=PropertyChanged, Delay=250}" />
-                                </StackPanel>
+                                <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="120" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <Border Background="{DynamicResource WindowBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
+                                            <TextBlock Text="Strips" VerticalAlignment="Center" Margin="8,4" Foreground="{DynamicResource TextBrush}"/>
+                                        </Border>
+                                        <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
+                                            <TextBox Text="{Binding Caliper_StripCount, UpdateSourceTrigger=PropertyChanged, Delay=250}" Margin="4" />
+                                        </Border>
+                                    </Grid>
+                                </Border>
 
-                                <StackPanel Orientation="Horizontal" Margin="0,0,0,2">
-                                    <TextBlock Text="Width" Width="60" VerticalAlignment="Center" />
-                                    <TextBox Width="80" Text="{Binding Caliper_StripWidth, UpdateSourceTrigger=PropertyChanged, Delay=250}" />
-                                </StackPanel>
+                                <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="120" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <Border Background="{DynamicResource WindowBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
+                                            <TextBlock Text="Width" VerticalAlignment="Center" Margin="8,4" Foreground="{DynamicResource TextBrush}"/>
+                                        </Border>
+                                        <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
+                                            <TextBox Text="{Binding Caliper_StripWidth, UpdateSourceTrigger=PropertyChanged, Delay=250}" Margin="4" />
+                                        </Border>
+                                    </Grid>
+                                </Border>
 
-                                <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
-                                    <TextBlock Text="Length" Width="60" VerticalAlignment="Center" />
-                                    <TextBox Width="80" Text="{Binding Caliper_StripLength, UpdateSourceTrigger=PropertyChanged, Delay=250}" />
-                                </StackPanel>
+                                <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="120" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <Border Background="{DynamicResource WindowBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
+                                            <TextBlock Text="Length" VerticalAlignment="Center" Margin="8,4" Foreground="{DynamicResource TextBrush}"/>
+                                        </Border>
+                                        <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
+                                            <TextBox Text="{Binding Caliper_StripLength, UpdateSourceTrigger=PropertyChanged, Delay=250}" Margin="4" />
+                                        </Border>
+                                    </Grid>
+                                </Border>
 
-                                <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
-                                    <TextBlock Text="MinStr" Width="60" VerticalAlignment="Center" />
-                                    <TextBox Width="80" Text="{Binding Caliper_MinEdgeStrength, UpdateSourceTrigger=PropertyChanged, Delay=250}" />
-                                </StackPanel>
+                                <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="120" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <Border Background="{DynamicResource WindowBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
+                                            <TextBlock Text="MinStr" VerticalAlignment="Center" Margin="8,4" Foreground="{DynamicResource TextBrush}"/>
+                                        </Border>
+                                        <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
+                                            <TextBox Text="{Binding Caliper_MinEdgeStrength, UpdateSourceTrigger=PropertyChanged, Delay=250}" Margin="4" />
+                                        </Border>
+                                    </Grid>
+                                </Border>
 
                                 <StackPanel Orientation="Horizontal" Margin="0,0,0,2">
                                     <TextBlock Text="Found" Width="60" VerticalAlignment="Center" />
@@ -304,68 +455,170 @@
                             </StackPanel>
 
                             <StackPanel Visibility="{Binding IsAnyDistanceNode, Converter={StaticResource BoolToVis}}">
-                                <TextBlock Text="Distance Spec" FontWeight="SemiBold" Margin="0,8,0,6" />
+                                <Border Background="{DynamicResource BorderBrush}" Padding="4,2" Margin="0,8,0,0">
+                                    <TextBlock Text="Distance Spec" FontWeight="Bold" Foreground="{DynamicResource TextBrush}" />
+                                </Border>
 
                                 <StackPanel Visibility="{Binding IsDistanceNode, Converter={StaticResource BoolToVis}}">
                                     <TextBlock Text="Inputs" FontWeight="SemiBold" Margin="0,0,0,6" />
 
-                                    <StackPanel Orientation="Horizontal" Margin="0,0,0,2">
-                                        <TextBlock Text="A" Width="60" VerticalAlignment="Center" />
-                                        <ComboBox Width="160" ItemsSource="{Binding AvailableDistanceRefNames}" SelectedItem="{Binding Distance_PointA, UpdateSourceTrigger=PropertyChanged}" />
-                                    </StackPanel>
-                                    <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
-                                        <TextBlock Text="B" Width="60" VerticalAlignment="Center" />
-                                        <ComboBox Width="160" ItemsSource="{Binding AvailableDistanceRefNames}" SelectedItem="{Binding Distance_PointB, UpdateSourceTrigger=PropertyChanged}" />
-                                    </StackPanel>
+                                    <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="120" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <Border Background="{DynamicResource WindowBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
+                                            <TextBlock Text="A" VerticalAlignment="Center" Margin="8,4" Foreground="{DynamicResource TextBrush}"/>
+                                        </Border>
+                                        <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
+                                            <ComboBox ItemsSource="{Binding AvailableDistanceRefNames}" SelectedItem="{Binding Distance_PointA, UpdateSourceTrigger=PropertyChanged}" Margin="4" />
+                                        </Border>
+                                    </Grid>
+                                </Border>
+                                    <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="120" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <Border Background="{DynamicResource WindowBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
+                                            <TextBlock Text="B" VerticalAlignment="Center" Margin="8,4" Foreground="{DynamicResource TextBrush}"/>
+                                        </Border>
+                                        <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
+                                            <ComboBox ItemsSource="{Binding AvailableDistanceRefNames}" SelectedItem="{Binding Distance_PointB, UpdateSourceTrigger=PropertyChanged}" Margin="4" />
+                                        </Border>
+                                    </Grid>
+                                </Border>
                                 </StackPanel>
 
                                 <StackPanel Visibility="{Binding IsLineLineDistanceNode, Converter={StaticResource BoolToVis}}">
                                     <TextBlock Text="Inputs" FontWeight="SemiBold" Margin="0,0,0,6" />
 
-                                    <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
-                                        <TextBlock Text="Mode" Width="60" VerticalAlignment="Center" />
-                                        <ComboBox Width="160" ItemsSource="{Binding AvailableLineLineDistanceModes}" SelectedItem="{Binding LineLineDistance_Mode, UpdateSourceTrigger=PropertyChanged}" />
-                                    </StackPanel>
+                                    <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="120" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <Border Background="{DynamicResource WindowBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
+                                            <TextBlock Text="Mode" VerticalAlignment="Center" Margin="8,4" Foreground="{DynamicResource TextBrush}"/>
+                                        </Border>
+                                        <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
+                                            <ComboBox ItemsSource="{Binding AvailableLineLineDistanceModes}" SelectedItem="{Binding LineLineDistance_Mode, UpdateSourceTrigger=PropertyChanged}" Margin="4" />
+                                        </Border>
+                                    </Grid>
+                                </Border>
 
-                                    <StackPanel Orientation="Horizontal" Margin="0,0,0,2">
-                                        <TextBlock Text="A" Width="60" VerticalAlignment="Center" />
-                                        <ComboBox Width="160" ItemsSource="{Binding AvailableLineNames}" SelectedItem="{Binding LineLineDistance_LineA, UpdateSourceTrigger=PropertyChanged}" />
-                                    </StackPanel>
-                                    <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
-                                        <TextBlock Text="B" Width="60" VerticalAlignment="Center" />
-                                        <ComboBox Width="160" ItemsSource="{Binding AvailableLineNames}" SelectedItem="{Binding LineLineDistance_LineB, UpdateSourceTrigger=PropertyChanged}" />
-                                    </StackPanel>
+                                    <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="120" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <Border Background="{DynamicResource WindowBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
+                                            <TextBlock Text="A" VerticalAlignment="Center" Margin="8,4" Foreground="{DynamicResource TextBrush}"/>
+                                        </Border>
+                                        <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
+                                            <ComboBox ItemsSource="{Binding AvailableLineNames}" SelectedItem="{Binding LineLineDistance_LineA, UpdateSourceTrigger=PropertyChanged}" Margin="4" />
+                                        </Border>
+                                    </Grid>
+                                </Border>
+                                    <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="120" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <Border Background="{DynamicResource WindowBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
+                                            <TextBlock Text="B" VerticalAlignment="Center" Margin="8,4" Foreground="{DynamicResource TextBrush}"/>
+                                        </Border>
+                                        <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
+                                            <ComboBox ItemsSource="{Binding AvailableLineNames}" SelectedItem="{Binding LineLineDistance_LineB, UpdateSourceTrigger=PropertyChanged}" Margin="4" />
+                                        </Border>
+                                    </Grid>
+                                </Border>
                                 </StackPanel>
 
                                 <StackPanel Visibility="{Binding IsPointLineDistanceNode, Converter={StaticResource BoolToVis}}">
                                     <TextBlock Text="Inputs" FontWeight="SemiBold" Margin="0,0,0,6" />
 
-                                    <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
-                                        <TextBlock Text="Mode" Width="60" VerticalAlignment="Center" />
-                                        <ComboBox Width="160" ItemsSource="{Binding AvailablePointLineDistanceModes}" SelectedItem="{Binding PointLineDistance_Mode, UpdateSourceTrigger=PropertyChanged}" />
-                                    </StackPanel>
+                                    <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="120" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <Border Background="{DynamicResource WindowBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
+                                            <TextBlock Text="Mode" VerticalAlignment="Center" Margin="8,4" Foreground="{DynamicResource TextBrush}"/>
+                                        </Border>
+                                        <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
+                                            <ComboBox ItemsSource="{Binding AvailablePointLineDistanceModes}" SelectedItem="{Binding PointLineDistance_Mode, UpdateSourceTrigger=PropertyChanged}" Margin="4" />
+                                        </Border>
+                                    </Grid>
+                                </Border>
 
-                                    <StackPanel Orientation="Horizontal" Margin="0,0,0,2">
-                                        <TextBlock Text="P" Width="60" VerticalAlignment="Center" />
-                                        <ComboBox Width="160" ItemsSource="{Binding AvailablePointNames}" SelectedItem="{Binding PointLineDistance_Point, UpdateSourceTrigger=PropertyChanged}" />
-                                    </StackPanel>
-                                    <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
-                                        <TextBlock Text="L" Width="60" VerticalAlignment="Center" />
-                                        <ComboBox Width="160" ItemsSource="{Binding AvailableLineNames}" SelectedItem="{Binding PointLineDistance_Line, UpdateSourceTrigger=PropertyChanged}" />
-                                    </StackPanel>
+                                    <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="120" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <Border Background="{DynamicResource WindowBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
+                                            <TextBlock Text="P" VerticalAlignment="Center" Margin="8,4" Foreground="{DynamicResource TextBrush}"/>
+                                        </Border>
+                                        <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
+                                            <ComboBox ItemsSource="{Binding AvailablePointNames}" SelectedItem="{Binding PointLineDistance_Point, UpdateSourceTrigger=PropertyChanged}" Margin="4" />
+                                        </Border>
+                                    </Grid>
+                                </Border>
+                                    <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="120" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <Border Background="{DynamicResource WindowBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
+                                            <TextBlock Text="L" VerticalAlignment="Center" Margin="8,4" Foreground="{DynamicResource TextBrush}"/>
+                                        </Border>
+                                        <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
+                                            <ComboBox ItemsSource="{Binding AvailableLineNames}" SelectedItem="{Binding PointLineDistance_Line, UpdateSourceTrigger=PropertyChanged}" Margin="4" />
+                                        </Border>
+                                    </Grid>
+                                </Border>
                                 </StackPanel>
 
                                 <StackPanel Visibility="{Binding IsAngleNode, Converter={StaticResource BoolToVis}}">
                                     <TextBlock Text="Inputs" FontWeight="SemiBold" Margin="0,0,0,6" />
 
-                                    <StackPanel Orientation="Horizontal" Margin="0,0,0,2">
-                                        <TextBlock Text="A" Width="60" VerticalAlignment="Center" />
-                                        <ComboBox Width="160" ItemsSource="{Binding AvailableLineNames}" SelectedItem="{Binding Angle_LineA, UpdateSourceTrigger=PropertyChanged}" />
-                                    </StackPanel>
-                                    <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
-                                        <TextBlock Text="B" Width="60" VerticalAlignment="Center" />
-                                        <ComboBox Width="160" ItemsSource="{Binding AvailableLineNames}" SelectedItem="{Binding Angle_LineB, UpdateSourceTrigger=PropertyChanged}" />
-                                    </StackPanel>
+                                    <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="120" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <Border Background="{DynamicResource WindowBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
+                                            <TextBlock Text="A" VerticalAlignment="Center" Margin="8,4" Foreground="{DynamicResource TextBrush}"/>
+                                        </Border>
+                                        <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
+                                            <ComboBox ItemsSource="{Binding AvailableLineNames}" SelectedItem="{Binding Angle_LineA, UpdateSourceTrigger=PropertyChanged}" Margin="4" />
+                                        </Border>
+                                    </Grid>
+                                </Border>
+                                    <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="120" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <Border Background="{DynamicResource WindowBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
+                                            <TextBlock Text="B" VerticalAlignment="Center" Margin="8,4" Foreground="{DynamicResource TextBrush}"/>
+                                        </Border>
+                                        <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
+                                            <ComboBox ItemsSource="{Binding AvailableLineNames}" SelectedItem="{Binding Angle_LineB, UpdateSourceTrigger=PropertyChanged}" Margin="4" />
+                                        </Border>
+                                    </Grid>
+                                </Border>
                                 </StackPanel>
 
                                 <StackPanel Visibility="{Binding IsEdgePairNode, Converter={StaticResource BoolToVis}}">
@@ -373,26 +626,67 @@
 
                                     <StackPanel Orientation="Horizontal" Margin="0,0,0,2">
                                         <TextBlock Text="A" Width="60" VerticalAlignment="Center" />
+                                        <TextBlock Text="Ref A" Width="60" VerticalAlignment="Center" />
                                         <ComboBox Width="160" ItemsSource="{Binding AvailableLineNames}" SelectedItem="{Binding EdgePair_RefA, UpdateSourceTrigger=PropertyChanged}" />
                                     </StackPanel>
-                                    <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
-                                        <TextBlock Text="B" Width="60" VerticalAlignment="Center" />
-                                        <ComboBox Width="160" ItemsSource="{Binding AvailableLineNames}" SelectedItem="{Binding EdgePair_RefB, UpdateSourceTrigger=PropertyChanged}" />
-                                    </StackPanel>
+                                    <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="120" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <Border Background="{DynamicResource WindowBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
+                                            <TextBlock Text="Ref B" VerticalAlignment="Center" Margin="8,4" Foreground="{DynamicResource TextBrush}"/>
+                                        </Border>
+                                        <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
+                                            <ComboBox ItemsSource="{Binding AvailableLineNames}" SelectedItem="{Binding EdgePair_RefB, UpdateSourceTrigger=PropertyChanged}" Margin="4" />
+                                        </Border>
+                                    </Grid>
+                                </Border>
                                 </StackPanel>
 
-                                <StackPanel Orientation="Horizontal" Margin="0,0,0,2">
-                                    <TextBlock Text="Nom" Width="60" VerticalAlignment="Center" />
-                                    <TextBox Width="80" Text="{Binding Distance_Nominal, UpdateSourceTrigger=PropertyChanged, Delay=250}" />
-                                </StackPanel>
-                                <StackPanel Orientation="Horizontal" Margin="0,0,0,2">
-                                    <TextBlock Text="Tol+" Width="60" VerticalAlignment="Center" />
-                                    <TextBox Width="80" Text="{Binding Distance_TolPlus, UpdateSourceTrigger=PropertyChanged, Delay=250}" />
-                                </StackPanel>
-                                <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
-                                    <TextBlock Text="Tol-" Width="60" VerticalAlignment="Center" />
-                                    <TextBox Width="80" Text="{Binding Distance_TolMinus, UpdateSourceTrigger=PropertyChanged, Delay=250}" />
-                                </StackPanel>
+                                <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="120" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <Border Background="{DynamicResource WindowBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
+                                            <TextBlock Text="Nominal" VerticalAlignment="Center" Margin="8,4" Foreground="{DynamicResource TextBrush}"/>
+                                        </Border>
+                                        <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
+                                            <TextBox Text="{Binding Distance_Nominal, UpdateSourceTrigger=PropertyChanged, Delay=250}" Margin="4" />
+                                        </Border>
+                                    </Grid>
+                                </Border>
+                                <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="120" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <Border Background="{DynamicResource WindowBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
+                                            <TextBlock Text="Tolerance+" VerticalAlignment="Center" Margin="8,4" Foreground="{DynamicResource TextBrush}"/>
+                                        </Border>
+                                        <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
+                                            <TextBox Text="{Binding Distance_TolPlus, UpdateSourceTrigger=PropertyChanged, Delay=250}" Margin="4" />
+                                        </Border>
+                                    </Grid>
+                                </Border>
+                                <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="120" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <Border Background="{DynamicResource WindowBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
+                                            <TextBlock Text="Tolerance-" VerticalAlignment="Center" Margin="8,4" Foreground="{DynamicResource TextBrush}"/>
+                                        </Border>
+                                        <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
+                                            <TextBox Text="{Binding Distance_TolMinus, UpdateSourceTrigger=PropertyChanged, Delay=250}" Margin="4" />
+                                        </Border>
+                                    </Grid>
+                                </Border>
 
                                 <StackPanel Orientation="Horizontal" Margin="0,0,0,2">
                                     <TextBlock Text="Value" Width="60" VerticalAlignment="Center" />
@@ -405,36 +699,50 @@
                             </StackPanel>
 
                             <StackPanel Visibility="{Binding IsConditionNode, Converter={StaticResource BoolToVis}}">
-                                <TextBlock Text="Condition Params" FontWeight="SemiBold" Margin="0,8,0,6" />
+                                <Border Background="{DynamicResource BorderBrush}" Padding="4,2" Margin="0,8,0,0">
+                                    <TextBlock Text="Condition Params" FontWeight="Bold" Foreground="{DynamicResource TextBrush}" />
+                                </Border>
 
-                                <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
-                                    <TextBlock Text="Inputs" Width="60" VerticalAlignment="Center" />
-                                    <TextBox Width="60" Text="{Binding Condition_InputCount, UpdateSourceTrigger=PropertyChanged, Delay=250}" />
-                                </StackPanel>
+                                <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="120" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <Border Background="{DynamicResource WindowBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
+                                            <TextBlock Text="Inputs" VerticalAlignment="Center" Margin="8,4" Foreground="{DynamicResource TextBrush}"/>
+                                        </Border>
+                                        <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
+                                            <TextBox Text="{Binding Condition_InputCount, UpdateSourceTrigger=PropertyChanged, Delay=250}" Margin="4" />
+                                        </Border>
+                                    </Grid>
+                                </Border>
 
                                 <TextBlock Text="Expression" Margin="0,0,0,2" />
                                 <TextBox Text="{Binding Condition_Expression, UpdateSourceTrigger=PropertyChanged}"
                                          AcceptsReturn="True"
                                          Height="80"
                                          TextWrapping="Wrap"
-                                         ToolTip="Ví dụ số: Caliper1 &gt; 10 &amp;&amp; Origin.Pass&#x0a;Ví dụ chữ: QR1.Text == &quot;ABC123&quot; || QR1.Text == &quot;LOT-01&quot;&#x0a;Biến trong Condition lấy theo đúng tên tool: Origin, Caliper1, QR1, EP.MyEdge, SC.MySurface, ...&#x0a;So sánh chữ hỗ trợ == và !=; so sánh số hỗ trợ &gt;, &lt;, &gt;=, &lt;=, ==, !=" />
-                                <TextBlock Text="Ví dụ: Caliper1 &gt; 10 || QR1.Text == &quot;ABC123&quot; | biến theo tên tool: Origin, Caliper1, QR1, EP.*, SC.*"
+                                         ToolTip="VÃ­ dá»¥ sá»‘: Caliper1 &gt; 10 &amp;&amp; Origin.Pass&#x0a;VÃ­ dá»¥ chá»¯: QR1.Text == &quot;ABC123&quot; || QR1.Text == &quot;LOT-01&quot;&#x0a;Biáº¿n trong Condition láº¥y theo Ä‘Ãºng tÃªn tool: Origin, Caliper1, QR1, EP.MyEdge, SC.MySurface, ...&#x0a;So sÃ¡nh chá»¯ há»— trá»£ == vÃ  !=; so sÃ¡nh sá»‘ há»— trá»£ &gt;, &lt;, &gt;=, &lt;=, ==, !=" />
+                                <TextBlock Text="VÃ­ dá»¥: Caliper1 &gt; 10 || QR1.Text == &quot;ABC123&quot; | biáº¿n theo tÃªn tool: Origin, Caliper1, QR1, EP.*, SC.*"
                                            FontSize="11"
-                                           Foreground="#777"
+                                           Foreground="{DynamicResource TextMutedBrush}"
                                            Margin="0,2,0,0"
                                            TextWrapping="Wrap" />
-                                <Border BorderBrush="#D9D9D9" BorderThickness="1" CornerRadius="4" Padding="6" Margin="0,6,0,0" Background="#FAFAFA">
+                                <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="4" Padding="6" Margin="0,6,0,0" Background="{DynamicResource PanelAltBackgroundBrush}">
                                     <StackPanel>
                                         <TextBlock Text="Condition cheatsheet" FontWeight="SemiBold" Margin="0,0,0,4" />
-                                        <TextBlock Text="{}/ Caliper1 &gt; 10  - số" FontSize="11" Foreground="#555" TextWrapping="Wrap" />
-                                        <TextBlock Text="{}/ Origin.Pass &amp;&amp; QR1.Pass  - bool" FontSize="11" Foreground="#555" TextWrapping="Wrap" />
-                                        <TextBlock Text="{}/ QR1.Text == &quot;ABC123&quot;  - text từ CodeDetection" FontSize="11" Foreground="#555" TextWrapping="Wrap" />
+                                        <TextBlock Text="{}/ Caliper1 &gt; 10  - sá»‘" FontSize="11" Foreground="{DynamicResource TextMutedBrush}" TextWrapping="Wrap" />
+                                        <TextBlock Text="{}/ Origin.Pass &amp;&amp; QR1.Pass  - bool" FontSize="11" Foreground="{DynamicResource TextMutedBrush}" TextWrapping="Wrap" />
+                                        <TextBlock Text="{}/ QR1.Text == &quot;ABC123&quot;  - text tá»« CodeDetection" FontSize="11" Foreground="{DynamicResource TextMutedBrush}" TextWrapping="Wrap" />
                                     </StackPanel>
                                 </Border>
                             </StackPanel>
 
                             <StackPanel Visibility="{Binding IsTextNode, Converter={StaticResource BoolToVis}}">
-                                <TextBlock Text="Text Params" FontWeight="SemiBold" Margin="0,8,0,6" />
+                                <Border Background="{DynamicResource BorderBrush}" Padding="4,2" Margin="0,8,0,0">
+                                    <TextBlock Text="Text Params" FontWeight="Bold" Foreground="{DynamicResource TextBrush}" />
+                                </Border>
 
                                 <TextBlock Text="Text" Margin="0,0,0,2" />
                                 <TextBox Text="{Binding TextNode_Text, UpdateSourceTrigger=PropertyChanged}"
@@ -442,49 +750,71 @@
                                          Height="60"
                                          TextWrapping="Wrap"
                                          Margin="0,0,0,6"
-                                         ToolTip="Dùng placeholder để ghép kết quả từ tool khác vào text. Hỗ trợ cả {ToolName.Value} và ${ToolName.Value}. Ví dụ: Kết quả Caliper: {Caliper1.Value:0.000} mm | QR: {QR1.Text} | Origin pass: {Origin.Pass}" />
-                                <TextBlock Text="Ví dụ: Kết quả Caliper: {Caliper1.Value:0.000} mm | QR: {QR1.Text} | Origin pass: {Origin.Pass}"
+                                         ToolTip="DÃ¹ng placeholder Ä‘á»ƒ ghÃ©p káº¿t quáº£ tá»« tool khÃ¡c vÃ o text. Há»— trá»£ cáº£ {ToolName.Value} vÃ  ${ToolName.Value}. VÃ­ dá»¥: Káº¿t quáº£ Caliper: {Caliper1.Value:0.000} mm | QR: {QR1.Text} | Origin pass: {Origin.Pass}" />
+                                <TextBlock Text="VÃ­ dá»¥: Káº¿t quáº£ Caliper: {Caliper1.Value:0.000} mm | QR: {QR1.Text} | Origin pass: {Origin.Pass}"
                                            FontSize="11"
-                                           Foreground="#777"
+                                           Foreground="{DynamicResource TextMutedBrush}"
                                            Margin="0,0,0,6"
                                            TextWrapping="Wrap" />
 
-                                <Border BorderBrush="#D9D9D9" BorderThickness="1" CornerRadius="4" Padding="6" Margin="0,0,0,8" Background="#FAFAFA">
+                                <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="4" Padding="6" Margin="0,0,0,8" Background="{DynamicResource PanelAltBackgroundBrush}">
                                     <StackPanel>
                                         <TextBlock Text="Placeholder cheatsheet" FontWeight="SemiBold" Margin="0,0,0,4" />
-                                        <TextBlock Text="{}{Caliper1.Value}  - giá trị đo của Caliper" FontSize="11" Foreground="#555" TextWrapping="Wrap" />
-                                        <TextBlock Text="{}{Origin.Pass}  - trạng thái pass/fail của Origin" FontSize="11" Foreground="#555" TextWrapping="Wrap" />
-                                        <TextBlock Text="{}{QR1.Text}  - text đọc được từ QR/Barcode" FontSize="11" Foreground="#555" TextWrapping="Wrap" />
-                                        <TextBlock Text="{}{SC.Surface1.Score}  - score/area của SurfaceCompare" FontSize="11" Foreground="#555" TextWrapping="Wrap" />
+                                        <TextBlock Text="{}{Caliper1.Value}  - giÃ¡ trá»‹ Ä‘o cá»§a Caliper" FontSize="11" Foreground="{DynamicResource TextMutedBrush}" TextWrapping="Wrap" />
+                                        <TextBlock Text="{}{Origin.Pass}  - tráº¡ng thÃ¡i pass/fail cá»§a Origin" FontSize="11" Foreground="{DynamicResource TextMutedBrush}" TextWrapping="Wrap" />
+                                        <TextBlock Text="{}{QR1.Text}  - text Ä‘á»c Ä‘Æ°á»£c tá»« QR/Barcode" FontSize="11" Foreground="{DynamicResource TextMutedBrush}" TextWrapping="Wrap" />
+                                        <TextBlock Text="{}{SC.Surface1.Score}  - score/area cá»§a SurfaceCompare" FontSize="11" Foreground="{DynamicResource TextMutedBrush}" TextWrapping="Wrap" />
                                     </StackPanel>
                                 </Border>
 
-                                <StackPanel Orientation="Horizontal" Margin="0,0,0,2">
-                                    <TextBlock Text="X" Width="60" VerticalAlignment="Center" />
-                                    <TextBox Width="80" Text="{Binding TextNode_X, UpdateSourceTrigger=PropertyChanged, Delay=150}" />
-                                </StackPanel>
-                                <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
-                                    <TextBlock Text="Y" Width="60" VerticalAlignment="Center" />
-                                    <TextBox Width="80" Text="{Binding TextNode_Y, UpdateSourceTrigger=PropertyChanged, Delay=150}" />
-                                </StackPanel>
+                                <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="120" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <Border Background="{DynamicResource WindowBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
+                                            <TextBlock Text="X" VerticalAlignment="Center" Margin="8,4" Foreground="{DynamicResource TextBrush}"/>
+                                        </Border>
+                                        <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
+                                            <TextBox Text="{Binding TextNode_X, UpdateSourceTrigger=PropertyChanged, Delay=150}" Margin="4" />
+                                        </Border>
+                                    </Grid>
+                                </Border>
+                                <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="120" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <Border Background="{DynamicResource WindowBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
+                                            <TextBlock Text="Y" VerticalAlignment="Center" Margin="8,4" Foreground="{DynamicResource TextBrush}"/>
+                                        </Border>
+                                        <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
+                                            <TextBox Text="{Binding TextNode_Y, UpdateSourceTrigger=PropertyChanged, Delay=150}" Margin="4" />
+                                        </Border>
+                                    </Grid>
+                                </Border>
 
                                 <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
                                     <TextBlock Text="Color" Width="60" VerticalAlignment="Center" />
                                     <Button Command="{Binding TextNode_PickDefaultColorCommand}" Margin="0,0,4,0" Padding="0" BorderThickness="0" Background="Transparent" ToolTip="Click to pick a color">
-                                        <Rectangle Width="20" Height="20" Stroke="#999" StrokeThickness="1"
+                                        <Rectangle Width="20" Height="20" Stroke="{DynamicResource TextMutedBrush}" StrokeThickness="1"
                                                    Fill="{Binding TextNode_DefaultColor, Converter={StaticResource HexToBrush}}" />
                                     </Button>
                                     <TextBox Width="130" Text="{Binding TextNode_DefaultColor, UpdateSourceTrigger=PropertyChanged, Delay=150}" />
                                 </StackPanel>
 
-                                <TextBlock Text="Color Rules" FontWeight="SemiBold" Margin="0,8,0,6" />
+                                <Border Background="{DynamicResource BorderBrush}" Padding="4,2" Margin="0,8,0,0">
+                                    <TextBlock Text="Color Rules" FontWeight="Bold" Foreground="{DynamicResource TextBrush}" />
+                                </Border>
 
                                 <Button Content="Add Rule" Command="{Binding TextNode_AddConditionCommand}" Width="90" Margin="0,0,0,6" />
 
                                 <ItemsControl ItemsSource="{Binding TextNode_ConditionRows}">
                                     <ItemsControl.ItemTemplate>
                                         <DataTemplate>
-                                            <Border BorderBrush="#DDD" BorderThickness="1" Padding="4" Margin="0,0,0,6">
+                                            <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" Padding="4" Margin="0,0,0,6">
                                                 <StackPanel>
                                                     <TextBlock Text="Expression" Margin="0,0,0,2" />
                                                     <TextBox Text="{Binding Expression, UpdateSourceTrigger=PropertyChanged}"
@@ -492,10 +822,10 @@
                                                              Height="50"
                                                              TextWrapping="Wrap"
                                                              Margin="0,0,0,6"
-                                                             ToolTip="Ví dụ: text.Contains(&quot;OK&quot;) || text.Contains(&quot;FAIL&quot;)&#x0a;Trong Text rule, biến thường là text và có thể ghép nhiều điều kiện bằng &amp;&amp; / ||.&#x0a;Nếu muốn đổi màu theo kết quả tool khác, hãy đưa kết quả đó vào placeholder của Text rồi dùng expression ở đây." />
-                                                    <TextBlock Text="Ví dụ: text.Contains(&quot;OK&quot;) || text.Contains(&quot;FAIL&quot;)"
+                                                             ToolTip="VÃ­ dá»¥: text.Contains(&quot;OK&quot;) || text.Contains(&quot;FAIL&quot;)&#x0a;Trong Text rule, biáº¿n thÆ°á»ng lÃ  text vÃ  cÃ³ thá»ƒ ghÃ©p nhiá»u Ä‘iá»u kiá»‡n báº±ng &amp;&amp; / ||.&#x0a;Náº¿u muá»‘n Ä‘á»•i mÃ u theo káº¿t quáº£ tool khÃ¡c, hÃ£y Ä‘Æ°a káº¿t quáº£ Ä‘Ã³ vÃ o placeholder cá»§a Text rá»“i dÃ¹ng expression á»Ÿ Ä‘Ã¢y." />
+                                                    <TextBlock Text="VÃ­ dá»¥: text.Contains(&quot;OK&quot;) || text.Contains(&quot;FAIL&quot;)"
                                                                FontSize="11"
-                                                               Foreground="#777"
+                                                               Foreground="{DynamicResource TextMutedBrush}"
                                                                Margin="0,0,0,6"
                                                                TextWrapping="Wrap" />
 
@@ -504,7 +834,7 @@
                                                         <Button Command="{Binding DataContext.TextNode_PickConditionColorCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                                                 CommandParameter="{Binding}"
                                                                 Margin="0,0,4,0" Padding="0" BorderThickness="0" Background="Transparent" ToolTip="Click to pick a color">
-                                                            <Rectangle Width="20" Height="20" Stroke="#999" StrokeThickness="1"
+                                                            <Rectangle Width="20" Height="20" Stroke="{DynamicResource TextMutedBrush}" StrokeThickness="1"
                                                                        Fill="{Binding Color, Converter={StaticResource HexToBrush}}" />
                                                         </Button>
                                                         <TextBox Width="80" Text="{Binding Color, UpdateSourceTrigger=PropertyChanged, Delay=150}" Margin="0,0,6,0" />
@@ -520,12 +850,24 @@
                             </StackPanel>
 
                             <StackPanel Visibility="{Binding IsBlobDetectionNode, Converter={StaticResource BoolToVis}}">
-                                <TextBlock Text="Blob Detection" FontWeight="SemiBold" Margin="0,8,0,6" />
+                                <Border Background="{DynamicResource BorderBrush}" Padding="4,2" Margin="0,8,0,0">
+                                    <TextBlock Text="Blob Detection" FontWeight="Bold" Foreground="{DynamicResource TextBrush}" />
+                                </Border>
 
-                                <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
-                                    <TextBlock Text="Polarity" Width="60" VerticalAlignment="Center" />
-                                    <ComboBox Width="160" ItemsSource="{Binding AvailableBlobPolarities}" SelectedItem="{Binding Blob_Polarity, UpdateSourceTrigger=PropertyChanged}" />
-                                </StackPanel>
+                                <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="120" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <Border Background="{DynamicResource WindowBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
+                                            <TextBlock Text="Polarity" VerticalAlignment="Center" Margin="8,4" Foreground="{DynamicResource TextBrush}"/>
+                                        </Border>
+                                        <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
+                                            <ComboBox ItemsSource="{Binding AvailableBlobPolarities}" SelectedItem="{Binding Blob_Polarity, UpdateSourceTrigger=PropertyChanged}" Margin="4" />
+                                        </Border>
+                                    </Grid>
+                                </Border>
 
                                 <StackPanel Orientation="Horizontal" Margin="0,0,0,2">
                                     <TextBlock Text="Thr" Width="60" VerticalAlignment="Center" />
@@ -533,18 +875,38 @@
                                 </StackPanel>
                                 <Slider Minimum="0" Maximum="255" Value="{Binding Blob_Threshold, UpdateSourceTrigger=PropertyChanged}" IsSnapToTickEnabled="True" TickFrequency="1" Margin="0,0,0,6" />
 
-                                <Border BorderBrush="#CCC" BorderThickness="1" Padding="2" Margin="0,0,0,6">
+                                <Border BorderBrush="{DynamicResource DarkBorderBrush}" BorderThickness="1" Padding="2" Margin="0,0,0,6">
                                     <Image Source="{Binding BlobThresholdPreviewImage}" Stretch="Uniform" Height="120" />
                                 </Border>
 
-                                <StackPanel Orientation="Horizontal" Margin="0,0,0,2">
-                                    <TextBlock Text="MinA" Width="60" VerticalAlignment="Center" />
-                                    <TextBox Width="80" Text="{Binding Blob_MinBlobArea, UpdateSourceTrigger=PropertyChanged, Delay=250}" />
-                                </StackPanel>
-                                <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
-                                    <TextBlock Text="MaxA" Width="60" VerticalAlignment="Center" />
-                                    <TextBox Width="80" Text="{Binding Blob_MaxBlobArea, UpdateSourceTrigger=PropertyChanged, Delay=250}" />
-                                </StackPanel>
+                                <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="120" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <Border Background="{DynamicResource WindowBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
+                                            <TextBlock Text="MinA" VerticalAlignment="Center" Margin="8,4" Foreground="{DynamicResource TextBrush}"/>
+                                        </Border>
+                                        <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
+                                            <TextBox Text="{Binding Blob_MinBlobArea, UpdateSourceTrigger=PropertyChanged, Delay=250}" Margin="4" />
+                                        </Border>
+                                    </Grid>
+                                </Border>
+                                <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="120" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <Border Background="{DynamicResource WindowBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
+                                            <TextBlock Text="MaxA" VerticalAlignment="Center" Margin="8,4" Foreground="{DynamicResource TextBrush}"/>
+                                        </Border>
+                                        <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
+                                            <TextBox Text="{Binding Blob_MaxBlobArea, UpdateSourceTrigger=PropertyChanged, Delay=250}" Margin="4" />
+                                        </Border>
+                                    </Grid>
+                                </Border>
 
                                 <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
                                     <TextBlock Text="Count" Width="60" VerticalAlignment="Center" />
@@ -553,40 +915,102 @@
                             </StackPanel>
 
                             <StackPanel Visibility="{Binding IsSurfaceCompareNode, Converter={StaticResource BoolToVis}}">
-                                <TextBlock Text="Surface Compare" FontWeight="SemiBold" Margin="0,8,0,6" />
+                                <Border Background="{DynamicResource BorderBrush}" Padding="4,2" Margin="0,8,0,0">
+                                    <TextBlock Text="Surface Compare" FontWeight="Bold" Foreground="{DynamicResource TextBrush}" />
+                                </Border>
 
                                 <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
                                     <Button Content="Set Search ROI" Command="{Binding SurfaceCompare_SetSearchRoiCommand}" Width="100" Margin="0,0,6,0" />
                                     <Button Content="Set Template ROI" Command="{Binding SurfaceCompare_SetTemplateRoiCommand}" Width="100" />
                                 </StackPanel>
 
-                                <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
-                                    <TextBlock Text="Thr" Width="60" VerticalAlignment="Center" />
-                                    <TextBox Width="80" Text="{Binding SurfaceCompare_DiffThreshold, UpdateSourceTrigger=PropertyChanged, Delay=150}" />
-                                </StackPanel>
+                                <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="120" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <Border Background="{DynamicResource WindowBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
+                                            <TextBlock Text="Thr" VerticalAlignment="Center" Margin="8,4" Foreground="{DynamicResource TextBrush}"/>
+                                        </Border>
+                                        <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
+                                            <TextBox Text="{Binding SurfaceCompare_DiffThreshold, UpdateSourceTrigger=PropertyChanged, Delay=150}" Margin="4" />
+                                        </Border>
+                                    </Grid>
+                                </Border>
 
-                                <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
-                                    <TextBlock Text="Morph" Width="60" VerticalAlignment="Center" />
-                                    <TextBox Width="80" Text="{Binding SurfaceCompare_MorphKernel, UpdateSourceTrigger=PropertyChanged, Delay=150}" />
-                                </StackPanel>
+                                <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="120" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <Border Background="{DynamicResource WindowBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
+                                            <TextBlock Text="Morph" VerticalAlignment="Center" Margin="8,4" Foreground="{DynamicResource TextBrush}"/>
+                                        </Border>
+                                        <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
+                                            <TextBox Text="{Binding SurfaceCompare_MorphKernel, UpdateSourceTrigger=PropertyChanged, Delay=150}" Margin="4" />
+                                        </Border>
+                                    </Grid>
+                                </Border>
 
-                                <StackPanel Orientation="Horizontal" Margin="0,0,0,2">
-                                    <TextBlock Text="MinA" Width="60" VerticalAlignment="Center" />
-                                    <TextBox Width="80" Text="{Binding SurfaceCompare_MinBlobArea, UpdateSourceTrigger=PropertyChanged, Delay=150}" />
-                                </StackPanel>
-                                <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
-                                    <TextBlock Text="MaxA" Width="60" VerticalAlignment="Center" />
-                                    <TextBox Width="80" Text="{Binding SurfaceCompare_MaxBlobArea, UpdateSourceTrigger=PropertyChanged, Delay=150}" />
-                                </StackPanel>
+                                <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="120" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <Border Background="{DynamicResource WindowBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
+                                            <TextBlock Text="MinA" VerticalAlignment="Center" Margin="8,4" Foreground="{DynamicResource TextBrush}"/>
+                                        </Border>
+                                        <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
+                                            <TextBox Text="{Binding SurfaceCompare_MinBlobArea, UpdateSourceTrigger=PropertyChanged, Delay=150}" Margin="4" />
+                                        </Border>
+                                    </Grid>
+                                </Border>
+                                <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="120" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <Border Background="{DynamicResource WindowBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
+                                            <TextBlock Text="MaxA" VerticalAlignment="Center" Margin="8,4" Foreground="{DynamicResource TextBrush}"/>
+                                        </Border>
+                                        <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
+                                            <TextBox Text="{Binding SurfaceCompare_MaxBlobArea, UpdateSourceTrigger=PropertyChanged, Delay=150}" Margin="4" />
+                                        </Border>
+                                    </Grid>
+                                </Border>
 
-                                <StackPanel Orientation="Horizontal" Margin="0,0,0,2">
-                                    <TextBlock Text="MinCount" Width="60" VerticalAlignment="Center" />
-                                    <TextBox Width="80" Text="{Binding SurfaceCompare_MinCount, UpdateSourceTrigger=PropertyChanged, Delay=150}" />
-                                </StackPanel>
-                                <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
-                                    <TextBlock Text="MaxCount" Width="60" VerticalAlignment="Center" />
-                                    <TextBox Width="80" Text="{Binding SurfaceCompare_MaxCount, UpdateSourceTrigger=PropertyChanged, Delay=150}" />
-                                </StackPanel>
+                                <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="120" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <Border Background="{DynamicResource WindowBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
+                                            <TextBlock Text="MinCount" VerticalAlignment="Center" Margin="8,4" Foreground="{DynamicResource TextBrush}"/>
+                                        </Border>
+                                        <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
+                                            <TextBox Text="{Binding SurfaceCompare_MinCount, UpdateSourceTrigger=PropertyChanged, Delay=150}" Margin="4" />
+                                        </Border>
+                                    </Grid>
+                                </Border>
+                                <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="120" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <Border Background="{DynamicResource WindowBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
+                                            <TextBlock Text="MaxCount" VerticalAlignment="Center" Margin="8,4" Foreground="{DynamicResource TextBrush}"/>
+                                        </Border>
+                                        <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
+                                            <TextBox Text="{Binding SurfaceCompare_MaxCount, UpdateSourceTrigger=PropertyChanged, Delay=150}" Margin="4" />
+                                        </Border>
+                                    </Grid>
+                                </Border>
 
                                 <StackPanel Orientation="Horizontal" Margin="0,0,0,2">
                                     <TextBlock Text="Count" Width="60" VerticalAlignment="Center" />
@@ -599,7 +1023,9 @@
                             </StackPanel>
 
                             <StackPanel Visibility="{Binding IsLinePairDetectionNode, Converter={StaticResource BoolToVis}}">
-                                <TextBlock Text="Line Pair Detection" FontWeight="SemiBold" Margin="0,8,0,6" />
+                                <Border Background="{DynamicResource BorderBrush}" Padding="4,2" Margin="0,8,0,0">
+                                    <TextBlock Text="Line Pair Detection" FontWeight="Bold" Foreground="{DynamicResource TextBrush}" />
+                                </Border>
 
                                 <StackPanel Margin="0,0,0,2">
                                     <StackPanel Orientation="Horizontal" Margin="0,0,0,2">
@@ -642,18 +1068,48 @@
                                 </StackPanel>
 
                                 <TextBlock Text="Spec" FontWeight="SemiBold" Margin="0,6,0,6" />
-                                <StackPanel Orientation="Horizontal" Margin="0,0,0,2">
-                                    <TextBlock Text="Nom" Width="60" VerticalAlignment="Center" />
-                                    <TextBox Width="80" Text="{Binding Distance_Nominal, UpdateSourceTrigger=PropertyChanged, Delay=250}" />
-                                </StackPanel>
-                                <StackPanel Orientation="Horizontal" Margin="0,0,0,2">
-                                    <TextBlock Text="Tol+" Width="60" VerticalAlignment="Center" />
-                                    <TextBox Width="80" Text="{Binding Distance_TolPlus, UpdateSourceTrigger=PropertyChanged, Delay=250}" />
-                                </StackPanel>
-                                <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
-                                    <TextBlock Text="Tol-" Width="60" VerticalAlignment="Center" />
-                                    <TextBox Width="80" Text="{Binding Distance_TolMinus, UpdateSourceTrigger=PropertyChanged, Delay=250}" />
-                                </StackPanel>
+                                <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="120" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <Border Background="{DynamicResource WindowBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
+                                            <TextBlock Text="Nom" VerticalAlignment="Center" Margin="8,4" Foreground="{DynamicResource TextBrush}"/>
+                                        </Border>
+                                        <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
+                                            <TextBox Text="{Binding Distance_Nominal, UpdateSourceTrigger=PropertyChanged, Delay=250}" Margin="4" />
+                                        </Border>
+                                    </Grid>
+                                </Border>
+                                <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="120" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <Border Background="{DynamicResource WindowBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
+                                            <TextBlock Text="Tol+" VerticalAlignment="Center" Margin="8,4" Foreground="{DynamicResource TextBrush}"/>
+                                        </Border>
+                                        <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
+                                            <TextBox Text="{Binding Distance_TolPlus, UpdateSourceTrigger=PropertyChanged, Delay=250}" Margin="4" />
+                                        </Border>
+                                    </Grid>
+                                </Border>
+                                <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="120" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <Border Background="{DynamicResource WindowBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
+                                            <TextBlock Text="Tol-" VerticalAlignment="Center" Margin="8,4" Foreground="{DynamicResource TextBrush}"/>
+                                        </Border>
+                                        <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
+                                            <TextBox Text="{Binding Distance_TolMinus, UpdateSourceTrigger=PropertyChanged, Delay=250}" Margin="4" />
+                                        </Border>
+                                    </Grid>
+                                </Border>
 
                                 <StackPanel Orientation="Horizontal" Margin="0,0,0,2">
                                     <TextBlock Text="Value" Width="60" VerticalAlignment="Center" />
@@ -666,21 +1122,53 @@
                             </StackPanel>
 
                             <StackPanel Visibility="{Binding IsCircleFinderNode, Converter={StaticResource BoolToVis}}">
-                                <TextBlock Text="Circle Finder" FontWeight="SemiBold" Margin="0,8,0,6" />
+                                <Border Background="{DynamicResource BorderBrush}" Padding="4,2" Margin="0,8,0,0">
+                                    <TextBlock Text="Circle Finder" FontWeight="Bold" Foreground="{DynamicResource TextBrush}" />
+                                </Border>
 
-                                <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
-                                    <TextBlock Text="Algo" Width="60" VerticalAlignment="Center" />
-                                    <ComboBox Width="160" ItemsSource="{Binding AvailableCircleFindAlgorithms}" SelectedItem="{Binding Cf_Algorithm, UpdateSourceTrigger=PropertyChanged}" />
-                                </StackPanel>
+                                <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="120" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <Border Background="{DynamicResource WindowBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
+                                            <TextBlock Text="Algo" VerticalAlignment="Center" Margin="8,4" Foreground="{DynamicResource TextBrush}"/>
+                                        </Border>
+                                        <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
+                                            <ComboBox ItemsSource="{Binding AvailableCircleFindAlgorithms}" SelectedItem="{Binding Cf_Algorithm, UpdateSourceTrigger=PropertyChanged}" Margin="4" />
+                                        </Border>
+                                    </Grid>
+                                </Border>
 
-                                <StackPanel Orientation="Horizontal" Margin="0,0,0,2">
-                                    <TextBlock Text="MinR" Width="60" VerticalAlignment="Center" />
-                                    <TextBox Width="80" Text="{Binding Cf_MinRadiusPx, UpdateSourceTrigger=PropertyChanged, Delay=250}" />
-                                </StackPanel>
-                                <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
-                                    <TextBlock Text="MaxR" Width="60" VerticalAlignment="Center" />
-                                    <TextBox Width="80" Text="{Binding Cf_MaxRadiusPx, UpdateSourceTrigger=PropertyChanged, Delay=250}" />
-                                </StackPanel>
+                                <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="120" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <Border Background="{DynamicResource WindowBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
+                                            <TextBlock Text="MinR" VerticalAlignment="Center" Margin="8,4" Foreground="{DynamicResource TextBrush}"/>
+                                        </Border>
+                                        <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
+                                            <TextBox Text="{Binding Cf_MinRadiusPx, UpdateSourceTrigger=PropertyChanged, Delay=250}" Margin="4" />
+                                        </Border>
+                                    </Grid>
+                                </Border>
+                                <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="120" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <Border Background="{DynamicResource WindowBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
+                                            <TextBlock Text="MaxR" VerticalAlignment="Center" Margin="8,4" Foreground="{DynamicResource TextBrush}"/>
+                                        </Border>
+                                        <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
+                                            <TextBox Text="{Binding Cf_MaxRadiusPx, UpdateSourceTrigger=PropertyChanged, Delay=250}" Margin="4" />
+                                        </Border>
+                                    </Grid>
+                                </Border>
 
                                 <StackPanel Margin="0,0,0,6">
                                     <StackPanel.Style>
@@ -696,22 +1184,62 @@
 
                                     <TextBlock Text="Hough" FontWeight="SemiBold" Margin="0,0,0,6" />
 
-                                    <StackPanel Orientation="Horizontal" Margin="0,0,0,2">
-                                        <TextBlock Text="Dp" Width="60" VerticalAlignment="Center" />
-                                        <TextBox Width="80" Text="{Binding Cf_HoughDp, UpdateSourceTrigger=PropertyChanged, Delay=250}" />
-                                    </StackPanel>
-                                    <StackPanel Orientation="Horizontal" Margin="0,0,0,2">
-                                        <TextBlock Text="MinDist" Width="60" VerticalAlignment="Center" />
-                                        <TextBox Width="80" Text="{Binding Cf_HoughMinDistPx, UpdateSourceTrigger=PropertyChanged, Delay=250}" />
-                                    </StackPanel>
-                                    <StackPanel Orientation="Horizontal" Margin="0,0,0,2">
-                                        <TextBlock Text="P1" Width="60" VerticalAlignment="Center" />
-                                        <TextBox Width="80" Text="{Binding Cf_HoughParam1, UpdateSourceTrigger=PropertyChanged, Delay=250}" />
-                                    </StackPanel>
-                                    <StackPanel Orientation="Horizontal" Margin="0,0,0,2">
-                                        <TextBlock Text="P2" Width="60" VerticalAlignment="Center" />
-                                        <TextBox Width="80" Text="{Binding Cf_HoughParam2, UpdateSourceTrigger=PropertyChanged, Delay=250}" />
-                                    </StackPanel>
+                                    <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="120" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <Border Background="{DynamicResource WindowBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
+                                            <TextBlock Text="Dp" VerticalAlignment="Center" Margin="8,4" Foreground="{DynamicResource TextBrush}"/>
+                                        </Border>
+                                        <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
+                                            <TextBox Text="{Binding Cf_HoughDp, UpdateSourceTrigger=PropertyChanged, Delay=250}" Margin="4" />
+                                        </Border>
+                                    </Grid>
+                                </Border>
+                                    <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="120" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <Border Background="{DynamicResource WindowBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
+                                            <TextBlock Text="MinDist" VerticalAlignment="Center" Margin="8,4" Foreground="{DynamicResource TextBrush}"/>
+                                        </Border>
+                                        <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
+                                            <TextBox Text="{Binding Cf_HoughMinDistPx, UpdateSourceTrigger=PropertyChanged, Delay=250}" Margin="4" />
+                                        </Border>
+                                    </Grid>
+                                </Border>
+                                    <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="120" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <Border Background="{DynamicResource WindowBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
+                                            <TextBlock Text="P1" VerticalAlignment="Center" Margin="8,4" Foreground="{DynamicResource TextBrush}"/>
+                                        </Border>
+                                        <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
+                                            <TextBox Text="{Binding Cf_HoughParam1, UpdateSourceTrigger=PropertyChanged, Delay=250}" Margin="4" />
+                                        </Border>
+                                    </Grid>
+                                </Border>
+                                    <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="120" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <Border Background="{DynamicResource WindowBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
+                                            <TextBlock Text="P2" VerticalAlignment="Center" Margin="8,4" Foreground="{DynamicResource TextBrush}"/>
+                                        </Border>
+                                        <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
+                                            <TextBox Text="{Binding Cf_HoughParam2, UpdateSourceTrigger=PropertyChanged, Delay=250}" Margin="4" />
+                                        </Border>
+                                    </Grid>
+                                </Border>
                                 </StackPanel>
 
                                 <StackPanel Margin="0,0,0,6">
@@ -731,14 +1259,34 @@
 
                                     <TextBlock Text="Edges" FontWeight="SemiBold" Margin="0,0,0,6" />
 
-                                    <StackPanel Orientation="Horizontal" Margin="0,0,0,2">
-                                        <TextBlock Text="C1" Width="60" VerticalAlignment="Center" />
-                                        <TextBox Width="80" Text="{Binding Cf_Canny1, UpdateSourceTrigger=PropertyChanged, Delay=250}" />
-                                    </StackPanel>
-                                    <StackPanel Orientation="Horizontal" Margin="0,0,0,2">
-                                        <TextBlock Text="C2" Width="60" VerticalAlignment="Center" />
-                                        <TextBox Width="80" Text="{Binding Cf_Canny2, UpdateSourceTrigger=PropertyChanged, Delay=250}" />
-                                    </StackPanel>
+                                    <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="120" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <Border Background="{DynamicResource WindowBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
+                                            <TextBlock Text="C1" VerticalAlignment="Center" Margin="8,4" Foreground="{DynamicResource TextBrush}"/>
+                                        </Border>
+                                        <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
+                                            <TextBox Text="{Binding Cf_Canny1, UpdateSourceTrigger=PropertyChanged, Delay=250}" Margin="4" />
+                                        </Border>
+                                    </Grid>
+                                </Border>
+                                    <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="120" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <Border Background="{DynamicResource WindowBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
+                                            <TextBlock Text="C2" VerticalAlignment="Center" Margin="8,4" Foreground="{DynamicResource TextBrush}"/>
+                                        </Border>
+                                        <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
+                                            <TextBox Text="{Binding Cf_Canny2, UpdateSourceTrigger=PropertyChanged, Delay=250}" Margin="4" />
+                                        </Border>
+                                    </Grid>
+                                </Border>
                                 </StackPanel>
 
                                 <StackPanel Margin="0,0,0,6">
@@ -753,10 +1301,20 @@
                                         </Style>
                                     </StackPanel.Style>
 
-                                    <StackPanel Orientation="Horizontal" Margin="0,0,0,2">
-                                        <TextBlock Text="Circ" Width="60" VerticalAlignment="Center" />
-                                        <TextBox Width="80" Text="{Binding Cf_MinCircularity, UpdateSourceTrigger=PropertyChanged, Delay=250}" />
-                                    </StackPanel>
+                                    <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="120" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <Border Background="{DynamicResource WindowBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
+                                            <TextBlock Text="Circularity" VerticalAlignment="Center" Margin="8,4" Foreground="{DynamicResource TextBrush}"/>
+                                        </Border>
+                                        <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
+                                            <TextBox Text="{Binding Cf_MinCircularity, UpdateSourceTrigger=PropertyChanged, Delay=250}" Margin="4" />
+                                        </Border>
+                                    </Grid>
+                                </Border>
                                 </StackPanel>
 
                                 <StackPanel Orientation="Horizontal" Margin="0,0,0,2">
@@ -770,66 +1328,180 @@
                             </StackPanel>
 
                             <StackPanel Visibility="{Binding IsDiameterNode, Converter={StaticResource BoolToVis}}">
-                                <TextBlock Text="Diameter" FontWeight="SemiBold" Margin="0,8,0,6" />
+                                <Border Background="{DynamicResource BorderBrush}" Padding="4,2" Margin="0,8,0,0">
+                                    <TextBlock Text="Diameter" FontWeight="Bold" Foreground="{DynamicResource TextBrush}" />
+                                </Border>
 
                                 <TextBlock Text="Inputs" FontWeight="SemiBold" Margin="0,0,0,6" />
-                                <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
-                                    <TextBlock Text="Circle" Width="60" VerticalAlignment="Center" />
-                                    <ComboBox Width="160" ItemsSource="{Binding AvailableCircleFinderNames}" SelectedItem="{Binding Dia_CircleRef, UpdateSourceTrigger=PropertyChanged}" />
-                                </StackPanel>
+                                <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="120" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <Border Background="{DynamicResource WindowBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
+                                            <TextBlock Text="Circle" VerticalAlignment="Center" Margin="8,4" Foreground="{DynamicResource TextBrush}"/>
+                                        </Border>
+                                        <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
+                                            <ComboBox ItemsSource="{Binding AvailableCircleFinderNames}" SelectedItem="{Binding Dia_CircleRef, UpdateSourceTrigger=PropertyChanged}" Margin="4" />
+                                        </Border>
+                                    </Grid>
+                                </Border>
                             </StackPanel>
 
                             <StackPanel Visibility="{Binding IsEdgePairDetectNode, Converter={StaticResource BoolToVis}}">
-                                <TextBlock Text="Edge Pair Detect" FontWeight="SemiBold" Margin="0,8,0,6" />
+                                <Border Background="{DynamicResource BorderBrush}" Padding="4,2" Margin="0,8,0,0">
+                                    <TextBlock Text="Edge Pair Detect" FontWeight="Bold" Foreground="{DynamicResource TextBrush}" />
+                                </Border>
 
-                                <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
-                                    <TextBlock Text="Ori" Width="60" VerticalAlignment="Center" />
-                                    <ComboBox Width="160" ItemsSource="{Binding AvailableCaliperOrientations}" SelectedItem="{Binding Epd_Orientation, UpdateSourceTrigger=PropertyChanged}" />
-                                </StackPanel>
+                                <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="120" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <Border Background="{DynamicResource WindowBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
+                                            <TextBlock Text="Orientation" VerticalAlignment="Center" Margin="8,4" Foreground="{DynamicResource TextBrush}"/>
+                                        </Border>
+                                        <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
+                                            <ComboBox ItemsSource="{Binding AvailableCaliperOrientations}" SelectedItem="{Binding Epd_Orientation, UpdateSourceTrigger=PropertyChanged}" Margin="4" />
+                                        </Border>
+                                    </Grid>
+                                </Border>
 
-                                <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
-                                    <TextBlock Text="Pol" Width="60" VerticalAlignment="Center" />
-                                    <ComboBox Width="160" ItemsSource="{Binding AvailableEdgePolarities}" SelectedItem="{Binding Epd_Polarity, UpdateSourceTrigger=PropertyChanged}" />
-                                </StackPanel>
+                                <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="120" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <Border Background="{DynamicResource WindowBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
+                                            <TextBlock Text="Polarity" VerticalAlignment="Center" Margin="8,4" Foreground="{DynamicResource TextBrush}"/>
+                                        </Border>
+                                        <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
+                                            <ComboBox ItemsSource="{Binding AvailableEdgePolarities}" SelectedItem="{Binding Epd_Polarity, UpdateSourceTrigger=PropertyChanged}" Margin="4" />
+                                        </Border>
+                                    </Grid>
+                                </Border>
 
-                                <StackPanel Orientation="Horizontal" Margin="0,0,0,2">
-                                    <TextBlock Text="Strips" Width="60" VerticalAlignment="Center" />
-                                    <TextBox Width="80" Text="{Binding Epd_StripCount, UpdateSourceTrigger=PropertyChanged, Delay=250}" />
-                                </StackPanel>
+                                <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="120" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <Border Background="{DynamicResource WindowBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
+                                            <TextBlock Text="Strip Count" VerticalAlignment="Center" Margin="8,4" Foreground="{DynamicResource TextBrush}"/>
+                                        </Border>
+                                        <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
+                                            <TextBox Text="{Binding Epd_StripCount, UpdateSourceTrigger=PropertyChanged, Delay=250}" Margin="4" />
+                                        </Border>
+                                    </Grid>
+                                </Border>
 
-                                <StackPanel Orientation="Horizontal" Margin="0,0,0,2">
-                                    <TextBlock Text="Width" Width="60" VerticalAlignment="Center" />
-                                    <TextBox Width="80" Text="{Binding Epd_StripWidth, UpdateSourceTrigger=PropertyChanged, Delay=250}" />
-                                </StackPanel>
+                                <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="120" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <Border Background="{DynamicResource WindowBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
+                                            <TextBlock Text="Strip Width" VerticalAlignment="Center" Margin="8,4" Foreground="{DynamicResource TextBrush}"/>
+                                        </Border>
+                                        <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
+                                            <TextBox Text="{Binding Epd_StripWidth, UpdateSourceTrigger=PropertyChanged, Delay=250}" Margin="4" />
+                                        </Border>
+                                    </Grid>
+                                </Border>
 
-                                <StackPanel Orientation="Horizontal" Margin="0,0,0,2">
-                                    <TextBlock Text="Length" Width="60" VerticalAlignment="Center" />
-                                    <TextBox Width="80" Text="{Binding Epd_StripLength, UpdateSourceTrigger=PropertyChanged, Delay=250}" />
-                                </StackPanel>
+                                <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="120" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <Border Background="{DynamicResource WindowBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
+                                            <TextBlock Text="Strip Length" VerticalAlignment="Center" Margin="8,4" Foreground="{DynamicResource TextBrush}"/>
+                                        </Border>
+                                        <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
+                                            <TextBox Text="{Binding Epd_StripLength, UpdateSourceTrigger=PropertyChanged, Delay=250}" Margin="4" />
+                                        </Border>
+                                    </Grid>
+                                </Border>
 
-                                <StackPanel Orientation="Horizontal" Margin="0,0,0,2">
-                                    <TextBlock Text="MinStr" Width="60" VerticalAlignment="Center" />
-                                    <TextBox Width="80" Text="{Binding Epd_MinEdgeStrength, UpdateSourceTrigger=PropertyChanged, Delay=250}" />
-                                </StackPanel>
+                                <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="120" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <Border Background="{DynamicResource WindowBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
+                                            <TextBlock Text="Min Gradient" VerticalAlignment="Center" Margin="8,4" Foreground="{DynamicResource TextBrush}"/>
+                                        </Border>
+                                        <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
+                                            <TextBox Text="{Binding Epd_MinEdgeStrength, UpdateSourceTrigger=PropertyChanged, Delay=250}" Margin="4" />
+                                        </Border>
+                                    </Grid>
+                                </Border>
 
-                                <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
-                                    <TextBlock Text="MinSep" Width="60" VerticalAlignment="Center" />
-                                    <TextBox Width="80" Text="{Binding Epd_MinEdgeSeparationPx, UpdateSourceTrigger=PropertyChanged, Delay=250}" />
-                                </StackPanel>
+                                <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="120" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <Border Background="{DynamicResource WindowBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
+                                            <TextBlock Text="Min Separation" VerticalAlignment="Center" Margin="8,4" Foreground="{DynamicResource TextBrush}"/>
+                                        </Border>
+                                        <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
+                                            <TextBox Text="{Binding Epd_MinEdgeSeparationPx, UpdateSourceTrigger=PropertyChanged, Delay=250}" Margin="4" />
+                                        </Border>
+                                    </Grid>
+                                </Border>
 
                                 <TextBlock Text="Spec" FontWeight="SemiBold" Margin="0,6,0,6" />
-                                <StackPanel Orientation="Horizontal" Margin="0,0,0,2">
-                                    <TextBlock Text="Nom" Width="60" VerticalAlignment="Center" />
-                                    <TextBox Width="80" Text="{Binding Distance_Nominal, UpdateSourceTrigger=PropertyChanged, Delay=250}" />
-                                </StackPanel>
-                                <StackPanel Orientation="Horizontal" Margin="0,0,0,2">
-                                    <TextBlock Text="Tol+" Width="60" VerticalAlignment="Center" />
-                                    <TextBox Width="80" Text="{Binding Distance_TolPlus, UpdateSourceTrigger=PropertyChanged, Delay=250}" />
-                                </StackPanel>
-                                <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
-                                    <TextBlock Text="Tol-" Width="60" VerticalAlignment="Center" />
-                                    <TextBox Width="80" Text="{Binding Distance_TolMinus, UpdateSourceTrigger=PropertyChanged, Delay=250}" />
-                                </StackPanel>
+                                <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="120" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <Border Background="{DynamicResource WindowBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
+                                            <TextBlock Text="Nominal" VerticalAlignment="Center" Margin="8,4" Foreground="{DynamicResource TextBrush}"/>
+                                        </Border>
+                                        <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
+                                            <TextBox Text="{Binding Distance_Nominal, UpdateSourceTrigger=PropertyChanged, Delay=250}" Margin="4" />
+                                        </Border>
+                                    </Grid>
+                                </Border>
+                                <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="120" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <Border Background="{DynamicResource WindowBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
+                                            <TextBlock Text="Tolerance+" VerticalAlignment="Center" Margin="8,4" Foreground="{DynamicResource TextBrush}"/>
+                                        </Border>
+                                        <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
+                                            <TextBox Text="{Binding Distance_TolPlus, UpdateSourceTrigger=PropertyChanged, Delay=250}" Margin="4" />
+                                        </Border>
+                                    </Grid>
+                                </Border>
+                                <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="120" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <Border Background="{DynamicResource WindowBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
+                                            <TextBlock Text="Tolerance-" VerticalAlignment="Center" Margin="8,4" Foreground="{DynamicResource TextBrush}"/>
+                                        </Border>
+                                        <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
+                                            <TextBox Text="{Binding Distance_TolMinus, UpdateSourceTrigger=PropertyChanged, Delay=250}" Margin="4" />
+                                        </Border>
+                                    </Grid>
+                                </Border>
 
                                 <StackPanel Orientation="Horizontal" Margin="0,0,0,2">
                                     <TextBlock Text="Value" Width="60" VerticalAlignment="Center" />
@@ -842,7 +1514,9 @@
                             </StackPanel>
 
                             <StackPanel Visibility="{Binding IsCodeDetectionNode, Converter={StaticResource BoolToVis}}">
-                                <TextBlock Text="Code Detection" FontWeight="SemiBold" Margin="0,8,0,6" />
+                                <Border Background="{DynamicResource BorderBrush}" Padding="4,2" Margin="0,8,0,0">
+                                    <TextBlock Text="Code Detection" FontWeight="Bold" Foreground="{DynamicResource TextBrush}" />
+                                </Border>
 
                                 <CheckBox Content="Try Harder" IsChecked="{Binding Cdt_TryHarder, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,6" />
 
@@ -866,19 +1540,36 @@
                 </Grid>
             </Border>
 
-            <GridSplitter Grid.Column="1" Width="5" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Background="#DDD" />
+            <GridSplitter Grid.Column="1" Width="5" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Background="{DynamicResource DarkBorderBrush}" />
 
-            <Border Grid.Column="2" BorderBrush="#CCC" BorderThickness="1" Padding="8" Margin="0,0,8,0">
+            <Border Grid.Column="2" BorderBrush="{DynamicResource DarkBorderBrush}" BorderThickness="1" Padding="8" Margin="0,0,8,0">
                 <Grid>
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="*" />
                     </Grid.RowDefinitions>
 
-                    <TextBlock FontWeight="Bold" Text="Canvas" Margin="0,0,0,6" />
+                    <Grid Margin="0,0,0,6">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock FontWeight="Bold" Text="Canvas" VerticalAlignment="Center" />
+                        
+                        <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Center">
+                            <TextBlock Text="RefName:" VerticalAlignment="Center" FontWeight="SemiBold" Margin="0,0,6,0" />
+                            <TextBox Text="{Binding SelectedNode.RefName, UpdateSourceTrigger=PropertyChanged}" Width="120" Padding="4,2" />
+                        </StackPanel>
+
+                        <StackPanel Grid.Column="2" Orientation="Horizontal">
+                            <Button Content="🌗 Theme" Height="28" Padding="12,0" Margin="0,0,6,0" Click="BtnToggleTheme_Click" Background="{DynamicResource ButtonBackgroundBrush}" Foreground="{DynamicResource TextBrush}" BorderBrush="{DynamicResource DarkBorderBrush}" FontWeight="SemiBold" ToolTip="Toggle Dark/Light Mode" />
+                            <Button Content="⚙ Global Pre-processor" Height="28" Padding="12,0" Click="BtnGlobalPreprocess_Click" Background="{DynamicResource ButtonBackgroundBrush}" Foreground="{DynamicResource TextBrush}" BorderBrush="{DynamicResource DarkBorderBrush}" FontWeight="SemiBold" ToolTip="Open Global Image Pre-processor Settings" />
+                        </StackPanel>
+                    </Grid>
 
                     <ScrollViewer x:Name="CanvasScrollViewer" Grid.Row="1" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto">
-                        <Canvas x:Name="EditorCanvas" Background="#11111111" Width="2000" Height="2000" AllowDrop="True" Drop="EditorCanvas_Drop" MouseMove="EditorCanvas_MouseMove" MouseLeftButtonUp="EditorCanvas_MouseLeftButtonUp"
+                        <Canvas x:Name="EditorCanvas" Background="Transparent" Width="2000" Height="2000" AllowDrop="True" Drop="EditorCanvas_Drop" MouseMove="EditorCanvas_MouseMove" MouseLeftButtonUp="EditorCanvas_MouseLeftButtonUp"
                                 Focusable="True" PreviewKeyDown="EditorCanvas_PreviewKeyDown" PreviewMouseWheel="EditorCanvas_PreviewMouseWheel">
                             <Canvas.LayoutTransform>
                                 <ScaleTransform ScaleX="{Binding CanvasZoom}" ScaleY="{Binding CanvasZoom}" />
@@ -940,7 +1631,7 @@
                                                             <DockPanel LastChildFill="True">
                                                                 <StackPanel DockPanel.Dock="Top" Margin="0,0,0,6">
                                                                     <TextBlock FontWeight="Bold" Text="{Binding Type}" />
-                                                                    <TextBlock Text="{Binding RefName}" Foreground="#555" />
+                                                                    <TextBlock Text="{Binding RefName}" Foreground="{DynamicResource TextMutedBrush}" />
                                                                 </StackPanel>
 
                                                                 <Grid>
@@ -963,7 +1654,7 @@
                                                                                         <ColumnDefinition Width="Auto" />
                                                                                     </Grid.ColumnDefinitions>
                                                                                     <Ellipse Width="12" Height="12" Fill="#2ECC71" Stroke="#1B5E20" StrokeThickness="1" />
-                                                                                    <TextBlock Grid.Column="1" Text="{Binding Name}" Margin="6,0,0,0" VerticalAlignment="Center" Foreground="#333" FontSize="11" />
+                                                                                    <TextBlock Grid.Column="1" Text="{Binding Name}" Margin="6,0,0,0" VerticalAlignment="Center" Foreground="{DynamicResource TextBrush}" FontSize="11" />
                                                                                 </Grid>
                                                                             </DataTemplate>
                                                                         </ItemsControl.ItemTemplate>
@@ -998,9 +1689,9 @@
                 </Grid>
             </Border>
 
-            <GridSplitter Grid.Column="3" Width="6" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Background="#DDD" />
+            <GridSplitter Grid.Column="3" Width="6" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Background="{DynamicResource DarkBorderBrush}" />
 
-            <Border Grid.Column="4" BorderBrush="#CCC" BorderThickness="1" Padding="8">
+            <Border Grid.Column="4" BorderBrush="{DynamicResource DarkBorderBrush}" BorderThickness="1" Padding="8">
                 <Grid>
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />
@@ -1011,7 +1702,7 @@
 
                     <TextBlock FontWeight="Bold" Text="Preview - Selected Node" Margin="0,0,0,6" />
                     <CheckBox Grid.Row="0" HorizontalAlignment="Right" VerticalAlignment="Center" Content="Show ROI" IsChecked="{Binding ShowRoisInSelectedPreview, UpdateSourceTrigger=PropertyChanged}" />
-                    <Border Grid.Row="1" BorderBrush="#EEE" BorderThickness="1" Background="#11111111">
+                    <Border Grid.Row="1" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" Background="Transparent">
                         <controls:ImageViewerControl ImageSource="{Binding SelectedNodePreviewImage}"
                                                   OverlayItems="{Binding SelectedNodeOverlayItems}"
                                                   EnableRoiEditing="True" ActiveRoiLabel="{Binding ActiveRoiLabel, Mode=TwoWay}"
@@ -1024,7 +1715,7 @@
 
                     <TextBlock Grid.Row="2" FontWeight="Bold" Text="Preview - Final Output" Margin="0,10,0,6" />
                     <CheckBox Grid.Row="2" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,10,0,6" Content="Show ROI" IsChecked="{Binding ShowRoisInFinalPreview, UpdateSourceTrigger=PropertyChanged}" />
-                    <Border Grid.Row="3" BorderBrush="#EEE" BorderThickness="1" Background="#11111111">
+                    <Border Grid.Row="3" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" Background="Transparent">
                         <controls:ImageViewerControl ImageSource="{Binding FinalPreviewImage}" OverlayItems="{Binding FinalOverlayItems}" />
                     </Border>
                 </Grid>
@@ -1032,3 +1723,6 @@
         </Grid>
     </Grid>
 </UserControl>
+
+
+

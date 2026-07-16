@@ -11,8 +11,8 @@
     Height="900"
     Width="1400"
     FontFamily="Segoe UI"
-    Background="#F3F6FB"
-    Foreground="#132238"
+    Background="{DynamicResource WindowBackgroundBrush}"
+    Foreground="{DynamicResource TextBrush}"
     Icon="pack://application:,,,/VisionInspectionApp.UI;component/Assets/cms-vina-vision-system.ico">
 
     <Window.InputBindings>
@@ -71,17 +71,17 @@
         </Style>
 
         <Style TargetType="TextBox">
-            <Setter Property="BorderBrush" Value="{StaticResource ShellBorder}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
             <Setter Property="Background" Value="White" />
-            <Setter Property="Foreground" Value="{StaticResource ShellText}" />
+            <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
             <Setter Property="Padding" Value="9,5" />
             <Setter Property="BorderThickness" Value="1" />
         </Style>
 
         <Style TargetType="ComboBox">
-            <Setter Property="BorderBrush" Value="{StaticResource ShellBorder}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
             <Setter Property="Background" Value="White" />
-            <Setter Property="Foreground" Value="{StaticResource ShellText}" />
+            <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
             <Setter Property="Padding" Value="7,4" />
         </Style>
 
@@ -94,9 +94,9 @@
         <Style TargetType="TabItem">
             <Setter Property="Margin" Value="0,0,6,0" />
             <Setter Property="Padding" Value="10,5" />
-            <Setter Property="Background" Value="{StaticResource ShellSurfaceSoft}" />
-            <Setter Property="BorderBrush" Value="{StaticResource ShellBorder}" />
-            <Setter Property="Foreground" Value="{StaticResource ShellTextMuted}" />
+            <Setter Property="Background" Value="{DynamicResource WindowBackgroundBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
+            <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="TabItem">
@@ -158,7 +158,7 @@
         </DataTemplate>
     </Window.Resources>
 
-    <Grid Background="{StaticResource ShellBg}">
+    <Grid Background="{DynamicResource WindowBackgroundBrush}">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
@@ -204,8 +204,8 @@
         </Border>
 
         <Border Grid.Row="1"
-                Background="{StaticResource ShellSurface}"
-                BorderBrush="{StaticResource ShellBorder}"
+                Background="{DynamicResource PanelBackgroundBrush}"
+                BorderBrush="{DynamicResource BorderBrush}"
                 BorderThickness="1"
                 CornerRadius="18"
                 Margin="18,0,18,14"
@@ -247,3 +247,4 @@
         </Border>
     </Grid>
 </Window>
+

@@ -20,3 +20,4 @@ Lộ trình tích hợp tính năng Chụp ảnh từ camera và hỗ trợ các
 - [x] Task 13: Sửa lỗi ShapeModelTrainer gây lệch tọa độ đặc trưng biên dẫn đến match score tụt thảm hại (NG oan).
 - [x] Task 14: Sửa lỗi CameraService khởi động thất bại ngay khi bật app đối với virtual camera (như DroidCam) bằng cách thêm cơ chế Retry.
 - [x] Task 15: Sửa lỗi lưu Config bị kẹp Tool "mồ côi" từ Config trước do Node bị xóa trên Graph nhưng không dọn dẹp trong Model.
+- [x] Task 16: Nâng cấp UI Tab Tool Editor (Thêm icon List Tool, đưa Global Pre-processor ra dialog riêng, format gọn Properties Panel).

@@ -38,7 +38,7 @@
         </Border>
 
         <!-- Right Panel: Adjustment Settings -->
-        <Border Grid.Column="1" Background="White" Margin="0,10,10,10" CornerRadius="8" BorderThickness="1" BorderBrush="#DDD" Padding="15">
+        <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}" Margin="0,10,10,10" CornerRadius="8" BorderThickness="1" BorderBrush="#DDD" Padding="15">
             <Grid>
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto" />
@@ -111,3 +111,4 @@
         </Border>
     </Grid>
 </UserControl>
+

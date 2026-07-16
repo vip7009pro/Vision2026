@@ -8,7 +8,7 @@
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
-        <Border Grid.Row="0" Background="White" BorderBrush="#DDD" BorderThickness="0,0,0,1" Padding="10">
+        <Border Grid.Row="0" Background="{DynamicResource PanelBackgroundBrush}" BorderBrush="#DDD" BorderThickness="0,0,0,1" Padding="10">
             <StackPanel>
                 <TextBlock Text="PLC Communication (Mitsubishi - MX Component)" FontSize="16" FontWeight="Bold" Margin="0,0,0,10" />
 
@@ -40,7 +40,7 @@
                 <ColumnDefinition Width="3*" />
             </Grid.ColumnDefinitions>
 
-            <Border Grid.Column="0" Background="White" BorderBrush="#DDD" BorderThickness="1" Padding="10" Margin="0,0,10,0">
+            <Border Grid.Column="0" Background="{DynamicResource PanelBackgroundBrush}" BorderBrush="#DDD" BorderThickness="1" Padding="10" Margin="0,0,10,0">
                 <StackPanel>
                     <TextBlock Text="PLC Address Mapping" FontWeight="Bold" Margin="0,0,0,10"/>
 
@@ -83,7 +83,7 @@
                 </StackPanel>
             </Border>
 
-            <Border Grid.Column="1" Background="White" BorderBrush="#DDD" BorderThickness="1" Padding="10">
+            <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}" BorderBrush="#DDD" BorderThickness="1" Padding="10">
                 <ScrollViewer VerticalScrollBarVisibility="Auto">
                     <StackPanel>
                         <TextBlock Text="Runtime Monitor" FontWeight="Bold" Margin="0,0,0,10"/>
@@ -114,7 +114,7 @@
         </Grid>
 
         <!-- Test / simulate -->
-        <Border Grid.Row="2" Margin="10,0,10,10" Background="White" BorderBrush="#DDD" BorderThickness="1" Padding="12">
+        <Border Grid.Row="2" Margin="10,0,10,10" Background="{DynamicResource PanelBackgroundBrush}" BorderBrush="#DDD" BorderThickness="1" Padding="12">
             <StackPanel>
                 <TextBlock Text="Bàn thử giao tiếp (đọc/ghi địa chỉ tùy ý &amp; giả lập trạng thái)" FontWeight="Bold" Margin="0,0,0,10"/>
 
@@ -198,3 +198,4 @@
         </Border>
     </Grid>
 </UserControl>
+

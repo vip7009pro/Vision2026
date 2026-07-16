@@ -109,6 +109,16 @@
 24. **Cập nhật `.gitignore`**:
    - Thay thế rules ignore `**/bin/`, `**/obj/` cũ thành bộ rules chuẩn của Visual Studio (`[Bb]in/`, `[Oo]bj/`, `[Dd]ebug/`, `[Rr]elease/`, `x64/`, `x86/`...) để bắt chính xác và bỏ qua các thư mục build ở mọi cấp độ trong toàn dự án.
 
+25. **Refactor UI Tool Editor & Hỗ trợ Global Dark Mode**:
+    - Mở rộng cơ chế Theming (Dark Mode/Light Mode) áp dụng cho toàn bộ ứng dụng (Global). Tất cả các View (`MainWindow.xaml`, `InspectionView.xaml`, `CalibrationView.xaml`, v.v.) đã được loại bỏ màu hardcode cứng (`#F3F6FB`, `#132238`...) và thay bằng `{DynamicResource WindowBackgroundBrush}`, `{DynamicResource TextBrush}`.
+    - Sửa lỗi nút bấm Toolbar (Theme, Global Pre-processor) trên `ToolEditorView.xaml` bị trùng màu chữ và nền ở Light Mode bằng cách thêm `Foreground="{DynamicResource TextBrush}"`.
+    - Thiết kế lại `ToolEditorView.xaml`: di chuyển textbox `RefName`, nút bấm `Global Pre-processor` ra khỏi panel properties và đặt lên Toolbar mới nằm ngay trên Canvas.
+    - Cập nhật lại toàn bộ nhãn tên tham số viết tắt trong Tool Editor thành tên đầy đủ cho dễ hiểu (ví dụ: `C1` thành `Canny Thresh 1`).
+    - **Lột xác Properties Panel**: Chuyển đổi toàn bộ layout tham số (hơn 70 row) từ dạng `StackPanel` lộn xộn sang dạng **Property Grid phong cách Visual Studio** (2 cột, có Border ngăn cách, màu nền trái/phải phân biệt) để tối đa hoá sự chuyên nghiệp và gọn gàng, đồng thời fix lỗi chữ trắng trên nền trắng.
+    - Đặt các màu cấu hình mặc định vào `Themes/LightTheme.xaml` và `Themes/DarkTheme.xaml`, quản lý chuyển đổi qua `ThemeService.cs`. Trạng thái giao diện được lưu vào file cấu hình gốc thông qua `GlobalAppSettingsService`.
+
 ### Trạng thái cuối cùng của Source Code
-- Toàn bộ source code biên dịch thành công 100% (`dotnet build` PASS với 0 Lỗi và 0 Cảnh báo).
+- Toàn bộ source code biên dịch thành công 100% (`dotnet build` PASS với 0 Lỗi và 4 Cảnh báo null-check).
+- Ứng dụng đã hỗ trợ Dark Mode 100% trên toàn bộ các màn hình và thẻ Tab.
+- Giao diện thuộc tính (Properties Panel) của Tool Editor đã được nâng cấp lên dạng Visual Studio Property Grid cực kỳ chuyên nghiệp.
 - Không có tiến trình nào bị treo và các COM Object được giải phóng hợp lệ khi thoát ứng dụng.

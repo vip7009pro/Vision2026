@@ -620,4 +620,23 @@ public partial class ToolEditorView : UserControl
         fig.Segments.Add(new LineSegment(p2, true));
         WirePreviewPath.Data = new PathGeometry(new[] { fig });
     }
+
+    private void BtnGlobalPreprocess_Click(object sender, RoutedEventArgs e)
+    {
+        var window = new GlobalPreprocessWindow
+        {
+            Owner = Window.GetWindow(this),
+            DataContext = this.DataContext
+        };
+        window.Show();
+    }
+
+    private void BtnToggleTheme_Click(object sender, RoutedEventArgs e)
+    {
+        var globalSettings = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService<VisionInspectionApp.UI.Services.GlobalAppSettingsService>((System.Windows.Application.Current as App).ServiceProvider);
+        var themeService = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService<VisionInspectionApp.UI.Services.ThemeService>((System.Windows.Application.Current as App).ServiceProvider);
+
+        globalSettings.Settings.IsDarkMode = !globalSettings.Settings.IsDarkMode;
+        themeService.ApplyTheme(globalSettings.Settings.IsDarkMode);
+    }
 }
