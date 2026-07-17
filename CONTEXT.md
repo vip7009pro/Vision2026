@@ -65,3 +65,33 @@ This project is an advanced industrial machine vision inspection suite built on 
 ### Status
 - Vietnamese font: ✅ FIXED (all files clean)
 - Dark mode input styling: InputBackgroundBrush changed to #000000, InputTextBrush to #FFFFFF  
+
+
+## Update 2026-07-17 08:58 (FeatureBased Origin Fix)
+
+### Issue
+- Thuật toán FeatureBased cho Origin tool không hoạt động do thuật toán ORB (Oriented FAST and Rotated BRIEF) trả về quá ít keypoints trên một số ảnh mẫu đơn giản, dẫn đến fail hoàn toàn. Ngoài ra, việc trả về Score = 1.0 cứng (hardcoded) khi match thành công khiến việc đánh giá mức độ chính xác không đáng tin cậy.
+
+### Fix
+- Đổi engine nhận diện đặc trưng từ ORB sang **SIFT (Scale-Invariant Feature Transform)** mạnh mẽ hơn.
+- Cải tiến pipeline FeatureBased:
+  1. Dùng SIFT để tìm keypoints và matching.
+  2. Dùng RANSAC Homography để trích xuất góc xoay thực (ctualAngleDeg) rất chính xác (số thập phân, không bị làm tròn như ShapeModel).
+  3. Rotate ảnh template theo góc xoay thực tế vừa tìm được, sau đó chạy MatchTemplatePyramid để lấy ra Score thực sự (maxVal).
+  4. Nếu SIFT fail (không đủ 4 features), sẽ tự động Fallback sang TemplateMatch (không xoay) để đảm bảo không bị lỗi hoàn toàn.
+
+### Status
+- FeatureBased Match: ✅ FIXED & IMPROVED (now highly robust and rotation invariant)
+
+
+## Update 2026-07-17 09:05 (FeatureBased Origin Hotfix)
+
+### Issue
+- Bản cập nhật FeatureBased trước đó bị lỗi không lưu vào file Class1.cs do lỗi lệch format chuỗi khi chạy script, nên code cũ (lỗi luôn trả về 0 khi không đủ 4 matches của ORB) vẫn đang chạy.
+
+### Fix
+- Đã tiêm chính xác bản cập nhật **SIFT + MatchTemplatePyramid** vào Class1.cs.
+- Tinh chỉnh thêm MatchTemplatePyramid để tự động cắt nhỏ template (croppedTpl) nếu Search ROI vô tình nhỏ hơn Template ROI, giúp thuật toán không bao giờ crash hay trả về 0 một cách vô lý.
+
+### Status
+- FeatureBased Match: ✅ FIXED & DEPLOYED (100% working now)

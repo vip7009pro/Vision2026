@@ -1,4 +1,4 @@
-﻿using OpenCvSharp;
+using OpenCvSharp;
 using VisionInspectionApp.Models;
 
 namespace VisionInspectionApp.VisionEngine;
@@ -815,41 +815,58 @@ public sealed class PatternMatcher
     {
         using var templPrep = PreprocessTemplateForMatch(templateGray, preprocess);
         
-        using var orb = ORB.Create(500);
+        using var detector = OpenCvSharp.Features2D.SIFT.Create();
         using var des1 = new Mat();
         using var des2 = new Mat();
         
-        orb.DetectAndCompute(templPrep, null, out KeyPoint[] keypoints1, des1);
-        orb.DetectAndCompute(roiGray, null, out KeyPoint[] keypoints2, des2);
+        detector.DetectAndCompute(templPrep, null, out KeyPoint[] keypoints1, des1);
+        detector.DetectAndCompute(roiGray, null, out KeyPoint[] keypoints2, des2);
         
-        if (des1.Empty() || des2.Empty())
+        if (des1.Empty() || des2.Empty() || des1.Rows < 4 || des2.Rows < 4)
         {
-            var centerFallback = new Point2d(roiRect.X + roiRect.Width / 2.0, roiRect.Y + roiRect.Height / 2.0);
-            return new MatchResult(centerFallback, 0.0, angleDeg, roiRect);
+            return FallbackToTemplateMatch(roiGray, templateGray, definition, angleDeg, preprocess, roiRect);
         }
         
-        using var bf = new BFMatcher(NormTypes.Hamming, crossCheck: true);
+        using var bf = new BFMatcher(NormTypes.L2, crossCheck: true);
         var matches = bf.Match(des1, des2);
         
-        var goodMatches = matches.OrderBy(m => m.Distance).Take(50).ToArray();
+        var goodMatches = matches.Where(m => m.Distance < 300).OrderBy(m => m.Distance).Take(50).ToArray();
         
         if (goodMatches.Length < 4)
         {
-            var centerFallback = new Point2d(roiRect.X + roiRect.Width / 2.0, roiRect.Y + roiRect.Height / 2.0);
-            return new MatchResult(centerFallback, 0.0, angleDeg, roiRect);
+            return FallbackToTemplateMatch(roiGray, templateGray, definition, angleDeg, preprocess, roiRect);
         }
         
         var pts1 = goodMatches.Select(m => new Point2d(keypoints1[m.QueryIdx].Pt.X, keypoints1[m.QueryIdx].Pt.Y)).ToArray();
         var pts2 = goodMatches.Select(m => new Point2d(keypoints2[m.TrainIdx].Pt.X, keypoints2[m.TrainIdx].Pt.Y)).ToArray();
         
-        using var H = Cv2.FindHomography(InputArray.Create(pts1), InputArray.Create(pts2), HomographyMethods.Ransac, 3.0);
+        using var inliers = new Mat();
+        using var H = Cv2.FindHomography(InputArray.Create(pts1), InputArray.Create(pts2), HomographyMethods.Ransac, 3.0, inliers);
         
         if (H.Empty())
         {
-            var centerFallback = new Point2d(roiRect.X + roiRect.Width / 2.0, roiRect.Y + roiRect.Height / 2.0);
-            return new MatchResult(centerFallback, 0.0, angleDeg, roiRect);
+            return FallbackToTemplateMatch(roiGray, templateGray, definition, angleDeg, preprocess, roiRect);
         }
         
+        var h11 = H.At<double>(0, 0);
+        var h21 = H.At<double>(1, 0);
+        var actualAngleDeg = Math.Atan2(h21, h11) * 180.0 / Math.PI;
+
+        var maxVal = 0.0;
+        using var templGrayRot = RotateWithPadding(templPrep, actualAngleDeg);
+        var crop = ContentRectFromNonZero(templGrayRot, pad: 0);
+        if (crop.Width > 0 && crop.Height > 0)
+        {
+            using var templCrop = new Mat(templGrayRot, crop);
+            var cw = Math.Min(templCrop.Width, roiGray.Width);
+            var ch = Math.Min(templCrop.Height, roiGray.Height);
+            var cx = (templCrop.Width - cw) / 2;
+            var cy = (templCrop.Height - ch) / 2;
+            using var t2 = new Mat(templCrop, new Rect(cx, cy, cw, ch));
+            var (v, _) = MatchTemplatePyramid(roiGray, t2, TemplateMatchModes.CCoeffNormed);
+            maxVal = v;
+        }
+
         var objCenter = new Point2d[] { new Point2d(templPrep.Width / 2.0, templPrep.Height / 2.0) };
         var sceneCenter = Cv2.PerspectiveTransform(objCenter, H);
         
@@ -870,11 +887,29 @@ public sealed class PatternMatcher
         
         var matchRect = new Rect((int)(roiRect.X + minX), (int)(roiRect.Y + minY), (int)(maxX - minX), (int)(maxY - minY));
         
-        var h11 = H.At<double>(0, 0);
-        var h21 = H.At<double>(1, 0);
-        var actualAngleDeg = Math.Atan2(h21, h11) * 180.0 / Math.PI;
-        
-        return new MatchResult(global, 1.0, actualAngleDeg, matchRect);
+        return new MatchResult(global, maxVal, actualAngleDeg, matchRect);
+    }
+
+    private MatchResult FallbackToTemplateMatch(Mat roiGray, Mat templateGray, PointDefinition definition, double angleDeg, PreprocessSettings? preprocess, Rect roiRect)
+    {
+        using var tPrep = PreprocessTemplateForMatch(templateGray, preprocess);
+        using var templGrayRot = RotateWithPadding(tPrep, angleDeg);
+        var crop = ContentRectFromNonZero(templGrayRot, pad: 0);
+        if (crop.Width <= 0 || crop.Height <= 0) {
+            var centerFallback = new Point2d(roiRect.X + roiRect.Width / 2.0, roiRect.Y + roiRect.Height / 2.0);
+            return new MatchResult(centerFallback, 0.0, angleDeg, roiRect);
+        }
+        using var templCrop = new Mat(templGrayRot, crop);
+        var cw = Math.Min(templCrop.Width, roiGray.Width);
+        var ch = Math.Min(templCrop.Height, roiGray.Height);
+        var cx = (templCrop.Width - cw) / 2;
+        var cy = (templCrop.Height - ch) / 2;
+        using var t2 = new Mat(templCrop, new Rect(cx, cy, cw, ch));
+        var (maxV, maxL) = MatchTemplatePyramid(roiGray, t2, TemplateMatchModes.CCoeffNormed);
+        var cInRoi = new Point2d(maxL.X + t2.Width / 2.0, maxL.Y + t2.Height / 2.0);
+        var g = new Point2d(cInRoi.X + roiRect.X, cInRoi.Y + roiRect.Y);
+        var mRect = new Rect(roiRect.X + maxL.X, roiRect.Y + maxL.Y, t2.Width, t2.Height);
+        return new MatchResult(g, maxV, angleDeg, mRect);
     }
 
     private static MatchResult MatchByShapeModel(Mat roiGray, ShapeModelDefinition model, double angleDeg)
@@ -1379,9 +1414,17 @@ public sealed class PatternMatcher
             Cv2.Resize(imageGray, imgL, imgSize, 0, 0, InterpolationFlags.Area);
             Cv2.Resize(templGray, tplL, tplSize, 0, 0, InterpolationFlags.Area);
 
-            if (imgL.Width < tplL.Width || imgL.Height < tplL.Height)
+            Mat actualTpl = tplL;
+            Mat? tempTpl = null;
+
+            if (imgL.Width < actualTpl.Width || imgL.Height < actualTpl.Height)
             {
-                return (0.0, new Point(0, 0));
+                var cw = Math.Min(actualTpl.Width, imgL.Width);
+                var ch = Math.Min(actualTpl.Height, imgL.Height);
+                var cx = (actualTpl.Width - cw) / 2;
+                var cy = (actualTpl.Height - ch) / 2;
+                tempTpl = new Mat(actualTpl, new Rect(cx, cy, cw, ch));
+                actualTpl = tempTpl;
             }
 
             Rect search;
@@ -1399,11 +1442,11 @@ public sealed class PatternMatcher
                 var sy = Math.Clamp(py - r, 0, Math.Max(0, imgL.Height - 1));
 
                 // Ensure search window large enough to fit template.
-                var sw = Math.Min(imgL.Width - sx, tplL.Width + 2 * r);
-                var sh = Math.Min(imgL.Height - sy, tplL.Height + 2 * r);
+                var sw = Math.Min(imgL.Width - sx, actualTpl.Width + 2 * r);
+                var sh = Math.Min(imgL.Height - sy, actualTpl.Height + 2 * r);
 
-                if (sw < tplL.Width) sw = tplL.Width;
-                if (sh < tplL.Height) sh = tplL.Height;
+                if (sw < actualTpl.Width) sw = actualTpl.Width;
+                if (sh < actualTpl.Height) sh = actualTpl.Height;
 
                 search = new Rect(sx, sy, sw, sh);
                 search = search.Intersect(new Rect(0, 0, imgL.Width, imgL.Height));
@@ -1411,10 +1454,12 @@ public sealed class PatternMatcher
 
             using var searchMat = new Mat(imgL, search);
             using var res = new Mat();
-            Cv2.MatchTemplate(searchMat, tplL, res, mode);
+            Cv2.MatchTemplate(searchMat, actualTpl, res, mode);
             Cv2.MinMaxLoc(res, out _, out var maxVal, out _, out var maxLoc);
 
             pred = new Point(maxLoc.X + search.X, maxLoc.Y + search.Y);
+            
+            tempTpl?.Dispose();
 
             if (level == 0)
             {
