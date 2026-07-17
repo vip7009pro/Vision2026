@@ -2240,11 +2240,62 @@ public sealed class InspectionService : IInspectionService
 
                 var w0 = gray.Cols;
                 var h0 = gray.Rows;
-                var buf = new byte[w0 * h0];
-                Marshal.Copy(gray.Data, buf, 0, buf.Length);
-                var source = new RGBLuminanceSource(buf, w0, h0, RGBLuminanceSource.BitmapFormat.Gray8);
+                var anglesToTry = new List<double> { 0 };
+                if (Math.Abs(angleDeg) > 0.1)
+                {
+                    anglesToTry.Add(-angleDeg); // Try to straighten based on Origin
+                }
+                
+                if (cdt.TryHarder)
+                {
+                    double[] sweep = { 45, -45, 15, -15, 30, -30, 60, -60, 75, -75 };
+                    foreach (var a in sweep)
+                    {
+                        if (!anglesToTry.Contains(a)) anglesToTry.Add(a);
+                    }
+                }
 
-                var decoded = reader.Decode(source);
+                ZXing.Result? decoded = null;
+                double successfulAngle = 0;
+                int rotatedW = gray.Cols;
+                int rotatedH = gray.Rows;
+
+                foreach (var a in anglesToTry)
+                {
+                    using var rotatedGray = new Mat();
+                    if (Math.Abs(a) < 0.1)
+                    {
+                        gray.CopyTo(rotatedGray);
+                        rotatedW = gray.Cols;
+                        rotatedH = gray.Rows;
+                    }
+                    else
+                    {
+                        var center = new Point2f(gray.Cols / 2.0f, gray.Rows / 2.0f);
+                        using var rot = Cv2.GetRotationMatrix2D(center, a, 1.0);
+                        var absCos = Math.Abs(rot.At<double>(0, 0));
+                        var absSin = Math.Abs(rot.At<double>(0, 1));
+                        rotatedW = (int)(gray.Rows * absSin + gray.Cols * absCos);
+                        rotatedH = (int)(gray.Rows * absCos + gray.Cols * absSin);
+                        
+                        rot.Set<double>(0, 2, rot.At<double>(0, 2) + rotatedW / 2.0 - center.X);
+                        rot.Set<double>(1, 2, rot.At<double>(1, 2) + rotatedH / 2.0 - center.Y);
+                        
+                        Cv2.WarpAffine(gray, rotatedGray, rot, new Size(rotatedW, rotatedH), InterpolationFlags.Linear, BorderTypes.Replicate);
+                    }
+
+                    var bufRot = new byte[rotatedW * rotatedH];
+                    Marshal.Copy(rotatedGray.Data, bufRot, 0, bufRot.Length);
+                    var srcRot = new RGBLuminanceSource(bufRot, rotatedW, rotatedH, RGBLuminanceSource.BitmapFormat.Gray8);
+
+                    decoded = reader.Decode(srcRot);
+                    if (decoded is not null && !string.IsNullOrWhiteSpace(decoded.Text))
+                    {
+                        successfulAngle = a;
+                        break;
+                    }
+                }
+
                 if (decoded is null || string.IsNullOrWhiteSpace(decoded.Text))
                 {
                     result.CodeDetections.Add(new CodeDetectionResult(cdt.Name, Found: false, Text: string.Empty, BoundingBox: default));
@@ -2255,8 +2306,30 @@ public sealed class InspectionService : IInspectionService
                 var bb = rect;
                 if (decoded.ResultPoints is not null && decoded.ResultPoints.Length > 0)
                 {
-                    var xs = decoded.ResultPoints.Select(p => p.X).ToArray();
-                    var ys = decoded.ResultPoints.Select(p => p.Y).ToArray();
+                    var xs = new List<double>();
+                    var ys = new List<double>();
+
+                    if (Math.Abs(successfulAngle) > 0.1)
+                    {
+                        var center = new Point2f(gray.Cols / 2.0f, gray.Rows / 2.0f);
+                        using var invRot = Cv2.GetRotationMatrix2D(new Point2f(rotatedW / 2.0f, rotatedH / 2.0f), -successfulAngle, 1.0);
+                        invRot.Set<double>(0, 2, invRot.At<double>(0, 2) + center.X - rotatedW / 2.0f);
+                        invRot.Set<double>(1, 2, invRot.At<double>(1, 2) + center.Y - rotatedH / 2.0f);
+
+                        foreach (var p in decoded.ResultPoints)
+                        {
+                            var px = p.X * invRot.At<double>(0, 0) + p.Y * invRot.At<double>(0, 1) + invRot.At<double>(0, 2);
+                            var py = p.X * invRot.At<double>(1, 0) + p.Y * invRot.At<double>(1, 1) + invRot.At<double>(1, 2);
+                            xs.Add(px);
+                            ys.Add(py);
+                        }
+                    }
+                    else
+                    {
+                        xs.AddRange(decoded.ResultPoints.Select(p => (double)p.X));
+                        ys.AddRange(decoded.ResultPoints.Select(p => (double)p.Y));
+                    }
+
                     var minX = xs.Min();
                     var maxX = xs.Max();
                     var minY = ys.Min();

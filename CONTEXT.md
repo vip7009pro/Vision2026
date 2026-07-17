@@ -138,3 +138,19 @@ This project is an advanced industrial machine vision inspection suite built on 
 ### Status
 - Image Info Overlay: ✅ DEPLOYED (Hiển thị đồng loạt trên 4 màn hình tab).
 
+
+## Update 2026-07-17 14:07 (Code Detection Rotation Enhancement)
+
+### Feature
+- Nâng cấp Tool CodeDetection: Khả năng bắt mã Barcode/QR Code ở mọi góc xoay ngẫu nhiên thay vì chỉ các góc vuông (0, 90, 180, 270) như thư viện ZXing mặc định.
+
+### Implementation
+- Sửa đổi trong `VisionInspectionApp.Application/Class1.cs` (Tool `CodeDetection`).
+- Bổ sung cơ chế Rotation Sweep: 
+  - Nếu công cụ Origin trả về một góc xoay (angleDeg != 0), hệ thống sẽ tự động bù góc ngược lại (`-angleDeg`) để đưa mã về phương ngang.
+  - Nếu mã vẫn không được tìm thấy và `TryHarder = true`, hệ thống tiếp tục tự động quét ở các góc xoay phổ biến (15, 30, 45, 60, 75 độ...) cho đến khi giải mã thành công.
+- Inverse Matrix Transformation: Tự động dùng ma trận xoay ngược để trả các điểm tọa độ ResultPoints của Barcode về không gian tọa độ hiển thị ban đầu, đảm bảo khung xanh lá (Bounding Box) vẫn được vẽ ôm sát mã Barcode bất chấp góc nghiêng.
+
+### Status
+- CodeDetection Rotation: ✅ FIXED & DEPLOYED (Hỗ trợ giải mã chính xác trong mọi điều kiện xoay).
+
