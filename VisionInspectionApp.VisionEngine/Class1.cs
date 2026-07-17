@@ -775,39 +775,57 @@ public sealed class PatternMatcher
             return new MatchResult(globalPos, m.Score, angleDeg, mr);
         }
 
-        using var templPrep0 = PreprocessTemplateForMatch(templateGray, preprocess);
+        using var templPrep = PreprocessTemplateForMatch(templateGray, preprocess);
 
-        using var templEdges0 = new Mat();
-        Cv2.Canny(templPrep0, templEdges0, 50, 150);
-        using var templEdgesRot = RotateWithPadding(templEdges0, angleDeg);
-        var crop = ContentRectFromNonZero(templEdgesRot, pad: 2);
-        if (crop.Width <= 0 || crop.Height <= 0)
+        if (Math.Abs(angleDeg) < 0.1)
+        {
+            if (roiGray.Mat.Width < templPrep.Width || roiGray.Mat.Height < templPrep.Height)
+            {
+                var centerFallback = new Point2d(roiRect.X + roiRect.Width / 2.0, roiRect.Y + roiRect.Height / 2.0);
+                return new MatchResult(centerFallback, 0.0, angleDeg, roiRect);
+            }
+            var (maxV, maxL) = MatchTemplatePyramid(roiGray.Mat, templPrep, TemplateMatchModes.CCoeffNormed);
+            var centerInRoi = new Point2d(maxL.X + templPrep.Width / 2.0, maxL.Y + templPrep.Height / 2.0);
+            var global = new Point2d(centerInRoi.X + roiRect.X, centerInRoi.Y + roiRect.Y);
+            var matchRect = new Rect(roiRect.X + maxL.X, roiRect.Y + maxL.Y, templPrep.Width, templPrep.Height);
+            return new MatchResult(global, maxV, angleDeg, matchRect);
+        }
+
+        var centerRoi = new Point2f(roiGray.Mat.Width / 2f, roiGray.Mat.Height / 2f);
+        using var M = Cv2.GetRotationMatrix2D(centerRoi, angleDeg, 1.0);
+        
+        using var unrotatedRoi = new Mat();
+        Cv2.WarpAffine(roiGray.Mat, unrotatedRoi, M, roiGray.Mat.Size(), InterpolationFlags.Linear, BorderTypes.Constant, Scalar.Black);
+
+        if (unrotatedRoi.Width < templPrep.Width || unrotatedRoi.Height < templPrep.Height)
         {
             var centerFallback = new Point2d(roiRect.X + roiRect.Width / 2.0, roiRect.Y + roiRect.Height / 2.0);
             return new MatchResult(centerFallback, 0.0, angleDeg, roiRect);
         }
 
-        using var templGrayRot = RotateWithPadding(templPrep0, angleDeg);
-        if (crop.X < 0 || crop.Y < 0 || crop.X + crop.Width > templGrayRot.Width || crop.Y + crop.Height > templGrayRot.Height)
-        {
-            var centerFallback = new Point2d(roiRect.X + roiRect.Width / 2.0, roiRect.Y + roiRect.Height / 2.0);
-            return new MatchResult(centerFallback, 0.0, angleDeg, roiRect);
-        }
+        var (maxVal, maxLoc) = MatchTemplatePyramid(unrotatedRoi, templPrep, TemplateMatchModes.CCoeffNormed);
+        
+        var unrotatedCenter = new Point2d(maxLoc.X + templPrep.Width / 2.0, maxLoc.Y + templPrep.Height / 2.0);
+        
+        var rad = angleDeg * Math.PI / 180.0;
+        var cos = Math.Cos(rad);
+        var sin = Math.Sin(rad);
+        var dx = unrotatedCenter.X - centerRoi.X;
+        var dy = unrotatedCenter.Y - centerRoi.Y;
+        var rotatedCenterInRoi = new Point2d(
+            centerRoi.X + dx * cos - dy * sin,
+            centerRoi.Y + dx * sin + dy * cos
+        );
 
-        using var templ = new Mat(templGrayRot, crop);
+        var globalCenter = new Point2d(rotatedCenterInRoi.X + roiRect.X, rotatedCenterInRoi.Y + roiRect.Y);
+        var globalMatchRect = new Rect(
+            (int)(globalCenter.X - templPrep.Width / 2.0),
+            (int)(globalCenter.Y - templPrep.Height / 2.0),
+            templPrep.Width,
+            templPrep.Height
+        );
 
-        if (roiGray.Mat.Width < templ.Width || roiGray.Mat.Height < templ.Height)
-        {
-            var centerFallback = new Point2d(roiRect.X + roiRect.Width / 2.0, roiRect.Y + roiRect.Height / 2.0);
-            return new MatchResult(centerFallback, 0.0, angleDeg, roiRect);
-        }
-
-        var (maxVal, maxLoc) = MatchTemplatePyramid(roiGray.Mat, templ, TemplateMatchModes.CCoeffNormed);
-
-        var centerInRoi = new Point2d(maxLoc.X + templ.Width / 2.0, maxLoc.Y + templ.Height / 2.0);
-        var global = new Point2d(centerInRoi.X + roiRect.X, centerInRoi.Y + roiRect.Y);
-        var matchRect = new Rect(roiRect.X + maxLoc.X, roiRect.Y + maxLoc.Y, templ.Width, templ.Height);
-        return new MatchResult(global, maxVal, angleDeg, matchRect);
+        return new MatchResult(globalCenter, maxVal, angleDeg, globalMatchRect);
     }
 
     
