@@ -110,3 +110,18 @@ This project is an advanced industrial machine vision inspection suite built on 
 
 ### Status
 - FeatureBased Match Score: ✅ FIXED & DEPLOYED (Tuyệt đối không bị giảm điểm do góc đen viền).
+
+
+## Update 2026-07-17 13:41 (CodeDetection Preprocess Input Fix)
+
+### Issue
+- Người dùng phản ánh rằng công cụ `CodeDetection` không nhận ảnh từ công cụ Preprocess (mặc dù đã nối dây trong Graph) mà luôn lấy ảnh gốc từ Global Pre-processor.
+
+### Fix
+- Trong file `VisionInspectionApp.Application/Class1.cs`, hàm `ResolveToolPreprocess` đang tìm kiếm port kết nối có tên là `"Pre"`. Tuy nhiên, trong `ToolEditorViewModel.cs` (hàm `RebuildPorts`), port đầu vào của CodeDetection và các tool khác lại được khai báo là `"Preprocess"`. Sự bất đồng nhất tên cổng này dẫn đến việc Engine không thể tìm thấy kết nối, do đó luôn fallback về Global Pre-processor mặc định.
+- Đổi cứng chuỗi `"Pre"` thành `"Preprocess"` tại `ResolveToolPreprocess` để đồng bộ hoàn toàn với Node Graph trên UI.
+- (Bổ sung) Phát hiện thêm lỗi trên UI: Khi click chọn Node `CodeDetection` hoặc `CircleFinder`, UI preview image không chịu cập nhật hình ảnh qua Pre-processor do bị thiếu tên 2 tool này trong vòng lặp if kiểm tra `ResolveToolPreprocessForPreview` (tại `ToolEditorViewModel.cs`). Đã thêm chúng vào danh sách preview hợp lệ.
+
+### Status
+- CodeDetection Input Routing: ✅ FIXED & DEPLOYED (Tool đã nhận đúng ảnh đầu vào từ các Preprocessor con trên cả quá trình chạy ngầm lẫn Preview UI).
+

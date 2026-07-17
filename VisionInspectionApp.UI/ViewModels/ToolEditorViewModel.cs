@@ -6553,7 +6553,9 @@ public sealed partial class ToolEditorViewModel : ObservableObject
                         || string.Equals(SelectedNode.Type, "LinePairDetection", StringComparison.OrdinalIgnoreCase)
                         || string.Equals(SelectedNode.Type, "EdgePairDetect", StringComparison.OrdinalIgnoreCase)
                         || string.Equals(SelectedNode.Type, "EdgePair", StringComparison.OrdinalIgnoreCase)
-                        || string.Equals(SelectedNode.Type, "BlobDetection", StringComparison.OrdinalIgnoreCase)))
+                        || string.Equals(SelectedNode.Type, "BlobDetection", StringComparison.OrdinalIgnoreCase)
+                        || string.Equals(SelectedNode.Type, "CircleFinder", StringComparison.OrdinalIgnoreCase)
+                        || string.Equals(SelectedNode.Type, "CodeDetection", StringComparison.OrdinalIgnoreCase)))
                 {
                     using var processedSel = ResolveToolPreprocessForPreview(snap, SelectedNode);
                     SelectedNodePreviewImage = processedSel.ToBitmapSource();

@@ -384,7 +384,7 @@ public sealed class InspectionService : IInspectionService
                 }
 
                 var preEdge = edges.FirstOrDefault(e => string.Equals(e.ToNodeId, toolNode.Id, StringComparison.OrdinalIgnoreCase)
-                                                       && string.Equals(e.ToPort, "Pre", StringComparison.OrdinalIgnoreCase));
+                                                       && string.Equals(e.ToPort, "Preprocess", StringComparison.OrdinalIgnoreCase));
                 if (preEdge is null)
                 {
                     return (mat, settings);
