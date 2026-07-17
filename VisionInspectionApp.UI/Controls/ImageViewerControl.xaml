@@ -1,4 +1,4 @@
-<UserControl x:Class="VisionInspectionApp.UI.Controls.ImageViewerControl"
+﻿<UserControl x:Class="VisionInspectionApp.UI.Controls.ImageViewerControl"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
 

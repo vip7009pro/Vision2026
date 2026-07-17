@@ -29,6 +29,10 @@ This project is an advanced industrial machine vision inspection suite built on 
 - **Angle Constraints**: Added `MinAngle` and `MaxAngle` bounds to `PointDefinition`. This allows the user to limit the search space strictly to a customized angular range (e.g., -20° to 20° or 0° to 360°) via the Tool Editor properties panel.
 - **Rotation Fixes**: Extracted exact orientation angles from the Homography matrix (`Cv2.FindHomography`) when using `FeatureBased` matching. Enhanced UI rendering in `ToolEditorViewModel` and `InspectionViewModel` to properly draw rotated bounding box center lines (crosshairs) that rotate alongside the matched template correctly.
 
+### 6. C# UTF-8 BOM Encoding Fix
+- Converted all `.cs` and `.xaml` files across the codebase to use **UTF-8 with BOM** instead of plain UTF-8.
+- This prevents the Roslyn compiler from falling back to local Windows code pages (like Windows-1258/ANSI) and resolves UI bugs where Vietnamese strings (e.g. in `InspectionViewModel.cs` Message Boxes, or `Text` tool placeholders) displayed as corrupted characters at runtime.
+
 ## Remaining Roadmap
 
 ### High Priority
@@ -41,3 +45,23 @@ This project is an advanced industrial machine vision inspection suite built on 
 
 ### Low Priority
 - **Persistence Checks**: Final verification that node graphs, custom layout settings, and global parameters accurately serialize to and from the configuration disk files without losing layout coordinates.
+
+
+## Update 2026-07-17 08:41 (Vietnamese Font Fix)
+
+### Root Cause Found
+- File ToolEditorView.xaml chứa **12 dòng** text tiếng Việt bị **double-encoded UTF-8** (mojibake).
+  - Ví dụ: VÃ­ dá»¥ thay vì Ví dụ, Ä'á»ƒ thay vì để
+  - Nguyên nhân: script ix_encoding.py trước đó đã đọc file UTF-8 như Latin-1 rồi encode lại thành UTF-8, tạo ra chuỗi byte bị double-encode.
+- Tất cả các file .cs khác đều có encoding đúng (UTF-8 with BOM, không bị mojibake).
+- DLL biên dịch chứa chuỗi Vietnamese chính xác dạng UTF-16LE.
+
+### Fixed
+- Tạo script ix_mojibake.py để tự động reverse double-encoding (UTF-8 → CP1252 → UTF-8).
+- Script đã sửa tự động 12 dòng, 2 dòng còn sót được sửa thủ công.
+- Xác minh: scan toàn bộ project - không còn file nào có mojibake.
+- Build thành công (0 errors, 4 warnings).
+
+### Status
+- Vietnamese font: ✅ FIXED (all files clean)
+- Dark mode input styling: InputBackgroundBrush changed to #000000, InputTextBrush to #FFFFFF  

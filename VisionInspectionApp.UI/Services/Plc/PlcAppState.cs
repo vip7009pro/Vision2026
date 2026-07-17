@@ -1,4 +1,4 @@
-namespace VisionInspectionApp.UI.Services.Plc;
+﻿namespace VisionInspectionApp.UI.Services.Plc;
 
 public enum PlcAppState : short
 {

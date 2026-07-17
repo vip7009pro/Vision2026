@@ -1,4 +1,4 @@
-namespace VisionInspectionApp.Models;
+﻿namespace VisionInspectionApp.Models;
 
 public enum LineLineDistanceMode
 {

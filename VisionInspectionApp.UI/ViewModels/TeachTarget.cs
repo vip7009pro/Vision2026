@@ -1,4 +1,4 @@
-namespace VisionInspectionApp.UI.ViewModels;
+﻿namespace VisionInspectionApp.UI.ViewModels;
 
 public enum TeachTarget
 {

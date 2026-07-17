@@ -828,8 +828,8 @@
                                          AcceptsReturn="True"
                                          Height="80"
                                          TextWrapping="Wrap"
-                                         ToolTip="VÃ­ dá»¥ sá»‘: Caliper1 &gt; 10 &amp;&amp; Origin.Pass&#x0a;VÃ­ dá»¥ chá»¯: QR1.Text == &quot;ABC123&quot; || QR1.Text == &quot;LOT-01&quot;&#x0a;Biáº¿n trong Condition láº¥y theo Ä‘Ãºng tÃªn tool: Origin, Caliper1, QR1, EP.MyEdge, SC.MySurface, ...&#x0a;So sÃ¡nh chá»¯ há»— trá»£ == vÃ  !=; so sÃ¡nh sá»‘ há»— trá»£ &gt;, &lt;, &gt;=, &lt;=, ==, !=" />
-                                <TextBlock Text="VÃ­ dá»¥: Caliper1 &gt; 10 || QR1.Text == &quot;ABC123&quot; | biáº¿n theo tÃªn tool: Origin, Caliper1, QR1, EP.*, SC.*"
+                                         ToolTip="Ví dụ số: Caliper1 &gt; 10 &amp;&amp; Origin.Pass&#x0a;Ví dụ chữ: QR1.Text == &quot;ABC123&quot; || QR1.Text == &quot;LOT-01&quot;&#x0a;Biến trong Condition lấy theo đúng tên tool: Origin, Caliper1, QR1, EP.MyEdge, SC.MySurface, ...&#x0a;So sánh chữ hỗ trợ == và !=; so sánh số hỗ trợ &gt;, &lt;, &gt;=, &lt;=, ==, !=" />
+                                <TextBlock Text="Ví dụ: Caliper1 &gt; 10 || QR1.Text == &quot;ABC123&quot; | biến theo tên tool: Origin, Caliper1, QR1, EP.*, SC.*"
                                            FontSize="11"
                                            Foreground="{DynamicResource TextMutedBrush}"
                                            Margin="0,2,0,0"
@@ -837,9 +837,9 @@
                                 <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="4" Padding="6" Margin="0,6,0,0" Background="{DynamicResource PanelAltBackgroundBrush}">
                                     <StackPanel>
                                         <TextBlock Text="Condition cheatsheet" FontWeight="SemiBold" Margin="0,0,0,4" />
-                                        <TextBlock Text="{}/ Caliper1 &gt; 10  - sá»‘" FontSize="11" Foreground="{DynamicResource TextMutedBrush}" TextWrapping="Wrap" />
+                                        <TextBlock Text="{}/ Caliper1 &gt; 10  - số" FontSize="11" Foreground="{DynamicResource TextMutedBrush}" TextWrapping="Wrap" />
                                         <TextBlock Text="{}/ Origin.Pass &amp;&amp; QR1.Pass  - bool" FontSize="11" Foreground="{DynamicResource TextMutedBrush}" TextWrapping="Wrap" />
-                                        <TextBlock Text="{}/ QR1.Text == &quot;ABC123&quot;  - text tá»« CodeDetection" FontSize="11" Foreground="{DynamicResource TextMutedBrush}" TextWrapping="Wrap" />
+                                        <TextBlock Text="{}/ QR1.Text == &quot;ABC123&quot;  - text từ CodeDetection" FontSize="11" Foreground="{DynamicResource TextMutedBrush}" TextWrapping="Wrap" />
                                     </StackPanel>
                                 </Border>
                             </StackPanel>
@@ -855,8 +855,8 @@
                                          Height="60"
                                          TextWrapping="Wrap"
                                          Margin="0,0,0,6"
-                                         ToolTip="DÃ¹ng placeholder Ä‘á»ƒ ghÃ©p káº¿t quáº£ tá»« tool khÃ¡c vÃ o text. Há»— trá»£ cáº£ {ToolName.Value} vÃ  ${ToolName.Value}. VÃ­ dá»¥: Káº¿t quáº£ Caliper: {Caliper1.Value:0.000} mm | QR: {QR1.Text} | Origin pass: {Origin.Pass}" />
-                                <TextBlock Text="VÃ­ dá»¥: Káº¿t quáº£ Caliper: {Caliper1.Value:0.000} mm | QR: {QR1.Text} | Origin pass: {Origin.Pass}"
+                                         ToolTip="Dùng placeholder để ghép kết quả từ tool khác vào text. Hỗ trợ cả {ToolName.Value} và ${ToolName.Value}. Ví dụ: Kết quả Caliper: {Caliper1.Value:0.000} mm | QR: {QR1.Text} | Origin pass: {Origin.Pass}" />
+                                <TextBlock Text="Ví dụ: Kết quả Caliper: {Caliper1.Value:0.000} mm | QR: {QR1.Text} | Origin pass: {Origin.Pass}"
                                            FontSize="11"
                                            Foreground="{DynamicResource TextMutedBrush}"
                                            Margin="0,0,0,6"
@@ -865,10 +865,10 @@
                                 <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="4" Padding="6" Margin="0,0,0,8" Background="{DynamicResource PanelAltBackgroundBrush}">
                                     <StackPanel>
                                         <TextBlock Text="Placeholder cheatsheet" FontWeight="SemiBold" Margin="0,0,0,4" />
-                                        <TextBlock Text="{}{Caliper1.Value}  - giÃ¡ trá»‹ Ä‘o cá»§a Caliper" FontSize="11" Foreground="{DynamicResource TextMutedBrush}" TextWrapping="Wrap" />
-                                        <TextBlock Text="{}{Origin.Pass}  - tráº¡ng thÃ¡i pass/fail cá»§a Origin" FontSize="11" Foreground="{DynamicResource TextMutedBrush}" TextWrapping="Wrap" />
-                                        <TextBlock Text="{}{QR1.Text}  - text Ä‘á»c Ä‘Æ°á»£c tá»« QR/Barcode" FontSize="11" Foreground="{DynamicResource TextMutedBrush}" TextWrapping="Wrap" />
-                                        <TextBlock Text="{}{SC.Surface1.Score}  - score/area cá»§a SurfaceCompare" FontSize="11" Foreground="{DynamicResource TextMutedBrush}" TextWrapping="Wrap" />
+                                        <TextBlock Text="{}{Caliper1.Value}  - giá trị đo của Caliper" FontSize="11" Foreground="{DynamicResource TextMutedBrush}" TextWrapping="Wrap" />
+                                        <TextBlock Text="{}{Origin.Pass}  - trạng thái pass/fail của Origin" FontSize="11" Foreground="{DynamicResource TextMutedBrush}" TextWrapping="Wrap" />
+                                        <TextBlock Text="{}{QR1.Text}  - text đọc được từ QR/Barcode" FontSize="11" Foreground="{DynamicResource TextMutedBrush}" TextWrapping="Wrap" />
+                                        <TextBlock Text="{}{SC.Surface1.Score}  - score/area của SurfaceCompare" FontSize="11" Foreground="{DynamicResource TextMutedBrush}" TextWrapping="Wrap" />
                                     </StackPanel>
                                 </Border>
 
@@ -927,8 +927,8 @@
                                                              Height="50"
                                                              TextWrapping="Wrap"
                                                              Margin="0,0,0,6"
-                                                             ToolTip="VÃ­ dá»¥: text.Contains(&quot;OK&quot;) || text.Contains(&quot;FAIL&quot;)&#x0a;Trong Text rule, biáº¿n thÆ°á»ng lÃ  text vÃ  cÃ³ thá»ƒ ghÃ©p nhiá»u Ä‘iá»u kiá»‡n báº±ng &amp;&amp; / ||.&#x0a;Náº¿u muá»‘n Ä‘á»•i mÃ u theo káº¿t quáº£ tool khÃ¡c, hÃ£y Ä‘Æ°a káº¿t quáº£ Ä‘Ã³ vÃ o placeholder cá»§a Text rá»“i dÃ¹ng expression á»Ÿ Ä‘Ã¢y." />
-                                                    <TextBlock Text="VÃ­ dá»¥: text.Contains(&quot;OK&quot;) || text.Contains(&quot;FAIL&quot;)"
+                                                             ToolTip="Ví dụ: text.Contains(&quot;OK&quot;) || text.Contains(&quot;FAIL&quot;)&#x0a;Trong Text rule, biến thường là text và có thể ghép nhiều điều kiện bằng &amp;&amp; / ||.&#x0a;Nếu muốn đổi màu theo kết quả tool khác, hãy đưa kết quả đó vào placeholder của Text rồi dùng expression ở đây." />
+                                                    <TextBlock Text="Ví dụ: text.Contains(&quot;OK&quot;) || text.Contains(&quot;FAIL&quot;)"
                                                                FontSize="11"
                                                                Foreground="{DynamicResource TextMutedBrush}"
                                                                Margin="0,0,0,6"
