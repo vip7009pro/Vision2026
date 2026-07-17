@@ -1,4 +1,4 @@
-﻿using OpenCvSharp;
+using OpenCvSharp;
 using VisionInspectionApp.Models;
 using VisionInspectionApp.VisionEngine;
 using System.Diagnostics;
@@ -58,7 +58,7 @@ public sealed class ConfigStoreOptions
     public string ConfigRootDirectory { get; set; } = "configs";
 }
 
-public sealed record PointMatchResult(string Name, Point2d Position, Rect MatchRect, double Score, double Threshold, bool Pass, double AngleDeg);
+public sealed record PointMatchResult(string Name, Point2d Position, Rect MatchRect, double Score, double Threshold, bool Pass, double AngleDeg, System.Collections.Generic.List<Point2d>? FeaturePoints = null);
 
 public sealed class InspectionTimings
 {
@@ -1058,7 +1058,8 @@ public sealed class InspectionService : IInspectionService
                 originMatch.Score,
                 config.Origin.MatchScoreThreshold,
                 originPass,
-                poseAngleDeg);
+                poseAngleDeg,
+                originMatch.FeaturePoints);
             result.Timings.OriginMs = (int)Math.Max(0, swTotal.ElapsedMilliseconds - tOrigin0);
 
             var originTeach = new Point2d(config.Origin.WorldPosition.X, config.Origin.WorldPosition.Y);
@@ -1266,6 +1267,7 @@ public sealed class InspectionService : IInspectionService
                     double score;
                     double thr;
                     bool pass;
+                    List<Point2d>? featurePoints = null;
 
                     if (p.Algorithm == PointFindAlgorithm.EdgePoint)
                     {
@@ -1295,12 +1297,13 @@ public sealed class InspectionService : IInspectionService
                         score = m.Score;
                         thr = p.MatchScoreThreshold;
                         pass = score >= thr;
+                        featurePoints = m.FeaturePoints;
                     }
 
                     var off = new Point2d(p.OffsetPx.X, p.OffsetPx.Y);
                     var offRot = Rotate(off, new Point2d(0, 0), templateAngleDeg);
                     var pos = new Point2d(basePos.X + offRot.X, basePos.Y + offRot.Y);
-                    return new PointMatchResult(p.Name, pos, matchRect, score, thr, pass, 0.0);
+                    return new PointMatchResult(p.Name, pos, matchRect, score, thr, pass, 0.0, featurePoints);
                 }))
                 .ToArray();
 

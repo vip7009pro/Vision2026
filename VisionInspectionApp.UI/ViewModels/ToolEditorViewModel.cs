@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.ObjectModel;
 using System.Globalization;
 using System.IO;
@@ -8101,6 +8101,24 @@ public sealed partial class ToolEditorViewModel : ObservableObject
                 Stroke = run.Origin.Pass ? Brushes.Lime : Brushes.Red,
                 Label = $"Origin: {run.Origin.Score:0.00}"
             });
+
+            if (run.Origin.FeaturePoints != null && run.Origin.Pass)
+            {
+                var ptBrush = Brushes.LawnGreen;
+                foreach (var fp in run.Origin.FeaturePoints)
+                {
+                    dst.Add(new OverlayPointItem
+                    {
+                        X = fp.X,
+                        Y = fp.Y,
+                        Radius = 1.0,
+                        Stroke = ptBrush,
+                        StrokeThickness = 1.0,
+                        Label = string.Empty
+                    });
+                }
+            }
+
             return;
         }
 
@@ -8129,6 +8147,24 @@ public sealed partial class ToolEditorViewModel : ObservableObject
                 Stroke = p.Pass ? Brushes.DeepSkyBlue : Brushes.Red,
                 Label = p.Name
             });
+
+            if (p.FeaturePoints != null && p.Pass)
+            {
+                var ptBrush = Brushes.DeepSkyBlue;
+                foreach (var fp in p.FeaturePoints)
+                {
+                    dst.Add(new OverlayPointItem
+                    {
+                        X = fp.X,
+                        Y = fp.Y,
+                        Radius = 1.0,
+                        Stroke = ptBrush,
+                        StrokeThickness = 1.0,
+                        Label = string.Empty
+                    });
+                }
+            }
+
             return;
         }
 

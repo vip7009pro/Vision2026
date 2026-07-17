@@ -1,4 +1,4 @@
-﻿using System.IO;
+using System.IO;
 
 using System.Windows.Input;
 
@@ -2383,6 +2383,40 @@ public sealed partial class InspectionViewModel : ObservableObject
                 Label = $"Origin ({angle:0.00}°)"
 
             });
+
+
+
+            if (LastResult.Origin.FeaturePoints != null && LastResult.Origin.Pass)
+
+            {
+
+                var ptBrush = System.Windows.Media.Brushes.LawnGreen;
+
+                foreach (var fp in LastResult.Origin.FeaturePoints)
+
+                {
+
+                    OverlayItems.Add(new OverlayPointItem
+
+                    {
+
+                        X = fp.X,
+
+                        Y = fp.Y,
+
+                        Radius = 1.0,
+
+                        Stroke = ptBrush,
+
+                        StrokeThickness = 1.0,
+
+                        Label = string.Empty
+
+                    });
+
+                }
+
+            }
 
         }
 

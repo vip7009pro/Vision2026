@@ -258,7 +258,7 @@ public interface IDefectDetector
     DefectDetectionResult Detect(Mat image, DefectInspectionConfig config);
 }
 
-public sealed record MatchResult(Point2d Position, double Score, double AngleDeg, Rect MatchRect);
+public sealed record MatchResult(Point2d Position, double Score, double AngleDeg, Rect MatchRect, System.Collections.Generic.List<Point2d>? FeaturePoints = null);
 
 public static class ShapeModelTrainer
 {
@@ -940,7 +940,16 @@ public sealed class PatternMatcher
         
         var matchRect = new Rect((int)(roiRect.X + minX), (int)(roiRect.Y + minY), (int)(maxX - minX), (int)(maxY - minY));
         
-        return new MatchResult(global, maxVal, actualAngleDeg, matchRect);
+        var featurePoints = new System.Collections.Generic.List<Point2d>();
+        for (int i = 0; i < pts2.Length; i++)
+        {
+            if (inliers.At<byte>(i, 0) != 0)
+            {
+                featurePoints.Add(new Point2d(pts2[i].X + roiRect.X, pts2[i].Y + roiRect.Y));
+            }
+        }
+
+        return new MatchResult(global, maxVal, actualAngleDeg, matchRect, featurePoints);
     }
 
     private MatchResult FallbackToTemplateMatch(Mat roiGray, Mat templateGray, PointDefinition definition, double angleDeg, PreprocessSettings? preprocess, Rect roiRect)
@@ -1070,7 +1079,14 @@ public sealed class PatternMatcher
         var score = (double)best / totalWeight;
         var center = new Point2d(bestX + tplW / 2.0, bestY + tplH / 2.0);
         var rect = new Rect(bestX, bestY, tplW, tplH);
-        return new MatchResult(center, score, angleDeg, rect);
+
+        var featurePoints = new System.Collections.Generic.List<Point2d>(rotated.Count);
+        foreach (var rf in rotated)
+        {
+            featurePoints.Add(new Point2d(center.X + rf.Dx, center.Y + rf.Dy));
+        }
+
+        return new MatchResult(center, score, angleDeg, rect, featurePoints);
     }
 
     private static List<Point>[] BuildEdgeByBinFromSobel(Mat roiGray, int binCount, float magThreshold)
