@@ -7673,9 +7673,23 @@ public sealed partial class ToolEditorViewModel : ObservableObject
             {
                 var cx = mr.X + mr.Width / 2.0;
                 var cy = mr.Y + mr.Height / 2.0;
+                
+                var angleDeg = run.Origin.AngleDeg;
+                var a = angleDeg * Math.PI / 180.0;
+                var cos = Math.Cos(a);
+                var sin = Math.Sin(a);
+                var hw = mr.Width / 2.0;
+                var hh = mr.Height / 2.0;
+                
+                var hx = new Point2d(hw * cos, hw * sin);
+                var hy = new Point2d(-hh * sin, hh * cos);
+                var cp1 = new Point2d(cx - hx.X, cy - hx.Y);
+                var cp2 = new Point2d(cx + hx.X, cy + hx.Y);
+                var cp3 = new Point2d(cx - hy.X, cy - hy.Y);
+                var cp4 = new Point2d(cx + hy.X, cy + hy.Y);
 
-                dst.Add(new OverlayLineItem { X1 = mr.X, Y1 = cy, X2 = mr.X + mr.Width, Y2 = cy, Stroke = run.Origin.Pass ? Brushes.Lime : Brushes.Red });
-                dst.Add(new OverlayLineItem { X1 = cx, Y1 = mr.Y, X2 = cx, Y2 = mr.Y + mr.Height, Stroke = run.Origin.Pass ? Brushes.Lime : Brushes.Red });
+                dst.Add(new OverlayLineItem { X1 = cp1.X, Y1 = cp1.Y, X2 = cp2.X, Y2 = cp2.Y, Stroke = run.Origin.Pass ? Brushes.Lime : Brushes.Red });
+                dst.Add(new OverlayLineItem { X1 = cp3.X, Y1 = cp3.Y, X2 = cp4.X, Y2 = cp4.Y, Stroke = run.Origin.Pass ? Brushes.Lime : Brushes.Red });
             }
 
             dst.Add(new OverlayPointItem
@@ -8061,9 +8075,23 @@ public sealed partial class ToolEditorViewModel : ObservableObject
             {
                 var cx = mr.X + mr.Width / 2.0;
                 var cy = mr.Y + mr.Height / 2.0;
+                
+                var angleDeg = run.Origin.AngleDeg;
+                var a = angleDeg * Math.PI / 180.0;
+                var cos = Math.Cos(a);
+                var sin = Math.Sin(a);
+                var hw = mr.Width / 2.0;
+                var hh = mr.Height / 2.0;
+                
+                var hx = new Point2d(hw * cos, hw * sin);
+                var hy = new Point2d(-hh * sin, hh * cos);
+                var cp1 = new Point2d(cx - hx.X, cy - hx.Y);
+                var cp2 = new Point2d(cx + hx.X, cy + hx.Y);
+                var cp3 = new Point2d(cx - hy.X, cy - hy.Y);
+                var cp4 = new Point2d(cx + hy.X, cy + hy.Y);
 
-                dst.Add(new OverlayLineItem { X1 = mr.X, Y1 = cy, X2 = mr.X + mr.Width, Y2 = cy, Stroke = run.Origin.Pass ? Brushes.Lime : Brushes.Red });
-                dst.Add(new OverlayLineItem { X1 = cx, Y1 = mr.Y, X2 = cx, Y2 = mr.Y + mr.Height, Stroke = run.Origin.Pass ? Brushes.Lime : Brushes.Red });
+                dst.Add(new OverlayLineItem { X1 = cp1.X, Y1 = cp1.Y, X2 = cp2.X, Y2 = cp2.Y, Stroke = run.Origin.Pass ? Brushes.Lime : Brushes.Red });
+                dst.Add(new OverlayLineItem { X1 = cp3.X, Y1 = cp3.Y, X2 = cp4.X, Y2 = cp4.Y, Stroke = run.Origin.Pass ? Brushes.Lime : Brushes.Red });
             }
 
             dst.Add(new OverlayPointItem
