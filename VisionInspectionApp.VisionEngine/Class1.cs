@@ -791,11 +791,39 @@ public sealed class PatternMatcher
             return new MatchResult(global, maxV, angleDeg, matchRect);
         }
 
-        var centerRoi = new Point2f(roiGray.Mat.Width / 2f, roiGray.Mat.Height / 2f);
-        using var M = Cv2.GetRotationMatrix2D(centerRoi, angleDeg, 1.0);
+        // To avoid clipping during rotation, we extract a larger ROI from the original image.
+        int diag = (int)Math.Ceiling(Math.Sqrt(roiRect.Width * roiRect.Width + roiRect.Height * roiRect.Height));
+        int padX = (diag - roiRect.Width) / 2;
+        int padY = (diag - roiRect.Height) / 2;
+
+        var paddedRect = new Rect(roiRect.X - padX, roiRect.Y - padY, roiRect.Width + 2 * padX, roiRect.Height + 2 * padY);
         
-        using var unrotatedRoi = new Mat();
-        Cv2.WarpAffine(roiGray.Mat, unrotatedRoi, M, roiGray.Mat.Size(), InterpolationFlags.Linear, BorderTypes.Constant, Scalar.Black);
+        var imgRect = new Rect(0, 0, image.Width, image.Height);
+        var safePaddedRect = paddedRect.Intersect(imgRect);
+        
+        using var paddedRoi = new Mat(image, safePaddedRect);
+        using var paddedRoiGray = EnsureGrayBorrowed(paddedRoi);
+
+        var centerInSafePadded = new Point2f(
+            (float)(roiRect.X + roiRect.Width / 2.0 - safePaddedRect.X),
+            (float)(roiRect.Y + roiRect.Height / 2.0 - safePaddedRect.Y)
+        );
+
+        using var M = Cv2.GetRotationMatrix2D(centerInSafePadded, angleDeg, 1.0);
+        
+        using var unrotatedPadded = new Mat();
+        Cv2.WarpAffine(paddedRoiGray.Mat, unrotatedPadded, M, paddedRoiGray.Mat.Size(), InterpolationFlags.Linear, BorderTypes.Constant, Scalar.Black);
+
+        var cropRectInPadded = new Rect(
+            (int)(centerInSafePadded.X - roiRect.Width / 2.0),
+            (int)(centerInSafePadded.Y - roiRect.Height / 2.0),
+            roiRect.Width,
+            roiRect.Height
+        );
+
+        var safeCropRect = cropRectInPadded.Intersect(new Rect(0, 0, unrotatedPadded.Width, unrotatedPadded.Height));
+
+        using var unrotatedRoi = new Mat(unrotatedPadded, safeCropRect);
 
         if (unrotatedRoi.Width < templPrep.Width || unrotatedRoi.Height < templPrep.Height)
         {
@@ -805,19 +833,22 @@ public sealed class PatternMatcher
 
         var (maxVal, maxLoc) = MatchTemplatePyramid(unrotatedRoi, templPrep, TemplateMatchModes.CCoeffNormed);
         
-        var unrotatedCenter = new Point2d(maxLoc.X + templPrep.Width / 2.0, maxLoc.Y + templPrep.Height / 2.0);
+        var centerInCrop = new Point2d(maxLoc.X + templPrep.Width / 2.0, maxLoc.Y + templPrep.Height / 2.0);
+        var unrotatedCenter = new Point2d(centerInCrop.X + safeCropRect.X, centerInCrop.Y + safeCropRect.Y);
         
         var rad = angleDeg * Math.PI / 180.0;
         var cos = Math.Cos(rad);
         var sin = Math.Sin(rad);
-        var dx = unrotatedCenter.X - centerRoi.X;
-        var dy = unrotatedCenter.Y - centerRoi.Y;
-        var rotatedCenterInRoi = new Point2d(
-            centerRoi.X + dx * cos - dy * sin,
-            centerRoi.Y + dx * sin + dy * cos
+        
+        var dx = unrotatedCenter.X - centerInSafePadded.X;
+        var dy = unrotatedCenter.Y - centerInSafePadded.Y;
+        
+        var rotatedCenterInPadded = new Point2d(
+            centerInSafePadded.X + dx * cos - dy * sin,
+            centerInSafePadded.Y + dx * sin + dy * cos
         );
 
-        var globalCenter = new Point2d(rotatedCenterInRoi.X + roiRect.X, rotatedCenterInRoi.Y + roiRect.Y);
+        var globalCenter = new Point2d(rotatedCenterInPadded.X + safePaddedRect.X, rotatedCenterInPadded.Y + safePaddedRect.Y);
         var globalMatchRect = new Rect(
             (int)(globalCenter.X - templPrep.Width / 2.0),
             (int)(globalCenter.Y - templPrep.Height / 2.0),
