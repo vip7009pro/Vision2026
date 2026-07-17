@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Collections.Specialized;
 using System.Linq;
@@ -164,6 +164,7 @@ public partial class ImageViewerControl : UserControl
             }
         }
         c.RedrawOverlays();
+        c.UpdateInfoText();
     }
 
     private void ResetView()
@@ -173,6 +174,25 @@ public partial class ImageViewerControl : UserControl
         _translate.X = 0.0;
         _translate.Y = 0.0;
         _panning = false;
+        UpdateInfoText();
+    }
+    
+    private void UpdateInfoText()
+    {
+        if (PART_InfoText != null)
+        {
+            if (_lastPixelWidth == 0 || _lastPixelHeight == 0)
+            {
+                PART_InfoText.Text = string.Empty;
+                PART_InfoText.Visibility = Visibility.Collapsed;
+            }
+            else
+            {
+                var z = _scale.ScaleX * 100.0;
+                PART_InfoText.Text = $"{_lastPixelWidth} x {_lastPixelHeight} px  |  Zoom: {z:F0}%";
+                PART_InfoText.Visibility = Visibility.Visible;
+            }
+        }
     }
 
     private static double Clamp(double v, double min, double max) => v < min ? min : (v > max ? max : v);
@@ -216,6 +236,8 @@ public partial class ImageViewerControl : UserControl
 
         _translate.X = viewPos.X - before.X * newScale;
         _translate.Y = viewPos.Y - before.Y * newScale;
+        
+        UpdateInfoText();
 
         e.Handled = true;
     }

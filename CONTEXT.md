@@ -125,3 +125,16 @@ This project is an advanced industrial machine vision inspection suite built on 
 ### Status
 - CodeDetection Input Routing: ✅ FIXED & DEPLOYED (Tool đã nhận đúng ảnh đầu vào từ các Preprocessor con trên cả quá trình chạy ngầm lẫn Preview UI).
 
+
+## Update 2026-07-17 13:58 (Image Viewer Enhancements)
+
+### Feature
+- Hiển thị thêm thông số độ phân giải ảnh (Kích thước gốc pixel) và Mức độ Zoom hiện tại (%) trực tiếp trên các màn hình preview hình ảnh.
+
+### Implementation
+- Bổ sung overlay TextBlock tại góc trên bên trái vào `ImageViewerControl.xaml` - component hiển thị ảnh dùng chung trên toàn bộ hệ thống (Tool Editor, Calibration, Manual Inspection, Inspection).
+- Code C# behind (`ImageViewerControl.xaml.cs`) tự động bắt sự kiện mỗi khi đổi ảnh (`OnImageSourceChanged`) và mỗi khi lăn chuột scroll (`OverlayOnMouseWheel`) để tính toán lại thông số tỷ lệ Zoom.
+
+### Status
+- Image Info Overlay: ✅ DEPLOYED (Hiển thị đồng loạt trên 4 màn hình tab).
+
