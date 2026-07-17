@@ -1,35 +1,25 @@
 using System;
-using System.Linq;
-using System.IO;
-using System.Text.RegularExpressions;
+using OpenCvSharp;
 
 class Program {
     static void Main() {
-        var path = @"g:\NODEJS\Vision2026\VisionInspectionApp.VisionEngine\Class1.cs";
-        var text = File.ReadAllText(path);
-
-        var target = @"            if (imgL.Width < tplL.Width || imgL.Height < tplL.Height)
-            {
-                return (0.0, new Point(0, 0));
-            }";
-
-        var patch = @"            if (imgL.Width < tplL.Width || imgL.Height < tplL.Height)
-            {
-                var cw = Math.Min(tplL.Width, imgL.Width);
-                var ch = Math.Min(tplL.Height, imgL.Height);
-                var cx = (tplL.Width - cw) / 2;
-                var cy = (tplL.Height - ch) / 2;
-                var croppedTpl = new Mat(tplL, new Rect(cx, cy, cw, ch));
-                tplL.Dispose();
-                tplL = croppedTpl;
-            }";
-
-        if (text.Contains(target)) {
-            text = text.Replace(target, patch);
-            File.WriteAllText(path, text);
-            Console.WriteLine("Replaced MatchTemplatePyramid");
-        } else {
-            Console.WriteLine("Not found");
-        }
+        var w = 100;
+        var h = 100;
+        var pad = 4;
+        
+        using var H = Mat.Eye(3, 3, MatType.CV_64FC1).ToMat();
+        H.Set<double>(0, 2, 50.0); // Translate by 50
+        H.Set<double>(1, 2, 50.0);
+        
+        using var T_inv = Mat.Eye(3, 3, MatType.CV_64FC1).ToMat();
+        T_inv.Set<double>(0, 2, -pad);
+        T_inv.Set<double>(1, 2, -pad);
+        
+        using var H_warped = new Mat();
+        Cv2.Gemm(H, T_inv, 1.0, new Mat(), 0.0, H_warped);
+        
+        Console.WriteLine("H_warped:");
+        Console.WriteLine(H_warped.At<double>(0, 2));
+        Console.WriteLine(H_warped.At<double>(1, 2));
     }
 }

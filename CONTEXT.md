@@ -95,3 +95,18 @@ This project is an advanced industrial machine vision inspection suite built on 
 
 ### Status
 - FeatureBased Match: ✅ FIXED & DEPLOYED (100% working now)
+
+
+## Update 2026-07-17 09:17 (FeatureBased Score Precision Fix)
+
+### Issue
+- Thuật toán nhận và xoay chuẩn xác (vì SIFT và RANSAC làm việc rất tốt), nhưng **Score (maxVal) trả về quá thấp (ví dụ 0.25)** khi bị xoay.
+- Nguyên nhân: Phương pháp cũ dùng RotateWithPadding sẽ sinh ra 4 góc đen (viền đen) khi xoay template thành hình chữ nhật bao ngoài. Sau đó MatchTemplate đi lấy nguyên cái hình có chứa 4 góc đen này đem đi so sánh với ảnh thực tế (không có viền đen). Việc chênh lệch pixel ở 4 góc này khiến thuật toán CCoeffNormed (đánh giá độ tương quan pixel-by-pixel) đánh giá điểm cực kỳ thấp!
+
+### Fix
+- Thay vì xoay Template và chịu trận với viền đen, tôi đã lật ngược tư duy bằng sức mạnh Toán học (Ma trận):
+- Dùng nghịch đảo của ma trận Homography (H) thông qua lệnh Cv2.WarpPerspective(..., WarpInverseMap) để **trích xuất thẳng hình ảnh gốc tại vị trí đó trên roiGray và bóp/xoay nó ngược trở lại thành khung chuẩn (kích thước gốc không bị méo, không có viền đen)**.
+- Khi đó tôi chỉ cần mang tấm ảnh vừa được 'nắn thẳng' này đi so sánh với Template gốc. => Loại bỏ hoàn toàn 100% các viền đen nhiễu => Trả về độ chính xác (Score) đúng với bản chất tương quan của vật thể!
+
+### Status
+- FeatureBased Match Score: ✅ FIXED & DEPLOYED (Tuyệt đối không bị giảm điểm do góc đen viền).

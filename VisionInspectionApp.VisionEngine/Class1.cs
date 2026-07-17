@@ -852,22 +852,26 @@ public sealed class PatternMatcher
         var h21 = H.At<double>(1, 0);
         var actualAngleDeg = Math.Atan2(h21, h11) * 180.0 / Math.PI;
 
-        var maxVal = 0.0;
-        using var templGrayRot = RotateWithPadding(templPrep, actualAngleDeg);
-        var crop = ContentRectFromNonZero(templGrayRot, pad: 0);
-        if (crop.Width > 0 && crop.Height > 0)
-        {
-            using var templCrop = new Mat(templGrayRot, crop);
-            var cw = Math.Min(templCrop.Width, roiGray.Width);
-            var ch = Math.Min(templCrop.Height, roiGray.Height);
-            var cx = (templCrop.Width - cw) / 2;
-            var cy = (templCrop.Height - ch) / 2;
-            using var t2 = new Mat(templCrop, new Rect(cx, cy, cw, ch));
-            var (v, _) = MatchTemplatePyramid(roiGray, t2, TemplateMatchModes.CCoeffNormed);
-            maxVal = v;
-        }
+        var pad = 4;
+        using var T_inv = Mat.Eye(3, 3, MatType.CV_64FC1).ToMat();
+        T_inv.Set<double>(0, 2, -pad);
+        T_inv.Set<double>(1, 2, -pad);
+        
+        using var H_warped = new Mat();
+        Cv2.Gemm(H, T_inv, 1.0, new Mat(), 0.0, H_warped);
 
-        var objCenter = new Point2d[] { new Point2d(templPrep.Width / 2.0, templPrep.Height / 2.0) };
+        using var warped = new Mat();
+        Cv2.WarpPerspective(roiGray, warped, H_warped, new Size(templPrep.Width + 2 * pad, templPrep.Height + 2 * pad), InterpolationFlags.Linear | InterpolationFlags.WarpInverseMap);
+        
+        var maxVal = 0.0;
+        using var res = new Mat();
+        Cv2.MatchTemplate(warped, templPrep, res, TemplateMatchModes.CCoeffNormed);
+        Cv2.MinMaxLoc(res, out _, out maxVal, out _, out var maxLoc);
+
+        var offsetX = maxLoc.X - pad;
+        var offsetY = maxLoc.Y - pad;
+
+        var objCenter = new Point2d[] { new Point2d(templPrep.Width / 2.0 + offsetX, templPrep.Height / 2.0 + offsetY) };
         var sceneCenter = Cv2.PerspectiveTransform(objCenter, H);
         
         var centerInRoi = sceneCenter[0];
