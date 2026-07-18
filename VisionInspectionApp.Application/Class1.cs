@@ -389,61 +389,46 @@ public sealed class InspectionService : IInspectionService
 
             (Mat ImageMat, PreprocessSettings Settings) ResolveToolPreprocess(string toolType, string toolRefName)
             {
-                var settings = config.Preprocess;
-                var baseToolImage = ResolveToolImage(toolType, toolRefName);
-                Mat mat;
-                if (baseToolImage == image)
-                {
-                    mat = GetProcessedDefault();
-                }
-                else
-                {
-                    mat = _preprocessor.Run(baseToolImage, settings);
-                    lock (matsLock) matsToDispose.Add(mat);
-                }
+                var defaultSettings = config.Preprocess;
 
                 var toolNode = nodesById.Values.FirstOrDefault(n => string.Equals(n.Type, toolType, StringComparison.OrdinalIgnoreCase)
                                                                     && string.Equals(n.RefName, toolRefName, StringComparison.OrdinalIgnoreCase));
                 if (toolNode is null)
                 {
-                    return (mat, settings);
+                    return (GetProcessedDefault(), defaultSettings);
                 }
 
-                var preEdge = edges.FirstOrDefault(e => string.Equals(e.ToNodeId, toolNode.Id, StringComparison.OrdinalIgnoreCase)
-                                                       && string.Equals(e.ToPort, "Preprocess", StringComparison.OrdinalIgnoreCase));
-                if (preEdge is null)
+                var imageEdge = edges.FirstOrDefault(e => string.Equals(e.ToNodeId, toolNode.Id, StringComparison.OrdinalIgnoreCase)
+                                                       && string.Equals(e.ToPort, "Image", StringComparison.OrdinalIgnoreCase));
+                
+                if (imageEdge is null || !nodesById.TryGetValue(imageEdge.FromNodeId, out var fromNode))
                 {
-                    return (mat, settings);
+                    return (GetProcessedDefault(), defaultSettings);
                 }
 
-                if (!nodesById.TryGetValue(preEdge.FromNodeId, out var ppNode))
+                if (string.Equals(fromNode.Type, "Preprocess", StringComparison.OrdinalIgnoreCase))
                 {
-                    return (mat, settings);
+                    preprocessSettingsByName.TryGetValue(fromNode.RefName ?? string.Empty, out var ppSettings);
+                    ppSettings ??= new PreprocessSettings();
+                    var ppMat = GetPreprocessNodeOutput(fromNode.Id);
+                    return (ppMat, ppSettings);
                 }
-
-                if (string.Equals(ppNode.Type, "ImageSource", StringComparison.OrdinalIgnoreCase))
+                else if (string.Equals(fromNode.Type, "ImageSource", StringComparison.OrdinalIgnoreCase))
                 {
-                    if (imageSourcesByName.TryGetValue(ppNode.RefName ?? string.Empty, out var imgSource))
+                    if (imageSourcesByName.TryGetValue(fromNode.RefName ?? string.Empty, out var imgSource))
                     {
                         var loadedMat = LoadImageFromSource(imgSource);
                         if (loadedMat is not null && !loadedMat.Empty())
                         {
                             lock (matsLock) matsToDispose.Add(loadedMat);
-                            return (loadedMat, settings);
+                            var preprocessedMat = _preprocessor.Run(loadedMat, defaultSettings);
+                            lock (matsLock) matsToDispose.Add(preprocessedMat);
+                            return (preprocessedMat, defaultSettings);
                         }
                     }
-                    return (mat, settings);
                 }
 
-                if (!string.Equals(ppNode.Type, "Preprocess", StringComparison.OrdinalIgnoreCase))
-                {
-                    return (mat, settings);
-                }
-
-                preprocessSettingsByName.TryGetValue(ppNode.RefName ?? string.Empty, out var ppSettings);
-                ppSettings ??= new PreprocessSettings();
-                var ppMat = GetPreprocessNodeOutput(ppNode.Id);
-                return (ppMat, ppSettings);
+                return (GetProcessedDefault(), defaultSettings);
             }
 
             Mat ResolveToolImage(string toolType, string toolRefName)
@@ -479,7 +464,9 @@ public sealed class InspectionService : IInspectionService
                         if (loadedMat is not null && !loadedMat.Empty())
                         {
                             lock (matsLock) matsToDispose.Add(loadedMat);
-                            return loadedMat;
+                            var preprocessedMat = _preprocessor.Run(loadedMat, config.Preprocess);
+                            lock (matsLock) matsToDispose.Add(preprocessedMat);
+                            return preprocessedMat;
                         }
                     }
                 }

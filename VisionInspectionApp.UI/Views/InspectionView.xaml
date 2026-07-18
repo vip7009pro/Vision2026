@@ -1,4 +1,4 @@
-﻿<UserControl x:Class="VisionInspectionApp.UI.Views.InspectionView"
+<UserControl x:Class="VisionInspectionApp.UI.Views.InspectionView"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
@@ -108,7 +108,7 @@
                             <RowDefinition Height="*" />
                         </Grid.RowDefinitions>
 
-                        <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,8">
+                        <WrapPanel Grid.Row="0" Margin="0,0,0,8" TextElement.Foreground="{DynamicResource TextBrush}">
                             <TextBlock Text="{Binding LastResult.Pass, StringFormat=PASS: {0}}" Margin="0,0,12,0" />
                             <TextBlock Text="{Binding LastResult.Defects.Defects.Count, StringFormat=Defects: {0}}" />
                             <TextBlock Text="{Binding LastResult.Timings.TotalMs, StringFormat=Total: {0} ms}" Margin="12,0,0,0" />
@@ -121,7 +121,7 @@
                             <TextBlock Text="{Binding LastResult.Timings.DistancesMs, StringFormat=D: {0}}" Margin="6,0,0,0" />
                             <TextBlock Text="{Binding LastResult.Timings.ConditionsMs, StringFormat=Cnd: {0}}" Margin="6,0,0,0" />
                             <TextBlock Text="{Binding LastResult.Timings.DefectsMs, StringFormat=Def: {0}}" Margin="6,0,0,0" />
-                        </StackPanel>
+                        </WrapPanel>
 
                         <Grid Grid.Row="1">
                             <Grid.RowDefinitions>
@@ -172,14 +172,15 @@
                                 <TextBlock Text="{Binding OriginScoreText}"
                                            FontSize="16"
                                            FontWeight="SemiBold"
-                                           Foreground="#555"
+                                           Foreground="{DynamicResource TextBrush}"
                                            HorizontalAlignment="Center"
                                            Margin="0,8,0,0" />
 
                                 <TextBlock Text="Code Detection"
                                            FontWeight="SemiBold"
                                            FontSize="12"
-                                           Foreground="#888"
+                                           Foreground="#555555"
+                                           Opacity="0.9"
                                            Margin="0,14,0,4"
                                            HorizontalAlignment="Left" />
 
@@ -196,7 +197,7 @@
                                                         <Run Text="Result: " FontWeight="SemiBold" />
                                                         <Run Text="{Binding Found, Converter={StaticResource OkNgConv}}" />
                                                     </TextBlock>
-                                                    <TextBlock TextWrapping="Wrap" FontWeight="SemiBold" Foreground="#222">
+                                                    <TextBlock TextWrapping="Wrap" FontWeight="SemiBold" Foreground="#222222">
                                                         <Run Text="Text: " FontWeight="SemiBold" />
                                                         <Run Text="{Binding Text, TargetNullValue='-'}" />
                                                     </TextBlock>
@@ -209,7 +210,8 @@
                                 <TextBlock Text="CHI TIẾT LỖI / LÝ DO NG:"
                                            FontWeight="SemiBold"
                                            FontSize="12"
-                                           Foreground="#888"
+                                           Foreground="#555555"
+                                           Opacity="0.9"
                                            Margin="0,16,0,4"
                                            HorizontalAlignment="Left"
                                            Visibility="{Binding IsNg, Converter={StaticResource BoolToVis}}" />

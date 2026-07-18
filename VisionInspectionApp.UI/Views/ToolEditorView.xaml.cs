@@ -1,4 +1,4 @@
-﻿using System.Windows;
+using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
@@ -483,15 +483,21 @@ public partial class ToolEditorView : UserControl
             return;
         }
 
-        if (vm.SelectedEdge is null)
+        if (vm.SelectedEdge is not null)
         {
-            return;
+            if (vm.DeleteSelectedEdgeCommand.CanExecute(null))
+            {
+                vm.DeleteSelectedEdgeCommand.Execute(null);
+                e.Handled = true;
+            }
         }
-
-        if (vm.DeleteSelectedEdgeCommand.CanExecute(null))
+        else if (vm.SelectedNode is not null)
         {
-            vm.DeleteSelectedEdgeCommand.Execute(null);
-            e.Handled = true;
+            if (vm.DeleteSelectedNodeCommand.CanExecute(null))
+            {
+                vm.DeleteSelectedNodeCommand.Execute(null);
+                e.Handled = true;
+            }
         }
     }
 

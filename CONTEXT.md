@@ -299,3 +299,22 @@ ew Mat()\ r?ng t?m th?i.
 ### Status
 - FIXED: Caliper v EdgePair da ho?t d?ng chnh xc, lu?n d? du?c gc xoay d? c?t ?nh patch chu?n cho thu?t ton do l?ch bin d? v tnh h?ng di.
 
+
+## Update 2026-07-18 14:30 (Inspection UI Disappearance Fix)
+
+### Issue
+- Tab inspection b? m?t ph?n hi?n th? th?i gian ch?y c?a cc tool v m?t ph?n k?t qu? CodeDetection ? gc du?i bn ph?i mn hnh sau vi l?n refactor v dark mode.
+
+### Root Cause
+- **Timings**: Cc thng s? th?i gian n?m trong StackPanel v?i thu?c tnh Orientation="Horizontal". Khi dng d?i qu dn d?n vi?c text b? c?t (clip) kh?i mn hnh m khng t? d?ng xu?ng dng.
+- **Code Detection**: Thu?c tnh Foreground="#222" c?a TextBlock v cc mu c? d?nh khc du?c set c?ng vo text hi?n th?. Khi chuy?n qua Dark Mode (n?n s?m/den), dng ch? den trn n?n den tr? nn hoan ton tv hnh.
+
+### Fix
+- Chuy?n d?i StackPanel thnh WrapPanel cho dng hi?n th? Timings t?i InspectionView.xaml d? cho php danh sch th?i gian c?a cc tool t? d?ng x?ng dng xu?ng bn du?i khi h?t chi?u r?ng.
+- Thay th? t?t c? cc m mu c? d?nh khng ph thch h?p (nhu #222, #555, #888) thnh {DynamicResource TextBrush} (v thm Opacity="0.7" d? gi? c?m gic nh?t mu ch? d? di k?t c?u ph? t?). Do d, CodeDetection s? phn k?t qu? ch? bnh thu?ng d l ? giao di?n Sng hay T?i.
+
+### Status
+- FIXED: Code Detection tnt v execution time d? dng d?c l?i trn ton b? cc Theme.
+
+- C?u trúc l?i ch?c nang c?a c?ng Image và Preprocess cho t?t c? các node. Lo?i b? c?ng Preprocess, gi? dây các node ch? c?n có 1 c?ng Image. N?u s? d?ng ImageSource -> Preprocess -> Tool thì Preprocess s? t? d?ng x? lý ?nh. Ðã s?a l?i ImageSource tool k?t n?i v?i Preprocess tool preview b? den ngòm.
+- C?p nh?t output c?a ImageSource tool d? luôn áp d?ng global preprocess. Thêm tính nang ch?n c?nh (hi?n th? màu d? khi du?c ch?n) và xóa c?nh ho?c xóa node du?c ch?n b?ng phím Delete.
