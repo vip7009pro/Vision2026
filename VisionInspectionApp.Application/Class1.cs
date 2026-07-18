@@ -306,6 +306,10 @@ public sealed class InspectionService : IInspectionService
                 .Where(n => !string.IsNullOrWhiteSpace(n.Id))
                 .ToDictionary(n => n.Id, StringComparer.OrdinalIgnoreCase);
 
+            var imageSourcesByName = (config.ImageSources ?? new List<ImageSourceDefinition>())
+                .Where(p => !string.IsNullOrWhiteSpace(p.Name))
+                .ToDictionary(p => p.Name, p => p, StringComparer.OrdinalIgnoreCase);
+
             var preprocessSettingsByName = (config.PreprocessNodes ?? new List<PreprocessNodeDefinition>())
                 .Where(p => !string.IsNullOrWhiteSpace(p.Name))
                 .ToDictionary(p => p.Name, p => p.Settings ?? new PreprocessSettings(), StringComparer.OrdinalIgnoreCase);
@@ -353,15 +357,28 @@ public sealed class InspectionService : IInspectionService
                     preprocessSettingsByName.TryGetValue(node.RefName ?? string.Empty, out var settings);
                     settings ??= new PreprocessSettings();
 
-                    // Preprocess node input: either raw image or another preprocess output connected to "In".
+                    // Preprocess node input: either raw image or another preprocess output connected to "In" or "Image".
                     var inEdge = edges.FirstOrDefault(e => string.Equals(e.ToNodeId, id, StringComparison.OrdinalIgnoreCase)
-                                                          && string.Equals(e.ToPort, "In", StringComparison.OrdinalIgnoreCase));
+                                                          && (string.Equals(e.ToPort, "In", StringComparison.OrdinalIgnoreCase) || string.Equals(e.ToPort, "Image", StringComparison.OrdinalIgnoreCase)));
                     Mat baseMat = image;
-                    if (inEdge is not null
-                        && nodesById.TryGetValue(inEdge.FromNodeId, out var fromNode)
-                        && string.Equals(fromNode.Type, "Preprocess", StringComparison.OrdinalIgnoreCase))
+                    if (inEdge is not null && nodesById.TryGetValue(inEdge.FromNodeId, out var fromNode))
                     {
-                        baseMat = GetPreprocessNodeOutput(fromNode.Id);
+                        if (string.Equals(fromNode.Type, "Preprocess", StringComparison.OrdinalIgnoreCase))
+                        {
+                            baseMat = GetPreprocessNodeOutput(fromNode.Id);
+                        }
+                        else if (string.Equals(fromNode.Type, "ImageSource", StringComparison.OrdinalIgnoreCase))
+                        {
+                            if (imageSourcesByName.TryGetValue(fromNode.RefName ?? string.Empty, out var imgSource))
+                            {
+                                var loadedMat = LoadImageFromSource(imgSource);
+                                if (loadedMat is not null && !loadedMat.Empty())
+                                {
+                                    lock (matsLock) matsToDispose.Add(loadedMat);
+                                    baseMat = loadedMat;
+                                }
+                            }
+                        }
                     }
 
                     var m = _preprocessor.Run(baseMat, settings);
@@ -372,9 +389,18 @@ public sealed class InspectionService : IInspectionService
 
             (Mat ImageMat, PreprocessSettings Settings) ResolveToolPreprocess(string toolType, string toolRefName)
             {
-                // Default.
                 var settings = config.Preprocess;
-                var mat = GetProcessedDefault();
+                var baseToolImage = ResolveToolImage(toolType, toolRefName);
+                Mat mat;
+                if (baseToolImage == image)
+                {
+                    mat = GetProcessedDefault();
+                }
+                else
+                {
+                    mat = _preprocessor.Run(baseToolImage, settings);
+                    lock (matsLock) matsToDispose.Add(mat);
+                }
 
                 var toolNode = nodesById.Values.FirstOrDefault(n => string.Equals(n.Type, toolType, StringComparison.OrdinalIgnoreCase)
                                                                     && string.Equals(n.RefName, toolRefName, StringComparison.OrdinalIgnoreCase));
@@ -390,8 +416,26 @@ public sealed class InspectionService : IInspectionService
                     return (mat, settings);
                 }
 
-                if (!nodesById.TryGetValue(preEdge.FromNodeId, out var ppNode)
-                    || !string.Equals(ppNode.Type, "Preprocess", StringComparison.OrdinalIgnoreCase))
+                if (!nodesById.TryGetValue(preEdge.FromNodeId, out var ppNode))
+                {
+                    return (mat, settings);
+                }
+
+                if (string.Equals(ppNode.Type, "ImageSource", StringComparison.OrdinalIgnoreCase))
+                {
+                    if (imageSourcesByName.TryGetValue(ppNode.RefName ?? string.Empty, out var imgSource))
+                    {
+                        var loadedMat = LoadImageFromSource(imgSource);
+                        if (loadedMat is not null && !loadedMat.Empty())
+                        {
+                            lock (matsLock) matsToDispose.Add(loadedMat);
+                            return (loadedMat, settings);
+                        }
+                    }
+                    return (mat, settings);
+                }
+
+                if (!string.Equals(ppNode.Type, "Preprocess", StringComparison.OrdinalIgnoreCase))
                 {
                     return (mat, settings);
                 }
@@ -400,6 +444,101 @@ public sealed class InspectionService : IInspectionService
                 ppSettings ??= new PreprocessSettings();
                 var ppMat = GetPreprocessNodeOutput(ppNode.Id);
                 return (ppMat, ppSettings);
+            }
+
+            Mat ResolveToolImage(string toolType, string toolRefName)
+            {
+                // Default to the input image
+                var mat = image;
+
+                var toolNode = nodesById.Values.FirstOrDefault(n => string.Equals(n.Type, toolType, StringComparison.OrdinalIgnoreCase)
+                                                                    && string.Equals(n.RefName, toolRefName, StringComparison.OrdinalIgnoreCase));
+                if (toolNode is null)
+                {
+                    return mat;
+                }
+
+                var imageEdge = edges.FirstOrDefault(e => string.Equals(e.ToNodeId, toolNode.Id, StringComparison.OrdinalIgnoreCase)
+                                                       && string.Equals(e.ToPort, "Image", StringComparison.OrdinalIgnoreCase));
+                if (imageEdge is null)
+                {
+                    return mat;
+                }
+
+                if (!nodesById.TryGetValue(imageEdge.FromNodeId, out var fromNode))
+                {
+                    return mat;
+                }
+
+                // If connected to ImageSource, load image from source
+                if (string.Equals(fromNode.Type, "ImageSource", StringComparison.OrdinalIgnoreCase))
+                {
+                    if (imageSourcesByName.TryGetValue(fromNode.RefName ?? string.Empty, out var imgSource))
+                    {
+                        var loadedMat = LoadImageFromSource(imgSource);
+                        if (loadedMat is not null && !loadedMat.Empty())
+                        {
+                            lock (matsLock) matsToDispose.Add(loadedMat);
+                            return loadedMat;
+                        }
+                    }
+                }
+                // If connected to Preprocess, get preprocessed image
+                else if (string.Equals(fromNode.Type, "Preprocess", StringComparison.OrdinalIgnoreCase))
+                {
+                    return GetPreprocessNodeOutput(fromNode.Id);
+                }
+
+                return mat;
+            }
+
+            Mat? LoadImageFromSource(ImageSourceDefinition source)
+            {
+                try
+                {
+                    if (source.SourceType == ImageSourceType.File)
+                    {
+                        if (!string.IsNullOrWhiteSpace(source.FilePath) && File.Exists(source.FilePath))
+                        {
+                            var mat = Cv2.ImRead(source.FilePath);
+                            if (mat is not null && !mat.Empty())
+                            {
+                                return mat;
+                            }
+                        }
+                    }
+                    else if (source.SourceType == ImageSourceType.Folder)
+                    {
+                        if (!string.IsNullOrWhiteSpace(source.FolderPath) && Directory.Exists(source.FolderPath))
+                        {
+                            var files = Directory.GetFiles(source.FolderPath, "*.*", SearchOption.TopDirectoryOnly)
+                                .Where(f => f.EndsWith(".jpg", StringComparison.OrdinalIgnoreCase) ||
+                                           f.EndsWith(".jpeg", StringComparison.OrdinalIgnoreCase) ||
+                                           f.EndsWith(".png", StringComparison.OrdinalIgnoreCase) ||
+                                           f.EndsWith(".bmp", StringComparison.OrdinalIgnoreCase) ||
+                                           f.EndsWith(".tif", StringComparison.OrdinalIgnoreCase) ||
+                                           f.EndsWith(".tiff", StringComparison.OrdinalIgnoreCase))
+                                .OrderBy(f => f)
+                                .FirstOrDefault();
+
+                            if (!string.IsNullOrWhiteSpace(files))
+                            {
+                                var mat = Cv2.ImRead(files);
+                                if (mat is not null && !mat.Empty())
+                                {
+                                    return mat;
+                                }
+                            }
+                        }
+                    }
+                    // Camera source would need CameraService integration - for now return null
+                    // This would be implemented when running in live mode with camera service
+                }
+                catch
+                {
+                    // Return null on any error
+                }
+                return null;
             }
 
             static List<BlobInfo> DetectBlobs(Mat matBgrOrGray, Roi roi, List<BlobRoiDefinition>? rois, BlobPolarity polarity, int threshold, int minArea, int maxArea)
@@ -825,27 +964,23 @@ public sealed class InspectionService : IInspectionService
                 return new SurfaceCompareResult(def.Name, defects.Count, maxFoundArea, defects, pass, imgTpl, imgCur, imgBin, imgDif);
             }
 
-            static CaliperResult DetectCaliper(Mat matBgrOrGray, Roi roi, CaliperDefinition def)
+            static CaliperResult DetectCaliper(Mat matBgrOrGray, Roi roiTeach, CaliperDefinition def, Point2d originTeach, Point2d originFound, double angleDeg)
             {
-                if (matBgrOrGray is null || roi.Width <= 0 || roi.Height <= 0)
+                if (matBgrOrGray is null || roiTeach.Width <= 0 || roiTeach.Height <= 0)
                 {
                     return new CaliperResult(def.Name, Found: false, new List<CaliperEdgePoint>(), default, default, 0.0);
                 }
 
-                var rect = new Rect(roi.X, roi.Y, roi.Width, roi.Height)
-                    .Intersect(new Rect(0, 0, matBgrOrGray.Width, matBgrOrGray.Height));
-                if (rect.Width <= 0 || rect.Height <= 0)
+                using var patch = ExtractStraightRoi(matBgrOrGray, roiTeach, originTeach, originFound, angleDeg, out var centerFound);
+                if (patch.Empty())
                 {
                     return new CaliperResult(def.Name, Found: false, new List<CaliperEdgePoint>(), default, default, 0.0);
                 }
 
-                using var crop = new Mat(matBgrOrGray, rect);
-                Mat gray = crop;
-                using var grayOwned = crop.Channels() == 1 ? null : crop.CvtColor(ColorConversionCodes.BGR2GRAY);
-                if (grayOwned is not null)
-                {
-                    gray = grayOwned;
-                }
+                using var patchGrayOwned = patch.Channels() == 1 ? null : patch.CvtColor(ColorConversionCodes.BGR2GRAY);
+                Mat gray = patchGrayOwned ?? patch;
+
+                var rect = new Rect(0, 0, patch.Width, patch.Height);
 
                 var stripCount = Math.Clamp(def.StripCount, 1, 200);
                 var stripWidth = Math.Clamp(def.StripWidth, 1, Math.Max(1, Math.Min(rect.Width, rect.Height)));
@@ -907,9 +1042,10 @@ public sealed class InspectionService : IInspectionService
                         var sub = InterpPeak(gL, gC, gR);
 
                         var ySub = bestIdx + sub;
-                        var xGlobal = rect.X + sr.X + sr.Width / 2.0;
-                        var yGlobal = rect.Y + sr.Y + ySub;
-                        points.Add(new CaliperEdgePoint(xGlobal, yGlobal, bestVal));
+                        var xLocal = rect.X + sr.X + sr.Width / 2.0;
+                        var yLocal = rect.Y + sr.Y + ySub;
+                        var ptGlobal = MapToGlobal(new Point2d(xLocal, yLocal), patch.Width, patch.Height, centerFound, angleDeg);
+                        points.Add(new CaliperEdgePoint(ptGlobal.X, ptGlobal.Y, bestVal));
                         strengths.Add(bestVal);
                     }
                     else
@@ -956,9 +1092,10 @@ public sealed class InspectionService : IInspectionService
                         var sub = InterpPeak(gL, gC, gR);
 
                         var xSub = bestIdx + sub;
-                        var xGlobal = rect.X + sr.X + xSub;
-                        var yGlobal = rect.Y + sr.Y + sr.Height / 2.0;
-                        points.Add(new CaliperEdgePoint(xGlobal, yGlobal, bestVal));
+                        var xLocal = rect.X + sr.X + xSub;
+                        var yLocal = rect.Y + sr.Y + sr.Height / 2.0;
+                        var ptGlobal = MapToGlobal(new Point2d(xLocal, yLocal), patch.Width, patch.Height, centerFound, angleDeg);
+                        points.Add(new CaliperEdgePoint(ptGlobal.X, ptGlobal.Y, bestVal));
                         strengths.Add(bestVal);
                     }
                 }
@@ -1010,6 +1147,7 @@ public sealed class InspectionService : IInspectionService
 
             // Origin
             var tOrigin0 = swTotal.ElapsedMilliseconds;
+            var originBaseImage = ResolveToolImage("Origin", config.Origin.Name);
             var (originMat, originPre) = ResolveToolPreprocess("Origin", config.Origin.Name);
             var originTempl = GetTemplateGray(config.Origin.TemplateImageFile);
 
@@ -1405,7 +1543,7 @@ public sealed class InspectionService : IInspectionService
                 {
                     var roi = TransformRoiKeepSize(c.SearchRoi, originTeach, originFound, angleDeg);
                     var (matForCal, _) = ResolveToolPreprocess("Caliper", c.Name);
-                    return DetectCaliper(matForCal, roi, c);
+                    return DetectCaliper(matForCal, c.SearchRoi, c, originTeach, originFound, angleDeg);
                 }))
                 .ToArray();
 
@@ -1431,26 +1569,25 @@ public sealed class InspectionService : IInspectionService
 
             var tEpdQueued = swTotal.ElapsedMilliseconds;
 
-            static EdgePairDetectResult DetectEdgePair(Mat matBgrOrGray, Roi roi, EdgePairDetectDefinition def, double pixelsPerMm)
+            static EdgePairDetectResult DetectEdgePair(Mat matBgrOrGray, Roi roiTeach, EdgePairDetectDefinition def, double pixelsPerMm, Point2d originTeach, Point2d originFound, double angleDeg)
             {
-                if (matBgrOrGray is null || roi.Width <= 0 || roi.Height <= 0)
+                if (matBgrOrGray is null || roiTeach.Width <= 0 || roiTeach.Height <= 0)
                 {
                     return new EdgePairDetectResult(def.Name, Found: false, default, default, default, default, double.NaN, def.Nominal, def.TolerancePlus, def.ToleranceMinus, Pass: false, default, default,
                         new List<CaliperEdgePoint>(), new List<CaliperEdgePoint>());
                 }
 
-                var rect = new Rect(roi.X, roi.Y, roi.Width, roi.Height)
-                    .Intersect(new Rect(0, 0, matBgrOrGray.Width, matBgrOrGray.Height));
-                if (rect.Width <= 0 || rect.Height <= 0)
+                using var patch = ExtractStraightRoi(matBgrOrGray, roiTeach, originTeach, originFound, angleDeg, out var centerFound);
+                if (patch.Empty())
                 {
                     return new EdgePairDetectResult(def.Name, Found: false, default, default, default, default, double.NaN, def.Nominal, def.TolerancePlus, def.ToleranceMinus, Pass: false, default, default,
                         new List<CaliperEdgePoint>(), new List<CaliperEdgePoint>());
                 }
 
-                using var crop = new Mat(matBgrOrGray, rect);
-                Mat gray = crop;
-                using var grayOwned = crop.Channels() == 1 ? null : crop.CvtColor(ColorConversionCodes.BGR2GRAY);
-                if (grayOwned is not null) gray = grayOwned;
+                using var patchGrayOwned = patch.Channels() == 1 ? null : patch.CvtColor(ColorConversionCodes.BGR2GRAY);
+                Mat gray = patchGrayOwned ?? patch;
+
+                var rect = new Rect(0, 0, patch.Width, patch.Height);
 
                 var stripCount = Math.Clamp(def.StripCount, 1, 200);
                 var stripWidth = Math.Clamp(def.StripWidth, 1, Math.Max(1, Math.Min(rect.Width, rect.Height)));
@@ -1556,9 +1693,11 @@ public sealed class InspectionService : IInspectionService
 
                         var ySubA = idxA + SubAt(idxA);
                         var ySubB = idxB + SubAt(idxB);
-                        var xGlobal = rect.X + sr.X + sr.Width / 2.0;
-                        e1.Add(new CaliperEdgePoint(xGlobal, rect.Y + sr.Y + ySubA, valA));
-                        e2.Add(new CaliperEdgePoint(xGlobal, rect.Y + sr.Y + ySubB, valB));
+                        var xLocal = rect.X + sr.X + sr.Width / 2.0;
+                        var ptA = MapToGlobal(new Point2d(xLocal, rect.Y + sr.Y + ySubA), patch.Width, patch.Height, centerFound, angleDeg);
+                        var ptB = MapToGlobal(new Point2d(xLocal, rect.Y + sr.Y + ySubB), patch.Width, patch.Height, centerFound, angleDeg);
+                        e1.Add(new CaliperEdgePoint(ptA.X, ptA.Y, valA));
+                        e2.Add(new CaliperEdgePoint(ptB.X, ptB.Y, valB));
                     }
                     else
                     {
@@ -1646,9 +1785,11 @@ public sealed class InspectionService : IInspectionService
 
                         var xSubA = idxA + SubAt(idxA);
                         var xSubB = idxB + SubAt(idxB);
-                        var yGlobal = rect.Y + sr.Y + sr.Height / 2.0;
-                        e1.Add(new CaliperEdgePoint(rect.X + sr.X + xSubA, yGlobal, valA));
-                        e2.Add(new CaliperEdgePoint(rect.X + sr.X + xSubB, yGlobal, valB));
+                        var yLocal = rect.Y + sr.Y + sr.Height / 2.0;
+                        var ptA = MapToGlobal(new Point2d(rect.X + sr.X + xSubA, yLocal), patch.Width, patch.Height, centerFound, angleDeg);
+                        var ptB = MapToGlobal(new Point2d(rect.X + sr.X + xSubB, yLocal), patch.Width, patch.Height, centerFound, angleDeg);
+                        e1.Add(new CaliperEdgePoint(ptA.X, ptA.Y, valA));
+                        e2.Add(new CaliperEdgePoint(ptB.X, ptB.Y, valB));
                     }
                 }
 
@@ -1698,9 +1839,8 @@ public sealed class InspectionService : IInspectionService
                 .Where(epd => epd is not null && !string.IsNullOrWhiteSpace(epd.Name) && epd.SearchRoi.Width > 0 && epd.SearchRoi.Height > 0)
                 .Select(epd => Task.Run(() =>
                 {
-                    var roi = TransformRoiKeepSize(epd.SearchRoi, originTeach, originFound, angleDeg);
                     var (matForEpd, _) = ResolveToolPreprocess("EdgePairDetect", epd.Name);
-                    return DetectEdgePair(matForEpd, roi, epd, config.PixelsPerMm);
+                    return DetectEdgePair(matForEpd, epd.SearchRoi, epd, config.PixelsPerMm, originTeach, originFound, angleDeg);
                 }))
                 .ToArray();
 
@@ -2561,6 +2701,49 @@ public sealed class InspectionService : IInspectionService
         var y = dx * sin + dy * cos;
         return new Point2d(x + origin.X, y + origin.Y);
     }
+
+    private static Mat ExtractStraightRoi(Mat source, Roi roiTeach, Point2d originTeach, Point2d originFound, double angleDeg, out Point2d centerFound)
+    {
+        var centerTeach = new Point2d(roiTeach.X + roiTeach.Width / 2.0, roiTeach.Y + roiTeach.Height / 2.0);
+        var centerRot = Rotate(centerTeach, originTeach, angleDeg);
+        var dx = originFound.X - originTeach.X;
+        var dy = originFound.Y - originTeach.Y;
+        centerFound = new Point2d(centerRot.X + dx, centerRot.Y + dy);
+
+        if (Math.Abs(angleDeg) < 0.001)
+        {
+            var rx = (int)Math.Round(centerFound.X - roiTeach.Width / 2.0);
+            var ry = (int)Math.Round(centerFound.Y - roiTeach.Height / 2.0);
+            var rect = new Rect(rx, ry, roiTeach.Width, roiTeach.Height).Intersect(new Rect(0, 0, source.Width, source.Height));
+            if (rect.Width <= 0 || rect.Height <= 0) return new Mat();
+            return new Mat(source, rect).Clone();
+        }
+
+        var rrect = new RotatedRect(new Point2f((float)centerFound.X, (float)centerFound.Y), new Size2f(roiTeach.Width, roiTeach.Height), (float)angleDeg);
+        var bbox = rrect.BoundingRect();
+        bbox.Inflate(2, 2);
+        var safeBbox = bbox.Intersect(new Rect(0, 0, source.Width, source.Height));
+        if (safeBbox.Width <= 0 || safeBbox.Height <= 0) return new Mat();
+
+        using var subSource = new Mat(source, safeBbox);
+        var centerInBbox = new Point2f((float)(centerFound.X - safeBbox.X), (float)(centerFound.Y - safeBbox.Y));
+        
+        using var M = Cv2.GetRotationMatrix2D(centerInBbox, angleDeg, 1.0);
+        using var rotatedBbox = new Mat();
+        Cv2.WarpAffine(subSource, rotatedBbox, M, safeBbox.Size, InterpolationFlags.Linear, BorderTypes.Replicate);
+
+        var patch = new Mat();
+        Cv2.GetRectSubPix(rotatedBbox, new Size(roiTeach.Width, roiTeach.Height), centerInBbox, patch);
+        return patch;
+    }
+
+    private static Point2d MapToGlobal(Point2d ptLocal, double w, double h, Point2d centerFound, double angleDeg)
+    {
+        var ptCenter = new Point2d(ptLocal.X - w / 2.0, ptLocal.Y - h / 2.0);
+        var ptRot = Rotate(ptCenter, new Point2d(0, 0), angleDeg);
+        return new Point2d(ptRot.X + centerFound.X, ptRot.Y + centerFound.Y);
+    }
+
 
     private static Roi TransformRoi(Roi roi, Point2d originTeach, Point2d originFound, double angleDeg)
     {

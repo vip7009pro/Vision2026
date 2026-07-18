@@ -395,6 +395,11 @@ public sealed class ImagePreprocessor
             throw new ArgumentNullException(nameof(settings));
         }
 
+        if (inputBgrOrGray.Empty())
+        {
+            return inputBgrOrGray.Clone();
+        }
+
         var current = inputBgrOrGray;
         var anyOp = false;
         var disposeList = new List<Mat>();
@@ -1259,9 +1264,10 @@ public sealed class PatternMatcher
         }
 
         var roiRect = ToRect(definition.SearchRoi, image.Width, image.Height);
-        if (roiRect.Width <= 0 || roiRect.Height <= 0)
+        if (roiRect.Width <= 0 || roiRect.Height <= 0 || templateGray.Empty())
         {
-            throw new ArgumentException($"Invalid SearchRoi for point '{definition.Name}'.");
+            var centerFallback = new Point2d(roiRect.X + roiRect.Width / 2.0, roiRect.Y + roiRect.Height / 2.0);
+            return new MatchResult(centerFallback, 0.0, 0.0, roiRect);
         }
 
         using var roi = new Mat(image, roiRect);

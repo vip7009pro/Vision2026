@@ -113,6 +113,32 @@ public enum CodeSymbology
     Aztec = 4
 }
 
+public enum ImageSourceType
+{
+    File = 0,
+    Folder = 1,
+    Camera = 2
+}
+
+public sealed class ImageSourceDefinition
+{
+    public string Name { get; set; } = string.Empty;
+
+    public ImageSourceType SourceType { get; set; } = ImageSourceType.File;
+
+    public string FilePath { get; set; } = string.Empty;
+
+    public string FolderPath { get; set; } = string.Empty;
+
+    public int CameraIndex { get; set; } = 0;
+
+    public string RtspUrl { get; set; } = string.Empty;
+
+    public bool LoopFolder { get; set; } = true;
+
+    public int FolderIntervalMs { get; set; } = 1000;
+}
+
 public sealed class VisionConfig
 {
     public string ProductCode { get; set; } = string.Empty;
@@ -160,6 +186,8 @@ public sealed class VisionConfig
     public List<SurfaceCompareDefinition> SurfaceCompares { get; set; } = new();
 
     public List<TextNodeDefinition> TextNodes { get; set; } = new();
+
+    public List<ImageSourceDefinition> ImageSources { get; set; } = new();
 
     public DefectInspectionConfig DefectConfig { get; set; } = new();
 }

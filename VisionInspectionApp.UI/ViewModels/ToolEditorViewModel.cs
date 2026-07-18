@@ -214,6 +214,7 @@ public sealed partial class ToolEditorViewModel : ObservableObject
         AvailableConfigs = new ObservableCollection<string>();
         ToolboxItems = new ObservableCollection<string>
         {
+            "ImageSource",
             "Preprocess",
             "Origin",
             "Point",
@@ -262,6 +263,9 @@ public sealed partial class ToolEditorViewModel : ObservableObject
         TextNode_RemoveConditionCommand = new RelayCommand<TextColorConditionRow?>(TextNode_RemoveCondition);
         TextNode_PickDefaultColorCommand = new RelayCommand(TextNode_PickDefaultColor);
         TextNode_PickConditionColorCommand = new RelayCommand<TextColorConditionRow?>(TextNode_PickConditionColor);
+
+        ImageSource_BrowseFileCommand = new RelayCommand(ImageSource_BrowseFile);
+        ImageSource_BrowseFolderCommand = new RelayCommand(ImageSource_BrowseFolder);
 
         SurfaceCompare_SetSearchRoiCommand = new RelayCommand(SurfaceCompare_SetSearchRoi);
         SurfaceCompare_SetTemplateRoiCommand = new RelayCommand(SurfaceCompare_SetTemplateRoi);
@@ -827,6 +831,9 @@ public sealed partial class ToolEditorViewModel : ObservableObject
     public ObservableCollection<OriginAlgorithm> AvailableOriginAlgorithms { get; }
         = new ObservableCollection<OriginAlgorithm>((OriginAlgorithm[])Enum.GetValues(typeof(OriginAlgorithm)));
 
+    public ObservableCollection<ImageSourceType> AvailableImageSourceTypes { get; }
+        = new ObservableCollection<ImageSourceType>((ImageSourceType[])Enum.GetValues(typeof(ImageSourceType)));
+
 
     public ObservableCollection<PointFindAlgorithm> AvailablePointFindAlgorithms { get; }
         = new ObservableCollection<PointFindAlgorithm>((PointFindAlgorithm[])Enum.GetValues(typeof(PointFindAlgorithm)));
@@ -885,24 +892,74 @@ public sealed partial class ToolEditorViewModel : ObservableObject
             return raw.Clone();
         }
 
-        // Determine if tool has a Pre connection from a Preprocess node.
         var edges = _config.ToolGraph?.Edges ?? new();
+        var nodesById = Nodes
+            .Where(n => !string.IsNullOrWhiteSpace(n.Id))
+            .ToDictionary(n => n.Id, StringComparer.OrdinalIgnoreCase);
+
+        // Check if tool has an Image connection from ImageSource node
+        var imageEdge = edges.FirstOrDefault(e => string.Equals(e.ToNodeId, toolNode.Id, StringComparison.OrdinalIgnoreCase)
+                                               && string.Equals(e.ToPort, "Image", StringComparison.OrdinalIgnoreCase));
+        Mat? imageFromSource = null;
+        if (imageEdge is not null && nodesById.TryGetValue(imageEdge.FromNodeId, out var fromNode)
+            && string.Equals(fromNode.Type, "ImageSource", StringComparison.OrdinalIgnoreCase))
+        {
+            var imgSourceDef = _config.ImageSources.FirstOrDefault(x => string.Equals(x.Name, fromNode.RefName, StringComparison.OrdinalIgnoreCase));
+            if (imgSourceDef is not null)
+            {
+                imageFromSource = LoadImageFromSourceForPreview(imgSourceDef);
+                if (imageFromSource is not null && !imageFromSource.Empty())
+                {
+                    raw = imageFromSource;
+                }
+                else
+                {
+                    imageFromSource?.Dispose();
+                    imageFromSource = null;
+                }
+            }
+        }
+
+        // Determine if tool has a Pre connection from a Preprocess node.
         var preEdge = edges.FirstOrDefault(e => string.Equals(e.ToNodeId, toolNode.Id, StringComparison.OrdinalIgnoreCase)
                                                && string.Equals(e.ToPort, "Preprocess", StringComparison.OrdinalIgnoreCase));
 
         if (preEdge is null)
         {
-            return _preprocessor.Run(raw, _config.Preprocess);
+            var result = _preprocessor.Run(raw, _config.Preprocess);
+            imageFromSource?.Dispose();
+            return result;
         }
 
-        var nodesById = Nodes
-            .Where(n => !string.IsNullOrWhiteSpace(n.Id))
-            .ToDictionary(n => n.Id, StringComparer.OrdinalIgnoreCase);
-
-        if (!nodesById.TryGetValue(preEdge.FromNodeId, out var preNode)
-            || !string.Equals(preNode.Type, "Preprocess", StringComparison.OrdinalIgnoreCase))
+        if (!nodesById.TryGetValue(preEdge.FromNodeId, out var preNode))
         {
-            return _preprocessor.Run(raw, _config.Preprocess);
+            var result = _preprocessor.Run(raw, _config.Preprocess);
+            imageFromSource?.Dispose();
+            return result;
+        }
+
+        if (string.Equals(preNode.Type, "ImageSource", StringComparison.OrdinalIgnoreCase))
+        {
+            var imgSourceDef = _config.ImageSources.FirstOrDefault(x => string.Equals(x.Name, preNode.RefName, StringComparison.OrdinalIgnoreCase));
+            if (imgSourceDef is not null)
+            {
+                var preImgFromSource = LoadImageFromSourceForPreview(imgSourceDef);
+                if (preImgFromSource is not null && !preImgFromSource.Empty())
+                {
+                    imageFromSource?.Dispose();
+                    return preImgFromSource;
+                }
+            }
+            var result = _preprocessor.Run(raw, _config.Preprocess);
+            imageFromSource?.Dispose();
+            return result;
+        }
+
+        if (!string.Equals(preNode.Type, "Preprocess", StringComparison.OrdinalIgnoreCase))
+        {
+            var result = _preprocessor.Run(raw, _config.Preprocess);
+            imageFromSource?.Dispose();
+            return result;
         }
 
         var preprocessSettingsByName = (_config.PreprocessNodes ?? new())
@@ -914,6 +971,11 @@ public sealed partial class ToolEditorViewModel : ObservableObject
 
         try
         {
+            if (imageFromSource is not null)
+            {
+                matsToDispose.Add(imageFromSource);
+            }
+
             Mat GetPreprocessNodeOutput(string preprocessNodeId)
             {
                 if (cache.TryGetValue(preprocessNodeId, out var cached))
@@ -933,21 +995,48 @@ public sealed partial class ToolEditorViewModel : ObservableObject
                 var settings = preprocessSettingsByName.TryGetValue(node.RefName, out var s) ? s : new PreprocessSettings();
 
                 var inEdge = edges.FirstOrDefault(e => string.Equals(e.ToNodeId, preprocessNodeId, StringComparison.OrdinalIgnoreCase)
-                                                      && string.Equals(e.ToPort, "In", StringComparison.OrdinalIgnoreCase));
+                                                      && (string.Equals(e.ToPort, "In", StringComparison.OrdinalIgnoreCase) || string.Equals(e.ToPort, "Image", StringComparison.OrdinalIgnoreCase)));
 
                 Mat inputMat;
                 if (inEdge is null)
                 {
                     inputMat = raw;
                 }
-                else if (!nodesById.TryGetValue(inEdge.FromNodeId, out var fromNode)
-                         || !string.Equals(fromNode.Type, "Preprocess", StringComparison.OrdinalIgnoreCase))
+                else if (nodesById.TryGetValue(inEdge.FromNodeId, out var fromPreNode))
                 {
-                    inputMat = raw;
+                    if (string.Equals(fromPreNode.Type, "Preprocess", StringComparison.OrdinalIgnoreCase))
+                    {
+                        inputMat = GetPreprocessNodeOutput(fromPreNode.Id);
+                    }
+                    else if (string.Equals(fromPreNode.Type, "ImageSource", StringComparison.OrdinalIgnoreCase))
+                    {
+                        var imgSourceDef = _config.ImageSources.FirstOrDefault(x => string.Equals(x.Name, fromPreNode.RefName, StringComparison.OrdinalIgnoreCase));
+                        if (imgSourceDef is not null)
+                        {
+                            var loadedMat = LoadImageFromSourceForPreview(imgSourceDef);
+                            if (loadedMat is not null && !loadedMat.Empty())
+                            {
+                                matsToDispose.Add(loadedMat);
+                                inputMat = loadedMat;
+                            }
+                            else
+                            {
+                                inputMat = raw;
+                            }
+                        }
+                        else
+                        {
+                            inputMat = raw;
+                        }
+                    }
+                    else
+                    {
+                        inputMat = raw;
+                    }
                 }
                 else
                 {
-                    inputMat = GetPreprocessNodeOutput(fromNode.Id);
+                    inputMat = raw;
                 }
 
                 var output = _preprocessor.Run(inputMat, settings);
@@ -1068,12 +1157,8 @@ public sealed partial class ToolEditorViewModel : ObservableObject
     {
         _blobThresholdPreviewTimer.Stop();
 
-        using var snap = _sharedImage.GetSnapshot();
-        if (snap is null)
-        {
-            BlobThresholdPreviewImage = null;
-            return;
-        }
+        using var rawSnap = _sharedImage.GetSnapshot();
+        using var snap = rawSnap ?? new Mat();
 
         _lastPreviewImageWidth = snap.Width;
         _lastPreviewImageHeight = snap.Height;
@@ -1842,11 +1927,8 @@ public sealed partial class ToolEditorViewModel : ObservableObject
             return;
         }
 
-        using var snap = _sharedImage.GetSnapshot();
-        if (snap is null || snap.Empty())
-        {
-            return;
-        }
+        using var rawSnap = _sharedImage.GetSnapshot();
+        using var snap = rawSnap ?? new Mat();
 
         var sc = _config.SurfaceCompares.FirstOrDefault(x => string.Equals(x.Name, surfaceCompareName, StringComparison.OrdinalIgnoreCase));
         if (sc is null)
@@ -2320,6 +2402,11 @@ public sealed partial class ToolEditorViewModel : ObservableObject
             return;
         }
 
+        if (string.IsNullOrWhiteSpace(ProductCode))
+        {
+            return;
+        }
+
         _config.ProductCode = ProductCode;
         _configService.SaveConfig(_config);
         EnsureTemplatePathsAbsolute(_config);
@@ -2358,11 +2445,8 @@ public sealed partial class ToolEditorViewModel : ObservableObject
 
     private void TrySaveTemplateImage(string name, Roi roi, bool isOrigin, string? pointName)
     {
-        using var snap = _sharedImage.GetSnapshot();
-        if (snap is null)
-        {
-            return;
-        }
+        using var rawSnap = _sharedImage.GetSnapshot();
+        using var snap = rawSnap ?? new Mat();
 
         if (roi.Width <= 0 || roi.Height <= 0)
         {
@@ -2879,6 +2963,7 @@ public sealed partial class ToolEditorViewModel : ObservableObject
         OnPropertyChanged(nameof(IsDiameterNode));
         OnPropertyChanged(nameof(IsConditionNode));
         OnPropertyChanged(nameof(IsTextNode));
+        OnPropertyChanged(nameof(IsImageSourceNode));
         OnPropertyChanged(nameof(IsBlobDetectionNode));
         OnPropertyChanged(nameof(IsSurfaceCompareNode));
 
@@ -2932,6 +3017,17 @@ public sealed partial class ToolEditorViewModel : ObservableObject
         OnPropertyChanged(nameof(TextNode_X));
         OnPropertyChanged(nameof(TextNode_Y));
         OnPropertyChanged(nameof(TextNode_DefaultColor));
+
+        OnPropertyChanged(nameof(ImageSource_SourceType));
+        OnPropertyChanged(nameof(ImageSource_IsFile));
+        OnPropertyChanged(nameof(ImageSource_IsFolder));
+        OnPropertyChanged(nameof(ImageSource_IsCamera));
+        OnPropertyChanged(nameof(ImageSource_FilePath));
+        OnPropertyChanged(nameof(ImageSource_FolderPath));
+        OnPropertyChanged(nameof(ImageSource_CameraIndex));
+        OnPropertyChanged(nameof(ImageSource_RtspUrl));
+        OnPropertyChanged(nameof(ImageSource_LoopFolder));
+        OnPropertyChanged(nameof(ImageSource_FolderIntervalMs));
 
         OnPropertyChanged(nameof(UseGray));
         OnPropertyChanged(nameof(IlluminationCorrection));
@@ -3278,6 +3374,8 @@ public sealed partial class ToolEditorViewModel : ObservableObject
 
     public bool IsTextNode => string.Equals(SelectedNode?.Type, "Text", StringComparison.OrdinalIgnoreCase);
 
+    public bool IsImageSourceNode => string.Equals(SelectedNode?.Type, "ImageSource", StringComparison.OrdinalIgnoreCase);
+
     public bool IsPreprocessNode => string.Equals(SelectedNode?.Type, "Preprocess", StringComparison.OrdinalIgnoreCase);
 
     public bool IsAnyDistanceNode => IsDistanceNode || IsLineLineDistanceNode || IsPointLineDistanceNode || IsAngleNode || IsEdgePairNode || IsEdgePairDetectNode || IsDiameterNode;
@@ -3294,6 +3392,13 @@ public sealed partial class ToolEditorViewModel : ObservableObject
         if (_config is null || SelectedNode is null) return null;
         if (!string.Equals(SelectedNode.Type, "Text", StringComparison.OrdinalIgnoreCase)) return null;
         return _config.TextNodes.FirstOrDefault(x => string.Equals(x.Name, SelectedNode.RefName, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private ImageSourceDefinition? SelectedImageSourceDef()
+    {
+        if (_config is null || SelectedNode is null) return null;
+        if (!string.Equals(SelectedNode.Type, "ImageSource", StringComparison.OrdinalIgnoreCase)) return null;
+        return _config.ImageSources.FirstOrDefault(x => string.Equals(x.Name, SelectedNode.RefName, StringComparison.OrdinalIgnoreCase));
     }
 
     public string TextNode_Text
@@ -3396,6 +3501,213 @@ public sealed partial class ToolEditorViewModel : ObservableObject
             RefreshPreviews();
             RequestAutoSave();
         }
+    }
+
+    public ImageSourceType ImageSource_SourceType
+    {
+        get => SelectedImageSourceDef()?.SourceType ?? ImageSourceType.File;
+        set
+        {
+            var def = SelectedImageSourceDef();
+            if (def is null) return;
+            if (def.SourceType == value) return;
+            def.SourceType = value;
+            OnPropertyChanged(nameof(ImageSource_IsFile));
+            OnPropertyChanged(nameof(ImageSource_IsFolder));
+            OnPropertyChanged(nameof(ImageSource_IsCamera));
+            RaiseToolPropertyPanelsChanged();
+            RefreshPreviews();
+            RequestAutoSave();
+        }
+    }
+
+    public bool ImageSource_IsFile => ImageSource_SourceType == ImageSourceType.File;
+    public bool ImageSource_IsFolder => ImageSource_SourceType == ImageSourceType.Folder;
+    public bool ImageSource_IsCamera => ImageSource_SourceType == ImageSourceType.Camera;
+
+    public string ImageSource_FilePath
+    {
+        get => SelectedImageSourceDef()?.FilePath ?? string.Empty;
+        set
+        {
+            var def = SelectedImageSourceDef();
+            if (def is null) return;
+            value ??= string.Empty;
+            if (string.Equals(def.FilePath, value, StringComparison.Ordinal)) return;
+            def.FilePath = value;
+            RaiseToolPropertyPanelsChanged();
+            RefreshPreviews();
+            RequestAutoSave();
+        }
+    }
+
+    public string ImageSource_FolderPath
+    {
+        get => SelectedImageSourceDef()?.FolderPath ?? string.Empty;
+        set
+        {
+            var def = SelectedImageSourceDef();
+            if (def is null) return;
+            value ??= string.Empty;
+            if (string.Equals(def.FolderPath, value, StringComparison.Ordinal)) return;
+            def.FolderPath = value;
+            RaiseToolPropertyPanelsChanged();
+            RefreshPreviews();
+            RequestAutoSave();
+        }
+    }
+
+    public int ImageSource_CameraIndex
+    {
+        get => SelectedImageSourceDef()?.CameraIndex ?? 0;
+        set
+        {
+            var def = SelectedImageSourceDef();
+            if (def is null) return;
+            if (def.CameraIndex == value) return;
+            def.CameraIndex = value;
+            RaiseToolPropertyPanelsChanged();
+            RefreshPreviews();
+            RequestAutoSave();
+        }
+    }
+
+    public string ImageSource_RtspUrl
+    {
+        get => SelectedImageSourceDef()?.RtspUrl ?? string.Empty;
+        set
+        {
+            var def = SelectedImageSourceDef();
+            if (def is null) return;
+            value ??= string.Empty;
+            if (string.Equals(def.RtspUrl, value, StringComparison.Ordinal)) return;
+            def.RtspUrl = value;
+            RaiseToolPropertyPanelsChanged();
+            RefreshPreviews();
+            RequestAutoSave();
+        }
+    }
+
+    public bool ImageSource_LoopFolder
+    {
+        get => SelectedImageSourceDef()?.LoopFolder ?? true;
+        set
+        {
+            var def = SelectedImageSourceDef();
+            if (def is null) return;
+            if (def.LoopFolder == value) return;
+            def.LoopFolder = value;
+            RaiseToolPropertyPanelsChanged();
+            RefreshPreviews();
+            RequestAutoSave();
+        }
+    }
+
+    public int ImageSource_FolderIntervalMs
+    {
+        get => SelectedImageSourceDef()?.FolderIntervalMs ?? 1000;
+        set
+        {
+            var def = SelectedImageSourceDef();
+            if (def is null) return;
+            if (def.FolderIntervalMs == value) return;
+            def.FolderIntervalMs = value;
+            RaiseToolPropertyPanelsChanged();
+            RefreshPreviews();
+            RequestAutoSave();
+        }
+    }
+
+    private void ImageSource_BrowseFile()
+    {
+        var dlg = new Microsoft.Win32.OpenFileDialog
+        {
+            Filter = "Image Files|*.jpg;*.jpeg;*.png;*.bmp;*.tif;*.tiff|All Files|*.*",
+            Title = "Select Image File"
+        };
+
+        if (dlg.ShowDialog() == true)
+        {
+            ImageSource_FilePath = dlg.FileName;
+        }
+    }
+
+    private void ImageSource_BrowseFolder()
+    {
+        using var dlg = new System.Windows.Forms.FolderBrowserDialog
+        {
+            Description = "Select Image Folder",
+            ShowNewFolderButton = false
+        };
+
+        if (dlg.ShowDialog() == System.Windows.Forms.DialogResult.OK)
+        {
+            ImageSource_FolderPath = dlg.SelectedPath;
+        }
+    }
+
+    public ICommand ImageSource_BrowseFileCommand { get; }
+    public ICommand ImageSource_BrowseFolderCommand { get; }
+
+    private Mat? LoadImageFromSourceForPreview(ImageSourceDefinition source)
+    {
+        try
+        {
+            System.Diagnostics.Debug.WriteLine($"LoadImageFromSourceForPreview: SourceType={source.SourceType}, FilePath={source.FilePath}, FolderPath={source.FolderPath}");
+
+            if (source.SourceType == ImageSourceType.File)
+            {
+                if (!string.IsNullOrWhiteSpace(source.FilePath) && File.Exists(source.FilePath))
+                {
+                    System.Diagnostics.Debug.WriteLine($"Loading image from file: {source.FilePath}");
+                    var mat = Cv2.ImRead(source.FilePath);
+                    if (mat is not null && !mat.Empty())
+                    {
+                        System.Diagnostics.Debug.WriteLine($"Successfully loaded image: {mat.Width}x{mat.Height}");
+                        return mat;
+                    }
+                    else
+                    {
+                        System.Diagnostics.Debug.WriteLine("Failed to load image or image is empty");
+                    }
+                }
+                else
+                {
+                    System.Diagnostics.Debug.WriteLine($"File does not exist or path is empty");
+                }
+            }
+            else if (source.SourceType == ImageSourceType.Folder)
+            {
+                if (!string.IsNullOrWhiteSpace(source.FolderPath) && Directory.Exists(source.FolderPath))
+                {
+                    var files = Directory.GetFiles(source.FolderPath, "*.*", SearchOption.TopDirectoryOnly)
+                        .Where(f => f.EndsWith(".jpg", StringComparison.OrdinalIgnoreCase) ||
+                                   f.EndsWith(".jpeg", StringComparison.OrdinalIgnoreCase) ||
+                                   f.EndsWith(".png", StringComparison.OrdinalIgnoreCase) ||
+                                   f.EndsWith(".bmp", StringComparison.OrdinalIgnoreCase) ||
+                                   f.EndsWith(".tif", StringComparison.OrdinalIgnoreCase) ||
+                                   f.EndsWith(".tiff", StringComparison.OrdinalIgnoreCase))
+                        .OrderBy(f => f)
+                        .FirstOrDefault();
+
+                    if (!string.IsNullOrWhiteSpace(files))
+                    {
+                        System.Diagnostics.Debug.WriteLine($"Loading image from folder: {files}");
+                        var mat = Cv2.ImRead(files);
+                        if (mat is not null && !mat.Empty())
+                        {
+                            System.Diagnostics.Debug.WriteLine($"Successfully loaded image: {mat.Width}x{mat.Height}");
+                            return mat;
+                        }
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Exception in LoadImageFromSourceForPreview: {ex.Message}");
+        }
+        return null;
     }
 
 
@@ -5634,6 +5946,7 @@ public sealed partial class ToolEditorViewModel : ObservableObject
         _config.Angles.RemoveAll(x => !validRefNames.Contains(x.Name));
         _config.Conditions.RemoveAll(x => !validRefNames.Contains(x.Name));
         _config.TextNodes.RemoveAll(x => !validRefNames.Contains(x.Name));
+        _config.ImageSources.RemoveAll(x => !validRefNames.Contains(x.Name));
         _config.BlobDetections.RemoveAll(x => !validRefNames.Contains(x.Name));
         _config.SurfaceCompares.RemoveAll(x => !validRefNames.Contains(x.Name));
         _config.LinePairDetections.RemoveAll(x => !validRefNames.Contains(x.Name));
@@ -5672,7 +5985,51 @@ public sealed partial class ToolEditorViewModel : ObservableObject
 
     private void RunFlow()
     {
-        using var snap = _sharedImage.GetSnapshot();
+        Mat? snap = null;
+
+        System.Diagnostics.Debug.WriteLine($"RunFlow: Checking for ImageSource nodes. Total nodes: {Nodes.Count}, ImageSources in config: {_config?.ImageSources.Count ?? 0}");
+
+        // Check if there's an ImageSource node and use its image
+        if (_config is not null && _config.ImageSources.Count > 0)
+        {
+            var imageSourceNode = Nodes.FirstOrDefault(n => string.Equals(n.Type, "ImageSource", StringComparison.OrdinalIgnoreCase));
+            if (imageSourceNode is not null)
+            {
+                System.Diagnostics.Debug.WriteLine($"RunFlow: Found ImageSource node: {imageSourceNode.RefName}");
+                var imgSourceDef = _config.ImageSources.FirstOrDefault(x => string.Equals(x.Name, imageSourceNode.RefName, StringComparison.OrdinalIgnoreCase));
+                if (imgSourceDef is not null)
+                {
+                    System.Diagnostics.Debug.WriteLine($"RunFlow: Found ImageSourceDef: {imgSourceDef.Name}, SourceType={imgSourceDef.SourceType}");
+                    snap = LoadImageFromSourceForPreview(imgSourceDef);
+                    if (snap is not null && !snap.Empty())
+                    {
+                        System.Diagnostics.Debug.WriteLine($"RunFlow: Successfully loaded image from ImageSource: {snap.Width}x{snap.Height}");
+                    }
+                    else
+                    {
+                        System.Diagnostics.Debug.WriteLine("RunFlow: Failed to load image from ImageSource");
+                        snap?.Dispose();
+                        snap = null;
+                    }
+                }
+                else
+                {
+                    System.Diagnostics.Debug.WriteLine($"RunFlow: ImageSourceDef not found for RefName: {imageSourceNode.RefName}");
+                }
+            }
+            else
+            {
+                System.Diagnostics.Debug.WriteLine("RunFlow: No ImageSource node found in graph");
+            }
+        }
+
+        // Fallback to shared image if no ImageSource or failed to load
+        if (snap is null)
+        {
+            System.Diagnostics.Debug.WriteLine("RunFlow: Using shared image as fallback");
+            snap = _sharedImage.GetSnapshot();
+        }
+
         if (snap is null || _config is null)
         {
             _lastRun = null;
@@ -5795,6 +6152,11 @@ public sealed partial class ToolEditorViewModel : ObservableObject
             if (string.Equals(toRemove.Type, "Condition", StringComparison.OrdinalIgnoreCase))
             {
                 _config.Conditions.RemoveAll(x => string.Equals(x.Name, toRemove.RefName, StringComparison.OrdinalIgnoreCase));
+            }
+
+            if (string.Equals(toRemove.Type, "ImageSource", StringComparison.OrdinalIgnoreCase))
+            {
+                _config.ImageSources.RemoveAll(x => string.Equals(x.Name, toRemove.RefName, StringComparison.OrdinalIgnoreCase));
             }
 
             if (string.Equals(toRemove.Type, "Text", StringComparison.OrdinalIgnoreCase))
@@ -6015,6 +6377,20 @@ public sealed partial class ToolEditorViewModel : ObservableObject
                 def.TemplateRoi = DefaultRoi();
                 _config.SurfaceCompares.Add(def);
                 ActiveRoiLabel = $"{node.RefName} SC";
+            }
+            return;
+        }
+
+        if (string.Equals(node.Type, "ImageSource", StringComparison.OrdinalIgnoreCase))
+        {
+            var existed = _config.ImageSources.Any(x => string.Equals(x.Name, node.RefName, StringComparison.OrdinalIgnoreCase));
+            if (!existed)
+            {
+                _config.ImageSources.Add(new ImageSourceDefinition
+                {
+                    Name = node.RefName,
+                    SourceType = ImageSourceType.File
+                });
             }
             return;
         }
@@ -6473,23 +6849,35 @@ public sealed partial class ToolEditorViewModel : ObservableObject
 
         FinalOverlayItems.Clear();
 
-        using var snap = _sharedImage.GetSnapshot();
-        if (snap is null)
+        using var rawSnap = _sharedImage.GetSnapshot();
+        Mat snapToUse;
+        if (rawSnap is not null && !rawSnap.Empty())
         {
-            FinalPreviewImage = null;
-            _cachedFinalPreviewImage = null;
-            return;
+            snapToUse = rawSnap;
         }
+        else
+        {
+            var firstImgSource = _config?.ImageSources?.FirstOrDefault();
+            if (firstImgSource is not null)
+            {
+                snapToUse = LoadImageFromSourceForPreview(firstImgSource) ?? new Mat();
+            }
+            else
+            {
+                snapToUse = new Mat();
+            }
+        }
+        using var snap = snapToUse;
 
         if (_config is not null && PreprocessPreviewEnabled)
         {
             using var processedFinal = _preprocessor.Run(snap, _config.Preprocess);
-            _cachedFinalPreviewImage = processedFinal.ToBitmapSource();
+            _cachedFinalPreviewImage = processedFinal.Empty() ? null : processedFinal.ToBitmapSource();
             FinalPreviewImage = _cachedFinalPreviewImage;
         }
         else
         {
-            _cachedFinalPreviewImage = snap.ToBitmapSource();
+            _cachedFinalPreviewImage = snap.Empty() ? null : snap.ToBitmapSource();
             FinalPreviewImage = _cachedFinalPreviewImage;
         }
 
@@ -6517,15 +6905,42 @@ public sealed partial class ToolEditorViewModel : ObservableObject
     {
         SelectedNodeOverlayItems.Clear();
 
-        using var snap = _sharedImage.GetSnapshot();
-        if (snap is null)
+        System.Diagnostics.Debug.WriteLine($"RefreshSelectedPreview: SelectedNode={SelectedNode?.Type}, RefName={SelectedNode?.RefName}");
+
+        // Special handling for ImageSource - always load from source regardless of PreprocessPreviewEnabled
+        if (SelectedNode is not null && string.Equals(SelectedNode.Type, "ImageSource", StringComparison.OrdinalIgnoreCase))
         {
-            SelectedNodePreviewImage = null;
-            LinePreviewImage = null;
-            PointEdgePreviewImage = null;
-            BlobThresholdPreviewImage = null;
+            System.Diagnostics.Debug.WriteLine("Processing ImageSource node preview (special case)");
+            var imgSourceDef = SelectedImageSourceDef();
+            if (imgSourceDef is not null)
+            {
+                System.Diagnostics.Debug.WriteLine($"ImageSourceDef found: Name={imgSourceDef.Name}, SourceType={imgSourceDef.SourceType}");
+                var loadedMat = LoadImageFromSourceForPreview(imgSourceDef);
+                if (loadedMat is not null && !loadedMat.Empty())
+                {
+                    System.Diagnostics.Debug.WriteLine($"Setting SelectedNodePreviewImage from ImageSource: {loadedMat.Width}x{loadedMat.Height}");
+                    var bitmapSource = loadedMat.ToBitmapSource();
+                    SelectedNodePreviewImage = bitmapSource;
+                    loadedMat.Dispose();
+                    System.Diagnostics.Debug.WriteLine($"SelectedNodePreviewImage set successfully");
+                }
+                else
+                {
+                    System.Diagnostics.Debug.WriteLine("Failed to load image from ImageSource, setting to null");
+                    SelectedNodePreviewImage = null;
+                }
+            }
+            else
+            {
+                System.Diagnostics.Debug.WriteLine("ImageSourceDef is null, setting to null");
+                SelectedNodePreviewImage = null;
+            }
+            UpdateBlobThresholdPreview(new Mat());
             return;
         }
+
+        using var rawSnap = _sharedImage.GetSnapshot();
+        using var snap = rawSnap ?? new Mat();
 
         if (_config is not null && PreprocessPreviewEnabled)
         {
@@ -6535,12 +6950,12 @@ public sealed partial class ToolEditorViewModel : ObservableObject
                 if (def is not null)
                 {
                     using var processedSel = _preprocessor.Run(snap, def.Settings);
-                    SelectedNodePreviewImage = processedSel.ToBitmapSource();
+                    SelectedNodePreviewImage = processedSel.Empty() ? null : processedSel.ToBitmapSource();
                 }
                 else
                 {
                     using var processedSel = _preprocessor.Run(snap, _config.Preprocess);
-                    SelectedNodePreviewImage = processedSel.ToBitmapSource();
+                    SelectedNodePreviewImage = processedSel.Empty() ? null : processedSel.ToBitmapSource();
                 }
             }
             else
@@ -6558,17 +6973,18 @@ public sealed partial class ToolEditorViewModel : ObservableObject
                         || string.Equals(SelectedNode.Type, "CodeDetection", StringComparison.OrdinalIgnoreCase)))
                 {
                     using var processedSel = ResolveToolPreprocessForPreview(snap, SelectedNode);
-                    SelectedNodePreviewImage = processedSel.ToBitmapSource();
+                    SelectedNodePreviewImage = processedSel.Empty() ? null : processedSel.ToBitmapSource();
                 }
                 else
                 {
-                    SelectedNodePreviewImage = _cachedFinalPreviewImage ?? snap.ToBitmapSource();
+                    SelectedNodePreviewImage = _cachedFinalPreviewImage ?? (snap.Empty() ? null : snap.ToBitmapSource());
                 }
             }
         }
         else
         {
-            SelectedNodePreviewImage = snap.ToBitmapSource();
+            System.Diagnostics.Debug.WriteLine("PreprocessPreviewEnabled is false, using raw snap");
+            SelectedNodePreviewImage = snap.Empty() ? null : snap.ToBitmapSource();
         }
 
         UpdateBlobThresholdPreview(snap);
@@ -9369,6 +9785,7 @@ public sealed partial class ToolGraphNodeViewModel : ObservableObject
         else if (string.Equals(Type, "Distance", StringComparison.OrdinalIgnoreCase)) outName = "Distance";
         else if (string.Equals(Type, "Condition", StringComparison.OrdinalIgnoreCase)) outName = "Result";
         else if (string.Equals(Type, "Preprocess", StringComparison.OrdinalIgnoreCase)) outName = "Image";
+        else if (string.Equals(Type, "ImageSource", StringComparison.OrdinalIgnoreCase)) outName = "Image";
         else if (string.Equals(Type, "BlobDetection", StringComparison.OrdinalIgnoreCase)) outName = "Blobs";
         else if (string.Equals(Type, "CodeDetection", StringComparison.OrdinalIgnoreCase)) outName = "Code";
         else if (string.Equals(Type, "CircleFinder", StringComparison.OrdinalIgnoreCase)) outName = "Circle";
@@ -9376,7 +9793,11 @@ public sealed partial class ToolGraphNodeViewModel : ObservableObject
 
         OutPorts.Add(new NodePortViewModel(this, outName, isInput: false));
 
-        if (string.Equals(Type, "Preprocess", StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(Type, "ImageSource", StringComparison.OrdinalIgnoreCase))
+        {
+            // ImageSource has no input ports - it's a source
+        }
+        else if (string.Equals(Type, "Preprocess", StringComparison.OrdinalIgnoreCase))
         {
             InPorts.Add(new NodePortViewModel(this, "Image", isInput: true));
         }
