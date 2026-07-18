@@ -21,3 +21,5 @@ Lộ trình tích hợp tính năng Chụp ảnh từ camera và hỗ trợ các
 - [x] Task 14: Sửa lỗi CameraService khởi động thất bại ngay khi bật app đối với virtual camera (như DroidCam) bằng cách thêm cơ chế Retry.
 - [x] Task 15: Sửa lỗi lưu Config bị kẹp Tool "mồ côi" từ Config trước do Node bị xóa trên Graph nhưng không dọn dẹp trong Model.
 - [x] Task 16: Nâng cấp UI Tab Tool Editor (Thêm icon List Tool, đưa Global Pre-processor ra dialog riêng, format gọn Properties Panel).
+- [x] Task 17: Sửa tương phản màu nút bấm và tab selected ở Light mode (chữ trắng trên nền accent xanh đậm).
+- [x] Task 18: Sửa ComboBox dark mode — chữ trắng/nền trắng do style override mất custom template.

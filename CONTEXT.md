@@ -154,3 +154,56 @@ This project is an advanced industrial machine vision inspection suite built on 
 ### Status
 - CodeDetection Rotation: ✅ FIXED & DEPLOYED (Hỗ trợ giải mã chính xác trong mọi điều kiện xoay).
 
+
+## Update 2026-07-18 11:30 (Light Mode Button/Tab Contrast Fix)
+
+### Issue
+- Ở **Light mode**, các nút bấm và tab đang được chọn có nền xanh đậm (`ShellAccent` / `#0F5FA8`) nhưng chữ lại dùng `TextBrush` (`#333333` đen) → tương phản kém, khó đọc.
+
+### Root Cause
+- Trong `MainWindow.xaml`, style mặc định của `Button` và trigger `IsSelected` của `TabItem` gán `Foreground="{DynamicResource TextBrush}"` trong khi nền là màu accent tối.
+
+### Fix
+- **MainWindow.xaml**: Đổi `Foreground` của Button và TabItem (selected) sang `{DynamicResource AccentTextBrush}` (trắng `#FFFFFF`).
+- **App.xaml**: Thêm style Button toàn cục cho popup/dialog (nền xám nhạt + chữ tối) dùng `ButtonBackgroundBrush` + `TextBrush`.
+- **PlcView.xaml**: Các nút giả lập có nền sáng (`#FFF3E0`, `#E8F5E9`) được gán rõ `Foreground="{DynamicResource TextBrush}"` để không bị kế thừa chữ trắng từ style accent.
+- **PortValueDialog.xaml**: Sửa resource không tồn tại (`ControlBackgroundBrush`, `ButtonTextBrush`) — dùng style/theme token chuẩn.
+
+### Status
+- Light mode button/tab contrast: ✅ FIXED (chữ trắng trên nền accent, chữ tối trên nền sáng)
+
+
+## Update 2026-07-18 11:35 (Dark Mode ComboBox Contrast Fix)
+
+### Issue
+- Ở **Dark mode**, ComboBox trên toàn app hiển thị **chữ trắng trên nền trắng** → không đọc được.
+
+### Root Cause
+- `MainWindow.xaml` và `ToolEditorView.xaml` định nghĩa style `ComboBox`/`TextBox` **không có `BasedOn`**, ghi đè hoàn toàn style trong `App.xaml` (kèm custom ControlTemplate).
+- WPF fallback về template mặc định của hệ thống (nền trắng) trong khi `Foreground` vẫn là `TextBrush` trắng từ dark theme.
+
+### Fix
+- **MainWindow.xaml**: Xóa style override `TextBox`/`ComboBox` — dùng style theme-aware từ `App.xaml`.
+- **ToolEditorView.xaml**: Thêm `BasedOn="{StaticResource {x:Type ComboBox}}"` / `{x:Type TextBox}` để giữ padding cục bộ mà không mất template.
+- **App.xaml**: Cải thiện template ComboBox — bind rõ `TextElement.Foreground` cho ContentPresenter, ToggleButton dùng nền của ComboBox cha.
+
+### Status
+- Dark mode ComboBox contrast: ✅ FIXED (nền tối + chữ sáng trên mọi tab/dialog)
+
+
+## Update 2026-07-18 11:38 (Startup Crash Hotfix — ComboBox Template)
+
+### Issue
+- App crash khi khởi động: `System.NullReferenceException` trong `TemplateContent.ParseNode`, stack trace trỏ `ToolEditorView.xaml`.
+
+### Root Cause
+- `TemplateBinding Background, RelativeSource=...` trên ToggleButton trong `App.xaml` — cú pháp **không hợp lệ** (TemplateBinding không hỗ trợ RelativeSource) → lỗi parse ControlTemplate.
+- Style `BasedOn="{StaticResource {x:Type ComboBox}}"` trong `ToolEditorView.xaml` kích hoạt load template lỗi khi khởi tạo view.
+
+### Fix
+- Hoàn nguyên ToggleButton `Background="Transparent"` (nền thật do Border ngoài ComboBox template đảm nhiệm).
+- Xóa style override TextBox/ComboBox cục bộ trong `ToolEditorView.xaml`; chuyển `VerticalContentAlignment="Center"` lên style toàn cục `App.xaml`.
+
+### Status
+- Startup crash: ✅ FIXED (build + launch OK)
+
