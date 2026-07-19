@@ -369,15 +369,7 @@ public sealed class InspectionService : IInspectionService
                         }
                         else if (string.Equals(fromNode.Type, "ImageSource", StringComparison.OrdinalIgnoreCase))
                         {
-                            if (imageSourcesByName.TryGetValue(fromNode.RefName ?? string.Empty, out var imgSource))
-                            {
-                                var loadedMat = LoadImageFromSource(imgSource);
-                                if (loadedMat is not null && !loadedMat.Empty())
-                                {
-                                    lock (matsLock) matsToDispose.Add(loadedMat);
-                                    baseMat = loadedMat;
-                                }
-                            }
+                            baseMat = image;
                         }
                     }
 
@@ -415,17 +407,9 @@ public sealed class InspectionService : IInspectionService
                 }
                 else if (string.Equals(fromNode.Type, "ImageSource", StringComparison.OrdinalIgnoreCase))
                 {
-                    if (imageSourcesByName.TryGetValue(fromNode.RefName ?? string.Empty, out var imgSource))
-                    {
-                        var loadedMat = LoadImageFromSource(imgSource);
-                        if (loadedMat is not null && !loadedMat.Empty())
-                        {
-                            lock (matsLock) matsToDispose.Add(loadedMat);
-                            var preprocessedMat = _preprocessor.Run(loadedMat, defaultSettings);
-                            lock (matsLock) matsToDispose.Add(preprocessedMat);
-                            return (preprocessedMat, defaultSettings);
-                        }
-                    }
+                    var preprocessedMat = _preprocessor.Run(image, defaultSettings);
+                    lock (matsLock) matsToDispose.Add(preprocessedMat);
+                    return (preprocessedMat, defaultSettings);
                 }
 
                 return (GetProcessedDefault(), defaultSettings);
@@ -455,20 +439,12 @@ public sealed class InspectionService : IInspectionService
                     return mat;
                 }
 
-                // If connected to ImageSource, load image from source
+                // If connected to ImageSource, use the input image directly (do not load from disk during run)
                 if (string.Equals(fromNode.Type, "ImageSource", StringComparison.OrdinalIgnoreCase))
                 {
-                    if (imageSourcesByName.TryGetValue(fromNode.RefName ?? string.Empty, out var imgSource))
-                    {
-                        var loadedMat = LoadImageFromSource(imgSource);
-                        if (loadedMat is not null && !loadedMat.Empty())
-                        {
-                            lock (matsLock) matsToDispose.Add(loadedMat);
-                            var preprocessedMat = _preprocessor.Run(loadedMat, config.Preprocess);
-                            lock (matsLock) matsToDispose.Add(preprocessedMat);
-                            return preprocessedMat;
-                        }
-                    }
+                    var preprocessedMat = _preprocessor.Run(image, config.Preprocess);
+                    lock (matsLock) matsToDispose.Add(preprocessedMat);
+                    return preprocessedMat;
                 }
                 // If connected to Preprocess, get preprocessed image
                 else if (string.Equals(fromNode.Type, "Preprocess", StringComparison.OrdinalIgnoreCase))

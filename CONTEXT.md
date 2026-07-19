@@ -334,3 +334,13 @@ ew Mat()\ r?ng t?m th?i.
 
 ### Status
 - FIXED: Cc tool nhu Point v Caliper nay da d?nh v? chu?n xc v xoay theo hu?ng dng c?a object k? c? khi dng Origin = TemplateMatch.
+
+## Update 2026-07-19 (Caliper & Point rotation fix, ImageSource runtime behavior fix)
+
+### Issue 1: Caliper and Point failed to detect rotated objects correctly.
+- **Root Cause**: ExtractStraightRoi cropped the unrotated image patch due to insufficient bounding box size given to WarpAffine. Point tool's FindPointByEdge was performing edge projection directly on the unrotated global image without extracting a straight patch first.
+- **Fix**: Upgraded ExtractStraightRoi to use a diagonal-sized bounding box for WarpAffine, preventing any cropping. Completely rewrote FindPointByEdge to utilize ExtractStraightRoi and MapToGlobal, standardizing it with Caliper's logic.
+
+### Issue 2: Inspection tools failed on rotated objects if the product used an ImageSource tool.
+- **Root Cause**: During actual RunInspection, if a tool was connected to ImageSource, it would reload the straight Teach image from disk instead of using the input rotated image (from camera/UI). This caused misalignment because the Origin tool calculated rotation on the new image, but Point/Caliper operated on the old straight image.
+- **Fix**: Modified Inspect in Class1.cs to ensure that ImageSource tool acts merely as a passthrough for the runtime input image when running inspection, completely skipping the disk load (LoadImageFromSource).
