@@ -318,3 +318,19 @@ ew Mat()\ r?ng t?m th?i.
 
 - C?u trúc l?i ch?c nang c?a c?ng Image và Preprocess cho t?t c? các node. Lo?i b? c?ng Preprocess, gi? dây các node ch? c?n có 1 c?ng Image. N?u s? d?ng ImageSource -> Preprocess -> Tool thì Preprocess s? t? d?ng x? lý ?nh. Ðã s?a l?i ImageSource tool k?t n?i v?i Preprocess tool preview b? den ngòm.
 - C?p nh?t output c?a ImageSource tool d? luôn áp d?ng global preprocess. Thêm tính nang ch?n c?nh (hi?n th? màu d? khi du?c ch?n) và xóa c?nh ho?c xóa node du?c ch?n b?ng phím Delete.
+
+## Update 2026-07-18 18:55 (Origin Tool / TemplateMatch Rotation Direction Fix)
+
+### Issue
+- Khi m?u b? xoay, cc tool nhu Point ho?c Caliper b? di d?i v xoay l?ch hu?ng so v?i teaching. Caliper ko theo Search ROI xoay l?ch h?n v khng b?t du?c du?ng vi?n chnh xc.
+
+### Root Cause
+- Thu?t ton TemplateMatch trong h? th?ng (thng qua MatchWithRotation) v tnh tr? v? gi tr? gc ng?c d?u (s? d?ng convention CCW thay v CW) do thng s? gc du?c d?y tr?c ti?p vo hm Cv2.GetRotationMatrix2D c?a OpenCV (OpenCV qui d?nh gc d?ong l CCW).
+- Ton b? cc thu?t ton khc trong code (FeatureMatch, ShapeMatch, hm Rotate chung, v UI) d?u ho?t d?ng chung m?t h? qui chi?u: **gc d?ong l Clockwise (CW)** trong t?a d? Y-down. S? b?t d?ng b? d?n d?n TransformRoiKeepSize d?y cc Search ROI v? sai hu?ng khi s? d?ng Origin d?a trn TemplateMatch.
+
+### Fix
+- Ch?nh s?a RotateSameSize v RotateWithPadding trong VisionEngine/Class1.cs b?ng cch d?o ng?c d?u gc (-angleDeg) tr?c khi g?i Cv2.GetRotationMatrix2D. Ði?u ny d?ng b? h?a h? chi?u c?a TemplateMatch v?i ton b? system.
+- Cc ch?c nang crop straight patch v map t?a d? (nhu ExtractStraightRoi v Point mapper) da du?c thi?t k? chu?n cho Clockwise, n?n sau khi d?ng b? gc t? Origin, chng t? d?ng kh?p.
+
+### Status
+- FIXED: Cc tool nhu Point v Caliper nay da d?nh v? chu?n xc v xoay theo hu?ng dng c?a object k? c? khi dng Origin = TemplateMatch.

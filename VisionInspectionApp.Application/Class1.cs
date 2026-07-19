@@ -1231,27 +1231,23 @@ public sealed class InspectionService : IInspectionService
                         };
                     }
 
-                    static (bool Found, Point2d Position, double Score, Rect MatchRect) FindPointByEdge(Mat matBgrOrGray, Roi roi, EdgePointSettings ep)
+                    static (bool Found, Point2d Position, double Score, Rect MatchRect) FindPointByEdge(Mat matBgrOrGray, Roi roiTeach, EdgePointSettings ep, Point2d originTeach, Point2d originFound, double angleDeg)
                     {
-                        if (matBgrOrGray is null || roi.Width <= 0 || roi.Height <= 0)
+                        if (matBgrOrGray is null || roiTeach.Width <= 0 || roiTeach.Height <= 0)
                         {
                             return (false, default, 0.0, default);
                         }
 
-                        var rect = new Rect(roi.X, roi.Y, roi.Width, roi.Height)
-                            .Intersect(new Rect(0, 0, matBgrOrGray.Width, matBgrOrGray.Height));
-                        if (rect.Width <= 0 || rect.Height <= 0)
+                        using var patch = ExtractStraightRoi(matBgrOrGray, roiTeach, originTeach, originFound, angleDeg, out var centerFound);
+                        if (patch.Empty())
                         {
                             return (false, default, 0.0, default);
                         }
 
-                        using var crop = new Mat(matBgrOrGray, rect);
-                        Mat gray = crop;
-                        using var grayOwned = crop.Channels() == 1 ? null : crop.CvtColor(ColorConversionCodes.BGR2GRAY);
-                        if (grayOwned is not null)
-                        {
-                            gray = grayOwned;
-                        }
+                        using var patchGrayOwned = patch.Channels() == 1 ? null : patch.CvtColor(ColorConversionCodes.BGR2GRAY);
+                        Mat gray = patchGrayOwned ?? patch;
+
+                        var rect = new Rect(0, 0, patch.Width, patch.Height);
 
                         var stripCount = Math.Clamp(ep.StripCount, 1, 200);
                         var stripWidth = Math.Clamp(ep.StripWidth, 1, Math.Max(1, Math.Min(rect.Width, rect.Height)));
@@ -1315,11 +1311,12 @@ public sealed class InspectionService : IInspectionService
                                 var sub = InterpPeak(gL, gC, gR);
 
                                 var ySub = bestIdx + sub;
-                                var xGlobal = rect.X + sr.X + sr.Width / 2.0;
-                                var yGlobal = rect.Y + sr.Y + ySub;
+                                var xLocal = sr.X + sr.Width / 2.0;
+                                var yLocal = sr.Y + ySub;
+                                var ptGlobal = MapToGlobal(new Point2d(xLocal, yLocal), patch.Width, patch.Height, centerFound, angleDeg);
 
-                                sumX += xGlobal;
-                                sumY += yGlobal;
+                                sumX += ptGlobal.X;
+                                sumY += ptGlobal.Y;
                                 sumG += bestVal;
                                 foundN++;
                             }
@@ -1367,11 +1364,12 @@ public sealed class InspectionService : IInspectionService
                                 var sub = InterpPeak(gL, gC, gR);
 
                                 var xSub = bestIdx + sub;
-                                var xGlobal = rect.X + sr.X + xSub;
-                                var yGlobal = rect.Y + sr.Y + sr.Height / 2.0;
+                                var xLocal = sr.X + xSub;
+                                var yLocal = sr.Y + sr.Height / 2.0;
+                                var ptGlobal = MapToGlobal(new Point2d(xLocal, yLocal), patch.Width, patch.Height, centerFound, angleDeg);
 
-                                sumX += xGlobal;
-                                sumY += yGlobal;
+                                sumX += ptGlobal.X;
+                                sumY += ptGlobal.Y;
                                 sumG += bestVal;
                                 foundN++;
                             }
@@ -1379,12 +1377,12 @@ public sealed class InspectionService : IInspectionService
 
                         if (foundN <= 0)
                         {
-                            return (false, default, foundN == 0 ? 0.0 : sumG / foundN, rect);
+                            return (false, default, foundN == 0 ? 0.0 : sumG / foundN, default);
                         }
 
                         var pos = new Point2d(sumX / foundN, sumY / foundN);
                         var score = sumG / foundN;
-                        return (true, pos, score, rect);
+                        return (true, pos, score, default);
                     }
 
                     Point2d basePos;
@@ -1396,7 +1394,7 @@ public sealed class InspectionService : IInspectionService
 
                     if (p.Algorithm == PointFindAlgorithm.EdgePoint)
                     {
-                        var r = FindPointByEdge(matForPoint, def.SearchRoi, p.EdgePoint);
+                        var r = FindPointByEdge(matForPoint, p.SearchRoi, p.EdgePoint, originTeach, originFound, angleDeg);
                         basePos = r.Position;
                         matchRect = r.MatchRect;
                         score = r.Score;
@@ -2706,9 +2704,8 @@ public sealed class InspectionService : IInspectionService
             return new Mat(source, rect).Clone();
         }
 
-        var rrect = new RotatedRect(new Point2f((float)centerFound.X, (float)centerFound.Y), new Size2f(roiTeach.Width, roiTeach.Height), (float)angleDeg);
-        var bbox = rrect.BoundingRect();
-        bbox.Inflate(2, 2);
+        int diag = (int)Math.Ceiling(Math.Sqrt(roiTeach.Width * roiTeach.Width + roiTeach.Height * roiTeach.Height));
+        var bbox = new Rect((int)(centerFound.X - diag / 2.0), (int)(centerFound.Y - diag / 2.0), diag, diag);
         var safeBbox = bbox.Intersect(new Rect(0, 0, source.Width, source.Height));
         if (safeBbox.Width <= 0 || safeBbox.Height <= 0) return new Mat();
 
@@ -2717,7 +2714,7 @@ public sealed class InspectionService : IInspectionService
         
         using var M = Cv2.GetRotationMatrix2D(centerInBbox, angleDeg, 1.0);
         using var rotatedBbox = new Mat();
-        Cv2.WarpAffine(subSource, rotatedBbox, M, safeBbox.Size, InterpolationFlags.Linear, BorderTypes.Replicate);
+        Cv2.WarpAffine(subSource, rotatedBbox, M, new Size(diag, diag), InterpolationFlags.Linear, BorderTypes.Replicate);
 
         var patch = new Mat();
         Cv2.GetRectSubPix(rotatedBbox, new Size(roiTeach.Width, roiTeach.Height), centerInBbox, patch);

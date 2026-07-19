@@ -1581,7 +1581,7 @@ public sealed class PatternMatcher
     private static Mat RotateSameSize(Mat templGray, double angleDeg)
     {
         var center = new Point2f(templGray.Width / 2f, templGray.Height / 2f);
-        using var m = Cv2.GetRotationMatrix2D(center, angleDeg, 1.0);
+        using var m = Cv2.GetRotationMatrix2D(center, -angleDeg, 1.0);
         var dst = new Mat();
         Cv2.WarpAffine(templGray, dst, m, new Size(templGray.Width, templGray.Height), InterpolationFlags.Linear, BorderTypes.Constant, Scalar.Black);
         return dst;
@@ -1603,7 +1603,7 @@ public sealed class PatternMatcher
         }
 
         var center = new Point2f(diag / 2f, diag / 2f);
-        using var m = Cv2.GetRotationMatrix2D(center, angleDeg, 1.0);
+        using var m = Cv2.GetRotationMatrix2D(center, -angleDeg, 1.0);
         var dst = new Mat();
         Cv2.WarpAffine(padded, dst, m, new Size(diag, diag), InterpolationFlags.Linear, BorderTypes.Constant, Scalar.Black);
         padded.Dispose();
