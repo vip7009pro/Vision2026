@@ -19,6 +19,7 @@
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
         <DockPanel Grid.Row="0" LastChildFill="False">
@@ -34,7 +35,7 @@
             <Button Content="Run Flow" Command="{Binding RunFlowCommand}" Margin="0,0,12,0" />
 
             <TextBlock Text="Product Code" VerticalAlignment="Center" Margin="0,0,6,0" />
-            <TextBox Width="120" Text="{Binding ProductCode, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,12,0" />
+            <TextBox Width="120" Text="{Binding ProductCode, UpdateSourceTrigger=PropertyChanged, Delay=500}" Margin="0,0,12,0" />
 
             <Button Content="Save" Command="{Binding SaveConfigCommand}" />
         </DockPanel>
@@ -57,9 +58,10 @@
 
                     <Grid>
                         <Grid.RowDefinitions>
-                            <RowDefinition Height="Auto" />
-                            <RowDefinition Height="*" />
-                        </Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
 
                         <TextBlock Grid.Row="0" FontWeight="Bold" Text="Toolbox" Margin="0,0,0,6" />
                         <ListBox Grid.Row="1" x:Name="ToolboxList" ItemsSource="{Binding ToolboxItems}" 
@@ -191,7 +193,7 @@
                                             <TextBlock Text="Pre" VerticalAlignment="Center" Margin="8,4" Foreground="{DynamicResource TextBrush}"/>
                                         </Border>
                                         <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
-                                            <ComboBox ItemsSource="{Binding AvailablePreprocessChoices}" SelectedItem="{Binding SelectedToolPreprocessChoice, UpdateSourceTrigger=PropertyChanged}" Margin="4" />
+                                            <ComboBox ItemsSource="{Binding AvailablePreprocessChoices}" SelectedItem="{Binding SelectedToolPreprocessChoice, UpdateSourceTrigger=PropertyChanged, Delay=500}" Margin="4" />
                                         </Border>
                                     </Grid>
                                 </Border>
@@ -213,7 +215,7 @@
                                             <TextBlock Text="Algorithm" VerticalAlignment="Center" Margin="8,4" Foreground="{DynamicResource TextBrush}"/>
                                         </Border>
                                         <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
-                                            <ComboBox ItemsSource="{Binding AvailableOriginAlgorithms}" SelectedItem="{Binding Origin_Algorithm, UpdateSourceTrigger=PropertyChanged}" Margin="4" />
+                                            <ComboBox ItemsSource="{Binding AvailableOriginAlgorithms}" SelectedItem="{Binding Origin_Algorithm, UpdateSourceTrigger=PropertyChanged, Delay=500}" Margin="4" />
                                         </Border>
                                     </Grid>
                                 </Border>
@@ -261,7 +263,7 @@
                                             <TextBlock Text="Algorithm" VerticalAlignment="Center" Margin="8,4" Foreground="{DynamicResource TextBrush}"/>
                                         </Border>
                                         <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
-                                            <ComboBox ItemsSource="{Binding AvailablePointFindAlgorithms}" SelectedItem="{Binding Point_Algorithm, UpdateSourceTrigger=PropertyChanged}" Margin="4" />
+                                            <ComboBox ItemsSource="{Binding AvailablePointFindAlgorithms}" SelectedItem="{Binding Point_Algorithm, UpdateSourceTrigger=PropertyChanged, Delay=500}" Margin="4" />
                                         </Border>
                                     </Grid>
                                 </Border>
@@ -312,7 +314,7 @@
                                             <TextBlock Text="Orientation" VerticalAlignment="Center" Margin="8,4" Foreground="{DynamicResource TextBrush}"/>
                                         </Border>
                                         <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
-                                            <ComboBox ItemsSource="{Binding AvailableCaliperOrientations}" SelectedItem="{Binding Point_Edge_Orientation, UpdateSourceTrigger=PropertyChanged}" Margin="4" />
+                                            <ComboBox ItemsSource="{Binding AvailableCaliperOrientations}" SelectedItem="{Binding Point_Edge_Orientation, UpdateSourceTrigger=PropertyChanged, Delay=500}" Margin="4" />
                                         </Border>
                                     </Grid>
                                 </Border>
@@ -327,7 +329,7 @@
                                             <TextBlock Text="Polarity" VerticalAlignment="Center" Margin="8,4" Foreground="{DynamicResource TextBrush}"/>
                                         </Border>
                                         <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
-                                            <ComboBox ItemsSource="{Binding AvailableEdgePolarities}" SelectedItem="{Binding Point_Edge_Polarity, UpdateSourceTrigger=PropertyChanged}" Margin="4" />
+                                            <ComboBox ItemsSource="{Binding AvailableEdgePolarities}" SelectedItem="{Binding Point_Edge_Polarity, UpdateSourceTrigger=PropertyChanged, Delay=500}" Margin="4" />
                                         </Border>
                                     </Grid>
                                 </Border>
@@ -389,7 +391,7 @@
                                     </Grid>
                                 </Border>
 
-                                    <CheckBox Content="Preview" IsChecked="{Binding PointEdgePreviewEnabled, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,6" />
+                                    <CheckBox Content="Preview" IsChecked="{Binding PointEdgePreviewEnabled, UpdateSourceTrigger=PropertyChanged, Delay=500}" Margin="0,0,0,6" />
 
                                     <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" Padding="4" Margin="0,0,0,6">
                                         <Image Source="{Binding PointEdgePreviewImage}" Stretch="Uniform" Height="120" />
@@ -402,7 +404,7 @@
                                     <TextBlock Text="Line Params" FontWeight="Bold" Foreground="{DynamicResource TextBrush}" />
                                 </Border>
 
-                                <CheckBox Content="Preview" IsChecked="{Binding LinePreviewEnabled, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,6" />
+                                <CheckBox Content="Preview" IsChecked="{Binding LinePreviewEnabled, UpdateSourceTrigger=PropertyChanged, Delay=500}" Margin="0,0,0,6" />
 
                                 <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" Padding="4" Margin="0,0,0,6">
                                     <Image Source="{Binding LinePreviewImage}" Stretch="Uniform" Height="120" />
@@ -413,7 +415,7 @@
                                         <TextBlock Text="Canny Thresh 1" Width="100" VerticalAlignment="Center" />
                                         <TextBlock Text="{Binding Line_Canny1}" Width="40" />
                                     </StackPanel>
-                                    <Slider Minimum="0" Maximum="255" Value="{Binding Line_Canny1, UpdateSourceTrigger=PropertyChanged}" IsSnapToTickEnabled="True" TickFrequency="1" />
+                                    <Slider Minimum="0" Maximum="255" Value="{Binding Line_Canny1, UpdateSourceTrigger=PropertyChanged, Delay=500}" IsSnapToTickEnabled="True" TickFrequency="1" />
                                 </StackPanel>
 
                                 <StackPanel Margin="0,0,0,2">
@@ -421,7 +423,7 @@
                                         <TextBlock Text="Canny Thresh 2" Width="100" VerticalAlignment="Center" />
                                         <TextBlock Text="{Binding Line_Canny2}" Width="40" />
                                     </StackPanel>
-                                    <Slider Minimum="0" Maximum="255" Value="{Binding Line_Canny2, UpdateSourceTrigger=PropertyChanged}" IsSnapToTickEnabled="True" TickFrequency="1" />
+                                    <Slider Minimum="0" Maximum="255" Value="{Binding Line_Canny2, UpdateSourceTrigger=PropertyChanged, Delay=500}" IsSnapToTickEnabled="True" TickFrequency="1" />
                                 </StackPanel>
 
                                 <StackPanel Margin="0,0,0,2">
@@ -429,7 +431,7 @@
                                         <TextBlock Text="Hough Thresh" Width="100" VerticalAlignment="Center" />
                                         <TextBlock Text="{Binding Line_HoughThreshold}" Width="40" />
                                     </StackPanel>
-                                    <Slider Minimum="1" Maximum="200" Value="{Binding Line_HoughThreshold, UpdateSourceTrigger=PropertyChanged}" IsSnapToTickEnabled="True" TickFrequency="1" />
+                                    <Slider Minimum="1" Maximum="200" Value="{Binding Line_HoughThreshold, UpdateSourceTrigger=PropertyChanged, Delay=500}" IsSnapToTickEnabled="True" TickFrequency="1" />
                                 </StackPanel>
 
                                 <StackPanel Margin="0,0,0,2">
@@ -437,7 +439,7 @@
                                         <TextBlock Text="Min Line Length" Width="100" VerticalAlignment="Center" />
                                         <TextBlock Text="{Binding Line_MinLineLength}" Width="40" />
                                     </StackPanel>
-                                    <Slider Minimum="1" Maximum="400" Value="{Binding Line_MinLineLength, UpdateSourceTrigger=PropertyChanged}" IsSnapToTickEnabled="True" TickFrequency="1" />
+                                    <Slider Minimum="1" Maximum="400" Value="{Binding Line_MinLineLength, UpdateSourceTrigger=PropertyChanged, Delay=500}" IsSnapToTickEnabled="True" TickFrequency="1" />
                                 </StackPanel>
 
                                 <StackPanel Margin="0,0,0,6">
@@ -445,7 +447,7 @@
                                         <TextBlock Text="Max Line Gap" Width="100" VerticalAlignment="Center" />
                                         <TextBlock Text="{Binding Line_MaxLineGap}" Width="40" />
                                     </StackPanel>
-                                    <Slider Minimum="0" Maximum="100" Value="{Binding Line_MaxLineGap, UpdateSourceTrigger=PropertyChanged}" IsSnapToTickEnabled="True" TickFrequency="1" />
+                                    <Slider Minimum="0" Maximum="100" Value="{Binding Line_MaxLineGap, UpdateSourceTrigger=PropertyChanged, Delay=500}" IsSnapToTickEnabled="True" TickFrequency="1" />
                                 </StackPanel>
                             </StackPanel>
 
@@ -464,7 +466,7 @@
                                             <TextBlock Text="Ori" VerticalAlignment="Center" Margin="8,4" Foreground="{DynamicResource TextBrush}"/>
                                         </Border>
                                         <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
-                                            <ComboBox ItemsSource="{Binding AvailableCaliperOrientations}" SelectedItem="{Binding Caliper_Orientation, UpdateSourceTrigger=PropertyChanged}" Margin="4" />
+                                            <ComboBox ItemsSource="{Binding AvailableCaliperOrientations}" SelectedItem="{Binding Caliper_Orientation, UpdateSourceTrigger=PropertyChanged, Delay=500}" Margin="4" />
                                         </Border>
                                     </Grid>
                                 </Border>
@@ -479,7 +481,7 @@
                                             <TextBlock Text="Pol" VerticalAlignment="Center" Margin="8,4" Foreground="{DynamicResource TextBrush}"/>
                                         </Border>
                                         <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
-                                            <ComboBox ItemsSource="{Binding AvailableEdgePolarities}" SelectedItem="{Binding Caliper_Polarity, UpdateSourceTrigger=PropertyChanged}" Margin="4" />
+                                            <ComboBox ItemsSource="{Binding AvailableEdgePolarities}" SelectedItem="{Binding Caliper_Polarity, UpdateSourceTrigger=PropertyChanged, Delay=500}" Margin="4" />
                                         </Border>
                                     </Grid>
                                 </Border>
@@ -572,7 +574,7 @@
                                             <TextBlock Text="A" VerticalAlignment="Center" Margin="8,4" Foreground="{DynamicResource TextBrush}"/>
                                         </Border>
                                         <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
-                                            <ComboBox ItemsSource="{Binding AvailableDistanceRefNames}" SelectedItem="{Binding Distance_PointA, UpdateSourceTrigger=PropertyChanged}" Margin="4" />
+                                            <ComboBox ItemsSource="{Binding AvailableDistanceRefNames}" SelectedItem="{Binding Distance_PointA, UpdateSourceTrigger=PropertyChanged, Delay=500}" Margin="4" />
                                         </Border>
                                     </Grid>
                                 </Border>
@@ -586,7 +588,7 @@
                                             <TextBlock Text="B" VerticalAlignment="Center" Margin="8,4" Foreground="{DynamicResource TextBrush}"/>
                                         </Border>
                                         <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
-                                            <ComboBox ItemsSource="{Binding AvailableDistanceRefNames}" SelectedItem="{Binding Distance_PointB, UpdateSourceTrigger=PropertyChanged}" Margin="4" />
+                                            <ComboBox ItemsSource="{Binding AvailableDistanceRefNames}" SelectedItem="{Binding Distance_PointB, UpdateSourceTrigger=PropertyChanged, Delay=500}" Margin="4" />
                                         </Border>
                                     </Grid>
                                 </Border>
@@ -605,7 +607,7 @@
                                             <TextBlock Text="Mode" VerticalAlignment="Center" Margin="8,4" Foreground="{DynamicResource TextBrush}"/>
                                         </Border>
                                         <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
-                                            <ComboBox ItemsSource="{Binding AvailableLineLineDistanceModes}" SelectedItem="{Binding LineLineDistance_Mode, UpdateSourceTrigger=PropertyChanged}" Margin="4" />
+                                            <ComboBox ItemsSource="{Binding AvailableLineLineDistanceModes}" SelectedItem="{Binding LineLineDistance_Mode, UpdateSourceTrigger=PropertyChanged, Delay=500}" Margin="4" />
                                         </Border>
                                     </Grid>
                                 </Border>
@@ -620,7 +622,7 @@
                                             <TextBlock Text="A" VerticalAlignment="Center" Margin="8,4" Foreground="{DynamicResource TextBrush}"/>
                                         </Border>
                                         <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
-                                            <ComboBox ItemsSource="{Binding AvailableLineNames}" SelectedItem="{Binding LineLineDistance_LineA, UpdateSourceTrigger=PropertyChanged}" Margin="4" />
+                                            <ComboBox ItemsSource="{Binding AvailableLineNames}" SelectedItem="{Binding LineLineDistance_LineA, UpdateSourceTrigger=PropertyChanged, Delay=500}" Margin="4" />
                                         </Border>
                                     </Grid>
                                 </Border>
@@ -634,7 +636,7 @@
                                             <TextBlock Text="B" VerticalAlignment="Center" Margin="8,4" Foreground="{DynamicResource TextBrush}"/>
                                         </Border>
                                         <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
-                                            <ComboBox ItemsSource="{Binding AvailableLineNames}" SelectedItem="{Binding LineLineDistance_LineB, UpdateSourceTrigger=PropertyChanged}" Margin="4" />
+                                            <ComboBox ItemsSource="{Binding AvailableLineNames}" SelectedItem="{Binding LineLineDistance_LineB, UpdateSourceTrigger=PropertyChanged, Delay=500}" Margin="4" />
                                         </Border>
                                     </Grid>
                                 </Border>
@@ -653,7 +655,7 @@
                                             <TextBlock Text="Mode" VerticalAlignment="Center" Margin="8,4" Foreground="{DynamicResource TextBrush}"/>
                                         </Border>
                                         <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
-                                            <ComboBox ItemsSource="{Binding AvailablePointLineDistanceModes}" SelectedItem="{Binding PointLineDistance_Mode, UpdateSourceTrigger=PropertyChanged}" Margin="4" />
+                                            <ComboBox ItemsSource="{Binding AvailablePointLineDistanceModes}" SelectedItem="{Binding PointLineDistance_Mode, UpdateSourceTrigger=PropertyChanged, Delay=500}" Margin="4" />
                                         </Border>
                                     </Grid>
                                 </Border>
@@ -668,7 +670,7 @@
                                             <TextBlock Text="P" VerticalAlignment="Center" Margin="8,4" Foreground="{DynamicResource TextBrush}"/>
                                         </Border>
                                         <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
-                                            <ComboBox ItemsSource="{Binding AvailablePointNames}" SelectedItem="{Binding PointLineDistance_Point, UpdateSourceTrigger=PropertyChanged}" Margin="4" />
+                                            <ComboBox ItemsSource="{Binding AvailablePointNames}" SelectedItem="{Binding PointLineDistance_Point, UpdateSourceTrigger=PropertyChanged, Delay=500}" Margin="4" />
                                         </Border>
                                     </Grid>
                                 </Border>
@@ -682,7 +684,7 @@
                                             <TextBlock Text="L" VerticalAlignment="Center" Margin="8,4" Foreground="{DynamicResource TextBrush}"/>
                                         </Border>
                                         <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
-                                            <ComboBox ItemsSource="{Binding AvailableLineNames}" SelectedItem="{Binding PointLineDistance_Line, UpdateSourceTrigger=PropertyChanged}" Margin="4" />
+                                            <ComboBox ItemsSource="{Binding AvailableLineNames}" SelectedItem="{Binding PointLineDistance_Line, UpdateSourceTrigger=PropertyChanged, Delay=500}" Margin="4" />
                                         </Border>
                                     </Grid>
                                 </Border>
@@ -701,7 +703,7 @@
                                             <TextBlock Text="A" VerticalAlignment="Center" Margin="8,4" Foreground="{DynamicResource TextBrush}"/>
                                         </Border>
                                         <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
-                                            <ComboBox ItemsSource="{Binding AvailableLineNames}" SelectedItem="{Binding Angle_LineA, UpdateSourceTrigger=PropertyChanged}" Margin="4" />
+                                            <ComboBox ItemsSource="{Binding AvailableLineNames}" SelectedItem="{Binding Angle_LineA, UpdateSourceTrigger=PropertyChanged, Delay=500}" Margin="4" />
                                         </Border>
                                     </Grid>
                                 </Border>
@@ -715,7 +717,7 @@
                                             <TextBlock Text="B" VerticalAlignment="Center" Margin="8,4" Foreground="{DynamicResource TextBrush}"/>
                                         </Border>
                                         <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
-                                            <ComboBox ItemsSource="{Binding AvailableLineNames}" SelectedItem="{Binding Angle_LineB, UpdateSourceTrigger=PropertyChanged}" Margin="4" />
+                                            <ComboBox ItemsSource="{Binding AvailableLineNames}" SelectedItem="{Binding Angle_LineB, UpdateSourceTrigger=PropertyChanged, Delay=500}" Margin="4" />
                                         </Border>
                                     </Grid>
                                 </Border>
@@ -727,7 +729,7 @@
                                     <StackPanel Orientation="Horizontal" Margin="0,0,0,2">
                                         <TextBlock Text="A" Width="60" VerticalAlignment="Center" />
                                         <TextBlock Text="Ref A" Width="60" VerticalAlignment="Center" />
-                                        <ComboBox Width="160" ItemsSource="{Binding AvailableLineNames}" SelectedItem="{Binding EdgePair_RefA, UpdateSourceTrigger=PropertyChanged}" />
+                                        <ComboBox Width="160" ItemsSource="{Binding AvailableLineNames}" SelectedItem="{Binding EdgePair_RefA, UpdateSourceTrigger=PropertyChanged, Delay=500}" />
                                     </StackPanel>
                                     <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
                                     <Grid>
@@ -739,7 +741,7 @@
                                             <TextBlock Text="Ref B" VerticalAlignment="Center" Margin="8,4" Foreground="{DynamicResource TextBrush}"/>
                                         </Border>
                                         <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
-                                            <ComboBox ItemsSource="{Binding AvailableLineNames}" SelectedItem="{Binding EdgePair_RefB, UpdateSourceTrigger=PropertyChanged}" Margin="4" />
+                                            <ComboBox ItemsSource="{Binding AvailableLineNames}" SelectedItem="{Binding EdgePair_RefB, UpdateSourceTrigger=PropertyChanged, Delay=500}" Margin="4" />
                                         </Border>
                                     </Grid>
                                 </Border>
@@ -819,7 +821,7 @@
                                 </Border>
 
                                 <TextBlock Text="Expression" Margin="0,0,0,2" />
-                                <TextBox Text="{Binding Condition_Expression, UpdateSourceTrigger=PropertyChanged}"
+                                <TextBox Text="{Binding Condition_Expression, UpdateSourceTrigger=LostFocus}"
                                          AcceptsReturn="True"
                                          Height="80"
                                          TextWrapping="Wrap"
@@ -854,7 +856,7 @@
                                             <TextBlock Text="Source Type" VerticalAlignment="Center" Margin="8,4" Foreground="{DynamicResource TextBrush}"/>
                                         </Border>
                                         <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
-                                            <ComboBox ItemsSource="{Binding AvailableImageSourceTypes}" SelectedItem="{Binding ImageSource_SourceType, UpdateSourceTrigger=PropertyChanged}" Margin="4" />
+                                            <ComboBox ItemsSource="{Binding AvailableImageSourceTypes}" SelectedItem="{Binding ImageSource_SourceType, UpdateSourceTrigger=PropertyChanged, Delay=500}" Margin="4" />
                                         </Border>
                                     </Grid>
                                 </Border>
@@ -870,7 +872,7 @@
                                             <TextBlock Text="File Path" VerticalAlignment="Center" Margin="8,4" Foreground="{DynamicResource TextBrush}"/>
                                         </Border>
                                         <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
-                                            <TextBox Text="{Binding ImageSource_FilePath, UpdateSourceTrigger=PropertyChanged}" Margin="4" />
+                                            <TextBox Text="{Binding ImageSource_FilePath, UpdateSourceTrigger=PropertyChanged, Delay=500}" Margin="4" />
                                         </Border>
                                         <Button Grid.Column="2" Content="..." Command="{Binding ImageSource_BrowseFileCommand}" Margin="4" Padding="8,4" />
                                     </Grid>
@@ -887,7 +889,7 @@
                                             <TextBlock Text="Folder Path" VerticalAlignment="Center" Margin="8,4" Foreground="{DynamicResource TextBrush}"/>
                                         </Border>
                                         <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
-                                            <TextBox Text="{Binding ImageSource_FolderPath, UpdateSourceTrigger=PropertyChanged}" Margin="4" />
+                                            <TextBox Text="{Binding ImageSource_FolderPath, UpdateSourceTrigger=PropertyChanged, Delay=500}" Margin="4" />
                                         </Border>
                                         <Button Grid.Column="2" Content="..." Command="{Binding ImageSource_BrowseFolderCommand}" Margin="4" Padding="8,4" />
                                     </Grid>
@@ -903,7 +905,7 @@
                                             <TextBlock Text="Loop Folder" VerticalAlignment="Center" Margin="8,4" Foreground="{DynamicResource TextBrush}"/>
                                         </Border>
                                         <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
-                                            <CheckBox IsChecked="{Binding ImageSource_LoopFolder, UpdateSourceTrigger=PropertyChanged}" Margin="4" VerticalAlignment="Center" />
+                                            <CheckBox IsChecked="{Binding ImageSource_LoopFolder, UpdateSourceTrigger=PropertyChanged, Delay=500}" Margin="4" VerticalAlignment="Center" />
                                         </Border>
                                     </Grid>
                                 </Border>
@@ -948,7 +950,7 @@
                                             <TextBlock Text="RTSP URL" VerticalAlignment="Center" Margin="8,4" Foreground="{DynamicResource TextBrush}"/>
                                         </Border>
                                         <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
-                                            <TextBox Text="{Binding ImageSource_RtspUrl, UpdateSourceTrigger=PropertyChanged}" Margin="4" />
+                                            <TextBox Text="{Binding ImageSource_RtspUrl, UpdateSourceTrigger=PropertyChanged, Delay=500}" Margin="4" />
                                         </Border>
                                     </Grid>
                                 </Border>
@@ -960,7 +962,7 @@
                                 </Border>
 
                                 <TextBlock Text="Text" Margin="0,0,0,2" />
-                                <TextBox Text="{Binding TextNode_Text, UpdateSourceTrigger=PropertyChanged}"
+                                <TextBox Text="{Binding TextNode_Text, UpdateSourceTrigger=LostFocus}"
                                          AcceptsReturn="True"
                                          Height="60"
                                          TextWrapping="Wrap"
@@ -1032,7 +1034,7 @@
                                             <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" Padding="4" Margin="0,0,0,6">
                                                 <StackPanel>
                                                     <TextBlock Text="Expression" Margin="0,0,0,2" />
-                                                    <TextBox Text="{Binding Expression, UpdateSourceTrigger=PropertyChanged}"
+                                                    <TextBox Text="{Binding Expression, UpdateSourceTrigger=PropertyChanged, Delay=500}"
                                                              AcceptsReturn="True"
                                                              Height="50"
                                                              TextWrapping="Wrap"
@@ -1079,7 +1081,7 @@
                                             <TextBlock Text="Polarity" VerticalAlignment="Center" Margin="8,4" Foreground="{DynamicResource TextBrush}"/>
                                         </Border>
                                         <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
-                                            <ComboBox ItemsSource="{Binding AvailableBlobPolarities}" SelectedItem="{Binding Blob_Polarity, UpdateSourceTrigger=PropertyChanged}" Margin="4" />
+                                            <ComboBox ItemsSource="{Binding AvailableBlobPolarities}" SelectedItem="{Binding Blob_Polarity, UpdateSourceTrigger=PropertyChanged, Delay=500}" Margin="4" />
                                         </Border>
                                     </Grid>
                                 </Border>
@@ -1088,7 +1090,7 @@
                                     <TextBlock Text="Thr" Width="60" VerticalAlignment="Center" />
                                     <TextBlock Text="{Binding Blob_Threshold}" Width="40" />
                                 </StackPanel>
-                                <Slider Minimum="0" Maximum="255" Value="{Binding Blob_Threshold, UpdateSourceTrigger=PropertyChanged}" IsSnapToTickEnabled="True" TickFrequency="1" Margin="0,0,0,6" />
+                                <Slider Minimum="0" Maximum="255" Value="{Binding Blob_Threshold, UpdateSourceTrigger=PropertyChanged, Delay=500}" IsSnapToTickEnabled="True" TickFrequency="1" Margin="0,0,0,6" />
 
                                 <Border BorderBrush="{DynamicResource DarkBorderBrush}" BorderThickness="1" Padding="2" Margin="0,0,0,6">
                                     <Image Source="{Binding BlobThresholdPreviewImage}" Stretch="Uniform" Height="120" />
@@ -1247,7 +1249,7 @@
                                         <TextBlock Text="C1" Width="60" VerticalAlignment="Center" />
                                         <TextBlock Text="{Binding Lpd_Canny1}" Width="40" />
                                     </StackPanel>
-                                    <Slider Minimum="0" Maximum="255" Value="{Binding Lpd_Canny1, UpdateSourceTrigger=PropertyChanged}" IsSnapToTickEnabled="True" TickFrequency="1" />
+                                    <Slider Minimum="0" Maximum="255" Value="{Binding Lpd_Canny1, UpdateSourceTrigger=PropertyChanged, Delay=500}" IsSnapToTickEnabled="True" TickFrequency="1" />
                                 </StackPanel>
 
                                 <StackPanel Margin="0,0,0,2">
@@ -1255,7 +1257,7 @@
                                         <TextBlock Text="C2" Width="60" VerticalAlignment="Center" />
                                         <TextBlock Text="{Binding Lpd_Canny2}" Width="40" />
                                     </StackPanel>
-                                    <Slider Minimum="0" Maximum="255" Value="{Binding Lpd_Canny2, UpdateSourceTrigger=PropertyChanged}" IsSnapToTickEnabled="True" TickFrequency="1" />
+                                    <Slider Minimum="0" Maximum="255" Value="{Binding Lpd_Canny2, UpdateSourceTrigger=PropertyChanged, Delay=500}" IsSnapToTickEnabled="True" TickFrequency="1" />
                                 </StackPanel>
 
                                 <StackPanel Margin="0,0,0,2">
@@ -1263,7 +1265,7 @@
                                         <TextBlock Text="Hough" Width="60" VerticalAlignment="Center" />
                                         <TextBlock Text="{Binding Lpd_HoughThreshold}" Width="40" />
                                     </StackPanel>
-                                    <Slider Minimum="1" Maximum="200" Value="{Binding Lpd_HoughThreshold, UpdateSourceTrigger=PropertyChanged}" IsSnapToTickEnabled="True" TickFrequency="1" />
+                                    <Slider Minimum="1" Maximum="200" Value="{Binding Lpd_HoughThreshold, UpdateSourceTrigger=PropertyChanged, Delay=500}" IsSnapToTickEnabled="True" TickFrequency="1" />
                                 </StackPanel>
 
                                 <StackPanel Margin="0,0,0,2">
@@ -1271,7 +1273,7 @@
                                         <TextBlock Text="MinLen" Width="60" VerticalAlignment="Center" />
                                         <TextBlock Text="{Binding Lpd_MinLineLength}" Width="40" />
                                     </StackPanel>
-                                    <Slider Minimum="1" Maximum="400" Value="{Binding Lpd_MinLineLength, UpdateSourceTrigger=PropertyChanged}" IsSnapToTickEnabled="True" TickFrequency="1" />
+                                    <Slider Minimum="1" Maximum="400" Value="{Binding Lpd_MinLineLength, UpdateSourceTrigger=PropertyChanged, Delay=500}" IsSnapToTickEnabled="True" TickFrequency="1" />
                                 </StackPanel>
 
                                 <StackPanel Margin="0,0,0,6">
@@ -1279,7 +1281,7 @@
                                         <TextBlock Text="MaxGap" Width="60" VerticalAlignment="Center" />
                                         <TextBlock Text="{Binding Lpd_MaxLineGap}" Width="40" />
                                     </StackPanel>
-                                    <Slider Minimum="0" Maximum="100" Value="{Binding Lpd_MaxLineGap, UpdateSourceTrigger=PropertyChanged}" IsSnapToTickEnabled="True" TickFrequency="1" />
+                                    <Slider Minimum="0" Maximum="100" Value="{Binding Lpd_MaxLineGap, UpdateSourceTrigger=PropertyChanged, Delay=500}" IsSnapToTickEnabled="True" TickFrequency="1" />
                                 </StackPanel>
 
                                 <TextBlock Text="Spec" FontWeight="SemiBold" Margin="0,6,0,6" />
@@ -1351,7 +1353,7 @@
                                             <TextBlock Text="Algo" VerticalAlignment="Center" Margin="8,4" Foreground="{DynamicResource TextBrush}"/>
                                         </Border>
                                         <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
-                                            <ComboBox ItemsSource="{Binding AvailableCircleFindAlgorithms}" SelectedItem="{Binding Cf_Algorithm, UpdateSourceTrigger=PropertyChanged}" Margin="4" />
+                                            <ComboBox ItemsSource="{Binding AvailableCircleFindAlgorithms}" SelectedItem="{Binding Cf_Algorithm, UpdateSourceTrigger=PropertyChanged, Delay=500}" Margin="4" />
                                         </Border>
                                     </Grid>
                                 </Border>
@@ -1558,7 +1560,7 @@
                                             <TextBlock Text="Circle" VerticalAlignment="Center" Margin="8,4" Foreground="{DynamicResource TextBrush}"/>
                                         </Border>
                                         <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
-                                            <ComboBox ItemsSource="{Binding AvailableCircleFinderNames}" SelectedItem="{Binding Dia_CircleRef, UpdateSourceTrigger=PropertyChanged}" Margin="4" />
+                                            <ComboBox ItemsSource="{Binding AvailableCircleFinderNames}" SelectedItem="{Binding Dia_CircleRef, UpdateSourceTrigger=PropertyChanged, Delay=500}" Margin="4" />
                                         </Border>
                                     </Grid>
                                 </Border>
@@ -1579,7 +1581,7 @@
                                             <TextBlock Text="Orientation" VerticalAlignment="Center" Margin="8,4" Foreground="{DynamicResource TextBrush}"/>
                                         </Border>
                                         <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
-                                            <ComboBox ItemsSource="{Binding AvailableCaliperOrientations}" SelectedItem="{Binding Epd_Orientation, UpdateSourceTrigger=PropertyChanged}" Margin="4" />
+                                            <ComboBox ItemsSource="{Binding AvailableCaliperOrientations}" SelectedItem="{Binding Epd_Orientation, UpdateSourceTrigger=PropertyChanged, Delay=500}" Margin="4" />
                                         </Border>
                                     </Grid>
                                 </Border>
@@ -1594,7 +1596,7 @@
                                             <TextBlock Text="Polarity" VerticalAlignment="Center" Margin="8,4" Foreground="{DynamicResource TextBrush}"/>
                                         </Border>
                                         <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
-                                            <ComboBox ItemsSource="{Binding AvailableEdgePolarities}" SelectedItem="{Binding Epd_Polarity, UpdateSourceTrigger=PropertyChanged}" Margin="4" />
+                                            <ComboBox ItemsSource="{Binding AvailableEdgePolarities}" SelectedItem="{Binding Epd_Polarity, UpdateSourceTrigger=PropertyChanged, Delay=500}" Margin="4" />
                                         </Border>
                                     </Grid>
                                 </Border>
@@ -1733,14 +1735,14 @@
                                     <TextBlock Text="Code Detection" FontWeight="Bold" Foreground="{DynamicResource TextBrush}" />
                                 </Border>
 
-                                <CheckBox Content="Try Harder" IsChecked="{Binding Cdt_TryHarder, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,6" />
+                                <CheckBox Content="Try Harder" IsChecked="{Binding Cdt_TryHarder, UpdateSourceTrigger=PropertyChanged, Delay=500}" Margin="0,0,0,6" />
 
                                 <TextBlock Text="Symbologies" FontWeight="SemiBold" Margin="0,0,0,6" />
-                                <CheckBox Content="QR" IsChecked="{Binding Cdt_EnableQr, UpdateSourceTrigger=PropertyChanged}" />
-                                <CheckBox Content="Barcode 1D" IsChecked="{Binding Cdt_EnableBarcode1D, UpdateSourceTrigger=PropertyChanged}" />
-                                <CheckBox Content="DataMatrix" IsChecked="{Binding Cdt_EnableDataMatrix, UpdateSourceTrigger=PropertyChanged}" />
-                                <CheckBox Content="PDF417" IsChecked="{Binding Cdt_EnablePdf417, UpdateSourceTrigger=PropertyChanged}" />
-                                <CheckBox Content="Aztec" IsChecked="{Binding Cdt_EnableAztec, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,6" />
+                                <CheckBox Content="QR" IsChecked="{Binding Cdt_EnableQr, UpdateSourceTrigger=PropertyChanged, Delay=500}" />
+                                <CheckBox Content="Barcode 1D" IsChecked="{Binding Cdt_EnableBarcode1D, UpdateSourceTrigger=PropertyChanged, Delay=500}" />
+                                <CheckBox Content="DataMatrix" IsChecked="{Binding Cdt_EnableDataMatrix, UpdateSourceTrigger=PropertyChanged, Delay=500}" />
+                                <CheckBox Content="PDF417" IsChecked="{Binding Cdt_EnablePdf417, UpdateSourceTrigger=PropertyChanged, Delay=500}" />
+                                <CheckBox Content="Aztec" IsChecked="{Binding Cdt_EnableAztec, UpdateSourceTrigger=PropertyChanged, Delay=500}" Margin="0,0,0,6" />
 
                                 <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
                                     <TextBlock Text="Text" Width="60" VerticalAlignment="Top" />
@@ -1760,9 +1762,10 @@
             <Border Grid.Column="2" BorderBrush="{DynamicResource DarkBorderBrush}" BorderThickness="1" Padding="8" Margin="0,0,8,0">
                 <Grid>
                     <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto" />
-                        <RowDefinition Height="*" />
-                    </Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
 
                     <Grid Margin="0,0,0,6">
                         <Grid.ColumnDefinitions>
@@ -1774,7 +1777,7 @@
                         
                         <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Center">
                             <TextBlock Text="RefName:" VerticalAlignment="Center" FontWeight="SemiBold" Margin="0,0,6,0" />
-                            <TextBox Text="{Binding SelectedNode.RefName, UpdateSourceTrigger=PropertyChanged}" Width="120" Padding="4,2" />
+                            <TextBox Text="{Binding SelectedNode.RefName, UpdateSourceTrigger=LostFocus}" Width="120" Padding="4,2" />
                         </StackPanel>
 
                         <StackPanel Grid.Column="2" Orientation="Horizontal">
@@ -1847,6 +1850,7 @@
                                                                 <StackPanel DockPanel.Dock="Top" Margin="0,0,0,6">
                                                                     <TextBlock FontWeight="Bold" Text="{Binding Type}" />
                                                                     <TextBlock Text="{Binding RefName}" Foreground="{DynamicResource TextMutedBrush}" />
+                                                                    <TextBlock Text="{Binding ExecutionTimeMs, StringFormat='{}Time: {0} ms', TargetNullValue=''}" Foreground="#4CAF50" FontSize="10" />
                                                                 </StackPanel>
 
                                                                 <Grid>
@@ -1922,7 +1926,7 @@
                     </Grid.RowDefinitions>
 
                     <TextBlock FontWeight="Bold" Text="Preview - Selected Node" Margin="0,0,0,6" />
-                    <CheckBox Grid.Row="0" HorizontalAlignment="Right" VerticalAlignment="Center" Content="Show ROI" IsChecked="{Binding ShowRoisInSelectedPreview, UpdateSourceTrigger=PropertyChanged}" />
+                    <CheckBox Grid.Row="0" HorizontalAlignment="Right" VerticalAlignment="Center" Content="Show ROI" IsChecked="{Binding ShowRoisInSelectedPreview, UpdateSourceTrigger=PropertyChanged, Delay=500}" />
                     <Border Grid.Row="1" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" Background="Transparent">
                         <controls:ImageViewerControl ImageSource="{Binding SelectedNodePreviewImage}"
                                                   OverlayItems="{Binding SelectedNodeOverlayItems}"
@@ -1935,15 +1939,24 @@
                     </Border>
 
                     <TextBlock Grid.Row="2" FontWeight="Bold" Text="Preview - Final Output" Margin="0,10,0,6" />
-                    <CheckBox Grid.Row="2" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,10,0,6" Content="Show ROI" IsChecked="{Binding ShowRoisInFinalPreview, UpdateSourceTrigger=PropertyChanged}" />
+                    <CheckBox Grid.Row="2" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,10,0,6" Content="Show ROI" IsChecked="{Binding ShowRoisInFinalPreview, UpdateSourceTrigger=PropertyChanged, Delay=500}" />
                     <Border Grid.Row="3" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" Background="Transparent">
                         <controls:ImageViewerControl ImageSource="{Binding FinalPreviewImage}" OverlayItems="{Binding FinalOverlayItems}" />
                     </Border>
                 </Grid>
             </Border>
         </Grid>
-    </Grid>
+        <StatusBar Grid.Row="2" Background="{DynamicResource DarkBackgroundBrush}" Foreground="{DynamicResource TextBrush}" BorderThickness="0,1,0,0" BorderBrush="{DynamicResource DarkBorderBrush}">
+            <StatusBarItem>
+                <TextBlock Text="{Binding StatusBarText}" />
+            </StatusBarItem>
+            <StatusBarItem HorizontalAlignment="Right">
+                <TextBlock Text="{Binding TotalExecutionTimeMs, StringFormat='{}Total Time: {0} ms'}" Foreground="#4CAF50" FontWeight="SemiBold" />
+            </StatusBarItem>
+        </StatusBar>
+</Grid>
 </UserControl>
+
 
 
 

@@ -62,6 +62,7 @@ public sealed record PointMatchResult(string Name, Point2d Position, Rect MatchR
 
 public sealed class InspectionTimings
 {
+      public System.Collections.Concurrent.ConcurrentDictionary<string, int> NodeTimings { get; } = new(System.StringComparer.OrdinalIgnoreCase);
     public int TotalMs { get; set; }
     public int OriginMs { get; set; }
     public int PointsMs { get; set; }
@@ -1175,6 +1176,7 @@ public sealed class InspectionService : IInspectionService
                 .Where(p => p is not null && !string.IsNullOrWhiteSpace(p.Name))
                 .Select(p => Task.Run(() =>
                 {
+                    var __sw = System.Diagnostics.Stopwatch.StartNew();
                     var defBase = TransformPointDefinition(p, originTeach, originFound, angleDeg);
                     var def = defBase;
 
@@ -1430,10 +1432,11 @@ public sealed class InspectionService : IInspectionService
                 .Where(l => l is not null && !string.IsNullOrWhiteSpace(l.Name) && l.SearchRoi.Width > 0 && l.SearchRoi.Height > 0)
                 .Select(l => Task.Run(() =>
                 {
+                    var __sw = System.Diagnostics.Stopwatch.StartNew();
                     var roi = TransformRoiKeepSize(l.SearchRoi, originTeach, originFound, angleDeg);
                     var (matForLine, _) = ResolveToolPreprocess("Line", l.Name);
                     var det = _lineDetector.DetectLongestLine(matForLine, roi, l.Canny1, l.Canny2, l.HoughThreshold, l.MinLineLength, l.MaxLineGap);
-                    return det with { Name = l.Name };
+                    __sw.Stop(); result.Timings.NodeTimings[l.Name] = (int)__sw.ElapsedMilliseconds; return det with { Name = l.Name };
                 }))
                 .ToArray();
 
@@ -1443,6 +1446,7 @@ public sealed class InspectionService : IInspectionService
                 .Where(b => b is not null && !string.IsNullOrWhiteSpace(b.Name) && b.InspectRoi.Width > 0 && b.InspectRoi.Height > 0)
                 .Select(b => Task.Run(() =>
                 {
+                    var __sw = System.Diagnostics.Stopwatch.StartNew();
                     var roi = TransformRoiKeepSize(b.InspectRoi, originTeach, originFound, angleDeg);
                     var (matForBlob, _) = ResolveToolPreprocess("BlobDetection", b.Name);
                     var rois = b.Rois;
@@ -1464,8 +1468,10 @@ public sealed class InspectionService : IInspectionService
                     .Where(sc => sc is not null && !string.IsNullOrWhiteSpace(sc.Name) && sc.InspectRoi.Width > 0 && sc.InspectRoi.Height > 0)
                     .Select(sc => Task.Run(() =>
                     {
+                        var __sw = System.Diagnostics.Stopwatch.StartNew();
                         var (matForSc, scSettings) = ResolveToolPreprocess("SurfaceCompare", sc.Name);
-                        return RunSurfaceCompare(matForSc, originTeach, originFound, angleDeg, sc, _preprocessor, scSettings);
+                        var res = RunSurfaceCompare(matForSc, originTeach, originFound, angleDeg, sc, _preprocessor, scSettings);
+                        __sw.Stop(); result.Timings.NodeTimings[sc.Name] = (int)__sw.ElapsedMilliseconds; return res;
                     }))
                     .ToArray();
 
@@ -1475,12 +1481,13 @@ public sealed class InspectionService : IInspectionService
                 .Where(lpd => lpd is not null && !string.IsNullOrWhiteSpace(lpd.Name) && lpd.SearchRoi.Width > 0 && lpd.SearchRoi.Height > 0)
                 .Select(lpd => Task.Run(() =>
                 {
+                    var __sw = System.Diagnostics.Stopwatch.StartNew();
                     var roi = TransformRoiKeepSize(lpd.SearchRoi, originTeach, originFound, angleDeg);
                     var (matForLpd, _) = ResolveToolPreprocess("LinePairDetection", lpd.Name);
                     var top = _lineDetector.DetectTopLines(matForLpd, roi, lpd.Canny1, lpd.Canny2, lpd.HoughThreshold, lpd.MinLineLength, lpd.MaxLineGap, topN: 2);
                     if (top.Count < 2)
                     {
-                        return new LinePairDetectionResult(
+                        __sw.Stop(); result.Timings.NodeTimings[lpd.Name] = (int)__sw.ElapsedMilliseconds; return new LinePairDetectionResult(
                             lpd.Name,
                             Found: false,
                             default, default, default, default,
@@ -1499,7 +1506,7 @@ public sealed class InspectionService : IInspectionService
                     var value = config.PixelsPerMm > 0 ? distPx / config.PixelsPerMm : distPx;
                     var pass = value >= (lpd.Nominal - lpd.ToleranceMinus) && value <= (lpd.Nominal + lpd.TolerancePlus);
 
-                    return new LinePairDetectionResult(
+                    __sw.Stop(); result.Timings.NodeTimings[lpd.Name] = (int)__sw.ElapsedMilliseconds; return new LinePairDetectionResult(
                         lpd.Name,
                         Found: true,
                         l1.P1, l1.P2,
@@ -1520,9 +1527,11 @@ public sealed class InspectionService : IInspectionService
                 .Where(c => c is not null && !string.IsNullOrWhiteSpace(c.Name) && c.SearchRoi.Width > 0 && c.SearchRoi.Height > 0)
                 .Select(c => Task.Run(() =>
                 {
+                    var __sw = System.Diagnostics.Stopwatch.StartNew();
                     var roi = TransformRoiKeepSize(c.SearchRoi, originTeach, originFound, angleDeg);
                     var (matForCal, _) = ResolveToolPreprocess("Caliper", c.Name);
-                    return DetectCaliper(matForCal, c.SearchRoi, c, originTeach, originFound, angleDeg);
+                    var res = DetectCaliper(matForCal, c.SearchRoi, c, originTeach, originFound, angleDeg);
+                    __sw.Stop(); result.Timings.NodeTimings[c.Name] = (int)__sw.ElapsedMilliseconds; return res;
                 }))
                 .ToArray();
 
@@ -1602,9 +1611,10 @@ public sealed class InspectionService : IInspectionService
 
                         double Sm(int y)
                         {
-                            if (y <= 0) return prof.Get<double>(0, 0);
-                            if (y >= n - 1) return prof.Get<double>(n - 1, 0);
-                            return (prof.Get<double>(y - 1, 0) + prof.Get<double>(y, 0) + prof.Get<double>(y + 1, 0)) / 3.0;
+                            var y0 = Math.Max(0, y - 1);
+                            var y1 = Math.Max(0, Math.Min(n - 1, y));
+                            var y2 = Math.Min(n - 1, y + 1);
+                            return (prof.Get<double>(y0, 0) + prof.Get<double>(y1, 0) + prof.Get<double>(y2, 0)) / 3.0;
                         }
 
                         var candidates = new List<(int idx, double g)>(n);
@@ -1695,9 +1705,10 @@ public sealed class InspectionService : IInspectionService
 
                         double Sm(int x)
                         {
-                            if (x <= 0) return prof.Get<double>(0, 0);
-                            if (x >= n - 1) return prof.Get<double>(0, n - 1);
-                            return (prof.Get<double>(0, x - 1) + prof.Get<double>(0, x) + prof.Get<double>(0, x + 1)) / 3.0;
+                            var x0 = Math.Max(0, x - 1);
+                            var x1 = Math.Max(0, Math.Min(n - 1, x));
+                            var x2 = Math.Min(n - 1, x + 1);
+                            return (prof.Get<double>(0, x0) + prof.Get<double>(0, x1) + prof.Get<double>(0, x2)) / 3.0;
                         }
 
                         var candidates = new List<(int idx, double g)>(n);
@@ -1818,8 +1829,10 @@ public sealed class InspectionService : IInspectionService
                 .Where(epd => epd is not null && !string.IsNullOrWhiteSpace(epd.Name) && epd.SearchRoi.Width > 0 && epd.SearchRoi.Height > 0)
                 .Select(epd => Task.Run(() =>
                 {
+                    var __sw = System.Diagnostics.Stopwatch.StartNew();
                     var (matForEpd, _) = ResolveToolPreprocess("EdgePairDetect", epd.Name);
-                    return DetectEdgePair(matForEpd, epd.SearchRoi, epd, config.PixelsPerMm, originTeach, originFound, angleDeg);
+                    var res = DetectEdgePair(matForEpd, epd.SearchRoi, epd, config.PixelsPerMm, originTeach, originFound, angleDeg);
+                    __sw.Stop(); result.Timings.NodeTimings[epd.Name] = (int)__sw.ElapsedMilliseconds; return res;
                 }))
                 .ToArray();
 
@@ -1994,9 +2007,11 @@ public sealed class InspectionService : IInspectionService
                 .Where(c => c is not null && !string.IsNullOrWhiteSpace(c.Name) && c.SearchRoi.Width > 0 && c.SearchRoi.Height > 0)
                 .Select(c => Task.Run(() =>
                 {
+                    var __sw = System.Diagnostics.Stopwatch.StartNew();
                     var roi = TransformRoiKeepSize(c.SearchRoi, originTeach, originFound, angleDeg);
                     var (matForCircle, _) = ResolveToolPreprocess("CircleFinder", c.Name);
-                    return DetectCircle(matForCircle, roi, c);
+                    var res = DetectCircle(matForCircle, roi, c);
+                    __sw.Stop(); result.Timings.NodeTimings[c.Name] = (int)__sw.ElapsedMilliseconds; return res;
                 }))
                 .ToArray();
 
@@ -2707,11 +2722,16 @@ public sealed class InspectionService : IInspectionService
         var centerInBbox = new Point2f((float)(centerFound.X - safeBbox.X), (float)(centerFound.Y - safeBbox.Y));
         
         using var M = Cv2.GetRotationMatrix2D(centerInBbox, angleDeg, 1.0);
+        var tx = diag / 2.0 - centerInBbox.X;
+        var ty = diag / 2.0 - centerInBbox.Y;
+        M.Set(0, 2, M.Get<double>(0, 2) + tx);
+        M.Set(1, 2, M.Get<double>(1, 2) + ty);
         using var rotatedBbox = new Mat();
         Cv2.WarpAffine(subSource, rotatedBbox, M, new Size(diag, diag), InterpolationFlags.Linear, BorderTypes.Replicate);
 
         var patch = new Mat();
-        Cv2.GetRectSubPix(rotatedBbox, new Size(roiTeach.Width, roiTeach.Height), centerInBbox, patch);
+        var centerInDst = new Point2f((float)(diag / 2.0), (float)(diag / 2.0));
+        Cv2.GetRectSubPix(rotatedBbox, new Size(roiTeach.Width, roiTeach.Height), centerInDst, patch);
         return patch;
     }
 

@@ -23,7 +23,10 @@ using VisionInspectionApp.VisionEngine;
 namespace VisionInspectionApp.UI.ViewModels;
 
 public sealed partial class ToolEditorViewModel : ObservableObject
-{
+    {
+        [ObservableProperty]
+        private string _statusBarText = "Ready.";
+
     public void ShowPortValueDialog(ToolGraphNodeViewModel node, string portName)
     {
         if (_lastRun is null)
@@ -221,7 +224,6 @@ public sealed partial class ToolEditorViewModel : ObservableObject
             "Point",
             "Line",
             "Caliper",
-            "LinePairDetection",
             "EdgePairDetect",
             "CircleFinder",
             "Diameter",
@@ -234,8 +236,7 @@ public sealed partial class ToolEditorViewModel : ObservableObject
             "Text",
             "BlobDetection",
             "SurfaceCompare",
-            "CodeDetection",
-            "DefectRoi"
+            "CodeDetection"
         };
 
         Nodes = new ObservableCollection<ToolGraphNodeViewModel>();
@@ -2158,7 +2159,7 @@ public sealed partial class ToolEditorViewModel : ObservableObject
                 Y = def.InspectRoi.Y + 2,
                 Radius = 1.0,
                 Stroke = stroke,
-                Label = $"{def.Name} [{status}]: S? l?i: {r.Count}, S.L?n nh?t: {r.MaxArea:0}"
+                Label = $"{def.Name} [{status}]: Số lỗi: {r.Count}, S.Lớn nhất: {r.MaxArea:0}"
             });
 
             if (r.Defects is null || r.Defects.Count == 0)
@@ -2534,6 +2535,9 @@ public sealed partial class ToolEditorViewModel : ObservableObject
 
     [ObservableProperty]
     private string _productCode = "";
+
+    [ObservableProperty]
+    private int _totalExecutionTimeMs = 0;
 
     [ObservableProperty]
     private bool _isLivePreviewMode = true;
@@ -5821,29 +5825,29 @@ public sealed partial class ToolEditorViewModel : ObservableObject
                 if (mat != null && !mat.Empty())
                 {
                     IsLivePreviewMode = false;
-                    CaptureButtonText = "Live Preview"; // Nh?n l?n sau d? quay l?i ch? d? Live
+                    CaptureButtonText = "Live Preview"; // Nhấn lần sau để quay lại chế độ Live
                     _sharedImage.SetImage(mat);
                     mat.Dispose();
                 }
                 else
                 {
-                    MessageBox.Show("Khng th? ch?p ?nh t? camera. Vui lng ki?m tra l?i k?t n?i camera trong tab Live Camera.", "L?i camera", MessageBoxButton.OK, MessageBoxImage.Error);
+                    MessageBox.Show("Không thể chụp ảnh từ camera. Vui lòng kiểm tra lại kết nối camera trong tab Live Camera.", "Lỗi camera", MessageBoxButton.OK, MessageBoxImage.Error);
                 }
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"L?i ch?p ?nh: {ex.Message}", "L?i", MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show($"Lỗi chụp ảnh: {ex.Message}", "Lỗi", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
         else
         {
-            // ANG TINH -> B?m nt d? QUAY L?I LIVE PREVIEW
+            // ĐANG TĨNH -> Bấm nút để QUAY LẠI LIVE PREVIEW
             IsLivePreviewMode = true;
             CaptureButtonText = "Capture Camera";
 
             if (!_cameraService.IsRunning)
             {
-                MessageBox.Show("Camera dang t?t. Vui lng b?t camera ? tab Live Camera tru?c d? xem hnh ?nh tr?c ti?p.", "Thng bo", MessageBoxButton.OK, MessageBoxImage.Warning);
+                MessageBox.Show("Camera đang tắt. Vui lòng bật camera ở tab Live Camera trước để xem hình ảnh trực tiếp.", "Thông báo", MessageBoxButton.OK, MessageBoxImage.Warning);
             }
         }
     }
@@ -5868,7 +5872,7 @@ public sealed partial class ToolEditorViewModel : ObservableObject
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"L?i load config: {ex.Message}");
+            System.Diagnostics.Debug.WriteLine($"Lỗi load config: {ex.Message}");
         }
 
         // ?m b?o ban d?u khng ch?n b?t k? c?u hnh no (t?t c? r?ng)
@@ -5929,7 +5933,7 @@ public sealed partial class ToolEditorViewModel : ObservableObject
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"L?i load config: {ex.Message}");
+            System.Diagnostics.Debug.WriteLine($"Lỗi load config: {ex.Message}");
             ClearActiveGraph();
         }
     }
@@ -6105,9 +6109,34 @@ public sealed partial class ToolEditorViewModel : ObservableObject
             _lastRunError = "Lỗi khi chạy Flow: " + ex.Message;
         }
 
+        UpdateNodeExecutionTimes();
         RefreshPreviews();
         RaiseToolPropertyPanelsChanged();
         OnPropertyChanged(nameof(Blob_LastRunCount));
+    }
+
+    private void UpdateNodeExecutionTimes()
+    {
+        if (_lastRun == null)
+        {
+            TotalExecutionTimeMs = 0;
+            foreach (var node in Nodes) node.ExecutionTimeMs = null;
+            return;
+        }
+
+        TotalExecutionTimeMs = _lastRun.Timings.TotalMs;
+
+        foreach (var node in Nodes)
+        {
+            if (!string.IsNullOrWhiteSpace(node.RefName) && _lastRun.Timings.NodeTimings.TryGetValue(node.RefName, out var ms))
+            {
+                node.ExecutionTimeMs = ms;
+            }
+            else
+            {
+                node.ExecutionTimeMs = null;
+            }
+        }
     }
 
     private void NewGraph()
@@ -6996,6 +7025,8 @@ public sealed partial class ToolEditorViewModel : ObservableObject
                         || string.Equals(SelectedNode.Type, "EdgePair", StringComparison.OrdinalIgnoreCase)
                         || string.Equals(SelectedNode.Type, "BlobDetection", StringComparison.OrdinalIgnoreCase)
                         || string.Equals(SelectedNode.Type, "CircleFinder", StringComparison.OrdinalIgnoreCase)
+                        || string.Equals(SelectedNode.Type, "SurfaceCompare", StringComparison.OrdinalIgnoreCase)
+                        || string.Equals(SelectedNode.Type, "Text", StringComparison.OrdinalIgnoreCase)
                         || string.Equals(SelectedNode.Type, "CodeDetection", StringComparison.OrdinalIgnoreCase)))
                 {
                     using var processedSel = ResolveToolPreprocessForPreview(snap, SelectedNode);
@@ -8428,7 +8459,7 @@ public sealed partial class ToolEditorViewModel : ObservableObject
                     Y = ly,
                     Radius = 1.0,
                     Stroke = stroke,
-                    Label = $"{sc.Name} [{status}]: S? l?i: {sc.Count}, S.L?n nh?t: {sc.MaxArea:0}"
+                    Label = $"{sc.Name} [{status}]: Số lỗi: {sc.Count}, S.Lớn nhất: {sc.MaxArea:0}"
                 });
             }
         }
@@ -9030,7 +9061,7 @@ public sealed partial class ToolEditorViewModel : ObservableObject
                 Y = ly,
                 Radius = 1.0,
                 Stroke = stroke,
-                Label = $"{sc.Name} [{status}]: S? l?i: {sc.Count}, S.L?n nh?t: {sc.MaxArea:0}"
+                Label = $"{sc.Name} [{status}]: Số lỗi: {sc.Count}, Diện tích lớn nhất: {sc.MaxArea:0}"
             });
             return;
         }
@@ -9695,9 +9726,12 @@ public sealed partial class ToolEditorViewModel : ObservableObject
 
 public sealed partial class ToolGraphNodeViewModel : ObservableObject
 {
+    [ObservableProperty]
+    private int? _executionTimeMs;
+
     // Keep this aligned with ToolEditorView.xaml node template:
-    // Border Padding=8, header StackPanel with 2 lines + Margin bottom=6.
-    private const double NodeHeaderHeight = 46.0;
+    // Border Padding=8, header StackPanel with 3 lines + Margin bottom=6.
+    private const double NodeHeaderHeight = 60.0;
     private const double PortItemHeight = 20.0;
     private const double NodeBottomPadding = 16.0;
     [ObservableProperty]
