@@ -3166,6 +3166,12 @@ public sealed partial class ToolEditorViewModel : ObservableObject
             if (def is null) return;
             if (def.Algorithm == value) return;
             def.Algorithm = value;
+            def.OriginAlgorithm = value switch
+            {
+                PointFindAlgorithm.TemplateMatch => OriginAlgorithm.TemplateMatch,
+                PointFindAlgorithm.FeatureBased => OriginAlgorithm.FeatureBased,
+                _ => def.OriginAlgorithm
+            };
             RaiseToolPropertyPanelsChanged();
             RefreshPreviews();
             RequestAutoSave();
@@ -9893,6 +9899,9 @@ public sealed class NodePortViewModel
 
 public sealed class ToolGraphEdgeViewModel : ObservableObject
 {
+    private const double NodeWidth = 160.0;
+    private const double PortOverhang = 6.0;
+    private const double RouteClearance = 32.0;
     private readonly ToolGraphNodeViewModel _from;
     private readonly ToolGraphNodeViewModel _to;
 
@@ -9926,15 +9935,33 @@ public sealed class ToolGraphEdgeViewModel : ObservableObject
             var p1 = GetFromPortPosition();
             var p2 = GetToPortPosition();
 
-            // Orthogonal (right-angle) edge: horizontal -> vertical -> horizontal.
-            var midX = (p1.X + p2.X) * 0.5;
-            if (midX < p1.X + 30) midX = p1.X + 30;
-            if (midX > p2.X - 30) midX = p2.X - 30;
-
             var fig = new PathFigure { StartPoint = p1, IsClosed = false, IsFilled = false };
-            fig.Segments.Add(new LineSegment(new System.Windows.Point(midX, p1.Y), true));
-            fig.Segments.Add(new LineSegment(new System.Windows.Point(midX, p2.Y), true));
-            fig.Segments.Add(new LineSegment(p2, true));
+
+            if (p2.X >= p1.X)
+            {
+                // Normal left-to-right connection.
+                var midX = (p1.X + p2.X) * 0.5;
+                fig.Segments.Add(new LineSegment(new System.Windows.Point(midX, p1.Y), true));
+                fig.Segments.Add(new LineSegment(new System.Windows.Point(midX, p2.Y), true));
+                fig.Segments.Add(new LineSegment(p2, true));
+            }
+            else
+            {
+                // A destination to the left used to force the wire back through the
+                // source node.  Exit to the right, then use an outer top/bottom lane
+                // before approaching the target from its left side.
+                var exit = new System.Windows.Point(p1.X + RouteClearance, p1.Y);
+                var approach = new System.Windows.Point(p2.X - RouteClearance, p2.Y);
+                var routeY = p2.Y < p1.Y
+                    ? Math.Min(_from.Y, _to.Y) - RouteClearance
+                    : Math.Max(_from.Y + _from.NodeHeight, _to.Y + _to.NodeHeight) + RouteClearance;
+
+                fig.Segments.Add(new LineSegment(exit, true));
+                fig.Segments.Add(new LineSegment(new System.Windows.Point(exit.X, routeY), true));
+                fig.Segments.Add(new LineSegment(new System.Windows.Point(approach.X, routeY), true));
+                fig.Segments.Add(new LineSegment(approach, true));
+                fig.Segments.Add(new LineSegment(p2, true));
+            }
             return new PathGeometry(new[] { fig });
         }
     }
@@ -9949,7 +9976,7 @@ public sealed class ToolGraphEdgeViewModel : ObservableObject
         _from.EnsurePortsInitialized();
         var cy = _from.GetOutPortCenterY(FromPort);
         // Out port ellipse is pushed outwards by Margin="0,0,-6,0" in XAML.
-        return new System.Windows.Point(_from.X + 166, _from.Y + cy);
+        return new System.Windows.Point(_from.X + NodeWidth + PortOverhang, _from.Y + cy);
     }
 
     private System.Windows.Point GetToPortPosition()

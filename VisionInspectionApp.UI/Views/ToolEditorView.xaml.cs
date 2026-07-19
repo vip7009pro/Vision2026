@@ -644,14 +644,28 @@ public partial class ToolEditorView : UserControl
 
     private void UpdateWirePreview(Point p1, Point p2)
     {
-        var midX = (p1.X + p2.X) * 0.5;
-        if (midX < p1.X + 30) midX = p1.X + 30;
-        if (midX > p2.X - 30) midX = p2.X - 30;
-
         var fig = new PathFigure { StartPoint = p1, IsClosed = false, IsFilled = false };
-        fig.Segments.Add(new LineSegment(new Point(midX, p1.Y), true));
-        fig.Segments.Add(new LineSegment(new Point(midX, p2.Y), true));
-        fig.Segments.Add(new LineSegment(p2, true));
+        if (p2.X >= p1.X)
+        {
+            var midX = (p1.X + p2.X) * 0.5;
+            fig.Segments.Add(new LineSegment(new Point(midX, p1.Y), true));
+            fig.Segments.Add(new LineSegment(new Point(midX, p2.Y), true));
+            fig.Segments.Add(new LineSegment(p2, true));
+        }
+        else
+        {
+            const double clearance = 60;
+            var exit = new Point(p1.X + clearance, p1.Y);
+            var approach = new Point(p2.X - clearance, p2.Y);
+            var routeY = p2.Y < p1.Y
+                ? Math.Min(p1.Y, p2.Y) - clearance
+                : Math.Max(p1.Y, p2.Y) + clearance;
+            fig.Segments.Add(new LineSegment(exit, true));
+            fig.Segments.Add(new LineSegment(new Point(exit.X, routeY), true));
+            fig.Segments.Add(new LineSegment(new Point(approach.X, routeY), true));
+            fig.Segments.Add(new LineSegment(approach, true));
+            fig.Segments.Add(new LineSegment(p2, true));
+        }
         WirePreviewPath.Data = new PathGeometry(new[] { fig });
     }
 

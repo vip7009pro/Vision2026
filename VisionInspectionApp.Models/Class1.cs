@@ -1,4 +1,4 @@
-﻿namespace VisionInspectionApp.Models;
+namespace VisionInspectionApp.Models;
 
 public enum LineLineDistanceMode
 {
@@ -458,7 +458,8 @@ public enum OriginAlgorithm
 public enum PointFindAlgorithm
 {
     TemplateMatch = 0,
-    EdgePoint = 1
+    EdgePoint = 1,
+    FeatureBased = 2
 }
 
 public sealed class EdgePointSettings

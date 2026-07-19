@@ -1134,6 +1134,9 @@ public sealed class InspectionService : IInspectionService
                         WorldPosition = originDefBase.WorldPosition,
                         OffsetPx = originDefBase.OffsetPx,
                         Algorithm = originDefBase.Algorithm,
+                        OriginAlgorithm = originDefBase.OriginAlgorithm,
+                        MinAngle = originDefBase.MinAngle,
+                        MaxAngle = originDefBase.MaxAngle,
                         EdgePoint = originDefBase.EdgePoint,
                         ShapeModel = originDefBase.ShapeModel
                     };
@@ -1202,6 +1205,9 @@ public sealed class InspectionService : IInspectionService
                             WorldPosition = def.WorldPosition,
                             OffsetPx = def.OffsetPx,
                             Algorithm = def.Algorithm,
+                            OriginAlgorithm = def.OriginAlgorithm,
+                            MinAngle = def.MinAngle,
+                            MaxAngle = def.MaxAngle,
                             EdgePoint = def.EdgePoint,
                             ShapeModel = def.ShapeModel
                         };
@@ -1356,9 +1362,18 @@ public sealed class InspectionService : IInspectionService
                             return (false, default, foundN == 0 ? 0.0 : sumG / foundN, default);
                         }
 
-                        var pos = new Point2d(sumX / foundN, sumY / foundN);
+                        // An EdgePoint verifies the edge around the taught template centre.  Its
+                        // result must remain the template crosshair, just like TemplateMatch;
+                        // otherwise a stronger, unrelated edge can make downstream dimensions
+                        // jump away from the point that was taught.
+                        var pos = centerFound;
                         var score = sumG / foundN;
-                        return (true, pos, score, default);
+                        var matchRect = new Rect(
+                            (int)Math.Round(centerFound.X - roiTeach.Width / 2.0),
+                            (int)Math.Round(centerFound.Y - roiTeach.Height / 2.0),
+                            roiTeach.Width,
+                            roiTeach.Height);
+                        return (true, pos, score, matchRect);
                     }
 
                     Point2d basePos;
@@ -1370,7 +1385,10 @@ public sealed class InspectionService : IInspectionService
 
                     if (p.Algorithm == PointFindAlgorithm.EdgePoint)
                     {
-                        var r = FindPointByEdge(matForPoint, p.SearchRoi, p.EdgePoint, originTeach, originFound, angleDeg);
+                        // Use the taught Template ROI as the point anchor.  SearchRoi is only a
+                        // search window for template/feature matching and is not the Point's
+                        // crosshair reference.
+                        var r = FindPointByEdge(matForPoint, p.TemplateRoi, p.EdgePoint, originTeach, originFound, angleDeg);
                         basePos = r.Position;
                         matchRect = r.MatchRect;
                         score = r.Score;
@@ -2777,7 +2795,18 @@ public sealed class InspectionService : IInspectionService
             TemplateRoi = p.TemplateRoi,
             SearchRoi = TransformRoiKeepSize(p.SearchRoi, originTeach, originFound, angleDeg),
             WorldPosition = p.WorldPosition,
-            OffsetPx = p.OffsetPx
+            OffsetPx = p.OffsetPx,
+            Algorithm = p.Algorithm,
+            OriginAlgorithm = p.Algorithm switch
+            {
+                PointFindAlgorithm.TemplateMatch => OriginAlgorithm.TemplateMatch,
+                PointFindAlgorithm.FeatureBased => OriginAlgorithm.FeatureBased,
+                _ => p.OriginAlgorithm
+            },
+            MinAngle = p.MinAngle,
+            MaxAngle = p.MaxAngle,
+            EdgePoint = p.EdgePoint,
+            ShapeModel = p.ShapeModel
         };
     }
 
