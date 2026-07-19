@@ -555,28 +555,24 @@ public partial class ToolEditorView : UserControl
         }
 
         var oldZoom = vm.CanvasZoom;
-        var delta = e.Delta > 0 ? 0.1 : -0.1;
-        var newZoom = Math.Clamp(oldZoom + delta, 0.2, 3.0);
+        var zoomFactor = e.Delta > 0 ? 1.12 : 1.0 / 1.12;
+        var newZoom = Math.Clamp(oldZoom * zoomFactor, 0.2, 3.0);
         if (Math.Abs(newZoom - oldZoom) < 0.0000001)
         {
             return;
         }
 
-        var mouse = e.GetPosition(CanvasScrollViewer);
-
-        // ScrollViewer offsets are in *scaled* coordinates because EditorCanvas uses LayoutTransform.
-        // Keep the logical canvas point under the cursor stable.
-        var worldX = (CanvasScrollViewer.HorizontalOffset + mouse.X) / oldZoom;
-        var worldY = (CanvasScrollViewer.VerticalOffset + mouse.Y) / oldZoom;
+        var mouseInViewport = e.GetPosition(CanvasScrollViewer);
+        // EditorCanvas reports its local coordinates in the unscaled canvas space.
+        // Capturing this point directly is more stable than reconstructing it from
+        // ScrollViewer offsets while a LayoutTransform is changing the extent.
+        var logicalMouse = e.GetPosition(EditorCanvas);
 
         vm.CanvasZoom = newZoom;
-
-        // Defer scrolling until layout has applied the new scale.
-        Dispatcher.BeginInvoke(() =>
-        {
-            CanvasScrollViewer.ScrollToHorizontalOffset(worldX * newZoom - mouse.X);
-            CanvasScrollViewer.ScrollToVerticalOffset(worldY * newZoom - mouse.Y);
-        }, DispatcherPriority.Loaded);
+        EditorCanvas.UpdateLayout();
+        CanvasScrollViewer.UpdateLayout();
+        CanvasScrollViewer.ScrollToHorizontalOffset(logicalMouse.X * newZoom - mouseInViewport.X);
+        CanvasScrollViewer.ScrollToVerticalOffset(logicalMouse.Y * newZoom - mouseInViewport.Y);
 
         e.Handled = true;
     }
@@ -657,9 +653,7 @@ public partial class ToolEditorView : UserControl
             const double clearance = 60;
             var exit = new Point(p1.X + clearance, p1.Y);
             var approach = new Point(p2.X - clearance, p2.Y);
-            var routeY = p2.Y < p1.Y
-                ? Math.Min(p1.Y, p2.Y) - clearance
-                : Math.Max(p1.Y, p2.Y) + clearance;
+            var routeY = Math.Min(p1.Y, p2.Y) - clearance;
             fig.Segments.Add(new LineSegment(exit, true));
             fig.Segments.Add(new LineSegment(new Point(exit.X, routeY), true));
             fig.Segments.Add(new LineSegment(new Point(approach.X, routeY), true));

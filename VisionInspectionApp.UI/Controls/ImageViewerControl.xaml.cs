@@ -109,6 +109,8 @@ public partial class ImageViewerControl : UserControl
     private Point _panStart;
     private double _panStartX;
     private double _panStartY;
+    private double _panPixelsPerUnitX = 1.0;
+    private double _panPixelsPerUnitY = 1.0;
 
     private void SetupTransforms()
     {
@@ -250,9 +252,13 @@ public partial class ImageViewerControl : UserControl
         }
 
         _panning = true;
-        _panStart = e.GetPosition(PART_Overlay);
+        // Coordinates relative to PART_Overlay change while PART_Content is being
+        // translated, which makes a middle-button drag fall behind the cursor.
+        // Use the stable UserControl coordinate space instead.
+        _panStart = e.GetPosition(this);
         _panStartX = _translate.X;
         _panStartY = _translate.Y;
+        (_panPixelsPerUnitX, _panPixelsPerUnitY) = GetPanPixelsPerContentUnit();
         PART_Overlay.CaptureMouse();
         e.Handled = true;
     }
@@ -276,12 +282,27 @@ public partial class ImageViewerControl : UserControl
             return;
         }
 
-        var p = e.GetPosition(PART_Overlay);
+        var p = e.GetPosition(this);
         var dx = p.X - _panStart.X;
         var dy = p.Y - _panStart.Y;
-        _translate.X = _panStartX + dx;
-        _translate.Y = _panStartY + dy;
+        _translate.X = _panStartX + dx / _panPixelsPerUnitX;
+        _translate.Y = _panStartY + dy / _panPixelsPerUnitY;
         e.Handled = true;
+    }
+
+    private (double X, double Y) GetPanPixelsPerContentUnit()
+    {
+        var transform = PART_Content.TransformToVisual(this);
+        var origin = transform.Transform(new Point(0, 0));
+        var xAxis = transform.Transform(new Point(1, 0));
+        var yAxis = transform.Transform(new Point(0, 1));
+
+        // TransformToVisual includes the current zoom. TranslateTransform follows
+        // ScaleTransform, so remove the zoom to get the screen movement caused by
+        // one translate unit.
+        var x = Math.Abs(xAxis.X - origin.X) / Math.Max(_scale.ScaleX, 0.0001);
+        var y = Math.Abs(yAxis.Y - origin.Y) / Math.Max(_scale.ScaleY, 0.0001);
+        return (Math.Max(x, 0.0001), Math.Max(y, 0.0001));
     }
 
     public ICommand? RoiSelectedCommand

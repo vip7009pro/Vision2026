@@ -854,12 +854,14 @@ public sealed partial class ToolEditorViewModel : ObservableObject
             return;
         }
 
-        // Remove existing Pre edge to this tool.
+        // The graph now uses a single Image input.  Older configurations may still
+        // contain a legacy Preprocess port, so remove both before adding the new edge.
         for (var i = Edges.Count - 1; i >= 0; i--)
         {
             var e = Edges[i];
             if (string.Equals(e.ToNodeId, SelectedNode.Id, StringComparison.OrdinalIgnoreCase)
-                && string.Equals(e.ToPort, "Preprocess", StringComparison.OrdinalIgnoreCase))
+                && (string.Equals(e.ToPort, "Image", StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(e.ToPort, "Preprocess", StringComparison.OrdinalIgnoreCase)))
             {
                 Edges.RemoveAt(i);
             }
@@ -875,8 +877,7 @@ public sealed partial class ToolEditorViewModel : ObservableObject
             {
                 // Create edge directly; this also syncs to config.
                 from.EnsurePortsInitialized();
-                CreateEdge(from, SelectedNode, fromPort: from.OutPorts.FirstOrDefault()?.Name ?? "Out", toPort: "Preprocess");
-                return;
+                CreateEdge(from, SelectedNode, fromPort: from.OutPorts.FirstOrDefault()?.Name ?? "Out", toPort: "Image");
             }
         }
 
@@ -2822,6 +2823,7 @@ public sealed partial class ToolEditorViewModel : ObservableObject
     private void SyncPreprocessChoices()
     {
         // IMPORTANT: don't let ComboBox list refresh reset SelectedItem and trigger graph mutations.
+        var wasSyncing = _syncingInputs;
         _syncingInputs = true;
         try
         {
@@ -2856,12 +2858,13 @@ public sealed partial class ToolEditorViewModel : ObservableObject
         }
         finally
         {
-            _syncingInputs = false;
+            _syncingInputs = wasSyncing;
         }
     }
 
     private void SyncSelectedToolPreprocessChoiceFromGraph()
     {
+        var wasSyncing = _syncingInputs;
         _syncingInputs = true;
         try
         {
@@ -2873,7 +2876,8 @@ public sealed partial class ToolEditorViewModel : ObservableObject
             }
 
             var edge = Edges.FirstOrDefault(e => string.Equals(e.ToNodeId, SelectedNode.Id, StringComparison.OrdinalIgnoreCase)
-                                                && string.Equals(e.ToPort, "Preprocess", StringComparison.OrdinalIgnoreCase));
+                                                && (string.Equals(e.ToPort, "Image", StringComparison.OrdinalIgnoreCase)
+                                                    || string.Equals(e.ToPort, "Preprocess", StringComparison.OrdinalIgnoreCase)));
             if (edge is null)
             {
                 SelectedToolPreprocessChoice = DefaultPreprocessChoice;
@@ -2896,7 +2900,7 @@ public sealed partial class ToolEditorViewModel : ObservableObject
         }
         finally
         {
-            _syncingInputs = false;
+            _syncingInputs = wasSyncing;
         }
     }
 
@@ -6693,8 +6697,11 @@ public sealed partial class ToolEditorViewModel : ObservableObject
             return;
         }
 
-        // Enforce single incoming connection for certain ports.
-        if (string.Equals(toPort, "Preprocess", StringComparison.OrdinalIgnoreCase))
+        // Image-processing nodes accept exactly one source image.  This also makes
+        // Properties Panel selection and direct canvas wiring deterministically use
+        // the same edge.
+        if (string.Equals(toPort, "Image", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(toPort, "Preprocess", StringComparison.OrdinalIgnoreCase))
         {
             for (var i = Edges.Count - 1; i >= 0; i--)
             {
@@ -9948,13 +9955,13 @@ public sealed class ToolGraphEdgeViewModel : ObservableObject
             else
             {
                 // A destination to the left used to force the wire back through the
-                // source node.  Exit to the right, then use an outer top/bottom lane
+                // source node.  Exit to the right, then use the outer top lane
                 // before approaching the target from its left side.
                 var exit = new System.Windows.Point(p1.X + RouteClearance, p1.Y);
                 var approach = new System.Windows.Point(p2.X - RouteClearance, p2.Y);
-                var routeY = p2.Y < p1.Y
-                    ? Math.Min(_from.Y, _to.Y) - RouteClearance
-                    : Math.Max(_from.Y + _from.NodeHeight, _to.Y + _to.NodeHeight) + RouteClearance;
+                // Keep reverse edges in the top lane.  A bottom lane adds an
+                // unnecessary U-turn and makes these connections hard to follow.
+                var routeY = Math.Min(_from.Y, _to.Y) - RouteClearance;
 
                 fig.Segments.Add(new LineSegment(exit, true));
                 fig.Segments.Add(new LineSegment(new System.Windows.Point(exit.X, routeY), true));
