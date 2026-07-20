@@ -373,6 +373,8 @@ public sealed class SurfaceCompareDefinition
     public int MaxCount { get; set; } = 0;
 
     public int MorphKernel { get; set; } = 3;
+
+    public int EdgeTolerancePx { get; set; } = 0;
 }
 
 public sealed class SurfaceCompareRoiDefinition

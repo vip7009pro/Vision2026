@@ -737,12 +737,33 @@ public sealed class InspectionService : IInspectionService
                     templCrop0.CopyTo(tplCrop);
                 }
 
-                using var diffGray = new Mat();
-                Cv2.Absdiff(testCrop, tplCrop, diffGray);
-
-                var thr = Math.Clamp(def.DiffThreshold, 0, 255);
                 using var bw = new Mat();
-                Cv2.Threshold(diffGray, bw, thr, 255, ThresholdTypes.Binary);
+                var thr = Math.Clamp(def.DiffThreshold, 0, 255);
+
+                var edgeTol = Math.Max(0, def.EdgeTolerancePx);
+                if (edgeTol > 0)
+                {
+                    using var kernel = Cv2.GetStructuringElement(MorphShapes.Rect, new Size(edgeTol * 2 + 1, edgeTol * 2 + 1));
+                    using var maxImg = new Mat();
+                    using var minImg = new Mat();
+                    Cv2.MorphologyEx(tplCrop, maxImg, MorphTypes.Dilate, kernel);
+                    Cv2.MorphologyEx(tplCrop, minImg, MorphTypes.Erode, kernel);
+
+                    using var diffHigh = new Mat();
+                    using var diffLow = new Mat();
+                    Cv2.Subtract(testCrop, maxImg, diffHigh);
+                    Cv2.Subtract(minImg, testCrop, diffLow);
+
+                    using var defectRaw = new Mat();
+                    Cv2.BitwiseOr(diffHigh, diffLow, defectRaw);
+                    Cv2.Threshold(defectRaw, bw, thr, 255, ThresholdTypes.Binary);
+                }
+                else
+                {
+                    using var diffGray = new Mat();
+                    Cv2.Absdiff(testCrop, tplCrop, diffGray);
+                    Cv2.Threshold(diffGray, bw, thr, 255, ThresholdTypes.Binary);
+                }
 
                 // Apply include/exclude multi-ROI mask (definitions are in teach space).
                 var rois = def.Rois;

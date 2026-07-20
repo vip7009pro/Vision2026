@@ -86,6 +86,24 @@ namespace VisionInspectionApp.UI.ViewModels
                 RequestAutoSave();
             }
         }
+
+        public int SurfaceCompare_EdgeTolerancePx
+        {
+            get => SelectedSurfaceCompareDef()?.EdgeTolerancePx ?? 0;
+            set
+            {
+                var def = SelectedSurfaceCompareDef();
+                if (def is null)
+                    return;
+                var v = Math.Max(0, value);
+                if (def.EdgeTolerancePx == v)
+                    return;
+                def.EdgeTolerancePx = v;
+                RaiseToolPropertyPanelsChanged();
+                RefreshPreviews();
+                RequestAutoSave();
+            }
+        }
     
         public int SurfaceCompare_MinBlobArea
         {

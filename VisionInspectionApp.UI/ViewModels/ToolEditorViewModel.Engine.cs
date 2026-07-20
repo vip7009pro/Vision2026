@@ -1029,7 +1029,7 @@ namespace VisionInspectionApp.UI.ViewModels
     
                 var stroke = r.Pass ? Brushes.Lime : Brushes.Red;
                 var status = r.Pass ? "OK" : "NG";
-                dst.Add(new OverlayPointItem { X = def.InspectRoi.X + 2, Y = def.InspectRoi.Y + 2, Radius = 1.0, Stroke = stroke, Label = $"{def.Name} [{status}]: Số lỗi: {r.Count}, S.Lớn nhất: {r.MaxArea:0}" });
+                dst.Add(new OverlayPointItem { X = def.InspectRoi.X + 2, Y = def.InspectRoi.Y + 2, Radius = 1.0, Stroke = stroke, Label = $"{def.Name} [{status}]: S\u1ed1 l\u1ed7i: {r.Count}, S.L\u1edbn nh\u1ea5t: {r.MaxArea:0}" });
                 if (r.Defects is null || r.Defects.Count == 0)
                 {
                     return;
@@ -2260,7 +2260,7 @@ namespace VisionInspectionApp.UI.ViewModels
                         }
                     }
     
-                    dst.Add(new OverlayPointItem { X = lx, Y = ly, Radius = 1.0, Stroke = stroke, Label = $"{sc.Name} [{status}]: Số lỗi: {sc.Count}, S.Lớn nhất: {sc.MaxArea:0}" });
+                    dst.Add(new OverlayPointItem { X = lx, Y = ly, Radius = 1.0, Stroke = stroke, Label = $"{sc.Name} [{status}]: S\u1ed1 l\u1ed7i: {sc.Count}, S.L\u1edbn nh\u1ea5t: {sc.MaxArea:0}" });
                 }
             }
     
@@ -2715,7 +2715,7 @@ namespace VisionInspectionApp.UI.ViewModels
                     ly = scDef.InspectRoi.Y + 2;
                 }
     
-                dst.Add(new OverlayPointItem { X = lx, Y = ly, Radius = 1.0, Stroke = stroke, Label = $"{sc.Name} [{status}]: Số lỗi: {sc.Count}, Diện tích lớn nhất: {sc.MaxArea:0}" });
+                dst.Add(new OverlayPointItem { X = lx, Y = ly, Radius = 1.0, Stroke = stroke, Label = $"{sc.Name} [{status}]: S\u1ed1 l\u1ed7i: {sc.Count}, Di\u1ec7n t\u00edch l\u1edbn nh\u1ea5t: {sc.MaxArea:0}" });
                 return;
             }
     
