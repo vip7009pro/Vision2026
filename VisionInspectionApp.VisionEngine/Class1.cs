@@ -895,7 +895,7 @@ public sealed class PatternMatcher
         var pts2 = goodMatches.Select(m => new Point2d(keypoints2[m.TrainIdx].Pt.X, keypoints2[m.TrainIdx].Pt.Y)).ToArray();
         
         using var inliers = new Mat();
-        using var H = Cv2.FindHomography(InputArray.Create(pts1), InputArray.Create(pts2), HomographyMethods.Ransac, 3.0, inliers);
+        using var H = Cv2.FindHomography(InputArray.Create(pts1), InputArray.Create(pts2), HomographyMethods.LMedS, 3.0, inliers);
         
         if (H.Empty())
         {

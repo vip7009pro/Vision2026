@@ -82,7 +82,6 @@ public sealed partial class InspectionViewModel : ObservableObject
 
 
 
-        OverlayItems = new ObservableCollection<OverlayItem>();
 
         AvailableConfigs = new ObservableCollection<string>();
 
@@ -576,7 +575,8 @@ public sealed partial class InspectionViewModel : ObservableObject
 
 
 
-    public ObservableCollection<OverlayItem> OverlayItems { get; }
+    [ObservableProperty]
+    private List<OverlayItem> _overlayItems = new();
 
 
 
@@ -1381,9 +1381,14 @@ public sealed partial class InspectionViewModel : ObservableObject
 
 
     private void RefreshOverlayItems()
-
     {
+        OverlayItems.Clear();
+        RefreshOverlayItemsCore();
+        OverlayItems = new List<OverlayItem>(OverlayItems);
+    }
 
+    private void RefreshOverlayItemsCore()
+    {
         OverlayItems.Clear();
 
 
@@ -3360,7 +3365,7 @@ public sealed partial class InspectionViewModel : ObservableObject
 
 
 
-    private static void AddAngleArc(ObservableCollection<OverlayItem> dst, double cx, double cy, double ax, double ay, double bx, double by, double radius, System.Windows.Media.Brush stroke)
+    private static void AddAngleArc(List<OverlayItem> dst, double cx, double cy, double ax, double ay, double bx, double by, double radius, System.Windows.Media.Brush stroke)
 
     {
 
@@ -3406,7 +3411,7 @@ public sealed partial class InspectionViewModel : ObservableObject
 
 
 
-    private static void AddCircle(ObservableCollection<OverlayItem> dst, double cx, double cy, double radius, Brush stroke, double strokeThickness)
+    private static void AddCircle(List<OverlayItem> dst, double cx, double cy, double radius, Brush stroke, double strokeThickness)
 
     {
 
@@ -3448,7 +3453,7 @@ public sealed partial class InspectionViewModel : ObservableObject
 
 
 
-    private static void AddCross(ObservableCollection<OverlayItem> dst, double cx, double cy, double size, Brush stroke, double strokeThickness)
+    private static void AddCross(List<OverlayItem> dst, double cx, double cy, double size, Brush stroke, double strokeThickness)
 
     {
 

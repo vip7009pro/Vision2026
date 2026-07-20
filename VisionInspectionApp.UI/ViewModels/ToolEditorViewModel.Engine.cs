@@ -32,7 +32,7 @@ namespace VisionInspectionApp.UI.ViewModels
         private readonly DispatcherTimer _blobThresholdPreviewTimer;
         private int _lastPreviewImageWidth;
         private int _lastPreviewImageHeight;
-        private const int MaxBlobOverlayCount = 300;
+        private const int MaxBlobOverlayCount = 1000;
         private void OnRoiDeleted(string? labelRaw)
         {
             if (string.IsNullOrWhiteSpace(labelRaw) || _config is null)
@@ -169,7 +169,7 @@ namespace VisionInspectionApp.UI.ViewModels
             };
         }
     
-        private void BuildFinalOverlayFromRunWithConfig(InspectionResult run, ObservableCollection<OverlayItem> dst)
+        private void BuildFinalOverlayFromRunWithConfig(InspectionResult run, List<OverlayItem> dst)
         {
             BuildFinalOverlayFromRun(run, dst, _config);
             // Angle overlays need image bounds for full infinite-line rendering.
@@ -964,7 +964,7 @@ namespace VisionInspectionApp.UI.ViewModels
             };
         }
     
-        private void BuildOverlayForNodeFromRunWithConfig(ToolGraphNodeViewModel node, InspectionResult run, ObservableCollection<OverlayItem> dst)
+        private void BuildOverlayForNodeFromRunWithConfig(ToolGraphNodeViewModel node, InspectionResult run, List<OverlayItem> dst)
         {
             BuildOverlayForNodeFromRun(node, run, dst);
             if (_config is null)
@@ -1251,7 +1251,8 @@ namespace VisionInspectionApp.UI.ViewModels
         private ImageSource? _pointEdgePreviewImage;
         [ObservableProperty]
         private ImageSource? _blobThresholdPreviewImage;
-        public ObservableCollection<OverlayItem> FinalOverlayItems { get; }
+        [ObservableProperty]
+        private List<OverlayItem> _finalOverlayItems = new();
         public ICommand LoadPreviewImageCommand { get; }
         public ICommand CaptureCameraImageCommand { get; }
         public ICommand RunFlowCommand { get; }
@@ -1542,7 +1543,7 @@ namespace VisionInspectionApp.UI.ViewModels
                 return;
             }
     
-            FinalOverlayItems.Clear();
+            var newFinalItems = new List<OverlayItem>();
             using var rawSnap = _sharedImage.GetSnapshot();
             Mat snapToUse;
             if (rawSnap is not null && !rawSnap.Empty())
@@ -1580,24 +1581,25 @@ namespace VisionInspectionApp.UI.ViewModels
                 _finalPreviewDirty = false;
                 return;
             }
-    
             // If user ran the flow, prefer showing overlays from the inspection result
             if (_lastRun is not null)
             {
-                AddConfigRois(FinalOverlayItems);
-                BuildFinalOverlayFromRunWithConfig(_lastRun, FinalOverlayItems);
+                AddConfigRois(newFinalItems);
+                BuildFinalOverlayFromRunWithConfig(_lastRun, newFinalItems);
             }
             else
             {
-                BuildFinalOverlay(snap, FinalOverlayItems);
+                BuildFinalOverlay(snap, newFinalItems);
             }
-    
+            
+            FinalOverlayItems = newFinalItems;
+
             _finalPreviewDirty = false;
         }
     
         private void RefreshSelectedPreview()
         {
-            SelectedNodeOverlayItems.Clear();
+            var newSelectedNodeOverlayItems = new List<OverlayItem>();
             System.Diagnostics.Debug.WriteLine($"RefreshSelectedPreview: SelectedNode={SelectedNode?.Type}, RefName={SelectedNode?.RefName}");
             // Special handling for ImageSource - always load from source regardless of PreprocessPreviewEnabled
             if (SelectedNode is not null && string.Equals(SelectedNode.Type, "ImageSource", StringComparison.OrdinalIgnoreCase))
@@ -1682,17 +1684,18 @@ namespace VisionInspectionApp.UI.ViewModels
             {
                 if (SelectedNode is not null)
                 {
-                    AddConfigRoisForNode(SelectedNode, SelectedNodeOverlayItems);
-                    BuildOverlayForNodeFromRunWithConfig(SelectedNode, _lastRun, SelectedNodeOverlayItems);
+                    AddConfigRoisForNode(SelectedNode, newSelectedNodeOverlayItems);
+                    BuildOverlayForNodeFromRunWithConfig(SelectedNode, _lastRun, newSelectedNodeOverlayItems);
                 }
             }
             else
             {
                 if (SelectedNode is not null)
                 {
-                    BuildOverlayForNode(SelectedNode, snap, SelectedNodeOverlayItems);
+                    BuildOverlayForNode(SelectedNode, snap, newSelectedNodeOverlayItems);
                 }
             }
+            SelectedNodeOverlayItems = newSelectedNodeOverlayItems;
         }
     
         private void UpdateBlobThresholdPreview(Mat snap)
@@ -1810,7 +1813,7 @@ namespace VisionInspectionApp.UI.ViewModels
             }
         }
     
-        private void AddConfigRois(ObservableCollection<OverlayItem> dst)
+        private void AddConfigRois(List<OverlayItem> dst)
         {
             if (_config is null)
             {
@@ -1983,7 +1986,7 @@ namespace VisionInspectionApp.UI.ViewModels
             }
         }
     
-        private static void BuildFinalOverlayFromRun(InspectionResult run, ObservableCollection<OverlayItem> dst, VisionConfig? config)
+        private static void BuildFinalOverlayFromRun(InspectionResult run, List<OverlayItem> dst, VisionConfig? config)
         {
             if (run.Origin is not null)
             {
@@ -2294,7 +2297,7 @@ namespace VisionInspectionApp.UI.ViewModels
             }
         }
     
-        private void BuildOverlayForNodeFromRun(ToolGraphNodeViewModel node, InspectionResult run, ObservableCollection<OverlayItem> dst)
+        private void BuildOverlayForNodeFromRun(ToolGraphNodeViewModel node, InspectionResult run, List<OverlayItem> dst)
         {
             if (string.Equals(node.Type, "Origin", StringComparison.OrdinalIgnoreCase))
             {
@@ -2748,7 +2751,7 @@ namespace VisionInspectionApp.UI.ViewModels
             }
         }
     
-        private void BuildOverlayForNode(ToolGraphNodeViewModel node, Mat image, ObservableCollection<OverlayItem> dst)
+        private void BuildOverlayForNode(ToolGraphNodeViewModel node, Mat image, List<OverlayItem> dst)
         {
             if (_config is null)
             {
@@ -3019,7 +3022,7 @@ namespace VisionInspectionApp.UI.ViewModels
             };
         }
     
-        private void BuildFinalOverlay(Mat image, ObservableCollection<OverlayItem> dst)
+        private void BuildFinalOverlay(Mat image, List<OverlayItem> dst)
         {
             if (_config is null)
             {

@@ -145,6 +145,11 @@ public partial class ImageViewerControl : UserControl
     private static void OnImageSourceChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
     {
         var c = (ImageViewerControl)d;
+        if (c.PART_FastOverlay != null)
+        {
+            c.PART_FastOverlay.ImageSource = e.NewValue as ImageSource;
+        }
+
 
         // Keep zoom/pan when the preview refreshes with the same-sized image.
         // Reset only when the actual image size changes (or when switching from/to null).
@@ -360,30 +365,14 @@ public partial class ImageViewerControl : UserControl
         set => SetValue(OverlayItemsProperty, value);
     }
 
-    private INotifyCollectionChanged? _overlayNotify;
-
     private static void OnOverlayItemsChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
     {
         var c = (ImageViewerControl)d;
-
-        if (c._overlayNotify is not null)
+        if (c.PART_FastOverlay != null)
         {
-            c._overlayNotify.CollectionChanged -= c.OverlayItems_CollectionChanged;
-            c._overlayNotify = null;
+            c.PART_FastOverlay.OverlayItems = e.NewValue as IEnumerable<OverlayItem>;
         }
-
-        c._overlayNotify = e.NewValue as INotifyCollectionChanged;
-        if (c._overlayNotify is not null)
-        {
-            c._overlayNotify.CollectionChanged += c.OverlayItems_CollectionChanged;
-        }
-
         c.RedrawOverlays();
-    }
-
-    private void OverlayItems_CollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
-    {
-        RedrawOverlays();
     }
 
     private string? FindHoverRoiLabel(BitmapSource bmp, Point contentPos)

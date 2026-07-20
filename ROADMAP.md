@@ -27,3 +27,5 @@ Lộ trình tích hợp tính năng Chụp ảnh từ camera và hỗ trợ các
 - [x] Task 20: C?p nh?t output c?a ImageSource tool d? lun p d?ng global preprocess. Thm tnh nang ch?n c?nh (hi?n th? mu d? khi du?c ch?n) v xa c?nh ho?c xa node du?c ch?n b?ng phm Delete.
 - [x] Task 21: Khắc phục lỗi mất input edge khi bỏ chọn node trên Canvas bằng cách loại bỏ thuộc tính `Delay=500` gây race condition trong quá trình binding XAML.
 - [x] Task 22: Cải thiện cấu trúc dự án: Phân rã tệp `ToolEditorViewModel.cs` lớn (gần 10.000 dòng) thành nhiều file C# nhỏ gọn và phân vùng bằng cơ chế `partial class` để dễ kiểm soát.
+- [x] Task 23: Tối ưu hiệu năng hiển thị Overlay (FastOverlayCanvas và ImageViewerControl) bằng cách sử dụng List, Pen caching và gỡ bỏ INotifyCollectionChanged, giải quyết giật lag khi cập nhật 1000 items. Sửa lỗi Inspection ViewModel không cập nhật Canvas bằng cách cấp phát danh sách mới thay cho ObservableCollection.
+- [x] Task 24: Khắc phục kết quả Tool Distance (và các tool khác) bị dao động (nhảy số) trên cùng 1 ảnh tĩnh bằng cách dùng thuật toán LMedS thay cho Ransac trong Origin FeatureBased.

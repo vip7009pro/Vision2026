@@ -7,6 +7,20 @@ namespace VisionInspectionApp.UI.Controls;
 
 public class FastOverlayCanvas : FrameworkElement
 {
+    private static readonly Dictionary<(Brush, double), Pen> _penCache = new();
+
+    private static Pen GetCachedPen(Brush brush, double thickness)
+    {
+        if (brush is null) return new Pen(Brushes.Transparent, thickness);
+        var key = (brush, thickness);
+        if (_penCache.TryGetValue(key, out var pen))
+            return pen;
+        
+        pen = new Pen(brush, thickness);
+        pen.Freeze();
+        _penCache[key] = pen;
+        return pen;
+    }
     public static readonly DependencyProperty OverlayItemsProperty = DependencyProperty.Register(
         nameof(OverlayItems), typeof(IEnumerable<OverlayItem>), typeof(FastOverlayCanvas),
         new FrameworkPropertyMetadata(null, FrameworkPropertyMetadataOptions.AffectsRender, OnOverlayItemsChanged));
@@ -39,8 +53,13 @@ public class FastOverlayCanvas : FrameworkElement
         var items = OverlayItems;
         if (items is null)
         {
+            System.Diagnostics.Debug.WriteLine("FastOverlayCanvas.OnRender: items is NULL");
             return;
         }
+
+        var itemList = new List<OverlayItem>(items);
+        System.Diagnostics.Debug.WriteLine($"FastOverlayCanvas.OnRender: rendering {itemList.Count} items.");
+
 
         double sx = 1.0;
         double sy = 1.0;
@@ -56,8 +75,7 @@ public class FastOverlayCanvas : FrameworkElement
 
         foreach (var item in items)
         {
-            var pen = new Pen(item.Stroke, item.StrokeThickness > 0 ? item.StrokeThickness : 2.0);
-            pen.Freeze();
+            var pen = GetCachedPen(item.Stroke, item.StrokeThickness > 0 ? item.StrokeThickness : 2.0);
 
             if (item is OverlayRectItem r)
             {

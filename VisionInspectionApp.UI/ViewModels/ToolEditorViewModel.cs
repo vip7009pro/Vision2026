@@ -199,8 +199,8 @@ namespace VisionInspectionApp.UI.ViewModels
             Nodes = new ObservableCollection<ToolGraphNodeViewModel>();
             Edges = new ObservableCollection<ToolGraphEdgeViewModel>();
             AvailablePreprocessChoices = new ObservableCollection<string>();
-            SelectedNodeOverlayItems = new ObservableCollection<OverlayItem>();
-            FinalOverlayItems = new ObservableCollection<OverlayItem>();
+            SelectedNodeOverlayItems = new List<OverlayItem>();
+            FinalOverlayItems = new List<OverlayItem>();
             TextNode_ConditionRows = new ObservableCollection<TextColorConditionRow>();
             RefreshConfigsCommand = new RelayCommand(RefreshConfigs);
             LoadConfigCommand = new RelayCommand(LoadConfig);
@@ -1661,7 +1661,7 @@ namespace VisionInspectionApp.UI.ViewModels
             return true;
         }
     
-        private static void AddAngleArc(ObservableCollection<OverlayItem> dst, double cx, double cy, double ax, double ay, double bx, double by, double radius, System.Windows.Media.Brush stroke)
+        private static void AddAngleArc(List<OverlayItem> dst, double cx, double cy, double ax, double ay, double bx, double by, double radius, System.Windows.Media.Brush stroke)
         {
             var a0 = Math.Atan2(ay, ax);
             var a1 = Math.Atan2(by, bx);
@@ -1685,7 +1685,7 @@ namespace VisionInspectionApp.UI.ViewModels
             }
         }
     
-        private static void AddCircle(ObservableCollection<OverlayItem> dst, double cx, double cy, double radius, System.Windows.Media.Brush stroke, double strokeThickness)
+        private static void AddCircle(List<OverlayItem> dst, double cx, double cy, double radius, System.Windows.Media.Brush stroke, double strokeThickness)
         {
             if (radius <= 0.0)
             {
@@ -1706,7 +1706,7 @@ namespace VisionInspectionApp.UI.ViewModels
             }
         }
     
-        private static void AddCross(ObservableCollection<OverlayItem> dst, double cx, double cy, double size, System.Windows.Media.Brush stroke, double strokeThickness)
+        private static void AddCross(List<OverlayItem> dst, double cx, double cy, double size, System.Windows.Media.Brush stroke, double strokeThickness)
         {
             var s = Math.Max(1.0, size);
             dst.Add(new OverlayLineItem { X1 = cx - s, Y1 = cy, X2 = cx + s, Y2 = cy, Stroke = stroke, StrokeThickness = strokeThickness, Label = string.Empty });

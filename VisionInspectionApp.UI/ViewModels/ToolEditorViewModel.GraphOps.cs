@@ -116,7 +116,8 @@ namespace VisionInspectionApp.UI.ViewModels
             }
         }
     
-        public ObservableCollection<OverlayItem> SelectedNodeOverlayItems { get; }
+        [ObservableProperty]
+        private List<OverlayItem> _selectedNodeOverlayItems = new();
         public ICommand DeleteSelectedNodeCommand { get; }
         public ICommand DeleteSelectedEdgeCommand { get; }
     
@@ -486,7 +487,7 @@ namespace VisionInspectionApp.UI.ViewModels
             }
         }
     
-        private void AddConfigRoisForNode(ToolGraphNodeViewModel node, ObservableCollection<OverlayItem> dst)
+        private void AddConfigRoisForNode(ToolGraphNodeViewModel node, List<OverlayItem> dst)
         {
             if (_config is null)
             {
