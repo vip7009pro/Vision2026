@@ -221,6 +221,7 @@ public partial class ToolEditorView : UserControl
 
         var pos = e.GetPosition(EditorCanvas);
         vm.AddNode(type, pos);
+        vm.IsDirty = true;
     }
 
     private void NodeThumb_DragDelta(object sender, DragDeltaEventArgs e)
@@ -293,6 +294,10 @@ public partial class ToolEditorView : UserControl
     private void NodeThumb_DragCompleted(object sender, DragCompletedEventArgs e)
     {
         _multiDragStart = null;
+        if (DataContext is ToolEditorViewModel vm)
+        {
+            vm.IsDirty = true;
+        }
     }
 
     private void NodeThumb_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)

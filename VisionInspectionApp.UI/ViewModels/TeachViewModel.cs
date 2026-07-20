@@ -23,6 +23,9 @@ public enum RoiTeachMode
 
 public sealed partial class TeachViewModel : ObservableObject
 {
+    [ObservableProperty]
+    private bool _isDirty;
+
     private readonly IConfigService _configService;
     private readonly ConfigStoreOptions _storeOptions;
     private readonly IJobService _jobService;
@@ -77,9 +80,11 @@ public sealed partial class TeachViewModel : ObservableObject
         SaveJobCommand = new RelayCommand(SaveJob);
         SaveJobAsCommand = new RelayCommand(SaveJobAs);
 
+        CloseJobCommand = new RelayCommand(CloseJob);
+
         UndoCommand = new RelayCommand(_undo.Undo, () => _undo.CanUndo);
         RedoCommand = new RelayCommand(_undo.Redo, () => _undo.CanRedo);
-
+        _undo.ActionExecuted += (_, _) => IsDirty = true;
         _undo.PropertyChanged += (_, e) =>
         {
             if (string.Equals(e.PropertyName, nameof(UndoRedoManager.CanUndo), StringComparison.Ordinal)
@@ -653,6 +658,29 @@ public sealed partial class TeachViewModel : ObservableObject
     public ICommand SaveJobCommand { get; }
     
     public ICommand SaveJobAsCommand { get; }
+    
+    public ICommand CloseJobCommand { get; }
+
+    public void CloseJob()
+    {
+        VisionConfig.Points.Clear();
+        VisionConfig.Lines.Clear();
+        VisionConfig.Distances.Clear();
+        VisionConfig.LineToLineDistances.Clear();
+        VisionConfig.PointToLineDistances.Clear();
+        VisionConfig.ProductCode = "ProductA";
+        ProductCode = "ProductA";
+        CurrentJobFilePath = null;
+        CurrentTempWorkingDir = null;
+        Points.Clear();
+        Lines.Clear();
+        Distances.Clear();
+        LineToLineDistances.Clear();
+        PointToLineDistances.Clear();
+        OverlayItems.Clear();
+        Image = null;
+        IsDirty = false;
+    }
 
     public ICommand UndoCommand { get; }
 
@@ -672,6 +700,7 @@ public sealed partial class TeachViewModel : ObservableObject
             {
                 var cfg = _jobService.LoadJob(dialog.FileName, out var tempDir);
                 CurrentJobFilePath = dialog.FileName;
+                System.Windows.Application.Current.MainWindow.Title = "CMS VINA VISION SYSTEM - " + Path.GetFileName(CurrentJobFilePath);
                 CurrentTempWorkingDir = tempDir;
                 ProductCode = cfg.ProductCode;
                 ApplyConfig(cfg);
@@ -2056,6 +2085,8 @@ public sealed partial class TeachViewModel : ObservableObject
         try
         {
             _jobService.SaveJob(VisionConfig, CurrentTempWorkingDir ?? string.Empty, CurrentJobFilePath);
+            IsDirty = false;
+            System.Windows.MessageBox.Show("Job saved successfully.", "Success", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Information);
         }
         catch (Exception ex)
         {
@@ -2074,6 +2105,7 @@ public sealed partial class TeachViewModel : ObservableObject
         if (dialog.ShowDialog() == true)
         {
             CurrentJobFilePath = dialog.FileName;
+            System.Windows.Application.Current.MainWindow.Title = "CMS VINA VISION SYSTEM - " + Path.GetFileName(CurrentJobFilePath);
             SaveJob();
         }
     }

@@ -16,6 +16,9 @@ namespace VisionInspectionApp.UI.ViewModels;
 
 public sealed partial class CalibrationViewModel : ObservableObject
 {
+    [ObservableProperty]
+    private bool _isDirty;
+
     private readonly IConfigService _configService;
     private readonly IJobService _jobService;
     private readonly ConfigStoreOptions _storeOptions;
@@ -76,6 +79,34 @@ public sealed partial class CalibrationViewModel : ObservableObject
     public ICommand OpenJobCommand { get; }
     public ICommand SaveJobCommand { get; }
 
+    public void CloseJob()
+    {
+        _config = null;
+        CurrentJobFilePath = null;
+        CurrentTempWorkingDir = null;
+        ProductCode = string.Empty;
+        OverlayItems.Clear();
+        Measurements.Clear();
+        Image = null;
+        IsDirty = false;
+    }
+
+    partial void OnIsDirtyChanged(bool value)
+    {
+        if (System.Windows.Application.Current?.MainWindow != null)
+        {
+            var title = System.Windows.Application.Current.MainWindow.Title;
+            if (value && !title.EndsWith("*"))
+            {
+                System.Windows.Application.Current.MainWindow.Title = title + "*";
+            }
+            else if (!value && title.EndsWith("*"))
+            {
+                System.Windows.Application.Current.MainWindow.Title = title.TrimEnd('*');
+            }
+        }
+    }
+
     public ICommand SavePixelsPerMmCommand { get; }
 
     public ICommand AddMeasurementCommand { get; }
@@ -98,6 +129,7 @@ public sealed partial class CalibrationViewModel : ObservableObject
             {
                 var cfg = _jobService.LoadJob(dialog.FileName, out var tempDir);
                 CurrentJobFilePath = dialog.FileName;
+                System.Windows.Application.Current.MainWindow.Title = "CMS VINA VISION SYSTEM - " + Path.GetFileName(CurrentJobFilePath);
                 CurrentTempWorkingDir = tempDir;
                 ProductCode = cfg.ProductCode;
                 _config = cfg;
@@ -120,6 +152,7 @@ public sealed partial class CalibrationViewModel : ObservableObject
         try
         {
             _jobService.SaveJob(_config, CurrentTempWorkingDir, CurrentJobFilePath);
+            IsDirty = false;
             System.Windows.MessageBox.Show("Job saved successfully.", "Success", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Information);
         }
         catch (Exception ex)
@@ -243,6 +276,7 @@ public sealed partial class CalibrationViewModel : ObservableObject
         _config.PixelsPerMm = AveragePixelsPerMm;
         _config.ProductCode = ProductCode;
         _jobService.SaveJob(_config, CurrentTempWorkingDir, CurrentJobFilePath ?? "");
+        IsDirty = true;
     }
 
     public sealed record CalibrationMeasurement(double DistancePx, double RealMm, double PixelsPerMm);

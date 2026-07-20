@@ -1,4 +1,6 @@
-﻿using CommunityToolkit.Mvvm.ComponentModel;
+using System.Windows.Input;
+using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
 
 namespace VisionInspectionApp.UI.ViewModels;
 
@@ -22,6 +24,19 @@ public sealed class MainWindowViewModel : ObservableObject
         BatchProcessing = batchProcessing;
         Plc = plc;
         CameraSettings = cameraSettings;
+
+        CloseJobCommand = new RelayCommand(CloseJob);
+    }
+
+    public ICommand CloseJobCommand { get; }
+
+    private void CloseJob()
+    {
+        ToolEditor.CloseJob();
+        Calibration.CloseJob();
+        Inspection.CloseJob();
+        
+        System.Windows.Application.Current.MainWindow.Title = "CMS VINA VISION SYSTEM";
     }
 
 

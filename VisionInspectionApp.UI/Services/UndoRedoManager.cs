@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using CommunityToolkit.Mvvm.ComponentModel;
 
 namespace VisionInspectionApp.UI.Services;
@@ -18,6 +18,8 @@ public sealed class UndoRedoManager : ObservableObject
 
     public bool CanRedo => _redo.Count > 0;
 
+    public event EventHandler ActionExecuted;
+
     public void Execute(IUndoableAction action)
     {
         if (action is null)
@@ -30,6 +32,7 @@ public sealed class UndoRedoManager : ObservableObject
         _redo.Clear();
         OnPropertyChanged(nameof(CanUndo));
         OnPropertyChanged(nameof(CanRedo));
+        ActionExecuted?.Invoke(this, EventArgs.Empty);
     }
 
     public void Undo()
@@ -44,6 +47,7 @@ public sealed class UndoRedoManager : ObservableObject
         _redo.Push(action);
         OnPropertyChanged(nameof(CanUndo));
         OnPropertyChanged(nameof(CanRedo));
+        ActionExecuted?.Invoke(this, EventArgs.Empty);
     }
 
     public void Redo()
@@ -58,6 +62,7 @@ public sealed class UndoRedoManager : ObservableObject
         _undo.Push(action);
         OnPropertyChanged(nameof(CanUndo));
         OnPropertyChanged(nameof(CanRedo));
+        ActionExecuted?.Invoke(this, EventArgs.Empty);
     }
 
     public void Clear()

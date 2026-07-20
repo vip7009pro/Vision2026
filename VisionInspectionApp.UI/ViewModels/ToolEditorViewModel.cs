@@ -24,6 +24,9 @@ namespace VisionInspectionApp.UI.ViewModels
     public sealed partial class ToolEditorViewModel : ObservableObject
     {
         [ObservableProperty]
+        private bool _isDirty;
+
+        [ObservableProperty]
         private string _statusBarText = "Ready.";
         public void ShowPortValueDialog(ToolGraphNodeViewModel node, string portName)
         {
@@ -198,7 +201,9 @@ namespace VisionInspectionApp.UI.ViewModels
                 "CodeDetection"
             };
             Nodes = new ObservableCollection<ToolGraphNodeViewModel>();
+            Nodes.CollectionChanged += (_, _) => IsDirty = true;
             Edges = new ObservableCollection<ToolGraphEdgeViewModel>();
+            Edges.CollectionChanged += (_, _) => IsDirty = true;
             AvailablePreprocessChoices = new ObservableCollection<string>();
             SelectedNodeOverlayItems = new List<OverlayItem>();
             FinalOverlayItems = new List<OverlayItem>();
@@ -578,7 +583,7 @@ namespace VisionInspectionApp.UI.ViewModels
     
             var toolNode = Nodes.FirstOrDefault(n => string.Equals(n.Type, "SurfaceCompare", StringComparison.OrdinalIgnoreCase) && string.Equals(n.RefName, surfaceCompareName, StringComparison.OrdinalIgnoreCase));
             using var processedMat = toolNode != null ? ResolveToolPreprocessForPreview(snap, toolNode) : (_config != null ? _preprocessor.Run(snap, _config.Preprocess) : snap.Clone());
-            var templateDir = Path.Combine(Path.GetFullPath(_storeOptions.ConfigRootDirectory), _config?.ProductCode ?? "", "templates");
+            var templateDir = Path.Combine(CurrentTempWorkingDir ?? Path.Combine(Path.GetFullPath(_storeOptions.ConfigRootDirectory), _config?.ProductCode ?? ""), "templates");
             Directory.CreateDirectory(templateDir);
             var fileName = Path.Combine(templateDir, $"{surfaceCompareName.ToLowerInvariant()}_sc.png");
             var r = new OpenCvSharp.Rect(roi.X, roi.Y, roi.Width, roi.Height).Intersect(new OpenCvSharp.Rect(0, 0, processedMat.Width, processedMat.Height));
@@ -635,7 +640,7 @@ namespace VisionInspectionApp.UI.ViewModels
                 return;
             }
     
-            var templateDir = Path.Combine(Path.GetFullPath(_storeOptions.ConfigRootDirectory), config.ProductCode, "templates");
+            var templateDir = Path.Combine(CurrentTempWorkingDir ?? Path.Combine(Path.GetFullPath(_storeOptions.ConfigRootDirectory), config.ProductCode), "templates");
             void NormalizePoint(PointDefinition p)
             {
                 if (string.IsNullOrWhiteSpace(p.TemplateImageFile))
@@ -683,7 +688,7 @@ namespace VisionInspectionApp.UI.ViewModels
             }
     
             using var rawMat = toolNode != null ? ResolveToolImageForPreview(snap, toolNode) : snap.Clone();
-            var templateDir = Path.Combine(Path.GetFullPath(_storeOptions.ConfigRootDirectory), ProductCode, "templates");
+            var templateDir = Path.Combine(CurrentTempWorkingDir ?? Path.Combine(Path.GetFullPath(_storeOptions.ConfigRootDirectory), ProductCode), "templates");
             Directory.CreateDirectory(templateDir);
             var safeName = name.Trim();
             var fileName = $"{safeName}.png";

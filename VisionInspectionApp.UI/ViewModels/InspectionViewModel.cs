@@ -80,6 +80,8 @@ public sealed partial class InspectionViewModel : ObservableObject
 
         OpenJobCommand = new RelayCommand(OpenJob);
 
+        CloseJobCommand = new RelayCommand(CloseJob);
+
 
 
         AvailableConfigs = new ObservableCollection<string>();
@@ -601,6 +603,28 @@ public sealed partial class InspectionViewModel : ObservableObject
 
     public ICommand OpenJobCommand { get; }
 
+    public ICommand CloseJobCommand { get; }
+
+    public void CloseJob()
+    {
+        _config = null;
+        CurrentJobFilePath = null;
+        CurrentTempWorkingDir = null;
+        ProductCode = string.Empty;
+        OverlayItems.Clear();
+        SpecResults.Clear();
+        CodeDetectionResults.Clear();
+        SurfaceCompareDebugItems.Clear();
+        Image = null;
+        ResultStatusText = "Chờ kiểm tra";
+        ResultBackgroundBrush = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(240, 240, 240));
+        ResultBorderBrush = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(220, 220, 220));
+        ResultForegroundBrush = System.Windows.Media.Brushes.Gray;
+        NgReasonsText = "";
+        IsNg = false;
+        OriginScoreText = "";
+    }
+
     private void OpenJob()
     {
         var dialog = new Microsoft.Win32.OpenFileDialog
@@ -615,6 +639,7 @@ public sealed partial class InspectionViewModel : ObservableObject
             {
                 var cfg = _jobService.LoadJob(dialog.FileName, out var tempDir);
                 CurrentJobFilePath = dialog.FileName;
+                System.Windows.Application.Current.MainWindow.Title = "CMS VINA VISION SYSTEM - " + Path.GetFileName(CurrentJobFilePath);
                 CurrentTempWorkingDir = tempDir;
                 _config = cfg;
                 RefreshOverlayItems();

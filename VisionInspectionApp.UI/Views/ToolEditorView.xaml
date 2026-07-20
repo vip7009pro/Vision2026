@@ -19,6 +19,7 @@
     <UserControl.InputBindings>
         <KeyBinding Key="C" Modifiers="Control" Command="{Binding CopySelectedNodeCommand}" />
         <KeyBinding Key="V" Modifiers="Control" Command="{Binding PasteNodeCommand}" />
+        <KeyBinding Key="S" Modifiers="Control" Command="{Binding SaveJobCommand}" />
         <KeyBinding Key="Delete" Command="{Binding DeleteSelectionCommand}" />
     </UserControl.InputBindings>
 
@@ -37,7 +38,12 @@
             <Button Content="Load Image" Command="{Binding LoadPreviewImageCommand}" Margin="0,0,12,0" />
             <Button Content="{Binding CaptureButtonText}" Command="{Binding CaptureCameraImageCommand}" Margin="0,0,12,0" />
 
-            <Button Content="Run Flow" Command="{Binding RunFlowCommand}" Margin="0,0,12,0" />
+            <Button Command="{Binding RunFlowCommand}" Margin="0,0,12,0" Padding="12,4" Background="#107C10" Foreground="White" BorderThickness="0" ToolTip="Run Flow">
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <TextBlock Text="&#x25B6;" FontFamily="Segoe UI Emoji" FontSize="14" Margin="0,0,6,0" VerticalAlignment="Center"/>
+                    <TextBlock Text="Run Flow" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                </StackPanel>
+            </Button>
 
             <TextBlock Text="Product Code" VerticalAlignment="Center" Margin="0,0,6,0" />
             <TextBox Width="120" Text="{Binding ProductCode, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,12,0" />

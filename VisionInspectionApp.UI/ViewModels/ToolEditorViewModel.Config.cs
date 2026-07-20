@@ -62,6 +62,40 @@ namespace VisionInspectionApp.UI.ViewModels
         public ICommand SaveJobCommand { get; }
         public ICommand SaveJobAsCommand { get; }
     
+        public void CloseJob()
+        {
+            Nodes.Clear();
+            Edges.Clear();
+            _config = null;
+            CurrentJobFilePath = null;
+            CurrentTempWorkingDir = null;
+            ProductCode = string.Empty;
+            _lastRun = null;
+            _lastRunError = null;
+            SelectedNode = null;
+            FinalOverlayItems = new List<OverlayItem>();
+            SelectedNodeOverlayItems = new List<OverlayItem>();
+            SelectedNodePreviewImage = null;
+            FinalPreviewImage = null;
+            IsDirty = false;
+        }
+
+        partial void OnIsDirtyChanged(bool value)
+        {
+            if (System.Windows.Application.Current?.MainWindow != null)
+            {
+                var title = System.Windows.Application.Current.MainWindow.Title;
+                if (value && !title.EndsWith("*"))
+                {
+                    System.Windows.Application.Current.MainWindow.Title = title + "*";
+                }
+                else if (!value && title.EndsWith("*"))
+                {
+                    System.Windows.Application.Current.MainWindow.Title = title.TrimEnd('*');
+                }
+            }
+        }
+    
         private void SyncEdgesToConfig()
         {
             if (_config?.ToolGraph is null)
@@ -121,6 +155,11 @@ namespace VisionInspectionApp.UI.ViewModels
                     SelectedNode = Nodes.Count > 0 ? Nodes[0] : null;
                     RaiseToolPropertyPanelsChanged();
                     RefreshPreviews();
+                    IsDirty = false;
+                    if (System.Windows.Application.Current?.MainWindow != null)
+                    {
+                        System.Windows.Application.Current.MainWindow.Title = "CMS VINA VISION SYSTEM - " + Path.GetFileName(CurrentJobFilePath);
+                    }
                 }
                 catch (Exception ex)
                 {
@@ -155,6 +194,7 @@ namespace VisionInspectionApp.UI.ViewModels
             try
             {
                 _jobService.SaveJob(_config, CurrentTempWorkingDir, CurrentJobFilePath);
+                IsDirty = false;
             }
             catch (Exception ex)
             {
@@ -174,6 +214,12 @@ namespace VisionInspectionApp.UI.ViewModels
             if (dialog.ShowDialog() == true)
             {
                 CurrentJobFilePath = dialog.FileName;
+                System.Windows.Application.Current.MainWindow.Title = "CMS VINA VISION SYSTEM - " + Path.GetFileName(CurrentJobFilePath);
+                if (string.IsNullOrWhiteSpace(CurrentTempWorkingDir))
+                {
+                    CurrentTempWorkingDir = Path.Combine(Path.GetTempPath(), "Vision2026", "Jobs", Guid.NewGuid().ToString());
+                    Directory.CreateDirectory(CurrentTempWorkingDir);
+                }
                 SaveJob();
             }
         }
