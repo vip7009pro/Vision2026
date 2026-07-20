@@ -1434,14 +1434,20 @@ namespace VisionInspectionApp.UI.ViewModels
     
         private void RunFlow()
         {
+            _inspectionService.ResetTracking();
             Mat? snap = null;
             System.Diagnostics.Debug.WriteLine($"RunFlow: Checking for ImageSource nodes. Total nodes: {Nodes.Count}, ImageSources in config: {_config?.ImageSources.Count ?? 0}");
             // Check if there's an ImageSource node and use its image
+            int? imageSourceMs = null;
+            string? imageSourceNodeRefName = null;
+            
             if (_config is not null && _config.ImageSources.Count > 0)
             {
                 var imageSourceNode = Nodes.FirstOrDefault(n => string.Equals(n.Type, "ImageSource", StringComparison.OrdinalIgnoreCase));
                 if (imageSourceNode is not null)
                 {
+                    imageSourceNodeRefName = imageSourceNode.RefName;
+                    var __sw = System.Diagnostics.Stopwatch.StartNew();
                     System.Diagnostics.Debug.WriteLine($"RunFlow: Found ImageSource node: {imageSourceNode.RefName}");
                     var imgSourceDef = _config.ImageSources.FirstOrDefault(x => string.Equals(x.Name, imageSourceNode.RefName, StringComparison.OrdinalIgnoreCase));
                     if (imgSourceDef is not null)
@@ -1463,6 +1469,8 @@ namespace VisionInspectionApp.UI.ViewModels
                     {
                         System.Diagnostics.Debug.WriteLine($"RunFlow: ImageSourceDef not found for RefName: {imageSourceNode.RefName}");
                     }
+                    __sw.Stop();
+                    imageSourceMs = (int)__sw.ElapsedMilliseconds;
                 }
                 else
                 {
@@ -1516,6 +1524,23 @@ namespace VisionInspectionApp.UI.ViewModels
             {
                 _lastRunError = null;
                 _lastRun = _inspectionService.Inspect(snap, _config);
+                if (_lastRun != null)
+                {
+                    if (imageSourceMs.HasValue && !string.IsNullOrWhiteSpace(imageSourceNodeRefName))
+                    {
+                        _lastRun.Timings.NodeTimings[imageSourceNodeRefName] = imageSourceMs.Value;
+                    }
+                    if (_config.PreprocessNodes != null)
+                    {
+                        foreach (var preNode in _config.PreprocessNodes)
+                        {
+                            if (!string.IsNullOrWhiteSpace(preNode.Name))
+                            {
+                                _lastRun.Timings.NodeTimings[preNode.Name] = 0; // Preprocess time is distributed/negligible
+                            }
+                        }
+                    }
+                }
             }
             catch (Exception ex)
             {

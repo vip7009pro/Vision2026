@@ -208,6 +208,8 @@ namespace VisionInspectionApp.UI.ViewModels
             NewGraphCommand = new RelayCommand(NewGraph);
             DeleteSelectedNodeCommand = new RelayCommand(DeleteSelectedNode);
             DeleteSelectedEdgeCommand = new RelayCommand(DeleteSelectedEdge);
+            CopySelectedNodeCommand = new RelayCommand(CopySelectedNode);
+            PasteNodeCommand = new RelayCommand(PasteNode);
             LoadPreviewImageCommand = new RelayCommand(LoadPreviewImage);
             CaptureCameraImageCommand = new AsyncRelayCommand(CaptureCameraImageAsync);
             RunFlowCommand = new RelayCommand(RunFlow);

@@ -170,7 +170,7 @@ public partial class ImageViewerControl : UserControl
                 c.ResetView();
             }
         }
-        c.RedrawOverlays();
+        c.Dispatcher.BeginInvoke(new Action(c.RedrawOverlays), System.Windows.Threading.DispatcherPriority.Render);
         c.UpdateInfoText();
     }
 
@@ -356,7 +356,7 @@ public partial class ImageViewerControl : UserControl
     {
         var c = (ImageViewerControl)d;
         c._activeRoiLabel = e.NewValue as string;
-        c.RedrawOverlays();
+        c.Dispatcher.BeginInvoke(new Action(c.RedrawOverlays), System.Windows.Threading.DispatcherPriority.Render);
     }
 
     public IEnumerable<OverlayItem>? OverlayItems
@@ -372,7 +372,7 @@ public partial class ImageViewerControl : UserControl
         {
             c.PART_FastOverlay.OverlayItems = e.NewValue as IEnumerable<OverlayItem>;
         }
-        c.RedrawOverlays();
+        c.Dispatcher.BeginInvoke(new Action(c.RedrawOverlays), System.Windows.Threading.DispatcherPriority.Render);
     }
 
     private string? FindHoverRoiLabel(BitmapSource bmp, Point contentPos)
@@ -603,6 +603,9 @@ public partial class ImageViewerControl : UserControl
         PART_Image.Height = bmp.Height;
         PART_Overlay.Width = bmp.Width;
         PART_Overlay.Height = bmp.Height;
+        PART_FastOverlay.Width = bmp.Width;
+        PART_FastOverlay.Height = bmp.Height;
+        PART_FastOverlay.InvalidateMeasure();
         PART_FastOverlay.InvalidateVisual();
 
         if (OverlayItems is null)

@@ -1,4 +1,4 @@
-﻿using OpenCvSharp;
+using OpenCvSharp;
 using VisionInspectionApp.Models;
 using VisionInspectionApp.VisionEngine;
 using System.Diagnostics;
@@ -1166,6 +1166,7 @@ public sealed class InspectionService : IInspectionService
                 poseAngleDeg,
                 originMatch.FeaturePoints);
             result.Timings.OriginMs = (int)Math.Max(0, swTotal.ElapsedMilliseconds - tOrigin0);
+            result.Timings.NodeTimings[config.Origin.Name ?? "Origin"] = result.Timings.OriginMs;
 
             var originTeach = new Point2d(config.Origin.WorldPosition.X, config.Origin.WorldPosition.Y);
             var originFound = originMatch.Position;
@@ -1422,6 +1423,8 @@ public sealed class InspectionService : IInspectionService
                     var off = new Point2d(p.OffsetPx.X, p.OffsetPx.Y);
                     var offRot = Rotate(off, new Point2d(0, 0), templateAngleDeg);
                     var pos = new Point2d(basePos.X + offRot.X, basePos.Y + offRot.Y);
+                    __sw.Stop();
+                    result.Timings.NodeTimings[p.Name] = (int)__sw.ElapsedMilliseconds;
                     return new PointMatchResult(p.Name, pos, matchRect, score, thr, pass, 0.0, featurePoints);
                 }))
                 .ToArray();

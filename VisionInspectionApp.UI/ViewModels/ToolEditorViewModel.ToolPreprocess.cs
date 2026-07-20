@@ -41,30 +41,45 @@ namespace VisionInspectionApp.UI.ViewModels
                 return;
             }
     
-            // The graph now uses a single Image input.  Older configurations may still
-            // contain a legacy Preprocess port, so remove both before adding the new edge.
-            for (var i = Edges.Count - 1; i >= 0; i--)
+            // The graph now uses a single Image input.
+            if (string.Equals(value, DefaultPreprocessChoice, StringComparison.OrdinalIgnoreCase) || string.IsNullOrWhiteSpace(value))
             {
-                var e = Edges[i];
-                if (string.Equals(e.ToNodeId, SelectedNode.Id, StringComparison.OrdinalIgnoreCase) && (string.Equals(e.ToPort, "Image", StringComparison.OrdinalIgnoreCase) || string.Equals(e.ToPort, "Preprocess", StringComparison.OrdinalIgnoreCase)))
+                // When selecting "None" (or triggered by UI virtualization pushing null),
+                // only remove edges that come from a Preprocess node. Leave ImageSource edges intact.
+                for (var i = Edges.Count - 1; i >= 0; i--)
                 {
-                    Edges.RemoveAt(i);
+                    var e = Edges[i];
+                    if (string.Equals(e.ToNodeId, SelectedNode.Id, StringComparison.OrdinalIgnoreCase) && (string.Equals(e.ToPort, "Image", StringComparison.OrdinalIgnoreCase) || string.Equals(e.ToPort, "Preprocess", StringComparison.OrdinalIgnoreCase)))
+                    {
+                        var fromNode = Nodes.FirstOrDefault(n => string.Equals(n.Id, e.FromNodeId, StringComparison.OrdinalIgnoreCase));
+                        if (fromNode != null && string.Equals(fromNode.Type, "Preprocess", StringComparison.OrdinalIgnoreCase))
+                        {
+                            Edges.RemoveAt(i);
+                        }
+                    }
                 }
             }
-    
-            if (!string.IsNullOrWhiteSpace(value) && !string.Equals(value, DefaultPreprocessChoice, StringComparison.OrdinalIgnoreCase))
+            else
             {
+                // When selecting a specific Preprocess node, remove ALL existing edges to the Image port to replace it.
+                for (var i = Edges.Count - 1; i >= 0; i--)
+                {
+                    var e = Edges[i];
+                    if (string.Equals(e.ToNodeId, SelectedNode.Id, StringComparison.OrdinalIgnoreCase) && (string.Equals(e.ToPort, "Image", StringComparison.OrdinalIgnoreCase) || string.Equals(e.ToPort, "Preprocess", StringComparison.OrdinalIgnoreCase)))
+                    {
+                        Edges.RemoveAt(i);
+                    }
+                }
+
                 // Find preprocess node by RefName.
                 var from = Nodes.FirstOrDefault(n => string.Equals(n.Type, "Preprocess", StringComparison.OrdinalIgnoreCase) && string.Equals(n.RefName, value, StringComparison.OrdinalIgnoreCase));
                 if (from is not null)
                 {
-                    // Create edge directly; this also syncs to config.
                     from.EnsurePortsInitialized();
-                    CreateEdge(from, SelectedNode, fromPort: from.OutPorts.FirstOrDefault()?.Name ?? "Out", toPort: "Image");
+                    CreateEdge(from, SelectedNode, from.OutPorts.FirstOrDefault()?.Name ?? "Out", "Image");
                 }
             }
     
-            // No connection => fallback to default preprocess.
             SyncEdgesToConfig();
             RefreshPreviews();
             RequestAutoSave();

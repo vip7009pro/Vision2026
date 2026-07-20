@@ -120,6 +120,8 @@ namespace VisionInspectionApp.UI.ViewModels
         private List<OverlayItem> _selectedNodeOverlayItems = new();
         public ICommand DeleteSelectedNodeCommand { get; }
         public ICommand DeleteSelectedEdgeCommand { get; }
+        public ICommand CopySelectedNodeCommand { get; }
+        public ICommand PasteNodeCommand { get; }
     
         public void SelectEdge(ToolGraphEdgeViewModel? edge)
         {
@@ -142,6 +144,98 @@ namespace VisionInspectionApp.UI.ViewModels
             RefreshPreviews();
             RequestAutoSave();
         }
+
+        private string? _copiedNodeRefName;
+        private string? _copiedNodeType;
+
+        private void CopySelectedNode()
+        {
+            if (SelectedNode is null || string.Equals(SelectedNode.Type, "Origin", StringComparison.OrdinalIgnoreCase))
+            {
+                return;
+            }
+            _copiedNodeRefName = SelectedNode.RefName;
+            _copiedNodeType = SelectedNode.Type;
+        }
+
+        private void PasteNode()
+        {
+            if (string.IsNullOrWhiteSpace(_copiedNodeRefName) || string.IsNullOrWhiteSpace(_copiedNodeType) || _config is null)
+            {
+                return;
+            }
+
+            var newName = GenerateDefaultRefName(_copiedNodeType);
+            var sourceNode = Nodes.FirstOrDefault(n => n.RefName == _copiedNodeRefName && n.Type == _copiedNodeType);
+            var canvasX = sourceNode != null ? sourceNode.X + 20 : 100;
+            var canvasY = sourceNode != null ? sourceNode.Y + 20 : 100;
+
+            var newNode = new ToolGraphNodeViewModel
+            {
+                Id = Guid.NewGuid().ToString("N"),
+                Type = _copiedNodeType,
+                RefName = newName,
+                X = canvasX,
+                Y = canvasY
+            };
+            newNode.PropertyChanged += Node_PropertyChanged;
+
+            var options = new System.Text.Json.JsonSerializerOptions();
+            if (_copiedNodeType.Equals("Point", StringComparison.OrdinalIgnoreCase)) CloneDefinition(_config.Points, _copiedNodeRefName, newName, options);
+            else if (_copiedNodeType.Equals("Line", StringComparison.OrdinalIgnoreCase)) CloneDefinition(_config.Lines, _copiedNodeRefName, newName, options);
+            else if (_copiedNodeType.Equals("Caliper", StringComparison.OrdinalIgnoreCase)) CloneDefinition(_config.Calipers, _copiedNodeRefName, newName, options);
+            else if (_copiedNodeType.Equals("Distance", StringComparison.OrdinalIgnoreCase)) CloneDefinition(_config.Distances, _copiedNodeRefName, newName, options);
+            else if (_copiedNodeType.Equals("LineLineDistance", StringComparison.OrdinalIgnoreCase)) CloneDefinition(_config.LineToLineDistances, _copiedNodeRefName, newName, options);
+            else if (_copiedNodeType.Equals("PointLineDistance", StringComparison.OrdinalIgnoreCase)) CloneDefinition(_config.PointToLineDistances, _copiedNodeRefName, newName, options);
+            else if (_copiedNodeType.Equals("Angle", StringComparison.OrdinalIgnoreCase)) CloneDefinition(_config.Angles, _copiedNodeRefName, newName, options);
+            else if (_copiedNodeType.Equals("Condition", StringComparison.OrdinalIgnoreCase)) CloneDefinition(_config.Conditions, _copiedNodeRefName, newName, options);
+            else if (_copiedNodeType.Equals("BlobDetection", StringComparison.OrdinalIgnoreCase)) CloneDefinition(_config.BlobDetections, _copiedNodeRefName, newName, options);
+            else if (_copiedNodeType.Equals("LinePairDetection", StringComparison.OrdinalIgnoreCase)) CloneDefinition(_config.LinePairDetections, _copiedNodeRefName, newName, options);
+            else if (_copiedNodeType.Equals("EdgePair", StringComparison.OrdinalIgnoreCase)) CloneDefinition(_config.EdgePairs, _copiedNodeRefName, newName, options);
+            else if (_copiedNodeType.Equals("EdgePairDetect", StringComparison.OrdinalIgnoreCase)) CloneDefinition(_config.EdgePairDetections, _copiedNodeRefName, newName, options);
+            else if (_copiedNodeType.Equals("CircleFinder", StringComparison.OrdinalIgnoreCase)) CloneDefinition(_config.CircleFinders, _copiedNodeRefName, newName, options);
+            else if (_copiedNodeType.Equals("Diameter", StringComparison.OrdinalIgnoreCase)) CloneDefinition(_config.Diameters, _copiedNodeRefName, newName, options);
+            else if (_copiedNodeType.Equals("CodeDetection", StringComparison.OrdinalIgnoreCase)) CloneDefinition(_config.CodeDetections, _copiedNodeRefName, newName, options);
+            else if (_copiedNodeType.Equals("SurfaceCompare", StringComparison.OrdinalIgnoreCase)) CloneDefinition(_config.SurfaceCompares, _copiedNodeRefName, newName, options);
+            else if (_copiedNodeType.Equals("Text", StringComparison.OrdinalIgnoreCase)) CloneDefinition(_config.TextNodes, _copiedNodeRefName, newName, options);
+            else if (_copiedNodeType.Equals("ImageSource", StringComparison.OrdinalIgnoreCase)) CloneDefinition(_config.ImageSources, _copiedNodeRefName, newName, options);
+            else if (_copiedNodeType.Equals("Preprocess", StringComparison.OrdinalIgnoreCase)) CloneDefinition(_config.PreprocessNodes, _copiedNodeRefName, newName, options);
+            
+            Nodes.Add(newNode);
+            SelectedNode = newNode;
+            RaiseToolPropertyPanelsChanged();
+            RefreshPreviews();
+            RequestAutoSave();
+        }
+
+        private void CloneDefinition<T>(List<T> list, string oldName, string newName, System.Text.Json.JsonSerializerOptions options) where T : class
+        {
+            var def = list.FirstOrDefault(x => {
+                var prop = x.GetType().GetProperty("Name");
+                if (prop != null)
+                {
+                    var val = prop.GetValue(x) as string;
+                    return string.Equals(val, oldName, StringComparison.OrdinalIgnoreCase);
+                }
+                return false;
+            });
+            
+            if (def != null)
+            {
+                var json = System.Text.Json.JsonSerializer.Serialize(def, options);
+                var clone = System.Text.Json.JsonSerializer.Deserialize<T>(json, options);
+                if (clone != null)
+                {
+                    var prop = clone.GetType().GetProperty("Name");
+                    if (prop != null && prop.CanWrite)
+                    {
+                        prop.SetValue(clone, newName);
+                    }
+                    list.Add(clone);
+                }
+            }
+        }
+
     
         public void DeleteEdge(ToolGraphEdgeViewModel edge)
         {
