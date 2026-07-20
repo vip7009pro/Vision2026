@@ -120,6 +120,7 @@ namespace VisionInspectionApp.UI.ViewModels
         private List<OverlayItem> _selectedNodeOverlayItems = new();
         public ICommand DeleteSelectedNodeCommand { get; }
         public ICommand DeleteSelectedEdgeCommand { get; }
+        public ICommand DeleteSelectionCommand { get; }
         public ICommand CopySelectedNodeCommand { get; }
         public ICommand PasteNodeCommand { get; }
     
@@ -127,6 +128,18 @@ namespace VisionInspectionApp.UI.ViewModels
         {
             SelectedNode = null;
             SelectedEdge = edge;
+        }
+        
+        partial void OnSelectedEdgeChanged(ToolGraphEdgeViewModel? oldValue, ToolGraphEdgeViewModel? newValue)
+        {
+            if (oldValue != null)
+            {
+                oldValue.IsSelected = false;
+            }
+            if (newValue != null)
+            {
+                newValue.IsSelected = true;
+            }
         }
     
         private void DeleteSelectedEdge()
@@ -309,6 +322,16 @@ namespace VisionInspectionApp.UI.ViewModels
             }
         }
     
+        private void DeleteSelection()
+        {
+            if (SelectedEdge != null)
+            {
+                DeleteSelectedEdge();
+                return;
+            }
+            DeleteSelectedNode();
+        }
+
         private void DeleteSelectedNode()
         {
             if (SelectedNode is null)

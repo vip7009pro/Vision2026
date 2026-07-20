@@ -1,4 +1,4 @@
-﻿using System.IO;
+using System.IO;
 using System.Collections.ObjectModel;
 using System.Windows.Input;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -25,6 +25,7 @@ public sealed partial class TeachViewModel : ObservableObject
 {
     private readonly IConfigService _configService;
     private readonly ConfigStoreOptions _storeOptions;
+    private readonly IJobService _jobService;
     private readonly ImagePreprocessor _preprocessor;
     private readonly LineDetector _lineDetector;
     private readonly UndoRedoManager _undo;
@@ -32,10 +33,11 @@ public sealed partial class TeachViewModel : ObservableObject
 
     private Mat? _imageMat;
 
-    public TeachViewModel(IConfigService configService, ConfigStoreOptions storeOptions, ImagePreprocessor preprocessor, LineDetector lineDetector, UndoRedoManager undo, SharedImageContext sharedImage)
+    public TeachViewModel(IConfigService configService, ConfigStoreOptions storeOptions, ImagePreprocessor preprocessor, LineDetector lineDetector, UndoRedoManager undo, SharedImageContext sharedImage, IJobService jobService)
     {
         _configService = configService;
         _storeOptions = storeOptions;
+        _jobService = jobService;
         _preprocessor = preprocessor;
         _lineDetector = lineDetector;
         _undo = undo;
@@ -70,10 +72,10 @@ public sealed partial class TeachViewModel : ObservableObject
         DeletePointCommand = new RelayCommand(DeletePoint);
         DeleteLineToolCommand = new RelayCommand(DeleteLineTool);
         DeleteDistanceCommand = new RelayCommand(DeleteDistance);
-        RefreshConfigsCommand = new RelayCommand(RefreshConfigs);
-        LoadConfigCommand = new RelayCommand(LoadConfig);
+        OpenJobCommand = new RelayCommand(OpenJob);
         NewConfigCommand = new RelayCommand(NewConfig);
-        SaveConfigCommand = new RelayCommand(SaveConfig);
+        SaveJobCommand = new RelayCommand(SaveJob);
+        SaveJobAsCommand = new RelayCommand(SaveJobAs);
 
         UndoCommand = new RelayCommand(_undo.Undo, () => _undo.CanUndo);
         RedoCommand = new RelayCommand(_undo.Redo, () => _undo.CanRedo);
@@ -89,14 +91,18 @@ public sealed partial class TeachViewModel : ObservableObject
         };
 
         RefreshLinesFromConfig();
-
-        RefreshConfigs();
     }
 
     public VisionConfig VisionConfig { get; }
 
     [ObservableProperty]
     private string _productCode = "ProductA";
+
+    [ObservableProperty]
+    private string? _currentJobFilePath;
+
+    [ObservableProperty]
+    private string? _currentTempWorkingDir;
 
     public ObservableCollection<string> AvailableConfigs { get; }
 
@@ -608,7 +614,7 @@ public sealed partial class TeachViewModel : ObservableObject
 
     public ICommand LoadImageCommand { get; }
 
-    public ICommand RefreshConfigsCommand { get; }
+    public ICommand OpenJobCommand { get; }
 
     public ICommand LoadConfigCommand { get; }
 
@@ -644,54 +650,40 @@ public sealed partial class TeachViewModel : ObservableObject
 
     public ICommand DeleteDistanceCommand { get; }
 
-    public ICommand SaveConfigCommand { get; }
+    public ICommand SaveJobCommand { get; }
+    
+    public ICommand SaveJobAsCommand { get; }
 
     public ICommand UndoCommand { get; }
 
     public ICommand RedoCommand { get; }
 
-    private void RefreshConfigs()
+    private void OpenJob()
     {
-        AvailableConfigs.Clear();
-
-        var root = Path.GetFullPath(_storeOptions.ConfigRootDirectory);
-        if (!Directory.Exists(root))
+        var dialog = new Microsoft.Win32.OpenFileDialog
         {
-            Directory.CreateDirectory(root);
-        }
+            Filter = "Job Files (*.job)|*.job|All Files (*.*)|*.*",
+            Title = "Open Vision Job"
+        };
 
-        foreach (var file in Directory.EnumerateFiles(root, "*.json", SearchOption.TopDirectoryOnly))
+        if (dialog.ShowDialog() == true)
         {
-            var name = Path.GetFileNameWithoutExtension(file);
-            if (!string.IsNullOrWhiteSpace(name))
+            try
             {
-                AvailableConfigs.Add(name);
+                var cfg = _jobService.LoadJob(dialog.FileName, out var tempDir);
+                CurrentJobFilePath = dialog.FileName;
+                CurrentTempWorkingDir = tempDir;
+                ProductCode = cfg.ProductCode;
+                ApplyConfig(cfg);
+                RaisePreprocessPropertiesChanged();
+                RefreshDisplayedImage();
+                RefreshOverlayItems();
+            }
+            catch (Exception ex)
+            {
+                System.Windows.MessageBox.Show($"Failed to open job: {ex.Message}", "Error", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Error);
             }
         }
-
-        if (!string.IsNullOrWhiteSpace(ProductCode) && AvailableConfigs.Contains(ProductCode))
-        {
-            SelectedConfig = ProductCode;
-        }
-        else if (AvailableConfigs.Count > 0)
-        {
-            SelectedConfig ??= AvailableConfigs[0];
-        }
-    }
-
-    private void LoadConfig()
-    {
-        var code = SelectedConfig;
-        if (string.IsNullOrWhiteSpace(code))
-        {
-            return;
-        }
-
-        var cfg = _configService.LoadConfig(code);
-        ApplyConfig(cfg);
-        RaisePreprocessPropertiesChanged();
-        RefreshDisplayedImage();
-        RefreshOverlayItems();
     }
 
     private void OnRoiEdited(RoiSelection? sel)
@@ -2050,13 +2042,40 @@ public sealed partial class TeachViewModel : ObservableObject
             }));
     }
 
-    private void SaveConfig()
+    private void SaveJob()
     {
+        if (string.IsNullOrWhiteSpace(CurrentJobFilePath))
+        {
+            SaveJobAs();
+            return;
+        }
+
         VisionConfig.ProductCode = ProductCode;
         VisionConfig.Origin.Name = string.IsNullOrWhiteSpace(VisionConfig.Origin.Name) ? "Origin" : VisionConfig.Origin.Name;
-        _configService.SaveConfig(VisionConfig);
 
-        RefreshConfigs();
+        try
+        {
+            _jobService.SaveJob(VisionConfig, CurrentTempWorkingDir ?? string.Empty, CurrentJobFilePath);
+        }
+        catch (Exception ex)
+        {
+            System.Windows.MessageBox.Show($"Failed to save job: {ex.Message}", "Error", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Error);
+        }
+    }
+
+    private void SaveJobAs()
+    {
+        var dialog = new Microsoft.Win32.SaveFileDialog
+        {
+            Filter = "Job Files (*.job)|*.job|All Files (*.*)|*.*",
+            Title = "Save Vision Job As"
+        };
+
+        if (dialog.ShowDialog() == true)
+        {
+            CurrentJobFilePath = dialog.FileName;
+            SaveJob();
+        }
     }
 
     private void RaisePreprocessPropertiesChanged()

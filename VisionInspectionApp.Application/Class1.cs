@@ -374,7 +374,13 @@ public sealed class InspectionService : IInspectionService
                         }
                     }
 
+                    var __sw = Stopwatch.StartNew();
                     var m = _preprocessor.Run(baseMat, settings);
+                    __sw.Stop();
+                    if (!string.IsNullOrWhiteSpace(node.RefName))
+                    {
+                        result.Timings.NodeTimings[node.RefName] = (int)__sw.ElapsedMilliseconds;
+                    }
                     lock (matsLock) matsToDispose.Add(m);
                     return m;
                 });
@@ -1461,6 +1467,8 @@ public sealed class InspectionService : IInspectionService
                     }
 
                     var blobs = DetectBlobs(matForBlob, roi, rois, b.Polarity, b.Threshold, b.MinBlobArea, b.MaxBlobArea);
+                    __sw.Stop();
+                    result.Timings.NodeTimings[b.Name] = (int)__sw.ElapsedMilliseconds;
                     return new BlobDetectionResult(b.Name, blobs.Count, blobs);
                 }))
                 .ToArray();

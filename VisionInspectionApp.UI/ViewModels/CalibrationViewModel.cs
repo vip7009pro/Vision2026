@@ -1,4 +1,4 @@
-﻿using System.Collections.ObjectModel;
+using System.Collections.ObjectModel;
 using System.IO;
 using System.Windows.Input;
 using System.Windows.Media;
@@ -17,55 +17,38 @@ namespace VisionInspectionApp.UI.ViewModels;
 public sealed partial class CalibrationViewModel : ObservableObject
 {
     private readonly IConfigService _configService;
+    private readonly IJobService _jobService;
     private readonly ConfigStoreOptions _storeOptions;
     private readonly CameraService _cameraService;
 
     private Mat? _imageMat;
     private VisionConfig? _config;
 
-    public CalibrationViewModel(IConfigService configService, ConfigStoreOptions storeOptions, CameraService cameraService)
+    public CalibrationViewModel(IConfigService configService, ConfigStoreOptions storeOptions, CameraService cameraService, IJobService jobService)
     {
         _configService = configService;
+        _jobService = jobService;
         _storeOptions = storeOptions;
         _cameraService = cameraService;
 
         OverlayItems = new ObservableCollection<OverlayItem>();
         Measurements = new ObservableCollection<CalibrationMeasurement>();
-        AvailableConfigs = new ObservableCollection<string>();
 
         LoadImageCommand = new RelayCommand(LoadImage);
         CaptureCameraImageCommand = new AsyncRelayCommand(CaptureCameraImageAsync);
-        RefreshConfigsCommand = new RelayCommand(RefreshConfigs);
-        LoadConfigCommand = new RelayCommand(LoadConfig);
+        OpenJobCommand = new RelayCommand(OpenJob);
+        SaveJobCommand = new RelayCommand(SaveJob);
         SavePixelsPerMmCommand = new RelayCommand(SavePixelsPerMm);
         AddMeasurementCommand = new RelayCommand(AddMeasurement);
         ClearMeasurementsCommand = new RelayCommand(ClearMeasurements);
         LineSelectedCommand = new RelayCommand<LineSelection?>(OnLineSelected);
-
-        RefreshConfigs();
     }
-
-    public ObservableCollection<string> AvailableConfigs { get; }
 
     [ObservableProperty]
-    private string? _selectedConfig;
+    private string? _currentJobFilePath;
 
-    partial void OnSelectedConfigChanged(string? value)
-    {
-        if (!string.IsNullOrWhiteSpace(value))
-        {
-            ProductCode = value;
-            LoadConfig();
-        }
-        else
-        {
-            _config = null;
-            ProductCode = "";
-            OverlayItems.Clear();
-            Measurements.Clear();
-            Image = null;
-        }
-    }
+    [ObservableProperty]
+    private string? _currentTempWorkingDir;
 
     [ObservableProperty]
     private string _productCode = "";
@@ -90,9 +73,8 @@ public sealed partial class CalibrationViewModel : ObservableObject
 
     public ICommand CaptureCameraImageCommand { get; }
 
-    public ICommand RefreshConfigsCommand { get; }
-
-    public ICommand LoadConfigCommand { get; }
+    public ICommand OpenJobCommand { get; }
+    public ICommand SaveJobCommand { get; }
 
     public ICommand SavePixelsPerMmCommand { get; }
 
@@ -102,44 +84,48 @@ public sealed partial class CalibrationViewModel : ObservableObject
 
     public ICommand LineSelectedCommand { get; }
 
-    private void RefreshConfigs()
+    private void OpenJob()
     {
-        AvailableConfigs.Clear();
-
-        var root = Path.GetFullPath(_storeOptions.ConfigRootDirectory);
-        if (!Directory.Exists(root))
+        var dialog = new Microsoft.Win32.OpenFileDialog
         {
-            Directory.CreateDirectory(root);
-        }
+            Filter = "Job Files (*.job)|*.job|All Files (*.*)|*.*",
+            Title = "Open Vision Job"
+        };
 
-        foreach (var file in Directory.EnumerateFiles(root, "*.json", SearchOption.TopDirectoryOnly))
+        if (dialog.ShowDialog() == true)
         {
-            var name = Path.GetFileNameWithoutExtension(file);
-            if (!string.IsNullOrWhiteSpace(name))
+            try
             {
-                AvailableConfigs.Add(name);
+                var cfg = _jobService.LoadJob(dialog.FileName, out var tempDir);
+                CurrentJobFilePath = dialog.FileName;
+                CurrentTempWorkingDir = tempDir;
+                ProductCode = cfg.ProductCode;
+                _config = cfg;
+                OverlayItems.Clear();
+                Measurements.Clear();
+                Image = null;
+            }
+            catch (Exception ex)
+            {
+                System.Windows.MessageBox.Show($"Failed to open job: {ex.Message}", "Error", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Error);
             }
         }
-
-        SelectedConfig = null;
-        ProductCode = "";
-        _config = null;
-        OverlayItems.Clear();
-        Measurements.Clear();
-        Image = null;
     }
 
-    private void LoadConfig()
+    private void SaveJob()
     {
-        var code = SelectedConfig ?? ProductCode;
-        if (string.IsNullOrWhiteSpace(code))
-        {
+        if (string.IsNullOrEmpty(CurrentJobFilePath) || string.IsNullOrEmpty(CurrentTempWorkingDir) || _config == null)
             return;
-        }
 
-        _config = _configService.LoadConfig(code);
-        ProductCode = _config.ProductCode;
-        AveragePixelsPerMm = _config.PixelsPerMm;
+        try
+        {
+            _jobService.SaveJob(_config, CurrentTempWorkingDir, CurrentJobFilePath);
+            System.Windows.MessageBox.Show("Job saved successfully.", "Success", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Information);
+        }
+        catch (Exception ex)
+        {
+            System.Windows.MessageBox.Show($"Failed to save job: {ex.Message}", "Error", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Error);
+        }
     }
 
     private void LoadImage()
@@ -248,18 +234,15 @@ public sealed partial class CalibrationViewModel : ObservableObject
 
     private void SavePixelsPerMm()
     {
-        var code = SelectedConfig ?? ProductCode;
-        if (string.IsNullOrWhiteSpace(code))
+        var code = ProductCode;
+        if (string.IsNullOrWhiteSpace(code) || _config == null || string.IsNullOrEmpty(CurrentTempWorkingDir))
         {
             return;
         }
 
-        _config ??= _configService.LoadConfig(code);
         _config.PixelsPerMm = AveragePixelsPerMm;
         _config.ProductCode = ProductCode;
-        _configService.SaveConfig(_config);
-
-        RefreshConfigs();
+        _jobService.SaveJob(_config, CurrentTempWorkingDir, CurrentJobFilePath ?? "");
     }
 
     public sealed record CalibrationMeasurement(double DistancePx, double RealMm, double PixelsPerMm);

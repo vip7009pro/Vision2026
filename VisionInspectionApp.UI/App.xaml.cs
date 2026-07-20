@@ -1,4 +1,4 @@
-﻿using System.Configuration;
+using System.Configuration;
 using System.Data;
 using System.Globalization;
 using System.Threading;
@@ -37,6 +37,7 @@ public partial class App : System.Windows.Application
             {
                 services.AddSingleton(new ConfigStoreOptions { ConfigRootDirectory = "configs" });
                 services.AddSingleton<IConfigService, JsonConfigService>();
+                services.AddSingleton<IJobService, JobService>();
 
                 services.AddSingleton<ImagePreprocessor>();
                 services.AddSingleton<PatternMatcher>();

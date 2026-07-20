@@ -145,8 +145,10 @@ namespace VisionInspectionApp.UI.ViewModels
         private bool _syncingInputs;
         [ObservableProperty]
         private double _canvasZoom = 1.0;
-        public ToolEditorViewModel(IConfigService configService, ConfigStoreOptions storeOptions, SharedImageContext sharedImage, ImagePreprocessor preprocessor, LineDetector lineDetector, IInspectionService inspectionService, CameraService cameraService)
+        private readonly IJobService _jobService;
+        public ToolEditorViewModel(IConfigService configService, ConfigStoreOptions storeOptions, SharedImageContext sharedImage, ImagePreprocessor preprocessor, LineDetector lineDetector, IInspectionService inspectionService, CameraService cameraService, IJobService jobService)
         {
+            _jobService = jobService;
             _configService = configService;
             _storeOptions = storeOptions;
             _sharedImage = sharedImage;
@@ -173,7 +175,6 @@ namespace VisionInspectionApp.UI.ViewModels
                 Interval = TimeSpan.FromMilliseconds(150)
             };
             _blobThresholdPreviewTimer.Tick += (_, __) => UpdateBlobThresholdPreviewFromSnapshot();
-            AvailableConfigs = new ObservableCollection<string>();
             ToolboxItems = new ObservableCollection<string>
             {
                 "ImageSource",
@@ -202,12 +203,13 @@ namespace VisionInspectionApp.UI.ViewModels
             SelectedNodeOverlayItems = new List<OverlayItem>();
             FinalOverlayItems = new List<OverlayItem>();
             TextNode_ConditionRows = new ObservableCollection<TextColorConditionRow>();
-            RefreshConfigsCommand = new RelayCommand(RefreshConfigs);
-            LoadConfigCommand = new RelayCommand(LoadConfig);
-            SaveConfigCommand = new RelayCommand(SaveConfig);
+            OpenJobCommand = new RelayCommand(OpenJob);
+            SaveJobCommand = new RelayCommand(SaveJob);
+            SaveJobAsCommand = new RelayCommand(SaveJobAs);
             NewGraphCommand = new RelayCommand(NewGraph);
             DeleteSelectedNodeCommand = new RelayCommand(DeleteSelectedNode);
             DeleteSelectedEdgeCommand = new RelayCommand(DeleteSelectedEdge);
+            DeleteSelectionCommand = new RelayCommand(DeleteSelection);
             CopySelectedNodeCommand = new RelayCommand(CopySelectedNode);
             PasteNodeCommand = new RelayCommand(PasteNode);
             LoadPreviewImageCommand = new RelayCommand(LoadPreviewImage);
@@ -234,7 +236,6 @@ namespace VisionInspectionApp.UI.ViewModels
                 }));
             };
             _cameraService.FrameCaptured += OnCameraFrameCaptured;
-            RefreshConfigs();
         }
     
         public IlluminationCorrectionPreset IlluminationCorrection
@@ -2141,7 +2142,8 @@ namespace VisionInspectionApp.UI.ViewModels
                 ProductCode = "NewProduct"
             };
             ProductCode = "NewProduct";
-            SelectedConfig = null;
+            CurrentJobFilePath = null;
+            CurrentTempWorkingDir = null;
             RefreshPreviews();
         }
     

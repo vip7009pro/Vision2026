@@ -42,6 +42,8 @@ public sealed partial class InspectionViewModel : ObservableObject
 
     private readonly CameraService _cameraService;
 
+    private readonly IJobService _jobService;
+
 
 
     private bool _isRunning;
@@ -56,7 +58,7 @@ public sealed partial class InspectionViewModel : ObservableObject
 
 
 
-    public InspectionViewModel(IConfigService configService, IInspectionService inspectionService, ConfigStoreOptions storeOptions, CameraService cameraService)
+    public InspectionViewModel(IConfigService configService, IInspectionService inspectionService, ConfigStoreOptions storeOptions, CameraService cameraService, IJobService jobService)
 
     {
 
@@ -68,18 +70,15 @@ public sealed partial class InspectionViewModel : ObservableObject
 
         _cameraService = cameraService;
 
+        _jobService = jobService;
+
 
 
         LoadImageCommand = new RelayCommand(LoadImage);
 
-        CaptureCameraImageCommand = new AsyncRelayCommand(CaptureCameraImageAsync);
-
         RunInspectionCommand = new AsyncRelayCommand(RunInspectionAsync);
 
-        LoadConfigCommand = new RelayCommand(LoadConfig);
-
-        RefreshConfigsCommand = new RelayCommand(RefreshConfigs);
-
+        OpenJobCommand = new RelayCommand(OpenJob);
 
 
 
@@ -88,10 +87,6 @@ public sealed partial class InspectionViewModel : ObservableObject
         SpecResults = new ObservableCollection<SpecResultRow>();
 
         SurfaceCompareDebugItems = new ObservableCollection<SurfaceCompareDebugPick>();
-
-
-
-        RefreshConfigs();
 
     }
 
@@ -136,6 +131,18 @@ public sealed partial class InspectionViewModel : ObservableObject
 
 
     public ObservableCollection<string> AvailableConfigs { get; }
+
+
+
+    [ObservableProperty]
+
+    private string? _currentJobFilePath;
+
+
+
+    [ObservableProperty]
+
+    private string? _currentTempWorkingDir;
 
 
 
@@ -592,6 +599,35 @@ public sealed partial class InspectionViewModel : ObservableObject
 
 
 
+    public ICommand OpenJobCommand { get; }
+
+    private void OpenJob()
+    {
+        var dialog = new Microsoft.Win32.OpenFileDialog
+        {
+            Filter = "Job Files (*.job)|*.job|All Files (*.*)|*.*",
+            Title = "Open Vision Job"
+        };
+
+        if (dialog.ShowDialog() == true)
+        {
+            try
+            {
+                var cfg = _jobService.LoadJob(dialog.FileName, out var tempDir);
+                CurrentJobFilePath = dialog.FileName;
+                CurrentTempWorkingDir = tempDir;
+                _config = cfg;
+                RefreshOverlayItems();
+            }
+            catch (Exception ex)
+            {
+                System.Windows.MessageBox.Show($"Failed to open job: {ex.Message}", "Error", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Error);
+            }
+        }
+    }
+
+
+
     public ICommand RefreshConfigsCommand { get; }
 
 
@@ -804,71 +840,6 @@ public sealed partial class InspectionViewModel : ObservableObject
 
     }
 
-
-
-    private void RefreshConfigs()
-
-    {
-
-        AvailableConfigs.Clear();
-
-
-
-        var root = Path.GetFullPath(_storeOptions.ConfigRootDirectory);
-
-        if (!Directory.Exists(root))
-
-        {
-
-            Directory.CreateDirectory(root);
-
-        }
-
-
-
-        foreach (var file in Directory.EnumerateFiles(root, "*.json", SearchOption.TopDirectoryOnly))
-
-        {
-
-            var name = Path.GetFileNameWithoutExtension(file);
-
-            if (!string.IsNullOrWhiteSpace(name))
-
-            {
-
-                AvailableConfigs.Add(name);
-
-            }
-
-        }
-
-
-
-        SelectedConfig = null;
-
-        ProductCode = "";
-
-        _config = null;
-
-        OverlayItems.Clear();
-
-        SpecResults.Clear();
-
-        Image = null;
-
-        ResultStatusText = "Chờ kiểm tra";
-
-        ResultBackgroundBrush = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(240, 240, 240));
-
-        ResultBorderBrush = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(220, 220, 220));
-
-        ResultForegroundBrush = System.Windows.Media.Brushes.Gray;
-
-        NgReasonsText = "";
-
-        IsNg = false;
-
-    }
 
 
 

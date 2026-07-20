@@ -19,6 +19,7 @@ using VisionInspectionApp.Models;
 using VisionInspectionApp.UI.Controls;
 using VisionInspectionApp.UI.Services;
 using VisionInspectionApp.VisionEngine;
+
 namespace VisionInspectionApp.UI.ViewModels
 {
     public sealed partial class ToolEditorViewModel : ObservableObject
@@ -44,38 +45,22 @@ namespace VisionInspectionApp.UI.ViewModels
                 return;
             }
     
-            if (string.IsNullOrWhiteSpace(ProductCode))
+            if (!string.IsNullOrWhiteSpace(CurrentJobFilePath) && !string.IsNullOrWhiteSpace(CurrentTempWorkingDir))
             {
-                return;
+                SyncToolGraphToConfig();
+                _jobService.SaveJob(_config, CurrentTempWorkingDir, CurrentJobFilePath);
             }
-    
-            _config.ProductCode = ProductCode;
-            _configService.SaveConfig(_config);
-            EnsureTemplatePathsAbsolute(_config);
         }
-    
-        public ObservableCollection<string> AvailableConfigs { get; }
     
         [ObservableProperty]
-        private string? _selectedConfig;
-        partial void OnSelectedConfigChanged(string? value)
-        {
-            if (!string.IsNullOrWhiteSpace(value))
-            {
-                ProductCode = value;
-                LoadConfig(); // Auto-load when config is selected
-            }
-            else
-            {
-                ClearActiveGraph();
-            }
-    
-            RefreshPreviews();
-        }
-    
-        public ICommand RefreshConfigsCommand { get; }
-        public ICommand LoadConfigCommand { get; }
-        public ICommand SaveConfigCommand { get; }
+        private string? _currentJobFilePath;
+
+        [ObservableProperty]
+        private string? _currentTempWorkingDir;
+
+        public ICommand OpenJobCommand { get; }
+        public ICommand SaveJobCommand { get; }
+        public ICommand SaveJobAsCommand { get; }
     
         private void SyncEdgesToConfig()
         {
@@ -87,107 +72,110 @@ namespace VisionInspectionApp.UI.ViewModels
             _config.ToolGraph.Edges = Edges.Select(e => new ToolGraphEdge { FromNodeId = e.FromNodeId, ToNodeId = e.ToNodeId, FromPort = e.FromPort, ToPort = e.ToPort }).ToList();
         }
     
-        private void RefreshConfigs()
+        private void OpenJob()
         {
-            AvailableConfigs.Clear();
-            try
+            var dialog = new OpenFileDialog
             {
-                var configRoot = _storeOptions.ConfigRootDirectory;
-                if (Directory.Exists(configRoot))
-                {
-                    foreach (var file in Directory.EnumerateFiles(configRoot, "*.json"))
-                    {
-                        var productCode = Path.GetFileNameWithoutExtension(file);
-                        if (!string.IsNullOrEmpty(productCode))
-                        {
-                            AvailableConfigs.Add(productCode);
-                        }
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                System.Diagnostics.Debug.WriteLine($"Lß╗ùi load config: {ex.Message}");
-            }
-    
-            // ?m b?o ban d?u khng ch?n b?t k? c?u hnh no (t?t c? r?ng)
-            SelectedConfig = null;
-            ProductCode = "";
-            ClearActiveGraph();
-        }
-    
-        private void LoadConfig()
-        {
-            var code = SelectedConfig ?? ProductCode;
-            if (string.IsNullOrWhiteSpace(code))
-            {
-                ClearActiveGraph();
-                return;
-            }
-    
-            // D?n s?ch c?u hnh cu kh?i b? nh? tru?c khi n?p c?u hnh m?i
-            ClearActiveGraph();
-            try
-            {
-                _config = _configService.LoadConfig(code);
-                ProductCode = _config.ProductCode;
-                Nodes.Clear();
-                Edges.Clear();
-                foreach (var n in _config.ToolGraph.Nodes)
-                {
-                    var vm = new ToolGraphNodeViewModel
-                    {
-                        Id = n.Id,
-                        Type = n.Type,
-                        RefName = n.RefName,
-                        X = n.X,
-                        Y = n.Y,
-                        InputCount = n.InputCount
-                    };
-                    vm.PropertyChanged += Node_PropertyChanged;
-                    Nodes.Add(vm);
-                }
-    
-                foreach (var e in _config.ToolGraph.Edges)
-                {
-                    var from = Nodes.FirstOrDefault(x => string.Equals(x.Id, e.FromNodeId, StringComparison.OrdinalIgnoreCase));
-                    var to = Nodes.FirstOrDefault(x => string.Equals(x.Id, e.ToNodeId, StringComparison.OrdinalIgnoreCase));
-                    if (from is null || to is null)
-                    {
-                        continue;
-                    }
-    
-                    Edges.Add(new ToolGraphEdgeViewModel(from, to, e.FromPort, e.ToPort));
-                }
-    
-                SelectedNode = Nodes.Count > 0 ? Nodes[0] : null;
-                RaiseToolPropertyPanelsChanged();
-                RefreshPreviews();
-            }
-            catch (Exception ex)
-            {
-                System.Diagnostics.Debug.WriteLine($"Lß╗ùi load config: {ex.Message}");
-                ClearActiveGraph();
-            }
-        }
-    
-        private void SaveConfig()
-        {
-            var code = SelectedConfig ?? ProductCode;
-            if (string.IsNullOrWhiteSpace(code))
-            {
-                return;
-            }
-    
-            // Brand-new products may not have a json yet.
-            _config ??= new VisionConfig
-            {
-                ProductCode = code
+                Filter = "Job Files (*.job)|*.job|All Files (*.*)|*.*",
+                Title = "Open Vision Job"
             };
+
+            if (dialog.ShowDialog() == true)
+            {
+                ClearActiveGraph();
+                try
+                {
+                    _config = _jobService.LoadJob(dialog.FileName, out var tempDir);
+                    CurrentJobFilePath = dialog.FileName;
+                    CurrentTempWorkingDir = tempDir;
+                    ProductCode = _config.ProductCode;
+                    Nodes.Clear();
+                    Edges.Clear();
+                    foreach (var n in _config.ToolGraph.Nodes)
+                    {
+                        var vm = new ToolGraphNodeViewModel
+                        {
+                            Id = n.Id,
+                            Type = n.Type,
+                            RefName = n.RefName,
+                            X = n.X,
+                            Y = n.Y,
+                            InputCount = n.InputCount
+                        };
+                        vm.PropertyChanged += Node_PropertyChanged;
+                        Nodes.Add(vm);
+                    }
+        
+                    foreach (var e in _config.ToolGraph.Edges)
+                    {
+                        var from = Nodes.FirstOrDefault(x => string.Equals(x.Id, e.FromNodeId, StringComparison.OrdinalIgnoreCase));
+                        var to = Nodes.FirstOrDefault(x => string.Equals(x.Id, e.ToNodeId, StringComparison.OrdinalIgnoreCase));
+                        if (from is null || to is null)
+                        {
+                            continue;
+                        }
+        
+                        Edges.Add(new ToolGraphEdgeViewModel(from, to, e.FromPort, e.ToPort));
+                    }
+        
+                    SelectedNode = Nodes.Count > 0 ? Nodes[0] : null;
+                    RaiseToolPropertyPanelsChanged();
+                    RefreshPreviews();
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show($"Failed to load job: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                    ClearActiveGraph();
+                }
+            }
+        }
+    
+        private void SaveJob()
+        {
+            if (string.IsNullOrWhiteSpace(CurrentJobFilePath))
+            {
+                SaveJobAs();
+                return;
+            }
+
+            if (_config is null)
+            {
+                _config = new VisionConfig { ProductCode = ProductCode };
+            }
+
+            if (string.IsNullOrWhiteSpace(CurrentTempWorkingDir))
+            {
+                CurrentTempWorkingDir = Path.Combine(Path.GetTempPath(), "Vision2026", "Jobs", Guid.NewGuid().ToString());
+                Directory.CreateDirectory(CurrentTempWorkingDir);
+            }
+
             _config.ProductCode = ProductCode;
             SyncToolGraphToConfig();
-            _configService.SaveConfig(_config);
+            
+            try
+            {
+                _jobService.SaveJob(_config, CurrentTempWorkingDir, CurrentJobFilePath);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Failed to save job: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
             RefreshPreviews();
+        }
+
+        private void SaveJobAs()
+        {
+            var dialog = new SaveFileDialog
+            {
+                Filter = "Job Files (*.job)|*.job|All Files (*.*)|*.*",
+                Title = "Save Vision Job As"
+            };
+
+            if (dialog.ShowDialog() == true)
+            {
+                CurrentJobFilePath = dialog.FileName;
+                SaveJob();
+            }
         }
     
         private void SyncToolGraphToConfig()
@@ -197,7 +185,6 @@ namespace VisionInspectionApp.UI.ViewModels
                 return;
             }
     
-            // D?n d?p cc config m? ci (khng cn node tuong ?ng trong graph)
             var validRefNames = new HashSet<string>(Nodes.Select(n => n.RefName).Where(x => !string.IsNullOrWhiteSpace(x)), StringComparer.OrdinalIgnoreCase);
             _config.PreprocessNodes.RemoveAll(x => !validRefNames.Contains(x.Name));
             _config.Points.RemoveAll(x => !validRefNames.Contains(x.Name));

@@ -6,7 +6,8 @@
              xmlns:controls="clr-namespace:VisionInspectionApp.UI.Controls"
              xmlns:models="clr-namespace:VisionInspectionApp.Models;assembly=VisionInspectionApp.Models"
              xmlns:converters="clr-namespace:VisionInspectionApp.UI.Converters"
-             mc:Ignorable="d">
+             mc:Ignorable="d"
+             Focusable="True">
 
     <UserControl.Resources>
         <BooleanToVisibilityConverter x:Key="BoolToVis" />
@@ -18,6 +19,7 @@
     <UserControl.InputBindings>
         <KeyBinding Key="C" Modifiers="Control" Command="{Binding CopySelectedNodeCommand}" />
         <KeyBinding Key="V" Modifiers="Control" Command="{Binding PasteNodeCommand}" />
+        <KeyBinding Key="Delete" Command="{Binding DeleteSelectionCommand}" />
     </UserControl.InputBindings>
 
     <Grid Margin="8">
@@ -28,10 +30,8 @@
         </Grid.RowDefinitions>
 
         <DockPanel Grid.Row="0" LastChildFill="False">
-            <TextBlock Text="Config" VerticalAlignment="Center" Margin="0,0,6,0" />
-            <ComboBox Width="160" ItemsSource="{Binding AvailableConfigs}" SelectedItem="{Binding SelectedConfig}" Margin="0,0,6,0" />
-            <Button Content="Refresh" Command="{Binding RefreshConfigsCommand}" Margin="0,0,6,0" />
-            <Button Content="Load" Command="{Binding LoadConfigCommand}" Margin="0,0,6,0" />
+            <TextBlock Text="Job File" VerticalAlignment="Center" Margin="0,0,6,0" />
+            <Button Content="Open Job" Command="{Binding OpenJobCommand}" Margin="0,0,6,0" />
             <Button Content="New Graph" Command="{Binding NewGraphCommand}" Margin="0,0,12,0" />
 
             <Button Content="Load Image" Command="{Binding LoadPreviewImageCommand}" Margin="0,0,12,0" />
@@ -42,7 +42,8 @@
             <TextBlock Text="Product Code" VerticalAlignment="Center" Margin="0,0,6,0" />
             <TextBox Width="120" Text="{Binding ProductCode, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,12,0" />
 
-            <Button Content="Save" Command="{Binding SaveConfigCommand}" />
+            <Button Content="Save Job" Command="{Binding SaveJobCommand}" Margin="0,0,6,0" />
+            <Button Content="Save As" Command="{Binding SaveJobAsCommand}" />
         </DockPanel>
 
         <Grid Grid.Row="1">
@@ -1806,8 +1807,19 @@
                                 </ItemsControl.ItemsPanel>
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate>
-                                        <Path Data="{Binding PathData}" Stroke="#2E7DFF" StrokeThickness="2"
-                                              MouseLeftButtonDown="Edge_MouseLeftButtonDown" />
+                                        <Path Data="{Binding PathData}" StrokeThickness="3"
+                                              MouseLeftButtonDown="Edge_MouseLeftButtonDown">
+                                            <Path.Style>
+                                                <Style TargetType="Path">
+                                                    <Setter Property="Stroke" Value="#2E7DFF" />
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding IsSelected}" Value="True">
+                                                            <Setter Property="Stroke" Value="#FF9800" />
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </Path.Style>
+                                        </Path>
                                     </DataTemplate>
                                 </ItemsControl.ItemTemplate>
                             </ItemsControl>
