@@ -23,5 +23,7 @@ Lộ trình tích hợp tính năng Chụp ảnh từ camera và hỗ trợ các
 - [x] Task 16: Nâng cấp UI Tab Tool Editor (Thêm icon List Tool, đưa Global Pre-processor ra dialog riêng, format gọn Properties Panel).
 - [x] Task 17: Sửa tương phản màu nút bấm và tab selected ở Light mode (chữ trắng trên nền accent xanh đậm).
 - [x] Task 18: Sửa ComboBox dark mode — chữ trắng/nền trắng do style override mất custom template.
-- [x] Task 19: C?u tr�c l?i ch?c nang c?a c?ng Image v� Preprocess cho t?t c? c�c node. Lo?i b? c?ng Preprocess, gi? d�y c�c node ch? c?n c� 1 c?ng Image. N?u s? d?ng ImageSource -> Preprocess -> Tool th� Preprocess s? t? d?ng x? l� ?nh. �� s?a l?i ImageSource tool k?t n?i v?i Preprocess tool preview b? den ng�m.
-- [x] Task 20: C?p nh?t output c?a ImageSource tool d? lu�n �p d?ng global preprocess. Th�m t�nh nang ch?n c?nh (hi?n th? m�u d? khi du?c ch?n) v� x�a c?nh ho?c x�a node du?c ch?n b?ng ph�m Delete.
+- [x] Task 19: C?u trc l?i ch?c nang c?a c?ng Image v Preprocess cho t?t c? cc node. Lo?i b? c?ng Preprocess, gi? dy cc node ch? c?n c 1 c?ng Image. N?u s? d?ng ImageSource -> Preprocess -> Tool th Preprocess s? t? d?ng x? l ?nh.  s?a l?i ImageSource tool k?t n?i v?i Preprocess tool preview b? den ngm.
+- [x] Task 20: C?p nh?t output c?a ImageSource tool d? lun p d?ng global preprocess. Thm tnh nang ch?n c?nh (hi?n th? mu d? khi du?c ch?n) v xa c?nh ho?c xa node du?c ch?n b?ng phm Delete.
+- [x] Task 21: Khắc phục lỗi mất input edge khi bỏ chọn node trên Canvas bằng cách loại bỏ thuộc tính `Delay=500` gây race condition trong quá trình binding XAML.
+- [x] Task 22: Cải thiện cấu trúc dự án: Phân rã tệp `ToolEditorViewModel.cs` lớn (gần 10.000 dòng) thành nhiều file C# nhỏ gọn và phân vùng bằng cơ chế `partial class` để dễ kiểm soát.
