@@ -1029,7 +1029,7 @@ namespace VisionInspectionApp.UI.ViewModels
     
                 var stroke = r.Pass ? Brushes.Lime : Brushes.Red;
                 var status = r.Pass ? "OK" : "NG";
-                dst.Add(new OverlayPointItem { X = def.InspectRoi.X + 2, Y = def.InspectRoi.Y + 2, Radius = 1.0, Stroke = stroke, Label = $"{def.Name} [{status}]: Sß╗æ lß╗ùi: {r.Count}, S.Lß╗¢n nhß║Ñt: {r.MaxArea:0}" });
+                dst.Add(new OverlayPointItem { X = def.InspectRoi.X + 2, Y = def.InspectRoi.Y + 2, Radius = 1.0, Stroke = stroke, Label = $"{def.Name} [{status}]: Số lỗi: {r.Count}, S.Lớn nhất: {r.MaxArea:0}" });
                 if (r.Defects is null || r.Defects.Count == 0)
                 {
                     return;
@@ -1042,7 +1042,7 @@ namespace VisionInspectionApp.UI.ViewModels
                     var br = d.BoundingBox;
                     if (br.Width > 0 && br.Height > 0)
                     {
-                        dst.Add(new OverlayRectItem { X = br.X, Y = br.Y, Width = br.Width, Height = br.Height, Stroke = stroke, StrokeThickness = 2.0, // Thicker boxes for better visibility
+                        dst.Add(new OverlayRectItem { X = br.X, Y = br.Y, Width = br.Width, Height = br.Height, Stroke = stroke, StrokeThickness = 2.0, Angle = d.Angle, // Thicker boxes for better visibility
      Label = string.Empty });
                     }
                 }
@@ -2233,7 +2233,7 @@ namespace VisionInspectionApp.UI.ViewModels
                             var r = d.BoundingBox;
                             if (r.Width > 0 && r.Height > 0)
                             {
-                                dst.Add(new OverlayRectItem { X = r.X, Y = r.Y, Width = r.Width, Height = r.Height, Stroke = stroke, StrokeThickness = 2.0, Label = string.Empty });
+                                dst.Add(new OverlayRectItem { X = r.X, Y = r.Y, Width = r.Width, Height = r.Height, Stroke = stroke, StrokeThickness = 2.0, Angle = d.Angle, Label = string.Empty });
                             }
                         }
                     }
@@ -2260,7 +2260,7 @@ namespace VisionInspectionApp.UI.ViewModels
                         }
                     }
     
-                    dst.Add(new OverlayPointItem { X = lx, Y = ly, Radius = 1.0, Stroke = stroke, Label = $"{sc.Name} [{status}]: Sß╗æ lß╗ùi: {sc.Count}, S.Lß╗¢n nhß║Ñt: {sc.MaxArea:0}" });
+                    dst.Add(new OverlayPointItem { X = lx, Y = ly, Radius = 1.0, Stroke = stroke, Label = $"{sc.Name} [{status}]: Số lỗi: {sc.Count}, S.Lớn nhất: {sc.MaxArea:0}" });
                 }
             }
     
@@ -2703,7 +2703,7 @@ namespace VisionInspectionApp.UI.ViewModels
                         var r = d.BoundingBox;
                         if (r.Width > 0 && r.Height > 0)
                         {
-                            dst.Add(new OverlayRectItem { X = r.X, Y = r.Y, Width = r.Width, Height = r.Height, Stroke = stroke, StrokeThickness = 2.0, Label = string.Empty });
+                            dst.Add(new OverlayRectItem { X = r.X, Y = r.Y, Width = r.Width, Height = r.Height, Stroke = stroke, StrokeThickness = 2.0, Angle = d.Angle, Label = string.Empty });
                         }
                     }
                 }
@@ -2715,7 +2715,7 @@ namespace VisionInspectionApp.UI.ViewModels
                     ly = scDef.InspectRoi.Y + 2;
                 }
     
-                dst.Add(new OverlayPointItem { X = lx, Y = ly, Radius = 1.0, Stroke = stroke, Label = $"{sc.Name} [{status}]: Sß╗æ lß╗ùi: {sc.Count}, Diß╗çn t├¡ch lß╗¢n nhß║Ñt: {sc.MaxArea:0}" });
+                dst.Add(new OverlayPointItem { X = lx, Y = ly, Radius = 1.0, Stroke = stroke, Label = $"{sc.Name} [{status}]: Số lỗi: {sc.Count}, Diện tích lớn nhất: {sc.MaxArea:0}" });
                 return;
             }
     

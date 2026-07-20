@@ -582,7 +582,7 @@ namespace VisionInspectionApp.UI.ViewModels
             }
     
             var toolNode = Nodes.FirstOrDefault(n => string.Equals(n.Type, "SurfaceCompare", StringComparison.OrdinalIgnoreCase) && string.Equals(n.RefName, surfaceCompareName, StringComparison.OrdinalIgnoreCase));
-            using var processedMat = toolNode != null ? ResolveToolPreprocessForPreview(snap, toolNode) : (_config != null ? _preprocessor.Run(snap, _config.Preprocess) : snap.Clone());
+            using var processedMat = toolNode != null ? ResolveToolImageForPreview(snap, toolNode) : snap.Clone();
             var templateDir = Path.Combine(CurrentTempWorkingDir ?? Path.Combine(Path.GetFullPath(_storeOptions.ConfigRootDirectory), _config?.ProductCode ?? ""), "templates");
             Directory.CreateDirectory(templateDir);
             var fileName = Path.Combine(templateDir, $"{surfaceCompareName.ToLowerInvariant()}_sc.png");

@@ -2758,9 +2758,8 @@ public sealed partial class InspectionViewModel : ObservableObject
                                     Height = r.Height,
 
                                     Stroke = stroke,
-
+                                    Angle = d.Angle,
                                     StrokeThickness = 2.0,
-
                                     Label = string.Empty
 
                                 });

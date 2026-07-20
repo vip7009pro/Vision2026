@@ -46,7 +46,7 @@
             </Button>
 
             <TextBlock Text="Product Code" VerticalAlignment="Center" Margin="0,0,6,0" />
-            <TextBox Width="120" Text="{Binding ProductCode, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,12,0" />
+            <TextBox Width="120" Text="{Binding ProductCode, UpdateSourceTrigger=LostFocus}" Margin="0,0,12,0" />
 
             <Button Content="Save Job" Command="{Binding SaveJobCommand}" Margin="0,0,6,0" />
             <Button Content="Save As" Command="{Binding SaveJobAsCommand}" />
@@ -205,7 +205,7 @@
                                             <TextBlock Text="Pre" VerticalAlignment="Center" Margin="8,4" Foreground="{DynamicResource TextBrush}"/>
                                         </Border>
                                         <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
-                                            <ComboBox ItemsSource="{Binding AvailablePreprocessChoices}" SelectedItem="{Binding SelectedToolPreprocessChoice, UpdateSourceTrigger=PropertyChanged}" Margin="4" />
+                                            <ComboBox ItemsSource="{Binding AvailablePreprocessChoices}" SelectedItem="{Binding SelectedToolPreprocessChoice, UpdateSourceTrigger=LostFocus}" Margin="4" />
                                         </Border>
                                     </Grid>
                                 </Border>
@@ -227,7 +227,7 @@
                                             <TextBlock Text="Algorithm" VerticalAlignment="Center" Margin="8,4" Foreground="{DynamicResource TextBrush}"/>
                                         </Border>
                                         <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
-                                            <ComboBox ItemsSource="{Binding AvailableOriginAlgorithms}" SelectedItem="{Binding Origin_Algorithm, UpdateSourceTrigger=PropertyChanged}" Margin="4" />
+                                            <ComboBox ItemsSource="{Binding AvailableOriginAlgorithms}" SelectedItem="{Binding Origin_Algorithm, UpdateSourceTrigger=LostFocus}" Margin="4" />
                                         </Border>
                                     </Grid>
                                 </Border>
@@ -241,7 +241,7 @@
                                             <TextBlock Text="Min Angle (deg)" VerticalAlignment="Center" Margin="8,4" Foreground="{DynamicResource TextBrush}"/>
                                         </Border>
                                         <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
-                                            <TextBox Text="{Binding Origin_MinAngle, UpdateSourceTrigger=PropertyChanged}" Margin="4" />
+                                            <TextBox Text="{Binding Origin_MinAngle, UpdateSourceTrigger=LostFocus}" Margin="4" />
                                         </Border>
                                     </Grid>
                                 </Border>
@@ -255,7 +255,7 @@
                                             <TextBlock Text="Max Angle (deg)" VerticalAlignment="Center" Margin="8,4" Foreground="{DynamicResource TextBrush}"/>
                                         </Border>
                                         <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
-                                            <TextBox Text="{Binding Origin_MaxAngle, UpdateSourceTrigger=PropertyChanged}" Margin="4" />
+                                            <TextBox Text="{Binding Origin_MaxAngle, UpdateSourceTrigger=LostFocus}" Margin="4" />
                                         </Border>
                                     </Grid>
                                 </Border>
@@ -275,7 +275,7 @@
                                             <TextBlock Text="Algorithm" VerticalAlignment="Center" Margin="8,4" Foreground="{DynamicResource TextBrush}"/>
                                         </Border>
                                         <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
-                                            <ComboBox ItemsSource="{Binding AvailablePointFindAlgorithms}" SelectedItem="{Binding Point_Algorithm, UpdateSourceTrigger=PropertyChanged}" Margin="4" />
+                                            <ComboBox ItemsSource="{Binding AvailablePointFindAlgorithms}" SelectedItem="{Binding Point_Algorithm, UpdateSourceTrigger=LostFocus}" Margin="4" />
                                         </Border>
                                     </Grid>
                                 </Border>
@@ -292,7 +292,7 @@
                                             <TextBlock Text="Offset X" VerticalAlignment="Center" Margin="8,4" Foreground="{DynamicResource TextBrush}"/>
                                         </Border>
                                         <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
-                                            <TextBox Text="{Binding Point_OffsetX, UpdateSourceTrigger=PropertyChanged}" Margin="4" />
+                                            <TextBox Text="{Binding Point_OffsetX, UpdateSourceTrigger=LostFocus}" Margin="4" />
                                         </Border>
                                     </Grid>
                                 </Border>
@@ -306,7 +306,7 @@
                                             <TextBlock Text="Offset Y" VerticalAlignment="Center" Margin="8,4" Foreground="{DynamicResource TextBrush}"/>
                                         </Border>
                                         <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
-                                            <TextBox Text="{Binding Point_OffsetY, UpdateSourceTrigger=PropertyChanged}" Margin="4" />
+                                            <TextBox Text="{Binding Point_OffsetY, UpdateSourceTrigger=LostFocus}" Margin="4" />
                                         </Border>
                                     </Grid>
                                 </Border>
@@ -326,7 +326,7 @@
                                             <TextBlock Text="Orientation" VerticalAlignment="Center" Margin="8,4" Foreground="{DynamicResource TextBrush}"/>
                                         </Border>
                                         <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
-                                            <ComboBox ItemsSource="{Binding AvailableCaliperOrientations}" SelectedItem="{Binding Point_Edge_Orientation, UpdateSourceTrigger=PropertyChanged}" Margin="4" />
+                                            <ComboBox ItemsSource="{Binding AvailableCaliperOrientations}" SelectedItem="{Binding Point_Edge_Orientation, UpdateSourceTrigger=LostFocus}" Margin="4" />
                                         </Border>
                                     </Grid>
                                 </Border>
@@ -341,7 +341,7 @@
                                             <TextBlock Text="Polarity" VerticalAlignment="Center" Margin="8,4" Foreground="{DynamicResource TextBrush}"/>
                                         </Border>
                                         <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
-                                            <ComboBox ItemsSource="{Binding AvailableEdgePolarities}" SelectedItem="{Binding Point_Edge_Polarity, UpdateSourceTrigger=PropertyChanged}" Margin="4" />
+                                            <ComboBox ItemsSource="{Binding AvailableEdgePolarities}" SelectedItem="{Binding Point_Edge_Polarity, UpdateSourceTrigger=LostFocus}" Margin="4" />
                                         </Border>
                                     </Grid>
                                 </Border>
@@ -356,7 +356,7 @@
                                             <TextBlock Text="Strip Count" VerticalAlignment="Center" Margin="8,4" Foreground="{DynamicResource TextBrush}"/>
                                         </Border>
                                         <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
-                                            <TextBox Text="{Binding Point_Edge_StripCount, UpdateSourceTrigger=PropertyChanged}" Margin="4" />
+                                            <TextBox Text="{Binding Point_Edge_StripCount, UpdateSourceTrigger=LostFocus}" Margin="4" />
                                         </Border>
                                     </Grid>
                                 </Border>
@@ -370,7 +370,7 @@
                                             <TextBlock Text="Strip Width" VerticalAlignment="Center" Margin="8,4" Foreground="{DynamicResource TextBrush}"/>
                                         </Border>
                                         <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
-                                            <TextBox Text="{Binding Point_Edge_StripWidth, UpdateSourceTrigger=PropertyChanged}" Margin="4" />
+                                            <TextBox Text="{Binding Point_Edge_StripWidth, UpdateSourceTrigger=LostFocus}" Margin="4" />
                                         </Border>
                                     </Grid>
                                 </Border>
@@ -384,7 +384,7 @@
                                             <TextBlock Text="Strip Length" VerticalAlignment="Center" Margin="8,4" Foreground="{DynamicResource TextBrush}"/>
                                         </Border>
                                         <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
-                                            <TextBox Text="{Binding Point_Edge_StripLength, UpdateSourceTrigger=PropertyChanged}" Margin="4" />
+                                            <TextBox Text="{Binding Point_Edge_StripLength, UpdateSourceTrigger=LostFocus}" Margin="4" />
                                         </Border>
                                     </Grid>
                                 </Border>
@@ -398,12 +398,12 @@
                                             <TextBlock Text="Min Gradient" VerticalAlignment="Center" Margin="8,4" Foreground="{DynamicResource TextBrush}"/>
                                         </Border>
                                         <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
-                                            <TextBox Text="{Binding Point_Edge_MinEdgeStrength, UpdateSourceTrigger=PropertyChanged}" Margin="4" />
+                                            <TextBox Text="{Binding Point_Edge_MinEdgeStrength, UpdateSourceTrigger=LostFocus}" Margin="4" />
                                         </Border>
                                     </Grid>
                                 </Border>
 
-                                    <CheckBox Content="Preview" IsChecked="{Binding PointEdgePreviewEnabled, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,6" />
+                                    <CheckBox Content="Preview" IsChecked="{Binding PointEdgePreviewEnabled, UpdateSourceTrigger=LostFocus}" Margin="0,0,0,6" />
 
                                     <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" Padding="4" Margin="0,0,0,6">
                                         <Image Source="{Binding PointEdgePreviewImage}" Stretch="Uniform" Height="120" />
@@ -416,7 +416,7 @@
                                     <TextBlock Text="Line Params" FontWeight="Bold" Foreground="{DynamicResource TextBrush}" />
                                 </Border>
 
-                                <CheckBox Content="Preview" IsChecked="{Binding LinePreviewEnabled, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,6" />
+                                <CheckBox Content="Preview" IsChecked="{Binding LinePreviewEnabled, UpdateSourceTrigger=LostFocus}" Margin="0,0,0,6" />
 
                                 <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" Padding="4" Margin="0,0,0,6">
                                     <Image Source="{Binding LinePreviewImage}" Stretch="Uniform" Height="120" />
@@ -427,7 +427,7 @@
                                         <TextBlock Text="Canny Thresh 1" Width="100" VerticalAlignment="Center" />
                                         <TextBlock Text="{Binding Line_Canny1}" Width="40" />
                                     </StackPanel>
-                                    <Slider Minimum="0" Maximum="255" Value="{Binding Line_Canny1, UpdateSourceTrigger=PropertyChanged}" IsSnapToTickEnabled="True" TickFrequency="1" />
+                                    <Slider Minimum="0" Maximum="255" Value="{Binding Line_Canny1, UpdateSourceTrigger=LostFocus}" IsSnapToTickEnabled="True" TickFrequency="1" />
                                 </StackPanel>
 
                                 <StackPanel Margin="0,0,0,2">
@@ -435,7 +435,7 @@
                                         <TextBlock Text="Canny Thresh 2" Width="100" VerticalAlignment="Center" />
                                         <TextBlock Text="{Binding Line_Canny2}" Width="40" />
                                     </StackPanel>
-                                    <Slider Minimum="0" Maximum="255" Value="{Binding Line_Canny2, UpdateSourceTrigger=PropertyChanged}" IsSnapToTickEnabled="True" TickFrequency="1" />
+                                    <Slider Minimum="0" Maximum="255" Value="{Binding Line_Canny2, UpdateSourceTrigger=LostFocus}" IsSnapToTickEnabled="True" TickFrequency="1" />
                                 </StackPanel>
 
                                 <StackPanel Margin="0,0,0,2">
@@ -443,7 +443,7 @@
                                         <TextBlock Text="Hough Thresh" Width="100" VerticalAlignment="Center" />
                                         <TextBlock Text="{Binding Line_HoughThreshold}" Width="40" />
                                     </StackPanel>
-                                    <Slider Minimum="1" Maximum="200" Value="{Binding Line_HoughThreshold, UpdateSourceTrigger=PropertyChanged}" IsSnapToTickEnabled="True" TickFrequency="1" />
+                                    <Slider Minimum="1" Maximum="200" Value="{Binding Line_HoughThreshold, UpdateSourceTrigger=LostFocus}" IsSnapToTickEnabled="True" TickFrequency="1" />
                                 </StackPanel>
 
                                 <StackPanel Margin="0,0,0,2">
@@ -451,7 +451,7 @@
                                         <TextBlock Text="Min Line Length" Width="100" VerticalAlignment="Center" />
                                         <TextBlock Text="{Binding Line_MinLineLength}" Width="40" />
                                     </StackPanel>
-                                    <Slider Minimum="1" Maximum="400" Value="{Binding Line_MinLineLength, UpdateSourceTrigger=PropertyChanged}" IsSnapToTickEnabled="True" TickFrequency="1" />
+                                    <Slider Minimum="1" Maximum="400" Value="{Binding Line_MinLineLength, UpdateSourceTrigger=LostFocus}" IsSnapToTickEnabled="True" TickFrequency="1" />
                                 </StackPanel>
 
                                 <StackPanel Margin="0,0,0,6">
@@ -459,7 +459,7 @@
                                         <TextBlock Text="Max Line Gap" Width="100" VerticalAlignment="Center" />
                                         <TextBlock Text="{Binding Line_MaxLineGap}" Width="40" />
                                     </StackPanel>
-                                    <Slider Minimum="0" Maximum="100" Value="{Binding Line_MaxLineGap, UpdateSourceTrigger=PropertyChanged}" IsSnapToTickEnabled="True" TickFrequency="1" />
+                                    <Slider Minimum="0" Maximum="100" Value="{Binding Line_MaxLineGap, UpdateSourceTrigger=LostFocus}" IsSnapToTickEnabled="True" TickFrequency="1" />
                                 </StackPanel>
                             </StackPanel>
 
@@ -478,7 +478,7 @@
                                             <TextBlock Text="Ori" VerticalAlignment="Center" Margin="8,4" Foreground="{DynamicResource TextBrush}"/>
                                         </Border>
                                         <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
-                                            <ComboBox ItemsSource="{Binding AvailableCaliperOrientations}" SelectedItem="{Binding Caliper_Orientation, UpdateSourceTrigger=PropertyChanged}" Margin="4" />
+                                            <ComboBox ItemsSource="{Binding AvailableCaliperOrientations}" SelectedItem="{Binding Caliper_Orientation, UpdateSourceTrigger=LostFocus}" Margin="4" />
                                         </Border>
                                     </Grid>
                                 </Border>
@@ -493,7 +493,7 @@
                                             <TextBlock Text="Pol" VerticalAlignment="Center" Margin="8,4" Foreground="{DynamicResource TextBrush}"/>
                                         </Border>
                                         <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
-                                            <ComboBox ItemsSource="{Binding AvailableEdgePolarities}" SelectedItem="{Binding Caliper_Polarity, UpdateSourceTrigger=PropertyChanged}" Margin="4" />
+                                            <ComboBox ItemsSource="{Binding AvailableEdgePolarities}" SelectedItem="{Binding Caliper_Polarity, UpdateSourceTrigger=LostFocus}" Margin="4" />
                                         </Border>
                                     </Grid>
                                 </Border>
@@ -508,7 +508,7 @@
                                             <TextBlock Text="Strips" VerticalAlignment="Center" Margin="8,4" Foreground="{DynamicResource TextBrush}"/>
                                         </Border>
                                         <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
-                                            <TextBox Text="{Binding Caliper_StripCount, UpdateSourceTrigger=PropertyChanged}" Margin="4" />
+                                            <TextBox Text="{Binding Caliper_StripCount, UpdateSourceTrigger=LostFocus}" Margin="4" />
                                         </Border>
                                     </Grid>
                                 </Border>
@@ -523,7 +523,7 @@
                                             <TextBlock Text="Width" VerticalAlignment="Center" Margin="8,4" Foreground="{DynamicResource TextBrush}"/>
                                         </Border>
                                         <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
-                                            <TextBox Text="{Binding Caliper_StripWidth, UpdateSourceTrigger=PropertyChanged}" Margin="4" />
+                                            <TextBox Text="{Binding Caliper_StripWidth, UpdateSourceTrigger=LostFocus}" Margin="4" />
                                         </Border>
                                     </Grid>
                                 </Border>
@@ -538,7 +538,7 @@
                                             <TextBlock Text="Length" VerticalAlignment="Center" Margin="8,4" Foreground="{DynamicResource TextBrush}"/>
                                         </Border>
                                         <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
-                                            <TextBox Text="{Binding Caliper_StripLength, UpdateSourceTrigger=PropertyChanged}" Margin="4" />
+                                            <TextBox Text="{Binding Caliper_StripLength, UpdateSourceTrigger=LostFocus}" Margin="4" />
                                         </Border>
                                     </Grid>
                                 </Border>
@@ -553,7 +553,7 @@
                                             <TextBlock Text="MinStr" VerticalAlignment="Center" Margin="8,4" Foreground="{DynamicResource TextBrush}"/>
                                         </Border>
                                         <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
-                                            <TextBox Text="{Binding Caliper_MinEdgeStrength, UpdateSourceTrigger=PropertyChanged}" Margin="4" />
+                                            <TextBox Text="{Binding Caliper_MinEdgeStrength, UpdateSourceTrigger=LostFocus}" Margin="4" />
                                         </Border>
                                     </Grid>
                                 </Border>
@@ -586,7 +586,7 @@
                                             <TextBlock Text="A" VerticalAlignment="Center" Margin="8,4" Foreground="{DynamicResource TextBrush}"/>
                                         </Border>
                                         <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
-                                            <ComboBox ItemsSource="{Binding AvailableDistanceRefNames}" SelectedItem="{Binding Distance_PointA, UpdateSourceTrigger=PropertyChanged}" Margin="4" />
+                                            <ComboBox ItemsSource="{Binding AvailableDistanceRefNames}" SelectedItem="{Binding Distance_PointA, UpdateSourceTrigger=LostFocus}" Margin="4" />
                                         </Border>
                                     </Grid>
                                 </Border>
@@ -600,7 +600,7 @@
                                             <TextBlock Text="B" VerticalAlignment="Center" Margin="8,4" Foreground="{DynamicResource TextBrush}"/>
                                         </Border>
                                         <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
-                                            <ComboBox ItemsSource="{Binding AvailableDistanceRefNames}" SelectedItem="{Binding Distance_PointB, UpdateSourceTrigger=PropertyChanged}" Margin="4" />
+                                            <ComboBox ItemsSource="{Binding AvailableDistanceRefNames}" SelectedItem="{Binding Distance_PointB, UpdateSourceTrigger=LostFocus}" Margin="4" />
                                         </Border>
                                     </Grid>
                                 </Border>
@@ -619,7 +619,7 @@
                                             <TextBlock Text="Mode" VerticalAlignment="Center" Margin="8,4" Foreground="{DynamicResource TextBrush}"/>
                                         </Border>
                                         <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
-                                            <ComboBox ItemsSource="{Binding AvailableLineLineDistanceModes}" SelectedItem="{Binding LineLineDistance_Mode, UpdateSourceTrigger=PropertyChanged}" Margin="4" />
+                                            <ComboBox ItemsSource="{Binding AvailableLineLineDistanceModes}" SelectedItem="{Binding LineLineDistance_Mode, UpdateSourceTrigger=LostFocus}" Margin="4" />
                                         </Border>
                                     </Grid>
                                 </Border>
@@ -634,7 +634,7 @@
                                             <TextBlock Text="A" VerticalAlignment="Center" Margin="8,4" Foreground="{DynamicResource TextBrush}"/>
                                         </Border>
                                         <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
-                                            <ComboBox ItemsSource="{Binding AvailableLineNames}" SelectedItem="{Binding LineLineDistance_LineA, UpdateSourceTrigger=PropertyChanged}" Margin="4" />
+                                            <ComboBox ItemsSource="{Binding AvailableLineNames}" SelectedItem="{Binding LineLineDistance_LineA, UpdateSourceTrigger=LostFocus}" Margin="4" />
                                         </Border>
                                     </Grid>
                                 </Border>
@@ -648,7 +648,7 @@
                                             <TextBlock Text="B" VerticalAlignment="Center" Margin="8,4" Foreground="{DynamicResource TextBrush}"/>
                                         </Border>
                                         <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
-                                            <ComboBox ItemsSource="{Binding AvailableLineNames}" SelectedItem="{Binding LineLineDistance_LineB, UpdateSourceTrigger=PropertyChanged}" Margin="4" />
+                                            <ComboBox ItemsSource="{Binding AvailableLineNames}" SelectedItem="{Binding LineLineDistance_LineB, UpdateSourceTrigger=LostFocus}" Margin="4" />
                                         </Border>
                                     </Grid>
                                 </Border>
@@ -667,7 +667,7 @@
                                             <TextBlock Text="Mode" VerticalAlignment="Center" Margin="8,4" Foreground="{DynamicResource TextBrush}"/>
                                         </Border>
                                         <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
-                                            <ComboBox ItemsSource="{Binding AvailablePointLineDistanceModes}" SelectedItem="{Binding PointLineDistance_Mode, UpdateSourceTrigger=PropertyChanged}" Margin="4" />
+                                            <ComboBox ItemsSource="{Binding AvailablePointLineDistanceModes}" SelectedItem="{Binding PointLineDistance_Mode, UpdateSourceTrigger=LostFocus}" Margin="4" />
                                         </Border>
                                     </Grid>
                                 </Border>
@@ -682,7 +682,7 @@
                                             <TextBlock Text="P" VerticalAlignment="Center" Margin="8,4" Foreground="{DynamicResource TextBrush}"/>
                                         </Border>
                                         <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
-                                            <ComboBox ItemsSource="{Binding AvailablePointNames}" SelectedItem="{Binding PointLineDistance_Point, UpdateSourceTrigger=PropertyChanged}" Margin="4" />
+                                            <ComboBox ItemsSource="{Binding AvailablePointNames}" SelectedItem="{Binding PointLineDistance_Point, UpdateSourceTrigger=LostFocus}" Margin="4" />
                                         </Border>
                                     </Grid>
                                 </Border>
@@ -696,7 +696,7 @@
                                             <TextBlock Text="L" VerticalAlignment="Center" Margin="8,4" Foreground="{DynamicResource TextBrush}"/>
                                         </Border>
                                         <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
-                                            <ComboBox ItemsSource="{Binding AvailableLineNames}" SelectedItem="{Binding PointLineDistance_Line, UpdateSourceTrigger=PropertyChanged}" Margin="4" />
+                                            <ComboBox ItemsSource="{Binding AvailableLineNames}" SelectedItem="{Binding PointLineDistance_Line, UpdateSourceTrigger=LostFocus}" Margin="4" />
                                         </Border>
                                     </Grid>
                                 </Border>
@@ -715,7 +715,7 @@
                                             <TextBlock Text="A" VerticalAlignment="Center" Margin="8,4" Foreground="{DynamicResource TextBrush}"/>
                                         </Border>
                                         <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
-                                            <ComboBox ItemsSource="{Binding AvailableLineNames}" SelectedItem="{Binding Angle_LineA, UpdateSourceTrigger=PropertyChanged}" Margin="4" />
+                                            <ComboBox ItemsSource="{Binding AvailableLineNames}" SelectedItem="{Binding Angle_LineA, UpdateSourceTrigger=LostFocus}" Margin="4" />
                                         </Border>
                                     </Grid>
                                 </Border>
@@ -729,7 +729,7 @@
                                             <TextBlock Text="B" VerticalAlignment="Center" Margin="8,4" Foreground="{DynamicResource TextBrush}"/>
                                         </Border>
                                         <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
-                                            <ComboBox ItemsSource="{Binding AvailableLineNames}" SelectedItem="{Binding Angle_LineB, UpdateSourceTrigger=PropertyChanged}" Margin="4" />
+                                            <ComboBox ItemsSource="{Binding AvailableLineNames}" SelectedItem="{Binding Angle_LineB, UpdateSourceTrigger=LostFocus}" Margin="4" />
                                         </Border>
                                     </Grid>
                                 </Border>
@@ -741,7 +741,7 @@
                                     <StackPanel Orientation="Horizontal" Margin="0,0,0,2">
                                         <TextBlock Text="A" Width="60" VerticalAlignment="Center" />
                                         <TextBlock Text="Ref A" Width="60" VerticalAlignment="Center" />
-                                        <ComboBox Width="160" ItemsSource="{Binding AvailableLineNames}" SelectedItem="{Binding EdgePair_RefA, UpdateSourceTrigger=PropertyChanged}" />
+                                        <ComboBox Width="160" ItemsSource="{Binding AvailableLineNames}" SelectedItem="{Binding EdgePair_RefA, UpdateSourceTrigger=LostFocus}" />
                                     </StackPanel>
                                     <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
                                     <Grid>
@@ -753,7 +753,7 @@
                                             <TextBlock Text="Ref B" VerticalAlignment="Center" Margin="8,4" Foreground="{DynamicResource TextBrush}"/>
                                         </Border>
                                         <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
-                                            <ComboBox ItemsSource="{Binding AvailableLineNames}" SelectedItem="{Binding EdgePair_RefB, UpdateSourceTrigger=PropertyChanged}" Margin="4" />
+                                            <ComboBox ItemsSource="{Binding AvailableLineNames}" SelectedItem="{Binding EdgePair_RefB, UpdateSourceTrigger=LostFocus}" Margin="4" />
                                         </Border>
                                     </Grid>
                                 </Border>
@@ -769,7 +769,7 @@
                                             <TextBlock Text="Nominal" VerticalAlignment="Center" Margin="8,4" Foreground="{DynamicResource TextBrush}"/>
                                         </Border>
                                         <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
-                                            <TextBox Text="{Binding Distance_Nominal, UpdateSourceTrigger=PropertyChanged}" Margin="4" />
+                                            <TextBox Text="{Binding Distance_Nominal, UpdateSourceTrigger=LostFocus}" Margin="4" />
                                         </Border>
                                     </Grid>
                                 </Border>
@@ -783,7 +783,7 @@
                                             <TextBlock Text="Tolerance+" VerticalAlignment="Center" Margin="8,4" Foreground="{DynamicResource TextBrush}"/>
                                         </Border>
                                         <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
-                                            <TextBox Text="{Binding Distance_TolPlus, UpdateSourceTrigger=PropertyChanged}" Margin="4" />
+                                            <TextBox Text="{Binding Distance_TolPlus, UpdateSourceTrigger=LostFocus}" Margin="4" />
                                         </Border>
                                     </Grid>
                                 </Border>
@@ -797,7 +797,7 @@
                                             <TextBlock Text="Tolerance-" VerticalAlignment="Center" Margin="8,4" Foreground="{DynamicResource TextBrush}"/>
                                         </Border>
                                         <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
-                                            <TextBox Text="{Binding Distance_TolMinus, UpdateSourceTrigger=PropertyChanged}" Margin="4" />
+                                            <TextBox Text="{Binding Distance_TolMinus, UpdateSourceTrigger=LostFocus}" Margin="4" />
                                         </Border>
                                     </Grid>
                                 </Border>
@@ -827,7 +827,7 @@
                                             <TextBlock Text="Inputs" VerticalAlignment="Center" Margin="8,4" Foreground="{DynamicResource TextBrush}"/>
                                         </Border>
                                         <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
-                                            <TextBox Text="{Binding Condition_InputCount, UpdateSourceTrigger=PropertyChanged}" Margin="4" />
+                                            <TextBox Text="{Binding Condition_InputCount, UpdateSourceTrigger=LostFocus}" Margin="4" />
                                         </Border>
                                     </Grid>
                                 </Border>
@@ -868,7 +868,7 @@
                                             <TextBlock Text="Source Type" VerticalAlignment="Center" Margin="8,4" Foreground="{DynamicResource TextBrush}"/>
                                         </Border>
                                         <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
-                                            <ComboBox ItemsSource="{Binding AvailableImageSourceTypes}" SelectedItem="{Binding ImageSource_SourceType, UpdateSourceTrigger=PropertyChanged}" Margin="4" />
+                                            <ComboBox ItemsSource="{Binding AvailableImageSourceTypes}" SelectedItem="{Binding ImageSource_SourceType, UpdateSourceTrigger=LostFocus}" Margin="4" />
                                         </Border>
                                     </Grid>
                                 </Border>
@@ -884,7 +884,7 @@
                                             <TextBlock Text="File Path" VerticalAlignment="Center" Margin="8,4" Foreground="{DynamicResource TextBrush}"/>
                                         </Border>
                                         <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
-                                            <TextBox Text="{Binding ImageSource_FilePath, UpdateSourceTrigger=PropertyChanged}" Margin="4" />
+                                            <TextBox Text="{Binding ImageSource_FilePath, UpdateSourceTrigger=LostFocus}" Margin="4" />
                                         </Border>
                                         <Button Grid.Column="2" Content="..." Command="{Binding ImageSource_BrowseFileCommand}" Margin="4" Padding="8,4" />
                                     </Grid>
@@ -901,7 +901,7 @@
                                             <TextBlock Text="Folder Path" VerticalAlignment="Center" Margin="8,4" Foreground="{DynamicResource TextBrush}"/>
                                         </Border>
                                         <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
-                                            <TextBox Text="{Binding ImageSource_FolderPath, UpdateSourceTrigger=PropertyChanged}" Margin="4" />
+                                            <TextBox Text="{Binding ImageSource_FolderPath, UpdateSourceTrigger=LostFocus}" Margin="4" />
                                         </Border>
                                         <Button Grid.Column="2" Content="..." Command="{Binding ImageSource_BrowseFolderCommand}" Margin="4" Padding="8,4" />
                                     </Grid>
@@ -917,7 +917,7 @@
                                             <TextBlock Text="Loop Folder" VerticalAlignment="Center" Margin="8,4" Foreground="{DynamicResource TextBrush}"/>
                                         </Border>
                                         <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
-                                            <CheckBox IsChecked="{Binding ImageSource_LoopFolder, UpdateSourceTrigger=PropertyChanged}" Margin="4" VerticalAlignment="Center" />
+                                            <CheckBox IsChecked="{Binding ImageSource_LoopFolder, UpdateSourceTrigger=LostFocus}" Margin="4" VerticalAlignment="Center" />
                                         </Border>
                                     </Grid>
                                 </Border>
@@ -932,7 +932,7 @@
                                             <TextBlock Text="Interval (ms)" VerticalAlignment="Center" Margin="8,4" Foreground="{DynamicResource TextBrush}"/>
                                         </Border>
                                         <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
-                                            <TextBox Text="{Binding ImageSource_FolderIntervalMs, UpdateSourceTrigger=PropertyChanged}" Margin="4" />
+                                            <TextBox Text="{Binding ImageSource_FolderIntervalMs, UpdateSourceTrigger=LostFocus}" Margin="4" />
                                         </Border>
                                     </Grid>
                                 </Border>
@@ -947,7 +947,7 @@
                                             <TextBlock Text="Camera Index" VerticalAlignment="Center" Margin="8,4" Foreground="{DynamicResource TextBrush}"/>
                                         </Border>
                                         <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
-                                            <TextBox Text="{Binding ImageSource_CameraIndex, UpdateSourceTrigger=PropertyChanged}" Margin="4" />
+                                            <TextBox Text="{Binding ImageSource_CameraIndex, UpdateSourceTrigger=LostFocus}" Margin="4" />
                                         </Border>
                                     </Grid>
                                 </Border>
@@ -962,7 +962,7 @@
                                             <TextBlock Text="RTSP URL" VerticalAlignment="Center" Margin="8,4" Foreground="{DynamicResource TextBrush}"/>
                                         </Border>
                                         <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
-                                            <TextBox Text="{Binding ImageSource_RtspUrl, UpdateSourceTrigger=PropertyChanged}" Margin="4" />
+                                            <TextBox Text="{Binding ImageSource_RtspUrl, UpdateSourceTrigger=LostFocus}" Margin="4" />
                                         </Border>
                                     </Grid>
                                 </Border>
@@ -1006,7 +1006,7 @@
                                             <TextBlock Text="X" VerticalAlignment="Center" Margin="8,4" Foreground="{DynamicResource TextBrush}"/>
                                         </Border>
                                         <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
-                                            <TextBox Text="{Binding TextNode_X, UpdateSourceTrigger=PropertyChanged}" Margin="4" />
+                                            <TextBox Text="{Binding TextNode_X, UpdateSourceTrigger=LostFocus}" Margin="4" />
                                         </Border>
                                     </Grid>
                                 </Border>
@@ -1020,7 +1020,7 @@
                                             <TextBlock Text="Y" VerticalAlignment="Center" Margin="8,4" Foreground="{DynamicResource TextBrush}"/>
                                         </Border>
                                         <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
-                                            <TextBox Text="{Binding TextNode_Y, UpdateSourceTrigger=PropertyChanged}" Margin="4" />
+                                            <TextBox Text="{Binding TextNode_Y, UpdateSourceTrigger=LostFocus}" Margin="4" />
                                         </Border>
                                     </Grid>
                                 </Border>
@@ -1031,7 +1031,7 @@
                                         <Rectangle Width="20" Height="20" Stroke="{DynamicResource TextMutedBrush}" StrokeThickness="1"
                                                    Fill="{Binding TextNode_DefaultColor, Converter={StaticResource HexToBrush}}" />
                                     </Button>
-                                    <TextBox Width="130" Text="{Binding TextNode_DefaultColor, UpdateSourceTrigger=PropertyChanged}" />
+                                    <TextBox Width="130" Text="{Binding TextNode_DefaultColor, UpdateSourceTrigger=LostFocus}" />
                                 </StackPanel>
 
                                 <Border Background="{DynamicResource BorderBrush}" Padding="4,2" Margin="0,8,0,0">
@@ -1046,7 +1046,7 @@
                                             <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" Padding="4" Margin="0,0,0,6">
                                                 <StackPanel>
                                                     <TextBlock Text="Expression" Margin="0,0,0,2" />
-                                                    <TextBox Text="{Binding Expression, UpdateSourceTrigger=PropertyChanged}"
+                                                    <TextBox Text="{Binding Expression, UpdateSourceTrigger=LostFocus}"
                                                              AcceptsReturn="True"
                                                              Height="50"
                                                              TextWrapping="Wrap"
@@ -1066,7 +1066,7 @@
                                                             <Rectangle Width="20" Height="20" Stroke="{DynamicResource TextMutedBrush}" StrokeThickness="1"
                                                                        Fill="{Binding Color, Converter={StaticResource HexToBrush}}" />
                                                         </Button>
-                                                        <TextBox Width="80" Text="{Binding Color, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,6,0" />
+                                                        <TextBox Width="80" Text="{Binding Color, UpdateSourceTrigger=LostFocus}" Margin="0,0,6,0" />
                                                         <Button Content="Remove" Width="60"
                                                                 Command="{Binding DataContext.TextNode_RemoveConditionCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                                                 CommandParameter="{Binding}" />
@@ -1093,7 +1093,7 @@
                                             <TextBlock Text="Polarity" VerticalAlignment="Center" Margin="8,4" Foreground="{DynamicResource TextBrush}"/>
                                         </Border>
                                         <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
-                                            <ComboBox ItemsSource="{Binding AvailableBlobPolarities}" SelectedItem="{Binding Blob_Polarity, UpdateSourceTrigger=PropertyChanged}" Margin="4" />
+                                            <ComboBox ItemsSource="{Binding AvailableBlobPolarities}" SelectedItem="{Binding Blob_Polarity, UpdateSourceTrigger=LostFocus}" Margin="4" />
                                         </Border>
                                     </Grid>
                                 </Border>
@@ -1102,7 +1102,7 @@
                                     <TextBlock Text="Thr" Width="60" VerticalAlignment="Center" />
                                     <TextBlock Text="{Binding Blob_Threshold}" Width="40" />
                                 </StackPanel>
-                                <Slider Minimum="0" Maximum="255" Value="{Binding Blob_Threshold, UpdateSourceTrigger=PropertyChanged}" IsSnapToTickEnabled="True" TickFrequency="1" Margin="0,0,0,6" />
+                                <Slider Minimum="0" Maximum="255" Value="{Binding Blob_Threshold, UpdateSourceTrigger=LostFocus}" IsSnapToTickEnabled="True" TickFrequency="1" Margin="0,0,0,6" />
 
                                 <Border BorderBrush="{DynamicResource DarkBorderBrush}" BorderThickness="1" Padding="2" Margin="0,0,0,6">
                                     <Image Source="{Binding BlobThresholdPreviewImage}" Stretch="Uniform" Height="120" />
@@ -1118,7 +1118,7 @@
                                             <TextBlock Text="MinA" VerticalAlignment="Center" Margin="8,4" Foreground="{DynamicResource TextBrush}"/>
                                         </Border>
                                         <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
-                                            <TextBox Text="{Binding Blob_MinBlobArea, UpdateSourceTrigger=PropertyChanged}" Margin="4" />
+                                            <TextBox Text="{Binding Blob_MinBlobArea, UpdateSourceTrigger=LostFocus}" Margin="4" />
                                         </Border>
                                     </Grid>
                                 </Border>
@@ -1132,7 +1132,7 @@
                                             <TextBlock Text="MaxA" VerticalAlignment="Center" Margin="8,4" Foreground="{DynamicResource TextBrush}"/>
                                         </Border>
                                         <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
-                                            <TextBox Text="{Binding Blob_MaxBlobArea, UpdateSourceTrigger=PropertyChanged}" Margin="4" />
+                                            <TextBox Text="{Binding Blob_MaxBlobArea, UpdateSourceTrigger=LostFocus}" Margin="4" />
                                         </Border>
                                     </Grid>
                                 </Border>
@@ -1163,7 +1163,7 @@
                                             <TextBlock Text="Thr" VerticalAlignment="Center" Margin="8,4" Foreground="{DynamicResource TextBrush}"/>
                                         </Border>
                                         <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
-                                            <TextBox Text="{Binding SurfaceCompare_DiffThreshold, UpdateSourceTrigger=PropertyChanged}" Margin="4" />
+                                            <TextBox Text="{Binding SurfaceCompare_DiffThreshold, UpdateSourceTrigger=LostFocus}" Margin="4" />
                                         </Border>
                                     </Grid>
                                 </Border>
@@ -1178,7 +1178,7 @@
                                             <TextBlock Text="Morph" VerticalAlignment="Center" Margin="8,4" Foreground="{DynamicResource TextBrush}"/>
                                         </Border>
                                         <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
-                                            <TextBox Text="{Binding SurfaceCompare_MorphKernel, UpdateSourceTrigger=PropertyChanged}" Margin="4" />
+                                            <TextBox Text="{Binding SurfaceCompare_MorphKernel, UpdateSourceTrigger=LostFocus}" Margin="4" />
                                         </Border>
                                     </Grid>
                                 </Border>
@@ -1193,7 +1193,7 @@
                                             <TextBlock Text="MinA" VerticalAlignment="Center" Margin="8,4" Foreground="{DynamicResource TextBrush}"/>
                                         </Border>
                                         <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
-                                            <TextBox Text="{Binding SurfaceCompare_MinBlobArea, UpdateSourceTrigger=PropertyChanged}" Margin="4" />
+                                            <TextBox Text="{Binding SurfaceCompare_MinBlobArea, UpdateSourceTrigger=LostFocus}" Margin="4" />
                                         </Border>
                                     </Grid>
                                 </Border>
@@ -1207,7 +1207,7 @@
                                             <TextBlock Text="MaxA" VerticalAlignment="Center" Margin="8,4" Foreground="{DynamicResource TextBrush}"/>
                                         </Border>
                                         <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
-                                            <TextBox Text="{Binding SurfaceCompare_MaxBlobArea, UpdateSourceTrigger=PropertyChanged}" Margin="4" />
+                                            <TextBox Text="{Binding SurfaceCompare_MaxBlobArea, UpdateSourceTrigger=LostFocus}" Margin="4" />
                                         </Border>
                                     </Grid>
                                 </Border>
@@ -1222,7 +1222,7 @@
                                             <TextBlock Text="MinCount" VerticalAlignment="Center" Margin="8,4" Foreground="{DynamicResource TextBrush}"/>
                                         </Border>
                                         <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
-                                            <TextBox Text="{Binding SurfaceCompare_MinCount, UpdateSourceTrigger=PropertyChanged}" Margin="4" />
+                                            <TextBox Text="{Binding SurfaceCompare_MinCount, UpdateSourceTrigger=LostFocus}" Margin="4" />
                                         </Border>
                                     </Grid>
                                 </Border>
@@ -1236,7 +1236,7 @@
                                             <TextBlock Text="MaxCount" VerticalAlignment="Center" Margin="8,4" Foreground="{DynamicResource TextBrush}"/>
                                         </Border>
                                         <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
-                                            <TextBox Text="{Binding SurfaceCompare_MaxCount, UpdateSourceTrigger=PropertyChanged}" Margin="4" />
+                                            <TextBox Text="{Binding SurfaceCompare_MaxCount, UpdateSourceTrigger=LostFocus}" Margin="4" />
                                         </Border>
                                     </Grid>
                                 </Border>
@@ -1261,7 +1261,7 @@
                                         <TextBlock Text="C1" Width="60" VerticalAlignment="Center" />
                                         <TextBlock Text="{Binding Lpd_Canny1}" Width="40" />
                                     </StackPanel>
-                                    <Slider Minimum="0" Maximum="255" Value="{Binding Lpd_Canny1, UpdateSourceTrigger=PropertyChanged}" IsSnapToTickEnabled="True" TickFrequency="1" />
+                                    <Slider Minimum="0" Maximum="255" Value="{Binding Lpd_Canny1, UpdateSourceTrigger=LostFocus}" IsSnapToTickEnabled="True" TickFrequency="1" />
                                 </StackPanel>
 
                                 <StackPanel Margin="0,0,0,2">
@@ -1269,7 +1269,7 @@
                                         <TextBlock Text="C2" Width="60" VerticalAlignment="Center" />
                                         <TextBlock Text="{Binding Lpd_Canny2}" Width="40" />
                                     </StackPanel>
-                                    <Slider Minimum="0" Maximum="255" Value="{Binding Lpd_Canny2, UpdateSourceTrigger=PropertyChanged}" IsSnapToTickEnabled="True" TickFrequency="1" />
+                                    <Slider Minimum="0" Maximum="255" Value="{Binding Lpd_Canny2, UpdateSourceTrigger=LostFocus}" IsSnapToTickEnabled="True" TickFrequency="1" />
                                 </StackPanel>
 
                                 <StackPanel Margin="0,0,0,2">
@@ -1277,7 +1277,7 @@
                                         <TextBlock Text="Hough" Width="60" VerticalAlignment="Center" />
                                         <TextBlock Text="{Binding Lpd_HoughThreshold}" Width="40" />
                                     </StackPanel>
-                                    <Slider Minimum="1" Maximum="200" Value="{Binding Lpd_HoughThreshold, UpdateSourceTrigger=PropertyChanged}" IsSnapToTickEnabled="True" TickFrequency="1" />
+                                    <Slider Minimum="1" Maximum="200" Value="{Binding Lpd_HoughThreshold, UpdateSourceTrigger=LostFocus}" IsSnapToTickEnabled="True" TickFrequency="1" />
                                 </StackPanel>
 
                                 <StackPanel Margin="0,0,0,2">
@@ -1285,7 +1285,7 @@
                                         <TextBlock Text="MinLen" Width="60" VerticalAlignment="Center" />
                                         <TextBlock Text="{Binding Lpd_MinLineLength}" Width="40" />
                                     </StackPanel>
-                                    <Slider Minimum="1" Maximum="400" Value="{Binding Lpd_MinLineLength, UpdateSourceTrigger=PropertyChanged}" IsSnapToTickEnabled="True" TickFrequency="1" />
+                                    <Slider Minimum="1" Maximum="400" Value="{Binding Lpd_MinLineLength, UpdateSourceTrigger=LostFocus}" IsSnapToTickEnabled="True" TickFrequency="1" />
                                 </StackPanel>
 
                                 <StackPanel Margin="0,0,0,6">
@@ -1293,7 +1293,7 @@
                                         <TextBlock Text="MaxGap" Width="60" VerticalAlignment="Center" />
                                         <TextBlock Text="{Binding Lpd_MaxLineGap}" Width="40" />
                                     </StackPanel>
-                                    <Slider Minimum="0" Maximum="100" Value="{Binding Lpd_MaxLineGap, UpdateSourceTrigger=PropertyChanged}" IsSnapToTickEnabled="True" TickFrequency="1" />
+                                    <Slider Minimum="0" Maximum="100" Value="{Binding Lpd_MaxLineGap, UpdateSourceTrigger=LostFocus}" IsSnapToTickEnabled="True" TickFrequency="1" />
                                 </StackPanel>
 
                                 <TextBlock Text="Spec" FontWeight="SemiBold" Margin="0,6,0,6" />
@@ -1307,7 +1307,7 @@
                                             <TextBlock Text="Nom" VerticalAlignment="Center" Margin="8,4" Foreground="{DynamicResource TextBrush}"/>
                                         </Border>
                                         <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
-                                            <TextBox Text="{Binding Distance_Nominal, UpdateSourceTrigger=PropertyChanged}" Margin="4" />
+                                            <TextBox Text="{Binding Distance_Nominal, UpdateSourceTrigger=LostFocus}" Margin="4" />
                                         </Border>
                                     </Grid>
                                 </Border>
@@ -1321,7 +1321,7 @@
                                             <TextBlock Text="Tol+" VerticalAlignment="Center" Margin="8,4" Foreground="{DynamicResource TextBrush}"/>
                                         </Border>
                                         <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
-                                            <TextBox Text="{Binding Distance_TolPlus, UpdateSourceTrigger=PropertyChanged}" Margin="4" />
+                                            <TextBox Text="{Binding Distance_TolPlus, UpdateSourceTrigger=LostFocus}" Margin="4" />
                                         </Border>
                                     </Grid>
                                 </Border>
@@ -1335,7 +1335,7 @@
                                             <TextBlock Text="Tol-" VerticalAlignment="Center" Margin="8,4" Foreground="{DynamicResource TextBrush}"/>
                                         </Border>
                                         <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
-                                            <TextBox Text="{Binding Distance_TolMinus, UpdateSourceTrigger=PropertyChanged}" Margin="4" />
+                                            <TextBox Text="{Binding Distance_TolMinus, UpdateSourceTrigger=LostFocus}" Margin="4" />
                                         </Border>
                                     </Grid>
                                 </Border>
@@ -1365,7 +1365,7 @@
                                             <TextBlock Text="Algo" VerticalAlignment="Center" Margin="8,4" Foreground="{DynamicResource TextBrush}"/>
                                         </Border>
                                         <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
-                                            <ComboBox ItemsSource="{Binding AvailableCircleFindAlgorithms}" SelectedItem="{Binding Cf_Algorithm, UpdateSourceTrigger=PropertyChanged}" Margin="4" />
+                                            <ComboBox ItemsSource="{Binding AvailableCircleFindAlgorithms}" SelectedItem="{Binding Cf_Algorithm, UpdateSourceTrigger=LostFocus}" Margin="4" />
                                         </Border>
                                     </Grid>
                                 </Border>
@@ -1380,7 +1380,7 @@
                                             <TextBlock Text="MinR" VerticalAlignment="Center" Margin="8,4" Foreground="{DynamicResource TextBrush}"/>
                                         </Border>
                                         <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
-                                            <TextBox Text="{Binding Cf_MinRadiusPx, UpdateSourceTrigger=PropertyChanged}" Margin="4" />
+                                            <TextBox Text="{Binding Cf_MinRadiusPx, UpdateSourceTrigger=LostFocus}" Margin="4" />
                                         </Border>
                                     </Grid>
                                 </Border>
@@ -1394,7 +1394,7 @@
                                             <TextBlock Text="MaxR" VerticalAlignment="Center" Margin="8,4" Foreground="{DynamicResource TextBrush}"/>
                                         </Border>
                                         <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
-                                            <TextBox Text="{Binding Cf_MaxRadiusPx, UpdateSourceTrigger=PropertyChanged}" Margin="4" />
+                                            <TextBox Text="{Binding Cf_MaxRadiusPx, UpdateSourceTrigger=LostFocus}" Margin="4" />
                                         </Border>
                                     </Grid>
                                 </Border>
@@ -1423,7 +1423,7 @@
                                             <TextBlock Text="Dp" VerticalAlignment="Center" Margin="8,4" Foreground="{DynamicResource TextBrush}"/>
                                         </Border>
                                         <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
-                                            <TextBox Text="{Binding Cf_HoughDp, UpdateSourceTrigger=PropertyChanged}" Margin="4" />
+                                            <TextBox Text="{Binding Cf_HoughDp, UpdateSourceTrigger=LostFocus}" Margin="4" />
                                         </Border>
                                     </Grid>
                                 </Border>
@@ -1437,7 +1437,7 @@
                                             <TextBlock Text="MinDist" VerticalAlignment="Center" Margin="8,4" Foreground="{DynamicResource TextBrush}"/>
                                         </Border>
                                         <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
-                                            <TextBox Text="{Binding Cf_HoughMinDistPx, UpdateSourceTrigger=PropertyChanged}" Margin="4" />
+                                            <TextBox Text="{Binding Cf_HoughMinDistPx, UpdateSourceTrigger=LostFocus}" Margin="4" />
                                         </Border>
                                     </Grid>
                                 </Border>
@@ -1451,7 +1451,7 @@
                                             <TextBlock Text="P1" VerticalAlignment="Center" Margin="8,4" Foreground="{DynamicResource TextBrush}"/>
                                         </Border>
                                         <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
-                                            <TextBox Text="{Binding Cf_HoughParam1, UpdateSourceTrigger=PropertyChanged}" Margin="4" />
+                                            <TextBox Text="{Binding Cf_HoughParam1, UpdateSourceTrigger=LostFocus}" Margin="4" />
                                         </Border>
                                     </Grid>
                                 </Border>
@@ -1465,7 +1465,7 @@
                                             <TextBlock Text="P2" VerticalAlignment="Center" Margin="8,4" Foreground="{DynamicResource TextBrush}"/>
                                         </Border>
                                         <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
-                                            <TextBox Text="{Binding Cf_HoughParam2, UpdateSourceTrigger=PropertyChanged}" Margin="4" />
+                                            <TextBox Text="{Binding Cf_HoughParam2, UpdateSourceTrigger=LostFocus}" Margin="4" />
                                         </Border>
                                     </Grid>
                                 </Border>
@@ -1498,7 +1498,7 @@
                                             <TextBlock Text="C1" VerticalAlignment="Center" Margin="8,4" Foreground="{DynamicResource TextBrush}"/>
                                         </Border>
                                         <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
-                                            <TextBox Text="{Binding Cf_Canny1, UpdateSourceTrigger=PropertyChanged}" Margin="4" />
+                                            <TextBox Text="{Binding Cf_Canny1, UpdateSourceTrigger=LostFocus}" Margin="4" />
                                         </Border>
                                     </Grid>
                                 </Border>
@@ -1512,7 +1512,7 @@
                                             <TextBlock Text="C2" VerticalAlignment="Center" Margin="8,4" Foreground="{DynamicResource TextBrush}"/>
                                         </Border>
                                         <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
-                                            <TextBox Text="{Binding Cf_Canny2, UpdateSourceTrigger=PropertyChanged}" Margin="4" />
+                                            <TextBox Text="{Binding Cf_Canny2, UpdateSourceTrigger=LostFocus}" Margin="4" />
                                         </Border>
                                     </Grid>
                                 </Border>
@@ -1540,7 +1540,7 @@
                                             <TextBlock Text="Circularity" VerticalAlignment="Center" Margin="8,4" Foreground="{DynamicResource TextBrush}"/>
                                         </Border>
                                         <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
-                                            <TextBox Text="{Binding Cf_MinCircularity, UpdateSourceTrigger=PropertyChanged}" Margin="4" />
+                                            <TextBox Text="{Binding Cf_MinCircularity, UpdateSourceTrigger=LostFocus}" Margin="4" />
                                         </Border>
                                     </Grid>
                                 </Border>
@@ -1572,7 +1572,7 @@
                                             <TextBlock Text="Circle" VerticalAlignment="Center" Margin="8,4" Foreground="{DynamicResource TextBrush}"/>
                                         </Border>
                                         <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
-                                            <ComboBox ItemsSource="{Binding AvailableCircleFinderNames}" SelectedItem="{Binding Dia_CircleRef, UpdateSourceTrigger=PropertyChanged}" Margin="4" />
+                                            <ComboBox ItemsSource="{Binding AvailableCircleFinderNames}" SelectedItem="{Binding Dia_CircleRef, UpdateSourceTrigger=LostFocus}" Margin="4" />
                                         </Border>
                                     </Grid>
                                 </Border>
@@ -1593,7 +1593,7 @@
                                             <TextBlock Text="Orientation" VerticalAlignment="Center" Margin="8,4" Foreground="{DynamicResource TextBrush}"/>
                                         </Border>
                                         <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
-                                            <ComboBox ItemsSource="{Binding AvailableCaliperOrientations}" SelectedItem="{Binding Epd_Orientation, UpdateSourceTrigger=PropertyChanged}" Margin="4" />
+                                            <ComboBox ItemsSource="{Binding AvailableCaliperOrientations}" SelectedItem="{Binding Epd_Orientation, UpdateSourceTrigger=LostFocus}" Margin="4" />
                                         </Border>
                                     </Grid>
                                 </Border>
@@ -1608,7 +1608,7 @@
                                             <TextBlock Text="Polarity" VerticalAlignment="Center" Margin="8,4" Foreground="{DynamicResource TextBrush}"/>
                                         </Border>
                                         <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
-                                            <ComboBox ItemsSource="{Binding AvailableEdgePolarities}" SelectedItem="{Binding Epd_Polarity, UpdateSourceTrigger=PropertyChanged}" Margin="4" />
+                                            <ComboBox ItemsSource="{Binding AvailableEdgePolarities}" SelectedItem="{Binding Epd_Polarity, UpdateSourceTrigger=LostFocus}" Margin="4" />
                                         </Border>
                                     </Grid>
                                 </Border>
@@ -1623,7 +1623,7 @@
                                             <TextBlock Text="Strip Count" VerticalAlignment="Center" Margin="8,4" Foreground="{DynamicResource TextBrush}"/>
                                         </Border>
                                         <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
-                                            <TextBox Text="{Binding Epd_StripCount, UpdateSourceTrigger=PropertyChanged}" Margin="4" />
+                                            <TextBox Text="{Binding Epd_StripCount, UpdateSourceTrigger=LostFocus}" Margin="4" />
                                         </Border>
                                     </Grid>
                                 </Border>
@@ -1638,7 +1638,7 @@
                                             <TextBlock Text="Strip Width" VerticalAlignment="Center" Margin="8,4" Foreground="{DynamicResource TextBrush}"/>
                                         </Border>
                                         <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
-                                            <TextBox Text="{Binding Epd_StripWidth, UpdateSourceTrigger=PropertyChanged}" Margin="4" />
+                                            <TextBox Text="{Binding Epd_StripWidth, UpdateSourceTrigger=LostFocus}" Margin="4" />
                                         </Border>
                                     </Grid>
                                 </Border>
@@ -1653,7 +1653,7 @@
                                             <TextBlock Text="Strip Length" VerticalAlignment="Center" Margin="8,4" Foreground="{DynamicResource TextBrush}"/>
                                         </Border>
                                         <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
-                                            <TextBox Text="{Binding Epd_StripLength, UpdateSourceTrigger=PropertyChanged}" Margin="4" />
+                                            <TextBox Text="{Binding Epd_StripLength, UpdateSourceTrigger=LostFocus}" Margin="4" />
                                         </Border>
                                     </Grid>
                                 </Border>
@@ -1668,7 +1668,7 @@
                                             <TextBlock Text="Min Gradient" VerticalAlignment="Center" Margin="8,4" Foreground="{DynamicResource TextBrush}"/>
                                         </Border>
                                         <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
-                                            <TextBox Text="{Binding Epd_MinEdgeStrength, UpdateSourceTrigger=PropertyChanged}" Margin="4" />
+                                            <TextBox Text="{Binding Epd_MinEdgeStrength, UpdateSourceTrigger=LostFocus}" Margin="4" />
                                         </Border>
                                     </Grid>
                                 </Border>
@@ -1683,7 +1683,7 @@
                                             <TextBlock Text="Min Separation" VerticalAlignment="Center" Margin="8,4" Foreground="{DynamicResource TextBrush}"/>
                                         </Border>
                                         <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
-                                            <TextBox Text="{Binding Epd_MinEdgeSeparationPx, UpdateSourceTrigger=PropertyChanged}" Margin="4" />
+                                            <TextBox Text="{Binding Epd_MinEdgeSeparationPx, UpdateSourceTrigger=LostFocus}" Margin="4" />
                                         </Border>
                                     </Grid>
                                 </Border>
@@ -1699,7 +1699,7 @@
                                             <TextBlock Text="Nominal" VerticalAlignment="Center" Margin="8,4" Foreground="{DynamicResource TextBrush}"/>
                                         </Border>
                                         <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
-                                            <TextBox Text="{Binding Distance_Nominal, UpdateSourceTrigger=PropertyChanged}" Margin="4" />
+                                            <TextBox Text="{Binding Distance_Nominal, UpdateSourceTrigger=LostFocus}" Margin="4" />
                                         </Border>
                                     </Grid>
                                 </Border>
@@ -1713,7 +1713,7 @@
                                             <TextBlock Text="Tolerance+" VerticalAlignment="Center" Margin="8,4" Foreground="{DynamicResource TextBrush}"/>
                                         </Border>
                                         <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
-                                            <TextBox Text="{Binding Distance_TolPlus, UpdateSourceTrigger=PropertyChanged}" Margin="4" />
+                                            <TextBox Text="{Binding Distance_TolPlus, UpdateSourceTrigger=LostFocus}" Margin="4" />
                                         </Border>
                                     </Grid>
                                 </Border>
@@ -1727,7 +1727,7 @@
                                             <TextBlock Text="Tolerance-" VerticalAlignment="Center" Margin="8,4" Foreground="{DynamicResource TextBrush}"/>
                                         </Border>
                                         <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
-                                            <TextBox Text="{Binding Distance_TolMinus, UpdateSourceTrigger=PropertyChanged}" Margin="4" />
+                                            <TextBox Text="{Binding Distance_TolMinus, UpdateSourceTrigger=LostFocus}" Margin="4" />
                                         </Border>
                                     </Grid>
                                 </Border>
@@ -1747,14 +1747,14 @@
                                     <TextBlock Text="Code Detection" FontWeight="Bold" Foreground="{DynamicResource TextBrush}" />
                                 </Border>
 
-                                <CheckBox Content="Try Harder" IsChecked="{Binding Cdt_TryHarder, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,6" />
+                                <CheckBox Content="Try Harder" IsChecked="{Binding Cdt_TryHarder, UpdateSourceTrigger=LostFocus}" Margin="0,0,0,6" />
 
                                 <TextBlock Text="Symbologies" FontWeight="SemiBold" Margin="0,0,0,6" />
-                                <CheckBox Content="QR" IsChecked="{Binding Cdt_EnableQr, UpdateSourceTrigger=PropertyChanged}" />
-                                <CheckBox Content="Barcode 1D" IsChecked="{Binding Cdt_EnableBarcode1D, UpdateSourceTrigger=PropertyChanged}" />
-                                <CheckBox Content="DataMatrix" IsChecked="{Binding Cdt_EnableDataMatrix, UpdateSourceTrigger=PropertyChanged}" />
-                                <CheckBox Content="PDF417" IsChecked="{Binding Cdt_EnablePdf417, UpdateSourceTrigger=PropertyChanged}" />
-                                <CheckBox Content="Aztec" IsChecked="{Binding Cdt_EnableAztec, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,6" />
+                                <CheckBox Content="QR" IsChecked="{Binding Cdt_EnableQr, UpdateSourceTrigger=LostFocus}" />
+                                <CheckBox Content="Barcode 1D" IsChecked="{Binding Cdt_EnableBarcode1D, UpdateSourceTrigger=LostFocus}" />
+                                <CheckBox Content="DataMatrix" IsChecked="{Binding Cdt_EnableDataMatrix, UpdateSourceTrigger=LostFocus}" />
+                                <CheckBox Content="PDF417" IsChecked="{Binding Cdt_EnablePdf417, UpdateSourceTrigger=LostFocus}" />
+                                <CheckBox Content="Aztec" IsChecked="{Binding Cdt_EnableAztec, UpdateSourceTrigger=LostFocus}" Margin="0,0,0,6" />
 
                                 <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
                                     <TextBlock Text="Text" Width="60" VerticalAlignment="Top" />
@@ -1950,8 +1950,8 @@
 
                     <TextBlock FontWeight="Bold" Text="Preview - Selected Node" Margin="0,0,0,6" />
                     <StackPanel Grid.Row="0" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
-                        <CheckBox Content="Show Results" IsChecked="{Binding ShowResultOverlay, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,10,0" />
-                        <CheckBox Content="Show ROI" IsChecked="{Binding ShowRoisInSelectedPreview, UpdateSourceTrigger=PropertyChanged}" />
+                        <CheckBox Content="Show Results" IsChecked="{Binding ShowResultOverlay, UpdateSourceTrigger=LostFocus}" Margin="0,0,10,0" />
+                        <CheckBox Content="Show ROI" IsChecked="{Binding ShowRoisInSelectedPreview, UpdateSourceTrigger=LostFocus}" />
                     </StackPanel>
                     <Border Grid.Row="1" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" Background="Transparent">
                         <controls:ImageViewerControl ImageSource="{Binding SelectedNodePreviewImage}"
@@ -1966,8 +1966,8 @@
 
                     <TextBlock Grid.Row="2" FontWeight="Bold" Text="Preview - Final Output" Margin="0,10,0,6" />
                     <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,10,0,6">
-                        <CheckBox Content="Show Results" IsChecked="{Binding ShowResultOverlay, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,10,0" />
-                        <CheckBox Content="Show ROI" IsChecked="{Binding ShowRoisInFinalPreview, UpdateSourceTrigger=PropertyChanged}" />
+                        <CheckBox Content="Show Results" IsChecked="{Binding ShowResultOverlay, UpdateSourceTrigger=LostFocus}" Margin="0,0,10,0" />
+                        <CheckBox Content="Show ROI" IsChecked="{Binding ShowRoisInFinalPreview, UpdateSourceTrigger=LostFocus}" />
                     </StackPanel>
                     <Border Grid.Row="3" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" Background="Transparent">
                         <controls:ImageViewerControl ImageSource="{Binding FinalPreviewImage}" OverlayItems="{Binding FinalOverlayItems}" />

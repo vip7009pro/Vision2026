@@ -146,7 +146,7 @@ public sealed record BlobInfo(Rect BoundingBox, Point2d Centroid, double Area);
 
 public sealed record BlobDetectionResult(string Name, int Count, List<BlobInfo> Blobs);
 
-public sealed record SurfaceCompareDefect(Rect BoundingBox, Point2d Centroid, double Area);
+public sealed record SurfaceCompareDefect(Rect BoundingBox, double Angle, Point2d Centroid, double Area);
 
 public sealed record SurfaceCompareResult(
     string Name, 
@@ -715,57 +715,27 @@ public sealed class InspectionService : IInspectionService
 
                 // Apply the same preprocessing steps to the template crop.
                 using var templCrop0 = preprocessor.Run(templRaw, settings);
-
-                using var templateCanvas = new Mat(testGray.Rows, testGray.Cols, MatType.CV_8UC1, Scalar.Black);
-                var tplRect = new Rect(templateRoiTeach.X, templateRoiTeach.Y, templateRoiTeach.Width, templateRoiTeach.Height)
-                    .Intersect(new Rect(0, 0, templateCanvas.Cols, templateCanvas.Rows));
-                if (tplRect.Width <= 0 || tplRect.Height <= 0)
+                // We need to un-rotate the target image to match the teach template orientation.
+                var trTeach = new Roi { X = templateRoiTeach.X, Y = templateRoiTeach.Y, Width = templateRoiTeach.Width, Height = templateRoiTeach.Height };
+                using var testCropRaw = ExtractStraightRoi(testGray, trTeach, originTeach, originFound, angleDeg, out var centerFoundTpl);
+                if (testCropRaw.Width <= 0 || testCropRaw.Height <= 0)
                 {
                     return new SurfaceCompareResult(def.Name, 0, 0.0, new List<SurfaceCompareDefect>(), false);
                 }
 
-                using (var dst = new Mat(templateCanvas, tplRect))
+                // Apply the same preprocessing steps to the target crop.
+                using var testCrop = preprocessor.Run(testCropRaw, settings);
+
+                // Make sure template crop has the exact size
+                using var tplCrop = new Mat();
+                if (templCrop0.Width != templateRoiTeach.Width || templCrop0.Height != templateRoiTeach.Height)
                 {
-                    // If stored crop size doesn't exactly match (older data), resize to fit.
-                    if (templCrop0.Width != tplRect.Width || templCrop0.Height != tplRect.Height)
-                    {
-                        using var resized = new Mat();
-                        Cv2.Resize(templCrop0, resized, new Size(tplRect.Width, tplRect.Height), 0, 0, InterpolationFlags.Area);
-                        resized.CopyTo(dst);
-                    }
-                    else
-                    {
-                        templCrop0.CopyTo(dst);
-                    }
+                    Cv2.Resize(templCrop0, tplCrop, new Size(templateRoiTeach.Width, templateRoiTeach.Height), 0, 0, InterpolationFlags.Area);
                 }
-
-                // Warp template canvas from teach pose to found pose.
-                var dx = originFound.X - originTeach.X;
-                var dy = originFound.Y - originTeach.Y;
-                using var m = Cv2.GetRotationMatrix2D(new Point2f((float)originTeach.X, (float)originTeach.Y), angleDeg, 1.0);
-                m.Set(0, 2, m.Get<double>(0, 2) + dx);
-                m.Set(1, 2, m.Get<double>(1, 2) + dy);
-
-                using var templWarp = new Mat(testGray.Rows, testGray.Cols, MatType.CV_8UC1, Scalar.Black);
-                Cv2.WarpAffine(templateCanvas, templWarp, m, new Size(testGray.Cols, testGray.Rows), InterpolationFlags.Linear, BorderTypes.Constant, Scalar.Black);
-
-                // Inspect ROI is defined in teach space; transform to current pose (keep size).
-                var inspectRoi = TransformRoiKeepSize(inspectRoiTeach, originTeach, originFound, angleDeg);
-                var templateRoi = TransformRoiKeepSize(templateRoiTeach, originTeach, originFound, angleDeg);
-
-                // We will perform the inspection focused on the templateRoi area (to avoid mismatch with search ROI size).
-                // However, we still use the Search ROI as a bounding container if needed.
-                var rect = new Rect(templateRoi.X, templateRoi.Y, templateRoi.Width, templateRoi.Height)
-                    .Intersect(new Rect(0, 0, testGray.Cols, testGray.Rows));
-
-                if (rect.Width <= 0 || rect.Height <= 0)
+                else
                 {
-                    return new SurfaceCompareResult(def.Name, 0, 0.0, new List<SurfaceCompareDefect>(), false);
+                    templCrop0.CopyTo(tplCrop);
                 }
-
-                // Compute diff in the template area using Grayscale Subtraction (more robust for noise)
-                using var testCrop = new Mat(testGray, rect);
-                using var tplCrop = new Mat(templWarp, rect);
 
                 using var diffGray = new Mat();
                 Cv2.Absdiff(testCrop, tplCrop, diffGray);
@@ -788,26 +758,16 @@ public sealed class InspectionService : IInspectionService
                             continue;
                         }
 
-                        var rr = TransformRoiKeepSize(rr0.Roi, originTeach, originFound, angleDeg);
-                        if (rr.Width <= 0 || rr.Height <= 0)
-                        {
-                            continue;
-                        }
-
-                        var rx = rr.X - rect.X;
-                        var ry = rr.Y - rect.Y;
-                        var r = new Rect(rx, ry, rr.Width, rr.Height)
-                            .Intersect(new Rect(0, 0, bw.Cols, bw.Rows));
-                        if (r.Width <= 0 || r.Height <= 0)
-                        {
-                            continue;
-                        }
+                        var ptsI = new Point[4];
+                        ptsI[0] = new Point(rr0.Roi.X - templateRoiTeach.X, rr0.Roi.Y - templateRoiTeach.Y);
+                        ptsI[1] = new Point(rr0.Roi.X + rr0.Roi.Width - templateRoiTeach.X, rr0.Roi.Y - templateRoiTeach.Y);
+                        ptsI[2] = new Point(rr0.Roi.X + rr0.Roi.Width - templateRoiTeach.X, rr0.Roi.Y + rr0.Roi.Height - templateRoiTeach.Y);
+                        ptsI[3] = new Point(rr0.Roi.X - templateRoiTeach.X, rr0.Roi.Y + rr0.Roi.Height - templateRoiTeach.Y);
 
                         if (rr0.Mode == BlobRoiMode.Include)
                         {
                             anyInclude = true;
-                            using var sub = new Mat(mask, r);
-                            sub.SetTo(Scalar.White);
+                            Cv2.FillPoly(mask, new[] { ptsI }, Scalar.White);
                         }
                     }
 
@@ -823,23 +783,13 @@ public sealed class InspectionService : IInspectionService
                             continue;
                         }
 
-                        var rr = TransformRoiKeepSize(rr0.Roi, originTeach, originFound, angleDeg);
-                        if (rr.Width <= 0 || rr.Height <= 0)
-                        {
-                            continue;
-                        }
+                        var ptsI = new Point[4];
+                        ptsI[0] = new Point(rr0.Roi.X - templateRoiTeach.X, rr0.Roi.Y - templateRoiTeach.Y);
+                        ptsI[1] = new Point(rr0.Roi.X + rr0.Roi.Width - templateRoiTeach.X, rr0.Roi.Y - templateRoiTeach.Y);
+                        ptsI[2] = new Point(rr0.Roi.X + rr0.Roi.Width - templateRoiTeach.X, rr0.Roi.Y + rr0.Roi.Height - templateRoiTeach.Y);
+                        ptsI[3] = new Point(rr0.Roi.X - templateRoiTeach.X, rr0.Roi.Y + rr0.Roi.Height - templateRoiTeach.Y);
 
-                        var rx = rr.X - rect.X;
-                        var ry = rr.Y - rect.Y;
-                        var r = new Rect(rx, ry, rr.Width, rr.Height)
-                            .Intersect(new Rect(0, 0, bw.Cols, bw.Rows));
-                        if (r.Width <= 0 || r.Height <= 0)
-                        {
-                            continue;
-                        }
-
-                        using var sub = new Mat(mask, r);
-                        sub.SetTo(Scalar.Black);
+                        Cv2.FillPoly(mask, new[] { ptsI }, Scalar.Black);
                     }
 
                     Cv2.BitwiseAnd(bw, mask, bw);
@@ -851,15 +801,13 @@ public sealed class InspectionService : IInspectionService
                     var tr0 = def.TemplateRoi;
                     if (tr0.Width <= 0 || tr0.Height <= 0) tr0 = def.InspectRoi;
 
-                    var tr = TransformRoiKeepSize(tr0, originTeach, originFound, angleDeg);
-                    var rx = tr.X - rect.X;
-                    var ry = tr.Y - rect.Y;
-                    var r = new Rect(rx, ry, tr.Width, tr.Height).Intersect(new Rect(0, 0, bw.Cols, bw.Rows));
-                    if (r.Width > 0 && r.Height > 0)
-                    {
-                        using var sub = new Mat(mask, r);
-                        sub.SetTo(Scalar.White);
-                    }
+                    var ptsI = new Point[4];
+                    ptsI[0] = new Point(tr0.X - templateRoiTeach.X, tr0.Y - templateRoiTeach.Y);
+                    ptsI[1] = new Point(tr0.X + tr0.Width - templateRoiTeach.X, tr0.Y - templateRoiTeach.Y);
+                    ptsI[2] = new Point(tr0.X + tr0.Width - templateRoiTeach.X, tr0.Y + tr0.Height - templateRoiTeach.Y);
+                    ptsI[3] = new Point(tr0.X - templateRoiTeach.X, tr0.Y + tr0.Height - templateRoiTeach.Y);
+                    
+                    Cv2.FillPoly(mask, new[] { ptsI }, Scalar.White);
                     Cv2.BitwiseAnd(bw, mask, bw);
                 }
 
@@ -912,9 +860,15 @@ public sealed class InspectionService : IInspectionService
                     var cx = centroids.Get<double>(i, 0);
                     var cy = centroids.Get<double>(i, 1);
 
-                    var fullRect = new Rect(left + rect.X, top + rect.Y, width, height);
-                    var centroid = new Point2d(cx + rect.X, cy + rect.Y);
-                    defects.Add(new SurfaceCompareDefect(fullRect, centroid, areaPx));
+                    // Map local coordinates from straight patch back to global found image
+                    var localCenterX = left + width / 2.0;
+                    var localCenterY = top + height / 2.0;
+                    var globalCenterForRect = MapToGlobal(new Point2d(localCenterX, localCenterY), templateRoiTeach.Width, templateRoiTeach.Height, centerFoundTpl, angleDeg);
+                    
+                    var fullRect = new Rect((int)Math.Round(globalCenterForRect.X - width / 2.0), (int)Math.Round(globalCenterForRect.Y - height / 2.0), width, height);
+                    var centroid = MapToGlobal(new Point2d(cx, cy), templateRoiTeach.Width, templateRoiTeach.Height, centerFoundTpl, angleDeg);
+
+                    defects.Add(new SurfaceCompareDefect(fullRect, angleDeg, centroid, areaPx));
                 }
 
                 var pass = defects.Count >= def.MinCount && defects.Count <= def.MaxCount;
@@ -1480,8 +1434,8 @@ public sealed class InspectionService : IInspectionService
                     .Select(sc => Task.Run(() =>
                     {
                         var __sw = System.Diagnostics.Stopwatch.StartNew();
-                        var (matForSc, scSettings) = ResolveToolPreprocess("SurfaceCompare", sc.Name);
-                        var res = RunSurfaceCompare(matForSc, originTeach, originFound, angleDeg, sc, _preprocessor, scSettings);
+                        var (_, scSettings) = ResolveToolPreprocess("SurfaceCompare", sc.Name);
+                        var res = RunSurfaceCompare(image, originTeach, originFound, angleDeg, sc, _preprocessor, scSettings);
                         __sw.Stop(); result.Timings.NodeTimings[sc.Name] = (int)__sw.ElapsedMilliseconds; return res;
                     }))
                     .ToArray();
