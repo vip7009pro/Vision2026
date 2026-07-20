@@ -1,4 +1,4 @@
-using OpenCvSharp;
+﻿using OpenCvSharp;
 using VisionInspectionApp.Models;
 using VisionInspectionApp.VisionEngine;
 using System.Diagnostics;

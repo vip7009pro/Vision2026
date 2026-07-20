@@ -1,4 +1,4 @@
-﻿using System.Windows.Media;
+using System.Windows.Media;
 
 namespace VisionInspectionApp.UI.Controls;
 
@@ -17,6 +17,7 @@ public sealed class OverlayRectItem : OverlayItem
     public int Y { get; init; }
     public int Width { get; init; }
     public int Height { get; init; }
+    public double Angle { get; init; } = 0;
 
     public Brush? Fill { get; init; }
 }

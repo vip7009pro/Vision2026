@@ -598,12 +598,7 @@ public partial class ImageViewerControl : UserControl
 
     private void RedrawOverlays()
     {
-        if (_panning)
-        {
-            return;
-        }
-
-        if (_dragging)
+        if (_panning || _dragging)
         {
             return;
         }
@@ -619,207 +614,35 @@ public partial class ImageViewerControl : UserControl
         PART_Image.Height = bmp.Height;
         PART_Overlay.Width = bmp.Width;
         PART_Overlay.Height = bmp.Height;
+        PART_FastOverlay.InvalidateVisual();
 
         if (OverlayItems is null)
         {
             return;
         }
 
-        var rects = new List<OverlayRectItem>();
-        var others = new List<OverlayItem>();
+        var sx = bmp.Width / bmp.PixelWidth;
+        var sy = bmp.Height / bmp.PixelHeight;
+
         foreach (var item in OverlayItems)
         {
             if (item is OverlayRectItem r)
             {
-                rects.Add(r);
+                var showHandles = (!string.IsNullOrWhiteSpace(r.Label)
+                    && (
+                        string.Equals(r.Label, _activeRoiLabel, StringComparison.OrdinalIgnoreCase)
+                        || string.Equals(r.Label, _hoverRoiLabel, StringComparison.OrdinalIgnoreCase)
+                    ));
+
+                if (showHandles)
+                {
+                    var vx = r.X * sx;
+                    var vy = r.Y * sy;
+                    var vw = r.Width * sx;
+                    var vh = r.Height * sy;
+                    DrawRoiHandles(vx, vy, vw, vh, string.Equals(r.Label, _activeRoiLabel, StringComparison.OrdinalIgnoreCase));
+                }
             }
-            else
-            {
-                others.Add(item);
-            }
-        }
-
-        var active = string.IsNullOrWhiteSpace(_activeRoiLabel)
-            ? null
-            : rects.FirstOrDefault(x => string.Equals(x.Label, _activeRoiLabel, StringComparison.OrdinalIgnoreCase));
-
-        foreach (var r in rects)
-        {
-            if (active is not null && string.Equals(r.Label, active.Label, StringComparison.OrdinalIgnoreCase))
-            {
-                continue;
-            }
-
-            DrawRect(bmp, r);
-        }
-
-        if (active is not null)
-        {
-            DrawRect(bmp, active);
-        }
-
-        foreach (var item in others)
-        {
-            switch (item)
-            {
-                case OverlayPointItem p:
-                    DrawPoint(bmp, p);
-                    break;
-                case OverlayLineItem l:
-                    DrawLine(bmp, l);
-                    break;
-                case OverlayTextItem t:
-                    DrawText(bmp, t);
-                    break;
-            }
-        }
-    }
-
-    private void DrawText(BitmapSource bmp, OverlayTextItem t)
-    {
-        if (t is null || string.IsNullOrWhiteSpace(t.Text))
-        {
-            return;
-        }
-
-        var sx = bmp.Width / bmp.PixelWidth;
-        var sy = bmp.Height / bmp.PixelHeight;
-        var vx = t.X * sx;
-        var vy = t.Y * sy;
-
-        var tb = new TextBlock
-        {
-            Text = t.Text,
-            Foreground = t.Foreground,
-            Background = t.Background,
-            Padding = new Thickness(2, 0, 2, 0)
-        };
-
-        Canvas.SetLeft(tb, vx);
-        Canvas.SetTop(tb, vy);
-        PART_Overlay.Children.Add(tb);
-    }
-
-    private void DrawRect(BitmapSource bmp, OverlayRectItem r)
-    {
-        var sx = bmp.Width / bmp.PixelWidth;
-        var sy = bmp.Height / bmp.PixelHeight;
-
-        var vx = r.X * sx;
-        var vy = r.Y * sy;
-        var vx2 = (r.X + r.Width) * sx;
-        var vy2 = (r.Y + r.Height) * sy;
-
-        var rect = new Rectangle
-        {
-            Stroke = r.Stroke,
-            StrokeThickness = r.StrokeThickness,
-            Fill = r.Fill
-        };
-
-        Canvas.SetLeft(rect, vx);
-        Canvas.SetTop(rect, vy);
-        rect.Width = Math.Max(1, vx2 - vx);
-        rect.Height = Math.Max(1, vy2 - vy);
-        PART_Overlay.Children.Add(rect);
-
-        var showHandles = (!string.IsNullOrWhiteSpace(r.Label)
-            && (
-                string.Equals(r.Label, _activeRoiLabel, StringComparison.OrdinalIgnoreCase)
-                || string.Equals(r.Label, _hoverRoiLabel, StringComparison.OrdinalIgnoreCase)
-            ));
-
-        if (showHandles)
-        {
-            DrawRoiHandles(vx, vy, rect.Width, rect.Height, string.Equals(r.Label, _activeRoiLabel, StringComparison.OrdinalIgnoreCase));
-        }
-
-        if (!string.IsNullOrWhiteSpace(r.Label))
-        {
-            var tb = new TextBlock
-            {
-                Text = r.Label,
-                Foreground = r.Stroke,
-                Background = new SolidColorBrush(Color.FromArgb(80, 0, 0, 0)),
-                Padding = new Thickness(2, 0, 2, 0)
-            };
-
-            Canvas.SetLeft(tb, vx + 2);
-            Canvas.SetTop(tb, Math.Max(0, vy - 18));
-            PART_Overlay.Children.Add(tb);
-        }
-    }
-
-    private void DrawPoint(BitmapSource bmp, OverlayPointItem p)
-    {
-        var sx = bmp.Width / bmp.PixelWidth;
-        var sy = bmp.Height / bmp.PixelHeight;
-        var vx = p.X * sx;
-        var vy = p.Y * sy;
-        var rr = p.Radius;
-
-        var ellipse = new Ellipse
-        {
-            Stroke = p.Stroke,
-            StrokeThickness = p.StrokeThickness,
-            Width = rr * 2,
-            Height = rr * 2
-        };
-
-        Canvas.SetLeft(ellipse, vx - rr);
-        Canvas.SetTop(ellipse, vy - rr);
-        PART_Overlay.Children.Add(ellipse);
-
-        if (!string.IsNullOrWhiteSpace(p.Label))
-        {
-            var tb = new TextBlock
-            {
-                Text = p.Label,
-                Foreground = p.Stroke,
-                Background = new SolidColorBrush(Color.FromArgb(80, 0, 0, 0)),
-                Padding = new Thickness(2, 0, 2, 0)
-            };
-
-            Canvas.SetLeft(tb, vx + rr + 2);
-            Canvas.SetTop(tb, vy - rr - 2);
-            PART_Overlay.Children.Add(tb);
-        }
-    }
-
-    private void DrawLine(BitmapSource bmp, OverlayLineItem l)
-    {
-        var sx = bmp.Width / bmp.PixelWidth;
-        var sy = bmp.Height / bmp.PixelHeight;
-        var vx1 = l.X1 * sx;
-        var vy1 = l.Y1 * sy;
-        var vx2 = l.X2 * sx;
-        var vy2 = l.Y2 * sy;
-
-        var line = new Line
-        {
-            X1 = vx1,
-            Y1 = vy1,
-            X2 = vx2,
-            Y2 = vy2,
-            Stroke = l.Stroke,
-            StrokeThickness = l.StrokeThickness
-        };
-
-        PART_Overlay.Children.Add(line);
-
-        if (!string.IsNullOrWhiteSpace(l.Label))
-        {
-            var tb = new TextBlock
-            {
-                Text = l.Label,
-                Foreground = l.Stroke,
-                Background = new SolidColorBrush(Color.FromArgb(80, 0, 0, 0)),
-                Padding = new Thickness(2, 0, 2, 0)
-            };
-
-            Canvas.SetLeft(tb, (vx1 + vx2) / 2.0 + 2);
-            Canvas.SetTop(tb, (vy1 + vy2) / 2.0 - 10);
-            PART_Overlay.Children.Add(tb);
         }
     }
 
