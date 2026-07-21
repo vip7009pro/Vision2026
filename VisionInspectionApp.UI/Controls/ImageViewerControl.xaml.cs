@@ -650,6 +650,7 @@ public partial class ImageViewerControl : UserControl
 
         PART_FastOverlay.Width = bmp.PixelWidth;
         PART_FastOverlay.Height = bmp.PixelHeight;
+        PART_FastOverlay.ViewScale = Math.Max(0.001, _transform.Matrix.M11);
         PART_FastOverlay.InvalidateVisual();
 
         if (OverlayItems is null)
@@ -1052,6 +1053,12 @@ public partial class ImageViewerControl : UserControl
         return new Point(px, py);
     }
 
+    private double GetScreenHitTolerance()
+    {
+        var scale = Math.Max(0.001, _transform.Matrix.M11);
+        return 14.0 / scale;
+    }
+
     private bool TryStartRoiEdit(BitmapSource bmp, Point contentPoint)
     {
         if (OverlayItems is null)
@@ -1059,7 +1066,7 @@ public partial class ImageViewerControl : UserControl
             return false;
         }
 
-        const double hitTol = 10.0;
+        var hitTol = GetScreenHitTolerance();
         var candidates = new List<(OverlayRectItem Item, Rect Rect)>();
 
         foreach (var item in OverlayItems)
@@ -1087,7 +1094,7 @@ public partial class ImageViewerControl : UserControl
 
         // Direct border or handle hits get top priority (ordered by smallest rect area)
         var borderHits = candidates
-            .Where(x => HitTestRoiHandle(x.Rect, contentPoint, 20.0) != RoiEditMode.None || IsNearRoiBorder(x.Rect, contentPoint, 20.0))
+            .Where(x => HitTestRoiHandle(x.Rect, contentPoint, hitTol) != RoiEditMode.None || IsNearRoiBorder(x.Rect, contentPoint, hitTol))
             .OrderBy(x => x.Rect.Width * x.Rect.Height)
             .ToList();
 
@@ -1111,11 +1118,11 @@ public partial class ImageViewerControl : UserControl
         _roiEditStart = contentPoint;
         _roiEditRectStart = picked.Rect;
         _roiEditRect = picked.Rect;
-        _roiEditMode = HitTestRoiHandle(picked.Rect, contentPoint, tolerance: 20.0);
+        _roiEditMode = HitTestRoiHandle(picked.Rect, contentPoint, tolerance: hitTol);
         if (_roiEditMode == RoiEditMode.None)
         {
             // Move mode is triggered by clicking near the edge/border, not deep inside
-            _roiEditMode = IsNearRoiBorder(picked.Rect, contentPoint, 20.0) ? RoiEditMode.Move : RoiEditMode.None;
+            _roiEditMode = IsNearRoiBorder(picked.Rect, contentPoint, hitTol) ? RoiEditMode.Move : RoiEditMode.None;
         }
 
         if (_roiEditMode == RoiEditMode.None)
@@ -1135,7 +1142,7 @@ public partial class ImageViewerControl : UserControl
             return null;
         }
 
-        const double hitTol = 10.0;
+        var hitTol = GetScreenHitTolerance();
         var candidates = new List<(OverlayRectItem Item, Rect Rect)>();
 
         foreach (var item in OverlayItems)
@@ -1162,7 +1169,7 @@ public partial class ImageViewerControl : UserControl
         }
 
         var borderHits = candidates
-            .Where(x => HitTestRoiHandle(x.Rect, contentPoint, 20.0) != RoiEditMode.None || IsNearRoiBorder(x.Rect, contentPoint, 20.0))
+            .Where(x => HitTestRoiHandle(x.Rect, contentPoint, hitTol) != RoiEditMode.None || IsNearRoiBorder(x.Rect, contentPoint, hitTol))
             .OrderBy(x => x.Rect.Width * x.Rect.Height)
             .ToList();
 
@@ -1181,8 +1188,9 @@ public partial class ImageViewerControl : UserControl
 
     private void DrawRoiHandles(double left, double top, double width, double height, bool isActive)
     {
-        var corner = isActive ? 12.0 : 10.0;
-        var edge = isActive ? 8.0 : 6.0;
+        var scale = Math.Max(0.001, _transform.Matrix.M11);
+        var corner = (isActive ? 12.0 : 10.0) / scale;
+        var edge = (isActive ? 8.0 : 6.0) / scale;
         var stroke = isActive ? Brushes.Cyan : Brushes.DeepSkyBlue;
 
         AddHandle(left, top, corner);
@@ -1202,7 +1210,7 @@ public partial class ImageViewerControl : UserControl
                 Width = size,
                 Height = size,
                 Stroke = stroke,
-                StrokeThickness = 1,
+                StrokeThickness = 1.5 / scale,
                 Fill = Brushes.Black
             };
 
@@ -1236,13 +1244,14 @@ public partial class ImageViewerControl : UserControl
             return;
         }
 
+        var hitTol = GetScreenHitTolerance();
         var rect = PixelRectToContentRect(bmp, roiItem.X, roiItem.Y, roiItem.Width, roiItem.Height);
-        var mode = HitTestRoiHandle(rect, contentPoint, tolerance: 20.0);
+        var mode = HitTestRoiHandle(rect, contentPoint, tolerance: hitTol);
 
         if (mode == RoiEditMode.None)
         {
             // Show SizeAll cursor only on the border/edge, not deep inside
-            Cursor = IsNearRoiBorder(rect, contentPoint, 20.0) ? Cursors.SizeAll : Cursors.Arrow;
+            Cursor = IsNearRoiBorder(rect, contentPoint, hitTol) ? Cursors.SizeAll : Cursors.Arrow;
             return;
         }
 
@@ -1376,11 +1385,12 @@ public partial class ImageViewerControl : UserControl
     private void RedrawRoiEditOverlay()
     {
         PART_Overlay.Children.Clear();
+        var scale = Math.Max(0.001, _transform.Matrix.M11);
 
         _roiEditRectShape = new Rectangle
         {
             Stroke = Brushes.Cyan,
-            StrokeThickness = 2,
+            StrokeThickness = 2.0 / scale,
             Fill = new SolidColorBrush(Color.FromArgb(20, 0, 255, 255))
         };
 
@@ -1402,7 +1412,7 @@ public partial class ImageViewerControl : UserControl
             PART_Overlay.Children.Add(new Line
             {
                 Stroke = Brushes.Cyan,
-                StrokeThickness = 2,
+                StrokeThickness = 2.0 / scale,
                 X1 = left,
                 Y1 = cy,
                 X2 = right,
@@ -1412,7 +1422,7 @@ public partial class ImageViewerControl : UserControl
             PART_Overlay.Children.Add(new Line
             {
                 Stroke = Brushes.Cyan,
-                StrokeThickness = 2,
+                StrokeThickness = 2.0 / scale,
                 X1 = cx,
                 Y1 = top,
                 X2 = cx,
@@ -1420,31 +1430,6 @@ public partial class ImageViewerControl : UserControl
             });
         }
 
-        const double hs = 6.0;
-        AddHandle(_roiEditRect.Left, _roiEditRect.Top);
-        AddHandle(_roiEditRect.Right, _roiEditRect.Top);
-        AddHandle(_roiEditRect.Left, _roiEditRect.Bottom);
-        AddHandle(_roiEditRect.Right, _roiEditRect.Bottom);
-        AddHandle((_roiEditRect.Left + _roiEditRect.Right) / 2.0, _roiEditRect.Top);
-        AddHandle((_roiEditRect.Left + _roiEditRect.Right) / 2.0, _roiEditRect.Bottom);
-        AddHandle(_roiEditRect.Left, (_roiEditRect.Top + _roiEditRect.Bottom) / 2.0);
-        AddHandle(_roiEditRect.Right, (_roiEditRect.Top + _roiEditRect.Bottom) / 2.0);
-
-        void AddHandle(double x, double y)
-        {
-            var h = new Rectangle
-            {
-                Width = hs,
-                Height = hs,
-                Stroke = Brushes.Cyan,
-                StrokeThickness = 1,
-                Fill = Brushes.Black
-            };
-
-            Canvas.SetLeft(h, x - hs / 2.0);
-            Canvas.SetTop(h, y - hs / 2.0);
-            _roiEditHandles.Add(h);
-            PART_Overlay.Children.Add(h);
-        }
+        DrawRoiHandles(_roiEditRect.X, _roiEditRect.Y, _roiEditRect.Width, _roiEditRect.Height, isActive: true);
     }
 }
