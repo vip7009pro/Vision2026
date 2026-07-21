@@ -750,6 +750,12 @@ public partial class ImageViewerControl : UserControl
 
         if (!Keyboard.Modifiers.HasFlag(ModifierKeys.Control) && !Keyboard.Modifiers.HasFlag(ModifierKeys.Shift))
         {
+            _panning = true;
+            _panStart = e.GetPosition(PART_RootGrid);
+            _panStartMatrix = _transform.Matrix;
+            PART_Overlay.CaptureMouse();
+            Cursor = Cursors.Hand;
+            e.Handled = true;
             return;
         }
 
@@ -880,6 +886,22 @@ public partial class ImageViewerControl : UserControl
 
     private void OverlayOnMouseLeftButtonUp(object sender, MouseButtonEventArgs e)
     {
+        if (_panning)
+        {
+            _panning = false;
+            if (PART_Overlay.IsMouseCaptured)
+            {
+                PART_Overlay.ReleaseMouseCapture();
+            }
+            if (PART_RootGrid.IsMouseCaptured)
+            {
+                PART_RootGrid.ReleaseMouseCapture();
+            }
+            Cursor = Cursors.Arrow;
+            e.Handled = true;
+            return;
+        }
+
         if (_roiEditing)
         {
             _roiEditing = false;
