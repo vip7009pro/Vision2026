@@ -3,15 +3,12 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:local="clr-namespace:VisionInspectionApp.UI.Controls">
 
-    <Grid Background="#111" ClipToBounds="True">
-        <Viewbox x:Name="PART_Viewbox" Stretch="Uniform">
-            <Grid x:Name="PART_Content">
-                <Image x:Name="PART_Image"
-                       Source="{Binding ImageSource, RelativeSource={RelativeSource AncestorType=UserControl}}" />
-                <local:FastOverlayCanvas x:Name="PART_FastOverlay" />
-                <Canvas x:Name="PART_Overlay" Background="Transparent" Focusable="True" />
-            </Grid>
-        </Viewbox>
+    <Grid x:Name="PART_RootGrid" Background="#111" ClipToBounds="True">
+        <Canvas x:Name="PART_Content" HorizontalAlignment="Left" VerticalAlignment="Top" RenderTransformOrigin="0,0">
+            <Image x:Name="PART_Image" Stretch="Fill" />
+            <local:FastOverlayCanvas x:Name="PART_FastOverlay" />
+            <Canvas x:Name="PART_Overlay" Background="Transparent" Focusable="True" />
+        </Canvas>
         
         <Border HorizontalAlignment="Left" VerticalAlignment="Top" Background="#80000000" CornerRadius="0,0,4,0" Margin="0" Padding="6,4" IsHitTestVisible="False">
             <TextBlock x:Name="PART_InfoText" Foreground="#00FF00" FontSize="11" FontFamily="Consolas" FontWeight="Bold" />

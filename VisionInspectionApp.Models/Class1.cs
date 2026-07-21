@@ -454,7 +454,9 @@ public enum OriginAlgorithm
 {
     ShapeBased = 0,
     TemplateMatch = 1,
-    FeatureBased = 2
+    FeatureBased = 2,
+    TemplateMatchPyramid = 3,
+    ShapePyramid = 4
 }
 
 public enum PointFindAlgorithm
@@ -505,6 +507,10 @@ public sealed class PointDefinition
     public Point2dModel WorldPosition { get; set; } = new();
 
     public Point2dModel OffsetPx { get; set; } = new();
+
+    public int EdgeThresholdMin { get; set; } = 50;
+    
+    public int EdgeThresholdMax { get; set; } = 150;
 }
 
 public sealed class ShapeModelDefinition

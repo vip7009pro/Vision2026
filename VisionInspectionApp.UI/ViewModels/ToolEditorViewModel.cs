@@ -775,6 +775,7 @@ namespace VisionInspectionApp.UI.ViewModels
             OnPropertyChanged(nameof(IsOriginNode));
             OnPropertyChanged(nameof(AvailableOriginAlgorithms));
             OnPropertyChanged(nameof(Origin_Algorithm));
+            OnPropertyChanged(nameof(IsOriginShapePyramid));
             OnPropertyChanged(nameof(IsPointNode));
             OnPropertyChanged(nameof(IsAnyDistanceNode));
             OnPropertyChanged(nameof(IsDistanceNode));

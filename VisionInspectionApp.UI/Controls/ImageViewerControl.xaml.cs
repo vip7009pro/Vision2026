@@ -90,11 +90,6 @@ public partial class ImageViewerControl : UserControl
 
         PART_Overlay.KeyDown += OverlayOnKeyDown;
 
-        PART_Overlay.MouseWheel += OverlayOnMouseWheel;
-        PART_Overlay.MouseDown += OverlayOnMouseDown;
-        PART_Overlay.MouseUp += OverlayOnMouseUp;
-        PART_Overlay.MouseMove += OverlayOnPanMouseMove;
-
         PART_Overlay.SizeChanged += (_, __) => RedrawOverlays();
 
         Loaded += (_, __) => RedrawOverlays();
@@ -102,23 +97,44 @@ public partial class ImageViewerControl : UserControl
         SetupTransforms();
     }
 
-    private readonly ScaleTransform _scale = new(1.0, 1.0);
-    private readonly TranslateTransform _translate = new(0.0, 0.0);
+    private readonly MatrixTransform _transform = new();
 
     private bool _panning;
     private Point _panStart;
-    private double _panStartX;
-    private double _panStartY;
-    private double _panPixelsPerUnitX = 1.0;
-    private double _panPixelsPerUnitY = 1.0;
+    private Matrix _panStartMatrix;
+
+    private bool _isViewInitialized;
 
     private void SetupTransforms()
     {
-        var tg = new TransformGroup();
-        tg.Children.Add(_scale);
-        tg.Children.Add(_translate);
-        PART_Content.RenderTransform = tg;
+        PART_Content.RenderTransform = _transform;
         PART_Content.RenderTransformOrigin = new Point(0, 0);
+
+        PART_RootGrid.PreviewMouseWheel += RootOnPreviewMouseWheel;
+        PART_RootGrid.MouseDown += RootOnMouseDown;
+        PART_RootGrid.MouseMove += RootOnMouseMove;
+        PART_RootGrid.MouseUp += RootOnMouseUp;
+        PART_RootGrid.SizeChanged += OnRootGridSizeChanged;
+        Loaded += OnLoaded;
+    }
+
+    private void OnLoaded(object sender, RoutedEventArgs e)
+    {
+        if (!_isViewInitialized && PART_RootGrid.ActualWidth > 0 && PART_RootGrid.ActualHeight > 0)
+        {
+            _isViewInitialized = true;
+            ResetView();
+        }
+        RedrawOverlays();
+    }
+
+    private void OnRootGridSizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        if (!_isViewInitialized && PART_RootGrid.ActualWidth > 0 && PART_RootGrid.ActualHeight > 0)
+        {
+            _isViewInitialized = true;
+            ResetView();
+        }
     }
 
     public ImageSource? ImageSource
@@ -150,9 +166,6 @@ public partial class ImageViewerControl : UserControl
             c.PART_FastOverlay.ImageSource = e.NewValue as ImageSource;
         }
 
-
-        // Keep zoom/pan when the preview refreshes with the same-sized image.
-        // Reset only when the actual image size changes (or when switching from/to null).
         var newBmp = e.NewValue as BitmapSource;
         if (newBmp is null)
         {
@@ -165,25 +178,58 @@ public partial class ImageViewerControl : UserControl
             var changed = c._lastPixelWidth != newBmp.PixelWidth || c._lastPixelHeight != newBmp.PixelHeight;
             c._lastPixelWidth = newBmp.PixelWidth;
             c._lastPixelHeight = newBmp.PixelHeight;
-            if (changed)
+            if (changed || c._transform.Matrix.IsIdentity)
             {
                 c.ResetView();
             }
         }
         c.Dispatcher.BeginInvoke(new Action(c.RedrawOverlays), System.Windows.Threading.DispatcherPriority.Render);
-        c.UpdateInfoText();
     }
 
-    private void ResetView()
+    public void ResetView()
     {
-        _scale.ScaleX = 1.0;
-        _scale.ScaleY = 1.0;
-        _translate.X = 0.0;
-        _translate.Y = 0.0;
         _panning = false;
+        if (ImageSource is not BitmapSource bmp || bmp.PixelWidth <= 0 || bmp.PixelHeight <= 0)
+        {
+            _transform.Matrix = Matrix.Identity;
+            UpdateInfoText();
+            return;
+        }
+
+        double containerW = PART_RootGrid?.ActualWidth ?? 0;
+        double containerH = PART_RootGrid?.ActualHeight ?? 0;
+
+        if (containerW <= 0 || containerH <= 0)
+        {
+            Dispatcher.BeginInvoke(new Action(ResetView), System.Windows.Threading.DispatcherPriority.Loaded);
+            return;
+        }
+
+        double imgW = bmp.Width;
+        double imgH = bmp.Height;
+
+        if (imgW <= 0 || imgH <= 0)
+        {
+            _transform.Matrix = Matrix.Identity;
+            UpdateInfoText();
+            return;
+        }
+
+        var scale = Math.Min(containerW / imgW, containerH / imgH);
+        if (scale <= 0 || double.IsNaN(scale) || double.IsInfinity(scale)) scale = 1.0;
+
+        var tx = (containerW - imgW * scale) / 2.0;
+        var ty = (containerH - imgH * scale) / 2.0;
+
+        var m = Matrix.Identity;
+        m.Scale(scale, scale);
+        m.Translate(tx, ty);
+        _transform.Matrix = m;
+
         UpdateInfoText();
+        RedrawOverlays();
     }
-    
+
     private void UpdateInfoText()
     {
         if (PART_InfoText != null)
@@ -195,119 +241,91 @@ public partial class ImageViewerControl : UserControl
             }
             else
             {
-                var z = _scale.ScaleX * 100.0;
+                var z = _transform.Matrix.M11 * 100.0;
                 PART_InfoText.Text = $"{_lastPixelWidth} x {_lastPixelHeight} px  |  Zoom: {z:F0}%";
                 PART_InfoText.Visibility = Visibility.Visible;
             }
         }
     }
 
-    private static double Clamp(double v, double min, double max) => v < min ? min : (v > max ? max : v);
-
-    private Point ViewToContent(Point overlayPoint)
+    private Point ContainerToContent(Point pContainer)
     {
-        var gt = PART_Content.TransformToVisual(PART_Overlay);
-        if (gt is null)
-        {
-            return overlayPoint;
-        }
-
-        if (!gt.TryTransform(new Point(0, 0), out _))
-        {
-            return overlayPoint;
-        }
-
-        if (gt.Inverse is null)
-        {
-            return overlayPoint;
-        }
-
-        return gt.Inverse.Transform(overlayPoint);
+        var m = _transform.Matrix;
+        if (!m.HasInverse) return pContainer;
+        m.Invert();
+        return m.Transform(pContainer);
     }
 
-    private void OverlayOnMouseWheel(object sender, MouseWheelEventArgs e)
+    private Point ViewToContent(Point overlayPoint) => overlayPoint;
+
+    private void RootOnPreviewMouseWheel(object sender, MouseWheelEventArgs e)
     {
-        if (!Keyboard.Modifiers.HasFlag(ModifierKeys.Control))
+        var mousePos = e.GetPosition(PART_RootGrid);
+        var zoomFactor = e.Delta > 0 ? 1.15 : 1.0 / 1.15;
+
+        var currentScale = _transform.Matrix.M11;
+        var newScale = currentScale * zoomFactor;
+        if (newScale < 0.001 || newScale > 500.0)
         {
             return;
         }
 
-        var viewPos = e.GetPosition(PART_Overlay);
-        var before = ViewToContent(viewPos);
+        var m = _transform.Matrix;
+        m.ScaleAt(zoomFactor, zoomFactor, mousePos.X, mousePos.Y);
+        _transform.Matrix = m;
 
-        var zoomFactor = e.Delta > 0 ? 1.1 : 1.0 / 1.1;
-        var newScale = Clamp(_scale.ScaleX * zoomFactor, 0.1, 20.0);
-
-        _scale.ScaleX = newScale;
-        _scale.ScaleY = newScale;
-
-        _translate.X = viewPos.X - before.X * newScale;
-        _translate.Y = viewPos.Y - before.Y * newScale;
-        
         UpdateInfoText();
-
         e.Handled = true;
     }
 
-    private void OverlayOnMouseDown(object sender, MouseButtonEventArgs e)
+    private void RootOnMouseDown(object sender, MouseButtonEventArgs e)
     {
-        if (e.ChangedButton != MouseButton.Middle)
+        if (e.ChangedButton == MouseButton.Middle)
         {
+            _panning = true;
+            _panStart = e.GetPosition(PART_RootGrid);
+            _panStartMatrix = _transform.Matrix;
+            PART_RootGrid.CaptureMouse();
+            e.Handled = true;
+        }
+    }
+
+    private void RootOnMouseMove(object sender, MouseEventArgs e)
+    {
+        if (_panning)
+        {
+            var current = e.GetPosition(PART_RootGrid);
+            var dx = current.X - _panStart.X;
+            var dy = current.Y - _panStart.Y;
+
+            var m = _panStartMatrix;
+            m.Translate(dx, dy);
+            _transform.Matrix = m;
+            e.Handled = true;
             return;
         }
 
-        _panning = true;
-        // Coordinates relative to PART_Overlay change while PART_Content is being
-        // translated, which makes a middle-button drag fall behind the cursor.
-        // Use the stable UserControl coordinate space instead.
-        _panStart = e.GetPosition(this);
-        _panStartX = _translate.X;
-        _panStartY = _translate.Y;
-        (_panPixelsPerUnitX, _panPixelsPerUnitY) = GetPanPixelsPerContentUnit();
-        PART_Overlay.CaptureMouse();
-        e.Handled = true;
-    }
-
-    private void OverlayOnMouseUp(object sender, MouseButtonEventArgs e)
-    {
-        if (e.ChangedButton != MouseButton.Middle)
+        if (EnableRoiEditing && !_roiEditing && !_dragging && !_lineDragging && ImageSource is BitmapSource bmp && OverlayItems is not null)
         {
-            return;
+            var contentPos = ContainerToContent(e.GetPosition(PART_RootGrid));
+            var hover = FindHoverRoiLabel(bmp, contentPos);
+            UpdateCursorForRoiHover(bmp, contentPos, hover);
+            if (!string.Equals(_hoverRoiLabel, hover, StringComparison.OrdinalIgnoreCase))
+            {
+                _hoverRoiLabel = hover;
+                RedrawOverlays();
+            }
         }
-
-        _panning = false;
-        PART_Overlay.ReleaseMouseCapture();
-        e.Handled = true;
     }
 
-    private void OverlayOnPanMouseMove(object sender, MouseEventArgs e)
+    private void RootOnMouseUp(object sender, MouseButtonEventArgs e)
     {
-        if (!_panning)
+        if (e.ChangedButton == MouseButton.Middle && _panning)
         {
-            return;
+            _panning = false;
+            PART_RootGrid.ReleaseMouseCapture();
+            e.Handled = true;
         }
-
-        var p = e.GetPosition(this);
-        var dx = p.X - _panStart.X;
-        var dy = p.Y - _panStart.Y;
-        _translate.X = _panStartX + dx / _panPixelsPerUnitX;
-        _translate.Y = _panStartY + dy / _panPixelsPerUnitY;
-        e.Handled = true;
-    }
-
-    private (double X, double Y) GetPanPixelsPerContentUnit()
-    {
-        var transform = PART_Content.TransformToVisual(this);
-        var origin = transform.Transform(new Point(0, 0));
-        var xAxis = transform.Transform(new Point(1, 0));
-        var yAxis = transform.Transform(new Point(0, 1));
-
-        // TransformToVisual includes the current zoom. TranslateTransform follows
-        // ScaleTransform, so remove the zoom to get the screen movement caused by
-        // one translate unit.
-        var x = Math.Abs(xAxis.X - origin.X) / Math.Max(_scale.ScaleX, 0.0001);
-        var y = Math.Abs(yAxis.Y - origin.Y) / Math.Max(_scale.ScaleY, 0.0001);
-        return (Math.Max(x, 0.0001), Math.Max(y, 0.0001));
     }
 
     public ICommand? RoiSelectedCommand
@@ -375,6 +393,24 @@ public partial class ImageViewerControl : UserControl
         c.Dispatcher.BeginInvoke(new Action(c.RedrawOverlays), System.Windows.Threading.DispatcherPriority.Render);
     }
 
+    /// <summary>
+    /// Returns true if the point is within 'tolerance' of any edge of the rect
+    /// (but not deep inside). This enables edge-only hit testing for ROI move.
+    /// </summary>
+    private static bool IsNearRoiBorder(Rect rect, Point p, double tolerance)
+    {
+        var expanded = rect;
+        expanded.Inflate(tolerance, tolerance);
+        if (!expanded.Contains(p)) return false;
+
+        var shrunk = rect;
+        shrunk.Inflate(-tolerance, -tolerance);
+        // If shrunk rect still contains the point, it's deep inside -> not near border
+        if (shrunk.Width > 0 && shrunk.Height > 0 && shrunk.Contains(p)) return false;
+
+        return true;
+    }
+
     private string? FindHoverRoiLabel(BitmapSource bmp, Point contentPos)
     {
         if (OverlayItems is null)
@@ -382,14 +418,16 @@ public partial class ImageViewerControl : UserControl
             return null;
         }
 
-        // Prefer last (top-most) ROI if multiple overlap.
+        // Detect hover when mouse is near the border/edge of a ROI (not deep inside).
+        // This allows overlapping ROIs to each be individually selectable by their edges.
+        const double borderTol = 12.0;
         var rects = OverlayItems.OfType<OverlayRectItem>().ToList();
         for (var i = rects.Count - 1; i >= 0; i--)
         {
             var r = rects[i];
             if (r.Width <= 0 || r.Height <= 0) continue;
-            if (contentPos.X >= r.X && contentPos.X <= r.X + r.Width
-                && contentPos.Y >= r.Y && contentPos.Y <= r.Y + r.Height)
+            var roiRect = new Rect(r.X, r.Y, r.Width, r.Height);
+            if (IsNearRoiBorder(roiRect, contentPos, borderTol))
             {
                 return r.Label;
             }
@@ -599,22 +637,25 @@ public partial class ImageViewerControl : UserControl
             return;
         }
 
-        PART_Image.Width = bmp.Width;
-        PART_Image.Height = bmp.Height;
-        PART_Overlay.Width = bmp.Width;
-        PART_Overlay.Height = bmp.Height;
-        PART_FastOverlay.Width = bmp.Width;
-        PART_FastOverlay.Height = bmp.Height;
-        PART_FastOverlay.InvalidateMeasure();
+        PART_Image.Source = bmp;
+
+        PART_Content.Width = bmp.PixelWidth;
+        PART_Content.Height = bmp.PixelHeight;
+
+        PART_Image.Width = bmp.PixelWidth;
+        PART_Image.Height = bmp.PixelHeight;
+
+        PART_Overlay.Width = bmp.PixelWidth;
+        PART_Overlay.Height = bmp.PixelHeight;
+
+        PART_FastOverlay.Width = bmp.PixelWidth;
+        PART_FastOverlay.Height = bmp.PixelHeight;
         PART_FastOverlay.InvalidateVisual();
 
         if (OverlayItems is null)
         {
             return;
         }
-
-        var sx = bmp.Width / bmp.PixelWidth;
-        var sy = bmp.Height / bmp.PixelHeight;
 
         foreach (var item in OverlayItems)
         {
@@ -628,11 +669,7 @@ public partial class ImageViewerControl : UserControl
 
                 if (showHandles)
                 {
-                    var vx = r.X * sx;
-                    var vy = r.Y * sy;
-                    var vw = r.Width * sx;
-                    var vh = r.Height * sy;
-                    DrawRoiHandles(vx, vy, vw, vh, string.Equals(r.Label, _activeRoiLabel, StringComparison.OrdinalIgnoreCase));
+                    DrawRoiHandles(r.X, r.Y, r.Width, r.Height, string.Equals(r.Label, _activeRoiLabel, StringComparison.OrdinalIgnoreCase));
                 }
             }
         }
@@ -955,13 +992,10 @@ public partial class ImageViewerControl : UserControl
 
     private static Roi ConvertContentRoiToPixelRoi(BitmapSource bmp, double contentX, double contentY, double contentW, double contentH)
     {
-        var scaleX = bmp.PixelWidth / bmp.Width;
-        var scaleY = bmp.PixelHeight / bmp.Height;
-
-        var px = (int)Math.Round(contentX * scaleX);
-        var py = (int)Math.Round(contentY * scaleY);
-        var pw = (int)Math.Round(contentW * scaleX);
-        var ph = (int)Math.Round(contentH * scaleY);
+        var px = (int)Math.Round(contentX);
+        var py = (int)Math.Round(contentY);
+        var pw = (int)Math.Round(contentW);
+        var ph = (int)Math.Round(contentH);
 
         var maxX = Math.Max(0, bmp.PixelWidth - 1);
         var maxY = Math.Max(0, bmp.PixelHeight - 1);
@@ -973,8 +1007,8 @@ public partial class ImageViewerControl : UserControl
         if (maxW < 1) maxW = 1;
         if (maxH < 1) maxH = 1;
 
-        pw = pw < 1 ? 1 : (pw > maxW ? maxW : pw);
-        ph = ph < 1 ? 1 : (ph > maxH ? maxH : ph);
+        pw = Math.Clamp(pw, 1, maxW);
+        ph = Math.Clamp(ph, 1, maxH);
 
         return new Roi
         {
@@ -987,11 +1021,8 @@ public partial class ImageViewerControl : UserControl
 
     private static Point ConvertContentPointToPixelPoint(BitmapSource bmp, double contentX, double contentY)
     {
-        var scaleX = bmp.PixelWidth / bmp.Width;
-        var scaleY = bmp.PixelHeight / bmp.Height;
-
-        var px = (int)Math.Round(contentX * scaleX);
-        var py = (int)Math.Round(contentY * scaleY);
+        var px = (int)Math.Round(contentX);
+        var py = (int)Math.Round(contentY);
 
         px = Math.Clamp(px, 0, Math.Max(0, bmp.PixelWidth - 1));
         py = Math.Clamp(py, 0, Math.Max(0, bmp.PixelHeight - 1));
@@ -1007,17 +1038,11 @@ public partial class ImageViewerControl : UserControl
         }
 
         const double hitTol = 10.0;
-
         var candidates = new List<(OverlayRectItem Item, Rect Rect)>();
 
         foreach (var item in OverlayItems)
         {
-            if (item is not OverlayRectItem r)
-            {
-                continue;
-            }
-
-            if (string.IsNullOrWhiteSpace(r.Label))
+            if (item is not OverlayRectItem r || string.IsNullOrWhiteSpace(r.Label))
             {
                 continue;
             }
@@ -1038,11 +1063,20 @@ public partial class ImageViewerControl : UserControl
             return false;
         }
 
+        // Direct border or handle hits get top priority (ordered by smallest rect area)
+        var borderHits = candidates
+            .Where(x => HitTestRoiHandle(x.Rect, contentPoint, 20.0) != RoiEditMode.None || IsNearRoiBorder(x.Rect, contentPoint, 20.0))
+            .OrderBy(x => x.Rect.Width * x.Rect.Height)
+            .ToList();
+
         (OverlayRectItem Item, Rect Rect) picked;
-        if (!string.IsNullOrWhiteSpace(_activeRoiLabel))
+        if (borderHits.Count > 0)
         {
-            var active = candidates.FirstOrDefault(x => string.Equals(x.Item.Label, _activeRoiLabel, StringComparison.OrdinalIgnoreCase));
-            picked = active.Item is not null ? active : candidates.OrderBy(x => x.Rect.Width * x.Rect.Height).First();
+            picked = borderHits.First();
+        }
+        else if (!string.IsNullOrWhiteSpace(_activeRoiLabel) && candidates.Any(x => string.Equals(x.Item.Label, _activeRoiLabel, StringComparison.OrdinalIgnoreCase)))
+        {
+            picked = candidates.First(x => string.Equals(x.Item.Label, _activeRoiLabel, StringComparison.OrdinalIgnoreCase));
         }
         else
         {
@@ -1058,11 +1092,13 @@ public partial class ImageViewerControl : UserControl
         _roiEditMode = HitTestRoiHandle(picked.Rect, contentPoint, tolerance: 20.0);
         if (_roiEditMode == RoiEditMode.None)
         {
-            _roiEditMode = picked.Rect.Contains(contentPoint) ? RoiEditMode.Move : RoiEditMode.None;
+            // Move mode is triggered by clicking near the edge/border, not deep inside
+            _roiEditMode = IsNearRoiBorder(picked.Rect, contentPoint, 20.0) ? RoiEditMode.Move : RoiEditMode.None;
         }
 
         if (_roiEditMode == RoiEditMode.None)
         {
+            _roiEditing = false;
             return false;
         }
 
@@ -1078,17 +1114,11 @@ public partial class ImageViewerControl : UserControl
         }
 
         const double hitTol = 10.0;
-
         var candidates = new List<(OverlayRectItem Item, Rect Rect)>();
 
         foreach (var item in OverlayItems)
         {
-            if (item is not OverlayRectItem r)
-            {
-                continue;
-            }
-
-            if (string.IsNullOrWhiteSpace(r.Label))
+            if (item is not OverlayRectItem r || string.IsNullOrWhiteSpace(r.Label))
             {
                 continue;
             }
@@ -1107,6 +1137,16 @@ public partial class ImageViewerControl : UserControl
         if (candidates.Count == 0)
         {
             return null;
+        }
+
+        var borderHits = candidates
+            .Where(x => HitTestRoiHandle(x.Rect, contentPoint, 20.0) != RoiEditMode.None || IsNearRoiBorder(x.Rect, contentPoint, 20.0))
+            .OrderBy(x => x.Rect.Width * x.Rect.Height)
+            .ToList();
+
+        if (borderHits.Count > 0)
+        {
+            return borderHits.First().Item.Label;
         }
 
         return candidates.OrderBy(x => x.Rect.Width * x.Rect.Height).First().Item.Label;
@@ -1114,58 +1154,7 @@ public partial class ImageViewerControl : UserControl
 
     private string? FindRoiLabelAtForClick(BitmapSource bmp, Point contentPoint)
     {
-        if (OverlayItems is null)
-        {
-            return null;
-        }
-
-        const double hitTol = 10.0;
-
-        var candidates = new List<(OverlayRectItem Item, Rect Rect)>();
-
-        foreach (var item in OverlayItems)
-        {
-            if (item is not OverlayRectItem r)
-            {
-                continue;
-            }
-
-            if (string.IsNullOrWhiteSpace(r.Label))
-            {
-                continue;
-            }
-
-            var baseRect = PixelRectToContentRect(bmp, r.X, r.Y, r.Width, r.Height);
-            var hitRect = baseRect;
-            hitRect.Inflate(hitTol, hitTol);
-            if (!hitRect.Contains(contentPoint))
-            {
-                continue;
-            }
-
-            candidates.Add((r, baseRect));
-        }
-
-        if (candidates.Count == 0)
-        {
-            return null;
-        }
-
-        var ordered = candidates
-            .OrderBy(x => x.Rect.Width * x.Rect.Height)
-            .ToList();
-
-        if (!string.IsNullOrWhiteSpace(_activeRoiLabel) && ordered.Count > 1)
-        {
-            var idx = ordered.FindIndex(x => string.Equals(x.Item.Label, _activeRoiLabel, StringComparison.OrdinalIgnoreCase));
-            if (idx >= 0)
-            {
-                var next = (idx + 1) % ordered.Count;
-                return ordered[next].Item.Label;
-            }
-        }
-
-        return ordered[0].Item.Label;
+        return FindTopRoiLabelAt(bmp, contentPoint);
     }
 
     private void DrawRoiHandles(double left, double top, double width, double height, bool isActive)
@@ -1230,7 +1219,8 @@ public partial class ImageViewerControl : UserControl
 
         if (mode == RoiEditMode.None)
         {
-            Cursor = rect.Contains(contentPoint) ? Cursors.SizeAll : Cursors.Arrow;
+            // Show SizeAll cursor only on the border/edge, not deep inside
+            Cursor = IsNearRoiBorder(rect, contentPoint, 20.0) ? Cursors.SizeAll : Cursors.Arrow;
             return;
         }
 
@@ -1246,27 +1236,29 @@ public partial class ImageViewerControl : UserControl
 
     private static Rect PixelRectToContentRect(BitmapSource bmp, int x, int y, int w, int h)
     {
-        var sx = bmp.Width / bmp.PixelWidth;
-        var sy = bmp.Height / bmp.PixelHeight;
-        return new Rect(x * sx, y * sy, w * sx, h * sy);
+        return new Rect(x, y, w, h);
     }
 
     private static RoiEditMode HitTestRoiHandle(Rect rect, Point p, double tolerance)
     {
-        var left = Math.Abs(p.X - rect.Left) <= tolerance;
-        var right = Math.Abs(p.X - rect.Right) <= tolerance;
-        var top = Math.Abs(p.Y - rect.Top) <= tolerance;
-        var bottom = Math.Abs(p.Y - rect.Bottom) <= tolerance;
+        var nearLeft = Math.Abs(p.X - rect.Left) <= tolerance;
+        var nearRight = Math.Abs(p.X - rect.Right) <= tolerance;
+        var nearTop = Math.Abs(p.Y - rect.Top) <= tolerance;
+        var nearBottom = Math.Abs(p.Y - rect.Bottom) <= tolerance;
+        var nearMidX = Math.Abs(p.X - (rect.Left + rect.Right) / 2.0) <= tolerance;
+        var nearMidY = Math.Abs(p.Y - (rect.Top + rect.Bottom) / 2.0) <= tolerance;
 
-        if (left && top) return RoiEditMode.TopLeft;
-        if (right && top) return RoiEditMode.TopRight;
-        if (left && bottom) return RoiEditMode.BottomLeft;
-        if (right && bottom) return RoiEditMode.BottomRight;
+        // 4 corners
+        if (nearLeft && nearTop) return RoiEditMode.TopLeft;
+        if (nearRight && nearTop) return RoiEditMode.TopRight;
+        if (nearLeft && nearBottom) return RoiEditMode.BottomLeft;
+        if (nearRight && nearBottom) return RoiEditMode.BottomRight;
 
-        if (left) return RoiEditMode.Left;
-        if (right) return RoiEditMode.Right;
-        if (top) return RoiEditMode.Top;
-        if (bottom) return RoiEditMode.Bottom;
+        // 4 midpoints of edges only
+        if (nearMidX && nearTop) return RoiEditMode.Top;
+        if (nearMidX && nearBottom) return RoiEditMode.Bottom;
+        if (nearLeft && nearMidY) return RoiEditMode.Left;
+        if (nearRight && nearMidY) return RoiEditMode.Right;
 
         return RoiEditMode.None;
     }

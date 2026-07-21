@@ -1176,6 +1176,11 @@ public sealed class PatternMatcher
         }
         if (totalWeight <= 0) totalWeight = 1;
 
+        // Group model features by their target bin after rotation
+        // This makes the inner loop much faster
+        var featuresByBin = new List<(int tx, int ty, int w)>[binCount];
+        for (int i = 0; i < binCount; i++) featuresByBin[i] = new List<(int tx, int ty, int w)>();
+
         foreach (var f in model.Features)
         {
             var rdx = (int)Math.Round(f.Dx * cos - f.Dy * sin);
@@ -1186,15 +1191,30 @@ public sealed class PatternMatcher
             var tx = cx + rdx;
             var ty = cy + rdy;
             if (tx < 0 || ty < 0 || tx >= tplW || ty >= tplH) continue;
+            
+            featuresByBin[b].Add((tx, ty, w));
+        }
 
+        // Optimized voting loop
+        for (var b = 0; b < binCount; b++)
+        {
+            var feats = featuresByBin[b];
+            if (feats.Count == 0) continue;
+            
             var pts = edgeByBin[b];
+            if (pts.Count == 0) continue;
+
             for (var p = 0; p < pts.Count; p++)
             {
                 var ip = pts[p];
-                var ox = ip.X - tx;
-                var oy = ip.Y - ty;
-                if ((uint)ox > (uint)maxX || (uint)oy > (uint)maxY) continue;
-                accScratch[oy * accW + ox] += w;
+                for (var fi = 0; fi < feats.Count; fi++)
+                {
+                    var f = feats[fi];
+                    var ox = ip.X - f.tx;
+                    var oy = ip.Y - f.ty;
+                    if ((uint)ox > (uint)maxX || (uint)oy > (uint)maxY) continue;
+                    accScratch[oy * accW + ox] += f.w;
+                }
             }
         }
 
@@ -1212,7 +1232,23 @@ public sealed class PatternMatcher
 
         var bestX = bestIdx % accW;
         var bestY = bestIdx / accW;
-        var score = (double)best / totalWeight;
+        
+        // Sum a 3x3 neighborhood around the peak to account for rotation discretization
+        var localSum = 0;
+        for (var dy = -1; dy <= 1; dy++)
+        {
+            for (var dx = -1; dx <= 1; dx++)
+            {
+                var nx = bestX + dx;
+                var ny = bestY + dy;
+                if ((uint)nx < (uint)accW && (uint)ny < (uint)accH)
+                {
+                    localSum += accScratch[ny * accW + nx];
+                }
+            }
+        }
+
+        var score = Math.Min(1.0, (double)localSum / totalWeight);
         var center = new Point2d(bestX + tplW / 2.0, bestY + tplH / 2.0);
         var rect = new Rect(bestX, bestY, tplW, tplH);
         return (score, center, rect);
@@ -1277,117 +1313,225 @@ public sealed class PatternMatcher
         if (definition.OriginAlgorithm == OriginAlgorithm.FeatureBased)
         {
             // For FeatureBased, angle is resolved by Homography. We pass 0.0 as angleDeg and let it find the real angle.
-            // But we might want to return the actual angle. For now, just use 0.0.
             return MatchByFeatureBased(roiGray.Mat, templateGray, definition, 0.0, preprocess, roiRect);
         }
 
-        if (definition.OriginAlgorithm == OriginAlgorithm.TemplateMatch)
+        return MatchByPyramidFast(roiGray.Mat, templateGray, definition, preprocess, minAngleDeg, maxAngleDeg, stepDeg, roiRect);
+    }
+
+    private MatchResult MatchByPyramidFast(Mat roiGray, Mat templateGray, PointDefinition def, PreprocessSettings? preprocess, double minAngleDeg, double maxAngleDeg, double stepDeg, Rect roiRect)
+    {
+        if (roiGray.Empty() || templateGray.Empty())
         {
-            // Bypass ShapeModel
-        }
-        else if (definition.ShapeModel is not null
-            && definition.ShapeModel.TemplateWidth > 0
-            && definition.ShapeModel.TemplateHeight > 0
-            && definition.ShapeModel.Features is not null
-            && definition.ShapeModel.Features.Count > 0)
-        {
-            var model = definition.ShapeModel;
-            var binCount = Math.Clamp(model.BinCount, 8, 64);
-            var edgeByBin = BuildEdgeByBinFromSobel(roiGray.Mat, binCount, magThreshold: 20.0f);
-
-            var bestScoreSm = double.NegativeInfinity;
-            var bestAngleSm = 0.0;
-            var bestCenter = new Point2d(roiRect.Width / 2.0, roiRect.Height / 2.0);
-            var bestRect = new Rect(0, 0, model.TemplateWidth, model.TemplateHeight);
-
-            if (stepDeg <= 0.000001)
-            {
-                stepDeg = 1.0;
-            }
-
-            var maxX = roiRect.Width - model.TemplateWidth;
-            var maxY = roiRect.Height - model.TemplateHeight;
-            if (maxX < 0 || maxY < 0)
-            {
-                var centerFallback = new Point2d(roiRect.X + roiRect.Width / 2.0, roiRect.Y + roiRect.Height / 2.0);
-                return new MatchResult(centerFallback, 0.0, 0.0, roiRect);
-            }
-
-            var accScratch = new int[(maxX + 1) * (maxY + 1)];
-
-            const double earlyExitScore = 0.97;
-            var searchMin = minAngleDeg;
-            var searchMax = maxAngleDeg;
-            if (searchMax < searchMin)
-            {
-                (searchMin, searchMax) = (searchMax, searchMin);
-            }
-
-            var coarseStepDeg = Math.Max(stepDeg * 3.0, 4.0);
-            if ((searchMax - searchMin) < coarseStepDeg * 1.5)
-            {
-                coarseStepDeg = stepDeg;
-            }
-
-            var bestAngleCoarse = 0.0;
-            var ang = searchMin;
-            while (ang <= searchMax + 0.000001)
-            {
-                var (score, center, rect) = ScoreByShapeModel(edgeByBin, roiRect.Width, roiRect.Height, model, ang, accScratch);
-                if (score > bestScoreSm)
-                {
-                    bestScoreSm = score;
-                    bestAngleSm = ang;
-                    bestAngleCoarse = ang;
-                    bestCenter = center;
-                    bestRect = rect;
-                    if (bestScoreSm >= earlyExitScore)
-                    {
-                        break;
-                    }
-                }
-
-                ang += coarseStepDeg;
-            }
-
-            if (bestScoreSm < earlyExitScore && coarseStepDeg > stepDeg + 0.000001)
-            {
-                var refineMin = Math.Max(searchMin, bestAngleCoarse - coarseStepDeg);
-                var refineMax = Math.Min(searchMax, bestAngleCoarse + coarseStepDeg);
-
-                ang = refineMin;
-                while (ang <= refineMax + 0.000001)
-                {
-                    var (score, center, rect) = ScoreByShapeModel(edgeByBin, roiRect.Width, roiRect.Height, model, ang, accScratch);
-                    if (score > bestScoreSm)
-                    {
-                        bestScoreSm = score;
-                        bestAngleSm = ang;
-                        bestCenter = center;
-                        bestRect = rect;
-                        if (bestScoreSm >= earlyExitScore)
-                        {
-                            break;
-                        }
-                    }
-
-                    ang += stepDeg;
-                }
-            }
-
-            var globalPos = new Point2d(bestCenter.X + roiRect.X, bestCenter.Y + roiRect.Y);
-            var mr = new Rect(roiRect.X + bestRect.X, roiRect.Y + bestRect.Y, bestRect.Width, bestRect.Height);
-            return new MatchResult(globalPos, bestScoreSm, bestAngleSm, mr);
+            var centerFallback = new Point2d(roiRect.X + roiRect.Width / 2.0, roiRect.Y + roiRect.Height / 2.0);
+            return new MatchResult(centerFallback, 0.0, 0.0, roiRect);
         }
 
+        using var templPrep = PreprocessTemplateForMatch(templateGray, preprocess);
+
+        // Build feature images for matching:
+        // For ShapePyramid / ShapeBased: Use Gaussian-blurred Sobel Magnitude (edge shape invariant, lighting invariant)
+        // For TemplateMatch / TemplateMatchPyramid: Use Preprocessed Grayscale directly
+        using var roiFeatureMat = new Mat();
+        using var templFeatureMat = new Mat();
+
+        if (def.OriginAlgorithm == OriginAlgorithm.ShapePyramid || def.OriginAlgorithm == OriginAlgorithm.ShapeBased)
+        {
+            using var gxR = new Mat(); using var gyR = new Mat();
+            Cv2.Sobel(roiGray, gxR, MatType.CV_32F, 1, 0, 3);
+            Cv2.Sobel(roiGray, gyR, MatType.CV_32F, 0, 1, 3);
+            using var magR = new Mat();
+            Cv2.Magnitude(gxR, gyR, magR);
+            using var mag8R = new Mat();
+            magR.ConvertTo(mag8R, MatType.CV_8U);
+            Cv2.GaussianBlur(mag8R, roiFeatureMat, new Size(5, 5), 0);
+
+            using var gxT = new Mat(); using var gyT = new Mat();
+            Cv2.Sobel(templPrep, gxT, MatType.CV_32F, 1, 0, 3);
+            Cv2.Sobel(templPrep, gyT, MatType.CV_32F, 0, 1, 3);
+            using var magT = new Mat();
+            Cv2.Magnitude(gxT, gyT, magT);
+            using var mag8T = new Mat();
+            magT.ConvertTo(mag8T, MatType.CV_8U);
+            Cv2.GaussianBlur(mag8T, templFeatureMat, new Size(5, 5), 0);
+        }
+        else
+        {
+            roiGray.CopyTo(roiFeatureMat);
+            templPrep.CopyTo(templFeatureMat);
+        }
+
+        // Determine coarse pyramid scale factor
+        var scale = 0.25;
+        if (templFeatureMat.Width < 60 || templFeatureMat.Height < 60) scale = 0.5;
+        if (templFeatureMat.Width < 30 || templFeatureMat.Height < 30) scale = 1.0;
+
+        var roiSmallSize = new Size(Math.Max(1, (int)Math.Round(roiFeatureMat.Width * scale)), Math.Max(1, (int)Math.Round(roiFeatureMat.Height * scale)));
+        using var roiSmall = new Mat();
+        Cv2.Resize(roiFeatureMat, roiSmall, roiSmallSize, 0, 0, InterpolationFlags.Area);
+
+        var templSmallSize = new Size(Math.Max(1, (int)Math.Round(templFeatureMat.Width * scale)), Math.Max(1, (int)Math.Round(templFeatureMat.Height * scale)));
+        using var templSmall = new Mat();
+        Cv2.Resize(templFeatureMat, templSmall, templSmallSize, 0, 0, InterpolationFlags.Area);
+
+        if (stepDeg <= 0.000001) stepDeg = 1.0;
+
+        // Stage 1: Coarse angle sweep on downscaled pyramid (Fast: ~10ms)
+        var bestCoarseScore = double.NegativeInfinity;
+        var bestCoarseAngle = 0.0;
+        Point bestCoarseLocSmall = new Point(0, 0);
+        Rect bestCoarseCropSmall = new Rect();
+
+        var angle = minAngleDeg;
+        while (angle <= maxAngleDeg + 0.000001)
+        {
+            using var templSmallRot = RotateWithPadding(templSmall, angle);
+            var cropSmall = ContentRectFromNonZero(templSmallRot, pad: 0);
+            if (cropSmall.Width <= 0 || cropSmall.Height <= 0 || roiSmall.Width < cropSmall.Width || roiSmall.Height < cropSmall.Height)
+            {
+                angle += stepDeg;
+                continue;
+            }
+
+            using var templSmallCrop = new Mat(templSmallRot, cropSmall);
+            using var resMatSmall = new Mat();
+            Cv2.MatchTemplate(roiSmall, templSmallCrop, resMatSmall, TemplateMatchModes.CCoeffNormed);
+            Cv2.MinMaxLoc(resMatSmall, out _, out var maxVal, out _, out var maxLoc);
+
+            if (maxVal > bestCoarseScore)
+            {
+                bestCoarseScore = maxVal;
+                bestCoarseAngle = angle;
+                bestCoarseLocSmall = maxLoc;
+                bestCoarseCropSmall = cropSmall;
+            }
+
+            angle += stepDeg;
+        }
+
+        if (double.IsNegativeInfinity(bestCoarseScore))
+        {
+            var centerFallback = new Point2d(roiRect.X + roiRect.Width / 2.0, roiRect.Y + roiRect.Height / 2.0);
+            return new MatchResult(centerFallback, 0.0, 0.0, roiRect);
+        }
+
+        // Stage 2: Fine angle sweep on full resolution image, but restricted to a tiny ROI around coarse location!
+        var coarseLocFullX = (int)Math.Round(bestCoarseLocSmall.X / scale);
+        var coarseLocFullY = (int)Math.Round(bestCoarseLocSmall.Y / scale);
+
+        var margin = (int)Math.Round(40 / scale);
+        var fineX = Math.Clamp(coarseLocFullX - margin, 0, Math.Max(0, roiFeatureMat.Width - 1));
+        var fineY = Math.Clamp(coarseLocFullY - margin, 0, Math.Max(0, roiFeatureMat.Height - 1));
+        var fineW = Math.Min(roiFeatureMat.Width - fineX, (int)Math.Round(bestCoarseCropSmall.Width / scale) + 2 * margin);
+        var fineH = Math.Min(roiFeatureMat.Height - fineY, (int)Math.Round(bestCoarseCropSmall.Height / scale) + 2 * margin);
+
+        if (fineW <= 0 || fineH <= 0)
+        {
+            fineX = 0; fineY = 0; fineW = roiFeatureMat.Width; fineH = roiFeatureMat.Height;
+        }
+
+        using var roiFine = new Mat(roiFeatureMat, new Rect(fineX, fineY, fineW, fineH));
+
+        var refineMin = Math.Max(minAngleDeg, bestCoarseAngle - Math.Max(stepDeg, 2.0));
+        var refineMax = Math.Min(maxAngleDeg, bestCoarseAngle + Math.Max(stepDeg, 2.0));
+        var refineStep = Math.Min(stepDeg, 0.5);
+
+        var bestFineScore = double.NegativeInfinity;
+        var bestFineAngle = bestCoarseAngle;
+        Point bestFineLocInFine = new Point(0, 0);
+        Rect bestFineCrop = new Rect();
+
+        angle = refineMin;
+        while (angle <= refineMax + 0.000001)
+        {
+            using var templRotFull = RotateWithPadding(templFeatureMat, angle);
+            var cropFull = ContentRectFromNonZero(templRotFull, pad: 0);
+            if (cropFull.Width <= 0 || cropFull.Height <= 0 || roiFine.Width < cropFull.Width || roiFine.Height < cropFull.Height)
+            {
+                angle += refineStep;
+                continue;
+            }
+
+            using var templCropFull = new Mat(templRotFull, cropFull);
+            using var resMatFine = new Mat();
+            Cv2.MatchTemplate(roiFine, templCropFull, resMatFine, TemplateMatchModes.CCoeffNormed);
+            Cv2.MinMaxLoc(resMatFine, out _, out var maxVal, out _, out var maxLoc);
+
+            if (maxVal > bestFineScore)
+            {
+                bestFineScore = maxVal;
+                bestFineAngle = angle;
+                bestFineLocInFine = maxLoc;
+                bestFineCrop = cropFull;
+            }
+
+            angle += refineStep;
+        }
+
+        if (double.IsNegativeInfinity(bestFineScore))
+        {
+            var centerFallback = new Point2d(roiRect.X + roiRect.Width / 2.0, roiRect.Y + roiRect.Height / 2.0);
+            return new MatchResult(centerFallback, 0.0, 0.0, roiRect);
+        }
+
+        // Sub-pixel 2D Parabolic Peak refinement
+        Point2d subPixelLocInFine = new Point2d(bestFineLocInFine.X, bestFineLocInFine.Y);
+        using var bestTemplRotFinal = RotateWithPadding(templFeatureMat, bestFineAngle);
+        using var bestTemplCropFinal = new Mat(bestTemplRotFinal, bestFineCrop);
+        using var resFinal = new Mat();
+        Cv2.MatchTemplate(roiFine, bestTemplCropFinal, resFinal, TemplateMatchModes.CCoeffNormed);
+
+        int fx = bestFineLocInFine.X;
+        int fy = bestFineLocInFine.Y;
+        if (fx > 0 && fx < resFinal.Width - 1 && fy > 0 && fy < resFinal.Height - 1)
+        {
+            float l = resFinal.At<float>(fy, fx - 1);
+            float r = resFinal.At<float>(fy, fx + 1);
+            float u = resFinal.At<float>(fy - 1, fx);
+            float d = resFinal.At<float>(fy + 1, fx);
+            float c = resFinal.At<float>(fy, fx);
+
+            double denomX = l + r - 2.0 * c;
+            double denomY = u + d - 2.0 * c;
+            if (Math.Abs(denomX) > 1e-6)
+            {
+                double dx = (l - r) / (2.0 * denomX);
+                if (Math.Abs(dx) < 1.0) subPixelLocInFine.X += dx;
+            }
+            if (Math.Abs(denomY) > 1e-6)
+            {
+                double dy = (u - d) / (2.0 * denomY);
+                if (Math.Abs(dy) < 1.0) subPixelLocInFine.Y += dy;
+            }
+        }
+
+        var w = templateGray.Width;
+        var h = templateGray.Height;
+        var diag = (int)Math.Ceiling(Math.Sqrt(w * w + h * h));
+        diag = Math.Max(diag, Math.Max(w, h));
+        var px = (diag - w) / 2;
+        var py = (diag - h) / 2;
+        double cxInCrop = (px + w / 2.0) - bestFineCrop.X;
+        double cyInCrop = (py + h / 2.0) - bestFineCrop.Y;
+
+        var matchLocInRoi = new Point2d(fineX + subPixelLocInFine.X, fineY + subPixelLocInFine.Y);
+        var centerInRoi = new Point2d(matchLocInRoi.X + cxInCrop, matchLocInRoi.Y + cyInCrop);
+        var globalPos = new Point2d(centerInRoi.X + roiRect.X, centerInRoi.Y + roiRect.Y);
+        var matchRect = new Rect(roiRect.X + (int)Math.Round(matchLocInRoi.X), roiRect.Y + (int)Math.Round(matchLocInRoi.Y), bestFineCrop.Width, bestFineCrop.Height);
+
+        return new MatchResult(globalPos, Math.Clamp(bestFineScore, 0.0, 1.0), bestFineAngle, matchRect);
+    }
+
+    private MatchResult MatchByTemplateSweep(Mat roiGray, Mat templateGray, PreprocessSettings? preprocess, double minAngleDeg, double maxAngleDeg, double stepDeg, Rect roiRect)
+    {
         using var templPrep0 = PreprocessTemplateForMatch(templateGray, preprocess);
 
         using var roiEdges = new Mat();
         using var templEdges0 = new Mat();
-        Cv2.Canny(roiGray.Mat, roiEdges, 50, 150);
+        Cv2.Canny(roiGray, roiEdges, 50, 150);
         Cv2.Canny(templPrep0, templEdges0, 50, 150);
 
-        if (roiGray.Mat.Width < templPrep0.Width || roiGray.Mat.Height < templPrep0.Height)
+        if (roiGray.Width < templPrep0.Width || roiGray.Height < templPrep0.Height)
         {
             var centerFallback = new Point2d(roiRect.X + roiRect.Width / 2.0, roiRect.Y + roiRect.Height / 2.0);
             return new MatchResult(centerFallback, 0.0, 0.0, roiRect);
@@ -1450,19 +1594,29 @@ public sealed class PatternMatcher
         }
 
         using var bestTemplGray = new Mat(bestTemplGrayRot, bestCrop);
-        if (roiGray.Mat.Width < bestTemplGray.Width || roiGray.Mat.Height < bestTemplGray.Height)
+        if (roiGray.Width < bestTemplGray.Width || roiGray.Height < bestTemplGray.Height)
         {
             var centerFallback = new Point2d(roiRect.X + roiRect.Width / 2.0, roiRect.Y + roiRect.Height / 2.0);
             return new MatchResult(centerFallback, 0.0, bestAngle, roiRect);
         }
 
-        var (maxValGray, maxLocGray) = MatchTemplatePyramid(roiGray.Mat, bestTemplGray, TemplateMatchModes.CCoeffNormed);
+        var (maxValGray, maxLocGray) = MatchTemplatePyramid(roiGray, bestTemplGray, TemplateMatchModes.CCoeffNormed);
 
-        var centerInRoi = new Point2d(maxLocGray.X + bestTemplGray.Width / 2.0, maxLocGray.Y + bestTemplGray.Height / 2.0);
+        var w = templateGray.Width;
+        var h = templateGray.Height;
+        var diag = (int)Math.Ceiling(Math.Sqrt(w * w + h * h));
+        diag = Math.Max(diag, Math.Max(w, h));
+        var px = (diag - w) / 2;
+        var py = (diag - h) / 2;
+        double cxInCrop = (px + w / 2.0) - bestCrop.X;
+        double cyInCrop = (py + h / 2.0) - bestCrop.Y;
+        var centerInRoi = new Point2d(maxLocGray.X + cxInCrop, maxLocGray.Y + cyInCrop);
+        
         var global = new Point2d(centerInRoi.X + roiRect.X, centerInRoi.Y + roiRect.Y);
         var matchRect = new Rect(roiRect.X + maxLocGray.X, roiRect.Y + maxLocGray.Y, bestTemplGray.Width, bestTemplGray.Height);
         return new MatchResult(global, maxValGray, bestAngle, matchRect);
     }
+
 
     private static (double MaxVal, Point MaxLoc) MatchTemplatePyramid(Mat imageGray, Mat templGray, TemplateMatchModes mode)
     {
@@ -1602,7 +1756,12 @@ public sealed class PatternMatcher
             templGray.CopyTo(roi);
         }
 
-        var center = new Point2f(diag / 2f, diag / 2f);
+        if (Math.Abs(angleDeg) < 1e-6)
+        {
+            return padded;
+        }
+
+        var center = new Point2f(x + w / 2f, y + h / 2f);
         using var m = Cv2.GetRotationMatrix2D(center, -angleDeg, 1.0);
         var dst = new Mat();
         Cv2.WarpAffine(padded, dst, m, new Size(diag, diag), InterpolationFlags.Linear, BorderTypes.Constant, Scalar.Black);

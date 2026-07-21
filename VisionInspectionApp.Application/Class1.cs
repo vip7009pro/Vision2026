@@ -1120,7 +1120,9 @@ public sealed class InspectionService : IInspectionService
                         MinAngle = originDefBase.MinAngle,
                         MaxAngle = originDefBase.MaxAngle,
                         EdgePoint = originDefBase.EdgePoint,
-                        ShapeModel = originDefBase.ShapeModel
+                        ShapeModel = originDefBase.ShapeModel,
+                        EdgeThresholdMin = originDefBase.EdgeThresholdMin,
+                        EdgeThresholdMax = originDefBase.EdgeThresholdMax
                     };
                 }
             }
@@ -1193,7 +1195,9 @@ public sealed class InspectionService : IInspectionService
                             MinAngle = def.MinAngle,
                             MaxAngle = def.MaxAngle,
                             EdgePoint = def.EdgePoint,
-                            ShapeModel = def.ShapeModel
+                            ShapeModel = def.ShapeModel,
+                            EdgeThresholdMin = def.EdgeThresholdMin,
+                            EdgeThresholdMax = def.EdgeThresholdMax
                         };
                     }
 
@@ -2812,7 +2816,9 @@ public sealed class InspectionService : IInspectionService
             MinAngle = p.MinAngle,
             MaxAngle = p.MaxAngle,
             EdgePoint = p.EdgePoint,
-            ShapeModel = p.ShapeModel
+            ShapeModel = p.ShapeModel,
+            EdgeThresholdMin = p.EdgeThresholdMin,
+            EdgeThresholdMax = p.EdgeThresholdMax
         };
     }
 

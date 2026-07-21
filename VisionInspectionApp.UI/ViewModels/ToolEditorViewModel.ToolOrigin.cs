@@ -34,6 +34,7 @@ namespace VisionInspectionApp.UI.ViewModels
                 {
                     _config.Origin.OriginAlgorithm = value;
                     OnPropertyChanged();
+                    OnPropertyChanged(nameof(IsOriginShapePyramid));
                 }
             }
         }
@@ -63,5 +64,32 @@ namespace VisionInspectionApp.UI.ViewModels
                 }
             }
         }
+        public int Origin_EdgeThresholdMin
+        {
+            get => _config?.Origin?.EdgeThresholdMin ?? 50;
+            set
+            {
+                if (_config?.Origin != null)
+                {
+                    _config.Origin.EdgeThresholdMin = value;
+                    OnPropertyChanged();
+                }
+            }
+        }
+
+        public int Origin_EdgeThresholdMax
+        {
+            get => _config?.Origin?.EdgeThresholdMax ?? 150;
+            set
+            {
+                if (_config?.Origin != null)
+                {
+                    _config.Origin.EdgeThresholdMax = value;
+                    OnPropertyChanged();
+                }
+            }
+        }
+
+        public bool IsOriginShapePyramid => Origin_Algorithm == OriginAlgorithm.ShapePyramid;
     }
 }

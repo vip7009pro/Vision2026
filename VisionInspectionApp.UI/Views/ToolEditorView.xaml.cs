@@ -544,11 +544,6 @@ public partial class ToolEditorView : UserControl
 
     private void EditorCanvas_PreviewMouseWheel(object sender, MouseWheelEventArgs e)
     {
-        if ((Keyboard.Modifiers & ModifierKeys.Control) != ModifierKeys.Control)
-        {
-            return;
-        }
-
         if (DataContext is not ToolEditorViewModel vm)
         {
             return;
@@ -560,24 +555,28 @@ public partial class ToolEditorView : UserControl
         }
 
         var oldZoom = vm.CanvasZoom;
-        var zoomFactor = e.Delta > 0 ? 1.12 : 1.0 / 1.12;
-        var newZoom = Math.Clamp(oldZoom * zoomFactor, 0.2, 3.0);
+        var zoomFactor = e.Delta > 0 ? 1.1 : 1.0 / 1.1;
+        var newZoom = Math.Clamp(oldZoom * zoomFactor, 0.05, 5.0);
         if (Math.Abs(newZoom - oldZoom) < 0.0000001)
         {
             return;
         }
 
         var mouseInViewport = e.GetPosition(CanvasScrollViewer);
-        // EditorCanvas reports its local coordinates in the unscaled canvas space.
-        // Capturing this point directly is more stable than reconstructing it from
-        // ScrollViewer offsets while a LayoutTransform is changing the extent.
-        var logicalMouse = e.GetPosition(EditorCanvas);
+
+        // Calculate the content point under the cursor from scroll offsets.
+        // This avoids relying on e.GetPosition(EditorCanvas) which can be
+        // unreliable when a LayoutTransform is being changed mid-layout.
+        var contentX = (CanvasScrollViewer.HorizontalOffset + mouseInViewport.X) / oldZoom;
+        var contentY = (CanvasScrollViewer.VerticalOffset + mouseInViewport.Y) / oldZoom;
 
         vm.CanvasZoom = newZoom;
         EditorCanvas.UpdateLayout();
         CanvasScrollViewer.UpdateLayout();
-        CanvasScrollViewer.ScrollToHorizontalOffset(logicalMouse.X * newZoom - mouseInViewport.X);
-        CanvasScrollViewer.ScrollToVerticalOffset(logicalMouse.Y * newZoom - mouseInViewport.Y);
+
+        // Set scroll so the same content point stays under the cursor
+        CanvasScrollViewer.ScrollToHorizontalOffset(contentX * newZoom - mouseInViewport.X);
+        CanvasScrollViewer.ScrollToVerticalOffset(contentY * newZoom - mouseInViewport.Y);
 
         e.Handled = true;
     }
