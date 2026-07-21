@@ -1330,8 +1330,7 @@ public sealed class PatternMatcher
         using var templPrep = PreprocessTemplateForMatch(templateGray, preprocess);
 
         // Build feature images for matching:
-        // For ShapePyramid / ShapeBased: Use Gaussian-blurred Sobel Magnitude (edge shape invariant, lighting invariant)
-        // For TemplateMatch / TemplateMatchPyramid: Use Preprocessed Grayscale directly
+        // For ShapePyramid / ShapeBased: Use Gaussian-blurred Sobel Magnitude with outer boundary zeroed out
         using var roiFeatureMat = new Mat();
         using var templFeatureMat = new Mat();
 
@@ -1354,6 +1353,18 @@ public sealed class PatternMatcher
             using var mag8T = new Mat();
             magT.ConvertTo(mag8T, MatType.CV_8U);
             Cv2.GaussianBlur(mag8T, templFeatureMat, new Size(5, 5), 0);
+
+            // Zero out 5-pixel outer boundary margin of templFeatureMat to remove artificial ROI box border edges
+            var m = 5;
+            if (templFeatureMat.Width > 2 * m && templFeatureMat.Height > 2 * m)
+            {
+                using var mask = new Mat(templFeatureMat.Size(), MatType.CV_8UC1, Scalar.Black);
+                using var maskSub = new Mat(mask, new Rect(m, m, templFeatureMat.Width - 2 * m, templFeatureMat.Height - 2 * m));
+                maskSub.SetTo(255);
+                using var cleanMat = new Mat(templFeatureMat.Size(), templFeatureMat.Type(), Scalar.Black);
+                templFeatureMat.CopyTo(cleanMat, mask);
+                cleanMat.CopyTo(templFeatureMat);
+            }
         }
         else
         {
@@ -1361,7 +1372,7 @@ public sealed class PatternMatcher
             templPrep.CopyTo(templFeatureMat);
         }
 
-        // Determine coarse pyramid scale factor
+        // Downscaled Coarse Search
         var scale = 0.25;
         if (templFeatureMat.Width < 60 || templFeatureMat.Height < 60) scale = 0.5;
         if (templFeatureMat.Width < 30 || templFeatureMat.Height < 30) scale = 1.0;
@@ -1376,11 +1387,10 @@ public sealed class PatternMatcher
 
         if (stepDeg <= 0.000001) stepDeg = 1.0;
 
-        // Stage 1: Coarse angle sweep on downscaled pyramid (Fast: ~10ms)
+        // Stage 1: Coarse angle sweep
         var bestCoarseScore = double.NegativeInfinity;
         var bestCoarseAngle = 0.0;
         Point bestCoarseLocSmall = new Point(0, 0);
-        Rect bestCoarseCropSmall = new Rect();
 
         var angle = minAngleDeg;
         while (angle <= maxAngleDeg + 0.000001)
@@ -1403,7 +1413,6 @@ public sealed class PatternMatcher
                 bestCoarseScore = maxVal;
                 bestCoarseAngle = angle;
                 bestCoarseLocSmall = maxLoc;
-                bestCoarseCropSmall = cropSmall;
             }
 
             angle += stepDeg;
@@ -1415,54 +1424,49 @@ public sealed class PatternMatcher
             return new MatchResult(centerFallback, 0.0, 0.0, roiRect);
         }
 
-        // Stage 2: Fine angle sweep on full resolution image, but restricted to a tiny ROI around coarse location!
+        // Stage 2: Inverse-rotate candidate search region by -angle around candidate center, and match unrotated template!
         var coarseLocFullX = (int)Math.Round(bestCoarseLocSmall.X / scale);
         var coarseLocFullY = (int)Math.Round(bestCoarseLocSmall.Y / scale);
-
-        var margin = (int)Math.Round(40 / scale);
-        var fineX = Math.Clamp(coarseLocFullX - margin, 0, Math.Max(0, roiFeatureMat.Width - 1));
-        var fineY = Math.Clamp(coarseLocFullY - margin, 0, Math.Max(0, roiFeatureMat.Height - 1));
-        var fineW = Math.Min(roiFeatureMat.Width - fineX, (int)Math.Round(bestCoarseCropSmall.Width / scale) + 2 * margin);
-        var fineH = Math.Min(roiFeatureMat.Height - fineY, (int)Math.Round(bestCoarseCropSmall.Height / scale) + 2 * margin);
-
-        if (fineW <= 0 || fineH <= 0)
-        {
-            fineX = 0; fineY = 0; fineW = roiFeatureMat.Width; fineH = roiFeatureMat.Height;
-        }
-
-        using var roiFine = new Mat(roiFeatureMat, new Rect(fineX, fineY, fineW, fineH));
+        Point2d coarseCenterInRoi = new Point2d(coarseLocFullX + templPrep.Width / 2.0, coarseLocFullY + templPrep.Height / 2.0);
 
         var refineMin = Math.Max(minAngleDeg, bestCoarseAngle - Math.Max(stepDeg, 2.0));
         var refineMax = Math.Min(maxAngleDeg, bestCoarseAngle + Math.Max(stepDeg, 2.0));
-        var refineStep = Math.Min(stepDeg, 0.5);
+        var refineStep = Math.Min(stepDeg, 0.2);
 
         var bestFineScore = double.NegativeInfinity;
         var bestFineAngle = bestCoarseAngle;
-        Point bestFineLocInFine = new Point(0, 0);
-        Rect bestFineCrop = new Rect();
+        Point2d bestCenterInRoi = coarseCenterInRoi;
 
         angle = refineMin;
         while (angle <= refineMax + 0.000001)
         {
-            using var templRotFull = RotateWithPadding(templFeatureMat, angle);
-            var cropFull = ContentRectFromNonZero(templRotFull, pad: 0);
-            if (cropFull.Width <= 0 || cropFull.Height <= 0 || roiFine.Width < cropFull.Width || roiFine.Height < cropFull.Height)
-            {
-                angle += refineStep;
-                continue;
-            }
+            // Rotate search ROI by -angle around coarse center
+            using var rotM = Cv2.GetRotationMatrix2D(new Point2f((float)coarseCenterInRoi.X, (float)coarseCenterInRoi.Y), -angle, 1.0);
+            using var roiRotated = new Mat();
+            Cv2.WarpAffine(roiFeatureMat, roiRotated, rotM, roiFeatureMat.Size(), InterpolationFlags.Linear, BorderTypes.Replicate);
 
-            using var templCropFull = new Mat(templRotFull, cropFull);
-            using var resMatFine = new Mat();
-            Cv2.MatchTemplate(roiFine, templCropFull, resMatFine, TemplateMatchModes.CCoeffNormed);
-            Cv2.MinMaxLoc(resMatFine, out _, out var maxVal, out _, out var maxLoc);
+            // Match un-rotated, un-blurred template feature image directly against restored search ROI!
+            using var resFine = new Mat();
+            Cv2.MatchTemplate(roiRotated, templFeatureMat, resFine, TemplateMatchModes.CCoeffNormed);
+            Cv2.MinMaxLoc(resFine, out _, out var maxValFine, out _, out var maxLocFine);
 
-            if (maxVal > bestFineScore)
+            if (maxValFine > bestFineScore)
             {
-                bestFineScore = maxVal;
+                bestFineScore = maxValFine;
                 bestFineAngle = angle;
-                bestFineLocInFine = maxLoc;
-                bestFineCrop = cropFull;
+
+                // Center of match in rotated ROI coordinates
+                var centerInRotatedRoi = new Point2d(maxLocFine.X + templFeatureMat.Width / 2.0, maxLocFine.Y + templFeatureMat.Height / 2.0);
+
+                // Transform center back from rotated ROI space to original ROI space using inverse rotation (+angle)
+                using var invM = Cv2.GetRotationMatrix2D(new Point2f((float)coarseCenterInRoi.X, (float)coarseCenterInRoi.Y), angle, 1.0);
+                var m00 = invM.At<double>(0, 0);
+                var m01 = invM.At<double>(0, 1);
+                var m02 = invM.At<double>(0, 2);
+                var m10 = invM.At<double>(1, 0);
+                var m11 = invM.At<double>(1, 1);
+                var m12 = invM.At<double>(1, 2);
+                bestCenterInRoi = new Point2d(m00 * centerInRotatedRoi.X + m01 * centerInRotatedRoi.Y + m02, m10 * centerInRotatedRoi.X + m11 * centerInRotatedRoi.Y + m12);
             }
 
             angle += refineStep;
@@ -1474,50 +1478,9 @@ public sealed class PatternMatcher
             return new MatchResult(centerFallback, 0.0, 0.0, roiRect);
         }
 
-        // Sub-pixel 2D Parabolic Peak refinement
-        Point2d subPixelLocInFine = new Point2d(bestFineLocInFine.X, bestFineLocInFine.Y);
-        using var bestTemplRotFinal = RotateWithPadding(templFeatureMat, bestFineAngle);
-        using var bestTemplCropFinal = new Mat(bestTemplRotFinal, bestFineCrop);
-        using var resFinal = new Mat();
-        Cv2.MatchTemplate(roiFine, bestTemplCropFinal, resFinal, TemplateMatchModes.CCoeffNormed);
-
-        int fx = bestFineLocInFine.X;
-        int fy = bestFineLocInFine.Y;
-        if (fx > 0 && fx < resFinal.Width - 1 && fy > 0 && fy < resFinal.Height - 1)
-        {
-            float l = resFinal.At<float>(fy, fx - 1);
-            float r = resFinal.At<float>(fy, fx + 1);
-            float u = resFinal.At<float>(fy - 1, fx);
-            float d = resFinal.At<float>(fy + 1, fx);
-            float c = resFinal.At<float>(fy, fx);
-
-            double denomX = l + r - 2.0 * c;
-            double denomY = u + d - 2.0 * c;
-            if (Math.Abs(denomX) > 1e-6)
-            {
-                double dx = (l - r) / (2.0 * denomX);
-                if (Math.Abs(dx) < 1.0) subPixelLocInFine.X += dx;
-            }
-            if (Math.Abs(denomY) > 1e-6)
-            {
-                double dy = (u - d) / (2.0 * denomY);
-                if (Math.Abs(dy) < 1.0) subPixelLocInFine.Y += dy;
-            }
-        }
-
-        var w = templateGray.Width;
-        var h = templateGray.Height;
-        var diag = (int)Math.Ceiling(Math.Sqrt(w * w + h * h));
-        diag = Math.Max(diag, Math.Max(w, h));
-        var px = (diag - w) / 2;
-        var py = (diag - h) / 2;
-        double cxInCrop = (px + w / 2.0) - bestFineCrop.X;
-        double cyInCrop = (py + h / 2.0) - bestFineCrop.Y;
-
-        var matchLocInRoi = new Point2d(fineX + subPixelLocInFine.X, fineY + subPixelLocInFine.Y);
-        var centerInRoi = new Point2d(matchLocInRoi.X + cxInCrop, matchLocInRoi.Y + cyInCrop);
-        var globalPos = new Point2d(centerInRoi.X + roiRect.X, centerInRoi.Y + roiRect.Y);
-        var matchRect = new Rect(roiRect.X + (int)Math.Round(matchLocInRoi.X), roiRect.Y + (int)Math.Round(matchLocInRoi.Y), bestFineCrop.Width, bestFineCrop.Height);
+        // Global position in full image
+        var globalPos = new Point2d(bestCenterInRoi.X + roiRect.X, bestCenterInRoi.Y + roiRect.Y);
+        var matchRect = new Rect((int)Math.Round(globalPos.X - templateGray.Width / 2.0), (int)Math.Round(globalPos.Y - templateGray.Height / 2.0), templateGray.Width, templateGray.Height);
 
         return new MatchResult(globalPos, Math.Clamp(bestFineScore, 0.0, 1.0), bestFineAngle, matchRect);
     }
