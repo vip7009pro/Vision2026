@@ -1433,17 +1433,19 @@ public sealed class PatternMatcher
             while (angle <= maxAngleDeg + 0.000001)
             {
                 using var templRot = RotateTemplateCentered(pyrTempl[coarseLvl], angle);
-                if (pyrRoi[coarseLvl].Width >= templRot.Width && pyrRoi[coarseLvl].Height >= templRot.Height)
+                var crop = ContentRectFromNonZero(templRot, pad: 2);
+                if (crop.Width > 0 && crop.Height > 0 && pyrRoi[coarseLvl].Width >= crop.Width && pyrRoi[coarseLvl].Height >= crop.Height)
                 {
+                    using var templCropped = new Mat(templRot, crop);
                     using var resMat = new Mat();
-                    Cv2.MatchTemplate(pyrRoi[coarseLvl], templRot, resMat, TemplateMatchModes.CCoeffNormed);
+                    Cv2.MatchTemplate(pyrRoi[coarseLvl], templCropped, resMat, TemplateMatchModes.CCoeffNormed);
                     Cv2.MinMaxLoc(resMat, out _, out var maxVal, out _, out var maxLoc);
 
                     if (maxVal > bestCoarseScore)
                     {
                         bestCoarseScore = maxVal;
                         bestCoarseAngle = angle;
-                        bestCoarseCenter = new Point2d(maxLoc.X + templRot.Width / 2.0, maxLoc.Y + templRot.Height / 2.0);
+                        bestCoarseCenter = new Point2d(maxLoc.X + (templRot.Width / 2.0 - crop.X), maxLoc.Y + (templRot.Height / 2.0 - crop.Y));
                     }
                 }
                 angle += coarseStep;
@@ -1475,34 +1477,37 @@ public sealed class PatternMatcher
                 double angleStart = Math.Max(minAngleDeg, bestAngle - currAngleSearchRange);
                 double angleEnd = Math.Min(maxAngleDeg, bestAngle + currAngleSearchRange);
 
-                int searchRadiusPx = (lvl == 0) ? 12 : 20;
+                int searchRadiusPx = (lvl == 0) ? 16 : 24;
 
                 angle = angleStart;
                 while (angle <= angleEnd + 0.000001)
                 {
                     using var templRot = RotateTemplateCentered(pyrTempl[lvl], angle);
-                    if (pyrRoi[lvl].Width >= templRot.Width && pyrRoi[lvl].Height >= templRot.Height)
+                    var crop = ContentRectFromNonZero(templRot, pad: 2);
+                    if (crop.Width > 0 && crop.Height > 0 && pyrRoi[lvl].Width >= crop.Width && pyrRoi[lvl].Height >= crop.Height)
                     {
-                        int expectedTopLeftX = (int)Math.Round(expectedCenterInLvl.X - templRot.Width / 2.0);
-                        int expectedTopLeftY = (int)Math.Round(expectedCenterInLvl.Y - templRot.Height / 2.0);
+                        using var templCropped = new Mat(templRot, crop);
+
+                        int expectedTopLeftX = (int)Math.Round(expectedCenterInLvl.X - (templRot.Width / 2.0 - crop.X));
+                        int expectedTopLeftY = (int)Math.Round(expectedCenterInLvl.Y - (templRot.Height / 2.0 - crop.Y));
 
                         int subX = Math.Max(0, expectedTopLeftX - searchRadiusPx);
                         int subY = Math.Max(0, expectedTopLeftY - searchRadiusPx);
-                        int subW = Math.Min(pyrRoi[lvl].Width - subX, templRot.Width + searchRadiusPx * 2);
-                        int subH = Math.Min(pyrRoi[lvl].Height - subY, templRot.Height + searchRadiusPx * 2);
+                        int subW = Math.Min(pyrRoi[lvl].Width - subX, templCropped.Width + searchRadiusPx * 2);
+                        int subH = Math.Min(pyrRoi[lvl].Height - subY, templCropped.Height + searchRadiusPx * 2);
 
-                        if (subW >= templRot.Width && subH >= templRot.Height)
+                        if (subW >= templCropped.Width && subH >= templCropped.Height)
                         {
                             using var subRoi = new Mat(pyrRoi[lvl], new Rect(subX, subY, subW, subH));
                             using var resMat = new Mat();
-                            Cv2.MatchTemplate(subRoi, templRot, resMat, TemplateMatchModes.CCoeffNormed);
+                            Cv2.MatchTemplate(subRoi, templCropped, resMat, TemplateMatchModes.CCoeffNormed);
                             Cv2.MinMaxLoc(resMat, out _, out var maxVal, out _, out var maxLoc);
 
                             if (maxVal > lvlBestScore)
                             {
                                 lvlBestScore = maxVal;
                                 lvlBestAngle = angle;
-                                lvlBestCenter = new Point2d(subX + maxLoc.X + templRot.Width / 2.0, subY + maxLoc.Y + templRot.Height / 2.0);
+                                lvlBestCenter = new Point2d(subX + maxLoc.X + (templRot.Width / 2.0 - crop.X), subY + maxLoc.Y + (templRot.Height / 2.0 - crop.Y));
                             }
                         }
                     }
@@ -1516,44 +1521,6 @@ public sealed class PatternMatcher
                     bestCenterInRoi = new Point2d(lvlBestCenter.X / lvlScale, lvlBestCenter.Y / lvlScale);
                 }
                 currAngleSearchRange = lvlStep * 1.5;
-            }
-
-            if (Math.Abs(bestAngle) > 0.0001)
-            {
-                try
-                {
-                    int patchW = (int)Math.Ceiling(templFeatureMat.Width * 1.4);
-                    int patchH = (int)Math.Ceiling(templFeatureMat.Height * 1.4);
-
-                    int pX = (int)Math.Round(bestCenterInRoi.X - patchW / 2.0);
-                    int pY = (int)Math.Round(bestCenterInRoi.Y - patchH / 2.0);
-
-                    pX = Math.Clamp(pX, 0, Math.Max(0, roiFeatureMat.Width - patchW));
-                    pY = Math.Clamp(pY, 0, Math.Max(0, roiFeatureMat.Height - patchH));
-
-                    patchW = Math.Min(roiFeatureMat.Width - pX, patchW);
-                    patchH = Math.Min(roiFeatureMat.Height - pY, patchH);
-
-                    if (patchW >= templFeatureMat.Width && patchH >= templFeatureMat.Height)
-                    {
-                        using var patch = new Mat(roiFeatureMat, new Rect(pX, pY, patchW, patchH));
-                        using var unrotatedPatch = RotateTemplateCentered(patch, -bestAngle);
-
-                        if (unrotatedPatch.Width >= templFeatureMat.Width && unrotatedPatch.Height >= templFeatureMat.Height)
-                        {
-                            using var resScore = new Mat();
-                            Cv2.MatchTemplate(unrotatedPatch, templFeatureMat, resScore, TemplateMatchModes.CCoeffNormed);
-                            Cv2.MinMaxLoc(resScore, out double _, out double maxTrueScore);
-                            if (!double.IsNaN(maxTrueScore) && maxTrueScore > 0)
-                            {
-                                bestScore = maxTrueScore;
-                            }
-                        }
-                    }
-                }
-                catch
-                {
-                }
             }
 
             var globalPos = new Point2d(bestCenterInRoi.X + roiRect.X, bestCenterInRoi.Y + roiRect.Y);

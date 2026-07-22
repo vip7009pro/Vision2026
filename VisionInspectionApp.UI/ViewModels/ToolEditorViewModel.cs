@@ -775,6 +775,7 @@ namespace VisionInspectionApp.UI.ViewModels
         private string? _lastRunError;
         private void RaiseToolPropertyPanelsChanged()
         {
+            RefreshOriginTemplatePreview();
             OnPropertyChanged(nameof(IsLineNode));
             OnPropertyChanged(nameof(IsCaliperNode));
             OnPropertyChanged(nameof(IsOriginNode));

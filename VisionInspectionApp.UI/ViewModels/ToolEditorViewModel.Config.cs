@@ -77,6 +77,31 @@ namespace VisionInspectionApp.UI.ViewModels
             SelectedNodeOverlayItems = new List<OverlayItem>();
             SelectedNodePreviewImage = null;
             FinalPreviewImage = null;
+            _cachedFinalPreviewImage = null;
+            LinePreviewImage = null;
+            PointEdgePreviewImage = null;
+            BlobThresholdPreviewImage = null;
+            Origin_TemplatePreviewImage = null;
+
+            foreach (var kv in _imageSourcePreviewCache.Values)
+            {
+                kv.Image?.Dispose();
+            }
+            _imageSourcePreviewCache.Clear();
+
+            _sharedImage.SetImage(null);
+
+            LastResult = null;
+            SpecResults?.Clear();
+            ToolTimings?.Clear();
+            CodeDetectionResults?.Clear();
+            SurfaceCompareDebugItems?.Clear();
+            DebugTemplate = null;
+            DebugCurrent = null;
+            DebugBinary = null;
+            DebugDiff = null;
+
+            RefreshPreviews();
             IsDirty = false;
         }
 

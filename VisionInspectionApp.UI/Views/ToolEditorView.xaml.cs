@@ -91,6 +91,8 @@ public partial class ToolEditorView : UserControl
         }
     }
 
+    private MouseButton? _panButton;
+
     private void EditorCanvas_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
         if (_isWiring || _isCanvasPanning)
@@ -109,20 +111,24 @@ public partial class ToolEditorView : UserControl
             return;
         }
 
-        _isRangeSelecting = true;
-        _rangeSelectStart = GetCanvasLogicalPosition(e.GetPosition(EditorCanvas));
-
-        if ((Keyboard.Modifiers & ModifierKeys.Control) != ModifierKeys.Control)
+        // If holding Ctrl or Shift on empty canvas, start box range selection
+        if ((Keyboard.Modifiers & (ModifierKeys.Control | ModifierKeys.Shift)) != 0)
         {
-            vm.ClearNodeSelection();
-            vm.SelectedNode = null;
-        }
+            _isRangeSelecting = true;
+            _rangeSelectStart = GetCanvasLogicalPosition(e.GetPosition(EditorCanvas));
 
-        UpdateSelectionRect(_rangeSelectStart, _rangeSelectStart);
-        SelectionRect.Visibility = Visibility.Visible;
-        EditorCanvas.CaptureMouse();
-        EditorCanvas.Focus();
-        e.Handled = true;
+            if ((Keyboard.Modifiers & ModifierKeys.Control) != ModifierKeys.Control)
+            {
+                vm.ClearNodeSelection();
+                vm.SelectedNode = null;
+            }
+
+            UpdateSelectionRect(_rangeSelectStart, _rangeSelectStart);
+            SelectionRect.Visibility = Visibility.Visible;
+            EditorCanvas.CaptureMouse();
+            EditorCanvas.Focus();
+            e.Handled = true;
+        }
     }
 
     private void EditorCanvas_PreviewMouseLeftButtonUp(object sender, MouseButtonEventArgs e)
@@ -328,22 +334,26 @@ public partial class ToolEditorView : UserControl
 
     private void EditorCanvas_PreviewMouseDown(object sender, MouseButtonEventArgs e)
     {
-        if (e.ChangedButton != MouseButton.Middle)
-        {
-            return;
-        }
-
         if (CanvasScrollViewer is null)
         {
             return;
         }
 
-        _isCanvasPanning = true;
-        _canvasPanStart = e.GetPosition(this);
-        _canvasPanStartH = CanvasScrollViewer.HorizontalOffset;
-        _canvasPanStartV = CanvasScrollViewer.VerticalOffset;
-        EditorCanvas.CaptureMouse();
-        e.Handled = true;
+        var isLeftOnBackground = e.ChangedButton == MouseButton.Left &&
+                                !IsMouseOverInteractiveElement(e.GetPosition(EditorCanvas)) &&
+                                (Keyboard.Modifiers & (ModifierKeys.Control | ModifierKeys.Shift)) == 0;
+
+        if (e.ChangedButton == MouseButton.Middle || isLeftOnBackground)
+        {
+            _isCanvasPanning = true;
+            _panButton = e.ChangedButton;
+            _canvasPanStart = e.GetPosition(this);
+            _canvasPanStartH = CanvasScrollViewer.HorizontalOffset;
+            _canvasPanStartV = CanvasScrollViewer.VerticalOffset;
+            EditorCanvas.CaptureMouse();
+            EditorCanvas.Focus();
+            e.Handled = true;
+        }
     }
 
     private void EditorCanvas_PreviewMouseMove(object sender, MouseEventArgs e)
@@ -369,14 +379,18 @@ public partial class ToolEditorView : UserControl
 
     private void EditorCanvas_PreviewMouseUp(object sender, MouseButtonEventArgs e)
     {
-        if (!_isCanvasPanning || e.ChangedButton != MouseButton.Middle)
+        if (!_isCanvasPanning)
         {
             return;
         }
 
-        _isCanvasPanning = false;
-        EditorCanvas.ReleaseMouseCapture();
-        e.Handled = true;
+        if (e.ChangedButton == _panButton || e.ChangedButton == MouseButton.Middle || e.ChangedButton == MouseButton.Left)
+        {
+            _isCanvasPanning = false;
+            _panButton = null;
+            EditorCanvas.ReleaseMouseCapture();
+            e.Handled = true;
+        }
     }
 
     private void OutPort_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)

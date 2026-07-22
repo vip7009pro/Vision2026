@@ -103,6 +103,43 @@ namespace VisionInspectionApp.UI.ViewModels
             }
         }
 
+        [ObservableProperty]
+        private BitmapSource? _origin_TemplatePreviewImage;
+
+        public void RefreshOriginTemplatePreview()
+        {
+            if (_config?.Origin == null || string.IsNullOrWhiteSpace(_config.Origin.TemplateImageFile))
+            {
+                Origin_TemplatePreviewImage = null;
+                return;
+            }
+
+            try
+            {
+                var file = _config.Origin.TemplateImageFile;
+                if (!Path.IsPathRooted(file))
+                {
+                    var templateDir = Path.Combine(CurrentTempWorkingDir ?? Path.Combine(Path.GetFullPath(_storeOptions.ConfigRootDirectory), ProductCode ?? ""), "templates");
+                    file = Path.Combine(templateDir, file);
+                }
+
+                if (File.Exists(file))
+                {
+                    using var mat = Cv2.ImRead(file, ImreadModes.Grayscale);
+                    if (mat != null && !mat.Empty())
+                    {
+                        Origin_TemplatePreviewImage = mat.ToBitmapSource();
+                        return;
+                    }
+                }
+            }
+            catch
+            {
+            }
+
+            Origin_TemplatePreviewImage = null;
+        }
+
         public ICommand? Origin_TeachTemplateCommand { get; internal set; }
 
         public void Origin_TeachTemplate()
@@ -114,6 +151,7 @@ namespace VisionInspectionApp.UI.ViewModels
             _config.Origin.WorldPosition = RoiCenterToWorld(roi);
             TrySaveTemplateImage("origin", roi, isOrigin: true, pointName: null);
 
+            RefreshOriginTemplatePreview();
             RunFlow();
             RequestAutoSave();
         }
@@ -122,4 +160,3 @@ namespace VisionInspectionApp.UI.ViewModels
         public bool IsOriginShapePyramid => Origin_Algorithm == OriginAlgorithm.ShapePyramid;
     }
 }
-

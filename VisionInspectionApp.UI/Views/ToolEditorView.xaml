@@ -321,6 +321,24 @@
                                     <Button Content="Lưu Template Origin" Command="{Binding Origin_TeachTemplateCommand}" Background="#0F5FA8" Foreground="White" Padding="12,6" HorizontalAlignment="Stretch" ToolTip="Lưu lại hình ảnh mẫu trong khung Template ROI cho Origin tool" />
                                 </Border>
 
+                                <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" Padding="4" Margin="0,4,0,6" Background="{DynamicResource PanelAltBackgroundBrush}">
+                                    <Grid Height="120">
+                                        <Image Source="{Binding Origin_TemplatePreviewImage}" Stretch="Uniform" />
+                                        <TextBlock Text="Chưa lưu template" VerticalAlignment="Center" HorizontalAlignment="Center" Foreground="{DynamicResource TextMutedBrush}" FontSize="11">
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock">
+                                                    <Setter Property="Visibility" Value="Collapsed" />
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding Origin_TemplatePreviewImage}" Value="{x:Null}">
+                                                            <Setter Property="Visibility" Value="Visible" />
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
+                                        </TextBlock>
+                                    </Grid>
+                                </Border>
+
                             </StackPanel>
 <StackPanel Visibility="{Binding IsPointNode, Converter={StaticResource BoolToVis}}">
                                 <Border Background="{DynamicResource BorderBrush}" Padding="4,2" Margin="0,8,0,0">

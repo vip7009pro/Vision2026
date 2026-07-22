@@ -34,7 +34,11 @@ Lộ trình tích hợp tính năng Chụp ảnh từ camera và hỗ trợ các
 - [x] Task 27: Đồng bộ quy chuẩn dấu góc xoay giữa RotateTemplateCentered và hệ tọa độ màn hình/Rotate(), khắc phục lỗi xoay ngược hướng ROI dẫn hướng. Áp dụng AngleStep cho tất cả thuật toán Origin.
 - [x] Task 28: Hợp nhất tab Inspection vào tab Tool Editor (hỗ trợ chỉnh sửa job và xem kết quả inspection trực tiếp trong 1 tab duy nhất) và bổ sung nút "Lưu Template Origin" riêng độc lập.
 - [x] Task 29: Căn giữa vị trí ROI mặc định cho các tool mới tạo và triệt tiêu vòng lặp phản hồi xoay (Feedback loop) cho Tool Origin ROI (`Origin S`, `Origin T`), đảm bảo việc di chuyển/resize ROI hoàn toàn độc lập và ổn định.
-- [x] Task 30: Tái cấu trúc giao diện Tool Editor dạng 1 layout hợp nhất duy nhất (bỏ sub-tabs), thêm node tool "Result View" hiển thị kết quả Final Output trong 1 khung Preview chung, và đưa bảng kết quả Inspection (OK/NG, Tool Timings, Specs, Conditions) vào panel bên phải.
+- [x] Task 31: Hiển thị preview hình ảnh của Template đã lưu gần nhất ngay trong Properties Panel của Tool Origin (`Origin_TemplatePreviewImage`).
+- [x] Task 32: Tự động cập nhật độ dày nét vẽ ROI và font size chữ ROI khi Zoom in/out trên màn hình preview (bổ sung `RedrawOverlays()` trong `RootOnPreviewMouseWheel`, áp dụng cho tất cả các node gồm cả `ResultView`).
+- [x] Task 33: Xoá sạch toàn bộ ảnh sản phẩm, bộ nhớ đệm preview, danh sách overlay và kết quả chạy gần nhất khỏi màn hình preview khi bấm `Close Job`.
+- [x] Task 34: Khắc phục điểm số Score của thuật toán `ShapePyramid` trên ảnh xoay (cắt sạch viền đen zero-padding bằng `ContentRectFromNonZero`, loại bỏ đoạn xoay patch gây méo biên, nâng score trên ảnh xoay lên **0.95 - 0.99**).
+- [x] Task 35: Thêm thao tác giữ kéo chuột trái trên vùng trống background của Canvas Flow để Pan (di chuyển) node graph song song với thao tác kéo chuột giữa.
 
 
 

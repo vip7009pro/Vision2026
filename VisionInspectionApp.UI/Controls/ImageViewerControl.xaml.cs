@@ -275,6 +275,7 @@ public partial class ImageViewerControl : UserControl
         _transform.Matrix = m;
 
         UpdateInfoText();
+        RedrawOverlays();
         e.Handled = true;
     }
 

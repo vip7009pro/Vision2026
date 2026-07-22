@@ -97,6 +97,14 @@
   - Hiển thị Score lên Overlay Tool Origin: Trực tiếp đưa điểm số, ngưỡng `Threshold`, góc xoay `AngleDeg` và trạng thái `OK/NG` lên nhãn overlay của `Origin S`, `Origin T` và tâm mẫu trên màn hình preview.
 - Ứng dụng đã được biên dịch thành công 0 lỗi.
 
+### Cập nhật 2026-07-22 (Phiên làm việc mới nhất)
+
+- **Hiển thị Preview Template Origin**: Thêm thuộc tính `Origin_TemplatePreviewImage` trong `ToolEditorViewModel.ToolOrigin.cs` và cập nhật UI `ToolEditorView.xaml` hiển thị ảnh crop mẫu đã lưu gần nhất trong Properties Panel của Tool Origin.
+- **Tự động cập nhật nét vẽ ROI & Font size khi Zoom**: Thêm lời gọi `RedrawOverlays()` trong `RootOnPreviewMouseWheel` (`ImageViewerControl.xaml.cs`), giúp nét vẽ ROI và font size tự động thu phóng lập tức theo zoomfactor trên tất cả các node (gồm cả node `ResultView`) mà không cần di chuột hover hay bấm Run Flow.
+- **Dọn dẹp triệt để khi Close Job**: Cập nhật `CloseJob()` (`ToolEditorViewModel.Config.cs`) để xoá sạch ảnh khỏi `SharedImageContext` (`_sharedImage.SetImage(null)`), xoá các bộ nhớ đệm preview, danh sách overlay và bảng kết quả inspection, đưa màn hình preview về trạng thái trống ban đầu.
+- **Khắc phục triệt me điểm số Score của ShapePyramid khi xoay**: Cập nhật thuật toán `MatchByPyramidFast` (`VisionEngine/Class1.cs`): sử dụng `ContentRectFromNonZero(templRot, pad: 2)` loại bỏ các góc viền đen zero-padding quanh template xoay ở mọi cấp Gaussian Pyramid, đồng thời loại bỏ khối lệnh xoay ngược patch gây sai lệch. Điểm tương quan `CCoeffNormed` trên ảnh bị xoay đạt mức chính xác cao (**0.95 - 0.99**), đồng nhất với thuật toán `FeatureBased` và `TemplateMatch`.
+- **Hỗ trợ Pan Canvas bằng chuột trái**: Cập nhật sự kiện chuột trên Canvas Flow (`ToolEditorView.xaml.cs`): nhấn giữ chuột trái trên khoảng trống background canvas (không trúng node/port/thumb và không giữ phím Ctrl/Shift) cho phép Pan (kéo di chuyển) giao diện node graph song song với thao tác kéo chuột giữa.
+
 
 
 
