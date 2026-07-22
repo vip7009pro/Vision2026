@@ -3149,22 +3149,35 @@ public sealed partial class InspectionViewModel : ObservableObject
                     var n = Math.Min(c.Points.Count, 80);
 
                     for (var i = 0; i < n; i++)
-
                     {
-
                         var p = c.Points[i];
-
                         OverlayItems.Add(new OverlayPointItem { X = p.X, Y = p.Y, Radius = 2.0, Stroke = Brushes.Gold, Label = string.Empty });
-
                     }
-
                 }
-
             }
-
         }
 
-
+        if (LastResult?.CodeDetections is not null)
+        {
+                foreach (var cdt in LastResult.CodeDetections)
+                {
+                    if (!cdt.Found) continue;
+                    var bb = cdt.BoundingBox;
+                if (bb.Width > 0 && bb.Height > 0)
+                {
+                    OverlayItems.Add(new OverlayRectItem
+                    {
+                        X = bb.X,
+                        Y = bb.Y,
+                        Width = bb.Width,
+                        Height = bb.Height,
+                        Angle = angleDeg,
+                        Stroke = Brushes.Lime,
+                        Label = $"{cdt.Name}: {cdt.Text}"
+                    });
+                }
+            }
+        }
 
         // TextNode overlays
 

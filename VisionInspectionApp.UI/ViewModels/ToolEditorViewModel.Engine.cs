@@ -1073,7 +1073,7 @@ namespace VisionInspectionApp.UI.ViewModels
             if (string.Equals(label, "DefectROI", StringComparison.OrdinalIgnoreCase))
             {
                 _config.DefectConfig.InspectRoi = roi;
-                RunFlow();
+                RefreshPreviews();
                 RequestAutoSave();
                 return;
             }
@@ -1087,7 +1087,7 @@ namespace VisionInspectionApp.UI.ViewModels
                     _config.Origin.WorldPosition = RoiCenterToWorld(roi);
                 }
     
-                RunFlow();
+                RefreshPreviews();
                 RequestAutoSave();
                 return;
             }
@@ -1096,11 +1096,10 @@ namespace VisionInspectionApp.UI.ViewModels
             {
                 _config.Origin.TemplateRoi = roi;
                 _config.Origin.WorldPosition = RoiCenterToWorld(roi);
-                RunFlow();
+                RefreshPreviews();
                 RequestAutoSave();
                 return;
             }
-
     
             var parts = label.Split(' ', StringSplitOptions.RemoveEmptyEntries);
             if (parts.Length == 2)
@@ -1119,7 +1118,7 @@ namespace VisionInspectionApp.UI.ViewModels
                             p.WorldPosition = RoiCenterToWorld(roi);
                         }
     
-                        RunFlow();
+                        RefreshPreviews();
                         RequestAutoSave();
                         return;
                     }
@@ -1133,7 +1132,7 @@ namespace VisionInspectionApp.UI.ViewModels
                         p.TemplateRoi = roi;
                         p.WorldPosition = RoiCenterToWorld(roi);
                         TrySaveTemplateImage(name, roi, isOrigin: false, pointName: name);
-                        RunFlow();
+                        RefreshPreviews();
                         RequestAutoSave();
                         return;
                     }
@@ -1145,7 +1144,7 @@ namespace VisionInspectionApp.UI.ViewModels
                     if (l is not null)
                     {
                         l.SearchRoi = roi;
-                        RunFlow();
+                        RefreshPreviews();
                         RequestAutoSave();
                         return;
                     }
@@ -1157,7 +1156,7 @@ namespace VisionInspectionApp.UI.ViewModels
                     if (l is not null)
                     {
                         l.SearchRoi = roi;
-                        RunFlow();
+                        RefreshPreviews();
                         RequestAutoSave();
                         return;
                     }
@@ -1169,7 +1168,7 @@ namespace VisionInspectionApp.UI.ViewModels
                     if (c is not null)
                     {
                         c.SearchRoi = roi;
-                        RunFlow();
+                        RefreshPreviews();
                         RequestAutoSave();
                         return;
                     }
@@ -1181,7 +1180,7 @@ namespace VisionInspectionApp.UI.ViewModels
                     if (e is not null)
                     {
                         e.SearchRoi = roi;
-                        RunFlow();
+                        RefreshPreviews();
                         RequestAutoSave();
                         return;
                     }
@@ -1193,7 +1192,7 @@ namespace VisionInspectionApp.UI.ViewModels
                     if (c is not null)
                     {
                         c.SearchRoi = roi;
-                        RunFlow();
+                        RefreshPreviews();
                         RequestAutoSave();
                         return;
                     }
@@ -1205,7 +1204,7 @@ namespace VisionInspectionApp.UI.ViewModels
                     if (c is not null)
                     {
                         c.SearchRoi = roi;
-                        RunFlow();
+                        RefreshPreviews();
                         RequestAutoSave();
                         return;
                     }
@@ -1214,7 +1213,7 @@ namespace VisionInspectionApp.UI.ViewModels
                 if (kind.StartsWith("B", StringComparison.OrdinalIgnoreCase))
                 {
                     ApplyRoiForLabel(label, roi);
-                    RunFlow();
+                    RefreshPreviews();
                     RequestAutoSave();
                     return;
                 }
@@ -1222,13 +1221,13 @@ namespace VisionInspectionApp.UI.ViewModels
                 if (kind.StartsWith("SC", StringComparison.OrdinalIgnoreCase))
                 {
                     ApplyRoiForLabel(label, roi);
-                    RunFlow();
+                    RefreshPreviews();
                     RequestAutoSave();
                     return;
                 }
             }
     
-            RunFlow();
+            RefreshPreviews();
             RaiseToolPropertyPanelsChanged();
             RequestAutoSave();
         }
@@ -1253,12 +1252,14 @@ namespace VisionInspectionApp.UI.ViewModels
         private ImageSource? _blobThresholdPreviewImage;
         [ObservableProperty]
         private List<OverlayItem> _finalOverlayItems = new();
-        public ICommand LoadPreviewImageCommand { get; }
-        public ICommand CaptureCameraImageCommand { get; }
-        public ICommand RunFlowCommand { get; }
-        public ICommand RoiSelectedCommand { get; }
-        public ICommand RoiEditedCommand { get; }
-        public ICommand RoiDeletedCommand { get; }
+        public ICommand LoadPreviewImageCommand { get; internal set; }
+        public ICommand CaptureCameraImageCommand { get; internal set; }
+        public ICommand RunFlowCommand { get; internal set; }
+        public ICommand RunOnceCommand { get; internal set; }
+        public ICommand RunContinuousCommand { get; internal set; }
+        public ICommand RoiSelectedCommand { get; internal set; }
+        public ICommand RoiEditedCommand { get; internal set; }
+        public ICommand RoiDeletedCommand { get; internal set; }
     
         [ObservableProperty]
         private bool _linePreviewEnabled = true;
@@ -1377,10 +1378,12 @@ namespace VisionInspectionApp.UI.ViewModels
         public bool IsRunningFolderFlow
         {
             get => _isRunningFolderFlow;
-            private set
+            set
             {
-                if (SetProperty(ref _isRunningFolderFlow, value))
+                if (_isRunningFolderFlow != value)
                 {
+                    _isRunningFolderFlow = value;
+                    OnPropertyChanged();
                     UpdateRunFlowButtonProperties();
                 }
             }
@@ -1393,20 +1396,30 @@ namespace VisionInspectionApp.UI.ViewModels
             : new SolidColorBrush(Color.FromRgb(16, 124, 16));
         public string RunFlowButtonToolTip => IsRunningFolderFlow ? "Dừng chạy luồng thư mục" : "Run Flow";
 
+        public string RunContinuousButtonIcon => IsRunningFolderFlow ? "⏹" : "🔁";
+        public string RunContinuousButtonText => IsRunningFolderFlow ? "STOP" : "Run Continuous";
+        public Brush RunContinuousButtonBackgroundBrush => IsRunningFolderFlow
+            ? new SolidColorBrush(Color.FromRgb(211, 47, 47))
+            : new SolidColorBrush(Color.FromRgb(46, 125, 50));
+        public string RunContinuousButtonToolTip => IsRunningFolderFlow ? "Dừng chạy luồng thư mục liên tục" : "Chạy liên tục qua các ảnh trong thư mục (Loop & Interval)";
+
         private void UpdateRunFlowButtonProperties()
         {
             OnPropertyChanged(nameof(RunFlowButtonIcon));
             OnPropertyChanged(nameof(RunFlowButtonText));
             OnPropertyChanged(nameof(RunFlowButtonBackgroundBrush));
             OnPropertyChanged(nameof(RunFlowButtonToolTip));
+            OnPropertyChanged(nameof(RunContinuousButtonIcon));
+            OnPropertyChanged(nameof(RunContinuousButtonText));
+            OnPropertyChanged(nameof(RunContinuousButtonBackgroundBrush));
+            OnPropertyChanged(nameof(RunContinuousButtonToolTip));
         }
 
-        private void OnRunFlowClicked()
+        private void OnRunOnceClicked()
         {
             if (IsRunningFolderFlow)
             {
                 StopFolderFlow();
-                return;
             }
 
             var imageSourceNode = Nodes.FirstOrDefault(n => string.Equals(n.Type, "ImageSource", StringComparison.OrdinalIgnoreCase));
@@ -1438,12 +1451,67 @@ namespace VisionInspectionApp.UI.ViewModels
                         return;
                     }
 
+                    if (_folderImageIndex >= files.Length)
+                    {
+                        _folderImageIndex = 0;
+                    }
+
+                    var filePath = files[_folderImageIndex];
+                    RunSingleFlowFromImageFile(filePath, imgSourceDef.Name);
+                    _folderImageIndex = (_folderImageIndex + 1) % files.Length;
+                    return;
+                }
+            }
+
+            RunFlow();
+        }
+
+        private void OnRunContinuousClicked()
+        {
+            if (IsRunningFolderFlow)
+            {
+                StopFolderFlow();
+                return;
+            }
+
+            var imageSourceNode = Nodes.FirstOrDefault(n => string.Equals(n.Type, "ImageSource", StringComparison.OrdinalIgnoreCase));
+            if (imageSourceNode is not null && _config is not null)
+            {
+                var imgSourceDef = _config.ImageSources.FirstOrDefault(x => string.Equals(x.Name, imageSourceNode.RefName, StringComparison.OrdinalIgnoreCase));
+                if (imgSourceDef is not null && imgSourceDef.SourceType == ImageSourceType.Folder)
+                {
+                    if (string.IsNullOrWhiteSpace(imgSourceDef.FolderPath) || !Directory.Exists(imgSourceDef.FolderPath))
+                    {
+                        MessageBox.Show($"Thư mục chứa ảnh không tồn tại:\n{imgSourceDef.FolderPath}", "Cảnh báo", MessageBoxButton.OK, MessageBoxImage.Warning);
+                        return;
+                    }
+
+                    var files = Directory.GetFiles(imgSourceDef.FolderPath, "*.*", SearchOption.TopDirectoryOnly)
+                        .Where(f => f.EndsWith(".jpg", StringComparison.OrdinalIgnoreCase) ||
+                                    f.EndsWith(".jpeg", StringComparison.OrdinalIgnoreCase) ||
+                                    f.EndsWith(".png", StringComparison.OrdinalIgnoreCase) ||
+                                    f.EndsWith(".bmp", StringComparison.OrdinalIgnoreCase) ||
+                                    f.EndsWith(".tif", StringComparison.OrdinalIgnoreCase) ||
+                                    f.EndsWith(".tiff", StringComparison.OrdinalIgnoreCase))
+                        .OrderBy(f => f).ToArray();
+
+                    if (files.Length == 0)
+                    {
+                        MessageBox.Show($"Thư mục không có tệp ảnh hợp lệ:\n{imgSourceDef.FolderPath}", "Cảnh báo", MessageBoxButton.OK, MessageBoxImage.Warning);
+                        return;
+                    }
+
                     StartFolderFlow(imgSourceDef, files);
                     return;
                 }
             }
 
             RunFlow();
+        }
+
+        private void OnRunFlowClicked()
+        {
+            OnRunOnceClicked();
         }
 
         private void StartFolderFlow(ImageSourceDefinition sourceDef, string[] imageFiles)
@@ -2250,6 +2318,14 @@ namespace VisionInspectionApp.UI.ViewModels
                 AddSurfaceCompareRoi(sc.Name);
             }
     
+            foreach (var c in config.CodeDetections)
+            {
+                if (c.SearchRoi.Width > 0 && c.SearchRoi.Height > 0)
+                {
+                    dst.Add(CreateRotatedRoiWithPose(c.SearchRoi, Brushes.Lime, $"{c.Name} C"));
+                }
+            }
+    
             if (_config.DefectConfig.InspectRoi.Width > 0 && _config.DefectConfig.InspectRoi.Height > 0)
             {
                 dst.Add(CreateRotatedRoi(_config.DefectConfig.InspectRoi, Brushes.Orange, "DefectROI"));
@@ -2392,8 +2468,17 @@ namespace VisionInspectionApp.UI.ViewModels
                 var bb = cdt.BoundingBox;
                 if (bb.Width > 0 && bb.Height > 0)
                 {
-                    dst.Add(new OverlayRectItem { X = bb.X, Y = bb.Y, Width = bb.Width, Height = bb.Height, Stroke = Brushes.Lime, Label = cdt.Name });
-                    dst.Add(new OverlayPointItem { X = bb.X + 2, Y = bb.Y + 2, Radius = 1.0, Stroke = Brushes.Lime, Label = cdt.Text });
+                    var angleDeg = run.Origin?.AngleDeg ?? 0.0;
+                    dst.Add(new OverlayRectItem
+                    {
+                        X = bb.X,
+                        Y = bb.Y,
+                        Width = bb.Width,
+                        Height = bb.Height,
+                        Angle = angleDeg,
+                        Stroke = Brushes.Lime,
+                        Label = $"{cdt.Name}: {cdt.Text}"
+                    });
                 }
             }
     
@@ -3185,6 +3270,41 @@ namespace VisionInspectionApp.UI.ViewModels
                 return;
             }
     
+            if (string.Equals(node.Type, "CodeDetection", StringComparison.OrdinalIgnoreCase))
+            {
+                var c = _config.CodeDetections.FirstOrDefault(x => string.Equals(x.Name, node.RefName, StringComparison.OrdinalIgnoreCase));
+                if (c is null)
+                {
+                    return;
+                }
+
+                if (showRois && c.SearchRoi.Width > 0 && c.SearchRoi.Height > 0)
+                {
+                    dst.Add(CreateRotatedRoiWithPose(c.SearchRoi, Brushes.Lime, $"{c.Name} C"));
+                }
+
+                if (_lastRun is not null && _lastRun.CodeDetections is not null)
+                {
+                    var cdt = _lastRun.CodeDetections.FirstOrDefault(x => string.Equals(x.Name, node.RefName, StringComparison.OrdinalIgnoreCase));
+                    if (cdt is not null && cdt.Found && cdt.BoundingBox.Width > 0 && cdt.BoundingBox.Height > 0)
+                    {
+                        var bb = cdt.BoundingBox;
+                        var angleDeg = _lastRun.Origin?.AngleDeg ?? 0.0;
+                        dst.Add(new OverlayRectItem
+                        {
+                            X = bb.X,
+                            Y = bb.Y,
+                            Width = bb.Width,
+                            Height = bb.Height,
+                            Angle = angleDeg,
+                            Stroke = Brushes.Lime,
+                            Label = $"{cdt.Name}: {cdt.Text}"
+                        });
+                    }
+                }
+                return;
+            }
+
             if (string.Equals(node.Type, "DefectRoi", StringComparison.OrdinalIgnoreCase))
             {
                 if (_config.DefectConfig.InspectRoi.Width > 0 && _config.DefectConfig.InspectRoi.Height > 0)

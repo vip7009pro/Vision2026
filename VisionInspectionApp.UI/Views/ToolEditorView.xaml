@@ -38,10 +38,17 @@
             <Button Content="Load Image" Command="{Binding LoadPreviewImageCommand}" Margin="0,0,12,0" />
             <Button Content="{Binding CaptureButtonText}" Command="{Binding CaptureCameraImageCommand}" Margin="0,0,12,0" />
 
-            <Button Command="{Binding RunFlowCommand}" Margin="0,0,12,0" Padding="12,4" Background="{Binding RunFlowButtonBackgroundBrush}" Foreground="White" BorderThickness="0" ToolTip="{Binding RunFlowButtonToolTip}">
+            <Button Command="{Binding RunOnceCommand}" Margin="0,0,6,0" Padding="10,4" Background="#0F5FA8" Foreground="White" BorderThickness="0" ToolTip="Chạy Flow 1 lần duy nhất (Nguồn thư mục: nạp ảnh kế tiếp)">
                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                    <TextBlock Text="{Binding RunFlowButtonIcon}" FontFamily="Segoe UI Emoji" FontSize="14" Margin="0,0,6,0" VerticalAlignment="Center"/>
-                    <TextBlock Text="{Binding RunFlowButtonText}" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                    <TextBlock Text="▶" FontFamily="Segoe UI Emoji" FontSize="13" Margin="0,0,5,0" VerticalAlignment="Center"/>
+                    <TextBlock Text="Run Once" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                </StackPanel>
+            </Button>
+
+            <Button Command="{Binding RunContinuousCommand}" Margin="0,0,12,0" Padding="10,4" Background="{Binding RunContinuousButtonBackgroundBrush}" Foreground="White" BorderThickness="0" ToolTip="{Binding RunContinuousButtonToolTip}">
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <TextBlock Text="{Binding RunContinuousButtonIcon}" FontFamily="Segoe UI Emoji" FontSize="13" Margin="0,0,5,0" VerticalAlignment="Center"/>
+                    <TextBlock Text="{Binding RunContinuousButtonText}" FontWeight="SemiBold" VerticalAlignment="Center"/>
                 </StackPanel>
             </Button>
 
@@ -241,6 +248,20 @@
                                         </Border>
                                         <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
                                             <ComboBox ItemsSource="{Binding AvailableOriginAlgorithms}" SelectedItem="{Binding Origin_Algorithm, UpdateSourceTrigger=LostFocus}" Margin="4" />
+                                        </Border>
+                                    </Grid>
+                                </Border>
+                                <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="120" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <Border Background="{DynamicResource WindowBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
+                                            <TextBlock Text="Min Score" VerticalAlignment="Center" Margin="8,4" Foreground="{DynamicResource TextBrush}"/>
+                                        </Border>
+                                        <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
+                                            <TextBox Text="{Binding Origin_MinScore, StringFormat={}{0:0.00}, UpdateSourceTrigger=LostFocus}" Margin="4" />
                                         </Border>
                                     </Grid>
                                 </Border>

@@ -39,6 +39,12 @@ Lộ trình tích hợp tính năng Chụp ảnh từ camera và hỗ trợ các
 - [x] Task 33: Xoá sạch toàn bộ ảnh sản phẩm, bộ nhớ đệm preview, danh sách overlay và kết quả chạy gần nhất khỏi màn hình preview khi bấm `Close Job`.
 - [x] Task 34: Khắc phục điểm số Score của thuật toán `ShapePyramid` trên ảnh xoay (cắt sạch viền đen zero-padding bằng `ContentRectFromNonZero`, loại bỏ đoạn xoay patch gây méo biên, nâng score trên ảnh xoay lên **0.95 - 0.99**).
 - [x] Task 35: Thêm thao tác giữ kéo chuột trái trên vùng trống background của Canvas Flow để Pan (di chuyển) node graph song song với thao tác kéo chuột giữa.
+- [x] Task 36: Tinh chỉnh dứt điểm chỉ số Score cho thuật toán `ShapePyramid` trên ảnh xoay (áp dụng `CCoeffNormed` trên ảnh xám sau khi định vị bằng Pyramid Sobel Search, đạt score **0.95 - 0.99**).
+- [x] Task 37: Tách nút `Run Flow` thành 2 nút riêng biệt: `▶ Run Once` (chạy 1 lần hoặc nạp ảnh kế tiếp nếu nguồn là Folder) và `🔁 Run Continuous` (chạy lặp liên tục qua các ảnh trong thư mục theo Interval kèm nút `⏹ STOP`).
+- [x] Task 38: Ngăn chặn tự động `RunFlow()` khi di chuyển/chỉnh sửa ROI các tool trong quá trình teaching (`OnRoiEdited` và `Origin_TeachTemplate()`), chỉ cập nhật tọa độ lý thuyết, hiển thị overlay preview và lưu cấu hình.
+- [x] Task 39: Xoay đường bao BoundingBox và Search ROI của `CodeDetection` tool trên màn hình preview kết quả (`ResultView` node & Main Inspection) theo góc xoay Origin (`Angle = angleDeg`).
+- [x] Task 40: Thêm thuộc tính `MinScore` cho Tool Origin, hiển thị điều chỉnh `Min Score` trong ô thuộc tính (`ToolEditorView.xaml`) và dùng `MinScore` này đánh giá điểm đạt `Origin.Pass` / `ScoreThreshold`.
+
 
 
 

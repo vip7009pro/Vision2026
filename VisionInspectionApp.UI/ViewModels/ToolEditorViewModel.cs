@@ -221,6 +221,8 @@ namespace VisionInspectionApp.UI.ViewModels
             LoadPreviewImageCommand = new RelayCommand(LoadPreviewImage);
             CaptureCameraImageCommand = new AsyncRelayCommand(CaptureCameraImageAsync);
             RunFlowCommand = new RelayCommand(OnRunFlowClicked);
+            RunOnceCommand = new RelayCommand(OnRunOnceClicked);
+            RunContinuousCommand = new RelayCommand(OnRunContinuousClicked);
             RoiSelectedCommand = new RelayCommand<object?>(OnRoiSelected);
             RoiEditedCommand = new RelayCommand<RoiSelection?>(OnRoiEdited);
             RoiDeletedCommand = new RelayCommand<string?>(OnRoiDeleted);

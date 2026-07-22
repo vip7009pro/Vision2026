@@ -495,6 +495,12 @@ public sealed class PointDefinition
 
     public double MatchScoreThreshold { get; set; } = 0.8;
 
+    public double MinScore
+    {
+        get => MatchScoreThreshold;
+        set => MatchScoreThreshold = value;
+    }
+
     public PointFindAlgorithm Algorithm { get; set; } = PointFindAlgorithm.TemplateMatch;
 
     public OriginAlgorithm OriginAlgorithm { get; set; } = OriginAlgorithm.ShapeBased;

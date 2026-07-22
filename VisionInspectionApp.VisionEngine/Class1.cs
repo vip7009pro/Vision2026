@@ -1523,6 +1523,40 @@ public sealed class PatternMatcher
                 currAngleSearchRange = lvlStep * 1.5;
             }
 
+            // Calculate final normalized match score on grayscale ROI & template rotated by bestAngle
+            try
+            {
+                using var templRot = RotateTemplateCentered(templPrep, bestAngle);
+                var crop = ContentRectFromNonZero(templRot, pad: 2);
+                if (crop.Width > 0 && crop.Height > 0)
+                {
+                    using var templCropped = new Mat(templRot, crop);
+                    int expectedTopLeftX = (int)Math.Round(bestCenterInRoi.X - (templRot.Width / 2.0 - crop.X));
+                    int expectedTopLeftY = (int)Math.Round(bestCenterInRoi.Y - (templRot.Height / 2.0 - crop.Y));
+
+                    int subX = Math.Max(0, expectedTopLeftX - 6);
+                    int subY = Math.Max(0, expectedTopLeftY - 6);
+                    int subW = Math.Min(roiGray.Width - subX, templCropped.Width + 12);
+                    int subH = Math.Min(roiGray.Height - subY, templCropped.Height + 12);
+
+                    if (subW >= templCropped.Width && subH >= templCropped.Height)
+                    {
+                        using var subRoi = new Mat(roiGray, new Rect(subX, subY, subW, subH));
+                        using var resScore = new Mat();
+                        Cv2.MatchTemplate(subRoi, templCropped, resScore, TemplateMatchModes.CCoeffNormed);
+                        Cv2.MinMaxLoc(resScore, out _, out double maxScore, out _, out Point maxLoc);
+                        if (!double.IsNaN(maxScore) && maxScore > 0)
+                        {
+                            bestScore = maxScore;
+                            bestCenterInRoi = new Point2d(subX + maxLoc.X + (templRot.Width / 2.0 - crop.X), subY + maxLoc.Y + (templRot.Height / 2.0 - crop.Y));
+                        }
+                    }
+                }
+            }
+            catch
+            {
+            }
+
             var globalPos = new Point2d(bestCenterInRoi.X + roiRect.X, bestCenterInRoi.Y + roiRect.Y);
             var matchRect = new Rect((int)Math.Round(globalPos.X - templateGray.Width / 2.0), (int)Math.Round(globalPos.Y - templateGray.Height / 2.0), templateGray.Width, templateGray.Height);
 
