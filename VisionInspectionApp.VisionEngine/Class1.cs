@@ -1518,6 +1518,44 @@ public sealed class PatternMatcher
                 currAngleSearchRange = lvlStep * 1.5;
             }
 
+            if (Math.Abs(bestAngle) > 0.0001)
+            {
+                try
+                {
+                    int patchW = (int)Math.Ceiling(templFeatureMat.Width * 1.4);
+                    int patchH = (int)Math.Ceiling(templFeatureMat.Height * 1.4);
+
+                    int pX = (int)Math.Round(bestCenterInRoi.X - patchW / 2.0);
+                    int pY = (int)Math.Round(bestCenterInRoi.Y - patchH / 2.0);
+
+                    pX = Math.Clamp(pX, 0, Math.Max(0, roiFeatureMat.Width - patchW));
+                    pY = Math.Clamp(pY, 0, Math.Max(0, roiFeatureMat.Height - patchH));
+
+                    patchW = Math.Min(roiFeatureMat.Width - pX, patchW);
+                    patchH = Math.Min(roiFeatureMat.Height - pY, patchH);
+
+                    if (patchW >= templFeatureMat.Width && patchH >= templFeatureMat.Height)
+                    {
+                        using var patch = new Mat(roiFeatureMat, new Rect(pX, pY, patchW, patchH));
+                        using var unrotatedPatch = RotateTemplateCentered(patch, -bestAngle);
+
+                        if (unrotatedPatch.Width >= templFeatureMat.Width && unrotatedPatch.Height >= templFeatureMat.Height)
+                        {
+                            using var resScore = new Mat();
+                            Cv2.MatchTemplate(unrotatedPatch, templFeatureMat, resScore, TemplateMatchModes.CCoeffNormed);
+                            Cv2.MinMaxLoc(resScore, out double _, out double maxTrueScore);
+                            if (!double.IsNaN(maxTrueScore) && maxTrueScore > 0)
+                            {
+                                bestScore = maxTrueScore;
+                            }
+                        }
+                    }
+                }
+                catch
+                {
+                }
+            }
+
             var globalPos = new Point2d(bestCenterInRoi.X + roiRect.X, bestCenterInRoi.Y + roiRect.Y);
             var matchRect = new Rect((int)Math.Round(globalPos.X - templateGray.Width / 2.0), (int)Math.Round(globalPos.Y - templateGray.Height / 2.0), templateGray.Width, templateGray.Height);
 

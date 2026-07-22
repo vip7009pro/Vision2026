@@ -38,10 +38,10 @@
             <Button Content="Load Image" Command="{Binding LoadPreviewImageCommand}" Margin="0,0,12,0" />
             <Button Content="{Binding CaptureButtonText}" Command="{Binding CaptureCameraImageCommand}" Margin="0,0,12,0" />
 
-            <Button Command="{Binding RunFlowCommand}" Margin="0,0,12,0" Padding="12,4" Background="#107C10" Foreground="White" BorderThickness="0" ToolTip="Run Flow">
+            <Button Command="{Binding RunFlowCommand}" Margin="0,0,12,0" Padding="12,4" Background="{Binding RunFlowButtonBackgroundBrush}" Foreground="White" BorderThickness="0" ToolTip="{Binding RunFlowButtonToolTip}">
                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                    <TextBlock Text="&#x25B6;" FontFamily="Segoe UI Emoji" FontSize="14" Margin="0,0,6,0" VerticalAlignment="Center"/>
-                    <TextBlock Text="Run Flow" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                    <TextBlock Text="{Binding RunFlowButtonIcon}" FontFamily="Segoe UI Emoji" FontSize="14" Margin="0,0,6,0" VerticalAlignment="Center"/>
+                    <TextBlock Text="{Binding RunFlowButtonText}" FontWeight="SemiBold" VerticalAlignment="Center"/>
                 </StackPanel>
             </Button>
 
@@ -49,19 +49,29 @@
             <TextBox Width="120" Text="{Binding ProductCode, UpdateSourceTrigger=LostFocus}" Margin="0,0,12,0" />
 
             <Button Content="Save Job" Command="{Binding SaveJobCommand}" Margin="0,0,6,0" />
-            <Button Content="Save As" Command="{Binding SaveJobAsCommand}" />
+            <Button Content="Save As" Command="{Binding SaveJobAsCommand}" Margin="0,0,12,0" />
+
+            <Border Background="{Binding ResultBackgroundBrush}" BorderBrush="{Binding ResultBorderBrush}" BorderThickness="1" CornerRadius="12" Padding="10,3" VerticalAlignment="Center">
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Text="Result: " FontSize="11" Foreground="{DynamicResource TextMutedBrush}" VerticalAlignment="Center"/>
+                    <TextBlock Text="{Binding ResultStatusText}" Foreground="{Binding ResultForegroundBrush}" FontSize="12" FontWeight="Bold" VerticalAlignment="Center"/>
+                </StackPanel>
+            </Border>
         </DockPanel>
 
-        <Grid Grid.Row="1">
+
+        <Grid Grid.Row="1" Margin="0,4,0,0">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="260" MinWidth="180" />
-                <ColumnDefinition Width="5" />
-                <ColumnDefinition Width="4*" />
-                <ColumnDefinition Width="6" />
-                <ColumnDefinition Width="7*" />
+                <ColumnDefinition Width="220" MinWidth="160" />
+                <ColumnDefinition Width="4" />
+                <ColumnDefinition Width="3.5*" MinWidth="240" />
+                <ColumnDefinition Width="4" />
+                <ColumnDefinition Width="4.5*" MinWidth="300" />
+                <ColumnDefinition Width="4" />
+                <ColumnDefinition Width="3.5*" MinWidth="280" />
             </Grid.ColumnDefinitions>
 
-            <Border Grid.Column="0" BorderBrush="{DynamicResource DarkBorderBrush}" BorderThickness="1" Padding="8" Margin="0,0,8,0">
+            <Border Grid.Column="0" BorderBrush="{DynamicResource DarkBorderBrush}" BorderThickness="1" Padding="8" Margin="0,0,4,0">
                 <Grid>
                     <Grid.RowDefinitions>
                         <RowDefinition Height="*" />
@@ -140,6 +150,9 @@
                                         </DataTrigger>
                                         <DataTrigger Binding="{Binding}" Value="ImageSource">
                                             <Setter TargetName="IconTxt" Property="Text" Value="&#x1F4F7;" />
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding}" Value="ResultView">
+                                            <Setter TargetName="IconTxt" Property="Text" Value="&#x1F4CA;" />
                                         </DataTrigger>
                                     </DataTemplate.Triggers>
                                 </DataTemplate>
@@ -304,6 +317,10 @@
                                         </Border>
                                     </Grid>
                                 </Border>
+                                <Border Padding="6" Background="{DynamicResource WindowBackgroundBrush}">
+                                    <Button Content="Lưu Template Origin" Command="{Binding Origin_TeachTemplateCommand}" Background="#0F5FA8" Foreground="White" Padding="12,6" HorizontalAlignment="Stretch" ToolTip="Lưu lại hình ảnh mẫu trong khung Template ROI cho Origin tool" />
+                                </Border>
+
                             </StackPanel>
 <StackPanel Visibility="{Binding IsPointNode, Converter={StaticResource BoolToVis}}">
                                 <Border Background="{DynamicResource BorderBrush}" Padding="4,2" Margin="0,8,0,0">
@@ -1822,6 +1839,14 @@
                                 </StackPanel>
                             </StackPanel>
 
+                            <StackPanel Visibility="{Binding IsResultViewNode, Converter={StaticResource BoolToVis}}">
+                                <Border Background="{DynamicResource BorderBrush}" Padding="4,2" Margin="0,8,0,0">
+                                    <TextBlock Text="Result View Node" FontWeight="Bold" Foreground="{DynamicResource TextBrush}" />
+                                </Border>
+                                <TextBlock Text="Node này hiển thị kết quả Final Output của toàn bộ luồng xử lý trên khung Preview." TextWrapping="Wrap" Margin="0,4,0,8" Foreground="{DynamicResource TextMutedBrush}" FontSize="11" />
+                                <Button Content="▶ Run Flow &amp; Inspect" Command="{Binding RunFlowCommand}" Height="30" FontWeight="Bold" Margin="0,0,0,8" />
+                            </StackPanel>
+
                             <Button Content="Delete Node" Command="{Binding DeleteSelectedNodeCommand}" />
                             </StackPanel>
                         </ScrollViewer>
@@ -1926,6 +1951,11 @@
                                                                             <Setter Property="BorderThickness" Value="2" />
                                                                             <Setter Property="Background" Value="#FFF8E1" />
                                                                         </DataTrigger>
+                                                                        <DataTrigger Binding="{Binding Type}" Value="ResultView">
+                                                                            <Setter Property="BorderBrush" Value="#FF6F00" />
+                                                                            <Setter Property="BorderThickness" Value="2" />
+                                                                            <Setter Property="Background" Value="#FFF3E0" />
+                                                                        </DataTrigger>
                                                                     </Style.Triggers>
                                                                 </Style>
                                                             </Border.Style>
@@ -1997,44 +2027,210 @@
                 </Grid>
             </Border>
 
-            <GridSplitter Grid.Column="3" Width="6" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Background="{DynamicResource DarkBorderBrush}" />
+            <GridSplitter Grid.Column="3" Width="4" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Background="{DynamicResource DarkBorderBrush}" />
 
+            <!-- Column 4: Single Image Preview Box -->
             <Border Grid.Column="4" BorderBrush="{DynamicResource DarkBorderBrush}" BorderThickness="1" Padding="8">
                 <Grid>
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
+
+                    <Grid Margin="0,0,0,6">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                            <TextBlock FontWeight="Bold" FontSize="13" Foreground="{DynamicResource TextBrush}">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="Text" Value="{Binding SelectedNode.RefName, StringFormat='📌 Preview: {0}'}" />
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding IsResultViewNode}" Value="True">
+                                                <Setter Property="Text" Value="📊 Preview: Result View (Final Output)" />
+                                            </DataTrigger>
+                                            <DataTrigger Binding="{Binding SelectedNode}" Value="{x:Null}">
+                                                <Setter Property="Text" Value="📌 Preview" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
+                        </StackPanel>
+
+                        <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                            <CheckBox Content="Show Results" IsChecked="{Binding ShowResultOverlay, UpdateSourceTrigger=LostFocus}" Margin="0,0,10,0" />
+                            <CheckBox Content="Show ROI" IsChecked="{Binding ShowRoisInSelectedPreview, UpdateSourceTrigger=LostFocus}" />
+                        </StackPanel>
+                    </Grid>
+
+                    <Border Grid.Row="1" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" Background="Black">
+                        <controls:ImageViewerControl ImageSource="{Binding SelectedNodePreviewImage}"
+                                                   OverlayItems="{Binding SelectedNodeOverlayItems}"
+                                                   EnableRoiEditing="{Binding EnableRoiEditingInPreview}" ActiveRoiLabel="{Binding ActiveRoiLabel, Mode=TwoWay}"
+                                                   RoiSelectedCommand="{Binding RoiSelectedCommand}"
+                                                   PointClickedCommand="{Binding PointClickedCommand}"
+                                                   PointDoubleClickedCommand="{Binding PointDoubleClickedCommand}"
+                                                   RoiEditedCommand="{Binding RoiEditedCommand}"
+                                                   RoiDeletedCommand="{Binding RoiDeletedCommand}" />
+                    </Border>
+                </Grid>
+            </Border>
+
+            <!-- Column 5: GridSplitter -->
+            <GridSplitter Grid.Column="5" Width="4" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Background="{DynamicResource DarkBorderBrush}" />
+
+            <!-- Column 6: Integrated Live Inspection Dashboard & Details -->
+            <Border Grid.Column="6" BorderBrush="{DynamicResource DarkBorderBrush}" BorderThickness="1" Padding="6">
+                <Grid>
+                    <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="*" />
                     </Grid.RowDefinitions>
 
-                    <TextBlock FontWeight="Bold" Text="Preview - Selected Node" Margin="0,0,0,6" />
-                    <StackPanel Grid.Row="0" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
-                        <CheckBox Content="Show Results" IsChecked="{Binding ShowResultOverlay, UpdateSourceTrigger=LostFocus}" Margin="0,0,10,0" />
-                        <CheckBox Content="Show ROI" IsChecked="{Binding ShowRoisInSelectedPreview, UpdateSourceTrigger=LostFocus}" />
-                    </StackPanel>
-                    <Border Grid.Row="1" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" Background="Transparent">
-                        <controls:ImageViewerControl ImageSource="{Binding SelectedNodePreviewImage}"
-                                                  OverlayItems="{Binding SelectedNodeOverlayItems}"
-                                                  EnableRoiEditing="True" ActiveRoiLabel="{Binding ActiveRoiLabel, Mode=TwoWay}"
-                                                  RoiSelectedCommand="{Binding RoiSelectedCommand}"
-                                                  PointClickedCommand="{Binding PointClickedCommand}"
-                                                  PointDoubleClickedCommand="{Binding PointDoubleClickedCommand}"
-                                                  RoiEditedCommand="{Binding RoiEditedCommand}"
-                                                  RoiDeletedCommand="{Binding RoiDeletedCommand}" />
+                    <!-- Status Pill Badge & Summary Card -->
+                    <Border Grid.Row="0" Padding="10,6" CornerRadius="8" Margin="0,0,0,6"
+                            Background="{Binding ResultBackgroundBrush}"
+                            BorderBrush="{Binding ResultBorderBrush}"
+                            BorderThickness="1">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+
+                            <TextBlock Text="{Binding ResultStatusText}" FontSize="24" FontWeight="Bold" Foreground="{Binding ResultForegroundBrush}" VerticalAlignment="Center" Margin="0,0,12,0"/>
+
+                            <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                <TextBlock Text="{Binding OriginScoreText}" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource TextBrush}" />
+                                <TextBlock Text="{Binding NgReasonsText}" FontSize="10" Foreground="#D32F2F" TextWrapping="Wrap" MaxHeight="36" Visibility="{Binding IsNg, Converter={StaticResource BoolToVis}}" />
+                            </StackPanel>
+
+                            <TextBlock Grid.Column="2" Text="{Binding LastResult.Timings.TotalMs, StringFormat='Total: {0} ms'}" Foreground="#4CAF50" FontWeight="Bold" FontSize="13" VerticalAlignment="Center"/>
+                        </Grid>
                     </Border>
 
-                    <TextBlock Grid.Row="2" FontWeight="Bold" Text="Preview - Final Output" Margin="0,10,0,6" />
-                    <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,10,0,6">
-                        <CheckBox Content="Show Results" IsChecked="{Binding ShowResultOverlay, UpdateSourceTrigger=LostFocus}" Margin="0,0,10,0" />
-                        <CheckBox Content="Show ROI" IsChecked="{Binding ShowRoisInFinalPreview, UpdateSourceTrigger=LostFocus}" />
-                    </StackPanel>
-                    <Border Grid.Row="3" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" Background="Transparent">
-                        <controls:ImageViewerControl ImageSource="{Binding FinalPreviewImage}" OverlayItems="{Binding FinalOverlayItems}" />
-                    </Border>
+                    <!-- Scrollable inspection tables & runtime details -->
+                    <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                        <StackPanel Margin="2">
+                            <!-- Timing Breakdown Bar -->
+                            <WrapPanel Margin="0,0,0,8" TextElement.Foreground="{DynamicResource TextBrush}">
+                                <TextBlock Text="{Binding LastResult.Pass, StringFormat='PASS: {0}'}" FontWeight="Bold" Margin="0,0,10,0" />
+                                <TextBlock Text="{Binding LastResult.Timings.TotalMs, StringFormat='Total: {0}ms'}" Foreground="#4CAF50" FontWeight="Bold" Margin="0,0,10,0" />
+                                <TextBlock Text="{Binding LastResult.Timings.OriginMs, StringFormat='O: {0}ms'}" Margin="0,0,6,0" />
+                                <TextBlock Text="{Binding LastResult.Timings.PointsMs, StringFormat='P: {0}ms'}" Margin="0,0,6,0" />
+                                <TextBlock Text="{Binding LastResult.Timings.LinesMs, StringFormat='L: {0}ms'}" Margin="0,0,6,0" />
+                                <TextBlock Text="{Binding LastResult.Timings.DistancesMs, StringFormat='D: {0}ms'}" Margin="0,0,6,0" />
+                                <TextBlock Text="{Binding LastResult.Timings.ConditionsMs, StringFormat='Cnd: {0}ms'}" Margin="0,0,6,0" />
+                                <TextBlock Text="{Binding LastResult.Timings.DefectsMs, StringFormat='Def: {0}ms'}" Margin="0,0,6,0" />
+                            </WrapPanel>
+
+                            <!-- Section 1: Spec Measurements Table -->
+                            <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" Padding="4" Margin="0,0,0,8" Background="{DynamicResource PanelBackgroundBrush}">
+                                <StackPanel>
+                                    <TextBlock Text="📏 BẢNG KẾT QUẢ ĐO ĐẠC (SPEC MEASUREMENTS)" FontWeight="Bold" FontSize="11" Margin="2,2,0,4" Foreground="{DynamicResource TextBrush}" />
+                                    <DataGrid ItemsSource="{Binding SpecResults}" AutoGenerateColumns="False" CanUserAddRows="False" GridLinesVisibility="Horizontal" MinHeight="80" MaxHeight="220" VerticalScrollBarVisibility="Auto">
+                                        <DataGrid.Columns>
+                                            <DataGridTextColumn Header="Tool" Binding="{Binding Tool}" Width="65" />
+                                            <DataGridTextColumn Header="Name" Binding="{Binding Name}" Width="95" />
+                                            <DataGridTextColumn Header="A" Binding="{Binding RefA}" Width="70" />
+                                            <DataGridTextColumn Header="B" Binding="{Binding RefB}" Width="70" />
+                                            <DataGridTextColumn Header="Value (mm)" Binding="{Binding Value, StringFormat={}{0:0.000}}" Width="90" />
+                                            <DataGridTextColumn Header="Nominal" Binding="{Binding Nominal, StringFormat={}{0:0.000}}" Width="80" />
+                                            <DataGridTextColumn Header="+Tol" Binding="{Binding TolPlus, StringFormat={}{0:0.000}}" Width="55" />
+                                            <DataGridTextColumn Header="-Tol" Binding="{Binding TolMinus, StringFormat={}{0:0.000}}" Width="55" />
+                                            <DataGridCheckBoxColumn Header="Pass" Binding="{Binding Pass}" Width="45" />
+                                        </DataGrid.Columns>
+                                    </DataGrid>
+                                </StackPanel>
+                            </Border>
+
+                            <!-- Section 2: Conditions Logic Table -->
+                            <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" Padding="4" Margin="0,0,0,8" Background="{DynamicResource PanelBackgroundBrush}">
+                                <StackPanel>
+                                    <TextBlock Text="❓ ĐIỀU KIỆN LOGIC (CONDITIONS LOGIC)" FontWeight="Bold" FontSize="11" Margin="2,2,0,4" Foreground="{DynamicResource TextBrush}" />
+                                    <DataGrid ItemsSource="{Binding LastResult.Conditions}" AutoGenerateColumns="False" CanUserAddRows="False" GridLinesVisibility="Horizontal" MinHeight="60" MaxHeight="160" VerticalScrollBarVisibility="Auto">
+                                        <DataGrid.Columns>
+                                            <DataGridTextColumn Header="Name" Binding="{Binding Name}" Width="95" />
+                                            <DataGridTextColumn Header="Expression" Binding="{Binding Expression}" Width="*" />
+                                            <DataGridTextColumn Header="Result" Binding="{Binding Pass, Converter={StaticResource OkNgConv}}" Width="65" />
+                                            <DataGridTextColumn Header="Error" Binding="{Binding Error}" Width="120" />
+                                        </DataGrid.Columns>
+                                    </DataGrid>
+                                </StackPanel>
+                            </Border>
+
+                            <!-- Section 3: Per-Tool Execution Timings -->
+                            <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" Padding="4" Margin="0,0,0,8" Background="{DynamicResource PanelBackgroundBrush}">
+                                <StackPanel>
+                                    <TextBlock Text="⏱ THỜI GIAN CHẠY TỪNG TOOL (PER-TOOL TIMINGS)" FontWeight="Bold" FontSize="11" Margin="2,2,0,4" Foreground="{DynamicResource TextBrush}" />
+                                    <DataGrid ItemsSource="{Binding ToolTimings}" AutoGenerateColumns="False" CanUserAddRows="False" GridLinesVisibility="Horizontal" MinHeight="60" MaxHeight="180" VerticalScrollBarVisibility="Auto">
+                                        <DataGrid.Columns>
+                                            <DataGridTextColumn Header="Tool Node Name" Binding="{Binding Name}" Width="*" />
+                                            <DataGridTextColumn Header="Thời gian (ms)" Binding="{Binding TimeMs}" Width="120" FontWeight="Bold" Foreground="#4CAF50" />
+                                        </DataGrid.Columns>
+                                    </DataGrid>
+                                </StackPanel>
+                            </Border>
+
+                            <!-- Section 4: Code Detection & SurfaceCompare Debugger -->
+                            <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" Padding="4" Margin="0,0,0,4" Background="{DynamicResource PanelBackgroundBrush}">
+                                <StackPanel>
+                                    <TextBlock Text="📷 ĐỌC MÃ VẠCH / QR &amp; SURFACE COMPARE DEBUG" FontWeight="Bold" FontSize="11" Margin="2,2,0,4" Foreground="{DynamicResource TextBrush}" />
+                                    
+                                    <ItemsControl ItemsSource="{Binding CodeDetectionResults}" Margin="0,0,0,6">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="4" Padding="6" Margin="0,0,0,4" Background="{DynamicResource PanelBackgroundBrush}">
+                                                    <StackPanel>
+                                                        <TextBlock Text="{Binding Name, StringFormat='Name: {0}'}" FontWeight="SemiBold" />
+                                                        <TextBlock Text="{Binding Text, StringFormat='Text: {0}', TargetNullValue='-'}" TextWrapping="Wrap" Foreground="#2E7D32" FontWeight="Bold" />
+                                                    </StackPanel>
+                                                </Border>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+
+                                    <ComboBox ItemsSource="{Binding SurfaceCompareDebugItems}" SelectedItem="{Binding SelectedSurfaceCompareDebugPick}" DisplayMemberPath="DisplayName" Margin="0,2,0,6" />
+                                    
+                                    <UniformGrid Columns="2">
+                                        <StackPanel Margin="2">
+                                            <TextBlock Text="Template" FontSize="10" Foreground="{DynamicResource TextMutedBrush}"/>
+                                            <Border BorderThickness="1" BorderBrush="#AAA" Background="Black">
+                                                <Image Source="{Binding DebugTemplate}" Stretch="Uniform" Height="70" />
+                                            </Border>
+                                        </StackPanel>
+                                        <StackPanel Margin="2">
+                                            <TextBlock Text="Current" FontSize="10" Foreground="{DynamicResource TextMutedBrush}"/>
+                                            <Border BorderThickness="1" BorderBrush="#AAA" Background="Black">
+                                                <Image Source="{Binding DebugCurrent}" Stretch="Uniform" Height="70" />
+                                            </Border>
+                                        </StackPanel>
+                                        <StackPanel Margin="2">
+                                            <TextBlock Text="Diff Thô" FontSize="10" Foreground="{DynamicResource TextMutedBrush}"/>
+                                            <Border BorderThickness="1" BorderBrush="#AAA" Background="Black">
+                                                <Image Source="{Binding DebugBinary}" Stretch="Uniform" Height="70" />
+                                            </Border>
+                                        </StackPanel>
+                                        <StackPanel Margin="2">
+                                            <TextBlock Text="Diff Morphed" FontSize="10" Foreground="{DynamicResource TextMutedBrush}"/>
+                                            <Border BorderThickness="1" BorderBrush="#AAA" Background="Black">
+                                                <Image Source="{Binding DebugDiff}" Stretch="Uniform" Height="70" />
+                                            </Border>
+                                        </StackPanel>
+                                    </UniformGrid>
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
+                    </ScrollViewer>
                 </Grid>
             </Border>
         </Grid>
+
         <StatusBar Grid.Row="2" Background="{DynamicResource DarkBackgroundBrush}" Foreground="{DynamicResource TextBrush}" BorderThickness="0,1,0,0" BorderBrush="{DynamicResource DarkBorderBrush}">
             <StatusBarItem>
                 <TextBlock Text="{Binding StatusBarText}" />

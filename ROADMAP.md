@@ -32,6 +32,14 @@ Lộ trình tích hợp tính năng Chụp ảnh từ camera và hỗ trợ các
 - [x] Task 25: Chuyển đổi lưu cấu hình sang `.job` file (chứa cả config json và template crops), hiển thị trạng thái `*` (chưa lưu) lên title bar kèm hộp thoại nhắc nhở khi đóng. Thu gọn thanh Tab lên khu vực Header và thêm nút Close Job global.
 - [x] Task 26: Khắc phục chính xác thuật toán ShapePyramid (đạt score 1.0 trên ảnh gốc, tối ưu pyramid đa cấp độ Coarse-to-Fine cho ảnh xoay) và bổ sung thuộc tính tùy chỉnh AngleStep trên giao diện và engine.
 - [x] Task 27: Đồng bộ quy chuẩn dấu góc xoay giữa RotateTemplateCentered và hệ tọa độ màn hình/Rotate(), khắc phục lỗi xoay ngược hướng ROI dẫn hướng. Áp dụng AngleStep cho tất cả thuật toán Origin.
+- [x] Task 28: Hợp nhất tab Inspection vào tab Tool Editor (hỗ trợ chỉnh sửa job và xem kết quả inspection trực tiếp trong 1 tab duy nhất) và bổ sung nút "Lưu Template Origin" riêng độc lập.
+- [x] Task 29: Căn giữa vị trí ROI mặc định cho các tool mới tạo và triệt tiêu vòng lặp phản hồi xoay (Feedback loop) cho Tool Origin ROI (`Origin S`, `Origin T`), đảm bảo việc di chuyển/resize ROI hoàn toàn độc lập và ổn định.
+- [x] Task 30: Tái cấu trúc giao diện Tool Editor dạng 1 layout hợp nhất duy nhất (bỏ sub-tabs), thêm node tool "Result View" hiển thị kết quả Final Output trong 1 khung Preview chung, và đưa bảng kết quả Inspection (OK/NG, Tool Timings, Specs, Conditions) vào panel bên phải.
+
+
+
+
+
 
 
 

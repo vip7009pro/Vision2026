@@ -27,6 +27,8 @@ namespace VisionInspectionApp.UI.ViewModels
     
         partial void OnSelectedNodeChanged(ToolGraphNodeViewModel? value)
         {
+            OnPropertyChanged(nameof(EnableRoiEditingInPreview));
+            OnPropertyChanged(nameof(IsResultViewNode));
             SelectedEdge = null;
             if (_selectedNodeHook is not null)
             {
@@ -842,12 +844,28 @@ namespace VisionInspectionApp.UI.ViewModels
                 {
                     return;
                 }
-    
+
                 if (showRois && c.SearchRoi.Width > 0 && c.SearchRoi.Height > 0)
                 {
-                    dst.Add(CreateRotatedRoi(c.SearchRoi, Brushes.Lime, $"{c.Name} Cal"));
+                    dst.Add(CreateRotatedRoiWithPose(c.SearchRoi, Brushes.Lime, $"{c.Name} Cal"));
                     var stripCount = Math.Clamp(c.StripCount, 1, 100);
                     var stripLength = Math.Max(3, c.StripLength);
+
+                    var hasOriginPose = _lastRun?.Origin is not null && (_lastRun.Origin.MatchRect.Width > 0 || _lastRun.Origin.Position.X != 0 || _lastRun.Origin.Position.Y != 0);
+                    var originTeach = (_config.Origin.TemplateRoi.Width > 0 && _config.Origin.TemplateRoi.Height > 0)
+                        ? new OpenCvSharp.Point2d(_config.Origin.TemplateRoi.X + _config.Origin.TemplateRoi.Width / 2.0, _config.Origin.TemplateRoi.Y + _config.Origin.TemplateRoi.Height / 2.0)
+                        : new OpenCvSharp.Point2d(_config.Origin.SearchRoi.X + _config.Origin.SearchRoi.Width / 2.0, _config.Origin.SearchRoi.Y + _config.Origin.SearchRoi.Height / 2.0);
+                    if (_config.Origin.WorldPosition.X != 0 || _config.Origin.WorldPosition.Y != 0)
+                    {
+                        originTeach = new OpenCvSharp.Point2d(_config.Origin.WorldPosition.X, _config.Origin.WorldPosition.Y);
+                    }
+
+                    var mr = _lastRun?.Origin?.MatchRect ?? default;
+                    var originFound = (mr.Width > 0 && mr.Height > 0)
+                        ? new OpenCvSharp.Point2d(mr.X + mr.Width / 2.0, mr.Y + mr.Height / 2.0)
+                        : new OpenCvSharp.Point2d(_lastRun?.Origin?.Position.X ?? originTeach.X, _lastRun?.Origin?.Position.Y ?? originTeach.Y);
+                    var angleDeg = hasOriginPose ? _lastRun!.Origin.AngleDeg : 0.0;
+
                     if (c.Orientation == CaliperOrientation.Vertical)
                     {
                         var y1 = c.SearchRoi.Y + (c.SearchRoi.Height - stripLength) / 2.0;
@@ -855,7 +873,16 @@ namespace VisionInspectionApp.UI.ViewModels
                         for (var i = 0; i < stripCount; i++)
                         {
                             var x = c.SearchRoi.X + (i + 0.5) * c.SearchRoi.Width / stripCount;
-                            dst.Add(new OverlayLineItem { X1 = x, Y1 = y1, X2 = x, Y2 = y2, Stroke = Brushes.Lime, StrokeThickness = 1.0 });
+                            var p1 = new OpenCvSharp.Point2d(x, y1);
+                            var p2 = new OpenCvSharp.Point2d(x, y2);
+
+                            if (hasOriginPose)
+                            {
+                                p1 = TransformPose(p1, originTeach, originFound, angleDeg);
+                                p2 = TransformPose(p2, originTeach, originFound, angleDeg);
+                            }
+
+                            dst.Add(new OverlayLineItem { X1 = p1.X, Y1 = p1.Y, X2 = p2.X, Y2 = p2.Y, Stroke = Brushes.Lime, StrokeThickness = 1.0 });
                         }
                     }
                     else
@@ -865,7 +892,16 @@ namespace VisionInspectionApp.UI.ViewModels
                         for (var i = 0; i < stripCount; i++)
                         {
                             var y = c.SearchRoi.Y + (i + 0.5) * c.SearchRoi.Height / stripCount;
-                            dst.Add(new OverlayLineItem { X1 = x1, Y1 = y, X2 = x2, Y2 = y, Stroke = Brushes.Lime, StrokeThickness = 1.0 });
+                            var p1 = new OpenCvSharp.Point2d(x1, y);
+                            var p2 = new OpenCvSharp.Point2d(x2, y);
+
+                            if (hasOriginPose)
+                            {
+                                p1 = TransformPose(p1, originTeach, originFound, angleDeg);
+                                p2 = TransformPose(p2, originTeach, originFound, angleDeg);
+                            }
+
+                            dst.Add(new OverlayLineItem { X1 = p1.X, Y1 = p1.Y, X2 = p2.X, Y2 = p2.Y, Stroke = Brushes.Lime, StrokeThickness = 1.0 });
                         }
                     }
                 }
@@ -883,7 +919,7 @@ namespace VisionInspectionApp.UI.ViewModels
     
                 if (showRois && l.SearchRoi.Width > 0 && l.SearchRoi.Height > 0)
                 {
-                    dst.Add(CreateRotatedRoi(l.SearchRoi, Brushes.MediumPurple, $"{l.Name} LP"));
+                    dst.Add(CreateRotatedRoiWithPose(l.SearchRoi, Brushes.MediumPurple, $"{l.Name} LP"));
                 }
     
                 return;
@@ -899,7 +935,7 @@ namespace VisionInspectionApp.UI.ViewModels
     
                 if (showRois && c.SearchRoi.Width > 0 && c.SearchRoi.Height > 0)
                 {
-                    dst.Add(CreateRotatedRoi(c.SearchRoi, Brushes.Lime, $"{c.Name} C"));
+                    dst.Add(CreateRotatedRoiWithPose(c.SearchRoi, Brushes.Lime, $"{c.Name} C"));
                 }
     
                 return;
@@ -929,9 +965,25 @@ namespace VisionInspectionApp.UI.ViewModels
     
                 if (showRois && e.SearchRoi.Width > 0 && e.SearchRoi.Height > 0)
                 {
-                    dst.Add(CreateRotatedRoi(e.SearchRoi, Brushes.MediumPurple, $"{e.Name} EPD"));
+                    dst.Add(CreateRotatedRoiWithPose(e.SearchRoi, Brushes.MediumPurple, $"{e.Name} EPD"));
                     var stripCount = Math.Clamp(e.StripCount, 1, 100);
                     var stripLength = Math.Max(3, e.StripLength);
+
+                    var hasOriginPose = _lastRun?.Origin is not null && (_lastRun.Origin.MatchRect.Width > 0 || _lastRun.Origin.Position.X != 0 || _lastRun.Origin.Position.Y != 0);
+                    var originTeach = (_config.Origin.TemplateRoi.Width > 0 && _config.Origin.TemplateRoi.Height > 0)
+                        ? new OpenCvSharp.Point2d(_config.Origin.TemplateRoi.X + _config.Origin.TemplateRoi.Width / 2.0, _config.Origin.TemplateRoi.Y + _config.Origin.TemplateRoi.Height / 2.0)
+                        : new OpenCvSharp.Point2d(_config.Origin.SearchRoi.X + _config.Origin.SearchRoi.Width / 2.0, _config.Origin.SearchRoi.Y + _config.Origin.SearchRoi.Height / 2.0);
+                    if (_config.Origin.WorldPosition.X != 0 || _config.Origin.WorldPosition.Y != 0)
+                    {
+                        originTeach = new OpenCvSharp.Point2d(_config.Origin.WorldPosition.X, _config.Origin.WorldPosition.Y);
+                    }
+
+                    var mr = _lastRun?.Origin?.MatchRect ?? default;
+                    var originFound = (mr.Width > 0 && mr.Height > 0)
+                        ? new OpenCvSharp.Point2d(mr.X + mr.Width / 2.0, mr.Y + mr.Height / 2.0)
+                        : new OpenCvSharp.Point2d(_lastRun?.Origin?.Position.X ?? originTeach.X, _lastRun?.Origin?.Position.Y ?? originTeach.Y);
+                    var angleDeg = hasOriginPose ? _lastRun!.Origin.AngleDeg : 0.0;
+
                     if (e.Orientation == CaliperOrientation.Vertical)
                     {
                         var y1 = e.SearchRoi.Y + (e.SearchRoi.Height - stripLength) / 2.0;
@@ -939,7 +991,16 @@ namespace VisionInspectionApp.UI.ViewModels
                         for (var i = 0; i < stripCount; i++)
                         {
                             var x = e.SearchRoi.X + (i + 0.5) * e.SearchRoi.Width / stripCount;
-                            dst.Add(new OverlayLineItem { X1 = x, Y1 = y1, X2 = x, Y2 = y2, Stroke = Brushes.MediumPurple, StrokeThickness = 1.0 });
+                            var p1 = new OpenCvSharp.Point2d(x, y1);
+                            var p2 = new OpenCvSharp.Point2d(x, y2);
+
+                            if (hasOriginPose)
+                            {
+                                p1 = TransformPose(p1, originTeach, originFound, angleDeg);
+                                p2 = TransformPose(p2, originTeach, originFound, angleDeg);
+                            }
+
+                            dst.Add(new OverlayLineItem { X1 = p1.X, Y1 = p1.Y, X2 = p2.X, Y2 = p2.Y, Stroke = Brushes.MediumPurple, StrokeThickness = 1.0 });
                         }
                     }
                     else
@@ -949,7 +1010,16 @@ namespace VisionInspectionApp.UI.ViewModels
                         for (var i = 0; i < stripCount; i++)
                         {
                             var y = e.SearchRoi.Y + (i + 0.5) * e.SearchRoi.Height / stripCount;
-                            dst.Add(new OverlayLineItem { X1 = x1, Y1 = y, X2 = x2, Y2 = y, Stroke = Brushes.MediumPurple, StrokeThickness = 1.0 });
+                            var p1 = new OpenCvSharp.Point2d(x1, y);
+                            var p2 = new OpenCvSharp.Point2d(x2, y);
+
+                            if (hasOriginPose)
+                            {
+                                p1 = TransformPose(p1, originTeach, originFound, angleDeg);
+                                p2 = TransformPose(p2, originTeach, originFound, angleDeg);
+                            }
+
+                            dst.Add(new OverlayLineItem { X1 = p1.X, Y1 = p1.Y, X2 = p2.X, Y2 = p2.Y, Stroke = Brushes.MediumPurple, StrokeThickness = 1.0 });
                         }
                     }
                 }
@@ -967,7 +1037,7 @@ namespace VisionInspectionApp.UI.ViewModels
     
                 if (showRois && c.SearchRoi.Width > 0 && c.SearchRoi.Height > 0)
                 {
-                    dst.Add(CreateRotatedRoi(c.SearchRoi, Brushes.MediumPurple, $"{c.Name} CIR"));
+                    dst.Add(CreateRotatedRoiWithPose(c.SearchRoi, Brushes.MediumPurple, $"{c.Name} CIR"));
                 }
     
                 return;

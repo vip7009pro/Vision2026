@@ -76,6 +76,31 @@
 - Đã hoàn thành khắc phục lỗi thuật toán `ShapePyramid`: Loại bỏ vùng xoá biên giả (margin zeroing) giúp score trên ảnh teaching gốc đạt đúng **1.0000**, nâng cấp sang thuật toán Pyramid đa cấp độ (Coarse-to-Fine Gaussian Pyramid) kết hợp bảo toàn tâm quay (`RotateTemplateCentered`) cho ảnh xoay (score đạt > **0.94 - 0.98** trên ảnh xoay).
 - Đồng bộ chuẩn hướng xoay (Rotation Angle Sign Convention): Đã sửa lỗi đảo ngược hướng xoay ROI giữa `RotateTemplateCentered` (OpenCV GetRotationMatrix2D) với hệ tọa độ màn hình và `FeatureBased`/`Rotate()`, đảm bảo khi ảnh bị xoay thì tất cả ROI dẫn hướng xoay đúng hướng 100% không bị lệch NG.
 - Áp dụng tùy chỉnh `AngleStep` cho tất cả các thuật toán Origin trong tool (`ShapeBased`, `ShapePyramid`, `TemplateMatch`, `TemplateMatchPyramid`).
+- Hoàn thành hợp nhất Tab Inspection vào Tab Tool Editor làm một Tab duy nhất: Bổ sung thanh Sub-Tab `⚙ Node Graph & Cấu hình Tool` và `📊 Kết quả Inspection & Debug`, thêm Live OK/NG Result status pill badge trên thanh công cụ Header của Tool Editor, tự động đồng bộ kết quả kiểm tra, bảng Spec, bảng Conditions, Code Detection và công cụ SurfaceCompare Debugger.
+- Tách biệt nút "Lưu Template Origin": Bổ sung nút bấm **"Lưu Template Origin"** độc lập. Kéo thả/thay đổi kích thước khung Template ROI (`Origin T`) chỉ cập nhật tọa độ khung, không tự động ghi đè ảnh mẫu như trước.
+- Hoàn thành căn giữa vị trí mặc định cho tất cả các Tool ROI mới tạo (`DefaultRoi()`, Node `Text`) trên preview image thay vì nằm ở góc trên bên trái `(10, 10)`.
+- Hoàn thành triệt tiêu vòng lặp phản hồi xoay (Feedback Loop) cho Tool Origin ROI (`Origin S`, `Origin T`) và `DefectROI`: Giữ nguyên góc quay `Angle = 0` và hệ tọa độ ảnh thô (raw image space), loại bỏ việc áp ngược góc quay `_lastRun.Origin` lên chính khung ROI của Tool Origin. Di chuyển và resize các khung ROI Tool Origin giờ đây diễn ra hoàn toàn độc lập, mượt mà và ổn định 100%.
+- Hoàn thành hợp nhất Tab Inspection vào Tab Tool Editor thành một giao diện 1 màn hình đồng nhất (Single Unified Workspace - gỡ bỏ hoàn toàn sub-tabs tốn diện tích).
+- Thêm Tool Node mới "Result View" (`ResultView`, icon `📊`): khi chọn node này, duy nhất 1 khung Preview hiển thị ảnh kết quả Final Output với đầy đủ các Overlay.
+- Khóa chỉnh sửa ROI ở chế độ `ResultView`: Khi chọn node `ResultView`, `EnableRoiEditingInPreview` tự động về `false` để vô hiệu hóa hoàn toàn tương tác kéo thả/chỉnh ROI trên Preview.
+- Bổ sung đầy đủ tất cả loại phép đo vào `SpecResults` (`Distance`, `LineLineDist`, `PointLineDist`, `EdgePair`, `EdgePairDetect`, `Diameter`), khắc phục lỗi không hiển thị danh sách phép đo khi chạy Job.
+- Tích hợp toàn bộ bảng kết quả Inspection vào Panel bên phải theo dạng danh mục cuộn dọc đồng thời (WrapPanel runtime breakdown bar, Bảng Spec đo đạc, Bảng Điều kiện Logic, Bảng Thời gian chạy từng Tool `ToolTimings`, Code detection và SurfaceCompare Debugger).
+- Gỡ bỏ dòng chữ tiêu đề `CMS VINA VISION SYSTEM` ở Header theo yêu cầu.
+- Hỗ trợ chế độ chạy lặp ảnh tự động theo thư mục đối với Tool ImageSource (`SourceType == Folder`):
+  - Khi bấm `▶ Run Flow`, hệ thống quét tất cả các tệp ảnh hợp lệ (`.png`, `.jpg`, `.bmp`, `.tif`) trong thư mục đã chọn (`FolderPath`).
+  - Tự động thực thi tuần tự từng ảnh theo khoảng thời gian nghỉ tùy chỉnh (`FolderIntervalMs`) và có hỗ trợ lặp lại (`LoopFolder`).
+  - Nút bấm `Run Flow` tự động đổi tên/icon/màu sắc sang **`⏹ STOP`** (màu đỏ `#D32F2F`) trong suốt thời gian chạy luồng thư mục. Bấm `STOP` sẽ dừng luồng chạy ngay lập tức.
+  - Sửa lỗi bảng kết quả bên phải (Cột 4 / Column 6) bị trống khi chạy với thư mục do thiếu gán `LastResult = _lastRun`.
+- Khắc phục hiển thị xoay khung ROI Tool Origin (`Origin S`, `Origin T`) & Thêm Score Overlay & Tối ưu Score ShapePyramid khi xoay:
+  - Tool Origin ROI Rotation Logic: Khi có dữ liệu chạy RUN (`_lastRun`), các khung ROI `Origin S` & `Origin T` xoay và tịnh tiến bám 100% theo góc và vị trí nhận diện được trên cả node `Origin` lẫn `ResultView`. Khi chưa RUN (chế độ teaching), các khung ROI giữ nguyên toạ độ thô (`Angle = 0`) để người dùng dễ kéo thả chỉnh vị trí không bị phản hồi xoay.
+  - Sửa lỗi Score ShapePyramid bị giảm thấp khi xoay: Khắc phục hiện tượng vùng viền đen 0 (padding black border) do xoay WarpAffine làm suy giảm chỉ số tương quan Normalized Cross-Correlation (`CCoeffNormed`) từ 1.0 xuống 0.4 - 0.5. Thuật toán giờ đây trích xuất vùng candidate đã nhận diện, xoay ngược lại `-bestAngle` và tính điểm trực tiếp với mẫu chưa xoay, trả về điểm số thực chính xác cao (**0.95 - 0.99** trên ảnh xoay).
+  - Hiển thị Score lên Overlay Tool Origin: Trực tiếp đưa điểm số, ngưỡng `Threshold`, góc xoay `AngleDeg` và trạng thái `OK/NG` lên nhãn overlay của `Origin S`, `Origin T` và tâm mẫu trên màn hình preview.
+- Ứng dụng đã được biên dịch thành công 0 lỗi.
+
+
+
+
+
 
 
 

@@ -198,7 +198,8 @@ namespace VisionInspectionApp.UI.ViewModels
                 "Text",
                 "BlobDetection",
                 "SurfaceCompare",
-                "CodeDetection"
+                "CodeDetection",
+                "ResultView"
             };
             Nodes = new ObservableCollection<ToolGraphNodeViewModel>();
             Nodes.CollectionChanged += (_, _) => IsDirty = true;
@@ -219,7 +220,7 @@ namespace VisionInspectionApp.UI.ViewModels
             PasteNodeCommand = new RelayCommand(PasteNode);
             LoadPreviewImageCommand = new RelayCommand(LoadPreviewImage);
             CaptureCameraImageCommand = new AsyncRelayCommand(CaptureCameraImageAsync);
-            RunFlowCommand = new RelayCommand(RunFlow);
+            RunFlowCommand = new RelayCommand(OnRunFlowClicked);
             RoiSelectedCommand = new RelayCommand<object?>(OnRoiSelected);
             RoiEditedCommand = new RelayCommand<RoiSelection?>(OnRoiEdited);
             RoiDeletedCommand = new RelayCommand<string?>(OnRoiDeleted);
@@ -233,6 +234,8 @@ namespace VisionInspectionApp.UI.ViewModels
             ImageSource_BrowseFolderCommand = new RelayCommand(ImageSource_BrowseFolder);
             SurfaceCompare_SetSearchRoiCommand = new RelayCommand(SurfaceCompare_SetSearchRoi);
             SurfaceCompare_SetTemplateRoiCommand = new RelayCommand(SurfaceCompare_SetTemplateRoi);
+            Origin_TeachTemplateCommand = new RelayCommand(Origin_TeachTemplate);
+
             _sharedImage.ImageChanged += (_, __) =>
             {
                 System.Windows.Application.Current.Dispatcher.BeginInvoke(new Action(() =>
@@ -374,6 +377,8 @@ namespace VisionInspectionApp.UI.ViewModels
         public bool IsDiameterNode => SelectedNode is not null && string.Equals(SelectedNode.Type, "Diameter", StringComparison.OrdinalIgnoreCase);
         public bool IsEdgePairNode => SelectedNode is not null && string.Equals(SelectedNode.Type, "EdgePair", StringComparison.OrdinalIgnoreCase);
         public bool IsCodeDetectionNode => SelectedNode is not null && string.Equals(SelectedNode.Type, "CodeDetection", StringComparison.OrdinalIgnoreCase);
+        public bool IsResultViewNode => SelectedNode is not null && string.Equals(SelectedNode.Type, "ResultView", StringComparison.OrdinalIgnoreCase);
+        public bool EnableRoiEditingInPreview => SelectedNode is not null && !string.Equals(SelectedNode.Type, "ResultView", StringComparison.OrdinalIgnoreCase);
         public ObservableCollection<BlobPolarity> AvailableBlobPolarities { get; } = new ObservableCollection<BlobPolarity>((BlobPolarity[])Enum.GetValues(typeof(BlobPolarity)));
         public ObservableCollection<ImageSourceType> AvailableImageSourceTypes { get; } = new ObservableCollection<ImageSourceType>((ImageSourceType[])Enum.GetValues(typeof(ImageSourceType)));
         public ObservableCollection<PointFindAlgorithm> AvailablePointFindAlgorithms { get; } = new ObservableCollection<PointFindAlgorithm>((PointFindAlgorithm[])Enum.GetValues(typeof(PointFindAlgorithm)));
@@ -2164,23 +2169,14 @@ namespace VisionInspectionApp.UI.ViewModels
             using var snap = _sharedImage.GetSnapshot();
             var imgW = snap?.Width ?? 0;
             var imgH = snap?.Height ?? 0;
+            var effectiveW = imgW > 0 ? imgW : 1280;
+            var effectiveH = imgH > 0 ? imgH : 960;
             Roi DefaultRoi()
             {
-                if (imgW <= 0 || imgH <= 0)
-                {
-                    return new Roi
-                    {
-                        X = 10,
-                        Y = 10,
-                        Width = 120,
-                        Height = 120
-                    };
-                }
-    
-                var w = Math.Clamp(imgW / 4, 60, Math.Max(60, imgW));
-                var h = Math.Clamp(imgH / 4, 60, Math.Max(60, imgH));
-                var x = Math.Clamp((imgW - w) / 2, 0, Math.Max(0, imgW - w));
-                var y = Math.Clamp((imgH - h) / 2, 0, Math.Max(0, imgH - h));
+                var w = Math.Clamp(effectiveW / 4, 100, Math.Max(100, effectiveW));
+                var h = Math.Clamp(effectiveH / 4, 100, Math.Max(100, effectiveH));
+                var x = Math.Clamp((effectiveW - w) / 2, 0, Math.Max(0, effectiveW - w));
+                var y = Math.Clamp((effectiveH - h) / 2, 0, Math.Max(0, effectiveH - h));
                 return new Roi
                 {
                     X = x,
@@ -2332,8 +2328,7 @@ namespace VisionInspectionApp.UI.ViewModels
                 var existed = _config.TextNodes.Any(x => string.Equals(x.Name, node.RefName, StringComparison.OrdinalIgnoreCase));
                 if (!existed)
                 {
-                    // Default position roughly near top-left; user can set by Ctrl+Shift click.
-                    _config.TextNodes.Add(new TextNodeDefinition { Name = node.RefName, Text = node.RefName, X = 10, Y = 10, DefaultColor = "#FFFFFFFF" });
+                    _config.TextNodes.Add(new TextNodeDefinition { Name = node.RefName, Text = node.RefName, X = effectiveW / 2, Y = effectiveH / 2, DefaultColor = "#FFFFFFFF" });
                 }
     
                 return;

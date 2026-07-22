@@ -1069,7 +1069,7 @@ namespace VisionInspectionApp.UI.ViewModels
             }
     
             var label = sel.Label.Trim();
-            var roi = UnTransformRoi(sel.Roi);
+            var roi = UnTransformRoi(sel.Roi, label);
             if (string.Equals(label, "DefectROI", StringComparison.OrdinalIgnoreCase))
             {
                 _config.DefectConfig.InspectRoi = roi;
@@ -1096,11 +1096,11 @@ namespace VisionInspectionApp.UI.ViewModels
             {
                 _config.Origin.TemplateRoi = roi;
                 _config.Origin.WorldPosition = RoiCenterToWorld(roi);
-                TrySaveTemplateImage("origin", roi, isOrigin: true, pointName: null);
                 RunFlow();
                 RequestAutoSave();
                 return;
             }
+
     
             var parts = label.Split(' ', StringSplitOptions.RemoveEmptyEntries);
             if (parts.Length == 2)
@@ -1339,22 +1339,23 @@ namespace VisionInspectionApp.UI.ViewModels
                 {
                     if (!string.IsNullOrWhiteSpace(source.FolderPath) && Directory.Exists(source.FolderPath))
                     {
-                        var files = Directory.GetFiles(source.FolderPath, "*.*", SearchOption.TopDirectoryOnly).Where(f => f.EndsWith(".jpg", StringComparison.OrdinalIgnoreCase) || f.EndsWith(".jpeg", StringComparison.OrdinalIgnoreCase) || f.EndsWith(".png", StringComparison.OrdinalIgnoreCase) || f.EndsWith(".bmp", StringComparison.OrdinalIgnoreCase) || f.EndsWith(".tif", StringComparison.OrdinalIgnoreCase) || f.EndsWith(".tiff", StringComparison.OrdinalIgnoreCase)).OrderBy(f => f).FirstOrDefault();
-                        if (!string.IsNullOrWhiteSpace(files))
+                        var files = Directory.GetFiles(source.FolderPath, "*.*", SearchOption.TopDirectoryOnly).Where(f => f.EndsWith(".jpg", StringComparison.OrdinalIgnoreCase) || f.EndsWith(".jpeg", StringComparison.OrdinalIgnoreCase) || f.EndsWith(".png", StringComparison.OrdinalIgnoreCase) || f.EndsWith(".bmp", StringComparison.OrdinalIgnoreCase) || f.EndsWith(".tif", StringComparison.OrdinalIgnoreCase) || f.EndsWith(".tiff", StringComparison.OrdinalIgnoreCase)).OrderBy(f => f).ToArray();
+                        if (files.Length > 0)
                         {
-                            if (_imageSourcePreviewCache.TryGetValue(source.Name ?? "", out var cached) && cached.SourcePath == files && cached.Image is not null && !cached.Image.IsDisposed)
+                            var targetFile = files[_folderImageIndex % files.Length];
+                            if (_imageSourcePreviewCache.TryGetValue(source.Name ?? "", out var cached) && cached.SourcePath == targetFile && cached.Image is not null && !cached.Image.IsDisposed)
                             {
                                 return cached.Image.Clone();
                             }
-    
-                            System.Diagnostics.Debug.WriteLine($"Loading image from folder: {files}");
-                            var mat = Cv2.ImRead(files);
+
+                            System.Diagnostics.Debug.WriteLine($"Loading image from folder: {targetFile}");
+                            var mat = Cv2.ImRead(targetFile);
                             if (mat is not null && !mat.Empty())
                             {
                                 System.Diagnostics.Debug.WriteLine($"Successfully loaded image: {mat.Width}x{mat.Height}");
                                 if (_imageSourcePreviewCache.TryGetValue(source.Name ?? "", out var old))
                                     old.Image?.Dispose();
-                                _imageSourcePreviewCache[source.Name ?? ""] = (files, mat.Clone());
+                                _imageSourcePreviewCache[source.Name ?? ""] = (targetFile, mat.Clone());
                                 return mat;
                             }
                         }
@@ -1367,6 +1368,204 @@ namespace VisionInspectionApp.UI.ViewModels
             }
     
             return null;
+        }
+
+        private CancellationTokenSource? _folderFlowCts;
+        private int _folderImageIndex = 0;
+        private bool _isRunningFolderFlow;
+
+        public bool IsRunningFolderFlow
+        {
+            get => _isRunningFolderFlow;
+            private set
+            {
+                if (SetProperty(ref _isRunningFolderFlow, value))
+                {
+                    UpdateRunFlowButtonProperties();
+                }
+            }
+        }
+
+        public string RunFlowButtonIcon => IsRunningFolderFlow ? "⏹" : "▶";
+        public string RunFlowButtonText => IsRunningFolderFlow ? "STOP" : "Run Flow";
+        public Brush RunFlowButtonBackgroundBrush => IsRunningFolderFlow
+            ? new SolidColorBrush(Color.FromRgb(211, 47, 47))
+            : new SolidColorBrush(Color.FromRgb(16, 124, 16));
+        public string RunFlowButtonToolTip => IsRunningFolderFlow ? "Dừng chạy luồng thư mục" : "Run Flow";
+
+        private void UpdateRunFlowButtonProperties()
+        {
+            OnPropertyChanged(nameof(RunFlowButtonIcon));
+            OnPropertyChanged(nameof(RunFlowButtonText));
+            OnPropertyChanged(nameof(RunFlowButtonBackgroundBrush));
+            OnPropertyChanged(nameof(RunFlowButtonToolTip));
+        }
+
+        private void OnRunFlowClicked()
+        {
+            if (IsRunningFolderFlow)
+            {
+                StopFolderFlow();
+                return;
+            }
+
+            var imageSourceNode = Nodes.FirstOrDefault(n => string.Equals(n.Type, "ImageSource", StringComparison.OrdinalIgnoreCase));
+            if (imageSourceNode is not null && _config is not null)
+            {
+                var imgSourceDef = _config.ImageSources.FirstOrDefault(x => string.Equals(x.Name, imageSourceNode.RefName, StringComparison.OrdinalIgnoreCase));
+                if (imgSourceDef is not null && imgSourceDef.SourceType == ImageSourceType.Folder)
+                {
+                    if (string.IsNullOrWhiteSpace(imgSourceDef.FolderPath) || !Directory.Exists(imgSourceDef.FolderPath))
+                    {
+                        MessageBox.Show($"Thư mục chứa ảnh không tồn tại:\n{imgSourceDef.FolderPath}", "Cảnh báo", MessageBoxButton.OK, MessageBoxImage.Warning);
+                        RunFlow();
+                        return;
+                    }
+
+                    var files = Directory.GetFiles(imgSourceDef.FolderPath, "*.*", SearchOption.TopDirectoryOnly)
+                        .Where(f => f.EndsWith(".jpg", StringComparison.OrdinalIgnoreCase) ||
+                                    f.EndsWith(".jpeg", StringComparison.OrdinalIgnoreCase) ||
+                                    f.EndsWith(".png", StringComparison.OrdinalIgnoreCase) ||
+                                    f.EndsWith(".bmp", StringComparison.OrdinalIgnoreCase) ||
+                                    f.EndsWith(".tif", StringComparison.OrdinalIgnoreCase) ||
+                                    f.EndsWith(".tiff", StringComparison.OrdinalIgnoreCase))
+                        .OrderBy(f => f).ToArray();
+
+                    if (files.Length == 0)
+                    {
+                        MessageBox.Show($"Thư mục không có tệp ảnh hợp lệ:\n{imgSourceDef.FolderPath}", "Cảnh báo", MessageBoxButton.OK, MessageBoxImage.Warning);
+                        RunFlow();
+                        return;
+                    }
+
+                    StartFolderFlow(imgSourceDef, files);
+                    return;
+                }
+            }
+
+            RunFlow();
+        }
+
+        private void StartFolderFlow(ImageSourceDefinition sourceDef, string[] imageFiles)
+        {
+            _folderFlowCts?.Cancel();
+            _folderFlowCts = new CancellationTokenSource();
+            IsRunningFolderFlow = true;
+
+            var token = _folderFlowCts.Token;
+            Task.Run(async () =>
+            {
+                int index = _folderImageIndex;
+                int interval = Math.Max(50, sourceDef.FolderIntervalMs);
+                bool loop = sourceDef.LoopFolder;
+
+                try
+                {
+                    while (!token.IsCancellationRequested)
+                    {
+                        if (index >= imageFiles.Length)
+                        {
+                            if (loop)
+                            {
+                                index = 0;
+                            }
+                            else
+                            {
+                                break;
+                            }
+                        }
+
+                        var filePath = imageFiles[index];
+                        _folderImageIndex = index;
+
+                        await System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
+                        {
+                            RunSingleFlowFromImageFile(filePath, sourceDef.Name);
+                        });
+
+                        index++;
+
+                        try
+                        {
+                            await Task.Delay(interval, token);
+                        }
+                        catch (TaskCanceledException)
+                        {
+                            break;
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"StartFolderFlow exception: {ex.Message}");
+                }
+                finally
+                {
+                    await System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
+                    {
+                        _folderImageIndex = index % Math.Max(1, imageFiles.Length);
+                        IsRunningFolderFlow = false;
+                    });
+                }
+            }, token);
+        }
+
+        private void StopFolderFlow()
+        {
+            _folderFlowCts?.Cancel();
+            IsRunningFolderFlow = false;
+        }
+
+        private void RunSingleFlowFromImageFile(string filePath, string sourceNodeName)
+        {
+            if (string.IsNullOrWhiteSpace(filePath) || !File.Exists(filePath) || _config is null)
+                return;
+
+            using var mat = Cv2.ImRead(filePath);
+            if (mat is null || mat.Empty())
+                return;
+
+            _inspectionService.ResetTracking();
+            var __sw = System.Diagnostics.Stopwatch.StartNew();
+
+            if (_imageSourcePreviewCache.TryGetValue(sourceNodeName ?? "", out var old))
+                old.Image?.Dispose();
+            _imageSourcePreviewCache[sourceNodeName ?? ""] = (filePath, mat.Clone());
+
+            SyncToolGraphToConfig();
+            EnsureTemplatePathsAbsolute(_config);
+
+            try
+            {
+                _lastRunError = null;
+                _lastRun = _inspectionService.Inspect(mat, _config);
+                __sw.Stop();
+
+                if (_lastRun != null)
+                {
+                    _lastRun.Timings.NodeTimings[sourceNodeName] = (int)__sw.ElapsedMilliseconds;
+                    if (_config.PreprocessNodes != null)
+                    {
+                        foreach (var preNode in _config.PreprocessNodes)
+                        {
+                            if (!string.IsNullOrWhiteSpace(preNode.Name))
+                            {
+                                _lastRun.Timings.NodeTimings[preNode.Name] = 0;
+                            }
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _lastRun = null;
+                _lastRunError = "Lỗi khi chạy Flow: " + ex.Message;
+            }
+
+            LastResult = _lastRun;
+            RefreshPreviews();
+            RaiseToolPropertyPanelsChanged();
+            OnPropertyChanged(nameof(Blob_LastRunCount));
         }
     
         private void LoadPreviewImage()
@@ -1549,10 +1748,13 @@ namespace VisionInspectionApp.UI.ViewModels
             }
     
             UpdateNodeExecutionTimes();
+            LastResult = _lastRun;
+            RefreshInspectionDashboard(_lastRun);
             RefreshPreviews();
             RaiseToolPropertyPanelsChanged();
             OnPropertyChanged(nameof(Blob_LastRunCount));
         }
+
     
         private void RefreshPreviews()
         {
@@ -1626,6 +1828,16 @@ namespace VisionInspectionApp.UI.ViewModels
         {
             var newSelectedNodeOverlayItems = new List<OverlayItem>();
             System.Diagnostics.Debug.WriteLine($"RefreshSelectedPreview: SelectedNode={SelectedNode?.Type}, RefName={SelectedNode?.RefName}");
+            
+            if (SelectedNode is not null && string.Equals(SelectedNode.Type, "ResultView", StringComparison.OrdinalIgnoreCase))
+            {
+                using var resultSnap = _sharedImage.GetSnapshot();
+                SelectedNodePreviewImage = FinalPreviewImage ?? _cachedFinalPreviewImage ?? (resultSnap is null || resultSnap.Empty() ? null : resultSnap.ToBitmapSource());
+                SelectedNodeOverlayItems = FinalOverlayItems;
+                ActiveRoiLabel = string.Empty;
+                return;
+            }
+
             // Special handling for ImageSource - always load from source regardless of PreprocessPreviewEnabled
             if (SelectedNode is not null && string.Equals(SelectedNode.Type, "ImageSource", StringComparison.OrdinalIgnoreCase))
             {
@@ -1853,12 +2065,12 @@ namespace VisionInspectionApp.UI.ViewModels
     
             if (config.Origin.SearchRoi.Width > 0 && config.Origin.SearchRoi.Height > 0)
             {
-                dst.Add(CreateRotatedRoi(config.Origin.SearchRoi, Brushes.Lime, "Origin S"));
+                dst.Add(CreateRotatedRoiWithPose(config.Origin.SearchRoi, Brushes.Lime, "Origin S"));
             }
     
             if (config.Origin.TemplateRoi.Width > 0 && config.Origin.TemplateRoi.Height > 0)
             {
-                dst.Add(CreateRotatedRoi(config.Origin.TemplateRoi, Brushes.Lime, "Origin T"));
+                dst.Add(CreateRotatedRoiWithPose(config.Origin.TemplateRoi, Brushes.Lime, "Origin T"));
             }
     
             foreach (var p in config.Points)
@@ -1892,11 +2104,26 @@ namespace VisionInspectionApp.UI.ViewModels
                     continue;
                 }
     
-                dst.Add(CreateRotatedRoi(c.SearchRoi, Brushes.Lime, $"{c.Name} Cal"));
+                dst.Add(CreateRotatedRoiWithPose(c.SearchRoi, Brushes.Lime, $"{c.Name} Cal"));
                 var stripCount = Math.Clamp(c.StripCount, 1, 100);
                 var stripLength = Math.Max(3, c.StripLength);
                 if (stripCount > 0)
                 {
+                    var hasOriginPose = _lastRun?.Origin is not null && (_lastRun.Origin.MatchRect.Width > 0 || _lastRun.Origin.Position.X != 0 || _lastRun.Origin.Position.Y != 0);
+                    var originTeach = (config.Origin.TemplateRoi.Width > 0 && config.Origin.TemplateRoi.Height > 0)
+                        ? new Point2d(config.Origin.TemplateRoi.X + config.Origin.TemplateRoi.Width / 2.0, config.Origin.TemplateRoi.Y + config.Origin.TemplateRoi.Height / 2.0)
+                        : new Point2d(config.Origin.SearchRoi.X + config.Origin.SearchRoi.Width / 2.0, config.Origin.SearchRoi.Y + config.Origin.SearchRoi.Height / 2.0);
+                    if (config.Origin.WorldPosition.X != 0 || config.Origin.WorldPosition.Y != 0)
+                    {
+                        originTeach = new Point2d(config.Origin.WorldPosition.X, config.Origin.WorldPosition.Y);
+                    }
+    
+                    var mr = _lastRun?.Origin?.MatchRect ?? default;
+                    var originFound = (mr.Width > 0 && mr.Height > 0)
+                        ? new Point2d(mr.X + mr.Width / 2.0, mr.Y + mr.Height / 2.0)
+                        : new Point2d(_lastRun?.Origin?.Position.X ?? originTeach.X, _lastRun?.Origin?.Position.Y ?? originTeach.Y);
+                    var angleDeg = hasOriginPose ? _lastRun!.Origin.AngleDeg : 0.0;
+    
                     if (c.Orientation == CaliperOrientation.Vertical)
                     {
                         var y1 = c.SearchRoi.Y + (c.SearchRoi.Height - stripLength) / 2.0;
@@ -1904,7 +2131,16 @@ namespace VisionInspectionApp.UI.ViewModels
                         for (var i = 0; i < stripCount; i++)
                         {
                             var x = c.SearchRoi.X + (i + 0.5) * c.SearchRoi.Width / stripCount;
-                            dst.Add(new OverlayLineItem { X1 = x, Y1 = y1, X2 = x, Y2 = y2, Stroke = Brushes.Lime, StrokeThickness = 1.0 });
+                            var p1 = new Point2d(x, y1);
+                            var p2 = new Point2d(x, y2);
+    
+                            if (hasOriginPose)
+                            {
+                                p1 = TransformPose(p1, originTeach, originFound, angleDeg);
+                                p2 = TransformPose(p2, originTeach, originFound, angleDeg);
+                            }
+    
+                            dst.Add(new OverlayLineItem { X1 = p1.X, Y1 = p1.Y, X2 = p2.X, Y2 = p2.Y, Stroke = Brushes.Lime, StrokeThickness = 1.0 });
                         }
                     }
                     else
@@ -1914,7 +2150,16 @@ namespace VisionInspectionApp.UI.ViewModels
                         for (var i = 0; i < stripCount; i++)
                         {
                             var y = c.SearchRoi.Y + (i + 0.5) * c.SearchRoi.Height / stripCount;
-                            dst.Add(new OverlayLineItem { X1 = x1, Y1 = y, X2 = x2, Y2 = y, Stroke = Brushes.Lime, StrokeThickness = 1.0 });
+                            var p1 = new Point2d(x1, y);
+                            var p2 = new Point2d(x2, y);
+    
+                            if (hasOriginPose)
+                            {
+                                p1 = TransformPose(p1, originTeach, originFound, angleDeg);
+                                p2 = TransformPose(p2, originTeach, originFound, angleDeg);
+                            }
+    
+                            dst.Add(new OverlayLineItem { X1 = p1.X, Y1 = p1.Y, X2 = p2.X, Y2 = p2.Y, Stroke = Brushes.Lime, StrokeThickness = 1.0 });
                         }
                     }
                 }
@@ -2770,7 +3015,7 @@ namespace VisionInspectionApp.UI.ViewModels
                         }
                     }
                 }
-    
+
                 dst.Add(new OverlayTextItem { X = t.X, Y = t.Y, Text = text, Foreground = brush, Background = new SolidColorBrush(Color.FromArgb(80, 0, 0, 0)) });
                 return;
             }
@@ -2788,12 +3033,12 @@ namespace VisionInspectionApp.UI.ViewModels
             {
                 if (showRois && _config.Origin.SearchRoi.Width > 0 && _config.Origin.SearchRoi.Height > 0)
                 {
-                    dst.Add(CreateRotatedRoi(_config.Origin.SearchRoi, Brushes.Lime, "Origin S"));
+                    dst.Add(CreateRotatedRoiWithPose(_config.Origin.SearchRoi, Brushes.Lime, "Origin S"));
                 }
     
                 if (showRois && _config.Origin.TemplateRoi.Width > 0 && _config.Origin.TemplateRoi.Height > 0)
                 {
-                    dst.Add(CreateRotatedRoi(_config.Origin.TemplateRoi, Brushes.Gold, "Origin T"));
+                    dst.Add(CreateRotatedRoiWithPose(_config.Origin.TemplateRoi, Brushes.Gold, "Origin T"));
                 }
     
                 return;
@@ -2949,18 +3194,86 @@ namespace VisionInspectionApp.UI.ViewModels
     
                 return;
             }
-    
+
             BuildFinalOverlay(image, dst);
         }
-    
+
+        private OverlayRectItem CreateRotatedRoiWithPose(Roi roi, System.Windows.Media.Brush? stroke, string? label)
+        {
+            return CreateRotatedRoiWithPose(new OpenCvSharp.Rect(roi.X, roi.Y, roi.Width, roi.Height), stroke, label);
+        }
+
+        private OverlayRectItem CreateRotatedRoiWithPose(OpenCvSharp.Rect roi, System.Windows.Media.Brush? stroke, string? label)
+        {
+            if (_lastRun is not null && _config is not null && _lastRun.Origin is not null && (_lastRun.Origin.MatchRect.Width > 0 || _lastRun.Origin.Position.X != 0 || _lastRun.Origin.Position.Y != 0))
+            {
+                var originTeach = new OpenCvSharp.Point2d(_config.Origin.WorldPosition.X, _config.Origin.WorldPosition.Y);
+                if (originTeach.X == 0 && originTeach.Y == 0 && _config.Origin.TemplateRoi.Width > 0)
+                {
+                    originTeach = new OpenCvSharp.Point2d(_config.Origin.TemplateRoi.X + _config.Origin.TemplateRoi.Width / 2.0, _config.Origin.TemplateRoi.Y + _config.Origin.TemplateRoi.Height / 2.0);
+                }
+                else if (originTeach.X == 0 && originTeach.Y == 0 && _config.Origin.SearchRoi.Width > 0)
+                {
+                    originTeach = new OpenCvSharp.Point2d(_config.Origin.SearchRoi.X + _config.Origin.SearchRoi.Width / 2.0, _config.Origin.SearchRoi.Y + _config.Origin.SearchRoi.Height / 2.0);
+                }
+
+                var mr = _lastRun.Origin.MatchRect;
+                var originFound = (mr.Width > 0 && mr.Height > 0)
+                    ? new OpenCvSharp.Point2d(mr.X + mr.Width / 2.0, mr.Y + mr.Height / 2.0)
+                    : new OpenCvSharp.Point2d(_lastRun.Origin.Position.X, _lastRun.Origin.Position.Y);
+
+                var angleDeg = _lastRun.Origin.AngleDeg;
+
+                var centerTeach = new OpenCvSharp.Point2d(roi.X + roi.Width / 2.0, roi.Y + roi.Height / 2.0);
+                var centerFound = TransformPose(centerTeach, originTeach, originFound, angleDeg);
+
+                var finalLabel = label;
+                if (!string.IsNullOrWhiteSpace(label) && label.StartsWith("Origin", StringComparison.OrdinalIgnoreCase))
+                {
+                    var status = _lastRun.Origin.Pass ? "OK" : "NG";
+                    finalLabel = $"{label} [{status}] Score: {_lastRun.Origin.Score:0.00} (Thr: {_lastRun.Origin.Threshold:0.00}) Ang: {_lastRun.Origin.AngleDeg:0.0}°";
+                }
+
+                return new OverlayRectItem
+                {
+                    X = (int)Math.Round(centerFound.X - roi.Width / 2.0),
+                    Y = (int)Math.Round(centerFound.Y - roi.Height / 2.0),
+                    Width = roi.Width,
+                    Height = roi.Height,
+                    Angle = angleDeg,
+                    Stroke = _lastRun.Origin.Pass ? stroke : System.Windows.Media.Brushes.Red,
+                    Label = finalLabel
+                };
+            }
+
+            return new OverlayRectItem
+            {
+                X = roi.X,
+                Y = roi.Y,
+                Width = roi.Width,
+                Height = roi.Height,
+                Angle = 0,
+                Stroke = stroke,
+                Label = label
+            };
+        }
+
         private OverlayRectItem CreateRotatedRoi(OpenCvSharp.Rect roi, System.Windows.Media.Brush? stroke, string? label)
         {
             return CreateRotatedRoi(new Roi { X = roi.X, Y = roi.Y, Width = roi.Width, Height = roi.Height }, stroke, label);
         }
-    
-        private Roi UnTransformRoi(Roi roi)
+
+        private static bool IsRawImageRoi(string? label)
         {
-            if (_lastRun is null || _config is null || _lastRun.Origin is null)
+            if (string.IsNullOrWhiteSpace(label)) return true;
+            var l = label.Trim();
+            return l.StartsWith("Origin", StringComparison.OrdinalIgnoreCase) ||
+                   string.Equals(l, "DefectROI", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private Roi UnTransformRoi(Roi roi, string? label = null)
+        {
+            if (IsRawImageRoi(label) || _lastRun is null || _config is null || _lastRun.Origin is null)
             {
                 return roi;
             }
@@ -2995,7 +3308,7 @@ namespace VisionInspectionApp.UI.ViewModels
     
         private OverlayRectItem CreateRotatedRoi(Roi roi, System.Windows.Media.Brush? stroke, string? label)
         {
-            if (_lastRun is not null && _config is not null && _lastRun.Origin is not null)
+            if (!IsRawImageRoi(label) && _lastRun is not null && _config is not null && _lastRun.Origin is not null)
             {
                 var originTeach = new OpenCvSharp.Point2d(_config.Origin.WorldPosition.X, _config.Origin.WorldPosition.Y);
                 var originFound = new OpenCvSharp.Point2d(_lastRun.Origin.Position.X, _lastRun.Origin.Position.Y);

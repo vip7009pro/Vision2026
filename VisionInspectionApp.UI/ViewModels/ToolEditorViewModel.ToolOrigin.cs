@@ -103,6 +103,23 @@ namespace VisionInspectionApp.UI.ViewModels
             }
         }
 
+        public ICommand? Origin_TeachTemplateCommand { get; internal set; }
+
+        public void Origin_TeachTemplate()
+        {
+            if (_config?.Origin == null) return;
+            var roi = _config.Origin.TemplateRoi;
+            if (roi.Width <= 0 || roi.Height <= 0) return;
+
+            _config.Origin.WorldPosition = RoiCenterToWorld(roi);
+            TrySaveTemplateImage("origin", roi, isOrigin: true, pointName: null);
+
+            RunFlow();
+            RequestAutoSave();
+        }
+
+
         public bool IsOriginShapePyramid => Origin_Algorithm == OriginAlgorithm.ShapePyramid;
     }
 }
+

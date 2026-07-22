@@ -156,7 +156,12 @@ namespace VisionInspectionApp.UI.ViewModels
             {
                 InPorts.Add(new NodePortViewModel(this, "Image", isInput: true));
             }
+            else if (string.Equals(Type, "ResultView", StringComparison.OrdinalIgnoreCase))
+            {
+                InPorts.Add(new NodePortViewModel(this, "Result", isInput: true));
+            }
             else if (string.Equals(Type, "Origin", StringComparison.OrdinalIgnoreCase) || string.Equals(Type, "Point", StringComparison.OrdinalIgnoreCase) || string.Equals(Type, "Line", StringComparison.OrdinalIgnoreCase) || string.Equals(Type, "Caliper", StringComparison.OrdinalIgnoreCase) || string.Equals(Type, "LinePairDetection", StringComparison.OrdinalIgnoreCase) || string.Equals(Type, "EdgePairDetect", StringComparison.OrdinalIgnoreCase) || string.Equals(Type, "CircleFinder", StringComparison.OrdinalIgnoreCase) || string.Equals(Type, "BlobDetection", StringComparison.OrdinalIgnoreCase) || string.Equals(Type, "CodeDetection", StringComparison.OrdinalIgnoreCase))
+
             {
                 InPorts.Add(new NodePortViewModel(this, "Image", isInput: true));
             }
