@@ -1119,6 +1119,7 @@ public sealed class InspectionService : IInspectionService
                         OriginAlgorithm = originDefBase.OriginAlgorithm,
                         MinAngle = originDefBase.MinAngle,
                         MaxAngle = originDefBase.MaxAngle,
+                        AngleStep = originDefBase.AngleStep,
                         EdgePoint = originDefBase.EdgePoint,
                         ShapeModel = originDefBase.ShapeModel,
                         EdgeThresholdMin = originDefBase.EdgeThresholdMin,
@@ -1127,10 +1128,13 @@ public sealed class InspectionService : IInspectionService
                 }
             }
 
-            var originMatch = _matcher.MatchWithRotation(originMat, originDef, originTempl, originPre, originDef.MinAngle, originDef.MaxAngle, 2.0);
+            var stepDeg = originDef.AngleStep > 0 ? originDef.AngleStep : 1.0;
+            var originMatch = _matcher.MatchWithRotation(originMat, originDef, originTempl, originPre, originDef.MinAngle, originDef.MaxAngle, stepDeg);
             if (usedGuidedOrigin && originMatch.Score < originDefBase.MatchScoreThreshold)
             {
-                var retry = _matcher.MatchWithRotation(originMat, originDefBase, originTempl, originPre, originDefBase.MinAngle, originDefBase.MaxAngle, 2.0);
+                var stepDegBase = originDefBase.AngleStep > 0 ? originDefBase.AngleStep : 1.0;
+                var retry = _matcher.MatchWithRotation(originMat, originDefBase, originTempl, originPre, originDefBase.MinAngle, originDefBase.MaxAngle, stepDegBase);
+
                 if (retry.Score > originMatch.Score)
                 {
                     originMatch = retry;
@@ -1194,7 +1198,9 @@ public sealed class InspectionService : IInspectionService
                             OriginAlgorithm = def.OriginAlgorithm,
                             MinAngle = def.MinAngle,
                             MaxAngle = def.MaxAngle,
+                            AngleStep = def.AngleStep,
                             EdgePoint = def.EdgePoint,
+
                             ShapeModel = def.ShapeModel,
                             EdgeThresholdMin = def.EdgeThresholdMin,
                             EdgeThresholdMax = def.EdgeThresholdMax
@@ -2815,7 +2821,9 @@ public sealed class InspectionService : IInspectionService
             },
             MinAngle = p.MinAngle,
             MaxAngle = p.MaxAngle,
+            AngleStep = p.AngleStep,
             EdgePoint = p.EdgePoint,
+
             ShapeModel = p.ShapeModel,
             EdgeThresholdMin = p.EdgeThresholdMin,
             EdgeThresholdMax = p.EdgeThresholdMax

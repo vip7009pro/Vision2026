@@ -64,6 +64,19 @@ namespace VisionInspectionApp.UI.ViewModels
                 }
             }
         }
+
+        public double Origin_AngleStep
+        {
+            get => _config?.Origin?.AngleStep ?? 1.0;
+            set
+            {
+                if (_config?.Origin != null)
+                {
+                    _config.Origin.AngleStep = value;
+                    OnPropertyChanged();
+                }
+            }
+        }
         public int Origin_EdgeThresholdMin
         {
             get => _config?.Origin?.EdgeThresholdMin ?? 50;

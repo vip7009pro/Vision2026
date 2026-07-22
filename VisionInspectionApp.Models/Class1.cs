@@ -501,6 +501,7 @@ public sealed class PointDefinition
 
     public double MinAngle { get; set; } = -20.0;
     public double MaxAngle { get; set; } = 20.0;
+    public double AngleStep { get; set; } = 1.0;
 
     public EdgePointSettings EdgePoint { get; set; } = new();
 

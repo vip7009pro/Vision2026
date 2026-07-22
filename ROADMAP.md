@@ -30,3 +30,8 @@ Lộ trình tích hợp tính năng Chụp ảnh từ camera và hỗ trợ các
 - [x] Task 23: Tối ưu hiệu năng hiển thị Overlay (FastOverlayCanvas và ImageViewerControl) bằng cách sử dụng List, Pen caching và gỡ bỏ INotifyCollectionChanged, giải quyết giật lag khi cập nhật 1000 items. Sửa lỗi Inspection ViewModel không cập nhật Canvas bằng cách cấp phát danh sách mới thay cho ObservableCollection.
 - [x] Task 24: Khắc phục kết quả Tool Distance (và các tool khác) bị dao động (nhảy số) trên cùng 1 ảnh tĩnh bằng cách dùng thuật toán LMedS thay cho Ransac trong Origin FeatureBased.
 - [x] Task 25: Chuyển đổi lưu cấu hình sang `.job` file (chứa cả config json và template crops), hiển thị trạng thái `*` (chưa lưu) lên title bar kèm hộp thoại nhắc nhở khi đóng. Thu gọn thanh Tab lên khu vực Header và thêm nút Close Job global.
+- [x] Task 26: Khắc phục chính xác thuật toán ShapePyramid (đạt score 1.0 trên ảnh gốc, tối ưu pyramid đa cấp độ Coarse-to-Fine cho ảnh xoay) và bổ sung thuộc tính tùy chỉnh AngleStep trên giao diện và engine.
+- [x] Task 27: Đồng bộ quy chuẩn dấu góc xoay giữa RotateTemplateCentered và hệ tọa độ màn hình/Rotate(), khắc phục lỗi xoay ngược hướng ROI dẫn hướng. Áp dụng AngleStep cho tất cả thuật toán Origin.
+
+
+

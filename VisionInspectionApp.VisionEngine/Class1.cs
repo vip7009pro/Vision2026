@@ -1254,7 +1254,7 @@ public sealed class PatternMatcher
         return (score, center, rect);
     }
 
-    public MatchResult MatchWithRotation(Mat image, PointDefinition definition, PreprocessSettings? preprocess, double minAngleDeg = -10.0, double maxAngleDeg = 10.0, double stepDeg = 2.0)
+    public MatchResult MatchWithRotation(Mat image, PointDefinition definition, PreprocessSettings? preprocess, double minAngleDeg = -10.0, double maxAngleDeg = 10.0, double stepDeg = 1.0)
     {
         if (image is null)
         {
@@ -1282,7 +1282,7 @@ public sealed class PatternMatcher
         return MatchWithRotation(image, definition, templGray0.Mat, preprocess, minAngleDeg, maxAngleDeg, stepDeg);
     }
 
-    public MatchResult MatchWithRotation(Mat image, PointDefinition definition, Mat templateGray, PreprocessSettings? preprocess, double minAngleDeg = -10.0, double maxAngleDeg = 10.0, double stepDeg = 2.0)
+    public MatchResult MatchWithRotation(Mat image, PointDefinition definition, Mat templateGray, PreprocessSettings? preprocess, double minAngleDeg = -10.0, double maxAngleDeg = 10.0, double stepDeg = 1.0)
     {
         if (image is null)
         {
@@ -1310,14 +1310,52 @@ public sealed class PatternMatcher
 
         using var roiGray = EnsureGrayBorrowed(roi);
 
+        double effectiveStep = stepDeg;
+        if (definition.AngleStep > 0)
+        {
+            effectiveStep = definition.AngleStep;
+        }
+
         if (definition.OriginAlgorithm == OriginAlgorithm.FeatureBased)
         {
             // For FeatureBased, angle is resolved by Homography. We pass 0.0 as angleDeg and let it find the real angle.
             return MatchByFeatureBased(roiGray.Mat, templateGray, definition, 0.0, preprocess, roiRect);
         }
 
-        return MatchByPyramidFast(roiGray.Mat, templateGray, definition, preprocess, minAngleDeg, maxAngleDeg, stepDeg, roiRect);
+        return MatchByPyramidFast(roiGray.Mat, templateGray, definition, preprocess, minAngleDeg, maxAngleDeg, effectiveStep, roiRect);
     }
+
+    private static Mat RotateTemplateCentered(Mat src, double angleDeg)
+    {
+        if (Math.Abs(angleDeg) < 1e-6)
+        {
+            return src.Clone();
+        }
+
+        double rad = angleDeg * Math.PI / 180.0;
+        double cos = Math.Abs(Math.Cos(rad));
+        double sin = Math.Abs(Math.Sin(rad));
+
+        int origW = src.Width;
+        int origH = src.Height;
+
+        int newW = (int)Math.Ceiling(origW * cos + origH * sin);
+        int newH = (int)Math.Ceiling(origW * sin + origH * cos);
+
+        Point2f center = new Point2f(origW / 2.0f, origH / 2.0f);
+        // Note: OpenCV GetRotationMatrix2D uses positive angle for counter-clockwise.
+        // To rotate CLOCKWISE by angleDeg (matching screen coordinates and FeatureBased convention),
+        // we pass -angleDeg to GetRotationMatrix2D!
+        using var rotMat = Cv2.GetRotationMatrix2D(center, -angleDeg, 1.0);
+
+        rotMat.Set(0, 2, rotMat.At<double>(0, 2) + (newW - origW) / 2.0);
+        rotMat.Set(1, 2, rotMat.At<double>(1, 2) + (newH - origH) / 2.0);
+
+        var dst = new Mat(new Size(newW, newH), src.Type(), Scalar.Black);
+        Cv2.WarpAffine(src, dst, rotMat, new Size(newW, newH), InterpolationFlags.Linear, BorderTypes.Constant, Scalar.Black);
+        return dst;
+    }
+
 
     private MatchResult MatchByPyramidFast(Mat roiGray, Mat templateGray, PointDefinition def, PreprocessSettings? preprocess, double minAngleDeg, double maxAngleDeg, double stepDeg, Rect roiRect)
     {
@@ -1327,10 +1365,11 @@ public sealed class PatternMatcher
             return new MatchResult(centerFallback, 0.0, 0.0, roiRect);
         }
 
+        if (stepDeg <= 0.000001) stepDeg = def.AngleStep > 0 ? def.AngleStep : 1.0;
+
         using var templPrep = PreprocessTemplateForMatch(templateGray, preprocess);
 
-        // Build feature images for matching:
-        // For ShapePyramid / ShapeBased: Use Gaussian-blurred Sobel Magnitude with outer boundary zeroed out
+        // Build feature images for matching
         using var roiFeatureMat = new Mat();
         using var templFeatureMat = new Mat();
 
@@ -1343,7 +1382,7 @@ public sealed class PatternMatcher
             Cv2.Magnitude(gxR, gyR, magR);
             using var mag8R = new Mat();
             magR.ConvertTo(mag8R, MatType.CV_8U);
-            Cv2.GaussianBlur(mag8R, roiFeatureMat, new Size(5, 5), 0);
+            Cv2.GaussianBlur(mag8R, roiFeatureMat, new Size(3, 3), 0);
 
             using var gxT = new Mat(); using var gyT = new Mat();
             Cv2.Sobel(templPrep, gxT, MatType.CV_32F, 1, 0, 3);
@@ -1352,19 +1391,7 @@ public sealed class PatternMatcher
             Cv2.Magnitude(gxT, gyT, magT);
             using var mag8T = new Mat();
             magT.ConvertTo(mag8T, MatType.CV_8U);
-            Cv2.GaussianBlur(mag8T, templFeatureMat, new Size(5, 5), 0);
-
-            // Zero out 5-pixel outer boundary margin of templFeatureMat to remove artificial ROI box border edges
-            var m = 5;
-            if (templFeatureMat.Width > 2 * m && templFeatureMat.Height > 2 * m)
-            {
-                using var mask = new Mat(templFeatureMat.Size(), MatType.CV_8UC1, Scalar.Black);
-                using var maskSub = new Mat(mask, new Rect(m, m, templFeatureMat.Width - 2 * m, templFeatureMat.Height - 2 * m));
-                maskSub.SetTo(255);
-                using var cleanMat = new Mat(templFeatureMat.Size(), templFeatureMat.Type(), Scalar.Black);
-                templFeatureMat.CopyTo(cleanMat, mask);
-                cleanMat.CopyTo(templFeatureMat);
-            }
+            Cv2.GaussianBlur(mag8T, templFeatureMat, new Size(3, 3), 0);
         }
         else
         {
@@ -1372,118 +1399,140 @@ public sealed class PatternMatcher
             templPrep.CopyTo(templFeatureMat);
         }
 
-        // Downscaled Coarse Search
-        var scale = 0.25;
-        if (templFeatureMat.Width < 60 || templFeatureMat.Height < 60) scale = 0.5;
-        if (templFeatureMat.Width < 30 || templFeatureMat.Height < 30) scale = 1.0;
+        // Determine maximum pyramid level (Level 0: 1/1, Level 1: 1/2, Level 2: 1/4)
+        int maxPyramidLevel = 2;
+        if (templFeatureMat.Width < 128 || templFeatureMat.Height < 128) maxPyramidLevel = 1;
+        if (templFeatureMat.Width < 40 || templFeatureMat.Height < 40) maxPyramidLevel = 0;
 
-        var roiSmallSize = new Size(Math.Max(1, (int)Math.Round(roiFeatureMat.Width * scale)), Math.Max(1, (int)Math.Round(roiFeatureMat.Height * scale)));
-        using var roiSmall = new Mat();
-        Cv2.Resize(roiFeatureMat, roiSmall, roiSmallSize, 0, 0, InterpolationFlags.Area);
+        Mat[] pyrRoi = new Mat[maxPyramidLevel + 1];
+        Mat[] pyrTempl = new Mat[maxPyramidLevel + 1];
 
-        var templSmallSize = new Size(Math.Max(1, (int)Math.Round(templFeatureMat.Width * scale)), Math.Max(1, (int)Math.Round(templFeatureMat.Height * scale)));
-        using var templSmall = new Mat();
-        Cv2.Resize(templFeatureMat, templSmall, templSmallSize, 0, 0, InterpolationFlags.Area);
+        pyrRoi[0] = roiFeatureMat.Clone();
+        pyrTempl[0] = templFeatureMat.Clone();
 
-        if (stepDeg <= 0.000001) stepDeg = 1.0;
-
-        // Stage 1: Coarse angle sweep
-        var bestCoarseScore = double.NegativeInfinity;
-        var bestCoarseAngle = 0.0;
-        Point bestCoarseLocSmall = new Point(0, 0);
-
-        var angle = minAngleDeg;
-        while (angle <= maxAngleDeg + 0.000001)
+        for (int l = 1; l <= maxPyramidLevel; l++)
         {
-            using var templSmallRot = RotateWithPadding(templSmall, angle);
-            var cropSmall = ContentRectFromNonZero(templSmallRot, pad: 0);
-            if (cropSmall.Width <= 0 || cropSmall.Height <= 0 || roiSmall.Width < cropSmall.Width || roiSmall.Height < cropSmall.Height)
+            pyrRoi[l] = new Mat();
+            pyrTempl[l] = new Mat();
+            Cv2.PyrDown(pyrRoi[l - 1], pyrRoi[l]);
+            Cv2.PyrDown(pyrTempl[l - 1], pyrTempl[l]);
+        }
+
+        try
+        {
+            // Level maxPyramidLevel: Coarse angle sweep
+            int coarseLvl = maxPyramidLevel;
+            double coarseScale = 1.0 / (1 << coarseLvl);
+            double coarseStep = Math.Max(stepDeg * 2.0, 2.0);
+
+            double bestCoarseScore = double.NegativeInfinity;
+            double bestCoarseAngle = 0.0;
+            Point2d bestCoarseCenter = new Point2d(pyrRoi[coarseLvl].Width / 2.0, pyrRoi[coarseLvl].Height / 2.0);
+
+            double angle = minAngleDeg;
+            while (angle <= maxAngleDeg + 0.000001)
             {
-                angle += stepDeg;
-                continue;
+                using var templRot = RotateTemplateCentered(pyrTempl[coarseLvl], angle);
+                if (pyrRoi[coarseLvl].Width >= templRot.Width && pyrRoi[coarseLvl].Height >= templRot.Height)
+                {
+                    using var resMat = new Mat();
+                    Cv2.MatchTemplate(pyrRoi[coarseLvl], templRot, resMat, TemplateMatchModes.CCoeffNormed);
+                    Cv2.MinMaxLoc(resMat, out _, out var maxVal, out _, out var maxLoc);
+
+                    if (maxVal > bestCoarseScore)
+                    {
+                        bestCoarseScore = maxVal;
+                        bestCoarseAngle = angle;
+                        bestCoarseCenter = new Point2d(maxLoc.X + templRot.Width / 2.0, maxLoc.Y + templRot.Height / 2.0);
+                    }
+                }
+                angle += coarseStep;
             }
 
-            using var templSmallCrop = new Mat(templSmallRot, cropSmall);
-            using var resMatSmall = new Mat();
-            Cv2.MatchTemplate(roiSmall, templSmallCrop, resMatSmall, TemplateMatchModes.CCoeffNormed);
-            Cv2.MinMaxLoc(resMatSmall, out _, out var maxVal, out _, out var maxLoc);
-
-            if (maxVal > bestCoarseScore)
+            if (double.IsNegativeInfinity(bestCoarseScore))
             {
-                bestCoarseScore = maxVal;
-                bestCoarseAngle = angle;
-                bestCoarseLocSmall = maxLoc;
+                var centerFallback = new Point2d(roiRect.X + roiRect.Width / 2.0, roiRect.Y + roiRect.Height / 2.0);
+                return new MatchResult(centerFallback, 0.0, 0.0, roiRect);
             }
 
-            angle += stepDeg;
-        }
+            // Refine through intermediate & fine pyramid levels
+            double bestAngle = bestCoarseAngle;
+            Point2d bestCenterInRoi = new Point2d(bestCoarseCenter.X / coarseScale, bestCoarseCenter.Y / coarseScale);
+            double bestScore = bestCoarseScore;
 
-        if (double.IsNegativeInfinity(bestCoarseScore))
-        {
-            var centerFallback = new Point2d(roiRect.X + roiRect.Width / 2.0, roiRect.Y + roiRect.Height / 2.0);
-            return new MatchResult(centerFallback, 0.0, 0.0, roiRect);
-        }
+            double currAngleSearchRange = coarseStep;
 
-        // Stage 2: Inverse-rotate candidate search region by -angle around candidate center, and match unrotated template!
-        var coarseLocFullX = (int)Math.Round(bestCoarseLocSmall.X / scale);
-        var coarseLocFullY = (int)Math.Round(bestCoarseLocSmall.Y / scale);
-        Point2d coarseCenterInRoi = new Point2d(coarseLocFullX + templPrep.Width / 2.0, coarseLocFullY + templPrep.Height / 2.0);
-
-        var refineMin = Math.Max(minAngleDeg, bestCoarseAngle - Math.Max(stepDeg, 2.0));
-        var refineMax = Math.Min(maxAngleDeg, bestCoarseAngle + Math.Max(stepDeg, 2.0));
-        var refineStep = Math.Min(stepDeg, 0.2);
-
-        var bestFineScore = double.NegativeInfinity;
-        var bestFineAngle = bestCoarseAngle;
-        Point2d bestCenterInRoi = coarseCenterInRoi;
-
-        angle = refineMin;
-        while (angle <= refineMax + 0.000001)
-        {
-            // Rotate search ROI by -angle around coarse center
-            using var rotM = Cv2.GetRotationMatrix2D(new Point2f((float)coarseCenterInRoi.X, (float)coarseCenterInRoi.Y), -angle, 1.0);
-            using var roiRotated = new Mat();
-            Cv2.WarpAffine(roiFeatureMat, roiRotated, rotM, roiFeatureMat.Size(), InterpolationFlags.Linear, BorderTypes.Replicate);
-
-            // Match un-rotated, un-blurred template feature image directly against restored search ROI!
-            using var resFine = new Mat();
-            Cv2.MatchTemplate(roiRotated, templFeatureMat, resFine, TemplateMatchModes.CCoeffNormed);
-            Cv2.MinMaxLoc(resFine, out _, out var maxValFine, out _, out var maxLocFine);
-
-            if (maxValFine > bestFineScore)
+            for (int lvl = maxPyramidLevel - 1; lvl >= 0; lvl--)
             {
-                bestFineScore = maxValFine;
-                bestFineAngle = angle;
+                double lvlScale = 1.0 / (1 << lvl);
+                double lvlStep = (lvl == 0) ? stepDeg : Math.Max(stepDeg, 1.0);
 
-                // Center of match in rotated ROI coordinates
-                var centerInRotatedRoi = new Point2d(maxLocFine.X + templFeatureMat.Width / 2.0, maxLocFine.Y + templFeatureMat.Height / 2.0);
+                Point2d expectedCenterInLvl = new Point2d(bestCenterInRoi.X * lvlScale, bestCenterInRoi.Y * lvlScale);
+                double lvlBestScore = double.NegativeInfinity;
+                double lvlBestAngle = bestAngle;
+                Point2d lvlBestCenter = expectedCenterInLvl;
 
-                // Transform center back from rotated ROI space to original ROI space using inverse rotation (+angle)
-                using var invM = Cv2.GetRotationMatrix2D(new Point2f((float)coarseCenterInRoi.X, (float)coarseCenterInRoi.Y), angle, 1.0);
-                var m00 = invM.At<double>(0, 0);
-                var m01 = invM.At<double>(0, 1);
-                var m02 = invM.At<double>(0, 2);
-                var m10 = invM.At<double>(1, 0);
-                var m11 = invM.At<double>(1, 1);
-                var m12 = invM.At<double>(1, 2);
-                bestCenterInRoi = new Point2d(m00 * centerInRotatedRoi.X + m01 * centerInRotatedRoi.Y + m02, m10 * centerInRotatedRoi.X + m11 * centerInRotatedRoi.Y + m12);
+                double angleStart = Math.Max(minAngleDeg, bestAngle - currAngleSearchRange);
+                double angleEnd = Math.Min(maxAngleDeg, bestAngle + currAngleSearchRange);
+
+                int searchRadiusPx = (lvl == 0) ? 12 : 20;
+
+                angle = angleStart;
+                while (angle <= angleEnd + 0.000001)
+                {
+                    using var templRot = RotateTemplateCentered(pyrTempl[lvl], angle);
+                    if (pyrRoi[lvl].Width >= templRot.Width && pyrRoi[lvl].Height >= templRot.Height)
+                    {
+                        int expectedTopLeftX = (int)Math.Round(expectedCenterInLvl.X - templRot.Width / 2.0);
+                        int expectedTopLeftY = (int)Math.Round(expectedCenterInLvl.Y - templRot.Height / 2.0);
+
+                        int subX = Math.Max(0, expectedTopLeftX - searchRadiusPx);
+                        int subY = Math.Max(0, expectedTopLeftY - searchRadiusPx);
+                        int subW = Math.Min(pyrRoi[lvl].Width - subX, templRot.Width + searchRadiusPx * 2);
+                        int subH = Math.Min(pyrRoi[lvl].Height - subY, templRot.Height + searchRadiusPx * 2);
+
+                        if (subW >= templRot.Width && subH >= templRot.Height)
+                        {
+                            using var subRoi = new Mat(pyrRoi[lvl], new Rect(subX, subY, subW, subH));
+                            using var resMat = new Mat();
+                            Cv2.MatchTemplate(subRoi, templRot, resMat, TemplateMatchModes.CCoeffNormed);
+                            Cv2.MinMaxLoc(resMat, out _, out var maxVal, out _, out var maxLoc);
+
+                            if (maxVal > lvlBestScore)
+                            {
+                                lvlBestScore = maxVal;
+                                lvlBestAngle = angle;
+                                lvlBestCenter = new Point2d(subX + maxLoc.X + templRot.Width / 2.0, subY + maxLoc.Y + templRot.Height / 2.0);
+                            }
+                        }
+                    }
+                    angle += lvlStep;
+                }
+
+                if (!double.IsNegativeInfinity(lvlBestScore))
+                {
+                    bestScore = lvlBestScore;
+                    bestAngle = lvlBestAngle;
+                    bestCenterInRoi = new Point2d(lvlBestCenter.X / lvlScale, lvlBestCenter.Y / lvlScale);
+                }
+                currAngleSearchRange = lvlStep * 1.5;
             }
 
-            angle += refineStep;
-        }
+            var globalPos = new Point2d(bestCenterInRoi.X + roiRect.X, bestCenterInRoi.Y + roiRect.Y);
+            var matchRect = new Rect((int)Math.Round(globalPos.X - templateGray.Width / 2.0), (int)Math.Round(globalPos.Y - templateGray.Height / 2.0), templateGray.Width, templateGray.Height);
 
-        if (double.IsNegativeInfinity(bestFineScore))
+            return new MatchResult(globalPos, Math.Clamp(bestScore, 0.0, 1.0), bestAngle, matchRect);
+        }
+        finally
         {
-            var centerFallback = new Point2d(roiRect.X + roiRect.Width / 2.0, roiRect.Y + roiRect.Height / 2.0);
-            return new MatchResult(centerFallback, 0.0, 0.0, roiRect);
+            for (int l = 0; l <= maxPyramidLevel; l++)
+            {
+                pyrRoi[l]?.Dispose();
+                pyrTempl[l]?.Dispose();
+            }
         }
-
-        // Global position in full image
-        var globalPos = new Point2d(bestCenterInRoi.X + roiRect.X, bestCenterInRoi.Y + roiRect.Y);
-        var matchRect = new Rect((int)Math.Round(globalPos.X - templateGray.Width / 2.0), (int)Math.Round(globalPos.Y - templateGray.Height / 2.0), templateGray.Width, templateGray.Height);
-
-        return new MatchResult(globalPos, Math.Clamp(bestFineScore, 0.0, 1.0), bestFineAngle, matchRect);
     }
+
 
     private MatchResult MatchByTemplateSweep(Mat roiGray, Mat templateGray, PreprocessSettings? preprocess, double minAngleDeg, double maxAngleDeg, double stepDeg, Rect roiRect)
     {
