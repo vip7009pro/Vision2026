@@ -608,7 +608,7 @@ namespace VisionInspectionApp.UI.ViewModels
     
         private void AddConfigRoisForNode(ToolGraphNodeViewModel node, List<OverlayItem> dst)
         {
-            if (_config is null)
+            if (_config is null || !ShowRoisInSelectedPreview)
             {
                 return;
             }

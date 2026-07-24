@@ -2101,8 +2101,8 @@
                         </StackPanel>
 
                         <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
-                            <CheckBox Content="Show Results" IsChecked="{Binding ShowResultOverlay, UpdateSourceTrigger=LostFocus}" Margin="0,0,10,0" />
-                            <CheckBox Content="Show ROI" IsChecked="{Binding ShowRoisInSelectedPreview, UpdateSourceTrigger=LostFocus}" />
+                            <CheckBox Content="Show Results" IsChecked="{Binding ShowResultOverlay, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,10,0" />
+                            <CheckBox Content="Show ROI" IsChecked="{Binding ShowRoisInSelectedPreview, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
                         </StackPanel>
                     </Grid>
 

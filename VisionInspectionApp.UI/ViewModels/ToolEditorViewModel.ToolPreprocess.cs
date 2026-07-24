@@ -172,6 +172,9 @@ namespace VisionInspectionApp.UI.ViewModels
                 if (def.SourceType == value)
                     return;
                 def.SourceType = value;
+                if (_imageSourcePreviewCache.TryGetValue(def.Name ?? "", out var oldType))
+                    oldType.Image?.Dispose();
+                _imageSourcePreviewCache.Remove(def.Name ?? "");
                 OnPropertyChanged(nameof(ImageSource_IsFile));
                 OnPropertyChanged(nameof(ImageSource_IsFolder));
                 OnPropertyChanged(nameof(ImageSource_IsCamera));
@@ -197,6 +200,9 @@ namespace VisionInspectionApp.UI.ViewModels
                 if (string.Equals(def.FilePath, value, StringComparison.Ordinal))
                     return;
                 def.FilePath = value;
+                if (_imageSourcePreviewCache.TryGetValue(def.Name ?? "", out var oldFile))
+                    oldFile.Image?.Dispose();
+                _imageSourcePreviewCache.Remove(def.Name ?? "");
                 RaiseToolPropertyPanelsChanged();
                 RefreshPreviews();
                 RequestAutoSave();
@@ -215,6 +221,10 @@ namespace VisionInspectionApp.UI.ViewModels
                 if (string.Equals(def.FolderPath, value, StringComparison.Ordinal))
                     return;
                 def.FolderPath = value;
+                if (_imageSourcePreviewCache.TryGetValue(def.Name ?? "", out var oldFolder))
+                    oldFolder.Image?.Dispose();
+                _imageSourcePreviewCache.Remove(def.Name ?? "");
+                _folderImageIndex = 0;
                 RaiseToolPropertyPanelsChanged();
                 RefreshPreviews();
                 RequestAutoSave();

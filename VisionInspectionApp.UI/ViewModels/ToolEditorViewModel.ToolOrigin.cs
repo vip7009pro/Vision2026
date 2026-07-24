@@ -21,9 +21,12 @@ namespace VisionInspectionApp.UI.ViewModels
             {
                 if (_config?.Origin != null)
                 {
+                    if (_config.Origin.OriginAlgorithm == value) return;
                     _config.Origin.OriginAlgorithm = value;
                     OnPropertyChanged();
                     OnPropertyChanged(nameof(IsOriginShapePyramid));
+                    RefreshPreviews();
+                    RequestAutoSave();
                 }
             }
         }
@@ -53,8 +56,11 @@ namespace VisionInspectionApp.UI.ViewModels
             {
                 if (_config?.Origin != null)
                 {
+                    if (Math.Abs(_config.Origin.MinAngle - value) < 0.000001) return;
                     _config.Origin.MinAngle = value;
                     OnPropertyChanged();
+                    RefreshPreviews();
+                    RequestAutoSave();
                 }
             }
         }
@@ -66,8 +72,11 @@ namespace VisionInspectionApp.UI.ViewModels
             {
                 if (_config?.Origin != null)
                 {
+                    if (Math.Abs(_config.Origin.MaxAngle - value) < 0.000001) return;
                     _config.Origin.MaxAngle = value;
                     OnPropertyChanged();
+                    RefreshPreviews();
+                    RequestAutoSave();
                 }
             }
         }
@@ -79,8 +88,11 @@ namespace VisionInspectionApp.UI.ViewModels
             {
                 if (_config?.Origin != null)
                 {
+                    if (Math.Abs(_config.Origin.AngleStep - value) < 0.000001) return;
                     _config.Origin.AngleStep = value;
                     OnPropertyChanged();
+                    RefreshPreviews();
+                    RequestAutoSave();
                 }
             }
         }
@@ -92,8 +104,11 @@ namespace VisionInspectionApp.UI.ViewModels
             {
                 if (_config?.Origin != null)
                 {
+                    if (_config.Origin.EdgeThresholdMin == value) return;
                     _config.Origin.EdgeThresholdMin = value;
                     OnPropertyChanged();
+                    RefreshPreviews();
+                    RequestAutoSave();
                 }
             }
         }
@@ -105,8 +120,11 @@ namespace VisionInspectionApp.UI.ViewModels
             {
                 if (_config?.Origin != null)
                 {
+                    if (_config.Origin.EdgeThresholdMax == value) return;
                     _config.Origin.EdgeThresholdMax = value;
                     OnPropertyChanged();
+                    RefreshPreviews();
+                    RequestAutoSave();
                 }
             }
         }

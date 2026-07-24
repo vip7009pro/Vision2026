@@ -46,6 +46,9 @@ Lộ trình tích hợp tính năng Chụp ảnh từ camera và hỗ trợ các
 - [x] Task 40: Thêm thuộc tính `MinScore` cho Tool Origin, hiển thị điều chỉnh `Min Score` trong ô thuộc tính (`ToolEditorView.xaml`) và dùng `MinScore` này đánh giá điểm đạt `Origin.Pass` / `ScoreThreshold`.
 - [x] Task 41: Chuyển đổi cơ chế xem ảnh của node ImageSource (Camera mode): Loại bỏ livestream liên tục 30 FPS khi click xem các node trên Tool Editor, chỉ chụp 1 frame tĩnh duy nhất từ camera khi bấm Run Once (hoặc Run Flow) để làm ảnh đầu vào.
 - [x] Task 42: Cố định Search ROI của Tool Origin (`Origin S`): Trong màn hình kết quả Final View (`ResultView` node) và Inspection, Search ROI giữ nguyên vị trí và góc xoay (`Angle = 0`) như lúc teaching, chỉ xoay Template ROI (`Origin T`) theo pose nhận diện.
+- [x] Task 43: Khắc phục nút CheckBox Show Results và Show ROI trên Node Preview Header: Bổ sung thuộc tính ViewModel `ShowResultOverlay`, chuyển `UpdateSourceTrigger=PropertyChanged` trên XAML và cập nhật logic lọc lớp Overlay khi hiển thị.
+- [x] Task 44: Sửa lỗi mất/reset thuộc tính Tool Origin khi lưu/mở lại Job: Bổ sung `RequestAutoSave()` & `RefreshPreviews()` cho tất cả setter thuộc tính Origin (`MinScore`, `MinAngle`, `MaxAngle`, `AngleStep`, `EdgeThresholdMin`, `EdgeThresholdMax`), thiết lập `IsDirty = true` trong `RequestAutoSave()` và đăng ký `OnPropertyChanged` đầy đủ khi load/chuyển node.
+- [x] Task 45: Đồng bộ 100% hình ảnh preview và lớp Overlay giữa các node khi Run Once: Cập nhật `_sharedImage` bằng frame ảnh đã kiểm tra, ưu tiên sử dụng ảnh tĩnh đã lưu trong `_imageSourcePreviewCache` khi view các node, ngăn chặn việc load trước tệp ảnh kế tiếp gây lệch bước với Overlay.
 
 
 

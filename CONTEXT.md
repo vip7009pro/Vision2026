@@ -124,6 +124,17 @@
   - Cập nhật cách hiển thị overlay của Tool `Origin` trong `ResultView` node (Final View), `AddConfigRois`, `BuildOverlayForNodeFromRunWithConfig` và `InspectionViewModel`.
   - Khung Search ROI (`Origin S`) giữ nguyên vị trí và hướng thẳng ban đầu như lúc teaching (`Angle = 0`), không xoay/tịnh tiến theo pose nhận diện được.
   - Khung Template ROI (`Origin T`) duy trì xoay và di chuyển bám 100% theo góc xoay và tâm sản phẩm nhận diện.
+- **Sửa lỗi CheckBox Show Results & Show ROI trên Node Preview Header**:
+  - Bổ sung thuộc tính ViewModel `ShowResultOverlay` và phương thức cập nhật `OnShowResultOverlayChanged`.
+  - Cập nhật binding trên `ToolEditorView.xaml` với `Mode=TwoWay, UpdateSourceTrigger=PropertyChanged` giúp CheckBox kích hoạt phản hồi tức thì khi tích/bỏ tích.
+  - Phân tách rõ rệt hai lớp hiển thị: `Show ROI` đóng/mở hiển thị các khung vẽ ROI (`SearchRoi`, `TemplateRoi`, `InspectRoi`), `Show Results` đóng/mở hiển thị kết quả phân tích kiểm tra (`Match score`, đường đo khoảng cách, điểm nhận diện, text overlay, contour blob).
+- **Khắc phục dứt điểm lỗi lệch bước ảnh preview & Overlay giữa các node khi Run Once**:
+  - **Nguyên nhân**: Khi thực thi `RunOnce` ở chế độ Folder, sau khi kiểm tra xong ảnh `N`, chỉ số `_folderImageIndex` tăng lên `N+1` để chuẩn bị cho lần chạy tiếp theo. Khi người dùng click xem node `ImageSource`, `LoadImageFromSourceForPreview` đọc `_folderImageIndex` (`N+1`) và nạp trước ảnh tiếp theo từ đĩa ghi đè vào cache, trong khi `_lastRun` vẫn lưu kết quả của ảnh `N`. Đồng thời `RunSingleFlowFromImageFile` chưa gọi `_sharedImage.SetImage(mat)` dẫn đến các node hạ nguồn (`Preprocess`, `Origin`, `Point`, `Line`...) hiển thị ảnh cũ hoặc lệch bước so với kết quả overlay `_lastRun`.
+  - **Khắc phục**:
+    1. Cập nhật `RunSingleFlowFromImageFile` và `RunFlow` gọi `_sharedImage.SetImage(mat)` ngay khi đọc được frame ảnh đầu vào, đảm bảo `_sharedImage` lưu đúng 100% hình ảnh thực tế đã được kiểm tra trong `_lastRun`.
+    2. Cập nhật `LoadImageFromSourceForPreview`: Khi `_imageSourcePreviewCache` đã lưu sẵn ảnh vừa thực thi của nguồn `ImageSource`, hàm sẽ lập tức trả về ảnh từ cache thay vì đọc file mới từ đĩa theo biến `_folderImageIndex`.
+    3. Thêm cơ chế tự xóa cache `_imageSourcePreviewCache` và đặt lại `_folderImageIndex = 0` khi người dùng thay đổi cấu hình nguồn ảnh (`FilePath`, `FolderPath`, `SourceType`) trong bảng thuộc tính.
+    4. Giúp tất cả các node (`ResultView`, `ImageSource`, `Preprocess`, `Origin`, `Point`, `Line`, `Caliper`, `Blob`, v.v.) hiển thị khớp 100% cùng 1 tấm ảnh và cùng 1 bộ Overlay sau mỗi lần bấm `Run Once`.
 
 
 

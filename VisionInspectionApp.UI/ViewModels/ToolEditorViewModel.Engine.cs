@@ -966,6 +966,10 @@ namespace VisionInspectionApp.UI.ViewModels
     
         private void BuildOverlayForNodeFromRunWithConfig(ToolGraphNodeViewModel node, InspectionResult run, List<OverlayItem> dst)
         {
+            if (!ShowResultOverlay)
+            {
+                return;
+            }
             BuildOverlayForNodeFromRun(node, run, dst);
             if (_config is null)
             {
@@ -1271,6 +1275,14 @@ namespace VisionInspectionApp.UI.ViewModels
         private bool _showRoisInSelectedPreview = true;
         [ObservableProperty]
         private bool _showRoisInFinalPreview = true;
+        [ObservableProperty]
+        private bool _showResultOverlay = true;
+
+        partial void OnShowResultOverlayChanged(bool value)
+        {
+            RefreshSelectedPreview();
+            RaiseToolPropertyPanelsChanged();
+        }
         partial void OnShowRoisInSelectedPreviewChanged(bool value)
         {
             RefreshSelectedPreview();
@@ -1301,39 +1313,28 @@ namespace VisionInspectionApp.UI.ViewModels
             RefreshPreviews();
             RaiseToolPropertyPanelsChanged();
         }
-    
         private Mat? LoadImageFromSourceForPreview(ImageSourceDefinition source)
         {
             try
             {
-                System.Diagnostics.Debug.WriteLine($"LoadImageFromSourceForPreview: SourceType={source.SourceType}, FilePath={source.FilePath}, FolderPath={source.FolderPath}");
+                if (_imageSourcePreviewCache.TryGetValue(source.Name ?? "", out var cached) && cached.Image is not null && !cached.Image.IsDisposed)
+                {
+                    return cached.Image.Clone();
+                }
+
                 if (source.SourceType == ImageSourceType.File)
                 {
                     if (!string.IsNullOrWhiteSpace(source.FilePath) && File.Exists(source.FilePath))
                     {
-                        if (_imageSourcePreviewCache.TryGetValue(source.Name ?? "", out var cached) && cached.SourcePath == source.FilePath && cached.Image is not null && !cached.Image.IsDisposed)
-                        {
-                            return cached.Image.Clone();
-                        }
-    
                         System.Diagnostics.Debug.WriteLine($"Loading image from file: {source.FilePath}");
                         var mat = Cv2.ImRead(source.FilePath);
                         if (mat is not null && !mat.Empty())
                         {
-                            System.Diagnostics.Debug.WriteLine($"Successfully loaded image: {mat.Width}x{mat.Height}");
                             if (_imageSourcePreviewCache.TryGetValue(source.Name ?? "", out var old))
                                 old.Image?.Dispose();
                             _imageSourcePreviewCache[source.Name ?? ""] = (source.FilePath, mat.Clone());
                             return mat;
                         }
-                        else
-                        {
-                            System.Diagnostics.Debug.WriteLine("Failed to load image or image is empty");
-                        }
-                    }
-                    else
-                    {
-                        System.Diagnostics.Debug.WriteLine($"File does not exist or path is empty");
                     }
                 }
                 else if (source.SourceType == ImageSourceType.Folder)
@@ -1344,16 +1345,10 @@ namespace VisionInspectionApp.UI.ViewModels
                         if (files.Length > 0)
                         {
                             var targetFile = files[_folderImageIndex % files.Length];
-                            if (_imageSourcePreviewCache.TryGetValue(source.Name ?? "", out var cached) && cached.SourcePath == targetFile && cached.Image is not null && !cached.Image.IsDisposed)
-                            {
-                                return cached.Image.Clone();
-                            }
-
                             System.Diagnostics.Debug.WriteLine($"Loading image from folder: {targetFile}");
                             var mat = Cv2.ImRead(targetFile);
                             if (mat is not null && !mat.Empty())
                             {
-                                System.Diagnostics.Debug.WriteLine($"Successfully loaded image: {mat.Width}x{mat.Height}");
                                 if (_imageSourcePreviewCache.TryGetValue(source.Name ?? "", out var old))
                                     old.Image?.Dispose();
                                 _imageSourcePreviewCache[source.Name ?? ""] = (targetFile, mat.Clone());
@@ -1364,11 +1359,6 @@ namespace VisionInspectionApp.UI.ViewModels
                 }
                 else if (source.SourceType == ImageSourceType.Camera)
                 {
-                    if (_imageSourcePreviewCache.TryGetValue(source.Name ?? "", out var cached) && cached.Image is not null && !cached.Image.IsDisposed)
-                    {
-                        return cached.Image.Clone();
-                    }
-
                     try
                     {
                         var cameraMat = _cameraService.CaptureSnapshotAsync().GetAwaiter().GetResult();
@@ -1390,7 +1380,7 @@ namespace VisionInspectionApp.UI.ViewModels
             {
                 System.Diagnostics.Debug.WriteLine($"Exception in LoadImageFromSourceForPreview: {ex.Message}");
             }
-    
+
             return null;
         }
 
@@ -1622,6 +1612,7 @@ namespace VisionInspectionApp.UI.ViewModels
             if (_imageSourcePreviewCache.TryGetValue(sourceNodeName ?? "", out var old))
                 old.Image?.Dispose();
             _imageSourcePreviewCache[sourceNodeName ?? ""] = (filePath, mat.Clone());
+            _sharedImage.SetImage(mat);
 
             SyncToolGraphToConfig();
             EnsureTemplatePathsAbsolute(_config);
@@ -1757,6 +1748,10 @@ namespace VisionInspectionApp.UI.ViewModels
                         else
                         {
                             snap = LoadImageFromSourceForPreview(imgSourceDef);
+                            if (snap is not null && !snap.Empty())
+                            {
+                                _sharedImage.SetImage(snap);
+                            }
                         }
                         if (snap is not null && !snap.Empty())
                         {

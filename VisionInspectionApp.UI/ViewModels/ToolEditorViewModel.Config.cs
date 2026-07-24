@@ -26,6 +26,7 @@ namespace VisionInspectionApp.UI.ViewModels
     {
         private void RequestAutoSave()
         {
+            IsDirty = true;
             _autoSavePending = true;
             _autoSaveTimer.Stop();
             _autoSaveTimer.Start();

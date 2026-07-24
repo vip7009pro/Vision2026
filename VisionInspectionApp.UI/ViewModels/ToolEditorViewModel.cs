@@ -784,6 +784,12 @@ namespace VisionInspectionApp.UI.ViewModels
             OnPropertyChanged(nameof(IsOriginNode));
             OnPropertyChanged(nameof(AvailableOriginAlgorithms));
             OnPropertyChanged(nameof(Origin_Algorithm));
+            OnPropertyChanged(nameof(Origin_MinScore));
+            OnPropertyChanged(nameof(Origin_MinAngle));
+            OnPropertyChanged(nameof(Origin_MaxAngle));
+            OnPropertyChanged(nameof(Origin_AngleStep));
+            OnPropertyChanged(nameof(Origin_EdgeThresholdMin));
+            OnPropertyChanged(nameof(Origin_EdgeThresholdMax));
             OnPropertyChanged(nameof(IsOriginShapePyramid));
             OnPropertyChanged(nameof(IsPointNode));
             OnPropertyChanged(nameof(IsAnyDistanceNode));
