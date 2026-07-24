@@ -1434,14 +1434,12 @@ public sealed partial class TeachViewModel : ObservableObject
         var fileName = $"{safeName}.png";
         var fullPath = Path.Combine(templateDir, fileName);
 
-        var rect = new OpenCvSharp.Rect(roi.X, roi.Y, roi.Width, roi.Height);
-        rect = rect.Intersect(new OpenCvSharp.Rect(0, 0, _imageMat.Width, _imageMat.Height));
-        if (rect.Width <= 0 || rect.Height <= 0)
+        using var cropped = ToolEditorViewModel.ExtractRoiPatch(_imageMat, roi);
+        if (cropped.Empty() || cropped.Width <= 0 || cropped.Height <= 0)
         {
             throw new ArgumentException("ROI is out of image bounds.");
         }
 
-        using var cropped = new Mat(_imageMat, rect);
         using var gray = cropped.Channels() == 1 ? cropped.Clone() : cropped.CvtColor(ColorConversionCodes.BGR2GRAY);
         Cv2.ImWrite(fullPath, gray);
 
@@ -2166,6 +2164,7 @@ public sealed partial class TeachViewModel : ObservableObject
                 Y = VisionConfig.Origin.TemplateRoi.Y,
                 Width = VisionConfig.Origin.TemplateRoi.Width,
                 Height = VisionConfig.Origin.TemplateRoi.Height,
+                Angle = VisionConfig.Origin.TemplateRoi.Angle,
                 Stroke = Brushes.Yellow,
                 Label = "Origin T"
             });

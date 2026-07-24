@@ -716,7 +716,7 @@ public sealed class InspectionService : IInspectionService
                 // Apply the same preprocessing steps to the template crop.
                 using var templCrop0 = preprocessor.Run(templRaw, settings);
                 // We need to un-rotate the target image to match the teach template orientation.
-                var trTeach = new Roi { X = templateRoiTeach.X, Y = templateRoiTeach.Y, Width = templateRoiTeach.Width, Height = templateRoiTeach.Height };
+                var trTeach = new Roi { X = templateRoiTeach.X, Y = templateRoiTeach.Y, Width = templateRoiTeach.Width, Height = templateRoiTeach.Height, Angle = templateRoiTeach.Angle };
                 using var testCropRaw = ExtractStraightRoi(testGray, trTeach, originTeach, originFound, angleDeg, out var centerFoundTpl);
                 if (testCropRaw.Width <= 0 || testCropRaw.Height <= 0)
                 {
@@ -1141,7 +1141,7 @@ public sealed class InspectionService : IInspectionService
                 }
             }
             var templateAngleDeg = originMatch.AngleDeg;
-            var poseAngleDeg = templateAngleDeg;
+            var poseAngleDeg = templateAngleDeg - config.Origin.TemplateRoi.Angle;
             var originPass = originMatch.Score >= config.Origin.MatchScoreThreshold;
             result.Origin = new PointMatchResult(
                 config.Origin.Name,
@@ -1150,7 +1150,7 @@ public sealed class InspectionService : IInspectionService
                 originMatch.Score,
                 config.Origin.MatchScoreThreshold,
                 originPass,
-                poseAngleDeg,
+                originMatch.AngleDeg,
                 originMatch.FeaturePoints);
             result.Timings.OriginMs = (int)Math.Max(0, swTotal.ElapsedMilliseconds - tOrigin0);
             result.Timings.NodeTimings[config.Origin.Name ?? "Origin"] = result.Timings.OriginMs;
@@ -2700,7 +2700,9 @@ public sealed class InspectionService : IInspectionService
         var dy = originFound.Y - originTeach.Y;
         centerFound = new Point2d(centerRot.X + dx, centerRot.Y + dy);
 
-        if (Math.Abs(angleDeg) < 0.001)
+        double totalAngleDeg = angleDeg + roiTeach.Angle;
+
+        if (Math.Abs(totalAngleDeg) < 0.001)
         {
             var rx = (int)Math.Round(centerFound.X - roiTeach.Width / 2.0);
             var ry = (int)Math.Round(centerFound.Y - roiTeach.Height / 2.0);
@@ -2717,7 +2719,7 @@ public sealed class InspectionService : IInspectionService
         using var subSource = new Mat(source, safeBbox);
         var centerInBbox = new Point2f((float)(centerFound.X - safeBbox.X), (float)(centerFound.Y - safeBbox.Y));
         
-        using var M = Cv2.GetRotationMatrix2D(centerInBbox, angleDeg, 1.0);
+        using var M = Cv2.GetRotationMatrix2D(centerInBbox, totalAngleDeg, 1.0);
         var tx = diag / 2.0 - centerInBbox.X;
         var ty = diag / 2.0 - centerInBbox.Y;
         M.Set(0, 2, M.Get<double>(0, 2) + tx);
@@ -2774,7 +2776,8 @@ public sealed class InspectionService : IInspectionService
             X = (int)Math.Round(minX),
             Y = (int)Math.Round(minY),
             Width = (int)Math.Round(maxX - minX),
-            Height = (int)Math.Round(maxY - minY)
+            Height = (int)Math.Round(maxY - minY),
+            Angle = Math.Round(roi.Angle + angleDeg, 1)
         };
     }
 
@@ -2797,7 +2800,8 @@ public sealed class InspectionService : IInspectionService
             X = (int)Math.Round(centerFound.X - roi.Width / 2.0),
             Y = (int)Math.Round(centerFound.Y - roi.Height / 2.0),
             Width = roi.Width,
-            Height = roi.Height
+            Height = roi.Height,
+            Angle = Math.Round(roi.Angle + angleDeg, 1)
         };
     }
 

@@ -1322,7 +1322,11 @@ public sealed class PatternMatcher
             return MatchByFeatureBased(roiGray.Mat, templateGray, definition, 0.0, preprocess, roiRect);
         }
 
-        return MatchByPyramidFast(roiGray.Mat, templateGray, definition, preprocess, minAngleDeg, maxAngleDeg, effectiveStep, roiRect);
+        var baseAngle = definition.TemplateRoi.Angle;
+        double searchMin = baseAngle + minAngleDeg;
+        double searchMax = baseAngle + maxAngleDeg;
+
+        return MatchByPyramidFast(roiGray.Mat, templateGray, definition, preprocess, searchMin, searchMax, effectiveStep, roiRect);
     }
 
     private static Mat RotateTemplateCentered(Mat src, double angleDeg)

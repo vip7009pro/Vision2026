@@ -1072,7 +1072,8 @@ namespace VisionInspectionApp.UI.ViewModels
                 return;
             }
     
-            var label = sel.Label.Trim();
+            var rawLabel = sel.Label.Trim();
+            var label = rawLabel.Split('[')[0].Trim();
             var roi = UnTransformRoi(sel.Roi, label);
             if (string.Equals(label, "DefectROI", StringComparison.OrdinalIgnoreCase))
             {
@@ -1100,6 +1101,7 @@ namespace VisionInspectionApp.UI.ViewModels
             {
                 _config.Origin.TemplateRoi = roi;
                 _config.Origin.WorldPosition = RoiCenterToWorld(roi);
+                TrySaveTemplateImage("origin", roi, isOrigin: true, pointName: null);
                 RefreshPreviews();
                 RequestAutoSave();
                 return;
@@ -3370,10 +3372,10 @@ namespace VisionInspectionApp.UI.ViewModels
 
         private OverlayRectItem CreateRotatedRoiWithPose(Roi roi, System.Windows.Media.Brush? stroke, string? label)
         {
-            return CreateRotatedRoiWithPose(new OpenCvSharp.Rect(roi.X, roi.Y, roi.Width, roi.Height), stroke, label);
+            return CreateRotatedRoiWithPose(new OpenCvSharp.Rect(roi.X, roi.Y, roi.Width, roi.Height), stroke, label, roi.Angle);
         }
 
-        private OverlayRectItem CreateRotatedRoiWithPose(OpenCvSharp.Rect roi, System.Windows.Media.Brush? stroke, string? label)
+        private OverlayRectItem CreateRotatedRoiWithPose(OpenCvSharp.Rect roi, System.Windows.Media.Brush? stroke, string? label, double roiAngle = 0)
         {
             if (_lastRun is not null && _config is not null && _lastRun.Origin is not null && (_lastRun.Origin.MatchRect.Width > 0 || _lastRun.Origin.Position.X != 0 || _lastRun.Origin.Position.Y != 0))
             {
@@ -3410,7 +3412,7 @@ namespace VisionInspectionApp.UI.ViewModels
                     Y = (int)Math.Round(centerFound.Y - roi.Height / 2.0),
                     Width = roi.Width,
                     Height = roi.Height,
-                    Angle = angleDeg,
+                    Angle = (!string.IsNullOrWhiteSpace(label) && label.StartsWith("Origin", StringComparison.OrdinalIgnoreCase)) ? angleDeg : (angleDeg + roiAngle),
                     Stroke = _lastRun.Origin.Pass ? stroke : System.Windows.Media.Brushes.Red,
                     Label = finalLabel
                 };
@@ -3422,7 +3424,7 @@ namespace VisionInspectionApp.UI.ViewModels
                 Y = roi.Y,
                 Width = roi.Width,
                 Height = roi.Height,
-                Angle = 0,
+                Angle = roiAngle,
                 Stroke = stroke,
                 Label = label
             };
@@ -3472,7 +3474,8 @@ namespace VisionInspectionApp.UI.ViewModels
                 X = (int)Math.Round(centerTeachX - roi.Width / 2.0),
                 Y = (int)Math.Round(centerTeachY - roi.Height / 2.0),
                 Width = roi.Width,
-                Height = roi.Height
+                Height = roi.Height,
+                Angle = Math.Round(roi.Angle - angleDeg, 1)
             };
         }
     
@@ -3491,6 +3494,7 @@ namespace VisionInspectionApp.UI.ViewModels
                         Y = roi.Y,
                         Width = roi.Width,
                         Height = roi.Height,
+                        Angle = roi.Angle,
                         Stroke = stroke,
                         Label = label
                     };
@@ -3513,7 +3517,7 @@ namespace VisionInspectionApp.UI.ViewModels
                     Y = (int)Math.Round(centerFoundY - roi.Height / 2.0),
                     Width = roi.Width,
                     Height = roi.Height,
-                    Angle = angleDeg,
+                    Angle = angleDeg + roi.Angle,
                     Stroke = stroke,
                     Label = label ?? string.Empty
                 };
@@ -3525,6 +3529,7 @@ namespace VisionInspectionApp.UI.ViewModels
                 Y = roi.Y,
                 Width = roi.Width,
                 Height = roi.Height,
+                Angle = roi.Angle,
                 Stroke = stroke,
                 Label = label ?? string.Empty
             };
@@ -3554,19 +3559,19 @@ namespace VisionInspectionApp.UI.ViewModels
 
             if (showRois && _config.Origin.TemplateRoi.Width > 0 && _config.Origin.TemplateRoi.Height > 0)
             {
-                dst.Add(CreateRotatedRoi(_config.Origin.TemplateRoi, Brushes.Gold, "Origin T"));
+                dst.Add(CreateRotatedRoiWithPose(_config.Origin.TemplateRoi, Brushes.Gold, "Origin T"));
             }
     
             foreach (var p in _config.Points)
             {
                 if (showRois && p.SearchRoi.Width > 0 && p.SearchRoi.Height > 0)
                 {
-                    dst.Add(CreateRotatedRoi(p.SearchRoi, Brushes.DeepSkyBlue, $"{p.Name} S"));
+                    dst.Add(CreateRotatedRoiWithPose(p.SearchRoi, Brushes.DeepSkyBlue, $"{p.Name} S"));
                 }
     
                 if (showRois && p.TemplateRoi.Width > 0 && p.TemplateRoi.Height > 0)
                 {
-                    dst.Add(CreateRotatedRoi(p.TemplateRoi, Brushes.Gold, $"{p.Name} T"));
+                    dst.Add(CreateRotatedRoiWithPose(p.TemplateRoi, Brushes.Gold, $"{p.Name} T"));
                 }
     
                 dst.Add(new OverlayPointItem { X = p.WorldPosition.X, Y = p.WorldPosition.Y, Stroke = Brushes.DeepSkyBlue, Label = p.Name });

@@ -1462,64 +1462,36 @@ public sealed partial class InspectionViewModel : ObservableObject
 
 
 
-                    AddRotatedTemplateAtPoint(originPosForTemplate, _config.Origin.TemplateRoi.Width, _config.Origin.TemplateRoi.Height, "Origin T", Brushes.Yellow, angleDeg);
-
+                    AddRotatedTemplateAtPoint(originPosForTemplate, _config.Origin.TemplateRoi.Width, _config.Origin.TemplateRoi.Height, "Origin T", Brushes.Yellow, angleDeg + _config.Origin.TemplateRoi.Angle);
                 }
-
             }
-
             else
-
             {
-
                 if (_config.Origin.SearchRoi.Width > 0 && _config.Origin.SearchRoi.Height > 0)
-
                 {
-
                     OverlayItems.Add(new OverlayRectItem
-
                     {
-
                         X = _config.Origin.SearchRoi.X,
-
                         Y = _config.Origin.SearchRoi.Y,
-
                         Width = _config.Origin.SearchRoi.Width,
-
                         Height = _config.Origin.SearchRoi.Height,
-
                         Stroke = Brushes.Lime,
-
                         Label = "Origin S"
-
                     });
-
                 }
-
-
 
                 if (_config.Origin.TemplateRoi.Width > 0 && _config.Origin.TemplateRoi.Height > 0)
-
                 {
-
                     OverlayItems.Add(new OverlayRectItem
-
                     {
-
                         X = _config.Origin.TemplateRoi.X,
-
                         Y = _config.Origin.TemplateRoi.Y,
-
                         Width = _config.Origin.TemplateRoi.Width,
-
                         Height = _config.Origin.TemplateRoi.Height,
-
+                        Angle = _config.Origin.TemplateRoi.Angle,
                         Stroke = Brushes.Yellow,
-
                         Label = "Origin T"
-
                     });
-
                 }
 
             }

@@ -49,6 +49,7 @@ Lộ trình tích hợp tính năng Chụp ảnh từ camera và hỗ trợ các
 - [x] Task 43: Khắc phục nút CheckBox Show Results và Show ROI trên Node Preview Header: Bổ sung thuộc tính ViewModel `ShowResultOverlay`, chuyển `UpdateSourceTrigger=PropertyChanged` trên XAML và cập nhật logic lọc lớp Overlay khi hiển thị.
 - [x] Task 44: Sửa lỗi mất/reset thuộc tính Tool Origin khi lưu/mở lại Job: Bổ sung `RequestAutoSave()` & `RefreshPreviews()` cho tất cả setter thuộc tính Origin (`MinScore`, `MinAngle`, `MaxAngle`, `AngleStep`, `EdgeThresholdMin`, `EdgeThresholdMax`), thiết lập `IsDirty = true` trong `RequestAutoSave()` và đăng ký `OnPropertyChanged` đầy đủ khi load/chuyển node.
 - [x] Task 45: Đồng bộ 100% hình ảnh preview và lớp Overlay giữa các node khi Run Once: Cập nhật `_sharedImage` bằng frame ảnh đã kiểm tra, ưu tiên sử dụng ảnh tĩnh đã lưu trong `_imageSourcePreviewCache` khi view các node, ngăn chặn việc load trước tệp ảnh kế tiếp gây lệch bước với Overlay.
+- [x] Task 46: Hỗ trợ Xoay ROI 360 độ và thêm Tay cầm (Handle) xoay ROI cho tất cả các Tool: Thêm thuộc tính `Angle` vào class `Roi`, cập nhật `ImageViewerControl` vẽ tay cầm xoay (Rotation Stem + Orange Handle) kèm cơ chế Hit-testing chuẩn hóa tọa độ góc xoay; cập nhật `ExtractStraightRoi` và `MapToGlobal` trong `VisionEngine` / `Application` hỗ trợ trích xuất vùng ảnh theo góc xoay tổng cộng (`totalAngleDeg = originAngle + roi.Angle`).
 
 
 

@@ -398,16 +398,18 @@ public partial class ImageViewerControl : UserControl
     /// Returns true if the point is within 'tolerance' of any edge of the rect
     /// (but not deep inside). This enables edge-only hit testing for ROI move.
     /// </summary>
-    private static bool IsNearRoiBorder(Rect rect, Point p, double tolerance)
+    private static bool IsNearRoiBorder(Rect rect, double angle, Point p, double tolerance)
     {
+        var center = new Point(rect.Left + rect.Width / 2.0, rect.Top + rect.Height / 2.0);
+        var unrotP = RotatePoint(p, center, -angle);
+
         var expanded = rect;
         expanded.Inflate(tolerance, tolerance);
-        if (!expanded.Contains(p)) return false;
+        if (!expanded.Contains(unrotP)) return false;
 
         var shrunk = rect;
         shrunk.Inflate(-tolerance, -tolerance);
-        // If shrunk rect still contains the point, it's deep inside -> not near border
-        if (shrunk.Width > 0 && shrunk.Height > 0 && shrunk.Contains(p)) return false;
+        if (shrunk.Width > 0 && shrunk.Height > 0 && shrunk.Contains(unrotP)) return false;
 
         return true;
     }
@@ -419,8 +421,6 @@ public partial class ImageViewerControl : UserControl
             return null;
         }
 
-        // Detect hover when mouse is near the border/edge of a ROI (not deep inside).
-        // This allows overlapping ROIs to each be individually selectable by their edges.
         const double borderTol = 12.0;
         var rects = OverlayItems.OfType<OverlayRectItem>().ToList();
         for (var i = rects.Count - 1; i >= 0; i--)
@@ -428,7 +428,7 @@ public partial class ImageViewerControl : UserControl
             var r = rects[i];
             if (r.Width <= 0 || r.Height <= 0) continue;
             var roiRect = new Rect(r.X, r.Y, r.Width, r.Height);
-            if (IsNearRoiBorder(roiRect, contentPos, borderTol))
+            if (IsNearRoiBorder(roiRect, r.Angle, contentPos, borderTol))
             {
                 return r.Label;
             }
@@ -562,9 +562,10 @@ public partial class ImageViewerControl : UserControl
             return false;
         }
 
-        return label.EndsWith(" SCT", StringComparison.OrdinalIgnoreCase)
-            || label.EndsWith(" T", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(label, "Origin T", StringComparison.OrdinalIgnoreCase);
+        var l = label.Split('[')[0].Trim();
+        return l.EndsWith(" SCT", StringComparison.OrdinalIgnoreCase)
+            || l.EndsWith(" T", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(l, "Origin T", StringComparison.OrdinalIgnoreCase);
     }
 
     private RoiDrawKind _roiDrawKind;
@@ -584,7 +585,8 @@ public partial class ImageViewerControl : UserControl
         TopLeft = 6,
         TopRight = 7,
         BottomLeft = 8,
-        BottomRight = 9
+        BottomRight = 9,
+        Rotate = 10
     }
 
     private bool _roiEditing;
@@ -592,12 +594,27 @@ public partial class ImageViewerControl : UserControl
     private string? _roiEditLabel;
     private Rect _roiEditRectStart;
     private Rect _roiEditRect;
+    private double _roiEditRectAngleStart;
+    private double _roiEditRectAngle;
     private Point _roiEditStart;
     private Rectangle? _roiEditRectShape;
     private readonly List<Rectangle> _roiEditHandles = new();
 
     private string? _activeRoiLabel;
     private string? _hoverRoiLabel;
+
+    private static Point RotatePoint(Point p, Point center, double angleDeg)
+    {
+        if (Math.Abs(angleDeg) < 0.001) return p;
+        var rad = angleDeg * Math.PI / 180.0;
+        var cos = Math.Cos(rad);
+        var sin = Math.Sin(rad);
+        var dx = p.X - center.X;
+        var dy = p.Y - center.Y;
+        var rx = dx * cos - dy * sin + center.X;
+        var ry = dx * sin + dy * cos + center.Y;
+        return new Point(rx, ry);
+    }
 
     private void OverlayOnKeyDown(object sender, KeyEventArgs e)
     {
@@ -671,7 +688,7 @@ public partial class ImageViewerControl : UserControl
 
                 if (showHandles)
                 {
-                    DrawRoiHandles(r.X, r.Y, r.Width, r.Height, string.Equals(r.Label, _activeRoiLabel, StringComparison.OrdinalIgnoreCase));
+                    DrawRoiHandles(r.X, r.Y, r.Width, r.Height, r.Angle, string.Equals(r.Label, _activeRoiLabel, StringComparison.OrdinalIgnoreCase));
                 }
             }
         }
@@ -911,14 +928,15 @@ public partial class ImageViewerControl : UserControl
 
             if (ImageSource is BitmapSource bmpEdit)
             {
-                var startRoi = ConvertContentRoiToPixelRoi(bmpEdit, _roiEditRectStart.X, _roiEditRectStart.Y, _roiEditRectStart.Width, _roiEditRectStart.Height);
-                var editedRoi = ConvertContentRoiToPixelRoi(bmpEdit, _roiEditRect.X, _roiEditRect.Y, _roiEditRect.Width, _roiEditRect.Height);
+                var startRoi = ConvertContentRoiToPixelRoi(bmpEdit, _roiEditRectStart.X, _roiEditRectStart.Y, _roiEditRectStart.Width, _roiEditRectStart.Height, _roiEditRectAngleStart);
+                var editedRoi = ConvertContentRoiToPixelRoi(bmpEdit, _roiEditRect.X, _roiEditRect.Y, _roiEditRect.Width, _roiEditRect.Height, _roiEditRectAngle);
                 if (_roiEditLabel is not null)
                 {
                     var changed = startRoi.X != editedRoi.X
                         || startRoi.Y != editedRoi.Y
                         || startRoi.Width != editedRoi.Width
-                        || startRoi.Height != editedRoi.Height;
+                        || startRoi.Height != editedRoi.Height
+                        || Math.Abs(startRoi.Angle - editedRoi.Angle) > 0.01;
 
                     var sel = new RoiSelection(_roiEditLabel, editedRoi, ModifierKeys.None);
                     if (changed && RoiEditedCommand?.CanExecute(sel) == true)
@@ -994,7 +1012,7 @@ public partial class ImageViewerControl : UserControl
             return;
         }
 
-        var roi = ConvertContentRoiToPixelRoi(bmp, x, y, w, h);
+        var roi = ConvertContentRoiToPixelRoi(bmp, x, y, w, h, 0);
 
         object arg = roi;
         if (EnableRoiEditing)
@@ -1014,7 +1032,7 @@ public partial class ImageViewerControl : UserControl
         RedrawOverlays();
     }
 
-    private static Roi ConvertContentRoiToPixelRoi(BitmapSource bmp, double contentX, double contentY, double contentW, double contentH)
+    private static Roi ConvertContentRoiToPixelRoi(BitmapSource bmp, double contentX, double contentY, double contentW, double contentH, double contentAngle = 0)
     {
         var px = (int)Math.Round(contentX);
         var py = (int)Math.Round(contentY);
@@ -1039,7 +1057,8 @@ public partial class ImageViewerControl : UserControl
             X = px,
             Y = py,
             Width = pw,
-            Height = ph
+            Height = ph,
+            Angle = Math.Round(contentAngle, 1)
         };
     }
 
@@ -1068,6 +1087,7 @@ public partial class ImageViewerControl : UserControl
         }
 
         var hitTol = GetScreenHitTolerance();
+        var scale = Math.Max(0.001, _transform.Matrix.M11);
         var candidates = new List<(OverlayRectItem Item, Rect Rect)>();
 
         foreach (var item in OverlayItems)
@@ -1078,9 +1098,11 @@ public partial class ImageViewerControl : UserControl
             }
 
             var baseRect = PixelRectToContentRect(bmp, r.X, r.Y, r.Width, r.Height);
+            var center = new Point(baseRect.Left + baseRect.Width / 2.0, baseRect.Top + baseRect.Height / 2.0);
+            var unrotP = RotatePoint(contentPoint, center, -r.Angle);
             var hitRect = baseRect;
-            hitRect.Inflate(hitTol, hitTol);
-            if (!hitRect.Contains(contentPoint))
+            hitRect.Inflate(hitTol + 25.0 / scale, hitTol + 25.0 / scale);
+            if (!hitRect.Contains(unrotP))
             {
                 continue;
             }
@@ -1095,7 +1117,7 @@ public partial class ImageViewerControl : UserControl
 
         // Direct border or handle hits get top priority (ordered by smallest rect area)
         var borderHits = candidates
-            .Where(x => HitTestRoiHandle(x.Rect, contentPoint, hitTol) != RoiEditMode.None || IsNearRoiBorder(x.Rect, contentPoint, hitTol))
+            .Where(x => HitTestRoiHandle(x.Rect, x.Item.Angle, contentPoint, hitTol, scale) != RoiEditMode.None || IsNearRoiBorder(x.Rect, x.Item.Angle, contentPoint, hitTol))
             .OrderBy(x => x.Rect.Width * x.Rect.Height)
             .ToList();
 
@@ -1119,11 +1141,13 @@ public partial class ImageViewerControl : UserControl
         _roiEditStart = contentPoint;
         _roiEditRectStart = picked.Rect;
         _roiEditRect = picked.Rect;
-        _roiEditMode = HitTestRoiHandle(picked.Rect, contentPoint, tolerance: hitTol);
+        _roiEditRectAngleStart = picked.Item.Angle;
+        _roiEditRectAngle = picked.Item.Angle;
+        _roiEditMode = HitTestRoiHandle(picked.Rect, picked.Item.Angle, contentPoint, tolerance: hitTol, scale: scale);
         if (_roiEditMode == RoiEditMode.None)
         {
             // Move mode is triggered by clicking near the edge/border, not deep inside
-            _roiEditMode = IsNearRoiBorder(picked.Rect, contentPoint, hitTol) ? RoiEditMode.Move : RoiEditMode.None;
+            _roiEditMode = IsNearRoiBorder(picked.Rect, picked.Item.Angle, contentPoint, hitTol) ? RoiEditMode.Move : RoiEditMode.None;
         }
 
         if (_roiEditMode == RoiEditMode.None)
@@ -1144,6 +1168,7 @@ public partial class ImageViewerControl : UserControl
         }
 
         var hitTol = GetScreenHitTolerance();
+        var scale = Math.Max(0.001, _transform.Matrix.M11);
         var candidates = new List<(OverlayRectItem Item, Rect Rect)>();
 
         foreach (var item in OverlayItems)
@@ -1154,9 +1179,11 @@ public partial class ImageViewerControl : UserControl
             }
 
             var baseRect = PixelRectToContentRect(bmp, r.X, r.Y, r.Width, r.Height);
+            var center = new Point(baseRect.Left + baseRect.Width / 2.0, baseRect.Top + baseRect.Height / 2.0);
+            var unrotP = RotatePoint(contentPoint, center, -r.Angle);
             var hitRect = baseRect;
-            hitRect.Inflate(hitTol, hitTol);
-            if (!hitRect.Contains(contentPoint))
+            hitRect.Inflate(hitTol + 25.0 / scale, hitTol + 25.0 / scale);
+            if (!hitRect.Contains(unrotP))
             {
                 continue;
             }
@@ -1170,7 +1197,7 @@ public partial class ImageViewerControl : UserControl
         }
 
         var borderHits = candidates
-            .Where(x => HitTestRoiHandle(x.Rect, contentPoint, hitTol) != RoiEditMode.None || IsNearRoiBorder(x.Rect, contentPoint, hitTol))
+            .Where(x => HitTestRoiHandle(x.Rect, x.Item.Angle, contentPoint, hitTol, scale) != RoiEditMode.None || IsNearRoiBorder(x.Rect, x.Item.Angle, contentPoint, hitTol))
             .OrderBy(x => x.Rect.Width * x.Rect.Height)
             .ToList();
 
@@ -1187,36 +1214,75 @@ public partial class ImageViewerControl : UserControl
         return FindTopRoiLabelAt(bmp, contentPoint);
     }
 
-    private void DrawRoiHandles(double left, double top, double width, double height, bool isActive)
+    private void DrawRoiHandles(double left, double top, double width, double height, double angle, bool isActive)
     {
         var scale = Math.Max(0.001, _transform.Matrix.M11);
         var corner = (isActive ? 12.0 : 10.0) / scale;
         var edge = (isActive ? 8.0 : 6.0) / scale;
+        var rotSize = (isActive ? 12.0 : 10.0) / scale;
         var stroke = isActive ? Brushes.Cyan : Brushes.DeepSkyBlue;
 
-        AddHandle(left, top, corner);
-        AddHandle(left + width, top, corner);
-        AddHandle(left, top + height, corner);
-        AddHandle(left + width, top + height, corner);
+        var center = new Point(left + width / 2.0, top + height / 2.0);
 
-        AddHandle(left + width / 2.0, top, edge);
-        AddHandle(left + width / 2.0, top + height, edge);
-        AddHandle(left, top + height / 2.0, edge);
-        AddHandle(left + width, top + height / 2.0, edge);
+        // 4 corners (unrotated)
+        AddHandle(new Point(left, top), corner);
+        AddHandle(new Point(left + width, top), corner);
+        AddHandle(new Point(left, top + height), corner);
+        AddHandle(new Point(left + width, top + height), corner);
 
-        void AddHandle(double x, double y, double size)
+        // 4 edge midpoints (unrotated)
+        AddHandle(new Point(left + width / 2.0, top), edge);
+        AddHandle(new Point(left + width / 2.0, top + height), edge);
+        AddHandle(new Point(left, top + height / 2.0), edge);
+        AddHandle(new Point(left + width, top + height / 2.0), edge);
+
+        // Top rotation stem line & handle
+        double rotOffsetY = 25.0 / scale;
+        var unrotStemStart = new Point(left + width / 2.0, top);
+        var unrotStemEnd = new Point(left + width / 2.0, top - rotOffsetY);
+
+        var stemStart = RotatePoint(unrotStemStart, center, angle);
+        var stemEnd = RotatePoint(unrotStemEnd, center, angle);
+
+        var stem = new Line
         {
+            X1 = stemStart.X,
+            Y1 = stemStart.Y,
+            X2 = stemEnd.X,
+            Y2 = stemEnd.Y,
+            Stroke = stroke,
+            StrokeThickness = 1.5 / scale
+        };
+        PART_Overlay.Children.Add(stem);
+
+        var rotHandle = new Ellipse
+        {
+            Width = rotSize,
+            Height = rotSize,
+            Stroke = stroke,
+            StrokeThickness = 1.5 / scale,
+            Fill = Brushes.Orange
+        };
+        Canvas.SetLeft(rotHandle, stemEnd.X - rotSize / 2.0);
+        Canvas.SetTop(rotHandle, stemEnd.Y - rotSize / 2.0);
+        PART_Overlay.Children.Add(rotHandle);
+
+        void AddHandle(Point unrotPt, double size)
+        {
+            var rotPt = RotatePoint(unrotPt, center, angle);
             var h = new Rectangle
             {
                 Width = size,
                 Height = size,
                 Stroke = stroke,
                 StrokeThickness = 1.5 / scale,
-                Fill = Brushes.Black
+                Fill = Brushes.Black,
+                RenderTransformOrigin = new Point(0.5, 0.5),
+                RenderTransform = Math.Abs(angle) > 0.001 ? new RotateTransform(angle) : null
             };
 
-            Canvas.SetLeft(h, x - size / 2.0);
-            Canvas.SetTop(h, y - size / 2.0);
+            Canvas.SetLeft(h, rotPt.X - size / 2.0);
+            Canvas.SetTop(h, rotPt.Y - size / 2.0);
             PART_Overlay.Children.Add(h);
         }
     }
@@ -1246,18 +1312,19 @@ public partial class ImageViewerControl : UserControl
         }
 
         var hitTol = GetScreenHitTolerance();
+        var scale = Math.Max(0.001, _transform.Matrix.M11);
         var rect = PixelRectToContentRect(bmp, roiItem.X, roiItem.Y, roiItem.Width, roiItem.Height);
-        var mode = HitTestRoiHandle(rect, contentPoint, tolerance: hitTol);
+        var mode = HitTestRoiHandle(rect, roiItem.Angle, contentPoint, tolerance: hitTol, scale: scale);
 
         if (mode == RoiEditMode.None)
         {
-            // Show SizeAll cursor only on the border/edge, not deep inside
-            Cursor = IsNearRoiBorder(rect, contentPoint, hitTol) ? Cursors.SizeAll : Cursors.Arrow;
+            Cursor = IsNearRoiBorder(rect, roiItem.Angle, contentPoint, hitTol) ? Cursors.SizeAll : Cursors.Arrow;
             return;
         }
 
         Cursor = mode switch
         {
+            RoiEditMode.Rotate => Cursors.Hand,
             RoiEditMode.Left or RoiEditMode.Right => Cursors.SizeWE,
             RoiEditMode.Top or RoiEditMode.Bottom => Cursors.SizeNS,
             RoiEditMode.TopLeft or RoiEditMode.BottomRight => Cursors.SizeNWSE,
@@ -1271,14 +1338,27 @@ public partial class ImageViewerControl : UserControl
         return new Rect(x, y, w, h);
     }
 
-    private static RoiEditMode HitTestRoiHandle(Rect rect, Point p, double tolerance)
+    private static RoiEditMode HitTestRoiHandle(Rect rect, double angle, Point p, double tolerance, double scale = 1.0)
     {
-        var nearLeft = Math.Abs(p.X - rect.Left) <= tolerance;
-        var nearRight = Math.Abs(p.X - rect.Right) <= tolerance;
-        var nearTop = Math.Abs(p.Y - rect.Top) <= tolerance;
-        var nearBottom = Math.Abs(p.Y - rect.Bottom) <= tolerance;
-        var nearMidX = Math.Abs(p.X - (rect.Left + rect.Right) / 2.0) <= tolerance;
-        var nearMidY = Math.Abs(p.Y - (rect.Top + rect.Bottom) / 2.0) <= tolerance;
+        var center = new Point(rect.Left + rect.Width / 2.0, rect.Top + rect.Height / 2.0);
+        var unrotP = RotatePoint(p, center, -angle);
+
+        // Check top rotation handle (25px above top-center)
+        var rotOffsetY = 25.0 / scale;
+        var rotHandleCenter = new Point(rect.Left + rect.Width / 2.0, rect.Top - rotOffsetY);
+        var dxRot = unrotP.X - rotHandleCenter.X;
+        var dyRot = unrotP.Y - rotHandleCenter.Y;
+        if (Math.Sqrt(dxRot * dxRot + dyRot * dyRot) <= tolerance * 1.3)
+        {
+            return RoiEditMode.Rotate;
+        }
+
+        var nearLeft = Math.Abs(unrotP.X - rect.Left) <= tolerance;
+        var nearRight = Math.Abs(unrotP.X - rect.Right) <= tolerance;
+        var nearTop = Math.Abs(unrotP.Y - rect.Top) <= tolerance;
+        var nearBottom = Math.Abs(unrotP.Y - rect.Bottom) <= tolerance;
+        var nearMidX = Math.Abs(unrotP.X - (rect.Left + rect.Right) / 2.0) <= tolerance;
+        var nearMidY = Math.Abs(unrotP.Y - (rect.Top + rect.Bottom) / 2.0) <= tolerance;
 
         // 4 corners
         if (nearLeft && nearTop) return RoiEditMode.TopLeft;
@@ -1297,8 +1377,21 @@ public partial class ImageViewerControl : UserControl
 
     private void UpdateRoiEdit(Point current)
     {
-        var dx = current.X - _roiEditStart.X;
-        var dy = current.Y - _roiEditStart.Y;
+        if (_roiEditMode == RoiEditMode.Rotate)
+        {
+            var center = new Point(_roiEditRect.Left + _roiEditRect.Width / 2.0, _roiEditRect.Top + _roiEditRect.Height / 2.0);
+            var dx = current.X - center.X;
+            var dy = current.Y - center.Y;
+            var angleRad = Math.Atan2(dy, dx);
+            var angleDeg = angleRad * 180.0 / Math.PI + 90.0;
+            while (angleDeg > 180.0) angleDeg -= 360.0;
+            while (angleDeg <= -180.0) angleDeg += 360.0;
+            _roiEditRectAngle = Math.Round(angleDeg, 1);
+            return;
+        }
+
+        var dxMove = current.X - _roiEditStart.X;
+        var dyMove = current.Y - _roiEditStart.Y;
         var start = _roiEditRectStart;
 
         var left = start.Left;
@@ -1309,42 +1402,41 @@ public partial class ImageViewerControl : UserControl
         switch (_roiEditMode)
         {
             case RoiEditMode.Move:
-                left += dx;
-                right += dx;
-                top += dy;
-                bottom += dy;
+                left += dxMove;
+                right += dxMove;
+                top += dyMove;
+                bottom += dyMove;
                 break;
             case RoiEditMode.Left:
-                left += dx;
+                left += dxMove;
                 break;
             case RoiEditMode.Right:
-                right += dx;
+                right += dxMove;
                 break;
             case RoiEditMode.Top:
-                top += dy;
+                top += dyMove;
                 break;
             case RoiEditMode.Bottom:
-                bottom += dy;
+                bottom += dyMove;
                 break;
             case RoiEditMode.TopLeft:
-                left += dx;
-                top += dy;
+                left += dxMove;
+                top += dyMove;
                 break;
             case RoiEditMode.TopRight:
-                right += dx;
-                top += dy;
+                right += dxMove;
+                top += dyMove;
                 break;
             case RoiEditMode.BottomLeft:
-                left += dx;
-                bottom += dy;
+                left += dxMove;
+                bottom += dyMove;
                 break;
             case RoiEditMode.BottomRight:
-                right += dx;
-                bottom += dy;
+                right += dxMove;
+                bottom += dyMove;
                 break;
         }
 
-        // Normalize and enforce minimum size without ever creating a Rect with negative width/height.
         if (right < left) (left, right) = (right, left);
         if (bottom < top) (top, bottom) = (bottom, top);
 
@@ -1388,11 +1480,16 @@ public partial class ImageViewerControl : UserControl
         PART_Overlay.Children.Clear();
         var scale = Math.Max(0.001, _transform.Matrix.M11);
 
+        var cx = _roiEditRect.X + _roiEditRect.Width / 2.0;
+        var cy = _roiEditRect.Y + _roiEditRect.Height / 2.0;
+
         _roiEditRectShape = new Rectangle
         {
             Stroke = Brushes.Cyan,
             StrokeThickness = 2.0 / scale,
-            Fill = new SolidColorBrush(Color.FromArgb(20, 0, 255, 255))
+            Fill = new SolidColorBrush(Color.FromArgb(20, 0, 255, 255)),
+            RenderTransformOrigin = new Point(0.5, 0.5),
+            RenderTransform = Math.Abs(_roiEditRectAngle) > 0.001 ? new RotateTransform(_roiEditRectAngle) : null
         };
 
         Canvas.SetLeft(_roiEditRectShape, _roiEditRect.X);
@@ -1407,30 +1504,71 @@ public partial class ImageViewerControl : UserControl
             var top = _roiEditRect.Top;
             var right = _roiEditRect.Right;
             var bottom = _roiEditRect.Bottom;
-            var cx = (left + right) / 2.0;
-            var cy = (top + bottom) / 2.0;
+            var center = new Point(cx, cy);
+
+            var ptH1 = RotatePoint(new Point(left, cy), center, _roiEditRectAngle);
+            var ptH2 = RotatePoint(new Point(right, cy), center, _roiEditRectAngle);
+            var ptV1 = RotatePoint(new Point(cx, top), center, _roiEditRectAngle);
+            var ptV2 = RotatePoint(new Point(cx, bottom), center, _roiEditRectAngle);
 
             PART_Overlay.Children.Add(new Line
             {
                 Stroke = Brushes.Cyan,
                 StrokeThickness = 2.0 / scale,
-                X1 = left,
-                Y1 = cy,
-                X2 = right,
-                Y2 = cy
+                X1 = ptH1.X,
+                Y1 = ptH1.Y,
+                X2 = ptH2.X,
+                Y2 = ptH2.Y
             });
 
             PART_Overlay.Children.Add(new Line
             {
                 Stroke = Brushes.Cyan,
                 StrokeThickness = 2.0 / scale,
-                X1 = cx,
-                Y1 = top,
-                X2 = cx,
-                Y2 = bottom
+                X1 = ptV1.X,
+                Y1 = ptV1.Y,
+                X2 = ptV2.X,
+                Y2 = ptV2.Y
             });
         }
 
-        DrawRoiHandles(_roiEditRect.X, _roiEditRect.Y, _roiEditRect.Width, _roiEditRect.Height, isActive: true);
+        DrawRoiHandles(_roiEditRect.X, _roiEditRect.Y, _roiEditRect.Width, _roiEditRect.Height, _roiEditRectAngle, isActive: true);
+
+        if (_roiEditing && (_roiEditMode == RoiEditMode.Rotate || Math.Abs(_roiEditRectAngle) > 0.001))
+        {
+            double rotOffsetY = 25.0 / scale;
+            var center = new Point(cx, cy);
+            var unrotStemEnd = new Point(cx, _roiEditRect.Top - rotOffsetY);
+            var stemEnd = RotatePoint(unrotStemEnd, center, _roiEditRectAngle);
+
+            var angleText = $"{_roiEditRectAngle:F1}°";
+            var textBlock = new TextBlock
+            {
+                Text = angleText,
+                FontSize = Math.Max(11.0, 13.0 / scale),
+                FontWeight = FontWeights.Bold,
+                Foreground = Brushes.Yellow,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+
+            var border = new Border
+            {
+                Background = new SolidColorBrush(Color.FromArgb(220, 20, 20, 20)),
+                BorderBrush = _roiEditMode == RoiEditMode.Rotate ? Brushes.Orange : Brushes.Cyan,
+                BorderThickness = new Thickness(1.5 / scale),
+                CornerRadius = new CornerRadius(4 / scale),
+                Padding = new Thickness(5 / scale, 2 / scale, 5 / scale, 2 / scale),
+                Child = textBlock
+            };
+
+            border.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+            var badgeW = border.DesiredSize.Width;
+            var badgeH = border.DesiredSize.Height;
+
+            Canvas.SetLeft(border, stemEnd.X - badgeW / 2.0);
+            Canvas.SetTop(border, stemEnd.Y - badgeH - 6.0 / scale);
+            PART_Overlay.Children.Add(border);
+        }
     }
 }

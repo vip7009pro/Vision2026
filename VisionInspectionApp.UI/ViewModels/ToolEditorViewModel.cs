@@ -676,10 +676,49 @@ namespace VisionInspectionApp.UI.ViewModels
                 NormalizeSurfaceCompare(sc);
         }
     
+        public static OpenCvSharp.Mat ExtractRoiPatch(OpenCvSharp.Mat source, Roi roi)
+        {
+            if (source is null || source.Empty() || roi.Width <= 0 || roi.Height <= 0)
+            {
+                return new OpenCvSharp.Mat();
+            }
+
+            var cx = roi.X + roi.Width / 2.0;
+            var cy = roi.Y + roi.Height / 2.0;
+
+            if (Math.Abs(roi.Angle) < 0.001)
+            {
+                var rect = new OpenCvSharp.Rect(roi.X, roi.Y, roi.Width, roi.Height).Intersect(new OpenCvSharp.Rect(0, 0, source.Width, source.Height));
+                if (rect.Width <= 0 || rect.Height <= 0) return new OpenCvSharp.Mat();
+                return new OpenCvSharp.Mat(source, rect).Clone();
+            }
+
+            int diag = (int)Math.Ceiling(Math.Sqrt(roi.Width * roi.Width + roi.Height * roi.Height));
+            var bbox = new OpenCvSharp.Rect((int)(cx - diag / 2.0), (int)(cy - diag / 2.0), diag, diag);
+            var safeBbox = bbox.Intersect(new OpenCvSharp.Rect(0, 0, source.Width, source.Height));
+            if (safeBbox.Width <= 0 || safeBbox.Height <= 0) return new OpenCvSharp.Mat();
+
+            using var subSource = new OpenCvSharp.Mat(source, safeBbox);
+            var centerInBbox = new OpenCvSharp.Point2f((float)(cx - safeBbox.X), (float)(cy - safeBbox.Y));
+            
+            using var M = OpenCvSharp.Cv2.GetRotationMatrix2D(centerInBbox, roi.Angle, 1.0);
+            var tx = diag / 2.0 - centerInBbox.X;
+            var ty = diag / 2.0 - centerInBbox.Y;
+            M.Set(0, 2, M.Get<double>(0, 2) + tx);
+            M.Set(1, 2, M.Get<double>(1, 2) + ty);
+            using var rotatedBbox = new OpenCvSharp.Mat();
+            OpenCvSharp.Cv2.WarpAffine(subSource, rotatedBbox, M, new OpenCvSharp.Size(diag, diag), OpenCvSharp.InterpolationFlags.Linear, OpenCvSharp.BorderTypes.Replicate);
+
+            var patch = new OpenCvSharp.Mat();
+            var centerInDst = new OpenCvSharp.Point2f((float)(diag / 2.0), (float)(diag / 2.0));
+            OpenCvSharp.Cv2.GetRectSubPix(rotatedBbox, new OpenCvSharp.Size(roi.Width, roi.Height), centerInDst, patch);
+            return patch;
+        }
+
         private void TrySaveTemplateImage(string name, Roi roi, bool isOrigin, string? pointName)
         {
             using var rawSnap = _sharedImage.GetSnapshot();
-            using var snap = rawSnap ?? new Mat();
+            using var snap = rawSnap ?? new OpenCvSharp.Mat();
             if (roi.Width <= 0 || roi.Height <= 0)
             {
                 return;
@@ -701,14 +740,13 @@ namespace VisionInspectionApp.UI.ViewModels
             var safeName = name.Trim();
             var fileName = $"{safeName}.png";
             var fullPath = Path.Combine(templateDir, fileName);
-            var rect = new OpenCvSharp.Rect(roi.X, roi.Y, roi.Width, roi.Height);
-            rect = rect.Intersect(new OpenCvSharp.Rect(0, 0, rawMat.Width, rawMat.Height));
-            if (rect.Width <= 0 || rect.Height <= 0)
+
+            using var cropped = ExtractRoiPatch(rawMat, roi);
+            if (cropped.Empty() || cropped.Width <= 0 || cropped.Height <= 0)
             {
                 return;
             }
-    
-            using var cropped = new OpenCvSharp.Mat(rawMat, rect);
+
             using var gray = cropped.Channels() == 1 ? cropped.Clone() : cropped.CvtColor(OpenCvSharp.ColorConversionCodes.BGR2GRAY);
             OpenCvSharp.Cv2.ImWrite(fullPath, gray);
             if (_config is null)

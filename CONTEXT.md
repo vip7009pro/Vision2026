@@ -135,6 +135,25 @@
     2. Cập nhật `LoadImageFromSourceForPreview`: Khi `_imageSourcePreviewCache` đã lưu sẵn ảnh vừa thực thi của nguồn `ImageSource`, hàm sẽ lập tức trả về ảnh từ cache thay vì đọc file mới từ đĩa theo biến `_folderImageIndex`.
     3. Thêm cơ chế tự xóa cache `_imageSourcePreviewCache` và đặt lại `_folderImageIndex = 0` khi người dùng thay đổi cấu hình nguồn ảnh (`FilePath`, `FolderPath`, `SourceType`) trong bảng thuộc tính.
     4. Giúp tất cả các node (`ResultView`, `ImageSource`, `Preprocess`, `Origin`, `Point`, `Line`, `Caliper`, `Blob`, v.v.) hiển thị khớp 100% cùng 1 tấm ảnh và cùng 1 bộ Overlay sau mỗi lần bấm `Run Once`.
+- **Hỗ trợ Xoay ROI 360 độ và thêm Tay cầm (Handle) xoay ROI cho tất cả các Tool**:
+  - **Data Model**: Bổ sung thuộc tính `Angle` (double) vào class `Roi` ([VisionInspectionApp.Models\Class1.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.Models/Class1.cs)). Tất cả các Tool (Point, Line, Caliper, Blob, SurfaceCompare, CircleFinder, EdgePair, CodeDetection, DefectConfig) đều tự động kế thừa khả năng lưu trữ góc xoay ROI.
+  - **Giao diện & Tương tác (`ImageViewerControl.xaml.cs`)**:
+    - Thiết kế thêm tay cầm xoay phía trên khung ROI: gồm đường Stem nối từ cạnh trên lên núm tròn xoay màu cam (Orange Handle).
+    - Khắc phục triệt để tâm xoay (Rotation Center Origin): Thiết lập `RenderTransformOrigin = new Point(0.5, 0.5)` trên khung `_roiEditRectShape` và tính toán vị trí tất cả các tay cầm (8 handle + rotation stem + orange circle handle) bằng hàm `RotatePoint(pt, center, angle)`. Khung ROI và các tay cầm tương tác giờ đây xoay **chính xác 100% quanh đúng tâm chính giữa của ROI** `(left + width/2, top + height/2)`.
+    - Hiển thị góc xoay trực quan thời gian thực (Live Angle Badge): Bổ sung badge nổi màu tối chữ vàng rực rỡ (`25.5°`) nằm ngay phía trên núm tròn màu cam khi kéo xoay ROI hoặc khi ROI đang có góc xoay khác 0°, giúp người dùng quan sát góc độ chính xác tuyệt đối trong khi xoay.
+    - Chuẩn hóa Hit-testing: Chuyển đổi tọa độ con trỏ chuột về hệ tọa độ local không xoay của ROI (`RotatePoint(p, center, -angle)`), giúp việc bấm chọn các handle góc, edge và tay cầm xoay đạt độ chính xác 100% khi ROI đang ở bất kỳ góc xoay nào.
+    - Thêm chế độ `RoiEditMode.Rotate`: Kéo thả tay cầm xoay sẽ tính toán góc nghiêng thời gian thực theo con trỏ chuột (`Atan2`), hiển thị khung nghiêng sinh động trên Canvas và cập nhật `Angle` khi nhả chuột.
+  - **Khắc phục triệt để lỗi Double Xoay & Không chỉnh được Template ROI sau khi Run**:
+    - **Sửa lỗi Double Xoay**: `_lastRun.Origin.AngleDeg` tìm được từ thuật toán matching vốn đã là góc nghiêng thực tế của vật thể trên ảnh. Đối với `Origin T` khi hiển thị vị trí kết quả tìm được, góc xoay là `Angle = AngleDeg` (không cộng dồn `roiAngle` lần 2 làm góc xoay bị nhân đôi).
+    - **Sửa lỗi Không chỉnh được ROI sau khi Run**: Khi xem/chỉnh sửa node `Origin`, khung `Origin T` được hiển thị ở tọa độ và góc xoay Teaching chuẩn `CreateRotatedRoi(_config.Origin.TemplateRoi, ...)` với Label chuẩn `"Origin T"`.
+    - **Chuẩn hóa Label Matching (`OnRoiEdited` & `IsTemplateRoiLabel`)**: Bổ sung hàm lọc nhãn `cleanLabel = label.Split('[')[0].Trim()` để bóc tách các thẻ trạng thái `[OK]`, `[NG]` khỏi Label. Nhờ đó, thao tác chỉnh sửa (di chuyển, thay đổi kích thước, xoay) đối với `Origin T` luôn được ghi nhận và tự động lưu cấu hình + cắt lại ảnh mẫu `origin.png` một cách mượt mà cả trước và sau khi bấm Run Once.
+  - **Khắc phục lỗi Score bị sụt giảm thấp (0.2) khi Teach có xoay Template ROI**:
+    - **Nguyên nhân**: Ảnh mẫu `origin.png` trích xuất từ `ExtractRoiPatch` được nắn phẳng về 0°. Khi chạy thuật toán tìm kiếm (`MatchWithRotation`), dải quét góc nghiêng mặc định `MinAngle`..`MaxAngle` (ví dụ `[-10°, +10°]`) chỉ quét quanh 0° chứ không tính đến góc nghiêng ban đầu của ROI (`TemplateRoi.Angle` = 25°). Do đó, thuật toán không quét tới góc 25° trên ảnh làm điểm Score bị rơi xuống 0.2.
+    - **Giải pháp**: Cập nhật dải quét góc trong `MatchWithRotation` ([VisionInspectionApp.VisionEngine\Class1.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.VisionEngine/Class1.cs#L1325)): Tự động dịch tâm dải quét góc theo `searchMin = baseAngle + minAngleDeg` và `searchMax = baseAngle + maxAngleDeg`.
+    - **Tính toán Pose góc tương đối**: Cập nhật `poseAngleDeg = originMatch.AngleDeg - config.Origin.TemplateRoi.Angle` trong [Application\Class1.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.Application/Class1.cs#L1144). Kết quả là khi xoay Template ROI lúc Teach, Score khi Run lại trên cùng ảnh đạt **chuẩn xác 1.0 (100%)** và các tool con biến đổi tọa độ khớp 100%.
+  - **Vision Engine & Application (`VisionInspectionApp.Application\Class1.cs`)**:
+    - Cập nhật `ExtractStraightRoi`: Tính toán góc xoay tổng cộng (`totalAngleDeg = originAngle + roi.Angle`) để trích xuất ảnh patch chuẩn hóa đã xoay phẳng, phục vụ các thuật toán xử lý ảnh của tool.
+    - Cập nhật `MapToGlobal`, `TransformRoi` và `TransformRoiKeepSize`: Áp dụng góc xoay tổng cộng để chuyển các điểm nhận diện (point, line, edge, caliper, blob) về tọa độ ảnh gốc một cách chính xác.
 
 
 

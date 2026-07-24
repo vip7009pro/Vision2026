@@ -565,6 +565,7 @@ public sealed class Roi
     public int Y { get; set; }
     public int Width { get; set; }
     public int Height { get; set; }
+    public double Angle { get; set; } = 0.0;
 }
 
 public sealed class LineDistance
