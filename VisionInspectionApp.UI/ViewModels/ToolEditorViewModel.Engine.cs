@@ -1362,6 +1362,29 @@ namespace VisionInspectionApp.UI.ViewModels
                         }
                     }
                 }
+                else if (source.SourceType == ImageSourceType.Camera)
+                {
+                    if (_imageSourcePreviewCache.TryGetValue(source.Name ?? "", out var cached) && cached.Image is not null && !cached.Image.IsDisposed)
+                    {
+                        return cached.Image.Clone();
+                    }
+
+                    try
+                    {
+                        var cameraMat = _cameraService.CaptureSnapshotAsync().GetAwaiter().GetResult();
+                        if (cameraMat is not null && !cameraMat.Empty())
+                        {
+                            if (_imageSourcePreviewCache.TryGetValue(source.Name ?? "", out var old))
+                                old.Image?.Dispose();
+                            _imageSourcePreviewCache[source.Name ?? ""] = ("camera", cameraMat.Clone());
+                            return cameraMat;
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"Exception in LoadImageFromSourceForPreview camera capture: {ex.Message}");
+                    }
+                }
             }
             catch (Exception ex)
             {
@@ -1664,38 +1687,30 @@ namespace VisionInspectionApp.UI.ViewModels
     
         private async Task CaptureCameraImageAsync()
         {
-            if (IsLivePreviewMode)
+            try
             {
-                // ANG LIVE -> B?m nt d? CHUYP V GI? ?NH TINH
-                try
+                var mat = await _cameraService.CaptureSnapshotAsync();
+                if (mat != null && !mat.Empty())
                 {
-                    var mat = await _cameraService.CaptureSnapshotAsync();
-                    if (mat != null && !mat.Empty())
+                    var imgSourceDef = SelectedImageSourceDef();
+                    if (imgSourceDef is not null)
                     {
-                        IsLivePreviewMode = false;
-                        CaptureButtonText = "Live Preview"; // Nhß║Ñn lß║ºn sau ─æß╗â quay lß║íi chß║┐ ─æß╗Ö Live
-                        _sharedImage.SetImage(mat);
-                        mat.Dispose();
+                        if (_imageSourcePreviewCache.TryGetValue(imgSourceDef.Name ?? "", out var old))
+                            old.Image?.Dispose();
+                        _imageSourcePreviewCache[imgSourceDef.Name ?? ""] = ("camera", mat.Clone());
                     }
-                    else
-                    {
-                        MessageBox.Show("Kh├┤ng thß╗â chß╗Ñp ß║únh tß╗½ camera. Vui l├▓ng kiß╗âm tra lß║íi kß║┐t nß╗æi camera trong tab Live Camera.", "Lß╗ùi camera", MessageBoxButton.OK, MessageBoxImage.Error);
-                    }
+                    _sharedImage.SetImage(mat);
+                    mat.Dispose();
+                    RefreshPreviews();
                 }
-                catch (Exception ex)
+                else
                 {
-                    MessageBox.Show($"Lß╗ùi chß╗Ñp ß║únh: {ex.Message}", "Lß╗ùi", MessageBoxButton.OK, MessageBoxImage.Error);
+                    MessageBox.Show("Không thể chụp ảnh từ camera. Vui lòng kiểm tra lại kết nối camera trong tab Live Camera.", "Lỗi camera", MessageBoxButton.OK, MessageBoxImage.Error);
                 }
             }
-            else
+            catch (Exception ex)
             {
-                // ─ÉANG T─¿NH -> Bß║Ñm n├║t ─æß╗â QUAY Lß║áI LIVE PREVIEW
-                IsLivePreviewMode = true;
-                CaptureButtonText = "Capture Camera";
-                if (!_cameraService.IsRunning)
-                {
-                    MessageBox.Show("Camera ─æang tß║»t. Vui l├▓ng bß║¡t camera ß╗ƒ tab Live Camera tr╞░ß╗¢c ─æß╗â xem h├¼nh ß║únh trß╗▒c tiß║┐p.", "Th├┤ng b├ío", MessageBoxButton.OK, MessageBoxImage.Warning);
-                }
+                MessageBox.Show($"Lỗi chụp ảnh: {ex.Message}", "Lỗi", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
     
@@ -1720,7 +1735,29 @@ namespace VisionInspectionApp.UI.ViewModels
                     if (imgSourceDef is not null)
                     {
                         System.Diagnostics.Debug.WriteLine($"RunFlow: Found ImageSourceDef: {imgSourceDef.Name}, SourceType={imgSourceDef.SourceType}");
-                        snap = LoadImageFromSourceForPreview(imgSourceDef);
+                        if (imgSourceDef.SourceType == ImageSourceType.Camera)
+                        {
+                            try
+                            {
+                                var cameraMat = _cameraService.CaptureSnapshotAsync().GetAwaiter().GetResult();
+                                if (cameraMat is not null && !cameraMat.Empty())
+                                {
+                                    if (_imageSourcePreviewCache.TryGetValue(imgSourceDef.Name ?? "", out var old))
+                                        old.Image?.Dispose();
+                                    _imageSourcePreviewCache[imgSourceDef.Name ?? ""] = ("camera", cameraMat.Clone());
+                                    _sharedImage.SetImage(cameraMat);
+                                    snap = cameraMat;
+                                }
+                            }
+                            catch (Exception ex)
+                            {
+                                System.Diagnostics.Debug.WriteLine($"RunFlow Camera Exception: {ex.Message}");
+                            }
+                        }
+                        else
+                        {
+                            snap = LoadImageFromSourceForPreview(imgSourceDef);
+                        }
                         if (snap is not null && !snap.Empty())
                         {
                             System.Diagnostics.Debug.WriteLine($"RunFlow: Successfully loaded image from ImageSource: {snap.Width}x{snap.Height}");
@@ -2133,7 +2170,16 @@ namespace VisionInspectionApp.UI.ViewModels
     
             if (config.Origin.SearchRoi.Width > 0 && config.Origin.SearchRoi.Height > 0)
             {
-                dst.Add(CreateRotatedRoiWithPose(config.Origin.SearchRoi, Brushes.Lime, "Origin S"));
+                dst.Add(new OverlayRectItem
+                {
+                    X = config.Origin.SearchRoi.X,
+                    Y = config.Origin.SearchRoi.Y,
+                    Width = config.Origin.SearchRoi.Width,
+                    Height = config.Origin.SearchRoi.Height,
+                    Angle = 0,
+                    Stroke = Brushes.Lime,
+                    Label = "Origin S"
+                });
             }
     
             if (config.Origin.TemplateRoi.Width > 0 && config.Origin.TemplateRoi.Height > 0)
@@ -3118,7 +3164,16 @@ namespace VisionInspectionApp.UI.ViewModels
             {
                 if (showRois && _config.Origin.SearchRoi.Width > 0 && _config.Origin.SearchRoi.Height > 0)
                 {
-                    dst.Add(CreateRotatedRoiWithPose(_config.Origin.SearchRoi, Brushes.Lime, "Origin S"));
+                    dst.Add(new OverlayRectItem
+                    {
+                        X = _config.Origin.SearchRoi.X,
+                        Y = _config.Origin.SearchRoi.Y,
+                        Width = _config.Origin.SearchRoi.Width,
+                        Height = _config.Origin.SearchRoi.Height,
+                        Angle = 0,
+                        Stroke = Brushes.Lime,
+                        Label = "Origin S"
+                    });
                 }
     
                 if (showRois && _config.Origin.TemplateRoi.Width > 0 && _config.Origin.TemplateRoi.Height > 0)
@@ -3488,11 +3543,20 @@ namespace VisionInspectionApp.UI.ViewModels
             }
     
             var showRois = ShowRoisInFinalPreview;
-            if (showRois && _config.Origin.SearchRoi.Width > 0 && _config.Origin.SearchRoi.Height > 0)
+                if (showRois && _config.Origin.SearchRoi.Width > 0 && _config.Origin.SearchRoi.Height > 0)
             {
-                dst.Add(CreateRotatedRoi(_config.Origin.SearchRoi, Brushes.Lime, "Origin S"));
+                dst.Add(new OverlayRectItem
+                {
+                    X = _config.Origin.SearchRoi.X,
+                    Y = _config.Origin.SearchRoi.Y,
+                    Width = _config.Origin.SearchRoi.Width,
+                    Height = _config.Origin.SearchRoi.Height,
+                    Angle = 0,
+                    Stroke = Brushes.Lime,
+                    Label = "Origin S"
+                });
             }
-    
+
             if (showRois && _config.Origin.TemplateRoi.Width > 0 && _config.Origin.TemplateRoi.Height > 0)
             {
                 dst.Add(CreateRotatedRoi(_config.Origin.TemplateRoi, Brushes.Gold, "Origin T"));

@@ -114,6 +114,17 @@
   - Thêm ô nhập liệu `Min Score` trên giao diện Properties Panel UI ([ToolEditorView.xaml](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/Views/ToolEditorView.xaml)) trong thẻ Origin.
   - Sử dụng `MinScore` để đánh giá `Origin.Pass` (`originMatch.Score >= config.Origin.MinScore`) và hiển thị ngưỡng `(Thr: ...)` trên overlay thông tin Origin.
 
+### Cập nhật 2026-07-24 (Phiên làm việc mới nhất)
+
+- **Chuyển đổi cơ chế xem ảnh của node ImageSource (Camera mode)**:
+  - Gỡ bỏ việc đăng ký nhận luồng 30 FPS (`_cameraService.FrameCaptured`) tự động đẩy vào `_sharedImage` trong `ToolEditorViewModel`, loại bỏ tình trạng livestream hình ảnh liên tục khi bấm chọn/xem các node trên Canvas.
+  - Khi nguồn vào là `Camera`, bấm `Run Once` (hoặc `Run Continuous`) mới thực hiện chụp đúng **1 frame tĩnh** từ camera để làm ảnh đầu vào thực thi inspection flow và lưu vào cache preview.
+  - Việc chuyển đổi/view qua lại giữa các node hiển thị ảnh tĩnh đã chụp trước đó, không gây giật lag hoặc livestream liên tục.
+- **Cố định vị trí Search ROI của Tool Origin (`Origin S`)**:
+  - Cập nhật cách hiển thị overlay của Tool `Origin` trong `ResultView` node (Final View), `AddConfigRois`, `BuildOverlayForNodeFromRunWithConfig` và `InspectionViewModel`.
+  - Khung Search ROI (`Origin S`) giữ nguyên vị trí và hướng thẳng ban đầu như lúc teaching (`Angle = 0`), không xoay/tịnh tiến theo pose nhận diện được.
+  - Khung Template ROI (`Origin T`) duy trì xoay và di chuyển bám 100% theo góc xoay và tâm sản phẩm nhận diện.
+
 
 
 

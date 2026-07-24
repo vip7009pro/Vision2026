@@ -245,7 +245,8 @@ namespace VisionInspectionApp.UI.ViewModels
                     RefreshPreviews();
                 }));
             };
-            _cameraService.FrameCaptured += OnCameraFrameCaptured;
+            // Do not subscribe _cameraService.FrameCaptured here to prevent continuous livestreaming when viewing nodes.
+            // Camera image is captured on-demand (1 frame) during Run Once / Run Flow.
         }
     
         public IlluminationCorrectionPreset IlluminationCorrection

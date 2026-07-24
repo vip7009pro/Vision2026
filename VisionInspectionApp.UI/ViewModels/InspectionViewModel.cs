@@ -1430,10 +1430,19 @@ public sealed partial class InspectionViewModel : ObservableObject
         {
 
             if (hasPose)
-
             {
-
-                AddRotatedRoiOverlay(_config.Origin.SearchRoi, "Origin S", Brushes.Lime, originTeach, originFound, angleDeg);
+                if (_config.Origin.SearchRoi.Width > 0 && _config.Origin.SearchRoi.Height > 0)
+                {
+                    OverlayItems.Add(new OverlayRectItem
+                    {
+                        X = _config.Origin.SearchRoi.X,
+                        Y = _config.Origin.SearchRoi.Y,
+                        Width = _config.Origin.SearchRoi.Width,
+                        Height = _config.Origin.SearchRoi.Height,
+                        Stroke = Brushes.Lime,
+                        Label = "Origin S"
+                    });
+                }
 
                 if (LastResult?.Origin is not null && _config.Origin.TemplateRoi.Width > 0 && _config.Origin.TemplateRoi.Height > 0)
 

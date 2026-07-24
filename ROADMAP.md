@@ -44,6 +44,8 @@ Lộ trình tích hợp tính năng Chụp ảnh từ camera và hỗ trợ các
 - [x] Task 38: Ngăn chặn tự động `RunFlow()` khi di chuyển/chỉnh sửa ROI các tool trong quá trình teaching (`OnRoiEdited` và `Origin_TeachTemplate()`), chỉ cập nhật tọa độ lý thuyết, hiển thị overlay preview và lưu cấu hình.
 - [x] Task 39: Xoay đường bao BoundingBox và Search ROI của `CodeDetection` tool trên màn hình preview kết quả (`ResultView` node & Main Inspection) theo góc xoay Origin (`Angle = angleDeg`).
 - [x] Task 40: Thêm thuộc tính `MinScore` cho Tool Origin, hiển thị điều chỉnh `Min Score` trong ô thuộc tính (`ToolEditorView.xaml`) và dùng `MinScore` này đánh giá điểm đạt `Origin.Pass` / `ScoreThreshold`.
+- [x] Task 41: Chuyển đổi cơ chế xem ảnh của node ImageSource (Camera mode): Loại bỏ livestream liên tục 30 FPS khi click xem các node trên Tool Editor, chỉ chụp 1 frame tĩnh duy nhất từ camera khi bấm Run Once (hoặc Run Flow) để làm ảnh đầu vào.
+- [x] Task 42: Cố định Search ROI của Tool Origin (`Origin S`): Trong màn hình kết quả Final View (`ResultView` node) và Inspection, Search ROI giữ nguyên vị trí và góc xoay (`Angle = 0`) như lúc teaching, chỉ xoay Template ROI (`Origin T`) theo pose nhận diện.
 
 
 
