@@ -427,17 +427,118 @@ public sealed partial class TeachViewModel : ObservableObject
         }
     }
 
+    public IEnumerable<PreprocessThresholdType> AvailableThresholdTypes => Enum.GetValues<PreprocessThresholdType>();
+
+    public PreprocessThresholdType ThresholdType
+    {
+        get => VisionConfig.Preprocess.ThresholdType;
+        set
+        {
+            if (VisionConfig.Preprocess.ThresholdType == value) return;
+            VisionConfig.Preprocess.ThresholdType = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(IsThresholdBinary));
+            OnPropertyChanged(nameof(IsThresholdLocal));
+            RefreshDisplayedImage();
+        }
+    }
+
+    public bool IsThresholdBinary => ThresholdType == PreprocessThresholdType.Binary;
+    public bool IsThresholdLocal => ThresholdType == PreprocessThresholdType.Local;
+
     public int ThresholdValue
     {
         get => VisionConfig.Preprocess.ThresholdValue;
         set
         {
-            if (VisionConfig.Preprocess.ThresholdValue == value)
-            {
-                return;
-            }
-
+            if (VisionConfig.Preprocess.ThresholdValue == value) return;
             VisionConfig.Preprocess.ThresholdValue = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(ThresholdLow));
+            RefreshDisplayedImage();
+        }
+    }
+
+    public int ThresholdLow
+    {
+        get => VisionConfig.Preprocess.ThresholdLow;
+        set
+        {
+            if (VisionConfig.Preprocess.ThresholdLow == value) return;
+            VisionConfig.Preprocess.ThresholdLow = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(ThresholdValue));
+            RefreshDisplayedImage();
+        }
+    }
+
+    public int ThresholdHigh
+    {
+        get => VisionConfig.Preprocess.ThresholdHigh;
+        set
+        {
+            if (VisionConfig.Preprocess.ThresholdHigh == value) return;
+            VisionConfig.Preprocess.ThresholdHigh = value;
+            OnPropertyChanged();
+            RefreshDisplayedImage();
+        }
+    }
+
+    public bool InvertBinary
+    {
+        get => VisionConfig.Preprocess.InvertBinary;
+        set
+        {
+            if (VisionConfig.Preprocess.InvertBinary == value) return;
+            VisionConfig.Preprocess.InvertBinary = value;
+            OnPropertyChanged();
+            RefreshDisplayedImage();
+        }
+    }
+
+    public int MaskWidth
+    {
+        get => VisionConfig.Preprocess.MaskWidth;
+        set
+        {
+            if (VisionConfig.Preprocess.MaskWidth == value) return;
+            VisionConfig.Preprocess.MaskWidth = value;
+            OnPropertyChanged();
+            RefreshDisplayedImage();
+        }
+    }
+
+    public int MaskHeight
+    {
+        get => VisionConfig.Preprocess.MaskHeight;
+        set
+        {
+            if (VisionConfig.Preprocess.MaskHeight == value) return;
+            VisionConfig.Preprocess.MaskHeight = value;
+            OnPropertyChanged();
+            RefreshDisplayedImage();
+        }
+    }
+
+    public double LocalOffset
+    {
+        get => VisionConfig.Preprocess.LocalOffset;
+        set
+        {
+            if (Math.Abs(VisionConfig.Preprocess.LocalOffset - value) < 1e-6) return;
+            VisionConfig.Preprocess.LocalOffset = value;
+            OnPropertyChanged();
+            RefreshDisplayedImage();
+        }
+    }
+
+    public bool InvertLocal
+    {
+        get => VisionConfig.Preprocess.InvertLocal;
+        set
+        {
+            if (VisionConfig.Preprocess.InvertLocal == value) return;
+            VisionConfig.Preprocess.InvertLocal = value;
             OnPropertyChanged();
             RefreshDisplayedImage();
         }

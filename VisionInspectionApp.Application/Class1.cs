@@ -1092,7 +1092,11 @@ public sealed class InspectionService : IInspectionService
 
             // Origin
             var tOrigin0 = swTotal.ElapsedMilliseconds;
-            var originBaseImage = ResolveToolImage("Origin", config.Origin.Name);
+            // Origin template (origin.png) is saved from Image 1 (Global Preprocess only).
+            // At runtime, both runtime image and template must go through the SAME full pipeline:
+            //   Runtime image: Raw → Global Preprocess → Local Preprocess (node) = Image 2
+            //   Template:      Image 1 (origin.png) → PreprocessTemplateForMatch(originPre) = Image 2
+            // This ensures symmetric comparison in the same "space".
             var (originMat, originPre) = ResolveToolPreprocess("Origin", config.Origin.Name);
             var originTempl = GetTemplateGray(config.Origin.TemplateImageFile);
 
@@ -1150,7 +1154,7 @@ public sealed class InspectionService : IInspectionService
                 originMatch.Score,
                 config.Origin.MatchScoreThreshold,
                 originPass,
-                originMatch.AngleDeg,
+                poseAngleDeg,
                 originMatch.FeaturePoints);
             result.Timings.OriginMs = (int)Math.Max(0, swTotal.ElapsedMilliseconds - tOrigin0);
             result.Timings.NodeTimings[config.Origin.Name ?? "Origin"] = result.Timings.OriginMs;

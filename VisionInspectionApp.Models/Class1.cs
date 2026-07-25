@@ -433,13 +433,32 @@ public sealed class PreprocessSettings
     public int BlurKernel { get; set; } = 3;
 
     public bool UseThreshold { get; set; }
-    public int ThresholdValue { get; set; } = 128;
+    public PreprocessThresholdType ThresholdType { get; set; } = PreprocessThresholdType.Binary;
+    public int ThresholdValue
+    {
+        get => ThresholdLow;
+        set => ThresholdLow = value;
+    }
+    public int ThresholdLow { get; set; } = 128;
+    public int ThresholdHigh { get; set; } = 255;
+    public bool InvertBinary { get; set; }
+
+    public int MaskWidth { get; set; } = 11;
+    public int MaskHeight { get; set; } = 11;
+    public double LocalOffset { get; set; } = 10.0;
+    public bool InvertLocal { get; set; }
 
     public bool UseCanny { get; set; }
     public int Canny1 { get; set; } = 50;
     public int Canny2 { get; set; } = 150;
 
     public bool UseMorphology { get; set; }
+}
+
+public enum PreprocessThresholdType
+{
+    Binary = 0,
+    Local = 1
 }
 
 public enum IlluminationCorrectionPreset

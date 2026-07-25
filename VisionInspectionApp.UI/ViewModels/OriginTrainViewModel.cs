@@ -18,6 +18,7 @@ namespace VisionInspectionApp.UI.ViewModels
     public sealed partial class OriginTrainViewModel : ObservableObject
     {
         private Mat _rawFullMat;
+        private Mat _globalPreprocessedMat;
         private Mat? _eraserMaskMat; // 255 = keep edge, 0 = erased edge
         private Stack<Mat> _undoStack = new();
         private Stack<Mat> _redoStack = new();
@@ -106,8 +107,14 @@ namespace VisionInspectionApp.UI.ViewModels
         public event Action? RequestCloseDialog;
 
         public OriginTrainViewModel(Mat inputMat, PointDefinition originDef, string workingDir)
+            : this(inputMat, inputMat, originDef, workingDir)
+        {
+        }
+
+        public OriginTrainViewModel(Mat inputMat, Mat globalPreprocessedMat, PointDefinition originDef, string workingDir)
         {
             _rawFullMat = inputMat.Clone();
+            _globalPreprocessedMat = globalPreprocessedMat?.Clone() ?? inputMat.Clone();
             _originDef = originDef ?? new PointDefinition();
             _workingDir = workingDir;
 
@@ -399,18 +406,51 @@ namespace VisionInspectionApp.UI.ViewModels
                 _originDef.MvpEraserMask = buf;
             }
 
-            // Crop & Save template image
+            // Crop & Save template image from Image 1 (Global Preprocess only)
+            // This file serves as the "base" that gets local-preprocessed at runtime
             var templateDir = Path.Combine(_workingDir, "templates");
             Directory.CreateDirectory(templateDir);
             var templateFile = Path.Combine(templateDir, "origin.png");
 
             var curRoi = _originDef.TemplateRoi;
-            using var crop = ToolEditorViewModel.ExtractRoiPatch(_rawFullMat, curRoi);
-            using var gray = crop.Channels() == 1 ? crop.Clone() : crop.CvtColor(ColorConversionCodes.BGR2GRAY);
-            Cv2.ImWrite(templateFile, gray);
+            var sourceMatForSave = (_globalPreprocessedMat != null && !_globalPreprocessedMat.Empty()) ? _globalPreprocessedMat : _rawFullMat;
+            if (sourceMatForSave == null || sourceMatForSave.Empty())
+            {
+                sourceMatForSave = _rawFullMat;
+            }
 
+            if (sourceMatForSave == null || sourceMatForSave.Empty())
+            {
+                return;
+            }
+
+            using var crop = ToolEditorViewModel.ExtractRoiPatch(sourceMatForSave, curRoi);
+            if (crop.Empty() || crop.Width <= 0 || crop.Height <= 0)
+            {
+                return;
+            }
+
+            using var grayToSave = crop.Channels() == 1 ? crop.Clone() : crop.CvtColor(ColorConversionCodes.BGR2GRAY);
+            if (grayToSave.Empty() || grayToSave.Width <= 0 || grayToSave.Height <= 0)
+            {
+                return;
+            }
+
+            Cv2.ImWrite(templateFile, grayToSave);
             _originDef.TemplateImageFile = "origin.png";
-            _originDef.ShapeModel = ShapeModelTrainer.Train(gray);
+
+            // Train ShapeModel from Image 2 (_rawFullMat = tool input after local preprocess)
+            // This matches the actual runtime pipeline: origin.png → PreprocessTemplateForMatch(localPre) = Image 2
+            using var cropForModel = ToolEditorViewModel.ExtractRoiPatch(_rawFullMat, curRoi);
+            if (!cropForModel.Empty() && cropForModel.Width > 0 && cropForModel.Height > 0)
+            {
+                using var grayForModel = cropForModel.Channels() == 1 ? cropForModel.Clone() : cropForModel.CvtColor(ColorConversionCodes.BGR2GRAY);
+                _originDef.ShapeModel = ShapeModelTrainer.Train(grayForModel);
+            }
+            else
+            {
+                _originDef.ShapeModel = ShapeModelTrainer.Train(grayToSave);
+            }
         }
     }
 }

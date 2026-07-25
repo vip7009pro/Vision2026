@@ -725,17 +725,23 @@ namespace VisionInspectionApp.UI.ViewModels
                 return;
             }
     
-            ToolGraphNodeViewModel? toolNode = null;
+            OpenCvSharp.Mat rawMat;
             if (isOrigin)
             {
-                toolNode = Nodes.FirstOrDefault(n => string.Equals(n.Type, "Origin", StringComparison.OrdinalIgnoreCase));
+                // Origin template image MUST ALWAYS be cropped from Image 1 (Global Preprocess)
+                rawMat = _preprocessor.Run(snap, _config?.Preprocess ?? new PreprocessSettings());
             }
-            else if (!string.IsNullOrWhiteSpace(pointName))
+            else
             {
-                toolNode = Nodes.FirstOrDefault(n => string.Equals(n.Type, "Point", StringComparison.OrdinalIgnoreCase) && string.Equals(n.RefName, pointName, StringComparison.OrdinalIgnoreCase));
+                ToolGraphNodeViewModel? toolNode = null;
+                if (!string.IsNullOrWhiteSpace(pointName))
+                {
+                    toolNode = Nodes.FirstOrDefault(n => string.Equals(n.Type, "Point", StringComparison.OrdinalIgnoreCase) && string.Equals(n.RefName, pointName, StringComparison.OrdinalIgnoreCase));
+                }
+                rawMat = toolNode != null ? ResolveToolImageForPreview(snap, toolNode) : _preprocessor.Run(snap, _config?.Preprocess ?? new PreprocessSettings());
             }
-    
-            using var rawMat = toolNode != null ? ResolveToolImageForPreview(snap, toolNode) : snap.Clone();
+            using var tempDisposeMat = rawMat;
+
             var templateDir = Path.Combine(CurrentTempWorkingDir ?? Path.Combine(Path.GetFullPath(_storeOptions.ConfigRootDirectory), ProductCode), "templates");
             Directory.CreateDirectory(templateDir);
             var safeName = name.Trim();
@@ -758,7 +764,19 @@ namespace VisionInspectionApp.UI.ViewModels
             if (isOrigin)
             {
                 _config.Origin.TemplateImageFile = fileName;
-                _config.Origin.ShapeModel = ShapeModelTrainer.Train(gray);
+                // Train ShapeModel from Image 2 (tool input after local preprocess) to match runtime pipeline
+                var originNode = Nodes.FirstOrDefault(n => string.Equals(n.Type, "Origin", StringComparison.OrdinalIgnoreCase));
+                using var image2Mat = originNode != null ? ResolveToolImageForPreview(snap, originNode) : rawMat.Clone();
+                using var cropForModel = ExtractRoiPatch(image2Mat, roi);
+                if (!cropForModel.Empty() && cropForModel.Width > 0 && cropForModel.Height > 0)
+                {
+                    using var grayForModel = cropForModel.Channels() == 1 ? cropForModel.Clone() : cropForModel.CvtColor(OpenCvSharp.ColorConversionCodes.BGR2GRAY);
+                    _config.Origin.ShapeModel = ShapeModelTrainer.Train(grayForModel);
+                }
+                else
+                {
+                    _config.Origin.ShapeModel = ShapeModelTrainer.Train(gray);
+                }
             }
             else if (!string.IsNullOrWhiteSpace(pointName))
             {
@@ -904,7 +922,17 @@ namespace VisionInspectionApp.UI.ViewModels
             OnPropertyChanged(nameof(UseGaussianBlur));
             OnPropertyChanged(nameof(BlurKernel));
             OnPropertyChanged(nameof(UseThreshold));
+            OnPropertyChanged(nameof(ThresholdType));
+            OnPropertyChanged(nameof(IsThresholdBinary));
+            OnPropertyChanged(nameof(IsThresholdLocal));
             OnPropertyChanged(nameof(ThresholdValue));
+            OnPropertyChanged(nameof(ThresholdLow));
+            OnPropertyChanged(nameof(ThresholdHigh));
+            OnPropertyChanged(nameof(InvertBinary));
+            OnPropertyChanged(nameof(MaskWidth));
+            OnPropertyChanged(nameof(MaskHeight));
+            OnPropertyChanged(nameof(LocalOffset));
+            OnPropertyChanged(nameof(InvertLocal));
             OnPropertyChanged(nameof(UseCanny));
             OnPropertyChanged(nameof(Canny1));
             OnPropertyChanged(nameof(Canny2));
@@ -1303,29 +1331,142 @@ namespace VisionInspectionApp.UI.ViewModels
                 RequestAutoSave();
             }
         }
-    
+
         public int ThresholdValue
         {
-            get
-            {
-                var s = GetActivePreprocessSettingsForUi();
-                return s?.ThresholdValue ?? 128;
-            }
-    
+            get => GetActivePreprocessSettingsForUi()?.ThresholdValue ?? 128;
             set
             {
                 var s = GetActivePreprocessSettingsForUi();
-                if (s is null)
-                    return;
-                if (s.ThresholdValue == value)
-                    return;
+                if (s is null || s.ThresholdValue == value) return;
                 s.ThresholdValue = value;
+                RefreshPreviews();
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(ThresholdLow));
+                RequestAutoSave();
+            }
+        }
+
+        public IEnumerable<PreprocessThresholdType> AvailableThresholdTypes => Enum.GetValues<PreprocessThresholdType>();
+
+        public PreprocessThresholdType ThresholdType
+        {
+            get => GetActivePreprocessSettingsForUi()?.ThresholdType ?? PreprocessThresholdType.Binary;
+            set
+            {
+                var s = GetActivePreprocessSettingsForUi();
+                if (s is null || s.ThresholdType == value) return;
+                s.ThresholdType = value;
+                RefreshPreviews();
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(IsThresholdBinary));
+                OnPropertyChanged(nameof(IsThresholdLocal));
+                RequestAutoSave();
+            }
+        }
+
+        public bool IsThresholdBinary => ThresholdType == PreprocessThresholdType.Binary;
+        public bool IsThresholdLocal => ThresholdType == PreprocessThresholdType.Local;
+
+        public int ThresholdLow
+        {
+            get => GetActivePreprocessSettingsForUi()?.ThresholdLow ?? 128;
+            set
+            {
+                var s = GetActivePreprocessSettingsForUi();
+                if (s is null || s.ThresholdLow == value) return;
+                s.ThresholdLow = value;
+                RefreshPreviews();
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(ThresholdValue));
+                RequestAutoSave();
+            }
+        }
+
+        public int ThresholdHigh
+        {
+            get => GetActivePreprocessSettingsForUi()?.ThresholdHigh ?? 255;
+            set
+            {
+                var s = GetActivePreprocessSettingsForUi();
+                if (s is null || s.ThresholdHigh == value) return;
+                s.ThresholdHigh = value;
                 RefreshPreviews();
                 OnPropertyChanged();
                 RequestAutoSave();
             }
         }
-    
+
+        public bool InvertBinary
+        {
+            get => GetActivePreprocessSettingsForUi()?.InvertBinary ?? false;
+            set
+            {
+                var s = GetActivePreprocessSettingsForUi();
+                if (s is null || s.InvertBinary == value) return;
+                s.InvertBinary = value;
+                RefreshPreviews();
+                OnPropertyChanged();
+                RequestAutoSave();
+            }
+        }
+
+        public int MaskWidth
+        {
+            get => GetActivePreprocessSettingsForUi()?.MaskWidth ?? 11;
+            set
+            {
+                var s = GetActivePreprocessSettingsForUi();
+                if (s is null || s.MaskWidth == value) return;
+                s.MaskWidth = value;
+                RefreshPreviews();
+                OnPropertyChanged();
+                RequestAutoSave();
+            }
+        }
+
+        public int MaskHeight
+        {
+            get => GetActivePreprocessSettingsForUi()?.MaskHeight ?? 11;
+            set
+            {
+                var s = GetActivePreprocessSettingsForUi();
+                if (s is null || s.MaskHeight == value) return;
+                s.MaskHeight = value;
+                RefreshPreviews();
+                OnPropertyChanged();
+                RequestAutoSave();
+            }
+        }
+
+        public double LocalOffset
+        {
+            get => GetActivePreprocessSettingsForUi()?.LocalOffset ?? 10.0;
+            set
+            {
+                var s = GetActivePreprocessSettingsForUi();
+                if (s is null || Math.Abs(s.LocalOffset - value) < 1e-6) return;
+                s.LocalOffset = value;
+                RefreshPreviews();
+                OnPropertyChanged();
+                RequestAutoSave();
+            }
+        }
+
+        public bool InvertLocal
+        {
+            get => GetActivePreprocessSettingsForUi()?.InvertLocal ?? false;
+            set
+            {
+                var s = GetActivePreprocessSettingsForUi();
+                if (s is null || s.InvertLocal == value) return;
+                s.InvertLocal = value;
+                RefreshPreviews();
+                OnPropertyChanged();
+                RequestAutoSave();
+            }
+        }
+
         public bool UseCanny
         {
             get

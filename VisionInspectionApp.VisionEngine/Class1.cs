@@ -559,7 +559,39 @@ public sealed class ImagePreprocessor
                 }
 
                 var thr = new Mat();
-                Cv2.Threshold(current, thr, settings.ThresholdValue, 255, ThresholdTypes.Binary);
+                if (settings.ThresholdType == PreprocessThresholdType.Local)
+                {
+                    int mw = settings.MaskWidth < 3 ? 3 : (settings.MaskWidth % 2 == 0 ? settings.MaskWidth + 1 : settings.MaskWidth);
+                    int mh = settings.MaskHeight < 3 ? 3 : (settings.MaskHeight % 2 == 0 ? settings.MaskHeight + 1 : settings.MaskHeight);
+                    int blockSize = Math.Max(mw, mh);
+
+                    var adaptiveType = settings.InvertLocal ? ThresholdTypes.BinaryInv : ThresholdTypes.Binary;
+                    Cv2.AdaptiveThreshold(current, thr, 255, AdaptiveThresholdTypes.GaussianC, adaptiveType, blockSize, settings.LocalOffset);
+                }
+                else
+                {
+                    var tLow = settings.ThresholdLow;
+                    var tHigh = settings.ThresholdHigh;
+                    if (tLow > 0 && tHigh < 255)
+                    {
+                        using var rangeMat = new Mat();
+                        Cv2.InRange(current, new Scalar(tLow), new Scalar(tHigh), rangeMat);
+                        if (settings.InvertBinary)
+                        {
+                            Cv2.BitwiseNot(rangeMat, thr);
+                        }
+                        else
+                        {
+                            rangeMat.CopyTo(thr);
+                        }
+                    }
+                    else
+                    {
+                        var threshType = settings.InvertBinary ? ThresholdTypes.BinaryInv : ThresholdTypes.Binary;
+                        Cv2.Threshold(current, thr, tLow, tHigh > 0 ? tHigh : 255, threshType);
+                    }
+                }
+
                 disposeList.Add(thr);
                 current = thr;
                 anyOp = true;
@@ -1418,7 +1450,7 @@ public sealed class PatternMatcher
             int edgeThresh = def.MvpEdgeThreshold > 0 ? def.MvpEdgeThreshold : 19;
             using var roiCanny = new Mat();
             Cv2.Canny(roiGray, roiCanny, edgeThresh, edgeThresh * 2.5);
-            Cv2.GaussianBlur(roiCanny, roiFeatureMat, new Size(3, 3), 0);
+            Cv2.GaussianBlur(roiCanny, roiFeatureMat, new Size(5, 5), 1.5);
 
             using var templCanny = new Mat();
             Cv2.Canny(templPrep, templCanny, edgeThresh, edgeThresh * 2.5);
@@ -1438,7 +1470,7 @@ public sealed class PatternMatcher
                 }
             }
 
-            Cv2.GaussianBlur(templCanny, templFeatureMat, new Size(3, 3), 0);
+            Cv2.GaussianBlur(templCanny, templFeatureMat, new Size(5, 5), 1.5);
         }
         else if (def.OriginAlgorithm == OriginAlgorithm.ShapePyramid || def.OriginAlgorithm == OriginAlgorithm.ShapeBased)
         {
@@ -1449,7 +1481,7 @@ public sealed class PatternMatcher
             Cv2.Magnitude(gxR, gyR, magR);
             using var mag8R = new Mat();
             magR.ConvertTo(mag8R, MatType.CV_8U);
-            Cv2.GaussianBlur(mag8R, roiFeatureMat, new Size(3, 3), 0);
+            Cv2.GaussianBlur(mag8R, roiFeatureMat, new Size(5, 5), 1.5);
 
             using var gxT = new Mat(); using var gyT = new Mat();
             Cv2.Sobel(templPrep, gxT, MatType.CV_32F, 1, 0, 3);
@@ -1458,7 +1490,7 @@ public sealed class PatternMatcher
             Cv2.Magnitude(gxT, gyT, magT);
             using var mag8T = new Mat();
             magT.ConvertTo(mag8T, MatType.CV_8U);
-            Cv2.GaussianBlur(mag8T, templFeatureMat, new Size(3, 3), 0);
+            Cv2.GaussianBlur(mag8T, templFeatureMat, new Size(5, 5), 1.5);
         }
         else
         {
@@ -1470,12 +1502,17 @@ public sealed class PatternMatcher
         int maxPyramidLevel = 2;
         if (def.OriginAlgorithm == OriginAlgorithm.MvpShapeMatch && def.MvpMaxPyramidLayers > 0)
         {
-            maxPyramidLevel = Math.Clamp(def.MvpMaxPyramidLayers - 1, 0, 5);
+            maxPyramidLevel = Math.Clamp(def.MvpMaxPyramidLayers - 1, 0, 4);
         }
         else
         {
             if (templFeatureMat.Width < 128 || templFeatureMat.Height < 128) maxPyramidLevel = 1;
             if (templFeatureMat.Width < 40 || templFeatureMat.Height < 40) maxPyramidLevel = 0;
+        }
+
+        while (maxPyramidLevel > 0 && (templFeatureMat.Width / (1 << maxPyramidLevel) < 12 || templFeatureMat.Height / (1 << maxPyramidLevel) < 12))
+        {
+            maxPyramidLevel--;
         }
 
         Mat[] pyrRoi = new Mat[maxPyramidLevel + 1];
@@ -1597,38 +1634,41 @@ public sealed class PatternMatcher
                 currAngleSearchRange = lvlStep * 1.5;
             }
 
-            // Calculate final normalized match score on grayscale ROI & template rotated by bestAngle
-            try
+            // For Shape/Edge matching algorithms (MvpShapeMatch, ShapeBased, ShapePyramid), bestScore is already accurately computed at Level 0 (pyrRoi[0]) on feature matrices without zero-padded black corner corruption.
+            if (def.OriginAlgorithm == OriginAlgorithm.TemplateMatch || def.OriginAlgorithm == OriginAlgorithm.TemplateMatchPyramid)
             {
-                using var templRot = RotateTemplateCentered(templPrep, bestAngle);
-                var crop = ContentRectFromNonZero(templRot, pad: 2);
-                if (crop.Width > 0 && crop.Height > 0)
+                try
                 {
-                    using var templCropped = new Mat(templRot, crop);
-                    int expectedTopLeftX = (int)Math.Round(bestCenterInRoi.X - (templRot.Width / 2.0 - crop.X));
-                    int expectedTopLeftY = (int)Math.Round(bestCenterInRoi.Y - (templRot.Height / 2.0 - crop.Y));
-
-                    int subX = Math.Max(0, expectedTopLeftX - 6);
-                    int subY = Math.Max(0, expectedTopLeftY - 6);
-                    int subW = Math.Min(roiGray.Width - subX, templCropped.Width + 12);
-                    int subH = Math.Min(roiGray.Height - subY, templCropped.Height + 12);
-
-                    if (subW >= templCropped.Width && subH >= templCropped.Height)
+                    using var templRot = RotateTemplateCentered(templPrep, bestAngle);
+                    var crop = ContentRectFromNonZero(templRot, pad: 2);
+                    if (crop.Width > 0 && crop.Height > 0)
                     {
-                        using var subRoi = new Mat(roiGray, new Rect(subX, subY, subW, subH));
-                        using var resScore = new Mat();
-                        Cv2.MatchTemplate(subRoi, templCropped, resScore, TemplateMatchModes.CCoeffNormed);
-                        Cv2.MinMaxLoc(resScore, out _, out double maxScore, out _, out Point maxLoc);
-                        if (!double.IsNaN(maxScore) && maxScore > 0)
+                        using var templCropped = new Mat(templRot, crop);
+                        int expectedTopLeftX = (int)Math.Round(bestCenterInRoi.X - (templRot.Width / 2.0 - crop.X));
+                        int expectedTopLeftY = (int)Math.Round(bestCenterInRoi.Y - (templRot.Height / 2.0 - crop.Y));
+
+                        int subX = Math.Max(0, expectedTopLeftX - 6);
+                        int subY = Math.Max(0, expectedTopLeftY - 6);
+                        int subW = Math.Min(roiGray.Width - subX, templCropped.Width + 12);
+                        int subH = Math.Min(roiGray.Height - subY, templCropped.Height + 12);
+
+                        if (subW >= templCropped.Width && subH >= templCropped.Height)
                         {
-                            bestScore = maxScore;
-                            bestCenterInRoi = new Point2d(subX + maxLoc.X + (templRot.Width / 2.0 - crop.X), subY + maxLoc.Y + (templRot.Height / 2.0 - crop.Y));
+                            using var subRoi = new Mat(roiGray, new Rect(subX, subY, subW, subH));
+                            using var resScore = new Mat();
+                            Cv2.MatchTemplate(subRoi, templCropped, resScore, TemplateMatchModes.CCoeffNormed);
+                            Cv2.MinMaxLoc(resScore, out _, out double maxScore, out _, out Point maxLoc);
+                            if (!double.IsNaN(maxScore) && maxScore > 0)
+                            {
+                                bestScore = maxScore;
+                                bestCenterInRoi = new Point2d(subX + maxLoc.X + (templRot.Width / 2.0 - crop.X), subY + maxLoc.Y + (templRot.Height / 2.0 - crop.Y));
+                            }
                         }
                     }
                 }
-            }
-            catch
-            {
+                catch
+                {
+                }
             }
 
             var globalPos = new Point2d(bestCenterInRoi.X + roiRect.X, bestCenterInRoi.Y + roiRect.Y);

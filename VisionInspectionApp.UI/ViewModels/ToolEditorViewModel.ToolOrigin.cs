@@ -192,9 +192,10 @@ namespace VisionInspectionApp.UI.ViewModels
 
             var toolNode = Nodes.FirstOrDefault(n => string.Equals(n.Type, "Origin", StringComparison.OrdinalIgnoreCase));
             using var prepSnap = toolNode != null ? ResolveToolImageForPreview(snap, toolNode) : snap.Clone();
+            using var globalPrepSnap = _preprocessor.Run(snap, _config.Preprocess);
 
             var workingDir = CurrentTempWorkingDir ?? Path.Combine(Path.GetFullPath(_storeOptions.ConfigRootDirectory), ProductCode ?? "");
-            var vm = new OriginTrainViewModel(prepSnap, _config.Origin, workingDir);
+            var vm = new OriginTrainViewModel(prepSnap, globalPrepSnap, _config.Origin, workingDir);
             var win = new Views.OriginTrainWindow(vm)
             {
                 Owner = System.Windows.Application.Current.MainWindow
