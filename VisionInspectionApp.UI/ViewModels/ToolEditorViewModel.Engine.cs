@@ -757,7 +757,6 @@ namespace VisionInspectionApp.UI.ViewModels
             {
                 _config.Origin.TemplateRoi = roi;
                 _config.Origin.WorldPosition = RoiCenterToWorld(roi);
-                TrySaveTemplateImage("origin", roi, isOrigin: true, pointName: null);
                 return;
             }
     
@@ -1101,7 +1100,6 @@ namespace VisionInspectionApp.UI.ViewModels
             {
                 _config.Origin.TemplateRoi = roi;
                 _config.Origin.WorldPosition = RoiCenterToWorld(roi);
-                TrySaveTemplateImage("origin", roi, isOrigin: true, pointName: null);
                 RefreshPreviews();
                 RequestAutoSave();
                 return;

@@ -154,6 +154,10 @@
   - **Vision Engine & Application (`VisionInspectionApp.Application\Class1.cs`)**:
     - Cập nhật `ExtractStraightRoi`: Tính toán góc xoay tổng cộng (`totalAngleDeg = originAngle + roi.Angle`) để trích xuất ảnh patch chuẩn hóa đã xoay phẳng, phục vụ các thuật toán xử lý ảnh của tool.
     - Cập nhật `MapToGlobal`, `TransformRoi` và `TransformRoiKeepSize`: Áp dụng góc xoay tổng cộng để chuyển các điểm nhận diện (point, line, edge, caliper, blob) về tọa độ ảnh gốc một cách chính xác.
+- **Tách biệt hoàn toàn việc lưu Template Origin**:
+  - Gỡ bỏ lời gọi `TrySaveTemplateImage` tự động khi chỉnh sửa/di chuyển/thay đổi kích thước khung ROI `Origin T` trên màn hình preview ([ToolEditorViewModel.Engine.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/ToolEditorViewModel.Engine.cs#L756-L762) & [#L1100-L1108](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/ToolEditorViewModel.Engine.cs#L1100-L1108)).
+  - Việc lưu/ghi đè hình ảnh mẫu `origin.png` và huấn luyện lại `ShapeModel` chỉ diễn ra khi người dùng bấm nút **"Lưu Template Origin"** trên Properties Panel (`Origin_TeachTemplateCommand`).
+  - Thao tác thực thi RUN (`▶ Run Once`, `🔁 Run Continuous`, `Run Flow`) chỉ sử dụng file template đã dạy trước đó để kiểm tra, hoàn toàn không tự động ghi đè hay thay đổi ảnh template.
 
 
 
