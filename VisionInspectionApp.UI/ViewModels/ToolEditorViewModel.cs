@@ -237,6 +237,7 @@ namespace VisionInspectionApp.UI.ViewModels
             SurfaceCompare_SetSearchRoiCommand = new RelayCommand(SurfaceCompare_SetSearchRoi);
             SurfaceCompare_SetTemplateRoiCommand = new RelayCommand(SurfaceCompare_SetTemplateRoi);
             Origin_TeachTemplateCommand = new RelayCommand(Origin_TeachTemplate);
+            Origin_OpenTrainWindowCommand = new RelayCommand(OpenTrainTemplateWindow);
 
             _sharedImage.ImageChanged += (_, __) =>
             {

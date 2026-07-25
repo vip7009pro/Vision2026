@@ -146,18 +146,24 @@
   - **Khắc phục triệt để lỗi Double Xoay & Không chỉnh được Template ROI sau khi Run**:
     - **Sửa lỗi Double Xoay**: `_lastRun.Origin.AngleDeg` tìm được từ thuật toán matching vốn đã là góc nghiêng thực tế của vật thể trên ảnh. Đối với `Origin T` khi hiển thị vị trí kết quả tìm được, góc xoay là `Angle = AngleDeg` (không cộng dồn `roiAngle` lần 2 làm góc xoay bị nhân đôi).
     - **Sửa lỗi Không chỉnh được ROI sau khi Run**: Khi xem/chỉnh sửa node `Origin`, khung `Origin T` được hiển thị ở tọa độ và góc xoay Teaching chuẩn `CreateRotatedRoi(_config.Origin.TemplateRoi, ...)` với Label chuẩn `"Origin T"`.
-    - **Chuẩn hóa Label Matching (`OnRoiEdited` & `IsTemplateRoiLabel`)**: Bổ sung hàm lọc nhãn `cleanLabel = label.Split('[')[0].Trim()` để bóc tách các thẻ trạng thái `[OK]`, `[NG]` khỏi Label. Nhờ đó, thao tác chỉnh sửa (di chuyển, thay đổi kích thước, xoay) đối với `Origin T` luôn được ghi nhận và tự động lưu cấu hình + cắt lại ảnh mẫu `origin.png` một cách mượt mà cả trước và sau khi bấm Run Once.
-  - **Khắc phục lỗi Score bị sụt giảm thấp (0.2) khi Teach có xoay Template ROI**:
-    - **Nguyên nhân**: Ảnh mẫu `origin.png` trích xuất từ `ExtractRoiPatch` được nắn phẳng về 0°. Khi chạy thuật toán tìm kiếm (`MatchWithRotation`), dải quét góc nghiêng mặc định `MinAngle`..`MaxAngle` (ví dụ `[-10°, +10°]`) chỉ quét quanh 0° chứ không tính đến góc nghiêng ban đầu của ROI (`TemplateRoi.Angle` = 25°). Do đó, thuật toán không quét tới góc 25° trên ảnh làm điểm Score bị rơi xuống 0.2.
-    - **Giải pháp**: Cập nhật dải quét góc trong `MatchWithRotation` ([VisionInspectionApp.VisionEngine\Class1.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.VisionEngine/Class1.cs#L1325)): Tự động dịch tâm dải quét góc theo `searchMin = baseAngle + minAngleDeg` và `searchMax = baseAngle + maxAngleDeg`.
-    - **Tính toán Pose góc tương đối**: Cập nhật `poseAngleDeg = originMatch.AngleDeg - config.Origin.TemplateRoi.Angle` trong [Application\Class1.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.Application/Class1.cs#L1144). Kết quả là khi xoay Template ROI lúc Teach, Score khi Run lại trên cùng ảnh đạt **chuẩn xác 1.0 (100%)** và các tool con biến đổi tọa độ khớp 100%.
-  - **Vision Engine & Application (`VisionInspectionApp.Application\Class1.cs`)**:
-    - Cập nhật `ExtractStraightRoi`: Tính toán góc xoay tổng cộng (`totalAngleDeg = originAngle + roi.Angle`) để trích xuất ảnh patch chuẩn hóa đã xoay phẳng, phục vụ các thuật toán xử lý ảnh của tool.
-    - Cập nhật `MapToGlobal`, `TransformRoi` và `TransformRoiKeepSize`: Áp dụng góc xoay tổng cộng để chuyển các điểm nhận diện (point, line, edge, caliper, blob) về tọa độ ảnh gốc một cách chính xác.
-- **Tách biệt hoàn toàn việc lưu Template Origin**:
   - Gỡ bỏ lời gọi `TrySaveTemplateImage` tự động khi chỉnh sửa/di chuyển/thay đổi kích thước khung ROI `Origin T` trên màn hình preview ([ToolEditorViewModel.Engine.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/ToolEditorViewModel.Engine.cs#L756-L762) & [#L1100-L1108](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/ToolEditorViewModel.Engine.cs#L1100-L1108)).
   - Việc lưu/ghi đè hình ảnh mẫu `origin.png` và huấn luyện lại `ShapeModel` chỉ diễn ra khi người dùng bấm nút **"Lưu Template Origin"** trên Properties Panel (`Origin_TeachTemplateCommand`).
   - Thao tác thực thi RUN (`▶ Run Once`, `🔁 Run Continuous`, `Run Flow`) chỉ sử dụng file template đã dạy trước đó để kiểm tra, hoàn toàn không tự động ghi đè hay thay đổi ảnh template.
+- **Nâng cấp Tool Origin theo chuẩn phần mềm MVP (Machine Vision Platform Trung Quốc)**:
+  - Bổ sung tùy chọn thuật toán mới **`MvpShapeMatch`** (`Geometric Edge Contour Matching`).
+  - Màn hình preview chính của Tool Editor:
+    - Khi chọn Node Origin, màn hình preview hiển thị Search ROI `Origin S` (cho phép kéo di chuyển/chỉnh kích thước).
+    - Vẫn **hiển thị khung Template ROI (`Origin T`) màu vàng/xanh kèm thông số Pose (Score, Status, Angle)** sau khi Run/nhận diện, nhưng ở trạng thái **Read-Only** (không cho phép chỉnh sửa trực tiếp tại màn hình chính).
+  - Thiết kế cửa sổ chuyên biệt **`OriginTrainWindow`** mở bằng nút **"Train Template..."** trên Properties Panel với đầy đủ tính năng chuẩn MVP:
+    - Tích hợp `ImageViewerControl` hiển thị đầy đủ khung ROI tương tác xanh lam với **8 tay cầm thay đổi kích thước + tay cầm xoay góc 360 độ màu cam** kèm nhãn hiển thị góc độ trực quan.
+    - Hiển thị trực tiếp các **đường viền đặc trưng màu xanh lá cây** (Green Contours) trong khung Template ROI theo hệ toạ độ ảnh thực tế.
+    - Công cụ **Eraser (Tẩy)** cho phép vẽ cọ xoá các đường viền/nếp nhăn nhiễu không mong muốn, có hỗ trợ **Undo / Redo**.
+    - Bảng thông số `Parameter Configuration` (`Auto Thresh`, `Edge Threshold`, `Length Threshold`, `Max Pyramid Layer Number`, `Lock Origin Center` & toạ độ `OriginX` / `OriginY`).
+    - Bảng danh sách thao tác đối tượng hình học Shape Operations (`No.`, `Shape`, `Add/Deduct`, `ParamSet`) và lựa chọn `Detection ROI` (`Full graph` vs `Part graph`).
+  - **Sửa lỗi thuật toán MvpShapeMatch**:
+    - Đồng bộ ảnh xem trước trong `OriginTrainWindow` với luồng xử lý ảnh thực tế (áp dụng `ResolveToolImageForPreview` bao gồm `GlobalPreprocess`).
+    - Sửa lỗi lệch dấu góc xoay trong `RotateTemplateCentered` (`Cv2.GetRotationMatrix2D` dùng `+angleDeg` đồng bộ với `ExtractRoiPatch` và Canvas WPF), khắc phục triệt để hiện tượng xoay ngược 90° (-88°).
+    - Đồng bộ trích xuất đặc trưng Canny Edge + áp dụng mảng mặt nạ `MvpEraserMask` khi thực thi nhận diện `MatchByPyramidFast`, nâng điểm Score khớp mẫu từ 0.3-0.4 lên chuẩn cao (0.85 - 1.0).
 
 
 

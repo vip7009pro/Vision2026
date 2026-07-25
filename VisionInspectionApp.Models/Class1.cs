@@ -456,7 +456,14 @@ public enum OriginAlgorithm
     TemplateMatch = 1,
     FeatureBased = 2,
     TemplateMatchPyramid = 3,
-    ShapePyramid = 4
+    ShapePyramid = 4,
+    MvpShapeMatch = 5
+}
+
+public enum DetectionRoiMode
+{
+    PartGraph = 0,
+    FullGraph = 1
 }
 
 public enum PointFindAlgorithm
@@ -518,6 +525,25 @@ public sealed class PointDefinition
     public int EdgeThresholdMin { get; set; } = 50;
     
     public int EdgeThresholdMax { get; set; } = 150;
+
+    // Chinese MVP Software Shape Matching properties
+    public bool MvpAutoThresh { get; set; } = true;
+
+    public int MvpEdgeThreshold { get; set; } = 19;
+
+    public int MvpLengthThreshold { get; set; } = 13;
+
+    public int MvpMaxPyramidLayers { get; set; } = 6;
+
+    public bool MvpLockOriginCenter { get; set; } = true;
+
+    public double MvpOriginX { get; set; }
+
+    public double MvpOriginY { get; set; }
+
+    public DetectionRoiMode MvpDetectionRoiMode { get; set; } = DetectionRoiMode.PartGraph;
+
+    public byte[]? MvpEraserMask { get; set; }
 }
 
 public sealed class ShapeModelDefinition

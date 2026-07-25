@@ -453,15 +453,15 @@ namespace VisionInspectionApp.UI.ViewModels
             {
                 return raw.Clone();
             }
-    
+
             var edges = _config.ToolGraph?.Edges ?? new();
             var nodesById = Nodes.Where(n => !string.IsNullOrWhiteSpace(n.Id)).ToDictionary(n => n.Id, StringComparer.OrdinalIgnoreCase);
             var imageEdge = edges.FirstOrDefault(e => string.Equals(e.ToNodeId, toolNode.Id, StringComparison.OrdinalIgnoreCase) && (string.Equals(e.ToPort, "Image", StringComparison.OrdinalIgnoreCase) || string.Equals(e.ToPort, "In", StringComparison.OrdinalIgnoreCase)));
             if (imageEdge is null || !nodesById.TryGetValue(imageEdge.FromNodeId, out var fromNode))
             {
-                return raw.Clone();
+                return _preprocessor.Run(raw, _config.Preprocess);
             }
-    
+
             if (string.Equals(fromNode.Type, "ImageSource", StringComparison.OrdinalIgnoreCase))
             {
                 var imgSourceDef = _config.ImageSources.FirstOrDefault(x => string.Equals(x.Name, fromNode.RefName, StringComparison.OrdinalIgnoreCase));
@@ -470,16 +470,19 @@ namespace VisionInspectionApp.UI.ViewModels
                     var loadedMat = LoadImageFromSourceForPreview(imgSourceDef);
                     if (loadedMat is not null && !loadedMat.Empty())
                     {
-                        return loadedMat.Clone();
+                        return _preprocessor.Run(loadedMat, _config.Preprocess);
                     }
                 }
             }
             else if (string.Equals(fromNode.Type, "Preprocess", StringComparison.OrdinalIgnoreCase))
             {
-                return ResolveToolImageForPreview(raw, fromNode);
+                var preDef = _config.PreprocessNodes?.FirstOrDefault(x => string.Equals(x.Name, fromNode.RefName, StringComparison.OrdinalIgnoreCase));
+                var settings = preDef?.Settings ?? _config.Preprocess;
+                using var upstreamMat = ResolveToolImageForPreview(raw, fromNode);
+                return _preprocessor.Run(upstreamMat, settings);
             }
-    
-            return raw.Clone();
+
+            return _preprocessor.Run(raw, _config.Preprocess);
         }
     
         private void RequestBlobThresholdPreviewUpdate()
@@ -1098,10 +1101,7 @@ namespace VisionInspectionApp.UI.ViewModels
     
             if (string.Equals(label, "Origin T", StringComparison.OrdinalIgnoreCase))
             {
-                _config.Origin.TemplateRoi = roi;
-                _config.Origin.WorldPosition = RoiCenterToWorld(roi);
-                RefreshPreviews();
-                RequestAutoSave();
+                // Khung Template ROI là Read-Only trên Canvas chính (việc Train/chỉnh sửa Template ROI được thực hiện trong cửa sổ Train Template)
                 return;
             }
     
@@ -2175,11 +2175,6 @@ namespace VisionInspectionApp.UI.ViewModels
                     Stroke = Brushes.Lime,
                     Label = "Origin S"
                 });
-            }
-    
-            if (config.Origin.TemplateRoi.Width > 0 && config.Origin.TemplateRoi.Height > 0)
-            {
-                dst.Add(CreateRotatedRoiWithPose(config.Origin.TemplateRoi, Brushes.Lime, "Origin T"));
             }
     
             foreach (var p in config.Points)
@@ -3410,7 +3405,7 @@ namespace VisionInspectionApp.UI.ViewModels
                     Y = (int)Math.Round(centerFound.Y - roi.Height / 2.0),
                     Width = roi.Width,
                     Height = roi.Height,
-                    Angle = (!string.IsNullOrWhiteSpace(label) && label.StartsWith("Origin", StringComparison.OrdinalIgnoreCase)) ? angleDeg : (angleDeg + roiAngle),
+                    Angle = roiAngle + angleDeg,
                     Stroke = _lastRun.Origin.Pass ? stroke : System.Windows.Media.Brushes.Red,
                     Label = finalLabel
                 };

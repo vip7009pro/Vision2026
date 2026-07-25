@@ -167,6 +167,7 @@ namespace VisionInspectionApp.UI.ViewModels
         }
 
         public ICommand? Origin_TeachTemplateCommand { get; internal set; }
+        public ICommand? Origin_OpenTrainWindowCommand { get; internal set; }
 
         public void Origin_TeachTemplate()
         {
@@ -182,6 +183,33 @@ namespace VisionInspectionApp.UI.ViewModels
             RequestAutoSave();
         }
 
-        public bool IsOriginShapePyramid => Origin_Algorithm == OriginAlgorithm.ShapePyramid;
+        public void OpenTrainTemplateWindow()
+        {
+            if (_config?.Origin == null) return;
+
+            using var rawSnap = _sharedImage.GetSnapshot();
+            using var snap = rawSnap ?? new Mat(480, 640, MatType.CV_8UC1, Scalar.All(128));
+
+            var toolNode = Nodes.FirstOrDefault(n => string.Equals(n.Type, "Origin", StringComparison.OrdinalIgnoreCase));
+            using var prepSnap = toolNode != null ? ResolveToolImageForPreview(snap, toolNode) : snap.Clone();
+
+            var workingDir = CurrentTempWorkingDir ?? Path.Combine(Path.GetFullPath(_storeOptions.ConfigRootDirectory), ProductCode ?? "");
+            var vm = new OriginTrainViewModel(prepSnap, _config.Origin, workingDir);
+            var win = new Views.OriginTrainWindow(vm)
+            {
+                Owner = System.Windows.Application.Current.MainWindow
+            };
+
+            if (win.ShowDialog() == true || true)
+            {
+                OnPropertyChanged(nameof(Origin_Algorithm));
+                OnPropertyChanged(nameof(IsOriginShapePyramid));
+                RefreshOriginTemplatePreview();
+                RefreshPreviews();
+                RequestAutoSave();
+            }
+        }
+
+        public bool IsOriginShapePyramid => Origin_Algorithm == OriginAlgorithm.ShapePyramid || Origin_Algorithm == OriginAlgorithm.MvpShapeMatch;
     }
 }

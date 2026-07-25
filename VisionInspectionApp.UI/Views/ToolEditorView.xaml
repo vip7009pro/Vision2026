@@ -339,7 +339,14 @@
                                     </Grid>
                                 </Border>
                                 <Border Padding="6" Background="{DynamicResource WindowBackgroundBrush}">
-                                    <Button Content="Lưu Template Origin" Command="{Binding Origin_TeachTemplateCommand}" Background="#0F5FA8" Foreground="White" Padding="12,6" HorizontalAlignment="Stretch" ToolTip="Lưu lại hình ảnh mẫu trong khung Template ROI cho Origin tool" />
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <Button Content="Train Template..." Command="{Binding Origin_OpenTrainWindowCommand}" Background="#007ACC" Foreground="White" Padding="6,6" Margin="0,0,3,0" ToolTip="Mở cửa sổ huấn luyện Template matching theo phong cách MVP (Trung Quốc)" />
+                                        <Button Grid.Column="1" Content="Lưu Template Origin" Command="{Binding Origin_TeachTemplateCommand}" Background="#0F5FA8" Foreground="White" Padding="6,6" Margin="3,0,0,0" ToolTip="Lưu lại hình ảnh mẫu trong khung Template ROI cho Origin tool" />
+                                    </Grid>
                                 </Border>
 
                                 <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" Padding="4" Margin="0,4,0,6" Background="{DynamicResource PanelAltBackgroundBrush}">

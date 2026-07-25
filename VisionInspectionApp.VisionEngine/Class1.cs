@@ -349,6 +349,45 @@ public static class ShapeModelTrainer
     }
 }
 
+public static class MvpShapeTrainer
+{
+    public static List<Point[]> ExtractContours(Mat gray, int edgeThresh, int lengthThresh, Mat? eraserMask = null)
+    {
+        if (gray is null || gray.Empty()) return new List<Point[]>();
+
+        using var prep = gray.Channels() == 1 ? gray.Clone() : gray.CvtColor(ColorConversionCodes.BGR2GRAY);
+        using var canny = new Mat();
+        Cv2.Canny(prep, canny, edgeThresh, edgeThresh * 2.5);
+
+        if (eraserMask is not null && !eraserMask.Empty() && eraserMask.Width == canny.Width && eraserMask.Height == canny.Height)
+        {
+            Cv2.BitwiseAnd(canny, eraserMask, canny);
+        }
+
+        Cv2.FindContours(canny, out var contours, out _, RetrievalModes.List, ContourApproximationModes.ApproxNone);
+
+        var result = new List<Point[]>();
+        foreach (var c in contours)
+        {
+            if (c.Length >= lengthThresh)
+            {
+                result.Add(c);
+            }
+        }
+        return result;
+    }
+
+    public static Mat RenderContourOverlay(Mat image, List<Point[]> contours, Scalar? contourColor = null)
+    {
+        if (image is null || image.Empty()) return new Mat();
+        Mat bgr = image.Channels() == 3 ? image.Clone() : image.CvtColor(ColorConversionCodes.GRAY2BGR);
+
+        var color = contourColor ?? Scalar.FromRgb(0, 255, 0); // Vivid Green #00FF00
+        Cv2.DrawContours(bgr, contours, -1, color, 1, LineTypes.AntiAlias);
+        return bgr;
+    }
+}
+
 public sealed record DistanceCheckResult(string Name, string PointA, string PointB, double Value, double Nominal, double TolPlus, double TolMinus, bool Pass);
 
 public sealed record LineDetectResult(string Name, Point2d P1, Point2d P2, double LengthPx, bool Found);
@@ -1347,9 +1386,6 @@ public sealed class PatternMatcher
         int newH = (int)Math.Ceiling(origW * sin + origH * cos);
 
         Point2f center = new Point2f(origW / 2.0f, origH / 2.0f);
-        // Note: OpenCV GetRotationMatrix2D uses positive angle for counter-clockwise.
-        // To rotate CLOCKWISE by angleDeg (matching screen coordinates and FeatureBased convention),
-        // we pass -angleDeg to GetRotationMatrix2D!
         using var rotMat = Cv2.GetRotationMatrix2D(center, -angleDeg, 1.0);
 
         rotMat.Set(0, 2, rotMat.At<double>(0, 2) + (newW - origW) / 2.0);
@@ -1377,7 +1413,34 @@ public sealed class PatternMatcher
         using var roiFeatureMat = new Mat();
         using var templFeatureMat = new Mat();
 
-        if (def.OriginAlgorithm == OriginAlgorithm.ShapePyramid || def.OriginAlgorithm == OriginAlgorithm.ShapeBased)
+        if (def.OriginAlgorithm == OriginAlgorithm.MvpShapeMatch)
+        {
+            int edgeThresh = def.MvpEdgeThreshold > 0 ? def.MvpEdgeThreshold : 19;
+            using var roiCanny = new Mat();
+            Cv2.Canny(roiGray, roiCanny, edgeThresh, edgeThresh * 2.5);
+            Cv2.GaussianBlur(roiCanny, roiFeatureMat, new Size(3, 3), 0);
+
+            using var templCanny = new Mat();
+            Cv2.Canny(templPrep, templCanny, edgeThresh, edgeThresh * 2.5);
+
+            if (def.MvpEraserMask != null && def.MvpEraserMask.Length > 0)
+            {
+                try
+                {
+                    using var decodedMask = Cv2.ImDecode(def.MvpEraserMask, ImreadModes.Grayscale);
+                    if (decodedMask != null && !decodedMask.Empty() && decodedMask.Width == templCanny.Width && decodedMask.Height == templCanny.Height)
+                    {
+                        Cv2.BitwiseAnd(templCanny, decodedMask, templCanny);
+                    }
+                }
+                catch
+                {
+                }
+            }
+
+            Cv2.GaussianBlur(templCanny, templFeatureMat, new Size(3, 3), 0);
+        }
+        else if (def.OriginAlgorithm == OriginAlgorithm.ShapePyramid || def.OriginAlgorithm == OriginAlgorithm.ShapeBased)
         {
             using var gxR = new Mat(); using var gyR = new Mat();
             Cv2.Sobel(roiGray, gxR, MatType.CV_32F, 1, 0, 3);
@@ -1405,8 +1468,15 @@ public sealed class PatternMatcher
 
         // Determine maximum pyramid level (Level 0: 1/1, Level 1: 1/2, Level 2: 1/4)
         int maxPyramidLevel = 2;
-        if (templFeatureMat.Width < 128 || templFeatureMat.Height < 128) maxPyramidLevel = 1;
-        if (templFeatureMat.Width < 40 || templFeatureMat.Height < 40) maxPyramidLevel = 0;
+        if (def.OriginAlgorithm == OriginAlgorithm.MvpShapeMatch && def.MvpMaxPyramidLayers > 0)
+        {
+            maxPyramidLevel = Math.Clamp(def.MvpMaxPyramidLayers - 1, 0, 5);
+        }
+        else
+        {
+            if (templFeatureMat.Width < 128 || templFeatureMat.Height < 128) maxPyramidLevel = 1;
+            if (templFeatureMat.Width < 40 || templFeatureMat.Height < 40) maxPyramidLevel = 0;
+        }
 
         Mat[] pyrRoi = new Mat[maxPyramidLevel + 1];
         Mat[] pyrTempl = new Mat[maxPyramidLevel + 1];
