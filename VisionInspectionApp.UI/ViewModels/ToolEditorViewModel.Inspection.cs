@@ -244,6 +244,62 @@ namespace VisionInspectionApp.UI.ViewModels
                     }
                 }
 
+                if (res.LineToLineDistances is not null)
+                {
+                    foreach (var l2l in res.LineToLineDistances.Where(x => !x.Pass))
+                    {
+                        reasons.Add($"• Lỗi LineLineDist '{l2l.Name}': Giá trị {l2l.Value:F3}mm nằm ngoài khoảng [{l2l.Nominal + l2l.TolMinus:F3}, {l2l.Nominal + l2l.TolPlus:F3}]");
+                    }
+                }
+
+                if (res.PointToLineDistances is not null)
+                {
+                    foreach (var p2l in res.PointToLineDistances.Where(x => !x.Pass))
+                    {
+                        reasons.Add($"• Lỗi PointLineDist '{p2l.Name}': Giá trị {p2l.Value:F3}mm nằm ngoài khoảng [{p2l.Nominal + p2l.TolMinus:F3}, {p2l.Nominal + p2l.TolPlus:F3}]");
+                    }
+                }
+
+                if (res.Angles is not null)
+                {
+                    foreach (var a in res.Angles.Where(x => !x.Pass))
+                    {
+                        reasons.Add($"• Lỗi Angle '{a.Name}': Giá trị {a.ValueDeg:F3}° nằm ngoài khoảng [{a.Nominal + a.TolMinus:F3}, {a.Nominal + a.TolPlus:F3}]");
+                    }
+                }
+
+                if (res.EdgePairs is not null)
+                {
+                    foreach (var ep in res.EdgePairs.Where(x => !x.Pass))
+                    {
+                        reasons.Add($"• Lỗi EdgePair '{ep.Name}': Giá trị {ep.Value:F3}mm nằm ngoài khoảng [{ep.Nominal + ep.TolMinus:F3}, {ep.Nominal + ep.TolPlus:F3}]");
+                    }
+                }
+
+                if (res.EdgePairDetections is not null)
+                {
+                    foreach (var epd in res.EdgePairDetections.Where(x => !x.Pass))
+                    {
+                        reasons.Add($"• Lỗi EdgePairDetect '{epd.Name}': Giá trị {epd.Value:F3}mm nằm ngoài khoảng [{epd.Nominal + epd.TolMinus:F3}, {epd.Nominal + epd.TolPlus:F3}]");
+                    }
+                }
+
+                if (res.LinePairDetections is not null)
+                {
+                    foreach (var lpd in res.LinePairDetections.Where(x => !x.Pass))
+                    {
+                        reasons.Add($"• Lỗi LinePairDetect '{lpd.Name}': Giá trị {lpd.Value:F3}mm nằm ngoài khoảng [{lpd.Nominal + lpd.TolMinus:F3}, {lpd.Nominal + lpd.TolPlus:F3}]");
+                    }
+                }
+
+                if (res.Diameters is not null)
+                {
+                    foreach (var dia in res.Diameters.Where(x => !x.Pass))
+                    {
+                        reasons.Add($"• Lỗi Diameter '{dia.Name}': Giá trị {dia.Value:F3}mm nằm ngoài khoảng [{dia.Nominal + dia.TolMinus:F3}, {dia.Nominal + dia.TolPlus:F3}]");
+                    }
+                }
+
                 if (res.Conditions is not null)
                 {
                     foreach (var c in res.Conditions.Where(x => !x.Pass))
@@ -329,6 +385,23 @@ namespace VisionInspectionApp.UI.ViewModels
                 }
             }
 
+            if (res.Angles is not null)
+            {
+                foreach (var ang in res.Angles)
+                {
+                    SpecResults.Add(new SpecResultRow(
+                        "Angle",
+                        ang.Name,
+                        ang.LineA,
+                        ang.LineB,
+                        ang.ValueDeg,
+                        ang.Nominal,
+                        ang.TolPlus,
+                        ang.TolMinus,
+                        ang.Pass));
+                }
+            }
+
             if (res.EdgePairs is not null)
             {
                 foreach (var ep in res.EdgePairs)
@@ -360,6 +433,23 @@ namespace VisionInspectionApp.UI.ViewModels
                         epd.TolPlus,
                         epd.TolMinus,
                         epd.Pass));
+                }
+            }
+
+            if (res.LinePairDetections is not null)
+            {
+                foreach (var lpd in res.LinePairDetections)
+                {
+                    SpecResults.Add(new SpecResultRow(
+                        "LinePairDetect",
+                        lpd.Name,
+                        "-",
+                        "-",
+                        lpd.Value,
+                        lpd.Nominal,
+                        lpd.TolPlus,
+                        lpd.TolMinus,
+                        lpd.Pass));
                 }
             }
 

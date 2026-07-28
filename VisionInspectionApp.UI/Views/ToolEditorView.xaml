@@ -2180,8 +2180,34 @@
                                 <StackPanel>
                                     <TextBlock Text="📏 BẢNG KẾT QUẢ ĐO ĐẠC (SPEC MEASUREMENTS)" FontWeight="Bold" FontSize="11" Margin="2,2,0,4" Foreground="{DynamicResource TextBrush}" />
                                     <DataGrid ItemsSource="{Binding SpecResults}" AutoGenerateColumns="False" CanUserAddRows="False" GridLinesVisibility="Horizontal" MinHeight="80" MaxHeight="220" VerticalScrollBarVisibility="Auto">
+                                        <DataGrid.RowStyle>
+                                            <Style TargetType="DataGridRow">
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding Pass}" Value="True">
+                                                        <Setter Property="Background" Value="#C8E6C9" />
+                                                        <Setter Property="Foreground" Value="#000000" />
+                                                    </DataTrigger>
+                                                    <DataTrigger Binding="{Binding Pass}" Value="False">
+                                                        <Setter Property="Background" Value="#E53935" />
+                                                        <Setter Property="Foreground" Value="#FFFFFF" />
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </DataGrid.RowStyle>
+                                        <DataGrid.CellStyle>
+                                            <Style TargetType="DataGridCell">
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding Pass}" Value="True">
+                                                        <Setter Property="Foreground" Value="#000000" />
+                                                    </DataTrigger>
+                                                    <DataTrigger Binding="{Binding Pass}" Value="False">
+                                                        <Setter Property="Foreground" Value="#FFFFFF" />
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </DataGrid.CellStyle>
                                         <DataGrid.Columns>
-                                            <DataGridTextColumn Header="Tool" Binding="{Binding Tool}" Width="65" />
+                                            <DataGridTextColumn Header="Tool" Binding="{Binding Tool}" Width="85" />
                                             <DataGridTextColumn Header="Name" Binding="{Binding Name}" Width="95" />
                                             <DataGridTextColumn Header="A" Binding="{Binding RefA}" Width="70" />
                                             <DataGridTextColumn Header="B" Binding="{Binding RefB}" Width="70" />

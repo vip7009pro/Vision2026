@@ -215,6 +215,15 @@
     - Duy trì Top 5 ứng viên tiềm năng ở mỗi tầng pyramid, giúp bắt chính xác vật thể ở các góc xoay lớn (+25°, -45°...); vị trí trả về chính xác tuyệt đối **(600.00, 450.00)** và góc quay **25.00°**, điểm số đạt **1.0000**.
   - **Tối ưu tốc độ cực cao**:
     - Xử lý mượt mà chỉ mất khoảng **~60 ms** nhờ kết hợp Kim tự tháp Gaussian Sobel magnitude downsample với trích xuất biên tập trung.
+- **Bổ sung kết quả Tool Angle, LinePairDetect và Format Bảng SpecResults (OK/NG Colors)**:
+  - Bổ sung đầy đủ kết quả đo đạc `Angle` (`AngleResult`) và `LinePairDetect` vào bộ sưu tập `SpecResults` và danh sách lý do lỗi `NgReasonsText` trong `ToolEditorViewModel.Inspection.cs`.
+  - Định dạng hàng tự động trong bảng `SpecResults` (tại cả `ToolEditorView.xaml` và `InspectionView.xaml`):
+    - Hàng có kết quả **NG** (`Pass == False`): Nền màu đỏ nhạt (`#E53935`), màu chữ trắng (`#FFFFFF`).
+    - Hàng có kết quả **OK** (`Pass == True`): Nền màu xanh lá nhạt (`#C8E6C9`), màu chữ đen (`#000000`).
+- **Hiển thị thời gian thực thi (Execution Time) cho tất cả các Node trên Canvas**:
+  - Rà soát và bổ sung đo thời gian chạy (`NodeTimings`) cho tất cả các tool trong pipeline `InspectionPipeline` (`VisionInspectionApp.Application/Class1.cs`): `Origin`, `Distance`, `LineLineDistance`, `PointLineDistance`, `Angle`, `Diameter`, `EdgePair`, `EdgePairDetect`, `LinePairDetection`, `BlobDetection`, `CircleFinder`, `CodeDetection`, `SurfaceCompare`, `Condition`, `Text`, `ResultView`.
+  - Cập nhật hàm `UpdateNodeExecutionTimes()` trong `ToolEditorViewModel.cs` để hiển thị chính xác thời gian `Time: X ms` cho từng node trên canvas graph.
+  - Cập nhật logic đánh giá tổng thể `result.Pass` bao gồm tất cả các tool kiểm tra.
 
 
 ## Encoding

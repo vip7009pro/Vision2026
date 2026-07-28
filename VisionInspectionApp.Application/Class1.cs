@@ -2095,6 +2095,7 @@ public sealed class InspectionService : IInspectionService
 
             foreach (var d in (config.Diameters ?? new List<DiameterDefinition>()))
             {
+                var __swNode = System.Diagnostics.Stopwatch.StartNew();
                 if (d is null || string.IsNullOrWhiteSpace(d.Name) || string.IsNullOrWhiteSpace(d.CircleRef))
                 {
                     continue;
@@ -2102,6 +2103,8 @@ public sealed class InspectionService : IInspectionService
 
                 if (!foundCircles.TryGetValue(d.CircleRef, out var c) || !c.Found)
                 {
+                    __swNode.Stop();
+                    result.Timings.NodeTimings[d.Name] = (int)__swNode.ElapsedMilliseconds;
                     result.Diameters.Add(new DiameterResult(d.Name, d.CircleRef, Found: false, double.NaN, d.Nominal, d.TolerancePlus, d.ToleranceMinus, Pass: false, default, 0.0));
                     continue;
                 }
@@ -2109,12 +2112,15 @@ public sealed class InspectionService : IInspectionService
                 var diameterPx = 2.0 * c.RadiusPx;
                 var value = config.PixelsPerMm > 0 ? diameterPx / config.PixelsPerMm : diameterPx;
                 var pass = value >= (d.Nominal - d.ToleranceMinus) && value <= (d.Nominal + d.TolerancePlus);
+                __swNode.Stop();
+                result.Timings.NodeTimings[d.Name] = (int)__swNode.ElapsedMilliseconds;
                 result.Diameters.Add(new DiameterResult(d.Name, d.CircleRef, Found: true, value, d.Nominal, d.TolerancePlus, d.ToleranceMinus, pass, c.Center, c.RadiusPx));
             }
 
             var tEdgePairs0 = swTotal.ElapsedMilliseconds;
             foreach (var ep in config.EdgePairs)
             {
+                var __swNode = System.Diagnostics.Stopwatch.StartNew();
                 if (string.IsNullOrWhiteSpace(ep.Name) || string.IsNullOrWhiteSpace(ep.RefA) || string.IsNullOrWhiteSpace(ep.RefB))
                 {
                     continue;
@@ -2122,6 +2128,8 @@ public sealed class InspectionService : IInspectionService
 
                 if (!foundLines.TryGetValue(ep.RefA, out var la) || !foundLines.TryGetValue(ep.RefB, out var lb) || !la.Found || !lb.Found)
                 {
+                    __swNode.Stop();
+                    result.Timings.NodeTimings[ep.Name] = (int)__swNode.ElapsedMilliseconds;
                     result.EdgePairs.Add(new EdgePairResult(
                         ep.Name,
                         ep.RefA,
@@ -2142,6 +2150,8 @@ public sealed class InspectionService : IInspectionService
                 var value = config.PixelsPerMm > 0 ? distPx / config.PixelsPerMm : distPx;
                 var pass = value >= (ep.Nominal - ep.ToleranceMinus) && value <= (ep.Nominal + ep.TolerancePlus);
 
+                __swNode.Stop();
+                result.Timings.NodeTimings[ep.Name] = (int)__swNode.ElapsedMilliseconds;
                 result.EdgePairs.Add(new EdgePairResult(
                     ep.Name,
                     ep.RefA,
@@ -2182,6 +2192,7 @@ public sealed class InspectionService : IInspectionService
             var tAngles0 = swTotal.ElapsedMilliseconds;
             foreach (var a in config.Angles)
             {
+                var __swNode = System.Diagnostics.Stopwatch.StartNew();
                 if (string.IsNullOrWhiteSpace(a.Name) || string.IsNullOrWhiteSpace(a.LineA) || string.IsNullOrWhiteSpace(a.LineB))
                 {
                     continue;
@@ -2189,6 +2200,8 @@ public sealed class InspectionService : IInspectionService
 
                 if (!foundLines.TryGetValue(a.LineA, out var la) || !foundLines.TryGetValue(a.LineB, out var lb) || !la.Found || !lb.Found)
                 {
+                    __swNode.Stop();
+                    result.Timings.NodeTimings[a.Name] = (int)__swNode.ElapsedMilliseconds;
                     result.Angles.Add(new AngleResult(a.Name, a.LineA, a.LineB, double.NaN, a.Nominal, a.TolerancePlus, a.ToleranceMinus, Pass: false, Found: false, default, default, default));
                     continue;
                 }
@@ -2199,6 +2212,8 @@ public sealed class InspectionService : IInspectionService
                 var n2 = Math.Sqrt(v2.X * v2.X + v2.Y * v2.Y);
                 if (n1 < 1e-9 || n2 < 1e-9)
                 {
+                    __swNode.Stop();
+                    result.Timings.NodeTimings[a.Name] = (int)__swNode.ElapsedMilliseconds;
                     result.Angles.Add(new AngleResult(a.Name, a.LineA, a.LineB, double.NaN, a.Nominal, a.TolerancePlus, a.ToleranceMinus, Pass: false, Found: false, default, default, default));
                     continue;
                 }
@@ -2209,6 +2224,8 @@ public sealed class InspectionService : IInspectionService
 
                 var pass = angle >= (a.Nominal - a.ToleranceMinus) && angle <= (a.Nominal + a.TolerancePlus);
                 var found = TryIntersectInfiniteLines(la, lb, out var inter);
+                __swNode.Stop();
+                result.Timings.NodeTimings[a.Name] = (int)__swNode.ElapsedMilliseconds;
                 result.Angles.Add(new AngleResult(a.Name, a.LineA, a.LineB, angle, a.Nominal, a.TolerancePlus, a.ToleranceMinus, pass, found, inter, new Point2d(v1.X / n1, v1.Y / n1), new Point2d(v2.X / n2, v2.Y / n2)));
             }
             result.Timings.AnglesMs = (int)Math.Max(0, swTotal.ElapsedMilliseconds - tAngles0);
@@ -2238,19 +2255,28 @@ public sealed class InspectionService : IInspectionService
 
             foreach (var d in config.Distances)
             {
+                var __swNode = System.Diagnostics.Stopwatch.StartNew();
                 if (!distanceAnchors.TryGetValue(d.PointA, out var a) || !distanceAnchors.TryGetValue(d.PointB, out var b))
                 {
+                    __swNode.Stop();
+                    result.Timings.NodeTimings[d.Name] = (int)__swNode.ElapsedMilliseconds;
                     result.Distances.Add(new DistanceCheckResult(d.Name, d.PointA, d.PointB, double.NaN, d.Nominal, d.TolerancePlus, d.ToleranceMinus, false));
                     continue;
                 }
 
-                result.Distances.Add(_distanceCalculator.CheckDistance(d, a, b, config.PixelsPerMm));
+                var checkRes = _distanceCalculator.CheckDistance(d, a, b, config.PixelsPerMm);
+                __swNode.Stop();
+                result.Timings.NodeTimings[d.Name] = (int)__swNode.ElapsedMilliseconds;
+                result.Distances.Add(checkRes);
             }
 
             foreach (var dd in config.LineToLineDistances)
             {
+                var __swNode = System.Diagnostics.Stopwatch.StartNew();
                 if (!foundLines.TryGetValue(dd.LineA, out var la) || !foundLines.TryGetValue(dd.LineB, out var lb) || !la.Found || !lb.Found)
                 {
+                    __swNode.Stop();
+                    result.Timings.NodeTimings[dd.Name] = (int)__swNode.ElapsedMilliseconds;
                     result.LineToLineDistances.Add(new SegmentDistanceResult(dd.Name, dd.LineA, dd.LineB, double.NaN, dd.Nominal, dd.TolerancePlus, dd.ToleranceMinus, false, default, default));
                     continue;
                 }
@@ -2258,13 +2284,18 @@ public sealed class InspectionService : IInspectionService
                 var (distPx, ca, cb) = CalculateLineLineDistance(la, lb, dd.Mode);
                 var value = config.PixelsPerMm > 0 ? distPx / config.PixelsPerMm : distPx;
                 var pass = value >= (dd.Nominal - dd.ToleranceMinus) && value <= (dd.Nominal + dd.TolerancePlus);
+                __swNode.Stop();
+                result.Timings.NodeTimings[dd.Name] = (int)__swNode.ElapsedMilliseconds;
                 result.LineToLineDistances.Add(new SegmentDistanceResult(dd.Name, dd.LineA, dd.LineB, value, dd.Nominal, dd.TolerancePlus, dd.ToleranceMinus, pass, ca, cb));
             }
 
             foreach (var dd in config.PointToLineDistances)
             {
+                var __swNode = System.Diagnostics.Stopwatch.StartNew();
                 if (!foundPoints.TryGetValue(dd.Point, out var p) || !foundLines.TryGetValue(dd.Line, out var l) || !l.Found)
                 {
+                    __swNode.Stop();
+                    result.Timings.NodeTimings[dd.Name] = (int)__swNode.ElapsedMilliseconds;
                     result.PointToLineDistances.Add(new SegmentDistanceResult(dd.Name, dd.Point, dd.Line, double.NaN, dd.Nominal, dd.TolerancePlus, dd.ToleranceMinus, false, default, default));
                     continue;
                 }
@@ -2272,6 +2303,8 @@ public sealed class InspectionService : IInspectionService
                 var (distPx, closest) = CalculatePointLineDistance(p, l, dd.Mode);
                 var value = config.PixelsPerMm > 0 ? distPx / config.PixelsPerMm : distPx;
                 var pass = value >= (dd.Nominal - dd.ToleranceMinus) && value <= (dd.Nominal + dd.TolerancePlus);
+                __swNode.Stop();
+                result.Timings.NodeTimings[dd.Name] = (int)__swNode.ElapsedMilliseconds;
                 result.PointToLineDistances.Add(new SegmentDistanceResult(dd.Name, dd.Point, dd.Line, value, dd.Nominal, dd.TolerancePlus, dd.ToleranceMinus, pass, p, closest));
             }
             result.Timings.DistancesMs = (int)Math.Max(0, swTotal.ElapsedMilliseconds - tDistances0);
@@ -2322,6 +2355,7 @@ public sealed class InspectionService : IInspectionService
 
             foreach (var cdt in config.CodeDetections)
             {
+                var __swNode = System.Diagnostics.Stopwatch.StartNew();
                 if (string.IsNullOrWhiteSpace(cdt.Name) || cdt.SearchRoi.Width <= 0 || cdt.SearchRoi.Height <= 0)
                 {
                     continue;
@@ -2335,6 +2369,8 @@ public sealed class InspectionService : IInspectionService
 
                 if (rect.Width <= 0 || rect.Height <= 0)
                 {
+                    __swNode.Stop();
+                    result.Timings.NodeTimings[cdt.Name] = (int)__swNode.ElapsedMilliseconds;
                     result.CodeDetections.Add(new CodeDetectionResult(cdt.Name, Found: false, Text: string.Empty, BoundingBox: default));
                     continue;
                 }
@@ -2432,6 +2468,8 @@ public sealed class InspectionService : IInspectionService
 
                 if (decoded is null || string.IsNullOrWhiteSpace(decoded.Text))
                 {
+                    __swNode.Stop();
+                    result.Timings.NodeTimings[cdt.Name] = (int)__swNode.ElapsedMilliseconds;
                     result.CodeDetections.Add(new CodeDetectionResult(cdt.Name, Found: false, Text: string.Empty, BoundingBox: default));
                     continue;
                 }
@@ -2481,6 +2519,8 @@ public sealed class InspectionService : IInspectionService
                     bb = new Rect(x, y, w, h).Intersect(rect);
                 }
 
+                __swNode.Stop();
+                result.Timings.NodeTimings[cdt.Name] = (int)__swNode.ElapsedMilliseconds;
                 result.CodeDetections.Add(new CodeDetectionResult(cdt.Name, Found: true, Text: decoded.Text, BoundingBox: bb));
             }
             result.Timings.CdtMs = (int)Math.Max(0, swTotal.ElapsedMilliseconds - tCdt0);
@@ -2500,8 +2540,15 @@ public sealed class InspectionService : IInspectionService
             && result.Distances.All(x => x.Pass)
             && result.LineToLineDistances.All(x => x.Pass)
             && result.PointToLineDistances.All(x => x.Pass)
+            && result.Angles.All(x => x.Pass)
+            && result.EdgePairs.All(x => x.Pass)
+            && result.EdgePairDetections.All(x => x.Pass)
+            && result.LinePairDetections.All(x => x.Pass)
+            && result.Diameters.All(x => x.Pass)
+            && result.SurfaceCompares.All(x => x.Pass)
+            && result.CodeDetections.All(x => x.Found)
             && result.Conditions.All(x => x.Pass)
-            && (result.Defects.Defects.Count == 0);
+            && (result.Defects?.Defects?.Count ?? 0) == 0;
 
             if (originPass)
             {

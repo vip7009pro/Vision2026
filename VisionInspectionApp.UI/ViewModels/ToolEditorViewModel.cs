@@ -2325,7 +2325,15 @@ namespace VisionInspectionApp.UI.ViewModels
             TotalExecutionTimeMs = _lastRun.Timings.TotalMs;
             foreach (var node in Nodes)
             {
-                if (!string.IsNullOrWhiteSpace(node.RefName) && _lastRun.Timings.NodeTimings.TryGetValue(node.RefName, out var ms))
+                if (string.Equals(node.Type, "Origin", StringComparison.OrdinalIgnoreCase))
+                {
+                    node.ExecutionTimeMs = _lastRun.Timings.OriginMs;
+                }
+                else if (string.Equals(node.Type, "ResultView", StringComparison.OrdinalIgnoreCase))
+                {
+                    node.ExecutionTimeMs = _lastRun.Timings.TotalMs;
+                }
+                else if (!string.IsNullOrWhiteSpace(node.RefName) && _lastRun.Timings.NodeTimings.TryGetValue(node.RefName, out var ms))
                 {
                     node.ExecutionTimeMs = ms;
                 }
