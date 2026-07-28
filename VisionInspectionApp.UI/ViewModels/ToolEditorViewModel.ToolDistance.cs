@@ -203,6 +203,89 @@ namespace VisionInspectionApp.UI.ViewModels
                 return null;
             return _config.PointToLineDistances.FirstOrDefault(x => string.Equals(x.Name, SelectedNode.RefName, StringComparison.OrdinalIgnoreCase));
         }
+
+        public string? SegmentLineDistance_LineA
+        {
+            get => SelectedSegmentLineDistanceDef()?.LineA;
+            set
+            {
+                if (string.IsNullOrEmpty(value))
+                    return;
+                var def = SelectedSegmentLineDistanceDef();
+                if (def is null)
+                    return;
+                if (string.Equals(def.LineA ?? "", value ?? "", StringComparison.OrdinalIgnoreCase))
+                    return;
+                def.LineA = value ?? string.Empty;
+                SyncInputEdgeForSegmentLineDistancePort("L1", value);
+                OnPropertyChanged();
+                RefreshPreviews();
+                RequestAutoSave();
+            }
+        }
+
+        public string? SegmentLineDistance_LineB
+        {
+            get => SelectedSegmentLineDistanceDef()?.LineB;
+            set
+            {
+                if (string.IsNullOrEmpty(value))
+                    return;
+                var def = SelectedSegmentLineDistanceDef();
+                if (def is null)
+                    return;
+                if (string.Equals(def.LineB ?? "", value ?? "", StringComparison.OrdinalIgnoreCase))
+                    return;
+                def.LineB = value ?? string.Empty;
+                SyncInputEdgeForSegmentLineDistancePort("L2", value);
+                OnPropertyChanged();
+                RefreshPreviews();
+                RequestAutoSave();
+            }
+        }
+
+        public SegmentLineDistanceMode SegmentLineDistance_Mode
+        {
+            get => SelectedSegmentLineDistanceDef()?.Mode ?? SegmentLineDistanceMode.ClosestPointOnSegmentToInfiniteLine;
+            set
+            {
+                var def = SelectedSegmentLineDistanceDef();
+                if (def is null)
+                    return;
+                if (def.Mode == value)
+                    return;
+                def.Mode = value;
+                RaiseToolPropertyPanelsChanged();
+                RefreshPreviews();
+                RequestAutoSave();
+            }
+        }
+
+        public SegmentLineExtensionMode SegmentLineDistance_ExtensionMode
+        {
+            get => SelectedSegmentLineDistanceDef()?.ExtensionMode ?? SegmentLineExtensionMode.ActualDetectedSegment;
+            set
+            {
+                var def = SelectedSegmentLineDistanceDef();
+                if (def is null)
+                    return;
+                if (def.ExtensionMode == value)
+                    return;
+                def.ExtensionMode = value;
+                RaiseToolPropertyPanelsChanged();
+                RefreshPreviews();
+                RequestAutoSave();
+            }
+        }
+
+        private SegmentLineDistance? SelectedSegmentLineDistanceDef()
+        {
+            if (_config is null || SelectedNode is null)
+                return null;
+            if (!string.Equals(SelectedNode.Type, "SegmentLineDistance", StringComparison.OrdinalIgnoreCase))
+                return null;
+            return _config.SegmentLineDistances.FirstOrDefault(x => string.Equals(x.Name, SelectedNode.RefName, StringComparison.OrdinalIgnoreCase));
+        }
     
         public double Distance_Nominal
         {
@@ -214,6 +297,8 @@ namespace VisionInspectionApp.UI.ViewModels
                     return ll.Nominal;
                 if (SelectedPointLineDistanceDef()is { } pl)
                     return pl.Nominal;
+                if (SelectedSegmentLineDistanceDef()is { } sld)
+                    return sld.Nominal;
                 if (SelectedAngleDef()is { } a)
                     return a.Nominal;
                 if (SelectedLinePairDef()is { } lpd)
@@ -246,6 +331,12 @@ namespace VisionInspectionApp.UI.ViewModels
                     if (Math.Abs(pl.Nominal - value) < 0.0000001)
                         return;
                     pl.Nominal = value;
+                }
+                else if (SelectedSegmentLineDistanceDef()is { } sld)
+                {
+                    if (Math.Abs(sld.Nominal - value) < 0.0000001)
+                        return;
+                    sld.Nominal = value;
                 }
                 else if (SelectedAngleDef()is { } a)
                 {
@@ -297,6 +388,8 @@ namespace VisionInspectionApp.UI.ViewModels
                     return ll.TolerancePlus;
                 if (SelectedPointLineDistanceDef()is { } pl)
                     return pl.TolerancePlus;
+                if (SelectedSegmentLineDistanceDef()is { } sld)
+                    return sld.TolerancePlus;
                 if (SelectedAngleDef()is { } a)
                     return a.TolerancePlus;
                 if (SelectedLinePairDef()is { } lpd)
@@ -329,6 +422,12 @@ namespace VisionInspectionApp.UI.ViewModels
                     if (Math.Abs(pl.TolerancePlus - value) < 0.0000001)
                         return;
                     pl.TolerancePlus = value;
+                }
+                else if (SelectedSegmentLineDistanceDef()is { } sld)
+                {
+                    if (Math.Abs(sld.TolerancePlus - value) < 0.0000001)
+                        return;
+                    sld.TolerancePlus = value;
                 }
                 else if (SelectedAngleDef()is { } a)
                 {
@@ -380,6 +479,8 @@ namespace VisionInspectionApp.UI.ViewModels
                     return ll.ToleranceMinus;
                 if (SelectedPointLineDistanceDef()is { } pl)
                     return pl.ToleranceMinus;
+                if (SelectedSegmentLineDistanceDef()is { } sld)
+                    return sld.ToleranceMinus;
                 if (SelectedAngleDef()is { } a)
                     return a.ToleranceMinus;
                 if (SelectedLinePairDef()is { } lpd)
@@ -412,6 +513,12 @@ namespace VisionInspectionApp.UI.ViewModels
                     if (Math.Abs(pl.ToleranceMinus - value) < 0.0000001)
                         return;
                     pl.ToleranceMinus = value;
+                }
+                else if (SelectedSegmentLineDistanceDef()is { } sld)
+                {
+                    if (Math.Abs(sld.ToleranceMinus - value) < 0.0000001)
+                        return;
+                    sld.ToleranceMinus = value;
                 }
                 else if (SelectedAngleDef()is { } a)
                 {

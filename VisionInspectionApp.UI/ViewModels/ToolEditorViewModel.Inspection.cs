@@ -260,6 +260,14 @@ namespace VisionInspectionApp.UI.ViewModels
                     }
                 }
 
+                if (res.SegmentLineDistances is not null)
+                {
+                    foreach (var sld in res.SegmentLineDistances.Where(x => !x.Pass))
+                    {
+                        reasons.Add($"• Lỗi SegmentLineDist '{sld.Name}': Giá trị {sld.Value:F3}mm nằm ngoài khoảng [{sld.Nominal + sld.TolMinus:F3}, {sld.Nominal + sld.TolPlus:F3}]");
+                    }
+                }
+
                 if (res.Angles is not null)
                 {
                     foreach (var a in res.Angles.Where(x => !x.Pass))
@@ -382,6 +390,23 @@ namespace VisionInspectionApp.UI.ViewModels
                         p2l.TolPlus,
                         p2l.TolMinus,
                         p2l.Pass));
+                }
+            }
+
+            if (res.SegmentLineDistances is not null)
+            {
+                foreach (var sld in res.SegmentLineDistances)
+                {
+                    SpecResults.Add(new SpecResultRow(
+                        "SegmentLineDist",
+                        sld.Name,
+                        sld.RefA,
+                        sld.RefB,
+                        sld.Value,
+                        sld.Nominal,
+                        sld.TolPlus,
+                        sld.TolMinus,
+                        sld.Pass));
                 }
             }
 

@@ -1128,6 +1128,23 @@ namespace VisionInspectionApp.UI.ViewModels
                 return;
             }
     
+            if (string.Equals(node.Type, "SegmentLineDistance", StringComparison.OrdinalIgnoreCase))
+            {
+                var dd = _config.SegmentLineDistances.FirstOrDefault(x => string.Equals(x.Name, node.RefName, StringComparison.OrdinalIgnoreCase));
+                if (dd is null)
+                {
+                    return;
+                }
+    
+                if (showRois)
+                {
+                    AddLineRoi(dd.LineA);
+                    AddLineRoi(dd.LineB);
+                }
+    
+                return;
+            }
+    
             if (string.Equals(node.Type, "DefectRoi", StringComparison.OrdinalIgnoreCase))
             {
                 if (showRois && _config.DefectConfig.InspectRoi.Width > 0 && _config.DefectConfig.InspectRoi.Height > 0)

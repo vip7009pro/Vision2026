@@ -223,7 +223,16 @@
 - **Hiển thị thời gian thực thi (Execution Time) cho tất cả các Node trên Canvas**:
   - Rà soát và bổ sung đo thời gian chạy (`NodeTimings`) cho tất cả các tool trong pipeline `InspectionPipeline` (`VisionInspectionApp.Application/Class1.cs`): `Origin`, `Distance`, `LineLineDistance`, `PointLineDistance`, `Angle`, `Diameter`, `EdgePair`, `EdgePairDetect`, `LinePairDetection`, `BlobDetection`, `CircleFinder`, `CodeDetection`, `SurfaceCompare`, `Condition`, `Text`, `ResultView`.
   - Cập nhật hàm `UpdateNodeExecutionTimes()` trong `ToolEditorViewModel.cs` để hiển thị chính xác thời gian `Time: X ms` cho từng node trên canvas graph.
-  - Cập nhật logic đánh giá tổng thể `result.Pass` bao gồm tất cả các tool kiểm tra.
+- **Sửa lỗi Checkbox `Show ROI` & `Show Results` trên màn hình Preview**:
+  - Khắc phục lỗi checkbox `Show Results` (`ShowResultOverlay`) và `Show ROI` (`ShowRoisInSelectedPreview` & `ShowRoisInFinalPreview`) không có tác dụng khi bật/tắt.
+  - Đồng bộ hóa các thuộc tính `ShowRoisInSelectedPreview` và `ShowRoisInFinalPreview` đồng thời thêm kiểm tra `ShowResultOverlay` trong `BuildFinalOverlayFromRunWithConfig()`, giúp việc bật/tắt hiển thị ROI và Overlay kết quả (đường đo, điểm, nhãn) hoạt động tức thì trên cả Selected Node Preview và ResultView.
+- **Cập nhật hiển thị Preview của Tool `SegmentLineDistance`**:
+  - Bổ sung hiển thị ROI của cả 2 đường LineA và LineB khi chọn node `SegmentLineDistance` trên canvas (`AddConfigRoisForNode` trong `ToolEditorViewModel.GraphOps.cs`).
+  - Cập nhật hiển thị đường thẳng vô hạn (infinite line - màu vàng `Gold`) xẻ ngang qua màn hình preview cho LineB, đường đoạn thẳng (segment - màu xanh `DeepSkyBlue`) cho LineA, và đường khoảng cách ngắn nhất/trung điểm/xa nhất (màu xanh `Lime`/đỏ `Red`).
+- **Nâng cấp Tool `Point`**:
+  - **Crosshair xoay theo góc quay**: Đã cập nhật vẽ đường crosshair chữ thập tại vị trí phát hiện của Tool Point xoay theo chính xác góc `AngleDeg` nhận diện được (`BuildFinalOverlayFromRun` và `BuildOverlayForNodeFromRun`).
+  - **Bổ sung thuật toán `MvpShapePyramid` / `MvpShapeMatch`**: Thêm các lựa chọn thuật toán `MvpShapePyramid`, `MvpShapeMatch`, `ShapePyramid`, `ShapeBased` vào enum `PointFindAlgorithm` (`VisionInspectionApp.Models`), đồng bộ ViewModel `ToolEditorViewModel.ToolPoint.cs` và cho phép thực thi tìm kiếm góc xoay theo mô hình hình học `_matcher.MatchWithRotation` trong `InspectionPipeline` (`VisionInspectionApp.Application`).
+
 
 
 ## Encoding

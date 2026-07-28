@@ -171,7 +171,21 @@ namespace VisionInspectionApp.UI.ViewModels
     
         private void BuildFinalOverlayFromRunWithConfig(InspectionResult run, List<OverlayItem> dst)
         {
+            if (!ShowResultOverlay)
+            {
+                return;
+            }
+
             BuildFinalOverlayFromRun(run, dst, _config);
+
+            foreach (var d in run.SegmentLineDistances)
+            {
+                if (double.IsNaN(d.Value)) continue;
+                dst.Add(new OverlayLineItem { X1 = d.ClosestA.X, Y1 = d.ClosestA.Y, X2 = d.ClosestB.X, Y2 = d.ClosestB.Y, Stroke = d.Pass ? Brushes.Lime : Brushes.Red, Label = $"{d.Name}: {d.Value:0.###}" });
+                dst.Add(new OverlayPointItem { X = d.ClosestA.X, Y = d.ClosestA.Y, Radius = 3.0, Stroke = d.Pass ? Brushes.Lime : Brushes.Red, Label = string.Empty });
+                dst.Add(new OverlayPointItem { X = d.ClosestB.X, Y = d.ClosestB.Y, Radius = 3.0, Stroke = d.Pass ? Brushes.Lime : Brushes.Red, Label = string.Empty });
+            }
+
             // Angle overlays need image bounds for full infinite-line rendering.
             if (_lastPreviewImageWidth > 0 && _lastPreviewImageHeight > 0)
             {
@@ -1280,19 +1294,32 @@ namespace VisionInspectionApp.UI.ViewModels
 
         partial void OnShowResultOverlayChanged(bool value)
         {
-            RefreshSelectedPreview();
+            _finalPreviewDirty = true;
+            RefreshPreviews();
             RaiseToolPropertyPanelsChanged();
         }
+
         partial void OnShowRoisInSelectedPreviewChanged(bool value)
         {
-            RefreshSelectedPreview();
+            if (_showRoisInFinalPreview != value)
+            {
+                _showRoisInFinalPreview = value;
+                OnPropertyChanged(nameof(ShowRoisInFinalPreview));
+            }
+            _finalPreviewDirty = true;
+            RefreshPreviews();
             RaiseToolPropertyPanelsChanged();
         }
     
         partial void OnShowRoisInFinalPreviewChanged(bool value)
         {
+            if (_showRoisInSelectedPreview != value)
+            {
+                _showRoisInSelectedPreview = value;
+                OnPropertyChanged(nameof(ShowRoisInSelectedPreview));
+            }
             _finalPreviewDirty = true;
-            RefreshFinalPreview();
+            RefreshPreviews();
             RaiseToolPropertyPanelsChanged();
         }
     
@@ -2403,8 +2430,25 @@ namespace VisionInspectionApp.UI.ViewModels
                 {
                     var cx = p.Position.X;
                     var cy = p.Position.Y;
-                    dst.Add(new OverlayLineItem { X1 = cx - mr.Width / 2.0, Y1 = cy, X2 = cx + mr.Width / 2.0, Y2 = cy, Stroke = p.Pass ? Brushes.DeepSkyBlue : Brushes.Red });
-                    dst.Add(new OverlayLineItem { X1 = cx, Y1 = cy - mr.Height / 2.0, X2 = cx, Y2 = cy + mr.Height / 2.0, Stroke = p.Pass ? Brushes.DeepSkyBlue : Brushes.Red });
+                    var halfW = mr.Width / 2.0;
+                    var halfH = mr.Height / 2.0;
+                    if (Math.Abs(p.AngleDeg) > 1e-4)
+                    {
+                        var rad = p.AngleDeg * Math.PI / 180.0;
+                        var cos = Math.Cos(rad);
+                        var sin = Math.Sin(rad);
+    
+                        var hx = new OpenCvSharp.Point2d(halfW * cos, halfW * sin);
+                        var hy = new OpenCvSharp.Point2d(-halfH * sin, halfH * cos);
+    
+                        dst.Add(new OverlayLineItem { X1 = cx - hx.X, Y1 = cy - hx.Y, X2 = cx + hx.X, Y2 = cy + hx.Y, Stroke = p.Pass ? Brushes.DeepSkyBlue : Brushes.Red });
+                        dst.Add(new OverlayLineItem { X1 = cx - hy.X, Y1 = cy - hy.Y, X2 = cx + hy.X, Y2 = cy + hy.Y, Stroke = p.Pass ? Brushes.DeepSkyBlue : Brushes.Red });
+                    }
+                    else
+                    {
+                        dst.Add(new OverlayLineItem { X1 = cx - halfW, Y1 = cy, X2 = cx + halfW, Y2 = cy, Stroke = p.Pass ? Brushes.DeepSkyBlue : Brushes.Red });
+                        dst.Add(new OverlayLineItem { X1 = cx, Y1 = cy - halfH, X2 = cx, Y2 = cy + halfH, Stroke = p.Pass ? Brushes.DeepSkyBlue : Brushes.Red });
+                    }
                 }
     
                 dst.Add(new OverlayPointItem { X = p.Position.X, Y = p.Position.Y, Stroke = p.Pass ? Brushes.DeepSkyBlue : Brushes.Red, Label = p.Name });
@@ -2744,8 +2788,25 @@ namespace VisionInspectionApp.UI.ViewModels
                 {
                     var cx = p.Position.X;
                     var cy = p.Position.Y;
-                    dst.Add(new OverlayLineItem { X1 = cx - mr.Width / 2.0, Y1 = cy, X2 = cx + mr.Width / 2.0, Y2 = cy, Stroke = p.Pass ? Brushes.DeepSkyBlue : Brushes.Red });
-                    dst.Add(new OverlayLineItem { X1 = cx, Y1 = cy - mr.Height / 2.0, X2 = cx, Y2 = cy + mr.Height / 2.0, Stroke = p.Pass ? Brushes.DeepSkyBlue : Brushes.Red });
+                    var halfW = mr.Width / 2.0;
+                    var halfH = mr.Height / 2.0;
+                    if (Math.Abs(p.AngleDeg) > 1e-4)
+                    {
+                        var rad = p.AngleDeg * Math.PI / 180.0;
+                        var cos = Math.Cos(rad);
+                        var sin = Math.Sin(rad);
+
+                        var hx = new OpenCvSharp.Point2d(halfW * cos, halfW * sin);
+                        var hy = new OpenCvSharp.Point2d(-halfH * sin, halfH * cos);
+
+                        dst.Add(new OverlayLineItem { X1 = cx - hx.X, Y1 = cy - hx.Y, X2 = cx + hx.X, Y2 = cy + hx.Y, Stroke = p.Pass ? Brushes.DeepSkyBlue : Brushes.Red });
+                        dst.Add(new OverlayLineItem { X1 = cx - hy.X, Y1 = cy - hy.Y, X2 = cx + hy.X, Y2 = cy + hy.Y, Stroke = p.Pass ? Brushes.DeepSkyBlue : Brushes.Red });
+                    }
+                    else
+                    {
+                        dst.Add(new OverlayLineItem { X1 = cx - halfW, Y1 = cy, X2 = cx + halfW, Y2 = cy, Stroke = p.Pass ? Brushes.DeepSkyBlue : Brushes.Red });
+                        dst.Add(new OverlayLineItem { X1 = cx, Y1 = cy - halfH, X2 = cx, Y2 = cy + halfH, Stroke = p.Pass ? Brushes.DeepSkyBlue : Brushes.Red });
+                    }
                 }
     
                 dst.Add(new OverlayPointItem { X = p.Position.X, Y = p.Position.Y, Stroke = p.Pass ? Brushes.DeepSkyBlue : Brushes.Red, Label = p.Name });
@@ -3046,6 +3107,84 @@ namespace VisionInspectionApp.UI.ViewModels
                 dst.Add(new OverlayPointItem { X = p.Position.X, Y = p.Position.Y, Stroke = p.Pass ? Brushes.DeepSkyBlue : Brushes.Red, Label = p.Name });
                 dst.Add(new OverlayLineItem { X1 = l.P1.X, Y1 = l.P1.Y, X2 = l.P2.X, Y2 = l.P2.Y, Stroke = Brushes.MediumPurple, Label = l.Name });
                 dst.Add(new OverlayLineItem { X1 = dd.ClosestA.X, Y1 = dd.ClosestA.Y, X2 = dd.ClosestB.X, Y2 = dd.ClosestB.Y, Stroke = dd.Pass ? Brushes.Lime : Brushes.Red, Label = $"{dd.Name}: {dd.Value:0.###}" });
+                return;
+            }
+
+            if (string.Equals(node.Type, "SegmentLineDistance", StringComparison.OrdinalIgnoreCase))
+            {
+                var dd = run.SegmentLineDistances.FirstOrDefault(x => string.Equals(x.Name, node.RefName, StringComparison.OrdinalIgnoreCase));
+                if (dd is null)
+                {
+                    return;
+                }
+
+                LineDetectResult? ResolveLineRef(InspectionResult r, string name)
+                {
+                    var l = r.Lines.FirstOrDefault(x => string.Equals(x.Name, name, StringComparison.OrdinalIgnoreCase));
+                    if (l is not null) return l;
+                    var c = r.Calipers.FirstOrDefault(x => string.Equals(x.Name, name, StringComparison.OrdinalIgnoreCase));
+                    if (c is not null && c.Found)
+                    {
+                        var dx = c.LineP2.X - c.LineP1.X;
+                        var dy = c.LineP2.Y - c.LineP1.Y;
+                        var len = Math.Sqrt(dx * dx + dy * dy);
+                        return new LineDetectResult(c.Name, c.LineP1, c.LineP2, len, Found: true);
+                    }
+                    var lpd = r.LinePairDetections.FirstOrDefault(x => string.Equals(x.Name, name, StringComparison.OrdinalIgnoreCase));
+                    if (lpd is not null && lpd.Found)
+                    {
+                        var dx = lpd.L1P2.X - lpd.L1P1.X;
+                        var dy = lpd.L1P2.Y - lpd.L1P1.Y;
+                        var len = Math.Sqrt(dx * dx + dy * dy);
+                        return new LineDetectResult(lpd.Name, lpd.L1P1, lpd.L1P2, len, Found: true);
+                    }
+                    var epd = r.EdgePairDetections.FirstOrDefault(x => string.Equals(x.Name, name, StringComparison.OrdinalIgnoreCase));
+                    if (epd is not null && epd.Found)
+                    {
+                        var dx = epd.L1P2.X - epd.L1P1.X;
+                        var dy = epd.L1P2.Y - epd.L1P1.Y;
+                        var len = Math.Sqrt(dx * dx + dy * dy);
+                        return new LineDetectResult(epd.Name, epd.L1P1, epd.L1P2, len, Found: true);
+                    }
+                    return null;
+                }
+
+                var la = ResolveLineRef(run, dd.RefA);
+                var lb = ResolveLineRef(run, dd.RefB);
+                if (la is not null && la.Found)
+                {
+                    dst.Add(new OverlayLineItem { X1 = la.P1.X, Y1 = la.P1.Y, X2 = la.P2.X, Y2 = la.P2.Y, Stroke = Brushes.DeepSkyBlue, Label = $"{la.Name} Seg" });
+                }
+                if (lb is not null && lb.Found)
+                {
+                    var ip = new System.Windows.Point(lb.P1.X, lb.P1.Y);
+                    var dir = new System.Windows.Point(lb.P2.X - lb.P1.X, lb.P2.Y - lb.P1.Y);
+                    if (_lastPreviewImageWidth > 0 && _lastPreviewImageHeight > 0 && TryClipInfiniteLineToImage(ip, dir, _lastPreviewImageWidth, _lastPreviewImageHeight, out var p1, out var p2))
+                    {
+                        dst.Add(new OverlayLineItem { X1 = p1.X, Y1 = p1.Y, X2 = p2.X, Y2 = p2.Y, Stroke = Brushes.Gold, Label = $"{lb.Name} (Inf)" });
+                    }
+                    else
+                    {
+                        var len = Math.Sqrt(dir.X * dir.X + dir.Y * dir.Y);
+                        if (len > 1e-6)
+                        {
+                            var uX = dir.X / len;
+                            var uY = dir.Y / len;
+                            dst.Add(new OverlayLineItem { X1 = lb.P1.X - 5000 * uX, Y1 = lb.P1.Y - 5000 * uY, X2 = lb.P1.X + 5000 * uX, Y2 = lb.P1.Y + 5000 * uY, Stroke = Brushes.Gold, Label = $"{lb.Name} (Inf)" });
+                        }
+                        else
+                        {
+                            dst.Add(new OverlayLineItem { X1 = lb.P1.X, Y1 = lb.P1.Y, X2 = lb.P2.X, Y2 = lb.P2.Y, Stroke = Brushes.Gold, Label = $"{lb.Name} (Inf)" });
+                        }
+                    }
+                }
+
+                if (!double.IsNaN(dd.Value))
+                {
+                    dst.Add(new OverlayLineItem { X1 = dd.ClosestA.X, Y1 = dd.ClosestA.Y, X2 = dd.ClosestB.X, Y2 = dd.ClosestB.Y, Stroke = dd.Pass ? Brushes.Lime : Brushes.Red, Label = $"{dd.Name}: {dd.Value:0.###}" });
+                    dst.Add(new OverlayPointItem { X = dd.ClosestA.X, Y = dd.ClosestA.Y, Radius = 3.0, Stroke = dd.Pass ? Brushes.Lime : Brushes.Red, Label = string.Empty });
+                    dst.Add(new OverlayPointItem { X = dd.ClosestB.X, Y = dd.ClosestB.Y, Radius = 3.0, Stroke = dd.Pass ? Brushes.Lime : Brushes.Red, Label = string.Empty });
+                }
                 return;
             }
     

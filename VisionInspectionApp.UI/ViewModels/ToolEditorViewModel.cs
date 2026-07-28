@@ -192,6 +192,7 @@ namespace VisionInspectionApp.UI.ViewModels
                 "Distance",
                 "LineLineDistance",
                 "PointLineDistance",
+                "SegmentLineDistance",
                 "Angle",
                 "EdgePair",
                 "Condition",
@@ -853,6 +854,7 @@ namespace VisionInspectionApp.UI.ViewModels
             OnPropertyChanged(nameof(IsDistanceNode));
             OnPropertyChanged(nameof(IsLineLineDistanceNode));
             OnPropertyChanged(nameof(IsPointLineDistanceNode));
+            OnPropertyChanged(nameof(IsSegmentLineDistanceNode));
             OnPropertyChanged(nameof(IsAngleNode));
             OnPropertyChanged(nameof(IsEdgePairNode));
             OnPropertyChanged(nameof(IsEdgePairDetectNode));
@@ -890,14 +892,20 @@ namespace VisionInspectionApp.UI.ViewModels
             OnPropertyChanged(nameof(LineLineDistance_LineB));
             OnPropertyChanged(nameof(PointLineDistance_Point));
             OnPropertyChanged(nameof(PointLineDistance_Line));
+            OnPropertyChanged(nameof(SegmentLineDistance_LineA));
+            OnPropertyChanged(nameof(SegmentLineDistance_LineB));
             OnPropertyChanged(nameof(Angle_LineA));
             OnPropertyChanged(nameof(Angle_LineB));
             OnPropertyChanged(nameof(EdgePair_RefA));
             OnPropertyChanged(nameof(EdgePair_RefB));
             OnPropertyChanged(nameof(AvailableLineLineDistanceModes));
             OnPropertyChanged(nameof(AvailablePointLineDistanceModes));
+            OnPropertyChanged(nameof(AvailableSegmentLineDistanceModes));
+            OnPropertyChanged(nameof(AvailableSegmentLineExtensionModes));
             OnPropertyChanged(nameof(LineLineDistance_Mode));
             OnPropertyChanged(nameof(PointLineDistance_Mode));
+            OnPropertyChanged(nameof(SegmentLineDistance_Mode));
+            OnPropertyChanged(nameof(SegmentLineDistance_ExtensionMode));
             OnPropertyChanged(nameof(Condition_InputCount));
             OnPropertyChanged(nameof(Condition_Expression));
             OnPropertyChanged(nameof(TextNode_Text));
@@ -1059,12 +1067,13 @@ namespace VisionInspectionApp.UI.ViewModels
         public bool IsDistanceNode => string.Equals(SelectedNode?.Type, "Distance", StringComparison.OrdinalIgnoreCase);
         public bool IsLineLineDistanceNode => string.Equals(SelectedNode?.Type, "LineLineDistance", StringComparison.OrdinalIgnoreCase);
         public bool IsPointLineDistanceNode => string.Equals(SelectedNode?.Type, "PointLineDistance", StringComparison.OrdinalIgnoreCase);
+        public bool IsSegmentLineDistanceNode => string.Equals(SelectedNode?.Type, "SegmentLineDistance", StringComparison.OrdinalIgnoreCase);
         public bool IsAngleNode => string.Equals(SelectedNode?.Type, "Angle", StringComparison.OrdinalIgnoreCase);
         public bool IsConditionNode => string.Equals(SelectedNode?.Type, "Condition", StringComparison.OrdinalIgnoreCase);
         public bool IsTextNode => string.Equals(SelectedNode?.Type, "Text", StringComparison.OrdinalIgnoreCase);
         public bool IsImageSourceNode => string.Equals(SelectedNode?.Type, "ImageSource", StringComparison.OrdinalIgnoreCase);
         public bool IsPreprocessNode => string.Equals(SelectedNode?.Type, "Preprocess", StringComparison.OrdinalIgnoreCase);
-        public bool IsAnyDistanceNode => IsDistanceNode || IsLineLineDistanceNode || IsPointLineDistanceNode || IsAngleNode || IsEdgePairNode || IsEdgePairDetectNode || IsDiameterNode;
+        public bool IsAnyDistanceNode => IsDistanceNode || IsLineLineDistanceNode || IsPointLineDistanceNode || IsSegmentLineDistanceNode || IsAngleNode || IsEdgePairNode || IsEdgePairDetectNode || IsDiameterNode;
     
         private ImageSourceDefinition? SelectedImageSourceDef()
         {
@@ -1764,6 +1773,36 @@ namespace VisionInspectionApp.UI.ViewModels
             }
         }
     
+        private void SyncInputEdgeForSegmentLineDistancePort(string port, string? lineName)
+        {
+            if (_syncingInputs)
+                return;
+            if (_config is null || SelectedNode is null)
+                return;
+            if (!string.Equals(SelectedNode.Type, "SegmentLineDistance", StringComparison.OrdinalIgnoreCase))
+                return;
+            _syncingInputs = true;
+            try
+            {
+                RemoveEdgesToSelectedNodePort(port);
+                if (!string.IsNullOrWhiteSpace(lineName))
+                {
+                    var from = Nodes.FirstOrDefault(n => (string.Equals(n.Type, "Line", StringComparison.OrdinalIgnoreCase) || string.Equals(n.Type, "Caliper", StringComparison.OrdinalIgnoreCase) || string.Equals(n.Type, "LinePairDetect", StringComparison.OrdinalIgnoreCase) || string.Equals(n.Type, "EdgePairDetect", StringComparison.OrdinalIgnoreCase)) && string.Equals(n.RefName, lineName, StringComparison.OrdinalIgnoreCase));
+                    if (from is not null)
+                    {
+                        from.EnsurePortsInitialized();
+                        CreateEdge(from, SelectedNode, from.OutPorts.FirstOrDefault()?.Name ?? "Out", port);
+                    }
+                }
+            }
+            finally
+            {
+                _syncingInputs = false;
+            }
+        }
+
+        public ObservableCollection<SegmentLineDistanceMode> AvailableSegmentLineDistanceModes { get; } = new ObservableCollection<SegmentLineDistanceMode>((SegmentLineDistanceMode[])Enum.GetValues(typeof(SegmentLineDistanceMode)));
+        public ObservableCollection<SegmentLineExtensionMode> AvailableSegmentLineExtensionModes { get; } = new ObservableCollection<SegmentLineExtensionMode>((SegmentLineExtensionMode[])Enum.GetValues(typeof(SegmentLineExtensionMode)));
         public ObservableCollection<CaliperOrientation> AvailableCaliperOrientations { get; } = new ObservableCollection<CaliperOrientation>((CaliperOrientation[])Enum.GetValues(typeof(CaliperOrientation)));
         public ObservableCollection<IlluminationCorrectionPreset> AvailableIlluminationCorrectionPresets { get; } = new ObservableCollection<IlluminationCorrectionPreset>((IlluminationCorrectionPreset[])Enum.GetValues(typeof(IlluminationCorrectionPreset)));
         public ObservableCollection<EdgePolarity> AvailableEdgePolarities { get; } = new ObservableCollection<EdgePolarity>((EdgePolarity[])Enum.GetValues(typeof(EdgePolarity)));
@@ -2637,6 +2676,17 @@ namespace VisionInspectionApp.UI.ViewModels
                 return;
             }
     
+            if (string.Equals(node.Type, "SegmentLineDistance", StringComparison.OrdinalIgnoreCase))
+            {
+                var existed = _config.SegmentLineDistances.Any(x => string.Equals(x.Name, node.RefName, StringComparison.OrdinalIgnoreCase));
+                if (!existed)
+                {
+                    _config.SegmentLineDistances.Add(new SegmentLineDistance { Name = node.RefName });
+                }
+    
+                return;
+            }
+    
             if (string.Equals(node.Type, "Angle", StringComparison.OrdinalIgnoreCase))
             {
                 var existed = _config.Angles.Any(x => string.Equals(x.Name, node.RefName, StringComparison.OrdinalIgnoreCase));
@@ -2746,6 +2796,11 @@ namespace VisionInspectionApp.UI.ViewModels
             {
                 baseName = "PLD";
                 exists = n => _config.PointToLineDistances.Any(x => string.Equals(x.Name, n, StringComparison.OrdinalIgnoreCase));
+            }
+            else if (string.Equals(type, "SegmentLineDistance", StringComparison.OrdinalIgnoreCase))
+            {
+                baseName = "SLD";
+                exists = n => _config.SegmentLineDistances.Any(x => string.Equals(x.Name, n, StringComparison.OrdinalIgnoreCase));
             }
             else if (string.Equals(type, "Angle", StringComparison.OrdinalIgnoreCase))
             {

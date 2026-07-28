@@ -98,6 +98,8 @@ public sealed class InspectionResult
 
     public List<SegmentDistanceResult> PointToLineDistances { get; } = new();
 
+    public List<SegmentDistanceResult> SegmentLineDistances { get; } = new();
+
     public List<AngleResult> Angles { get; } = new();
 
     public List<ConditionResult> Conditions { get; } = new();
@@ -1381,11 +1383,10 @@ public sealed class InspectionService : IInspectionService
                     bool pass;
                     List<Point2d>? featurePoints = null;
 
+                    double detectedAngleDeg = templateAngleDeg;
+
                     if (p.Algorithm == PointFindAlgorithm.EdgePoint)
                     {
-                        // Use the taught Template ROI as the point anchor.  SearchRoi is only a
-                        // search window for template/feature matching and is not the Point's
-                        // crosshair reference.
                         var r = FindPointByEdge(matForPoint, p.TemplateRoi, p.EdgePoint, originTeach, originFound, angleDeg);
                         basePos = r.Position;
                         matchRect = r.MatchRect;
@@ -1396,14 +1397,28 @@ public sealed class InspectionService : IInspectionService
                     else
                     {
                         var templ = GetTemplateGray(def.TemplateImageFile);
-                        var m = _matcher.MatchWithFixedRotation(matForPoint, def, templ, templateAngleDeg, preForPoint);
-                        if (!ReferenceEquals(def, defBase) && m.Score < defBase.MatchScoreThreshold)
+                        MatchResult m;
+                        if (p.Algorithm == PointFindAlgorithm.MvpShapeMatch
+                            || p.Algorithm == PointFindAlgorithm.MvpShapePyramid
+                            || p.Algorithm == PointFindAlgorithm.ShapePyramid
+                            || p.Algorithm == PointFindAlgorithm.ShapeBased)
                         {
-                            var templ2 = GetTemplateGray(defBase.TemplateImageFile);
-                            var retry = _matcher.MatchWithFixedRotation(matForPoint, defBase, templ2, templateAngleDeg, preForPoint);
-                            if (retry.Score > m.Score)
+                            var minA = p.MinAngle != 0 ? p.MinAngle : -15.0;
+                            var maxA = p.MaxAngle != 0 ? p.MaxAngle : 15.0;
+                            var stepA = p.AngleStep > 0 ? p.AngleStep : 1.0;
+                            m = _matcher.MatchWithRotation(matForPoint, def, templ, preForPoint, minA, maxA, stepA);
+                        }
+                        else
+                        {
+                            m = _matcher.MatchWithFixedRotation(matForPoint, def, templ, templateAngleDeg, preForPoint);
+                            if (!ReferenceEquals(def, defBase) && m.Score < defBase.MatchScoreThreshold)
                             {
-                                m = retry;
+                                var templ2 = GetTemplateGray(defBase.TemplateImageFile);
+                                var retry = _matcher.MatchWithFixedRotation(matForPoint, defBase, templ2, templateAngleDeg, preForPoint);
+                                if (retry.Score > m.Score)
+                                {
+                                    m = retry;
+                                }
                             }
                         }
 
@@ -1413,14 +1428,15 @@ public sealed class InspectionService : IInspectionService
                         thr = p.MatchScoreThreshold;
                         pass = score >= thr;
                         featurePoints = m.FeaturePoints;
+                        if (m.AngleDeg != 0) detectedAngleDeg = m.AngleDeg;
                     }
 
                     var off = new Point2d(p.OffsetPx.X, p.OffsetPx.Y);
-                    var offRot = Rotate(off, new Point2d(0, 0), templateAngleDeg);
+                    var offRot = Rotate(off, new Point2d(0, 0), detectedAngleDeg);
                     var pos = new Point2d(basePos.X + offRot.X, basePos.Y + offRot.Y);
                     __sw.Stop();
                     result.Timings.NodeTimings[p.Name] = (int)__sw.ElapsedMilliseconds;
-                    return new PointMatchResult(p.Name, pos, matchRect, score, thr, pass, 0.0, featurePoints);
+                    return new PointMatchResult(p.Name, pos, matchRect, score, thr, pass, detectedAngleDeg, featurePoints);
                 }))
                 .ToArray();
 
@@ -2307,6 +2323,43 @@ public sealed class InspectionService : IInspectionService
                 result.Timings.NodeTimings[dd.Name] = (int)__swNode.ElapsedMilliseconds;
                 result.PointToLineDistances.Add(new SegmentDistanceResult(dd.Name, dd.Point, dd.Line, value, dd.Nominal, dd.TolerancePlus, dd.ToleranceMinus, pass, p, closest));
             }
+            foreach (var dd in config.SegmentLineDistances)
+            {
+                var __swNode = System.Diagnostics.Stopwatch.StartNew();
+                if (!foundLines.TryGetValue(dd.LineA, out var la) || !foundLines.TryGetValue(dd.LineB, out var lb) || !la.Found || !lb.Found)
+                {
+                    __swNode.Stop();
+                    result.Timings.NodeTimings[dd.Name] = (int)__swNode.ElapsedMilliseconds;
+                    result.SegmentLineDistances.Add(new SegmentDistanceResult(dd.Name, dd.LineA, dd.LineB, double.NaN, dd.Nominal, dd.TolerancePlus, dd.ToleranceMinus, false, default, default));
+                    continue;
+                }
+
+                Roi? searchRoiA = null;
+                var lineADef = config.Lines?.FirstOrDefault(x => string.Equals(x.Name, dd.LineA, StringComparison.OrdinalIgnoreCase));
+                if (lineADef is not null) searchRoiA = lineADef.SearchRoi;
+                else
+                {
+                    var calADef = config.Calipers?.FirstOrDefault(x => string.Equals(x.Name, dd.LineA, StringComparison.OrdinalIgnoreCase));
+                    if (calADef is not null) searchRoiA = calADef.SearchRoi;
+                    else
+                    {
+                        var lpdADef = config.LinePairDetections?.FirstOrDefault(x => string.Equals(x.Name, dd.LineA, StringComparison.OrdinalIgnoreCase));
+                        if (lpdADef is not null) searchRoiA = lpdADef.SearchRoi;
+                        else
+                        {
+                            var epdADef = config.EdgePairDetections?.FirstOrDefault(x => string.Equals(x.Name, dd.LineA, StringComparison.OrdinalIgnoreCase));
+                            if (epdADef is not null) searchRoiA = epdADef.SearchRoi;
+                        }
+                    }
+                }
+
+                var (distPx, ca, cb) = CalculateSegmentLineDistance(la, lb, dd.Mode, dd.ExtensionMode, searchRoiA, originTeach, originFound, angleDeg);
+                var value = config.PixelsPerMm > 0 ? distPx / config.PixelsPerMm : distPx;
+                var pass = value >= (dd.Nominal - dd.ToleranceMinus) && value <= (dd.Nominal + dd.TolerancePlus);
+                __swNode.Stop();
+                result.Timings.NodeTimings[dd.Name] = (int)__swNode.ElapsedMilliseconds;
+                result.SegmentLineDistances.Add(new SegmentDistanceResult(dd.Name, dd.LineA, dd.LineB, value, dd.Nominal, dd.TolerancePlus, dd.ToleranceMinus, pass, ca, cb));
+            }
             result.Timings.DistancesMs = (int)Math.Max(0, swTotal.ElapsedMilliseconds - tDistances0);
 
             var tCdt0 = swTotal.ElapsedMilliseconds;
@@ -2540,6 +2593,7 @@ public sealed class InspectionService : IInspectionService
             && result.Distances.All(x => x.Pass)
             && result.LineToLineDistances.All(x => x.Pass)
             && result.PointToLineDistances.All(x => x.Pass)
+            && result.SegmentLineDistances.All(x => x.Pass)
             && result.Angles.All(x => x.Pass)
             && result.EdgePairs.All(x => x.Pass)
             && result.EdgePairDetections.All(x => x.Pass)
@@ -2723,6 +2777,137 @@ public sealed class InspectionService : IInspectionService
 
         // Default / legacy
         return Geometry2D.PointToSegmentDistance(p, l.P1, l.P2);
+    }
+
+    private static (double DistPx, Point2d SegmentPt, Point2d LinePt) CalculateSegmentLineDistance(
+        LineDetectResult la,
+        LineDetectResult lb,
+        SegmentLineDistanceMode mode,
+        SegmentLineExtensionMode extensionMode,
+        Roi? searchRoiA,
+        Point2d originTeach,
+        Point2d originFound,
+        double angleDeg)
+    {
+        var segP1 = la.P1;
+        var segP2 = la.P2;
+
+        if (extensionMode == SegmentLineExtensionMode.ExtendToSearchRoiBounds && searchRoiA is not null && searchRoiA.Width > 0 && searchRoiA.Height > 0)
+        {
+            var dir = segP2 - segP1;
+            if (dir.X * dir.X + dir.Y * dir.Y > 1e-9)
+            {
+                var roiCenter = new Point2d(searchRoiA.X + searchRoiA.Width / 2.0, searchRoiA.Y + searchRoiA.Height / 2.0);
+                if (originFound.X != 0 || originFound.Y != 0)
+                {
+                    var rotC = Rotate(roiCenter, originTeach, angleDeg);
+                    roiCenter = new Point2d(rotC.X + (originFound.X - originTeach.X), rotC.Y + (originFound.Y - originTeach.Y));
+                }
+                var totalAngle = angleDeg + searchRoiA.Angle;
+                var halfW = searchRoiA.Width / 2.0;
+                var halfH = searchRoiA.Height / 2.0;
+
+                var rad = totalAngle * Math.PI / 180.0;
+                var cos = Math.Cos(rad);
+                var sin = Math.Sin(rad);
+
+                Point2d ToLocal(Point2d g)
+                {
+                    var dx = g.X - roiCenter.X;
+                    var dy = g.Y - roiCenter.Y;
+                    return new Point2d(dx * cos + dy * sin, -dx * sin + dy * cos);
+                }
+
+                Point2d ToGlobal(Point2d loc)
+                {
+                    var gx = roiCenter.X + loc.X * cos - loc.Y * sin;
+                    var gy = roiCenter.Y + loc.X * sin + loc.Y * cos;
+                    return new Point2d(gx, gy);
+                }
+
+                var locP1 = ToLocal(segP1);
+                var locP2 = ToLocal(segP2);
+                var locDir = locP2 - locP1;
+
+                if (Math.Abs(locDir.X) > 1e-9 || Math.Abs(locDir.Y) > 1e-9)
+                {
+                    var ts = new List<double>();
+                    if (Math.Abs(locDir.X) > 1e-9)
+                    {
+                        var tLeft = (-halfW - locP1.X) / locDir.X;
+                        var yLeft = locP1.Y + tLeft * locDir.Y;
+                        if (yLeft >= -halfH - 1e-3 && yLeft <= halfH + 1e-3) ts.Add(tLeft);
+
+                        var tRight = (halfW - locP1.X) / locDir.X;
+                        var yRight = locP1.Y + tRight * locDir.Y;
+                        if (yRight >= -halfH - 1e-3 && yRight <= halfH + 1e-3) ts.Add(tRight);
+                    }
+
+                    if (Math.Abs(locDir.Y) > 1e-9)
+                    {
+                        var tTop = (-halfH - locP1.Y) / locDir.Y;
+                        var xTop = locP1.X + tTop * locDir.X;
+                        if (xTop >= -halfW - 1e-3 && xTop <= halfW + 1e-3) ts.Add(tTop);
+
+                        var tBottom = (halfH - locP1.Y) / locDir.Y;
+                        var xBottom = locP1.X + tBottom * locDir.X;
+                        if (xBottom >= -halfW - 1e-3 && xBottom <= halfW + 1e-3) ts.Add(tBottom);
+                    }
+
+                    if (ts.Count >= 2)
+                    {
+                        var minT = ts.Min();
+                        var maxT = ts.Max();
+                        var extLoc1 = new Point2d(locP1.X + minT * locDir.X, locP1.Y + minT * locDir.Y);
+                        var extLoc2 = new Point2d(locP1.X + maxT * locDir.X, locP1.Y + maxT * locDir.Y);
+                        segP1 = ToGlobal(extLoc1);
+                        segP2 = ToGlobal(extLoc2);
+                    }
+                }
+            }
+        }
+
+        static Point2d ClosestPointOnInfiniteLine(Point2d p, Point2d q1, Point2d q2)
+        {
+            var v = q2 - q1;
+            var len2 = v.X * v.X + v.Y * v.Y;
+            if (len2 <= 1e-12) return q1;
+            var t = ((p.X - q1.X) * v.X + (p.Y - q1.Y) * v.Y) / len2;
+            return new Point2d(q1.X + t * v.X, q1.Y + t * v.Y);
+        }
+
+        if (mode == SegmentLineDistanceMode.MidpointToInfiniteLine)
+        {
+            var mid = new Point2d((segP1.X + segP2.X) * 0.5, (segP1.Y + segP2.Y) * 0.5);
+            var proj = ClosestPointOnInfiniteLine(mid, lb.P1, lb.P2);
+            return (Geometry2D.Distance(mid, proj), mid, proj);
+        }
+
+        var c1 = ClosestPointOnInfiniteLine(segP1, lb.P1, lb.P2);
+        var c2 = ClosestPointOnInfiniteLine(segP2, lb.P1, lb.P2);
+        var d1 = Geometry2D.Distance(segP1, c1);
+        var d2 = Geometry2D.Distance(segP2, c2);
+
+        if (mode == SegmentLineDistanceMode.ClosestPointOnSegmentToInfiniteLine)
+        {
+            var vLine = lb.P2 - lb.P1;
+            var cross1 = (lb.P2.X - lb.P1.X) * (segP1.Y - lb.P1.Y) - (lb.P2.Y - lb.P1.Y) * (segP1.X - lb.P1.X);
+            var cross2 = (lb.P2.X - lb.P1.X) * (segP2.Y - lb.P1.Y) - (lb.P2.Y - lb.P1.Y) * (segP2.X - lb.P1.X);
+            if (cross1 * cross2 <= 0 && (Math.Abs(cross1) > 1e-9 || Math.Abs(cross2) > 1e-9))
+            {
+                var denom = (segP2.X - segP1.X) * vLine.Y - (segP2.Y - segP1.Y) * vLine.X;
+                if (Math.Abs(denom) > 1e-9)
+                {
+                    var tSeg = ((lb.P1.X - segP1.X) * vLine.Y - (lb.P1.Y - segP1.Y) * vLine.X) / denom;
+                    var inter = new Point2d(segP1.X + tSeg * (segP2.X - segP1.X), segP1.Y + tSeg * (segP2.Y - segP1.Y));
+                    return (0.0, inter, inter);
+                }
+            }
+
+            return d1 <= d2 ? (d1, segP1, c1) : (d2, segP2, c2);
+        }
+
+        return d1 >= d2 ? (d1, segP1, c1) : (d2, segP2, c2);
     }
 
     private static Point2d Rotate(Point2d p, Point2d origin, double angleDeg)

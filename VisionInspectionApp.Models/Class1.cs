@@ -165,6 +165,8 @@ public sealed class VisionConfig
 
     public List<PointToLineDistance> PointToLineDistances { get; set; } = new();
 
+    public List<SegmentLineDistance> SegmentLineDistances { get; set; } = new();
+
     public List<AngleDefinition> Angles { get; set; } = new();
 
     public List<ConditionDefinition> Conditions { get; set; } = new();
@@ -489,7 +491,11 @@ public enum PointFindAlgorithm
 {
     TemplateMatch = 0,
     EdgePoint = 1,
-    FeatureBased = 2
+    FeatureBased = 2,
+    ShapeBased = 3,
+    ShapePyramid = 4,
+    MvpShapeMatch = 5,
+    MvpShapePyramid = 6
 }
 
 public sealed class EdgePointSettings
@@ -623,6 +629,38 @@ public sealed class LineDistance
     public double Nominal { get; set; }
     public double TolerancePlus { get; set; }
     public double ToleranceMinus { get; set; }
+}
+
+public enum SegmentLineDistanceMode
+{
+    ClosestPointOnSegmentToInfiniteLine = 0,
+    FarthestPointOnSegmentToInfiniteLine = 1,
+    MidpointToInfiniteLine = 2
+}
+
+public enum SegmentLineExtensionMode
+{
+    ActualDetectedSegment = 0,
+    ExtendToSearchRoiBounds = 1
+}
+
+public sealed class SegmentLineDistance
+{
+    public string Name { get; set; } = string.Empty;
+
+    public string LineA { get; set; } = string.Empty; // Segment Line
+
+    public string LineB { get; set; } = string.Empty; // Infinite Line
+
+    public double Nominal { get; set; }
+
+    public double TolerancePlus { get; set; }
+
+    public double ToleranceMinus { get; set; }
+
+    public SegmentLineDistanceMode Mode { get; set; } = SegmentLineDistanceMode.ClosestPointOnSegmentToInfiniteLine;
+
+    public SegmentLineExtensionMode ExtensionMode { get; set; } = SegmentLineExtensionMode.ActualDetectedSegment;
 }
 
 public sealed class LineToLineDistance
