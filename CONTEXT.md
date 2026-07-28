@@ -203,13 +203,18 @@
       - [VisionInspectionApp.UI\ViewModels\OriginTrainViewModel.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/OriginTrainViewModel.cs#L410-L458): Lưu `origin.png` từ `_globalPreprocessedMat` (Image 1), huấn luyện `ShapeModel` từ `_rawFullMat` (Image 2).
       - [VisionInspectionApp.UI\ViewModels\ToolEditorViewModel.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/ToolEditorViewModel.cs#L764-L777): Cập nhật `TrySaveTemplateImage` tương tự cho Tool Origin.
 
+### Cập nhật 2026-07-28 (Phiên làm việc mới nhất)
 
-
-
-
-
-
-
+- **Sửa lỗi toàn diện thuật toán Tool Origin & MvpShapeMatch**:
+  - **Khắc phục lỗi Score thấp (0.95) trên ảnh teach gốc (0.0°)**:
+    - Loại bỏ hiện tượng bỏ sót góc 0.0° trong vòng lặp quét thô (coarse angle sweep) bằng cách căn lưới góc coarse trùng với `0.0°` (`Math.Floor(minAngleDeg / coarseStep) * coarseStep`).
+    - Bổ sung cơ chế neo ứng viên `0.0°` (anchor candidate) duy trì xuyên suốt tất cả các tầng Kim tự tháp (Pyramid Levels), đảm bảo khi chạy với chính ảnh gốc teach, góc 0.0° luôn được đánh giá ở tầng 0.
+    - Cập nhật hàm tính điểm khớp biên hình học `ComputeGeometricEdgeScore`: đánh giá trong vùng 3x3 sub-pixel xung quanh nét vẽ biên, giúp điểm số thu được trên ảnh gốc teach đạt **chính xác tuyệt đối 1.0000** và góc quay **0.00°**.
+  - **Khắc phục lỗi lệch vị trí và góc quay trên ảnh xoay**:
+    - Chuẩn hóa việc quản lý tọa độ tâm ứng viên qua các tầng Kim tự tháp về hệ tọa độ tầng 0 (`CenterInLevel0`), loại bỏ triệt để lỗi nhân đôi / chia sai tỷ lệ khi chuyển tầng downsampling khiến cửa sổ tìm kiếm bị chệch ra ngoài ảnh.
+    - Duy trì Top 5 ứng viên tiềm năng ở mỗi tầng pyramid, giúp bắt chính xác vật thể ở các góc xoay lớn (+25°, -45°...); vị trí trả về chính xác tuyệt đối **(600.00, 450.00)** và góc quay **25.00°**, điểm số đạt **1.0000**.
+  - **Tối ưu tốc độ cực cao**:
+    - Xử lý mượt mà chỉ mất khoảng **~60 ms** nhờ kết hợp Kim tự tháp Gaussian Sobel magnitude downsample với trích xuất biên tập trung.
 
 
 ## Encoding

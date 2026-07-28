@@ -1353,51 +1353,11 @@ public sealed class PatternMatcher
         return MatchWithRotation(image, definition, templGray0.Mat, preprocess, minAngleDeg, maxAngleDeg, stepDeg);
     }
 
+    private readonly OriginMatcher _originMatcher = new();
+
     public MatchResult MatchWithRotation(Mat image, PointDefinition definition, Mat templateGray, PreprocessSettings? preprocess, double minAngleDeg = -10.0, double maxAngleDeg = 10.0, double stepDeg = 1.0)
     {
-        if (image is null)
-        {
-            throw new ArgumentNullException(nameof(image));
-        }
-
-        if (definition is null)
-        {
-            throw new ArgumentNullException(nameof(definition));
-        }
-
-        if (templateGray is null)
-        {
-            throw new ArgumentNullException(nameof(templateGray));
-        }
-
-        var roiRect = ToRect(definition.SearchRoi, image.Width, image.Height);
-        if (roiRect.Width <= 0 || roiRect.Height <= 0 || templateGray.Empty())
-        {
-            var centerFallback = new Point2d(roiRect.X + roiRect.Width / 2.0, roiRect.Y + roiRect.Height / 2.0);
-            return new MatchResult(centerFallback, 0.0, 0.0, roiRect);
-        }
-
-        using var roi = new Mat(image, roiRect);
-
-        using var roiGray = EnsureGrayBorrowed(roi);
-
-        double effectiveStep = stepDeg;
-        if (definition.AngleStep > 0)
-        {
-            effectiveStep = definition.AngleStep;
-        }
-
-        if (definition.OriginAlgorithm == OriginAlgorithm.FeatureBased)
-        {
-            // For FeatureBased, angle is resolved by Homography. We pass 0.0 as angleDeg and let it find the real angle.
-            return MatchByFeatureBased(roiGray.Mat, templateGray, definition, 0.0, preprocess, roiRect);
-        }
-
-        var baseAngle = definition.TemplateRoi.Angle;
-        double searchMin = baseAngle + minAngleDeg;
-        double searchMax = baseAngle + maxAngleDeg;
-
-        return MatchByPyramidFast(roiGray.Mat, templateGray, definition, preprocess, searchMin, searchMax, effectiveStep, roiRect);
+        return _originMatcher.MatchWithRotation(image, definition, templateGray, preprocess, minAngleDeg, maxAngleDeg, stepDeg);
     }
 
     private static Mat RotateTemplateCentered(Mat src, double angleDeg)
