@@ -599,6 +599,12 @@ namespace VisionInspectionApp.UI.ViewModels
                     if (b is not null)
                         b.InspectRoi = roi;
                 }
+                else if (string.Equals(SelectedNode.Type, "CircleFinder", StringComparison.OrdinalIgnoreCase))
+                {
+                    var c = _config.CircleFinders.FirstOrDefault(x => string.Equals(x.Name, SelectedNode.RefName, StringComparison.OrdinalIgnoreCase));
+                    if (c is not null)
+                        c.SearchRoi = roi;
+                }
     
                 RefreshPreviews();
                 RaiseToolPropertyPanelsChanged();
@@ -2589,9 +2595,20 @@ namespace VisionInspectionApp.UI.ViewModels
                     continue;
                 }
     
-                AddCircle(dst, c.Center.X, c.Center.Y, c.RadiusPx, stroke: Brushes.MediumPurple, strokeThickness: 2.0);
-                AddCross(dst, c.Center.X, c.Center.Y, size: 10.0, stroke: Brushes.MediumPurple, strokeThickness: 2.0);
-                dst.Add(new OverlayPointItem { X = c.Center.X, Y = c.Center.Y, Radius = 1.0, Stroke = Brushes.MediumPurple, Label = c.Name });
+                if (c.EdgePoints is not null && c.EdgePoints.Count > 0)
+                {
+                    for (var i = 0; i < c.EdgePoints.Count; i++)
+                    {
+                        var pt = c.EdgePoints[i];
+                        var isInlier = c.InlierFlags is not null && i < c.InlierFlags.Count && c.InlierFlags[i];
+                        var ptStroke = isInlier ? Brushes.Lime : Brushes.Red;
+                        AddCross(dst, pt.X, pt.Y, size: 6.0, stroke: ptStroke, strokeThickness: 1.5);
+                    }
+                }
+    
+                AddCircle(dst, c.Center.X, c.Center.Y, c.RadiusPx, stroke: Brushes.Lime, strokeThickness: 2.0);
+                AddCross(dst, c.Center.X, c.Center.Y, size: 10.0, stroke: Brushes.Lime, strokeThickness: 2.0);
+                dst.Add(new OverlayPointItem { X = c.Center.X, Y = c.Center.Y, Radius = 1.0, Stroke = Brushes.Lime, Label = $"{c.Name}: R={c.RadiusPx:0.##}px" });
             }
     
             foreach (var d in run.Diameters)
@@ -2881,10 +2898,21 @@ namespace VisionInspectionApp.UI.ViewModels
                 {
                     return;
                 }
-    
-                AddCircle(dst, c.Center.X, c.Center.Y, c.RadiusPx, stroke: Brushes.MediumPurple, strokeThickness: 2.0);
-                AddCross(dst, c.Center.X, c.Center.Y, size: 12.0, stroke: Brushes.MediumPurple, strokeThickness: 2.0);
-                dst.Add(new OverlayPointItem { X = c.Center.X, Y = c.Center.Y, Radius = 1.0, Stroke = Brushes.MediumPurple, Label = c.Name });
+
+                if (c.EdgePoints is not null && c.EdgePoints.Count > 0)
+                {
+                    for (var i = 0; i < c.EdgePoints.Count; i++)
+                    {
+                        var pt = c.EdgePoints[i];
+                        var isInlier = c.InlierFlags is not null && i < c.InlierFlags.Count && c.InlierFlags[i];
+                        var ptStroke = isInlier ? Brushes.Lime : Brushes.Red;
+                        AddCross(dst, pt.X, pt.Y, size: 6.0, stroke: ptStroke, strokeThickness: 1.5);
+                    }
+                }
+
+                AddCircle(dst, c.Center.X, c.Center.Y, c.RadiusPx, stroke: Brushes.Lime, strokeThickness: 2.0);
+                AddCross(dst, c.Center.X, c.Center.Y, size: 12.0, stroke: Brushes.Lime, strokeThickness: 2.0);
+                dst.Add(new OverlayPointItem { X = c.Center.X, Y = c.Center.Y, Radius = 1.0, Stroke = Brushes.Lime, Label = $"{c.Name}: R={c.RadiusPx:0.##}px" });
                 return;
             }
     

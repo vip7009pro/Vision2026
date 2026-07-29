@@ -38,9 +38,10 @@ public sealed class EdgePairDetectDefinition
 
 public enum CircleFindAlgorithm
 {
-    HoughCircles = 0,
+    RadialCaliper = 0,
     ContourFit = 1,
-    Ransac = 2
+    HoughCircles = 2,
+    Ransac = 3
 }
 
 public sealed class CircleFinderDefinition
@@ -49,7 +50,24 @@ public sealed class CircleFinderDefinition
 
     public Roi SearchRoi { get; set; } = new();
 
-    public CircleFindAlgorithm Algorithm { get; set; } = CircleFindAlgorithm.ContourFit;
+    public CircleFindAlgorithm Algorithm { get; set; } = CircleFindAlgorithm.RadialCaliper;
+
+    // RadialCaliper params
+    public int StripCount { get; set; } = 32;
+
+    public int StripWidth { get; set; } = 10;
+
+    public int StripLength { get; set; } = 40;
+
+    public EdgePolarity Polarity { get; set; } = EdgePolarity.Any;
+
+    public EdgeSelection EdgeSelection { get; set; } = EdgeSelection.MaxStrength;
+
+    public int MinEdgeStrength { get; set; } = 15;
+
+    public double MinAngleDeg { get; set; } = 0.0;
+
+    public double MaxAngleDeg { get; set; } = 360.0;
 
     // Common constraints
     public int MinRadiusPx { get; set; } = 0;
@@ -257,6 +275,13 @@ public enum EdgePolarity
     Any = 0,
     DarkToLight = 1,
     LightToDark = 2
+}
+
+public enum EdgeSelection
+{
+    MaxStrength = 0,
+    First = 1,
+    Last = 2
 }
 
 public sealed class CaliperDefinition

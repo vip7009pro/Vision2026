@@ -509,19 +509,25 @@ public partial class ImageViewerControl : UserControl
 
         if (kind == RoiDrawKind.Search)
         {
-            // For Search: SC, S, L, LP, C.
+            // For Search: SC, S, L, LP, C, CIR, Cal, EPD.
             if (!string.IsNullOrWhiteSpace(_activeRoiLabel)
                 && (EndsWith(_activeRoiLabel!, " SC")
                     || EndsWith(_activeRoiLabel!, " S")
                     || EndsWith(_activeRoiLabel!, " L")
                     || EndsWith(_activeRoiLabel!, " LP")
-                    || EndsWith(_activeRoiLabel!, " C")))
+                    || EndsWith(_activeRoiLabel!, " C")
+                    || EndsWith(_activeRoiLabel!, " CIR")
+                    || EndsWith(_activeRoiLabel!, " Cal")
+                    || EndsWith(_activeRoiLabel!, " EPD")))
             {
                 return _activeRoiLabel;
             }
 
             var swapped = TrySwapSuffix(_activeRoiLabel, "SC") ?? TrySwapSuffix(_activeRoiLabel, "S");
             if (!string.IsNullOrWhiteSpace(swapped)) return swapped;
+
+            var cir = rectLabels.FirstOrDefault(x => EndsWith(x, " CIR"));
+            if (!string.IsNullOrWhiteSpace(cir)) return cir;
 
             var sc = rectLabels.FirstOrDefault(x => EndsWith(x, " SC"));
             if (!string.IsNullOrWhiteSpace(sc)) return sc;
@@ -537,6 +543,12 @@ public partial class ImageViewerControl : UserControl
 
             var c = rectLabels.FirstOrDefault(x => EndsWith(x, " C"));
             if (!string.IsNullOrWhiteSpace(c)) return c;
+
+            var cal = rectLabels.FirstOrDefault(x => EndsWith(x, " Cal"));
+            if (!string.IsNullOrWhiteSpace(cal)) return cal;
+
+            var epd = rectLabels.FirstOrDefault(x => EndsWith(x, " EPD"));
+            if (!string.IsNullOrWhiteSpace(epd)) return epd;
         }
 
         return _activeRoiLabel;

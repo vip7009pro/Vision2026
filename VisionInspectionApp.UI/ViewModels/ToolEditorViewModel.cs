@@ -880,7 +880,26 @@ namespace VisionInspectionApp.UI.ViewModels
             OnPropertyChanged(nameof(Point_Edge_MinEdgeStrength));
             OnPropertyChanged(nameof(PointEdgePreviewEnabled));
             OnPropertyChanged(nameof(PointEdgePreviewImage));
+            OnPropertyChanged(nameof(IsCircleFinderNode));
             OnPropertyChanged(nameof(AvailableCircleFindAlgorithms));
+            OnPropertyChanged(nameof(Cf_Algorithm));
+            OnPropertyChanged(nameof(Cf_StripCount));
+            OnPropertyChanged(nameof(Cf_StripWidth));
+            OnPropertyChanged(nameof(Cf_StripLength));
+            OnPropertyChanged(nameof(Cf_Polarity));
+            OnPropertyChanged(nameof(Cf_EdgeSelection));
+            OnPropertyChanged(nameof(Cf_MinEdgeStrength));
+            OnPropertyChanged(nameof(Cf_MinAngleDeg));
+            OnPropertyChanged(nameof(Cf_MaxAngleDeg));
+            OnPropertyChanged(nameof(Cf_MinRadiusPx));
+            OnPropertyChanged(nameof(Cf_MaxRadiusPx));
+            OnPropertyChanged(nameof(Cf_HoughDp));
+            OnPropertyChanged(nameof(Cf_HoughMinDistPx));
+            OnPropertyChanged(nameof(Cf_HoughParam1));
+            OnPropertyChanged(nameof(Cf_HoughParam2));
+            OnPropertyChanged(nameof(Cf_Canny1));
+            OnPropertyChanged(nameof(Cf_Canny2));
+            OnPropertyChanged(nameof(Cf_MinCircularity));
             OnPropertyChanged(nameof(AvailableCircleFinderNames));
             OnPropertyChanged(nameof(AvailableIlluminationCorrectionPresets));
             OnPropertyChanged(nameof(AvailablePointNames));
@@ -1806,6 +1825,7 @@ namespace VisionInspectionApp.UI.ViewModels
         public ObservableCollection<CaliperOrientation> AvailableCaliperOrientations { get; } = new ObservableCollection<CaliperOrientation>((CaliperOrientation[])Enum.GetValues(typeof(CaliperOrientation)));
         public ObservableCollection<IlluminationCorrectionPreset> AvailableIlluminationCorrectionPresets { get; } = new ObservableCollection<IlluminationCorrectionPreset>((IlluminationCorrectionPreset[])Enum.GetValues(typeof(IlluminationCorrectionPreset)));
         public ObservableCollection<EdgePolarity> AvailableEdgePolarities { get; } = new ObservableCollection<EdgePolarity>((EdgePolarity[])Enum.GetValues(typeof(EdgePolarity)));
+        public ObservableCollection<EdgeSelection> AvailableEdgeSelections { get; } = new ObservableCollection<EdgeSelection>((EdgeSelection[])Enum.GetValues(typeof(EdgeSelection)));
         public ObservableCollection<CircleFindAlgorithm> AvailableCircleFindAlgorithms { get; } = new ObservableCollection<CircleFindAlgorithm>((CircleFindAlgorithm[])Enum.GetValues(typeof(CircleFindAlgorithm)));
     
         public ObservableCollection<string> AvailableCircleFinderNames
@@ -1947,6 +1967,98 @@ namespace VisionInspectionApp.UI.ViewModels
                 dst.Add(new OverlayLineItem { X1 = prevX, Y1 = prevY, X2 = x, Y2 = y, Stroke = stroke, StrokeThickness = strokeThickness, Label = string.Empty });
                 prevX = x;
                 prevY = y;
+            }
+        }
+
+        public (Point2d Center, double AngleDeg) GetRoiPose(Roi roi)
+        {
+            if (roi.Width <= 0 || roi.Height <= 0)
+            {
+                return (new Point2d(0, 0), 0);
+            }
+
+            var centerTeach = new Point2d(roi.X + roi.Width / 2.0, roi.Y + roi.Height / 2.0);
+
+            if (_lastRun is not null && _config is not null && _lastRun.Origin is not null && (_lastRun.Origin.MatchRect.Width > 0 || _lastRun.Origin.Position.X != 0 || _lastRun.Origin.Position.Y != 0))
+            {
+                var originTeach = new Point2d(_config.Origin.WorldPosition.X, _config.Origin.WorldPosition.Y);
+                if (originTeach.X == 0 && originTeach.Y == 0 && _config.Origin.TemplateRoi.Width > 0)
+                {
+                    originTeach = new Point2d(_config.Origin.TemplateRoi.X + _config.Origin.TemplateRoi.Width / 2.0, _config.Origin.TemplateRoi.Y + _config.Origin.TemplateRoi.Height / 2.0);
+                }
+                else if (originTeach.X == 0 && originTeach.Y == 0 && _config.Origin.SearchRoi.Width > 0)
+                {
+                    originTeach = new Point2d(_config.Origin.SearchRoi.X + _config.Origin.SearchRoi.Width / 2.0, _config.Origin.SearchRoi.Y + _config.Origin.SearchRoi.Height / 2.0);
+                }
+
+                var mr = _lastRun.Origin.MatchRect;
+                var originFound = (mr.Width > 0 && mr.Height > 0)
+                    ? new Point2d(mr.X + mr.Width / 2.0, mr.Y + mr.Height / 2.0)
+                    : new Point2d(_lastRun.Origin.Position.X, _lastRun.Origin.Position.Y);
+
+                var oAngle = _lastRun.Origin.AngleDeg;
+                var centerFound = TransformPose(centerTeach, originTeach, originFound, oAngle);
+                return (centerFound, roi.Angle + oAngle);
+            }
+
+            return (centerTeach, roi.Angle);
+        }
+
+        private static void AddRadialCaliperStripsOverlay(
+            List<OverlayItem> dst,
+            Point2d center,
+            double nominalR,
+            int stripCount,
+            double stripLength,
+            double stripWidth,
+            double minAngleDeg,
+            double maxAngleDeg,
+            double poseAngleDeg,
+            System.Windows.Media.Brush stroke)
+        {
+            stripCount = Math.Clamp(stripCount > 0 ? stripCount : 32, 4, 360);
+            stripLength = Math.Max(5, stripLength > 0 ? stripLength : 40);
+            stripWidth = Math.Max(1, stripWidth > 0 ? stripWidth : 10);
+
+            var poseAngleRad = poseAngleDeg * Math.PI / 180.0;
+            var startAngleRad = minAngleDeg * Math.PI / 180.0;
+            var endAngleRad = maxAngleDeg * Math.PI / 180.0;
+            if (Math.Abs(endAngleRad - startAngleRad) < 1e-4)
+            {
+                endAngleRad = startAngleRad + 2.0 * Math.PI;
+            }
+
+            var angleStep = (endAngleRad - startAngleRad) / stripCount;
+            var halfL = stripLength / 2.0;
+            var halfW = stripWidth / 2.0;
+
+            for (var i = 0; i < stripCount; i++)
+            {
+                var angle = poseAngleRad + startAngleRad + (i + 0.5) * angleStep;
+                var ux = Math.Cos(angle);
+                var uy = Math.Sin(angle);
+                var vx = -uy;
+                var vy = ux;
+
+                var rMin = nominalR - halfL;
+                var rMax = nominalR + halfL;
+
+                var p1x = center.X + rMin * ux - halfW * vx;
+                var p1y = center.Y + rMin * uy - halfW * vy;
+
+                var p2x = center.X + rMin * ux + halfW * vx;
+                var p2y = center.Y + rMin * uy + halfW * vy;
+
+                var p3x = center.X + rMax * ux + halfW * vx;
+                var p3y = center.Y + rMax * uy + halfW * vy;
+
+                var p4x = center.X + rMax * ux - halfW * vx;
+                var p4y = center.Y + rMax * uy - halfW * vy;
+
+                dst.Add(new OverlayLineItem { X1 = p1x, Y1 = p1y, X2 = p2x, Y2 = p2y, Stroke = stroke, StrokeThickness = 1.0 });
+                dst.Add(new OverlayLineItem { X1 = p2x, Y1 = p2y, X2 = p3x, Y2 = p3y, Stroke = stroke, StrokeThickness = 1.0 });
+                dst.Add(new OverlayLineItem { X1 = p3x, Y1 = p3y, X2 = p4x, Y2 = p4y, Stroke = stroke, StrokeThickness = 1.0 });
+                dst.Add(new OverlayLineItem { X1 = p4x, Y1 = p4y, X2 = p1x, Y2 = p1y, Stroke = stroke, StrokeThickness = 1.0 });
             }
         }
     

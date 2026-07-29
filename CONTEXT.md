@@ -226,12 +226,16 @@
 - **Sửa lỗi Checkbox `Show ROI` & `Show Results` trên màn hình Preview**:
   - Khắc phục lỗi checkbox `Show Results` (`ShowResultOverlay`) và `Show ROI` (`ShowRoisInSelectedPreview` & `ShowRoisInFinalPreview`) không có tác dụng khi bật/tắt.
   - Đồng bộ hóa các thuộc tính `ShowRoisInSelectedPreview` và `ShowRoisInFinalPreview` đồng thời thêm kiểm tra `ShowResultOverlay` trong `BuildFinalOverlayFromRunWithConfig()`, giúp việc bật/tắt hiển thị ROI và Overlay kết quả (đường đo, điểm, nhãn) hoạt động tức thì trên cả Selected Node Preview và ResultView.
-- **Cập nhật hiển thị Preview của Tool `SegmentLineDistance`**:
-  - Bổ sung hiển thị ROI của cả 2 đường LineA và LineB khi chọn node `SegmentLineDistance` trên canvas (`AddConfigRoisForNode` trong `ToolEditorViewModel.GraphOps.cs`).
-  - Cập nhật hiển thị đường thẳng vô hạn (infinite line - màu vàng `Gold`) xẻ ngang qua màn hình preview cho LineB, đường đoạn thẳng (segment - màu xanh `DeepSkyBlue`) cho LineA, và đường khoảng cách ngắn nhất/trung điểm/xa nhất (màu xanh `Lime`/đỏ `Red`).
-- **Nâng cấp Tool `Point`**:
-  - **Crosshair xoay theo góc quay**: Đã cập nhật vẽ đường crosshair chữ thập tại vị trí phát hiện của Tool Point xoay theo chính xác góc `AngleDeg` nhận diện được (`BuildFinalOverlayFromRun` và `BuildOverlayForNodeFromRun`).
-  - **Bổ sung thuật toán `MvpShapePyramid` / `MvpShapeMatch`**: Thêm các lựa chọn thuật toán `MvpShapePyramid`, `MvpShapeMatch`, `ShapePyramid`, `ShapeBased` vào enum `PointFindAlgorithm` (`VisionInspectionApp.Models`), đồng bộ ViewModel `ToolEditorViewModel.ToolPoint.cs` và cho phép thực thi tìm kiếm góc xoay theo mô hình hình học `_matcher.MatchWithRotation` trong `InspectionPipeline` (`VisionInspectionApp.Application`).
+- **Nâng cấp toàn diện Tool `CircleFinder` theo chuẩn phần mềm MVP (Radial Caliper Circle Finder)**:
+  - **Động cơ Radial Caliper**: Chia vành đai tìm kiếm thành $N$ thanh quét hướng tâm (`StripCount`), tùy chỉnh độ rộng (`StripWidth`), chiều dài quét hướng tâm (`StripLength`), góc quét đầu/cuối (`MinAngleDeg`, `MaxAngleDeg`).
+  - **Lấy mẫu Profile 1D & Sub-Pixel**: Trích xuất profile độ sáng 1D trung bình theo bề rộng thanh quét bằng lấy mẫu nội suy Bilinear. Phát hiện đỉnh gradient cực trị theo `Polarity` (`LightToDark`, `DarkToLight`, `Any`), `EdgeSelection` (`First`, `Last`, `MaxStrength`) và `MinEdgeStrength`. Nội suy parabol 3 điểm đạt độ chính xác Sub-Pixel.
+  - **Khớp đường tròn RANSAC + Kasa Least-Squares**: Lọc nhiễu / điểm ngoại lệ (outliers) bằng RANSAC 100 vòng lặp, sau đó khớp đường tròn tối ưu bằng giải hệ phương trình tuyến tính Kasa Least-Squares. Trả về tâm đường tròn $(C_x, C_y)$, bán kính $R$, đường kính $D = 2R$.
+  - **Giao diện Properties Panel**: Bổ sung đầy đủ các ô nhập liệu `Strip Count`, `Strip Width`, `Strip Length`, `Polarity`, `Edge Selection`, `Min Edge Strength`, `Min Angle`, `Max Angle` trong `ToolEditorView.xaml`. Đã phát tín hiệu NotifyPropertyChanged (`IsCircleFinderNode`, `Cf_*`) khi chọn node CircleFinder giúp Properties Panel hiển thị tức thì.
+  - **Hiển thị Overlay & Thao tác Handle ROI**:
+    - Thiết lập `ActiveRoiLabel = $"{node.RefName} CIR"` khi chọn node `CircleFinder`, kích hoạt các tay cầm (handles) xoay/co giãn ROI trực tiếp trên màn hình Preview.
+    - Đồng bộ hoàn toàn tọa độ và góc xoay của dải khung các thanh quét radial (`AddRadialCaliperStripsOverlay`) với tâm biến đổi Origin (`GetRoiPose`), khắc phục dứt điểm tình trạng các caliper strips bị lệch vị trí so với khung ROI khi Origin có độ dời/góc xoay.
+    - Bổ sung `roiAngleRad` vào góc quét của từng dải radial caliper trong `DetectCircleByRadialCaliper` (`Class1.cs`) đảm bảo việc lấy mẫu 1D profile trùng khớp chính xác với góc xoay thực tế của ROI/Origin.
+    - Bổ sung hỗ trợ nhãn ROI dạng `CIR`, `Cal`, `EPD` trong control `ImageViewerControl.xaml.cs` giúp việc kéo thả/vẽ lại ROI của CircleFinder tự động cập nhật vào `CircleFinderDefinition.SearchRoi`.
 
 
 

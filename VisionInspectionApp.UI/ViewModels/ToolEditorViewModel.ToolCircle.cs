@@ -43,7 +43,7 @@ namespace VisionInspectionApp.UI.ViewModels
     
         public CircleFindAlgorithm Cf_Algorithm
         {
-            get => SelectedCircleFinderDef()?.Algorithm ?? CircleFindAlgorithm.ContourFit;
+            get => SelectedCircleFinderDef()?.Algorithm ?? CircleFindAlgorithm.RadialCaliper;
             set
             {
                 var d = SelectedCircleFinderDef();
@@ -52,6 +52,130 @@ namespace VisionInspectionApp.UI.ViewModels
                 if (d.Algorithm == value)
                     return;
                 d.Algorithm = value;
+                RunFlow();
+                RequestAutoSave();
+                OnPropertyChanged();
+            }
+        }
+
+        public int Cf_StripCount
+        {
+            get => SelectedCircleFinderDef()?.StripCount ?? 32;
+            set
+            {
+                var d = SelectedCircleFinderDef();
+                if (d is null) return;
+                var v = Math.Clamp(value, 4, 360);
+                if (d.StripCount == v) return;
+                d.StripCount = v;
+                RunFlow();
+                RequestAutoSave();
+                OnPropertyChanged();
+            }
+        }
+
+        public int Cf_StripWidth
+        {
+            get => SelectedCircleFinderDef()?.StripWidth ?? 10;
+            set
+            {
+                var d = SelectedCircleFinderDef();
+                if (d is null) return;
+                var v = Math.Max(1, value);
+                if (d.StripWidth == v) return;
+                d.StripWidth = v;
+                RunFlow();
+                RequestAutoSave();
+                OnPropertyChanged();
+            }
+        }
+
+        public int Cf_StripLength
+        {
+            get => SelectedCircleFinderDef()?.StripLength ?? 40;
+            set
+            {
+                var d = SelectedCircleFinderDef();
+                if (d is null) return;
+                var v = Math.Max(5, value);
+                if (d.StripLength == v) return;
+                d.StripLength = v;
+                RunFlow();
+                RequestAutoSave();
+                OnPropertyChanged();
+            }
+        }
+
+        public EdgePolarity Cf_Polarity
+        {
+            get => SelectedCircleFinderDef()?.Polarity ?? EdgePolarity.Any;
+            set
+            {
+                var d = SelectedCircleFinderDef();
+                if (d is null) return;
+                if (d.Polarity == value) return;
+                d.Polarity = value;
+                RunFlow();
+                RequestAutoSave();
+                OnPropertyChanged();
+            }
+        }
+
+        public EdgeSelection Cf_EdgeSelection
+        {
+            get => SelectedCircleFinderDef()?.EdgeSelection ?? EdgeSelection.MaxStrength;
+            set
+            {
+                var d = SelectedCircleFinderDef();
+                if (d is null) return;
+                if (d.EdgeSelection == value) return;
+                d.EdgeSelection = value;
+                RunFlow();
+                RequestAutoSave();
+                OnPropertyChanged();
+            }
+        }
+
+        public int Cf_MinEdgeStrength
+        {
+            get => SelectedCircleFinderDef()?.MinEdgeStrength ?? 15;
+            set
+            {
+                var d = SelectedCircleFinderDef();
+                if (d is null) return;
+                var v = Math.Max(1, value);
+                if (d.MinEdgeStrength == v) return;
+                d.MinEdgeStrength = v;
+                RunFlow();
+                RequestAutoSave();
+                OnPropertyChanged();
+            }
+        }
+
+        public double Cf_MinAngleDeg
+        {
+            get => SelectedCircleFinderDef()?.MinAngleDeg ?? 0.0;
+            set
+            {
+                var d = SelectedCircleFinderDef();
+                if (d is null) return;
+                if (Math.Abs(d.MinAngleDeg - value) < 1e-6) return;
+                d.MinAngleDeg = value;
+                RunFlow();
+                RequestAutoSave();
+                OnPropertyChanged();
+            }
+        }
+
+        public double Cf_MaxAngleDeg
+        {
+            get => SelectedCircleFinderDef()?.MaxAngleDeg ?? 360.0;
+            set
+            {
+                var d = SelectedCircleFinderDef();
+                if (d is null) return;
+                if (Math.Abs(d.MaxAngleDeg - value) < 1e-6) return;
+                d.MaxAngleDeg = value;
                 RunFlow();
                 RequestAutoSave();
                 OnPropertyChanged();

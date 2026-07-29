@@ -44,10 +44,30 @@ namespace VisionInspectionApp.UI.ViewModels
             _selectedNodePrevRefName = value?.RefName;
             if (value is null)
             {
+                ActiveRoiLabel = string.Empty;
                 ClearNodeSelection();
             }
             else
             {
+                if (string.Equals(value.Type, "CircleFinder", StringComparison.OrdinalIgnoreCase))
+                    ActiveRoiLabel = $"{value.RefName} CIR";
+                else if (string.Equals(value.Type, "Origin", StringComparison.OrdinalIgnoreCase))
+                    ActiveRoiLabel = "Origin T";
+                else if (string.Equals(value.Type, "Point", StringComparison.OrdinalIgnoreCase))
+                    ActiveRoiLabel = $"{value.RefName} S";
+                else if (string.Equals(value.Type, "Line", StringComparison.OrdinalIgnoreCase))
+                    ActiveRoiLabel = $"{value.RefName} L";
+                else if (string.Equals(value.Type, "Caliper", StringComparison.OrdinalIgnoreCase))
+                    ActiveRoiLabel = $"{value.RefName} Cal";
+                else if (string.Equals(value.Type, "LinePairDetection", StringComparison.OrdinalIgnoreCase))
+                    ActiveRoiLabel = $"{value.RefName} LP";
+                else if (string.Equals(value.Type, "EdgePairDetect", StringComparison.OrdinalIgnoreCase) || string.Equals(value.Type, "EdgePair", StringComparison.OrdinalIgnoreCase))
+                    ActiveRoiLabel = $"{value.RefName} EPD";
+                else if (string.Equals(value.Type, "BlobDetection", StringComparison.OrdinalIgnoreCase))
+                    ActiveRoiLabel = $"{value.RefName} B";
+                else if (string.Equals(value.Type, "SurfaceCompare", StringComparison.OrdinalIgnoreCase))
+                    ActiveRoiLabel = $"{value.RefName} SC";
+
                 // If selection is empty or this node isn't part of multi-selection, treat it as a single-select.
                 if (SelectedNodes.Count == 0 || !value.IsSelected)
                 {
@@ -1038,6 +1058,12 @@ namespace VisionInspectionApp.UI.ViewModels
                 if (showRois && c.SearchRoi.Width > 0 && c.SearchRoi.Height > 0)
                 {
                     dst.Add(CreateRotatedRoiWithPose(c.SearchRoi, Brushes.MediumPurple, $"{c.Name} CIR"));
+                    if (c.Algorithm == CircleFindAlgorithm.RadialCaliper)
+                    {
+                        var pose = GetRoiPose(c.SearchRoi);
+                        var nominalR = Math.Min(c.SearchRoi.Width, c.SearchRoi.Height) / 2.0;
+                        AddRadialCaliperStripsOverlay(dst, pose.Center, nominalR, c.StripCount, c.StripLength, c.StripWidth, c.MinAngleDeg, c.MaxAngleDeg, pose.AngleDeg, Brushes.DeepSkyBlue);
+                    }
                 }
     
                 return;

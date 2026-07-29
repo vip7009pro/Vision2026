@@ -39,7 +39,9 @@ public sealed record CircleFinderResult(
     bool Found,
     Point2d Center,
     double RadiusPx,
-    double Score);
+    double Score,
+    List<Point2d>? EdgePoints = null,
+    List<bool>? InlierFlags = null);
 
 public sealed record DiameterResult(
     string Name,
@@ -1855,9 +1857,287 @@ public sealed class InspectionService : IInspectionService
             static CircleFinderResult DetectCircle(Mat matBgrOrGray, Roi roi, CircleFinderDefinition def)
             {
                 var name = def.Name ?? string.Empty;
-                if (matBgrOrGray is null || roi.Width <= 0 || roi.Height <= 0)
+                if (matBgrOrGray is null || matBgrOrGray.Empty() || roi.Width <= 0 || roi.Height <= 0)
                 {
                     return new CircleFinderResult(name, Found: false, default, 0.0, 0.0);
+                }
+
+                var imgW = matBgrOrGray.Width;
+                var imgH = matBgrOrGray.Height;
+
+                if (def.Algorithm == CircleFindAlgorithm.RadialCaliper)
+                {
+                    using var grayOwnedR = matBgrOrGray.Channels() == 1 ? null : matBgrOrGray.CvtColor(ColorConversionCodes.BGR2GRAY);
+                    var grayMat = grayOwnedR ?? matBgrOrGray;
+
+                    var centerEst = new Point2d(roi.X + roi.Width / 2.0, roi.Y + roi.Height / 2.0);
+                    var nominalR = Math.Min(roi.Width, roi.Height) / 2.0;
+                    if (nominalR < 3.0) nominalR = 20.0;
+
+                    var stripCount = Math.Clamp(def.StripCount > 0 ? def.StripCount : 32, 4, 360);
+                    var stripLength = Math.Max(5, def.StripLength > 0 ? def.StripLength : 40);
+                    var stripWidth = Math.Max(1, def.StripWidth > 0 ? def.StripWidth : 10);
+                    var minEdgeStrength = Math.Max(1, def.MinEdgeStrength);
+
+                    var startAngleRad = def.MinAngleDeg * Math.PI / 180.0;
+                    var endAngleRad = def.MaxAngleDeg * Math.PI / 180.0;
+                    if (Math.Abs(endAngleRad - startAngleRad) < 1e-4)
+                    {
+                        endAngleRad = startAngleRad + 2.0 * Math.PI;
+                    }
+
+                    var angleStep = (endAngleRad - startAngleRad) / stripCount;
+                    var halfL = stripLength / 2.0;
+                    var halfW = stripWidth / 2.0;
+
+                    var detectedPoints = new List<Point2d>();
+
+                    byte SampleBilinear(double x, double y)
+                    {
+                        var ix = (int)Math.Floor(x);
+                        var iy = (int)Math.Floor(y);
+                        if (ix < 0 || ix >= imgW - 1 || iy < 0 || iy >= imgH - 1)
+                        {
+                            if (ix >= 0 && ix < imgW && iy >= 0 && iy < imgH)
+                                return grayMat.At<byte>(iy, ix);
+                            return 0;
+                        }
+
+                        var fx = x - ix;
+                        var fy = y - iy;
+                        var v00 = grayMat.At<byte>(iy, ix);
+                        var v10 = grayMat.At<byte>(iy, ix + 1);
+                        var v01 = grayMat.At<byte>(iy + 1, ix);
+                        var v11 = grayMat.At<byte>(iy + 1, ix + 1);
+
+                        var top = v00 + fx * (v10 - v00);
+                        var bottom = v01 + fx * (v11 - v01);
+                        return (byte)Math.Clamp(top + fy * (bottom - top), 0, 255);
+                    }
+
+                    var roiAngleRad = roi.Angle * Math.PI / 180.0;
+                    for (var i = 0; i < stripCount; i++)
+                    {
+                        var angle = roiAngleRad + startAngleRad + (i + 0.5) * angleStep;
+                        var ux = Math.Cos(angle);
+                        var uy = Math.Sin(angle);
+                        var vx = -uy;
+                        var vy = ux;
+
+                        var radialSamples = stripLength + 1;
+                        var profile = new double[radialSamples];
+                        var widthStepCount = Math.Max(1, stripWidth);
+
+                        for (var rIdx = 0; rIdx < radialSamples; rIdx++)
+                        {
+                            var rOffset = -halfL + (rIdx * stripLength / Math.Max(1, radialSamples - 1));
+                            var sampleCenterPt = new Point2d(
+                                centerEst.X + (nominalR + rOffset) * ux,
+                                centerEst.Y + (nominalR + rOffset) * uy);
+
+                            double sumVal = 0;
+                            for (var wIdx = 0; wIdx < widthStepCount; wIdx++)
+                            {
+                                var wOffset = -halfW + (wIdx * stripWidth / Math.Max(1, widthStepCount - 1));
+                                var px = sampleCenterPt.X + wOffset * vx;
+                                var py = sampleCenterPt.Y + wOffset * vy;
+                                sumVal += SampleBilinear(px, py);
+                            }
+                            profile[rIdx] = sumVal / widthStepCount;
+                        }
+
+                        var deriv = new double[radialSamples];
+                        for (var rIdx = 1; rIdx < radialSamples - 1; rIdx++)
+                        {
+                            deriv[rIdx] = (profile[rIdx + 1] - profile[rIdx - 1]) / 2.0;
+                        }
+
+                        int bestIdx = -1;
+                        double bestVal = 0;
+
+                        for (var rIdx = 1; rIdx < radialSamples - 1; rIdx++)
+                        {
+                            var dVal = deriv[rIdx];
+                            bool isCandidate = def.Polarity switch
+                            {
+                                EdgePolarity.LightToDark => dVal < -minEdgeStrength,
+                                EdgePolarity.DarkToLight => dVal > minEdgeStrength,
+                                _ => Math.Abs(dVal) > minEdgeStrength
+                            };
+
+                            if (!isCandidate) continue;
+
+                            if (def.EdgeSelection == EdgeSelection.First)
+                            {
+                                bestIdx = rIdx;
+                                bestVal = dVal;
+                                break;
+                            }
+
+                            if (def.EdgeSelection == EdgeSelection.Last)
+                            {
+                                bestIdx = rIdx;
+                                bestVal = dVal;
+                            }
+                            else // MaxStrength
+                            {
+                                if (Math.Abs(dVal) > Math.Abs(bestVal))
+                                {
+                                    bestIdx = rIdx;
+                                    bestVal = dVal;
+                                }
+                            }
+                        }
+
+                        if (bestIdx > 0 && bestIdx < radialSamples - 1)
+                        {
+                            var y1 = deriv[bestIdx - 1];
+                            var y2 = deriv[bestIdx];
+                            var y3 = deriv[bestIdx + 1];
+                            var denom = (y1 - 2.0 * y2 + y3);
+                            var subOffset = 0.0;
+                            if (Math.Abs(denom) > 1e-6)
+                            {
+                                subOffset = (y1 - y3) / (2.0 * denom);
+                                subOffset = Math.Clamp(subOffset, -0.9, 0.9);
+                            }
+
+                            var subRIdx = bestIdx + subOffset;
+                            var finalR = -halfL + (subRIdx * stripLength / Math.Max(1, radialSamples - 1));
+                            var edgePt = new Point2d(
+                                centerEst.X + (nominalR + finalR) * ux,
+                                centerEst.Y + (nominalR + finalR) * uy);
+                            detectedPoints.Add(edgePt);
+                        }
+                    }
+
+                    if (detectedPoints.Count < 3)
+                    {
+                        return new CircleFinderResult(name, Found: false, centerEst, nominalR, 0.0, detectedPoints, new List<bool>());
+                    }
+
+                    var rnd = new Random(name.GetHashCode());
+                    var bestInlierCount = -1;
+                    Point2d bestCenter = centerEst;
+                    double bestRadius = nominalR;
+                    var inlierTol = 3.0;
+
+                    static bool TryCircleFrom3Points(Point2d a, Point2d b, Point2d c, out Point2d center, out double r)
+                    {
+                        center = default;
+                        r = 0;
+                        var ax = a.X; var ay = a.Y;
+                        var bx = b.X; var by = b.Y;
+                        var cx = c.X; var cy = c.Y;
+                        var d = 2.0 * (ax * (by - cy) + bx * (cy - ay) + cx * (ay - by));
+                        if (Math.Abs(d) < 1e-9) return false;
+                        var ax2ay2 = ax * ax + ay * ay;
+                        var bx2by2 = bx * bx + by * by;
+                        var cx2cy2 = cx * cx + cy * cy;
+                        var ux = (ax2ay2 * (by - cy) + bx2by2 * (cy - ay) + cx2cy2 * (ay - by)) / d;
+                        var uy = (ax2ay2 * (cx - bx) + bx2by2 * (ax - cx) + cx2cy2 * (bx - ax)) / d;
+                        center = new Point2d(ux, uy);
+                        r = Math.Sqrt((ux - ax) * (ux - ax) + (uy - ay) * (uy - ay));
+                        return double.IsFinite(r) && r > 0;
+                    }
+
+                    for (var iter = 0; iter < 100; iter++)
+                    {
+                        var ia = rnd.Next(detectedPoints.Count);
+                        var ib = rnd.Next(detectedPoints.Count);
+                        var ic = rnd.Next(detectedPoints.Count);
+                        if (ia == ib || ia == ic || ib == ic) continue;
+
+                        if (!TryCircleFrom3Points(detectedPoints[ia], detectedPoints[ib], detectedPoints[ic], out var c0, out var r0))
+                            continue;
+
+                        if (def.MinRadiusPx > 0 && r0 < def.MinRadiusPx) continue;
+                        if (def.MaxRadiusPx > 0 && r0 > def.MaxRadiusPx) continue;
+
+                        var inlCount = 0;
+                        for (var pIdx = 0; pIdx < detectedPoints.Count; pIdx++)
+                        {
+                            var p = detectedPoints[pIdx];
+                            var distToCenter = Math.Sqrt((p.X - c0.X) * (p.X - c0.X) + (p.Y - c0.Y) * (p.Y - c0.Y));
+                            if (Math.Abs(distToCenter - r0) <= inlierTol)
+                            {
+                                inlCount++;
+                            }
+                        }
+
+                        if (inlCount > bestInlierCount)
+                        {
+                            bestInlierCount = inlCount;
+                            bestCenter = c0;
+                            bestRadius = r0;
+                        }
+                    }
+
+                    var inliers = new List<Point2d>();
+                    var inlierFlags = new List<bool>();
+                    for (var pIdx = 0; pIdx < detectedPoints.Count; pIdx++)
+                    {
+                        var p = detectedPoints[pIdx];
+                        var distToCenter = Math.Sqrt((p.X - bestCenter.X) * (p.X - bestCenter.X) + (p.Y - bestCenter.Y) * (p.Y - bestCenter.Y));
+                        var isInlier = Math.Abs(distToCenter - bestRadius) <= inlierTol;
+                        inlierFlags.Add(isInlier);
+                        if (isInlier)
+                        {
+                            inliers.Add(p);
+                        }
+                    }
+
+                    if (inliers.Count >= 3)
+                    {
+                        double sumX = 0, sumY = 0, sumX2 = 0, sumY2 = 0, sumXY = 0;
+                        double sumR = 0, sumXR = 0, sumYR = 0;
+                        var M = inliers.Count;
+
+                        for (var k = 0; k < M; k++)
+                        {
+                            var px = inliers[k].X;
+                            var py = inliers[k].Y;
+                            var r2 = px * px + py * py;
+                            sumX += px;
+                            sumY += py;
+                            sumX2 += px * px;
+                            sumY2 += py * py;
+                            sumXY += px * py;
+                            sumR += r2;
+                            sumXR += px * r2;
+                            sumYR += py * r2;
+                        }
+
+                        var A1 = M * sumX2 - sumX * sumX;
+                        var B1 = M * sumXY - sumX * sumY;
+                        var C1 = 0.5 * (M * sumXR - sumX * sumR);
+
+                        var A2 = M * sumXY - sumX * sumY;
+                        var B2 = M * sumY2 - sumY * sumY;
+                        var C2 = 0.5 * (M * sumYR - sumY * sumR);
+
+                        var det = A1 * B2 - A2 * B1;
+                        if (Math.Abs(det) > 1e-6)
+                        {
+                            var cx = (C1 * B2 - C2 * B1) / det;
+                            var cy = (A1 * C2 - A2 * C1) / det;
+                            var meanR2 = (sumR - 2.0 * cx * sumX - 2.0 * cy * sumY) / M + cx * cx + cy * cy;
+                            if (meanR2 > 0)
+                            {
+                                bestCenter = new Point2d(cx, cy);
+                                bestRadius = Math.Sqrt(meanR2);
+                            }
+                        }
+                    }
+
+                    var minPassInliers = Math.Max(3, stripCount / 4);
+                    var isFound = inliers.Count >= minPassInliers && bestRadius > 0;
+                    if (def.MinRadiusPx > 0 && bestRadius < def.MinRadiusPx) isFound = false;
+                    if (def.MaxRadiusPx > 0 && bestRadius > def.MaxRadiusPx) isFound = false;
+
+                    var score = inliers.Count / (double)stripCount;
+
+                    return new CircleFinderResult(name, isFound, bestCenter, bestRadius, score, detectedPoints, inlierFlags);
                 }
 
                 var rect = new Rect(roi.X, roi.Y, roi.Width, roi.Height)
