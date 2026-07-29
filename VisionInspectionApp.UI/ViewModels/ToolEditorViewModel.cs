@@ -2150,6 +2150,14 @@ namespace VisionInspectionApp.UI.ViewModels
                 {
                     valueObj = v.Text;
                 }
+                else if (string.Equals(prop, "Count", StringComparison.OrdinalIgnoreCase))
+                {
+                    valueObj = v.Value;
+                }
+                else if (string.Equals(prop, "MaxArea", StringComparison.OrdinalIgnoreCase) || string.Equals(prop, "Area", StringComparison.OrdinalIgnoreCase))
+                {
+                    valueObj = v.Score;
+                }
                 else
                 {
                     return string.Empty;

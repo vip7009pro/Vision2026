@@ -3424,6 +3424,23 @@ public static class ConditionEvaluator
             vars[dd.Name] = new Variable(dd.Pass, value: dd.Value);
         }
 
+        foreach (var sld in result.SegmentLineDistances)
+        {
+            vars[sld.Name] = new Variable(sld.Pass, value: sld.Value);
+        }
+
+        foreach (var lpd in result.LinePairDetections)
+        {
+            vars[lpd.Name] = new Variable(lpd.Pass, value: lpd.Value, found: lpd.Found);
+            vars[$"LPD.{lpd.Name}"] = new Variable(lpd.Pass, value: lpd.Value, found: lpd.Found);
+        }
+
+        foreach (var cf in result.CircleFinders)
+        {
+            vars[cf.Name] = new Variable(cf.Found, value: cf.RadiusPx, found: cf.Found, score: cf.Score);
+            vars[$"CIR.{cf.Name}"] = new Variable(cf.Found, value: cf.RadiusPx, found: cf.Found, score: cf.Score);
+        }
+
         foreach (var a in result.Angles)
         {
             vars[a.Name] = new Variable(a.Pass, value: a.ValueDeg);

@@ -240,6 +240,13 @@
   - Khắc phục lỗi trong tab `Calibration`: trước đây khi bấm `Save Job`, thuộc tính `_config.PixelsPerMm` không tự động cập nhật từ `AveragePixelsPerMm`, dẫn đến file `.job` lưu ra vẫn mang giá trị mặc định (`1.0` / uncalibrated). Đã cập nhật `CalibrationViewModel.cs` để tự động gán `_config.PixelsPerMm = AveragePixelsPerMm` khi tính toán, khi mở Job và khi bấm `Save Job`.
   - Cập nhật hiển thị nhãn Overlay Canvas (`BuildFinalOverlayFromRun` & `BuildOverlayForNodeFromRun`): Đơn vị hiển thị trên hình ảnh preview sẽ tự động là `mm` nếu công cụ đã được calib (`PixelsPerMm > 0` và khác `1.0`), ngược lại hiển thị `px`.
   - Cập nhật bảng `SpecResults` trong cả `ToolEditorView` và `InspectionView`: Bổ sung cột `Unit` (`mm`, `px`, `°`) và tiêu đề động `SpecResultsValueHeader`, giúp hiển thị rõ ràng giá trị đo đạc kèm đơn vị tương ứng.
+- **Tích hợp Tính năng Auto-Complete / IntelliSense cho Tool Text và Condition**:
+  - Tạo đính kèm giao diện `IntellisenseBehavior` ([IntellisenseBehavior.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/Controls/IntellisenseBehavior.cs)) áp dụng cho các ô TextBox nhập liệu biểu thức / văn bản mẫu (`Condition_Expression`, `TextNode_Text`, `Expression` rule).
+  - **Tự động gợi ý tên Tool & Thuộc tính**: Khi người dùng gõ tên Tool kèm dấu chấm (ví dụ `Caliper1.` hoặc `{Circle1.` hay `Origin.`), hệ thống tự động mở danh sách xổ xuống ngay bên dưới con trỏ chuột/con trỏ soạn thảo (caret), hiển thị các thuộc tính hỗ trợ phù hợp cho loại tool đó (`.Value`, `.Pass`, `.Found`, `.Score`, `.Text`, `.Count`, `.MaxArea`).
+  - **Phím tắt & Thao tác**: Hỗ trợ phím mũi tên `Up`/`Down` để di chuyển, `Enter`/`Tab` hoặc click chuột để chèn nhanh thuộc tính được chọn vào văn bản mà không cần phải nhớ chính xác tên thuộc tính. Hỗ trợ phím `Esc` để đóng popup.
+  - **Xử lý an toàn khi xóa văn bản & Khắc phục WPF ListBox ItemsSource**: 
+    - Khắc phục triệt để lỗi `InvalidOperationException` (dạng `An ItemsControl is inconsistent with its items source`) bằng cách khởi tạo danh sách mới (`filtered.ToList()`) gán trực tiếp cho `ListBox.ItemsSource` thay vì mutate biến `List<T>` cũ.
+    - Rà soát toàn bộ các tool trong đồ thị (`CircleFinders`, `LinePairDetections`, `SegmentLineDistances`, `SurfaceCompares`, `BlobDetections`, `CodeDetections`, `Diameter`, `EdgePairs`, `EdgePairDetections`, `Distance`, `Angles`, `Points`, `Origin`, `Preprocess`, `ImageSource`, `Text`, `Condition`), bổ sung đầy đủ biến đầu ra vào `ConditionEvaluator.BuildVariableMap`, `EvaluateTextTemplate`, và danh sách gợi ý thuộc tính `IntellisenseBehavior.GetPropertiesForNode`.
 
 
 

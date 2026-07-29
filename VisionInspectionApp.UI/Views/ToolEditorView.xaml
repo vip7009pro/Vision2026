@@ -1008,6 +1008,7 @@
 
                                 <TextBlock Text="Expression" Margin="0,0,0,2" />
                                 <TextBox Text="{Binding Condition_Expression, UpdateSourceTrigger=LostFocus}"
+                                         controls:IntellisenseBehavior.Enable="True"
                                          AcceptsReturn="True"
                                          Height="80"
                                          TextWrapping="Wrap"
@@ -1149,6 +1150,7 @@
 
                                 <TextBlock Text="Text" Margin="0,0,0,2" />
                                 <TextBox Text="{Binding TextNode_Text, UpdateSourceTrigger=LostFocus}"
+                                         controls:IntellisenseBehavior.Enable="True"
                                          AcceptsReturn="True"
                                          Height="60"
                                          TextWrapping="Wrap"
@@ -1221,6 +1223,7 @@
                                                 <StackPanel>
                                                     <TextBlock Text="Expression" Margin="0,0,0,2" />
                                                     <TextBox Text="{Binding Expression, UpdateSourceTrigger=LostFocus}"
+                                                             controls:IntellisenseBehavior.Enable="True"
                                                              AcceptsReturn="True"
                                                              Height="50"
                                                              TextWrapping="Wrap"
