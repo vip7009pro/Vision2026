@@ -236,6 +236,10 @@
     - Đồng bộ hoàn toàn tọa độ và góc xoay của dải khung các thanh quét radial (`AddRadialCaliperStripsOverlay`) với tâm biến đổi Origin (`GetRoiPose`), khắc phục dứt điểm tình trạng các caliper strips bị lệch vị trí so với khung ROI khi Origin có độ dời/góc xoay.
     - Bổ sung `roiAngleRad` vào góc quét của từng dải radial caliper trong `DetectCircleByRadialCaliper` (`Class1.cs`) đảm bảo việc lấy mẫu 1D profile trùng khớp chính xác với góc xoay thực tế của ROI/Origin.
     - Bổ sung hỗ trợ nhãn ROI dạng `CIR`, `Cal`, `EPD` trong control `ImageViewerControl.xaml.cs` giúp việc kéo thả/vẽ lại ROI của CircleFinder tự động cập nhật vào `CircleFinderDefinition.SearchRoi`.
+- **Sửa lỗi lưu & đồng bộ đơn vị Calibration (mm vs px)**:
+  - Khắc phục lỗi trong tab `Calibration`: trước đây khi bấm `Save Job`, thuộc tính `_config.PixelsPerMm` không tự động cập nhật từ `AveragePixelsPerMm`, dẫn đến file `.job` lưu ra vẫn mang giá trị mặc định (`1.0` / uncalibrated). Đã cập nhật `CalibrationViewModel.cs` để tự động gán `_config.PixelsPerMm = AveragePixelsPerMm` khi tính toán, khi mở Job và khi bấm `Save Job`.
+  - Cập nhật hiển thị nhãn Overlay Canvas (`BuildFinalOverlayFromRun` & `BuildOverlayForNodeFromRun`): Đơn vị hiển thị trên hình ảnh preview sẽ tự động là `mm` nếu công cụ đã được calib (`PixelsPerMm > 0` và khác `1.0`), ngược lại hiển thị `px`.
+  - Cập nhật bảng `SpecResults` trong cả `ToolEditorView` và `InspectionView`: Bổ sung cột `Unit` (`mm`, `px`, `°`) và tiêu đề động `SpecResultsValueHeader`, giúp hiển thị rõ ràng giá trị đo đạc kèm đơn vị tương ứng.
 
 
 

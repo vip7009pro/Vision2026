@@ -2492,6 +2492,9 @@ namespace VisionInspectionApp.UI.ViewModels
                 dst.Add(new OverlayLineItem { X1 = l.P1.X, Y1 = l.P1.Y, X2 = l.P2.X, Y2 = l.P2.Y, Stroke = Brushes.MediumPurple, Label = l.Name });
             }
     
+            var isCalibrated = config is not null && config.PixelsPerMm > 0 && Math.Abs(config.PixelsPerMm - 1.0) > 1e-6;
+            var unitStr = isCalibrated ? "mm" : "px";
+
             foreach (var lpd in run.LinePairDetections)
             {
                 if (!lpd.Found)
@@ -2501,7 +2504,7 @@ namespace VisionInspectionApp.UI.ViewModels
     
                 dst.Add(new OverlayLineItem { X1 = lpd.L1P1.X, Y1 = lpd.L1P1.Y, X2 = lpd.L1P2.X, Y2 = lpd.L1P2.Y, Stroke = Brushes.MediumPurple, Label = lpd.Name });
                 dst.Add(new OverlayLineItem { X1 = lpd.L2P1.X, Y1 = lpd.L2P1.Y, X2 = lpd.L2P2.X, Y2 = lpd.L2P2.Y, Stroke = Brushes.MediumPurple, Label = string.Empty });
-                dst.Add(new OverlayLineItem { X1 = lpd.ClosestA.X, Y1 = lpd.ClosestA.Y, X2 = lpd.ClosestB.X, Y2 = lpd.ClosestB.Y, Stroke = lpd.Pass ? Brushes.Lime : Brushes.Red, Label = $"{lpd.Name}: {lpd.Value:0.###}" });
+                dst.Add(new OverlayLineItem { X1 = lpd.ClosestA.X, Y1 = lpd.ClosestA.Y, X2 = lpd.ClosestB.X, Y2 = lpd.ClosestB.Y, Stroke = lpd.Pass ? Brushes.Lime : Brushes.Red, Label = $"{lpd.Name}: {lpd.Value:0.###} {unitStr}" });
             }
     
             foreach (var epd in run.EdgePairDetections)
@@ -2513,7 +2516,7 @@ namespace VisionInspectionApp.UI.ViewModels
     
                 dst.Add(new OverlayLineItem { X1 = epd.L1P1.X, Y1 = epd.L1P1.Y, X2 = epd.L1P2.X, Y2 = epd.L1P2.Y, Stroke = Brushes.MediumPurple, Label = $"{epd.Name} E1" });
                 dst.Add(new OverlayLineItem { X1 = epd.L2P1.X, Y1 = epd.L2P1.Y, X2 = epd.L2P2.X, Y2 = epd.L2P2.Y, Stroke = Brushes.MediumPurple, Label = $"{epd.Name} E2" });
-                dst.Add(new OverlayLineItem { X1 = epd.ClosestA.X, Y1 = epd.ClosestA.Y, X2 = epd.ClosestB.X, Y2 = epd.ClosestB.Y, Stroke = epd.Pass ? Brushes.Lime : Brushes.Red, Label = $"{epd.Name}: {epd.Value:0.###}" });
+                dst.Add(new OverlayLineItem { X1 = epd.ClosestA.X, Y1 = epd.ClosestA.Y, X2 = epd.ClosestB.X, Y2 = epd.ClosestB.Y, Stroke = epd.Pass ? Brushes.Lime : Brushes.Red, Label = $"{epd.Name}: {epd.Value:0.###} {unitStr}" });
             }
     
             foreach (var ep in run.EdgePairs)
@@ -2525,7 +2528,7 @@ namespace VisionInspectionApp.UI.ViewModels
     
                 dst.Add(new OverlayLineItem { X1 = ep.L1P1.X, Y1 = ep.L1P1.Y, X2 = ep.L1P2.X, Y2 = ep.L1P2.Y, Stroke = Brushes.MediumPurple, Label = ep.RefA });
                 dst.Add(new OverlayLineItem { X1 = ep.L2P1.X, Y1 = ep.L2P1.Y, X2 = ep.L2P2.X, Y2 = ep.L2P2.Y, Stroke = Brushes.MediumPurple, Label = ep.RefB });
-                dst.Add(new OverlayLineItem { X1 = ep.ClosestA.X, Y1 = ep.ClosestA.Y, X2 = ep.ClosestB.X, Y2 = ep.ClosestB.Y, Stroke = ep.Pass ? Brushes.Lime : Brushes.Red, Label = $"{ep.Name}: {ep.Value:0.###}" });
+                dst.Add(new OverlayLineItem { X1 = ep.ClosestA.X, Y1 = ep.ClosestA.Y, X2 = ep.ClosestB.X, Y2 = ep.ClosestB.Y, Stroke = ep.Pass ? Brushes.Lime : Brushes.Red, Label = $"{ep.Name}: {ep.Value:0.###} {unitStr}" });
             }
     
             foreach (var cal in run.Calipers)
@@ -2575,17 +2578,22 @@ namespace VisionInspectionApp.UI.ViewModels
                     continue;
                 }
     
-                dst.Add(new OverlayLineItem { X1 = pa.X, Y1 = pa.Y, X2 = pb.X, Y2 = pb.Y, Stroke = d.Pass ? Brushes.Lime : Brushes.Red, Label = $"{d.Name}: {d.Value:0.###}" });
+                dst.Add(new OverlayLineItem { X1 = pa.X, Y1 = pa.Y, X2 = pb.X, Y2 = pb.Y, Stroke = d.Pass ? Brushes.Lime : Brushes.Red, Label = $"{d.Name}: {d.Value:0.###} {unitStr}" });
             }
     
             foreach (var dd in run.LineToLineDistances)
             {
-                dst.Add(new OverlayLineItem { X1 = dd.ClosestA.X, Y1 = dd.ClosestA.Y, X2 = dd.ClosestB.X, Y2 = dd.ClosestB.Y, Stroke = dd.Pass ? Brushes.Lime : Brushes.Red, Label = $"{dd.Name}: {dd.Value:0.00}" });
+                dst.Add(new OverlayLineItem { X1 = dd.ClosestA.X, Y1 = dd.ClosestA.Y, X2 = dd.ClosestB.X, Y2 = dd.ClosestB.Y, Stroke = dd.Pass ? Brushes.Lime : Brushes.Red, Label = $"{dd.Name}: {dd.Value:0.00} {unitStr}" });
             }
     
             foreach (var dd in run.PointToLineDistances)
             {
-                dst.Add(new OverlayLineItem { X1 = dd.ClosestA.X, Y1 = dd.ClosestA.Y, X2 = dd.ClosestB.X, Y2 = dd.ClosestB.Y, Stroke = dd.Pass ? Brushes.Lime : Brushes.Red, Label = $"{dd.Name}: {dd.Value:0.00}" });
+                dst.Add(new OverlayLineItem { X1 = dd.ClosestA.X, Y1 = dd.ClosestA.Y, X2 = dd.ClosestB.X, Y2 = dd.ClosestB.Y, Stroke = dd.Pass ? Brushes.Lime : Brushes.Red, Label = $"{dd.Name}: {dd.Value:0.00} {unitStr}" });
+            }
+    
+            foreach (var sld in run.SegmentLineDistances)
+            {
+                dst.Add(new OverlayLineItem { X1 = sld.ClosestA.X, Y1 = sld.ClosestA.Y, X2 = sld.ClosestB.X, Y2 = sld.ClosestB.Y, Stroke = sld.Pass ? Brushes.Lime : Brushes.Red, Label = $"{sld.Name}: {sld.Value:0.00} {unitStr}" });
             }
     
             foreach (var c in run.CircleFinders)
@@ -2608,7 +2616,8 @@ namespace VisionInspectionApp.UI.ViewModels
     
                 AddCircle(dst, c.Center.X, c.Center.Y, c.RadiusPx, stroke: Brushes.Lime, strokeThickness: 2.0);
                 AddCross(dst, c.Center.X, c.Center.Y, size: 10.0, stroke: Brushes.Lime, strokeThickness: 2.0);
-                dst.Add(new OverlayPointItem { X = c.Center.X, Y = c.Center.Y, Radius = 1.0, Stroke = Brushes.Lime, Label = $"{c.Name}: R={c.RadiusPx:0.##}px" });
+                var rVal = (isCalibrated && config!.PixelsPerMm > 0) ? c.RadiusPx / config.PixelsPerMm : c.RadiusPx;
+                dst.Add(new OverlayPointItem { X = c.Center.X, Y = c.Center.Y, Radius = 1.0, Stroke = Brushes.Lime, Label = $"{c.Name}: R={rVal:0.##} {unitStr}" });
             }
     
             foreach (var d in run.Diameters)
@@ -2751,6 +2760,9 @@ namespace VisionInspectionApp.UI.ViewModels
     
         private void BuildOverlayForNodeFromRun(ToolGraphNodeViewModel node, InspectionResult run, List<OverlayItem> dst)
         {
+            var isCalibrated = _config is not null && _config.PixelsPerMm > 0 && Math.Abs(_config.PixelsPerMm - 1.0) > 1e-6;
+            var unitStr = isCalibrated ? "mm" : "px";
+
             if (string.Equals(node.Type, "Origin", StringComparison.OrdinalIgnoreCase))
             {
                 if (run.Origin is null)
@@ -2887,7 +2899,7 @@ namespace VisionInspectionApp.UI.ViewModels
     
                 dst.Add(new OverlayLineItem { X1 = r.L1P1.X, Y1 = r.L1P1.Y, X2 = r.L1P2.X, Y2 = r.L1P2.Y, Stroke = Brushes.MediumPurple, Label = $"{r.Name} E1" });
                 dst.Add(new OverlayLineItem { X1 = r.L2P1.X, Y1 = r.L2P1.Y, X2 = r.L2P2.X, Y2 = r.L2P2.Y, Stroke = Brushes.MediumPurple, Label = $"{r.Name} E2" });
-                dst.Add(new OverlayLineItem { X1 = r.ClosestA.X, Y1 = r.ClosestA.Y, X2 = r.ClosestB.X, Y2 = r.ClosestB.Y, Stroke = r.Pass ? Brushes.Lime : Brushes.Red, Label = $"{r.Name}: {r.Value:0.###}" });
+                dst.Add(new OverlayLineItem { X1 = r.ClosestA.X, Y1 = r.ClosestA.Y, X2 = r.ClosestB.X, Y2 = r.ClosestB.Y, Stroke = r.Pass ? Brushes.Lime : Brushes.Red, Label = $"{r.Name}: {r.Value:0.###} {unitStr}" });
                 return;
             }
     
@@ -2912,7 +2924,8 @@ namespace VisionInspectionApp.UI.ViewModels
 
                 AddCircle(dst, c.Center.X, c.Center.Y, c.RadiusPx, stroke: Brushes.Lime, strokeThickness: 2.0);
                 AddCross(dst, c.Center.X, c.Center.Y, size: 12.0, stroke: Brushes.Lime, strokeThickness: 2.0);
-                dst.Add(new OverlayPointItem { X = c.Center.X, Y = c.Center.Y, Radius = 1.0, Stroke = Brushes.Lime, Label = $"{c.Name}: R={c.RadiusPx:0.##}px" });
+                var rVal = (isCalibrated && _config!.PixelsPerMm > 0) ? c.RadiusPx / _config.PixelsPerMm : c.RadiusPx;
+                dst.Add(new OverlayPointItem { X = c.Center.X, Y = c.Center.Y, Radius = 1.0, Stroke = Brushes.Lime, Label = $"{c.Name}: R={rVal:0.##} {unitStr}" });
                 return;
             }
     
@@ -2927,7 +2940,7 @@ namespace VisionInspectionApp.UI.ViewModels
                 var stroke = d.Pass ? Brushes.Lime : Brushes.Red;
                 AddCircle(dst, d.Center.X, d.Center.Y, d.RadiusPx, stroke: stroke, strokeThickness: 2.0);
                 AddCross(dst, d.Center.X, d.Center.Y, size: 12.0, stroke: stroke, strokeThickness: 2.0);
-                dst.Add(new OverlayPointItem { X = d.Center.X, Y = d.Center.Y, Radius = 1.0, Stroke = stroke, Label = $"{d.Name}: {d.Value:0.###} mm" });
+                dst.Add(new OverlayPointItem { X = d.Center.X, Y = d.Center.Y, Radius = 1.0, Stroke = stroke, Label = $"{d.Name}: {d.Value:0.###} {unitStr}" });
                 return;
             }
     
@@ -3054,7 +3067,7 @@ namespace VisionInspectionApp.UI.ViewModels
     
                 AddAnchorOverlay(d.PointA);
                 AddAnchorOverlay(d.PointB);
-                dst.Add(new OverlayLineItem { X1 = a.X, Y1 = a.Y, X2 = b.X, Y2 = b.Y, Stroke = d.Pass ? Brushes.Lime : Brushes.Red, Label = $"{d.Name}: {d.Value:0.###}" });
+                dst.Add(new OverlayLineItem { X1 = a.X, Y1 = a.Y, X2 = b.X, Y2 = b.Y, Stroke = d.Pass ? Brushes.Lime : Brushes.Red, Label = $"{d.Name}: {d.Value:0.###} {unitStr}" });
                 return;
             }
     
@@ -3092,7 +3105,7 @@ namespace VisionInspectionApp.UI.ViewModels
     
                 dst.Add(new OverlayLineItem { X1 = la.P1.X, Y1 = la.P1.Y, X2 = la.P2.X, Y2 = la.P2.Y, Stroke = Brushes.MediumPurple, Label = la.Name });
                 dst.Add(new OverlayLineItem { X1 = lb.P1.X, Y1 = lb.P1.Y, X2 = lb.P2.X, Y2 = lb.P2.Y, Stroke = Brushes.MediumPurple, Label = lb.Name });
-                dst.Add(new OverlayLineItem { X1 = dd.ClosestA.X, Y1 = dd.ClosestA.Y, X2 = dd.ClosestB.X, Y2 = dd.ClosestB.Y, Stroke = dd.Pass ? Brushes.Lime : Brushes.Red, Label = $"{dd.Name}: {dd.Value:0.###}" });
+                dst.Add(new OverlayLineItem { X1 = dd.ClosestA.X, Y1 = dd.ClosestA.Y, X2 = dd.ClosestB.X, Y2 = dd.ClosestB.Y, Stroke = dd.Pass ? Brushes.Lime : Brushes.Red, Label = $"{dd.Name}: {dd.Value:0.###} {unitStr}" });
                 return;
             }
     
@@ -3134,7 +3147,7 @@ namespace VisionInspectionApp.UI.ViewModels
     
                 dst.Add(new OverlayPointItem { X = p.Position.X, Y = p.Position.Y, Stroke = p.Pass ? Brushes.DeepSkyBlue : Brushes.Red, Label = p.Name });
                 dst.Add(new OverlayLineItem { X1 = l.P1.X, Y1 = l.P1.Y, X2 = l.P2.X, Y2 = l.P2.Y, Stroke = Brushes.MediumPurple, Label = l.Name });
-                dst.Add(new OverlayLineItem { X1 = dd.ClosestA.X, Y1 = dd.ClosestA.Y, X2 = dd.ClosestB.X, Y2 = dd.ClosestB.Y, Stroke = dd.Pass ? Brushes.Lime : Brushes.Red, Label = $"{dd.Name}: {dd.Value:0.###}" });
+                dst.Add(new OverlayLineItem { X1 = dd.ClosestA.X, Y1 = dd.ClosestA.Y, X2 = dd.ClosestB.X, Y2 = dd.ClosestB.Y, Stroke = dd.Pass ? Brushes.Lime : Brushes.Red, Label = $"{dd.Name}: {dd.Value:0.###} {unitStr}" });
                 return;
             }
 
@@ -3209,7 +3222,7 @@ namespace VisionInspectionApp.UI.ViewModels
 
                 if (!double.IsNaN(dd.Value))
                 {
-                    dst.Add(new OverlayLineItem { X1 = dd.ClosestA.X, Y1 = dd.ClosestA.Y, X2 = dd.ClosestB.X, Y2 = dd.ClosestB.Y, Stroke = dd.Pass ? Brushes.Lime : Brushes.Red, Label = $"{dd.Name}: {dd.Value:0.###}" });
+                    dst.Add(new OverlayLineItem { X1 = dd.ClosestA.X, Y1 = dd.ClosestA.Y, X2 = dd.ClosestB.X, Y2 = dd.ClosestB.Y, Stroke = dd.Pass ? Brushes.Lime : Brushes.Red, Label = $"{dd.Name}: {dd.Value:0.###} {unitStr}" });
                     dst.Add(new OverlayPointItem { X = dd.ClosestA.X, Y = dd.ClosestA.Y, Radius = 3.0, Stroke = dd.Pass ? Brushes.Lime : Brushes.Red, Label = string.Empty });
                     dst.Add(new OverlayPointItem { X = dd.ClosestB.X, Y = dd.ClosestB.Y, Radius = 3.0, Stroke = dd.Pass ? Brushes.Lime : Brushes.Red, Label = string.Empty });
                 }

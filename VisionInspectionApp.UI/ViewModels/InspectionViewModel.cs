@@ -112,7 +112,9 @@ public sealed partial class InspectionViewModel : ObservableObject
 
         double TolMinus,
 
-        bool Pass);
+        bool Pass,
+
+        string Unit = "mm");
 
 
 
@@ -1114,11 +1116,17 @@ public sealed partial class InspectionViewModel : ObservableObject
 
 
 
+        var isCalibrated = _config is not null && _config.PixelsPerMm > 0 && Math.Abs(_config.PixelsPerMm - 1.0) > 1e-6;
+
+        var distUnit = isCalibrated ? "mm" : "px";
+
+
+
         foreach (var d in LastResult.Distances)
 
         {
 
-            SpecResults.Add(new SpecResultRow("Distance", d.Name, d.PointA, d.PointB, d.Value, d.Nominal, d.TolPlus, d.TolMinus, d.Pass));
+            SpecResults.Add(new SpecResultRow("Distance", d.Name, d.PointA, d.PointB, d.Value, d.Nominal, d.TolPlus, d.TolMinus, d.Pass, distUnit));
 
         }
 
@@ -1128,7 +1136,7 @@ public sealed partial class InspectionViewModel : ObservableObject
 
         {
 
-            SpecResults.Add(new SpecResultRow("LLD", d.Name, d.RefA, d.RefB, d.Value, d.Nominal, d.TolPlus, d.TolMinus, d.Pass));
+            SpecResults.Add(new SpecResultRow("LLD", d.Name, d.RefA, d.RefB, d.Value, d.Nominal, d.TolPlus, d.TolMinus, d.Pass, distUnit));
 
         }
 
@@ -1138,7 +1146,17 @@ public sealed partial class InspectionViewModel : ObservableObject
 
         {
 
-            SpecResults.Add(new SpecResultRow("PLD", d.Name, d.RefA, d.RefB, d.Value, d.Nominal, d.TolPlus, d.TolMinus, d.Pass));
+            SpecResults.Add(new SpecResultRow("PLD", d.Name, d.RefA, d.RefB, d.Value, d.Nominal, d.TolPlus, d.TolMinus, d.Pass, distUnit));
+
+        }
+
+
+
+        foreach (var d in LastResult.SegmentLineDistances)
+
+        {
+
+            SpecResults.Add(new SpecResultRow("SegmentLineDist", d.Name, d.RefA, d.RefB, d.Value, d.Nominal, d.TolPlus, d.TolMinus, d.Pass, distUnit));
 
         }
 
@@ -1148,7 +1166,7 @@ public sealed partial class InspectionViewModel : ObservableObject
 
         {
 
-            SpecResults.Add(new SpecResultRow("Angle", a.Name, a.LineA, a.LineB, a.ValueDeg, a.Nominal, a.TolPlus, a.TolMinus, a.Pass));
+            SpecResults.Add(new SpecResultRow("Angle", a.Name, a.LineA, a.LineB, a.ValueDeg, a.Nominal, a.TolPlus, a.TolMinus, a.Pass, "°"));
 
         }
 
@@ -1158,7 +1176,7 @@ public sealed partial class InspectionViewModel : ObservableObject
 
         {
 
-            SpecResults.Add(new SpecResultRow("LPD", d.Name, "L1", "L2", d.Value, d.Nominal, d.TolPlus, d.TolMinus, d.Pass));
+            SpecResults.Add(new SpecResultRow("LPD", d.Name, "L1", "L2", d.Value, d.Nominal, d.TolPlus, d.TolMinus, d.Pass, distUnit));
 
         }
 
@@ -1168,7 +1186,7 @@ public sealed partial class InspectionViewModel : ObservableObject
 
         {
 
-            SpecResults.Add(new SpecResultRow("EdgePair", ep.Name, ep.RefA, ep.RefB, ep.Value, ep.Nominal, ep.TolPlus, ep.TolMinus, ep.Pass));
+            SpecResults.Add(new SpecResultRow("EdgePair", ep.Name, ep.RefA, ep.RefB, ep.Value, ep.Nominal, ep.TolPlus, ep.TolMinus, ep.Pass, distUnit));
 
         }
 
@@ -1178,7 +1196,7 @@ public sealed partial class InspectionViewModel : ObservableObject
 
         {
 
-            SpecResults.Add(new SpecResultRow("EdgePairDetect", epd.Name, "E1", "E2", epd.Value, epd.Nominal, epd.TolPlus, epd.TolMinus, epd.Pass));
+            SpecResults.Add(new SpecResultRow("EdgePairDetect", epd.Name, "E1", "E2", epd.Value, epd.Nominal, epd.TolPlus, epd.TolMinus, epd.Pass, distUnit));
 
         }
 
@@ -1188,7 +1206,7 @@ public sealed partial class InspectionViewModel : ObservableObject
 
         {
 
-            SpecResults.Add(new SpecResultRow("Diameter", d.Name, d.CircleRef, string.Empty, d.Value, d.Nominal, d.TolPlus, d.TolMinus, d.Pass));
+            SpecResults.Add(new SpecResultRow("Diameter", d.Name, d.CircleRef, string.Empty, d.Value, d.Nominal, d.TolPlus, d.TolMinus, d.Pass, distUnit));
 
         }
 

@@ -133,6 +133,14 @@ public sealed partial class CalibrationViewModel : ObservableObject
                 CurrentTempWorkingDir = tempDir;
                 ProductCode = cfg.ProductCode;
                 _config = cfg;
+                if (cfg.PixelsPerMm > 0 && Math.Abs(cfg.PixelsPerMm - 1.0) > 1e-6)
+                {
+                    AveragePixelsPerMm = cfg.PixelsPerMm;
+                }
+                else
+                {
+                    AveragePixelsPerMm = 0.0;
+                }
                 OverlayItems.Clear();
                 Measurements.Clear();
                 Image = null;
@@ -151,6 +159,11 @@ public sealed partial class CalibrationViewModel : ObservableObject
 
         try
         {
+            if (AveragePixelsPerMm > 0)
+            {
+                _config.PixelsPerMm = AveragePixelsPerMm;
+            }
+            _config.ProductCode = ProductCode;
             _jobService.SaveJob(_config, CurrentTempWorkingDir, CurrentJobFilePath);
             IsDirty = false;
             System.Windows.MessageBox.Show("Job saved successfully.", "Success", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Information);
@@ -263,20 +276,28 @@ public sealed partial class CalibrationViewModel : ObservableObject
         }
 
         AveragePixelsPerMm = Measurements.Average(x => x.PixelsPerMm);
+        if (_config != null && AveragePixelsPerMm > 0)
+        {
+            _config.PixelsPerMm = AveragePixelsPerMm;
+            IsDirty = true;
+        }
     }
 
     private void SavePixelsPerMm()
     {
-        var code = ProductCode;
-        if (string.IsNullOrWhiteSpace(code) || _config == null || string.IsNullOrEmpty(CurrentTempWorkingDir))
+        if (_config == null || string.IsNullOrEmpty(CurrentTempWorkingDir))
         {
             return;
         }
 
-        _config.PixelsPerMm = AveragePixelsPerMm;
-        _config.ProductCode = ProductCode;
+        if (AveragePixelsPerMm > 0)
+        {
+            _config.PixelsPerMm = AveragePixelsPerMm;
+        }
+        _config.ProductCode = ProductCode ?? string.Empty;
         _jobService.SaveJob(_config, CurrentTempWorkingDir, CurrentJobFilePath ?? "");
-        IsDirty = true;
+        IsDirty = false;
+        System.Windows.MessageBox.Show($"Calibration saved: {_config.PixelsPerMm:0.####} px/mm", "Calibration Saved", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Information);
     }
 
     public sealed record CalibrationMeasurement(double DistancePx, double RealMm, double PixelsPerMm);

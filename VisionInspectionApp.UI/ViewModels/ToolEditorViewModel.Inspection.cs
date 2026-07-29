@@ -25,7 +25,8 @@ namespace VisionInspectionApp.UI.ViewModels
             double Nominal,
             double TolPlus,
             double TolMinus,
-            bool Pass);
+            bool Pass,
+            string Unit = "mm");
 
         public sealed record CodeDetectionRow(string Name, bool Found, string Text);
 
@@ -337,10 +338,16 @@ namespace VisionInspectionApp.UI.ViewModels
             }
         }
 
+        public string SpecResultsValueHeader => (_config is not null && _config.PixelsPerMm > 0 && Math.Abs(_config.PixelsPerMm - 1.0) > 1e-6) ? "Value (mm)" : "Value (px)";
+
         private void RefreshSpecResults(InspectionResult? res)
         {
             SpecResults.Clear();
+            OnPropertyChanged(nameof(SpecResultsValueHeader));
             if (res is null) return;
+
+            var isCalibrated = _config is not null && _config.PixelsPerMm > 0 && Math.Abs(_config.PixelsPerMm - 1.0) > 1e-6;
+            var distUnit = isCalibrated ? "mm" : "px";
 
             if (res.Distances is not null)
             {
@@ -355,7 +362,8 @@ namespace VisionInspectionApp.UI.ViewModels
                         d.Nominal,
                         d.TolPlus,
                         d.TolMinus,
-                        d.Pass));
+                        d.Pass,
+                        distUnit));
                 }
             }
 
@@ -372,7 +380,8 @@ namespace VisionInspectionApp.UI.ViewModels
                         l2l.Nominal,
                         l2l.TolPlus,
                         l2l.TolMinus,
-                        l2l.Pass));
+                        l2l.Pass,
+                        distUnit));
                 }
             }
 
@@ -389,7 +398,8 @@ namespace VisionInspectionApp.UI.ViewModels
                         p2l.Nominal,
                         p2l.TolPlus,
                         p2l.TolMinus,
-                        p2l.Pass));
+                        p2l.Pass,
+                        distUnit));
                 }
             }
 
@@ -406,7 +416,8 @@ namespace VisionInspectionApp.UI.ViewModels
                         sld.Nominal,
                         sld.TolPlus,
                         sld.TolMinus,
-                        sld.Pass));
+                        sld.Pass,
+                        distUnit));
                 }
             }
 
@@ -423,7 +434,8 @@ namespace VisionInspectionApp.UI.ViewModels
                         ang.Nominal,
                         ang.TolPlus,
                         ang.TolMinus,
-                        ang.Pass));
+                        ang.Pass,
+                        "°"));
                 }
             }
 
@@ -440,7 +452,8 @@ namespace VisionInspectionApp.UI.ViewModels
                         ep.Nominal,
                         ep.TolPlus,
                         ep.TolMinus,
-                        ep.Pass));
+                        ep.Pass,
+                        distUnit));
                 }
             }
 
@@ -457,7 +470,8 @@ namespace VisionInspectionApp.UI.ViewModels
                         epd.Nominal,
                         epd.TolPlus,
                         epd.TolMinus,
-                        epd.Pass));
+                        epd.Pass,
+                        distUnit));
                 }
             }
 
@@ -474,7 +488,8 @@ namespace VisionInspectionApp.UI.ViewModels
                         lpd.Nominal,
                         lpd.TolPlus,
                         lpd.TolMinus,
-                        lpd.Pass));
+                        lpd.Pass,
+                        distUnit));
                 }
             }
 
@@ -491,7 +506,8 @@ namespace VisionInspectionApp.UI.ViewModels
                         dia.Nominal,
                         dia.TolPlus,
                         dia.TolMinus,
-                        dia.Pass));
+                        dia.Pass,
+                        distUnit));
                 }
             }
         }
