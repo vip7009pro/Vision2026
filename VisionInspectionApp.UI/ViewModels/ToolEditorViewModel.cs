@@ -200,6 +200,7 @@ namespace VisionInspectionApp.UI.ViewModels
                 "BlobDetection",
                 "SurfaceCompare",
                 "CodeDetection",
+                "ImageOutput",
                 "ResultView"
             };
             Nodes = new ObservableCollection<ToolGraphNodeViewModel>();
@@ -862,6 +863,16 @@ namespace VisionInspectionApp.UI.ViewModels
             OnPropertyChanged(nameof(IsConditionNode));
             OnPropertyChanged(nameof(IsTextNode));
             OnPropertyChanged(nameof(IsImageSourceNode));
+            OnPropertyChanged(nameof(IsImageOutputNode));
+            OnPropertyChanged(nameof(AvailableImageNodes));
+            OnPropertyChanged(nameof(ImageOutput_InputNodeChoice));
+            OnPropertyChanged(nameof(ImageOutput_SaveFolderPath));
+            OnPropertyChanged(nameof(ImageOutput_FileNameFormat));
+            OnPropertyChanged(nameof(ImageOutput_Format));
+            OnPropertyChanged(nameof(ImageOutput_EnableOutput));
+            OnPropertyChanged(nameof(ImageOutput_IncludeOverlay));
+            OnPropertyChanged(nameof(ImageOutput_TextFontSize));
+            OnPropertyChanged(nameof(ImageOutput_SaveCondition));
             OnPropertyChanged(nameof(IsBlobDetectionNode));
             OnPropertyChanged(nameof(IsSurfaceCompareNode));
             OnPropertyChanged(nameof(Point_OffsetX));
@@ -2093,108 +2104,7 @@ namespace VisionInspectionApp.UI.ViewModels
     
         internal static string EvaluateTextTemplate(string text, Dictionary<string, ConditionEvaluator.Variable>? vars)
         {
-            if (string.IsNullOrEmpty(text) || vars is null || vars.Count == 0)
-            {
-                return text ?? string.Empty;
-            }
-    
-            return TextTemplateRegex().Replace(text, m =>
-            {
-                var inner = m.Groups[1].Value?.Trim() ?? string.Empty;
-                if (inner.Length == 0)
-                    return string.Empty;
-                var fmt = string.Empty;
-                var colonIdx = inner.IndexOf(':');
-                if (colonIdx >= 0)
-                {
-                    fmt = inner[(colonIdx + 1)..].Trim();
-                    inner = inner[..colonIdx].Trim();
-                }
-    
-                var varName = inner;
-                var prop = string.Empty;
-                var dotIdx = inner.IndexOf('.');
-                if (dotIdx >= 0)
-                {
-                    varName = inner[..dotIdx].Trim();
-                    prop = inner[(dotIdx + 1)..].Trim();
-                }
-    
-                if (string.IsNullOrWhiteSpace(varName) || !vars.TryGetValue(varName, out var v) || v is null)
-                {
-                    return string.Empty;
-                }
-    
-                object? valueObj = null;
-                if (string.IsNullOrWhiteSpace(prop))
-                {
-                    valueObj = v.Value ?? (object)v.Pass;
-                }
-                else if (string.Equals(prop, "Pass", StringComparison.OrdinalIgnoreCase))
-                {
-                    valueObj = v.Pass;
-                }
-                else if (string.Equals(prop, "Value", StringComparison.OrdinalIgnoreCase))
-                {
-                    valueObj = v.Value;
-                }
-                else if (string.Equals(prop, "Score", StringComparison.OrdinalIgnoreCase))
-                {
-                    valueObj = v.Score;
-                }
-                else if (string.Equals(prop, "Found", StringComparison.OrdinalIgnoreCase))
-                {
-                    valueObj = v.Found;
-                }
-                else if (string.Equals(prop, "Text", StringComparison.OrdinalIgnoreCase))
-                {
-                    valueObj = v.Text;
-                }
-                else if (string.Equals(prop, "Count", StringComparison.OrdinalIgnoreCase))
-                {
-                    valueObj = v.Value;
-                }
-                else if (string.Equals(prop, "MaxArea", StringComparison.OrdinalIgnoreCase) || string.Equals(prop, "Area", StringComparison.OrdinalIgnoreCase))
-                {
-                    valueObj = v.Score;
-                }
-                else
-                {
-                    return string.Empty;
-                }
-    
-                if (valueObj is null)
-                {
-                    return string.Empty;
-                }
-    
-                if (valueObj is double d)
-                {
-                    return string.IsNullOrWhiteSpace(fmt) ? d.ToString("0.###", CultureInfo.InvariantCulture) : d.ToString(fmt, CultureInfo.InvariantCulture);
-                }
-    
-                if (valueObj is bool b)
-                {
-                    return b ? "True" : "False";
-                }
-    
-                if (valueObj is bool bn)
-                {
-                    return bn ? "True" : "False";
-                }
-    
-                if (valueObj is double dn)
-                {
-                    return string.IsNullOrWhiteSpace(fmt) ? dn.ToString("0.###", CultureInfo.InvariantCulture) : dn.ToString(fmt, CultureInfo.InvariantCulture);
-                }
-    
-                if (valueObj is IFormattable f && !string.IsNullOrWhiteSpace(fmt))
-                {
-                    return f.ToString(fmt, CultureInfo.InvariantCulture);
-                }
-    
-                return Convert.ToString(valueObj, CultureInfo.InvariantCulture) ?? string.Empty;
-            });
+            return ConditionEvaluator.EvaluateTextTemplate(text, vars);
         }
     
         [GeneratedRegex(@"(?:\$\{|\{)([^{}]+)\}", RegexOptions.Compiled)]
@@ -2680,6 +2590,18 @@ namespace VisionInspectionApp.UI.ViewModels
                 return;
             }
     
+            if (string.Equals(node.Type, "ImageOutput", StringComparison.OrdinalIgnoreCase) || string.Equals(node.Type, "OutputImage", StringComparison.OrdinalIgnoreCase))
+            {
+                _config.ImageOutputs ??= new List<ImageOutputDefinition>();
+                var existed = _config.ImageOutputs.Any(x => string.Equals(x.Name, node.RefName, StringComparison.OrdinalIgnoreCase));
+                if (!existed)
+                {
+                    _config.ImageOutputs.Add(new ImageOutputDefinition { Name = node.RefName, SaveFolderPath = @"C:\VisionOutput" });
+                }
+    
+                return;
+            }
+    
             if (string.Equals(node.Type, "Text", StringComparison.OrdinalIgnoreCase))
             {
                 var existed = _config.TextNodes.Any(x => string.Equals(x.Name, node.RefName, StringComparison.OrdinalIgnoreCase));
@@ -2967,6 +2889,11 @@ namespace VisionInspectionApp.UI.ViewModels
                 baseName = "CDT";
                 exists = n => _config.CodeDetections.Any(x => string.Equals(x.Name, n, StringComparison.OrdinalIgnoreCase));
             }
+            else if (string.Equals(type, "ImageOutput", StringComparison.OrdinalIgnoreCase) || string.Equals(type, "OutputImage", StringComparison.OrdinalIgnoreCase))
+            {
+                baseName = "IMG_OUT";
+                exists = n => (_config.ImageOutputs ?? new List<ImageOutputDefinition>()).Any(x => string.Equals(x.Name, n, StringComparison.OrdinalIgnoreCase));
+            }
             else
             {
                 baseName = type;
@@ -2993,6 +2920,17 @@ namespace VisionInspectionApp.UI.ViewModels
             var from = Nodes.FirstOrDefault(n => string.Equals(n.Id, edge.FromNodeId, StringComparison.OrdinalIgnoreCase));
             if (to is null || from is null)
                 return;
+            if (string.Equals(to.Type, "ImageOutput", StringComparison.OrdinalIgnoreCase) || string.Equals(to.Type, "OutputImage", StringComparison.OrdinalIgnoreCase))
+            {
+                var def = _config.ImageOutputs.FirstOrDefault(x => string.Equals(x.Name, to.RefName, StringComparison.OrdinalIgnoreCase));
+                if (def is not null && string.Equals(def.InputNodeName, from.RefName, StringComparison.OrdinalIgnoreCase))
+                {
+                    def.InputNodeName = string.Empty;
+                    OnPropertyChanged(nameof(ImageOutput_InputNodeChoice));
+                }
+                return;
+            }
+
             if (string.Equals(to.Type, "Angle", StringComparison.OrdinalIgnoreCase))
             {
                 var def = _config.Angles.FirstOrDefault(x => string.Equals(x.Name, to.RefName, StringComparison.OrdinalIgnoreCase));

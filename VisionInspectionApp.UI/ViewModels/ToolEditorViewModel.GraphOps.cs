@@ -234,6 +234,7 @@ namespace VisionInspectionApp.UI.ViewModels
             else if (_copiedNodeType.Equals("SurfaceCompare", StringComparison.OrdinalIgnoreCase)) CloneDefinition(_config.SurfaceCompares, _copiedNodeRefName, newName, options);
             else if (_copiedNodeType.Equals("Text", StringComparison.OrdinalIgnoreCase)) CloneDefinition(_config.TextNodes, _copiedNodeRefName, newName, options);
             else if (_copiedNodeType.Equals("ImageSource", StringComparison.OrdinalIgnoreCase)) CloneDefinition(_config.ImageSources, _copiedNodeRefName, newName, options);
+            else if (_copiedNodeType.Equals("ImageOutput", StringComparison.OrdinalIgnoreCase) || _copiedNodeType.Equals("OutputImage", StringComparison.OrdinalIgnoreCase)) CloneDefinition(_config.ImageOutputs, _copiedNodeRefName, newName, options);
             else if (_copiedNodeType.Equals("Preprocess", StringComparison.OrdinalIgnoreCase)) CloneDefinition(_config.PreprocessNodes, _copiedNodeRefName, newName, options);
             
             Nodes.Add(newNode);
@@ -419,6 +420,11 @@ namespace VisionInspectionApp.UI.ViewModels
                 {
                     _config.ImageSources.RemoveAll(x => string.Equals(x.Name, toRemove.RefName, StringComparison.OrdinalIgnoreCase));
                 }
+
+                if (string.Equals(toRemove.Type, "ImageOutput", StringComparison.OrdinalIgnoreCase) || string.Equals(toRemove.Type, "OutputImage", StringComparison.OrdinalIgnoreCase))
+                {
+                    _config.ImageOutputs?.RemoveAll(x => string.Equals(x.Name, toRemove.RefName, StringComparison.OrdinalIgnoreCase));
+                }
     
                 if (string.Equals(toRemove.Type, "Text", StringComparison.OrdinalIgnoreCase))
                 {
@@ -550,6 +556,17 @@ namespace VisionInspectionApp.UI.ViewModels
                 return;
             }
     
+            if (string.Equals(toNode.Type, "ImageOutput", StringComparison.OrdinalIgnoreCase) || string.Equals(toNode.Type, "OutputImage", StringComparison.OrdinalIgnoreCase))
+            {
+                var def = _config.ImageOutputs.FirstOrDefault(x => string.Equals(x.Name, toNode.RefName, StringComparison.OrdinalIgnoreCase));
+                if (def is not null)
+                {
+                    def.InputNodeName = fromNode.RefName;
+                    OnPropertyChanged(nameof(ImageOutput_InputNodeChoice));
+                    RefreshPreviews();
+                }
+            }
+
             if (string.Equals(toNode.Type, "Distance", StringComparison.OrdinalIgnoreCase) && (string.Equals(fromNode.Type, "Point", StringComparison.OrdinalIgnoreCase) || string.Equals(fromNode.Type, "CircleFinder", StringComparison.OrdinalIgnoreCase) || string.Equals(fromNode.Type, "Diameter", StringComparison.OrdinalIgnoreCase)))
             {
                 var def = _config.Distances.FirstOrDefault(x => string.Equals(x.Name, toNode.RefName, StringComparison.OrdinalIgnoreCase));

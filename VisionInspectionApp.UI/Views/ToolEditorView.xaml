@@ -1,4 +1,4 @@
-<UserControl x:Class="VisionInspectionApp.UI.Views.ToolEditorView"
+﻿<UserControl x:Class="VisionInspectionApp.UI.Views.ToolEditorView"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
@@ -1138,6 +1138,187 @@
                                         </Border>
                                         <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
                                             <TextBox Text="{Binding ImageSource_RtspUrl, UpdateSourceTrigger=LostFocus}" Margin="4" />
+                                        </Border>
+                                    </Grid>
+                                </Border>
+                            </StackPanel>
+
+                            <StackPanel Visibility="{Binding IsImageOutputNode, Converter={StaticResource BoolToVis}}">
+                                <Border Background="{DynamicResource BorderBrush}" Padding="4,2" Margin="0,8,0,0">
+                                    <TextBlock Text="Output Image Params" FontWeight="Bold" Foreground="{DynamicResource TextBrush}" />
+                                </Border>
+
+                                <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="120" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <Border Background="{DynamicResource WindowBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
+                                            <TextBlock Text="Enable Output" VerticalAlignment="Center" Margin="8,4" Foreground="{DynamicResource TextBrush}"/>
+                                        </Border>
+                                        <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
+                                            <CheckBox IsChecked="{Binding ImageOutput_EnableOutput, UpdateSourceTrigger=PropertyChanged}" Margin="4" VerticalAlignment="Center" Content="Kích hoạt xuất ảnh ra file" />
+                                        </Border>
+                                    </Grid>
+                                </Border>
+
+                                <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="120" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <Border Background="{DynamicResource WindowBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
+                                            <TextBlock Text="Input Image" VerticalAlignment="Center" Margin="8,4" Foreground="{DynamicResource TextBrush}"/>
+                                        </Border>
+                                        <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
+                                            <ComboBox ItemsSource="{Binding AvailableImageNodes}" SelectedItem="{Binding ImageOutput_InputNodeChoice, UpdateSourceTrigger=PropertyChanged}" Margin="4" />
+                                        </Border>
+                                    </Grid>
+                                </Border>
+
+                                <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="120" />
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <Border Background="{DynamicResource WindowBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
+                                            <TextBlock Text="Save Folder" VerticalAlignment="Center" Margin="8,4" Foreground="{DynamicResource TextBrush}"/>
+                                        </Border>
+                                        <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
+                                            <TextBox Text="{Binding ImageOutput_SaveFolderPath, UpdateSourceTrigger=LostFocus}" Margin="4" />
+                                        </Border>
+                                        <Button Grid.Column="2" Content="..." Command="{Binding BrowseImageOutputFolderCommand}" Margin="4" Padding="8,4" />
+                                    </Grid>
+                                </Border>
+
+                                <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="120" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <Border Background="{DynamicResource WindowBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
+                                            <TextBlock Text="File Format" VerticalAlignment="Top" Margin="8,8,8,4" Foreground="{DynamicResource TextBrush}"/>
+                                        </Border>
+                                        <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
+                                            <StackPanel Margin="4">
+                                                <TextBox Text="{Binding ImageOutput_FileNameFormat, UpdateSourceTrigger=LostFocus}" Padding="4"
+                                                         ToolTip="Nhập tên file mẫu kèm các thẻ tùy chọn bên dưới" />
+                                                <Border Margin="0,4,0,0" Padding="6" Background="{DynamicResource WindowBackgroundBrush}" CornerRadius="3" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1">
+                                                    <StackPanel>
+                                                        <TextBlock Text="💡 Thẻ tùy chọn đặt tên file (Placeholders):" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource PrimaryBrush}" Margin="0,0,0,4"/>
+                                                        <WrapPanel Margin="0,2">
+                                                            <Border Background="#2D2D30" CornerRadius="2" Padding="4,2" Margin="0,0,4,4" ToolTip="Năm 4 chữ số (VD: 2026)">
+                                                                <TextBlock Text="{}{YYYY}" FontWeight="SemiBold" Foreground="#4EC9B0" FontSize="11"/>
+                                                            </Border>
+                                                            <Border Background="#2D2D30" CornerRadius="2" Padding="4,2" Margin="0,0,4,4" ToolTip="Tháng 2 chữ số (01-12)">
+                                                                <TextBlock Text="{}{MM}" FontWeight="SemiBold" Foreground="#4EC9B0" FontSize="11"/>
+                                                            </Border>
+                                                            <Border Background="#2D2D30" CornerRadius="2" Padding="4,2" Margin="0,0,4,4" ToolTip="Ngày 2 chữ số (01-31)">
+                                                                <TextBlock Text="{}{DD}" FontWeight="SemiBold" Foreground="#4EC9B0" FontSize="11"/>
+                                                            </Border>
+                                                            <Border Background="#2D2D30" CornerRadius="2" Padding="4,2" Margin="0,0,4,4" ToolTip="Giờ 24h (00-23)">
+                                                                <TextBlock Text="{}{HH}" FontWeight="SemiBold" Foreground="#CE9178" FontSize="11"/>
+                                                            </Border>
+                                                            <Border Background="#2D2D30" CornerRadius="2" Padding="4,2" Margin="0,0,4,4" ToolTip="Phút (00-59)">
+                                                                <TextBlock Text="{}{mm}" FontWeight="SemiBold" Foreground="#CE9178" FontSize="11"/>
+                                                            </Border>
+                                                            <Border Background="#2D2D30" CornerRadius="2" Padding="4,2" Margin="0,0,4,4" ToolTip="Giây (00-59)">
+                                                                <TextBlock Text="{}{ss}" FontWeight="SemiBold" Foreground="#CE9178" FontSize="11"/>
+                                                            </Border>
+                                                            <Border Background="#2D2D30" CornerRadius="2" Padding="4,2" Margin="0,0,4,4" ToolTip="Số đếm / Ticks ngắn">
+                                                                <TextBlock Text="{}{Count}" FontWeight="SemiBold" Foreground="#DCDCAA" FontSize="11"/>
+                                                            </Border>
+                                                            <Border Background="#2D2D30" CornerRadius="2" Padding="4,2" Margin="0,0,4,4" ToolTip="Mã sản phẩm">
+                                                                <TextBlock Text="{}{ProductCode}" FontWeight="SemiBold" Foreground="#9CDCFE" FontSize="11"/>
+                                                            </Border>
+                                                            <Border Background="#2D2D30" CornerRadius="2" Padding="4,2" Margin="0,0,4,4" ToolTip="Trạng thái kết quả (PASS / FAIL)">
+                                                                <TextBlock Text="{}{Status}" FontWeight="SemiBold" Foreground="#569CD6" FontSize="11"/>
+                                                            </Border>
+                                                        </WrapPanel>
+                                                        <TextBlock Text="Ví dụ mẫu: IMG_{YYYY}{MM}{DD}_{HH}{mm}{ss}_{Status}" FontSize="10" Foreground="#888888" Margin="0,2,0,0"/>
+                                                    </StackPanel>
+                                                </Border>
+                                            </StackPanel>
+                                        </Border>
+                                    </Grid>
+                                </Border>
+
+                                <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="120" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <Border Background="{DynamicResource WindowBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
+                                            <TextBlock Text="Image Format" VerticalAlignment="Center" Margin="8,4" Foreground="{DynamicResource TextBrush}"/>
+                                        </Border>
+                                        <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
+                                            <ComboBox ItemsSource="{Binding AvailableImageOutputFormats}" SelectedItem="{Binding ImageOutput_Format, UpdateSourceTrigger=PropertyChanged}" Margin="4" />
+                                        </Border>
+                                    </Grid>
+                                </Border>
+
+                                 <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+                                     <Grid>
+                                         <Grid.ColumnDefinitions>
+                                             <ColumnDefinition Width="120" />
+                                             <ColumnDefinition Width="*" />
+                                         </Grid.ColumnDefinitions>
+                                         <Border Background="{DynamicResource WindowBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
+                                             <TextBlock Text="Burn Overlay" VerticalAlignment="Center" Margin="8,4" Foreground="{DynamicResource TextBrush}"/>
+                                         </Border>
+                                         <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
+                                             <CheckBox IsChecked="{Binding ImageOutput_IncludeOverlay, UpdateSourceTrigger=PropertyChanged}" Margin="4" VerticalAlignment="Center" Content="V&#x1EBD; ROI &amp; Overlay v&#xE0;o &#x1EA3;nh xu&#x1EA5;t" />
+                                         </Border>
+                                     </Grid>
+                                 </Border>
+
+                                 <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+                                     <Grid>
+                                         <Grid.ColumnDefinitions>
+                                             <ColumnDefinition Width="120" />
+                                             <ColumnDefinition Width="*" />
+                                         </Grid.ColumnDefinitions>
+                                         <Border Background="{DynamicResource WindowBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
+                                             <TextBlock Text="Show ROI Boxes" VerticalAlignment="Center" Margin="8,4" Foreground="{DynamicResource TextBrush}"/>
+                                         </Border>
+                                         <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
+                                             <CheckBox IsChecked="{Binding ImageOutput_ShowRoi, UpdateSourceTrigger=PropertyChanged}" Margin="4" VerticalAlignment="Center" Content="V&#x1EBD; &#xF4; vu&#xF4;ng ROI t&#xEC;m ki&#x1EBF;m (B&#x1ECF; ch&#x1ECD;n &#x111;&#x1EC3; ch&#x1EC9; hi&#x1EC7;n k&#x1EBF;t qu&#x1EA3;)" />
+                                         </Border>
+                                     </Grid>
+                                 </Border>
+
+                                <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="120" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <Border Background="{DynamicResource WindowBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
+                                            <TextBlock Text="Text Font Size" VerticalAlignment="Center" Margin="8,4" Foreground="{DynamicResource TextBrush}"/>
+                                        </Border>
+                                        <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
+                                            <TextBox Text="{Binding ImageOutput_TextFontSize, UpdateSourceTrigger=LostFocus}" Margin="4" ToolTip="Cỡ chữ khi render của Tool Text trên ảnh xuất (Mặc định: 18, Tùy chỉnh: 8-96)" />
+                                        </Border>
+                                    </Grid>
+                                </Border>
+
+                                <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="120" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <Border Background="{DynamicResource WindowBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
+                                            <TextBlock Text="Save Condition" VerticalAlignment="Center" Margin="8,4" Foreground="{DynamicResource TextBrush}"/>
+                                        </Border>
+                                        <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
+                                            <ComboBox ItemsSource="{Binding AvailableImageOutputConditions}" SelectedItem="{Binding ImageOutput_SaveCondition, UpdateSourceTrigger=PropertyChanged}" Margin="4" />
                                         </Border>
                                     </Grid>
                                 </Border>

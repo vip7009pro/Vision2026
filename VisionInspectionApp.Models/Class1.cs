@@ -209,7 +209,46 @@ public sealed class VisionConfig
 
     public List<ImageSourceDefinition> ImageSources { get; set; } = new();
 
+    public List<ImageOutputDefinition> ImageOutputs { get; set; } = new();
+
     public DefectInspectionConfig DefectConfig { get; set; } = new();
+}
+
+public enum ImageOutputFormat
+{
+    PNG,
+    JPG,
+    BMP
+}
+
+public enum ImageOutputCondition
+{
+    Always,
+    OnPass,
+    OnFail
+}
+
+public sealed class ImageOutputDefinition
+{
+    public string Name { get; set; } = string.Empty;
+
+    public string InputNodeName { get; set; } = string.Empty;
+
+    public string SaveFolderPath { get; set; } = @"C:\VisionOutput";
+
+    public string FileNameFormat { get; set; } = "IMG_{YYYY}{MM}{DD}_{HH}{mm}{ss}_{Count}";
+
+    public ImageOutputFormat Format { get; set; } = ImageOutputFormat.PNG;
+
+    public bool EnableOutput { get; set; } = true;
+
+    public bool IncludeOverlay { get; set; } = true;
+
+    public bool ShowRoi { get; set; } = true;
+
+    public int TextFontSize { get; set; } = 18;
+
+    public ImageOutputCondition SaveCondition { get; set; } = ImageOutputCondition.Always;
 }
 
 public sealed class TextColorConditionDefinition

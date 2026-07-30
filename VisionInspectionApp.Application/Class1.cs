@@ -124,8 +124,17 @@ public sealed class InspectionResult
 
     public List<CodeDetectionResult> CodeDetections { get; } = new();
 
+    public List<ImageOutputResult> ImageOutputs { get; } = new();
+
     public DefectDetectionResult? Defects { get; set; }
 }
+
+public sealed record ImageOutputResult(
+    string Name,
+    bool Saved,
+    string SavedFilePath,
+    string Error = ""
+);
 
 public sealed record EdgePairResult(
     string Name,
@@ -515,42 +524,14 @@ public sealed class InspectionService : IInspectionService
                 return null;
             }
 
-            static List<BlobInfo> DetectBlobs(Mat matBgrOrGray, Roi roi, List<BlobRoiDefinition>? rois, BlobPolarity polarity, int threshold, int minArea, int maxArea)
+            static List<BlobInfo> DetectBlobsInCrop(Mat crop, Roi inspectRoi, List<BlobRoiDefinition>? rois, BlobPolarity polarity, int threshold, int minArea, int maxArea, Point2d centerFound, double totalAngle)
             {
                 var blobs = new List<BlobInfo>();
-
-                if (matBgrOrGray is null || roi.Width <= 0 || roi.Height <= 0)
+                if (crop is null || crop.Empty())
                 {
                     return blobs;
                 }
 
-                // If multi-ROIs are provided, compute a working bounding box from INCLUDE ROIs.
-                // This keeps performance reasonable while allowing masking for include/exclude.
-                var hasMulti = rois is not null && rois.Count > 0;
-                if (hasMulti)
-                {
-                    var inc = rois!.Where(x => x is not null && x.Mode == BlobRoiMode.Include && x.Roi.Width > 0 && x.Roi.Height > 0)
-                        .Select(x => x.Roi)
-                        .ToList();
-
-                    if (inc.Count > 0)
-                    {
-                        var minX = inc.Min(x => x.X);
-                        var minY = inc.Min(x => x.Y);
-                        var maxX = inc.Max(x => x.X + x.Width);
-                        var maxY = inc.Max(x => x.Y + x.Height);
-                        roi = new Roi { X = minX, Y = minY, Width = Math.Max(1, maxX - minX), Height = Math.Max(1, maxY - minY) };
-                    }
-                }
-
-                var rect = new Rect(roi.X, roi.Y, roi.Width, roi.Height);
-                rect = rect.Intersect(new Rect(0, 0, matBgrOrGray.Width, matBgrOrGray.Height));
-                if (rect.Width <= 0 || rect.Height <= 0)
-                {
-                    return blobs;
-                }
-
-                using var crop = new Mat(matBgrOrGray, rect);
                 Mat gray = crop;
                 using var grayOwned = crop.Channels() == 1 ? null : crop.CvtColor(ColorConversionCodes.BGR2GRAY);
                 if (grayOwned is not null)
@@ -563,6 +544,7 @@ public sealed class InspectionService : IInspectionService
                 var thrType = polarity == BlobPolarity.DarkOnLight ? ThresholdTypes.BinaryInv : ThresholdTypes.Binary;
                 Cv2.Threshold(gray, bw, threshold, 255, thrType);
 
+                var hasMulti = rois is not null && rois.Count > 0;
                 if (hasMulti)
                 {
                     using var mask = new Mat(bw.Rows, bw.Cols, MatType.CV_8UC1, Scalar.Black);
@@ -575,8 +557,8 @@ public sealed class InspectionService : IInspectionService
                             continue;
                         }
 
-                        var rx = rr.Roi.X - rect.X;
-                        var ry = rr.Roi.Y - rect.Y;
+                        var rx = rr.Roi.X - inspectRoi.X;
+                        var ry = rr.Roi.Y - inspectRoi.Y;
                         var r = new Rect(rx, ry, rr.Roi.Width, rr.Roi.Height);
                         r = r.Intersect(new Rect(0, 0, bw.Cols, bw.Rows));
                         if (r.Width <= 0 || r.Height <= 0)
@@ -604,8 +586,8 @@ public sealed class InspectionService : IInspectionService
                             continue;
                         }
 
-                        var rx = rr.Roi.X - rect.X;
-                        var ry = rr.Roi.Y - rect.Y;
+                        var rx = rr.Roi.X - inspectRoi.X;
+                        var ry = rr.Roi.Y - inspectRoi.Y;
                         var r = new Rect(rx, ry, rr.Roi.Width, rr.Roi.Height);
                         r = r.Intersect(new Rect(0, 0, bw.Cols, bw.Rows));
                         if (r.Width <= 0 || r.Height <= 0)
@@ -623,8 +605,6 @@ public sealed class InspectionService : IInspectionService
                 minArea = Math.Max(0, minArea);
                 maxArea = Math.Max(minArea, maxArea);
 
-                // Use connected components so very small dots (even 1 pixel) have stable pixel area.
-                // stats: [label, CC_STAT_LEFT, TOP, WIDTH, HEIGHT, AREA]
                 using var labels = new Mat();
                 using var stats = new Mat();
                 using var centroids = new Mat();
@@ -636,7 +616,7 @@ public sealed class InspectionService : IInspectionService
                     PixelConnectivity.Connectivity8,
                     MatType.CV_32S);
 
-                for (var i = 1; i < nLabels; i++) // 0 is background
+                for (var i = 1; i < nLabels; i++)
                 {
                     var left = stats.Get<int>(i, (int)ConnectedComponentsTypes.Left);
                     var top = stats.Get<int>(i, (int)ConnectedComponentsTypes.Top);
@@ -652,10 +632,12 @@ public sealed class InspectionService : IInspectionService
                     var cx = centroids.Get<double>(i, 0);
                     var cy = centroids.Get<double>(i, 1);
 
-                    // Convert from crop coordinates to full image coordinates
-                    var fullRect = new Rect(left + rect.X, top + rect.Y, width, height);
-                    var centroid = new Point2d(cx + rect.X, cy + rect.Y);
-                    blobs.Add(new BlobInfo(fullRect, centroid, areaPx));
+                    var globalCentroid = MapToGlobal(new Point2d(cx, cy), inspectRoi.Width, inspectRoi.Height, centerFound, totalAngle);
+                    var bboxCenterLocal = new Point2d(left + width / 2.0, top + height / 2.0);
+                    var bboxCenterGlobal = MapToGlobal(bboxCenterLocal, inspectRoi.Width, inspectRoi.Height, centerFound, totalAngle);
+                    var fullRect = new Rect((int)Math.Round(bboxCenterGlobal.X - width / 2.0), (int)Math.Round(bboxCenterGlobal.Y - height / 2.0), width, height);
+
+                    blobs.Add(new BlobInfo(fullRect, globalCentroid, areaPx));
                 }
                 return blobs;
             }
@@ -1463,17 +1445,10 @@ public sealed class InspectionService : IInspectionService
                 .Select(b => Task.Run(() =>
                 {
                     var __sw = System.Diagnostics.Stopwatch.StartNew();
-                    var roi = TransformRoiKeepSize(b.InspectRoi, originTeach, originFound, angleDeg);
                     var (matForBlob, _) = ResolveToolPreprocess("BlobDetection", b.Name);
-                    var rois = b.Rois;
-                    if (rois is not null && rois.Count > 0)
-                    {
-                        rois = rois
-                            .Select(x => new BlobRoiDefinition { Mode = x.Mode, Roi = TransformRoiKeepSize(x.Roi, originTeach, originFound, angleDeg) })
-                            .ToList();
-                    }
-
-                    var blobs = DetectBlobs(matForBlob, roi, rois, b.Polarity, b.Threshold, b.MinBlobArea, b.MaxBlobArea);
+                    using var crop = ExtractStraightRoi(matForBlob, b.InspectRoi, originTeach, originFound, angleDeg, out var centerFound);
+                    var totalAngle = angleDeg + b.InspectRoi.Angle;
+                    var blobs = DetectBlobsInCrop(crop, b.InspectRoi, b.Rois, b.Polarity, b.Threshold, b.MinBlobArea, b.MaxBlobArea, centerFound, totalAngle);
                     __sw.Stop();
                     result.Timings.NodeTimings[b.Name] = (int)__sw.ElapsedMilliseconds;
                     return new BlobDetectionResult(b.Name, blobs.Count, blobs);
@@ -2898,6 +2873,8 @@ public sealed class InspectionService : IInspectionService
                 }
             }
 
+            ExecuteImageOutputs(config, result, image, GetPreprocessNodeOutput, nodesById, edges);
+
             result.Timings.TotalMs = (int)Math.Max(0, swTotal.ElapsedMilliseconds);
 
             return result;
@@ -2909,6 +2886,611 @@ public sealed class InspectionService : IInspectionService
                 m.Dispose();
             }
         }
+    }
+
+    private static void ExecuteImageOutputs(VisionConfig config, InspectionResult result, Mat rawInputImage, Func<string, Mat> getPreprocessNodeOutput, Dictionary<string, ToolGraphNode> nodesById, List<ToolGraphEdge> edges)
+    {
+        if (config.ImageOutputs is null || config.ImageOutputs.Count == 0 || rawInputImage is null || rawInputImage.Empty())
+        {
+            return;
+        }
+
+        foreach (var io in config.ImageOutputs)
+        {
+            if (string.IsNullOrWhiteSpace(io.Name))
+            {
+                continue;
+            }
+
+            if (!io.EnableOutput)
+            {
+                continue;
+            }
+
+            if (io.SaveCondition == ImageOutputCondition.OnPass && !result.Pass)
+            {
+                continue;
+            }
+            if (io.SaveCondition == ImageOutputCondition.OnFail && result.Pass)
+            {
+                continue;
+            }
+
+            try
+            {
+                Mat sourceMat = rawInputImage;
+                var ioNode = nodesById.Values.FirstOrDefault(n => (string.Equals(n.Type, "ImageOutput", StringComparison.OrdinalIgnoreCase) || string.Equals(n.Type, "OutputImage", StringComparison.OrdinalIgnoreCase)) && string.Equals(n.RefName, io.Name, StringComparison.OrdinalIgnoreCase));
+
+                string? inputName = io.InputNodeName;
+                if (string.IsNullOrWhiteSpace(inputName) && ioNode is not null)
+                {
+                    var edge = edges.FirstOrDefault(e => string.Equals(e.ToNodeId, ioNode.Id, StringComparison.OrdinalIgnoreCase));
+                    if (edge is not null && nodesById.TryGetValue(edge.FromNodeId, out var fromNode))
+                    {
+                        inputName = fromNode.RefName;
+                    }
+                }
+
+                if (!string.IsNullOrWhiteSpace(inputName))
+                {
+                    var srcNode = nodesById.Values.FirstOrDefault(n => string.Equals(n.RefName, inputName, StringComparison.OrdinalIgnoreCase));
+                    if (srcNode is not null)
+                    {
+                        if (string.Equals(srcNode.Type, "Preprocess", StringComparison.OrdinalIgnoreCase))
+                        {
+                            sourceMat = getPreprocessNodeOutput(srcNode.Id);
+                        }
+                        else
+                        {
+                            var inEdge = edges.FirstOrDefault(e => string.Equals(e.ToNodeId, srcNode.Id, StringComparison.OrdinalIgnoreCase));
+                            if (inEdge is not null && nodesById.TryGetValue(inEdge.FromNodeId, out var fromNode))
+                            {
+                                if (string.Equals(fromNode.Type, "Preprocess", StringComparison.OrdinalIgnoreCase))
+                                {
+                                    sourceMat = getPreprocessNodeOutput(fromNode.Id);
+                                }
+                            }
+                        }
+                    }
+                }
+
+                var folder = string.IsNullOrWhiteSpace(io.SaveFolderPath) ? @"C:\VisionOutput" : io.SaveFolderPath;
+                if (!Directory.Exists(folder))
+                {
+                    Directory.CreateDirectory(folder);
+                }
+
+                var now = DateTime.Now;
+                var fileName = string.IsNullOrWhiteSpace(io.FileNameFormat) ? "IMG_{YYYY}{MM}{DD}_{HH}{mm}{ss}" : io.FileNameFormat;
+                fileName = fileName.Replace("{YYYY}", now.ToString("yyyy"))
+                                   .Replace("{MM}", now.ToString("MM"))
+                                   .Replace("{DD}", now.ToString("dd"))
+                                   .Replace("{HH}", now.ToString("HH"))
+                                   .Replace("{mm}", now.ToString("mm"))
+                                   .Replace("{ss}", now.ToString("ss"))
+                                   .Replace("{Count}", now.Ticks.ToString()[^6..])
+                                   .Replace("{ProductCode}", config.ProductCode ?? "")
+                                   .Replace("{Status}", result.Pass ? "PASS" : "FAIL");
+
+                var ext = io.Format switch
+                {
+                    ImageOutputFormat.JPG => ".jpg",
+                    ImageOutputFormat.BMP => ".bmp",
+                    _ => ".png"
+                };
+
+                if (!fileName.EndsWith(ext, StringComparison.OrdinalIgnoreCase))
+                {
+                    fileName += ext;
+                }
+
+                var fullPath = Path.Combine(folder, fileName);
+
+                Mat saveMat;
+                if (sourceMat.Channels() == 1)
+                {
+                    saveMat = new Mat();
+                    Cv2.CvtColor(sourceMat, saveMat, ColorConversionCodes.GRAY2BGR);
+                }
+                else
+                {
+                    saveMat = sourceMat.Clone();
+                }
+
+                using (saveMat)
+                {
+                    if (io.IncludeOverlay)
+                    {
+                        BurnOverlaysToMat(saveMat, config, result, io, inputName);
+                    }
+
+                    var ok = Cv2.ImWrite(fullPath, saveMat);
+                    result.ImageOutputs.Add(new ImageOutputResult(io.Name, ok, ok ? fullPath : "", ok ? "" : "Failed to write image file"));
+                }
+            }
+            catch (Exception ex)
+            {
+                result.ImageOutputs.Add(new ImageOutputResult(io.Name, false, "", ex.Message));
+            }
+        }
+    }
+
+    private static void BurnOverlaysToMat(Mat mat, VisionConfig config, InspectionResult result, ImageOutputDefinition? io = null, string? resolvedInputNodeName = null)
+    {
+        if (mat is null || mat.Empty())
+        {
+            return;
+        }
+
+        var targetNodeName = !string.IsNullOrWhiteSpace(resolvedInputNodeName) ? resolvedInputNodeName : io?.InputNodeName;
+        var renderAll = string.IsNullOrWhiteSpace(targetNodeName) ||
+                         string.Equals(targetNodeName, "Default (Current Image)", StringComparison.OrdinalIgnoreCase) ||
+                         string.Equals(targetNodeName, "ResultView", StringComparison.OrdinalIgnoreCase) ||
+                         string.Equals(targetNodeName, "Preprocess", StringComparison.OrdinalIgnoreCase) ||
+                         string.Equals(targetNodeName, "ImageSource", StringComparison.OrdinalIgnoreCase) ||
+                         targetNodeName.StartsWith("ResultView", StringComparison.OrdinalIgnoreCase) ||
+                         targetNodeName.StartsWith("Preprocess", StringComparison.OrdinalIgnoreCase) ||
+                         targetNodeName.StartsWith("ImageSource", StringComparison.OrdinalIgnoreCase);
+
+        var allowedNodes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        if (!renderAll && !string.IsNullOrWhiteSpace(targetNodeName))
+        {
+            allowedNodes.Add(targetNodeName);
+
+            var distDef = config.Distances?.FirstOrDefault(x => string.Equals(x.Name, targetNodeName, StringComparison.OrdinalIgnoreCase));
+            if (distDef is not null)
+            {
+                if (!string.IsNullOrWhiteSpace(distDef.PointA)) allowedNodes.Add(distDef.PointA);
+                if (!string.IsNullOrWhiteSpace(distDef.PointB)) allowedNodes.Add(distDef.PointB);
+            }
+
+            var lldDef = config.LineToLineDistances?.FirstOrDefault(x => string.Equals(x.Name, targetNodeName, StringComparison.OrdinalIgnoreCase));
+            if (lldDef is not null)
+            {
+                if (!string.IsNullOrWhiteSpace(lldDef.LineA)) allowedNodes.Add(lldDef.LineA);
+                if (!string.IsNullOrWhiteSpace(lldDef.LineB)) allowedNodes.Add(lldDef.LineB);
+            }
+
+            var pldDef = config.PointToLineDistances?.FirstOrDefault(x => string.Equals(x.Name, targetNodeName, StringComparison.OrdinalIgnoreCase));
+            if (pldDef is not null)
+            {
+                if (!string.IsNullOrWhiteSpace(pldDef.Point)) allowedNodes.Add(pldDef.Point);
+                if (!string.IsNullOrWhiteSpace(pldDef.Line)) allowedNodes.Add(pldDef.Line);
+            }
+
+            var sldDef = config.SegmentLineDistances?.FirstOrDefault(x => string.Equals(x.Name, targetNodeName, StringComparison.OrdinalIgnoreCase));
+            if (sldDef is not null)
+            {
+                if (!string.IsNullOrWhiteSpace(sldDef.LineA)) allowedNodes.Add(sldDef.LineA);
+                if (!string.IsNullOrWhiteSpace(sldDef.LineB)) allowedNodes.Add(sldDef.LineB);
+            }
+
+            var angleDef = config.Angles?.FirstOrDefault(x => string.Equals(x.Name, targetNodeName, StringComparison.OrdinalIgnoreCase));
+            if (angleDef is not null)
+            {
+                if (!string.IsNullOrWhiteSpace(angleDef.LineA)) allowedNodes.Add(angleDef.LineA);
+                if (!string.IsNullOrWhiteSpace(angleDef.LineB)) allowedNodes.Add(angleDef.LineB);
+            }
+        }
+
+        bool ShouldRender(string nodeName) => renderAll || allowedNodes.Contains(nodeName);
+
+        var isCalibrated = config.PixelsPerMm > 0 && Math.Abs(config.PixelsPerMm - 1.0) > 1e-6;
+        var scale = config.PixelsPerMm;
+        string UnitStr(double val) => isCalibrated ? $"{val:0.##} mm" : $"{val:0.##} px";
+
+        var green = new Scalar(0, 255, 0);       // Lime / Pass
+        var red = new Scalar(0, 0, 255);         // Red / Fail / Outlier
+        var cyan = new Scalar(255, 255, 0);       // Cyan / Search ROI
+        var yellow = new Scalar(0, 255, 255);     // Yellow
+        var white = new Scalar(255, 255, 255);   // White
+        var showRoiBoxes = io is null || io.ShowRoi;
+
+        void DrawRotatedRoi(Mat targetMat, Roi teachRoi, Scalar color, int thickness = 1)
+        {
+            if (!showRoiBoxes) return;
+            if (targetMat is null || targetMat.Empty() || teachRoi is null || teachRoi.Width <= 0 || teachRoi.Height <= 0) return;
+
+            Point2d originTeach;
+            if (config.Origin is not null && (config.Origin.WorldPosition.X != 0 || config.Origin.WorldPosition.Y != 0))
+            {
+                originTeach = new Point2d(config.Origin.WorldPosition.X, config.Origin.WorldPosition.Y);
+            }
+            else if (config.Origin?.TemplateRoi.Width > 0)
+            {
+                originTeach = new Point2d(config.Origin.TemplateRoi.X + config.Origin.TemplateRoi.Width / 2.0, config.Origin.TemplateRoi.Y + config.Origin.TemplateRoi.Height / 2.0);
+            }
+            else if (config.Origin?.SearchRoi.Width > 0)
+            {
+                originTeach = new Point2d(config.Origin.SearchRoi.X + config.Origin.SearchRoi.Width / 2.0, config.Origin.SearchRoi.Y + config.Origin.SearchRoi.Height / 2.0);
+            }
+            else
+            {
+                originTeach = new Point2d(0, 0);
+            }
+
+            Point2d originFound;
+            double angleDeg = 0;
+            bool hasOriginPose = false;
+
+            if (result.Origin is not null && (result.Origin.MatchRect.Width > 0 || result.Origin.Position.X != 0 || result.Origin.Position.Y != 0))
+            {
+                var mr = result.Origin.MatchRect;
+                originFound = (mr.Width > 0 && mr.Height > 0)
+                    ? new Point2d(mr.X + mr.Width / 2.0, mr.Y + mr.Height / 2.0)
+                    : new Point2d(result.Origin.Position.X, result.Origin.Position.Y);
+                angleDeg = result.Origin.AngleDeg;
+                hasOriginPose = true;
+            }
+            else
+            {
+                originFound = originTeach;
+            }
+
+            Point2d centerFound;
+            double totalAngle;
+
+            if (hasOriginPose)
+            {
+                var centerTeach = new Point2d(teachRoi.X + teachRoi.Width / 2.0, teachRoi.Y + teachRoi.Height / 2.0);
+                var centerRot = Rotate(centerTeach, originTeach, angleDeg);
+                var dx = originFound.X - originTeach.X;
+                var dy = originFound.Y - originTeach.Y;
+                centerFound = new Point2d(centerRot.X + dx, centerRot.Y + dy);
+                totalAngle = angleDeg + teachRoi.Angle;
+            }
+            else
+            {
+                centerFound = new Point2d(teachRoi.X + teachRoi.Width / 2.0, teachRoi.Y + teachRoi.Height / 2.0);
+                totalAngle = teachRoi.Angle;
+            }
+
+            var halfW = teachRoi.Width / 2.0;
+            var halfH = teachRoi.Height / 2.0;
+
+            var p1 = Rotate(new Point2d(-halfW, -halfH), new Point2d(0, 0), totalAngle) + centerFound;
+            var p2 = Rotate(new Point2d(halfW, -halfH), new Point2d(0, 0), totalAngle) + centerFound;
+            var p3 = Rotate(new Point2d(halfW, halfH), new Point2d(0, 0), totalAngle) + centerFound;
+            var p4 = Rotate(new Point2d(-halfW, halfH), new Point2d(0, 0), totalAngle) + centerFound;
+
+            Cv2.Line(targetMat, new Point((int)Math.Round(p1.X), (int)Math.Round(p1.Y)), new Point((int)Math.Round(p2.X), (int)Math.Round(p2.Y)), color, thickness, LineTypes.AntiAlias);
+            Cv2.Line(targetMat, new Point((int)Math.Round(p2.X), (int)Math.Round(p2.Y)), new Point((int)Math.Round(p3.X), (int)Math.Round(p3.Y)), color, thickness, LineTypes.AntiAlias);
+            Cv2.Line(targetMat, new Point((int)Math.Round(p3.X), (int)Math.Round(p3.Y)), new Point((int)Math.Round(p4.X), (int)Math.Round(p4.Y)), color, thickness, LineTypes.AntiAlias);
+            Cv2.Line(targetMat, new Point((int)Math.Round(p4.X), (int)Math.Round(p4.Y)), new Point((int)Math.Round(p1.X), (int)Math.Round(p1.Y)), color, thickness, LineTypes.AntiAlias);
+        }
+
+        // 1. Origin
+        if (result.Origin is not null)
+        {
+            if (config.Origin?.TemplateRoi.Width > 0)
+            {
+                DrawRotatedRoi(mat, config.Origin.TemplateRoi, green, 2);
+            }
+            else if (config.Origin?.SearchRoi.Width > 0)
+            {
+                DrawRotatedRoi(mat, config.Origin.SearchRoi, green, 2);
+            }
+
+            var mr = result.Origin.MatchRect;
+            var cx = (int)Math.Round(mr.Width > 0 && mr.Height > 0 ? mr.X + mr.Width / 2.0 : result.Origin.Position.X);
+            var cyPos = (int)Math.Round(mr.Width > 0 && mr.Height > 0 ? mr.Y + mr.Height / 2.0 : result.Origin.Position.Y);
+            Cv2.Line(mat, new Point(cx - 15, cyPos), new Point(cx + 15, cyPos), red, 2, LineTypes.AntiAlias);
+            Cv2.Line(mat, new Point(cx, cyPos - 15), new Point(cx, cyPos + 15), green, 2, LineTypes.AntiAlias);
+            Cv2.PutText(mat, $"Origin: {result.Origin.Score:0.00}", new Point(cx + 18, cyPos + 5), HersheyFonts.HersheySimplex, 0.5, green, 1, LineTypes.AntiAlias);
+        }
+
+        // Map point positions for Distance lookups
+        var pointPosMap = new Dictionary<string, Point2d>(StringComparer.OrdinalIgnoreCase);
+        foreach (var pRes in result.Points)
+        {
+            pointPosMap[pRes.Name] = pRes.Position;
+        }
+
+        // 2. Points
+        foreach (var pRes in result.Points)
+        {
+            if (!ShouldRender(pRes.Name)) continue;
+            var pDef = config.Points.FirstOrDefault(x => string.Equals(x.Name, pRes.Name, StringComparison.OrdinalIgnoreCase));
+            if (pDef is not null && pDef.SearchRoi.Width > 0 && pDef.SearchRoi.Height > 0)
+            {
+                DrawRotatedRoi(mat, pDef.SearchRoi, cyan, 1);
+            }
+
+            var color = pRes.Pass ? green : red;
+            var px = (int)Math.Round(pRes.Position.X);
+            var py = (int)Math.Round(pRes.Position.Y);
+            Cv2.Line(mat, new Point(px - 10, py), new Point(px + 10, py), color, 2, LineTypes.AntiAlias);
+            Cv2.Line(mat, new Point(px, py - 10), new Point(px, py + 10), color, 2, LineTypes.AntiAlias);
+            Cv2.PutText(mat, pRes.Name, new Point(px + 12, py - 6), HersheyFonts.HersheySimplex, 0.5, color, 1, LineTypes.AntiAlias);
+        }
+
+        // 3. Lines
+        foreach (var lRes in result.Lines)
+        {
+            if (!ShouldRender(lRes.Name)) continue;
+            var lDef = config.Lines.FirstOrDefault(x => string.Equals(x.Name, lRes.Name, StringComparison.OrdinalIgnoreCase));
+            if (lDef is not null && lDef.SearchRoi.Width > 0 && lDef.SearchRoi.Height > 0)
+            {
+                DrawRotatedRoi(mat, lDef.SearchRoi, cyan, 1);
+            }
+
+            if (lRes.Found)
+            {
+                var p1 = new Point((int)lRes.P1.X, (int)lRes.P1.Y);
+                var p2 = new Point((int)lRes.P2.X, (int)lRes.P2.Y);
+                Cv2.Line(mat, p1, p2, green, 2, LineTypes.AntiAlias);
+                Cv2.PutText(mat, lRes.Name, new Point((p1.X + p2.X) / 2 + 5, (p1.Y + p2.Y) / 2 - 5), HersheyFonts.HersheySimplex, 0.5, green, 1, LineTypes.AntiAlias);
+            }
+        }
+
+        // 4. Calipers
+        foreach (var cRes in result.Calipers)
+        {
+            if (!ShouldRender(cRes.Name)) continue;
+            var cDef = config.Calipers.FirstOrDefault(x => string.Equals(x.Name, cRes.Name, StringComparison.OrdinalIgnoreCase));
+            if (cDef is not null && cDef.SearchRoi.Width > 0 && cDef.SearchRoi.Height > 0)
+            {
+                DrawRotatedRoi(mat, cDef.SearchRoi, green, 1);
+            }
+
+            if (cRes.Found)
+            {
+                var p1 = new Point((int)cRes.LineP1.X, (int)cRes.LineP1.Y);
+                var p2 = new Point((int)cRes.LineP2.X, (int)cRes.LineP2.Y);
+                Cv2.Line(mat, p1, p2, green, 2, LineTypes.AntiAlias);
+                Cv2.PutText(mat, cRes.Name, new Point((p1.X + p2.X) / 2 + 5, (p1.Y + p2.Y) / 2 - 5), HersheyFonts.HersheySimplex, 0.5, green, 1, LineTypes.AntiAlias);
+            }
+        }
+
+        // 5. CircleFinders
+        foreach (var cfRes in result.CircleFinders)
+        {
+            if (!ShouldRender(cfRes.Name)) continue;
+            var cfDef = config.CircleFinders.FirstOrDefault(x => string.Equals(x.Name, cfRes.Name, StringComparison.OrdinalIgnoreCase));
+            if (cfDef is not null && cfDef.SearchRoi.Width > 0 && cfDef.SearchRoi.Height > 0)
+            {
+                DrawRotatedRoi(mat, cfDef.SearchRoi, cyan, 1);
+            }
+
+            if (cfRes.Found)
+            {
+                var center = new Point((int)Math.Round(cfRes.Center.X), (int)Math.Round(cfRes.Center.Y));
+                var radius = (int)Math.Round(cfRes.RadiusPx);
+                Cv2.Circle(mat, center, radius, green, 2, LineTypes.AntiAlias);
+                Cv2.Line(mat, new Point(center.X - 8, center.Y), new Point(center.X + 8, center.Y), green, 2, LineTypes.AntiAlias);
+                Cv2.Line(mat, new Point(center.X, center.Y - 8), new Point(center.X, center.Y + 8), green, 2, LineTypes.AntiAlias);
+                var rVal = isCalibrated ? cfRes.RadiusPx / scale : cfRes.RadiusPx;
+                var lbl = $"{cfRes.Name}: R={rVal:0.##}{(isCalibrated ? "mm" : "px")}";
+                Cv2.PutText(mat, lbl, new Point(center.X + 10, center.Y - 10), HersheyFonts.HersheySimplex, 0.5, green, 1, LineTypes.AntiAlias);
+            }
+        }
+
+        // 6. Diameters
+        foreach (var dRes in result.Diameters)
+        {
+            if (!ShouldRender(dRes.Name)) continue;
+            if (dRes.Found)
+            {
+                var center = new Point((int)Math.Round(dRes.Center.X), (int)Math.Round(dRes.Center.Y));
+                var radius = (int)Math.Round(dRes.RadiusPx);
+                Cv2.Circle(mat, center, radius, green, 2, LineTypes.AntiAlias);
+                var lbl = $"{dRes.Name}: D={UnitStr(dRes.Value)}";
+                Cv2.PutText(mat, lbl, new Point(center.X + 10, center.Y - 10), HersheyFonts.HersheySimplex, 0.5, green, 1, LineTypes.AntiAlias);
+            }
+        }
+
+        // 7. Distances
+        foreach (var dRes in result.Distances)
+        {
+            if (!ShouldRender(dRes.Name)) continue;
+            if ((dRes.Pass || dRes.Value > 0) && pointPosMap.TryGetValue(dRes.PointA, out var pa) && pointPosMap.TryGetValue(dRes.PointB, out var pb))
+            {
+                var p1 = new Point((int)pa.X, (int)pa.Y);
+                var p2 = new Point((int)pb.X, (int)pb.Y);
+                var col = dRes.Pass ? green : red;
+                Cv2.Line(mat, p1, p2, col, 2, LineTypes.AntiAlias);
+                var mx = (p1.X + p2.X) / 2;
+                var my = (p1.Y + p2.Y) / 2;
+                Cv2.PutText(mat, $"{dRes.Name}={UnitStr(dRes.Value)}", new Point(mx + 5, my - 5), HersheyFonts.HersheySimplex, 0.5, col, 1, LineTypes.AntiAlias);
+            }
+        }
+
+        // 8. LineToLineDistances
+        foreach (var lld in result.LineToLineDistances)
+        {
+            if (!ShouldRender(lld.Name)) continue;
+            var p1 = new Point((int)lld.ClosestA.X, (int)lld.ClosestA.Y);
+            var p2 = new Point((int)lld.ClosestB.X, (int)lld.ClosestB.Y);
+            var col = lld.Pass ? green : red;
+            Cv2.Line(mat, p1, p2, col, 2, LineTypes.AntiAlias);
+            var mx = (p1.X + p2.X) / 2;
+            var my = (p1.Y + p2.Y) / 2;
+            Cv2.PutText(mat, $"{lld.Name}={UnitStr(lld.Value)}", new Point(mx + 5, my - 5), HersheyFonts.HersheySimplex, 0.5, col, 1, LineTypes.AntiAlias);
+        }
+
+        // 9. PointToLineDistances
+        foreach (var pld in result.PointToLineDistances)
+        {
+            if (!ShouldRender(pld.Name)) continue;
+            var p1 = new Point((int)pld.ClosestA.X, (int)pld.ClosestA.Y);
+            var p2 = new Point((int)pld.ClosestB.X, (int)pld.ClosestB.Y);
+            var col = pld.Pass ? green : red;
+            Cv2.Line(mat, p1, p2, col, 2, LineTypes.AntiAlias);
+            var mx = (p1.X + p2.X) / 2;
+            var my = (p1.Y + p2.Y) / 2;
+            Cv2.PutText(mat, $"{pld.Name}={UnitStr(pld.Value)}", new Point(mx + 5, my - 5), HersheyFonts.HersheySimplex, 0.5, col, 1, LineTypes.AntiAlias);
+        }
+
+        // 10. SegmentLineDistances
+        foreach (var sld in result.SegmentLineDistances)
+        {
+            if (!ShouldRender(sld.Name)) continue;
+            var p1 = new Point((int)sld.ClosestA.X, (int)sld.ClosestA.Y);
+            var p2 = new Point((int)sld.ClosestB.X, (int)sld.ClosestB.Y);
+            var col = sld.Pass ? green : red;
+            Cv2.Line(mat, p1, p2, col, 2, LineTypes.AntiAlias);
+            var mx = (p1.X + p2.X) / 2;
+            var my = (p1.Y + p2.Y) / 2;
+            Cv2.PutText(mat, $"{sld.Name}={UnitStr(sld.Value)}", new Point(mx + 5, my - 5), HersheyFonts.HersheySimplex, 0.5, col, 1, LineTypes.AntiAlias);
+        }
+
+        // 11. Angles
+        foreach (var a in result.Angles)
+        {
+            if (!ShouldRender(a.Name)) continue;
+            var col = a.Pass ? green : red;
+            var vertex = new Point((int)a.Intersection.X, (int)a.Intersection.Y);
+            Cv2.Circle(mat, vertex, 5, col, 2, LineTypes.AntiAlias);
+            Cv2.PutText(mat, $"{a.Name}={a.ValueDeg:0.##} deg", new Point(vertex.X + 10, vertex.Y - 10), HersheyFonts.HersheySimplex, 0.5, col, 1, LineTypes.AntiAlias);
+        }
+
+        // 12. EdgePairs
+        foreach (var ep in result.EdgePairs)
+        {
+            if (!ShouldRender(ep.Name)) continue;
+            if (ep.Found)
+            {
+                var p1 = new Point((int)ep.ClosestA.X, (int)ep.ClosestA.Y);
+                var p2 = new Point((int)ep.ClosestB.X, (int)ep.ClosestB.Y);
+                var col = ep.Pass ? green : red;
+                Cv2.Line(mat, p1, p2, col, 2, LineTypes.AntiAlias);
+                Cv2.PutText(mat, $"{ep.Name}={UnitStr(ep.Value)}", new Point((p1.X + p2.X) / 2, (p1.Y + p2.Y) / 2 - 5), HersheyFonts.HersheySimplex, 0.5, col, 1, LineTypes.AntiAlias);
+            }
+        }
+
+        // 13. BlobDetections
+        foreach (var bRes in result.BlobDetections)
+        {
+            if (!ShouldRender(bRes.Name)) continue;
+            var bDef = config.BlobDetections.FirstOrDefault(x => string.Equals(x.Name, bRes.Name, StringComparison.OrdinalIgnoreCase));
+            if (bDef is not null && bDef.InspectRoi.Width > 0 && bDef.InspectRoi.Height > 0)
+            {
+                DrawRotatedRoi(mat, bDef.InspectRoi, cyan, 1);
+                if (bDef.Rois is not null)
+                {
+                    foreach (var rr in bDef.Rois)
+                    {
+                        if (rr?.Roi is not null && rr.Roi.Width > 0 && rr.Roi.Height > 0)
+                        {
+                            DrawRotatedRoi(mat, rr.Roi, rr.Mode == BlobRoiMode.Exclude ? red : yellow, 1);
+                        }
+                    }
+                }
+            }
+
+            foreach (var blob in bRes.Blobs)
+            {
+                var r = new Rect(blob.BoundingBox.X, blob.BoundingBox.Y, blob.BoundingBox.Width, blob.BoundingBox.Height);
+                Cv2.Rectangle(mat, r, yellow, 1, LineTypes.AntiAlias);
+                var pt = new Point((int)blob.Centroid.X, (int)blob.Centroid.Y);
+                Cv2.Circle(mat, pt, 3, yellow, -1, LineTypes.AntiAlias);
+            }
+        }
+
+        // 14. SurfaceCompares
+        foreach (var scRes in result.SurfaceCompares)
+        {
+            if (!ShouldRender(scRes.Name)) continue;
+            var scDef = config.SurfaceCompares.FirstOrDefault(x => string.Equals(x.Name, scRes.Name, StringComparison.OrdinalIgnoreCase));
+            if (scDef is not null && scDef.InspectRoi.Width > 0 && scDef.InspectRoi.Height > 0)
+            {
+                DrawRotatedRoi(mat, scDef.InspectRoi, cyan, 1);
+            }
+
+            foreach (var defect in scRes.Defects)
+            {
+                var r = new Rect(defect.BoundingBox.X, defect.BoundingBox.Y, defect.BoundingBox.Width, defect.BoundingBox.Height);
+                Cv2.Rectangle(mat, r, red, 2, LineTypes.AntiAlias);
+            }
+        }
+
+        // 15. CodeDetections
+        foreach (var cdt in result.CodeDetections)
+        {
+            if (!ShouldRender(cdt.Name)) continue;
+            var cdtDef = config.CodeDetections.FirstOrDefault(x => string.Equals(x.Name, cdt.Name, StringComparison.OrdinalIgnoreCase));
+            if (cdtDef is not null && cdtDef.SearchRoi.Width > 0 && cdtDef.SearchRoi.Height > 0)
+            {
+                DrawRotatedRoi(mat, cdtDef.SearchRoi, cyan, 1);
+            }
+
+            if (cdt.Found)
+            {
+                var col = green;
+                if (cdt.BoundingBox.Width > 0 && cdt.BoundingBox.Height > 0)
+                {
+                    Cv2.Rectangle(mat, new Rect(cdt.BoundingBox.X, cdt.BoundingBox.Y, cdt.BoundingBox.Width, cdt.BoundingBox.Height), col, 2, LineTypes.AntiAlias);
+                }
+
+                Cv2.PutText(mat, $"{cdt.Name}: {cdt.Text}", new Point(cdt.BoundingBox.X, Math.Max(15, cdt.BoundingBox.Y - 5)), HersheyFonts.HersheySimplex, 0.6, col, 2, LineTypes.AntiAlias);
+            }
+        }
+
+        // 16. TextNodes
+        if (config.TextNodes is not null)
+        {
+            Dictionary<string, ConditionEvaluator.Variable>? vars = null;
+            try { vars = ConditionEvaluator.BuildVariableMap(result); } catch { }
+
+            double fontScale = (io is not null && io.TextFontSize > 0) ? (io.TextFontSize / 24.0) : 0.7;
+
+            foreach (var t in config.TextNodes)
+            {
+                if (string.IsNullOrWhiteSpace(t.Name)) continue;
+                var text = ConditionEvaluator.EvaluateTextTemplate(t.Text ?? string.Empty, vars);
+                var col = white;
+                if (vars is not null && t.Conditions is not null)
+                {
+                    foreach (var c in t.Conditions)
+                    {
+                        if (string.IsNullOrWhiteSpace(c.Expression)) continue;
+                        try
+                        {
+                            if (ConditionEvaluator.Evaluate(c.Expression, vars))
+                            {
+                                col = ParseHexColorToScalar(c.Color) ?? col;
+                                break;
+                            }
+                        }
+                        catch { }
+                    }
+                }
+
+                RenderTextWithNewlines(mat, text, new Point(t.X, t.Y), HersheyFonts.HersheySimplex, fontScale, col, 2);
+            }
+        }
+    }
+
+    private static void RenderTextWithNewlines(Mat mat, string text, Point basePt, HersheyFonts fontFace, double fontScale, Scalar color, int thickness)
+    {
+        if (string.IsNullOrEmpty(text)) return;
+        var lines = text.Split(new[] { "\r\n", "\n", "\r" }, StringSplitOptions.None);
+        int fontHeight = Math.Max(15, (int)(32 * fontScale));
+        for (int i = 0; i < lines.Length; i++)
+        {
+            if (string.IsNullOrEmpty(lines[i])) continue;
+            var linePt = new Point(basePt.X, basePt.Y + i * fontHeight);
+            Cv2.PutText(mat, lines[i], linePt, fontFace, fontScale, color, thickness, LineTypes.AntiAlias);
+        }
+    }
+
+    private static Scalar? ParseHexColorToScalar(string hex)
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(hex)) return null;
+            hex = hex.TrimStart('#');
+            if (hex.Length == 8) hex = hex.Substring(2);
+            if (hex.Length == 6)
+            {
+                var r = Convert.ToByte(hex.Substring(0, 2), 16);
+                var g = Convert.ToByte(hex.Substring(2, 2), 16);
+                var b = Convert.ToByte(hex.Substring(4, 2), 16);
+                return new Scalar(b, g, r);
+            }
+        }
+        catch { }
+        return null;
     }
 
     public void ResetTracking(string? productCode = null)
@@ -3394,83 +3976,143 @@ public static class ConditionEvaluator
     {
         var vars = new Dictionary<string, Variable>(StringComparer.OrdinalIgnoreCase);
 
-        if (result.Origin is not null)
+        if (result.Origin is not null && !string.IsNullOrWhiteSpace(result.Origin.Name))
         {
             vars[result.Origin.Name] = new Variable(result.Origin.Pass, score: result.Origin.Score);
+            vars[$"{result.Origin.Name}.X"] = new Variable(result.Origin.Pass, value: result.Origin.Position.X);
+            vars[$"{result.Origin.Name}.Y"] = new Variable(result.Origin.Pass, value: result.Origin.Position.Y);
+            vars[$"{result.Origin.Name}.Score"] = new Variable(result.Origin.Pass, value: result.Origin.Score);
+            vars[$"{result.Origin.Name}.Pass"] = new Variable(result.Origin.Pass);
+            vars[$"{result.Origin.Name}.Angle"] = new Variable(result.Origin.Pass, value: result.Origin.AngleDeg);
         }
 
         foreach (var p in result.Points)
         {
+            if (string.IsNullOrWhiteSpace(p.Name)) continue;
             vars[p.Name] = new Variable(p.Pass, score: p.Score);
+            vars[$"{p.Name}.X"] = new Variable(p.Pass, value: p.Position.X);
+            vars[$"{p.Name}.Y"] = new Variable(p.Pass, value: p.Position.Y);
+            vars[$"{p.Name}.Score"] = new Variable(p.Pass, value: p.Score);
+            vars[$"{p.Name}.Pass"] = new Variable(p.Pass);
         }
 
         foreach (var l in result.Lines)
         {
+            if (string.IsNullOrWhiteSpace(l.Name)) continue;
             vars[l.Name] = new Variable(l.Found, found: l.Found);
+            vars[$"{l.Name}.Found"] = new Variable(l.Found, found: l.Found);
+            vars[$"{l.Name}.Pass"] = new Variable(l.Found);
+            vars[$"{l.Name}.Length"] = new Variable(l.Found, value: l.LengthPx);
         }
 
         foreach (var d in result.Distances)
         {
+            if (string.IsNullOrWhiteSpace(d.Name)) continue;
             vars[d.Name] = new Variable(d.Pass, value: d.Value);
+            vars[$"{d.Name}.Value"] = new Variable(d.Pass, value: d.Value);
+            vars[$"{d.Name}.Pass"] = new Variable(d.Pass);
         }
 
         foreach (var dd in result.LineToLineDistances)
         {
+            if (string.IsNullOrWhiteSpace(dd.Name)) continue;
             vars[dd.Name] = new Variable(dd.Pass, value: dd.Value);
+            vars[$"{dd.Name}.Value"] = new Variable(dd.Pass, value: dd.Value);
+            vars[$"{dd.Name}.Pass"] = new Variable(dd.Pass);
         }
 
         foreach (var dd in result.PointToLineDistances)
         {
+            if (string.IsNullOrWhiteSpace(dd.Name)) continue;
             vars[dd.Name] = new Variable(dd.Pass, value: dd.Value);
+            vars[$"{dd.Name}.Value"] = new Variable(dd.Pass, value: dd.Value);
+            vars[$"{dd.Name}.Pass"] = new Variable(dd.Pass);
         }
 
         foreach (var sld in result.SegmentLineDistances)
         {
+            if (string.IsNullOrWhiteSpace(sld.Name)) continue;
             vars[sld.Name] = new Variable(sld.Pass, value: sld.Value);
+            vars[$"{sld.Name}.Value"] = new Variable(sld.Pass, value: sld.Value);
+            vars[$"{sld.Name}.Pass"] = new Variable(sld.Pass);
         }
 
         foreach (var lpd in result.LinePairDetections)
         {
+            if (string.IsNullOrWhiteSpace(lpd.Name)) continue;
             vars[lpd.Name] = new Variable(lpd.Pass, value: lpd.Value, found: lpd.Found);
+            vars[$"{lpd.Name}.Value"] = new Variable(lpd.Pass, value: lpd.Value);
+            vars[$"{lpd.Name}.Pass"] = new Variable(lpd.Pass);
+            vars[$"{lpd.Name}.Found"] = new Variable(lpd.Pass, found: lpd.Found);
             vars[$"LPD.{lpd.Name}"] = new Variable(lpd.Pass, value: lpd.Value, found: lpd.Found);
         }
 
         foreach (var cf in result.CircleFinders)
         {
+            if (string.IsNullOrWhiteSpace(cf.Name)) continue;
             vars[cf.Name] = new Variable(cf.Found, value: cf.RadiusPx, found: cf.Found, score: cf.Score);
+            vars[$"{cf.Name}.Value"] = new Variable(cf.Found, value: cf.RadiusPx);
+            vars[$"{cf.Name}.RadiusPx"] = new Variable(cf.Found, value: cf.RadiusPx);
+            vars[$"{cf.Name}.CenterX"] = new Variable(cf.Found, value: cf.Center.X);
+            vars[$"{cf.Name}.CenterY"] = new Variable(cf.Found, value: cf.Center.Y);
+            vars[$"{cf.Name}.Found"] = new Variable(cf.Found, found: cf.Found);
+            vars[$"{cf.Name}.Pass"] = new Variable(cf.Found);
+            vars[$"{cf.Name}.Score"] = new Variable(cf.Found, value: cf.Score);
             vars[$"CIR.{cf.Name}"] = new Variable(cf.Found, value: cf.RadiusPx, found: cf.Found, score: cf.Score);
         }
 
         foreach (var a in result.Angles)
         {
+            if (string.IsNullOrWhiteSpace(a.Name)) continue;
             vars[a.Name] = new Variable(a.Pass, value: a.ValueDeg);
+            vars[$"{a.Name}.Value"] = new Variable(a.Pass, value: a.ValueDeg);
+            vars[$"{a.Name}.Pass"] = new Variable(a.Pass);
         }
 
         foreach (var ep in result.EdgePairs)
         {
+            if (string.IsNullOrWhiteSpace(ep.Name)) continue;
+            vars[ep.Name] = new Variable(ep.Pass, value: ep.Value, found: ep.Found);
+            vars[$"{ep.Name}.Value"] = new Variable(ep.Pass, value: ep.Value);
+            vars[$"{ep.Name}.Pass"] = new Variable(ep.Pass);
+            vars[$"{ep.Name}.Found"] = new Variable(ep.Pass, found: ep.Found);
             vars[$"EP.{ep.Name}"] = new Variable(ep.Pass, value: ep.Value, found: ep.Found);
             vars[$"EdgePair.{ep.Name}"] = new Variable(ep.Pass, value: ep.Value, found: ep.Found);
         }
 
         foreach (var epd in result.EdgePairDetections)
         {
+            if (string.IsNullOrWhiteSpace(epd.Name)) continue;
+            vars[epd.Name] = new Variable(epd.Pass, value: epd.Value, found: epd.Found);
+            vars[$"{epd.Name}.Value"] = new Variable(epd.Pass, value: epd.Value);
+            vars[$"{epd.Name}.Pass"] = new Variable(epd.Pass);
+            vars[$"{epd.Name}.Found"] = new Variable(epd.Pass, found: epd.Found);
             vars[$"EPD.{epd.Name}"] = new Variable(epd.Pass, value: epd.Value, found: epd.Found);
             vars[$"EdgePairDetect.{epd.Name}"] = new Variable(epd.Pass, value: epd.Value, found: epd.Found);
         }
 
         foreach (var c in result.Conditions)
         {
+            if (string.IsNullOrWhiteSpace(c.Name)) continue;
             vars[c.Name] = new Variable(c.Pass);
+            vars[$"{c.Name}.Pass"] = new Variable(c.Pass);
         }
 
         foreach (var b in result.BlobDetections)
         {
+            if (string.IsNullOrWhiteSpace(b.Name)) continue;
             vars[b.Name] = new Variable(true, value: b.Count);
+            vars[$"{b.Name}.Count"] = new Variable(true, value: b.Count);
+            vars[$"{b.Name}.Value"] = new Variable(true, value: b.Count);
         }
 
         foreach (var sc in result.SurfaceCompares)
         {
+            if (string.IsNullOrWhiteSpace(sc.Name)) continue;
             vars[sc.Name] = new Variable(sc.Pass, value: sc.Count, score: sc.MaxArea);
+            vars[$"{sc.Name}.Count"] = new Variable(sc.Pass, value: sc.Count);
+            vars[$"{sc.Name}.MaxArea"] = new Variable(sc.Pass, value: sc.MaxArea);
+            vars[$"{sc.Name}.Pass"] = new Variable(sc.Pass);
             vars[$"SC.{sc.Name}"] = new Variable(sc.Pass, value: sc.Count, score: sc.MaxArea);
             vars[$"SurfaceCompare.{sc.Name}"] = new Variable(sc.Pass, value: sc.Count, score: sc.MaxArea);
             vars[$"SC.{sc.Name}.MaxArea"] = new Variable(sc.Pass, value: sc.MaxArea);
@@ -3479,21 +4121,147 @@ public static class ConditionEvaluator
 
         foreach (var c in result.Calipers)
         {
-            vars[c.Name] = new Variable(c.Found, found: c.Found);
+            if (string.IsNullOrWhiteSpace(c.Name)) continue;
+            vars[c.Name] = new Variable(c.Found, value: c.AvgStrength, found: c.Found);
+            vars[$"{c.Name}.Value"] = new Variable(c.Found, value: c.AvgStrength);
+            vars[$"{c.Name}.Found"] = new Variable(c.Found, found: c.Found);
+            vars[$"{c.Name}.Pass"] = new Variable(c.Found);
+            vars[$"CAL.{c.Name}"] = new Variable(c.Found, value: c.AvgStrength, found: c.Found);
+            vars[$"Caliper.{c.Name}"] = new Variable(c.Found, value: c.AvgStrength, found: c.Found);
         }
 
         foreach (var cdt in result.CodeDetections)
         {
+            if (string.IsNullOrWhiteSpace(cdt.Name)) continue;
             vars[cdt.Name] = new Variable(cdt.Found, found: cdt.Found, text: cdt.Text);
+            vars[$"{cdt.Name}.Text"] = new Variable(cdt.Found, text: cdt.Text);
+            vars[$"{cdt.Name}.Found"] = new Variable(cdt.Found, found: cdt.Found);
+            vars[$"{cdt.Name}.Pass"] = new Variable(cdt.Found);
         }
 
         foreach (var d in result.Diameters)
         {
+            if (string.IsNullOrWhiteSpace(d.Name)) continue;
+            vars[d.Name] = new Variable(d.Pass, value: d.Value, found: d.Found);
+            vars[$"{d.Name}.Value"] = new Variable(d.Pass, value: d.Value);
+            vars[$"{d.Name}.Pass"] = new Variable(d.Pass);
+            vars[$"{d.Name}.Found"] = new Variable(d.Pass, found: d.Found);
             vars[$"CIR.{d.Name}"] = new Variable(d.Pass, value: d.Value, found: d.Found);
             vars[$"Diameter.{d.Name}"] = new Variable(d.Pass, value: d.Value, found: d.Found);
         }
 
+        foreach (var io in result.ImageOutputs)
+        {
+            if (string.IsNullOrWhiteSpace(io.Name)) continue;
+            vars[io.Name] = new Variable(io.Saved, found: io.Saved, text: io.SavedFilePath);
+            vars[$"{io.Name}.Saved"] = new Variable(io.Saved, found: io.Saved);
+            vars[$"{io.Name}.SavedFilePath"] = new Variable(io.Saved, text: io.SavedFilePath);
+            vars[$"Saved.{io.Name}"] = new Variable(io.Saved, found: io.Saved, text: io.SavedFilePath);
+        }
+
         return vars;
+    }
+
+    public static string EvaluateTextTemplate(string text, Dictionary<string, Variable>? vars)
+    {
+        if (string.IsNullOrEmpty(text) || vars is null || vars.Count == 0)
+        {
+            return text ?? string.Empty;
+        }
+
+        return System.Text.RegularExpressions.Regex.Replace(text, @"\{([^}]+)\}", m =>
+        {
+            var inner = m.Groups[1].Value?.Trim() ?? string.Empty;
+            if (inner.Length == 0)
+                return string.Empty;
+
+            var fmt = string.Empty;
+            var colonIdx = inner.IndexOf(':');
+            if (colonIdx >= 0)
+            {
+                fmt = inner[(colonIdx + 1)..].Trim();
+                inner = inner[..colonIdx].Trim();
+            }
+
+            if (vars.TryGetValue(inner, out var vDirect) && vDirect is not null)
+            {
+                object? directVal = vDirect.Text ?? (object?)vDirect.Value ?? vDirect.Found ?? vDirect.Pass;
+                if (directVal is double dD)
+                {
+                    return string.IsNullOrWhiteSpace(fmt) ? dD.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture) : dD.ToString(fmt, System.Globalization.CultureInfo.InvariantCulture);
+                }
+                if (directVal is bool bD)
+                {
+                    return bD ? "True" : "False";
+                }
+                return directVal?.ToString() ?? string.Empty;
+            }
+
+            var varName = inner;
+            var prop = string.Empty;
+            var dotIdx = inner.IndexOf('.');
+            if (dotIdx >= 0)
+            {
+                varName = inner[..dotIdx].Trim();
+                prop = inner[(dotIdx + 1)..].Trim();
+            }
+
+            if (string.IsNullOrWhiteSpace(varName) || !vars.TryGetValue(varName, out var v) || v is null)
+            {
+                return m.Value;
+            }
+
+            object? valueObj = null;
+            if (string.IsNullOrWhiteSpace(prop))
+            {
+                valueObj = v.Text ?? (object?)v.Value ?? v.Found ?? v.Pass;
+            }
+            else if (string.Equals(prop, "Pass", StringComparison.OrdinalIgnoreCase))
+            {
+                valueObj = v.Pass;
+            }
+            else if (string.Equals(prop, "Value", StringComparison.OrdinalIgnoreCase))
+            {
+                valueObj = v.Value ?? (object?)v.Score ?? v.Found ?? v.Pass;
+            }
+            else if (string.Equals(prop, "Score", StringComparison.OrdinalIgnoreCase))
+            {
+                valueObj = v.Score ?? v.Value;
+            }
+            else if (string.Equals(prop, "Found", StringComparison.OrdinalIgnoreCase))
+            {
+                valueObj = v.Found ?? v.Pass;
+            }
+            else if (string.Equals(prop, "Text", StringComparison.OrdinalIgnoreCase))
+            {
+                valueObj = v.Text ?? v.Value?.ToString() ?? v.Pass.ToString();
+            }
+            else if (string.Equals(prop, "Count", StringComparison.OrdinalIgnoreCase))
+            {
+                valueObj = v.Value;
+            }
+            else if (string.Equals(prop, "MaxArea", StringComparison.OrdinalIgnoreCase) || string.Equals(prop, "Area", StringComparison.OrdinalIgnoreCase))
+            {
+                valueObj = v.Score;
+            }
+
+            if (valueObj is null)
+            {
+                return string.Empty;
+            }
+
+            if (valueObj is double d)
+            {
+                return string.IsNullOrWhiteSpace(fmt) ? d.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture) : d.ToString(fmt, System.Globalization.CultureInfo.InvariantCulture);
+            }
+
+            if (valueObj is bool b)
+            {
+                return b ? "True" : "False";
+            }
+
+            return valueObj.ToString() ?? string.Empty;
+        });
     }
 
     public static bool Evaluate(string expression, Dictionary<string, Variable> vars)

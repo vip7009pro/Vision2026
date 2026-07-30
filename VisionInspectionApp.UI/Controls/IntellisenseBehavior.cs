@@ -465,6 +465,17 @@ public static class IntellisenseBehavior
             };
         }
 
+        if (string.Equals(type, "ImageOutput", StringComparison.OrdinalIgnoreCase) || string.Equals(type, "OutputImage", StringComparison.OrdinalIgnoreCase))
+        {
+            return new List<IntellisenseItem>
+            {
+                new("Text", "Text", "Đường dẫn file ảnh đã xuất (Absolute Path)", "⚡", false),
+                new("SavedFilePath", "SavedFilePath", "Đường dẫn file ảnh đã xuất (Absolute Path)", "⚡", false),
+                new("Pass", "Pass", "Trạng thái lưu ảnh thành công (bool: true/false)", "⚡", false),
+                new("Found", "Found", "Trạng thái lưu ảnh thành công (bool: true/false)", "⚡", false)
+            };
+        }
+
         if (string.Equals(type, "SurfaceCompare", StringComparison.OrdinalIgnoreCase))
         {
             return new List<IntellisenseItem>

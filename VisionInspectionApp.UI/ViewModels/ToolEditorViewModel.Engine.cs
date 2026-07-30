@@ -1971,6 +1971,53 @@ namespace VisionInspectionApp.UI.ViewModels
                 return;
             }
 
+            if (IsImageOutputNode && SelectedNode is not null)
+            {
+                using var rawSnapIO = _sharedImage.GetSnapshot();
+                using var snapIO = rawSnapIO ?? new Mat();
+                
+                var ioDef = SelectedImageOutputDef();
+                var inputName = ioDef?.InputNodeName;
+                var targetNode = Nodes.FirstOrDefault(n => string.Equals(n.RefName, inputName, StringComparison.OrdinalIgnoreCase));
+                if (targetNode is null)
+                {
+                    var inEdge = Edges.FirstOrDefault(e => string.Equals(e.ToNodeId, SelectedNode.Id, StringComparison.OrdinalIgnoreCase));
+                    if (inEdge is not null)
+                    {
+                        targetNode = Nodes.FirstOrDefault(n => string.Equals(n.Id, inEdge.FromNodeId, StringComparison.OrdinalIgnoreCase));
+                    }
+                }
+
+                if (targetNode is null || string.Equals(targetNode.Type, "ResultView", StringComparison.OrdinalIgnoreCase))
+                {
+                    SelectedNodePreviewImage = FinalPreviewImage ?? _cachedFinalPreviewImage ?? (snapIO.Empty() ? null : snapIO.ToBitmapSource());
+                    SelectedNodeOverlayItems = FinalOverlayItems;
+                    return;
+                }
+
+                if (string.Equals(targetNode.Type, "ImageSource", StringComparison.OrdinalIgnoreCase))
+                {
+                    SelectedNodePreviewImage = snapIO.Empty() ? null : snapIO.ToBitmapSource();
+                }
+                else
+                {
+                    using var processedSel = ResolveToolPreprocessForPreview(snapIO, targetNode);
+                    SelectedNodePreviewImage = processedSel.Empty() ? null : processedSel.ToBitmapSource();
+                }
+
+                AddConfigRoisForNode(targetNode, newSelectedNodeOverlayItems);
+                if (_lastRun is not null)
+                {
+                    BuildOverlayForNodeFromRunWithConfig(targetNode, _lastRun, newSelectedNodeOverlayItems);
+                }
+                else
+                {
+                    BuildOverlayForNode(targetNode, snapIO, newSelectedNodeOverlayItems);
+                }
+                SelectedNodeOverlayItems = newSelectedNodeOverlayItems;
+                return;
+            }
+
             // Special handling for ImageSource - always load from source regardless of PreprocessPreviewEnabled
             if (SelectedNode is not null && string.Equals(SelectedNode.Type, "ImageSource", StringComparison.OrdinalIgnoreCase))
             {
@@ -3754,7 +3801,7 @@ namespace VisionInspectionApp.UI.ViewModels
             {
                 if (showRois && l.SearchRoi.Width > 0 && l.SearchRoi.Height > 0)
                 {
-                    dst.Add(CreateRotatedRoi(l.SearchRoi, Brushes.MediumPurple, $"{l.Name} L"));
+                    dst.Add(CreateRotatedRoiWithPose(l.SearchRoi, Brushes.MediumPurple, $"{l.Name} L"));
                 }
             }
     
@@ -3762,7 +3809,7 @@ namespace VisionInspectionApp.UI.ViewModels
             {
                 if (showRois && b.InspectRoi.Width > 0 && b.InspectRoi.Height > 0)
                 {
-                    dst.Add(CreateRotatedRoi(b.InspectRoi, Brushes.Gold, $"{b.Name} B"));
+                    dst.Add(CreateRotatedRoiWithPose(b.InspectRoi, Brushes.Gold, $"{b.Name} B"));
                 }
             }
     
@@ -3770,7 +3817,7 @@ namespace VisionInspectionApp.UI.ViewModels
             {
                 if (showRois && c.SearchRoi.Width > 0 && c.SearchRoi.Height > 0)
                 {
-                    dst.Add(CreateRotatedRoi(c.SearchRoi, Brushes.MediumPurple, $"{c.Name} CIR"));
+                    dst.Add(CreateRotatedRoiWithPose(c.SearchRoi, Brushes.MediumPurple, $"{c.Name} CIR"));
                 }
             }
     
@@ -3778,7 +3825,7 @@ namespace VisionInspectionApp.UI.ViewModels
             {
                 if (showRois && e.SearchRoi.Width > 0 && e.SearchRoi.Height > 0)
                 {
-                    dst.Add(CreateRotatedRoi(e.SearchRoi, Brushes.MediumPurple, $"{e.Name} EPD"));
+                    dst.Add(CreateRotatedRoiWithPose(e.SearchRoi, Brushes.MediumPurple, $"{e.Name} EPD"));
                 }
             }
     

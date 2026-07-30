@@ -139,6 +139,10 @@ namespace VisionInspectionApp.UI.ViewModels
                 outName = "Image";
             else if (string.Equals(Type, "ImageSource", StringComparison.OrdinalIgnoreCase))
                 outName = "Image";
+            else if (string.Equals(Type, "ResultView", StringComparison.OrdinalIgnoreCase))
+                outName = "Image";
+            else if (string.Equals(Type, "ImageOutput", StringComparison.OrdinalIgnoreCase) || string.Equals(Type, "OutputImage", StringComparison.OrdinalIgnoreCase))
+                outName = "Image";
             else if (string.Equals(Type, "BlobDetection", StringComparison.OrdinalIgnoreCase))
                 outName = "Blobs";
             else if (string.Equals(Type, "CodeDetection", StringComparison.OrdinalIgnoreCase))
