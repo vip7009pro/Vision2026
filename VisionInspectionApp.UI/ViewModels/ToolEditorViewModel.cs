@@ -1028,6 +1028,10 @@ namespace VisionInspectionApp.UI.ViewModels
             OnPropertyChanged(nameof(SurfaceCompare_MaxCount));
             OnPropertyChanged(nameof(SurfaceCompare_MorphKernel));
             OnPropertyChanged(nameof(SurfaceCompare_EdgeTolerancePx));
+            OnPropertyChanged(nameof(SurfaceCompare_Algorithm));
+            OnPropertyChanged(nameof(SurfaceCompare_SsimWindowSize));
+            OnPropertyChanged(nameof(SurfaceCompare_SsimThreshold));
+            OnPropertyChanged(nameof(SurfaceCompare_GradientWeight));
             OnPropertyChanged(nameof(AvailableCaliperOrientations));
             OnPropertyChanged(nameof(AvailableEdgePolarities));
             OnPropertyChanged(nameof(Caliper_Orientation));

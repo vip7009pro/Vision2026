@@ -23,6 +23,8 @@ namespace VisionInspectionApp.UI.ViewModels
 {
     public sealed partial class ToolEditorViewModel : ObservableObject
     {
+        public IEnumerable<SurfaceCompareAlgorithm> AvailableSurfaceCompareAlgorithms => Enum.GetValues<SurfaceCompareAlgorithm>();
+
         public ICommand SurfaceCompare_SetSearchRoiCommand { get; }
         public ICommand SurfaceCompare_SetTemplateRoiCommand { get; }
     
@@ -194,6 +196,70 @@ namespace VisionInspectionApp.UI.ViewModels
             }
         }
     
+        public SurfaceCompareAlgorithm SurfaceCompare_Algorithm
+        {
+            get => SelectedSurfaceCompareDef()?.Algorithm ?? SurfaceCompareAlgorithm.AbsDiff;
+            set
+            {
+                var def = SelectedSurfaceCompareDef();
+                if (def is null) return;
+                if (def.Algorithm == value) return;
+                def.Algorithm = value;
+                RaiseToolPropertyPanelsChanged();
+                RefreshPreviews();
+                RequestAutoSave();
+            }
+        }
+
+        public int SurfaceCompare_SsimWindowSize
+        {
+            get => SelectedSurfaceCompareDef()?.SsimWindowSize ?? 7;
+            set
+            {
+                var def = SelectedSurfaceCompareDef();
+                if (def is null) return;
+                var v = Math.Clamp(value, 3, 21);
+                if (v % 2 == 0) v += 1;
+                if (def.SsimWindowSize == v) return;
+                def.SsimWindowSize = v;
+                RaiseToolPropertyPanelsChanged();
+                RefreshPreviews();
+                RequestAutoSave();
+            }
+        }
+
+        public double SurfaceCompare_SsimThreshold
+        {
+            get => SelectedSurfaceCompareDef()?.SsimThreshold ?? 0.85;
+            set
+            {
+                var def = SelectedSurfaceCompareDef();
+                if (def is null) return;
+                var v = Math.Clamp(value, 0.05, 0.99);
+                if (Math.Abs(def.SsimThreshold - v) < 1e-4) return;
+                def.SsimThreshold = v;
+                RaiseToolPropertyPanelsChanged();
+                RefreshPreviews();
+                RequestAutoSave();
+            }
+        }
+
+        public double SurfaceCompare_GradientWeight
+        {
+            get => SelectedSurfaceCompareDef()?.GradientWeight ?? 0.5;
+            set
+            {
+                var def = SelectedSurfaceCompareDef();
+                if (def is null) return;
+                var v = Math.Clamp(value, 0.0, 1.0);
+                if (Math.Abs(def.GradientWeight - v) < 1e-4) return;
+                def.GradientWeight = v;
+                RaiseToolPropertyPanelsChanged();
+                RefreshPreviews();
+                RequestAutoSave();
+            }
+        }
+
         public double? SurfaceCompare_LastRunMaxArea
         {
             get

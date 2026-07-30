@@ -307,7 +307,11 @@
   - Xóa bỏ đoạn mã vẽ ROI/striplines cũ không biến đổi pose trong `BuildFinalOverlayFromRunWithConfig` (nguyên nhân gây ra hiện tượng bỏ qua cờ `Show ROI` và striplines bị nhảy ra ngoài khung ROI khi Origin dịch chuyển/xoay).
   - Bổ sung helper `AddEpdSearchStripsOverlay` trong [ToolEditorViewModel.Engine.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/ToolEditorViewModel.Engine.cs): Kiểm tra chính xác cờ `showRois`, xoay các đoạn stripline theo góc `SearchRoi.Angle` xung quanh tâm ROI và biến đổi tọa độ theo `Origin` pose (`TransformPose`), đồng bộ ở cả `Engine.cs` và [ToolEditorViewModel.GraphOps.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/ToolEditorViewModel.GraphOps.cs).
   - Cập nhật `BurnOverlaysToMat` trong [Class1.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.Application/Class1.cs) hỗ trợ render kết quả kiểm tra và cờ `showRoiBoxes` cho `EdgePairDetections`.
-- **Trạng thái**: Biên dịch thành công toàn bộ Solution `VisionInspectionApp.slnx` (`0 Errors, 34 Warnings`).
+- **Nâng cấp thuật toán so sánh bề mặt nâng cao cho tool SurfaceCompare**:
+  - Bổ sung enum `SurfaceCompareAlgorithm` (`AbsDiff`, `SSIM`, `GradientAdaptive`) trong [Models Class1.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.Models/Class1.cs).
+  - Triển khai thuật toán **SSIM (Structural Similarity Index)** chống nhiễu ánh sáng toàn cục và thuật toán **Gradient Adaptive (Sobel Gradient Magnitude Blend)** chống bóng mờ trong `RunSurfaceCompare` ([Application Class1.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.Application/Class1.cs)).
+  - Bổ sung thuộc tính ViewModel, selector ComboBox và các ô nhập tham số (`SSIM Window Size`, `SSIM Threshold`, `Gradient Weight`) trên UI Properties Panel ([ToolEditorView.xaml](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/Views/ToolEditorView.xaml)).
+- **Trạng thái**: Biên dịch thành công toàn bộ Solution `VisionInspectionApp.slnx` (`0 Errors, 36 Warnings`).
 
 
 

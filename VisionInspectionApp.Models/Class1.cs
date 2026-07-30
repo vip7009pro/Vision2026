@@ -441,6 +441,21 @@ public sealed class SurfaceCompareDefinition
     public int MorphKernel { get; set; } = 3;
 
     public int EdgeTolerancePx { get; set; } = 0;
+
+    public SurfaceCompareAlgorithm Algorithm { get; set; } = SurfaceCompareAlgorithm.AbsDiff;
+
+    public int SsimWindowSize { get; set; } = 7;
+
+    public double SsimThreshold { get; set; } = 0.85;
+
+    public double GradientWeight { get; set; } = 0.5;
+}
+
+public enum SurfaceCompareAlgorithm
+{
+    AbsDiff = 0,
+    SSIM = 1,
+    GradientAdaptive = 2
 }
 
 public sealed class SurfaceCompareRoiDefinition

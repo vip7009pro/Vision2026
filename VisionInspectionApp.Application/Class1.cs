@@ -726,29 +726,146 @@ public sealed class InspectionService : IInspectionService
                 using var bw = new Mat();
                 var thr = Math.Clamp(def.DiffThreshold, 0, 255);
 
-                var edgeTol = Math.Max(0, def.EdgeTolerancePx);
-                if (edgeTol > 0)
+                if (def.Algorithm == SurfaceCompareAlgorithm.SSIM)
                 {
-                    using var kernel = Cv2.GetStructuringElement(MorphShapes.Rect, new Size(edgeTol * 2 + 1, edgeTol * 2 + 1));
-                    using var maxImg = new Mat();
-                    using var minImg = new Mat();
-                    Cv2.MorphologyEx(tplCrop, maxImg, MorphTypes.Dilate, kernel);
-                    Cv2.MorphologyEx(tplCrop, minImg, MorphTypes.Erode, kernel);
+                    var winSize = Math.Clamp(def.SsimWindowSize > 0 ? def.SsimWindowSize : 7, 3, 21);
+                    if (winSize % 2 == 0) winSize += 1;
 
-                    using var diffHigh = new Mat();
-                    using var diffLow = new Mat();
-                    Cv2.Subtract(testCrop, maxImg, diffHigh);
-                    Cv2.Subtract(minImg, testCrop, diffLow);
+                    using var img1Float = new Mat();
+                    using var img2Float = new Mat();
+                    testCrop.ConvertTo(img1Float, MatType.CV_32FC1);
+                    tplCrop.ConvertTo(img2Float, MatType.CV_32FC1);
 
-                    using var defectRaw = new Mat();
-                    Cv2.BitwiseOr(diffHigh, diffLow, defectRaw);
-                    Cv2.Threshold(defectRaw, bw, thr, 255, ThresholdTypes.Binary);
+                    using var mu1 = new Mat();
+                    using var mu2 = new Mat();
+                    var kSize = new Size(winSize, winSize);
+                    Cv2.GaussianBlur(img1Float, mu1, kSize, 1.5);
+                    Cv2.GaussianBlur(img2Float, mu2, kSize, 1.5);
+
+                    using var mu1Sq = new Mat();
+                    using var mu2Sq = new Mat();
+                    using var mu1Mu2 = new Mat();
+                    Cv2.Multiply(mu1, mu1, mu1Sq);
+                    Cv2.Multiply(mu2, mu2, mu2Sq);
+                    Cv2.Multiply(mu1, mu2, mu1Mu2);
+
+                    using var sigma1Sq = new Mat();
+                    using var sigma2Sq = new Mat();
+                    using var sigma12 = new Mat();
+
+                    using var t1 = new Mat();
+                    using var t2 = new Mat();
+                    using var t3 = new Mat();
+                    Cv2.Multiply(img1Float, img1Float, t1);
+                    Cv2.GaussianBlur(t1, t1, kSize, 1.5);
+                    Cv2.Subtract(t1, mu1Sq, sigma1Sq);
+
+                    Cv2.Multiply(img2Float, img2Float, t2);
+                    Cv2.GaussianBlur(t2, t2, kSize, 1.5);
+                    Cv2.Subtract(t2, mu2Sq, sigma2Sq);
+
+                    Cv2.Multiply(img1Float, img2Float, t3);
+                    Cv2.GaussianBlur(t3, t3, kSize, 1.5);
+                    Cv2.Subtract(t3, mu1Mu2, sigma12);
+
+                    const double C1 = 6.5025, C2 = 58.5225;
+                    using var num1 = new Mat();
+                    using var num2 = new Mat();
+                    using var den1 = new Mat();
+                    using var den2 = new Mat();
+
+                    Cv2.AddWeighted(mu1Mu2, 2.0, mu1Mu2, 0, C1, num1);
+                    Cv2.AddWeighted(sigma12, 2.0, sigma12, 0, C2, num2);
+
+                    Cv2.AddWeighted(mu1Sq, 1.0, mu2Sq, 1.0, C1, den1);
+                    Cv2.AddWeighted(sigma1Sq, 1.0, sigma2Sq, 1.0, C2, den2);
+
+                    using var num = new Mat();
+                    using var den = new Mat();
+                    Cv2.Multiply(num1, num2, num);
+                    Cv2.Multiply(den1, den2, den);
+
+                    using var ssimMap = new Mat();
+                    Cv2.Divide(num, den, ssimMap);
+
+                    using var dissim = new Mat();
+                    using var ones = new Mat(ssimMap.Rows, ssimMap.Cols, MatType.CV_32FC1, Scalar.All(1.0));
+                    Cv2.Subtract(ones, ssimMap, dissim);
+                    Cv2.Multiply(dissim, Scalar.All(255.0), dissim);
+
+                    using var dissim8u = new Mat();
+                    dissim.ConvertTo(dissim8u, MatType.CV_8UC1);
+
+                    var ssimThr = Math.Clamp(def.SsimThreshold > 0 ? (1.0 - def.SsimThreshold) * 255.0 : 38.0, 5.0, 250.0);
+                    if (def.DiffThreshold > 0 && def.DiffThreshold != 25)
+                    {
+                        ssimThr = (1.0 - Math.Clamp(def.DiffThreshold / 100.0, 0.05, 0.95)) * 255.0;
+                    }
+                    Cv2.Threshold(dissim8u, bw, ssimThr, 255, ThresholdTypes.Binary);
+                }
+                else if (def.Algorithm == SurfaceCompareAlgorithm.GradientAdaptive)
+                {
+                    using var grad1X = new Mat();
+                    using var grad1Y = new Mat();
+                    using var grad2X = new Mat();
+                    using var grad2Y = new Mat();
+                    Cv2.Sobel(testCrop, grad1X, MatType.CV_16S, 1, 0);
+                    Cv2.Sobel(testCrop, grad1Y, MatType.CV_16S, 0, 1);
+                    Cv2.Sobel(tplCrop, grad2X, MatType.CV_16S, 1, 0);
+                    Cv2.Sobel(tplCrop, grad2Y, MatType.CV_16S, 0, 1);
+
+                    using var absGrad1X = new Mat();
+                    using var absGrad1Y = new Mat();
+                    using var absGrad2X = new Mat();
+                    using var absGrad2Y = new Mat();
+                    Cv2.ConvertScaleAbs(grad1X, absGrad1X);
+                    Cv2.ConvertScaleAbs(grad1Y, absGrad1Y);
+                    Cv2.ConvertScaleAbs(grad2X, absGrad2X);
+                    Cv2.ConvertScaleAbs(grad2Y, absGrad2Y);
+
+                    using var mag1 = new Mat();
+                    using var mag2 = new Mat();
+                    Cv2.AddWeighted(absGrad1X, 0.5, absGrad1Y, 0.5, 0, mag1);
+                    Cv2.AddWeighted(absGrad2X, 0.5, absGrad2Y, 0.5, 0, mag2);
+
+                    using var gradDiff = new Mat();
+                    Cv2.Absdiff(mag1, mag2, gradDiff);
+
+                    using var grayDiff = new Mat();
+                    Cv2.Absdiff(testCrop, tplCrop, grayDiff);
+
+                    using var combinedDiff = new Mat();
+                    var wGrad = Math.Clamp(def.GradientWeight > 0 ? def.GradientWeight : 0.5, 0.0, 1.0);
+                    Cv2.AddWeighted(grayDiff, 1.0 - wGrad, gradDiff, wGrad, 0, combinedDiff);
+
+                    Cv2.Threshold(combinedDiff, bw, thr, 255, ThresholdTypes.Binary);
                 }
                 else
                 {
-                    using var diffGray = new Mat();
-                    Cv2.Absdiff(testCrop, tplCrop, diffGray);
-                    Cv2.Threshold(diffGray, bw, thr, 255, ThresholdTypes.Binary);
+                    var edgeTol = Math.Max(0, def.EdgeTolerancePx);
+                    if (edgeTol > 0)
+                    {
+                        using var kernel = Cv2.GetStructuringElement(MorphShapes.Rect, new Size(edgeTol * 2 + 1, edgeTol * 2 + 1));
+                        using var maxImg = new Mat();
+                        using var minImg = new Mat();
+                        Cv2.MorphologyEx(tplCrop, maxImg, MorphTypes.Dilate, kernel);
+                        Cv2.MorphologyEx(tplCrop, minImg, MorphTypes.Erode, kernel);
+
+                        using var diffHigh = new Mat();
+                        using var diffLow = new Mat();
+                        Cv2.Subtract(testCrop, maxImg, diffHigh);
+                        Cv2.Subtract(minImg, testCrop, diffLow);
+
+                        using var defectRaw = new Mat();
+                        Cv2.BitwiseOr(diffHigh, diffLow, defectRaw);
+                        Cv2.Threshold(defectRaw, bw, thr, 255, ThresholdTypes.Binary);
+                    }
+                    else
+                    {
+                        using var diffGray = new Mat();
+                        Cv2.Absdiff(testCrop, tplCrop, diffGray);
+                        Cv2.Threshold(diffGray, bw, thr, 255, ThresholdTypes.Binary);
+                    }
                 }
 
                 // Apply include/exclude multi-ROI mask (definitions are in teach space).
