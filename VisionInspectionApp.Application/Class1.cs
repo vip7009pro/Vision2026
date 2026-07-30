@@ -3358,6 +3358,32 @@ public sealed class InspectionService : IInspectionService
             }
         }
 
+        // 12b. EdgePairDetections
+        foreach (var epdRes in result.EdgePairDetections)
+        {
+            if (!ShouldRender(epdRes.Name)) continue;
+            var epdDef = config.EdgePairDetections?.FirstOrDefault(x => string.Equals(x.Name, epdRes.Name, StringComparison.OrdinalIgnoreCase));
+            if (showRoiBoxes && epdDef is not null && epdDef.SearchRoi.Width > 0 && epdDef.SearchRoi.Height > 0)
+            {
+                DrawRotatedRoi(mat, epdDef.SearchRoi, cyan, 1);
+            }
+
+            if (epdRes.Found)
+            {
+                var l1p1 = new Point((int)epdRes.L1P1.X, (int)epdRes.L1P1.Y);
+                var l1p2 = new Point((int)epdRes.L1P2.X, (int)epdRes.L1P2.Y);
+                var l2p1 = new Point((int)epdRes.L2P1.X, (int)epdRes.L2P1.Y);
+                var l2p2 = new Point((int)epdRes.L2P2.X, (int)epdRes.L2P2.Y);
+                var col = epdRes.Pass ? green : red;
+                Cv2.Line(mat, l1p1, l1p2, cyan, 2, LineTypes.AntiAlias);
+                Cv2.Line(mat, l2p1, l2p2, cyan, 2, LineTypes.AntiAlias);
+                var ca = new Point((int)epdRes.ClosestA.X, (int)epdRes.ClosestA.Y);
+                var cb = new Point((int)epdRes.ClosestB.X, (int)epdRes.ClosestB.Y);
+                Cv2.Line(mat, ca, cb, col, 2, LineTypes.AntiAlias);
+                Cv2.PutText(mat, $"{epdRes.Name}={UnitStr(epdRes.Value)}", new Point((ca.X + cb.X) / 2, (ca.Y + cb.Y) / 2 - 5), HersheyFonts.HersheySimplex, 0.5, col, 1, LineTypes.AntiAlias);
+            }
+        }
+
         // 13. BlobDetections
         foreach (var bRes in result.BlobDetections)
         {

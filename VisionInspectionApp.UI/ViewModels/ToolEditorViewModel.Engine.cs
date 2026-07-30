@@ -219,51 +219,6 @@ namespace VisionInspectionApp.UI.ViewModels
                 return;
             }
     
-            foreach (var c in _config.CircleFinders)
-            {
-                if (c.SearchRoi.Width <= 0 || c.SearchRoi.Height <= 0)
-                {
-                    continue;
-                }
-    
-                dst.Add(CreateRotatedRoi(c.SearchRoi, Brushes.MediumPurple, $"{c.Name} CIR"));
-            }
-    
-            foreach (var e in _config.EdgePairDetections)
-            {
-                if (e.SearchRoi.Width <= 0 || e.SearchRoi.Height <= 0)
-                {
-                    continue;
-                }
-    
-                dst.Add(CreateRotatedRoi(e.SearchRoi, Brushes.MediumPurple, $"{e.Name} EPD"));
-                var stripCount = Math.Clamp(e.StripCount, 1, 100);
-                var stripLength = Math.Max(3, e.StripLength);
-                if (stripCount > 0)
-                {
-                    if (e.Orientation == CaliperOrientation.Vertical)
-                    {
-                        var y1 = e.SearchRoi.Y + (e.SearchRoi.Height - stripLength) / 2.0;
-                        var y2 = y1 + stripLength;
-                        for (var i = 0; i < stripCount; i++)
-                        {
-                            var x = e.SearchRoi.X + (i + 0.5) * e.SearchRoi.Width / stripCount;
-                            dst.Add(new OverlayLineItem { X1 = x, Y1 = y1, X2 = x, Y2 = y2, Stroke = Brushes.MediumPurple, StrokeThickness = 1.0 });
-                        }
-                    }
-                    else
-                    {
-                        var x1 = e.SearchRoi.X + (e.SearchRoi.Width - stripLength) / 2.0;
-                        var x2 = x1 + stripLength;
-                        for (var i = 0; i < stripCount; i++)
-                        {
-                            var y = e.SearchRoi.Y + (i + 0.5) * e.SearchRoi.Height / stripCount;
-                            dst.Add(new OverlayLineItem { X1 = x1, Y1 = y, X2 = x2, Y2 = y, Stroke = Brushes.MediumPurple, StrokeThickness = 1.0 });
-                        }
-                    }
-                }
-            }
-    
             foreach (var b in _config.BlobDetections)
             {
                 if (b.InspectRoi.Width <= 0 || b.InspectRoi.Height <= 0)
@@ -1076,27 +1031,73 @@ namespace VisionInspectionApp.UI.ViewModels
                 if (r.Defects.Count > MaxBlobOverlayCount)
                 {
                     dst.Add(new OverlayPointItem { X = def.InspectRoi.X + 2, Y = def.InspectRoi.Y + 16, Radius = 1.0, Stroke = stroke, Label = $"+{r.Defects.Count - MaxBlobOverlayCount}" });
+                    return;
                 }
-    
-                return;
             }
         }
-    
+
+        private Roi? GetRoiForLabel(string labelRaw)
+        {
+            if (_config is null || string.IsNullOrWhiteSpace(labelRaw)) return null;
+            var label = labelRaw.Trim();
+            if (string.Equals(label, "DefectROI", StringComparison.OrdinalIgnoreCase)) return _config.DefectConfig.InspectRoi;
+            if (string.Equals(label, "Origin S", StringComparison.OrdinalIgnoreCase)) return _config.Origin.SearchRoi;
+            if (string.Equals(label, "Origin T", StringComparison.OrdinalIgnoreCase)) return _config.Origin.TemplateRoi;
+            var parts = label.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            if (parts.Length != 2) return null;
+            var name = parts[0];
+            var kind = parts[1];
+            if (string.Equals(kind, "S", StringComparison.OrdinalIgnoreCase)) return _config.Points.FirstOrDefault(x => string.Equals(x.Name, name, StringComparison.OrdinalIgnoreCase))?.SearchRoi;
+            if (string.Equals(kind, "T", StringComparison.OrdinalIgnoreCase)) return _config.Points.FirstOrDefault(x => string.Equals(x.Name, name, StringComparison.OrdinalIgnoreCase))?.TemplateRoi;
+            if (string.Equals(kind, "L", StringComparison.OrdinalIgnoreCase)) return _config.Lines.FirstOrDefault(x => string.Equals(x.Name, name, StringComparison.OrdinalIgnoreCase))?.SearchRoi;
+            if (string.Equals(kind, "Cal", StringComparison.OrdinalIgnoreCase)) return _config.Calipers.FirstOrDefault(x => string.Equals(x.Name, name, StringComparison.OrdinalIgnoreCase))?.SearchRoi;
+            if (string.Equals(kind, "LP", StringComparison.OrdinalIgnoreCase)) return _config.LinePairDetections.FirstOrDefault(x => string.Equals(x.Name, name, StringComparison.OrdinalIgnoreCase))?.SearchRoi;
+            if (string.Equals(kind, "EPD", StringComparison.OrdinalIgnoreCase)) return _config.EdgePairDetections.FirstOrDefault(x => string.Equals(x.Name, name, StringComparison.OrdinalIgnoreCase))?.SearchRoi;
+            if (string.Equals(kind, "CIR", StringComparison.OrdinalIgnoreCase)) return _config.CircleFinders.FirstOrDefault(x => string.Equals(x.Name, name, StringComparison.OrdinalIgnoreCase))?.SearchRoi;
+            if (string.Equals(kind, "C", StringComparison.OrdinalIgnoreCase)) return _config.CodeDetections.FirstOrDefault(x => string.Equals(x.Name, name, StringComparison.OrdinalIgnoreCase))?.SearchRoi;
+            if (kind.StartsWith("B", StringComparison.OrdinalIgnoreCase)) return _config.BlobDetections.FirstOrDefault(x => string.Equals(x.Name, name, StringComparison.OrdinalIgnoreCase))?.InspectRoi;
+            if (kind.StartsWith("SC", StringComparison.OrdinalIgnoreCase)) return _config.SurfaceCompares.FirstOrDefault(x => string.Equals(x.Name, name, StringComparison.OrdinalIgnoreCase))?.InspectRoi;
+            return null;
+        }
+
         private void OnRoiEdited(RoiSelection? sel)
         {
             if (sel is null || _config is null)
             {
                 return;
             }
-    
+
             if (string.IsNullOrWhiteSpace(sel.Label))
             {
                 return;
             }
-    
+
             var rawLabel = sel.Label.Trim();
             var label = rawLabel.Split('[')[0].Trim();
+            var oldRoi = GetRoiForLabel(rawLabel);
+            var oldRoiCopy = oldRoi is not null ? new Roi { X = oldRoi.X, Y = oldRoi.Y, Width = oldRoi.Width, Height = oldRoi.Height, Angle = oldRoi.Angle } : null;
             var roi = UnTransformRoi(sel.Roi, label);
+
+            if (oldRoiCopy is not null && (Math.Abs(oldRoiCopy.X - roi.X) > 0.1 || Math.Abs(oldRoiCopy.Y - roi.Y) > 0.1 || Math.Abs(oldRoiCopy.Width - roi.Width) > 0.1 || Math.Abs(oldRoiCopy.Height - roi.Height) > 0.1 || Math.Abs(oldRoiCopy.Angle - roi.Angle) > 0.1))
+            {
+                var newRoiCopy = new Roi { X = roi.X, Y = roi.Y, Width = roi.Width, Height = roi.Height, Angle = roi.Angle };
+                var labelToUpdate = rawLabel;
+                UndoManager.Execute(new UndoRedoManager.DelegateAction(
+                    doAction: () =>
+                    {
+                        ApplyRoiForLabel(labelToUpdate, newRoiCopy);
+                        RefreshPreviews();
+                        RequestAutoSave();
+                    },
+                    undoAction: () =>
+                    {
+                        ApplyRoiForLabel(labelToUpdate, oldRoiCopy);
+                        RefreshPreviews();
+                        RequestAutoSave();
+                    }
+                ));
+            }
+
             if (string.Equals(label, "DefectROI", StringComparison.OrdinalIgnoreCase))
             {
                 _config.DefectConfig.InspectRoi = roi;
@@ -1245,6 +1246,10 @@ namespace VisionInspectionApp.UI.ViewModels
                 if (kind.StartsWith("SC", StringComparison.OrdinalIgnoreCase))
                 {
                     ApplyRoiForLabel(label, roi);
+                    if (string.Equals(kind, "SCT", StringComparison.OrdinalIgnoreCase) || string.Equals(kind, "SC", StringComparison.OrdinalIgnoreCase))
+                    {
+                        TrySaveSurfaceCompareTemplateImage(name, roi, sel.Roi);
+                    }
                     RefreshPreviews();
                     RequestAutoSave();
                     return;
@@ -3421,9 +3426,11 @@ namespace VisionInspectionApp.UI.ViewModels
     
                 if (p.TemplateRoi.Width > 0 && p.TemplateRoi.Height > 0)
                 {
-                    var cx = p.TemplateRoi.X + p.TemplateRoi.Width / 2.0;
-                    var cy = p.TemplateRoi.Y + p.TemplateRoi.Height / 2.0;
-                    dst.Add(new OverlayPointItem { X = cx + p.OffsetPx.X, Y = cy + p.OffsetPx.Y, Stroke = Brushes.DeepSkyBlue, Label = p.Name });
+                    var (patternCenter, patternAngle) = GetCurrentPointPatternCenterAndAngle(p);
+                    var rad = patternAngle * Math.PI / 180.0;
+                    var rotX = p.OffsetPx.X * Math.Cos(rad) - p.OffsetPx.Y * Math.Sin(rad);
+                    var rotY = p.OffsetPx.X * Math.Sin(rad) + p.OffsetPx.Y * Math.Cos(rad);
+                    dst.Add(new OverlayPointItem { X = patternCenter.X + rotX, Y = patternCenter.Y + rotY, Stroke = Brushes.DeepSkyBlue, Label = p.Name });
                 }
     
                 return;
@@ -3823,17 +3830,14 @@ namespace VisionInspectionApp.UI.ViewModels
     
             foreach (var e in _config.EdgePairDetections)
             {
-                if (showRois && e.SearchRoi.Width > 0 && e.SearchRoi.Height > 0)
-                {
-                    dst.Add(CreateRotatedRoiWithPose(e.SearchRoi, Brushes.MediumPurple, $"{e.Name} EPD"));
-                }
+                AddEpdSearchStripsOverlay(dst, e, showRois);
             }
-    
+
             if (showRois && _config.DefectConfig.InspectRoi.Width > 0 && _config.DefectConfig.InspectRoi.Height > 0)
             {
                 dst.Add(CreateRotatedRoi(_config.DefectConfig.InspectRoi, Brushes.Orange, "DefectROI"));
             }
-    
+
             using var processed = _preprocessor.Run(image, _config.Preprocess);
             var detectedLines = new System.Collections.Generic.Dictionary<string, LineDetectResult>(StringComparer.OrdinalIgnoreCase);
             foreach (var l in _config.Lines)
@@ -3913,10 +3917,97 @@ namespace VisionInspectionApp.UI.ViewModels
                 var mm = _config.PixelsPerMm > 0 ? distPx / _config.PixelsPerMm : distPx;
                 dst.Add(new OverlayLineItem { X1 = pa.WorldPosition.X, Y1 = pa.WorldPosition.Y, X2 = pb.WorldPosition.X, Y2 = pb.WorldPosition.Y, Stroke = Brushes.Yellow, Label = $"{d.Name}: {mm:0.00} mm" });
             }
+        }
     
-            if (_config.DefectConfig.InspectRoi.Width > 0 && _config.DefectConfig.InspectRoi.Height > 0)
+        private void AddEpdSearchStripsOverlay(List<OverlayItem> dst, EdgePairDetectDefinition e, bool showRois)
+        {
+            if (!showRois || e.SearchRoi.Width <= 0 || e.SearchRoi.Height <= 0)
             {
-                dst.Add(CreateRotatedRoi(_config.DefectConfig.InspectRoi, Brushes.Orange, "DefectROI"));
+                return;
+            }
+
+            dst.Add(CreateRotatedRoiWithPose(e.SearchRoi, Brushes.MediumPurple, $"{e.Name} EPD"));
+
+            var stripCount = Math.Clamp(e.StripCount, 1, 100);
+            var stripLength = Math.Max(3, e.StripLength);
+            if (stripCount <= 0)
+            {
+                return;
+            }
+
+            var roiCenter = new OpenCvSharp.Point2d(e.SearchRoi.X + e.SearchRoi.Width / 2.0, e.SearchRoi.Y + e.SearchRoi.Height / 2.0);
+            var roiAngle = e.SearchRoi.Angle;
+
+            var hasOriginPose = _lastRun?.Origin is not null && (_lastRun.Origin.MatchRect.Width > 0 || _lastRun.Origin.Position.X != 0 || _lastRun.Origin.Position.Y != 0);
+            OpenCvSharp.Point2d originTeach = default;
+            OpenCvSharp.Point2d originFound = default;
+            double originAngleDeg = 0.0;
+
+            if (hasOriginPose && _config?.Origin is not null)
+            {
+                originTeach = (_config.Origin.TemplateRoi.Width > 0 && _config.Origin.TemplateRoi.Height > 0)
+                    ? new OpenCvSharp.Point2d(_config.Origin.TemplateRoi.X + _config.Origin.TemplateRoi.Width / 2.0, _config.Origin.TemplateRoi.Y + _config.Origin.TemplateRoi.Height / 2.0)
+                    : new OpenCvSharp.Point2d(_config.Origin.SearchRoi.X + _config.Origin.SearchRoi.Width / 2.0, _config.Origin.SearchRoi.Y + _config.Origin.SearchRoi.Height / 2.0);
+                if (_config.Origin.WorldPosition.X != 0 || _config.Origin.WorldPosition.Y != 0)
+                {
+                    originTeach = new OpenCvSharp.Point2d(_config.Origin.WorldPosition.X, _config.Origin.WorldPosition.Y);
+                }
+
+                var mr = _lastRun!.Origin.MatchRect;
+                originFound = (mr.Width > 0 && mr.Height > 0)
+                    ? new OpenCvSharp.Point2d(mr.X + mr.Width / 2.0, mr.Y + mr.Height / 2.0)
+                    : new OpenCvSharp.Point2d(_lastRun.Origin.Position.X, _lastRun.Origin.Position.Y);
+                originAngleDeg = _lastRun.Origin.AngleDeg;
+            }
+
+            if (e.Orientation == CaliperOrientation.Vertical)
+            {
+                var y1 = e.SearchRoi.Y + (e.SearchRoi.Height - stripLength) / 2.0;
+                var y2 = y1 + stripLength;
+                for (var i = 0; i < stripCount; i++)
+                {
+                    var x = e.SearchRoi.X + (i + 0.5) * e.SearchRoi.Width / stripCount;
+                    var p1 = new OpenCvSharp.Point2d(x, y1);
+                    var p2 = new OpenCvSharp.Point2d(x, y2);
+
+                    if (Math.Abs(roiAngle) > 0.0001)
+                    {
+                        p1 = Rotate(p1, roiCenter, roiAngle);
+                        p2 = Rotate(p2, roiCenter, roiAngle);
+                    }
+
+                    if (hasOriginPose)
+                    {
+                        p1 = TransformPose(p1, originTeach, originFound, originAngleDeg);
+                        p2 = TransformPose(p2, originTeach, originFound, originAngleDeg);
+                    }
+
+                    dst.Add(new OverlayLineItem { X1 = p1.X, Y1 = p1.Y, X2 = p2.X, Y2 = p2.Y, Stroke = Brushes.MediumPurple, StrokeThickness = 1.0 });
+                }
+            }
+            else
+            {
+                var x1 = e.SearchRoi.X + (e.SearchRoi.Width - stripLength) / 2.0;
+                var x2 = x1 + stripLength;
+                for (var i = 0; i < stripCount; i++)
+                {
+                    var y = e.SearchRoi.Y + (i + 0.5) * e.SearchRoi.Height / stripCount;
+                    var p1 = new OpenCvSharp.Point2d(x1, y);
+                    var p2 = new OpenCvSharp.Point2d(x2, y);
+
+                    if (Math.Abs(roiAngle) > 0.0001)
+                    {
+                        p1 = Rotate(p1, roiCenter, roiAngle);
+                        p2 = Rotate(p2, roiCenter, roiAngle);
+                    }
+
+                    if (hasOriginPose)
+                    {
+                        p1 = TransformPose(p1, originTeach, originFound, originAngleDeg);
+                        p2 = TransformPose(p2, originTeach, originFound, originAngleDeg);
+                    }
+
+                }
             }
         }
     }

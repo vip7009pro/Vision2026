@@ -4,6 +4,7 @@ using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Threading;
+using VisionInspectionApp.UI.Services;
 using VisionInspectionApp.UI.ViewModels;
 
 namespace VisionInspectionApp.UI.Views;
@@ -261,19 +262,17 @@ public partial class ToolEditorView : UserControl
             return;
         }
 
-        if (_multiDragStart is null)
+        var dx = e.HorizontalChange;
+        var dy = e.VerticalChange;
+        if (Math.Abs(dx) < 0.0001 && Math.Abs(dy) < 0.0001)
         {
-            // Fallback if DragStarted didn't run.
-            _multiDragStart = vm.SelectedNodes.ToDictionary(x => x, x => new Point(x.X, x.Y));
+            return;
         }
 
         foreach (var sn in vm.SelectedNodes)
         {
-            if (_multiDragStart.TryGetValue(sn, out var p0))
-            {
-                sn.X = p0.X + e.HorizontalChange;
-                sn.Y = p0.Y + e.VerticalChange;
-            }
+            sn.X += dx;
+            sn.Y += dy;
         }
     }
 
@@ -299,11 +298,40 @@ public partial class ToolEditorView : UserControl
 
     private void NodeThumb_DragCompleted(object sender, DragCompletedEventArgs e)
     {
-        _multiDragStart = null;
         if (DataContext is ToolEditorViewModel vm)
         {
             vm.IsDirty = true;
+            if (_multiDragStart is not null && _multiDragStart.Count > 0)
+            {
+                var startPositions = _multiDragStart;
+                var endPositions = startPositions.Keys.ToDictionary(x => x, x => new Point(x.X, x.Y));
+                bool hasMoved = startPositions.Any(kv => Math.Abs(kv.Value.X - endPositions[kv.Key].X) > 0.1 || Math.Abs(kv.Value.Y - endPositions[kv.Key].Y) > 0.1);
+                if (hasMoved)
+                {
+                    vm.UndoManager.Execute(new UndoRedoManager.DelegateAction(
+                        doAction: () =>
+                        {
+                            foreach (var (node, pos) in endPositions)
+                            {
+                                node.X = pos.X;
+                                node.Y = pos.Y;
+                            }
+                            vm.IsDirty = true;
+                        },
+                        undoAction: () =>
+                        {
+                            foreach (var (node, pos) in startPositions)
+                            {
+                                node.X = pos.X;
+                                node.Y = pos.Y;
+                            }
+                            vm.IsDirty = true;
+                        }
+                    ));
+                }
+            }
         }
+        _multiDragStart = null;
     }
 
     private void NodeThumb_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)

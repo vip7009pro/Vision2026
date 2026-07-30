@@ -995,72 +995,11 @@ namespace VisionInspectionApp.UI.ViewModels
             if (string.Equals(node.Type, "EdgePairDetect", StringComparison.OrdinalIgnoreCase))
             {
                 var e = _config.EdgePairDetections.FirstOrDefault(x => string.Equals(x.Name, node.RefName, StringComparison.OrdinalIgnoreCase));
-                if (e is null)
+                if (e is not null)
                 {
-                    return;
+                    AddEpdSearchStripsOverlay(dst, e, showRois);
                 }
-    
-                if (showRois && e.SearchRoi.Width > 0 && e.SearchRoi.Height > 0)
-                {
-                    dst.Add(CreateRotatedRoiWithPose(e.SearchRoi, Brushes.MediumPurple, $"{e.Name} EPD"));
-                    var stripCount = Math.Clamp(e.StripCount, 1, 100);
-                    var stripLength = Math.Max(3, e.StripLength);
 
-                    var hasOriginPose = _lastRun?.Origin is not null && (_lastRun.Origin.MatchRect.Width > 0 || _lastRun.Origin.Position.X != 0 || _lastRun.Origin.Position.Y != 0);
-                    var originTeach = (_config.Origin.TemplateRoi.Width > 0 && _config.Origin.TemplateRoi.Height > 0)
-                        ? new OpenCvSharp.Point2d(_config.Origin.TemplateRoi.X + _config.Origin.TemplateRoi.Width / 2.0, _config.Origin.TemplateRoi.Y + _config.Origin.TemplateRoi.Height / 2.0)
-                        : new OpenCvSharp.Point2d(_config.Origin.SearchRoi.X + _config.Origin.SearchRoi.Width / 2.0, _config.Origin.SearchRoi.Y + _config.Origin.SearchRoi.Height / 2.0);
-                    if (_config.Origin.WorldPosition.X != 0 || _config.Origin.WorldPosition.Y != 0)
-                    {
-                        originTeach = new OpenCvSharp.Point2d(_config.Origin.WorldPosition.X, _config.Origin.WorldPosition.Y);
-                    }
-
-                    var mr = _lastRun?.Origin?.MatchRect ?? default;
-                    var originFound = (mr.Width > 0 && mr.Height > 0)
-                        ? new OpenCvSharp.Point2d(mr.X + mr.Width / 2.0, mr.Y + mr.Height / 2.0)
-                        : new OpenCvSharp.Point2d(_lastRun?.Origin?.Position.X ?? originTeach.X, _lastRun?.Origin?.Position.Y ?? originTeach.Y);
-                    var angleDeg = hasOriginPose ? _lastRun!.Origin.AngleDeg : 0.0;
-
-                    if (e.Orientation == CaliperOrientation.Vertical)
-                    {
-                        var y1 = e.SearchRoi.Y + (e.SearchRoi.Height - stripLength) / 2.0;
-                        var y2 = y1 + stripLength;
-                        for (var i = 0; i < stripCount; i++)
-                        {
-                            var x = e.SearchRoi.X + (i + 0.5) * e.SearchRoi.Width / stripCount;
-                            var p1 = new OpenCvSharp.Point2d(x, y1);
-                            var p2 = new OpenCvSharp.Point2d(x, y2);
-
-                            if (hasOriginPose)
-                            {
-                                p1 = TransformPose(p1, originTeach, originFound, angleDeg);
-                                p2 = TransformPose(p2, originTeach, originFound, angleDeg);
-                            }
-
-                            dst.Add(new OverlayLineItem { X1 = p1.X, Y1 = p1.Y, X2 = p2.X, Y2 = p2.Y, Stroke = Brushes.MediumPurple, StrokeThickness = 1.0 });
-                        }
-                    }
-                    else
-                    {
-                        var x1 = e.SearchRoi.X + (e.SearchRoi.Width - stripLength) / 2.0;
-                        var x2 = x1 + stripLength;
-                        for (var i = 0; i < stripCount; i++)
-                        {
-                            var y = e.SearchRoi.Y + (i + 0.5) * e.SearchRoi.Height / stripCount;
-                            var p1 = new OpenCvSharp.Point2d(x1, y);
-                            var p2 = new OpenCvSharp.Point2d(x2, y);
-
-                            if (hasOriginPose)
-                            {
-                                p1 = TransformPose(p1, originTeach, originFound, angleDeg);
-                                p2 = TransformPose(p2, originTeach, originFound, angleDeg);
-                            }
-
-                            dst.Add(new OverlayLineItem { X1 = p1.X, Y1 = p1.Y, X2 = p2.X, Y2 = p2.Y, Stroke = Brushes.MediumPurple, StrokeThickness = 1.0 });
-                        }
-                    }
-                }
-    
                 return;
             }
     

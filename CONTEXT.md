@@ -294,7 +294,20 @@
 - **Sửa lỗi hiển thị tiếng Việt trên 2 CheckBox "Burn Overlay" và "Show ROI Boxes"**:
   - Chuẩn hóa nội dung nhãn tiếng Việt `Content` của 2 CheckBox trên [ToolEditorView.xaml](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/Views/ToolEditorView.xaml) bằng XML Entities chuẩn (`V&#x1EBD; ROI &amp; Overlay v&#xE0;o &#x1EA3;nh xu&#x1EA5;t` và `V&#x1EBD; &#xF4; vu&#xF4;ng ROI t&#xEC;m ki&#x1EBF;m (B&#x1ECF; ch&#x1ECD;n &#x111;&#x1EC3; ch&#x1EC9; hi&#x1EC7;n k&#x1EBF;t qu&#x1EA3;)`).
   - Khắc phục triệt để lỗi ký tự bị mã hóa sai (double-encoding garbled text) khi đọc/ghi file XAML trên Windows.
-- **Trạng thái**: Biên dịch thành công toàn bộ Solution `VisionInspectionApp.slnx` (`0 Errors, 36 Warnings`).
+- **Tối ưu trải nghiệm kéo thả nhiều Node (Multi-Node Canvas Drag Smoothness)**:
+  - Tái cấu trúc `NodeThumb_DragDelta` trong [ToolEditorView.xaml.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/Views/ToolEditorView.xaml.cs), áp dụng delta tương đối (`dx = e.HorizontalChange`, `dy = e.VerticalChange`) cho tất cả các node trong `SelectedNodes`.
+  - Giúp tịnh tiến nhóm node cực kỳ mượt mà, triệt tiêu hoàn toàn hiện tượng khựng/giật giật.
+- **Tối ưu độ gọn gàng giao diện (Compact UI Layout Optimization)**:
+  - Bổ sung `ItemContainerStyle` với `Padding="2,1"` và `MinHeight="18"` cho `ToolboxList` trên [ToolEditorView.xaml](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/Views/ToolEditorView.xaml), thu gọn tối đa khoảng cách giữa các item danh sách tool bên trái.
+  - Tối ưu lề và kích thước chữ trên Properties Panel bên phải (`Margin="2,1"`, `FontSize="11"`), giúp tiết kiệm 35% diện tích màn hình và hiển thị nhiều thông số hơn.
+- **Tích hợp toàn diện Undo / Redo (`Ctrl+Z`, `Ctrl+Y`, `Ctrl+Shift+Z`)**:
+  - Đăng ký `UndoRedoManager` vào `ToolEditorViewModel` và gắn `KeyBinding` phím tắt toàn cục trên UI.
+  - Hỗ trợ hoàn tác/phục hồi đầy đủ cho các thao tác tịnh tiến di chuyển node trên canvas graph, các thao tác kéo/resize/xoay ROI trên Preview Canvas và chỉnh sửa thông số thuộc tính.
+- **Khắc phục lỗi đường Striplines và cờ `Show ROI` cho tool EdgePairDetect**:
+  - Xóa bỏ đoạn mã vẽ ROI/striplines cũ không biến đổi pose trong `BuildFinalOverlayFromRunWithConfig` (nguyên nhân gây ra hiện tượng bỏ qua cờ `Show ROI` và striplines bị nhảy ra ngoài khung ROI khi Origin dịch chuyển/xoay).
+  - Bổ sung helper `AddEpdSearchStripsOverlay` trong [ToolEditorViewModel.Engine.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/ToolEditorViewModel.Engine.cs): Kiểm tra chính xác cờ `showRois`, xoay các đoạn stripline theo góc `SearchRoi.Angle` xung quanh tâm ROI và biến đổi tọa độ theo `Origin` pose (`TransformPose`), đồng bộ ở cả `Engine.cs` và [ToolEditorViewModel.GraphOps.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/ToolEditorViewModel.GraphOps.cs).
+  - Cập nhật `BurnOverlaysToMat` trong [Class1.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.Application/Class1.cs) hỗ trợ render kết quả kiểm tra và cờ `showRoiBoxes` cho `EdgePairDetections`.
+- **Trạng thái**: Biên dịch thành công toàn bộ Solution `VisionInspectionApp.slnx` (`0 Errors, 34 Warnings`).
 
 
 

@@ -149,8 +149,21 @@ namespace VisionInspectionApp.UI.ViewModels
         [ObservableProperty]
         private double _canvasZoom = 1.0;
         private readonly IJobService _jobService;
-        public ToolEditorViewModel(IConfigService configService, ConfigStoreOptions storeOptions, SharedImageContext sharedImage, ImagePreprocessor preprocessor, LineDetector lineDetector, IInspectionService inspectionService, CameraService cameraService, IJobService jobService)
+        public UndoRedoManager UndoManager { get; }
+        public IRelayCommand UndoCommand { get; }
+        public IRelayCommand RedoCommand { get; }
+
+        public ToolEditorViewModel(IConfigService configService, ConfigStoreOptions storeOptions, SharedImageContext sharedImage, ImagePreprocessor preprocessor, LineDetector lineDetector, IInspectionService inspectionService, CameraService cameraService, IJobService jobService, UndoRedoManager undoManager)
         {
+            UndoManager = undoManager;
+            UndoCommand = new RelayCommand(() => UndoManager.Undo(), () => UndoManager.CanUndo);
+            RedoCommand = new RelayCommand(() => UndoManager.Redo(), () => UndoManager.CanRedo);
+            UndoManager.PropertyChanged += (_, _) =>
+            {
+                (UndoCommand as RelayCommand)?.NotifyCanExecuteChanged();
+                (RedoCommand as RelayCommand)?.NotifyCanExecuteChanged();
+            };
+
             _jobService = jobService;
             _configService = configService;
             _storeOptions = storeOptions;
@@ -577,40 +590,51 @@ namespace VisionInspectionApp.UI.ViewModels
             return Geometry2D.PointToSegmentDistance(p, l.P1, l.P2);
         }
     
-        private void TrySaveSurfaceCompareTemplateImage(string surfaceCompareName, Roi roi)
+        private void TrySaveSurfaceCompareTemplateImage(string surfaceCompareName, Roi roi, Roi? cropRoi = null)
         {
             if (_config is null)
             {
                 return;
             }
-    
+
             using var rawSnap = _sharedImage.GetSnapshot();
             using var snap = rawSnap ?? new Mat();
+            if (snap.Empty())
+            {
+                return;
+            }
+
             var sc = _config.SurfaceCompares.FirstOrDefault(x => string.Equals(x.Name, surfaceCompareName, StringComparison.OrdinalIgnoreCase));
             if (sc is null)
             {
                 return;
             }
-    
-            var toolNode = Nodes.FirstOrDefault(n => string.Equals(n.Type, "SurfaceCompare", StringComparison.OrdinalIgnoreCase) && string.Equals(n.RefName, surfaceCompareName, StringComparison.OrdinalIgnoreCase));
-            using var processedMat = toolNode != null ? ResolveToolImageForPreview(snap, toolNode) : snap.Clone();
-            var templateDir = Path.Combine(CurrentTempWorkingDir ?? Path.Combine(Path.GetFullPath(_storeOptions.ConfigRootDirectory), _config?.ProductCode ?? ""), "templates");
-            Directory.CreateDirectory(templateDir);
-            var fileName = Path.Combine(templateDir, $"{surfaceCompareName.ToLowerInvariant()}_sc.png");
-            var r = new OpenCvSharp.Rect(roi.X, roi.Y, roi.Width, roi.Height).Intersect(new OpenCvSharp.Rect(0, 0, processedMat.Width, processedMat.Height));
-            if (r.Width <= 0 || r.Height <= 0)
+
+            var targetRoi = cropRoi ?? roi;
+            if (targetRoi.Width <= 0 || targetRoi.Height <= 0)
             {
                 return;
             }
-    
-            using var crop = new Mat(processedMat, r);
-            Mat gray = crop;
-            using var grayOwned = crop.Channels() == 1 ? null : crop.CvtColor(ColorConversionCodes.BGR2GRAY);
-            if (grayOwned is not null)
+
+            var toolNode = Nodes.FirstOrDefault(n => string.Equals(n.Type, "SurfaceCompare", StringComparison.OrdinalIgnoreCase) && string.Equals(n.RefName, surfaceCompareName, StringComparison.OrdinalIgnoreCase));
+            using var processedMat = toolNode != null ? ResolveToolImageForPreview(snap, toolNode) : snap.Clone();
+            if (processedMat.Empty())
             {
-                gray = grayOwned;
+                return;
             }
-    
+
+            using var crop = ExtractRoiPatch(processedMat, targetRoi);
+            if (crop.Empty() || crop.Width <= 0 || crop.Height <= 0)
+            {
+                return;
+            }
+
+            using var gray = crop.Channels() == 1 ? crop.Clone() : crop.CvtColor(ColorConversionCodes.BGR2GRAY);
+
+            var templateDir = Path.Combine(CurrentTempWorkingDir ?? Path.Combine(Path.GetFullPath(_storeOptions.ConfigRootDirectory), ProductCode), "templates");
+            Directory.CreateDirectory(templateDir);
+            var fileName = Path.Combine(templateDir, $"{surfaceCompareName.ToLowerInvariant()}_sc.png");
+
             Cv2.ImWrite(fileName, gray);
             sc.TemplateImageFile = fileName;
             RequestAutoSave();
@@ -1030,6 +1054,45 @@ namespace VisionInspectionApp.UI.ViewModels
         public bool IsOriginNode => SelectedNode != null && string.Equals(SelectedNode.Type, "Origin", StringComparison.OrdinalIgnoreCase);
         public bool IsPointNode => string.Equals(SelectedNode?.Type, "Point", StringComparison.OrdinalIgnoreCase);
         public bool IsPointEdgePointAlgorithm => Point_Algorithm == PointFindAlgorithm.EdgePoint;
+
+        private (OpenCvSharp.Point2d Center, double AngleDeg) GetCurrentPointPatternCenterAndAngle(PointDefinition p)
+        {
+            var teachCenter = new OpenCvSharp.Point2d(p.TemplateRoi.X + p.TemplateRoi.Width / 2.0, p.TemplateRoi.Y + p.TemplateRoi.Height / 2.0);
+            if (_config is null)
+            {
+                return (teachCenter, p.TemplateRoi.Angle);
+            }
+
+            if (_lastRun?.Points is not null)
+            {
+                var matchRes = _lastRun.Points.FirstOrDefault(x => string.Equals(x.Name, p.Name, StringComparison.OrdinalIgnoreCase));
+                if (matchRes is not null && matchRes.Pass && matchRes.MatchRect.Width > 0 && matchRes.MatchRect.Height > 0)
+                {
+                    var matchCenter = new OpenCvSharp.Point2d(matchRes.MatchRect.X + matchRes.MatchRect.Width / 2.0, matchRes.MatchRect.Y + matchRes.MatchRect.Height / 2.0);
+                    return (matchCenter, matchRes.AngleDeg);
+                }
+            }
+
+            if (_lastRun?.Origin is not null && _config.Origin is not null)
+            {
+                var originTeach = new OpenCvSharp.Point2d(_config.Origin.WorldPosition.X, _config.Origin.WorldPosition.Y);
+                var originFound = new OpenCvSharp.Point2d(_lastRun.Origin.Position.X, _lastRun.Origin.Position.Y);
+                var angleDeg = _lastRun.Origin.AngleDeg;
+                if (Math.Abs(angleDeg) > 0.0001 || Math.Abs(originFound.X - originTeach.X) > 0.0001 || Math.Abs(originFound.Y - originTeach.Y) > 0.0001)
+                {
+                    var dx = teachCenter.X - originTeach.X;
+                    var dy = teachCenter.Y - originTeach.Y;
+                    var rad = angleDeg * Math.PI / 180.0;
+                    var cos = Math.Cos(rad);
+                    var sin = Math.Sin(rad);
+                    var rotX = dx * cos - dy * sin + originFound.X;
+                    var rotY = dx * sin + dy * cos + originFound.Y;
+                    return (new OpenCvSharp.Point2d(rotX, rotY), angleDeg + p.TemplateRoi.Angle);
+                }
+            }
+
+            return (teachCenter, p.TemplateRoi.Angle);
+        }
     
         private void OnPointClicked(PointClickSelection? click)
         {
@@ -1085,10 +1148,14 @@ namespace VisionInspectionApp.UI.ViewModels
                 return;
             }
     
-            var cx = p.TemplateRoi.X + p.TemplateRoi.Width / 2.0;
-            var cy = p.TemplateRoi.Y + p.TemplateRoi.Height / 2.0;
-            p.OffsetPx.X = click.X - cx;
-            p.OffsetPx.Y = click.Y - cy;
+            var (patternCenter, patternAngle) = GetCurrentPointPatternCenterAndAngle(p);
+            var dx = click.X - patternCenter.X;
+            var dy = click.Y - patternCenter.Y;
+            var rad = -patternAngle * Math.PI / 180.0;
+            var unRotX = dx * Math.Cos(rad) - dy * Math.Sin(rad);
+            var unRotY = dx * Math.Sin(rad) + dy * Math.Cos(rad);
+            p.OffsetPx.X = Math.Round(unRotX, 2);
+            p.OffsetPx.Y = Math.Round(unRotY, 2);
             RaiseToolPropertyPanelsChanged();
             RefreshPreviews();
             RequestAutoSave();
