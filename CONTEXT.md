@@ -330,12 +330,11 @@
 - **Căn chỉnh định vị mẫu Template ROI trong Search ROI & Hiển thị trực quan Contour OK (Xanh)/NG (Đỏ)**:
   - **Tự động định vị mẫu (`MatchTemplate`)**: Sử dụng `Cv2.MatchTemplate` định vị chính xác vị trí mẫu `TemplateRoi` bên trong vùng tìm kiếm `InspectRoi`. Nhờ đó khi test trên chính ảnh gốc, khoảng cách lệch `MaxDistancePx = 0.00px`, `MatchScore = 0.0000`, hệ thống đánh giá **OK** chính xác 100%.
   - **Phân loại hiển thị Contour theo từng ký tự/đường nét**: Đánh giá khoảng cách sai khác của từng đường contour kiểm tra so với mẫu. Đường contour đạt chuẩn được lưu vào `PassContours` và tô màu **Xanh lá (`Lime`)**, đường contour bị sai lệch/khác biệt vượt ngưỡng được lưu vào `FailContours` và khoanh màu **Đỏ (`Red`)**. Đã đồng bộ hiển thị trên cả OpenCV `BurnOverlaysToMat` và WPF `FastOverlayCanvas.cs`.
-- **Thuật toán Nắn khớp ICP Đa điểm & Phân loại chi tiết đường nét Khuyết/Thừa màu Đỏ**:
-  - **Căn chỉnh Robust ICP Alignment**: Sử dụng thuật toán tối ưu vị trí trượt Robust ICP Grid Search (hàm tổn thất xén trượt Robust Loss) tìm ra độ dời hoàn hảo `(alignDx, alignDy)` để nắn khớp tất cả các ký tự nguyên vẹn ('C', 'E', 'U', 'C', 'A') trùng khít 100% với contour mẫu với sai số $0.0\text{px} \to 0.8\text{px}$. Các nét nguyên vẹn này được đánh dấu **MÀU XANH LÁ (`Lime Green`)**.
-  - **Phân loại 2 chiều (Test & Template) để đánh dấu đỏ đúng nét lỗi**:
-    - **Nét dư thừa / biến dạng trên ảnh test**: Phân loại theo từng đoạn điểm contour thực tế có khoảng cách tới mẫu $> 4\text{px}$ $\implies$ lưu vào `failContours` (**MÀU ĐỎ**).
-    - **Nét khuyết thiếu trên mẫu gốc (như nét chéo trên của chữ 'K' hay nửa dưới biểu tượng '18')**: Phân loại từng đoạn điểm mẫu gốc không tìm thấy điểm tương ứng trên ảnh test $\implies$ lưu vào `failContours` (**MÀU ĐỎ**).
-  - Kết quả: Tất cả các chữ nguyên vẹn giữ nguyên **MÀU XANH LÁ**, chỉ riêng đúng các vị trí bị mất nét hoặc thừa nét bị khoanh **MÀU ĐỎ TƯƠI**, hoàn toàn đáp ứng đúng mong muốn trực quan của người dùng.
+- **Khắc phục hoàn toàn lỗi đường thẳng tua tủa nối chéo bên trong Contour (Spiky Cross-Chords Elimination)**:
+  - **Phân định rõ `IsClosed` cho từng đoạn Contour (`ContourSegment`)**: Định nghĩa kiểu dữ liệu `ContourSegment(List<Point2d> Points, bool IsClosed)`.
+  - **Khép kín cho ký tự nguyên vẹn (`IsClosed = true`)**: Đối với các ký tự đạt chuẩn OK như ('C', 'E', 'U', 'C', 'A'), toàn bộ đường viền ký tự được lưu trữ dạng vòng khép kín `IsClosed = true` $\implies$ Hiển thị đường viền màu **Xanh Lá (`Lime Green`)** bao bọc mịn màng xung quanh chữ.
+  - **Vẽ đường gấp khúc hở cho đoạn nét lỗi (`IsClosed = false`)**: Khi tách các đoạn đường nét nhỏ bị thiếu (như nét chéo trên chữ 'K' hay nửa dưới số '18'), đoạn nét được thiết lập `IsClosed = false` $\implies$ WPF `StreamGeometry` và OpenCV `Cv2.Polylines` chỉ vẽ men theo đúng đoạn nét đó, không tự động nối điểm cuối về điểm đầu xuyên qua thân ký tự.
+  - **Kết quả**: Triệt tiêu $100\%$ các đường chéo đâm tua tủa ngang qua chữ, mang lại giao diện hiển thị sắc nét, chuyên nghiệp.
 - **Trạng thái**: Biên dịch thành công toàn bộ Solution `VisionInspectionApp.slnx` (`0 Errors, 36 Warnings`).
 
 

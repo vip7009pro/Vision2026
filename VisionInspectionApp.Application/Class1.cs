@@ -174,6 +174,8 @@ public sealed record SurfaceCompareResult(
     byte[]? BinaryImage = null,
     byte[]? DiffImage = null);
 
+public sealed record ContourSegment(List<Point2d> Points, bool IsClosed);
+
 public sealed record ContourCompareResult(
     string Name,
     bool Found,
@@ -187,7 +189,9 @@ public sealed record ContourCompareResult(
     List<List<Point2d>>? TemplateContours = null,
     List<List<Point2d>>? TestContours = null,
     List<List<Point2d>>? PassContours = null,
-    List<List<Point2d>>? FailContours = null);
+    List<List<Point2d>>? FailContours = null,
+    List<ContourSegment>? PassSegments = null,
+    List<ContourSegment>? FailSegments = null);
 
 public sealed record LinePairDetectionResult(
     string Name,
@@ -1200,15 +1204,20 @@ public sealed class InspectionService : IInspectionService
                 // Convert contours to global space for UI canvas overlay drawing
                 var tplPointsGlobalList = tplContours.Select(c => c.Select(p => MapToGlobal(new Point2d(p.X, p.Y), templCrop.Width, templCrop.Height, centerFoundTemplate, angleDeg)).ToList()).ToList();
 
+                var passSegmentsList = new List<ContourSegment>();
+                var failSegmentsList = new List<ContourSegment>();
                 var passContoursGlobalList = new List<List<Point2d>>();
                 var failContoursGlobalList = new List<List<Point2d>>();
                 double maxDistPx = 0.0;
 
-                static void ClassifyAndAddSegments(
+                static void ClassifyAndAddSubSegments(
                     List<Point2d> localPoints,
-                    Func<Point2d, bool> isPointOk,
+                    double[] distances,
+                    double maxAllowedDist,
                     Func<Point2d, Point2d> mapToGlobal,
-                    List<List<Point2d>> passDst,
+                    List<ContourSegment>? passSegDst,
+                    List<ContourSegment> failSegDst,
+                    List<List<Point2d>>? passDst,
                     List<List<Point2d>> failDst)
                 {
                     if (localPoints.Count < 2) return;
@@ -1218,16 +1227,24 @@ public sealed class InspectionService : IInspectionService
 
                     for (int i = 0; i < localPoints.Count; i++)
                     {
-                        var ptLocal = localPoints[i];
-                        bool ok = isPointOk(ptLocal);
-                        var ptGlobal = mapToGlobal(ptLocal);
+                        bool ok = distances[i] <= maxAllowedDist;
+                        var ptGlobal = mapToGlobal(localPoints[i]);
 
                         if (currentSegOk is null || currentSegOk != ok)
                         {
                             if (currentSeg is not null && currentSeg.Count > 1)
                             {
-                                if (currentSegOk == true) passDst.Add(currentSeg);
-                                else failDst.Add(currentSeg);
+                                var seg = new ContourSegment(currentSeg, IsClosed: false);
+                                if (currentSegOk == true)
+                                {
+                                    passSegDst?.Add(seg);
+                                    passDst?.Add(currentSeg);
+                                }
+                                else
+                                {
+                                    failSegDst.Add(seg);
+                                    failDst.Add(currentSeg);
+                                }
                             }
 
                             currentSeg = new List<Point2d>();
@@ -1244,59 +1261,101 @@ public sealed class InspectionService : IInspectionService
 
                     if (currentSeg is not null && currentSeg.Count > 1)
                     {
-                        if (currentSegOk == true) passDst.Add(currentSeg);
-                        else failDst.Add(currentSeg);
+                        var seg = new ContourSegment(currentSeg, IsClosed: false);
+                        if (currentSegOk == true)
+                        {
+                            passSegDst?.Add(seg);
+                            passDst?.Add(currentSeg);
+                        }
+                        else
+                        {
+                            failSegDst.Add(seg);
+                            failDst.Add(currentSeg);
+                        }
                     }
                 }
 
-                // 2. Classify Test Contours (Extra / Deformed strokes) point-by-point
+                // 2. Classify Test Contours (Intact closed contours vs partial extra/deformed strokes)
                 foreach (var cTest in testContours)
                 {
                     var localPts = cTest.Select(p => new Point2d(p.X + alignDx, p.Y + alignDy)).ToList();
-                    
-                    ClassifyAndAddSegments(
-                        localPts,
-                        pt =>
+                    var globalPts = localPts.Select(pt => MapToGlobal(pt, templCrop.Width, templCrop.Height, centerFoundTemplate, angleDeg)).ToList();
+
+                    int okCount = 0;
+                    var ptDistances = new double[localPts.Count];
+                    for (int k = 0; k < localPts.Count; k++)
+                    {
+                        var pt = localPts[k];
+                        double minDist = double.MaxValue;
+                        foreach (var q in allTplLocalPoints)
                         {
-                            double minDist = double.MaxValue;
-                            foreach (var q in allTplLocalPoints)
-                            {
-                                double dX = pt.X - q.X;
-                                double dY = pt.Y - q.Y;
-                                double d = Math.Sqrt(dX * dX + dY * dY);
-                                if (d < minDist) minDist = d;
-                            }
-                            if (minDist > maxDistPx) maxDistPx = minDist;
-                            return minDist <= maxAllowedDist;
-                        },
-                        pt => MapToGlobal(pt, templCrop.Width, templCrop.Height, centerFoundTemplate, angleDeg),
-                        passContoursGlobalList,
-                        failContoursGlobalList);
+                            double dX = pt.X - q.X;
+                            double dY = pt.Y - q.Y;
+                            double d = Math.Sqrt(dX * dX + dY * dY);
+                            if (d < minDist) minDist = d;
+                        }
+                        ptDistances[k] = minDist;
+                        if (minDist > maxDistPx) maxDistPx = minDist;
+                        if (minDist <= maxAllowedDist) okCount++;
+                    }
+
+                    double okRatio = (double)okCount / localPts.Count;
+                    if (okRatio >= 0.80)
+                    {
+                        var seg = new ContourSegment(globalPts, IsClosed: true);
+                        passSegmentsList.Add(seg);
+                        passContoursGlobalList.Add(globalPts);
+                    }
+                    else
+                    {
+                        ClassifyAndAddSubSegments(
+                            localPts,
+                            ptDistances,
+                            maxAllowedDist,
+                            pt => MapToGlobal(pt, templCrop.Width, templCrop.Height, centerFoundTemplate, angleDeg),
+                            passSegmentsList,
+                            failSegmentsList,
+                            passContoursGlobalList,
+                            failContoursGlobalList);
+                    }
                 }
 
-                // 3. Classify Template Contours (Missing strokes) point-by-point
+                // 3. Classify Template Contours (Missing strokes)
                 foreach (var cTpl in tplContours)
                 {
                     var localPts = cTpl.Select(p => new Point2d(p.X, p.Y)).ToList();
+                    var ptDistances = new double[localPts.Count];
 
-                    ClassifyAndAddSegments(
-                        localPts,
-                        pt =>
+                    int okCount = 0;
+                    for (int k = 0; k < localPts.Count; k++)
+                    {
+                        var pt = localPts[k];
+                        double minDist = double.MaxValue;
+                        foreach (var pTest in allTestLocalPoints)
                         {
-                            double minDist = double.MaxValue;
-                            foreach (var pTest in allTestLocalPoints)
-                            {
-                                double dX = pt.X - (pTest.X + alignDx);
-                                double dY = pt.Y - (pTest.Y + alignDy);
-                                double d = Math.Sqrt(dX * dX + dY * dY);
-                                if (d < minDist) minDist = d;
-                            }
-                            if (minDist > maxDistPx) maxDistPx = minDist;
-                            return minDist <= maxAllowedDist;
-                        },
-                        pt => MapToGlobal(pt, templCrop.Width, templCrop.Height, centerFoundTemplate, angleDeg),
-                        passContoursGlobalList, // Matched template parts remain normal
-                        failContoursGlobalList); // Missing template parts added to failContours (RED)!
+                            double dX = pt.X - (pTest.X + alignDx);
+                            double dY = pt.Y - (pTest.Y + alignDy);
+                            double d = Math.Sqrt(dX * dX + dY * dY);
+                            if (d < minDist) minDist = d;
+                        }
+                        ptDistances[k] = minDist;
+                        if (minDist > maxDistPx) maxDistPx = minDist;
+                        if (minDist <= maxAllowedDist) okCount++;
+                    }
+
+                    double okRatio = (double)okCount / localPts.Count;
+                    if (okRatio < 0.85)
+                    {
+                        ClassifyAndAddSubSegments(
+                            localPts,
+                            ptDistances,
+                            maxAllowedDist,
+                            pt => MapToGlobal(pt, templCrop.Width, templCrop.Height, centerFoundTemplate, angleDeg),
+                            passSegDst: null,
+                            failSegmentsList,
+                            passDst: null,
+                            failContoursGlobalList);
+                    }
                 }
 
                 var tplCombined = tplContours.SelectMany(c => c).ToArray();
@@ -1313,9 +1372,9 @@ public sealed class InspectionService : IInspectionService
 
                 bool pass = def.MatchMethod switch
                 {
-                    ContourMatchMethod.HausdorffDistance => failContoursGlobalList.Count == 0 && maxDistPx <= maxAllowedDist,
+                    ContourMatchMethod.HausdorffDistance => failSegmentsList.Count == 0 && maxDistPx <= maxAllowedDist,
                     ContourMatchMethod.AreaPerimeterDiff => areaDiffPercent <= maxAllowedAreaDiff,
-                    _ => failContoursGlobalList.Count == 0 || matchScore <= maxAllowedShapeScore
+                    _ => failSegmentsList.Count == 0 || matchScore <= maxAllowedShapeScore
                 };
 
                 var testPointsGlobalList = testContours.Select(c => c.Select(p => MapToGlobal(new Point2d(p.X, p.Y), templCrop.Width, templCrop.Height, centerFoundTestCrop, angleDeg)).ToList()).ToList();
@@ -1333,7 +1392,9 @@ public sealed class InspectionService : IInspectionService
                     TemplateContours: tplPointsGlobalList,
                     TestContours: testPointsGlobalList,
                     PassContours: passContoursGlobalList,
-                    FailContours: failContoursGlobalList);
+                    FailContours: failContoursGlobalList,
+                    PassSegments: passSegmentsList,
+                    FailSegments: failSegmentsList);
             }
 
             static CaliperResult DetectCaliper(Mat matBgrOrGray, Roi roiTeach, CaliperDefinition def, Point2d originTeach, Point2d originFound, double angleDeg)
@@ -3911,10 +3972,20 @@ public sealed class InspectionService : IInspectionService
                 }
             }
 
-            var passList = ccRes.PassContours ?? (ccRes.Pass && ccRes.TestContours is not null ? ccRes.TestContours : null);
-            if (passList is not null)
+            if (ccRes.PassSegments is not null)
             {
-                foreach (var c in passList)
+                foreach (var seg in ccRes.PassSegments)
+                {
+                    if (seg.Points.Count > 1)
+                    {
+                        var ptsPass = seg.Points.Select(p => new Point((int)p.X, (int)p.Y)).ToArray();
+                        Cv2.Polylines(mat, new[] { ptsPass }, seg.IsClosed, green, 2, LineTypes.AntiAlias);
+                    }
+                }
+            }
+            else if (ccRes.PassContours is not null)
+            {
+                foreach (var c in ccRes.PassContours)
                 {
                     if (c.Count > 1)
                     {
@@ -3924,15 +3995,25 @@ public sealed class InspectionService : IInspectionService
                 }
             }
 
-            var failList = ccRes.FailContours ?? (!ccRes.Pass && ccRes.TestContours is not null ? ccRes.TestContours : null);
-            if (failList is not null)
+            if (ccRes.FailSegments is not null)
             {
-                foreach (var c in failList)
+                foreach (var seg in ccRes.FailSegments)
+                {
+                    if (seg.Points.Count > 1)
+                    {
+                        var ptsFail = seg.Points.Select(p => new Point((int)p.X, (int)p.Y)).ToArray();
+                        Cv2.Polylines(mat, new[] { ptsFail }, seg.IsClosed, red, 2, LineTypes.AntiAlias);
+                    }
+                }
+            }
+            else if (ccRes.FailContours is not null)
+            {
+                foreach (var c in ccRes.FailContours)
                 {
                     if (c.Count > 1)
                     {
                         var ptsFail = c.Select(p => new Point((int)p.X, (int)p.Y)).ToArray();
-                        Cv2.Polylines(mat, new[] { ptsFail }, true, red, 2, LineTypes.AntiAlias);
+                        Cv2.Polylines(mat, new[] { ptsFail }, false, red, 2, LineTypes.AntiAlias);
                     }
                 }
             }

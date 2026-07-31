@@ -2871,10 +2871,26 @@ namespace VisionInspectionApp.UI.ViewModels
                         }
                     }
 
-                    var passList = cc.PassContours ?? (cc.Pass && cc.TestContours is not null ? cc.TestContours : null);
-                    if (passList is not null)
+                    if (cc.PassSegments is not null)
                     {
-                        foreach (var c in passList)
+                        foreach (var seg in cc.PassSegments)
+                        {
+                            if (seg.Points.Count > 1)
+                            {
+                                dst.Add(new OverlayPolylineItem
+                                {
+                                    Points = seg.Points.Select(p => new System.Windows.Point(p.X, p.Y)).ToList(),
+                                    IsClosed = seg.IsClosed,
+                                    Stroke = Brushes.Lime,
+                                    StrokeThickness = 2.0,
+                                    Label = string.Empty
+                                });
+                            }
+                        }
+                    }
+                    else if (cc.PassContours is not null)
+                    {
+                        foreach (var c in cc.PassContours)
                         {
                             if (c.Count > 1)
                             {
@@ -2890,17 +2906,33 @@ namespace VisionInspectionApp.UI.ViewModels
                         }
                     }
 
-                    var failList = cc.FailContours ?? (!cc.Pass && cc.TestContours is not null ? cc.TestContours : null);
-                    if (failList is not null)
+                    if (cc.FailSegments is not null)
                     {
-                        foreach (var c in failList)
+                        foreach (var seg in cc.FailSegments)
+                        {
+                            if (seg.Points.Count > 1)
+                            {
+                                dst.Add(new OverlayPolylineItem
+                                {
+                                    Points = seg.Points.Select(p => new System.Windows.Point(p.X, p.Y)).ToList(),
+                                    IsClosed = seg.IsClosed,
+                                    Stroke = Brushes.Red,
+                                    StrokeThickness = 2.0,
+                                    Label = string.Empty
+                                });
+                            }
+                        }
+                    }
+                    else if (cc.FailContours is not null)
+                    {
+                        foreach (var c in cc.FailContours)
                         {
                             if (c.Count > 1)
                             {
                                 dst.Add(new OverlayPolylineItem
                                 {
                                     Points = c.Select(p => new System.Windows.Point(p.X, p.Y)).ToList(),
-                                    IsClosed = true,
+                                    IsClosed = false,
                                     Stroke = Brushes.Red,
                                     StrokeThickness = 2.0,
                                     Label = string.Empty
@@ -3513,10 +3545,26 @@ namespace VisionInspectionApp.UI.ViewModels
                     }
                 }
 
-                var passList = cc.PassContours ?? (cc.Pass && cc.TestContours is not null ? cc.TestContours : null);
-                if (passList is not null)
+                if (cc.PassSegments is not null)
                 {
-                    foreach (var c in passList)
+                    foreach (var seg in cc.PassSegments)
+                    {
+                        if (seg.Points.Count > 1)
+                        {
+                            dst.Add(new OverlayPolylineItem
+                            {
+                                Points = seg.Points.Select(p => new System.Windows.Point(p.X, p.Y)).ToList(),
+                                IsClosed = seg.IsClosed,
+                                Stroke = Brushes.Lime,
+                                StrokeThickness = 2.0,
+                                Label = string.Empty
+                            });
+                        }
+                    }
+                }
+                else if (cc.PassContours is not null)
+                {
+                    foreach (var c in cc.PassContours)
                     {
                         if (c.Count > 1)
                         {
@@ -3532,17 +3580,33 @@ namespace VisionInspectionApp.UI.ViewModels
                     }
                 }
 
-                var failList = cc.FailContours ?? (!cc.Pass && cc.TestContours is not null ? cc.TestContours : null);
-                if (failList is not null)
+                if (cc.FailSegments is not null)
                 {
-                    foreach (var c in failList)
+                    foreach (var seg in cc.FailSegments)
+                    {
+                        if (seg.Points.Count > 1)
+                        {
+                            dst.Add(new OverlayPolylineItem
+                            {
+                                Points = seg.Points.Select(p => new System.Windows.Point(p.X, p.Y)).ToList(),
+                                IsClosed = seg.IsClosed,
+                                Stroke = Brushes.Red,
+                                StrokeThickness = 2.0,
+                                Label = string.Empty
+                            });
+                        }
+                    }
+                }
+                else if (cc.FailContours is not null)
+                {
+                    foreach (var c in cc.FailContours)
                     {
                         if (c.Count > 1)
                         {
                             dst.Add(new OverlayPolylineItem
                             {
                                 Points = c.Select(p => new System.Windows.Point(p.X, p.Y)).ToList(),
-                                IsClosed = true,
+                                IsClosed = false,
                                 Stroke = Brushes.Red,
                                 StrokeThickness = 2.0,
                                 Label = string.Empty
