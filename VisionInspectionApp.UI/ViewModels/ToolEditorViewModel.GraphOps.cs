@@ -67,6 +67,8 @@ namespace VisionInspectionApp.UI.ViewModels
                     ActiveRoiLabel = $"{value.RefName} B";
                 else if (string.Equals(value.Type, "SurfaceCompare", StringComparison.OrdinalIgnoreCase))
                     ActiveRoiLabel = $"{value.RefName} SC";
+                else if (string.Equals(value.Type, "ContourCompare", StringComparison.OrdinalIgnoreCase))
+                    ActiveRoiLabel = $"{value.RefName} CC";
 
                 // If selection is empty or this node isn't part of multi-selection, treat it as a single-select.
                 if (SelectedNodes.Count == 0 || !value.IsSelected)
@@ -232,6 +234,7 @@ namespace VisionInspectionApp.UI.ViewModels
             else if (_copiedNodeType.Equals("Diameter", StringComparison.OrdinalIgnoreCase)) CloneDefinition(_config.Diameters, _copiedNodeRefName, newName, options);
             else if (_copiedNodeType.Equals("CodeDetection", StringComparison.OrdinalIgnoreCase)) CloneDefinition(_config.CodeDetections, _copiedNodeRefName, newName, options);
             else if (_copiedNodeType.Equals("SurfaceCompare", StringComparison.OrdinalIgnoreCase)) CloneDefinition(_config.SurfaceCompares, _copiedNodeRefName, newName, options);
+            else if (_copiedNodeType.Equals("ContourCompare", StringComparison.OrdinalIgnoreCase)) CloneDefinition(_config.ContourCompares, _copiedNodeRefName, newName, options);
             else if (_copiedNodeType.Equals("Text", StringComparison.OrdinalIgnoreCase)) CloneDefinition(_config.TextNodes, _copiedNodeRefName, newName, options);
             else if (_copiedNodeType.Equals("ImageSource", StringComparison.OrdinalIgnoreCase)) CloneDefinition(_config.ImageSources, _copiedNodeRefName, newName, options);
             else if (_copiedNodeType.Equals("ImageOutput", StringComparison.OrdinalIgnoreCase) || _copiedNodeType.Equals("OutputImage", StringComparison.OrdinalIgnoreCase)) CloneDefinition(_config.ImageOutputs, _copiedNodeRefName, newName, options);
@@ -439,6 +442,11 @@ namespace VisionInspectionApp.UI.ViewModels
                 if (string.Equals(toRemove.Type, "SurfaceCompare", StringComparison.OrdinalIgnoreCase))
                 {
                     _config.SurfaceCompares.RemoveAll(x => string.Equals(x.Name, toRemove.RefName, StringComparison.OrdinalIgnoreCase));
+                }
+
+                if (string.Equals(toRemove.Type, "ContourCompare", StringComparison.OrdinalIgnoreCase))
+                {
+                    _config.ContourCompares.RemoveAll(x => string.Equals(x.Name, toRemove.RefName, StringComparison.OrdinalIgnoreCase));
                 }
     
                 if (string.Equals(toRemove.Type, "LinePairDetection", StringComparison.OrdinalIgnoreCase))
@@ -832,6 +840,22 @@ namespace VisionInspectionApp.UI.ViewModels
                     }
                 }
             }
+
+            void AddContourCompareRoi(string contourCompareName)
+            {
+                var cc = config.ContourCompares.FirstOrDefault(x => string.Equals(x.Name, contourCompareName, StringComparison.OrdinalIgnoreCase));
+                if (cc is null || !showRois) return;
+
+                if (cc.InspectRoi.Width > 0 && cc.InspectRoi.Height > 0)
+                {
+                    dst.Add(CreateRotatedRoi(cc.InspectRoi, Brushes.MediumSpringGreen, $"{cc.Name} CC"));
+                }
+
+                if (cc.TemplateRoi.Width > 0 && cc.TemplateRoi.Height > 0)
+                {
+                    dst.Add(CreateRotatedRoi(cc.TemplateRoi, Brushes.MediumSpringGreen, $"{cc.Name} CCT"));
+                }
+            }
     
             if (string.Equals(node.Type, "Origin", StringComparison.OrdinalIgnoreCase))
             {
@@ -989,6 +1013,13 @@ namespace VisionInspectionApp.UI.ViewModels
             {
                 if (showRois)
                     AddSurfaceCompareRoi(node.RefName);
+                return;
+            }
+
+            if (string.Equals(node.Type, "ContourCompare", StringComparison.OrdinalIgnoreCase))
+            {
+                if (showRois)
+                    AddContourCompareRoi(node.RefName);
                 return;
             }
     

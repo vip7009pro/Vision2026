@@ -466,11 +466,14 @@ public partial class ImageViewerControl : UserControl
 
         if (kind == RoiDrawKind.Template)
         {
-            // Prefer active SCT or T; otherwise swap SC->SCT or S->T; otherwise any SCT/T in overlays.
-            if (!string.IsNullOrWhiteSpace(_activeRoiLabel) && (EndsWith(_activeRoiLabel!, " SCT") || EndsWith(_activeRoiLabel!, " T"))) return _activeRoiLabel;
+            // Prefer active CCT, SCT or T; otherwise swap CC->CCT, SC->SCT or S->T; otherwise any CCT/SCT/T in overlays.
+            if (!string.IsNullOrWhiteSpace(_activeRoiLabel) && (EndsWith(_activeRoiLabel!, " CCT") || EndsWith(_activeRoiLabel!, " SCT") || EndsWith(_activeRoiLabel!, " T"))) return _activeRoiLabel;
 
-            var swapped = TrySwapSuffix(_activeRoiLabel, "SCT") ?? TrySwapSuffix(_activeRoiLabel, "T");
+            var swapped = TrySwapSuffix(_activeRoiLabel, "CCT") ?? TrySwapSuffix(_activeRoiLabel, "SCT") ?? TrySwapSuffix(_activeRoiLabel, "T");
             if (!string.IsNullOrWhiteSpace(swapped)) return swapped;
+
+            var cct = rectLabels.FirstOrDefault(x => EndsWith(x, " CCT"));
+            if (!string.IsNullOrWhiteSpace(cct)) return cct;
 
             var sct = rectLabels.FirstOrDefault(x => EndsWith(x, " SCT"));
             if (!string.IsNullOrWhiteSpace(sct)) return sct;
@@ -479,6 +482,16 @@ public partial class ImageViewerControl : UserControl
             if (!string.IsNullOrWhiteSpace(t)) return t;
 
             // If we only have a Search ROI overlay, synthesize a matching Template label.
+            var cc = rectLabels.FirstOrDefault(x => EndsWith(x, " CC"));
+            if (!string.IsNullOrWhiteSpace(cc))
+            {
+                var parts = cc.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+                if (parts.Length == 2)
+                {
+                    return $"{parts[0]} CCT";
+                }
+            }
+
             var sc = rectLabels.FirstOrDefault(x => EndsWith(x, " SC"));
             if (!string.IsNullOrWhiteSpace(sc))
             {
@@ -509,9 +522,10 @@ public partial class ImageViewerControl : UserControl
 
         if (kind == RoiDrawKind.Search)
         {
-            // For Search: SC, S, L, LP, C, CIR, Cal, EPD.
+            // For Search: CC, SC, S, L, LP, C, CIR, Cal, EPD.
             if (!string.IsNullOrWhiteSpace(_activeRoiLabel)
-                && (EndsWith(_activeRoiLabel!, " SC")
+                && (EndsWith(_activeRoiLabel!, " CC")
+                    || EndsWith(_activeRoiLabel!, " SC")
                     || EndsWith(_activeRoiLabel!, " S")
                     || EndsWith(_activeRoiLabel!, " L")
                     || EndsWith(_activeRoiLabel!, " LP")
@@ -523,8 +537,11 @@ public partial class ImageViewerControl : UserControl
                 return _activeRoiLabel;
             }
 
-            var swapped = TrySwapSuffix(_activeRoiLabel, "SC") ?? TrySwapSuffix(_activeRoiLabel, "S");
+            var swapped = TrySwapSuffix(_activeRoiLabel, "CC") ?? TrySwapSuffix(_activeRoiLabel, "SC") ?? TrySwapSuffix(_activeRoiLabel, "S");
             if (!string.IsNullOrWhiteSpace(swapped)) return swapped;
+
+            var cc1 = rectLabels.FirstOrDefault(x => EndsWith(x, " CC"));
+            if (!string.IsNullOrWhiteSpace(cc1)) return cc1;
 
             var cir = rectLabels.FirstOrDefault(x => EndsWith(x, " CIR"));
             if (!string.IsNullOrWhiteSpace(cir)) return cir;
@@ -575,7 +592,8 @@ public partial class ImageViewerControl : UserControl
         }
 
         var l = label.Split('[')[0].Trim();
-        return l.EndsWith(" SCT", StringComparison.OrdinalIgnoreCase)
+        return l.EndsWith(" CCT", StringComparison.OrdinalIgnoreCase)
+            || l.EndsWith(" SCT", StringComparison.OrdinalIgnoreCase)
             || l.EndsWith(" T", StringComparison.OrdinalIgnoreCase)
             || string.Equals(l, "Origin T", StringComparison.OrdinalIgnoreCase);
     }

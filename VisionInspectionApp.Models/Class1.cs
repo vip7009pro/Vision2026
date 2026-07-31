@@ -205,6 +205,8 @@ public sealed class VisionConfig
 
     public List<SurfaceCompareDefinition> SurfaceCompares { get; set; } = new();
 
+    public List<ContourCompareDefinition> ContourCompares { get; set; } = new();
+
     public List<TextNodeDefinition> TextNodes { get; set; } = new();
 
     public List<ImageSourceDefinition> ImageSources { get; set; } = new();
@@ -449,6 +451,10 @@ public sealed class SurfaceCompareDefinition
     public double SsimThreshold { get; set; } = 0.85;
 
     public double GradientWeight { get; set; } = 0.5;
+
+    public bool AutoAlign { get; set; } = false;
+
+    public int AutoAlignMaxShiftPx { get; set; } = 5;
 }
 
 public enum SurfaceCompareAlgorithm
@@ -456,6 +462,40 @@ public enum SurfaceCompareAlgorithm
     AbsDiff = 0,
     SSIM = 1,
     GradientAdaptive = 2
+}
+
+public enum ContourMatchMethod
+{
+    HuMoments = 0,
+    HausdorffDistance = 1,
+    AreaPerimeterDiff = 2
+}
+
+public sealed class ContourCompareDefinition
+{
+    public string Name { get; set; } = string.Empty;
+
+    public Roi TemplateRoi { get; set; } = new();
+
+    public string TemplateImageFile { get; set; } = string.Empty;
+
+    public Roi InspectRoi { get; set; } = new();
+
+    public string PreprocessChoice { get; set; } = string.Empty;
+
+    public double CannyThreshold1 { get; set; } = 50;
+
+    public double CannyThreshold2 { get; set; } = 150;
+
+    public int MinContourArea { get; set; } = 50;
+
+    public ContourMatchMethod MatchMethod { get; set; } = ContourMatchMethod.HuMoments;
+
+    public double MaxShapeMatchScore { get; set; } = 0.10;
+
+    public double MaxHausdorffDistPx { get; set; } = 5.0;
+
+    public double MaxAreaDiffPercent { get; set; } = 5.0;
 }
 
 public sealed class SurfaceCompareRoiDefinition

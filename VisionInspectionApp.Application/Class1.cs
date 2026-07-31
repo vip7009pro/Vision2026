@@ -110,6 +110,8 @@ public sealed class InspectionResult
 
     public List<SurfaceCompareResult> SurfaceCompares { get; } = new();
 
+    public List<ContourCompareResult> ContourCompares { get; } = new();
+
     public List<LinePairDetectionResult> LinePairDetections { get; } = new();
 
     public List<EdgePairResult> EdgePairs { get; } = new();
@@ -171,6 +173,21 @@ public sealed record SurfaceCompareResult(
     byte[]? CurrentImage = null,
     byte[]? BinaryImage = null,
     byte[]? DiffImage = null);
+
+public sealed record ContourCompareResult(
+    string Name,
+    bool Found,
+    bool Pass,
+    double MatchScore,
+    double MaxDistancePx,
+    double AreaDiffPercent,
+    double PerimeterDiffPercent,
+    List<Point2d>? TemplateContour = null,
+    List<Point2d>? TestContour = null,
+    List<List<Point2d>>? TemplateContours = null,
+    List<List<Point2d>>? TestContours = null,
+    List<List<Point2d>>? PassContours = null,
+    List<List<Point2d>>? FailContours = null);
 
 public sealed record LinePairDetectionResult(
     string Name,
@@ -723,6 +740,28 @@ public sealed class InspectionService : IInspectionService
                     templCrop0.CopyTo(tplCrop);
                 }
 
+                if (def.AutoAlign && def.AutoAlignMaxShiftPx > 0 && testCrop.Width > def.AutoAlignMaxShiftPx * 2 && testCrop.Height > def.AutoAlignMaxShiftPx * 2)
+                {
+                    var shift = Math.Clamp(def.AutoAlignMaxShiftPx, 1, 30);
+                    var innerRect = new Rect(shift, shift, tplCrop.Width - shift * 2, tplCrop.Height - shift * 2);
+                    using var tplInner = new Mat(tplCrop, innerRect);
+                    using var matchRes = new Mat();
+                    Cv2.MatchTemplate(testCrop, tplInner, matchRes, TemplateMatchModes.SqDiffNormed);
+                    Cv2.MinMaxLoc(matchRes, out double minVal, out _, out Point minLoc, out _);
+
+                    int dx = minLoc.X - shift;
+                    int dy = minLoc.Y - shift;
+                    if (dx != 0 || dy != 0)
+                    {
+                        using var M = new Mat(2, 3, MatType.CV_32FC1);
+                        M.Set(0, 0, 1.0f); M.Set(0, 1, 0.0f); M.Set(0, 2, (float)-dx);
+                        M.Set(1, 0, 0.0f); M.Set(1, 1, 1.0f); M.Set(1, 2, (float)-dy);
+                        using var alignedTest = new Mat();
+                        Cv2.WarpAffine(testCrop, alignedTest, M, testCrop.Size(), InterpolationFlags.Linear, BorderTypes.Replicate);
+                        alignedTest.CopyTo(testCrop);
+                    }
+                }
+
                 using var bw = new Mat();
                 var thr = Math.Clamp(def.DiffThreshold, 0, 255);
 
@@ -1010,6 +1049,291 @@ public sealed class InspectionService : IInspectionService
                 catch { /* Ignore encoding errors */ }
 
                 return new SurfaceCompareResult(def.Name, defects.Count, maxFoundArea, defects, pass, imgTpl, imgCur, imgBin, imgDif);
+            }
+
+            static ContourCompareResult RunContourCompare(
+                Mat matBgrOrGray,
+                Point2d originTeach,
+                Point2d originFound,
+                double angleDeg,
+                ContourCompareDefinition def,
+                ImagePreprocessor preprocessor,
+                PreprocessSettings settings)
+            {
+                if (matBgrOrGray is null || def is null || string.IsNullOrWhiteSpace(def.Name))
+                {
+                    return new ContourCompareResult(def?.Name ?? string.Empty, false, false, 999.0, 999.0, 999.0, 999.0);
+                }
+
+                var templateRoiTeach = def.TemplateRoi;
+                var inspectRoiTeach = def.InspectRoi;
+                if (templateRoiTeach.Width <= 0 || templateRoiTeach.Height <= 0) templateRoiTeach = inspectRoiTeach;
+                if (inspectRoiTeach.Width <= 0 || inspectRoiTeach.Height <= 0) inspectRoiTeach = templateRoiTeach;
+
+                if (templateRoiTeach.Width <= 0 || templateRoiTeach.Height <= 0 || inspectRoiTeach.Width <= 0 || inspectRoiTeach.Height <= 0)
+                {
+                    return new ContourCompareResult(def.Name, false, false, 999.0, 999.0, 999.0, 999.0);
+                }
+
+                if (string.IsNullOrWhiteSpace(def.TemplateImageFile) || !File.Exists(def.TemplateImageFile))
+                {
+                    return new ContourCompareResult(def.Name, false, false, 999.0, 999.0, 999.0, 999.0);
+                }
+
+                using var templRaw = Cv2.ImRead(def.TemplateImageFile, ImreadModes.Grayscale);
+                if (templRaw.Empty())
+                {
+                    return new ContourCompareResult(def.Name, false, false, 999.0, 999.0, 999.0, 999.0);
+                }
+
+                Mat testGray = matBgrOrGray;
+                using var testGrayOwned = matBgrOrGray.Channels() == 1 ? null : matBgrOrGray.CvtColor(ColorConversionCodes.BGR2GRAY);
+                if (testGrayOwned is not null) testGray = testGrayOwned;
+
+                // Calculate global center of Template ROI when pose transform is applied
+                var centerTemplateTeach = new Point2d(templateRoiTeach.X + templateRoiTeach.Width / 2.0, templateRoiTeach.Y + templateRoiTeach.Height / 2.0);
+                var centerTemplateRot = Rotate(centerTemplateTeach, originTeach, angleDeg);
+                var deltaX = originFound.X - originTeach.X;
+                var deltaY = originFound.Y - originTeach.Y;
+                var centerFoundTemplate = new Point2d(centerTemplateRot.X + deltaX, centerTemplateRot.Y + deltaY);
+
+                // Expand Template ROI by padding to search for sub-pixel/local shift
+                var pad = 20;
+                var trPadTeach = new Roi
+                {
+                    X = templateRoiTeach.X - pad,
+                    Y = templateRoiTeach.Y - pad,
+                    Width = templateRoiTeach.Width + pad * 2,
+                    Height = templateRoiTeach.Height + pad * 2,
+                    Angle = templateRoiTeach.Angle
+                };
+
+                using var searchCropPadRaw = ExtractStraightRoi(testGray, trPadTeach, originTeach, originFound, angleDeg, out _);
+                if (searchCropPadRaw.Width <= 0 || searchCropPadRaw.Height <= 0)
+                {
+                    return new ContourCompareResult(def.Name, false, false, 999.0, 999.0, 999.0, 999.0);
+                }
+
+                using var searchCropPad = preprocessor.Run(searchCropPadRaw, settings);
+                using var templCrop = preprocessor.Run(templRaw, settings);
+
+                var testRect = new Rect(pad, pad, templCrop.Width, templCrop.Height).Intersect(new Rect(0, 0, searchCropPad.Width, searchCropPad.Height));
+                if (testRect.Width <= 0 || testRect.Height <= 0)
+                {
+                    return new ContourCompareResult(def.Name, false, false, 999.0, 999.0, 999.0, 999.0);
+                }
+
+                using var testCrop = new Mat(searchCropPad, testRect).Clone();
+
+                static List<Point[]> FindAllContours(Mat img, double c1, double c2, int minArea)
+                {
+                    using var canny = new Mat();
+                    Cv2.Canny(img, canny, c1, c2);
+                    Cv2.FindContours(canny, out var contours, out _, RetrievalModes.External, ContourApproximationModes.ApproxSimple);
+                    if (contours is null || contours.Length == 0) return new List<Point[]>();
+                    return contours.Where(c => c.Length >= 4 && (Cv2.ContourArea(c) >= minArea || Cv2.ArcLength(c, true) >= minArea / 2.0)).OrderByDescending(c => Cv2.ArcLength(c, true)).ToList();
+                }
+
+                var c1 = def.CannyThreshold1 > 0 ? def.CannyThreshold1 : 50;
+                var c2 = def.CannyThreshold2 > 0 ? def.CannyThreshold2 : 150;
+                var minArea = Math.Max(1, def.MinContourArea);
+
+                var tplContours = FindAllContours(templCrop, c1, c2, minArea);
+                var testContours = FindAllContours(testCrop, c1, c2, minArea);
+
+                if (tplContours.Count == 0 || testContours.Count == 0)
+                {
+                    return new ContourCompareResult(def.Name, false, false, 999.0, 999.0, 999.0, 999.0);
+                }
+
+                var allTplLocalPoints = tplContours.SelectMany(c => c).Select(p => new Point2d(p.X, p.Y)).ToList();
+                var allTestLocalPoints = testContours.SelectMany(c => c).Select(p => new Point2d(p.X, p.Y)).ToList();
+
+                double maxAllowedDist = def.MaxHausdorffDistPx > 0 ? def.MaxHausdorffDistPx : 4.0;
+                double maxAllowedAreaDiff = def.MaxAreaDiffPercent > 0 ? def.MaxAreaDiffPercent : 5.0;
+                double maxAllowedShapeScore = def.MaxShapeMatchScore > 0 ? def.MaxShapeMatchScore : 0.10;
+
+                // 1. Robust ICP Alignment: find optimal translation (alignDx, alignDy) in range [-15, 15]
+                double alignDx = 0.0, alignDy = 0.0;
+                double minError = double.MaxValue;
+                double clipThreshSq = maxAllowedDist * maxAllowedDist * 2.0;
+
+                for (double tX = -15; tX <= 15; tX += 1.0)
+                {
+                    for (double tY = -15; tY <= 15; tY += 1.0)
+                    {
+                        double errSum = 0.0;
+                        int sampleCount = 0;
+                        int step = Math.Max(1, allTestLocalPoints.Count / 100);
+
+                        for (int k = 0; k < allTestLocalPoints.Count; k += step)
+                        {
+                            var p = allTestLocalPoints[k];
+                            double px = p.X + tX;
+                            double py = p.Y + tY;
+                            double dMinSq = double.MaxValue;
+
+                            foreach (var q in allTplLocalPoints)
+                            {
+                                double dX = px - q.X;
+                                double dY = py - q.Y;
+                                double dSq = dX * dX + dY * dY;
+                                if (dSq < dMinSq) dMinSq = dSq;
+                            }
+
+                            errSum += Math.Min(clipThreshSq, dMinSq);
+                            sampleCount++;
+                        }
+
+                        if (sampleCount > 0 && errSum < minError)
+                        {
+                            minError = errSum;
+                            alignDx = tX;
+                            alignDy = tY;
+                        }
+                    }
+                }
+
+                var shiftRot = Rotate(new Point2d(alignDx, alignDy), new Point2d(0, 0), angleDeg);
+                var centerFoundTestCrop = new Point2d(centerFoundTemplate.X + shiftRot.X, centerFoundTemplate.Y + shiftRot.Y);
+
+                // Convert contours to global space for UI canvas overlay drawing
+                var tplPointsGlobalList = tplContours.Select(c => c.Select(p => MapToGlobal(new Point2d(p.X, p.Y), templCrop.Width, templCrop.Height, centerFoundTemplate, angleDeg)).ToList()).ToList();
+
+                var passContoursGlobalList = new List<List<Point2d>>();
+                var failContoursGlobalList = new List<List<Point2d>>();
+                double maxDistPx = 0.0;
+
+                static void ClassifyAndAddSegments(
+                    List<Point2d> localPoints,
+                    Func<Point2d, bool> isPointOk,
+                    Func<Point2d, Point2d> mapToGlobal,
+                    List<List<Point2d>> passDst,
+                    List<List<Point2d>> failDst)
+                {
+                    if (localPoints.Count < 2) return;
+
+                    List<Point2d>? currentSeg = null;
+                    bool? currentSegOk = null;
+
+                    for (int i = 0; i < localPoints.Count; i++)
+                    {
+                        var ptLocal = localPoints[i];
+                        bool ok = isPointOk(ptLocal);
+                        var ptGlobal = mapToGlobal(ptLocal);
+
+                        if (currentSegOk is null || currentSegOk != ok)
+                        {
+                            if (currentSeg is not null && currentSeg.Count > 1)
+                            {
+                                if (currentSegOk == true) passDst.Add(currentSeg);
+                                else failDst.Add(currentSeg);
+                            }
+
+                            currentSeg = new List<Point2d>();
+                            currentSegOk = ok;
+
+                            if (i > 0)
+                            {
+                                currentSeg.Add(mapToGlobal(localPoints[i - 1]));
+                            }
+                        }
+
+                        currentSeg!.Add(ptGlobal);
+                    }
+
+                    if (currentSeg is not null && currentSeg.Count > 1)
+                    {
+                        if (currentSegOk == true) passDst.Add(currentSeg);
+                        else failDst.Add(currentSeg);
+                    }
+                }
+
+                // 2. Classify Test Contours (Extra / Deformed strokes) point-by-point
+                foreach (var cTest in testContours)
+                {
+                    var localPts = cTest.Select(p => new Point2d(p.X + alignDx, p.Y + alignDy)).ToList();
+                    
+                    ClassifyAndAddSegments(
+                        localPts,
+                        pt =>
+                        {
+                            double minDist = double.MaxValue;
+                            foreach (var q in allTplLocalPoints)
+                            {
+                                double dX = pt.X - q.X;
+                                double dY = pt.Y - q.Y;
+                                double d = Math.Sqrt(dX * dX + dY * dY);
+                                if (d < minDist) minDist = d;
+                            }
+                            if (minDist > maxDistPx) maxDistPx = minDist;
+                            return minDist <= maxAllowedDist;
+                        },
+                        pt => MapToGlobal(pt, templCrop.Width, templCrop.Height, centerFoundTemplate, angleDeg),
+                        passContoursGlobalList,
+                        failContoursGlobalList);
+                }
+
+                // 3. Classify Template Contours (Missing strokes) point-by-point
+                foreach (var cTpl in tplContours)
+                {
+                    var localPts = cTpl.Select(p => new Point2d(p.X, p.Y)).ToList();
+
+                    ClassifyAndAddSegments(
+                        localPts,
+                        pt =>
+                        {
+                            double minDist = double.MaxValue;
+                            foreach (var pTest in allTestLocalPoints)
+                            {
+                                double dX = pt.X - (pTest.X + alignDx);
+                                double dY = pt.Y - (pTest.Y + alignDy);
+                                double d = Math.Sqrt(dX * dX + dY * dY);
+                                if (d < minDist) minDist = d;
+                            }
+                            if (minDist > maxDistPx) maxDistPx = minDist;
+                            return minDist <= maxAllowedDist;
+                        },
+                        pt => MapToGlobal(pt, templCrop.Width, templCrop.Height, centerFoundTemplate, angleDeg),
+                        passContoursGlobalList, // Matched template parts remain normal
+                        failContoursGlobalList); // Missing template parts added to failContours (RED)!
+                }
+
+                var tplCombined = tplContours.SelectMany(c => c).ToArray();
+                var testCombined = testContours.SelectMany(c => c).ToArray();
+                double matchScore = (tplCombined.Length > 0 && testCombined.Length > 0) ? Cv2.MatchShapes(tplCombined, testCombined, ShapeMatchModes.I1) : 999.0;
+
+                double areaTpl = Math.Max(1.0, tplContours.Sum(c => Cv2.ContourArea(c)));
+                double areaTest = testContours.Sum(c => Cv2.ContourArea(c));
+                double areaDiffPercent = Math.Abs(areaTest - areaTpl) / areaTpl * 100.0;
+
+                double perimTpl = Math.Max(1.0, tplContours.Sum(c => Cv2.ArcLength(c, true)));
+                double perimTest = testContours.Sum(c => Cv2.ArcLength(c, true));
+                double perimDiffPercent = Math.Abs(perimTest - perimTpl) / perimTpl * 100.0;
+
+                bool pass = def.MatchMethod switch
+                {
+                    ContourMatchMethod.HausdorffDistance => failContoursGlobalList.Count == 0 && maxDistPx <= maxAllowedDist,
+                    ContourMatchMethod.AreaPerimeterDiff => areaDiffPercent <= maxAllowedAreaDiff,
+                    _ => failContoursGlobalList.Count == 0 || matchScore <= maxAllowedShapeScore
+                };
+
+                var testPointsGlobalList = testContours.Select(c => c.Select(p => MapToGlobal(new Point2d(p.X, p.Y), templCrop.Width, templCrop.Height, centerFoundTestCrop, angleDeg)).ToList()).ToList();
+
+                return new ContourCompareResult(
+                    def.Name,
+                    Found: true,
+                    Pass: pass,
+                    MatchScore: matchScore,
+                    MaxDistancePx: maxDistPx,
+                    AreaDiffPercent: areaDiffPercent,
+                    PerimeterDiffPercent: perimDiffPercent,
+                    TemplateContour: tplPointsGlobalList.FirstOrDefault(),
+                    TestContour: testPointsGlobalList.FirstOrDefault(),
+                    TemplateContours: tplPointsGlobalList,
+                    TestContours: testPointsGlobalList,
+                    PassContours: passContoursGlobalList,
+                    FailContours: failContoursGlobalList);
             }
 
             static CaliperResult DetectCaliper(Mat matBgrOrGray, Roi roiTeach, CaliperDefinition def, Point2d originTeach, Point2d originFound, double angleDeg)
@@ -1585,6 +1909,17 @@ public sealed class InspectionService : IInspectionService
                     }))
                     .ToArray();
 
+                var contourCompareTasks = (config.ContourCompares ?? new List<ContourCompareDefinition>())
+                    .Where(cc => cc is not null && !string.IsNullOrWhiteSpace(cc.Name) && cc.InspectRoi.Width > 0 && cc.InspectRoi.Height > 0)
+                    .Select(cc => Task.Run(() =>
+                    {
+                        var __sw = System.Diagnostics.Stopwatch.StartNew();
+                        var (_, ccSettings) = ResolveToolPreprocess("ContourCompare", cc.Name);
+                        var res = RunContourCompare(image, originTeach, originFound, angleDeg, cc, _preprocessor, ccSettings);
+                        __sw.Stop(); result.Timings.NodeTimings[cc.Name] = (int)__sw.ElapsedMilliseconds; return res;
+                    }))
+                    .ToArray();
+
             var tScQueued = swTotal.ElapsedMilliseconds;
 
             var lpdTasks = (config.LinePairDetections ?? new List<LinePairDetectionDefinition>())
@@ -1657,6 +1992,7 @@ public sealed class InspectionService : IInspectionService
             var tBlobsDone = swTotal.ElapsedMilliseconds;
 
             Task.WaitAll(surfaceCompareTasks);
+            Task.WaitAll(contourCompareTasks);
             var tScDone = swTotal.ElapsedMilliseconds;
 
             Task.WaitAll(lpdTasks);
@@ -2436,6 +2772,11 @@ public sealed class InspectionService : IInspectionService
             foreach (var t in surfaceCompareTasks)
             {
                 result.SurfaceCompares.Add(t.Result);
+            }
+
+            foreach (var t in contourCompareTasks)
+            {
+                result.ContourCompares.Add(t.Result);
             }
 
             foreach (var t in lpdTasks)
@@ -3544,6 +3885,56 @@ public sealed class InspectionService : IInspectionService
             {
                 var r = new Rect(defect.BoundingBox.X, defect.BoundingBox.Y, defect.BoundingBox.Width, defect.BoundingBox.Height);
                 Cv2.Rectangle(mat, r, red, 2, LineTypes.AntiAlias);
+            }
+        }
+
+        // 14b. ContourCompares
+        foreach (var ccRes in result.ContourCompares)
+        {
+            if (!ShouldRender(ccRes.Name)) continue;
+            var ccDef = config.ContourCompares?.FirstOrDefault(x => string.Equals(x.Name, ccRes.Name, StringComparison.OrdinalIgnoreCase));
+            if (showRoiBoxes && ccDef is not null && ccDef.InspectRoi.Width > 0 && ccDef.InspectRoi.Height > 0)
+            {
+                DrawRotatedRoi(mat, ccDef.InspectRoi, cyan, 1);
+            }
+
+            var tplList = ccRes.TemplateContours ?? (ccRes.TemplateContour is not null ? new List<List<Point2d>> { ccRes.TemplateContour } : null);
+            if (tplList is not null)
+            {
+                foreach (var c in tplList)
+                {
+                    if (c.Count > 1)
+                    {
+                        var ptsTpl = c.Select(p => new Point((int)p.X, (int)p.Y)).ToArray();
+                        Cv2.Polylines(mat, new[] { ptsTpl }, true, yellow, 1, LineTypes.AntiAlias);
+                    }
+                }
+            }
+
+            var passList = ccRes.PassContours ?? (ccRes.Pass && ccRes.TestContours is not null ? ccRes.TestContours : null);
+            if (passList is not null)
+            {
+                foreach (var c in passList)
+                {
+                    if (c.Count > 1)
+                    {
+                        var ptsPass = c.Select(p => new Point((int)p.X, (int)p.Y)).ToArray();
+                        Cv2.Polylines(mat, new[] { ptsPass }, true, green, 2, LineTypes.AntiAlias);
+                    }
+                }
+            }
+
+            var failList = ccRes.FailContours ?? (!ccRes.Pass && ccRes.TestContours is not null ? ccRes.TestContours : null);
+            if (failList is not null)
+            {
+                foreach (var c in failList)
+                {
+                    if (c.Count > 1)
+                    {
+                        var ptsFail = c.Select(p => new Point((int)p.X, (int)p.Y)).ToArray();
+                        Cv2.Polylines(mat, new[] { ptsFail }, true, red, 2, LineTypes.AntiAlias);
+                    }
+                }
             }
         }
 

@@ -260,6 +260,37 @@ namespace VisionInspectionApp.UI.ViewModels
             }
         }
 
+        public bool SurfaceCompare_AutoAlign
+        {
+            get => SelectedSurfaceCompareDef()?.AutoAlign ?? false;
+            set
+            {
+                var def = SelectedSurfaceCompareDef();
+                if (def is null) return;
+                if (def.AutoAlign == value) return;
+                def.AutoAlign = value;
+                RaiseToolPropertyPanelsChanged();
+                RefreshPreviews();
+                RequestAutoSave();
+            }
+        }
+
+        public int SurfaceCompare_AutoAlignMaxShiftPx
+        {
+            get => SelectedSurfaceCompareDef()?.AutoAlignMaxShiftPx ?? 5;
+            set
+            {
+                var def = SelectedSurfaceCompareDef();
+                if (def is null) return;
+                var v = Math.Clamp(value, 1, 30);
+                if (def.AutoAlignMaxShiftPx == v) return;
+                def.AutoAlignMaxShiftPx = v;
+                RaiseToolPropertyPanelsChanged();
+                RefreshPreviews();
+                RequestAutoSave();
+            }
+        }
+
         public double? SurfaceCompare_LastRunMaxArea
         {
             get

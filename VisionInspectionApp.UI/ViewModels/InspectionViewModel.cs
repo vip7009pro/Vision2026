@@ -436,6 +436,20 @@ public sealed partial class InspectionViewModel : ObservableObject
 
         }
 
+        foreach (var cc in result.ContourCompares)
+
+        {
+
+            if (!cc.Pass)
+
+            {
+
+                reasons.Add($"• Contour Compare NG: {cc.Name} (MatchScore: {cc.MatchScore:0.####}, MaxDist: {cc.MaxDistancePx:0.##}px)");
+
+            }
+
+        }
+
 
 
         if (result.Pass && reasons.Count == 0)

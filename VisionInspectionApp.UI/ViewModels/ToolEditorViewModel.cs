@@ -212,6 +212,7 @@ namespace VisionInspectionApp.UI.ViewModels
                 "Text",
                 "BlobDetection",
                 "SurfaceCompare",
+                "ContourCompare",
                 "CodeDetection",
                 "ImageOutput",
                 "ResultView"
@@ -251,6 +252,8 @@ namespace VisionInspectionApp.UI.ViewModels
             ImageSource_BrowseFolderCommand = new RelayCommand(ImageSource_BrowseFolder);
             SurfaceCompare_SetSearchRoiCommand = new RelayCommand(SurfaceCompare_SetSearchRoi);
             SurfaceCompare_SetTemplateRoiCommand = new RelayCommand(SurfaceCompare_SetTemplateRoi);
+            ContourCompare_SetSearchRoiCommand = new RelayCommand(ContourCompare_SetSearchRoi);
+            ContourCompare_SetTemplateRoiCommand = new RelayCommand(ContourCompare_SetTemplateRoi);
             Origin_TeachTemplateCommand = new RelayCommand(Origin_TeachTemplate);
             Origin_OpenTrainWindowCommand = new RelayCommand(OpenTrainTemplateWindow);
 
@@ -390,6 +393,7 @@ namespace VisionInspectionApp.UI.ViewModels
     
         public bool IsBlobDetectionNode => SelectedNode is not null && string.Equals(SelectedNode.Type, "BlobDetection", StringComparison.OrdinalIgnoreCase);
         public bool IsSurfaceCompareNode => SelectedNode is not null && string.Equals(SelectedNode.Type, "SurfaceCompare", StringComparison.OrdinalIgnoreCase);
+        public bool IsContourCompareNode => SelectedNode is not null && string.Equals(SelectedNode.Type, "ContourCompare", StringComparison.OrdinalIgnoreCase);
         public bool IsLinePairDetectionNode => SelectedNode is not null && string.Equals(SelectedNode.Type, "LinePairDetection", StringComparison.OrdinalIgnoreCase);
         public bool IsEdgePairDetectNode => SelectedNode is not null && string.Equals(SelectedNode.Type, "EdgePairDetect", StringComparison.OrdinalIgnoreCase);
         public bool IsCircleFinderNode => SelectedNode is not null && string.Equals(SelectedNode.Type, "CircleFinder", StringComparison.OrdinalIgnoreCase);
@@ -637,6 +641,38 @@ namespace VisionInspectionApp.UI.ViewModels
 
             Cv2.ImWrite(fileName, gray);
             sc.TemplateImageFile = fileName;
+            RequestAutoSave();
+        }
+
+        private void TrySaveContourCompareTemplateImage(string contourCompareName, Roi roi, Roi? cropRoi = null)
+        {
+            if (_config is null) return;
+
+            using var rawSnap = _sharedImage.GetSnapshot();
+            using var snap = rawSnap ?? new Mat();
+            if (snap.Empty()) return;
+
+            var cc = _config.ContourCompares.FirstOrDefault(x => string.Equals(x.Name, contourCompareName, StringComparison.OrdinalIgnoreCase));
+            if (cc is null) return;
+
+            var targetRoi = cropRoi ?? roi;
+            if (targetRoi.Width <= 0 || targetRoi.Height <= 0) return;
+
+            var toolNode = Nodes.FirstOrDefault(n => string.Equals(n.Type, "ContourCompare", StringComparison.OrdinalIgnoreCase) && string.Equals(n.RefName, contourCompareName, StringComparison.OrdinalIgnoreCase));
+            using var processedMat = toolNode != null ? ResolveToolImageForPreview(snap, toolNode) : snap.Clone();
+            if (processedMat.Empty()) return;
+
+            using var crop = ExtractRoiPatch(processedMat, targetRoi);
+            if (crop.Empty() || crop.Width <= 0 || crop.Height <= 0) return;
+
+            using var gray = crop.Channels() == 1 ? crop.Clone() : crop.CvtColor(ColorConversionCodes.BGR2GRAY);
+
+            var templateDir = Path.Combine(CurrentTempWorkingDir ?? Path.Combine(Path.GetFullPath(_storeOptions.ConfigRootDirectory), ProductCode), "templates");
+            Directory.CreateDirectory(templateDir);
+            var fileName = Path.Combine(templateDir, $"{contourCompareName.ToLowerInvariant()}_contour.png");
+
+            Cv2.ImWrite(fileName, gray);
+            cc.TemplateImageFile = fileName;
             RequestAutoSave();
         }
     
@@ -899,11 +935,18 @@ namespace VisionInspectionApp.UI.ViewModels
             OnPropertyChanged(nameof(ImageOutput_SaveCondition));
             OnPropertyChanged(nameof(IsBlobDetectionNode));
             OnPropertyChanged(nameof(IsSurfaceCompareNode));
-            OnPropertyChanged(nameof(Point_OffsetX));
-            OnPropertyChanged(nameof(Point_OffsetY));
-            OnPropertyChanged(nameof(IsBlobDetectionNode));
-            OnPropertyChanged(nameof(IsSurfaceCompareNode));
+            OnPropertyChanged(nameof(IsContourCompareNode));
             OnPropertyChanged(nameof(IsCodeDetectionNode));
+            OnPropertyChanged(nameof(AvailableContourMatchMethods));
+            OnPropertyChanged(nameof(ContourCompare_MatchMethod));
+            OnPropertyChanged(nameof(ContourCompare_CannyThreshold1));
+            OnPropertyChanged(nameof(ContourCompare_CannyThreshold2));
+            OnPropertyChanged(nameof(ContourCompare_MinContourArea));
+            OnPropertyChanged(nameof(ContourCompare_MaxShapeMatchScore));
+            OnPropertyChanged(nameof(ContourCompare_MaxHausdorffDistPx));
+            OnPropertyChanged(nameof(ContourCompare_MaxAreaDiffPercent));
+            OnPropertyChanged(nameof(ContourCompare_LastRunScore));
+            OnPropertyChanged(nameof(ContourCompare_LastRunMaxDist));
             OnPropertyChanged(nameof(AvailablePointFindAlgorithms));
             OnPropertyChanged(nameof(Point_Algorithm));
             OnPropertyChanged(nameof(IsPointEdgePointAlgorithm));
@@ -1032,6 +1075,15 @@ namespace VisionInspectionApp.UI.ViewModels
             OnPropertyChanged(nameof(SurfaceCompare_SsimWindowSize));
             OnPropertyChanged(nameof(SurfaceCompare_SsimThreshold));
             OnPropertyChanged(nameof(SurfaceCompare_GradientWeight));
+            OnPropertyChanged(nameof(SurfaceCompare_AutoAlign));
+            OnPropertyChanged(nameof(SurfaceCompare_AutoAlignMaxShiftPx));
+            OnPropertyChanged(nameof(ContourCompare_MatchMethod));
+            OnPropertyChanged(nameof(ContourCompare_CannyThreshold1));
+            OnPropertyChanged(nameof(ContourCompare_CannyThreshold2));
+            OnPropertyChanged(nameof(ContourCompare_MinContourArea));
+            OnPropertyChanged(nameof(ContourCompare_MaxShapeMatchScore));
+            OnPropertyChanged(nameof(ContourCompare_MaxHausdorffDistPx));
+            OnPropertyChanged(nameof(ContourCompare_MaxAreaDiffPercent));
             OnPropertyChanged(nameof(AvailableCaliperOrientations));
             OnPropertyChanged(nameof(AvailableEdgePolarities));
             OnPropertyChanged(nameof(Caliper_Orientation));
@@ -2650,6 +2702,24 @@ namespace VisionInspectionApp.UI.ViewModels
                 return;
             }
     
+            if (string.Equals(node.Type, "ContourCompare", StringComparison.OrdinalIgnoreCase))
+            {
+                var existed = _config.ContourCompares.Any(x => string.Equals(x.Name, node.RefName, StringComparison.OrdinalIgnoreCase));
+                if (!existed)
+                {
+                    var def = new ContourCompareDefinition
+                    {
+                        Name = node.RefName
+                    };
+                    def.InspectRoi = DefaultRoi();
+                    def.TemplateRoi = DefaultRoi();
+                    _config.ContourCompares.Add(def);
+                    ActiveRoiLabel = $"{node.RefName} CC";
+                }
+    
+                return;
+            }
+    
             if (string.Equals(node.Type, "ImageSource", StringComparison.OrdinalIgnoreCase))
             {
                 var existed = _config.ImageSources.Any(x => string.Equals(x.Name, node.RefName, StringComparison.OrdinalIgnoreCase));
@@ -2954,6 +3024,11 @@ namespace VisionInspectionApp.UI.ViewModels
             {
                 baseName = "SC";
                 exists = n => _config.SurfaceCompares.Any(x => string.Equals(x.Name, n, StringComparison.OrdinalIgnoreCase));
+            }
+            else if (string.Equals(type, "ContourCompare", StringComparison.OrdinalIgnoreCase))
+            {
+                baseName = "CC";
+                exists = n => _config.ContourCompares.Any(x => string.Equals(x.Name, n, StringComparison.OrdinalIgnoreCase));
             }
             else if (string.Equals(type, "CodeDetection", StringComparison.OrdinalIgnoreCase))
             {

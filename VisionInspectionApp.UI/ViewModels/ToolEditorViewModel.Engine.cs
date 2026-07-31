@@ -913,6 +913,27 @@ namespace VisionInspectionApp.UI.ViewModels
                 sc.InspectRoi = ComputeSurfaceCompareInspectRoi(sc);
                 return;
             }
+
+            if (kind.StartsWith("CC", StringComparison.OrdinalIgnoreCase))
+            {
+                var cc = _config.ContourCompares.FirstOrDefault(x => string.Equals(x.Name, name, StringComparison.OrdinalIgnoreCase));
+                if (cc is null) return;
+
+                if (string.Equals(kind, "CC", StringComparison.OrdinalIgnoreCase))
+                {
+                    cc.InspectRoi = roi;
+                    if (cc.TemplateRoi.Width <= 0 || cc.TemplateRoi.Height <= 0) cc.TemplateRoi = roi;
+                    if (string.IsNullOrWhiteSpace(cc.TemplateImageFile)) TrySaveContourCompareTemplateImage(name, cc.TemplateRoi);
+                    return;
+                }
+
+                if (string.Equals(kind, "CCT", StringComparison.OrdinalIgnoreCase))
+                {
+                    cc.TemplateRoi = roi;
+                    TrySaveContourCompareTemplateImage(name, roi);
+                    return;
+                }
+            }
         }
     
         private static Roi ComputeBlobInspectRoi(BlobDetectionDefinition b)
@@ -1034,6 +1055,20 @@ namespace VisionInspectionApp.UI.ViewModels
                     return;
                 }
             }
+
+            if (string.Equals(node.Type, "ContourCompare", StringComparison.OrdinalIgnoreCase))
+            {
+                var def = _config.ContourCompares.FirstOrDefault(x => string.Equals(x.Name, node.RefName, StringComparison.OrdinalIgnoreCase));
+                if (def is null || def.InspectRoi.Width <= 0 || def.InspectRoi.Height <= 0) return;
+
+                var r = run.ContourCompares.FirstOrDefault(x => string.Equals(x.Name, node.RefName, StringComparison.OrdinalIgnoreCase));
+                if (r is null) return;
+
+                var stroke = r.Pass ? Brushes.Lime : Brushes.Red;
+                var status = r.Pass ? "OK" : "NG";
+                dst.Add(new OverlayPointItem { X = def.InspectRoi.X + 2, Y = def.InspectRoi.Y + 2, Radius = 1.0, Stroke = stroke, Label = $"{def.Name} [{status}]: Score: {r.MatchScore:0.####}, MaxDist: {r.MaxDistancePx:0.##}px" });
+                return;
+            }
         }
 
         private Roi? GetRoiForLabel(string labelRaw)
@@ -1056,7 +1091,10 @@ namespace VisionInspectionApp.UI.ViewModels
             if (string.Equals(kind, "CIR", StringComparison.OrdinalIgnoreCase)) return _config.CircleFinders.FirstOrDefault(x => string.Equals(x.Name, name, StringComparison.OrdinalIgnoreCase))?.SearchRoi;
             if (string.Equals(kind, "C", StringComparison.OrdinalIgnoreCase)) return _config.CodeDetections.FirstOrDefault(x => string.Equals(x.Name, name, StringComparison.OrdinalIgnoreCase))?.SearchRoi;
             if (kind.StartsWith("B", StringComparison.OrdinalIgnoreCase)) return _config.BlobDetections.FirstOrDefault(x => string.Equals(x.Name, name, StringComparison.OrdinalIgnoreCase))?.InspectRoi;
+            if (string.Equals(kind, "SCT", StringComparison.OrdinalIgnoreCase)) return _config.SurfaceCompares.FirstOrDefault(x => string.Equals(x.Name, name, StringComparison.OrdinalIgnoreCase))?.TemplateRoi;
             if (kind.StartsWith("SC", StringComparison.OrdinalIgnoreCase)) return _config.SurfaceCompares.FirstOrDefault(x => string.Equals(x.Name, name, StringComparison.OrdinalIgnoreCase))?.InspectRoi;
+            if (string.Equals(kind, "CCT", StringComparison.OrdinalIgnoreCase)) return _config.ContourCompares.FirstOrDefault(x => string.Equals(x.Name, name, StringComparison.OrdinalIgnoreCase))?.TemplateRoi;
+            if (kind.StartsWith("CC", StringComparison.OrdinalIgnoreCase)) return _config.ContourCompares.FirstOrDefault(x => string.Equals(x.Name, name, StringComparison.OrdinalIgnoreCase))?.InspectRoi;
             return null;
         }
 
@@ -1249,6 +1287,18 @@ namespace VisionInspectionApp.UI.ViewModels
                     if (string.Equals(kind, "SCT", StringComparison.OrdinalIgnoreCase) || string.Equals(kind, "SC", StringComparison.OrdinalIgnoreCase))
                     {
                         TrySaveSurfaceCompareTemplateImage(name, roi, sel.Roi);
+                    }
+                    RefreshPreviews();
+                    RequestAutoSave();
+                    return;
+                }
+
+                if (kind.StartsWith("CC", StringComparison.OrdinalIgnoreCase))
+                {
+                    ApplyRoiForLabel(label, roi);
+                    if (string.Equals(kind, "CCT", StringComparison.OrdinalIgnoreCase) || string.Equals(kind, "CC", StringComparison.OrdinalIgnoreCase))
+                    {
+                        TrySaveContourCompareTemplateImage(name, roi, sel.Roi);
                     }
                     RefreshPreviews();
                     RequestAutoSave();
@@ -2074,7 +2124,7 @@ namespace VisionInspectionApp.UI.ViewModels
                 }
                 else
                 {
-                    if (SelectedNode is not null && (string.Equals(SelectedNode.Type, "Origin", StringComparison.OrdinalIgnoreCase) || string.Equals(SelectedNode.Type, "Point", StringComparison.OrdinalIgnoreCase) || string.Equals(SelectedNode.Type, "Line", StringComparison.OrdinalIgnoreCase) || string.Equals(SelectedNode.Type, "Caliper", StringComparison.OrdinalIgnoreCase) || string.Equals(SelectedNode.Type, "LinePairDetection", StringComparison.OrdinalIgnoreCase) || string.Equals(SelectedNode.Type, "EdgePairDetect", StringComparison.OrdinalIgnoreCase) || string.Equals(SelectedNode.Type, "EdgePair", StringComparison.OrdinalIgnoreCase) || string.Equals(SelectedNode.Type, "BlobDetection", StringComparison.OrdinalIgnoreCase) || string.Equals(SelectedNode.Type, "CircleFinder", StringComparison.OrdinalIgnoreCase) || string.Equals(SelectedNode.Type, "SurfaceCompare", StringComparison.OrdinalIgnoreCase) || string.Equals(SelectedNode.Type, "Text", StringComparison.OrdinalIgnoreCase) || string.Equals(SelectedNode.Type, "CodeDetection", StringComparison.OrdinalIgnoreCase)))
+                    if (SelectedNode is not null && (string.Equals(SelectedNode.Type, "Origin", StringComparison.OrdinalIgnoreCase) || string.Equals(SelectedNode.Type, "Point", StringComparison.OrdinalIgnoreCase) || string.Equals(SelectedNode.Type, "Line", StringComparison.OrdinalIgnoreCase) || string.Equals(SelectedNode.Type, "Caliper", StringComparison.OrdinalIgnoreCase) || string.Equals(SelectedNode.Type, "LinePairDetection", StringComparison.OrdinalIgnoreCase) || string.Equals(SelectedNode.Type, "EdgePairDetect", StringComparison.OrdinalIgnoreCase) || string.Equals(SelectedNode.Type, "EdgePair", StringComparison.OrdinalIgnoreCase) || string.Equals(SelectedNode.Type, "BlobDetection", StringComparison.OrdinalIgnoreCase) || string.Equals(SelectedNode.Type, "CircleFinder", StringComparison.OrdinalIgnoreCase) || string.Equals(SelectedNode.Type, "SurfaceCompare", StringComparison.OrdinalIgnoreCase) || string.Equals(SelectedNode.Type, "ContourCompare", StringComparison.OrdinalIgnoreCase) || string.Equals(SelectedNode.Type, "Text", StringComparison.OrdinalIgnoreCase) || string.Equals(SelectedNode.Type, "CodeDetection", StringComparison.OrdinalIgnoreCase)))
                     {
                         using var processedSel = ResolveToolPreprocessForPreview(snap, SelectedNode);
                         SelectedNodePreviewImage = processedSel.Empty() ? null : processedSel.ToBitmapSource();
@@ -2438,6 +2488,27 @@ namespace VisionInspectionApp.UI.ViewModels
             {
                 AddSurfaceCompareRoi(sc.Name);
             }
+
+            void AddContourCompareRoi(string contourCompareName)
+            {
+                var cc = config.ContourCompares.FirstOrDefault(x => string.Equals(x.Name, contourCompareName, StringComparison.OrdinalIgnoreCase));
+                if (cc is null) return;
+
+                if (cc.InspectRoi.Width > 0 && cc.InspectRoi.Height > 0)
+                {
+                    dst.Add(CreateRotatedRoiWithPose(cc.InspectRoi, Brushes.MediumSpringGreen, $"{cc.Name} CC"));
+                }
+
+                if (cc.TemplateRoi.Width > 0 && cc.TemplateRoi.Height > 0)
+                {
+                    dst.Add(CreateRotatedRoiWithPose(cc.TemplateRoi, Brushes.MediumSpringGreen, $"{cc.Name} CCT"));
+                }
+            }
+
+            foreach (var cc in config.ContourCompares)
+            {
+                AddContourCompareRoi(cc.Name);
+            }
     
             foreach (var c in config.CodeDetections)
             {
@@ -2749,6 +2820,96 @@ namespace VisionInspectionApp.UI.ViewModels
                     }
     
                     dst.Add(new OverlayPointItem { X = lx, Y = ly, Radius = 1.0, Stroke = stroke, Label = $"{sc.Name} [{status}]: S\u1ed1 l\u1ed7i: {sc.Count}, S.L\u1edbn nh\u1ea5t: {sc.MaxArea:0}" });
+                }
+            }
+
+            if (run.ContourCompares is not null)
+            {
+                foreach (var cc in run.ContourCompares)
+                {
+                    var stroke = cc.Pass ? Brushes.Lime : Brushes.Red;
+                    var status = cc.Pass ? "OK" : "NG";
+
+                    var lx = 12.0;
+                    var ly = 12.0;
+                    if (config is not null)
+                    {
+                        var ccDef = config.ContourCompares.FirstOrDefault(x => string.Equals(x.Name, cc.Name, StringComparison.OrdinalIgnoreCase));
+                        if (ccDef is not null && ccDef.InspectRoi.Width > 0 && ccDef.InspectRoi.Height > 0)
+                        {
+                            if (run.Origin is not null)
+                            {
+                                var originTeach = new Point2d(config.Origin.WorldPosition.X, config.Origin.WorldPosition.Y);
+                                var tr = TransformPose(new Point2d(ccDef.InspectRoi.X, ccDef.InspectRoi.Y), originTeach, run.Origin.Position, run.Origin.AngleDeg);
+                                lx = tr.X + 2;
+                                ly = tr.Y + 2;
+                            }
+                            else
+                            {
+                                lx = ccDef.InspectRoi.X + 2;
+                                ly = ccDef.InspectRoi.Y + 2;
+                            }
+                        }
+                    }
+
+                    var tplList = cc.TemplateContours ?? (cc.TemplateContour is not null ? new List<List<Point2d>> { cc.TemplateContour } : null);
+                    if (tplList is not null)
+                    {
+                        foreach (var c in tplList)
+                        {
+                            if (c.Count > 1)
+                            {
+                                dst.Add(new OverlayPolylineItem
+                                {
+                                    Points = c.Select(p => new System.Windows.Point(p.X, p.Y)).ToList(),
+                                    IsClosed = true,
+                                    Stroke = Brushes.Gold,
+                                    StrokeThickness = 1.5,
+                                    Label = string.Empty
+                                });
+                            }
+                        }
+                    }
+
+                    var passList = cc.PassContours ?? (cc.Pass && cc.TestContours is not null ? cc.TestContours : null);
+                    if (passList is not null)
+                    {
+                        foreach (var c in passList)
+                        {
+                            if (c.Count > 1)
+                            {
+                                dst.Add(new OverlayPolylineItem
+                                {
+                                    Points = c.Select(p => new System.Windows.Point(p.X, p.Y)).ToList(),
+                                    IsClosed = true,
+                                    Stroke = Brushes.Lime,
+                                    StrokeThickness = 2.0,
+                                    Label = string.Empty
+                                });
+                            }
+                        }
+                    }
+
+                    var failList = cc.FailContours ?? (!cc.Pass && cc.TestContours is not null ? cc.TestContours : null);
+                    if (failList is not null)
+                    {
+                        foreach (var c in failList)
+                        {
+                            if (c.Count > 1)
+                            {
+                                dst.Add(new OverlayPolylineItem
+                                {
+                                    Points = c.Select(p => new System.Windows.Point(p.X, p.Y)).ToList(),
+                                    IsClosed = true,
+                                    Stroke = Brushes.Red,
+                                    StrokeThickness = 2.0,
+                                    Label = string.Empty
+                                });
+                            }
+                        }
+                    }
+
+                    dst.Add(new OverlayPointItem { X = lx, Y = ly, Radius = 1.0, Stroke = stroke, Label = $"{cc.Name} [{status}]: Score: {cc.MatchScore:0.####}, MaxDist: {cc.MaxDistancePx:0.##}px" });
                 }
             }
     
@@ -3314,6 +3475,83 @@ namespace VisionInspectionApp.UI.ViewModels
                 }
     
                 dst.Add(new OverlayPointItem { X = lx, Y = ly, Radius = 1.0, Stroke = stroke, Label = $"{sc.Name} [{status}]: S\u1ed1 l\u1ed7i: {sc.Count}, Di\u1ec7n t\u00edch l\u1edbn nh\u1ea5t: {sc.MaxArea:0}" });
+                return;
+            }
+
+            if (string.Equals(node.Type, "ContourCompare", StringComparison.OrdinalIgnoreCase))
+            {
+                var cc = run.ContourCompares.FirstOrDefault(x => string.Equals(x.Name, node.RefName, StringComparison.OrdinalIgnoreCase));
+                if (cc is null) return;
+
+                var ccDef = _config?.ContourCompares.FirstOrDefault(x => string.Equals(x.Name, cc.Name, StringComparison.OrdinalIgnoreCase));
+                var stroke = cc.Pass ? Brushes.Lime : Brushes.Red;
+                var status = cc.Pass ? "OK" : "NG";
+
+                double lx = 12, ly = 12;
+                if (ccDef is not null)
+                {
+                    lx = ccDef.InspectRoi.X + 2;
+                    ly = ccDef.InspectRoi.Y + 2;
+                }
+
+                var tplList = cc.TemplateContours ?? (cc.TemplateContour is not null ? new List<List<Point2d>> { cc.TemplateContour } : null);
+                if (tplList is not null)
+                {
+                    foreach (var c in tplList)
+                    {
+                        if (c.Count > 1)
+                        {
+                            dst.Add(new OverlayPolylineItem
+                            {
+                                Points = c.Select(p => new System.Windows.Point(p.X, p.Y)).ToList(),
+                                IsClosed = true,
+                                Stroke = Brushes.Gold,
+                                StrokeThickness = 1.5,
+                                Label = string.Empty
+                            });
+                        }
+                    }
+                }
+
+                var passList = cc.PassContours ?? (cc.Pass && cc.TestContours is not null ? cc.TestContours : null);
+                if (passList is not null)
+                {
+                    foreach (var c in passList)
+                    {
+                        if (c.Count > 1)
+                        {
+                            dst.Add(new OverlayPolylineItem
+                            {
+                                Points = c.Select(p => new System.Windows.Point(p.X, p.Y)).ToList(),
+                                IsClosed = true,
+                                Stroke = Brushes.Lime,
+                                StrokeThickness = 2.0,
+                                Label = string.Empty
+                            });
+                        }
+                    }
+                }
+
+                var failList = cc.FailContours ?? (!cc.Pass && cc.TestContours is not null ? cc.TestContours : null);
+                if (failList is not null)
+                {
+                    foreach (var c in failList)
+                    {
+                        if (c.Count > 1)
+                        {
+                            dst.Add(new OverlayPolylineItem
+                            {
+                                Points = c.Select(p => new System.Windows.Point(p.X, p.Y)).ToList(),
+                                IsClosed = true,
+                                Stroke = Brushes.Red,
+                                StrokeThickness = 2.0,
+                                Label = string.Empty
+                            });
+                        }
+                    }
+                }
+
+                dst.Add(new OverlayPointItem { X = lx, Y = ly, Radius = 1.0, Stroke = stroke, Label = $"{cc.Name} [{status}]: Score: {cc.MatchScore:0.####}, MaxDist: {cc.MaxDistancePx:0.##}px" });
                 return;
             }
     

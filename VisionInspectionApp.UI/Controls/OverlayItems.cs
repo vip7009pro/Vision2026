@@ -38,6 +38,12 @@ public sealed class OverlayLineItem : OverlayItem
     public double Y2 { get; init; }
 }
 
+public sealed class OverlayPolylineItem : OverlayItem
+{
+    public List<System.Windows.Point> Points { get; init; } = new();
+    public bool IsClosed { get; init; } = true;
+}
+
 public sealed class OverlayTextItem : OverlayItem
 {
     public double X { get; init; }

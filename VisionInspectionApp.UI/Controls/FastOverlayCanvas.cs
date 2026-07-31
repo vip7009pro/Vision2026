@@ -140,6 +140,31 @@ public class FastOverlayCanvas : FrameworkElement
                     dc.DrawText(text, new Point((vx1 + vx2) / 2, (vy1 + vy2) / 2));
                 }
             }
+            else if (item is OverlayPolylineItem pl)
+            {
+                if (pl.Points is not null && pl.Points.Count > 1)
+                {
+                    var geo = new StreamGeometry();
+                    using (var ctx = geo.Open())
+                    {
+                        var startPt = new Point(pl.Points[0].X * sx, pl.Points[0].Y * sy);
+                        ctx.BeginFigure(startPt, isFilled: false, isClosed: pl.IsClosed);
+                        for (int i = 1; i < pl.Points.Count; i++)
+                        {
+                            ctx.LineTo(new Point(pl.Points[i].X * sx, pl.Points[i].Y * sy), isStroked: true, isSmoothJoin: true);
+                        }
+                    }
+                    geo.Freeze();
+                    dc.DrawGeometry(null, pen, geo);
+
+                    if (!string.IsNullOrWhiteSpace(pl.Label))
+                    {
+                        var text = new FormattedText(pl.Label, CultureInfo.CurrentUICulture, FlowDirection.LeftToRight, typeface, effFontSize, item.Stroke, dpi);
+                        var firstPt = new Point(pl.Points[0].X * sx, pl.Points[0].Y * sy);
+                        dc.DrawText(text, new Point(firstPt.X, firstPt.Y - text.Height - 2 / scale));
+                    }
+                }
+            }
             else if (item is OverlayTextItem t)
             {
                 var vx = t.X * sx;

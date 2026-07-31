@@ -1633,6 +1633,36 @@
                                             <ColumnDefinition Width="*" />
                                         </Grid.ColumnDefinitions>
                                         <Border Background="{DynamicResource WindowBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
+                                            <TextBlock Text="Auto Align" VerticalAlignment="Center" Margin="4,2" FontSize="11" Foreground="{DynamicResource TextBrush}"/>
+                                        </Border>
+                                        <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
+                                            <CheckBox IsChecked="{Binding SurfaceCompare_AutoAlign}" Margin="4,2" VerticalAlignment="Center" />
+                                        </Border>
+                                    </Grid>
+                                </Border>
+
+                                <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="120" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <Border Background="{DynamicResource WindowBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
+                                            <TextBlock Text="AutoAlign MaxShift" VerticalAlignment="Center" Margin="4,2" FontSize="11" Foreground="{DynamicResource TextBrush}"/>
+                                        </Border>
+                                        <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
+                                            <TextBox Text="{Binding SurfaceCompare_AutoAlignMaxShiftPx, UpdateSourceTrigger=LostFocus}" Margin="2,1" FontSize="11" />
+                                        </Border>
+                                    </Grid>
+                                </Border>
+
+                                <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="120" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <Border Background="{DynamicResource WindowBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
                                             <TextBlock Text="MinA" VerticalAlignment="Center" Margin="4,2" FontSize="11" Foreground="{DynamicResource TextBrush}"/>
                                         </Border>
                                         <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
@@ -1691,6 +1721,131 @@
                                 <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
                                     <TextBlock Text="MaxArea" Width="60" VerticalAlignment="Center" />
                                     <TextBlock Text="{Binding SurfaceCompare_LastRunMaxArea, TargetNullValue='-'}" Width="80" />
+                                </StackPanel>
+                            </StackPanel>
+
+                            <StackPanel Visibility="{Binding IsContourCompareNode, Converter={StaticResource BoolToVis}}">
+                                <Border Background="{DynamicResource BorderBrush}" Padding="3,1" Margin="0,3,0,0">
+                                    <TextBlock Text="Contour Compare" FontWeight="Bold" Foreground="{DynamicResource TextBrush}" />
+                                </Border>
+
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                                    <Button Content="Set Search ROI" Command="{Binding ContourCompare_SetSearchRoiCommand}" Width="100" Margin="0,0,6,0" />
+                                    <Button Content="Set Template ROI" Command="{Binding ContourCompare_SetTemplateRoiCommand}" Width="100" />
+                                </StackPanel>
+
+                                <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="120" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <Border Background="{DynamicResource WindowBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
+                                            <TextBlock Text="Match Method" VerticalAlignment="Center" Margin="4,2" FontSize="11" Foreground="{DynamicResource TextBrush}"/>
+                                        </Border>
+                                        <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
+                                            <ComboBox ItemsSource="{Binding AvailableContourMatchMethods}" SelectedItem="{Binding ContourCompare_MatchMethod}" Margin="2,1" FontSize="11" />
+                                        </Border>
+                                    </Grid>
+                                </Border>
+
+                                <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="120" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <Border Background="{DynamicResource WindowBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
+                                            <TextBlock Text="Canny Thr 1" VerticalAlignment="Center" Margin="4,2" FontSize="11" Foreground="{DynamicResource TextBrush}"/>
+                                        </Border>
+                                        <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
+                                            <TextBox Text="{Binding ContourCompare_CannyThreshold1, UpdateSourceTrigger=LostFocus}" Margin="2,1" FontSize="11" />
+                                        </Border>
+                                    </Grid>
+                                </Border>
+
+                                <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="120" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <Border Background="{DynamicResource WindowBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
+                                            <TextBlock Text="Canny Thr 2" VerticalAlignment="Center" Margin="4,2" FontSize="11" Foreground="{DynamicResource TextBrush}"/>
+                                        </Border>
+                                        <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
+                                            <TextBox Text="{Binding ContourCompare_CannyThreshold2, UpdateSourceTrigger=LostFocus}" Margin="2,1" FontSize="11" />
+                                        </Border>
+                                    </Grid>
+                                </Border>
+
+                                <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="120" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <Border Background="{DynamicResource WindowBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
+                                            <TextBlock Text="Min Area (Px)" VerticalAlignment="Center" Margin="4,2" FontSize="11" Foreground="{DynamicResource TextBrush}"/>
+                                        </Border>
+                                        <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
+                                            <TextBox Text="{Binding ContourCompare_MinContourArea, UpdateSourceTrigger=LostFocus}" Margin="2,1" FontSize="11" />
+                                        </Border>
+                                    </Grid>
+                                </Border>
+
+                                <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="120" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <Border Background="{DynamicResource WindowBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
+                                            <TextBlock Text="Max Shape Score" VerticalAlignment="Center" Margin="4,2" FontSize="11" Foreground="{DynamicResource TextBrush}"/>
+                                        </Border>
+                                        <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
+                                            <TextBox Text="{Binding ContourCompare_MaxShapeMatchScore, UpdateSourceTrigger=LostFocus}" Margin="2,1" FontSize="11" />
+                                        </Border>
+                                    </Grid>
+                                </Border>
+
+                                <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="120" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <Border Background="{DynamicResource WindowBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
+                                            <TextBlock Text="Max Hausdorff (Px)" VerticalAlignment="Center" Margin="4,2" FontSize="11" Foreground="{DynamicResource TextBrush}"/>
+                                        </Border>
+                                        <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
+                                            <TextBox Text="{Binding ContourCompare_MaxHausdorffDistPx, UpdateSourceTrigger=LostFocus}" Margin="2,1" FontSize="11" />
+                                        </Border>
+                                    </Grid>
+                                </Border>
+
+                                <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="120" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <Border Background="{DynamicResource WindowBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
+                                            <TextBlock Text="Max Area Diff (%)" VerticalAlignment="Center" Margin="4,2" FontSize="11" Foreground="{DynamicResource TextBrush}"/>
+                                        </Border>
+                                        <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
+                                            <TextBox Text="{Binding ContourCompare_MaxAreaDiffPercent, UpdateSourceTrigger=LostFocus}" Margin="2,1" FontSize="11" />
+                                        </Border>
+                                    </Grid>
+                                </Border>
+
+                                <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
+                                    <TextBlock Text="Score:" Foreground="{DynamicResource TextMutedBrush}" FontSize="11" Width="80" />
+                                    <TextBlock Text="{Binding ContourCompare_LastRunScore, TargetNullValue='-', StringFormat={}{0:0.####}}" Width="80" FontSize="11" />
+                                </StackPanel>
+                                <StackPanel Orientation="Horizontal" Margin="0,2,0,0">
+                                    <TextBlock Text="Max Dist:" Foreground="{DynamicResource TextMutedBrush}" FontSize="11" Width="80" />
+                                    <TextBlock Text="{Binding ContourCompare_LastRunMaxDist, TargetNullValue='-', StringFormat={}{0:0.##} px}" Width="80" FontSize="11" />
                                 </StackPanel>
                             </StackPanel>
 
