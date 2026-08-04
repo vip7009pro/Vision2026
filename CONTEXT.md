@@ -334,8 +334,34 @@
   - **Phân định rõ `IsClosed` cho từng đoạn Contour (`ContourSegment`)**: Định nghĩa kiểu dữ liệu `ContourSegment(List<Point2d> Points, bool IsClosed)`.
   - **Khép kín cho ký tự nguyên vẹn (`IsClosed = true`)**: Đối với các ký tự đạt chuẩn OK như ('C', 'E', 'U', 'C', 'A'), toàn bộ đường viền ký tự được lưu trữ dạng vòng khép kín `IsClosed = true` $\implies$ Hiển thị đường viền màu **Xanh Lá (`Lime Green`)** bao bọc mịn màng xung quanh chữ.
   - **Vẽ đường gấp khúc hở cho đoạn nét lỗi (`IsClosed = false`)**: Khi tách các đoạn đường nét nhỏ bị thiếu (như nét chéo trên chữ 'K' hay nửa dưới số '18'), đoạn nét được thiết lập `IsClosed = false` $\implies$ WPF `StreamGeometry` và OpenCV `Cv2.Polylines` chỉ vẽ men theo đúng đoạn nét đó, không tự động nối điểm cuối về điểm đầu xuyên qua thân ký tự.
-  - **Kết quả**: Triệt tiêu $100\%$ các đường chéo đâm tua tủa ngang qua chữ, mang lại giao diện hiển thị sắc nét, chuyên nghiệp.
-- **Trạng thái**: Biên dịch thành công toàn bộ Solution `VisionInspectionApp.slnx` (`0 Errors, 36 Warnings`).
+- **Cập nhật 2026-08-04: Thiết kế & Triển khai toàn bộ PLC Framework tích hợp Vision Flow**:
+  - **Kiến trúc Project Resource Vendor-Agnostic**: PLC được tích hợp làm một Project Resource độc lập (ngang hàng Camera). Vision Flow thao tác strictly qua PLC Tags & PLC Nodes (`PlcRead`, `PlcWrite`, `PlcWait`, `PlcTrigger`, `PlcBatchRead`, `PlcBatchWrite`), tuyệt đối không hard-code IP/Port hay địa chỉ bộ nhớ (D100, M10...) trong Node Graph.
+  - **Data Models Layer**: Đã bổ sung `PlcEnums.cs` (`PlcDriverType`, `PlcConnectionState`, `PlcDataType`, `TagQuality`, `PlcTriggerEdge`, `PlcCompareOperator`), `PlcModel`, `PlcTag`, `PlcTagCache` (ConcurrentDictionary atomic thread-safe value store) và các định nghĩa node `PlcNodeDefinitions.cs` trong [VisionInspectionApp.Models](file:///g:/NODEJS/Vision2026/VisionInspectionApp.Models).
+  - **Application Services Layer**:
+    - Giao diện driver chuẩn `IPlcDriver.cs`.
+    - `MitsubishiDriver.cs`: Triển khai chuẩn MC Protocol 3E Binary over TCP Socket cho họ Mitsubishi (Q/L/FX5U/iQ-R), hỗ trợ các vùng nhớ (D, M, X, Y, W, R, L, B, ZR) với cơ chế tự động chuyển đổi sang Offline In-Memory Simulation Fallback khi không có phần cứng PLC thực tế.
+    - `PlcPollingEngine.cs`: Engine gom nhóm tag theo từng PLC và chạy background task poll độc lập, phát sự kiện `OnTagChanged` khi có biến đổi giá trị biên.
+    - `PlcLogger.cs` & `PlcManagerService.cs`: Quản lý danh sách kết nối, quản lý cache, tự động re-connect và xử lý log sự kiện PLC.
+    - Pipeline `InspectionService.cs`: Tích hợp bước `ExecutePlcNodes()` chạy tự động trước bước `ExecuteImageOutputs()`.
+  - **UI Windows & ViewModels Layer**:
+    - `PlcManagerWindow.xaml`: Giao diện quản lý danh sách PLC, cấu hình kết nối IP/Port/ScanInterval và bảng quản lý PLC Tags.
+    - `PlcMonitorWindow.xaml`: Giao diện theo dõi thời gian thực trạng thái kết nối, Latency (ms), số lượng gói tin Sent/Received, lỗi và danh sách Log sự kiện.
+    - `PlcBrowserControl.xaml`: UserControl tra cứu danh sách Tag PLC kèm bộ lọc tìm kiếm nhanh.
+    - Toolbar buttons Header (`🔌 PLC Manager`, `📊 Monitor`, `🏷️ Tags`), Toolbox icons, Color theme (`ToolConverters.cs`), Canvas node ports và bảng Properties Panel XAML cho từng PLC Node (`IsPlcReadNode`, `IsPlcWriteNode`, `IsPlcWaitNode`, `IsPlcTriggerNode`).
+  - **Đóng gói `.job` Serialization**: Tự động lưu/mở danh sách `Plcs`, `PlcTags` và các định nghĩa PLC nodes trong `.job` ZIP file (`VisionConfig` & `JobService`).
+  - **Automated Unit Test Suite (`PlcTests.cs`)**: Chạy bộ kiểm thử tự động gồm 5 test cases (`MitsubishiDriver Offline Simulation`, `PlcTagCache Thread-Safety`, `Polling Engine & Tag Change Events`, `PlcManagerService Lifecycle`, `MitsubishiMxComponentDriver Station No Simulation`) đạt kết quả **100% PASSED**.
+- **Khắc phục giao diện PLC Manager Form & Bổ sung Driver Mitsubishi MX Component (Station No)**:
+  - **Tương phản màu giao diện (UI Contrast Fix)**: Đã chuyển toàn bộ tài nguyên màu trong `PlcManagerWindow.xaml`, `PlcMonitorWindow.xaml` và `PlcBrowserControl.xaml` sang hệ thống `DynamicResource` brushes chung của hệ thống (`WindowBackgroundBrush`, `TextBrush`, `PanelBackgroundBrush`, `BorderBrush`, `InputBackgroundBrush`, `InputTextBrush`), loại bỏ triệt để hiện tượng chữ đen trên nền đen khi chạy ứng dụng.
+  - **Driver Mitsubishi MX Component (`MitsubishiMxComponentDriver.cs`)**: Triển khai giao diện kết nối với Mitsubishi Communication Utility (MX Component) thông qua COM Interop `ActUtlType.ActUtlType` / `ActUtlType64.ActUtlType` / `ActFXUtlType.ActFXUtlType`.
+  - **Logical Station Number (Station No)**: Bổ sung thuộc tính `LogicalStationNumber` (alias với `Station`) trong `PlcModel` (tích hợp `INotifyPropertyChanged`). Trong `PlcManagerViewModel.cs`, đăng ký lắng nghe sự kiện `SelectedPlc.PropertyChanged` để khi người dùng đổi ComboBox `Driver` sang `MitsubishiMxComponent`, giao diện tự động bật/tắt ô nhập liệu **Station No** (`ActLogicalStationNumber`) thay thế IP Address/Port.
+  - **Hiển thị đầy đủ bảng thuộc tính Properties Panel cho toàn bộ các Node PLC (`PlcRead`, `PlcWrite`, `PlcWait`, `PlcTrigger`, `PlcBatchRead`, `PlcBatchWrite`)**:
+    - **Nguyên nhân gốc rễ**: Khi click chọn Node trên đồ thị canvas (`SelectedNode`), phương thức `OnSelectedNodeChanged` trong `ToolEditorViewModel.GraphOps.cs` và `RaiseToolPropertyPanelsChanged` trong `ToolEditorViewModel.cs` chưa gọi thông báo thay đổi (`OnPropertyChanged`) cho các thuộc tính hiển thị Node PLC (`IsPlcReadNode`, `IsPlcWriteNode`, `IsPlcWaitNode`, `IsPlcTriggerNode`, `IsPlcBatchReadNode`, `IsPlcBatchWriteNode`, `IsAnyPlcNode`). Do đó, giao diện WPF không kích hoạt hiển thị khung Properties bên phải. Đồng thời, XAML giao diện chưa bao phủ Node `PlcBatchRead` và `PlcBatchWrite`.
+    - **Khắc phục**:
+      - Bổ sung phát thông báo sự kiện `OnPropertyChanged` đầy đủ cho toàn bộ thuộc tính thuộc Node PLC trong `RaiseToolPropertyPanelsChanged()` và tự động gọi thông báo này ngay khi `SelectedNode` thay đổi.
+      - Mở rộng XAML trong `ToolEditorView.xaml` bổ sung khung tùy chỉnh thuộc tính (Properties Panel) với thiết kế Dark/Light chuẩn hệ thống cho cả 6 loại Node PLC: `PlcRead`, `PlcWrite`, `PlcWait`, `PlcTrigger`, `PlcBatchRead`, và `PlcBatchWrite`.
+      - Người dùng giờ đây có thể nhấp chọn từng Node PLC trên canvas và điều chỉnh linh hoạt PLC Target, Tag Name, Write Value, Trigger Edge, Compare Operator, Timeout, Batch Tag List... trực tiếp từ khung Properties Panel bên phải.
+- **Trạng thái**: Biên dịch thành công 100% Solution `VisionInspectionApp.slnx` (`0 Errors, 34 Warnings`). Automated tests 5/5 PASSED. Khung Properties Panel hiển thị 100% hoàn hảo cho tất cả các Node PLC.
+
 
 
 

@@ -80,12 +80,8 @@ Lộ trình tích hợp tính năng Chụp ảnh từ camera và hỗ trợ các
 - [x] Task 83: Triệt tiêu hoàn toàn lỗi trôi lệch contour khi xoay ảnh (Rotate / Pose Transform): Chuyển đổi phương thức trích xuất và tinh chỉnh vị trí `testCrop` trực tiếp từ `templateRoiTeach` đã được un-rotate thẳng theo góc `angleDeg`, tinh chỉnh vi lệch sub-pixel trong vùng cửa sổ nhỏ $\pm 20\text{px}$ và thực hiện so sánh khoảng cách contour `minDist` trong không gian ảnh phẳng local (Local Straightened Space). Loại bỏ hoàn toàn sai số dịch chuyển hệ tọa độ toàn cục khi xoay nghiêng ảnh.
 - [x] Task 84: Thuật toán Căn chỉnh ICP Đa điểm và Phân loại chi tiết đường nét Khuyết/Thừa màu Đỏ: Triển khai thuật toán nắn khớp ICP Grid Search (Robust Loss) khớp hoàn hảo các ký tự nguyên vẹn ('C', 'E', 'U', 'C', 'A') với sai số $0\text{px}$, hiển thị **MÀU XANH LÁ (Lime Green)**; đồng thời phân loại từng điểm/đoạn contour khuyết thiếu nét (như nét chéo trên của chữ 'K' hay nửa dưới biểu tượng '18') hoặc nét dư thừa/biến dạng thành các đoạn contour lỗi hiển thị **MÀU ĐỎ TƯƠI (Red)**.
 - [x] Task 85: Triệt tiêu hoàn toàn các đường thẳng tua tủa nối chéo bên trong Contour (`IsClosed = false` cho đoạn nét hở): Đã phân định cấu trúc `ContourSegment` có thuộc tính `IsClosed`. Khi một ký tự nguyên vẹn được đánh giá OK, toàn bộ viền contour được vẽ thành 1 vòng khép kín mịn màng (`IsClosed = true`); khi có đoạn viền bị lỗi/khuyết thiếu (open sub-polyline), đoạn viền đó được vẽ dạng đường gấp khúc hở (`IsClosed = false`), loại bỏ hoàn toàn các đường nối tắt tự do đâm ngang dọc qua thân ký tự.
-
-
-
-
-
-
+- [x] Task 86: Thiết kế và triển khai toàn bộ **PLC Framework** độc lập với hãng sản xuất (Vendor-Agnostic PLC Architecture): Bổ sung Data Models (`PlcModel`, `PlcTag`, `PlcTagCache`, `PlcNodeDefinitions`), Application Services (`PlcManagerService`, `PlcPollingEngine`, `PlcLogger`), Driver Interface (`IPlcDriver`), Mitsubishi Driver MC Protocol 3E Binary TCP với chế độ tự động offline simulation fallback; ViewModels & UI Windows (`PlcManagerWindow`, `PlcMonitorWindow`, `PlcBrowserControl`); Canvas Nodes (`PlcRead`, `PlcWrite`, `PlcWait`, `PlcTrigger`, `PlcBatchRead`, `PlcBatchWrite`) kèm icon/color/property panels; serialization vào `.job`; và bộ kiểm thử tự động `PlcTests` (`100% Passed`).
+- [x] Task 87: Sửa lỗi hiển thị màu tương phản giao diện PLC Manager Form (chuyển sang DynamicResource theme brushes tương thích Light/Dark mode) và bổ sung Driver kết nối Mitsubishi MX Component (`ActUtlType` / Communication Utility) qua tham số `LogicalStationNumber` (`Station No`) kèm bộ kiểm thử tự động Test 5 (`100% Passed`).
 
 
 

@@ -128,8 +128,32 @@ public sealed class InspectionResult
 
     public List<ImageOutputResult> ImageOutputs { get; } = new();
 
+    public List<PlcReadResult> PlcReads { get; } = new();
+
+    public List<PlcWriteResult> PlcWrites { get; } = new();
+
+    public List<PlcWaitResult> PlcWaits { get; } = new();
+
+    public List<PlcTriggerResult> PlcTriggers { get; } = new();
+
+    public List<PlcBatchReadResult> PlcBatchReads { get; } = new();
+
+    public List<PlcBatchWriteResult> PlcBatchWrites { get; } = new();
+
     public DefectDetectionResult? Defects { get; set; }
 }
+
+public sealed record PlcReadResult(string Name, string PlcId, string TagName, object? Value, bool Found);
+
+public sealed record PlcWriteResult(string Name, string PlcId, string TagName, object? WrittenValue, bool Success);
+
+public sealed record PlcWaitResult(string Name, string PlcId, string TagName, PlcCompareOperator Operator, string TargetValue, bool Success, double ElapsedMs);
+
+public sealed record PlcTriggerResult(string Name, string PlcId, string TagName, PlcTriggerEdge EdgeMode, bool Triggered);
+
+public sealed record PlcBatchReadResult(string Name, string PlcId, Dictionary<string, object?> TagValues);
+
+public sealed record PlcBatchWriteResult(string Name, string PlcId, bool Success);
 
 public sealed record ImageOutputResult(
     string Name,
@@ -257,18 +281,22 @@ public sealed class InspectionService : IInspectionService
 
     private readonly ConcurrentDictionary<string, TrackState> _trackByProductCode = new(StringComparer.OrdinalIgnoreCase);
 
+    private readonly PLC.Services.IPlcManagerService? _plcManager;
+
     public InspectionService(
         ImagePreprocessor preprocessor,
         PatternMatcher matcher,
         DistanceCalculator distanceCalculator,
         LineDetector lineDetector,
-        IDefectDetector defectDetector)
+        IDefectDetector defectDetector,
+        PLC.Services.IPlcManagerService? plcManager = null)
     {
         _preprocessor = preprocessor;
         _matcher = matcher;
         _distanceCalculator = distanceCalculator;
         _lineDetector = lineDetector;
         _defectDetector = defectDetector;
+        _plcManager = plcManager;
     }
 
     public InspectionResult Inspect(Mat image, VisionConfig config)
@@ -3392,6 +3420,8 @@ public sealed class InspectionService : IInspectionService
                 }
             }
 
+            ExecutePlcNodes(config, result, _plcManager);
+
             ExecuteImageOutputs(config, result, image, GetPreprocessNodeOutput, nodesById, edges);
 
             result.Timings.TotalMs = (int)Math.Max(0, swTotal.ElapsedMilliseconds);
@@ -3405,6 +3435,132 @@ public sealed class InspectionService : IInspectionService
                 m.Dispose();
             }
         }
+    }
+
+    private static void ExecutePlcNodes(VisionConfig config, InspectionResult result, PLC.Services.IPlcManagerService? plcManager)
+    {
+        if (config is null || result is null) return;
+
+        // 1. PlcReads
+        if (config.PlcReads != null)
+        {
+            foreach (var r in config.PlcReads)
+            {
+                var __swNode = Stopwatch.StartNew();
+                var val = plcManager?.GetTagValue(r.PlcId, r.TagName);
+                __swNode.Stop();
+                result.Timings.NodeTimings[r.Name] = (int)__swNode.ElapsedMilliseconds;
+                result.PlcReads.Add(new PlcReadResult(r.Name, r.PlcId, r.TagName, val?.CurrentValue, val != null));
+            }
+        }
+
+        // 2. PlcWrites
+        if (config.PlcWrites != null)
+        {
+            foreach (var w in config.PlcWrites)
+            {
+                var __swNode = Stopwatch.StartNew();
+                bool ok = false;
+                if (plcManager != null && !string.IsNullOrWhiteSpace(w.PlcId) && !string.IsNullOrWhiteSpace(w.TagName))
+                {
+                    ok = plcManager.WriteTagValueAsync(w.PlcId, w.TagName, w.WriteValue).GetAwaiter().GetResult();
+                }
+                __swNode.Stop();
+                result.Timings.NodeTimings[w.Name] = (int)__swNode.ElapsedMilliseconds;
+                result.PlcWrites.Add(new PlcWriteResult(w.Name, w.PlcId, w.TagName, w.WriteValue, ok));
+            }
+        }
+
+        // 3. PlcWaits
+        if (config.PlcWaits != null)
+        {
+            foreach (var wt in config.PlcWaits)
+            {
+                var __swNode = Stopwatch.StartNew();
+                bool pass = false;
+                int timeoutMs = Math.Max(10, wt.TimeoutMs);
+                while (__swNode.ElapsedMilliseconds <= timeoutMs)
+                {
+                    var val = plcManager?.GetTagValue(wt.PlcId, wt.TagName);
+                    if (val != null && CompareValues(val.CurrentValue, wt.Operator, wt.TargetValue))
+                    {
+                        pass = true;
+                        break;
+                    }
+                    if (timeoutMs > 50) System.Threading.Thread.Sleep(10);
+                }
+                __swNode.Stop();
+                result.Timings.NodeTimings[wt.Name] = (int)__swNode.ElapsedMilliseconds;
+                result.PlcWaits.Add(new PlcWaitResult(wt.Name, wt.PlcId, wt.TagName, wt.Operator, wt.TargetValue, pass, __swNode.ElapsedMilliseconds));
+            }
+        }
+
+        // 4. PlcTriggers
+        if (config.PlcTriggers != null)
+        {
+            foreach (var tr in config.PlcTriggers)
+            {
+                var __swNode = Stopwatch.StartNew();
+                var val = plcManager?.GetTagValue(tr.PlcId, tr.TagName);
+                bool triggered = false;
+                if (val != null)
+                {
+                    bool cur = ConvertToBool(val.CurrentValue);
+                    bool prev = ConvertToBool(val.PreviousValue);
+                    triggered = tr.EdgeMode switch
+                    {
+                        PlcTriggerEdge.RisingEdge => !prev && cur,
+                        PlcTriggerEdge.FallingEdge => prev && !cur,
+                        PlcTriggerEdge.Changed => prev != cur,
+                        _ => false
+                    };
+                }
+                __swNode.Stop();
+                result.Timings.NodeTimings[tr.Name] = (int)__swNode.ElapsedMilliseconds;
+                result.PlcTriggers.Add(new PlcTriggerResult(tr.Name, tr.PlcId, tr.TagName, tr.EdgeMode, triggered));
+            }
+        }
+    }
+
+    private static bool ConvertToBool(object? obj)
+    {
+        if (obj is bool b) return b;
+        if (obj is int i) return i != 0;
+        if (obj is double d) return d != 0;
+        if (obj != null && bool.TryParse(obj.ToString(), out bool bRes)) return bRes;
+        return false;
+    }
+
+    private static bool CompareValues(object? curVal, PlcCompareOperator op, string targetStr)
+    {
+        if (curVal == null) return false;
+
+        if (double.TryParse(curVal.ToString(), out double curD) && double.TryParse(targetStr, out double tgtD))
+        {
+            return op switch
+            {
+                PlcCompareOperator.Equal => Math.Abs(curD - tgtD) < 1e-6,
+                PlcCompareOperator.NotEqual => Math.Abs(curD - tgtD) >= 1e-6,
+                PlcCompareOperator.GreaterThan => curD > tgtD,
+                PlcCompareOperator.LessThan => curD < tgtD,
+                PlcCompareOperator.GreaterOrEqual => curD >= tgtD,
+                PlcCompareOperator.LessOrEqual => curD <= tgtD,
+                _ => false
+            };
+        }
+
+        string curStr = curVal.ToString() ?? string.Empty;
+        int comp = string.Compare(curStr, targetStr, StringComparison.OrdinalIgnoreCase);
+        return op switch
+        {
+            PlcCompareOperator.Equal => comp == 0,
+            PlcCompareOperator.NotEqual => comp != 0,
+            PlcCompareOperator.GreaterThan => comp > 0,
+            PlcCompareOperator.LessThan => comp < 0,
+            PlcCompareOperator.GreaterOrEqual => comp >= 0,
+            PlcCompareOperator.LessOrEqual => comp <= 0,
+            _ => false
+        };
     }
 
     private static void ExecuteImageOutputs(VisionConfig config, InspectionResult result, Mat rawInputImage, Func<string, Mat> getPreprocessNodeOutput, Dictionary<string, ToolGraphNode> nodesById, List<ToolGraphEdge> edges)

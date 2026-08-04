@@ -1,4 +1,4 @@
-﻿<UserControl x:Class="VisionInspectionApp.UI.Views.ToolEditorView"
+<UserControl x:Class="VisionInspectionApp.UI.Views.ToolEditorView"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
@@ -54,6 +54,10 @@
                     <TextBlock Text="{Binding RunContinuousButtonText}" FontWeight="SemiBold" VerticalAlignment="Center"/>
                 </StackPanel>
             </Button>
+
+            <Button Content="🔌 PLC Manager" Command="{Binding OpenPlcManagerCommand}" Margin="0,0,4,0" Padding="8,4" Background="#1E88E5" Foreground="White" BorderThickness="0" ToolTip="Quản lý kết nối PLC và cấu hình Tag"/>
+            <Button Content="📊 Monitor" Command="{Binding OpenPlcMonitorCommand}" Margin="0,0,4,0" Padding="8,4" Background="#43A047" Foreground="White" BorderThickness="0" ToolTip="Theo dõi trạng thái kết nối, Latency và Log PLC"/>
+            <Button Content="🏷️ Tags" Command="{Binding OpenPlcBrowserCommand}" Margin="0,0,12,0" Padding="8,4" Background="#8E24AA" Foreground="White" BorderThickness="0" ToolTip="Cửa sổ tra cứu danh sách Tag PLC"/>
 
             <TextBlock Text="Product Code" VerticalAlignment="Center" Margin="0,0,6,0" />
             <TextBox Width="120" Text="{Binding ProductCode, UpdateSourceTrigger=LostFocus}" Margin="0,0,12,0" />
@@ -173,6 +177,24 @@
                                         </DataTrigger>
                                         <DataTrigger Binding="{Binding}" Value="ResultView">
                                             <Setter TargetName="IconTxt" Property="Text" Value="&#x1F4CA;" />
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding}" Value="PlcRead">
+                                            <Setter TargetName="IconTxt" Property="Text" Value="&#x1F4E5;" />
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding}" Value="PlcWrite">
+                                            <Setter TargetName="IconTxt" Property="Text" Value="&#x1F4E4;" />
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding}" Value="PlcWait">
+                                            <Setter TargetName="IconTxt" Property="Text" Value="&#x23F1;" />
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding}" Value="PlcTrigger">
+                                            <Setter TargetName="IconTxt" Property="Text" Value="&#x26A1;" />
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding}" Value="PlcBatchRead">
+                                            <Setter TargetName="IconTxt" Property="Text" Value="&#x1F4E5;" />
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding}" Value="PlcBatchWrite">
+                                            <Setter TargetName="IconTxt" Property="Text" Value="&#x1F4E4;" />
                                         </DataTrigger>
                                     </DataTemplate.Triggers>
                                 </DataTemplate>
@@ -2503,6 +2525,178 @@
                                 </Border>
                                 <TextBlock Text="Node này hiển thị kết quả Final Output của toàn bộ luồng xử lý trên khung Preview." TextWrapping="Wrap" Margin="0,4,0,8" Foreground="{DynamicResource TextMutedBrush}" FontSize="11" />
                                 <Button Content="▶ Run Flow &amp; Inspect" Command="{Binding RunFlowCommand}" Height="30" FontWeight="Bold" Margin="0,0,0,8" />
+                            </StackPanel>
+
+                            <StackPanel Visibility="{Binding IsPlcReadNode, Converter={StaticResource BoolToVis}}">
+                                <Border Background="{DynamicResource BorderBrush}" Padding="3,1" Margin="0,3,0,0">
+                                    <TextBlock Text="Read PLC Node" FontWeight="Bold" Foreground="{DynamicResource TextBrush}" />
+                                </Border>
+                                <Grid Margin="0,4">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="90"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="Auto"/>
+                                    </Grid.RowDefinitions>
+
+                                    <TextBlock Grid.Row="0" Grid.Column="0" Text="PLC:" VerticalAlignment="Center" Margin="0,2"/>
+                                    <ComboBox Grid.Row="0" Grid.Column="1" ItemsSource="{Binding AvailablePlcNames}" SelectedItem="{Binding PlcNode_PlcId, UpdateSourceTrigger=PropertyChanged}" Margin="2"/>
+
+                                    <TextBlock Grid.Row="1" Grid.Column="0" Text="Tag:" VerticalAlignment="Center" Margin="0,2"/>
+                                    <ComboBox Grid.Row="1" Grid.Column="1" ItemsSource="{Binding AvailablePlcTagNames}" SelectedItem="{Binding PlcNode_TagName, UpdateSourceTrigger=PropertyChanged}" Margin="2"/>
+
+                                    <TextBlock Grid.Row="2" Grid.Column="0" Text="Data Type:" VerticalAlignment="Center" Margin="0,2"/>
+                                    <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding PlcNode_TagDataType}" FontWeight="SemiBold" VerticalAlignment="Center" Margin="4,2"/>
+
+                                    <TextBlock Grid.Row="3" Grid.Column="0" Text="Current Val:" VerticalAlignment="Center" Margin="0,2"/>
+                                    <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding PlcNode_CurrentValue}" Foreground="#00E676" FontWeight="Bold" VerticalAlignment="Center" Margin="4,2"/>
+                                </Grid>
+                            </StackPanel>
+
+                            <StackPanel Visibility="{Binding IsPlcWriteNode, Converter={StaticResource BoolToVis}}">
+                                <Border Background="{DynamicResource BorderBrush}" Padding="3,1" Margin="0,3,0,0">
+                                    <TextBlock Text="Write PLC Node" FontWeight="Bold" Foreground="{DynamicResource TextBrush}" />
+                                </Border>
+                                <Grid Margin="0,4">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="90"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="Auto"/>
+                                    </Grid.RowDefinitions>
+
+                                    <TextBlock Grid.Row="0" Grid.Column="0" Text="PLC:" VerticalAlignment="Center" Margin="0,2"/>
+                                    <ComboBox Grid.Row="0" Grid.Column="1" ItemsSource="{Binding AvailablePlcNames}" SelectedItem="{Binding PlcNode_PlcId, UpdateSourceTrigger=PropertyChanged}" Margin="2"/>
+
+                                    <TextBlock Grid.Row="1" Grid.Column="0" Text="Tag:" VerticalAlignment="Center" Margin="0,2"/>
+                                    <ComboBox Grid.Row="1" Grid.Column="1" ItemsSource="{Binding AvailablePlcTagNames}" SelectedItem="{Binding PlcNode_TagName, UpdateSourceTrigger=PropertyChanged}" Margin="2"/>
+
+                                    <TextBlock Grid.Row="2" Grid.Column="0" Text="Write Value:" VerticalAlignment="Center" Margin="0,2"/>
+                                    <TextBox Grid.Row="2" Grid.Column="1" Text="{Binding PlcNode_WriteValue, UpdateSourceTrigger=LostFocus}" Margin="2"/>
+
+                                    <TextBlock Grid.Row="3" Grid.Column="0" Text="Current Val:" VerticalAlignment="Center" Margin="0,2"/>
+                                    <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding PlcNode_CurrentValue}" Foreground="#00E676" FontWeight="Bold" VerticalAlignment="Center" Margin="4,2"/>
+                                </Grid>
+                            </StackPanel>
+
+                            <StackPanel Visibility="{Binding IsPlcWaitNode, Converter={StaticResource BoolToVis}}">
+                                <Border Background="{DynamicResource BorderBrush}" Padding="3,1" Margin="0,3,0,0">
+                                    <TextBlock Text="Wait PLC Node" FontWeight="Bold" Foreground="{DynamicResource TextBrush}" />
+                                </Border>
+                                <Grid Margin="0,4">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="90"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="Auto"/>
+                                    </Grid.RowDefinitions>
+
+                                    <TextBlock Grid.Row="0" Grid.Column="0" Text="PLC:" VerticalAlignment="Center" Margin="0,2"/>
+                                    <ComboBox Grid.Row="0" Grid.Column="1" ItemsSource="{Binding AvailablePlcNames}" SelectedItem="{Binding PlcNode_PlcId, UpdateSourceTrigger=PropertyChanged}" Margin="2"/>
+
+                                    <TextBlock Grid.Row="1" Grid.Column="0" Text="Tag:" VerticalAlignment="Center" Margin="0,2"/>
+                                    <ComboBox Grid.Row="1" Grid.Column="1" ItemsSource="{Binding AvailablePlcTagNames}" SelectedItem="{Binding PlcNode_TagName, UpdateSourceTrigger=PropertyChanged}" Margin="2"/>
+
+                                    <TextBlock Grid.Row="2" Grid.Column="0" Text="Operator:" VerticalAlignment="Center" Margin="0,2"/>
+                                    <ComboBox Grid.Row="2" Grid.Column="1" ItemsSource="{Binding AvailablePlcCompareOperators}" SelectedItem="{Binding PlcNode_Operator, UpdateSourceTrigger=PropertyChanged}" Margin="2"/>
+
+                                    <TextBlock Grid.Row="3" Grid.Column="0" Text="Target Val:" VerticalAlignment="Center" Margin="0,2"/>
+                                    <TextBox Grid.Row="3" Grid.Column="1" Text="{Binding PlcNode_TargetValue, UpdateSourceTrigger=LostFocus}" Margin="2"/>
+
+                                    <TextBlock Grid.Row="4" Grid.Column="0" Text="Timeout (ms):" VerticalAlignment="Center" Margin="0,2"/>
+                                    <TextBox Grid.Row="4" Grid.Column="1" Text="{Binding PlcNode_TimeoutMs, UpdateSourceTrigger=LostFocus}" Margin="2"/>
+
+                                    <TextBlock Grid.Row="5" Grid.Column="0" Text="Current Val:" VerticalAlignment="Center" Margin="0,2"/>
+                                    <TextBlock Grid.Row="5" Grid.Column="1" Text="{Binding PlcNode_CurrentValue}" Foreground="#00E676" FontWeight="Bold" VerticalAlignment="Center" Margin="4,2"/>
+                                </Grid>
+                            </StackPanel>
+
+                            <StackPanel Visibility="{Binding IsPlcTriggerNode, Converter={StaticResource BoolToVis}}">
+                                <Border Background="{DynamicResource BorderBrush}" Padding="3,1" Margin="0,3,0,0">
+                                    <TextBlock Text="PLC Trigger Node" FontWeight="Bold" Foreground="{DynamicResource TextBrush}" />
+                                </Border>
+                                <Grid Margin="0,4">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="90"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="Auto"/>
+                                    </Grid.RowDefinitions>
+
+                                    <TextBlock Grid.Row="0" Grid.Column="0" Text="PLC:" VerticalAlignment="Center" Margin="0,2"/>
+                                    <ComboBox Grid.Row="0" Grid.Column="1" ItemsSource="{Binding AvailablePlcNames}" SelectedItem="{Binding PlcNode_PlcId, UpdateSourceTrigger=PropertyChanged}" Margin="2"/>
+
+                                    <TextBlock Grid.Row="1" Grid.Column="0" Text="Tag:" VerticalAlignment="Center" Margin="0,2"/>
+                                    <ComboBox Grid.Row="1" Grid.Column="1" ItemsSource="{Binding AvailablePlcTagNames}" SelectedItem="{Binding PlcNode_TagName, UpdateSourceTrigger=PropertyChanged}" Margin="2"/>
+
+                                    <TextBlock Grid.Row="2" Grid.Column="0" Text="Edge Mode:" VerticalAlignment="Center" Margin="0,2"/>
+                                    <ComboBox Grid.Row="2" Grid.Column="1" ItemsSource="{Binding AvailablePlcTriggerEdges}" SelectedItem="{Binding PlcNode_EdgeMode, UpdateSourceTrigger=PropertyChanged}" Margin="2"/>
+
+                                    <TextBlock Grid.Row="3" Grid.Column="0" Text="Current Val:" VerticalAlignment="Center" Margin="0,2"/>
+                                    <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding PlcNode_CurrentValue}" Foreground="#00E676" FontWeight="Bold" VerticalAlignment="Center" Margin="4,2"/>
+                                </Grid>
+                            </StackPanel>
+
+                            <StackPanel Visibility="{Binding IsPlcBatchReadNode, Converter={StaticResource BoolToVis}}">
+                                <Border Background="{DynamicResource BorderBrush}" Padding="3,1" Margin="0,3,0,0">
+                                    <TextBlock Text="Batch Read PLC Node" FontWeight="Bold" Foreground="{DynamicResource TextBrush}" />
+                                </Border>
+                                <Grid Margin="0,4">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="90"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="Auto"/>
+                                    </Grid.RowDefinitions>
+
+                                    <TextBlock Grid.Row="0" Grid.Column="0" Text="PLC:" VerticalAlignment="Center" Margin="0,2"/>
+                                    <ComboBox Grid.Row="0" Grid.Column="1" ItemsSource="{Binding AvailablePlcNames}" SelectedItem="{Binding PlcNode_PlcId, UpdateSourceTrigger=PropertyChanged}" Margin="2"/>
+
+                                    <TextBlock Grid.Row="1" Grid.Column="0" Text="Tags List:" VerticalAlignment="Center" Margin="0,2"/>
+                                    <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding PlcNode_BatchTagListString, UpdateSourceTrigger=LostFocus}" ToolTip="Comma separated tag names (e.g. X0, X1, D100)" Margin="2"/>
+                                </Grid>
+                            </StackPanel>
+
+                            <StackPanel Visibility="{Binding IsPlcBatchWriteNode, Converter={StaticResource BoolToVis}}">
+                                <Border Background="{DynamicResource BorderBrush}" Padding="3,1" Margin="0,3,0,0">
+                                    <TextBlock Text="Batch Write PLC Node" FontWeight="Bold" Foreground="{DynamicResource TextBrush}" />
+                                </Border>
+                                <Grid Margin="0,4">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="90"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="Auto"/>
+                                    </Grid.RowDefinitions>
+
+                                    <TextBlock Grid.Row="0" Grid.Column="0" Text="PLC:" VerticalAlignment="Center" Margin="0,2"/>
+                                    <ComboBox Grid.Row="0" Grid.Column="1" ItemsSource="{Binding AvailablePlcNames}" SelectedItem="{Binding PlcNode_PlcId, UpdateSourceTrigger=PropertyChanged}" Margin="2"/>
+
+                                    <TextBlock Grid.Row="1" Grid.Column="0" Text="Tag=Value:" VerticalAlignment="Center" Margin="0,2"/>
+                                    <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding PlcNode_BatchWriteValuesString, UpdateSourceTrigger=LostFocus}" ToolTip="Comma separated Tag=Value (e.g. Y0=true, D100=500)" Margin="2"/>
+                                </Grid>
                             </StackPanel>
 
                             <Button Content="Delete Node" Command="{Binding DeleteSelectedNodeCommand}" />

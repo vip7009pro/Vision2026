@@ -177,7 +177,7 @@ namespace VisionInspectionApp.UI.ViewModels
         
                         Edges.Add(new ToolGraphEdgeViewModel(from, to, e.FromPort, e.ToPort));
                     }
-        
+
                     SelectedNode = Nodes.Count > 0 ? Nodes[0] : null;
                     RaiseToolPropertyPanelsChanged();
                     RefreshPreviews();
@@ -256,7 +256,7 @@ namespace VisionInspectionApp.UI.ViewModels
             {
                 return;
             }
-    
+
             var validRefNames = new HashSet<string>(Nodes.Select(n => n.RefName).Where(x => !string.IsNullOrWhiteSpace(x)), StringComparer.OrdinalIgnoreCase);
             _config.PreprocessNodes.RemoveAll(x => !validRefNames.Contains(x.Name));
             _config.Points.RemoveAll(x => !validRefNames.Contains(x.Name));

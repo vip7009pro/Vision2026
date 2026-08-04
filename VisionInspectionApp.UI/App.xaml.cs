@@ -55,7 +55,13 @@ public partial class App : System.Windows.Application
                 services.AddSingleton<CameraService>();
                 services.AddSingleton<BatchProcessingService>();
 
-                // PLC (MX Component)
+                // PLC Framework
+                services.AddSingleton<Application.PLC.Services.IPlcManagerService, Application.PLC.Services.PlcManagerService>();
+                services.AddTransient<ViewModels.PLC.PlcManagerViewModel>();
+                services.AddTransient<ViewModels.PLC.PlcMonitorViewModel>();
+                services.AddTransient<ViewModels.PLC.PlcBrowserViewModel>();
+
+                // Legacy PLC (MX Component)
                 services.AddSingleton<IPlcClient, MxComponentPlcClient>();
                 services.AddSingleton<PlcOrchestratorService>();
                 services.AddSingleton<PlcViewModel>();

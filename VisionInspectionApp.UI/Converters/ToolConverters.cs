@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Globalization;
 using System.Windows.Data;
 using System.Windows.Media;
@@ -33,6 +33,12 @@ namespace VisionInspectionApp.UI.Converters
                     "BlobDetection" => "\uE9A3", // Drops / Blob
                     "SurfaceCompare" => "\uE7B6", // Compare
                     "CodeDetection" => "\uED14", // QRCode
+                    "PlcRead" => "\uE9A1", // Download / Read
+                    "PlcWrite" => "\uE9A2", // Upload / Write
+                    "PlcWait" => "\uE825", // Timer / Wait
+                    "PlcTrigger" => "\uE8D6", // Lightning / Trigger
+                    "PlcBatchRead" => "\uE9A1",
+                    "PlcBatchWrite" => "\uE9A2",
                     _ => "\uE734" // Default (Star or general)
                 };
             }
@@ -64,6 +70,12 @@ namespace VisionInspectionApp.UI.Converters
                     "CodeDetection" => "#038387",
                     "BlobDetection" => "#C239B3",
                     "SurfaceCompare" => "#0078D7",
+                    "PlcRead" => "#00897B",
+                    "PlcWrite" => "#D81B60",
+                    "PlcWait" => "#F57C00",
+                    "PlcTrigger" => "#7B1FA2",
+                    "PlcBatchRead" => "#00796B",
+                    "PlcBatchWrite" => "#C2185B",
                     _ => "#0078D7"
                 };
                 return new SolidColorBrush((Color)ColorConverter.ConvertFromString(hex));

@@ -149,11 +149,12 @@ namespace VisionInspectionApp.UI.ViewModels
         [ObservableProperty]
         private double _canvasZoom = 1.0;
         private readonly IJobService _jobService;
+        private readonly Application.PLC.Services.IPlcManagerService _plcManagerService;
         public UndoRedoManager UndoManager { get; }
         public IRelayCommand UndoCommand { get; }
         public IRelayCommand RedoCommand { get; }
 
-        public ToolEditorViewModel(IConfigService configService, ConfigStoreOptions storeOptions, SharedImageContext sharedImage, ImagePreprocessor preprocessor, LineDetector lineDetector, IInspectionService inspectionService, CameraService cameraService, IJobService jobService, UndoRedoManager undoManager)
+        public ToolEditorViewModel(IConfigService configService, ConfigStoreOptions storeOptions, SharedImageContext sharedImage, ImagePreprocessor preprocessor, LineDetector lineDetector, IInspectionService inspectionService, CameraService cameraService, IJobService jobService, UndoRedoManager undoManager, Application.PLC.Services.IPlcManagerService plcManagerService)
         {
             UndoManager = undoManager;
             UndoCommand = new RelayCommand(() => UndoManager.Undo(), () => UndoManager.CanUndo);
@@ -172,6 +173,7 @@ namespace VisionInspectionApp.UI.ViewModels
             _lineDetector = lineDetector;
             _inspectionService = inspectionService;
             _cameraService = cameraService;
+            _plcManagerService = plcManagerService;
             _autoSaveTimer = new DispatcherTimer
             {
                 Interval = TimeSpan.FromMilliseconds(400)
@@ -215,7 +217,13 @@ namespace VisionInspectionApp.UI.ViewModels
                 "ContourCompare",
                 "CodeDetection",
                 "ImageOutput",
-                "ResultView"
+                "ResultView",
+                "PlcRead",
+                "PlcWrite",
+                "PlcWait",
+                "PlcTrigger",
+                "PlcBatchRead",
+                "PlcBatchWrite"
             };
             Nodes = new ObservableCollection<ToolGraphNodeViewModel>();
             Nodes.CollectionChanged += (_, _) => IsDirty = true;
@@ -937,6 +945,28 @@ namespace VisionInspectionApp.UI.ViewModels
             OnPropertyChanged(nameof(IsSurfaceCompareNode));
             OnPropertyChanged(nameof(IsContourCompareNode));
             OnPropertyChanged(nameof(IsCodeDetectionNode));
+
+            // PLC Nodes
+            OnPropertyChanged(nameof(IsPlcReadNode));
+            OnPropertyChanged(nameof(IsPlcWriteNode));
+            OnPropertyChanged(nameof(IsPlcWaitNode));
+            OnPropertyChanged(nameof(IsPlcTriggerNode));
+            OnPropertyChanged(nameof(IsPlcBatchReadNode));
+            OnPropertyChanged(nameof(IsPlcBatchWriteNode));
+            OnPropertyChanged(nameof(IsAnyPlcNode));
+            OnPropertyChanged(nameof(AvailablePlcNames));
+            OnPropertyChanged(nameof(AvailablePlcTagNames));
+            OnPropertyChanged(nameof(PlcNode_PlcId));
+            OnPropertyChanged(nameof(PlcNode_TagName));
+            OnPropertyChanged(nameof(PlcNode_TagDataType));
+            OnPropertyChanged(nameof(PlcNode_CurrentValue));
+            OnPropertyChanged(nameof(PlcNode_WriteValue));
+            OnPropertyChanged(nameof(PlcNode_Operator));
+            OnPropertyChanged(nameof(PlcNode_TargetValue));
+            OnPropertyChanged(nameof(PlcNode_TimeoutMs));
+            OnPropertyChanged(nameof(PlcNode_EdgeMode));
+            OnPropertyChanged(nameof(PlcNode_BatchTagListString));
+            OnPropertyChanged(nameof(PlcNode_BatchWriteValuesString));
             OnPropertyChanged(nameof(AvailableContourMatchMethods));
             OnPropertyChanged(nameof(ContourCompare_MatchMethod));
             OnPropertyChanged(nameof(ContourCompare_CannyThreshold1));

@@ -147,18 +147,43 @@ namespace VisionInspectionApp.UI.ViewModels
                 outName = "Blobs";
             else if (string.Equals(Type, "CodeDetection", StringComparison.OrdinalIgnoreCase))
                 outName = "Code";
-            else if (string.Equals(Type, "CircleFinder", StringComparison.OrdinalIgnoreCase))
-                outName = "Circle";
+            else if (string.Equals(Type, "PlcRead", StringComparison.OrdinalIgnoreCase))
+                outName = "Value";
+            else if (string.Equals(Type, "PlcWrite", StringComparison.OrdinalIgnoreCase))
+                outName = "Status";
+            else if (string.Equals(Type, "PlcWait", StringComparison.OrdinalIgnoreCase))
+                outName = "Result";
+            else if (string.Equals(Type, "PlcTrigger", StringComparison.OrdinalIgnoreCase))
+                outName = "Trigger";
+            else if (string.Equals(Type, "PlcBatchRead", StringComparison.OrdinalIgnoreCase))
+                outName = "Values";
+            else if (string.Equals(Type, "PlcBatchWrite", StringComparison.OrdinalIgnoreCase))
+                outName = "Status";
             else
                 outName = $"Out{Type}";
             OutPorts.Add(new NodePortViewModel(this, outName, isInput: false));
-            if (string.Equals(Type, "ImageSource", StringComparison.OrdinalIgnoreCase))
+            if (string.Equals(Type, "ImageSource", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(Type, "PlcRead", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(Type, "PlcTrigger", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(Type, "PlcBatchRead", StringComparison.OrdinalIgnoreCase))
             {
-            // ImageSource has no input ports - it's a source
+                // Source nodes without mandatory image input ports
             }
             else if (string.Equals(Type, "Preprocess", StringComparison.OrdinalIgnoreCase))
             {
                 InPorts.Add(new NodePortViewModel(this, "Image", isInput: true));
+            }
+            else if (string.Equals(Type, "PlcWrite", StringComparison.OrdinalIgnoreCase))
+            {
+                InPorts.Add(new NodePortViewModel(this, "Value", isInput: true));
+            }
+            else if (string.Equals(Type, "PlcWait", StringComparison.OrdinalIgnoreCase))
+            {
+                InPorts.Add(new NodePortViewModel(this, "In", isInput: true));
+            }
+            else if (string.Equals(Type, "PlcBatchWrite", StringComparison.OrdinalIgnoreCase))
+            {
+                InPorts.Add(new NodePortViewModel(this, "Values", isInput: true));
             }
             else if (string.Equals(Type, "ResultView", StringComparison.OrdinalIgnoreCase))
             {

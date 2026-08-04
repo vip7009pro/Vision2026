@@ -29,6 +29,7 @@ namespace VisionInspectionApp.UI.ViewModels
         {
             OnPropertyChanged(nameof(EnableRoiEditingInPreview));
             OnPropertyChanged(nameof(IsResultViewNode));
+            RaiseToolPropertyPanelsChanged();
             SelectedEdge = null;
             if (_selectedNodeHook is not null)
             {

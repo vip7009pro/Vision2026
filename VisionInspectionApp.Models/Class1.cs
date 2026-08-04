@@ -213,6 +213,22 @@ public sealed class VisionConfig
 
     public List<ImageOutputDefinition> ImageOutputs { get; set; } = new();
 
+    public List<PlcModel> Plcs { get; set; } = new();
+
+    public List<PlcTag> PlcTags { get; set; } = new();
+
+    public List<PlcReadDefinition> PlcReads { get; set; } = new();
+
+    public List<PlcWriteDefinition> PlcWrites { get; set; } = new();
+
+    public List<PlcWaitDefinition> PlcWaits { get; set; } = new();
+
+    public List<PlcTriggerDefinition> PlcTriggers { get; set; } = new();
+
+    public List<PlcBatchReadDefinition> PlcBatchReads { get; set; } = new();
+
+    public List<PlcBatchWriteDefinition> PlcBatchWrites { get; set; } = new();
+
     public DefectInspectionConfig DefectConfig { get; set; } = new();
 }
 
