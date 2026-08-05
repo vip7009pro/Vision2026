@@ -28,6 +28,75 @@ namespace VisionInspectionApp.UI.ViewModels
         private bool _finalPreviewDirty = true;
         private BitmapSource? _cachedFinalPreviewImage;
         private readonly System.Collections.Generic.Dictionary<string, (string SourcePath, Mat Image)> _imageSourcePreviewCache = new(StringComparer.OrdinalIgnoreCase);
+        private readonly object _cacheLock = new();
+
+        private void SetImageSourceCache(string? nodeName, string sourcePath, Mat? mat)
+        {
+            if (string.IsNullOrWhiteSpace(nodeName) || mat is null || mat.IsDisposed || mat.Empty()) return;
+
+            lock (_cacheLock)
+            {
+                if (_imageSourcePreviewCache.TryGetValue(nodeName, out var old))
+                {
+                    try { old.Image?.Dispose(); } catch { }
+                }
+                try
+                {
+                    _imageSourcePreviewCache[nodeName] = (sourcePath, mat.Clone());
+                }
+                catch { }
+            }
+        }
+
+        private void ClearImageSourceCache(string? nodeName)
+        {
+            if (string.IsNullOrWhiteSpace(nodeName)) return;
+
+            lock (_cacheLock)
+            {
+                if (_imageSourcePreviewCache.TryGetValue(nodeName, out var old))
+                {
+                    try { old.Image?.Dispose(); } catch { }
+                    _imageSourcePreviewCache.Remove(nodeName);
+                }
+            }
+        }
+
+        private Mat? GetImageSourceCache(string? nodeName)
+        {
+            if (string.IsNullOrWhiteSpace(nodeName)) return null;
+
+            lock (_cacheLock)
+            {
+                if (_imageSourcePreviewCache.TryGetValue(nodeName, out var cached))
+                {
+                    if (cached.Image is not null && !cached.Image.IsDisposed && !cached.Image.Empty())
+                    {
+                        try
+                        {
+                            return cached.Image.Clone();
+                        }
+                        catch
+                        {
+                            _imageSourcePreviewCache.Remove(nodeName);
+                        }
+                    }
+                }
+            }
+            return null;
+        }
+
+        private void ClearAllImageSourceCache()
+        {
+            lock (_cacheLock)
+            {
+                foreach (var kv in _imageSourcePreviewCache.Values)
+                {
+                    try { kv.Image?.Dispose(); } catch { }
+                }
+                _imageSourcePreviewCache.Clear();
+            }
+        }
         private readonly DispatcherTimer _specEditPreviewTimer;
         private readonly DispatcherTimer _blobThresholdPreviewTimer;
         private int _lastPreviewImageWidth;
@@ -601,7 +670,7 @@ namespace VisionInspectionApp.UI.ViewModels
                 Cv2.Line(view, p1, p2, Scalar.White, 2);
             }
     
-            LinePreviewImage = view.ToBitmapSource();
+            LinePreviewImage = view.ToBitmapSourceSafe();
         }
     
         private void RefreshPointEdgePreview(Mat snap)
@@ -694,7 +763,7 @@ namespace VisionInspectionApp.UI.ViewModels
                 Cv2.DrawMarker(view, new OpenCvSharp.Point((int)Math.Round(avgX), (int)Math.Round(avgY)), new Scalar(0, 0, 255), MarkerTypes.Cross, 20, 2);
             }
     
-            PointEdgePreviewImage = view.ToBitmapSource();
+            PointEdgePreviewImage = view.ToBitmapSourceSafe();
         }
     
         private static Point2dModel RoiCenterToWorld(Roi roi)
@@ -1405,9 +1474,10 @@ namespace VisionInspectionApp.UI.ViewModels
         {
             try
             {
-                if (_imageSourcePreviewCache.TryGetValue(source.Name ?? "", out var cached) && cached.Image is not null && !cached.Image.IsDisposed)
+                var cachedMat = GetImageSourceCache(source.Name);
+                if (cachedMat is not null && !cachedMat.Empty())
                 {
-                    return cached.Image.Clone();
+                    return cachedMat;
                 }
 
                 if (source.SourceType == ImageSourceType.File)
@@ -1418,9 +1488,7 @@ namespace VisionInspectionApp.UI.ViewModels
                         var mat = Cv2.ImRead(source.FilePath);
                         if (mat is not null && !mat.Empty())
                         {
-                            if (_imageSourcePreviewCache.TryGetValue(source.Name ?? "", out var old))
-                                old.Image?.Dispose();
-                            _imageSourcePreviewCache[source.Name ?? ""] = (source.FilePath, mat.Clone());
+                            SetImageSourceCache(source.Name, source.FilePath, mat);
                             return mat;
                         }
                     }
@@ -1437,9 +1505,7 @@ namespace VisionInspectionApp.UI.ViewModels
                             var mat = Cv2.ImRead(targetFile);
                             if (mat is not null && !mat.Empty())
                             {
-                                if (_imageSourcePreviewCache.TryGetValue(source.Name ?? "", out var old))
-                                    old.Image?.Dispose();
-                                _imageSourcePreviewCache[source.Name ?? ""] = (targetFile, mat.Clone());
+                                SetImageSourceCache(source.Name, targetFile, mat);
                                 return mat;
                             }
                         }
@@ -1449,12 +1515,10 @@ namespace VisionInspectionApp.UI.ViewModels
                 {
                     try
                     {
-                        var cameraMat = _cameraService.CaptureSnapshotAsync().GetAwaiter().GetResult();
+                        var cameraMat = CaptureCameraSnapshotSafe(source.CameraIndex, string.IsNullOrWhiteSpace(source.RtspUrl) ? null : source.RtspUrl);
                         if (cameraMat is not null && !cameraMat.Empty())
                         {
-                            if (_imageSourcePreviewCache.TryGetValue(source.Name ?? "", out var old))
-                                old.Image?.Dispose();
-                            _imageSourcePreviewCache[source.Name ?? ""] = ("camera", cameraMat.Clone());
+                            SetImageSourceCache(source.Name, "camera", cameraMat);
                             return cameraMat;
                         }
                     }
@@ -1469,6 +1533,36 @@ namespace VisionInspectionApp.UI.ViewModels
                 System.Diagnostics.Debug.WriteLine($"Exception in LoadImageFromSourceForPreview: {ex.Message}");
             }
 
+            return null;
+        }
+
+        private Mat? CaptureCameraSnapshotSafe(int cameraIndex, string? rtspUrl)
+        {
+            try
+            {
+                if (_cameraService.IsRunning)
+                {
+                    var liveMat = _cameraService.TryGetLatestFrameClone();
+                    if (liveMat is not null && !liveMat.Empty())
+                    {
+                        return liveMat;
+                    }
+                }
+
+                var task = Task.Run(async () => await _cameraService.CaptureSnapshotAsync(cameraIndex, rtspUrl));
+                if (task.Wait(2000))
+                {
+                    return task.Result;
+                }
+                else
+                {
+                    System.Diagnostics.Debug.WriteLine("Camera snapshot capture timed out (2000ms limit)");
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Camera capture exception: {ex.Message}");
+            }
             return null;
         }
 
@@ -1502,7 +1596,23 @@ namespace VisionInspectionApp.UI.ViewModels
         public Brush RunContinuousButtonBackgroundBrush => IsRunningFolderFlow
             ? new SolidColorBrush(Color.FromRgb(211, 47, 47))
             : new SolidColorBrush(Color.FromRgb(46, 125, 50));
-        public string RunContinuousButtonToolTip => IsRunningFolderFlow ? "Dừng chạy luồng thư mục liên tục" : "Chạy liên tục qua các ảnh trong thư mục (Loop & Interval)";
+        public string RunContinuousButtonToolTip
+        {
+            get
+            {
+                if (IsRunningFolderFlow)
+                {
+                    var imgSourceNode = Nodes.FirstOrDefault(n => string.Equals(n.Type, "ImageSource", StringComparison.OrdinalIgnoreCase));
+                    var def = _config?.ImageSources.FirstOrDefault(x => string.Equals(x.Name, imgSourceNode?.RefName, StringComparison.OrdinalIgnoreCase));
+                    if (def != null && def.TriggerMode == ImageSourceTriggerMode.PlcTrigger)
+                    {
+                        return "Dừng chờ PLC Trigger";
+                    }
+                    return "Dừng chạy luồng liên tục";
+                }
+                return "Chạy liên tục qua Camera / Thư mục / PLC Trigger";
+            }
+        }
 
         private void UpdateRunFlowButtonProperties()
         {
@@ -1579,35 +1689,191 @@ namespace VisionInspectionApp.UI.ViewModels
             if (imageSourceNode is not null && _config is not null)
             {
                 var imgSourceDef = _config.ImageSources.FirstOrDefault(x => string.Equals(x.Name, imageSourceNode.RefName, StringComparison.OrdinalIgnoreCase));
-                if (imgSourceDef is not null && imgSourceDef.SourceType == ImageSourceType.Folder)
+                if (imgSourceDef is not null)
                 {
-                    if (string.IsNullOrWhiteSpace(imgSourceDef.FolderPath) || !Directory.Exists(imgSourceDef.FolderPath))
+                    if (imgSourceDef.SourceType == ImageSourceType.Folder)
                     {
-                        MessageBox.Show($"Thư mục chứa ảnh không tồn tại:\n{imgSourceDef.FolderPath}", "Cảnh báo", MessageBoxButton.OK, MessageBoxImage.Warning);
+                        if (string.IsNullOrWhiteSpace(imgSourceDef.FolderPath) || !Directory.Exists(imgSourceDef.FolderPath))
+                        {
+                            MessageBox.Show($"Thư mục chứa ảnh không tồn tại:\n{imgSourceDef.FolderPath}", "Cảnh báo", MessageBoxButton.OK, MessageBoxImage.Warning);
+                            return;
+                        }
+
+                        var files = Directory.GetFiles(imgSourceDef.FolderPath, "*.*", SearchOption.TopDirectoryOnly)
+                            .Where(f => f.EndsWith(".jpg", StringComparison.OrdinalIgnoreCase) ||
+                                        f.EndsWith(".jpeg", StringComparison.OrdinalIgnoreCase) ||
+                                        f.EndsWith(".png", StringComparison.OrdinalIgnoreCase) ||
+                                        f.EndsWith(".bmp", StringComparison.OrdinalIgnoreCase) ||
+                                        f.EndsWith(".tif", StringComparison.OrdinalIgnoreCase) ||
+                                        f.EndsWith(".tiff", StringComparison.OrdinalIgnoreCase))
+                            .OrderBy(f => f).ToArray();
+
+                        if (files.Length == 0)
+                        {
+                            MessageBox.Show($"Thư mục không có tệp ảnh hợp lệ:\n{imgSourceDef.FolderPath}", "Cảnh báo", MessageBoxButton.OK, MessageBoxImage.Warning);
+                            return;
+                        }
+
+                        StartFolderFlow(imgSourceDef, files);
                         return;
                     }
-
-                    var files = Directory.GetFiles(imgSourceDef.FolderPath, "*.*", SearchOption.TopDirectoryOnly)
-                        .Where(f => f.EndsWith(".jpg", StringComparison.OrdinalIgnoreCase) ||
-                                    f.EndsWith(".jpeg", StringComparison.OrdinalIgnoreCase) ||
-                                    f.EndsWith(".png", StringComparison.OrdinalIgnoreCase) ||
-                                    f.EndsWith(".bmp", StringComparison.OrdinalIgnoreCase) ||
-                                    f.EndsWith(".tif", StringComparison.OrdinalIgnoreCase) ||
-                                    f.EndsWith(".tiff", StringComparison.OrdinalIgnoreCase))
-                        .OrderBy(f => f).ToArray();
-
-                    if (files.Length == 0)
+                    else if (imgSourceDef.TriggerMode == ImageSourceTriggerMode.PlcTrigger)
                     {
-                        MessageBox.Show($"Thư mục không có tệp ảnh hợp lệ:\n{imgSourceDef.FolderPath}", "Cảnh báo", MessageBoxButton.OK, MessageBoxImage.Warning);
+                        IsRunningFolderFlow = true;
+                        StatusBarText = $"Đang chạy liên tục chế độ PLC Trigger ({imgSourceDef.PlcTriggerPlcId}.{imgSourceDef.PlcTriggerTagName})...";
                         return;
                     }
-
-                    StartFolderFlow(imgSourceDef, files);
-                    return;
+                    else if (imgSourceDef.SourceType == ImageSourceType.Camera || imgSourceDef.SourceType == ImageSourceType.File)
+                    {
+                        StartCameraContinuousFlow(imgSourceDef);
+                        return;
+                    }
                 }
             }
 
             RunFlow();
+        }
+
+        private void StartCameraContinuousFlow(ImageSourceDefinition sourceDef)
+        {
+            _folderFlowCts?.Cancel();
+            _folderFlowCts = new CancellationTokenSource();
+            IsRunningFolderFlow = true;
+
+            var token = _folderFlowCts.Token;
+            Task.Run(async () =>
+            {
+                int interval = Math.Max(50, sourceDef.FolderIntervalMs);
+
+                try
+                {
+                    while (!token.IsCancellationRequested)
+                    {
+                        await System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
+                        {
+                            ClearImageSourceCache(sourceDef.Name);
+                            RunFlow();
+                        });
+
+                        try
+                        {
+                            await Task.Delay(interval, token);
+                        }
+                        catch (TaskCanceledException)
+                        {
+                            break;
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"StartCameraContinuousFlow exception: {ex.Message}");
+                }
+                finally
+                {
+                    await System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
+                    {
+                        IsRunningFolderFlow = false;
+                    });
+                }
+            }, token);
+        }
+
+        private DateTime _lastPlcTriggerTime = DateTime.MinValue;
+
+        private void OnPlcTagChangedForTrigger(object? sender, Application.PLC.Services.TagChangedEventArgs e)
+        {
+            if (!IsRunningFolderFlow || _config is null)
+            {
+                return;
+            }
+
+            var imageSourceNode = Nodes.FirstOrDefault(n => string.Equals(n.Type, "ImageSource", StringComparison.OrdinalIgnoreCase));
+            if (imageSourceNode is null)
+            {
+                return;
+            }
+
+            var imgSourceDef = _config.ImageSources.FirstOrDefault(x => string.Equals(x.Name, imageSourceNode.RefName, StringComparison.OrdinalIgnoreCase));
+            if (imgSourceDef is null || imgSourceDef.TriggerMode != ImageSourceTriggerMode.PlcTrigger)
+            {
+                return;
+            }
+
+            string targetPlcId = (imgSourceDef.PlcTriggerPlcId ?? "").Trim();
+            string targetTagName = (imgSourceDef.PlcTriggerTagName ?? "").Trim();
+
+            // Khớp PLC theo ID hoặc theo Tên PLC
+            bool matchPlc = string.IsNullOrWhiteSpace(targetPlcId) || 
+                            string.Equals(e.PlcId, targetPlcId, StringComparison.OrdinalIgnoreCase) ||
+                            _plcManagerService.Plcs.Any(p => (string.Equals(p.Id, e.PlcId, StringComparison.OrdinalIgnoreCase) || string.Equals(p.Name, e.PlcId, StringComparison.OrdinalIgnoreCase)) &&
+                                                              (string.Equals(p.Id, targetPlcId, StringComparison.OrdinalIgnoreCase) || string.Equals(p.Name, targetPlcId, StringComparison.OrdinalIgnoreCase)));
+
+            // Khớp Tag theo Tên Tag hoặc theo Địa chỉ Tag (ví dụ: X0 vs X0_Trigger)
+            var plcTag = _plcManagerService.Tags.FirstOrDefault(t => string.Equals(t.Name, e.TagName, StringComparison.OrdinalIgnoreCase) || string.Equals(t.Address, e.TagName, StringComparison.OrdinalIgnoreCase));
+            string tagAddress = plcTag?.Address ?? "";
+
+            bool matchTag = string.Equals(e.TagName?.Trim(), targetTagName, StringComparison.OrdinalIgnoreCase) ||
+                            (!string.IsNullOrEmpty(tagAddress) && string.Equals(tagAddress.Trim(), targetTagName, StringComparison.OrdinalIgnoreCase));
+
+            if (!matchPlc || !matchTag)
+            {
+                return;
+            }
+
+            bool isTriggered = false;
+            switch (imgSourceDef.PlcTriggerEdge)
+            {
+                case PlcTriggerEdge.RisingEdge:
+                    bool oldBoolRising = ToBoolValue(e.OldValue);
+                    bool newBoolRising = ToBoolValue(e.NewValue);
+                    isTriggered = (e.OldValue == null && newBoolRising) || (!oldBoolRising && newBoolRising);
+                    break;
+
+                case PlcTriggerEdge.FallingEdge:
+                    bool oldBoolFalling = ToBoolValue(e.OldValue);
+                    bool newBoolFalling = ToBoolValue(e.NewValue);
+                    isTriggered = oldBoolFalling && !newBoolFalling;
+                    break;
+
+                case PlcTriggerEdge.Changed:
+                    isTriggered = !ValuesEqual(e.OldValue, e.NewValue);
+                    break;
+            }
+
+            if (isTriggered)
+            {
+                var now = DateTime.Now;
+                if ((now - _lastPlcTriggerTime).TotalMilliseconds < 100)
+                {
+                    return; // Skip duplicate rapid triggers (100ms debouncing)
+                }
+                _lastPlcTriggerTime = now;
+
+                System.Diagnostics.Debug.WriteLine($"PLC Trigger fired: Tag '{e.TagName}' on PLC '{e.PlcId}' changed from '{e.OldValue}' to '{e.NewValue}'. Running Job Flow!");
+                System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
+                {
+                    ClearImageSourceCache(imgSourceDef.Name);
+                    RunFlow();
+                });
+            }
+        }
+
+        private static bool ToBoolValue(object? val)
+        {
+            if (val == null) return false;
+            if (val is bool b) return b;
+            if (int.TryParse(val.ToString(), out int i)) return i != 0;
+            if (double.TryParse(val.ToString(), out double d)) return d != 0.0;
+            if (bool.TryParse(val.ToString(), out bool bParsed)) return bParsed;
+            return false;
+        }
+
+        private static bool ValuesEqual(object? v1, object? v2)
+        {
+            if (v1 == null && v2 == null) return true;
+            if (v1 == null || v2 == null) return false;
+            return string.Equals(v1.ToString(), v2.ToString(), StringComparison.OrdinalIgnoreCase);
         }
 
         private void OnRunFlowClicked()
@@ -1697,9 +1963,7 @@ namespace VisionInspectionApp.UI.ViewModels
             _inspectionService.ResetTracking();
             var __sw = System.Diagnostics.Stopwatch.StartNew();
 
-            if (_imageSourcePreviewCache.TryGetValue(sourceNodeName ?? "", out var old))
-                old.Image?.Dispose();
-            _imageSourcePreviewCache[sourceNodeName ?? ""] = (filePath, mat.Clone());
+            SetImageSourceCache(sourceNodeName, filePath, mat);
             _sharedImage.SetImage(mat);
 
             SyncToolGraphToConfig();
@@ -1768,15 +2032,15 @@ namespace VisionInspectionApp.UI.ViewModels
         {
             try
             {
-                var mat = await _cameraService.CaptureSnapshotAsync();
+                var imgSourceDef = SelectedImageSourceDef();
+                int camIndex = imgSourceDef?.CameraIndex ?? 0;
+                string? rtsp = (imgSourceDef != null && !string.IsNullOrWhiteSpace(imgSourceDef.RtspUrl)) ? imgSourceDef.RtspUrl : null;
+                var mat = await _cameraService.CaptureSnapshotAsync(camIndex, rtsp);
                 if (mat != null && !mat.Empty())
                 {
-                    var imgSourceDef = SelectedImageSourceDef();
                     if (imgSourceDef is not null)
                     {
-                        if (_imageSourcePreviewCache.TryGetValue(imgSourceDef.Name ?? "", out var old))
-                            old.Image?.Dispose();
-                        _imageSourcePreviewCache[imgSourceDef.Name ?? ""] = ("camera", mat.Clone());
+                        SetImageSourceCache(imgSourceDef.Name, "camera", mat);
                     }
                     _sharedImage.SetImage(mat);
                     mat.Dispose();
@@ -1792,155 +2056,166 @@ namespace VisionInspectionApp.UI.ViewModels
                 MessageBox.Show($"Lỗi chụp ảnh: {ex.Message}", "Lỗi", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
-    
+        private bool _isExecutingRunFlow;
+
         private void RunFlow()
         {
+            if (_isExecutingRunFlow)
+            {
+                System.Diagnostics.Debug.WriteLine("[RunFlow] Skipped re-entrant flow execution request.");
+                return;
+            }
+            _isExecutingRunFlow = true;
+
             _inspectionService.ResetTracking();
             Mat? snap = null;
-            System.Diagnostics.Debug.WriteLine($"RunFlow: Checking for ImageSource nodes. Total nodes: {Nodes.Count}, ImageSources in config: {_config?.ImageSources.Count ?? 0}");
-            // Check if there's an ImageSource node and use its image
-            int? imageSourceMs = null;
-            string? imageSourceNodeRefName = null;
-            
-            if (_config is not null && _config.ImageSources.Count > 0)
+            try
             {
-                var imageSourceNode = Nodes.FirstOrDefault(n => string.Equals(n.Type, "ImageSource", StringComparison.OrdinalIgnoreCase));
-                if (imageSourceNode is not null)
+                System.Diagnostics.Debug.WriteLine($"RunFlow: Checking for ImageSource nodes. Total nodes: {Nodes.Count}, ImageSources in config: {_config?.ImageSources.Count ?? 0}");
+                int? imageSourceMs = null;
+                string? imageSourceNodeRefName = null;
+                
+                if (_config is not null && _config.ImageSources.Count > 0)
                 {
-                    imageSourceNodeRefName = imageSourceNode.RefName;
-                    var __sw = System.Diagnostics.Stopwatch.StartNew();
-                    System.Diagnostics.Debug.WriteLine($"RunFlow: Found ImageSource node: {imageSourceNode.RefName}");
-                    var imgSourceDef = _config.ImageSources.FirstOrDefault(x => string.Equals(x.Name, imageSourceNode.RefName, StringComparison.OrdinalIgnoreCase));
-                    if (imgSourceDef is not null)
+                    var imageSourceNode = Nodes.FirstOrDefault(n => string.Equals(n.Type, "ImageSource", StringComparison.OrdinalIgnoreCase));
+                    if (imageSourceNode is not null)
                     {
-                        System.Diagnostics.Debug.WriteLine($"RunFlow: Found ImageSourceDef: {imgSourceDef.Name}, SourceType={imgSourceDef.SourceType}");
-                        if (imgSourceDef.SourceType == ImageSourceType.Camera)
+                        imageSourceNodeRefName = imageSourceNode.RefName;
+                        var __sw = System.Diagnostics.Stopwatch.StartNew();
+                        System.Diagnostics.Debug.WriteLine($"RunFlow: Found ImageSource node: {imageSourceNode.RefName}");
+                        var imgSourceDef = _config.ImageSources.FirstOrDefault(x => string.Equals(x.Name, imageSourceNode.RefName, StringComparison.OrdinalIgnoreCase));
+                        if (imgSourceDef is not null)
                         {
-                            try
+                            System.Diagnostics.Debug.WriteLine($"RunFlow: Found ImageSourceDef: {imgSourceDef.Name}, SourceType={imgSourceDef.SourceType}");
+                            if (imgSourceDef.SourceType == ImageSourceType.Camera)
                             {
-                                var cameraMat = _cameraService.CaptureSnapshotAsync().GetAwaiter().GetResult();
-                                if (cameraMat is not null && !cameraMat.Empty())
+                                try
                                 {
-                                    if (_imageSourcePreviewCache.TryGetValue(imgSourceDef.Name ?? "", out var old))
-                                        old.Image?.Dispose();
-                                    _imageSourcePreviewCache[imgSourceDef.Name ?? ""] = ("camera", cameraMat.Clone());
-                                    _sharedImage.SetImage(cameraMat);
-                                    snap = cameraMat;
+                                    var cameraMat = CaptureCameraSnapshotSafe(imgSourceDef.CameraIndex, string.IsNullOrWhiteSpace(imgSourceDef.RtspUrl) ? null : imgSourceDef.RtspUrl);
+                                    if (cameraMat is not null && !cameraMat.Empty())
+                                    {
+                                        SetImageSourceCache(imgSourceDef.Name, "camera", cameraMat);
+                                        _sharedImage.SetImage(cameraMat);
+                                        snap = cameraMat;
+                                    }
+                                }
+                                catch (Exception ex)
+                                {
+                                    System.Diagnostics.Debug.WriteLine($"RunFlow Camera Exception: {ex.Message}");
                                 }
                             }
-                            catch (Exception ex)
+                            else
                             {
-                                System.Diagnostics.Debug.WriteLine($"RunFlow Camera Exception: {ex.Message}");
+                                snap = LoadImageFromSourceForPreview(imgSourceDef);
+                                if (snap is not null && !snap.Empty())
+                                {
+                                    _sharedImage.SetImage(snap);
+                                }
                             }
-                        }
-                        else
-                        {
-                            snap = LoadImageFromSourceForPreview(imgSourceDef);
                             if (snap is not null && !snap.Empty())
                             {
-                                _sharedImage.SetImage(snap);
+                                System.Diagnostics.Debug.WriteLine($"RunFlow: Successfully loaded image from ImageSource: {snap.Width}x{snap.Height}");
                             }
-                        }
-                        if (snap is not null && !snap.Empty())
-                        {
-                            System.Diagnostics.Debug.WriteLine($"RunFlow: Successfully loaded image from ImageSource: {snap.Width}x{snap.Height}");
+                            else
+                            {
+                                System.Diagnostics.Debug.WriteLine("RunFlow: Failed to load image from ImageSource");
+                                snap?.Dispose();
+                                snap = null;
+                            }
                         }
                         else
                         {
-                            System.Diagnostics.Debug.WriteLine("RunFlow: Failed to load image from ImageSource");
-                            snap?.Dispose();
-                            snap = null;
+                            System.Diagnostics.Debug.WriteLine($"RunFlow: ImageSourceDef not found for RefName: {imageSourceNode.RefName}");
                         }
+                        __sw.Stop();
+                        imageSourceMs = (int)__sw.ElapsedMilliseconds;
                     }
                     else
                     {
-                        System.Diagnostics.Debug.WriteLine($"RunFlow: ImageSourceDef not found for RefName: {imageSourceNode.RefName}");
+                        System.Diagnostics.Debug.WriteLine("RunFlow: No ImageSource node found in graph");
                     }
-                    __sw.Stop();
-                    imageSourceMs = (int)__sw.ElapsedMilliseconds;
                 }
-                else
+        
+                // Fallback to shared image if no ImageSource or failed to load
+                if (snap is null)
                 {
-                    System.Diagnostics.Debug.WriteLine("RunFlow: No ImageSource node found in graph");
+                    System.Diagnostics.Debug.WriteLine("RunFlow: Using shared image as fallback");
+                    snap = _sharedImage.GetSnapshot();
                 }
-            }
-    
-            // Fallback to shared image if no ImageSource or failed to load
-            if (snap is null)
-            {
-                System.Diagnostics.Debug.WriteLine("RunFlow: Using shared image as fallback");
-                snap = _sharedImage.GetSnapshot();
-            }
-    
-            if (snap is null || _config is null)
-            {
-                _lastRun = null;
-                _lastRunError = "Kh├┤ng c├│ ß║únh hoß║╖c cß║Ñu h├¼nh (config).";
-                RefreshPreviews();
-                return;
-            }
-    
-            SyncToolGraphToConfig();
-            EnsureTemplatePathsAbsolute(_config);
-            // Guard: auto-run may happen while templates are not taught yet.
-            // In that case, do not attempt to inspect (PatternMatcher may throw); just refresh previews.
-            bool HasTemplate(PointDefinition p)
-            {
-                if (p.TemplateRoi.Width <= 0 || p.TemplateRoi.Height <= 0)
-                    return false;
-                if (string.IsNullOrWhiteSpace(p.TemplateImageFile))
-                    return false;
-                return File.Exists(p.TemplateImageFile);
-            }
-    
-            var originOk = HasTemplate(_config.Origin);
-            var anyPointNeedsTemplate = _config.Points.Any(p => p.Algorithm == PointFindAlgorithm.TemplateMatch && (p.SearchRoi.Width > 0 && p.SearchRoi.Height > 0) && !HasTemplate(p));
-            var graphNeedsOrigin = Nodes.Any(n => string.Equals(n.Type, "Origin", StringComparison.OrdinalIgnoreCase));
-            var graphNeedsPoint = Nodes.Any(n => string.Equals(n.Type, "Point", StringComparison.OrdinalIgnoreCase));
-            if ((graphNeedsOrigin && !originOk) || (graphNeedsPoint && anyPointNeedsTemplate))
-            {
-                _lastRun = null;
-                _lastRunError = "Flow bß╗ï dß╗½ng v├¼ node Origin hoß║╖c Point ─æang chß╗¥ khß╗ƒi tß║ío Template ß║únh.";
-                RefreshPreviews();
-                RaiseToolPropertyPanelsChanged();
-                OnPropertyChanged(nameof(Blob_LastRunCount));
-                return;
-            }
-    
-            try
-            {
-                _lastRunError = null;
-                _lastRun = _inspectionService.Inspect(snap, _config);
-                if (_lastRun != null)
+        
+                if (snap is null || _config is null)
                 {
-                    if (imageSourceMs.HasValue && !string.IsNullOrWhiteSpace(imageSourceNodeRefName))
+                    _lastRun = null;
+                    _lastRunError = "Không có ảnh hoặc cấu hình (config).";
+                    RefreshPreviews();
+                    return;
+                }
+        
+                SyncToolGraphToConfig();
+                EnsureTemplatePathsAbsolute(_config);
+                bool HasTemplate(PointDefinition p)
+                {
+                    if (p.TemplateRoi.Width <= 0 || p.TemplateRoi.Height <= 0)
+                        return false;
+                    if (string.IsNullOrWhiteSpace(p.TemplateImageFile))
+                        return false;
+                    return File.Exists(p.TemplateImageFile);
+                }
+        
+                var originOk = HasTemplate(_config.Origin);
+                var anyPointNeedsTemplate = _config.Points.Any(p => p.Algorithm == PointFindAlgorithm.TemplateMatch && (p.SearchRoi.Width > 0 && p.SearchRoi.Height > 0) && !HasTemplate(p));
+                var graphNeedsOrigin = Nodes.Any(n => string.Equals(n.Type, "Origin", StringComparison.OrdinalIgnoreCase));
+                var graphNeedsPoint = Nodes.Any(n => string.Equals(n.Type, "Point", StringComparison.OrdinalIgnoreCase));
+                if ((graphNeedsOrigin && !originOk) || (graphNeedsPoint && anyPointNeedsTemplate))
+                {
+                    _lastRun = null;
+                    _lastRunError = "Flow bị dừng vì node Origin hoặc Point đang chờ khởi tạo Template ảnh.";
+                    RefreshPreviews();
+                    RaiseToolPropertyPanelsChanged();
+                    OnPropertyChanged(nameof(Blob_LastRunCount));
+                    return;
+                }
+        
+                try
+                {
+                    _lastRunError = null;
+                    _lastRun = _inspectionService.Inspect(snap, _config);
+                    if (_lastRun != null)
                     {
-                        _lastRun.Timings.NodeTimings[imageSourceNodeRefName] = imageSourceMs.Value;
-                    }
-                    if (_config.PreprocessNodes != null)
-                    {
-                        foreach (var preNode in _config.PreprocessNodes)
+                        if (imageSourceMs.HasValue && !string.IsNullOrWhiteSpace(imageSourceNodeRefName))
                         {
-                            if (!string.IsNullOrWhiteSpace(preNode.Name))
+                            _lastRun.Timings.NodeTimings[imageSourceNodeRefName] = imageSourceMs.Value;
+                        }
+                        if (_config.PreprocessNodes != null)
+                        {
+                            foreach (var preNode in _config.PreprocessNodes)
                             {
-                                _lastRun.Timings.NodeTimings[preNode.Name] = 0; // Preprocess time is distributed/negligible
+                                if (!string.IsNullOrWhiteSpace(preNode.Name))
+                                {
+                                    _lastRun.Timings.NodeTimings[preNode.Name] = 0;
+                                }
                             }
                         }
                     }
                 }
+                catch (Exception ex)
+                {
+                    _lastRun = null;
+                    _lastRunError = "Lỗi khi chạy Flow: " + ex.Message;
+                }
+        
+                UpdateNodeExecutionTimes();
+                LastResult = _lastRun;
+                RefreshInspectionDashboard(_lastRun);
+                RefreshPreviews();
+                RaiseToolPropertyPanelsChanged();
+                OnPropertyChanged(nameof(Blob_LastRunCount));
             }
-            catch (Exception ex)
+            finally
             {
-                _lastRun = null;
-                _lastRunError = "Lß╗ùi khi chß║íy Flow: " + ex.Message;
+                snap?.Dispose();
+                _isExecutingRunFlow = false;
             }
-    
-            UpdateNodeExecutionTimes();
-            LastResult = _lastRun;
-            RefreshInspectionDashboard(_lastRun);
-            RefreshPreviews();
-            RaiseToolPropertyPanelsChanged();
-            OnPropertyChanged(nameof(Blob_LastRunCount));
         }
 
     
@@ -1982,12 +2257,12 @@ namespace VisionInspectionApp.UI.ViewModels
             if (_config is not null && PreprocessPreviewEnabled)
             {
                 using var processedFinal = _preprocessor.Run(snap, _config.Preprocess);
-                _cachedFinalPreviewImage = processedFinal.Empty() ? null : processedFinal.ToBitmapSource();
+                _cachedFinalPreviewImage = processedFinal.Empty() ? null : processedFinal.ToBitmapSourceSafe();
                 FinalPreviewImage = _cachedFinalPreviewImage;
             }
             else
             {
-                _cachedFinalPreviewImage = snap.Empty() ? null : snap.ToBitmapSource();
+                _cachedFinalPreviewImage = snap.Empty() ? null : snap.ToBitmapSourceSafe();
                 FinalPreviewImage = _cachedFinalPreviewImage;
             }
     
@@ -2020,7 +2295,7 @@ namespace VisionInspectionApp.UI.ViewModels
             if (SelectedNode is not null && string.Equals(SelectedNode.Type, "ResultView", StringComparison.OrdinalIgnoreCase))
             {
                 using var resultSnap = _sharedImage.GetSnapshot();
-                SelectedNodePreviewImage = FinalPreviewImage ?? _cachedFinalPreviewImage ?? (resultSnap is null || resultSnap.Empty() ? null : resultSnap.ToBitmapSource());
+                SelectedNodePreviewImage = FinalPreviewImage ?? _cachedFinalPreviewImage ?? (resultSnap is null || resultSnap.Empty() ? null : resultSnap.ToBitmapSourceSafe());
                 SelectedNodeOverlayItems = FinalOverlayItems;
                 ActiveRoiLabel = string.Empty;
                 return;
@@ -2045,19 +2320,19 @@ namespace VisionInspectionApp.UI.ViewModels
 
                 if (targetNode is null || string.Equals(targetNode.Type, "ResultView", StringComparison.OrdinalIgnoreCase))
                 {
-                    SelectedNodePreviewImage = FinalPreviewImage ?? _cachedFinalPreviewImage ?? (snapIO.Empty() ? null : snapIO.ToBitmapSource());
+                    SelectedNodePreviewImage = FinalPreviewImage ?? _cachedFinalPreviewImage ?? (snapIO.Empty() ? null : snapIO.ToBitmapSourceSafe());
                     SelectedNodeOverlayItems = FinalOverlayItems;
                     return;
                 }
 
                 if (string.Equals(targetNode.Type, "ImageSource", StringComparison.OrdinalIgnoreCase))
                 {
-                    SelectedNodePreviewImage = snapIO.Empty() ? null : snapIO.ToBitmapSource();
+                    SelectedNodePreviewImage = snapIO.Empty() ? null : snapIO.ToBitmapSourceSafe();
                 }
                 else
                 {
                     using var processedSel = ResolveToolPreprocessForPreview(snapIO, targetNode);
-                    SelectedNodePreviewImage = processedSel.Empty() ? null : processedSel.ToBitmapSource();
+                    SelectedNodePreviewImage = processedSel.Empty() ? null : processedSel.ToBitmapSourceSafe();
                 }
 
                 AddConfigRoisForNode(targetNode, newSelectedNodeOverlayItems);
@@ -2081,18 +2356,18 @@ namespace VisionInspectionApp.UI.ViewModels
                 if (imgSourceDef is not null)
                 {
                     System.Diagnostics.Debug.WriteLine($"ImageSourceDef found: Name={imgSourceDef.Name}, SourceType={imgSourceDef.SourceType}");
-                    var loadedMat = LoadImageFromSourceForPreview(imgSourceDef);
+                    using var loadedMat = LoadImageFromSourceForPreview(imgSourceDef);
                     if (loadedMat is not null && !loadedMat.Empty())
                     {
                         System.Diagnostics.Debug.WriteLine($"Setting SelectedNodePreviewImage from ImageSource: {loadedMat.Width}x{loadedMat.Height}");
                         if (_config is not null && PreprocessPreviewEnabled)
                         {
                             using var processed = _preprocessor.Run(loadedMat, _config.Preprocess);
-                            SelectedNodePreviewImage = processed.ToBitmapSource();
+                            SelectedNodePreviewImage = processed.ToBitmapSourceSafe();
                         }
                         else
                         {
-                            SelectedNodePreviewImage = loadedMat.ToBitmapSource();
+                            SelectedNodePreviewImage = loadedMat.ToBitmapSourceSafe();
                         }
     
                         System.Diagnostics.Debug.WriteLine($"SelectedNodePreviewImage set successfully");
@@ -2120,25 +2395,25 @@ namespace VisionInspectionApp.UI.ViewModels
                 if (SelectedNode is not null && string.Equals(SelectedNode.Type, "Preprocess", StringComparison.OrdinalIgnoreCase))
                 {
                     using var processedSel = ResolveToolPreprocessForPreview(snap, SelectedNode);
-                    SelectedNodePreviewImage = processedSel.Empty() ? null : processedSel.ToBitmapSource();
+                    SelectedNodePreviewImage = processedSel.Empty() ? null : processedSel.ToBitmapSourceSafe();
                 }
                 else
                 {
                     if (SelectedNode is not null && (string.Equals(SelectedNode.Type, "Origin", StringComparison.OrdinalIgnoreCase) || string.Equals(SelectedNode.Type, "Point", StringComparison.OrdinalIgnoreCase) || string.Equals(SelectedNode.Type, "Line", StringComparison.OrdinalIgnoreCase) || string.Equals(SelectedNode.Type, "Caliper", StringComparison.OrdinalIgnoreCase) || string.Equals(SelectedNode.Type, "LinePairDetection", StringComparison.OrdinalIgnoreCase) || string.Equals(SelectedNode.Type, "EdgePairDetect", StringComparison.OrdinalIgnoreCase) || string.Equals(SelectedNode.Type, "EdgePair", StringComparison.OrdinalIgnoreCase) || string.Equals(SelectedNode.Type, "BlobDetection", StringComparison.OrdinalIgnoreCase) || string.Equals(SelectedNode.Type, "CircleFinder", StringComparison.OrdinalIgnoreCase) || string.Equals(SelectedNode.Type, "SurfaceCompare", StringComparison.OrdinalIgnoreCase) || string.Equals(SelectedNode.Type, "ContourCompare", StringComparison.OrdinalIgnoreCase) || string.Equals(SelectedNode.Type, "Text", StringComparison.OrdinalIgnoreCase) || string.Equals(SelectedNode.Type, "CodeDetection", StringComparison.OrdinalIgnoreCase)))
                     {
                         using var processedSel = ResolveToolPreprocessForPreview(snap, SelectedNode);
-                        SelectedNodePreviewImage = processedSel.Empty() ? null : processedSel.ToBitmapSource();
+                        SelectedNodePreviewImage = processedSel.Empty() ? null : processedSel.ToBitmapSourceSafe();
                     }
                     else
                     {
-                        SelectedNodePreviewImage = _cachedFinalPreviewImage ?? (snap.Empty() ? null : snap.ToBitmapSource());
+                        SelectedNodePreviewImage = _cachedFinalPreviewImage ?? (snap.Empty() ? null : snap.ToBitmapSourceSafe());
                     }
                 }
             }
             else
             {
                 System.Diagnostics.Debug.WriteLine("PreprocessPreviewEnabled is false, using raw snap");
-                SelectedNodePreviewImage = snap.Empty() ? null : snap.ToBitmapSource();
+                SelectedNodePreviewImage = snap.Empty() ? null : snap.ToBitmapSourceSafe();
             }
     
             UpdateBlobThresholdPreview(snap);
@@ -2274,7 +2549,7 @@ namespace VisionInspectionApp.UI.ViewModels
     
             try
             {
-                BlobThresholdPreviewImage = view.ToBitmapSource();
+                BlobThresholdPreviewImage = view.ToBitmapSourceSafe();
             }
             finally
             {

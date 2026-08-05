@@ -138,11 +138,20 @@ public enum ImageSourceType
     Camera = 2
 }
 
+public enum ImageSourceTriggerMode
+{
+    SoftTrigger = 0,
+    LineTrigger = 1,
+    PlcTrigger = 2
+}
+
 public sealed class ImageSourceDefinition
 {
     public string Name { get; set; } = string.Empty;
 
     public ImageSourceType SourceType { get; set; } = ImageSourceType.File;
+
+    public ImageSourceTriggerMode TriggerMode { get; set; } = ImageSourceTriggerMode.SoftTrigger;
 
     public string FilePath { get; set; } = string.Empty;
 
@@ -155,6 +164,16 @@ public sealed class ImageSourceDefinition
     public bool LoopFolder { get; set; } = true;
 
     public int FolderIntervalMs { get; set; } = 1000;
+
+    // Line Trigger (Hardware Sensor Signal)
+    public string LineTriggerName { get; set; } = "Line1";
+
+    // PLC Trigger (PLC Tag Signal)
+    public string PlcTriggerPlcId { get; set; } = "PLC1";
+
+    public string PlcTriggerTagName { get; set; } = "X0_Trigger";
+
+    public PlcTriggerEdge PlcTriggerEdge { get; set; } = PlcTriggerEdge.RisingEdge;
 }
 
 public sealed class VisionConfig

@@ -1,4 +1,4 @@
-﻿using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using OpenCvSharp;
 using OpenCvSharp.WpfExtensions;
@@ -88,28 +88,13 @@ public sealed class CameraSettingsViewModel : ObservableObject, IDisposable
         ResetSettingsCommand = new RelayCommand(ResetSettings);
     }
 
+    private bool _isRenderingFrame;
+
     private void OnFrameCaptured(object? sender, Mat frame)
     {
         try
         {
             if (frame == null || frame.Empty()) return;
-
-            _currentFrame?.Dispose();
-            _currentFrame = frame.Clone();
-
-            // Chuyển đổi sang BitmapSource tĩnh và Freeze để thread-safe
-            var bitmap = _currentFrame.ToBitmapSource();
-            bitmap.Freeze();
-
-            // Gán hiển thị trên UI Thread
-            System.Windows.Application.Current.Dispatcher.BeginInvoke(() =>
-            {
-                LiveImage = bitmap;
-                if (_cameraService.IsRunning)
-                {
-                    StatusMessage = "Camera đang chạy - Stream mượt mà";
-                }
-            });
 
             // Tính toán FPS thực tế
             _frameCount++;
@@ -120,12 +105,43 @@ public sealed class CameraSettingsViewModel : ObservableObject, IDisposable
                 var fpsVal = (int)(_frameCount / elapsed);
                 _frameCount = 0;
                 _lastFrameTime = now;
-                System.Windows.Application.Current.Dispatcher.BeginInvoke(() => Fps = fpsVal);
+                System.Windows.Application.Current?.Dispatcher?.BeginInvoke(System.Windows.Threading.DispatcherPriority.Background, () => Fps = fpsVal);
             }
+
+            if (_isRenderingFrame) return;
+            _isRenderingFrame = true;
+
+            var bitmap = frame.ToBitmapSourceSafe();
+            if (bitmap == null)
+            {
+                _isRenderingFrame = false;
+                return;
+            }
+
+            // Gán hiển thị trên UI Thread
+            System.Windows.Application.Current?.Dispatcher?.BeginInvoke(System.Windows.Threading.DispatcherPriority.Render, () =>
+            {
+                try
+                {
+                    LiveImage = bitmap;
+                    if (_cameraService.IsRunning)
+                    {
+                        StatusMessage = "Camera đang chạy - Stream mượt mà";
+                    }
+                }
+                finally
+                {
+                    _isRenderingFrame = false;
+                }
+            });
         }
         catch
         {
-            // Bỏ qua lỗi render hình ảnh
+            _isRenderingFrame = false;
+        }
+        finally
+        {
+            frame?.Dispose();
         }
     }
 

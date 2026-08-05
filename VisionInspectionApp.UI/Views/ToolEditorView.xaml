@@ -1151,10 +1151,10 @@
                                             <ColumnDefinition Width="*" />
                                         </Grid.ColumnDefinitions>
                                         <Border Background="{DynamicResource WindowBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
-                                            <TextBlock Text="Camera Index" VerticalAlignment="Center" Margin="4,2" FontSize="11" Foreground="{DynamicResource TextBrush}"/>
+                                            <TextBlock Text="Camera" VerticalAlignment="Center" Margin="4,2" FontSize="11" Foreground="{DynamicResource TextBrush}"/>
                                         </Border>
                                         <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
-                                            <TextBox Text="{Binding ImageSource_CameraIndex, UpdateSourceTrigger=LostFocus}" Margin="2,1" FontSize="11" />
+                                            <ComboBox ItemsSource="{Binding AvailableCameraItems}" SelectedItem="{Binding SelectedCameraItem, UpdateSourceTrigger=PropertyChanged}" Margin="2,1" FontSize="11" />
                                         </Border>
                                     </Grid>
                                 </Border>
@@ -1173,6 +1173,86 @@
                                         </Border>
                                     </Grid>
                                 </Border>
+
+                                <!-- Trigger Mode Selection -->
+                                <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="120" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <Border Background="{DynamicResource WindowBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
+                                            <TextBlock Text="Trigger Mode" VerticalAlignment="Center" Margin="4,2" FontSize="11" Foreground="{DynamicResource TextBrush}"/>
+                                        </Border>
+                                        <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
+                                            <ComboBox ItemsSource="{Binding AvailableImageSourceTriggerModes}" SelectedItem="{Binding ImageSource_TriggerMode, UpdateSourceTrigger=PropertyChanged}" Margin="2,1" FontSize="11" />
+                                        </Border>
+                                    </Grid>
+                                </Border>
+
+                                <!-- Line Trigger Settings -->
+                                <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1" Visibility="{Binding ImageSource_IsLineTrigger, Converter={StaticResource BoolToVis}}">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="120" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <Border Background="{DynamicResource WindowBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
+                                            <TextBlock Text="Hardware Sensor" VerticalAlignment="Center" Margin="4,2" FontSize="11" Foreground="{DynamicResource TextBrush}"/>
+                                        </Border>
+                                        <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
+                                            <TextBox Text="{Binding ImageSource_LineTriggerName, UpdateSourceTrigger=LostFocus}" ToolTip="Hardware Line Signal (Line1, Line2...)" Margin="2,1" FontSize="11" />
+                                        </Border>
+                                    </Grid>
+                                </Border>
+
+                                <!-- PLC Trigger Settings -->
+                                <StackPanel Visibility="{Binding ImageSource_IsPlcTrigger, Converter={StaticResource BoolToVis}}">
+                                    <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="120" />
+                                                <ColumnDefinition Width="*" />
+                                            </Grid.ColumnDefinitions>
+                                            <Border Background="{DynamicResource WindowBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
+                                                <TextBlock Text="PLC Target" VerticalAlignment="Center" Margin="4,2" FontSize="11" Foreground="{DynamicResource TextBrush}"/>
+                                            </Border>
+                                            <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
+                                                <ComboBox ItemsSource="{Binding AvailablePlcNames}" SelectedItem="{Binding ImageSource_PlcTriggerPlcId, UpdateSourceTrigger=PropertyChanged}" Margin="2,1" FontSize="11" />
+                                            </Border>
+                                        </Grid>
+                                    </Border>
+
+                                    <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="120" />
+                                                <ColumnDefinition Width="*" />
+                                            </Grid.ColumnDefinitions>
+                                            <Border Background="{DynamicResource WindowBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
+                                                <TextBlock Text="PLC Trigger Tag" VerticalAlignment="Center" Margin="4,2" FontSize="11" Foreground="{DynamicResource TextBrush}"/>
+                                            </Border>
+                                            <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
+                                                <ComboBox ItemsSource="{Binding AvailablePlcTagNames}" SelectedItem="{Binding ImageSource_PlcTriggerTagName, UpdateSourceTrigger=PropertyChanged}" Margin="2,1" FontSize="11" />
+                                            </Border>
+                                        </Grid>
+                                    </Border>
+
+                                    <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="120" />
+                                                <ColumnDefinition Width="*" />
+                                            </Grid.ColumnDefinitions>
+                                            <Border Background="{DynamicResource WindowBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
+                                                <TextBlock Text="Trigger Edge" VerticalAlignment="Center" Margin="4,2" FontSize="11" Foreground="{DynamicResource TextBrush}"/>
+                                            </Border>
+                                            <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
+                                                <ComboBox ItemsSource="{Binding AvailablePlcTriggerEdges}" SelectedItem="{Binding ImageSource_PlcTriggerEdge, UpdateSourceTrigger=PropertyChanged}" Margin="2,1" FontSize="11" />
+                                            </Border>
+                                        </Grid>
+                                    </Border>
+                                </StackPanel>
                             </StackPanel>
 
                             <StackPanel Visibility="{Binding IsImageOutputNode, Converter={StaticResource BoolToVis}}">

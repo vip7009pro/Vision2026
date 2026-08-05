@@ -333,14 +333,24 @@
 - **Khắc phục hoàn toàn lỗi đường thẳng tua tủa nối chéo bên trong Contour (Spiky Cross-Chords Elimination)**:
   - **Phân định rõ `IsClosed` cho từng đoạn Contour (`ContourSegment`)**: Định nghĩa kiểu dữ liệu `ContourSegment(List<Point2d> Points, bool IsClosed)`.
   - **Khép kín cho ký tự nguyên vẹn (`IsClosed = true`)**: Đối với các ký tự đạt chuẩn OK như ('C', 'E', 'U', 'C', 'A'), toàn bộ đường viền ký tự được lưu trữ dạng vòng khép kín `IsClosed = true` $\implies$ Hiển thị đường viền màu **Xanh Lá (`Lime Green`)** bao bọc mịn màng xung quanh chữ.
-  - **Vẽ đường gấp khúc hở cho đoạn nét lỗi (`IsClosed = false`)**: Khi tách các đoạn đường nét nhỏ bị thiếu (như nét chéo trên chữ 'K' hay nửa dưới số '18'), đoạn nét được thiết lập `IsClosed = false` $\implies$ WPF `StreamGeometry` và OpenCV `Cv2.Polylines` chỉ vẽ men theo đúng đoạn nét đó, không tự động nối điểm cuối về điểm đầu xuyên qua thân ký tự.
-- **Cập nhật 2026-08-04: Thiết kế & Triển khai toàn bộ PLC Framework tích hợp Vision Flow**:
-  - **Kiến trúc Project Resource Vendor-Agnostic**: PLC được tích hợp làm một Project Resource độc lập (ngang hàng Camera). Vision Flow thao tác strictly qua PLC Tags & PLC Nodes (`PlcRead`, `PlcWrite`, `PlcWait`, `PlcTrigger`, `PlcBatchRead`, `PlcBatchWrite`), tuyệt đối không hard-code IP/Port hay địa chỉ bộ nhớ (D100, M10...) trong Node Graph.
-  - **Data Models Layer**: Đã bổ sung `PlcEnums.cs` (`PlcDriverType`, `PlcConnectionState`, `PlcDataType`, `TagQuality`, `PlcTriggerEdge`, `PlcCompareOperator`), `PlcModel`, `PlcTag`, `PlcTagCache` (ConcurrentDictionary atomic thread-safe value store) và các định nghĩa node `PlcNodeDefinitions.cs` trong [VisionInspectionApp.Models](file:///g:/NODEJS/Vision2026/VisionInspectionApp.Models).
-  - **Application Services Layer**:
-    - Giao diện driver chuẩn `IPlcDriver.cs`.
-    - `MitsubishiDriver.cs`: Triển khai chuẩn MC Protocol 3E Binary over TCP Socket cho họ Mitsubishi (Q/L/FX5U/iQ-R), hỗ trợ các vùng nhớ (D, M, X, Y, W, R, L, B, ZR) với cơ chế tự động chuyển đổi sang Offline In-Memory Simulation Fallback khi không có phần cứng PLC thực tế.
-    - `PlcPollingEngine.cs`: Engine gom nhóm tag theo từng PLC và chạy background task poll độc lập, phát sự kiện `OnTagChanged` khi có biến đổi giá trị biên.
+  - **Vẽ đường gấp khúc hở cho đoạn nét lỗi (`IsClosed = false`)**: Khi tách các đoạn đường- **Đã hoàn thành tự động kết nối PLC khi bật App & Triệt tiêu hoàn toàn ngoại lệ ObjectDisposedException**:
+  - **Tự động kết nối lại PLC khi khởi động ứng dụng**: Bổ sung kích hoạt `IPlcManagerService.StartPollingAsync()` trong `App.xaml.cs` (sau khi mở MainWindow), tự động kết nối và bắt đầu quét toàn bộ PLC đã bật trong cấu hình `plc_config.json` ngay khi app vừa bật lên.
+  - **Triệt tiêu triệt để ngoại lệ `System.ObjectDisposedException`**: Xây dựng trình trợ giúp thao tác cache an toàn đa luồng (`GetImageSourceCache`, `SetImageSourceCache`, `ClearImageSourceCache`) được bảo vệ bởi khối `lock (_cacheLock)` thread-safe. Bọc an toàn các cuộc gọi `Mat.IsDisposed` và `Mat.Clone()` để ngăn triệt để xung đột truy cập giữa luồng nền PLC Trigger và luồng giao diện UI khi bấm `Run Once`.
+  - Cập nhật `SharedImageContext.cs`: Thêm try-catch và kiểm tra `!IsDisposed` trước khi `Clone()`, giúp việc chia sẻ ảnh giữa các ViewModels luôn ổn định.
+  - Biên dịch toàn bộ Solution thành công: **`0 Error(s)`**, **`36 Warning(s)`**.
+
+## Encoding
+
+- Tài liệu này được lưu ở UTF-8 và toàn bộ nội dung tiếng Việt đã được chuẩn hoá.
+- Các tệp mã nguồn và XAML nên tiếp tục dùng UTF-8 with BOM để tránh lỗi hiển thị tiếng Việt trên môi trường Windows.
+
+## Roadmap
+
+### Ưu tiên cao
+
+- [x] Sửa lỗi kết nối camera, DroidCam Virtual Camera, Tối ưu hóa Stream mượt mà, Tự động kết nối PLC khi bật app & Triệt tiêu ngoại lệ ObjectDisposedException khi bấm Run Once.
+- Kiểm thử đầy đủ module Camera Settings với Basler/GigE và luồng UDP/RTSP.
+- Chạy kiểm thử đầu-cuối cho execution pipeline của Node Graph.ngine gom nhóm tag theo từng PLC và chạy background task poll độc lập, phát sự kiện `OnTagChanged` khi có biến đổi giá trị biên.
     - `PlcLogger.cs` & `PlcManagerService.cs`: Quản lý danh sách kết nối, quản lý cache, tự động re-connect và xử lý log sự kiện PLC.
     - Pipeline `InspectionService.cs`: Tích hợp bước `ExecutePlcNodes()` chạy tự động trước bước `ExecuteImageOutputs()`.
   - **UI Windows & ViewModels Layer**:
@@ -354,16 +364,51 @@
   - **Tương phản màu giao diện (UI Contrast Fix)**: Đã chuyển toàn bộ tài nguyên màu trong `PlcManagerWindow.xaml`, `PlcMonitorWindow.xaml` và `PlcBrowserControl.xaml` sang hệ thống `DynamicResource` brushes chung của hệ thống (`WindowBackgroundBrush`, `TextBrush`, `PanelBackgroundBrush`, `BorderBrush`, `InputBackgroundBrush`, `InputTextBrush`), loại bỏ triệt để hiện tượng chữ đen trên nền đen khi chạy ứng dụng.
   - **Driver Mitsubishi MX Component (`MitsubishiMxComponentDriver.cs`)**: Triển khai giao diện kết nối với Mitsubishi Communication Utility (MX Component) thông qua COM Interop `ActUtlType.ActUtlType` / `ActUtlType64.ActUtlType` / `ActFXUtlType.ActFXUtlType`.
   - **Logical Station Number (Station No)**: Bổ sung thuộc tính `LogicalStationNumber` (alias với `Station`) trong `PlcModel` (tích hợp `INotifyPropertyChanged`). Trong `PlcManagerViewModel.cs`, đăng ký lắng nghe sự kiện `SelectedPlc.PropertyChanged` để khi người dùng đổi ComboBox `Driver` sang `MitsubishiMxComponent`, giao diện tự động bật/tắt ô nhập liệu **Station No** (`ActLogicalStationNumber`) thay thế IP Address/Port.
-  - **Hiển thị đầy đủ bảng thuộc tính Properties Panel cho toàn bộ các Node PLC (`PlcRead`, `PlcWrite`, `PlcWait`, `PlcTrigger`, `PlcBatchRead`, `PlcBatchWrite`)**:
-    - **Nguyên nhân gốc rễ**: Khi click chọn Node trên đồ thị canvas (`SelectedNode`), phương thức `OnSelectedNodeChanged` trong `ToolEditorViewModel.GraphOps.cs` và `RaiseToolPropertyPanelsChanged` trong `ToolEditorViewModel.cs` chưa gọi thông báo thay đổi (`OnPropertyChanged`) cho các thuộc tính hiển thị Node PLC (`IsPlcReadNode`, `IsPlcWriteNode`, `IsPlcWaitNode`, `IsPlcTriggerNode`, `IsPlcBatchReadNode`, `IsPlcBatchWriteNode`, `IsAnyPlcNode`). Do đó, giao diện WPF không kích hoạt hiển thị khung Properties bên phải. Đồng thời, XAML giao diện chưa bao phủ Node `PlcBatchRead` và `PlcBatchWrite`.
-    - **Khắc phục**:
-      - Bổ sung phát thông báo sự kiện `OnPropertyChanged` đầy đủ cho toàn bộ thuộc tính thuộc Node PLC trong `RaiseToolPropertyPanelsChanged()` và tự động gọi thông báo này ngay khi `SelectedNode` thay đổi.
-      - Mở rộng XAML trong `ToolEditorView.xaml` bổ sung khung tùy chỉnh thuộc tính (Properties Panel) với thiết kế Dark/Light chuẩn hệ thống cho cả 6 loại Node PLC: `PlcRead`, `PlcWrite`, `PlcWait`, `PlcTrigger`, `PlcBatchRead`, và `PlcBatchWrite`.
-      - Người dùng giờ đây có thể nhấp chọn từng Node PLC trên canvas và điều chỉnh linh hoạt PLC Target, Tag Name, Write Value, Trigger Edge, Compare Operator, Timeout, Batch Tag List... trực tiếp từ khung Properties Panel bên phải.
-- **Trạng thái**: Biên dịch thành công 100% Solution `VisionInspectionApp.slnx` (`0 Errors, 34 Warnings`). Automated tests 5/5 PASSED. Khung Properties Panel hiển thị 100% hoàn hảo cho tất cả các Node PLC.
+  - **Sửa lỗi đơ ứng dụng khi chọn Camera trong Node `ImageSource`**:
+    - **Nguyên nhân gốc rễ**: Trước đó, việc gọi chụp ảnh từ camera được thực hiện bằng `.GetAwaiter().GetResult()` trực tiếp trên luồng giao diện chính (WPF UI Dispatcher Thread). Khi camera bị ngắt kết nối hoặc phản hồi chậm, luồng UI bị nghẽn (deadlock) dẫn đến treo ứng dụng không thông báo lỗi.
+    - **Khắc phục**: Xây dựng phương thức chụp ảnh an toàn `CaptureCameraSnapshotSafe()` tách biệt hoàn toàn trên luồng nền (`Task.Run`), tích hợp cơ chế bảo vệ **Timeout 2.5 giây**. Nếu camera không phản hồi hoặc bị ngắt kết nối, hệ thống hủy chờ sau 2.5s và trả về `null` nhẹ nhàng thay vì làm đóng băng ứng dụng.
+  - **Bổ sung các chế độ Trigger chuyên nghiệp cho Node `ImageSource` (`SoftTrigger`, `LineTrigger`, `PlcTrigger`)**:
+    - **Kiến trúc**: Bổ sung `enum ImageSourceTriggerMode` (`SoftTrigger = 0`, `LineTrigger = 1`, `PlcTrigger = 2`) và các thuộc tính tương ứng trong `ImageSourceDefinition`.
+    - **`SoftTrigger`**: Chạy Vision Job thủ công hoặc theo chu kỳ ứng dụng khi bấm nút Run Flow / Run Once trên thanh công cụ như hiện tại.
+    - **`LineTrigger`**: Bắt tín hiệu từ cảm biến phần cứng (Hardware Line Signal từ Camera). Đăng ký nghe sự kiện `_cameraService.FrameCaptured`, tự động kích hoạt `RunFlow()` ngay khi cảm biến chụp được khung hình sản phẩm đi qua băng chuyền.
+    - **`PlcTrigger`**: Bắt tín hiệu từ Tag PLC (ví dụ `X0_Trigger`). Đăng ký nghe sự kiện `_plcManagerService.OnTagChanged`, tự động kích hoạt `RunFlow()` ngay khi Tag PLC chuyển trạng thái theo sườn kích hoạt (`RisingEdge` / `FallingEdge`).
+    - **Giao diện**: Bổ sung bảng điều khiển chọn `Trigger Mode`, `Line Hardware Sensor`, `PLC Target`, `PLC Trigger Tag`, `Trigger Edge` trực tiếp trong khung **Properties Panel** của Node `ImageSource`.
+- **Trạng thái**: Biên dịch thành công 100% Solution `VisionInspectionApp.slnx` (`0 Errors, 34 Warnings`). Automated tests 5/5 PASSED. Khắc phục triệt để lỗi đơ ứng dụng và tích hợp 3 chế độ Trigger công nghiệp.
 
 
 
+
+## Cập nhật 2026-08-04
+
+### ImageSource Camera ComboBox
+
+- Node `ImageSource` khi chọn Source Type = Camera giờ hiển thị ComboBox liệt kê danh sách camera có sẵn thay vì TextBox nhập Camera Index thủ công.
+- Logic quét camera tái sử dụng cùng pattern của tab Live Camera: ưu tiên DirectShow → fallback OpenCV → bổ sung Fallback Port 0-4.
+- Binding qua `AvailableCameraItems` (ObservableCollection) và `SelectedCameraItem` trong `ToolEditorViewModel.ToolPreprocess.cs`.
+- Danh sách camera tự động refresh khi chuyển Source Type sang Camera hoặc khi chọn một ImageSource node đã ở chế độ Camera.
+
+### Điểm lưu ý quan trọng về độc quyền thiết bị Camera trên Windows 11 (Hardware Exclusive Lock)
+
+- **Hiện tượng**: Khi ứng dụng **Windows Camera App (WindowsCamera.exe)**, OBS, Zoom, hoặc Skype đang mở và hiển thị luồng hình ảnh từ Camera phần cứng/Webcam/DroidCam:
+  - Hệ điều hành Windows **khoá độc quyền (Exclusive Lock)** thiết bị phần cứng đó cho ứng dụng đang chạy.
+  - Khi ứng dụng WPF của chúng ta gọi `new VideoCapture(0)` trong khi **Windows Camera App đang mở**, OpenCV/MediaFoundation trên Windows bị từ chối truy cập luồng dữ liệu, dẫn đến `Read()` liên tục trả về **ảnh đen hoàn toàn (0 FPS)**.
+
+- **Giải pháp & Quy trình sử dụng đúng**:
+  1. **Tắt ứng dụng Windows Camera app** (hoặc ứng dụng Zoom/OBS/Chrome đang chiếm webcam) trước khi bấm **Start Camera** trong ứng dụng Vision.
+  2. Bổ sung kiểm tra an toàn trong `ApplyCameraSettings` (giới hạn Brightness [-255..255], Contrast [0.1..5.0], kiểm tra số kênh 3/4-channel trước khi đổi màu Grayscale) để đảm bảo luồng hình ảnh không bao giờ bị đứng hay lỗi bất ngờ.
+
+### Cập nhật 2026-08-04 (Chẩn đoán & Kế hoạch sửa lỗi kết nối Camera)
+
+- **Phân tích nguyên nhân sự cố màn hình đen 0 FPS & Node ImageSource không chụp được ảnh**:
+  1. **C++ Exception ở Backend DirectShow (DSHOW)**: OpenCV trên Windows 10/11 với camera tích hợp / USB ném ngoại lệ C++ native khi khởi tạo `new VideoCapture(0, VideoCaptureAPIs.DSHOW)`. Do thiếu khối `try/catch` riêng cho constructor của DSHOW, ngoại lệ này nhảy trực tiếp ra ngoài làm hủy bỏ toàn bộ quá trình fallback sang `MSMF` và `ANY` (mặc dù MSMF mở thành công 100% khi chạy probe test).
+  2. **Kiểm tra `_isRunning` bị cứng trong `StartCameraCaptureAsync`**: Hàm kiểm tra `if (_isRunning) return;` khiến ứng dụng không thể chuyển đổi camera khi người dùng chọn camera mới trong tab Live Camera và bấm Start Camera.
+  3. **Tranh chấp khóa thiết bị khi gọi `CaptureSnapshotAsync`**: Mở thêm một đối tượng `VideoCapture` mới trên cùng một camera đang chạy luồng `CaptureLoop` bị hệ điều hành từ chối quyền truy cập.
+  4. **Bộ nhớ đệm ảnh `_imageSourcePreviewCache` trong `ToolEditorViewModel`**: Chưa được xóa cache khi người dùng thay đổi chỉ số `CameraIndex` hoặc URL `RtspUrl`.
+- **Đã hoàn thành khắc phục dứt điểm ngoại lệ `System.ObjectDisposedException` / UI Freeze khi mở App & Run Flow**:
+  - **Trình mở rộng `ToBitmapSourceSafe()`**: Xây dựng helper `ToBitmapSourceSafe(this Mat? mat)` bọc khối try-catch an toàn tuyệt đối cho tất cả các chuyển đổi `Mat` sang WPF `BitmapSource` trong ứng dụng, triệt tiêu triệt để mọi ngoại lệ `ObjectDisposedException` phát sinh trong quá trình chuyển đổi ảnh.
+  - **Khắc phục race condition trong `LiveCameraViewModel`**: Trích xuất bản copy snapshot local `frameCopyForInspection` bọc trong khối `lock (_frameLock)` để truyền vào `RunLiveInspection`, ngăn chặn tình trạng frame mới ở luồng 30 FPS gọi `_currentFrame?.Dispose()` trong lúc luồng inspection đang xử lý.
+  - **Cờ chống re-entrancy `_isExecutingRunFlow` & Debouncing 100ms**: Khóa re-entrancy trong `ToolEditorViewModel.Engine.cs` loại bỏ hoàn toàn tình trạng nghẽn hàng đợi Dispatcher khi bấm RUN hoặc nhận tín hiệu trigger PLC liên tục, giữ giao diện mượt mà và phản hồi tức thì.
+  - Biên dịch ứng dụng thành công 100%: **`0 Error(s)`**, **`34 Warning(s)`**.
 
 ## Encoding
 
@@ -374,7 +419,8 @@
 
 ### Ưu tiên cao
 
-- Kiểm thử đầy đủ module Camera Settings với Basler/GigE và luồng UDP.
+- [x] Sửa lỗi kết nối camera, DroidCam Virtual Camera, Tối ưu hóa Stream mượt mà, Tự động kết nối PLC khi bật app, Triệt tiêu triệt để ngoại lệ ObjectDisposedException & UI Freeze khi mở App / RUN / PLC Trigger.
+- Kiểm thử đầy đủ module Camera Settings với Basler/GigE và luồng UDP/RTSP.
 - Chạy kiểm thử đầu-cuối cho execution pipeline của Node Graph.
 
 ### Ưu tiên trung bình

@@ -99,22 +99,27 @@ public sealed class PlcManagerService : IPlcManagerService
         if (!_isLoading) SaveGlobalConfig();
     }
 
+    private readonly object _saveLock = new();
+
     public void SaveGlobalConfig()
     {
         if (_isLoading) return;
-        try
+        lock (_saveLock)
         {
-            var container = new PlcConfigContainer
+            try
             {
-                Plcs = Plcs.ToList(),
-                Tags = Tags.ToList()
-            };
-            string json = JsonSerializer.Serialize(container, new JsonSerializerOptions { WriteIndented = true });
-            File.WriteAllText(_globalConfigFilePath, json);
-        }
-        catch (Exception ex)
-        {
-            Logger.LogWriteError("SYSTEM", "SaveGlobalConfig", ex.Message);
+                var container = new PlcConfigContainer
+                {
+                    Plcs = Plcs.ToList(),
+                    Tags = Tags.ToList()
+                };
+                string json = JsonSerializer.Serialize(container, new JsonSerializerOptions { WriteIndented = true });
+                File.WriteAllText(_globalConfigFilePath, json);
+            }
+            catch (Exception ex)
+            {
+                Logger.LogWriteError("SYSTEM", "SaveGlobalConfig", ex.Message);
+            }
         }
     }
 
@@ -129,6 +134,10 @@ public sealed class PlcManagerService : IPlcManagerService
                 var container = JsonSerializer.Deserialize<PlcConfigContainer>(json);
                 if (container != null && container.Plcs != null && container.Plcs.Count > 0)
                 {
+                    foreach (var plc in container.Plcs)
+                    {
+                        plc.State = PlcConnectionState.Disconnected;
+                    }
                     LoadConfigInternal(container.Plcs, container.Tags ?? new List<PlcTag>());
                     return;
                 }

@@ -104,13 +104,16 @@ public partial class PlcManagerViewModel : ObservableObject
         if (SelectedPlc == null) return;
 
         var plcToDelete = SelectedPlc;
-        var tagsToRemove = Tags.Where(t => string.Equals(t.PlcId, plcToDelete.Id, StringComparison.OrdinalIgnoreCase)).ToList();
+        var tagsToRemove = _plcService.Tags.Where(t => 
+            string.Equals(t.PlcId, plcToDelete.Id, StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(t.PlcId, plcToDelete.Name, StringComparison.OrdinalIgnoreCase)).ToList();
+
         foreach (var t in tagsToRemove)
         {
-            Tags.Remove(t);
+            _plcService.Tags.Remove(t);
         }
 
-        Plcs.Remove(plcToDelete);
+        _plcService.Plcs.Remove(plcToDelete);
         SelectedPlc = Plcs.FirstOrDefault();
         _plcService.SaveGlobalConfig();
         _plcService.StartPollingAsync();
@@ -129,7 +132,7 @@ public partial class PlcManagerViewModel : ObservableObject
             DataType = PlcDataType.Bool,
             Description = "General Tag"
         };
-        Tags.Add(newTag);
+        _plcService.Tags.Add(newTag);
         FilteredTags.Add(newTag);
         SelectedTag = newTag;
         _plcService.SaveGlobalConfig();
@@ -142,7 +145,16 @@ public partial class PlcManagerViewModel : ObservableObject
         if (SelectedTag == null) return;
 
         var tagToDelete = SelectedTag;
-        Tags.Remove(tagToDelete);
+        var realTagInService = _plcService.Tags.FirstOrDefault(t => 
+            ReferenceEquals(t, tagToDelete) || 
+            (string.Equals(t.Name, tagToDelete.Name, StringComparison.OrdinalIgnoreCase) && 
+             string.Equals(t.Address, tagToDelete.Address, StringComparison.OrdinalIgnoreCase)));
+
+        if (realTagInService != null)
+        {
+            _plcService.Tags.Remove(realTagInService);
+        }
+
         FilteredTags.Remove(tagToDelete);
         SelectedTag = FilteredTags.FirstOrDefault();
         _plcService.SaveGlobalConfig();

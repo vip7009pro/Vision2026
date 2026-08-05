@@ -1,4 +1,4 @@
-﻿using System.Collections.ObjectModel;
+using System.Collections.ObjectModel;
 using System.IO;
 using System.Windows.Input;
 using System.Windows.Media;
@@ -18,6 +18,7 @@ public sealed partial class LiveCameraViewModel : ObservableObject
     private readonly CameraService _cameraService;
     private readonly IConfigService _configService;
     private readonly IInspectionService _inspectionService;
+    private readonly object _frameLock = new();
     private Mat? _currentFrame;
     private VisionConfig? _config;
 
@@ -35,7 +36,7 @@ public sealed partial class LiveCameraViewModel : ObservableObject
         LoadConfigCommand = new RelayCommand(LoadConfig);
         RefreshConfigsCommand = new RelayCommand(RefreshConfigs);
         CaptureSnapshotCommand = new RelayCommand(CaptureSnapshot);
-        RunLiveInspectionCommand = new RelayCommand(RunLiveInspection);
+        RunLiveInspectionCommand = new RelayCommand(RunLiveInspectionOnCurrentFrame);
         ToggleLiveInspectionCommand = new RelayCommand(ToggleLiveInspection);
 
         AvailableConfigs = new ObservableCollection<string>();
@@ -163,11 +164,23 @@ public sealed partial class LiveCameraViewModel : ObservableObject
             {
                 await _cameraService.StartCameraCaptureAsync(cameraIndex: SelectedCamera.Index);
             }
-            IsCameraRunning = true;
-            StatusMessage = "Camera đang chạy";
+
+            if (_cameraService.IsRunning)
+            {
+                IsCameraRunning = true;
+                StatusMessage = SelectedCamera.Index == CameraService.SimulatorCameraIndex
+                    ? "Camera Giả Lập đang hoạt động (30 FPS)"
+                    : "Camera đang hoạt động";
+            }
+            else
+            {
+                IsCameraRunning = false;
+                StatusMessage = "Không thể khởi động camera đã chọn. Vui lòng kiểm tra kết nối.";
+            }
         }
         catch (Exception ex)
         {
+            IsCameraRunning = false;
             StatusMessage = $"Lỗi: {ex.Message}";
         }
     }
@@ -191,27 +204,11 @@ public sealed partial class LiveCameraViewModel : ObservableObject
         }
     }
 
-    /// <summary>
-    /// Xử lý frame từ camera
-    /// </summary>
-    private void OnFrameCaptured(object? sender, Mat frame)
+    private bool _isRenderingFrame;    private void OnFrameCaptured(object? sender, Mat frame)
     {
         try
         {
-            if (frame == null || frame.Empty()) return;
-
-            _currentFrame?.Dispose();
-            _currentFrame = frame.Clone();
-
-            // Chuyển đổi Mat sang BitmapSource và Freeze để thread-safe
-            var bitmap = _currentFrame.ToBitmapSource();
-            bitmap.Freeze();
-
-            // Gán thuộc tính Image trên UI Thread
-            System.Windows.Application.Current.Dispatcher.BeginInvoke(() =>
-            {
-                LiveImage = bitmap;
-            });
+            if (frame == null || frame.IsDisposed || frame.Empty()) return;
 
             // Tính FPS
             _frameCount++;
@@ -222,21 +219,59 @@ public sealed partial class LiveCameraViewModel : ObservableObject
                 var fps = (int)(_frameCount / elapsed);
                 _frameCount = 0;
                 _lastFrameTime = now;
-                System.Windows.Application.Current.Dispatcher.BeginInvoke(() =>
+                System.Windows.Application.Current?.Dispatcher?.BeginInvoke(System.Windows.Threading.DispatcherPriority.Background, () =>
                 {
                     Fps = fps;
                 });
             }
 
-            // Chạy live inspection nếu enabled
-            if (IsLiveInspectionEnabled && _config != null)
+            Mat? frameCopyForInspection = null;
+            lock (_frameLock)
             {
-                RunLiveInspection();
+                _currentFrame?.Dispose();
+                _currentFrame = frame.Clone();
+                if (IsLiveInspectionEnabled && _config != null)
+                {
+                    frameCopyForInspection = _currentFrame.Clone();
+                }
+            }
+
+            if (!_isRenderingFrame)
+            {
+                _isRenderingFrame = true;
+
+                var bitmap = frame.ToBitmapSourceSafe();
+                if (bitmap != null)
+                {
+                    System.Windows.Application.Current?.Dispatcher?.BeginInvoke(System.Windows.Threading.DispatcherPriority.Render, () =>
+                    {
+                        try
+                        {
+                            LiveImage = bitmap;
+                        }
+                        finally
+                        {
+                            _isRenderingFrame = false;
+                        }
+                    });
+                }
+                else
+                {
+                    _isRenderingFrame = false;
+                }
+            }
+
+            if (frameCopyForInspection != null)
+            {
+                using (frameCopyForInspection)
+                {
+                    RunLiveInspection(frameCopyForInspection);
+                }
             }
         }
         catch
         {
-            // Bỏ qua lỗi hiển thị frame
+            _isRenderingFrame = false;
         }
     }
 
@@ -306,6 +341,14 @@ public sealed partial class LiveCameraViewModel : ObservableObject
     {
         AvailableCameras.Clear();
 
+        // Bổ sung tùy chọn Camera Giả Lập (Simulator)
+        AvailableCameras.Add(new CameraInfo
+        {
+            Index = CameraService.SimulatorCameraIndex,
+            Name = "📷 Camera Giả Lập (Simulator)",
+            IsRtsp = false
+        });
+
         try
         {
             var dsCameras = DirectShowDeviceEnumerator.GetDevices();
@@ -324,22 +367,7 @@ public sealed partial class LiveCameraViewModel : ObservableObject
             // Bỏ qua lỗi quét bằng COM DirectShow
         }
 
-        // Nếu không quét được camera nào từ DirectShow, chạy OpenCV check
-        if (AvailableCameras.Count == 0)
-        {
-            var cameraIndices = CameraService.GetAvailableCameras();
-            foreach (var index in cameraIndices)
-            {
-                AvailableCameras.Add(new CameraInfo
-                {
-                    Index = index,
-                    Name = $"Webcam {index}",
-                    IsRtsp = false
-                });
-            }
-        }
-
-        // LUÔN LUÔN bổ sung thêm các Camera Port tĩnh từ 0 tới 4 để dự phòng cho camera ảo (như DroidCam) hoặc thiết bị ngoại vi offline lúc quét
+        // Bổ sung các Camera Port 0-4 nếu chưa có
         for (int i = 0; i < 5; i++)
         {
             if (!AvailableCameras.Any(c => c.Index == i && !c.IsRtsp))
@@ -407,14 +435,33 @@ public sealed partial class LiveCameraViewModel : ObservableObject
     /// <summary>
     /// Chạy inspection trên frame hiện tại
     /// </summary>
-    private void RunLiveInspection()
+    private void RunLiveInspectionOnCurrentFrame()
     {
-        if (_currentFrame == null || _config == null)
+        Mat? frameCopy = null;
+        lock (_frameLock)
+        {
+            if (_currentFrame != null && !_currentFrame.IsDisposed && !_currentFrame.Empty())
+            {
+                frameCopy = _currentFrame.Clone();
+            }
+        }
+        if (frameCopy != null)
+        {
+            using (frameCopy)
+            {
+                RunLiveInspection(frameCopy);
+            }
+        }
+    }
+
+    private void RunLiveInspection(Mat? frameForInspection)
+    {
+        if (frameForInspection == null || frameForInspection.IsDisposed || frameForInspection.Empty() || _config == null)
             return;
 
         try
         {
-            var result = _inspectionService.Inspect(_currentFrame, _config);
+            var result = _inspectionService.Inspect(frameForInspection, _config);
 
             // Dispatch việc thay đổi UI và ObservableCollection lên UI Thread
             System.Windows.Application.Current.Dispatcher.BeginInvoke(() =>

@@ -84,11 +84,7 @@ namespace VisionInspectionApp.UI.ViewModels
             BlobThresholdPreviewImage = null;
             Origin_TemplatePreviewImage = null;
 
-            foreach (var kv in _imageSourcePreviewCache.Values)
-            {
-                kv.Image?.Dispose();
-            }
-            _imageSourcePreviewCache.Clear();
+            ClearAllImageSourceCache();
 
             _sharedImage.SetImage(null);
 

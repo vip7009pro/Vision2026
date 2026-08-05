@@ -26,7 +26,7 @@ public sealed class MitsubishiDriver : IPlcDriver
 
     public PlcModel Config { get; }
 
-    public bool IsConnected => ForceSimulationMode || Config.State == PlcConnectionState.Connected || (_tcpClient != null && _tcpClient.Connected);
+    public bool IsConnected => ForceSimulationMode || (_tcpClient != null && _tcpClient.Connected);
 
     public bool ForceSimulationMode { get; set; } = false;
 

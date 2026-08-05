@@ -174,6 +174,7 @@ namespace VisionInspectionApp.UI.ViewModels
             _inspectionService = inspectionService;
             _cameraService = cameraService;
             _plcManagerService = plcManagerService;
+            _plcManagerService.OnTagChanged += OnPlcTagChangedForTrigger;
             _autoSaveTimer = new DispatcherTimer
             {
                 Interval = TimeSpan.FromMilliseconds(400)
@@ -265,15 +266,24 @@ namespace VisionInspectionApp.UI.ViewModels
             Origin_TeachTemplateCommand = new RelayCommand(Origin_TeachTemplate);
             Origin_OpenTrainWindowCommand = new RelayCommand(OpenTrainTemplateWindow);
 
-            _sharedImage.ImageChanged += (_, __) =>
+            // Line Trigger (Hardware Sensor Signal from Camera)
+            _cameraService.FrameCaptured += (s, frameMat) =>
             {
-                System.Windows.Application.Current.Dispatcher.BeginInvoke(new Action(() =>
+                if (_config?.ImageSources is null) return;
+
+                foreach (var imgSourceDef in _config.ImageSources)
                 {
-                    RefreshPreviews();
-                }));
+                    if (imgSourceDef.SourceType == ImageSourceType.Camera && imgSourceDef.TriggerMode == ImageSourceTriggerMode.LineTrigger)
+                    {
+                        System.Windows.Application.Current.Dispatcher.BeginInvoke(new Action(() =>
+                        {
+                            System.Diagnostics.Debug.WriteLine("[LineTrigger] Hardware sensor frame captured, running Vision Flow");
+                            RunFlow();
+                        }));
+                        break;
+                    }
+                }
             };
-            // Do not subscribe _cameraService.FrameCaptured here to prevent continuous livestreaming when viewing nodes.
-            // Camera image is captured on-demand (1 frame) during Run Once / Run Flow.
         }
     
         public IlluminationCorrectionPreset IlluminationCorrection
@@ -931,6 +941,14 @@ namespace VisionInspectionApp.UI.ViewModels
             OnPropertyChanged(nameof(IsConditionNode));
             OnPropertyChanged(nameof(IsTextNode));
             OnPropertyChanged(nameof(IsImageSourceNode));
+            OnPropertyChanged(nameof(ImageSource_TriggerMode));
+            OnPropertyChanged(nameof(ImageSource_IsSoftTrigger));
+            OnPropertyChanged(nameof(ImageSource_IsLineTrigger));
+            OnPropertyChanged(nameof(ImageSource_IsPlcTrigger));
+            OnPropertyChanged(nameof(ImageSource_LineTriggerName));
+            OnPropertyChanged(nameof(ImageSource_PlcTriggerPlcId));
+            OnPropertyChanged(nameof(ImageSource_PlcTriggerTagName));
+            OnPropertyChanged(nameof(ImageSource_PlcTriggerEdge));
             OnPropertyChanged(nameof(IsImageOutputNode));
             OnPropertyChanged(nameof(AvailableImageNodes));
             OnPropertyChanged(nameof(ImageOutput_InputNodeChoice));
@@ -1046,6 +1064,10 @@ namespace VisionInspectionApp.UI.ViewModels
             OnPropertyChanged(nameof(ImageSource_FilePath));
             OnPropertyChanged(nameof(ImageSource_FolderPath));
             OnPropertyChanged(nameof(ImageSource_CameraIndex));
+            // Refresh camera list when selecting a node already in Camera mode
+            if (ImageSource_IsCamera)
+                RefreshAvailableCameraItems();
+            OnPropertyChanged(nameof(SelectedCameraItem));
             OnPropertyChanged(nameof(ImageSource_RtspUrl));
             OnPropertyChanged(nameof(ImageSource_LoopFolder));
             OnPropertyChanged(nameof(ImageSource_FolderIntervalMs));

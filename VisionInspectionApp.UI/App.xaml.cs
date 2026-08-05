@@ -89,6 +89,9 @@ public partial class App : System.Windows.Application
 
         var cameraService = _host.Services.GetRequiredService<CameraService>();
         _ = cameraService.StartSavedCameraAsync();
+
+        var plcManager = _host.Services.GetRequiredService<Application.PLC.Services.IPlcManagerService>();
+        _ = plcManager.StartPollingAsync();
     }
 
     protected override void OnExit(ExitEventArgs e)

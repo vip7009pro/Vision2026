@@ -68,7 +68,7 @@ public sealed class PlcPollingEngine
         if (_cts != null)
         {
             _cts.Cancel();
-            try { _pollingTask?.Wait(1000); } catch { }
+            try { _pollingTask?.Wait(2000); } catch { }
             _cts.Dispose();
             _cts = null;
             _pollingTask = null;
@@ -93,7 +93,18 @@ public sealed class PlcPollingEngine
                 if (cancellationToken.IsCancellationRequested) break;
 
                 var driver = driverLookup(plc.Id);
-                if (driver == null || !driver.IsConnected) continue;
+                if (driver == null) continue;
+
+                if (!driver.IsConnected)
+                {
+                    try
+                    {
+                        await driver.ConnectAsync(cancellationToken);
+                    }
+                    catch { }
+                }
+
+                if (!driver.IsConnected) continue;
 
                 var plcTags = tags.Where(t => string.Equals(t.PlcId, plc.Id, StringComparison.OrdinalIgnoreCase)
                                               || string.Equals(t.PlcId, plc.Name, StringComparison.OrdinalIgnoreCase)).ToList();

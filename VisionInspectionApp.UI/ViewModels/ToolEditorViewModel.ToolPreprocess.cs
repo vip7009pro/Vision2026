@@ -161,6 +161,82 @@ namespace VisionInspectionApp.UI.ViewModels
             }
         }
     
+        /// <summary>
+        /// Simple camera item for the ImageSource camera selector ComboBox.
+        /// </summary>
+        public sealed class ImageSourceCameraItem
+        {
+            public int Index { get; set; }
+            public string DisplayName { get; set; } = string.Empty;
+            public override string ToString() => DisplayName;
+        }
+
+        public ObservableCollection<ImageSourceCameraItem> AvailableCameraItems { get; } = new();
+
+        /// <summary>
+        /// The currently selected camera item in the ComboBox.
+        /// Syncs with <see cref="ImageSource_CameraIndex"/>.
+        /// </summary>
+        public ImageSourceCameraItem? SelectedCameraItem
+        {
+            get
+            {
+                var idx = ImageSource_CameraIndex;
+                return AvailableCameraItems.FirstOrDefault(c => c.Index == idx);
+            }
+            set
+            {
+                if (value is null) return;
+                ImageSource_CameraIndex = value.Index;
+                OnPropertyChanged();
+            }
+        }
+
+        /// <summary>
+        /// Populates AvailableCameraItems using DirectShow first, then OpenCV fallback,
+        /// plus static fallback ports 0-4 (same pattern as LiveCameraView).
+        /// </summary>
+        private void RefreshAvailableCameraItems()
+        {
+            AvailableCameraItems.Clear();
+
+            AvailableCameraItems.Add(new ImageSourceCameraItem
+            {
+                Index = CameraService.SimulatorCameraIndex,
+                DisplayName = "📷 Camera Giả Lập (Simulator)"
+            });
+
+            try
+            {
+                var dsCameras = DirectShowDeviceEnumerator.GetDevices();
+                for (int i = 0; i < dsCameras.Count; i++)
+                {
+                    AvailableCameraItems.Add(new ImageSourceCameraItem
+                    {
+                        Index = i,
+                        DisplayName = $"Camera {i}: {dsCameras[i]}"
+                    });
+                }
+            }
+            catch
+            {
+            }
+
+            for (int i = 0; i < 5; i++)
+            {
+                if (!AvailableCameraItems.Any(c => c.Index == i))
+                {
+                    AvailableCameraItems.Add(new ImageSourceCameraItem
+                    {
+                        Index = i,
+                        DisplayName = $"Camera Port {i} (Fallback)"
+                    });
+                }
+            }
+
+            OnPropertyChanged(nameof(SelectedCameraItem));
+        }
+
         public ImageSourceType ImageSource_SourceType
         {
             get => SelectedImageSourceDef()?.SourceType ?? ImageSourceType.File;
@@ -172,12 +248,13 @@ namespace VisionInspectionApp.UI.ViewModels
                 if (def.SourceType == value)
                     return;
                 def.SourceType = value;
-                if (_imageSourcePreviewCache.TryGetValue(def.Name ?? "", out var oldType))
-                    oldType.Image?.Dispose();
-                _imageSourcePreviewCache.Remove(def.Name ?? "");
+                ClearImageSourceCache(def.Name);
                 OnPropertyChanged(nameof(ImageSource_IsFile));
                 OnPropertyChanged(nameof(ImageSource_IsFolder));
                 OnPropertyChanged(nameof(ImageSource_IsCamera));
+                // Refresh camera list when switching to Camera source
+                if (value == ImageSourceType.Camera)
+                    RefreshAvailableCameraItems();
                 RaiseToolPropertyPanelsChanged();
                 RefreshPreviews();
                 RequestAutoSave();
@@ -187,6 +264,81 @@ namespace VisionInspectionApp.UI.ViewModels
         public bool ImageSource_IsFile => ImageSource_SourceType == ImageSourceType.File;
         public bool ImageSource_IsFolder => ImageSource_SourceType == ImageSourceType.Folder;
         public bool ImageSource_IsCamera => ImageSource_SourceType == ImageSourceType.Camera;
+
+        public Array AvailableImageSourceTriggerModes => Enum.GetValues(typeof(ImageSourceTriggerMode));
+
+        public ImageSourceTriggerMode ImageSource_TriggerMode
+        {
+            get => SelectedImageSourceDef()?.TriggerMode ?? ImageSourceTriggerMode.SoftTrigger;
+            set
+            {
+                var def = SelectedImageSourceDef();
+                if (def is null || def.TriggerMode == value) return;
+                def.TriggerMode = value;
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(ImageSource_IsSoftTrigger));
+                OnPropertyChanged(nameof(ImageSource_IsLineTrigger));
+                OnPropertyChanged(nameof(ImageSource_IsPlcTrigger));
+                RaiseToolPropertyPanelsChanged();
+                RequestAutoSave();
+            }
+        }
+
+        public bool ImageSource_IsSoftTrigger => ImageSource_TriggerMode == ImageSourceTriggerMode.SoftTrigger;
+        public bool ImageSource_IsLineTrigger => ImageSource_TriggerMode == ImageSourceTriggerMode.LineTrigger;
+        public bool ImageSource_IsPlcTrigger => ImageSource_TriggerMode == ImageSourceTriggerMode.PlcTrigger;
+
+        public string ImageSource_LineTriggerName
+        {
+            get => SelectedImageSourceDef()?.LineTriggerName ?? "Line1";
+            set
+            {
+                var def = SelectedImageSourceDef();
+                if (def is null) return;
+                def.LineTriggerName = value ?? "Line1";
+                OnPropertyChanged();
+                RequestAutoSave();
+            }
+        }
+
+        public string ImageSource_PlcTriggerPlcId
+        {
+            get => SelectedImageSourceDef()?.PlcTriggerPlcId ?? "PLC1";
+            set
+            {
+                var def = SelectedImageSourceDef();
+                if (def is null) return;
+                def.PlcTriggerPlcId = value ?? "PLC1";
+                OnPropertyChanged();
+                RequestAutoSave();
+            }
+        }
+
+        public string ImageSource_PlcTriggerTagName
+        {
+            get => SelectedImageSourceDef()?.PlcTriggerTagName ?? "X0_Trigger";
+            set
+            {
+                var def = SelectedImageSourceDef();
+                if (def is null) return;
+                def.PlcTriggerTagName = value ?? "X0_Trigger";
+                OnPropertyChanged();
+                RequestAutoSave();
+            }
+        }
+
+        public PlcTriggerEdge ImageSource_PlcTriggerEdge
+        {
+            get => SelectedImageSourceDef()?.PlcTriggerEdge ?? PlcTriggerEdge.RisingEdge;
+            set
+            {
+                var def = SelectedImageSourceDef();
+                if (def is null) return;
+                def.PlcTriggerEdge = value;
+                OnPropertyChanged();
+                RequestAutoSave();
+            }
+        }
     
         public string ImageSource_FilePath
         {
@@ -200,9 +352,7 @@ namespace VisionInspectionApp.UI.ViewModels
                 if (string.Equals(def.FilePath, value, StringComparison.Ordinal))
                     return;
                 def.FilePath = value;
-                if (_imageSourcePreviewCache.TryGetValue(def.Name ?? "", out var oldFile))
-                    oldFile.Image?.Dispose();
-                _imageSourcePreviewCache.Remove(def.Name ?? "");
+                ClearImageSourceCache(def.Name);
                 RaiseToolPropertyPanelsChanged();
                 RefreshPreviews();
                 RequestAutoSave();
@@ -221,9 +371,7 @@ namespace VisionInspectionApp.UI.ViewModels
                 if (string.Equals(def.FolderPath, value, StringComparison.Ordinal))
                     return;
                 def.FolderPath = value;
-                if (_imageSourcePreviewCache.TryGetValue(def.Name ?? "", out var oldFolder))
-                    oldFolder.Image?.Dispose();
-                _imageSourcePreviewCache.Remove(def.Name ?? "");
+                ClearImageSourceCache(def.Name);
                 _folderImageIndex = 0;
                 RaiseToolPropertyPanelsChanged();
                 RefreshPreviews();
@@ -242,6 +390,8 @@ namespace VisionInspectionApp.UI.ViewModels
                 if (def.CameraIndex == value)
                     return;
                 def.CameraIndex = value;
+                ClearImageSourceCache(def.Name);
+                OnPropertyChanged(nameof(SelectedCameraItem));
                 RaiseToolPropertyPanelsChanged();
                 RefreshPreviews();
                 RequestAutoSave();
@@ -260,6 +410,7 @@ namespace VisionInspectionApp.UI.ViewModels
                 if (string.Equals(def.RtspUrl, value, StringComparison.Ordinal))
                     return;
                 def.RtspUrl = value;
+                ClearImageSourceCache(def.Name);
                 RaiseToolPropertyPanelsChanged();
                 RefreshPreviews();
                 RequestAutoSave();

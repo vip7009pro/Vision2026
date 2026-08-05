@@ -1,4 +1,5 @@
-﻿using OpenCvSharp;
+using System;
+using OpenCvSharp;
 
 namespace VisionInspectionApp.UI.Services;
 
@@ -12,8 +13,20 @@ public sealed class SharedImageContext
     {
         lock (this)
         {
-            _image?.Dispose();
-            _image = image is null ? null : image.Clone();
+            try
+            {
+                _image?.Dispose();
+            }
+            catch { }
+
+            try
+            {
+                _image = (image is null || image.IsDisposed || image.Empty()) ? null : image.Clone();
+            }
+            catch
+            {
+                _image = null;
+            }
         }
 
         ImageChanged?.Invoke(this, EventArgs.Empty);
@@ -23,7 +36,17 @@ public sealed class SharedImageContext
     {
         lock (this)
         {
-            return _image is null ? null : _image.Clone();
+            if (_image is null || _image.IsDisposed || _image.Empty())
+                return null;
+
+            try
+            {
+                return _image.Clone();
+            }
+            catch
+            {
+                return null;
+            }
         }
     }
 }

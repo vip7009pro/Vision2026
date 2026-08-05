@@ -22,7 +22,7 @@ public sealed class MitsubishiMxComponentDriver : IPlcDriver
 
     public bool ForceSimulationMode { get; set; } = false;
 
-    public bool IsConnected => ForceSimulationMode || Config.State == PlcConnectionState.Connected;
+    public bool IsConnected => ForceSimulationMode || (Config.State == PlcConnectionState.Connected && _comObject != null);
 
     public MitsubishiMxComponentDriver(PlcModel config)
     {

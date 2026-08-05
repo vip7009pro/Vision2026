@@ -1,4 +1,4 @@
-﻿using OpenCvSharp;
+using OpenCvSharp;
 using System;
 using System.Collections.Generic;
 using System.Threading;
@@ -7,10 +7,14 @@ using System.Threading.Tasks;
 namespace VisionInspectionApp.UI.Services;
 
 /// <summary>
-/// Service để quản lý kết nối camera và capture video stream
+/// Service để quản lý kết nối camera và capture video stream.
+/// Hỗ trợ camera MSMF, DirectShow, OpenCV ANY, RTSP IP stream, và Camera Giả Lập (Simulator).
 /// </summary>
 public sealed class CameraService : IDisposable
 {
+    public const int SimulatorCameraIndex = -2;
+    public const string SimulatorRtspUrl = "simulator://";
+
     private VideoCapture? _camera;
     private CancellationTokenSource? _cancellationTokenSource;
     private Thread? _captureThread;
@@ -96,108 +100,196 @@ public sealed class CameraService : IDisposable
         }
     }
 
+    public static bool IsSimulator(int cameraIndex, string? rtspUrl)
+    {
+        return cameraIndex == SimulatorCameraIndex || 
+               string.Equals(rtspUrl, SimulatorRtspUrl, StringComparison.OrdinalIgnoreCase) || 
+               string.Equals(rtspUrl, "SIMULATOR", StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Thử mở VideoCapture bằng nhiều backend an toàn (MSMF -> DSHOW -> ANY -> FFMPEG)
+    /// </summary>
+    public static VideoCapture? TryOpenVideoCapture(int cameraIndex, string? rtspUrl)
+    {
+        // 1. Luồng RTSP / IP Camera
+        if (!string.IsNullOrWhiteSpace(rtspUrl) && !IsSimulator(cameraIndex, rtspUrl))
+        {
+            try
+            {
+                var cap = new VideoCapture(rtspUrl, VideoCaptureAPIs.FFMPEG);
+                if (cap.IsOpened())
+                {
+                    using var testMat = new Mat();
+                    for (int i = 0; i < 5; i++)
+                    {
+                        if (cap.Read(testMat) && !testMat.Empty() && testMat.Width > 0 && testMat.Height > 0)
+                        {
+                            return cap;
+                        }
+                        Thread.Sleep(50);
+                    }
+                }
+                cap.Dispose();
+            }
+            catch { }
+
+            try
+            {
+                var cap = new VideoCapture(rtspUrl);
+                if (cap.IsOpened())
+                {
+                    using var testMat = new Mat();
+                    for (int i = 0; i < 5; i++)
+                    {
+                        if (cap.Read(testMat) && !testMat.Empty() && testMat.Width > 0 && testMat.Height > 0)
+                        {
+                            return cap;
+                        }
+                        Thread.Sleep(50);
+                    }
+                }
+                cap.Dispose();
+            }
+            catch { }
+
+            return null;
+        }
+
+        // 2. Camera chỉ số địa phương (USB, Built-in, Industrial DirectShow/MSMF)
+        if (cameraIndex < 0) return null;
+
+        // Backend 1: MSMF (Media Foundation - Khuyên dùng trên Windows 10/11)
+        try
+        {
+            var cap = new VideoCapture(cameraIndex, VideoCaptureAPIs.MSMF);
+            if (cap.IsOpened())
+            {
+                using var testMat = new Mat();
+                for (int i = 0; i < 15; i++)
+                {
+                    if (cap.Read(testMat) && !testMat.Empty() && testMat.Width > 0 && testMat.Height > 0)
+                    {
+                        return cap;
+                    }
+                    Thread.Sleep(30);
+                }
+            }
+            cap.Dispose();
+        }
+        catch { }
+
+        // Backend 2: DSHOW (DirectShow - Bắt buộc cho DroidCam, Cam ảo OBS, DirectShow Industrial Filter)
+        try
+        {
+            var cap = new VideoCapture(cameraIndex, VideoCaptureAPIs.DSHOW);
+            if (cap.IsOpened())
+            {
+                using var testMat = new Mat();
+                for (int i = 0; i < 15; i++)
+                {
+                    if (cap.Read(testMat) && !testMat.Empty() && testMat.Width > 0 && testMat.Height > 0)
+                    {
+                        return cap;
+                    }
+                    Thread.Sleep(30);
+                }
+            }
+            cap.Dispose();
+        }
+        catch { }
+
+        // Backend 3: ANY (OpenCV mặc định)
+        try
+        {
+            var cap = new VideoCapture(cameraIndex, VideoCaptureAPIs.ANY);
+            if (cap.IsOpened())
+            {
+                using var testMat = new Mat();
+                for (int i = 0; i < 15; i++)
+                {
+                    if (cap.Read(testMat) && !testMat.Empty() && testMat.Width > 0 && testMat.Height > 0)
+                    {
+                        return cap;
+                    }
+                    Thread.Sleep(30);
+                }
+            }
+            cap.Dispose();
+        }
+        catch { }
+
+        return null;
+    }
+
     /// <summary>
     /// Khởi động capture camera với chỉ số camera hoặc địa chỉ RTSP
     /// </summary>
     public async Task StartCameraCaptureAsync(int cameraIndex = 0, string? rtspUrl = null, int fps = 30)
     {
         if (_isRunning)
-            return;
+        {
+            bool isSame = (IsSimulator(cameraIndex, rtspUrl) && IsSimulator(_currentCameraIndex, _lastSelectedRtspUrl))
+                || (!string.IsNullOrEmpty(rtspUrl) && string.Equals(rtspUrl, _lastSelectedRtspUrl, StringComparison.OrdinalIgnoreCase))
+                || (string.IsNullOrEmpty(rtspUrl) && string.IsNullOrEmpty(_lastSelectedRtspUrl) && cameraIndex == _currentCameraIndex);
+
+            if (isSame && _captureThread != null && _captureThread.IsAlive)
+            {
+                return;
+            }
+
+            await StopCameraAsync();
+        }
 
         try
         {
             _currentCameraIndex = cameraIndex;
             _lastSelectedRtspUrl = rtspUrl;
 
-            // Lưu cài đặt camera đã mở
             SavedCameraIndex = cameraIndex;
             SavedRtspUrl = rtspUrl ?? "";
             SavedIsRtsp = !string.IsNullOrEmpty(rtspUrl);
 
-            // Hàm helper để thử mở và cấu hình camera
-            bool TryOpenAndConfigure(bool configureSettings)
+            bool isSim = IsSimulator(cameraIndex, rtspUrl);
+            VideoCapture? cap = null;
+
+            if (!isSim)
             {
-                if (!string.IsNullOrEmpty(rtspUrl))
+                // Giải phóng camera cũ nếu có trước khi mở mới
+                try
                 {
-                    _camera = new VideoCapture(rtspUrl);
-                }
-                else
-                {
-                    // Thử sử dụng DirectShow backend trước vì nó hoạt động rất ổn định trên Windows
-                    _camera = new VideoCapture(cameraIndex, VideoCaptureAPIs.DSHOW);
-
-                    if (!_camera.IsOpened())
-                    {
-                        _camera.Dispose();
-                        // Fallback về mặc định
-                        _camera = new VideoCapture(cameraIndex);
-                    }
-                }
-
-                if (!_camera.IsOpened())
-                {
-                    _camera.Dispose();
+                    _camera?.Dispose();
                     _camera = null;
-                    return false;
+                }
+                catch { }
+
+                cap = TryOpenVideoCapture(cameraIndex, rtspUrl);
+                if (cap == null || !cap.IsOpened())
+                {
+                    cap?.Dispose();
+                    _isRunning = false;
+                    ErrorOccurred?.Invoke(this, "Không thể nhận dữ liệu từ camera. Vui lòng đảm bảo DroidCam Client / Camera đã kết nối và ứng dụng khác (OBS, Zoom, Windows Camera) không chiếm quyền.");
+                    return;
                 }
 
-                // Cấu hình camera (chỉ đối với camera USB thông thường)
                 if (string.IsNullOrEmpty(rtspUrl))
                 {
-                    if (configureSettings)
-                    {
-                        _camera.Set(VideoCaptureProperties.FrameWidth, 1280);
-                        _camera.Set(VideoCaptureProperties.FrameHeight, 720);
-                        _camera.Set(VideoCaptureProperties.Fps, fps);
-                        _camera.Set(VideoCaptureProperties.BufferSize, 1);
-                    }
-                    else
-                    {
-                        // Fallback: giữ nguyên cấu hình gốc của thiết bị (đối với DroidCam bản Free chỉ hỗ trợ 640x480)
-                        _camera.Set(VideoCaptureProperties.BufferSize, 1);
-                    }
+                    try { cap.Set(VideoCaptureProperties.BufferSize, 1); } catch { }
                 }
-
-                // Đọc thử 1 frame để kiểm tra xem camera có xuất hình ảnh thực tế hay đang bị khóa/lỗi
-                using var testFrame = new Mat();
-                if (_camera.Read(testFrame) && !testFrame.Empty())
-                {
-                    return true;
-                }
-
-                _camera.Dispose();
-                _camera = null;
-                return false;
             }
 
-            // Thử mở lần 1: với cấu hình chất lượng HD
-            bool opened = TryOpenAndConfigure(true);
-
-            // Thử mở lần 2 (nếu lần 1 thất bại): giữ nguyên độ phân giải mặc định của camera
-            if (!opened)
-            {
-                opened = TryOpenAndConfigure(false);
-            }
-
-            if (!opened || _camera == null)
-            {
-                ErrorOccurred?.Invoke(this, "Không thể nhận dữ liệu hình ảnh từ camera. Vui lòng đảm bảo bạn đã đóng các ứng dụng đang chiếm quyền camera khác (như Windows Camera app, OBS, trình duyệt,...) và DroidCam Client đã được kết nối.");
-                _isRunning = false;
-                return;
-            }
-
+            _camera = cap;
             _isRunning = true;
             _cancellationTokenSource = new CancellationTokenSource();
 
-            // Khởi động Thread Capture đồng bộ độc lập giúp chạy cực kỳ mượt mà, không bị trễ/nghẽn luồng Task
-            _captureThread = new Thread(() => CaptureLoop(_cancellationTokenSource.Token))
+            _captureThread = new Thread(() => CaptureLoop(_cancellationTokenSource.Token, isSim))
             {
                 IsBackground = true,
                 Name = "CameraCaptureThread"
             };
             _captureThread.Start();
 
-            await Task.Delay(100); // Chờ camera ready
+            await Task.Delay(100);
         }
         catch (Exception ex)
         {
@@ -211,7 +303,7 @@ public sealed class CameraService : IDisposable
     /// </summary>
     public async Task StopCameraAsync()
     {
-        if (!_isRunning)
+        if (!_isRunning && _captureThread == null)
             return;
 
         _isRunning = false;
@@ -219,55 +311,100 @@ public sealed class CameraService : IDisposable
 
         if (_captureThread != null)
         {
-            // Chờ luồng capture kết thúc trong tối đa 500ms để không treo UI
             _captureThread.Join(500);
             _captureThread = null;
         }
+
+        _camera?.Dispose();
+        _camera = null;
 
         await Task.CompletedTask;
     }
 
     /// <summary>
+    /// Tạo khung ảnh giả lập (Camera Simulator) cho mục đích kiểm thử động
+    /// </summary>
+    private static Mat GenerateSimulatorFrame(ref int frameCounter)
+    {
+        frameCounter++;
+        var mat = new Mat(480, 640, MatType.CV_8UC3, new Scalar(40, 40, 40));
+
+        // Nền lưới Industrial Grid
+        for (int x = 0; x < 640; x += 40)
+        {
+            Cv2.Line(mat, new OpenCvSharp.Point(x, 0), new OpenCvSharp.Point(x, 480), new Scalar(60, 60, 60), 1);
+        }
+        for (int y = 0; y < 480; y += 40)
+        {
+            Cv2.Line(mat, new OpenCvSharp.Point(0, y), new OpenCvSharp.Point(640, y), new Scalar(60, 60, 60), 1);
+        }
+
+        // Mục tiêu di chuyển sinh động
+        double angle = (frameCounter % 120) * (2 * Math.PI / 120);
+        int cx = 320 + (int)(150 * Math.Cos(angle));
+        int cy = 240 + (int)(100 * Math.Sin(angle));
+
+        Cv2.Circle(mat, new OpenCvSharp.Point(cx, cy), 40, new Scalar(0, 255, 255), 2);
+        Cv2.Circle(mat, new OpenCvSharp.Point(cx, cy), 15, new Scalar(0, 165, 255), -1);
+        Cv2.DrawMarker(mat, new OpenCvSharp.Point(cx, cy), new Scalar(0, 0, 255), MarkerTypes.Cross, 30, 2);
+
+        Cv2.PutText(mat, "CAMERA SIMULATOR (INDUSTRIAL TEST)", new OpenCvSharp.Point(20, 35), HersheyFonts.HersheySimplex, 0.7, new Scalar(0, 255, 0), 2);
+        Cv2.PutText(mat, $"TIME: {DateTime.Now:HH:mm:ss.fff}  FRAME: {frameCounter}", new OpenCvSharp.Point(20, 460), HersheyFonts.HersheySimplex, 0.5, new Scalar(200, 200, 200), 1);
+
+        return mat;
+    }
+
+    /// <summary>
     /// Vòng lặp capture frame chính chạy trên Thread nền
     /// </summary>
-    private void CaptureLoop(CancellationToken cancellationToken)
+    private void CaptureLoop(CancellationToken cancellationToken, bool isSimulator)
     {
         var frameMat = new Mat();
         var sw = new System.Diagnostics.Stopwatch();
         int errorCount = 0;
+        int simFrameCounter = 0;
 
-        while (!cancellationToken.IsCancellationRequested && _isRunning && _camera != null)
+        while (!cancellationToken.IsCancellationRequested && _isRunning)
         {
             sw.Restart();
 
             try
             {
-                if (!_camera.Read(frameMat) || frameMat.Empty())
+                if (isSimulator)
                 {
-                    errorCount++;
-                    if (errorCount > 100) // Đợi ~3 giây mất frame liên tiếp trước khi ngắt kết nối
+                    frameMat.Dispose();
+                    frameMat = GenerateSimulatorFrame(ref simFrameCounter);
+                }
+                else
+                {
+                    if (_camera == null || !_camera.Read(frameMat) || frameMat.Empty())
                     {
-                        ErrorOccurred?.Invoke(this, "Mất luồng truyền hình ảnh từ camera hoặc camera bị chiếm dụng bởi ứng dụng khác.");
-                        break;
+                        errorCount++;
+                        if (errorCount > 150)
+                        {
+                            ErrorOccurred?.Invoke(this, "Mất luồng truyền hình ảnh từ camera hoặc camera bị chiếm dụng bởi ứng dụng khác.");
+                            break;
+                        }
+                        Thread.Sleep(33);
+                        continue;
                     }
-                    Thread.Sleep(30);
-                    continue;
                 }
 
-                errorCount = 0; // Reset đếm lỗi khi đọc thành công
+                errorCount = 0;
 
-                // Áp dụng các cấu hình điều chỉnh hình ảnh đầu vào gốc
                 using var processedFrame = ApplyCameraSettings(frameMat);
 
-                // Store last frame for background consumers (e.g., PLC trigger).
                 lock (_lastFrameGate)
                 {
                     _lastFrame?.Dispose();
                     _lastFrame = processedFrame.Clone();
                 }
 
-                // Fire event với frame mới
-                FrameCaptured?.Invoke(this, processedFrame.Clone());
+                if (FrameCaptured != null)
+                {
+                    using var eventFrame = processedFrame.Clone();
+                    FrameCaptured.Invoke(this, eventFrame);
+                }
             }
             catch (Exception ex)
             {
@@ -275,14 +412,18 @@ public sealed class CameraService : IDisposable
             }
 
             sw.Stop();
-            // Khống chế cứng tốc độ khung hình ở mức ~30 FPS (33ms cho mỗi frame)
-            // Việc này cực kỳ quan trọng để tránh nghẽn buffer camera và tránh quá tải mạng DroidCam
             int elapsed = (int)sw.ElapsedMilliseconds;
             int delay = Math.Max(5, 33 - elapsed);
             Thread.Sleep(delay);
         }
 
         frameMat.Dispose();
+        try
+        {
+            _camera?.Dispose();
+            _camera = null;
+        }
+        catch { }
         _isRunning = false;
     }
 
@@ -294,21 +435,37 @@ public sealed class CameraService : IDisposable
         if (input == null || input.Empty())
             return new Mat();
 
-        var output = new Mat();
-        
-        // 1. Áp dụng Tương phản (Contrast: alpha) và Độ sáng (Brightness: beta)
-        // new_pixel = alpha * old_pixel + beta
-        input.ConvertTo(output, -1, _contrast, _brightness);
-
-        // 2. Áp dụng chế độ ảnh Xám (Grayscale)
-        if (_isGrayscale)
+        try
         {
-            using var gray = new Mat();
-            Cv2.CvtColor(output, gray, ColorConversionCodes.BGR2GRAY);
-            Cv2.CvtColor(gray, output, ColorConversionCodes.GRAY2BGR); // Chuyển lại 3 kênh màu để tương thích với các view hiển thị
-        }
+            var output = new Mat();
+            double safeContrast = _contrast <= 0.01 ? 1.0 : Math.Clamp(_contrast, 0.1, 5.0);
+            double safeBrightness = Math.Clamp(_brightness, -255.0, 255.0);
 
-        return output;
+            input.ConvertTo(output, -1, safeContrast, safeBrightness);
+
+            if (_isGrayscale)
+            {
+                if (output.Channels() == 3)
+                {
+                    using var gray = new Mat();
+                    Cv2.CvtColor(output, gray, ColorConversionCodes.BGR2GRAY);
+                    Cv2.CvtColor(gray, output, ColorConversionCodes.GRAY2BGR);
+                }
+                else if (output.Channels() == 4)
+                {
+                    using var gray = new Mat();
+                    Cv2.CvtColor(output, gray, ColorConversionCodes.BGRA2GRAY);
+                    Cv2.CvtColor(gray, output, ColorConversionCodes.GRAY2BGR);
+                }
+            }
+
+            return output;
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[CameraService] ApplyCameraSettings error: {ex.Message}");
+            return input.Clone();
+        }
     }
 
     /// <summary>
@@ -322,32 +479,13 @@ public sealed class CameraService : IDisposable
         {
             try
             {
-                using var camera = new VideoCapture(i, VideoCaptureAPIs.DSHOW);
-                if (camera.IsOpened())
+                using var camera = TryOpenVideoCapture(i, null);
+                if (camera != null && camera.IsOpened())
                 {
                     availableCameras.Add(i);
-                    camera.Release();
-                    continue;
                 }
             }
-            catch
-            {
-                // Bỏ qua
-            }
-
-            try
-            {
-                using var camera = new VideoCapture(i);
-                if (camera.IsOpened())
-                {
-                    availableCameras.Add(i);
-                    camera.Release();
-                }
-            }
-            catch
-            {
-                // Bỏ qua
-            }
+            catch { }
         }
 
         return availableCameras.ToArray();
@@ -355,68 +493,111 @@ public sealed class CameraService : IDisposable
 
     /// <summary>
     /// Chụp ảnh tĩnh bất đồng bộ từ camera hiện tại.
-    /// Nếu camera đang chạy, trả về frame mới nhất ngay lập tức.
-    /// Nếu camera không chạy, mở tạm thời để chụp 1 frame rồi tắt.
+    /// Trả về frame mới nhất nếu camera đang chạy.
     /// </summary>
     public async Task<Mat?> CaptureSnapshotAsync()
     {
         if (_isRunning)
         {
+            for (int i = 0; i < 10; i++)
+            {
+                var f = TryGetLatestFrameClone();
+                if (f != null && !f.Empty()) return f;
+                await Task.Delay(50);
+            }
             return TryGetLatestFrameClone();
         }
 
-        return await Task.Run(async () =>
+        return await CaptureSnapshotFromCameraAsync(_currentCameraIndex, _lastSelectedRtspUrl);
+    }
+
+    /// <summary>
+    /// Chụp ảnh tĩnh từ camera theo chỉ số hoặc RTSP URL chỉ định.
+    /// Dùng cho ImageSource node khi cần capture từ camera cấu hình riêng.
+    /// </summary>
+    public async Task<Mat?> CaptureSnapshotAsync(int cameraIndex, string? rtspUrl)
+    {
+        bool isSameCamera = _isRunning
+            && ((IsSimulator(cameraIndex, rtspUrl) && IsSimulator(_currentCameraIndex, _lastSelectedRtspUrl))
+                || (!string.IsNullOrEmpty(rtspUrl) && string.Equals(rtspUrl, _lastSelectedRtspUrl, StringComparison.OrdinalIgnoreCase))
+                || (string.IsNullOrEmpty(rtspUrl) && string.IsNullOrEmpty(_lastSelectedRtspUrl) && cameraIndex == _currentCameraIndex));
+
+        if (isSameCamera)
         {
-            VideoCapture? tempCamera = null;
+            for (int i = 0; i < 10; i++)
+            {
+                var f = TryGetLatestFrameClone();
+                if (f != null && !f.Empty()) return f;
+                await Task.Delay(50);
+            }
+            return TryGetLatestFrameClone();
+        }
+
+        return await CaptureSnapshotFromCameraAsync(cameraIndex, rtspUrl);
+    }
+
+    /// <summary>
+    /// Logic chung: mở camera tạm thời, xả warmup frame để đọc ảnh thực tế, chụp 1 frame rồi đóng.
+    /// </summary>
+    private async Task<Mat?> CaptureSnapshotFromCameraAsync(int cameraIndex, string? rtspUrl)
+    {
+        return await Task.Run(() =>
+        {
+            if (IsSimulator(cameraIndex, rtspUrl))
+            {
+                int cnt = (int)(DateTime.Now.Ticks % 1000);
+                var rawSim = GenerateSimulatorFrame(ref cnt);
+                var processedSim = ApplyCameraSettings(rawSim);
+                rawSim.Dispose();
+                return processedSim;
+            }
+
+            VideoCapture? cap = null;
             try
             {
-                if (!string.IsNullOrEmpty(_lastSelectedRtspUrl))
+                cap = TryOpenVideoCapture(cameraIndex, rtspUrl);
+                if (cap == null || !cap.IsOpened())
                 {
-                    tempCamera = new VideoCapture(_lastSelectedRtspUrl);
-                }
-                else
-                {
-                    tempCamera = new VideoCapture(_currentCameraIndex, VideoCaptureAPIs.DSHOW);
-                    if (!tempCamera.IsOpened())
-                    {
-                        tempCamera.Dispose();
-                        tempCamera = new VideoCapture(_currentCameraIndex);
-                    }
-                }
-
-                if (tempCamera == null || !tempCamera.IsOpened())
-                {
-                    tempCamera?.Dispose();
+                    cap?.Dispose();
                     return null;
                 }
 
-                // Chờ 500ms cho cảm biến camera ổn định độ sáng và phơi sáng
-                await Task.Delay(500);
+                try { cap.Set(VideoCaptureProperties.BufferSize, 1); } catch { }
 
                 var frame = new Mat();
-                if (tempCamera.Read(frame) && !frame.Empty())
+                bool gotFrame = false;
+                for (int i = 0; i < 30; i++)
                 {
-                    // Vẫn áp dụng cài đặt xử lý ảnh cho ảnh chụp tĩnh
-                    var processed = ApplyCameraSettings(frame);
-                    frame.Dispose();
-                    tempCamera.Dispose();
-                    return processed;
+                    if (cap.Read(frame) && !frame.Empty() && frame.Width > 0 && frame.Height > 0)
+                    {
+                        gotFrame = true;
+                        break;
+                    }
+                    Thread.Sleep(100);
                 }
 
+                if (!gotFrame || frame.Empty())
+                {
+                    frame.Dispose();
+                    cap.Dispose();
+                    return null;
+                }
+
+                var processed = ApplyCameraSettings(frame);
                 frame.Dispose();
-                tempCamera.Dispose();
+                cap.Dispose();
+                return processed;
             }
             catch
             {
-                tempCamera?.Dispose();
+                cap?.Dispose();
+                return null;
             }
-            return null;
         });
     }
 
     /// <summary>
     /// Lấy frame mới nhất (clone) theo kiểu thread-safe.
-    /// Caller phải Dispose Mat trả về.
     /// </summary>
     public Mat? TryGetLatestFrameClone()
     {
@@ -426,19 +607,10 @@ public sealed class CameraService : IDisposable
         }
     }
 
-    /// <summary>
-    /// Kiểm tra camera đang chạy hay không
-    /// </summary>
     public bool IsRunning => _isRunning;
 
-    /// <summary>
-    /// Camera hiện tại
-    /// </summary>
     public int CurrentCameraIndex => _currentCameraIndex;
 
-    /// <summary>
-    /// RTSP URL hiện tại của camera mạng
-    /// </summary>
     public string? CurrentRtspUrl => _lastSelectedRtspUrl;
 
     private void LoadSettings()
@@ -463,10 +635,8 @@ public sealed class CameraService : IDisposable
         }
         catch
         {
-            // Bỏ qua lỗi load cài đặt mặc định
         }
 
-        // Cài đặt mặc định
         _brightness = 0.0;
         _contrast = 1.0;
         _isGrayscale = false;
@@ -493,7 +663,6 @@ public sealed class CameraService : IDisposable
         }
         catch
         {
-            // Bỏ qua
         }
     }
 
