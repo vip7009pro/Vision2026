@@ -27,21 +27,29 @@ public static class PlcResultTransferRunner
                 if (string.IsNullOrWhiteSpace(item.TagName))
                     continue;
 
-                // Kiểm tra điều kiện gửi
-                if (item.Condition == ImageOutputCondition.OnPass && !result.Pass)
-                    continue;
-                if (item.Condition == ImageOutputCondition.OnFail && result.Pass)
-                    continue;
+                try
+                {
+                    // Kiểm tra điều kiện gửi
+                    if (item.Condition == ImageOutputCondition.OnPass && !result.Pass)
+                        continue;
+                    if (item.Condition == ImageOutputCondition.OnFail && result.Pass)
+                        continue;
 
-                // Tính toán biểu thức giá trị
-                object writeVal = EvaluateExpression(item.ValueExpression, result, config);
+                    // Tính toán biểu thức giá trị
+                    object writeVal = EvaluateExpression(item.ValueExpression, result, config);
 
-                // Gửi xuống PLC
-                string targetPlcId = item.PlcId;
-                System.Diagnostics.Debug.WriteLine($"[PLC RESULT TRANSFER] Tag='{item.TagName}' (PLC: {targetPlcId}) | Expr='{item.ValueExpression}' => Output: {writeVal} ({writeVal?.GetType().Name})");
-                Console.WriteLine($"[PLC RESULT TRANSFER] Tag='{item.TagName}' (PLC: {targetPlcId}) | Expr='{item.ValueExpression}' => Output: {writeVal} ({writeVal?.GetType().Name})");
+                    // Gửi xuống PLC
+                    string targetPlcId = item.PlcId;
+                    System.Diagnostics.Debug.WriteLine($"[PLC RESULT TRANSFER] Tag='{item.TagName}' (PLC: {targetPlcId}) | Expr='{item.ValueExpression}' => Output: {writeVal} ({writeVal?.GetType().Name})");
+                    Console.WriteLine($"[PLC RESULT TRANSFER] Tag='{item.TagName}' (PLC: {targetPlcId}) | Expr='{item.ValueExpression}' => Output: {writeVal} ({writeVal?.GetType().Name})");
 
-                await plcManager.WriteTagValueAsync(targetPlcId, item.TagName, writeVal);
+                    await plcManager.WriteTagValueAsync(targetPlcId, item.TagName, writeVal);
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"[PLC RESULT TRANSFER ERROR] Item '{item.TagName}': {ex.Message}");
+                    Console.WriteLine($"[PLC RESULT TRANSFER ERROR] Item '{item.TagName}': {ex.Message}");
+                }
             }
         }
     }

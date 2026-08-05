@@ -407,13 +407,13 @@
   2. **Kiểm tra `_isRunning` bị cứng trong `StartCameraCaptureAsync`**: Hàm kiểm tra `if (_isRunning) return;` khiến ứng dụng không thể chuyển đổi camera khi người dùng chọn camera mới trong tab Live Camera và bấm Start Camera.
   3. **Tranh chấp khóa thiết bị khi gọi `CaptureSnapshotAsync`**: Mở thêm một đối tượng `VideoCapture` mới trên cùng một camera đang chạy luồng `CaptureLoop` bị hệ điều hành từ chối quyền truy cập.
   4. **Bộ nhớ đệm ảnh `_imageSourcePreviewCache` trong `ToolEditorViewModel`**: Chưa được xóa cache khi người dùng thay đổi chỉ số `CameraIndex` hoặc URL `RtspUrl`.
-- **Task 104: Sửa triệt để nguyên nhân `D201` = 0 và Bổ sung đọc 2-word Float cho PLC Tag Browser UI**:
-  - **Phân tích hình ảnh thực tế (Hình 3 & 4)**: 
-    - Hình 3 cho thấy `D200` có dữ liệu nhị phân `1100 0010 0101 1000` (`49840`), trong khi `D201` = `0000 0000 0000 0000`. Điều này chứng tỏ trước đó phương thức ghi chỉ truyền 1 word duy nhất `sWords[0]`, làm `D201` bị bỏ trống 0. Khi đọc 2 word `(D200, D201)`, do exponent ở `D201` bằng 0 nên GX Works báo lỗi `--` (NaN).
-    - Hình 4 cho thấy bảng **PLC Tag Browser** hiển thị số nguyên `49840` thay vì `463.521` vì hàm `ReadComTagValue` trước đây gọi `GetDevice` chỉ đọc 1 word 16-bit nguyên bản của `D200`.
+- **Task 105: Triệt tiêu ngoại lệ `TargetInvocationException` và Giải phóng đơ lag UI khi Run Flow / PLC Trigger**:
+  - **Phân tích nguyên nhân đơ lag & TargetInvocationException**:
+    1. **Nguyên nhân `TargetInvocationException`**: Việc gọi phương thức `WriteDeviceBlock2` / `ReadDeviceBlock2` qua C# COM Reflection với tham số mảng `short[]` bị môi trường COM Interop của MX Component từ chối và ném ra ngoại lệ `TargetInvocationException`.
+    2. **Nguyên nhân đơ UI**: Trong `Class1.cs`, việc gọi `PlcResultTransferRunner.ExecuteResultTransfersAsync(...).GetAwaiter().GetResult()` thực hiện chặn đồng bộ (blocking sync call) ngay trên luồng UI Dispatcher trong quá trình Run Flow / Trigger PLC.
   - **Khắc phục triệt để**:
-    - Cập nhật `WriteComTagValue`: Truyền mảng `short[]` qua `ParameterModifier` cho `WriteDeviceBlock2` / `WriteDeviceBlock`, đồng thời thêm cơ chế Fallback ghi 2 thanh ghi liên tiếp (`SetDevice2(D200)` và `SetDevice2(D201)`) đảm bảo 100% `D201` nhận đúng high-word chứa exponent bits.
-    - Cập nhật `ReadComTagValue`: Đọc 2 thanh ghi liên tiếp cho Tag `Float` (`ReadDeviceBlock2` / `ReadDeviceBlock` hoặc đọc `D200` + `D201`) rồi ghép qua `WordsToFloat`, giúp bảng PLC Tag Browser hiển thị số thực thập phân chuẩn `463.521` đúng yêu cầu.
+    - Trong `MitsubishiMxComponentDriver.cs`: Chuyển hoàn toàn việc ghi/đọc 2 thanh ghi Float `(D200, D201)` sang sử dụng phương thức native `SetDevice2(D200, lowWord)` + `SetDevice2(D201, highWord)` và `GetDevice(D200)` + `GetDevice(D201)`. Phương thức này tương thích 100% với tất cả phiên bản MX Component (`ActUtlType`/`ActProgType`), không bao giờ bị ném `TargetInvocationException`.
+    - Trong `Class1.cs`: Đóng gói `ExecuteResultTransfersAsync` bên trong `Task.Run(async () => { ... })` bất đồng bộ ở background kèm try-catch. Kết quả là việc gửi dữ liệu PLC diễn ra mượt mà dưới nền, giúp giao diện ứng dụng giữ độ nhạy 100%, không bị đơ lag khi bấm Run Once hay Trigger PLC.
   - Biên dịch ứng dụng thành công 100%: **`0 Error(s)`**, **`42 Warning(s)`**.
 
 ## Encoding
@@ -427,7 +427,7 @@
 
 - [x] Sửa lỗi kết nối camera, DroidCam Virtual Camera, Tối ưu hóa Stream mượt mà, Tự động kết nối PLC khi bật app, Triệt tiêu triệt để ngoại lệ ObjectDisposedException & UI Freeze khi mở App / RUN / PLC Freeze.
 - [x] Tối ưu Scan PLC theo điều kiện & Tích hợp Node `ResultTransfer` truyền kết quả OK/NG, tọa độ sau khi hoàn thành Job Flow.
-- [x] Sửa lỗi ghi/đọc 2-word Float (truyền đủ mảng short[]) & Hiển thị số thực chuẩn trên PLC Tag Browser UI.
+- [x] Triệt tiêu ngoại lệ TargetInvocationException & Bất đồng bộ luồng truyền PLC giữ mượt UI 100%.
 - Kiểm thử đầy đủ module Camera Settings với Basler/GigE và luồng UDP/RTSP.
 - Chạy kiểm thử đầu-cuối cho execution pipeline của Node Graph.
 

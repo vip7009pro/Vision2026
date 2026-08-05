@@ -263,66 +263,48 @@ public sealed class MitsubishiMxComponentDriver : IPlcDriver
 
         string device = tag.Address.Trim();
 
-        // Special handling for Float data type (requires 2 words = 32-bit Float)
+        // Special handling for Float data type (reads 2 consecutive words: e.g. D200 & D201)
         if (tag.DataType == PlcDataType.Float)
         {
             try
             {
-                short[] sWords = new short[2];
-                object[] args = new object[] { device, 2, sWords };
-                ParameterModifier[] modifiers = new ParameterModifier[1];
-                modifiers[0] = new ParameterModifier(3);
-                modifiers[0][2] = true;
+                string nextDevice = IncrementDeviceAddress(device, 1);
+                object[] args1 = new object[] { device, 0 };
+                object[] args2 = new object[] { nextDevice, 0 };
+                ParameterModifier[] modifiers1 = new ParameterModifier[1];
+                modifiers1[0] = new ParameterModifier(2);
+                modifiers1[0][1] = true;
+                ParameterModifier[] modifiers2 = new ParameterModifier[1];
+                modifiers2[0] = new ParameterModifier(2);
+                modifiers2[0][1] = true;
 
-                var res = _comType.InvokeMember("ReadDeviceBlock2",
-                    BindingFlags.InvokeMethod | BindingFlags.Public | BindingFlags.Instance,
-                    null, _comObject, args, modifiers, null, null);
+                var res1 = _comType.InvokeMember("GetDevice", BindingFlags.InvokeMethod | BindingFlags.Public | BindingFlags.Instance, null, _comObject, args1, modifiers1, null, null);
+                var res2 = _comType.InvokeMember("GetDevice", BindingFlags.InvokeMethod | BindingFlags.Public | BindingFlags.Instance, null, _comObject, args2, modifiers2, null, null);
 
-                int retCode = res is int rc ? rc : -1;
-                if (retCode == 0)
+                if (res1 is int rc1 && rc1 == 0 && res2 is int rc2 && rc2 == 0)
                 {
-                    short[] retArr = (short[])args[2];
-                    int[] words = new int[] { retArr[0], retArr[1] };
-                    float fVal = WordsToFloat(words);
+                    int w1 = Convert.ToInt32(args1[1]);
+                    int w2 = Convert.ToInt32(args2[1]);
+                    float fVal = WordsToFloat(new int[] { w1, w2 });
                     return ApplyScale(fVal, tag.Scale);
                 }
             }
             catch { }
 
-            try
-            {
-                int[] iWords = new int[2];
-                object[] args = new object[] { device, 2, iWords };
-                ParameterModifier[] modifiers = new ParameterModifier[1];
-                modifiers[0] = new ParameterModifier(3);
-                modifiers[0][2] = true;
-
-                var res = _comType.InvokeMember("ReadDeviceBlock",
-                    BindingFlags.InvokeMethod | BindingFlags.Public | BindingFlags.Instance,
-                    null, _comObject, args, modifiers, null, null);
-
-                int retCode = res is int rc ? rc : -1;
-                if (retCode == 0)
-                {
-                    int[] retArr = (int[])args[2];
-                    float fVal = WordsToFloat(retArr);
-                    return ApplyScale(fVal, tag.Scale);
-                }
-            }
-            catch { }
-
-            // Fallback: Read 2 individual words using GetDevice2
             try
             {
                 string nextDevice = IncrementDeviceAddress(device, 1);
                 object[] args1 = new object[] { device, (short)0 };
                 object[] args2 = new object[] { nextDevice, (short)0 };
-                ParameterModifier[] modifiers = new ParameterModifier[1];
-                modifiers[0] = new ParameterModifier(2);
-                modifiers[0][1] = true;
+                ParameterModifier[] modifiers1 = new ParameterModifier[1];
+                modifiers1[0] = new ParameterModifier(2);
+                modifiers1[0][1] = true;
+                ParameterModifier[] modifiers2 = new ParameterModifier[1];
+                modifiers2[0] = new ParameterModifier(2);
+                modifiers2[0][1] = true;
 
-                var res1 = _comType.InvokeMember("GetDevice2", BindingFlags.InvokeMethod | BindingFlags.Public | BindingFlags.Instance, null, _comObject, args1, modifiers, null, null);
-                var res2 = _comType.InvokeMember("GetDevice2", BindingFlags.InvokeMethod | BindingFlags.Public | BindingFlags.Instance, null, _comObject, args2, modifiers, null, null);
+                var res1 = _comType.InvokeMember("GetDevice2", BindingFlags.InvokeMethod | BindingFlags.Public | BindingFlags.Instance, null, _comObject, args1, modifiers1, null, null);
+                var res2 = _comType.InvokeMember("GetDevice2", BindingFlags.InvokeMethod | BindingFlags.Public | BindingFlags.Instance, null, _comObject, args2, modifiers2, null, null);
 
                 if (res1 is int rc1 && rc1 == 0 && res2 is int rc2 && rc2 == 0)
                 {
@@ -405,46 +387,27 @@ public sealed class MitsubishiMxComponentDriver : IPlcDriver
             }
 
             int[] words = FloatToWords(fVal);
-            short[] sWords = new short[] { (short)words[0], (short)words[1] };
+            string nextDevice = IncrementDeviceAddress(device, 1);
 
+            // Write 2 consecutive words (word 0 to device, word 1 to device+1) using SetDevice2/SetDevice
             try
             {
-                object[] args = new object[] { device, 2, sWords };
-                ParameterModifier[] modifiers = new ParameterModifier[1];
-                modifiers[0] = new ParameterModifier(3);
-                modifiers[0][2] = true;
-
-                _comType.InvokeMember("WriteDeviceBlock2",
-                    BindingFlags.InvokeMethod | BindingFlags.Public | BindingFlags.Instance,
-                    null, _comObject, args, modifiers, null, null);
-                return;
-            }
-            catch { }
-
-            try
-            {
-                object[] args = new object[] { device, 2, words };
-                ParameterModifier[] modifiers = new ParameterModifier[1];
-                modifiers[0] = new ParameterModifier(3);
-                modifiers[0][2] = true;
-
-                _comType.InvokeMember("WriteDeviceBlock",
-                    BindingFlags.InvokeMethod | BindingFlags.Public | BindingFlags.Instance,
-                    null, _comObject, args, modifiers, null, null);
-                return;
-            }
-            catch { }
-
-            // Reliable Fallback: Write 2 individual words using SetDevice2 / SetDevice
-            try
-            {
-                string nextDevice = IncrementDeviceAddress(device, 1);
                 object[] args1 = new object[] { device, (short)words[0] };
                 object[] args2 = new object[] { nextDevice, (short)words[1] };
                 _comType.InvokeMember("SetDevice2", BindingFlags.InvokeMethod | BindingFlags.Public | BindingFlags.Instance, null, _comObject, args1);
                 _comType.InvokeMember("SetDevice2", BindingFlags.InvokeMethod | BindingFlags.Public | BindingFlags.Instance, null, _comObject, args2);
             }
-            catch { }
+            catch
+            {
+                try
+                {
+                    object[] args1 = new object[] { device, words[0] };
+                    object[] args2 = new object[] { nextDevice, words[1] };
+                    _comType.InvokeMember("SetDevice", BindingFlags.InvokeMethod | BindingFlags.Public | BindingFlags.Instance, null, _comObject, args1);
+                    _comType.InvokeMember("SetDevice", BindingFlags.InvokeMethod | BindingFlags.Public | BindingFlags.Instance, null, _comObject, args2);
+                }
+                catch { }
+            }
 
             return;
         }

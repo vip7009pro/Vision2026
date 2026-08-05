@@ -3530,10 +3530,20 @@ public sealed class InspectionService : IInspectionService
             }
         }
 
-        // 5. ResultTransfers
+        // 5. ResultTransfers (run asynchronously in background to prevent UI dispatcher freeze)
         if (config.ResultTransfers != null && config.ResultTransfers.Count > 0 && plcManager != null)
         {
-            PLC.Services.PlcResultTransferRunner.ExecuteResultTransfersAsync(config, result, plcManager).GetAwaiter().GetResult();
+            Task.Run(async () =>
+            {
+                try
+                {
+                    await PLC.Services.PlcResultTransferRunner.ExecuteResultTransfersAsync(config, result, plcManager);
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"[PLC RESULT TRANSFER ERROR] {ex.Message}");
+                }
+            });
         }
     }
 
