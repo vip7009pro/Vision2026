@@ -108,6 +108,9 @@ public partial class App : System.Windows.Application
         }
 
         base.OnExit(e);
+
+        // Terminate residual background threads / unmanaged COM hosts so process never lingers in Task Manager
+        Environment.Exit(0);
     }
 
     private async Task ShutdownGracefullyAsync()
@@ -127,9 +130,15 @@ public partial class App : System.Windows.Application
                 await orchestrator.DisposeAsync().ConfigureAwait(false);
             }
 
+            if (services.GetService<VisionInspectionApp.Application.PLC.Services.IPlcManagerService>() is { } plcManager)
+            {
+                plcManager.Dispose();
+            }
+
             if (services.GetService<CameraService>() is { } camera)
             {
                 await camera.StopCameraAsync().ConfigureAwait(false);
+                camera.Dispose();
             }
         }
         catch

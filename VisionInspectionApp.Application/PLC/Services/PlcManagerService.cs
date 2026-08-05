@@ -19,7 +19,7 @@ public sealed class PlcConfigContainer
     public List<PlcTag> Tags { get; set; } = new();
 }
 
-public sealed class PlcManagerService : IPlcManagerService
+public sealed class PlcManagerService : IPlcManagerService, IDisposable
 {
     private readonly ConcurrentDictionary<string, IPlcDriver> _drivers = new(StringComparer.OrdinalIgnoreCase);
     private readonly string _globalConfigFilePath;
