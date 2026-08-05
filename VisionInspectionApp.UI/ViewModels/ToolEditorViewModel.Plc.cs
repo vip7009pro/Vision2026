@@ -26,23 +26,30 @@ public sealed partial class ToolEditorViewModel : ObservableObject
 
     public bool IsPlcBatchWriteNode => SelectedNode != null && string.Equals(SelectedNode.Type, "PlcBatchWrite", StringComparison.OrdinalIgnoreCase);
 
-    public bool IsAnyPlcNode => IsPlcReadNode || IsPlcWriteNode || IsPlcWaitNode || IsPlcTriggerNode || IsPlcBatchReadNode || IsPlcBatchWriteNode;
+    public bool IsResultTransferNode => SelectedNode != null && string.Equals(SelectedNode.Type, "ResultTransfer", StringComparison.OrdinalIgnoreCase);
 
-    public IEnumerable<string> AvailablePlcNames => _plcManagerService.Plcs.Select(p => p.Name);
+    public bool IsAnyPlcNode => IsPlcReadNode || IsPlcWriteNode || IsPlcWaitNode || IsPlcTriggerNode || IsPlcBatchReadNode || IsPlcBatchWriteNode || IsResultTransferNode;
+
+    public IEnumerable<string> AvailablePlcNames => _plcManagerService.Plcs.Select(p => p.Name).ToList();
+
+    public IEnumerable<string> AvailablePlcAllTagNames => _plcManagerService.Tags.Select(t => t.Name).Where(n => !string.IsNullOrWhiteSpace(n)).Distinct().ToList();
 
     public IEnumerable<string> AvailablePlcTagNames
     {
         get
         {
             var plcName = PlcNode_PlcId;
-            if (string.IsNullOrWhiteSpace(plcName)) return _plcManagerService.Tags.Select(t => t.Name);
+            if (string.IsNullOrWhiteSpace(plcName)) return AvailablePlcAllTagNames;
 
             var plc = _plcManagerService.Plcs.FirstOrDefault(p => string.Equals(p.Name, plcName, StringComparison.OrdinalIgnoreCase) || string.Equals(p.Id, plcName, StringComparison.OrdinalIgnoreCase));
             string targetId = plc?.Id ?? plcName;
 
             return _plcManagerService.Tags
                 .Where(t => string.Equals(t.PlcId, targetId, StringComparison.OrdinalIgnoreCase) || string.Equals(t.PlcId, plcName, StringComparison.OrdinalIgnoreCase))
-                .Select(t => t.Name);
+                .Select(t => t.Name)
+                .Where(n => !string.IsNullOrWhiteSpace(n))
+                .Distinct()
+                .ToList();
         }
     }
 
@@ -370,6 +377,103 @@ public sealed partial class ToolEditorViewModel : ObservableObject
         return def;
     }
 
+    public ResultTransferDefinition? GetOrCreateResultTransfer(string name)
+    {
+        if (string.IsNullOrWhiteSpace(name)) return null;
+        _config ??= new VisionConfig();
+        var def = _config.ResultTransfers.FirstOrDefault(x => string.Equals(x.Name, name, StringComparison.OrdinalIgnoreCase));
+        if (def == null)
+        {
+            def = new ResultTransferDefinition
+            {
+                Name = name,
+                Items = new List<ResultTransferItem>
+                {
+                    new ResultTransferItem { PlcId = _plcManagerService.Plcs.FirstOrDefault()?.Name ?? "PLC1", TagName = "Y0_OK", ValueExpression = "TotalPassBit", Condition = ImageOutputCondition.Always },
+                    new ResultTransferItem { PlcId = _plcManagerService.Plcs.FirstOrDefault()?.Name ?? "PLC1", TagName = "Y1_NG", ValueExpression = "TotalFailBit", Condition = ImageOutputCondition.Always }
+                }
+            };
+            _config.ResultTransfers.Add(def);
+        }
+        return def;
+    }
+
+    public ObservableCollection<ResultTransferItemVM> ResultTransferItemVMs { get; } = new();
+
+    public void RefreshResultTransferItems()
+    {
+        ResultTransferItemVMs.Clear();
+        if (SelectedNode == null || !IsResultTransferNode || _config == null) return;
+        var def = GetOrCreateResultTransfer(SelectedNode.RefName);
+        if (def == null) return;
+
+        foreach (var item in def.Items)
+        {
+            var vm = new ResultTransferItemVM(item, AvailablePlcNames, AvailablePlcTagNames, () => IsDirty = true);
+            ResultTransferItemVMs.Add(vm);
+        }
+    }
+
+    [RelayCommand]
+    private void AddResultTransferItem()
+    {
+        if (SelectedNode == null || !IsResultTransferNode) return;
+        var def = GetOrCreateResultTransfer(SelectedNode.RefName);
+        if (def == null) return;
+
+        var newItem = new ResultTransferItem
+        {
+            PlcId = _plcManagerService.Plcs.FirstOrDefault()?.Name ?? "PLC1",
+            TagName = _plcManagerService.Tags.FirstOrDefault()?.Name ?? "Y0",
+            ValueExpression = "TotalPassBit",
+            Condition = ImageOutputCondition.Always
+        };
+        def.Items.Add(newItem);
+        IsDirty = true;
+        RefreshResultTransferItems();
+    }
+
+    [RelayCommand]
+    private void AddResultTransferPresetOkNg()
+    {
+        if (SelectedNode == null || !IsResultTransferNode) return;
+        var def = GetOrCreateResultTransfer(SelectedNode.RefName);
+        if (def == null) return;
+
+        var defaultPlc = _plcManagerService.Plcs.FirstOrDefault()?.Name ?? "PLC1";
+        def.Items.Add(new ResultTransferItem { PlcId = defaultPlc, TagName = "Y0_OK", ValueExpression = "TotalPassBit", Condition = ImageOutputCondition.Always });
+        def.Items.Add(new ResultTransferItem { PlcId = defaultPlc, TagName = "Y1_NG", ValueExpression = "TotalFailBit", Condition = ImageOutputCondition.Always });
+        IsDirty = true;
+        RefreshResultTransferItems();
+    }
+
+    [RelayCommand]
+    private void AddResultTransferPresetPose()
+    {
+        if (SelectedNode == null || !IsResultTransferNode) return;
+        var def = GetOrCreateResultTransfer(SelectedNode.RefName);
+        if (def == null) return;
+
+        var defaultPlc = _plcManagerService.Plcs.FirstOrDefault()?.Name ?? "PLC1";
+        def.Items.Add(new ResultTransferItem { PlcId = defaultPlc, TagName = "D200_PosX", ValueExpression = "{Origin.X}", Condition = ImageOutputCondition.OnPass });
+        def.Items.Add(new ResultTransferItem { PlcId = defaultPlc, TagName = "D202_PosY", ValueExpression = "{Origin.Y}", Condition = ImageOutputCondition.OnPass });
+        def.Items.Add(new ResultTransferItem { PlcId = defaultPlc, TagName = "D204_Angle", ValueExpression = "{Origin.AngleDeg}", Condition = ImageOutputCondition.OnPass });
+        IsDirty = true;
+        RefreshResultTransferItems();
+    }
+
+    [RelayCommand]
+    private void RemoveResultTransferItem(ResultTransferItemVM? itemVm)
+    {
+        if (itemVm == null || SelectedNode == null || !IsResultTransferNode) return;
+        var def = GetOrCreateResultTransfer(SelectedNode.RefName);
+        if (def == null) return;
+
+        def.Items.Remove(itemVm.Model);
+        IsDirty = true;
+        RefreshResultTransferItems();
+    }
+
     #endregion
 
     #region Commands for Toolbar/UI
@@ -377,34 +481,39 @@ public sealed partial class ToolEditorViewModel : ObservableObject
     [RelayCommand]
     private void OpenPlcManager()
     {
+        _plcManagerService.AcquirePollingLock("PlcManagerWindow");
         var vm = new PlcManagerViewModel(_plcManagerService);
         var win = new PlcManagerWindow(vm)
         {
             Owner = System.Windows.Application.Current?.MainWindow
         };
+        win.Closed += (s, e) => _plcManagerService.ReleasePollingLock("PlcManagerWindow");
         win.ShowDialog();
 
         _plcManagerService.SaveGlobalConfig();
-        _plcManagerService.StartPollingAsync();
 
         OnPropertyChanged(nameof(AvailablePlcNames));
         OnPropertyChanged(nameof(AvailablePlcTagNames));
+        OnPropertyChanged(nameof(AvailablePlcAllTagNames));
     }
 
     [RelayCommand]
     private void OpenPlcMonitor()
     {
+        _plcManagerService.AcquirePollingLock("PlcMonitorWindow");
         var vm = new PlcMonitorViewModel(_plcManagerService);
         var win = new PlcMonitorWindow(vm)
         {
             Owner = System.Windows.Application.Current?.MainWindow
         };
+        win.Closed += (s, e) => _plcManagerService.ReleasePollingLock("PlcMonitorWindow");
         win.Show();
     }
 
     [RelayCommand]
     private void OpenPlcBrowser()
     {
+        _plcManagerService.AcquirePollingLock("PlcBrowserWindow");
         var win = new Window
         {
             Title = "PLC Tag Browser",
@@ -414,8 +523,83 @@ public sealed partial class ToolEditorViewModel : ObservableObject
             Owner = System.Windows.Application.Current?.MainWindow,
             Content = new PlcBrowserControl { DataContext = new PlcBrowserViewModel(_plcManagerService) }
         };
+        win.Closed += (s, e) => _plcManagerService.ReleasePollingLock("PlcBrowserWindow");
         win.Show();
     }
 
     #endregion
+}
+
+public partial class ResultTransferItemVM : ObservableObject
+{
+    public ResultTransferItem Model { get; }
+    private readonly Action _onChanged;
+
+    public IEnumerable<string> AvailablePlcs { get; }
+    public IEnumerable<string> AvailableTags { get; }
+    public Array AvailableConditions => Enum.GetValues(typeof(ImageOutputCondition));
+
+    public string PlcId
+    {
+        get => Model.PlcId;
+        set
+        {
+            if (Model.PlcId != value)
+            {
+                Model.PlcId = value;
+                OnPropertyChanged();
+                _onChanged();
+            }
+        }
+    }
+
+    public string TagName
+    {
+        get => Model.TagName;
+        set
+        {
+            if (Model.TagName != value)
+            {
+                Model.TagName = value;
+                OnPropertyChanged();
+                _onChanged();
+            }
+        }
+    }
+
+    public string ValueExpression
+    {
+        get => Model.ValueExpression;
+        set
+        {
+            if (Model.ValueExpression != value)
+            {
+                Model.ValueExpression = value;
+                OnPropertyChanged();
+                _onChanged();
+            }
+        }
+    }
+
+    public ImageOutputCondition Condition
+    {
+        get => Model.Condition;
+        set
+        {
+            if (Model.Condition != value)
+            {
+                Model.Condition = value;
+                OnPropertyChanged();
+                _onChanged();
+            }
+        }
+    }
+
+    public ResultTransferItemVM(ResultTransferItem model, IEnumerable<string> plcs, IEnumerable<string> tags, Action onChanged)
+    {
+        Model = model;
+        AvailablePlcs = plcs;
+        AvailableTags = tags;
+        _onChanged = onChanged;
+    }
 }

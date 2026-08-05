@@ -113,6 +113,7 @@
                         </Border>
 
                         <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" HorizontalAlignment="Right">
+                            <Button Content="💾 Save Config" Command="{Binding SaveConfigCommand}" Padding="10,5" Margin="0,0,4,0" Background="#0277BD" Foreground="White" FontWeight="Bold"/>
                             <Button Content="⚡ Connect" Command="{Binding ConnectSelectedPlcCommand}" Padding="10,5" Margin="0,0,4,0" FontWeight="Bold"/>
                             <Button Content="🔌 Disconnect" Command="{Binding DisconnectSelectedPlcCommand}" Padding="10,5"/>
                         </StackPanel>
@@ -157,7 +158,8 @@
 
                     <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,8,0,0">
                         <Button Content="➕ Add Tag" Command="{Binding AddTagCommand}" Padding="8,4" Margin="0,0,4,0"/>
-                        <Button Content="🗑 Delete Tag" Command="{Binding DeleteTagCommand}" Padding="8,4"/>
+                        <Button Content="🗑 Delete Tag" Command="{Binding DeleteTagCommand}" Padding="8,4" Margin="0,0,4,0"/>
+                        <Button Content="💾 Save Config" Command="{Binding SaveConfigCommand}" Padding="8,4" Background="#0277BD" Foreground="White"/>
                     </StackPanel>
                 </Grid>
             </Border>

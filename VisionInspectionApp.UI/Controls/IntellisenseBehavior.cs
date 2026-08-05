@@ -374,6 +374,18 @@ public static class IntellisenseBehavior
                         .Select(n => new IntellisenseItem(n.RefName, n.RefName, $"Tool {n.Type}", "🔧", IsToolName: true))
                         .ToList();
 
+                    var globalItems = new List<IntellisenseItem>
+                    {
+                        new("TotalPass", "TotalPass", "Kết quả tổng Pass (bool: true/false)", "⚡", IsToolName: false),
+                        new("TotalFail", "TotalFail", "Kết quả tổng NG (bool: true/false)", "⚡", IsToolName: false),
+                        new("TotalPassBit", "TotalPassBit", "Bit tổng Pass (1/0)", "⚡", IsToolName: false),
+                        new("TotalFailBit", "TotalFailBit", "Bit tổng NG (1/0)", "⚡", IsToolName: false),
+                        new("PassCount", "PassCount", "Số lượng công cụ Pass", "⚡", IsToolName: false),
+                        new("FailCount", "FailCount", "Số lượng công cụ NG", "⚡", IsToolName: false)
+                    };
+
+                    matchingNodes.AddRange(globalItems.Where(g => g.DisplayText.StartsWith(typedWord, StringComparison.OrdinalIgnoreCase)));
+
                     if (matchingNodes.Count > 0)
                     {
                         ctx.ListBox.ItemsSource = matchingNodes;
@@ -441,8 +453,30 @@ public static class IntellisenseBehavior
         {
             return new List<IntellisenseItem>
             {
+                new("X", "X", "Tọa độ X (px)", "⚡", false),
+                new("Y", "Y", "Tọa độ Y (px)", "⚡", false),
+                new("AngleDeg", "AngleDeg", "Góc xoay (độ)", "⚡", false),
                 new("Pass", "Pass", "Kết quả OK/NG (bool: true/false)", "⚡", false),
                 new("Score", "Score", "Điểm số khớp Pattern/Origin (0.0 -> 1.0)", "⚡", false)
+            };
+        }
+
+        if (string.Equals(type, "Distance", StringComparison.OrdinalIgnoreCase))
+        {
+            return new List<IntellisenseItem>
+            {
+                new("Value", "Value", "Giá trị khoảng cách (px hoặc mm)", "⚡", false),
+                new("Pass", "Pass", "Kết quả kiểm tra OK/NG (bool: true/false)", "⚡", false)
+            };
+        }
+
+        if (string.Equals(type, "Angle", StringComparison.OrdinalIgnoreCase))
+        {
+            return new List<IntellisenseItem>
+            {
+                new("AngleDeg", "AngleDeg", "Góc nghiêng (độ)", "⚡", false),
+                new("Value", "Value", "Góc nghiêng (độ)", "⚡", false),
+                new("Pass", "Pass", "Kết quả kiểm tra OK/NG (bool: true/false)", "⚡", false)
             };
         }
 

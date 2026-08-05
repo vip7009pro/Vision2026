@@ -248,6 +248,8 @@ public sealed class VisionConfig
 
     public List<PlcBatchWriteDefinition> PlcBatchWrites { get; set; } = new();
 
+    public List<ResultTransferDefinition> ResultTransfers { get; set; } = new();
+
     public DefectInspectionConfig DefectConfig { get; set; } = new();
 }
 

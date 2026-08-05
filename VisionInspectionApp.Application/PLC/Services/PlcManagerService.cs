@@ -108,6 +108,11 @@ public sealed class PlcManagerService : IPlcManagerService
         {
             try
             {
+                var dir = Path.GetDirectoryName(_globalConfigFilePath);
+                if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
+                {
+                    Directory.CreateDirectory(dir);
+                }
                 var container = new PlcConfigContainer
                 {
                     Plcs = Plcs.ToList(),
@@ -178,6 +183,83 @@ public sealed class PlcManagerService : IPlcManagerService
         SaveGlobalConfig();
     }
 
+    public async Task<bool> WriteTagValueAsync(string plcId, string tagName, object value, CancellationToken cancellationToken = default)
+    {
+        var plc = Plcs.FirstOrDefault(p => string.Equals(p.Id, plcId, StringComparison.OrdinalIgnoreCase) || string.Equals(p.Name, plcId, StringComparison.OrdinalIgnoreCase));
+        string targetPlcId = plc?.Id ?? plcId;
+
+        // 1. Search by Name or Address
+        var tag = Tags.FirstOrDefault(t => (string.Equals(t.PlcId, targetPlcId, StringComparison.OrdinalIgnoreCase) || string.Equals(t.PlcId, plcId, StringComparison.OrdinalIgnoreCase))
+                                           && (string.Equals(t.Name, tagName, StringComparison.OrdinalIgnoreCase) || string.Equals(t.Address, tagName, StringComparison.OrdinalIgnoreCase)));
+
+        // 2. Fallback: if tag is not pre-registered in PLC Manager, create a dynamic tag for direct address writing (e.g. Y0, Y1, D200)
+        if (tag == null)
+        {
+            PlcDataType defaultType = PlcDataType.Bool;
+            if (value is bool) defaultType = PlcDataType.Bool;
+            else if (value is short || value is ushort || value is int || value is uint) defaultType = PlcDataType.Int16;
+            else if (value is float || value is double) defaultType = PlcDataType.Float;
+            else if (value is string) defaultType = PlcDataType.String;
+
+            tag = new PlcTag
+            {
+                PlcId = targetPlcId,
+                Name = tagName,
+                Address = tagName,
+                DataType = defaultType
+            };
+        }
+
+        if (tag.ReadOnly)
+        {
+            Logger.LogWriteError(targetPlcId, tagName, "Tag is read-only.");
+            return false;
+        }
+
+        var driver = GetDriver(targetPlcId);
+        if (driver == null && plc != null)
+        {
+            CreateDriverForPlc(plc);
+            driver = GetDriver(targetPlcId);
+        }
+
+        if (driver == null)
+        {
+            Logger.LogWriteError(targetPlcId, tagName, "No active driver available.");
+            return false;
+        }
+
+        if (!driver.IsConnected)
+        {
+            try
+            {
+                await driver.ConnectAsync(cancellationToken);
+            }
+            catch { }
+        }
+
+        try
+        {
+            bool success = await driver.WriteAsync(tag, value, cancellationToken);
+            if (success)
+            {
+                Cache.Set(targetPlcId, tagName, value, TagQuality.Good);
+                if (plc != null) Cache.Set(plc.Name, tagName, value, TagQuality.Good);
+            }
+            else
+            {
+                Logger.LogWriteError(targetPlcId, tagName, "Write operation failed.");
+            }
+            return success;
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWriteError(targetPlcId, tagName, ex.Message);
+            OnError?.Invoke(this, (targetPlcId, ex.Message));
+            return false;
+        }
+    }
+
     private void LoadConfigInternal(IEnumerable<PlcModel> plcs, IEnumerable<PlcTag> tags)
     {
         _isLoading = true;
@@ -213,7 +295,10 @@ public sealed class PlcManagerService : IPlcManagerService
                 }
             }
 
-            StartPollingAsync();
+            if (IsPollingActive)
+            {
+                StartPollingAsync();
+            }
         }
         finally
         {
@@ -278,54 +363,6 @@ public sealed class PlcManagerService : IPlcManagerService
         return Cache.Get(plcId, tagName);
     }
 
-    public async Task<bool> WriteTagValueAsync(string plcId, string tagName, object value, CancellationToken cancellationToken = default)
-    {
-        var plc = Plcs.FirstOrDefault(p => string.Equals(p.Id, plcId, StringComparison.OrdinalIgnoreCase) || string.Equals(p.Name, plcId, StringComparison.OrdinalIgnoreCase));
-        string targetPlcId = plc?.Id ?? plcId;
-
-        var tag = Tags.FirstOrDefault(t => (string.Equals(t.PlcId, targetPlcId, StringComparison.OrdinalIgnoreCase) || string.Equals(t.PlcId, plcId, StringComparison.OrdinalIgnoreCase))
-                                           && string.Equals(t.Name, tagName, StringComparison.OrdinalIgnoreCase));
-        if (tag == null)
-        {
-            Logger.LogWriteError(targetPlcId, tagName, "Tag definition not found.");
-            return false;
-        }
-
-        if (tag.ReadOnly)
-        {
-            Logger.LogWriteError(targetPlcId, tagName, "Tag is read-only.");
-            return false;
-        }
-
-        var driver = GetDriver(targetPlcId);
-        if (driver == null)
-        {
-            Logger.LogWriteError(targetPlcId, tagName, "No active driver available.");
-            return false;
-        }
-
-        try
-        {
-            bool success = await driver.WriteAsync(tag, value, cancellationToken);
-            if (success)
-            {
-                Cache.Set(targetPlcId, tagName, value, TagQuality.Good);
-                if (plc != null) Cache.Set(plc.Name, tagName, value, TagQuality.Good);
-            }
-            else
-            {
-                Logger.LogWriteError(targetPlcId, tagName, "Write operation failed.");
-            }
-            return success;
-        }
-        catch (Exception ex)
-        {
-            Logger.LogWriteError(targetPlcId, tagName, ex.Message);
-            OnError?.Invoke(this, (targetPlcId, ex.Message));
-            return false;
-        }
-    }
-
     public async Task ConnectAllAsync(CancellationToken cancellationToken = default)
     {
         foreach (var plc in Plcs.Where(p => p.Enabled))
@@ -363,6 +400,51 @@ public sealed class PlcManagerService : IPlcManagerService
                 Logger.LogDisconnect(plc.Id, plc.Name);
                 OnDisconnected?.Invoke(this, plc.Id);
             }
+        }
+    }
+
+    private readonly HashSet<string> _pollingSources = new(StringComparer.OrdinalIgnoreCase);
+
+    public bool IsPollingActive
+    {
+        get
+        {
+            lock (_pollingSources)
+            {
+                return _pollingSources.Count > 0;
+            }
+        }
+    }
+
+    public void AcquirePollingLock(string sourceId)
+    {
+        if (string.IsNullOrWhiteSpace(sourceId)) return;
+        bool shouldStart = false;
+        lock (_pollingSources)
+        {
+            _pollingSources.Add(sourceId);
+            shouldStart = _pollingSources.Count > 0;
+        }
+
+        if (shouldStart)
+        {
+            _ = StartPollingAsync();
+        }
+    }
+
+    public void ReleasePollingLock(string sourceId)
+    {
+        if (string.IsNullOrWhiteSpace(sourceId)) return;
+        bool shouldStop = false;
+        lock (_pollingSources)
+        {
+            _pollingSources.Remove(sourceId);
+            shouldStop = _pollingSources.Count == 0;
+        }
+
+        if (shouldStop)
+        {
+            _ = StopPollingAsync();
         }
     }
 

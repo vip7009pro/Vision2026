@@ -1,5 +1,6 @@
 using System;
 using System.Collections.ObjectModel;
+using System.Collections.Specialized;
 using System.Linq;
 using System.Windows.Input;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -29,11 +30,38 @@ public partial class PlcManagerViewModel : ObservableObject
 
     public Array DataTypes => Enum.GetValues(typeof(PlcDataType));
 
+    private bool _isRefreshingFilteredTags;
+
     public PlcManagerViewModel(IPlcManagerService plcService)
     {
         _plcService = plcService ?? throw new ArgumentNullException(nameof(plcService));
         SelectedPlc = Plcs.FirstOrDefault();
+        
+        FilteredTags.CollectionChanged += FilteredTags_CollectionChanged;
         RefreshFilteredTags();
+    }
+
+    private void FilteredTags_CollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
+    {
+        if (_isRefreshingFilteredTags) return;
+
+        if (e.Action == NotifyCollectionChangedAction.Remove && e.OldItems != null)
+        {
+            foreach (PlcTag tag in e.OldItems)
+            {
+                var matchingInService = _plcService.Tags.Where(t => 
+                    ReferenceEquals(t, tag) || 
+                    string.Equals(t.Id, tag.Id, StringComparison.OrdinalIgnoreCase) ||
+                    (string.Equals(t.Name, tag.Name, StringComparison.OrdinalIgnoreCase) && 
+                     string.Equals(t.PlcId, tag.PlcId, StringComparison.OrdinalIgnoreCase))).ToList();
+
+                foreach (var t in matchingInService)
+                {
+                    _plcService.Tags.Remove(t);
+                }
+            }
+            _plcService.SaveGlobalConfig();
+        }
     }
 
     public bool IsMxComponent => SelectedPlc != null && SelectedPlc.DriverType == PlcDriverType.MitsubishiMxComponent;
@@ -68,16 +96,24 @@ public partial class PlcManagerViewModel : ObservableObject
 
     private void RefreshFilteredTags()
     {
-        FilteredTags.Clear();
-        if (SelectedPlc == null) return;
-
-        var list = _plcService.Tags.Where(t => string.Equals(t.PlcId, SelectedPlc.Id, StringComparison.OrdinalIgnoreCase)
-                                                || string.Equals(t.PlcId, SelectedPlc.Name, StringComparison.OrdinalIgnoreCase));
-        foreach (var tag in list)
+        _isRefreshingFilteredTags = true;
+        try
         {
-            FilteredTags.Add(tag);
+            FilteredTags.Clear();
+            if (SelectedPlc == null) return;
+
+            var list = _plcService.Tags.Where(t => string.Equals(t.PlcId, SelectedPlc.Id, StringComparison.OrdinalIgnoreCase)
+                                                    || string.Equals(t.PlcId, SelectedPlc.Name, StringComparison.OrdinalIgnoreCase));
+            foreach (var tag in list)
+            {
+                FilteredTags.Add(tag);
+            }
+            SelectedTag = FilteredTags.FirstOrDefault();
         }
-        SelectedTag = FilteredTags.FirstOrDefault();
+        finally
+        {
+            _isRefreshingFilteredTags = false;
+        }
     }
 
     [RelayCommand]
@@ -136,7 +172,10 @@ public partial class PlcManagerViewModel : ObservableObject
         FilteredTags.Add(newTag);
         SelectedTag = newTag;
         _plcService.SaveGlobalConfig();
-        _plcService.StartPollingAsync();
+        if (_plcService.IsPollingActive)
+        {
+            _plcService.StartPollingAsync();
+        }
     }
 
     [RelayCommand]
@@ -145,20 +184,32 @@ public partial class PlcManagerViewModel : ObservableObject
         if (SelectedTag == null) return;
 
         var tagToDelete = SelectedTag;
-        var realTagInService = _plcService.Tags.FirstOrDefault(t => 
-            ReferenceEquals(t, tagToDelete) || 
+        
+        var realTagsInService = _plcService.Tags.Where(t => 
+            ReferenceEquals(t, tagToDelete) ||
+            string.Equals(t.Id, tagToDelete.Id, StringComparison.OrdinalIgnoreCase) ||
             (string.Equals(t.Name, tagToDelete.Name, StringComparison.OrdinalIgnoreCase) && 
-             string.Equals(t.Address, tagToDelete.Address, StringComparison.OrdinalIgnoreCase)));
+             string.Equals(t.PlcId, tagToDelete.PlcId, StringComparison.OrdinalIgnoreCase))).ToList();
 
-        if (realTagInService != null)
+        foreach (var t in realTagsInService)
         {
-            _plcService.Tags.Remove(realTagInService);
+            _plcService.Tags.Remove(t);
         }
 
         FilteredTags.Remove(tagToDelete);
         SelectedTag = FilteredTags.FirstOrDefault();
         _plcService.SaveGlobalConfig();
-        _plcService.StartPollingAsync();
+        if (_plcService.IsPollingActive)
+        {
+            _plcService.StartPollingAsync();
+        }
+    }
+
+    [RelayCommand]
+    private void SaveConfig()
+    {
+        _plcService.SaveGlobalConfig();
+        System.Windows.MessageBox.Show("Cấu hình PLC và Tags đã được lưu thành công!", "Lưu Cấu Hình PLC", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Information);
     }
 
     [RelayCommand]

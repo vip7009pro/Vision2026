@@ -328,16 +328,17 @@
   - **Sửa vị trí Contour mẫu (`centerFoundTemplate`)**: Trong `RunContourCompare` ([Class1.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.Application/Class1.cs)), khi chuyển đổi tọa độ điểm contour mẫu về không gian ảnh chung `MapToGlobal`, trước đây mã dùng nhầm `centerFoundInspect` (tâm ROI Inspect lớn) khiến viền contour màu vàng bị trôi dịch xuống tâm Search ROI. Đã sửa lại tính chính xác tâm toàn cục của Template ROI `centerFoundTemplate`, giúp viền contour mẫu nằm chuẩn xác khớp 100% bên trong khung `CC1 CCT`.
   - **Trích xuất đa Contour (`FindAllContours`)**: Thay thế hàm `FindLargestContour` (vốn chỉ lấy 1 contour lớn nhất `.FirstOrDefault()`) bằng `FindAllContours` kết hợp lọc theo diện tích (`ContourArea`) và chu vi (`ArcLength`). Giờ đây khi khoanh ROI rộng chứa cụm ký tự "CE UK CA", toàn bộ viền của tất cả ký tự và biểu tượng đều được trích xuất và hiển thị đầy đủ.
 - **Căn chỉnh định vị mẫu Template ROI trong Search ROI & Hiển thị trực quan Contour OK (Xanh)/NG (Đỏ)**:
-  - **Tự động định vị mẫu (`MatchTemplate`)**: Sử dụng `Cv2.MatchTemplate` định vị chính xác vị trí mẫu `TemplateRoi` bên trong vùng tìm kiếm `InspectRoi`. Nhờ đó khi test trên chính ảnh gốc, khoảng cách lệch `MaxDistancePx = 0.00px`, `MatchScore = 0.0000`, hệ thống đánh giá **OK** chính xác 100%.
+- **Tự động định vị mẫu (`MatchTemplate`)**: Sử dụng `Cv2.MatchTemplate` định vị chính xác vị trí mẫu `TemplateRoi` bên trong vùng tìm kiếm `InspectRoi`. Nhờ đó khi test trên chính ảnh gốc, khoảng cách lệch `MaxDistancePx = 0.00px`, `MatchScore = 0.0000`, hệ thống đánh giá **OK** chính xác 100%.
   - **Phân loại hiển thị Contour theo từng ký tự/đường nét**: Đánh giá khoảng cách sai khác của từng đường contour kiểm tra so với mẫu. Đường contour đạt chuẩn được lưu vào `PassContours` và tô màu **Xanh lá (`Lime`)**, đường contour bị sai lệch/khác biệt vượt ngưỡng được lưu vào `FailContours` và khoanh màu **Đỏ (`Red`)**. Đã đồng bộ hiển thị trên cả OpenCV `BurnOverlaysToMat` và WPF `FastOverlayCanvas.cs`.
 - **Khắc phục hoàn toàn lỗi đường thẳng tua tủa nối chéo bên trong Contour (Spiky Cross-Chords Elimination)**:
   - **Phân định rõ `IsClosed` cho từng đoạn Contour (`ContourSegment`)**: Định nghĩa kiểu dữ liệu `ContourSegment(List<Point2d> Points, bool IsClosed)`.
   - **Khép kín cho ký tự nguyên vẹn (`IsClosed = true`)**: Đối với các ký tự đạt chuẩn OK như ('C', 'E', 'U', 'C', 'A'), toàn bộ đường viền ký tự được lưu trữ dạng vòng khép kín `IsClosed = true` $\implies$ Hiển thị đường viền màu **Xanh Lá (`Lime Green`)** bao bọc mịn màng xung quanh chữ.
-  - **Vẽ đường gấp khúc hở cho đoạn nét lỗi (`IsClosed = false`)**: Khi tách các đoạn đường- **Đã hoàn thành tự động kết nối PLC khi bật App & Triệt tiêu hoàn toàn ngoại lệ ObjectDisposedException**:
-  - **Tự động kết nối lại PLC khi khởi động ứng dụng**: Bổ sung kích hoạt `IPlcManagerService.StartPollingAsync()` trong `App.xaml.cs` (sau khi mở MainWindow), tự động kết nối và bắt đầu quét toàn bộ PLC đã bật trong cấu hình `plc_config.json` ngay khi app vừa bật lên.
-  - **Triệt tiêu triệt để ngoại lệ `System.ObjectDisposedException`**: Xây dựng trình trợ giúp thao tác cache an toàn đa luồng (`GetImageSourceCache`, `SetImageSourceCache`, `ClearImageSourceCache`) được bảo vệ bởi khối `lock (_cacheLock)` thread-safe. Bọc an toàn các cuộc gọi `Mat.IsDisposed` và `Mat.Clone()` để ngăn triệt để xung đột truy cập giữa luồng nền PLC Trigger và luồng giao diện UI khi bấm `Run Once`.
-  - Cập nhật `SharedImageContext.cs`: Thêm try-catch và kiểm tra `!IsDisposed` trước khi `Clone()`, giúp việc chia sẻ ảnh giữa các ViewModels luôn ổn định.
-  - Biên dịch toàn bộ Solution thành công: **`0 Error(s)`**, **`36 Warning(s)`**.
+  - **Vẽ đường gấp khúc hở cho đoạn nét lỗi (`IsClosed = false`)**: Khi tách các đoạn đường nét bị lỗi (ví dụ nét đứt đoạn hoặc biến dạng), `IsClosed` được set `false`, hệ thống vẽ đường Polyline hở (không nối điểm cuối về điểm đầu), tránh hiện tượng các đường thẳng nối chéo (cross-chords) chạy xuyên tâm ký tự gây rối mắt.
+- **Task 96: Tối ưu hoá & Khắc phục Xóa Tag PLC Vĩnh Viễn, Cập nhật Combobox ResultTransfer & Intellisense Gợi Ý Biến**:
+  - **Sửa dứt điểm lỗi Xóa Tag PLC trong `PlcManagerViewModel.cs`**: Xóa triệt để tất cả instance tag trùng khớp (`ReferenceEquals`, `Id`, `Name` & `PlcId`), đồng thời lưu ngay vào `plc_config.json`, triệt tiêu hoàn toàn sự cố Tag đã xóa bị phục hồi lại khi mở lại cửa sổ PLC Manager.
+  - **Cập nhật Combobox Tag PLC & Target PLC Realtime**: Binding Combobox của Node `ResultTransfer` trực tiếp tới DataContext `AvailablePlcTagNames` & `AvailablePlcNames`, tự động làm mới ngay lập tức khi người dùng thêm, xóa, sửa Tag trong PLC Manager.
+  - **Intellisense Gợi Ý Biến khi Gõ trong `ValueExpression`**: Tích hợp `controls:IntellisenseBehavior.Enable="True"`, tự động hiển thị popup gợi ý các thuộc tính chi tiết (`{Origin.X}`, `{Origin.Y}`, `{Origin.AngleDeg}`, `{Distance1.Value}`, `{Angle1.AngleDeg}`, `{Caliper1.Value}`, `{Code1.Text}`,...) và biến tổng (`TotalPass`, `TotalFail`, `TotalPassBit`, `TotalFailBit`, `PassCount`, `FailCount`) khi gõ `{` hoặc gõ tên biến.
+  - Biên dịch ứng dụng thành công 100%: **`0 Error(s)`**, **`41 Warning(s)`**.
 
 ## Encoding
 
@@ -348,7 +349,9 @@
 
 ### Ưu tiên cao
 
-- [x] Sửa lỗi kết nối camera, DroidCam Virtual Camera, Tối ưu hóa Stream mượt mà, Tự động kết nối PLC khi bật app & Triệt tiêu ngoại lệ ObjectDisposedException khi bấm Run Once.
+- [x] Sửa lỗi kết nối camera, DroidCam Virtual Camera, Tối ưu hóa Stream mượt mà, Tự động kết nối PLC khi bật app, Triệt tiêu triệt để ngoại lệ ObjectDisposedException & UI Freeze khi mở App / RUN / PLC Trigger.
+- [x] Tối ưu Scan PLC theo điều kiện & Tích hợp Node `ResultTransfer` truyền kết quả OK/NG, tọa độ sau khi hoàn thành Job Flow.
+- [x] Khắc phục Xóa Tag PLC Vĩnh Viễn, Cập nhật Realtime Combobox Tag ResultTransfer & Tích hợp Intellisense Gợi Ý Biến khi gõ..
 - Kiểm thử đầy đủ module Camera Settings với Basler/GigE và luồng UDP/RTSP.
 - Chạy kiểm thử đầu-cuối cho execution pipeline của Node Graph.ngine gom nhóm tag theo từng PLC và chạy background task poll độc lập, phát sự kiện `OnTagChanged` khi có biến đổi giá trị biên.
     - `PlcLogger.cs` & `PlcManagerService.cs`: Quản lý danh sách kết nối, quản lý cache, tự động re-connect và xử lý log sự kiện PLC.
@@ -404,11 +407,10 @@
   2. **Kiểm tra `_isRunning` bị cứng trong `StartCameraCaptureAsync`**: Hàm kiểm tra `if (_isRunning) return;` khiến ứng dụng không thể chuyển đổi camera khi người dùng chọn camera mới trong tab Live Camera và bấm Start Camera.
   3. **Tranh chấp khóa thiết bị khi gọi `CaptureSnapshotAsync`**: Mở thêm một đối tượng `VideoCapture` mới trên cùng một camera đang chạy luồng `CaptureLoop` bị hệ điều hành từ chối quyền truy cập.
   4. **Bộ nhớ đệm ảnh `_imageSourcePreviewCache` trong `ToolEditorViewModel`**: Chưa được xóa cache khi người dùng thay đổi chỉ số `CameraIndex` hoặc URL `RtspUrl`.
-- **Đã hoàn thành khắc phục dứt điểm ngoại lệ `System.ObjectDisposedException` / UI Freeze khi mở App & Run Flow**:
-  - **Trình mở rộng `ToBitmapSourceSafe()`**: Xây dựng helper `ToBitmapSourceSafe(this Mat? mat)` bọc khối try-catch an toàn tuyệt đối cho tất cả các chuyển đổi `Mat` sang WPF `BitmapSource` trong ứng dụng, triệt tiêu triệt để mọi ngoại lệ `ObjectDisposedException` phát sinh trong quá trình chuyển đổi ảnh.
-  - **Khắc phục race condition trong `LiveCameraViewModel`**: Trích xuất bản copy snapshot local `frameCopyForInspection` bọc trong khối `lock (_frameLock)` để truyền vào `RunLiveInspection`, ngăn chặn tình trạng frame mới ở luồng 30 FPS gọi `_currentFrame?.Dispose()` trong lúc luồng inspection đang xử lý.
-  - **Cờ chống re-entrancy `_isExecutingRunFlow` & Debouncing 100ms**: Khóa re-entrancy trong `ToolEditorViewModel.Engine.cs` loại bỏ hoàn toàn tình trạng nghẽn hàng đợi Dispatcher khi bấm RUN hoặc nhận tín hiệu trigger PLC liên tục, giữ giao diện mượt mà và phản hồi tức thì.
-  - Biên dịch ứng dụng thành công 100%: **`0 Error(s)`**, **`34 Warning(s)`**.
+- **Task 99: Sửa dứt điểm nguyên nhân gốc rễ gây Ẩn/Mất Chữ (Nền đen chữ đen / Thiếu PART_EditableTextBox) trên tất cả Combobox Editable (`IsEditable="True"`)**:
+  - **Chẩn đoán chính xác nguyên nhân gốc rễ**: `ControlTemplate TargetType="ComboBox"` mặc định trong `App.xaml` thiếu mẫu `PART_EditableTextBox` và thiếu Trigger cho `IsEditable = True`. Khi người dùng bật `IsEditable="True"`, WPF sẽ giấu `ContentPresenter` (SelectionBoxItem), nhưng do template không khai báo `PART_EditableTextBox` nên không có TextBox nào được render, khiến giá trị ComboBox hiển thị hoàn toàn trống rỗng / mất chữ (như bị chữ đen trên nền đen).
+  - **Khắc phục triệt để**: Khai báo `ComboBoxTextBoxTemplate` và tích hợp `TextBox x:Name="PART_EditableTextBox"` vào `ControlTemplate TargetType="ComboBox"` trong `App.xaml`. Thiết lập `Foreground="{TemplateBinding Foreground}"` (`InputTextBrush` - chữ sáng/trắng `#FFFFFF` / `#DCDCDC`), `CaretBrush="{DynamicResource TextBrush}"`, và gắn Trigger tự động chuyển đổi giữa `ContentSite` (IsEditable=False) và `PART_EditableTextBox` (IsEditable=True).
+  - Biên dịch ứng dụng thành công 100%: **`0 Error(s)`**, **`41 Warning(s)`**.
 
 ## Encoding
 
@@ -420,6 +422,8 @@
 ### Ưu tiên cao
 
 - [x] Sửa lỗi kết nối camera, DroidCam Virtual Camera, Tối ưu hóa Stream mượt mà, Tự động kết nối PLC khi bật app, Triệt tiêu triệt để ngoại lệ ObjectDisposedException & UI Freeze khi mở App / RUN / PLC Trigger.
+- [x] Tối ưu Scan PLC theo điều kiện & Tích hợp Node `ResultTransfer` truyền kết quả OK/NG, tọa độ sau khi hoàn thành Job Flow.
+- [x] Sửa dứt điểm xóa Tag bằng phím Delete bàn phím & Khắc phục nguyên nhân gốc rễ lỗi ẩn chữ trên Combobox Editable (`App.xaml`).
 - Kiểm thử đầy đủ module Camera Settings với Basler/GigE và luồng UDP/RTSP.
 - Chạy kiểm thử đầu-cuối cho execution pipeline của Node Graph.
 

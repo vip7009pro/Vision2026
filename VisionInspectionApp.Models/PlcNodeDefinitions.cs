@@ -67,3 +67,27 @@ public sealed class PlcBatchWriteDefinition
 
     public Dictionary<string, string> TagValues { get; set; } = new();
 }
+
+public sealed class ResultTransferItem
+{
+    public string PlcId { get; set; } = string.Empty;
+
+    public string TagName { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Giá trị truyền: TotalPass, TotalFail, PassCount, FailCount, hoặc biểu thức mẫu: {Origin.X}, {Origin.Y}, {Origin.AngleDeg}, {Distance1.Value}, v.v.
+    /// </summary>
+    public string ValueExpression { get; set; } = "TotalPass";
+
+    /// <summary>
+    /// Điều kiện gửi: Always, OnPass, OnFail
+    /// </summary>
+    public ImageOutputCondition Condition { get; set; } = ImageOutputCondition.Always;
+}
+
+public sealed class ResultTransferDefinition
+{
+    public string Name { get; set; } = string.Empty;
+
+    public List<ResultTransferItem> Items { get; set; } = new();
+}

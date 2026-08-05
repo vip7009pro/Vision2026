@@ -224,7 +224,8 @@ namespace VisionInspectionApp.UI.ViewModels
                 "PlcWait",
                 "PlcTrigger",
                 "PlcBatchRead",
-                "PlcBatchWrite"
+                "PlcBatchWrite",
+                "ResultTransfer"
             };
             Nodes = new ObservableCollection<ToolGraphNodeViewModel>();
             Nodes.CollectionChanged += (_, _) => IsDirty = true;
@@ -971,6 +972,8 @@ namespace VisionInspectionApp.UI.ViewModels
             OnPropertyChanged(nameof(IsPlcTriggerNode));
             OnPropertyChanged(nameof(IsPlcBatchReadNode));
             OnPropertyChanged(nameof(IsPlcBatchWriteNode));
+            OnPropertyChanged(nameof(IsResultTransferNode));
+            RefreshResultTransferItems();
             OnPropertyChanged(nameof(IsAnyPlcNode));
             OnPropertyChanged(nameof(AvailablePlcNames));
             OnPropertyChanged(nameof(AvailablePlcTagNames));

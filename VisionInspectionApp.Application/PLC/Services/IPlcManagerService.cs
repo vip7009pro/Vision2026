@@ -34,6 +34,12 @@ public interface IPlcManagerService : IDisposable
 
     Task<bool> WriteTagValueAsync(string plcId, string tagName, object value, CancellationToken cancellationToken = default);
 
+    bool IsPollingActive { get; }
+
+    void AcquirePollingLock(string sourceId);
+
+    void ReleasePollingLock(string sourceId);
+
     Task StartPollingAsync();
 
     Task StopPollingAsync();

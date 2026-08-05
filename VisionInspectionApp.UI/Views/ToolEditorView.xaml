@@ -2779,6 +2779,68 @@
                                 </Grid>
                             </StackPanel>
 
+                            <StackPanel Visibility="{Binding IsResultTransferNode, Converter={StaticResource BoolToVis}}" Margin="0,4,0,0">
+                                <Border Background="#1565C0" Padding="6,4" CornerRadius="4" Margin="0,0,0,6">
+                                    <StackPanel>
+                                        <TextBlock Text="📤 Result Transfer (Truyền kết quả tổng PLC)" FontWeight="Bold" Foreground="White" FontSize="13" />
+                                        <TextBlock Text="Tự động truyền kết quả OK/NG và tọa độ/kích thước xuống PLC ngay sau khi Job Flow chạy xong." Foreground="#E3F2FD" FontSize="11" TextWrapping="Wrap" Margin="0,2,0,0" />
+                                    </StackPanel>
+                                </Border>
+
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                                    <Button Content="⚡ Preset OK/NG" Command="{Binding AddResultTransferPresetOkNgCommand}" Background="#2E7D32" Foreground="White" Padding="6,3" Margin="0,0,4,0" ToolTip="Thêm nhanh 2 dòng truyền bit Y0 (OK) và Y1 (NG)" />
+                                    <Button Content="📐 Preset Tọa Độ" Command="{Binding AddResultTransferPresetPoseCommand}" Background="#1976D2" Foreground="White" Padding="6,3" Margin="0,0,4,0" ToolTip="Thêm nhanh truyền tọa độ Origin X, Y, Angle vào D200, D202, D204" />
+                                    <Button Content="➕ Thêm Dòng" Command="{Binding AddResultTransferItemCommand}" Background="#6A1B9A" Foreground="White" Padding="6,3" ToolTip="Thêm 1 dòng ghi PLC tùy chỉnh" />
+                                </StackPanel>
+
+                                <ItemsControl ItemsSource="{Binding ResultTransferItemVMs}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <Border Background="#252526" BorderBrush="#3F3F46" BorderThickness="1" CornerRadius="4" Padding="6" Margin="0,0,0,6">
+                                                <Grid>
+                                                    <Grid.RowDefinitions>
+                                                        <RowDefinition Height="Auto"/>
+                                                        <RowDefinition Height="Auto"/>
+                                                        <RowDefinition Height="Auto"/>
+                                                        <RowDefinition Height="Auto"/>
+                                                    </Grid.RowDefinitions>
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="80"/>
+                                                        <ColumnDefinition Width="*"/>
+                                                        <ColumnDefinition Width="Auto"/>
+                                                    </Grid.ColumnDefinitions>
+
+                                                    <TextBlock Grid.Row="0" Grid.Column="0" Text="PLC Target:" VerticalAlignment="Center" Foreground="#CCCCCC" FontSize="11"/>
+                                                    <ComboBox Grid.Row="0" Grid.Column="1" ItemsSource="{Binding DataContext.AvailablePlcNames, RelativeSource={RelativeSource AncestorType=UserControl}}" Text="{Binding PlcId, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" IsEditable="True" Margin="2" Height="24"/>
+                                                    <Button Grid.Row="0" Grid.Column="2" Content="❌" Command="{Binding DataContext.RemoveResultTransferItemCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}" Background="Transparent" Foreground="#FF5252" BorderThickness="0" ToolTip="Xóa dòng này" Margin="4,0,0,0" VerticalAlignment="Center"/>
+
+                                                    <TextBlock Grid.Row="1" Grid.Column="0" Text="Tag PLC:" VerticalAlignment="Center" Foreground="#CCCCCC" FontSize="11"/>
+                                                    <ComboBox Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="2" ItemsSource="{Binding DataContext.AvailablePlcAllTagNames, RelativeSource={RelativeSource AncestorType=UserControl}}" Text="{Binding TagName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" IsEditable="True" Margin="2" Height="24"/>
+
+                                                    <TextBlock Grid.Row="2" Grid.Column="0" Text="Giá trị gửi:" VerticalAlignment="Center" Foreground="#CCCCCC" FontSize="11"/>
+                                                    <TextBox Grid.Row="2" Grid.Column="1" Grid.ColumnSpan="2" Text="{Binding ValueExpression, UpdateSourceTrigger=PropertyChanged}" controls:IntellisenseBehavior.Enable="True" Margin="2" Height="24"
+                                                             ToolTip="Nhập giá trị hoặc cú pháp: TotalPass, TotalFail, TotalPassBit, TotalFailBit, {Origin.X}, {Origin.Y}, {Origin.AngleDeg}, {Distance1.Value}"/>
+
+                                                    <TextBlock Grid.Row="3" Grid.Column="0" Text="Điều kiện:" VerticalAlignment="Center" Foreground="#CCCCCC" FontSize="11"/>
+                                                    <ComboBox Grid.Row="3" Grid.Column="1" Grid.ColumnSpan="2" ItemsSource="{Binding AvailableConditions}" SelectedItem="{Binding Condition, UpdateSourceTrigger=PropertyChanged}" Margin="2" Height="24"/>
+                                                </Grid>
+                                            </Border>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+
+                                <Border Background="#1E1E1E" BorderBrush="#333333" BorderThickness="1" CornerRadius="4" Padding="6" Margin="0,4,0,6">
+                                    <StackPanel>
+                                        <TextBlock Text="💡 Hướng dẫn cú pháp giá trị gửi xuống PLC:" FontWeight="Bold" Foreground="#4FC3F7" FontSize="11" Margin="0,0,0,4"/>
+                                        <TextBlock Text="• TotalPass / TotalFail: Gửi boolean (true/false) kết quả tổng" Foreground="#BBDEFB" FontSize="10" TextWrapping="Wrap"/>
+                                        <TextBlock Text="• TotalPassBit / TotalFailBit: Gửi số 1/0 bit Pass hoặc Fail" Foreground="#BBDEFB" FontSize="10" TextWrapping="Wrap"/>
+                                        <TextBlock Text="• {Origin.X}, {Origin.Y}, {Origin.AngleDeg}: Tọa độ gốc" Foreground="#BBDEFB" FontSize="10" TextWrapping="Wrap"/>
+                                        <TextBlock Text="• {KhoangCach1.Value}, {Caliper1.Value}: Khoảng cách / kích thước" Foreground="#BBDEFB" FontSize="10" TextWrapping="Wrap"/>
+                                        <TextBlock Text="• {MaBarCode.Text}: Chuỗi văn bản đọc được từ Barcode/OCR" Foreground="#BBDEFB" FontSize="10" TextWrapping="Wrap"/>
+                                    </StackPanel>
+                                </Border>
+                            </StackPanel>
+
                             <Button Content="Delete Node" Command="{Binding DeleteSelectedNodeCommand}" />
                             </StackPanel>
                         </ScrollViewer>

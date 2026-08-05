@@ -1580,6 +1580,15 @@ namespace VisionInspectionApp.UI.ViewModels
                     _isRunningFolderFlow = value;
                     OnPropertyChanged();
                     UpdateRunFlowButtonProperties();
+
+                    if (value)
+                    {
+                        _plcManagerService.AcquirePollingLock("RunContinuousMode");
+                    }
+                    else
+                    {
+                        _plcManagerService.ReleasePollingLock("RunContinuousMode");
+                    }
                 }
             }
         }
@@ -2195,6 +2204,11 @@ namespace VisionInspectionApp.UI.ViewModels
                                     _lastRun.Timings.NodeTimings[preNode.Name] = 0;
                                 }
                             }
+                        }
+
+                        if (_config.ResultTransfers != null && _config.ResultTransfers.Count > 0)
+                        {
+                            _ = Application.PLC.Services.PlcResultTransferRunner.ExecuteResultTransfersAsync(_config, _lastRun, _plcManagerService);
                         }
                     }
                 }
