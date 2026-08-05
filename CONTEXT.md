@@ -407,10 +407,14 @@
   2. **Kiểm tra `_isRunning` bị cứng trong `StartCameraCaptureAsync`**: Hàm kiểm tra `if (_isRunning) return;` khiến ứng dụng không thể chuyển đổi camera khi người dùng chọn camera mới trong tab Live Camera và bấm Start Camera.
   3. **Tranh chấp khóa thiết bị khi gọi `CaptureSnapshotAsync`**: Mở thêm một đối tượng `VideoCapture` mới trên cùng một camera đang chạy luồng `CaptureLoop` bị hệ điều hành từ chối quyền truy cập.
   4. **Bộ nhớ đệm ảnh `_imageSourcePreviewCache` trong `ToolEditorViewModel`**: Chưa được xóa cache khi người dùng thay đổi chỉ số `CameraIndex` hoặc URL `RtspUrl`.
-- **Task 99: Sửa dứt điểm nguyên nhân gốc rễ gây Ẩn/Mất Chữ (Nền đen chữ đen / Thiếu PART_EditableTextBox) trên tất cả Combobox Editable (`IsEditable="True"`)**:
-  - **Chẩn đoán chính xác nguyên nhân gốc rễ**: `ControlTemplate TargetType="ComboBox"` mặc định trong `App.xaml` thiếu mẫu `PART_EditableTextBox` và thiếu Trigger cho `IsEditable = True`. Khi người dùng bật `IsEditable="True"`, WPF sẽ giấu `ContentPresenter` (SelectionBoxItem), nhưng do template không khai báo `PART_EditableTextBox` nên không có TextBox nào được render, khiến giá trị ComboBox hiển thị hoàn toàn trống rỗng / mất chữ (như bị chữ đen trên nền đen).
-  - **Khắc phục triệt để**: Khai báo `ComboBoxTextBoxTemplate` và tích hợp `TextBox x:Name="PART_EditableTextBox"` vào `ControlTemplate TargetType="ComboBox"` trong `App.xaml`. Thiết lập `Foreground="{TemplateBinding Foreground}"` (`InputTextBrush` - chữ sáng/trắng `#FFFFFF` / `#DCDCDC`), `CaretBrush="{DynamicResource TextBrush}"`, và gắn Trigger tự động chuyển đổi giữa `ContentSite` (IsEditable=False) và `PART_EditableTextBox` (IsEditable=True).
-  - Biên dịch ứng dụng thành công 100%: **`0 Error(s)`**, **`41 Warning(s)`**.
+- **Task 104: Sửa triệt để nguyên nhân `D201` = 0 và Bổ sung đọc 2-word Float cho PLC Tag Browser UI**:
+  - **Phân tích hình ảnh thực tế (Hình 3 & 4)**: 
+    - Hình 3 cho thấy `D200` có dữ liệu nhị phân `1100 0010 0101 1000` (`49840`), trong khi `D201` = `0000 0000 0000 0000`. Điều này chứng tỏ trước đó phương thức ghi chỉ truyền 1 word duy nhất `sWords[0]`, làm `D201` bị bỏ trống 0. Khi đọc 2 word `(D200, D201)`, do exponent ở `D201` bằng 0 nên GX Works báo lỗi `--` (NaN).
+    - Hình 4 cho thấy bảng **PLC Tag Browser** hiển thị số nguyên `49840` thay vì `463.521` vì hàm `ReadComTagValue` trước đây gọi `GetDevice` chỉ đọc 1 word 16-bit nguyên bản của `D200`.
+  - **Khắc phục triệt để**:
+    - Cập nhật `WriteComTagValue`: Truyền mảng `short[]` qua `ParameterModifier` cho `WriteDeviceBlock2` / `WriteDeviceBlock`, đồng thời thêm cơ chế Fallback ghi 2 thanh ghi liên tiếp (`SetDevice2(D200)` và `SetDevice2(D201)`) đảm bảo 100% `D201` nhận đúng high-word chứa exponent bits.
+    - Cập nhật `ReadComTagValue`: Đọc 2 thanh ghi liên tiếp cho Tag `Float` (`ReadDeviceBlock2` / `ReadDeviceBlock` hoặc đọc `D200` + `D201`) rồi ghép qua `WordsToFloat`, giúp bảng PLC Tag Browser hiển thị số thực thập phân chuẩn `463.521` đúng yêu cầu.
+  - Biên dịch ứng dụng thành công 100%: **`0 Error(s)`**, **`42 Warning(s)`**.
 
 ## Encoding
 
@@ -421,9 +425,9 @@
 
 ### Ưu tiên cao
 
-- [x] Sửa lỗi kết nối camera, DroidCam Virtual Camera, Tối ưu hóa Stream mượt mà, Tự động kết nối PLC khi bật app, Triệt tiêu triệt để ngoại lệ ObjectDisposedException & UI Freeze khi mở App / RUN / PLC Trigger.
+- [x] Sửa lỗi kết nối camera, DroidCam Virtual Camera, Tối ưu hóa Stream mượt mà, Tự động kết nối PLC khi bật app, Triệt tiêu triệt để ngoại lệ ObjectDisposedException & UI Freeze khi mở App / RUN / PLC Freeze.
 - [x] Tối ưu Scan PLC theo điều kiện & Tích hợp Node `ResultTransfer` truyền kết quả OK/NG, tọa độ sau khi hoàn thành Job Flow.
-- [x] Sửa dứt điểm xóa Tag bằng phím Delete bàn phím & Khắc phục nguyên nhân gốc rễ lỗi ẩn chữ trên Combobox Editable (`App.xaml`).
+- [x] Sửa lỗi ghi/đọc 2-word Float (truyền đủ mảng short[]) & Hiển thị số thực chuẩn trên PLC Tag Browser UI.
 - Kiểm thử đầy đủ module Camera Settings với Basler/GigE và luồng UDP/RTSP.
 - Chạy kiểm thử đầu-cuối cho execution pipeline của Node Graph.
 

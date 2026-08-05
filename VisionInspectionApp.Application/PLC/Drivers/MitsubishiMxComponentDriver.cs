@@ -263,6 +263,78 @@ public sealed class MitsubishiMxComponentDriver : IPlcDriver
 
         string device = tag.Address.Trim();
 
+        // Special handling for Float data type (requires 2 words = 32-bit Float)
+        if (tag.DataType == PlcDataType.Float)
+        {
+            try
+            {
+                short[] sWords = new short[2];
+                object[] args = new object[] { device, 2, sWords };
+                ParameterModifier[] modifiers = new ParameterModifier[1];
+                modifiers[0] = new ParameterModifier(3);
+                modifiers[0][2] = true;
+
+                var res = _comType.InvokeMember("ReadDeviceBlock2",
+                    BindingFlags.InvokeMethod | BindingFlags.Public | BindingFlags.Instance,
+                    null, _comObject, args, modifiers, null, null);
+
+                int retCode = res is int rc ? rc : -1;
+                if (retCode == 0)
+                {
+                    short[] retArr = (short[])args[2];
+                    int[] words = new int[] { retArr[0], retArr[1] };
+                    float fVal = WordsToFloat(words);
+                    return ApplyScale(fVal, tag.Scale);
+                }
+            }
+            catch { }
+
+            try
+            {
+                int[] iWords = new int[2];
+                object[] args = new object[] { device, 2, iWords };
+                ParameterModifier[] modifiers = new ParameterModifier[1];
+                modifiers[0] = new ParameterModifier(3);
+                modifiers[0][2] = true;
+
+                var res = _comType.InvokeMember("ReadDeviceBlock",
+                    BindingFlags.InvokeMethod | BindingFlags.Public | BindingFlags.Instance,
+                    null, _comObject, args, modifiers, null, null);
+
+                int retCode = res is int rc ? rc : -1;
+                if (retCode == 0)
+                {
+                    int[] retArr = (int[])args[2];
+                    float fVal = WordsToFloat(retArr);
+                    return ApplyScale(fVal, tag.Scale);
+                }
+            }
+            catch { }
+
+            // Fallback: Read 2 individual words using GetDevice2
+            try
+            {
+                string nextDevice = IncrementDeviceAddress(device, 1);
+                object[] args1 = new object[] { device, (short)0 };
+                object[] args2 = new object[] { nextDevice, (short)0 };
+                ParameterModifier[] modifiers = new ParameterModifier[1];
+                modifiers[0] = new ParameterModifier(2);
+                modifiers[0][1] = true;
+
+                var res1 = _comType.InvokeMember("GetDevice2", BindingFlags.InvokeMethod | BindingFlags.Public | BindingFlags.Instance, null, _comObject, args1, modifiers, null, null);
+                var res2 = _comType.InvokeMember("GetDevice2", BindingFlags.InvokeMethod | BindingFlags.Public | BindingFlags.Instance, null, _comObject, args2, modifiers, null, null);
+
+                if (res1 is int rc1 && rc1 == 0 && res2 is int rc2 && rc2 == 0)
+                {
+                    short w1 = Convert.ToInt16(args1[1]);
+                    short w2 = Convert.ToInt16(args2[1]);
+                    float fVal = WordsToFloat(new int[] { w1, w2 });
+                    return ApplyScale(fVal, tag.Scale);
+                }
+            }
+            catch { }
+        }
+
         // 1. Try GetDevice(szDevice, out int iData) - standard Mitsubishi MX Component API
         try
         {
@@ -321,6 +393,62 @@ public sealed class MitsubishiMxComponentDriver : IPlcDriver
         if (_comObject == null || _comType == null) return;
 
         string device = tag.Address.Trim();
+
+        if (tag.DataType == PlcDataType.Float)
+        {
+            float fVal = 0f;
+            if (val != null)
+            {
+                if (val is float f) fVal = f;
+                else if (val is double d) fVal = (float)d;
+                else float.TryParse(val.ToString(), System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out fVal);
+            }
+
+            int[] words = FloatToWords(fVal);
+            short[] sWords = new short[] { (short)words[0], (short)words[1] };
+
+            try
+            {
+                object[] args = new object[] { device, 2, sWords };
+                ParameterModifier[] modifiers = new ParameterModifier[1];
+                modifiers[0] = new ParameterModifier(3);
+                modifiers[0][2] = true;
+
+                _comType.InvokeMember("WriteDeviceBlock2",
+                    BindingFlags.InvokeMethod | BindingFlags.Public | BindingFlags.Instance,
+                    null, _comObject, args, modifiers, null, null);
+                return;
+            }
+            catch { }
+
+            try
+            {
+                object[] args = new object[] { device, 2, words };
+                ParameterModifier[] modifiers = new ParameterModifier[1];
+                modifiers[0] = new ParameterModifier(3);
+                modifiers[0][2] = true;
+
+                _comType.InvokeMember("WriteDeviceBlock",
+                    BindingFlags.InvokeMethod | BindingFlags.Public | BindingFlags.Instance,
+                    null, _comObject, args, modifiers, null, null);
+                return;
+            }
+            catch { }
+
+            // Reliable Fallback: Write 2 individual words using SetDevice2 / SetDevice
+            try
+            {
+                string nextDevice = IncrementDeviceAddress(device, 1);
+                object[] args1 = new object[] { device, (short)words[0] };
+                object[] args2 = new object[] { nextDevice, (short)words[1] };
+                _comType.InvokeMember("SetDevice2", BindingFlags.InvokeMethod | BindingFlags.Public | BindingFlags.Instance, null, _comObject, args1);
+                _comType.InvokeMember("SetDevice2", BindingFlags.InvokeMethod | BindingFlags.Public | BindingFlags.Instance, null, _comObject, args2);
+            }
+            catch { }
+
+            return;
+        }
+
         int iVal = ConvertToInt(val, tag.DataType);
 
         try
@@ -340,14 +468,51 @@ public sealed class MitsubishiMxComponentDriver : IPlcDriver
         }
     }
 
+    private static string IncrementDeviceAddress(string address, int offset)
+    {
+        if (string.IsNullOrWhiteSpace(address)) return address;
+        string clean = address.Trim().ToUpperInvariant();
+        string prefix = new string(clean.TakeWhile(char.IsLetter).ToArray());
+        string numStr = new string(clean.SkipWhile(char.IsLetter).ToArray());
+        if (int.TryParse(numStr, out int num))
+        {
+            return $"{prefix}{num + offset}";
+        }
+        return address;
+    }
+
+    public static int[] FloatToWords(float value)
+    {
+        byte[] arr = BitConverter.GetBytes(value);
+        byte[] highWord = { arr[2], arr[3] };
+        byte[] lowWord = { arr[0], arr[1] };
+        int valueD1 = BitConverter.ToInt16(lowWord, 0);
+        int valueD3 = BitConverter.ToInt16(highWord, 0);
+        return new int[] { valueD1, valueD3 };
+    }
+
+    public static float WordsToFloat(int[] doubles)
+    {
+        byte[] highWordByte = BitConverter.GetBytes((short)doubles[1]);
+        byte[] lowWordByte = BitConverter.GetBytes((short)doubles[0]);
+        byte[] combineWordByte = { lowWordByte[0], lowWordByte[1], highWordByte[0], highWordByte[1] };
+        return BitConverter.ToSingle(combineWordByte, 0);
+    }
+
     private static int ConvertToInt(object val, PlcDataType type)
     {
-        string str = val?.ToString() ?? "0";
+        if (val == null) return 0;
         if (type == PlcDataType.Bool)
         {
-            return bool.TryParse(str, out bool b) && b ? 1 : 0;
+            string s = val.ToString() ?? "";
+            return bool.TryParse(s, out bool b) && b ? 1 : 0;
         }
-        return int.TryParse(str, out int i) ? i : 0;
+
+        if (double.TryParse(val.ToString(), System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out double dVal))
+        {
+            return (int)Math.Round(dVal);
+        }
+        return 0;
     }
 
     private static object ConvertFromInt(int iVal, PlcDataType type) => type switch

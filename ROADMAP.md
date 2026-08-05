@@ -86,9 +86,14 @@ Lộ trình tích hợp tính năng Chụp ảnh từ camera và hỗ trợ các
 - [x] Task 89: Khắc phục kết nối camera ảo DroidCam và Kích hoạt luồng kiểm tra tự động theo Trigger PLC khi bấm Run Continuous: Giải phóng handle thiết bị cũ triệt để và tăng thời gian khởi động warmup frame (15 retries / 450ms) cho DroidCam/Virtual Cameras; đồng thời đăng ký lắng nghe sự kiện `OnTagChanged` từ `PlcManagerService` trong `ToolEditorViewModel` để tự động thực thi Job Flow khi nhận tín hiệu Trigger PLC (`RisingEdge` / `FallingEdge` / `Changed`) hoặc chạy luồng liên tục Camera/File khi bấm `🔁 Run Continuous`.
 - [x] Task 90: Tối ưu hóa triệt để hiệu năng Stream Camera (Triệt tiêu hiện tượng giật lag) và Khớp nối thông minh Trigger PLC (Fix Auto Run Flow): Giải phóng bộ nhớ C++ Mat nguyên bản ngay khi render (`using eventFrame`, `frame?.Dispose()`), áp dụng cờ điều hướng UI Dispatcher `_isRenderingFrame` ở ưu tiên `DispatcherPriority.Render` ngăn tình trạng nghẽn hàng đợi Dispatcher khi chạy 30 FPS; đồng thời mở rộng khớp nối thông minh PLC ID (khớp theo cả `Id` và `Name`) & Tag Name/Address (khớp cả `X0` và `X0_Trigger`) đảm bảo Run Flow tự động 100% khi nhận tín hiệu từ PLC.
 - [x] Task 91: Khởi động tự động kết nối PLC khi mở ứng dụng và Triệt tiêu triệt để ngoại lệ `System.ObjectDisposedException` trong OpenCvSharp khi bấm Run Once: Khởi chạy `IPlcManagerService.StartPollingAsync()` tự động tại `App.xaml.cs` để kết nối PLC ngay khi mở app; đồng thời đóng gói toàn bộ thao tác bộ nhớ đệm ảnh `_imageSourcePreviewCache` và `SharedImageContext` bằng khối khóa `lock (_cacheLock)` thread-safe cùng trình trợ giúp `GetImageSourceCache` / `SetImageSourceCache` / `ClearImageSourceCache` có try-catch bọc quanh `Mat.IsDisposed` và `Mat.Clone()`, triệt tiêu hoàn toàn lỗi văng ngoại lệ vô hạn và hiện tượng đơ lag khi bấm Run Once.
-- [x] Task 99: Sửa dứt điểm nguyên nhân gốc rễ gây Ẩn/Mất Chữ (Nền đen chữ đen) trên tất cả Combobox Editable (`IsEditable="True"`):
-  - Phát hiện và sửa nguyên nhân gốc rễ trong `App.xaml`: `ControlTemplate TargetType="ComboBox"` mặc định của ứng dụng thiếu thành phần `PART_EditableTextBox` và thiếu trigger `IsEditable = True`. Khi bật `IsEditable="True"`, WPF giấu `SelectionBoxItem` nhưng không có `PART_EditableTextBox` để thay thế, dẫn tới toàn bộ Combobox editable hiển thị trống rỗng / mất chữ hoàn toàn.
-  - Bổ sung `ComboBoxTextBoxTemplate` và `TextBox x:Name="PART_EditableTextBox"` trong `ControlTemplate` (`App.xaml`) với `Foreground="{TemplateBinding Foreground}"` (`#FFFFFF` / `#DCDCDC`) và `CaretBrush="{DynamicResource TextBrush}"`: Đảm bảo 100% các Combobox có `IsEditable="True"` trong toàn bộ ứng dụng hiển thị chữ nổi bật, rõ ràng trên nền tối.
+- [x] Task 104: Sửa lỗi truyền Mảng COM Interop & Bổ sung đọc 2-word Float cho PLC Tag Browser UI:
+  - **Khắc phục nguyên nhân ô `--` (NaN) & `D201` = 0**: Trong `MitsubishiMxComponentDriver.cs`, phương thức `WriteComTagValue` trước đây truyền `sWords[0]` (1 phần tử duy nhất) thay vì truyền mảng `sWords` (`short[]`) kèm `ParameterModifier`, khiến COM Reflection chỉ copy 1 word `D200` và làm `D201` bị trống 0. Đã sửa lại truyền mảng `short[]` qua `ParameterModifier` và bổ sung luồng Fallback ghi 2 thanh ghi liên tiếp (`D200` và `D201`).
+  - **Sửa đọc Float trong PLC Tag Browser UI**: Cập nhật `ReadComTagValue` đọc 2 thanh ghi liên tiếp cho kiểu `Float` (thông qua `ReadDeviceBlock2` / `ReadDeviceBlock` và `WordsToFloat`), hiển thị giá trị thực số thập phân (ví dụ `463.521`) trên bảng PLC Tag Browser UI thay vì hiển thị số nguyên thô 16-bit (`49840`).
+
+
+
+
+
 
 
 

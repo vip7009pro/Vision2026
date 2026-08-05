@@ -449,15 +449,32 @@ public static class IntellisenseBehavior
     {
         var type = node?.Type ?? string.Empty;
 
+        if (string.IsNullOrEmpty(type))
+        {
+            if (toolToken.StartsWith("Origin", StringComparison.OrdinalIgnoreCase)) type = "Origin";
+            else if (toolToken.StartsWith("Point", StringComparison.OrdinalIgnoreCase)) type = "Point";
+            else if (toolToken.StartsWith("Dist", StringComparison.OrdinalIgnoreCase)) type = "Distance";
+            else if (toolToken.StartsWith("Ang", StringComparison.OrdinalIgnoreCase)) type = "Angle";
+            else if (toolToken.StartsWith("Line", StringComparison.OrdinalIgnoreCase)) type = "Line";
+            else if (toolToken.StartsWith("Code", StringComparison.OrdinalIgnoreCase)) type = "CodeDetection";
+            else if (toolToken.StartsWith("Blob", StringComparison.OrdinalIgnoreCase)) type = "BlobDetection";
+            else if (toolToken.StartsWith("Circle", StringComparison.OrdinalIgnoreCase)) type = "Point";
+        }
+
         if (string.Equals(type, "Origin", StringComparison.OrdinalIgnoreCase) || string.Equals(type, "Point", StringComparison.OrdinalIgnoreCase))
         {
             return new List<IntellisenseItem>
             {
-                new("X", "X", "Tọa độ X (px)", "⚡", false),
-                new("Y", "Y", "Tọa độ Y (px)", "⚡", false),
+                new("X", "X", "Tọa độ X (mm nếu calib / px)", "⚡", false),
+                new("Y", "Y", "Tọa độ Y (mm nếu calib / px)", "⚡", false),
                 new("AngleDeg", "AngleDeg", "Góc xoay (độ)", "⚡", false),
+                new("Angle", "Angle", "Góc xoay (độ)", "⚡", false),
                 new("Pass", "Pass", "Kết quả OK/NG (bool: true/false)", "⚡", false),
-                new("Score", "Score", "Điểm số khớp Pattern/Origin (0.0 -> 1.0)", "⚡", false)
+                new("Score", "Score", "Điểm số khớp Pattern/Origin (0.0 -> 1.0)", "⚡", false),
+                new("X_mm", "X_mm", "Tọa độ X (mm)", "⚡", false),
+                new("Y_mm", "Y_mm", "Tọa độ Y (mm)", "⚡", false),
+                new("X_px", "X_px", "Tọa độ X (pixel)", "⚡", false),
+                new("Y_px", "Y_px", "Tọa độ Y (pixel)", "⚡", false)
             };
         }
 
@@ -465,8 +482,11 @@ public static class IntellisenseBehavior
         {
             return new List<IntellisenseItem>
             {
-                new("Value", "Value", "Giá trị khoảng cách (px hoặc mm)", "⚡", false),
-                new("Pass", "Pass", "Kết quả kiểm tra OK/NG (bool: true/false)", "⚡", false)
+                new("Value", "Value", "Khoảng cách (mm nếu calib / px)", "⚡", false),
+                new("Distance", "Distance", "Khoảng cách (mm nếu calib / px)", "⚡", false),
+                new("Pass", "Pass", "Kết quả kiểm tra OK/NG (bool: true/false)", "⚡", false),
+                new("Value_mm", "Value_mm", "Khoảng cách (mm)", "⚡", false),
+                new("Value_px", "Value_px", "Khoảng cách (pixel)", "⚡", false)
             };
         }
 

@@ -1672,6 +1672,16 @@ public sealed class InspectionService : IInspectionService
                 originPass,
                 poseAngleDeg,
                 originMatch.FeaturePoints);
+            
+            System.Diagnostics.Debug.WriteLine($"[ORIGIN INSPECT] Tool='{config.Origin.Name ?? "Origin"}', Pass={originPass}, Score={originMatch.Score:F4} (Thr={config.Origin.MatchScoreThreshold:F4}) | Pos_px=({originMatch.Position.X:F2}, {originMatch.Position.Y:F2}), PoseAngle={poseAngleDeg:F2}°, MatchAngle={templateAngleDeg:F2}°");
+            Console.WriteLine($"[ORIGIN INSPECT] Tool='{config.Origin.Name ?? "Origin"}', Pass={originPass}, Score={originMatch.Score:F4} (Thr={config.Origin.MatchScoreThreshold:F4}) | Pos_px=({originMatch.Position.X:F2}, {originMatch.Position.Y:F2}), PoseAngle={poseAngleDeg:F2}°, MatchAngle={templateAngleDeg:F2}°");
+            if (config.PixelsPerMm > 0 && Math.Abs(config.PixelsPerMm - 1.0) > 1e-6)
+            {
+                double pxMm = config.PixelsPerMm;
+                System.Diagnostics.Debug.WriteLine($"[ORIGIN INSPECT] Calibrated Pos_mm=({originMatch.Position.X / pxMm:F3}, {originMatch.Position.Y / pxMm:F3}) (Scale={pxMm:F4} px/mm)");
+                Console.WriteLine($"[ORIGIN INSPECT] Calibrated Pos_mm=({originMatch.Position.X / pxMm:F3}, {originMatch.Position.Y / pxMm:F3}) (Scale={pxMm:F4} px/mm)");
+            }
+
             result.Timings.OriginMs = (int)Math.Max(0, swTotal.ElapsedMilliseconds - tOrigin0);
             result.Timings.NodeTimings[config.Origin.Name ?? "Origin"] = result.Timings.OriginMs;
 
@@ -3517,8 +3527,13 @@ public sealed class InspectionService : IInspectionService
                 }
                 __swNode.Stop();
                 result.Timings.NodeTimings[tr.Name] = (int)__swNode.ElapsedMilliseconds;
-                result.PlcTriggers.Add(new PlcTriggerResult(tr.Name, tr.PlcId, tr.TagName, tr.EdgeMode, triggered));
             }
+        }
+
+        // 5. ResultTransfers
+        if (config.ResultTransfers != null && config.ResultTransfers.Count > 0 && plcManager != null)
+        {
+            PLC.Services.PlcResultTransferRunner.ExecuteResultTransfersAsync(config, result, plcManager).GetAwaiter().GetResult();
         }
     }
 

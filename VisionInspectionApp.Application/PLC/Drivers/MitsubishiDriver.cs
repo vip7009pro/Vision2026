@@ -205,7 +205,8 @@ public sealed class MitsubishiDriver : IPlcDriver
         ushort wordCount = GetWordCount(tag.DataType);
 
         // Frame 3E Batch Read Command: 0x0401 (Subcommand: 0x0000)
-        byte[] requestPacket = Build3EHeader(command: 0x0401, subcommand: 0x0000, dataLength: 12);
+        // Payload following command/subcommand is 6 bytes (3 bytes headNumber + 1 byte deviceCode + 2 bytes wordCount)
+        byte[] requestPacket = Build3EHeader(command: 0x0401, subcommand: 0x0000, dataLength: 6);
 
         // Device Code (1 byte), Head Address (3 bytes little endian), Device Count (2 bytes)
         byte[] payload = new byte[6];
@@ -246,8 +247,9 @@ public sealed class MitsubishiDriver : IPlcDriver
         ushort wordCount = (ushort)Math.Max(1, valBytes.Length / 2);
 
         // Frame 3E Batch Write Command: 0x1401
+        // Payload following command/subcommand is 6 bytes header + valBytes.Length
         ushort payloadTotalLen = (ushort)(6 + valBytes.Length);
-        byte[] requestPacket = Build3EHeader(command: 0x1401, subcommand: 0x0000, dataLength: (ushort)(6 + payloadTotalLen));
+        byte[] requestPacket = Build3EHeader(command: 0x1401, subcommand: 0x0000, dataLength: payloadTotalLen);
 
         byte[] payloadHeader = new byte[6];
         payloadHeader[0] = (byte)(headNumber & 0xFF);
@@ -342,18 +344,28 @@ public sealed class MitsubishiDriver : IPlcDriver
 
     private static byte[] EncodeDataBuffer(object val, PlcDataType type)
     {
+        double dVal = 0;
+        if (val != null)
+        {
+            if (val is bool b) dVal = b ? 1 : 0;
+            else if (val is int iVal) dVal = iVal;
+            else if (val is double dbl) dVal = dbl;
+            else if (val is float flt) dVal = flt;
+            else double.TryParse(val.ToString(), System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out dVal);
+        }
+
         string valStr = val?.ToString() ?? "0";
         return type switch
         {
-            PlcDataType.Bool => new byte[] { (byte)(bool.TryParse(valStr, out bool b) && b ? 1 : 0), 0 },
-            PlcDataType.Int16 => short.TryParse(valStr, out short s) ? BitConverter.GetBytes(s) : new byte[2],
-            PlcDataType.UInt16 => ushort.TryParse(valStr, out ushort us) ? BitConverter.GetBytes(us) : new byte[2],
-            PlcDataType.Int32 => int.TryParse(valStr, out int i) ? BitConverter.GetBytes(i) : new byte[4],
-            PlcDataType.UInt32 => uint.TryParse(valStr, out uint ui) ? BitConverter.GetBytes(ui) : new byte[4],
-            PlcDataType.Float => float.TryParse(valStr, out float f) ? BitConverter.GetBytes(f) : new byte[4],
-            PlcDataType.Double => double.TryParse(valStr, out double d) ? BitConverter.GetBytes(d) : new byte[8],
+            PlcDataType.Bool => new byte[] { (byte)(dVal != 0 ? 1 : 0), 0 },
+            PlcDataType.Int16 => BitConverter.GetBytes((short)Math.Round(dVal)),
+            PlcDataType.UInt16 => BitConverter.GetBytes((ushort)Math.Max(0, Math.Round(dVal))),
+            PlcDataType.Int32 => BitConverter.GetBytes((int)Math.Round(dVal)),
+            PlcDataType.UInt32 => BitConverter.GetBytes((uint)Math.Max(0, Math.Round(dVal))),
+            PlcDataType.Float => BitConverter.GetBytes((float)dVal),
+            PlcDataType.Double => BitConverter.GetBytes(dVal),
             PlcDataType.String => Encoding.ASCII.GetBytes(valStr.PadRight(16, '\0')),
-            _ => short.TryParse(valStr, out short sDef) ? BitConverter.GetBytes(sDef) : new byte[2]
+            _ => BitConverter.GetBytes((short)Math.Round(dVal))
         };
     }
 
