@@ -128,6 +128,8 @@ public sealed class InspectionResult
 
     public List<ImageOutputResult> ImageOutputs { get; } = new();
 
+    public List<DbResult> DbResults { get; } = new();
+
     public List<PlcReadResult> PlcReads { get; } = new();
 
     public List<PlcWriteResult> PlcWrites { get; } = new();
@@ -282,6 +284,7 @@ public sealed class InspectionService : IInspectionService
     private readonly ConcurrentDictionary<string, TrackState> _trackByProductCode = new(StringComparer.OrdinalIgnoreCase);
 
     private readonly PLC.Services.IPlcManagerService? _plcManager;
+    private readonly DB.Services.IDbManagerService? _dbManager;
 
     public InspectionService(
         ImagePreprocessor preprocessor,
@@ -289,7 +292,8 @@ public sealed class InspectionService : IInspectionService
         DistanceCalculator distanceCalculator,
         LineDetector lineDetector,
         IDefectDetector defectDetector,
-        PLC.Services.IPlcManagerService? plcManager = null)
+        PLC.Services.IPlcManagerService? plcManager = null,
+        DB.Services.IDbManagerService? dbManager = null)
     {
         _preprocessor = preprocessor;
         _matcher = matcher;
@@ -297,6 +301,7 @@ public sealed class InspectionService : IInspectionService
         _lineDetector = lineDetector;
         _defectDetector = defectDetector;
         _plcManager = plcManager;
+        _dbManager = dbManager;
     }
 
     public InspectionResult Inspect(Mat image, VisionConfig config)
@@ -1605,6 +1610,9 @@ public sealed class InspectionService : IInspectionService
                 var avg = strengths.Average();
                 return new CaliperResult(def.Name, Found: true, points, p1, p2, avg);
             }
+
+            // 0. Execute BeforeFlow DB Nodes (Read/Write before flow)
+            ExecuteDbNodes(config, result, _dbManager, DbExecutionTiming.BeforeFlow);
 
             // Origin
             var tOrigin0 = swTotal.ElapsedMilliseconds;
@@ -3434,6 +3442,8 @@ public sealed class InspectionService : IInspectionService
 
             ExecuteImageOutputs(config, result, image, GetPreprocessNodeOutput, nodesById, edges);
 
+            ExecuteDbNodes(config, result, _dbManager, DbExecutionTiming.AfterFlow);
+
             result.Timings.TotalMs = (int)Math.Max(0, swTotal.ElapsedMilliseconds);
 
             return result;
@@ -3443,6 +3453,43 @@ public sealed class InspectionService : IInspectionService
             foreach (var m in matsToDispose)
             {
                 m.Dispose();
+            }
+        }
+    }
+
+    private static void ExecuteDbNodes(VisionConfig config, InspectionResult result, DB.Services.IDbManagerService? dbManager, DbExecutionTiming timing)
+    {
+        if (config is null || result is null || dbManager is null) return;
+
+        if (timing == DbExecutionTiming.AfterFlow)
+        {
+            // Execute AfterFlow DB nodes asynchronously in background to prevent UI freeze
+            Task.Run(async () =>
+            {
+                try
+                {
+                    await DB.Services.DbNodeRunner.ExecuteDbNodesAsync(config, result, dbManager, timing);
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"[DB NODE RUNNER ERROR ({timing})] {ex.Message}");
+                }
+            });
+        }
+        else
+        {
+            // BeforeFlow DB nodes: execute with 3000ms timeout guard
+            try
+            {
+                var task = DB.Services.DbNodeRunner.ExecuteDbNodesAsync(config, result, dbManager, timing);
+                if (!task.Wait(3000))
+                {
+                    System.Diagnostics.Debug.WriteLine($"[DB NODE RUNNER TIMEOUT ({timing})]");
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[DB NODE RUNNER ERROR ({timing})] {ex.Message}");
             }
         }
     }

@@ -250,6 +250,10 @@ public sealed class VisionConfig
 
     public List<ResultTransferDefinition> ResultTransfers { get; set; } = new();
 
+    public List<DbModel> Databases { get; set; } = new();
+
+    public List<DbNodeDefinition> DbNodes { get; set; } = new();
+
     public DefectInspectionConfig DefectConfig { get; set; } = new();
 }
 

@@ -12,8 +12,6 @@ public sealed class MainWindowViewModel : ObservableObject
         ManualInspectionViewModel manualInspection,
         InspectionViewModel inspection,
         LiveCameraViewModel liveCamera,
-        BatchProcessingViewModel batchProcessing,
-        PlcViewModel plc,
         CameraSettingsViewModel cameraSettings)
     {
         ToolEditor = toolEditor;
@@ -21,8 +19,6 @@ public sealed class MainWindowViewModel : ObservableObject
         ManualInspection = manualInspection;
         Inspection = inspection;
         LiveCamera = liveCamera;
-        BatchProcessing = batchProcessing;
-        Plc = plc;
         CameraSettings = cameraSettings;
 
         CloseJobCommand = new RelayCommand(CloseJob);
@@ -49,10 +45,6 @@ public sealed class MainWindowViewModel : ObservableObject
     public InspectionViewModel Inspection { get; }
 
     public LiveCameraViewModel LiveCamera { get; }
-
-    public BatchProcessingViewModel BatchProcessing { get; }
-
-    public PlcViewModel Plc { get; }
 
     public CameraSettingsViewModel CameraSettings { get; }
 }

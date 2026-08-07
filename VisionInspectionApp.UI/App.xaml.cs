@@ -61,10 +61,12 @@ public partial class App : System.Windows.Application
                 services.AddTransient<ViewModels.PLC.PlcMonitorViewModel>();
                 services.AddTransient<ViewModels.PLC.PlcBrowserViewModel>();
 
+                // Database Framework
+                services.AddSingleton<Application.DB.Services.IDbManagerService, Application.DB.Services.DbManagerService>();
+
                 // Legacy PLC (MX Component)
                 services.AddSingleton<IPlcClient, MxComponentPlcClient>();
                 services.AddSingleton<PlcOrchestratorService>();
-                services.AddSingleton<PlcViewModel>();
 
                 services.AddSingleton<TeachViewModel>();
                 services.AddSingleton<ToolEditorViewModel>();
@@ -73,7 +75,6 @@ public partial class App : System.Windows.Application
                 services.AddSingleton<InspectionViewModel>();
                 services.AddSingleton<LiveCameraViewModel>();
                 services.AddSingleton<CameraSettingsViewModel>();
-                services.AddSingleton<BatchProcessingViewModel>();
                 services.AddSingleton<MainWindowViewModel>();
                 services.AddSingleton<MainWindow>();
             })

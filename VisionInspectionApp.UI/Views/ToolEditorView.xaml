@@ -57,7 +57,8 @@
 
             <Button Content="🔌 PLC Manager" Command="{Binding OpenPlcManagerCommand}" Margin="0,0,4,0" Padding="8,4" Background="#1E88E5" Foreground="White" BorderThickness="0" ToolTip="Quản lý kết nối PLC và cấu hình Tag"/>
             <Button Content="📊 Monitor" Command="{Binding OpenPlcMonitorCommand}" Margin="0,0,4,0" Padding="8,4" Background="#43A047" Foreground="White" BorderThickness="0" ToolTip="Theo dõi trạng thái kết nối, Latency và Log PLC"/>
-            <Button Content="🏷️ Tags" Command="{Binding OpenPlcBrowserCommand}" Margin="0,0,12,0" Padding="8,4" Background="#8E24AA" Foreground="White" BorderThickness="0" ToolTip="Cửa sổ tra cứu danh sách Tag PLC"/>
+            <Button Content="🏷️ Tags" Command="{Binding OpenPlcBrowserCommand}" Margin="0,0,4,0" Padding="8,4" Background="#8E24AA" Foreground="White" BorderThickness="0" ToolTip="Cửa sổ tra cứu danh sách Tag PLC"/>
+            <Button Content="🗄️ DB Manager" Command="{Binding OpenDbManagerCommand}" Margin="0,0,12,0" Padding="8,4" Background="#0D9488" Foreground="White" BorderThickness="0" ToolTip="Quản lý danh sách kết nối CSDL (SQL Server, MySQL, PostgreSQL, SQLite, ODBC)"/>
 
             <TextBlock Text="Product Code" VerticalAlignment="Center" Margin="0,0,6,0" />
             <TextBox Width="120" Text="{Binding ProductCode, UpdateSourceTrigger=LostFocus}" Margin="0,0,12,0" />
@@ -2817,29 +2818,112 @@
                                                     <TextBlock Grid.Row="1" Grid.Column="0" Text="Tag PLC:" VerticalAlignment="Center" Foreground="#CCCCCC" FontSize="11"/>
                                                     <ComboBox Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="2" ItemsSource="{Binding DataContext.AvailablePlcAllTagNames, RelativeSource={RelativeSource AncestorType=UserControl}}" Text="{Binding TagName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" IsEditable="True" Margin="2" Height="24"/>
 
-                                                    <TextBlock Grid.Row="2" Grid.Column="0" Text="Giá trị gửi:" VerticalAlignment="Center" Foreground="#CCCCCC" FontSize="11"/>
-                                                    <TextBox Grid.Row="2" Grid.Column="1" Grid.ColumnSpan="2" Text="{Binding ValueExpression, UpdateSourceTrigger=PropertyChanged}" controls:IntellisenseBehavior.Enable="True" Margin="2" Height="24"
-                                                             ToolTip="Nhập giá trị hoặc cú pháp: TotalPass, TotalFail, TotalPassBit, TotalFailBit, {Origin.X}, {Origin.Y}, {Origin.AngleDeg}, {Distance1.Value}"/>
+                                    <TextBlock Grid.Row="2" Grid.Column="0" Text="Giá trị gửi:" VerticalAlignment="Center" Foreground="#CCCCCC" FontSize="11"/>
+                                    <TextBox Grid.Row="2" Grid.Column="1" Grid.ColumnSpan="2" Text="{Binding ValueExpression, UpdateSourceTrigger=PropertyChanged}" controls:IntellisenseBehavior.Enable="True" Margin="2" Height="24"
+                                             ToolTip="Nhập giá trị hoặc cú pháp: TotalPass, TotalFail, TotalPassBit, TotalFailBit, {Origin.X}, {Origin.Y}, {Origin.AngleDeg}, {Distance1.Value}"/>
 
-                                                    <TextBlock Grid.Row="3" Grid.Column="0" Text="Điều kiện:" VerticalAlignment="Center" Foreground="#CCCCCC" FontSize="11"/>
-                                                    <ComboBox Grid.Row="3" Grid.Column="1" Grid.ColumnSpan="2" ItemsSource="{Binding AvailableConditions}" SelectedItem="{Binding Condition, UpdateSourceTrigger=PropertyChanged}" Margin="2" Height="24"/>
-                                                </Grid>
-                                            </Border>
-                                        </DataTemplate>
-                                    </ItemsControl.ItemTemplate>
-                                </ItemsControl>
+                                    <TextBlock Grid.Row="3" Grid.Column="0" Text="Điều kiện:" VerticalAlignment="Center" Foreground="#CCCCCC" FontSize="11"/>
+                                    <ComboBox Grid.Row="3" Grid.Column="1" Grid.ColumnSpan="2" ItemsSource="{Binding AvailableConditions}" SelectedItem="{Binding Condition, UpdateSourceTrigger=PropertyChanged}" Margin="2" Height="24"/>
+                                </Grid>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
 
-                                <Border Background="#1E1E1E" BorderBrush="#333333" BorderThickness="1" CornerRadius="4" Padding="6" Margin="0,4,0,6">
-                                    <StackPanel>
-                                        <TextBlock Text="💡 Hướng dẫn cú pháp giá trị gửi xuống PLC:" FontWeight="Bold" Foreground="#4FC3F7" FontSize="11" Margin="0,0,0,4"/>
-                                        <TextBlock Text="• TotalPass / TotalFail: Gửi boolean (true/false) kết quả tổng" Foreground="#BBDEFB" FontSize="10" TextWrapping="Wrap"/>
-                                        <TextBlock Text="• TotalPassBit / TotalFailBit: Gửi số 1/0 bit Pass hoặc Fail" Foreground="#BBDEFB" FontSize="10" TextWrapping="Wrap"/>
-                                        <TextBlock Text="• {Origin.X}, {Origin.Y}, {Origin.AngleDeg}: Tọa độ gốc" Foreground="#BBDEFB" FontSize="10" TextWrapping="Wrap"/>
-                                        <TextBlock Text="• {KhoangCach1.Value}, {Caliper1.Value}: Khoảng cách / kích thước" Foreground="#BBDEFB" FontSize="10" TextWrapping="Wrap"/>
-                                        <TextBlock Text="• {MaBarCode.Text}: Chuỗi văn bản đọc được từ Barcode/OCR" Foreground="#BBDEFB" FontSize="10" TextWrapping="Wrap"/>
-                                    </StackPanel>
-                                </Border>
-                            </StackPanel>
+                <Border Background="#1E1E1E" BorderBrush="#333333" BorderThickness="1" CornerRadius="4" Padding="6" Margin="0,4,0,6">
+                    <StackPanel>
+                        <TextBlock Text="💡 Hướng dẫn cú pháp giá trị gửi xuống PLC:" FontWeight="Bold" Foreground="#4FC3F7" FontSize="11" Margin="0,0,0,4"/>
+                        <TextBlock Text="• TotalPass / TotalFail: Gửi boolean (true/false) kết quả tổng" Foreground="#BBDEFB" FontSize="10" TextWrapping="Wrap"/>
+                        <TextBlock Text="• TotalPassBit / TotalFailBit: Gửi số 1/0 bit Pass hoặc Fail" Foreground="#BBDEFB" FontSize="10" TextWrapping="Wrap"/>
+                        <TextBlock Text="• {Origin.X}, {Origin.Y}, {Origin.AngleDeg}: Tọa độ gốc" Foreground="#BBDEFB" FontSize="10" TextWrapping="Wrap"/>
+                        <TextBlock Text="• {KhoangCach1.Value}, {Caliper1.Value}: Khoảng cách / kích thước" Foreground="#BBDEFB" FontSize="10" TextWrapping="Wrap"/>
+                        <TextBlock Text="• {MaBarCode.Text}: Chuỗi văn bản đọc được từ Barcode/OCR" Foreground="#BBDEFB" FontSize="10" TextWrapping="Wrap"/>
+                    </StackPanel>
+                </Border>
+            </StackPanel>
+
+            <!-- DB Node Properties Panel -->
+            <StackPanel Visibility="{Binding IsDbNode, Converter={StaticResource BoolToVis}}" Margin="0,4,0,0">
+                <Border Background="#0D9488" Padding="6,4" CornerRadius="4" Margin="0,0,0,6">
+                    <StackPanel>
+                        <TextBlock Text="🗄️ Database Node (Read / Write DB)" FontWeight="Bold" Foreground="White" FontSize="13" />
+                        <TextBlock Text="Truy vấn CSDL động (MS SQL, MySQL, PostgreSQL, SQLite, ODBC). Hỗ trợ chèn thuộc tính tool {Distance1.Value}, {Origin.X}, {Result.Pass}." Foreground="#E0F2FE" FontSize="11" TextWrapping="Wrap" Margin="0,2,0,0" />
+                    </StackPanel>
+                </Border>
+
+                <Grid Margin="0,2">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="100"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+
+                    <TextBlock Grid.Row="0" Grid.Column="0" Text="Target DB:" VerticalAlignment="Center" Margin="0,2" Foreground="{DynamicResource TextBrush}"/>
+                    <ComboBox Grid.Row="0" Grid.Column="1" ItemsSource="{Binding AvailableDatabases}" DisplayMemberPath="Name" SelectedItem="{Binding Db_SelectedDbChoice, UpdateSourceTrigger=PropertyChanged}" Margin="2"/>
+
+                    <TextBlock Grid.Row="1" Grid.Column="0" Text="Operation Mode:" VerticalAlignment="Center" Margin="0,2" Foreground="{DynamicResource TextBrush}"/>
+                    <ComboBox Grid.Row="1" Grid.Column="1" ItemsSource="{Binding DbNodeModes}" SelectedItem="{Binding Db_Mode, UpdateSourceTrigger=PropertyChanged}" Margin="2"/>
+
+                    <TextBlock Grid.Row="2" Grid.Column="0" Text="Timing:" VerticalAlignment="Center" Margin="0,2" Foreground="{DynamicResource TextBrush}"/>
+                    <ComboBox Grid.Row="2" Grid.Column="1" ItemsSource="{Binding DbExecutionTimings}" SelectedItem="{Binding Db_Timing, UpdateSourceTrigger=PropertyChanged}" Margin="2" ToolTip="Before Flow: Chạy trước inspection. After Flow: Chạy sau khi inspection kết thúc."/>
+
+                    <TextBlock Grid.Row="3" Grid.Column="0" Text="Condition:" VerticalAlignment="Center" Margin="0,2" Foreground="{DynamicResource TextBrush}"/>
+                    <ComboBox Grid.Row="3" Grid.Column="1" ItemsSource="{Binding AvailableConditions}" SelectedItem="{Binding Db_Condition, UpdateSourceTrigger=PropertyChanged}" Margin="2"/>
+                </Grid>
+
+                <!-- Read Format Settings (Visible in Read Mode) -->
+                <StackPanel Visibility="{Binding IsDbReadMode, Converter={StaticResource BoolToVis}}" Margin="0,4,0,0">
+                    <Border Background="{DynamicResource WindowBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="4" Padding="6" Margin="0,0,0,6">
+                        <StackPanel>
+                            <TextBlock Text="⚙️ Trích Xuất Kết Quả Read DB" FontWeight="Bold" Foreground="{DynamicResource TextBrush}" FontSize="12" Margin="0,0,0,4"/>
+
+                            <Grid Margin="0,2">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="100"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                </Grid.RowDefinitions>
+
+                                <TextBlock Grid.Row="0" Grid.Column="0" Text="Read Format:" VerticalAlignment="Center" Margin="0,2" Foreground="{DynamicResource TextBrush}"/>
+                                <ComboBox Grid.Row="0" Grid.Column="1" ItemsSource="{Binding DbReadOutputFormats}" SelectedItem="{Binding Db_ReadFormat, UpdateSourceTrigger=PropertyChanged}" Margin="2" ToolTip="FirstCell (Hàng 0, Cột 0), SpecificCell (Chỉ định ô), ColumnJoin (Gộp cột), FullTableCsv/Json (Cả bảng)"/>
+
+                                <TextBlock Grid.Row="1" Grid.Column="0" Text="Target Row Idx:" VerticalAlignment="Center" Margin="0,2" Foreground="{DynamicResource TextBrush}" Visibility="{Binding IsSpecificCellFormat, Converter={StaticResource BoolToVis}}"/>
+                                <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding Db_TargetRowIndex, UpdateSourceTrigger=PropertyChanged}" Margin="2" Visibility="{Binding IsSpecificCellFormat, Converter={StaticResource BoolToVis}}" ToolTip="Chỉ số dòng (0 là dòng đầu tiên)"/>
+
+                                <TextBlock Grid.Row="2" Grid.Column="0" Text="Target Column:" VerticalAlignment="Center" Margin="0,2" Foreground="{DynamicResource TextBrush}"/>
+                                <TextBox Grid.Row="2" Grid.Column="1" Text="{Binding Db_TargetColumnName, UpdateSourceTrigger=PropertyChanged}" Margin="2" ToolTip="Tên cột hoặc chỉ số cột (vd: SerialNumber, Status, 0)"/>
+
+                                <TextBlock Grid.Row="3" Grid.Column="0" Text="Separator:" VerticalAlignment="Center" Margin="0,2" Foreground="{DynamicResource TextBrush}" Visibility="{Binding IsColumnJoinFormat, Converter={StaticResource BoolToVis}}"/>
+                                <TextBox Grid.Row="3" Grid.Column="1" Text="{Binding Db_ColumnJoinSeparator, UpdateSourceTrigger=PropertyChanged}" Margin="2" Visibility="{Binding IsColumnJoinFormat, Converter={StaticResource BoolToVis}}" ToolTip="Ký tự phân cách khi gộp cột (vd: , hoặc \n)"/>
+                            </Grid>
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+
+                <!-- Dynamic SQL Query String -->
+                <TextBlock Text="Dynamic SQL Query:" FontWeight="SemiBold" Margin="0,4,0,2" Foreground="{DynamicResource TextBrush}"/>
+                <TextBox Text="{Binding Db_SqlQuery, UpdateSourceTrigger=PropertyChanged}" controls:IntellisenseBehavior.Enable="True" AcceptsReturn="True" TextWrapping="Wrap" Height="85" Margin="0,0,0,4" ToolTip="Nhập câu truy vấn SQL. Ví dụ: INSERT INTO Logs (Result, Dist) VALUES ('{Result.Pass}', {Distance1.Value}) hoặc SELECT Status FROM Orders WHERE ID = 1"/>
+
+                <CheckBox Content="🔒 Cho phép câu lệnh UPDATE / DELETE (Bắt buộc có WHERE)" IsChecked="{Binding Db_AllowUpdateDelete, UpdateSourceTrigger=PropertyChanged}" Margin="0,2,0,6" Foreground="#FFB74D" FontSize="11" ToolTip="Cảnh báo an toàn CSDL: Mặc định ứng dụng ngăn chặn các lệnh UPDATE/DELETE. Tích chọn ô này để cho phép thực thi lệnh UPDATE/DELETE có chứa điều kiện WHERE."/>
+
+                <!-- Debug Output Preview -->
+                <Border Background="#1E1E1E" BorderBrush="#333333" BorderThickness="1" CornerRadius="4" Padding="6" Margin="0,2,0,8">
+                    <StackPanel>
+                        <TextBlock Text="🔍 Live Result Preview:" FontWeight="Bold" Foreground="#4FC3F7" FontSize="11" Margin="0,0,0,4"/>
+                        <TextBox Text="{Binding Db_LastRunResultText, Mode=OneWay}" IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap" Background="Transparent" Foreground="#E0E0E0" BorderThickness="0" FontSize="11" MaxHeight="80"/>
+                    </StackPanel>
+                </Border>
+            </StackPanel>
 
                             <Button Content="Delete Node" Command="{Binding DeleteSelectedNodeCommand}" />
                             </StackPanel>

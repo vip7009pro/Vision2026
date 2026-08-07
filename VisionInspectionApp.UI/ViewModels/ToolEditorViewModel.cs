@@ -150,11 +150,12 @@ namespace VisionInspectionApp.UI.ViewModels
         private double _canvasZoom = 1.0;
         private readonly IJobService _jobService;
         private readonly Application.PLC.Services.IPlcManagerService _plcManagerService;
+        private readonly Application.DB.Services.IDbManagerService _dbManagerService;
         public UndoRedoManager UndoManager { get; }
         public IRelayCommand UndoCommand { get; }
         public IRelayCommand RedoCommand { get; }
 
-        public ToolEditorViewModel(IConfigService configService, ConfigStoreOptions storeOptions, SharedImageContext sharedImage, ImagePreprocessor preprocessor, LineDetector lineDetector, IInspectionService inspectionService, CameraService cameraService, IJobService jobService, UndoRedoManager undoManager, Application.PLC.Services.IPlcManagerService plcManagerService)
+        public ToolEditorViewModel(IConfigService configService, ConfigStoreOptions storeOptions, SharedImageContext sharedImage, ImagePreprocessor preprocessor, LineDetector lineDetector, IInspectionService inspectionService, CameraService cameraService, IJobService jobService, UndoRedoManager undoManager, Application.PLC.Services.IPlcManagerService plcManagerService, Application.DB.Services.IDbManagerService dbManagerService)
         {
             UndoManager = undoManager;
             UndoCommand = new RelayCommand(() => UndoManager.Undo(), () => UndoManager.CanUndo);
@@ -174,6 +175,7 @@ namespace VisionInspectionApp.UI.ViewModels
             _inspectionService = inspectionService;
             _cameraService = cameraService;
             _plcManagerService = plcManagerService;
+            _dbManagerService = dbManagerService;
             _plcManagerService.OnTagChanged += OnPlcTagChangedForTrigger;
             _autoSaveTimer = new DispatcherTimer
             {
@@ -225,7 +227,8 @@ namespace VisionInspectionApp.UI.ViewModels
                 "PlcTrigger",
                 "PlcBatchRead",
                 "PlcBatchWrite",
-                "ResultTransfer"
+                "ResultTransfer",
+                "DbNode"
             };
             Nodes = new ObservableCollection<ToolGraphNodeViewModel>();
             Nodes.CollectionChanged += (_, _) => IsDirty = true;
@@ -916,6 +919,7 @@ namespace VisionInspectionApp.UI.ViewModels
         private string? _lastRunError;
         private void RaiseToolPropertyPanelsChanged()
         {
+            SyncSelectedDbNode(SelectedNode);
             RefreshOriginTemplatePreview();
             OnPropertyChanged(nameof(IsLineNode));
             OnPropertyChanged(nameof(IsCaliperNode));
@@ -3094,6 +3098,11 @@ namespace VisionInspectionApp.UI.ViewModels
             {
                 baseName = "IMG_OUT";
                 exists = n => (_config.ImageOutputs ?? new List<ImageOutputDefinition>()).Any(x => string.Equals(x.Name, n, StringComparison.OrdinalIgnoreCase));
+            }
+            else if (string.Equals(type, "DbNode", StringComparison.OrdinalIgnoreCase) || string.Equals(type, "DB", StringComparison.OrdinalIgnoreCase))
+            {
+                baseName = "DB";
+                exists = n => (_config.DbNodes ?? new List<DbNodeDefinition>()).Any(x => string.Equals(x.RefName, n, StringComparison.OrdinalIgnoreCase));
             }
             else
             {

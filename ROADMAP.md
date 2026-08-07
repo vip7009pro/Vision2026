@@ -89,6 +89,12 @@ Lộ trình tích hợp tính năng Chụp ảnh từ camera và hỗ trợ các
 - [x] Task 106: Khắc phục triệt để tiến trình chạy ngầm (Zombie Instance) trong Task Manager khi đóng ứng dụng:
   - **Khai báo `IDisposable` cho `PlcManagerService`**: Bổ sung `IDisposable` trong định danh lớp `PlcManagerService`, gọi dừng luồng Polling Loop `PollingEngine.Stop()` và giải phóng toàn bộ driver kết nối PLC (`DisconnectAllAsync()`) khi đóng app.
   - **Tích hợp dọn dẹp trong `ShutdownGracefullyAsync` & `Environment.Exit(0)`**: Đăng ký gọi `plcManager.Dispose()` và `cameraService.Dispose()` trong `App.xaml.cs`, đồng thời gọi `Environment.Exit(0)` ở cuối sự kiện `OnExit`. Đảm bảo giải phóng sạch sẽ mọi handle, bộ nhớ unmanaged C++ và tiến trình chạy ngầm, không bao giờ xuất hiện instance zombie trong Windows Task Manager sau khi tắt app.
+- [x] Task 107: Xóa 2 Tab không sử dụng (`Batch Processing` & `PLC`) và Cập nhật tab Tool Editor với hệ thống **Database Manager** & **Read/Write DB Node**:
+  - Xóa 2 tab `Batch Processing` và `PLC` khỏi main UI và ViewModels.
+  - Hỗ trợ 6 loại CSDL: **MS SQL Server**, **MySQL / MariaDB**, **PostgreSQL**, **SQLite**, **Oracle**, **ODBC**.
+  - Xây dựng cửa sổ **`DbManagerWindow.xaml`** để cấu hình CSDL, lưu trữ và nút bấm **⚡ Test Connection** bất đồng bộ.
+  - Tạo Canvas Node **`DbNode`** tích hợp vào Tool Editor Graph hỗ trợ chế độ `Read` / `Write`, thời điểm thực thi `Before Flow` / `After Flow`, điều kiện `Condition` (`Always`, `OnPass`, `OnFail`), truy vấn SQL động chèn được thuộc tính các tool khác `{ToolName.Prop}`.
+  - Hỗ trợ lựa chọn linh hoạt định dạng trích xuất kết quả `Read DB`: `FirstCell` (Ô 0,0), `SpecificCell` (Chỉ định hàng N, cột Name/Idx), `ColumnJoin` (Gộp cột theo separator), `FullTableCsv` (Bảng CSV), `FullTableJson` (Bảng JSON).
 
 
 

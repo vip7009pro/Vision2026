@@ -418,6 +418,49 @@
     - Thêm `Environment.Exit(0)` vào cuối phương thức `OnExit` trong `App.xaml.cs` đảm bảo giải phóng toàn bộ tiến trình Windows 100%.
   - Biên dịch ứng dụng thành công 100%: **`0 Error(s)`**, **`42 Warning(s)`**.
 
+## Cập nhật 2026-08-07
+
+### Xóa 2 Tab không sử dụng (`Batch Processing` & `PLC`)
+- Loại bỏ 2 tab `Batch Processing` và `PLC` khỏi danh sách `TabItem` trên thanh điều hướng chính trong `MainWindow.xaml`.
+- Cập nhật `MainWindowViewModel.cs` và `App.xaml.cs` dọn dẹp các constructor parameter và dependency injection liên quan.
+
+### Tích hợp hệ thống Database Manager & Dynamic DB Node (`Read/Write DB`)
+1. **Hỗ trợ Đa Cơ Sở Dữ Liệu (`DbModel` & ADO.NET Drivers)**:
+   - Hỗ trợ 6 loại CSDL phổ biến: **MS SQL Server**, **MySQL / MariaDB**, **PostgreSQL**, **SQLite**, **Oracle**, và **ODBC Driver**.
+   - Cài đặt đầy đủ các ADO.NET Provider chính thức: `Microsoft.Data.SqlClient`, `MySqlConnector`, `Npgsql`, `Microsoft.Data.Sqlite`, `System.Data.Odbc`.
+   - Tự động tạo connection string chuẩn cho từng loại CSDL hoặc hỗ trợ nhập custom Connection String override.
+2. **Database Manager Window (`DbManagerWindow.xaml`)**:
+   - Thêm nút bấm **`🗄️ DB Manager`** trên thanh Header của `ToolEditorView.xaml`.
+   - Giao diện quản lý danh sách CSDL chuyên nghiệp: thêm/xóa CSDL, cấu hình Host, Port, Database Name, User/Password, Timeout và nút bấm **⚡ Test Connection** kiểm tra kết nối tức thì bất đồng bộ (`TestConnectionAsync`).
+3. **Dynamic Read/Write DB Canvas Node (`DbNode`)**:
+   - Thêm node mới **`DbNode`** vào danh sách Toolbox palette và hệ thống canvas graph editor.
+   - Panel thuộc tính Properties Panel hỗ trợ:
+     - Checkbox/Dropdown chọn chế độ: **`Read`** (Truy vấn dữ liệu) / **`Write`** (Ghi/Thêm/Cập nhật CSDL).
+     - Checkbox/Dropdown chọn thời điểm thực thi **Timing**: **`Before Flow`** (chạy trước khi vision algorithms hoạt động) / **`After Flow`** (chạy sau khi flow kết thúc).
+     - Lựa chọn điều kiện thực thi **Condition**: `Always`, `OnPass`, `OnFail`.
+     - Nhập câu truy vấn SQL động (**Dynamic SQL Query**): Hỗ trợ inject biến của các tool khác trong flow dạng `{ToolName.PropertyName}` (ví dụ: `{Distance1.Value}`, `{Origin.X}`, `{Result.Pass}`). Tự động escape chuỗi `'` sang `''` chống lỗi SQL.
+4. **Lựa chọn Linh Hoạt Kết Quả Output của Read DB Node (`ReadFormat`)**:
+   - **`FirstCell`**: Trả về 1 giá trị duy nhất ở [Hàng 0, Cột 0].
+   - **`SpecificCell`**: Chỉ định chính xác Ô dữ liệu theo [Hàng N, Cột Name/Index].
+   - **`ColumnJoin`**: Gộp tất cả các giá trị của một cột thành chuỗi phân cách bởi ký tự separator (ví dụ: dấu phẩy `,` hoặc xuống dòng `\n`).
+   - **`FullTableCsv`**: Trả về toàn bộ bảng kết quả dưới dạng CSV.
+   - **`FullTableJson`**: Trả về toàn bộ bảng kết quả dưới dạng mảng JSON.
+5. **Ghi nhận và Xem Kết Quả Live Debug**:
+   - Kết quả thực thi DB Node (`DbResult`) được lưu trữ trực tiếp trong `InspectionResult.DbResults`.
+   - Màn hình Properties Panel của node hiển thị live status preview kết quả chạy gần nhất (thành công/thất bại, số dòng bị ảnh hưởng, số hàng/cột và nội dung text trích xuất).
+   - Tích hợp gọi `DbNodeRunner.ExecuteDbNodesAsync` tại cả hai giai đoạn `BeforeFlow` và `AfterFlow` trong `InspectionPipeline` (`Class1.cs`).
+- Sửa lỗi `NullReferenceException` khi mở `DbManagerWindow`: Đã chuyển vị trí khởi tạo các đối tượng `Command` (`AddDbCommand`, `DeleteDbCommand`, `TestConnectionCommand`, `SaveCommand`) lên trước khi gán `SelectedDb` trong constructor của `DbManagerViewModel.cs`, đồng thời bổ sung null-conditional operator `?.` trong hàm `OnSelectedDbChanged` tránh kích hoạt sự kiện thay đổi thuộc tính khi các Command chưa được khởi tạo.
+- Khắc phục lỗi mất danh sách Database khi khởi động lại App: Đã tích hợp tự động lưu & nạp tập trung danh sách CSDL toàn cục ra file `%AppData%\Vision2026\databases_config.json` (`LoadFromDisk` / `SaveToDisk` trong `DbManagerService.cs`), đảm bảo mọi cấu hình DB của người dùng được bảo toàn 100% qua các phiên chạy app.
+- Triệt tiêu hoàn toàn hiện tượng Lag / Freeze ứng dụng khi chạy Flow có `DbNode`:
+  - Chuyển giai đoạn thực thi **`AfterFlow`** của `DbNode` sang chạy **bất đồng bộ hoàn toàn (`Task.Run`)**, giải phóng luồng chính UI Dispatcher ngay lập tức sau khi kiểm tra xong ảnh.
+  - Thiết lập bộ đếm thời gian hủy nhanh **Cancellation Timeout (3s)** cho `OpenAsync()`, `ExecuteReaderAsync()`, và `ExecuteNonQueryAsync()` trong `DbManagerService.cs`, đồng thời thêm khối giới hạn thời gian chờ `Wait(3000)` cho giai đoạn `BeforeFlow`, ngăn chặn triệt để hiện tượng treo đơ UI nếu CSDL không khả dụng hoặc bị ngắt kết nối mạng.
+  - Sử dụng khối khóa `lock (result.DbResults)` đảm bảo thread-safety khi lưu vết kết quả CSDL từ luồng chạy ngầm.
+- **Tích hợp Bộ Lọc An Toàn CSDL (SQL Query Safety Validator)**:
+  - Chặn triệt để các lệnh phá hủy CSDL cực kỳ nguy hiểm (`DROP TABLE`, `DROP DATABASE`, `TRUNCATE`, `ALTER`) trên tất cả các chế độ.
+  - Ở chế độ **Read DB**: Chặn 100% các câu lệnh thay đổi dữ liệu (`DELETE`, `UPDATE`, `INSERT`, `DROP`, `TRUNCATE`). Chỉ cho phép các lệnh truy vấn đọc `SELECT`, `EXPLAIN`, `WITH`, `EXEC`.
+  - Ở chế độ **Write DB**: Bắt buộc lệnh `DELETE` và `UPDATE` phải chứa mệnh đề **`WHERE`** (chặn hành vi xóa/sửa nhầm toàn bộ bảng CSDL), đồng thời người dùng phải chủ động tích chọn ô CheckBox **`🔒 Cho phép câu lệnh UPDATE / DELETE (Bắt buộc có WHERE)`** trên Properties Panel thì lệnh mới được phép thực thi.
+- Biên dịch ứng dụng thành công 100%: **`0 Error(s)`**, **`44 Warning(s)`**.
+
 ## Encoding
 
 - Tài liệu này được lưu ở UTF-8 và toàn bộ nội dung tiếng Việt đã được chuẩn hoá.
@@ -430,6 +473,7 @@
 - [x] Sửa lỗi kết nối camera, DroidCam Virtual Camera, Tối ưu hóa Stream mượt mà, Tự động kết nối PLC khi bật app, Triệt tiêu triệt để ngoại lệ ObjectDisposedException & UI Freeze khi mở App / RUN / PLC Freeze.
 - [x] Tối ưu Scan PLC theo điều kiện & Tích hợp Node `ResultTransfer` truyền kết quả OK/NG, tọa độ sau khi hoàn thành Job Flow.
 - [x] Triệt tiêu tiến trình chạy ngầm Zombie Instance khi đóng app (Tự động dừng Polling, giải phóng COM/Camera & gọi Environment.Exit(0)).
+- [x] Xóa 2 Tab không sử dụng Batch Processing & PLC; Tích hợp DB Manager và Node Read/Write DB linh hoạt dữ liệu output.
 - Kiểm thử đầy đủ module Camera Settings với Basler/GigE và luồng UDP/RTSP.
 - Chạy kiểm thử đầu-cuối cho execution pipeline của Node Graph.
 

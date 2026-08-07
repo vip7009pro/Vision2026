@@ -192,14 +192,6 @@
             <views:LiveCameraView />
         </DataTemplate>
 
-        <DataTemplate DataType="{x:Type viewModels:BatchProcessingViewModel}">
-            <views:BatchProcessingView />
-        </DataTemplate>
-
-        <DataTemplate DataType="{x:Type viewModels:PlcViewModel}">
-            <views:PlcView />
-        </DataTemplate>
-
         <DataTemplate DataType="{x:Type viewModels:CameraSettingsViewModel}">
             <views:CameraSettingsView />
         </DataTemplate>
@@ -222,12 +214,6 @@
             </TabItem>
             <TabItem Header="Camera Settings">
                 <ContentControl Content="{Binding CameraSettings}" />
-            </TabItem>
-            <TabItem Header="Batch Processing">
-                <ContentControl Content="{Binding BatchProcessing}" />
-            </TabItem>
-            <TabItem Header="PLC">
-                <ContentControl Content="{Binding Plc}" />
             </TabItem>
         </TabControl>
     </Grid>
