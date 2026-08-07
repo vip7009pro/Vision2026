@@ -230,6 +230,20 @@ public partial class ToolEditorViewModel
         OnPropertyChanged(nameof(Db_SelectedDbChoice));
     }
 
+    public bool Db_Enable
+    {
+        get => _selectedDbNode?.Enable ?? true;
+        set
+        {
+            if (_selectedDbNode != null && _selectedDbNode.Enable != value)
+            {
+                _selectedDbNode.Enable = value;
+                OnPropertyChanged(nameof(Db_Enable));
+                RequestAutoSave();
+            }
+        }
+    }
+
     private void SyncSelectedDbNode(ToolGraphNodeViewModel? node)
     {
         if (node != null && string.Equals(node.Type, "DbNode", StringComparison.OrdinalIgnoreCase))
@@ -257,6 +271,7 @@ public partial class ToolEditorViewModel
         }
 
         OnPropertyChanged(nameof(IsDbNode));
+        OnPropertyChanged(nameof(Db_Enable));
         OnPropertyChanged(nameof(Db_SelectedDbChoice));
         OnPropertyChanged(nameof(Db_Mode));
         OnPropertyChanged(nameof(IsDbReadMode));

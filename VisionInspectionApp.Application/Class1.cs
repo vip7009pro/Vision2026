@@ -262,7 +262,7 @@ public sealed record CodeDetectionResult(string Name, bool Found, string Text, R
 
 public interface IInspectionService
 {
-    InspectionResult Inspect(Mat image, VisionConfig config);
+    InspectionResult Inspect(Mat image, VisionConfig config, DB.Services.IDbManagerService? dbManagerOverride = null);
     void ResetTracking(string? productCode = null);
 }
 
@@ -306,6 +306,12 @@ public sealed class InspectionService : IInspectionService
 
     public InspectionResult Inspect(Mat image, VisionConfig config)
     {
+        return Inspect(image, config, dbManagerOverride: null);
+    }
+
+    public InspectionResult Inspect(Mat image, VisionConfig config, DB.Services.IDbManagerService? dbManagerOverride = null)
+    {
+        var effectiveDbManager = dbManagerOverride ?? _dbManager;
         if (image is null)
         {
             throw new ArgumentNullException(nameof(image));
@@ -1612,7 +1618,7 @@ public sealed class InspectionService : IInspectionService
             }
 
             // 0. Execute BeforeFlow DB Nodes (Read/Write before flow)
-            ExecuteDbNodes(config, result, _dbManager, DbExecutionTiming.BeforeFlow);
+            ExecuteDbNodes(config, result, effectiveDbManager, DbExecutionTiming.BeforeFlow);
 
             // Origin
             var tOrigin0 = swTotal.ElapsedMilliseconds;
@@ -3440,9 +3446,9 @@ public sealed class InspectionService : IInspectionService
 
             ExecutePlcNodes(config, result, _plcManager);
 
-            ExecuteImageOutputs(config, result, image, GetPreprocessNodeOutput, nodesById, edges);
+            ExecuteDbNodes(config, result, effectiveDbManager, DbExecutionTiming.AfterFlow);
 
-            ExecuteDbNodes(config, result, _dbManager, DbExecutionTiming.AfterFlow);
+            ExecuteImageOutputs(config, result, image, GetPreprocessNodeOutput, nodesById, edges);
 
             result.Timings.TotalMs = (int)Math.Max(0, swTotal.ElapsedMilliseconds);
 
@@ -3461,36 +3467,17 @@ public sealed class InspectionService : IInspectionService
     {
         if (config is null || result is null || dbManager is null) return;
 
-        if (timing == DbExecutionTiming.AfterFlow)
+        try
         {
-            // Execute AfterFlow DB nodes asynchronously in background to prevent UI freeze
-            Task.Run(async () =>
+            var task = DB.Services.DbNodeRunner.ExecuteDbNodesAsync(config, result, dbManager, timing);
+            if (!task.Wait(500))
             {
-                try
-                {
-                    await DB.Services.DbNodeRunner.ExecuteDbNodesAsync(config, result, dbManager, timing);
-                }
-                catch (Exception ex)
-                {
-                    System.Diagnostics.Debug.WriteLine($"[DB NODE RUNNER ERROR ({timing})] {ex.Message}");
-                }
-            });
+                System.Diagnostics.Debug.WriteLine($"[DB NODE RUNNER TIMEOUT ({timing})]");
+            }
         }
-        else
+        catch (Exception ex)
         {
-            // BeforeFlow DB nodes: execute with 3000ms timeout guard
-            try
-            {
-                var task = DB.Services.DbNodeRunner.ExecuteDbNodesAsync(config, result, dbManager, timing);
-                if (!task.Wait(3000))
-                {
-                    System.Diagnostics.Debug.WriteLine($"[DB NODE RUNNER TIMEOUT ({timing})]");
-                }
-            }
-            catch (Exception ex)
-            {
-                System.Diagnostics.Debug.WriteLine($"[DB NODE RUNNER ERROR ({timing})] {ex.Message}");
-            }
+            System.Diagnostics.Debug.WriteLine($"[DB NODE RUNNER ERROR ({timing})] {ex.Message}");
         }
     }
 
@@ -3718,6 +3705,9 @@ public sealed class InspectionService : IInspectionService
                                    .Replace("{Count}", now.Ticks.ToString()[^6..])
                                    .Replace("{ProductCode}", config.ProductCode ?? "")
                                    .Replace("{Status}", result.Pass ? "PASS" : "FAIL");
+
+                var vars = ConditionEvaluator.BuildVariableMap(result);
+                fileName = ConditionEvaluator.EvaluateTextTemplate(fileName, vars);
 
                 var ext = io.Format switch
                 {
@@ -5002,6 +4992,62 @@ public static class ConditionEvaluator
             vars[$"Saved.{io.Name}"] = new Variable(io.Saved, found: io.Saved, text: io.SavedFilePath);
         }
 
+        if (result.DbResults is not null)
+        {
+            foreach (var db in result.DbResults)
+            {
+                if (string.IsNullOrWhiteSpace(db.NodeName)) continue;
+
+                void AddDbAlias(string aliasName)
+                {
+                    if (string.IsNullOrWhiteSpace(aliasName)) return;
+
+                    double valNum = 0;
+                    string textVal = db.Text ?? string.Empty;
+                    if (db.Value != null && double.TryParse(db.Value.ToString(), System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out double parsedVal))
+                    {
+                        valNum = parsedVal;
+                    }
+
+                    var dbVar = new Variable(db.Success, value: valNum, score: db.RowCount, found: db.Success, text: textVal);
+
+                    vars[aliasName] = dbVar;
+                    vars[$"{aliasName}.Value"] = new Variable(db.Success, value: valNum, text: db.Value?.ToString() ?? textVal);
+                    vars[$"{aliasName}.Text"] = new Variable(db.Success, text: textVal);
+                    vars[$"{aliasName}.Pass"] = new Variable(db.Success);
+                    vars[$"{aliasName}.Success"] = new Variable(db.Success, value: db.Success ? 1.0 : 0.0);
+                    vars[$"{aliasName}.RowCount"] = new Variable(db.Success, value: db.RowCount);
+                    vars[$"{aliasName}.ColumnCount"] = new Variable(db.Success, value: db.ColumnCount);
+                    vars[$"{aliasName}.RowsAffected"] = new Variable(db.Success, value: db.RowsAffected);
+
+                    foreach (var kvp in db.ColumnMap)
+                    {
+                        if (string.IsNullOrWhiteSpace(kvp.Key)) continue;
+
+                        double colNum = 0;
+                        string colStr = kvp.Value?.ToString() ?? string.Empty;
+                        if (kvp.Value != null && double.TryParse(colStr, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out double pCol))
+                        {
+                            colNum = pCol;
+                        }
+
+                        vars[$"{aliasName}.{kvp.Key}"] = new Variable(db.Success, value: colNum, text: colStr);
+                    }
+                }
+
+                AddDbAlias(db.NodeName);
+                if (db.NodeName.Contains("Node", StringComparison.OrdinalIgnoreCase))
+                {
+                    AddDbAlias(db.NodeName.Replace("Node", "", StringComparison.OrdinalIgnoreCase));
+                }
+                else if (db.NodeName.StartsWith("DB", StringComparison.OrdinalIgnoreCase) && db.NodeName.Length > 2 && char.IsDigit(db.NodeName[2]))
+                {
+                    AddDbAlias($"DbNode{db.NodeName[2..]}");
+                }
+                AddDbAlias("DB");
+            }
+        }
+
         return vars;
     }
 
@@ -5051,6 +5097,20 @@ public static class ConditionEvaluator
 
             if (string.IsNullOrWhiteSpace(varName) || !vars.TryGetValue(varName, out var v) || v is null)
             {
+                if (inner.StartsWith("DB", StringComparison.OrdinalIgnoreCase) || inner.StartsWith("DbNode", StringComparison.OrdinalIgnoreCase))
+                {
+                    string altKey = inner.Contains("Node", StringComparison.OrdinalIgnoreCase)
+                        ? inner.Replace("Node", "", StringComparison.OrdinalIgnoreCase)
+                        : inner;
+
+                    if (vars.TryGetValue(altKey, out var vAlt) && vAlt is not null)
+                    {
+                        object? altVal = vAlt.Text ?? (object?)vAlt.Value ?? vAlt.Found ?? vAlt.Pass;
+                        return altVal?.ToString() ?? string.Empty;
+                    }
+
+                    return string.Empty;
+                }
                 return m.Value;
             }
 
@@ -5422,6 +5482,13 @@ public static class ConditionEvaluator
 
         private ConditionValue Resolve(string name, string? member)
         {
+            if (!string.IsNullOrWhiteSpace(member) && _vars.TryGetValue($"{name}.{member}", out var vDirect))
+            {
+                if (vDirect.Text is not null) return ConditionValue.FromString(vDirect.Text);
+                if (vDirect.Value is not null) return ConditionValue.FromNumber(vDirect.Value.Value);
+                return ConditionValue.FromBool(vDirect.Pass);
+            }
+
             if (!_vars.TryGetValue(name, out var v))
             {
                 throw new InvalidOperationException($"Unknown identifier '{name}'");
@@ -5429,12 +5496,18 @@ public static class ConditionEvaluator
 
             if (string.IsNullOrWhiteSpace(member))
             {
+                if (v.Text is not null) return ConditionValue.FromString(v.Text);
+                if (v.Value is not null) return ConditionValue.FromNumber(v.Value.Value);
                 return ConditionValue.FromBool(v.Pass);
             }
 
             if (string.Equals(member, "PASS", StringComparison.OrdinalIgnoreCase)) return ConditionValue.FromBool(v.Pass);
+            if (string.Equals(member, "SUCCESS", StringComparison.OrdinalIgnoreCase)) return ConditionValue.FromBool(v.Pass);
             if (string.Equals(member, "VALUE", StringComparison.OrdinalIgnoreCase) || 
-                string.Equals(member, "COUNT", StringComparison.OrdinalIgnoreCase))
+                string.Equals(member, "COUNT", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(member, "ROWCOUNT", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(member, "COLUMNCOUNT", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(member, "ROWSAFFECTED", StringComparison.OrdinalIgnoreCase))
             {
                 if (v.Value is null) throw new InvalidOperationException($"{name}.Value is not available");
                 return ConditionValue.FromNumber(v.Value.Value);

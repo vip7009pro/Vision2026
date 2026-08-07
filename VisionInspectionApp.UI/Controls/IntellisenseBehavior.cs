@@ -550,6 +550,24 @@ public static class IntellisenseBehavior
             };
         }
 
+        if (string.Equals(type, "DbNode", StringComparison.OrdinalIgnoreCase) || 
+            string.Equals(type, "Db", StringComparison.OrdinalIgnoreCase) || 
+            string.Equals(type, "ReadDB", StringComparison.OrdinalIgnoreCase) || 
+            string.Equals(type, "WriteDB", StringComparison.OrdinalIgnoreCase) || 
+            toolToken.StartsWith("DB", StringComparison.OrdinalIgnoreCase))
+        {
+            return new List<IntellisenseItem>
+            {
+                new("Value", "Value", "Giá trị ô trích xuất (Scalar/Format)", "⚡", false),
+                new("Text", "Text", "Nội dung văn bản kết quả CSDL", "⚡", false),
+                new("Pass", "Pass", "Trạng thái thực thi CSDL OK/NG (bool: true/false)", "⚡", false),
+                new("Success", "Success", "Trạng thái thực thi CSDL (1/0)", "⚡", false),
+                new("RowCount", "RowCount", "Số dòng dữ liệu trả về (Read DB)", "⚡", false),
+                new("ColumnCount", "ColumnCount", "Số cột dữ liệu trả về (Read DB)", "⚡", false),
+                new("RowsAffected", "RowsAffected", "Số dòng bị thay đổi (Write DB)", "⚡", false)
+            };
+        }
+
         if (string.Equals(type, "Condition", StringComparison.OrdinalIgnoreCase))
         {
             return new List<IntellisenseItem>

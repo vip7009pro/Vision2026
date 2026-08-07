@@ -459,6 +459,20 @@
   - Chặn triệt để các lệnh phá hủy CSDL cực kỳ nguy hiểm (`DROP TABLE`, `DROP DATABASE`, `TRUNCATE`, `ALTER`) trên tất cả các chế độ.
   - Ở chế độ **Read DB**: Chặn 100% các câu lệnh thay đổi dữ liệu (`DELETE`, `UPDATE`, `INSERT`, `DROP`, `TRUNCATE`). Chỉ cho phép các lệnh truy vấn đọc `SELECT`, `EXPLAIN`, `WITH`, `EXEC`.
   - Ở chế độ **Write DB**: Bắt buộc lệnh `DELETE` và `UPDATE` phải chứa mệnh đề **`WHERE`** (chặn hành vi xóa/sửa nhầm toàn bộ bảng CSDL), đồng thời người dùng phải chủ động tích chọn ô CheckBox **`🔒 Cho phép câu lệnh UPDATE / DELETE (Bắt buộc có WHERE)`** trên Properties Panel thì lệnh mới được phép thực thi.
+- **Tích hợp Inject Kết Quả DBNode vào Tool Text và Tool Condition**:
+  - Bổ sung ánh xạ kết quả thực thi `DbResult` vào `ConditionEvaluator.BuildVariableMap` trong `Class1.cs`.
+  - Cho phép Tool Text hiển thị / thay thế động các token như: `{DB1.Value}`, `{DB1.Text}`, `{DB1.RowCount}`, `{DB1.ColumnCount}`, `{DB1.RowsAffected}`, `{DB1.Success}`, `{DB1.Pass}`, cũng như từng tên cột CSDL cụ thể (ví dụ `{DB1.Status}`, `{DB1.PartNumber}`, `{DB1.Barcode}`).
+  - Cho phép Tool Condition đánh giá các biểu thức logic liên quan đến CSDL (ví dụ `DB1.Pass == true`, `DB1.RowCount > 0`, `DB1.Status == 'PASS'`).
+  - Bổ sung Intellisense gợi ý thuộc tính của `DbNode` trong `IntellisenseBehavior.cs`.
+- **Khắc Phục Triệt Để Hiển Thị Giá Trị DB `{DB1.Text}` (Sửa lỗi gốc DI Container) & Nút Bật/Tắt Kích Hoạt `DbNode`**:
+  - **Phát hiện Nguyên nhân Gốc (Root Cause)**: Trong `App.xaml.cs`, dịch vụ `IDbManagerService` được đăng ký trong DI Container **sau** `IInspectionService`. Do đó khi DI khởi tạo `InspectionService`, tham số `dbManager` bị truyền thành `null`, dẫn tới `ExecuteDbNodes` lập tức bỏ qua và không thực thi bất kỳ truy vấn CSDL nào, làm kết quả `result.DbResults` luôn rỗng.
+  - **Sửa Lỗi DI & Truyền Nối Dịch Vụ**:
+    - Đã di chuyển đăng ký `IDbManagerService` lên trước `IInspectionService` trong `App.xaml.cs`.
+    - Bổ sung tham số `dbManagerOverride` cho hàm `Inspect` trong `IInspectionService` & `InspectionService`, đồng thời truyền trực tiếp `_dbManagerService` từ `ToolEditorViewModel` vào `Inspect()`, đảm bảo `DbManagerService` luôn khả dụng 100%.
+    - Kết quả: Khi chạy Flow, các `DbNode` thực thi chính xác, kết quả được nạp vào `result.DbResults` và thay thế hoàn hảo token `{DB1.Text}`, `{DB1.Value}`, `{DB1.Status}`,... trên cả **ResultView Preview UI** và **Ảnh xuất đĩa ImageOutput**.
+  - **Bổ sung Nút Bật/Tắt Kích Hoạt `DbNode`**:
+    - Bổ sung ô CheckBox **`⚡ Kích hoạt DbNode`** tại Properties Panel của `DbNode` trong `ToolEditorView.xaml`.
+    - Ánh xạ thuộc tính `Db_Enable` với `_selectedDbNode.Enable`. Cho phép bật/tắt kích hoạt thực thi từng `DbNode` khi chạy flow mà không cần phải xóa node khỏi đồ thị.
 - Biên dịch ứng dụng thành công 100%: **`0 Error(s)`**, **`44 Warning(s)`**.
 
 ## Encoding

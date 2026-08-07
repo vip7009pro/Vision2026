@@ -1981,7 +1981,7 @@ namespace VisionInspectionApp.UI.ViewModels
             try
             {
                 _lastRunError = null;
-                _lastRun = _inspectionService.Inspect(mat, _config);
+                _lastRun = _inspectionService.Inspect(mat, _config, _dbManagerService);
                 __sw.Stop();
 
                 if (_lastRun != null)

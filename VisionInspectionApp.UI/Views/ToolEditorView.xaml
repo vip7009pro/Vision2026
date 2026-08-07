@@ -2851,6 +2851,8 @@
                     </StackPanel>
                 </Border>
 
+                <CheckBox Content="⚡ Kích hoạt DbNode" IsChecked="{Binding Db_Enable, UpdateSourceTrigger=PropertyChanged}" Margin="0,2,0,6" FontWeight="Bold" Foreground="{DynamicResource TextBrush}" ToolTip="Tích chọn để kích hoạt thực thi node CSDL này khi chạy flow. Bỏ tích chọn để tạm ngắt kích hoạt mà không cần xóa node."/>
+
                 <Grid Margin="0,2">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="100"/>

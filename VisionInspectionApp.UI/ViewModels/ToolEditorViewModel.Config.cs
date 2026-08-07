@@ -273,6 +273,7 @@ namespace VisionInspectionApp.UI.ViewModels
             _config.CircleFinders.RemoveAll(x => !validRefNames.Contains(x.Name));
             _config.Diameters.RemoveAll(x => !validRefNames.Contains(x.Name));
             _config.CodeDetections.RemoveAll(x => !validRefNames.Contains(x.Name));
+            _config.DbNodes?.RemoveAll(x => !validRefNames.Contains(x.RefName));
             _config.ToolGraph.Nodes.Clear();
             foreach (var n in Nodes)
             {

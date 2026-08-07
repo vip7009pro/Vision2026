@@ -44,6 +44,10 @@ public partial class App : System.Windows.Application
                 services.AddSingleton<DistanceCalculator>();
                 services.AddSingleton<LineDetector>();
                 services.AddSingleton<IDefectDetector, DefectDetector>();
+
+                // Database Framework
+                services.AddSingleton<Application.DB.Services.IDbManagerService, Application.DB.Services.DbManagerService>();
+
                 services.AddSingleton<IInspectionService, InspectionService>();
 
                 services.AddSingleton<UndoRedoManager>();
@@ -60,9 +64,6 @@ public partial class App : System.Windows.Application
                 services.AddTransient<ViewModels.PLC.PlcManagerViewModel>();
                 services.AddTransient<ViewModels.PLC.PlcMonitorViewModel>();
                 services.AddTransient<ViewModels.PLC.PlcBrowserViewModel>();
-
-                // Database Framework
-                services.AddSingleton<Application.DB.Services.IDbManagerService, Application.DB.Services.DbManagerService>();
 
                 // Legacy PLC (MX Component)
                 services.AddSingleton<IPlcClient, MxComponentPlcClient>();

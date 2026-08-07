@@ -167,13 +167,13 @@ public class DbManagerService : IDbManagerService
         }
     }
 
-    public async Task<(bool Success, int RowsAffected, string ErrorMessage)> ExecuteNonQueryAsync(string dbIdOrName, string sqlQuery, int timeoutSeconds = 3)
+    public async Task<(bool Success, int RowsAffected, string ErrorMessage)> ExecuteNonQueryAsync(string dbIdOrName, string sqlQuery, int timeoutSeconds = 1)
     {
         var db = GetDatabase(dbIdOrName);
         if (db == null) return (false, 0, $"Database '{dbIdOrName}' not found.");
         if (!db.IsEnabled) return (false, 0, $"Database '{db.Name}' is disabled.");
 
-        int effectiveTimeout = Math.Clamp(timeoutSeconds > 0 ? timeoutSeconds : db.ConnectionTimeout, 1, 5);
+        int effectiveTimeout = Math.Clamp(timeoutSeconds > 0 ? timeoutSeconds : 1, 1, 3);
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(effectiveTimeout));
 
         try
@@ -199,13 +199,13 @@ public class DbManagerService : IDbManagerService
         }
     }
 
-    public async Task<(bool Success, DataTable? Table, string ErrorMessage)> ExecuteQueryAsync(string dbIdOrName, string sqlQuery, int timeoutSeconds = 3)
+    public async Task<(bool Success, DataTable? Table, string ErrorMessage)> ExecuteQueryAsync(string dbIdOrName, string sqlQuery, int timeoutSeconds = 1)
     {
         var db = GetDatabase(dbIdOrName);
         if (db == null) return (false, null, $"Database '{dbIdOrName}' not found.");
         if (!db.IsEnabled) return (false, null, $"Database '{db.Name}' is disabled.");
 
-        int effectiveTimeout = Math.Clamp(timeoutSeconds > 0 ? timeoutSeconds : db.ConnectionTimeout, 1, 5);
+        int effectiveTimeout = Math.Clamp(timeoutSeconds > 0 ? timeoutSeconds : 1, 1, 3);
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(effectiveTimeout));
 
         try
