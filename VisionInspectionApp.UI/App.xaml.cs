@@ -69,11 +69,15 @@ public partial class App : System.Windows.Application
                 services.AddSingleton<IPlcClient, MxComponentPlcClient>();
                 services.AddSingleton<PlcOrchestratorService>();
 
+                // OQC Framework
+                services.AddSingleton<Application.OQC.IOqcScannerService, Application.OQC.OqcScannerService>();
+
                 services.AddSingleton<TeachViewModel>();
                 services.AddSingleton<ToolEditorViewModel>();
                 services.AddSingleton<CalibrationViewModel>();
                 services.AddSingleton<ManualInspectionViewModel>();
                 services.AddSingleton<InspectionViewModel>();
+                services.AddSingleton<OqcScannerViewModel>();
                 services.AddSingleton<LiveCameraViewModel>();
                 services.AddSingleton<CameraSettingsViewModel>();
                 services.AddSingleton<MainWindowViewModel>();

@@ -1,0 +1,99 @@
+<Window x:Class="VisionInspectionApp.UI.Views.OQC.ProductAssignDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Gán Mã Sản Phẩm cho Tệp Job"
+        Height="650" Width="850"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="CanResize"
+        Background="{DynamicResource WindowBackgroundBrush}"
+        Foreground="{DynamicResource TextBrush}">
+
+    <Grid Margin="16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <!-- Header -->
+        <Border Grid.Row="0" Margin="0,0,0,12" Padding="10" Background="{DynamicResource HeaderBackgroundBrush}" CornerRadius="6">
+            <StackPanel>
+                <TextBlock Text="📋 Gán Mã Sản Phẩm vào Tệp Job (Database Mapping)" FontSize="16" FontWeight="Bold" Foreground="{DynamicResource TextBrush}" />
+                <TextBlock Text="Chọn tệp Job và tra cứu sản phẩm từ cơ sở dữ liệu để thực hiện liên kết." FontSize="12" Foreground="{DynamicResource TextMutedBrush}" Margin="0,4,0,0" />
+            </StackPanel>
+        </Border>
+
+        <!-- Job File Selector -->
+        <Grid Grid.Row="1" Margin="0,0,0,12">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="130" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="90" />
+            </Grid.ColumnDefinitions>
+            <TextBlock Text="Tệp Job liên kết:" VerticalAlignment="Center" FontWeight="Bold" />
+            <TextBox Grid.Column="1" Text="{Binding AssignJobFilePath, UpdateSourceTrigger=PropertyChanged}" VerticalAlignment="Center" Margin="0,0,8,0" />
+            <Button Grid.Column="2" Content="📁 Chọn Job" Click="BrowseJobFile_Click" Height="28" />
+        </Grid>
+
+        <!-- Product Browser (DataGrid & Search) -->
+        <GroupBox Grid.Row="2" Header="Danh sách sản phẩm từ DB (Phân trang)" Padding="8" Foreground="{DynamicResource TextBrush}">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+
+                <!-- Search Bar -->
+                <DockPanel Grid.Row="0" Margin="0,0,0,8" LastChildFill="True">
+                    <Button Content="🔍 Tìm kiếm" Command="{Binding SearchProductsCommand}" DockPanel.Dock="Right" Width="100" Margin="8,0,0,0" Height="28" />
+                    <TextBox Text="{Binding ProductSearchText, UpdateSourceTrigger=PropertyChanged}" Height="28" VerticalContentAlignment="Center">
+                        <TextBox.InputBindings>
+                            <KeyBinding Key="Enter" Command="{Binding SearchProductsCommand}" />
+                        </TextBox.InputBindings>
+                    </TextBox>
+                </DockPanel>
+
+                <!-- DataGrid (Virtualized for High Performance) -->
+                <DataGrid Grid.Row="1"
+                          ItemsSource="{Binding ProductListTable}"
+                          SelectedItem="{Binding SelectedProductRow}"
+                          AutoGenerateColumns="True"
+                          IsReadOnly="True"
+                          SelectionMode="Single"
+                          CanUserAddRows="False"
+                          CanUserDeleteRows="False"
+                          EnableRowVirtualization="True"
+                          EnableColumnVirtualization="True"
+                          VirtualizingStackPanel.IsVirtualizing="True"
+                          VirtualizingStackPanel.VirtualizationMode="Recycling"
+                          GridLinesVisibility="Horizontal"
+                          HeadersVisibility="Column"
+                          Background="{DynamicResource PanelBackgroundBrush}"
+                          Foreground="{DynamicResource TextBrush}">
+                </DataGrid>
+            </Grid>
+        </GroupBox>
+
+        <!-- Pagination Controls -->
+        <Border Grid.Row="3" Margin="0,8,0,0" Padding="4">
+            <DockPanel LastChildFill="False">
+                <Button Content="◀ Trang trước" Command="{Binding PrevPageCommand}" DockPanel.Dock="Left" Width="110" Height="26" />
+                <Button Content="Trang sau ▶" Command="{Binding NextPageCommand}" DockPanel.Dock="Right" Width="110" Height="26" />
+                <TextBlock Text="{Binding PageIndicatorText}" VerticalAlignment="Center" HorizontalAlignment="Center" FontWeight="SemiBold" FontSize="13" />
+            </DockPanel>
+        </Border>
+
+        <!-- Action Buttons -->
+        <Border Grid.Row="4" Margin="0,12,0,0" Padding="0,8,0,0" BorderThickness="0,1,0,0" BorderBrush="{DynamicResource BorderBrush}">
+            <DockPanel LastChildFill="False">
+                <TextBlock Text="{Binding AssignStatusMessage}" Foreground="{Binding AssignStatusBrush}" VerticalAlignment="Center" FontWeight="SemiBold" MaxWidth="450" TextTrimming="CharacterEllipsis" DockPanel.Dock="Left" />
+                <StackPanel Orientation="Horizontal" DockPanel.Dock="Right">
+                    <Button Content="✅ Gán sản phẩm đã chọn" Command="{Binding AssignProductCommand}" Width="190" Height="32" Margin="0,0,8,0" IsDefault="True" />
+                    <Button Content="Đóng" Click="Close_Click" Width="90" Height="32" IsCancel="True" />
+                </StackPanel>
+            </DockPanel>
+        </Border>
+    </Grid>
+</Window>

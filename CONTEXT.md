@@ -473,7 +473,15 @@
   - **Bổ sung Nút Bật/Tắt Kích Hoạt `DbNode`**:
     - Bổ sung ô CheckBox **`⚡ Kích hoạt DbNode`** tại Properties Panel của `DbNode` trong `ToolEditorView.xaml`.
     - Ánh xạ thuộc tính `Db_Enable` với `_selectedDbNode.Enable`. Cho phép bật/tắt kích hoạt thực thi từng `DbNode` khi chạy flow mà không cần phải xóa node khỏi đồ thị.
-- Biên dịch ứng dụng thành công 100%: **`0 Error(s)`**, **`44 Warning(s)`**.
+- **Tích hợp Tính Năng OQC Scanner (Quét QR/Barcode → Tự động nạp Job từ DB & Ghi Log kết quả)**:
+  - **Tab OQC Scanner**: Bổ sung tab riêng **OQC Scanner** trên MainWindow với giao diện hiện đại, ô nhập mã scan tự động focus, thẻ hiển thị thông tin sản phẩm/job hiện tại và bảng lịch sử quét mã.
+  - **Tra cứu Job tự động**: Tra cứu đường dẫn file Job từ DB theo truy vấn SQL linh hoạt (chèn token `{ScannedCode}`). Cho phép cấu hình thư mục gốc `JobRootDirectory` để tự động ghép nối nếu DB chỉ lưu tên tệp tương đối.
+  - **Giao diện Gán Mã ↔ Job (Database Mapping)**: Thiết kế cửa sổ **`ProductAssignDialog.xaml`** cho phép gán/cập nhật liên kết giữa mã sản phẩm và file `.job` (truy vấn SQL Upsert do người dùng tự tùy chỉnh).
+  - **Duyệt sản phẩm Phân Trang Server-Side**: Trình duyệt sản phẩm trong dialog gán hỗ trợ phân trang SQL (`OFFSET-FETCH` / `LIMIT-OFFSET`) kết hợp `DataGrid` ảo hóa (`VirtualizingStackPanel.IsVirtualizing="True"`), đảm bảo tìm kiếm và hiển thị siêu tốc đối với bảng dữ liệu lên tới hàng trăm nghìn sản phẩm mà không gây treo app.
+  - **Tự động Ghi Log Kết quả kiểm tra OQC**: Khi kết thúc kiểm tra, tự động trích xuất thông tin kết quả (PASS/NG, lý do lỗi chi tiết) và thực thi câu lệnh SQL log do người dùng cấu hình (chèn các token `{ScannedCode}`, `{JobFilePath}`, `{PassBit}`, `{InspectResult}`, `{NgReasons}`).
+  - **Đồng bộ Kết quả Kiểm tra thời gian thực & Hiển thị Chi tiết Tool NG**: Đã điều chỉnh thứ tự khởi tạo `CurrentProductName` & thêm `AddHistory` trước khi nạp Job vào Tool Editor để không bỏ lỡ sự kiện; bổ sung hàm `ExtractDetailedReasons` trích xuất toàn bộ lý do và thông số đo của từng tool bị NG (ví dụ: `Distance [Dist1] NG: 15.2mm (Nominal: 10.0mm)`, `Origin NG`, `SurfaceCompare NG`), hiển thị nổi bật mã màu Xanh (PASS) / Đỏ (NG) trên DataGrid OQC Scan History kèm ToolTip.
+  - **Khắc phục trạng thái hiển thị "Đang nạp tệp Job..."**: Bổ sung xử lý cập nhật `StatusMessage` & kích hoạt `HandleInspectionCompletedAsync` trực tiếp ngay sau khi `LoadJobFromFile` hoàn tất; đồng thời cải tiến `LastResult` property setter trong `ToolEditorViewModel` để luôn thông báo sự kiện kiểm tra kể cả khi kết quả trả về cùng instance.
+- Biên dịch ứng dụng thành công 100%: **`0 Error(s)`**, **`36 Warning(s)`**.
 
 ## Encoding
 
@@ -488,6 +496,7 @@
 - [x] Tối ưu Scan PLC theo điều kiện & Tích hợp Node `ResultTransfer` truyền kết quả OK/NG, tọa độ sau khi hoàn thành Job Flow.
 - [x] Triệt tiêu tiến trình chạy ngầm Zombie Instance khi đóng app (Tự động dừng Polling, giải phóng COM/Camera & gọi Environment.Exit(0)).
 - [x] Xóa 2 Tab không sử dụng Batch Processing & PLC; Tích hợp DB Manager và Node Read/Write DB linh hoạt dữ liệu output.
+- [x] Triển khai hệ thống OQC Scanner (Quét QR/Barcode tự động tra cứu nạp Job từ DB, phân trang server-side chọn sản phẩm & tự động ghi log kết quả kiểm tra lên DB).
 - Kiểm thử đầy đủ module Camera Settings với Basler/GigE và luồng UDP/RTSP.
 - Chạy kiểm thử đầu-cuối cho execution pipeline của Node Graph.
 

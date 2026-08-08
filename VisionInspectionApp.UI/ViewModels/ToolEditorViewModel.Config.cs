@@ -128,6 +128,68 @@ namespace VisionInspectionApp.UI.ViewModels
             _config.ToolGraph.Edges = Edges.Select(e => new ToolGraphEdge { FromNodeId = e.FromNodeId, ToNodeId = e.ToNodeId, FromPort = e.FromPort, ToPort = e.ToPort }).ToList();
         }
     
+        public void LoadJobFromFile(string filePath)
+        {
+            if (string.IsNullOrWhiteSpace(filePath) || !File.Exists(filePath))
+            {
+                return;
+            }
+
+            ClearActiveGraph();
+            try
+            {
+                _config = _jobService.LoadJob(filePath, out var tempDir);
+                CurrentJobFilePath = filePath;
+                CurrentTempWorkingDir = tempDir;
+                ProductCode = _config.ProductCode;
+                Nodes.Clear();
+                Edges.Clear();
+                foreach (var n in _config.ToolGraph.Nodes)
+                {
+                    var vm = new ToolGraphNodeViewModel
+                    {
+                        Id = n.Id,
+                        Type = n.Type,
+                        RefName = n.RefName,
+                        X = n.X,
+                        Y = n.Y,
+                        InputCount = n.InputCount
+                    };
+                    vm.PropertyChanged += Node_PropertyChanged;
+                    Nodes.Add(vm);
+                }
+    
+                foreach (var e in _config.ToolGraph.Edges)
+                {
+                    var from = Nodes.FirstOrDefault(x => string.Equals(x.Id, e.FromNodeId, StringComparison.OrdinalIgnoreCase));
+                    var to = Nodes.FirstOrDefault(x => string.Equals(x.Id, e.ToNodeId, StringComparison.OrdinalIgnoreCase));
+                    if (from is null || to is null)
+                    {
+                        continue;
+                    }
+    
+                    Edges.Add(new ToolGraphEdgeViewModel(from, to, e.FromPort, e.ToPort));
+                }
+
+                SelectedNode = Nodes.Count > 0 ? Nodes[0] : null;
+                RaiseToolPropertyPanelsChanged();
+                RefreshPreviews();
+                IsDirty = false;
+                if (System.Windows.Application.Current?.MainWindow != null)
+                {
+                    System.Windows.Application.Current.MainWindow.Title = "CMS VINA VISION SYSTEM - " + Path.GetFileName(CurrentJobFilePath);
+                }
+
+                // Trigger inspection execution with new job
+                OnRunOnceClicked();
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Failed to load job: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                ClearActiveGraph();
+            }
+        }
+
         private void OpenJob()
         {
             var dialog = new OpenFileDialog
@@ -138,56 +200,7 @@ namespace VisionInspectionApp.UI.ViewModels
 
             if (dialog.ShowDialog() == true)
             {
-                ClearActiveGraph();
-                try
-                {
-                    _config = _jobService.LoadJob(dialog.FileName, out var tempDir);
-                    CurrentJobFilePath = dialog.FileName;
-                    CurrentTempWorkingDir = tempDir;
-                    ProductCode = _config.ProductCode;
-                    Nodes.Clear();
-                    Edges.Clear();
-                    foreach (var n in _config.ToolGraph.Nodes)
-                    {
-                        var vm = new ToolGraphNodeViewModel
-                        {
-                            Id = n.Id,
-                            Type = n.Type,
-                            RefName = n.RefName,
-                            X = n.X,
-                            Y = n.Y,
-                            InputCount = n.InputCount
-                        };
-                        vm.PropertyChanged += Node_PropertyChanged;
-                        Nodes.Add(vm);
-                    }
-        
-                    foreach (var e in _config.ToolGraph.Edges)
-                    {
-                        var from = Nodes.FirstOrDefault(x => string.Equals(x.Id, e.FromNodeId, StringComparison.OrdinalIgnoreCase));
-                        var to = Nodes.FirstOrDefault(x => string.Equals(x.Id, e.ToNodeId, StringComparison.OrdinalIgnoreCase));
-                        if (from is null || to is null)
-                        {
-                            continue;
-                        }
-        
-                        Edges.Add(new ToolGraphEdgeViewModel(from, to, e.FromPort, e.ToPort));
-                    }
-
-                    SelectedNode = Nodes.Count > 0 ? Nodes[0] : null;
-                    RaiseToolPropertyPanelsChanged();
-                    RefreshPreviews();
-                    IsDirty = false;
-                    if (System.Windows.Application.Current?.MainWindow != null)
-                    {
-                        System.Windows.Application.Current.MainWindow.Title = "CMS VINA VISION SYSTEM - " + Path.GetFileName(CurrentJobFilePath);
-                    }
-                }
-                catch (Exception ex)
-                {
-                    MessageBox.Show($"Failed to load job: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
-                    ClearActiveGraph();
-                }
+                LoadJobFromFile(dialog.FileName);
             }
         }
     

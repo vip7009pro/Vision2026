@@ -4,13 +4,17 @@ using CommunityToolkit.Mvvm.Input;
 
 namespace VisionInspectionApp.UI.ViewModels;
 
-public sealed class MainWindowViewModel : ObservableObject
+public sealed partial class MainWindowViewModel : ObservableObject
 {
+    [ObservableProperty]
+    private int _selectedTabIndex = 3; // Default to OQC Scanner tab or Tool Editor tab
+
     public MainWindowViewModel(
         ToolEditorViewModel toolEditor,
         CalibrationViewModel calibration,
         ManualInspectionViewModel manualInspection,
         InspectionViewModel inspection,
+        OqcScannerViewModel oqcScanner,
         LiveCameraViewModel liveCamera,
         CameraSettingsViewModel cameraSettings)
     {
@@ -18,6 +22,8 @@ public sealed class MainWindowViewModel : ObservableObject
         Calibration = calibration;
         ManualInspection = manualInspection;
         Inspection = inspection;
+        OqcScanner = oqcScanner;
+        OqcScanner.RequestSwitchTab = idx => SelectedTabIndex = idx;
         LiveCamera = liveCamera;
         CameraSettings = cameraSettings;
 
@@ -43,6 +49,8 @@ public sealed class MainWindowViewModel : ObservableObject
     public ManualInspectionViewModel ManualInspection { get; }
 
     public InspectionViewModel Inspection { get; }
+
+    public OqcScannerViewModel OqcScanner { get; }
 
     public LiveCameraViewModel LiveCamera { get; }
 

@@ -48,10 +48,9 @@ namespace VisionInspectionApp.UI.ViewModels
             get => _lastResult;
             set
             {
-                if (SetProperty(ref _lastResult, value))
-                {
-                    OnLastResultChanged(value);
-                }
+                _lastResult = value;
+                OnPropertyChanged(nameof(LastResult));
+                OnLastResultChanged(value);
             }
         }
 
@@ -150,9 +149,16 @@ namespace VisionInspectionApp.UI.ViewModels
 
         private bool _surfaceCompareDebugRebuildInProgress;
 
+        public event Func<InspectionResult, VisionConfig, Task>? InspectionCompletedAsync;
+
         private void OnLastResultChanged(InspectionResult? value)
         {
             RefreshInspectionDashboard(value);
+
+            if (value != null && _config != null && InspectionCompletedAsync != null)
+            {
+                _ = InspectionCompletedAsync.Invoke(value, _config);
+            }
         }
 
         private void RefreshInspectionDashboard(InspectionResult? res)

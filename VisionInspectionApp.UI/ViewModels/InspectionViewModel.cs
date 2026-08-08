@@ -286,18 +286,25 @@ public sealed partial class InspectionViewModel : ObservableObject
 
 
 
-    partial void OnLastResultChanged(InspectionResult? value)
+    public event Func<InspectionResult, VisionConfig, Task>? InspectionCompletedAsync;
 
+    public void SetConfig(VisionConfig config)
     {
+        _config = config;
+        RefreshOverlayItems();
+    }
 
+    partial void OnLastResultChanged(InspectionResult? value)
+    {
         RefreshSpecResults();
-
         RefreshCodeDetectionResults();
-
         RebuildSurfaceCompareDebugSelector();
-
         UpdateResultSummary(value);
 
+        if (value != null && _config != null && InspectionCompletedAsync != null)
+        {
+            _ = InspectionCompletedAsync.Invoke(value, _config);
+        }
     }
 
 

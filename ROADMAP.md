@@ -95,6 +95,12 @@ Lộ trình tích hợp tính năng Chụp ảnh từ camera và hỗ trợ các
   - Xây dựng cửa sổ **`DbManagerWindow.xaml`** để cấu hình CSDL, lưu trữ và nút bấm **⚡ Test Connection** bất đồng bộ.
   - Tạo Canvas Node **`DbNode`** tích hợp vào Tool Editor Graph hỗ trợ chế độ `Read` / `Write`, thời điểm thực thi `Before Flow` / `After Flow`, điều kiện `Condition` (`Always`, `OnPass`, `OnFail`), truy vấn SQL động chèn được thuộc tính các tool khác `{ToolName.Prop}`.
   - Hỗ trợ lựa chọn linh hoạt định dạng trích xuất kết quả `Read DB`: `FirstCell` (Ô 0,0), `SpecificCell` (Chỉ định hàng N, cột Name/Idx), `ColumnJoin` (Gộp cột theo separator), `FullTableCsv` (Bảng CSV), `FullTableJson` (Bảng JSON).
+- [x] Task 108: Triển khai tính năng **OQC Scanner (Quét QR/Barcode → Tự động nạp Job từ DB & Ghi Log kết quả)**:
+  - Thêm tab mới **OQC Scanner** trên MainWindow.
+  - Tự động tra cứu đường dẫn tệp Job từ mã QR/Barcode scan được qua truy vấn SQL linh hoạt (hỗ trợ `{ScannedCode}` và thư mục gốc tệp Job `JobRootDirectory`).
+  - Hỗ trợ giao diện **Gán mã sản phẩm ↔ Tệp Job** (Upsert SQL query) kèm trình duyệt danh sách sản phẩm phân trang server-side (`OFFSET-FETCH`) và DataGrid ảo hóa hiệu năng cao cho hàng trăm nghìn dòng.
+  - Tự động nạp Job và cập nhật giao diện kiểm tra.
+  - Hỗ trợ tùy chỉnh câu lệnh ghi log kết quả kiểm tra (PASS/NG, lý do lỗi) lên cơ sở dữ liệu sau khi kết thúc luồng inspection.
 
 
 

@@ -1,0 +1,139 @@
+<UserControl x:Class="VisionInspectionApp.UI.Views.OQC.OqcScannerView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
+             mc:Ignorable="d" 
+             d:DesignHeight="700" d:DesignWidth="1100">
+
+    <UserControl.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVis" />
+        <Style x:Key="BoldStyle" TargetType="TextBlock">
+            <Setter Property="FontWeight" Value="Bold" />
+        </Style>
+    </UserControl.Resources>
+
+    <Grid Margin="16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <!-- Top Header & Action Bar -->
+        <Border Grid.Row="0" Margin="0,0,0,16" Padding="12,10" Background="{DynamicResource HeaderBackgroundBrush}" CornerRadius="8">
+            <DockPanel LastChildFill="True">
+                <StackPanel Orientation="Horizontal" DockPanel.Dock="Right">
+                    <Button Content="👁️ Xem Tool Editor" Command="{Binding SwitchToToolEditorCommand}" Width="150" Height="34" Margin="0,0,8,0" ToolTip="Chuyển sang Tab Tool Editor để xem Graph và kết quả kiểm tra chi tiết" />
+                    <Button Content="📋 Gán Mã ↔ Job" Command="{Binding OpenProductAssignCommand}" Width="140" Height="34" Margin="0,0,8,0" />
+                    <Button Content="📁 Mở Job thủ công" Command="{Binding ManualOpenJobCommand}" Width="140" Height="34" Margin="0,0,8,0" />
+                    <Button Content="⚙ Cấu hình DB" Command="{Binding OpenSettingsCommand}" Width="120" Height="34" />
+                </StackPanel>
+
+                <StackPanel VerticalAlignment="Center">
+                    <TextBlock Text="📷 OQC PRODUCT SCANNER &amp; AUTOMATIC JOB SWITCHER" FontSize="18" FontWeight="Bold" Foreground="{DynamicResource TextBrush}" />
+                    <TextBlock Text="Quét mã QR/Barcode sản phẩm để tự động tìm kiếm &amp; nạp cấu hình Job kiểm tra tương ứng từ Database." FontSize="12" Foreground="{DynamicResource TextMutedBrush}" Margin="0,2,0,0" />
+                </StackPanel>
+            </DockPanel>
+        </Border>
+
+        <!-- Barcode/QR Input Section -->
+        <Border Grid.Row="1" Margin="0,0,0,16" Padding="16" Background="{DynamicResource PanelBackgroundBrush}" BorderThickness="1" BorderBrush="{DynamicResource BorderBrush}" CornerRadius="8">
+            <StackPanel>
+                <TextBlock Text="NHẬP HOẶC QUÉT MÃ SẢN PHẨM (QR / BARCODE):" FontSize="12" FontWeight="Bold" Foreground="{DynamicResource TextMutedBrush}" Margin="0,0,0,8" />
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="120" />
+                    </Grid.ColumnDefinitions>
+
+                    <TextBox x:Name="ScanInputTextBox"
+                             Grid.Column="0"
+                             Text="{Binding ScannedCode, UpdateSourceTrigger=PropertyChanged}"
+                             FontSize="22" FontWeight="Bold" Padding="8,6"
+                             VerticalContentAlignment="Center"
+                             IsEnabled="{Binding IsScanning, Converter={StaticResource BoolToVis}, ConverterParameter=Inverse}"
+                             Margin="0,0,8,0">
+                        <TextBox.InputBindings>
+                            <KeyBinding Key="Enter" Command="{Binding ScanCommand}" />
+                        </TextBox.InputBindings>
+                    </TextBox>
+
+                    <Button Grid.Column="1"
+                            Content="🔍 QUÉT / TIM"
+                            Command="{Binding ScanCommand}"
+                            FontSize="14" FontWeight="Bold"
+                            Height="44" />
+                </Grid>
+            </StackPanel>
+        </Border>
+
+        <!-- Status Card -->
+        <Border Grid.Row="2" Margin="0,0,0,16" Padding="16" Background="{DynamicResource PanelBackgroundBrush}" BorderThickness="2" BorderBrush="{Binding StatusBrush}" CornerRadius="8">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+
+                <StackPanel Grid.Column="0" Margin="0,0,24,0">
+                    <TextBlock Text="SẢN PHẨM HIỆN TẠI:" FontSize="11" FontWeight="Bold" Foreground="{DynamicResource TextMutedBrush}" />
+                    <TextBlock Text="{Binding CurrentProductName}" FontSize="20" FontWeight="Bold" Foreground="{DynamicResource TextBrush}" Margin="0,4,0,0" />
+                </StackPanel>
+
+                <StackPanel Grid.Column="1">
+                    <TextBlock Text="TRẠNG THÁI &amp; TỆP JOB ĐANG NẠP:" FontSize="11" FontWeight="Bold" Foreground="{DynamicResource TextMutedBrush}" />
+                    <TextBlock Text="{Binding StatusMessage}" FontSize="15" FontWeight="SemiBold" Foreground="{Binding StatusBrush}" Margin="0,4,0,4" TextWrapping="Wrap" />
+                    <TextBlock Text="{Binding CurrentJobFilePath, StringFormat='Job: {0}'}" FontSize="12" Foreground="{DynamicResource TextMutedBrush}" TextTrimming="CharacterEllipsis" ToolTip="{Binding CurrentJobFilePath}" />
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- Scan History Table -->
+        <GroupBox Grid.Row="3" Header="Lịch sử quét mã gần nhất (Scan History Log)" Padding="8" Foreground="{DynamicResource TextBrush}">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="*" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+
+                <DataGrid Grid.Row="0"
+                          ItemsSource="{Binding ScanHistory}"
+                          AutoGenerateColumns="False"
+                          IsReadOnly="True"
+                          CanUserAddRows="False"
+                          CanUserDeleteRows="False"
+                          GridLinesVisibility="Horizontal"
+                          HeadersVisibility="Column"
+                          Background="{DynamicResource PanelBackgroundBrush}"
+                          Foreground="{DynamicResource TextBrush}">
+                    <DataGrid.Columns>
+                        <DataGridTextColumn Header="Thời gian" Binding="{Binding Time, StringFormat='HH:mm:ss dd/MM'}" Width="110" />
+                        <DataGridTextColumn Header="Mã Scan (Product)" Binding="{Binding ScannedCode}" Width="160" ElementStyle="{StaticResource BoldStyle}" />
+                        <DataGridTextColumn Header="Tệp Job" Binding="{Binding JobFilePath}" Width="160" />
+                        <DataGridTextColumn Header="Tra cứu DB" Binding="{Binding Message}" Width="110" />
+                        <DataGridTemplateColumn Header="KQ Kiểm Tra" Width="140">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate>
+                                    <TextBlock Text="{Binding InspectResult}" Foreground="{Binding ResultBrushHex}" FontWeight="Bold" VerticalAlignment="Center" HorizontalAlignment="Center" />
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                        <DataGridTextColumn Header="Chi Tiết Lỗi / Thông Số Tool" Binding="{Binding InspectDetails}" Width="*">
+                            <DataGridTextColumn.CellStyle>
+                                <Style TargetType="DataGridCell" BasedOn="{StaticResource {x:Type DataGridCell}}">
+                                    <Setter Property="ToolTip" Value="{Binding InspectDetails}" />
+                                </Style>
+                            </DataGridTextColumn.CellStyle>
+                        </DataGridTextColumn>
+                    </DataGrid.Columns>
+                </DataGrid>
+
+                <DockPanel Grid.Row="1" Margin="0,8,0,0">
+                    <Button Content="🗑️ Xóa lịch sử" Command="{Binding ClearHistoryCommand}" DockPanel.Dock="Right" Width="110" Height="26" />
+                </DockPanel>
+            </Grid>
+        </GroupBox>
+    </Grid>
+</UserControl>
