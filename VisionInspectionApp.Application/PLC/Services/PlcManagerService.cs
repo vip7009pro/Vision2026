@@ -88,7 +88,14 @@ public sealed class PlcManagerService : IPlcManagerService, IDisposable
                     t.PropertyChanged -= Item_PropertyChanged;
                 }
             }
-            if (!_isLoading) SaveGlobalConfig();
+            if (!_isLoading)
+            {
+                SaveGlobalConfig();
+                if (IsPollingActive)
+                {
+                    PollingEngine.Start(Plcs.ToList(), Tags.ToList(), GetDriver);
+                }
+            }
         };
 
         LoadGlobalConfig();
@@ -185,7 +192,8 @@ public sealed class PlcManagerService : IPlcManagerService, IDisposable
 
     public async Task<bool> WriteTagValueAsync(string plcId, string tagName, object value, CancellationToken cancellationToken = default)
     {
-        var plc = Plcs.FirstOrDefault(p => string.Equals(p.Id, plcId, StringComparison.OrdinalIgnoreCase) || string.Equals(p.Name, plcId, StringComparison.OrdinalIgnoreCase));
+        var plc = Plcs.FirstOrDefault(p => string.Equals(p.Id, plcId, StringComparison.OrdinalIgnoreCase) || string.Equals(p.Name, plcId, StringComparison.OrdinalIgnoreCase))
+                  ?? Plcs.FirstOrDefault();
         string targetPlcId = plc?.Id ?? plcId;
 
         // 1. Search by Name or Address
@@ -245,6 +253,7 @@ public sealed class PlcManagerService : IPlcManagerService, IDisposable
             {
                 Cache.Set(targetPlcId, tagName, value, TagQuality.Good);
                 if (plc != null) Cache.Set(plc.Name, tagName, value, TagQuality.Good);
+                OnTagChanged?.Invoke(this, new TagChangedEventArgs(targetPlcId, tagName, null, value, DateTime.Now));
             }
             else
             {

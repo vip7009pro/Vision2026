@@ -1,0 +1,81 @@
+<UserControl x:Class="VisionInspectionApp.UI.Views.HMI.HmiControlView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
+             mc:Ignorable="d" 
+             d:DesignHeight="100" d:DesignWidth="120">
+
+    <UserControl.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVis" />
+    </UserControl.Resources>
+
+    <Grid x:Name="RootContainer"
+          Background="Transparent"
+          PreviewMouseDown="RootContainer_PreviewMouseDown"
+          PreviewMouseUp="RootContainer_PreviewMouseUp">
+
+        <!-- Control Graphic / Vector or Custom Image -->
+        <DockPanel LastChildFill="True" Margin="4">
+
+            <!-- Top/Bottom Label -->
+            <TextBlock DockPanel.Dock="Bottom"
+                       Text="{Binding DisplayLabel}"
+                       FontSize="{Binding Model.FontSize}"
+                       Foreground="#00E5FF"
+                       FontWeight="SemiBold"
+                       HorizontalAlignment="Center"
+                       VerticalAlignment="Center"
+                       TextAlignment="Center"
+                       TextWrapping="Wrap"
+                       Margin="0,2,0,0" />
+
+            <!-- Main Graphic / Value Display -->
+            <Grid>
+                <!-- Vector or Custom Image Graphic -->
+                <Image Source="{Binding CurrentImageSource}"
+                       Stretch="Uniform"
+                       HorizontalAlignment="Center"
+                       VerticalAlignment="Center" />
+
+                <!-- Text Overlay for Numeric/Text Displays -->
+                <Border VerticalAlignment="Center"
+                        HorizontalAlignment="Center"
+                        Padding="6,3"
+                        Background="#CC000000"
+                        CornerRadius="4"
+                        BorderBrush="#44FFFFFF"
+                        BorderThickness="1">
+                    <TextBlock Text="{Binding CurrentDisplayValue}"
+                               FontSize="{Binding Model.FontSize}"
+                               FontWeight="Bold"
+                               Foreground="#00FF66"
+                               HorizontalAlignment="Center"
+                               VerticalAlignment="Center" />
+                </Border>
+            </Grid>
+        </DockPanel>
+
+        <!-- Selection Highlight Border (In Design Mode) -->
+        <Border BorderBrush="#1E88E5"
+                BorderThickness="2"
+                CornerRadius="2"
+                IsHitTestVisible="False">
+            <Border.Style>
+                <Style TargetType="Border">
+                    <Setter Property="Visibility" Value="Collapsed" />
+                    <Style.Triggers>
+                        <MultiDataTrigger>
+                            <MultiDataTrigger.Conditions>
+                                <Condition Binding="{Binding IsSelected}" Value="True" />
+                                <Condition Binding="{Binding IsRunMode}" Value="False" />
+                            </MultiDataTrigger.Conditions>
+                            <Setter Property="Visibility" Value="Visible" />
+                        </MultiDataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </Border.Style>
+        </Border>
+
+    </Grid>
+</UserControl>

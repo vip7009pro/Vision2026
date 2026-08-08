@@ -1,0 +1,196 @@
+<Window x:Class="VisionInspectionApp.UI.Views.HMI.HmiManagerWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
+        xmlns:views="clr-namespace:VisionInspectionApp.UI.Views.HMI"
+        mc:Ignorable="d" 
+        Title="{Binding WindowTitle}" Height="850" Width="1400"
+        WindowStartupLocation="CenterOwner"
+        Background="{DynamicResource WindowBackgroundBrush}">
+
+    <Window.InputBindings>
+        <KeyBinding Key="C" Modifiers="Control" Command="{Binding CopyCommand}" />
+        <KeyBinding Key="V" Modifiers="Control" Command="{Binding PasteCommand}" />
+        <KeyBinding Key="Z" Modifiers="Control" Command="{Binding UndoCommand}" />
+        <KeyBinding Key="Y" Modifiers="Control" Command="{Binding RedoCommand}" />
+        <KeyBinding Key="Z" Modifiers="Control+Shift" Command="{Binding RedoCommand}" />
+        <KeyBinding Key="Delete" Command="{Binding DeleteSelectedControlsCommand}" />
+    </Window.InputBindings>
+
+    <Window.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVis" />
+    </Window.Resources>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <!-- Top Header Action Toolbar -->
+        <Border Grid.Row="0" Padding="12,8" Background="{DynamicResource HeaderBackgroundBrush}" BorderThickness="0,0,0,1" BorderBrush="{DynamicResource BorderBrush}">
+            <DockPanel LastChildFill="True">
+                <!-- Right Action Buttons -->
+                <StackPanel Orientation="Horizontal" DockPanel.Dock="Right">
+                    <!-- File Name Badge -->
+                    <Border Margin="0,0,12,0" Padding="10,4" Background="#22FFFFFF" CornerRadius="4" VerticalAlignment="Center">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="📄 " FontSize="12" />
+                            <TextBlock Text="{Binding CurrentFileName}" FontWeight="Bold" Foreground="{DynamicResource TextBrush}" FontSize="12" />
+                            <TextBlock Text=" *" Foreground="#FFD54F" FontWeight="Bold" FontSize="14" Visibility="{Binding IsDirty, Converter={StaticResource BoolToVis}}" Margin="2,0,0,0" ToolTip="Có thay đổi chưa lưu" />
+                        </StackPanel>
+                    </Border>
+
+                    <Button Content="💾 Lưu .HMI" Command="{Binding SaveHmiConfigCommand}" Width="100" Height="32" Margin="0,0,6,0" ToolTip="Lưu tệp thiết kế HMI (.hmi)" />
+                    <Button Content="📂 Mở .HMI" Command="{Binding LoadHmiConfigCommand}" Width="100" Height="32" Margin="0,0,12,0" ToolTip="Mở tệp thiết kế HMI (.hmi)" />
+                    
+                    <!-- Mode RUN / PAUSE Toggle Button -->
+                    <Button Command="{Binding ToggleRunModeCommand}" Width="150" Height="32" Margin="0,0,6,0"
+                            Foreground="White" FontWeight="Bold" BorderThickness="0">
+                        <Button.Style>
+                            <Style TargetType="Button">
+                                <Setter Property="Background" Value="#43A047" />
+                                <Setter Property="Content" Value="▶ VẬN HÀNH (RUN)" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding IsRunMode}" Value="True">
+                                        <Setter Property="Background" Value="#E53935" />
+                                        <Setter Property="Content" Value="⏸ TẠM DỪNG (EDIT)" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Button.Style>
+                    </Button>
+                </StackPanel>
+
+                <!-- Left Action Toolbar -->
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <Button Content="↩️ Undo" Command="{Binding UndoCommand}" IsEnabled="{Binding CanUndo}" Margin="0,0,4,0" Padding="8,4" ToolTip="Hoàn tác (Ctrl+Z)" />
+                    <Button Content="↪️ Redo" Command="{Binding RedoCommand}" IsEnabled="{Binding CanRedo}" Margin="0,0,4,0" Padding="8,4" ToolTip="Làm lại (Ctrl+Y)" />
+                    <Button Content="📋 Copy" Command="{Binding CopyCommand}" Margin="0,0,4,0" Padding="8,4" ToolTip="Sao chép (Ctrl+C)" />
+                    <Button Content="📋 Paste" Command="{Binding PasteCommand}" Margin="0,0,4,0" Padding="8,4" ToolTip="Dán phần tử (Ctrl+V)" />
+                    <Button Content="🗑️ Xóa" Command="{Binding DeleteSelectedControlsCommand}" Background="#C62828" Foreground="White" BorderThickness="0" Padding="10,4" ToolTip="Xóa các phần tử đang chọn (Delete)" />
+                </StackPanel>
+            </DockPanel>
+        </Border>
+
+        <!-- Main Body Grid: Canvas & Right Side Panel -->
+        <Grid Grid.Row="1">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="340" />
+            </Grid.ColumnDefinitions>
+
+            <!-- Center HMI Canvas Design Area -->
+            <ScrollViewer Grid.Column="0" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto">
+                <Border Background="#121212" Margin="12" CornerRadius="8" BorderThickness="1" BorderBrush="#33FFFFFF">
+                    <!-- Outer Container Canvas with Exact Width & Height -->
+                    <Canvas x:Name="HmiCanvas"
+                            Width="{Binding ScreenConfig.Width}"
+                            Height="{Binding ScreenConfig.Height}"
+                            Background="#1A1A1A"
+                            MouseLeftButtonDown="Canvas_MouseLeftButtonDown"
+                            MouseMove="Canvas_MouseMove"
+                            MouseLeftButtonUp="Canvas_MouseLeftButtonUp">
+
+                        <!-- Controls ItemsControl -->
+                        <ItemsControl x:Name="HmiCanvasItemsControl" ItemsSource="{Binding Controls}"
+                                      Width="{Binding ScreenConfig.Width}" Height="{Binding ScreenConfig.Height}">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <Canvas Width="{Binding ScreenConfig.Width}" Height="{Binding ScreenConfig.Height}" Background="Transparent" />
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemContainerStyle>
+                                <Style TargetType="ContentPresenter">
+                                    <Setter Property="Canvas.Left" Value="{Binding Model.X}" />
+                                    <Setter Property="Canvas.Top" Value="{Binding Model.Y}" />
+                                    <Setter Property="Canvas.ZIndex" Value="{Binding Model.ZIndex}" />
+                                    <Setter Property="Width" Value="{Binding Model.Width}" />
+                                    <Setter Property="Height" Value="{Binding Model.Height}" />
+                                </Style>
+                            </ItemsControl.ItemContainerStyle>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <views:HmiControlView />
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+
+                        <!-- Selection Rubberband Rectangle inside HmiCanvas (0px Offset) -->
+                        <Rectangle x:Name="RubberbandRect"
+                                   Stroke="#00E5FF"
+                                   StrokeDashArray="3 2"
+                                   StrokeThickness="1.5"
+                                   Fill="#2200E5FF"
+                                   Visibility="Collapsed"
+                                   Canvas.ZIndex="9999" />
+                    </Canvas>
+                </Border>
+            </ScrollViewer>
+
+            <GridSplitter Grid.Column="1" Width="5" HorizontalAlignment="Center" VerticalAlignment="Stretch" Background="{DynamicResource BorderBrush}" />
+
+            <!-- Right Panel: Compact Vertical Toolbox & Property Inspector TabControl -->
+            <Border Grid.Column="2" Background="{DynamicResource PanelBackgroundBrush}">
+                <TabControl x:Name="RightPanelTabControl" Background="Transparent" BorderThickness="0" Margin="4">
+                    
+                    <!-- TAB 1: THƯ VIỆN THIẾT BỊ (COMPACT TOOLBOX PALETTE) -->
+                    <TabItem Header="🧰 Thư Viện Thiết Bị" FontWeight="SemiBold" Padding="10,6">
+                        <ScrollViewer VerticalScrollBarVisibility="Auto">
+                            <StackPanel Margin="6">
+                                <TextBlock Text="DANH SÁCH THIẾT BỊ HMI" FontSize="11" FontWeight="Bold" Foreground="#00E5FF" Margin="0,4,0,8" />
+                                <TextBlock Text="Click nút để thêm phần tử mới lên màn hình:" FontSize="10" Foreground="{DynamicResource TextMutedBrush}" Margin="0,0,0,8" />
+
+                                <UniformGrid Columns="2" Margin="0,0,0,12" xmlns:models="clr-namespace:VisionInspectionApp.Models;assembly=VisionInspectionApp.Models">
+                                    <Button Content="📊 Hiển Thị Số" Command="{Binding AddControlCommand}" CommandParameter="{x:Static models:HmiControlType.ValueDisplay}"
+                                            Margin="2" Padding="6,8" Height="38" ToolTip="Tạo ô hiển thị đọc giá trị PLC (Bool, Float, Int16, Int32, String)" />
+                                    <Button Content="🏷️ Nhãn Chữ" Command="{Binding AddControlCommand}" CommandParameter="{x:Static models:HmiControlType.Label}"
+                                            Margin="2" Padding="6,8" Height="38" ToolTip="Tạo nhãn tiêu đề / văn bản tĩnh" />
+                                    <Button Content="🔘 Nút Bấm" Command="{Binding AddControlCommand}" CommandParameter="{x:Static models:HmiControlType.Button}"
+                                            Margin="2" Padding="6,8" Height="38" ToolTip="Tạo nút bấm Momentary, Toggle, SetTrue/False" />
+                                    <Button Content="💡 Đèn Báo" Command="{Binding AddControlCommand}" CommandParameter="{x:Static models:HmiControlType.Lamp}"
+                                            Margin="2" Padding="6,8" Height="38" ToolTip="Tạo đèn báo trạng thái tín hiệu PLC" />
+                                    <Button Content="🎚️ Công Tắc" Command="{Binding AddControlCommand}" CommandParameter="{x:Static models:HmiControlType.Switch}"
+                                            Margin="2" Padding="6,8" Height="38" ToolTip="Tạo công tắc gạt ON/OFF" />
+                                    <Button Content="🚚 Băng Tải" Command="{Binding AddControlCommand}" CommandParameter="{x:Static models:HmiControlType.Conveyor}"
+                                            Margin="2" Padding="6,8" Height="38" ToolTip="Tạo băng tải động (Conveyor)" />
+                                    <Button Content="🦾 Xi Lanh" Command="{Binding AddControlCommand}" CommandParameter="{x:Static models:HmiControlType.Cylinder}"
+                                            Margin="2" Padding="6,8" Height="38" ToolTip="Tạo xilanh khí nén duỗi/thu" />
+                                    <Button Content="🔢 Nhập Số" Command="{Binding AddControlCommand}" CommandParameter="{x:Static models:HmiControlType.NumericInput}"
+                                            Margin="2" Padding="6,8" Height="38" ToolTip="Tạo ô nhập giá trị số xuống PLC" />
+                                    <Button Content="🔤 Nhập Chuỗi" Command="{Binding AddControlCommand}" CommandParameter="{x:Static models:HmiControlType.TextInput}"
+                                            Margin="2" Padding="6,8" Height="38" ToolTip="Tạo ô nhập văn bản xuống PLC" />
+                                    <Button Content="🖼️ Ảnh Custom" Command="{Binding AddControlCommand}" CommandParameter="{x:Static models:HmiControlType.CustomImage}"
+                                            Margin="2" Padding="6,8" Height="38" ToolTip="Thêm ảnh tùy chỉnh từ bên ngoài" />
+                                </UniformGrid>
+
+                                <Separator Background="{DynamicResource BorderBrush}" Margin="0,4,0,12" />
+
+                                <TextBlock Text="💡 MẸO THAO TÁC:" FontSize="11" FontWeight="Bold" Foreground="#FFD54F" Margin="0,0,0,4" />
+                                <TextBlock Text="• Giữ Shift / Ctrl + Click chuột để chọn nhiều phần tử" FontSize="10" Foreground="{DynamicResource TextMutedBrush}" Margin="0,0,0,2" />
+                                <TextBlock Text="• Kéo thả chuột trên vùng trống để quét chọn nhóm phần tử" FontSize="10" Foreground="{DynamicResource TextMutedBrush}" Margin="0,0,0,2" />
+                                <TextBlock Text="• Phím Ctrl+C, Ctrl+V, Delete, Undo/Redo thao tác nhanh" FontSize="10" Foreground="{DynamicResource TextMutedBrush}" Margin="0,0,0,2" />
+                            </StackPanel>
+                        </ScrollViewer>
+                    </TabItem>
+
+                    <!-- TAB 2: THUỘC TÍNH THIẾT BỊ (PROPERTY INSPECTOR) -->
+                    <TabItem Header="⚙️ Thuộc Tính" FontWeight="SemiBold" Padding="10,6" IsSelected="{Binding HasSelectedControl}">
+                        <views:HmiPropertyInspectorView DataContext="{Binding}" />
+                    </TabItem>
+                </TabControl>
+            </Border>
+        </Grid>
+
+        <!-- Bottom Status Bar -->
+        <Border Grid.Row="2" Padding="12,6" Background="{DynamicResource HeaderBackgroundBrush}" BorderThickness="0,1,0,0" BorderBrush="{DynamicResource BorderBrush}">
+            <DockPanel>
+                <TextBlock Text="{Binding StatusMessage}" Foreground="{Binding StatusBrush}" FontWeight="Bold" VerticalAlignment="Center" />
+            </DockPanel>
+        </Border>
+
+    </Grid>
+</Window>

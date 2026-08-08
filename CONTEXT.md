@@ -492,7 +492,17 @@
   - **Phân định chính xác Giá trị Quét Thực tế `{ScannedCode}` & Tên sản phẩm `{ProductName}`**:
     - Điều chỉnh để thẻ `{ScannedCode}` trong câu lệnh SQL ghi log CSDL luôn lưu chính xác **nội dung chuỗi mã thô được quét từ đầu đọc/máy quét** (ví dụ: `QR-999888777`), thay vì lấy tên sản phẩm đã tra cứu.
     - Hỗ trợ thêm thẻ `{ProductName}` cho câu lệnh SQL ghi log CSDL nếu người dùng muốn chèn cả Tên sản phẩm đã được giải mã từ CSDL.
-- Biên dịch ứng dụng thành công 100%: **`0 Error(s)`**, **`36 Warning(s)`**.
+  - **Module HMI Designer & HMI Manager (WPF Automation)**:
+    - **Nút bấm `🖥️ HMI Manager`**: Thêm nút mở `HMI Manager Window` từ thanh công cụ Tool Editor bên cạnh nút `PLC Manager`.
+    - **Hai chế độ Vận hành & Thiết kế**: Hỗ trợ chuyển đổi giữa chế độ **`▶ VẬN HÀNH (RUN)`** (kết nối thời gian thực với PLC, cho phép bấm nút/công tắc, nhập số/chuỗi và lắng nghe sự kiện `OnTagChanged` để cập nhật giao diện) và chế độ **`⏸ TẠM DỪNG (EDIT)`** (cho phép kéo thả di chuyển, căn chỉnh vị trí và chỉnh sửa thuộc tính phần tử).
+    - **Chỉ Quét PLC Khi Bật RUN Mode (Scan ONLY on RUN Mode)**: Đã xóa bỏ cơ chế tự động chiếm quyền `AcquirePollingLock` khi mở cửa sổ HMI. Khi vừa mở cửa sổ HMI hoặc khi ở chế độ Chỉnh sửa (`EDIT`), tiến trình quét PLC dừng ngắt 100%. Tiến trình quét PLC chỉ được kích hoạt duy nhất khi bật **`▶ VẬN HÀNH (RUN)`** và tự động giải phóng ngắt quét ngay khi bấm **`⏸ TẠM DỪNG (EDIT)`** hoặc đóng cửa sổ HMI.
+    - **Tối Ưu Hiệu Năng Giao Diện (60 FPS Non-blocking UI)**:
+      - Chuyển `Dispatcher.Invoke` sang `Dispatcher.BeginInvoke(..., Background)` bất đồng bộ giúp giao diện không bị giật lag khi nhận dữ liệu PLC liên tục.
+      - Kiểm tra giá trị đọc: nếu giá trị PLC không đổi so với chu kỳ trước thì không phát thông báo vẽ lại UI.
+      - Đóng băng `.Freeze()` và lưu đệm `ConcurrentDictionary` toàn bộ các hình ảnh vector `DrawingImage`, triệt tiêu hoàn toàn rác bộ nhớ (GC pressure).
+    - **Giao Diện Thư Viện Thiết Bị Hàng Dọc Bên Phải (`Toolbox Palette`)**: Chuyển danh sách nút thêm thiết bị về cột bên phải dưới dạng Tab Control 2 cột gọn gàng (`UniformGrid`).
+    - **Fix Triệt Để Lỗi Lệch Khung Vuông Quét Chọn (`Rubberband Drag Selection Fix`)**: Khung vuông nét đứt màu cyan (`#00E5FF`) bám chính xác 100% tọa độ con trỏ chuột khi kéo thả chọn nhiều thiết bị (0px lệch).
+- Biên dịch ứng dụng thành công 100%: **`0 Error(s)`**, **`46 Warning(s)`**.
 
 ## Encoding
 

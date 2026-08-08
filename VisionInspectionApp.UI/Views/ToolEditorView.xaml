@@ -56,6 +56,7 @@
             </Button>
 
             <Button Content="🔌 PLC Manager" Command="{Binding OpenPlcManagerCommand}" Margin="0,0,4,0" Padding="8,4" Background="#1E88E5" Foreground="White" BorderThickness="0" ToolTip="Quản lý kết nối PLC và cấu hình Tag"/>
+            <Button Content="🖥️ HMI Manager" Command="{Binding OpenHmiManagerCommand}" Margin="0,0,4,0" Padding="8,4" Background="#D81B60" Foreground="White" BorderThickness="0" ToolTip="Thiết kế và vận hành màn hình HMI tương tác PLC"/>
             <Button Content="📊 Monitor" Command="{Binding OpenPlcMonitorCommand}" Margin="0,0,4,0" Padding="8,4" Background="#43A047" Foreground="White" BorderThickness="0" ToolTip="Theo dõi trạng thái kết nối, Latency và Log PLC"/>
             <Button Content="🏷️ Tags" Command="{Binding OpenPlcBrowserCommand}" Margin="0,0,4,0" Padding="8,4" Background="#8E24AA" Foreground="White" BorderThickness="0" ToolTip="Cửa sổ tra cứu danh sách Tag PLC"/>
             <Button Content="🗄️ DB Manager" Command="{Binding OpenDbManagerCommand}" Margin="0,0,12,0" Padding="8,4" Background="#0D9488" Foreground="White" BorderThickness="0" ToolTip="Quản lý danh sách kết nối CSDL (SQL Server, MySQL, PostgreSQL, SQLite, ODBC)"/>

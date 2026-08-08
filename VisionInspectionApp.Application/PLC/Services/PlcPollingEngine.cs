@@ -106,8 +106,10 @@ public sealed class PlcPollingEngine
 
                 if (!driver.IsConnected) continue;
 
-                var plcTags = tags.Where(t => string.Equals(t.PlcId, plc.Id, StringComparison.OrdinalIgnoreCase)
-                                              || string.Equals(t.PlcId, plc.Name, StringComparison.OrdinalIgnoreCase)).ToList();
+                var plcTags = tags.Where(t => string.IsNullOrWhiteSpace(t.PlcId)
+                                              || string.Equals(t.PlcId, plc.Id, StringComparison.OrdinalIgnoreCase)
+                                              || string.Equals(t.PlcId, plc.Name, StringComparison.OrdinalIgnoreCase)
+                                              || enabledPlcs.Count == 1).ToList();
                 if (plcTags.Count == 0) continue;
 
                 var swPlc = Stopwatch.StartNew();

@@ -1,0 +1,221 @@
+<UserControl x:Class="VisionInspectionApp.UI.Views.HMI.HmiPropertyInspectorView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
+             mc:Ignorable="d" 
+             d:DesignHeight="800" d:DesignWidth="300">
+
+    <UserControl.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVis" />
+    </UserControl.Resources>
+
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+        <StackPanel Margin="12">
+
+            <TextBlock Text="⚙ THUỘC TÍNH MÀN HÌNH &amp; THIẾT BỊ HMI" FontSize="13" FontWeight="Bold" Foreground="{DynamicResource TextBrush}" Margin="0,0,0,10" />
+
+            <!-- 0. Screen & Global PLC Configuration -->
+            <GroupBox Header="0. MÀN HÌNH &amp; PLC CHÍNH" Margin="0,0,0,10" Foreground="{DynamicResource TextBrush}" FontWeight="SemiBold">
+                <StackPanel Margin="6">
+                    <TextBlock Text="Tên Màn Hình:" FontSize="11" Margin="0,2,0,2" Foreground="{DynamicResource TextMutedBrush}" />
+                    <TextBox Text="{Binding ScreenConfig.ScreenName, UpdateSourceTrigger=PropertyChanged}" Padding="4,3" Margin="0,0,0,6" />
+
+                    <TextBlock Text="PLC Kết Nối Chính (Target PLC):" FontSize="11" Margin="0,2,0,2" Foreground="{DynamicResource TextMutedBrush}" />
+                    <ComboBox ItemsSource="{Binding AvailablePlcItems}"
+                              SelectedValue="{Binding ScreenConfig.TargetPlcId, UpdateSourceTrigger=PropertyChanged}"
+                              SelectedValuePath="Id"
+                              DisplayMemberPath="DisplayName"
+                              Padding="4,3" Margin="0,0,0,2"
+                              ToolTip="PLC kết nối chung cho toàn bộ các thiết bị trên màn hình này" />
+                    <TextBlock Text="💡 Chọn PLC đã kết nối trong PLC Manager" FontSize="10" Foreground="{DynamicResource TextMutedBrush}" Margin="0,0,0,4" />
+                </StackPanel>
+            </GroupBox>
+
+            <!-- No Selection State -->
+            <Border Visibility="{Binding HasNoSelectedControl, Converter={StaticResource BoolToVis}}"
+                    Padding="16" Background="{DynamicResource HeaderBackgroundBrush}" CornerRadius="6" Margin="0,0,0,12">
+                <TextBlock Text="Click chọn 1 thiết bị trên Canvas để xem &amp; chỉnh sửa thuộc tính chi tiết."
+                           TextWrapping="Wrap" Foreground="{DynamicResource TextMutedBrush}" FontSize="12" HorizontalAlignment="Center" TextAlignment="Center" />
+            </Border>
+
+            <!-- Property Form (When SelectedControl != null) -->
+            <StackPanel Visibility="{Binding HasSelectedControl, Converter={StaticResource BoolToVis}}">
+
+                <!-- 1. General Info -->
+                <GroupBox Header="1. THÔNG TIN CHUNG THIẾT BỊ" Margin="0,0,0,10" Foreground="{DynamicResource TextBrush}" FontWeight="SemiBold">
+                    <StackPanel Margin="6">
+                        <TextBlock Text="Tên thiết bị:" FontSize="11" Margin="0,2,0,2" Foreground="{DynamicResource TextMutedBrush}" />
+                        <TextBox Text="{Binding SelectedControl.Name, UpdateSourceTrigger=PropertyChanged}" Padding="4,3" Margin="0,0,0,6" />
+
+                        <TextBlock Text="Loại thiết bị:" FontSize="11" Margin="0,2,0,2" Foreground="{DynamicResource TextMutedBrush}" />
+                        <ComboBox ItemsSource="{Binding ControlTypes}"
+                                  SelectedItem="{Binding SelectedControl.Model.Type, UpdateSourceTrigger=PropertyChanged}"
+                                  Padding="4,3" />
+                    </StackPanel>
+                </GroupBox>
+
+                <!-- 2. Position & Size -->
+                <GroupBox Header="2. VỊ TRÍ &amp; KÍCH THƯỚC" Margin="0,0,0,10" Foreground="{DynamicResource TextBrush}" FontWeight="SemiBold">
+                    <Grid Margin="6">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+
+                        <StackPanel Grid.Row="0" Grid.Column="0" Margin="0,0,4,4">
+                            <TextBlock Text="Tọa độ X (px):" FontSize="11" Foreground="{DynamicResource TextMutedBrush}" />
+                            <TextBox Text="{Binding SelectedControl.X, UpdateSourceTrigger=PropertyChanged}" Padding="4,2" />
+                        </StackPanel>
+
+                        <StackPanel Grid.Row="0" Grid.Column="1" Margin="4,0,0,4">
+                            <TextBlock Text="Tọa độ Y (px):" FontSize="11" Foreground="{DynamicResource TextMutedBrush}" />
+                            <TextBox Text="{Binding SelectedControl.Y, UpdateSourceTrigger=PropertyChanged}" Padding="4,2" />
+                        </StackPanel>
+
+                        <StackPanel Grid.Row="1" Grid.Column="0" Margin="0,4,4,0">
+                            <TextBlock Text="Chiều rộng W:" FontSize="11" Foreground="{DynamicResource TextMutedBrush}" />
+                            <TextBox Text="{Binding SelectedControl.Width, UpdateSourceTrigger=PropertyChanged}" Padding="4,2" />
+                        </StackPanel>
+
+                        <StackPanel Grid.Row="1" Grid.Column="1" Margin="4,4,0,0">
+                            <TextBlock Text="Chiều cao H:" FontSize="11" Foreground="{DynamicResource TextMutedBrush}" />
+                            <TextBox Text="{Binding SelectedControl.Height, UpdateSourceTrigger=PropertyChanged}" Padding="4,2" />
+                        </StackPanel>
+                    </Grid>
+                </GroupBox>
+
+                <!-- 3. PLC Direct Address / Tag Binding -->
+                <GroupBox Header="3. ĐỊA CHỈ TRỰC TIẾP / TAG PLC" Margin="0,0,0,10" Foreground="{DynamicResource TextBrush}" FontWeight="SemiBold">
+                    <StackPanel Margin="6">
+                        <TextBlock Text="PLC Chỉ Định (Mặc định dùng PLC chính):" FontSize="11" Margin="0,2,0,2" Foreground="{DynamicResource TextMutedBrush}" />
+                        <ComboBox ItemsSource="{Binding AvailablePlcItems}"
+                                  SelectedValue="{Binding SelectedControl.ReadPlcId, UpdateSourceTrigger=PropertyChanged}"
+                                  SelectedValuePath="Id"
+                                  DisplayMemberPath="DisplayName"
+                                  Padding="4,3" Margin="0,0,0,6" />
+
+                        <TextBlock Text="Địa chỉ / Tag PLC (Read &amp; Write):" FontSize="11" Margin="0,2,0,2" Foreground="{DynamicResource TextMutedBrush}" />
+                        <ComboBox ItemsSource="{Binding AvailableTags}"
+                                  Text="{Binding SelectedControl.ReadTagName, Mode=TwoWay}"
+                                  IsEditable="True"
+                                  IsTextSearchEnabled="True"
+                                  MaxDropDownHeight="220"
+                                  Padding="4,3" Margin="0,0,0,2"
+                                  ToolTip="Nhập trực tiếp địa chỉ PLC (như X0, Y0, D100, M10, MW100) hoặc chọn Tag từ danh sách" />
+                        <TextBlock Text="💡 Nhập trực tiếp địa chỉ PLC (VD: D100, X0, M10) hoặc chọn từ danh sách" FontSize="10" Foreground="#29B6F6" Margin="0,0,0,6" />
+
+                        <!-- Optional Separate Write Address -->
+                        <CheckBox Content="Sử dụng địa chỉ Ghi (Write) riêng biệt"
+                                  IsChecked="{Binding SelectedControl.UseSeparateWriteAddress, UpdateSourceTrigger=PropertyChanged}"
+                                  FontSize="11" Margin="0,2,0,4" Foreground="{DynamicResource TextMutedBrush}" />
+
+                        <StackPanel Visibility="{Binding SelectedControl.UseSeparateWriteAddress, Converter={StaticResource BoolToVis}}" Margin="0,0,0,6">
+                            <TextBlock Text="Địa chỉ / Tag Ghi riêng (Write Address / Tag):" FontSize="11" Margin="0,2,0,2" Foreground="{DynamicResource TextMutedBrush}" />
+                            <ComboBox ItemsSource="{Binding AvailableTags}"
+                                      Text="{Binding SelectedControl.WriteTagName, Mode=TwoWay}"
+                                      IsEditable="True"
+                                      IsTextSearchEnabled="True"
+                                      MaxDropDownHeight="220"
+                                      Padding="4,3" Margin="0,0,0,2"
+                                      ToolTip="Địa chỉ Ghi riêng (Nếu khác địa chỉ Đọc ở trên)" />
+                        </StackPanel>
+
+                        <TextBlock Text="Chế độ Nút Bấm / Công Tắc:" FontSize="11" Margin="0,2,0,2" Foreground="{DynamicResource TextMutedBrush}" />
+                        <ComboBox ItemsSource="{Binding ButtonBehaviors}"
+                                  SelectedItem="{Binding SelectedControl.ButtonBehavior, UpdateSourceTrigger=PropertyChanged}"
+                                  Padding="4,3" Margin="0,0,0,6" />
+
+                        <Grid Margin="0,4,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0" Margin="0,0,4,0">
+                                <TextBlock Text="Ghi khi ON:" FontSize="10" Foreground="{DynamicResource TextMutedBrush}" />
+                                <TextBox Text="{Binding SelectedControl.WriteValueOn, UpdateSourceTrigger=PropertyChanged}" Padding="4,2" />
+                            </StackPanel>
+                            <StackPanel Grid.Column="1" Margin="4,0,0,0">
+                                <TextBlock Text="Ghi khi OFF:" FontSize="10" Foreground="{DynamicResource TextMutedBrush}" />
+                                <TextBox Text="{Binding SelectedControl.WriteValueOff, UpdateSourceTrigger=PropertyChanged}" Padding="4,2" />
+                            </StackPanel>
+                        </Grid>
+                    </StackPanel>
+                </GroupBox>
+
+                <!-- 4. Data Type & Formatting Settings -->
+                <GroupBox Header="4. KIỂU DỮ LIỆU ĐỌC &amp; ĐỊNH DẠNG (DATA TYPE)" Margin="0,0,0,10" Foreground="{DynamicResource TextBrush}" FontWeight="SemiBold">
+                    <StackPanel Margin="6">
+                        <TextBlock Text="Kiểu dữ liệu đọc từ PLC (Data Type):" FontSize="11" Margin="0,2,0,2" Foreground="{DynamicResource TextMutedBrush}" />
+                        <ComboBox ItemsSource="{Binding ValueDataTypes}"
+                                  SelectedItem="{Binding SelectedControl.ValueDataType, UpdateSourceTrigger=PropertyChanged}"
+                                  Padding="4,3" Margin="0,0,0,6"
+                                  ToolTip="Chọn kiểu dữ liệu đọc từ PLC (Ví dụ: Bool -> TRUE/FALSE, Float -> Số thực 32-bit D200+D201, Int16, Int32, String)" />
+
+                        <TextBlock Text="Định dạng hiển thị số (Format String):" FontSize="11" Margin="0,2,0,2" Foreground="{DynamicResource TextMutedBrush}" />
+                        <TextBox Text="{Binding SelectedControl.ValueFormat, UpdateSourceTrigger=PropertyChanged}" Padding="4,3" Margin="0,0,0,6"
+                                 ToolTip="Ví dụ: 0.## (2 chữ số thập phân), 0.00, 0, #,##0" />
+
+                        <TextBlock Text="Căn lề văn bản (Text Alignment):" FontSize="11" Margin="0,2,0,2" Foreground="{DynamicResource TextMutedBrush}" />
+                        <ComboBox ItemsSource="{Binding TextAlignments}"
+                                  SelectedItem="{Binding SelectedControl.Alignment, UpdateSourceTrigger=PropertyChanged}"
+                                  Padding="4,3" Margin="0,0,0,6" />
+                    </StackPanel>
+                </GroupBox>
+
+                <!-- 5. Text & Theme Settings -->
+                <GroupBox Header="5. NHÃN &amp; HIỂN THỊ" Margin="0,0,0,10" Foreground="{DynamicResource TextBrush}" FontWeight="SemiBold">
+                    <StackPanel Margin="6">
+                        <TextBlock Text="Nhãn thiết bị (Label Text):" FontSize="11" Margin="0,2,0,2" Foreground="{DynamicResource TextMutedBrush}" />
+                        <TextBox Text="{Binding SelectedControl.LabelText, UpdateSourceTrigger=PropertyChanged}" Padding="4,3" Margin="0,0,0,6" />
+
+                        <TextBlock Text="Cỡ chữ (Font Size):" FontSize="11" Margin="0,2,0,2" Foreground="{DynamicResource TextMutedBrush}" />
+                        <TextBox Text="{Binding SelectedControl.FontSize, UpdateSourceTrigger=PropertyChanged}" Padding="4,3" Margin="0,0,0,6" />
+
+                        <TextBlock Text="Chủ đề màu Đèn / Nút (Color Theme):" FontSize="11" Margin="0,2,0,2" Foreground="{DynamicResource TextMutedBrush}" />
+                        <ComboBox ItemsSource="{Binding ColorThemes}"
+                                  SelectedItem="{Binding SelectedControl.Theme, UpdateSourceTrigger=PropertyChanged}"
+                                  Padding="4,3" />
+                    </StackPanel>
+                </GroupBox>
+
+                <!-- 5. Custom Image Settings -->
+                <GroupBox Header="5. HÌNH ẢNH TÙY CHỈNH (CUSTOM IMAGE)" Margin="0,0,0,10" Foreground="{DynamicResource TextBrush}" FontWeight="SemiBold">
+                    <StackPanel Margin="6">
+                        <CheckBox Content="Sử dụng ảnh bên ngoài tùy chỉnh"
+                                  IsChecked="{Binding SelectedControl.UseCustomImage, UpdateSourceTrigger=PropertyChanged}"
+                                  FontWeight="Bold" Margin="0,2,0,8" />
+
+                        <StackPanel Visibility="{Binding SelectedControl.UseCustomImage, Converter={StaticResource BoolToVis}}">
+                            
+                            <!-- Pick from Global Library -->
+                            <TextBlock Text="Chọn từ Thư viện Ảnh Toàn Cục:" FontSize="11" Foreground="{DynamicResource TextMutedBrush}" Margin="0,0,0,2" />
+                            <ComboBox ItemsSource="{Binding GlobalLibraryImages}"
+                                      SelectedItem="{Binding SelectedGlobalLibraryImage, Mode=TwoWay}"
+                                      Padding="4,3" Margin="0,0,0,8"
+                                      ToolTip="Chọn ảnh từ Thư viện toàn cục đã được lưu từ các dự án trước" />
+
+                            <TextBlock Text="Ảnh trạng thái OFF:" FontSize="11" Foreground="{DynamicResource TextMutedBrush}" Margin="0,0,0,2" />
+                            <DockPanel Margin="0,0,0,6">
+                                <Button Content="..." Command="{Binding BrowseCustomImageOffCommand}" Width="35" DockPanel.Dock="Right" Margin="4,0,0,0" />
+                                <TextBox Text="{Binding SelectedControl.Model.CustomImagePathOff, UpdateSourceTrigger=PropertyChanged}" Padding="4,2" />
+                            </DockPanel>
+
+                            <TextBlock Text="Ảnh trạng thái ON:" FontSize="11" Foreground="{DynamicResource TextMutedBrush}" Margin="0,4,0,2" />
+                            <DockPanel Margin="0,0,0,6">
+                                <Button Content="..." Command="{Binding BrowseCustomImageOnCommand}" Width="35" DockPanel.Dock="Right" Margin="4,0,0,0" />
+                                <TextBox Text="{Binding SelectedControl.Model.CustomImagePathOn, UpdateSourceTrigger=PropertyChanged}" Padding="4,2" />
+                            </DockPanel>
+
+                        </StackPanel>
+                    </StackPanel>
+                </GroupBox>
+
+            </StackPanel>
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

@@ -498,6 +498,18 @@ public sealed partial class ToolEditorViewModel : ObservableObject
     }
 
     [RelayCommand]
+    private void OpenHmiManager()
+    {
+        var vm = new HMI.HmiManagerViewModel(_plcManagerService);
+        var win = new Views.HMI.HmiManagerWindow(vm)
+        {
+            Owner = System.Windows.Application.Current?.MainWindow
+        };
+        win.Closed += (s, e) => vm.StopRunMode();
+        win.Show();
+    }
+
+    [RelayCommand]
     private void OpenPlcMonitor()
     {
         _plcManagerService.AcquirePollingLock("PlcMonitorWindow");

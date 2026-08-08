@@ -105,6 +105,13 @@ Lộ trình tích hợp tính năng Chụp ảnh từ camera và hỗ trợ các
   - Bổ sung token `{ProductName}` vào `FileNameFormat` và `SaveFolderPath` của Tool `ImageOutput`.
   - Hiển thị chip chọn `{ProductName}` trong bảng thuộc tính ImageOutput trên Tool Editor UI.
   - Đồng bộ `ProductName` và `ProductCode` real-time từ OQC Scanner vào `VisionConfig` và `ToolEditorViewModel`.
+- [x] Task 110: Triển khai Module **HMI Designer & HMI Manager (WPF Automation)**:
+  - Thêm nút bấm **`🖥️ HMI Manager`** nổi bật trên thanh công cụ Tool Editor.
+  - Hỗ trợ 2 chế độ: **`▶ VẬN HÀNH (RUN)`** (Tương tác thời gian thực với PLC, cho phép bấm nút/công tắc, nhập số/chuỗi và tự động cập nhật hiển thị theo tín hiệu PLC `OnTagChanged`) và **`⏸ TẠM DỪNG (EDIT)`** (Tự do kéo thả di chuyển, căn chỉnh vị trí và thay đổi thuộc tính phần tử).
+  - Hỗ trợ đầy đủ các loại thiết bị: `Button`, `Lamp`, `Switch`, `Label`, `Conveyor`, `Cylinder`, `NumericDisplay`, `NumericInput`, `TextInput` và `CustomImage`.
+  - Tự động sinh hình ảnh Vector 3D công nghiệp rực rỡ chuẩn 60FPS bằng WPF `DrawingImage` & `PathGeometry` cho từng thiết bị ở 2 trạng thái **ON** và **OFF**.
+  - Xây dựng **Thư viện Ảnh Tùy chỉnh Cục bộ & Toàn cục**: Tự động lưu tệp ảnh tùy chỉnh bên ngoài được nạp bởi người dùng vào cả 2 vị trí Cục bộ (`Resources/HMI/`) và Toàn cục (`%APPDATA%\VisionInspectionApp\HMI_Library\`), cho phép các dự án mới tái sử dụng lại các tệp ảnh tùy chỉnh đã nạp trước đây.
+  - Hỗ trợ Lưu/Nạp cấu hình thiết kế HMI dưới dạng tệp độc lập `.hmi` (JSON format).
 
 
 
