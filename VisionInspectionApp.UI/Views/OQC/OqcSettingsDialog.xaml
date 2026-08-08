@@ -69,8 +69,47 @@
                     </StackPanel>
                 </GroupBox>
 
-                <!-- 2. Danh sách Sản phẩm (Product List) -->
-                <GroupBox Header="2. Danh sách sản phẩm (Product Browser Query)" Margin="0,0,0,12" Padding="8" Foreground="{DynamicResource TextBrush}">
+                <!-- 2. Tra cứu Tên sản phẩm từ Mã Scan -->
+                <GroupBox Header="2. Tra cứu Tên sản phẩm từ Mã Scan (Product Name Query)" Margin="0,0,0,12" Padding="8" Foreground="{DynamicResource TextBrush}">
+                    <StackPanel>
+                        <CheckBox Content="Kích hoạt tra cứu Tên sản phẩm từ DB theo Mã Scan"
+                                  IsChecked="{Binding EnableProductNameLookup, UpdateSourceTrigger=PropertyChanged}"
+                                  FontWeight="Bold" Margin="0,0,0,8" />
+
+                        <Grid Margin="0,0,0,8">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="160" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="Cơ sở dữ liệu:" VerticalAlignment="Center" FontWeight="SemiBold" />
+                            <ComboBox Grid.Column="0" Grid.ColumnSpan="2" Margin="160,0,0,0"
+                                      ItemsSource="{Binding AvailableDatabases}"
+                                      DisplayMemberPath="Name"
+                                      SelectedValuePath="Id"
+                                      SelectedValue="{Binding ProductNameDbId, UpdateSourceTrigger=PropertyChanged}"
+                                      IsEnabled="{Binding EnableProductNameLookup}" />
+                        </Grid>
+
+                        <TextBlock Text="Truy vấn SQL lấy Tên sản phẩm (hỗ trợ token {ScannedCode}):" Margin="0,0,0,4" FontSize="11" Foreground="{DynamicResource TextMutedBrush}" />
+                        <TextBox Text="{Binding ProductNameQuery, UpdateSourceTrigger=PropertyChanged}"
+                                 IsEnabled="{Binding EnableProductNameLookup}"
+                                 AcceptsReturn="True" TextWrapping="Wrap" FontFamily="Consolas" Height="60" Margin="0,0,0,8" />
+
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="160" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="Tên cột chứa Tên sản phẩm:" VerticalAlignment="Center" />
+                            <TextBox Grid.Column="1" Text="{Binding ProductNameColumn, UpdateSourceTrigger=PropertyChanged}"
+                                     IsEnabled="{Binding EnableProductNameLookup}"
+                                     ToolTip="Tên cột chứa tên sản phẩm (VD: 'G_NAME_KD' hoặc 'ProductName')" />
+                        </Grid>
+                    </StackPanel>
+                </GroupBox>
+
+                <!-- 3. Danh sách Sản phẩm (Product List) -->
+                <GroupBox Header="3. Danh sách sản phẩm (Product Browser Query)" Margin="0,0,0,12" Padding="8" Foreground="{DynamicResource TextBrush}">
                     <StackPanel>
                         <Grid Margin="0,0,0,8">
                             <Grid.ColumnDefinitions>
@@ -100,8 +139,8 @@
                     </StackPanel>
                 </GroupBox>
 
-                <!-- 3. Gán sản phẩm ↔ Job (Assign Query) -->
-                <GroupBox Header="3. Gán sản phẩm ↔ Tệp Job (Assign / Upsert Query)" Margin="0,0,0,12" Padding="8" Foreground="{DynamicResource TextBrush}">
+                <!-- 4. Gán sản phẩm ↔ Job (Assign Query) -->
+                <GroupBox Header="4. Gán sản phẩm ↔ Tệp Job (Assign / Upsert Query)" Margin="0,0,0,12" Padding="8" Foreground="{DynamicResource TextBrush}">
                     <StackPanel>
                         <Grid Margin="0,0,0,8">
                             <Grid.ColumnDefinitions>
@@ -122,8 +161,8 @@
                     </StackPanel>
                 </GroupBox>
 
-                <!-- 4. Ghi log kết quả lên DB -->
-                <GroupBox Header="4. Ghi log kết quả kiểm tra OQC lên DB (Upload Result Log)" Margin="0,0,0,8" Padding="8" Foreground="{DynamicResource TextBrush}">
+                <!-- 5. Ghi log kết quả lên DB -->
+                <GroupBox Header="5. Ghi log kết quả kiểm tra OQC lên DB (Upload Result Log)" Margin="0,0,0,8" Padding="8" Foreground="{DynamicResource TextBrush}">
                     <StackPanel>
                         <CheckBox Content="Kích hoạt tự động ghi log kết quả kiểm tra lên DB"
                                   IsChecked="{Binding LogResultToDb, UpdateSourceTrigger=PropertyChanged}"

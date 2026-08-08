@@ -155,6 +155,65 @@ public sealed class OqcScannerService : IOqcScannerService
             (!string.IsNullOrWhiteSpace(Config.JobRootDirectory) ? $" hoặc trong thư mục gốc '{Config.JobRootDirectory}'." : "."));
     }
 
+    public async Task<(bool Found, string ProductName, string ErrorMessage)> LookupProductNameAsync(
+        string scannedCode, IDbManagerService dbManager)
+    {
+        if (string.IsNullOrWhiteSpace(scannedCode))
+        {
+            return (false, string.Empty, "Mã scan rỗng.");
+        }
+
+        if (!Config.EnableProductNameLookup || string.IsNullOrWhiteSpace(Config.ProductNameQuery))
+        {
+            return (false, scannedCode, "Chưa bật hoặc chưa cấu hình truy vấn Tên sản phẩm.");
+        }
+
+        if (dbManager == null)
+        {
+            return (false, scannedCode, "Dịch vụ DB Manager chưa được khởi tạo.");
+        }
+
+        string safeCode = EscapeSqlValue(scannedCode.Trim());
+        string query = Config.ProductNameQuery.Replace("{ScannedCode}", safeCode, StringComparison.OrdinalIgnoreCase);
+
+        var (isSafe, safetyError) = DbNodeRunner.ValidateSqlQuerySafety(query, DbNodeMode.Read, allowUpdateDelete: false);
+        if (!isSafe)
+        {
+            return (false, scannedCode, safetyError);
+        }
+
+        var (success, table, error) = await dbManager.ExecuteQueryAsync(Config.ProductNameDbId, query);
+        if (!success || table == null || table.Rows.Count == 0)
+        {
+            return (false, scannedCode, string.IsNullOrWhiteSpace(error) ? $"Không tìm thấy Tên sản phẩm cho mã '{scannedCode}' trong cơ sở dữ liệu." : error);
+        }
+
+        string colName = Config.ProductNameColumn?.Trim() ?? "";
+        object? rawVal = null;
+
+        if (!string.IsNullOrEmpty(colName) && table.Columns.Contains(colName))
+        {
+            rawVal = table.Rows[0][colName];
+        }
+        else if (table.Columns.Count > 0)
+        {
+            rawVal = table.Rows[0][0];
+        }
+
+        if (rawVal == null || rawVal == DBNull.Value)
+        {
+            return (false, scannedCode, "Kết quả DB trả về ô tên sản phẩm rỗng.");
+        }
+
+        string name = rawVal.ToString()?.Trim() ?? "";
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            return (false, scannedCode, "Tên sản phẩm trả về rỗng.");
+        }
+
+        return (true, name, string.Empty);
+    }
+
     public async Task<(bool Success, DataTable? Table, string ErrorMessage)> GetProductListAsync(
         string searchText, int pageIndex, IDbManagerService dbManager)
     {

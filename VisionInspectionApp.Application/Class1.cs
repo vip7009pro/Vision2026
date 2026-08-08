@@ -3688,13 +3688,21 @@ public sealed class InspectionService : IInspectionService
                     }
                 }
 
+                var now = DateTime.Now;
+                var prodName = !string.IsNullOrWhiteSpace(config.ProductName) ? config.ProductName : (config.ProductCode ?? "");
+
                 var folder = string.IsNullOrWhiteSpace(io.SaveFolderPath) ? @"C:\VisionOutput" : io.SaveFolderPath;
+                folder = folder.Replace("{ProductCode}", config.ProductCode ?? "")
+                               .Replace("{ProductName}", prodName)
+                               .Replace("{YYYY}", now.ToString("yyyy"))
+                               .Replace("{MM}", now.ToString("MM"))
+                               .Replace("{DD}", now.ToString("dd"));
+
                 if (!Directory.Exists(folder))
                 {
                     Directory.CreateDirectory(folder);
                 }
 
-                var now = DateTime.Now;
                 var fileName = string.IsNullOrWhiteSpace(io.FileNameFormat) ? "IMG_{YYYY}{MM}{DD}_{HH}{mm}{ss}" : io.FileNameFormat;
                 fileName = fileName.Replace("{YYYY}", now.ToString("yyyy"))
                                    .Replace("{MM}", now.ToString("MM"))
@@ -3704,6 +3712,7 @@ public sealed class InspectionService : IInspectionService
                                    .Replace("{ss}", now.ToString("ss"))
                                    .Replace("{Count}", now.Ticks.ToString()[^6..])
                                    .Replace("{ProductCode}", config.ProductCode ?? "")
+                                   .Replace("{ProductName}", prodName)
                                    .Replace("{Status}", result.Pass ? "PASS" : "FAIL");
 
                 var vars = ConditionEvaluator.BuildVariableMap(result);

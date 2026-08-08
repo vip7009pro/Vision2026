@@ -91,7 +91,18 @@ public partial class OqcScannerViewModel : ObservableObject
         StatusMessage = $"🔍 Đang tra cứu cơ sở dữ liệu cho mã '{code}'...";
         StatusBrush = Brushes.DodgerBlue;
 
-        CurrentProductName = code;
+        // Lookup product name from database
+        string displayProductName = code;
+        if (_oqcService.Config.EnableProductNameLookup)
+        {
+            var (nameFound, resolvedName, _) = await _oqcService.LookupProductNameAsync(code, _dbManager);
+            if (nameFound && !string.IsNullOrWhiteSpace(resolvedName))
+            {
+                displayProductName = resolvedName;
+            }
+        }
+
+        CurrentProductName = displayProductName;
 
         var historyEntry = new OqcScanHistoryEntry
         {
@@ -130,9 +141,13 @@ public partial class OqcScannerViewModel : ObservableObject
             // Load job into Tool Editor & Inspection Engine (which triggers OnRunOnceClicked)
             StatusMessage = $"📁 Đang nạp tệp Job: '{Path.GetFileName(jobPath)}' vào Tool Editor...";
             
+            _toolEditorViewModel.ProductCode = code;
             _toolEditorViewModel.LoadJobFromFile(jobPath);
 
             var cfg = _jobService.LoadJob(jobPath, out var tempDir);
+            cfg.ProductCode = code;
+            cfg.ProductName = displayProductName;
+
             _inspectionViewModel.CurrentJobFilePath = jobPath;
             _inspectionViewModel.CurrentTempWorkingDir = tempDir;
             _inspectionViewModel.ProductCode = code;

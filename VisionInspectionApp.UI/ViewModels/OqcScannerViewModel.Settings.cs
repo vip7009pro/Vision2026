@@ -26,6 +26,18 @@ public partial class OqcScannerViewModel
     private string _jobRootDirectory = "";
 
     [ObservableProperty]
+    private bool _enableProductNameLookup = true;
+
+    [ObservableProperty]
+    private string _productNameDbId = "";
+
+    [ObservableProperty]
+    private string _productNameQuery = "";
+
+    [ObservableProperty]
+    private string _productNameColumn = "";
+
+    [ObservableProperty]
     private string _productListDbId = "";
 
     [ObservableProperty]
@@ -103,6 +115,11 @@ public partial class OqcScannerViewModel
         JobFilePathColumn = cfg.JobFilePathColumn;
         JobRootDirectory = cfg.JobRootDirectory;
 
+        EnableProductNameLookup = cfg.EnableProductNameLookup;
+        ProductNameDbId = cfg.ProductNameDbId;
+        ProductNameQuery = cfg.ProductNameQuery;
+        ProductNameColumn = cfg.ProductNameColumn;
+
         ProductListDbId = cfg.ProductListDbId;
         ProductListQuery = cfg.ProductListQuery;
         ProductListPageSize = cfg.ProductListPageSize;
@@ -123,6 +140,11 @@ public partial class OqcScannerViewModel
             LookupQuery = LookupQuery,
             JobFilePathColumn = JobFilePathColumn,
             JobRootDirectory = JobRootDirectory,
+
+            EnableProductNameLookup = EnableProductNameLookup,
+            ProductNameDbId = ProductNameDbId,
+            ProductNameQuery = ProductNameQuery,
+            ProductNameColumn = ProductNameColumn,
 
             ProductListDbId = ProductListDbId,
             ProductListQuery = ProductListQuery,

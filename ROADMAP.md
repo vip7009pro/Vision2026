@@ -101,6 +101,10 @@ Lộ trình tích hợp tính năng Chụp ảnh từ camera và hỗ trợ các
   - Hỗ trợ giao diện **Gán mã sản phẩm ↔ Tệp Job** (Upsert SQL query) kèm trình duyệt danh sách sản phẩm phân trang server-side (`OFFSET-FETCH`) và DataGrid ảo hóa hiệu năng cao cho hàng trăm nghìn dòng.
   - Tự động nạp Job và cập nhật giao diện kiểm tra.
   - Hỗ trợ tùy chỉnh câu lệnh ghi log kết quả kiểm tra (PASS/NG, lý do lỗi) lên cơ sở dữ liệu sau khi kết thúc luồng inspection.
+- [x] Task 109: Hỗ trợ thẻ Token `{ProductName}` cho Tool ImageOutput và đồng bộ trạng thái kiểm tra OQC thời gian thực:
+  - Bổ sung token `{ProductName}` vào `FileNameFormat` và `SaveFolderPath` của Tool `ImageOutput`.
+  - Hiển thị chip chọn `{ProductName}` trong bảng thuộc tính ImageOutput trên Tool Editor UI.
+  - Đồng bộ `ProductName` và `ProductCode` real-time từ OQC Scanner vào `VisionConfig` và `ToolEditorViewModel`.
 
 
 

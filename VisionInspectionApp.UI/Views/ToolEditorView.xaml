@@ -1349,6 +1349,9 @@
                                                             <Border Background="#2D2D30" CornerRadius="2" Padding="4,2" Margin="0,0,4,4" ToolTip="Mã sản phẩm">
                                                                 <TextBlock Text="{}{ProductCode}" FontWeight="SemiBold" Foreground="#9CDCFE" FontSize="11"/>
                                                             </Border>
+                                                            <Border Background="#2D2D30" CornerRadius="2" Padding="4,2" Margin="0,0,4,4" ToolTip="Tên sản phẩm (ProductName)">
+                                                                <TextBlock Text="{}{ProductName}" FontWeight="SemiBold" Foreground="#9CDCFE" FontSize="11"/>
+                                                            </Border>
                                                             <Border Background="#2D2D30" CornerRadius="2" Padding="4,2" Margin="0,0,4,4" ToolTip="Trạng thái kết quả (PASS / FAIL)">
                                                                 <TextBlock Text="{}{Status}" FontWeight="SemiBold" Foreground="#569CD6" FontSize="11"/>
                                                             </Border>

@@ -179,6 +179,7 @@ public sealed class ImageSourceDefinition
 public sealed class VisionConfig
 {
     public string ProductCode { get; set; } = string.Empty;
+    public string ProductName { get; set; } = string.Empty;
 
     public double PixelsPerMm { get; set; } = 1.0;
 

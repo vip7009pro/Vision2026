@@ -10,6 +10,12 @@ public class OqcScannerConfig
     public string JobFilePathColumn { get; set; } = "JobFilePath";
     public string JobRootDirectory { get; set; } = @"C:\VisionJobs";
 
+    // ─── Tên sản phẩm Tra cứu (Product Name Lookup Query) ───
+    public bool EnableProductNameLookup { get; set; } = true;
+    public string ProductNameDbId { get; set; } = "";
+    public string ProductNameQuery { get; set; } = "SELECT G_NAME_KD FROM M100 WHERE G_CODE = '{ScannedCode}'";
+    public string ProductNameColumn { get; set; } = "G_NAME_KD";
+
     // ─── Danh sách sản phẩm (Product List Browser Query) ───
     public string ProductListDbId { get; set; } = "";
     public string ProductListQuery { get; set; } = "SELECT G_CODE, G_NAME_KD FROM M100 WHERE G_CODE LIKE '%{SearchText}%' OR G_NAME_KD LIKE '%{SearchText}%' ORDER BY G_CODE OFFSET {Offset} ROWS FETCH NEXT {PageSize} ROWS ONLY";

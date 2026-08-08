@@ -15,6 +15,9 @@ public interface IOqcScannerService
     Task<(bool Found, string JobFilePath, string ErrorMessage)> LookupJobAsync(
         string scannedCode, IDbManagerService dbManager);
 
+    Task<(bool Found, string ProductName, string ErrorMessage)> LookupProductNameAsync(
+        string scannedCode, IDbManagerService dbManager);
+
     Task<(bool Success, DataTable? Table, string ErrorMessage)> GetProductListAsync(
         string searchText, int pageIndex, IDbManagerService dbManager);
 
