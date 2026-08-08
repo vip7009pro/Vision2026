@@ -3,8 +3,13 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
+             xmlns:controls="clr-namespace:VisionInspectionApp.UI.Controls"
              mc:Ignorable="d" 
              d:DesignHeight="700" d:DesignWidth="1100">
+
+    <UserControl.InputBindings>
+        <KeyBinding Key="F5" Command="{Binding EnableLiveCameraCommand}" />
+    </UserControl.InputBindings>
 
     <UserControl.Resources>
         <BooleanToVisibilityConverter x:Key="BoolToVis" />
@@ -45,7 +50,8 @@
                 <Grid>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="120" />
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="140" />
                     </Grid.ColumnDefinitions>
 
                     <TextBox x:Name="ScanInputTextBox"
@@ -54,14 +60,24 @@
                              FontSize="22" FontWeight="Bold" Padding="8,6"
                              VerticalContentAlignment="Center"
                              IsEnabled="{Binding IsScanning, Converter={StaticResource BoolToVis}, ConverterParameter=Inverse}"
-                             Margin="0,0,8,0">
+                             Margin="0,0,12,0">
                         <TextBox.InputBindings>
                             <KeyBinding Key="Enter" Command="{Binding ScanCommand}" />
+                            <KeyBinding Key="F5" Command="{Binding EnableLiveCameraCommand}" />
                         </TextBox.InputBindings>
                     </TextBox>
 
-                    <Button Grid.Column="1"
-                            Content="🔍 QUÉT / TIM"
+                    <CheckBox Grid.Column="1"
+                              Content="⚡ Tự động chạy Job (Auto Run)"
+                              IsChecked="{Binding AutoRunJob, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                              ToolTip="Khi bật: Tự động chạy kiểm tra ngay sau khi quét mã sản phẩm. Khi tắt: Chỉ nạp Job, căn chỉnh camera rồi bấm 'CHẠY JOB' để kiểm tra."
+                              FontWeight="Bold"
+                              FontSize="13"
+                              VerticalAlignment="Center"
+                              Margin="0,0,12,0" />
+
+                    <Button Grid.Column="2"
+                            Content="{Binding ScanButtonText}"
                             Command="{Binding ScanCommand}"
                             FontSize="14" FontWeight="Bold"
                             Height="44" />
@@ -90,50 +106,93 @@
             </Grid>
         </Border>
 
-        <!-- Scan History Table -->
-        <GroupBox Grid.Row="3" Header="Lịch sử quét mã gần nhất (Scan History Log)" Padding="8" Foreground="{DynamicResource TextBrush}">
-            <Grid>
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="*" />
-                    <RowDefinition Height="Auto" />
-                </Grid.RowDefinitions>
+        <!-- Bottom Split Section: Left - Final Result Preview, Right - Scan History Table -->
+        <Grid Grid.Row="3">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" MinWidth="300" />
+                <ColumnDefinition Width="6" />
+                <ColumnDefinition Width="*" MinWidth="350" />
+            </Grid.ColumnDefinitions>
 
-                <DataGrid Grid.Row="0"
-                          ItemsSource="{Binding ScanHistory}"
-                          AutoGenerateColumns="False"
-                          IsReadOnly="True"
-                          CanUserAddRows="False"
-                          CanUserDeleteRows="False"
-                          GridLinesVisibility="Horizontal"
-                          HeadersVisibility="Column"
-                          Background="{DynamicResource PanelBackgroundBrush}"
-                          Foreground="{DynamicResource TextBrush}">
-                    <DataGrid.Columns>
-                        <DataGridTextColumn Header="Thời gian" Binding="{Binding Time, StringFormat='HH:mm:ss dd/MM'}" Width="110" />
-                        <DataGridTextColumn Header="Mã Scan (Product)" Binding="{Binding ScannedCode}" Width="160" ElementStyle="{StaticResource BoldStyle}" />
-                        <DataGridTextColumn Header="Tệp Job" Binding="{Binding JobFilePath}" Width="160" />
-                        <DataGridTextColumn Header="Tra cứu DB" Binding="{Binding Message}" Width="110" />
-                        <DataGridTemplateColumn Header="KQ Kiểm Tra" Width="140">
-                            <DataGridTemplateColumn.CellTemplate>
-                                <DataTemplate>
-                                    <TextBlock Text="{Binding InspectResult}" Foreground="{Binding ResultBrushHex}" FontWeight="Bold" VerticalAlignment="Center" HorizontalAlignment="Center" />
-                                </DataTemplate>
-                            </DataGridTemplateColumn.CellTemplate>
-                        </DataGridTemplateColumn>
-                        <DataGridTextColumn Header="Chi Tiết Lỗi / Thông Số Tool" Binding="{Binding InspectDetails}" Width="*">
-                            <DataGridTextColumn.CellStyle>
-                                <Style TargetType="DataGridCell" BasedOn="{StaticResource {x:Type DataGridCell}}">
-                                    <Setter Property="ToolTip" Value="{Binding InspectDetails}" />
-                                </Style>
-                            </DataGridTextColumn.CellStyle>
-                        </DataGridTextColumn>
-                    </DataGrid.Columns>
-                </DataGrid>
+            <!-- Column 0: Left Side - Preview Final Image of ResultView Node / Live Stream -->
+            <GroupBox Grid.Column="0" Header="{Binding PreviewHeaderTitle}" Padding="6" Foreground="{DynamicResource TextBrush}">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
 
-                <DockPanel Grid.Row="1" Margin="0,8,0,0">
-                    <Button Content="🗑️ Xóa lịch sử" Command="{Binding ClearHistoryCommand}" DockPanel.Dock="Right" Width="110" Height="26" />
-                </DockPanel>
-            </Grid>
-        </GroupBox>
+                    <!-- Control Bar with Mode Toggle & Overlay CheckBoxes -->
+                    <DockPanel Grid.Row="0" Margin="4,0,4,6" LastChildFill="False">
+                        <Button DockPanel.Dock="Left"
+                                Content="{Binding LiveToggleButtonText}"
+                                Command="{Binding ToggleLiveCameraCommand}"
+                                Width="145" Height="26" Margin="0,0,12,0"
+                                ToolTip="Chuyển đổi giữa chế độ xem Live Stream từ Camera và Ảnh kết quả kiểm tra Final" />
+
+                        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+                            <CheckBox Content="Kết Quả (Overlay)" IsChecked="{Binding ShowResultOverlay, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,12,0" FontWeight="SemiBold" VerticalAlignment="Center" />
+                            <CheckBox Content="Khung ROI" IsChecked="{Binding ShowRois, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" FontWeight="SemiBold" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </DockPanel>
+
+                    <!-- Image Viewer Control -->
+                    <Border Grid.Row="1" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" Background="Black" CornerRadius="4">
+                        <controls:ImageViewerControl ImageSource="{Binding PreviewImage}"
+                                                   OverlayItems="{Binding OverlayItems}"
+                                                   EnableRoiEditing="False" />
+                    </Border>
+                </Grid>
+            </GroupBox>
+
+            <!-- GridSplitter -->
+            <GridSplitter Grid.Column="1" Width="6" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Background="{DynamicResource DarkBorderBrush}" />
+
+            <!-- Column 2: Right Side - Scan History Log Table -->
+            <GroupBox Grid.Column="2" Header="📊 Lịch sử quét mã gần nhất (Scan History Log)" Padding="6" Foreground="{DynamicResource TextBrush}">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="*" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+
+                    <DataGrid Grid.Row="0"
+                              ItemsSource="{Binding ScanHistory}"
+                              AutoGenerateColumns="False"
+                              IsReadOnly="True"
+                              CanUserAddRows="False"
+                              CanUserDeleteRows="False"
+                              GridLinesVisibility="Horizontal"
+                              HeadersVisibility="Column"
+                              Background="{DynamicResource PanelBackgroundBrush}"
+                              Foreground="{DynamicResource TextBrush}">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="Thời gian" Binding="{Binding Time, StringFormat='HH:mm:ss dd/MM'}" Width="100" />
+                            <DataGridTextColumn Header="Mã Scan (Product)" Binding="{Binding ScannedCode}" Width="140" ElementStyle="{StaticResource BoldStyle}" />
+                            <DataGridTextColumn Header="Tệp Job" Binding="{Binding JobFilePath}" Width="130" />
+                            <DataGridTextColumn Header="Tra cứu DB" Binding="{Binding Message}" Width="90" />
+                            <DataGridTemplateColumn Header="KQ Kiểm Tra" Width="120">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <TextBlock Text="{Binding InspectResult}" Foreground="{Binding ResultBrushHex}" FontWeight="Bold" VerticalAlignment="Center" HorizontalAlignment="Center" />
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
+                            <DataGridTextColumn Header="Chi Tiết Lỗi / Thông Số Tool" Binding="{Binding InspectDetails}" Width="*">
+                                <DataGridTextColumn.CellStyle>
+                                    <Style TargetType="DataGridCell" BasedOn="{StaticResource {x:Type DataGridCell}}">
+                                        <Setter Property="ToolTip" Value="{Binding InspectDetails}" />
+                                    </Style>
+                                </DataGridTextColumn.CellStyle>
+                            </DataGridTextColumn>
+                        </DataGrid.Columns>
+                    </DataGrid>
+
+                    <DockPanel Grid.Row="1" Margin="0,8,0,0">
+                        <Button Content="🗑️ Xóa lịch sử" Command="{Binding ClearHistoryCommand}" DockPanel.Dock="Right" Width="110" Height="26" />
+                    </DockPanel>
+                </Grid>
+            </GroupBox>
+        </Grid>
     </Grid>
 </UserControl>

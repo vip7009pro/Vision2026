@@ -128,7 +128,7 @@ namespace VisionInspectionApp.UI.ViewModels
             _config.ToolGraph.Edges = Edges.Select(e => new ToolGraphEdge { FromNodeId = e.FromNodeId, ToNodeId = e.ToNodeId, FromPort = e.FromPort, ToPort = e.ToPort }).ToList();
         }
     
-        public void LoadJobFromFile(string filePath)
+        public void LoadJobFromFile(string filePath, bool autoRun = true)
         {
             if (string.IsNullOrWhiteSpace(filePath) || !File.Exists(filePath))
             {
@@ -180,8 +180,11 @@ namespace VisionInspectionApp.UI.ViewModels
                     System.Windows.Application.Current.MainWindow.Title = "CMS VINA VISION SYSTEM - " + Path.GetFileName(CurrentJobFilePath);
                 }
 
-                // Trigger inspection execution with new job
-                OnRunOnceClicked();
+                // Trigger inspection execution with new job if autoRun is enabled
+                if (autoRun)
+                {
+                    OnRunOnceClicked();
+                }
             }
             catch (Exception ex)
             {

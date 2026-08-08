@@ -12,6 +12,10 @@ using VisionInspectionApp.Application.DB.Services;
 using VisionInspectionApp.Application.OQC;
 using VisionInspectionApp.Models;
 
+using OpenCvSharp;
+using VisionInspectionApp.UI.Controls;
+using VisionInspectionApp.UI.Services;
+
 namespace VisionInspectionApp.UI.ViewModels;
 
 public partial class OqcScannerViewModel : ObservableObject
@@ -21,6 +25,7 @@ public partial class OqcScannerViewModel : ObservableObject
     private readonly IJobService _jobService;
     private readonly InspectionViewModel _inspectionViewModel;
     private readonly ToolEditorViewModel _toolEditorViewModel;
+    private readonly CameraService _cameraService;
 
     [ObservableProperty]
     private string _scannedCode = "";
@@ -40,6 +45,29 @@ public partial class OqcScannerViewModel : ObservableObject
     [ObservableProperty]
     private bool _isScanning = false;
 
+    [ObservableProperty]
+    private bool _autoRunJob = true;
+
+    [ObservableProperty]
+    private bool _isShowingLiveCamera = true;
+
+    // ─── Image & Overlay Preview Properties for ResultView ───
+    [ObservableProperty]
+    private ImageSource? _previewImage;
+
+    [ObservableProperty]
+    private IEnumerable<OverlayItem>? _overlayItems;
+
+    [ObservableProperty]
+    private bool _showResultOverlay = true;
+
+    [ObservableProperty]
+    private bool _showRois = true;
+
+    private List<OverlayItem>? _allOverlayItemsCache;
+    private bool _isRenderingLiveFrame = false;
+    private string _lastScannedRawCode = "";
+
     public ObservableCollection<OqcScanHistoryEntry> ScanHistory { get; } = new();
 
     public Action<int>? RequestSwitchTab { get; set; }
@@ -50,19 +78,42 @@ public partial class OqcScannerViewModel : ObservableObject
     public IRelayCommand ManualOpenJobCommand { get; }
     public IRelayCommand ClearHistoryCommand { get; }
     public IRelayCommand SwitchToToolEditorCommand { get; }
+    public IRelayCommand ToggleLiveCameraCommand { get; }
+
+    public string ScanButtonText
+    {
+        get
+        {
+            if (!AutoRunJob && !string.IsNullOrWhiteSpace(CurrentJobFilePath) && CurrentJobFilePath != "-" && CurrentJobFilePath != "Chưa có Job")
+            {
+                return "▶ CHẠY JOB";
+            }
+            return "🔍 QUÉT / TÌM";
+        }
+    }
+
+    public string PreviewHeaderTitle => IsShowingLiveCamera 
+        ? "📷 LIVE CAMERA (Căn chỉnh sản phẩm - F5)" 
+        : "🖼️ XEM TRƯỚC KẾT QUẢ FINAL (ResultView - Nút F5 để bật Live Cam)";
+
+    public string LiveToggleButtonText => IsShowingLiveCamera 
+        ? "🖼️ Xem Kết Quả Final" 
+        : "📷 Live Camera (F5)";
 
     public OqcScannerViewModel(
         IOqcScannerService oqcService,
         IDbManagerService dbManager,
         IJobService jobService,
         InspectionViewModel inspectionViewModel,
-        ToolEditorViewModel toolEditorViewModel)
+        ToolEditorViewModel toolEditorViewModel,
+        CameraService cameraService)
     {
         _oqcService = oqcService;
         _dbManager = dbManager;
         _jobService = jobService;
         _inspectionViewModel = inspectionViewModel;
         _toolEditorViewModel = toolEditorViewModel;
+        _cameraService = cameraService;
 
         ScanCommand = new AsyncRelayCommand(ExecuteScanAsync);
         OpenSettingsCommand = new RelayCommand(OpenSettingsDialog);
@@ -70,11 +121,98 @@ public partial class OqcScannerViewModel : ObservableObject
         ManualOpenJobCommand = new RelayCommand(ExecuteManualOpenJob);
         ClearHistoryCommand = new RelayCommand(() => ScanHistory.Clear());
         SwitchToToolEditorCommand = new RelayCommand(() => RequestSwitchTab?.Invoke(0));
+        ToggleLiveCameraCommand = new RelayCommand(ToggleLiveCamera);
 
         _inspectionViewModel.InspectionCompletedAsync += HandleInspectionCompletedAsync;
 
+        // Subscribe to CameraService frame stream for live alignment preview
+        _cameraService.FrameCaptured += OnCameraFrameCaptured;
+        if (!_cameraService.IsRunning)
+        {
+            _ = _cameraService.StartSavedCameraAsync();
+        }
+
         // Initialize Settings properties
         InitSettingsProperties();
+    }
+
+    partial void OnAutoRunJobChanged(bool value)
+    {
+        OnPropertyChanged(nameof(ScanButtonText));
+    }
+
+    partial void OnCurrentJobFilePathChanged(string value)
+    {
+        OnPropertyChanged(nameof(ScanButtonText));
+    }
+
+    [RelayCommand]
+    private void EnableLiveCamera()
+    {
+        IsShowingLiveCamera = true;
+        OverlayItems = null; // Clear inspection overlays during live stream
+        if (!_cameraService.IsRunning)
+        {
+            _ = _cameraService.StartSavedCameraAsync();
+        }
+        OnPropertyChanged(nameof(PreviewHeaderTitle));
+        OnPropertyChanged(nameof(LiveToggleButtonText));
+    }
+
+    private void ToggleLiveCamera()
+    {
+        if (!IsShowingLiveCamera)
+        {
+            EnableLiveCamera();
+        }
+        else
+        {
+            IsShowingLiveCamera = false;
+            RefreshPreviewFromToolEditor();
+            OnPropertyChanged(nameof(PreviewHeaderTitle));
+            OnPropertyChanged(nameof(LiveToggleButtonText));
+        }
+    }
+
+    private void OnCameraFrameCaptured(object? sender, Mat frame)
+    {
+        if (!IsShowingLiveCamera || frame == null || frame.Empty())
+        {
+            return;
+        }
+
+        if (_isRenderingLiveFrame)
+        {
+            return;
+        }
+
+        _isRenderingLiveFrame = true;
+
+        try
+        {
+            using var frameClone = frame.Clone();
+            var bitmap = frameClone.ToBitmapSourceSafe();
+
+            System.Windows.Application.Current?.Dispatcher?.BeginInvoke(new Action(() =>
+            {
+                try
+                {
+                    if (IsShowingLiveCamera)
+                    {
+                        PreviewImage = bitmap;
+                        OverlayItems = null;
+                    }
+                }
+                finally
+                {
+                    _isRenderingLiveFrame = false;
+                }
+            }));
+        }
+        catch
+        {
+            _isRenderingLiveFrame = false;
+        }
     }
 
     private async Task ExecuteScanAsync()
@@ -82,11 +220,25 @@ public partial class OqcScannerViewModel : ObservableObject
         string code = ScannedCode?.Trim() ?? "";
         if (string.IsNullOrWhiteSpace(code))
         {
+            // If input is empty but a job is already loaded and AutoRunJob is false, treat click as "CHẠY JOB"
+            if (!AutoRunJob && !string.IsNullOrWhiteSpace(CurrentJobFilePath) && CurrentJobFilePath != "-" && CurrentJobFilePath != "Chưa có Job")
+            {
+                IsShowingLiveCamera = false;
+                OnPropertyChanged(nameof(PreviewHeaderTitle));
+                OnPropertyChanged(nameof(LiveToggleButtonText));
+                StatusMessage = $"⌛ Đang chạy kiểm tra cho sản phẩm '{CurrentProductName}'...";
+                StatusBrush = Brushes.DodgerBlue;
+
+                _toolEditorViewModel.OnRunOnceClicked();
+                return;
+            }
+
             StatusMessage = "⚠️ Vui lòng nhập hoặc quét mã sản phẩm!";
             StatusBrush = Brushes.Orange;
             return;
         }
 
+        _lastScannedRawCode = code;
         IsScanning = true;
         StatusMessage = $"🔍 Đang tra cứu cơ sở dữ liệu cho mã '{code}'...";
         StatusBrush = Brushes.DodgerBlue;
@@ -108,7 +260,7 @@ public partial class OqcScannerViewModel : ObservableObject
         {
             Time = DateTime.Now,
             ScannedCode = code,
-            InspectResult = "Đang kiểm tra...",
+            InspectResult = AutoRunJob ? "Đang kiểm tra..." : "Đã nạp Job",
             ResultBrushHex = "#1E88E5"
         };
 
@@ -135,14 +287,8 @@ public partial class OqcScannerViewModel : ObservableObject
             historyEntry.JobFilePath = jobPath;
             historyEntry.Message = "OK";
 
-            // Add history entry to UI before executing inspection so it can be updated by event
+            // Add history entry to UI
             AddHistory(historyEntry);
-
-            // Load job into Tool Editor & Inspection Engine (which triggers OnRunOnceClicked)
-            StatusMessage = $"📁 Đang nạp tệp Job: '{Path.GetFileName(jobPath)}' vào Tool Editor...";
-            
-            _toolEditorViewModel.ProductCode = code;
-            _toolEditorViewModel.LoadJobFromFile(jobPath);
 
             var cfg = _jobService.LoadJob(jobPath, out var tempDir);
             cfg.ProductCode = code;
@@ -155,16 +301,32 @@ public partial class OqcScannerViewModel : ObservableObject
 
             System.Windows.Application.Current.MainWindow.Title = "CMS VINA VISION SYSTEM - [OQC] " + Path.GetFileName(jobPath);
 
-            // Check if ToolEditor produced an inspection result
-            if (_toolEditorViewModel.LastResult != null)
+            _toolEditorViewModel.ProductCode = code;
+
+            if (AutoRunJob)
             {
-                await HandleInspectionCompletedAsync(_toolEditorViewModel.LastResult, cfg);
+                // Auto Run mode: Load job and run graph automatically
+                IsShowingLiveCamera = false;
+                StatusMessage = $"📁 Đang nạp tệp Job: '{Path.GetFileName(jobPath)}' và chạy kiểm tra...";
+                _toolEditorViewModel.LoadJobFromFile(jobPath, autoRun: true);
+
+                if (_toolEditorViewModel.LastResult != null)
+                {
+                    await HandleInspectionCompletedAsync(_toolEditorViewModel.LastResult, cfg);
+                }
             }
             else
             {
-                StatusMessage = $"✅ Đã nạp Job '{Path.GetFileName(jobPath)}' cho mã '{code}'. Sẵn sàng kiểm tra.";
-                StatusBrush = Brushes.Green;
+                // Manual Run mode: Load job only, keep Live Camera active for product alignment
+                IsShowingLiveCamera = true;
+                StatusMessage = $"✅ Đã nạp Job '{Path.GetFileName(jobPath)}' cho mã '{code}'. Căn chỉnh sản phẩm và nhấn '▶ CHẠY JOB' để kiểm tra.";
+                StatusBrush = Brushes.DodgerBlue;
+                _toolEditorViewModel.LoadJobFromFile(jobPath, autoRun: false);
             }
+
+            OnPropertyChanged(nameof(ScanButtonText));
+            OnPropertyChanged(nameof(PreviewHeaderTitle));
+            OnPropertyChanged(nameof(LiveToggleButtonText));
 
             // Auto select code in input field for quick re-scanning
             ScannedCode = "";
@@ -193,7 +355,15 @@ public partial class OqcScannerViewModel : ObservableObject
     {
         if (result == null) return;
 
-        string code = CurrentProductName;
+        IsShowingLiveCamera = false;
+        OnPropertyChanged(nameof(PreviewHeaderTitle));
+        OnPropertyChanged(nameof(LiveToggleButtonText));
+
+        string rawCode = !string.IsNullOrWhiteSpace(_lastScannedRawCode)
+            ? _lastScannedRawCode
+            : (!string.IsNullOrWhiteSpace(_toolEditorViewModel.ProductCode) ? _toolEditorViewModel.ProductCode : config?.ProductCode ?? CurrentProductName);
+
+        string productName = CurrentProductName;
         string path = CurrentJobFilePath;
 
         string details = ExtractDetailedReasons(result);
@@ -201,12 +371,12 @@ public partial class OqcScannerViewModel : ObservableObject
         string colorHex = result.Pass ? "#2E7D32" : "#D32F2F";
         Brush statusBrush = result.Pass ? Brushes.ForestGreen : Brushes.Crimson;
 
-        // Always update UI Scan History entry
-        if (ScanHistory.Count > 0)
+        // Always update UI Scan History entry & Refresh Preview Image
+        System.Windows.Application.Current?.Dispatcher?.Invoke(() =>
         {
-            System.Windows.Application.Current?.Dispatcher?.Invoke(() =>
+            if (ScanHistory.Count > 0)
             {
-                var entry = ScanHistory.FirstOrDefault(e => string.Equals(e.ScannedCode, code, StringComparison.OrdinalIgnoreCase)) 
+                var entry = ScanHistory.FirstOrDefault(e => string.Equals(e.ScannedCode, rawCode, StringComparison.OrdinalIgnoreCase)) 
                             ?? ScanHistory[0];
 
                 entry.InspectResult = statusStr;
@@ -214,129 +384,70 @@ public partial class OqcScannerViewModel : ObservableObject
                 entry.ResultBrushHex = colorHex;
 
                 StatusMessage = result.Pass
-                    ? $"✅ SẢN PHẨM '{code}' -> KẾT QUẢ: PASS (OK)"
-                    : $"❌ SẢN PHẨM '{code}' -> KẾT QUẢ: NG! Lý do: {details}";
+                    ? $"✅ SẢN PHẨM '{productName}' ({rawCode}) -> KẾT QUẢ: PASS (OK)"
+                    : $"❌ SẢN PHẨM '{productName}' ({rawCode}) -> KẾT QUẢ: NG! Lý do: {details}";
                 StatusBrush = statusBrush;
-            });
-        }
+            }
+
+            RefreshPreviewFromToolEditor();
+        });
 
         // Log result to Database if enabled
         if (_oqcService.Config.LogResultToDb && config != null)
         {
-            await _oqcService.LogInspectionResultAsync(code, path, result, config, _dbManager);
+            await _oqcService.LogInspectionResultAsync(rawCode, path, result, config, _dbManager);
         }
+    }
+
+    public void RefreshPreviewFromToolEditor()
+    {
+        System.Windows.Application.Current?.Dispatcher?.Invoke(() =>
+        {
+            PreviewImage = _toolEditorViewModel.FinalPreviewImage ?? _toolEditorViewModel.SelectedNodePreviewImage;
+            var finalOverlays = _toolEditorViewModel.FinalOverlayItems;
+            _allOverlayItemsCache = finalOverlays != null ? new List<OverlayItem>(finalOverlays) : new List<OverlayItem>();
+            UpdatePreviewOverlays();
+        });
+    }
+
+    partial void OnShowResultOverlayChanged(bool value) => UpdatePreviewOverlays();
+    partial void OnShowRoisChanged(bool value) => UpdatePreviewOverlays();
+
+    private void UpdatePreviewOverlays()
+    {
+        if (_allOverlayItemsCache == null || _allOverlayItemsCache.Count == 0)
+        {
+            OverlayItems = null;
+            return;
+        }
+
+        var filtered = new List<OverlayItem>();
+        foreach (var item in _allOverlayItemsCache)
+        {
+            bool isRoiBox = item is OverlayRectItem;
+
+            if (isRoiBox)
+            {
+                if (ShowRois)
+                {
+                    filtered.Add(item);
+                }
+            }
+            else
+            {
+                if (ShowResultOverlay)
+                {
+                    filtered.Add(item);
+                }
+            }
+        }
+
+        OverlayItems = filtered;
     }
 
     private static string ExtractDetailedReasons(InspectionResult result)
     {
-        if (result == null) return "Chưa có kết quả";
-        if (result.Pass) return "Tất cả công cụ kiểm tra đạt yêu cầu (PASS).";
-
-        var reasons = new System.Collections.Generic.List<string>();
-
-        if (result.Origin != null && !result.Origin.Pass)
-        {
-            reasons.Add($"Origin NG (Score: {result.Origin.Score:F3})");
-        }
-
-        foreach (var d in result.Distances)
-        {
-            if (!d.Pass)
-            {
-                reasons.Add($"Distance [{d.Name}] NG: {d.Value:F3}mm (Tiêu chuẩn: {d.Nominal:F3}, Dung sai: +{d.TolPlus}/-{d.TolMinus})");
-            }
-        }
-
-        foreach (var l2l in result.LineToLineDistances)
-        {
-            if (!l2l.Pass)
-            {
-                reasons.Add($"LineToLine [{l2l.Name}] NG: {l2l.Value:F3}mm (Tiêu chuẩn: {l2l.Nominal:F3})");
-            }
-        }
-
-        foreach (var p2l in result.PointToLineDistances)
-        {
-            if (!p2l.Pass)
-            {
-                reasons.Add($"PointToLine [{p2l.Name}] NG: {p2l.Value:F3}mm (Tiêu chuẩn: {p2l.Nominal:F3})");
-            }
-        }
-
-        foreach (var seg in result.SegmentLineDistances)
-        {
-            if (!seg.Pass)
-            {
-                reasons.Add($"SegmentLine [{seg.Name}] NG: {seg.Value:F3}mm");
-            }
-        }
-
-        foreach (var ang in result.Angles)
-        {
-            if (!ang.Pass)
-            {
-                reasons.Add($"Angle [{ang.Name}] NG: {ang.ValueDeg:F2}° (Tiêu chuẩn: {ang.Nominal:F2}°)");
-            }
-        }
-
-        foreach (var ep in result.EdgePairs)
-        {
-            if (!ep.Pass)
-            {
-                reasons.Add($"EdgePair [{ep.Name}] NG: {ep.Value:F3}mm");
-            }
-        }
-
-        foreach (var epd in result.EdgePairDetections)
-        {
-            if (!epd.Pass)
-            {
-                reasons.Add($"EdgePairDetect [{epd.Name}] NG: {epd.Value:F3}mm");
-            }
-        }
-
-        foreach (var dia in result.Diameters)
-        {
-            if (!dia.Pass)
-            {
-                reasons.Add($"Diameter [{dia.Name}] NG: {dia.Value:F3}mm");
-            }
-        }
-
-        foreach (var c in result.Conditions)
-        {
-            if (!c.Pass)
-            {
-                reasons.Add($"Condition [{c.Name}] NG ({c.Expression})");
-            }
-        }
-
-        foreach (var sc in result.SurfaceCompares)
-        {
-            if (!sc.Pass)
-            {
-                reasons.Add($"Ngoại quan [{sc.Name}] NG ({sc.Count} vết lỗi)");
-            }
-        }
-
-        foreach (var cc in result.ContourCompares)
-        {
-            if (!cc.Pass)
-            {
-                reasons.Add($"ContourCompare [{cc.Name}] NG (Score: {cc.MatchScore:F3}, MaxDist: {cc.MaxDistancePx:F1}px)");
-            }
-        }
-
-        foreach (var cd in result.CodeDetections)
-        {
-            if (!cd.Found)
-            {
-                reasons.Add($"CodeDetect [{cd.Name}] NG (Không đọc được mã)");
-            }
-        }
-
-        if (reasons.Count == 0) return "NG (Không đạt tiêu chí kiểm tra chung)";
-        return string.Join(" | ", reasons);
+        return OqcScannerService.ExtractNgReasons(result);
     }
 
     private void ExecuteManualOpenJob()

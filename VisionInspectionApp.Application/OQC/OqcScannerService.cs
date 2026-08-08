@@ -307,6 +307,7 @@ public sealed class OqcScannerService : IOqcScannerService
         }
 
         string safeCode = EscapeSqlValue((scannedCode ?? "").Trim());
+        string safeProductName = EscapeSqlValue((config?.ProductName ?? "").Trim());
         string safePath = EscapeSqlValue((jobFilePath ?? "").Trim());
         string passBit = (result != null && result.Pass) ? "1" : "0";
         string inspectResultText = (result != null && result.Pass) ? "PASS" : "NG";
@@ -314,6 +315,7 @@ public sealed class OqcScannerService : IOqcScannerService
 
         string query = Config.LogResultQuery
             .Replace("{ScannedCode}", safeCode, StringComparison.OrdinalIgnoreCase)
+            .Replace("{ProductName}", safeProductName, StringComparison.OrdinalIgnoreCase)
             .Replace("{JobFilePath}", safePath, StringComparison.OrdinalIgnoreCase)
             .Replace("{PassBit}", passBit, StringComparison.OrdinalIgnoreCase)
             .Replace("{Pass}", passBit, StringComparison.OrdinalIgnoreCase)
@@ -342,11 +344,13 @@ public sealed class OqcScannerService : IOqcScannerService
         }
     }
 
-    private static string ExtractNgReasons(InspectionResult result)
+    public static string ExtractNgReasons(InspectionResult result)
     {
-        if (result == null || result.Pass) return string.Empty;
+        if (result == null) return "Chưa có kết quả";
+        if (result.Pass) return "Tất cả công cụ kiểm tra đạt yêu cầu (PASS).";
 
         var reasons = new System.Collections.Generic.List<string>();
+
         if (result.Origin != null && !result.Origin.Pass)
         {
             reasons.Add($"Origin NG (Score: {result.Origin.Score:F3})");
@@ -354,22 +358,102 @@ public sealed class OqcScannerService : IOqcScannerService
 
         foreach (var d in result.Distances)
         {
-            if (!d.Pass) reasons.Add($"Distance NG: {d.Name} ({d.Value:F2}mm)");
-        }
-        foreach (var c in result.Conditions)
-        {
-            if (!c.Pass) reasons.Add($"Condition NG: {c.Name}");
-        }
-        foreach (var sc in result.SurfaceCompares)
-        {
-            if (!sc.Pass) reasons.Add($"Surface NG: {sc.Name}");
-        }
-        foreach (var cc in result.ContourCompares)
-        {
-            if (!cc.Pass) reasons.Add($"Contour NG: {cc.Name}");
+            if (!d.Pass)
+            {
+                reasons.Add($"Distance [{d.Name}] NG: {d.Value:F3}mm (Tiêu chuẩn: {d.Nominal:F3}, Dung sai: +{d.TolPlus}/-{d.TolMinus})");
+            }
         }
 
-        if (reasons.Count == 0) reasons.Add("NG");
+        foreach (var l2l in result.LineToLineDistances)
+        {
+            if (!l2l.Pass)
+            {
+                reasons.Add($"LineToLine [{l2l.Name}] NG: {l2l.Value:F3}mm (Tiêu chuẩn: {l2l.Nominal:F3})");
+            }
+        }
+
+        foreach (var p2l in result.PointToLineDistances)
+        {
+            if (!p2l.Pass)
+            {
+                reasons.Add($"PointToLine [{p2l.Name}] NG: {p2l.Value:F3}mm (Tiêu chuẩn: {p2l.Nominal:F3})");
+            }
+        }
+
+        foreach (var seg in result.SegmentLineDistances)
+        {
+            if (!seg.Pass)
+            {
+                reasons.Add($"SegmentLine [{seg.Name}] NG: {seg.Value:F3}mm");
+            }
+        }
+
+        foreach (var ang in result.Angles)
+        {
+            if (!ang.Pass)
+            {
+                reasons.Add($"Angle [{ang.Name}] NG: {ang.ValueDeg:F2}° (Tiêu chuẩn: {ang.Nominal:F2}°)");
+            }
+        }
+
+        foreach (var ep in result.EdgePairs)
+        {
+            if (!ep.Pass)
+            {
+                reasons.Add($"EdgePair [{ep.Name}] NG: {ep.Value:F3}mm");
+            }
+        }
+
+        foreach (var epd in result.EdgePairDetections)
+        {
+            if (!epd.Pass)
+            {
+                reasons.Add($"EdgePairDetect [{epd.Name}] NG: {epd.Value:F3}mm");
+            }
+        }
+
+        foreach (var dia in result.Diameters)
+        {
+            if (!dia.Pass)
+            {
+                reasons.Add($"Diameter [{dia.Name}] NG: {dia.Value:F3}mm");
+            }
+        }
+
+        foreach (var c in result.Conditions)
+        {
+            if (!c.Pass)
+            {
+                reasons.Add($"Condition [{c.Name}] NG ({c.Expression})");
+            }
+        }
+
+        foreach (var sc in result.SurfaceCompares)
+        {
+            if (!sc.Pass)
+            {
+                reasons.Add($"Ngoại quan [{sc.Name}] NG ({sc.Count} vết lỗi)");
+            }
+        }
+
+        foreach (var cc in result.ContourCompares)
+        {
+            if (!cc.Pass)
+            {
+                reasons.Add($"ContourCompare [{cc.Name}] NG (Score: {cc.MatchScore:F3}, MaxDist: {cc.MaxDistancePx:F1}px)");
+            }
+        }
+
+        foreach (var cd in result.CodeDetections)
+        {
+            if (!cd.Found)
+            {
+                reasons.Add($"CodeDetect [{cd.Name}] NG (Không đọc được mã)");
+            }
+        }
+
+        if (reasons.Count == 0) return "NG (Không đạt tiêu chí kiểm tra chung)";
+
         return string.Join("; ", reasons);
     }
 

@@ -182,7 +182,7 @@
                                       IsEnabled="{Binding LogResultToDb}" />
                         </Grid>
 
-                        <TextBlock Text="Truy vấn SQL Ghi log (hỗ trợ {ScannedCode}, {JobFilePath}, {PassBit}, {InspectResult}, {NgReasons}):" Margin="0,0,0,4" FontSize="11" Foreground="{DynamicResource TextMutedBrush}" />
+                        <TextBlock Text="Truy vấn SQL Ghi log (hỗ trợ {ScannedCode}, {ProductName}, {JobFilePath}, {PassBit}, {InspectResult}, {NgReasons}):" Margin="0,0,0,4" FontSize="11" Foreground="{DynamicResource TextMutedBrush}" />
                         <TextBox Text="{Binding LogResultQuery, UpdateSourceTrigger=PropertyChanged}"
                                  IsEnabled="{Binding LogResultToDb}"
                                  AcceptsReturn="True" TextWrapping="Wrap" FontFamily="Consolas" Height="65" />

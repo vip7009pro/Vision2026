@@ -1635,7 +1635,7 @@ namespace VisionInspectionApp.UI.ViewModels
             OnPropertyChanged(nameof(RunContinuousButtonToolTip));
         }
 
-        private void OnRunOnceClicked()
+        public void OnRunOnceClicked()
         {
             if (IsRunningFolderFlow)
             {
