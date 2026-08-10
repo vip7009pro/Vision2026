@@ -507,7 +507,11 @@
   10. `Services/InspectionService.Helpers.cs`: `partial class InspectionService` chứa các hàm hình học/math (`Rotate`, `ExtractStraightRoi`, `MapToGlobal`, `TransformRoi`, `TransformRoiKeepSize`, `TransformPointDefinition`, `TransformDefectConfig`, `CalculateLineLineDistance`, `CalculatePointLineDistance`, `CalculateSegmentLineDistance`).
 - **Đã xóa hoàn toàn tệp `Class1.cs` monolith cũ**.
 - **Giữ nguyên 100% namespace `VisionInspectionApp.Application`** giúp zero breaking-changes đối với tất cả các dự án phụ thuộc (`VisionInspectionApp.UI`, `VisionInspectionApp.Persistence`, `TestExtractApp`).
-- **Biên dịch toàn bộ Solution `VisionInspectionApp.slnx` thành công 100%**: **0 Error(s)**, **38 Warning(s)**.
+- **Gỡ bỏ Tab "Live Camera" khỏi giao diện ứng dụng** và hợp nhất tính năng chọn nguồn camera sang **Tab "Camera Settings"**:
+  - Tích hợp Dropdown ComboBox chọn nguồn Camera (Camera Giả Lập, Các thiết bị DirectShow thực tế, Fallback Ports 0-4, Custom RTSP / IP Camera) ngay trong GroupBox `Thiết Bị Camera (Device & Source)` trên Tab **Camera Settings**.
+  - Bổ sung các nút bấm điều khiển trực tiếp **`▶ Start Camera`**, **`⏹ Stop Camera`** và **`🔄 Làm mới`** trên Tab Camera Settings, giúp người dùng vừa xem stream trực tiếp vừa tinh chỉnh thông số Độ Sáng (Brightness), Độ Tương Phản (Contrast) và Chế Độ Đen Trắng (Grayscale).
+- **Biên dịch toàn bộ Solution `VisionInspectionApp.slnx` thành công 100%**: **0 Error(s)**, **36 Warning(s)**.
+
 
 ## Encoding
 

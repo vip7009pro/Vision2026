@@ -193,10 +193,6 @@
             <oqc:OqcScannerView />
         </DataTemplate>
 
-        <DataTemplate DataType="{x:Type viewModels:LiveCameraViewModel}">
-            <views:LiveCameraView />
-        </DataTemplate>
-
         <DataTemplate DataType="{x:Type viewModels:CameraSettingsViewModel}">
             <views:CameraSettingsView />
         </DataTemplate>
@@ -215,9 +211,6 @@
             </TabItem>
             <TabItem Header="OQC Scanner">
                 <ContentControl Content="{Binding OqcScanner}" />
-            </TabItem>
-            <TabItem Header="Live Camera">
-                <ContentControl Content="{Binding LiveCamera}" />
             </TabItem>
             <TabItem Header="Camera Settings">
                 <ContentControl Content="{Binding CameraSettings}" />

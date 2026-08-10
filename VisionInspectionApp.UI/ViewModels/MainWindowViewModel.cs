@@ -7,7 +7,7 @@ namespace VisionInspectionApp.UI.ViewModels;
 public sealed partial class MainWindowViewModel : ObservableObject
 {
     [ObservableProperty]
-    private int _selectedTabIndex = 3; // Default to OQC Scanner tab or Tool Editor tab
+    private int _selectedTabIndex = 3; // Default to OQC Scanner tab
 
     public MainWindowViewModel(
         ToolEditorViewModel toolEditor,
@@ -15,7 +15,6 @@ public sealed partial class MainWindowViewModel : ObservableObject
         ManualInspectionViewModel manualInspection,
         InspectionViewModel inspection,
         OqcScannerViewModel oqcScanner,
-        LiveCameraViewModel liveCamera,
         CameraSettingsViewModel cameraSettings)
     {
         ToolEditor = toolEditor;
@@ -24,7 +23,6 @@ public sealed partial class MainWindowViewModel : ObservableObject
         Inspection = inspection;
         OqcScanner = oqcScanner;
         OqcScanner.RequestSwitchTab = idx => SelectedTabIndex = idx;
-        LiveCamera = liveCamera;
         CameraSettings = cameraSettings;
 
         CloseJobCommand = new RelayCommand(CloseJob);
@@ -41,7 +39,6 @@ public sealed partial class MainWindowViewModel : ObservableObject
         System.Windows.Application.Current.MainWindow.Title = "CMS VINA VISION SYSTEM";
     }
 
-
     public ToolEditorViewModel ToolEditor { get; }
 
     public CalibrationViewModel Calibration { get; }
@@ -51,8 +48,6 @@ public sealed partial class MainWindowViewModel : ObservableObject
     public InspectionViewModel Inspection { get; }
 
     public OqcScannerViewModel OqcScanner { get; }
-
-    public LiveCameraViewModel LiveCamera { get; }
 
     public CameraSettingsViewModel CameraSettings { get; }
 }

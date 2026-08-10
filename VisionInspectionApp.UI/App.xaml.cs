@@ -78,7 +78,6 @@ public partial class App : System.Windows.Application
                 services.AddSingleton<ManualInspectionViewModel>();
                 services.AddSingleton<InspectionViewModel>();
                 services.AddSingleton<OqcScannerViewModel>();
-                services.AddSingleton<LiveCameraViewModel>();
                 services.AddSingleton<CameraSettingsViewModel>();
                 services.AddSingleton<MainWindowViewModel>();
                 services.AddSingleton<MainWindow>();
