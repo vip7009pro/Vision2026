@@ -444,18 +444,6 @@
    - **`SpecificCell`**: Chỉ định chính xác Ô dữ liệu theo [Hàng N, Cột Name/Index].
    - **`ColumnJoin`**: Gộp tất cả các giá trị của một cột thành chuỗi phân cách bởi ký tự separator (ví dụ: dấu phẩy `,` hoặc xuống dòng `\n`).
    - **`FullTableCsv`**: Trả về toàn bộ bảng kết quả dưới dạng CSV.
-   - **`FullTableJson`**: Trả về toàn bộ bảng kết quả dưới dạng mảng JSON.
-5. **Ghi nhận và Xem Kết Quả Live Debug**:
-   - Kết quả thực thi DB Node (`DbResult`) được lưu trữ trực tiếp trong `InspectionResult.DbResults`.
-   - Màn hình Properties Panel của node hiển thị live status preview kết quả chạy gần nhất (thành công/thất bại, số dòng bị ảnh hưởng, số hàng/cột và nội dung text trích xuất).
-   - Tích hợp gọi `DbNodeRunner.ExecuteDbNodesAsync` tại cả hai giai đoạn `BeforeFlow` và `AfterFlow` trong `InspectionPipeline` (`Class1.cs`).
-- Sửa lỗi `NullReferenceException` khi mở `DbManagerWindow`: Đã chuyển vị trí khởi tạo các đối tượng `Command` (`AddDbCommand`, `DeleteDbCommand`, `TestConnectionCommand`, `SaveCommand`) lên trước khi gán `SelectedDb` trong constructor của `DbManagerViewModel.cs`, đồng thời bổ sung null-conditional operator `?.` trong hàm `OnSelectedDbChanged` tránh kích hoạt sự kiện thay đổi thuộc tính khi các Command chưa được khởi tạo.
-- Khắc phục lỗi mất danh sách Database khi khởi động lại App: Đã tích hợp tự động lưu & nạp tập trung danh sách CSDL toàn cục ra file `%AppData%\Vision2026\databases_config.json` (`LoadFromDisk` / `SaveToDisk` trong `DbManagerService.cs`), đảm bảo mọi cấu hình DB của người dùng được bảo toàn 100% qua các phiên chạy app.
-- Triệt tiêu hoàn toàn hiện tượng Lag / Freeze ứng dụng khi chạy Flow có `DbNode`:
-  - Chuyển giai đoạn thực thi **`AfterFlow`** của `DbNode` sang chạy **bất đồng bộ hoàn toàn (`Task.Run`)**, giải phóng luồng chính UI Dispatcher ngay lập tức sau khi kiểm tra xong ảnh.
-  - Thiết lập bộ đếm thời gian hủy nhanh **Cancellation Timeout (3s)** cho `OpenAsync()`, `ExecuteReaderAsync()`, và `ExecuteNonQueryAsync()` trong `DbManagerService.cs`, đồng thời thêm khối giới hạn thời gian chờ `Wait(3000)` cho giai đoạn `BeforeFlow`, ngăn chặn triệt để hiện tượng treo đơ UI nếu CSDL không khả dụng hoặc bị ngắt kết nối mạng.
-  - Sử dụng khối khóa `lock (result.DbResults)` đảm bảo thread-safety khi lưu vết kết quả CSDL từ luồng chạy ngầm.
-- **Tích hợp Bộ Lọc An Toàn CSDL (SQL Query Safety Validator)**:
   - Chặn triệt để các lệnh phá hủy CSDL cực kỳ nguy hiểm (`DROP TABLE`, `DROP DATABASE`, `TRUNCATE`, `ALTER`) trên tất cả các chế độ.
   - Ở chế độ **Read DB**: Chặn 100% các câu lệnh thay đổi dữ liệu (`DELETE`, `UPDATE`, `INSERT`, `DROP`, `TRUNCATE`). Chỉ cho phép các lệnh truy vấn đọc `SELECT`, `EXPLAIN`, `WITH`, `EXEC`.
   - Ở chế độ **Write DB**: Bắt buộc lệnh `DELETE` và `UPDATE` phải chứa mệnh đề **`WHERE`** (chặn hành vi xóa/sửa nhầm toàn bộ bảng CSDL), đồng thời người dùng phải chủ động tích chọn ô CheckBox **`🔒 Cho phép câu lệnh UPDATE / DELETE (Bắt buộc có WHERE)`** trên Properties Panel thì lệnh mới được phép thực thi.
@@ -503,6 +491,23 @@
     - **Giao Diện Thư Viện Thiết Bị Hàng Dọc Bên Phải (`Toolbox Palette`)**: Chuyển danh sách nút thêm thiết bị về cột bên phải dưới dạng Tab Control 2 cột gọn gàng (`UniformGrid`).
     - **Fix Triệt Để Lỗi Lệch Khung Vuông Quét Chọn (`Rubberband Drag Selection Fix`)**: Khung vuông nét đứt màu cyan (`#00E5FF`) bám chính xác 100% tọa độ con trỏ chuột khi kéo thả chọn nhiều thiết bị (0px lệch).
 - Biên dịch ứng dụng thành công 100%: **`0 Error(s)`**, **`46 Warning(s)`**.
+
+### Cập nhật 2026-08-10 (Phiên làm việc mới nhất)
+
+- **Phân rã thành công tệp monolith `Class1.cs` (5,553 dòng)** trong `VisionInspectionApp.Application` thành **10 tệp C# nhỏ hơn, mô đun hóa**:
+  1. `Results/InspectionResult.cs`: Chứa class `InspectionResult` và record `InspectionTimings`.
+  2. `Results/InspectionResultModels.cs`: Chứa hơn 20 record/model kết quả kiểm tra (PointMatchResult, LineDetectResult, BlobDetectionResult, SurfaceCompareResult, ContourCompareResult, CaliperResult, EdgePairResult, LinePairDetectionResult, CircleFinderResult, DiameterResult, DistanceCheckResult, SegmentDistanceResult, AngleResult, CodeDetectionResult, ConditionResult, PlcReadResult, PlcWriteResult, PlcWaitResult, ImageOutputResult, v.v.).
+  3. `Services/IInspectionService.cs`: Interface `IInspectionService`.
+  4. `Services/IConfigService.cs`: Interface `IConfigService` và class `ConfigStoreOptions`.
+  5. `Services/ConditionEvaluator.cs`: Static class `ConditionEvaluator`, `Lexer`, `Parser`, `Variable`, `TokenKind`.
+  6. `Services/InspectionService.cs`: `partial class InspectionService` (khởi tạo, constructor, tracking state).
+  7. `Services/InspectionService.Pipeline.cs`: `partial class InspectionService` chứa hàm chính `Inspect(...)` điều phối quy trình Vision pipeline.
+  8. `Services/InspectionService.PlcDb.cs`: `partial class InspectionService` chứa `ExecuteDbNodes`, `ExecutePlcNodes`, `EvaluateConditions`, `CompareValues`, `ConvertToBool`.
+  9. `Services/InspectionService.ImageOutputs.cs`: `partial class InspectionService` chứa `ExecuteImageOutputs`, `BurnOverlaysToMat`, `RenderTextWithNewlines`, `ParseHexColorToScalar`.
+  10. `Services/InspectionService.Helpers.cs`: `partial class InspectionService` chứa các hàm hình học/math (`Rotate`, `ExtractStraightRoi`, `MapToGlobal`, `TransformRoi`, `TransformRoiKeepSize`, `TransformPointDefinition`, `TransformDefectConfig`, `CalculateLineLineDistance`, `CalculatePointLineDistance`, `CalculateSegmentLineDistance`).
+- **Đã xóa hoàn toàn tệp `Class1.cs` monolith cũ**.
+- **Giữ nguyên 100% namespace `VisionInspectionApp.Application`** giúp zero breaking-changes đối với tất cả các dự án phụ thuộc (`VisionInspectionApp.UI`, `VisionInspectionApp.Persistence`, `TestExtractApp`).
+- **Biên dịch toàn bộ Solution `VisionInspectionApp.slnx` thành công 100%**: **0 Error(s)**, **38 Warning(s)**.
 
 ## Encoding
 

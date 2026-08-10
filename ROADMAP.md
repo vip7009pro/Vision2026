@@ -112,6 +112,8 @@ Lộ trình tích hợp tính năng Chụp ảnh từ camera và hỗ trợ các
   - Tự động sinh hình ảnh Vector 3D công nghiệp rực rỡ chuẩn 60FPS bằng WPF `DrawingImage` & `PathGeometry` cho từng thiết bị ở 2 trạng thái **ON** và **OFF**.
   - Xây dựng **Thư viện Ảnh Tùy chỉnh Cục bộ & Toàn cục**: Tự động lưu tệp ảnh tùy chỉnh bên ngoài được nạp bởi người dùng vào cả 2 vị trí Cục bộ (`Resources/HMI/`) và Toàn cục (`%APPDATA%\VisionInspectionApp\HMI_Library\`), cho phép các dự án mới tái sử dụng lại các tệp ảnh tùy chỉnh đã nạp trước đây.
   - Hỗ trợ Lưu/Nạp cấu hình thiết kế HMI dưới dạng tệp độc lập `.hmi` (JSON format).
+- [x] Task 111: Phân rã tệp monolith `Class1.cs` (hơn 5,500 dòng) thuộc dự án `VisionInspectionApp.Application` thành 10 tệp C# nhỏ hơn (sử dụng `partial class` và phân chia theo từng module logic: Results, Interfaces, ConditionEvaluator, Pipeline, PlcDb, ImageOutputs, Helpers), loại bỏ tệp monolith khổng lồ và giữ tương thích 100% API/namespace.
+
 
 
 
