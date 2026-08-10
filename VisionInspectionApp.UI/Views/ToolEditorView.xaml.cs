@@ -17,9 +17,10 @@ public partial class ToolEditorView : UserControl
     private Point _wireCurrent;
 
     private bool _isCanvasPanning;
-    private Point _canvasPanStart;
-    private double _canvasPanStartH;
-    private double _canvasPanStartV;
+    private Point _panStartMouse;
+    private double _panStartH;
+    private double _panStartV;
+    private ToolEditorViewModel? _subscribedVm;
 
     private Dictionary<ToolGraphNodeViewModel, Point>? _multiDragStart;
 
@@ -32,12 +33,36 @@ public partial class ToolEditorView : UserControl
 
         AddHandler(Thumb.MouseLeftButtonDownEvent, new MouseButtonEventHandler(AnyNode_MouseLeftButtonDown), true);
 
-        EditorCanvas.PreviewMouseDown += EditorCanvas_PreviewMouseDown;
-        EditorCanvas.PreviewMouseMove += EditorCanvas_PreviewMouseMove;
-        EditorCanvas.PreviewMouseUp += EditorCanvas_PreviewMouseUp;
+        CanvasScrollViewer.PreviewMouseDown += CanvasScrollViewer_PreviewMouseDown;
+        CanvasScrollViewer.PreviewMouseMove += CanvasScrollViewer_PreviewMouseMove;
+        CanvasScrollViewer.PreviewMouseUp += CanvasScrollViewer_PreviewMouseUp;
+        CanvasScrollViewer.LostMouseCapture += CanvasScrollViewer_LostMouseCapture;
 
         EditorCanvas.PreviewMouseLeftButtonDown += EditorCanvas_PreviewMouseLeftButtonDown;
         EditorCanvas.PreviewMouseLeftButtonUp += EditorCanvas_PreviewMouseLeftButtonUp;
+
+        DataContextChanged += ToolEditorView_DataContextChanged;
+        Loaded += (s, e) => Dispatcher.BeginInvoke(DispatcherPriority.ContextIdle, AutoFitAndCenterGraph);
+    }
+
+    private void ToolEditorView_DataContextChanged(object sender, DependencyPropertyChangedEventArgs e)
+    {
+        if (_subscribedVm != null)
+        {
+            _subscribedVm.RequestAutoFitGraph -= OnRequestAutoFitGraph;
+        }
+
+        if (e.NewValue is ToolEditorViewModel vm)
+        {
+            _subscribedVm = vm;
+            _subscribedVm.RequestAutoFitGraph += OnRequestAutoFitGraph;
+            Dispatcher.BeginInvoke(DispatcherPriority.ContextIdle, AutoFitAndCenterGraph);
+        }
+    }
+
+    private void OnRequestAutoFitGraph()
+    {
+        Dispatcher.BeginInvoke(DispatcherPriority.ContextIdle, AutoFitAndCenterGraph);
     }
 
     private void Edge_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
@@ -91,8 +116,6 @@ public partial class ToolEditorView : UserControl
             d = VisualTreeHelper.GetParent(d);
         }
     }
-
-    private MouseButton? _panButton;
 
     private void EditorCanvas_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
@@ -201,7 +224,14 @@ public partial class ToolEditorView : UserControl
             return;
         }
 
-        if (lb.SelectedItem is not string type || string.IsNullOrWhiteSpace(type))
+        string? type = lb.SelectedItem switch
+        {
+            string s => s,
+            ToolboxItemModel item => item.Name,
+            _ => lb.SelectedItem?.ToString()
+        };
+
+        if (string.IsNullOrWhiteSpace(type))
         {
             return;
         }
@@ -226,19 +256,14 @@ public partial class ToolEditorView : UserControl
             return;
         }
 
-        var pos = e.GetPosition(EditorCanvas);
+        var pos = GetCanvasLogicalPosition(e.GetPosition(EditorCanvas));
         vm.AddNode(type, pos);
         vm.IsDirty = true;
     }
 
     private void NodeThumb_DragDelta(object sender, DragDeltaEventArgs e)
     {
-        if (sender is not Thumb t)
-        {
-            return;
-        }
-
-        if (t.DataContext is not ToolGraphNodeViewModel n)
+        if (sender is not Thumb t || t.DataContext is not ToolGraphNodeViewModel n)
         {
             return;
         }
@@ -255,17 +280,18 @@ public partial class ToolEditorView : UserControl
             vm.SelectedNode = n;
         }
 
-        if (vm.SelectedNodes.Count <= 1)
-        {
-            n.X += e.HorizontalChange;
-            n.Y += e.VerticalChange;
-            return;
-        }
-
+        // LayoutTransform on EditorCanvas means e.HorizontalChange & e.VerticalChange are ALREADY exact logical units!
         var dx = e.HorizontalChange;
         var dy = e.VerticalChange;
         if (Math.Abs(dx) < 0.0001 && Math.Abs(dy) < 0.0001)
         {
+            return;
+        }
+
+        if (vm.SelectedNodes.Count <= 1)
+        {
+            n.X += dx;
+            n.Y += dy;
             return;
         }
 
@@ -360,31 +386,30 @@ public partial class ToolEditorView : UserControl
         }
     }
 
-    private void EditorCanvas_PreviewMouseDown(object sender, MouseButtonEventArgs e)
+    private void CanvasScrollViewer_PreviewMouseDown(object sender, MouseButtonEventArgs e)
     {
-        if (CanvasScrollViewer is null)
+        if (DataContext is not ToolEditorViewModel vm || CanvasScrollViewer is null)
         {
             return;
         }
 
-        var isLeftOnBackground = e.ChangedButton == MouseButton.Left &&
-                                !IsMouseOverInteractiveElement(e.GetPosition(EditorCanvas)) &&
-                                (Keyboard.Modifiers & (ModifierKeys.Control | ModifierKeys.Shift)) == 0;
+        var isMiddle = e.ChangedButton == MouseButton.Middle;
+        var isLeftOnBg = e.ChangedButton == MouseButton.Left &&
+                         !IsMouseOverInteractiveElement(e.GetPosition(EditorCanvas)) &&
+                         (Keyboard.Modifiers & (ModifierKeys.Control | ModifierKeys.Shift)) == 0;
 
-        if (e.ChangedButton == MouseButton.Middle || isLeftOnBackground)
+        if (isMiddle || isLeftOnBg)
         {
             _isCanvasPanning = true;
-            _panButton = e.ChangedButton;
-            _canvasPanStart = e.GetPosition(this);
-            _canvasPanStartH = CanvasScrollViewer.HorizontalOffset;
-            _canvasPanStartV = CanvasScrollViewer.VerticalOffset;
-            EditorCanvas.CaptureMouse();
-            EditorCanvas.Focus();
+            _panStartMouse = e.GetPosition(this);
+            _panStartH = CanvasScrollViewer.HorizontalOffset;
+            _panStartV = CanvasScrollViewer.VerticalOffset;
+            CanvasScrollViewer.CaptureMouse();
             e.Handled = true;
         }
     }
 
-    private void EditorCanvas_PreviewMouseMove(object sender, MouseEventArgs e)
+    private void CanvasScrollViewer_PreviewMouseMove(object sender, MouseEventArgs e)
     {
         if (!_isCanvasPanning || CanvasScrollViewer is null)
         {
@@ -397,27 +422,35 @@ public partial class ToolEditorView : UserControl
             return;
         }
 
-        var p = e.GetPosition(this);
-        var dx = p.X - _canvasPanStart.X;
-        var dy = p.Y - _canvasPanStart.Y;
-        CanvasScrollViewer.ScrollToHorizontalOffset(_canvasPanStartH - dx);
-        CanvasScrollViewer.ScrollToVerticalOffset(_canvasPanStartV - dy);
+        var curMouse = e.GetPosition(this);
+        var dx = curMouse.X - _panStartMouse.X;
+        var dy = curMouse.Y - _panStartMouse.Y;
+
+        CanvasScrollViewer.ScrollToHorizontalOffset(_panStartH - dx);
+        CanvasScrollViewer.ScrollToVerticalOffset(_panStartV - dy);
         e.Handled = true;
     }
 
-    private void EditorCanvas_PreviewMouseUp(object sender, MouseButtonEventArgs e)
+    private void CanvasScrollViewer_PreviewMouseUp(object sender, MouseButtonEventArgs e)
     {
-        if (!_isCanvasPanning)
+        if (_isCanvasPanning)
         {
-            return;
-        }
-
-        if (e.ChangedButton == _panButton || e.ChangedButton == MouseButton.Middle || e.ChangedButton == MouseButton.Left)
-        {
-            _isCanvasPanning = false;
-            _panButton = null;
-            EditorCanvas.ReleaseMouseCapture();
+            StopCanvasPan();
             e.Handled = true;
+        }
+    }
+
+    private void CanvasScrollViewer_LostMouseCapture(object sender, MouseEventArgs e)
+    {
+        StopCanvasPan();
+    }
+
+    private void StopCanvasPan()
+    {
+        _isCanvasPanning = false;
+        if (CanvasScrollViewer != null && CanvasScrollViewer.IsMouseCaptured)
+        {
+            CanvasScrollViewer.ReleaseMouseCapture();
         }
     }
 
@@ -453,7 +486,7 @@ public partial class ToolEditorView : UserControl
         _isWiring = true;
         _wireFrom = n;
         _wireFromPort = port.Name;
-        _wireCurrent = e.GetPosition(EditorCanvas);
+        _wireCurrent = GetCanvasLogicalPosition(e.GetPosition(EditorCanvas));
 
         WirePreviewPath.Visibility = Visibility.Visible;
         UpdateWirePreview(GetOutPortPosition(n, _wireFromPort), _wireCurrent);
@@ -586,19 +619,14 @@ public partial class ToolEditorView : UserControl
 
     private void EditorCanvas_PreviewMouseWheel(object sender, MouseWheelEventArgs e)
     {
-        if (DataContext is not ToolEditorViewModel vm)
-        {
-            return;
-        }
-
-        if (CanvasScrollViewer is null)
+        if (DataContext is not ToolEditorViewModel vm || CanvasScrollViewer is null)
         {
             return;
         }
 
         var oldZoom = vm.CanvasZoom;
-        var zoomFactor = e.Delta > 0 ? 1.1 : 1.0 / 1.1;
-        var newZoom = Math.Clamp(oldZoom * zoomFactor, 0.05, 5.0);
+        var zoomFactor = e.Delta > 0 ? 1.15 : 1.0 / 1.15;
+        var newZoom = Math.Clamp(oldZoom * zoomFactor, 0.1, 4.0);
         if (Math.Abs(newZoom - oldZoom) < 0.0000001)
         {
             return;
@@ -606,9 +634,6 @@ public partial class ToolEditorView : UserControl
 
         var mouseInViewport = e.GetPosition(CanvasScrollViewer);
 
-        // Calculate the content point under the cursor from scroll offsets.
-        // This avoids relying on e.GetPosition(EditorCanvas) which can be
-        // unreliable when a LayoutTransform is being changed mid-layout.
         var contentX = (CanvasScrollViewer.HorizontalOffset + mouseInViewport.X) / oldZoom;
         var contentY = (CanvasScrollViewer.VerticalOffset + mouseInViewport.Y) / oldZoom;
 
@@ -616,39 +641,26 @@ public partial class ToolEditorView : UserControl
         EditorCanvas.UpdateLayout();
         CanvasScrollViewer.UpdateLayout();
 
-        // Set scroll so the same content point stays under the cursor
         CanvasScrollViewer.ScrollToHorizontalOffset(contentX * newZoom - mouseInViewport.X);
         CanvasScrollViewer.ScrollToVerticalOffset(contentY * newZoom - mouseInViewport.Y);
 
         e.Handled = true;
     }
 
-    private Point GetCanvasLogicalPosition(Point p)
+    private Point GetCanvasLogicalPosition(Point pEditorCanvas)
     {
-        // EditorCanvas uses LayoutTransform for zoom.
-        // Mouse positions reported relative to EditorCanvas already match the canvas logical space,
-        // so dividing by CanvasZoom would cause a visible offset (especially when zoom < 1).
-        return p;
+        return new Point(pEditorCanvas.X - 3000.0, pEditorCanvas.Y - 3000.0);
     }
 
     private bool IsMouseOverInteractiveElement(Point canvasPoint)
     {
+        if (EditorCanvas == null) return false;
         var result = VisualTreeHelper.HitTest(EditorCanvas, canvasPoint);
         var d = result?.VisualHit as DependencyObject;
 
-        while (d is not null)
+        while (d is not null && d != EditorCanvas)
         {
-            if (d is Thumb)
-            {
-                return true;
-            }
-
-            if (d is System.Windows.Shapes.Path)
-            {
-                return true;
-            }
-
-            if (d is System.Windows.Shapes.Ellipse)
+            if (d is Thumb || d is System.Windows.Shapes.Path || d is System.Windows.Shapes.Ellipse)
             {
                 return true;
             }
@@ -687,26 +699,83 @@ public partial class ToolEditorView : UserControl
     private void UpdateWirePreview(Point p1, Point p2)
     {
         var fig = new PathFigure { StartPoint = p1, IsClosed = false, IsFilled = false };
-        if (p2.X >= p1.X)
+        double dx = Math.Abs(p2.X - p1.X);
+        double dy = Math.Abs(p2.Y - p1.Y);
+        double dist = Math.Sqrt(dx * dx + dy * dy);
+        double smoothness = Math.Max(20.0, Math.Min(dist * 0.4, 120.0));
+
+        Point cp1, cp2;
+        if (Math.Abs(p2.Y - p1.Y) > Math.Abs(p2.X - p1.X) * 0.8)
         {
-            var midX = (p1.X + p2.X) * 0.5;
-            fig.Segments.Add(new LineSegment(new Point(midX, p1.Y), true));
-            fig.Segments.Add(new LineSegment(new Point(midX, p2.Y), true));
-            fig.Segments.Add(new LineSegment(p2, true));
+            double sign = p2.Y >= p1.Y ? 1.0 : -1.0;
+            cp1 = new Point(p1.X, p1.Y + smoothness * sign);
+            cp2 = new Point(p2.X, p2.Y - smoothness * sign);
         }
         else
         {
-            const double clearance = 60;
-            var exit = new Point(p1.X + clearance, p1.Y);
-            var approach = new Point(p2.X - clearance, p2.Y);
-            var routeY = Math.Min(p1.Y, p2.Y) - clearance;
-            fig.Segments.Add(new LineSegment(exit, true));
-            fig.Segments.Add(new LineSegment(new Point(exit.X, routeY), true));
-            fig.Segments.Add(new LineSegment(new Point(approach.X, routeY), true));
-            fig.Segments.Add(new LineSegment(approach, true));
-            fig.Segments.Add(new LineSegment(p2, true));
+            double sign = p2.X >= p1.X ? 1.0 : -1.0;
+            cp1 = new Point(p1.X + smoothness * sign, p1.Y);
+            cp2 = new Point(p2.X - smoothness * sign, p2.Y);
         }
+
+        fig.Segments.Add(new BezierSegment(cp1, cp2, p2, true));
         WirePreviewPath.Data = new PathGeometry(new[] { fig });
+    }
+
+    public void AutoFitAndCenterGraph()
+    {
+        StopCanvasPan();
+
+        if (DataContext is not ToolEditorViewModel vm || vm.Nodes.Count == 0 || CanvasScrollViewer == null)
+        {
+            return;
+        }
+
+        double minX = double.MaxValue, minY = double.MaxValue;
+        double maxX = double.MinValue, maxY = double.MinValue;
+
+        foreach (var n in vm.Nodes)
+        {
+            if (n.X < minX) minX = n.X;
+            if (n.Y < minY) minY = n.Y;
+            if (n.X + 160.0 > maxX) maxX = n.X + 160.0;
+            double nh = n.NodeHeight > 0 ? n.NodeHeight : 80.0;
+            if (n.Y + nh > maxY) maxY = n.Y + nh;
+        }
+
+        if (minX >= maxX || minY >= maxY)
+        {
+            return;
+        }
+
+        const double padding = 80.0;
+        const double baseOffset = 3000.0;
+
+        double contentW = (maxX - minX) + padding * 2.0;
+        double contentH = (maxY - minY) + padding * 2.0;
+
+        double viewW = CanvasScrollViewer.ActualWidth > 0 ? CanvasScrollViewer.ActualWidth : 800.0;
+        double viewH = CanvasScrollViewer.ActualHeight > 0 ? CanvasScrollViewer.ActualHeight : 600.0;
+
+        double scaleX = viewW / contentW;
+        double scaleY = viewH / contentH;
+        double fitZoom = Math.Min(scaleX, scaleY);
+        fitZoom = Math.Clamp(fitZoom, 0.3, 1.5);
+
+        vm.CanvasZoom = fitZoom;
+        EditorCanvas.UpdateLayout();
+        CanvasScrollViewer.UpdateLayout();
+
+        double graphCenterX = (baseOffset + (minX + maxX) / 2.0) * fitZoom;
+        double graphCenterY = (baseOffset + (minY + maxY) / 2.0) * fitZoom;
+
+        CanvasScrollViewer.ScrollToHorizontalOffset(Math.Max(0, graphCenterX - viewW / 2.0));
+        CanvasScrollViewer.ScrollToVerticalOffset(Math.Max(0, graphCenterY - viewH / 2.0));
+    }
+
+    private void BtnFitView_Click(object sender, RoutedEventArgs e)
+    {
+        AutoFitAndCenterGraph();
     }
 
     private void BtnGlobalPreprocess_Click(object sender, RoutedEventArgs e)

@@ -180,6 +180,8 @@ namespace VisionInspectionApp.UI.ViewModels
                     System.Windows.Application.Current.MainWindow.Title = "CMS VINA VISION SYSTEM - " + Path.GetFileName(CurrentJobFilePath);
                 }
 
+                TriggerAutoFitGraph();
+
                 // Trigger inspection execution with new job if autoRun is enabled
                 if (autoRun)
                 {

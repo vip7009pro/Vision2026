@@ -96,109 +96,58 @@
 
                     <Grid>
                         <Grid.RowDefinitions>
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="*" />
-            <RowDefinition Height="Auto" />
-        </Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                        </Grid.RowDefinitions>
 
-                        <TextBlock Grid.Row="0" FontWeight="Bold" Text="Toolbox" Margin="0,0,0,6" />
-                        <ListBox Grid.Row="1" x:Name="ToolboxList" ItemsSource="{Binding ToolboxItems}" 
+                        <!-- Header with dynamic theme text color -->
+                        <TextBlock Grid.Row="0" FontWeight="Bold" FontSize="13" Text="🧰 Toolbox" Foreground="{DynamicResource TextBrush}" Margin="0,0,0,4" />
+
+                        <!-- Search Box for quick tool filtering -->
+                        <Border Grid.Row="1" Background="{DynamicResource WindowBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="4" Margin="0,0,0,6" Padding="4,2">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="🔍" FontSize="11" VerticalAlignment="Center" Margin="2,0,4,0" Foreground="{DynamicResource TextMutedBrush}" />
+                                <TextBox Grid.Column="1" Text="{Binding ToolboxSearchText, UpdateSourceTrigger=PropertyChanged}" 
+                                         BorderThickness="0" Background="Transparent" Foreground="{DynamicResource TextBrush}" 
+                                         VerticalContentAlignment="Center" FontSize="11" ToolTip="Nhập tên tool để tìm kiếm nhanh..." />
+                            </Grid>
+                        </Border>
+
+                        <!-- Categorized Tool List with Group Dividers -->
+                        <ListBox Grid.Row="2" x:Name="ToolboxList" ItemsSource="{Binding ToolboxCollectionView}" 
                                  PreviewMouseLeftButtonDown="ToolboxList_PreviewMouseLeftButtonDown" 
                                  PreviewMouseMove="ToolboxList_PreviewMouseMove" 
-                                 BorderThickness="0" Background="Transparent">
+                                 BorderThickness="0" Background="Transparent"
+                                 ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                            <ListBox.GroupStyle>
+                                <GroupStyle>
+                                    <GroupStyle.HeaderTemplate>
+                                        <DataTemplate>
+                                            <Border Background="{DynamicResource HeaderBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,1,0,1" Padding="4,3" Margin="0,4,0,2">
+                                                <TextBlock Text="{Binding Name}" FontWeight="Bold" FontSize="10.5" Foreground="#FF9800" />
+                                            </Border>
+                                        </DataTemplate>
+                                    </GroupStyle.HeaderTemplate>
+                                </GroupStyle>
+                            </ListBox.GroupStyle>
                             <ListBox.ItemContainerStyle>
                                 <Style TargetType="ListBoxItem">
-                                    <Setter Property="Padding" Value="2,1" />
-                                    <Setter Property="Margin" Value="0" />
-                                    <Setter Property="MinHeight" Value="18" />
+                                    <Setter Property="Padding" Value="4,2" />
+                                    <Setter Property="Margin" Value="0,1" />
+                                    <Setter Property="MinHeight" Value="22" />
                                 </Style>
                             </ListBox.ItemContainerStyle>
                             <ListBox.ItemTemplate>
                                 <DataTemplate>
                                     <StackPanel Orientation="Horizontal" Margin="2,1">
-                                        <TextBlock x:Name="IconTxt" Text="&#x1F527;" Margin="0,0,6,0" FontFamily="Segoe UI Emoji" FontSize="12" VerticalAlignment="Center" Foreground="{DynamicResource TextBrush}" />
-                                        <TextBlock Text="{Binding}" FontSize="11.5" FontWeight="Medium" Foreground="{DynamicResource TextBrush}" VerticalAlignment="Center" />
+                                        <TextBlock Text="{Binding Icon}" Margin="0,0,6,0" FontSize="12" VerticalAlignment="Center" />
+                                        <TextBlock Text="{Binding Name}" FontSize="11.5" FontWeight="Medium" Foreground="{DynamicResource TextBrush}" VerticalAlignment="Center" />
                                     </StackPanel>
-                                    <DataTemplate.Triggers>
-                                        <DataTrigger Binding="{Binding}" Value="Preprocess">
-                                            <Setter TargetName="IconTxt" Property="Text" Value="&#x2699;" />
-                                        </DataTrigger>
-                                        <DataTrigger Binding="{Binding}" Value="Origin">
-                                            <Setter TargetName="IconTxt" Property="Text" Value="&#x1F3AF;" />
-                                        </DataTrigger>
-                                        <DataTrigger Binding="{Binding}" Value="Point">
-                                            <Setter TargetName="IconTxt" Property="Text" Value="&#x1F4CD;" />
-                                        </DataTrigger>
-                                        <DataTrigger Binding="{Binding}" Value="Line">
-                                            <Setter TargetName="IconTxt" Property="Text" Value="&#x1F4CF;" />
-                                        </DataTrigger>
-                                        <DataTrigger Binding="{Binding}" Value="Caliper">
-                                            <Setter TargetName="IconTxt" Property="Text" Value="&#x1F4D0;" />
-                                        </DataTrigger>
-                                        <DataTrigger Binding="{Binding}" Value="Distance">
-                                            <Setter TargetName="IconTxt" Property="Text" Value="&#x2194;" />
-                                        </DataTrigger>
-                                        <DataTrigger Binding="{Binding}" Value="LineLineDistance">
-                                            <Setter TargetName="IconTxt" Property="Text" Value="&#x23F8;" />
-                                        </DataTrigger>
-                                        <DataTrigger Binding="{Binding}" Value="PointLineDistance">
-                                            <Setter TargetName="IconTxt" Property="Text" Value="&#x23EF;" />
-                                        </DataTrigger>
-                                        <DataTrigger Binding="{Binding}" Value="SegmentLineDistance">
-                                            <Setter TargetName="IconTxt" Property="Text" Value="&#x21A0;" />
-                                        </DataTrigger>
-                                        <DataTrigger Binding="{Binding}" Value="Angle">
-                                            <Setter TargetName="IconTxt" Property="Text" Value="&#x2220;" />
-                                        </DataTrigger>
-                                        <DataTrigger Binding="{Binding}" Value="Diameter">
-                                            <Setter TargetName="IconTxt" Property="Text" Value="&#x2B55;" />
-                                        </DataTrigger>
-                                        <DataTrigger Binding="{Binding}" Value="EdgePairDetect">
-                                            <Setter TargetName="IconTxt" Property="Text" Value="&#x23F8;" />
-                                        </DataTrigger>
-                                        <DataTrigger Binding="{Binding}" Value="LinePairDetection">
-                                            <Setter TargetName="IconTxt" Property="Text" Value="&#x23F8;" />
-                                        </DataTrigger>
-                                        <DataTrigger Binding="{Binding}" Value="BlobDetection">
-                                            <Setter TargetName="IconTxt" Property="Text" Value="&#x1F9A0;" />
-                                        </DataTrigger>
-                                        <DataTrigger Binding="{Binding}" Value="CodeDetection">
-                                            <Setter TargetName="IconTxt" Property="Text" Value="&#x1F532;" />
-                                        </DataTrigger>
-                                        <DataTrigger Binding="{Binding}" Value="CircleFinder">
-                                            <Setter TargetName="IconTxt" Property="Text" Value="&#x1F518;" />
-                                        </DataTrigger>
-                                        <DataTrigger Binding="{Binding}" Value="Condition">
-                                            <Setter TargetName="IconTxt" Property="Text" Value="&#x2753;" />
-                                        </DataTrigger>
-                                        <DataTrigger Binding="{Binding}" Value="Text">
-                                            <Setter TargetName="IconTxt" Property="Text" Value="&#x1F524;" />
-                                        </DataTrigger>
-                                        <DataTrigger Binding="{Binding}" Value="ImageSource">
-                                            <Setter TargetName="IconTxt" Property="Text" Value="&#x1F4F7;" />
-                                        </DataTrigger>
-                                        <DataTrigger Binding="{Binding}" Value="ResultView">
-                                            <Setter TargetName="IconTxt" Property="Text" Value="&#x1F4CA;" />
-                                        </DataTrigger>
-                                        <DataTrigger Binding="{Binding}" Value="PlcRead">
-                                            <Setter TargetName="IconTxt" Property="Text" Value="&#x1F4E5;" />
-                                        </DataTrigger>
-                                        <DataTrigger Binding="{Binding}" Value="PlcWrite">
-                                            <Setter TargetName="IconTxt" Property="Text" Value="&#x1F4E4;" />
-                                        </DataTrigger>
-                                        <DataTrigger Binding="{Binding}" Value="PlcWait">
-                                            <Setter TargetName="IconTxt" Property="Text" Value="&#x23F1;" />
-                                        </DataTrigger>
-                                        <DataTrigger Binding="{Binding}" Value="PlcTrigger">
-                                            <Setter TargetName="IconTxt" Property="Text" Value="&#x26A1;" />
-                                        </DataTrigger>
-                                        <DataTrigger Binding="{Binding}" Value="PlcBatchRead">
-                                            <Setter TargetName="IconTxt" Property="Text" Value="&#x1F4E5;" />
-                                        </DataTrigger>
-                                        <DataTrigger Binding="{Binding}" Value="PlcBatchWrite">
-                                            <Setter TargetName="IconTxt" Property="Text" Value="&#x1F4E4;" />
-                                        </DataTrigger>
-                                    </DataTemplate.Triggers>
                                 </DataTemplate>
                             </ListBox.ItemTemplate>
                         </ListBox>
@@ -223,31 +172,7 @@
                                     </Style>
                                 </StackPanel.Resources>
                             
-                            <!-- Properties Header and Global Preprocessor Button -->
-                            <Border Background="{DynamicResource PanelBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="4" Padding="8" Margin="0,0,0,12">
-                                <StackPanel>
-                                    <TextBlock FontWeight="Bold" Text="Selected Properties" Margin="0,0,0,8" />
-                                    
-                                    <Grid Margin="0,0,0,6">
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="65" />
-                                            <ColumnDefinition Width="*" />
-                                        </Grid.ColumnDefinitions>
-                                        <TextBlock Text="Type:" FontWeight="SemiBold" VerticalAlignment="Center" Foreground="{DynamicResource TextMutedBrush}" />
-                                        <TextBlock Grid.Column="1" Text="{Binding SelectedNode.Type}" FontWeight="SemiBold" VerticalAlignment="Center" />
-                                    </Grid>
-                                    
-                                    <Grid Margin="0,0,0,6">
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="65" />
-                                            <ColumnDefinition Width="*" />
-                                        </Grid.ColumnDefinitions>
-                                        <TextBlock Text="Type:" FontWeight="SemiBold" VerticalAlignment="Center" Foreground="{DynamicResource TextMutedBrush}" />
-                                        <TextBlock Grid.Column="1" Text="{Binding SelectedNode.Type}" FontWeight="SemiBold" VerticalAlignment="Center" />
-                                    </Grid>
-                                </StackPanel>
-                            </Border>
-
+                            <!-- Properties Header and Global Preprocessor Button --> 
                             <StackPanel Visibility="{Binding IsToolWithPreprocessInput, Converter={StaticResource BoolToVis}}">
                                 <Border Background="{DynamicResource BorderBrush}" Padding="3,1" Margin="0,3,0,0">
                                     <TextBlock Text="Tool Preprocess" FontWeight="Bold" Foreground="{DynamicResource TextBrush}" />
@@ -2962,17 +2887,23 @@
                         </StackPanel>
 
                         <StackPanel Grid.Column="2" Orientation="Horizontal">
+                            <Button Content="🎯 Fit View" Height="28" Padding="10,0" Margin="0,0,6,0" Click="BtnFitView_Click" Background="{DynamicResource ButtonBackgroundBrush}" Foreground="{DynamicResource TextBrush}" BorderBrush="{DynamicResource DarkBorderBrush}" FontWeight="SemiBold" ToolTip="Tự động cân chỉnh vị trí &amp; mức Zoom để xem toàn bộ Graph Nodes" />
                             <Button Content="🌗 Theme" Height="28" Padding="12,0" Margin="0,0,6,0" Click="BtnToggleTheme_Click" Background="{DynamicResource ButtonBackgroundBrush}" Foreground="{DynamicResource TextBrush}" BorderBrush="{DynamicResource DarkBorderBrush}" FontWeight="SemiBold" ToolTip="Toggle Dark/Light Mode" />
                             <Button Content="⚙ Global Pre-processor" Height="28" Padding="12,0" Click="BtnGlobalPreprocess_Click" Background="{DynamicResource ButtonBackgroundBrush}" Foreground="{DynamicResource TextBrush}" BorderBrush="{DynamicResource DarkBorderBrush}" FontWeight="SemiBold" ToolTip="Open Global Image Pre-processor Settings" />
                         </StackPanel>
                     </Grid>
 
-                    <ScrollViewer x:Name="CanvasScrollViewer" Grid.Row="1" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto">
-                        <Canvas x:Name="EditorCanvas" Background="Transparent" Width="2000" Height="2000" AllowDrop="True" Drop="EditorCanvas_Drop" MouseMove="EditorCanvas_MouseMove" MouseLeftButtonUp="EditorCanvas_MouseLeftButtonUp"
+                    <ScrollViewer x:Name="CanvasScrollViewer" Grid.Row="1" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto"
+                                  Background="{DynamicResource DarkBackgroundBrush}" Focusable="True">
+                        <Canvas x:Name="EditorCanvas" Background="Transparent" Width="10000" Height="10000" AllowDrop="True" Drop="EditorCanvas_Drop" 
+                                MouseMove="EditorCanvas_MouseMove" MouseLeftButtonUp="EditorCanvas_MouseLeftButtonUp"
                                 Focusable="True" PreviewKeyDown="EditorCanvas_PreviewKeyDown" PreviewMouseWheel="EditorCanvas_PreviewMouseWheel">
                             <Canvas.LayoutTransform>
                                 <ScaleTransform ScaleX="{Binding CanvasZoom}" ScaleY="{Binding CanvasZoom}" />
                             </Canvas.LayoutTransform>
+
+                            <!-- Sub-canvas offset by (3000, 3000) for unlimited 360-degree panning -->
+                            <Canvas x:Name="GraphCanvas" Canvas.Left="3000" Canvas.Top="3000" Width="4000" Height="4000" Background="Transparent">
 
                             <ItemsControl ItemsSource="{Binding Edges}">
                                 <ItemsControl.ItemsPanel>
@@ -3106,6 +3037,7 @@
                                     </DataTemplate>
                                 </ItemsControl.ItemTemplate>
                             </ItemsControl>
+                            </Canvas>
                         </Canvas>
                     </ScrollViewer>
                 </Grid>

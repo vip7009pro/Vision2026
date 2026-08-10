@@ -196,39 +196,58 @@ namespace VisionInspectionApp.UI.ViewModels
                 Interval = TimeSpan.FromMilliseconds(150)
             };
             _blobThresholdPreviewTimer.Tick += (_, __) => UpdateBlobThresholdPreviewFromSnapshot();
-            ToolboxItems = new ObservableCollection<string>
+            AllToolboxItems = new List<ToolboxItemModel>
             {
-                "ImageSource",
-                "Preprocess",
-                "Origin",
-                "Point",
-                "Line",
-                "Caliper",
-                "EdgePairDetect",
-                "CircleFinder",
-                "Diameter",
-                "Distance",
-                "LineLineDistance",
-                "PointLineDistance",
-                "SegmentLineDistance",
-                "Angle",
-                "EdgePair",
-                "Condition",
-                "Text",
-                "BlobDetection",
-                "SurfaceCompare",
-                "ContourCompare",
-                "CodeDetection",
-                "ImageOutput",
-                "ResultView",
-                "PlcRead",
-                "PlcWrite",
-                "PlcWait",
-                "PlcTrigger",
-                "PlcBatchRead",
-                "PlcBatchWrite",
-                "ResultTransfer",
-                "DbNode"
+                new ToolboxItemModel { Name = "ImageSource", Category = "📷 Nguồn & Định Vị", Icon = "📷" },
+                new ToolboxItemModel { Name = "Origin", Category = "📷 Nguồn & Định Vị", Icon = "🎯" },
+                new ToolboxItemModel { Name = "Preprocess", Category = "📷 Nguồn & Định Vị", Icon = "⚙️" },
+
+                new ToolboxItemModel { Name = "Point", Category = "🔍 Phát Hiện & Tìm Kiếm", Icon = "📍" },
+                new ToolboxItemModel { Name = "Line", Category = "🔍 Phát Hiện & Tìm Kiếm", Icon = "📏" },
+                new ToolboxItemModel { Name = "Caliper", Category = "🔍 Phát Hiện & Tìm Kiếm", Icon = "📐" },
+                new ToolboxItemModel { Name = "EdgePairDetect", Category = "🔍 Phát Hiện & Tìm Kiếm", Icon = "⏸️" },
+                new ToolboxItemModel { Name = "CircleFinder", Category = "🔍 Phát Hiện & Tìm Kiếm", Icon = "🔘" },
+                new ToolboxItemModel { Name = "BlobDetection", Category = "🔍 Phát Hiện & Tìm Kiếm", Icon = "🦠" },
+                new ToolboxItemModel { Name = "CodeDetection", Category = "🔍 Phát Hiện & Tìm Kiếm", Icon = "🔳" },
+                new ToolboxItemModel { Name = "SurfaceCompare", Category = "🔍 Phát Hiện & Tìm Kiếm", Icon = "🔍" },
+                new ToolboxItemModel { Name = "ContourCompare", Category = "🔍 Phát Hiện & Tìm Kiếm", Icon = "🌀" },
+
+                new ToolboxItemModel { Name = "Distance", Category = "📐 Đo Đạc & Kích Thước", Icon = "↔️" },
+                new ToolboxItemModel { Name = "LineLineDistance", Category = "📐 Đo Đạc & Kích Thước", Icon = "⏸️" },
+                new ToolboxItemModel { Name = "PointLineDistance", Category = "📐 Đo Đạc & Kích Thước", Icon = "⏯️" },
+                new ToolboxItemModel { Name = "SegmentLineDistance", Category = "📐 Đo Đạc & Kích Thước", Icon = "⏩" },
+                new ToolboxItemModel { Name = "Angle", Category = "📐 Đo Đạc & Kích Thước", Icon = "∠" },
+                new ToolboxItemModel { Name = "Diameter", Category = "📐 Đo Đạc & Kích Thước", Icon = "⭕" },
+                new ToolboxItemModel { Name = "EdgePair", Category = "📐 Đo Đạc & Kích Thước", Icon = "⏸️" },
+
+                new ToolboxItemModel { Name = "Condition", Category = "🔀 Điều Kiện & Hiển Thị", Icon = "❓" },
+                new ToolboxItemModel { Name = "Text", Category = "🔀 Điều Kiện & Hiển Thị", Icon = "🔤" },
+                new ToolboxItemModel { Name = "ImageOutput", Category = "🔀 Điều Kiện & Hiển Thị", Icon = "🖼️" },
+                new ToolboxItemModel { Name = "ResultView", Category = "🔀 Điều Kiện & Hiển Thị", Icon = "📊" },
+
+                new ToolboxItemModel { Name = "PlcRead", Category = "🔌 Kết Nối PLC & CSDL", Icon = "📥" },
+                new ToolboxItemModel { Name = "PlcWrite", Category = "🔌 Kết Nối PLC & CSDL", Icon = "📤" },
+                new ToolboxItemModel { Name = "PlcWait", Category = "🔌 Kết Nối PLC & CSDL", Icon = "⏱️" },
+                new ToolboxItemModel { Name = "PlcTrigger", Category = "🔌 Kết Nối PLC & CSDL", Icon = "⚡" },
+                new ToolboxItemModel { Name = "PlcBatchRead", Category = "🔌 Kết Nối PLC & CSDL", Icon = "📥" },
+                new ToolboxItemModel { Name = "PlcBatchWrite", Category = "🔌 Kết Nối PLC & CSDL", Icon = "📤" },
+                new ToolboxItemModel { Name = "ResultTransfer", Category = "🔌 Kết Nối PLC & CSDL", Icon = "🔄" },
+                new ToolboxItemModel { Name = "DbNode", Category = "🔌 Kết Nối PLC & CSDL", Icon = "🗄️" }
+            };
+
+            ToolboxItems = new ObservableCollection<string>(AllToolboxItems.Select(x => x.Name));
+
+            ToolboxCollectionView = System.Windows.Data.CollectionViewSource.GetDefaultView(AllToolboxItems);
+            ToolboxCollectionView.GroupDescriptions.Add(new System.Windows.Data.PropertyGroupDescription("Category"));
+            ToolboxCollectionView.Filter = item =>
+            {
+                if (string.IsNullOrWhiteSpace(ToolboxSearchText)) return true;
+                if (item is ToolboxItemModel model)
+                {
+                    return model.Name.Contains(ToolboxSearchText, StringComparison.OrdinalIgnoreCase) ||
+                           model.Category.Contains(ToolboxSearchText, StringComparison.OrdinalIgnoreCase);
+                }
+                return true;
             };
             Nodes = new ObservableCollection<ToolGraphNodeViewModel>();
             Nodes.CollectionChanged += (_, _) => IsDirty = true;
@@ -879,6 +898,30 @@ namespace VisionInspectionApp.UI.ViewModels
         private int _totalExecutionTimeMs = 0;
         [ObservableProperty]
         private string _captureButtonText = "Capture Camera";
+
+        [ObservableProperty]
+        private double _canvasPanX = 0.0;
+
+        [ObservableProperty]
+        private double _canvasPanY = 0.0;
+
+        public event Action? RequestAutoFitGraph;
+
+        public void TriggerAutoFitGraph()
+        {
+            RequestAutoFitGraph?.Invoke();
+        }
+
+        [ObservableProperty]
+        private string _toolboxSearchText = string.Empty;
+
+        partial void OnToolboxSearchTextChanged(string value)
+        {
+            ToolboxCollectionView?.Refresh();
+        }
+
+        public List<ToolboxItemModel> AllToolboxItems { get; }
+        public System.ComponentModel.ICollectionView ToolboxCollectionView { get; }
         public ObservableCollection<string> ToolboxItems { get; }
         public ObservableCollection<ToolGraphNodeViewModel> Nodes { get; }
         public ObservableCollection<ToolGraphEdgeViewModel> Edges { get; }
@@ -3204,5 +3247,14 @@ namespace VisionInspectionApp.UI.ViewModels
             var dy = originFound.Y - originTeach.Y;
             return new Point2d(pr.X + dx, pr.Y + dy);
         }
+    }
+
+    public sealed class ToolboxItemModel
+    {
+        public string Name { get; set; } = string.Empty;
+        public string Category { get; set; } = string.Empty;
+        public string Icon { get; set; } = "🔧";
+
+        public override string ToString() => Name;
     }
 }

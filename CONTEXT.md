@@ -510,7 +510,18 @@
 - **Gỡ bỏ Tab "Live Camera" khỏi giao diện ứng dụng** và hợp nhất tính năng chọn nguồn camera sang **Tab "Camera Settings"**:
   - Tích hợp Dropdown ComboBox chọn nguồn Camera (Camera Giả Lập, Các thiết bị DirectShow thực tế, Fallback Ports 0-4, Custom RTSP / IP Camera) ngay trong GroupBox `Thiết Bị Camera (Device & Source)` trên Tab **Camera Settings**.
   - Bổ sung các nút bấm điều khiển trực tiếp **`▶ Start Camera`**, **`⏹ Stop Camera`** và **`🔄 Làm mới`** trên Tab Camera Settings, giúp người dùng vừa xem stream trực tiếp vừa tinh chỉnh thông số Độ Sáng (Brightness), Độ Tương Phản (Contrast) và Chế Độ Đen Trắng (Grayscale).
+- **Tối ưu hóa giao diện Tab Tool Editor & Graph Flow Canvas**:
+  - **Toolbox**: Chuẩn hóa màu tiêu đề `🧰 Toolbox` sử dụng `{DynamicResource TextBrush}` (hiển thị rõ ràng sắc nét ở cả Light & Dark mode). Bổ sung ô tìm kiếm nhanh `🔍` kèm bộ lọc theo tên/chức năng tool, phân nhóm các tool theo từng nhóm tính năng riêng biệt (📷 Nguồn & Định vị, 🔍 Phát hiện & Tìm kiếm, 📐 Đo đạc & Kích thước, 🔀 Điều kiện & Hiển thị, 🔌 Kết nối PLC & CSDL) với các Divider header phân biệt rõ ràng.
+  - **Khắc phục triệt để lỗi "Node bay khỏi màn hình" & "Chỉ Pan được trong vùng chữ nhật node"**:
+    - **Node Dragging (Khắc phục lỗi node bay xa)**: Chuyển `ScaleTransform` từ `RenderTransform` về lại `LayoutTransform` trên `EditorCanvas`. Nhờ đó, WPF `Thumb.DragDelta` tự động xử lý chuẩn hóa tỷ lệ zoom ở cấp độ Layout. Lượng di chuyển `e.HorizontalChange` và `e.VerticalChange` chuẩn xác 1:1 theo tọa độ logical của canvas mà không bị nhân dồn chuỗi phản hồi dương (positive feedback loop), giúp việc kéo di chuyển node cực kỳ êm ái, chính xác và không bao giờ bị văng đi xa.
+    - **Pan 360° Không Giới Hạn Biên**: Đặt sub-canvas `GraphCanvas` tại offset `(3000, 3000)` bên trong không gian `ScrollViewer` rộng `10000x10000`. Điều này tạo ra khoảng trống hơn 3000 pixel ở cả 4 hướng (trên, dưới, trái, phải) xung quanh đồ thị. Người dùng có thể cuộn/pan canvas 360° tự do đưa bất kỳ node nào ra bất kỳ vị trí nào trên màn hình mà không bao giờ bị vướng biên cứng.
+  - **Tự động Fit & Center khi Nạp/Mở Job**: Thêm sự kiện `RequestAutoFitGraph` phát ra từ `ToolEditorViewModel` mỗi khi có Job mới được tải từ tệp (`LoadJobFromFile`), khởi tạo (`NewGraph`) hoặc chuyển cấu hình. `ToolEditorView` đăng ký lắng nghe và tự động tính toán bounding box chính xác để căn giữa và zoom phù hợp nhất (`AutoFitAndCenterGraph`), kèm nút thủ công **`🎯 Fit View`** trên thanh công cụ Canvas.
+  - **Dynamic Ports & Path Routing**: Tự động tính toán điểm neo kết nối linh hoạt (Bottom-Top khi các node xếp theo chiều dọc từ trên xuống, Left-Right khi xếp ngang) và vẽ đường nối cong Bezier mượt mà giúp khoảng cách nối giữa 2 node luôn là ngắn nhất và tự nhiên nhất.
 - **Biên dịch toàn bộ Solution `VisionInspectionApp.slnx` thành công 100%**: **0 Error(s)**, **36 Warning(s)**.
+
+
+
+
 
 
 ## Encoding
