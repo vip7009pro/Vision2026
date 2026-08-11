@@ -115,6 +115,8 @@ Lộ trình tích hợp tính năng Chụp ảnh từ camera và hỗ trợ các
 - [x] Task 111: Phân rã tệp monolith `Class1.cs` (hơn 5,500 dòng) thuộc dự án `VisionInspectionApp.Application` thành 10 tệp C# nhỏ hơn (sử dụng `partial class` và phân chia theo từng module logic: Results, Interfaces, ConditionEvaluator, Pipeline, PlcDb, ImageOutputs, Helpers), loại bỏ tệp monolith khổng lồ và giữ tương thích 100% API/namespace.
 - [x] Task 112: Loại bỏ Tab "Live Camera" khỏi giao diện ứng dụng; bổ sung ComboBox chọn nguồn Camera (Camera Giả lập, DirectShow devices, RTSP URL), nút Refresh và bộ nút bấm ▶ Start Camera / ⏹ Stop Camera trực tiếp vào Tab "Camera Settings".
 - [x] Task 113: Tối ưu UI Tab Tool Editor: Bổ sung ô tìm kiếm tool nhanh + Phân loại danh mục Toolbox theo chức năng; Chuẩn hóa màu tiêu đề "Toolbox" thích ứng Light/Dark theme; Chuyển sang cơ chế Pan/Zoom qua RenderTransform Translate (Pan tự do 360° không giới hạn biên cứng ở góc trên/trái); Tự động Fit & Center toàn bộ Graph Nodes mỗi khi mở/nạp Job mới (kèm sự kiện `RequestAutoFitGraph` & nút `🎯 Fit View`); Định tuyến đường nối cạnh Bezier mượt mà và tự động xác định vị trí cổng kết nối linh hoạt theo khoảng cách ngắn nhất.
+- [x] Task 114: Tạo Grid mờ mượt nhẹ và Hiệu ứng Snap Alignment Lines kéo dài tự động căn lề giữa các Node; Tối ưu Properties Panel cho Node Preprocessor (Xóa nút Delete Node, hiển thị thuộc tính riêng độc lập theo node, bổ sung ROI Masking Rectangle/Circle/Polygon N-đỉnh với kéo thả góc đỉnh & biến dạng thời gian thực 60FPS).
+- [x] Task 115: Bổ sung 3 Tool mới (`Crop`, `ColorDiff`, `ImgArithmetic`) và tích hợp trực tiếp Cửa sổ Calibration (`CalibrationDialog`) ngay trong Tab ToolEditor áp dụng tự động hệ số `PixelsPerMm` thời gian thực cho Active Job.
 
 
 

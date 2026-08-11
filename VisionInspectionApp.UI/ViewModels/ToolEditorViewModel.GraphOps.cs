@@ -960,6 +960,43 @@ namespace VisionInspectionApp.UI.ViewModels
 
                 return;
             }
+
+            if (string.Equals(node.Type, "Crop", StringComparison.OrdinalIgnoreCase))
+            {
+                var cropDef = _config.Crops?.FirstOrDefault(x => string.Equals(x.Name, node.RefName, StringComparison.OrdinalIgnoreCase));
+                if (cropDef is not null && showRois)
+                {
+                    if (cropDef.CropRoi == null || cropDef.CropRoi.Width <= 0 || cropDef.CropRoi.Height <= 0)
+                    {
+                        cropDef.CropRoi = new Roi { X = 50, Y = 50, Width = 150, Height = 150 };
+                    }
+                    dst.Add(CreateRotatedRoi(cropDef.CropRoi, Brushes.Orange, $"{cropDef.Name} Crop"));
+                }
+                return;
+            }
+
+            if (string.Equals(node.Type, "ColorDiff", StringComparison.OrdinalIgnoreCase))
+            {
+                var colorDiffDef = _config.ColorDiffs?.FirstOrDefault(x => string.Equals(x.Name, node.RefName, StringComparison.OrdinalIgnoreCase));
+                if (colorDiffDef is not null && showRois)
+                {
+                    if (colorDiffDef.InspectRoi == null || colorDiffDef.InspectRoi.Width <= 0 || colorDiffDef.InspectRoi.Height <= 0)
+                    {
+                        colorDiffDef.InspectRoi = new Roi { X = 50, Y = 50, Width = 150, Height = 150 };
+                    }
+                    dst.Add(CreateRotatedRoi(colorDiffDef.InspectRoi, Brushes.DeepPink, $"{colorDiffDef.Name} Sample"));
+
+                    if (!colorDiffDef.UseRefColor && colorDiffDef.RefRoi != null)
+                    {
+                        if (colorDiffDef.RefRoi.Width <= 0 || colorDiffDef.RefRoi.Height <= 0)
+                        {
+                            colorDiffDef.RefRoi = new Roi { X = 50, Y = 50, Width = 150, Height = 150 };
+                        }
+                        dst.Add(CreateRotatedRoi(colorDiffDef.RefRoi, Brushes.MediumOrchid, $"{colorDiffDef.Name} Ref"));
+                    }
+                }
+                return;
+            }
     
             if (string.Equals(node.Type, "Point", StringComparison.OrdinalIgnoreCase))
             {

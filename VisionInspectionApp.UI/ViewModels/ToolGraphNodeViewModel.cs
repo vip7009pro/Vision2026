@@ -139,6 +139,8 @@ namespace VisionInspectionApp.UI.ViewModels
                 outName = "Image";
             else if (string.Equals(Type, "ImageSource", StringComparison.OrdinalIgnoreCase))
                 outName = "Image";
+            else if (string.Equals(Type, "Crop", StringComparison.OrdinalIgnoreCase) || string.Equals(Type, "ImgArithmetic", StringComparison.OrdinalIgnoreCase))
+                outName = "Image";
             else if (string.Equals(Type, "ResultView", StringComparison.OrdinalIgnoreCase))
                 outName = "Image";
             else if (string.Equals(Type, "ImageOutput", StringComparison.OrdinalIgnoreCase) || string.Equals(Type, "OutputImage", StringComparison.OrdinalIgnoreCase))
@@ -231,6 +233,15 @@ namespace VisionInspectionApp.UI.ViewModels
                 {
                     InPorts.Add(new NodePortViewModel(this, $"Input{i}", isInput: true));
                 }
+            }
+            else if (string.Equals(Type, "Crop", StringComparison.OrdinalIgnoreCase) || string.Equals(Type, "ColorDiff", StringComparison.OrdinalIgnoreCase))
+            {
+                InPorts.Add(new NodePortViewModel(this, "Image", isInput: true));
+            }
+            else if (string.Equals(Type, "ImgArithmetic", StringComparison.OrdinalIgnoreCase))
+            {
+                InPorts.Add(new NodePortViewModel(this, "InA", isInput: true));
+                InPorts.Add(new NodePortViewModel(this, "InB", isInput: true));
             }
             else
             {

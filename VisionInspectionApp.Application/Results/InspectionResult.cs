@@ -53,6 +53,12 @@ public sealed class InspectionResult
 
     public List<SurfaceCompareResult> SurfaceCompares { get; } = new();
 
+    public List<CropResult> Crops { get; } = new();
+
+    public List<ColorDiffResult> ColorDiffs { get; } = new();
+
+    public List<ImgArithmeticResult> ImgArithmetics { get; } = new();
+
     public List<ContourCompareResult> ContourCompares { get; } = new();
 
     public List<LinePairDetectionResult> LinePairDetections { get; } = new();

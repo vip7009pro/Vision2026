@@ -411,18 +411,10 @@
   - **Phân tích nguyên nhân**:
     1. **Thiếu kế thừa `IDisposable` trong `PlcManagerService`**: Mặc dù `PlcManagerService` có phương thức `Dispose()`, định danh lớp thiếu `IDisposable` làm bộ quản lý dịch vụ `IHost` (`Microsoft.Extensions.Hosting`) không gọi `Dispose()` khi ứng dụng tắt, khiến luồng `PollingEngine` tiếp tục chạy ngầm vô hạn.
     2. **Thiếu giải phóng `plcManager` và `cameraService` trong `ShutdownGracefullyAsync`**: Hàm giải phóng của `App.xaml.cs` chưa đăng ký đóng `IPlcManagerService` và giải phóng đối tượng `CameraService`.
-    3. **Thiếu kết thúc tiến trình cứng**: Các luồng chạy ngầm OpenCV và COM Object của MX Component không giải phóng hết khiến tiến trình .NET tiếp tục treo dưới dạng Zombie process trong Task Manager.
-  - **Khắc phục triệt để**:
-    - Thêm `IDisposable` cho `PlcManagerService`.
-    - Bổ sung gọi `plcManager.Dispose()` và `camera.Dispose()` trong `ShutdownGracefullyAsync()`.
-    - Thêm `Environment.Exit(0)` vào cuối phương thức `OnExit` trong `App.xaml.cs` đảm bảo giải phóng toàn bộ tiến trình Windows 100%.
-  - Biên dịch ứng dụng thành công 100%: **`0 Error(s)`**, **`42 Warning(s)`**.
-
-## Cập nhật 2026-08-07
-
-### Xóa 2 Tab không sử dụng (`Batch Processing` & `PLC`)
-- Loại bỏ 2 tab `Batch Processing` và `PLC` khỏi danh sách `TabItem` trên thanh điều hướng chính trong `MainWindow.xaml`.
-- Cập nhật `MainWindowViewModel.cs` và `App.xaml.cs` dọn dẹp các constructor parameter và dependency injection liên quan.
+    3. **T 1. **Crop Tool**: Cắt ROI hình chữ nhật chỉ định từ ảnh nguồn nguyên bản và tạo ảnh xám/màu mới theo tọa độ `(X, Y, Width, Height)` của ROI (`CropProcessor.cs`, `CropDefinition`, `CropResult`).
+        - **Phân định hiển thị Preview chuẩn xác**: Khi nhấp chọn chính Node `Crop`, Preview hiển thị ảnh **Đầu Vào (Input Image)** toàn thể giúp kéo di chuyển/thay đổi kích thước khung ROI màu cam chuẩn xác tại tọa độ thực của ảnh. Khi nhấp chọn các Node hạ nguồn (`Preprocess`, `Blob`, `ColorDiff`...), Preview hiển thị ảnh **Đã Cắt (Cropped Image)** theo đúng ROI.
+        - **Cố định hệ tọa độ Crop ROI (`IsRawImageRoi`)**: Đã bổ sung nhãn `Crop` vào hàm `IsRawImageRoi` trong `ToolEditorViewModel.Engine.cs`. Khắc phục triệt để lỗi khi có Node `Origin`, tọa độ `CropRoi` bị cộng/trừ sai lệch theo vị trí `OriginFound`, khiến cho vùng ảnh bị cắt sai lệch vị trí so với khung màu cam người dùng đặt trên giao diện.
+        - **Bổ sung luồng giải phóng & cache ảnh Crop trong Pipeline thực thi (`InspectionService.Pipeline.cs`)**: Thêm bộ đệm `cropMatCache` và hàm `GetCropNodeOutput(cropNodeId)` giải quyết triệt để lỗi các Node hạ nguồn kết nối sau Node `Crop` bị trả về ảnh chưa cắt. Giờ đây toàn bộ pipeline chạy thực thi (Run inspection) phân giải chuẩn xác ảnh cắt theo tọa độ `(X, Y, Width, Height)` từ upstream node `Crop`. constructor parameter và dependency injection liên quan.
 
 ### Tích hợp hệ thống Database Manager & Dynamic DB Node (`Read/Write DB`)
 1. **Hỗ trợ Đa Cơ Sở Dữ Liệu (`DbModel` & ADO.NET Drivers)**:
@@ -477,9 +469,10 @@
     - Tích hợp **Live Camera Stream** trực tiếp trên khung Preview bên trái trước khi Job được chạy: Giúp thao tác viên dễ dàng quan sát hình ảnh thời gian thực từ máy ảnh để căn chỉnh vị trí sản phẩm vật lý dưới ống kính trước khi chụp/kiểm tra; ngay khi kiểm tra xong, khung tự động chuyển sang hiển thị ảnh kết quả Final kèm các đường nét overlay đo đạc.
     - Hỗ trợ **Phím tắt F5**: Cho phép thao tác viên ấn phím **F5** bất cứ lúc nào (hoặc khi focus vào ô quét mã) để chuyển nhanh trở lại luồng Live Camera stream, sẵn sàng cho việc đặt và căn chỉnh sản phẩm tiếp theo.
   - **Đồng nhất và ghi nhận đầy đủ lý do NG (`{NgReasons}`) lên CSDL**: Nâng cấp thuật toán `ExtractNgReasons` trong `OqcScannerService` để trích xuất đầy đủ, chi tiết và không sót thông số nào của tất cả các công cụ kiểm tra bị NG (Origin, Distance, LineToLine, PointToLine, SegmentLine, Angle, EdgePair, EdgePairDetect, Diameter, Condition, SurfaceCompare, ContourCompare, CodeDetect). Dữ liệu chèn vào token `{NgReasons}` ghi lên CSDL hoàn toàn đồng nhất 100% với cột chi tiết trên giao diện OQC.
-  - **Phân định chính xác Giá trị Quét Thực tế `{ScannedCode}` & Tên sản phẩm `{ProductName}`**:
-    - Điều chỉnh để thẻ `{ScannedCode}` trong câu lệnh SQL ghi log CSDL luôn lưu chính xác **nội dung chuỗi mã thô được quét từ đầu đọc/máy quét** (ví dụ: `QR-999888777`), thay vì lấy tên sản phẩm đã tra cứu.
-    - Hỗ trợ thêm thẻ `{ProductName}` cho câu lệnh SQL ghi log CSDL nếu người dùng muốn chèn cả Tên sản phẩm đã được giải mã từ CSDL.
+  - **Cấu trúc hệ thống phân giải nguồn ảnh & Sửa lỗi Timing**:
+     1. **Crop Tool**: Cắt ROI hình chữ nhật chỉ định từ ảnh nguồn nguyên bản và tạo ảnh xám/màu mới theo tọa độ `(X, Y, Width, Height)` của ROI (`CropProcessor.cs`, `CropDefinition`, `CropResult`).
+        - **Phân định hiển thị Preview chuẩn xác**: Khi nhấp chọn chính Node `Crop`, Preview hiển thị ảnh **Đầu Vào (Input Image)** toàn thể giúp kéo di chuyển/thay đổi kích thước khung ROI màu cam chuẩn xác tại tọa độ thực của ảnh. Khi nhấp chọn các Node hạ nguồn (`Preprocess`, `Blob`, `ColorDiff`...), Preview hiển thị ảnh **Đã Cắt (Cropped Image)** theo đúng ROI.
+        - **Bổ sung luồng giải phóng & cache ảnh Crop trong Pipeline thực thi (`InspectionService.Pipeline.cs`)**: Thêm bộ đệm `cropMatCache` và hàm `GetCropNodeOutput(cropNodeId)` giải quyết triệt để lỗi các Node hạ nguồn kết nối sau Node `Crop` bị trả về ảnh chưa cắt. Giờ đây toàn bộ pipeline chạy thực thi (Run inspection) phân giải chuẩn xác ảnh cắt theo tọa độ `(X, Y, Width, Height)` từ upstream node `Crop`.
   - **Module HMI Designer & HMI Manager (WPF Automation)**:
     - **Nút bấm `🖥️ HMI Manager`**: Thêm nút mở `HMI Manager Window` từ thanh công cụ Tool Editor bên cạnh nút `PLC Manager`.
     - **Hai chế độ Vận hành & Thiết kế**: Hỗ trợ chuyển đổi giữa chế độ **`▶ VẬN HÀNH (RUN)`** (kết nối thời gian thực với PLC, cho phép bấm nút/công tắc, nhập số/chuỗi và lắng nghe sự kiện `OnTagChanged` để cập nhật giao diện) và chế độ **`⏸ TẠM DỪNG (EDIT)`** (cho phép kéo thả di chuyển, căn chỉnh vị trí và chỉnh sửa thuộc tính phần tử).
@@ -555,6 +548,17 @@
         - **ROI Đa Giác (Polygon ROI) - Biến dạng Thời Gian Thực (Real-time Edge Rubber-banding)**: Khi bấm giữ và kéo từng chấm điểm đỉnh góc (`OverlayPointItem`), các cạnh đa giác khép kín nối với đỉnh đó sẽ di chuyển và co dãn biến dạng theo thời gian thực (real-time 60 FPS) ngay dưới con trỏ chuột mà không cần chờ nhả chuột.
         - **Thứ tự ưu tiên Tương tác (Hit-testing Priority)**: Đã điều chỉnh ưu tiên nhận diện nhấp chuột: **Chấm Đỉnh Đa Giác** $\rightarrow$ **ROI Hình Tròn** $\rightarrow$ **Khung / Tay nắm ROI Hình Chữ Nhật** $\rightarrow$ **Thân Đa Giác**. Nhờ đó, khi ROI Đa Giác đè lên ROI Hình Chữ Nhật, người dùng vẫn bấm chọn và kéo thả ROI Hình Chữ Nhật hoàn toàn bình thường.
     - **Nới rộng Cột đầu tiên (Toolbox & Properties Panel)**: Đã điều chỉnh chiều rộng `Column 0` trong `ToolEditorView.xaml` từ `220px` lên `340px` (`MinWidth="260"`) giúp giao diện rộng rãi, dễ theo dõi và điều chỉnh các slider/combobox tham số.
+  - **Bổ sung 3 Tool Xử Lý Ảnh & Đo Đạc Mới (Crop, ColorDiff, ImgArithmetic)**:
+    1. **Crop Tool**: Cắt ROI hình chữ nhật chỉ định từ ảnh nguồn nguyên bản và tạo ảnh xám/màu mới theo kích thước ROI (`CropProcessor.cs`, `CropDefinition`, `CropResult`). Node `Crop` đóng vai trò là một Image Source và có thể được các node phía me chọn làm nguồn đầu vào (`ImageSourceRef`). Đã bổ sung hiển thị khung ROI màu cam tương tác kéo thả trực tiếp trên Canvas Preview.
+    2. **ColorDiff Tool**: Đo sự khác biệt màu sắc của điểm/vùng ROI chỉ định theo mô hình màu CIELAB ($L, a, b$ và $\Delta E$). Tự động tính toán $\Delta E = \sqrt{(L_1 - L_2)^2 + (a_1 - a_2)^2 + (b_1 - b_2)^2}$ và so sánh với ngưỡng `MaxDeltaE`. Hỗ trợ hiển thị ROI `Sample` / `Ref` kéo thả trực tiếp trên Preview, đồng thời bổ sung nút **`🎯 Lấy Màu Mẫu Từ ROI (Teach Ref Color)`** tự động trích xuất màu trung bình $L, a, b$ từ ảnh thực tế nạp vào Job.
+       - **Hiển thị Overlay ΔE trên Preview**: Tự động vẽ nhãn Overlay hiển thị kết quả màu thực tế dạng `${Name}: ΔE = {DeltaE:F2} (L={L:F1}, a={a:F1}, b={b:F1})` với viền màu Xanh Green (Pass) hoặc Đỏ Red (NG) đè trên ảnh Preview.
+       - **Thống kê Bảng Đo Đạc & Bảng Thời Gian Chạy Tool (Timings)**: Đã tích hợp kết quả `ColorDiffResult` vào `InspectionResult.ColorDiffs`, hiển thị dòng đo đạc trong Bảng kết quả đo (`SpecResults`) và ghi nhận thời gian thực thi (ms) vào Bảng thống kê thời gian chạy từng tool (`ToolTimings` / `NodeTimings`).
+       - **Inject Dữ Liệu Vào Tool Text & Tool Condition (Biểu thức & IntelliSense)**: Cung cấp đầy đủ các biến và thuộc tính con (`DeltaE`, `dE`, `L`, `a`, `b`, `RefL`, `RefA`, `RefB`, `Pass`) dưới dạng tiền tố `ColorDiff.<Name>` hoặc `<Name>`. Tool Text và Tool Condition tự động thay thế và tính toán logic biểu thức chính xác (kèm hỗ trợ gợi ý thuộc tính tự động trong IntelliSense).
+    3. **ImgArithmetic Tool**: Thực hiện phép toán đại số/logic giữa 2 ảnh đầu vào (`ADD`, `SUB`, `MIN`, `MAX`, `BIT_AND`, `BIT_OR`, `BIT_XOR`, `BIT_NOT`) hỗ trợ trọng số `WeightA`, `WeightB` và `Offset`. Đã bổ sung 2 cổng đầu vào `InA`, `InB` trên Node Canvas, ComboBox chọn phép toán `Op` và ComboBox chọn ảnh nguồn `Image A` / `Image B` trực tiếp từ bảng Properties Panel.
+  - **Tích Hợp Cửa Sổ Calibration Ngay Trong Tab ToolEditor**:
+    - Bổ sung nút `📐 Calibration` trên thanh công cụ của màn hình ToolEditor.
+    - Bấm nút mở hộp thoại modal `CalibrationDialog` hiển thị màn hình Calibration và nạp trực tiếp Job đang mở cùng ảnh Preview hiện tại.
+    - Hệ số hiệu chuẩn tỉ lệ Pixels/mm sau khi đo đạc xong được tự động áp dụng trực tiếp vào Job đang mở thời gian thực mà không cần thao tác lưu thủ công hay mở lại tab khác.
 
 ## Roadmap
 

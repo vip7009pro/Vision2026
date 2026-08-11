@@ -79,6 +79,18 @@ public sealed partial class CalibrationViewModel : ObservableObject
     public ICommand OpenJobCommand { get; }
     public ICommand SaveJobCommand { get; }
 
+    public void InitializeWithConfig(VisionConfig config, string? jobFilePath, ImageSource? previewImage)
+    {
+        _config = config;
+        CurrentJobFilePath = jobFilePath;
+        ProductCode = config.ProductCode ?? string.Empty;
+        AveragePixelsPerMm = config.PixelsPerMm;
+        if (previewImage != null)
+        {
+            Image = previewImage;
+        }
+    }
+
     public void CloseJob()
     {
         _config = null;

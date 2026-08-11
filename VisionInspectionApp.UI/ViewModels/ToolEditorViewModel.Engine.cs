@@ -15,6 +15,7 @@ using Microsoft.Win32;
 using OpenCvSharp;
 using OpenCvSharp.WpfExtensions;
 using VisionInspectionApp.Application;
+using VisionInspectionApp.Application.Services;
 using VisionInspectionApp.Models;
 using VisionInspectionApp.UI.Controls;
 using VisionInspectionApp.UI.Services;
@@ -365,165 +366,94 @@ namespace VisionInspectionApp.UI.ViewModels
             }
         }
     
-        private Mat ResolveToolPreprocessForPreview(Mat raw, ToolGraphNodeViewModel toolNode)
+        private Mat GetNodeOutputImageForPreview(Mat raw, ToolGraphNodeViewModel node)
         {
-            if (_config is null)
+            if (_config is null || node is null) return raw.Clone();
+
+            if (string.Equals(node.Type, "Crop", StringComparison.OrdinalIgnoreCase))
             {
-                return raw.Clone();
-            }
-    
-            var edges = _config.ToolGraph?.Edges ?? new();
-            var nodesById = Nodes.Where(n => !string.IsNullOrWhiteSpace(n.Id)).ToDictionary(n => n.Id, StringComparer.OrdinalIgnoreCase);
-            var preprocessSettingsByName = (_config.PreprocessNodes ?? new()).Where(p => !string.IsNullOrWhiteSpace(p.Name)).ToDictionary(p => p.Name, p => p.Settings ?? new PreprocessSettings(), StringComparer.OrdinalIgnoreCase);
-            var cache = new System.Collections.Generic.Dictionary<string, Mat>(StringComparer.OrdinalIgnoreCase);
-            var matsToDispose = new System.Collections.Generic.List<Mat>();
-            try
-            {
-                Mat GetPreprocessNodeOutput(string preprocessNodeId)
-                {
-                    if (cache.TryGetValue(preprocessNodeId, out var cached))
-                    {
-                        return cached;
-                    }
-    
-                    if (!nodesById.TryGetValue(preprocessNodeId, out var node) || !string.Equals(node.Type, "Preprocess", StringComparison.OrdinalIgnoreCase))
-                    {
-                        var fallback = _preprocessor.Run(raw, _config.Preprocess);
-                        matsToDispose.Add(fallback);
-                        cache[preprocessNodeId] = fallback;
-                        return fallback;
-                    }
-    
-                    var preDef = _config.PreprocessNodes?.FirstOrDefault(x => string.Equals(x.Name, node.RefName, StringComparison.OrdinalIgnoreCase));
-                    var settings = preDef?.Settings ?? new PreprocessSettings();
-                    var rois = preDef?.Rois;
-    
-                    var inEdge = edges.FirstOrDefault(e => string.Equals(e.ToNodeId, preprocessNodeId, StringComparison.OrdinalIgnoreCase) && (string.Equals(e.ToPort, "In", StringComparison.OrdinalIgnoreCase) || string.Equals(e.ToPort, "Image", StringComparison.OrdinalIgnoreCase)));
-                    Mat inputMat;
-                    if (inEdge is null)
-                    {
-                        inputMat = raw;
-                    }
-                    else if (nodesById.TryGetValue(inEdge.FromNodeId, out var fromPreNode))
-                    {
-                        if (string.Equals(fromPreNode.Type, "Preprocess", StringComparison.OrdinalIgnoreCase))
-                        {
-                            inputMat = GetPreprocessNodeOutput(fromPreNode.Id);
-                        }
-                        else if (string.Equals(fromPreNode.Type, "ImageSource", StringComparison.OrdinalIgnoreCase))
-                        {
-                            var imgSourceDef = _config.ImageSources.FirstOrDefault(x => string.Equals(x.Name, fromPreNode.RefName, StringComparison.OrdinalIgnoreCase));
-                            if (imgSourceDef is not null)
-                            {
-                                var loadedMat = LoadImageFromSourceForPreview(imgSourceDef);
-                                if (loadedMat is not null && !loadedMat.Empty())
-                                {
-                                    inputMat = _preprocessor.Run(loadedMat, _config.Preprocess);
-                                    matsToDispose.Add(inputMat);
-                                }
-                                else
-                                {
-                                    inputMat = raw;
-                                }
-                            }
-                            else
-                            {
-                                inputMat = raw;
-                            }
-                        }
-                        else
-                        {
-                            inputMat = raw;
-                        }
-                    }
-                    else
-                    {
-                        inputMat = raw;
-                    }
-    
-                    var output = _preprocessor.Run(inputMat, settings, rois);
-                    matsToDispose.Add(output);
-                    cache[preprocessNodeId] = output;
-                    return output;
-                }
-    
-                if (string.Equals(toolNode.Type, "Preprocess", StringComparison.OrdinalIgnoreCase))
-                {
-                    return GetPreprocessNodeOutput(toolNode.Id).Clone();
-                }
-    
-                var imageEdge = edges.FirstOrDefault(e => string.Equals(e.ToNodeId, toolNode.Id, StringComparison.OrdinalIgnoreCase) && string.Equals(e.ToPort, "Image", StringComparison.OrdinalIgnoreCase));
-                if (imageEdge is null || !nodesById.TryGetValue(imageEdge.FromNodeId, out var fromNode))
-                {
-                    return _preprocessor.Run(raw, _config.Preprocess);
-                }
-    
-                if (string.Equals(fromNode.Type, "Preprocess", StringComparison.OrdinalIgnoreCase))
-                {
-                    return GetPreprocessNodeOutput(fromNode.Id).Clone();
-                }
-                else if (string.Equals(fromNode.Type, "ImageSource", StringComparison.OrdinalIgnoreCase))
-                {
-                    var imgSourceDef = _config.ImageSources.FirstOrDefault(x => string.Equals(x.Name, fromNode.RefName, StringComparison.OrdinalIgnoreCase));
-                    if (imgSourceDef is not null)
-                    {
-                        var loadedMat = LoadImageFromSourceForPreview(imgSourceDef);
-                        if (loadedMat is not null && !loadedMat.Empty())
-                        {
-                            var outputMat = _preprocessor.Run(loadedMat, _config.Preprocess);
-                            matsToDispose.Add(outputMat);
-                            return outputMat.Clone();
-                        }
-                    }
-                }
-    
-                return _preprocessor.Run(raw, _config.Preprocess);
-            }
-            finally
-            {
-                foreach (var m in matsToDispose)
-                {
-                    m.Dispose();
-                }
-            }
-        }
-    
-        private Mat ResolveToolImageForPreview(Mat raw, ToolGraphNodeViewModel toolNode)
-        {
-            if (_config is null)
-            {
-                return raw.Clone();
+                var cropDef = _config.Crops?.FirstOrDefault(x => string.Equals(x.Name, node.RefName, StringComparison.OrdinalIgnoreCase));
+                using var inputMat = GetNodeInputImageForPreview(raw, node, "Image");
+                return (cropDef != null && cropDef.CropRoi != null && cropDef.CropRoi.Width > 0 && cropDef.CropRoi.Height > 0)
+                    ? CropProcessor.Run(inputMat, cropDef.CropRoi)
+                    : inputMat.Clone();
             }
 
-            var edges = _config.ToolGraph?.Edges ?? new();
-            var nodesById = Nodes.Where(n => !string.IsNullOrWhiteSpace(n.Id)).ToDictionary(n => n.Id, StringComparer.OrdinalIgnoreCase);
-            var imageEdge = edges.FirstOrDefault(e => string.Equals(e.ToNodeId, toolNode.Id, StringComparison.OrdinalIgnoreCase) && (string.Equals(e.ToPort, "Image", StringComparison.OrdinalIgnoreCase) || string.Equals(e.ToPort, "In", StringComparison.OrdinalIgnoreCase)));
-            if (imageEdge is null || !nodesById.TryGetValue(imageEdge.FromNodeId, out var fromNode))
+            if (string.Equals(node.Type, "ImgArithmetic", StringComparison.OrdinalIgnoreCase))
             {
-                return _preprocessor.Run(raw, _config.Preprocess);
+                var arithDef = _config.ImgArithmetics?.FirstOrDefault(x => string.Equals(x.Name, node.RefName, StringComparison.OrdinalIgnoreCase));
+                using var matA = GetNodeInputImageForPreview(raw, node, "InA");
+                using var matB = GetNodeInputImageForPreview(raw, node, "InB");
+                return arithDef != null ? ImgArithmeticProcessor.Run(matA, matB, arithDef) : matA.Clone();
             }
 
-            if (string.Equals(fromNode.Type, "ImageSource", StringComparison.OrdinalIgnoreCase))
+            if (string.Equals(node.Type, "ImageSource", StringComparison.OrdinalIgnoreCase))
             {
-                var imgSourceDef = _config.ImageSources.FirstOrDefault(x => string.Equals(x.Name, fromNode.RefName, StringComparison.OrdinalIgnoreCase));
+                var imgSourceDef = _config.ImageSources?.FirstOrDefault(x => string.Equals(x.Name, node.RefName, StringComparison.OrdinalIgnoreCase));
                 if (imgSourceDef is not null)
                 {
                     var loadedMat = LoadImageFromSourceForPreview(imgSourceDef);
                     if (loadedMat is not null && !loadedMat.Empty())
                     {
-                        return _preprocessor.Run(loadedMat, _config.Preprocess);
+                        return loadedMat;
                     }
                 }
-            }
-            else if (string.Equals(fromNode.Type, "Preprocess", StringComparison.OrdinalIgnoreCase))
-            {
-                var preDef = _config.PreprocessNodes?.FirstOrDefault(x => string.Equals(x.Name, fromNode.RefName, StringComparison.OrdinalIgnoreCase));
-                var settings = preDef?.Settings ?? _config.Preprocess;
-                using var upstreamMat = ResolveToolImageForPreview(raw, fromNode);
-                return _preprocessor.Run(upstreamMat, settings);
+                return raw.Clone();
             }
 
-            return _preprocessor.Run(raw, _config.Preprocess);
+            if (string.Equals(node.Type, "Preprocess", StringComparison.OrdinalIgnoreCase))
+            {
+                var preDef = _config.PreprocessNodes?.FirstOrDefault(x => string.Equals(x.Name, node.RefName, StringComparison.OrdinalIgnoreCase));
+                var settings = preDef?.Settings ?? _config.Preprocess;
+                var rois = preDef?.Rois;
+                using var inputMat = GetNodeInputImageForPreview(raw, node, "In");
+                return _preprocessor.Run(inputMat, settings, rois);
+            }
+
+            using var inMat = GetNodeInputImageForPreview(raw, node, "Image");
+            return inMat.Clone();
+        }
+
+        private Mat GetNodeInputImageForPreview(Mat raw, ToolGraphNodeViewModel node, string targetPort = "Image")
+        {
+            if (_config is null || node is null) return raw.Clone();
+
+            var edges = _config.ToolGraph?.Edges ?? new();
+            var nodesById = Nodes.Where(n => !string.IsNullOrWhiteSpace(n.Id)).ToDictionary(n => n.Id, StringComparer.OrdinalIgnoreCase);
+
+            var inEdge = edges.FirstOrDefault(e => string.Equals(e.ToNodeId, node.Id, StringComparison.OrdinalIgnoreCase) &&
+                (string.Equals(e.ToPort, targetPort, StringComparison.OrdinalIgnoreCase) || string.Equals(e.ToPort, "In", StringComparison.OrdinalIgnoreCase) || string.Equals(e.ToPort, "Image", StringComparison.OrdinalIgnoreCase)));
+
+            if (inEdge is not null && nodesById.TryGetValue(inEdge.FromNodeId, out var fromNode))
+            {
+                return GetNodeOutputImageForPreview(raw, fromNode);
+            }
+
+            return raw.Clone();
+        }
+
+        private Mat ResolveToolPreprocessForPreview(Mat raw, ToolGraphNodeViewModel toolNode)
+        {
+            if (_config is null || toolNode is null) return raw.Clone();
+
+            if (string.Equals(toolNode.Type, "Crop", StringComparison.OrdinalIgnoreCase))
+            {
+                return GetNodeInputImageForPreview(raw, toolNode, "Image");
+            }
+
+            if (string.Equals(toolNode.Type, "Preprocess", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(toolNode.Type, "ImgArithmetic", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(toolNode.Type, "ImageSource", StringComparison.OrdinalIgnoreCase))
+            {
+                return GetNodeOutputImageForPreview(raw, toolNode);
+            }
+
+            return GetNodeInputImageForPreview(raw, toolNode, "Image");
+        }
+
+        private Mat ResolveToolImageForPreview(Mat raw, ToolGraphNodeViewModel toolNode)
+        {
+            return ResolveToolPreprocessForPreview(raw, toolNode);
         }
     
         private void RequestBlobThresholdPreviewUpdate()
@@ -886,6 +816,30 @@ namespace VisionInspectionApp.UI.ViewModels
                     c.SearchRoi = roi;
                 return;
             }
+
+            if (string.Equals(kind, "Crop", StringComparison.OrdinalIgnoreCase))
+            {
+                var cropDef = _config.Crops.FirstOrDefault(x => string.Equals(x.Name, name, StringComparison.OrdinalIgnoreCase));
+                if (cropDef is not null)
+                    cropDef.CropRoi = roi;
+                return;
+            }
+
+            if (string.Equals(kind, "Sample", StringComparison.OrdinalIgnoreCase))
+            {
+                var cdDef = _config.ColorDiffs.FirstOrDefault(x => string.Equals(x.Name, name, StringComparison.OrdinalIgnoreCase));
+                if (cdDef is not null)
+                    cdDef.InspectRoi = roi;
+                return;
+            }
+
+            if (string.Equals(kind, "Ref", StringComparison.OrdinalIgnoreCase))
+            {
+                var cdDef = _config.ColorDiffs.FirstOrDefault(x => string.Equals(x.Name, name, StringComparison.OrdinalIgnoreCase));
+                if (cdDef is not null)
+                    cdDef.RefRoi = roi;
+                return;
+            }
     
             if (kind.StartsWith("B", StringComparison.OrdinalIgnoreCase))
             {
@@ -1227,6 +1181,9 @@ namespace VisionInspectionApp.UI.ViewModels
             if (string.Equals(kind, "LP", StringComparison.OrdinalIgnoreCase)) return _config.LinePairDetections.FirstOrDefault(x => string.Equals(x.Name, name, StringComparison.OrdinalIgnoreCase))?.SearchRoi;
             if (string.Equals(kind, "EPD", StringComparison.OrdinalIgnoreCase)) return _config.EdgePairDetections.FirstOrDefault(x => string.Equals(x.Name, name, StringComparison.OrdinalIgnoreCase))?.SearchRoi;
             if (string.Equals(kind, "CIR", StringComparison.OrdinalIgnoreCase)) return _config.CircleFinders.FirstOrDefault(x => string.Equals(x.Name, name, StringComparison.OrdinalIgnoreCase))?.SearchRoi;
+            if (string.Equals(kind, "Crop", StringComparison.OrdinalIgnoreCase)) return _config.Crops.FirstOrDefault(x => string.Equals(x.Name, name, StringComparison.OrdinalIgnoreCase))?.CropRoi;
+            if (string.Equals(kind, "Sample", StringComparison.OrdinalIgnoreCase)) return _config.ColorDiffs.FirstOrDefault(x => string.Equals(x.Name, name, StringComparison.OrdinalIgnoreCase))?.InspectRoi;
+            if (string.Equals(kind, "Ref", StringComparison.OrdinalIgnoreCase)) return _config.ColorDiffs.FirstOrDefault(x => string.Equals(x.Name, name, StringComparison.OrdinalIgnoreCase))?.RefRoi;
             if (string.Equals(kind, "C", StringComparison.OrdinalIgnoreCase)) return _config.CodeDetections.FirstOrDefault(x => string.Equals(x.Name, name, StringComparison.OrdinalIgnoreCase))?.SearchRoi;
             if (kind.StartsWith("B", StringComparison.OrdinalIgnoreCase)) return _config.BlobDetections.FirstOrDefault(x => string.Equals(x.Name, name, StringComparison.OrdinalIgnoreCase))?.InspectRoi;
             if (string.Equals(kind, "SCT", StringComparison.OrdinalIgnoreCase)) return _config.SurfaceCompares.FirstOrDefault(x => string.Equals(x.Name, name, StringComparison.OrdinalIgnoreCase))?.TemplateRoi;
@@ -2100,7 +2057,7 @@ namespace VisionInspectionApp.UI.ViewModels
 
                 if (_lastRun != null)
                 {
-                    _lastRun.Timings.NodeTimings[sourceNodeName] = (int)__sw.ElapsedMilliseconds;
+                    _lastRun.Timings.NodeTimings[sourceNodeName] = 0;
                     if (_config.PreprocessNodes != null)
                     {
                         foreach (var preNode in _config.PreprocessNodes)
@@ -2527,7 +2484,7 @@ namespace VisionInspectionApp.UI.ViewModels
                 }
                 else
                 {
-                    if (SelectedNode is not null && (string.Equals(SelectedNode.Type, "Origin", StringComparison.OrdinalIgnoreCase) || string.Equals(SelectedNode.Type, "Point", StringComparison.OrdinalIgnoreCase) || string.Equals(SelectedNode.Type, "Line", StringComparison.OrdinalIgnoreCase) || string.Equals(SelectedNode.Type, "Caliper", StringComparison.OrdinalIgnoreCase) || string.Equals(SelectedNode.Type, "LinePairDetection", StringComparison.OrdinalIgnoreCase) || string.Equals(SelectedNode.Type, "EdgePairDetect", StringComparison.OrdinalIgnoreCase) || string.Equals(SelectedNode.Type, "EdgePair", StringComparison.OrdinalIgnoreCase) || string.Equals(SelectedNode.Type, "BlobDetection", StringComparison.OrdinalIgnoreCase) || string.Equals(SelectedNode.Type, "CircleFinder", StringComparison.OrdinalIgnoreCase) || string.Equals(SelectedNode.Type, "SurfaceCompare", StringComparison.OrdinalIgnoreCase) || string.Equals(SelectedNode.Type, "ContourCompare", StringComparison.OrdinalIgnoreCase) || string.Equals(SelectedNode.Type, "Text", StringComparison.OrdinalIgnoreCase) || string.Equals(SelectedNode.Type, "CodeDetection", StringComparison.OrdinalIgnoreCase)))
+                    if (SelectedNode is not null && (string.Equals(SelectedNode.Type, "Origin", StringComparison.OrdinalIgnoreCase) || string.Equals(SelectedNode.Type, "Point", StringComparison.OrdinalIgnoreCase) || string.Equals(SelectedNode.Type, "Line", StringComparison.OrdinalIgnoreCase) || string.Equals(SelectedNode.Type, "Caliper", StringComparison.OrdinalIgnoreCase) || string.Equals(SelectedNode.Type, "LinePairDetection", StringComparison.OrdinalIgnoreCase) || string.Equals(SelectedNode.Type, "EdgePairDetect", StringComparison.OrdinalIgnoreCase) || string.Equals(SelectedNode.Type, "EdgePair", StringComparison.OrdinalIgnoreCase) || string.Equals(SelectedNode.Type, "BlobDetection", StringComparison.OrdinalIgnoreCase) || string.Equals(SelectedNode.Type, "CircleFinder", StringComparison.OrdinalIgnoreCase) || string.Equals(SelectedNode.Type, "SurfaceCompare", StringComparison.OrdinalIgnoreCase) || string.Equals(SelectedNode.Type, "ContourCompare", StringComparison.OrdinalIgnoreCase) || string.Equals(SelectedNode.Type, "Text", StringComparison.OrdinalIgnoreCase) || string.Equals(SelectedNode.Type, "CodeDetection", StringComparison.OrdinalIgnoreCase) || string.Equals(SelectedNode.Type, "Crop", StringComparison.OrdinalIgnoreCase) || string.Equals(SelectedNode.Type, "ColorDiff", StringComparison.OrdinalIgnoreCase) || string.Equals(SelectedNode.Type, "ImgArithmetic", StringComparison.OrdinalIgnoreCase)))
                     {
                         using var processedSel = ResolveToolPreprocessForPreview(snap, SelectedNode);
                         SelectedNodePreviewImage = processedSel.Empty() ? null : processedSel.ToBitmapSourceSafe();
@@ -4077,6 +4034,31 @@ namespace VisionInspectionApp.UI.ViewModels
                 dst.Add(new OverlayTextItem { X = t.X, Y = t.Y, Text = text, Foreground = brush, Background = new SolidColorBrush(Color.FromArgb(80, 0, 0, 0)) });
                 return;
             }
+
+            if (string.Equals(node.Type, "ColorDiff", StringComparison.OrdinalIgnoreCase))
+            {
+                var cdRes = run.ColorDiffs.FirstOrDefault(x => string.Equals(x.Name, node.RefName, StringComparison.OrdinalIgnoreCase));
+                var cdDef = _config?.ColorDiffs?.FirstOrDefault(x => string.Equals(x.Name, node.RefName, StringComparison.OrdinalIgnoreCase));
+                if (cdDef is not null)
+                {
+                    var brush = (cdRes?.Pass ?? false) ? Brushes.Lime : Brushes.Red;
+                    dst.Add(CreateRotatedRoi(cdDef.InspectRoi, brush, $"{cdDef.Name} Sample"));
+
+                    if (cdRes is not null)
+                    {
+                        var text = $"{cdRes.Name}: ΔE = {cdRes.DeltaE:F2} (L={cdRes.MeasuredL:F1}, a={cdRes.MeasuredA:F1}, b={cdRes.MeasuredB:F1})";
+                        dst.Add(new OverlayTextItem
+                        {
+                            X = cdDef.InspectRoi.X + 4,
+                            Y = cdDef.InspectRoi.Y + 4,
+                            Text = text,
+                            Foreground = brush,
+                            Background = new SolidColorBrush(Color.FromArgb(160, 0, 0, 0))
+                        });
+                    }
+                }
+                return;
+            }
         }
     
         private void BuildOverlayForNode(ToolGraphNodeViewModel node, Mat image, List<OverlayItem> dst)
@@ -4372,7 +4354,9 @@ namespace VisionInspectionApp.UI.ViewModels
             if (string.IsNullOrWhiteSpace(label)) return true;
             var l = label.Trim();
             return l.StartsWith("Origin", StringComparison.OrdinalIgnoreCase) ||
-                   string.Equals(l, "DefectROI", StringComparison.OrdinalIgnoreCase);
+                   string.Equals(l, "DefectROI", StringComparison.OrdinalIgnoreCase) ||
+                   l.EndsWith("Crop", StringComparison.OrdinalIgnoreCase) ||
+                   l.Contains("Crop", StringComparison.OrdinalIgnoreCase);
         }
 
         private Roi UnTransformRoi(Roi roi, string? label = null)

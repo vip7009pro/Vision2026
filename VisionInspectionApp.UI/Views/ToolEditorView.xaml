@@ -60,7 +60,8 @@
             <Button Content="🖥️ HMI Manager" Command="{Binding OpenHmiManagerCommand}" Margin="0,0,4,0" Padding="8,4" Background="#D81B60" Foreground="White" BorderThickness="0" ToolTip="Thiết kế và vận hành màn hình HMI tương tác PLC"/>
             <Button Content="📊 Monitor" Command="{Binding OpenPlcMonitorCommand}" Margin="0,0,4,0" Padding="8,4" Background="#43A047" Foreground="White" BorderThickness="0" ToolTip="Theo dõi trạng thái kết nối, Latency và Log PLC"/>
             <Button Content="🏷️ Tags" Command="{Binding OpenPlcBrowserCommand}" Margin="0,0,4,0" Padding="8,4" Background="#8E24AA" Foreground="White" BorderThickness="0" ToolTip="Cửa sổ tra cứu danh sách Tag PLC"/>
-            <Button Content="🗄️ DB Manager" Command="{Binding OpenDbManagerCommand}" Margin="0,0,12,0" Padding="8,4" Background="#0D9488" Foreground="White" BorderThickness="0" ToolTip="Quản lý danh sách kết nối CSDL (SQL Server, MySQL, PostgreSQL, SQLite, ODBC)"/>
+            <Button Content="🗄️ DB Manager" Command="{Binding OpenDbManagerCommand}" Margin="0,0,4,0" Padding="8,4" Background="#0D9488" Foreground="White" BorderThickness="0" ToolTip="Quản lý danh sách kết nối CSDL (SQL Server, MySQL, PostgreSQL, SQLite, ODBC)"/>
+            <Button Content="📐 Calibration" Command="{Binding OpenCalibrationDialogCommand}" Margin="0,0,12,0" Padding="8,4" Background="#E65100" Foreground="White" BorderThickness="0" ToolTip="Hiệu chuẩn tỉ lệ Pixels/mm trực tiếp trên Job hiện tại" />
 
             <TextBlock Text="Product Code" VerticalAlignment="Center" Margin="0,0,6,0" />
             <TextBox Width="120" Text="{Binding ProductCode, UpdateSourceTrigger=LostFocus}" Margin="0,0,12,0" />
@@ -3029,6 +3030,112 @@
                     </StackPanel>
                 </Border>
             </StackPanel>
+
+            <!-- Crop Card -->
+            <Border Background="{DynamicResource PanelBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="4" Padding="8" Margin="0,4,0,0" Visibility="{Binding IsCropNode, Converter={StaticResource BoolToVis}}">
+                <StackPanel>
+                    <TextBlock Text="✂️ Crop Tool Properties" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource TextBrush}" Margin="0,0,0,6"/>
+                    <UniformGrid Columns="2" Margin="0,2">
+                        <StackPanel Margin="2">
+                            <TextBlock Text="ROI X (px):" FontSize="10" Foreground="{DynamicResource TextMutedBrush}"/>
+                            <TextBox Text="{Binding Crop_X, UpdateSourceTrigger=PropertyChanged}" FontSize="11" Padding="2"/>
+                        </StackPanel>
+                        <StackPanel Margin="2">
+                            <TextBlock Text="ROI Y (px):" FontSize="10" Foreground="{DynamicResource TextMutedBrush}"/>
+                            <TextBox Text="{Binding Crop_Y, UpdateSourceTrigger=PropertyChanged}" FontSize="11" Padding="2"/>
+                        </StackPanel>
+                        <StackPanel Margin="2">
+                            <TextBlock Text="ROI Width (px):" FontSize="10" Foreground="{DynamicResource TextMutedBrush}"/>
+                            <TextBox Text="{Binding Crop_Width, UpdateSourceTrigger=PropertyChanged}" FontSize="11" Padding="2"/>
+                        </StackPanel>
+                        <StackPanel Margin="2">
+                            <TextBlock Text="ROI Height (px):" FontSize="10" Foreground="{DynamicResource TextMutedBrush}"/>
+                            <TextBox Text="{Binding Crop_Height, UpdateSourceTrigger=PropertyChanged}" FontSize="11" Padding="2"/>
+                        </StackPanel>
+                    </UniformGrid>
+                </StackPanel>
+            </Border>
+
+            <!-- ColorDiff Card -->
+            <Border Background="{DynamicResource PanelBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="4" Padding="8" Margin="0,4,0,0" Visibility="{Binding IsColorDiffNode, Converter={StaticResource BoolToVis}}">
+                <StackPanel>
+                    <TextBlock Text="🎨 ColorDiff Tool Properties" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource TextBrush}" Margin="0,0,0,6"/>
+                    <Button Content="🎯 Lấy Màu Mẫu Từ ROI (Teach Ref Color)" Command="{Binding ColorDiff_TeachRefColorCommand}" Background="#007ACC" Foreground="White" Padding="6,4" FontWeight="Bold" Margin="0,0,0,8" ToolTip="Tính màu trung bình L,a,b trong khung ROI mẫu và lưu vào Job" />
+
+                    <CheckBox Content="Màu tham chiếu cố định (Manual Ref)" IsChecked="{Binding ColorDiff_UseRefColor, UpdateSourceTrigger=PropertyChanged}" FontSize="11" Margin="0,0,0,6" Foreground="{DynamicResource TextBrush}"/>
+
+                    <StackPanel Visibility="{Binding ColorDiff_UseRefColor, Converter={StaticResource BoolToVis}}">
+                        <UniformGrid Columns="3" Margin="0,2">
+                            <StackPanel Margin="2">
+                                <TextBlock Text="Ref L:" FontSize="10" Foreground="{DynamicResource TextMutedBrush}"/>
+                                <TextBox Text="{Binding ColorDiff_RefL, UpdateSourceTrigger=PropertyChanged}" FontSize="11" Padding="2"/>
+                            </StackPanel>
+                            <StackPanel Margin="2">
+                                <TextBlock Text="Ref a:" FontSize="10" Foreground="{DynamicResource TextMutedBrush}"/>
+                                <TextBox Text="{Binding ColorDiff_RefA, UpdateSourceTrigger=PropertyChanged}" FontSize="11" Padding="2"/>
+                            </StackPanel>
+                            <StackPanel Margin="2">
+                                <TextBlock Text="Ref b:" FontSize="10" Foreground="{DynamicResource TextMutedBrush}"/>
+                                <TextBox Text="{Binding ColorDiff_RefB, UpdateSourceTrigger=PropertyChanged}" FontSize="11" Padding="2"/>
+                            </StackPanel>
+                        </UniformGrid>
+                    </StackPanel>
+
+                    <StackPanel Margin="0,4,0,0">
+                        <TextBlock Text="Ngưỡng Delta E Tối Đa (Max Delta E):" FontSize="10" Foreground="{DynamicResource TextMutedBrush}"/>
+                        <TextBox Text="{Binding ColorDiff_MaxDeltaE, UpdateSourceTrigger=PropertyChanged}" FontSize="11" Padding="2" Margin="0,2,0,0"/>
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+
+            <!-- ImgArithmetic Card -->
+            <Border Background="{DynamicResource PanelBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="4" Padding="8" Margin="0,4,0,0" Visibility="{Binding IsImgArithmeticNode, Converter={StaticResource BoolToVis}}">
+                <StackPanel>
+                    <TextBlock Text="🧮 ImgArithmetic Tool Properties" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource TextBrush}" Margin="0,0,0,6"/>
+
+                    <Grid Margin="0,0,0,6">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="90"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="Phép Toán (Op):" VerticalAlignment="Center" FontSize="11" Foreground="{DynamicResource TextMutedBrush}"/>
+                        <ComboBox Grid.Column="1" ItemsSource="{Binding AvailableImgArithmeticOps}" SelectedItem="{Binding ImgArithmetic_Op, UpdateSourceTrigger=PropertyChanged}" FontSize="11"/>
+                    </Grid>
+
+                    <Grid Margin="0,0,0,4">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="90"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="Ảnh A (Image A):" VerticalAlignment="Center" FontSize="11" Foreground="{DynamicResource TextMutedBrush}"/>
+                        <ComboBox Grid.Column="1" ItemsSource="{Binding AvailableImageNodes}" SelectedItem="{Binding ImgArithmetic_ImageSourceRefA, UpdateSourceTrigger=LostFocus}" FontSize="11"/>
+                    </Grid>
+
+                    <Grid Margin="0,0,0,6">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="90"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="Ảnh B (Image B):" VerticalAlignment="Center" FontSize="11" Foreground="{DynamicResource TextMutedBrush}"/>
+                        <ComboBox Grid.Column="1" ItemsSource="{Binding AvailableImageNodes}" SelectedItem="{Binding ImgArithmetic_ImageSourceRefB, UpdateSourceTrigger=LostFocus}" FontSize="11"/>
+                    </Grid>
+
+                    <UniformGrid Columns="3" Margin="0,4,0,0">
+                        <StackPanel Margin="2">
+                            <TextBlock Text="Weight A:" FontSize="10" Foreground="{DynamicResource TextMutedBrush}"/>
+                            <TextBox Text="{Binding ImgArithmetic_WeightA, UpdateSourceTrigger=PropertyChanged}" FontSize="11" Padding="2"/>
+                        </StackPanel>
+                        <StackPanel Margin="2">
+                            <TextBlock Text="Weight B:" FontSize="10" Foreground="{DynamicResource TextMutedBrush}"/>
+                            <TextBox Text="{Binding ImgArithmetic_WeightB, UpdateSourceTrigger=PropertyChanged}" FontSize="11" Padding="2"/>
+                        </StackPanel>
+                        <StackPanel Margin="2">
+                            <TextBlock Text="Offset:" FontSize="10" Foreground="{DynamicResource TextMutedBrush}"/>
+                            <TextBox Text="{Binding ImgArithmetic_Offset, UpdateSourceTrigger=PropertyChanged}" FontSize="11" Padding="2"/>
+                        </StackPanel>
+                    </UniformGrid>
+                </StackPanel>
+            </Border>
 
                             </StackPanel>
                         </ScrollViewer>

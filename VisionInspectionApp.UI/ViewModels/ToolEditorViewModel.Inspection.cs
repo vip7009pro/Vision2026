@@ -340,6 +340,14 @@ namespace VisionInspectionApp.UI.ViewModels
                     }
                 }
 
+                if (res.ColorDiffs is not null)
+                {
+                    foreach (var cd in res.ColorDiffs.Where(x => !x.Pass))
+                    {
+                        reasons.Add($"• Lỗi ColorDiff '{cd.Name}': ΔE = {cd.DeltaE:F2} > Ngưỡng tối đa {cd.MaxDeltaE:F2}");
+                    }
+                }
+
                 NgReasonsText = string.Join("\n", reasons);
             }
         }
@@ -514,6 +522,24 @@ namespace VisionInspectionApp.UI.ViewModels
                         dia.TolMinus,
                         dia.Pass,
                         distUnit));
+                }
+            }
+
+            if (res.ColorDiffs is not null)
+            {
+                foreach (var cd in res.ColorDiffs)
+                {
+                    SpecResults.Add(new SpecResultRow(
+                        "ColorDiff",
+                        cd.Name,
+                        "Sample",
+                        "Ref",
+                        cd.DeltaE,
+                        0.0,
+                        cd.MaxDeltaE,
+                        0.0,
+                        cd.Pass,
+                        "ΔE"));
                 }
             }
         }

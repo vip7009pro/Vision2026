@@ -519,6 +519,21 @@ public static class IntellisenseBehavior
             };
         }
 
+        if (string.Equals(type, "ColorDiff", StringComparison.OrdinalIgnoreCase))
+        {
+            return new List<IntellisenseItem>
+            {
+                new("DeltaE", "DeltaE", "Độ khác màu ΔE (double)", "⚡", false),
+                new("L", "L", "Giá trị L mẫu đo CIELab (double: 0..100)", "⚡", false),
+                new("a", "a", "Giá trị a mẫu đo CIELab (double: -128..127)", "⚡", false),
+                new("b", "b", "Giá trị b mẫu đo CIELab (double: -128..127)", "⚡", false),
+                new("RefL", "RefL", "Giá trị L tham chiếu (double)", "⚡", false),
+                new("RefA", "RefA", "Giá trị a tham chiếu (double)", "⚡", false),
+                new("RefB", "RefB", "Giá trị b tham chiếu (double)", "⚡", false),
+                new("Pass", "Pass", "Kết quả OK/NG (bool: true/false)", "⚡", false)
+            };
+        }
+
         if (string.Equals(type, "ImageOutput", StringComparison.OrdinalIgnoreCase) || string.Equals(type, "OutputImage", StringComparison.OrdinalIgnoreCase))
         {
             return new List<IntellisenseItem>

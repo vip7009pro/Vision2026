@@ -118,6 +118,24 @@ namespace VisionInspectionApp.UI.ViewModels
                     if (res is not null)
                         val = $"Pass: {res.Pass}\r\nDefect Count: {res.Count}\r\nMax Area: {res.MaxArea:F3}";
                 }
+                else if (string.Equals(node.Type, "Crop", StringComparison.OrdinalIgnoreCase))
+                {
+                    var res = _lastRun.Crops?.FirstOrDefault(x => string.Equals(x.Name, node.RefName, StringComparison.OrdinalIgnoreCase));
+                    if (res is not null)
+                        val = $"Success: {res.Success}\r\nOutput Size: {res.Width} x {res.Height} px";
+                }
+                else if (string.Equals(node.Type, "ColorDiff", StringComparison.OrdinalIgnoreCase))
+                {
+                    var res = _lastRun.ColorDiffs?.FirstOrDefault(x => string.Equals(x.Name, node.RefName, StringComparison.OrdinalIgnoreCase));
+                    if (res is not null)
+                        val = $"Pass: {res.Pass}\r\nDeltaE: {res.DeltaE:F2} (Max: {res.MaxDeltaE:F2})\r\nMeasured Lab: ({res.MeasuredL:F2}, {res.MeasuredA:F2}, {res.MeasuredB:F2})\r\nRef Lab: ({res.RefL:F2}, {res.RefA:F2}, {res.RefB:F2})";
+                }
+                else if (string.Equals(node.Type, "ImgArithmetic", StringComparison.OrdinalIgnoreCase))
+                {
+                    var res = _lastRun.ImgArithmetics?.FirstOrDefault(x => string.Equals(x.Name, node.RefName, StringComparison.OrdinalIgnoreCase));
+                    if (res is not null)
+                        val = $"Success: {res.Success}\r\nOp: {res.Op}\r\nSize: {res.Width} x {res.Height} px";
+                }
                 else if (string.Equals(node.Type, "Condition", StringComparison.OrdinalIgnoreCase))
                 {
                     var res = _lastRun.Conditions?.FirstOrDefault(x => string.Equals(x.Name, node.RefName, StringComparison.OrdinalIgnoreCase));
@@ -211,6 +229,9 @@ namespace VisionInspectionApp.UI.ViewModels
                 new ToolboxItemModel { Name = "CodeDetection", Category = "🔍 Phát Hiện & Tìm Kiếm", Icon = "🔳" },
                 new ToolboxItemModel { Name = "SurfaceCompare", Category = "🔍 Phát Hiện & Tìm Kiếm", Icon = "🔍" },
                 new ToolboxItemModel { Name = "ContourCompare", Category = "🔍 Phát Hiện & Tìm Kiếm", Icon = "🌀" },
+                new ToolboxItemModel { Name = "Crop", Category = "🔍 Phát Hiện & Tìm Kiếm", Icon = "✂️" },
+                new ToolboxItemModel { Name = "ColorDiff", Category = "🔍 Phát Hiện & Tìm Kiếm", Icon = "🎨" },
+                new ToolboxItemModel { Name = "ImgArithmetic", Category = "🔍 Phát Hiện & Tìm Kiếm", Icon = "🧮" },
 
                 new ToolboxItemModel { Name = "Distance", Category = "📐 Đo Đạc & Kích Thước", Icon = "↔️" },
                 new ToolboxItemModel { Name = "LineLineDistance", Category = "📐 Đo Đạc & Kích Thước", Icon = "⏸️" },
@@ -295,6 +316,8 @@ namespace VisionInspectionApp.UI.ViewModels
             Preprocess_ToggleRoiModeCommand = new RelayCommand<PreprocessRoiDefinition?>(Preprocess_ToggleRoiMode);
             Preprocess_AddPolygonPointCommand = new RelayCommand<PreprocessRoiDefinition?>(Preprocess_AddPolygonPoint);
             Preprocess_RemovePolygonPointCommand = new RelayCommand<Point2dModel?>(Preprocess_RemovePolygonPoint);
+            OpenCalibrationDialogCommand = new RelayCommand(OpenCalibrationDialog);
+            ColorDiff_TeachRefColorCommand = new RelayCommand(ColorDiff_TeachRefColor);
 
             // Line Trigger (Hardware Sensor Signal from Camera)
             _cameraService.FrameCaptured += (s, frameMat) =>
@@ -1020,6 +1043,25 @@ namespace VisionInspectionApp.UI.ViewModels
             OnPropertyChanged(nameof(IsSurfaceCompareNode));
             OnPropertyChanged(nameof(IsContourCompareNode));
             OnPropertyChanged(nameof(IsCodeDetectionNode));
+            OnPropertyChanged(nameof(IsCropNode));
+            OnPropertyChanged(nameof(SelectedCrop));
+            OnPropertyChanged(nameof(Crop_X));
+            OnPropertyChanged(nameof(Crop_Y));
+            OnPropertyChanged(nameof(Crop_Width));
+            OnPropertyChanged(nameof(Crop_Height));
+            OnPropertyChanged(nameof(IsColorDiffNode));
+            OnPropertyChanged(nameof(SelectedColorDiff));
+            OnPropertyChanged(nameof(ColorDiff_UseRefColor));
+            OnPropertyChanged(nameof(ColorDiff_RefL));
+            OnPropertyChanged(nameof(ColorDiff_RefA));
+            OnPropertyChanged(nameof(ColorDiff_RefB));
+            OnPropertyChanged(nameof(ColorDiff_MaxDeltaE));
+            OnPropertyChanged(nameof(IsImgArithmeticNode));
+            OnPropertyChanged(nameof(SelectedImgArithmetic));
+            OnPropertyChanged(nameof(ImgArithmetic_Op));
+            OnPropertyChanged(nameof(ImgArithmetic_WeightA));
+            OnPropertyChanged(nameof(ImgArithmetic_WeightB));
+            OnPropertyChanged(nameof(ImgArithmetic_Offset));
 
             // PLC Nodes
             OnPropertyChanged(nameof(IsPlcReadNode));
@@ -1221,6 +1263,228 @@ namespace VisionInspectionApp.UI.ViewModels
         public bool IsOriginNode => SelectedNode != null && string.Equals(SelectedNode.Type, "Origin", StringComparison.OrdinalIgnoreCase);
         public bool IsPointNode => string.Equals(SelectedNode?.Type, "Point", StringComparison.OrdinalIgnoreCase);
         public bool IsPointEdgePointAlgorithm => Point_Algorithm == PointFindAlgorithm.EdgePoint;
+
+        public bool IsCropNode => string.Equals(SelectedNode?.Type, "Crop", StringComparison.OrdinalIgnoreCase);
+        public bool IsColorDiffNode => string.Equals(SelectedNode?.Type, "ColorDiff", StringComparison.OrdinalIgnoreCase);
+        public bool IsImgArithmeticNode => string.Equals(SelectedNode?.Type, "ImgArithmetic", StringComparison.OrdinalIgnoreCase);
+
+        public ICommand OpenCalibrationDialogCommand { get; }
+
+        private void OpenCalibrationDialog()
+        {
+            if (_config is null)
+            {
+                System.Windows.MessageBox.Show("Chưa mở Job nào để thực hiện Calibration.", "Thông báo", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Information);
+                return;
+            }
+
+            var calibVm = new CalibrationViewModel(_configService, _storeOptions, _cameraService, _jobService);
+            calibVm.InitializeWithConfig(_config, CurrentJobFilePath, SelectedNodePreviewImage);
+
+            var dialog = new VisionInspectionApp.UI.Views.CalibrationDialog
+            {
+                DataContext = calibVm,
+                Owner = System.Windows.Application.Current?.MainWindow
+            };
+
+            var res = dialog.ShowDialog();
+            if (res == true || calibVm.IsDirty)
+            {
+                OnPropertyChanged(nameof(PixelsPerMm));
+                IsDirty = true;
+                RefreshPreviews();
+            }
+        }
+
+        public double PixelsPerMm
+        {
+            get => _config?.PixelsPerMm ?? 1.0;
+            set
+            {
+                if (_config != null && Math.Abs(_config.PixelsPerMm - value) > 0.00001)
+                {
+                    _config.PixelsPerMm = value;
+                    OnPropertyChanged();
+                    IsDirty = true;
+                }
+            }
+        }
+
+        // Crop Properties
+        public CropDefinition? SelectedCrop => _config?.Crops?.FirstOrDefault(x => string.Equals(x.Name, SelectedNode?.RefName, StringComparison.OrdinalIgnoreCase));
+        
+        public int Crop_X
+        {
+            get => SelectedCrop?.CropRoi?.X ?? 0;
+            set { if (SelectedCrop?.CropRoi != null && SelectedCrop.CropRoi.X != value) { SelectedCrop.CropRoi.X = value; OnPropertyChanged(); IsDirty = true; RefreshPreviews(); } }
+        }
+        public int Crop_Y
+        {
+            get => SelectedCrop?.CropRoi?.Y ?? 0;
+            set { if (SelectedCrop?.CropRoi != null && SelectedCrop.CropRoi.Y != value) { SelectedCrop.CropRoi.Y = value; OnPropertyChanged(); IsDirty = true; RefreshPreviews(); } }
+        }
+        public int Crop_Width
+        {
+            get => SelectedCrop?.CropRoi?.Width ?? 100;
+            set { if (SelectedCrop?.CropRoi != null && SelectedCrop.CropRoi.Width != value) { SelectedCrop.CropRoi.Width = value; OnPropertyChanged(); IsDirty = true; RefreshPreviews(); } }
+        }
+        public int Crop_Height
+        {
+            get => SelectedCrop?.CropRoi?.Height ?? 100;
+            set { if (SelectedCrop?.CropRoi != null && SelectedCrop.CropRoi.Height != value) { SelectedCrop.CropRoi.Height = value; OnPropertyChanged(); IsDirty = true; RefreshPreviews(); } }
+        }
+
+        // ColorDiff Properties
+        public ColorDiffDefinition? SelectedColorDiff => _config?.ColorDiffs?.FirstOrDefault(x => string.Equals(x.Name, SelectedNode?.RefName, StringComparison.OrdinalIgnoreCase));
+
+        public bool ColorDiff_UseRefColor
+        {
+            get => SelectedColorDiff?.UseRefColor ?? true;
+            set { if (SelectedColorDiff != null && SelectedColorDiff.UseRefColor != value) { SelectedColorDiff.UseRefColor = value; OnPropertyChanged(); IsDirty = true; RefreshPreviews(); } }
+        }
+        public double ColorDiff_RefL
+        {
+            get => SelectedColorDiff?.RefL ?? 0.0;
+            set { if (SelectedColorDiff != null && Math.Abs(SelectedColorDiff.RefL - value) > 0.01) { SelectedColorDiff.RefL = value; OnPropertyChanged(); IsDirty = true; RefreshPreviews(); } }
+        }
+        public double ColorDiff_RefA
+        {
+            get => SelectedColorDiff?.RefA ?? 0.0;
+            set { if (SelectedColorDiff != null && Math.Abs(SelectedColorDiff.RefA - value) > 0.01) { SelectedColorDiff.RefA = value; OnPropertyChanged(); IsDirty = true; RefreshPreviews(); } }
+        }
+        public double ColorDiff_RefB
+        {
+            get => SelectedColorDiff?.RefB ?? 0.0;
+            set { if (SelectedColorDiff != null && Math.Abs(SelectedColorDiff.RefB - value) > 0.01) { SelectedColorDiff.RefB = value; OnPropertyChanged(); IsDirty = true; RefreshPreviews(); } }
+        }
+        public double ColorDiff_MaxDeltaE
+        {
+            get => SelectedColorDiff?.MaxDeltaE ?? 5.0;
+            set { if (SelectedColorDiff != null && Math.Abs(SelectedColorDiff.MaxDeltaE - value) > 0.01) { SelectedColorDiff.MaxDeltaE = value; OnPropertyChanged(); IsDirty = true; RefreshPreviews(); } }
+        }
+
+        // ImgArithmetic Properties
+        public ImgArithmeticDefinition? SelectedImgArithmetic => _config?.ImgArithmetics?.FirstOrDefault(x => string.Equals(x.Name, SelectedNode?.RefName, StringComparison.OrdinalIgnoreCase));
+
+        public ImgArithmeticOp ImgArithmetic_Op
+        {
+            get => SelectedImgArithmetic?.Op ?? ImgArithmeticOp.ADD;
+            set { if (SelectedImgArithmetic != null && SelectedImgArithmetic.Op != value) { SelectedImgArithmetic.Op = value; OnPropertyChanged(); IsDirty = true; RefreshPreviews(); } }
+        }
+        public double ImgArithmetic_WeightA
+        {
+            get => SelectedImgArithmetic?.WeightA ?? 0.5;
+            set { if (SelectedImgArithmetic != null && Math.Abs(SelectedImgArithmetic.WeightA - value) > 0.01) { SelectedImgArithmetic.WeightA = value; OnPropertyChanged(); IsDirty = true; RefreshPreviews(); } }
+        }
+        public double ImgArithmetic_WeightB
+        {
+            get => SelectedImgArithmetic?.WeightB ?? 0.5;
+            set { if (SelectedImgArithmetic != null && Math.Abs(SelectedImgArithmetic.WeightB - value) > 0.01) { SelectedImgArithmetic.WeightB = value; OnPropertyChanged(); IsDirty = true; RefreshPreviews(); } }
+        }
+        public double ImgArithmetic_Offset
+        {
+            get => SelectedImgArithmetic?.Offset ?? 0.0;
+            set { if (SelectedImgArithmetic != null && Math.Abs(SelectedImgArithmetic.Offset - value) > 0.01) { SelectedImgArithmetic.Offset = value; OnPropertyChanged(); IsDirty = true; RefreshPreviews(); } }
+        }
+
+        public ObservableCollection<ImgArithmeticOp> AvailableImgArithmeticOps { get; } = new()
+        {
+            ImgArithmeticOp.ADD,
+            ImgArithmeticOp.SUB,
+            ImgArithmeticOp.MIN,
+            ImgArithmeticOp.MAX,
+            ImgArithmeticOp.BIT_AND,
+            ImgArithmeticOp.BIT_OR,
+            ImgArithmeticOp.BIT_XOR,
+            ImgArithmeticOp.BIT_NOT
+        };
+
+        public string ImgArithmetic_ImageSourceRefA
+        {
+            get => SelectedImgArithmetic?.ImageSourceRefA ?? string.Empty;
+            set { if (SelectedImgArithmetic != null && SelectedImgArithmetic.ImageSourceRefA != value) { SelectedImgArithmetic.ImageSourceRefA = value; OnPropertyChanged(); IsDirty = true; RefreshPreviews(); } }
+        }
+
+        public string ImgArithmetic_ImageSourceRefB
+        {
+            get => SelectedImgArithmetic?.ImageSourceRefB ?? string.Empty;
+            set { if (SelectedImgArithmetic != null && SelectedImgArithmetic.ImageSourceRefB != value) { SelectedImgArithmetic.ImageSourceRefB = value; OnPropertyChanged(); IsDirty = true; RefreshPreviews(); } }
+        }
+
+        public ICommand ColorDiff_TeachRefColorCommand { get; }
+
+        private void ColorDiff_TeachRefColor()
+        {
+            if (_config is null || SelectedColorDiff is null)
+            {
+                System.Windows.MessageBox.Show("Vui lòng chọn 1 Node ColorDiff trước khi lấy màu mẫu.", "Thông báo", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Information);
+                return;
+            }
+
+            using var rawSnap = _sharedImage.GetSnapshot();
+            using var snap = rawSnap ?? new OpenCvSharp.Mat();
+            if (snap.Empty())
+            {
+                System.Windows.MessageBox.Show("Chưa có ảnh đầu vào để lấy mẫu màu. Vui lòng bấm Run Once hoặc nạp ảnh.", "Thông báo", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Warning);
+                return;
+            }
+
+            using var inputMat = ResolveToolImageForPreview(snap, SelectedNode!);
+            if (inputMat.Empty())
+            {
+                System.Windows.MessageBox.Show("Không thể lấy ảnh đầu vào cho Node ColorDiff.", "Lỗi", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Error);
+                return;
+            }
+
+            var roi = SelectedColorDiff.InspectRoi;
+            if (roi == null || roi.Width <= 0 || roi.Height <= 0)
+            {
+                roi = new Roi { X = 50, Y = 50, Width = 150, Height = 150 };
+                SelectedColorDiff.InspectRoi = roi;
+            }
+
+            int x = Math.Clamp(roi.X, 0, Math.Max(0, inputMat.Width - 1));
+            int y = Math.Clamp(roi.Y, 0, Math.Max(0, inputMat.Height - 1));
+            int w = Math.Min(roi.Width, inputMat.Width - x);
+            int h = Math.Min(roi.Height, inputMat.Height - y);
+
+            if (w <= 0 || h <= 0)
+            {
+                System.Windows.MessageBox.Show("ROI lấy mẫu màu không hợp lệ.", "Lỗi", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Warning);
+                return;
+            }
+
+            using var roiMat = new OpenCvSharp.Mat(inputMat, new OpenCvSharp.Rect(x, y, w, h));
+            using var bgrMat = new OpenCvSharp.Mat();
+            if (roiMat.Channels() == 1)
+                OpenCvSharp.Cv2.CvtColor(roiMat, bgrMat, OpenCvSharp.ColorConversionCodes.GRAY2BGR);
+            else if (roiMat.Channels() == 4)
+                OpenCvSharp.Cv2.CvtColor(roiMat, bgrMat, OpenCvSharp.ColorConversionCodes.BGRA2BGR);
+            else
+                roiMat.CopyTo(bgrMat);
+
+            using var labMat = new OpenCvSharp.Mat();
+            OpenCvSharp.Cv2.CvtColor(bgrMat, labMat, OpenCvSharp.ColorConversionCodes.BGR2Lab);
+            OpenCvSharp.Scalar mean = OpenCvSharp.Cv2.Mean(labMat);
+
+            double l = Math.Round(mean.Val0 * 100.0 / 255.0, 2);
+            double a = Math.Round(mean.Val1 - 128.0, 2);
+            double b = Math.Round(mean.Val2 - 128.0, 2);
+
+            SelectedColorDiff.RefL = l;
+            SelectedColorDiff.RefA = a;
+            SelectedColorDiff.RefB = b;
+            SelectedColorDiff.UseRefColor = true;
+
+            OnPropertyChanged(nameof(ColorDiff_RefL));
+            OnPropertyChanged(nameof(ColorDiff_RefA));
+            OnPropertyChanged(nameof(ColorDiff_RefB));
+            OnPropertyChanged(nameof(ColorDiff_UseRefColor));
+            IsDirty = true;
+            RefreshPreviews();
+
+            System.Windows.MessageBox.Show($"Đã lấy màu mẫu thành công từ vùng ROI!\r\n\r\nCIELab Ref Values:\r\nL = {l:F2}\r\na = {a:F2}\r\nb = {b:F2}", "Lấy Mẫu Màu Thành Công", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Information);
+        }
 
         private (OpenCvSharp.Point2d Center, double AngleDeg) GetCurrentPointPatternCenterAndAngle(PointDefinition p)
         {
@@ -3028,6 +3292,36 @@ namespace VisionInspectionApp.UI.ViewModels
             if (string.Equals(node.Type, "DefectRoi", StringComparison.OrdinalIgnoreCase))
             {
                 // Defect config already exists; ROI can be taught to DefectROI label.
+                return;
+            }
+    
+            if (string.Equals(node.Type, "Crop", StringComparison.OrdinalIgnoreCase))
+            {
+                var existed = _config.Crops.Any(x => string.Equals(x.Name, node.RefName, StringComparison.OrdinalIgnoreCase));
+                if (!existed)
+                {
+                    _config.Crops.Add(new CropDefinition { Name = node.RefName, CropRoi = DefaultRoi() });
+                }
+                return;
+            }
+    
+            if (string.Equals(node.Type, "ColorDiff", StringComparison.OrdinalIgnoreCase))
+            {
+                var existed = _config.ColorDiffs.Any(x => string.Equals(x.Name, node.RefName, StringComparison.OrdinalIgnoreCase));
+                if (!existed)
+                {
+                    _config.ColorDiffs.Add(new ColorDiffDefinition { Name = node.RefName, InspectRoi = DefaultRoi(), RefRoi = DefaultRoi() });
+                }
+                return;
+            }
+    
+            if (string.Equals(node.Type, "ImgArithmetic", StringComparison.OrdinalIgnoreCase))
+            {
+                var existed = _config.ImgArithmetics.Any(x => string.Equals(x.Name, node.RefName, StringComparison.OrdinalIgnoreCase));
+                if (!existed)
+                {
+                    _config.ImgArithmetics.Add(new ImgArithmeticDefinition { Name = node.RefName });
+                }
                 return;
             }
         }

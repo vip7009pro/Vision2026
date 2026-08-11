@@ -11,6 +11,7 @@ using VisionInspectionApp.Models;
 using VisionInspectionApp.VisionEngine;
 using ZXing;
 using ZXing.Common;
+using VisionInspectionApp.Application.Services;
 
 namespace VisionInspectionApp.Application;
 
@@ -95,6 +96,10 @@ public partial class InspectionService
                 .Where(p => !string.IsNullOrWhiteSpace(p.Name))
                 .ToDictionary(p => p.Name, p => p, StringComparer.OrdinalIgnoreCase);
 
+            var cropNodesByName = (config.Crops ?? new List<CropDefinition>())
+                .Where(p => !string.IsNullOrWhiteSpace(p.Name))
+                .ToDictionary(p => p.Name, p => p, StringComparer.OrdinalIgnoreCase);
+
             var edges = config.ToolGraph?.Edges ?? new List<ToolGraphEdge>();
 
             // Default (backward-compatible) processing path (lazy + thread-safe).
@@ -107,6 +112,7 @@ public partial class InspectionService
             Mat GetProcessedDefault() => processedDefault.Value;
 
             var preprocessMatCache = new ConcurrentDictionary<string, Mat>(StringComparer.OrdinalIgnoreCase);
+            var cropMatCache = new ConcurrentDictionary<string, Mat>(StringComparer.OrdinalIgnoreCase);
 
             var templateCache = new ConcurrentDictionary<string, Mat>(StringComparer.OrdinalIgnoreCase);
 
@@ -125,6 +131,47 @@ public partial class InspectionService
                 });
             }
 
+            Mat GetCropNodeOutput(string cropNodeId)
+            {
+                return cropMatCache.GetOrAdd(cropNodeId, id =>
+                {
+                    if (!nodesById.TryGetValue(id, out var node)
+                        || !string.Equals(node.Type, "Crop", StringComparison.OrdinalIgnoreCase))
+                    {
+                        return image;
+                    }
+
+                    cropNodesByName.TryGetValue(node.RefName ?? string.Empty, out var cropDef);
+                    if (cropDef is null || cropDef.CropRoi is null || cropDef.CropRoi.Width <= 0 || cropDef.CropRoi.Height <= 0)
+                    {
+                        return image;
+                    }
+
+                    var inEdge = edges.FirstOrDefault(e => string.Equals(e.ToNodeId, id, StringComparison.OrdinalIgnoreCase)
+                                                          && (string.Equals(e.ToPort, "In", StringComparison.OrdinalIgnoreCase) || string.Equals(e.ToPort, "Image", StringComparison.OrdinalIgnoreCase)));
+                    Mat baseMat = image;
+                    if (inEdge is not null && nodesById.TryGetValue(inEdge.FromNodeId, out var fromNode))
+                    {
+                        if (string.Equals(fromNode.Type, "Preprocess", StringComparison.OrdinalIgnoreCase))
+                        {
+                            baseMat = GetPreprocessNodeOutput(fromNode.Id);
+                        }
+                        else if (string.Equals(fromNode.Type, "Crop", StringComparison.OrdinalIgnoreCase))
+                        {
+                            baseMat = GetCropNodeOutput(fromNode.Id);
+                        }
+                        else if (string.Equals(fromNode.Type, "ImageSource", StringComparison.OrdinalIgnoreCase))
+                        {
+                            baseMat = image;
+                        }
+                    }
+
+                    var cropped = CropProcessor.Run(baseMat, cropDef.CropRoi);
+                    lock (matsLock) matsToDispose.Add(cropped);
+                    return cropped;
+                });
+            }
+
             Mat GetPreprocessNodeOutput(string preprocessNodeId)
             {
                 return preprocessMatCache.GetOrAdd(preprocessNodeId, id =>
@@ -139,7 +186,7 @@ public partial class InspectionService
                     var settings = preDef?.Settings ?? new PreprocessSettings();
                     var rois = preDef?.Rois;
 
-                    // Preprocess node input: either raw image or another preprocess output connected to "In" or "Image".
+                    // Preprocess node input: either raw image or another preprocess/crop output connected to "In" or "Image".
                     var inEdge = edges.FirstOrDefault(e => string.Equals(e.ToNodeId, id, StringComparison.OrdinalIgnoreCase)
                                                           && (string.Equals(e.ToPort, "In", StringComparison.OrdinalIgnoreCase) || string.Equals(e.ToPort, "Image", StringComparison.OrdinalIgnoreCase)));
                     Mat baseMat = image;
@@ -148,6 +195,10 @@ public partial class InspectionService
                         if (string.Equals(fromNode.Type, "Preprocess", StringComparison.OrdinalIgnoreCase))
                         {
                             baseMat = GetPreprocessNodeOutput(fromNode.Id);
+                        }
+                        else if (string.Equals(fromNode.Type, "Crop", StringComparison.OrdinalIgnoreCase))
+                        {
+                            baseMat = GetCropNodeOutput(fromNode.Id);
                         }
                         else if (string.Equals(fromNode.Type, "ImageSource", StringComparison.OrdinalIgnoreCase))
                         {
@@ -191,6 +242,11 @@ public partial class InspectionService
                     var ppSettings = preprocessNodesByName.TryGetValue(fromNode.RefName ?? string.Empty, out var preDef) ? (preDef.Settings ?? new PreprocessSettings()) : new PreprocessSettings();
                     var ppMat = GetPreprocessNodeOutput(fromNode.Id);
                     return (ppMat, ppSettings);
+                }
+                else if (string.Equals(fromNode.Type, "Crop", StringComparison.OrdinalIgnoreCase))
+                {
+                    var cropMat = GetCropNodeOutput(fromNode.Id);
+                    return (cropMat, defaultSettings);
                 }
                 else if (string.Equals(fromNode.Type, "ImageSource", StringComparison.OrdinalIgnoreCase))
                 {
@@ -1647,6 +1703,44 @@ public partial class InspectionService
                     }))
                     .ToArray();
 
+            var colorDiffTasks = (config.ColorDiffs ?? new List<ColorDiffDefinition>())
+                .Where(cd => cd is not null && !string.IsNullOrWhiteSpace(cd.Name))
+                .Select(cd => Task.Run(() =>
+                {
+                    var __sw = System.Diagnostics.Stopwatch.StartNew();
+                    var (matForCd, _) = ResolveToolPreprocess("ColorDiff", cd.Name);
+                    var cdRes = ColorDiffProcessor.Run(matForCd, cd);
+                    __sw.Stop();
+                    result.Timings.NodeTimings[cd.Name] = (int)__sw.ElapsedMilliseconds;
+                    return cdRes;
+                }))
+                .ToArray();
+
+            var cropTasks = (config.Crops ?? new List<CropDefinition>())
+                .Where(cr => cr is not null && !string.IsNullOrWhiteSpace(cr.Name))
+                .Select(cr => Task.Run(() =>
+                {
+                    var __sw = System.Diagnostics.Stopwatch.StartNew();
+                    var cropNode = nodesById.Values.FirstOrDefault(n => string.Equals(n.Type, "Crop", StringComparison.OrdinalIgnoreCase) && string.Equals(n.RefName, cr.Name, StringComparison.OrdinalIgnoreCase));
+                    Mat croppedMat = cropNode is not null ? GetCropNodeOutput(cropNode.Id) : CropProcessor.Run(image, cr.CropRoi);
+                    __sw.Stop();
+                    result.Timings.NodeTimings[cr.Name] = (int)__sw.ElapsedMilliseconds;
+                    return new CropResult(cr.Name, croppedMat is not null && !croppedMat.Empty(), croppedMat?.Width ?? 0, croppedMat?.Height ?? 0);
+                }))
+                .ToArray();
+
+            var imgArithmeticTasks = (config.ImgArithmetics ?? new List<ImgArithmeticDefinition>())
+                .Where(ari => ari is not null && !string.IsNullOrWhiteSpace(ari.Name))
+                .Select(ari => Task.Run(() =>
+                {
+                    var __sw = System.Diagnostics.Stopwatch.StartNew();
+                    using var resMat = ImgArithmeticProcessor.Run(image, image, ari);
+                    __sw.Stop();
+                    result.Timings.NodeTimings[ari.Name] = (int)__sw.ElapsedMilliseconds;
+                    return new ImgArithmeticResult(ari.Name, !resMat.Empty(), ari.Op, resMat.Width, resMat.Height);
+                }))
+                .ToArray();
+
             var tScQueued = swTotal.ElapsedMilliseconds;
 
             var lpdTasks = (config.LinePairDetections ?? new List<LinePairDetectionDefinition>())
@@ -2525,6 +2619,24 @@ public partial class InspectionService
             foreach (var t in circleTasks)
             {
                 result.CircleFinders.Add(t.Result);
+            }
+
+            Task.WaitAll(colorDiffTasks);
+            foreach (var t in colorDiffTasks)
+            {
+                result.ColorDiffs.Add(t.Result);
+            }
+
+            Task.WaitAll(cropTasks);
+            foreach (var t in cropTasks)
+            {
+                result.Crops.Add(t.Result);
+            }
+
+            Task.WaitAll(imgArithmeticTasks);
+            foreach (var t in imgArithmeticTasks)
+            {
+                result.ImgArithmetics.Add(t.Result);
             }
 
             result.Timings.EdgePairDetectMs = (int)Math.Max(0, swTotal.ElapsedMilliseconds - tEpdQueued);

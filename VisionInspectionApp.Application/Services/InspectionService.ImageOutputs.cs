@@ -655,6 +655,23 @@ public partial class InspectionService
             }
         }
 
+        // 15b. ColorDiffs
+        if (result.ColorDiffs is not null)
+        {
+            foreach (var cdRes in result.ColorDiffs)
+            {
+                if (!ShouldRender(cdRes.Name)) continue;
+                var cdDef = config.ColorDiffs?.FirstOrDefault(x => string.Equals(x.Name, cdRes.Name, StringComparison.OrdinalIgnoreCase));
+                if (cdDef is not null && cdDef.InspectRoi.Width > 0 && cdDef.InspectRoi.Height > 0)
+                {
+                    var col = cdRes.Pass ? green : red;
+                    DrawRotatedRoi(mat, cdDef.InspectRoi, col, 2);
+                    var text = $"{cdRes.Name}: dE={cdRes.DeltaE:F2} (L={cdRes.MeasuredL:F1}, a={cdRes.MeasuredA:F1}, b={cdRes.MeasuredB:F1})";
+                    Cv2.PutText(mat, text, new Point(cdDef.InspectRoi.X + 6, cdDef.InspectRoi.Y + 18), HersheyFonts.HersheySimplex, 0.5, col, 1, LineTypes.AntiAlias);
+                }
+            }
+        }
+
         // 16. TextNodes
         if (config.TextNodes is not null)
         {

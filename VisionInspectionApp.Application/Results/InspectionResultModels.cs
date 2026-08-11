@@ -141,6 +141,22 @@ public sealed record LinePairDetectionResult(
     Point2d ClosestA,
     Point2d ClosestB);
 
+public sealed record CropResult(string Name, bool Success, int Width, int Height);
+
+public sealed record ColorDiffResult(
+    string Name,
+    bool Pass,
+    double MeasuredL,
+    double MeasuredA,
+    double MeasuredB,
+    double RefL,
+    double RefA,
+    double RefB,
+    double DeltaE,
+    double MaxDeltaE);
+
+public sealed record ImgArithmeticResult(string Name, bool Success, ImgArithmeticOp Op, int Width, int Height);
+
 public sealed record CaliperEdgePoint(double X, double Y, double Strength);
 
 public sealed record CaliperResult(

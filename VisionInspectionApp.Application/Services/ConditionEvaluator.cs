@@ -177,6 +177,48 @@ public static class ConditionEvaluator
             vars[$"SurfaceCompare.{sc.Name}.MaxArea"] = new Variable(sc.Pass, value: sc.MaxArea);
         }
 
+        foreach (var cd in result.ColorDiffs)
+        {
+            if (string.IsNullOrWhiteSpace(cd.Name)) continue;
+            var vDeltaE = new Variable(cd.Pass, value: cd.DeltaE);
+            var vL = new Variable(cd.Pass, value: cd.MeasuredL);
+            var vA = new Variable(cd.Pass, value: cd.MeasuredA);
+            var vB = new Variable(cd.Pass, value: cd.MeasuredB);
+            var vRefL = new Variable(cd.Pass, value: cd.RefL);
+            var vRefA = new Variable(cd.Pass, value: cd.RefA);
+            var vRefB = new Variable(cd.Pass, value: cd.RefB);
+            var vPass = new Variable(cd.Pass);
+
+            vars[cd.Name] = vDeltaE;
+            vars[$"{cd.Name}.DeltaE"] = vDeltaE;
+            vars[$"{cd.Name}.dE"] = vDeltaE;
+            vars[$"{cd.Name}.L"] = vL;
+            vars[$"{cd.Name}.a"] = vA;
+            vars[$"{cd.Name}.A"] = vA;
+            vars[$"{cd.Name}.b"] = vB;
+            vars[$"{cd.Name}.B"] = vB;
+            vars[$"{cd.Name}.SampleL"] = vL;
+            vars[$"{cd.Name}.SampleA"] = vA;
+            vars[$"{cd.Name}.SampleB"] = vB;
+            vars[$"{cd.Name}.RefL"] = vRefL;
+            vars[$"{cd.Name}.RefA"] = vRefA;
+            vars[$"{cd.Name}.RefB"] = vRefB;
+            vars[$"{cd.Name}.Pass"] = vPass;
+
+            vars[$"ColorDiff.{cd.Name}"] = vDeltaE;
+            vars[$"ColorDiff.{cd.Name}.DeltaE"] = vDeltaE;
+            vars[$"ColorDiff.{cd.Name}.dE"] = vDeltaE;
+            vars[$"ColorDiff.{cd.Name}.L"] = vL;
+            vars[$"ColorDiff.{cd.Name}.a"] = vA;
+            vars[$"ColorDiff.{cd.Name}.A"] = vA;
+            vars[$"ColorDiff.{cd.Name}.b"] = vB;
+            vars[$"ColorDiff.{cd.Name}.B"] = vB;
+            vars[$"ColorDiff.{cd.Name}.RefL"] = vRefL;
+            vars[$"ColorDiff.{cd.Name}.RefA"] = vRefA;
+            vars[$"ColorDiff.{cd.Name}.RefB"] = vRefB;
+            vars[$"ColorDiff.{cd.Name}.Pass"] = vPass;
+        }
+
         foreach (var c in result.Calipers)
         {
             if (string.IsNullOrWhiteSpace(c.Name)) continue;

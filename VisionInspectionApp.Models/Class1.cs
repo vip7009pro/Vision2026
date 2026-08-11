@@ -233,6 +233,12 @@ public sealed class VisionConfig
 
     public List<ImageOutputDefinition> ImageOutputs { get; set; } = new();
 
+    public List<CropDefinition> Crops { get; set; } = new();
+
+    public List<ColorDiffDefinition> ColorDiffs { get; set; } = new();
+
+    public List<ImgArithmeticDefinition> ImgArithmetics { get; set; } = new();
+
     public List<PlcModel> Plcs { get; set; } = new();
 
     public List<PlcTag> PlcTags { get; set; } = new();
@@ -909,4 +915,50 @@ public sealed class Point2dModel
 {
     public double X { get; set; }
     public double Y { get; set; }
+}
+
+public sealed class CropDefinition
+{
+    public string Name { get; set; } = string.Empty;
+    public string ImageSourceRef { get; set; } = string.Empty;
+    public Roi CropRoi { get; set; } = new();
+}
+
+public sealed class ColorDiffDefinition
+{
+    public string Name { get; set; } = string.Empty;
+    public string ImageSourceRef { get; set; } = string.Empty;
+    public Roi InspectRoi { get; set; } = new();
+
+    public bool UseRefColor { get; set; } = true;
+    public double RefL { get; set; } = 100.0;
+    public double RefA { get; set; } = 0.0;
+    public double RefB { get; set; } = 0.0;
+
+    public Roi RefRoi { get; set; } = new();
+
+    public double MaxDeltaE { get; set; } = 5.0;
+}
+
+public enum ImgArithmeticOp
+{
+    ADD = 0,
+    SUB = 1,
+    MIN = 2,
+    MAX = 3,
+    BIT_AND = 4,
+    BIT_OR = 5,
+    BIT_XOR = 6,
+    BIT_NOT = 7
+}
+
+public sealed class ImgArithmeticDefinition
+{
+    public string Name { get; set; } = string.Empty;
+    public string ImageSourceRefA { get; set; } = string.Empty;
+    public string ImageSourceRefB { get; set; } = string.Empty;
+    public ImgArithmeticOp Op { get; set; } = ImgArithmeticOp.SUB;
+    public double WeightA { get; set; } = 1.0;
+    public double WeightB { get; set; } = 1.0;
+    public double Offset { get; set; } = 0.0;
 }
