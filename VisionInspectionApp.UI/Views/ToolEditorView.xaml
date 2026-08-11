@@ -2894,8 +2894,8 @@
                     </Grid>
 
                     <ScrollViewer x:Name="CanvasScrollViewer" Grid.Row="1" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto"
-                                  Background="{DynamicResource DarkBackgroundBrush}" Focusable="True">
-                        <Canvas x:Name="EditorCanvas" Background="Transparent" Width="10000" Height="10000" AllowDrop="True" Drop="EditorCanvas_Drop" 
+                                  Background="{DynamicResource CanvasBackgroundBrush}" Focusable="True">
+                        <Canvas x:Name="EditorCanvas" Background="{DynamicResource CanvasGridBrush}" Width="10000" Height="10000" AllowDrop="True" Drop="EditorCanvas_Drop" 
                                 MouseMove="EditorCanvas_MouseMove" MouseLeftButtonUp="EditorCanvas_MouseLeftButtonUp"
                                 Focusable="True" PreviewKeyDown="EditorCanvas_PreviewKeyDown" PreviewMouseWheel="EditorCanvas_PreviewMouseWheel">
                             <Canvas.LayoutTransform>
@@ -2935,6 +2935,10 @@
                             <Rectangle x:Name="SelectionRect" Visibility="Collapsed" IsHitTestVisible="False"
                                        Stroke="#FF9800" StrokeThickness="1" StrokeDashArray="4 2"
                                        Fill="#33FF9800" />
+
+                            <!-- Extended Smart Snap Alignment Lines -->
+                            <Path x:Name="SnapLinesPath" Stroke="{DynamicResource SnapLineBrush}" StrokeThickness="1.5" StrokeDashArray="4 2"
+                                  Visibility="Collapsed" IsHitTestVisible="False" />
 
                             <ItemsControl ItemsSource="{Binding Nodes}">
                                 <ItemsControl.ItemsPanel>

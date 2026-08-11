@@ -529,6 +529,17 @@
 - Tài liệu này được lưu ở UTF-8 và toàn bộ nội dung tiếng Việt đã được chuẩn hoá.
 - Các tệp mã nguồn và XAML nên tiếp tục dùng UTF-8 with BOM để tránh lỗi hiển thị tiếng Việt trên môi trường Windows.
 
+### Cập nhật 2026-08-11 (Phiên làm việc mới nhất)
+
+- **Tạo Grid mờ nhẹ và Hiệu ứng Snap mật độ cao cho Canvas trong Tab ToolEditor**:
+  - **Lưới Grid mờ nhẹ (`CanvasGridBrush`)**: Định nghĩa `DrawingBrush` dạng tiled pattern mờ nhẹ, đồng bộ linh hoạt giữa Light Theme (`#F5F5F7` nền, line mờ `#0D000000`/`#22000000`) và Dark Theme (`#18181C` nền, line mờ `#0EFFFFFF`/`#25FFFFFF`) trong [DarkTheme.xaml](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/Themes/DarkTheme.xaml) và [LightTheme.xaml](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/Themes/LightTheme.xaml).
+  - **Khắc phục triệt để hiện tượng di chuyển Node bị giật cục / loạn rung (Oscillation Jitter Fix)**:
+    - **Nguyên nhân**: Sử dụng delta tương đối `e.HorizontalChange` từ `Thumb.DragDelta` kết hợp tích lũy `_accumulatedDragDx` làm vị trí Node snap nhảy vọt, dẫn đến vị trí `Thumb` trên Canvas bị dịch chuyển làm WPF tính lại delta theo chiều ngược lại trên event tiếp theo, tạo thành vòng lặp rung lắc liên tục ở 60 FPS.
+  - **Đường Gợi Ý Snap Lines Kéo Dài Căn Chỉnh Thông Minh (Extended Smart Alignment Lines)**:
+    - **Tự động dò tìm điểm căn lề**: Khi rê kéo node (đơn hoặc nhóm), thuật toán `UpdateSmartSnapLines` tự động quét các điểm lề cạnh (Left, Center, Right) và lề ngang (Top, Center, Bottom) của các node lân cận trong khoảng sai số $7\text{px}$.
+    - **Đường vạch định vị kéo dài**: Khi khớp vị trí lề, hệ thống tự động căn node vào đúng vị trí và hiển thị các đường vạch nét đứt màu Neon Cyan / Accent Blue (`SnapLinesPath` dạng `GeometryGroup`) kéo dài phủ ngang/dọc giữa các node liên quan.
+    - **Tự động ẩn**: Khi hoàn thành thao tác rê kéo (`NodeThumb_DragCompleted`), các đường Snap Lines tự động ẩn đi (`HideSnapLines`), mang lại trải nghiệm căn chỉnh chuyên nghiệp tương tự Visio / Photoshop / Figma.
+
 ## Roadmap
 
 ### Ưu tiên cao

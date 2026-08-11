@@ -205,8 +205,8 @@ namespace VisionInspectionApp.UI.ViewModels
 
             var newName = GenerateDefaultRefName(_copiedNodeType);
             var sourceNode = Nodes.FirstOrDefault(n => n.RefName == _copiedNodeRefName && n.Type == _copiedNodeType);
-            var canvasX = sourceNode != null ? sourceNode.X + 20 : 100;
-            var canvasY = sourceNode != null ? sourceNode.Y + 20 : 100;
+            var canvasX = sourceNode != null ? Math.Round((sourceNode.X + 20) / 10.0) * 10.0 : 100;
+            var canvasY = sourceNode != null ? Math.Round((sourceNode.Y + 20) / 10.0) * 10.0 : 100;
 
             var newNode = new ToolGraphNodeViewModel
             {
@@ -512,8 +512,8 @@ namespace VisionInspectionApp.UI.ViewModels
                 Id = Guid.NewGuid().ToString("N"),
                 Type = type,
                 RefName = string.Empty,
-                X = canvasPosition.X,
-                Y = canvasPosition.Y
+                X = Math.Round(canvasPosition.X / 10.0) * 10.0,
+                Y = Math.Round(canvasPosition.Y / 10.0) * 10.0
             };
             node.PropertyChanged += Node_PropertyChanged;
             Nodes.Add(node);

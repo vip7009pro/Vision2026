@@ -23,6 +23,8 @@ public partial class ToolEditorView : UserControl
     private ToolEditorViewModel? _subscribedVm;
 
     private Dictionary<ToolGraphNodeViewModel, Point>? _multiDragStart;
+    private Point _dragStartMouseLogical;
+    private const double GridSnapSize = 10.0;
 
     private bool _isRangeSelecting;
     private Point _rangeSelectStart;
@@ -103,7 +105,7 @@ public partial class ToolEditorView : UserControl
                 {
                     vm.ToggleNodeSelection(n);
                 }
-                else
+                else if (!n.IsSelected)
                 {
                     vm.SelectedNode = n;
                 }
@@ -257,49 +259,10 @@ public partial class ToolEditorView : UserControl
         }
 
         var pos = GetCanvasLogicalPosition(e.GetPosition(EditorCanvas));
+        pos.X = Math.Round(pos.X / GridSnapSize) * GridSnapSize;
+        pos.Y = Math.Round(pos.Y / GridSnapSize) * GridSnapSize;
         vm.AddNode(type, pos);
         vm.IsDirty = true;
-    }
-
-    private void NodeThumb_DragDelta(object sender, DragDeltaEventArgs e)
-    {
-        if (sender is not Thumb t || t.DataContext is not ToolGraphNodeViewModel n)
-        {
-            return;
-        }
-
-        if (DataContext is not ToolEditorViewModel vm)
-        {
-            n.X += e.HorizontalChange;
-            n.Y += e.VerticalChange;
-            return;
-        }
-
-        if (!n.IsSelected)
-        {
-            vm.SelectedNode = n;
-        }
-
-        // LayoutTransform on EditorCanvas means e.HorizontalChange & e.VerticalChange are ALREADY exact logical units!
-        var dx = e.HorizontalChange;
-        var dy = e.VerticalChange;
-        if (Math.Abs(dx) < 0.0001 && Math.Abs(dy) < 0.0001)
-        {
-            return;
-        }
-
-        if (vm.SelectedNodes.Count <= 1)
-        {
-            n.X += dx;
-            n.Y += dy;
-            return;
-        }
-
-        foreach (var sn in vm.SelectedNodes)
-        {
-            sn.X += dx;
-            sn.Y += dy;
-        }
     }
 
     private void NodeThumb_DragStarted(object sender, DragStartedEventArgs e)
@@ -316,45 +279,238 @@ public partial class ToolEditorView : UserControl
 
         if (!n.IsSelected)
         {
-            vm.SelectedNode = n;
+            if ((Keyboard.Modifiers & ModifierKeys.Control) == ModifierKeys.Control)
+            {
+                vm.ToggleNodeSelection(n);
+            }
+            else
+            {
+                vm.SelectedNode = n;
+            }
         }
 
+        _dragStartMouseLogical = GetCanvasLogicalPosition(Mouse.GetPosition(EditorCanvas));
         _multiDragStart = vm.SelectedNodes.ToDictionary(x => x, x => new Point(x.X, x.Y));
+    }
+
+    private void NodeThumb_DragDelta(object sender, DragDeltaEventArgs e)
+    {
+        if (sender is not Thumb t || t.DataContext is not ToolGraphNodeViewModel n)
+        {
+            return;
+        }
+
+        if (DataContext is not ToolEditorViewModel vm)
+        {
+            return;
+        }
+
+        if (_multiDragStart is null || _multiDragStart.Count == 0)
+        {
+            _dragStartMouseLogical = GetCanvasLogicalPosition(Mouse.GetPosition(EditorCanvas));
+            _multiDragStart = vm.SelectedNodes.ToDictionary(x => x, x => new Point(x.X, x.Y));
+        }
+
+        var currentMouseLogical = GetCanvasLogicalPosition(Mouse.GetPosition(EditorCanvas));
+        double totalDx = currentMouseLogical.X - _dragStartMouseLogical.X;
+        double totalDy = currentMouseLogical.Y - _dragStartMouseLogical.Y;
+
+        if (!_multiDragStart.TryGetValue(n, out var primaryStartPos))
+        {
+            primaryStartPos = new Point(n.X, n.Y);
+        }
+
+        double rawPrimaryX = primaryStartPos.X + totalDx;
+        double rawPrimaryY = primaryStartPos.Y + totalDy;
+
+        UpdateSmartSnapLines(vm, n, rawPrimaryX, rawPrimaryY, out double snappedPrimaryX, out double snappedPrimaryY);
+
+        double deltaX = snappedPrimaryX - primaryStartPos.X;
+        double deltaY = snappedPrimaryY - primaryStartPos.Y;
+
+        foreach (var (node, startPos) in _multiDragStart)
+        {
+            node.X = Math.Round((startPos.X + deltaX) / GridSnapSize) * GridSnapSize;
+            node.Y = Math.Round((startPos.Y + deltaY) / GridSnapSize) * GridSnapSize;
+        }
+    }
+
+    private const double SmartSnapTolerance = 7.0;
+    private const double NodeStandardWidth = 160.0;
+
+    private void UpdateSmartSnapLines(ToolEditorViewModel vm, ToolGraphNodeViewModel primaryNode, double rawPrimaryX, double rawPrimaryY, out double snappedPrimaryX, out double snappedPrimaryY)
+    {
+        snappedPrimaryX = Math.Round(rawPrimaryX / GridSnapSize) * GridSnapSize;
+        snappedPrimaryY = Math.Round(rawPrimaryY / GridSnapSize) * GridSnapSize;
+
+        var otherNodes = vm.Nodes.Where(x => !x.IsSelected).ToList();
+        if (otherNodes.Count == 0)
+        {
+            HideSnapLines();
+            return;
+        }
+
+        double primaryH = primaryNode.NodeHeight > 0 ? primaryNode.NodeHeight : 100.0;
+
+        (double Val, double Offset)[] primaryXCandidates = new[]
+        {
+            (rawPrimaryX, 0.0),
+            (rawPrimaryX + NodeStandardWidth / 2.0, NodeStandardWidth / 2.0),
+            (rawPrimaryX + NodeStandardWidth, NodeStandardWidth)
+        };
+
+        (double Val, double Offset)[] primaryYCandidates = new[]
+        {
+            (rawPrimaryY, 0.0),
+            (rawPrimaryY + primaryH / 2.0, primaryH / 2.0),
+            (rawPrimaryY + primaryH, primaryH)
+        };
+
+        double bestDx = SmartSnapTolerance + 1.0;
+        double? vSnapLineX = null;
+        double vMinY = double.MaxValue;
+        double vMaxY = double.MinValue;
+        double? vSnapXVal = null;
+
+        foreach (var other in otherNodes)
+        {
+            double otherH = other.NodeHeight > 0 ? other.NodeHeight : 100.0;
+            double[] otherXPositions = new[] { other.X, other.X + NodeStandardWidth / 2.0, other.X + NodeStandardWidth };
+
+            foreach (var (pVal, offset) in primaryXCandidates)
+            {
+                foreach (var oX in otherXPositions)
+                {
+                    double diff = Math.Abs(pVal - oX);
+                    if (diff < bestDx)
+                    {
+                        bestDx = diff;
+                        vSnapLineX = oX;
+                        vSnapXVal = oX - offset;
+
+                        double top = Math.Min(rawPrimaryY, other.Y) - 30.0;
+                        double bot = Math.Max(rawPrimaryY + primaryH, other.Y + otherH) + 30.0;
+                        vMinY = Math.Min(vMinY, top);
+                        vMaxY = Math.Max(vMaxY, bot);
+                    }
+                }
+            }
+        }
+
+        if (bestDx <= SmartSnapTolerance && vSnapXVal.HasValue)
+        {
+            snappedPrimaryX = vSnapXVal.Value;
+        }
+        else
+        {
+            vSnapLineX = null;
+        }
+
+        double bestDy = SmartSnapTolerance + 1.0;
+        double? hSnapLineY = null;
+        double hMinX = double.MaxValue;
+        double hMaxX = double.MinValue;
+        double? hSnapYVal = null;
+
+        foreach (var other in otherNodes)
+        {
+            double otherH = other.NodeHeight > 0 ? other.NodeHeight : 100.0;
+            double[] otherYPositions = new[] { other.Y, other.Y + otherH / 2.0, other.Y + otherH };
+
+            foreach (var (pVal, offset) in primaryYCandidates)
+            {
+                foreach (var oY in otherYPositions)
+                {
+                    double diff = Math.Abs(pVal - oY);
+                    if (diff < bestDy)
+                    {
+                        bestDy = diff;
+                        hSnapLineY = oY;
+                        hSnapYVal = oY - offset;
+
+                        double left = Math.Min(rawPrimaryX, other.X) - 30.0;
+                        double right = Math.Max(rawPrimaryX + NodeStandardWidth, other.X + NodeStandardWidth) + 30.0;
+                        hMinX = Math.Min(hMinX, left);
+                        hMaxX = Math.Max(hMaxX, right);
+                    }
+                }
+            }
+        }
+
+        if (bestDy <= SmartSnapTolerance && hSnapYVal.HasValue)
+        {
+            snappedPrimaryY = hSnapYVal.Value;
+        }
+        else
+        {
+            hSnapLineY = null;
+        }
+
+        if (vSnapLineX.HasValue || hSnapLineY.HasValue)
+        {
+            var group = new GeometryGroup();
+            if (vSnapLineX.HasValue)
+            {
+                group.Children.Add(new LineGeometry(new Point(vSnapLineX.Value, vMinY), new Point(vSnapLineX.Value, vMaxY)));
+            }
+            if (hSnapLineY.HasValue)
+            {
+                group.Children.Add(new LineGeometry(new Point(hMinX, hSnapLineY.Value), new Point(hMaxX, hSnapLineY.Value)));
+            }
+
+            SnapLinesPath.Data = group;
+            SnapLinesPath.Visibility = Visibility.Visible;
+        }
+        else
+        {
+            HideSnapLines();
+        }
+    }
+
+    private void HideSnapLines()
+    {
+        SnapLinesPath.Visibility = Visibility.Collapsed;
+        SnapLinesPath.Data = null;
     }
 
     private void NodeThumb_DragCompleted(object sender, DragCompletedEventArgs e)
     {
-        if (DataContext is ToolEditorViewModel vm)
+        HideSnapLines();
+        if (DataContext is ToolEditorViewModel vm && _multiDragStart is not null && _multiDragStart.Count > 0)
         {
-            vm.IsDirty = true;
-            if (_multiDragStart is not null && _multiDragStart.Count > 0)
+            // Ensure final positions are perfectly snapped to grid
+            foreach (var node in vm.SelectedNodes)
             {
-                var startPositions = _multiDragStart;
-                var endPositions = startPositions.Keys.ToDictionary(x => x, x => new Point(x.X, x.Y));
-                bool hasMoved = startPositions.Any(kv => Math.Abs(kv.Value.X - endPositions[kv.Key].X) > 0.1 || Math.Abs(kv.Value.Y - endPositions[kv.Key].Y) > 0.1);
-                if (hasMoved)
-                {
-                    vm.UndoManager.Execute(new UndoRedoManager.DelegateAction(
-                        doAction: () =>
+                node.X = Math.Round(node.X / GridSnapSize) * GridSnapSize;
+                node.Y = Math.Round(node.Y / GridSnapSize) * GridSnapSize;
+            }
+
+            vm.IsDirty = true;
+            var startPositions = _multiDragStart;
+            var endPositions = startPositions.Keys.ToDictionary(x => x, x => new Point(x.X, x.Y));
+            bool hasMoved = startPositions.Any(kv => Math.Abs(kv.Value.X - endPositions[kv.Key].X) > 0.1 || Math.Abs(kv.Value.Y - endPositions[kv.Key].Y) > 0.1);
+            if (hasMoved)
+            {
+                vm.UndoManager.Execute(new UndoRedoManager.DelegateAction(
+                    doAction: () =>
+                    {
+                        foreach (var (node, pos) in endPositions)
                         {
-                            foreach (var (node, pos) in endPositions)
-                            {
-                                node.X = pos.X;
-                                node.Y = pos.Y;
-                            }
-                            vm.IsDirty = true;
-                        },
-                        undoAction: () =>
-                        {
-                            foreach (var (node, pos) in startPositions)
-                            {
-                                node.X = pos.X;
-                                node.Y = pos.Y;
-                            }
-                            vm.IsDirty = true;
+                            node.X = pos.X;
+                            node.Y = pos.Y;
                         }
-                    ));
-                }
+                        vm.IsDirty = true;
+                    },
+                    undoAction: () =>
+                    {
+                        foreach (var (node, pos) in startPositions)
+                        {
+                            node.X = pos.X;
+                            node.Y = pos.Y;
+                        }
+                        vm.IsDirty = true;
+                    }
+                ));
             }
         }
         _multiDragStart = null;
@@ -378,7 +534,7 @@ public partial class ToolEditorView : UserControl
             {
                 vm.ToggleNodeSelection(n);
             }
-            else
+            else if (!n.IsSelected)
             {
                 vm.SelectedNode = n;
             }
