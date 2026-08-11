@@ -550,8 +550,10 @@
         - **Kéo rê từng đỉnh riêng biệt trên Preview**: Mỗi đỉnh của đa giác được hiển thị bằng một tay nắm Cyan (`V1`, `V2`, `V3`, ... `Vn`). Người dùng có thể rê chuột kéo di chuyển từng góc đỉnh riêng lẻ trực tiếp trên ảnh Preview một cách hoàn toàn tự do và mượt mà.
         - **Thêm/Xóa đỉnh chủ động**: Cung cấp nút `➕ Thêm Đỉnh` và nút `✖` xóa từng đỉnh giúp tạo ra đa giác từ 3 đỉnh trở lên ($N$ cạnh bất kỳ).
         - **Nhập tọa độ từng đỉnh**: Cho phép nhập/chỉnh trực tiếp từng cặp tọa độ `(X, Y)` của mỗi đỉnh ngay trên bảng Properties Panel.
-      - **Hiển thị Overlay & Kéo thả / Thay đổi kích thước tương tác**: Cho phép người dùng rê chuột kéo di chuyển (Move) hoặc thay đổi kích thước (Resize) ROI trực tiếp trên ảnh Preview (tự động gắn nhãn `PR1`, `PRX1`, `PRC1`, `PRP1`).
-      - Thuật toán OpenCV mask blending trong `ImagePreprocessor.Run` đảm bảo xử lý tiền xử lý chính xác tuyệt đối trên các vùng mong muốn.
+      - **Hiển thị đúng hình dáng thực tế & Tương tác thời gian thực (True Shape & Real-time Interaction)**:
+        - **ROI Hình Tròn (Circle ROI)**: Đã loại bỏ hoàn toàn khung hình chữ nhật bao quanh. ROI được vẽ và hiển thị chuẩn hình tròn (`OverlayCircleItem`). Đã sửa công thức tính bán kính `Math.Max(roi.Width, roi.Height) / 2.0` và hiển thị Ellipse linh hoạt giúp thao tác kéo nới/thu nhỏ bán kính hoặc di chuyển tâm hình tròn thay đổi kích thước mượt mà.
+        - **ROI Đa Giác (Polygon ROI) - Biến dạng Thời Gian Thực (Real-time Edge Rubber-banding)**: Khi bấm giữ và kéo từng chấm điểm đỉnh góc (`OverlayPointItem`), các cạnh đa giác khép kín nối với đỉnh đó sẽ di chuyển và co dãn biến dạng theo thời gian thực (real-time 60 FPS) ngay dưới con trỏ chuột mà không cần chờ nhả chuột.
+        - **Thứ tự ưu tiên Tương tác (Hit-testing Priority)**: Đã điều chỉnh ưu tiên nhận diện nhấp chuột: **Chấm Đỉnh Đa Giác** $\rightarrow$ **ROI Hình Tròn** $\rightarrow$ **Khung / Tay nắm ROI Hình Chữ Nhật** $\rightarrow$ **Thân Đa Giác**. Nhờ đó, khi ROI Đa Giác đè lên ROI Hình Chữ Nhật, người dùng vẫn bấm chọn và kéo thả ROI Hình Chữ Nhật hoàn toàn bình thường.
     - **Nới rộng Cột đầu tiên (Toolbox & Properties Panel)**: Đã điều chỉnh chiều rộng `Column 0` trong `ToolEditorView.xaml` từ `220px` lên `340px` (`MinWidth="260"`) giúp giao diện rộng rãi, dễ theo dõi và điều chỉnh các slider/combobox tham số.
 
 ## Roadmap

@@ -1033,7 +1033,7 @@ namespace VisionInspectionApp.UI.ViewModels
 
                         if (targetRoi.Shape == PreprocessRoiShape.Circle)
                         {
-                            targetRoi.CircleRadius = (int)Math.Max(5, Math.Min(roi.Width, roi.Height) / 2.0);
+                            targetRoi.CircleRadius = (int)Math.Max(5, Math.Max(roi.Width, roi.Height) / 2.0);
                             targetRoi.CircleCenterX = (int)(roi.X + roi.Width / 2.0);
                             targetRoi.CircleCenterY = (int)(roi.Y + roi.Height / 2.0);
                         }

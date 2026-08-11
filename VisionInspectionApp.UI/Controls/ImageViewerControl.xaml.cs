@@ -627,7 +627,7 @@ public partial class ImageViewerControl : UserControl
     private double _roiEditRectAngleStart;
     private double _roiEditRectAngle;
     private Point _roiEditStart;
-    private Rectangle? _roiEditRectShape;
+    private Shape? _roiEditRectShape;
     private readonly List<Rectangle> _roiEditHandles = new();
 
     private string? _activeRoiLabel;
@@ -719,6 +719,32 @@ public partial class ImageViewerControl : UserControl
                 if (showHandles)
                 {
                     DrawRoiHandles(r.X, r.Y, r.Width, r.Height, r.Angle, string.Equals(r.Label, _activeRoiLabel, StringComparison.OrdinalIgnoreCase));
+                }
+            }
+            else if (item is OverlayCircleItem c)
+            {
+                var showHandles = (!string.IsNullOrWhiteSpace(c.Label)
+                    && (
+                        string.Equals(c.Label, _activeRoiLabel, StringComparison.OrdinalIgnoreCase)
+                        || string.Equals(c.Label, _hoverRoiLabel, StringComparison.OrdinalIgnoreCase)
+                    ));
+
+                if (showHandles)
+                {
+                    DrawCircleRoiHandles(c.CenterX, c.CenterY, c.Radius, string.Equals(c.Label, _activeRoiLabel, StringComparison.OrdinalIgnoreCase));
+                }
+            }
+            else if (item is OverlayPointItem pt)
+            {
+                var showHandles = (!string.IsNullOrWhiteSpace(pt.Label)
+                    && (
+                        string.Equals(pt.Label, _activeRoiLabel, StringComparison.OrdinalIgnoreCase)
+                        || string.Equals(pt.Label, _hoverRoiLabel, StringComparison.OrdinalIgnoreCase)
+                    ));
+
+                if (showHandles)
+                {
+                    DrawPointRoiHandle(pt.X, pt.Y, pt.Radius, string.Equals(pt.Label, _activeRoiLabel, StringComparison.OrdinalIgnoreCase));
                 }
             }
         }
@@ -1118,6 +1144,70 @@ public partial class ImageViewerControl : UserControl
 
         var hitTol = GetScreenHitTolerance();
         var scale = Math.Max(0.001, _transform.Matrix.M11);
+
+        // 1. Highest Priority: Point items (e.g. Polygon vertex handles or point markers)
+        foreach (var item in OverlayItems)
+        {
+            if (item is OverlayPointItem pt && !string.IsNullOrWhiteSpace(pt.Label))
+            {
+                double dist = Math.Sqrt((contentPoint.X - pt.X) * (contentPoint.X - pt.X) + (contentPoint.Y - pt.Y) * (contentPoint.Y - pt.Y));
+                double maxDist = Math.Max(12.0 / scale, pt.Radius + 6.0 / scale);
+                if (dist <= maxDist)
+                {
+                    _roiEditing = true;
+                    _roiEditLabel = pt.Label;
+                    _activeRoiLabel = pt.Label;
+                    _roiEditStart = contentPoint;
+                    _roiEditMode = RoiEditMode.Move;
+                    _roiEditRectStart = new Rect(pt.X - 5, pt.Y - 5, 10, 10);
+                    _roiEditRect = _roiEditRectStart;
+                    _roiEditRectAngleStart = 0;
+                    _roiEditRectAngle = 0;
+                    RedrawRoiEditOverlay();
+                    return true;
+                }
+            }
+        }
+
+        // 2. Second Priority: Circle items
+        foreach (var item in OverlayItems)
+        {
+            if (item is OverlayCircleItem c && !string.IsNullOrWhiteSpace(c.Label))
+            {
+                double dist = Math.Sqrt((contentPoint.X - c.CenterX) * (contentPoint.X - c.CenterX) + (contentPoint.Y - c.CenterY) * (contentPoint.Y - c.CenterY));
+                double rimDist = Math.Abs(dist - c.Radius);
+                if (rimDist <= hitTol + 6.0 / scale)
+                {
+                    _roiEditing = true;
+                    _roiEditLabel = c.Label;
+                    _activeRoiLabel = c.Label;
+                    _roiEditStart = contentPoint;
+                    _roiEditMode = RoiEditMode.Right;
+                    _roiEditRectStart = new Rect(c.CenterX - c.Radius, c.CenterY - c.Radius, c.Radius * 2, c.Radius * 2);
+                    _roiEditRect = _roiEditRectStart;
+                    _roiEditRectAngleStart = 0;
+                    _roiEditRectAngle = 0;
+                    RedrawRoiEditOverlay();
+                    return true;
+                }
+                else if (dist < c.Radius)
+                {
+                    _roiEditing = true;
+                    _roiEditLabel = c.Label;
+                    _activeRoiLabel = c.Label;
+                    _roiEditStart = contentPoint;
+                    _roiEditMode = RoiEditMode.Move;
+                    _roiEditRectStart = new Rect(c.CenterX - c.Radius, c.CenterY - c.Radius, c.Radius * 2, c.Radius * 2);
+                    _roiEditRect = _roiEditRectStart;
+                    _roiEditRectAngleStart = 0;
+                    _roiEditRectAngle = 0;
+                    RedrawRoiEditOverlay();
+                    return true;
+                }
+            }
+        }
+
+        // 3. Third Priority: Rectangle items (Checked before Polygon interior body so Rectangles overlapping under/over Polygons can be interacted with)
         var candidates = new List<(OverlayRectItem Item, Rect Rect)>();
 
         foreach (var item in OverlayItems)
@@ -1140,54 +1230,79 @@ public partial class ImageViewerControl : UserControl
             candidates.Add((r, baseRect));
         }
 
-        if (candidates.Count == 0)
+        if (candidates.Count > 0)
         {
-            return false;
+            // Direct border or handle hits get top priority (ordered by smallest rect area)
+            var borderHits = candidates
+                .Where(x => HitTestRoiHandle(x.Rect, x.Item.Angle, contentPoint, hitTol, scale) != RoiEditMode.None || IsNearRoiBorder(x.Rect, x.Item.Angle, contentPoint, hitTol))
+                .OrderBy(x => x.Rect.Width * x.Rect.Height)
+                .ToList();
+
+            (OverlayRectItem Item, Rect Rect) picked;
+            if (borderHits.Count > 0)
+            {
+                picked = borderHits.First();
+            }
+            else if (!string.IsNullOrWhiteSpace(_activeRoiLabel) && candidates.Any(x => string.Equals(x.Item.Label, _activeRoiLabel, StringComparison.OrdinalIgnoreCase)))
+            {
+                picked = candidates.First(x => string.Equals(x.Item.Label, _activeRoiLabel, StringComparison.OrdinalIgnoreCase));
+            }
+            else
+            {
+                picked = candidates.OrderBy(x => x.Rect.Width * x.Rect.Height).First();
+            }
+
+            var mode = HitTestRoiHandle(picked.Rect, picked.Item.Angle, contentPoint, tolerance: hitTol, scale: scale);
+            if (mode == RoiEditMode.None)
+            {
+                mode = IsNearRoiBorder(picked.Rect, picked.Item.Angle, contentPoint, hitTol) ? RoiEditMode.Move : RoiEditMode.None;
+            }
+
+            if (mode != RoiEditMode.None)
+            {
+                _roiEditing = true;
+                _roiEditLabel = picked.Item.Label;
+                _activeRoiLabel = picked.Item.Label;
+                _roiEditStart = contentPoint;
+                _roiEditRectStart = picked.Rect;
+                _roiEditRect = picked.Rect;
+                _roiEditRectAngleStart = picked.Item.Angle;
+                _roiEditRectAngle = picked.Item.Angle;
+                _roiEditMode = mode;
+
+                RedrawRoiEditOverlay();
+                return true;
+            }
         }
 
-        // Direct border or handle hits get top priority (ordered by smallest rect area)
-        var borderHits = candidates
-            .Where(x => HitTestRoiHandle(x.Rect, x.Item.Angle, contentPoint, hitTol, scale) != RoiEditMode.None || IsNearRoiBorder(x.Rect, x.Item.Angle, contentPoint, hitTol))
-            .OrderBy(x => x.Rect.Width * x.Rect.Height)
-            .ToList();
+        // 4. Fourth Priority: Polyline items (Polygon body interior)
+        foreach (var item in OverlayItems)
+        {
+            if (item is OverlayPolylineItem pl && !string.IsNullOrWhiteSpace(pl.Label) && pl.Points != null && pl.Points.Count >= 3)
+            {
+                if (IsPointInPolygon(contentPoint, pl.Points))
+                {
+                    double minX = pl.Points.Min(p => p.X);
+                    double minY = pl.Points.Min(p => p.Y);
+                    double maxX = pl.Points.Max(p => p.X);
+                    double maxY = pl.Points.Max(p => p.Y);
 
-        (OverlayRectItem Item, Rect Rect) picked;
-        if (borderHits.Count > 0)
-        {
-            picked = borderHits.First();
-        }
-        else if (!string.IsNullOrWhiteSpace(_activeRoiLabel) && candidates.Any(x => string.Equals(x.Item.Label, _activeRoiLabel, StringComparison.OrdinalIgnoreCase)))
-        {
-            picked = candidates.First(x => string.Equals(x.Item.Label, _activeRoiLabel, StringComparison.OrdinalIgnoreCase));
-        }
-        else
-        {
-            picked = candidates.OrderBy(x => x.Rect.Width * x.Rect.Height).First();
-        }
-
-        _roiEditing = true;
-        _roiEditLabel = picked.Item.Label;
-        _activeRoiLabel = picked.Item.Label;
-        _roiEditStart = contentPoint;
-        _roiEditRectStart = picked.Rect;
-        _roiEditRect = picked.Rect;
-        _roiEditRectAngleStart = picked.Item.Angle;
-        _roiEditRectAngle = picked.Item.Angle;
-        _roiEditMode = HitTestRoiHandle(picked.Rect, picked.Item.Angle, contentPoint, tolerance: hitTol, scale: scale);
-        if (_roiEditMode == RoiEditMode.None)
-        {
-            // Move mode is triggered by clicking near the edge/border, not deep inside
-            _roiEditMode = IsNearRoiBorder(picked.Rect, picked.Item.Angle, contentPoint, hitTol) ? RoiEditMode.Move : RoiEditMode.None;
+                    _roiEditing = true;
+                    _roiEditLabel = pl.Label;
+                    _activeRoiLabel = pl.Label;
+                    _roiEditStart = contentPoint;
+                    _roiEditMode = RoiEditMode.Move;
+                    _roiEditRectStart = new Rect(minX, minY, Math.Max(10, maxX - minX), Math.Max(10, maxY - minY));
+                    _roiEditRect = _roiEditRectStart;
+                    _roiEditRectAngleStart = 0;
+                    _roiEditRectAngle = 0;
+                    RedrawRoiEditOverlay();
+                    return true;
+                }
+            }
         }
 
-        if (_roiEditMode == RoiEditMode.None)
-        {
-            _roiEditing = false;
-            return false;
-        }
-
-        RedrawRoiEditOverlay();
-        return true;
+        return false;
     }
 
     private string? FindTopRoiLabelAt(BitmapSource bmp, Point contentPoint)
@@ -1199,6 +1314,31 @@ public partial class ImageViewerControl : UserControl
 
         var hitTol = GetScreenHitTolerance();
         var scale = Math.Max(0.001, _transform.Matrix.M11);
+
+        foreach (var item in OverlayItems)
+        {
+            if (item is OverlayPointItem pt && !string.IsNullOrWhiteSpace(pt.Label))
+            {
+                double dist = Math.Sqrt((contentPoint.X - pt.X) * (contentPoint.X - pt.X) + (contentPoint.Y - pt.Y) * (contentPoint.Y - pt.Y));
+                if (dist <= Math.Max(12.0 / scale, pt.Radius + 6.0 / scale))
+                {
+                    return pt.Label;
+                }
+            }
+        }
+
+        foreach (var item in OverlayItems)
+        {
+            if (item is OverlayCircleItem c && !string.IsNullOrWhiteSpace(c.Label))
+            {
+                double dist = Math.Sqrt((contentPoint.X - c.CenterX) * (contentPoint.X - c.CenterX) + (contentPoint.Y - c.CenterY) * (contentPoint.Y - c.CenterY));
+                if (dist <= c.Radius + hitTol)
+                {
+                    return c.Label;
+                }
+            }
+        }
+
         var candidates = new List<(OverlayRectItem Item, Rect Rect)>();
 
         foreach (var item in OverlayItems)
@@ -1221,22 +1361,33 @@ public partial class ImageViewerControl : UserControl
             candidates.Add((r, baseRect));
         }
 
-        if (candidates.Count == 0)
+        if (candidates.Count > 0)
         {
-            return null;
+            var borderHits = candidates
+                .Where(x => HitTestRoiHandle(x.Rect, x.Item.Angle, contentPoint, hitTol, scale) != RoiEditMode.None || IsNearRoiBorder(x.Rect, x.Item.Angle, contentPoint, hitTol))
+                .OrderBy(x => x.Rect.Width * x.Rect.Height)
+                .ToList();
+
+            if (borderHits.Count > 0)
+            {
+                return borderHits.First().Item.Label;
+            }
+
+            return candidates.OrderBy(x => x.Rect.Width * x.Rect.Height).First().Item.Label;
         }
 
-        var borderHits = candidates
-            .Where(x => HitTestRoiHandle(x.Rect, x.Item.Angle, contentPoint, hitTol, scale) != RoiEditMode.None || IsNearRoiBorder(x.Rect, x.Item.Angle, contentPoint, hitTol))
-            .OrderBy(x => x.Rect.Width * x.Rect.Height)
-            .ToList();
-
-        if (borderHits.Count > 0)
+        foreach (var item in OverlayItems)
         {
-            return borderHits.First().Item.Label;
+            if (item is OverlayPolylineItem pl && !string.IsNullOrWhiteSpace(pl.Label) && pl.Points != null && pl.Points.Count >= 3)
+            {
+                if (IsPointInPolygon(contentPoint, pl.Points))
+                {
+                    return pl.Label;
+                }
+            }
         }
 
-        return candidates.OrderBy(x => x.Rect.Width * x.Rect.Height).First().Item.Label;
+        return null;
     }
 
     private string? FindRoiLabelAtForClick(BitmapSource bmp, Point contentPoint)
@@ -1315,6 +1466,67 @@ public partial class ImageViewerControl : UserControl
             Canvas.SetTop(h, rotPt.Y - size / 2.0);
             PART_Overlay.Children.Add(h);
         }
+    }
+
+    private void DrawCircleRoiHandles(double cx, double cy, double radius, bool isActive)
+    {
+        var scale = Math.Max(0.001, _transform.Matrix.M11);
+        var handleSize = (isActive ? 10.0 : 8.0) / scale;
+        var stroke = isActive ? Brushes.Cyan : Brushes.DeepSkyBlue;
+
+        // 4 cardinal handles on rim (Top, Bottom, Left, Right)
+        AddHandle(new Point(cx, cy - radius));
+        AddHandle(new Point(cx, cy + radius));
+        AddHandle(new Point(cx - radius, cy));
+        AddHandle(new Point(cx + radius, cy));
+
+        void AddHandle(Point pt)
+        {
+            var h = new Ellipse
+            {
+                Width = handleSize,
+                Height = handleSize,
+                Stroke = stroke,
+                StrokeThickness = 1.5 / scale,
+                Fill = Brushes.Lime
+            };
+            Canvas.SetLeft(h, pt.X - handleSize / 2.0);
+            Canvas.SetTop(h, pt.Y - handleSize / 2.0);
+            PART_Overlay.Children.Add(h);
+        }
+    }
+
+    private void DrawPointRoiHandle(double x, double y, double radius, bool isActive)
+    {
+        var scale = Math.Max(0.001, _transform.Matrix.M11);
+        var handleSize = (isActive ? 14.0 : 10.0) / scale;
+        var stroke = isActive ? Brushes.Cyan : Brushes.Yellow;
+
+        var ring = new Ellipse
+        {
+            Width = handleSize,
+            Height = handleSize,
+            Stroke = stroke,
+            StrokeThickness = 2.0 / scale,
+            Fill = Brushes.Transparent
+        };
+        Canvas.SetLeft(ring, x - handleSize / 2.0);
+        Canvas.SetTop(ring, y - handleSize / 2.0);
+        PART_Overlay.Children.Add(ring);
+    }
+
+    private static bool IsPointInPolygon(Point p, List<Point> poly)
+    {
+        bool inside = false;
+        for (int i = 0, j = poly.Count - 1; i < poly.Count; j = i++)
+        {
+            if (((poly[i].Y > p.Y) != (poly[j].Y > p.Y)) &&
+                (p.X < (poly[j].X - poly[i].X) * (p.Y - poly[i].Y) / (poly[j].Y - poly[i].Y) + poly[i].X))
+            {
+                inside = !inside;
+            }
+        }
+        return inside;
     }
 
     private void UpdateCursorForRoiHover(BitmapSource bmp, Point contentPoint, string? hoverLabel)
@@ -1510,17 +1722,114 @@ public partial class ImageViewerControl : UserControl
         PART_Overlay.Children.Clear();
         var scale = Math.Max(0.001, _transform.Matrix.M11);
 
+        var targetLabel = _roiEditLabel ?? _activeRoiLabel;
+
+        // Check if editing a polygon vertex (e.g. "PRE1 PRP1_V2")
+        int vIndex = -1;
+        string? parentPolyLabel = null;
+        if (!string.IsNullOrWhiteSpace(targetLabel) && targetLabel.Contains("_V"))
+        {
+            var parts = targetLabel.Split("_V", StringSplitOptions.RemoveEmptyEntries);
+            if (parts.Length == 2 && int.TryParse(parts[1], out var idx))
+            {
+                vIndex = idx - 1;
+                parentPolyLabel = parts[0];
+            }
+        }
+
+        OverlayPolylineItem? polyItem = null;
+        if (!string.IsNullOrWhiteSpace(parentPolyLabel))
+        {
+            polyItem = OverlayItems?.OfType<OverlayPolylineItem>()
+                .FirstOrDefault(x => string.Equals(x.Label, parentPolyLabel, StringComparison.OrdinalIgnoreCase));
+        }
+        else if (!string.IsNullOrWhiteSpace(targetLabel))
+        {
+            polyItem = OverlayItems?.OfType<OverlayPolylineItem>()
+                .FirstOrDefault(x => string.Equals(x.Label, targetLabel, StringComparison.OrdinalIgnoreCase));
+        }
+
+        if (polyItem != null && polyItem.Points != null && polyItem.Points.Count >= 3)
+        {
+            List<Point> livePoints;
+            if (vIndex >= 0 && vIndex < polyItem.Points.Count)
+            {
+                // Single vertex dragging in real-time!
+                livePoints = polyItem.Points.ToList();
+                var currentVx = _roiEditRect.X + 5;
+                var currentVy = _roiEditRect.Y + 5;
+                livePoints[vIndex] = new Point(currentVx, currentVy);
+            }
+            else
+            {
+                // Polygon body dragging in real-time!
+                var dx = _roiEditRect.X - _roiEditRectStart.X;
+                var dy = _roiEditRect.Y - _roiEditRectStart.Y;
+                livePoints = polyItem.Points.Select(p => new Point(p.X + dx, p.Y + dy)).ToList();
+            }
+
+            var geometry = new StreamGeometry();
+            using (var ctx = geometry.Open())
+            {
+                ctx.BeginFigure(livePoints[0], isFilled: true, isClosed: true);
+                ctx.PolyLineTo(livePoints.Skip(1).ToList(), isStroked: true, isSmoothJoin: false);
+            }
+
+            var livePolyPath = new System.Windows.Shapes.Path
+            {
+                Data = geometry,
+                Stroke = Brushes.Cyan,
+                StrokeThickness = 2.0 / scale,
+                Fill = new SolidColorBrush(Color.FromArgb(30, 0, 255, 255))
+            };
+            PART_Overlay.Children.Add(livePolyPath);
+
+            for (int i = 0; i < livePoints.Count; i++)
+            {
+                var p = livePoints[i];
+                bool isDragged = (i == vIndex);
+                double rSize = (isDragged ? 14.0 : 8.0) / scale;
+                var dot = new Ellipse
+                {
+                    Width = rSize,
+                    Height = rSize,
+                    Fill = isDragged ? Brushes.Cyan : Brushes.Yellow,
+                    Stroke = isDragged ? Brushes.White : Brushes.DarkBlue,
+                    StrokeThickness = 1.5 / scale
+                };
+                Canvas.SetLeft(dot, p.X - rSize / 2.0);
+                Canvas.SetTop(dot, p.Y - rSize / 2.0);
+                PART_Overlay.Children.Add(dot);
+            }
+
+            _roiEditRectShape = livePolyPath;
+            return;
+        }
+
         var cx = _roiEditRect.X + _roiEditRect.Width / 2.0;
         var cy = _roiEditRect.Y + _roiEditRect.Height / 2.0;
 
-        _roiEditRectShape = new Rectangle
+        var isCircleEdit = !string.IsNullOrWhiteSpace(_activeRoiLabel) && OverlayItems?.FirstOrDefault(x => string.Equals(x.Label, _activeRoiLabel, StringComparison.OrdinalIgnoreCase)) is OverlayCircleItem;
+        if (isCircleEdit)
         {
-            Stroke = Brushes.Cyan,
-            StrokeThickness = 2.0 / scale,
-            Fill = new SolidColorBrush(Color.FromArgb(20, 0, 255, 255)),
-            RenderTransformOrigin = new Point(0.5, 0.5),
-            RenderTransform = Math.Abs(_roiEditRectAngle) > 0.001 ? new RotateTransform(_roiEditRectAngle) : null
-        };
+            _roiEditRectShape = new Ellipse
+            {
+                Stroke = Brushes.Cyan,
+                StrokeThickness = 2.0 / scale,
+                Fill = new SolidColorBrush(Color.FromArgb(20, 0, 255, 255))
+            };
+        }
+        else
+        {
+            _roiEditRectShape = new Rectangle
+            {
+                Stroke = Brushes.Cyan,
+                StrokeThickness = 2.0 / scale,
+                Fill = new SolidColorBrush(Color.FromArgb(20, 0, 255, 255)),
+                RenderTransformOrigin = new Point(0.5, 0.5),
+                RenderTransform = Math.Abs(_roiEditRectAngle) > 0.001 ? new RotateTransform(_roiEditRectAngle) : null
+            };
+        }
 
         Canvas.SetLeft(_roiEditRectShape, _roiEditRect.X);
         Canvas.SetTop(_roiEditRectShape, _roiEditRect.Y);

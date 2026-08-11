@@ -118,12 +118,26 @@ public class FastOverlayCanvas : FrameworkElement
             {
                 var vx = p.X * sx;
                 var vy = p.Y * sy;
-                dc.DrawEllipse(null, pen, new Point(vx, vy), p.Radius, p.Radius);
+                var pr = p.Radius;
+                dc.DrawEllipse(p.Fill ?? item.Stroke, pen, new Point(vx, vy), pr, pr);
 
                 if (!string.IsNullOrWhiteSpace(p.Label))
                 {
                     var text = new FormattedText(p.Label, CultureInfo.CurrentUICulture, FlowDirection.LeftToRight, typeface, effFontSize, item.Stroke, dpi);
-                    dc.DrawText(text, new Point(vx + p.Radius + 2 / scale, vy - text.Height / 2));
+                    dc.DrawText(text, new Point(vx + pr + 4 / scale, vy - text.Height / 2.0));
+                }
+            }
+            else if (item is OverlayCircleItem c)
+            {
+                var cx = c.CenterX * sx;
+                var cy = c.CenterY * sy;
+                var cr = Math.Max(1.0, c.Radius * Math.Max(sx, sy));
+                dc.DrawEllipse(c.Fill, pen, new Point(cx, cy), cr, cr);
+
+                if (!string.IsNullOrWhiteSpace(c.Label))
+                {
+                    var text = new FormattedText(c.Label, CultureInfo.CurrentUICulture, FlowDirection.LeftToRight, typeface, effFontSize, item.Stroke, dpi);
+                    dc.DrawText(text, new Point(cx - text.Width / 2.0, cy - cr - text.Height - 2 / scale));
                 }
             }
             else if (item is OverlayLineItem l)

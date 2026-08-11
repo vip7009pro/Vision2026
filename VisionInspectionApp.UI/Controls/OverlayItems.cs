@@ -28,6 +28,15 @@ public sealed class OverlayPointItem : OverlayItem
     public double Y { get; init; }
 
     public double Radius { get; init; } = 4.0;
+    public Brush? Fill { get; init; }
+}
+
+public sealed class OverlayCircleItem : OverlayItem
+{
+    public double CenterX { get; init; }
+    public double CenterY { get; init; }
+    public double Radius { get; init; }
+    public Brush? Fill { get; init; }
 }
 
 public sealed class OverlayLineItem : OverlayItem

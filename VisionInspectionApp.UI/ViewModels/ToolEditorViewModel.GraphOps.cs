@@ -887,22 +887,21 @@ namespace VisionInspectionApp.UI.ViewModels
 
                         if (rr.Shape == PreprocessRoiShape.Circle)
                         {
-                            int rad = Math.Max(5, rr.CircleRadius);
-                            var circleRoi = new Roi
+                            dst.Add(new OverlayCircleItem
                             {
-                                X = rr.CircleCenterX - rad,
-                                Y = rr.CircleCenterY - rad,
-                                Width = rad * 2,
-                                Height = rad * 2,
-                                Angle = 0
-                            };
-                            dst.Add(CreateRotatedRoi(circleRoi, stroke, $"{preDef.Name} {prefix}C{i + 1}"));
+                                CenterX = rr.CircleCenterX,
+                                CenterY = rr.CircleCenterY,
+                                Radius = Math.Max(5, rr.CircleRadius),
+                                Stroke = stroke,
+                                StrokeThickness = 2.0,
+                                Label = $"{preDef.Name} {prefix}C{i + 1}"
+                            });
                         }
                         else if (rr.Shape == PreprocessRoiShape.Polygon)
                         {
                             if (rr.PolygonPoints != null && rr.PolygonPoints.Count >= 3)
                             {
-                                // 1. Draw closed polyline outline connecting all vertices
+                                // 1. Closed Polyline outline for the Polygon
                                 var polyPoints = rr.PolygonPoints.Select(p => new System.Windows.Point(p.X, p.Y)).ToList();
                                 dst.Add(new OverlayPolylineItem
                                 {
@@ -913,36 +912,21 @@ namespace VisionInspectionApp.UI.ViewModels
                                     Label = $"{preDef.Name} {prefix}P{i + 1}"
                                 });
 
-                                // 2. Draw interactive vertex handles V1, V2... Vn for each corner
+                                // 2. Clean vertex point markers (Cyan Point Dots) for each corner
                                 for (int vIdx = 0; vIdx < rr.PolygonPoints.Count; vIdx++)
                                 {
                                     var pt = rr.PolygonPoints[vIdx];
-                                    int handleSize = 14;
-                                    var vertexRoi = new Roi
+                                    dst.Add(new OverlayPointItem
                                     {
-                                        X = (int)(pt.X - handleSize / 2.0),
-                                        Y = (int)(pt.Y - handleSize / 2.0),
-                                        Width = handleSize,
-                                        Height = handleSize,
-                                        Angle = 0
-                                    };
-                                    dst.Add(CreateRotatedRoi(vertexRoi, Brushes.Cyan, $"{preDef.Name} {prefix}P{i + 1}_V{vIdx + 1}"));
+                                        X = pt.X,
+                                        Y = pt.Y,
+                                        Radius = 5.0,
+                                        Fill = Brushes.Cyan,
+                                        Stroke = Brushes.Black,
+                                        StrokeThickness = 1.0,
+                                        Label = $"{preDef.Name} {prefix}P{i + 1}_V{vIdx + 1}"
+                                    });
                                 }
-
-                                // 3. Draw bounding box for scaling/moving entire polygon
-                                double minX = rr.PolygonPoints.Min(p => p.X);
-                                double minY = rr.PolygonPoints.Min(p => p.Y);
-                                double maxX = rr.PolygonPoints.Max(p => p.X);
-                                double maxY = rr.PolygonPoints.Max(p => p.Y);
-                                var polyRoi = new Roi
-                                {
-                                    X = (int)minX,
-                                    Y = (int)minY,
-                                    Width = (int)Math.Max(10, maxX - minX),
-                                    Height = (int)Math.Max(10, maxY - minY),
-                                    Angle = 0
-                                };
-                                dst.Add(CreateRotatedRoi(polyRoi, stroke, $"{preDef.Name} {prefix}P{i + 1}"));
                             }
                         }
                         else
