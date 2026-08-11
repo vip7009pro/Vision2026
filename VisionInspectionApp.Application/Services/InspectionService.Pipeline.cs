@@ -1709,7 +1709,19 @@ public partial class InspectionService
                 {
                     var __sw = System.Diagnostics.Stopwatch.StartNew();
                     var (matForCd, _) = ResolveToolPreprocess("ColorDiff", cd.Name);
-                    var cdRes = ColorDiffProcessor.Run(matForCd, cd);
+                    var cdTransformed = new ColorDiffDefinition
+                    {
+                        Name = cd.Name,
+                        ImageSourceRef = cd.ImageSourceRef,
+                        InspectRoi = TransformRoiKeepSize(cd.InspectRoi, originTeach, originFound, angleDeg),
+                        UseRefColor = cd.UseRefColor,
+                        RefL = cd.RefL,
+                        RefA = cd.RefA,
+                        RefB = cd.RefB,
+                        RefRoi = TransformRoiKeepSize(cd.RefRoi, originTeach, originFound, angleDeg),
+                        MaxDeltaE = cd.MaxDeltaE
+                    };
+                    var cdRes = ColorDiffProcessor.Run(matForCd, cdTransformed);
                     __sw.Stop();
                     result.Timings.NodeTimings[cd.Name] = (int)__sw.ElapsedMilliseconds;
                     return cdRes;
