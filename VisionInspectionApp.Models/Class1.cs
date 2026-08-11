@@ -420,11 +420,47 @@ public sealed class CodeDetectionDefinition
     public bool TryHarder { get; set; } = true;
 }
 
+public enum PreprocessRoiShape
+{
+    Rectangle = 0,
+    Circle = 1,
+    Polygon = 2
+}
+
+public enum PreprocessRoiMode
+{
+    Include = 0,
+    Exclude = 1
+}
+
+public sealed class PreprocessRoiDefinition
+{
+    public PreprocessRoiShape Shape { get; set; } = PreprocessRoiShape.Rectangle;
+    public PreprocessRoiMode Mode { get; set; } = PreprocessRoiMode.Include;
+
+    // Rectangle
+    public int X { get; set; } = 50;
+    public int Y { get; set; } = 50;
+    public int Width { get; set; } = 200;
+    public int Height { get; set; } = 200;
+    public double Angle { get; set; } = 0.0;
+
+    // Circle (Center X, Y, Radius)
+    public int CircleCenterX { get; set; } = 150;
+    public int CircleCenterY { get; set; } = 150;
+    public int CircleRadius { get; set; } = 50;
+
+    // Polygon
+    public List<Point2dModel> PolygonPoints { get; set; } = new();
+}
+
 public sealed class PreprocessNodeDefinition
 {
     public string Name { get; set; } = string.Empty;
 
     public PreprocessSettings Settings { get; set; } = new();
+
+    public List<PreprocessRoiDefinition> Rois { get; set; } = new();
 }
 
 public sealed class ConditionDefinition

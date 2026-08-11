@@ -479,5 +479,130 @@ namespace VisionInspectionApp.UI.ViewModels
     
         public ICommand ImageSource_BrowseFileCommand { get; }
         public ICommand ImageSource_BrowseFolderCommand { get; }
+
+        public ObservableCollection<PreprocessRoiDefinition> PreprocessRois
+        {
+            get
+            {
+                var def = SelectedPreprocessNodeDef();
+                if (def is null) return new ObservableCollection<PreprocessRoiDefinition>();
+                return new ObservableCollection<PreprocessRoiDefinition>(def.Rois);
+            }
+        }
+
+        public void Preprocess_AddRoi(PreprocessRoiShape shape, PreprocessRoiMode mode = PreprocessRoiMode.Include)
+        {
+            var def = SelectedPreprocessNodeDef();
+            if (def is null) return;
+
+            var newRoi = new PreprocessRoiDefinition
+            {
+                Shape = shape,
+                Mode = mode,
+                X = 50 + def.Rois.Count * 20,
+                Y = 50 + def.Rois.Count * 20,
+                Width = 200,
+                Height = 200,
+                CircleCenterX = 150 + def.Rois.Count * 20,
+                CircleCenterY = 150 + def.Rois.Count * 20,
+                CircleRadius = 60
+            };
+
+            if (shape == PreprocessRoiShape.Polygon)
+            {
+                newRoi.PolygonPoints = new List<Point2dModel>
+                {
+                    new Point2dModel { X = newRoi.X, Y = newRoi.Y },
+                    new Point2dModel { X = newRoi.X + 150, Y = newRoi.Y },
+                    new Point2dModel { X = newRoi.X + 200, Y = newRoi.Y + 150 },
+                    new Point2dModel { X = newRoi.X + 50, Y = newRoi.Y + 150 }
+                };
+            }
+
+            def.Rois.Add(newRoi);
+            OnPropertyChanged(nameof(PreprocessRois));
+            RaiseToolPropertyPanelsChanged();
+            RefreshPreviews();
+            RequestAutoSave();
+        }
+
+        public void Preprocess_RemoveRoi(PreprocessRoiDefinition? roi)
+        {
+            var def = SelectedPreprocessNodeDef();
+            if (def is null || roi is null) return;
+            def.Rois.Remove(roi);
+            OnPropertyChanged(nameof(PreprocessRois));
+            RaiseToolPropertyPanelsChanged();
+            RefreshPreviews();
+            RequestAutoSave();
+        }
+
+        public void Preprocess_ToggleRoiMode(PreprocessRoiDefinition? roi)
+        {
+            var def = SelectedPreprocessNodeDef();
+            if (def is null || roi is null) return;
+            roi.Mode = roi.Mode == PreprocessRoiMode.Include ? PreprocessRoiMode.Exclude : PreprocessRoiMode.Include;
+            OnPropertyChanged(nameof(PreprocessRois));
+            RaiseToolPropertyPanelsChanged();
+            RefreshPreviews();
+            RequestAutoSave();
+        }
+
+        public void Preprocess_AddPolygonPoint(PreprocessRoiDefinition? roi)
+        {
+            if (roi is null || roi.Shape != PreprocessRoiShape.Polygon) return;
+            if (roi.PolygonPoints is null) roi.PolygonPoints = new List<Point2dModel>();
+
+            if (roi.PolygonPoints.Count == 0)
+            {
+                roi.PolygonPoints.Add(new Point2dModel { X = 100, Y = 100 });
+                roi.PolygonPoints.Add(new Point2dModel { X = 250, Y = 100 });
+                roi.PolygonPoints.Add(new Point2dModel { X = 175, Y = 250 });
+            }
+            else
+            {
+                var last = roi.PolygonPoints.Last();
+                var first = roi.PolygonPoints.First();
+                roi.PolygonPoints.Add(new Point2dModel
+                {
+                    X = Math.Round((last.X + first.X) / 2.0 + 30),
+                    Y = Math.Round((last.Y + first.Y) / 2.0 + 30)
+                });
+            }
+
+            OnPropertyChanged(nameof(PreprocessRois));
+            RaiseToolPropertyPanelsChanged();
+            RefreshPreviews();
+            RequestAutoSave();
+        }
+
+        public void Preprocess_RemovePolygonPoint(Point2dModel? point)
+        {
+            var def = SelectedPreprocessNodeDef();
+            if (def is null || point is null) return;
+            foreach (var roi in def.Rois)
+            {
+                if (roi.Shape == PreprocessRoiShape.Polygon && roi.PolygonPoints != null && roi.PolygonPoints.Contains(point))
+                {
+                    if (roi.PolygonPoints.Count > 3)
+                    {
+                        roi.PolygonPoints.Remove(point);
+                        OnPropertyChanged(nameof(PreprocessRois));
+                        RaiseToolPropertyPanelsChanged();
+                        RefreshPreviews();
+                        RequestAutoSave();
+                    }
+                    break;
+                }
+            }
+        }
+
+        public ICommand Preprocess_AddRectangleRoiCommand { get; set; }
+        public ICommand Preprocess_AddCircleRoiCommand { get; set; }
+        public ICommand Preprocess_AddPolygonRoiCommand { get; set; }
+        public ICommand Preprocess_RemoveRoiCommand { get; set; }
+        public ICommand Preprocess_ToggleRoiModeCommand { get; set; }
+        public ICommand Preprocess_AddPolygonPointCommand { get; set; }
+        public ICommand Preprocess_RemovePolygonPointCommand { get; set; }
     }
 }

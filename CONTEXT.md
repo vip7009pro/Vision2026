@@ -539,6 +539,20 @@
     - **Tự động dò tìm điểm căn lề**: Khi rê kéo node (đơn hoặc nhóm), thuật toán `UpdateSmartSnapLines` tự động quét các điểm lề cạnh (Left, Center, Right) và lề ngang (Top, Center, Bottom) của các node lân cận trong khoảng sai số $7\text{px}$.
     - **Đường vạch định vị kéo dài**: Khi khớp vị trí lề, hệ thống tự động căn node vào đúng vị trí và hiển thị các đường vạch nét đứt màu Neon Cyan / Accent Blue (`SnapLinesPath` dạng `GeometryGroup`) kéo dài phủ ngang/dọc giữa các node liên quan.
     - **Tự động ẩn**: Khi hoàn thành thao tác rê kéo (`NodeThumb_DragCompleted`), các đường Snap Lines tự động ẩn đi (`HideSnapLines`), mang lại trải nghiệm căn chỉnh chuyên nghiệp tương tự Visio / Photoshop / Figma.
+  - **Tối ưu Giao diện & Hiển thị Properties Panel cho Node Preprocessor**:
+    - **Xóa nút "Delete node" trên Properties Panel**: Đã loại bỏ nút Delete Node thừa ở phía cuối panel thuộc tính của tất cả các tool trong [ToolEditorView.xaml](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/Views/ToolEditorView.xaml).
+    - **Hiển thị tham số Preprocessor độc lập theo từng Node (Đã khắc phục lỗi hiển thị)**:
+      - Tự động khởi tạo `PreprocessNodeDefinition` cho Node được chọn trong `SelectedPreprocessNodeDef()` nếu chưa tồn tại trong cấu hình Job.
+      - Bổ sung thông báo `OnPropertyChanged(nameof(IsPreprocessNode))` và `OnPropertyChanged(nameof(PreprocessRois))` trong `RaiseToolPropertyPanelsChanged()` để WPF tự động hiển thị panel thuộc tính tiền xử lý khi bấm chọn bất kỳ Node Preprocess nào trên Canvas.
+    - **Bổ sung ROI Masking & Kéo thả tương tác cho Preprocessor (Add / Subtract Regions)**:
+      - Hỗ trợ thêm nhiều loại hình dạng ROI (`Square / Rectangle`, `Circle`, `Polygon` đa giác $N$ cạnh linh hoạt).
+      - **ROI Đa giác linh hoạt $N$-đỉnh (Tam giác, Tứ giác, Ngũ giác, Lục giác, ...)**:
+        - **Kéo rê từng đỉnh riêng biệt trên Preview**: Mỗi đỉnh của đa giác được hiển thị bằng một tay nắm Cyan (`V1`, `V2`, `V3`, ... `Vn`). Người dùng có thể rê chuột kéo di chuyển từng góc đỉnh riêng lẻ trực tiếp trên ảnh Preview một cách hoàn toàn tự do và mượt mà.
+        - **Thêm/Xóa đỉnh chủ động**: Cung cấp nút `➕ Thêm Đỉnh` và nút `✖` xóa từng đỉnh giúp tạo ra đa giác từ 3 đỉnh trở lên ($N$ cạnh bất kỳ).
+        - **Nhập tọa độ từng đỉnh**: Cho phép nhập/chỉnh trực tiếp từng cặp tọa độ `(X, Y)` của mỗi đỉnh ngay trên bảng Properties Panel.
+      - **Hiển thị Overlay & Kéo thả / Thay đổi kích thước tương tác**: Cho phép người dùng rê chuột kéo di chuyển (Move) hoặc thay đổi kích thước (Resize) ROI trực tiếp trên ảnh Preview (tự động gắn nhãn `PR1`, `PRX1`, `PRC1`, `PRP1`).
+      - Thuật toán OpenCV mask blending trong `ImagePreprocessor.Run` đảm bảo xử lý tiền xử lý chính xác tuyệt đối trên các vùng mong muốn.
+    - **Nới rộng Cột đầu tiên (Toolbox & Properties Panel)**: Đã điều chỉnh chiều rộng `Column 0` trong `ToolEditorView.xaml` từ `220px` lên `340px` (`MinWidth="260"`) giúp giao diện rộng rãi, dễ theo dõi và điều chỉnh các slider/combobox tham số.
 
 ## Roadmap
 

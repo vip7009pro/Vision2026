@@ -91,9 +91,9 @@ public partial class InspectionService
                 .Where(p => !string.IsNullOrWhiteSpace(p.Name))
                 .ToDictionary(p => p.Name, p => p, StringComparer.OrdinalIgnoreCase);
 
-            var preprocessSettingsByName = (config.PreprocessNodes ?? new List<PreprocessNodeDefinition>())
+            var preprocessNodesByName = (config.PreprocessNodes ?? new List<PreprocessNodeDefinition>())
                 .Where(p => !string.IsNullOrWhiteSpace(p.Name))
-                .ToDictionary(p => p.Name, p => p.Settings ?? new PreprocessSettings(), StringComparer.OrdinalIgnoreCase);
+                .ToDictionary(p => p.Name, p => p, StringComparer.OrdinalIgnoreCase);
 
             var edges = config.ToolGraph?.Edges ?? new List<ToolGraphEdge>();
 
@@ -135,8 +135,9 @@ public partial class InspectionService
                         return image;
                     }
 
-                    preprocessSettingsByName.TryGetValue(node.RefName ?? string.Empty, out var settings);
-                    settings ??= new PreprocessSettings();
+                    preprocessNodesByName.TryGetValue(node.RefName ?? string.Empty, out var preDef);
+                    var settings = preDef?.Settings ?? new PreprocessSettings();
+                    var rois = preDef?.Rois;
 
                     // Preprocess node input: either raw image or another preprocess output connected to "In" or "Image".
                     var inEdge = edges.FirstOrDefault(e => string.Equals(e.ToNodeId, id, StringComparison.OrdinalIgnoreCase)
@@ -155,7 +156,7 @@ public partial class InspectionService
                     }
 
                     var __sw = Stopwatch.StartNew();
-                    var m = _preprocessor.Run(baseMat, settings);
+                    var m = _preprocessor.Run(baseMat, settings, rois);
                     __sw.Stop();
                     if (!string.IsNullOrWhiteSpace(node.RefName))
                     {
@@ -187,8 +188,7 @@ public partial class InspectionService
 
                 if (string.Equals(fromNode.Type, "Preprocess", StringComparison.OrdinalIgnoreCase))
                 {
-                    preprocessSettingsByName.TryGetValue(fromNode.RefName ?? string.Empty, out var ppSettings);
-                    ppSettings ??= new PreprocessSettings();
+                    var ppSettings = preprocessNodesByName.TryGetValue(fromNode.RefName ?? string.Empty, out var preDef) ? (preDef.Settings ?? new PreprocessSettings()) : new PreprocessSettings();
                     var ppMat = GetPreprocessNodeOutput(fromNode.Id);
                     return (ppMat, ppSettings);
                 }

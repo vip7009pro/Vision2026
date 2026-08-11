@@ -88,4 +88,25 @@ namespace VisionInspectionApp.UI.Converters
             throw new NotImplementedException();
         }
     }
+
+    public class EnumToVisibilityConverter : IValueConverter
+    {
+        public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+        {
+            if (value != null && parameter != null)
+            {
+                var checkValue = value.ToString();
+                var paramValue = parameter.ToString();
+                return string.Equals(checkValue, paramValue, StringComparison.OrdinalIgnoreCase)
+                    ? System.Windows.Visibility.Visible
+                    : System.Windows.Visibility.Collapsed;
+            }
+            return System.Windows.Visibility.Collapsed;
+        }
+
+        public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+        {
+            throw new NotImplementedException();
+        }
+    }
 }

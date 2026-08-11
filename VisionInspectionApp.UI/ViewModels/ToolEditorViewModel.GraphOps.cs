@@ -299,7 +299,23 @@ namespace VisionInspectionApp.UI.ViewModels
                 return null;
             if (!string.Equals(SelectedNode.Type, "Preprocess", StringComparison.OrdinalIgnoreCase))
                 return null;
-            return _config.PreprocessNodes.FirstOrDefault(x => string.Equals(x.Name, SelectedNode.RefName, StringComparison.OrdinalIgnoreCase));
+
+            if (string.IsNullOrWhiteSpace(SelectedNode.RefName))
+            {
+                SelectedNode.RefName = "PRE1";
+            }
+
+            var def = _config.PreprocessNodes.FirstOrDefault(x => string.Equals(x.Name, SelectedNode.RefName, StringComparison.OrdinalIgnoreCase));
+            if (def is null)
+            {
+                def = new PreprocessNodeDefinition
+                {
+                    Name = SelectedNode.RefName,
+                    Settings = new PreprocessSettings()
+                };
+                _config.PreprocessNodes.Add(def);
+            }
+            return def;
         }
     
         private void RemoveEdgesToSelectedNodePortsBeyondConditionCount(int inputCount)
@@ -856,6 +872,94 @@ namespace VisionInspectionApp.UI.ViewModels
                 {
                     dst.Add(CreateRotatedRoi(cc.TemplateRoi, Brushes.MediumSpringGreen, $"{cc.Name} CCT"));
                 }
+            }
+
+            if (string.Equals(node.Type, "Preprocess", StringComparison.OrdinalIgnoreCase))
+            {
+                var preDef = _config.PreprocessNodes.FirstOrDefault(x => string.Equals(x.Name, node.RefName, StringComparison.OrdinalIgnoreCase));
+                if (preDef is not null && preDef.Rois is not null && showRois)
+                {
+                    for (var i = 0; i < preDef.Rois.Count; i++)
+                    {
+                        var rr = preDef.Rois[i];
+                        var stroke = rr.Mode == PreprocessRoiMode.Exclude ? Brushes.Red : Brushes.Lime;
+                        var prefix = rr.Mode == PreprocessRoiMode.Exclude ? "PRX" : "PR";
+
+                        if (rr.Shape == PreprocessRoiShape.Circle)
+                        {
+                            int rad = Math.Max(5, rr.CircleRadius);
+                            var circleRoi = new Roi
+                            {
+                                X = rr.CircleCenterX - rad,
+                                Y = rr.CircleCenterY - rad,
+                                Width = rad * 2,
+                                Height = rad * 2,
+                                Angle = 0
+                            };
+                            dst.Add(CreateRotatedRoi(circleRoi, stroke, $"{preDef.Name} {prefix}C{i + 1}"));
+                        }
+                        else if (rr.Shape == PreprocessRoiShape.Polygon)
+                        {
+                            if (rr.PolygonPoints != null && rr.PolygonPoints.Count >= 3)
+                            {
+                                // 1. Draw closed polyline outline connecting all vertices
+                                var polyPoints = rr.PolygonPoints.Select(p => new System.Windows.Point(p.X, p.Y)).ToList();
+                                dst.Add(new OverlayPolylineItem
+                                {
+                                    Points = polyPoints,
+                                    IsClosed = true,
+                                    Stroke = stroke,
+                                    StrokeThickness = 2.0,
+                                    Label = $"{preDef.Name} {prefix}P{i + 1}"
+                                });
+
+                                // 2. Draw interactive vertex handles V1, V2... Vn for each corner
+                                for (int vIdx = 0; vIdx < rr.PolygonPoints.Count; vIdx++)
+                                {
+                                    var pt = rr.PolygonPoints[vIdx];
+                                    int handleSize = 14;
+                                    var vertexRoi = new Roi
+                                    {
+                                        X = (int)(pt.X - handleSize / 2.0),
+                                        Y = (int)(pt.Y - handleSize / 2.0),
+                                        Width = handleSize,
+                                        Height = handleSize,
+                                        Angle = 0
+                                    };
+                                    dst.Add(CreateRotatedRoi(vertexRoi, Brushes.Cyan, $"{preDef.Name} {prefix}P{i + 1}_V{vIdx + 1}"));
+                                }
+
+                                // 3. Draw bounding box for scaling/moving entire polygon
+                                double minX = rr.PolygonPoints.Min(p => p.X);
+                                double minY = rr.PolygonPoints.Min(p => p.Y);
+                                double maxX = rr.PolygonPoints.Max(p => p.X);
+                                double maxY = rr.PolygonPoints.Max(p => p.Y);
+                                var polyRoi = new Roi
+                                {
+                                    X = (int)minX,
+                                    Y = (int)minY,
+                                    Width = (int)Math.Max(10, maxX - minX),
+                                    Height = (int)Math.Max(10, maxY - minY),
+                                    Angle = 0
+                                };
+                                dst.Add(CreateRotatedRoi(polyRoi, stroke, $"{preDef.Name} {prefix}P{i + 1}"));
+                            }
+                        }
+                        else
+                        {
+                            var rectRoi = new Roi
+                            {
+                                X = rr.X,
+                                Y = rr.Y,
+                                Width = Math.Max(10, rr.Width),
+                                Height = Math.Max(10, rr.Height),
+                                Angle = rr.Angle
+                            };
+                            dst.Add(CreateRotatedRoi(rectRoi, stroke, $"{preDef.Name} {prefix}{i + 1}"));
+                        }
+                    }
+                }
+                return;
             }
     
             if (string.Equals(node.Type, "Origin", StringComparison.OrdinalIgnoreCase))

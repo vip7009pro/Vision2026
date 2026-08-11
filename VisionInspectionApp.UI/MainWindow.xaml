@@ -25,7 +25,7 @@
         <SolidColorBrush x:Key="ShellSurfaceSoft" Color="#F8FAFD" />
         <SolidColorBrush x:Key="ShellBorder" Color="#D9E2EC" />
         <SolidColorBrush x:Key="ShellAccent" Color="#0F5FA8" />
-        <SolidColorBrush x:Key="ShellAccentDark" Color="#0A3C6D" />
+        <SolidColorBrush x:Key="ShellAccentDark" Color="#32c746" />
         <SolidColorBrush x:Key="ShellAccentTeal" Color="#18A6A3" />
         <SolidColorBrush x:Key="ShellText" Color="#132238" />
         <SolidColorBrush x:Key="ShellTextMuted" Color="#5F6B7A" />
@@ -86,8 +86,8 @@
 
                             <Border Grid.Row="0"
                                     Background="{StaticResource ShellAccentDark}"
-                                    Padding="14,6"
-                                    CornerRadius="0,0,18,18"
+                                    Padding="5"
+                                    CornerRadius="0,0,0,0"
                                     Margin="0,0,0,6">
                                 <Grid>
                                     <Grid.ColumnDefinitions>
@@ -128,9 +128,9 @@
                                     Background="{DynamicResource PanelBackgroundBrush}"
                                     BorderBrush="{DynamicResource BorderBrush}"
                                     BorderThickness="1"
-                                    CornerRadius="18"
-                                    Margin="18,0,18,14"
-                                    Padding="6">
+                                    CornerRadius="5"
+                                    Margin="0,0,0,0"
+                                    Padding="0">
                                 <ContentPresenter ContentSource="SelectedContent" />
                             </Border>
                         </Grid>

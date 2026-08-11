@@ -288,6 +288,13 @@ namespace VisionInspectionApp.UI.ViewModels
             ContourCompare_SetTemplateRoiCommand = new RelayCommand(ContourCompare_SetTemplateRoi);
             Origin_TeachTemplateCommand = new RelayCommand(Origin_TeachTemplate);
             Origin_OpenTrainWindowCommand = new RelayCommand(OpenTrainTemplateWindow);
+            Preprocess_AddRectangleRoiCommand = new RelayCommand(() => Preprocess_AddRoi(PreprocessRoiShape.Rectangle, PreprocessRoiMode.Include));
+            Preprocess_AddCircleRoiCommand = new RelayCommand(() => Preprocess_AddRoi(PreprocessRoiShape.Circle, PreprocessRoiMode.Include));
+            Preprocess_AddPolygonRoiCommand = new RelayCommand(() => Preprocess_AddRoi(PreprocessRoiShape.Polygon, PreprocessRoiMode.Include));
+            Preprocess_RemoveRoiCommand = new RelayCommand<PreprocessRoiDefinition?>(Preprocess_RemoveRoi);
+            Preprocess_ToggleRoiModeCommand = new RelayCommand<PreprocessRoiDefinition?>(Preprocess_ToggleRoiMode);
+            Preprocess_AddPolygonPointCommand = new RelayCommand<PreprocessRoiDefinition?>(Preprocess_AddPolygonPoint);
+            Preprocess_RemovePolygonPointCommand = new RelayCommand<Point2dModel?>(Preprocess_RemovePolygonPoint);
 
             // Line Trigger (Hardware Sensor Signal from Camera)
             _cameraService.FrameCaptured += (s, frameMat) =>
@@ -964,6 +971,8 @@ namespace VisionInspectionApp.UI.ViewModels
         {
             SyncSelectedDbNode(SelectedNode);
             RefreshOriginTemplatePreview();
+            OnPropertyChanged(nameof(IsPreprocessNode));
+            OnPropertyChanged(nameof(PreprocessRois));
             OnPropertyChanged(nameof(IsLineNode));
             OnPropertyChanged(nameof(IsCaliperNode));
             OnPropertyChanged(nameof(IsOriginNode));

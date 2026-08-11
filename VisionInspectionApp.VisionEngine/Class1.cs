@@ -422,7 +422,7 @@ public sealed class ImagePreprocessor
         return k;
     }
 
-    public Mat Run(Mat inputBgrOrGray, PreprocessSettings settings)
+    public Mat Run(Mat inputBgrOrGray, PreprocessSettings settings, List<PreprocessRoiDefinition>? rois = null)
     {
         if (inputBgrOrGray is null)
         {
@@ -630,6 +630,59 @@ public sealed class ImagePreprocessor
                 Cv2.MorphologyEx(current, mor, MorphTypes.Close, MorphKernel3x3);
                 disposeList.Add(mor);
                 current = mor;
+                anyOp = true;
+            }
+
+            if (rois is not null && rois.Count > 0)
+            {
+                using var roiMask = new Mat(inputBgrOrGray.Size(), MatType.CV_8UC1, new Scalar(0));
+                bool hasIncludes = rois.Any(r => r.Mode == PreprocessRoiMode.Include);
+
+                if (!hasIncludes)
+                {
+                    roiMask.SetTo(new Scalar(255));
+                }
+
+                foreach (var roi in rois)
+                {
+                    byte fillColor = roi.Mode == PreprocessRoiMode.Include ? (byte)255 : (byte)0;
+                    if (roi.Shape == PreprocessRoiShape.Circle)
+                    {
+                        var center = new Point(roi.CircleCenterX, roi.CircleCenterY);
+                        int radius = Math.Max(1, roi.CircleRadius);
+                        Cv2.Circle(roiMask, center, radius, new Scalar(fillColor), -1);
+                    }
+                    else if (roi.Shape == PreprocessRoiShape.Polygon)
+                    {
+                        if (roi.PolygonPoints != null && roi.PolygonPoints.Count >= 3)
+                        {
+                            var pts = roi.PolygonPoints.Select(p => new Point((int)p.X, (int)p.Y)).ToArray();
+                            Cv2.FillPoly(roiMask, new[] { pts }, new Scalar(fillColor));
+                        }
+                    }
+                    else
+                    {
+                        // Rectangle (Square)
+                        if (Math.Abs(roi.Angle) > 0.001)
+                        {
+                            var center = new Point2f(roi.X + roi.Width / 2f, roi.Y + roi.Height / 2f);
+                            var size = new Size2f(Math.Max(1, roi.Width), Math.Max(1, roi.Height));
+                            var rotRect = new RotatedRect(center, size, (float)roi.Angle);
+                            var pts = rotRect.Points().Select(p => new Point((int)p.X, (int)p.Y)).ToArray();
+                            Cv2.FillPoly(roiMask, new[] { pts }, new Scalar(fillColor));
+                        }
+                        else
+                        {
+                            var r = new Rect(Math.Max(0, roi.X), Math.Max(0, roi.Y), Math.Max(1, roi.Width), Math.Max(1, roi.Height));
+                            Cv2.Rectangle(roiMask, r, new Scalar(fillColor), -1);
+                        }
+                    }
+                }
+
+                var blended = inputBgrOrGray.Clone();
+                current.CopyTo(blended, roiMask);
+                disposeList.Add(blended);
+                current = blended;
                 anyOp = true;
             }
 

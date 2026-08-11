@@ -394,7 +394,10 @@ namespace VisionInspectionApp.UI.ViewModels
                         return fallback;
                     }
     
-                    var settings = preprocessSettingsByName.TryGetValue(node.RefName, out var s) ? s : new PreprocessSettings();
+                    var preDef = _config.PreprocessNodes?.FirstOrDefault(x => string.Equals(x.Name, node.RefName, StringComparison.OrdinalIgnoreCase));
+                    var settings = preDef?.Settings ?? new PreprocessSettings();
+                    var rois = preDef?.Rois;
+    
                     var inEdge = edges.FirstOrDefault(e => string.Equals(e.ToNodeId, preprocessNodeId, StringComparison.OrdinalIgnoreCase) && (string.Equals(e.ToPort, "In", StringComparison.OrdinalIgnoreCase) || string.Equals(e.ToPort, "Image", StringComparison.OrdinalIgnoreCase)));
                     Mat inputMat;
                     if (inEdge is null)
@@ -438,7 +441,7 @@ namespace VisionInspectionApp.UI.ViewModels
                         inputMat = raw;
                     }
     
-                    var output = _preprocessor.Run(inputMat, settings);
+                    var output = _preprocessor.Run(inputMat, settings, rois);
                     matsToDispose.Add(output);
                     cache[preprocessNodeId] = output;
                     return output;
@@ -1003,6 +1006,72 @@ namespace VisionInspectionApp.UI.ViewModels
                     return;
                 }
             }
+
+            if (kind.StartsWith("PR", StringComparison.OrdinalIgnoreCase))
+            {
+                var preDef = _config.PreprocessNodes.FirstOrDefault(x => string.Equals(x.Name, name, StringComparison.OrdinalIgnoreCase));
+                if (preDef is not null && preDef.Rois is not null)
+                {
+                    var vParts = kind.Split("_V", StringSplitOptions.RemoveEmptyEntries);
+                    var roiKind = vParts[0];
+
+                    var digitsStr = new string(roiKind.Where(char.IsDigit).ToArray());
+                    if (int.TryParse(digitsStr, out var idx) && idx >= 1 && idx <= preDef.Rois.Count)
+                    {
+                        var targetRoi = preDef.Rois[idx - 1];
+
+                        // If dragging an individual vertex handle V1, V2, ... Vn:
+                        if (vParts.Length == 2 && int.TryParse(vParts[1], out var vIdx) && vIdx >= 1 && targetRoi.PolygonPoints != null && vIdx <= targetRoi.PolygonPoints.Count)
+                        {
+                            targetRoi.PolygonPoints[vIdx - 1] = new Point2dModel
+                            {
+                                X = Math.Round(roi.X + roi.Width / 2.0),
+                                Y = Math.Round(roi.Y + roi.Height / 2.0)
+                            };
+                            return;
+                        }
+
+                        if (targetRoi.Shape == PreprocessRoiShape.Circle)
+                        {
+                            targetRoi.CircleRadius = (int)Math.Max(5, Math.Min(roi.Width, roi.Height) / 2.0);
+                            targetRoi.CircleCenterX = (int)(roi.X + roi.Width / 2.0);
+                            targetRoi.CircleCenterY = (int)(roi.Y + roi.Height / 2.0);
+                        }
+                        else if (targetRoi.Shape == PreprocessRoiShape.Polygon)
+                        {
+                            if (targetRoi.PolygonPoints != null && targetRoi.PolygonPoints.Count >= 3)
+                            {
+                                double oldMinX = targetRoi.PolygonPoints.Min(p => p.X);
+                                double oldMinY = targetRoi.PolygonPoints.Min(p => p.Y);
+                                double oldW = Math.Max(1.0, targetRoi.PolygonPoints.Max(p => p.X) - oldMinX);
+                                double oldH = Math.Max(1.0, targetRoi.PolygonPoints.Max(p => p.Y) - oldMinY);
+
+                                double scaleX = roi.Width / oldW;
+                                double scaleY = roi.Height / oldH;
+
+                                for (int pIdx = 0; pIdx < targetRoi.PolygonPoints.Count; pIdx++)
+                                {
+                                    var p = targetRoi.PolygonPoints[pIdx];
+                                    targetRoi.PolygonPoints[pIdx] = new Point2dModel
+                                    {
+                                        X = Math.Round(roi.X + (p.X - oldMinX) * scaleX),
+                                        Y = Math.Round(roi.Y + (p.Y - oldMinY) * scaleY)
+                                    };
+                                }
+                            }
+                        }
+                        else
+                        {
+                            targetRoi.X = (int)roi.X;
+                            targetRoi.Y = (int)roi.Y;
+                            targetRoi.Width = (int)roi.Width;
+                            targetRoi.Height = (int)roi.Height;
+                            targetRoi.Angle = roi.Angle;
+                        }
+                    }
+                }
+                return;
+            }
         }
     
         private static Roi ComputeBlobInspectRoi(BlobDetectionDefinition b)
@@ -1163,7 +1232,43 @@ namespace VisionInspectionApp.UI.ViewModels
             if (string.Equals(kind, "SCT", StringComparison.OrdinalIgnoreCase)) return _config.SurfaceCompares.FirstOrDefault(x => string.Equals(x.Name, name, StringComparison.OrdinalIgnoreCase))?.TemplateRoi;
             if (kind.StartsWith("SC", StringComparison.OrdinalIgnoreCase)) return _config.SurfaceCompares.FirstOrDefault(x => string.Equals(x.Name, name, StringComparison.OrdinalIgnoreCase))?.InspectRoi;
             if (string.Equals(kind, "CCT", StringComparison.OrdinalIgnoreCase)) return _config.ContourCompares.FirstOrDefault(x => string.Equals(x.Name, name, StringComparison.OrdinalIgnoreCase))?.TemplateRoi;
-            if (kind.StartsWith("CC", StringComparison.OrdinalIgnoreCase)) return _config.ContourCompares.FirstOrDefault(x => string.Equals(x.Name, name, StringComparison.OrdinalIgnoreCase))?.InspectRoi;
+            if (kind.StartsWith("PR", StringComparison.OrdinalIgnoreCase))
+            {
+                var preDef = _config.PreprocessNodes.FirstOrDefault(x => string.Equals(x.Name, name, StringComparison.OrdinalIgnoreCase));
+                if (preDef is not null && preDef.Rois is not null)
+                {
+                    var vParts = kind.Split("_V", StringSplitOptions.RemoveEmptyEntries);
+                    var roiKind = vParts[0];
+
+                    var digitsStr = new string(roiKind.Where(char.IsDigit).ToArray());
+                    if (int.TryParse(digitsStr, out var idx) && idx >= 1 && idx <= preDef.Rois.Count)
+                    {
+                        var r = preDef.Rois[idx - 1];
+                        if (vParts.Length == 2 && int.TryParse(vParts[1], out var vIdx) && vIdx >= 1 && r.PolygonPoints != null && vIdx <= r.PolygonPoints.Count)
+                        {
+                            var pt = r.PolygonPoints[vIdx - 1];
+                            int handleSize = 14;
+                            return new Roi { X = (int)(pt.X - handleSize / 2.0), Y = (int)(pt.Y - handleSize / 2.0), Width = handleSize, Height = handleSize };
+                        }
+
+                        if (r.Shape == PreprocessRoiShape.Circle)
+                        {
+                            int rad = Math.Max(5, r.CircleRadius);
+                            return new Roi { X = r.CircleCenterX - rad, Y = r.CircleCenterY - rad, Width = rad * 2, Height = rad * 2 };
+                        }
+                        if (r.Shape == PreprocessRoiShape.Polygon && r.PolygonPoints != null && r.PolygonPoints.Count >= 3)
+                        {
+                            double minX = r.PolygonPoints.Min(p => p.X);
+                            double minY = r.PolygonPoints.Min(p => p.Y);
+                            double maxX = r.PolygonPoints.Max(p => p.X);
+                            double maxY = r.PolygonPoints.Max(p => p.Y);
+                            return new Roi { X = (int)minX, Y = (int)minY, Width = Math.Max(10, (int)(maxX - minX)), Height = Math.Max(10, (int)(maxY - minY)) };
+                        }
+                        return new Roi { X = r.X, Y = r.Y, Width = r.Width, Height = r.Height, Angle = r.Angle };
+                    }
+                }
+                return null;
+            }
             return null;
         }
 
@@ -1369,6 +1474,15 @@ namespace VisionInspectionApp.UI.ViewModels
                     {
                         TrySaveContourCompareTemplateImage(name, roi, sel.Roi);
                     }
+                    RefreshPreviews();
+                    RequestAutoSave();
+                    return;
+                }
+
+                if (kind.StartsWith("PR", StringComparison.OrdinalIgnoreCase))
+                {
+                    ApplyRoiForLabel(label, roi);
+                    OnPropertyChanged(nameof(PreprocessRois));
                     RefreshPreviews();
                     RequestAutoSave();
                     return;
