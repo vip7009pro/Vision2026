@@ -8,42 +8,41 @@ using CommunityToolkit.Mvvm.Input;
 using OpenCvSharp;
 using OpenCvSharp.WpfExtensions;
 using VisionInspectionApp.UI.Services;
+using VisionInspectionApp.UI.Services.Camera;
 
 namespace VisionInspectionApp.UI.ViewModels;
-
-public sealed class CameraInfo
-{
-    public int Index { get; set; }
-    public string Name { get; set; } = string.Empty;
-    public bool IsRtsp { get; set; }
-
-    public override string ToString() => IsRtsp ? Name : $"Camera {Index}: {Name}";
-}
 
 public sealed class CameraSettingsViewModel : ObservableObject, IDisposable
 {
     private readonly CameraService _cameraService;
     private ImageSource? _liveImage;
-    private string _statusMessage = "Chọn camera và điều chỉnh thông số hình ảnh.";
+    private string _statusMessage = "Chọn camera công nghiệp (Hikrobot, Basler, Cognex...) hoặc USB Webcam để bắt đầu.";
     private int _fps;
     private int _frameCount;
     private DateTime _lastFrameTime = DateTime.Now;
 
-    private CameraInfo? _selectedCamera;
+    private CameraDeviceInfo? _selectedDevice;
     private string _rtspUrl = "rtsp://192.168.1.100:554/stream1";
     private bool _isRtspSelected;
     private bool _isCameraRunning;
 
-    public ObservableCollection<CameraInfo> AvailableCameras { get; } = new();
+    // Parameter properties
+    private CameraParameters _cameraParams = new();
 
-    public CameraInfo? SelectedCamera
+    public ObservableCollection<CameraDeviceInfo> AvailableDevices { get; } = new();
+
+    public CameraDeviceInfo? SelectedDevice
     {
-        get => _selectedCamera;
+        get => _selectedDevice;
         set
         {
-            if (SetProperty(ref _selectedCamera, value))
+            if (SetProperty(ref _selectedDevice, value))
             {
-                IsRtspSelected = value?.IsRtsp ?? false;
+                IsRtspSelected = value?.InterfaceType == CameraInterfaceType.RTSP;
+                if (value != null && value.InterfaceType == CameraInterfaceType.RTSP && !string.IsNullOrEmpty(value.RtspUrl))
+                {
+                    RtspUrl = value.RtspUrl;
+                }
             }
         }
     }
@@ -111,29 +110,190 @@ public sealed class CameraSettingsViewModel : ObservableObject, IDisposable
     {
         get
         {
-            int w = _cameraService.DesiredWidth;
-            int h = _cameraService.DesiredHeight;
+            int w = _cameraParams.Width;
+            int h = _cameraParams.Height;
             return ResolutionOptions.FirstOrDefault(r => r.StartsWith($"{w} x {h}")) ?? ResolutionOptions[0];
         }
         set
         {
             if (string.IsNullOrWhiteSpace(value)) return;
-            if (value.StartsWith("1920")) { _cameraService.DesiredWidth = 1920; _cameraService.DesiredHeight = 1080; }
-            else if (value.StartsWith("1280")) { _cameraService.DesiredWidth = 1280; _cameraService.DesiredHeight = 720; }
-            else if (value.StartsWith("2560")) { _cameraService.DesiredWidth = 2560; _cameraService.DesiredHeight = 1440; }
-            else if (value.StartsWith("3840")) { _cameraService.DesiredWidth = 3840; _cameraService.DesiredHeight = 2160; }
-            else if (value.StartsWith("640")) { _cameraService.DesiredWidth = 640; _cameraService.DesiredHeight = 480; }
+            if (value.StartsWith("1920")) { _cameraParams.Width = 1920; _cameraParams.Height = 1080; }
+            else if (value.StartsWith("1280")) { _cameraParams.Width = 1280; _cameraParams.Height = 720; }
+            else if (value.StartsWith("2560")) { _cameraParams.Width = 2560; _cameraParams.Height = 1440; }
+            else if (value.StartsWith("3840")) { _cameraParams.Width = 3840; _cameraParams.Height = 2160; }
+            else if (value.StartsWith("640")) { _cameraParams.Width = 640; _cameraParams.Height = 480; }
+            _cameraService.DesiredWidth = _cameraParams.Width;
+            _cameraService.DesiredHeight = _cameraParams.Height;
             OnPropertyChanged();
+            _ = ApplyCameraParametersAsync();
         }
     }
 
     public int SelectedFps
     {
-        get => _cameraService.DesiredFps;
+        get => _cameraParams.TargetFps;
         set
         {
+            _cameraParams.TargetFps = value;
             _cameraService.DesiredFps = value;
             OnPropertyChanged();
+            _ = ApplyCameraParametersAsync();
+        }
+    }
+
+    // Industrial Camera Parameters Binding
+    public float ExposureTimeUs
+    {
+        get => _cameraParams.ExposureTimeUs;
+        set
+        {
+            if (Math.Abs(_cameraParams.ExposureTimeUs - value) > 1.0f)
+            {
+                _cameraParams.ExposureTimeUs = value;
+                OnPropertyChanged();
+                _ = ApplyCameraParametersAsync();
+            }
+        }
+    }
+
+    public bool AutoExposure
+    {
+        get => _cameraParams.AutoExposure;
+        set
+        {
+            if (_cameraParams.AutoExposure != value)
+            {
+                _cameraParams.AutoExposure = value;
+                OnPropertyChanged();
+                _ = ApplyCameraParametersAsync();
+            }
+        }
+    }
+
+    public float GainDb
+    {
+        get => _cameraParams.GainDb;
+        set
+        {
+            if (Math.Abs(_cameraParams.GainDb - value) > 0.1f)
+            {
+                _cameraParams.GainDb = value;
+                OnPropertyChanged();
+                _ = ApplyCameraParametersAsync();
+            }
+        }
+    }
+
+    public bool AutoGain
+    {
+        get => _cameraParams.AutoGain;
+        set
+        {
+            if (_cameraParams.AutoGain != value)
+            {
+                _cameraParams.AutoGain = value;
+                OnPropertyChanged();
+                _ = ApplyCameraParametersAsync();
+            }
+        }
+    }
+
+    public float Gamma
+    {
+        get => _cameraParams.Gamma;
+        set
+        {
+            if (Math.Abs(_cameraParams.Gamma - value) > 0.05f)
+            {
+                _cameraParams.Gamma = value;
+                OnPropertyChanged();
+                _ = ApplyCameraParametersAsync();
+            }
+        }
+    }
+
+    public bool TriggerModeOn
+    {
+        get => _cameraParams.TriggerMode == CameraTriggerMode.On;
+        set
+        {
+            _cameraParams.TriggerMode = value ? CameraTriggerMode.On : CameraTriggerMode.Off;
+            OnPropertyChanged();
+            _ = ApplyCameraParametersAsync();
+        }
+    }
+
+    public ObservableCollection<CameraTriggerSource> TriggerSources { get; } = new()
+    {
+        CameraTriggerSource.Software,
+        CameraTriggerSource.Line0,
+        CameraTriggerSource.Line1,
+        CameraTriggerSource.Line2
+    };
+
+    public CameraTriggerSource SelectedTriggerSource
+    {
+        get => _cameraParams.TriggerSource;
+        set
+        {
+            _cameraParams.TriggerSource = value;
+            OnPropertyChanged();
+            _ = ApplyCameraParametersAsync();
+        }
+    }
+
+    public float TriggerDelayUs
+    {
+        get => _cameraParams.TriggerDelayUs;
+        set
+        {
+            _cameraParams.TriggerDelayUs = value;
+            OnPropertyChanged();
+            _ = ApplyCameraParametersAsync();
+        }
+    }
+
+    public bool ReverseX
+    {
+        get => _cameraParams.ReverseX;
+        set
+        {
+            _cameraParams.ReverseX = value;
+            OnPropertyChanged();
+            _ = ApplyCameraParametersAsync();
+        }
+    }
+
+    public bool ReverseY
+    {
+        get => _cameraParams.ReverseY;
+        set
+        {
+            _cameraParams.ReverseY = value;
+            OnPropertyChanged();
+            _ = ApplyCameraParametersAsync();
+        }
+    }
+
+    public int PacketSize
+    {
+        get => _cameraParams.PacketSize;
+        set
+        {
+            _cameraParams.PacketSize = value;
+            OnPropertyChanged();
+            _ = ApplyCameraParametersAsync();
+        }
+    }
+
+    public int PacketDelay
+    {
+        get => _cameraParams.PacketDelay;
+        set
+        {
+            _cameraParams.PacketDelay = value;
+            OnPropertyChanged();
+            _ = ApplyCameraParametersAsync();
         }
     }
 
@@ -145,6 +305,7 @@ public sealed class CameraSettingsViewModel : ObservableObject, IDisposable
             if (Math.Abs(_cameraService.Brightness - value) > 0.01)
             {
                 _cameraService.Brightness = value;
+                _cameraParams.Brightness = value;
                 OnPropertyChanged();
             }
         }
@@ -158,6 +319,7 @@ public sealed class CameraSettingsViewModel : ObservableObject, IDisposable
             if (Math.Abs(_cameraService.Contrast - value) > 0.01)
             {
                 _cameraService.Contrast = value;
+                _cameraParams.Contrast = value;
                 OnPropertyChanged();
             }
         }
@@ -171,6 +333,7 @@ public sealed class CameraSettingsViewModel : ObservableObject, IDisposable
             if (_cameraService.IsGrayscale != value)
             {
                 _cameraService.IsGrayscale = value;
+                _cameraParams.IsGrayscale = value;
                 OnPropertyChanged();
             }
         }
@@ -179,6 +342,7 @@ public sealed class CameraSettingsViewModel : ObservableObject, IDisposable
     public IAsyncRelayCommand StartCameraCommand { get; }
     public IAsyncRelayCommand StopCameraCommand { get; }
     public IRelayCommand RefreshAvailableCamerasCommand { get; }
+    public IAsyncRelayCommand ExecuteSoftwareTriggerCommand { get; }
     public IRelayCommand ResetSettingsCommand { get; }
 
     public CameraSettingsViewModel(CameraService cameraService)
@@ -190,6 +354,7 @@ public sealed class CameraSettingsViewModel : ObservableObject, IDisposable
         StartCameraCommand = new AsyncRelayCommand(StartCameraAsync);
         StopCameraCommand = new AsyncRelayCommand(StopCameraAsync);
         RefreshAvailableCamerasCommand = new RelayCommand(RefreshAvailableCameras);
+        ExecuteSoftwareTriggerCommand = new AsyncRelayCommand(ExecuteSoftwareTriggerAsync);
         ResetSettingsCommand = new RelayCommand(ResetSettings);
 
         RefreshAvailableCameras();
@@ -198,113 +363,66 @@ public sealed class CameraSettingsViewModel : ObservableObject, IDisposable
 
     public void RefreshAvailableCameras()
     {
-        AvailableCameras.Clear();
+        AvailableDevices.Clear();
 
-        // Simulator Camera
-        AvailableCameras.Add(new CameraInfo
+        var scanned = CameraDriverFactory.ScanAllDevices();
+        foreach (var dev in scanned)
         {
-            Index = CameraService.SimulatorCameraIndex,
-            Name = "📷 Camera Giả Lập (Simulator)",
-            IsRtsp = false
-        });
-
-        try
-        {
-            var dsCameras = DirectShowDeviceEnumerator.GetDevices();
-            for (int i = 0; i < dsCameras.Count; i++)
-            {
-                AvailableCameras.Add(new CameraInfo
-                {
-                    Index = i,
-                    Name = dsCameras[i],
-                    IsRtsp = false
-                });
-            }
-        }
-        catch
-        {
-            // Ignore DirectShow COM errors
+            AvailableDevices.Add(dev);
         }
 
-        // Fallback ports 0-4
-        for (int i = 0; i < 5; i++)
-        {
-            if (!AvailableCameras.Any(c => c.Index == i && !c.IsRtsp))
-            {
-                AvailableCameras.Add(new CameraInfo
-                {
-                    Index = i,
-                    Name = $"Camera Port {i} (Fallback)",
-                    IsRtsp = false
-                });
-            }
-        }
-
-        // RTSP / IP Camera
-        AvailableCameras.Add(new CameraInfo
-        {
-            Index = -1,
-            Name = "Custom RTSP / IP Camera",
-            IsRtsp = true
-        });
-
-        // Restore saved selection
-        if (AvailableCameras.Count > 0)
+        if (AvailableDevices.Count > 0)
         {
             if (_cameraService.SavedIsRtsp)
             {
-                SelectedCamera = AvailableCameras.FirstOrDefault(c => c.IsRtsp);
-                RtspUrl = _cameraService.SavedRtspUrl;
+                SelectedDevice = AvailableDevices.FirstOrDefault(c => c.InterfaceType == CameraInterfaceType.RTSP) ?? AvailableDevices[0];
             }
             else
             {
-                SelectedCamera = AvailableCameras.FirstOrDefault(c => !c.IsRtsp && c.Index == _cameraService.SavedCameraIndex) ?? AvailableCameras[0];
+                SelectedDevice = AvailableDevices.FirstOrDefault(c => c.Index == _cameraService.SavedCameraIndex) ?? AvailableDevices[0];
             }
         }
     }
 
     private async Task StartCameraAsync()
     {
-        if (SelectedCamera == null)
+        if (SelectedDevice == null)
         {
-            StatusMessage = "Vui lòng chọn camera";
+            StatusMessage = "Vui lòng chọn camera từ danh sách";
             return;
         }
 
         try
         {
-            StatusMessage = "Đang khởi động camera...";
-            if (SelectedCamera.IsRtsp)
+            StatusMessage = $"Đang kết nối [{SelectedDevice.Vendor}] {SelectedDevice.ModelName}...";
+
+            if (SelectedDevice.InterfaceType == CameraInterfaceType.RTSP)
             {
                 if (string.IsNullOrWhiteSpace(RtspUrl))
                 {
                     StatusMessage = "Vui lòng nhập địa chỉ RTSP URL";
                     return;
                 }
-                await _cameraService.StartCameraCaptureAsync(fps: 30, rtspUrl: RtspUrl);
-            }
-            else
-            {
-                await _cameraService.StartCameraCaptureAsync(cameraIndex: SelectedCamera.Index);
+                SelectedDevice.RtspUrl = RtspUrl;
             }
 
-            if (_cameraService.IsRunning)
+            bool success = await _cameraService.StartDriverCameraAsync(SelectedDevice, _cameraParams);
+
+            if (success)
             {
                 IsCameraRunning = true;
-                StatusMessage = SelectedCamera.Index == CameraService.SimulatorCameraIndex
-                    ? "Camera Giả Lập đang hoạt động (30 FPS)"
-                    : "Camera đang hoạt động";
+                StatusMessage = $"Đã kết nối thành công [{SelectedDevice.Vendor}] {SelectedDevice.ModelName}";
             }
             else
             {
                 IsCameraRunning = false;
-                StatusMessage = "Không thể khởi động camera đã chọn. Vui lòng kiểm tra kết nối.";
+                StatusMessage = $"Không thể kết nối camera {SelectedDevice.ModelName}. Kiểm tra lại SDK/dây cáp.";
             }
         }
         catch (Exception ex)
         {
             IsCameraRunning = false;
-            StatusMessage = $"Lỗi: {ex.Message}";
+            StatusMessage = $"Lỗi kết nối camera: {ex.Message}";
         }
     }
 
@@ -323,6 +441,24 @@ public sealed class CameraSettingsViewModel : ObservableObject, IDisposable
         }
     }
 
+    private async Task ExecuteSoftwareTriggerAsync()
+    {
+        if (_cameraService.IsRunning)
+        {
+            bool ok = await _cameraService.ExecuteSoftwareTriggerAsync();
+            StatusMessage = ok ? "⚡ Software Trigger thành công!" : "Lỗi thực thi Software Trigger.";
+        }
+    }
+
+    private async Task ApplyCameraParametersAsync()
+    {
+        try
+        {
+            await _cameraService.ApplyParametersAsync(_cameraParams);
+        }
+        catch { }
+    }
+
     private bool _isRenderingFrame;
 
     private void OnFrameCaptured(object? sender, Mat frame)
@@ -331,7 +467,6 @@ public sealed class CameraSettingsViewModel : ObservableObject, IDisposable
         {
             if (frame == null || frame.IsDisposed || frame.Empty()) return;
 
-            // Compute FPS
             _frameCount++;
             var now = DateTime.Now;
             var elapsed = (now - _lastFrameTime).TotalSeconds;
@@ -367,7 +502,6 @@ public sealed class CameraSettingsViewModel : ObservableObject, IDisposable
                     if (_cameraService.IsRunning)
                     {
                         IsCameraRunning = true;
-                        StatusMessage = "Camera đang chạy - Stream mượt mà";
                     }
                 }
                 finally
@@ -401,7 +535,13 @@ public sealed class CameraSettingsViewModel : ObservableObject, IDisposable
         Brightness = 0.0;
         Contrast = 1.0;
         IsGrayscale = false;
-        StatusMessage = "Đã khôi phục cài đặt hình ảnh mặc định.";
+        ExposureTimeUs = 10000.0f;
+        GainDb = 0.0f;
+        Gamma = 1.0f;
+        ReverseX = false;
+        ReverseY = false;
+        TriggerModeOn = false;
+        StatusMessage = "Đã khôi phục cài đặt mặc định.";
     }
 
     public void Dispose()

@@ -5,45 +5,22 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:converters="clr-namespace:VisionInspectionApp.UI.Converters"
              mc:Ignorable="d"
-             d:DesignHeight="700" d:DesignWidth="1100">
+             d:DesignHeight="750" d:DesignWidth="1280">
     <UserControl.Resources>
         <converters:NullToVisibilityConverter x:Key="NullToVisibilityConverter" />
         <converters:InverseBoolConverter x:Key="InverseBoolConverter" />
         <BooleanToVisibilityConverter x:Key="BoolToVis" />
     </UserControl.Resources>
+    
     <Grid Background="{DynamicResource PanelAltBackgroundBrush}">
         <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="320" />
             <ColumnDefinition Width="*" />
-            <ColumnDefinition Width="360" />
+            <ColumnDefinition Width="380" />
         </Grid.ColumnDefinitions>
 
-        <!-- Left Panel: Live Stream View -->
-        <Border Grid.Column="0" Background="#1E1E1E" Margin="10" CornerRadius="8" BorderThickness="1" BorderBrush="{DynamicResource BorderBrush}" ClipToBounds="True">
-            <Grid>
-                <!-- Live Image Display -->
-                <Image Source="{Binding LiveImage}" Stretch="Uniform" />
-
-                <!-- HUD Info Overlay -->
-                <Border VerticalAlignment="Top" HorizontalAlignment="Left" Margin="15" Background="#B0000000" Padding="10,6" CornerRadius="4">
-                    <StackPanel Orientation="Horizontal">
-                        <TextBlock Text="{Binding Fps, StringFormat='FPS: {0}'}" Foreground="#4CAF50" FontWeight="Bold" FontSize="14" Margin="0,0,12,0" />
-                        <TextBlock Text="{Binding ResolutionText, StringFormat='Res: {0}'}" Foreground="#00BCD4" FontWeight="Bold" FontSize="14" />
-                    </StackPanel>
-                </Border>
-
-                <!-- Offline Placeholder -->
-                <Grid Visibility="{Binding LiveImage, Converter={StaticResource NullToVisibilityConverter}}">
-                    <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
-                        <TextBlock Text="📷" FontSize="48" Foreground="#666" HorizontalAlignment="Center" Margin="0,0,0,10" />
-                        <TextBlock Text="Camera chưa khởi chạy" FontSize="16" Foreground="#888" HorizontalAlignment="Center" />
-                        <TextBlock Text="Vui lòng chọn camera và bấm ▶ Start Camera để bắt đầu xem trực tiếp &amp; căn chỉnh" FontSize="12" Foreground="#666" HorizontalAlignment="Center" Margin="0,5,0,0" />
-                    </StackPanel>
-                </Grid>
-            </Grid>
-        </Border>
-
-        <!-- Right Panel: Adjustment Settings & Camera Device Selection -->
-        <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}" Margin="0,10,10,10" CornerRadius="8" BorderThickness="1" BorderBrush="{DynamicResource BorderBrush}" Padding="15">
+        <!-- Left Panel: Device Selection & Scanner -->
+        <Border Grid.Column="0" Background="{DynamicResource PanelBackgroundBrush}" Margin="10" CornerRadius="8" BorderThickness="1" BorderBrush="{DynamicResource BorderBrush}" Padding="12">
             <Grid>
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto" />
@@ -51,129 +28,248 @@
                     <RowDefinition Height="Auto" />
                 </Grid.RowDefinitions>
 
-                <!-- Header Title -->
-                <StackPanel Grid.Row="0" Margin="0,0,0,15">
-                    <TextBlock Text="Camera Settings" FontSize="18" FontWeight="Bold" Foreground="{DynamicResource TextBrush}" />
-                    <TextBlock Text="Chọn camera &amp; căn chỉnh các bộ lọc hình ảnh đầu vào" FontSize="12" Foreground="#888" Margin="0,2,0,0" />
-                    <Separator Margin="0,10,0,0" />
+                <StackPanel Grid.Row="0" Margin="0,0,0,10">
+                    <DockPanel>
+                        <TextBlock Text="📷 Camera Devices" FontSize="16" FontWeight="Bold" Foreground="{DynamicResource TextBrush}" VerticalAlignment="Center" />
+                        <Button DockPanel.Dock="Right" Command="{Binding RefreshAvailableCamerasCommand}" 
+                                IsEnabled="{Binding IsCameraRunning, Converter={StaticResource InverseBoolConverter}}"
+                                Content="🔄 Quét Đa Hãng" ToolTip="Quét lại camera Hikrobot, Basler, Cognex, USB..." 
+                                Padding="8,4" Background="{DynamicResource PrimaryBrush}" Foreground="White" BorderThickness="0" />
+                    </DockPanel>
+                    <TextBlock Text="Hỗ trợ SDK Hikrobot MVS, Basler, Cognex, USB &amp; RTSP" FontSize="11" Foreground="#888" Margin="0,4,0,0" />
+                    <Separator Margin="0,8,0,0" />
                 </StackPanel>
 
-                <!-- Adjusters Controls -->
-                <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" Margin="0,0,0,10">
+                <!-- Available Devices List -->
+                <ListBox Grid.Row="1" ItemsSource="{Binding AvailableDevices}" SelectedItem="{Binding SelectedDevice}"
+                         IsEnabled="{Binding IsCameraRunning, Converter={StaticResource InverseBoolConverter}}"
+                         Background="#121212" BorderBrush="{DynamicResource BorderBrush}" Margin="0,0,0,10">
+                    <ListBox.ItemTemplate>
+                        <DataTemplate>
+                            <Border Padding="6,4" Margin="2" CornerRadius="4" Background="#1E1E1E">
+                                <StackPanel>
+                                    <TextBlock Text="{Binding DisplayName}" FontWeight="SemiBold" Foreground="#FFF" FontSize="12" TextWrapping="Wrap" />
+                                    <StackPanel Orientation="Horizontal" Margin="0,2,0,0">
+                                        <Border Background="#333" Padding="4,1" CornerRadius="2" Margin="0,0,4,0">
+                                            <TextBlock Text="{Binding Vendor}" FontSize="10" Foreground="#00BCD4" />
+                                        </Border>
+                                        <Border Background="#333" Padding="4,1" CornerRadius="2">
+                                            <TextBlock Text="{Binding InterfaceType}" FontSize="10" Foreground="#4CAF50" />
+                                        </Border>
+                                    </StackPanel>
+                                </StackPanel>
+                            </Border>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+
+                <!-- Control Buttons -->
+                <StackPanel Grid.Row="2">
+                    <!-- RTSP URL Input -->
+                    <StackPanel Orientation="Vertical" Margin="0,0,0,8" Visibility="{Binding IsRtspSelected, Converter={StaticResource BoolToVis}}">
+                        <TextBlock Text="RTSP URL:" FontSize="11" Foreground="#888" Margin="0,0,0,4" />
+                        <TextBox Text="{Binding RtspUrl, UpdateSourceTrigger=PropertyChanged}" Padding="6,4" 
+                                 IsEnabled="{Binding IsCameraRunning, Converter={StaticResource InverseBoolConverter}}" />
+                    </StackPanel>
+
+                    <Grid Margin="0,4,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <Button Grid.Column="0" Command="{Binding StartCameraCommand}" 
+                                IsEnabled="{Binding IsCameraRunning, Converter={StaticResource InverseBoolConverter}}"
+                                Background="#2E7D32" Foreground="White" BorderThickness="0" Padding="8,8" Margin="0,0,4,0" FontWeight="Bold">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="▶ " />
+                                <TextBlock Text="Start Camera" />
+                            </StackPanel>
+                        </Button>
+
+                        <Button Grid.Column="1" Command="{Binding StopCameraCommand}" 
+                                IsEnabled="{Binding IsCameraRunning}"
+                                Background="#C62828" Foreground="White" BorderThickness="0" Padding="8,8" Margin="4,0,0,0" FontWeight="Bold">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="⏹ " />
+                                <TextBlock Text="Stop Camera" />
+                            </StackPanel>
+                        </Button>
+                    </Grid>
+
+                    <Button Command="{Binding ExecuteSoftwareTriggerCommand}" IsEnabled="{Binding IsCameraRunning}"
+                            Margin="0,8,0,0" Padding="8,6" Background="#1565C0" Foreground="White" BorderThickness="0" FontWeight="Bold">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="⚡ " />
+                            <TextBlock Text="Software Trigger Once" />
+                        </StackPanel>
+                    </Button>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- Center Panel: Live Preview Display -->
+        <Border Grid.Column="1" Background="#1E1E1E" Margin="0,10,0,10" CornerRadius="8" BorderThickness="1" BorderBrush="{DynamicResource BorderBrush}" ClipToBounds="True">
+            <Grid>
+                <!-- Live Image Display -->
+                <Image Source="{Binding LiveImage}" Stretch="Uniform" />
+
+                <!-- HUD Info Overlay -->
+                <Border VerticalAlignment="Top" HorizontalAlignment="Left" Margin="15" Background="#B0000000" Padding="12,8" CornerRadius="6">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="{Binding Fps, StringFormat='FPS: {0}'}" Foreground="#4CAF50" FontWeight="Bold" FontSize="14" Margin="0,0,16,0" />
+                        <TextBlock Text="{Binding ResolutionText, StringFormat='Res: {0}'}" Foreground="#00BCD4" FontWeight="Bold" FontSize="14" Margin="0,0,16,0" />
+                        <TextBlock Text="{Binding SelectedDevice.Vendor, StringFormat='Vendor: {0}'}" Foreground="#FFC107" FontWeight="Bold" FontSize="14" />
+                    </StackPanel>
+                </Border>
+
+                <!-- Offline Placeholder -->
+                <Grid Visibility="{Binding LiveImage, Converter={StaticResource NullToVisibilityConverter}}">
+                    <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                        <TextBlock Text="📷" FontSize="56" Foreground="#555" HorizontalAlignment="Center" Margin="0,0,0,10" />
+                        <TextBlock Text="Camera chưa khởi chạy" FontSize="18" FontWeight="Bold" Foreground="#AAA" HorizontalAlignment="Center" />
+                        <TextBlock Text="Chọn thiết bị camera (Hikrobot, Basler, Cognex, USB) và bấm ▶ Start Camera" FontSize="13" Foreground="#777" HorizontalAlignment="Center" Margin="0,6,0,0" />
+                    </StackPanel>
+                </Grid>
+            </Grid>
+        </Border>
+
+        <!-- Right Panel: Industrial Camera Parameters Control -->
+        <Border Grid.Column="2" Background="{DynamicResource PanelBackgroundBrush}" Margin="10" CornerRadius="8" BorderThickness="1" BorderBrush="{DynamicResource BorderBrush}" Padding="12">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+
+                <StackPanel Grid.Row="0" Margin="0,0,0,10">
+                    <TextBlock Text="⚙️ Thông Số Camera Công Nghiệp" FontSize="16" FontWeight="Bold" Foreground="{DynamicResource TextBrush}" />
+                    <TextBlock Text="Cấu hình Exposure, Gain, Trigger Mode &amp; GigE Params" FontSize="11" Foreground="#888" Margin="0,2,0,0" />
+                    <Separator Margin="0,8,0,0" />
+                </StackPanel>
+
+                <!-- Parameter Adjusters Scrollable -->
+                <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
                     <StackPanel Orientation="Vertical">
 
-                        <!-- Device Selection & Control -->
-                        <GroupBox Header="Thiết Bị Camera (Device &amp; Source)" Margin="0,0,0,15" Padding="8" FontWeight="SemiBold" BorderBrush="#EEE">
-                            <StackPanel Margin="0">
-                                <TextBlock Text="Chọn nguồn Camera:" FontSize="11" Foreground="#888" Margin="0,0,0,4" />
+                        <!-- Group 1: Phơi sáng & Gain (Exposure & Gain) -->
+                        <GroupBox Header="💡 Phơi Sáng &amp; Độ Khuếch Đại (Exposure &amp; Gain)" Margin="0,0,0,10" Padding="8" FontWeight="SemiBold">
+                            <StackPanel>
+                                <!-- Auto Exposure & Exposure Time -->
+                                <DockPanel Margin="0,0,0,4">
+                                    <TextBlock Text="Phơi sáng (Exposure Time us):" FontSize="11" Foreground="{DynamicResource TextBrush}" VerticalAlignment="Center" />
+                                    <CheckBox Content="Auto" IsChecked="{Binding AutoExposure}" DockPanel.Dock="Right" VerticalAlignment="Center" Margin="8,0,0,0" />
+                                </DockPanel>
                                 <Grid Margin="0,0,0,8">
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="*" />
-                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="70" />
                                     </Grid.ColumnDefinitions>
-                                    <ComboBox Grid.Column="0" ItemsSource="{Binding AvailableCameras}" SelectedItem="{Binding SelectedCamera}" 
-                                              IsEnabled="{Binding IsCameraRunning, Converter={StaticResource InverseBoolConverter}}" Padding="6,4" />
-                                    <Button Grid.Column="1" Command="{Binding RefreshAvailableCamerasCommand}" 
-                                            IsEnabled="{Binding IsCameraRunning, Converter={StaticResource InverseBoolConverter}}"
-                                            Content="🔄" ToolTip="Làm mới danh sách Camera" Margin="6,0,0,0" Padding="8,4" />
+                                    <Slider Grid.Column="0" Minimum="100" Maximum="100000" Value="{Binding ExposureTimeUs}" IsEnabled="{Binding AutoExposure, Converter={StaticResource InverseBoolConverter}}" VerticalAlignment="Center" />
+                                    <TextBox Grid.Column="1" Text="{Binding ExposureTimeUs, StringFormat='{}{0:F0}'}" IsEnabled="{Binding AutoExposure, Converter={StaticResource InverseBoolConverter}}" Margin="6,0,0,0" Padding="4,2" TextAlignment="Right" />
                                 </Grid>
 
-                                <!-- RTSP URL Input -->
-                                <StackPanel Orientation="Vertical" Margin="0,0,0,8" Visibility="{Binding IsRtspSelected, Converter={StaticResource BoolToVis}}">
-                                    <TextBlock Text="RTSP URL:" FontSize="11" Foreground="#888" Margin="0,0,0,4" />
-                                    <TextBox Text="{Binding RtspUrl, UpdateSourceTrigger=PropertyChanged}" Padding="6,4" 
-                                             IsEnabled="{Binding IsCameraRunning, Converter={StaticResource InverseBoolConverter}}" />
-                                </StackPanel>
-
-                                <!-- Start / Stop Buttons -->
-                                <Grid Margin="0,4,0,0">
+                                <!-- Auto Gain & Gain dB -->
+                                <DockPanel Margin="0,0,0,4">
+                                    <TextBlock Text="Độ khuếch đại (Gain dB):" FontSize="11" Foreground="{DynamicResource TextBrush}" VerticalAlignment="Center" />
+                                    <CheckBox Content="Auto" IsChecked="{Binding AutoGain}" DockPanel.Dock="Right" VerticalAlignment="Center" Margin="8,0,0,0" />
+                                </DockPanel>
+                                <Grid Margin="0,0,0,8">
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="*" />
-                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="70" />
                                     </Grid.ColumnDefinitions>
-                                    <Button Grid.Column="0" Command="{Binding StartCameraCommand}" 
-                                            IsEnabled="{Binding IsCameraRunning, Converter={StaticResource InverseBoolConverter}}"
-                                            Background="#4CAF50" Foreground="White" BorderBrush="#388E3C" Padding="8,6" Margin="0,0,4,0">
-                                        <StackPanel Orientation="Horizontal">
-                                            <TextBlock Text="▶ " />
-                                            <TextBlock Text="Start Camera" />
-                                        </StackPanel>
-                                    </Button>
+                                    <Slider Grid.Column="0" Minimum="0" Maximum="24" Value="{Binding GainDb}" IsEnabled="{Binding AutoGain, Converter={StaticResource InverseBoolConverter}}" VerticalAlignment="Center" />
+                                    <TextBox Grid.Column="1" Text="{Binding GainDb, StringFormat='{}{0:F1}'}" IsEnabled="{Binding AutoGain, Converter={StaticResource InverseBoolConverter}}" Margin="6,0,0,0" Padding="4,2" TextAlignment="Right" />
+                                </Grid>
 
-                                    <Button Grid.Column="1" Command="{Binding StopCameraCommand}" 
-                                            IsEnabled="{Binding IsCameraRunning}"
-                                            Background="#F44336" Foreground="White" BorderBrush="#D32F2F" Padding="8,6" Margin="4,0,0,0">
-                                        <StackPanel Orientation="Horizontal">
-                                            <TextBlock Text="⏹ " />
-                                            <TextBlock Text="Stop Camera" />
-                                        </StackPanel>
-                                    </Button>
+                                <!-- Gamma -->
+                                <TextBlock Text="Gamma Correction:" FontSize="11" Foreground="{DynamicResource TextBrush}" Margin="0,0,0,4" />
+                                <Grid Margin="0,0,0,4">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="70" />
+                                    </Grid.ColumnDefinitions>
+                                    <Slider Grid.Column="0" Minimum="0.1" Maximum="4.0" Value="{Binding Gamma}" VerticalAlignment="Center" />
+                                    <TextBox Grid.Column="1" Text="{Binding Gamma, StringFormat='{}{0:F2}'}" Margin="6,0,0,0" Padding="4,2" TextAlignment="Right" />
                                 </Grid>
                             </StackPanel>
                         </GroupBox>
 
-                        <!-- Resolution & FPS Selection -->
-                        <GroupBox Header="Độ Phân Giải &amp; Tần Số Quét (Format &amp; FPS)" Margin="0,0,0,15" Padding="8" FontWeight="SemiBold" BorderBrush="#EEE">
-                            <StackPanel Margin="0">
-                                <TextBlock Text="Độ Phân Giải (Resolution):" FontSize="11" Foreground="#888" Margin="0,0,0,4" />
-                                <ComboBox ItemsSource="{Binding ResolutionOptions}" SelectedItem="{Binding SelectedResolution, UpdateSourceTrigger=PropertyChanged}"
-                                          IsEnabled="{Binding IsCameraRunning, Converter={StaticResource InverseBoolConverter}}" Margin="0,0,0,8" Padding="6,4" />
+                        <!-- Group 2: Trigger Mode & I/O -->
+                        <GroupBox Header="🎯 Chế Độ Trigger &amp; Chân I/O Hardware" Margin="0,0,0,10" Padding="8" FontWeight="SemiBold">
+                            <StackPanel>
+                                <CheckBox Content="Kích hoạt Trigger Mode (On)" IsChecked="{Binding TriggerModeOn}" Margin="0,0,0,8" />
+                                
+                                <TextBlock Text="Nguồn tín hiệu Trigger (Source):" FontSize="11" Foreground="{DynamicResource TextBrush}" Margin="0,0,0,4" />
+                                <ComboBox ItemsSource="{Binding TriggerSources}" SelectedItem="{Binding SelectedTriggerSource}" IsEnabled="{Binding TriggerModeOn}" Margin="0,0,0,8" Padding="6,4" />
 
-                                <TextBlock Text="Tần Số Quét (FPS):" FontSize="11" Foreground="#888" Margin="0,0,0,4" />
-                                <ComboBox ItemsSource="{Binding FpsOptions}" SelectedItem="{Binding SelectedFps, UpdateSourceTrigger=PropertyChanged}"
-                                          IsEnabled="{Binding IsCameraRunning, Converter={StaticResource InverseBoolConverter}}" Padding="6,4" />
+                                <TextBlock Text="Độ trễ Trigger (Delay us):" FontSize="11" Foreground="{DynamicResource TextBrush}" Margin="0,0,0,4" />
+                                <TextBox Text="{Binding TriggerDelayUs}" IsEnabled="{Binding TriggerModeOn}" Padding="6,4" />
                             </StackPanel>
                         </GroupBox>
 
-                        <!-- Brightness Adjuster -->
-                        <GroupBox Header="Độ Sáng (Brightness)" Margin="0,0,0,15" Padding="5" FontWeight="SemiBold" BorderBrush="#EEE">
-                            <StackPanel Margin="5">
-                                <Grid Margin="0,0,0,5">
-                                    <TextBlock Text="Cân bằng sáng tối" FontSize="11" Foreground="#888" VerticalAlignment="Center" />
-                                    <TextBlock Text="{Binding Brightness, StringFormat='{}{0:F0}'}" FontSize="12" FontWeight="Bold" Foreground="#2196F3" HorizontalAlignment="Right" />
-                                </Grid>
-                                <Slider Minimum="-100" Maximum="100" Value="{Binding Brightness, UpdateSourceTrigger=PropertyChanged}" 
-                                        TickFrequency="5" IsSnapToTickEnabled="False" Margin="0,5,0,0" />
-                                <Grid Margin="0,2,0,0">
-                                    <TextBlock Text="Tối (-100)" FontSize="10" Foreground="#AAA" />
-                                    <TextBlock Text="Sáng (+100)" FontSize="10" Foreground="#AAA" HorizontalAlignment="Right" />
-                                </Grid>
+                        <!-- Group 3: Định dạng & Lật hình (Format & Orientation) -->
+                        <GroupBox Header="🔄 Định Dạng &amp; Hướng Hình Ảnh" Margin="0,0,0,10" Padding="8" FontWeight="SemiBold">
+                            <StackPanel>
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                                    <CheckBox Content="Lật Ngang (Reverse X)" IsChecked="{Binding ReverseX}" Margin="0,0,16,0" />
+                                    <CheckBox Content="Lật Dọc (Reverse Y)" IsChecked="{Binding ReverseY}" />
+                                </StackPanel>
+
+                                <TextBlock Text="Độ Phân Giải (Resolution):" FontSize="11" Foreground="{DynamicResource TextBrush}" Margin="0,0,0,4" />
+                                <ComboBox ItemsSource="{Binding ResolutionOptions}" SelectedItem="{Binding SelectedResolution}" Margin="0,0,0,8" Padding="6,4" />
+
+                                <TextBlock Text="Tần Số Quét Mục Tiêu (Target FPS):" FontSize="11" Foreground="{DynamicResource TextBrush}" Margin="0,0,0,4" />
+                                <ComboBox ItemsSource="{Binding FpsOptions}" SelectedItem="{Binding SelectedFps}" Margin="0,0,0,4" Padding="6,4" />
                             </StackPanel>
                         </GroupBox>
 
-                        <!-- Contrast Adjuster -->
-                        <GroupBox Header="Độ Tương Phản (Contrast)" Margin="0,0,0,15" Padding="5" FontWeight="SemiBold" BorderBrush="#EEE">
-                            <StackPanel Margin="5">
-                                <Grid Margin="0,0,0,5">
-                                    <TextBlock Text="Độ sắc nét biên độ ảnh" FontSize="11" Foreground="#888" VerticalAlignment="Center" />
-                                    <TextBlock Text="{Binding Contrast, StringFormat='{}{0:F2}'}" FontSize="12" FontWeight="Bold" Foreground="#2196F3" HorizontalAlignment="Right" />
-                                </Grid>
-                                <Slider Minimum="0.5" Maximum="3.0" Value="{Binding Contrast, UpdateSourceTrigger=PropertyChanged}" 
-                                        TickFrequency="0.05" IsSnapToTickEnabled="False" Margin="0,5,0,0" />
-                                <Grid Margin="0,2,0,0">
-                                    <TextBlock Text="Nhạt (0.5)" FontSize="10" Foreground="#AAA" />
-                                    <TextBlock Text="Gắt (3.0)" FontSize="10" Foreground="#AAA" HorizontalAlignment="Right" />
-                                </Grid>
+                        <!-- Group 4: Mạng GigE Vision -->
+                        <GroupBox Header="🌐 Mạng GigE Vision (Packet Settings)" Margin="0,0,0,10" Padding="8" FontWeight="SemiBold">
+                            <StackPanel>
+                                <TextBlock Text="Kích thước Gói Packet Size (Bytes):" FontSize="11" Foreground="{DynamicResource TextBrush}" Margin="0,0,0,4" />
+                                <TextBox Text="{Binding PacketSize}" Padding="6,4" Margin="0,0,0,8" ToolTip="Khuyên dùng 9000 cho Jumbo Frames hoặc 1500 cho Ethernet chuẩn" />
+
+                                <TextBlock Text="Độ trễ Gói Packet Delay (us):" FontSize="11" Foreground="{DynamicResource TextBrush}" Margin="0,0,0,4" />
+                                <TextBox Text="{Binding PacketDelay}" Padding="6,4" />
                             </StackPanel>
                         </GroupBox>
 
-                        <!-- Colorspace Conversion -->
-                        <GroupBox Header="Chế Độ Hiển Thị (Color Mode)" Margin="0,0,0,15" Padding="5" FontWeight="SemiBold" BorderBrush="#EEE">
-                            <StackPanel Margin="5">
-                                <CheckBox IsChecked="{Binding IsGrayscale, UpdateSourceTrigger=PropertyChanged}" Content="Chuyển sang ảnh Đen Trắng (Grayscale)" 
-                                          FontSize="12" Margin="0,5,0,0" Padding="5,0,0,0" VerticalAlignment="Center" />
-                                <TextBlock Text="Đầu vào đen trắng giúp tăng độ ổn định của các bộ lọc biên dạng và tối ưu bộ nhớ xử lý." 
-                                           FontSize="11" Foreground="#999" TextWrapping="Wrap" Margin="5,5,0,0" />
+                        <!-- Group 5: Bộ lọc OpenCV mềm -->
+                        <GroupBox Header="🎨 Bộ Lọc Mềm (Brightness, Contrast, Grayscale)" Margin="0,0,0,10" Padding="8" FontWeight="SemiBold">
+                            <StackPanel>
+                                <TextBlock Text="Độ sáng (Brightness):" FontSize="11" Foreground="{DynamicResource TextBrush}" Margin="0,0,0,4" />
+                                <Grid Margin="0,0,0,8">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="60" />
+                                    </Grid.ColumnDefinitions>
+                                    <Slider Grid.Column="0" Minimum="-100" Maximum="100" Value="{Binding Brightness}" VerticalAlignment="Center" />
+                                    <TextBox Grid.Column="1" Text="{Binding Brightness, StringFormat='{}{0:F0}'}" Margin="6,0,0,0" Padding="4,2" TextAlignment="Right" />
+                                </Grid>
+
+                                <TextBlock Text="Độ tương phản (Contrast):" FontSize="11" Foreground="{DynamicResource TextBrush}" Margin="0,0,0,4" />
+                                <Grid Margin="0,0,0,8">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="60" />
+                                    </Grid.ColumnDefinitions>
+                                    <Slider Grid.Column="0" Minimum="0.1" Maximum="3.0" Value="{Binding Contrast}" VerticalAlignment="Center" />
+                                    <TextBox Grid.Column="1" Text="{Binding Contrast, StringFormat='{}{0:F2}'}" Margin="6,0,0,0" Padding="4,2" TextAlignment="Right" />
+                                </Grid>
+
+                                <CheckBox Content="Chuyển Ảnh Đen Trắng (Grayscale)" IsChecked="{Binding IsGrayscale}" />
                             </StackPanel>
                         </GroupBox>
                     </StackPanel>
                 </ScrollViewer>
 
-                <!-- Footer Status and Reset -->
-                <StackPanel Grid.Row="2">
-                    <Separator Margin="0,0,0,10" />
-                    <Button Command="{Binding ResetSettingsCommand}" Content="Khôi phục mặc định" Padding="8" Background="{DynamicResource PanelAltBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" Foreground="{DynamicResource TextBrush}" FontWeight="SemiBold" Margin="0,0,0,10" />
-                    <TextBlock Text="{Binding StatusMessage}" Foreground="#666" FontSize="11" TextWrapping="Wrap" TextAlignment="Center" />
+                <!-- Status & Reset Footer -->
+                <StackPanel Grid.Row="2" Margin="0,8,0,0">
+                    <Separator Margin="0,0,0,8" />
+                    <TextBlock Text="{Binding StatusMessage}" FontSize="11" Foreground="#4CAF50" TextWrapping="Wrap" Margin="0,0,0,8" />
+                    <Button Command="{Binding ResetSettingsCommand}" Content="🔄 Khôi phục mặc định" Padding="8,4" Background="{DynamicResource BorderBrush}" Foreground="{DynamicResource TextBrush}" BorderThickness="0" />
                 </StackPanel>
             </Grid>
         </Border>

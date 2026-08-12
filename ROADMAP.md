@@ -158,6 +158,10 @@ Lộ trình tích hợp tính năng Chụp ảnh từ camera và hỗ trợ các
 - [x] Task 125: Sửa hiển thị Node Runtime trên Canvas & Caching mô hình mẫu `MvpShapeMatch2` giảm thời gian từ 400ms xuống ~5-10ms:
   - Cập nhật `UpdateNodeExecutionTimes()` trong `ToolEditorViewModel.cs` hiển thị chính xác runtime cho toàn bộ các node trên canvas (`ImageSource`, `Crop`, `Preprocess`, `Create*`, `Origin`, `ResultView`).
   - Tích hợp đệm `ConcurrentDictionary` lưu trữ mô hình đặc trưng vector mẫu `Mvp2TemplateModel[]` loại bỏ 350ms trích xuất lặp lại trên ảnh mẫu tĩnh mỗi khung hình camera, kết hợp Sobel lười (`Lazy Sobel`) cho ROI pyramid. Tốc độ đạt **~5–12ms**.
+- [x] Task 126: Tích hợp SDK Camera Công Nghiệp Hikrobot MVS & Kiến Trúc Lớp Trừu Tượng Camera Đa Hãng (`ICameraDriver`, `CameraDriverFactory`, `CameraDeviceInfo`, `CameraParameters`):
+  - Xây dựng hệ thống lớp trừu tượng `ICameraDriver` sẵn sàng mở rộng cho Hikrobot, Basler, Cognex, USB DirectShow, RTSP IP camera và Simulator.
+  - Tích hợp driver `HikCameraDriver` qua P/Invoke `MvCameraControl.dll` kết nối camera GigE Vision & USB3 Vision Hikrobot.
+  - Nâng cấp `CameraSettingsViewModel` và giao diện 3 cột `CameraSettingsView.xaml` cho phép quét thiết bị đa hãng, xem Live 60 FPS HUD overlay và điều chỉnh mọi thông số: Exposure Time, Auto Exposure, Gain, Auto Gain, Gamma, Trigger Mode (Off/On), Trigger Source (Software, Line0, Line1, Line2), Trigger Delay, Reverse X/Y (lật hình), Packet Size/Delay GigE, và nút bấm **⚡ Software Trigger Once**.
 
 
 

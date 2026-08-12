@@ -600,6 +600,12 @@
           - Chuyển tính toán Sobel gradient `pyrNx`/`pyrNy` của ảnh ROI sang dạng tính toán lười (Lazy evaluation): Chỉ tính Sobel ở tầng thô $L=3$ ($320 \times 240$) trước, các tầng chi tiết chỉ tính khi có ứng viên tốt.
         - **Kết quả**: Thời gian chạy thực tế của `MvpShapeMatch2` giảm từ **400ms xuống siêu tốc chỉ còn ~5–12ms** (nhanh hơn gấp nhiều lần so với FeatureBased ~35ms)!
 
+- [x] Task 126: Tích hợp SDK Camera Công nghiệp Hikrobot MVS & Kiến Trúc Lớp Trừu Tượng Camera Đa Hãng (`ICameraDriver`, `CameraDriverFactory`, `CameraDeviceInfo`, `CameraParameters`):
+  - Xây dựng hệ thống lớp trừu tượng `ICameraDriver` sẵn sàng mở rộng cho Hikrobot, Basler, Cognex, USB DirectShow, RTSP IP camera và Simulator.
+  - Tích hợp driver `HikCameraDriver` qua P/Invoke `MvCameraControl.dll` kết nối camera GigE Vision & USB3 Vision Hikrobot.
+  - Nâng cấp `CameraSettingsViewModel` và giao diện 3 cột `CameraSettingsView.xaml` cho phép quét thiết bị đa hãng, xem Live 60 FPS HUD overlay và điều chỉnh mọi thông số: Exposure Time, Auto Exposure, Gain, Auto Gain, Gamma, Trigger Mode (Off/On), Trigger Source (Software, Line0, Line1, Line2), Trigger Delay, Reverse X/Y (lật hình), Packet Size/Delay GigE, và nút bấm **⚡ Software Trigger Once**.
+  - **Khắc phục triệt để ngoại lệ `AccessViolationException` khi bật app**: Cách ly các phương thức P/Invoke vào lớp `NativeMethods`, kiểm tra sự khả thi DLL runtime bằng `NativeLibrary.TryLoad("MvCameraControl.dll", out _)` trước khi gọi, và khởi tạo mảng con trỏ `pDeviceInfo = new IntPtr[256]` ngăn chặn truy cập vùng nhớ không hợp lệ khi máy tính chưa cài đặt MVS SDK.
+
 ## Roadmap
 
 ### Ưu tiên cao
@@ -609,6 +615,8 @@
 - [x] Triệt tiêu tiến trình chạy ngầm Zombie Instance khi đóng app (Tự động dừng Polling, giải phóng COM/Camera & gọi Environment.Exit(0)).
 - [x] Xóa 2 Tab không sử dụng Batch Processing & PLC; Tích hợp DB Manager và Node Read/Write DB linh hoạt dữ liệu output.
 - [x] Triển khai hệ thống OQC Scanner (Quét QR/Barcode tự động tra cứu nạp Job từ DB, phân trang server-side chọn sản phẩm & tự động ghi log kết quả kiểm tra lên DB).
+- [x] Tích hợp SDK Camera Công Nghiệp Hikrobot MVS (MvCameraControl API) & Xây dựng Kiến trúc Lớp Trừu Tượng Đa Hãng (`ICameraDriver`, `CameraDriverFactory`) cho phép mở rộng camera Basler, Cognex...
+- [x] Thiết kế Bảng Điều Khiển Thông Số Camera Công Nghiệp (Phơi sáng Exposure, Gain, Gamma, Trigger Mode, Trigger Source, Reverse X/Y, Packet Size GigE, Software Trigger Once).
 - Kiểm thử đầy đủ module Camera Settings với Basler/GigE và luồng UDP/RTSP.
 - Chạy kiểm thử đầu-cuối cho execution pipeline của Node Graph.
 
