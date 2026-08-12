@@ -559,6 +559,12 @@
     - Bổ sung nút `📐 Calibration` trên thanh công cụ của màn hình ToolEditor.
     - Bấm nút mở hộp thoại modal `CalibrationDialog` hiển thị màn hình Calibration và nạp trực tiếp Job đang mở cùng ảnh Preview hiện tại.
     - Hệ số hiệu chuẩn tỉ lệ Pixels/mm sau khi đo đạc xong được tự động áp dụng trực tiếp vào Job đang mở thời gian thực mà không cần thao tác lưu thủ công hay mở lại tab khác.
+  - **Triển khai Màn hình Chessboard Camera Calibration (Calibration 2)**:
+    - Bổ sung nút bấm **`♟ Chessboard Calib`** nổi bật trên thanh công cụ Tool Editor.
+    - Xây dựng service `ChessboardCalibrationService.cs` tự động tìm inner corners `Cv2.FindChessboardCorners` + tinh chỉnh sub-pixel `Cv2.CornerSubPix`, tính ma trận nội tại camera `Cv2.CalibrateCamera` (focal `fx, fy`, principal point `cx, cy`), các hệ số méo ống kính `k1, k2, p1, p2, k3`, sai số reprojection `ReprojectionError` và tỉ lệ `PixelsPerMm`.
+    - Hỗ trợ cho phép người dùng tùy chỉnh số hàng/cột bảng (mặc định 8×6 ô vuông) và kích thước ô (mặc định 29mm).
+    - Tạo dialog modal `ChessboardCalibrationDialog.xaml` + ViewModel `ChessboardCalibrationViewModel.cs` hỗ trợ nạp tệp/chụp camera nhiều ảnh (≥ 3 ảnh), hiển thị danh sách thumbnail ảnh đã chụp kèm trạng thái corners, xem kết quả calibration và nút **`🔄 Undistort Preview`** xem thử ảnh đã khử méo.
+    - Bổ sung tùy chọn công tắc **`Undistort (Calib)`** tại bảng Properties Panel của Node `ImageSource` cho phép bật/tắt tự động khử biến dạng ống kính khi chạy pipeline kiểm tra.
 
 ## Roadmap
 

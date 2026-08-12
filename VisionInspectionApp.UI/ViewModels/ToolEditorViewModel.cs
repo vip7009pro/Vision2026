@@ -317,6 +317,7 @@ namespace VisionInspectionApp.UI.ViewModels
             Preprocess_AddPolygonPointCommand = new RelayCommand<PreprocessRoiDefinition?>(Preprocess_AddPolygonPoint);
             Preprocess_RemovePolygonPointCommand = new RelayCommand<Point2dModel?>(Preprocess_RemovePolygonPoint);
             OpenCalibrationDialogCommand = new RelayCommand(OpenCalibrationDialog);
+            OpenChessboardCalibrationDialogCommand = new RelayCommand(OpenChessboardCalibrationDialog);
             ColorDiff_TeachRefColorCommand = new RelayCommand(ColorDiff_TeachRefColor);
 
             // Line Trigger (Hardware Sensor Signal from Camera)
@@ -1029,6 +1030,7 @@ namespace VisionInspectionApp.UI.ViewModels
             OnPropertyChanged(nameof(ImageSource_PlcTriggerPlcId));
             OnPropertyChanged(nameof(ImageSource_PlcTriggerTagName));
             OnPropertyChanged(nameof(ImageSource_PlcTriggerEdge));
+            OnPropertyChanged(nameof(ImageSource_EnableUndistort));
             OnPropertyChanged(nameof(IsImageOutputNode));
             OnPropertyChanged(nameof(AvailableImageNodes));
             OnPropertyChanged(nameof(ImageOutput_InputNodeChoice));
@@ -1289,6 +1291,34 @@ namespace VisionInspectionApp.UI.ViewModels
 
             var res = dialog.ShowDialog();
             if (res == true || calibVm.IsDirty)
+            {
+                OnPropertyChanged(nameof(PixelsPerMm));
+                IsDirty = true;
+                RefreshPreviews();
+            }
+        }
+
+        public ICommand OpenChessboardCalibrationDialogCommand { get; }
+
+        private void OpenChessboardCalibrationDialog()
+        {
+            if (_config is null)
+            {
+                System.Windows.MessageBox.Show("Chưa mở Job nào để thực hiện Chessboard Calibration.", "Thông báo", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Information);
+                return;
+            }
+
+            var vm = new ChessboardCalibrationViewModel(_cameraService);
+            vm.Initialize(_config);
+
+            var dialog = new VisionInspectionApp.UI.Views.ChessboardCalibrationDialog
+            {
+                DataContext = vm,
+                Owner = System.Windows.Application.Current?.MainWindow
+            };
+
+            var res = dialog.ShowDialog();
+            if (res == true || vm.IsDirty)
             {
                 OnPropertyChanged(nameof(PixelsPerMm));
                 IsDirty = true;

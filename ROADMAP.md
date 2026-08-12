@@ -117,6 +117,13 @@ Lộ trình tích hợp tính năng Chụp ảnh từ camera và hỗ trợ các
 - [x] Task 113: Tối ưu UI Tab Tool Editor: Bổ sung ô tìm kiếm tool nhanh + Phân loại danh mục Toolbox theo chức năng; Chuẩn hóa màu tiêu đề "Toolbox" thích ứng Light/Dark theme; Chuyển sang cơ chế Pan/Zoom qua RenderTransform Translate (Pan tự do 360° không giới hạn biên cứng ở góc trên/trái); Tự động Fit & Center toàn bộ Graph Nodes mỗi khi mở/nạp Job mới (kèm sự kiện `RequestAutoFitGraph` & nút `🎯 Fit View`); Định tuyến đường nối cạnh Bezier mượt mà và tự động xác định vị trí cổng kết nối linh hoạt theo khoảng cách ngắn nhất.
 - [x] Task 114: Tạo Grid mờ mượt nhẹ và Hiệu ứng Snap Alignment Lines kéo dài tự động căn lề giữa các Node; Tối ưu Properties Panel cho Node Preprocessor (Xóa nút Delete Node, hiển thị thuộc tính riêng độc lập theo node, bổ sung ROI Masking Rectangle/Circle/Polygon N-đỉnh với kéo thả góc đỉnh & biến dạng thời gian thực 60FPS).
 - [x] Task 115: Bổ sung 3 Tool mới (`Crop`, `ColorDiff`, `ImgArithmetic`) và tích hợp trực tiếp Cửa sổ Calibration (`CalibrationDialog`) ngay trong Tab ToolEditor áp dụng tự động hệ số `PixelsPerMm` thời gian thực cho Active Job.
+- [x] Task 116: Triển khai màn hình **Chessboard Camera Calibration (Calibration 2)**:
+  - Tự động phát hiện góc inner corners bằng OpenCV `FindChessboardCorners` + sub-pixel refinement `CornerSubPix`.
+  - Hỗ trợ tùy chỉnh số hàng/cột (mặc định 8×6 ô vuông) và kích thước ô (mặc định 29mm).
+  - Chụp/Nạp đa ảnh (≥ 3 ảnh) ở nhiều vị trí/góc nghiêng khác nhau.
+  - Tính toán chính xác thông số camera (Camera Matrix `fx, fy, cx, cy`, Distortion Coefficients `k1, k2, p1, p2, k3`, Reprojection Error `px`) và tỉ lệ chuyển đổi `PixelsPerMm`.
+  - Tích hợp công tắc `Undistort (Calib)` ở Properties Panel của Node `ImageSource` cho phép bật/tắt tự động khử biến dạng ống kính khi chạy pipeline.
+  - Bổ sung nút bấm **`♟ Chessboard Calib`** nổi bật trên thanh công cụ Tool Editor.
 
 
 

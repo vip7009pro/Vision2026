@@ -38,6 +38,14 @@ public partial class InspectionService
         var matsLock = new object();
         try
         {
+            if (config.ChessboardCalibration is not null && config.ChessboardCalibration.IsCalibrated &&
+                (config.ImageSources?.Any(s => s.EnableUndistort) ?? false))
+            {
+                var undistorted = ChessboardCalibrationService.Undistort(image, config.ChessboardCalibration);
+                image = undistorted;
+                matsToDispose.Add(undistorted);
+            }
+
             const int guidedRadiusPx = 50;
             var track = _trackByProductCode.GetOrAdd(config.ProductCode ?? string.Empty, _ => new TrackState());
 

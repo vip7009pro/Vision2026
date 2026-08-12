@@ -339,6 +339,19 @@ namespace VisionInspectionApp.UI.ViewModels
                 RequestAutoSave();
             }
         }
+
+        public bool ImageSource_EnableUndistort
+        {
+            get => SelectedImageSourceDef()?.EnableUndistort ?? false;
+            set
+            {
+                var def = SelectedImageSourceDef();
+                if (def is null) return;
+                def.EnableUndistort = value;
+                OnPropertyChanged();
+                RequestAutoSave();
+            }
+        }
     
         public string ImageSource_FilePath
         {

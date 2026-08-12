@@ -61,7 +61,8 @@
             <Button Content="📊 Monitor" Command="{Binding OpenPlcMonitorCommand}" Margin="0,0,4,0" Padding="8,4" Background="#43A047" Foreground="White" BorderThickness="0" ToolTip="Theo dõi trạng thái kết nối, Latency và Log PLC"/>
             <Button Content="🏷️ Tags" Command="{Binding OpenPlcBrowserCommand}" Margin="0,0,4,0" Padding="8,4" Background="#8E24AA" Foreground="White" BorderThickness="0" ToolTip="Cửa sổ tra cứu danh sách Tag PLC"/>
             <Button Content="🗄️ DB Manager" Command="{Binding OpenDbManagerCommand}" Margin="0,0,4,0" Padding="8,4" Background="#0D9488" Foreground="White" BorderThickness="0" ToolTip="Quản lý danh sách kết nối CSDL (SQL Server, MySQL, PostgreSQL, SQLite, ODBC)"/>
-            <Button Content="📐 Calibration" Command="{Binding OpenCalibrationDialogCommand}" Margin="0,0,12,0" Padding="8,4" Background="#E65100" Foreground="White" BorderThickness="0" ToolTip="Hiệu chuẩn tỉ lệ Pixels/mm trực tiếp trên Job hiện tại" />
+            <Button Content="📐 Calibration" Command="{Binding OpenCalibrationDialogCommand}" Margin="0,0,4,0" Padding="8,4" Background="#E65100" Foreground="White" BorderThickness="0" ToolTip="Hiệu chuẩn tỉ lệ Pixels/mm trực tiếp trên Job hiện tại" />
+            <Button Content="♟ Chessboard Calib" Command="{Binding OpenChessboardCalibrationDialogCommand}" Margin="0,0,12,0" Padding="8,4" Background="#6A1B9A" Foreground="White" BorderThickness="0" ToolTip="Hiệu chuẩn camera bằng bảng Chessboard (tự động tính Intrinsic, Distortion, Pixels/mm)" />
 
             <TextBlock Text="Product Code" VerticalAlignment="Center" Margin="0,0,6,0" />
             <TextBox Width="120" Text="{Binding ProductCode, UpdateSourceTrigger=LostFocus}" Margin="0,0,12,0" />
@@ -1182,6 +1183,22 @@
                                         </Grid>
                                     </Border>
                                 </StackPanel>
+
+                                <!-- Enable Undistort (Chessboard Calibration) -->
+                                <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="120" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <Border Background="{DynamicResource WindowBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
+                                            <TextBlock Text="Undistort (Calib)" VerticalAlignment="Center" Margin="4,2" FontSize="11" Foreground="{DynamicResource TextBrush}" ToolTip="Bật/tắt khử biến dạng ống kính camera (cần Chessboard Calibration trước)"/>
+                                        </Border>
+                                        <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
+                                            <CheckBox IsChecked="{Binding ImageSource_EnableUndistort, UpdateSourceTrigger=PropertyChanged}" Margin="2,1" FontSize="11" VerticalAlignment="Center" ToolTip="Tự động undistort ảnh đầu vào trước khi đưa vào pipeline" />
+                                        </Border>
+                                    </Grid>
+                                </Border>
                             </StackPanel>
 
                             <StackPanel Visibility="{Binding IsImageOutputNode, Converter={StaticResource BoolToVis}}">

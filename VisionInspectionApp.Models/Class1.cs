@@ -145,6 +145,21 @@ public enum ImageSourceTriggerMode
     PlcTrigger = 2
 }
 
+public sealed class ChessboardCalibrationData
+{
+    public int BoardCols { get; set; } = 8;
+    public int BoardRows { get; set; } = 6;
+    public double SquareSizeMm { get; set; } = 29.0;
+    public double Fx { get; set; }
+    public double Fy { get; set; }
+    public double Cx { get; set; }
+    public double Cy { get; set; }
+    public double[] DistCoeffs { get; set; } = Array.Empty<double>();
+    public double ReprojectionError { get; set; }
+    public double PixelsPerMm { get; set; }
+    public bool IsCalibrated { get; set; }
+}
+
 public sealed class ImageSourceDefinition
 {
     public string Name { get; set; } = string.Empty;
@@ -174,6 +189,8 @@ public sealed class ImageSourceDefinition
     public string PlcTriggerTagName { get; set; } = "X0_Trigger";
 
     public PlcTriggerEdge PlcTriggerEdge { get; set; } = PlcTriggerEdge.RisingEdge;
+
+    public bool EnableUndistort { get; set; } = false;
 }
 
 public sealed class VisionConfig
@@ -262,6 +279,8 @@ public sealed class VisionConfig
     public List<DbNodeDefinition> DbNodes { get; set; } = new();
 
     public DefectInspectionConfig DefectConfig { get; set; } = new();
+
+    public ChessboardCalibrationData? ChessboardCalibration { get; set; }
 }
 
 public enum ImageOutputFormat
