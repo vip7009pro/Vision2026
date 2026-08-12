@@ -3465,7 +3465,7 @@
                                             <DataGridTextColumn Header="Name" Binding="{Binding Name}" Width="95" />
                                             <DataGridTextColumn Header="A" Binding="{Binding RefA}" Width="70" />
                                             <DataGridTextColumn Header="B" Binding="{Binding RefB}" Width="70" />
-                                            <DataGridTextColumn Header="{Binding DataContext.SpecResultsValueHeader, RelativeSource={RelativeSource AncestorType=UserControl}}" Binding="{Binding Value, StringFormat={}{0:0.000}}" Width="90" />
+                                            <DataGridTextColumn Header="Value" Binding="{Binding Value, StringFormat={}{0:0.000}}" Width="90" />
                                             <DataGridTextColumn Header="Unit" Binding="{Binding Unit}" Width="45" />
                                             <DataGridTextColumn Header="Nominal" Binding="{Binding Nominal, StringFormat={}{0:0.000}}" Width="80" />
                                             <DataGridTextColumn Header="+Tol" Binding="{Binding TolPlus, StringFormat={}{0:0.000}}" Width="55" />
