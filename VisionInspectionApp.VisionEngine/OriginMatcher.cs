@@ -50,6 +50,14 @@ public sealed class OriginMatcher
 
         double effectiveStep = stepDeg > 0.000001 ? stepDeg : (definition.AngleStep > 0 ? definition.AngleStep : 1.0);
 
+        if (definition.OriginAlgorithm == OriginAlgorithm.MvpShapeMatch2)
+        {
+            var baseAngle2 = definition.TemplateRoi.Angle;
+            double searchMin2 = baseAngle2 + minAngleDeg;
+            double searchMax2 = baseAngle2 + maxAngleDeg;
+            return MvpShapeMatch2Engine.Match(roiGray.Mat, templateGray, definition, searchMin2, searchMax2, effectiveStep, roiRect);
+        }
+
         if (definition.OriginAlgorithm == OriginAlgorithm.FeatureBased)
         {
             return MatchByFeatureBased(roiGray.Mat, templateGray, definition, preprocess, roiRect);
@@ -437,22 +445,38 @@ public sealed class OriginMatcher
     {
         using var templPrep = PreprocessTemplateForMatch(templateGray, preprocess);
 
+        // Apply CLAHE (Contrast Limited Adaptive Histogram Equalization) to make SIFT invariant to camera gain and lighting shifts
+        using var clahe = Cv2.CreateCLAHE(clipLimit: 3.0, tileGridSize: new Size(8, 8));
+        using var roiClahe = new Mat();
+        using var templClahe = new Mat();
+        clahe.Apply(roiGray, roiClahe);
+        clahe.Apply(templPrep, templClahe);
+
         using var detector = OpenCvSharp.Features2D.SIFT.Create();
         using var des1 = new Mat();
         using var des2 = new Mat();
 
-        detector.DetectAndCompute(templPrep, null, out KeyPoint[] keypoints1, des1);
-        detector.DetectAndCompute(roiGray, null, out KeyPoint[] keypoints2, des2);
+        detector.DetectAndCompute(templClahe, null, out KeyPoint[] keypoints1, des1);
+        detector.DetectAndCompute(roiClahe, null, out KeyPoint[] keypoints2, des2);
 
         if (des1.Empty() || des2.Empty() || des1.Rows < 4 || des2.Rows < 4)
         {
             return FallbackToTemplateMatch(roiGray, templateGray, definition, 0.0, preprocess, roiRect);
         }
 
-        using var bf = new BFMatcher(NormTypes.L2, crossCheck: true);
-        var matches = bf.Match(des1, des2);
+        using var bf = new BFMatcher(NormTypes.L2, crossCheck: false);
+        var knnMatches = bf.KnnMatch(des1, des2, k: 2);
 
-        var goodMatches = matches.Where(m => m.Distance < 300).OrderBy(m => m.Distance).Take(50).ToArray();
+        var goodMatchesList = new List<DMatch>();
+        foreach (var m in knnMatches)
+        {
+            if (m.Length >= 2 && m[0].Distance < 0.75f * m[1].Distance)
+            {
+                goodMatchesList.Add(m[0]);
+            }
+        }
+
+        var goodMatches = goodMatchesList.OrderBy(m => m.Distance).Take(60).ToArray();
 
         if (goodMatches.Length < 4)
         {
@@ -463,16 +487,57 @@ public sealed class OriginMatcher
         var pts2 = goodMatches.Select(m => new Point2d(keypoints2[m.TrainIdx].Pt.X, keypoints2[m.TrainIdx].Pt.Y)).ToArray();
 
         using var inliers = new Mat();
-        using var H = Cv2.FindHomography(InputArray.Create(pts1), InputArray.Create(pts2), HomographyMethods.LMedS, 3.0, inliers);
+        using var M = Cv2.EstimateAffinePartial2D(InputArray.Create(pts1), InputArray.Create(pts2), inliers);
 
-        if (H.Empty())
+        if (M.Empty())
         {
             return FallbackToTemplateMatch(roiGray, templateGray, definition, 0.0, preprocess, roiRect);
         }
 
-        var h11 = H.At<double>(0, 0);
-        var h21 = H.At<double>(1, 0);
-        var actualAngleDeg = Math.Atan2(h21, h11) * 180.0 / Math.PI;
+        int inlierCount = Cv2.CountNonZero(inliers);
+        if (inlierCount < 4)
+        {
+            return FallbackToTemplateMatch(roiGray, templateGray, definition, 0.0, preprocess, roiRect);
+        }
+
+        // Convert 2x3 Affine Matrix to 3x3 Homography Matrix for perspective operations
+        using var H = Mat.Eye(3, 3, MatType.CV_64FC1).ToMat();
+        H.Set<double>(0, 0, M.At<double>(0, 0));
+        H.Set<double>(0, 1, M.At<double>(0, 1));
+        H.Set<double>(0, 2, M.At<double>(0, 2));
+        H.Set<double>(1, 0, M.At<double>(1, 0));
+        H.Set<double>(1, 1, M.At<double>(1, 1));
+        H.Set<double>(1, 2, M.At<double>(1, 2));
+
+        var m00 = M.At<double>(0, 0);
+        var m01 = M.At<double>(0, 1);
+        var m10 = M.At<double>(1, 0);
+        var m11 = M.At<double>(1, 1);
+
+        double det = m00 * m11 - m01 * m10;
+        if (det <= 0.1 || det >= 10.0)
+        {
+            return FallbackToTemplateMatch(roiGray, templateGray, definition, 0.0, preprocess, roiRect);
+        }
+
+        // Calculate true 2D rigid rotation angle from Affine matrix
+        var actualAngleDeg = Math.Atan2(m10, m00) * 180.0 / Math.PI;
+
+        while (actualAngleDeg > 180.0) actualAngleDeg -= 360.0;
+        while (actualAngleDeg < -180.0) actualAngleDeg += 360.0;
+
+        double baseAngle = definition.TemplateRoi.Angle;
+        double angleDiff = actualAngleDeg - baseAngle;
+        while (angleDiff > 180.0) angleDiff -= 360.0;
+        while (angleDiff < -180.0) angleDiff += 360.0;
+
+        if (definition.MinAngle != 0 || definition.MaxAngle != 0)
+        {
+            if (angleDiff < definition.MinAngle - 10.0 || angleDiff > definition.MaxAngle + 10.0)
+            {
+                return FallbackToTemplateMatch(roiGray, templateGray, definition, 0.0, preprocess, roiRect);
+            }
+        }
 
         var pad = 4;
         using var T_inv = Mat.Eye(3, 3, MatType.CV_64FC1).ToMat();
@@ -489,6 +554,12 @@ public sealed class OriginMatcher
         using var res = new Mat();
         Cv2.MatchTemplate(warped, templPrep, res, TemplateMatchModes.CCoeffNormed);
         Cv2.MinMaxLoc(res, out _, out maxVal, out _, out var maxLoc);
+
+        double minScoreTarget = definition.MinScore > 0 ? definition.MinScore : 0.6;
+        if (maxVal < minScoreTarget * 0.65)
+        {
+            return FallbackToTemplateMatch(roiGray, templateGray, definition, 0.0, preprocess, roiRect);
+        }
 
         var offsetX = maxLoc.X - pad;
         var offsetY = maxLoc.Y - pad;

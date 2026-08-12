@@ -106,17 +106,20 @@ namespace VisionInspectionApp.UI.ViewModels
 
         public event Action? RequestCloseDialog;
 
+        private Func<Mat>? _refreshImageFunc;
+
         public OriginTrainViewModel(Mat inputMat, PointDefinition originDef, string workingDir)
-            : this(inputMat, inputMat, originDef, workingDir)
+            : this(inputMat, inputMat, originDef, workingDir, null)
         {
         }
 
-        public OriginTrainViewModel(Mat inputMat, Mat globalPreprocessedMat, PointDefinition originDef, string workingDir)
+        public OriginTrainViewModel(Mat inputMat, Mat globalPreprocessedMat, PointDefinition originDef, string workingDir, Func<Mat>? refreshImageFunc = null)
         {
             _rawFullMat = inputMat.Clone();
             _globalPreprocessedMat = globalPreprocessedMat?.Clone() ?? inputMat.Clone();
             _originDef = originDef ?? new PointDefinition();
             _workingDir = workingDir;
+            _refreshImageFunc = refreshImageFunc;
 
             // Load initial values from originDef
             _autoThresh = originDef.MvpAutoThresh;
@@ -142,12 +145,15 @@ namespace VisionInspectionApp.UI.ViewModels
             }
 
             var roi = originDef.TemplateRoi;
-            if (roi.Width <= 0 || roi.Height <= 0)
+            if (roi.Width <= 0 || roi.Height <= 0 ||
+                roi.X < 0 || roi.Y < 0 ||
+                roi.X >= _rawFullMat.Width || roi.Y >= _rawFullMat.Height ||
+                roi.X + roi.Width > _rawFullMat.Width || roi.Y + roi.Height > _rawFullMat.Height)
             {
-                var w = Math.Max(50, _rawFullMat.Width / 3);
-                var h = Math.Max(50, _rawFullMat.Height / 3);
-                _roiX = (_rawFullMat.Width - w) / 2.0;
-                _roiY = (_rawFullMat.Height - h) / 2.0;
+                var w = Math.Clamp(roi.Width > 0 ? roi.Width : _rawFullMat.Width / 3.0, 10, _rawFullMat.Width);
+                var h = Math.Clamp(roi.Height > 0 ? roi.Height : _rawFullMat.Height / 3.0, 10, _rawFullMat.Height);
+                _roiX = Math.Max(0, (_rawFullMat.Width - w) / 2.0);
+                _roiY = Math.Max(0, (_rawFullMat.Height - h) / 2.0);
                 _roiWidth = w;
                 _roiHeight = h;
                 _roiAngle = 0;
@@ -290,6 +296,23 @@ namespace VisionInspectionApp.UI.ViewModels
 
         private void ExecuteRefreshImage()
         {
+            if (_refreshImageFunc != null)
+            {
+                try
+                {
+                    var freshMat = _refreshImageFunc();
+                    if (freshMat != null && !freshMat.Empty())
+                    {
+                        _rawFullMat?.Dispose();
+                        _globalPreprocessedMat?.Dispose();
+                        _rawFullMat = freshMat.Clone();
+                        _globalPreprocessedMat = freshMat.Clone();
+                        freshMat.Dispose();
+                        InitEraserMask();
+                    }
+                }
+                catch { }
+            }
             ExecuteTrain();
         }
 
@@ -305,15 +328,19 @@ namespace VisionInspectionApp.UI.ViewModels
             {
                 var curRoi = new Roi
                 {
-                    X = (int)RoiX,
-                    Y = (int)RoiY,
-                    Width = (int)RoiWidth,
-                    Height = (int)RoiHeight,
+                    X = (int)Math.Clamp(RoiX, 0, Math.Max(0, _rawFullMat.Width - 10)),
+                    Y = (int)Math.Clamp(RoiY, 0, Math.Max(0, _rawFullMat.Height - 10)),
+                    Width = (int)Math.Clamp(RoiWidth, 10, _rawFullMat.Width),
+                    Height = (int)Math.Clamp(RoiHeight, 10, _rawFullMat.Height),
                     Angle = RoiAngle
                 };
 
                 using var roiMat = ToolEditorViewModel.ExtractRoiPatch(_rawFullMat, curRoi);
-                if (roiMat.Empty() || roiMat.Width <= 0 || roiMat.Height <= 0) return;
+                if (roiMat.Empty() || roiMat.Width <= 0 || roiMat.Height <= 0)
+                {
+                    FullPreviewImage = _rawFullMat.ToBitmapSource();
+                    return;
+                }
 
                 using var roiEraser = _eraserMaskMat != null ? ToolEditorViewModel.ExtractRoiPatch(_eraserMaskMat, curRoi) : null;
 
@@ -383,7 +410,10 @@ namespace VisionInspectionApp.UI.ViewModels
                 Angle = RoiAngle
             };
 
-            _originDef.OriginAlgorithm = OriginAlgorithm.MvpShapeMatch;
+            if (_originDef.OriginAlgorithm != OriginAlgorithm.MvpShapeMatch2 && _originDef.OriginAlgorithm != OriginAlgorithm.ShapePyramid)
+            {
+                _originDef.OriginAlgorithm = OriginAlgorithm.MvpShapeMatch;
+            }
             _originDef.MvpAutoThresh = AutoThresh;
             _originDef.MvpEdgeThreshold = EdgeThreshold;
             _originDef.MvpLengthThreshold = LengthThreshold;

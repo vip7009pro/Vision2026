@@ -50,6 +50,7 @@ namespace VisionInspectionApp.UI.ViewModels
                     PointFindAlgorithm.ShapeBased => OriginAlgorithm.ShapeBased,
                     PointFindAlgorithm.ShapePyramid => OriginAlgorithm.ShapePyramid,
                     PointFindAlgorithm.MvpShapeMatch => OriginAlgorithm.MvpShapeMatch,
+                    PointFindAlgorithm.MvpShapeMatch2 => OriginAlgorithm.MvpShapeMatch2,
                     PointFindAlgorithm.MvpShapePyramid => OriginAlgorithm.MvpShapeMatch,
                     _ => OriginAlgorithm.TemplateMatch
                 };

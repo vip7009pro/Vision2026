@@ -1615,6 +1615,7 @@ public partial class InspectionService
                         var templ = GetTemplateGray(def.TemplateImageFile);
                         MatchResult m;
                         if (p.Algorithm == PointFindAlgorithm.MvpShapeMatch
+                            || p.Algorithm == PointFindAlgorithm.MvpShapeMatch2
                             || p.Algorithm == PointFindAlgorithm.MvpShapePyramid
                             || p.Algorithm == PointFindAlgorithm.ShapePyramid
                             || p.Algorithm == PointFindAlgorithm.ShapeBased)

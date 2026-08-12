@@ -183,19 +183,54 @@ namespace VisionInspectionApp.UI.ViewModels
             RequestAutoSave();
         }
 
+        private Mat GetCurrentWorkingImageSnapshot()
+        {
+            var rawSnap = _sharedImage.GetSnapshot();
+            if (rawSnap != null && !rawSnap.Empty())
+            {
+                return rawSnap;
+            }
+
+            if (_config != null && _config.ImageSources.Count > 0)
+            {
+                var imgSourceNode = Nodes.FirstOrDefault(n => string.Equals(n.Type, "ImageSource", StringComparison.OrdinalIgnoreCase));
+                var imgSourceDef = _config.ImageSources.FirstOrDefault(x => string.Equals(x.Name, imgSourceNode?.RefName, StringComparison.OrdinalIgnoreCase)) ?? _config.ImageSources.FirstOrDefault();
+                if (imgSourceDef != null)
+                {
+                    var cached = GetImageSourceCache(imgSourceDef.Name);
+                    if (cached != null && !cached.Empty())
+                    {
+                        _sharedImage.SetImage(cached);
+                        return cached;
+                    }
+
+                    var loaded = LoadImageFromSourceForPreview(imgSourceDef);
+                    if (loaded != null && !loaded.Empty())
+                    {
+                        _sharedImage.SetImage(loaded);
+                        return loaded;
+                    }
+                }
+            }
+
+            return new Mat(480, 640, MatType.CV_8UC1, Scalar.All(128));
+        }
+
         public void OpenTrainTemplateWindow()
         {
             if (_config?.Origin == null) return;
 
-            using var rawSnap = _sharedImage.GetSnapshot();
-            using var snap = rawSnap ?? new Mat(480, 640, MatType.CV_8UC1, Scalar.All(128));
-
+            using var snap = GetCurrentWorkingImageSnapshot();
             var toolNode = Nodes.FirstOrDefault(n => string.Equals(n.Type, "Origin", StringComparison.OrdinalIgnoreCase));
             using var prepSnap = toolNode != null ? ResolveToolImageForPreview(snap, toolNode) : snap.Clone();
             using var globalPrepSnap = _preprocessor.Run(snap, _config.Preprocess);
 
             var workingDir = CurrentTempWorkingDir ?? Path.Combine(Path.GetFullPath(_storeOptions.ConfigRootDirectory), ProductCode ?? "");
-            var vm = new OriginTrainViewModel(prepSnap, globalPrepSnap, _config.Origin, workingDir);
+            var vm = new OriginTrainViewModel(prepSnap, globalPrepSnap, _config.Origin, workingDir, () =>
+            {
+                using var freshSnap = GetCurrentWorkingImageSnapshot();
+                return toolNode != null ? ResolveToolImageForPreview(freshSnap, toolNode) : freshSnap.Clone();
+            });
             var win = new Views.OriginTrainWindow(vm)
             {
                 Owner = System.Windows.Application.Current.MainWindow
@@ -211,6 +246,6 @@ namespace VisionInspectionApp.UI.ViewModels
             }
         }
 
-        public bool IsOriginShapePyramid => Origin_Algorithm == OriginAlgorithm.ShapePyramid || Origin_Algorithm == OriginAlgorithm.MvpShapeMatch;
+        public bool IsOriginShapePyramid => Origin_Algorithm == OriginAlgorithm.ShapePyramid || Origin_Algorithm == OriginAlgorithm.MvpShapeMatch || Origin_Algorithm == OriginAlgorithm.MvpShapeMatch2;
     }
 }

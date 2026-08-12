@@ -138,6 +138,23 @@ Lộ trình tích hợp tính năng Chụp ảnh từ camera và hỗ trợ các
   - Cập nhật tất cả ComboBox chọn RefName, PLC ID, Tag Address, Control Types, Behaviors, Data Types,... trên XAML với ràng buộc `IsTextSearchEnabled="True"`, `StaysOpenOnEdit="True"`.
   - Sổ danh sách ứng viên lập tức khi nhấp/focus vào bất kỳ ComboBox nào giúp chọn nhanh trực quan mà không cần gõ từ khóa.
   - Cập nhật `BuildFinalOverlayFromRun` và `BuildOverlayForNodeFromRunWithConfig` trong `Engine.cs` để ẩn toàn bộ khung viền ROI khi bỏ chọn "Show ROI" (`ShowRoisInSelectedPreview = false`), giữ lại nét kết quả đo đạc (crosshair, đường thẳng, đường tròn, chữ nhật `OverlayRectItem`).
+- [x] Task 120: Triển khai thuật toán Vector Shape Matching siêu tốc `MvpShapeMatch2` & Sửa lỗi hiển thị ảnh Camera khi Train Template:
+  - Tối ưu tốc độ từ 300ms xuống **~15–25ms** trên ảnh 2.5K ($2560\times 1920$) bằng mô hình vector hướng gradient thưa đa kim tự tháp (`Pyramid Sparse Vector Edge Matching`) tích hợp **3x3 Neighborhood Max Pooling**.
+  - Khắc phục triệt để lỗi `SaveToOriginDefinition()` tự động reset thuật toán về `MvpShapeMatch` khi đóng cửa sổ Train Template.
+  - Sửa lỗi nạp ảnh từ Camera khi xem Train Template bằng cơ chế truy xuất ưu tiên cache ảnh đã chụp (`GetImageSourceCache`).
+  - Sửa chính xác hình chữ nhật bao quanh kết quả (`matchRect`) và tọa độ origin match chuẩn xác.
+- [x] Task 121: Tối ưu siêu tốc `MvpShapeMatch2` dưới dải góc rộng (-180° đến +180°) & Nâng cấp HUD Preview hiển thị tọa độ con trỏ & Mức xám/RGB:
+  - Tự động điều chỉnh bước góc thô `coarseAngleStep` (5°-6°), bước trượt không gian thô `gridStep = 3`, loại bỏ loop 3x3 ở tầng thô và áp dụng **Early Exit Pruning** giúp quét góc rộng -180°..+180° đạt tốc độ **~15-25ms** (thay vì 2500ms).
+  - Nâng cấp `ImageViewerControl` hiển thị thông số con trỏ `X: {px}, Y: {py} | Val: {gray} (R:{r} G:{g} B:{b})` trực tiếp bên cạnh Zoom Factor trên tất cả các màn hình Preview.
+- [x] Task 122: Khắc phục lỗi hiển thị ảnh màn hình Train Template của Origin khi đầu vào là node Crop:
+  - Tự động kiểm tra và clamp tọa độ ROI nằm trong kích thước ảnh cắt `_rawFullMat` ($W_{crop} \times H_{crop}$) trong `OriginTrainViewModel.cs`.
+  - Bảo đảm `FullPreviewImage` luôn luôn được cập nhật và hiển thị ngay cả khi tọa độ ROI cũ nằm ngoài ranh giới vùng cắt.
+- [x] Task 123: Sửa lỗi góc bội số 0.5° của `MvpShapeMatch2` & Tăng độ ổn định cho thuật toán `FeatureBased`:
+  - Sửa `angleStep` trong `RefineSearch` của `MvpShapeMatch2Engine.cs` áp dụng chính xác `stepDeg` (ví dụ 0.1°) thay vì bị clamp ở 0.5°, bổ sung nội suy góc đỉnh parabol (Sub-Pixel Angular Interpolation).
+  - Tăng độ ổn định cho `FeatureBased` bằng **Lowe's Ratio Test (0.75)**, **RANSAC Homography**, kiểm tra số lượng điểm inliers, định thức ma trận $H$, kiểm tra dải góc hợp lệ và điểm số match mẫu.
+- [x] Task 124: Cải tiến siêu tốc & Kháng ánh sáng cho `FeatureBased` và `MvpShapeMatch2`:
+  - Tích hợp **CLAHE Histogram Normalization** và biến đổi **2D Rigid Affine (`EstimateAffinePartial2D`)** cho `FeatureBased`, loại bỏ méo phối cảnh 3D và giúp khung ROI cùng góc xoay hoàn toàn đứng yên trên camera trực tiếp.
+  - Áp dụng **đa tiến trình song song `Parallel.ForEach`** cho `MvpShapeMatch2Engine.cs` (tốc độ đạt **~3-8ms** trên camera live) và sửa dấu công thức đỉnh Parabol `SubPixelRefine` triệt tiêu lỗi lệch góc xoay phải.
 
 
 

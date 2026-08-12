@@ -230,6 +230,8 @@ public partial class ImageViewerControl : UserControl
         RedrawOverlays();
     }
 
+    private Point? _lastMousePos;
+
     private void UpdateInfoText()
     {
         if (PART_InfoText != null)
@@ -242,9 +244,87 @@ public partial class ImageViewerControl : UserControl
             else
             {
                 var z = _transform.Matrix.M11 * 100.0;
-                PART_InfoText.Text = $"{_lastPixelWidth} x {_lastPixelHeight} px  |  Zoom: {z:F0}%";
+                string baseText = $"{_lastPixelWidth} x {_lastPixelHeight} px  |  Zoom: {z:F0}%";
+
+                if (_lastMousePos.HasValue && ImageSource is BitmapSource bmp)
+                {
+                    var contentPos = ContainerToContent(_lastMousePos.Value);
+                    int px = (int)Math.Floor(contentPos.X);
+                    int py = (int)Math.Floor(contentPos.Y);
+
+                    if (px >= 0 && px < _lastPixelWidth && py >= 0 && py < _lastPixelHeight)
+                    {
+                        string colorStr = SamplePixelColor(bmp, px, py);
+                        PART_InfoText.Text = $"{baseText}  |  X: {px}, Y: {py}  |  {colorStr}";
+                        PART_InfoText.Visibility = Visibility.Visible;
+                        return;
+                    }
+                    else
+                    {
+                        PART_InfoText.Text = $"{baseText}  |  X: --, Y: --  |  Val: --";
+                        PART_InfoText.Visibility = Visibility.Visible;
+                        return;
+                    }
+                }
+
+                PART_InfoText.Text = baseText;
                 PART_InfoText.Visibility = Visibility.Visible;
             }
+        }
+    }
+
+    private static string SamplePixelColor(BitmapSource bmp, int x, int y)
+    {
+        try
+        {
+            int bytesPerPixel = (bmp.Format.BitsPerPixel + 7) / 8;
+            if (bytesPerPixel <= 0) return "Val: --";
+
+            byte[] pixels = new byte[bytesPerPixel];
+            int stride = bytesPerPixel;
+            var rect = new Int32Rect(x, y, 1, 1);
+
+            bmp.CopyPixels(rect, pixels, stride, 0);
+
+            var fmt = bmp.Format;
+            if (fmt == PixelFormats.Gray8 || fmt == PixelFormats.Indexed8 || fmt == PixelFormats.Gray2 || fmt == PixelFormats.Gray4)
+            {
+                byte val = pixels[0];
+                return $"Val: {val}";
+            }
+            else if (fmt == PixelFormats.Bgr24)
+            {
+                byte b = pixels[0];
+                byte g = pixels[1];
+                byte r = pixels[2];
+                byte gray = (byte)(0.299 * r + 0.587 * g + 0.114 * b);
+                return $"Val: {gray} (R:{r} G:{g} B:{b})";
+            }
+            else if (fmt == PixelFormats.Bgra32 || fmt == PixelFormats.Pbgra32)
+            {
+                byte b = pixels[0];
+                byte g = pixels[1];
+                byte r = pixels[2];
+                byte gray = (byte)(0.299 * r + 0.587 * g + 0.114 * b);
+                return $"Val: {gray} (R:{r} G:{g} B:{b})";
+            }
+            else if (fmt == PixelFormats.Rgb24)
+            {
+                byte r = pixels[0];
+                byte g = pixels[1];
+                byte b = pixels[2];
+                byte gray = (byte)(0.299 * r + 0.587 * g + 0.114 * b);
+                return $"Val: {gray} (R:{r} G:{g} B:{b})";
+            }
+            else
+            {
+                byte val = pixels[0];
+                return $"Val: {val}";
+            }
+        }
+        catch
+        {
+            return "Val: --";
         }
     }
 
@@ -293,9 +373,13 @@ public partial class ImageViewerControl : UserControl
 
     private void RootOnMouseMove(object sender, MouseEventArgs e)
     {
+        var mousePos = e.GetPosition(PART_RootGrid);
+        _lastMousePos = mousePos;
+        UpdateInfoText();
+
         if (_panning)
         {
-            var current = e.GetPosition(PART_RootGrid);
+            var current = mousePos;
             var dx = current.X - _panStart.X;
             var dy = current.Y - _panStart.Y;
 
@@ -308,7 +392,7 @@ public partial class ImageViewerControl : UserControl
 
         if (EnableRoiEditing && !_roiEditing && !_dragging && !_lineDragging && ImageSource is BitmapSource bmp && OverlayItems is not null)
         {
-            var contentPos = ContainerToContent(e.GetPosition(PART_RootGrid));
+            var contentPos = ContainerToContent(mousePos);
             var hover = FindHoverRoiLabel(bmp, contentPos);
             UpdateCursorForRoiHover(bmp, contentPos, hover);
             if (!string.Equals(_hoverRoiLabel, hover, StringComparison.OrdinalIgnoreCase))

@@ -708,7 +708,8 @@ public enum OriginAlgorithm
     FeatureBased = 2,
     TemplateMatchPyramid = 3,
     ShapePyramid = 4,
-    MvpShapeMatch = 5
+    MvpShapeMatch = 5,
+    MvpShapeMatch2 = 8
 }
 
 public enum DetectionRoiMode
@@ -725,7 +726,8 @@ public enum PointFindAlgorithm
     ShapeBased = 3,
     ShapePyramid = 4,
     MvpShapeMatch = 5,
-    MvpShapePyramid = 6
+    MvpShapePyramid = 6,
+    MvpShapeMatch2 = 8
 }
 
 public sealed class EdgePointSettings
