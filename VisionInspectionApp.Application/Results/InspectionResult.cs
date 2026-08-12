@@ -59,6 +59,14 @@ public sealed class InspectionResult
 
     public List<ImgArithmeticResult> ImgArithmetics { get; } = new();
 
+    public List<CreatePointResult> CreatePoints { get; } = new();
+
+    public List<CreateLineResult> CreateLines { get; } = new();
+
+    public List<CreateRectResult> CreateRects { get; } = new();
+
+    public List<CreateCircleResult> CreateCircles { get; } = new();
+
     public List<ContourCompareResult> ContourCompares { get; } = new();
 
     public List<LinePairDetectionResult> LinePairDetections { get; } = new();

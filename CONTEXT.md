@@ -569,6 +569,31 @@
     - **Nguyên nhân**: Mặc định OpenCV (`VideoCapture`) negotiation với Windows Driver USB sử dụng định dạng thô không nén YUY2 dẫn tới nghẽn băng thông USB 2.0/3.0 làm driver tự động hạ độ phân giải về 640x480.
     - **Khắc phục**: Tự động cấu hình chuẩn nén nén `MJPEG` (`cap.Set(VideoCaptureProperties.FourCC, VideoWriter.FourCC('M','J','P','G'))`), cho phép truyền luồng 1080P (1920x1080), 2K, 4K ở tốc độ 60FPS - 120FPS mượt mà qua bus USB.
     - Bổ sung ComboBox tùy chọn độ phân giải mong muốn (1080P Full HD 1920x1080, 720P, 2K, 4K, 640x480) và FPS (120 FPS, 60 FPS, 30 FPS) trong tab **Camera Settings**, đồng thời hiển thị thông số độ phân giải thực tế (`Res: 1920x1080`) & `FPS` trực tiếp trên nhãn HUD Overlay.
+  - **Triển khai Bộ Tool Tạo Đối Tượng Hình Học (Tool Creation Suite)**:
+    - **Thêm 4 Tool Mới Trong Toolbox Danh Mục "🛠️ Tool Creation"**: `CreatePoint`, `CreateLine`, `CreateRect`, `CreateCircle`.
+    - **Chuyển các ô nhập `PointRef` sang ComboBox linh hoạt**: Tất cả các thuộc tính điểm tham chiếu (`PointRef`, `Point1Ref`, `Point2Ref`, `CenterPointRef`, `BoundaryPointRef`) được chuyển sang định dạng ComboBox tự động nạp danh sách các node điểm hợp lệ (`Origin`, `Points`, `CreatePoints`, `CircleFinders`, `BlobDetections`), hỗ trợ vừa chọn nhanh vừa tự gõ tùy ý.
+    - **Nâng Cấp Hiển Thị Overlay Trực Quan (Real-time Visual Overlay)**:
+      - **CreatePoint**: Hiển thị đường chữ thập Crosshair kết hợp vòng tròn định vị tại tọa độ $(X, Y)$ giúp xác định vị trí cực kỳ chính xác.
+      - **CreateLine**: Hiển thị đường thẳng Line thực tế màu Xanh (`Brushes.LimeGreen`) nối giữa 2 điểm kèm nhãn kích thước chiều dài ($px$) và crosshair nhỏ ở 2 đầu mút.
+      - **CreateCircle**: Hiển thị đường cong tròn thực tế màu Xanh (`Brushes.LimeGreen`) tâm $(CX, CY)$ bán kính $R$ và crosshair tại tâm đường tròn.
+      - **CreateRect**: Hiển thị hình chữ nhật xoay theo góc và đánh dấu crosshair tại vị trí Anchor ($0\text{--}8$).
+    - **Sửa Lỗi Hiển Thị Overlay Trên Cả Màn Hình Preview Selected Node & Final Result Output**:
+      - Khắc phục lỗi lặp khối lệnh bị hỏng trong `AddConfigRoisForNode` khiến không vẽ được Overlay/ROI khi chọn node 4 tool khởi tạo hình học (`CreatePoint`, `CreateLine`, `CreateRect`, `CreateCircle`).
+      - Bổ sung handler vẽ Overlay kết quả tương ứng vào `BuildOverlayForNodeFromRunWithConfig` và `BuildFinalOverlayFromRun` trong `ToolEditorViewModel.Engine.cs`.
+      - Đưa `GetCurrentPointsMap()` thành phương thức lớp của `ToolEditorViewModel` để các partial class truy cập chung.
+      - Bổ sung `CalculateAnchorFromTopLeft` trong `GeometryCreationProcessor.cs` và cho phép kéo thả/thay đổi kích thước ROI của 4 tool khởi tạo hình học trực tiếp trên Canvas Preview (`OnRoiEdited`).
+    - **Tự Động Mở Danh Sách ComboBox Chọn RefName Khi Click/Focus (`IsDropDownOpen = true`)**:
+      - Đã thêm handler `ComboBox_PreviewMouseDown` và `ComboBox_GotFocus` trong `ToolEditorView.xaml.cs`.
+      - Cập nhật tất cả các ComboBox chọn `PointRef` (`CreatePoint`, `CreateLine`, `CreateRect`, `CreateCircle`) trong `ToolEditorView.xaml` bổ sung ràng buộc `Text="{Binding ..., Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"`, `IsTextSearchEnabled="True"`, `StaysOpenOnEdit="True"`.
+      - Khi bấm vào ô ComboBox, danh sách các điểm ứng viên (`Origin`, `P1`, `P2`, `CP1`, `CIR1`,...) tự động sổ xuống ngay lập tức giúp chọn nhanh mà không cần nhớ từ khóa.
+    - **Tuân Thủ Công Tắc "Show ROI" Khi Xem Qua Node `ResultView`**:
+      - Khắc phục lỗi khi bỏ chọn "Show ROI" (`ShowRoisInSelectedPreview = false`) trên thanh Header nhưng xem qua node `ResultView` vẫn bị hiện khung viền ROI.
+      - Cập nhật `BuildFinalOverlayFromRun` và `BuildOverlayForNodeFromRunWithConfig` trong `ToolEditorViewModel.Engine.cs` kiểm tra điều kiện `ShowRoisInSelectedPreview && ShowRoisInFinalPreview` trước khi thêm các khung viền ROI (`OverlayRectItem` / `CreateRotatedRoi`).
+      - Khi bỏ chọn "Show ROI", toàn bộ khung viền ROI tìm kiếm/dạy học bị ẩn hoàn toàn, chỉ giữ lại các nét kết quả đo đạc (điểm chữ thập crosshair của CreatePoint, đường thẳng của CreateLine, đường tròn của CreateCircle và hình chữ nhật kết quả `OverlayRectItem` của CreateRect).
+    - **Khắc Phục Lỗi ComboBox Bị kẹt Loop Tự Động Mở Lại Khi Bấm Chọn Hoặc Click Out (Tool Editor & HMI Manager)**:
+      - Loại bỏ hoàn toàn handler `GotFocus` (`ComboBox_GotFocus`) vốn gây ra vòng lặp vô tận tự động mở lại ComboBox mỗi khi popup đóng lại và focus trả về control.
+      - Cập nhật `ComboBox_PreviewMouseDown` chỉ tự động mở danh sách khi nhấp chuột trực tiếp vào vùng nhập liệu text của ComboBox có `IsEditable="True"` và `IsDropDownOpen == false`.
+      - Trả lại cơ chế đóng/mở tự nhiên mặc định chuẩn WPF cho toàn bộ ComboBox chuẩn (non-editable). Khi chọn item hoặc nhấp ra ngoài, danh sách sẽ đóng lại lập tức và hoàn toàn.
 
 ## Roadmap
 

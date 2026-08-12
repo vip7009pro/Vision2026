@@ -123,11 +123,21 @@ Lộ trình tích hợp tính năng Chụp ảnh từ camera và hỗ trợ các
   - Chụp/Nạp đa ảnh (≥ 3 ảnh) ở nhiều vị trí/góc nghiêng khác nhau.
   - Tính toán chính xác thông số camera (Camera Matrix `fx, fy, cx, cy`, Distortion Coefficients `k1, k2, p1, p2, k3`, Reprojection Error `px`) và tỉ lệ chuyển đổi `PixelsPerMm`.
   - Tích hợp công tắc `Undistort (Calib)` ở Properties Panel của Node `ImageSource` cho phép bật/tắt tự động khử biến dạng ống kính khi chạy pipeline.
-  - Bổ sung nút bấm **`♟ Chessboard Calib`** nổi bật trên thanh công cụ Tool Editor.
-- [x] Task 117: Khắc phục lỗi độ phân giải camera bị giới hạn ở 640x480 & Hỗ trợ chuẩn 1080P / 120FPS:
+- [x] Task 117: Triển khai Bộ Tool Tạo Đối Tượng Hình Học (**Tool Creation Suite**):
+  - **CreatePoint**: Cho phép tạo điểm từ tọa độ thủ công $(X, Y)$ hoặc chọn node Point từ ComboBox (`AvailablePointNames`), vẽ Crosshair + Circle định vị rõ ràng.
+  - **CreateLine**: Hỗ trợ 2 chế độ (`TwoPoints` và `PointAndAngle`), hỗ trợ ComboBox chọn điểm nguồn và vẽ đường Line thực tế kèm nhãn chiều dài + crosshair 2 đầu.
+  - **CreateRect**: Cho phép tạo chữ nhật từ Point Anchor (9 vị trí Anchor), ComboBox chọn điểm nguồn, vẽ hình chữ nhật xoay kèm crosshair tại vị trí Anchor.
+  - **CreateCircle**: Hỗ trợ 2 chế độ (`CenterAndRadius` và `TwoPoints`), ComboBox chọn điểm nguồn và vẽ đường tròn thực tế kèm tâm crosshair.
+  - **Hiển thị Visual Overlays**: Khắc phục triệt để lỗi không hiển thị Overlay/ROI khi chọn node cũng như khi xem màn hình Preview Final Output (`BuildOverlayForNodeFromRunWithConfig`, `BuildFinalOverlayFromRun`). Cho phép kéo thả & chỉnh sửa vị trí ROI trực tiếp trên Canvas.
+- [x] Task 118: Khắc phục lỗi độ phân giải camera bị giới hạn ở 640x480 & Hỗ trợ chuẩn 1080P / 120FPS:
   - Tự động cấu hình chuẩn nén nén MJPEG (`FourCC('M','J','P','G')`) giải phóng băng thông bus USB 2.0/3.0.
   - Cho phép chọn độ phân giải mong muốn (1080P Full HD 1920x1080, 720P HD, 2K QHD, 4K UHD, 640x480 VGA) và tần số quét (120 FPS, 60 FPS, 30 FPS) trong tab Camera Settings.
   - Hiển thị thông số độ phân giải thực tế (`Res: 1920x1080`) & `FPS` trực tiếp trên nhãn HUD Overlay của giao diện xem stream live.
+- [x] Task 119: Tự động mở danh sách ComboBox (Tool Editor & HMI Manager) khi click/focus và Khắc phục tuân thủ công tắc "Show ROI" khi xem qua node ResultView:
+  - Bổ sung handler `ComboBox_PreviewMouseDown` và `ComboBox_GotFocus` trong `ToolEditorView.xaml.cs` và `HmiPropertyInspectorView.xaml.cs`.
+  - Cập nhật tất cả ComboBox chọn RefName, PLC ID, Tag Address, Control Types, Behaviors, Data Types,... trên XAML với ràng buộc `IsTextSearchEnabled="True"`, `StaysOpenOnEdit="True"`.
+  - Sổ danh sách ứng viên lập tức khi nhấp/focus vào bất kỳ ComboBox nào giúp chọn nhanh trực quan mà không cần gõ từ khóa.
+  - Cập nhật `BuildFinalOverlayFromRun` và `BuildOverlayForNodeFromRunWithConfig` trong `Engine.cs` để ẩn toàn bộ khung viền ROI khi bỏ chọn "Show ROI" (`ShowRoisInSelectedPreview = false`), giữ lại nét kết quả đo đạc (crosshair, đường thẳng, đường tròn, chữ nhật `OverlayRectItem`).
 
 
 

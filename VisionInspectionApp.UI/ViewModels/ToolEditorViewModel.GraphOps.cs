@@ -15,6 +15,7 @@ using Microsoft.Win32;
 using OpenCvSharp;
 using OpenCvSharp.WpfExtensions;
 using VisionInspectionApp.Application;
+using VisionInspectionApp.Application.Services;
 using VisionInspectionApp.Models;
 using VisionInspectionApp.UI.Controls;
 using VisionInspectionApp.UI.Services;
@@ -668,6 +669,31 @@ namespace VisionInspectionApp.UI.ViewModels
             }
         }
     
+        private Dictionary<string, OpenCvSharp.Point2d> GetCurrentPointsMap()
+        {
+            var dict = new Dictionary<string, OpenCvSharp.Point2d>(StringComparer.OrdinalIgnoreCase);
+            if (_lastRun?.Points != null)
+            {
+                foreach (var p in _lastRun.Points)
+                    dict[p.Name] = p.Position;
+            }
+            if (_lastRun?.Origin != null && _lastRun.Origin.Pass)
+            {
+                dict["Origin"] = _lastRun.Origin.Position;
+            }
+            if (_lastRun?.CreatePoints != null)
+            {
+                foreach (var cp in _lastRun.CreatePoints)
+                    dict[cp.Name] = new OpenCvSharp.Point2d(cp.X, cp.Y);
+            }
+            if (_lastRun?.CircleFinders != null)
+            {
+                foreach (var cf in _lastRun.CircleFinders)
+                    if (cf.Found) dict[cf.Name] = cf.Center;
+            }
+            return dict;
+        }
+
         private void AddConfigRoisForNode(ToolGraphNodeViewModel node, List<OverlayItem> dst)
         {
             if (_config is null || !ShowRoisInSelectedPreview)
@@ -677,6 +703,7 @@ namespace VisionInspectionApp.UI.ViewModels
     
             var config = _config;
             var showRois = ShowRoisInSelectedPreview;
+
             void AddPointRoi(string pointName)
             {
                 var p = _config.Points.FirstOrDefault(x => string.Equals(x.Name, pointName, StringComparison.OrdinalIgnoreCase));
@@ -1290,7 +1317,67 @@ namespace VisionInspectionApp.UI.ViewModels
                 {
                     dst.Add(CreateRotatedRoi(_config.DefectConfig.InspectRoi, Brushes.Orange, "DefectROI"));
                 }
-    
+                return;
+            }
+
+            if (string.Equals(node.Type, "CreatePoint", StringComparison.OrdinalIgnoreCase))
+            {
+                var cp = _config.CreatePoints?.FirstOrDefault(x => string.Equals(x.Name, node.RefName, StringComparison.OrdinalIgnoreCase));
+                if (cp is not null && showRois)
+                {
+                    var pts = GetCurrentPointsMap();
+                    var res = GeometryCreationProcessor.EvaluateCreatePoint(cp, pts);
+                    dst.Add(CreateRotatedRoi(new Roi { X = (int)res.X - 10, Y = (int)res.Y - 10, Width = 20, Height = 20 }, Brushes.LimeGreen, $"{cp.Name} Point ({res.X:F1}, {res.Y:F1})"));
+                    AddCross(dst, res.X, res.Y, 20, Brushes.LimeGreen, 2.0);
+                    AddCircle(dst, res.X, res.Y, 6, Brushes.LimeGreen, 1.5);
+                }
+                return;
+            }
+
+            if (string.Equals(node.Type, "CreateLine", StringComparison.OrdinalIgnoreCase))
+            {
+                var cl = _config.CreateLines?.FirstOrDefault(x => string.Equals(x.Name, node.RefName, StringComparison.OrdinalIgnoreCase));
+                if (cl is not null && showRois)
+                {
+                    var pts = GetCurrentPointsMap();
+                    var res = GeometryCreationProcessor.EvaluateCreateLine(cl, pts);
+                    double minX = Math.Min(res.X1, res.X2);
+                    double minY = Math.Min(res.Y1, res.Y2);
+                    double w = Math.Max(10, Math.Abs(res.X2 - res.X1));
+                    double h = Math.Max(10, Math.Abs(res.Y2 - res.Y1));
+                    dst.Add(CreateRotatedRoi(new Roi { X = (int)minX, Y = (int)minY, Width = (int)w, Height = (int)h, Angle = res.Angle }, Brushes.LimeGreen, $"{cl.Name} Line"));
+                    dst.Add(new OverlayLineItem { X1 = res.X1, Y1 = res.Y1, X2 = res.X2, Y2 = res.Y2, Stroke = Brushes.LimeGreen, StrokeThickness = 2.5, Label = $"{cl.Name} (L={res.Length:F1}px)" });
+                    AddCross(dst, res.X1, res.Y1, 10, Brushes.LimeGreen, 1.5);
+                    AddCross(dst, res.X2, res.Y2, 10, Brushes.LimeGreen, 1.5);
+                }
+                return;
+            }
+
+            if (string.Equals(node.Type, "CreateRect", StringComparison.OrdinalIgnoreCase))
+            {
+                var cr = _config.CreateRects?.FirstOrDefault(x => string.Equals(x.Name, node.RefName, StringComparison.OrdinalIgnoreCase));
+                if (cr is not null && showRois)
+                {
+                    var pts = GetCurrentPointsMap();
+                    var res = GeometryCreationProcessor.EvaluateCreateRect(cr, pts);
+                    dst.Add(CreateRotatedRoi(new Roi { X = (int)res.TopLeftX, Y = (int)res.TopLeftY, Width = (int)res.Width, Height = (int)res.Height, Angle = res.Angle }, Brushes.LimeGreen, $"{cr.Name} Rect"));
+                    AddCross(dst, res.X, res.Y, 12, Brushes.LimeGreen, 1.5);
+                }
+                return;
+            }
+
+            if (string.Equals(node.Type, "CreateCircle", StringComparison.OrdinalIgnoreCase))
+            {
+                var cc = _config.CreateCircles?.FirstOrDefault(x => string.Equals(x.Name, node.RefName, StringComparison.OrdinalIgnoreCase));
+                if (cc is not null && showRois)
+                {
+                    var pts = GetCurrentPointsMap();
+                    var res = GeometryCreationProcessor.EvaluateCreateCircle(cc, pts);
+                    int r = (int)res.Radius;
+                    dst.Add(CreateRotatedRoi(new Roi { X = (int)res.CenterX - r, Y = (int)res.CenterY - r, Width = r * 2, Height = r * 2 }, Brushes.LimeGreen, $"{cc.Name} Circle"));
+                    AddCircle(dst, res.CenterX, res.CenterY, res.Radius, Brushes.LimeGreen, 2.5);
+                    AddCross(dst, res.CenterX, res.CenterY, 15, Brushes.LimeGreen, 1.5);
+                }
                 return;
             }
         }

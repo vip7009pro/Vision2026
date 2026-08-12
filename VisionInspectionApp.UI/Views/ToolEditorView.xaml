@@ -3154,6 +3154,251 @@
                 </StackPanel>
             </Border>
 
+            <!-- CreatePoint Card -->
+            <Border Background="{DynamicResource PanelBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="4" Padding="8" Margin="0,4,0,0" Visibility="{Binding IsCreatePointNode, Converter={StaticResource BoolToVis}}">
+                <StackPanel>
+                    <TextBlock Text="📍 CreatePoint Properties" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource TextBrush}" Margin="0,0,0,6"/>
+
+                    <Grid Margin="0,0,0,4">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="90"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="Point Ref:" VerticalAlignment="Center" FontSize="11" Foreground="{DynamicResource TextMutedBrush}"/>
+                        <ComboBox Grid.Column="1" ItemsSource="{Binding AvailablePointNames}" Text="{Binding CreatePoint_PointRef, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" SelectedItem="{Binding CreatePoint_PointRef, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" IsEditable="True" IsTextSearchEnabled="True" StaysOpenOnEdit="True" PreviewMouseDown="ComboBox_PreviewMouseDown" FontSize="11" ToolTip="Chọn Point node nguồn (hoặc gõ tên/để trống nếu nhập thủ công)"/>
+                    </Grid>
+
+                    <UniformGrid Columns="2" Margin="0,4,0,0">
+                        <StackPanel Margin="2">
+                            <TextBlock Text="X (px):" FontSize="10" Foreground="{DynamicResource TextMutedBrush}"/>
+                            <TextBox Text="{Binding CreatePoint_X, UpdateSourceTrigger=PropertyChanged}" FontSize="11" Padding="2"/>
+                        </StackPanel>
+                        <StackPanel Margin="2">
+                            <TextBlock Text="Y (px):" FontSize="10" Foreground="{DynamicResource TextMutedBrush}"/>
+                            <TextBox Text="{Binding CreatePoint_Y, UpdateSourceTrigger=PropertyChanged}" FontSize="11" Padding="2"/>
+                        </StackPanel>
+                    </UniformGrid>
+                </StackPanel>
+            </Border>
+
+            <!-- CreateLine Card -->
+            <Border Background="{DynamicResource PanelBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="4" Padding="8" Margin="0,4,0,0" Visibility="{Binding IsCreateLineNode, Converter={StaticResource BoolToVis}}">
+                <StackPanel>
+                    <TextBlock Text="📏 CreateLine Properties" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource TextBrush}" Margin="0,0,0,6"/>
+
+                    <Grid Margin="0,0,0,6">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="90"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="Chế Độ (Mode):" VerticalAlignment="Center" FontSize="11" Foreground="{DynamicResource TextMutedBrush}"/>
+                        <ComboBox Grid.Column="1" ItemsSource="{Binding AvailableCreateLineModes}" SelectedItem="{Binding CreateLine_Mode, UpdateSourceTrigger=PropertyChanged}" FontSize="11"/>
+                    </Grid>
+
+                    <!-- TwoPoints Mode Controls -->
+                    <StackPanel Visibility="{Binding CreateLine_IsTwoPointsMode, Converter={StaticResource BoolToVis}}">
+                        <TextBlock Text="-- Point 1 --" FontSize="10" FontWeight="SemiBold" Foreground="{DynamicResource AccentBrush}" Margin="0,2,0,2"/>
+                        <Grid Margin="0,0,0,2">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="90"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="Point 1 Ref:" VerticalAlignment="Center" FontSize="10" Foreground="{DynamicResource TextMutedBrush}"/>
+                            <ComboBox Grid.Column="1" ItemsSource="{Binding AvailablePointNames}" Text="{Binding CreateLine_Point1Ref, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" SelectedItem="{Binding CreateLine_Point1Ref, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" IsEditable="True" IsTextSearchEnabled="True" StaysOpenOnEdit="True" PreviewMouseDown="ComboBox_PreviewMouseDown" FontSize="11"/>
+                        </Grid>
+                        <UniformGrid Columns="2" Margin="0,0,0,4">
+                            <StackPanel Margin="2">
+                                <TextBlock Text="X1 (px):" FontSize="10" Foreground="{DynamicResource TextMutedBrush}"/>
+                                <TextBox Text="{Binding CreateLine_X1, UpdateSourceTrigger=PropertyChanged}" FontSize="11" Padding="2"/>
+                            </StackPanel>
+                            <StackPanel Margin="2">
+                                <TextBlock Text="Y1 (px):" FontSize="10" Foreground="{DynamicResource TextMutedBrush}"/>
+                                <TextBox Text="{Binding CreateLine_Y1, UpdateSourceTrigger=PropertyChanged}" FontSize="11" Padding="2"/>
+                            </StackPanel>
+                        </UniformGrid>
+
+                        <TextBlock Text="-- Point 2 --" FontSize="10" FontWeight="SemiBold" Foreground="{DynamicResource AccentBrush}" Margin="0,4,0,2"/>
+                        <Grid Margin="0,0,0,2">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="90"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="Point 2 Ref:" VerticalAlignment="Center" FontSize="10" Foreground="{DynamicResource TextMutedBrush}"/>
+                            <ComboBox Grid.Column="1" ItemsSource="{Binding AvailablePointNames}" Text="{Binding CreateLine_Point2Ref, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" SelectedItem="{Binding CreateLine_Point2Ref, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" IsEditable="True" IsTextSearchEnabled="True" StaysOpenOnEdit="True" PreviewMouseDown="ComboBox_PreviewMouseDown" FontSize="11"/>
+                        </Grid>
+                        <UniformGrid Columns="2">
+                            <StackPanel Margin="2">
+                                <TextBlock Text="X2 (px):" FontSize="10" Foreground="{DynamicResource TextMutedBrush}"/>
+                                <TextBox Text="{Binding CreateLine_X2, UpdateSourceTrigger=PropertyChanged}" FontSize="11" Padding="2"/>
+                            </StackPanel>
+                            <StackPanel Margin="2">
+                                <TextBlock Text="Y2 (px):" FontSize="10" Foreground="{DynamicResource TextMutedBrush}"/>
+                                <TextBox Text="{Binding CreateLine_Y2, UpdateSourceTrigger=PropertyChanged}" FontSize="11" Padding="2"/>
+                            </StackPanel>
+                        </UniformGrid>
+                    </StackPanel>
+
+                    <!-- PointAndAngle Mode Controls -->
+                    <StackPanel Visibility="{Binding CreateLine_IsPointAndAngleMode, Converter={StaticResource BoolToVis}}">
+                        <Grid Margin="0,0,0,4">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="90"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="Point Ref:" VerticalAlignment="Center" FontSize="10" Foreground="{DynamicResource TextMutedBrush}"/>
+                            <ComboBox Grid.Column="1" ItemsSource="{Binding AvailablePointNames}" Text="{Binding CreateLine_PointRef, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" SelectedItem="{Binding CreateLine_PointRef, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" IsEditable="True" IsTextSearchEnabled="True" StaysOpenOnEdit="True" PreviewMouseDown="ComboBox_PreviewMouseDown" FontSize="11"/>
+                        </Grid>
+                        <UniformGrid Columns="2" Margin="0,0,0,4">
+                            <StackPanel Margin="2">
+                                <TextBlock Text="X (px):" FontSize="10" Foreground="{DynamicResource TextMutedBrush}"/>
+                                <TextBox Text="{Binding CreateLine_X, UpdateSourceTrigger=PropertyChanged}" FontSize="11" Padding="2"/>
+                            </StackPanel>
+                            <StackPanel Margin="2">
+                                <TextBlock Text="Y (px):" FontSize="10" Foreground="{DynamicResource TextMutedBrush}"/>
+                                <TextBox Text="{Binding CreateLine_Y, UpdateSourceTrigger=PropertyChanged}" FontSize="11" Padding="2"/>
+                            </StackPanel>
+                        </UniformGrid>
+                        <UniformGrid Columns="2">
+                            <StackPanel Margin="2">
+                                <TextBlock Text="Góc (Angle °):" FontSize="10" Foreground="{DynamicResource TextMutedBrush}"/>
+                                <TextBox Text="{Binding CreateLine_Angle, UpdateSourceTrigger=PropertyChanged}" FontSize="11" Padding="2"/>
+                            </StackPanel>
+                            <StackPanel Margin="2">
+                                <TextBlock Text="Chiều Dài (px):" FontSize="10" Foreground="{DynamicResource TextMutedBrush}"/>
+                                <TextBox Text="{Binding CreateLine_Length, UpdateSourceTrigger=PropertyChanged}" FontSize="11" Padding="2"/>
+                            </StackPanel>
+                        </UniformGrid>
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+
+            <!-- CreateRect Card -->
+            <Border Background="{DynamicResource PanelBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="4" Padding="8" Margin="0,4,0,0" Visibility="{Binding IsCreateRectNode, Converter={StaticResource BoolToVis}}">
+                <StackPanel>
+                    <TextBlock Text="▭ CreateRect Properties" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource TextBrush}" Margin="0,0,0,6"/>
+
+                    <Grid Margin="0,0,0,4">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="90"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="Point Ref:" VerticalAlignment="Center" FontSize="11" Foreground="{DynamicResource TextMutedBrush}"/>
+                        <ComboBox Grid.Column="1" ItemsSource="{Binding AvailablePointNames}" Text="{Binding CreateRect_PointRef, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" SelectedItem="{Binding CreateRect_PointRef, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" IsEditable="True" IsTextSearchEnabled="True" StaysOpenOnEdit="True" PreviewMouseDown="ComboBox_PreviewMouseDown" FontSize="11"/>
+                    </Grid>
+
+                    <UniformGrid Columns="2" Margin="0,0,0,4">
+                        <StackPanel Margin="2">
+                            <TextBlock Text="Point X (px):" FontSize="10" Foreground="{DynamicResource TextMutedBrush}"/>
+                            <TextBox Text="{Binding CreateRect_X, UpdateSourceTrigger=PropertyChanged}" FontSize="11" Padding="2"/>
+                        </StackPanel>
+                        <StackPanel Margin="2">
+                            <TextBlock Text="Point Y (px):" FontSize="10" Foreground="{DynamicResource TextMutedBrush}"/>
+                            <TextBox Text="{Binding CreateRect_Y, UpdateSourceTrigger=PropertyChanged}" FontSize="11" Padding="2"/>
+                        </StackPanel>
+                    </UniformGrid>
+
+                    <UniformGrid Columns="2" Margin="0,0,0,4">
+                        <StackPanel Margin="2">
+                            <TextBlock Text="Rộng (Width px):" FontSize="10" Foreground="{DynamicResource TextMutedBrush}"/>
+                            <TextBox Text="{Binding CreateRect_Width, UpdateSourceTrigger=PropertyChanged}" FontSize="11" Padding="2"/>
+                        </StackPanel>
+                        <StackPanel Margin="2">
+                            <TextBlock Text="Cao (Height px):" FontSize="10" Foreground="{DynamicResource TextMutedBrush}"/>
+                            <TextBox Text="{Binding CreateRect_Height, UpdateSourceTrigger=PropertyChanged}" FontSize="11" Padding="2"/>
+                        </StackPanel>
+                    </UniformGrid>
+
+                    <Grid Margin="0,0,0,6">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="90"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="Góc Xoay (°):" VerticalAlignment="Center" FontSize="11" Foreground="{DynamicResource TextMutedBrush}"/>
+                        <TextBox Grid.Column="1" Text="{Binding CreateRect_Angle, UpdateSourceTrigger=PropertyChanged}" FontSize="11" Padding="2"/>
+                    </Grid>
+
+                    <Grid Margin="0,0,0,2">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="90"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="Point Anchor:" VerticalAlignment="Center" FontSize="11" Foreground="{DynamicResource TextMutedBrush}"/>
+                        <ComboBox Grid.Column="1" ItemsSource="{Binding AvailableRectAnchors}" SelectedItem="{Binding CreateRect_Anchor, UpdateSourceTrigger=PropertyChanged}" FontSize="11"/>
+                    </Grid>
+                </StackPanel>
+            </Border>
+
+            <!-- CreateCircle Card -->
+            <Border Background="{DynamicResource PanelBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="4" Padding="8" Margin="0,4,0,0" Visibility="{Binding IsCreateCircleNode, Converter={StaticResource BoolToVis}}">
+                <StackPanel>
+                    <TextBlock Text="⭕ CreateCircle Properties" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource TextBrush}" Margin="0,0,0,6"/>
+
+                    <Grid Margin="0,0,0,6">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="90"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="Chế Độ (Mode):" VerticalAlignment="Center" FontSize="11" Foreground="{DynamicResource TextMutedBrush}"/>
+                        <ComboBox Grid.Column="1" ItemsSource="{Binding AvailableCreateCircleModes}" SelectedItem="{Binding CreateCircle_Mode, UpdateSourceTrigger=PropertyChanged}" FontSize="11"/>
+                    </Grid>
+
+                    <TextBlock Text="-- Center Point --" FontSize="10" FontWeight="SemiBold" Foreground="{DynamicResource AccentBrush}" Margin="0,2,0,2"/>
+                    <Grid Margin="0,0,0,4">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="90"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="Center Ref:" VerticalAlignment="Center" FontSize="10" Foreground="{DynamicResource TextMutedBrush}"/>
+                        <ComboBox Grid.Column="1" ItemsSource="{Binding AvailablePointNames}" Text="{Binding CreateCircle_CenterPointRef, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" SelectedItem="{Binding CreateCircle_CenterPointRef, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" IsEditable="True" IsTextSearchEnabled="True" StaysOpenOnEdit="True" PreviewMouseDown="ComboBox_PreviewMouseDown" FontSize="11"/>
+                    </Grid>
+                    <UniformGrid Columns="2" Margin="0,0,0,4">
+                        <StackPanel Margin="2">
+                            <TextBlock Text="Center X (px):" FontSize="10" Foreground="{DynamicResource TextMutedBrush}"/>
+                            <TextBox Text="{Binding CreateCircle_CenterX, UpdateSourceTrigger=PropertyChanged}" FontSize="11" Padding="2"/>
+                        </StackPanel>
+                        <StackPanel Margin="2">
+                            <TextBlock Text="Center Y (px):" FontSize="10" Foreground="{DynamicResource TextMutedBrush}"/>
+                            <TextBox Text="{Binding CreateCircle_CenterY, UpdateSourceTrigger=PropertyChanged}" FontSize="11" Padding="2"/>
+                        </StackPanel>
+                    </UniformGrid>
+
+                    <!-- CenterAndRadius Mode Controls -->
+                    <StackPanel Visibility="{Binding CreateCircle_IsCenterAndRadiusMode, Converter={StaticResource BoolToVis}}">
+                        <Grid Margin="0,2,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="90"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="Bán Kính (Radius):" VerticalAlignment="Center" FontSize="10" Foreground="{DynamicResource TextMutedBrush}"/>
+                            <TextBox Grid.Column="1" Text="{Binding CreateCircle_Radius, UpdateSourceTrigger=PropertyChanged}" FontSize="11" Padding="2"/>
+                        </Grid>
+                    </StackPanel>
+
+                    <!-- TwoPoints Mode Controls -->
+                    <StackPanel Visibility="{Binding CreateCircle_IsTwoPointsMode, Converter={StaticResource BoolToVis}}">
+                        <TextBlock Text="-- Boundary Point --" FontSize="10" FontWeight="SemiBold" Foreground="{DynamicResource AccentBrush}" Margin="0,4,0,2"/>
+                        <Grid Margin="0,0,0,4">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="90"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="Boundary Ref:" VerticalAlignment="Center" FontSize="10" Foreground="{DynamicResource TextMutedBrush}"/>
+                            <ComboBox Grid.Column="1" ItemsSource="{Binding AvailablePointNames}" Text="{Binding CreateCircle_BoundaryPointRef, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" SelectedItem="{Binding CreateCircle_BoundaryPointRef, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" IsEditable="True" IsTextSearchEnabled="True" StaysOpenOnEdit="True" PreviewMouseDown="ComboBox_PreviewMouseDown" FontSize="11"/>
+                        </Grid>
+                        <UniformGrid Columns="2">
+                            <StackPanel Margin="2">
+                                <TextBlock Text="Boundary X:" FontSize="10" Foreground="{DynamicResource TextMutedBrush}"/>
+                                <TextBox Text="{Binding CreateCircle_BoundaryX, UpdateSourceTrigger=PropertyChanged}" FontSize="11" Padding="2"/>
+                            </StackPanel>
+                            <StackPanel Margin="2">
+                                <TextBlock Text="Boundary Y:" FontSize="10" Foreground="{DynamicResource TextMutedBrush}"/>
+                                <TextBox Text="{Binding CreateCircle_BoundaryY, UpdateSourceTrigger=PropertyChanged}" FontSize="11" Padding="2"/>
+                            </StackPanel>
+                        </UniformGrid>
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+
                             </StackPanel>
                         </ScrollViewer>
                     </Border>

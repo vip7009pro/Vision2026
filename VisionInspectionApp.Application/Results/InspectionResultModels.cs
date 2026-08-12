@@ -182,3 +182,11 @@ public sealed record AngleResult(
     Point2d BDir);
 
 public sealed record CodeDetectionResult(string Name, bool Found, string Text, Rect BoundingBox);
+
+public sealed record CreatePointResult(string Name, bool Success, double X, double Y);
+
+public sealed record CreateLineResult(string Name, bool Success, double X1, double Y1, double X2, double Y2, double Angle, double Length);
+
+public sealed record CreateRectResult(string Name, bool Success, double X, double Y, double Width, double Height, double Angle, RectAnchorPosition Anchor, double TopLeftX, double TopLeftY);
+
+public sealed record CreateCircleResult(string Name, bool Success, double CenterX, double CenterY, double Radius);

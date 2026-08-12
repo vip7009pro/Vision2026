@@ -101,9 +101,12 @@
 
                         <TextBlock Text="Địa chỉ / Tag PLC (Read &amp; Write):" FontSize="11" Margin="0,2,0,2" Foreground="{DynamicResource TextMutedBrush}" />
                         <ComboBox ItemsSource="{Binding AvailableTags}"
-                                  Text="{Binding SelectedControl.ReadTagName, Mode=TwoWay}"
+                                  Text="{Binding SelectedControl.ReadTagName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                  SelectedItem="{Binding SelectedControl.ReadTagName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                                   IsEditable="True"
                                   IsTextSearchEnabled="True"
+                                  StaysOpenOnEdit="True"
+                                  PreviewMouseDown="ComboBox_PreviewMouseDown"
                                   MaxDropDownHeight="220"
                                   Padding="4,3" Margin="0,0,0,2"
                                   ToolTip="Nhập trực tiếp địa chỉ PLC (như X0, Y0, D100, M10, MW100) hoặc chọn Tag từ danh sách" />
@@ -117,9 +120,12 @@
                         <StackPanel Visibility="{Binding SelectedControl.UseSeparateWriteAddress, Converter={StaticResource BoolToVis}}" Margin="0,0,0,6">
                             <TextBlock Text="Địa chỉ / Tag Ghi riêng (Write Address / Tag):" FontSize="11" Margin="0,2,0,2" Foreground="{DynamicResource TextMutedBrush}" />
                             <ComboBox ItemsSource="{Binding AvailableTags}"
-                                      Text="{Binding SelectedControl.WriteTagName, Mode=TwoWay}"
+                                      Text="{Binding SelectedControl.WriteTagName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                      SelectedItem="{Binding SelectedControl.WriteTagName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                                       IsEditable="True"
                                       IsTextSearchEnabled="True"
+                                      StaysOpenOnEdit="True"
+                                      PreviewMouseDown="ComboBox_PreviewMouseDown"
                                       MaxDropDownHeight="220"
                                       Padding="4,3" Margin="0,0,0,2"
                                       ToolTip="Địa chỉ Ghi riêng (Nếu khác địa chỉ Đọc ở trên)" />
@@ -158,7 +164,7 @@
 
                         <TextBlock Text="Định dạng hiển thị số (Format String):" FontSize="11" Margin="0,2,0,2" Foreground="{DynamicResource TextMutedBrush}" />
                         <TextBox Text="{Binding SelectedControl.ValueFormat, UpdateSourceTrigger=PropertyChanged}" Padding="4,3" Margin="0,0,0,6"
-                                 ToolTip="Ví dụ: 0.## (2 chữ số thập phân), 0.00, 0, #,##0" />
+                                  ToolTip="Ví dụ: 0.## (2 chữ số thập phân), 0.00, 0, #,##0" />
 
                         <TextBlock Text="Căn lề văn bản (Text Alignment):" FontSize="11" Margin="0,2,0,2" Foreground="{DynamicResource TextMutedBrush}" />
                         <ComboBox ItemsSource="{Binding TextAlignments}"
@@ -195,7 +201,7 @@
                             <!-- Pick from Global Library -->
                             <TextBlock Text="Chọn từ Thư viện Ảnh Toàn Cục:" FontSize="11" Foreground="{DynamicResource TextMutedBrush}" Margin="0,0,0,2" />
                             <ComboBox ItemsSource="{Binding GlobalLibraryImages}"
-                                      SelectedItem="{Binding SelectedGlobalLibraryImage, Mode=TwoWay}"
+                                      SelectedItem="{Binding SelectedGlobalLibraryImage, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                                       Padding="4,3" Margin="0,0,0,8"
                                       ToolTip="Chọn ảnh từ Thư viện toàn cục đã được lưu từ các dự án trước" />
 

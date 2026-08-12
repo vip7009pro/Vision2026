@@ -2659,6 +2659,103 @@ public partial class InspectionService
                 result.ImgArithmetics.Add(t.Result);
             }
 
+            if (result.Origin is not null && result.Origin.Pass)
+            {
+                foundPoints["Origin"] = result.Origin.Position;
+            }
+
+            foreach (var cr in result.CircleFinders)
+            {
+                if (cr.Found)
+                {
+                    foundPoints[cr.Name] = cr.Center;
+                }
+            }
+
+            // 1. Process CreatePoint definitions
+            var createPointTasks = (config.CreatePoints ?? new List<CreatePointDefinition>())
+                .Where(cp => cp is not null && !string.IsNullOrWhiteSpace(cp.Name))
+                .Select(cp => Task.Run(() =>
+                {
+                    var __sw = System.Diagnostics.Stopwatch.StartNew();
+                    var res = GeometryCreationProcessor.EvaluateCreatePoint(cp, foundPoints);
+                    __sw.Stop();
+                    result.Timings.NodeTimings[cp.Name] = (int)__sw.ElapsedMilliseconds;
+                    return res;
+                }))
+                .ToArray();
+
+            Task.WaitAll(createPointTasks);
+            foreach (var t in createPointTasks)
+            {
+                var cpr = t.Result;
+                result.CreatePoints.Add(cpr);
+                if (cpr.Success)
+                {
+                    foundPoints[cpr.Name] = new Point2d(cpr.X, cpr.Y);
+                }
+            }
+
+            // 2. Process CreateLine definitions
+            var createLineTasks = (config.CreateLines ?? new List<CreateLineDefinition>())
+                .Where(cl => cl is not null && !string.IsNullOrWhiteSpace(cl.Name))
+                .Select(cl => Task.Run(() =>
+                {
+                    var __sw = System.Diagnostics.Stopwatch.StartNew();
+                    var res = GeometryCreationProcessor.EvaluateCreateLine(cl, foundPoints);
+                    __sw.Stop();
+                    result.Timings.NodeTimings[cl.Name] = (int)__sw.ElapsedMilliseconds;
+                    return res;
+                }))
+                .ToArray();
+
+            Task.WaitAll(createLineTasks);
+            foreach (var t in createLineTasks)
+            {
+                var clr = t.Result;
+                result.CreateLines.Add(clr);
+            }
+
+            // 3. Process CreateRect definitions
+            var createRectTasks = (config.CreateRects ?? new List<CreateRectDefinition>())
+                .Where(cr => cr is not null && !string.IsNullOrWhiteSpace(cr.Name))
+                .Select(cr => Task.Run(() =>
+                {
+                    var __sw = System.Diagnostics.Stopwatch.StartNew();
+                    var res = GeometryCreationProcessor.EvaluateCreateRect(cr, foundPoints);
+                    __sw.Stop();
+                    result.Timings.NodeTimings[cr.Name] = (int)__sw.ElapsedMilliseconds;
+                    return res;
+                }))
+                .ToArray();
+
+            Task.WaitAll(createRectTasks);
+            foreach (var t in createRectTasks)
+            {
+                var crr = t.Result;
+                result.CreateRects.Add(crr);
+            }
+
+            // 4. Process CreateCircle definitions
+            var createCircleTasks = (config.CreateCircles ?? new List<CreateCircleDefinition>())
+                .Where(cc => cc is not null && !string.IsNullOrWhiteSpace(cc.Name))
+                .Select(cc => Task.Run(() =>
+                {
+                    var __sw = System.Diagnostics.Stopwatch.StartNew();
+                    var res = GeometryCreationProcessor.EvaluateCreateCircle(cc, foundPoints);
+                    __sw.Stop();
+                    result.Timings.NodeTimings[cc.Name] = (int)__sw.ElapsedMilliseconds;
+                    return res;
+                }))
+                .ToArray();
+
+            Task.WaitAll(createCircleTasks);
+            foreach (var t in createCircleTasks)
+            {
+                var ccr = t.Result;
+                result.CreateCircles.Add(ccr);
+            }
+
             result.Timings.EdgePairDetectMs = (int)Math.Max(0, swTotal.ElapsedMilliseconds - tEpdQueued);
 
             foreach (var cal in result.Calipers)

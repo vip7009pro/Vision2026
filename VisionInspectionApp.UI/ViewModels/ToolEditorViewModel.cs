@@ -248,6 +248,11 @@ namespace VisionInspectionApp.UI.ViewModels
 
                 new ToolboxItemModel { Name = "PlcRead", Category = "🔌 Kết Nối PLC & CSDL", Icon = "📥" },
                 new ToolboxItemModel { Name = "PlcWrite", Category = "🔌 Kết Nối PLC & CSDL", Icon = "📤" },
+
+                new ToolboxItemModel { Name = "CreatePoint", Category = "🛠️ Tool Creation", Icon = "📍" },
+                new ToolboxItemModel { Name = "CreateLine", Category = "🛠️ Tool Creation", Icon = "📏" },
+                new ToolboxItemModel { Name = "CreateRect", Category = "🛠️ Tool Creation", Icon = "▭" },
+                new ToolboxItemModel { Name = "CreateCircle", Category = "🛠️ Tool Creation", Icon = "⭕" },
                 new ToolboxItemModel { Name = "PlcWait", Category = "🔌 Kết Nối PLC & CSDL", Icon = "⏱️" },
                 new ToolboxItemModel { Name = "PlcTrigger", Category = "🔌 Kết Nối PLC & CSDL", Icon = "⚡" },
                 new ToolboxItemModel { Name = "PlcBatchRead", Category = "🔌 Kết Nối PLC & CSDL", Icon = "📥" },
@@ -1064,6 +1069,53 @@ namespace VisionInspectionApp.UI.ViewModels
             OnPropertyChanged(nameof(ImgArithmetic_WeightA));
             OnPropertyChanged(nameof(ImgArithmetic_WeightB));
             OnPropertyChanged(nameof(ImgArithmetic_Offset));
+
+            // Tool Creation Nodes
+            OnPropertyChanged(nameof(IsCreatePointNode));
+            OnPropertyChanged(nameof(SelectedCreatePoint));
+            OnPropertyChanged(nameof(CreatePoint_X));
+            OnPropertyChanged(nameof(CreatePoint_Y));
+            OnPropertyChanged(nameof(CreatePoint_PointRef));
+
+            OnPropertyChanged(nameof(IsCreateLineNode));
+            OnPropertyChanged(nameof(SelectedCreateLine));
+            OnPropertyChanged(nameof(CreateLine_Mode));
+            OnPropertyChanged(nameof(CreateLine_IsTwoPointsMode));
+            OnPropertyChanged(nameof(CreateLine_IsPointAndAngleMode));
+            OnPropertyChanged(nameof(CreateLine_Point1Ref));
+            OnPropertyChanged(nameof(CreateLine_X1));
+            OnPropertyChanged(nameof(CreateLine_Y1));
+            OnPropertyChanged(nameof(CreateLine_Point2Ref));
+            OnPropertyChanged(nameof(CreateLine_X2));
+            OnPropertyChanged(nameof(CreateLine_Y2));
+            OnPropertyChanged(nameof(CreateLine_PointRef));
+            OnPropertyChanged(nameof(CreateLine_X));
+            OnPropertyChanged(nameof(CreateLine_Y));
+            OnPropertyChanged(nameof(CreateLine_Angle));
+            OnPropertyChanged(nameof(CreateLine_Length));
+
+            OnPropertyChanged(nameof(IsCreateRectNode));
+            OnPropertyChanged(nameof(SelectedCreateRect));
+            OnPropertyChanged(nameof(CreateRect_PointRef));
+            OnPropertyChanged(nameof(CreateRect_X));
+            OnPropertyChanged(nameof(CreateRect_Y));
+            OnPropertyChanged(nameof(CreateRect_Width));
+            OnPropertyChanged(nameof(CreateRect_Height));
+            OnPropertyChanged(nameof(CreateRect_Angle));
+            OnPropertyChanged(nameof(CreateRect_Anchor));
+
+            OnPropertyChanged(nameof(IsCreateCircleNode));
+            OnPropertyChanged(nameof(SelectedCreateCircle));
+            OnPropertyChanged(nameof(CreateCircle_Mode));
+            OnPropertyChanged(nameof(CreateCircle_IsCenterAndRadiusMode));
+            OnPropertyChanged(nameof(CreateCircle_IsTwoPointsMode));
+            OnPropertyChanged(nameof(CreateCircle_CenterPointRef));
+            OnPropertyChanged(nameof(CreateCircle_CenterX));
+            OnPropertyChanged(nameof(CreateCircle_CenterY));
+            OnPropertyChanged(nameof(CreateCircle_Radius));
+            OnPropertyChanged(nameof(CreateCircle_BoundaryPointRef));
+            OnPropertyChanged(nameof(CreateCircle_BoundaryX));
+            OnPropertyChanged(nameof(CreateCircle_BoundaryY));
 
             // PLC Nodes
             OnPropertyChanged(nameof(IsPlcReadNode));
@@ -2186,11 +2238,44 @@ namespace VisionInspectionApp.UI.ViewModels
                 var list = new ObservableCollection<string>();
                 if (_config is null)
                     return list;
-                foreach (var p in _config.Points.Select(x => x.Name).Where(x => !string.IsNullOrWhiteSpace(x)))
+
+                if (_config.Origin is not null)
                 {
-                    list.Add(p);
+                    list.Add("Origin");
                 }
-    
+
+                if (_config.Points != null)
+                {
+                    foreach (var p in _config.Points.Select(x => x.Name).Where(x => !string.IsNullOrWhiteSpace(x)))
+                    {
+                        if (!list.Contains(p)) list.Add(p);
+                    }
+                }
+
+                if (_config.CreatePoints != null)
+                {
+                    foreach (var cp in _config.CreatePoints.Select(x => x.Name).Where(x => !string.IsNullOrWhiteSpace(x)))
+                    {
+                        if (!list.Contains(cp)) list.Add(cp);
+                    }
+                }
+
+                if (_config.CircleFinders != null)
+                {
+                    foreach (var cf in _config.CircleFinders.Select(x => x.Name).Where(x => !string.IsNullOrWhiteSpace(x)))
+                    {
+                        if (!list.Contains(cf)) list.Add(cf);
+                    }
+                }
+
+                if (_config.BlobDetections != null)
+                {
+                    foreach (var bd in _config.BlobDetections.Select(x => x.Name).Where(x => !string.IsNullOrWhiteSpace(x)))
+                    {
+                        if (!list.Contains(bd)) list.Add(bd);
+                    }
+                }
+
                 return list;
             }
         }
@@ -3354,6 +3439,46 @@ namespace VisionInspectionApp.UI.ViewModels
                 }
                 return;
             }
+
+            if (string.Equals(node.Type, "CreatePoint", StringComparison.OrdinalIgnoreCase))
+            {
+                var existed = _config.CreatePoints.Any(x => string.Equals(x.Name, node.RefName, StringComparison.OrdinalIgnoreCase));
+                if (!existed)
+                {
+                    _config.CreatePoints.Add(new CreatePointDefinition { Name = node.RefName, X = 100, Y = 100 });
+                }
+                return;
+            }
+
+            if (string.Equals(node.Type, "CreateLine", StringComparison.OrdinalIgnoreCase))
+            {
+                var existed = _config.CreateLines.Any(x => string.Equals(x.Name, node.RefName, StringComparison.OrdinalIgnoreCase));
+                if (!existed)
+                {
+                    _config.CreateLines.Add(new CreateLineDefinition { Name = node.RefName, X1 = 50, Y1 = 50, X2 = 250, Y2 = 150 });
+                }
+                return;
+            }
+
+            if (string.Equals(node.Type, "CreateRect", StringComparison.OrdinalIgnoreCase))
+            {
+                var existed = _config.CreateRects.Any(x => string.Equals(x.Name, node.RefName, StringComparison.OrdinalIgnoreCase));
+                if (!existed)
+                {
+                    _config.CreateRects.Add(new CreateRectDefinition { Name = node.RefName, X = 100, Y = 100, Width = 150, Height = 100 });
+                }
+                return;
+            }
+
+            if (string.Equals(node.Type, "CreateCircle", StringComparison.OrdinalIgnoreCase))
+            {
+                var existed = _config.CreateCircles.Any(x => string.Equals(x.Name, node.RefName, StringComparison.OrdinalIgnoreCase));
+                if (!existed)
+                {
+                    _config.CreateCircles.Add(new CreateCircleDefinition { Name = node.RefName, CenterX = 150, CenterY = 150, Radius = 60 });
+                }
+                return;
+            }
         }
     
         private string GenerateDefaultRefName(string type)
@@ -3469,6 +3594,26 @@ namespace VisionInspectionApp.UI.ViewModels
             {
                 baseName = "CDT";
                 exists = n => _config.CodeDetections.Any(x => string.Equals(x.Name, n, StringComparison.OrdinalIgnoreCase));
+            }
+            else if (string.Equals(type, "CreatePoint", StringComparison.OrdinalIgnoreCase))
+            {
+                baseName = "CP_P";
+                exists = n => (_config.CreatePoints ?? new List<CreatePointDefinition>()).Any(x => string.Equals(x.Name, n, StringComparison.OrdinalIgnoreCase));
+            }
+            else if (string.Equals(type, "CreateLine", StringComparison.OrdinalIgnoreCase))
+            {
+                baseName = "CP_L";
+                exists = n => (_config.CreateLines ?? new List<CreateLineDefinition>()).Any(x => string.Equals(x.Name, n, StringComparison.OrdinalIgnoreCase));
+            }
+            else if (string.Equals(type, "CreateRect", StringComparison.OrdinalIgnoreCase))
+            {
+                baseName = "CP_R";
+                exists = n => (_config.CreateRects ?? new List<CreateRectDefinition>()).Any(x => string.Equals(x.Name, n, StringComparison.OrdinalIgnoreCase));
+            }
+            else if (string.Equals(type, "CreateCircle", StringComparison.OrdinalIgnoreCase))
+            {
+                baseName = "CP_C";
+                exists = n => (_config.CreateCircles ?? new List<CreateCircleDefinition>()).Any(x => string.Equals(x.Name, n, StringComparison.OrdinalIgnoreCase));
             }
             else if (string.Equals(type, "ImageOutput", StringComparison.OrdinalIgnoreCase) || string.Equals(type, "OutputImage", StringComparison.OrdinalIgnoreCase))
             {

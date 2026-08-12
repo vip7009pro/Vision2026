@@ -256,6 +256,14 @@ public sealed class VisionConfig
 
     public List<ImgArithmeticDefinition> ImgArithmetics { get; set; } = new();
 
+    public List<CreatePointDefinition> CreatePoints { get; set; } = new();
+
+    public List<CreateLineDefinition> CreateLines { get; set; } = new();
+
+    public List<CreateRectDefinition> CreateRects { get; set; } = new();
+
+    public List<CreateCircleDefinition> CreateCircles { get; set; } = new();
+
     public List<PlcModel> Plcs { get; set; } = new();
 
     public List<PlcTag> PlcTags { get; set; } = new();
@@ -980,4 +988,93 @@ public sealed class ImgArithmeticDefinition
     public double WeightA { get; set; } = 1.0;
     public double WeightB { get; set; } = 1.0;
     public double Offset { get; set; } = 0.0;
+}
+
+public enum RectAnchorPosition
+{
+    TopLeft = 0,
+    TopCenter = 1,
+    TopRight = 2,
+    MiddleLeft = 3,
+    MiddleCenter = 4,
+    MiddleRight = 5,
+    BottomLeft = 6,
+    BottomCenter = 7,
+    BottomRight = 8
+}
+
+public enum CreateLineMode
+{
+    TwoPoints = 0,
+    PointAndAngle = 1
+}
+
+public enum CreateCircleMode
+{
+    CenterAndRadius = 0,
+    TwoPoints = 1
+}
+
+public sealed class CreatePointDefinition
+{
+    public string Name { get; set; } = string.Empty;
+    public string ImageSourceRef { get; set; } = string.Empty;
+    public string PointRef { get; set; } = string.Empty;
+    public double X { get; set; } = 0.0;
+    public double Y { get; set; } = 0.0;
+}
+
+public sealed class CreateLineDefinition
+{
+    public string Name { get; set; } = string.Empty;
+    public string ImageSourceRef { get; set; } = string.Empty;
+    public CreateLineMode Mode { get; set; } = CreateLineMode.TwoPoints;
+    
+    // TwoPoints mode
+    public string Point1Ref { get; set; } = string.Empty;
+    public double X1 { get; set; } = 0.0;
+    public double Y1 { get; set; } = 0.0;
+    public string Point2Ref { get; set; } = string.Empty;
+    public double X2 { get; set; } = 100.0;
+    public double Y2 { get; set; } = 100.0;
+
+    // PointAndAngle mode
+    public string PointRef { get; set; } = string.Empty;
+    public double X { get; set; } = 0.0;
+    public double Y { get; set; } = 0.0;
+    public double Angle { get; set; } = 0.0;
+    public double Length { get; set; } = 200.0;
+}
+
+public sealed class CreateRectDefinition
+{
+    public string Name { get; set; } = string.Empty;
+    public string ImageSourceRef { get; set; } = string.Empty;
+    public string PointRef { get; set; } = string.Empty;
+    public double X { get; set; } = 0.0;
+    public double Y { get; set; } = 0.0;
+    public double Width { get; set; } = 100.0;
+    public double Height { get; set; } = 80.0;
+    public double Angle { get; set; } = 0.0;
+    public RectAnchorPosition Anchor { get; set; } = RectAnchorPosition.TopLeft;
+}
+
+public sealed class CreateCircleDefinition
+{
+    public string Name { get; set; } = string.Empty;
+    public string ImageSourceRef { get; set; } = string.Empty;
+    public CreateCircleMode Mode { get; set; } = CreateCircleMode.CenterAndRadius;
+
+    // Center point
+    public string CenterPointRef { get; set; } = string.Empty;
+    public double CenterX { get; set; } = 0.0;
+    public double CenterY { get; set; } = 0.0;
+
+    // CenterAndRadius mode
+    public double Radius { get; set; } = 50.0;
+
+    // TwoPoints mode (Boundary point on circle)
+    public string BoundaryPointRef { get; set; } = string.Empty;
+    public double BoundaryX { get; set; } = 50.0;
+    public double BoundaryY { get; set; } = 0.0;
 }

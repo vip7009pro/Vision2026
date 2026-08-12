@@ -47,6 +47,18 @@ public partial class ToolEditorView : UserControl
         Loaded += (s, e) => Dispatcher.BeginInvoke(DispatcherPriority.ContextIdle, AutoFitAndCenterGraph);
     }
 
+    private void ComboBox_PreviewMouseDown(object sender, MouseButtonEventArgs e)
+    {
+        if (sender is ComboBox cb && cb.IsEditable && !cb.IsDropDownOpen)
+        {
+            var source = e.OriginalSource as DependencyObject;
+            if (source is TextBox || source is TextBlock || source?.GetType().Name.Contains("Text") == true)
+            {
+                cb.IsDropDownOpen = true;
+            }
+        }
+    }
+
     private void ToolEditorView_DataContextChanged(object sender, DependencyPropertyChangedEventArgs e)
     {
         if (_subscribedVm != null)

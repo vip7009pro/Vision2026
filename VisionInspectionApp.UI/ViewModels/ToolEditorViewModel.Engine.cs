@@ -246,7 +246,7 @@ namespace VisionInspectionApp.UI.ViewModels
                 return;
             }
 
-            BuildFinalOverlayFromRun(run, dst, _config);
+            BuildFinalOverlayFromRun(run, dst, _config, ShowRoisInSelectedPreview && ShowRoisInFinalPreview);
 
             foreach (var d in run.SegmentLineDistances)
             {
@@ -1161,6 +1161,138 @@ namespace VisionInspectionApp.UI.ViewModels
                 dst.Add(new OverlayPointItem { X = def.InspectRoi.X + 2, Y = def.InspectRoi.Y + 2, Radius = 1.0, Stroke = stroke, Label = $"{def.Name} [{status}]: Score: {r.MatchScore:0.####}, MaxDist: {r.MaxDistancePx:0.##}px" });
                 return;
             }
+
+            if (string.Equals(node.Type, "CreatePoint", StringComparison.OrdinalIgnoreCase))
+            {
+                var cp = run.CreatePoints?.FirstOrDefault(x => string.Equals(x.Name, node.RefName, StringComparison.OrdinalIgnoreCase));
+                if (cp is not null && cp.Success)
+                {
+                    if (ShowRoisInSelectedPreview)
+                    {
+                        dst.Add(CreateRotatedRoi(new Roi { X = (int)cp.X - 10, Y = (int)cp.Y - 10, Width = 20, Height = 20 }, Brushes.LimeGreen, $"{cp.Name} Point ({cp.X:F1}, {cp.Y:F1})"));
+                    }
+                    AddCross(dst, cp.X, cp.Y, 20, Brushes.LimeGreen, 2.0);
+                    AddCircle(dst, cp.X, cp.Y, 6, Brushes.LimeGreen, 1.5);
+                }
+                else
+                {
+                    var cpDef = _config.CreatePoints?.FirstOrDefault(x => string.Equals(x.Name, node.RefName, StringComparison.OrdinalIgnoreCase));
+                    if (cpDef is not null)
+                    {
+                        var pts = GetCurrentPointsMap();
+                        var res = GeometryCreationProcessor.EvaluateCreatePoint(cpDef, pts);
+                        if (ShowRoisInSelectedPreview)
+                        {
+                            dst.Add(CreateRotatedRoi(new Roi { X = (int)res.X - 10, Y = (int)res.Y - 10, Width = 20, Height = 20 }, Brushes.LimeGreen, $"{cpDef.Name} Point ({res.X:F1}, {res.Y:F1})"));
+                        }
+                        AddCross(dst, res.X, res.Y, 20, Brushes.LimeGreen, 2.0);
+                        AddCircle(dst, res.X, res.Y, 6, Brushes.LimeGreen, 1.5);
+                    }
+                }
+                return;
+            }
+
+            if (string.Equals(node.Type, "CreateLine", StringComparison.OrdinalIgnoreCase))
+            {
+                var cl = run.CreateLines?.FirstOrDefault(x => string.Equals(x.Name, node.RefName, StringComparison.OrdinalIgnoreCase));
+                if (cl is not null && cl.Success)
+                {
+                    if (ShowRoisInSelectedPreview)
+                    {
+                        double minX = Math.Min(cl.X1, cl.X2);
+                        double minY = Math.Min(cl.Y1, cl.Y2);
+                        double w = Math.Max(10, Math.Abs(cl.X2 - cl.X1));
+                        double h = Math.Max(10, Math.Abs(cl.Y2 - cl.Y1));
+                        dst.Add(CreateRotatedRoi(new Roi { X = (int)minX, Y = (int)minY, Width = (int)w, Height = (int)h, Angle = cl.Angle }, Brushes.LimeGreen, $"{cl.Name} Line"));
+                    }
+                    dst.Add(new OverlayLineItem { X1 = cl.X1, Y1 = cl.Y1, X2 = cl.X2, Y2 = cl.Y2, Stroke = Brushes.LimeGreen, StrokeThickness = 2.5, Label = $"{cl.Name} (L={cl.Length:F1}px)" });
+                    AddCross(dst, cl.X1, cl.Y1, 10, Brushes.LimeGreen, 1.5);
+                    AddCross(dst, cl.X2, cl.Y2, 10, Brushes.LimeGreen, 1.5);
+                }
+                else
+                {
+                    var clDef = _config.CreateLines?.FirstOrDefault(x => string.Equals(x.Name, node.RefName, StringComparison.OrdinalIgnoreCase));
+                    if (clDef is not null)
+                    {
+                        var pts = GetCurrentPointsMap();
+                        var res = GeometryCreationProcessor.EvaluateCreateLine(clDef, pts);
+                        if (ShowRoisInSelectedPreview)
+                        {
+                            double minX = Math.Min(res.X1, res.X2);
+                            double minY = Math.Min(res.Y1, res.Y2);
+                            double w = Math.Max(10, Math.Abs(res.X2 - res.X1));
+                            double h = Math.Max(10, Math.Abs(res.Y2 - res.Y1));
+                            dst.Add(CreateRotatedRoi(new Roi { X = (int)minX, Y = (int)minY, Width = (int)w, Height = (int)h, Angle = res.Angle }, Brushes.LimeGreen, $"{clDef.Name} Line"));
+                        }
+                        dst.Add(new OverlayLineItem { X1 = res.X1, Y1 = res.Y1, X2 = res.X2, Y2 = res.Y2, Stroke = Brushes.LimeGreen, StrokeThickness = 2.5, Label = $"{clDef.Name} (L={res.Length:F1}px)" });
+                        AddCross(dst, res.X1, res.Y1, 10, Brushes.LimeGreen, 1.5);
+                        AddCross(dst, res.X2, res.Y2, 10, Brushes.LimeGreen, 1.5);
+                    }
+                }
+                return;
+            }
+
+            if (string.Equals(node.Type, "CreateRect", StringComparison.OrdinalIgnoreCase))
+            {
+                var cr = run.CreateRects?.FirstOrDefault(x => string.Equals(x.Name, node.RefName, StringComparison.OrdinalIgnoreCase));
+                if (cr is not null && cr.Success)
+                {
+                    if (ShowRoisInSelectedPreview)
+                    {
+                        dst.Add(CreateRotatedRoi(new Roi { X = (int)cr.TopLeftX, Y = (int)cr.TopLeftY, Width = (int)cr.Width, Height = (int)cr.Height, Angle = cr.Angle }, Brushes.LimeGreen, $"{cr.Name} ROI"));
+                    }
+                    dst.Add(new OverlayRectItem { X = (int)cr.TopLeftX, Y = (int)cr.TopLeftY, Width = (int)cr.Width, Height = (int)cr.Height, Angle = cr.Angle, Stroke = Brushes.LimeGreen, StrokeThickness = 2.0, Label = $"{cr.Name} Rect ({cr.Width:F1}x{cr.Height:F1})" });
+                    AddCross(dst, cr.X, cr.Y, 12, Brushes.LimeGreen, 1.5);
+                }
+                else
+                {
+                    var crDef = _config.CreateRects?.FirstOrDefault(x => string.Equals(x.Name, node.RefName, StringComparison.OrdinalIgnoreCase));
+                    if (crDef is not null)
+                    {
+                        var pts = GetCurrentPointsMap();
+                        var res = GeometryCreationProcessor.EvaluateCreateRect(crDef, pts);
+                        if (ShowRoisInSelectedPreview)
+                        {
+                            dst.Add(CreateRotatedRoi(new Roi { X = (int)res.TopLeftX, Y = (int)res.TopLeftY, Width = (int)res.Width, Height = (int)res.Height, Angle = res.Angle }, Brushes.LimeGreen, $"{crDef.Name} ROI"));
+                        }
+                        dst.Add(new OverlayRectItem { X = (int)res.TopLeftX, Y = (int)res.TopLeftY, Width = (int)res.Width, Height = (int)res.Height, Angle = res.Angle, Stroke = Brushes.LimeGreen, StrokeThickness = 2.0, Label = $"{crDef.Name} Rect ({res.Width:F1}x{res.Height:F1})" });
+                        AddCross(dst, res.X, res.Y, 12, Brushes.LimeGreen, 1.5);
+                    }
+                }
+                return;
+            }
+
+            if (string.Equals(node.Type, "CreateCircle", StringComparison.OrdinalIgnoreCase))
+            {
+                var cc = run.CreateCircles?.FirstOrDefault(x => string.Equals(x.Name, node.RefName, StringComparison.OrdinalIgnoreCase));
+                if (cc is not null && cc.Success)
+                {
+                    if (ShowRoisInSelectedPreview)
+                    {
+                        int r = (int)cc.Radius;
+                        dst.Add(CreateRotatedRoi(new Roi { X = (int)cc.CenterX - r, Y = (int)cc.CenterY - r, Width = r * 2, Height = r * 2 }, Brushes.LimeGreen, $"{cc.Name} Circle"));
+                    }
+                    AddCircle(dst, cc.CenterX, cc.CenterY, cc.Radius, Brushes.LimeGreen, 2.5);
+                    AddCross(dst, cc.CenterX, cc.CenterY, 15, Brushes.LimeGreen, 1.5);
+                }
+                else
+                {
+                    var ccDef = _config.CreateCircles?.FirstOrDefault(x => string.Equals(x.Name, node.RefName, StringComparison.OrdinalIgnoreCase));
+                    if (ccDef is not null)
+                    {
+                        var pts = GetCurrentPointsMap();
+                        var res = GeometryCreationProcessor.EvaluateCreateCircle(ccDef, pts);
+                        if (ShowRoisInSelectedPreview)
+                        {
+                            int r = (int)res.Radius;
+                            dst.Add(CreateRotatedRoi(new Roi { X = (int)res.CenterX - r, Y = (int)res.CenterY - r, Width = r * 2, Height = r * 2 }, Brushes.LimeGreen, $"{ccDef.Name} Circle"));
+                        }
+                        AddCircle(dst, res.CenterX, res.CenterY, res.Radius, Brushes.LimeGreen, 2.5);
+                        AddCross(dst, res.CenterX, res.CenterY, 15, Brushes.LimeGreen, 1.5);
+                    }
+                }
+                return;
+            }
         }
 
         private Roi? GetRoiForLabel(string labelRaw)
@@ -1174,6 +1306,41 @@ namespace VisionInspectionApp.UI.ViewModels
             if (parts.Length != 2) return null;
             var name = parts[0];
             var kind = parts[1];
+            if (string.Equals(kind, "Point", StringComparison.OrdinalIgnoreCase))
+            {
+                var cp = _config.CreatePoints?.FirstOrDefault(x => string.Equals(x.Name, name, StringComparison.OrdinalIgnoreCase));
+                if (cp != null) return new Roi { X = (int)cp.X - 10, Y = (int)cp.Y - 10, Width = 20, Height = 20 };
+            }
+            if (string.Equals(kind, "Line", StringComparison.OrdinalIgnoreCase))
+            {
+                var cl = _config.CreateLines?.FirstOrDefault(x => string.Equals(x.Name, name, StringComparison.OrdinalIgnoreCase));
+                if (cl != null)
+                {
+                    double minX = Math.Min(cl.X1, cl.X2);
+                    double minY = Math.Min(cl.Y1, cl.Y2);
+                    double w = Math.Max(10, Math.Abs(cl.X2 - cl.X1));
+                    double h = Math.Max(10, Math.Abs(cl.Y2 - cl.Y1));
+                    return new Roi { X = (int)minX, Y = (int)minY, Width = (int)w, Height = (int)h, Angle = cl.Angle };
+                }
+            }
+            if (string.Equals(kind, "Rect", StringComparison.OrdinalIgnoreCase))
+            {
+                var cr = _config.CreateRects?.FirstOrDefault(x => string.Equals(x.Name, name, StringComparison.OrdinalIgnoreCase));
+                if (cr != null)
+                {
+                    var (tlX, tlY) = GeometryCreationProcessor.CalculateRectTopLeft(cr.X, cr.Y, cr.Width, cr.Height, cr.Anchor);
+                    return new Roi { X = (int)tlX, Y = (int)tlY, Width = (int)cr.Width, Height = (int)cr.Height, Angle = cr.Angle };
+                }
+            }
+            if (string.Equals(kind, "Circle", StringComparison.OrdinalIgnoreCase))
+            {
+                var cc = _config.CreateCircles?.FirstOrDefault(x => string.Equals(x.Name, name, StringComparison.OrdinalIgnoreCase));
+                if (cc != null)
+                {
+                    int r = (int)cc.Radius;
+                    return new Roi { X = (int)cc.CenterX - r, Y = (int)cc.CenterY - r, Width = r * 2, Height = r * 2 };
+                }
+            }
             if (string.Equals(kind, "S", StringComparison.OrdinalIgnoreCase)) return _config.Points.FirstOrDefault(x => string.Equals(x.Name, name, StringComparison.OrdinalIgnoreCase))?.SearchRoi;
             if (string.Equals(kind, "T", StringComparison.OrdinalIgnoreCase)) return _config.Points.FirstOrDefault(x => string.Equals(x.Name, name, StringComparison.OrdinalIgnoreCase))?.TemplateRoi;
             if (string.Equals(kind, "L", StringComparison.OrdinalIgnoreCase)) return _config.Lines.FirstOrDefault(x => string.Equals(x.Name, name, StringComparison.OrdinalIgnoreCase))?.SearchRoi;
@@ -1443,6 +1610,66 @@ namespace VisionInspectionApp.UI.ViewModels
                     RefreshPreviews();
                     RequestAutoSave();
                     return;
+                }
+
+                if (string.Equals(kind, "Point", StringComparison.OrdinalIgnoreCase))
+                {
+                    var cp = _config.CreatePoints?.FirstOrDefault(x => string.Equals(x.Name, name, StringComparison.OrdinalIgnoreCase));
+                    if (cp is not null)
+                    {
+                        cp.X = roi.X + roi.Width / 2.0;
+                        cp.Y = roi.Y + roi.Height / 2.0;
+                        RefreshPreviews();
+                        RequestAutoSave();
+                        return;
+                    }
+                }
+
+                if (string.Equals(kind, "Line", StringComparison.OrdinalIgnoreCase))
+                {
+                    var cl = _config.CreateLines?.FirstOrDefault(x => string.Equals(x.Name, name, StringComparison.OrdinalIgnoreCase));
+                    if (cl is not null)
+                    {
+                        cl.X1 = roi.X;
+                        cl.Y1 = roi.Y;
+                        cl.X2 = roi.X + roi.Width;
+                        cl.Y2 = roi.Y + roi.Height;
+                        cl.Angle = roi.Angle;
+                        RefreshPreviews();
+                        RequestAutoSave();
+                        return;
+                    }
+                }
+
+                if (string.Equals(kind, "Rect", StringComparison.OrdinalIgnoreCase))
+                {
+                    var cr = _config.CreateRects?.FirstOrDefault(x => string.Equals(x.Name, name, StringComparison.OrdinalIgnoreCase));
+                    if (cr is not null)
+                    {
+                        cr.Width = roi.Width;
+                        cr.Height = roi.Height;
+                        cr.Angle = roi.Angle;
+                        var (anchorX, anchorY) = GeometryCreationProcessor.CalculateAnchorFromTopLeft(roi.X, roi.Y, roi.Width, roi.Height, cr.Anchor);
+                        cr.X = anchorX;
+                        cr.Y = anchorY;
+                        RefreshPreviews();
+                        RequestAutoSave();
+                        return;
+                    }
+                }
+
+                if (string.Equals(kind, "Circle", StringComparison.OrdinalIgnoreCase))
+                {
+                    var cc = _config.CreateCircles?.FirstOrDefault(x => string.Equals(x.Name, name, StringComparison.OrdinalIgnoreCase));
+                    if (cc is not null)
+                    {
+                        cc.CenterX = roi.X + roi.Width / 2.0;
+                        cc.CenterY = roi.Y + roi.Height / 2.0;
+                        cc.Radius = Math.Min(roi.Width, roi.Height) / 2.0;
+                        RefreshPreviews();
+                        RequestAutoSave();
+                        return;
+                    }
                 }
             }
     
@@ -2884,7 +3111,7 @@ namespace VisionInspectionApp.UI.ViewModels
             }
         }
     
-        private static void BuildFinalOverlayFromRun(InspectionResult run, List<OverlayItem> dst, VisionConfig? config)
+        private static void BuildFinalOverlayFromRun(InspectionResult run, List<OverlayItem> dst, VisionConfig? config, bool showRois = true)
         {
             if (run.Origin is not null)
             {
@@ -3304,7 +3531,67 @@ namespace VisionInspectionApp.UI.ViewModels
                     dst.Add(new OverlayPointItem { X = lx, Y = ly, Radius = 1.0, Stroke = stroke, Label = $"{cc.Name} [{status}]: Score: {cc.MatchScore:0.####}, MaxDist: {cc.MaxDistancePx:0.##}px" });
                 }
             }
-    
+
+            var showRoisInFinal = showRois;
+
+            if (run.CreatePoints is not null)
+            {
+                foreach (var cp in run.CreatePoints)
+                {
+                    if (!cp.Success) continue;
+                    if (showRoisInFinal)
+                    {
+                        dst.Add(new OverlayRectItem { X = (int)cp.X - 10, Y = (int)cp.Y - 10, Width = 20, Height = 20, Stroke = Brushes.LimeGreen, StrokeThickness = 1.5, Label = $"{cp.Name} Point ({cp.X:F1}, {cp.Y:F1})" });
+                    }
+                    AddCross(dst, cp.X, cp.Y, 20, Brushes.LimeGreen, 2.0);
+                    AddCircle(dst, cp.X, cp.Y, 6, Brushes.LimeGreen, 1.5);
+                }
+            }
+
+            if (run.CreateLines is not null)
+            {
+                foreach (var cl in run.CreateLines)
+                {
+                    if (!cl.Success) continue;
+                    if (showRoisInFinal)
+                    {
+                        double minX = Math.Min(cl.X1, cl.X2);
+                        double minY = Math.Min(cl.Y1, cl.Y2);
+                        double w = Math.Max(10, Math.Abs(cl.X2 - cl.X1));
+                        double h = Math.Max(10, Math.Abs(cl.Y2 - cl.Y1));
+                        dst.Add(new OverlayRectItem { X = (int)minX, Y = (int)minY, Width = (int)w, Height = (int)h, Angle = cl.Angle, Stroke = Brushes.LimeGreen, StrokeThickness = 1.5, Label = $"{cl.Name} Line" });
+                    }
+                    dst.Add(new OverlayLineItem { X1 = cl.X1, Y1 = cl.Y1, X2 = cl.X2, Y2 = cl.Y2, Stroke = Brushes.LimeGreen, StrokeThickness = 2.5, Label = $"{cl.Name} (L={cl.Length:F1}px)" });
+                    AddCross(dst, cl.X1, cl.Y1, 10, Brushes.LimeGreen, 1.5);
+                    AddCross(dst, cl.X2, cl.Y2, 10, Brushes.LimeGreen, 1.5);
+                }
+            }
+
+            if (run.CreateRects is not null)
+            {
+                foreach (var cr in run.CreateRects)
+                {
+                    if (!cr.Success) continue;
+                    dst.Add(new OverlayRectItem { X = (int)cr.TopLeftX, Y = (int)cr.TopLeftY, Width = (int)cr.Width, Height = (int)cr.Height, Angle = cr.Angle, Stroke = Brushes.LimeGreen, StrokeThickness = 2.0, Label = $"{cr.Name} Rect ({cr.Width:F1}x{cr.Height:F1})" });
+                    AddCross(dst, cr.X, cr.Y, 12, Brushes.LimeGreen, 1.5);
+                }
+            }
+
+            if (run.CreateCircles is not null)
+            {
+                foreach (var cc in run.CreateCircles)
+                {
+                    if (!cc.Success) continue;
+                    if (showRoisInFinal)
+                    {
+                        int r = (int)cc.Radius;
+                        dst.Add(new OverlayRectItem { X = (int)cc.CenterX - r, Y = (int)cc.CenterY - r, Width = r * 2, Height = r * 2, Stroke = Brushes.LimeGreen, StrokeThickness = 1.5, Label = $"{cc.Name} Circle" });
+                    }
+                    AddCircle(dst, cc.CenterX, cc.CenterY, cc.Radius, Brushes.LimeGreen, 2.5);
+                    AddCross(dst, cc.CenterX, cc.CenterY, 15, Brushes.LimeGreen, 1.5);
+                }
+            }
+
             if (run.Conditions.Count > 0)
             {
                 var y = 14.0;
