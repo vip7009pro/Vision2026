@@ -84,6 +84,59 @@ public sealed class CameraSettingsViewModel : ObservableObject, IDisposable
         private set => SetProperty(ref _fps, value);
     }
 
+    private string _resolutionText = "Unknown";
+    public string ResolutionText
+    {
+        get => _resolutionText;
+        private set => SetProperty(ref _resolutionText, value);
+    }
+
+    public ObservableCollection<string> ResolutionOptions { get; } = new()
+    {
+        "1920 x 1080 (1080p Full HD - Mặc định)",
+        "1280 x 720 (720p HD)",
+        "2560 x 1440 (2K QHD)",
+        "3840 x 2160 (4K UHD)",
+        "640 x 480 (VGA)"
+    };
+
+    public ObservableCollection<int> FpsOptions { get; } = new()
+    {
+        120,
+        60,
+        30
+    };
+
+    public string SelectedResolution
+    {
+        get
+        {
+            int w = _cameraService.DesiredWidth;
+            int h = _cameraService.DesiredHeight;
+            return ResolutionOptions.FirstOrDefault(r => r.StartsWith($"{w} x {h}")) ?? ResolutionOptions[0];
+        }
+        set
+        {
+            if (string.IsNullOrWhiteSpace(value)) return;
+            if (value.StartsWith("1920")) { _cameraService.DesiredWidth = 1920; _cameraService.DesiredHeight = 1080; }
+            else if (value.StartsWith("1280")) { _cameraService.DesiredWidth = 1280; _cameraService.DesiredHeight = 720; }
+            else if (value.StartsWith("2560")) { _cameraService.DesiredWidth = 2560; _cameraService.DesiredHeight = 1440; }
+            else if (value.StartsWith("3840")) { _cameraService.DesiredWidth = 3840; _cameraService.DesiredHeight = 2160; }
+            else if (value.StartsWith("640")) { _cameraService.DesiredWidth = 640; _cameraService.DesiredHeight = 480; }
+            OnPropertyChanged();
+        }
+    }
+
+    public int SelectedFps
+    {
+        get => _cameraService.DesiredFps;
+        set
+        {
+            _cameraService.DesiredFps = value;
+            OnPropertyChanged();
+        }
+    }
+
     public double Brightness
     {
         get => _cameraService.Brightness;
@@ -287,7 +340,13 @@ public sealed class CameraSettingsViewModel : ObservableObject, IDisposable
                 var fpsVal = (int)(_frameCount / elapsed);
                 _frameCount = 0;
                 _lastFrameTime = now;
-                System.Windows.Application.Current?.Dispatcher?.BeginInvoke(System.Windows.Threading.DispatcherPriority.Background, () => Fps = fpsVal);
+                int frameW = frame.Width;
+                int frameH = frame.Height;
+                System.Windows.Application.Current?.Dispatcher?.BeginInvoke(System.Windows.Threading.DispatcherPriority.Background, () =>
+                {
+                    Fps = fpsVal;
+                    ResolutionText = $"{frameW} × {frameH}";
+                });
             }
 
             if (_isRenderingFrame) return;

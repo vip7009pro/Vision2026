@@ -565,6 +565,10 @@
     - Hỗ trợ cho phép người dùng tùy chỉnh số hàng/cột bảng (mặc định 8×6 ô vuông) và kích thước ô (mặc định 29mm).
     - Tạo dialog modal `ChessboardCalibrationDialog.xaml` + ViewModel `ChessboardCalibrationViewModel.cs` hỗ trợ nạp tệp/chụp camera nhiều ảnh (≥ 3 ảnh), hiển thị danh sách thumbnail ảnh đã chụp kèm trạng thái corners, xem kết quả calibration và nút **`🔄 Undistort Preview`** xem thử ảnh đã khử méo.
     - Bổ sung tùy chọn công tắc **`Undistort (Calib)`** tại bảng Properties Panel của Node `ImageSource` cho phép bật/tắt tự động khử biến dạng ống kính khi chạy pipeline kiểm tra.
+  - **Khắc Phục Giới Hạn Độ Phân Giải Camera 640x480 & Hỗ Trợ 1080P / 120FPS**:
+    - **Nguyên nhân**: Mặc định OpenCV (`VideoCapture`) negotiation với Windows Driver USB sử dụng định dạng thô không nén YUY2 dẫn tới nghẽn băng thông USB 2.0/3.0 làm driver tự động hạ độ phân giải về 640x480.
+    - **Khắc phục**: Tự động cấu hình chuẩn nén nén `MJPEG` (`cap.Set(VideoCaptureProperties.FourCC, VideoWriter.FourCC('M','J','P','G'))`), cho phép truyền luồng 1080P (1920x1080), 2K, 4K ở tốc độ 60FPS - 120FPS mượt mà qua bus USB.
+    - Bổ sung ComboBox tùy chọn độ phân giải mong muốn (1080P Full HD 1920x1080, 720P, 2K, 4K, 640x480) và FPS (120 FPS, 60 FPS, 30 FPS) trong tab **Camera Settings**, đồng thời hiển thị thông số độ phân giải thực tế (`Res: 1920x1080`) & `FPS` trực tiếp trên nhãn HUD Overlay.
 
 ## Roadmap
 

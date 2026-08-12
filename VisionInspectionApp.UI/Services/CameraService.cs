@@ -33,6 +33,9 @@ public sealed class CameraService : IDisposable
     private int _savedCameraIndex = 0;
     private string _savedRtspUrl = "";
     private bool _savedIsRtsp = false;
+    private int _desiredWidth = 1920;
+    private int _desiredHeight = 1080;
+    private int _desiredFps = 120;
 
     public event EventHandler<Mat>? FrameCaptured;
     public event EventHandler<string>? ErrorOccurred;
@@ -73,6 +76,24 @@ public sealed class CameraService : IDisposable
         set { _savedIsRtsp = value; SaveSettings(); }
     }
 
+    public int DesiredWidth
+    {
+        get => _desiredWidth;
+        set { _desiredWidth = value; SaveSettings(); }
+    }
+
+    public int DesiredHeight
+    {
+        get => _desiredHeight;
+        set { _desiredHeight = value; SaveSettings(); }
+    }
+
+    public int DesiredFps
+    {
+        get => _desiredFps;
+        set { _desiredFps = value; SaveSettings(); }
+    }
+
     public CameraService()
     {
         LoadSettings();
@@ -107,10 +128,43 @@ public sealed class CameraService : IDisposable
                string.Equals(rtspUrl, "SIMULATOR", StringComparison.OrdinalIgnoreCase);
     }
 
+    public static void ConfigureCaptureFormat(VideoCapture cap, int requestedWidth = 1920, int requestedHeight = 1080, int requestedFps = 120)
+    {
+        if (cap == null || !cap.IsOpened()) return;
+
+        // 1. Try MJPG video format first - crucial for USB 2.0/3.0 cameras to deliver 1080P/120FPS
+        try
+        {
+            cap.Set(VideoCaptureProperties.FourCC, VideoWriter.FourCC('M', 'J', 'P', 'G'));
+        }
+        catch { }
+
+        // 2. Request Frame Width & Height
+        if (requestedWidth > 0 && requestedHeight > 0)
+        {
+            try
+            {
+                cap.Set(VideoCaptureProperties.FrameWidth, requestedWidth);
+                cap.Set(VideoCaptureProperties.FrameHeight, requestedHeight);
+            }
+            catch { }
+        }
+
+        // 3. Request FPS
+        if (requestedFps > 0)
+        {
+            try
+            {
+                cap.Set(VideoCaptureProperties.Fps, requestedFps);
+            }
+            catch { }
+        }
+    }
+
     /// <summary>
-    /// Thử mở VideoCapture bằng nhiều backend an toàn (MSMF -> DSHOW -> ANY -> FFMPEG)
+    /// Thử mở VideoCapture bằng nhiều backend an toàn (MSMF -> DSHOW -> ANY -> FFMPEG) kèm cấu hình độ phân giải & FPS
     /// </summary>
-    public static VideoCapture? TryOpenVideoCapture(int cameraIndex, string? rtspUrl)
+    public static VideoCapture? TryOpenVideoCapture(int cameraIndex, string? rtspUrl, int requestedWidth = 1920, int requestedHeight = 1080, int requestedFps = 120)
     {
         // 1. Luồng RTSP / IP Camera
         if (!string.IsNullOrWhiteSpace(rtspUrl) && !IsSimulator(cameraIndex, rtspUrl))
@@ -165,6 +219,7 @@ public sealed class CameraService : IDisposable
             var cap = new VideoCapture(cameraIndex, VideoCaptureAPIs.MSMF);
             if (cap.IsOpened())
             {
+                ConfigureCaptureFormat(cap, requestedWidth, requestedHeight, requestedFps);
                 using var testMat = new Mat();
                 for (int i = 0; i < 15; i++)
                 {
@@ -185,6 +240,7 @@ public sealed class CameraService : IDisposable
             var cap = new VideoCapture(cameraIndex, VideoCaptureAPIs.DSHOW);
             if (cap.IsOpened())
             {
+                ConfigureCaptureFormat(cap, requestedWidth, requestedHeight, requestedFps);
                 using var testMat = new Mat();
                 for (int i = 0; i < 15; i++)
                 {
@@ -205,6 +261,7 @@ public sealed class CameraService : IDisposable
             var cap = new VideoCapture(cameraIndex, VideoCaptureAPIs.ANY);
             if (cap.IsOpened())
             {
+                ConfigureCaptureFormat(cap, requestedWidth, requestedHeight, requestedFps);
                 using var testMat = new Mat();
                 for (int i = 0; i < 15; i++)
                 {
@@ -263,7 +320,7 @@ public sealed class CameraService : IDisposable
                 }
                 catch { }
 
-                cap = TryOpenVideoCapture(cameraIndex, rtspUrl);
+                cap = TryOpenVideoCapture(cameraIndex, rtspUrl, _desiredWidth, _desiredHeight, _desiredFps);
                 if (cap == null || !cap.IsOpened())
                 {
                     cap?.Dispose();
@@ -555,7 +612,7 @@ public sealed class CameraService : IDisposable
             VideoCapture? cap = null;
             try
             {
-                cap = TryOpenVideoCapture(cameraIndex, rtspUrl);
+                cap = TryOpenVideoCapture(cameraIndex, rtspUrl, _desiredWidth, _desiredHeight, _desiredFps);
                 if (cap == null || !cap.IsOpened())
                 {
                     cap?.Dispose();
@@ -629,6 +686,9 @@ public sealed class CameraService : IDisposable
                     _savedCameraIndex = settings.SavedCameraIndex;
                     _savedRtspUrl = settings.SavedRtspUrl;
                     _savedIsRtsp = settings.SavedIsRtsp;
+                    _desiredWidth = settings.DesiredWidth > 0 ? settings.DesiredWidth : 1920;
+                    _desiredHeight = settings.DesiredHeight > 0 ? settings.DesiredHeight : 1080;
+                    _desiredFps = settings.DesiredFps > 0 ? settings.DesiredFps : 120;
                     return;
                 }
             }
@@ -643,6 +703,9 @@ public sealed class CameraService : IDisposable
         _savedCameraIndex = 0;
         _savedRtspUrl = "";
         _savedIsRtsp = false;
+        _desiredWidth = 1920;
+        _desiredHeight = 1080;
+        _desiredFps = 120;
     }
 
     private void SaveSettings()
@@ -656,7 +719,10 @@ public sealed class CameraService : IDisposable
                 IsGrayscale = _isGrayscale,
                 SavedCameraIndex = _savedCameraIndex,
                 SavedRtspUrl = _savedRtspUrl ?? "",
-                SavedIsRtsp = _savedIsRtsp
+                SavedIsRtsp = _savedIsRtsp,
+                DesiredWidth = _desiredWidth,
+                DesiredHeight = _desiredHeight,
+                DesiredFps = _desiredFps
             };
             var json = System.Text.Json.JsonSerializer.Serialize(settings, new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
             System.IO.File.WriteAllText(_settingsPath, json);
@@ -674,6 +740,9 @@ public sealed class CameraService : IDisposable
         public int SavedCameraIndex { get; set; }
         public string SavedRtspUrl { get; set; } = "";
         public bool SavedIsRtsp { get; set; }
+        public int DesiredWidth { get; set; } = 1920;
+        public int DesiredHeight { get; set; } = 1080;
+        public int DesiredFps { get; set; } = 120;
     }
 
     public void Dispose()

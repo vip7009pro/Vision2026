@@ -124,6 +124,10 @@ Lộ trình tích hợp tính năng Chụp ảnh từ camera và hỗ trợ các
   - Tính toán chính xác thông số camera (Camera Matrix `fx, fy, cx, cy`, Distortion Coefficients `k1, k2, p1, p2, k3`, Reprojection Error `px`) và tỉ lệ chuyển đổi `PixelsPerMm`.
   - Tích hợp công tắc `Undistort (Calib)` ở Properties Panel của Node `ImageSource` cho phép bật/tắt tự động khử biến dạng ống kính khi chạy pipeline.
   - Bổ sung nút bấm **`♟ Chessboard Calib`** nổi bật trên thanh công cụ Tool Editor.
+- [x] Task 117: Khắc phục lỗi độ phân giải camera bị giới hạn ở 640x480 & Hỗ trợ chuẩn 1080P / 120FPS:
+  - Tự động cấu hình chuẩn nén nén MJPEG (`FourCC('M','J','P','G')`) giải phóng băng thông bus USB 2.0/3.0.
+  - Cho phép chọn độ phân giải mong muốn (1080P Full HD 1920x1080, 720P HD, 2K QHD, 4K UHD, 640x480 VGA) và tần số quét (120 FPS, 60 FPS, 30 FPS) trong tab Camera Settings.
+  - Hiển thị thông số độ phân giải thực tế (`Res: 1920x1080`) & `FPS` trực tiếp trên nhãn HUD Overlay của giao diện xem stream live.
 
 
 

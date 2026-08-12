@@ -24,8 +24,11 @@
                 <Image Source="{Binding LiveImage}" Stretch="Uniform" />
 
                 <!-- HUD Info Overlay -->
-                <Border VerticalAlignment="Top" HorizontalAlignment="Left" Margin="15" Background="#80000000" Padding="8,4" CornerRadius="4">
-                    <TextBlock Text="{Binding Fps, StringFormat='FPS: {0}'}" Foreground="#4CAF50" FontWeight="Bold" FontSize="14" />
+                <Border VerticalAlignment="Top" HorizontalAlignment="Left" Margin="15" Background="#B0000000" Padding="10,6" CornerRadius="4">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="{Binding Fps, StringFormat='FPS: {0}'}" Foreground="#4CAF50" FontWeight="Bold" FontSize="14" Margin="0,0,12,0" />
+                        <TextBlock Text="{Binding ResolutionText, StringFormat='Res: {0}'}" Foreground="#00BCD4" FontWeight="Bold" FontSize="14" />
+                    </StackPanel>
                 </Border>
 
                 <!-- Offline Placeholder -->
@@ -106,6 +109,19 @@
                                         </StackPanel>
                                     </Button>
                                 </Grid>
+                            </StackPanel>
+                        </GroupBox>
+
+                        <!-- Resolution & FPS Selection -->
+                        <GroupBox Header="Độ Phân Giải &amp; Tần Số Quét (Format &amp; FPS)" Margin="0,0,0,15" Padding="8" FontWeight="SemiBold" BorderBrush="#EEE">
+                            <StackPanel Margin="0">
+                                <TextBlock Text="Độ Phân Giải (Resolution):" FontSize="11" Foreground="#888" Margin="0,0,0,4" />
+                                <ComboBox ItemsSource="{Binding ResolutionOptions}" SelectedItem="{Binding SelectedResolution, UpdateSourceTrigger=PropertyChanged}"
+                                          IsEnabled="{Binding IsCameraRunning, Converter={StaticResource InverseBoolConverter}}" Margin="0,0,0,8" Padding="6,4" />
+
+                                <TextBlock Text="Tần Số Quét (FPS):" FontSize="11" Foreground="#888" Margin="0,0,0,4" />
+                                <ComboBox ItemsSource="{Binding FpsOptions}" SelectedItem="{Binding SelectedFps, UpdateSourceTrigger=PropertyChanged}"
+                                          IsEnabled="{Binding IsCameraRunning, Converter={StaticResource InverseBoolConverter}}" Padding="6,4" />
                             </StackPanel>
                         </GroupBox>
 
