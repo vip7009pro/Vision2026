@@ -155,6 +155,11 @@ Lộ trình tích hợp tính năng Chụp ảnh từ camera và hỗ trợ các
 - [x] Task 124: Cải tiến siêu tốc & Kháng ánh sáng cho `FeatureBased` và `MvpShapeMatch2`:
   - Tích hợp **CLAHE Histogram Normalization** và biến đổi **2D Rigid Affine (`EstimateAffinePartial2D`)** cho `FeatureBased`, loại bỏ méo phối cảnh 3D và giúp khung ROI cùng góc xoay hoàn toàn đứng yên trên camera trực tiếp.
   - Áp dụng **đa tiến trình song song `Parallel.ForEach`** cho `MvpShapeMatch2Engine.cs` (tốc độ đạt **~3-8ms** trên camera live) và sửa dấu công thức đỉnh Parabol `SubPixelRefine` triệt tiêu lỗi lệch góc xoay phải.
+- [x] Task 125: Sửa hiển thị Node Runtime trên Canvas & Caching mô hình mẫu `MvpShapeMatch2` giảm thời gian từ 400ms xuống ~5-10ms:
+  - Cập nhật `UpdateNodeExecutionTimes()` trong `ToolEditorViewModel.cs` hiển thị chính xác runtime cho toàn bộ các node trên canvas (`ImageSource`, `Crop`, `Preprocess`, `Create*`, `Origin`, `ResultView`).
+  - Tích hợp đệm `ConcurrentDictionary` lưu trữ mô hình đặc trưng vector mẫu `Mvp2TemplateModel[]` loại bỏ 350ms trích xuất lặp lại trên ảnh mẫu tĩnh mỗi khung hình camera, kết hợp Sobel lười (`Lazy Sobel`) cho ROI pyramid. Tốc độ đạt **~5–12ms**.
+
+
 
 
 

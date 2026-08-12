@@ -3003,7 +3003,7 @@ namespace VisionInspectionApp.UI.ViewModels
                     node.ExecutionTimeMs = null;
                 return;
             }
-    
+
             TotalExecutionTimeMs = _lastRun.Timings.TotalMs;
             foreach (var node in Nodes)
             {
@@ -3021,7 +3021,19 @@ namespace VisionInspectionApp.UI.ViewModels
                 }
                 else
                 {
-                    node.ExecutionTimeMs = null;
+                    var matchedKv = _lastRun.Timings.NodeTimings.FirstOrDefault(kv =>
+                        string.Equals(kv.Key, node.RefName, StringComparison.OrdinalIgnoreCase) ||
+                        string.Equals(kv.Key, node.Type, StringComparison.OrdinalIgnoreCase) ||
+                        string.Equals(kv.Key, node.Id, StringComparison.OrdinalIgnoreCase));
+
+                    if (!string.IsNullOrEmpty(matchedKv.Key))
+                    {
+                        node.ExecutionTimeMs = matchedKv.Value;
+                    }
+                    else
+                    {
+                        node.ExecutionTimeMs = 0;
+                    }
                 }
             }
         }

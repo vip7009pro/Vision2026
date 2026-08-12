@@ -25,6 +25,16 @@ namespace VisionInspectionApp.VisionEngine
 
     public static class MvpShapeMatch2Engine
     {
+        private static readonly ConcurrentDictionary<string, Mvp2TemplateModel[]> _templateModelCache = new();
+
+        /// <summary>
+        /// Clears cached template models (e.g. after training a new template).
+        /// </summary>
+        public static void ClearCache()
+        {
+            _templateModelCache.Clear();
+        }
+
         /// <summary>
         /// Extracts sparse vector edge contour features from a template image at a given scale.
         /// </summary>
@@ -136,7 +146,7 @@ namespace VisionInspectionApp.VisionEngine
         }
 
         /// <summary>
-        /// Ultra High-speed Geometric Vector Shape Matching with Multi-Threaded Pyramid Search & Early Exit Pruning.
+        /// Ultra High-speed Geometric Vector Shape Matching with Multi-Threaded Pyramid Search, Model Caching & Early Exit Pruning.
         /// Execution time: ~3..10ms even under full -180°..+180° search range.
         /// </summary>
         public static MatchResult Match(
@@ -167,7 +177,7 @@ namespace VisionInspectionApp.VisionEngine
                 try { eraserMask = Cv2.ImDecode(def.MvpEraserMask, ImreadModes.Grayscale); } catch { }
             }
 
-            // Build Pyramid Levels for ROI and Template
+            // Build Pyramid Levels for ROI
             int maxPyramidLevel = 3;
             if (def.MvpMaxPyramidLayers > 0)
             {
@@ -179,39 +189,49 @@ namespace VisionInspectionApp.VisionEngine
             }
 
             Mat[] pyrRoi = new Mat[maxPyramidLevel + 1];
-            Mat[] pyrTempl = new Mat[maxPyramidLevel + 1];
-            Mat[] pyrEraser = new Mat[maxPyramidLevel + 1];
-
             pyrRoi[0] = roiInput.Clone();
-            pyrTempl[0] = templInput.Clone();
-            if (eraserMask != null && !eraserMask.Empty()) pyrEraser[0] = eraserMask.Clone();
-
             for (int l = 1; l <= maxPyramidLevel; l++)
             {
                 pyrRoi[l] = new Mat();
-                pyrTempl[l] = new Mat();
                 Cv2.PyrDown(pyrRoi[l - 1], pyrRoi[l]);
-                Cv2.PyrDown(pyrTempl[l - 1], pyrTempl[l]);
-                if (pyrEraser[0] != null)
-                {
-                    pyrEraser[l] = new Mat();
-                    Cv2.PyrDown(pyrEraser[l - 1], pyrEraser[l]);
-                }
             }
 
-            // Extract Template Feature Models per Pyramid Level
-            Mvp2TemplateModel[] pyrModels = new Mvp2TemplateModel[maxPyramidLevel + 1];
-            for (int l = 0; l <= maxPyramidLevel; l++)
+            // Retrieve or Compute Template Feature Models per Pyramid Level
+            string cacheKey = $"{def.Name}_{edgeThresh}_{lengthThresh}_{autoThresh}_{templInput.Width}x{templInput.Height}_{def.MvpEraserMask?.Length ?? 0}_{maxPyramidLevel}";
+            
+            Mvp2TemplateModel[] pyrModels = _templateModelCache.GetOrAdd(cacheKey, _ =>
             {
-                pyrModels[l] = ExtractTemplateModel(pyrTempl[l], edgeThresh, Math.Max(2, lengthThresh >> l), autoThresh, pyrEraser[l]);
-            }
+                Mat[] pyrTempl = new Mat[maxPyramidLevel + 1];
+                Mat[] pyrEraser = new Mat[maxPyramidLevel + 1];
+                pyrTempl[0] = templInput.Clone();
+                if (eraserMask != null && !eraserMask.Empty()) pyrEraser[0] = eraserMask.Clone();
+
+                for (int l = 1; l <= maxPyramidLevel; l++)
+                {
+                    pyrTempl[l] = new Mat();
+                    Cv2.PyrDown(pyrTempl[l - 1], pyrTempl[l]);
+                    if (pyrEraser[0] != null)
+                    {
+                        pyrEraser[l] = new Mat();
+                        Cv2.PyrDown(pyrEraser[l - 1], pyrEraser[l]);
+                    }
+                }
+
+                var models = new Mvp2TemplateModel[maxPyramidLevel + 1];
+                for (int l = 0; l <= maxPyramidLevel; l++)
+                {
+                    models[l] = ExtractTemplateModel(pyrTempl[l], edgeThresh, Math.Max(2, lengthThresh >> l), autoThresh, pyrEraser[l]);
+                }
+
+                for (int l = 0; l <= maxPyramidLevel; l++)
+                {
+                    pyrTempl[l].Dispose();
+                    pyrEraser[l]?.Dispose();
+                }
+                return models;
+            });
 
             eraserMask?.Dispose();
-            for (int l = 0; l <= maxPyramidLevel; l++)
-            {
-                pyrTempl[l].Dispose();
-                pyrEraser[l]?.Dispose();
-            }
 
             if (pyrModels[0].Features.Length == 0)
             {
@@ -220,42 +240,9 @@ namespace VisionInspectionApp.VisionEngine
                 return new MatchResult(centerFallback, 0.0, 0.0, roiRect);
             }
 
-            // Build Normalized Gradient Field Grids (Nx, Ny) for each ROI Pyramid Level
-            Mat[] pyrNx = new Mat[maxPyramidLevel + 1];
-            Mat[] pyrNy = new Mat[maxPyramidLevel + 1];
-
-            for (int l = 0; l <= maxPyramidLevel; l++)
-            {
-                using var gx = new Mat();
-                using var gy = new Mat();
-                Cv2.Sobel(pyrRoi[l], gx, MatType.CV_32F, 1, 0, 3);
-                Cv2.Sobel(pyrRoi[l], gy, MatType.CV_32F, 0, 1, 3);
-                using var mag = new Mat();
-                Cv2.Magnitude(gx, gy, mag);
-
-                pyrNx[l] = new Mat(pyrRoi[l].Size(), MatType.CV_32F, Scalar.All(0));
-                pyrNy[l] = new Mat(pyrRoi[l].Size(), MatType.CV_32F, Scalar.All(0));
-
-                unsafe
-                {
-                    float* pGx = (float*)gx.Data;
-                    float* pGy = (float*)gy.Data;
-                    float* pMag = (float*)mag.Data;
-                    float* pNx = (float*)pyrNx[l].Data;
-                    float* pNy = (float*)pyrNy[l].Data;
-                    int total = pyrRoi[l].Width * pyrRoi[l].Height;
-
-                    for (int i = 0; i < total; i++)
-                    {
-                        float m = pMag[i];
-                        if (m >= 4.0f)
-                        {
-                            pNx[i] = pGx[i] / m;
-                            pNy[i] = pGy[i] / m;
-                        }
-                    }
-                }
-            }
+            // Lazy Gradient Field Grids (Nx, Ny) per Pyramid Level
+            Mat?[] pyrNx = new Mat?[maxPyramidLevel + 1];
+            Mat?[] pyrNy = new Mat?[maxPyramidLevel + 1];
 
             double targetMinScore = def.MinScore > 0 ? def.MinScore : 0.6;
 
@@ -267,20 +254,23 @@ namespace VisionInspectionApp.VisionEngine
                 coarseAngleStep = Math.Max(coarseAngleStep, 6.0);
             }
 
-            // Parallel Coarse Level Search Sweep
+            // Compute Sobel Gradient Grid for Coarse Pyramid Level
             int coarseLvl = maxPyramidLevel;
-            var candidates = CoarseSearchParallel(pyrNx[coarseLvl], pyrNy[coarseLvl], pyrModels[coarseLvl].Features, minAngleDeg, maxAngleDeg, coarseAngleStep, targetMinScore * 0.55);
+            GetOrComputeGradientGrid(pyrRoi[coarseLvl], ref pyrNx[coarseLvl], ref pyrNy[coarseLvl]);
+
+            // Parallel Coarse Level Search Sweep
+            var candidates = CoarseSearchParallel(pyrNx[coarseLvl]!, pyrNy[coarseLvl]!, pyrModels[coarseLvl].Features, minAngleDeg, maxAngleDeg, coarseAngleStep, targetMinScore * 0.55);
 
             if (candidates.Count == 0)
             {
                 // Fallback sweep with lower threshold
-                candidates = CoarseSearchParallel(pyrNx[coarseLvl], pyrNy[coarseLvl], pyrModels[coarseLvl].Features, minAngleDeg, maxAngleDeg, coarseAngleStep, 0.15);
+                candidates = CoarseSearchParallel(pyrNx[coarseLvl]!, pyrNy[coarseLvl]!, pyrModels[coarseLvl].Features, minAngleDeg, maxAngleDeg, coarseAngleStep, 0.15);
             }
 
             if (candidates.Count == 0)
             {
                 // Clean up pyramid mats
-                for (int l = 0; l <= maxPyramidLevel; l++) { pyrRoi[l].Dispose(); pyrNx[l].Dispose(); pyrNy[l].Dispose(); }
+                for (int l = 0; l <= maxPyramidLevel; l++) { pyrRoi[l].Dispose(); pyrNx[l]?.Dispose(); pyrNy[l]?.Dispose(); }
                 var centerFallback = new Point2d(roiRect.X + roiRect.Width / 2.0, roiRect.Y + roiRect.Height / 2.0);
                 return new MatchResult(centerFallback, 0.0, 0.0, roiRect);
             }
@@ -310,8 +300,10 @@ namespace VisionInspectionApp.VisionEngine
                     double curScaleY = curY * lvlScale;
                     double deltaA = Math.Max(1.0, coarseAngleStep / (1 << (maxPyramidLevel - lvl)));
 
+                    GetOrComputeGradientGrid(pyrRoi[lvl], ref pyrNx[lvl], ref pyrNy[lvl]);
+
                     RefineSearch(
-                        pyrNx[lvl], pyrNy[lvl], pyrModels[lvl].Features,
+                        pyrNx[lvl]!, pyrNy[lvl]!, pyrModels[lvl].Features,
                         curScaleX, curScaleY, curAngle,
                         searchRadius: 4, angleRange: deltaA, angleStep: Math.Clamp(stepDeg, 0.01, 1.0),
                         out double refX, out double refY, out double refAngle, out double refScore);
@@ -330,10 +322,11 @@ namespace VisionInspectionApp.VisionEngine
             }
 
             // Fine Sub-Pixel Peak Refinement at Level 0
-            SubPixelRefine(pyrNx[0], pyrNy[0], pyrModels[0].Features, bestCenterLvl0.X, bestCenterLvl0.Y, bestAngle, stepDeg, out Point2d subPixelCenter, out double subPixelAngle, out double finalScore);
+            GetOrComputeGradientGrid(pyrRoi[0], ref pyrNx[0], ref pyrNy[0]);
+            SubPixelRefine(pyrNx[0]!, pyrNy[0]!, pyrModels[0].Features, bestCenterLvl0.X, bestCenterLvl0.Y, bestAngle, stepDeg, out Point2d subPixelCenter, out double subPixelAngle, out double finalScore);
 
             // Clean up pyramid mats
-            for (int l = 0; l <= maxPyramidLevel; l++) { pyrRoi[l].Dispose(); pyrNx[l].Dispose(); pyrNy[l].Dispose(); }
+            for (int l = 0; l <= maxPyramidLevel; l++) { pyrRoi[l].Dispose(); pyrNx[l]?.Dispose(); pyrNy[l]?.Dispose(); }
 
             // Score boost for clean matches
             if (finalScore > 0.95) finalScore = 1.0;
@@ -348,6 +341,41 @@ namespace VisionInspectionApp.VisionEngine
                 templInput.Height);
 
             return new MatchResult(finalWorldCenter, Math.Clamp(finalScore, 0.0, 1.0), subPixelAngle, matchRect);
+        }
+
+        private static void GetOrComputeGradientGrid(Mat roiLevel, ref Mat? nx, ref Mat? ny)
+        {
+            if (nx != null && ny != null) return;
+
+            using var gx = new Mat();
+            using var gy = new Mat();
+            Cv2.Sobel(roiLevel, gx, MatType.CV_32F, 1, 0, 3);
+            Cv2.Sobel(roiLevel, gy, MatType.CV_32F, 0, 1, 3);
+            using var mag = new Mat();
+            Cv2.Magnitude(gx, gy, mag);
+
+            nx = new Mat(roiLevel.Size(), MatType.CV_32F, Scalar.All(0));
+            ny = new Mat(roiLevel.Size(), MatType.CV_32F, Scalar.All(0));
+
+            unsafe
+            {
+                float* pGx = (float*)gx.Data;
+                float* pGy = (float*)gy.Data;
+                float* pMag = (float*)mag.Data;
+                float* pNx = (float*)nx.Data;
+                float* pNy = (float*)ny.Data;
+                int total = roiLevel.Width * roiLevel.Height;
+
+                for (int i = 0; i < total; i++)
+                {
+                    float m = pMag[i];
+                    if (m >= 4.0f)
+                    {
+                        pNx[i] = pGx[i] / m;
+                        pNy[i] = pGy[i] / m;
+                    }
+                }
+            }
         }
 
         private static List<(double Score, double Angle, double X, double Y)> CoarseSearchParallel(
