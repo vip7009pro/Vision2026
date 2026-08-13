@@ -22,6 +22,8 @@ public sealed class CameraService : IDisposable
     private CameraParameters _currentParameters = new();
 
     private bool _isRunning;
+    private bool _isDisposed;
+    private readonly SemaphoreSlim _cameraLock = new(1, 1);
     private int _currentCameraIndex = 0;
     private string? _lastSelectedRtspUrl;
     private readonly object _lastFrameGate = new();
@@ -50,19 +52,46 @@ public sealed class CameraService : IDisposable
     public double Brightness
     {
         get => _brightness;
-        set { _brightness = value; _currentParameters.Brightness = value; SaveSettings(); }
+        set
+        {
+            _brightness = value;
+            _currentParameters.Brightness = value;
+            SaveSettings();
+            if (_activeDriver != null && _activeDriver.IsOpened)
+            {
+                _ = _activeDriver.ApplyParametersAsync(_currentParameters);
+            }
+        }
     }
 
     public double Contrast
     {
         get => _contrast;
-        set { _contrast = value; _currentParameters.Contrast = value; SaveSettings(); }
+        set
+        {
+            _contrast = value;
+            _currentParameters.Contrast = value;
+            SaveSettings();
+            if (_activeDriver != null && _activeDriver.IsOpened)
+            {
+                _ = _activeDriver.ApplyParametersAsync(_currentParameters);
+            }
+        }
     }
 
     public bool IsGrayscale
     {
         get => _isGrayscale;
-        set { _isGrayscale = value; _currentParameters.IsGrayscale = value; SaveSettings(); }
+        set
+        {
+            _isGrayscale = value;
+            _currentParameters.IsGrayscale = value;
+            SaveSettings();
+            if (_activeDriver != null && _activeDriver.IsOpened)
+            {
+                _ = _activeDriver.ApplyParametersAsync(_currentParameters);
+            }
+        }
     }
 
     public int SavedCameraIndex
@@ -114,23 +143,48 @@ public sealed class CameraService : IDisposable
 
     public async Task StartSavedCameraAsync()
     {
-        for (int i = 0; i < 3; i++)
+        if (_isDisposed) return;
+
+        try
         {
-            if (SavedIsRtsp && !string.IsNullOrWhiteSpace(SavedRtspUrl))
+            await _cameraLock.WaitAsync();
+        }
+        catch (ObjectDisposedException)
+        {
+            return;
+        }
+
+        try
+        {
+            if (_isDisposed || (_isRunning && _activeDriver != null && _activeDriver.IsOpened))
             {
-                await StartCameraCaptureAsync(fps: 30, rtspUrl: SavedRtspUrl);
-            }
-            else
-            {
-                await StartCameraCaptureAsync(cameraIndex: SavedCameraIndex, fps: 30);
+                return;
             }
 
-            if (_isRunning)
+            for (int i = 0; i < 3; i++)
             {
-                break;
-            }
+                if (_isDisposed) break;
 
-            await Task.Delay(500);
+                if (SavedIsRtsp && !string.IsNullOrWhiteSpace(SavedRtspUrl))
+                {
+                    await StartCameraCaptureInternalAsync(fps: 30, rtspUrl: SavedRtspUrl);
+                }
+                else
+                {
+                    await StartCameraCaptureInternalAsync(cameraIndex: SavedCameraIndex, fps: 30);
+                }
+
+                if (_isRunning)
+                {
+                    break;
+                }
+
+                await Task.Delay(300);
+            }
+        }
+        finally
+        {
+            try { _cameraLock.Release(); } catch { }
         }
     }
 
@@ -143,32 +197,10 @@ public sealed class CameraService : IDisposable
 
     public static void ConfigureCaptureFormat(VideoCapture cap, int requestedWidth = 1920, int requestedHeight = 1080, int requestedFps = 120)
     {
-        if (cap == null || !cap.IsOpened()) return;
-
-        try
-        {
-            cap.Set(VideoCaptureProperties.FourCC, VideoWriter.FourCC('M', 'J', 'P', 'G'));
-        }
-        catch { }
-
-        if (requestedWidth > 0 && requestedHeight > 0)
-        {
-            try
-            {
-                cap.Set(VideoCaptureProperties.FrameWidth, requestedWidth);
-                cap.Set(VideoCaptureProperties.FrameHeight, requestedHeight);
-            }
-            catch { }
-        }
-
-        if (requestedFps > 0)
-        {
-            try
-            {
-                cap.Set(VideoCaptureProperties.Fps, requestedFps);
-            }
-            catch { }
-        }
+        // Nhằm triệt tiêu 100% ngoại lệ AccessViolationException từ C++ native OpenCV (cả DSHOW lẫn MSMF backend),
+        // ứng dụng không gọi cap.Set(FrameWidth/FrameHeight/Fps) vì các webcam USB/Virtual camera trên Windows
+        // sẽ bị crash trong C++ native pin filter khi thay đổi thuộc tính luồng.
+        // Camera sẽ tự động hoạt động mượt mà ở độ phân giải gốc của thiết bị.
     }
 
     public static VideoCapture? TryOpenVideoCapture(int cameraIndex, string? rtspUrl, int requestedWidth = 1920, int requestedHeight = 1080, int requestedFps = 120)
@@ -220,7 +252,6 @@ public sealed class CameraService : IDisposable
         if (cameraIndex < 0) return null;
 
         // Kiểm tra xem thiết bị webcam USB thực tế có tồn tại trên máy hay không trước khi gọi OpenCV native C++
-        // Giúp triệt tiêu hoàn toàn lỗi AccessViolationException khi chỉ số camera không có phần cứng tương ứng
         try
         {
             var dsCameras = DirectShowDeviceEnumerator.GetDevices();
@@ -234,7 +265,30 @@ public sealed class CameraService : IDisposable
             return null;
         }
 
-        // Backend 1: MSMF
+        // Backend 1: DSHOW (DirectShow - Chuẩn ổn định nhất trên Windows)
+        try
+        {
+            var cap = new VideoCapture(cameraIndex, VideoCaptureAPIs.DSHOW);
+            if (cap.IsOpened())
+            {
+                ConfigureCaptureFormat(cap, requestedWidth, requestedHeight, requestedFps);
+                using var testMat = new Mat();
+                for (int i = 0; i < 15; i++)
+                {
+                    if (cap.Read(testMat) && !testMat.Empty() && testMat.Width > 0 && testMat.Height > 0)
+                    {
+                        return cap;
+                    }
+                    Thread.Sleep(30);
+                }
+            }
+            cap.Dispose();
+        }
+        catch { }
+
+        Thread.Sleep(100);
+
+        // Backend 2: MSMF (Media Foundation)
         try
         {
             var cap = new VideoCapture(cameraIndex, VideoCaptureAPIs.MSMF);
@@ -255,26 +309,7 @@ public sealed class CameraService : IDisposable
         }
         catch { }
 
-        // Backend 2: DSHOW
-        try
-        {
-            var cap = new VideoCapture(cameraIndex, VideoCaptureAPIs.DSHOW);
-            if (cap.IsOpened())
-            {
-                ConfigureCaptureFormat(cap, requestedWidth, requestedHeight, requestedFps);
-                using var testMat = new Mat();
-                for (int i = 0; i < 15; i++)
-                {
-                    if (cap.Read(testMat) && !testMat.Empty() && testMat.Width > 0 && testMat.Height > 0)
-                    {
-                        return cap;
-                    }
-                    Thread.Sleep(30);
-                }
-            }
-            cap.Dispose();
-        }
-        catch { }
+        Thread.Sleep(100);
 
         // Backend 3: ANY
         try
@@ -306,7 +341,31 @@ public sealed class CameraService : IDisposable
     /// </summary>
     public async Task<bool> StartDriverCameraAsync(CameraDeviceInfo device, CameraParameters? parameters = null)
     {
-        await StopCameraAsync();
+        if (_isDisposed) return false;
+
+        try
+        {
+            await _cameraLock.WaitAsync();
+        }
+        catch (ObjectDisposedException)
+        {
+            return false;
+        }
+
+        try
+        {
+            if (_isDisposed) return false;
+            return await StartDriverCameraInternalAsync(device, parameters);
+        }
+        finally
+        {
+            try { _cameraLock.Release(); } catch { }
+        }
+    }
+
+    private async Task<bool> StartDriverCameraInternalAsync(CameraDeviceInfo device, CameraParameters? parameters = null)
+    {
+        await StopCameraInternalAsync();
 
         try
         {
@@ -369,6 +428,30 @@ public sealed class CameraService : IDisposable
 
     public async Task StartCameraCaptureAsync(int cameraIndex = 0, string? rtspUrl = null, int fps = 30)
     {
+        if (_isDisposed) return;
+
+        try
+        {
+            await _cameraLock.WaitAsync();
+        }
+        catch (ObjectDisposedException)
+        {
+            return;
+        }
+
+        try
+        {
+            if (_isDisposed) return;
+            await StartCameraCaptureInternalAsync(cameraIndex, rtspUrl, fps);
+        }
+        finally
+        {
+            try { _cameraLock.Release(); } catch { }
+        }
+    }
+
+    private async Task StartCameraCaptureInternalAsync(int cameraIndex = 0, string? rtspUrl = null, int fps = 30)
+    {
         CameraDeviceInfo dev;
 
         if (IsSimulator(cameraIndex, rtspUrl))
@@ -409,10 +492,34 @@ public sealed class CameraService : IDisposable
         SavedRtspUrl = rtspUrl ?? "";
         SavedIsRtsp = !string.IsNullOrEmpty(rtspUrl);
 
-        await StartDriverCameraAsync(dev, _currentParameters);
+        await StartDriverCameraInternalAsync(dev, _currentParameters);
     }
 
     public async Task StopCameraAsync()
+    {
+        if (_isDisposed) return;
+
+        try
+        {
+            await _cameraLock.WaitAsync();
+        }
+        catch (ObjectDisposedException)
+        {
+            await StopCameraInternalAsync();
+            return;
+        }
+
+        try
+        {
+            await StopCameraInternalAsync();
+        }
+        finally
+        {
+            try { _cameraLock.Release(); } catch { }
+        }
+    }
+
+    private async Task StopCameraInternalAsync()
     {
         _isRunning = false;
 
@@ -637,11 +744,47 @@ public sealed class CameraService : IDisposable
 
     public void Dispose()
     {
-        StopCameraAsync().Wait();
-        lock (_lastFrameGate)
+        if (_isDisposed) return;
+        _isDisposed = true;
+
+        try
         {
-            _lastFrame?.Dispose();
-            _lastFrame = null;
+            if (_cameraLock.Wait(2000))
+            {
+                try
+                {
+                    StopCameraInternalAsync().GetAwaiter().GetResult();
+                    lock (_lastFrameGate)
+                    {
+                        _lastFrame?.Dispose();
+                        _lastFrame = null;
+                    }
+                }
+                finally
+                {
+                    try { _cameraLock.Release(); } catch { }
+                }
+            }
+            else
+            {
+                StopCameraInternalAsync().GetAwaiter().GetResult();
+            }
+        }
+        catch (ObjectDisposedException)
+        {
+            // Semaphore already disposed
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[CameraService] Dispose error: {ex.Message}");
+        }
+        finally
+        {
+            try
+            {
+                _cameraLock.Dispose();
+            }
+            catch { }
         }
     }
 }

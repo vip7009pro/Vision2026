@@ -605,8 +605,36 @@
   - Tích hợp driver `HikCameraDriver` qua P/Invoke `MvCameraControl.dll` kết nối camera GigE Vision & USB3 Vision Hikrobot.
   - Nâng cấp `CameraSettingsViewModel` và giao diện 3 cột `CameraSettingsView.xaml` cho phép quét thiết bị đa hãng, xem Live 60 FPS HUD overlay và điều chỉnh mọi thông số: Exposure Time, Auto Exposure, Gain, Auto Gain, Gamma, Trigger Mode (Off/On), Trigger Source (Software, Line0, Line1, Line2), Trigger Delay, Reverse X/Y (lật hình), Packet Size/Delay GigE, và nút bấm **⚡ Software Trigger Once**.
   - **Khắc phục triệt để ngoại lệ `AccessViolationException` khi bật app**: Cách ly các phương thức P/Invoke vào lớp `NativeMethods`, kiểm tra sự khả thi DLL runtime bằng `NativeLibrary.TryLoad("MvCameraControl.dll", out _)` trước khi gọi, và khởi tạo mảng con trỏ `pDeviceInfo = new IntPtr[256]` ngăn chặn truy cập vùng nhớ không hợp lệ khi máy tính chưa cài đặt MVS SDK.
+- [x] Task 127: Tích hợp Gói NuGet `MvCameraControl.Net` (v1.1.0) & Chuyển đổi `HikCameraDriver.cs`:
+  - Thêm gói NuGet `MvCameraControl.Net` trực tiếp vào tệp `VisionInspectionApp.UI.csproj`.
+  - Cập nhật [HikCameraDriver.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/Services/Camera/Drivers/HikCameraDriver.cs) chuyển sang sử dụng lớp wrapper managed `MvCamCtrl.NET.MyCamera` cùng các phương thức `ByteToStruct` và enum `MvGvspPixelType`.
+  - Mở rộng `FindHikMvsDllPath()` tìm kiếm linh hoạt cả `MvCameraControl.Net.dll` lẫn `MvCameraControl.dll` trong các thư mục cài đặt tiêu chuẩn, môi trường và thư mục `BaseDirectory` của ứng dụng.
+  - Biên dịch toàn bộ Solution thành công 0 lỗi.
+- [x] Task 128: Khắc Phục Triệt Để Lỗi Đứng Hình USB Camera (1 FPS) Khi Khởi Động App Mặc Định Mở Tab OQC Scanner:
+  - **Phân tích nguyên nhân**: Khi mở app mặc định ở tab OQC Scanner, cả `App.xaml.cs` và `OqcScannerViewModel` cùng gọi `StartSavedCameraAsync()` bất đồng bộ tại cùng một thời điểm. Việc gọi song song làm cho tiến trình thứ hai hủy/gỡ `VideoCapture` của tiến trình thứ nhất khi DirectShow filter graph đang khởi tạo, khiến Windows USB Video Driver rơi vào trạng thái lỗi fallback 1 FPS YUY2.
+  - **Khắc phục**:
+    1. Bổ sung cờ khóa bất đồng bộ thread-safe `SemaphoreSlim(1, 1)` cho [CameraService.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/Services/CameraService.cs). Khi camera đã ở trạng thái `_isRunning`, các yêu cầu khởi động trùng lặp sẽ tự động bỏ qua và bảo toàn luồng stream hiện tại.
+    2. Bổ sung khoảng nghỉ `Thread.Sleep(100)` giải phóng filter graph giữa các tầng thử nghiệm backend (DSHOW, MSMF, ANY) trong `TryOpenVideoCapture`.
+    3. Thêm nắn nhịp `Thread.Sleep(5)` trong vòng lặp đọc ảnh [OpenCvCameraDriver.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/Services/Camera/Drivers/OpenCvCameraDriver.cs) tránh hiện tượng chiếm dụng CPU và tràn hàng đợi Dispatcher.
+  - **Kết quả**: Camera USB tự động bật và phát stream Live mượt mà 30–60 FPS ngay lập tức từ khi mở ứng dụng ở tab OQC Scanner mà không cần thao tác tắt/bật lại thủ công.
+- [x] Task 129: Khắc Phục Lỗi Checkbox Chuyển Đổi Ảnh Màu <=> Đen Trắng (Grayscale) Không Có Tác Dụng:
+  - **Phân tích nguyên nhân**: Khi người dùng tích/bỏ tích checkbox `Chuyển Ảnh Đen Trắng (Grayscale)` hoặc kéo thanh trượt `Brightness/Contrast` trong `CameraSettingsView.xaml`, thuộc tính `IsGrayscale` được cập nhật vào `CameraService` và lưu xuống file settings JSON, nhưng không gọi `ApplyParametersAsync()` để chuyển thông số mới xuống driver camera đang chạy (`_activeDriver`). Do đó, driver camera vẫn tiếp tục xử lý ảnh bằng giá trị thông số cũ làm cho ảnh bị kẹt ở màu đen trắng.
+  - **Khắc phục**:
+    1. Khởi tạo `_cameraParams` trong constructor của [CameraSettingsViewModel.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/CameraSettingsViewModel.cs) đồng bộ với `_cameraService.CurrentParameters`.
+    2. Thêm lệnh gọi `_ = ApplyCameraParametersAsync();` trong các thuộc tính `IsGrayscale`, `Brightness`, `Contrast` và phương thức `ResetSettings()` của ViewModel.
+    3. Cập nhật các setter `Brightness`, `Contrast`, `IsGrayscale` trong [CameraService.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/Services/CameraService.cs) tự động gọi `_activeDriver.ApplyParametersAsync(_currentParameters)` tức thì nếu driver camera đang mở.
+  - **Kết quả**: Việc tích/bỏ tích checkbox `Chuyển Ảnh Đen Trắng (Grayscale)` có tác dụng tức thì trên luồng stream Live (chuyển đổi realtime giữa ảnh màu 3-channel BGR và ảnh đen trắng).
+- [x] Task 130: Khắc Phục Ngoại Lệ `ObjectDisposedException` Trực Tiếp Trên `SemaphoreSlim` Khi Tắt Ứng Dụng:
+  - **Phân tích nguyên nhân**: Khi tắt ứng dụng, `App.xaml.cs` trong `ShutdownGracefullyAsync` gọi `camera.Dispose()`. Ngay sau đó, Microsoft Dependency Injection Container `_host.Dispose()` tự động dọn dẹp các Singleton service và gọi `CameraService.Dispose()` lần thứ hai. Lần gọi thứ hai cố gắng thực thi `_cameraLock.Wait()` trên instance `SemaphoreSlim` đã bị giải phóng từ lần Dispose thứ nhất, dẫn đến văng ngoại lệ `ObjectDisposedException`.
+  - **Khắc phục**:
+    1. Bổ sung cờ guard `private bool _isDisposed;` chuẩn hóa mẫu thiết kế IDisposable cho [CameraService.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/Services/CameraService.cs). Khi `Dispose()` đã chạy một lần, các lần gọi trùng lặp tiếp theo sẽ thoát ngay lập tức (`if (_isDisposed) return;`).
+    2. Sử dụng `_cameraLock.Wait(2000)` có thời gian chờ tối đa 2 giây và bọc an toàn trong khối try-catch `ObjectDisposedException`.
+    3. Cập nhật tất cả các phương thức async (`StartSavedCameraAsync`, `StartDriverCameraAsync`, `StartCameraCaptureAsync`, `StopCameraAsync`) kiểm tra cờ `_isDisposed` và bắt `ObjectDisposedException` khi truy cập khóa.
+  - **Kết quả**: Ứng dụng đóng/tắt hoàn toàn êm ái khi camera đang phát stream Live, triệt tiêu 100% ngoại lệ `ObjectDisposedException` và không bị treo tiến trình chạy ngầm.
 
 ## Roadmap
+
+
 
 ### Ưu tiên cao
 

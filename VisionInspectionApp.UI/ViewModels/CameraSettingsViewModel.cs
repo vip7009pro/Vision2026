@@ -307,6 +307,7 @@ public sealed class CameraSettingsViewModel : ObservableObject, IDisposable
                 _cameraService.Brightness = value;
                 _cameraParams.Brightness = value;
                 OnPropertyChanged();
+                _ = ApplyCameraParametersAsync();
             }
         }
     }
@@ -321,6 +322,7 @@ public sealed class CameraSettingsViewModel : ObservableObject, IDisposable
                 _cameraService.Contrast = value;
                 _cameraParams.Contrast = value;
                 OnPropertyChanged();
+                _ = ApplyCameraParametersAsync();
             }
         }
     }
@@ -335,6 +337,7 @@ public sealed class CameraSettingsViewModel : ObservableObject, IDisposable
                 _cameraService.IsGrayscale = value;
                 _cameraParams.IsGrayscale = value;
                 OnPropertyChanged();
+                _ = ApplyCameraParametersAsync();
             }
         }
     }
@@ -348,6 +351,7 @@ public sealed class CameraSettingsViewModel : ObservableObject, IDisposable
     public CameraSettingsViewModel(CameraService cameraService)
     {
         _cameraService = cameraService;
+        _cameraParams = _cameraService.CurrentParameters.Clone();
         _cameraService.FrameCaptured += OnFrameCaptured;
         _cameraService.ErrorOccurred += OnCameraError;
 
@@ -542,6 +546,7 @@ public sealed class CameraSettingsViewModel : ObservableObject, IDisposable
         ReverseY = false;
         TriggerModeOn = false;
         StatusMessage = "Đã khôi phục cài đặt mặc định.";
+        _ = ApplyCameraParametersAsync();
     }
 
     public void Dispose()

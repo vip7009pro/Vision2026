@@ -178,6 +178,7 @@ public sealed class OpenCvCameraDriver : CameraDriverBase
                 if (_cap != null && _cap.Read(frame) && !frame.Empty())
                 {
                     RaiseFrameCaptured(frame);
+                    Thread.Sleep(5);
                 }
                 else
                 {

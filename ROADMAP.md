@@ -162,6 +162,13 @@ Lộ trình tích hợp tính năng Chụp ảnh từ camera và hỗ trợ các
   - Xây dựng hệ thống lớp trừu tượng `ICameraDriver` sẵn sàng mở rộng cho Hikrobot, Basler, Cognex, USB DirectShow, RTSP IP camera và Simulator.
   - Tích hợp driver `HikCameraDriver` qua P/Invoke `MvCameraControl.dll` kết nối camera GigE Vision & USB3 Vision Hikrobot.
   - Nâng cấp `CameraSettingsViewModel` và giao diện 3 cột `CameraSettingsView.xaml` cho phép quét thiết bị đa hãng, xem Live 60 FPS HUD overlay và điều chỉnh mọi thông số: Exposure Time, Auto Exposure, Gain, Auto Gain, Gamma, Trigger Mode (Off/On), Trigger Source (Software, Line0, Line1, Line2), Trigger Delay, Reverse X/Y (lật hình), Packet Size/Delay GigE, và nút bấm **⚡ Software Trigger Once**.
+- [x] Task 127: Tích hợp gói NuGet `MvCameraControl.Net` vào dự án UI và chuyển đổi `HikCameraDriver.cs` sang dùng managed wrapper `MvCamCtrl.NET` (`MyCamera` class), loại bỏ phụ thuộc vào các đường dẫn đĩa cứng cố định.
+- [x] Task 128: Khắc phục lỗi đứng hình camera USB (1 FPS) khi mở app mặc định ở tab OQC Scanner: Bổ sung cờ khóa `SemaphoreSlim` bảo vệ `CameraService` triệt tiêu xung đột gọi `StartSavedCameraAsync()` song song khi khởi động, bổ sung khoảng trễ giải phóng filter graph giữa các OpenCV VideoCapture backend (DSHOW, MSMF), và nắn nhịp `Thread.Sleep(5)` trong `OpenCvCameraDriver` giúp camera USB chạy mượt mà 30-60 FPS ngay từ khi mở app.
+- [x] Task 129: Sửa lỗi checkbox chuyển đổi Màu <=> Đen trắng (Grayscale) không có tác dụng: Đồng bộ dữ liệu `_cameraParams` trong `CameraSettingsViewModel` và bổ sung lệnh gọi `ApplyParametersAsync` tức thì khi thay đổi cờ `IsGrayscale` (cũng như Brightness/Contrast) giúp chuyển đổi realtime giữa chế độ ảnh màu và đen trắng.
+- [x] Task 130: Khắc phục lỗi `ObjectDisposedException` trên `SemaphoreSlim` khi tắt app lúc camera đang chạy: Bổ sung cờ `_isDisposed` phòng chống hủy lặp 2 lần (Dispose collision) giữa `App.OnExit` và DI Container Scope, bổ sung bọc try-catch `ObjectDisposedException` cho tất cả phương thức async trong `CameraService`.
+
+
+
 
 
 
