@@ -631,6 +631,13 @@
     2. Sử dụng `_cameraLock.Wait(2000)` có thời gian chờ tối đa 2 giây và bọc an toàn trong khối try-catch `ObjectDisposedException`.
     3. Cập nhật tất cả các phương thức async (`StartSavedCameraAsync`, `StartDriverCameraAsync`, `StartCameraCaptureAsync`, `StopCameraAsync`) kiểm tra cờ `_isDisposed` và bắt `ObjectDisposedException` khi truy cập khóa.
   - **Kết quả**: Ứng dụng đóng/tắt hoàn toàn êm ái khi camera đang phát stream Live, triệt tiêu 100% ngoại lệ `ObjectDisposedException` và không bị treo tiến trình chạy ngầm.
+- [x] Task 131: Xây Dựng File Tài Liệu Hướng Dẫn Tự Học WPF Và Vision Công Nghiệp Chi Tiết (`learnwpfvision.md`):
+  - Tổng hợp kiến thức lập trình WPF từ nền tảng đến nâng cao thông qua việc phân tích trực tiếp mã nguồn ứng dụng `Vision2026`.
+  - Phân tích 4 trụ cột Lập trình Hướng Đối Tượng (OOP: Encapsulation, Inheritance, Polymorphism, Abstraction) qua các file mã nguồn thực tế.
+  - Phân tích kiến trúc Dependency Injection (DI) & Inversion of Control (IoC) với `Microsoft.Extensions.DependencyInjection` và `IHost` trong `App.xaml.cs`.
+  - Phân tích chi tiết mô hình MVVM, `INotifyPropertyChanged`, Data Binding (`Mode`, `UpdateSourceTrigger`), `ICommand` và kỹ thuật phân rã ViewModel bằng `partial class` (`ToolEditorViewModel.*.cs`).
+  - Hướng dẫn kỹ thuật kết hợp WPF và OpenCV (OpenCvSharp4): Chuyển đổi `Mat` sang `BitmapSource` an toàn qua các Thread UI (`bmp.Freeze()`), vẽ Overlay hiệu năng cao 60 FPS với Custom Control `FastOverlayCanvas` (`OnRender` + Pen Caching), và tương tác ROI 360 độ (`ImageViewerControl`).
+  - Cung cấp luồng dữ liệu thực thi từng bước (Step-by-step Execution Flow) và 3 bài tập thực hành cụ thể giúp người mới nhanh chóng làm chủ WPF và Vision công nghiệp.
 
 ## Roadmap
 
