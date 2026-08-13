@@ -9,6 +9,7 @@
 
     <UserControl.InputBindings>
         <KeyBinding Key="F5" Command="{Binding EnableLiveCameraCommand}" />
+        <KeyBinding Key="Space" Command="{Binding ScanFromCameraCommand}" />
     </UserControl.InputBindings>
 
     <UserControl.Resources>
@@ -33,12 +34,12 @@
                     <Button Content="👁️ Xem Tool Editor" Command="{Binding SwitchToToolEditorCommand}" Width="150" Height="34" Margin="0,0,8,0" ToolTip="Chuyển sang Tab Tool Editor để xem Graph và kết quả kiểm tra chi tiết" />
                     <Button Content="📋 Gán Mã ↔ Job" Command="{Binding OpenProductAssignCommand}" Width="140" Height="34" Margin="0,0,8,0" />
                     <Button Content="📁 Mở Job thủ công" Command="{Binding ManualOpenJobCommand}" Width="140" Height="34" Margin="0,0,8,0" />
-                    <Button Content="⚙ Cấu hình DB" Command="{Binding OpenSettingsCommand}" Width="120" Height="34" />
+                    <Button Content="⚙ Cấu hình DB / Camera" Command="{Binding OpenSettingsCommand}" Width="150" Height="34" />
                 </StackPanel>
 
                 <StackPanel VerticalAlignment="Center">
                     <TextBlock Text="📷 OQC PRODUCT SCANNER &amp; AUTOMATIC JOB SWITCHER" FontSize="18" FontWeight="Bold" Foreground="{DynamicResource TextBrush}" />
-                    <TextBlock Text="Quét mã QR/Barcode sản phẩm để tự động tìm kiếm &amp; nạp cấu hình Job kiểm tra tương ứng từ Database." FontSize="12" Foreground="{DynamicResource TextMutedBrush}" Margin="0,2,0,0" />
+                    <TextBlock Text="Quét mã QR/Barcode từ Camera hoặc Máy quét để tự động nạp Job &amp; thực thi kiểm tra từ Database." FontSize="12" Foreground="{DynamicResource TextMutedBrush}" Margin="0,2,0,0" />
                 </StackPanel>
             </DockPanel>
         </Border>
@@ -51,7 +52,8 @@
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*" />
                         <ColumnDefinition Width="Auto" />
-                        <ColumnDefinition Width="140" />
+                        <ColumnDefinition Width="175" />
+                        <ColumnDefinition Width="135" />
                     </Grid.ColumnDefinitions>
 
                     <TextBox x:Name="ScanInputTextBox"
@@ -64,6 +66,7 @@
                         <TextBox.InputBindings>
                             <KeyBinding Key="Enter" Command="{Binding ScanCommand}" />
                             <KeyBinding Key="F5" Command="{Binding EnableLiveCameraCommand}" />
+                            <KeyBinding Key="Space" Command="{Binding ScanFromCameraCommand}" />
                         </TextBox.InputBindings>
                     </TextBox>
 
@@ -77,6 +80,13 @@
                               Margin="0,0,12,0" />
 
                     <Button Grid.Column="2"
+                            Content="📷 QUÉT CAMERA (SPACE)"
+                            Command="{Binding ScanFromCameraCommand}"
+                            FontSize="12" FontWeight="Bold"
+                            Height="44" Margin="0,0,10,0"
+                            ToolTip="Chụp ảnh Camera, tự động đọc mã QR/Barcode, lọc loại mã, độ dài, cắt chuỗi và nạp/chạy Job. Phím tắt: Space" />
+
+                    <Button Grid.Column="3"
                             Content="{Binding ScanButtonText}"
                             Command="{Binding ScanCommand}"
                             FontSize="14" FontWeight="Bold"

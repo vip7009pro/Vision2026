@@ -103,9 +103,25 @@ public sealed class SimulatorCameraDriver : CameraDriverBase
         }
     }
 
-    private static Mat GenerateFrame(ref int frameCounter)
+    private Mat GenerateFrame(ref int frameCounter)
     {
         frameCounter++;
+        string customPath = _parameters?.CustomImagePath?.Trim() ?? "";
+
+        if (!string.IsNullOrEmpty(customPath) && System.IO.File.Exists(customPath))
+        {
+            try
+            {
+                var customMat = Cv2.ImRead(customPath, ImreadModes.Color);
+                if (customMat != null && !customMat.Empty() && customMat.Width > 0 && customMat.Height > 0)
+                {
+                    return customMat;
+                }
+                customMat?.Dispose();
+            }
+            catch { }
+        }
+
         var mat = new Mat(480, 640, MatType.CV_8UC3, new Scalar(40, 40, 40));
 
         // Nền lưới Industrial Grid

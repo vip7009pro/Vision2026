@@ -29,6 +29,15 @@ public class OqcScannerConfig
     public bool LogResultToDb { get; set; } = false;
     public string LogResultDbId { get; set; } = "";
     public string LogResultQuery { get; set; } = "INSERT INTO OqcLogs (ScannedCode, JobFilePath, Pass, NgReasons, InspectDateTime) VALUES ('{ScannedCode}', '{JobFilePath}', {PassBit}, '{NgReasons}', GETDATE())";
+
+    // ─── Cấu hình quét mã Barcode / QR Code từ Camera ───
+    public bool EnableCameraBarcodeScan { get; set; } = true;
+    public string TargetCodeType { get; set; } = "ALL";
+    public bool EnableLengthFilter { get; set; } = false;
+    public int RequiredCodeLength { get; set; } = 0;
+    public bool EnableCodeCrop { get; set; } = false;
+    public int CropStartIndex { get; set; } = 0;
+    public int CropLength { get; set; } = 0;
 }
 
 public class OqcScanHistoryEntry : System.ComponentModel.INotifyPropertyChanged

@@ -53,6 +53,9 @@ public sealed class CameraParameters
     public double Contrast { get; set; } = 1.0;
     public bool IsGrayscale { get; set; } = false;
 
+    // Nguồn ảnh tùy chỉnh cho Camera Giả Lập (Simulator)
+    public string CustomImagePath { get; set; } = "";
+
     public CameraParameters Clone()
     {
         return (CameraParameters)MemberwiseClone();

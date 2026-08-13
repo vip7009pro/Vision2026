@@ -73,6 +73,7 @@ public partial class OqcScannerViewModel : ObservableObject
     public Action<int>? RequestSwitchTab { get; set; }
 
     public IAsyncRelayCommand ScanCommand { get; }
+    public IAsyncRelayCommand ScanFromCameraCommand { get; }
     public IRelayCommand OpenSettingsCommand { get; }
     public IRelayCommand OpenProductAssignCommand { get; }
     public IRelayCommand ManualOpenJobCommand { get; }
@@ -116,6 +117,7 @@ public partial class OqcScannerViewModel : ObservableObject
         _cameraService = cameraService;
 
         ScanCommand = new AsyncRelayCommand(ExecuteScanAsync);
+        ScanFromCameraCommand = new AsyncRelayCommand(ExecuteScanFromCameraAsync);
         OpenSettingsCommand = new RelayCommand(OpenSettingsDialog);
         OpenProductAssignCommand = new RelayCommand(OpenProductAssignDialog);
         ManualOpenJobCommand = new RelayCommand(ExecuteManualOpenJob);
@@ -212,6 +214,50 @@ public partial class OqcScannerViewModel : ObservableObject
         catch
         {
             _isRenderingLiveFrame = false;
+        }
+    }
+
+    private async Task ExecuteScanFromCameraAsync()
+    {
+        if (IsScanning) return;
+
+        IsScanning = true;
+        StatusMessage = "📷 Đang chụp ảnh và nhận diện mã QR/Barcode từ Camera...";
+        StatusBrush = Brushes.DodgerBlue;
+
+        try
+        {
+            using var snapshot = await _cameraService.CaptureSnapshotAsync();
+            if (snapshot == null || snapshot.Empty())
+            {
+                StatusMessage = "❌ Không lấy được hình ảnh từ Camera! Vui lòng kiểm tra kết nối Camera.";
+                StatusBrush = Brushes.Red;
+                return;
+            }
+
+            var result = _oqcService.DecodeCodeFromImage(snapshot, _oqcService.Config);
+            if (!result.Success || string.IsNullOrWhiteSpace(result.ProcessedCode))
+            {
+                StatusMessage = $"❌ {result.ErrorMessage}";
+                StatusBrush = Brushes.Orange;
+                return;
+            }
+
+            ScannedCode = result.ProcessedCode;
+            StatusMessage = $"📷 Đã đọc mã từ Camera: '{result.ProcessedCode}' (Mã gốc: '{result.RawCode}', Loại: {result.CodeType}). Đang tra DB...";
+            StatusBrush = Brushes.DodgerBlue;
+
+            IsScanning = false;
+            await ExecuteScanAsync();
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = $"❌ Lỗi đọc mã từ camera: {ex.Message}";
+            StatusBrush = Brushes.Red;
+        }
+        finally
+        {
+            IsScanning = false;
         }
     }
 

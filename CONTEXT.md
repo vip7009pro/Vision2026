@@ -638,6 +638,25 @@
   - Phân tích chi tiết mô hình MVVM, `INotifyPropertyChanged`, Data Binding (`Mode`, `UpdateSourceTrigger`), `ICommand` và kỹ thuật phân rã ViewModel bằng `partial class` (`ToolEditorViewModel.*.cs`).
   - Hướng dẫn kỹ thuật kết hợp WPF và OpenCV (OpenCvSharp4): Chuyển đổi `Mat` sang `BitmapSource` an toàn qua các Thread UI (`bmp.Freeze()`), vẽ Overlay hiệu năng cao 60 FPS với Custom Control `FastOverlayCanvas` (`OnRender` + Pen Caching), và tương tác ROI 360 độ (`ImageViewerControl`).
   - Cung cấp luồng dữ liệu thực thi từng bước (Step-by-step Execution Flow) và 3 bài tập thực hành cụ thể giúp người mới nhanh chóng làm chủ WPF và Vision công nghiệp.
+- [x] Task 132: Tích Hợp Chức Năng Nhận Diện Barcode/QR Code Trực Tiếp Từ Camera Trong Tab OQC Scanner:
+  - **Tự động đọc mã từ Camera (`DecodeCodeFromImage`)**: Sử dụng thư viện `ZXing.Net` kết hợp OpenCvSharp để phân tích ảnh camera snapshot (`CameraService.CaptureSnapshotAsync()`), giải mã đa định dạng mã Barcode 1D và QR Code 2D (`DecodeMultiple`).
+  - **Tùy chọn lọc loại mã chỉ định (`TargetCodeType`)**: Hỗ trợ người dùng lọc loại mã cần nhận diện (Ví dụ: `ALL`, `QR_CODE`, `CODE_128`, `CODE_39`, `DATA_MATRIX`, `EAN_13`, `EAN_8`, `PDF_417`, `AZTEC`, `BARCODE_1D`).
+  - **Tùy chọn lọc theo độ dài mã $n$ ký tự (`EnableLengthFilter` & `RequiredCodeLength`)**: Chỉ chấp nhận các mã scan được có độ dài bằng đúng $n$ ký tự thiết lập.
+  - **Tùy chọn trích xuất / cắt chuỗi mã (`EnableCodeCrop`, `CropStartIndex`, `CropLength`)**: Cho phép trích xuất một đoạn ký tự cụ thể từ chuỗi mã scan được (từ vị trí bắt đầu `CropStartIndex` với độ dài `CropLength`) để làm đầu ra `ScannedCode` cuối cùng.
+  - **Phím tắt `Space` & Nút Quét Camera**: Bổ sung phím tắt `Space` (và nút bấm **📷 QUÉT CAMERA (SPACE)**) trên giao diện OQC Scanner giúp thực hiện luồng làm việc tự động: *Chụp ảnh camera → Giải mã QR/Barcode → Lọc & trích xuất ScannedCode → Tra DB nạp Job → Tự động chạy Job kiểm tra*.
+  - **Giao diện cấu hình `OqcSettingsDialog.xaml`**: Thiết kế vùng cấu hình chuyên biệt hỗ trợ người dùng bật/tắt tính năng, lựa chọn loại mã, cài đặt độ dài $n$ và thông số cắt chuỗi.
+  - **Biên dịch thành công 0 lỗi**.
+- [x] Task 133: Bổ Sung Ghi Log Output Window Chi Tiết Barcode & Tùy Chọn Chọn Ảnh Tùy Chỉnh Cho Camera Giả Lập:
+  - **Ghi Log Output Window Chi Tiết (`System.Diagnostics.Debug.WriteLine`)**:
+    * Ghi log tổng số lượng mã QR/Barcode nhận diện được từ ảnh camera (`SỐ LƯỢNG MÃ ĐÃ NHẬN DIỆN ĐƯỢC: N`).
+    * Ghi log danh sách nội dung và định dạng của tất cả các mã đọc được (Mã #1, Mã #2...).
+    * Ghi log nội dung mã được chọn thỏa mãn bộ lọc (`NỘI DUNG MÃ ĐƯỢC CHỌN`).
+    * Ghi log giá trị `ScannedCode` cuối cùng thu được sau khi cắt chuỗi (`GIÁ TRỊ SCANNEDCODE CUỐI CÙNG`).
+  - **Tùy Chọn Chọn Ảnh Từ Máy Tính Cho Camera Giả Lập (Simulator Custom Image)**:
+    * Bổ sung thuộc tính `CustomImagePath` trong `CameraParameters`, `SimulatorCameraDriver` và `CameraService` (lưu vĩnh viễn cấu hình xuống `camera_adjust_settings.json`).
+    * `SimulatorCameraDriver.cs`: Kiểm tra tệp ảnh tùy chỉnh (`CustomImagePath`). Nếu tồn tại, nạp trực tiếp ảnh từ đĩa (`Cv2.ImRead`) làm nguồn stream cho Camera Giả Lập thay vì nền video target mặc định.
+    * Giao diện `CameraSettingsView.xaml` & `CameraSettingsViewModel.cs`: Thêm khung chọn nguồn ảnh giả lập tùy chỉnh với nút **📁 Duyệt** mở OpenFileDialog chọn tệp ảnh (`.png`, `.jpg`, `.bmp`, `.tif`) và nút **🔄 Mặc định** để khôi phục mẫu mặc định.
+  - **Biên dịch thành công 0 lỗi**.
 
 ## Roadmap
 

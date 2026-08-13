@@ -1,12 +1,16 @@
 using System;
+using System.Collections.Generic;
 using System.Data;
 using System.Globalization;
 using System.IO;
+using System.Linq;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
+using OpenCvSharp;
 using VisionInspectionApp.Application.DB.Services;
 using VisionInspectionApp.Models;
+using ZXing;
 
 namespace VisionInspectionApp.Application.OQC;
 
@@ -64,6 +68,226 @@ public sealed class OqcScannerService : IOqcScannerService
         catch (Exception ex)
         {
             System.Diagnostics.Debug.WriteLine($"Failed to save OQC config: {ex.Message}");
+        }
+    }
+
+    public CameraCodeScanResult DecodeCodeFromImage(Mat image, OqcScannerConfig? config = null)
+    {
+        var cfg = config ?? Config ?? new OqcScannerConfig();
+        if (image == null || image.Empty() || image.Width <= 0 || image.Height <= 0)
+        {
+            return new CameraCodeScanResult
+            {
+                Success = false,
+                ErrorMessage = "Hình ảnh camera không hợp lệ hoặc rỗng."
+            };
+        }
+
+        try
+        {
+            using var grayMat = image.Channels() == 1 ? image.Clone() : image.CvtColor(ColorConversionCodes.BGR2GRAY);
+            using var continuousMat = grayMat.IsContinuous() ? grayMat.Clone() : grayMat;
+
+            int width = continuousMat.Width;
+            int height = continuousMat.Height;
+            var bytes = new byte[width * height];
+            System.Runtime.InteropServices.Marshal.Copy(continuousMat.Data, bytes, 0, bytes.Length);
+
+            var options = new ZXing.Common.DecodingOptions
+            {
+                TryHarder = true,
+                TryInverted = true
+            };
+
+            var targetType = cfg.TargetCodeType?.Trim().ToUpperInvariant() ?? "ALL";
+            if (targetType != "ALL")
+            {
+                var formats = new List<BarcodeFormat>();
+                switch (targetType)
+                {
+                    case "QR_CODE":
+                    case "QR":
+                        formats.Add(BarcodeFormat.QR_CODE);
+                        break;
+                    case "CODE_128":
+                        formats.Add(BarcodeFormat.CODE_128);
+                        break;
+                    case "CODE_39":
+                        formats.Add(BarcodeFormat.CODE_39);
+                        break;
+                    case "DATA_MATRIX":
+                    case "DATAMATRIX":
+                        formats.Add(BarcodeFormat.DATA_MATRIX);
+                        break;
+                    case "EAN_13":
+                    case "EAN13":
+                        formats.Add(BarcodeFormat.EAN_13);
+                        break;
+                    case "EAN_8":
+                    case "EAN8":
+                        formats.Add(BarcodeFormat.EAN_8);
+                        break;
+                    case "PDF_417":
+                    case "PDF417":
+                        formats.Add(BarcodeFormat.PDF_417);
+                        break;
+                    case "AZTEC":
+                        formats.Add(BarcodeFormat.AZTEC);
+                        break;
+                    case "BARCODE_1D":
+                        formats.AddRange(new[]
+                        {
+                            BarcodeFormat.CODE_128, BarcodeFormat.CODE_39, BarcodeFormat.CODE_93,
+                            BarcodeFormat.EAN_13, BarcodeFormat.EAN_8, BarcodeFormat.UPC_A,
+                            BarcodeFormat.UPC_E, BarcodeFormat.ITF, BarcodeFormat.CODABAR
+                        });
+                        break;
+                    default:
+                        if (Enum.TryParse<BarcodeFormat>(targetType, true, out var parsedFormat))
+                        {
+                            formats.Add(parsedFormat);
+                        }
+                        break;
+                }
+
+                if (formats.Count > 0)
+                {
+                    options.PossibleFormats = formats;
+                }
+            }
+
+            var reader = new BarcodeReaderGeneric
+            {
+                AutoRotate = true,
+                Options = options
+            };
+
+            var luminanceSource = new RGBLuminanceSource(bytes, width, height, RGBLuminanceSource.BitmapFormat.Gray8);
+
+            var decodedResults = reader.DecodeMultiple(luminanceSource);
+            var rawResults = new List<Result>();
+
+            if (decodedResults != null && decodedResults.Length > 0)
+            {
+                rawResults.AddRange(decodedResults);
+            }
+
+            if (rawResults.Count == 0)
+            {
+                var singleResult = reader.Decode(luminanceSource);
+                if (singleResult != null && !string.IsNullOrWhiteSpace(singleResult.Text))
+                {
+                    rawResults.Add(singleResult);
+                }
+            }
+
+            if (rawResults.Count == 0)
+            {
+                System.Diagnostics.Debug.WriteLine("[OQC Barcode Scanner] ⚠️ Không tìm thấy mã QR/Barcode trong ảnh camera.");
+                return new CameraCodeScanResult
+                {
+                    Success = false,
+                    ErrorMessage = "Không tìm thấy mã QR/Barcode trong ảnh camera."
+                };
+            }
+
+            // Ghi log số lượng và nội dung tất cả các mã phát hiện được trong ảnh
+            System.Diagnostics.Debug.WriteLine($"==================================================");
+            System.Diagnostics.Debug.WriteLine($"[OQC Barcode Scanner] 📊 SỐ LƯỢNG MÃ ĐÃ NHẬN DIỆN ĐƯỢC: {rawResults.Count}");
+            for (int i = 0; i < rawResults.Count; i++)
+            {
+                System.Diagnostics.Debug.WriteLine($"  ├─ Mã #{i + 1}: '{rawResults[i].Text}' | Định dạng: {rawResults[i].BarcodeFormat}");
+            }
+
+            var candidateResults = new List<(string raw, string format)>();
+            foreach (var res in rawResults)
+            {
+                if (res == null || string.IsNullOrWhiteSpace(res.Text)) continue;
+                string text = res.Text.Trim();
+                string fmt = res.BarcodeFormat.ToString();
+
+                if (cfg.EnableLengthFilter && cfg.RequiredCodeLength > 0)
+                {
+                    if (text.Length != cfg.RequiredCodeLength)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"  [Bộ lọc] Loại bỏ mã '{text}' do độ dài ({text.Length}) != {cfg.RequiredCodeLength}");
+                        continue;
+                    }
+                }
+
+                candidateResults.Add((text, fmt));
+            }
+
+            if (candidateResults.Count == 0)
+            {
+                var foundRawTexts = string.Join(", ", rawResults.Select(r => $"'{r.Text}' ({r.BarcodeFormat})"));
+                string reqMsg = cfg.EnableLengthFilter && cfg.RequiredCodeLength > 0 ? $"độ dài {cfg.RequiredCodeLength} ký tự" : "";
+                string typeMsg = targetType != "ALL" ? $"loại mã {targetType}" : "";
+                string filterDesc = string.Join(" & ", new[] { typeMsg, reqMsg }.Where(s => !string.IsNullOrEmpty(s)));
+
+                System.Diagnostics.Debug.WriteLine($"[OQC Barcode Scanner] ❌ Tất cả {rawResults.Count} mã đều bị loại bởi bộ lọc ({filterDesc}).");
+                System.Diagnostics.Debug.WriteLine($"==================================================");
+
+                return new CameraCodeScanResult
+                {
+                    Success = false,
+                    ErrorMessage = $"Đã nhận diện {rawResults.Count} mã [{foundRawTexts}], nhưng không mã nào thỏa mãn bộ lọc ({filterDesc})."
+                };
+            }
+
+            var (selectedRawCode, selectedFormat) = candidateResults[0];
+            string finalProcessedCode = selectedRawCode;
+
+            if (cfg.EnableCodeCrop)
+            {
+                int start = Math.Max(0, cfg.CropStartIndex);
+                if (start < selectedRawCode.Length)
+                {
+                    int cropLen = cfg.CropLength;
+                    if (cropLen > 0 && start + cropLen <= selectedRawCode.Length)
+                    {
+                        finalProcessedCode = selectedRawCode.Substring(start, cropLen);
+                    }
+                    else
+                    {
+                        finalProcessedCode = selectedRawCode.Substring(start);
+                    }
+                }
+                else
+                {
+                    System.Diagnostics.Debug.WriteLine($"[OQC Barcode Scanner] ❌ Lỗi cắt chuỗi: StartIndex ({start}) >= Độ dài mã gốc ({selectedRawCode.Length}).");
+                    System.Diagnostics.Debug.WriteLine($"==================================================");
+
+                    return new CameraCodeScanResult
+                    {
+                        Success = false,
+                        RawCode = selectedRawCode,
+                        CodeType = selectedFormat,
+                        ErrorMessage = $"Vị trí bắt đầu cắt ({start}) vượt quá độ dài mã gốc ({selectedRawCode.Length} ký tự)."
+                    };
+                }
+            }
+
+            System.Diagnostics.Debug.WriteLine($"[OQC Barcode Scanner] 🎯 NỘI DUNG MÃ ĐƯỢC CHỌN: '{selectedRawCode}' (Loại mã: {selectedFormat})");
+            System.Diagnostics.Debug.WriteLine($"[OQC Barcode Scanner] ✂️ GIÁ TRỊ SCANNEDCODE CUỐI CÙNG: '{finalProcessedCode}'");
+            System.Diagnostics.Debug.WriteLine($"==================================================");
+
+            return new CameraCodeScanResult
+            {
+                Success = true,
+                RawCode = selectedRawCode,
+                ProcessedCode = finalProcessedCode,
+                CodeType = selectedFormat,
+                ErrorMessage = ""
+            };
+        }
+        catch (Exception ex)
+        {
+            return new CameraCodeScanResult
+            {
+                Success = false,
+                ErrorMessage = $"Lỗi xử lý đọc mã camera: {ex.Message}"
+            };
         }
     }
 

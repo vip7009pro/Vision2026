@@ -41,6 +41,7 @@ public sealed class CameraService : IDisposable
     private int _desiredWidth = 1920;
     private int _desiredHeight = 1080;
     private int _desiredFps = 120;
+    private string _simulatorCustomImagePath = "";
 
     public event EventHandler<Mat>? FrameCaptured;
     public event EventHandler<string>? ErrorOccurred;
@@ -48,6 +49,21 @@ public sealed class CameraService : IDisposable
     public ICameraDriver? ActiveDriver => _activeDriver;
     public CameraDeviceInfo? ActiveDeviceInfo => _activeDeviceInfo;
     public CameraParameters CurrentParameters => _currentParameters;
+
+    public string SimulatorCustomImagePath
+    {
+        get => _simulatorCustomImagePath;
+        set
+        {
+            _simulatorCustomImagePath = value;
+            _currentParameters.CustomImagePath = value;
+            SaveSettings();
+            if (_activeDriver != null && _activeDriver.IsOpened)
+            {
+                _ = _activeDriver.ApplyParametersAsync(_currentParameters);
+            }
+        }
+    }
 
     public double Brightness
     {
@@ -690,6 +706,8 @@ public sealed class CameraService : IDisposable
                     _desiredWidth = settings.DesiredWidth > 0 ? settings.DesiredWidth : 1920;
                     _desiredHeight = settings.DesiredHeight > 0 ? settings.DesiredHeight : 1080;
                     _desiredFps = settings.DesiredFps > 0 ? settings.DesiredFps : 120;
+                    _simulatorCustomImagePath = settings.SimulatorCustomImagePath ?? "";
+                    _currentParameters.CustomImagePath = _simulatorCustomImagePath;
                     return;
                 }
             }
@@ -705,6 +723,8 @@ public sealed class CameraService : IDisposable
         _desiredWidth = 1920;
         _desiredHeight = 1080;
         _desiredFps = 120;
+        _simulatorCustomImagePath = "";
+        _currentParameters.CustomImagePath = "";
     }
 
     private void SaveSettings()
@@ -721,7 +741,8 @@ public sealed class CameraService : IDisposable
                 SavedIsRtsp = _savedIsRtsp,
                 DesiredWidth = _desiredWidth,
                 DesiredHeight = _desiredHeight,
-                DesiredFps = _desiredFps
+                DesiredFps = _desiredFps,
+                SimulatorCustomImagePath = _simulatorCustomImagePath ?? ""
             };
             var json = System.Text.Json.JsonSerializer.Serialize(settings, new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
             System.IO.File.WriteAllText(_settingsPath, json);
@@ -740,6 +761,7 @@ public sealed class CameraService : IDisposable
         public int DesiredWidth { get; set; } = 1920;
         public int DesiredHeight { get; set; } = 1080;
         public int DesiredFps { get; set; } = 120;
+        public string SimulatorCustomImagePath { get; set; } = "";
     }
 
     public void Dispose()

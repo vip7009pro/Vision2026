@@ -342,11 +342,25 @@ public sealed class CameraSettingsViewModel : ObservableObject, IDisposable
         }
     }
 
+    public string SimulatorCustomImagePath
+    {
+        get => _cameraService.SimulatorCustomImagePath;
+        set
+        {
+            _cameraService.SimulatorCustomImagePath = value;
+            _cameraParams.CustomImagePath = value;
+            OnPropertyChanged();
+            _ = ApplyCameraParametersAsync();
+        }
+    }
+
     public IAsyncRelayCommand StartCameraCommand { get; }
     public IAsyncRelayCommand StopCameraCommand { get; }
     public IRelayCommand RefreshAvailableCamerasCommand { get; }
     public IAsyncRelayCommand ExecuteSoftwareTriggerCommand { get; }
     public IRelayCommand ResetSettingsCommand { get; }
+    public IRelayCommand BrowseSimulatorImageCommand { get; }
+    public IRelayCommand ClearSimulatorImageCommand { get; }
 
     public CameraSettingsViewModel(CameraService cameraService)
     {
@@ -360,6 +374,8 @@ public sealed class CameraSettingsViewModel : ObservableObject, IDisposable
         RefreshAvailableCamerasCommand = new RelayCommand(RefreshAvailableCameras);
         ExecuteSoftwareTriggerCommand = new AsyncRelayCommand(ExecuteSoftwareTriggerAsync);
         ResetSettingsCommand = new RelayCommand(ResetSettings);
+        BrowseSimulatorImageCommand = new RelayCommand(ExecuteBrowseSimulatorImage);
+        ClearSimulatorImageCommand = new RelayCommand(ExecuteClearSimulatorImage);
 
         RefreshAvailableCameras();
         IsCameraRunning = _cameraService.IsRunning;
@@ -547,6 +563,27 @@ public sealed class CameraSettingsViewModel : ObservableObject, IDisposable
         TriggerModeOn = false;
         StatusMessage = "Đã khôi phục cài đặt mặc định.";
         _ = ApplyCameraParametersAsync();
+    }
+
+    private void ExecuteBrowseSimulatorImage()
+    {
+        var dialog = new Microsoft.Win32.OpenFileDialog
+        {
+            Filter = "Image Files (*.png;*.jpg;*.jpeg;*.bmp;*.tif)|*.png;*.jpg;*.jpeg;*.bmp;*.tif|All Files (*.*)|*.*",
+            Title = "Chọn tệp hình ảnh làm nguồn Camera Giả Lập"
+        };
+
+        if (dialog.ShowDialog() == true)
+        {
+            SimulatorCustomImagePath = dialog.FileName;
+            StatusMessage = $"✅ Đã chọn tệp ảnh giả lập: '{System.IO.Path.GetFileName(dialog.FileName)}'";
+        }
+    }
+
+    private void ExecuteClearSimulatorImage()
+    {
+        SimulatorCustomImagePath = "";
+        StatusMessage = "🔄 Đã chuyển về nguồn camera giả lập mặc định.";
     }
 
     public void Dispose()

@@ -5,12 +5,23 @@ using VisionInspectionApp.Models;
 
 namespace VisionInspectionApp.Application.OQC;
 
+public class CameraCodeScanResult
+{
+    public bool Success { get; set; }
+    public string RawCode { get; set; } = "";
+    public string ProcessedCode { get; set; } = "";
+    public string CodeType { get; set; } = "";
+    public string ErrorMessage { get; set; } = "";
+}
+
 public interface IOqcScannerService
 {
     OqcScannerConfig Config { get; }
 
     void LoadConfig();
     void SaveConfig(OqcScannerConfig config);
+
+    CameraCodeScanResult DecodeCodeFromImage(OpenCvSharp.Mat image, OqcScannerConfig? config = null);
 
     Task<(bool Found, string JobFilePath, string ErrorMessage)> LookupJobAsync(
         string scannedCode, IDbManagerService dbManager);

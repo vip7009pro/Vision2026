@@ -61,6 +61,42 @@ public partial class OqcScannerViewModel
     [ObservableProperty]
     private string _logResultQuery = "";
 
+    // ─── Camera Barcode Reader Settings Properties ───
+    [ObservableProperty]
+    private bool _enableCameraBarcodeScan = true;
+
+    [ObservableProperty]
+    private string _targetCodeType = "ALL";
+
+    [ObservableProperty]
+    private bool _enableLengthFilter = false;
+
+    [ObservableProperty]
+    private int _requiredCodeLength = 0;
+
+    [ObservableProperty]
+    private bool _enableCodeCrop = false;
+
+    [ObservableProperty]
+    private int _cropStartIndex = 0;
+
+    [ObservableProperty]
+    private int _cropLength = 0;
+
+    public IReadOnlyList<string> AvailableCodeTypes { get; } = new List<string>
+    {
+        "ALL",
+        "QR_CODE",
+        "CODE_128",
+        "CODE_39",
+        "DATA_MATRIX",
+        "EAN_13",
+        "EAN_8",
+        "PDF_417",
+        "AZTEC",
+        "BARCODE_1D"
+    };
+
     public IReadOnlyList<DbModel> AvailableDatabases => _dbManager.Databases;
 
     public IRelayCommand SaveConfigCommand { get; private set; } = null!;
@@ -130,6 +166,14 @@ public partial class OqcScannerViewModel
         LogResultToDb = cfg.LogResultToDb;
         LogResultDbId = cfg.LogResultDbId;
         LogResultQuery = cfg.LogResultQuery;
+
+        EnableCameraBarcodeScan = cfg.EnableCameraBarcodeScan;
+        TargetCodeType = cfg.TargetCodeType ?? "ALL";
+        EnableLengthFilter = cfg.EnableLengthFilter;
+        RequiredCodeLength = cfg.RequiredCodeLength;
+        EnableCodeCrop = cfg.EnableCodeCrop;
+        CropStartIndex = cfg.CropStartIndex;
+        CropLength = cfg.CropLength;
     }
 
     private void SaveSettingsToConfig()
@@ -155,7 +199,15 @@ public partial class OqcScannerViewModel
 
             LogResultToDb = LogResultToDb,
             LogResultDbId = LogResultDbId,
-            LogResultQuery = LogResultQuery
+            LogResultQuery = LogResultQuery,
+
+            EnableCameraBarcodeScan = EnableCameraBarcodeScan,
+            TargetCodeType = TargetCodeType,
+            EnableLengthFilter = EnableLengthFilter,
+            RequiredCodeLength = RequiredCodeLength,
+            EnableCodeCrop = EnableCodeCrop,
+            CropStartIndex = CropStartIndex,
+            CropLength = CropLength
         };
 
         _oqcService.SaveConfig(cfg);

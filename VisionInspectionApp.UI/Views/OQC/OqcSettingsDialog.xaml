@@ -27,6 +27,61 @@
         <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
             <StackPanel Margin="0,0,12,0">
 
+                <!-- 0. Cấu hình Đọc mã Barcode / QR Code từ Camera -->
+                <GroupBox Header="📷 Cấu hình Nhận diện Mã (Barcode / QR Code) từ Camera" Margin="0,0,0,12" Padding="8" Foreground="{DynamicResource TextBrush}">
+                    <StackPanel>
+                        <CheckBox Content="Cho phép tự động đọc mã QR/Barcode từ Camera khi bấm Space hoặc nút Quét"
+                                  IsChecked="{Binding EnableCameraBarcodeScan, UpdateSourceTrigger=PropertyChanged}"
+                                  FontWeight="Bold" Margin="0,0,0,10" />
+
+                        <Grid Margin="0,0,0,8">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="180" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="Loại mã Code chỉ định:" VerticalAlignment="Center" FontWeight="SemiBold" />
+                            <ComboBox Grid.Column="1"
+                                      ItemsSource="{Binding AvailableCodeTypes}"
+                                      SelectedItem="{Binding TargetCodeType, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                      IsEnabled="{Binding EnableCameraBarcodeScan}"
+                                      Height="28" VerticalContentAlignment="Center" />
+                        </Grid>
+
+                        <!-- Lọc độ dài -->
+                        <Border Margin="0,4,0,8" Padding="8" Background="{DynamicResource HeaderBackgroundBrush}" CornerRadius="4">
+                            <StackPanel Orientation="Horizontal">
+                                <CheckBox Content="Chỉ nhận mã có độ dài n ký tự:"
+                                          IsChecked="{Binding EnableLengthFilter, UpdateSourceTrigger=PropertyChanged}"
+                                          IsEnabled="{Binding EnableCameraBarcodeScan}"
+                                          FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,12,0" />
+                                <TextBox Text="{Binding RequiredCodeLength, UpdateSourceTrigger=PropertyChanged}"
+                                         IsEnabled="{Binding EnableLengthFilter}"
+                                         Width="80" Height="26" VerticalContentAlignment="Center" FontWeight="Bold" HorizontalContentAlignment="Center" />
+                                <TextBlock Text="ký tự (VD: 10, 12...)" VerticalAlignment="Center" Margin="8,0,0,0" Foreground="{DynamicResource TextMutedBrush}" FontSize="11" />
+                            </StackPanel>
+                        </Border>
+
+                        <!-- Trích xuất / Cắt chuỗi -->
+                        <Border Margin="0,0,0,4" Padding="8" Background="{DynamicResource HeaderBackgroundBrush}" CornerRadius="4">
+                            <StackPanel Orientation="Horizontal">
+                                <CheckBox Content="Cắt chuỗi mã đầu ra (Crop Substring):"
+                                          IsChecked="{Binding EnableCodeCrop, UpdateSourceTrigger=PropertyChanged}"
+                                          IsEnabled="{Binding EnableCameraBarcodeScan}"
+                                          FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,12,0" />
+                                <TextBlock Text="Vị trí bắt đầu (0-based):" VerticalAlignment="Center" Margin="0,0,6,0" />
+                                <TextBox Text="{Binding CropStartIndex, UpdateSourceTrigger=PropertyChanged}"
+                                         IsEnabled="{Binding EnableCodeCrop}"
+                                         Width="60" Height="26" VerticalContentAlignment="Center" FontWeight="Bold" HorizontalContentAlignment="Center" Margin="0,0,12,0" />
+                                <TextBlock Text="Số ký tự lấy:" VerticalAlignment="Center" Margin="0,0,6,0" />
+                                <TextBox Text="{Binding CropLength, UpdateSourceTrigger=PropertyChanged}"
+                                         IsEnabled="{Binding EnableCodeCrop}"
+                                         Width="60" Height="26" VerticalContentAlignment="Center" FontWeight="Bold" HorizontalContentAlignment="Center"
+                                         ToolTip="Nhập 0 để lấy toàn bộ phần còn lại từ vị trí bắt đầu" />
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </GroupBox>
+
                 <!-- 1. Tra cứu Job File (Lookup) -->
                 <GroupBox Header="1. Tra cứu tệp Job từ Mã Scan (Lookup Query)" Margin="0,0,0,12" Padding="8" Foreground="{DynamicResource TextBrush}">
                     <StackPanel>
