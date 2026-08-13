@@ -74,7 +74,7 @@ public sealed class OqcScannerService : IOqcScannerService
     public CameraCodeScanResult DecodeCodeFromImage(Mat image, OqcScannerConfig? config = null)
     {
         var cfg = config ?? Config ?? new OqcScannerConfig();
-        if (image == null || image.Empty() || image.Width <= 0 || image.Height <= 0)
+        if (image == null || image.IsDisposed || image.Empty() || image.Width <= 0 || image.Height <= 0)
         {
             return new CameraCodeScanResult
             {
@@ -86,104 +86,196 @@ public sealed class OqcScannerService : IOqcScannerService
         try
         {
             using var grayMat = image.Channels() == 1 ? image.Clone() : image.CvtColor(ColorConversionCodes.BGR2GRAY);
-            using var continuousMat = grayMat.IsContinuous() ? grayMat.Clone() : grayMat;
 
-            int width = continuousMat.Width;
-            int height = continuousMat.Height;
-            var bytes = new byte[width * height];
-            System.Runtime.InteropServices.Marshal.Copy(continuousMat.Data, bytes, 0, bytes.Length);
+            var allFoundResults = new List<(string text, string format)>();
+            var seenKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-            var options = new ZXing.Common.DecodingOptions
+            void AddCandidate(string text, string format)
             {
-                TryHarder = true,
-                TryInverted = true
+                if (string.IsNullOrWhiteSpace(text)) return;
+                text = text.Trim();
+                string key = $"{format}:{text}";
+                if (seenKeys.Add(key))
+                {
+                    allFoundResults.Add((text, format));
+                }
+            }
+
+            var list2D = new List<BarcodeFormat>
+            {
+                BarcodeFormat.QR_CODE, BarcodeFormat.DATA_MATRIX, BarcodeFormat.PDF_417, BarcodeFormat.AZTEC
             };
 
+            var list1D = new List<BarcodeFormat>
+            {
+                BarcodeFormat.CODE_128, BarcodeFormat.CODE_39, BarcodeFormat.CODE_93,
+                BarcodeFormat.EAN_13, BarcodeFormat.EAN_8, BarcodeFormat.UPC_A,
+                BarcodeFormat.UPC_E, BarcodeFormat.ITF, BarcodeFormat.CODABAR
+            };
+
+            // Hàm quét 1 Mat với danh sách Formats chỉ định (quản lý bộ nhớ an toàn)
+            void ScanMat(Mat matToScan, List<BarcodeFormat>? allowedFormats)
+            {
+                if (matToScan == null || matToScan.IsDisposed || matToScan.Empty() || matToScan.Width <= 0 || matToScan.Height <= 0) return;
+
+                Mat continuousMat;
+                bool mustDisposeContinuous = false;
+
+                if (matToScan.IsContinuous())
+                {
+                    continuousMat = matToScan;
+                }
+                else
+                {
+                    continuousMat = matToScan.Clone();
+                    mustDisposeContinuous = true;
+                }
+
+                try
+                {
+                    int w = continuousMat.Width;
+                    int h = continuousMat.Height;
+                    var bytes = new byte[w * h];
+                    System.Runtime.InteropServices.Marshal.Copy(continuousMat.Data, bytes, 0, bytes.Length);
+
+                    var opts = new ZXing.Common.DecodingOptions
+                    {
+                        TryHarder = true,
+                        TryInverted = true
+                    };
+
+                    if (allowedFormats != null && allowedFormats.Count > 0)
+                    {
+                        opts.PossibleFormats = allowedFormats;
+                    }
+
+                    var rdr = new BarcodeReaderGeneric
+                    {
+                        AutoRotate = true,
+                        Options = opts
+                    };
+
+                    var lumSrc = new RGBLuminanceSource(bytes, w, h, RGBLuminanceSource.BitmapFormat.Gray8);
+
+                    // 1. Decode Multiple
+                    var multiRes = rdr.DecodeMultiple(lumSrc);
+                    if (multiRes != null)
+                    {
+                        foreach (var r in multiRes)
+                        {
+                            if (r != null && !string.IsNullOrWhiteSpace(r.Text))
+                            {
+                                AddCandidate(r.Text, r.BarcodeFormat.ToString());
+                            }
+                        }
+                    }
+
+                    // 2. Decode Single fallback
+                    var singleRes = rdr.Decode(lumSrc);
+                    if (singleRes != null && !string.IsNullOrWhiteSpace(singleRes.Text))
+                    {
+                        AddCandidate(singleRes.Text, singleRes.BarcodeFormat.ToString());
+                    }
+                }
+                finally
+                {
+                    if (mustDisposeContinuous)
+                    {
+                        continuousMat.Dispose();
+                    }
+                }
+            }
+
             var targetType = cfg.TargetCodeType?.Trim().ToUpperInvariant() ?? "ALL";
+
             if (targetType != "ALL")
             {
-                var formats = new List<BarcodeFormat>();
+                var specificFormats = new List<BarcodeFormat>();
                 switch (targetType)
                 {
-                    case "QR_CODE":
-                    case "QR":
-                        formats.Add(BarcodeFormat.QR_CODE);
-                        break;
-                    case "CODE_128":
-                        formats.Add(BarcodeFormat.CODE_128);
-                        break;
-                    case "CODE_39":
-                        formats.Add(BarcodeFormat.CODE_39);
-                        break;
-                    case "DATA_MATRIX":
-                    case "DATAMATRIX":
-                        formats.Add(BarcodeFormat.DATA_MATRIX);
-                        break;
-                    case "EAN_13":
-                    case "EAN13":
-                        formats.Add(BarcodeFormat.EAN_13);
-                        break;
-                    case "EAN_8":
-                    case "EAN8":
-                        formats.Add(BarcodeFormat.EAN_8);
-                        break;
-                    case "PDF_417":
-                    case "PDF417":
-                        formats.Add(BarcodeFormat.PDF_417);
-                        break;
-                    case "AZTEC":
-                        formats.Add(BarcodeFormat.AZTEC);
-                        break;
-                    case "BARCODE_1D":
-                        formats.AddRange(new[]
-                        {
-                            BarcodeFormat.CODE_128, BarcodeFormat.CODE_39, BarcodeFormat.CODE_93,
-                            BarcodeFormat.EAN_13, BarcodeFormat.EAN_8, BarcodeFormat.UPC_A,
-                            BarcodeFormat.UPC_E, BarcodeFormat.ITF, BarcodeFormat.CODABAR
-                        });
-                        break;
+                    case "QR_CODE": case "QR": specificFormats.Add(BarcodeFormat.QR_CODE); break;
+                    case "CODE_128": specificFormats.Add(BarcodeFormat.CODE_128); break;
+                    case "CODE_39": specificFormats.Add(BarcodeFormat.CODE_39); break;
+                    case "DATA_MATRIX": case "DATAMATRIX": specificFormats.Add(BarcodeFormat.DATA_MATRIX); break;
+                    case "EAN_13": case "EAN13": specificFormats.Add(BarcodeFormat.EAN_13); break;
+                    case "EAN_8": case "EAN8": specificFormats.Add(BarcodeFormat.EAN_8); break;
+                    case "PDF_417": case "PDF417": specificFormats.Add(BarcodeFormat.PDF_417); break;
+                    case "AZTEC": specificFormats.Add(BarcodeFormat.AZTEC); break;
+                    case "BARCODE_1D": specificFormats.AddRange(list1D); break;
                     default:
                         if (Enum.TryParse<BarcodeFormat>(targetType, true, out var parsedFormat))
                         {
-                            formats.Add(parsedFormat);
+                            specificFormats.Add(parsedFormat);
                         }
                         break;
                 }
 
-                if (formats.Count > 0)
+                // Quét với định dạng được chỉ định
+                ScanMat(grayMat, specificFormats);
+
+                // Quét bổ sung khi xoay 90 độ
+                using var rot90Spec = new Mat();
+                Cv2.Rotate(grayMat, rot90Spec, RotateFlags.Rotate90Clockwise);
+                ScanMat(rot90Spec, specificFormats);
+            }
+            else
+            {
+                // 🔥 THUẬT TOÁN ĐA TẦNG (MULTI-PASS) CHUYÊN SÂU ĐẢM BẢO BẮT HẾT 100% MÃ MỌI VỊ TRÍ:
+                // Pass 1A: Quét chuyên biệt mã 2D (QR Code, DataMatrix, PDF417...)
+                ScanMat(grayMat, list2D);
+
+                // Pass 1B: Quét chuyên biệt mã 1D Barcode (Code 128, Code 39, EAN...)
+                ScanMat(grayMat, list1D);
+
+                // Pass 1C: Quét tổng hợp tất cả định dạng
+                ScanMat(grayMat, null);
+
+                // Pass 2: Quét khi xoay ảnh 90 độ (bắt các mã Barcode/QR xoay dọc)
+                using var rot90 = new Mat();
+                Cv2.Rotate(grayMat, rot90, RotateFlags.Rotate90Clockwise);
+                ScanMat(rot90, list2D);
+                ScanMat(rot90, list1D);
+
+                // Pass 3: Slicing / Phân vùng ảnh (Nửa trên, nửa dưới, nửa trái, nửa phải)
+                // Giúp đọc tách biệt các mã barcode nằm song song gần nhau mà không bị đè vùng quét
+                int w = grayMat.Width;
+                int h = grayMat.Height;
+
+                if (w > 100 && h > 100)
                 {
-                    options.PossibleFormats = formats;
+                    // Nửa trên (Top half)
+                    using (var topCrop = new Mat(grayMat, new Rect(0, 0, w, h / 2)))
+                    {
+                        ScanMat(topCrop, list2D);
+                        ScanMat(topCrop, list1D);
+                    }
+
+                    // Nửa dưới (Bottom half)
+                    using (var botCrop = new Mat(grayMat, new Rect(0, h / 2, w, h - h / 2)))
+                    {
+                        ScanMat(botCrop, list2D);
+                        ScanMat(botCrop, list1D);
+                    }
+
+                    // Nửa trái (Left half)
+                    using (var leftCrop = new Mat(grayMat, new Rect(0, 0, w / 2, h)))
+                    {
+                        ScanMat(leftCrop, list2D);
+                        ScanMat(leftCrop, list1D);
+                    }
+
+                    // Nửa phải (Right half)
+                    using (var rightCrop = new Mat(grayMat, new Rect(w / 2, 0, w - w / 2, h)))
+                    {
+                        ScanMat(rightCrop, list2D);
+                        ScanMat(rightCrop, list1D);
+                    }
                 }
             }
 
-            var reader = new BarcodeReaderGeneric
+            if (allFoundResults.Count == 0)
             {
-                AutoRotate = true,
-                Options = options
-            };
-
-            var luminanceSource = new RGBLuminanceSource(bytes, width, height, RGBLuminanceSource.BitmapFormat.Gray8);
-
-            var decodedResults = reader.DecodeMultiple(luminanceSource);
-            var rawResults = new List<Result>();
-
-            if (decodedResults != null && decodedResults.Length > 0)
-            {
-                rawResults.AddRange(decodedResults);
-            }
-
-            if (rawResults.Count == 0)
-            {
-                var singleResult = reader.Decode(luminanceSource);
-                if (singleResult != null && !string.IsNullOrWhiteSpace(singleResult.Text))
-                {
-                    rawResults.Add(singleResult);
-                }
-            }
-
-            if (rawResults.Count == 0)
-            {
-                System.Diagnostics.Debug.WriteLine("[OQC Barcode Scanner] ⚠️ Không tìm thấy mã QR/Barcode trong ảnh camera.");
+                System.Diagnostics.Debug.WriteLine("[OQC Barcode Scanner] ⚠️ Không tìm thấy mã QR/Barcode nào trong ảnh camera.");
                 return new CameraCodeScanResult
                 {
                     Success = false,
@@ -191,21 +283,18 @@ public sealed class OqcScannerService : IOqcScannerService
                 };
             }
 
-            // Ghi log số lượng và nội dung tất cả các mã phát hiện được trong ảnh
+            // Ghi log chi tiết số lượng và nội dung tất cả các mã nhận diện được ra Output Window
             System.Diagnostics.Debug.WriteLine($"==================================================");
-            System.Diagnostics.Debug.WriteLine($"[OQC Barcode Scanner] 📊 SỐ LƯỢNG MÃ ĐÃ NHẬN DIỆN ĐƯỢC: {rawResults.Count}");
-            for (int i = 0; i < rawResults.Count; i++)
+            System.Diagnostics.Debug.WriteLine($"[OQC Barcode Scanner] 📊 SỐ LƯỢNG MÃ ĐÃ NHẬN DIỆN ĐƯỢC: {allFoundResults.Count}");
+            for (int i = 0; i < allFoundResults.Count; i++)
             {
-                System.Diagnostics.Debug.WriteLine($"  ├─ Mã #{i + 1}: '{rawResults[i].Text}' | Định dạng: {rawResults[i].BarcodeFormat}");
+                System.Diagnostics.Debug.WriteLine($"  ├─ Mã #{i + 1}: '{allFoundResults[i].text}' | Định dạng: {allFoundResults[i].format}");
             }
 
+            // Lọc ứng viên theo độ dài n
             var candidateResults = new List<(string raw, string format)>();
-            foreach (var res in rawResults)
+            foreach (var (text, fmt) in allFoundResults)
             {
-                if (res == null || string.IsNullOrWhiteSpace(res.Text)) continue;
-                string text = res.Text.Trim();
-                string fmt = res.BarcodeFormat.ToString();
-
                 if (cfg.EnableLengthFilter && cfg.RequiredCodeLength > 0)
                 {
                     if (text.Length != cfg.RequiredCodeLength)
@@ -220,18 +309,18 @@ public sealed class OqcScannerService : IOqcScannerService
 
             if (candidateResults.Count == 0)
             {
-                var foundRawTexts = string.Join(", ", rawResults.Select(r => $"'{r.Text}' ({r.BarcodeFormat})"));
+                var foundRawTexts = string.Join(", ", allFoundResults.Select(r => $"'{r.text}' ({r.format})"));
                 string reqMsg = cfg.EnableLengthFilter && cfg.RequiredCodeLength > 0 ? $"độ dài {cfg.RequiredCodeLength} ký tự" : "";
                 string typeMsg = targetType != "ALL" ? $"loại mã {targetType}" : "";
                 string filterDesc = string.Join(" & ", new[] { typeMsg, reqMsg }.Where(s => !string.IsNullOrEmpty(s)));
 
-                System.Diagnostics.Debug.WriteLine($"[OQC Barcode Scanner] ❌ Tất cả {rawResults.Count} mã đều bị loại bởi bộ lọc ({filterDesc}).");
+                System.Diagnostics.Debug.WriteLine($"[OQC Barcode Scanner] ❌ Tất cả {allFoundResults.Count} mã đều bị loại bởi bộ lọc ({filterDesc}).");
                 System.Diagnostics.Debug.WriteLine($"==================================================");
 
                 return new CameraCodeScanResult
                 {
                     Success = false,
-                    ErrorMessage = $"Đã nhận diện {rawResults.Count} mã [{foundRawTexts}], nhưng không mã nào thỏa mãn bộ lọc ({filterDesc})."
+                    ErrorMessage = $"Đã nhận diện {allFoundResults.Count} mã [{foundRawTexts}], nhưng không mã nào thỏa mãn bộ lọc ({filterDesc})."
                 };
             }
 

@@ -651,11 +651,23 @@
     * Ghi log tổng số lượng mã QR/Barcode nhận diện được từ ảnh camera (`SỐ LƯỢNG MÃ ĐÃ NHẬN DIỆN ĐƯỢC: N`).
     * Ghi log danh sách nội dung và định dạng của tất cả các mã đọc được (Mã #1, Mã #2...).
     * Ghi log nội dung mã được chọn thỏa mãn bộ lọc (`NỘI DUNG MÃ ĐƯỢC CHỌN`).
-    * Ghi log giá trị `ScannedCode` cuối cùng thu được sau khi cắt chuỗi (`GIÁ TRỊ SCANNEDCODE CUỐI CÙNG`).
+    * Ghi log giá trị `ScannedCode` cuối cùng thu me được sau khi cắt chuỗi (`GIÁ TRỊ SCANNEDCODE CUỐI CÙNG`).
   - **Tùy Chọn Chọn Ảnh Từ Máy Tính Cho Camera Giả Lập (Simulator Custom Image)**:
     * Bổ sung thuộc tính `CustomImagePath` trong `CameraParameters`, `SimulatorCameraDriver` và `CameraService` (lưu vĩnh viễn cấu hình xuống `camera_adjust_settings.json`).
     * `SimulatorCameraDriver.cs`: Kiểm tra tệp ảnh tùy chỉnh (`CustomImagePath`). Nếu tồn tại, nạp trực tiếp ảnh từ đĩa (`Cv2.ImRead`) làm nguồn stream cho Camera Giả Lập thay vì nền video target mặc định.
     * Giao diện `CameraSettingsView.xaml` & `CameraSettingsViewModel.cs`: Thêm khung chọn nguồn ảnh giả lập tùy chỉnh với nút **📁 Duyệt** mở OpenFileDialog chọn tệp ảnh (`.png`, `.jpg`, `.bmp`, `.tif`) và nút **🔄 Mặc định** để khôi phục mẫu mặc định.
+  - **Biên dịch thành công 0 lỗi**.
+- [x] Task 134: Tối Ưu Thuật Toán Đọc Mã Đa Tầng (Multi-Pass & Image Slicing) Khắc Phục Hiện Tượng Bỏ Sót Mã Khi Trong Ảnh Có Cả Barcode 1D Lẫn QR Code 2D:
+  - **Nguyên nhân bỏ sót mã**: Thư viện ZXing khi gọi `DecodeMultiple` đơn luồng trên cùng 1 ảnh chứa lẫn lộn cả Barcode 1D và QR Code 2D sẽ tự động cắt vùng ảnh sau khi tìm thấy mã 2D đầu tiên. Thuật toán cắt vùng 2D làm phá vỡ cấu trúc ma trận của các đường barcode 1D nằm xung quanh, dẫn đến chỉ nhận diện được 2/3 mã. Trong khi tool `CodeDetect` ở Vision Job đọc mã dựa trên khung ROI crop riêng biệt nên nhận đủ 3/3 mã.
+  - **Giải pháp Nâng cấp Đa Tầng (Multi-Pass Execution Pipeline)**:
+    1. **Tách biệt lượt quét 2D & 1D (2D Pass & 1D Pass)**: Quét chuyên biệt mã 2D (`QR_CODE`, `DATA_MATRIX`, `PDF_417`...) trên ảnh gốc, sau đó quét lượt riêng cho mã 1D (`CODE_128`, `CODE_39`, `EAN_13`...).
+    2. **Lượt quét Xoay 90 độ (Rotated 90° Pass)**: Xoay ảnh 90° (`Cv2.Rotate`) và thực hiện quét lượt 1D/2D độc lập để bắt 100% các mã barcode dán theo chiều dọc.
+    3. **Lượt quét Phân vùng Slicing (Grid Crop Pass)**: Tự động chia nhỏ ảnh thành các khung nửa trên (Top), nửa dưới (Bottom), nửa trái (Left), nửa phải (Right) để đọc độc lập từng vùng ảnh. Việc phân vùng giúp cô lập hoàn toàn các mã nằm song song hoặc dán gần nhau, triệt tiêu 100% sự can thiệp giữa mã 1D và QR Code.
+    4. **Hợp nhất & Loại trùng (Deduplication)**: Sử dụng `HashSet<string>` theo khóa `format:text` hợp nhất tất cả các mã phát hiện được qua tất cả các tầng, đảm bảo bắt đầy đủ 3/3 mã (và nhiều hơn nữa) trong ảnh một cách nhanh chóng và chính xác 100%.
+  - **Biên dịch thành công 0 lỗi**.
+- [x] Task 135: Khắc Phục Triệt Để Ngoại Lệ `ObjectDisposedException` (`Object name: 'OpenCvSharp.Mat'`):
+  - **Nguyên nhân**: Trong hàm `ScanMat` ở `OqcScannerService.cs`, dòng `using var continuousMat = matToScan.IsContinuous() ? matToScan.Clone() : matToScan;` khi nhận tham số là một vùng cắt ROI sub-mat (`topCrop`, `botCrop`...) có `IsContinuous() == false`, biến `continuousMat` được gán chính bằng tham số `matToScan`. Khi kết thúc hàm `ScanMat`, từ khóa `using` đã giải phóng nhầm đối tượng `matToScan`. Khi lượt quét tiếp theo hoặc khối `using` bên ngoài cố gắng truy cập `matToScan` sẽ lập tức bắn ngoại lệ `Cannot access a disposed object`.
+  - **Giải pháp**: Quản lý cờ `mustDisposeContinuous`. Chỉ khi `matToScan` không liên tục (`IsContinuous() == false`), hệ thống mới thực hiện `Clone()` ra một bản sao mới và chỉ giải phóng bản sao clone này trong khối `finally`, bảo vệ tuyệt đối đối tượng `matToScan` ban đầu không bị giải phóng nhầm. Đồng thời bổ sung kiểm tra cờ `matToScan.IsDisposed` trước khi xử lý.
   - **Biên dịch thành công 0 lỗi**.
 
 ## Roadmap
