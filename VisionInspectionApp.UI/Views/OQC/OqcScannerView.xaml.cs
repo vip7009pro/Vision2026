@@ -16,6 +16,15 @@ public partial class OqcScannerView : UserControl
     private void OqcScannerView_Loaded(object sender, RoutedEventArgs e)
     {
         ScanInputTextBox.Focus();
+        Dispatcher.BeginInvoke(new System.Action(() =>
+        {
+            OqcImageViewer?.ResetView();
+        }), System.Windows.Threading.DispatcherPriority.Loaded);
+    }
+
+    private void BtnFitImagePreview_Click(object sender, RoutedEventArgs e)
+    {
+        OqcImageViewer?.ResetView();
     }
 
     private void OqcScannerView_PreviewKeyDown(object sender, KeyEventArgs e)

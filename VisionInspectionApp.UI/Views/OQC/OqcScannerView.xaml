@@ -158,13 +158,15 @@
 
                             <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
                                 <CheckBox Content="Kết Quả (Overlay)" IsChecked="{Binding ShowResultOverlay, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,12,0" FontWeight="SemiBold" VerticalAlignment="Center" />
-                                <CheckBox Content="Khung ROI" IsChecked="{Binding ShowRois, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" FontWeight="SemiBold" VerticalAlignment="Center" />
+                                <CheckBox Content="Khung ROI" IsChecked="{Binding ShowRois, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,10,0" FontWeight="SemiBold" VerticalAlignment="Center" />
+                                <Button Content="🎯 Fit View" Height="24" Padding="8,0" Click="BtnFitImagePreview_Click" Background="{DynamicResource ButtonBackgroundBrush}" Foreground="{DynamicResource TextBrush}" BorderBrush="{DynamicResource DarkBorderBrush}" FontWeight="SemiBold" ToolTip="Tự động cân chỉnh (Auto Fit) ảnh vừa vặn toàn bộ với khung Preview" VerticalAlignment="Center" />
                             </StackPanel>
                         </DockPanel>
 
                         <!-- Image Viewer Control -->
                         <Border Grid.Row="1" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" Background="Black" CornerRadius="4">
-                            <controls:ImageViewerControl ImageSource="{Binding PreviewImage}"
+                            <controls:ImageViewerControl x:Name="OqcImageViewer"
+                                                       ImageSource="{Binding PreviewImage}"
                                                        OverlayItems="{Binding OverlayItems}"
                                                        EnableRoiEditing="False" />
                         </Border>

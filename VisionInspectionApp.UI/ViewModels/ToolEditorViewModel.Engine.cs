@@ -100,6 +100,8 @@ namespace VisionInspectionApp.UI.ViewModels
         }
         private readonly DispatcherTimer _specEditPreviewTimer;
         private readonly DispatcherTimer _blobThresholdPreviewTimer;
+        private readonly DispatcherTimer _continuousStatsTimer;
+        private readonly System.Diagnostics.Stopwatch _continuousStopwatch = new();
         private int _lastPreviewImageWidth;
         private int _lastPreviewImageHeight;
         private const int MaxBlobOverlayCount = 1000;
@@ -1788,6 +1790,24 @@ namespace VisionInspectionApp.UI.ViewModels
         private ImageSource? _blobThresholdPreviewImage;
         [ObservableProperty]
         private List<OverlayItem> _finalOverlayItems = new();
+        [ObservableProperty]
+        private int _processedImageCount = 0;
+        [ObservableProperty]
+        private string _continuousElapsedAndSpeedText = "Time: 00:00:00 (0.0 pcs/s)";
+
+        private void UpdateContinuousStats()
+        {
+            if (!_continuousStopwatch.IsRunning)
+            {
+                ContinuousElapsedAndSpeedText = "Time: 00:00:00 (0.0 pcs/s)";
+                return;
+            }
+
+            var elapsed = _continuousStopwatch.Elapsed;
+            var elapsedSec = elapsed.TotalSeconds;
+            double speed = elapsedSec > 0.05 ? ProcessedImageCount / elapsedSec : 0.0;
+            ContinuousElapsedAndSpeedText = $"Time: {elapsed:hh\\:mm\\:ss} ({speed:F1} pcs/s)";
+        }
         public ICommand LoadPreviewImageCommand { get; internal set; }
         public ICommand CaptureCameraImageCommand { get; internal set; }
         public ICommand RunFlowCommand { get; internal set; }
@@ -1972,10 +1992,18 @@ namespace VisionInspectionApp.UI.ViewModels
                     if (value)
                     {
                         _plcManagerService.AcquirePollingLock("RunContinuousMode");
+                        ProcessedImageCount = 0;
+                        _continuousStopwatch.Restart();
+                        _continuousStatsTimer?.Start();
+                        UpdateContinuousStats();
                     }
                     else
                     {
                         _plcManagerService.ReleasePollingLock("RunContinuousMode");
+                        _continuousStopwatch.Reset();
+                        _continuousStatsTimer?.Stop();
+                        ProcessedImageCount = 0;
+                        UpdateContinuousStats();
                     }
                 }
             }
@@ -2346,6 +2374,10 @@ namespace VisionInspectionApp.UI.ViewModels
         {
             _folderFlowCts?.Cancel();
             IsRunningFolderFlow = false;
+            _continuousStopwatch.Reset();
+            _continuousStatsTimer?.Stop();
+            ProcessedImageCount = 0;
+            UpdateContinuousStats();
         }
 
         private void RunSingleFlowFromImageFile(string filePath, string sourceNodeName)
@@ -2394,6 +2426,12 @@ namespace VisionInspectionApp.UI.ViewModels
             }
 
             LastResult = _lastRun;
+            if (IsRunningFolderFlow)
+            {
+                ProcessedImageCount++;
+                UpdateContinuousStats();
+            }
+            RefreshInspectionDashboard(_lastRun);
             RefreshPreviews();
             RaiseToolPropertyPanelsChanged();
             OnPropertyChanged(nameof(Blob_LastRunCount));
@@ -2608,6 +2646,11 @@ namespace VisionInspectionApp.UI.ViewModels
         
                 UpdateNodeExecutionTimes();
                 LastResult = _lastRun;
+                if (IsRunningFolderFlow)
+                {
+                    ProcessedImageCount++;
+                    UpdateContinuousStats();
+                }
                 RefreshInspectionDashboard(_lastRun);
                 RefreshPreviews();
                 RaiseToolPropertyPanelsChanged();

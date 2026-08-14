@@ -946,6 +946,11 @@ public partial class ToolEditorView : UserControl
         AutoFitAndCenterGraph();
     }
 
+    private void BtnFitImagePreview_Click(object sender, RoutedEventArgs e)
+    {
+        PreviewImageViewer?.ResetView();
+    }
+
     private void BtnGlobalPreprocess_Click(object sender, RoutedEventArgs e)
     {
         var window = new GlobalPreprocessWindow

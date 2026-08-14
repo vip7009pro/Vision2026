@@ -3624,13 +3624,15 @@
                         </StackPanel>
 
                         <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
-                            <CheckBox Content="Show Results" IsChecked="{Binding ShowResultOverlay, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,10,0" />
-                            <CheckBox Content="Show ROI" IsChecked="{Binding ShowRoisInSelectedPreview, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                            <CheckBox Content="Show Results" IsChecked="{Binding ShowResultOverlay, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,10,0" VerticalAlignment="Center" />
+                            <CheckBox Content="Show ROI" IsChecked="{Binding ShowRoisInSelectedPreview, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,10,0" VerticalAlignment="Center" />
+                            <Button Content="🎯 Fit View" Height="24" Padding="8,0" Click="BtnFitImagePreview_Click" Background="{DynamicResource ButtonBackgroundBrush}" Foreground="{DynamicResource TextBrush}" BorderBrush="{DynamicResource DarkBorderBrush}" FontWeight="SemiBold" ToolTip="Tự động cân chỉnh (Auto Fit) ảnh vừa vặn toàn bộ với khung Preview" VerticalAlignment="Center" />
                         </StackPanel>
                     </Grid>
 
                     <Border Grid.Row="1" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" Background="Black">
-                        <controls:ImageViewerControl ImageSource="{Binding SelectedNodePreviewImage}"
+                        <controls:ImageViewerControl x:Name="PreviewImageViewer"
+                                                   ImageSource="{Binding SelectedNodePreviewImage}"
                                                    OverlayItems="{Binding SelectedNodeOverlayItems}"
                                                    EnableRoiEditing="{Binding EnableRoiEditingInPreview}" ActiveRoiLabel="{Binding ActiveRoiLabel, Mode=TwoWay}"
                                                    RoiSelectedCommand="{Binding RoiSelectedCommand}"
@@ -3672,7 +3674,11 @@
                                 <TextBlock Text="{Binding NgReasonsText}" FontSize="10" Foreground="#D32F2F" TextWrapping="Wrap" MaxHeight="36" Visibility="{Binding IsNg, Converter={StaticResource BoolToVis}}" />
                             </StackPanel>
 
-                            <TextBlock Grid.Column="2" Text="{Binding LastResult.Timings.TotalMs, StringFormat='Total: {0} ms'}" Foreground="#4CAF50" FontWeight="Bold" FontSize="13" VerticalAlignment="Center"/>
+                            <StackPanel Grid.Column="2" VerticalAlignment="Center" HorizontalAlignment="Right">
+                                <TextBlock Text="{Binding LastResult.Timings.TotalMs, StringFormat='Total: {0} ms'}" Foreground="#4CAF50" FontWeight="Bold" FontSize="13" HorizontalAlignment="Right" />
+                                <TextBlock Text="{Binding ProcessedImageCount, StringFormat='Count: {0}'}" Foreground="{DynamicResource TextBrush}" FontWeight="SemiBold" FontSize="11" HorizontalAlignment="Right" Margin="0,1,0,0" />
+                                <TextBlock Text="{Binding ContinuousElapsedAndSpeedText}" Foreground="{DynamicResource TextBrush}" FontSize="10.5" HorizontalAlignment="Right" Margin="0,1,0,0" />
+                            </StackPanel>
                         </Grid>
                     </Border>
 

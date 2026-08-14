@@ -103,7 +103,7 @@ public partial class ImageViewerControl : UserControl
     private Point _panStart;
     private Matrix _panStartMatrix;
 
-    private bool _isViewInitialized;
+    private bool _hasFirstFit;
 
     private void SetupTransforms()
     {
@@ -120,19 +120,22 @@ public partial class ImageViewerControl : UserControl
 
     private void OnLoaded(object sender, RoutedEventArgs e)
     {
-        if (!_isViewInitialized && PART_RootGrid.ActualWidth > 0 && PART_RootGrid.ActualHeight > 0)
+        if (PART_RootGrid.ActualWidth > 0 && PART_RootGrid.ActualHeight > 0)
         {
-            _isViewInitialized = true;
             ResetView();
+            if (ImageSource is BitmapSource)
+            {
+                _hasFirstFit = true;
+            }
         }
         RedrawOverlays();
     }
 
     private void OnRootGridSizeChanged(object sender, SizeChangedEventArgs e)
     {
-        if (!_isViewInitialized && PART_RootGrid.ActualWidth > 0 && PART_RootGrid.ActualHeight > 0)
+        if (!_hasFirstFit && PART_RootGrid.ActualWidth > 0 && PART_RootGrid.ActualHeight > 0 && ImageSource is BitmapSource)
         {
-            _isViewInitialized = true;
+            _hasFirstFit = true;
             ResetView();
         }
     }
@@ -171,6 +174,7 @@ public partial class ImageViewerControl : UserControl
         {
             c._lastPixelWidth = 0;
             c._lastPixelHeight = 0;
+            c._hasFirstFit = false;
             c.ResetView();
         }
         else
@@ -178,8 +182,9 @@ public partial class ImageViewerControl : UserControl
             var changed = c._lastPixelWidth != newBmp.PixelWidth || c._lastPixelHeight != newBmp.PixelHeight;
             c._lastPixelWidth = newBmp.PixelWidth;
             c._lastPixelHeight = newBmp.PixelHeight;
-            if (changed || c._transform.Matrix.IsIdentity)
+            if (changed || !c._hasFirstFit || c._transform.Matrix.IsIdentity)
             {
+                c._hasFirstFit = true;
                 c.ResetView();
             }
         }

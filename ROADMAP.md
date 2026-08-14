@@ -186,6 +186,22 @@ Lộ trình tích hợp tính năng Chụp ảnh từ camera và hỗ trợ các
 - [x] Task 144: Chuẩn hóa Trích xuất ROI xoay theo Origin cho Preview Line Tool & Cập nhật màu chữ Slider Labels tương thích Light Mode:
   - `Line Tool ROI Preview`: Nâng cấp hàm `RefreshLineRoiPreview` trong `ToolEditorViewModel.Engine.cs` và `TeachViewModel.cs`, tự động tính toán ma trận biến đổi tọa độ và góc xoay từ Origin (`originTeach`, `originFound`, `angleDeg`) và dùng `ExtractRoiPatch(matForLine, targetRoi)` để cắt chính xác patch ảnh ROI đã được nắn thẳng; chạy line detector cục bộ và vẽ kết quả lên preview. Đồng bộ `CreateRotatedRoiWithPose` cho Line Tool trên Canvas Preview.
   - `Màu chữ Slider Labels (Light Mode)`: Bổ sung thuộc tính `Foreground="{DynamicResource TextBrush}"` cho tất cả các nhãn và giá trị của Slider (`Canny Thresh 1`, `Canny Thresh 2`, `Hough Thresh`, `Min Line Length`, `Max Line Gap`), `CheckBox Preview` của Tool Line và Tool LinePairDetection trong `ToolEditorView.xaml`, đảm bảo chữ luôn hiển thị sắc nét, tương phản rõ ràng ở cả Light Mode lẫn Dark Mode.
+- [x] Task 145: Bổ sung nút "🎯 Fit View" trên thanh công cụ Cửa sổ Preview ảnh (cạnh CheckBox Show ROI):
+  - `Giao diện Tool Editor`: Bổ sung nút bấm **`🎯 Fit View`** (`Height="24"`, icon `🎯`) trên thanh Header của khung Preview ảnh (ngay cạnh các CheckBox `Show Results` và `Show ROI`) trong `ToolEditorView.xaml`.
+  - `Xử lý Auto Fit ảnh`: Đặt định danh `x:Name="PreviewImageViewer"` và kết nối sự kiện `BtnFitImagePreview_Click` gọi phương thức `ResetView()` của `ImageViewerControl`, tự động tính toán tỷ lệ `scale = Math.Min(containerW / imgW, containerH / imgH)` và căn giữa ảnh, giúp đưa toàn bộ ảnh về vừa vặn 100% với khung Preview khi người dùng bấm nút sau khi pan/zoom.
+  - `Đồng bộ giao diện Inspection`: Bổ sung nút `🎯 Fit View` tương ứng và liên kết `InspectionImageViewer?.ResetView()` trong `InspectionView.xaml` và `InspectionView.xaml.cs`.
+- [x] Task 146: Bổ sung nút "🎯 Fit View" cho Tab OQC Scanner & Tự động Auto Fit ảnh khi mở ứng dụng / nạp frame đầu tiên:
+  - `Nút Fit View trên Tab OQC Scanner`: Thêm nút bấm **`🎯 Fit View`** (`Height="24"`, icon `🎯`) trên thanh điều khiển của khung Preview OQC (cạnh CheckBox `Kết Quả (Overlay)` và `Khung ROI`) trong `OqcScannerView.xaml`.
+  - `Định danh & Kết nối Sự kiện`: Đặt tên `x:Name="OqcImageViewer"` và kết nối sự kiện `BtnFitImagePreview_Click` trong `OqcScannerView.xaml.cs` gọi trực tiếp `OqcImageViewer?.ResetView()`.
+  - `Tự động Auto Fit khi mở App`: Nâng cấp cờ `_hasFirstFit` trong `ImageViewerControl.xaml.cs` (tại `OnLoaded`, `OnRootGridSizeChanged` và `OnImageSourceChanged`) và kích hoạt `OqcImageViewer?.ResetView()` qua `Dispatcher.BeginInvoke` trong `OqcScannerView_Loaded`, đảm bảo khi vừa mở ứng dụng vào Tab OQC Scanner hoặc khi frame stream camera đầu tiên được nạp, toàn bộ hình ảnh luôn được tự động căn chỉnh tỷ lệ và zoom vừa khít 100% với khung Preview.
+- [x] Task 147: Bổ sung hiển thị Đếm số lượng ảnh đã xử lý (Count) dưới Total time tại cột bên phải của Tab Tool Editor:
+  - `Khai báo Thuộc tính đếm`: Khởi tạo `[ObservableProperty] private int _processedImageCount = 0;` trong `ToolEditorViewModel.Engine.cs`.
+  - `Giao diện Cột ngoài cùng bên phải`: Thêm TextBlock binding `ProcessedImageCount` với format `Count: {0}` nằm ngay dưới `Total: {0} ms` trong thẻ Summary Card ở đầu cột 6 của `ToolEditorView.xaml`.
+  - `Cơ chế tự tăng và Reset`: Tự động tăng `ProcessedImageCount++` mỗi khi xử lý xong một frame ảnh trong chế độ chạy liên tục (`IsRunningFolderFlow` = true trong cả `RunFlow()` và `RunSingleFlowFromImageFile()`), đồng thời tự động reset `ProcessedImageCount = 0` khi bắt đầu chạy hoặc khi nhấn nút **STOP** (`StopFolderFlow()`).
+- [x] Task 148: Bổ sung Tổng thời gian đã chạy liên tục và Tốc độ sản phẩm/giây (Time & pcs/s) trong Summary Card:
+  - `Khởi tạo Stopwatch và Timer thời gian thực`: Khởi tạo `_continuousStopwatch` và `_continuousStatsTimer` (chu kỳ 200ms) trong `ToolEditorViewModel.cs` và `ToolEditorViewModel.Engine.cs`.
+  - `Tính toán Tốc độ tức thời`: Thuộc tính `ContinuousElapsedAndSpeedText` tự động tính `speed = ProcessedImageCount / elapsedSec` và định dạng `Time: hh:mm:ss (x.x pcs/s)` mỗi khi timer tick hoặc khi có frame mới hoàn tất.
+  - `Giao diện Summary Card`: Thêm TextBlock hiển thị `ContinuousElapsedAndSpeedText` ngay dưới `Count: {0}` tại góc phải trên cùng của cột 6 trong `ToolEditorView.xaml`. Tự động khởi động khi bấm `Run Continuous` và tự động reset về `Time: 00:00:00 (0.0 pcs/s)` khi bấm `STOP`.
 
 
 

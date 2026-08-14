@@ -214,6 +214,11 @@ namespace VisionInspectionApp.UI.ViewModels
                 Interval = TimeSpan.FromMilliseconds(150)
             };
             _blobThresholdPreviewTimer.Tick += (_, __) => UpdateBlobThresholdPreviewFromSnapshot();
+            _continuousStatsTimer = new DispatcherTimer
+            {
+                Interval = TimeSpan.FromMilliseconds(200)
+            };
+            _continuousStatsTimer.Tick += (_, __) => UpdateContinuousStats();
             AllToolboxItems = new List<ToolboxItemModel>
             {
                 new ToolboxItemModel { Name = "ImageSource", Category = "📷 Nguồn & Định Vị", Icon = "📷" },

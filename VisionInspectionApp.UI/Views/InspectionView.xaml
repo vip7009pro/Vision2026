@@ -29,6 +29,8 @@
 
             <CheckBox Content="Show Overlay" IsChecked="{Binding ShowOverlay, UpdateSourceTrigger=PropertyChanged}" VerticalAlignment="Center" Margin="0,0,12,0" />
 
+            <Button Content="🎯 Fit View" Height="24" Padding="8,0" Click="BtnFitImagePreview_Click" Background="{DynamicResource ButtonBackgroundBrush}" Foreground="{DynamicResource TextBrush}" BorderBrush="{DynamicResource DarkBorderBrush}" FontWeight="SemiBold" ToolTip="Tự động cân chỉnh (Auto Fit) ảnh vừa vặn toàn bộ với khung Preview" VerticalAlignment="Center" Margin="0,0,12,0" />
+
             <TextBlock Text="Origin OK Thresh:" VerticalAlignment="Center" Margin="0,0,6,0" FontWeight="SemiBold" />
             <TextBox Width="40" Text="{Binding OriginScoreThreshold, UpdateSourceTrigger=PropertyChanged, StringFormat=F2, Delay=500}" VerticalAlignment="Center" Margin="0,0,12,0" ToolTip="Ngưỡng điểm score để pass bước tìm gốc (Origin). Sẽ tự động lưu lại khi sửa." />
 
@@ -43,7 +45,8 @@
                 <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
 
-            <controls:ImageViewerControl Grid.Column="0"
+            <controls:ImageViewerControl x:Name="InspectionImageViewer"
+                                        Grid.Column="0"
                                         ImageSource="{Binding Image}"
                                         OverlayItems="{Binding OverlayItems}" />
 
