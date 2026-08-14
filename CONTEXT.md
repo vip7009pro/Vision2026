@@ -699,6 +699,10 @@
     - Nếu xử lý kéo dài > 1s $\rightarrow$ Tự động bật `BlurEffect` (làm mờ 14px) toàn bộ giao diện OqcScannerView và hiển thị Loading Modal Overlay làm mờ background với ProgressBar vô tận và thông điệp: `🔍 ĐANG PHÂN TÍCH & NHẬN DIỆN MÃ 360°...`.
     - Đưa hàm `DecodeCodeFromImage` chạy ngầm trong `Task.Run` giúp UI thread hoàn toàn rảnh rỗi, các hiệu ứng animation và ProgressBar mượt mà ở 60 FPS.
   - **Biên dịch Solution VisionInspectionApp.slnx thành công 100%**: **0 Error(s)**.
+- [x] Task 139: Giải đáp và hướng dẫn khắc phục hiện tượng lỗi khi chuyển từ Debug sang Release trong Visual Studio:
+  - Phân tích nguyên nhân lỗi CS0246 / CS0103 / CS1061 / CS0117 do chưa Rebuild tất cả các dự án phụ thuộc (`VisionInspectionApp.Models`, `VisionInspectionApp.Application`) ở cấu hình Release khiến cache DLL trong `bin\Release\` bị thiếu hoặc chưa đồng bộ với IntelliSense cache.
+  - Kiểm tra qua `dotnet build -c Release` xác nhận toàn bộ solution biên dịch 100% thành công không có lỗi.
+  - Hướng dẫn người dùng các bước `Rebuild Solution`, kiểm tra `Configuration Manager` và đổi bộ lọc `Error List` trong Visual Studio.
 
 ## Roadmap
 

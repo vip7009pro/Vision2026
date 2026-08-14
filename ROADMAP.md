@@ -169,6 +169,7 @@ Lộ trình tích hợp tính năng Chụp ảnh từ camera và hỗ trợ các
 - [x] Task 136: Bổ sung cột `Tên Sản Phẩm` (ProductName) trong bảng *Lịch sử quét mã gần nhất* (Tab OQC Scanner) và Thêm tùy chọn CheckBox **"Tự xoay + di chuyển nhẹ"** cho Camera Giả Lập (Tab Camera Settings), cho phép tự động xoay và xê dịch ngẫu nhiên quanh tâm bức ảnh mỗi lần lấy frame phục vụ kiểm thử.
 - [x] Task 137: Nâng cấp Động cơ đọc mã 360° Đa tầng (5-Stage Omni-Directional Scanning Engine) cho OQC Scanner, xoay ảnh bảo toàn 100% dữ liệu không xén góc (`RotateImageNoClip`), quét 16 bước góc mịn $15^\circ$ phủ $360^\circ$, tăng cường tương phản EqualizeHist/Adaptive Threshold, đọc thành công 100% tất cả loại mã (Code 128, Code 39, EAN-13, QR Code, DataMatrix, PDF417...) dù bị xoay ngẫu nhiên bất kỳ hướng nào.
 - [x] Task 138: Tối ưu hóa Tốc độ Đọc mã 360° Đa tầng (Fast-pass Downscale $4\times - 8\times$, `Parallel.ForEach` đa luồng CPU) và Thêm hiệu ứng Loading Modal Overlay + Blur Window khi thời gian xử lý đọc mã kéo dài > 1.0s cho OQC Scanner.
+- [x] Task 139: Giải đáp và hướng dẫn xử lý hiện tượng báo lỗi khi chuyển Debug sang Release trong Visual Studio (Phân tích lỗi Intellisense cache / DLL missing in bin/Release, xác nhận dotnet build Release 100% SUCCESS, hướng dẫn Rebuild Solution & Configuration Manager).
 
 
 
