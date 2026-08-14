@@ -60,7 +60,15 @@ public sealed class OriginMatcher
 
         if (definition.OriginAlgorithm == OriginAlgorithm.FeatureBased)
         {
-            return MatchByFeatureBased(roiGray.Mat, templateGray, definition, preprocess, roiRect);
+            try
+            {
+                return MatchByFeatureBased(roiGray.Mat, templateGray, definition, preprocess, roiRect);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[OriginMatcher] FeatureBased match error: {ex.Message}, falling back to template match.");
+                return FallbackToTemplateMatch(roiGray.Mat, templateGray, definition, 0.0, preprocess, roiRect);
+            }
         }
 
         var baseAngle = definition.TemplateRoi.Angle;
@@ -540,12 +548,23 @@ public sealed class OriginMatcher
         }
 
         var pad = 4;
-        using var T_inv = Mat.Eye(3, 3, MatType.CV_64FC1).ToMat();
-        T_inv.Set<double>(0, 2, -pad);
-        T_inv.Set<double>(1, 2, -pad);
+        using var H_warped = Mat.Eye(3, 3, MatType.CV_64FC1).ToMat();
+        var h00 = H.At<double>(0, 0);
+        var h01 = H.At<double>(0, 1);
+        var h02 = H.At<double>(0, 2);
+        var h10 = H.At<double>(1, 0);
+        var h11 = H.At<double>(1, 1);
+        var h12 = H.At<double>(1, 2);
 
-        using var H_warped = new Mat();
-        Cv2.Gemm(H, T_inv, 1.0, new Mat(), 0.0, H_warped);
+        H_warped.Set<double>(0, 0, h00);
+        H_warped.Set<double>(0, 1, h01);
+        H_warped.Set<double>(0, 2, h02 - pad * (h00 + h01));
+        H_warped.Set<double>(1, 0, h10);
+        H_warped.Set<double>(1, 1, h11);
+        H_warped.Set<double>(1, 2, h12 - pad * (h10 + h11));
+        H_warped.Set<double>(2, 0, 0.0);
+        H_warped.Set<double>(2, 1, 0.0);
+        H_warped.Set<double>(2, 2, 1.0);
 
         using var warped = new Mat();
         Cv2.WarpPerspective(roiGray, warped, H_warped, new Size(templPrep.Width + 2 * pad, templPrep.Height + 2 * pad), InterpolationFlags.Linear | InterpolationFlags.WarpInverseMap);
@@ -587,7 +606,21 @@ public sealed class OriginMatcher
         var featurePoints = new List<Point2d>();
         for (int i = 0; i < pts2.Length; i++)
         {
-            if (inliers.At<byte>(i, 0) != 0)
+            byte isInlierVal = 0;
+            if (inliers.Rows == 1 && i < inliers.Cols)
+            {
+                isInlierVal = inliers.At<byte>(0, i);
+            }
+            else if (inliers.Cols == 1 && i < inliers.Rows)
+            {
+                isInlierVal = inliers.At<byte>(i, 0);
+            }
+            else if (i < inliers.Total())
+            {
+                isInlierVal = inliers.Get<byte>(i);
+            }
+
+            if (isInlierVal != 0)
             {
                 featurePoints.Add(new Point2d(pts2[i].X + roiRect.X, pts2[i].Y + roiRect.Y));
             }

@@ -292,6 +292,24 @@ public partial class InspectionService
             Cv2.Line(targetMat, new Point((int)Math.Round(p4.X), (int)Math.Round(p4.Y)), new Point((int)Math.Round(p1.X), (int)Math.Round(p1.Y)), color, thickness, LineTypes.AntiAlias);
         }
 
+        void DrawRotatedBoxDirect(Mat targetMat, Rect bb, double angle, Scalar color, int thickness = 1)
+        {
+            if (targetMat is null || targetMat.Empty() || bb.Width <= 0 || bb.Height <= 0) return;
+            var center = new Point2d(bb.X + bb.Width / 2.0, bb.Y + bb.Height / 2.0);
+            var halfW = bb.Width / 2.0;
+            var halfH = bb.Height / 2.0;
+
+            var p1 = Rotate(new Point2d(-halfW, -halfH), new Point2d(0, 0), angle) + center;
+            var p2 = Rotate(new Point2d(halfW, -halfH), new Point2d(0, 0), angle) + center;
+            var p3 = Rotate(new Point2d(halfW, halfH), new Point2d(0, 0), angle) + center;
+            var p4 = Rotate(new Point2d(-halfW, halfH), new Point2d(0, 0), angle) + center;
+
+            Cv2.Line(targetMat, new Point((int)Math.Round(p1.X), (int)Math.Round(p1.Y)), new Point((int)Math.Round(p2.X), (int)Math.Round(p2.Y)), color, thickness, LineTypes.AntiAlias);
+            Cv2.Line(targetMat, new Point((int)Math.Round(p2.X), (int)Math.Round(p2.Y)), new Point((int)Math.Round(p3.X), (int)Math.Round(p3.Y)), color, thickness, LineTypes.AntiAlias);
+            Cv2.Line(targetMat, new Point((int)Math.Round(p3.X), (int)Math.Round(p3.Y)), new Point((int)Math.Round(p4.X), (int)Math.Round(p4.Y)), color, thickness, LineTypes.AntiAlias);
+            Cv2.Line(targetMat, new Point((int)Math.Round(p4.X), (int)Math.Round(p4.Y)), new Point((int)Math.Round(p1.X), (int)Math.Round(p1.Y)), color, thickness, LineTypes.AntiAlias);
+        }
+
         // 1. Origin
         if (result.Origin is not null)
         {
@@ -648,7 +666,14 @@ public partial class InspectionService
                 var col = green;
                 if (cdt.BoundingBox.Width > 0 && cdt.BoundingBox.Height > 0)
                 {
-                    Cv2.Rectangle(mat, new Rect(cdt.BoundingBox.X, cdt.BoundingBox.Y, cdt.BoundingBox.Width, cdt.BoundingBox.Height), col, 2, LineTypes.AntiAlias);
+                    if (Math.Abs(cdt.Angle) > 0.001)
+                    {
+                        DrawRotatedBoxDirect(mat, cdt.BoundingBox, cdt.Angle, col, 2);
+                    }
+                    else
+                    {
+                        Cv2.Rectangle(mat, new Rect(cdt.BoundingBox.X, cdt.BoundingBox.Y, cdt.BoundingBox.Width, cdt.BoundingBox.Height), col, 2, LineTypes.AntiAlias);
+                    }
                 }
 
                 Cv2.PutText(mat, $"{cdt.Name}: {cdt.Text}", new Point(cdt.BoundingBox.X, Math.Max(15, cdt.BoundingBox.Y - 5)), HersheyFonts.HersheySimplex, 0.6, col, 2, LineTypes.AntiAlias);

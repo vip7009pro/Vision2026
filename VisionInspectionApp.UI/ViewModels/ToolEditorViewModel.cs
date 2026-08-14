@@ -3674,9 +3674,9 @@ namespace VisionInspectionApp.UI.ViewModels
                 return;
             }
 
-            if (string.Equals(to.Type, "Angle", StringComparison.OrdinalIgnoreCase))
+            if (string.Equals(to.Type, "SegmentLineDistance", StringComparison.OrdinalIgnoreCase))
             {
-                var def = _config.Angles.FirstOrDefault(x => string.Equals(x.Name, to.RefName, StringComparison.OrdinalIgnoreCase));
+                var def = _config.SegmentLineDistances?.FirstOrDefault(x => string.Equals(x.Name, to.RefName, StringComparison.OrdinalIgnoreCase));
                 if (def is null)
                     return;
                 if (string.Equals(edge.ToPort, "L1", StringComparison.OrdinalIgnoreCase) && string.Equals(def.LineA, from.RefName, StringComparison.OrdinalIgnoreCase))
@@ -3687,7 +3687,70 @@ namespace VisionInspectionApp.UI.ViewModels
                 {
                     def.LineB = string.Empty;
                 }
-    
+                return;
+            }
+
+            if (string.Equals(to.Type, "LineLineDistance", StringComparison.OrdinalIgnoreCase))
+            {
+                var def = _config.LineToLineDistances?.FirstOrDefault(x => string.Equals(x.Name, to.RefName, StringComparison.OrdinalIgnoreCase));
+                if (def is null)
+                    return;
+                if (string.Equals(edge.ToPort, "L1", StringComparison.OrdinalIgnoreCase) && string.Equals(def.LineA, from.RefName, StringComparison.OrdinalIgnoreCase))
+                {
+                    def.LineA = string.Empty;
+                }
+                else if (string.Equals(edge.ToPort, "L2", StringComparison.OrdinalIgnoreCase) && string.Equals(def.LineB, from.RefName, StringComparison.OrdinalIgnoreCase))
+                {
+                    def.LineB = string.Empty;
+                }
+                return;
+            }
+
+            if (string.Equals(to.Type, "Distance", StringComparison.OrdinalIgnoreCase))
+            {
+                var def = _config.Distances?.FirstOrDefault(x => string.Equals(x.Name, to.RefName, StringComparison.OrdinalIgnoreCase));
+                if (def is null)
+                    return;
+                if (string.Equals(edge.ToPort, "P1", StringComparison.OrdinalIgnoreCase) && string.Equals(def.PointA, from.RefName, StringComparison.OrdinalIgnoreCase))
+                {
+                    def.PointA = string.Empty;
+                }
+                else if (string.Equals(edge.ToPort, "P2", StringComparison.OrdinalIgnoreCase) && string.Equals(def.PointB, from.RefName, StringComparison.OrdinalIgnoreCase))
+                {
+                    def.PointB = string.Empty;
+                }
+                return;
+            }
+
+            if (string.Equals(to.Type, "PointLineDistance", StringComparison.OrdinalIgnoreCase))
+            {
+                var def = _config.PointToLineDistances?.FirstOrDefault(x => string.Equals(x.Name, to.RefName, StringComparison.OrdinalIgnoreCase));
+                if (def is null)
+                    return;
+                if (string.Equals(edge.ToPort, "P1", StringComparison.OrdinalIgnoreCase) && string.Equals(def.Point, from.RefName, StringComparison.OrdinalIgnoreCase))
+                {
+                    def.Point = string.Empty;
+                }
+                else if (string.Equals(edge.ToPort, "L1", StringComparison.OrdinalIgnoreCase) && string.Equals(def.Line, from.RefName, StringComparison.OrdinalIgnoreCase))
+                {
+                    def.Line = string.Empty;
+                }
+                return;
+            }
+
+            if (string.Equals(to.Type, "Angle", StringComparison.OrdinalIgnoreCase))
+            {
+                var def = _config.Angles?.FirstOrDefault(x => string.Equals(x.Name, to.RefName, StringComparison.OrdinalIgnoreCase));
+                if (def is null)
+                    return;
+                if (string.Equals(edge.ToPort, "L1", StringComparison.OrdinalIgnoreCase) && string.Equals(def.LineA, from.RefName, StringComparison.OrdinalIgnoreCase))
+                {
+                    def.LineA = string.Empty;
+                }
+                else if (string.Equals(edge.ToPort, "L2", StringComparison.OrdinalIgnoreCase) && string.Equals(def.LineB, from.RefName, StringComparison.OrdinalIgnoreCase))
+                {
+                    def.LineB = string.Empty;
+                }
                 return;
             }
         }

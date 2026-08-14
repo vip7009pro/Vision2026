@@ -226,6 +226,7 @@ namespace VisionInspectionApp.UI.ViewModels
             else if (_copiedNodeType.Equals("Distance", StringComparison.OrdinalIgnoreCase)) CloneDefinition(_config.Distances, _copiedNodeRefName, newName, options);
             else if (_copiedNodeType.Equals("LineLineDistance", StringComparison.OrdinalIgnoreCase)) CloneDefinition(_config.LineToLineDistances, _copiedNodeRefName, newName, options);
             else if (_copiedNodeType.Equals("PointLineDistance", StringComparison.OrdinalIgnoreCase)) CloneDefinition(_config.PointToLineDistances, _copiedNodeRefName, newName, options);
+            else if (_copiedNodeType.Equals("SegmentLineDistance", StringComparison.OrdinalIgnoreCase)) CloneDefinition(_config.SegmentLineDistances, _copiedNodeRefName, newName, options);
             else if (_copiedNodeType.Equals("Angle", StringComparison.OrdinalIgnoreCase)) CloneDefinition(_config.Angles, _copiedNodeRefName, newName, options);
             else if (_copiedNodeType.Equals("Condition", StringComparison.OrdinalIgnoreCase)) CloneDefinition(_config.Conditions, _copiedNodeRefName, newName, options);
             else if (_copiedNodeType.Equals("BlobDetection", StringComparison.OrdinalIgnoreCase)) CloneDefinition(_config.BlobDetections, _copiedNodeRefName, newName, options);
@@ -425,6 +426,11 @@ namespace VisionInspectionApp.UI.ViewModels
                 if (string.Equals(toRemove.Type, "PointLineDistance", StringComparison.OrdinalIgnoreCase))
                 {
                     _config.PointToLineDistances.RemoveAll(x => string.Equals(x.Name, toRemove.RefName, StringComparison.OrdinalIgnoreCase));
+                }
+    
+                if (string.Equals(toRemove.Type, "SegmentLineDistance", StringComparison.OrdinalIgnoreCase))
+                {
+                    _config.SegmentLineDistances?.RemoveAll(x => string.Equals(x.Name, toRemove.RefName, StringComparison.OrdinalIgnoreCase));
                 }
     
                 if (string.Equals(toRemove.Type, "Angle", StringComparison.OrdinalIgnoreCase))
@@ -628,6 +634,17 @@ namespace VisionInspectionApp.UI.ViewModels
                     {
                         def.Line = fromNode.RefName;
                     }
+                }
+            }
+            else if (string.Equals(toNode.Type, "SegmentLineDistance", StringComparison.OrdinalIgnoreCase) && (string.Equals(fromNode.Type, "Line", StringComparison.OrdinalIgnoreCase) || string.Equals(fromNode.Type, "Caliper", StringComparison.OrdinalIgnoreCase)))
+            {
+                var def = _config.SegmentLineDistances.FirstOrDefault(x => string.Equals(x.Name, toNode.RefName, StringComparison.OrdinalIgnoreCase));
+                if (def is not null)
+                {
+                    if (string.Equals(toPort, "L1", StringComparison.OrdinalIgnoreCase))
+                        def.LineA = fromNode.RefName;
+                    else if (string.Equals(toPort, "L2", StringComparison.OrdinalIgnoreCase))
+                        def.LineB = fromNode.RefName;
                 }
             }
             else if (string.Equals(toNode.Type, "Angle", StringComparison.OrdinalIgnoreCase) && (string.Equals(fromNode.Type, "Line", StringComparison.OrdinalIgnoreCase) || string.Equals(fromNode.Type, "Caliper", StringComparison.OrdinalIgnoreCase)))

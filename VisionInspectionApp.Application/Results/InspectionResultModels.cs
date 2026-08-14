@@ -90,7 +90,7 @@ public sealed record EdgePairResult(
 
 public sealed record ConditionResult(string Name, string Expression, bool Pass, string? Error);
 
-public sealed record BlobInfo(Rect BoundingBox, Point2d Centroid, double Area);
+public sealed record BlobInfo(Rect BoundingBox, Point2d Centroid, double Area, double Angle = 0.0);
 
 public sealed record BlobDetectionResult(string Name, int Count, List<BlobInfo> Blobs);
 
@@ -181,7 +181,7 @@ public sealed record AngleResult(
     Point2d ADir,
     Point2d BDir);
 
-public sealed record CodeDetectionResult(string Name, bool Found, string Text, Rect BoundingBox);
+public sealed record CodeDetectionResult(string Name, bool Found, string Text, Rect BoundingBox, double Angle = 0.0);
 
 public sealed record CreatePointResult(string Name, bool Success, double X, double Y);
 

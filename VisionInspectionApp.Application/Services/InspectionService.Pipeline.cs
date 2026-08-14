@@ -379,7 +379,7 @@ public partial class InspectionService
                     var bboxCenterGlobal = MapToGlobal(bboxCenterLocal, inspectRoi.Width, inspectRoi.Height, centerFound, totalAngle);
                     var fullRect = new Rect((int)Math.Round(bboxCenterGlobal.X - width / 2.0), (int)Math.Round(bboxCenterGlobal.Y - height / 2.0), width, height);
 
-                    blobs.Add(new BlobInfo(fullRect, globalCentroid, areaPx));
+                    blobs.Add(new BlobInfo(fullRect, globalCentroid, areaPx, totalAngle));
                 }
                 return blobs;
             }
@@ -3083,167 +3083,397 @@ public partial class InspectionService
                     continue;
                 }
 
-                var roi = TransformRoiKeepSize(cdt.SearchRoi, originTeach, originFound, angleDeg);
+                var totalAngleDeg = angleDeg + cdt.SearchRoi.Angle;
                 var (matForCode, _) = ResolveToolPreprocess("CodeDetection", cdt.Name);
 
-                var rect = new Rect(roi.X, roi.Y, roi.Width, roi.Height)
-                    .Intersect(new Rect(0, 0, matForCode.Width, matForCode.Height));
-
-                if (rect.Width <= 0 || rect.Height <= 0)
+                // 1. Cắt vùng ROI trên ảnh để lấy 1 ảnh nhỏ chứa mã code, xoay ảnh đó về 0 độ theo góc lệch của origin
+                using var crop = ExtractStraightRoi(matForCode, cdt.SearchRoi, originTeach, originFound, angleDeg, out var centerFound);
+                if (crop.Empty() || crop.Width <= 0 || crop.Height <= 0)
                 {
                     __swNode.Stop();
                     result.Timings.NodeTimings[cdt.Name] = (int)__swNode.ElapsedMilliseconds;
-                    result.CodeDetections.Add(new CodeDetectionResult(cdt.Name, Found: false, Text: string.Empty, BoundingBox: default));
+                    result.CodeDetections.Add(new CodeDetectionResult(cdt.Name, Found: false, Text: string.Empty, BoundingBox: default, Angle: totalAngleDeg));
                     continue;
                 }
 
-                using var crop = new Mat(matForCode, rect);
-                Mat gray0;
-                if (crop.Channels() == 1)
-                {
-                    gray0 = crop;
-                }
-                else
-                {
-                    gray0 = crop.CvtColor(ColorConversionCodes.BGR2GRAY);
-                    matsToDispose.Add(gray0);
-                }
+                using var gray = crop.Channels() == 1 ? crop.Clone() : crop.CvtColor(ColorConversionCodes.BGR2GRAY);
 
                 var options = new DecodingOptions
                 {
-                    TryHarder = cdt.TryHarder,
+                    TryHarder = true,
                     PossibleFormats = ResolveFormats(cdt.Symbologies).ToList()
                 };
+                options.TryInverted = true;
 
                 var reader = new BarcodeReaderGeneric
                 {
-                    AutoRotate = true,
+                    AutoRotate = false,
                     Options = options
                 };
 
-                options.TryInverted = true;
+                // Helper để giải mã trên một Mat cụ thể
+                ZXing.Result? TryDecodeMat(Mat m)
+                {
+                    if (m.Empty() || m.Width <= 0 || m.Height <= 0) return null;
+                    using var mCont = m.IsContinuous() ? m.Clone() : m.Clone();
+                    var buf = new byte[mCont.Cols * mCont.Rows];
+                    Marshal.Copy(mCont.Data, buf, 0, buf.Length);
+                    var src = new RGBLuminanceSource(buf, mCont.Cols, mCont.Rows, RGBLuminanceSource.BitmapFormat.Gray8);
 
-                // Convert gray Mat to byte[] and decode via LuminanceSource (no System.Drawing dependency).
-                var gray = gray0.IsContinuous() ? gray0 : gray0.Clone();
-                if (!ReferenceEquals(gray, gray0))
-                {
-                    matsToDispose.Add(gray);
-                }
+                    var r = reader.Decode(src);
+                    if (r != null && !string.IsNullOrWhiteSpace(r.Text)) return r;
 
-                var w0 = gray.Cols;
-                var h0 = gray.Rows;
-                var anglesToTry = new List<double> { 0 };
-                if (Math.Abs(angleDeg) > 0.1)
-                {
-                    anglesToTry.Add(-angleDeg); // Try to straighten based on Origin
-                }
-                
-                if (cdt.TryHarder)
-                {
-                    double[] sweep = { 45, -45, 15, -15, 30, -30, 60, -60, 75, -75 };
-                    foreach (var a in sweep)
+                    var multi = reader.DecodeMultiple(src);
+                    if (multi != null && multi.Length > 0)
                     {
-                        if (!anglesToTry.Contains(a)) anglesToTry.Add(a);
+                        var firstValid = multi.FirstOrDefault(x => x != null && !string.IsNullOrWhiteSpace(x.Text));
+                        if (firstValid != null) return firstValid;
                     }
+
+                    return null;
                 }
 
                 ZXing.Result? decoded = null;
-                double successfulAngle = 0;
-                int rotatedW = gray.Cols;
-                int rotatedH = gray.Rows;
+                Mat? matchedMat = null;
+                Mat? matchedMatToDispose = null;
+                double scanRotAngle = 0.0; // Góc xoay của ảnh nhỏ khi scan thành công (0 = ảnh thẳng)
 
-                foreach (var a in anglesToTry)
+                // STAGE 1: Quét ở góc 0 độ (ảnh thẳng) với các tầng tiền xử lý tương phản cao
+                // 1.1 Ảnh xám gốc
+                decoded = TryDecodeMat(gray);
+                if (decoded != null) matchedMat = gray;
+
+                // 1.2 EqualizeHist (tăng tương phản)
+                if (decoded == null)
                 {
-                    using var rotatedGray = new Mat();
-                    if (Math.Abs(a) < 0.1)
-                    {
-                        gray.CopyTo(rotatedGray);
-                        rotatedW = gray.Cols;
-                        rotatedH = gray.Rows;
-                    }
-                    else
-                    {
-                        var center = new Point2f(gray.Cols / 2.0f, gray.Rows / 2.0f);
-                        using var rot = Cv2.GetRotationMatrix2D(center, a, 1.0);
-                        var absCos = Math.Abs(rot.At<double>(0, 0));
-                        var absSin = Math.Abs(rot.At<double>(0, 1));
-                        rotatedW = (int)(gray.Rows * absSin + gray.Cols * absCos);
-                        rotatedH = (int)(gray.Rows * absCos + gray.Cols * absSin);
-                        
-                        rot.Set<double>(0, 2, rot.At<double>(0, 2) + rotatedW / 2.0 - center.X);
-                        rot.Set<double>(1, 2, rot.At<double>(1, 2) + rotatedH / 2.0 - center.Y);
-                        
-                        Cv2.WarpAffine(gray, rotatedGray, rot, new Size(rotatedW, rotatedH), InterpolationFlags.Linear, BorderTypes.Replicate);
-                    }
+                    var eq = new Mat();
+                    Cv2.EqualizeHist(gray, eq);
+                    decoded = TryDecodeMat(eq);
+                    if (decoded != null) { matchedMat = eq; matchedMatToDispose = eq; }
+                    else eq.Dispose();
+                }
 
-                    var bufRot = new byte[rotatedW * rotatedH];
-                    Marshal.Copy(rotatedGray.Data, bufRot, 0, bufRot.Length);
-                    var srcRot = new RGBLuminanceSource(bufRot, rotatedW, rotatedH, RGBLuminanceSource.BitmapFormat.Gray8);
+                // 1.3 Adaptive Threshold (xử lý bóng đổ / không đều sáng)
+                if (decoded == null)
+                {
+                    var adapt = new Mat();
+                    Cv2.AdaptiveThreshold(gray, adapt, 255, AdaptiveThresholdTypes.GaussianC, ThresholdTypes.Binary, 21, 5);
+                    decoded = TryDecodeMat(adapt);
+                    if (decoded != null) { matchedMat = adapt; matchedMatToDispose = adapt; }
+                    else adapt.Dispose();
+                }
 
-                    decoded = reader.Decode(srcRot);
-                    if (decoded is not null && !string.IsNullOrWhiteSpace(decoded.Text))
+                // 1.4 Otsu Threshold
+                if (decoded == null)
+                {
+                    var otsu = new Mat();
+                    Cv2.Threshold(gray, otsu, 0, 255, ThresholdTypes.Binary | ThresholdTypes.Otsu);
+                    decoded = TryDecodeMat(otsu);
+                    if (decoded != null) { matchedMat = otsu; matchedMatToDispose = otsu; }
+                    else otsu.Dispose();
+                }
+
+                // 1.5 Inverted Gray (nền tối chữ sáng)
+                if (decoded == null)
+                {
+                    var inv = new Mat();
+                    Cv2.BitwiseNot(gray, inv);
+                    decoded = TryDecodeMat(inv);
+                    if (decoded != null) { matchedMat = inv; matchedMatToDispose = inv; }
+                    else inv.Dispose();
+                }
+
+                // STAGE 2: Nếu chưa tìm thấy ở 0 độ và bật TryHarder, quét các góc xoay chính và phụ
+                if (decoded == null && cdt.TryHarder)
+                {
+                    double[] extraAngles = { 90.0, 180.0, 270.0, 5.0, -5.0, 10.0, -10.0, 15.0, -15.0, 45.0, -45.0 };
+                    foreach (var a in extraAngles)
                     {
-                        successfulAngle = a;
-                        break;
+                        var rotMat = new Mat();
+                        if (Math.Abs(a - 90.0) < 0.1) Cv2.Rotate(gray, rotMat, RotateFlags.Rotate90Clockwise);
+                        else if (Math.Abs(a - 180.0) < 0.1) Cv2.Rotate(gray, rotMat, RotateFlags.Rotate180);
+                        else if (Math.Abs(a - 270.0) < 0.1) Cv2.Rotate(gray, rotMat, RotateFlags.Rotate90Counterclockwise);
+                        else
+                        {
+                            var center = new Point2f(gray.Cols / 2.0f, gray.Rows / 2.0f);
+                            using var rot = Cv2.GetRotationMatrix2D(center, a, 1.0);
+                            Cv2.WarpAffine(gray, rotMat, rot, gray.Size(), InterpolationFlags.Linear, BorderTypes.Replicate);
+                        }
+
+                        decoded = TryDecodeMat(rotMat);
+                        if (decoded != null)
+                        {
+                            matchedMat = rotMat;
+                            matchedMatToDispose = rotMat;
+                            scanRotAngle = a;
+                            break;
+                        }
+
+                        var eqRot = new Mat();
+                        Cv2.EqualizeHist(rotMat, eqRot);
+                        decoded = TryDecodeMat(eqRot);
+                        if (decoded != null)
+                        {
+                            matchedMat = eqRot;
+                            matchedMatToDispose = eqRot;
+                            scanRotAngle = a;
+                            rotMat.Dispose();
+                            break;
+                        }
+                        eqRot.Dispose();
+                        rotMat.Dispose();
                     }
                 }
 
                 if (decoded is null || string.IsNullOrWhiteSpace(decoded.Text))
                 {
+                    matchedMatToDispose?.Dispose();
                     __swNode.Stop();
                     result.Timings.NodeTimings[cdt.Name] = (int)__swNode.ElapsedMilliseconds;
-                    result.CodeDetections.Add(new CodeDetectionResult(cdt.Name, Found: false, Text: string.Empty, BoundingBox: default));
+                    result.CodeDetections.Add(new CodeDetectionResult(cdt.Name, Found: false, Text: string.Empty, BoundingBox: default, Angle: totalAngleDeg));
                     continue;
                 }
 
-                // Bounding box: start from decoded points, then pad slightly so the overlay covers the full symbol.
-                var bb = rect;
-                if (decoded.ResultPoints is not null && decoded.ResultPoints.Length > 0)
+                // Helper đo chiều cao thực tế của các vạch barcode 1D
+                double Measure1DBarcodeHeight(Mat m, double x0, double x1, double yScan, out double yCenter)
                 {
-                    var xs = new List<double>();
-                    var ys = new List<double>();
+                    yCenter = yScan;
+                    if (m.Empty() || m.Width <= 0 || m.Height <= 0) return 24.0;
 
-                    if (Math.Abs(successfulAngle) > 0.1)
+                    int minX = (int)Math.Clamp(Math.Min(x0, x1), 0, m.Cols - 1);
+                    int maxX = (int)Math.Clamp(Math.Max(x0, x1), 0, m.Cols - 1);
+                    int spanW = maxX - minX;
+                    if (spanW < 8) return Math.Min(24.0, m.Rows * 0.4);
+
+                    int sX1 = minX + (int)(spanW * 0.10);
+                    int sX2 = maxX - (int)(spanW * 0.10);
+                    int sampleW = sX2 - sX1;
+                    if (sampleW < 6) return Math.Min(24.0, m.Rows * 0.4);
+
+                    int curY = (int)Math.Clamp(yScan, 0, m.Rows - 1);
+
+                    double GetRowEnergy(int y)
                     {
-                        var center = new Point2f(gray.Cols / 2.0f, gray.Rows / 2.0f);
-                        using var invRot = Cv2.GetRotationMatrix2D(new Point2f(rotatedW / 2.0f, rotatedH / 2.0f), -successfulAngle, 1.0);
-                        invRot.Set<double>(0, 2, invRot.At<double>(0, 2) + center.X - rotatedW / 2.0f);
-                        invRot.Set<double>(1, 2, invRot.At<double>(1, 2) + center.Y - rotatedH / 2.0f);
-
-                        foreach (var p in decoded.ResultPoints)
+                        if (y < 0 || y >= m.Rows) return 0.0;
+                        double sum = 0;
+                        double sumSq = 0;
+                        int count = sampleW + 1;
+                        var rowBytes = new byte[count];
+                        Marshal.Copy(IntPtr.Add(m.Data, y * (int)m.Step() + sX1), rowBytes, 0, count);
+                        for (int i = 0; i < count; i++)
                         {
-                            var px = p.X * invRot.At<double>(0, 0) + p.Y * invRot.At<double>(0, 1) + invRot.At<double>(0, 2);
-                            var py = p.X * invRot.At<double>(1, 0) + p.Y * invRot.At<double>(1, 1) + invRot.At<double>(1, 2);
-                            xs.Add(px);
-                            ys.Add(py);
+                            byte val = rowBytes[i];
+                            sum += val;
+                            sumSq += (double)val * val;
+                        }
+                        double mean = sum / count;
+                        double variance = (sumSq / count) - (mean * mean);
+                        return variance > 0 ? Math.Sqrt(variance) : 0.0;
+                    }
+
+                    double baseEnergy = GetRowEnergy(curY);
+                    for (int dy = -6; dy <= 6; dy++)
+                    {
+                        double e = GetRowEnergy(curY + dy);
+                        if (e > baseEnergy) baseEnergy = e;
+                    }
+
+                    double threshold = Math.Max(5.0, baseEnergy * 0.35);
+
+                    // Quét lên trên tìm đỉnh vạch
+                    int topY = curY;
+                    while (topY > 0)
+                    {
+                        double e = GetRowEnergy(topY - 1);
+                        if (e < threshold)
+                        {
+                            double e2 = GetRowEnergy(topY - 2);
+                            if (e2 < threshold) break;
+                        }
+                        topY--;
+                    }
+
+                    // Quét xuống dưới tìm đáy vạch
+                    int bottomY = curY;
+                    while (bottomY < m.Rows - 1)
+                    {
+                        double e = GetRowEnergy(bottomY + 1);
+                        if (e < threshold)
+                        {
+                            double e2 = GetRowEnergy(bottomY + 2);
+                            if (e2 < threshold) break;
+                        }
+                        bottomY++;
+                    }
+
+                    int rawH = bottomY - topY;
+                    if (rawH >= 6 && rawH <= m.Rows)
+                    {
+                        yCenter = (topY + bottomY) / 2.0;
+                        return rawH + 4.0;
+                    }
+
+                    return Math.Clamp(spanW * 0.20, 14.0, Math.Min(45.0, m.Rows * 0.6));
+                }
+
+                // 2. Chuyển đổi các điểm phát hiện về hệ tọa độ của ảnh nhỏ (crop)
+                var rawPts = decoded.ResultPoints;
+                var ptsInCrop = new List<Point2d>();
+
+                if (rawPts is not null && rawPts.Length > 0)
+                {
+                    if (Math.Abs(scanRotAngle) > 0.001)
+                    {
+                        if (Math.Abs(scanRotAngle - 90.0) < 0.1)
+                        {
+                            foreach (var p in rawPts) ptsInCrop.Add(new Point2d(p.Y, gray.Rows - 1 - p.X));
+                        }
+                        else if (Math.Abs(scanRotAngle - 180.0) < 0.1)
+                        {
+                            foreach (var p in rawPts) ptsInCrop.Add(new Point2d(gray.Cols - 1 - p.X, gray.Rows - 1 - p.Y));
+                        }
+                        else if (Math.Abs(scanRotAngle - 270.0) < 0.1)
+                        {
+                            foreach (var p in rawPts) ptsInCrop.Add(new Point2d(gray.Cols - 1 - p.Y, p.X));
+                        }
+                        else
+                        {
+                            var center = new Point2f(gray.Cols / 2.0f, gray.Rows / 2.0f);
+                            using var rot = Cv2.GetRotationMatrix2D(center, scanRotAngle, 1.0);
+                            using var invRot = new Mat();
+                            Cv2.InvertAffineTransform(rot, invRot);
+                            foreach (var p in rawPts)
+                            {
+                                var px = p.X * invRot.At<double>(0, 0) + p.Y * invRot.At<double>(0, 1) + invRot.At<double>(0, 2);
+                                var py = p.X * invRot.At<double>(1, 0) + p.Y * invRot.At<double>(1, 1) + invRot.At<double>(1, 2);
+                                ptsInCrop.Add(new Point2d(px, py));
+                            }
                         }
                     }
                     else
                     {
-                        xs.AddRange(decoded.ResultPoints.Select(p => (double)p.X));
-                        ys.AddRange(decoded.ResultPoints.Select(p => (double)p.Y));
+                        foreach (var p in rawPts) ptsInCrop.Add(new Point2d(p.X, p.Y));
+                    }
+                }
+
+                // 3. Tính tâm, kích thước và góc lệch cục bộ (localAngle) của mã trên ảnh nhỏ
+                Point2d localCenter;
+                double codeW = 0.0;
+                double codeH = 0.0;
+                double localAngle = 0.0;
+
+                if (ptsInCrop.Count >= 3)
+                {
+                    // QR Code / DataMatrix (Finder patterns: P0=BottomLeft, P1=TopLeft, P2=TopRight)
+                    var p0 = ptsInCrop[0];
+                    var p1 = ptsInCrop[1];
+                    var p2 = ptsInCrop[2];
+
+                    var vTop = new Point2d(p2.X - p1.X, p2.Y - p1.Y);
+                    var vLeft = new Point2d(p0.X - p1.X, p0.Y - p1.Y);
+
+                    var lenTop = Math.Sqrt(vTop.X * vTop.X + vTop.Y * vTop.Y);
+                    var lenLeft = Math.Sqrt(vLeft.X * vLeft.X + vLeft.Y * vLeft.Y);
+
+                    localAngle = Math.Atan2(vTop.Y, vTop.X) * 180.0 / Math.PI;
+
+                    if (ptsInCrop.Count >= 4)
+                    {
+                        var p3 = ptsInCrop[3];
+                        localCenter = new Point2d((p0.X + p1.X + p2.X + p3.X) / 4.0, (p0.Y + p1.Y + p2.Y + p3.Y) / 4.0);
+                    }
+                    else
+                    {
+                        localCenter = new Point2d((p0.X + p2.X) / 2.0, (p0.Y + p2.Y) / 2.0);
                     }
 
-                    var minX = xs.Min();
-                    var maxX = xs.Max();
-                    var minY = ys.Min();
-                    var maxY = ys.Max();
-                    var baseW = Math.Max(1.0, maxX - minX);
-                    var baseH = Math.Max(1.0, maxY - minY);
-                    var padX = Math.Max(2.0, baseW * 0.12);
-                    var padY = Math.Max(2.0, baseH * 0.12);
-
-                    var x = rect.X + (int)Math.Floor(minX - padX);
-                    var y = rect.Y + (int)Math.Floor(minY - padY);
-                    var w = (int)Math.Ceiling(baseW + padX * 2);
-                    var h = (int)Math.Ceiling(baseH + padY * 2);
-
-                    bb = new Rect(x, y, w, h).Intersect(rect);
+                    var side = Math.Max(lenTop, lenLeft);
+                    codeW = Math.Max(10.0, side * 1.28 + 4.0);
+                    codeH = codeW;
                 }
+                else if (rawPts is not null && rawPts.Length == 2)
+                {
+                    // 1D Barcode: Đo chiều cao vạch chính xác trên matchedMat và tính hướng xoay
+                    var p0Rot = rawPts[0];
+                    var p1Rot = rawPts[1];
+                    var len = Math.Abs(p1Rot.X - p0Rot.X);
+                    var yScan = p0Rot.Y;
+
+                    var measuredH = Measure1DBarcodeHeight(matchedMat ?? gray, p0Rot.X, p1Rot.X, yScan, out double yMidRot);
+                    var xMidRot = (p0Rot.X + p1Rot.X) / 2.0;
+
+                    codeW = Math.Max(10.0, len * 1.08 + 4.0);
+                    codeH = measuredH;
+
+                    // Chuyển tâm từ matchedMat về crop
+                    Point2d ptMid;
+                    if (Math.Abs(scanRotAngle) > 0.001)
+                    {
+                        if (Math.Abs(scanRotAngle - 90.0) < 0.1)
+                        {
+                            ptMid = new Point2d(yMidRot, gray.Rows - 1 - xMidRot);
+                            localAngle = 90.0;
+                        }
+                        else if (Math.Abs(scanRotAngle - 180.0) < 0.1)
+                        {
+                            ptMid = new Point2d(gray.Cols - 1 - xMidRot, gray.Rows - 1 - yMidRot);
+                            localAngle = 180.0;
+                        }
+                        else if (Math.Abs(scanRotAngle - 270.0) < 0.1)
+                        {
+                            ptMid = new Point2d(gray.Cols - 1 - yMidRot, xMidRot);
+                            localAngle = -90.0;
+                        }
+                        else
+                        {
+                            var center = new Point2f(gray.Cols / 2.0f, gray.Rows / 2.0f);
+                            using var rot = Cv2.GetRotationMatrix2D(center, scanRotAngle, 1.0);
+                            using var invRot = new Mat();
+                            Cv2.InvertAffineTransform(rot, invRot);
+                            var px = xMidRot * invRot.At<double>(0, 0) + yMidRot * invRot.At<double>(0, 1) + invRot.At<double>(0, 2);
+                            var py = xMidRot * invRot.At<double>(1, 0) + yMidRot * invRot.At<double>(1, 1) + invRot.At<double>(1, 2);
+                            ptMid = new Point2d(px, py);
+                            localAngle = scanRotAngle;
+                        }
+                    }
+                    else
+                    {
+                        ptMid = new Point2d(xMidRot, yMidRot);
+                        localAngle = 0.0;
+                    }
+
+                    localCenter = ptMid;
+                }
+                else if (ptsInCrop.Count == 1)
+                {
+                    localCenter = ptsInCrop[0];
+                    codeW = Math.Min(crop.Width * 0.8, 80.0);
+                    codeH = codeW;
+                    localAngle = 0.0;
+                }
+                else
+                {
+                    localCenter = new Point2d(crop.Width / 2.0, crop.Height / 2.0);
+                    codeW = crop.Width * 0.85;
+                    codeH = crop.Height * 0.85;
+                    localAngle = 0.0;
+                }
+
+                matchedMatToDispose?.Dispose();
+
+                // 4. Tính ngược góc cần xoay, kích thước đường bao và tọa độ để vẽ ngược về ảnh gốc
+                var globalCenter = MapToGlobal(localCenter, crop.Width, crop.Height, centerFound, totalAngleDeg);
+                double globalCodeAngle = totalAngleDeg + localAngle;
+                while (globalCodeAngle > 180.0) globalCodeAngle -= 360.0;
+                while (globalCodeAngle <= -180.0) globalCodeAngle += 360.0;
+
+                int finalW = (int)Math.Ceiling(codeW);
+                int finalH = (int)Math.Ceiling(codeH);
+                var bb = new Rect((int)Math.Round(globalCenter.X - finalW / 2.0), (int)Math.Round(globalCenter.Y - finalH / 2.0), finalW, finalH);
 
                 __swNode.Stop();
                 result.Timings.NodeTimings[cdt.Name] = (int)__swNode.ElapsedMilliseconds;
-                result.CodeDetections.Add(new CodeDetectionResult(cdt.Name, Found: true, Text: decoded.Text, BoundingBox: bb));
+                result.CodeDetections.Add(new CodeDetectionResult(cdt.Name, Found: true, Text: decoded.Text, BoundingBox: bb, Angle: globalCodeAngle));
             }
             result.Timings.CdtMs = (int)Math.Max(0, swTotal.ElapsedMilliseconds - tCdt0);
 

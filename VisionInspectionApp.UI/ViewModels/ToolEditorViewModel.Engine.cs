@@ -315,7 +315,16 @@ namespace VisionInspectionApp.UI.ViewModels
                     var br = bi.BoundingBox;
                     if (br.Width > 0 && br.Height > 0)
                     {
-                        dst.Add(CreateRotatedRoi(br, Brushes.Gold, string.Empty));
+                        dst.Add(new OverlayRectItem
+                        {
+                            X = br.X,
+                            Y = br.Y,
+                            Width = br.Width,
+                            Height = br.Height,
+                            Angle = bi.Angle,
+                            Stroke = Brushes.Gold,
+                            Label = string.Empty
+                        });
                     }
     
                     dst.Add(new OverlayPointItem { X = bi.Centroid.X, Y = bi.Centroid.Y, Radius = 3.0, Stroke = Brushes.Gold, Label = string.Empty });
@@ -1093,7 +1102,16 @@ namespace VisionInspectionApp.UI.ViewModels
                     var br = bi.BoundingBox;
                     if (br.Width > 0 && br.Height > 0)
                     {
-                        dst.Add(CreateRotatedRoi(br, Brushes.Gold, string.Empty));
+                        dst.Add(new OverlayRectItem
+                        {
+                            X = br.X,
+                            Y = br.Y,
+                            Width = br.Width,
+                            Height = br.Height,
+                            Angle = bi.Angle,
+                            Stroke = Brushes.Gold,
+                            Label = string.Empty
+                        });
                     }
     
                     dst.Add(new OverlayPointItem { X = bi.Centroid.X, Y = bi.Centroid.Y, Radius = 3.0, Stroke = Brushes.Gold, Label = string.Empty });
@@ -1290,6 +1308,32 @@ namespace VisionInspectionApp.UI.ViewModels
                         AddCircle(dst, res.CenterX, res.CenterY, res.Radius, Brushes.LimeGreen, 2.5);
                         AddCross(dst, res.CenterX, res.CenterY, 15, Brushes.LimeGreen, 1.5);
                     }
+                }
+                return;
+            }
+
+            if (string.Equals(node.Type, "CodeDetection", StringComparison.OrdinalIgnoreCase))
+            {
+                var def = _config.CodeDetections.FirstOrDefault(x => string.Equals(x.Name, node.RefName, StringComparison.OrdinalIgnoreCase));
+                if (def is not null && ShowRoisInSelectedPreview && def.SearchRoi.Width > 0 && def.SearchRoi.Height > 0)
+                {
+                    dst.Add(CreateRotatedRoiWithPose(def.SearchRoi, Brushes.Lime, $"{def.Name} C"));
+                }
+
+                var cdt = run.CodeDetections?.FirstOrDefault(x => string.Equals(x.Name, node.RefName, StringComparison.OrdinalIgnoreCase));
+                if (cdt is not null && cdt.Found && cdt.BoundingBox.Width > 0 && cdt.BoundingBox.Height > 0)
+                {
+                    var bb = cdt.BoundingBox;
+                    dst.Add(new OverlayRectItem
+                    {
+                        X = bb.X,
+                        Y = bb.Y,
+                        Width = bb.Width,
+                        Height = bb.Height,
+                        Angle = cdt.Angle,
+                        Stroke = Brushes.Lime,
+                        Label = $"{cdt.Name}: {cdt.Text}"
+                    });
                 }
                 return;
             }
@@ -2773,21 +2817,67 @@ namespace VisionInspectionApp.UI.ViewModels
             }
     
             using var matForBlob = ResolveToolPreprocessForPreview(snap, SelectedNode);
+            if (matForBlob.Empty())
+            {
+                BlobThresholdPreviewImage = null;
+                return;
+            }
+
             var previewRoi = def.InspectRoi;
             if (def.Rois is not null && def.Rois.Count > 0)
             {
                 previewRoi = ComputeBlobInspectRoi(def);
             }
-    
-            var rect = new OpenCvSharp.Rect(previewRoi.X, previewRoi.Y, previewRoi.Width, previewRoi.Height);
-            rect = rect.Intersect(new OpenCvSharp.Rect(0, 0, matForBlob.Width, matForBlob.Height));
-            if (rect.Width <= 0 || rect.Height <= 0)
+
+            OpenCvSharp.Point2d originTeach = default;
+            OpenCvSharp.Point2d originFound = default;
+            double angleDeg = 0;
+            if (_lastRun?.Origin is not null && (_lastRun.Origin.MatchRect.Width > 0 || _lastRun.Origin.Position.X != 0 || _lastRun.Origin.Position.Y != 0))
+            {
+                originTeach = new OpenCvSharp.Point2d(_config.Origin.WorldPosition.X, _config.Origin.WorldPosition.Y);
+                if (originTeach.X == 0 && originTeach.Y == 0 && _config.Origin.TemplateRoi.Width > 0)
+                {
+                    originTeach = new OpenCvSharp.Point2d(_config.Origin.TemplateRoi.X + _config.Origin.TemplateRoi.Width / 2.0, _config.Origin.TemplateRoi.Y + _config.Origin.TemplateRoi.Height / 2.0);
+                }
+                else if (originTeach.X == 0 && originTeach.Y == 0 && _config.Origin.SearchRoi.Width > 0)
+                {
+                    originTeach = new OpenCvSharp.Point2d(_config.Origin.SearchRoi.X + _config.Origin.SearchRoi.Width / 2.0, _config.Origin.SearchRoi.Y + _config.Origin.SearchRoi.Height / 2.0);
+                }
+
+                var mr = _lastRun.Origin.MatchRect;
+                originFound = (mr.Width > 0 && mr.Height > 0)
+                    ? new OpenCvSharp.Point2d(mr.X + mr.Width / 2.0, mr.Y + mr.Height / 2.0)
+                    : new OpenCvSharp.Point2d(_lastRun.Origin.Position.X, _lastRun.Origin.Position.Y);
+
+                angleDeg = _lastRun.Origin.AngleDeg;
+            }
+
+            Roi targetRoi;
+            if (Math.Abs(angleDeg) > 0.001 || originFound.X != 0 || originFound.Y != 0)
+            {
+                var centerTeach = new OpenCvSharp.Point2d(previewRoi.X + previewRoi.Width / 2.0, previewRoi.Y + previewRoi.Height / 2.0);
+                var centerFound = TransformPose(centerTeach, originTeach, originFound, angleDeg);
+                targetRoi = new Roi
+                {
+                    X = (int)Math.Round(centerFound.X - previewRoi.Width / 2.0),
+                    Y = (int)Math.Round(centerFound.Y - previewRoi.Height / 2.0),
+                    Width = previewRoi.Width,
+                    Height = previewRoi.Height,
+                    Angle = previewRoi.Angle + angleDeg
+                };
+            }
+            else
+            {
+                targetRoi = previewRoi;
+            }
+
+            using var crop = ExtractRoiPatch(matForBlob, targetRoi);
+            if (crop.Empty() || crop.Width <= 0 || crop.Height <= 0)
             {
                 BlobThresholdPreviewImage = null;
                 return;
             }
-    
-            using var crop = new Mat(matForBlob, rect);
+
             using var gray = crop.Channels() == 1 ? crop.Clone() : crop.CvtColor(ColorConversionCodes.BGR2GRAY);
             using var bw = new Mat();
             var thr = Math.Clamp(def.Threshold, 0, 255);
@@ -2804,8 +2894,8 @@ namespace VisionInspectionApp.UI.ViewModels
                         continue;
                     }
     
-                    var rx = rr.Roi.X - rect.X;
-                    var ry = rr.Roi.Y - rect.Y;
+                    var rx = rr.Roi.X - previewRoi.X;
+                    var ry = rr.Roi.Y - previewRoi.Y;
                     var r = new OpenCvSharp.Rect(rx, ry, rr.Roi.Width, rr.Roi.Height);
                     r = r.Intersect(new OpenCvSharp.Rect(0, 0, bw.Cols, bw.Rows));
                     if (r.Width <= 0 || r.Height <= 0)
@@ -2833,8 +2923,8 @@ namespace VisionInspectionApp.UI.ViewModels
                         continue;
                     }
     
-                    var rx = rr.Roi.X - rect.X;
-                    var ry = rr.Roi.Y - rect.Y;
+                    var rx = rr.Roi.X - previewRoi.X;
+                    var ry = rr.Roi.Y - previewRoi.Y;
                     var r = new OpenCvSharp.Rect(rx, ry, rr.Roi.Width, rr.Roi.Height);
                     r = r.Intersect(new OpenCvSharp.Rect(0, 0, bw.Cols, bw.Rows));
                     if (r.Width <= 0 || r.Height <= 0)
@@ -3267,14 +3357,13 @@ namespace VisionInspectionApp.UI.ViewModels
                 var bb = cdt.BoundingBox;
                 if (bb.Width > 0 && bb.Height > 0)
                 {
-                    var angleDeg = run.Origin?.AngleDeg ?? 0.0;
                     dst.Add(new OverlayRectItem
                     {
                         X = bb.X,
                         Y = bb.Y,
                         Width = bb.Width,
                         Height = bb.Height,
-                        Angle = angleDeg,
+                        Angle = cdt.Angle,
                         Stroke = Brushes.Lime,
                         Label = $"{cdt.Name}: {cdt.Text}"
                     });
@@ -4346,6 +4435,26 @@ namespace VisionInspectionApp.UI.ViewModels
                 }
                 return;
             }
+
+            if (string.Equals(node.Type, "CodeDetection", StringComparison.OrdinalIgnoreCase))
+            {
+                var cdt = run.CodeDetections?.FirstOrDefault(x => string.Equals(x.Name, node.RefName, StringComparison.OrdinalIgnoreCase));
+                if (cdt is not null && cdt.Found && cdt.BoundingBox.Width > 0 && cdt.BoundingBox.Height > 0)
+                {
+                    var bb = cdt.BoundingBox;
+                    dst.Add(new OverlayRectItem
+                    {
+                        X = bb.X,
+                        Y = bb.Y,
+                        Width = bb.Width,
+                        Height = bb.Height,
+                        Angle = cdt.Angle,
+                        Stroke = Brushes.Lime,
+                        Label = $"{cdt.Name}: {cdt.Text}"
+                    });
+                }
+                return;
+            }
         }
     
         private void BuildOverlayForNode(ToolGraphNodeViewModel node, Mat image, List<OverlayItem> dst)
@@ -4542,14 +4651,13 @@ namespace VisionInspectionApp.UI.ViewModels
                     if (cdt is not null && cdt.Found && cdt.BoundingBox.Width > 0 && cdt.BoundingBox.Height > 0)
                     {
                         var bb = cdt.BoundingBox;
-                        var angleDeg = _lastRun.Origin?.AngleDeg ?? 0.0;
                         dst.Add(new OverlayRectItem
                         {
                             X = bb.X,
                             Y = bb.Y,
                             Width = bb.Width,
                             Height = bb.Height,
-                            Angle = angleDeg,
+                            Angle = cdt.Angle,
                             Stroke = Brushes.Lime,
                             Label = $"{cdt.Name}: {cdt.Text}"
                         });

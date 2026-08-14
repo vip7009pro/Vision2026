@@ -190,7 +190,7 @@
                                             <TextBlock Text="Pre" VerticalAlignment="Center" Margin="4,2" FontSize="11" Foreground="{DynamicResource TextBrush}"/>
                                         </Border>
                                         <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
-                                            <ComboBox ItemsSource="{Binding AvailablePreprocessChoices}" SelectedItem="{Binding SelectedToolPreprocessChoice, UpdateSourceTrigger=LostFocus}" Margin="2,1" FontSize="11" />
+                                            <ComboBox ItemsSource="{Binding AvailablePreprocessChoices}" SelectedItem="{Binding SelectedToolPreprocessChoice}" Margin="2,1" FontSize="11" />
                                         </Border>
                                     </Grid>
                                 </Border>
@@ -692,7 +692,7 @@
                                             <TextBlock Text="Mode" VerticalAlignment="Center" Margin="4,2" FontSize="11" Foreground="{DynamicResource TextBrush}"/>
                                         </Border>
                                         <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
-                                            <ComboBox ItemsSource="{Binding AvailableLineLineDistanceModes}" SelectedItem="{Binding LineLineDistance_Mode, UpdateSourceTrigger=LostFocus}" Margin="2,1" FontSize="11" />
+                                            <ComboBox ItemsSource="{Binding AvailableLineLineDistanceModes}" SelectedItem="{Binding LineLineDistance_Mode}" Margin="2,1" FontSize="11" />
                                         </Border>
                                     </Grid>
                                 </Border>
@@ -707,7 +707,7 @@
                                             <TextBlock Text="A" VerticalAlignment="Center" Margin="4,2" FontSize="11" Foreground="{DynamicResource TextBrush}"/>
                                         </Border>
                                         <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
-                                            <ComboBox ItemsSource="{Binding AvailableLineNames}" SelectedItem="{Binding LineLineDistance_LineA, UpdateSourceTrigger=LostFocus}" Margin="2,1" FontSize="11" />
+                                            <ComboBox ItemsSource="{Binding AvailableLineNames}" SelectedItem="{Binding LineLineDistance_LineA}" Margin="2,1" FontSize="11" />
                                         </Border>
                                     </Grid>
                                 </Border>
@@ -721,7 +721,7 @@
                                             <TextBlock Text="B" VerticalAlignment="Center" Margin="4,2" FontSize="11" Foreground="{DynamicResource TextBrush}"/>
                                         </Border>
                                         <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
-                                            <ComboBox ItemsSource="{Binding AvailableLineNames}" SelectedItem="{Binding LineLineDistance_LineB, UpdateSourceTrigger=LostFocus}" Margin="2,1" FontSize="11" />
+                                            <ComboBox ItemsSource="{Binding AvailableLineNames}" SelectedItem="{Binding LineLineDistance_LineB}" Margin="2,1" FontSize="11" />
                                         </Border>
                                     </Grid>
                                 </Border>
@@ -769,7 +769,7 @@
                                             <TextBlock Text="L" VerticalAlignment="Center" Margin="4,2" FontSize="11" Foreground="{DynamicResource TextBrush}"/>
                                         </Border>
                                         <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
-                                            <ComboBox ItemsSource="{Binding AvailableLineNames}" SelectedItem="{Binding PointLineDistance_Line, UpdateSourceTrigger=LostFocus}" Margin="2,1" FontSize="11" />
+                                            <ComboBox ItemsSource="{Binding AvailableLineNames}" SelectedItem="{Binding PointLineDistance_Line}" Margin="2,1" FontSize="11" />
                                         </Border>
                                     </Grid>
                                 </Border>
@@ -788,7 +788,7 @@
                                              <TextBlock Text="Mode" VerticalAlignment="Center" Margin="4,2" FontSize="11" Foreground="{DynamicResource TextBrush}"/>
                                          </Border>
                                          <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
-                                             <ComboBox ItemsSource="{Binding AvailableSegmentLineDistanceModes}" SelectedItem="{Binding SegmentLineDistance_Mode, UpdateSourceTrigger=LostFocus}" Margin="2,1" FontSize="11" />
+                                             <ComboBox ItemsSource="{Binding AvailableSegmentLineDistanceModes}" SelectedItem="{Binding SegmentLineDistance_Mode}" Margin="2,1" FontSize="11" />
                                          </Border>
                                      </Grid>
                                  </Border>
@@ -803,7 +803,7 @@
                                              <TextBlock Text="Extension" VerticalAlignment="Center" Margin="4,2" FontSize="11" Foreground="{DynamicResource TextBrush}"/>
                                          </Border>
                                          <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
-                                             <ComboBox ItemsSource="{Binding AvailableSegmentLineExtensionModes}" SelectedItem="{Binding SegmentLineDistance_ExtensionMode, UpdateSourceTrigger=LostFocus}" Margin="2,1" FontSize="11" />
+                                             <ComboBox ItemsSource="{Binding AvailableSegmentLineExtensionModes}" SelectedItem="{Binding SegmentLineDistance_ExtensionMode}" Margin="2,1" FontSize="11" />
                                          </Border>
                                      </Grid>
                                  </Border>
@@ -818,7 +818,7 @@
                                              <TextBlock Text="Segment (A)" VerticalAlignment="Center" Margin="4,2" FontSize="11" Foreground="{DynamicResource TextBrush}"/>
                                          </Border>
                                          <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
-                                             <ComboBox ItemsSource="{Binding AvailableLineNames}" SelectedItem="{Binding SegmentLineDistance_LineA, UpdateSourceTrigger=LostFocus}" Margin="2,1" FontSize="11" />
+                                             <ComboBox ItemsSource="{Binding AvailableLineNames}" SelectedItem="{Binding SegmentLineDistance_LineA}" Margin="2,1" FontSize="11" />
                                          </Border>
                                      </Grid>
                                  </Border>
@@ -832,7 +832,7 @@
                                              <TextBlock Text="Infinite Line (B)" VerticalAlignment="Center" Margin="4,2" FontSize="11" Foreground="{DynamicResource TextBrush}"/>
                                          </Border>
                                          <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
-                                             <ComboBox ItemsSource="{Binding AvailableLineNames}" SelectedItem="{Binding SegmentLineDistance_LineB, UpdateSourceTrigger=LostFocus}" Margin="2,1" FontSize="11" />
+                                             <ComboBox ItemsSource="{Binding AvailableLineNames}" SelectedItem="{Binding SegmentLineDistance_LineB}" Margin="2,1" FontSize="11" />
                                          </Border>
                                      </Grid>
                                  </Border>
@@ -851,7 +851,7 @@
                                             <TextBlock Text="A" VerticalAlignment="Center" Margin="4,2" FontSize="11" Foreground="{DynamicResource TextBrush}"/>
                                         </Border>
                                         <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
-                                            <ComboBox ItemsSource="{Binding AvailableLineNames}" SelectedItem="{Binding Angle_LineA, UpdateSourceTrigger=LostFocus}" Margin="2,1" FontSize="11" />
+                                            <ComboBox ItemsSource="{Binding AvailableLineNames}" SelectedItem="{Binding Angle_LineA}" Margin="2,1" FontSize="11" />
                                         </Border>
                                     </Grid>
                                 </Border>
@@ -865,7 +865,7 @@
                                             <TextBlock Text="B" VerticalAlignment="Center" Margin="4,2" FontSize="11" Foreground="{DynamicResource TextBrush}"/>
                                         </Border>
                                         <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
-                                            <ComboBox ItemsSource="{Binding AvailableLineNames}" SelectedItem="{Binding Angle_LineB, UpdateSourceTrigger=LostFocus}" Margin="2,1" FontSize="11" />
+                                            <ComboBox ItemsSource="{Binding AvailableLineNames}" SelectedItem="{Binding Angle_LineB}" Margin="2,1" FontSize="11" />
                                         </Border>
                                     </Grid>
                                 </Border>
@@ -877,7 +877,7 @@
                                     <StackPanel Orientation="Horizontal" Margin="0,0,0,2">
                                         <TextBlock Text="A" Width="60" VerticalAlignment="Center" />
                                         <TextBlock Text="Ref A" Width="60" VerticalAlignment="Center" />
-                                        <ComboBox Width="160" ItemsSource="{Binding AvailableLineNames}" SelectedItem="{Binding EdgePair_RefA, UpdateSourceTrigger=LostFocus}" />
+                                        <ComboBox Width="160" ItemsSource="{Binding AvailableLineNames}" SelectedItem="{Binding EdgePair_RefA}" />
                                     </StackPanel>
                                     <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
                                     <Grid>
@@ -889,7 +889,7 @@
                                             <TextBlock Text="Ref B" VerticalAlignment="Center" Margin="4,2" FontSize="11" Foreground="{DynamicResource TextBrush}"/>
                                         </Border>
                                         <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
-                                            <ComboBox ItemsSource="{Binding AvailableLineNames}" SelectedItem="{Binding EdgePair_RefB, UpdateSourceTrigger=LostFocus}" Margin="2,1" FontSize="11" />
+                                            <ComboBox ItemsSource="{Binding AvailableLineNames}" SelectedItem="{Binding EdgePair_RefB}" Margin="2,1" FontSize="11" />
                                         </Border>
                                     </Grid>
                                 </Border>
@@ -1518,8 +1518,8 @@
                                 </Border>
 
                                 <StackPanel Orientation="Horizontal" Margin="0,0,0,2">
-                                    <TextBlock Text="Thr" Width="60" VerticalAlignment="Center" />
-                                    <TextBlock Text="{Binding Blob_Threshold}" Width="40" />
+                                    <TextBlock Text="Thr" Width="60" VerticalAlignment="Center" Foreground="{DynamicResource TextBrush}" />
+                                    <TextBlock Text="{Binding Blob_Threshold}" Width="40" Foreground="{DynamicResource TextBrush}" />
                                 </StackPanel>
                                 <Slider Minimum="0" Maximum="255" Value="{Binding Blob_Threshold, UpdateSourceTrigger=LostFocus}" IsSnapToTickEnabled="True" TickFrequency="1" Margin="0,0,0,6" />
 

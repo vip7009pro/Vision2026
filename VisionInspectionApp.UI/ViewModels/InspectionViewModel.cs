@@ -2697,6 +2697,8 @@ public sealed partial class InspectionViewModel : ObservableObject
 
                                 Height = br.Height,
 
+                                Angle = bi.Angle,
+
                                 Stroke = Brushes.Gold,
 
                                 Label = string.Empty
@@ -3191,7 +3193,7 @@ public sealed partial class InspectionViewModel : ObservableObject
                         Y = bb.Y,
                         Width = bb.Width,
                         Height = bb.Height,
-                        Angle = angleDeg,
+                        Angle = cdt.Angle,
                         Stroke = Brushes.Lime,
                         Label = $"{cdt.Name}: {cdt.Text}"
                     });
