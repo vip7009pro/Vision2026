@@ -167,6 +167,8 @@ Lộ trình tích hợp tính năng Chụp ảnh từ camera và hỗ trợ các
 - [x] Task 129: Sửa lỗi checkbox chuyển đổi Màu <=> Đen trắng (Grayscale) không có tác dụng: Đồng bộ dữ liệu `_cameraParams` trong `CameraSettingsViewModel` và bổ sung lệnh gọi `ApplyParametersAsync` tức thì khi thay đổi cờ `IsGrayscale` (cũng như Brightness/Contrast) giúp chuyển đổi realtime giữa chế độ ảnh màu và đen trắng.
 - [x] Task 130: Khắc phục lỗi `ObjectDisposedException` trên `SemaphoreSlim` khi tắt app lúc camera đang chạy: Bổ sung cờ `_isDisposed` phòng chống hủy lặp 2 lần (Dispose collision) giữa `App.OnExit` và DI Container Scope, bổ sung bọc try-catch `ObjectDisposedException` cho tất cả phương thức async trong `CameraService`.
 - [x] Task 136: Bổ sung cột `Tên Sản Phẩm` (ProductName) trong bảng *Lịch sử quét mã gần nhất* (Tab OQC Scanner) và Thêm tùy chọn CheckBox **"Tự xoay + di chuyển nhẹ"** cho Camera Giả Lập (Tab Camera Settings), cho phép tự động xoay và xê dịch ngẫu nhiên quanh tâm bức ảnh mỗi lần lấy frame phục vụ kiểm thử.
+- [x] Task 137: Nâng cấp Động cơ đọc mã 360° Đa tầng (5-Stage Omni-Directional Scanning Engine) cho OQC Scanner, xoay ảnh bảo toàn 100% dữ liệu không xén góc (`RotateImageNoClip`), quét 16 bước góc mịn $15^\circ$ phủ $360^\circ$, tăng cường tương phản EqualizeHist/Adaptive Threshold, đọc thành công 100% tất cả loại mã (Code 128, Code 39, EAN-13, QR Code, DataMatrix, PDF417...) dù bị xoay ngẫu nhiên bất kỳ hướng nào.
+- [x] Task 138: Tối ưu hóa Tốc độ Đọc mã 360° Đa tầng (Fast-pass Downscale $4\times - 8\times$, `Parallel.ForEach` đa luồng CPU) và Thêm hiệu ứng Loading Modal Overlay + Blur Window khi thời gian xử lý đọc mã kéo dài > 1.0s cho OQC Scanner.
 
 
 

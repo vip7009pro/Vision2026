@@ -49,6 +49,12 @@ public partial class OqcScannerViewModel : ObservableObject
     private bool _autoRunJob = true;
 
     [ObservableProperty]
+    private bool _isLoadingPopupVisible = false;
+
+    [ObservableProperty]
+    private string _loadingMessage = "🔍 Đang phân tích & nhận diện mã 360° đa tầng... Vui lòng chờ trong giây lát!";
+
+    [ObservableProperty]
     private bool _isShowingLiveCamera = true;
 
     // ─── Image & Overlay Preview Properties for ResultView ───
@@ -136,6 +142,34 @@ public partial class OqcScannerViewModel : ObservableObject
 
         // Initialize Settings properties
         InitSettingsProperties();
+    }
+
+    private async Task RunTaskWith1SecLoadingTimeoutAsync(Func<Task> asyncAction, string loadingMsg)
+    {
+        using var cts = new CancellationTokenSource();
+        var timeoutTask = Task.Run(async () =>
+        {
+            try
+            {
+                await Task.Delay(1000, cts.Token);
+                System.Windows.Application.Current?.Dispatcher?.Invoke(() =>
+                {
+                    LoadingMessage = loadingMsg;
+                    IsLoadingPopupVisible = true;
+                });
+            }
+            catch (TaskCanceledException) { }
+        });
+
+        try
+        {
+            await asyncAction();
+        }
+        finally
+        {
+            cts.Cancel();
+            IsLoadingPopupVisible = false;
+        }
     }
 
     partial void OnAutoRunJobChanged(bool value)
@@ -227,28 +261,30 @@ public partial class OqcScannerViewModel : ObservableObject
 
         try
         {
-            using var snapshot = await _cameraService.CaptureSnapshotAsync();
-            if (snapshot == null || snapshot.Empty())
+            await RunTaskWith1SecLoadingTimeoutAsync(async () =>
             {
-                StatusMessage = "❌ Không lấy được hình ảnh từ Camera! Vui lòng kiểm tra kết nối Camera.";
-                StatusBrush = Brushes.Red;
-                return;
-            }
+                using var snapshot = await _cameraService.CaptureSnapshotAsync();
+                if (snapshot == null || snapshot.Empty())
+                {
+                    StatusMessage = "❌ Không lấy được hình ảnh từ Camera! Vui lòng kiểm tra kết nối Camera.";
+                    StatusBrush = Brushes.Red;
+                    return;
+                }
 
-            var result = _oqcService.DecodeCodeFromImage(snapshot, _oqcService.Config);
-            if (!result.Success || string.IsNullOrWhiteSpace(result.ProcessedCode))
-            {
-                StatusMessage = $"❌ {result.ErrorMessage}";
-                StatusBrush = Brushes.Orange;
-                return;
-            }
+                var result = await Task.Run(() => _oqcService.DecodeCodeFromImage(snapshot, _oqcService.Config));
+                if (!result.Success || string.IsNullOrWhiteSpace(result.ProcessedCode))
+                {
+                    StatusMessage = $"❌ {result.ErrorMessage}";
+                    StatusBrush = Brushes.Orange;
+                    return;
+                }
 
-            ScannedCode = result.ProcessedCode;
-            StatusMessage = $"📷 Đã đọc mã từ Camera: '{result.ProcessedCode}' (Mã gốc: '{result.RawCode}', Loại: {result.CodeType}). Đang tra DB...";
-            StatusBrush = Brushes.DodgerBlue;
+                ScannedCode = result.ProcessedCode;
+                StatusMessage = $"📷 Đã đọc mã từ Camera: '{result.ProcessedCode}' (Mã gốc: '{result.RawCode}', Loại: {result.CodeType}). Đang tra DB...";
+                StatusBrush = Brushes.DodgerBlue;
 
-            IsScanning = false;
-            await ExecuteScanAsync();
+                await ExecuteScanInternalAsync();
+            }, "🔍 Đang phân tích & nhận diện mã 360° đa tầng... Vui lòng chờ trong giây lát!");
         }
         catch (Exception ex)
         {
@@ -263,10 +299,32 @@ public partial class OqcScannerViewModel : ObservableObject
 
     private async Task ExecuteScanAsync()
     {
+        if (IsScanning) return;
+
+        IsScanning = true;
+        try
+        {
+            await RunTaskWith1SecLoadingTimeoutAsync(async () =>
+            {
+                await ExecuteScanInternalAsync();
+            }, "⚡ Đang tra cứu cơ sở dữ liệu & nạp Job... Vui lòng chờ!");
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = $"❌ Lỗi xử lý mã: {ex.Message}";
+            StatusBrush = Brushes.Red;
+        }
+        finally
+        {
+            IsScanning = false;
+        }
+    }
+
+    private async Task ExecuteScanInternalAsync()
+    {
         string code = ScannedCode?.Trim() ?? "";
         if (string.IsNullOrWhiteSpace(code))
         {
-            // If input is empty but a job is already loaded and AutoRunJob is false, treat click as "CHẠY JOB"
             if (!AutoRunJob && !string.IsNullOrWhiteSpace(CurrentJobFilePath) && CurrentJobFilePath != "-" && CurrentJobFilePath != "Chưa có Job")
             {
                 IsShowingLiveCamera = false;
@@ -285,11 +343,9 @@ public partial class OqcScannerViewModel : ObservableObject
         }
 
         _lastScannedRawCode = code;
-        IsScanning = true;
         StatusMessage = $"🔍 Đang tra cứu cơ sở dữ liệu cho mã '{code}'...";
         StatusBrush = Brushes.DodgerBlue;
 
-        // Lookup product name from database
         string displayProductName = code;
         if (_oqcService.Config.EnableProductNameLookup)
         {

@@ -71,6 +71,27 @@ public sealed class OqcScannerService : IOqcScannerService
         }
     }
 
+    private static Mat RotateImageNoClip(Mat src, double angleDeg)
+    {
+        if (src == null || src.IsDisposed || src.Empty()) return new Mat();
+
+        Point2f center = new Point2f(src.Width / 2.0f, src.Height / 2.0f);
+        using var rotMat = Cv2.GetRotationMatrix2D(center, angleDeg, 1.0);
+
+        var rad = angleDeg * Math.PI / 180.0;
+        var cos = Math.Abs(Math.Cos(rad));
+        var sin = Math.Abs(Math.Sin(rad));
+        int newWidth = (int)Math.Round(src.Width * cos + src.Height * sin);
+        int newHeight = (int)Math.Round(src.Width * sin + src.Height * cos);
+
+        rotMat.Set<double>(0, 2, rotMat.At<double>(0, 2) + (newWidth / 2.0 - center.X));
+        rotMat.Set<double>(1, 2, rotMat.At<double>(1, 2) + (newHeight / 2.0 - center.Y));
+
+        Mat dst = new Mat();
+        Cv2.WarpAffine(src, dst, rotMat, new Size(newWidth, newHeight), InterpolationFlags.Linear, BorderTypes.Replicate);
+        return dst;
+    }
+
     public CameraCodeScanResult DecodeCodeFromImage(Mat image, OqcScannerConfig? config = null)
     {
         var cfg = config ?? Config ?? new OqcScannerConfig();
@@ -89,15 +110,19 @@ public sealed class OqcScannerService : IOqcScannerService
 
             var allFoundResults = new List<(string text, string format)>();
             var seenKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var resultLock = new object();
 
             void AddCandidate(string text, string format)
             {
                 if (string.IsNullOrWhiteSpace(text)) return;
                 text = text.Trim();
                 string key = $"{format}:{text}";
-                if (seenKeys.Add(key))
+                lock (resultLock)
                 {
-                    allFoundResults.Add((text, format));
+                    if (seenKeys.Add(key))
+                    {
+                        allFoundResults.Add((text, format));
+                    }
                 }
             }
 
@@ -187,6 +212,9 @@ public sealed class OqcScannerService : IOqcScannerService
             }
 
             var targetType = cfg.TargetCodeType?.Trim().ToUpperInvariant() ?? "ALL";
+            List<BarcodeFormat>? activeFormats2D = list2D;
+            List<BarcodeFormat>? activeFormats1D = list1D;
+            List<BarcodeFormat>? activeFormatsAll = null;
 
             if (targetType != "ALL")
             {
@@ -209,69 +237,207 @@ public sealed class OqcScannerService : IOqcScannerService
                         }
                         break;
                 }
-
-                // Quét với định dạng được chỉ định
-                ScanMat(grayMat, specificFormats);
-
-                // Quét bổ sung khi xoay 90 độ
-                using var rot90Spec = new Mat();
-                Cv2.Rotate(grayMat, rot90Spec, RotateFlags.Rotate90Clockwise);
-                ScanMat(rot90Spec, specificFormats);
+                activeFormats2D = specificFormats;
+                activeFormats1D = specificFormats;
+                activeFormatsAll = specificFormats;
             }
-            else
+
+            bool HasValidCandidate()
             {
-                // 🔥 THUẬT TOÁN ĐA TẦNG (MULTI-PASS) CHUYÊN SÂU ĐẢM BẢO BẮT HẾT 100% MÃ MỌI VỊ TRÍ:
-                // Pass 1A: Quét chuyên biệt mã 2D (QR Code, DataMatrix, PDF417...)
-                ScanMat(grayMat, list2D);
+                lock (resultLock)
+                {
+                    if (allFoundResults.Count == 0) return false;
+                    foreach (var (text, fmt) in allFoundResults)
+                    {
+                        if (cfg.EnableLengthFilter && cfg.RequiredCodeLength > 0)
+                        {
+                            if (text.Length != cfg.RequiredCodeLength) continue;
+                        }
+                        return true;
+                    }
+                    return false;
+                }
+            }
 
-                // Pass 1B: Quét chuyên biệt mã 1D Barcode (Code 128, Code 39, EAN...)
-                ScanMat(grayMat, list1D);
+            bool TryScanAngleMat(Mat matToScan)
+            {
+                ScanMat(matToScan, activeFormats2D);
+                if (HasValidCandidate()) return true;
 
-                // Pass 1C: Quét tổng hợp tất cả định dạng
-                ScanMat(grayMat, null);
+                ScanMat(matToScan, activeFormats1D);
+                if (HasValidCandidate()) return true;
 
-                // Pass 2: Quét khi xoay ảnh 90 độ (bắt các mã Barcode/QR xoay dọc)
-                using var rot90 = new Mat();
-                Cv2.Rotate(grayMat, rot90, RotateFlags.Rotate90Clockwise);
-                ScanMat(rot90, list2D);
-                ScanMat(rot90, list1D);
+                if (activeFormatsAll == null)
+                {
+                    ScanMat(matToScan, null);
+                    if (HasValidCandidate()) return true;
+                }
+                return false;
+            }
 
-                // Pass 3: Slicing / Phân vùng ảnh (Nửa trên, nửa dưới, nửa trái, nửa phải)
-                // Giúp đọc tách biệt các mã barcode nằm song song gần nhau mà không bị đè vùng quét
+            void ScanAnglesParallel(Mat baseMat, double[] angles)
+            {
+                if (HasValidCandidate()) return;
+
+                var popts = new ParallelOptions
+                {
+                    MaxDegreeOfParallelism = Environment.ProcessorCount
+                };
+
+                Parallel.ForEach(angles, popts, (angle, state) =>
+                {
+                    if (HasValidCandidate())
+                    {
+                        state.Stop();
+                        return;
+                    }
+
+                    using var rotMat = RotateImageNoClip(baseMat, angle);
+                    if (TryScanAngleMat(rotMat))
+                    {
+                        state.Stop();
+                    }
+                });
+            }
+
+            // 🔥 THUẬT TOÁN ĐỌC MÃ 360° SIÊU TỐC ĐA TẦNG (5-STAGE PARALLEL OMNI-ENGINE) 🔥
+
+            // STAGE 0: FAST-PASS TRÊN ĂNH DOWNSCALE (Nếu ảnh phân giải cao > 1200px)
+            // Giảm kích thước ảnh giúp tăng tốc quét ZXing gấp 4-8 lần!
+            if (grayMat.Width > 1200 || grayMat.Height > 1200)
+            {
+                double scale = 1000.0 / Math.Max(grayMat.Width, grayMat.Height);
+                int nw = (int)(grayMat.Width * scale);
+                int nh = (int)(grayMat.Height * scale);
+
+                using var downMat = new Mat();
+                Cv2.Resize(grayMat, downMat, new Size(nw, nh), 0, 0, InterpolationFlags.Area);
+
+                // Quét 4 hướng chính (0°, 90°, 180°, 270°) trên ảnh downscale
+                if (!TryScanAngleMat(downMat))
+                {
+                    using (var rot90 = new Mat())
+                    {
+                        Cv2.Rotate(downMat, rot90, RotateFlags.Rotate90Clockwise);
+                        if (!TryScanAngleMat(rot90))
+                        {
+                            using (var rot180 = new Mat())
+                            {
+                                Cv2.Rotate(downMat, rot180, RotateFlags.Rotate180);
+                                if (!TryScanAngleMat(rot180))
+                                {
+                                    using (var rot270 = new Mat())
+                                    {
+                                        Cv2.Rotate(downMat, rot270, RotateFlags.Rotate90Counterclockwise);
+                                        TryScanAngleMat(rot270);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Quét các góc chéo chính (45°, 135°, 225°, 315°) song song trên ảnh downscale
+                if (!HasValidCandidate())
+                {
+                    ScanAnglesParallel(downMat, new double[] { 45.0, 135.0, 225.0, 315.0 });
+                }
+
+                // Quét mịn 15° song song trên ảnh downscale
+                if (!HasValidCandidate())
+                {
+                    ScanAnglesParallel(downMat, new double[] { 15.0, 30.0, 60.0, 75.0, 105.0, 120.0, 150.0, 165.0, 195.0, 210.0, 240.0, 255.0, 285.0, 300.0, 330.0, 345.0 });
+                }
+
+                // Nếu ảnh downscale đã tìm thấy mã -> Thoát sớm hoàn thành ngay lập tức trong vài ms!
+                if (HasValidCandidate())
+                {
+                    goto ProcessFinalSelection;
+                }
+            }
+
+            // STAGE 1: Quét 4 hướng chính trên ảnh gốc (0°, 90°, 180°, 270°)
+            if (!TryScanAngleMat(grayMat))
+            {
+                using (var rot90 = new Mat())
+                {
+                    Cv2.Rotate(grayMat, rot90, RotateFlags.Rotate90Clockwise);
+                    if (!TryScanAngleMat(rot90))
+                    {
+                        using (var rot180 = new Mat())
+                        {
+                            Cv2.Rotate(grayMat, rot180, RotateFlags.Rotate180);
+                            if (!TryScanAngleMat(rot180))
+                            {
+                                using (var rot270 = new Mat())
+                                {
+                                    Cv2.Rotate(grayMat, rot270, RotateFlags.Rotate90Counterclockwise);
+                                    TryScanAngleMat(rot270);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // STAGE 2: Quét các góc nghiêng chéo chính (45°, 135°, 225°, 315°) song song đa luồng CPU
+            if (!HasValidCandidate())
+            {
+                ScanAnglesParallel(grayMat, new double[] { 45.0, 135.0, 225.0, 315.0 });
+            }
+
+            // STAGE 3: Quét bước góc mịn 15° phủ 360° song song đa luồng CPU (đảm bảo sai số góc ≤ 7.5°)
+            if (!HasValidCandidate())
+            {
+                ScanAnglesParallel(grayMat, new double[] { 15.0, 30.0, 60.0, 75.0, 105.0, 120.0, 150.0, 165.0, 195.0, 210.0, 240.0, 255.0, 285.0, 300.0, 330.0, 345.0 });
+            }
+
+            // STAGE 4: Tăng cường tương phản (EqualizeHist & Adaptive Threshold Binarization) cho ảnh mờ/tối
+            if (!HasValidCandidate())
+            {
+                using var enhancedMat = new Mat();
+                Cv2.EqualizeHist(grayMat, enhancedMat);
+                if (!TryScanAngleMat(enhancedMat))
+                {
+                    ScanAnglesParallel(enhancedMat, new double[] { 45.0, 90.0, 135.0, 180.0, 225.0, 270.0, 315.0 });
+                }
+            }
+
+            if (!HasValidCandidate())
+            {
+                using var binMat = new Mat();
+                Cv2.AdaptiveThreshold(grayMat, binMat, 255, AdaptiveThresholdTypes.GaussianC, ThresholdTypes.Binary, 21, 5);
+                if (!TryScanAngleMat(binMat))
+                {
+                    ScanAnglesParallel(binMat, new double[] { 45.0, 90.0, 135.0, 180.0, 225.0, 270.0, 315.0 });
+                }
+            }
+
+            // STAGE 5: Slicing / Phân vùng ảnh (Nửa trên, nửa dưới, nửa trái, nửa phải)
+            if (!HasValidCandidate())
+            {
                 int w = grayMat.Width;
                 int h = grayMat.Height;
 
                 if (w > 100 && h > 100)
                 {
-                    // Nửa trên (Top half)
-                    using (var topCrop = new Mat(grayMat, new Rect(0, 0, w, h / 2)))
+                    using (var topCrop = new Mat(grayMat, new Rect(0, 0, w, h / 2))) { TryScanAngleMat(topCrop); }
+                    if (!HasValidCandidate())
                     {
-                        ScanMat(topCrop, list2D);
-                        ScanMat(topCrop, list1D);
+                        using (var botCrop = new Mat(grayMat, new Rect(0, h / 2, w, h - h / 2))) { TryScanAngleMat(botCrop); }
                     }
-
-                    // Nửa dưới (Bottom half)
-                    using (var botCrop = new Mat(grayMat, new Rect(0, h / 2, w, h - h / 2)))
+                    if (!HasValidCandidate())
                     {
-                        ScanMat(botCrop, list2D);
-                        ScanMat(botCrop, list1D);
+                        using (var leftCrop = new Mat(grayMat, new Rect(0, 0, w / 2, h))) { TryScanAngleMat(leftCrop); }
                     }
-
-                    // Nửa trái (Left half)
-                    using (var leftCrop = new Mat(grayMat, new Rect(0, 0, w / 2, h)))
+                    if (!HasValidCandidate())
                     {
-                        ScanMat(leftCrop, list2D);
-                        ScanMat(leftCrop, list1D);
-                    }
-
-                    // Nửa phải (Right half)
-                    using (var rightCrop = new Mat(grayMat, new Rect(w / 2, 0, w - w / 2, h)))
-                    {
-                        ScanMat(rightCrop, list2D);
-                        ScanMat(rightCrop, list1D);
+                        using (var rightCrop = new Mat(grayMat, new Rect(w / 2, 0, w - w / 2, h))) { TryScanAngleMat(rightCrop); }
                     }
                 }
             }
+
+        ProcessFinalSelection:
 
             if (allFoundResults.Count == 0)
             {

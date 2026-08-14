@@ -19,191 +19,248 @@
         </Style>
     </UserControl.Resources>
 
-    <Grid Margin="16">
-        <Grid.RowDefinitions>
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="*" />
-        </Grid.RowDefinitions>
+    <Grid>
+        <!-- Main Content Area with Blur Effect when loading -->
+        <Grid x:Name="MainContentGrid" Margin="16">
+            <Grid.Style>
+                <Style TargetType="Grid">
+                    <Style.Triggers>
+                        <DataTrigger Binding="{Binding IsLoadingPopupVisible}" Value="True">
+                            <Setter Property="Effect">
+                                <Setter.Value>
+                                    <BlurEffect Radius="14" RenderingBias="Quality" />
+                                </Setter.Value>
+                            </Setter>
+                        </DataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </Grid.Style>
 
-        <!-- Top Header & Action Bar -->
-        <Border Grid.Row="0" Margin="0,0,0,16" Padding="12,10" Background="{DynamicResource HeaderBackgroundBrush}" CornerRadius="8">
-            <DockPanel LastChildFill="True">
-                <StackPanel Orientation="Horizontal" DockPanel.Dock="Right">
-                    <Button Content="👁️ Xem Tool Editor" Command="{Binding SwitchToToolEditorCommand}" Width="150" Height="34" Margin="0,0,8,0" ToolTip="Chuyển sang Tab Tool Editor để xem Graph và kết quả kiểm tra chi tiết" />
-                    <Button Content="📋 Gán Mã ↔ Job" Command="{Binding OpenProductAssignCommand}" Width="140" Height="34" Margin="0,0,8,0" />
-                    <Button Content="📁 Mở Job thủ công" Command="{Binding ManualOpenJobCommand}" Width="140" Height="34" Margin="0,0,8,0" />
-                    <Button Content="⚙ Cấu hình DB / Camera" Command="{Binding OpenSettingsCommand}" Width="150" Height="34" />
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
+
+            <!-- Top Header & Action Bar -->
+            <Border Grid.Row="0" Margin="0,0,0,16" Padding="12,10" Background="{DynamicResource HeaderBackgroundBrush}" CornerRadius="8">
+                <DockPanel LastChildFill="True">
+                    <StackPanel Orientation="Horizontal" DockPanel.Dock="Right">
+                        <Button Content="👁️ Xem Tool Editor" Command="{Binding SwitchToToolEditorCommand}" Width="150" Height="34" Margin="0,0,8,0" ToolTip="Chuyển sang Tab Tool Editor để xem Graph và kết quả kiểm tra chi tiết" />
+                        <Button Content="📋 Gán Mã ↔ Job" Command="{Binding OpenProductAssignCommand}" Width="140" Height="34" Margin="0,0,8,0" />
+                        <Button Content="📁 Mở Job thủ công" Command="{Binding ManualOpenJobCommand}" Width="140" Height="34" Margin="0,0,8,0" />
+                        <Button Content="⚙ Cấu hình DB / Camera" Command="{Binding OpenSettingsCommand}" Width="150" Height="34" />
+                    </StackPanel>
+
+                    <StackPanel VerticalAlignment="Center">
+                        <TextBlock Text="📷 OQC PRODUCT SCANNER &amp; AUTOMATIC JOB SWITCHER" FontSize="18" FontWeight="Bold" Foreground="{DynamicResource TextBrush}" />
+                        <TextBlock Text="Quét mã QR/Barcode từ Camera hoặc Máy quét để tự động nạp Job &amp; thực thi kiểm tra từ Database." FontSize="12" Foreground="{DynamicResource TextMutedBrush}" Margin="0,2,0,0" />
+                    </StackPanel>
+                </DockPanel>
+            </Border>
+
+            <!-- Barcode/QR Input Section -->
+            <Border Grid.Row="1" Margin="0,0,0,16" Padding="16" Background="{DynamicResource PanelBackgroundBrush}" BorderThickness="1" BorderBrush="{DynamicResource BorderBrush}" CornerRadius="8">
+                <StackPanel>
+                    <TextBlock Text="NHẬP HOẶC QUÉT MÃ SẢN PHẨM (QR / BARCODE):" FontSize="12" FontWeight="Bold" Foreground="{DynamicResource TextMutedBrush}" Margin="0,0,0,8" />
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="175" />
+                            <ColumnDefinition Width="135" />
+                        </Grid.ColumnDefinitions>
+
+                        <TextBox x:Name="ScanInputTextBox"
+                                 Grid.Column="0"
+                                 Text="{Binding ScannedCode, UpdateSourceTrigger=PropertyChanged}"
+                                 FontSize="22" FontWeight="Bold" Padding="8,6"
+                                 VerticalContentAlignment="Center"
+                                 IsEnabled="{Binding IsScanning, Converter={StaticResource BoolToVis}, ConverterParameter=Inverse}"
+                                 Margin="0,0,12,0">
+                            <TextBox.InputBindings>
+                                <KeyBinding Key="Enter" Command="{Binding ScanCommand}" />
+                                <KeyBinding Key="F5" Command="{Binding EnableLiveCameraCommand}" />
+                                <KeyBinding Key="Space" Command="{Binding ScanFromCameraCommand}" />
+                            </TextBox.InputBindings>
+                        </TextBox>
+
+                        <CheckBox Grid.Column="1"
+                                  Content="⚡ Tự động chạy Job (Auto Run)"
+                                  IsChecked="{Binding AutoRunJob, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                  ToolTip="Khi bật: Tự động chạy kiểm tra ngay sau khi quét mã sản phẩm. Khi tắt: Chỉ nạp Job, căn chỉnh camera rồi bấm 'CHẠY JOB' để kiểm tra."
+                                  FontWeight="Bold"
+                                  FontSize="13"
+                                  VerticalAlignment="Center"
+                                  Margin="0,0,12,0" />
+
+                        <Button Grid.Column="2"
+                                Content="📷 QUÉT CAMERA (SPACE)"
+                                Command="{Binding ScanFromCameraCommand}"
+                                FontSize="12" FontWeight="Bold"
+                                Height="44" Margin="0,0,10,0"
+                                ToolTip="Chụp ảnh Camera, tự động đọc mã QR/Barcode, lọc loại mã, độ dài, cắt chuỗi và nạp/chạy Job. Phím tắt: Space" />
+
+                        <Button Grid.Column="3"
+                                Content="{Binding ScanButtonText}"
+                                Command="{Binding ScanCommand}"
+                                FontSize="14" FontWeight="Bold"
+                                Height="44" />
+                    </Grid>
                 </StackPanel>
+            </Border>
 
-                <StackPanel VerticalAlignment="Center">
-                    <TextBlock Text="📷 OQC PRODUCT SCANNER &amp; AUTOMATIC JOB SWITCHER" FontSize="18" FontWeight="Bold" Foreground="{DynamicResource TextBrush}" />
-                    <TextBlock Text="Quét mã QR/Barcode từ Camera hoặc Máy quét để tự động nạp Job &amp; thực thi kiểm tra từ Database." FontSize="12" Foreground="{DynamicResource TextMutedBrush}" Margin="0,2,0,0" />
-                </StackPanel>
-            </DockPanel>
-        </Border>
-
-        <!-- Barcode/QR Input Section -->
-        <Border Grid.Row="1" Margin="0,0,0,16" Padding="16" Background="{DynamicResource PanelBackgroundBrush}" BorderThickness="1" BorderBrush="{DynamicResource BorderBrush}" CornerRadius="8">
-            <StackPanel>
-                <TextBlock Text="NHẬP HOẶC QUÉT MÃ SẢN PHẨM (QR / BARCODE):" FontSize="12" FontWeight="Bold" Foreground="{DynamicResource TextMutedBrush}" Margin="0,0,0,8" />
+            <!-- Status Card -->
+            <Border Grid.Row="2" Margin="0,0,0,16" Padding="16" Background="{DynamicResource PanelBackgroundBrush}" BorderThickness="2" BorderBrush="{Binding StatusBrush}" CornerRadius="8">
                 <Grid>
                     <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*" />
                         <ColumnDefinition Width="Auto" />
-                        <ColumnDefinition Width="175" />
-                        <ColumnDefinition Width="135" />
+                        <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
 
-                    <TextBox x:Name="ScanInputTextBox"
-                             Grid.Column="0"
-                             Text="{Binding ScannedCode, UpdateSourceTrigger=PropertyChanged}"
-                             FontSize="22" FontWeight="Bold" Padding="8,6"
-                             VerticalContentAlignment="Center"
-                             IsEnabled="{Binding IsScanning, Converter={StaticResource BoolToVis}, ConverterParameter=Inverse}"
-                             Margin="0,0,12,0">
-                        <TextBox.InputBindings>
-                            <KeyBinding Key="Enter" Command="{Binding ScanCommand}" />
-                            <KeyBinding Key="F5" Command="{Binding EnableLiveCameraCommand}" />
-                            <KeyBinding Key="Space" Command="{Binding ScanFromCameraCommand}" />
-                        </TextBox.InputBindings>
-                    </TextBox>
+                    <StackPanel Grid.Column="0" Margin="0,0,24,0">
+                        <TextBlock Text="SẢN PHẨM HIỆN TẠI:" FontSize="11" FontWeight="Bold" Foreground="{DynamicResource TextMutedBrush}" />
+                        <TextBlock Text="{Binding CurrentProductName}" FontSize="20" FontWeight="Bold" Foreground="{DynamicResource TextBrush}" Margin="0,4,0,0" />
+                    </StackPanel>
 
-                    <CheckBox Grid.Column="1"
-                              Content="⚡ Tự động chạy Job (Auto Run)"
-                              IsChecked="{Binding AutoRunJob, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                              ToolTip="Khi bật: Tự động chạy kiểm tra ngay sau khi quét mã sản phẩm. Khi tắt: Chỉ nạp Job, căn chỉnh camera rồi bấm 'CHẠY JOB' để kiểm tra."
-                              FontWeight="Bold"
-                              FontSize="13"
-                              VerticalAlignment="Center"
-                              Margin="0,0,12,0" />
-
-                    <Button Grid.Column="2"
-                            Content="📷 QUÉT CAMERA (SPACE)"
-                            Command="{Binding ScanFromCameraCommand}"
-                            FontSize="12" FontWeight="Bold"
-                            Height="44" Margin="0,0,10,0"
-                            ToolTip="Chụp ảnh Camera, tự động đọc mã QR/Barcode, lọc loại mã, độ dài, cắt chuỗi và nạp/chạy Job. Phím tắt: Space" />
-
-                    <Button Grid.Column="3"
-                            Content="{Binding ScanButtonText}"
-                            Command="{Binding ScanCommand}"
-                            FontSize="14" FontWeight="Bold"
-                            Height="44" />
+                    <StackPanel Grid.Column="1">
+                        <TextBlock Text="TRẠNG THÁI &amp; TỆP JOB ĐANG NẠP:" FontSize="11" FontWeight="Bold" Foreground="{DynamicResource TextMutedBrush}" />
+                        <TextBlock Text="{Binding StatusMessage}" FontSize="15" FontWeight="SemiBold" Foreground="{Binding StatusBrush}" Margin="0,4,0,4" TextWrapping="Wrap" />
+                        <TextBlock Text="{Binding CurrentJobFilePath, StringFormat='Job: {0}'}" FontSize="12" Foreground="{DynamicResource TextMutedBrush}" TextTrimming="CharacterEllipsis" ToolTip="{Binding CurrentJobFilePath}" />
+                    </StackPanel>
                 </Grid>
-            </StackPanel>
-        </Border>
+            </Border>
 
-        <!-- Status Card -->
-        <Border Grid.Row="2" Margin="0,0,0,16" Padding="16" Background="{DynamicResource PanelBackgroundBrush}" BorderThickness="2" BorderBrush="{Binding StatusBrush}" CornerRadius="8">
-            <Grid>
+            <!-- Bottom Split Section: Left - Final Result Preview, Right - Scan History Table -->
+            <Grid Grid.Row="3">
                 <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="Auto" />
-                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="*" MinWidth="300" />
+                    <ColumnDefinition Width="6" />
+                    <ColumnDefinition Width="*" MinWidth="350" />
                 </Grid.ColumnDefinitions>
 
-                <StackPanel Grid.Column="0" Margin="0,0,24,0">
-                    <TextBlock Text="SẢN PHẨM HIỆN TẠI:" FontSize="11" FontWeight="Bold" Foreground="{DynamicResource TextMutedBrush}" />
-                    <TextBlock Text="{Binding CurrentProductName}" FontSize="20" FontWeight="Bold" Foreground="{DynamicResource TextBrush}" Margin="0,4,0,0" />
-                </StackPanel>
+                <!-- Column 0: Left Side - Preview Final Image of ResultView Node / Live Stream -->
+                <GroupBox Grid.Column="0" Header="{Binding PreviewHeaderTitle}" Padding="6" Foreground="{DynamicResource TextBrush}">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                        </Grid.RowDefinitions>
 
-                <StackPanel Grid.Column="1">
-                    <TextBlock Text="TRẠNG THÁI &amp; TỆP JOB ĐANG NẠP:" FontSize="11" FontWeight="Bold" Foreground="{DynamicResource TextMutedBrush}" />
-                    <TextBlock Text="{Binding StatusMessage}" FontSize="15" FontWeight="SemiBold" Foreground="{Binding StatusBrush}" Margin="0,4,0,4" TextWrapping="Wrap" />
-                    <TextBlock Text="{Binding CurrentJobFilePath, StringFormat='Job: {0}'}" FontSize="12" Foreground="{DynamicResource TextMutedBrush}" TextTrimming="CharacterEllipsis" ToolTip="{Binding CurrentJobFilePath}" />
-                </StackPanel>
+                        <!-- Control Bar with Mode Toggle & Overlay CheckBoxes -->
+                        <DockPanel Grid.Row="0" Margin="4,0,4,6" LastChildFill="False">
+                            <Button DockPanel.Dock="Left"
+                                    Content="{Binding LiveToggleButtonText}"
+                                    Command="{Binding ToggleLiveCameraCommand}"
+                                    Width="145" Height="26" Margin="0,0,12,0"
+                                    ToolTip="Chuyển đổi giữa chế độ xem Live Stream từ Camera và Ảnh kết quả kiểm tra Final" />
+
+                            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+                                <CheckBox Content="Kết Quả (Overlay)" IsChecked="{Binding ShowResultOverlay, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,12,0" FontWeight="SemiBold" VerticalAlignment="Center" />
+                                <CheckBox Content="Khung ROI" IsChecked="{Binding ShowRois, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" FontWeight="SemiBold" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </DockPanel>
+
+                        <!-- Image Viewer Control -->
+                        <Border Grid.Row="1" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" Background="Black" CornerRadius="4">
+                            <controls:ImageViewerControl ImageSource="{Binding PreviewImage}"
+                                                       OverlayItems="{Binding OverlayItems}"
+                                                       EnableRoiEditing="False" />
+                        </Border>
+                    </Grid>
+                </GroupBox>
+
+                <!-- GridSplitter -->
+                <GridSplitter Grid.Column="1" Width="6" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Background="{DynamicResource DarkBorderBrush}" />
+
+                <!-- Column 2: Right Side - Scan History Log Table -->
+                <GroupBox Grid.Column="2" Header="📊 Lịch sử quét mã gần nhất (Scan History Log)" Padding="6" Foreground="{DynamicResource TextBrush}">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="*" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+
+                        <DataGrid Grid.Row="0"
+                                  ItemsSource="{Binding ScanHistory}"
+                                  AutoGenerateColumns="False"
+                                  IsReadOnly="True"
+                                  CanUserAddRows="False"
+                                  CanUserDeleteRows="False"
+                                  GridLinesVisibility="Horizontal"
+                                  HeadersVisibility="Column"
+                                  Background="{DynamicResource PanelBackgroundBrush}"
+                                  Foreground="{DynamicResource TextBrush}">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="Thời gian" Binding="{Binding Time, StringFormat='HH:mm:ss dd/MM'}" Width="100" />
+                                <DataGridTextColumn Header="Mã Scan (Product)" Binding="{Binding ScannedCode}" Width="140" ElementStyle="{StaticResource BoldStyle}" />
+                                <DataGridTextColumn Header="Tên Sản Phẩm" Binding="{Binding ProductName}" Width="150" ElementStyle="{StaticResource BoldStyle}" />
+                                <DataGridTextColumn Header="Tệp Job" Binding="{Binding JobFilePath}" Width="130" />
+                                <DataGridTextColumn Header="Tra cứu DB" Binding="{Binding Message}" Width="90" />
+                                <DataGridTemplateColumn Header="KQ Kiểm Tra" Width="120">
+                                    <DataGridTemplateColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <TextBlock Text="{Binding InspectResult}" Foreground="{Binding ResultBrushHex}" FontWeight="Bold" VerticalAlignment="Center" HorizontalAlignment="Center" />
+                                        </DataTemplate>
+                                    </DataGridTemplateColumn.CellTemplate>
+                                </DataGridTemplateColumn>
+                                <DataGridTextColumn Header="Chi Tiết Lỗi / Thông Số Tool" Binding="{Binding InspectDetails}" Width="*">
+                                    <DataGridTextColumn.CellStyle>
+                                        <Style TargetType="DataGridCell" BasedOn="{StaticResource {x:Type DataGridCell}}">
+                                            <Setter Property="ToolTip" Value="{Binding InspectDetails}" />
+                                        </Style>
+                                    </DataGridTextColumn.CellStyle>
+                                </DataGridTextColumn>
+                            </DataGrid.Columns>
+                        </DataGrid>
+
+                        <DockPanel Grid.Row="1" Margin="0,8,0,0">
+                            <Button Content="🗑️ Xóa lịch sử" Command="{Binding ClearHistoryCommand}" DockPanel.Dock="Right" Width="110" Height="26" />
+                        </DockPanel>
+                    </Grid>
+                </GroupBox>
             </Grid>
-        </Border>
-
-        <!-- Bottom Split Section: Left - Final Result Preview, Right - Scan History Table -->
-        <Grid Grid.Row="3">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="*" MinWidth="300" />
-                <ColumnDefinition Width="6" />
-                <ColumnDefinition Width="*" MinWidth="350" />
-            </Grid.ColumnDefinitions>
-
-            <!-- Column 0: Left Side - Preview Final Image of ResultView Node / Live Stream -->
-            <GroupBox Grid.Column="0" Header="{Binding PreviewHeaderTitle}" Padding="6" Foreground="{DynamicResource TextBrush}">
-                <Grid>
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto" />
-                        <RowDefinition Height="*" />
-                    </Grid.RowDefinitions>
-
-                    <!-- Control Bar with Mode Toggle & Overlay CheckBoxes -->
-                    <DockPanel Grid.Row="0" Margin="4,0,4,6" LastChildFill="False">
-                        <Button DockPanel.Dock="Left"
-                                Content="{Binding LiveToggleButtonText}"
-                                Command="{Binding ToggleLiveCameraCommand}"
-                                Width="145" Height="26" Margin="0,0,12,0"
-                                ToolTip="Chuyển đổi giữa chế độ xem Live Stream từ Camera và Ảnh kết quả kiểm tra Final" />
-
-                        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
-                            <CheckBox Content="Kết Quả (Overlay)" IsChecked="{Binding ShowResultOverlay, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,12,0" FontWeight="SemiBold" VerticalAlignment="Center" />
-                            <CheckBox Content="Khung ROI" IsChecked="{Binding ShowRois, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" FontWeight="SemiBold" VerticalAlignment="Center" />
-                        </StackPanel>
-                    </DockPanel>
-
-                    <!-- Image Viewer Control -->
-                    <Border Grid.Row="1" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" Background="Black" CornerRadius="4">
-                        <controls:ImageViewerControl ImageSource="{Binding PreviewImage}"
-                                                   OverlayItems="{Binding OverlayItems}"
-                                                   EnableRoiEditing="False" />
-                    </Border>
-                </Grid>
-            </GroupBox>
-
-            <!-- GridSplitter -->
-            <GridSplitter Grid.Column="1" Width="6" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Background="{DynamicResource DarkBorderBrush}" />
-
-            <!-- Column 2: Right Side - Scan History Log Table -->
-            <GroupBox Grid.Column="2" Header="📊 Lịch sử quét mã gần nhất (Scan History Log)" Padding="6" Foreground="{DynamicResource TextBrush}">
-                <Grid>
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="*" />
-                        <RowDefinition Height="Auto" />
-                    </Grid.RowDefinitions>
-
-                    <DataGrid Grid.Row="0"
-                              ItemsSource="{Binding ScanHistory}"
-                              AutoGenerateColumns="False"
-                              IsReadOnly="True"
-                              CanUserAddRows="False"
-                              CanUserDeleteRows="False"
-                              GridLinesVisibility="Horizontal"
-                              HeadersVisibility="Column"
-                              Background="{DynamicResource PanelBackgroundBrush}"
-                              Foreground="{DynamicResource TextBrush}">
-                        <DataGrid.Columns>
-                            <DataGridTextColumn Header="Thời gian" Binding="{Binding Time, StringFormat='HH:mm:ss dd/MM'}" Width="100" />
-                            <DataGridTextColumn Header="Mã Scan (Product)" Binding="{Binding ScannedCode}" Width="140" ElementStyle="{StaticResource BoldStyle}" />
-                            <DataGridTextColumn Header="Tên Sản Phẩm" Binding="{Binding ProductName}" Width="150" ElementStyle="{StaticResource BoldStyle}" />
-                            <DataGridTextColumn Header="Tệp Job" Binding="{Binding JobFilePath}" Width="130" />
-                            <DataGridTextColumn Header="Tra cứu DB" Binding="{Binding Message}" Width="90" />
-                            <DataGridTemplateColumn Header="KQ Kiểm Tra" Width="120">
-                                <DataGridTemplateColumn.CellTemplate>
-                                    <DataTemplate>
-                                        <TextBlock Text="{Binding InspectResult}" Foreground="{Binding ResultBrushHex}" FontWeight="Bold" VerticalAlignment="Center" HorizontalAlignment="Center" />
-                                    </DataTemplate>
-                                </DataGridTemplateColumn.CellTemplate>
-                            </DataGridTemplateColumn>
-                            <DataGridTextColumn Header="Chi Tiết Lỗi / Thông Số Tool" Binding="{Binding InspectDetails}" Width="*">
-                                <DataGridTextColumn.CellStyle>
-                                    <Style TargetType="DataGridCell" BasedOn="{StaticResource {x:Type DataGridCell}}">
-                                        <Setter Property="ToolTip" Value="{Binding InspectDetails}" />
-                                    </Style>
-                                </DataGridTextColumn.CellStyle>
-                            </DataGridTextColumn>
-                        </DataGrid.Columns>
-                    </DataGrid>
-
-                    <DockPanel Grid.Row="1" Margin="0,8,0,0">
-                        <Button Content="🗑️ Xóa lịch sử" Command="{Binding ClearHistoryCommand}" DockPanel.Dock="Right" Width="110" Height="26" />
-                    </DockPanel>
-                </Grid>
-            </GroupBox>
         </Grid>
+
+        <!-- Loading Popup Modal Overlay -->
+        <Border Visibility="{Binding IsLoadingPopupVisible, Converter={StaticResource BoolToVis}}"
+                Background="#90000000"
+                HorizontalAlignment="Stretch"
+                VerticalAlignment="Stretch">
+            <Border HorizontalAlignment="Center"
+                    VerticalAlignment="Center"
+                    Width="460"
+                    Padding="28,24"
+                    Background="{DynamicResource PanelBackgroundBrush}"
+                    BorderBrush="#1E88E5"
+                    BorderThickness="2"
+                    CornerRadius="12">
+                <Border.Effect>
+                    <DropShadowEffect BlurRadius="25" ShadowDepth="4" Opacity="0.5" Color="#000000" />
+                </Border.Effect>
+                <StackPanel HorizontalAlignment="Center">
+                    <ProgressBar IsIndeterminate="True" Height="6" Width="360" Foreground="#1E88E5" Margin="0,0,0,20" />
+                    <TextBlock Text="🔍 ĐANG PHÂN TÍCH &amp; NHẬN DIỆN MÃ 360°..."
+                               FontSize="17"
+                               FontWeight="Bold"
+                               Foreground="#1E88E5"
+                               HorizontalAlignment="Center"
+                               Margin="0,0,0,10" />
+                    <TextBlock Text="{Binding LoadingMessage}"
+                               FontSize="13"
+                               Foreground="{DynamicResource TextBrush}"
+                               TextWrapping="Wrap"
+                               TextAlignment="Center"
+                               HorizontalAlignment="Center"
+                               Margin="0,0,0,14" />
+                    <TextBlock Text="Hệ thống đang chạy quy trình đọc mã đa tầng (360° Omni-Scanning) chuyên sâu. Vui lòng chờ..."
+                               FontSize="11"
+                               Foreground="{DynamicResource TextMutedBrush}"
+                               TextWrapping="Wrap"
+                               TextAlignment="Center" />
+                </StackPanel>
+            </Border>
+        </Border>
     </Grid>
 </UserControl>
