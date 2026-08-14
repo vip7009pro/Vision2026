@@ -593,25 +593,71 @@ namespace VisionInspectionApp.UI.ViewModels
                 return;
             }
     
-            var r = new OpenCvSharp.Rect(def.SearchRoi.X, def.SearchRoi.Y, def.SearchRoi.Width, def.SearchRoi.Height);
-            r = r.Intersect(new OpenCvSharp.Rect(0, 0, image.Width, image.Height));
-            if (r.Width <= 0 || r.Height <= 0)
+            using var matForLine = ResolveToolPreprocessForPreview(image, SelectedNode);
+            if (matForLine.Empty() || matForLine.Width <= 0 || matForLine.Height <= 0)
             {
                 LinePreviewImage = null;
                 return;
             }
-    
-            using var processed = _preprocessor.Run(image, _config!.Preprocess);
-            using var crop = new Mat(processed, r);
+
+            OpenCvSharp.Point2d originTeach = default;
+            OpenCvSharp.Point2d originFound = default;
+            double angleDeg = 0;
+            if (_config?.Origin is not null && _lastRun?.Origin is not null && (_lastRun.Origin.MatchRect.Width > 0 || _lastRun.Origin.Position.X != 0 || _lastRun.Origin.Position.Y != 0))
+            {
+                originTeach = new OpenCvSharp.Point2d(_config.Origin.WorldPosition.X, _config.Origin.WorldPosition.Y);
+                if (originTeach.X == 0 && originTeach.Y == 0 && _config.Origin.TemplateRoi.Width > 0)
+                {
+                    originTeach = new OpenCvSharp.Point2d(_config.Origin.TemplateRoi.X + _config.Origin.TemplateRoi.Width / 2.0, _config.Origin.TemplateRoi.Y + _config.Origin.TemplateRoi.Height / 2.0);
+                }
+                else if (originTeach.X == 0 && originTeach.Y == 0 && _config.Origin.SearchRoi.Width > 0)
+                {
+                    originTeach = new OpenCvSharp.Point2d(_config.Origin.SearchRoi.X + _config.Origin.SearchRoi.Width / 2.0, _config.Origin.SearchRoi.Y + _config.Origin.SearchRoi.Height / 2.0);
+                }
+
+                var mr = _lastRun.Origin.MatchRect;
+                originFound = (mr.Width > 0 && mr.Height > 0)
+                    ? new OpenCvSharp.Point2d(mr.X + mr.Width / 2.0, mr.Y + mr.Height / 2.0)
+                    : new OpenCvSharp.Point2d(_lastRun.Origin.Position.X, _lastRun.Origin.Position.Y);
+
+                angleDeg = _lastRun.Origin.AngleDeg;
+            }
+
+            Roi targetRoi;
+            if (Math.Abs(angleDeg) > 0.001 || originFound.X != 0 || originFound.Y != 0)
+            {
+                var centerTeach = new OpenCvSharp.Point2d(def.SearchRoi.X + def.SearchRoi.Width / 2.0, def.SearchRoi.Y + def.SearchRoi.Height / 2.0);
+                var centerFound = TransformPose(centerTeach, originTeach, originFound, angleDeg);
+                targetRoi = new Roi
+                {
+                    X = (int)Math.Round(centerFound.X - def.SearchRoi.Width / 2.0),
+                    Y = (int)Math.Round(centerFound.Y - def.SearchRoi.Height / 2.0),
+                    Width = def.SearchRoi.Width,
+                    Height = def.SearchRoi.Height,
+                    Angle = def.SearchRoi.Angle + angleDeg
+                };
+            }
+            else
+            {
+                targetRoi = def.SearchRoi;
+            }
+
+            using var crop = ExtractRoiPatch(matForLine, targetRoi);
+            if (crop.Empty() || crop.Width <= 0 || crop.Height <= 0)
+            {
+                LinePreviewImage = null;
+                return;
+            }
+
             using var view = crop.Channels() == 1 ? crop.Clone() : crop.CvtColor(ColorConversionCodes.BGR2GRAY);
-            var det = _lineDetector.DetectLongestLine(processed, def.SearchRoi, def.Canny1, def.Canny2, def.HoughThreshold, def.MinLineLength, def.MaxLineGap);
+            var det = _lineDetector.DetectLongestLine(view, new Roi { X = 0, Y = 0, Width = view.Width, Height = view.Height }, def.Canny1, def.Canny2, def.HoughThreshold, def.MinLineLength, def.MaxLineGap);
             if (det.Found)
             {
-                var p1 = new OpenCvSharp.Point((int)Math.Round(det.P1.X) - r.X, (int)Math.Round(det.P1.Y) - r.Y);
-                var p2 = new OpenCvSharp.Point((int)Math.Round(det.P2.X) - r.X, (int)Math.Round(det.P2.Y) - r.Y);
+                var p1 = new OpenCvSharp.Point((int)Math.Round(det.P1.X), (int)Math.Round(det.P1.Y));
+                var p2 = new OpenCvSharp.Point((int)Math.Round(det.P2.X), (int)Math.Round(det.P2.Y));
                 Cv2.Line(view, p1, p2, Scalar.White, 2);
             }
-    
+
             LinePreviewImage = view.ToBitmapSourceSafe();
         }
     
@@ -3010,7 +3056,7 @@ namespace VisionInspectionApp.UI.ViewModels
                     continue;
                 }
     
-                dst.Add(CreateRotatedRoi(l.SearchRoi, Brushes.MediumPurple, $"{l.Name} L"));
+                dst.Add(CreateRotatedRoiWithPose(l.SearchRoi, Brushes.MediumPurple, $"{l.Name} L"));
             }
     
             foreach (var c in config.Calipers)
@@ -4529,7 +4575,7 @@ namespace VisionInspectionApp.UI.ViewModels
     
                 if (showRois && l.SearchRoi.Width > 0 && l.SearchRoi.Height > 0)
                 {
-                    dst.Add(CreateRotatedRoi(l.SearchRoi, Brushes.MediumPurple, $"{l.Name} L"));
+                    dst.Add(CreateRotatedRoiWithPose(l.SearchRoi, Brushes.MediumPurple, $"{l.Name} L"));
                 }
     
                 if (!LinePreviewEnabled)

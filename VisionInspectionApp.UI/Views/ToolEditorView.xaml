@@ -489,7 +489,7 @@
                                     <TextBlock Text="Line Params" FontWeight="Bold" Foreground="{DynamicResource TextBrush}" />
                                 </Border>
 
-                                <CheckBox Content="Preview" IsChecked="{Binding LinePreviewEnabled, UpdateSourceTrigger=LostFocus}" Margin="0,0,0,6" />
+                                <CheckBox Content="Preview" IsChecked="{Binding LinePreviewEnabled, UpdateSourceTrigger=LostFocus}" Margin="0,0,0,6" Foreground="{DynamicResource TextBrush}" />
 
                                 <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" Padding="4" Margin="0,0,0,6">
                                     <Image Source="{Binding LinePreviewImage}" Stretch="Uniform" Height="120" />
@@ -497,40 +497,40 @@
 
                                 <StackPanel Margin="0,0,0,2">
                                     <StackPanel Orientation="Horizontal" Margin="0,0,0,2">
-                                        <TextBlock Text="Canny Thresh 1" Width="100" VerticalAlignment="Center" />
-                                        <TextBlock Text="{Binding Line_Canny1}" Width="40" />
+                                        <TextBlock Text="Canny Thresh 1" Width="100" VerticalAlignment="Center" Foreground="{DynamicResource TextBrush}" />
+                                        <TextBlock Text="{Binding Line_Canny1}" Width="40" Foreground="{DynamicResource TextBrush}" />
                                     </StackPanel>
                                     <Slider Minimum="0" Maximum="255" Value="{Binding Line_Canny1, UpdateSourceTrigger=LostFocus}" IsSnapToTickEnabled="True" TickFrequency="1" />
                                 </StackPanel>
 
                                 <StackPanel Margin="0,0,0,2">
                                     <StackPanel Orientation="Horizontal" Margin="0,0,0,2">
-                                        <TextBlock Text="Canny Thresh 2" Width="100" VerticalAlignment="Center" />
-                                        <TextBlock Text="{Binding Line_Canny2}" Width="40" />
+                                        <TextBlock Text="Canny Thresh 2" Width="100" VerticalAlignment="Center" Foreground="{DynamicResource TextBrush}" />
+                                        <TextBlock Text="{Binding Line_Canny2}" Width="40" Foreground="{DynamicResource TextBrush}" />
                                     </StackPanel>
                                     <Slider Minimum="0" Maximum="255" Value="{Binding Line_Canny2, UpdateSourceTrigger=LostFocus}" IsSnapToTickEnabled="True" TickFrequency="1" />
                                 </StackPanel>
 
                                 <StackPanel Margin="0,0,0,2">
                                     <StackPanel Orientation="Horizontal" Margin="0,0,0,2">
-                                        <TextBlock Text="Hough Thresh" Width="100" VerticalAlignment="Center" />
-                                        <TextBlock Text="{Binding Line_HoughThreshold}" Width="40" />
+                                        <TextBlock Text="Hough Thresh" Width="100" VerticalAlignment="Center" Foreground="{DynamicResource TextBrush}" />
+                                        <TextBlock Text="{Binding Line_HoughThreshold}" Width="40" Foreground="{DynamicResource TextBrush}" />
                                     </StackPanel>
                                     <Slider Minimum="1" Maximum="200" Value="{Binding Line_HoughThreshold, UpdateSourceTrigger=LostFocus}" IsSnapToTickEnabled="True" TickFrequency="1" />
                                 </StackPanel>
 
                                 <StackPanel Margin="0,0,0,2">
                                     <StackPanel Orientation="Horizontal" Margin="0,0,0,2">
-                                        <TextBlock Text="Min Line Length" Width="100" VerticalAlignment="Center" />
-                                        <TextBlock Text="{Binding Line_MinLineLength}" Width="40" />
+                                        <TextBlock Text="Min Line Length" Width="100" VerticalAlignment="Center" Foreground="{DynamicResource TextBrush}" />
+                                        <TextBlock Text="{Binding Line_MinLineLength}" Width="40" Foreground="{DynamicResource TextBrush}" />
                                     </StackPanel>
                                     <Slider Minimum="1" Maximum="400" Value="{Binding Line_MinLineLength, UpdateSourceTrigger=LostFocus}" IsSnapToTickEnabled="True" TickFrequency="1" />
                                 </StackPanel>
 
                                 <StackPanel Margin="0,0,0,6">
                                     <StackPanel Orientation="Horizontal" Margin="0,0,0,2">
-                                        <TextBlock Text="Max Line Gap" Width="100" VerticalAlignment="Center" />
-                                        <TextBlock Text="{Binding Line_MaxLineGap}" Width="40" />
+                                        <TextBlock Text="Max Line Gap" Width="100" VerticalAlignment="Center" Foreground="{DynamicResource TextBrush}" />
+                                        <TextBlock Text="{Binding Line_MaxLineGap}" Width="40" Foreground="{DynamicResource TextBrush}" />
                                     </StackPanel>
                                     <Slider Minimum="0" Maximum="100" Value="{Binding Line_MaxLineGap, UpdateSourceTrigger=LostFocus}" IsSnapToTickEnabled="True" TickFrequency="1" />
                                 </StackPanel>
@@ -1907,45 +1907,45 @@
 
                                 <StackPanel Margin="0,0,0,2">
                                     <StackPanel Orientation="Horizontal" Margin="0,0,0,2">
-                                        <TextBlock Text="C1" Width="60" VerticalAlignment="Center" />
-                                        <TextBlock Text="{Binding Lpd_Canny1}" Width="40" />
+                                        <TextBlock Text="C1" Width="60" VerticalAlignment="Center" Foreground="{DynamicResource TextBrush}" />
+                                        <TextBlock Text="{Binding Lpd_Canny1}" Width="40" Foreground="{DynamicResource TextBrush}" />
                                     </StackPanel>
                                     <Slider Minimum="0" Maximum="255" Value="{Binding Lpd_Canny1, UpdateSourceTrigger=LostFocus}" IsSnapToTickEnabled="True" TickFrequency="1" />
                                 </StackPanel>
 
                                 <StackPanel Margin="0,0,0,2">
                                     <StackPanel Orientation="Horizontal" Margin="0,0,0,2">
-                                        <TextBlock Text="C2" Width="60" VerticalAlignment="Center" />
-                                        <TextBlock Text="{Binding Lpd_Canny2}" Width="40" />
+                                        <TextBlock Text="C2" Width="60" VerticalAlignment="Center" Foreground="{DynamicResource TextBrush}" />
+                                        <TextBlock Text="{Binding Lpd_Canny2}" Width="40" Foreground="{DynamicResource TextBrush}" />
                                     </StackPanel>
                                     <Slider Minimum="0" Maximum="255" Value="{Binding Lpd_Canny2, UpdateSourceTrigger=LostFocus}" IsSnapToTickEnabled="True" TickFrequency="1" />
                                 </StackPanel>
 
                                 <StackPanel Margin="0,0,0,2">
                                     <StackPanel Orientation="Horizontal" Margin="0,0,0,2">
-                                        <TextBlock Text="Hough" Width="60" VerticalAlignment="Center" />
-                                        <TextBlock Text="{Binding Lpd_HoughThreshold}" Width="40" />
+                                        <TextBlock Text="Hough" Width="60" VerticalAlignment="Center" Foreground="{DynamicResource TextBrush}" />
+                                        <TextBlock Text="{Binding Lpd_HoughThreshold}" Width="40" Foreground="{DynamicResource TextBrush}" />
                                     </StackPanel>
                                     <Slider Minimum="1" Maximum="200" Value="{Binding Lpd_HoughThreshold, UpdateSourceTrigger=LostFocus}" IsSnapToTickEnabled="True" TickFrequency="1" />
                                 </StackPanel>
 
                                 <StackPanel Margin="0,0,0,2">
                                     <StackPanel Orientation="Horizontal" Margin="0,0,0,2">
-                                        <TextBlock Text="MinLen" Width="60" VerticalAlignment="Center" />
-                                        <TextBlock Text="{Binding Lpd_MinLineLength}" Width="40" />
+                                        <TextBlock Text="MinLen" Width="60" VerticalAlignment="Center" Foreground="{DynamicResource TextBrush}" />
+                                        <TextBlock Text="{Binding Lpd_MinLineLength}" Width="40" Foreground="{DynamicResource TextBrush}" />
                                     </StackPanel>
                                     <Slider Minimum="1" Maximum="400" Value="{Binding Lpd_MinLineLength, UpdateSourceTrigger=LostFocus}" IsSnapToTickEnabled="True" TickFrequency="1" />
                                 </StackPanel>
 
                                 <StackPanel Margin="0,0,0,6">
                                     <StackPanel Orientation="Horizontal" Margin="0,0,0,2">
-                                        <TextBlock Text="MaxGap" Width="60" VerticalAlignment="Center" />
-                                        <TextBlock Text="{Binding Lpd_MaxLineGap}" Width="40" />
+                                        <TextBlock Text="MaxGap" Width="60" VerticalAlignment="Center" Foreground="{DynamicResource TextBrush}" />
+                                        <TextBlock Text="{Binding Lpd_MaxLineGap}" Width="40" Foreground="{DynamicResource TextBrush}" />
                                     </StackPanel>
                                     <Slider Minimum="0" Maximum="100" Value="{Binding Lpd_MaxLineGap, UpdateSourceTrigger=LostFocus}" IsSnapToTickEnabled="True" TickFrequency="1" />
                                 </StackPanel>
 
-                                <TextBlock Text="Spec" FontWeight="SemiBold" Margin="0,6,0,6" />
+                                <TextBlock Text="Spec" FontWeight="SemiBold" Margin="0,6,0,6" Foreground="{DynamicResource TextBrush}" />
                                 <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
                                     <Grid>
                                         <Grid.ColumnDefinitions>
@@ -1990,12 +1990,12 @@
                                 </Border>
 
                                 <StackPanel Orientation="Horizontal" Margin="0,0,0,2">
-                                    <TextBlock Text="Value" Width="60" VerticalAlignment="Center" />
-                                    <TextBlock Text="{Binding SelectedRunValue, TargetNullValue='-'}" Width="120" />
+                                    <TextBlock Text="Value" Width="60" VerticalAlignment="Center" Foreground="{DynamicResource TextBrush}" />
+                                    <TextBlock Text="{Binding SelectedRunValue, TargetNullValue='-'}" Width="120" Foreground="{DynamicResource TextBrush}" />
                                 </StackPanel>
                                 <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
-                                    <TextBlock Text="Pass" Width="60" VerticalAlignment="Center" />
-                                    <TextBlock Text="{Binding SelectedRunPass, TargetNullValue='-'}" Width="120" />
+                                    <TextBlock Text="Pass" Width="60" VerticalAlignment="Center" Foreground="{DynamicResource TextBrush}" />
+                                    <TextBlock Text="{Binding SelectedRunPass, TargetNullValue='-'}" Width="120" Foreground="{DynamicResource TextBrush}" />
                                 </StackPanel>
                             </StackPanel>
 

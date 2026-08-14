@@ -306,23 +306,21 @@ public sealed partial class TeachViewModel : ObservableObject
             return;
         }
 
-        var r = new OpenCvSharp.Rect(def.SearchRoi.X, def.SearchRoi.Y, def.SearchRoi.Width, def.SearchRoi.Height);
-        r = r.Intersect(new OpenCvSharp.Rect(0, 0, _imageMat.Width, _imageMat.Height));
-        if (r.Width <= 0 || r.Height <= 0)
+        using var processed = _preprocessor.Run(_imageMat, VisionConfig.Preprocess);
+        using var crop = ToolEditorViewModel.ExtractRoiPatch(processed, def.SearchRoi);
+        if (crop.Empty() || crop.Width <= 0 || crop.Height <= 0)
         {
             LinePreviewImage = null;
             return;
         }
 
-        using var processed = _preprocessor.Run(_imageMat, VisionConfig.Preprocess);
-        using var crop = new Mat(processed, r);
         using var view = crop.Channels() == 1 ? crop.Clone() : crop.CvtColor(ColorConversionCodes.BGR2GRAY);
 
-        var det = _lineDetector.DetectLongestLine(processed, def.SearchRoi, def.Canny1, def.Canny2, def.HoughThreshold, def.MinLineLength, def.MaxLineGap);
+        var det = _lineDetector.DetectLongestLine(view, new Roi { X = 0, Y = 0, Width = view.Width, Height = view.Height }, def.Canny1, def.Canny2, def.HoughThreshold, def.MinLineLength, def.MaxLineGap);
         if (det.Found)
         {
-            var p1 = new OpenCvSharp.Point((int)Math.Round(det.P1.X) - r.X, (int)Math.Round(det.P1.Y) - r.Y);
-            var p2 = new OpenCvSharp.Point((int)Math.Round(det.P2.X) - r.X, (int)Math.Round(det.P2.Y) - r.Y);
+            var p1 = new OpenCvSharp.Point((int)Math.Round(det.P1.X), (int)Math.Round(det.P1.Y));
+            var p2 = new OpenCvSharp.Point((int)Math.Round(det.P2.X), (int)Math.Round(det.P2.Y));
             Cv2.Line(view, p1, p2, Scalar.White, 2);
         }
 

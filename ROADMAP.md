@@ -183,6 +183,9 @@ Lộ trình tích hợp tính năng Chụp ảnh từ camera và hỗ trợ các
 - [x] Task 143: Đo chiều cao thực tế (True Bar Height Measurement) và Chuẩn hóa góc xoay chính xác cho Barcode 1D (Code 128, Code 39, EAN-13...):
   - `Đo chiều cao vạch thực tế`: Xây dựng hàm `Measure1DBarcodeHeight` quét năng lượng biến thiên gradient/variance của các vạch sọc dọc theo cột từ dòng quét `yScan` lên đỉnh (top) và xuống đáy (bottom), đo chính xác chiều cao thực tế của các vạch mã + 4px padding, cập nhật tâm `yCenter` chính xác về giữa vạch, triệt tiêu hoàn toàn hiện tượng khung bao bị quá cao (oversized height) do ước lượng tỷ lệ cố định.
   - `Chuẩn hóa góc xoay`: Căn chỉnh góc xoay `localAngle` theo góc quét thành công `scanRotAngle` ($0^\circ, 90^\circ, 180^\circ, 270^\circ, \pm 5^\circ, \dots$) thay vì tính qua sai số tọa độ pixel của 1 scanline đơn, loại bỏ hoàn toàn hiện tượng lệch góc hoặc đảo chiều bounding box cho Barcode 1D.
+- [x] Task 144: Chuẩn hóa Trích xuất ROI xoay theo Origin cho Preview Line Tool & Cập nhật màu chữ Slider Labels tương thích Light Mode:
+  - `Line Tool ROI Preview`: Nâng cấp hàm `RefreshLineRoiPreview` trong `ToolEditorViewModel.Engine.cs` và `TeachViewModel.cs`, tự động tính toán ma trận biến đổi tọa độ và góc xoay từ Origin (`originTeach`, `originFound`, `angleDeg`) và dùng `ExtractRoiPatch(matForLine, targetRoi)` để cắt chính xác patch ảnh ROI đã được nắn thẳng; chạy line detector cục bộ và vẽ kết quả lên preview. Đồng bộ `CreateRotatedRoiWithPose` cho Line Tool trên Canvas Preview.
+  - `Màu chữ Slider Labels (Light Mode)`: Bổ sung thuộc tính `Foreground="{DynamicResource TextBrush}"` cho tất cả các nhãn và giá trị của Slider (`Canny Thresh 1`, `Canny Thresh 2`, `Hough Thresh`, `Min Line Length`, `Max Line Gap`), `CheckBox Preview` của Tool Line và Tool LinePairDetection trong `ToolEditorView.xaml`, đảm bảo chữ luôn hiển thị sắc nét, tương phản rõ ràng ở cả Light Mode lẫn Dark Mode.
 
 
 

@@ -734,6 +734,17 @@
   - **Đo chiều cao vạch thực tế**: Xây dựng hàm `Measure1DBarcodeHeight` quét năng lượng biến thiên gradient/variance của các vạch sọc dọc theo cột từ dòng quét `yScan` lên đỉnh (top) và xuống đáy (bottom), đo chính xác chiều cao thực tế của các vạch mã + 4px padding, cập nhật tâm `yCenter` chính xác về giữa vạch, triệt tiêu hoàn toàn hiện tượng khung bao bị quá cao (oversized height) do ước lượng tỷ lệ cố định.
   - **Chuẩn hóa góc xoay**: Căn chỉnh góc xoay `localAngle` theo góc quét thành công `scanRotAngle` ($0^\circ, 90^\circ, 180^\circ, 270^\circ, \pm 5^\circ, \dots$) thay vì tính qua sai số tọa độ pixel của 1 scanline đơn, loại bỏ hoàn toàn hiện tượng lệch góc hoặc đảo chiều bounding box cho Barcode 1D.
   - **Biên dịch Solution VisionInspectionApp.slnx thành công 100%**: **0 Error(s)**.
+- [x] Task 144: Chuẩn hóa Trích xuất ROI xoay theo Origin cho Preview Line Tool & Cập nhật màu chữ Slider Labels tương thích Light Mode:
+  - **Trích xuất Preview Line Tool theo Origin**:
+    - Nâng cấp phương thức `RefreshLineRoiPreview` trong [ToolEditorViewModel.Engine.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/ToolEditorViewModel.Engine.cs) và `RefreshLinePreview` trong [TeachViewModel.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/TeachViewModel.cs).
+    - Tính toán tâm và góc xoay thực tế dựa trên Origin pose (`originTeach`, `originFound`, `angleDeg`) từ `_lastRun.Origin` và `_config.Origin`.
+    - Sử dụng `ExtractRoiPatch(matForLine, targetRoi)` để cắt chính xác patch ảnh ROI xoay nắn thẳng tương ứng với khung ROI được hiển thị trên Canvas Preview.
+    - Chạy thuật toán phát hiện đường thẳng `_lineDetector.DetectLongestLine` trong tọa độ cục bộ của ảnh crop và vẽ đường line tìm thấy (`Cv2.Line`) trực tiếp lên ảnh xem trước `LinePreviewImage`.
+    - Đồng bộ `CreateRotatedRoiWithPose` cho Line Tool trong `BuildAllOverlays` và `BuildOverlayForNode`.
+  - **Khắc phục màu chữ Slider Labels trong Light Mode**:
+    - Bổ sung thuộc tính `Foreground="{DynamicResource TextBrush}"` cho toàn bộ các `TextBlock` và giá trị hiển thị (`Canny Thresh 1`, `Canny Thresh 2`, `Hough Thresh`, `Min Line Length`, `Max Line Gap`), `CheckBox Preview` của Tool Line và Tool LinePairDetection trong [ToolEditorView.xaml](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/Views/ToolEditorView.xaml).
+    - Đảm bảo toàn bộ văn bản và nhãn slider luôn có màu tương phản chuẩn (`#333333` ở Light Mode và `#E0E0E0` ở Dark Mode), triệt tiêu hoàn toàn hiện tượng chữ trắng trên nền sáng.
+  - **Biên dịch Solution VisionInspectionApp.slnx thành công 100%**: **0 Error(s)**.
 
 ## Roadmap
 
