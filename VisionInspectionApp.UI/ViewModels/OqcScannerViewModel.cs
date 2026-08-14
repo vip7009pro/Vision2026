@@ -306,6 +306,7 @@ public partial class OqcScannerViewModel : ObservableObject
         {
             Time = DateTime.Now,
             ScannedCode = code,
+            ProductName = displayProductName,
             InspectResult = AutoRunJob ? "Đang kiểm tra..." : "Đã nạp Job",
             ResultBrushHex = "#1E88E5"
         };

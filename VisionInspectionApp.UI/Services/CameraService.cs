@@ -42,6 +42,7 @@ public sealed class CameraService : IDisposable
     private int _desiredHeight = 1080;
     private int _desiredFps = 120;
     private string _simulatorCustomImagePath = "";
+    private bool _simulatorEnableRandomTransform = false;
 
     public event EventHandler<Mat>? FrameCaptured;
     public event EventHandler<string>? ErrorOccurred;
@@ -57,6 +58,21 @@ public sealed class CameraService : IDisposable
         {
             _simulatorCustomImagePath = value;
             _currentParameters.CustomImagePath = value;
+            SaveSettings();
+            if (_activeDriver != null && _activeDriver.IsOpened)
+            {
+                _ = _activeDriver.ApplyParametersAsync(_currentParameters);
+            }
+        }
+    }
+
+    public bool SimulatorEnableRandomTransform
+    {
+        get => _simulatorEnableRandomTransform;
+        set
+        {
+            _simulatorEnableRandomTransform = value;
+            _currentParameters.EnableRandomTransform = value;
             SaveSettings();
             if (_activeDriver != null && _activeDriver.IsOpened)
             {
@@ -707,7 +723,9 @@ public sealed class CameraService : IDisposable
                     _desiredHeight = settings.DesiredHeight > 0 ? settings.DesiredHeight : 1080;
                     _desiredFps = settings.DesiredFps > 0 ? settings.DesiredFps : 120;
                     _simulatorCustomImagePath = settings.SimulatorCustomImagePath ?? "";
+                    _simulatorEnableRandomTransform = settings.SimulatorEnableRandomTransform;
                     _currentParameters.CustomImagePath = _simulatorCustomImagePath;
+                    _currentParameters.EnableRandomTransform = _simulatorEnableRandomTransform;
                     return;
                 }
             }
@@ -724,7 +742,9 @@ public sealed class CameraService : IDisposable
         _desiredHeight = 1080;
         _desiredFps = 120;
         _simulatorCustomImagePath = "";
+        _simulatorEnableRandomTransform = false;
         _currentParameters.CustomImagePath = "";
+        _currentParameters.EnableRandomTransform = false;
     }
 
     private void SaveSettings()
@@ -742,7 +762,8 @@ public sealed class CameraService : IDisposable
                 DesiredWidth = _desiredWidth,
                 DesiredHeight = _desiredHeight,
                 DesiredFps = _desiredFps,
-                SimulatorCustomImagePath = _simulatorCustomImagePath ?? ""
+                SimulatorCustomImagePath = _simulatorCustomImagePath ?? "",
+                SimulatorEnableRandomTransform = _simulatorEnableRandomTransform
             };
             var json = System.Text.Json.JsonSerializer.Serialize(settings, new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
             System.IO.File.WriteAllText(_settingsPath, json);
@@ -762,6 +783,7 @@ public sealed class CameraService : IDisposable
         public int DesiredHeight { get; set; } = 1080;
         public int DesiredFps { get; set; } = 120;
         public string SimulatorCustomImagePath { get; set; } = "";
+        public bool SimulatorEnableRandomTransform { get; set; }
     }
 
     public void Dispose()

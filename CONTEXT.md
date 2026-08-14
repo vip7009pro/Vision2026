@@ -669,6 +669,16 @@
   - **Nguyên nhân**: Trong hàm `ScanMat` ở `OqcScannerService.cs`, dòng `using var continuousMat = matToScan.IsContinuous() ? matToScan.Clone() : matToScan;` khi nhận tham số là một vùng cắt ROI sub-mat (`topCrop`, `botCrop`...) có `IsContinuous() == false`, biến `continuousMat` được gán chính bằng tham số `matToScan`. Khi kết thúc hàm `ScanMat`, từ khóa `using` đã giải phóng nhầm đối tượng `matToScan`. Khi lượt quét tiếp theo hoặc khối `using` bên ngoài cố gắng truy cập `matToScan` sẽ lập tức bắn ngoại lệ `Cannot access a disposed object`.
   - **Giải pháp**: Quản lý cờ `mustDisposeContinuous`. Chỉ khi `matToScan` không liên tục (`IsContinuous() == false`), hệ thống mới thực hiện `Clone()` ra một bản sao mới và chỉ giải phóng bản sao clone này trong khối `finally`, bảo vệ tuyệt đối đối tượng `matToScan` ban đầu không bị giải phóng nhầm. Đồng thời bổ sung kiểm tra cờ `matToScan.IsDisposed` trước khi xử lý.
   - **Biên dịch thành công 0 lỗi**.
+- [x] Task 136: Bổ sung cột ProductName trong Tab OQC Scanner & Thêm Checkbox Tự Xoay/Xê Dịch Ngẫu Nhiên cho Camera Giả Lập:
+  - **Cột ProductName (Tab OQC Scanner)**:
+    - Bổ sung thuộc tính `ProductName` (kèm thông báo `PropertyChanged`) vào `OqcScanHistoryEntry` trong `OqcScannerConfig.cs`.
+    - Trong `OqcScannerViewModel.cs`, gán `ProductName = displayProductName` khi tạo đối tượng lịch sử `historyEntry`.
+    - Trong `OqcScannerView.xaml`, thêm cột `<DataGridTextColumn Header="Tên Sản Phẩm" Binding="{Binding ProductName}" Width="150" ElementStyle="{StaticResource BoldStyle}" />` vào DataGrid *Lịch sử quét mã gần nhất*.
+  - **Tự xoay + di chuyển nhẹ cho Camera Giả Lập (Tab Camera Settings)**:
+    - Bổ sung cờ `EnableRandomTransform` trong `CameraParameters`, `CameraService` (lưu vĩnh viễn xuống `camera_adjust_settings.json`) và `CameraSettingsViewModel`.
+    - Triển khai hàm `ApplyRandomTransform` trong `SimulatorCameraDriver.cs`: Khi bật tùy chọn này, mỗi lần lấy ảnh từ camera giả lập sẽ ngẫu nhiên xoay nhẹ ($\pm 12^\circ$) và dịch chuyển ($\pm 20\text{px}$) từ tâm ảnh bằng `Cv2.WarpAffine` + `BorderTypes.Reflect101`. Khi bỏ check, camera giả lập giữ nguyên 1 ảnh gốc tĩnh.
+    - Trong `CameraSettingsView.xaml`, bổ sung CheckBox `🔄 Tự xoay + di chuyển nhẹ` trong khung **🖼️ Nguồn Ảnh Camera Giả Lập (Simulator Image)**.
+  - **Biên dịch Solution VisionInspectionApp.slnx thành công 100%**: **0 Error(s)**.
 
 ## Roadmap
 

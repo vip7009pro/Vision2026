@@ -103,10 +103,13 @@ public sealed class SimulatorCameraDriver : CameraDriverBase
         }
     }
 
+    private readonly Random _rand = new Random();
+
     private Mat GenerateFrame(ref int frameCounter)
     {
         frameCounter++;
         string customPath = _parameters?.CustomImagePath?.Trim() ?? "";
+        bool enableRandom = _parameters?.EnableRandomTransform ?? false;
 
         if (!string.IsNullOrEmpty(customPath) && System.IO.File.Exists(customPath))
         {
@@ -115,6 +118,12 @@ public sealed class SimulatorCameraDriver : CameraDriverBase
                 var customMat = Cv2.ImRead(customPath, ImreadModes.Color);
                 if (customMat != null && !customMat.Empty() && customMat.Width > 0 && customMat.Height > 0)
                 {
+                    if (enableRandom)
+                    {
+                        var transformed = ApplyRandomTransform(customMat);
+                        customMat.Dispose();
+                        return transformed;
+                    }
                     return customMat;
                 }
                 customMat?.Dispose();
@@ -134,10 +143,8 @@ public sealed class SimulatorCameraDriver : CameraDriverBase
             Cv2.Line(mat, new OpenCvSharp.Point(0, y), new OpenCvSharp.Point(640, y), new Scalar(60, 60, 60), 1);
         }
 
-        // Target di chuyển sinh động
-        double angle = (frameCounter % 120) * (2 * Math.PI / 120);
-        int cx = 320 + (int)(150 * Math.Cos(angle));
-        int cy = 240 + (int)(100 * Math.Sin(angle));
+        int cx = 320;
+        int cy = 240;
 
         Cv2.Circle(mat, new OpenCvSharp.Point(cx, cy), 40, new Scalar(0, 255, 255), 2);
         Cv2.Circle(mat, new OpenCvSharp.Point(cx, cy), 15, new Scalar(0, 165, 255), -1);
@@ -146,6 +153,35 @@ public sealed class SimulatorCameraDriver : CameraDriverBase
         Cv2.PutText(mat, "INDUSTRIAL CAMERA SIMULATOR", new OpenCvSharp.Point(20, 35), HersheyFonts.HersheySimplex, 0.7, new Scalar(0, 255, 0), 2);
         Cv2.PutText(mat, $"TIME: {DateTime.Now:HH:mm:ss.fff}  FRAME: {frameCounter}", new OpenCvSharp.Point(20, 460), HersheyFonts.HersheySimplex, 0.5, new Scalar(200, 200, 200), 1);
 
+        if (enableRandom)
+        {
+            var transformed = ApplyRandomTransform(mat);
+            mat.Dispose();
+            return transformed;
+        }
+
         return mat;
+    }
+
+    private Mat ApplyRandomTransform(Mat srcMat)
+    {
+        if (srcMat == null || srcMat.Empty()) return srcMat ?? new Mat();
+
+        // Góc xoay ngẫu nhiên từ -12.0° đến +12.0°
+        double angle = (_rand.NextDouble() * 24.0) - 12.0;
+
+        // Độ xê dịch ngẫu nhiên từ -20.0px đến +20.0px
+        double shiftX = (_rand.NextDouble() * 40.0) - 20.0;
+        double shiftY = (_rand.NextDouble() * 40.0) - 20.0;
+
+        Point2f center = new Point2f(srcMat.Width / 2.0f, srcMat.Height / 2.0f);
+        using var rotMat = Cv2.GetRotationMatrix2D(center, angle, 1.0);
+
+        rotMat.Set<double>(0, 2, rotMat.At<double>(0, 2) + shiftX);
+        rotMat.Set<double>(1, 2, rotMat.At<double>(1, 2) + shiftY);
+
+        Mat dstMat = new Mat();
+        Cv2.WarpAffine(srcMat, dstMat, rotMat, srcMat.Size(), InterpolationFlags.Linear, BorderTypes.Reflect101);
+        return dstMat;
     }
 }

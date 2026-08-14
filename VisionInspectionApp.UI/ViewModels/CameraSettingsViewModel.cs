@@ -354,6 +354,18 @@ public sealed class CameraSettingsViewModel : ObservableObject, IDisposable
         }
     }
 
+    public bool SimulatorEnableRandomTransform
+    {
+        get => _cameraService.SimulatorEnableRandomTransform;
+        set
+        {
+            _cameraService.SimulatorEnableRandomTransform = value;
+            _cameraParams.EnableRandomTransform = value;
+            OnPropertyChanged();
+            _ = ApplyCameraParametersAsync();
+        }
+    }
+
     public IAsyncRelayCommand StartCameraCommand { get; }
     public IAsyncRelayCommand StopCameraCommand { get; }
     public IRelayCommand RefreshAvailableCamerasCommand { get; }

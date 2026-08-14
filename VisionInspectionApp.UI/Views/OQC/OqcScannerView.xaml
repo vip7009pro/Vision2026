@@ -179,6 +179,7 @@
                         <DataGrid.Columns>
                             <DataGridTextColumn Header="Thời gian" Binding="{Binding Time, StringFormat='HH:mm:ss dd/MM'}" Width="100" />
                             <DataGridTextColumn Header="Mã Scan (Product)" Binding="{Binding ScannedCode}" Width="140" ElementStyle="{StaticResource BoldStyle}" />
+                            <DataGridTextColumn Header="Tên Sản Phẩm" Binding="{Binding ProductName}" Width="150" ElementStyle="{StaticResource BoldStyle}" />
                             <DataGridTextColumn Header="Tệp Job" Binding="{Binding JobFilePath}" Width="130" />
                             <DataGridTextColumn Header="Tra cứu DB" Binding="{Binding Message}" Width="90" />
                             <DataGridTemplateColumn Header="KQ Kiểm Tra" Width="120">

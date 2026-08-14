@@ -44,6 +44,21 @@ public class OqcScanHistoryEntry : System.ComponentModel.INotifyPropertyChanged
 {
     public DateTime Time { get; set; } = DateTime.Now;
     public string ScannedCode { get; set; } = "";
+
+    private string _productName = "";
+    public string ProductName
+    {
+        get => _productName;
+        set
+        {
+            if (_productName != value)
+            {
+                _productName = value;
+                PropertyChanged?.Invoke(this, new System.ComponentModel.PropertyChangedEventArgs(nameof(ProductName)));
+            }
+        }
+    }
+
     public string JobFilePath { get; set; } = "";
     public bool Success { get; set; } = false;
     public string Message { get; set; } = "";

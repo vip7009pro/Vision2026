@@ -91,6 +91,10 @@
                                         Padding="6,3" FontSize="11" Margin="4,0,0,0"
                                         Background="#333" Foreground="White" BorderThickness="1" BorderBrush="#555" />
                             </Grid>
+                            <CheckBox Content="🔄 Tự xoay + di chuyển nhẹ"
+                                      IsChecked="{Binding SimulatorEnableRandomTransform, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                      Margin="0,2,0,6" FontSize="11" FontWeight="SemiBold" Foreground="#4CAF50"
+                                      ToolTip="Mỗi lần lấy ảnh từ camera giả lập sẽ ngẫu nhiên xoay nhẹ và xê dịch ảnh xung quanh tâm để test." />
                             <DockPanel>
                                 <TextBlock Text="Để trống nếu dùng mẫu giả lập mặc định" FontSize="10" Foreground="#888" VerticalAlignment="Center" />
                                 <Button Command="{Binding ClearSimulatorImageCommand}"

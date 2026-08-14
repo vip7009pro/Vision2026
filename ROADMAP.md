@@ -166,6 +166,7 @@ Lộ trình tích hợp tính năng Chụp ảnh từ camera và hỗ trợ các
 - [x] Task 128: Khắc phục lỗi đứng hình camera USB (1 FPS) khi mở app mặc định ở tab OQC Scanner: Bổ sung cờ khóa `SemaphoreSlim` bảo vệ `CameraService` triệt tiêu xung đột gọi `StartSavedCameraAsync()` song song khi khởi động, bổ sung khoảng trễ giải phóng filter graph giữa các OpenCV VideoCapture backend (DSHOW, MSMF), và nắn nhịp `Thread.Sleep(5)` trong `OpenCvCameraDriver` giúp camera USB chạy mượt mà 30-60 FPS ngay từ khi mở app.
 - [x] Task 129: Sửa lỗi checkbox chuyển đổi Màu <=> Đen trắng (Grayscale) không có tác dụng: Đồng bộ dữ liệu `_cameraParams` trong `CameraSettingsViewModel` và bổ sung lệnh gọi `ApplyParametersAsync` tức thì khi thay đổi cờ `IsGrayscale` (cũng như Brightness/Contrast) giúp chuyển đổi realtime giữa chế độ ảnh màu và đen trắng.
 - [x] Task 130: Khắc phục lỗi `ObjectDisposedException` trên `SemaphoreSlim` khi tắt app lúc camera đang chạy: Bổ sung cờ `_isDisposed` phòng chống hủy lặp 2 lần (Dispose collision) giữa `App.OnExit` và DI Container Scope, bổ sung bọc try-catch `ObjectDisposedException` cho tất cả phương thức async trong `CameraService`.
+- [x] Task 136: Bổ sung cột `Tên Sản Phẩm` (ProductName) trong bảng *Lịch sử quét mã gần nhất* (Tab OQC Scanner) và Thêm tùy chọn CheckBox **"Tự xoay + di chuyển nhẹ"** cho Camera Giả Lập (Tab Camera Settings), cho phép tự động xoay và xê dịch ngẫu nhiên quanh tâm bức ảnh mỗi lần lấy frame phục vụ kiểm thử.
 
 
 
