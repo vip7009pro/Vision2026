@@ -519,7 +519,7 @@ public sealed class CameraSettingsViewModel : ObservableObject, IDisposable
             if (_isRenderingFrame) return;
             _isRenderingFrame = true;
 
-            var bitmap = frame.ToBitmapSourceSafe();
+            var bitmap = frame.ToBitmapSourceForDisplay(1920, 1080);
             if (bitmap == null)
             {
                 _isRenderingFrame = false;
@@ -545,10 +545,6 @@ public sealed class CameraSettingsViewModel : ObservableObject, IDisposable
         catch
         {
             _isRenderingFrame = false;
-        }
-        finally
-        {
-            frame?.Dispose();
         }
     }
 

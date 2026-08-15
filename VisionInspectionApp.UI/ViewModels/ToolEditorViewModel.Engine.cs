@@ -595,13 +595,6 @@ namespace VisionInspectionApp.UI.ViewModels
                 return;
             }
     
-            using var matForLine = ResolveToolPreprocessForPreview(image, SelectedNode);
-            if (matForLine.Empty() || matForLine.Width <= 0 || matForLine.Height <= 0)
-            {
-                LinePreviewImage = null;
-                return;
-            }
-
             OpenCvSharp.Point2d originTeach = default;
             OpenCvSharp.Point2d originFound = default;
             double angleDeg = 0;
@@ -644,13 +637,15 @@ namespace VisionInspectionApp.UI.ViewModels
                 targetRoi = def.SearchRoi;
             }
 
-            using var crop = ExtractRoiPatch(matForLine, targetRoi);
-            if (crop.Empty() || crop.Width <= 0 || crop.Height <= 0)
+            // Tối ưu: Trích xuất ROI patch trực tiếp từ ảnh gốc (chỉ vài trăm pixel thay vì 20 Megapixels)
+            using var rawCrop = ExtractRoiPatch(image, targetRoi);
+            if (rawCrop.Empty() || rawCrop.Width <= 0 || rawCrop.Height <= 0)
             {
                 LinePreviewImage = null;
                 return;
             }
 
+            using var crop = _config is not null && PreprocessPreviewEnabled ? _preprocessor.Run(rawCrop, _config.Preprocess) : rawCrop.Clone();
             using var view = crop.Channels() == 1 ? crop.Clone() : crop.CvtColor(ColorConversionCodes.BGR2GRAY);
             var det = _lineDetector.DetectLongestLine(view, new Roi { X = 0, Y = 0, Width = view.Width, Height = view.Height }, def.Canny1, def.Canny2, def.HoughThreshold, def.MinLineLength, def.MaxLineGap);
             if (det.Found)
@@ -690,16 +685,16 @@ namespace VisionInspectionApp.UI.ViewModels
                 return;
             }
     
-            using var matForPoint = ResolveToolPreprocessForPreview(snap, SelectedNode);
             var rect = new OpenCvSharp.Rect(def.SearchRoi.X, def.SearchRoi.Y, def.SearchRoi.Width, def.SearchRoi.Height);
-            rect = rect.Intersect(new OpenCvSharp.Rect(0, 0, matForPoint.Width, matForPoint.Height));
+            rect = rect.Intersect(new OpenCvSharp.Rect(0, 0, snap.Width, snap.Height));
             if (rect.Width <= 0 || rect.Height <= 0)
             {
                 PointEdgePreviewImage = null;
                 return;
             }
     
-            using var crop = new Mat(matForPoint, rect);
+            using var rawCrop = new Mat(snap, rect);
+            using var crop = _config is not null && PreprocessPreviewEnabled ? _preprocessor.Run(rawCrop, _config.Preprocess) : rawCrop.Clone();
             using var gray = crop.Channels() == 1 ? crop.Clone() : crop.CvtColor(ColorConversionCodes.BGR2GRAY);
             using var view = crop.Clone();
             var n = Math.Clamp(def.EdgePoint.StripCount, 1, 200);
@@ -2954,13 +2949,6 @@ namespace VisionInspectionApp.UI.ViewModels
                 return;
             }
     
-            using var matForBlob = ResolveToolPreprocessForPreview(snap, SelectedNode);
-            if (matForBlob.Empty())
-            {
-                BlobThresholdPreviewImage = null;
-                return;
-            }
-
             var previewRoi = def.InspectRoi;
             if (def.Rois is not null && def.Rois.Count > 0)
             {
@@ -3009,12 +2997,14 @@ namespace VisionInspectionApp.UI.ViewModels
                 targetRoi = previewRoi;
             }
 
-            using var crop = ExtractRoiPatch(matForBlob, targetRoi);
-            if (crop.Empty() || crop.Width <= 0 || crop.Height <= 0)
+            using var rawCrop = ExtractRoiPatch(snap, targetRoi);
+            if (rawCrop.Empty() || rawCrop.Width <= 0 || rawCrop.Height <= 0)
             {
                 BlobThresholdPreviewImage = null;
                 return;
             }
+
+            using var crop = _config is not null && PreprocessPreviewEnabled ? _preprocessor.Run(rawCrop, _config.Preprocess) : rawCrop.Clone();
 
             using var gray = crop.Channels() == 1 ? crop.Clone() : crop.CvtColor(ColorConversionCodes.BGR2GRAY);
             using var bw = new Mat();

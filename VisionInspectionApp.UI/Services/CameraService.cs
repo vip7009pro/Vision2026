@@ -603,7 +603,8 @@ public sealed class CameraService : IDisposable
             _lastFrame = frame.Clone();
         }
 
-        FrameCaptured?.Invoke(this, frame.Clone());
+        using var broadcastMat = frame.Clone();
+        FrameCaptured?.Invoke(this, broadcastMat);
     }
 
     private void OnDriverError(object? sender, string message)

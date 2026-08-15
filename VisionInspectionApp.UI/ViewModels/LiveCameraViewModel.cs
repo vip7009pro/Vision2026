@@ -240,7 +240,7 @@ public sealed partial class LiveCameraViewModel : ObservableObject
             {
                 _isRenderingFrame = true;
 
-                var bitmap = frame.ToBitmapSourceSafe();
+                var bitmap = frame.ToBitmapSourceForDisplay(1920, 1080);
                 if (bitmap != null)
                 {
                     System.Windows.Application.Current?.Dispatcher?.BeginInvoke(System.Windows.Threading.DispatcherPriority.Render, () =>

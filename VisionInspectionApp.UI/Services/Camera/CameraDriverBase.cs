@@ -48,9 +48,30 @@ public abstract class CameraDriverBase : ICameraDriver
 
     protected void RaiseFrameCaptured(Mat frame)
     {
-        if (frame == null || frame.Empty()) return;
-        using var processed = ApplySoftwarePostProcessing(frame, _parameters);
-        FrameCaptured?.Invoke(this, processed.Clone());
+        if (frame == null || frame.IsDisposed || frame.Empty()) return;
+
+        CameraParameters p;
+        lock (_lock)
+        {
+            p = _parameters;
+        }
+
+        bool needProcessing = (p != null) &&
+            (Math.Abs(p.Contrast - 1.0) > 0.01 ||
+             Math.Abs(p.Brightness) > 0.01 ||
+             p.IsGrayscale ||
+             p.ReverseX ||
+             p.ReverseY);
+
+        if (needProcessing && p != null)
+        {
+            using var processed = ApplySoftwarePostProcessing(frame, p);
+            FrameCaptured?.Invoke(this, processed);
+        }
+        else
+        {
+            FrameCaptured?.Invoke(this, frame);
+        }
     }
 
     protected void RaiseErrorOccurred(string message)
@@ -60,7 +81,19 @@ public abstract class CameraDriverBase : ICameraDriver
 
     protected static Mat ApplySoftwarePostProcessing(Mat input, CameraParameters paramsObj)
     {
-        if (input == null || input.Empty()) return new Mat();
+        if (input == null || input.IsDisposed || input.Empty()) return new Mat();
+        if (paramsObj == null) return input.Clone();
+
+        bool needProcessing = Math.Abs(paramsObj.Contrast - 1.0) > 0.01 ||
+                              Math.Abs(paramsObj.Brightness) > 0.01 ||
+                              paramsObj.IsGrayscale ||
+                              paramsObj.ReverseX ||
+                              paramsObj.ReverseY;
+
+        if (!needProcessing)
+        {
+            return input.Clone();
+        }
 
         try
         {

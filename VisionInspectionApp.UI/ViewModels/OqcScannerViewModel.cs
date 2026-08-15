@@ -226,8 +226,7 @@ public partial class OqcScannerViewModel : ObservableObject
 
         try
         {
-            using var frameClone = frame.Clone();
-            var bitmap = frameClone.ToBitmapSourceSafe();
+            var bitmap = frame.ToBitmapSourceForDisplay(1920, 1080);
 
             System.Windows.Application.Current?.Dispatcher?.BeginInvoke(new Action(() =>
             {
