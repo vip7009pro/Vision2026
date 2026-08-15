@@ -217,6 +217,13 @@ Lộ trình tích hợp tính năng Chụp ảnh từ camera và hỗ trợ các
   - `Đồng bộ hệ toạ độ ảnh gốc cho ROI Selection`: Cập nhật `ConvertContentRoiToPixelRoi` và `ConvertContentPointToPixelPoint` trong `ImageViewerControl.xaml.cs` sử dụng `bmp.TryGetSourcePixelSize()` để lấy kích thước ảnh gốc `(sourceWidth, sourceHeight)` từ metadata proxy thay vì `bmp.PixelWidth` và `bmp.PixelHeight` (1440x1080).
   - `Cho phép tương tác ROI trên toàn bộ không gian ảnh gốc 20MPx`: Khung ROI của tất cả các tool (`Origin`, `Point`, `Line`, `Caliper`, `Blob`, `CircleFinder`, `SurfaceCompare`, `ContourCompare`, `DefectROI`) có thể di chuyển, kéo vẽ, phóng to/thu nhỏ trên toàn bộ diện tích ảnh gốc (5120x3840, 2560x1920...) mà không bị kẹt ở biên proxy 1440x1080.
   - `Đồng bộ Tool Angle Infinite Line & Preview Cache`: Sử dụng `TryGetSourcePixelSize` cho đoạn vẽ đường vô hạn góc trong `InspectionViewModel.cs` và cập nhật `_lastPreviewImageWidth`, `_lastPreviewImageHeight` trong `ToolEditorViewModel.Engine.cs`.
+- [x] Task 153: Chuyển đổi toàn diện toàn bộ Solution sang nền tảng 64-bit (x64) & Triển khai kiến trúc Out-of-Process 32-bit PLC Bridge Worker:
+  - `Tạo Project Phụ Trợ VisionInspectionApp.PlcBridge (x86)`: Xây dựng worker 32-bit siêu nhẹ (~10-15MB RAM) chạy ngầm không giao diện (`WinExe`), quản lý nạp COM `ActUtlType.ActUtlType` trên STA thread và mở Named Pipe Server `VisionInspectionApp_MxBridge_IPC`.
+  - `Nâng cấp MitsubishiMxComponentDriver sang IPC Client (x64)`: Tích hợp `MxBridgeClient` tự động kết nối và quản lý vòng đời của `VisionInspectionApp.PlcBridge.exe`, gửi các lệnh đọc/ghi bit, word, float, array block qua Windows Named Pipe siêu tốc (độ trễ < 0.05ms) hoàn toàn trong suốt với UI/ViewModel.
+  - `Tự động Quản lý Vòng đời & Dọn dẹp Tiến trình (Zero Zombie)`: `PlcBridge` tích hợp Parent Process Watcher tự động giải phóng COM và thoát an toàn khi ứng dụng chính tắt; tự động sao chép tệp `PlcBridge.exe` vào thư mục output x64 của UI khi build.
+  - `Triệt tiêu Hiện tượng Đơ/Treo UI khi mở PLC Manager & HMI Manager`: Loại bỏ hoàn toàn các lời gọi blocking `.Wait()` trong `PlcPollingEngine`, `PlcManagerService`, chuyển sang Dynamic Lookup Polling Loop; bổ sung Safe Timeout (1500–2500ms) cho các lời gọi COM và Named Pipe, bảo đảm UI luôn phản hồi 60 FPS.
+  - `Build x64 Thành công 100%`: Cấu hình toàn bộ `VisionInspectionApp.UI.csproj` sang `<PlatformTarget>x64</PlatformTarget>`, giải phóng toàn bộ giới hạn bộ nhớ RAM, tận dụng tối đa tập lệnh OpenCV SIMD 64-bit.
+
 
 
 

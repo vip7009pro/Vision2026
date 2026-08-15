@@ -42,6 +42,7 @@ public sealed class PlcPollingEngine
     private readonly IPlcLogger _logger;
     private Task? _pollingTask;
     private CancellationTokenSource? _cts;
+    private readonly object _startLock = new();
 
     public event EventHandler<TagChangedEventArgs>? OnTagChanged;
 
@@ -53,39 +54,73 @@ public sealed class PlcPollingEngine
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
+    public void Start(Func<IReadOnlyList<PlcModel>> plcsLookup, Func<IReadOnlyList<PlcTag>> tagsLookup, Func<string, IPlcDriver?> driverLookup)
+    {
+        lock (_startLock)
+        {
+            if (_cts != null && !_cts.IsCancellationRequested && _pollingTask != null && !_pollingTask.IsCompleted)
+            {
+                // Already running
+                return;
+            }
+
+            Stop();
+
+            _cts = new CancellationTokenSource();
+            var token = _cts.Token;
+
+            _pollingTask = Task.Run(() => PollingLoopAsync(plcsLookup, tagsLookup, driverLookup, token), token);
+        }
+    }
+
     public void Start(IReadOnlyList<PlcModel> plcs, IReadOnlyList<PlcTag> tags, Func<string, IPlcDriver?> driverLookup)
     {
-        Stop();
-
-        _cts = new CancellationTokenSource();
-        var token = _cts.Token;
-
-        _pollingTask = Task.Run(() => PollingLoopAsync(plcs, tags, driverLookup, token), token);
+        Start(() => plcs, () => tags, driverLookup);
     }
 
     public void Stop()
     {
-        if (_cts != null)
+        lock (_startLock)
         {
-            _cts.Cancel();
-            try { _pollingTask?.Wait(2000); } catch { }
-            _cts.Dispose();
-            _cts = null;
-            _pollingTask = null;
+            if (_cts != null)
+            {
+                try
+                {
+                    _cts.Cancel();
+                    _cts.Dispose();
+                }
+                catch { }
+                _cts = null;
+                _pollingTask = null;
+            }
         }
     }
 
     private async Task PollingLoopAsync(
-        IReadOnlyList<PlcModel> plcs,
-        IReadOnlyList<PlcTag> tags,
+        Func<IReadOnlyList<PlcModel>> plcsLookup,
+        Func<IReadOnlyList<PlcTag>> tagsLookup,
         Func<string, IPlcDriver?> driverLookup,
         CancellationToken cancellationToken)
     {
-        var enabledPlcs = plcs.Where(p => p.Enabled).ToList();
-        if (enabledPlcs.Count == 0) return;
-
         while (!cancellationToken.IsCancellationRequested)
         {
+            var plcs = plcsLookup();
+            var tags = tagsLookup();
+            var enabledPlcs = plcs.Where(p => p.Enabled).ToList();
+
+            if (enabledPlcs.Count == 0)
+            {
+                try
+                {
+                    await Task.Delay(250, cancellationToken);
+                }
+                catch (TaskCanceledException)
+                {
+                    break;
+                }
+                continue;
+            }
+
             var swTotal = Stopwatch.StartNew();
 
             foreach (var plc in enabledPlcs)
@@ -99,7 +134,9 @@ public sealed class PlcPollingEngine
                 {
                     try
                     {
-                        await driver.ConnectAsync(cancellationToken);
+                        using var connectCts = new CancellationTokenSource(1500);
+                        using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, connectCts.Token);
+                        await driver.ConnectAsync(linkedCts.Token);
                     }
                     catch { }
                 }
@@ -115,7 +152,9 @@ public sealed class PlcPollingEngine
                 var swPlc = Stopwatch.StartNew();
                 try
                 {
-                    var readResults = await driver.ReadBatchAsync(plcTags, cancellationToken);
+                    using var readCts = new CancellationTokenSource(2000);
+                    using var linkedReadCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, readCts.Token);
+                    var readResults = await driver.ReadBatchAsync(plcTags, linkedReadCts.Token);
                     swPlc.Stop();
 
                     double elapsedMs = swPlc.Elapsed.TotalMilliseconds;

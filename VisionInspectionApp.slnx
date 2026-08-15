@@ -1,7 +1,26 @@
 <Solution>
-  <Project Path="VisionInspectionApp.Application/VisionInspectionApp.Application.csproj" />
-  <Project Path="VisionInspectionApp.Models/VisionInspectionApp.Models.csproj" />
-  <Project Path="VisionInspectionApp.Persistence/VisionInspectionApp.Persistence.csproj" />
-  <Project Path="VisionInspectionApp.UI/VisionInspectionApp.UI.csproj" />
-  <Project Path="VisionInspectionApp.VisionEngine/VisionInspectionApp.VisionEngine.csproj" />
+  <Configurations>
+    <Platform Name="Any CPU" />
+    <Platform Name="x64" />
+    <Platform Name="x86" />
+  </Configurations>
+  <Project Path="VisionInspectionApp.Application/VisionInspectionApp.Application.csproj">
+    <Platform Solution="*|x64" Project="x64" />
+  </Project>
+  <Project Path="VisionInspectionApp.Models/VisionInspectionApp.Models.csproj">
+    <Platform Solution="*|x64" Project="x64" />
+  </Project>
+  <Project Path="VisionInspectionApp.Persistence/VisionInspectionApp.Persistence.csproj">
+    <Platform Solution="*|x64" Project="x64" />
+  </Project>
+  <Project Path="VisionInspectionApp.PlcBridge/VisionInspectionApp.PlcBridge.csproj">
+    <Platform Solution="*|x64" Project="x86" />
+    <Platform Solution="*|Any CPU" Project="x86" />
+  </Project>
+  <Project Path="VisionInspectionApp.UI/VisionInspectionApp.UI.csproj">
+    <Platform Solution="*|x64" Project="x64" />
+  </Project>
+  <Project Path="VisionInspectionApp.VisionEngine/VisionInspectionApp.VisionEngine.csproj">
+    <Platform Solution="*|x64" Project="x64" />
+  </Project>
 </Solution>

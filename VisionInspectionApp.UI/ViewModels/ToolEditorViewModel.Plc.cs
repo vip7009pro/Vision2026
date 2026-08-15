@@ -483,9 +483,10 @@ public sealed partial class ToolEditorViewModel : ObservableObject
     {
         _plcManagerService.AcquirePollingLock("PlcManagerWindow");
         var vm = new PlcManagerViewModel(_plcManagerService);
+        var activeWin = System.Windows.Application.Current?.Windows.OfType<Window>().FirstOrDefault(w => w.IsActive) ?? System.Windows.Application.Current?.MainWindow;
         var win = new PlcManagerWindow(vm)
         {
-            Owner = System.Windows.Application.Current?.MainWindow
+            Owner = activeWin
         };
         win.Closed += (s, e) => _plcManagerService.ReleasePollingLock("PlcManagerWindow");
         win.ShowDialog();
@@ -501,9 +502,10 @@ public sealed partial class ToolEditorViewModel : ObservableObject
     private void OpenHmiManager()
     {
         var vm = new HMI.HmiManagerViewModel(_plcManagerService);
+        var activeWin = System.Windows.Application.Current?.Windows.OfType<Window>().FirstOrDefault(w => w.IsActive) ?? System.Windows.Application.Current?.MainWindow;
         var win = new Views.HMI.HmiManagerWindow(vm)
         {
-            Owner = System.Windows.Application.Current?.MainWindow
+            Owner = activeWin
         };
         win.Closed += (s, e) => vm.StopRunMode();
         win.Show();
@@ -514,9 +516,10 @@ public sealed partial class ToolEditorViewModel : ObservableObject
     {
         _plcManagerService.AcquirePollingLock("PlcMonitorWindow");
         var vm = new PlcMonitorViewModel(_plcManagerService);
+        var activeWin = System.Windows.Application.Current?.Windows.OfType<Window>().FirstOrDefault(w => w.IsActive) ?? System.Windows.Application.Current?.MainWindow;
         var win = new PlcMonitorWindow(vm)
         {
-            Owner = System.Windows.Application.Current?.MainWindow
+            Owner = activeWin
         };
         win.Closed += (s, e) => _plcManagerService.ReleasePollingLock("PlcMonitorWindow");
         win.Show();
@@ -526,13 +529,14 @@ public sealed partial class ToolEditorViewModel : ObservableObject
     private void OpenPlcBrowser()
     {
         _plcManagerService.AcquirePollingLock("PlcBrowserWindow");
+        var activeWin = System.Windows.Application.Current?.Windows.OfType<Window>().FirstOrDefault(w => w.IsActive) ?? System.Windows.Application.Current?.MainWindow;
         var win = new Window
         {
             Title = "PLC Tag Browser",
             Width = 700,
             Height = 450,
-            WindowStartupLocation = WindowStartupLocation.CenterOwner,
-            Owner = System.Windows.Application.Current?.MainWindow,
+            WindowStartupLocation = WindowStartupLocation.CenterScreen,
+            Owner = activeWin,
             Content = new PlcBrowserControl { DataContext = new PlcBrowserViewModel(_plcManagerService) }
         };
         win.Closed += (s, e) => _plcManagerService.ReleasePollingLock("PlcBrowserWindow");

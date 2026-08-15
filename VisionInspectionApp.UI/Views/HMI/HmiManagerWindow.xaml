@@ -6,7 +6,7 @@
         xmlns:views="clr-namespace:VisionInspectionApp.UI.Views.HMI"
         mc:Ignorable="d" 
         Title="{Binding WindowTitle}" Height="850" Width="1400"
-        WindowStartupLocation="CenterOwner"
+        WindowStartupLocation="CenterScreen"
         Background="{DynamicResource WindowBackgroundBrush}">
 
     <Window.InputBindings>

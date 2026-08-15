@@ -88,14 +88,7 @@ public sealed class PlcManagerService : IPlcManagerService, IDisposable
                     t.PropertyChanged -= Item_PropertyChanged;
                 }
             }
-            if (!_isLoading)
-            {
-                SaveGlobalConfig();
-                if (IsPollingActive)
-                {
-                    PollingEngine.Start(Plcs.ToList(), Tags.ToList(), GetDriver);
-                }
-            }
+            if (!_isLoading) SaveGlobalConfig();
         };
 
         LoadGlobalConfig();
@@ -103,6 +96,10 @@ public sealed class PlcManagerService : IPlcManagerService, IDisposable
 
     private void Item_PropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
+        if (e.PropertyName == nameof(PlcModel.State) || e.PropertyName == nameof(PlcModel.CpuName))
+        {
+            return;
+        }
         if (!_isLoading) SaveGlobalConfig();
     }
 
@@ -196,11 +193,9 @@ public sealed class PlcManagerService : IPlcManagerService, IDisposable
                   ?? Plcs.FirstOrDefault();
         string targetPlcId = plc?.Id ?? plcId;
 
-        // 1. Search by Name or Address
         var tag = Tags.FirstOrDefault(t => (string.Equals(t.PlcId, targetPlcId, StringComparison.OrdinalIgnoreCase) || string.Equals(t.PlcId, plcId, StringComparison.OrdinalIgnoreCase))
                                            && (string.Equals(t.Name, tagName, StringComparison.OrdinalIgnoreCase) || string.Equals(t.Address, tagName, StringComparison.OrdinalIgnoreCase)));
 
-        // 2. Fallback: if tag is not pre-registered in PLC Manager, create a dynamic tag for direct address writing (e.g. Y0, Y1, D200)
         if (tag == null)
         {
             PlcDataType defaultType = PlcDataType.Bool;
@@ -241,14 +236,18 @@ public sealed class PlcManagerService : IPlcManagerService, IDisposable
         {
             try
             {
-                await driver.ConnectAsync(cancellationToken);
+                using var connCts = new CancellationTokenSource(1500);
+                using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, connCts.Token);
+                await driver.ConnectAsync(linkedCts.Token);
             }
             catch { }
         }
 
         try
         {
-            bool success = await driver.WriteAsync(tag, value, cancellationToken);
+            using var writeCts = new CancellationTokenSource(2000);
+            using var linkedWriteCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, writeCts.Token);
+            bool success = await driver.WriteAsync(tag, value, linkedWriteCts.Token);
             if (success)
             {
                 Cache.Set(targetPlcId, tagName, value, TagQuality.Good);
@@ -274,7 +273,7 @@ public sealed class PlcManagerService : IPlcManagerService, IDisposable
         _isLoading = true;
         try
         {
-            StopPollingAsync().Wait();
+            PollingEngine.Stop();
 
             foreach (var d in _drivers.Values)
             {
@@ -306,7 +305,7 @@ public sealed class PlcManagerService : IPlcManagerService, IDisposable
 
             if (IsPollingActive)
             {
-                StartPollingAsync();
+                Task.Run(() => StartPollingAsync());
             }
         }
         finally
@@ -380,18 +379,27 @@ public sealed class PlcManagerService : IPlcManagerService, IDisposable
             if (driver != null && !driver.IsConnected)
             {
                 plc.State = PlcConnectionState.Connecting;
-                bool ok = await driver.ConnectAsync(cancellationToken);
-                if (ok)
+                try
                 {
-                    plc.State = PlcConnectionState.Connected;
-                    Logger.LogConnect(plc.Id, plc.Name);
-                    OnConnected?.Invoke(this, plc.Id);
+                    using var connCts = new CancellationTokenSource(2000);
+                    using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, connCts.Token);
+                    bool ok = await driver.ConnectAsync(linkedCts.Token);
+                    if (ok)
+                    {
+                        plc.State = PlcConnectionState.Connected;
+                        Logger.LogConnect(plc.Id, plc.Name);
+                        OnConnected?.Invoke(this, plc.Id);
+                    }
+                    else
+                    {
+                        plc.State = PlcConnectionState.Error;
+                        Logger.LogDisconnect(plc.Id, plc.Name);
+                        OnDisconnected?.Invoke(this, plc.Id);
+                    }
                 }
-                else
+                catch
                 {
                     plc.State = PlcConnectionState.Error;
-                    Logger.LogDisconnect(plc.Id, plc.Name);
-                    OnDisconnected?.Invoke(this, plc.Id);
                 }
             }
         }
@@ -404,7 +412,11 @@ public sealed class PlcManagerService : IPlcManagerService, IDisposable
             var driver = GetDriver(plc.Id);
             if (driver != null)
             {
-                await driver.DisconnectAsync();
+                try
+                {
+                    await driver.DisconnectAsync();
+                }
+                catch { }
                 plc.State = PlcConnectionState.Disconnected;
                 Logger.LogDisconnect(plc.Id, plc.Name);
                 OnDisconnected?.Invoke(this, plc.Id);
@@ -437,7 +449,7 @@ public sealed class PlcManagerService : IPlcManagerService, IDisposable
 
         if (shouldStart)
         {
-            _ = StartPollingAsync();
+            Task.Run(() => StartPollingAsync());
         }
     }
 
@@ -453,14 +465,14 @@ public sealed class PlcManagerService : IPlcManagerService, IDisposable
 
         if (shouldStop)
         {
-            _ = StopPollingAsync();
+            Task.Run(() => StopPollingAsync());
         }
     }
 
     public async Task StartPollingAsync()
     {
         await ConnectAllAsync();
-        PollingEngine.Start(Plcs.ToList(), Tags.ToList(), GetDriver);
+        PollingEngine.Start(() => Plcs.ToList(), () => Tags.ToList(), GetDriver);
     }
 
     public Task StopPollingAsync()
@@ -486,12 +498,11 @@ public sealed class PlcManagerService : IPlcManagerService, IDisposable
         if (_disposed) return;
         _disposed = true;
 
-        StopPollingAsync().Wait();
-        DisconnectAllAsync().Wait();
+        PollingEngine.Stop();
 
         foreach (var d in _drivers.Values)
         {
-            d.Dispose();
+            try { d.Dispose(); } catch { }
         }
         _drivers.Clear();
     }

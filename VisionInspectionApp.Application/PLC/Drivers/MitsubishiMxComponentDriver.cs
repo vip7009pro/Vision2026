@@ -1,8 +1,14 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Diagnostics;
+using System.IO;
 using System.Linq;
+using System.Net;
+using System.Net.Sockets;
 using System.Reflection;
+using System.Runtime.InteropServices;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using VisionInspectionApp.Models;
@@ -14,15 +20,20 @@ public sealed class MitsubishiMxComponentDriver : IPlcDriver
     private readonly SemaphoreSlim _lock = new(1, 1);
     private readonly ConcurrentDictionary<string, object> _simulatedMemory = new(StringComparer.OrdinalIgnoreCase);
 
+    // In-process COM fields (for x86 execution)
     private object? _comObject;
     private Type? _comType;
+
+    // Out-of-process Socket Bridge fields (for x64 execution)
+    private MxBridgeClient? _bridgeClient;
+
     private bool _disposed;
 
     public PlcModel Config { get; }
 
     public bool ForceSimulationMode { get; set; } = false;
 
-    public bool IsConnected => ForceSimulationMode || (Config.State == PlcConnectionState.Connected && _comObject != null);
+    public bool IsConnected => ForceSimulationMode || (Config.State == PlcConnectionState.Connected && (_comObject != null || (_bridgeClient != null && _bridgeClient.IsConnected)));
 
     public MitsubishiMxComponentDriver(PlcModel config)
     {
@@ -31,10 +42,22 @@ public sealed class MitsubishiMxComponentDriver : IPlcDriver
 
     public async Task<bool> ConnectAsync(CancellationToken cancellationToken = default)
     {
-        await _lock.WaitAsync(cancellationToken);
+        using var timeoutCts = new CancellationTokenSource(8000);
+        using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutCts.Token);
+
         try
         {
-            if (IsConnected && _comObject != null) return true;
+            await _lock.WaitAsync(linkedCts.Token);
+        }
+        catch
+        {
+            Config.State = PlcConnectionState.Error;
+            return false;
+        }
+
+        try
+        {
+            if (IsConnected && (_comObject != null || (_bridgeClient != null && _bridgeClient.IsConnected))) return true;
 
             if (ForceSimulationMode)
             {
@@ -43,10 +66,17 @@ public sealed class MitsubishiMxComponentDriver : IPlcDriver
                 return true;
             }
 
+            // 1. If running as 64-bit process, use out-of-process 32-bit PLC Bridge via Localhost Socket
+            if (Environment.Is64BitProcess)
+            {
+                return await ConnectViaBridgeAsync(linkedCts.Token);
+            }
+
+            // 2. If running as 32-bit process, try direct in-process COM first, fallback to bridge
             try
             {
                 _comType = Type.GetTypeFromProgID("ActUtlType.ActUtlType")
-                          ?? Type.GetTypeFromProgID("ActUtlType64.ActUtlType")
+                          ?? Type.GetTypeFromProgID("ActProgType.ActProgType")
                           ?? Type.GetTypeFromProgID("ActFXUtlType.ActFXUtlType");
 
                 if (_comType != null)
@@ -54,22 +84,19 @@ public sealed class MitsubishiMxComponentDriver : IPlcDriver
                     _comObject = Activator.CreateInstance(_comType);
                     if (_comObject != null)
                     {
-                        // Set ActLogicalStationNumber
                         SetComProperty("ActLogicalStationNumber", Config.LogicalStationNumber);
 
-                        // Call Open()
                         var openResult = InvokeComMethod("Open");
                         if (openResult is int resCode && resCode == 0)
                         {
                             Config.State = PlcConnectionState.Connected;
 
-                            // Call GetCpuType(out szCpuName, out iCpuType) like reference Form1.cs
                             try
                             {
                                 object[] cpuArgs = new object[] { "", 0 };
                                 ParameterModifier p = new ParameterModifier(2);
-                                p[0] = true; // out szCpuName
-                                p[1] = true; // out iCpuType
+                                p[0] = true;
+                                p[1] = true;
                                 ParameterModifier[] mods = new ParameterModifier[] { p };
 
                                 var cpuRes = _comType.InvokeMember("GetCpuType",
@@ -107,18 +134,12 @@ public sealed class MitsubishiMxComponentDriver : IPlcDriver
                     }
                 }
             }
-            catch (Exception ex)
+            catch
             {
-                Config.CpuName = $"COM Error: {ex.Message}";
-                Config.State = PlcConnectionState.Error;
                 CleanupCom();
-                return false;
             }
 
-            // COM type not registered on Windows
-            Config.CpuName = "MX Component Not Installed";
-            Config.State = PlcConnectionState.Error;
-            return false;
+            return await ConnectViaBridgeAsync(linkedCts.Token);
         }
         finally
         {
@@ -126,16 +147,59 @@ public sealed class MitsubishiMxComponentDriver : IPlcDriver
         }
     }
 
-    public async Task DisconnectAsync()
+    private async Task<bool> ConnectViaBridgeAsync(CancellationToken cancellationToken)
     {
-        await _lock.WaitAsync();
         try
         {
+            _bridgeClient ??= new MxBridgeClient();
+            var (success, cpuName, errMsg) = await _bridgeClient.ConnectAsync(Config.LogicalStationNumber, cancellationToken);
+            if (success)
+            {
+                Config.State = PlcConnectionState.Connected;
+                Config.CpuName = string.IsNullOrEmpty(cpuName) ? $"Mitsubishi PLC (St.{Config.LogicalStationNumber})" : cpuName;
+                return true;
+            }
+            else
+            {
+                Config.State = PlcConnectionState.Error;
+                Config.CpuName = errMsg ?? "Bridge Connection Failed";
+                return false;
+            }
+        }
+        catch (Exception ex)
+        {
+            Config.State = PlcConnectionState.Error;
+            Config.CpuName = $"Bridge Error: {ex.Message}";
+            return false;
+        }
+    }
+
+    public async Task DisconnectAsync()
+    {
+        try
+        {
+            await _lock.WaitAsync(TimeSpan.FromMilliseconds(1000));
+        }
+        catch
+        {
+            return;
+        }
+
+        try
+        {
+            if (_bridgeClient != null)
+            {
+                try { await _bridgeClient.DisconnectAsync(); } catch { }
+                _bridgeClient.Dispose();
+                _bridgeClient = null;
+            }
+
             if (_comObject != null)
             {
                 try { InvokeComMethod("Close"); } catch { }
                 CleanupCom();
             }
+
             Config.State = PlcConnectionState.Disconnected;
             Config.CpuName = string.Empty;
         }
@@ -172,43 +236,58 @@ public sealed class MitsubishiMxComponentDriver : IPlcDriver
         var tagList = tags.Where(t => t != null && !string.IsNullOrWhiteSpace(t.Address)).ToList();
         if (tagList.Count == 0) return result;
 
-        await _lock.WaitAsync(cancellationToken);
+        using var timeoutCts = new CancellationTokenSource(2000);
+        using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutCts.Token);
+
         try
         {
-            if (!ForceSimulationMode && _comObject != null && Config.State == PlcConnectionState.Connected)
+            await _lock.WaitAsync(linkedCts.Token);
+        }
+        catch
+        {
+            return FallbackReadSimulation(tagList);
+        }
+
+        try
+        {
+            if (!ForceSimulationMode && Config.State == PlcConnectionState.Connected)
             {
-                try
+                if (_bridgeClient != null && _bridgeClient.IsConnected)
                 {
-                    foreach (var tag in tagList)
+                    try
                     {
-                        object? val = ReadComTagValue(tag);
-                        result[tag.Name] = ApplyScale(val, tag.Scale);
+                        foreach (var tag in tagList)
+                        {
+                            object? val = await ReadBridgeTagValueAsync(_bridgeClient, tag, linkedCts.Token);
+                            result[tag.Name] = ApplyScale(val, tag.Scale);
+                        }
+                        return result;
                     }
-                    return result;
+                    catch
+                    {
+                        Config.State = PlcConnectionState.Error;
+                    }
                 }
-                catch
+                else if (_comObject != null)
                 {
-                    CleanupCom();
-                    Config.State = PlcConnectionState.Error;
+                    try
+                    {
+                        foreach (var tag in tagList)
+                        {
+                            object? val = ReadComTagValue(tag);
+                            result[tag.Name] = ApplyScale(val, tag.Scale);
+                        }
+                        return result;
+                    }
+                    catch
+                    {
+                        CleanupCom();
+                        Config.State = PlcConnectionState.Error;
+                    }
                 }
             }
 
-            // Fallback / Simulation mode read
-            foreach (var tag in tagList)
-            {
-                if (_simulatedMemory.TryGetValue(tag.Address, out var existing))
-                {
-                    result[tag.Name] = ApplyScale(existing, tag.Scale);
-                }
-                else
-                {
-                    var def = tag.DefaultValue ?? GetDefaultValueForDataType(tag.DataType);
-                    _simulatedMemory[tag.Address] = def;
-                    result[tag.Name] = ApplyScale(def, tag.Scale);
-                }
-            }
-
-            return result;
+            return FallbackReadSimulation(tagList);
         }
         finally
         {
@@ -216,32 +295,80 @@ public sealed class MitsubishiMxComponentDriver : IPlcDriver
         }
     }
 
+    private Dictionary<string, object?> FallbackReadSimulation(List<PlcTag> tagList)
+    {
+        var result = new Dictionary<string, object?>();
+        foreach (var tag in tagList)
+        {
+            if (_simulatedMemory.TryGetValue(tag.Address, out var existing))
+            {
+                result[tag.Name] = ApplyScale(existing, tag.Scale);
+            }
+            else
+            {
+                var def = tag.DefaultValue ?? GetDefaultValueForDataType(tag.DataType);
+                _simulatedMemory[tag.Address] = def;
+                result[tag.Name] = ApplyScale(def, tag.Scale);
+            }
+        }
+        return result;
+    }
+
     public async Task<bool> WriteBatchAsync(IDictionary<PlcTag, object> values, CancellationToken cancellationToken = default)
     {
         if (values == null || values.Count == 0) return true;
 
-        await _lock.WaitAsync(cancellationToken);
+        using var timeoutCts = new CancellationTokenSource(2000);
+        using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutCts.Token);
+
         try
         {
-            if (!ForceSimulationMode && _comObject != null && Config.State == PlcConnectionState.Connected)
+            await _lock.WaitAsync(linkedCts.Token);
+        }
+        catch
+        {
+            return false;
+        }
+
+        try
+        {
+            if (!ForceSimulationMode && Config.State == PlcConnectionState.Connected)
             {
-                try
+                if (_bridgeClient != null && _bridgeClient.IsConnected)
                 {
-                    foreach (var (tag, val) in values)
+                    try
                     {
-                        WriteComTagValue(tag, val);
-                        _simulatedMemory[tag.Address] = val;
+                        foreach (var (tag, val) in values)
+                        {
+                            await WriteBridgeTagValueAsync(_bridgeClient, tag, val, linkedCts.Token);
+                            _simulatedMemory[tag.Address] = val;
+                        }
+                        return true;
                     }
-                    return true;
+                    catch
+                    {
+                        Config.State = PlcConnectionState.Error;
+                    }
                 }
-                catch
+                else if (_comObject != null)
                 {
-                    CleanupCom();
-                    Config.State = PlcConnectionState.Error;
+                    try
+                    {
+                        foreach (var (tag, val) in values)
+                        {
+                            WriteComTagValue(tag, val);
+                            _simulatedMemory[tag.Address] = val;
+                        }
+                        return true;
+                    }
+                    catch
+                    {
+                        CleanupCom();
+                        Config.State = PlcConnectionState.Error;
+                    }
                 }
             }
 
-            // Simulated memory write
             foreach (var (tag, val) in values)
             {
                 _simulatedMemory[tag.Address] = val;
@@ -255,7 +382,66 @@ public sealed class MitsubishiMxComponentDriver : IPlcDriver
         }
     }
 
-    #region COM Reflection Helpers
+    #region Bridge Read/Write Helpers
+
+    private static async Task<object?> ReadBridgeTagValueAsync(MxBridgeClient bridge, PlcTag tag, CancellationToken cancellationToken)
+    {
+        string device = tag.Address.Trim();
+
+        if (tag.DataType == PlcDataType.Float)
+        {
+            string nextDevice = IncrementDeviceAddress(device, 1);
+            var (rc1, w1) = await bridge.GetDevice2Async(device, cancellationToken);
+            var (rc2, w2) = await bridge.GetDevice2Async(nextDevice, cancellationToken);
+            if (rc1 == 0 && rc2 == 0)
+            {
+                float fVal = WordsToFloat(new int[] { w1, w2 });
+                return ApplyScale(fVal, tag.Scale);
+            }
+            return tag.DefaultValue;
+        }
+
+        var (rc, val) = await bridge.GetDeviceAsync(device, cancellationToken);
+        if (rc == 0)
+        {
+            if (tag.DataType == PlcDataType.Bool)
+            {
+                return val != 0;
+            }
+            return ConvertFromInt(val, tag.DataType);
+        }
+
+        return tag.DefaultValue;
+    }
+
+    private static async Task WriteBridgeTagValueAsync(MxBridgeClient bridge, PlcTag tag, object val, CancellationToken cancellationToken)
+    {
+        string device = tag.Address.Trim();
+
+        if (tag.DataType == PlcDataType.Float)
+        {
+            float fVal = 0f;
+            if (val != null)
+            {
+                if (val is float f) fVal = f;
+                else if (val is double d) fVal = (float)d;
+                else float.TryParse(val.ToString(), System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out fVal);
+            }
+
+            int[] words = FloatToWords(fVal);
+            string nextDevice = IncrementDeviceAddress(device, 1);
+            await bridge.SetDevice2Async(device, (short)words[0], cancellationToken);
+            await bridge.SetDevice2Async(nextDevice, (short)words[1], cancellationToken);
+            return;
+        }
+
+        int iVal = ConvertToInt(val, tag.DataType);
+        await bridge.SetDeviceAsync(device, iVal, cancellationToken);
+    }
+
+    #endregion
+
+    #region In-Process COM Reflection Helpers
 
     private object? ReadComTagValue(PlcTag tag)
     {
@@ -263,34 +449,8 @@ public sealed class MitsubishiMxComponentDriver : IPlcDriver
 
         string device = tag.Address.Trim();
 
-        // Special handling for Float data type (reads 2 consecutive words: e.g. D200 & D201)
         if (tag.DataType == PlcDataType.Float)
         {
-            try
-            {
-                string nextDevice = IncrementDeviceAddress(device, 1);
-                object[] args1 = new object[] { device, 0 };
-                object[] args2 = new object[] { nextDevice, 0 };
-                ParameterModifier[] modifiers1 = new ParameterModifier[1];
-                modifiers1[0] = new ParameterModifier(2);
-                modifiers1[0][1] = true;
-                ParameterModifier[] modifiers2 = new ParameterModifier[1];
-                modifiers2[0] = new ParameterModifier(2);
-                modifiers2[0][1] = true;
-
-                var res1 = _comType.InvokeMember("GetDevice", BindingFlags.InvokeMethod | BindingFlags.Public | BindingFlags.Instance, null, _comObject, args1, modifiers1, null, null);
-                var res2 = _comType.InvokeMember("GetDevice", BindingFlags.InvokeMethod | BindingFlags.Public | BindingFlags.Instance, null, _comObject, args2, modifiers2, null, null);
-
-                if (res1 is int rc1 && rc1 == 0 && res2 is int rc2 && rc2 == 0)
-                {
-                    int w1 = Convert.ToInt32(args1[1]);
-                    int w2 = Convert.ToInt32(args2[1]);
-                    float fVal = WordsToFloat(new int[] { w1, w2 });
-                    return ApplyScale(fVal, tag.Scale);
-                }
-            }
-            catch { }
-
             try
             {
                 string nextDevice = IncrementDeviceAddress(device, 1);
@@ -317,7 +477,6 @@ public sealed class MitsubishiMxComponentDriver : IPlcDriver
             catch { }
         }
 
-        // 1. Try GetDevice(szDevice, out int iData) - standard Mitsubishi MX Component API
         try
         {
             object[] args = new object[] { device, 0 };
@@ -342,7 +501,6 @@ public sealed class MitsubishiMxComponentDriver : IPlcDriver
         }
         catch { }
 
-        // 2. Fallback to GetDevice2(szDevice, out short sData)
         try
         {
             object[] args = new object[] { device, (short)0 };
@@ -389,7 +547,6 @@ public sealed class MitsubishiMxComponentDriver : IPlcDriver
             int[] words = FloatToWords(fVal);
             string nextDevice = IncrementDeviceAddress(device, 1);
 
-            // Write 2 consecutive words (word 0 to device, word 1 to device+1) using SetDevice2/SetDevice
             try
             {
                 object[] args1 = new object[] { device, (short)words[0] };
@@ -397,17 +554,7 @@ public sealed class MitsubishiMxComponentDriver : IPlcDriver
                 _comType.InvokeMember("SetDevice2", BindingFlags.InvokeMethod | BindingFlags.Public | BindingFlags.Instance, null, _comObject, args1);
                 _comType.InvokeMember("SetDevice2", BindingFlags.InvokeMethod | BindingFlags.Public | BindingFlags.Instance, null, _comObject, args2);
             }
-            catch
-            {
-                try
-                {
-                    object[] args1 = new object[] { device, words[0] };
-                    object[] args2 = new object[] { nextDevice, words[1] };
-                    _comType.InvokeMember("SetDevice", BindingFlags.InvokeMethod | BindingFlags.Public | BindingFlags.Instance, null, _comObject, args1);
-                    _comType.InvokeMember("SetDevice", BindingFlags.InvokeMethod | BindingFlags.Public | BindingFlags.Instance, null, _comObject, args2);
-                }
-                catch { }
-            }
+            catch { }
 
             return;
         }
@@ -430,6 +577,36 @@ public sealed class MitsubishiMxComponentDriver : IPlcDriver
                 null, _comObject, args);
         }
     }
+
+    private void SetComProperty(string propName, object val)
+    {
+        if (_comObject == null || _comType == null) return;
+        _comType.InvokeMember(propName,
+            BindingFlags.SetProperty | BindingFlags.Public | BindingFlags.Instance,
+            null, _comObject, new[] { val });
+    }
+
+    private object? InvokeComMethod(string methodName, params object[] args)
+    {
+        if (_comObject == null || _comType == null) return null;
+        return _comType.InvokeMember(methodName,
+            BindingFlags.InvokeMethod | BindingFlags.Public | BindingFlags.Instance,
+            null, _comObject, args);
+    }
+
+    private void CleanupCom()
+    {
+        if (_comObject != null)
+        {
+            try { Marshal.FinalReleaseComObject(_comObject); } catch { }
+            _comObject = null;
+        }
+        _comType = null;
+    }
+
+    #endregion
+
+    #region Common Utility Helpers
 
     private static string IncrementDeviceAddress(string address, int offset)
     {
@@ -488,32 +665,6 @@ public sealed class MitsubishiMxComponentDriver : IPlcDriver
         _ => iVal
     };
 
-    private void SetComProperty(string propName, object val)
-    {
-        if (_comObject == null || _comType == null) return;
-        _comType.InvokeMember(propName,
-            BindingFlags.SetProperty | BindingFlags.Public | BindingFlags.Instance,
-            null, _comObject, new[] { val });
-    }
-
-    private object? InvokeComMethod(string methodName, params object[] args)
-    {
-        if (_comObject == null || _comType == null) return null;
-        return _comType.InvokeMember(methodName,
-            BindingFlags.InvokeMethod | BindingFlags.Public | BindingFlags.Instance,
-            null, _comObject, args);
-    }
-
-    private void CleanupCom()
-    {
-        if (_comObject != null)
-        {
-            try { System.Runtime.InteropServices.Marshal.ReleaseComObject(_comObject); } catch { }
-            _comObject = null;
-        }
-        _comType = null;
-    }
-
     private static short ConvertToShort(object val, PlcDataType type)
     {
         string str = val?.ToString() ?? "0";
@@ -559,8 +710,487 @@ public sealed class MitsubishiMxComponentDriver : IPlcDriver
         if (_disposed) return;
         _disposed = true;
 
-        try { DisconnectAsync().Wait(); } catch { }
+        if (_bridgeClient != null)
+        {
+            try { _bridgeClient.Dispose(); } catch { }
+            _bridgeClient = null;
+        }
+
+        CleanupCom();
         _lock.Dispose();
     }
+
+    #endregion
+
+    #region Out-of-Process Localhost TCP Socket Bridge Client
+
+    private sealed class MxBridgeClient : IDisposable
+    {
+        private const int BridgePort = 39871;
+        private readonly SemaphoreSlim _clientLock = new(1, 1);
+        private TcpClient? _tcpClient;
+        private NetworkStream? _networkStream;
+        private StreamReader? _reader;
+        private StreamWriter? _writer;
+        private Process? _bridgeProcess;
+        private bool _isConnected;
+        private bool _disposed;
+        private DateTime _lastLaunchAttempt = DateTime.MinValue;
+
+        public bool IsConnected => _isConnected && _tcpClient != null && _tcpClient.Connected;
+
+        public async Task<(bool Success, string CpuName, string? ErrorMessage)> ConnectAsync(int stationNumber, CancellationToken cancellationToken)
+        {
+            using var timeoutCts = new CancellationTokenSource(8000);
+            using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutCts.Token);
+
+            try
+            {
+                await _clientLock.WaitAsync(linkedCts.Token);
+            }
+            catch
+            {
+                return (false, "", "Connect request timed out.");
+            }
+
+            try
+            {
+                await EnsureBridgeProcessAndSocketConnectedAsync(linkedCts.Token);
+
+                string response = await SendCommandInternalAsync($"CONNECT|{stationNumber}", linkedCts.Token);
+                string[] parts = response.Split('|');
+                if (parts.Length > 0 && string.Equals(parts[0], "OK", StringComparison.OrdinalIgnoreCase))
+                {
+                    _isConnected = true;
+                    string cpuName = parts.Length > 2 ? parts[2] : $"Mitsubishi PLC (St.{stationNumber})";
+                    string cpuType = parts.Length > 3 ? parts[3] : "";
+                    if (!string.IsNullOrEmpty(cpuType) && !cpuName.Contains(cpuType))
+                    {
+                        cpuName = $"{cpuName} (Type {cpuType})";
+                    }
+                    return (true, cpuName, null);
+                }
+
+                string err = parts.Length > 2 ? parts[2] : "Connect rejected by bridge.";
+                return (false, "", err);
+            }
+            catch (Exception ex)
+            {
+                return (false, "", ex.Message);
+            }
+            finally
+            {
+                _clientLock.Release();
+            }
+        }
+
+        public async Task DisconnectAsync()
+        {
+            try
+            {
+                await _clientLock.WaitAsync(TimeSpan.FromMilliseconds(500));
+            }
+            catch
+            {
+                return;
+            }
+
+            try
+            {
+                if (IsConnected)
+                {
+                    try
+                    {
+                        using var cts = new CancellationTokenSource(500);
+                        await SendCommandInternalAsync("DISCONNECT", cts.Token);
+                    }
+                    catch { }
+                }
+                _isConnected = false;
+            }
+            finally
+            {
+                _clientLock.Release();
+            }
+        }
+
+        public async Task<(int ResCode, int Value)> GetDeviceAsync(string device, CancellationToken cancellationToken)
+        {
+            using var timeoutCts = new CancellationTokenSource(1500);
+            using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutCts.Token);
+
+            try
+            {
+                await _clientLock.WaitAsync(linkedCts.Token);
+            }
+            catch
+            {
+                return (-99, 0);
+            }
+
+            try
+            {
+                if (!IsConnected) return (-1, 0);
+                string res = await SendCommandInternalAsync($"GET_DEVICE|{device}", linkedCts.Token);
+                string[] parts = res.Split('|');
+                if (parts.Length > 1 && string.Equals(parts[0], "OK", StringComparison.OrdinalIgnoreCase))
+                {
+                    int.TryParse(parts[1], out int val);
+                    return (0, val);
+                }
+                int.TryParse(parts.Length > 1 ? parts[1] : "-1", out int errCode);
+                return (errCode, 0);
+            }
+            catch
+            {
+                return (-99, 0);
+            }
+            finally
+            {
+                _clientLock.Release();
+            }
+        }
+
+        public async Task<int> SetDeviceAsync(string device, int value, CancellationToken cancellationToken)
+        {
+            using var timeoutCts = new CancellationTokenSource(1500);
+            using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutCts.Token);
+
+            try
+            {
+                await _clientLock.WaitAsync(linkedCts.Token);
+            }
+            catch
+            {
+                return -99;
+            }
+
+            try
+            {
+                if (!IsConnected) return -1;
+                string res = await SendCommandInternalAsync($"SET_DEVICE|{device}|{value}", linkedCts.Token);
+                string[] parts = res.Split('|');
+                if (parts.Length > 0 && string.Equals(parts[0], "OK", StringComparison.OrdinalIgnoreCase))
+                {
+                    return 0;
+                }
+                int.TryParse(parts.Length > 1 ? parts[1] : "-1", out int errCode);
+                return errCode;
+            }
+            catch
+            {
+                return -99;
+            }
+            finally
+            {
+                _clientLock.Release();
+            }
+        }
+
+        public async Task<(int ResCode, short Value)> GetDevice2Async(string device, CancellationToken cancellationToken)
+        {
+            using var timeoutCts = new CancellationTokenSource(1500);
+            using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutCts.Token);
+
+            try
+            {
+                await _clientLock.WaitAsync(linkedCts.Token);
+            }
+            catch
+            {
+                return (-99, (short)0);
+            }
+
+            try
+            {
+                if (!IsConnected) return (-1, (short)0);
+                string res = await SendCommandInternalAsync($"GET_DEVICE2|{device}", linkedCts.Token);
+                string[] parts = res.Split('|');
+                if (parts.Length > 1 && string.Equals(parts[0], "OK", StringComparison.OrdinalIgnoreCase))
+                {
+                    short.TryParse(parts[1], out short val);
+                    return (0, val);
+                }
+                int.TryParse(parts.Length > 1 ? parts[1] : "-1", out int errCode);
+                return (errCode, (short)0);
+            }
+            catch
+            {
+                return (-99, (short)0);
+            }
+            finally
+            {
+                _clientLock.Release();
+            }
+        }
+
+        public async Task<int> SetDevice2Async(string device, short value, CancellationToken cancellationToken)
+        {
+            using var timeoutCts = new CancellationTokenSource(1500);
+            using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutCts.Token);
+
+            try
+            {
+                await _clientLock.WaitAsync(linkedCts.Token);
+            }
+            catch
+            {
+                return -99;
+            }
+
+            try
+            {
+                if (!IsConnected) return -1;
+                string res = await SendCommandInternalAsync($"SET_DEVICE2|{device}|{value}", linkedCts.Token);
+                string[] parts = res.Split('|');
+                if (parts.Length > 0 && string.Equals(parts[0], "OK", StringComparison.OrdinalIgnoreCase))
+                {
+                    return 0;
+                }
+                int.TryParse(parts.Length > 1 ? parts[1] : "-1", out int errCode);
+                return errCode;
+            }
+            catch
+            {
+                return -99;
+            }
+            finally
+            {
+                _clientLock.Release();
+            }
+        }
+
+        private async Task EnsureBridgeProcessAndSocketConnectedAsync(CancellationToken cancellationToken)
+        {
+            if (_tcpClient != null && _tcpClient.Connected)
+            {
+                return;
+            }
+
+            CloseSocketConnection();
+
+            // 1. First, attempt quick connection to existing running bridge instance
+            bool connected = false;
+            try
+            {
+                _tcpClient = new TcpClient { NoDelay = true };
+                using var quickCts = new CancellationTokenSource(400);
+                await _tcpClient.ConnectAsync(IPAddress.Loopback, BridgePort, quickCts.Token);
+                connected = true;
+            }
+            catch
+            {
+                CloseSocketConnection();
+            }
+
+            // 2. If not already running, launch bridge process
+            if (!connected)
+            {
+                if ((DateTime.UtcNow - _lastLaunchAttempt).TotalSeconds > 2)
+                {
+                    _lastLaunchAttempt = DateTime.UtcNow;
+                    LaunchBridgeProcess();
+                }
+
+                // 3. Retry connection loop up to 4000ms while bridge starts up
+                int maxAttempts = 20;
+                while (maxAttempts-- > 0 && !cancellationToken.IsCancellationRequested)
+                {
+                    try
+                    {
+                        await Task.Delay(200, cancellationToken);
+                        _tcpClient = new TcpClient { NoDelay = true };
+                        using var retryCts = new CancellationTokenSource(500);
+                        using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, retryCts.Token);
+                        await _tcpClient.ConnectAsync(IPAddress.Loopback, BridgePort, linked.Token);
+                        connected = true;
+                        break;
+                    }
+                    catch
+                    {
+                        CloseSocketConnection();
+                    }
+                }
+            }
+
+            if (!connected || _tcpClient == null || !_tcpClient.Connected)
+            {
+                throw new IOException($"Could not connect to 32-bit PLC Bridge on 127.0.0.1:{BridgePort}.");
+            }
+
+            _networkStream = _tcpClient.GetStream();
+            _reader = new StreamReader(_networkStream, Encoding.UTF8, false, 4096, leaveOpen: true);
+            _writer = new StreamWriter(_networkStream, Encoding.UTF8, 4096, leaveOpen: true) { AutoFlush = true };
+        }
+
+        private static void KillExistingZombieBridges()
+        {
+            try
+            {
+                foreach (var p in Process.GetProcessesByName("VisionInspectionApp.PlcBridge"))
+                {
+                    try { p.Kill(); } catch { }
+                }
+            }
+            catch { }
+        }
+
+        private void LaunchBridgeProcess()
+        {
+            KillExistingZombieBridges();
+
+            string baseDir = AppDomain.CurrentDomain.BaseDirectory;
+            string bridgeDll = Path.Combine(baseDir, "VisionInspectionApp.PlcBridge.dll");
+            string bridgeExe = Path.Combine(baseDir, "VisionInspectionApp.PlcBridge.exe");
+
+            // Check and pick the newest build of PlcBridge.dll across known output directories
+            string[] searchPaths = new[]
+            {
+                Path.Combine(baseDir, "VisionInspectionApp.PlcBridge.dll"),
+                Path.Combine(baseDir, "..", "..", "..", "..", "VisionInspectionApp.PlcBridge", "bin", "x86", "Debug", "net8.0-windows", "VisionInspectionApp.PlcBridge.dll"),
+                Path.Combine(baseDir, "..", "..", "..", "..", "VisionInspectionApp.PlcBridge", "bin", "x86", "Release", "net8.0-windows", "VisionInspectionApp.PlcBridge.dll"),
+                Path.Combine(baseDir, "..", "..", "..", "..", "VisionInspectionApp.PlcBridge", "bin", "Debug", "net8.0-windows", "VisionInspectionApp.PlcBridge.dll"),
+                Path.Combine(baseDir, "..", "..", "..", "..", "VisionInspectionApp.PlcBridge", "bin", "Release", "net8.0-windows", "VisionInspectionApp.PlcBridge.dll")
+            };
+
+            string? bestDll = null;
+            DateTime bestTime = DateTime.MinValue;
+            foreach (var path in searchPaths)
+            {
+                try
+                {
+                    string full = Path.GetFullPath(path);
+                    if (File.Exists(full))
+                    {
+                        var writeTime = File.GetLastWriteTime(full);
+                        if (writeTime > bestTime)
+                        {
+                            bestTime = writeTime;
+                            bestDll = full;
+                        }
+                    }
+                }
+                catch { }
+            }
+
+            if (bestDll != null)
+            {
+                bridgeDll = bestDll;
+                bridgeExe = Path.ChangeExtension(bestDll, ".exe");
+            }
+
+            if (!File.Exists(bridgeExe) && !File.Exists(bridgeDll))
+            {
+                throw new FileNotFoundException($"Cannot find 32-bit PLC Bridge worker executable or assembly in: {baseDir}");
+            }
+
+            int currentPid = Process.GetCurrentProcess().Id;
+            string x86Dotnet = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86), "dotnet", "dotnet.exe");
+
+            ProcessStartInfo psi;
+            if (File.Exists(x86Dotnet) && File.Exists(bridgeDll))
+            {
+                psi = new ProcessStartInfo
+                {
+                    FileName = x86Dotnet,
+                    Arguments = $"\"{bridgeDll}\" --parent-pid {currentPid} --port {BridgePort}",
+                    UseShellExecute = false,
+                    CreateNoWindow = true,
+                    WindowStyle = ProcessWindowStyle.Hidden,
+                    WorkingDirectory = Path.GetDirectoryName(bridgeDll) ?? baseDir
+                };
+            }
+            else
+            {
+                psi = new ProcessStartInfo
+                {
+                    FileName = bridgeExe,
+                    Arguments = $"--parent-pid {currentPid} --port {BridgePort}",
+                    UseShellExecute = false,
+                    CreateNoWindow = true,
+                    WindowStyle = ProcessWindowStyle.Hidden,
+                    WorkingDirectory = Path.GetDirectoryName(bridgeExe) ?? baseDir
+                };
+            }
+
+            string x86DotnetRoot = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86), "dotnet");
+            if (Directory.Exists(x86DotnetRoot))
+            {
+                psi.Environment["DOTNET_ROOT"] = x86DotnetRoot;
+            }
+
+            _bridgeProcess = Process.Start(psi);
+        }
+
+        private async Task<string> SendCommandInternalAsync(string command, CancellationToken cancellationToken)
+        {
+            if (_writer == null || _reader == null)
+            {
+                throw new InvalidOperationException("Bridge socket is not connected.");
+            }
+
+            using var cmdTimeoutCts = new CancellationTokenSource(2500);
+            using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, cmdTimeoutCts.Token);
+
+            await _writer.WriteLineAsync(command.AsMemory(), linkedCts.Token);
+            await _writer.FlushAsync(linkedCts.Token);
+            string? response = await _reader.ReadLineAsync(linkedCts.Token);
+            if (response == null)
+            {
+                _isConnected = false;
+                throw new IOException("Bridge socket connection closed unexpectedly.");
+            }
+
+            return response;
+        }
+
+        private void CloseSocketConnection()
+        {
+            _isConnected = false;
+            try { _reader?.Dispose(); } catch { }
+            try { _writer?.Dispose(); } catch { }
+            try { _networkStream?.Dispose(); } catch { }
+            try { _tcpClient?.Dispose(); } catch { }
+            _reader = null;
+            _writer = null;
+            _networkStream = null;
+            _tcpClient = null;
+        }
+
+        public void Dispose()
+        {
+            if (_disposed) return;
+            _disposed = true;
+
+            try
+            {
+                if (IsConnected && _writer != null)
+                {
+                    _writer.WriteLine("EXIT");
+                    _writer.Flush();
+                }
+            }
+            catch { }
+
+            CloseSocketConnection();
+
+            if (_bridgeProcess != null)
+            {
+                try
+                {
+                    if (!_bridgeProcess.HasExited)
+                    {
+                        _bridgeProcess.WaitForExit(500);
+                    }
+                }
+                catch { }
+                try { _bridgeProcess.Dispose(); } catch { }
+                _bridgeProcess = null;
+            }
+
+            _clientLock.Dispose();
+        }
+    }
+
     #endregion
 }
