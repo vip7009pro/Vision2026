@@ -815,6 +815,12 @@
   - **Dọn dẹp & Flush an toàn**: Tích hợp `DisposeAsync()` trong [App.xaml.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/App.xaml.cs) đảm bảo khi ứng dụng tắt, toàn bộ ảnh còn trong hàng đợi sẽ được ghi hoàn tất an toàn.
   - **Hiệu năng đột phá**: Thời gian thực thi của node `ImageOutput` trên flow giảm từ **~350–500 ms** xuống còn **~2–5 ms**; tổng pipeline khi có ImageOutput giảm từ **> 600 ms** về ngang bằng chế độ không có ImageOutput (**~125–250 ms**).
   - **Biên dịch Solution VisionInspectionApp.slnx thành công 100%**: **0 Error(s)**.
+- [x] Task 156: Triển khai Ngắt Sớm Pipeline Khi Origin Fail (Origin-Fail Short-Circuit Execution):
+  - **Phát hiện & Ngắt dòng tức thì**: Ngay sau khi chạy `Origin`, nếu điểm số không đạt ngưỡng (`!originPass`), hệ thống lập tức ngắt toàn bộ việc chạy các vision tool phía sau (Point, Line, Blob, SurfaceCompare, Caliper, EdgePair, CodeDetection ZXing, Distance, Angle, v.v.).
+  - **Gán kết quả Fail mặc định (`PopulateOriginFailedResults`)**: Tự động khởi tạo kết quả `Pass: false` / `Found: false` với `NodeTimings = 0` cho toàn bộ các node con phía sau, đảm bảo UI và báo cáo không bị thiếu dữ liệu.
+  - **Bảo đảm luồng gửi tín hiệu NG**: Vẫn thực thi các node điều khiển ngoại vi (`PlcNodes`, `DbNodes`, `ImageOutputs` theo điều kiện `OnFail`/`Always`) để báo còi/đèn NG cho PLC và lưu log ảnh lỗi.
+  - **Hiệu năng đột phá**: Triệt tiêu hoàn toàn độ trễ quét xoay vô ích của `CodeDetection` (~2170ms) và các tool hình học, rút ngắn tổng thời gian khi bắt lỗi Origin từ **~3000 ms** xuống còn **~60–310 ms** (Nhanh hơn gấp **~10 lần** khi phôi lỗi/lệch).
+  - **Biên dịch Solution VisionInspectionApp.slnx thành công 100%**: **0 Error(s)**.
 
 ## Roadmap
 

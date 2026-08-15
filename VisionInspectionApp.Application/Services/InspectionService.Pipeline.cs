@@ -1395,6 +1395,20 @@ public partial class InspectionService
             result.Timings.OriginMs = (int)Math.Max(0, swTotal.ElapsedMilliseconds - tOrigin0);
             result.Timings.NodeTimings[config.Origin.Name ?? "Origin"] = result.Timings.OriginMs;
 
+            if (!originPass)
+            {
+                // SHORT-CIRCUIT: Origin failed to match. Skip all downstream vision tools immediately.
+                PopulateOriginFailedResults(config, result);
+                result.Pass = false;
+
+                ExecutePlcNodes(config, result, _plcManager);
+                ExecuteDbNodes(config, result, effectiveDbManager, DbExecutionTiming.AfterFlow);
+                ExecuteImageOutputs(config, result, image, GetPreprocessNodeOutput, nodesById, edges);
+
+                result.Timings.TotalMs = (int)Math.Max(0, swTotal.ElapsedMilliseconds);
+                return result;
+            }
+
             var originTeach = new Point2d(config.Origin.WorldPosition.X, config.Origin.WorldPosition.Y);
             var originFound = originMatch.Position;
             var angleDeg = poseAngleDeg;
@@ -3550,4 +3564,317 @@ public partial class InspectionService
             flowDiagnostics.CompleteAfterCleanup();
         }
     }
+
+    private static void PopulateOriginFailedResults(VisionConfig config, InspectionResult result)
+    {
+        // 1. Points
+        if (config.Points != null)
+        {
+            foreach (var p in config.Points)
+            {
+                if (p is not null && !string.IsNullOrWhiteSpace(p.Name))
+                {
+                    result.Points.Add(new PointMatchResult(p.Name, new Point2d(p.WorldPosition.X, p.WorldPosition.Y), new Rect(0, 0, 0, 0), 0.0, p.MatchScoreThreshold, Pass: false, AngleDeg: 0.0));
+                    result.Timings.NodeTimings[p.Name] = 0;
+                }
+            }
+        }
+
+        // 2. Lines
+        if (config.Lines != null)
+        {
+            foreach (var l in config.Lines)
+            {
+                if (l is not null && !string.IsNullOrWhiteSpace(l.Name))
+                {
+                    result.Lines.Add(new LineDetectResult(l.Name, default, default, 0.0, Found: false));
+                    result.Timings.NodeTimings[l.Name] = 0;
+                }
+            }
+        }
+
+        // 3. Blobs
+        if (config.BlobDetections != null)
+        {
+            foreach (var b in config.BlobDetections)
+            {
+                if (b is not null && !string.IsNullOrWhiteSpace(b.Name))
+                {
+                    result.BlobDetections.Add(new BlobDetectionResult(b.Name, 0, new List<BlobInfo>()));
+                    result.Timings.NodeTimings[b.Name] = 0;
+                }
+            }
+        }
+
+        // 4. SurfaceCompares
+        if (config.SurfaceCompares != null)
+        {
+            foreach (var sc in config.SurfaceCompares)
+            {
+                if (sc is not null && !string.IsNullOrWhiteSpace(sc.Name))
+                {
+                    result.SurfaceCompares.Add(new SurfaceCompareResult(sc.Name, 0, 0.0, new List<SurfaceCompareDefect>(), Pass: false));
+                    result.Timings.NodeTimings[sc.Name] = 0;
+                }
+            }
+        }
+
+        // 5. ContourCompares
+        if (config.ContourCompares != null)
+        {
+            foreach (var cc in config.ContourCompares)
+            {
+                if (cc is not null && !string.IsNullOrWhiteSpace(cc.Name))
+                {
+                    result.ContourCompares.Add(new ContourCompareResult(cc.Name, Found: false, Pass: false, 0.0, 999.0, 999.0, 999.0));
+                    result.Timings.NodeTimings[cc.Name] = 0;
+                }
+            }
+        }
+
+        // 6. ColorDiffs
+        if (config.ColorDiffs != null)
+        {
+            foreach (var cd in config.ColorDiffs)
+            {
+                if (cd is not null && !string.IsNullOrWhiteSpace(cd.Name))
+                {
+                    result.ColorDiffs.Add(new ColorDiffResult(cd.Name, Pass: false, 0, 0, 0, 0, 0, 0, 999.0, cd.MaxDeltaE));
+                    result.Timings.NodeTimings[cd.Name] = 0;
+                }
+            }
+        }
+
+        // 7. Crops
+        if (config.Crops != null)
+        {
+            foreach (var cr in config.Crops)
+            {
+                if (cr is not null && !string.IsNullOrWhiteSpace(cr.Name))
+                {
+                    result.Crops.Add(new CropResult(cr.Name, false, 0, 0));
+                    result.Timings.NodeTimings[cr.Name] = 0;
+                }
+            }
+        }
+
+        // 8. ImgArithmetics
+        if (config.ImgArithmetics != null)
+        {
+            foreach (var ari in config.ImgArithmetics)
+            {
+                if (ari is not null && !string.IsNullOrWhiteSpace(ari.Name))
+                {
+                    result.ImgArithmetics.Add(new ImgArithmeticResult(ari.Name, false, ari.Op, 0, 0));
+                    result.Timings.NodeTimings[ari.Name] = 0;
+                }
+            }
+        }
+
+        // 9. LinePairDetections
+        if (config.LinePairDetections != null)
+        {
+            foreach (var lpd in config.LinePairDetections)
+            {
+                if (lpd is not null && !string.IsNullOrWhiteSpace(lpd.Name))
+                {
+                    result.LinePairDetections.Add(new LinePairDetectionResult(lpd.Name, false, default, default, default, default, double.NaN, lpd.Nominal, lpd.TolerancePlus, lpd.ToleranceMinus, false, default, default));
+                    result.Timings.NodeTimings[lpd.Name] = 0;
+                }
+            }
+        }
+
+        // 10. Calipers
+        if (config.Calipers != null)
+        {
+            foreach (var c in config.Calipers)
+            {
+                if (c is not null && !string.IsNullOrWhiteSpace(c.Name))
+                {
+                    result.Calipers.Add(new CaliperResult(c.Name, false, new List<CaliperEdgePoint>(), default, default, 0.0));
+                    result.Timings.NodeTimings[c.Name] = 0;
+                }
+            }
+        }
+
+        // 11. EdgePairDetections
+        if (config.EdgePairDetections != null)
+        {
+            foreach (var epd in config.EdgePairDetections)
+            {
+                if (epd is not null && !string.IsNullOrWhiteSpace(epd.Name))
+                {
+                    result.EdgePairDetections.Add(new EdgePairDetectResult(epd.Name, false, default, default, default, default, double.NaN, epd.Nominal, epd.TolerancePlus, epd.ToleranceMinus, false, default, default, new List<CaliperEdgePoint>(), new List<CaliperEdgePoint>()));
+                    result.Timings.NodeTimings[epd.Name] = 0;
+                }
+            }
+        }
+
+        // 12. CircleFinders
+        if (config.CircleFinders != null)
+        {
+            foreach (var cf in config.CircleFinders)
+            {
+                if (cf is not null && !string.IsNullOrWhiteSpace(cf.Name))
+                {
+                    result.CircleFinders.Add(new CircleFinderResult(cf.Name, false, default, 0.0, 0.0));
+                    result.Timings.NodeTimings[cf.Name] = 0;
+                }
+            }
+        }
+
+        // 13. CreatePoints, CreateLines, CreateRects, CreateCircles
+        if (config.CreatePoints != null)
+        {
+            foreach (var cp in config.CreatePoints)
+            {
+                if (cp is not null && !string.IsNullOrWhiteSpace(cp.Name))
+                {
+                    result.CreatePoints.Add(new CreatePointResult(cp.Name, false, 0.0, 0.0));
+                    result.Timings.NodeTimings[cp.Name] = 0;
+                }
+            }
+        }
+        if (config.CreateLines != null)
+        {
+            foreach (var cl in config.CreateLines)
+            {
+                if (cl is not null && !string.IsNullOrWhiteSpace(cl.Name))
+                {
+                    result.CreateLines.Add(new CreateLineResult(cl.Name, false, 0, 0, 0, 0, 0, 0));
+                    result.Timings.NodeTimings[cl.Name] = 0;
+                }
+            }
+        }
+        if (config.CreateRects != null)
+        {
+            foreach (var cr in config.CreateRects)
+            {
+                if (cr is not null && !string.IsNullOrWhiteSpace(cr.Name))
+                {
+                    result.CreateRects.Add(new CreateRectResult(cr.Name, false, 0, 0, 0, 0, 0, default, 0, 0));
+                    result.Timings.NodeTimings[cr.Name] = 0;
+                }
+            }
+        }
+        if (config.CreateCircles != null)
+        {
+            foreach (var cc in config.CreateCircles)
+            {
+                if (cc is not null && !string.IsNullOrWhiteSpace(cc.Name))
+                {
+                    result.CreateCircles.Add(new CreateCircleResult(cc.Name, false, 0, 0, 0));
+                    result.Timings.NodeTimings[cc.Name] = 0;
+                }
+            }
+        }
+
+        // 14. Diameters
+        if (config.Diameters != null)
+        {
+            foreach (var d in config.Diameters)
+            {
+                if (d is not null && !string.IsNullOrWhiteSpace(d.Name))
+                {
+                    result.Diameters.Add(new DiameterResult(d.Name, d.CircleRef, false, double.NaN, d.Nominal, d.TolerancePlus, d.ToleranceMinus, false, default, 0.0));
+                    result.Timings.NodeTimings[d.Name] = 0;
+                }
+            }
+        }
+
+        // 15. EdgePairs
+        if (config.EdgePairs != null)
+        {
+            foreach (var ep in config.EdgePairs)
+            {
+                if (ep is not null && !string.IsNullOrWhiteSpace(ep.Name))
+                {
+                    result.EdgePairs.Add(new EdgePairResult(ep.Name, ep.RefA, ep.RefB, false, default, default, default, default, double.NaN, ep.Nominal, ep.TolerancePlus, ep.ToleranceMinus, false, default, default));
+                    result.Timings.NodeTimings[ep.Name] = 0;
+                }
+            }
+        }
+
+        // 16. Angles
+        if (config.Angles != null)
+        {
+            foreach (var a in config.Angles)
+            {
+                if (a is not null && !string.IsNullOrWhiteSpace(a.Name))
+                {
+                    result.Angles.Add(new AngleResult(a.Name, a.LineA, a.LineB, double.NaN, a.Nominal, a.TolerancePlus, a.ToleranceMinus, false, false, default, default, default));
+                    result.Timings.NodeTimings[a.Name] = 0;
+                }
+            }
+        }
+
+        // 17. Distances, LineToLineDistances, PointToLineDistances, SegmentLineDistances
+        if (config.Distances != null)
+        {
+            foreach (var d in config.Distances)
+            {
+                if (d is not null && !string.IsNullOrWhiteSpace(d.Name))
+                {
+                    result.Distances.Add(new DistanceCheckResult(d.Name, d.PointA, d.PointB, double.NaN, d.Nominal, d.TolerancePlus, d.ToleranceMinus, false));
+                    result.Timings.NodeTimings[d.Name] = 0;
+                }
+            }
+        }
+        if (config.LineToLineDistances != null)
+        {
+            foreach (var dd in config.LineToLineDistances)
+            {
+                if (dd is not null && !string.IsNullOrWhiteSpace(dd.Name))
+                {
+                    result.LineToLineDistances.Add(new SegmentDistanceResult(dd.Name, dd.LineA, dd.LineB, double.NaN, dd.Nominal, dd.TolerancePlus, dd.ToleranceMinus, false, default, default));
+                    result.Timings.NodeTimings[dd.Name] = 0;
+                }
+            }
+        }
+        if (config.PointToLineDistances != null)
+        {
+            foreach (var dd in config.PointToLineDistances)
+            {
+                if (dd is not null && !string.IsNullOrWhiteSpace(dd.Name))
+                {
+                    result.PointToLineDistances.Add(new SegmentDistanceResult(dd.Name, dd.Point, dd.Line, double.NaN, dd.Nominal, dd.TolerancePlus, dd.ToleranceMinus, false, default, default));
+                    result.Timings.NodeTimings[dd.Name] = 0;
+                }
+            }
+        }
+        if (config.SegmentLineDistances != null)
+        {
+            foreach (var dd in config.SegmentLineDistances)
+            {
+                if (dd is not null && !string.IsNullOrWhiteSpace(dd.Name))
+                {
+                    result.SegmentLineDistances.Add(new SegmentDistanceResult(dd.Name, dd.LineA, dd.LineB, double.NaN, dd.Nominal, dd.TolerancePlus, dd.ToleranceMinus, false, default, default));
+                    result.Timings.NodeTimings[dd.Name] = 0;
+                }
+            }
+        }
+
+        // 18. CodeDetections
+        if (config.CodeDetections != null)
+        {
+            foreach (var cdt in config.CodeDetections)
+            {
+                if (cdt is not null && !string.IsNullOrWhiteSpace(cdt.Name))
+                {
+                    result.CodeDetections.Add(new CodeDetectionResult(cdt.Name, Found: false, Text: string.Empty, BoundingBox: new Rect(0, 0, 0, 0), Angle: 0.0));
+                    result.Timings.NodeTimings[cdt.Name] = 0;
+                }
+            }
+        }
+
+        // 19. Defects
+        if (config.DefectConfig != null && config.DefectConfig.InspectRoi.Width > 0 && config.DefectConfig.InspectRoi.Height > 0)
+        {
+            result.Defects = new DefectDetectionResult();
+        }
+
+        // 20. Conditions
+        EvaluateConditions(config, result);
+    }
 }
+
