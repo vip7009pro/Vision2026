@@ -439,76 +439,71 @@ public sealed class ImagePreprocessor
             return inputBgrOrGray.Clone();
         }
 
-        var current = inputBgrOrGray;
-        var anyOp = false;
-        var disposeList = new List<Mat>();
+        Mat current = inputBgrOrGray;
+        bool anyOp = false;
         Mat? ret = null;
+
+        void AdvanceCurrent(Mat newMat)
+        {
+            if (!ReferenceEquals(current, inputBgrOrGray) && current != null)
+            {
+                current.Dispose();
+            }
+            current = newMat;
+            anyOp = true;
+        }
 
         try
         {
-            // Illumination correction should run early (before threshold/canny) and can work on gray.
+            bool needsGray = settings.UseGray || settings.UseThreshold || settings.UseCanny || settings.UseMorphology || (settings.IlluminationCorrection != IlluminationCorrectionPreset.None);
+
+            // Single-pass Grayscale conversion at the beginning if any single-channel filter is requested
+            if (needsGray && current.Channels() > 1)
+            {
+                var gray = new Mat();
+                Cv2.CvtColor(current, gray, ColorConversionCodes.BGR2GRAY);
+                AdvanceCurrent(gray);
+            }
+
+            // Illumination correction should run early (before threshold/canny) and works on gray.
             if (settings.IlluminationCorrection != IlluminationCorrectionPreset.None)
             {
-                if (current.Channels() > 1)
-                {
-                    var gray0 = new Mat();
-                    Cv2.CvtColor(current, gray0, ColorConversionCodes.BGR2GRAY);
-                    disposeList.Add(gray0);
-                    current = gray0;
-                    anyOp = true;
-                }
-
                 var k = MakeOddAtLeast3(settings.IlluminationKernel);
 
                 if (settings.IlluminationCorrection == IlluminationCorrectionPreset.BackgroundSubtract)
                 {
-                    // Remove low-frequency background via strong blur and subtract.
-                    var bg = new Mat();
+                    using var bg = new Mat();
                     Cv2.GaussianBlur(current, bg, new Size(k, k), 0);
-                    disposeList.Add(bg);
 
-                    var sub = new Mat();
+                    using var sub = new Mat();
                     Cv2.Subtract(current, bg, sub);
-                    disposeList.Add(sub);
 
                     var norm = new Mat();
                     Cv2.Normalize(sub, norm, 0, 255, NormTypes.MinMax);
-                    disposeList.Add(norm);
-
-                    current = norm;
-                    anyOp = true;
+                    AdvanceCurrent(norm);
                 }
                 else if (settings.IlluminationCorrection == IlluminationCorrectionPreset.FlatFieldNormalize)
                 {
-                    // Approximate flat-field correction: divide by blurred background then normalize.
-                    var bg = new Mat();
+                    using var bg = new Mat();
                     Cv2.GaussianBlur(current, bg, new Size(k, k), 0);
-                    disposeList.Add(bg);
 
                     using var cur32 = new Mat();
                     using var bg32 = new Mat();
                     current.ConvertTo(cur32, MatType.CV_32F);
                     bg.ConvertTo(bg32, MatType.CV_32F);
 
-                    // Avoid division by zero by adding epsilon.
-                    var bgEps = new Mat();
+                    using var bgEps = new Mat();
                     Cv2.Add(bg32, Scalar.All(1.0), bgEps);
-                    disposeList.Add(bgEps);
 
-                    var div = new Mat();
+                    using var div = new Mat();
                     Cv2.Divide(cur32, bgEps, div);
-                    disposeList.Add(div);
 
-                    var norm = new Mat();
+                    using var norm = new Mat();
                     Cv2.Normalize(div, norm, 0, 255, NormTypes.MinMax);
-                    disposeList.Add(norm);
 
                     var u8 = new Mat();
                     norm.ConvertTo(u8, MatType.CV_8U);
-                    disposeList.Add(u8);
-
-                    current = u8;
-                    anyOp = true;
+                    AdvanceCurrent(u8);
                 }
                 else if (settings.IlluminationCorrection == IlluminationCorrectionPreset.Clahe)
                 {
@@ -518,20 +513,8 @@ public sealed class ImagePreprocessor
 
                     var dstClahe = new Mat();
                     clahe.Apply(current, dstClahe);
-                    disposeList.Add(dstClahe);
-
-                    current = dstClahe;
-                    anyOp = true;
+                    AdvanceCurrent(dstClahe);
                 }
-            }
-
-            if (settings.UseGray && current.Channels() > 1)
-            {
-                var gray = new Mat();
-                Cv2.CvtColor(current, gray, ColorConversionCodes.BGR2GRAY);
-                disposeList.Add(gray);
-                current = gray;
-                anyOp = true;
             }
 
             if (settings.UseGaussianBlur)
@@ -542,22 +525,11 @@ public sealed class ImagePreprocessor
 
                 var blur = new Mat();
                 Cv2.GaussianBlur(current, blur, new Size(k, k), 0);
-                disposeList.Add(blur);
-                current = blur;
-                anyOp = true;
+                AdvanceCurrent(blur);
             }
 
             if (settings.UseThreshold)
             {
-                if (current.Channels() > 1)
-                {
-                    var gray = new Mat();
-                    Cv2.CvtColor(current, gray, ColorConversionCodes.BGR2GRAY);
-                    disposeList.Add(gray);
-                    current = gray;
-                    anyOp = true;
-                }
-
                 var thr = new Mat();
                 if (settings.ThresholdType == PreprocessThresholdType.Local)
                 {
@@ -592,45 +564,21 @@ public sealed class ImagePreprocessor
                     }
                 }
 
-                disposeList.Add(thr);
-                current = thr;
-                anyOp = true;
+                AdvanceCurrent(thr);
             }
 
             if (settings.UseCanny)
             {
-                if (current.Channels() > 1)
-                {
-                    var gray = new Mat();
-                    Cv2.CvtColor(current, gray, ColorConversionCodes.BGR2GRAY);
-                    disposeList.Add(gray);
-                    current = gray;
-                    anyOp = true;
-                }
-
                 var edges = new Mat();
                 Cv2.Canny(current, edges, settings.Canny1, settings.Canny2);
-                disposeList.Add(edges);
-                current = edges;
-                anyOp = true;
+                AdvanceCurrent(edges);
             }
 
             if (settings.UseMorphology)
             {
-                if (current.Channels() > 1)
-                {
-                    var gray = new Mat();
-                    Cv2.CvtColor(current, gray, ColorConversionCodes.BGR2GRAY);
-                    disposeList.Add(gray);
-                    current = gray;
-                    anyOp = true;
-                }
-
                 var mor = new Mat();
                 Cv2.MorphologyEx(current, mor, MorphTypes.Close, MorphKernel3x3);
-                disposeList.Add(mor);
-                current = mor;
-                anyOp = true;
+                AdvanceCurrent(mor);
             }
 
             if (rois is not null && rois.Count > 0)
@@ -681,9 +629,7 @@ public sealed class ImagePreprocessor
 
                 var blended = inputBgrOrGray.Clone();
                 current.CopyTo(blended, roiMask);
-                disposeList.Add(blended);
-                current = blended;
-                anyOp = true;
+                AdvanceCurrent(blended);
             }
 
             if (!anyOp)
@@ -695,16 +641,13 @@ public sealed class ImagePreprocessor
             ret = current;
             return ret;
         }
-        finally
+        catch
         {
-            if (ret is not null)
+            if (!ReferenceEquals(current, inputBgrOrGray) && current != null)
             {
-                disposeList.Remove(ret);
+                current.Dispose();
             }
-            foreach (var m in disposeList)
-            {
-                m.Dispose();
-            }
+            throw;
         }
     }
 }

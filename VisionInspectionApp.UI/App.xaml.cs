@@ -145,6 +145,15 @@ public partial class App : System.Windows.Application
                 await camera.StopCameraAsync().ConfigureAwait(false);
                 camera.Dispose();
             }
+
+            try
+            {
+                await VisionInspectionApp.Application.Services.AsyncImageSaver.Instance.DisposeAsync().ConfigureAwait(false);
+            }
+            catch
+            {
+                // ignore
+            }
         }
         catch
         {

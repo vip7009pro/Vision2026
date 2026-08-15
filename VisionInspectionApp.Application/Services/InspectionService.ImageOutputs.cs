@@ -1,8 +1,10 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using OpenCvSharp;
+using VisionInspectionApp.Application.Services;
 using VisionInspectionApp.Models;
 
 namespace VisionInspectionApp.Application;
@@ -23,17 +25,22 @@ public partial class InspectionService
                 continue;
             }
 
+            var swIo = Stopwatch.StartNew();
+
             if (!io.EnableOutput)
             {
+                result.Timings.NodeTimings[io.Name] = (int)swIo.ElapsedMilliseconds;
                 continue;
             }
 
             if (io.SaveCondition == ImageOutputCondition.OnPass && !result.Pass)
             {
+                result.Timings.NodeTimings[io.Name] = (int)swIo.ElapsedMilliseconds;
                 continue;
             }
             if (io.SaveCondition == ImageOutputCondition.OnFail && result.Pass)
             {
+                result.Timings.NodeTimings[io.Name] = (int)swIo.ElapsedMilliseconds;
                 continue;
             }
 
@@ -85,11 +92,6 @@ public partial class InspectionService
                                .Replace("{MM}", now.ToString("MM"))
                                .Replace("{DD}", now.ToString("dd"));
 
-                if (!Directory.Exists(folder))
-                {
-                    Directory.CreateDirectory(folder);
-                }
-
                 var fileName = string.IsNullOrWhiteSpace(io.FileNameFormat) ? "IMG_{YYYY}{MM}{DD}_{HH}{mm}{ss}" : io.FileNameFormat;
                 fileName = fileName.Replace("{YYYY}", now.ToString("yyyy"))
                                    .Replace("{MM}", now.ToString("MM"))
@@ -130,20 +132,23 @@ public partial class InspectionService
                     saveMat = sourceMat.Clone();
                 }
 
-                using (saveMat)
+                if (io.IncludeOverlay)
                 {
-                    if (io.IncludeOverlay)
-                    {
-                        BurnOverlaysToMat(saveMat, config, result, io, inputName);
-                    }
-
-                    var ok = Cv2.ImWrite(fullPath, saveMat);
-                    result.ImageOutputs.Add(new ImageOutputResult(io.Name, ok, ok ? fullPath : "", ok ? "" : "Failed to write image file"));
+                    BurnOverlaysToMat(saveMat, config, result, io, inputName);
                 }
+
+                // Gửi vào hàng đợi bất đồng bộ ngoài luồng chính (Non-blocking, tốn < 0.01ms)
+                // AsyncImageSaver tự quản lý vòng đời và giải phóng saveMat sau khi ghi đĩa xong.
+                bool enqueued = AsyncImageSaver.Instance.Enqueue(saveMat, fullPath, io.Name);
+                result.ImageOutputs.Add(new ImageOutputResult(io.Name, enqueued, enqueued ? fullPath : "", enqueued ? "" : "Image save queue is full"));
             }
             catch (Exception ex)
             {
                 result.ImageOutputs.Add(new ImageOutputResult(io.Name, false, "", ex.Message));
+            }
+            finally
+            {
+                result.Timings.NodeTimings[io.Name] = (int)swIo.ElapsedMilliseconds;
             }
         }
     }

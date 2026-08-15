@@ -446,14 +446,6 @@ public partial class InspectionService
                     return new SurfaceCompareResult(def.Name, 0, 0.0, new List<SurfaceCompareDefect>(), false);
                 }
 
-                // Convert input to grayscale.
-                Mat testGray = matBgrOrGray;
-                using var testGrayOwned = matBgrOrGray.Channels() == 1 ? null : matBgrOrGray.CvtColor(ColorConversionCodes.BGR2GRAY);
-                if (testGrayOwned is not null)
-                {
-                    testGray = testGrayOwned;
-                }
-
                 // Load and Preprocess template exactly like the current image.
                 using var templRaw = Cv2.ImRead(def.TemplateImageFile, ImreadModes.Grayscale);
                 if (templRaw.Empty())
@@ -465,14 +457,17 @@ public partial class InspectionService
                 using var templCrop0 = preprocessor.Run(templRaw, settings);
                 // We need to un-rotate the target image to match the teach template orientation.
                 var trTeach = new Roi { X = templateRoiTeach.X, Y = templateRoiTeach.Y, Width = templateRoiTeach.Width, Height = templateRoiTeach.Height, Angle = templateRoiTeach.Angle };
-                using var testCropRaw = ExtractStraightRoi(testGray, trTeach, originTeach, originFound, angleDeg, out var centerFoundTpl);
+                using var testCropRaw = ExtractStraightRoi(matBgrOrGray, trTeach, originTeach, originFound, angleDeg, out var centerFoundTpl);
                 if (testCropRaw.Width <= 0 || testCropRaw.Height <= 0)
                 {
                     return new SurfaceCompareResult(def.Name, 0, 0.0, new List<SurfaceCompareDefect>(), false);
                 }
 
+                using var testCropGrayOwned = testCropRaw.Channels() == 1 ? null : testCropRaw.CvtColor(ColorConversionCodes.BGR2GRAY);
+                Mat testCropGray = testCropGrayOwned ?? testCropRaw;
+
                 // Apply the same preprocessing steps to the target crop.
-                using var testCrop = preprocessor.Run(testCropRaw, settings);
+                using var testCrop = preprocessor.Run(testCropGray, settings);
 
                 // Make sure template crop has the exact size
                 using var tplCrop = new Mat();
@@ -831,10 +826,6 @@ public partial class InspectionService
                     return new ContourCompareResult(def.Name, false, false, 999.0, 999.0, 999.0, 999.0);
                 }
 
-                Mat testGray = matBgrOrGray;
-                using var testGrayOwned = matBgrOrGray.Channels() == 1 ? null : matBgrOrGray.CvtColor(ColorConversionCodes.BGR2GRAY);
-                if (testGrayOwned is not null) testGray = testGrayOwned;
-
                 // Calculate global center of Template ROI when pose transform is applied
                 var centerTemplateTeach = new Point2d(templateRoiTeach.X + templateRoiTeach.Width / 2.0, templateRoiTeach.Y + templateRoiTeach.Height / 2.0);
                 var centerTemplateRot = Rotate(centerTemplateTeach, originTeach, angleDeg);
@@ -853,13 +844,16 @@ public partial class InspectionService
                     Angle = templateRoiTeach.Angle
                 };
 
-                using var searchCropPadRaw = ExtractStraightRoi(testGray, trPadTeach, originTeach, originFound, angleDeg, out _);
+                using var searchCropPadRaw = ExtractStraightRoi(matBgrOrGray, trPadTeach, originTeach, originFound, angleDeg, out _);
                 if (searchCropPadRaw.Width <= 0 || searchCropPadRaw.Height <= 0)
                 {
                     return new ContourCompareResult(def.Name, false, false, 999.0, 999.0, 999.0, 999.0);
                 }
 
-                using var searchCropPad = preprocessor.Run(searchCropPadRaw, settings);
+                using var searchCropPadGrayOwned = searchCropPadRaw.Channels() == 1 ? null : searchCropPadRaw.CvtColor(ColorConversionCodes.BGR2GRAY);
+                Mat searchCropPadGray = searchCropPadGrayOwned ?? searchCropPadRaw;
+
+                using var searchCropPad = preprocessor.Run(searchCropPadGray, settings);
                 using var templCrop = preprocessor.Run(templRaw, settings);
 
                 var testRect = new Rect(pad, pad, templCrop.Width, templCrop.Height).Intersect(new Rect(0, 0, searchCropPad.Width, searchCropPad.Height));

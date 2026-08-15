@@ -48,27 +48,10 @@ public static class ColorDiffProcessor
 
     private static (double L, double A, double B) GetMeanLab(Mat mat, Roi roi)
     {
-        if (roi == null || roi.Width <= 0 || roi.Height <= 0)
+        if (roi == null || roi.Width <= 0 || roi.Height <= 0 || mat.Empty())
         {
             return (0, 0, 0);
         }
-
-        using var bgrMat = new Mat();
-        if (mat.Channels() == 1)
-        {
-            Cv2.CvtColor(mat, bgrMat, ColorConversionCodes.GRAY2BGR);
-        }
-        else if (mat.Channels() == 4)
-        {
-            Cv2.CvtColor(mat, bgrMat, ColorConversionCodes.BGRA2BGR);
-        }
-        else
-        {
-            mat.CopyTo(bgrMat);
-        }
-
-        using var labMat = new Mat();
-        Cv2.CvtColor(bgrMat, labMat, ColorConversionCodes.BGR2Lab);
 
         double angleDeg = roi.Angle;
         double centerX = roi.X + roi.Width / 2.0;
@@ -76,51 +59,48 @@ public static class ColorDiffProcessor
 
         Scalar mean;
 
+        // ROI-First: Extract sub-matrix header (0-copy) FIRST, then convert only the small ROI patch to Lab
         if (Math.Abs(angleDeg) < 0.01)
         {
-            // Axis-aligned rectangle: crop sub-matrix directly for performance
-            int x = Math.Clamp(roi.X, 0, Math.Max(0, labMat.Width - 1));
-            int y = Math.Clamp(roi.Y, 0, Math.Max(0, labMat.Height - 1));
-            int w = Math.Min(roi.Width, labMat.Width - x);
-            int h = Math.Min(roi.Height, labMat.Height - y);
+            int x = Math.Clamp(roi.X, 0, Math.Max(0, mat.Width - 1));
+            int y = Math.Clamp(roi.Y, 0, Math.Max(0, mat.Height - 1));
+            int w = Math.Min(roi.Width, mat.Width - x);
+            int h = Math.Min(roi.Height, mat.Height - y);
 
             if (w <= 0 || h <= 0)
             {
-                mean = Cv2.Mean(labMat);
+                return (0, 0, 0);
             }
-            else
-            {
-                using var sub = new Mat(labMat, new Rect(x, y, w, h));
-                mean = Cv2.Mean(sub);
-            }
+
+            using var subBgr = new Mat(mat, new Rect(x, y, w, h));
+            using var subLab = ConvertPatchToLab(subBgr);
+            mean = Cv2.Mean(subLab);
         }
         else
         {
-            // Rotated rectangle: compute bounding box, create rotated polygon mask, and calculate mean color inside mask
             var rotRect = new RotatedRect(new Point2f((float)centerX, (float)centerY), new Size2f(roi.Width, roi.Height), (float)angleDeg);
             Rect boundingBox = rotRect.BoundingRect();
-            Rect imgRect = new Rect(0, 0, labMat.Width, labMat.Height);
+            Rect imgRect = new Rect(0, 0, mat.Width, mat.Height);
             Rect cropRect = boundingBox.Intersect(imgRect);
 
             if (cropRect.Width <= 0 || cropRect.Height <= 0)
             {
-                mean = Cv2.Mean(labMat);
+                return (0, 0, 0);
             }
-            else
+
+            using var subMat = new Mat(mat, cropRect);
+            using var subLab = ConvertPatchToLab(subMat);
+            using var mask = new Mat(cropRect.Height, cropRect.Width, MatType.CV_8UC1, Scalar.Black);
+
+            Point2f[] pts = rotRect.Points();
+            Point[] polyPts = new Point[4];
+            for (int i = 0; i < 4; i++)
             {
-                using var subMat = new Mat(labMat, cropRect);
-                using var mask = new Mat(cropRect.Height, cropRect.Width, MatType.CV_8UC1, Scalar.Black);
-
-                Point2f[] pts = rotRect.Points();
-                Point[] polyPts = new Point[4];
-                for (int i = 0; i < 4; i++)
-                {
-                    polyPts[i] = new Point((int)Math.Round(pts[i].X - cropRect.X), (int)Math.Round(pts[i].Y - cropRect.Y));
-                }
-
-                Cv2.FillConvexPoly(mask, polyPts, Scalar.White);
-                mean = Cv2.Mean(subMat, mask);
+                polyPts[i] = new Point((int)Math.Round(pts[i].X - cropRect.X), (int)Math.Round(pts[i].Y - cropRect.Y));
             }
+
+            Cv2.FillConvexPoly(mask, polyPts, Scalar.White);
+            mean = Cv2.Mean(subLab, mask);
         }
 
         // Convert OpenCV 8-bit Lab to standard CIELab range: L: 0..100, a, b: -128..127
@@ -129,5 +109,27 @@ public static class ColorDiffProcessor
         double b = mean.Val2 - 128.0;
 
         return (l, a, b);
+    }
+
+    private static Mat ConvertPatchToLab(Mat patch)
+    {
+        var lab = new Mat();
+        if (patch.Channels() == 1)
+        {
+            using var bgr = new Mat();
+            Cv2.CvtColor(patch, bgr, ColorConversionCodes.GRAY2BGR);
+            Cv2.CvtColor(bgr, lab, ColorConversionCodes.BGR2Lab);
+        }
+        else if (patch.Channels() == 4)
+        {
+            using var bgr = new Mat();
+            Cv2.CvtColor(patch, bgr, ColorConversionCodes.BGRA2BGR);
+            Cv2.CvtColor(bgr, lab, ColorConversionCodes.BGR2Lab);
+        }
+        else
+        {
+            Cv2.CvtColor(patch, lab, ColorConversionCodes.BGR2Lab);
+        }
+        return lab;
     }
 }
