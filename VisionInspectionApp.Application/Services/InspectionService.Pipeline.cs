@@ -1864,15 +1864,6 @@ public partial class InspectionService
             Task.WaitAll(surfaceCompareTasks);
             Task.WaitAll(contourCompareTasks);
             var tScDone = swTotal.ElapsedMilliseconds;
-
-            Task.WaitAll(lpdTasks);
-            var tLpdDone = swTotal.ElapsedMilliseconds;
-
-            Task.WaitAll(caliperTasks);
-            var tCalDone = swTotal.ElapsedMilliseconds;
-
-            var tEpdQueued = swTotal.ElapsedMilliseconds;
-
             static EdgePairDetectResult DetectEdgePair(Mat matBgrOrGray, Roi roiTeach, EdgePairDetectDefinition def, double pixelsPerMm, Point2d originTeach, Point2d originFound, double angleDeg)
             {
                 if (matBgrOrGray is null || roiTeach.Width <= 0 || roiTeach.Height <= 0)
@@ -2140,17 +2131,6 @@ public partial class InspectionService
                 return new EdgePairDetectResult(def.Name, Found: true, l1p1, l1p2, l2p1, l2p2, value, def.Nominal, def.TolerancePlus, def.ToleranceMinus, pass, ca, cb, e1, e2);
             }
 
-            var epdTasks = (config.EdgePairDetections ?? new List<EdgePairDetectDefinition>())
-                .Where(epd => epd is not null && !string.IsNullOrWhiteSpace(epd.Name) && epd.SearchRoi.Width > 0 && epd.SearchRoi.Height > 0)
-                .Select(epd => RunHeavyTool($"EdgePair:{epd.Name}", () =>
-                {
-                    var __sw = System.Diagnostics.Stopwatch.StartNew();
-                    var (matForEpd, _) = ResolveToolPreprocess("EdgePairDetect", epd.Name);
-                    var res = DetectEdgePair(matForEpd, epd.SearchRoi, epd, config.PixelsPerMm, originTeach, originFound, angleDeg);
-                    __sw.Stop(); result.Timings.NodeTimings[epd.Name] = (int)__sw.ElapsedMilliseconds; return res;
-                }))
-                .ToArray();
-
             static CircleFinderResult DetectCircle(Mat matBgrOrGray, Roi roi, CircleFinderDefinition def)
             {
                 var name = def.Name ?? string.Empty;
@@ -2159,43 +2139,36 @@ public partial class InspectionService
                     return new CircleFinderResult(name, Found: false, default, 0.0, 0.0);
                 }
 
-                var imgW = matBgrOrGray.Width;
-                var imgH = matBgrOrGray.Height;
-
                 if (def.Algorithm == CircleFindAlgorithm.RadialCaliper)
                 {
-                    using var grayOwnedR = matBgrOrGray.Channels() == 1 ? null : matBgrOrGray.CvtColor(ColorConversionCodes.BGR2GRAY);
-                    var grayMat = grayOwnedR ?? matBgrOrGray;
-
-                    var centerEst = new Point2d(roi.X + roi.Width / 2.0, roi.Y + roi.Height / 2.0);
-                    var nominalR = Math.Min(roi.Width, roi.Height) / 2.0;
-                    if (nominalR < 3.0) nominalR = 20.0;
-
                     var stripCount = Math.Clamp(def.StripCount > 0 ? def.StripCount : 32, 4, 360);
-                    var stripLength = Math.Max(5, def.StripLength > 0 ? def.StripLength : 40);
                     var stripWidth = Math.Max(1, def.StripWidth > 0 ? def.StripWidth : 10);
+                    var stripLength = Math.Max(5, def.StripLength > 0 ? def.StripLength : 40);
                     var minEdgeStrength = Math.Max(1, def.MinEdgeStrength);
 
-                    var startAngleRad = def.MinAngleDeg * Math.PI / 180.0;
-                    var endAngleRad = def.MaxAngleDeg * Math.PI / 180.0;
-                    if (Math.Abs(endAngleRad - startAngleRad) < 1e-4)
-                    {
-                        endAngleRad = startAngleRad + 2.0 * Math.PI;
-                    }
+                    var centerEst = new Point2d(roi.X + roi.Width / 2.0, roi.Y + roi.Height / 2.0);
+                    var nominalR = (roi.Width + roi.Height) / 4.0;
 
-                    var angleStep = (endAngleRad - startAngleRad) / stripCount;
                     var halfL = stripLength / 2.0;
                     var halfW = stripWidth / 2.0;
+                    var startAngleRad = def.MinAngleDeg * Math.PI / 180.0;
+                    var endAngleRad = def.MaxAngleDeg * Math.PI / 180.0;
+                    if (Math.Abs(endAngleRad - startAngleRad) < 1e-4) endAngleRad = startAngleRad + 2.0 * Math.PI;
+                    var sweepRad = endAngleRad - startAngleRad;
+                    var angleStep = sweepRad / stripCount;
 
                     var detectedPoints = new List<Point2d>();
+
+                    using var grayOwnedLoc = matBgrOrGray.Channels() == 1 ? null : matBgrOrGray.CvtColor(ColorConversionCodes.BGR2GRAY);
+                    Mat grayMat = grayOwnedLoc ?? matBgrOrGray;
 
                     byte SampleBilinear(double x, double y)
                     {
                         var ix = (int)Math.Floor(x);
                         var iy = (int)Math.Floor(y);
-                        if (ix < 0 || ix >= imgW - 1 || iy < 0 || iy >= imgH - 1)
+                        if (ix < 0 || ix >= grayMat.Cols - 1 || iy < 0 || iy >= grayMat.Rows - 1)
                         {
-                            if (ix >= 0 && ix < imgW && iy >= 0 && iy < imgH)
+                            if (ix >= 0 && ix < grayMat.Cols && iy >= 0 && iy < grayMat.Rows)
                                 return grayMat.At<byte>(iy, ix);
                             return 0;
                         }
@@ -2206,16 +2179,14 @@ public partial class InspectionService
                         var v10 = grayMat.At<byte>(iy, ix + 1);
                         var v01 = grayMat.At<byte>(iy + 1, ix);
                         var v11 = grayMat.At<byte>(iy + 1, ix + 1);
-
                         var top = v00 + fx * (v10 - v00);
                         var bottom = v01 + fx * (v11 - v01);
                         return (byte)Math.Clamp(top + fy * (bottom - top), 0, 255);
                     }
 
-                    var roiAngleRad = roi.Angle * Math.PI / 180.0;
                     for (var i = 0; i < stripCount; i++)
                     {
-                        var angle = roiAngleRad + startAngleRad + (i + 0.5) * angleStep;
+                        var angle = startAngleRad + (i + 0.5) * angleStep;
                         var ux = Math.Cos(angle);
                         var uy = Math.Sin(angle);
                         var vx = -uy;
@@ -2228,40 +2199,25 @@ public partial class InspectionService
                         for (var rIdx = 0; rIdx < radialSamples; rIdx++)
                         {
                             var rOffset = -halfL + (rIdx * stripLength / Math.Max(1, radialSamples - 1));
-                            var sampleCenterPt = new Point2d(
-                                centerEst.X + (nominalR + rOffset) * ux,
-                                centerEst.Y + (nominalR + rOffset) * uy);
-
+                            var sampleCenterPt = new Point2d(centerEst.X + (nominalR + rOffset) * ux, centerEst.Y + (nominalR + rOffset) * uy);
                             double sumVal = 0;
                             for (var wIdx = 0; wIdx < widthStepCount; wIdx++)
                             {
                                 var wOffset = -halfW + (wIdx * stripWidth / Math.Max(1, widthStepCount - 1));
-                                var px = sampleCenterPt.X + wOffset * vx;
-                                var py = sampleCenterPt.Y + wOffset * vy;
-                                sumVal += SampleBilinear(px, py);
+                                sumVal += SampleBilinear(sampleCenterPt.X + wOffset * vx, sampleCenterPt.Y + wOffset * vy);
                             }
                             profile[rIdx] = sumVal / widthStepCount;
                         }
 
                         var deriv = new double[radialSamples];
-                        for (var rIdx = 1; rIdx < radialSamples - 1; rIdx++)
-                        {
-                            deriv[rIdx] = (profile[rIdx + 1] - profile[rIdx - 1]) / 2.0;
-                        }
+                        for (var rIdx = 1; rIdx < radialSamples - 1; rIdx++) deriv[rIdx] = (profile[rIdx + 1] - profile[rIdx - 1]) / 2.0;
 
                         int bestIdx = -1;
                         double bestVal = 0;
-
                         for (var rIdx = 1; rIdx < radialSamples - 1; rIdx++)
                         {
                             var dVal = deriv[rIdx];
-                            bool isCandidate = def.Polarity switch
-                            {
-                                EdgePolarity.LightToDark => dVal < -minEdgeStrength,
-                                EdgePolarity.DarkToLight => dVal > minEdgeStrength,
-                                _ => Math.Abs(dVal) > minEdgeStrength
-                            };
-
+                            bool isCandidate = def.Polarity switch { EdgePolarity.LightToDark => dVal < -minEdgeStrength, EdgePolarity.DarkToLight => dVal > minEdgeStrength, _ => Math.Abs(dVal) > minEdgeStrength };
                             if (!isCandidate) continue;
 
                             if (def.EdgeSelection == EdgeSelection.First)
@@ -2270,331 +2226,88 @@ public partial class InspectionService
                                 bestVal = dVal;
                                 break;
                             }
-
                             if (def.EdgeSelection == EdgeSelection.Last)
                             {
                                 bestIdx = rIdx;
                                 bestVal = dVal;
                             }
-                            else // MaxStrength
+                            else
                             {
-                                if (Math.Abs(dVal) > Math.Abs(bestVal))
-                                {
-                                    bestIdx = rIdx;
-                                    bestVal = dVal;
-                                }
+                                if (Math.Abs(dVal) > Math.Abs(bestVal)) { bestIdx = rIdx; bestVal = dVal; }
                             }
                         }
 
                         if (bestIdx > 0 && bestIdx < radialSamples - 1)
                         {
-                            var y1 = deriv[bestIdx - 1];
-                            var y2 = deriv[bestIdx];
-                            var y3 = deriv[bestIdx + 1];
-                            var denom = (y1 - 2.0 * y2 + y3);
-                            var subOffset = 0.0;
-                            if (Math.Abs(denom) > 1e-6)
-                            {
-                                subOffset = (y1 - y3) / (2.0 * denom);
-                                subOffset = Math.Clamp(subOffset, -0.9, 0.9);
-                            }
-
-                            var subRIdx = bestIdx + subOffset;
-                            var finalR = -halfL + (subRIdx * stripLength / Math.Max(1, radialSamples - 1));
-                            var edgePt = new Point2d(
-                                centerEst.X + (nominalR + finalR) * ux,
-                                centerEst.Y + (nominalR + finalR) * uy);
-                            detectedPoints.Add(edgePt);
+                            var subOffset = (Math.Abs(deriv[bestIdx - 1] - 2.0 * deriv[bestIdx] + deriv[bestIdx + 1]) < 1e-6) ? 0 : (deriv[bestIdx - 1] - deriv[bestIdx + 1]) / (2.0 * (deriv[bestIdx - 1] - 2.0 * deriv[bestIdx] + deriv[bestIdx + 1]));
+                            var finalR = -halfL + ((bestIdx + Math.Clamp(subOffset, -0.9, 0.9)) * stripLength / Math.Max(1, radialSamples - 1));
+                            detectedPoints.Add(new Point2d(centerEst.X + (nominalR + finalR) * ux, centerEst.Y + (nominalR + finalR) * uy));
                         }
                     }
 
-                    if (detectedPoints.Count < 3)
-                    {
-                        return new CircleFinderResult(name, Found: false, centerEst, nominalR, 0.0, detectedPoints, new List<bool>());
-                    }
+                    if (detectedPoints.Count < 3) return new CircleFinderResult(name, Found: false, default, 0.0, 0.0);
 
                     var rnd = new Random(name.GetHashCode());
                     var bestInlierCount = -1;
-                    Point2d bestCenter = centerEst;
+                    Point2d circleCenter = centerEst;
                     double bestRadius = nominalR;
-                    var inlierTol = 3.0;
-
-                    static bool TryCircleFrom3Points(Point2d a, Point2d b, Point2d c, out Point2d center, out double r)
-                    {
-                        center = default;
-                        r = 0;
-                        var ax = a.X; var ay = a.Y;
-                        var bx = b.X; var by = b.Y;
-                        var cx = c.X; var cy = c.Y;
-                        var d = 2.0 * (ax * (by - cy) + bx * (cy - ay) + cx * (ay - by));
-                        if (Math.Abs(d) < 1e-9) return false;
-                        var ax2ay2 = ax * ax + ay * ay;
-                        var bx2by2 = bx * bx + by * by;
-                        var cx2cy2 = cx * cx + cy * cy;
-                        var ux = (ax2ay2 * (by - cy) + bx2by2 * (cy - ay) + cx2cy2 * (ay - by)) / d;
-                        var uy = (ax2ay2 * (cx - bx) + bx2by2 * (ax - cx) + cx2cy2 * (bx - ax)) / d;
-                        center = new Point2d(ux, uy);
-                        r = Math.Sqrt((ux - ax) * (ux - ax) + (uy - ay) * (uy - ay));
-                        return double.IsFinite(r) && r > 0;
-                    }
-
                     for (var iter = 0; iter < 100; iter++)
                     {
-                        var ia = rnd.Next(detectedPoints.Count);
-                        var ib = rnd.Next(detectedPoints.Count);
-                        var ic = rnd.Next(detectedPoints.Count);
-                        if (ia == ib || ia == ic || ib == ic) continue;
-
-                        if (!TryCircleFrom3Points(detectedPoints[ia], detectedPoints[ib], detectedPoints[ic], out var c0, out var r0))
-                            continue;
-
-                        if (def.MinRadiusPx > 0 && r0 < def.MinRadiusPx) continue;
-                        if (def.MaxRadiusPx > 0 && r0 > def.MaxRadiusPx) continue;
-
-                        var inlCount = 0;
-                        for (var pIdx = 0; pIdx < detectedPoints.Count; pIdx++)
-                        {
-                            var p = detectedPoints[pIdx];
-                            var distToCenter = Math.Sqrt((p.X - c0.X) * (p.X - c0.X) + (p.Y - c0.Y) * (p.Y - c0.Y));
-                            if (Math.Abs(distToCenter - r0) <= inlierTol)
-                            {
-                                inlCount++;
-                            }
-                        }
-
-                        if (inlCount > bestInlierCount)
-                        {
-                            bestInlierCount = inlCount;
-                            bestCenter = c0;
-                            bestRadius = r0;
-                        }
+                        var p1 = detectedPoints[rnd.Next(detectedPoints.Count)];
+                        var p2 = detectedPoints[rnd.Next(detectedPoints.Count)];
+                        var p3 = detectedPoints[rnd.Next(detectedPoints.Count)];
+                        var d = 2.0 * (p1.X * (p2.Y - p3.Y) + p2.X * (p3.Y - p1.Y) + p3.X * (p1.Y - p2.Y));
+                        if (Math.Abs(d) < 1e-9) continue;
+                        var c = new Point2d(((p1.X * p1.X + p1.Y * p1.Y) * (p2.Y - p3.Y) + (p2.X * p2.X + p2.Y * p2.Y) * (p3.Y - p1.Y) + (p3.X * p3.X + p3.Y * p3.Y) * (p1.Y - p2.Y)) / d,
+                                            ((p1.X * p1.X + p1.Y * p1.Y) * (p3.X - p2.X) + (p2.X * p2.X + p2.Y * p2.Y) * (p1.X - p3.X) + (p3.X * p3.X + p3.Y * p3.Y) * (p2.X - p1.X)) / d);
+                        var r = Math.Sqrt((c.X - p1.X) * (c.X - p1.X) + (c.Y - p1.Y) * (c.Y - p1.Y));
+                        var inlCount = detectedPoints.Count(p => Math.Abs(Math.Sqrt((p.X - c.X) * (p.X - c.X) + (p.Y - c.Y) * (p.Y - c.Y)) - r) <= 3.0);
+                        if (inlCount > bestInlierCount) { bestInlierCount = inlCount; circleCenter = c; bestRadius = r; }
                     }
-
-                    var inliers = new List<Point2d>();
-                    var inlierFlags = new List<bool>();
-                    for (var pIdx = 0; pIdx < detectedPoints.Count; pIdx++)
-                    {
-                        var p = detectedPoints[pIdx];
-                        var distToCenter = Math.Sqrt((p.X - bestCenter.X) * (p.X - bestCenter.X) + (p.Y - bestCenter.Y) * (p.Y - bestCenter.Y));
-                        var isInlier = Math.Abs(distToCenter - bestRadius) <= inlierTol;
-                        inlierFlags.Add(isInlier);
-                        if (isInlier)
-                        {
-                            inliers.Add(p);
-                        }
-                    }
-
-                    if (inliers.Count >= 3)
-                    {
-                        double sumX = 0, sumY = 0, sumX2 = 0, sumY2 = 0, sumXY = 0;
-                        double sumR = 0, sumXR = 0, sumYR = 0;
-                        var M = inliers.Count;
-
-                        for (var k = 0; k < M; k++)
-                        {
-                            var px = inliers[k].X;
-                            var py = inliers[k].Y;
-                            var r2 = px * px + py * py;
-                            sumX += px;
-                            sumY += py;
-                            sumX2 += px * px;
-                            sumY2 += py * py;
-                            sumXY += px * py;
-                            sumR += r2;
-                            sumXR += px * r2;
-                            sumYR += py * r2;
-                        }
-
-                        var A1 = M * sumX2 - sumX * sumX;
-                        var B1 = M * sumXY - sumX * sumY;
-                        var C1 = 0.5 * (M * sumXR - sumX * sumR);
-
-                        var A2 = M * sumXY - sumX * sumY;
-                        var B2 = M * sumY2 - sumY * sumY;
-                        var C2 = 0.5 * (M * sumYR - sumY * sumR);
-
-                        var det = A1 * B2 - A2 * B1;
-                        if (Math.Abs(det) > 1e-6)
-                        {
-                            var cx = (C1 * B2 - C2 * B1) / det;
-                            var cy = (A1 * C2 - A2 * C1) / det;
-                            var meanR2 = (sumR - 2.0 * cx * sumX - 2.0 * cy * sumY) / M + cx * cx + cy * cy;
-                            if (meanR2 > 0)
-                            {
-                                bestCenter = new Point2d(cx, cy);
-                                bestRadius = Math.Sqrt(meanR2);
-                            }
-                        }
-                    }
-
-                    var minPassInliers = Math.Max(3, stripCount / 4);
-                    var isFound = inliers.Count >= minPassInliers && bestRadius > 0;
-                    if (def.MinRadiusPx > 0 && bestRadius < def.MinRadiusPx) isFound = false;
-                    if (def.MaxRadiusPx > 0 && bestRadius > def.MaxRadiusPx) isFound = false;
-
-                    var score = inliers.Count / (double)stripCount;
-
-                    return new CircleFinderResult(name, isFound, bestCenter, bestRadius, score, detectedPoints, inlierFlags);
+                    return new CircleFinderResult(name, bestInlierCount >= 3, circleCenter, bestRadius, bestInlierCount / (double)stripCount);
                 }
 
-                var rect = new Rect(roi.X, roi.Y, roi.Width, roi.Height)
-                    .Intersect(new Rect(0, 0, matBgrOrGray.Width, matBgrOrGray.Height));
-                if (rect.Width <= 2 || rect.Height <= 2)
-                {
-                    return new CircleFinderResult(name, Found: false, default, 0.0, 0.0);
-                }
-
+                var rect = new Rect(roi.X, roi.Y, roi.Width, roi.Height).Intersect(new Rect(0, 0, matBgrOrGray.Width, matBgrOrGray.Height));
+                if (rect.Width <= 2 || rect.Height <= 2) return new CircleFinderResult(name, Found: false, default, 0.0, 0.0);
                 using var crop = new Mat(matBgrOrGray, rect);
-                Mat gray = crop;
-                using var grayOwned = crop.Channels() == 1 ? null : crop.CvtColor(ColorConversionCodes.BGR2GRAY);
-                if (grayOwned is not null) gray = grayOwned;
-
-                var minR = Math.Max(0, def.MinRadiusPx);
-                var maxR = Math.Max(0, def.MaxRadiusPx);
+                Mat gray = crop.Channels() == 1 ? crop : crop.CvtColor(ColorConversionCodes.BGR2GRAY);
+                var minR = Math.Max(0, def.MinRadiusPx); var maxR = Math.Max(0, def.MaxRadiusPx);
 
                 if (def.Algorithm == CircleFindAlgorithm.HoughCircles)
                 {
-                    using var blur = new Mat();
-                    Cv2.GaussianBlur(gray, blur, new Size(0, 0), 1.2);
-                    var dp = Math.Max(1.0, def.HoughDp);
-                    var minDist = Math.Max(1.0, def.HoughMinDistPx);
-                    var p1 = Math.Max(1.0, def.HoughParam1);
-                    var p2 = Math.Max(1.0, def.HoughParam2);
-                    var circles = Cv2.HoughCircles(blur, HoughModes.Gradient, dp, minDist, p1, p2, minR, maxR);
-                    if (circles is null || circles.Length == 0)
-                    {
-                        return new CircleFinderResult(name, Found: false, default, 0.0, 0.0);
-                    }
-
+                    using var blur = new Mat(); Cv2.GaussianBlur(gray, blur, new Size(0, 0), 1.2);
+                    var circles = Cv2.HoughCircles(blur, HoughModes.Gradient, Math.Max(1.0, def.HoughDp), Math.Max(1.0, def.HoughMinDistPx), Math.Max(1.0, def.HoughParam1), Math.Max(1.0, def.HoughParam2), minR, maxR);
+                    if (circles is null || circles.Length == 0) return new CircleFinderResult(name, Found: false, default, 0.0, 0.0);
                     var best = circles.OrderByDescending(c => c.Radius).First();
-                    var center = new Point2d(rect.X + best.Center.X, rect.Y + best.Center.Y);
-                    return new CircleFinderResult(name, Found: true, center, best.Radius, Score: 1.0);
+                    return new CircleFinderResult(name, Found: true, new Point2d(rect.X + best.Center.X, rect.Y + best.Center.Y), best.Radius, Score: 1.0);
                 }
-
-                if (def.Algorithm == CircleFindAlgorithm.ContourFit)
+                
+                using var edges = new Mat(); Cv2.Canny(gray, edges, def.Canny1, def.Canny2);
+                Cv2.FindContours(edges, out var contours, out _, RetrievalModes.External, ContourApproximationModes.ApproxSimple);
+                var bestScore = double.NegativeInfinity; var bestCenter = new Point2d(); var bestR = 0.0;
+                foreach (var cnt in contours)
                 {
-                    using var edges = new Mat();
-                    Cv2.Canny(gray, edges, def.Canny1, def.Canny2);
-                    Cv2.FindContours(edges, out var contours, out _, RetrievalModes.External, ContourApproximationModes.ApproxSimple);
-
-                    var bestScore = double.NegativeInfinity;
-                    var bestCenter = new Point2d();
-                    var bestR = 0.0;
-
-                    foreach (var cnt in contours)
-                    {
-                        if (cnt is null || cnt.Length < 20) continue;
-                        var area = Math.Abs(Cv2.ContourArea(cnt));
-                        if (area <= 1.0) continue;
-
-                        var peri = Cv2.ArcLength(cnt, closed: true);
-                        if (peri <= 1e-9) continue;
-                        var circ = 4.0 * Math.PI * area / (peri * peri);
-                        if (circ < def.MinCircularity) continue;
-
-                        Cv2.MinEnclosingCircle(cnt, out var c, out var r);
-                        if (minR > 0 && r < minR) continue;
-                        if (maxR > 0 && r > maxR) continue;
-
-                        var score = circ * Math.Sqrt(area);
-                        if (score > bestScore)
-                        {
-                            bestScore = score;
-                            bestCenter = new Point2d(rect.X + c.X, rect.Y + c.Y);
-                            bestR = r;
-                        }
-                    }
-
-                    if (bestScore <= double.NegativeInfinity)
-                    {
-                        return new CircleFinderResult(name, Found: false, default, 0.0, 0.0);
-                    }
-
-                    return new CircleFinderResult(name, Found: true, bestCenter, bestR, Score: bestScore);
+                    if (cnt is null || cnt.Length < 20) continue;
+                    var area = Math.Abs(Cv2.ContourArea(cnt)); var peri = Cv2.ArcLength(cnt, closed: true);
+                    if (peri <= 1e-9 || (4.0 * Math.PI * area / (peri * peri)) < def.MinCircularity) continue;
+                    Cv2.MinEnclosingCircle(cnt, out var c, out var r);
+                    if ((minR > 0 && r < minR) || (maxR > 0 && r > maxR)) continue;
+                    var score = (4.0 * Math.PI * area / (peri * peri)) * Math.Sqrt(area);
+                    if (score > bestScore) { bestScore = score; bestCenter = new Point2d(rect.X + c.X, rect.Y + c.Y); bestR = r; }
                 }
-
-                // RANSAC (simple): reuse contour edges as points (if any). If none, fail.
-                {
-                    using var edges = new Mat();
-                    Cv2.Canny(gray, edges, def.Canny1, def.Canny2);
-                    var pts = new List<Point2f>();
-                    for (var y = 0; y < edges.Rows; y++)
-                    {
-                        for (var x = 0; x < edges.Cols; x++)
-                        {
-                            if (edges.Get<byte>(y, x) != 0) pts.Add(new Point2f(x, y));
-                        }
-                    }
-
-                    if (pts.Count < 50)
-                    {
-                        return new CircleFinderResult(name, Found: false, default, 0.0, 0.0);
-                    }
-
-                    var rnd = new Random(def.Name?.GetHashCode() ?? 0);
-                    var bestInliers = -1;
-                    var bestCenter = new Point2d();
-                    var bestR = 0.0;
-                    var thresh = 2.5;
-                    var iters = 80;
-
-                    static bool TryCircleFrom3(Point2f a, Point2f b, Point2f c, out Point2d center, out double r)
-                    {
-                        center = default;
-                        r = 0;
-                        var ax = a.X; var ay = a.Y;
-                        var bx = b.X; var by = b.Y;
-                        var cx = c.X; var cy = c.Y;
-                        var d = 2.0 * (ax * (by - cy) + bx * (cy - ay) + cx * (ay - by));
-                        if (Math.Abs(d) < 1e-9) return false;
-                        var ax2ay2 = ax * ax + ay * ay;
-                        var bx2by2 = bx * bx + by * by;
-                        var cx2cy2 = cx * cx + cy * cy;
-                        var ux = (ax2ay2 * (by - cy) + bx2by2 * (cy - ay) + cx2cy2 * (ay - by)) / d;
-                        var uy = (ax2ay2 * (cx - bx) + bx2by2 * (ax - cx) + cx2cy2 * (bx - ax)) / d;
-                        center = new Point2d(ux, uy);
-                        r = Math.Sqrt((ux - ax) * (ux - ax) + (uy - ay) * (uy - ay));
-                        return double.IsFinite(r) && r > 0;
-                    }
-
-                    for (var k = 0; k < iters; k++)
-                    {
-                        var ia = rnd.Next(pts.Count);
-                        var ib = rnd.Next(pts.Count);
-                        var ic = rnd.Next(pts.Count);
-                        if (ia == ib || ia == ic || ib == ic) continue;
-
-                        if (!TryCircleFrom3(pts[ia], pts[ib], pts[ic], out var c0, out var r0)) continue;
-                        if (minR > 0 && r0 < minR) continue;
-                        if (maxR > 0 && r0 > maxR) continue;
-
-                        var inl = 0;
-                        for (var i = 0; i < pts.Count; i += 2)
-                        {
-                            var p = pts[i];
-                            var dx = p.X - c0.X;
-                            var dy = p.Y - c0.Y;
-                            var d0 = Math.Abs(Math.Sqrt(dx * dx + dy * dy) - r0);
-                            if (d0 <= thresh) inl++;
-                        }
-
-                        if (inl > bestInliers)
-                        {
-                            bestInliers = inl;
-                            bestCenter = c0;
-                            bestR = r0;
-                        }
-                    }
-
-                    if (bestInliers < 0)
-                    {
-                        return new CircleFinderResult(name, Found: false, default, 0.0, 0.0);
-                    }
-
-                    var center = new Point2d(rect.X + bestCenter.X, rect.Y + bestCenter.Y);
-                    return new CircleFinderResult(name, Found: true, center, bestR, Score: bestInliers);
-                }
+                return bestScore <= double.NegativeInfinity ? new CircleFinderResult(name, Found: false, default, 0.0, 0.0) : new CircleFinderResult(name, Found: true, bestCenter, bestR, Score: bestScore);
             }
+
+            var epdTasks = (config.EdgePairDetections ?? new List<EdgePairDetectDefinition>())
+                .Where(epd => epd is not null && !string.IsNullOrWhiteSpace(epd.Name) && epd.SearchRoi.Width > 0 && epd.SearchRoi.Height > 0)
+                .Select(epd => RunHeavyTool($"EdgePair:{epd.Name}", () =>
+                {
+                    var __sw = System.Diagnostics.Stopwatch.StartNew();
+                    var (matForEpd, _) = ResolveToolPreprocess("EdgePairDetect", epd.Name);
+                    var res = DetectEdgePair(matForEpd, epd.SearchRoi, epd, config.PixelsPerMm, originTeach, originFound, angleDeg);
+                    __sw.Stop(); result.Timings.NodeTimings[epd.Name] = (int)__sw.ElapsedMilliseconds; return res;
+                }))
+                .ToArray();
 
             var circleTasks = (config.CircleFinders ?? new List<CircleFinderDefinition>())
                 .Where(c => c is not null && !string.IsNullOrWhiteSpace(c.Name) && c.SearchRoi.Width > 0 && c.SearchRoi.Height > 0)
@@ -2608,902 +2321,227 @@ public partial class InspectionService
                 }))
                 .ToArray();
 
-            var tEpdDone = swTotal.ElapsedMilliseconds;
+            static BarcodeFormat[] ResolveFormats(List<CodeSymbology> sym)
+            {
+                if (sym is null || sym.Count == 0) return Array.Empty<BarcodeFormat>();
+                var fmts = new HashSet<BarcodeFormat>();
+                foreach (var s in sym)
+                {
+                    switch (s)
+                    {
+                        case CodeSymbology.Qr: fmts.Add(BarcodeFormat.QR_CODE); break;
+                        case CodeSymbology.DataMatrix: fmts.Add(BarcodeFormat.DATA_MATRIX); break;
+                        case CodeSymbology.Pdf417: fmts.Add(BarcodeFormat.PDF_417); break;
+                        case CodeSymbology.Aztec: fmts.Add(BarcodeFormat.AZTEC); break;
+                        case CodeSymbology.Barcode1D:
+                            fmts.Add(BarcodeFormat.CODE_128); fmts.Add(BarcodeFormat.CODE_39); fmts.Add(BarcodeFormat.CODE_93);
+                            fmts.Add(BarcodeFormat.EAN_13); fmts.Add(BarcodeFormat.EAN_8); fmts.Add(BarcodeFormat.UPC_A);
+                            fmts.Add(BarcodeFormat.UPC_E); fmts.Add(BarcodeFormat.ITF); fmts.Add(BarcodeFormat.CODABAR); break;
+                    }
+                }
+                return fmts.ToArray();
+            }
 
-            result.Timings.PointsMs = (int)Math.Max(0, tPointsDone - tPointsQueued);
-            result.Timings.LinesMs = (int)Math.Max(0, tLinesDone - tLinesQueued);
-            result.Timings.BlobsMs = (int)Math.Max(0, tBlobsDone - tBlobsQueued);
-            result.Timings.SurfaceCompareMs = (int)Math.Max(0, tScDone - tScQueued);
-            result.Timings.LpdMs = (int)Math.Max(0, tLpdDone - tLpdQueued);
-            result.Timings.CalipersMs = (int)Math.Max(0, tCalDone - tCalQueued);
+            var codeDetectionTasks = (config.CodeDetections ?? new List<CodeDetectionDefinition>())
+                .Where(cdt => cdt is not null && !string.IsNullOrWhiteSpace(cdt.Name) && cdt.SearchRoi.Width > 0 && cdt.SearchRoi.Height > 0)
+                .Select(cdt => RunHeavyTool($"CDT:{cdt.Name}", () =>
+                {
+                    var __swNode = System.Diagnostics.Stopwatch.StartNew();
+                    var totalAngleDeg = angleDeg + cdt.SearchRoi.Angle;
+                    var (matForCode, _) = ResolveToolPreprocess("CodeDetection", cdt.Name);
+
+                    using var crop = ExtractStraightRoi(matForCode, cdt.SearchRoi, originTeach, originFound, angleDeg, out var centerFound);
+                    if (crop.Empty() || crop.Width <= 0 || crop.Height <= 0)
+                    {
+                        __swNode.Stop();
+                        result.Timings.NodeTimings[cdt.Name] = (int)__swNode.ElapsedMilliseconds;
+                        return new CodeDetectionResult(cdt.Name, Found: false, Text: string.Empty, BoundingBox: default, Angle: totalAngleDeg);
+                    }
+
+                    using var gray = crop.Channels() == 1 ? crop.Clone() : crop.CvtColor(ColorConversionCodes.BGR2GRAY);
+                    var reader = new BarcodeReaderGeneric { AutoRotate = false, Options = new DecodingOptions { TryHarder = true, PossibleFormats = ResolveFormats(cdt.Symbologies).ToList(), TryInverted = true } };
+
+                    ZXing.Result? TryDecodeMat(Mat m)
+                    {
+                        if (m.Empty() || m.Width <= 0 || m.Height <= 0) return null;
+                        using var mCont = m.IsContinuous() ? m.Clone() : m.Clone();
+                        var buf = new byte[mCont.Cols * mCont.Rows];
+                        Marshal.Copy(mCont.Data, buf, 0, buf.Length);
+                        var src = new RGBLuminanceSource(buf, mCont.Cols, mCont.Rows, RGBLuminanceSource.BitmapFormat.Gray8);
+                        var r = reader.Decode(src);
+                        if (r != null && !string.IsNullOrWhiteSpace(r.Text)) return r;
+                        var multi = reader.DecodeMultiple(src);
+                        return multi?.FirstOrDefault(x => x != null && !string.IsNullOrWhiteSpace(x.Text));
+                    }
+
+                    ZXing.Result? decoded = null; Mat? matchedMat = null; Mat? matchedMatToDispose = null; double scanRotAngle = 0.0;
+                    decoded = TryDecodeMat(gray); if (decoded != null) matchedMat = gray;
+                    if (decoded == null) { var eq = new Mat(); Cv2.EqualizeHist(gray, eq); decoded = TryDecodeMat(eq); if (decoded != null) { matchedMat = eq; matchedMatToDispose = eq; } else eq.Dispose(); }
+                    if (decoded == null) { var adapt = new Mat(); Cv2.AdaptiveThreshold(gray, adapt, 255, AdaptiveThresholdTypes.GaussianC, ThresholdTypes.Binary, 21, 5); decoded = TryDecodeMat(adapt); if (decoded != null) { matchedMat = adapt; matchedMatToDispose = adapt; } else adapt.Dispose(); }
+                    if (decoded == null) { var otsu = new Mat(); Cv2.Threshold(gray, otsu, 0, 255, ThresholdTypes.Binary | ThresholdTypes.Otsu); decoded = TryDecodeMat(otsu); if (decoded != null) { matchedMat = otsu; matchedMatToDispose = otsu; } else otsu.Dispose(); }
+                    if (decoded == null) { var inv = new Mat(); Cv2.BitwiseNot(gray, inv); decoded = TryDecodeMat(inv); if (decoded != null) { matchedMat = inv; matchedMatToDispose = inv; } else inv.Dispose(); }
+
+                    if (decoded == null && cdt.TryHarder)
+                    {
+                        double[] extraAngles = { 90.0, 180.0, 270.0, 5.0, -5.0, 10.0, -10.0, 15.0, -15.0, 45.0, -45.0 };
+                        foreach (var a in extraAngles)
+                        {
+                            var rotMat = new Mat();
+                            if (Math.Abs(a - 90.0) < 0.1) Cv2.Rotate(gray, rotMat, RotateFlags.Rotate90Clockwise);
+                            else if (Math.Abs(a - 180.0) < 0.1) Cv2.Rotate(gray, rotMat, RotateFlags.Rotate180);
+                            else if (Math.Abs(a - 270.0) < 0.1) Cv2.Rotate(gray, rotMat, RotateFlags.Rotate90Counterclockwise);
+                            else { var center = new Point2f(gray.Cols / 2.0f, gray.Rows / 2.0f); using var rot = Cv2.GetRotationMatrix2D(center, a, 1.0); Cv2.WarpAffine(gray, rotMat, rot, gray.Size(), InterpolationFlags.Linear, BorderTypes.Replicate); }
+                            decoded = TryDecodeMat(rotMat);
+                            if (decoded != null) { matchedMat = rotMat; matchedMatToDispose = rotMat; scanRotAngle = a; break; }
+                            var eqRot = new Mat(); Cv2.EqualizeHist(rotMat, eqRot); decoded = TryDecodeMat(eqRot);
+                            if (decoded != null) { matchedMat = eqRot; matchedMatToDispose = eqRot; scanRotAngle = a; rotMat.Dispose(); break; }
+                            eqRot.Dispose(); rotMat.Dispose();
+                        }
+                    }
+
+                    if (decoded is null || string.IsNullOrWhiteSpace(decoded.Text)) { matchedMatToDispose?.Dispose(); __swNode.Stop(); result.Timings.NodeTimings[cdt.Name] = (int)__swNode.ElapsedMilliseconds; return new CodeDetectionResult(cdt.Name, Found: false, Text: string.Empty, BoundingBox: default, Angle: totalAngleDeg); }
+                    var rawPts = decoded.ResultPoints; var ptsInCrop = new List<Point2d>();
+                    if (rawPts is not null)
+                    {
+                        if (Math.Abs(scanRotAngle) > 0.001)
+                        {
+                            var center = new Point2f(gray.Cols / 2.0f, gray.Rows / 2.0f); using var rot = Cv2.GetRotationMatrix2D(center, scanRotAngle, 1.0); using var invRot = new Mat(); Cv2.InvertAffineTransform(rot, invRot);
+                            foreach (var p in rawPts) ptsInCrop.Add(new Point2d(p.X * invRot.At<double>(0, 0) + p.Y * invRot.At<double>(0, 1) + invRot.At<double>(0, 2), p.X * invRot.At<double>(1, 0) + p.Y * invRot.At<double>(1, 1) + invRot.At<double>(1, 2)));
+                        }
+                        else foreach (var p in rawPts) ptsInCrop.Add(new Point2d(p.X, p.Y));
+                    }
+                    Point2d localCenter = ptsInCrop.Count >= 3 ? new Point2d((ptsInCrop[0].X + ptsInCrop[2].X) / 2.0, (ptsInCrop[0].Y + ptsInCrop[2].Y) / 2.0) : (ptsInCrop.Count > 0 ? ptsInCrop[0] : new Point2d(crop.Width / 2.0, crop.Height / 2.0));
+                    matchedMatToDispose?.Dispose();
+                    var globalCenter = MapToGlobal(localCenter, crop.Width, crop.Height, centerFound, totalAngleDeg);
+                    var bb = new Rect((int)globalCenter.X - 20, (int)globalCenter.Y - 20, 40, 40);
+                    __swNode.Stop(); result.Timings.NodeTimings[cdt.Name] = (int)__swNode.ElapsedMilliseconds; return new CodeDetectionResult(cdt.Name, Found: true, Text: decoded.Text, BoundingBox: bb, Angle: totalAngleDeg);
+                }))
+                .ToArray();
+
+            var allHeavyTasks = new List<Task>(pointTasks.Length + lineTasks.Length + blobTasks.Length + surfaceCompareTasks.Length + contourCompareTasks.Length + colorDiffTasks.Length + cropTasks.Length + imgArithmeticTasks.Length + lpdTasks.Length + caliperTasks.Length + epdTasks.Length + circleTasks.Length + codeDetectionTasks.Length);
+            allHeavyTasks.AddRange(pointTasks); allHeavyTasks.AddRange(lineTasks); allHeavyTasks.AddRange(blobTasks); allHeavyTasks.AddRange(surfaceCompareTasks); allHeavyTasks.AddRange(contourCompareTasks); allHeavyTasks.AddRange(colorDiffTasks); allHeavyTasks.AddRange(cropTasks); allHeavyTasks.AddRange(imgArithmeticTasks); allHeavyTasks.AddRange(lpdTasks); allHeavyTasks.AddRange(caliperTasks); allHeavyTasks.AddRange(epdTasks); allHeavyTasks.AddRange(circleTasks); allHeavyTasks.AddRange(codeDetectionTasks);
+
+            var tBatch1Start = swTotal.ElapsedMilliseconds;
+            if (allHeavyTasks.Count > 0) Task.WaitAll(allHeavyTasks.ToArray());
+            var tBatch1Done = swTotal.ElapsedMilliseconds;
+            var batch1DurationMs = (int)Math.Max(0, tBatch1Done - tBatch1Start);
+
+            result.Timings.PointsMs = pointTasks.Length > 0 ? batch1DurationMs : 0;
+            result.Timings.LinesMs = lineTasks.Length > 0 ? batch1DurationMs : 0;
+            result.Timings.BlobsMs = blobTasks.Length > 0 ? batch1DurationMs : 0;
+            result.Timings.SurfaceCompareMs = (surfaceCompareTasks.Length > 0 || contourCompareTasks.Length > 0) ? batch1DurationMs : 0;
+            result.Timings.LpdMs = lpdTasks.Length > 0 ? batch1DurationMs : 0;
+            result.Timings.CalipersMs = caliperTasks.Length > 0 ? batch1DurationMs : 0;
+            result.Timings.EdgePairDetectMs = epdTasks.Length > 0 ? batch1DurationMs : 0;
+            result.Timings.CdtMs = codeDetectionTasks.Length > 0 ? batch1DurationMs : 0;
 
             var foundPoints = new Dictionary<string, Point2d>(StringComparer.OrdinalIgnoreCase);
-            foreach (var t in pointTasks)
-            {
-                var pr = t.Result;
-                result.Points.Add(pr);
-                foundPoints[pr.Name] = pr.Position;
-            }
-
+            foreach (var t in pointTasks) { var pr = t.Result; result.Points.Add(pr); foundPoints[pr.Name] = pr.Position; }
             var foundLines = new Dictionary<string, LineDetectResult>(StringComparer.OrdinalIgnoreCase);
-            foreach (var t in lineTasks)
-            {
-                var lr = t.Result;
-                result.Lines.Add(lr);
-                foundLines[lr.Name] = lr;
-            }
+            foreach (var t in lineTasks) { var lr = t.Result; result.Lines.Add(lr); foundLines[lr.Name] = lr; }
+            foreach (var t in blobTasks) result.BlobDetections.Add(t.Result);
+            foreach (var t in surfaceCompareTasks) result.SurfaceCompares.Add(t.Result);
+            foreach (var t in contourCompareTasks) result.ContourCompares.Add(t.Result);
+            foreach (var t in lpdTasks) result.LinePairDetections.Add(t.Result);
+            foreach (var t in caliperTasks) result.Calipers.Add(t.Result);
+            foreach (var t in epdTasks) result.EdgePairDetections.Add(t.Result);
+            foreach (var t in circleTasks) { var cir = t.Result; result.CircleFinders.Add(cir); if (cir.Found) foundPoints[cir.Name] = cir.Center; }
+            foreach (var t in colorDiffTasks) result.ColorDiffs.Add(t.Result);
+            foreach (var t in cropTasks) result.Crops.Add(t.Result);
+            foreach (var t in imgArithmeticTasks) result.ImgArithmetics.Add(t.Result);
+            foreach (var t in codeDetectionTasks) result.CodeDetections.Add(t.Result);
 
-            foreach (var t in blobTasks)
-            {
-                result.BlobDetections.Add(t.Result);
-            }
+            if (result.Origin is not null && result.Origin.Pass) foundPoints["Origin"] = result.Origin.Position;
 
-            foreach (var t in surfaceCompareTasks)
-            {
-                result.SurfaceCompares.Add(t.Result);
-            }
+            if (config.CreatePoints != null) foreach (var cp in config.CreatePoints) if (cp is not null && !string.IsNullOrWhiteSpace(cp.Name)) { var __sw = System.Diagnostics.Stopwatch.StartNew(); var res = GeometryCreationProcessor.EvaluateCreatePoint(cp, foundPoints); __sw.Stop(); result.Timings.NodeTimings[cp.Name] = (int)__sw.ElapsedMilliseconds; result.CreatePoints.Add(res); if (res.Success) foundPoints[res.Name] = new Point2d(res.X, res.Y); }
+            if (config.CreateLines != null) foreach (var cl in config.CreateLines) if (cl is not null && !string.IsNullOrWhiteSpace(cl.Name)) { var __sw = System.Diagnostics.Stopwatch.StartNew(); var res = GeometryCreationProcessor.EvaluateCreateLine(cl, foundPoints); __sw.Stop(); result.Timings.NodeTimings[cl.Name] = (int)__sw.ElapsedMilliseconds; result.CreateLines.Add(res); }
+            if (config.CreateRects != null) foreach (var cr in config.CreateRects) if (cr is not null && !string.IsNullOrWhiteSpace(cr.Name)) { var __sw = System.Diagnostics.Stopwatch.StartNew(); var res = GeometryCreationProcessor.EvaluateCreateRect(cr, foundPoints); __sw.Stop(); result.Timings.NodeTimings[cr.Name] = (int)__sw.ElapsedMilliseconds; result.CreateRects.Add(res); }
+            if (config.CreateCircles != null) foreach (var cc in config.CreateCircles) if (cc is not null && !string.IsNullOrWhiteSpace(cc.Name)) { var __sw = System.Diagnostics.Stopwatch.StartNew(); var res = GeometryCreationProcessor.EvaluateCreateCircle(cc, foundPoints); __sw.Stop(); result.Timings.NodeTimings[cc.Name] = (int)__sw.ElapsedMilliseconds; result.CreateCircles.Add(res); }
 
-            foreach (var t in contourCompareTasks)
-            {
-                result.ContourCompares.Add(t.Result);
-            }
-
-            foreach (var t in lpdTasks)
-            {
-                result.LinePairDetections.Add(t.Result);
-            }
-
-            foreach (var t in caliperTasks)
-            {
-                result.Calipers.Add(t.Result);
-            }
-
-            Task.WaitAll(epdTasks);
-            foreach (var t in epdTasks)
-            {
-                result.EdgePairDetections.Add(t.Result);
-            }
-
-            Task.WaitAll(circleTasks);
-            foreach (var t in circleTasks)
-            {
-                result.CircleFinders.Add(t.Result);
-            }
-
-            Task.WaitAll(colorDiffTasks);
-            foreach (var t in colorDiffTasks)
-            {
-                result.ColorDiffs.Add(t.Result);
-            }
-
-            Task.WaitAll(cropTasks);
-            foreach (var t in cropTasks)
-            {
-                result.Crops.Add(t.Result);
-            }
-
-            Task.WaitAll(imgArithmeticTasks);
-            foreach (var t in imgArithmeticTasks)
-            {
-                result.ImgArithmetics.Add(t.Result);
-            }
-
-            if (result.Origin is not null && result.Origin.Pass)
-            {
-                foundPoints["Origin"] = result.Origin.Position;
-            }
-
-            foreach (var cr in result.CircleFinders)
-            {
-                if (cr.Found)
-                {
-                    foundPoints[cr.Name] = cr.Center;
-                }
-            }
-
-            // 1. Process CreatePoint definitions
-            var createPointTasks = (config.CreatePoints ?? new List<CreatePointDefinition>())
-                .Where(cp => cp is not null && !string.IsNullOrWhiteSpace(cp.Name))
-                .Select(cp => RunHeavyTool($"CreatePoint:{cp.Name}", () =>
-                {
-                    var __sw = System.Diagnostics.Stopwatch.StartNew();
-                    var res = GeometryCreationProcessor.EvaluateCreatePoint(cp, foundPoints);
-                    __sw.Stop();
-                    result.Timings.NodeTimings[cp.Name] = (int)__sw.ElapsedMilliseconds;
-                    return res;
-                }))
-                .ToArray();
-
-            Task.WaitAll(createPointTasks);
-            foreach (var t in createPointTasks)
-            {
-                var cpr = t.Result;
-                result.CreatePoints.Add(cpr);
-                if (cpr.Success)
-                {
-                    foundPoints[cpr.Name] = new Point2d(cpr.X, cpr.Y);
-                }
-            }
-
-            // 2. Process CreateLine definitions
-            var createLineTasks = (config.CreateLines ?? new List<CreateLineDefinition>())
-                .Where(cl => cl is not null && !string.IsNullOrWhiteSpace(cl.Name))
-                .Select(cl => RunHeavyTool($"CreateLine:{cl.Name}", () =>
-                {
-                    var __sw = System.Diagnostics.Stopwatch.StartNew();
-                    var res = GeometryCreationProcessor.EvaluateCreateLine(cl, foundPoints);
-                    __sw.Stop();
-                    result.Timings.NodeTimings[cl.Name] = (int)__sw.ElapsedMilliseconds;
-                    return res;
-                }))
-                .ToArray();
-
-            Task.WaitAll(createLineTasks);
-            foreach (var t in createLineTasks)
-            {
-                var clr = t.Result;
-                result.CreateLines.Add(clr);
-            }
-
-            // 3. Process CreateRect definitions
-            var createRectTasks = (config.CreateRects ?? new List<CreateRectDefinition>())
-                .Where(cr => cr is not null && !string.IsNullOrWhiteSpace(cr.Name))
-                .Select(cr => RunHeavyTool($"CreateRect:{cr.Name}", () =>
-                {
-                    var __sw = System.Diagnostics.Stopwatch.StartNew();
-                    var res = GeometryCreationProcessor.EvaluateCreateRect(cr, foundPoints);
-                    __sw.Stop();
-                    result.Timings.NodeTimings[cr.Name] = (int)__sw.ElapsedMilliseconds;
-                    return res;
-                }))
-                .ToArray();
-
-            Task.WaitAll(createRectTasks);
-            foreach (var t in createRectTasks)
-            {
-                var crr = t.Result;
-                result.CreateRects.Add(crr);
-            }
-
-            // 4. Process CreateCircle definitions
-            var createCircleTasks = (config.CreateCircles ?? new List<CreateCircleDefinition>())
-                .Where(cc => cc is not null && !string.IsNullOrWhiteSpace(cc.Name))
-                .Select(cc => RunHeavyTool($"CreateCircle:{cc.Name}", () =>
-                {
-                    var __sw = System.Diagnostics.Stopwatch.StartNew();
-                    var res = GeometryCreationProcessor.EvaluateCreateCircle(cc, foundPoints);
-                    __sw.Stop();
-                    result.Timings.NodeTimings[cc.Name] = (int)__sw.ElapsedMilliseconds;
-                    return res;
-                }))
-                .ToArray();
-
-            Task.WaitAll(createCircleTasks);
-            foreach (var t in createCircleTasks)
-            {
-                var ccr = t.Result;
-                result.CreateCircles.Add(ccr);
-            }
-
-            result.Timings.EdgePairDetectMs = (int)Math.Max(0, swTotal.ElapsedMilliseconds - tEpdQueued);
-
-            foreach (var cal in result.Calipers)
-            {
-                if (!cal.Found)
-                {
-                    continue;
-                }
-
-                var dx = cal.LineP2.X - cal.LineP1.X;
-                var dy = cal.LineP2.Y - cal.LineP1.Y;
-                var len = Math.Sqrt(dx * dx + dy * dy);
-                foundLines[cal.Name] = new LineDetectResult(cal.Name, cal.LineP1, cal.LineP2, len, Found: true);
-            }
+            foreach (var cal in result.Calipers) if (cal.Found) { var dx = cal.LineP2.X - cal.LineP1.X; var dy = cal.LineP2.Y - cal.LineP1.Y; foundLines[cal.Name] = new LineDetectResult(cal.Name, cal.LineP1, cal.LineP2, Math.Sqrt(dx * dx + dy * dy), Found: true); }
 
             var foundCircles = new Dictionary<string, CircleFinderResult>(StringComparer.OrdinalIgnoreCase);
-            foreach (var c in result.CircleFinders)
-            {
-                foundCircles[c.Name] = c;
-            }
+            foreach (var c in result.CircleFinders) foundCircles[c.Name] = c;
 
             foreach (var d in (config.Diameters ?? new List<DiameterDefinition>()))
             {
                 var __swNode = System.Diagnostics.Stopwatch.StartNew();
-                if (d is null || string.IsNullOrWhiteSpace(d.Name) || string.IsNullOrWhiteSpace(d.CircleRef))
-                {
-                    continue;
-                }
-
-                if (!foundCircles.TryGetValue(d.CircleRef, out var c) || !c.Found)
-                {
-                    __swNode.Stop();
-                    result.Timings.NodeTimings[d.Name] = (int)__swNode.ElapsedMilliseconds;
-                    result.Diameters.Add(new DiameterResult(d.Name, d.CircleRef, Found: false, double.NaN, d.Nominal, d.TolerancePlus, d.ToleranceMinus, Pass: false, default, 0.0));
-                    continue;
-                }
-
-                var diameterPx = 2.0 * c.RadiusPx;
-                var value = config.PixelsPerMm > 0 ? diameterPx / config.PixelsPerMm : diameterPx;
-                var pass = value >= (d.Nominal - d.ToleranceMinus) && value <= (d.Nominal + d.TolerancePlus);
-                __swNode.Stop();
-                result.Timings.NodeTimings[d.Name] = (int)__swNode.ElapsedMilliseconds;
-                result.Diameters.Add(new DiameterResult(d.Name, d.CircleRef, Found: true, value, d.Nominal, d.TolerancePlus, d.ToleranceMinus, pass, c.Center, c.RadiusPx));
+                if (d is null || string.IsNullOrWhiteSpace(d.Name) || string.IsNullOrWhiteSpace(d.CircleRef)) continue;
+                if (!foundCircles.TryGetValue(d.CircleRef, out var c) || !c.Found) { __swNode.Stop(); result.Timings.NodeTimings[d.Name] = (int)__swNode.ElapsedMilliseconds; result.Diameters.Add(new DiameterResult(d.Name, d.CircleRef, Found: false, double.NaN, d.Nominal, d.TolerancePlus, d.ToleranceMinus, Pass: false, default, 0.0)); continue; }
+                var diameterPx = 2.0 * c.RadiusPx; var value = config.PixelsPerMm > 0 ? diameterPx / config.PixelsPerMm : diameterPx; var pass = value >= (d.Nominal - d.ToleranceMinus) && value <= (d.Nominal + d.TolerancePlus);
+                __swNode.Stop(); result.Timings.NodeTimings[d.Name] = (int)__swNode.ElapsedMilliseconds; result.Diameters.Add(new DiameterResult(d.Name, d.CircleRef, Found: true, value, d.Nominal, d.TolerancePlus, d.ToleranceMinus, pass, c.Center, c.RadiusPx));
             }
 
             var tEdgePairs0 = swTotal.ElapsedMilliseconds;
             foreach (var ep in config.EdgePairs)
             {
                 var __swNode = System.Diagnostics.Stopwatch.StartNew();
-                if (string.IsNullOrWhiteSpace(ep.Name) || string.IsNullOrWhiteSpace(ep.RefA) || string.IsNullOrWhiteSpace(ep.RefB))
-                {
-                    continue;
-                }
-
-                if (!foundLines.TryGetValue(ep.RefA, out var la) || !foundLines.TryGetValue(ep.RefB, out var lb) || !la.Found || !lb.Found)
-                {
-                    __swNode.Stop();
-                    result.Timings.NodeTimings[ep.Name] = (int)__swNode.ElapsedMilliseconds;
-                    result.EdgePairs.Add(new EdgePairResult(
-                        ep.Name,
-                        ep.RefA,
-                        ep.RefB,
-                        Found: false,
-                        default, default, default, default,
-                        double.NaN,
-                        ep.Nominal,
-                        ep.TolerancePlus,
-                        ep.ToleranceMinus,
-                        Pass: false,
-                        default,
-                        default));
-                    continue;
-                }
-
+                if (string.IsNullOrWhiteSpace(ep.Name) || string.IsNullOrWhiteSpace(ep.RefA) || string.IsNullOrWhiteSpace(ep.RefB)) continue;
+                if (!foundLines.TryGetValue(ep.RefA, out var la) || !foundLines.TryGetValue(ep.RefB, out var lb) || !la.Found || !lb.Found) { __swNode.Stop(); result.Timings.NodeTimings[ep.Name] = (int)__swNode.ElapsedMilliseconds; result.EdgePairs.Add(new EdgePairResult(ep.Name, ep.RefA, ep.RefB, Found: false, default, default, default, default, double.NaN, ep.Nominal, ep.TolerancePlus, ep.ToleranceMinus, Pass: false, default, default)); continue; }
                 var (distPx, ca, cb) = Geometry2D.SegmentToSegmentDistance(la.P1, la.P2, lb.P1, lb.P2);
-                var value = config.PixelsPerMm > 0 ? distPx / config.PixelsPerMm : distPx;
-                var pass = value >= (ep.Nominal - ep.ToleranceMinus) && value <= (ep.Nominal + ep.TolerancePlus);
-
-                __swNode.Stop();
-                result.Timings.NodeTimings[ep.Name] = (int)__swNode.ElapsedMilliseconds;
-                result.EdgePairs.Add(new EdgePairResult(
-                    ep.Name,
-                    ep.RefA,
-                    ep.RefB,
-                    Found: true,
-                    la.P1, la.P2,
-                    lb.P1, lb.P2,
-                    value,
-                    ep.Nominal,
-                    ep.TolerancePlus,
-                    ep.ToleranceMinus,
-                    pass,
-                    ca,
-                    cb));
+                var value = config.PixelsPerMm > 0 ? distPx / config.PixelsPerMm : distPx; var pass = value >= (ep.Nominal - ep.ToleranceMinus) && value <= (ep.Nominal + ep.TolerancePlus);
+                __swNode.Stop(); result.Timings.NodeTimings[ep.Name] = (int)__swNode.ElapsedMilliseconds; result.EdgePairs.Add(new EdgePairResult(ep.Name, ep.RefA, ep.RefB, Found: true, la.P1, la.P2, lb.P1, lb.P2, value, ep.Nominal, ep.TolerancePlus, ep.ToleranceMinus, pass, ca, cb));
             }
             result.Timings.EdgePairsMs = (int)Math.Max(0, swTotal.ElapsedMilliseconds - tEdgePairs0);
 
             static bool TryIntersectInfiniteLines(LineDetectResult a, LineDetectResult b, out Point2d inter)
             {
-                var ax = a.P2.X - a.P1.X;
-                var ay = a.P2.Y - a.P1.Y;
-                var bx = b.P2.X - b.P1.X;
-                var by = b.P2.Y - b.P1.Y;
-                var denom = ax * by - ay * bx;
-                if (Math.Abs(denom) < 1e-9)
-                {
-                    inter = default;
-                    return false;
-                }
-
-                var cx = b.P1.X - a.P1.X;
-                var cy = b.P1.Y - a.P1.Y;
-                var t = (cx * by - cy * bx) / denom;
-                inter = new Point2d(a.P1.X + t * ax, a.P1.Y + t * ay);
-                return double.IsFinite(inter.X) && double.IsFinite(inter.Y);
+                var ax = a.P2.X - a.P1.X; var ay = a.P2.Y - a.P1.Y; var bx = b.P2.X - b.P1.X; var by = b.P2.Y - b.P1.Y; var denom = ax * by - ay * bx;
+                if (Math.Abs(denom) < 1e-9) { inter = default; return false; }
+                var cx = b.P1.X - a.P1.X; var cy = b.P1.Y - a.P1.Y; var t = (cx * by - cy * bx) / denom;
+                inter = new Point2d(a.P1.X + t * ax, a.P1.Y + t * ay); return double.IsFinite(inter.X) && double.IsFinite(inter.Y);
             }
 
             var tAngles0 = swTotal.ElapsedMilliseconds;
             foreach (var a in config.Angles)
             {
                 var __swNode = System.Diagnostics.Stopwatch.StartNew();
-                if (string.IsNullOrWhiteSpace(a.Name) || string.IsNullOrWhiteSpace(a.LineA) || string.IsNullOrWhiteSpace(a.LineB))
-                {
-                    continue;
-                }
-
-                if (!foundLines.TryGetValue(a.LineA, out var la) || !foundLines.TryGetValue(a.LineB, out var lb) || !la.Found || !lb.Found)
-                {
-                    __swNode.Stop();
-                    result.Timings.NodeTimings[a.Name] = (int)__swNode.ElapsedMilliseconds;
-                    result.Angles.Add(new AngleResult(a.Name, a.LineA, a.LineB, double.NaN, a.Nominal, a.TolerancePlus, a.ToleranceMinus, Pass: false, Found: false, default, default, default));
-                    continue;
-                }
-
-                var v1 = new Point2d(la.P2.X - la.P1.X, la.P2.Y - la.P1.Y);
-                var v2 = new Point2d(lb.P2.X - lb.P1.X, lb.P2.Y - lb.P1.Y);
-                var n1 = Math.Sqrt(v1.X * v1.X + v1.Y * v1.Y);
-                var n2 = Math.Sqrt(v2.X * v2.X + v2.Y * v2.Y);
-                if (n1 < 1e-9 || n2 < 1e-9)
-                {
-                    __swNode.Stop();
-                    result.Timings.NodeTimings[a.Name] = (int)__swNode.ElapsedMilliseconds;
-                    result.Angles.Add(new AngleResult(a.Name, a.LineA, a.LineB, double.NaN, a.Nominal, a.TolerancePlus, a.ToleranceMinus, Pass: false, Found: false, default, default, default));
-                    continue;
-                }
-
-                var dot = (v1.X * v2.X + v1.Y * v2.Y) / (n1 * n2);
-                dot = Math.Clamp(dot, -1.0, 1.0);
-                var angle = Math.Acos(dot) * 180.0 / Math.PI;
-
-                var pass = angle >= (a.Nominal - a.ToleranceMinus) && angle <= (a.Nominal + a.TolerancePlus);
-                var found = TryIntersectInfiniteLines(la, lb, out var inter);
-                __swNode.Stop();
-                result.Timings.NodeTimings[a.Name] = (int)__swNode.ElapsedMilliseconds;
-                result.Angles.Add(new AngleResult(a.Name, a.LineA, a.LineB, angle, a.Nominal, a.TolerancePlus, a.ToleranceMinus, pass, found, inter, new Point2d(v1.X / n1, v1.Y / n1), new Point2d(v2.X / n2, v2.Y / n2)));
+                if (string.IsNullOrWhiteSpace(a.Name) || string.IsNullOrWhiteSpace(a.LineA) || string.IsNullOrWhiteSpace(a.LineB)) continue;
+                if (!foundLines.TryGetValue(a.LineA, out var la) || !foundLines.TryGetValue(a.LineB, out var lb) || !la.Found || !lb.Found) { __swNode.Stop(); result.Timings.NodeTimings[a.Name] = (int)__swNode.ElapsedMilliseconds; result.Angles.Add(new AngleResult(a.Name, a.LineA, a.LineB, double.NaN, a.Nominal, a.TolerancePlus, a.ToleranceMinus, Pass: false, Found: false, default, default, default)); continue; }
+                var v1 = new Point2d(la.P2.X - la.P1.X, la.P2.Y - la.P1.Y); var v2 = new Point2d(lb.P2.X - lb.P1.X, lb.P2.Y - lb.P1.Y); var n1 = Math.Sqrt(v1.X * v1.X + v1.Y * v1.Y); var n2 = Math.Sqrt(v2.X * v2.X + v2.Y * v2.Y);
+                if (n1 < 1e-9 || n2 < 1e-9) { __swNode.Stop(); result.Timings.NodeTimings[a.Name] = (int)__swNode.ElapsedMilliseconds; result.Angles.Add(new AngleResult(a.Name, a.LineA, a.LineB, double.NaN, a.Nominal, a.TolerancePlus, a.ToleranceMinus, Pass: false, Found: false, default, default, default)); continue; }
+                var dot = Math.Clamp((v1.X * v2.X + v1.Y * v2.Y) / (n1 * n2), -1.0, 1.0); var angle = Math.Acos(dot) * 180.0 / Math.PI; var pass = angle >= (a.Nominal - a.ToleranceMinus) && angle <= (a.Nominal + a.TolerancePlus);
+                var found = TryIntersectInfiniteLines(la, lb, out var inter); __swNode.Stop(); result.Timings.NodeTimings[a.Name] = (int)__swNode.ElapsedMilliseconds; result.Angles.Add(new AngleResult(a.Name, a.LineA, a.LineB, angle, a.Nominal, a.TolerancePlus, a.ToleranceMinus, pass, found, inter, new Point2d(v1.X / n1, v1.Y / n1), new Point2d(v2.X / n2, v2.Y / n2)));
             }
             result.Timings.AnglesMs = (int)Math.Max(0, swTotal.ElapsedMilliseconds - tAngles0);
 
             var tDistances0 = swTotal.ElapsedMilliseconds;
             var distanceAnchors = new Dictionary<string, Point2d>(StringComparer.OrdinalIgnoreCase);
-            foreach (var kv in foundPoints)
-            {
-                distanceAnchors[kv.Key] = kv.Value;
-            }
-
-            foreach (var c in result.CircleFinders)
-            {
-                if (c is not null && c.Found)
-                {
-                    distanceAnchors[c.Name] = c.Center;
-                }
-            }
-
-            foreach (var d in result.Diameters)
-            {
-                if (d is not null && d.Found)
-                {
-                    distanceAnchors[d.Name] = d.Center;
-                }
-            }
+            foreach (var kv in foundPoints) distanceAnchors[kv.Key] = kv.Value;
+            foreach (var c in result.CircleFinders) if (c is not null && c.Found) distanceAnchors[c.Name] = c.Center;
+            foreach (var d in result.Diameters) if (d is not null && d.Found) distanceAnchors[d.Name] = d.Center;
 
             foreach (var d in config.Distances)
             {
                 var __swNode = System.Diagnostics.Stopwatch.StartNew();
-                if (!distanceAnchors.TryGetValue(d.PointA, out var a) || !distanceAnchors.TryGetValue(d.PointB, out var b))
-                {
-                    __swNode.Stop();
-                    result.Timings.NodeTimings[d.Name] = (int)__swNode.ElapsedMilliseconds;
-                    result.Distances.Add(new DistanceCheckResult(d.Name, d.PointA, d.PointB, double.NaN, d.Nominal, d.TolerancePlus, d.ToleranceMinus, false));
-                    continue;
-                }
-
-                var checkRes = _distanceCalculator.CheckDistance(d, a, b, config.PixelsPerMm);
-                __swNode.Stop();
-                result.Timings.NodeTimings[d.Name] = (int)__swNode.ElapsedMilliseconds;
-                result.Distances.Add(checkRes);
+                if (!distanceAnchors.TryGetValue(d.PointA, out var a) || !distanceAnchors.TryGetValue(d.PointB, out var b)) { __swNode.Stop(); result.Timings.NodeTimings[d.Name] = (int)__swNode.ElapsedMilliseconds; result.Distances.Add(new DistanceCheckResult(d.Name, d.PointA, d.PointB, double.NaN, d.Nominal, d.TolerancePlus, d.ToleranceMinus, false)); continue; }
+                var checkRes = _distanceCalculator.CheckDistance(d, a, b, config.PixelsPerMm); __swNode.Stop(); result.Timings.NodeTimings[d.Name] = (int)__swNode.ElapsedMilliseconds; result.Distances.Add(checkRes);
             }
 
             foreach (var dd in config.LineToLineDistances)
             {
                 var __swNode = System.Diagnostics.Stopwatch.StartNew();
-                if (!foundLines.TryGetValue(dd.LineA, out var la) || !foundLines.TryGetValue(dd.LineB, out var lb) || !la.Found || !lb.Found)
-                {
-                    __swNode.Stop();
-                    result.Timings.NodeTimings[dd.Name] = (int)__swNode.ElapsedMilliseconds;
-                    result.LineToLineDistances.Add(new SegmentDistanceResult(dd.Name, dd.LineA, dd.LineB, double.NaN, dd.Nominal, dd.TolerancePlus, dd.ToleranceMinus, false, default, default));
-                    continue;
-                }
-
-                var (distPx, ca, cb) = CalculateLineLineDistance(la, lb, dd.Mode);
-                var value = config.PixelsPerMm > 0 ? distPx / config.PixelsPerMm : distPx;
-                var pass = value >= (dd.Nominal - dd.ToleranceMinus) && value <= (dd.Nominal + dd.TolerancePlus);
-                __swNode.Stop();
-                result.Timings.NodeTimings[dd.Name] = (int)__swNode.ElapsedMilliseconds;
-                result.LineToLineDistances.Add(new SegmentDistanceResult(dd.Name, dd.LineA, dd.LineB, value, dd.Nominal, dd.TolerancePlus, dd.ToleranceMinus, pass, ca, cb));
+                if (!foundLines.TryGetValue(dd.LineA, out var la) || !foundLines.TryGetValue(dd.LineB, out var lb) || !la.Found || !lb.Found) { __swNode.Stop(); result.Timings.NodeTimings[dd.Name] = (int)__swNode.ElapsedMilliseconds; result.LineToLineDistances.Add(new SegmentDistanceResult(dd.Name, dd.LineA, dd.LineB, double.NaN, dd.Nominal, dd.TolerancePlus, dd.ToleranceMinus, false, default, default)); continue; }
+                var (distPx, ca, cb) = CalculateLineLineDistance(la, lb, dd.Mode); var value = config.PixelsPerMm > 0 ? distPx / config.PixelsPerMm : distPx; var pass = value >= (dd.Nominal - dd.ToleranceMinus) && value <= (dd.Nominal + dd.TolerancePlus);
+                __swNode.Stop(); result.Timings.NodeTimings[dd.Name] = (int)__swNode.ElapsedMilliseconds; result.LineToLineDistances.Add(new SegmentDistanceResult(dd.Name, dd.LineA, dd.LineB, value, dd.Nominal, dd.TolerancePlus, dd.ToleranceMinus, pass, ca, cb));
             }
 
             foreach (var dd in config.PointToLineDistances)
             {
                 var __swNode = System.Diagnostics.Stopwatch.StartNew();
-                if (!foundPoints.TryGetValue(dd.Point, out var p) || !foundLines.TryGetValue(dd.Line, out var l) || !l.Found)
-                {
-                    __swNode.Stop();
-                    result.Timings.NodeTimings[dd.Name] = (int)__swNode.ElapsedMilliseconds;
-                    result.PointToLineDistances.Add(new SegmentDistanceResult(dd.Name, dd.Point, dd.Line, double.NaN, dd.Nominal, dd.TolerancePlus, dd.ToleranceMinus, false, default, default));
-                    continue;
-                }
-
-                var (distPx, closest) = CalculatePointLineDistance(p, l, dd.Mode);
-                var value = config.PixelsPerMm > 0 ? distPx / config.PixelsPerMm : distPx;
-                var pass = value >= (dd.Nominal - dd.ToleranceMinus) && value <= (dd.Nominal + dd.TolerancePlus);
-                __swNode.Stop();
-                result.Timings.NodeTimings[dd.Name] = (int)__swNode.ElapsedMilliseconds;
-                result.PointToLineDistances.Add(new SegmentDistanceResult(dd.Name, dd.Point, dd.Line, value, dd.Nominal, dd.TolerancePlus, dd.ToleranceMinus, pass, p, closest));
+                if (!foundPoints.TryGetValue(dd.Point, out var p) || !foundLines.TryGetValue(dd.Line, out var l) || !l.Found) { __swNode.Stop(); result.Timings.NodeTimings[dd.Name] = (int)__swNode.ElapsedMilliseconds; result.PointToLineDistances.Add(new SegmentDistanceResult(dd.Name, dd.Point, dd.Line, double.NaN, dd.Nominal, dd.TolerancePlus, dd.ToleranceMinus, false, default, default)); continue; }
+                var (distPx, closest) = CalculatePointLineDistance(p, l, dd.Mode); var value = config.PixelsPerMm > 0 ? distPx / config.PixelsPerMm : distPx; var pass = value >= (dd.Nominal - dd.ToleranceMinus) && value <= (dd.Nominal + dd.TolerancePlus);
+                __swNode.Stop(); result.Timings.NodeTimings[dd.Name] = (int)__swNode.ElapsedMilliseconds; result.PointToLineDistances.Add(new SegmentDistanceResult(dd.Name, dd.Point, dd.Line, value, dd.Nominal, dd.TolerancePlus, dd.ToleranceMinus, pass, p, closest));
             }
             foreach (var dd in config.SegmentLineDistances)
             {
                 var __swNode = System.Diagnostics.Stopwatch.StartNew();
-                if (!foundLines.TryGetValue(dd.LineA, out var la) || !foundLines.TryGetValue(dd.LineB, out var lb) || !la.Found || !lb.Found)
-                {
-                    __swNode.Stop();
-                    result.Timings.NodeTimings[dd.Name] = (int)__swNode.ElapsedMilliseconds;
-                    result.SegmentLineDistances.Add(new SegmentDistanceResult(dd.Name, dd.LineA, dd.LineB, double.NaN, dd.Nominal, dd.TolerancePlus, dd.ToleranceMinus, false, default, default));
-                    continue;
-                }
-
-                Roi? searchRoiA = null;
-                var lineADef = config.Lines?.FirstOrDefault(x => string.Equals(x.Name, dd.LineA, StringComparison.OrdinalIgnoreCase));
-                if (lineADef is not null) searchRoiA = lineADef.SearchRoi;
-                else
-                {
-                    var calADef = config.Calipers?.FirstOrDefault(x => string.Equals(x.Name, dd.LineA, StringComparison.OrdinalIgnoreCase));
-                    if (calADef is not null) searchRoiA = calADef.SearchRoi;
-                    else
-                    {
-                        var lpdADef = config.LinePairDetections?.FirstOrDefault(x => string.Equals(x.Name, dd.LineA, StringComparison.OrdinalIgnoreCase));
-                        if (lpdADef is not null) searchRoiA = lpdADef.SearchRoi;
-                        else
-                        {
-                            var epdADef = config.EdgePairDetections?.FirstOrDefault(x => string.Equals(x.Name, dd.LineA, StringComparison.OrdinalIgnoreCase));
-                            if (epdADef is not null) searchRoiA = epdADef.SearchRoi;
-                        }
-                    }
-                }
-
-                var (distPx, ca, cb) = CalculateSegmentLineDistance(la, lb, dd.Mode, dd.ExtensionMode, searchRoiA, originTeach, originFound, angleDeg);
-                var value = config.PixelsPerMm > 0 ? distPx / config.PixelsPerMm : distPx;
-                var pass = value >= (dd.Nominal - dd.ToleranceMinus) && value <= (dd.Nominal + dd.TolerancePlus);
-                __swNode.Stop();
-                result.Timings.NodeTimings[dd.Name] = (int)__swNode.ElapsedMilliseconds;
-                result.SegmentLineDistances.Add(new SegmentDistanceResult(dd.Name, dd.LineA, dd.LineB, value, dd.Nominal, dd.TolerancePlus, dd.ToleranceMinus, pass, ca, cb));
+                if (!foundLines.TryGetValue(dd.LineA, out var la) || !foundLines.TryGetValue(dd.LineB, out var lb) || !la.Found || !lb.Found) { __swNode.Stop(); result.Timings.NodeTimings[dd.Name] = (int)__swNode.ElapsedMilliseconds; result.SegmentLineDistances.Add(new SegmentDistanceResult(dd.Name, dd.LineA, dd.LineB, double.NaN, dd.Nominal, dd.TolerancePlus, dd.ToleranceMinus, false, default, default)); continue; }
+                Roi? searchRoiA = config.Lines?.FirstOrDefault(x => string.Equals(x.Name, dd.LineA, StringComparison.OrdinalIgnoreCase))?.SearchRoi ?? config.Calipers?.FirstOrDefault(x => string.Equals(x.Name, dd.LineA, StringComparison.OrdinalIgnoreCase))?.SearchRoi ?? config.LinePairDetections?.FirstOrDefault(x => string.Equals(x.Name, dd.LineA, StringComparison.OrdinalIgnoreCase))?.SearchRoi ?? config.EdgePairDetections?.FirstOrDefault(x => string.Equals(x.Name, dd.LineA, StringComparison.OrdinalIgnoreCase))?.SearchRoi;
+                var (distPx, ca, cb) = CalculateSegmentLineDistance(la, lb, dd.Mode, dd.ExtensionMode, searchRoiA, originTeach, originFound, angleDeg); var value = config.PixelsPerMm > 0 ? distPx / config.PixelsPerMm : distPx; var pass = value >= (dd.Nominal - dd.ToleranceMinus) && value <= (dd.Nominal + dd.TolerancePlus);
+                __swNode.Stop(); result.Timings.NodeTimings[dd.Name] = (int)__swNode.ElapsedMilliseconds; result.SegmentLineDistances.Add(new SegmentDistanceResult(dd.Name, dd.LineA, dd.LineB, value, dd.Nominal, dd.TolerancePlus, dd.ToleranceMinus, pass, ca, cb));
             }
             result.Timings.DistancesMs = (int)Math.Max(0, swTotal.ElapsedMilliseconds - tDistances0);
-
-            var tCdt0 = swTotal.ElapsedMilliseconds;
-            static BarcodeFormat[] ResolveFormats(List<CodeSymbology> sym)
-            {
-                if (sym is null || sym.Count == 0)
-                {
-                    return Array.Empty<BarcodeFormat>();
-                }
-
-                var fmts = new HashSet<BarcodeFormat>();
-                foreach (var s in sym)
-                {
-                    switch (s)
-                    {
-                        case CodeSymbology.Qr:
-                            fmts.Add(BarcodeFormat.QR_CODE);
-                            break;
-                        case CodeSymbology.DataMatrix:
-                            fmts.Add(BarcodeFormat.DATA_MATRIX);
-                            break;
-                        case CodeSymbology.Pdf417:
-                            fmts.Add(BarcodeFormat.PDF_417);
-                            break;
-                        case CodeSymbology.Aztec:
-                            fmts.Add(BarcodeFormat.AZTEC);
-                            break;
-                        case CodeSymbology.Barcode1D:
-                            fmts.Add(BarcodeFormat.CODE_128);
-                            fmts.Add(BarcodeFormat.CODE_39);
-                            fmts.Add(BarcodeFormat.CODE_93);
-                            fmts.Add(BarcodeFormat.EAN_13);
-                            fmts.Add(BarcodeFormat.EAN_8);
-                            fmts.Add(BarcodeFormat.UPC_A);
-                            fmts.Add(BarcodeFormat.UPC_E);
-                            fmts.Add(BarcodeFormat.ITF);
-                            fmts.Add(BarcodeFormat.CODABAR);
-                            break;
-                        default:
-                            break;
-                    }
-                }
-
-                return fmts.ToArray();
-            }
-
-            foreach (var cdt in config.CodeDetections)
-            {
-                var __swNode = System.Diagnostics.Stopwatch.StartNew();
-                if (string.IsNullOrWhiteSpace(cdt.Name) || cdt.SearchRoi.Width <= 0 || cdt.SearchRoi.Height <= 0)
-                {
-                    continue;
-                }
-
-                var totalAngleDeg = angleDeg + cdt.SearchRoi.Angle;
-                var (matForCode, _) = ResolveToolPreprocess("CodeDetection", cdt.Name);
-
-                // 1. Cắt vùng ROI trên ảnh để lấy 1 ảnh nhỏ chứa mã code, xoay ảnh đó về 0 độ theo góc lệch của origin
-                using var crop = ExtractStraightRoi(matForCode, cdt.SearchRoi, originTeach, originFound, angleDeg, out var centerFound);
-                if (crop.Empty() || crop.Width <= 0 || crop.Height <= 0)
-                {
-                    __swNode.Stop();
-                    result.Timings.NodeTimings[cdt.Name] = (int)__swNode.ElapsedMilliseconds;
-                    result.CodeDetections.Add(new CodeDetectionResult(cdt.Name, Found: false, Text: string.Empty, BoundingBox: default, Angle: totalAngleDeg));
-                    continue;
-                }
-
-                using var gray = crop.Channels() == 1 ? crop.Clone() : crop.CvtColor(ColorConversionCodes.BGR2GRAY);
-
-                var options = new DecodingOptions
-                {
-                    TryHarder = true,
-                    PossibleFormats = ResolveFormats(cdt.Symbologies).ToList()
-                };
-                options.TryInverted = true;
-
-                var reader = new BarcodeReaderGeneric
-                {
-                    AutoRotate = false,
-                    Options = options
-                };
-
-                // Helper để giải mã trên một Mat cụ thể
-                ZXing.Result? TryDecodeMat(Mat m)
-                {
-                    if (m.Empty() || m.Width <= 0 || m.Height <= 0) return null;
-                    using var mCont = m.IsContinuous() ? m.Clone() : m.Clone();
-                    var buf = new byte[mCont.Cols * mCont.Rows];
-                    Marshal.Copy(mCont.Data, buf, 0, buf.Length);
-                    var src = new RGBLuminanceSource(buf, mCont.Cols, mCont.Rows, RGBLuminanceSource.BitmapFormat.Gray8);
-
-                    var r = reader.Decode(src);
-                    if (r != null && !string.IsNullOrWhiteSpace(r.Text)) return r;
-
-                    var multi = reader.DecodeMultiple(src);
-                    if (multi != null && multi.Length > 0)
-                    {
-                        var firstValid = multi.FirstOrDefault(x => x != null && !string.IsNullOrWhiteSpace(x.Text));
-                        if (firstValid != null) return firstValid;
-                    }
-
-                    return null;
-                }
-
-                ZXing.Result? decoded = null;
-                Mat? matchedMat = null;
-                Mat? matchedMatToDispose = null;
-                double scanRotAngle = 0.0; // Góc xoay của ảnh nhỏ khi scan thành công (0 = ảnh thẳng)
-
-                // STAGE 1: Quét ở góc 0 độ (ảnh thẳng) với các tầng tiền xử lý tương phản cao
-                // 1.1 Ảnh xám gốc
-                decoded = TryDecodeMat(gray);
-                if (decoded != null) matchedMat = gray;
-
-                // 1.2 EqualizeHist (tăng tương phản)
-                if (decoded == null)
-                {
-                    var eq = new Mat();
-                    Cv2.EqualizeHist(gray, eq);
-                    decoded = TryDecodeMat(eq);
-                    if (decoded != null) { matchedMat = eq; matchedMatToDispose = eq; }
-                    else eq.Dispose();
-                }
-
-                // 1.3 Adaptive Threshold (xử lý bóng đổ / không đều sáng)
-                if (decoded == null)
-                {
-                    var adapt = new Mat();
-                    Cv2.AdaptiveThreshold(gray, adapt, 255, AdaptiveThresholdTypes.GaussianC, ThresholdTypes.Binary, 21, 5);
-                    decoded = TryDecodeMat(adapt);
-                    if (decoded != null) { matchedMat = adapt; matchedMatToDispose = adapt; }
-                    else adapt.Dispose();
-                }
-
-                // 1.4 Otsu Threshold
-                if (decoded == null)
-                {
-                    var otsu = new Mat();
-                    Cv2.Threshold(gray, otsu, 0, 255, ThresholdTypes.Binary | ThresholdTypes.Otsu);
-                    decoded = TryDecodeMat(otsu);
-                    if (decoded != null) { matchedMat = otsu; matchedMatToDispose = otsu; }
-                    else otsu.Dispose();
-                }
-
-                // 1.5 Inverted Gray (nền tối chữ sáng)
-                if (decoded == null)
-                {
-                    var inv = new Mat();
-                    Cv2.BitwiseNot(gray, inv);
-                    decoded = TryDecodeMat(inv);
-                    if (decoded != null) { matchedMat = inv; matchedMatToDispose = inv; }
-                    else inv.Dispose();
-                }
-
-                // STAGE 2: Nếu chưa tìm thấy ở 0 độ và bật TryHarder, quét các góc xoay chính và phụ
-                if (decoded == null && cdt.TryHarder)
-                {
-                    double[] extraAngles = { 90.0, 180.0, 270.0, 5.0, -5.0, 10.0, -10.0, 15.0, -15.0, 45.0, -45.0 };
-                    foreach (var a in extraAngles)
-                    {
-                        var rotMat = new Mat();
-                        if (Math.Abs(a - 90.0) < 0.1) Cv2.Rotate(gray, rotMat, RotateFlags.Rotate90Clockwise);
-                        else if (Math.Abs(a - 180.0) < 0.1) Cv2.Rotate(gray, rotMat, RotateFlags.Rotate180);
-                        else if (Math.Abs(a - 270.0) < 0.1) Cv2.Rotate(gray, rotMat, RotateFlags.Rotate90Counterclockwise);
-                        else
-                        {
-                            var center = new Point2f(gray.Cols / 2.0f, gray.Rows / 2.0f);
-                            using var rot = Cv2.GetRotationMatrix2D(center, a, 1.0);
-                            Cv2.WarpAffine(gray, rotMat, rot, gray.Size(), InterpolationFlags.Linear, BorderTypes.Replicate);
-                        }
-
-                        decoded = TryDecodeMat(rotMat);
-                        if (decoded != null)
-                        {
-                            matchedMat = rotMat;
-                            matchedMatToDispose = rotMat;
-                            scanRotAngle = a;
-                            break;
-                        }
-
-                        var eqRot = new Mat();
-                        Cv2.EqualizeHist(rotMat, eqRot);
-                        decoded = TryDecodeMat(eqRot);
-                        if (decoded != null)
-                        {
-                            matchedMat = eqRot;
-                            matchedMatToDispose = eqRot;
-                            scanRotAngle = a;
-                            rotMat.Dispose();
-                            break;
-                        }
-                        eqRot.Dispose();
-                        rotMat.Dispose();
-                    }
-                }
-
-                if (decoded is null || string.IsNullOrWhiteSpace(decoded.Text))
-                {
-                    matchedMatToDispose?.Dispose();
-                    __swNode.Stop();
-                    result.Timings.NodeTimings[cdt.Name] = (int)__swNode.ElapsedMilliseconds;
-                    result.CodeDetections.Add(new CodeDetectionResult(cdt.Name, Found: false, Text: string.Empty, BoundingBox: default, Angle: totalAngleDeg));
-                    continue;
-                }
-
-                // Helper đo chiều cao thực tế của các vạch barcode 1D
-                double Measure1DBarcodeHeight(Mat m, double x0, double x1, double yScan, out double yCenter)
-                {
-                    yCenter = yScan;
-                    if (m.Empty() || m.Width <= 0 || m.Height <= 0) return 24.0;
-
-                    int minX = (int)Math.Clamp(Math.Min(x0, x1), 0, m.Cols - 1);
-                    int maxX = (int)Math.Clamp(Math.Max(x0, x1), 0, m.Cols - 1);
-                    int spanW = maxX - minX;
-                    if (spanW < 8) return Math.Min(24.0, m.Rows * 0.4);
-
-                    int sX1 = minX + (int)(spanW * 0.10);
-                    int sX2 = maxX - (int)(spanW * 0.10);
-                    int sampleW = sX2 - sX1;
-                    if (sampleW < 6) return Math.Min(24.0, m.Rows * 0.4);
-
-                    int curY = (int)Math.Clamp(yScan, 0, m.Rows - 1);
-
-                    double GetRowEnergy(int y)
-                    {
-                        if (y < 0 || y >= m.Rows) return 0.0;
-                        double sum = 0;
-                        double sumSq = 0;
-                        int count = sampleW + 1;
-                        var rowBytes = new byte[count];
-                        Marshal.Copy(IntPtr.Add(m.Data, y * (int)m.Step() + sX1), rowBytes, 0, count);
-                        for (int i = 0; i < count; i++)
-                        {
-                            byte val = rowBytes[i];
-                            sum += val;
-                            sumSq += (double)val * val;
-                        }
-                        double mean = sum / count;
-                        double variance = (sumSq / count) - (mean * mean);
-                        return variance > 0 ? Math.Sqrt(variance) : 0.0;
-                    }
-
-                    double baseEnergy = GetRowEnergy(curY);
-                    for (int dy = -6; dy <= 6; dy++)
-                    {
-                        double e = GetRowEnergy(curY + dy);
-                        if (e > baseEnergy) baseEnergy = e;
-                    }
-
-                    double threshold = Math.Max(5.0, baseEnergy * 0.35);
-
-                    // Quét lên trên tìm đỉnh vạch
-                    int topY = curY;
-                    while (topY > 0)
-                    {
-                        double e = GetRowEnergy(topY - 1);
-                        if (e < threshold)
-                        {
-                            double e2 = GetRowEnergy(topY - 2);
-                            if (e2 < threshold) break;
-                        }
-                        topY--;
-                    }
-
-                    // Quét xuống dưới tìm đáy vạch
-                    int bottomY = curY;
-                    while (bottomY < m.Rows - 1)
-                    {
-                        double e = GetRowEnergy(bottomY + 1);
-                        if (e < threshold)
-                        {
-                            double e2 = GetRowEnergy(bottomY + 2);
-                            if (e2 < threshold) break;
-                        }
-                        bottomY++;
-                    }
-
-                    int rawH = bottomY - topY;
-                    if (rawH >= 6 && rawH <= m.Rows)
-                    {
-                        yCenter = (topY + bottomY) / 2.0;
-                        return rawH + 4.0;
-                    }
-
-                    return Math.Clamp(spanW * 0.20, 14.0, Math.Min(45.0, m.Rows * 0.6));
-                }
-
-                // 2. Chuyển đổi các điểm phát hiện về hệ tọa độ của ảnh nhỏ (crop)
-                var rawPts = decoded.ResultPoints;
-                var ptsInCrop = new List<Point2d>();
-
-                if (rawPts is not null && rawPts.Length > 0)
-                {
-                    if (Math.Abs(scanRotAngle) > 0.001)
-                    {
-                        if (Math.Abs(scanRotAngle - 90.0) < 0.1)
-                        {
-                            foreach (var p in rawPts) ptsInCrop.Add(new Point2d(p.Y, gray.Rows - 1 - p.X));
-                        }
-                        else if (Math.Abs(scanRotAngle - 180.0) < 0.1)
-                        {
-                            foreach (var p in rawPts) ptsInCrop.Add(new Point2d(gray.Cols - 1 - p.X, gray.Rows - 1 - p.Y));
-                        }
-                        else if (Math.Abs(scanRotAngle - 270.0) < 0.1)
-                        {
-                            foreach (var p in rawPts) ptsInCrop.Add(new Point2d(gray.Cols - 1 - p.Y, p.X));
-                        }
-                        else
-                        {
-                            var center = new Point2f(gray.Cols / 2.0f, gray.Rows / 2.0f);
-                            using var rot = Cv2.GetRotationMatrix2D(center, scanRotAngle, 1.0);
-                            using var invRot = new Mat();
-                            Cv2.InvertAffineTransform(rot, invRot);
-                            foreach (var p in rawPts)
-                            {
-                                var px = p.X * invRot.At<double>(0, 0) + p.Y * invRot.At<double>(0, 1) + invRot.At<double>(0, 2);
-                                var py = p.X * invRot.At<double>(1, 0) + p.Y * invRot.At<double>(1, 1) + invRot.At<double>(1, 2);
-                                ptsInCrop.Add(new Point2d(px, py));
-                            }
-                        }
-                    }
-                    else
-                    {
-                        foreach (var p in rawPts) ptsInCrop.Add(new Point2d(p.X, p.Y));
-                    }
-                }
-
-                // 3. Tính tâm, kích thước và góc lệch cục bộ (localAngle) của mã trên ảnh nhỏ
-                Point2d localCenter;
-                double codeW = 0.0;
-                double codeH = 0.0;
-                double localAngle = 0.0;
-
-                if (ptsInCrop.Count >= 3)
-                {
-                    // QR Code / DataMatrix (Finder patterns: P0=BottomLeft, P1=TopLeft, P2=TopRight)
-                    var p0 = ptsInCrop[0];
-                    var p1 = ptsInCrop[1];
-                    var p2 = ptsInCrop[2];
-
-                    var vTop = new Point2d(p2.X - p1.X, p2.Y - p1.Y);
-                    var vLeft = new Point2d(p0.X - p1.X, p0.Y - p1.Y);
-
-                    var lenTop = Math.Sqrt(vTop.X * vTop.X + vTop.Y * vTop.Y);
-                    var lenLeft = Math.Sqrt(vLeft.X * vLeft.X + vLeft.Y * vLeft.Y);
-
-                    localAngle = Math.Atan2(vTop.Y, vTop.X) * 180.0 / Math.PI;
-
-                    if (ptsInCrop.Count >= 4)
-                    {
-                        var p3 = ptsInCrop[3];
-                        localCenter = new Point2d((p0.X + p1.X + p2.X + p3.X) / 4.0, (p0.Y + p1.Y + p2.Y + p3.Y) / 4.0);
-                    }
-                    else
-                    {
-                        localCenter = new Point2d((p0.X + p2.X) / 2.0, (p0.Y + p2.Y) / 2.0);
-                    }
-
-                    var side = Math.Max(lenTop, lenLeft);
-                    codeW = Math.Max(10.0, side * 1.28 + 4.0);
-                    codeH = codeW;
-                }
-                else if (rawPts is not null && rawPts.Length == 2)
-                {
-                    // 1D Barcode: Đo chiều cao vạch chính xác trên matchedMat và tính hướng xoay
-                    var p0Rot = rawPts[0];
-                    var p1Rot = rawPts[1];
-                    var len = Math.Abs(p1Rot.X - p0Rot.X);
-                    var yScan = p0Rot.Y;
-
-                    var measuredH = Measure1DBarcodeHeight(matchedMat ?? gray, p0Rot.X, p1Rot.X, yScan, out double yMidRot);
-                    var xMidRot = (p0Rot.X + p1Rot.X) / 2.0;
-
-                    codeW = Math.Max(10.0, len * 1.08 + 4.0);
-                    codeH = measuredH;
-
-                    // Chuyển tâm từ matchedMat về crop
-                    Point2d ptMid;
-                    if (Math.Abs(scanRotAngle) > 0.001)
-                    {
-                        if (Math.Abs(scanRotAngle - 90.0) < 0.1)
-                        {
-                            ptMid = new Point2d(yMidRot, gray.Rows - 1 - xMidRot);
-                            localAngle = 90.0;
-                        }
-                        else if (Math.Abs(scanRotAngle - 180.0) < 0.1)
-                        {
-                            ptMid = new Point2d(gray.Cols - 1 - xMidRot, gray.Rows - 1 - yMidRot);
-                            localAngle = 180.0;
-                        }
-                        else if (Math.Abs(scanRotAngle - 270.0) < 0.1)
-                        {
-                            ptMid = new Point2d(gray.Cols - 1 - yMidRot, xMidRot);
-                            localAngle = -90.0;
-                        }
-                        else
-                        {
-                            var center = new Point2f(gray.Cols / 2.0f, gray.Rows / 2.0f);
-                            using var rot = Cv2.GetRotationMatrix2D(center, scanRotAngle, 1.0);
-                            using var invRot = new Mat();
-                            Cv2.InvertAffineTransform(rot, invRot);
-                            var px = xMidRot * invRot.At<double>(0, 0) + yMidRot * invRot.At<double>(0, 1) + invRot.At<double>(0, 2);
-                            var py = xMidRot * invRot.At<double>(1, 0) + yMidRot * invRot.At<double>(1, 1) + invRot.At<double>(1, 2);
-                            ptMid = new Point2d(px, py);
-                            localAngle = scanRotAngle;
-                        }
-                    }
-                    else
-                    {
-                        ptMid = new Point2d(xMidRot, yMidRot);
-                        localAngle = 0.0;
-                    }
-
-                    localCenter = ptMid;
-                }
-                else if (ptsInCrop.Count == 1)
-                {
-                    localCenter = ptsInCrop[0];
-                    codeW = Math.Min(crop.Width * 0.8, 80.0);
-                    codeH = codeW;
-                    localAngle = 0.0;
-                }
-                else
-                {
-                    localCenter = new Point2d(crop.Width / 2.0, crop.Height / 2.0);
-                    codeW = crop.Width * 0.85;
-                    codeH = crop.Height * 0.85;
-                    localAngle = 0.0;
-                }
-
-                matchedMatToDispose?.Dispose();
-
-                // 4. Tính ngược góc cần xoay, kích thước đường bao và tọa độ để vẽ ngược về ảnh gốc
-                var globalCenter = MapToGlobal(localCenter, crop.Width, crop.Height, centerFound, totalAngleDeg);
-                double globalCodeAngle = totalAngleDeg + localAngle;
-                while (globalCodeAngle > 180.0) globalCodeAngle -= 360.0;
-                while (globalCodeAngle <= -180.0) globalCodeAngle += 360.0;
-
-                int finalW = (int)Math.Ceiling(codeW);
-                int finalH = (int)Math.Ceiling(codeH);
-                var bb = new Rect((int)Math.Round(globalCenter.X - finalW / 2.0), (int)Math.Round(globalCenter.Y - finalH / 2.0), finalW, finalH);
-
-                __swNode.Stop();
-                result.Timings.NodeTimings[cdt.Name] = (int)__swNode.ElapsedMilliseconds;
-                result.CodeDetections.Add(new CodeDetectionResult(cdt.Name, Found: true, Text: decoded.Text, BoundingBox: bb, Angle: globalCodeAngle));
-            }
-            result.Timings.CdtMs = (int)Math.Max(0, swTotal.ElapsedMilliseconds - tCdt0);
 
             var tCond0 = swTotal.ElapsedMilliseconds;
             EvaluateConditions(config, result);
