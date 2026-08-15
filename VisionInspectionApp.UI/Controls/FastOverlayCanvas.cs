@@ -8,6 +8,7 @@ namespace VisionInspectionApp.UI.Controls;
 public class FastOverlayCanvas : FrameworkElement
 {
     private static readonly Dictionary<(Brush, double), Pen> _penCache = new();
+    private static readonly Typeface _defaultTypeface = new("Segoe UI");
 
     private static Pen GetCachedPen(Brush brush, double thickness)
     {
@@ -75,7 +76,7 @@ public class FastOverlayCanvas : FrameworkElement
             sy = bmp.Height / bmp.PixelHeight;
         }
 
-        var typeface = new Typeface("Segoe UI");
+        var typeface = _defaultTypeface;
         var dpi = VisualTreeHelper.GetDpi(this).PixelsPerDip;
         double scale = Math.Max(0.001, ViewScale);
         double effFontSize = 13.0 / scale;
@@ -158,17 +159,7 @@ public class FastOverlayCanvas : FrameworkElement
             {
                 if (pl.Points is not null && pl.Points.Count > 1)
                 {
-                    var geo = new StreamGeometry();
-                    using (var ctx = geo.Open())
-                    {
-                        var startPt = new Point(pl.Points[0].X * sx, pl.Points[0].Y * sy);
-                        ctx.BeginFigure(startPt, isFilled: false, isClosed: pl.IsClosed);
-                        for (int i = 1; i < pl.Points.Count; i++)
-                        {
-                            ctx.LineTo(new Point(pl.Points[i].X * sx, pl.Points[i].Y * sy), isStroked: true, isSmoothJoin: true);
-                        }
-                    }
-                    geo.Freeze();
+                    var geo = pl.GetOrCreateGeometry(sx, sy);
                     dc.DrawGeometry(null, pen, geo);
 
                     if (!string.IsNullOrWhiteSpace(pl.Label))

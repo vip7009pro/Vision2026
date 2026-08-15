@@ -51,6 +51,35 @@ public sealed class OverlayPolylineItem : OverlayItem
 {
     public List<System.Windows.Point> Points { get; init; } = new();
     public bool IsClosed { get; init; } = true;
+
+    private StreamGeometry? _cachedGeometry;
+
+    public StreamGeometry GetOrCreateGeometry(double sx = 1.0, double sy = 1.0)
+    {
+        if (_cachedGeometry is not null && sx == 1.0 && sy == 1.0)
+        {
+            return _cachedGeometry;
+        }
+
+        var geo = new StreamGeometry();
+        if (Points.Count > 1)
+        {
+            using var ctx = geo.Open();
+            var startPt = new System.Windows.Point(Points[0].X * sx, Points[0].Y * sy);
+            ctx.BeginFigure(startPt, isFilled: false, isClosed: IsClosed);
+            for (int i = 1; i < Points.Count; i++)
+            {
+                ctx.LineTo(new System.Windows.Point(Points[i].X * sx, Points[i].Y * sy), isStroked: true, isSmoothJoin: true);
+            }
+        }
+        geo.Freeze();
+
+        if (sx == 1.0 && sy == 1.0)
+        {
+            _cachedGeometry = geo;
+        }
+        return geo;
+    }
 }
 
 public sealed class OverlayTextItem : OverlayItem

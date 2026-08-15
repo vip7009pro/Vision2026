@@ -2174,10 +2174,10 @@ namespace VisionInspectionApp.UI.ViewModels
                 {
                     while (!token.IsCancellationRequested)
                     {
-                        await System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
+                        await System.Windows.Application.Current.Dispatcher.InvokeAsync(async () =>
                         {
                             ClearImageSourceCache(sourceDef.Name);
-                            RunFlow();
+                            await RunFlowAsync();
                         });
 
                         try
@@ -2276,10 +2276,10 @@ namespace VisionInspectionApp.UI.ViewModels
                 _lastPlcTriggerTime = now;
 
                 System.Diagnostics.Debug.WriteLine($"PLC Trigger fired: Tag '{e.TagName}' on PLC '{e.PlcId}' changed from '{e.OldValue}' to '{e.NewValue}'. Running Job Flow!");
-                System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
+                System.Windows.Application.Current?.Dispatcher?.InvokeAsync(async () =>
                 {
                     ClearImageSourceCache(imgSourceDef.Name);
-                    RunFlow();
+                    await RunFlowAsync();
                 });
             }
         }
@@ -2338,9 +2338,9 @@ namespace VisionInspectionApp.UI.ViewModels
                         var filePath = imageFiles[index];
                         _folderImageIndex = index;
 
-                        await System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
+                        await System.Windows.Application.Current.Dispatcher.InvokeAsync(async () =>
                         {
-                            RunSingleFlowFromImageFile(filePath, sourceDef.Name);
+                            await RunSingleFlowFromImageFileAsync(filePath, sourceDef.Name);
                         });
 
                         index++;
@@ -2380,12 +2380,12 @@ namespace VisionInspectionApp.UI.ViewModels
             UpdateContinuousStats();
         }
 
-        private void RunSingleFlowFromImageFile(string filePath, string sourceNodeName)
+        private async Task RunSingleFlowFromImageFileAsync(string filePath, string sourceNodeName)
         {
             if (string.IsNullOrWhiteSpace(filePath) || !File.Exists(filePath) || _config is null)
                 return;
 
-            using var mat = Cv2.ImRead(filePath);
+            var mat = await Task.Run(() => Cv2.ImRead(filePath));
             if (mat is null || mat.Empty())
                 return;
 
@@ -2398,33 +2398,46 @@ namespace VisionInspectionApp.UI.ViewModels
             SyncToolGraphToConfig();
             EnsureTemplatePathsAbsolute(_config);
 
+            var configCopy = _config;
+            var snapForInspect = mat.Clone();
+            InspectionResult? inspectionResult = null;
             try
             {
                 _lastRunError = null;
-                _lastRun = _inspectionService.Inspect(mat, _config, _dbManagerService);
+                inspectionResult = await Task.Run(() => _inspectionService.Inspect(snapForInspect, configCopy, _dbManagerService));
                 __sw.Stop();
 
-                if (_lastRun != null)
+                if (inspectionResult != null)
                 {
-                    _lastRun.Timings.NodeTimings[sourceNodeName] = 0;
-                    if (_config.PreprocessNodes != null)
+                    inspectionResult.Timings.NodeTimings[sourceNodeName] = 0;
+                    if (configCopy.PreprocessNodes != null)
                     {
-                        foreach (var preNode in _config.PreprocessNodes)
+                        foreach (var preNode in configCopy.PreprocessNodes)
                         {
                             if (!string.IsNullOrWhiteSpace(preNode.Name))
                             {
-                                _lastRun.Timings.NodeTimings[preNode.Name] = 0;
+                                inspectionResult.Timings.NodeTimings[preNode.Name] = 0;
                             }
                         }
+                    }
+                    if (configCopy.ResultTransfers != null && configCopy.ResultTransfers.Count > 0)
+                    {
+                        _ = Application.PLC.Services.PlcResultTransferRunner.ExecuteResultTransfersAsync(configCopy, inspectionResult, _plcManagerService);
                     }
                 }
             }
             catch (Exception ex)
             {
-                _lastRun = null;
+                inspectionResult = null;
                 _lastRunError = "Lỗi khi chạy Flow: " + ex.Message;
             }
+            finally
+            {
+                snapForInspect?.Dispose();
+                mat?.Dispose();
+            }
 
+            _lastRun = inspectionResult;
             LastResult = _lastRun;
             if (IsRunningFolderFlow)
             {
@@ -2436,6 +2449,8 @@ namespace VisionInspectionApp.UI.ViewModels
             RaiseToolPropertyPanelsChanged();
             OnPropertyChanged(nameof(Blob_LastRunCount));
         }
+
+        private void RunSingleFlowFromImageFile(string filePath, string sourceNodeName) => _ = RunSingleFlowFromImageFileAsync(filePath, sourceNodeName);
     
         private void LoadPreviewImage()
         {
@@ -2493,7 +2508,7 @@ namespace VisionInspectionApp.UI.ViewModels
         }
         private bool _isExecutingRunFlow;
 
-        private void RunFlow()
+        private async Task RunFlowAsync()
         {
             if (_isExecutingRunFlow)
             {
@@ -2611,39 +2626,47 @@ namespace VisionInspectionApp.UI.ViewModels
                     return;
                 }
         
+                var configCopy = _config;
+                var snapForInspect = snap.Clone();
+                InspectionResult? inspectionResult = null;
                 try
                 {
                     _lastRunError = null;
-                    _lastRun = _inspectionService.Inspect(snap, _config);
-                    if (_lastRun != null)
+                    inspectionResult = await Task.Run(() => _inspectionService.Inspect(snapForInspect, configCopy, _dbManagerService));
+                    if (inspectionResult != null)
                     {
                         if (imageSourceMs.HasValue && !string.IsNullOrWhiteSpace(imageSourceNodeRefName))
                         {
-                            _lastRun.Timings.NodeTimings[imageSourceNodeRefName] = imageSourceMs.Value;
+                            inspectionResult.Timings.NodeTimings[imageSourceNodeRefName] = imageSourceMs.Value;
                         }
-                        if (_config.PreprocessNodes != null)
+                        if (configCopy.PreprocessNodes != null)
                         {
-                            foreach (var preNode in _config.PreprocessNodes)
+                            foreach (var preNode in configCopy.PreprocessNodes)
                             {
                                 if (!string.IsNullOrWhiteSpace(preNode.Name))
                                 {
-                                    _lastRun.Timings.NodeTimings[preNode.Name] = 0;
+                                    inspectionResult.Timings.NodeTimings[preNode.Name] = 0;
                                 }
                             }
                         }
 
-                        if (_config.ResultTransfers != null && _config.ResultTransfers.Count > 0)
+                        if (configCopy.ResultTransfers != null && configCopy.ResultTransfers.Count > 0)
                         {
-                            _ = Application.PLC.Services.PlcResultTransferRunner.ExecuteResultTransfersAsync(_config, _lastRun, _plcManagerService);
+                            _ = Application.PLC.Services.PlcResultTransferRunner.ExecuteResultTransfersAsync(configCopy, inspectionResult, _plcManagerService);
                         }
                     }
                 }
                 catch (Exception ex)
                 {
-                    _lastRun = null;
+                    inspectionResult = null;
                     _lastRunError = "Lỗi khi chạy Flow: " + ex.Message;
                 }
+                finally
+                {
+                    snapForInspect?.Dispose();
+                }
         
+                _lastRun = inspectionResult;
                 UpdateNodeExecutionTimes();
                 LastResult = _lastRun;
                 if (IsRunningFolderFlow)
@@ -2662,6 +2685,8 @@ namespace VisionInspectionApp.UI.ViewModels
                 _isExecutingRunFlow = false;
             }
         }
+
+        private void RunFlow() => _ = RunFlowAsync();
 
     
         private void RefreshPreviews()
@@ -2861,7 +2886,15 @@ namespace VisionInspectionApp.UI.ViewModels
                 SelectedNodePreviewImage = snap.Empty() ? null : snap.ToBitmapSourceSafe();
             }
     
-            UpdateBlobThresholdPreview(snap);
+            if (SelectedNode is not null && string.Equals(SelectedNode.Type, "BlobDetection", StringComparison.OrdinalIgnoreCase))
+            {
+                UpdateBlobThresholdPreview(snap);
+            }
+            else
+            {
+                BlobThresholdPreviewImage = null;
+            }
+
             if (_config is null)
             {
                 LinePreviewImage = null;
@@ -2869,9 +2902,25 @@ namespace VisionInspectionApp.UI.ViewModels
                 BlobThresholdPreviewImage = null;
                 return;
             }
-    
-            RefreshLineRoiPreview(snap);
-            RefreshPointEdgePreview(snap);
+
+            if (SelectedNode is not null && string.Equals(SelectedNode.Type, "Line", StringComparison.OrdinalIgnoreCase))
+            {
+                RefreshLineRoiPreview(snap);
+            }
+            else
+            {
+                LinePreviewImage = null;
+            }
+
+            if (SelectedNode is not null && string.Equals(SelectedNode.Type, "Point", StringComparison.OrdinalIgnoreCase))
+            {
+                RefreshPointEdgePreview(snap);
+            }
+            else
+            {
+                PointEdgePreviewImage = null;
+            }
+
             if (_lastRun is not null)
             {
                 if (SelectedNode is not null)

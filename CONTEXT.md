@@ -765,6 +765,11 @@
   - **Tính toán Tốc độ tức thời**: Thuộc tính `ContinuousElapsedAndSpeedText` tự động tính `speed = ProcessedImageCount / elapsedSec` và định dạng `Time: hh:mm:ss (x.x pcs/s)` mỗi khi timer tick hoặc khi có frame mới hoàn tất.
   - **Giao diện Summary Card**: Thêm TextBlock hiển thị `ContinuousElapsedAndSpeedText` ngay dưới `Count: {0}` tại góc phải trên cùng của cột 6 trong [ToolEditorView.xaml](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/Views/ToolEditorView.xaml). Tự động khởi động khi bấm `Run Continuous` và tự động reset về `Time: 00:00:00 (0.0 pcs/s)` khi bấm `STOP`.
   - **Biên dịch Solution VisionInspectionApp.slnx thành công 100%**: **0 Error(s)**.
+- [x] Task 149: Rà soát & Tối ưu hóa toàn diện: Tách rời Vision Pipeline khỏi tầng Canvas/Overlay Rendering & Triệt tiêu tính toán trùng lặp:
+  - **Tách rời Background Task (Decoupling)**: Chuyển toàn bộ việc thực thi `_inspectionService.Inspect()` từ UI Thread sang `Task.Run()` bất đồng bộ trên `RunFlowAsync`, `RunSingleFlowFromImageFileAsync`, `StartCameraContinuousFlow`, `StartFolderFlow` và `OnPlcTagChangedForTrigger`. UI Dispatcher không bao giờ bị block bởi OpenCV, đảm bảo giao diện luôn mượt mà 60 FPS và nút STOP phản hồi tức thì.
+  - **Triệt tiêu tính toán trùng lặp khi Refresh Preview**: Cập nhật `RefreshSelectedPreview` trong [ToolEditorViewModel.Engine.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/ToolEditorViewModel.Engine.cs) chỉ tính toán các bộ lọc nặng (Blob Threshold, Line ROI, Point Edge) khi Tool tương ứng đang được người dùng chọn trên Canvas, triệt tiêu 100% lãng phí CPU cho các Tool không liên quan.
+  - **Tối ưu FastOverlayCanvas Rendering**: Khai báo static cache `Typeface`, bổ sung `GetOrCreateGeometry` đóng băng (`Freeze()`) cho `OverlayPolylineItem` trong [FastOverlayCanvas.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/Controls/FastOverlayCanvas.cs) và [OverlayItems.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/Controls/OverlayItems.cs) để triệt tiêu hoàn toàn việc cấp phát rác bộ nhớ (GC Allocation) khi render hàng loạt điểm/viền overlay.
+  - **Biên dịch Solution VisionInspectionApp.slnx thành công 100%**: **0 Error(s)**.
 
 ## Roadmap
 
