@@ -91,7 +91,7 @@ public sealed partial class ManualInspectionViewModel : ObservableObject
 
         _imageMat?.Dispose();
         _imageMat = Cv2.ImRead(dlg.FileName, ImreadModes.Color);
-        Image = _imageMat.ToBitmapSource();
+        Image = _imageMat.ToBitmapSourceForDisplay();
         RefreshOverlays();
     }
 
@@ -104,7 +104,7 @@ public sealed partial class ManualInspectionViewModel : ObservableObject
             {
                 _imageMat?.Dispose();
                 _imageMat = mat;
-                Image = _imageMat.ToBitmapSource();
+                Image = _imageMat.ToBitmapSourceForDisplay();
                 RefreshOverlays();
             }
             else

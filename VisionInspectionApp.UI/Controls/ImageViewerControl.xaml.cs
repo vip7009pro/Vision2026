@@ -9,6 +9,7 @@ using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Shapes;
 using VisionInspectionApp.Models;
+using VisionInspectionApp.UI.Services;
 
 namespace VisionInspectionApp.UI.Controls;
 
@@ -179,9 +180,10 @@ public partial class ImageViewerControl : UserControl
         }
         else
         {
-            var changed = c._lastPixelWidth != newBmp.PixelWidth || c._lastPixelHeight != newBmp.PixelHeight;
-            c._lastPixelWidth = newBmp.PixelWidth;
-            c._lastPixelHeight = newBmp.PixelHeight;
+            newBmp.TryGetSourcePixelSize(out var sourceWidth, out var sourceHeight);
+            var changed = c._lastPixelWidth != sourceWidth || c._lastPixelHeight != sourceHeight;
+            c._lastPixelWidth = sourceWidth;
+            c._lastPixelHeight = sourceHeight;
             if (changed || !c._hasFirstFit || c._transform.Matrix.IsIdentity)
             {
                 c._hasFirstFit = true;
@@ -210,8 +212,9 @@ public partial class ImageViewerControl : UserControl
             return;
         }
 
-        double imgW = bmp.Width;
-        double imgH = bmp.Height;
+        bmp.TryGetSourcePixelSize(out var sourceWidth, out var sourceHeight);
+        double imgW = sourceWidth;
+        double imgH = sourceHeight;
 
         if (imgW <= 0 || imgH <= 0)
         {
@@ -259,7 +262,7 @@ public partial class ImageViewerControl : UserControl
 
                     if (px >= 0 && px < _lastPixelWidth && py >= 0 && py < _lastPixelHeight)
                     {
-                        string colorStr = SamplePixelColor(bmp, px, py);
+                        string colorStr = SamplePixelColor(bmp, px, py, _lastPixelWidth, _lastPixelHeight);
                         PART_InfoText.Text = $"{baseText}  |  X: {px}, Y: {py}  |  {colorStr}";
                         PART_InfoText.Visibility = Visibility.Visible;
                         return;
@@ -278,7 +281,7 @@ public partial class ImageViewerControl : UserControl
         }
     }
 
-    private static string SamplePixelColor(BitmapSource bmp, int x, int y)
+    private static string SamplePixelColor(BitmapSource bmp, int x, int y, int sourceWidth, int sourceHeight)
     {
         try
         {
@@ -287,7 +290,9 @@ public partial class ImageViewerControl : UserControl
 
             byte[] pixels = new byte[bytesPerPixel];
             int stride = bytesPerPixel;
-            var rect = new Int32Rect(x, y, 1, 1);
+            var sampleX = Math.Clamp((int)Math.Floor(x * bmp.PixelWidth / (double)Math.Max(1, sourceWidth)), 0, bmp.PixelWidth - 1);
+            var sampleY = Math.Clamp((int)Math.Floor(y * bmp.PixelHeight / (double)Math.Max(1, sourceHeight)), 0, bmp.PixelHeight - 1);
+            var rect = new Int32Rect(sampleX, sampleY, 1, 1);
 
             bmp.CopyPixels(rect, pixels, stride, 0);
 
@@ -776,17 +781,19 @@ public partial class ImageViewerControl : UserControl
 
         PART_Image.Source = bmp;
 
-        PART_Content.Width = bmp.PixelWidth;
-        PART_Content.Height = bmp.PixelHeight;
+        bmp.TryGetSourcePixelSize(out var sourceWidth, out var sourceHeight);
 
-        PART_Image.Width = bmp.PixelWidth;
-        PART_Image.Height = bmp.PixelHeight;
+        PART_Content.Width = sourceWidth;
+        PART_Content.Height = sourceHeight;
 
-        PART_Overlay.Width = bmp.PixelWidth;
-        PART_Overlay.Height = bmp.PixelHeight;
+        PART_Image.Width = sourceWidth;
+        PART_Image.Height = sourceHeight;
 
-        PART_FastOverlay.Width = bmp.PixelWidth;
-        PART_FastOverlay.Height = bmp.PixelHeight;
+        PART_Overlay.Width = sourceWidth;
+        PART_Overlay.Height = sourceHeight;
+
+        PART_FastOverlay.Width = sourceWidth;
+        PART_FastOverlay.Height = sourceHeight;
         PART_FastOverlay.ViewScale = Math.Max(0.001, _transform.Matrix.M11);
         PART_FastOverlay.InvalidateVisual();
 
@@ -1184,13 +1191,15 @@ public partial class ImageViewerControl : UserControl
         var pw = (int)Math.Round(contentW);
         var ph = (int)Math.Round(contentH);
 
-        var maxX = Math.Max(0, bmp.PixelWidth - 1);
-        var maxY = Math.Max(0, bmp.PixelHeight - 1);
+        bmp.TryGetSourcePixelSize(out var sourceWidth, out var sourceHeight);
+
+        var maxX = Math.Max(0, sourceWidth - 1);
+        var maxY = Math.Max(0, sourceHeight - 1);
         px = Math.Clamp(px, 0, maxX);
         py = Math.Clamp(py, 0, maxY);
 
-        var maxW = bmp.PixelWidth - px;
-        var maxH = bmp.PixelHeight - py;
+        var maxW = sourceWidth - px;
+        var maxH = sourceHeight - py;
         if (maxW < 1) maxW = 1;
         if (maxH < 1) maxH = 1;
 
@@ -1212,8 +1221,10 @@ public partial class ImageViewerControl : UserControl
         var px = (int)Math.Round(contentX);
         var py = (int)Math.Round(contentY);
 
-        px = Math.Clamp(px, 0, Math.Max(0, bmp.PixelWidth - 1));
-        py = Math.Clamp(py, 0, Math.Max(0, bmp.PixelHeight - 1));
+        bmp.TryGetSourcePixelSize(out var sourceWidth, out var sourceHeight);
+
+        px = Math.Clamp(px, 0, Math.Max(0, sourceWidth - 1));
+        py = Math.Clamp(py, 0, Math.Max(0, sourceHeight - 1));
 
         return new Point(px, py);
     }

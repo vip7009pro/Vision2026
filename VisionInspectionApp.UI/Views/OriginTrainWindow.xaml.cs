@@ -11,6 +11,7 @@ namespace VisionInspectionApp.UI.Views
         {
             InitializeComponent();
             DataContext = viewModel;
+            Closed += (_, _) => viewModel.Dispose();
 
             if (viewModel != null)
             {

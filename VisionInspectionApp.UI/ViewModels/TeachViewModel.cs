@@ -324,7 +324,7 @@ public sealed partial class TeachViewModel : ObservableObject
             Cv2.Line(view, p1, p2, Scalar.White, 2);
         }
 
-        LinePreviewImage = view.ToBitmapSource();
+        LinePreviewImage = view.ToBitmapSourceForDisplay();
     }
 
     [ObservableProperty]
@@ -2230,12 +2230,12 @@ public sealed partial class TeachViewModel : ObservableObject
 
         if (!IsPreprocessPreviewEnabled)
         {
-            Image = _imageMat.ToBitmapSource();
+            Image = _imageMat.ToBitmapSourceForDisplay();
             return;
         }
 
         using var processed = _preprocessor.Run(_imageMat, VisionConfig.Preprocess);
-        Image = processed.ToBitmapSource();
+        Image = processed.ToBitmapSourceForDisplay();
     }
 
     private void RefreshOverlayItems()

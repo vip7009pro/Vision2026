@@ -200,7 +200,7 @@ public sealed partial class CalibrationViewModel : ObservableObject
 
         _imageMat?.Dispose();
         _imageMat = Cv2.ImRead(dlg.FileName, ImreadModes.Color);
-        Image = _imageMat.ToBitmapSource();
+        Image = _imageMat.ToBitmapSourceForDisplay();
         OverlayItems.Clear();
         CurrentDistancePx = 0.0;
     }
@@ -214,7 +214,7 @@ public sealed partial class CalibrationViewModel : ObservableObject
             {
                 _imageMat?.Dispose();
                 _imageMat = mat;
-                Image = _imageMat.ToBitmapSource();
+                Image = _imageMat.ToBitmapSourceForDisplay();
                 OverlayItems.Clear();
                 CurrentDistancePx = 0.0;
             }

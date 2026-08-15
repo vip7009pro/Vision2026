@@ -1,4 +1,5 @@
 using System;
+using System.Runtime.CompilerServices;
 using System.Windows.Media.Imaging;
 using OpenCvSharp;
 using OpenCvSharp.WpfExtensions;
@@ -7,6 +8,36 @@ namespace VisionInspectionApp.UI.Services;
 
 public static class MatExtensions
 {
+    private sealed class DisplaySourceMetadata
+    {
+        public DisplaySourceMetadata(int sourceWidth, int sourceHeight)
+        {
+            SourceWidth = sourceWidth;
+            SourceHeight = sourceHeight;
+        }
+
+        public int SourceWidth { get; }
+        public int SourceHeight { get; }
+    }
+
+    // Metadata follows a BitmapSource without retaining it. ImageViewerControl uses it to
+    // keep overlays and ROI coordinates in original-image pixels when a display proxy is used.
+    private static readonly ConditionalWeakTable<BitmapSource, DisplaySourceMetadata> DisplaySourceMetadataByBitmap = new();
+
+    public static bool TryGetSourcePixelSize(this BitmapSource bitmap, out int sourceWidth, out int sourceHeight)
+    {
+        if (DisplaySourceMetadataByBitmap.TryGetValue(bitmap, out var metadata))
+        {
+            sourceWidth = metadata.SourceWidth;
+            sourceHeight = metadata.SourceHeight;
+            return true;
+        }
+
+        sourceWidth = bitmap.PixelWidth;
+        sourceHeight = bitmap.PixelHeight;
+        return false;
+    }
+
     /// <summary>
     /// Chuyển đổi an toàn từ OpenCvSharp Mat sang WPF BitmapSource.
     /// Bọc khối try-catch bẫy tất cả ngoại lệ ObjectDisposedException hoặc Mat invalid.
@@ -54,7 +85,12 @@ public static class MatExtensions
 
                 using var resized = new Mat();
                 Cv2.Resize(mat, resized, new OpenCvSharp.Size(targetW, targetH), 0, 0, InterpolationFlags.Linear);
-                return resized.ToBitmapSourceSafe();
+                var bitmap = resized.ToBitmapSourceSafe();
+                if (bitmap is not null)
+                {
+                    DisplaySourceMetadataByBitmap.Add(bitmap, new DisplaySourceMetadata(mat.Width, mat.Height));
+                }
+                return bitmap;
             }
 
             return mat.ToBitmapSourceSafe();

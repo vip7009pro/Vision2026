@@ -146,12 +146,11 @@ public sealed class OpenCvCameraDriver : CameraDriverBase
         {
             try
             {
-                var frame = new Mat();
+                using var frame = new Mat();
                 if (_cap.Read(frame) && !frame.Empty())
                 {
                     return ApplySoftwarePostProcessing(frame, _parameters);
                 }
-                frame.Dispose();
                 return null;
             }
             catch

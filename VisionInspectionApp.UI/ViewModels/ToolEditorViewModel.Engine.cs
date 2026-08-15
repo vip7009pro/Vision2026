@@ -655,7 +655,7 @@ namespace VisionInspectionApp.UI.ViewModels
                 Cv2.Line(view, p1, p2, Scalar.White, 2);
             }
 
-            LinePreviewImage = view.ToBitmapSourceSafe();
+            LinePreviewImage = view.ToBitmapSourceForDisplay();
         }
     
         private void RefreshPointEdgePreview(Mat snap)
@@ -748,7 +748,7 @@ namespace VisionInspectionApp.UI.ViewModels
                 Cv2.DrawMarker(view, new OpenCvSharp.Point((int)Math.Round(avgX), (int)Math.Round(avgY)), new Scalar(0, 0, 255), MarkerTypes.Cross, 20, 2);
             }
     
-            PointEdgePreviewImage = view.ToBitmapSourceSafe();
+            PointEdgePreviewImage = view.ToBitmapSourceForDisplay();
         }
     
         private static Point2dModel RoiCenterToWorld(Roi roi)
@@ -2394,12 +2394,13 @@ namespace VisionInspectionApp.UI.ViewModels
             EnsureTemplatePathsAbsolute(_config);
 
             var configCopy = _config;
-            var snapForInspect = mat.Clone();
             InspectionResult? inspectionResult = null;
             try
             {
                 _lastRunError = null;
-                inspectionResult = await Task.Run(() => _inspectionService.Inspect(snapForInspect, configCopy, _dbManagerService));
+                // mat is owned by this method and remains read-only during inspection.
+                // Passing it directly removes one full-resolution clone per file run.
+                inspectionResult = await Task.Run(() => _inspectionService.Inspect(mat, configCopy, _dbManagerService));
                 __sw.Stop();
 
                 if (inspectionResult != null)
@@ -2428,7 +2429,6 @@ namespace VisionInspectionApp.UI.ViewModels
             }
             finally
             {
-                snapForInspect?.Dispose();
                 mat?.Dispose();
             }
 
@@ -2622,12 +2622,13 @@ namespace VisionInspectionApp.UI.ViewModels
                 }
         
                 var configCopy = _config;
-                var snapForInspect = snap.Clone();
                 InspectionResult? inspectionResult = null;
                 try
                 {
                     _lastRunError = null;
-                    inspectionResult = await Task.Run(() => _inspectionService.Inspect(snapForInspect, configCopy, _dbManagerService));
+                    // snap is owned by this method and is disposed after the read-only inspection.
+                    // Do not clone a 20 MP frame solely for the Task boundary.
+                    inspectionResult = await Task.Run(() => _inspectionService.Inspect(snap, configCopy, _dbManagerService));
                     if (inspectionResult != null)
                     {
                         if (imageSourceMs.HasValue && !string.IsNullOrWhiteSpace(imageSourceNodeRefName))
@@ -2656,11 +2657,6 @@ namespace VisionInspectionApp.UI.ViewModels
                     inspectionResult = null;
                     _lastRunError = "Lỗi khi chạy Flow: " + ex.Message;
                 }
-                finally
-                {
-                    snapForInspect?.Dispose();
-                }
-        
                 _lastRun = inspectionResult;
                 UpdateNodeExecutionTimes();
                 LastResult = _lastRun;
@@ -2719,15 +2715,20 @@ namespace VisionInspectionApp.UI.ViewModels
             }
     
             using var snap = snapToUse;
+            if (snap is not null && !snap.Empty())
+            {
+                _lastPreviewImageWidth = snap.Width;
+                _lastPreviewImageHeight = snap.Height;
+            }
             if (_config is not null && PreprocessPreviewEnabled)
             {
                 using var processedFinal = _preprocessor.Run(snap, _config.Preprocess);
-                _cachedFinalPreviewImage = processedFinal.Empty() ? null : processedFinal.ToBitmapSourceSafe();
+                _cachedFinalPreviewImage = processedFinal.Empty() ? null : processedFinal.ToBitmapSourceForDisplay();
                 FinalPreviewImage = _cachedFinalPreviewImage;
             }
             else
             {
-                _cachedFinalPreviewImage = snap.Empty() ? null : snap.ToBitmapSourceSafe();
+                _cachedFinalPreviewImage = snap.Empty() ? null : snap.ToBitmapSourceForDisplay();
                 FinalPreviewImage = _cachedFinalPreviewImage;
             }
     
@@ -2760,7 +2761,7 @@ namespace VisionInspectionApp.UI.ViewModels
             if (SelectedNode is not null && string.Equals(SelectedNode.Type, "ResultView", StringComparison.OrdinalIgnoreCase))
             {
                 using var resultSnap = _sharedImage.GetSnapshot();
-                SelectedNodePreviewImage = FinalPreviewImage ?? _cachedFinalPreviewImage ?? (resultSnap is null || resultSnap.Empty() ? null : resultSnap.ToBitmapSourceSafe());
+                SelectedNodePreviewImage = FinalPreviewImage ?? _cachedFinalPreviewImage ?? (resultSnap is null || resultSnap.Empty() ? null : resultSnap.ToBitmapSourceForDisplay());
                 SelectedNodeOverlayItems = FinalOverlayItems;
                 ActiveRoiLabel = string.Empty;
                 return;
@@ -2785,19 +2786,19 @@ namespace VisionInspectionApp.UI.ViewModels
 
                 if (targetNode is null || string.Equals(targetNode.Type, "ResultView", StringComparison.OrdinalIgnoreCase))
                 {
-                    SelectedNodePreviewImage = FinalPreviewImage ?? _cachedFinalPreviewImage ?? (snapIO.Empty() ? null : snapIO.ToBitmapSourceSafe());
+                    SelectedNodePreviewImage = FinalPreviewImage ?? _cachedFinalPreviewImage ?? (snapIO.Empty() ? null : snapIO.ToBitmapSourceForDisplay());
                     SelectedNodeOverlayItems = FinalOverlayItems;
                     return;
                 }
 
                 if (string.Equals(targetNode.Type, "ImageSource", StringComparison.OrdinalIgnoreCase))
                 {
-                    SelectedNodePreviewImage = snapIO.Empty() ? null : snapIO.ToBitmapSourceSafe();
+                    SelectedNodePreviewImage = snapIO.Empty() ? null : snapIO.ToBitmapSourceForDisplay();
                 }
                 else
                 {
                     using var processedSel = ResolveToolPreprocessForPreview(snapIO, targetNode);
-                    SelectedNodePreviewImage = processedSel.Empty() ? null : processedSel.ToBitmapSourceSafe();
+                    SelectedNodePreviewImage = processedSel.Empty() ? null : processedSel.ToBitmapSourceForDisplay();
                 }
 
                 AddConfigRoisForNode(targetNode, newSelectedNodeOverlayItems);
@@ -2828,11 +2829,11 @@ namespace VisionInspectionApp.UI.ViewModels
                         if (_config is not null && PreprocessPreviewEnabled)
                         {
                             using var processed = _preprocessor.Run(loadedMat, _config.Preprocess);
-                            SelectedNodePreviewImage = processed.ToBitmapSourceSafe();
+                            SelectedNodePreviewImage = processed.ToBitmapSourceForDisplay();
                         }
                         else
                         {
-                            SelectedNodePreviewImage = loadedMat.ToBitmapSourceSafe();
+                            SelectedNodePreviewImage = loadedMat.ToBitmapSourceForDisplay();
                         }
     
                         System.Diagnostics.Debug.WriteLine($"SelectedNodePreviewImage set successfully");
@@ -2860,25 +2861,25 @@ namespace VisionInspectionApp.UI.ViewModels
                 if (SelectedNode is not null && string.Equals(SelectedNode.Type, "Preprocess", StringComparison.OrdinalIgnoreCase))
                 {
                     using var processedSel = ResolveToolPreprocessForPreview(snap, SelectedNode);
-                    SelectedNodePreviewImage = processedSel.Empty() ? null : processedSel.ToBitmapSourceSafe();
+                    SelectedNodePreviewImage = processedSel.Empty() ? null : processedSel.ToBitmapSourceForDisplay();
                 }
                 else
                 {
                     if (SelectedNode is not null && (string.Equals(SelectedNode.Type, "Origin", StringComparison.OrdinalIgnoreCase) || string.Equals(SelectedNode.Type, "Point", StringComparison.OrdinalIgnoreCase) || string.Equals(SelectedNode.Type, "Line", StringComparison.OrdinalIgnoreCase) || string.Equals(SelectedNode.Type, "Caliper", StringComparison.OrdinalIgnoreCase) || string.Equals(SelectedNode.Type, "LinePairDetection", StringComparison.OrdinalIgnoreCase) || string.Equals(SelectedNode.Type, "EdgePairDetect", StringComparison.OrdinalIgnoreCase) || string.Equals(SelectedNode.Type, "EdgePair", StringComparison.OrdinalIgnoreCase) || string.Equals(SelectedNode.Type, "BlobDetection", StringComparison.OrdinalIgnoreCase) || string.Equals(SelectedNode.Type, "CircleFinder", StringComparison.OrdinalIgnoreCase) || string.Equals(SelectedNode.Type, "SurfaceCompare", StringComparison.OrdinalIgnoreCase) || string.Equals(SelectedNode.Type, "ContourCompare", StringComparison.OrdinalIgnoreCase) || string.Equals(SelectedNode.Type, "Text", StringComparison.OrdinalIgnoreCase) || string.Equals(SelectedNode.Type, "CodeDetection", StringComparison.OrdinalIgnoreCase) || string.Equals(SelectedNode.Type, "Crop", StringComparison.OrdinalIgnoreCase) || string.Equals(SelectedNode.Type, "ColorDiff", StringComparison.OrdinalIgnoreCase) || string.Equals(SelectedNode.Type, "ImgArithmetic", StringComparison.OrdinalIgnoreCase)))
                     {
                         using var processedSel = ResolveToolPreprocessForPreview(snap, SelectedNode);
-                        SelectedNodePreviewImage = processedSel.Empty() ? null : processedSel.ToBitmapSourceSafe();
+                        SelectedNodePreviewImage = processedSel.Empty() ? null : processedSel.ToBitmapSourceForDisplay();
                     }
                     else
                     {
-                        SelectedNodePreviewImage = _cachedFinalPreviewImage ?? (snap.Empty() ? null : snap.ToBitmapSourceSafe());
+                        SelectedNodePreviewImage = _cachedFinalPreviewImage ?? (snap.Empty() ? null : snap.ToBitmapSourceForDisplay());
                     }
                 }
             }
             else
             {
                 System.Diagnostics.Debug.WriteLine("PreprocessPreviewEnabled is false, using raw snap");
-                SelectedNodePreviewImage = snap.Empty() ? null : snap.ToBitmapSourceSafe();
+                SelectedNodePreviewImage = snap.Empty() ? null : snap.ToBitmapSourceForDisplay();
             }
     
             if (SelectedNode is not null && string.Equals(SelectedNode.Type, "BlobDetection", StringComparison.OrdinalIgnoreCase))
@@ -3079,7 +3080,7 @@ namespace VisionInspectionApp.UI.ViewModels
     
             try
             {
-                BlobThresholdPreviewImage = view.ToBitmapSourceSafe();
+                BlobThresholdPreviewImage = view.ToBitmapSourceForDisplay();
             }
             finally
             {

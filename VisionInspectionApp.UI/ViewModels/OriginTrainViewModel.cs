@@ -12,11 +12,13 @@ using OpenCvSharp.WpfExtensions;
 using VisionInspectionApp.Models;
 using VisionInspectionApp.VisionEngine;
 using VisionInspectionApp.UI.Controls;
+using VisionInspectionApp.UI.Services;
 
 namespace VisionInspectionApp.UI.ViewModels
 {
-    public sealed partial class OriginTrainViewModel : ObservableObject
+    public sealed partial class OriginTrainViewModel : ObservableObject, IDisposable
     {
+        private const int MaxHistoryStates = 10;
         private Mat _rawFullMat;
         private Mat _globalPreprocessedMat;
         private Mat? _eraserMaskMat; // 255 = keep edge, 0 = erased edge
@@ -267,8 +269,33 @@ namespace VisionInspectionApp.UI.ViewModels
         {
             if (_eraserMaskMat is not null)
             {
+                TrimHistory(_undoStack, MaxHistoryStates - 1);
                 _undoStack.Push(_eraserMaskMat.Clone());
-                _redoStack.Clear();
+                DisposeHistory(_redoStack);
+            }
+        }
+
+        private static void TrimHistory(Stack<Mat> history, int maxStates)
+        {
+            if (history.Count <= maxStates) return;
+
+            var newestFirst = history.ToArray();
+            history.Clear();
+            for (var index = Math.Min(maxStates, newestFirst.Length) - 1; index >= 0; index--)
+            {
+                history.Push(newestFirst[index]);
+            }
+            for (var index = maxStates; index < newestFirst.Length; index++)
+            {
+                newestFirst[index].Dispose();
+            }
+        }
+
+        private static void DisposeHistory(Stack<Mat> history)
+        {
+            while (history.Count > 0)
+            {
+                history.Pop().Dispose();
             }
         }
 
@@ -276,6 +303,7 @@ namespace VisionInspectionApp.UI.ViewModels
         {
             if (_undoStack.Count > 0 && _eraserMaskMat is not null)
             {
+                TrimHistory(_redoStack, MaxHistoryStates - 1);
                 _redoStack.Push(_eraserMaskMat.Clone());
                 _eraserMaskMat.Dispose();
                 _eraserMaskMat = _undoStack.Pop();
@@ -287,6 +315,7 @@ namespace VisionInspectionApp.UI.ViewModels
         {
             if (_redoStack.Count > 0 && _eraserMaskMat is not null)
             {
+                TrimHistory(_undoStack, MaxHistoryStates - 1);
                 _undoStack.Push(_eraserMaskMat.Clone());
                 _eraserMaskMat.Dispose();
                 _eraserMaskMat = _redoStack.Pop();
@@ -338,7 +367,7 @@ namespace VisionInspectionApp.UI.ViewModels
                 using var roiMat = ToolEditorViewModel.ExtractRoiPatch(_rawFullMat, curRoi);
                 if (roiMat.Empty() || roiMat.Width <= 0 || roiMat.Height <= 0)
                 {
-                    FullPreviewImage = _rawFullMat.ToBitmapSource();
+                    FullPreviewImage = _rawFullMat.ToBitmapSourceForDisplay();
                     return;
                 }
 
@@ -376,11 +405,11 @@ namespace VisionInspectionApp.UI.ViewModels
                     fullBgr.SetTo(new Scalar(0, 0, 180), invMask); // Translucent Red for erased areas
                 }
 
-                FullPreviewImage = fullBgr.ToBitmapSource();
+                FullPreviewImage = fullBgr.ToBitmapSourceForDisplay();
 
                 // Render Generated Template (cropped ROI patch with green contours)
                 using var generatedBgr = MvpShapeTrainer.RenderContourOverlay(roiMat, contours);
-                GeneratedTemplateImage = generatedBgr.ToBitmapSource();
+                GeneratedTemplateImage = generatedBgr.ToBitmapSourceForDisplay();
             }
             catch (Exception ex)
             {
@@ -481,6 +510,18 @@ namespace VisionInspectionApp.UI.ViewModels
             {
                 _originDef.ShapeModel = ShapeModelTrainer.Train(grayToSave);
             }
+        }
+
+        public void Dispose()
+        {
+            DisposeHistory(_undoStack);
+            DisposeHistory(_redoStack);
+            _eraserMaskMat?.Dispose();
+            _eraserMaskMat = null;
+            _rawFullMat?.Dispose();
+            _globalPreprocessedMat?.Dispose();
+            FullPreviewImage = null;
+            GeneratedTemplateImage = null;
         }
     }
 }

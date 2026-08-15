@@ -179,7 +179,7 @@ public sealed partial class ChessboardCalibrationViewModel : ObservableObject
     private void ShowCurrentImage()
     {
         if (_currentMat is null || _currentMat.IsDisposed || _currentMat.Empty()) return;
-        Image = _currentMat.ToBitmapSource();
+        Image = _currentMat.ToBitmapSourceForDisplay();
         OverlayItems.Clear();
     }
 
@@ -205,13 +205,13 @@ public sealed partial class ChessboardCalibrationViewModel : ObservableObject
         {
             // Draw corners overlay
             using var drawn = ChessboardCalibrationService.DrawCorners(_currentMat, patternSize, corners, true);
-            Image = drawn.ToBitmapSource();
+            Image = drawn.ToBitmapSourceForDisplay();
 
             StatusMessage = $"✅ Phát hiện {corners.Length} corners. Bấm [+ Thêm ảnh] để thêm vào danh sách.";
         }
         else
         {
-            Image = _currentMat.ToBitmapSource();
+            Image = _currentMat.ToBitmapSourceForDisplay();
             StatusMessage = $"❌ Không tìm thấy chessboard pattern ({InnerCornersX}×{InnerCornersY} inner corners). Kiểm tra số ô / góc chụp.";
         }
     }
@@ -341,7 +341,7 @@ public sealed partial class ChessboardCalibrationViewModel : ObservableObject
 
         _undistortedMat?.Dispose();
         _undistortedMat = ChessboardCalibrationService.Undistort(_currentMat, _config.ChessboardCalibration);
-        Image = _undistortedMat.ToBitmapSource();
+        Image = _undistortedMat.ToBitmapSourceForDisplay();
         StatusMessage = "🔄 Ảnh đã được Undistort (khử biến dạng ống kính).";
     }
 

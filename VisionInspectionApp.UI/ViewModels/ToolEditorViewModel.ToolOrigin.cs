@@ -7,6 +7,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using OpenCvSharp;
 using OpenCvSharp.WpfExtensions;
 using VisionInspectionApp.Models;
+using VisionInspectionApp.UI.Services;
 
 namespace VisionInspectionApp.UI.ViewModels
 {
@@ -154,7 +155,7 @@ namespace VisionInspectionApp.UI.ViewModels
                     using var mat = Cv2.ImRead(file, ImreadModes.Grayscale);
                     if (mat != null && !mat.Empty())
                     {
-                        Origin_TemplatePreviewImage = mat.ToBitmapSource();
+                        Origin_TemplatePreviewImage = mat.ToBitmapSourceForDisplay();
                         return;
                     }
                 }

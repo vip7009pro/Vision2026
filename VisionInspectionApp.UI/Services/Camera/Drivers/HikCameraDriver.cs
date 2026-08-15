@@ -316,26 +316,31 @@ public sealed class HikCameraDriver : CameraDriverBase
 
         return await Task.Run(() =>
         {
+            IntPtr pData = IntPtr.Zero;
             try
             {
                 uint bufferSize = 1920 * 1080 * 4;
-                IntPtr pData = Marshal.AllocHGlobal((int)bufferSize);
+                pData = Marshal.AllocHGlobal((int)bufferSize);
                 var frameInfo = new MyCamera.MV_FRAME_OUT_INFO_EX();
 
                 int ret = _camera.MV_CC_GetOneFrameTimeout_NET(pData, bufferSize, ref frameInfo, timeoutMs);
                 if (ret == MyCamera.MV_OK && frameInfo.nWidth > 0 && frameInfo.nHeight > 0)
                 {
-                    var mat = ConvertHikFrameToMat(pData, frameInfo);
-                    Marshal.FreeHGlobal(pData);
-                    return mat;
+                    return ConvertHikFrameToMat(pData, frameInfo);
                 }
 
-                Marshal.FreeHGlobal(pData);
                 return null;
             }
             catch
             {
                 return null;
+            }
+            finally
+            {
+                if (pData != IntPtr.Zero)
+                {
+                    Marshal.FreeHGlobal(pData);
+                }
             }
         });
     }

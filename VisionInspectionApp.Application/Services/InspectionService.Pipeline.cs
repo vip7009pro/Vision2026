@@ -5,6 +5,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
+using System.Threading;
 using System.Threading.Tasks;
 using OpenCvSharp;
 using VisionInspectionApp.Models;
@@ -36,6 +37,25 @@ public partial class InspectionService
 
         var matsToDispose = new List<Mat>();
         var matsLock = new object();
+        var maxConcurrentHeavyTools = Math.Clamp(config.MaxConcurrentHeavyTools, 1, Math.Max(1, Environment.ProcessorCount));
+        using var heavyToolGate = new SemaphoreSlim(maxConcurrentHeavyTools, maxConcurrentHeavyTools);
+        var flowDiagnostics = VisionDiagnostics.Begin("Inspection");
+
+        Task<T> RunHeavyTool<T>(string toolName, Func<T> action) => Task.Run(() =>
+        {
+            heavyToolGate.Wait();
+            var diagnostics = VisionDiagnostics.Begin(toolName);
+            try
+            {
+                return action();
+            }
+            finally
+            {
+                diagnostics.CompleteAfterCleanup();
+                heavyToolGate.Release();
+            }
+        });
+
         try
         {
             if (config.ChessboardCalibration is not null && config.ChessboardCalibration.IsCalibrated &&
@@ -258,9 +278,9 @@ public partial class InspectionService
                 }
                 else if (string.Equals(fromNode.Type, "ImageSource", StringComparison.OrdinalIgnoreCase))
                 {
-                    var preprocessedMat = _preprocessor.Run(image, defaultSettings);
-                    lock (matsLock) matsToDispose.Add(preprocessedMat);
-                    return (preprocessedMat, defaultSettings);
+                    // Direct ImageSource tools use the same immutable default preprocessing result.
+                    // The prior path created one full-resolution preprocessing Mat per tool.
+                    return (GetProcessedDefault(), defaultSettings);
                 }
 
                 return (GetProcessedDefault(), defaultSettings);
@@ -1388,7 +1408,7 @@ public partial class InspectionService
             var tTools0 = swTotal.ElapsedMilliseconds;
             var pointTasks = (config.Points ?? new List<PointDefinition>())
                 .Where(p => p is not null && !string.IsNullOrWhiteSpace(p.Name))
-                .Select(p => Task.Run(() =>
+                .Select(p => RunHeavyTool($"Point:{p.Name}", () =>
                 {
                     var __sw = System.Diagnostics.Stopwatch.StartNew();
                     var defBase = TransformPointDefinition(p, originTeach, originFound, angleDeg);
@@ -1661,7 +1681,7 @@ public partial class InspectionService
 
             var lineTasks = (config.Lines ?? new List<LineToolDefinition>())
                 .Where(l => l is not null && !string.IsNullOrWhiteSpace(l.Name) && l.SearchRoi.Width > 0 && l.SearchRoi.Height > 0)
-                .Select(l => Task.Run(() =>
+                .Select(l => RunHeavyTool($"Line:{l.Name}", () =>
                 {
                     var __sw = System.Diagnostics.Stopwatch.StartNew();
                     var roi = TransformRoiKeepSize(l.SearchRoi, originTeach, originFound, angleDeg);
@@ -1675,7 +1695,7 @@ public partial class InspectionService
 
             var blobTasks = (config.BlobDetections ?? new List<BlobDetectionDefinition>())
                 .Where(b => b is not null && !string.IsNullOrWhiteSpace(b.Name) && b.InspectRoi.Width > 0 && b.InspectRoi.Height > 0)
-                .Select(b => Task.Run(() =>
+                .Select(b => RunHeavyTool($"Blob:{b.Name}", () =>
                 {
                     var __sw = System.Diagnostics.Stopwatch.StartNew();
                     var (matForBlob, _) = ResolveToolPreprocess("BlobDetection", b.Name);
@@ -1692,7 +1712,7 @@ public partial class InspectionService
 
                 var surfaceCompareTasks = (config.SurfaceCompares ?? new List<SurfaceCompareDefinition>())
                     .Where(sc => sc is not null && !string.IsNullOrWhiteSpace(sc.Name) && sc.InspectRoi.Width > 0 && sc.InspectRoi.Height > 0)
-                    .Select(sc => Task.Run(() =>
+                    .Select(sc => RunHeavyTool($"SurfaceCompare:{sc.Name}", () =>
                     {
                         var __sw = System.Diagnostics.Stopwatch.StartNew();
                         var (_, scSettings) = ResolveToolPreprocess("SurfaceCompare", sc.Name);
@@ -1703,7 +1723,7 @@ public partial class InspectionService
 
                 var contourCompareTasks = (config.ContourCompares ?? new List<ContourCompareDefinition>())
                     .Where(cc => cc is not null && !string.IsNullOrWhiteSpace(cc.Name) && cc.InspectRoi.Width > 0 && cc.InspectRoi.Height > 0)
-                    .Select(cc => Task.Run(() =>
+                    .Select(cc => RunHeavyTool($"ContourCompare:{cc.Name}", () =>
                     {
                         var __sw = System.Diagnostics.Stopwatch.StartNew();
                         var (_, ccSettings) = ResolveToolPreprocess("ContourCompare", cc.Name);
@@ -1714,7 +1734,7 @@ public partial class InspectionService
 
             var colorDiffTasks = (config.ColorDiffs ?? new List<ColorDiffDefinition>())
                 .Where(cd => cd is not null && !string.IsNullOrWhiteSpace(cd.Name))
-                .Select(cd => Task.Run(() =>
+                .Select(cd => RunHeavyTool($"ColorDiff:{cd.Name}", () =>
                 {
                     var __sw = System.Diagnostics.Stopwatch.StartNew();
                     var (matForCd, _) = ResolveToolPreprocess("ColorDiff", cd.Name);
@@ -1739,7 +1759,7 @@ public partial class InspectionService
 
             var cropTasks = (config.Crops ?? new List<CropDefinition>())
                 .Where(cr => cr is not null && !string.IsNullOrWhiteSpace(cr.Name))
-                .Select(cr => Task.Run(() =>
+                .Select(cr => RunHeavyTool($"Crop:{cr.Name}", () =>
                 {
                     var __sw = System.Diagnostics.Stopwatch.StartNew();
                     var cropNode = nodesById.Values.FirstOrDefault(n => string.Equals(n.Type, "Crop", StringComparison.OrdinalIgnoreCase) && string.Equals(n.RefName, cr.Name, StringComparison.OrdinalIgnoreCase));
@@ -1752,7 +1772,7 @@ public partial class InspectionService
 
             var imgArithmeticTasks = (config.ImgArithmetics ?? new List<ImgArithmeticDefinition>())
                 .Where(ari => ari is not null && !string.IsNullOrWhiteSpace(ari.Name))
-                .Select(ari => Task.Run(() =>
+                .Select(ari => RunHeavyTool($"ImgArithmetic:{ari.Name}", () =>
                 {
                     var __sw = System.Diagnostics.Stopwatch.StartNew();
                     using var resMat = ImgArithmeticProcessor.Run(image, image, ari);
@@ -1766,7 +1786,7 @@ public partial class InspectionService
 
             var lpdTasks = (config.LinePairDetections ?? new List<LinePairDetectionDefinition>())
                 .Where(lpd => lpd is not null && !string.IsNullOrWhiteSpace(lpd.Name) && lpd.SearchRoi.Width > 0 && lpd.SearchRoi.Height > 0)
-                .Select(lpd => Task.Run(() =>
+                .Select(lpd => RunHeavyTool($"LinePair:{lpd.Name}", () =>
                 {
                     var __sw = System.Diagnostics.Stopwatch.StartNew();
                     var roi = TransformRoiKeepSize(lpd.SearchRoi, originTeach, originFound, angleDeg);
@@ -1812,7 +1832,7 @@ public partial class InspectionService
 
             var caliperTasks = (config.Calipers ?? new List<CaliperDefinition>())
                 .Where(c => c is not null && !string.IsNullOrWhiteSpace(c.Name) && c.SearchRoi.Width > 0 && c.SearchRoi.Height > 0)
-                .Select(c => Task.Run(() =>
+                .Select(c => RunHeavyTool($"Caliper:{c.Name}", () =>
                 {
                     var __sw = System.Diagnostics.Stopwatch.StartNew();
                     var roi = TransformRoiKeepSize(c.SearchRoi, originTeach, originFound, angleDeg);
@@ -2114,7 +2134,7 @@ public partial class InspectionService
 
             var epdTasks = (config.EdgePairDetections ?? new List<EdgePairDetectDefinition>())
                 .Where(epd => epd is not null && !string.IsNullOrWhiteSpace(epd.Name) && epd.SearchRoi.Width > 0 && epd.SearchRoi.Height > 0)
-                .Select(epd => Task.Run(() =>
+                .Select(epd => RunHeavyTool($"EdgePair:{epd.Name}", () =>
                 {
                     var __sw = System.Diagnostics.Stopwatch.StartNew();
                     var (matForEpd, _) = ResolveToolPreprocess("EdgePairDetect", epd.Name);
@@ -2570,7 +2590,7 @@ public partial class InspectionService
 
             var circleTasks = (config.CircleFinders ?? new List<CircleFinderDefinition>())
                 .Where(c => c is not null && !string.IsNullOrWhiteSpace(c.Name) && c.SearchRoi.Width > 0 && c.SearchRoi.Height > 0)
-                .Select(c => Task.Run(() =>
+                .Select(c => RunHeavyTool($"Circle:{c.Name}", () =>
                 {
                     var __sw = System.Diagnostics.Stopwatch.StartNew();
                     var roi = TransformRoiKeepSize(c.SearchRoi, originTeach, originFound, angleDeg);
@@ -2676,7 +2696,7 @@ public partial class InspectionService
             // 1. Process CreatePoint definitions
             var createPointTasks = (config.CreatePoints ?? new List<CreatePointDefinition>())
                 .Where(cp => cp is not null && !string.IsNullOrWhiteSpace(cp.Name))
-                .Select(cp => Task.Run(() =>
+                .Select(cp => RunHeavyTool($"CreatePoint:{cp.Name}", () =>
                 {
                     var __sw = System.Diagnostics.Stopwatch.StartNew();
                     var res = GeometryCreationProcessor.EvaluateCreatePoint(cp, foundPoints);
@@ -2700,7 +2720,7 @@ public partial class InspectionService
             // 2. Process CreateLine definitions
             var createLineTasks = (config.CreateLines ?? new List<CreateLineDefinition>())
                 .Where(cl => cl is not null && !string.IsNullOrWhiteSpace(cl.Name))
-                .Select(cl => Task.Run(() =>
+                .Select(cl => RunHeavyTool($"CreateLine:{cl.Name}", () =>
                 {
                     var __sw = System.Diagnostics.Stopwatch.StartNew();
                     var res = GeometryCreationProcessor.EvaluateCreateLine(cl, foundPoints);
@@ -2720,7 +2740,7 @@ public partial class InspectionService
             // 3. Process CreateRect definitions
             var createRectTasks = (config.CreateRects ?? new List<CreateRectDefinition>())
                 .Where(cr => cr is not null && !string.IsNullOrWhiteSpace(cr.Name))
-                .Select(cr => Task.Run(() =>
+                .Select(cr => RunHeavyTool($"CreateRect:{cr.Name}", () =>
                 {
                     var __sw = System.Diagnostics.Stopwatch.StartNew();
                     var res = GeometryCreationProcessor.EvaluateCreateRect(cr, foundPoints);
@@ -2740,7 +2760,7 @@ public partial class InspectionService
             // 4. Process CreateCircle definitions
             var createCircleTasks = (config.CreateCircles ?? new List<CreateCircleDefinition>())
                 .Where(cc => cc is not null && !string.IsNullOrWhiteSpace(cc.Name))
-                .Select(cc => Task.Run(() =>
+                .Select(cc => RunHeavyTool($"CreateCircle:{cc.Name}", () =>
                 {
                     var __sw = System.Diagnostics.Stopwatch.StartNew();
                     var res = GeometryCreationProcessor.EvaluateCreateCircle(cc, foundPoints);
@@ -3533,6 +3553,7 @@ public partial class InspectionService
             {
                 m.Dispose();
             }
+            flowDiagnostics.CompleteAfterCleanup();
         }
     }
 }

@@ -213,6 +213,10 @@ Lộ trình tích hợp tính năng Chụp ảnh từ camera và hỗ trợ các
   - `Bảo toàn 100% Kích thước Pixel gốc (5120x3840)`: Giữ nguyên phương thức `ToBitmapSourceSafe()` cho `FinalPreviewImage` và `SelectedNodePreviewImage` để toàn bộ tọa độ ROI, Teach Template, Caliper, Point/Line/Blob của tất cả các job đã tạo trong quá khứ khớp chính xác tuyệt đối 100%.
   - `Tối ưu hóa Cực bộ ROI Patch (Zero Redundant 20MPx Processing)`: Cắt vùng ROI nhỏ trực tiếp từ `snap` trước khi đưa vào tiền xử lý / Threshold / Line / Point Edge (`RefreshLineRoiPreview`, `RefreshPointEdgePreview`, `UpdateBlobThresholdPreview`), giảm bộ nhớ xử lý từ 20 MB xuống < 100 KB (giảm 99.5% RAM) và tăng tốc độ xử lý tức thì.
   - `Bật LargeAddressAware 4GB`: Bổ sung cấu hình `<LargeAddressAware>true</LargeAddressAware>` trong `VisionInspectionApp.UI.csproj`, mở rộng không gian địa chỉ bộ nhớ ảo lên 4 GB cho tiến trình x86 trên Windows 64-bit, triệt tiêu hoàn toàn hiện tượng phân mảnh heap khi nạp ảnh 20 MPx.
+- [x] Task 152: Khắc phục triệt để lỗi di chuyển, kéo vẽ và resize ROI bị giới hạn trong vùng 1440x1080 (Display Proxy Regression):
+  - `Đồng bộ hệ toạ độ ảnh gốc cho ROI Selection`: Cập nhật `ConvertContentRoiToPixelRoi` và `ConvertContentPointToPixelPoint` trong `ImageViewerControl.xaml.cs` sử dụng `bmp.TryGetSourcePixelSize()` để lấy kích thước ảnh gốc `(sourceWidth, sourceHeight)` từ metadata proxy thay vì `bmp.PixelWidth` và `bmp.PixelHeight` (1440x1080).
+  - `Cho phép tương tác ROI trên toàn bộ không gian ảnh gốc 20MPx`: Khung ROI của tất cả các tool (`Origin`, `Point`, `Line`, `Caliper`, `Blob`, `CircleFinder`, `SurfaceCompare`, `ContourCompare`, `DefectROI`) có thể di chuyển, kéo vẽ, phóng to/thu nhỏ trên toàn bộ diện tích ảnh gốc (5120x3840, 2560x1920...) mà không bị kẹt ở biên proxy 1440x1080.
+  - `Đồng bộ Tool Angle Infinite Line & Preview Cache`: Sử dụng `TryGetSourcePixelSize` cho đoạn vẽ đường vô hạn góc trong `InspectionViewModel.cs` và cập nhật `_lastPreviewImageWidth`, `_lastPreviewImageHeight` trong `ToolEditorViewModel.Engine.cs`.
 
 
 

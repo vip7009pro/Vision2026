@@ -200,6 +200,12 @@ public sealed class VisionConfig
 
     public double PixelsPerMm { get; set; } = 1.0;
 
+    /// <summary>
+    /// Maximum number of CPU/native-memory intensive vision tools that may execute at once.
+    /// A conservative default keeps large industrial images from multiplying temporary Mat buffers.
+    /// </summary>
+    public int MaxConcurrentHeavyTools { get; set; } = 2;
+
     public ToolGraph ToolGraph { get; set; } = new();
 
     public PreprocessSettings Preprocess { get; set; } = new();

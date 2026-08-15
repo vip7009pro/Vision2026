@@ -919,7 +919,7 @@ public sealed partial class InspectionViewModel : ObservableObject
 
         _imageMat = Cv2.ImRead(dlg.FileName, ImreadModes.Color);
 
-        Image = _imageMat.ToBitmapSource();
+        Image = _imageMat.ToBitmapSourceForDisplay();
 
 
 
@@ -947,7 +947,7 @@ public sealed partial class InspectionViewModel : ObservableObject
 
                 _imageMat = mat;
 
-                Image = _imageMat.ToBitmapSource();
+                Image = _imageMat.ToBitmapSourceForDisplay();
 
                 RefreshOverlayItems();
 
@@ -2962,9 +2962,12 @@ public sealed partial class InspectionViewModel : ObservableObject
 
                     var bmp = Image as System.Windows.Media.Imaging.BitmapSource;
 
-                    var imgW = bmp?.PixelWidth ?? 0;
-
-                    var imgH = bmp?.PixelHeight ?? 0;
+                    int imgW = 0;
+                    int imgH = 0;
+                    if (bmp != null)
+                    {
+                        bmp.TryGetSourcePixelSize(out imgW, out imgH);
+                    }
 
 
 
