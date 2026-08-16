@@ -1,90 +1,112 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
+using System.IO;
+using System.Linq;
 using OpenCvSharp;
 using VisionInspectionApp.Models;
 using VisionInspectionApp.VisionEngine;
 
-class Program
+namespace TestApp;
+
+public class Program
 {
-    static void Main()
+    public static void Main(string[] args)
     {
-        Console.WriteLine("=== TESTING ORIGIN MATCHER ALGORITHMS ===");
+        Console.WriteLine("================================================================================");
+        Console.WriteLine("STRESS TESTING 50 RANDOM SHIFTS & ROTATIONS ON MVPSHAPEMATCH2");
+        Console.WriteLine("================================================================================");
 
-        // Create synthetic image with geometric features (rectangle + cross + circle)
-        int imgW = 1200;
-        int imgH = 900;
-        using var baseImg = new Mat(new Size(imgW, imgH), MatType.CV_8UC1, Scalar.All(200));
+        int imgW = 5120;
+        int imgH = 3840;
+        int cx = 2560;
+        int cy = 1920;
 
-        // Draw shape at center (600, 450)
-        Cv2.Rectangle(baseImg, new Rect(530, 380, 140, 140), Scalar.All(30), 4);
-        Cv2.Circle(baseImg, new Point(600, 450), 40, Scalar.All(10), 3);
-        Cv2.Line(baseImg, new Point(550, 450), new Point(650, 450), Scalar.All(10), 3);
+        using var fullBgr = new Mat(new Size(imgW, imgH), MatType.CV_8UC3, new Scalar(210, 210, 210));
+        
+        // Draw distinct non-symmetric industrial product features
+        Cv2.Rectangle(fullBgr, new Rect(cx - 300, cy - 250, 600, 500), new Scalar(40, 40, 40), 8);
+        Cv2.Rectangle(fullBgr, new Rect(cx - 220, cy - 180, 440, 360), new Scalar(90, 90, 90), 4);
+        
+        // Circular hole & non-symmetric crosshair fiducial (L-shaped notches)
+        Cv2.Circle(fullBgr, new Point(cx, cy), 100, new Scalar(30, 30, 30), 6);
+        Cv2.Circle(fullBgr, new Point(cx, cy), 50, new Scalar(150, 50, 50), -1);
+        Cv2.Line(fullBgr, new Point(cx - 150, cy), new Point(cx + 80, cy), new Scalar(20, 20, 20), 4);
+        Cv2.Line(fullBgr, new Point(cx, cy - 120), new Point(cx, cy + 150), new Scalar(20, 20, 20), 4);
+        
+        // Non-symmetric corners
+        Cv2.Circle(fullBgr, new Point(cx - 260, cy - 210), 20, new Scalar(30, 30, 30), -1);
+        Cv2.Rectangle(fullBgr, new Rect(cx + 240, cy - 220, 30, 30), new Scalar(30, 30, 30), -1);
+        Cv2.Circle(fullBgr, new Point(cx - 260, cy + 210), 10, new Scalar(30, 30, 30), -1);
+        
+        Cv2.PutText(fullBgr, "VISION 2026 PRODUCT", new Point(cx - 180, cy - 100), HersheyFonts.HersheyComplex, 1.0, new Scalar(20, 20, 20), 2);
 
-        // Define Origin Template ROI at center
-        var def = new PointDefinition
-        {
-            Name = "Origin",
-            OriginAlgorithm = OriginAlgorithm.MvpShapeMatch,
-            SearchRoi = new Roi { X = 50, Y = 50, Width = 1100, Height = 800 },
-            TemplateRoi = new Roi { X = 520, Y = 370, Width = 160, Height = 160, Angle = 0.0 },
-            MinAngle = -45.0,
-            MaxAngle = 45.0,
-            AngleStep = 1.0,
-            MatchScoreThreshold = 0.7
-        };
+        var searchRoi = new Roi { X = cx - 900, Y = cy - 700, Width = 1800, Height = 1400 };
+        var templateRoi = new Roi { X = cx - 200, Y = cy - 160, Width = 400, Height = 320, Angle = 0.0 };
 
-        // Extract template patch
-        var templRoiRect = new Rect(520, 370, 160, 160);
-        using var templateGray = new Mat(baseImg, templRoiRect);
+        using var templateBgr = new Mat(fullBgr, new Rect(templateRoi.X, templateRoi.Y, templateRoi.Width, templateRoi.Height));
+        using var templateGray = templateBgr.CvtColor(ColorConversionCodes.BGR2GRAY);
 
         var matcher = new OriginMatcher();
 
-        // 1. TEST IDENTICAL IMAGE MATCH
-        var sw = Stopwatch.StartNew();
-        var match0 = matcher.MatchWithRotation(baseImg, def, templateGray, null, def.MinAngle, def.MaxAngle, def.AngleStep);
-        sw.Stop();
+        int totalTests = 50;
+        var rng = new Random(100);
+        int passed = 0;
+        var times = new List<double>();
 
-        Console.WriteLine($"\n--- Test 1: Identical Image Match (0 deg) ---");
-        Console.WriteLine($"Score: {match0.Score:F4} (Expected >= 0.99)");
-        Console.WriteLine($"Position: ({match0.Position.X:F2}, {match0.Position.Y:F2}) (Expected 600.00, 450.00)");
-        Console.WriteLine($"Angle: {match0.AngleDeg:F2} deg (Expected 0.00)");
-        Console.WriteLine($"Execution Time: {sw.ElapsedMilliseconds} ms");
+        Console.WriteLine($"\nRunning {totalTests} consecutive random test cases (Shift [-40..+40px], Angle [-12..+12 deg])...");
 
-        bool pass1 = match0.Score >= 0.99 && Math.Abs(match0.Position.X - 600.0) < 1.5 && Math.Abs(match0.Position.Y - 450.0) < 1.5;
-        Console.WriteLine($"Test 1 Result: {(pass1 ? "PASS" : "FAIL")}");
+        for (int i = 0; i < totalTests; i++)
+        {
+            double dX = (rng.NextDouble() - 0.5) * 80.0;
+            double dY = (rng.NextDouble() - 0.5) * 80.0;
+            double angle = (rng.NextDouble() - 0.5) * 24.0;
 
-        // 2. TEST ROTATED IMAGE MATCH (+25 degrees)
-        double testAngle = 25.0;
-        Point2f center = new Point2f(600f, 450f);
-        using var rotMat = Cv2.GetRotationMatrix2D(center, -testAngle, 1.0);
-        using var rotatedImg = new Mat();
-        Cv2.WarpAffine(baseImg, rotatedImg, rotMat, baseImg.Size(), InterpolationFlags.Linear, BorderTypes.Constant, Scalar.All(200));
+            Point2f rotCenter = new Point2f(cx, cy);
+            using var rotMat = Cv2.GetRotationMatrix2D(rotCenter, -angle, 1.0);
+            rotMat.Set(0, 2, rotMat.Get<double>(0, 2) + dX);
+            rotMat.Set(1, 2, rotMat.Get<double>(1, 2) + dY);
 
-        sw.Restart();
-        var matchRot = matcher.MatchWithRotation(rotatedImg, def, templateGray, null, def.MinAngle, def.MaxAngle, def.AngleStep);
-        sw.Stop();
+            using var warpedImg = new Mat();
+            Cv2.WarpAffine(fullBgr, warpedImg, rotMat, fullBgr.Size(), InterpolationFlags.Linear, BorderTypes.Constant, new Scalar(210, 210, 210));
 
-        Console.WriteLine($"\n--- Test 2: Rotated Image Match (+{testAngle} deg) ---");
-        Console.WriteLine($"Score: {matchRot.Score:F4} (Expected >= 0.90)");
-        Console.WriteLine($"Position: ({matchRot.Position.X:F2}, {matchRot.Position.Y:F2}) (Expected 600.00, 450.00)");
-        Console.WriteLine($"Angle: {matchRot.AngleDeg:F2} deg (Expected {testAngle:F2})");
-        Console.WriteLine($"Execution Time: {sw.ElapsedMilliseconds} ms");
+            double trueX = cx + dX;
+            double trueY = cy + dY;
+            double trueAngle = angle;
 
-        bool pass2 = matchRot.Score >= 0.90 && Math.Abs(matchRot.AngleDeg - testAngle) < 1.5 && Math.Abs(matchRot.Position.X - 600.0) < 3.0;
-        Console.WriteLine($"Test 2 Result: {(pass2 ? "PASS" : "FAIL")}");
+            var defMvp2 = new PointDefinition
+            {
+                Name = "Origin",
+                OriginAlgorithm = OriginAlgorithm.MvpShapeMatch2,
+                SearchRoi = searchRoi,
+                TemplateRoi = templateRoi,
+                MinAngle = -15.0,
+                MaxAngle = 15.0,
+                AngleStep = 1.0,
+                MatchScoreThreshold = 0.6
+            };
 
-        // 3. TEST SHAPE PYRAMID ALGORITHM
-        def.OriginAlgorithm = OriginAlgorithm.ShapePyramid;
-        sw.Restart();
-        var matchPyr = matcher.MatchWithRotation(rotatedImg, def, templateGray, null, def.MinAngle, def.MaxAngle, def.AngleStep);
-        sw.Stop();
+            var sw = Stopwatch.StartNew();
+            var res = matcher.MatchWithRotation(warpedImg, defMvp2, templateGray, null, -15.0, 15.0, 1.0);
+            sw.Stop();
+            times.Add(sw.Elapsed.TotalMilliseconds);
 
-        Console.WriteLine($"\n--- Test 3: ShapePyramid Algorithm (+{testAngle} deg) ---");
-        Console.WriteLine($"Score: {matchPyr.Score:F4}");
-        Console.WriteLine($"Position: ({matchPyr.Position.X:F2}, {matchPyr.Position.Y:F2})");
-        Console.WriteLine($"Angle: {matchPyr.AngleDeg:F2} deg");
-        Console.WriteLine($"Execution Time: {sw.ElapsedMilliseconds} ms");
+            double errX = res.Position.X - trueX;
+            double errY = res.Position.Y - trueY;
+            double errDist = Math.Sqrt(errX * errX + errY * errY);
+            double errAngle = Math.Abs(res.AngleDeg - trueAngle);
 
-        Console.WriteLine("\n=== ALL TESTS FINISHED ===");
+            bool ok = res.Score >= 0.70 && errDist < 2.0 && errAngle < 1.0;
+            if (ok) passed++;
+
+            if (!ok || (i + 1) % 10 == 0)
+            {
+                Console.WriteLine($"Test {i + 1,2}/{totalTests}: Expected ({trueX,6:F1}, {trueY,6:F1}, {trueAngle,5:F1}°) -> Det ({res.Position.X,6:F1}, {res.Position.Y,6:F1}, {res.AngleDeg,5:F1}°) | Err: {errDist:F2}px, {errAngle:F2}° | Score: {res.Score:F4} | Time: {sw.Elapsed.TotalMilliseconds:F1}ms | {(ok ? "PASS" : "FAIL ⚠️")}");
+            }
+        }
+
+        Console.WriteLine("----------------------------------------------------------------------------------------------------------------------------------");
+        Console.WriteLine($"SUMMARY: {passed}/{totalTests} PASSED ({(double)passed / totalTests * 100.0:F1}%) | Avg Runtime: {times.Average():F2} ms (Min: {times.Min():F2} ms, Max: {times.Max():F2} ms)");
+        Console.WriteLine("==================================================================================================================================");
     }
 }

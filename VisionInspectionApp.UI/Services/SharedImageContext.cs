@@ -9,7 +9,7 @@ public sealed class SharedImageContext
 
     public event EventHandler? ImageChanged;
 
-    public void SetImage(Mat? image)
+    public void SetImage(Mat? image, bool transferOwnership = false)
     {
         lock (this)
         {
@@ -21,7 +21,14 @@ public sealed class SharedImageContext
 
             try
             {
-                _image = (image is null || image.IsDisposed || image.Empty()) ? null : image.Clone();
+                if (image is null || image.IsDisposed || image.Empty())
+                {
+                    _image = null;
+                }
+                else
+                {
+                    _image = transferOwnership ? image : image.Clone();
+                }
             }
             catch
             {

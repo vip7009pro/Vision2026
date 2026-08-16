@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using OpenCvSharp;
@@ -8,6 +9,20 @@ namespace VisionInspectionApp.VisionEngine;
 
 public sealed class OriginMatcher
 {
+    private static readonly ConcurrentDictionary<string, Mat[]> _templateFeaturePyramidCache = new(StringComparer.OrdinalIgnoreCase);
+
+    public static void ClearCache()
+    {
+        foreach (var arr in _templateFeaturePyramidCache.Values)
+        {
+            if (arr != null)
+            {
+                foreach (var m in arr) m?.Dispose();
+            }
+        }
+        _templateFeaturePyramidCache.Clear();
+    }
+
     private readonly struct GrayMat : IDisposable
     {
         public GrayMat(Mat mat, Mat? owned)
@@ -45,8 +60,16 @@ public sealed class OriginMatcher
             return new MatchResult(centerFallback, 0.0, 0.0, roiRect);
         }
 
+        // ROI-First: Extract Search ROI (0-copy header pointer)
         using var roi = new Mat(image, roiRect);
-        using var roiGray = EnsureGrayBorrowed(roi);
+        
+        // Apply Preprocess locally on Search ROI if configured
+        using var roiPre = (preprocess != null && (preprocess.UseGaussianBlur || preprocess.UseThreshold || preprocess.UseCanny || preprocess.UseMorphology || preprocess.IlluminationCorrection != 0))
+            ? new ImagePreprocessor().Run(roi, preprocess)
+            : null;
+        
+        Mat targetMat = roiPre ?? roi;
+        using var roiGray = EnsureGrayBorrowed(targetMat);
 
         double effectiveStep = stepDeg > 0.000001 ? stepDeg : (definition.AngleStep > 0 ? definition.AngleStep : 1.0);
 
@@ -141,24 +164,14 @@ public sealed class OriginMatcher
             maxPyramidLevel--;
         }
 
-        // BUILD GRAYSCALE PYRAMID FIRST (To preserve sharp edge gradients at high pyramid levels)
+        // BUILD GRAYSCALE PYRAMID FOR SEARCH ROI
         Mat[] pyrRoiGray = new Mat[maxPyramidLevel + 1];
-        Mat[] pyrTemplGray = new Mat[maxPyramidLevel + 1];
-
         pyrRoiGray[0] = roiGray.Clone();
-        pyrTemplGray[0] = templPrep.Clone();
-
         for (int l = 1; l <= maxPyramidLevel; l++)
         {
             pyrRoiGray[l] = new Mat();
-            pyrTemplGray[l] = new Mat();
             Cv2.PyrDown(pyrRoiGray[l - 1], pyrRoiGray[l]);
-            Cv2.PyrDown(pyrTemplGray[l - 1], pyrTemplGray[l]);
         }
-
-        // BUILD FEATURE MAPS AT EACH LEVEL FROM GRAYSCALE PYRAMIDS
-        Mat[] pyrRoiFeature = new Mat[maxPyramidLevel + 1];
-        Mat[] pyrTemplFeature = new Mat[maxPyramidLevel + 1];
 
         bool isGeometric = def.OriginAlgorithm == OriginAlgorithm.MvpShapeMatch
                         || def.OriginAlgorithm == OriginAlgorithm.ShapeBased
@@ -166,14 +179,63 @@ public sealed class OriginMatcher
 
         int edgeThresh = def.MvpEdgeThreshold > 0 ? def.MvpEdgeThreshold : (def.EdgeThresholdMin > 0 ? def.EdgeThresholdMin : 25);
 
+        // CACHED TEMPLATE FEATURE PYRAMID (Train-Time / Cache Lookup)
+        string cacheKey = $"{def.TemplateImageFile ?? def.Name}_{templPrep.Width}x{templPrep.Height}_{isGeometric}_{edgeThresh}_{def.MvpEraserMask?.Length ?? 0}_{maxPyramidLevel}";
+        Mat[] pyrTemplFeature = _templateFeaturePyramidCache.GetOrAdd(cacheKey, _ =>
+        {
+            Mat[] pyrTemplGray = new Mat[maxPyramidLevel + 1];
+            pyrTemplGray[0] = templPrep.Clone();
+            for (int l = 1; l <= maxPyramidLevel; l++)
+            {
+                pyrTemplGray[l] = new Mat();
+                Cv2.PyrDown(pyrTemplGray[l - 1], pyrTemplGray[l]);
+            }
+
+            Mat[] features = new Mat[maxPyramidLevel + 1];
+            for (int l = 0; l <= maxPyramidLevel; l++)
+            {
+                features[l] = new Mat();
+                if (isGeometric)
+                {
+                    using var gxT = new Mat(); using var gyT = new Mat();
+                    Cv2.Sobel(pyrTemplGray[l], gxT, MatType.CV_32F, 1, 0, 3);
+                    Cv2.Sobel(pyrTemplGray[l], gyT, MatType.CV_32F, 0, 1, 3);
+                    using var magT = new Mat();
+                    Cv2.Magnitude(gxT, gyT, magT);
+                    using var mag8T = new Mat();
+                    magT.ConvertTo(mag8T, MatType.CV_8U);
+
+                    if (l == 0 && def.MvpEraserMask != null && def.MvpEraserMask.Length > 0)
+                    {
+                        try
+                        {
+                            using var decodedMask = Cv2.ImDecode(def.MvpEraserMask, ImreadModes.Grayscale);
+                            if (decodedMask != null && !decodedMask.Empty() && decodedMask.Width == mag8T.Width && decodedMask.Height == mag8T.Height)
+                            {
+                                Cv2.BitwiseAnd(mag8T, decodedMask, mag8T);
+                            }
+                        }
+                        catch { }
+                    }
+
+                    Cv2.GaussianBlur(mag8T, features[l], new Size(3, 3), 1.0);
+                }
+                else
+                {
+                    pyrTemplGray[l].CopyTo(features[l]);
+                }
+                pyrTemplGray[l].Dispose();
+            }
+            return features;
+        });
+
+        // BUILD FEATURE MAPS AT EACH LEVEL FOR ROI
+        Mat[] pyrRoiFeature = new Mat[maxPyramidLevel + 1];
         for (int l = 0; l <= maxPyramidLevel; l++)
         {
             pyrRoiFeature[l] = new Mat();
-            pyrTemplFeature[l] = new Mat();
-
             if (isGeometric)
             {
-                // Sobel magnitude creates continuous, robust edge gradient maps across all pyramid levels
                 using var gxR = new Mat(); using var gyR = new Mat();
                 Cv2.Sobel(pyrRoiGray[l], gxR, MatType.CV_32F, 1, 0, 3);
                 Cv2.Sobel(pyrRoiGray[l], gyR, MatType.CV_32F, 0, 1, 3);
@@ -182,34 +244,10 @@ public sealed class OriginMatcher
                 using var mag8R = new Mat();
                 magR.ConvertTo(mag8R, MatType.CV_8U);
                 Cv2.GaussianBlur(mag8R, pyrRoiFeature[l], new Size(3, 3), 1.0);
-
-                using var gxT = new Mat(); using var gyT = new Mat();
-                Cv2.Sobel(pyrTemplGray[l], gxT, MatType.CV_32F, 1, 0, 3);
-                Cv2.Sobel(pyrTemplGray[l], gyT, MatType.CV_32F, 0, 1, 3);
-                using var magT = new Mat();
-                Cv2.Magnitude(gxT, gyT, magT);
-                using var mag8T = new Mat();
-                magT.ConvertTo(mag8T, MatType.CV_8U);
-
-                if (l == 0 && def.MvpEraserMask != null && def.MvpEraserMask.Length > 0)
-                {
-                    try
-                    {
-                        using var decodedMask = Cv2.ImDecode(def.MvpEraserMask, ImreadModes.Grayscale);
-                        if (decodedMask != null && !decodedMask.Empty() && decodedMask.Width == mag8T.Width && decodedMask.Height == mag8T.Height)
-                        {
-                            Cv2.BitwiseAnd(mag8T, decodedMask, mag8T);
-                        }
-                    }
-                    catch { }
-                }
-
-                Cv2.GaussianBlur(mag8T, pyrTemplFeature[l], new Size(3, 3), 1.0);
             }
             else
             {
                 pyrRoiGray[l].CopyTo(pyrRoiFeature[l]);
-                pyrTemplGray[l].CopyTo(pyrTemplFeature[l]);
             }
         }
 
@@ -362,9 +400,7 @@ public sealed class OriginMatcher
             for (int l = 0; l <= maxPyramidLevel; l++)
             {
                 pyrRoiGray[l]?.Dispose();
-                pyrTemplGray[l]?.Dispose();
                 pyrRoiFeature[l]?.Dispose();
-                pyrTemplFeature[l]?.Dispose();
             }
         }
     }

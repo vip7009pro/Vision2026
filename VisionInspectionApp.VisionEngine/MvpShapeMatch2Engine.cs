@@ -2,6 +2,10 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
+using System.Numerics;
+using System.Runtime.CompilerServices;
+using System.Runtime.Intrinsics;
+using System.Runtime.Intrinsics.X86;
 using System.Threading.Tasks;
 using OpenCvSharp;
 using VisionInspectionApp.Models;
@@ -25,19 +29,13 @@ namespace VisionInspectionApp.VisionEngine
 
     public static class MvpShapeMatch2Engine
     {
-        private static readonly ConcurrentDictionary<string, Mvp2TemplateModel[]> _templateModelCache = new();
+        private static readonly ConcurrentDictionary<string, Mvp2TemplateModel[]> _templateModelCache = new(StringComparer.OrdinalIgnoreCase);
 
-        /// <summary>
-        /// Clears cached template models (e.g. after training a new template).
-        /// </summary>
         public static void ClearCache()
         {
             _templateModelCache.Clear();
         }
 
-        /// <summary>
-        /// Extracts sparse vector edge contour features from a template image at a given scale.
-        /// </summary>
         public static Mvp2TemplateModel ExtractTemplateModel(
             Mat templateGray,
             int edgeThresh = 25,
@@ -66,7 +64,7 @@ namespace VisionInspectionApp.VisionEngine
             if (autoThresh)
             {
                 Cv2.MinMaxLoc(mag, out _, out double maxMag);
-                effectiveThresh = (float)Math.Clamp(maxMag * 0.12, 10.0, 70.0);
+                effectiveThresh = (float)Math.Clamp(maxMag * 0.10, 8.0, 60.0);
             }
 
             // Thin edges using Canny edge detector
@@ -80,7 +78,7 @@ namespace VisionInspectionApp.VisionEngine
             // Extract contours to filter out short noisy segments
             Cv2.FindContours(thinnedEdges, out Point[][] contours, out _, RetrievalModes.List, ContourApproximationModes.ApproxNone);
 
-            var rawPoints = new List<(Point Pt, float Gx, float Gy)>();
+            var rawPoints = new List<(Point Pt, float Gx, float Gy, float Mag)>();
             float centerX = gray.Width / 2.0f;
             float centerY = gray.Height / 2.0f;
 
@@ -106,7 +104,7 @@ namespace VisionInspectionApp.VisionEngine
                         float nGx = pGx[idx] / m;
                         float nGy = pGy[idx] / m;
 
-                        rawPoints.Add((pt, nGx, nGy));
+                        rawPoints.Add((pt, nGx, nGy, m));
                     }
                 }
             }
@@ -120,14 +118,40 @@ namespace VisionInspectionApp.VisionEngine
                 };
             }
 
-            // Subsample features to target optimal count N ~ 100..250 for maximum performance
-            int maxN = Math.Clamp(gray.Width * gray.Height / 40, 80, 250);
-            int step = Math.Max(1, rawPoints.Count / maxN);
+            // Spatial Grid Suppression for uniform distribution across entire shape
+            int cellPx = Math.Max(6, Math.Min(gray.Width, gray.Height) / 20);
+            var gridBins = new Dictionary<int, (Point Pt, float Gx, float Gy, float Mag)>();
 
-            var features = new List<VectorFeaturePoint>();
-            for (int i = 0; i < rawPoints.Count; i += step)
+            foreach (var p in rawPoints)
             {
-                var item = rawPoints[i];
+                int bx = p.Pt.X / cellPx;
+                int by = p.Pt.Y / cellPx;
+                int cellKey = (by << 16) ^ bx;
+
+                if (!gridBins.TryGetValue(cellKey, out var existing) || p.Mag > existing.Mag)
+                {
+                    gridBins[cellKey] = p;
+                }
+            }
+
+            var chosenPoints = gridBins.Values.ToList();
+            if (chosenPoints.Count < 80 && rawPoints.Count >= 80)
+            {
+                int step = Math.Max(1, rawPoints.Count / 160);
+                chosenPoints.Clear();
+                for (int i = 0; i < rawPoints.Count; i += step) chosenPoints.Add(rawPoints[i]);
+            }
+
+            // Target optimal N ~ 120..200 points for robust detection without false drops
+            int targetN = Math.Clamp(chosenPoints.Count, 80, 180);
+            if (chosenPoints.Count > targetN)
+            {
+                chosenPoints = chosenPoints.OrderByDescending(p => p.Mag).Take(targetN).ToList();
+            }
+
+            var features = new List<VectorFeaturePoint>(chosenPoints.Count);
+            foreach (var item in chosenPoints)
+            {
                 features.Add(new VectorFeaturePoint
                 {
                     X = item.Pt.X - centerX,
@@ -145,10 +169,6 @@ namespace VisionInspectionApp.VisionEngine
             };
         }
 
-        /// <summary>
-        /// Ultra High-speed Geometric Vector Shape Matching with Multi-Threaded Pyramid Search, Model Caching & Early Exit Pruning.
-        /// Execution time: ~3..10ms even under full -180°..+180° search range.
-        /// </summary>
         public static MatchResult Match(
             Mat roiGray,
             Mat templateGray,
@@ -177,13 +197,13 @@ namespace VisionInspectionApp.VisionEngine
                 try { eraserMask = Cv2.ImDecode(def.MvpEraserMask, ImreadModes.Grayscale); } catch { }
             }
 
-            // Build Pyramid Levels for ROI
-            int maxPyramidLevel = 3;
+            // High Stability Pyramid: Level 2 (1/4 size) gives optimal gradient clarity without over-blurring
+            int maxPyramidLevel = 2;
             if (def.MvpMaxPyramidLayers > 0)
             {
-                maxPyramidLevel = Math.Clamp(def.MvpMaxPyramidLayers - 1, 0, 4);
+                maxPyramidLevel = Math.Clamp(def.MvpMaxPyramidLayers - 1, 0, 3);
             }
-            while (maxPyramidLevel > 0 && (templInput.Width / (1 << maxPyramidLevel) < 16 || templInput.Height / (1 << maxPyramidLevel) < 16))
+            while (maxPyramidLevel > 0 && (templInput.Width / (1 << maxPyramidLevel) < 20 || templInput.Height / (1 << maxPyramidLevel) < 20))
             {
                 maxPyramidLevel--;
             }
@@ -196,7 +216,6 @@ namespace VisionInspectionApp.VisionEngine
                 Cv2.PyrDown(pyrRoi[l - 1], pyrRoi[l]);
             }
 
-            // Retrieve or Compute Template Feature Models per Pyramid Level
             string cacheKey = $"{def.Name}_{edgeThresh}_{lengthThresh}_{autoThresh}_{templInput.Width}x{templInput.Height}_{def.MvpEraserMask?.Length ?? 0}_{maxPyramidLevel}";
             
             Mvp2TemplateModel[] pyrModels = _templateModelCache.GetOrAdd(cacheKey, _ =>
@@ -240,43 +259,34 @@ namespace VisionInspectionApp.VisionEngine
                 return new MatchResult(centerFallback, 0.0, 0.0, roiRect);
             }
 
-            // Lazy Gradient Field Grids (Nx, Ny) per Pyramid Level
             Mat?[] pyrNx = new Mat?[maxPyramidLevel + 1];
             Mat?[] pyrNy = new Mat?[maxPyramidLevel + 1];
 
-            double targetMinScore = def.MinScore > 0 ? def.MinScore : 0.6;
+            double targetMinScore = def.MinScore > 0 ? def.MinScore : (def.MatchScoreThreshold > 0 ? def.MatchScoreThreshold : 0.6);
 
-            // Adaptive Coarse Angle Step: Scale coarse angle step for wide ranges to avoid excessive angle loops
-            double coarseAngleStep = Math.Max(5.0, stepDeg * (1 << maxPyramidLevel));
-            double angleRangeTotal = maxAngleDeg - minAngleDeg;
-            if (angleRangeTotal > 120.0)
-            {
-                coarseAngleStep = Math.Max(coarseAngleStep, 6.0);
-            }
+            // Robust Coarse Angle Step: Max 2.5° coarse step ensures we never miss the real peak
+            double coarseAngleStep = Math.Clamp(stepDeg * (1 << maxPyramidLevel), 1.0, 2.5);
 
-            // Compute Sobel Gradient Grid for Coarse Pyramid Level
             int coarseLvl = maxPyramidLevel;
             GetOrComputeGradientGrid(pyrRoi[coarseLvl], ref pyrNx[coarseLvl], ref pyrNy[coarseLvl]);
 
-            // Parallel Coarse Level Search Sweep
-            var candidates = CoarseSearchParallel(pyrNx[coarseLvl]!, pyrNy[coarseLvl]!, pyrModels[coarseLvl].Features, minAngleDeg, maxAngleDeg, coarseAngleStep, targetMinScore * 0.55);
+            // Coarse search with conservative pruning threshold to prevent false-negative drops
+            var candidates = CoarseSearchParallel(pyrNx[coarseLvl]!, pyrNy[coarseLvl]!, pyrModels[coarseLvl].Features, minAngleDeg, maxAngleDeg, coarseAngleStep, targetMinScore * 0.40);
 
             if (candidates.Count == 0)
             {
-                // Fallback sweep with lower threshold
-                candidates = CoarseSearchParallel(pyrNx[coarseLvl]!, pyrNy[coarseLvl]!, pyrModels[coarseLvl].Features, minAngleDeg, maxAngleDeg, coarseAngleStep, 0.15);
+                candidates = CoarseSearchParallel(pyrNx[coarseLvl]!, pyrNy[coarseLvl]!, pyrModels[coarseLvl].Features, minAngleDeg, maxAngleDeg, coarseAngleStep, 0.12);
             }
 
             if (candidates.Count == 0)
             {
-                // Clean up pyramid mats
                 for (int l = 0; l <= maxPyramidLevel; l++) { pyrRoi[l].Dispose(); pyrNx[l]?.Dispose(); pyrNy[l]?.Dispose(); }
                 var centerFallback = new Point2d(roiRect.X + roiRect.Width / 2.0, roiRect.Y + roiRect.Height / 2.0);
                 return new MatchResult(centerFallback, 0.0, 0.0, roiRect);
             }
 
-            // Top candidates + 0° anchor
-            var topCandidates = candidates.OrderByDescending(c => c.Score).Take(5).ToList();
+            // Top 10 candidates + 0° anchor candidate to guarantee true peak capture
+            var topCandidates = candidates.OrderByDescending(c => c.Score).Take(10).ToList();
             var zeroCand = candidates.OrderBy(c => Math.Abs(c.Angle)).FirstOrDefault();
             if (!topCandidates.Any(c => Math.Abs(c.Angle - zeroCand.Angle) < 1e-4))
             {
@@ -298,14 +308,16 @@ namespace VisionInspectionApp.VisionEngine
                     double lvlScale = 1.0 / (1 << lvl);
                     double curScaleX = curX * lvlScale;
                     double curScaleY = curY * lvlScale;
-                    double deltaA = Math.Max(1.0, coarseAngleStep / (1 << (maxPyramidLevel - lvl)));
+                    double deltaA = Math.Max(1.5, coarseAngleStep / (1 << (maxPyramidLevel - lvl)));
 
                     GetOrComputeGradientGrid(pyrRoi[lvl], ref pyrNx[lvl], ref pyrNy[lvl]);
 
+                    // Expanded searchRadius (6px) guarantees catching any slight coarse grid offset
+                    int sRadius = (lvl == 0) ? 3 : 6;
                     RefineSearch(
                         pyrNx[lvl]!, pyrNy[lvl]!, pyrModels[lvl].Features,
                         curScaleX, curScaleY, curAngle,
-                        searchRadius: 4, angleRange: deltaA, angleStep: Math.Clamp(stepDeg, 0.01, 1.0),
+                        searchRadius: sRadius, angleRange: deltaA, angleStep: Math.Clamp(stepDeg, 0.01, 1.0),
                         out double refX, out double refY, out double refAngle, out double refScore);
 
                     curX = refX / lvlScale;
@@ -328,12 +340,11 @@ namespace VisionInspectionApp.VisionEngine
             // Clean up pyramid mats
             for (int l = 0; l <= maxPyramidLevel; l++) { pyrRoi[l].Dispose(); pyrNx[l]?.Dispose(); pyrNy[l]?.Dispose(); }
 
-            // Score boost for clean matches
+            // Clean match score normalization
             if (finalScore > 0.95) finalScore = 1.0;
 
             Point2d finalWorldCenter = new Point2d(roiRect.X + subPixelCenter.X, roiRect.Y + subPixelCenter.Y);
 
-            // Correct match rectangle (bounding box of original template centered at matched position)
             Rect matchRect = new Rect(
                 (int)Math.Round(finalWorldCenter.X - templInput.Width / 2.0),
                 (int)Math.Round(finalWorldCenter.Y - templInput.Height / 2.0),
@@ -343,6 +354,7 @@ namespace VisionInspectionApp.VisionEngine
             return new MatchResult(finalWorldCenter, Math.Clamp(finalScore, 0.0, 1.0), subPixelAngle, matchRect);
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveOptimization | MethodImplOptions.AggressiveInlining)]
         private static void GetOrComputeGradientGrid(Mat roiLevel, ref Mat? nx, ref Mat? ny)
         {
             if (nx != null && ny != null) return;
@@ -366,18 +378,43 @@ namespace VisionInspectionApp.VisionEngine
                 float* pNy = (float*)ny.Data;
                 int total = roiLevel.Width * roiLevel.Height;
 
-                for (int i = 0; i < total; i++)
+                int i = 0;
+                if (Avx.IsSupported && total >= 8)
+                {
+                    Vector256<float> vFour = Vector256.Create(3.0f);
+                    Vector256<float> vOne = Vector256.Create(1.0f);
+
+                    for (; i <= total - 8; i += 8)
+                    {
+                        Vector256<float> vMag = Avx.LoadVector256(pMag + i);
+                        Vector256<float> vGx = Avx.LoadVector256(pGx + i);
+                        Vector256<float> vGy = Avx.LoadVector256(pGy + i);
+
+                        Vector256<float> vMask = Avx.Compare(vMag, vFour, FloatComparisonMode.OrderedGreaterThanOrEqualNonSignaling);
+                        Vector256<float> vInvMag = Avx.Divide(vOne, vMag);
+
+                        Vector256<float> vNx = Avx.And(vMask, Avx.Multiply(vGx, vInvMag));
+                        Vector256<float> vNy = Avx.And(vMask, Avx.Multiply(vGy, vInvMag));
+
+                        Avx.Store(pNx + i, vNx);
+                        Avx.Store(pNy + i, vNy);
+                    }
+                }
+
+                for (; i < total; i++)
                 {
                     float m = pMag[i];
-                    if (m >= 4.0f)
+                    if (m >= 3.0f)
                     {
-                        pNx[i] = pGx[i] / m;
-                        pNy[i] = pGy[i] / m;
+                        float invM = 1.0f / m;
+                        pNx[i] = pGx[i] * invM;
+                        pNy[i] = pGy[i] * invM;
                     }
                 }
             }
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveOptimization)]
         private static List<(double Score, double Angle, double X, double Y)> CoarseSearchParallel(
             Mat nx, Mat ny, VectorFeaturePoint[] features,
             double minAngle, double maxAngle, double angleStep, double minScore)
@@ -388,7 +425,8 @@ namespace VisionInspectionApp.VisionEngine
             int N = features.Length;
             if (N == 0 || w <= 10 || h <= 10) return results.ToList();
 
-            int gridStep = 3; // 3px spatial stride in coarse pyramid space
+            // gridStep = 2 in Level 2 gives high density coarse sampling
+            int gridStep = 2;
 
             var angleList = new List<double>();
             for (double a = minAngle; a <= maxAngle + 1e-5; a += angleStep)
@@ -408,7 +446,6 @@ namespace VisionInspectionApp.VisionEngine
                     float cosA = (float)Math.Cos(rad);
                     float sinA = (float)Math.Sin(rad);
 
-                    // Pre-rotate feature offsets and direction vectors for candidate angle
                     var rotFeat = new (int Dx, int Dy, float Gx, float Gy)[N];
                     float maxBound = 0;
                     for (int i = 0; i < N; i++)
@@ -437,7 +474,55 @@ namespace VisionInspectionApp.VisionEngine
                                 float scoreSum = 0;
                                 float maxRemaining = N;
 
-                                for (int i = 0; i < N; i++)
+                                int i = 0;
+                                for (; i <= N - 4; i += 4)
+                                {
+                                    // Feature 0
+                                    int px0 = cx + rotFeat[i].Dx; int py0 = cy + rotFeat[i].Dy;
+                                    if (px0 >= 0 && px0 < w && py0 >= 0 && py0 < h)
+                                    {
+                                        int idx0 = py0 * stepN + px0;
+                                        float dot0 = pNx[idx0] * rotFeat[i].Gx + pNy[idx0] * rotFeat[i].Gy;
+                                        if (dot0 > 0) scoreSum += dot0;
+                                    }
+
+                                    // Feature 1
+                                    int px1 = cx + rotFeat[i + 1].Dx; int py1 = cy + rotFeat[i + 1].Dy;
+                                    if (px1 >= 0 && px1 < w && py1 >= 0 && py1 < h)
+                                    {
+                                        int idx1 = py1 * stepN + px1;
+                                        float dot1 = pNx[idx1] * rotFeat[i + 1].Gx + pNy[idx1] * rotFeat[i + 1].Gy;
+                                        if (dot1 > 0) scoreSum += dot1;
+                                    }
+
+                                    // Feature 2
+                                    int px2 = cx + rotFeat[i + 2].Dx; int py2 = cy + rotFeat[i + 2].Dy;
+                                    if (px2 >= 0 && px2 < w && py2 >= 0 && py2 < h)
+                                    {
+                                        int idx2 = py2 * stepN + px2;
+                                        float dot2 = pNx[idx2] * rotFeat[i + 2].Gx + pNy[idx2] * rotFeat[i + 2].Gy;
+                                        if (dot2 > 0) scoreSum += dot2;
+                                    }
+
+                                    // Feature 3
+                                    int px3 = cx + rotFeat[i + 3].Dx; int py3 = cy + rotFeat[i + 3].Dy;
+                                    if (px3 >= 0 && px3 < w && py3 >= 0 && py3 < h)
+                                    {
+                                        int idx3 = py3 * stepN + px3;
+                                        float dot3 = pNx[idx3] * rotFeat[i + 3].Gx + pNy[idx3] * rotFeat[i + 3].Gy;
+                                        if (dot3 > 0) scoreSum += dot3;
+                                    }
+
+                                    maxRemaining -= 4.0f;
+
+                                    // Conservative block pruning check
+                                    if ((scoreSum + maxRemaining) / N < minScore)
+                                    {
+                                        goto NextCandidate;
+                                    }
+                                }
+
+                                for (; i < N; i++)
                                 {
                                     int px = cx + rotFeat[i].Dx;
                                     int py = cy + rotFeat[i].Dy;
@@ -448,14 +533,6 @@ namespace VisionInspectionApp.VisionEngine
                                         float dot = pNx[idx] * rotFeat[i].Gx + pNy[idx] * rotFeat[i].Gy;
                                         if (dot > 0) scoreSum += dot;
                                     }
-
-                                    maxRemaining -= 1.0f;
-
-                                    // Early Exit Pruning: if even perfect remaining scores cannot reach minScore, abort!
-                                    if ((scoreSum + maxRemaining) / N < minScore)
-                                    {
-                                        break;
-                                    }
                                 }
 
                                 float finalScore = scoreSum / N;
@@ -463,6 +540,8 @@ namespace VisionInspectionApp.VisionEngine
                                 {
                                     results.Add((finalScore, angle, cx, cy));
                                 }
+
+                            NextCandidate:;
                             }
                         }
                     }
@@ -472,6 +551,7 @@ namespace VisionInspectionApp.VisionEngine
             return results.ToList();
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveOptimization)]
         private static void RefineSearch(
             Mat nx, Mat ny, VectorFeaturePoint[] features,
             double startX, double startY, double startAngle,
@@ -524,6 +604,7 @@ namespace VisionInspectionApp.VisionEngine
                                 int py = cy + rotFeat[i].Dy;
 
                                 float maxDot = 0;
+                                // 3x3 local neighborhood allows slight sub-pixel gradient flexibility
                                 for (int vy = -1; vy <= 1; vy++)
                                 {
                                     int npy = py + vy;
@@ -574,7 +655,6 @@ namespace VisionInspectionApp.VisionEngine
             double dxOffset = 0;
             double dyOffset = 0;
 
-            // Mathematical Parabolic Peak Fitting: x* = (y_plus - y_minus) / (2 * (2 * y_0 - y_plus - y_minus))
             double denomX = 2.0 * centerVal - grid[1, 2] - grid[1, 0];
             if (denomX > 1e-5)
             {
@@ -590,7 +670,6 @@ namespace VisionInspectionApp.VisionEngine
             dxOffset = Math.Clamp(dxOffset, -0.5, 0.5);
             dyOffset = Math.Clamp(dyOffset, -0.5, 0.5);
 
-            // Sub-pixel Angular Parabolic Interpolation
             double aStep = Math.Clamp(stepDeg, 0.05, 1.0);
             RefineSearch(nx, ny, features, x, y, angle - aStep, searchRadius: 0, angleRange: 0, angleStep: 1, out _, out _, out _, out double scoreMinusA);
             RefineSearch(nx, ny, features, x, y, angle + aStep, searchRadius: 0, angleRange: 0, angleStep: 1, out _, out _, out _, out double scorePlusA);

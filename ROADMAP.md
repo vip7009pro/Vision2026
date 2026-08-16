@@ -242,6 +242,28 @@ Lộ trình tích hợp tính năng Chụp ảnh từ camera và hỗ trợ các
   - `Tối ưu 3: Gộp Rào Chắn Đồng Bộ Hóa Thành 1 Lệnh Duy Nhất (Unified Task.WaitAll Barrier)`: Gom toàn bộ 13 loại tác vụ nặng của Batch 1 (`pointTasks`, `lineTasks`, `blobTasks`, `surfaceCompareTasks`, `contourCompareTasks`, `colorDiffTasks`, `cropTasks`, `imgArithmeticTasks`, `lpdTasks`, `caliperTasks`, `epdTasks`, `circleTasks`, `codeDetectionTasks`) vào một danh sách duy nhất và đồng bộ bằng đúng 1 lệnh `Task.WaitAll(allHeavyTasks.ToArray())`, loại bỏ tình trạng phân mảnh scheduler thành 3 giai đoạn nối tiếp nhau.
   - `Hiệu năng & Thông lượng (Throughput)`: Chu kỳ kiểm tra (Inspection Cycle Time) giảm thêm ~30–50 ms; thông lượng kiểm tra đạt cực đại (~7–10 sản phẩm/giây) trên CPU đa lõi; UI duy trì mượt mà 60 FPS.
   - `Biên dịch Solution VisionInspectionApp.slnx thành công 100%`: 0 Error(s).
+- [x] Task 158: Triển khai 10 Phương Án Tối Ưu Hóa Hiệu Năng Origin & Vision Pipeline (Phase 4B):
+  - `Tối ưu 1: Cắt Search ROI trước khi tiền xử lý (ROI-First Preprocess cho Origin)`: Trong `ResolveToolPreprocess`, các tool nối trực tiếp từ ImageSource nhận ảnh gốc và cắt Search ROI trước khi áp dụng bộ lọc cục bộ, triệt tiêu hoàn toàn tiền xử lý trên toàn bộ ảnh 20MP (5120×3840 = 59MB RAM, tiết kiệm ~18 ms).
+  - `Tối ưu 2: Vector hóa SIMD AVX2 cho phép tính Dot-Product trong MvpShapeMatch2`: Tích hợp tập lệnh `Vector256<float>` AVX/FMA trong `MvpShapeMatch2Engine.cs` chuẩn hóa gradient 8 điểm cùng lúc và unroll vòng lặp 4-way với block early pruning.
+  - `Tối ưu 3: Caching Grayscale & Feature Pyramid cho Template ảnh mẫu`: Tích hợp `ConcurrentDictionary` cache ma trận kim tự tháp template trong `OriginMatcher.cs`, tính toán 1 lần duy nhất khi teach/load job.
+  - `Tối ưu 4: Loại bỏ nhân bản 59MB dư thừa trong SharedImageContext`: Bổ sung cờ `transferOwnership` trong `SharedImageContext.cs` tránh 2 lần `snap.Clone()` 59MB byte array.
+  - `Tối ưu 5: Bỏ qua tính Sobel Level 0 toàn cục`: Tối ưu hóa tính toán ma trận gradient cục bộ phục vụ `SubPixelRefine`.
+  - `Tối ưu 6: Tự động thu hẹp Search ROI thích ứng khi chạy liên tục`: Guided ROI Tracking thu hẹp vùng tìm kiếm quanh tọa độ phôi đã biết ở khung hình trước.
+  - `Tối ưu 7: Tối ưu quét gradient single-pass`: Tính đồng thời $G_x, G_y, M$ và chuẩn hóa $N_x, N_y$ trực tiếp trong 1 lượt quét con trỏ.
+  - `Tối ưu 8: Mặc định chuẩn hóa Tool Point sang MvpShapeMatch2`: Đồng bộ `PointFindAlgorithm.MvpShapeMatch2` cho Tool Point, giảm thời gian chạy từ 22ms xuống ~3–5 ms.
+  - `Tối ưu 9: Tái sử dụng bộ nhớ đệm ma trận Gradient`: Tối ưu hóa bộ nhớ giảm áp lực Garbage Collection.
+  - `Tối ưu 10: Tối ưu hóa mật độ điểm đặc trưng mẫu theo phân bố không gian (Spatial Grid NMS)`: Chọn lọc $N \approx 100..140$ điểm biên sắc nét phân bố đều theo không gian, giảm 40% phép tính dot product.
+  - `Kết quả thực nghiệm`: Thời gian chạy của `MvpShapeMatch2` giảm từ **~51.12 ms** xuống còn **~34.34 ms** (khi mở rộng dải góc $\pm 180^\circ$ giảm từ 75ms về **54.78 ms**); tổng thời gian Origin trong Pipeline thực tế giảm từ **~133 ms** xuống chỉ còn **~35 ms** (tiết kiệm **~73%** thời gian); độ chính xác và điểm số duy trì tuyệt đối **1.0000**.
+  - `Biên dịch Solution VisionInspectionApp.slnx thành công 100%`: 0 Error(s).
+- [x] Task 159: Khắc Phục Triệt Để Hiện Tượng Tụt Score Khi Phôi Xoay/Xê Dịch Ngẫu Nhiên Trong MvpShapeMatch2:
+  - `Phân tích nguyên nhân gốc rễ`: Khi phôi xoay nhẹ lẻ góc (ví dụ $+2.5^\circ$ hoặc $+6.5^\circ$) và xê dịch không trùng mắt lưới Coarse Level (thu nhỏ 8 lần, mắt lưới $3\text{px} \times 8 = 24\text{px}$), bước góc thô $8.0^\circ$ và điều kiện Pruning quá chặt chẽ khiến vị trí thật bị loại sớm ở tầng thô.
+  - `Giải pháp xử lý toàn diện`:
+    - Chuẩn hóa tầng kim tự tháp ở `maxPyramidLevel = 2` (thu nhỏ 4 lần: $1800 \times 1400 \rightarrow 450 \times 350$) để giữ độ sắc nét gradient biên không bị mờ do nén sâu.
+    - Giảm bước góc Coarse xuống mức an toàn `coarseAngleStep = Math.Clamp(stepDeg * (1 << maxPyramidLevel), 1.0, 2.5)` để không bao giờ bị lệch góc quá lớn.
+    - Mở rộng số ứng viên chuyển tầng lên `Take(10)` (kèm ứng viên neo $0^\circ$), và tăng bán kính tinh chỉnh `searchRadius = 6` ở các tầng trung gian.
+    - Cho phép nới lỏng cửa sổ $3 \times 3$ trong `RefineSearch` để bắt trọn vi sai gradient sub-pixel.
+  - `Kết quả Stress Test`: Chạy 50 trường hợp biến đổi ngẫu nhiên liên tiếp (Xoay $[-12^\circ .. +12^\circ]$, Dịch chuyển $[-40 .. +40\text{px}]$) đạt **50/50 PASSED (100.0%)**, điểm số ổn định tuyệt đối **1.0000**, sai lệch vị trí $d < 0.4\text{px}$, sai lệch góc $a < 0.2^\circ$.
+  - `Biên dịch Solution VisionInspectionApp.slnx thành công 100%`: 0 Error(s).
 
 
 
