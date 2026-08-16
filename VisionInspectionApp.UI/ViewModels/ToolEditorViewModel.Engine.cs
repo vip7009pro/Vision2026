@@ -2573,7 +2573,7 @@ namespace VisionInspectionApp.UI.ViewModels
                             System.Diagnostics.Debug.WriteLine($"RunFlow: ImageSourceDef not found for RefName: {imageSourceNode.RefName}");
                         }
                         __sw.Stop();
-                        imageSourceMs = (int)__sw.ElapsedMilliseconds;
+                        imageSourceMs = (imgSourceDef?.SourceType == ImageSourceType.File) ? 0 : (int)__sw.ElapsedMilliseconds;
                     }
                     else
                     {

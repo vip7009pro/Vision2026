@@ -268,6 +268,13 @@ public partial class InspectionService
                 if (string.Equals(fromNode.Type, "Preprocess", StringComparison.OrdinalIgnoreCase))
                 {
                     var ppSettings = preprocessNodesByName.TryGetValue(fromNode.RefName ?? string.Empty, out var preDef) ? (preDef.Settings ?? new PreprocessSettings()) : new PreprocessSettings();
+                    var hasCustomRois = preDef?.Rois != null && preDef.Rois.Count > 0;
+                    if (!hasCustomRois)
+                    {
+                        // ROI-First: pass raw image + preprocess settings so downstream tools extract their ROI first
+                        // before applying local preprocess. This eliminates 100-130ms redundant 20MP full-image filter operations.
+                        return (image, ppSettings);
+                    }
                     var ppMat = GetPreprocessNodeOutput(fromNode.Id);
                     return (ppMat, ppSettings);
                 }
@@ -1317,7 +1324,6 @@ public partial class InspectionService
             ExecuteDbNodes(config, result, effectiveDbManager, DbExecutionTiming.BeforeFlow);
 
             // Origin
-            var tOrigin0 = swTotal.ElapsedMilliseconds;
             // Origin template (origin.png) is saved from Image 1 (Global Preprocess only).
             // At runtime, both runtime image and template must go through the SAME full pipeline:
             //   Runtime image: Raw → Global Preprocess → Local Preprocess (node) = Image 2
@@ -1358,6 +1364,7 @@ public partial class InspectionService
                 }
             }
 
+            var tOrigin0 = swTotal.ElapsedMilliseconds;
             var stepDeg = originDef.AngleStep > 0 ? originDef.AngleStep : 1.0;
             var originMatch = _matcher.MatchWithRotation(originMat, originDef, originTempl, originPre, originDef.MinAngle, originDef.MaxAngle, stepDeg);
             if (usedGuidedOrigin && originMatch.Score < originDefBase.MatchScoreThreshold)

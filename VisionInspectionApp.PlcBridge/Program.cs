@@ -84,43 +84,50 @@ internal static class Program
 
     private static void StartParentProcessWatcher(int parentPid)
     {
+        try
+        {
+            var parent = Process.GetProcessById(parentPid);
+            parent.EnableRaisingEvents = true;
+            parent.Exited += (s, e) =>
+            {
+                Log($"Parent process PID {parentPid} exited. Terminating bridge immediately.");
+                Environment.Exit(0);
+            };
+        }
+        catch (Exception ex)
+        {
+            Log($"Could not attach Exited event to parent PID {parentPid}: {ex.Message}");
+        }
+
         Task.Run(async () =>
         {
             try
             {
-                int consecutiveFailures = 0;
                 while (!_cts.IsCancellationRequested)
                 {
-                    await Task.Delay(3000, _cts.Token).ConfigureAwait(false);
+                    await Task.Delay(1000, _cts.Token).ConfigureAwait(false);
 
                     bool isAlive = false;
                     try
                     {
-                        isAlive = Process.GetProcesses().Any(p => p.Id == parentPid);
+                        var p = Process.GetProcessById(parentPid);
+                        isAlive = !p.HasExited;
                     }
                     catch
                     {
-                        isAlive = true;
+                        isAlive = false;
                     }
 
                     if (!isAlive)
                     {
-                        consecutiveFailures++;
-                        if (consecutiveFailures >= 3)
-                        {
-                            Log($"Parent process PID {parentPid} no longer exists. Exiting bridge worker.");
-                            _cts.Cancel();
-                            break;
-                        }
-                    }
-                    else
-                    {
-                        consecutiveFailures = 0;
+                        Log($"Parent process PID {parentPid} no longer exists. Exiting bridge worker.");
+                        Environment.Exit(0);
                     }
                 }
             }
-            catch
+            catch (Exception ex)
             {
+                Log($"Parent watcher exception: {ex.Message}");
             }
         });
     }

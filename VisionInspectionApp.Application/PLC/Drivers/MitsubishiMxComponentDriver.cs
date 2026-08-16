@@ -1031,6 +1031,21 @@ public sealed class MitsubishiMxComponentDriver : IPlcDriver
                 {
                     try { p.Kill(); } catch { }
                 }
+
+                // Also terminate any stray dotnet.exe running PlcBridge
+                try
+                {
+                    var psi = new ProcessStartInfo
+                    {
+                        FileName = "powershell",
+                        Arguments = "-NoProfile -Command \"Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object { $_.CommandLine -like '*VisionInspectionApp.PlcBridge*' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }\"",
+                        CreateNoWindow = true,
+                        UseShellExecute = false
+                    };
+                    using var proc = Process.Start(psi);
+                    proc?.WaitForExit(1500);
+                }
+                catch { }
             }
             catch { }
         }

@@ -36,13 +36,17 @@
     <Resource Include="Assets\cms-vina-vision-system.ico" />
   </ItemGroup>
 
+  <Target Name="KillPlcBridgeBeforeBuild" BeforeTargets="PreBuildEvent">
+    <Exec Command="powershell -Command &quot;Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object { $_.CommandLine -like '*VisionInspectionApp.PlcBridge*' -or $_.Name -eq 'VisionInspectionApp.PlcBridge.exe' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }&quot;" ContinueOnError="true" />
+  </Target>
+
   <Target Name="CopyPlcBridgeFiles" AfterTargets="Build">
     <ItemGroup>
       <PlcBridgeFiles Include="..\VisionInspectionApp.PlcBridge\bin\x86\$(Configuration)\net8.0-windows\*.*" />
       <PlcBridgeFiles Include="..\VisionInspectionApp.PlcBridge\bin\$(Platform)\$(Configuration)\net8.0-windows\*.*" />
       <PlcBridgeFiles Include="..\VisionInspectionApp.PlcBridge\bin\$(Configuration)\net8.0-windows\*.*" />
     </ItemGroup>
-    <Copy SourceFiles="@(PlcBridgeFiles)" DestinationFolder="$(TargetDir)" SkipUnchangedFiles="false" />
+    <Copy SourceFiles="@(PlcBridgeFiles)" DestinationFolder="$(TargetDir)" SkipUnchangedFiles="true" ContinueOnError="true" />
   </Target>
 
 </Project>

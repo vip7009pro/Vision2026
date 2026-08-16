@@ -60,8 +60,16 @@ public sealed class OriginMatcher
             return new MatchResult(centerFallback, 0.0, 0.0, roiRect);
         }
 
-        // ROI-First: Extract Search ROI (0-copy header pointer)
-        using var roi = new Mat(image, roiRect);
+        // Safe Boundary Padding (16px) ensures Sobel 3x3 kernels have full support even if Search ROI is tight to Template
+        int pad = 16;
+        int padLeft = Math.Min(pad, roiRect.X);
+        int padTop = Math.Min(pad, roiRect.Y);
+        int padRight = Math.Min(pad, image.Width - (roiRect.X + roiRect.Width));
+        int padBottom = Math.Min(pad, image.Height - (roiRect.Y + roiRect.Height));
+        var paddedRect = new Rect(roiRect.X - padLeft, roiRect.Y - padTop, roiRect.Width + padLeft + padRight, roiRect.Height + padTop + padBottom);
+
+        // ROI-First: Extract Padded Search ROI (0-copy header pointer)
+        using var roi = new Mat(image, paddedRect);
         
         // Apply Preprocess locally on Search ROI if configured
         using var roiPre = (preprocess != null && (preprocess.UseGaussianBlur || preprocess.UseThreshold || preprocess.UseCanny || preprocess.UseMorphology || preprocess.IlluminationCorrection != 0))
@@ -78,19 +86,19 @@ public sealed class OriginMatcher
             var baseAngle2 = definition.TemplateRoi.Angle;
             double searchMin2 = baseAngle2 + minAngleDeg;
             double searchMax2 = baseAngle2 + maxAngleDeg;
-            return MvpShapeMatch2Engine.Match(roiGray.Mat, templateGray, definition, searchMin2, searchMax2, effectiveStep, roiRect);
+            return MvpShapeMatch2Engine.Match(roiGray.Mat, templateGray, definition, searchMin2, searchMax2, effectiveStep, paddedRect);
         }
 
         if (definition.OriginAlgorithm == OriginAlgorithm.FeatureBased)
         {
             try
             {
-                return MatchByFeatureBased(roiGray.Mat, templateGray, definition, preprocess, roiRect);
+                return MatchByFeatureBased(roiGray.Mat, templateGray, definition, preprocess, paddedRect);
             }
             catch (Exception ex)
             {
                 System.Diagnostics.Debug.WriteLine($"[OriginMatcher] FeatureBased match error: {ex.Message}, falling back to template match.");
-                return FallbackToTemplateMatch(roiGray.Mat, templateGray, definition, 0.0, preprocess, roiRect);
+                return FallbackToTemplateMatch(roiGray.Mat, templateGray, definition, 0.0, preprocess, paddedRect);
             }
         }
 
@@ -98,7 +106,7 @@ public sealed class OriginMatcher
         double searchMin = baseAngle + minAngleDeg;
         double searchMax = baseAngle + maxAngleDeg;
 
-        return MatchByPyramid(roiGray.Mat, templateGray, definition, preprocess, searchMin, searchMax, effectiveStep, roiRect);
+        return MatchByPyramid(roiGray.Mat, templateGray, definition, preprocess, searchMin, searchMax, effectiveStep, paddedRect);
     }
 
     public static Mat RotateTemplateCentered(Mat src, double angleDeg)

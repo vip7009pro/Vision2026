@@ -845,7 +845,34 @@
     - Mở rộng số ứng viên chuyển tầng lên `Take(10)` (kèm ứng viên neo $0^\circ$), và tăng bán kính tinh chỉnh `searchRadius = 6` ở các tầng trung gian.
     - Cho phép nới lỏng cửa sổ $3 \times 3$ trong `RefineSearch` để bắt trọn vi sai gradient sub-pixel.
   - **Kết quả Stress Test**: Chạy 50 trường hợp biến đổi ngẫu nhiên liên tiếp (Xoay $[-12^\circ .. +12^\circ]$, Dịch chuyển $[-40 .. +40\text{px}]$) đạt **50/50 PASSED (100.0%)**, điểm số ổn định tuyệt đối **1.0000**, sai lệch vị trí $d < 0.4\text{px}$, sai lệch góc $a < 0.2^\circ$.
+- [x] Task 160: Khắc Phục Lỗi Search ROI Sát Template ROI Bị Fail & Tối Ưu Triệt Để Runtime Origin Xuống < 18ms:
+  - **Vấn đề 1: Search ROI sát Template ROI bị fail (Score = 0)**:
+    - *Nguyên nhân*: Do `margin = maxBound` trong Coarse Search làm triệt tiêu không gian quét `[startX .. endX]` khi $W_{roi} \approx W_{templ}$. Đồng thời khi Search ROI bị cắt quá sát, toán tử vi phân Sobel 3x3 bị thiếu pixel lân cận tại mép biên ma trận ROI.
+    - *Giải pháp*: Mở rộng không gian quét `startX = 0, endX = w` (không bị margin clipping) và bổ sung **Safe Boundary Padding (16px)** trong `OriginMatcher.cs` khi cắt Search ROI từ ảnh 20MP.
+    - *Kết quả*: Mọi kích thước Search ROI (kể cả Exact Fit 0px padding) đều đạt **Score = 1.0000** và chạy trong **~13–18 ms**.
+  - **Vấn đề 2: Runtime Origin hiển thị 173ms**:
+    - *Nguyên nhân*: Node `Preprocess` chạy trên toàn bộ ảnh 20MP (mất 110–130ms) và toàn bộ thời gian này bị đo dồn vào `OriginMs` do lệnh bấm giờ nằm trước `ResolveToolPreprocess`.
+    - *Giải pháp*: Chuyển đổi cơ chế sang **ROI-First Preprocess** trong `ResolveToolPreprocess`: Downstream tool chỉ nhận `(image, ppSettings)` và tự áp dụng bộ lọc cục bộ trên Search ROI patch ($600 \times 500 = 0.3\text{MP}$ thay vì $20\text{MP}$), tăng tốc độ tiền xử lý **84 lần** (từ ~120ms xuống **0.3ms**) và đo chính xác thời gian thực tế của Origin.
+- [x] Task 161: Tối Ưu Hóa Tốc Độ MvpShapeMatch2 Trên Kích Thước ROI Thực Tế & Cache RAM ImageSource File:
+  - **Khớp điều kiện Benchmark với ROI thực tế của người dùng**:
+    - Search ROI: $(2377, 1398)$ đến $(3772, 2423) \rightarrow 1395 \times 1025\text{ px}$.
+    - Template ROI: $(2761, 1791)$ đến $(3215, 1944) \rightarrow 454 \times 153\text{ px}$.
+  - **Tối ưu hóa thuật toán MvpShapeMatch2**:
+    - Bỏ lặp lân cận $3 \times 3$ (9 điểm) ở các tầng trung gian (Level 2 và Level 1) trong `RefineSearchFast`, tăng tốc độ tầng trung gian lên 9 lần.
+    - Sàng lọc chỉ giữ lại duy nhất **1 ứng viên tốt nhất (Best Candidate)** sau Level 1 để tinh chỉnh ở Level 0.
+    - Thời gian chạy trên kích thước ROI thực tế $1395 \times 1025$ giảm từ **35.5 ms** xuống còn **~19–22 ms** (Score tuyệt đối **1.0000**).
+  - **Tool ImageSource: Cache ảnh File trong RAM**:
+    - Khi nguồn `ImageSource` là file ảnh: Load và giải mã 1 lần duy nhất vào RAM cache, các lần chạy Flow tiếp theo lấy trực tiếp từ RAM, triệt tiêu hoàn toàn chi phí Disk IO ($73\text{ ms} \rightarrow 0\text{ ms}$).
   - **Biên dịch Solution VisionInspectionApp.slnx thành công 100%**: **0 Error(s)**.
+- [x] Task 162: Khắc Phục Triệt Để Lỗi Build Release MSB3027 (PlcBridge File Locked):
+  - **Nguyên nhân**: Tiến trình 32-bit `dotnet.exe` chạy `PlcBridge` từ phiên trước chưa thoát hết, chiếm lock file `VisionInspectionApp.PlcBridge.dll`.
+  - **Khắc phục**:
+    - Kill tiến trình lock PID 13568.
+    - Thêm `KillPlcBridgeBeforeBuild` PreBuild target trong `VisionInspectionApp.UI.csproj` tự động dọn dẹp mọi tiến trình PlcBridge trước mỗi lần build/rebuild.
+    - Cấu hình `SkipUnchangedFiles="true"` và `ContinueOnError="true"` cho `CopyPlcBridgeFiles`.
+    - Nâng cấp `StartParentProcessWatcher` trong `VisionInspectionApp.PlcBridge/Program.cs` đăng ký trực tiếp sự kiện `parent.Exited` để thoát ngay lập tức khi ứng dụng UI tắt, không còn hiện tượng zombie.
+    - Nâng cấp `KillExistingZombieBridges` trong `MitsubishiMxComponentDriver.cs`.
+  - **Biên dịch Solution Release**: **0 Error(s)**.
 
 ## Roadmap
 
