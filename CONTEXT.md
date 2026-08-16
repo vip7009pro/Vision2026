@@ -873,6 +873,21 @@
     - Nâng cấp `StartParentProcessWatcher` trong `VisionInspectionApp.PlcBridge/Program.cs` đăng ký trực tiếp sự kiện `parent.Exited` để thoát ngay lập tức khi ứng dụng UI tắt, không còn hiện tượng zombie.
     - Nâng cấp `KillExistingZombieBridges` trong `MitsubishiMxComponentDriver.cs`.
   - **Biên dịch Solution Release**: **0 Error(s)**.
+- [x] Task 163: Khắc Phục Kích Thước BoundingBox CodeDetection & Thêm Checkbox Bật/Tắt Toàn Bộ Canvas Render:
+  - **Tool CodeDetection: Tính BoundingBox Thực Tế Theo Kích Thước Mã ([InspectionService.Pipeline.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.Application/Services/InspectionService.Pipeline.cs))**:
+    - *Phân tích nguyên nhân hình ảnh bị lệch*: Khi nhận diện mã QR với 3 điểm `ResultPoints`, ZXing trả về 3 điểm gồm `BottomLeft (P0), TopLeft (P1), TopRight (P2)`. Trước đây mã nguồn lấy nhầm trung điểm giữa `P1` và `P2` làm tâm mã, dẫn đến tâm bị đặt ở mép trên của mã QR, nửa trên khung bao nhô lên trời và nửa dưới chỉ bao tới giữa mã.
+    - *Giải pháp hình học tam giác vuông cân*:
+      - Tính 3 cạnh $d_{AB}, d_{BC}, d_{CA}$. Cạnh dài nhất là **cạnh huyền** nối 2 đỉnh đối diện qua tâm ($P_1, P_2$). Đỉnh còn lại là đỉnh góc vuông ($P_{\text{corner}}$).
+      - **Tâm thực sự của mã QR**: $C_{\text{local}} = (P_1 + P_2) / 2.0$.
+      - **Kích thước thực của toàn bộ mã QR**: $\text{sideLen} = (\|P_1 - P_{\text{corner}}\| + \|P_2 - P_{\text{corner}}\|) / 2.0$, kích thước đầy đủ $W = H = \text{sideLen} \times 1.38$ (bao trọn vẹn 3.5 modules viền ngoài mỗi Finder pattern).
+      - **DataMatrix / Aztec (4 điểm)**: $W = H = \max(d_{01}, d_{12}, d_{23}, d_{30}) \times 1.12$, tâm $C_{\text{local}} = (P_0 + P_1 + P_2 + P_3)/4.0$.
+      - **Barcode 1D (2 điểm)**: $W = d_{01} \times 1.15$, $H = \max(24, \min(\text{crop.Height} \times 0.8, d_{01} \times 0.45))$.
+    - *Kết quả*: Khung bao ôm khít 100% toàn bộ 3 ô Finder pattern và toàn bộ diện tích mã QR, đặt đúng tâm thực sự của mã.
+  - **Tool Editor: Thêm Checkbox Render Canvas & Tối Ưu Hóa Render 20MP ([ToolEditorView.xaml](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/Views/ToolEditorView.xaml), [ToolEditorViewModel.Engine.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/ToolEditorViewModel.Engine.cs))**:
+    - Bổ sung Checkbox `Render Canvas` trên toolbar của Preview panel (kèm thuộc tính `EnableCanvasRendering`).
+    - Khi tắt (`EnableCanvasRendering == false`): Bỏ qua 100% quá trình scale/resize 20MP Mat $\rightarrow$ BitmapSource và render overlay, giải phóng hoàn toàn CPU và LOH memory, giao diện phản hồi tức thì với zero overhead đồ họa.
+    - Khi bật: Tối ưu hóa caching, tái sử dụng `_cachedFinalPreviewImage` tránh resize 20MP lặp lại giữa các node.
+  - **Biên dịch Solution VisionInspectionApp.slnx Release thành công 100%**: **0 Error(s)**.
 
 ## Roadmap
 

@@ -3624,6 +3624,7 @@
                         </StackPanel>
 
                         <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                            <CheckBox Content="Render Canvas" IsChecked="{Binding EnableCanvasRendering, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,10,0" FontWeight="SemiBold" VerticalAlignment="Center" ToolTip="Bật/Tắt hoàn toàn việc chuyển đổi và vẽ ảnh + overlay lên Canvas (tối đa hóa hiệu năng cho ảnh 20MP)" />
                             <CheckBox Content="Show Results" IsChecked="{Binding ShowResultOverlay, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,10,0" VerticalAlignment="Center" />
                             <CheckBox Content="Show ROI" IsChecked="{Binding ShowRoisInSelectedPreview, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,10,0" VerticalAlignment="Center" />
                             <Button Content="🎯 Fit View" Height="24" Padding="8,0" Click="BtnFitImagePreview_Click" Background="{DynamicResource ButtonBackgroundBrush}" Foreground="{DynamicResource TextBrush}" BorderBrush="{DynamicResource DarkBorderBrush}" FontWeight="SemiBold" ToolTip="Tự động cân chỉnh (Auto Fit) ảnh vừa vặn toàn bộ với khung Preview" VerticalAlignment="Center" />

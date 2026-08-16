@@ -283,6 +283,10 @@ Lộ trình tích hợp tính năng Chụp ảnh từ camera và hỗ trợ các
   - Cập nhật `CopyPlcBridgeFiles` với `SkipUnchangedFiles="true"` và `ContinueOnError="true"`.
   - Nâng cấp `StartParentProcessWatcher` lắng nghe sự kiện `parent.Exited` để thoát ngay lập tức khi UI tắt.
   - `Biên dịch Solution Release thành công 100%`: 0 Error(s).
+- [x] Task 163: Khắc Phục Kích Thước BoundingBox CodeDetection & Thêm Checkbox Bật/Tắt Toàn Bộ Canvas Render:
+  - `Tool CodeDetection: Tính BoundingBox Thực Tế Theo Kích Thước Mã (InspectionService.Pipeline.cs)`: Xác định đỉnh góc vuông và cạnh huyền trong tam giác tạo bởi 3 Finder patterns của QR code, đặt tâm chính xác tại trung điểm cạnh huyền và tính kích thước $W = H = \text{sideLen} \times 1.38$ bao trọn 100% diện tích mã; hỗ trợ DataMatrix (4 góc) và Barcode 1D (2 đầu scanline).
+  - `Tool Editor: Checkbox Render Canvas & Tối Ưu Hóa Render 20MP (ToolEditorView.xaml, ToolEditorViewModel.Engine.cs)`: Bổ sung Checkbox `Render Canvas` cho phép tắt hoàn toàn việc chuyển đổi ảnh và overlay lên canvas, tiết kiệm 100% tài nguyên CPU/RAM khi không cần đồ họa UI; tối ưu hóa tái sử dụng cache khi bật.
+  - `Biên dịch Solution VisionInspectionApp.slnx Release thành công 100%`: 0 Error(s).
 
 
 

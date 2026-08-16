@@ -2425,10 +2425,91 @@ public partial class InspectionService
                         }
                         else foreach (var p in rawPts) ptsInCrop.Add(new Point2d(p.X, p.Y));
                     }
-                    Point2d localCenter = ptsInCrop.Count >= 3 ? new Point2d((ptsInCrop[0].X + ptsInCrop[2].X) / 2.0, (ptsInCrop[0].Y + ptsInCrop[2].Y) / 2.0) : (ptsInCrop.Count > 0 ? ptsInCrop[0] : new Point2d(crop.Width / 2.0, crop.Height / 2.0));
+
+                    Point2d localCenter;
+                    double codeW = 40.0;
+                    double codeH = 40.0;
+
+                    if (ptsInCrop.Count >= 4)
+                    {
+                        // 4 corners: DataMatrix, Aztec, or 4-point QR
+                        double d01 = Math.Sqrt(Math.Pow(ptsInCrop[1].X - ptsInCrop[0].X, 2) + Math.Pow(ptsInCrop[1].Y - ptsInCrop[0].Y, 2));
+                        double d12 = Math.Sqrt(Math.Pow(ptsInCrop[2].X - ptsInCrop[1].X, 2) + Math.Pow(ptsInCrop[2].Y - ptsInCrop[1].Y, 2));
+                        double d23 = Math.Sqrt(Math.Pow(ptsInCrop[3].X - ptsInCrop[2].X, 2) + Math.Pow(ptsInCrop[3].Y - ptsInCrop[2].Y, 2));
+                        double d30 = Math.Sqrt(Math.Pow(ptsInCrop[0].X - ptsInCrop[3].X, 2) + Math.Pow(ptsInCrop[0].Y - ptsInCrop[3].Y, 2));
+
+                        codeW = Math.Max(Math.Max(d01, d23), Math.Max(d12, d30)) * 1.12;
+                        codeH = codeW;
+                        localCenter = new Point2d((ptsInCrop[0].X + ptsInCrop[1].X + ptsInCrop[2].X + ptsInCrop[3].X) / 4.0,
+                                                  (ptsInCrop[0].Y + ptsInCrop[1].Y + ptsInCrop[2].Y + ptsInCrop[3].Y) / 4.0);
+                    }
+                    else if (ptsInCrop.Count == 3)
+                    {
+                        // 3 finder patterns of QR Code (A, B, C)
+                        var pA = ptsInCrop[0];
+                        var pB = ptsInCrop[1];
+                        var pC = ptsInCrop[2];
+
+                        double dAB = Math.Sqrt(Math.Pow(pB.X - pA.X, 2) + Math.Pow(pB.Y - pA.Y, 2));
+                        double dBC = Math.Sqrt(Math.Pow(pC.X - pB.X, 2) + Math.Pow(pC.Y - pB.Y, 2));
+                        double dCA = Math.Sqrt(Math.Pow(pA.X - pC.X, 2) + Math.Pow(pA.Y - pC.Y, 2));
+
+                        // Hypotenuse is the longest side connecting 2 opposite finders across center
+                        Point2d pCorner, pSide1, pSide2;
+                        double sideLen;
+
+                        if (dBC >= dAB && dBC >= dCA)
+                        {
+                            pCorner = pA; pSide1 = pB; pSide2 = pC;
+                            sideLen = (dAB + dCA) / 2.0;
+                        }
+                        else if (dCA >= dAB && dCA >= dBC)
+                        {
+                            pCorner = pB; pSide1 = pC; pSide2 = pA;
+                            sideLen = (dBC + dAB) / 2.0;
+                        }
+                        else
+                        {
+                            pCorner = pC; pSide1 = pA; pSide2 = pB;
+                            sideLen = (dCA + dBC) / 2.0;
+                        }
+
+                        // True center of the QR code is the midpoint of the hypotenuse
+                        localCenter = new Point2d((pSide1.X + pSide2.X) / 2.0, (pSide1.Y + pSide2.Y) / 2.0);
+
+                        // Total QR code width/height including 3.5 module margin outside finder patterns
+                        // Standard QR code side distance between finder centers is N - 7 modules.
+                        // Full width is N modules -> ratio is N / (N - 7) ≈ 1.38.
+                        double qrDim = Math.Max(30.0, sideLen * 1.38);
+                        codeW = qrDim;
+                        codeH = qrDim;
+                    }
+                    else if (ptsInCrop.Count == 2)
+                    {
+                        // 1D Barcode scanline endpoints (P0, P1)
+                        double d01 = Math.Sqrt(Math.Pow(ptsInCrop[1].X - ptsInCrop[0].X, 2) + Math.Pow(ptsInCrop[1].Y - ptsInCrop[0].Y, 2));
+                        codeW = Math.Max(40.0, d01 * 1.15);
+                        codeH = Math.Max(24.0, Math.Min(crop.Height * 0.8, d01 * 0.45));
+                        localCenter = new Point2d((ptsInCrop[0].X + ptsInCrop[1].X) / 2.0, (ptsInCrop[0].Y + ptsInCrop[1].Y) / 2.0);
+                    }
+                    else if (ptsInCrop.Count == 1)
+                    {
+                        codeW = Math.Max(40.0, crop.Width * 0.6);
+                        codeH = Math.Max(40.0, crop.Height * 0.6);
+                        localCenter = ptsInCrop[0];
+                    }
+                    else
+                    {
+                        codeW = Math.Max(40.0, crop.Width * 0.8);
+                        codeH = Math.Max(40.0, crop.Height * 0.8);
+                        localCenter = new Point2d(crop.Width / 2.0, crop.Height / 2.0);
+                    }
+
                     matchedMatToDispose?.Dispose();
+                    int wBox = (int)Math.Max(10, Math.Round(codeW));
+                    int hBox = (int)Math.Max(10, Math.Round(codeH));
                     var globalCenter = MapToGlobal(localCenter, crop.Width, crop.Height, centerFound, totalAngleDeg);
-                    var bb = new Rect((int)globalCenter.X - 20, (int)globalCenter.Y - 20, 40, 40);
+                    var bb = new Rect((int)Math.Round(globalCenter.X - wBox / 2.0), (int)Math.Round(globalCenter.Y - hBox / 2.0), wBox, hBox);
                     __swNode.Stop(); result.Timings.NodeTimings[cdt.Name] = (int)__swNode.ElapsedMilliseconds; return new CodeDetectionResult(cdt.Name, Found: true, Text: decoded.Text, BoundingBox: bb, Angle: totalAngleDeg);
                 }))
                 .ToArray();

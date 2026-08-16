@@ -1824,6 +1824,26 @@ namespace VisionInspectionApp.UI.ViewModels
         private bool _showRoisInFinalPreview = true;
         [ObservableProperty]
         private bool _showResultOverlay = true;
+        [ObservableProperty]
+        private bool _enableCanvasRendering = true;
+
+        partial void OnEnableCanvasRenderingChanged(bool value)
+        {
+            if (!value)
+            {
+                SelectedNodePreviewImage = null;
+                FinalPreviewImage = null;
+                _cachedFinalPreviewImage = null;
+                SelectedNodeOverlayItems = null;
+                FinalOverlayItems = null;
+            }
+            else
+            {
+                _finalPreviewDirty = true;
+                RefreshPreviews();
+            }
+            RaiseToolPropertyPanelsChanged();
+        }
 
         partial void OnShowResultOverlayChanged(bool value)
         {
@@ -2682,6 +2702,16 @@ namespace VisionInspectionApp.UI.ViewModels
     
         private void RefreshPreviews()
         {
+            if (!EnableCanvasRendering)
+            {
+                SelectedNodePreviewImage = null;
+                FinalPreviewImage = null;
+                _cachedFinalPreviewImage = null;
+                SelectedNodeOverlayItems = null;
+                FinalOverlayItems = null;
+                _finalPreviewDirty = false;
+                return;
+            }
             _finalPreviewDirty = true;
             RefreshFinalPreview();
             RefreshSelectedPreview();
@@ -2689,6 +2719,15 @@ namespace VisionInspectionApp.UI.ViewModels
     
         private void RefreshFinalPreview()
         {
+            if (!EnableCanvasRendering)
+            {
+                FinalPreviewImage = null;
+                _cachedFinalPreviewImage = null;
+                FinalOverlayItems = null;
+                _finalPreviewDirty = false;
+                return;
+            }
+
             if (!_finalPreviewDirty)
             {
                 return;
@@ -2755,6 +2794,13 @@ namespace VisionInspectionApp.UI.ViewModels
     
         private void RefreshSelectedPreview()
         {
+            if (!EnableCanvasRendering)
+            {
+                SelectedNodePreviewImage = null;
+                SelectedNodeOverlayItems = null;
+                return;
+            }
+
             var newSelectedNodeOverlayItems = new List<OverlayItem>();
             System.Diagnostics.Debug.WriteLine($"RefreshSelectedPreview: SelectedNode={SelectedNode?.Type}, RefName={SelectedNode?.RefName}");
             
@@ -2878,8 +2924,8 @@ namespace VisionInspectionApp.UI.ViewModels
             }
             else
             {
-                System.Diagnostics.Debug.WriteLine("PreprocessPreviewEnabled is false, using raw snap");
-                SelectedNodePreviewImage = snap.Empty() ? null : snap.ToBitmapSourceForDisplay();
+                System.Diagnostics.Debug.WriteLine("PreprocessPreviewEnabled is false, using cached or raw snap");
+                SelectedNodePreviewImage = _cachedFinalPreviewImage ?? (snap.Empty() ? null : snap.ToBitmapSourceForDisplay());
             }
     
             if (SelectedNode is not null && string.Equals(SelectedNode.Type, "BlobDetection", StringComparison.OrdinalIgnoreCase))
