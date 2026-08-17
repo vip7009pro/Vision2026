@@ -893,8 +893,24 @@
       - Đăng ký toàn bộ 32+ loại Tool hiện có (Origin, Points, Lines, Distances, LineToLine, PointToLine, SegmentLine, Angles, Circles, Diameters, Calipers, EdgePairs, EdgePairDetects, LinePairDetections, SurfaceCompares, ContourCompares, BlobDetections, ColorDiffs, Crop, ImgArithmetic, CreatePoint, CreateLine, CreateRect, CreateCircle, CodeDetections, ImageOutputs, DbResults, PlcReads, PlcWrites, PlcWaits, PlcTriggers, PlcBatchReads, PlcBatchWrites, Defects, v.v.).
     - **Mở rộng IntelliSense Auto-Complete ([IntellisenseBehavior.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/Controls/IntellisenseBehavior.cs))**:
       - Bổ sung danh sách thuộc tính gợi ý đầy đủ cho tất cả các loại Tool khi người dùng gõ `{` hoặc tên tool + dấu `.`.
-    - **Kiểm thử tự động & Biên dịch**:
-      - Xây dựng bộ test suite `VariableInjectionTest.cs` kiểm thử thành công 100% 30/30 test cases (Origin1.Angle, Point1.X_mm, Line1.Length, Dist1.Diff, Circle1.Diameter, DB1.Value, PLC1.Value, Global Status, Logic Expressions).
+  - **Cải Tiến Cơ Chế `Run Continuous` Phân Tầng Theo Loại Nguồn `ImageSource` (Timer-Driven vs Event-Driven Cho Camera Công Nghiệp Hikrobot 20MP GigE Hardware Trigger Line 0)**:
+    - **Phân Định Kiến Trúc 2 Pipeline Rõ Rệt**:
+      1. *Timer-Driven Continuous Pipeline* (Folder, File, USB Camera / Simulator): Duy trì Timer/Interval lặp tuần tự theo chu kỳ `FolderIntervalMs`, nạp ảnh và thực thi Flow an toàn.
+      2. *Event-Driven Industrial Camera Pipeline* (Camera Công Nghiệp Hikrobot / Basler / Cognex, hoặc `LineTrigger` từ PLC): Chuyển camera sang chế độ Grabbing liên tục và chờ tín hiệu Hardware Trigger Line 0 từ PLC. Tuyệt đối KHÔNG dùng Timer/Interval polling giả lập trigger.
+    - **Đệm Khung Hình Bounded Channel & Zero Memory Leak Cho Ảnh 20MP ($5120 \times 3840 = \sim 60\text{MB}$ RAM)**:
+      - Sử dụng `System.Threading.Channels.Channel<Mat>` với `BoundedChannelOptions(capacity: 2)` và `BoundedChannelFullMode.DropOldest`.
+      - Callback SDK Camera chỉ làm nhiệm vụ đẩy `frame.Clone()` vào Channel rồi thoát ngay lập tức, không làm tắc nghẽn luồng callback của SDK.
+      - Worker Task độc lập chạy ngầm đọc tuần tự từ Channel, thực thi `_inspectionService.Inspect(frameMat, ...)`, cập nhật thống kê tốc độ/Dashboard và gọi `frameMat.Dispose()` ngay lập tức trong khối `finally`.
+      - Tự động hoàn tất Channel và Dispose sạch mọi frame tồn dư khi bấm `STOP` hoặc huỷ luồng, loại bỏ triệt để rò rỉ bộ nhớ.
+    - **Sửa Lỗi Buffer Size Trong HikCameraDriver.cs**:
+      - Thay thế kích thước bộ đệm hardcode $1920 \times 1080 \times 4$ (~8.29MB) bằng việc truy vấn động `PayloadSize` thực tế từ MVS SDK (`MV_CC_GetIntValueEx_NET("PayloadSize", ...)`), fallback tối thiểu $5120 \times 3840 \times 4$ (~80MB), triệt tiêu hoàn toàn nguy cơ tràn bộ đệm hoặc crash khi kết nối camera 20MP GigE.
+      - Hỗ trợ giải mã đầy đủ các định dạng Pixel công nghiệp: `Mono8`, `BGR8_Packed`, `RGB8_Packed`, `BayerRG8`, `BayerGB8`, `BayerBG8`, `BayerGR8`.
+    - **Nâng Cấp Giao Diện Tool Editor & Thuộc Tính ImageSource**:
+      - Quét danh sách Camera đa hãng (Hikrobot GigE/USB3, USB DirectShow, Simulator) hiển thị trực quan trên ComboBox.
+      - Nút `🔁 Run Continuous` chuyển sang `⏹ STOP` (nền đỏ `#D32F2F`) với tooltip chi tiết ("Dừng chờ Camera Hardware Trigger (Line 0)").
+      - Bổ sung huy hiệu mô tả chế độ thời gian thực (`ImageSource_ContinuousModeDescription`) và ẩn/hiện ô `Interval (ms)` phù hợp.
+    - **Kiểm Thử Tự Động & Biên Dịch**:
+      - Bổ sung `ContinuousPipelineTest.cs` kiểm thử thành công 100% 4/4 test cases về Channel Bounded, Burst Producer vs Slow Consumer và Memory Cleanup khi Stop.
       - Biên dịch Solution thành công **0 Error(s)**.
 
 ## Roadmap

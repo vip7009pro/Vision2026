@@ -1120,6 +1120,11 @@
                                     </Grid>
                                 </Border>
 
+                                <!-- Continuous Mode Status Badge -->
+                                <Border Background="{DynamicResource ControlBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1" Padding="6,4">
+                                    <TextBlock Text="{Binding ImageSource_ContinuousModeDescription}" FontSize="10" Foreground="{DynamicResource AccentBrush}" TextWrapping="Wrap" />
+                                </Border>
+
                                 <!-- Line Trigger Settings -->
                                 <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1" Visibility="{Binding ImageSource_IsLineTrigger, Converter={StaticResource BoolToVis}}">
                                     <Grid>

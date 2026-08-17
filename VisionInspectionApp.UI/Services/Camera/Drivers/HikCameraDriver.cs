@@ -310,6 +310,25 @@ public sealed class HikCameraDriver : CameraDriverBase
         await Task.CompletedTask;
     }
 
+    private uint GetPayloadSize()
+    {
+        if (_camera != null && IsMvSdkAvailable())
+        {
+            try
+            {
+                var stValue = new MyCamera.MVCC_INTVALUE_EX();
+                int ret = _camera.MV_CC_GetIntValueEx_NET("PayloadSize", ref stValue);
+                if (ret == MyCamera.MV_OK && stValue.nCurValue > 0)
+                {
+                    return (uint)Math.Max(stValue.nCurValue, 5120 * 3840 * 4);
+                }
+            }
+            catch { }
+        }
+        // Fallback an toàn tối thiểu 80MB cho camera 20MP (5120x3840x4)
+        return 5120 * 3840 * 4;
+    }
+
     public override async Task<Mat?> GrabFrameAsync(int timeoutMs = 1000)
     {
         if (!_isOpened || _camera == null || !IsMvSdkAvailable()) return null;
@@ -319,7 +338,7 @@ public sealed class HikCameraDriver : CameraDriverBase
             IntPtr pData = IntPtr.Zero;
             try
             {
-                uint bufferSize = 1920 * 1080 * 4;
+                uint bufferSize = GetPayloadSize();
                 pData = Marshal.AllocHGlobal((int)bufferSize);
                 var frameInfo = new MyCamera.MV_FRAME_OUT_INFO_EX();
 
@@ -444,15 +463,15 @@ public sealed class HikCameraDriver : CameraDriverBase
 
     private void ContinuousGrabLoop(CancellationToken token)
     {
-        int bufLen = 1920 * 1080 * 4;
-        IntPtr pData = Marshal.AllocHGlobal(bufLen);
+        uint bufLen = GetPayloadSize();
+        IntPtr pData = Marshal.AllocHGlobal((int)bufLen);
         var frameInfo = new MyCamera.MV_FRAME_OUT_INFO_EX();
 
         while (!token.IsCancellationRequested && _isGrabbing)
         {
             try
             {
-                int ret = _camera != null ? _camera.MV_CC_GetOneFrameTimeout_NET(pData, (uint)bufLen, ref frameInfo, 100) : -1;
+                int ret = _camera != null ? _camera.MV_CC_GetOneFrameTimeout_NET(pData, bufLen, ref frameInfo, 100) : -1;
                 if (ret == MyCamera.MV_OK && frameInfo.nWidth > 0 && frameInfo.nHeight > 0)
                 {
                     using var rawMat = ConvertHikFrameToMat(pData, frameInfo);
@@ -463,7 +482,8 @@ public sealed class HikCameraDriver : CameraDriverBase
                 }
                 else
                 {
-                    Thread.Sleep(10);
+                    // Khi chờ Hardware Trigger, timeout 100ms là bình thường, nhường nhịp CPU ngắn
+                    Thread.Sleep(5);
                 }
             }
             catch (Exception ex)
@@ -481,23 +501,70 @@ public sealed class HikCameraDriver : CameraDriverBase
         int h = frameInfo.nHeight;
         if (w <= 0 || h <= 0) return new Mat();
 
-        using var rawMat = Mat.FromPixelData(h, w, MatType.CV_8UC1, pData);
-
-        if (frameInfo.enPixelType == MyCamera.MvGvspPixelType.PixelType_Gvsp_BGR8_Packed)
+        switch (frameInfo.enPixelType)
         {
-            using var bgrDirect = Mat.FromPixelData(h, w, MatType.CV_8UC3, pData);
-            return bgrDirect.Clone();
-        }
-        else if (frameInfo.enPixelType == MyCamera.MvGvspPixelType.PixelType_Gvsp_RGB8_Packed)
-        {
-            using var rgbMat = Mat.FromPixelData(h, w, MatType.CV_8UC3, pData);
-            var bgrMat = new Mat();
-            Cv2.CvtColor(rgbMat, bgrMat, ColorConversionCodes.RGB2BGR);
-            return bgrMat;
-        }
+            case MyCamera.MvGvspPixelType.PixelType_Gvsp_BGR8_Packed:
+            {
+                using var bgrDirect = Mat.FromPixelData(h, w, MatType.CV_8UC3, pData);
+                return bgrDirect.Clone();
+            }
 
-        var colorMat = new Mat();
-        Cv2.CvtColor(rawMat, colorMat, ColorConversionCodes.GRAY2BGR);
-        return colorMat;
+            case MyCamera.MvGvspPixelType.PixelType_Gvsp_RGB8_Packed:
+            {
+                using var rgbMat = Mat.FromPixelData(h, w, MatType.CV_8UC3, pData);
+                var bgrMat = new Mat();
+                Cv2.CvtColor(rgbMat, bgrMat, ColorConversionCodes.RGB2BGR);
+                return bgrMat;
+            }
+
+            case MyCamera.MvGvspPixelType.PixelType_Gvsp_Mono8:
+            {
+                using var rawMono = Mat.FromPixelData(h, w, MatType.CV_8UC1, pData);
+                var colorMat = new Mat();
+                Cv2.CvtColor(rawMono, colorMat, ColorConversionCodes.GRAY2BGR);
+                return colorMat;
+            }
+
+            case MyCamera.MvGvspPixelType.PixelType_Gvsp_BayerRG8:
+            {
+                using var bayerMat = Mat.FromPixelData(h, w, MatType.CV_8UC1, pData);
+                var bgrMat = new Mat();
+                Cv2.CvtColor(bayerMat, bgrMat, ColorConversionCodes.BayerRG2BGR);
+                return bgrMat;
+            }
+
+            case MyCamera.MvGvspPixelType.PixelType_Gvsp_BayerGB8:
+            {
+                using var bayerMat = Mat.FromPixelData(h, w, MatType.CV_8UC1, pData);
+                var bgrMat = new Mat();
+                Cv2.CvtColor(bayerMat, bgrMat, ColorConversionCodes.BayerGB2BGR);
+                return bgrMat;
+            }
+
+            case MyCamera.MvGvspPixelType.PixelType_Gvsp_BayerBG8:
+            {
+                using var bayerMat = Mat.FromPixelData(h, w, MatType.CV_8UC1, pData);
+                var bgrMat = new Mat();
+                Cv2.CvtColor(bayerMat, bgrMat, ColorConversionCodes.BayerBG2BGR);
+                return bgrMat;
+            }
+
+            case MyCamera.MvGvspPixelType.PixelType_Gvsp_BayerGR8:
+            {
+                using var bayerMat = Mat.FromPixelData(h, w, MatType.CV_8UC1, pData);
+                var bgrMat = new Mat();
+                Cv2.CvtColor(bayerMat, bgrMat, ColorConversionCodes.BayerGR2BGR);
+                return bgrMat;
+            }
+
+            default:
+            {
+                // Mặc định xem như Mono8 và chuyển sang BGR
+                using var rawMat = Mat.FromPixelData(h, w, MatType.CV_8UC1, pData);
+                var colorMat = new Mat();
+                Cv2.CvtColor(rawMat, colorMat, ColorConversionCodes.GRAY2BGR);
+                return colorMat;
+            }
+        }
     }
 }

@@ -18,6 +18,7 @@ using VisionInspectionApp.Application;
 using VisionInspectionApp.Models;
 using VisionInspectionApp.UI.Controls;
 using VisionInspectionApp.UI.Services;
+using VisionInspectionApp.UI.Services.Camera;
 using VisionInspectionApp.VisionEngine;
 namespace VisionInspectionApp.UI.ViewModels
 {
@@ -193,48 +194,70 @@ namespace VisionInspectionApp.UI.ViewModels
         }
 
         /// <summary>
-        /// Populates AvailableCameraItems using DirectShow first, then OpenCV fallback,
-        /// plus static fallback ports 0-4 (same pattern as LiveCameraView).
+        /// Populates AvailableCameraItems using CameraDriverFactory.ScanAllDevices (Hikrobot GigE/USB3, Basler, USB Webcam DirectShow, Simulator).
         /// </summary>
         private void RefreshAvailableCameraItems()
         {
             AvailableCameraItems.Clear();
 
-            AvailableCameraItems.Add(new ImageSourceCameraItem
-            {
-                Index = CameraService.SimulatorCameraIndex,
-                DisplayName = "📷 Camera Giả Lập (Simulator)"
-            });
-
             try
             {
-                var dsCameras = DirectShowDeviceEnumerator.GetDevices();
-                for (int i = 0; i < dsCameras.Count; i++)
+                var allDevices = CameraDriverFactory.ScanAllDevices();
+                foreach (var dev in allDevices)
                 {
                     AvailableCameraItems.Add(new ImageSourceCameraItem
                     {
-                        Index = i,
-                        DisplayName = $"Camera {i}: {dsCameras[i]}"
+                        Index = dev.Index,
+                        DisplayName = dev.DisplayName
                     });
                 }
             }
             catch
             {
-            }
-
-            for (int i = 0; i < 5; i++)
-            {
-                if (!AvailableCameraItems.Any(c => c.Index == i))
+                // Fallback nếu có lỗi
+                AvailableCameraItems.Add(new ImageSourceCameraItem
                 {
-                    AvailableCameraItems.Add(new ImageSourceCameraItem
-                    {
-                        Index = i,
-                        DisplayName = $"Camera Port {i} (Fallback)"
-                    });
-                }
+                    Index = CameraService.SimulatorCameraIndex,
+                    DisplayName = "📷 Camera Giả Lập (Simulator)"
+                });
             }
 
             OnPropertyChanged(nameof(SelectedCameraItem));
+            OnPropertyChanged(nameof(ImageSource_IsIndustrialCamera));
+            OnPropertyChanged(nameof(ImageSource_IsTimerDriven));
+            OnPropertyChanged(nameof(ImageSource_ContinuousModeDescription));
+        }
+
+        public bool ImageSource_IsIndustrialCamera
+        {
+            get
+            {
+                var def = SelectedImageSourceDef();
+                if (def == null) return false;
+                if (def.SourceType != ImageSourceType.Camera) return false;
+                if (def.TriggerMode == ImageSourceTriggerMode.LineTrigger) return true;
+                var item = SelectedCameraItem;
+                if (item != null && item.DisplayName.Contains("Hikrobot", StringComparison.OrdinalIgnoreCase)) return true;
+                return false;
+            }
+        }
+
+        public bool ImageSource_IsTimerDriven => !ImageSource_IsIndustrialCamera && ImageSource_TriggerMode != ImageSourceTriggerMode.PlcTrigger;
+
+        public string ImageSource_ContinuousModeDescription
+        {
+            get
+            {
+                if (ImageSource_IsIndustrialCamera)
+                {
+                    return "⚡ Chế độ: Event-Driven (Chờ tín hiệu Hardware Trigger / PLC Line 0 từ Camera Hikrobot GigE). Không dùng Interval.";
+                }
+                if (ImageSource_IsPlcTrigger)
+                {
+                    return "⚡ Chế độ: PLC Trigger (Lắng nghe sự kiện đổi trạng thái PLC Tag).";
+                }
+                return "⏱ Chế độ: Timer-Driven (Chạy tuần tự theo chu kỳ Interval đã định).";
+            }
         }
 
         public ImageSourceType ImageSource_SourceType
@@ -252,6 +275,9 @@ namespace VisionInspectionApp.UI.ViewModels
                 OnPropertyChanged(nameof(ImageSource_IsFile));
                 OnPropertyChanged(nameof(ImageSource_IsFolder));
                 OnPropertyChanged(nameof(ImageSource_IsCamera));
+                OnPropertyChanged(nameof(ImageSource_IsIndustrialCamera));
+                OnPropertyChanged(nameof(ImageSource_IsTimerDriven));
+                OnPropertyChanged(nameof(ImageSource_ContinuousModeDescription));
                 // Refresh camera list when switching to Camera source
                 if (value == ImageSourceType.Camera)
                     RefreshAvailableCameraItems();
@@ -279,6 +305,9 @@ namespace VisionInspectionApp.UI.ViewModels
                 OnPropertyChanged(nameof(ImageSource_IsSoftTrigger));
                 OnPropertyChanged(nameof(ImageSource_IsLineTrigger));
                 OnPropertyChanged(nameof(ImageSource_IsPlcTrigger));
+                OnPropertyChanged(nameof(ImageSource_IsIndustrialCamera));
+                OnPropertyChanged(nameof(ImageSource_IsTimerDriven));
+                OnPropertyChanged(nameof(ImageSource_ContinuousModeDescription));
                 RaiseToolPropertyPanelsChanged();
                 RequestAutoSave();
             }

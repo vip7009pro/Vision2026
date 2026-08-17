@@ -9,6 +9,7 @@ using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
+using System.Threading.Channels;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.Win32;
@@ -19,6 +20,7 @@ using VisionInspectionApp.Application.Services;
 using VisionInspectionApp.Models;
 using VisionInspectionApp.UI.Controls;
 using VisionInspectionApp.UI.Services;
+using VisionInspectionApp.UI.Services.Camera;
 using VisionInspectionApp.VisionEngine;
 namespace VisionInspectionApp.UI.ViewModels
 {
@@ -2031,6 +2033,9 @@ namespace VisionInspectionApp.UI.ViewModels
             : new SolidColorBrush(Color.FromRgb(16, 124, 16));
         public string RunFlowButtonToolTip => IsRunningFolderFlow ? "Dừng chạy luồng thư mục" : "Run Flow";
 
+        private Channel<Mat>? _industrialCameraFrameChannel;
+        private EventHandler<Mat>? _continuousFrameHandler;
+
         public string RunContinuousButtonIcon => IsRunningFolderFlow ? "⏹" : "🔁";
         public string RunContinuousButtonText => IsRunningFolderFlow ? "STOP" : "Run Continuous";
         public Brush RunContinuousButtonBackgroundBrush => IsRunningFolderFlow
@@ -2048,10 +2053,28 @@ namespace VisionInspectionApp.UI.ViewModels
                     {
                         return "Dừng chờ PLC Trigger";
                     }
+                    if (def != null && IsIndustrialCameraSource(def))
+                    {
+                        return "Dừng chờ Camera Hardware Trigger (Line 0)";
+                    }
                     return "Dừng chạy luồng liên tục";
                 }
                 return "Chạy liên tục qua Camera / Thư mục / PLC Trigger";
             }
+        }
+
+        private bool IsIndustrialCameraSource(ImageSourceDefinition? def)
+        {
+            if (def == null) return false;
+            if (def.TriggerMode == ImageSourceTriggerMode.LineTrigger) return true;
+
+            var selectedCam = AvailableCameraItems.FirstOrDefault(c => c.Index == def.CameraIndex);
+            if (selectedCam != null && selectedCam.DisplayName.Contains("Hikrobot", StringComparison.OrdinalIgnoreCase)) return true;
+            if (_cameraService.ActiveDeviceInfo?.Vendor == CameraVendor.Hikrobot ||
+                _cameraService.ActiveDeviceInfo?.Vendor == CameraVendor.Basler ||
+                _cameraService.ActiveDeviceInfo?.Vendor == CameraVendor.Cognex) return true;
+
+            return false;
         }
 
         private void UpdateRunFlowButtonProperties()
@@ -2070,7 +2093,7 @@ namespace VisionInspectionApp.UI.ViewModels
         {
             if (IsRunningFolderFlow)
             {
-                StopFolderFlow();
+                StopContinuousFlow();
             }
 
             var imageSourceNode = Nodes.FirstOrDefault(n => string.Equals(n.Type, "ImageSource", StringComparison.OrdinalIgnoreCase));
@@ -2121,7 +2144,7 @@ namespace VisionInspectionApp.UI.ViewModels
         {
             if (IsRunningFolderFlow)
             {
-                StopFolderFlow();
+                StopContinuousFlow();
                 return;
             }
 
@@ -2163,9 +2186,21 @@ namespace VisionInspectionApp.UI.ViewModels
                         StatusBarText = $"Đang chạy liên tục chế độ PLC Trigger ({imgSourceDef.PlcTriggerPlcId}.{imgSourceDef.PlcTriggerTagName})...";
                         return;
                     }
-                    else if (imgSourceDef.SourceType == ImageSourceType.Camera || imgSourceDef.SourceType == ImageSourceType.File)
+                    else if (imgSourceDef.SourceType == ImageSourceType.Camera)
                     {
-                        StartCameraContinuousFlow(imgSourceDef);
+                        if (IsIndustrialCameraSource(imgSourceDef))
+                        {
+                            _ = StartIndustrialCameraContinuousFlow(imgSourceDef);
+                        }
+                        else
+                        {
+                            StartUsbCameraContinuousFlow(imgSourceDef);
+                        }
+                        return;
+                    }
+                    else if (imgSourceDef.SourceType == ImageSourceType.File)
+                    {
+                        StartFileContinuousFlow(imgSourceDef);
                         return;
                     }
                 }
@@ -2174,9 +2209,175 @@ namespace VisionInspectionApp.UI.ViewModels
             RunFlow();
         }
 
-        private void StartCameraContinuousFlow(ImageSourceDefinition sourceDef)
+        private async Task StartIndustrialCameraContinuousFlow(ImageSourceDefinition sourceDef)
         {
-            _folderFlowCts?.Cancel();
+            StopContinuousFlow();
+
+            _folderFlowCts = new CancellationTokenSource();
+            var token = _folderFlowCts.Token;
+            IsRunningFolderFlow = true;
+
+            StatusBarText = "Đang chạy liên tục: Chờ Hardware Trigger từ Camera Hikrobot (Line 0 / PLC)...";
+
+            // 1. Cấu hình Camera sang Hardware/Line Trigger nếu ImageSource là LineTrigger
+            if (sourceDef.TriggerMode == ImageSourceTriggerMode.LineTrigger)
+            {
+                var p = _cameraService.CurrentParameters.Clone();
+                p.TriggerMode = CameraTriggerMode.On;
+                p.TriggerSource = CameraTriggerSource.Line0;
+                await _cameraService.ApplyParametersAsync(p);
+            }
+
+            // 2. Khởi động Camera stream/grabbing nếu chưa chạy
+            if (!_cameraService.IsRunning)
+            {
+                var allDevices = CameraDriverFactory.ScanAllDevices();
+                var targetDevice = allDevices.FirstOrDefault(d => d.Index == sourceDef.CameraIndex && d.Vendor == CameraVendor.Hikrobot)
+                                   ?? allDevices.FirstOrDefault(d => d.Vendor == CameraVendor.Hikrobot)
+                                   ?? new CameraDeviceInfo { Vendor = CameraVendor.Hikrobot, Index = sourceDef.CameraIndex };
+                await _cameraService.StartDriverCameraAsync(targetDevice, _cameraService.CurrentParameters);
+            }
+
+            // 3. Khởi tạo Bounded Channel với capacity = 2, DropOldest (tránh tràn RAM 20MP)
+            var channelOptions = new BoundedChannelOptions(2)
+            {
+                FullMode = BoundedChannelFullMode.DropOldest,
+                SingleReader = true,
+                SingleWriter = false
+            };
+            _industrialCameraFrameChannel = Channel.CreateBounded<Mat>(channelOptions);
+            var channel = _industrialCameraFrameChannel;
+
+            // 4. Đăng ký nhận frame từ CameraService
+            _continuousFrameHandler = (sender, frame) =>
+            {
+                if (token.IsCancellationRequested || frame == null || frame.IsDisposed || frame.Empty())
+                    return;
+
+                var frameClone = frame.Clone();
+                if (!channel.Writer.TryWrite(frameClone))
+                {
+                    frameClone.Dispose();
+                }
+            };
+            _cameraService.FrameCaptured += _continuousFrameHandler;
+
+            // 5. Worker Task chạy ngầm xử lý frame tuần tự
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    while (await channel.Reader.WaitToReadAsync(token))
+                    {
+                        while (channel.Reader.TryRead(out var frameMat))
+                        {
+                            if (token.IsCancellationRequested)
+                            {
+                                frameMat.Dispose();
+                                break;
+                            }
+
+                            try
+                            {
+                                await ProcessContinuousFrameAsync(frameMat, sourceDef.Name);
+                            }
+                            catch (Exception ex)
+                            {
+                                System.Diagnostics.Debug.WriteLine($"[Continuous Worker] Error processing frame: {ex.Message}");
+                            }
+                            finally
+                            {
+                                frameMat.Dispose();
+                            }
+                        }
+                    }
+                }
+                catch (OperationCanceledException) { }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"[Continuous Worker] Exception: {ex.Message}");
+                }
+                finally
+                {
+                    while (channel.Reader.TryRead(out var leftover))
+                    {
+                        leftover.Dispose();
+                    }
+                    await System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
+                    {
+                        IsRunningFolderFlow = false;
+                    });
+                }
+            }, token);
+        }
+
+        private async Task ProcessContinuousFrameAsync(Mat frameMat, string sourceNodeName)
+        {
+            if (frameMat == null || frameMat.IsDisposed || frameMat.Empty() || _config == null)
+                return;
+
+            _inspectionService.ResetTracking();
+            var __sw = System.Diagnostics.Stopwatch.StartNew();
+
+            SetImageSourceCache(sourceNodeName, "camera", frameMat);
+            _sharedImage.SetImage(frameMat);
+
+            SyncToolGraphToConfig();
+            EnsureTemplatePathsAbsolute(_config);
+
+            var configCopy = _config;
+            InspectionResult? inspectionResult = null;
+            try
+            {
+                _lastRunError = null;
+                inspectionResult = await Task.Run(() => _inspectionService.Inspect(frameMat, configCopy, _dbManagerService));
+                __sw.Stop();
+
+                if (inspectionResult != null)
+                {
+                    inspectionResult.Timings.NodeTimings[sourceNodeName] = (int)__sw.ElapsedMilliseconds;
+                    if (configCopy.PreprocessNodes != null)
+                    {
+                        foreach (var preNode in configCopy.PreprocessNodes)
+                        {
+                            if (!string.IsNullOrWhiteSpace(preNode.Name))
+                            {
+                                inspectionResult.Timings.NodeTimings[preNode.Name] = 0;
+                            }
+                        }
+                    }
+
+                    if (configCopy.ResultTransfers != null && configCopy.ResultTransfers.Count > 0)
+                    {
+                        _ = Application.PLC.Services.PlcResultTransferRunner.ExecuteResultTransfersAsync(configCopy, inspectionResult, _plcManagerService);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                inspectionResult = null;
+                _lastRunError = "Lỗi khi chạy Flow: " + ex.Message;
+            }
+
+            _lastRun = inspectionResult;
+            LastResult = _lastRun;
+            ProcessedImageCount++;
+            UpdateContinuousStats();
+
+            await System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
+            {
+                UpdateNodeExecutionTimes();
+                RefreshInspectionDashboard(_lastRun);
+                RefreshPreviews();
+                RaiseToolPropertyPanelsChanged();
+                OnPropertyChanged(nameof(Blob_LastRunCount));
+            });
+        }
+
+        private void StartUsbCameraContinuousFlow(ImageSourceDefinition sourceDef)
+        {
+            StopContinuousFlow();
+
             _folderFlowCts = new CancellationTokenSource();
             IsRunningFolderFlow = true;
 
@@ -2207,7 +2408,59 @@ namespace VisionInspectionApp.UI.ViewModels
                 }
                 catch (Exception ex)
                 {
-                    System.Diagnostics.Debug.WriteLine($"StartCameraContinuousFlow exception: {ex.Message}");
+                    System.Diagnostics.Debug.WriteLine($"StartUsbCameraContinuousFlow exception: {ex.Message}");
+                }
+                finally
+                {
+                    await System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
+                    {
+                        IsRunningFolderFlow = false;
+                    });
+                }
+            }, token);
+        }
+
+        private void StartFileContinuousFlow(ImageSourceDefinition sourceDef)
+        {
+            StopContinuousFlow();
+
+            _folderFlowCts = new CancellationTokenSource();
+            IsRunningFolderFlow = true;
+
+            var token = _folderFlowCts.Token;
+            Task.Run(async () =>
+            {
+                int interval = Math.Max(50, sourceDef.FolderIntervalMs);
+
+                try
+                {
+                    while (!token.IsCancellationRequested)
+                    {
+                        await System.Windows.Application.Current.Dispatcher.InvokeAsync(async () =>
+                        {
+                            if (!string.IsNullOrWhiteSpace(sourceDef.FilePath) && File.Exists(sourceDef.FilePath))
+                            {
+                                await RunSingleFlowFromImageFileAsync(sourceDef.FilePath, sourceDef.Name);
+                            }
+                            else
+                            {
+                                await RunFlowAsync();
+                            }
+                        });
+
+                        try
+                        {
+                            await Task.Delay(interval, token);
+                        }
+                        catch (TaskCanceledException)
+                        {
+                            break;
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"StartFileContinuousFlow exception: {ex.Message}");
                 }
                 finally
                 {
@@ -2323,7 +2576,8 @@ namespace VisionInspectionApp.UI.ViewModels
 
         private void StartFolderFlow(ImageSourceDefinition sourceDef, string[] imageFiles)
         {
-            _folderFlowCts?.Cancel();
+            StopContinuousFlow();
+
             _folderFlowCts = new CancellationTokenSource();
             IsRunningFolderFlow = true;
 
@@ -2385,8 +2639,24 @@ namespace VisionInspectionApp.UI.ViewModels
             }, token);
         }
 
-        private void StopFolderFlow()
+        private void StopContinuousFlow()
         {
+            if (_continuousFrameHandler != null)
+            {
+                _cameraService.FrameCaptured -= _continuousFrameHandler;
+                _continuousFrameHandler = null;
+            }
+
+            if (_industrialCameraFrameChannel != null)
+            {
+                _industrialCameraFrameChannel.Writer.TryComplete();
+                while (_industrialCameraFrameChannel.Reader.TryRead(out var leftover))
+                {
+                    leftover.Dispose();
+                }
+                _industrialCameraFrameChannel = null;
+            }
+
             _folderFlowCts?.Cancel();
             IsRunningFolderFlow = false;
             _continuousStopwatch.Reset();
@@ -2394,6 +2664,8 @@ namespace VisionInspectionApp.UI.ViewModels
             ProcessedImageCount = 0;
             UpdateContinuousStats();
         }
+
+        private void StopFolderFlow() => StopContinuousFlow();
 
         private async Task RunSingleFlowFromImageFileAsync(string filePath, string sourceNodeName)
         {
