@@ -883,8 +883,19 @@
   - **Tool Editor: Thêm Checkbox Render Canvas & Tối Ưu Hóa Render 20MP ([ToolEditorView.xaml](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/Views/ToolEditorView.xaml), [ToolEditorViewModel.Engine.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/ToolEditorViewModel.Engine.cs))**:
     - Bổ sung Checkbox `Render Canvas` trên toolbar của Preview panel (kèm thuộc tính `EnableCanvasRendering`).
     - Khi tắt (`EnableCanvasRendering == false`): Bỏ qua 100% quá trình scale/resize 20MP Mat $\rightarrow$ BitmapSource và render overlay, giải phóng hoàn toàn CPU và LOH memory, giao diện phản hồi tức thì với zero overhead đồ họa.
-    - Khi bật: Tối ưu hóa caching, tái sử dụng `_cachedFinalPreviewImage` tránh resize 20MP lặp lại giữa các node.
-  - **Biên dịch Solution VisionInspectionApp.slnx Release thành công 100%**: **0 Error(s)**.
+  - **Nâng Cấp Toàn Diện Cơ Chế Inject Thuộc Tính Tool Vào Text & Biểu Thức Logic (Universal Dynamic Variable Registry)**:
+    - **Khắc phục triệt để lỗi không inject được `{Origin1.Angle}`**: Đã bổ sung cơ chế Multi-Alias (`Origin1`, `Origin`, `Origin_1`, `Pattern1`, `P1`, `CIR1`, `CAL1`, `LPD1`, `EP1`, `EPD1`, `SC1`, `CC1`, `CD1`, `CP1`, `CL1`, `CR1`, `CCIR1`, `DB1`, `PLC1`, v.v.).
+    - **Kiến trúc Module Hóa `ConditionEvaluator.VariableRegistry.cs`**:
+      - Mở rộng lớp `Variable` hỗ trợ đa tầng: `IDictionary<string, object?> Members` và `object? RawObject`.
+      - Cơ chế **Universal Dynamic Reflection Fallback**: Tự động quét toàn bộ public property của `InspectionResult` và bất kỳ tool/class mới nào được thêm vào trong tương lai mà không cần viết code thủ công.
+      - **EvaluateTextTemplate Thông Minh 4 Tầng**: (1) Direct Exact Lookup $\rightarrow$ (2) Dot-Notation Nested Property $\rightarrow$ (3) Fuzzy Alias Tra Cứu Số Thứ Tự $\rightarrow$ (4) Reflection Property Scanner.
+      - Hỗ trợ đầy đủ các bộ định dạng số chuyên sâu (`{Origin1.Angle:F1}`, `{Origin1.Score:P1}`, `{Dist1.Diff:F2}`, `{X_mm}`, `{X_px}`, v.v.).
+      - Đăng ký toàn bộ 32+ loại Tool hiện có (Origin, Points, Lines, Distances, LineToLine, PointToLine, SegmentLine, Angles, Circles, Diameters, Calipers, EdgePairs, EdgePairDetects, LinePairDetections, SurfaceCompares, ContourCompares, BlobDetections, ColorDiffs, Crop, ImgArithmetic, CreatePoint, CreateLine, CreateRect, CreateCircle, CodeDetections, ImageOutputs, DbResults, PlcReads, PlcWrites, PlcWaits, PlcTriggers, PlcBatchReads, PlcBatchWrites, Defects, v.v.).
+    - **Mở rộng IntelliSense Auto-Complete ([IntellisenseBehavior.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/Controls/IntellisenseBehavior.cs))**:
+      - Bổ sung danh sách thuộc tính gợi ý đầy đủ cho tất cả các loại Tool khi người dùng gõ `{` hoặc tên tool + dấu `.`.
+    - **Kiểm thử tự động & Biên dịch**:
+      - Xây dựng bộ test suite `VariableInjectionTest.cs` kiểm thử thành công 100% 30/30 test cases (Origin1.Angle, Point1.X_mm, Line1.Length, Dist1.Diff, Circle1.Diameter, DB1.Value, PLC1.Value, Global Status, Logic Expressions).
+      - Biên dịch Solution thành công **0 Error(s)**.
 
 ## Roadmap
 

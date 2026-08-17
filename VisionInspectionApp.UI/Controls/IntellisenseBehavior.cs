@@ -458,35 +458,76 @@ public static class IntellisenseBehavior
             else if (toolToken.StartsWith("Line", StringComparison.OrdinalIgnoreCase)) type = "Line";
             else if (toolToken.StartsWith("Code", StringComparison.OrdinalIgnoreCase)) type = "CodeDetection";
             else if (toolToken.StartsWith("Blob", StringComparison.OrdinalIgnoreCase)) type = "BlobDetection";
-            else if (toolToken.StartsWith("Circle", StringComparison.OrdinalIgnoreCase)) type = "Point";
+            else if (toolToken.StartsWith("Circle", StringComparison.OrdinalIgnoreCase)) type = "CircleFinder";
+            else if (toolToken.StartsWith("CIR", StringComparison.OrdinalIgnoreCase)) type = "CircleFinder";
+            else if (toolToken.StartsWith("CAL", StringComparison.OrdinalIgnoreCase)) type = "Caliper";
+            else if (toolToken.StartsWith("EPD", StringComparison.OrdinalIgnoreCase)) type = "EdgePairDetect";
+            else if (toolToken.StartsWith("EP", StringComparison.OrdinalIgnoreCase)) type = "EdgePair";
+            else if (toolToken.StartsWith("LPD", StringComparison.OrdinalIgnoreCase)) type = "LinePairDetection";
+            else if (toolToken.StartsWith("SC", StringComparison.OrdinalIgnoreCase)) type = "SurfaceCompare";
+            else if (toolToken.StartsWith("CC", StringComparison.OrdinalIgnoreCase)) type = "ContourCompare";
+            else if (toolToken.StartsWith("CD", StringComparison.OrdinalIgnoreCase)) type = "ColorDiff";
+            else if (toolToken.StartsWith("CP", StringComparison.OrdinalIgnoreCase)) type = "CreatePoint";
+            else if (toolToken.StartsWith("CL", StringComparison.OrdinalIgnoreCase)) type = "CreateLine";
+            else if (toolToken.StartsWith("CR", StringComparison.OrdinalIgnoreCase)) type = "CreateRect";
+            else if (toolToken.StartsWith("CCIR", StringComparison.OrdinalIgnoreCase)) type = "CreateCircle";
+            else if (toolToken.StartsWith("PLC", StringComparison.OrdinalIgnoreCase)) type = "PlcRead";
+            else if (toolToken.StartsWith("DB", StringComparison.OrdinalIgnoreCase)) type = "DbNode";
         }
 
-        if (string.Equals(type, "Origin", StringComparison.OrdinalIgnoreCase) || string.Equals(type, "Point", StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(type, "Origin", StringComparison.OrdinalIgnoreCase))
         {
             return new List<IntellisenseItem>
             {
-                new("X", "X", "Tọa độ X (mm nếu calib / px)", "⚡", false),
-                new("Y", "Y", "Tọa độ Y (mm nếu calib / px)", "⚡", false),
-                new("AngleDeg", "AngleDeg", "Góc xoay (độ)", "⚡", false),
-                new("Angle", "Angle", "Góc xoay (độ)", "⚡", false),
-                new("Pass", "Pass", "Kết quả OK/NG (bool: true/false)", "⚡", false),
-                new("Score", "Score", "Điểm số khớp Pattern/Origin (0.0 -> 1.0)", "⚡", false),
-                new("X_mm", "X_mm", "Tọa độ X (mm)", "⚡", false),
-                new("Y_mm", "Y_mm", "Tọa độ Y (mm)", "⚡", false),
-                new("X_px", "X_px", "Tọa độ X (pixel)", "⚡", false),
-                new("Y_px", "Y_px", "Tọa độ Y (pixel)", "⚡", false)
+                new("Angle", "Angle", "Góc xoay Origin (độ)", "⚡", false),
+                new("AngleDeg", "AngleDeg", "Góc xoay Origin (độ)", "⚡", false),
+                new("Score", "Score", "Điểm số khớp mẫu (0.0 -> 1.0)", "⚡", false),
+                new("Threshold", "Threshold", "Ngưỡng điểm số đạt", "⚡", false),
+                new("Pass", "Pass", "Kết quả tìm thấy mẫu (True/False)", "⚡", false),
+                new("Status", "Status", "Trạng thái đánh giá (OK/NG)", "⚡", false),
+                new("X", "X", "Tọa độ X tìm thấy (px)", "⚡", false),
+                new("Y", "Y", "Tọa độ Y tìm thấy (px)", "⚡", false),
+                new("X_mm", "X_mm", "Tọa độ X theo mm (nếu calib)", "⚡", false),
+                new("Y_mm", "Y_mm", "Tọa độ Y theo mm (nếu calib)", "⚡", false),
+                new("Width", "Width", "Chiều rộng khung khớp", "⚡", false),
+                new("Height", "Height", "Chiều cao khung khớp", "⚡", false),
+                new("ExecutionTime", "ExecutionTime", "Thời gian thực thi (ms)", "⚡", false)
             };
         }
 
-        if (string.Equals(type, "Distance", StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(type, "Point", StringComparison.OrdinalIgnoreCase))
         {
             return new List<IntellisenseItem>
             {
-                new("Value", "Value", "Khoảng cách (mm nếu calib / px)", "⚡", false),
-                new("Distance", "Distance", "Khoảng cách (mm nếu calib / px)", "⚡", false),
-                new("Pass", "Pass", "Kết quả kiểm tra OK/NG (bool: true/false)", "⚡", false),
-                new("Value_mm", "Value_mm", "Khoảng cách (mm)", "⚡", false),
-                new("Value_px", "Value_px", "Khoảng cách (pixel)", "⚡", false)
+                new("X", "X", "Tọa độ X (px)", "⚡", false),
+                new("Y", "Y", "Tọa độ Y (px)", "⚡", false),
+                new("X_mm", "X_mm", "Tọa độ X theo mm", "⚡", false),
+                new("Y_mm", "Y_mm", "Tọa độ Y theo mm", "⚡", false),
+                new("Angle", "Angle", "Góc xoay điểm (độ)", "⚡", false),
+                new("Score", "Score", "Điểm số khớp mẫu (0.0 -> 1.0)", "⚡", false),
+                new("Pass", "Pass", "Kết quả OK/NG (True/False)", "⚡", false),
+                new("Status", "Status", "Trạng thái (OK/NG)", "⚡", false),
+                new("ExecutionTime", "ExecutionTime", "Thời gian thực thi (ms)", "⚡", false)
+            };
+        }
+
+        if (string.Equals(type, "Distance", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(type, "LineToLineDistance", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(type, "PointToLineDistance", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(type, "SegmentLineDistance", StringComparison.OrdinalIgnoreCase))
+        {
+            return new List<IntellisenseItem>
+            {
+                new("Value", "Value", "Khoảng cách đo được (px/mm)", "⚡", false),
+                new("Value_mm", "Value_mm", "Khoảng cách theo mm", "⚡", false),
+                new("Value_px", "Value_px", "Khoảng cách theo pixel", "⚡", false),
+                new("Nominal", "Nominal", "Giá trị tiêu chuẩn lý thuyết", "⚡", false),
+                new("TolPlus", "TolPlus", "Dung sai trên (+)", "⚡", false),
+                new("TolMinus", "TolMinus", "Dung sai dưới (-)", "⚡", false),
+                new("Diff", "Diff", "Độ lệch so với tiêu chuẩn (Value - Nominal)", "⚡", false),
+                new("Pass", "Pass", "Kết quả kiểm tra (True/False)", "⚡", false),
+                new("Status", "Status", "Trạng thái đánh giá (OK/NG)", "⚡", false),
+                new("ExecutionTime", "ExecutionTime", "Thời gian thực thi (ms)", "⚡", false)
             };
         }
 
@@ -494,18 +535,104 @@ public static class IntellisenseBehavior
         {
             return new List<IntellisenseItem>
             {
-                new("AngleDeg", "AngleDeg", "Góc nghiêng (độ)", "⚡", false),
-                new("Value", "Value", "Góc nghiêng (độ)", "⚡", false),
-                new("Pass", "Pass", "Kết quả kiểm tra OK/NG (bool: true/false)", "⚡", false)
+                new("Angle", "Angle", "Góc nghiêng đo được (độ)", "⚡", false),
+                new("AngleDeg", "AngleDeg", "Góc nghiêng đo được (độ)", "⚡", false),
+                new("Value", "Value", "Góc nghiêng đo được (độ)", "⚡", false),
+                new("Nominal", "Nominal", "Giá trị tiêu chuẩn lý thuyết", "⚡", false),
+                new("TolPlus", "TolPlus", "Dung sai trên (+)", "⚡", false),
+                new("TolMinus", "TolMinus", "Dung sai dưới (-)", "⚡", false),
+                new("Diff", "Diff", "Độ lệch góc (Value - Nominal)", "⚡", false),
+                new("Pass", "Pass", "Kết quả kiểm tra (True/False)", "⚡", false),
+                new("Status", "Status", "Trạng thái đánh giá (OK/NG)", "⚡", false),
+                new("ExecutionTime", "ExecutionTime", "Thời gian thực thi (ms)", "⚡", false)
             };
         }
 
-        if (string.Equals(type, "Line", StringComparison.OrdinalIgnoreCase) || string.Equals(type, "Caliper", StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(type, "CircleFinder", StringComparison.OrdinalIgnoreCase) || string.Equals(type, "Circle", StringComparison.OrdinalIgnoreCase))
         {
             return new List<IntellisenseItem>
             {
-                new("Found", "Found", "Trạng thái phát hiện đường thẳng (bool: true/false)", "⚡", false),
-                new("Pass", "Pass", "Kết quả OK/NG (bool: true/false)", "⚡", false)
+                new("Diameter", "Diameter", "Đường kính đường tròn (px)", "⚡", false),
+                new("Diameter_mm", "Diameter_mm", "Đường kính theo mm", "⚡", false),
+                new("Radius", "Radius", "Bán kính đường tròn (px)", "⚡", false),
+                new("Radius_mm", "Radius_mm", "Bán kính theo mm", "⚡", false),
+                new("CenterX", "CenterX", "Tọa độ tâm X (px)", "⚡", false),
+                new("CenterY", "CenterY", "Tọa độ tâm Y (px)", "⚡", false),
+                new("X", "X", "Tọa độ tâm X", "⚡", false),
+                new("Y", "Y", "Tọa độ tâm Y", "⚡", false),
+                new("Score", "Score", "Điểm số khớp đường tròn", "⚡", false),
+                new("Found", "Found", "Trạng thái tìm thấy (True/False)", "⚡", false),
+                new("Pass", "Pass", "Trạng thái kiểm tra (True/False)", "⚡", false),
+                new("Status", "Status", "Trạng thái đánh giá (OK/NG)", "⚡", false),
+                new("ExecutionTime", "ExecutionTime", "Thời gian thực thi (ms)", "⚡", false)
+            };
+        }
+
+        if (string.Equals(type, "Diameter", StringComparison.OrdinalIgnoreCase))
+        {
+            return new List<IntellisenseItem>
+            {
+                new("Value", "Value", "Đường kính đo được (px/mm)", "⚡", false),
+                new("Diameter", "Diameter", "Đường kính đo được", "⚡", false),
+                new("Value_mm", "Value_mm", "Đường kính theo mm", "⚡", false),
+                new("Nominal", "Nominal", "Tiêu chuẩn lý thuyết", "⚡", false),
+                new("TolPlus", "TolPlus", "Dung sai trên (+)", "⚡", false),
+                new("TolMinus", "TolMinus", "Dung sai dưới (-)", "⚡", false),
+                new("Diff", "Diff", "Độ lệch so với tiêu chuẩn", "⚡", false),
+                new("Pass", "Pass", "Kết quả kiểm tra (True/False)", "⚡", false),
+                new("Status", "Status", "Trạng thái đánh giá (OK/NG)", "⚡", false),
+                new("ExecutionTime", "ExecutionTime", "Thời gian thực thi (ms)", "⚡", false)
+            };
+        }
+
+        if (string.Equals(type, "Line", StringComparison.OrdinalIgnoreCase))
+        {
+            return new List<IntellisenseItem>
+            {
+                new("Length", "Length", "Chiều dài đoạn thẳng (px)", "⚡", false),
+                new("Length_mm", "Length_mm", "Chiều dài đoạn thẳng theo mm", "⚡", false),
+                new("Angle", "Angle", "Góc nghiêng đường thẳng (độ)", "⚡", false),
+                new("X1", "X1", "Tọa độ đầu mút X1", "⚡", false),
+                new("Y1", "Y1", "Tọa độ đầu mút Y1", "⚡", false),
+                new("X2", "X2", "Tọa độ đầu mút X2", "⚡", false),
+                new("Y2", "Y2", "Tọa độ đầu mút Y2", "⚡", false),
+                new("Found", "Found", "Trạng thái tìm thấy (True/False)", "⚡", false),
+                new("Pass", "Pass", "Kết quả OK/NG", "⚡", false),
+                new("Status", "Status", "Trạng thái đánh giá (OK/NG)", "⚡", false),
+                new("ExecutionTime", "ExecutionTime", "Thời gian thực thi (ms)", "⚡", false)
+            };
+        }
+
+        if (string.Equals(type, "Caliper", StringComparison.OrdinalIgnoreCase))
+        {
+            return new List<IntellisenseItem>
+            {
+                new("Value", "Value", "Cường độ biên trung bình (AvgStrength)", "⚡", false),
+                new("AvgStrength", "AvgStrength", "Cường độ biên trung bình", "⚡", false),
+                new("PointCount", "PointCount", "Số điểm biên phát hiện", "⚡", false),
+                new("Found", "Found", "Trạng thái tìm thấy cạnh", "⚡", false),
+                new("Pass", "Pass", "Kết quả OK/NG", "⚡", false),
+                new("Status", "Status", "Trạng thái đánh giá (OK/NG)", "⚡", false),
+                new("ExecutionTime", "ExecutionTime", "Thời gian thực thi (ms)", "⚡", false)
+            };
+        }
+
+        if (string.Equals(type, "EdgePair", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(type, "EdgePairDetect", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(type, "LinePairDetection", StringComparison.OrdinalIgnoreCase))
+        {
+            return new List<IntellisenseItem>
+            {
+                new("Value", "Value", "Khoảng cách cặp cạnh đo được (px/mm)", "⚡", false),
+                new("Value_mm", "Value_mm", "Khoảng cách cặp cạnh theo mm", "⚡", false),
+                new("Nominal", "Nominal", "Tiêu chuẩn lý thuyết", "⚡", false),
+                new("TolPlus", "TolPlus", "Dung sai trên (+)", "⚡", false),
+                new("TolMinus", "TolMinus", "Dung sai dưới (-)", "⚡", false),
+                new("Diff", "Diff", "Độ lệch so với tiêu chuẩn", "⚡", false),
+                new("Found", "Found", "Trạng thái tìm thấy", "⚡", false),
+                new("Pass", "Pass", "Kết quả kiểm tra (True/False)", "⚡", false),
+                new("Status", "Status", "Trạng thái đánh giá (OK/NG)", "⚡", false),
+                new("ExecutionTime", "ExecutionTime", "Thời gian thực thi (ms)", "⚡", false)
             };
         }
 
@@ -513,9 +640,18 @@ public static class IntellisenseBehavior
         {
             return new List<IntellisenseItem>
             {
-                new("Text", "Text", "Chuỗi văn bản mã đọc được (Barcode/QR)", "⚡", false),
-                new("Pass", "Pass", "Kết quả đọc mã OK/NG (bool: true/false)", "⚡", false),
-                new("Found", "Found", "Trạng thái phát hiện mã (bool: true/false)", "⚡", false)
+                new("Text", "Text", "Chuỗi ký tự mã đọc được (Barcode/QR)", "⚡", false),
+                new("Value", "Value", "Chuỗi ký tự mã đọc được", "⚡", false),
+                new("Code", "Code", "Chuỗi ký tự mã đọc được", "⚡", false),
+                new("Angle", "Angle", "Góc nghiêng của mã (độ)", "⚡", false),
+                new("X", "X", "Tọa độ X của mã", "⚡", false),
+                new("Y", "Y", "Tọa độ Y của mã", "⚡", false),
+                new("Width", "Width", "Bề rộng mã", "⚡", false),
+                new("Height", "Height", "Chiều cao mã", "⚡", false),
+                new("Found", "Found", "Trạng thái đọc được mã (True/False)", "⚡", false),
+                new("Pass", "Pass", "Kết quả OK/NG", "⚡", false),
+                new("Status", "Status", "Trạng thái đánh giá (OK/NG)", "⚡", false),
+                new("ExecutionTime", "ExecutionTime", "Thời gian thực thi (ms)", "⚡", false)
             };
         }
 
@@ -524,24 +660,18 @@ public static class IntellisenseBehavior
             return new List<IntellisenseItem>
             {
                 new("DeltaE", "DeltaE", "Độ khác màu ΔE (double)", "⚡", false),
-                new("L", "L", "Giá trị L mẫu đo CIELab (double: 0..100)", "⚡", false),
-                new("a", "a", "Giá trị a mẫu đo CIELab (double: -128..127)", "⚡", false),
-                new("b", "b", "Giá trị b mẫu đo CIELab (double: -128..127)", "⚡", false),
-                new("RefL", "RefL", "Giá trị L tham chiếu (double)", "⚡", false),
-                new("RefA", "RefA", "Giá trị a tham chiếu (double)", "⚡", false),
-                new("RefB", "RefB", "Giá trị b tham chiếu (double)", "⚡", false),
-                new("Pass", "Pass", "Kết quả OK/NG (bool: true/false)", "⚡", false)
-            };
-        }
-
-        if (string.Equals(type, "ImageOutput", StringComparison.OrdinalIgnoreCase) || string.Equals(type, "OutputImage", StringComparison.OrdinalIgnoreCase))
-        {
-            return new List<IntellisenseItem>
-            {
-                new("Text", "Text", "Đường dẫn file ảnh đã xuất (Absolute Path)", "⚡", false),
-                new("SavedFilePath", "SavedFilePath", "Đường dẫn file ảnh đã xuất (Absolute Path)", "⚡", false),
-                new("Pass", "Pass", "Trạng thái lưu ảnh thành công (bool: true/false)", "⚡", false),
-                new("Found", "Found", "Trạng thái lưu ảnh thành công (bool: true/false)", "⚡", false)
+                new("dE", "dE", "Độ khác màu ΔE", "⚡", false),
+                new("Value", "Value", "Độ khác màu ΔE", "⚡", false),
+                new("MaxDeltaE", "MaxDeltaE", "Ngưỡng ΔE tối đa cho phép", "⚡", false),
+                new("L", "L", "Mức sáng L mẫu đo (CIELab 0..100)", "⚡", false),
+                new("a", "a", "Chỉ số a mẫu đo (-128..127)", "⚡", false),
+                new("b", "b", "Chỉ số b mẫu đo (-128..127)", "⚡", false),
+                new("RefL", "RefL", "Mức sáng L tham chiếu", "⚡", false),
+                new("RefA", "RefA", "Chỉ số a tham chiếu", "⚡", false),
+                new("RefB", "RefB", "Chỉ số b tham chiếu", "⚡", false),
+                new("Pass", "Pass", "Kết quả kiểm tra (True/False)", "⚡", false),
+                new("Status", "Status", "Trạng thái đánh giá (OK/NG)", "⚡", false),
+                new("ExecutionTime", "ExecutionTime", "Thời gian thực thi (ms)", "⚡", false)
             };
         }
 
@@ -549,10 +679,30 @@ public static class IntellisenseBehavior
         {
             return new List<IntellisenseItem>
             {
-                new("Pass", "Pass", "Kết quả so sánh bề mặt OK/NG", "⚡", false),
-                new("Count", "Count", "Số lượng vùng lỗi phát hiện", "⚡", false),
-                new("Score", "Score", "Diện tích vùng lỗi lớn nhất (px)", "⚡", false),
-                new("MaxArea", "MaxArea", "Diện tích vùng lỗi lớn nhất (px)", "⚡", false)
+                new("Count", "Count", "Số lượng đốm lỗi phát hiện", "⚡", false),
+                new("DefectCount", "DefectCount", "Số lượng đốm lỗi phát hiện", "⚡", false),
+                new("MaxArea", "MaxArea", "Diện tích đốm lỗi lớn nhất (px)", "⚡", false),
+                new("Score", "Score", "Diện tích đốm lỗi lớn nhất (px)", "⚡", false),
+                new("Pass", "Pass", "Kết quả so sánh bề mặt (True/False)", "⚡", false),
+                new("Status", "Status", "Trạng thái đánh giá (OK/NG)", "⚡", false),
+                new("ExecutionTime", "ExecutionTime", "Thời gian thực thi (ms)", "⚡", false)
+            };
+        }
+
+        if (string.Equals(type, "ContourCompare", StringComparison.OrdinalIgnoreCase))
+        {
+            return new List<IntellisenseItem>
+            {
+                new("MatchScore", "MatchScore", "Điểm số so khớp đường viền", "⚡", false),
+                new("Score", "Score", "Điểm số so khớp đường viền", "⚡", false),
+                new("MaxDistancePx", "MaxDistancePx", "Khoảng cách lệch viền lớn nhất (px)", "⚡", false),
+                new("MaxDistance_mm", "MaxDistance_mm", "Khoảng cách lệch viền lớn nhất (mm)", "⚡", false),
+                new("AreaDiffPercent", "AreaDiffPercent", "Tỷ lệ lệch diện tích viền (%)", "⚡", false),
+                new("PerimeterDiffPercent", "PerimeterDiffPercent", "Tỷ lệ lệch chu vi viền (%)", "⚡", false),
+                new("Found", "Found", "Trạng thái phát hiện viền", "⚡", false),
+                new("Pass", "Pass", "Kết quả kiểm tra (True/False)", "⚡", false),
+                new("Status", "Status", "Trạng thái đánh giá (OK/NG)", "⚡", false),
+                new("ExecutionTime", "ExecutionTime", "Thời gian thực thi (ms)", "⚡", false)
             };
         }
 
@@ -560,8 +710,85 @@ public static class IntellisenseBehavior
         {
             return new List<IntellisenseItem>
             {
-                new("Value", "Value", "Số lượng blob phát hiện (Count)", "⚡", false),
-                new("Pass", "Pass", "Kết quả đánh giá OK/NG (bool: true/false)", "⚡", false)
+                new("Count", "Count", "Số lượng blob phát hiện", "⚡", false),
+                new("Value", "Value", "Số lượng blob phát hiện", "⚡", false),
+                new("Pass", "Pass", "Kết quả đánh giá (True/False)", "⚡", false),
+                new("Status", "Status", "Trạng thái đánh giá (OK/NG)", "⚡", false),
+                new("ExecutionTime", "ExecutionTime", "Thời gian thực thi (ms)", "⚡", false)
+            };
+        }
+
+        if (string.Equals(type, "CreatePoint", StringComparison.OrdinalIgnoreCase))
+        {
+            return new List<IntellisenseItem>
+            {
+                new("X", "X", "Tọa độ X điểm tạo (px)", "⚡", false),
+                new("Y", "Y", "Tọa độ Y điểm tạo (px)", "⚡", false),
+                new("X_mm", "X_mm", "Tọa độ X theo mm", "⚡", false),
+                new("Y_mm", "Y_mm", "Tọa độ Y theo mm", "⚡", false),
+                new("Pass", "Pass", "Trạng thái tạo điểm thành công", "⚡", false),
+                new("Status", "Status", "Trạng thái đánh giá (OK/NG)", "⚡", false)
+            };
+        }
+
+        if (string.Equals(type, "CreateLine", StringComparison.OrdinalIgnoreCase))
+        {
+            return new List<IntellisenseItem>
+            {
+                new("Length", "Length", "Chiều dài đường thẳng tạo (px)", "⚡", false),
+                new("Length_mm", "Length_mm", "Chiều dài đường thẳng theo mm", "⚡", false),
+                new("Angle", "Angle", "Góc nghiêng đường thẳng (độ)", "⚡", false),
+                new("X1", "X1", "Tọa độ đầu mút X1", "⚡", false),
+                new("Y1", "Y1", "Tọa độ đầu mút Y1", "⚡", false),
+                new("X2", "X2", "Tọa độ đầu mút X2", "⚡", false),
+                new("Y2", "Y2", "Tọa độ đầu mút Y2", "⚡", false),
+                new("Pass", "Pass", "Trạng thái tạo line thành công", "⚡", false),
+                new("Status", "Status", "Trạng thái đánh giá (OK/NG)", "⚡", false)
+            };
+        }
+
+        if (string.Equals(type, "CreateRect", StringComparison.OrdinalIgnoreCase))
+        {
+            return new List<IntellisenseItem>
+            {
+                new("Width", "Width", "Chiều rộng hình chữ nhật (px)", "⚡", false),
+                new("Height", "Height", "Chiều cao hình chữ nhật (px)", "⚡", false),
+                new("Width_mm", "Width_mm", "Chiều rộng theo mm", "⚡", false),
+                new("Height_mm", "Height_mm", "Chiều cao theo mm", "⚡", false),
+                new("X", "X", "Tọa độ Anchor X", "⚡", false),
+                new("Y", "Y", "Tọa độ Anchor Y", "⚡", false),
+                new("Angle", "Angle", "Góc nghiêng (độ)", "⚡", false),
+                new("Pass", "Pass", "Trạng thái tạo Rect thành công", "⚡", false),
+                new("Status", "Status", "Trạng thái đánh giá (OK/NG)", "⚡", false)
+            };
+        }
+
+        if (string.Equals(type, "CreateCircle", StringComparison.OrdinalIgnoreCase))
+        {
+            return new List<IntellisenseItem>
+            {
+                new("Diameter", "Diameter", "Đường kính đường tròn tạo (px)", "⚡", false),
+                new("Diameter_mm", "Diameter_mm", "Đường kính theo mm", "⚡", false),
+                new("Radius", "Radius", "Bán kính đường tròn tạo (px)", "⚡", false),
+                new("Radius_mm", "Radius_mm", "Bán kính theo mm", "⚡", false),
+                new("CenterX", "CenterX", "Tọa độ tâm X", "⚡", false),
+                new("CenterY", "CenterY", "Tọa độ tâm Y", "⚡", false),
+                new("X", "X", "Tọa độ tâm X", "⚡", false),
+                new("Y", "Y", "Tọa độ tâm Y", "⚡", false),
+                new("Pass", "Pass", "Trạng thái tạo hình tròn thành công", "⚡", false),
+                new("Status", "Status", "Trạng thái đánh giá (OK/NG)", "⚡", false)
+            };
+        }
+
+        if (string.Equals(type, "ImageOutput", StringComparison.OrdinalIgnoreCase) || string.Equals(type, "OutputImage", StringComparison.OrdinalIgnoreCase))
+        {
+            return new List<IntellisenseItem>
+            {
+                new("SavedFilePath", "SavedFilePath", "Đường dẫn file ảnh đã xuất (Absolute Path)", "⚡", false),
+                new("Text", "Text", "Đường dẫn file ảnh đã xuất", "⚡", false),
+                new("Saved", "Saved", "Trạng thái lưu ảnh thành công (True/False)", "⚡", false),
+                new("Pass", "Pass", "Trạng thái lưu ảnh thành công", "⚡", false),
+                new("Status", "Status", "Trạng thái đánh giá (OK/NG)", "⚡", false)
             };
         }
 
@@ -575,11 +802,31 @@ public static class IntellisenseBehavior
             {
                 new("Value", "Value", "Giá trị ô trích xuất (Scalar/Format)", "⚡", false),
                 new("Text", "Text", "Nội dung văn bản kết quả CSDL", "⚡", false),
-                new("Pass", "Pass", "Trạng thái thực thi CSDL OK/NG (bool: true/false)", "⚡", false),
+                new("Pass", "Pass", "Trạng thái thực thi CSDL (True/False)", "⚡", false),
                 new("Success", "Success", "Trạng thái thực thi CSDL (1/0)", "⚡", false),
+                new("Status", "Status", "Trạng thái đánh giá (OK/NG)", "⚡", false),
                 new("RowCount", "RowCount", "Số dòng dữ liệu trả về (Read DB)", "⚡", false),
                 new("ColumnCount", "ColumnCount", "Số cột dữ liệu trả về (Read DB)", "⚡", false),
                 new("RowsAffected", "RowsAffected", "Số dòng bị thay đổi (Write DB)", "⚡", false)
+            };
+        }
+
+        if (string.Equals(type, "PlcRead", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(type, "PlcWrite", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(type, "PlcWait", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(type, "PlcTrigger", StringComparison.OrdinalIgnoreCase) ||
+            toolToken.StartsWith("PLC", StringComparison.OrdinalIgnoreCase))
+        {
+            return new List<IntellisenseItem>
+            {
+                new("Value", "Value", "Giá trị đọc/ghi PLC", "⚡", false),
+                new("Text", "Text", "Chuỗi giá trị PLC", "⚡", false),
+                new("TagName", "TagName", "Tên Tag / Địa chỉ PLC", "⚡", false),
+                new("PlcId", "PlcId", "Mã định danh PLC", "⚡", false),
+                new("Found", "Found", "Trạng thái tìm thấy / Đọc thành công", "⚡", false),
+                new("Success", "Success", "Trạng thái thành công", "⚡", false),
+                new("Pass", "Pass", "Kết quả OK/NG", "⚡", false),
+                new("Status", "Status", "Trạng thái đánh giá (OK/NG)", "⚡", false)
             };
         }
 
@@ -587,7 +834,9 @@ public static class IntellisenseBehavior
         {
             return new List<IntellisenseItem>
             {
-                new("Pass", "Pass", "Kết quả logic của Condition (bool: true/false)", "⚡", false)
+                new("Pass", "Pass", "Kết quả logic của Condition (True/False)", "⚡", false),
+                new("Status", "Status", "Trạng thái đánh giá (OK/NG)", "⚡", false),
+                new("Expression", "Expression", "Biểu thức điều kiện", "⚡", false)
             };
         }
 
@@ -596,24 +845,28 @@ public static class IntellisenseBehavior
             return new List<IntellisenseItem>
             {
                 new("Text", "Text", "Nội dung văn bản hiển thị", "⚡", false),
-                new("Pass", "Pass", "Trạng thái OK/NG", "⚡", false)
+                new("Pass", "Pass", "Trạng thái OK/NG", "⚡", false),
+                new("Status", "Status", "Trạng thái đánh giá (OK/NG)", "⚡", false)
             };
         }
 
-        if (string.Equals(type, "Preprocess", StringComparison.OrdinalIgnoreCase) || string.Equals(type, "ImageSource", StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(type, "Preprocess", StringComparison.OrdinalIgnoreCase) || string.Equals(type, "ImageSource", StringComparison.OrdinalIgnoreCase) || string.Equals(type, "Crop", StringComparison.OrdinalIgnoreCase))
         {
             return new List<IntellisenseItem>
             {
-                new("Pass", "Pass", "Trạng thái xử lý ảnh OK/NG", "⚡", false)
+                new("Pass", "Pass", "Trạng thái xử lý ảnh OK/NG", "⚡", false),
+                new("Status", "Status", "Trạng thái đánh giá (OK/NG)", "⚡", false)
             };
         }
 
-        // Distance / LineLineDistance / PointLineDistance / SegmentLineDistance / CircleFinder / Diameter / Angle / EdgePair / EdgePairDetect / LinePairDetection
+        // Default Generic Fallback for Any Tool
         return new List<IntellisenseItem>
         {
-            new("Value", "Value", "Giá trị đo đạc (mm/px/độ/bán kính)", "⚡", false),
-            new("Pass", "Pass", "Kết quả đánh giá OK/NG (bool: true/false)", "⚡", false),
-            new("Found", "Found", "Trạng thái tìm thấy đối tượng (bool: true/false)", "⚡", false)
+            new("Value", "Value", "Giá trị đo đạc / kết quả chính", "⚡", false),
+            new("Pass", "Pass", "Kết quả đánh giá (True/False)", "⚡", false),
+            new("Status", "Status", "Trạng thái đánh giá (OK/NG)", "⚡", false),
+            new("Found", "Found", "Trạng thái tìm thấy đối tượng", "⚡", false),
+            new("ExecutionTime", "ExecutionTime", "Thời gian thực thi (ms)", "⚡", false)
         };
     }
 

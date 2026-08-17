@@ -3212,7 +3212,7 @@ public sealed partial class InspectionViewModel : ObservableObject
 
             Dictionary<string, ConditionEvaluator.Variable>? vars = null;
 
-            try { vars = ConditionEvaluator.BuildVariableMap(LastResult); } catch { vars = null; }
+            try { vars = ConditionEvaluator.BuildVariableMap(LastResult, _config); } catch { vars = null; }
 
 
 

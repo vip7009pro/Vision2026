@@ -286,7 +286,14 @@ Lộ trình tích hợp tính năng Chụp ảnh từ camera và hỗ trợ các
 - [x] Task 163: Khắc Phục Kích Thước BoundingBox CodeDetection & Thêm Checkbox Bật/Tắt Toàn Bộ Canvas Render:
   - `Tool CodeDetection: Tính BoundingBox Thực Tế Theo Kích Thước Mã (InspectionService.Pipeline.cs)`: Xác định đỉnh góc vuông và cạnh huyền trong tam giác tạo bởi 3 Finder patterns của QR code, đặt tâm chính xác tại trung điểm cạnh huyền và tính kích thước $W = H = \text{sideLen} \times 1.52$ bao trọn vẹn 100% diện tích mã và viền ngoài; hiệu chỉnh chiều cao Barcode 1D $\text{codeH} = \text{Clamp}(d_{01} \times 0.20, 15, \min(\text{crop.Height} \times 0.45, 300))$ ôm khít các vạch barcode mà không lan sang text.
   - `Tool Editor: Checkbox Render Canvas & Tối Ưu Hóa Render 20MP (ToolEditorView.xaml, ToolEditorViewModel.Engine.cs)`: Bổ sung Checkbox `Render Canvas` cho phép tắt hoàn toàn việc chuyển đổi ảnh và overlay lên canvas, tiết kiệm 100% tài nguyên CPU/RAM khi không cần đồ họa UI; tối ưu hóa tái sử dụng cache khi bật.
-  - `Biên dịch Solution VisionInspectionApp.slnx Release thành công 100%`: 0 Error(s).
+- [x] Task 164: Nâng Cấp Toàn Diện Cơ Chế Inject Thuộc Tính Cho Tool Text & Condition Logic (Universal Dynamic Variable Registry):
+  - `Khắc phục triệt để lỗi {Origin1.Angle}`: Thiết kế cơ chế Multi-Alias (`Origin1`, `Origin`, `Origin_1`, `Pattern1`, `P1`, `CIR1`, `CAL1`, `LPD1`, `EP1`, `EPD1`, `SC1`, `CC1`, `CD1`, `CP1`, `CL1`, `CR1`, `CCIR1`, `DB1`, `PLC1`, v.v.), cho phép tham chiếu linh hoạt theo tên node thực tế trên đồ thị hoặc tên loại tool.
+  - `Kiến trúc Module Hóa ConditionEvaluator.VariableRegistry.cs`: Phân rã `ConditionEvaluator.cs`, mở rộng `class Variable` với `Members` dictionary và `RawObject`, tự động đăng ký đầy đủ 32+ loại Tool hiện có.
+  - `Universal Dynamic Reflection Fallback`: Tự động quét toàn bộ public property của `InspectionResult` và các class kết quả mới trong tương lai, đảm bảo không bao giờ bỏ sót bất kỳ tool hay thuộc tính mới nào mà không cần sửa code thủ công.
+  - `Động cơ Text Template 4 Tầng & Định Dạng Nâng Cao`: Hỗ trợ đầy đủ format số (`{Origin1.Angle:F1}`, `{Origin1.Score:P1}`, `{Dist1.Diff:F2}`, `{X_mm}`, `{X_px}`, v.v.).
+  - `Mở rộng IntelliSense Auto-Complete`: Tự động gợi ý toàn bộ danh sách thuộc tính phong phú cho tất cả các Tool khi gõ `{` hoặc tên tool + dấu `.`.
+  - `Bộ Test Tự Động`: Xây dựng `VariableInjectionTest.cs` với 30/30 Test Cases đạt kết quả **PASSED 100%**.
+  - `Biên dịch Solution VisionInspectionApp.slnx thành công 100%`: 0 Error(s).
 
 
 

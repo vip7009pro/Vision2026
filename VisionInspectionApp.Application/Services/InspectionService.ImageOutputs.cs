@@ -104,7 +104,7 @@ public partial class InspectionService
                                    .Replace("{ProductName}", prodName)
                                    .Replace("{Status}", result.Pass ? "PASS" : "FAIL");
 
-                var vars = ConditionEvaluator.BuildVariableMap(result);
+                var vars = ConditionEvaluator.BuildVariableMap(result, config);
                 fileName = ConditionEvaluator.EvaluateTextTemplate(fileName, vars);
 
                 var ext = io.Format switch
@@ -706,7 +706,7 @@ public partial class InspectionService
         if (config.TextNodes is not null)
         {
             Dictionary<string, ConditionEvaluator.Variable>? vars = null;
-            try { vars = ConditionEvaluator.BuildVariableMap(result); } catch { }
+            try { vars = ConditionEvaluator.BuildVariableMap(result, config); } catch { }
 
             double fontScale = (io is not null && io.TextFontSize > 0) ? (io.TextFontSize / 24.0) : 0.7;
 

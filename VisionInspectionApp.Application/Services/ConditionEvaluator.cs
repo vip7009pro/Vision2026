@@ -1,437 +1,16 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 
 namespace VisionInspectionApp.Application;
 
-public static class ConditionEvaluator
+public static partial class ConditionEvaluator
 {
     internal readonly record struct ConditionValue(bool IsBool, bool Bool, double Number, string? Text)
     {
         public static ConditionValue FromBool(bool v) => new(true, v, 0.0, null);
         public static ConditionValue FromNumber(double v) => new(false, false, v, null);
         public static ConditionValue FromString(string v) => new(false, false, 0.0, v);
-    }
-
-    public sealed class Variable
-    {
-        public Variable(bool pass, double? value = null, double? score = null, bool? found = null, string? text = null)
-        {
-            Pass = pass;
-            Value = value;
-            Score = score;
-            Found = found;
-            Text = text;
-        }
-
-        public bool Pass { get; }
-        public double? Value { get; }
-        public double? Score { get; }
-        public bool? Found { get; }
-        public string? Text { get; }
-    }
-
-    public static Dictionary<string, Variable> BuildVariableMap(InspectionResult result)
-    {
-        var vars = new Dictionary<string, Variable>(StringComparer.OrdinalIgnoreCase);
-
-        if (result.Origin is not null && !string.IsNullOrWhiteSpace(result.Origin.Name))
-        {
-            vars[result.Origin.Name] = new Variable(result.Origin.Pass, score: result.Origin.Score);
-            vars[$"{result.Origin.Name}.X"] = new Variable(result.Origin.Pass, value: result.Origin.Position.X);
-            vars[$"{result.Origin.Name}.Y"] = new Variable(result.Origin.Pass, value: result.Origin.Position.Y);
-            vars[$"{result.Origin.Name}.Score"] = new Variable(result.Origin.Pass, value: result.Origin.Score);
-            vars[$"{result.Origin.Name}.Pass"] = new Variable(result.Origin.Pass);
-            vars[$"{result.Origin.Name}.Angle"] = new Variable(result.Origin.Pass, value: result.Origin.AngleDeg);
-        }
-
-        foreach (var p in result.Points)
-        {
-            if (string.IsNullOrWhiteSpace(p.Name)) continue;
-            vars[p.Name] = new Variable(p.Pass, score: p.Score);
-            vars[$"{p.Name}.X"] = new Variable(p.Pass, value: p.Position.X);
-            vars[$"{p.Name}.Y"] = new Variable(p.Pass, value: p.Position.Y);
-            vars[$"{p.Name}.Score"] = new Variable(p.Pass, value: p.Score);
-            vars[$"{p.Name}.Pass"] = new Variable(p.Pass);
-        }
-
-        foreach (var l in result.Lines)
-        {
-            if (string.IsNullOrWhiteSpace(l.Name)) continue;
-            vars[l.Name] = new Variable(l.Found, found: l.Found);
-            vars[$"{l.Name}.Found"] = new Variable(l.Found, found: l.Found);
-            vars[$"{l.Name}.Pass"] = new Variable(l.Found);
-            vars[$"{l.Name}.Length"] = new Variable(l.Found, value: l.LengthPx);
-        }
-
-        foreach (var d in result.Distances)
-        {
-            if (string.IsNullOrWhiteSpace(d.Name)) continue;
-            vars[d.Name] = new Variable(d.Pass, value: d.Value);
-            vars[$"{d.Name}.Value"] = new Variable(d.Pass, value: d.Value);
-            vars[$"{d.Name}.Pass"] = new Variable(d.Pass);
-        }
-
-        foreach (var dd in result.LineToLineDistances)
-        {
-            if (string.IsNullOrWhiteSpace(dd.Name)) continue;
-            vars[dd.Name] = new Variable(dd.Pass, value: dd.Value);
-            vars[$"{dd.Name}.Value"] = new Variable(dd.Pass, value: dd.Value);
-            vars[$"{dd.Name}.Pass"] = new Variable(dd.Pass);
-        }
-
-        foreach (var dd in result.PointToLineDistances)
-        {
-            if (string.IsNullOrWhiteSpace(dd.Name)) continue;
-            vars[dd.Name] = new Variable(dd.Pass, value: dd.Value);
-            vars[$"{dd.Name}.Value"] = new Variable(dd.Pass, value: dd.Value);
-            vars[$"{dd.Name}.Pass"] = new Variable(dd.Pass);
-        }
-
-        foreach (var sld in result.SegmentLineDistances)
-        {
-            if (string.IsNullOrWhiteSpace(sld.Name)) continue;
-            vars[sld.Name] = new Variable(sld.Pass, value: sld.Value);
-            vars[$"{sld.Name}.Value"] = new Variable(sld.Pass, value: sld.Value);
-            vars[$"{sld.Name}.Pass"] = new Variable(sld.Pass);
-        }
-
-        foreach (var lpd in result.LinePairDetections)
-        {
-            if (string.IsNullOrWhiteSpace(lpd.Name)) continue;
-            vars[lpd.Name] = new Variable(lpd.Pass, value: lpd.Value, found: lpd.Found);
-            vars[$"{lpd.Name}.Value"] = new Variable(lpd.Pass, value: lpd.Value);
-            vars[$"{lpd.Name}.Pass"] = new Variable(lpd.Pass);
-            vars[$"{lpd.Name}.Found"] = new Variable(lpd.Pass, found: lpd.Found);
-            vars[$"LPD.{lpd.Name}"] = new Variable(lpd.Pass, value: lpd.Value, found: lpd.Found);
-        }
-
-        foreach (var cf in result.CircleFinders)
-        {
-            if (string.IsNullOrWhiteSpace(cf.Name)) continue;
-            vars[cf.Name] = new Variable(cf.Found, value: cf.RadiusPx, found: cf.Found, score: cf.Score);
-            vars[$"{cf.Name}.Value"] = new Variable(cf.Found, value: cf.RadiusPx);
-            vars[$"{cf.Name}.RadiusPx"] = new Variable(cf.Found, value: cf.RadiusPx);
-            vars[$"{cf.Name}.CenterX"] = new Variable(cf.Found, value: cf.Center.X);
-            vars[$"{cf.Name}.CenterY"] = new Variable(cf.Found, value: cf.Center.Y);
-            vars[$"{cf.Name}.Found"] = new Variable(cf.Found, found: cf.Found);
-            vars[$"{cf.Name}.Pass"] = new Variable(cf.Found);
-            vars[$"{cf.Name}.Score"] = new Variable(cf.Found, value: cf.Score);
-            vars[$"CIR.{cf.Name}"] = new Variable(cf.Found, value: cf.RadiusPx, found: cf.Found, score: cf.Score);
-        }
-
-        foreach (var a in result.Angles)
-        {
-            if (string.IsNullOrWhiteSpace(a.Name)) continue;
-            vars[a.Name] = new Variable(a.Pass, value: a.ValueDeg);
-            vars[$"{a.Name}.Value"] = new Variable(a.Pass, value: a.ValueDeg);
-            vars[$"{a.Name}.Pass"] = new Variable(a.Pass);
-        }
-
-        foreach (var ep in result.EdgePairs)
-        {
-            if (string.IsNullOrWhiteSpace(ep.Name)) continue;
-            vars[ep.Name] = new Variable(ep.Pass, value: ep.Value, found: ep.Found);
-            vars[$"{ep.Name}.Value"] = new Variable(ep.Pass, value: ep.Value);
-            vars[$"{ep.Name}.Pass"] = new Variable(ep.Pass);
-            vars[$"{ep.Name}.Found"] = new Variable(ep.Pass, found: ep.Found);
-            vars[$"EP.{ep.Name}"] = new Variable(ep.Pass, value: ep.Value, found: ep.Found);
-            vars[$"EdgePair.{ep.Name}"] = new Variable(ep.Pass, value: ep.Value, found: ep.Found);
-        }
-
-        foreach (var epd in result.EdgePairDetections)
-        {
-            if (string.IsNullOrWhiteSpace(epd.Name)) continue;
-            vars[epd.Name] = new Variable(epd.Pass, value: epd.Value, found: epd.Found);
-            vars[$"{epd.Name}.Value"] = new Variable(epd.Pass, value: epd.Value);
-            vars[$"{epd.Name}.Pass"] = new Variable(epd.Pass);
-            vars[$"{epd.Name}.Found"] = new Variable(epd.Pass, found: epd.Found);
-            vars[$"EPD.{epd.Name}"] = new Variable(epd.Pass, value: epd.Value, found: epd.Found);
-            vars[$"EdgePairDetect.{epd.Name}"] = new Variable(epd.Pass, value: epd.Value, found: epd.Found);
-        }
-
-        foreach (var c in result.Conditions)
-        {
-            if (string.IsNullOrWhiteSpace(c.Name)) continue;
-            vars[c.Name] = new Variable(c.Pass);
-            vars[$"{c.Name}.Pass"] = new Variable(c.Pass);
-        }
-
-        foreach (var b in result.BlobDetections)
-        {
-            if (string.IsNullOrWhiteSpace(b.Name)) continue;
-            vars[b.Name] = new Variable(true, value: b.Count);
-            vars[$"{b.Name}.Count"] = new Variable(true, value: b.Count);
-            vars[$"{b.Name}.Value"] = new Variable(true, value: b.Count);
-        }
-
-        foreach (var sc in result.SurfaceCompares)
-        {
-            if (string.IsNullOrWhiteSpace(sc.Name)) continue;
-            vars[sc.Name] = new Variable(sc.Pass, value: sc.Count, score: sc.MaxArea);
-            vars[$"{sc.Name}.Count"] = new Variable(sc.Pass, value: sc.Count);
-            vars[$"{sc.Name}.MaxArea"] = new Variable(sc.Pass, value: sc.MaxArea);
-            vars[$"{sc.Name}.Pass"] = new Variable(sc.Pass);
-            vars[$"SC.{sc.Name}"] = new Variable(sc.Pass, value: sc.Count, score: sc.MaxArea);
-            vars[$"SurfaceCompare.{sc.Name}"] = new Variable(sc.Pass, value: sc.Count, score: sc.MaxArea);
-            vars[$"SC.{sc.Name}.MaxArea"] = new Variable(sc.Pass, value: sc.MaxArea);
-            vars[$"SurfaceCompare.{sc.Name}.MaxArea"] = new Variable(sc.Pass, value: sc.MaxArea);
-        }
-
-        foreach (var cd in result.ColorDiffs)
-        {
-            if (string.IsNullOrWhiteSpace(cd.Name)) continue;
-            var vDeltaE = new Variable(cd.Pass, value: cd.DeltaE);
-            var vL = new Variable(cd.Pass, value: cd.MeasuredL);
-            var vA = new Variable(cd.Pass, value: cd.MeasuredA);
-            var vB = new Variable(cd.Pass, value: cd.MeasuredB);
-            var vRefL = new Variable(cd.Pass, value: cd.RefL);
-            var vRefA = new Variable(cd.Pass, value: cd.RefA);
-            var vRefB = new Variable(cd.Pass, value: cd.RefB);
-            var vPass = new Variable(cd.Pass);
-
-            vars[cd.Name] = vDeltaE;
-            vars[$"{cd.Name}.DeltaE"] = vDeltaE;
-            vars[$"{cd.Name}.dE"] = vDeltaE;
-            vars[$"{cd.Name}.L"] = vL;
-            vars[$"{cd.Name}.a"] = vA;
-            vars[$"{cd.Name}.A"] = vA;
-            vars[$"{cd.Name}.b"] = vB;
-            vars[$"{cd.Name}.B"] = vB;
-            vars[$"{cd.Name}.SampleL"] = vL;
-            vars[$"{cd.Name}.SampleA"] = vA;
-            vars[$"{cd.Name}.SampleB"] = vB;
-            vars[$"{cd.Name}.RefL"] = vRefL;
-            vars[$"{cd.Name}.RefA"] = vRefA;
-            vars[$"{cd.Name}.RefB"] = vRefB;
-            vars[$"{cd.Name}.Pass"] = vPass;
-
-            vars[$"ColorDiff.{cd.Name}"] = vDeltaE;
-            vars[$"ColorDiff.{cd.Name}.DeltaE"] = vDeltaE;
-            vars[$"ColorDiff.{cd.Name}.dE"] = vDeltaE;
-            vars[$"ColorDiff.{cd.Name}.L"] = vL;
-            vars[$"ColorDiff.{cd.Name}.a"] = vA;
-            vars[$"ColorDiff.{cd.Name}.A"] = vA;
-            vars[$"ColorDiff.{cd.Name}.b"] = vB;
-            vars[$"ColorDiff.{cd.Name}.B"] = vB;
-            vars[$"ColorDiff.{cd.Name}.RefL"] = vRefL;
-            vars[$"ColorDiff.{cd.Name}.RefA"] = vRefA;
-            vars[$"ColorDiff.{cd.Name}.RefB"] = vRefB;
-            vars[$"ColorDiff.{cd.Name}.Pass"] = vPass;
-        }
-
-        foreach (var c in result.Calipers)
-        {
-            if (string.IsNullOrWhiteSpace(c.Name)) continue;
-            vars[c.Name] = new Variable(c.Found, value: c.AvgStrength, found: c.Found);
-            vars[$"{c.Name}.Value"] = new Variable(c.Found, value: c.AvgStrength);
-            vars[$"{c.Name}.Found"] = new Variable(c.Found, found: c.Found);
-            vars[$"{c.Name}.Pass"] = new Variable(c.Found);
-            vars[$"CAL.{c.Name}"] = new Variable(c.Found, value: c.AvgStrength, found: c.Found);
-            vars[$"Caliper.{c.Name}"] = new Variable(c.Found, value: c.AvgStrength, found: c.Found);
-        }
-
-        foreach (var cdt in result.CodeDetections)
-        {
-            if (string.IsNullOrWhiteSpace(cdt.Name)) continue;
-            vars[cdt.Name] = new Variable(cdt.Found, found: cdt.Found, text: cdt.Text);
-            vars[$"{cdt.Name}.Text"] = new Variable(cdt.Found, text: cdt.Text);
-            vars[$"{cdt.Name}.Found"] = new Variable(cdt.Found, found: cdt.Found);
-            vars[$"{cdt.Name}.Pass"] = new Variable(cdt.Found);
-        }
-
-        foreach (var d in result.Diameters)
-        {
-            if (string.IsNullOrWhiteSpace(d.Name)) continue;
-            vars[d.Name] = new Variable(d.Pass, value: d.Value, found: d.Found);
-            vars[$"{d.Name}.Value"] = new Variable(d.Pass, value: d.Value);
-            vars[$"{d.Name}.Pass"] = new Variable(d.Pass);
-            vars[$"{d.Name}.Found"] = new Variable(d.Pass, found: d.Found);
-            vars[$"CIR.{d.Name}"] = new Variable(d.Pass, value: d.Value, found: d.Found);
-            vars[$"Diameter.{d.Name}"] = new Variable(d.Pass, value: d.Value, found: d.Found);
-        }
-
-        foreach (var io in result.ImageOutputs)
-        {
-            if (string.IsNullOrWhiteSpace(io.Name)) continue;
-            vars[io.Name] = new Variable(io.Saved, found: io.Saved, text: io.SavedFilePath);
-            vars[$"{io.Name}.Saved"] = new Variable(io.Saved, found: io.Saved);
-            vars[$"{io.Name}.SavedFilePath"] = new Variable(io.Saved, text: io.SavedFilePath);
-            vars[$"Saved.{io.Name}"] = new Variable(io.Saved, found: io.Saved, text: io.SavedFilePath);
-        }
-
-        if (result.DbResults is not null)
-        {
-            foreach (var db in result.DbResults)
-            {
-                if (string.IsNullOrWhiteSpace(db.NodeName)) continue;
-
-                void AddDbAlias(string aliasName)
-                {
-                    if (string.IsNullOrWhiteSpace(aliasName)) return;
-
-                    double valNum = 0;
-                    string textVal = db.Text ?? string.Empty;
-                    if (db.Value != null && double.TryParse(db.Value.ToString(), System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out double parsedVal))
-                    {
-                        valNum = parsedVal;
-                    }
-
-                    var dbVar = new Variable(db.Success, value: valNum, score: db.RowCount, found: db.Success, text: textVal);
-
-                    vars[aliasName] = dbVar;
-                    vars[$"{aliasName}.Value"] = new Variable(db.Success, value: valNum, text: db.Value?.ToString() ?? textVal);
-                    vars[$"{aliasName}.Text"] = new Variable(db.Success, text: textVal);
-                    vars[$"{aliasName}.Pass"] = new Variable(db.Success);
-                    vars[$"{aliasName}.Success"] = new Variable(db.Success, value: db.Success ? 1.0 : 0.0);
-                    vars[$"{aliasName}.RowCount"] = new Variable(db.Success, value: db.RowCount);
-                    vars[$"{aliasName}.ColumnCount"] = new Variable(db.Success, value: db.ColumnCount);
-                    vars[$"{aliasName}.RowsAffected"] = new Variable(db.Success, value: db.RowsAffected);
-
-                    foreach (var kvp in db.ColumnMap)
-                    {
-                        if (string.IsNullOrWhiteSpace(kvp.Key)) continue;
-
-                        double colNum = 0;
-                        string colStr = kvp.Value?.ToString() ?? string.Empty;
-                        if (kvp.Value != null && double.TryParse(colStr, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out double pCol))
-                        {
-                            colNum = pCol;
-                        }
-
-                        vars[$"{aliasName}.{kvp.Key}"] = new Variable(db.Success, value: colNum, text: colStr);
-                    }
-                }
-
-                AddDbAlias(db.NodeName);
-                if (db.NodeName.Contains("Node", StringComparison.OrdinalIgnoreCase))
-                {
-                    AddDbAlias(db.NodeName.Replace("Node", "", StringComparison.OrdinalIgnoreCase));
-                }
-                else if (db.NodeName.StartsWith("DB", StringComparison.OrdinalIgnoreCase) && db.NodeName.Length > 2 && char.IsDigit(db.NodeName[2]))
-                {
-                    AddDbAlias($"DbNode{db.NodeName[2..]}");
-                }
-                AddDbAlias("DB");
-            }
-        }
-
-        return vars;
-    }
-
-    public static string EvaluateTextTemplate(string text, Dictionary<string, Variable>? vars)
-    {
-        if (string.IsNullOrEmpty(text) || vars is null || vars.Count == 0)
-        {
-            return text ?? string.Empty;
-        }
-
-        return System.Text.RegularExpressions.Regex.Replace(text, @"\{([^}]+)\}", m =>
-        {
-            var inner = m.Groups[1].Value?.Trim() ?? string.Empty;
-            if (inner.Length == 0)
-                return string.Empty;
-
-            var fmt = string.Empty;
-            var colonIdx = inner.IndexOf(':');
-            if (colonIdx >= 0)
-            {
-                fmt = inner[(colonIdx + 1)..].Trim();
-                inner = inner[..colonIdx].Trim();
-            }
-
-            if (vars.TryGetValue(inner, out var vDirect) && vDirect is not null)
-            {
-                object? directVal = vDirect.Text ?? (object?)vDirect.Value ?? vDirect.Found ?? vDirect.Pass;
-                if (directVal is double dD)
-                {
-                    return string.IsNullOrWhiteSpace(fmt) ? dD.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture) : dD.ToString(fmt, System.Globalization.CultureInfo.InvariantCulture);
-                }
-                if (directVal is bool bD)
-                {
-                    return bD ? "True" : "False";
-                }
-                return directVal?.ToString() ?? string.Empty;
-            }
-
-            var varName = inner;
-            var prop = string.Empty;
-            var dotIdx = inner.IndexOf('.');
-            if (dotIdx >= 0)
-            {
-                varName = inner[..dotIdx].Trim();
-                prop = inner[(dotIdx + 1)..].Trim();
-            }
-
-            if (string.IsNullOrWhiteSpace(varName) || !vars.TryGetValue(varName, out var v) || v is null)
-            {
-                if (inner.StartsWith("DB", StringComparison.OrdinalIgnoreCase) || inner.StartsWith("DbNode", StringComparison.OrdinalIgnoreCase))
-                {
-                    string altKey = inner.Contains("Node", StringComparison.OrdinalIgnoreCase)
-                        ? inner.Replace("Node", "", StringComparison.OrdinalIgnoreCase)
-                        : inner;
-
-                    if (vars.TryGetValue(altKey, out var vAlt) && vAlt is not null)
-                    {
-                        object? altVal = vAlt.Text ?? (object?)vAlt.Value ?? vAlt.Found ?? vAlt.Pass;
-                        return altVal?.ToString() ?? string.Empty;
-                    }
-
-                    return string.Empty;
-                }
-                return m.Value;
-            }
-
-            object? valueObj = null;
-            if (string.IsNullOrWhiteSpace(prop))
-            {
-                valueObj = v.Text ?? (object?)v.Value ?? v.Found ?? v.Pass;
-            }
-            else if (string.Equals(prop, "Pass", StringComparison.OrdinalIgnoreCase))
-            {
-                valueObj = v.Pass;
-            }
-            else if (string.Equals(prop, "Value", StringComparison.OrdinalIgnoreCase))
-            {
-                valueObj = v.Value ?? (object?)v.Score ?? v.Found ?? v.Pass;
-            }
-            else if (string.Equals(prop, "Score", StringComparison.OrdinalIgnoreCase))
-            {
-                valueObj = v.Score ?? v.Value;
-            }
-            else if (string.Equals(prop, "Found", StringComparison.OrdinalIgnoreCase))
-            {
-                valueObj = v.Found ?? v.Pass;
-            }
-            else if (string.Equals(prop, "Text", StringComparison.OrdinalIgnoreCase))
-            {
-                valueObj = v.Text ?? v.Value?.ToString() ?? v.Pass.ToString();
-            }
-            else if (string.Equals(prop, "Count", StringComparison.OrdinalIgnoreCase))
-            {
-                valueObj = v.Value;
-            }
-            else if (string.Equals(prop, "MaxArea", StringComparison.OrdinalIgnoreCase) || string.Equals(prop, "Area", StringComparison.OrdinalIgnoreCase))
-            {
-                valueObj = v.Score;
-            }
-
-            if (valueObj is null)
-            {
-                return string.Empty;
-            }
-
-            if (valueObj is double d)
-            {
-                return string.IsNullOrWhiteSpace(fmt) ? d.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture) : d.ToString(fmt, System.Globalization.CultureInfo.InvariantCulture);
-            }
-
-            if (valueObj is bool b)
-            {
-                return b ? "True" : "False";
-            }
-
-            return valueObj.ToString() ?? string.Empty;
-        });
     }
 
     public static bool Evaluate(string expression, Dictionary<string, Variable> vars)
@@ -560,7 +139,7 @@ public static class ConditionEvaluator
                     _pos++;
                 }
                 string numStr = _text.Substring(start, _pos - start);
-                if (double.TryParse(numStr, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out var val))
+                if (double.TryParse(numStr, NumberStyles.Any, CultureInfo.InvariantCulture, out var val))
                 {
                     return new Token(TokenKind.Number, numStr, val);
                 }
@@ -609,7 +188,7 @@ public static class ConditionEvaluator
         public Parser(string expression, Dictionary<string, Variable> vars)
         {
             _lexer = new Lexer(expression);
-            _vars = vars;
+            _vars = vars ?? new Dictionary<string, Variable>(StringComparer.OrdinalIgnoreCase);
             _current = _lexer.Next();
         }
 
@@ -692,8 +271,8 @@ public static class ConditionEvaluator
 
             if (a.Text is not null || b.Text is not null)
             {
-                string sa = a.Text ?? a.Number.ToString(System.Globalization.CultureInfo.InvariantCulture);
-                string sb = b.Text ?? b.Number.ToString(System.Globalization.CultureInfo.InvariantCulture);
+                string sa = a.Text ?? a.Number.ToString(CultureInfo.InvariantCulture);
+                string sb = b.Text ?? b.Number.ToString(CultureInfo.InvariantCulture);
                 int compStr = string.Compare(sa, sb, StringComparison.OrdinalIgnoreCase);
                 return op switch
                 {
@@ -774,55 +353,120 @@ public static class ConditionEvaluator
 
         private ConditionValue Resolve(string name, string? member)
         {
-            if (!_vars.TryGetValue(name, out var v))
+            Variable? v = null;
+            if (!_vars.TryGetValue(name, out v) || v is null)
             {
-                throw new InvalidOperationException($"Unknown identifier '{name}'");
+                // Thử alternate aliases (ví dụ Origin -> Origin1, Point1 -> Point)
+                var alternates = GetAlternateVarNames(name);
+                foreach (var alt in alternates)
+                {
+                    if (_vars.TryGetValue(alt, out var vAlt) && vAlt != null)
+                    {
+                        v = vAlt;
+                        break;
+                    }
+                }
+
+                // Thử tra cứu phẳng name.member nếu có
+                if (!string.IsNullOrEmpty(member) && _vars.TryGetValue($"{name}.{member}", out var vFlat) && vFlat != null)
+                {
+                    if (vFlat.Text != null) return ConditionValue.FromString(vFlat.Text);
+                    if (vFlat.Value.HasValue) return ConditionValue.FromNumber(vFlat.Value.Value);
+                    return ConditionValue.FromBool(vFlat.Pass);
+                }
+
+                if (v is null)
+                {
+                    throw new InvalidOperationException($"Unknown identifier '{name}'");
+                }
             }
 
             if (string.IsNullOrWhiteSpace(member))
             {
                 if (v.Text is not null) return ConditionValue.FromString(v.Text);
                 if (v.Value is not null) return ConditionValue.FromNumber(v.Value.Value);
+                if (v.Score is not null) return ConditionValue.FromNumber(v.Score.Value);
                 return ConditionValue.FromBool(v.Pass);
             }
 
-            if (string.Equals(member, "PASS", StringComparison.OrdinalIgnoreCase)) return ConditionValue.FromBool(v.Pass);
-            if (string.Equals(member, "SUCCESS", StringComparison.OrdinalIgnoreCase)) return ConditionValue.FromBool(v.Pass);
+            // 1. Kiểm tra trực tiếp trong v.Members
+            if (v.TryGetMember(member, out var mVal) && mVal != null)
+            {
+                if (mVal is bool b) return ConditionValue.FromBool(b);
+                if (mVal is double d) return ConditionValue.FromNumber(d);
+                if (mVal is int i) return ConditionValue.FromNumber(i);
+                if (mVal is long l) return ConditionValue.FromNumber(l);
+                if (mVal is float f) return ConditionValue.FromNumber(f);
+                if (double.TryParse(mVal.ToString(), NumberStyles.Any, CultureInfo.InvariantCulture, out double parsed))
+                {
+                    return ConditionValue.FromNumber(parsed);
+                }
+                return ConditionValue.FromString(mVal.ToString() ?? string.Empty);
+            }
+
+            // 2. Tra cứu aliases chuẩn
+            if (string.Equals(member, "PASS", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(member, "SUCCESS", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(member, "OK", StringComparison.OrdinalIgnoreCase))
+            {
+                return ConditionValue.FromBool(v.Pass);
+            }
+
+            if (string.Equals(member, "FOUND", StringComparison.OrdinalIgnoreCase))
+            {
+                return ConditionValue.FromBool(v.Found ?? v.Pass);
+            }
+
             if (string.Equals(member, "VALUE", StringComparison.OrdinalIgnoreCase) || 
                 string.Equals(member, "COUNT", StringComparison.OrdinalIgnoreCase) ||
                 string.Equals(member, "ROWCOUNT", StringComparison.OrdinalIgnoreCase) ||
                 string.Equals(member, "COLUMNCOUNT", StringComparison.OrdinalIgnoreCase) ||
                 string.Equals(member, "ROWSAFFECTED", StringComparison.OrdinalIgnoreCase))
             {
-                if (v.Value is null) throw new InvalidOperationException($"{name}.Value is not available");
-                return ConditionValue.FromNumber(v.Value.Value);
+                if (v.Value.HasValue) return ConditionValue.FromNumber(v.Value.Value);
+                if (v.Score.HasValue) return ConditionValue.FromNumber(v.Score.Value);
+                throw new InvalidOperationException($"{name}.Value is not available");
             }
+
             if (string.Equals(member, "SCORE", StringComparison.OrdinalIgnoreCase) || 
                 string.Equals(member, "MAXAREA", StringComparison.OrdinalIgnoreCase) ||
                 string.Equals(member, "AREA", StringComparison.OrdinalIgnoreCase))
             {
-                if (v.Score is null) throw new InvalidOperationException($"{name}.Score is not available");
-                return ConditionValue.FromNumber(v.Score.Value);
-            }
-            if (string.Equals(member, "FOUND", StringComparison.OrdinalIgnoreCase))
-            {
-                if (v.Found is null) throw new InvalidOperationException($"{name}.Found is not available");
-                return ConditionValue.FromBool(v.Found.Value);
+                if (v.Score.HasValue) return ConditionValue.FromNumber(v.Score.Value);
+                if (v.Value.HasValue) return ConditionValue.FromNumber(v.Value.Value);
+                throw new InvalidOperationException($"{name}.Score is not available");
             }
 
-            if (string.Equals(member, "TEXT", StringComparison.OrdinalIgnoreCase))
+            if (string.Equals(member, "ANGLE", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(member, "ANGLEDEG", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(member, "ROTATION", StringComparison.OrdinalIgnoreCase))
             {
-                if (v.Text is null) throw new InvalidOperationException($"{name}.Text is not available");
-                return ConditionValue.FromString(v.Text);
+                if (v.TryGetMember("Angle", out var a) && a is double da) return ConditionValue.FromNumber(da);
+                if (v.TryGetMember("AngleDeg", out var ad) && ad is double dad) return ConditionValue.FromNumber(dad);
+                if (v.Value.HasValue) return ConditionValue.FromNumber(v.Value.Value);
+            }
+
+            if (string.Equals(member, "X", StringComparison.OrdinalIgnoreCase))
+            {
+                if (v.TryGetMember("X", out var x) && x is double dx) return ConditionValue.FromNumber(dx);
+                if (v.TryGetMember("CenterX", out var cx) && cx is double dcx) return ConditionValue.FromNumber(dcx);
+            }
+
+            if (string.Equals(member, "Y", StringComparison.OrdinalIgnoreCase))
+            {
+                if (v.TryGetMember("Y", out var y) && y is double dy) return ConditionValue.FromNumber(dy);
+                if (v.TryGetMember("CenterY", out var cy) && cy is double dcy) return ConditionValue.FromNumber(dcy);
+            }
+
+            if (string.Equals(member, "TEXT", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(member, "STRING", StringComparison.OrdinalIgnoreCase))
+            {
+                if (v.Text is not null) return ConditionValue.FromString(v.Text);
+                if (v.TryGetMember("Text", out var t) && t != null) return ConditionValue.FromString(t.ToString() ?? string.Empty);
+                throw new InvalidOperationException($"{name}.Text is not available");
             }
 
             throw new InvalidOperationException($"Unknown member '{member}' on '{name}'");
-        }
-
-        private static bool ToBool(ConditionValue v)
-        {
-            if (v.IsBool) return v.Bool;
-            throw new InvalidOperationException("Expected boolean");
         }
     }
 }

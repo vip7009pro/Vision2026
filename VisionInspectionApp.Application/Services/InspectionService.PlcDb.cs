@@ -173,7 +173,7 @@ public partial class InspectionService
             return;
         }
 
-        var vars = ConditionEvaluator.BuildVariableMap(result);
+        var vars = ConditionEvaluator.BuildVariableMap(result, config);
         foreach (var c in config.Conditions)
         {
             if (string.IsNullOrWhiteSpace(c.Name))

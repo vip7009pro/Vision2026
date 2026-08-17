@@ -3872,7 +3872,7 @@ namespace VisionInspectionApp.UI.ViewModels
                 Dictionary<string, ConditionEvaluator.Variable>? vars = null;
                 try
                 {
-                    vars = ConditionEvaluator.BuildVariableMap(run);
+                    vars = ConditionEvaluator.BuildVariableMap(run, config);
                 }
                 catch
                 {
@@ -4553,7 +4553,7 @@ namespace VisionInspectionApp.UI.ViewModels
                 Dictionary<string, ConditionEvaluator.Variable>? vars = null;
                 try
                 {
-                    vars = ConditionEvaluator.BuildVariableMap(run);
+                    vars = ConditionEvaluator.BuildVariableMap(run, _config);
                 }
                 catch
                 {
