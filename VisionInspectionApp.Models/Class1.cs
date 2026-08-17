@@ -319,7 +319,7 @@ public sealed class ImageOutputDefinition
 
     public string SaveFolderPath { get; set; } = @"C:\VisionOutput";
 
-    public string FileNameFormat { get; set; } = "IMG_{YYYY}{MM}{DD}_{HH}{mm}{ss}_{Count}";
+    public string FileNameFormat { get; set; } = "IMG_{ProductName}_{YYYY}{MM}{DD}_{HH}{mm}{ss}_{Count}";
 
     public ImageOutputFormat Format { get; set; } = ImageOutputFormat.PNG;
 

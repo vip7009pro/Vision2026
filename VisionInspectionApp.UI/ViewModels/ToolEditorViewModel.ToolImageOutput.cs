@@ -109,12 +109,12 @@ namespace VisionInspectionApp.UI.ViewModels
 
         public string ImageOutput_FileNameFormat
         {
-            get => SelectedImageOutputDef()?.FileNameFormat ?? "IMG_{YYYY}{MM}{DD}_{HH}{mm}{ss}_{Count}";
+            get => SelectedImageOutputDef()?.FileNameFormat ?? "IMG_{ProductName}_{YYYY}{MM}{DD}_{HH}{mm}{ss}_{Count}";
             set
             {
                 var def = SelectedImageOutputDef();
                 if (def is null || def.FileNameFormat == value) return;
-                def.FileNameFormat = value ?? "IMG_{YYYY}{MM}{DD}_{HH}{mm}{ss}_{Count}";
+                def.FileNameFormat = value ?? "IMG_{ProductName}_{YYYY}{MM}{DD}_{HH}{mm}{ss}_{Count}";
                 OnPropertyChanged();
                 IsDirty = true;
                 RequestAutoSave();
