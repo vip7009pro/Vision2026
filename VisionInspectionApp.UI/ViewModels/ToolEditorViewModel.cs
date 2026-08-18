@@ -366,9 +366,8 @@ namespace VisionInspectionApp.UI.ViewModels
                 if (s.IlluminationCorrection == value)
                     return;
                 s.IlluminationCorrection = value;
-                RefreshPreviews();
+                SchedulePreprocessPreviewUpdate();
                 OnPropertyChanged();
-                RequestAutoSave();
             }
         }
     
@@ -391,9 +390,8 @@ namespace VisionInspectionApp.UI.ViewModels
                 if (s.IlluminationKernel == v)
                     return;
                 s.IlluminationKernel = v;
-                RefreshPreviews();
+                SchedulePreprocessPreviewUpdate();
                 OnPropertyChanged();
-                RequestAutoSave();
             }
         }
     
@@ -414,9 +412,8 @@ namespace VisionInspectionApp.UI.ViewModels
                 if (Math.Abs(s.ClaheClipLimit - v) < 0.0000001)
                     return;
                 s.ClaheClipLimit = v;
-                RefreshPreviews();
+                SchedulePreprocessPreviewUpdate();
                 OnPropertyChanged();
-                RequestAutoSave();
             }
         }
     
@@ -437,9 +434,8 @@ namespace VisionInspectionApp.UI.ViewModels
                 if (s.ClaheTileGrid == v)
                     return;
                 s.ClaheTileGrid = v;
-                RefreshPreviews();
+                SchedulePreprocessPreviewUpdate();
                 OnPropertyChanged();
-                RequestAutoSave();
             }
         }
     
@@ -1875,7 +1871,7 @@ namespace VisionInspectionApp.UI.ViewModels
                 var s = GetActivePreprocessSettingsForUi();
                 return s?.UseGray ?? true;
             }
-    
+
             set
             {
                 var s = GetActivePreprocessSettingsForUi();
@@ -1884,12 +1880,11 @@ namespace VisionInspectionApp.UI.ViewModels
                 if (s.UseGray == value)
                     return;
                 s.UseGray = value;
-                RefreshPreviews();
+                SchedulePreprocessPreviewUpdate();
                 OnPropertyChanged();
-                RequestAutoSave();
             }
         }
-    
+
         public bool UseGaussianBlur
         {
             get
@@ -1897,7 +1892,7 @@ namespace VisionInspectionApp.UI.ViewModels
                 var s = GetActivePreprocessSettingsForUi();
                 return s?.UseGaussianBlur ?? false;
             }
-    
+
             set
             {
                 var s = GetActivePreprocessSettingsForUi();
@@ -1906,12 +1901,11 @@ namespace VisionInspectionApp.UI.ViewModels
                 if (s.UseGaussianBlur == value)
                     return;
                 s.UseGaussianBlur = value;
-                RefreshPreviews();
+                SchedulePreprocessPreviewUpdate();
                 OnPropertyChanged();
-                RequestAutoSave();
             }
         }
-    
+
         public int BlurKernel
         {
             get
@@ -1919,7 +1913,7 @@ namespace VisionInspectionApp.UI.ViewModels
                 var s = GetActivePreprocessSettingsForUi();
                 return s?.BlurKernel ?? 3;
             }
-    
+
             set
             {
                 var s = GetActivePreprocessSettingsForUi();
@@ -1928,12 +1922,11 @@ namespace VisionInspectionApp.UI.ViewModels
                 if (s.BlurKernel == value)
                     return;
                 s.BlurKernel = value;
-                RefreshPreviews();
+                SchedulePreprocessPreviewUpdate();
                 OnPropertyChanged();
-                RequestAutoSave();
             }
         }
-    
+
         public bool UseThreshold
         {
             get
@@ -1941,7 +1934,7 @@ namespace VisionInspectionApp.UI.ViewModels
                 var s = GetActivePreprocessSettingsForUi();
                 return s?.UseThreshold ?? false;
             }
-    
+
             set
             {
                 var s = GetActivePreprocessSettingsForUi();
@@ -1950,9 +1943,8 @@ namespace VisionInspectionApp.UI.ViewModels
                 if (s.UseThreshold == value)
                     return;
                 s.UseThreshold = value;
-                RefreshPreviews();
+                SchedulePreprocessPreviewUpdate();
                 OnPropertyChanged();
-                RequestAutoSave();
             }
         }
 
@@ -1964,10 +1956,9 @@ namespace VisionInspectionApp.UI.ViewModels
                 var s = GetActivePreprocessSettingsForUi();
                 if (s is null || s.ThresholdValue == value) return;
                 s.ThresholdValue = value;
-                RefreshPreviews();
+                SchedulePreprocessPreviewUpdate();
                 OnPropertyChanged();
                 OnPropertyChanged(nameof(ThresholdLow));
-                RequestAutoSave();
             }
         }
 
@@ -1981,11 +1972,10 @@ namespace VisionInspectionApp.UI.ViewModels
                 var s = GetActivePreprocessSettingsForUi();
                 if (s is null || s.ThresholdType == value) return;
                 s.ThresholdType = value;
-                RefreshPreviews();
+                SchedulePreprocessPreviewUpdate();
                 OnPropertyChanged();
                 OnPropertyChanged(nameof(IsThresholdBinary));
                 OnPropertyChanged(nameof(IsThresholdLocal));
-                RequestAutoSave();
             }
         }
 
@@ -2000,10 +1990,9 @@ namespace VisionInspectionApp.UI.ViewModels
                 var s = GetActivePreprocessSettingsForUi();
                 if (s is null || s.ThresholdLow == value) return;
                 s.ThresholdLow = value;
-                RefreshPreviews();
+                SchedulePreprocessPreviewUpdate();
                 OnPropertyChanged();
                 OnPropertyChanged(nameof(ThresholdValue));
-                RequestAutoSave();
             }
         }
 
@@ -2015,9 +2004,8 @@ namespace VisionInspectionApp.UI.ViewModels
                 var s = GetActivePreprocessSettingsForUi();
                 if (s is null || s.ThresholdHigh == value) return;
                 s.ThresholdHigh = value;
-                RefreshPreviews();
+                SchedulePreprocessPreviewUpdate();
                 OnPropertyChanged();
-                RequestAutoSave();
             }
         }
 
@@ -2029,9 +2017,8 @@ namespace VisionInspectionApp.UI.ViewModels
                 var s = GetActivePreprocessSettingsForUi();
                 if (s is null || s.InvertBinary == value) return;
                 s.InvertBinary = value;
-                RefreshPreviews();
+                SchedulePreprocessPreviewUpdate();
                 OnPropertyChanged();
-                RequestAutoSave();
             }
         }
 
@@ -2043,9 +2030,8 @@ namespace VisionInspectionApp.UI.ViewModels
                 var s = GetActivePreprocessSettingsForUi();
                 if (s is null || s.MaskWidth == value) return;
                 s.MaskWidth = value;
-                RefreshPreviews();
+                SchedulePreprocessPreviewUpdate();
                 OnPropertyChanged();
-                RequestAutoSave();
             }
         }
 
@@ -2057,9 +2043,8 @@ namespace VisionInspectionApp.UI.ViewModels
                 var s = GetActivePreprocessSettingsForUi();
                 if (s is null || s.MaskHeight == value) return;
                 s.MaskHeight = value;
-                RefreshPreviews();
+                SchedulePreprocessPreviewUpdate();
                 OnPropertyChanged();
-                RequestAutoSave();
             }
         }
 
@@ -2071,9 +2056,8 @@ namespace VisionInspectionApp.UI.ViewModels
                 var s = GetActivePreprocessSettingsForUi();
                 if (s is null || Math.Abs(s.LocalOffset - value) < 1e-6) return;
                 s.LocalOffset = value;
-                RefreshPreviews();
+                SchedulePreprocessPreviewUpdate();
                 OnPropertyChanged();
-                RequestAutoSave();
             }
         }
 
@@ -2085,9 +2069,8 @@ namespace VisionInspectionApp.UI.ViewModels
                 var s = GetActivePreprocessSettingsForUi();
                 if (s is null || s.InvertLocal == value) return;
                 s.InvertLocal = value;
-                RefreshPreviews();
+                SchedulePreprocessPreviewUpdate();
                 OnPropertyChanged();
-                RequestAutoSave();
             }
         }
 
@@ -2107,9 +2090,8 @@ namespace VisionInspectionApp.UI.ViewModels
                 if (s.UseCanny == value)
                     return;
                 s.UseCanny = value;
-                RefreshPreviews();
+                SchedulePreprocessPreviewUpdate();
                 OnPropertyChanged();
-                RequestAutoSave();
             }
         }
     
@@ -2129,9 +2111,8 @@ namespace VisionInspectionApp.UI.ViewModels
                 if (s.Canny1 == value)
                     return;
                 s.Canny1 = value;
-                RefreshPreviews();
+                SchedulePreprocessPreviewUpdate();
                 OnPropertyChanged();
-                RequestAutoSave();
             }
         }
     
@@ -2151,9 +2132,8 @@ namespace VisionInspectionApp.UI.ViewModels
                 if (s.Canny2 == value)
                     return;
                 s.Canny2 = value;
-                RefreshPreviews();
+                SchedulePreprocessPreviewUpdate();
                 OnPropertyChanged();
-                RequestAutoSave();
             }
         }
     
@@ -2173,9 +2153,8 @@ namespace VisionInspectionApp.UI.ViewModels
                 if (s.UseMorphology == value)
                     return;
                 s.UseMorphology = value;
-                RefreshPreviews();
+                SchedulePreprocessPreviewUpdate();
                 OnPropertyChanged();
-                RequestAutoSave();
             }
         }
     

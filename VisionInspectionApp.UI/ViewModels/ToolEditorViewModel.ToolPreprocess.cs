@@ -564,7 +564,7 @@ namespace VisionInspectionApp.UI.ViewModels
             def.Rois.Add(newRoi);
             OnPropertyChanged(nameof(PreprocessRois));
             RaiseToolPropertyPanelsChanged();
-            RefreshPreviews();
+            SchedulePreprocessPreviewUpdate();
             RequestAutoSave();
         }
 
@@ -575,7 +575,7 @@ namespace VisionInspectionApp.UI.ViewModels
             def.Rois.Remove(roi);
             OnPropertyChanged(nameof(PreprocessRois));
             RaiseToolPropertyPanelsChanged();
-            RefreshPreviews();
+            SchedulePreprocessPreviewUpdate();
             RequestAutoSave();
         }
 
@@ -586,7 +586,7 @@ namespace VisionInspectionApp.UI.ViewModels
             roi.Mode = roi.Mode == PreprocessRoiMode.Include ? PreprocessRoiMode.Exclude : PreprocessRoiMode.Include;
             OnPropertyChanged(nameof(PreprocessRois));
             RaiseToolPropertyPanelsChanged();
-            RefreshPreviews();
+            SchedulePreprocessPreviewUpdate();
             RequestAutoSave();
         }
 
@@ -614,7 +614,7 @@ namespace VisionInspectionApp.UI.ViewModels
 
             OnPropertyChanged(nameof(PreprocessRois));
             RaiseToolPropertyPanelsChanged();
-            RefreshPreviews();
+            SchedulePreprocessPreviewUpdate();
             RequestAutoSave();
         }
 
@@ -631,7 +631,7 @@ namespace VisionInspectionApp.UI.ViewModels
                         roi.PolygonPoints.Remove(point);
                         OnPropertyChanged(nameof(PreprocessRois));
                         RaiseToolPropertyPanelsChanged();
-                        RefreshPreviews();
+                        SchedulePreprocessPreviewUpdate();
                         RequestAutoSave();
                     }
                     break;

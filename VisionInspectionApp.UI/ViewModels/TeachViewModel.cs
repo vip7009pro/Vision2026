@@ -33,6 +33,8 @@ public sealed partial class TeachViewModel : ObservableObject
     private readonly LineDetector _lineDetector;
     private readonly UndoRedoManager _undo;
     private readonly SharedImageContext _sharedImage;
+    private CancellationTokenSource? _teachPreprocessCts;
+    private readonly object _teachPreprocessLock = new();
 
     private Mat? _imageMat;
 
@@ -2222,7 +2224,7 @@ public sealed partial class TeachViewModel : ObservableObject
 
     private void RefreshDisplayedImage()
     {
-        if (_imageMat is null)
+        if (_imageMat is null || _imageMat.Empty())
         {
             Image = null;
             return;
@@ -2234,8 +2236,51 @@ public sealed partial class TeachViewModel : ObservableObject
             return;
         }
 
-        using var processed = _preprocessor.Run(_imageMat, VisionConfig.Preprocess);
-        Image = processed.ToBitmapSourceForDisplay();
+        lock (_teachPreprocessLock)
+        {
+            _teachPreprocessCts?.Cancel();
+            _teachPreprocessCts?.Dispose();
+            _teachPreprocessCts = new CancellationTokenSource();
+        }
+
+        var token = _teachPreprocessCts.Token;
+        var matCopy = _imageMat.Clone();
+        var preprocessSettings = VisionConfig.Preprocess;
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await Task.Delay(10, token).ConfigureAwait(false);
+                if (token.IsCancellationRequested) return;
+
+                using (matCopy)
+                {
+                    using var processed = _preprocessor.Run(matCopy, preprocessSettings);
+                    if (token.IsCancellationRequested) return;
+
+                    var bmp = processed.ToBitmapSourceForDisplay();
+                    bmp?.Freeze();
+
+                    if (token.IsCancellationRequested) return;
+
+                    await System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
+                    {
+                        if (!token.IsCancellationRequested && bmp != null)
+                        {
+                            Image = bmp;
+                        }
+                    }, System.Windows.Threading.DispatcherPriority.Render);
+                }
+            }
+            catch (OperationCanceledException)
+            {
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Teach RefreshDisplayedImage error: {ex.Message}");
+            }
+        });
     }
 
     private void RefreshOverlayItems()

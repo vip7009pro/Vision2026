@@ -104,6 +104,8 @@ namespace VisionInspectionApp.UI.ViewModels
         private readonly DispatcherTimer _blobThresholdPreviewTimer;
         private readonly DispatcherTimer _continuousStatsTimer;
         private readonly System.Diagnostics.Stopwatch _continuousStopwatch = new();
+        private CancellationTokenSource? _preprocessPreviewCts;
+        private readonly object _preprocessPreviewLock = new();
         private int _lastPreviewImageWidth;
         private int _lastPreviewImageHeight;
         private const int MaxBlobOverlayCount = 1000;
@@ -2971,7 +2973,149 @@ namespace VisionInspectionApp.UI.ViewModels
 
         private void RunFlow() => _ = RunFlowAsync();
 
-    
+        /// <summary>
+        /// Cập nhật ảnh Preview cho Preprocessor bất đồng bộ và có cơ chế Throttling/Debouncing.
+        /// Chuyển toàn bộ tác vụ xử lý ảnh OpenCV sang luồng nền (Task.Run) và tự động hủy bỏ các frame cũ
+        /// khi người dùng đang giữ kéo slider liên tục, đảm bảo giao diện 60+ FPS siêu mượt mà không bao giờ bị đơ lag.
+        /// </summary>
+        public void SchedulePreprocessPreviewUpdate()
+        {
+            if (!EnableCanvasRendering)
+            {
+                return;
+            }
+
+            lock (_preprocessPreviewLock)
+            {
+                _preprocessPreviewCts?.Cancel();
+                _preprocessPreviewCts?.Dispose();
+                _preprocessPreviewCts = new CancellationTokenSource();
+            }
+
+            var token = _preprocessPreviewCts.Token;
+
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    // Debounce ngắn 10ms gom các micro-events của Slider
+                    await Task.Delay(10, token).ConfigureAwait(false);
+                    if (token.IsCancellationRequested) return;
+
+                    using var rawSnap = _sharedImage.GetSnapshot();
+                    Mat? snapToUse = null;
+                    if (rawSnap is not null && !rawSnap.Empty())
+                    {
+                        snapToUse = rawSnap.Clone();
+                    }
+                    else
+                    {
+                        var firstImgSource = _config?.ImageSources?.FirstOrDefault();
+                        if (firstImgSource is not null)
+                        {
+                            snapToUse = LoadImageFromSourceForPreview(firstImgSource);
+                        }
+                    }
+
+                    if (snapToUse is null || snapToUse.Empty())
+                    {
+                        snapToUse?.Dispose();
+                        return;
+                    }
+
+                    using var snap = snapToUse;
+                    if (token.IsCancellationRequested) return;
+
+                    var selNode = SelectedNode;
+                    var config = _config;
+                    if (config is null) return;
+
+                    BitmapSource? selectedBmp = null;
+                    BitmapSource? finalBmp = null;
+
+                    // Nếu đang chọn node Preprocess cụ thể
+                    if (selNode is not null && string.Equals(selNode.Type, "Preprocess", StringComparison.OrdinalIgnoreCase))
+                    {
+                        using var processedSel = ResolveToolPreprocessForPreview(snap, selNode);
+                        if (token.IsCancellationRequested) return;
+
+                        selectedBmp = processedSel.Empty() ? null : processedSel.ToBitmapSourceForDisplay(1920, 1080);
+                        selectedBmp?.Freeze();
+
+                        if (PreprocessPreviewEnabled)
+                        {
+                            using var processedFinal = _preprocessor.Run(snap, config.Preprocess);
+                            finalBmp = processedFinal.Empty() ? null : processedFinal.ToBitmapSourceForDisplay(1920, 1080);
+                            finalBmp?.Freeze();
+                        }
+                        else
+                        {
+                            finalBmp = snap.ToBitmapSourceForDisplay(1920, 1080);
+                            finalBmp?.Freeze();
+                        }
+                    }
+                    else
+                    {
+                        // Đang mở hộp thoại Global Preprocessor hoặc chọn node khác
+                        if (PreprocessPreviewEnabled)
+                        {
+                            using var processedFinal = _preprocessor.Run(snap, config.Preprocess);
+                            if (token.IsCancellationRequested) return;
+
+                            finalBmp = processedFinal.Empty() ? null : processedFinal.ToBitmapSourceForDisplay(1920, 1080);
+                            finalBmp?.Freeze();
+                        }
+                        else
+                        {
+                            finalBmp = snap.ToBitmapSourceForDisplay(1920, 1080);
+                            finalBmp?.Freeze();
+                        }
+
+                        if (selNode is not null && string.Equals(selNode.Type, "ResultView", StringComparison.OrdinalIgnoreCase))
+                        {
+                            selectedBmp = finalBmp;
+                        }
+                        else if (selNode is not null)
+                        {
+                            using var processedSel = ResolveToolPreprocessForPreview(snap, selNode);
+                            if (token.IsCancellationRequested) return;
+
+                            selectedBmp = processedSel.Empty() ? null : processedSel.ToBitmapSourceForDisplay(1920, 1080);
+                            selectedBmp?.Freeze();
+                        }
+                    }
+
+                    if (token.IsCancellationRequested) return;
+
+                    // Đẩy kết quả lên UI thread
+                    await System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
+                    {
+                        if (token.IsCancellationRequested) return;
+
+                        if (selectedBmp != null)
+                        {
+                            SelectedNodePreviewImage = selectedBmp;
+                        }
+                        if (finalBmp != null)
+                        {
+                            _cachedFinalPreviewImage = finalBmp;
+                            FinalPreviewImage = finalBmp;
+                        }
+                    }, DispatcherPriority.Render);
+                }
+                catch (OperationCanceledException)
+                {
+                    // Bình thường khi người dùng kéo slider nhanh
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"SchedulePreprocessPreviewUpdate error: {ex.Message}");
+                }
+            });
+
+            RequestAutoSave();
+        }
+
         private void RefreshPreviews()
         {
             if (!EnableCanvasRendering)
