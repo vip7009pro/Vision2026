@@ -321,7 +321,15 @@ Lộ trình tích hợp tính năng Chụp ảnh từ camera và hỗ trợ các
     - Tự động hủy bỏ (cancel) tác vụ cũ đang tính dở khi có giá trị slider mới tới, gom cụm các micro-events bằng độ trễ ngắn 10ms.
     - Chạy `_preprocessor.Run(...)` và chuyển đổi `ToBitmapSourceForDisplay(1920, 1080)` hoàn toàn dưới nền, gọi `.Freeze()` và gán vào UI Dispatcher ở mức `DispatcherPriority.Render`.
     - Chuyển toàn bộ 21+ property setters của Preprocessor trong `ToolEditorViewModel.cs` và `TeachViewModel.cs` sang `SchedulePreprocessPreviewUpdate()`.
-    - Kết quả: Khi kéo slider liên tục trên ảnh độ phân giải siêu cao (20MP+), UI Slider phản hồi tức thì ở tốc độ 60+ FPS siêu mượt mà không bao giờ bị đơ cứng hay giật lag.
+- [x] Task 65: Khắc phục quy trình áp dụng Preprocess và ROI Masking cho Tool Origin:
+  - `Sửa Lỗi Thuật Toán ROI Masking (Class1.cs)`: Khởi tạo ảnh `blended` bằng ma trận nền đen `Scalar.All(0)` thay vì clone lại `inputBgrOrGray`. Nhờ đó, các pixel trong vùng bị che/loại trừ (`roiMask == 0`) được xóa sạch thành màu đen thay vì giữ lại ảnh gốc chưa che.
+  - `Đồng Bộ Dạy Mẫu Template Origin (ToolEditorViewModel.cs)`: Cập nhật `TrySaveTemplateImage` sử dụng `ResolveToolImageForPreview(snap, originNode)` để trích xuất ảnh mẫu Origin từ đúng node Preprocess/Crop kết nối trực tiếp trên Canvas Flow.
+  - `Chuẩn Hóa Pipeline Runtime (InspectionService.Pipeline.cs)`: Bổ sung điều kiện tìm `toolNode` cho Origin theo kiểu `"Origin"`, hỗ trợ cả cổng `Image` và `In`, đồng thời trả về `(ppMat, new PreprocessSettings())` khi node Preprocess có custom ROIs/masking để tránh double filter.
+- [x] Task 66: Nâng cấp toàn diện kiến trúc tổng hợp hiển thị Kết quả & ROI Overlay cho Tool ResultView và Final Preview:
+  - `Bổ sung ColorDiff & BlobDetection vào BuildFinalOverlayFromRun`: Tích hợp đầy đủ kết quả đo lường độ lệch màu $\Delta E$, giá trị đo $L, a, b$ kèm khung viền màu động theo trạng thái PASS/NG, cũng như danh sách bounding box, tâm điểm và tổng số lỗi của BlobDetection trên màn hình tổng hợp ResultView.
+  - `Kiến trúc Universal Node-Based ROI Aggregator cho AddConfigRois & BuildFinalOverlay`: Thay thế việc duyệt thủ công từng công cụ rời rạc bằng cơ chế tự động duyệt qua tất cả các Node trên đồ thị Canvas (`Nodes`) và gọi `AddConfigRoisForNode(node, dst)`. Đảm bảo 100% các công cụ hiện tại (`ColorDiff`, `CircleFinder`, `LinePair`, `EdgePair`, `CodeDetection`,...) và bất kỳ công cụ mới nào trong tương lai sẽ tự động được hiển thị khung ROI trên ResultView/Final Preview mà không bao giờ bị bỏ sót.
+  - `Đồng Bộ Chuyển Hướng BuildOverlayForNodeFromRunWithConfig`: Khi người dùng click chọn trực tiếp node `ResultView` trên Canvas, hệ thống tự động định tuyến gọi `BuildFinalOverlayFromRunWithConfig(run, dst)` để kết xuất đầy đủ lớp phủ composite của toàn bộ quy trình.
+  - `Đồng Bộ Xoay Pose ROI ColorDiff theo Origin`: Áp dụng `CreateRotatedRoiWithPose` cho cả vùng mẫu (Sample ROI) và vùng tham chiếu (Ref ROI) của Tool ColorDiff trong `AddConfigRoisForNode`.
 
 
 

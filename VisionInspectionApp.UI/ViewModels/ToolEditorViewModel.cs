@@ -866,20 +866,16 @@ namespace VisionInspectionApp.UI.ViewModels
             }
     
             OpenCvSharp.Mat rawMat;
+            ToolGraphNodeViewModel? toolNode = null;
             if (isOrigin)
             {
-                // Origin template image MUST ALWAYS be cropped from Image 1 (Global Preprocess)
-                rawMat = _preprocessor.Run(snap, _config?.Preprocess ?? new PreprocessSettings());
+                toolNode = Nodes.FirstOrDefault(n => string.Equals(n.Type, "Origin", StringComparison.OrdinalIgnoreCase));
             }
-            else
+            else if (!string.IsNullOrWhiteSpace(pointName))
             {
-                ToolGraphNodeViewModel? toolNode = null;
-                if (!string.IsNullOrWhiteSpace(pointName))
-                {
-                    toolNode = Nodes.FirstOrDefault(n => string.Equals(n.Type, "Point", StringComparison.OrdinalIgnoreCase) && string.Equals(n.RefName, pointName, StringComparison.OrdinalIgnoreCase));
-                }
-                rawMat = toolNode != null ? ResolveToolImageForPreview(snap, toolNode) : _preprocessor.Run(snap, _config?.Preprocess ?? new PreprocessSettings());
+                toolNode = Nodes.FirstOrDefault(n => string.Equals(n.Type, "Point", StringComparison.OrdinalIgnoreCase) && string.Equals(n.RefName, pointName, StringComparison.OrdinalIgnoreCase));
             }
+            rawMat = toolNode != null ? ResolveToolImageForPreview(snap, toolNode) : _preprocessor.Run(snap, _config?.Preprocess ?? new PreprocessSettings());
             using var tempDisposeMat = rawMat;
 
             var templateDir = Path.Combine(CurrentTempWorkingDir ?? Path.Combine(Path.GetFullPath(_storeOptions.ConfigRootDirectory), ProductCode), "templates");

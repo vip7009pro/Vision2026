@@ -51,6 +51,15 @@
 
 ### Sửa lỗi và Cải thiện UX/UI (Phiên làm việc hiện tại)
 
+- **Nâng cấp kiến trúc tổng hợp hiển thị Kết quả & ROI Overlay cho Tool ResultView và Final Preview**:
+  - Khắc phục triệt để lỗi thiếu kết quả và khung ROI của `ColorDiff` (và `BlobDetection`) trên màn hình ResultView / Final Preview: Bổ sung logic render đầy đủ độ lệch màu $\Delta E$, giá trị đo $L,a,b$, nhãn trạng thái PASS/NG cùng các bounding box và tâm điểm của BlobDetection vào `BuildFinalOverlayFromRun`.
+  - Tái cấu trúc cơ chế `AddConfigRois` và `BuildFinalOverlay` sang mô hình **Universal Node-Based ROI Aggregator**: Tự động duyệt qua toàn bộ danh sách `Nodes` trên Canvas để gọi `AddConfigRoisForNode(node, dst)`. Bất kỳ công cụ nào đã có hoặc thêm mới trong tương lai sẽ tự động được hiển thị khung ROI trên ResultView/Final Preview mà không cần phải cập nhật lại danh sách thủ công.
+  - Bổ sung định tuyến `BuildOverlayForNodeFromRunWithConfig` cho `ResultView` tự động gọi `BuildFinalOverlayFromRunWithConfig(run, dst)`.
+  - Áp dụng `CreateRotatedRoiWithPose` cho cả Sample ROI và Ref ROI của Tool ColorDiff để tự động biến đổi vị trí và góc xoay bám theo Origin khi sản phẩm dịch chuyển.
+- **Khắc phục quy trình áp dụng Preprocess và Masking cho Tool Origin**:
+  - Đã sửa triệt để lỗi thuật toán ROI Masking trong `ImagePreprocessor` (`VisionEngine/Class1.cs`): Khởi tạo `blended` bằng ma trận `Scalar.All(0)` (nền đen) thay vì clone lại `inputBgrOrGray`. Nhờ đó, các vùng bị che/loại trừ (`roiMask == 0`) được xóa sạch thành màu đen thay vì giữ nguyên ảnh gốc, ngăn chặn hoàn toàn việc pattern bị che vẫn bị Origin nhận diện.
+  - Sửa lỗi trích xuất ảnh dạy mẫu `TrySaveTemplateImage` (`ToolEditorViewModel.cs`): Tool Origin sử dụng `ResolveToolImageForPreview(snap, originNode)` để lấy ảnh đầu vào đã qua node Preprocess kết nối trên đồ thị thay vì hardcode Global Preprocess.
+  - Cập nhật `ResolveToolPreprocess` trong `InspectionService.Pipeline.cs`: Chuẩn hóa việc tìm `toolNode` cho Origin theo kiểu node `"Origin"` và trả về `(ppMat, new PreprocessSettings())` khi node Preprocess có custom ROIs/masking để tránh double filter.
 - **Tối ưu hoá siêu tốc độ cho Preprocessor Tool (Properties Panel & Global Preprocess Dialog)**:
   - Khắc phục triệt để hiện tượng giật lag, đơ cứng UI khi kéo các slider điều chỉnh thông số tiền xử lý ảnh (Illumination Kernel, CLAHE Clip/Grid, Gaussian Blur, Threshold Low/High/Value, Local Offset, Canny 1/2, Morphology, Invert...).
   - Tối ưu thuật toán trong `ImagePreprocessor` (`VisionEngine/Class1.cs`): Bổ sung `EstimateBackground` áp dụng kỹ thuật **Pyramidal Downscale-Blur-Upscale** cho Illumination Correction. Thay vì thực hiện tích chập Gaussian trên ảnh 20MP độ phân giải đầy đủ với kernel khổng lồ ($k \in [15, 401]$) tốn **1.500ms - 3.500ms/frame**, ảnh được downscale về proxy 480-640px để làm mờ với kernel nhỏ $k_{small}$ rồi upscale bilinear, giảm thời gian ước lượng nền xuống **~3.5ms** (~400x speedup).

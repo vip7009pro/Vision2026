@@ -1112,10 +1112,17 @@ namespace VisionInspectionApp.UI.ViewModels
     
         private void BuildOverlayForNodeFromRunWithConfig(ToolGraphNodeViewModel node, InspectionResult run, List<OverlayItem> dst)
         {
-            if (!ShowResultOverlay)
+            if (node is null || !ShowResultOverlay)
             {
                 return;
             }
+
+            if (string.Equals(node.Type, "ResultView", StringComparison.OrdinalIgnoreCase))
+            {
+                BuildFinalOverlayFromRunWithConfig(run, dst);
+                return;
+            }
+
             BuildOverlayForNodeFromRun(node, run, dst);
             if (_config is null)
             {
@@ -3555,18 +3562,33 @@ namespace VisionInspectionApp.UI.ViewModels
     
         private void AddConfigRois(List<OverlayItem> dst)
         {
-            if (_config is null)
+            if (_config is null || !ShowRoisInFinalPreview)
             {
                 return;
             }
-    
+
+            var renderedRefNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            // 1. Render ROIs from all active canvas nodes (guarantees ColorDiff, CircleFinder, LinePair, EdgePair, Point, Line, etc. are always included)
+            if (Nodes is not null && Nodes.Count > 0)
+            {
+                foreach (var node in Nodes)
+                {
+                    if (node is null || string.Equals(node.Type, "ResultView", StringComparison.OrdinalIgnoreCase) || string.Equals(node.Type, "ImageOutput", StringComparison.OrdinalIgnoreCase))
+                    {
+                        continue;
+                    }
+                    AddConfigRoisForNode(node, dst);
+                    if (!string.IsNullOrWhiteSpace(node.RefName))
+                    {
+                        renderedRefNames.Add(node.RefName);
+                    }
+                }
+            }
+
+            // 2. Fallback for config items that might not be explicitly represented in Nodes
             var config = _config;
-            if (!ShowRoisInFinalPreview)
-            {
-                return;
-            }
-    
-            if (config.Origin.SearchRoi.Width > 0 && config.Origin.SearchRoi.Height > 0)
+            if (config.Origin.SearchRoi.Width > 0 && config.Origin.SearchRoi.Height > 0 && !renderedRefNames.Contains("Origin"))
             {
                 dst.Add(new OverlayRectItem
                 {
@@ -3579,213 +3601,6 @@ namespace VisionInspectionApp.UI.ViewModels
                     Label = "Origin S"
                 });
             }
-    
-            foreach (var p in config.Points)
-            {
-                if (p.SearchRoi.Width <= 0 || p.SearchRoi.Height <= 0)
-                {
-                    continue;
-                }
-    
-                dst.Add(CreateRotatedRoi(p.SearchRoi, Brushes.DeepSkyBlue, $"{p.Name} S"));
-                if (p.TemplateRoi.Width > 0 && p.TemplateRoi.Height > 0)
-                {
-                    dst.Add(CreateRotatedRoi(p.TemplateRoi, Brushes.DeepSkyBlue, $"{p.Name} T"));
-                }
-            }
-    
-            foreach (var l in config.Lines)
-            {
-                if (l.SearchRoi.Width <= 0 || l.SearchRoi.Height <= 0)
-                {
-                    continue;
-                }
-    
-                dst.Add(CreateRotatedRoiWithPose(l.SearchRoi, Brushes.MediumPurple, $"{l.Name} L"));
-            }
-    
-            foreach (var c in config.Calipers)
-            {
-                if (c.SearchRoi.Width <= 0 || c.SearchRoi.Height <= 0)
-                {
-                    continue;
-                }
-    
-                dst.Add(CreateRotatedRoiWithPose(c.SearchRoi, Brushes.Lime, $"{c.Name} Cal"));
-                var stripCount = Math.Clamp(c.StripCount, 1, 100);
-                var stripLength = Math.Max(3, c.StripLength);
-                if (stripCount > 0)
-                {
-                    var hasOriginPose = _lastRun?.Origin is not null && (_lastRun.Origin.MatchRect.Width > 0 || _lastRun.Origin.Position.X != 0 || _lastRun.Origin.Position.Y != 0);
-                    var originTeach = (config.Origin.TemplateRoi.Width > 0 && config.Origin.TemplateRoi.Height > 0)
-                        ? new Point2d(config.Origin.TemplateRoi.X + config.Origin.TemplateRoi.Width / 2.0, config.Origin.TemplateRoi.Y + config.Origin.TemplateRoi.Height / 2.0)
-                        : new Point2d(config.Origin.SearchRoi.X + config.Origin.SearchRoi.Width / 2.0, config.Origin.SearchRoi.Y + config.Origin.SearchRoi.Height / 2.0);
-                    if (config.Origin.WorldPosition.X != 0 || config.Origin.WorldPosition.Y != 0)
-                    {
-                        originTeach = new Point2d(config.Origin.WorldPosition.X, config.Origin.WorldPosition.Y);
-                    }
-    
-                    var mr = _lastRun?.Origin?.MatchRect ?? default;
-                    var originFound = (mr.Width > 0 && mr.Height > 0)
-                        ? new Point2d(mr.X + mr.Width / 2.0, mr.Y + mr.Height / 2.0)
-                        : new Point2d(_lastRun?.Origin?.Position.X ?? originTeach.X, _lastRun?.Origin?.Position.Y ?? originTeach.Y);
-                    var angleDeg = hasOriginPose ? _lastRun!.Origin.AngleDeg : 0.0;
-    
-                    if (c.Orientation == CaliperOrientation.Vertical)
-                    {
-                        var y1 = c.SearchRoi.Y + (c.SearchRoi.Height - stripLength) / 2.0;
-                        var y2 = y1 + stripLength;
-                        for (var i = 0; i < stripCount; i++)
-                        {
-                            var x = c.SearchRoi.X + (i + 0.5) * c.SearchRoi.Width / stripCount;
-                            var p1 = new Point2d(x, y1);
-                            var p2 = new Point2d(x, y2);
-    
-                            if (hasOriginPose)
-                            {
-                                p1 = TransformPose(p1, originTeach, originFound, angleDeg);
-                                p2 = TransformPose(p2, originTeach, originFound, angleDeg);
-                            }
-    
-                            dst.Add(new OverlayLineItem { X1 = p1.X, Y1 = p1.Y, X2 = p2.X, Y2 = p2.Y, Stroke = Brushes.Lime, StrokeThickness = 1.0 });
-                        }
-                    }
-                    else
-                    {
-                        var x1 = c.SearchRoi.X + (c.SearchRoi.Width - stripLength) / 2.0;
-                        var x2 = x1 + stripLength;
-                        for (var i = 0; i < stripCount; i++)
-                        {
-                            var y = c.SearchRoi.Y + (i + 0.5) * c.SearchRoi.Height / stripCount;
-                            var p1 = new Point2d(x1, y);
-                            var p2 = new Point2d(x2, y);
-    
-                            if (hasOriginPose)
-                            {
-                                p1 = TransformPose(p1, originTeach, originFound, angleDeg);
-                                p2 = TransformPose(p2, originTeach, originFound, angleDeg);
-                            }
-    
-                            dst.Add(new OverlayLineItem { X1 = p1.X, Y1 = p1.Y, X2 = p2.X, Y2 = p2.Y, Stroke = Brushes.Lime, StrokeThickness = 1.0 });
-                        }
-                    }
-                }
-            }
-    
-            foreach (var b in _config.BlobDetections)
-            {
-                if (b.Rois is not null && b.Rois.Count > 0)
-                {
-                    var hasValidInclude = false;
-                    for (var i = 0; i < b.Rois.Count; i++)
-                    {
-                        var rr = b.Rois[i];
-                        if (rr.Roi.Width <= 0 || rr.Roi.Height <= 0)
-                        {
-                            continue;
-                        }
-    
-                        if (rr.Mode == BlobRoiMode.Exclude)
-                        {
-                            dst.Add(CreateRotatedRoi(rr.Roi, Brushes.Red, $"{b.Name} BX{i + 1}"));
-                        }
-                        else
-                        {
-                            hasValidInclude = true;
-                            dst.Add(CreateRotatedRoi(rr.Roi, Brushes.Gold, $"{b.Name} B{i + 1}"));
-                        }
-                    }
-    
-                    if (!hasValidInclude && b.InspectRoi.Width > 0 && b.InspectRoi.Height > 0)
-                    {
-                        dst.Add(CreateRotatedRoi(b.InspectRoi, Brushes.Gold, $"{b.Name} B"));
-                    }
-    
-                    continue;
-                }
-    
-                if (b.InspectRoi.Width <= 0 || b.InspectRoi.Height <= 0)
-                {
-                    continue;
-                }
-    
-                dst.Add(CreateRotatedRoi(b.InspectRoi, Brushes.Gold, $"{b.Name} B"));
-            }
-    
-            void AddSurfaceCompareRoi(string surfaceCompareName)
-            {
-                var sc = config.SurfaceCompares.FirstOrDefault(x => string.Equals(x.Name, surfaceCompareName, StringComparison.OrdinalIgnoreCase));
-                if (sc is null)
-                {
-                    return;
-                }
-    
-                if (sc.InspectRoi.Width > 0 && sc.InspectRoi.Height > 0)
-                {
-                    dst.Add(CreateRotatedRoi(sc.InspectRoi, Brushes.DeepSkyBlue, $"{sc.Name} SC"));
-                }
-    
-                if (sc.TemplateRoi.Width > 0 && sc.TemplateRoi.Height > 0)
-                {
-                    dst.Add(CreateRotatedRoi(sc.TemplateRoi, Brushes.DeepSkyBlue, $"{sc.Name} SCT"));
-                }
-    
-                if (sc.Rois is not null && sc.Rois.Count > 0)
-                {
-                    for (var i = 0; i < sc.Rois.Count; i++)
-                    {
-                        var rr = sc.Rois[i];
-                        if (rr.Roi.Width <= 0 || rr.Roi.Height <= 0)
-                        {
-                            continue;
-                        }
-    
-                        if (rr.Mode == BlobRoiMode.Exclude)
-                        {
-                            dst.Add(CreateRotatedRoi(rr.Roi, Brushes.Red, $"{sc.Name} SCX{i + 1}"));
-                        }
-                        else
-                        {
-                            dst.Add(CreateRotatedRoi(rr.Roi, Brushes.DeepSkyBlue, $"{sc.Name} SC{i + 1}"));
-                        }
-                    }
-                }
-            }
-    
-            foreach (var sc in config.SurfaceCompares)
-            {
-                AddSurfaceCompareRoi(sc.Name);
-            }
-
-            void AddContourCompareRoi(string contourCompareName)
-            {
-                var cc = config.ContourCompares.FirstOrDefault(x => string.Equals(x.Name, contourCompareName, StringComparison.OrdinalIgnoreCase));
-                if (cc is null) return;
-
-                if (cc.InspectRoi.Width > 0 && cc.InspectRoi.Height > 0)
-                {
-                    dst.Add(CreateRotatedRoiWithPose(cc.InspectRoi, Brushes.MediumSpringGreen, $"{cc.Name} CC"));
-                }
-
-                if (cc.TemplateRoi.Width > 0 && cc.TemplateRoi.Height > 0)
-                {
-                    dst.Add(CreateRotatedRoiWithPose(cc.TemplateRoi, Brushes.MediumSpringGreen, $"{cc.Name} CCT"));
-                }
-            }
-
-            foreach (var cc in config.ContourCompares)
-            {
-                AddContourCompareRoi(cc.Name);
-            }
-    
-            foreach (var c in config.CodeDetections)
-            {
-                if (c.SearchRoi.Width > 0 && c.SearchRoi.Height > 0)
-                {
-                    dst.Add(CreateRotatedRoiWithPose(c.SearchRoi, Brushes.Lime, $"{c.Name} C"));
-                }
-            }
-    
             if (_config.DefectConfig.InspectRoi.Width > 0 && _config.DefectConfig.InspectRoi.Height > 0)
             {
                 dst.Add(CreateRotatedRoi(_config.DefectConfig.InspectRoi, Brushes.Orange, "DefectROI"));
@@ -4326,6 +4141,93 @@ namespace VisionInspectionApp.UI.ViewModels
                     }
     
                     dst.Add(new OverlayTextItem { X = t.X, Y = t.Y, Text = text, Foreground = brush, Background = new SolidColorBrush(Color.FromArgb(80, 0, 0, 0)) });
+                }
+            }
+
+            if (run.BlobDetections is not null)
+            {
+                foreach (var b in run.BlobDetections)
+                {
+                    var bDef = config?.BlobDetections?.FirstOrDefault(x => string.Equals(x.Name, b.Name, StringComparison.OrdinalIgnoreCase));
+                    var lx = 12.0;
+                    var ly = 12.0;
+                    if (bDef is not null && bDef.InspectRoi.Width > 0 && bDef.InspectRoi.Height > 0)
+                    {
+                        if (run.Origin is not null)
+                        {
+                            var originTeach = new Point2d(config!.Origin.WorldPosition.X, config.Origin.WorldPosition.Y);
+                            var tr = TransformPose(new Point2d(bDef.InspectRoi.X, bDef.InspectRoi.Y), originTeach, run.Origin.Position, run.Origin.AngleDeg);
+                            lx = tr.X + 2;
+                            ly = tr.Y + 2;
+                        }
+                        else
+                        {
+                            lx = bDef.InspectRoi.X + 2;
+                            ly = bDef.InspectRoi.Y + 2;
+                        }
+                    }
+
+                    dst.Add(new OverlayPointItem { X = lx, Y = ly, Radius = 1.0, Stroke = Brushes.Gold, Label = $"{b.Name}: {b.Count}" });
+                    if (b.Blobs is not null && b.Blobs.Count > 0)
+                    {
+                        var n = Math.Min(b.Blobs.Count, 300);
+                        for (var i = 0; i < n; i++)
+                        {
+                            var bi = b.Blobs[i];
+                            var br = bi.BoundingBox;
+                            if (br.Width > 0 && br.Height > 0)
+                            {
+                                dst.Add(new OverlayRectItem
+                                {
+                                    X = br.X,
+                                    Y = br.Y,
+                                    Width = br.Width,
+                                    Height = br.Height,
+                                    Angle = bi.Angle,
+                                    Stroke = Brushes.Gold,
+                                    Label = string.Empty
+                                });
+                            }
+                            dst.Add(new OverlayPointItem { X = bi.Centroid.X, Y = bi.Centroid.Y, Radius = 3.0, Stroke = Brushes.Gold, Label = string.Empty });
+                        }
+                    }
+                }
+            }
+
+            if (run.ColorDiffs is not null)
+            {
+                foreach (var cd in run.ColorDiffs)
+                {
+                    var stroke = cd.Pass ? Brushes.Lime : Brushes.Red;
+                    var status = cd.Pass ? "OK" : "NG";
+                    var cdDef = config?.ColorDiffs?.FirstOrDefault(x => string.Equals(x.Name, cd.Name, StringComparison.OrdinalIgnoreCase));
+                    var lx = 12.0;
+                    var ly = 12.0;
+                    if (cdDef is not null && cdDef.InspectRoi.Width > 0 && cdDef.InspectRoi.Height > 0)
+                    {
+                        if (run.Origin is not null)
+                        {
+                            var originTeach = new Point2d(config!.Origin.WorldPosition.X, config.Origin.WorldPosition.Y);
+                            var tr = TransformPose(new Point2d(cdDef.InspectRoi.X, cdDef.InspectRoi.Y), originTeach, run.Origin.Position, run.Origin.AngleDeg);
+                            lx = tr.X + 4;
+                            ly = tr.Y + 4;
+                        }
+                        else
+                        {
+                            lx = cdDef.InspectRoi.X + 4;
+                            ly = cdDef.InspectRoi.Y + 4;
+                        }
+                    }
+
+                    var text = $"{cd.Name} [{status}]: ΔE={cd.DeltaE:F2} (L={cd.MeasuredL:F1}, a={cd.MeasuredA:F1}, b={cd.MeasuredB:F1})";
+                    dst.Add(new OverlayTextItem
+                    {
+                        X = lx,
+                        Y = ly,
+                        Text = text,
+                        Foreground = stroke,
+                        Background = new SolidColorBrush(Color.FromArgb(160, 0, 0, 0))
+                    });
                 }
             }
         }
@@ -5444,74 +5346,7 @@ namespace VisionInspectionApp.UI.ViewModels
                 return;
             }
     
-            var showRois = ShowRoisInFinalPreview;
-                if (showRois && _config.Origin.SearchRoi.Width > 0 && _config.Origin.SearchRoi.Height > 0)
-            {
-                dst.Add(new OverlayRectItem
-                {
-                    X = _config.Origin.SearchRoi.X,
-                    Y = _config.Origin.SearchRoi.Y,
-                    Width = _config.Origin.SearchRoi.Width,
-                    Height = _config.Origin.SearchRoi.Height,
-                    Angle = 0,
-                    Stroke = Brushes.Lime,
-                    Label = "Origin S"
-                });
-            }
-
-            if (showRois && _config.Origin.TemplateRoi.Width > 0 && _config.Origin.TemplateRoi.Height > 0)
-            {
-                dst.Add(CreateRotatedRoiWithPose(_config.Origin.TemplateRoi, Brushes.Gold, "Origin T"));
-            }
-    
-            foreach (var p in _config.Points)
-            {
-                if (showRois && p.SearchRoi.Width > 0 && p.SearchRoi.Height > 0)
-                {
-                    dst.Add(CreateRotatedRoiWithPose(p.SearchRoi, Brushes.DeepSkyBlue, $"{p.Name} S"));
-                }
-    
-                if (showRois && p.TemplateRoi.Width > 0 && p.TemplateRoi.Height > 0)
-                {
-                    dst.Add(CreateRotatedRoiWithPose(p.TemplateRoi, Brushes.Gold, $"{p.Name} T"));
-                }
-    
-                dst.Add(new OverlayPointItem { X = p.WorldPosition.X, Y = p.WorldPosition.Y, Stroke = Brushes.DeepSkyBlue, Label = p.Name });
-            }
-    
-            foreach (var l in _config.Lines)
-            {
-                if (showRois && l.SearchRoi.Width > 0 && l.SearchRoi.Height > 0)
-                {
-                    dst.Add(CreateRotatedRoiWithPose(l.SearchRoi, Brushes.MediumPurple, $"{l.Name} L"));
-                }
-            }
-    
-            foreach (var b in _config.BlobDetections)
-            {
-                if (showRois && b.InspectRoi.Width > 0 && b.InspectRoi.Height > 0)
-                {
-                    dst.Add(CreateRotatedRoiWithPose(b.InspectRoi, Brushes.Gold, $"{b.Name} B"));
-                }
-            }
-    
-            foreach (var c in _config.CircleFinders)
-            {
-                if (showRois && c.SearchRoi.Width > 0 && c.SearchRoi.Height > 0)
-                {
-                    dst.Add(CreateRotatedRoiWithPose(c.SearchRoi, Brushes.MediumPurple, $"{c.Name} CIR"));
-                }
-            }
-    
-            foreach (var e in _config.EdgePairDetections)
-            {
-                AddEpdSearchStripsOverlay(dst, e, showRois);
-            }
-
-            if (showRois && _config.DefectConfig.InspectRoi.Width > 0 && _config.DefectConfig.InspectRoi.Height > 0)
-            {
-                dst.Add(CreateRotatedRoi(_config.DefectConfig.InspectRoi, Brushes.Orange, "DefectROI"));
-            }
+            AddConfigRois(dst);
 
             using var processed = _preprocessor.Run(image, _config.Preprocess);
             var detectedLines = new System.Collections.Generic.Dictionary<string, LineDetectResult>(StringComparer.OrdinalIgnoreCase);

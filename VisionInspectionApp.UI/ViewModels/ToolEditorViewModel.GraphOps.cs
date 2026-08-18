@@ -1028,7 +1028,7 @@ namespace VisionInspectionApp.UI.ViewModels
                     {
                         colorDiffDef.InspectRoi = new Roi { X = 50, Y = 50, Width = 150, Height = 150 };
                     }
-                    dst.Add(CreateRotatedRoi(colorDiffDef.InspectRoi, Brushes.DeepPink, $"{colorDiffDef.Name} Sample"));
+                    dst.Add(CreateRotatedRoiWithPose(colorDiffDef.InspectRoi, Brushes.DeepPink, $"{colorDiffDef.Name} Sample"));
 
                     if (!colorDiffDef.UseRefColor && colorDiffDef.RefRoi != null)
                     {
@@ -1036,7 +1036,7 @@ namespace VisionInspectionApp.UI.ViewModels
                         {
                             colorDiffDef.RefRoi = new Roi { X = 50, Y = 50, Width = 150, Height = 150 };
                         }
-                        dst.Add(CreateRotatedRoi(colorDiffDef.RefRoi, Brushes.MediumOrchid, $"{colorDiffDef.Name} Ref"));
+                        dst.Add(CreateRotatedRoiWithPose(colorDiffDef.RefRoi, Brushes.MediumOrchid, $"{colorDiffDef.Name} Ref"));
                     }
                 }
                 return;

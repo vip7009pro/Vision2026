@@ -251,14 +251,14 @@ public partial class InspectionService
                 var defaultSettings = config.Preprocess;
 
                 var toolNode = nodesById.Values.FirstOrDefault(n => string.Equals(n.Type, toolType, StringComparison.OrdinalIgnoreCase)
-                                                                    && string.Equals(n.RefName, toolRefName, StringComparison.OrdinalIgnoreCase));
+                                                                    && (string.Equals(toolType, "Origin", StringComparison.OrdinalIgnoreCase) || string.Equals(n.RefName, toolRefName, StringComparison.OrdinalIgnoreCase)));
                 if (toolNode is null)
                 {
                     return (image, defaultSettings);
                 }
 
                 var imageEdge = edges.FirstOrDefault(e => string.Equals(e.ToNodeId, toolNode.Id, StringComparison.OrdinalIgnoreCase)
-                                                       && string.Equals(e.ToPort, "Image", StringComparison.OrdinalIgnoreCase));
+                                                       && (string.Equals(e.ToPort, "Image", StringComparison.OrdinalIgnoreCase) || string.Equals(e.ToPort, "In", StringComparison.OrdinalIgnoreCase)));
                 
                 if (imageEdge is null || !nodesById.TryGetValue(imageEdge.FromNodeId, out var fromNode))
                 {
@@ -276,7 +276,7 @@ public partial class InspectionService
                         return (image, ppSettings);
                     }
                     var ppMat = GetPreprocessNodeOutput(fromNode.Id);
-                    return (ppMat, ppSettings);
+                    return (ppMat, new PreprocessSettings());
                 }
                 else if (string.Equals(fromNode.Type, "Crop", StringComparison.OrdinalIgnoreCase))
                 {

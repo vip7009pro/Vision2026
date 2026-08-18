@@ -654,7 +654,7 @@ public sealed class ImagePreprocessor
                     }
                 }
 
-                var blended = inputBgrOrGray.Clone();
+                var blended = new Mat(inputBgrOrGray.Size(), current.Type(), Scalar.All(0));
                 current.CopyTo(blended, roiMask);
                 AdvanceCurrent(blended);
             }
