@@ -123,7 +123,7 @@ namespace VisionInspectionApp.UI.ViewModels
             OutPorts.Clear();
             // Output port based on node type
             string outName = $"Out";
-            if (string.Equals(Type, "LineLineDistance", StringComparison.OrdinalIgnoreCase))
+            if (string.Equals(Type, "LineLineDistance", StringComparison.OrdinalIgnoreCase) || string.Equals(Type, "SegmentLineDistance", StringComparison.OrdinalIgnoreCase))
                 outName = "Distance";
             else if (string.Equals(Type, "PointLineDistance", StringComparison.OrdinalIgnoreCase))
                 outName = "Distance";
@@ -205,7 +205,7 @@ namespace VisionInspectionApp.UI.ViewModels
                 InPorts.Add(new NodePortViewModel(this, "P1", isInput: true));
                 InPorts.Add(new NodePortViewModel(this, "P2", isInput: true));
             }
-            else if (string.Equals(Type, "LineLineDistance", StringComparison.OrdinalIgnoreCase))
+            else if (string.Equals(Type, "LineLineDistance", StringComparison.OrdinalIgnoreCase) || string.Equals(Type, "SegmentLineDistance", StringComparison.OrdinalIgnoreCase))
             {
                 InPorts.Add(new NodePortViewModel(this, "L1", isInput: true));
                 InPorts.Add(new NodePortViewModel(this, "L2", isInput: true));

@@ -636,14 +636,18 @@ namespace VisionInspectionApp.UI.ViewModels
                     }
                 }
             }
-            else if (string.Equals(toNode.Type, "SegmentLineDistance", StringComparison.OrdinalIgnoreCase) && (string.Equals(fromNode.Type, "Line", StringComparison.OrdinalIgnoreCase) || string.Equals(fromNode.Type, "Caliper", StringComparison.OrdinalIgnoreCase)))
+            else if (string.Equals(toNode.Type, "SegmentLineDistance", StringComparison.OrdinalIgnoreCase))
             {
                 var def = _config.SegmentLineDistances.FirstOrDefault(x => string.Equals(x.Name, toNode.RefName, StringComparison.OrdinalIgnoreCase));
                 if (def is not null)
                 {
-                    if (string.Equals(toPort, "L1", StringComparison.OrdinalIgnoreCase))
+                    if (string.Equals(toPort, "L1", StringComparison.OrdinalIgnoreCase) || string.Equals(toPort, "LineA", StringComparison.OrdinalIgnoreCase) || string.Equals(toPort, "InA", StringComparison.OrdinalIgnoreCase) || string.Equals(toPort, "In1", StringComparison.OrdinalIgnoreCase))
                         def.LineA = fromNode.RefName;
-                    else if (string.Equals(toPort, "L2", StringComparison.OrdinalIgnoreCase))
+                    else if (string.Equals(toPort, "L2", StringComparison.OrdinalIgnoreCase) || string.Equals(toPort, "LineB", StringComparison.OrdinalIgnoreCase) || string.Equals(toPort, "InB", StringComparison.OrdinalIgnoreCase) || string.Equals(toPort, "In2", StringComparison.OrdinalIgnoreCase))
+                        def.LineB = fromNode.RefName;
+                    else if (string.IsNullOrWhiteSpace(def.LineA))
+                        def.LineA = fromNode.RefName;
+                    else if (string.IsNullOrWhiteSpace(def.LineB) && !string.Equals(def.LineA, fromNode.RefName, StringComparison.OrdinalIgnoreCase))
                         def.LineB = fromNode.RefName;
                 }
             }

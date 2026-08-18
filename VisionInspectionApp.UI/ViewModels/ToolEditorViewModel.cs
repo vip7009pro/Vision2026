@@ -923,6 +923,9 @@ namespace VisionInspectionApp.UI.ViewModels
                     p.ShapeModel = ShapeModelTrainer.Train(gray);
                 }
             }
+
+            VisionEngine.OriginMatcher.ClearCache();
+            VisionEngine.MvpShapeMatch2Engine.ClearCache();
         }
     
         [ObservableProperty]
@@ -2299,7 +2302,7 @@ namespace VisionInspectionApp.UI.ViewModels
                 {
                     list.Add(l);
                 }
-    
+
                 foreach (var c in _config.Calipers.Select(x => x.Name).Where(x => !string.IsNullOrWhiteSpace(x)))
                 {
                     if (!list.Contains(c))
@@ -2307,7 +2310,40 @@ namespace VisionInspectionApp.UI.ViewModels
                         list.Add(c);
                     }
                 }
-    
+
+                if (_config.CreateLines != null)
+                {
+                    foreach (var cl in _config.CreateLines.Select(x => x.Name).Where(x => !string.IsNullOrWhiteSpace(x)))
+                    {
+                        if (!list.Contains(cl))
+                        {
+                            list.Add(cl);
+                        }
+                    }
+                }
+
+                if (_config.LinePairDetections != null)
+                {
+                    foreach (var lpd in _config.LinePairDetections.Select(x => x.Name).Where(x => !string.IsNullOrWhiteSpace(x)))
+                    {
+                        if (!list.Contains(lpd))
+                        {
+                            list.Add(lpd);
+                        }
+                    }
+                }
+
+                if (_config.EdgePairDetections != null)
+                {
+                    foreach (var epd in _config.EdgePairDetections.Select(x => x.Name).Where(x => !string.IsNullOrWhiteSpace(x)))
+                    {
+                        if (!list.Contains(epd))
+                        {
+                            list.Add(epd);
+                        }
+                    }
+                }
+
                 return list;
             }
         }
@@ -2410,10 +2446,18 @@ namespace VisionInspectionApp.UI.ViewModels
                 RemoveEdgesToSelectedNodePort(port);
                 if (!string.IsNullOrWhiteSpace(lineName))
                 {
-                    var from = Nodes.FirstOrDefault(n => (string.Equals(n.Type, "Line", StringComparison.OrdinalIgnoreCase) || string.Equals(n.Type, "Caliper", StringComparison.OrdinalIgnoreCase) || string.Equals(n.Type, "LinePairDetect", StringComparison.OrdinalIgnoreCase) || string.Equals(n.Type, "EdgePairDetect", StringComparison.OrdinalIgnoreCase)) && string.Equals(n.RefName, lineName, StringComparison.OrdinalIgnoreCase));
+                    var from = Nodes.FirstOrDefault(n => (string.Equals(n.Type, "Line", StringComparison.OrdinalIgnoreCase)
+                        || string.Equals(n.Type, "Caliper", StringComparison.OrdinalIgnoreCase)
+                        || string.Equals(n.Type, "LinePairDetect", StringComparison.OrdinalIgnoreCase)
+                        || string.Equals(n.Type, "LinePairDetection", StringComparison.OrdinalIgnoreCase)
+                        || string.Equals(n.Type, "EdgePairDetect", StringComparison.OrdinalIgnoreCase)
+                        || string.Equals(n.Type, "EdgePair", StringComparison.OrdinalIgnoreCase)
+                        || string.Equals(n.Type, "CreateLine", StringComparison.OrdinalIgnoreCase))
+                        && string.Equals(n.RefName, lineName, StringComparison.OrdinalIgnoreCase));
                     if (from is not null)
                     {
                         from.EnsurePortsInitialized();
+                        SelectedNode.EnsurePortsInitialized();
                         CreateEdge(from, SelectedNode, from.OutPorts.FirstOrDefault()?.Name ?? "Out", port);
                     }
                 }

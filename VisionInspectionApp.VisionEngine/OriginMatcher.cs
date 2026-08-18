@@ -53,7 +53,23 @@ public sealed class OriginMatcher
         if (definition is null) throw new ArgumentNullException(nameof(definition));
         if (templateGray is null) throw new ArgumentNullException(nameof(templateGray));
 
-        var roiRect = ToRect(definition.SearchRoi, image.Width, image.Height);
+        Rect roiRect;
+        if (definition.MvpDetectionRoiMode == DetectionRoiMode.FullGraph 
+            || definition.SearchRoi == null 
+            || definition.SearchRoi.Width <= 0 
+            || definition.SearchRoi.Height <= 0)
+        {
+            roiRect = new Rect(0, 0, image.Width, image.Height);
+        }
+        else
+        {
+            roiRect = ToRect(definition.SearchRoi, image.Width, image.Height);
+            if (roiRect.Width < Math.Min(32, templateGray.Width / 2) || roiRect.Height < Math.Min(32, templateGray.Height / 2))
+            {
+                roiRect = new Rect(0, 0, image.Width, image.Height);
+            }
+        }
+
         if (roiRect.Width <= 0 || roiRect.Height <= 0 || templateGray.Empty())
         {
             var centerFallback = new Point2d(roiRect.X + roiRect.Width / 2.0, roiRect.Y + roiRect.Height / 2.0);

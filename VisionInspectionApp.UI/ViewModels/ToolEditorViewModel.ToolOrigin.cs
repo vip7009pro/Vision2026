@@ -224,7 +224,7 @@ namespace VisionInspectionApp.UI.ViewModels
             using var snap = GetCurrentWorkingImageSnapshot();
             var toolNode = Nodes.FirstOrDefault(n => string.Equals(n.Type, "Origin", StringComparison.OrdinalIgnoreCase));
             using var prepSnap = toolNode != null ? ResolveToolImageForPreview(snap, toolNode) : snap.Clone();
-            using var globalPrepSnap = _preprocessor.Run(snap, _config.Preprocess);
+            using var globalPrepSnap = prepSnap.Clone();
 
             var workingDir = CurrentTempWorkingDir ?? Path.Combine(Path.GetFullPath(_storeOptions.ConfigRootDirectory), ProductCode ?? "");
             var vm = new OriginTrainViewModel(prepSnap, globalPrepSnap, _config.Origin, workingDir, () =>

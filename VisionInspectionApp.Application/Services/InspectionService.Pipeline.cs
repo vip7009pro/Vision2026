@@ -246,6 +246,31 @@ public partial class InspectionService
                 });
             }
 
+            Mat GetNodeOutputImage(string nodeId)
+            {
+                if (!nodesById.TryGetValue(nodeId, out var node)) return image;
+                if (string.Equals(node.Type, "Preprocess", StringComparison.OrdinalIgnoreCase))
+                {
+                    return GetPreprocessNodeOutput(node.Id);
+                }
+                if (string.Equals(node.Type, "Crop", StringComparison.OrdinalIgnoreCase))
+                {
+                    return GetCropNodeOutput(node.Id);
+                }
+                if (string.Equals(node.Type, "ImageSource", StringComparison.OrdinalIgnoreCase))
+                {
+                    return image;
+                }
+                
+                var inEdge = edges.FirstOrDefault(e => string.Equals(e.ToNodeId, node.Id, StringComparison.OrdinalIgnoreCase)
+                                                    && (string.Equals(e.ToPort, "In", StringComparison.OrdinalIgnoreCase) || string.Equals(e.ToPort, "Image", StringComparison.OrdinalIgnoreCase)));
+                if (inEdge is not null)
+                {
+                    return GetNodeOutputImage(inEdge.FromNodeId);
+                }
+                return image;
+            }
+
             (Mat ImageMat, PreprocessSettings Settings) ResolveToolPreprocess(string toolType, string toolRefName)
             {
                 var defaultSettings = config.Preprocess;
@@ -257,8 +282,7 @@ public partial class InspectionService
                     return (image, defaultSettings);
                 }
 
-                var imageEdge = edges.FirstOrDefault(e => string.Equals(e.ToNodeId, toolNode.Id, StringComparison.OrdinalIgnoreCase)
-                                                       && (string.Equals(e.ToPort, "Image", StringComparison.OrdinalIgnoreCase) || string.Equals(e.ToPort, "In", StringComparison.OrdinalIgnoreCase)));
+                var imageEdge = edges.FirstOrDefault(e => string.Equals(e.ToNodeId, toolNode.Id, StringComparison.OrdinalIgnoreCase));
                 
                 if (imageEdge is null || !nodesById.TryGetValue(imageEdge.FromNodeId, out var fromNode))
                 {
@@ -267,14 +291,6 @@ public partial class InspectionService
 
                 if (string.Equals(fromNode.Type, "Preprocess", StringComparison.OrdinalIgnoreCase))
                 {
-                    var ppSettings = preprocessNodesByName.TryGetValue(fromNode.RefName ?? string.Empty, out var preDef) ? (preDef.Settings ?? new PreprocessSettings()) : new PreprocessSettings();
-                    var hasCustomRois = preDef?.Rois != null && preDef.Rois.Count > 0;
-                    if (!hasCustomRois)
-                    {
-                        // ROI-First: pass raw image + preprocess settings so downstream tools extract their ROI first
-                        // before applying local preprocess. This eliminates 100-130ms redundant 20MP full-image filter operations.
-                        return (image, ppSettings);
-                    }
                     var ppMat = GetPreprocessNodeOutput(fromNode.Id);
                     return (ppMat, new PreprocessSettings());
                 }
@@ -282,6 +298,11 @@ public partial class InspectionService
                 {
                     var cropMat = GetCropNodeOutput(fromNode.Id);
                     return (cropMat, defaultSettings);
+                }
+                else if (string.Equals(fromNode.Type, "ImgArithmetic", StringComparison.OrdinalIgnoreCase))
+                {
+                    var arithMat = GetNodeOutputImage(fromNode.Id);
+                    return (arithMat, defaultSettings);
                 }
                 else if (string.Equals(fromNode.Type, "ImageSource", StringComparison.OrdinalIgnoreCase))
                 {
@@ -1242,7 +1263,7 @@ public partial class InspectionService
 
                     ExecutePlcNodes(config, result, _plcManager);
                     ExecuteDbNodes(config, result, effectiveDbManager, DbExecutionTiming.AfterFlow);
-                    ExecuteImageOutputs(config, result, image, GetPreprocessNodeOutput, nodesById, edges);
+                    ExecuteImageOutputs(config, result, image, GetNodeOutputImage, nodesById, edges);
 
                     result.Timings.TotalMs = (int)Math.Max(0, swTotal.ElapsedMilliseconds);
                     return result;
@@ -2404,11 +2425,198 @@ public partial class InspectionService
             if (result.Origin is not null && result.Origin.Pass) foundPoints["Origin"] = result.Origin.Position;
 
             if (config.CreatePoints != null) foreach (var cp in config.CreatePoints) if (cp is not null && !string.IsNullOrWhiteSpace(cp.Name)) { var __sw = System.Diagnostics.Stopwatch.StartNew(); var res = GeometryCreationProcessor.EvaluateCreatePoint(cp, foundPoints); __sw.Stop(); result.Timings.NodeTimings[cp.Name] = (int)__sw.ElapsedMilliseconds; result.CreatePoints.Add(res); if (res.Success) foundPoints[res.Name] = new Point2d(res.X, res.Y); }
-            if (config.CreateLines != null) foreach (var cl in config.CreateLines) if (cl is not null && !string.IsNullOrWhiteSpace(cl.Name)) { var __sw = System.Diagnostics.Stopwatch.StartNew(); var res = GeometryCreationProcessor.EvaluateCreateLine(cl, foundPoints); __sw.Stop(); result.Timings.NodeTimings[cl.Name] = (int)__sw.ElapsedMilliseconds; result.CreateLines.Add(res); }
+            if (config.CreateLines != null)
+            {
+                foreach (var cl in config.CreateLines)
+                {
+                    if (cl is not null && !string.IsNullOrWhiteSpace(cl.Name))
+                    {
+                        var __sw = System.Diagnostics.Stopwatch.StartNew();
+                        var res = GeometryCreationProcessor.EvaluateCreateLine(cl, foundPoints);
+                        __sw.Stop();
+                        result.Timings.NodeTimings[cl.Name] = (int)__sw.ElapsedMilliseconds;
+                        result.CreateLines.Add(res);
+                        if (res.Success)
+                        {
+                            var p1 = new Point2d(res.X1, res.Y1);
+                            var p2 = new Point2d(res.X2, res.Y2);
+                            var dx = p2.X - p1.X;
+                            var dy = p2.Y - p1.Y;
+                            foundLines[res.Name] = new LineDetectResult(res.Name, p1, p2, Math.Sqrt(dx * dx + dy * dy), Found: true);
+                        }
+                    }
+                }
+            }
             if (config.CreateRects != null) foreach (var cr in config.CreateRects) if (cr is not null && !string.IsNullOrWhiteSpace(cr.Name)) { var __sw = System.Diagnostics.Stopwatch.StartNew(); var res = GeometryCreationProcessor.EvaluateCreateRect(cr, foundPoints); __sw.Stop(); result.Timings.NodeTimings[cr.Name] = (int)__sw.ElapsedMilliseconds; result.CreateRects.Add(res); }
             if (config.CreateCircles != null) foreach (var cc in config.CreateCircles) if (cc is not null && !string.IsNullOrWhiteSpace(cc.Name)) { var __sw = System.Diagnostics.Stopwatch.StartNew(); var res = GeometryCreationProcessor.EvaluateCreateCircle(cc, foundPoints); __sw.Stop(); result.Timings.NodeTimings[cc.Name] = (int)__sw.ElapsedMilliseconds; result.CreateCircles.Add(res); }
 
             foreach (var cal in result.Calipers) if (cal.Found) { var dx = cal.LineP2.X - cal.LineP1.X; var dy = cal.LineP2.Y - cal.LineP1.Y; foundLines[cal.Name] = new LineDetectResult(cal.Name, cal.LineP1, cal.LineP2, Math.Sqrt(dx * dx + dy * dy), Found: true); }
+
+            foreach (var lpd in result.LinePairDetections)
+            {
+                if (lpd.Found)
+                {
+                    var dx1 = lpd.L1P2.X - lpd.L1P1.X; var dy1 = lpd.L1P2.Y - lpd.L1P1.Y;
+                    var l1 = new LineDetectResult($"{lpd.Name}.L1", lpd.L1P1, lpd.L1P2, Math.Sqrt(dx1 * dx1 + dy1 * dy1), Found: true);
+                    foundLines[$"{lpd.Name}.L1"] = l1;
+                    foundLines[$"{lpd.Name}_L1"] = l1;
+                    foundLines[$"{lpd.Name}.Line1"] = l1;
+
+                    var dx2 = lpd.L2P2.X - lpd.L2P1.X; var dy2 = lpd.L2P2.Y - lpd.L2P1.Y;
+                    var l2 = new LineDetectResult($"{lpd.Name}.L2", lpd.L2P1, lpd.L2P2, Math.Sqrt(dx2 * dx2 + dy2 * dy2), Found: true);
+                    foundLines[$"{lpd.Name}.L2"] = l2;
+                    foundLines[$"{lpd.Name}_L2"] = l2;
+                    foundLines[$"{lpd.Name}.Line2"] = l2;
+
+                    foundLines[lpd.Name] = l1;
+                }
+            }
+
+            foreach (var epd in result.EdgePairDetections)
+            {
+                if (epd.Pass || epd.Found)
+                {
+                    var dx1 = epd.L1P2.X - epd.L1P1.X; var dy1 = epd.L1P2.Y - epd.L1P1.Y;
+                    var l1 = new LineDetectResult($"{epd.Name}.E1", epd.L1P1, epd.L1P2, Math.Sqrt(dx1 * dx1 + dy1 * dy1), Found: true);
+                    foundLines[$"{epd.Name}.E1"] = l1;
+                    foundLines[$"{epd.Name}_E1"] = l1;
+                    foundLines[$"{epd.Name}.Line1"] = l1;
+
+                    var dx2 = epd.L2P2.X - epd.L2P1.X; var dy2 = epd.L2P2.Y - epd.L2P1.Y;
+                    var l2 = new LineDetectResult($"{epd.Name}.E2", epd.L2P1, epd.L2P2, Math.Sqrt(dx2 * dx2 + dy2 * dy2), Found: true);
+                    foundLines[$"{epd.Name}.E2"] = l2;
+                    foundLines[$"{epd.Name}_E2"] = l2;
+                    foundLines[$"{epd.Name}.Line2"] = l2;
+
+                    foundLines[epd.Name] = l1;
+                }
+            }
+
+            LineDetectResult? ResolveLine(string name)
+            {
+                if (string.IsNullOrWhiteSpace(name)) return null;
+                var trimmed = name.Trim();
+                if (foundLines.TryGetValue(trimmed, out var l) && l.Found) return l;
+                if (foundLines.TryGetValue(name, out var lRaw) && lRaw.Found) return lRaw;
+
+                // 1. Direct check in result collections
+                var lineMatch = result.Lines.FirstOrDefault(x => string.Equals(x.Name, trimmed, StringComparison.OrdinalIgnoreCase));
+                if (lineMatch != null && lineMatch.Found)
+                {
+                    foundLines[name] = lineMatch;
+                    return lineMatch;
+                }
+
+                var calMatch = result.Calipers.FirstOrDefault(x => string.Equals(x.Name, trimmed, StringComparison.OrdinalIgnoreCase));
+                if (calMatch != null && calMatch.Found)
+                {
+                    var dx = calMatch.LineP2.X - calMatch.LineP1.X; var dy = calMatch.LineP2.Y - calMatch.LineP1.Y;
+                    var res = new LineDetectResult(calMatch.Name, calMatch.LineP1, calMatch.LineP2, Math.Sqrt(dx * dx + dy * dy), Found: true);
+                    foundLines[name] = res;
+                    return res;
+                }
+
+                var lpdMatch = result.LinePairDetections.FirstOrDefault(x => string.Equals(x.Name, trimmed, StringComparison.OrdinalIgnoreCase));
+                if (lpdMatch != null && lpdMatch.Found)
+                {
+                    var dx = lpdMatch.L1P2.X - lpdMatch.L1P1.X; var dy = lpdMatch.L1P2.Y - lpdMatch.L1P1.Y;
+                    var res = new LineDetectResult(lpdMatch.Name, lpdMatch.L1P1, lpdMatch.L1P2, Math.Sqrt(dx * dx + dy * dy), Found: true);
+                    foundLines[name] = res;
+                    return res;
+                }
+
+                var epdMatch = result.EdgePairDetections.FirstOrDefault(x => string.Equals(x.Name, trimmed, StringComparison.OrdinalIgnoreCase));
+                if (epdMatch != null && (epdMatch.Pass || epdMatch.Found))
+                {
+                    var dx = epdMatch.L1P2.X - epdMatch.L1P1.X; var dy = epdMatch.L1P2.Y - epdMatch.L1P1.Y;
+                    var res = new LineDetectResult(epdMatch.Name, epdMatch.L1P1, epdMatch.L1P2, Math.Sqrt(dx * dx + dy * dy), Found: true);
+                    foundLines[name] = res;
+                    return res;
+                }
+
+                var clMatch = result.CreateLines?.FirstOrDefault(x => string.Equals(x.Name, trimmed, StringComparison.OrdinalIgnoreCase));
+                if (clMatch != null && clMatch.Success)
+                {
+                    var p1 = new Point2d(clMatch.X1, clMatch.Y1);
+                    var p2 = new Point2d(clMatch.X2, clMatch.Y2);
+                    var dx = p2.X - p1.X; var dy = p2.Y - p1.Y;
+                    var res = new LineDetectResult(clMatch.Name, p1, p2, Math.Sqrt(dx * dx + dy * dy), Found: true);
+                    foundLines[name] = res;
+                    return res;
+                }
+
+                // 2. Fallbacks to evaluate line directly if not yet evaluated
+                var lDef = config.Lines?.FirstOrDefault(x => string.Equals(x.Name, trimmed, StringComparison.OrdinalIgnoreCase));
+                if (lDef != null && lDef.SearchRoi.Width > 0 && lDef.SearchRoi.Height > 0)
+                {
+                    var (matForLine, _) = ResolveToolPreprocess("Line", lDef.Name);
+                    var det = _lineDetector.DetectLongestLine(matForLine, lDef.SearchRoi, lDef.Canny1, lDef.Canny2, lDef.HoughThreshold, lDef.MinLineLength, lDef.MaxLineGap, originTeach, originFound, angleDeg);
+                    if (det.Found)
+                    {
+                        var res = det with { Name = lDef.Name };
+                        foundLines[name] = res;
+                        return res;
+                    }
+                }
+
+                var cDef = config.Calipers?.FirstOrDefault(x => string.Equals(x.Name, trimmed, StringComparison.OrdinalIgnoreCase));
+                if (cDef != null && cDef.SearchRoi.Width > 0 && cDef.SearchRoi.Height > 0)
+                {
+                    var (matForCal, _) = ResolveToolPreprocess("Caliper", cDef.Name);
+                    var det = CaliperDetector.Detect(matForCal, cDef, originTeach, originFound, angleDeg);
+                    if (det.Found)
+                    {
+                        var dx = det.LineP2.X - det.LineP1.X; var dy = det.LineP2.Y - det.LineP1.Y;
+                        var res = new LineDetectResult(cDef.Name, det.LineP1, det.LineP2, Math.Sqrt(dx * dx + dy * dy), Found: true);
+                        foundLines[name] = res;
+                        return res;
+                    }
+                }
+
+                var clDef = config.CreateLines?.FirstOrDefault(x => string.Equals(x.Name, trimmed, StringComparison.OrdinalIgnoreCase));
+                if (clDef != null)
+                {
+                    var res = GeometryCreationProcessor.EvaluateCreateLine(clDef, foundPoints);
+                    if (res.Success)
+                    {
+                        var p1 = new Point2d(res.X1, res.Y1);
+                        var p2 = new Point2d(res.X2, res.Y2);
+                        var dx = p2.X - p1.X; var dy = p2.Y - p1.Y;
+                        var lr = new LineDetectResult(clDef.Name, p1, p2, Math.Sqrt(dx * dx + dy * dy), Found: true);
+                        foundLines[name] = lr;
+                        return lr;
+                    }
+                }
+
+                var lpdDef = config.LinePairDetections?.FirstOrDefault(x => string.Equals(x.Name, trimmed, StringComparison.OrdinalIgnoreCase));
+                if (lpdDef != null && lpdDef.SearchRoi.Width > 0 && lpdDef.SearchRoi.Height > 0)
+                {
+                    var (matForLpd, _) = ResolveToolPreprocess("LinePairDetection", lpdDef.Name);
+                    var top = _lineDetector.DetectTopLines(matForLpd, lpdDef.SearchRoi, lpdDef.Canny1, lpdDef.Canny2, lpdDef.HoughThreshold, lpdDef.MinLineLength, lpdDef.MaxLineGap, topN: 2, originTeach, originFound, angleDeg);
+                    if (top.Count > 0)
+                    {
+                        var lr = top[0] with { Name = lpdDef.Name };
+                        foundLines[name] = lr;
+                        return lr;
+                    }
+                }
+
+                var epdDef = config.EdgePairDetections?.FirstOrDefault(x => string.Equals(x.Name, trimmed, StringComparison.OrdinalIgnoreCase));
+                if (epdDef != null && epdDef.SearchRoi.Width > 0 && epdDef.SearchRoi.Height > 0)
+                {
+                    var (matForEpd, _) = ResolveToolPreprocess("EdgePairDetect", epdDef.Name);
+                    var epdRes = DetectEdgePair(matForEpd, epdDef.SearchRoi, epdDef, config.PixelsPerMm, originTeach, originFound, angleDeg);
+                    if (epdRes.Pass || epdRes.Found)
+                    {
+                        var dx = epdRes.L1P2.X - epdRes.L1P1.X; var dy = epdRes.L1P2.Y - epdRes.L1P1.Y;
+                        var lr = new LineDetectResult(epdDef.Name, epdRes.L1P1, epdRes.L1P2, Math.Sqrt(dx * dx + dy * dy), Found: true);
+                        foundLines[name] = lr;
+                        return lr;
+                    }
+                }
+
+                return null;
+            }
 
             var foundCircles = new Dictionary<string, CircleFinderResult>(StringComparer.OrdinalIgnoreCase);
             foreach (var c in result.CircleFinders) foundCircles[c.Name] = c;
@@ -2427,7 +2635,9 @@ public partial class InspectionService
             {
                 var __swNode = System.Diagnostics.Stopwatch.StartNew();
                 if (string.IsNullOrWhiteSpace(ep.Name) || string.IsNullOrWhiteSpace(ep.RefA) || string.IsNullOrWhiteSpace(ep.RefB)) continue;
-                if (!foundLines.TryGetValue(ep.RefA, out var la) || !foundLines.TryGetValue(ep.RefB, out var lb) || !la.Found || !lb.Found) { __swNode.Stop(); result.Timings.NodeTimings[ep.Name] = (int)__swNode.ElapsedMilliseconds; result.EdgePairs.Add(new EdgePairResult(ep.Name, ep.RefA, ep.RefB, Found: false, default, default, default, default, double.NaN, ep.Nominal, ep.TolerancePlus, ep.ToleranceMinus, Pass: false, default, default)); continue; }
+                var la = ResolveLine(ep.RefA);
+                var lb = ResolveLine(ep.RefB);
+                if (la == null || lb == null || !la.Found || !lb.Found) { __swNode.Stop(); result.Timings.NodeTimings[ep.Name] = (int)__swNode.ElapsedMilliseconds; result.EdgePairs.Add(new EdgePairResult(ep.Name, ep.RefA, ep.RefB, Found: false, default, default, default, default, double.NaN, ep.Nominal, ep.TolerancePlus, ep.ToleranceMinus, Pass: false, default, default)); continue; }
                 var (distPx, ca, cb) = Geometry2D.SegmentToSegmentDistance(la.P1, la.P2, lb.P1, lb.P2);
                 var value = config.PixelsPerMm > 0 ? distPx / config.PixelsPerMm : distPx; var pass = value >= (ep.Nominal - ep.ToleranceMinus) && value <= (ep.Nominal + ep.TolerancePlus);
                 __swNode.Stop(); result.Timings.NodeTimings[ep.Name] = (int)__swNode.ElapsedMilliseconds; result.EdgePairs.Add(new EdgePairResult(ep.Name, ep.RefA, ep.RefB, Found: true, la.P1, la.P2, lb.P1, lb.P2, value, ep.Nominal, ep.TolerancePlus, ep.ToleranceMinus, pass, ca, cb));
@@ -2447,7 +2657,9 @@ public partial class InspectionService
             {
                 var __swNode = System.Diagnostics.Stopwatch.StartNew();
                 if (string.IsNullOrWhiteSpace(a.Name) || string.IsNullOrWhiteSpace(a.LineA) || string.IsNullOrWhiteSpace(a.LineB)) continue;
-                if (!foundLines.TryGetValue(a.LineA, out var la) || !foundLines.TryGetValue(a.LineB, out var lb) || !la.Found || !lb.Found) { __swNode.Stop(); result.Timings.NodeTimings[a.Name] = (int)__swNode.ElapsedMilliseconds; result.Angles.Add(new AngleResult(a.Name, a.LineA, a.LineB, double.NaN, a.Nominal, a.TolerancePlus, a.ToleranceMinus, Pass: false, Found: false, default, default, default)); continue; }
+                var la = ResolveLine(a.LineA);
+                var lb = ResolveLine(a.LineB);
+                if (la == null || lb == null || !la.Found || !lb.Found) { __swNode.Stop(); result.Timings.NodeTimings[a.Name] = (int)__swNode.ElapsedMilliseconds; result.Angles.Add(new AngleResult(a.Name, a.LineA, a.LineB, double.NaN, a.Nominal, a.TolerancePlus, a.ToleranceMinus, Pass: false, Found: false, default, default, default)); continue; }
                 var v1 = new Point2d(la.P2.X - la.P1.X, la.P2.Y - la.P1.Y); var v2 = new Point2d(lb.P2.X - lb.P1.X, lb.P2.Y - lb.P1.Y); var n1 = Math.Sqrt(v1.X * v1.X + v1.Y * v1.Y); var n2 = Math.Sqrt(v2.X * v2.X + v2.Y * v2.Y);
                 if (n1 < 1e-9 || n2 < 1e-9) { __swNode.Stop(); result.Timings.NodeTimings[a.Name] = (int)__swNode.ElapsedMilliseconds; result.Angles.Add(new AngleResult(a.Name, a.LineA, a.LineB, double.NaN, a.Nominal, a.TolerancePlus, a.ToleranceMinus, Pass: false, Found: false, default, default, default)); continue; }
                 var dot = Math.Clamp((v1.X * v2.X + v1.Y * v2.Y) / (n1 * n2), -1.0, 1.0); var angle = Math.Acos(dot) * 180.0 / Math.PI; var pass = angle >= (a.Nominal - a.ToleranceMinus) && angle <= (a.Nominal + a.TolerancePlus);
@@ -2471,7 +2683,9 @@ public partial class InspectionService
             foreach (var dd in config.LineToLineDistances)
             {
                 var __swNode = System.Diagnostics.Stopwatch.StartNew();
-                if (!foundLines.TryGetValue(dd.LineA, out var la) || !foundLines.TryGetValue(dd.LineB, out var lb) || !la.Found || !lb.Found) { __swNode.Stop(); result.Timings.NodeTimings[dd.Name] = (int)__swNode.ElapsedMilliseconds; result.LineToLineDistances.Add(new SegmentDistanceResult(dd.Name, dd.LineA, dd.LineB, double.NaN, dd.Nominal, dd.TolerancePlus, dd.ToleranceMinus, false, default, default)); continue; }
+                var la = ResolveLine(dd.LineA);
+                var lb = ResolveLine(dd.LineB);
+                if (la == null || lb == null || !la.Found || !lb.Found) { __swNode.Stop(); result.Timings.NodeTimings[dd.Name] = (int)__swNode.ElapsedMilliseconds; result.LineToLineDistances.Add(new SegmentDistanceResult(dd.Name, dd.LineA, dd.LineB, double.NaN, dd.Nominal, dd.TolerancePlus, dd.ToleranceMinus, false, default, default)); continue; }
                 var (distPx, ca, cb) = CalculateLineLineDistance(la, lb, dd.Mode); var value = config.PixelsPerMm > 0 ? distPx / config.PixelsPerMm : distPx; var pass = value >= (dd.Nominal - dd.ToleranceMinus) && value <= (dd.Nominal + dd.TolerancePlus);
                 __swNode.Stop(); result.Timings.NodeTimings[dd.Name] = (int)__swNode.ElapsedMilliseconds; result.LineToLineDistances.Add(new SegmentDistanceResult(dd.Name, dd.LineA, dd.LineB, value, dd.Nominal, dd.TolerancePlus, dd.ToleranceMinus, pass, ca, cb));
             }
@@ -2479,17 +2693,88 @@ public partial class InspectionService
             foreach (var dd in config.PointToLineDistances)
             {
                 var __swNode = System.Diagnostics.Stopwatch.StartNew();
-                if (!foundPoints.TryGetValue(dd.Point, out var p) || !foundLines.TryGetValue(dd.Line, out var l) || !l.Found) { __swNode.Stop(); result.Timings.NodeTimings[dd.Name] = (int)__swNode.ElapsedMilliseconds; result.PointToLineDistances.Add(new SegmentDistanceResult(dd.Name, dd.Point, dd.Line, double.NaN, dd.Nominal, dd.TolerancePlus, dd.ToleranceMinus, false, default, default)); continue; }
+                var l = ResolveLine(dd.Line);
+                if (!foundPoints.TryGetValue(dd.Point, out var p) || l == null || !l.Found) { __swNode.Stop(); result.Timings.NodeTimings[dd.Name] = (int)__swNode.ElapsedMilliseconds; result.PointToLineDistances.Add(new SegmentDistanceResult(dd.Name, dd.Point, dd.Line, double.NaN, dd.Nominal, dd.TolerancePlus, dd.ToleranceMinus, false, default, default)); continue; }
                 var (distPx, closest) = CalculatePointLineDistance(p, l, dd.Mode); var value = config.PixelsPerMm > 0 ? distPx / config.PixelsPerMm : distPx; var pass = value >= (dd.Nominal - dd.ToleranceMinus) && value <= (dd.Nominal + dd.TolerancePlus);
                 __swNode.Stop(); result.Timings.NodeTimings[dd.Name] = (int)__swNode.ElapsedMilliseconds; result.PointToLineDistances.Add(new SegmentDistanceResult(dd.Name, dd.Point, dd.Line, value, dd.Nominal, dd.TolerancePlus, dd.ToleranceMinus, pass, p, closest));
             }
             foreach (var dd in config.SegmentLineDistances)
             {
                 var __swNode = System.Diagnostics.Stopwatch.StartNew();
-                if (!foundLines.TryGetValue(dd.LineA, out var la) || !foundLines.TryGetValue(dd.LineB, out var lb) || !la.Found || !lb.Found) { __swNode.Stop(); result.Timings.NodeTimings[dd.Name] = (int)__swNode.ElapsedMilliseconds; result.SegmentLineDistances.Add(new SegmentDistanceResult(dd.Name, dd.LineA, dd.LineB, double.NaN, dd.Nominal, dd.TolerancePlus, dd.ToleranceMinus, false, default, default)); continue; }
-                Roi? searchRoiA = config.Lines?.FirstOrDefault(x => string.Equals(x.Name, dd.LineA, StringComparison.OrdinalIgnoreCase))?.SearchRoi ?? config.Calipers?.FirstOrDefault(x => string.Equals(x.Name, dd.LineA, StringComparison.OrdinalIgnoreCase))?.SearchRoi ?? config.LinePairDetections?.FirstOrDefault(x => string.Equals(x.Name, dd.LineA, StringComparison.OrdinalIgnoreCase))?.SearchRoi ?? config.EdgePairDetections?.FirstOrDefault(x => string.Equals(x.Name, dd.LineA, StringComparison.OrdinalIgnoreCase))?.SearchRoi;
-                var (distPx, ca, cb) = CalculateSegmentLineDistance(la, lb, dd.Mode, dd.ExtensionMode, searchRoiA, originTeach, originFound, angleDeg); var value = config.PixelsPerMm > 0 ? distPx / config.PixelsPerMm : distPx; var pass = value >= (dd.Nominal - dd.ToleranceMinus) && value <= (dd.Nominal + dd.TolerancePlus);
-                __swNode.Stop(); result.Timings.NodeTimings[dd.Name] = (int)__swNode.ElapsedMilliseconds; result.SegmentLineDistances.Add(new SegmentDistanceResult(dd.Name, dd.LineA, dd.LineB, value, dd.Nominal, dd.TolerancePlus, dd.ToleranceMinus, pass, ca, cb));
+                string lineAName = dd.LineA;
+                string lineBName = dd.LineB;
+
+                System.Diagnostics.Debug.WriteLine($"[SLD] Processing '{dd.Name}': LineA='{dd.LineA}', LineB='{dd.LineB}', IsEmpty(A)={string.IsNullOrWhiteSpace(lineAName)}, IsEmpty(B)={string.IsNullOrWhiteSpace(lineBName)}");
+                System.Diagnostics.Debug.WriteLine($"[SLD] foundLines keys: [{string.Join(", ", foundLines.Keys)}]");
+
+                if (string.IsNullOrWhiteSpace(lineAName) || string.IsNullOrWhiteSpace(lineBName))
+                {
+                    System.Diagnostics.Debug.WriteLine($"[SLD] Entering edge resolution for '{dd.Name}'...");
+                    var sldNode = nodesById.Values.FirstOrDefault(n => string.Equals(n.Type, "SegmentLineDistance", StringComparison.OrdinalIgnoreCase) && string.Equals(n.RefName, dd.Name, StringComparison.OrdinalIgnoreCase));
+                    if (sldNode != null)
+                    {
+                        var inEdges = edges.Where(e => string.Equals(e.ToNodeId, sldNode.Id, StringComparison.OrdinalIgnoreCase)).ToList();
+                        System.Diagnostics.Debug.WriteLine($"[SLD] Found sldNode '{sldNode.Id}', inEdges count={inEdges.Count}");
+                        foreach (var edge in inEdges)
+                        {
+                            if (nodesById.TryGetValue(edge.FromNodeId, out var fromNode))
+                            {
+                                var srcRef = fromNode.RefName ?? string.Empty;
+                                System.Diagnostics.Debug.WriteLine($"[SLD] Edge: FromNode='{fromNode.Type}:{fromNode.RefName}', ToPort='{edge.ToPort}', srcRef='{srcRef}'");
+                                if (string.Equals(edge.ToPort, "L1", StringComparison.OrdinalIgnoreCase) || string.Equals(edge.ToPort, "LineA", StringComparison.OrdinalIgnoreCase) || string.Equals(edge.ToPort, "InA", StringComparison.OrdinalIgnoreCase) || string.Equals(edge.ToPort, "In1", StringComparison.OrdinalIgnoreCase))
+                                {
+                                    lineAName = srcRef;
+                                }
+                                else if (string.Equals(edge.ToPort, "L2", StringComparison.OrdinalIgnoreCase) || string.Equals(edge.ToPort, "LineB", StringComparison.OrdinalIgnoreCase) || string.Equals(edge.ToPort, "InB", StringComparison.OrdinalIgnoreCase) || string.Equals(edge.ToPort, "In2", StringComparison.OrdinalIgnoreCase))
+                                {
+                                    lineBName = srcRef;
+                                }
+                                else if (string.IsNullOrWhiteSpace(lineAName))
+                                {
+                                    lineAName = srcRef;
+                                }
+                                else if (string.IsNullOrWhiteSpace(lineBName) && !string.Equals(lineAName, srcRef, StringComparison.OrdinalIgnoreCase))
+                                {
+                                    lineBName = srcRef;
+                                }
+                            }
+                        }
+                    }
+                    else
+                    {
+                        System.Diagnostics.Debug.WriteLine($"[SLD] sldNode NOT FOUND for name='{dd.Name}'");
+                    }
+                    System.Diagnostics.Debug.WriteLine($"[SLD] After edge resolution: lineAName='{lineAName}', lineBName='{lineBName}'");
+                }
+
+                System.Diagnostics.Debug.WriteLine($"[SLD] Calling ResolveLine('{lineAName}')...");
+                var la = ResolveLine(lineAName);
+                System.Diagnostics.Debug.WriteLine($"[SLD] ResolveLine('{lineAName}') => {(la == null ? "null" : $"Found={la.Found}, P1=({la.P1.X:F1},{la.P1.Y:F1}), P2=({la.P2.X:F1},{la.P2.Y:F1})")}");
+                System.Diagnostics.Debug.WriteLine($"[SLD] Calling ResolveLine('{lineBName}')...");
+                var lb = ResolveLine(lineBName);
+                System.Diagnostics.Debug.WriteLine($"[SLD] ResolveLine('{lineBName}') => {(lb == null ? "null" : $"Found={lb.Found}, P1=({lb.P1.X:F1},{lb.P1.Y:F1}), P2=({lb.P2.X:F1},{lb.P2.Y:F1})")}");
+
+                if (la == null || lb == null || !la.Found || !lb.Found)
+                {
+                    System.Diagnostics.Debug.WriteLine($"[SLD] FAIL for '{dd.Name}': la={(la == null ? "null" : $"Found={la.Found}")}, lb={(lb == null ? "null" : $"Found={lb.Found}")}");
+                    __swNode.Stop();
+                    result.Timings.NodeTimings[dd.Name] = (int)__swNode.ElapsedMilliseconds;
+                    result.SegmentLineDistances.Add(new SegmentDistanceResult(dd.Name, lineAName ?? dd.LineA, lineBName ?? dd.LineB, double.NaN, dd.Nominal, dd.TolerancePlus, dd.ToleranceMinus, false, default, default));
+                    continue;
+                }
+
+                Roi? searchRoiA = config.Lines?.FirstOrDefault(x => string.Equals(x.Name, lineAName, StringComparison.OrdinalIgnoreCase))?.SearchRoi
+                    ?? config.Calipers?.FirstOrDefault(x => string.Equals(x.Name, lineAName, StringComparison.OrdinalIgnoreCase))?.SearchRoi
+                    ?? config.LinePairDetections?.FirstOrDefault(x => string.Equals(x.Name, lineAName, StringComparison.OrdinalIgnoreCase))?.SearchRoi
+                    ?? config.EdgePairDetections?.FirstOrDefault(x => string.Equals(x.Name, lineAName, StringComparison.OrdinalIgnoreCase))?.SearchRoi;
+
+                var (distPx, ca, cb) = CalculateSegmentLineDistance(la, lb, dd.Mode, dd.ExtensionMode, searchRoiA, originTeach, originFound, angleDeg);
+                var value = config.PixelsPerMm > 0 ? distPx / config.PixelsPerMm : distPx;
+                var pass = value >= (dd.Nominal - dd.ToleranceMinus) && value <= (dd.Nominal + dd.TolerancePlus);
+                System.Diagnostics.Debug.WriteLine($"[SLD] OK '{dd.Name}': distPx={distPx:F3}, value={value:F3}, nominal={dd.Nominal}, tol=[{dd.Nominal - dd.ToleranceMinus},{dd.Nominal + dd.TolerancePlus}], pass={pass}");
+                __swNode.Stop();
+                result.Timings.NodeTimings[dd.Name] = (int)__swNode.ElapsedMilliseconds;
+                result.SegmentLineDistances.Add(new SegmentDistanceResult(dd.Name, lineAName, lineBName, value, dd.Nominal, dd.TolerancePlus, dd.ToleranceMinus, pass, ca, cb));
             }
             result.Timings.DistancesMs = (int)Math.Max(0, swTotal.ElapsedMilliseconds - tDistances0);
 
@@ -2537,7 +2822,7 @@ public partial class InspectionService
 
             ExecuteDbNodes(config, result, effectiveDbManager, DbExecutionTiming.AfterFlow);
 
-            ExecuteImageOutputs(config, result, image, GetPreprocessNodeOutput, nodesById, edges);
+            ExecuteImageOutputs(config, result, image, GetNodeOutputImage, nodesById, edges);
 
             result.Timings.TotalMs = (int)Math.Max(0, swTotal.ElapsedMilliseconds);
 

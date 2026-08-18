@@ -6,12 +6,13 @@ using System.Linq;
 using OpenCvSharp;
 using VisionInspectionApp.Application.Services;
 using VisionInspectionApp.Models;
+using VisionInspectionApp.VisionEngine;
 
 namespace VisionInspectionApp.Application;
 
 public partial class InspectionService
 {
-    private static void ExecuteImageOutputs(VisionConfig config, InspectionResult result, Mat rawInputImage, Func<string, Mat> getPreprocessNodeOutput, Dictionary<string, ToolGraphNode> nodesById, List<ToolGraphEdge> edges)
+    private static void ExecuteImageOutputs(VisionConfig config, InspectionResult result, Mat rawInputImage, Func<string, Mat> getNodeOutputImage, Dictionary<string, ToolGraphNode> nodesById, List<ToolGraphEdge> edges)
     {
         if (config.ImageOutputs is null || config.ImageOutputs.Count == 0 || rawInputImage is null || rawInputImage.Empty())
         {
@@ -61,24 +62,10 @@ public partial class InspectionService
 
                 if (!string.IsNullOrWhiteSpace(inputName))
                 {
-                    var srcNode = nodesById.Values.FirstOrDefault(n => string.Equals(n.RefName, inputName, StringComparison.OrdinalIgnoreCase));
+                    var srcNode = nodesById.Values.FirstOrDefault(n => string.Equals(n.RefName, inputName, StringComparison.OrdinalIgnoreCase) || string.Equals(n.Id, inputName, StringComparison.OrdinalIgnoreCase));
                     if (srcNode is not null)
                     {
-                        if (string.Equals(srcNode.Type, "Preprocess", StringComparison.OrdinalIgnoreCase))
-                        {
-                            sourceMat = getPreprocessNodeOutput(srcNode.Id);
-                        }
-                        else
-                        {
-                            var inEdge = edges.FirstOrDefault(e => string.Equals(e.ToNodeId, srcNode.Id, StringComparison.OrdinalIgnoreCase));
-                            if (inEdge is not null && nodesById.TryGetValue(inEdge.FromNodeId, out var fromNode))
-                            {
-                                if (string.Equals(fromNode.Type, "Preprocess", StringComparison.OrdinalIgnoreCase))
-                                {
-                                    sourceMat = getPreprocessNodeOutput(fromNode.Id);
-                                }
-                            }
-                        }
+                        sourceMat = getNodeOutputImage(srcNode.Id);
                     }
                 }
 
@@ -134,7 +121,7 @@ public partial class InspectionService
 
                 if (io.IncludeOverlay)
                 {
-                    BurnOverlaysToMat(saveMat, config, result, io, inputName);
+                    BurnOverlaysToMat(saveMat, config, result, io, inputName, nodesById, edges);
                 }
 
                 // Gửi vào hàng đợi bất đồng bộ ngoài luồng chính (Non-blocking, tốn < 0.01ms)
@@ -153,7 +140,7 @@ public partial class InspectionService
         }
     }
 
-    private static void BurnOverlaysToMat(Mat mat, VisionConfig config, InspectionResult result, ImageOutputDefinition? io = null, string? resolvedInputNodeName = null)
+    private static void BurnOverlaysToMat(Mat mat, VisionConfig config, InspectionResult result, ImageOutputDefinition? io = null, string? resolvedInputNodeName = null, Dictionary<string, ToolGraphNode>? nodesById = null, List<ToolGraphEdge>? edges = null)
     {
         if (mat is null || mat.Empty())
         {
@@ -208,6 +195,39 @@ public partial class InspectionService
             {
                 if (!string.IsNullOrWhiteSpace(angleDef.LineA)) allowedNodes.Add(angleDef.LineA);
                 if (!string.IsNullOrWhiteSpace(angleDef.LineB)) allowedNodes.Add(angleDef.LineB);
+            }
+
+            var cpDef = config.CreatePoints?.FirstOrDefault(x => string.Equals(x.Name, targetNodeName, StringComparison.OrdinalIgnoreCase));
+            if (cpDef is not null)
+            {
+                if (!string.IsNullOrWhiteSpace(cpDef.PointRef)) allowedNodes.Add(cpDef.PointRef);
+            }
+
+            var clDef = config.CreateLines?.FirstOrDefault(x => string.Equals(x.Name, targetNodeName, StringComparison.OrdinalIgnoreCase));
+            if (clDef is not null)
+            {
+                if (!string.IsNullOrWhiteSpace(clDef.Point1Ref)) allowedNodes.Add(clDef.Point1Ref);
+                if (!string.IsNullOrWhiteSpace(clDef.Point2Ref)) allowedNodes.Add(clDef.Point2Ref);
+                if (!string.IsNullOrWhiteSpace(clDef.PointRef)) allowedNodes.Add(clDef.PointRef);
+            }
+
+            // If targetNode is a Crop or Preprocess node, also include downstream child nodes
+            IEnumerable<ToolGraphNode>? gNodes = nodesById != null ? nodesById.Values : config.ToolGraph?.Nodes;
+            var gEdges = edges ?? config.ToolGraph?.Edges;
+            if (gNodes != null && gEdges != null)
+            {
+                var targetGNode = gNodes.FirstOrDefault(n => string.Equals(n.RefName, targetNodeName, StringComparison.OrdinalIgnoreCase));
+                if (targetGNode != null)
+                {
+                    foreach (var edge in gEdges.Where(e => string.Equals(e.FromNodeId, targetGNode.Id, StringComparison.OrdinalIgnoreCase)))
+                    {
+                        var childNode = gNodes.FirstOrDefault(n => string.Equals(n.Id, edge.ToNodeId, StringComparison.OrdinalIgnoreCase));
+                        if (childNode != null && !string.IsNullOrWhiteSpace(childNode.RefName))
+                        {
+                            allowedNodes.Add(childNode.RefName);
+                        }
+                    }
+                }
             }
         }
 
@@ -316,7 +336,7 @@ public partial class InspectionService
         }
 
         // 1. Origin
-        if (result.Origin is not null)
+        if (result.Origin is not null && ShouldRender(config.Origin?.Name ?? "Origin"))
         {
             if (config.Origin?.TemplateRoi.Width > 0)
             {
@@ -330,12 +350,13 @@ public partial class InspectionService
             var mr = result.Origin.MatchRect;
             var cx = (int)Math.Round(mr.Width > 0 && mr.Height > 0 ? mr.X + mr.Width / 2.0 : result.Origin.Position.X);
             var cyPos = (int)Math.Round(mr.Width > 0 && mr.Height > 0 ? mr.Y + mr.Height / 2.0 : result.Origin.Position.Y);
+            Cv2.Circle(mat, new Point(cx, cyPos), 4, green, -1, LineTypes.AntiAlias);
             Cv2.Line(mat, new Point(cx - 15, cyPos), new Point(cx + 15, cyPos), red, 2, LineTypes.AntiAlias);
             Cv2.Line(mat, new Point(cx, cyPos - 15), new Point(cx, cyPos + 15), green, 2, LineTypes.AntiAlias);
             Cv2.PutText(mat, $"Origin: {result.Origin.Score:0.00}", new Point(cx + 18, cyPos + 5), HersheyFonts.HersheySimplex, 0.5, green, 1, LineTypes.AntiAlias);
         }
 
-        // Map point positions for Distance lookups
+        // Map point positions for Distance / Geometry lookups
         var pointPosMap = new Dictionary<string, Point2d>(StringComparer.OrdinalIgnoreCase);
         foreach (var pRes in result.Points)
         {
@@ -355,6 +376,7 @@ public partial class InspectionService
             var color = pRes.Pass ? green : red;
             var px = (int)Math.Round(pRes.Position.X);
             var py = (int)Math.Round(pRes.Position.Y);
+            Cv2.Circle(mat, new Point(px, py), 3, color, -1, LineTypes.AntiAlias);
             Cv2.Line(mat, new Point(px - 10, py), new Point(px + 10, py), color, 2, LineTypes.AntiAlias);
             Cv2.Line(mat, new Point(px, py - 10), new Point(px, py + 10), color, 2, LineTypes.AntiAlias);
             Cv2.PutText(mat, pRes.Name, new Point(px + 12, py - 6), HersheyFonts.HersheySimplex, 0.5, color, 1, LineTypes.AntiAlias);
@@ -398,11 +420,9 @@ public partial class InspectionService
 
                 if (cRes.Points is not null && cRes.Points.Count > 0)
                 {
-                    var step = Math.Max(1, cRes.Points.Count / 80);
-                    for (var i = 0; i < cRes.Points.Count; i += step)
+                    foreach (var p in cRes.Points)
                     {
-                        var p = cRes.Points[i];
-                        Cv2.Circle(mat, new Point((int)Math.Round(p.X), (int)Math.Round(p.Y)), 2, yellow, -1, LineTypes.AntiAlias);
+                        Cv2.Circle(mat, new Point((int)Math.Round(p.X), (int)Math.Round(p.Y)), 3, yellow, -1, LineTypes.AntiAlias);
                     }
                 }
             }
@@ -423,11 +443,54 @@ public partial class InspectionService
                 var center = new Point((int)Math.Round(cfRes.Center.X), (int)Math.Round(cfRes.Center.Y));
                 var radius = (int)Math.Round(cfRes.RadiusPx);
                 Cv2.Circle(mat, center, radius, green, 2, LineTypes.AntiAlias);
+                Cv2.Circle(mat, center, 3, green, -1, LineTypes.AntiAlias);
                 Cv2.Line(mat, new Point(center.X - 8, center.Y), new Point(center.X + 8, center.Y), green, 2, LineTypes.AntiAlias);
                 Cv2.Line(mat, new Point(center.X, center.Y - 8), new Point(center.X, center.Y + 8), green, 2, LineTypes.AntiAlias);
+
+                if (cfRes.EdgePoints is not null && cfRes.EdgePoints.Count > 0)
+                {
+                    for (var i = 0; i < cfRes.EdgePoints.Count; i++)
+                    {
+                        var pt = cfRes.EdgePoints[i];
+                        var isInlier = cfRes.InlierFlags is not null && i < cfRes.InlierFlags.Count && cfRes.InlierFlags[i];
+                        var ptColor = isInlier ? green : red;
+                        Cv2.Circle(mat, new Point((int)Math.Round(pt.X), (int)Math.Round(pt.Y)), 2, ptColor, -1, LineTypes.AntiAlias);
+                    }
+                }
+
                 var rVal = isCalibrated ? cfRes.RadiusPx / scale : cfRes.RadiusPx;
                 var lbl = $"{cfRes.Name}: R={rVal:0.##}{(isCalibrated ? "mm" : "px")}";
                 Cv2.PutText(mat, lbl, new Point(center.X + 10, center.Y - 10), HersheyFonts.HersheySimplex, 0.5, green, 1, LineTypes.AntiAlias);
+            }
+        }
+
+        // 5b. LinePairDetections
+        foreach (var lpdRes in result.LinePairDetections)
+        {
+            if (!ShouldRender(lpdRes.Name)) continue;
+            var lpdDef = config.LinePairDetections?.FirstOrDefault(x => string.Equals(x.Name, lpdRes.Name, StringComparison.OrdinalIgnoreCase));
+            if (showRoiBoxes && lpdDef is not null && lpdDef.SearchRoi.Width > 0 && lpdDef.SearchRoi.Height > 0)
+            {
+                DrawRotatedRoi(mat, lpdDef.SearchRoi, cyan, 1);
+            }
+
+            if (lpdRes.Found)
+            {
+                var l1p1 = new Point((int)lpdRes.L1P1.X, (int)lpdRes.L1P1.Y);
+                var l1p2 = new Point((int)lpdRes.L1P2.X, (int)lpdRes.L1P2.Y);
+                var l2p1 = new Point((int)lpdRes.L2P1.X, (int)lpdRes.L2P1.Y);
+                var l2p2 = new Point((int)lpdRes.L2P2.X, (int)lpdRes.L2P2.Y);
+                Cv2.Line(mat, l1p1, l1p2, cyan, 2, LineTypes.AntiAlias);
+                Cv2.Line(mat, l2p1, l2p2, cyan, 2, LineTypes.AntiAlias);
+
+                var (distPx, ca, cb) = Geometry2D.SegmentToSegmentDistance(lpdRes.L1P1, lpdRes.L1P2, lpdRes.L2P1, lpdRes.L2P2);
+                var cap = new Point((int)ca.X, (int)ca.Y);
+                var cbp = new Point((int)cb.X, (int)cb.Y);
+                var col = lpdRes.Pass ? green : red;
+                Cv2.Line(mat, cap, cbp, col, 2, LineTypes.AntiAlias);
+                Cv2.Circle(mat, cap, 3, col, -1, LineTypes.AntiAlias);
+                Cv2.Circle(mat, cbp, 3, col, -1, LineTypes.AntiAlias);
+                Cv2.PutText(mat, $"{lpdRes.Name}={UnitStr(lpdRes.Value)}", new Point((cap.X + cbp.X) / 2 + 5, (cap.Y + cbp.Y) / 2 - 5), HersheyFonts.HersheySimplex, 0.5, col, 1, LineTypes.AntiAlias);
             }
         }
 
@@ -440,6 +503,9 @@ public partial class InspectionService
                 var center = new Point((int)Math.Round(dRes.Center.X), (int)Math.Round(dRes.Center.Y));
                 var radius = (int)Math.Round(dRes.RadiusPx);
                 Cv2.Circle(mat, center, radius, green, 2, LineTypes.AntiAlias);
+                Cv2.Circle(mat, center, 3, green, -1, LineTypes.AntiAlias);
+                Cv2.Line(mat, new Point(center.X - 8, center.Y), new Point(center.X + 8, center.Y), green, 2, LineTypes.AntiAlias);
+                Cv2.Line(mat, new Point(center.X, center.Y - 8), new Point(center.X, center.Y + 8), green, 2, LineTypes.AntiAlias);
                 var lbl = $"{dRes.Name}: D={UnitStr(dRes.Value)}";
                 Cv2.PutText(mat, lbl, new Point(center.X + 10, center.Y - 10), HersheyFonts.HersheySimplex, 0.5, green, 1, LineTypes.AntiAlias);
             }
@@ -455,6 +521,8 @@ public partial class InspectionService
                 var p2 = new Point((int)pb.X, (int)pb.Y);
                 var col = dRes.Pass ? green : red;
                 Cv2.Line(mat, p1, p2, col, 2, LineTypes.AntiAlias);
+                Cv2.Circle(mat, p1, 3, col, -1, LineTypes.AntiAlias);
+                Cv2.Circle(mat, p2, 3, col, -1, LineTypes.AntiAlias);
                 var mx = (p1.X + p2.X) / 2;
                 var my = (p1.Y + p2.Y) / 2;
                 Cv2.PutText(mat, $"{dRes.Name}={UnitStr(dRes.Value)}", new Point(mx + 5, my - 5), HersheyFonts.HersheySimplex, 0.5, col, 1, LineTypes.AntiAlias);
@@ -469,6 +537,8 @@ public partial class InspectionService
             var p2 = new Point((int)lld.ClosestB.X, (int)lld.ClosestB.Y);
             var col = lld.Pass ? green : red;
             Cv2.Line(mat, p1, p2, col, 2, LineTypes.AntiAlias);
+            Cv2.Circle(mat, p1, 3, col, -1, LineTypes.AntiAlias);
+            Cv2.Circle(mat, p2, 3, col, -1, LineTypes.AntiAlias);
             var mx = (p1.X + p2.X) / 2;
             var my = (p1.Y + p2.Y) / 2;
             Cv2.PutText(mat, $"{lld.Name}={UnitStr(lld.Value)}", new Point(mx + 5, my - 5), HersheyFonts.HersheySimplex, 0.5, col, 1, LineTypes.AntiAlias);
@@ -482,6 +552,8 @@ public partial class InspectionService
             var p2 = new Point((int)pld.ClosestB.X, (int)pld.ClosestB.Y);
             var col = pld.Pass ? green : red;
             Cv2.Line(mat, p1, p2, col, 2, LineTypes.AntiAlias);
+            Cv2.Circle(mat, p1, 3, col, -1, LineTypes.AntiAlias);
+            Cv2.Circle(mat, p2, 3, col, -1, LineTypes.AntiAlias);
             var mx = (p1.X + p2.X) / 2;
             var my = (p1.Y + p2.Y) / 2;
             Cv2.PutText(mat, $"{pld.Name}={UnitStr(pld.Value)}", new Point(mx + 5, my - 5), HersheyFonts.HersheySimplex, 0.5, col, 1, LineTypes.AntiAlias);
@@ -491,15 +563,28 @@ public partial class InspectionService
         foreach (var sld in result.SegmentLineDistances)
         {
             if (!ShouldRender(sld.Name)) continue;
-            var p1 = new Point((int)sld.ClosestA.X, (int)sld.ClosestA.Y);
-            var p2 = new Point((int)sld.ClosestB.X, (int)sld.ClosestB.Y);
-            var col = sld.Pass ? green : red;
-            Cv2.Line(mat, p1, p2, col, 2, LineTypes.AntiAlias);
-            Cv2.Circle(mat, p1, 3, col, -1, LineTypes.AntiAlias);
-            Cv2.Circle(mat, p2, 3, col, -1, LineTypes.AntiAlias);
-            var mx = (p1.X + p2.X) / 2;
-            var my = (p1.Y + p2.Y) / 2;
-            Cv2.PutText(mat, $"{sld.Name}={UnitStr(sld.Value)}", new Point(mx + 5, my - 5), HersheyFonts.HersheySimplex, 0.5, col, 1, LineTypes.AntiAlias);
+            var la = result.Lines.FirstOrDefault(x => string.Equals(x.Name, sld.RefA, StringComparison.OrdinalIgnoreCase));
+            if (la is not null && la.Found)
+            {
+                Cv2.Line(mat, new Point((int)la.P1.X, (int)la.P1.Y), new Point((int)la.P2.X, (int)la.P2.Y), cyan, 2, LineTypes.AntiAlias);
+            }
+            var lb = result.Lines.FirstOrDefault(x => string.Equals(x.Name, sld.RefB, StringComparison.OrdinalIgnoreCase));
+            if (lb is not null && lb.Found)
+            {
+                Cv2.Line(mat, new Point((int)lb.P1.X, (int)lb.P1.Y), new Point((int)lb.P2.X, (int)lb.P2.Y), yellow, 2, LineTypes.AntiAlias);
+            }
+            if (!double.IsNaN(sld.Value))
+            {
+                var p1 = new Point((int)sld.ClosestA.X, (int)sld.ClosestA.Y);
+                var p2 = new Point((int)sld.ClosestB.X, (int)sld.ClosestB.Y);
+                var col = sld.Pass ? green : red;
+                Cv2.Line(mat, p1, p2, col, 2, LineTypes.AntiAlias);
+                Cv2.Circle(mat, p1, 3, col, -1, LineTypes.AntiAlias);
+                Cv2.Circle(mat, p2, 3, col, -1, LineTypes.AntiAlias);
+                var mx = (p1.X + p2.X) / 2;
+                var my = (p1.Y + p2.Y) / 2;
+                Cv2.PutText(mat, $"{sld.Name}={UnitStr(sld.Value)}", new Point(mx + 5, my - 5), HersheyFonts.HersheySimplex, 0.5, col, 1, LineTypes.AntiAlias);
+            }
         }
 
         // 11. Angles
@@ -522,6 +607,8 @@ public partial class InspectionService
                 var p2 = new Point((int)ep.ClosestB.X, (int)ep.ClosestB.Y);
                 var col = ep.Pass ? green : red;
                 Cv2.Line(mat, p1, p2, col, 2, LineTypes.AntiAlias);
+                Cv2.Circle(mat, p1, 3, col, -1, LineTypes.AntiAlias);
+                Cv2.Circle(mat, p2, 3, col, -1, LineTypes.AntiAlias);
                 Cv2.PutText(mat, $"{ep.Name}={UnitStr(ep.Value)}", new Point((p1.X + p2.X) / 2, (p1.Y + p2.Y) / 2 - 5), HersheyFonts.HersheySimplex, 0.5, col, 1, LineTypes.AntiAlias);
             }
         }
@@ -548,6 +635,8 @@ public partial class InspectionService
                 var ca = new Point((int)epdRes.ClosestA.X, (int)epdRes.ClosestA.Y);
                 var cb = new Point((int)epdRes.ClosestB.X, (int)epdRes.ClosestB.Y);
                 Cv2.Line(mat, ca, cb, col, 2, LineTypes.AntiAlias);
+                Cv2.Circle(mat, ca, 3, col, -1, LineTypes.AntiAlias);
+                Cv2.Circle(mat, cb, 3, col, -1, LineTypes.AntiAlias);
                 Cv2.PutText(mat, $"{epdRes.Name}={UnitStr(epdRes.Value)}", new Point((ca.X + cb.X) / 2, (ca.Y + cb.Y) / 2 - 5), HersheyFonts.HersheySimplex, 0.5, col, 1, LineTypes.AntiAlias);
             }
         }
@@ -714,7 +803,99 @@ public partial class InspectionService
             }
         }
 
-        // 16. TextNodes
+        // 16. CreatePoints
+        if (result.CreatePoints is not null)
+        {
+            foreach (var cp in result.CreatePoints)
+            {
+                if (!ShouldRender(cp.Name)) continue;
+                if (cp.Success)
+                {
+                    var px = (int)Math.Round(cp.X);
+                    var py = (int)Math.Round(cp.Y);
+                    Cv2.Circle(mat, new Point(px, py), 5, green, 1, LineTypes.AntiAlias);
+                    Cv2.Circle(mat, new Point(px, py), 2, green, -1, LineTypes.AntiAlias);
+                    Cv2.Line(mat, new Point(px - 8, py), new Point(px + 8, py), green, 1, LineTypes.AntiAlias);
+                    Cv2.Line(mat, new Point(px, py - 8), new Point(px, py + 8), green, 1, LineTypes.AntiAlias);
+                    Cv2.PutText(mat, $"{cp.Name} ({cp.X:F1}, {cp.Y:F1})", new Point(px + 10, py - 5), HersheyFonts.HersheySimplex, 0.5, green, 1, LineTypes.AntiAlias);
+                }
+            }
+        }
+
+        // 17. CreateLines
+        if (result.CreateLines is not null)
+        {
+            foreach (var cl in result.CreateLines)
+            {
+                if (!ShouldRender(cl.Name)) continue;
+                if (cl.Success)
+                {
+                    var p1 = new Point((int)Math.Round(cl.X1), (int)Math.Round(cl.Y1));
+                    var p2 = new Point((int)Math.Round(cl.X2), (int)Math.Round(cl.Y2));
+                    Cv2.Line(mat, p1, p2, green, 2, LineTypes.AntiAlias);
+                    var mx = (p1.X + p2.X) / 2;
+                    var my = (p1.Y + p2.Y) / 2;
+                    Cv2.PutText(mat, cl.Name, new Point(mx + 5, my - 5), HersheyFonts.HersheySimplex, 0.5, green, 1, LineTypes.AntiAlias);
+                }
+            }
+        }
+
+        // 18. CreateRects
+        if (result.CreateRects is not null)
+        {
+            foreach (var cr in result.CreateRects)
+            {
+                if (!ShouldRender(cr.Name)) continue;
+                if (cr.Success)
+                {
+                    var rect = new Rect((int)Math.Round(cr.X), (int)Math.Round(cr.Y), (int)Math.Round(cr.Width), (int)Math.Round(cr.Height));
+                    if (Math.Abs(cr.Angle) > 0.001)
+                    {
+                        DrawRotatedBoxDirect(mat, rect, cr.Angle, green, 2);
+                    }
+                    else
+                    {
+                        Cv2.Rectangle(mat, rect, green, 2, LineTypes.AntiAlias);
+                    }
+                    Cv2.PutText(mat, cr.Name, new Point(rect.X + 5, rect.Y + 15), HersheyFonts.HersheySimplex, 0.5, green, 1, LineTypes.AntiAlias);
+                }
+            }
+        }
+
+        // 19. CreateCircles
+        if (result.CreateCircles is not null)
+        {
+            foreach (var cc in result.CreateCircles)
+            {
+                if (!ShouldRender(cc.Name)) continue;
+                if (cc.Success)
+                {
+                    var center = new Point((int)Math.Round(cc.CenterX), (int)Math.Round(cc.CenterY));
+                    var radius = (int)Math.Round(cc.Radius);
+                    Cv2.Circle(mat, center, radius, green, 2, LineTypes.AntiAlias);
+                    Cv2.Circle(mat, center, 3, green, -1, LineTypes.AntiAlias);
+                    Cv2.Line(mat, new Point(center.X - 8, center.Y), new Point(center.X + 8, center.Y), green, 2, LineTypes.AntiAlias);
+                    Cv2.Line(mat, new Point(center.X, center.Y - 8), new Point(center.X, center.Y + 8), green, 2, LineTypes.AntiAlias);
+                    Cv2.PutText(mat, cc.Name, new Point(center.X + 10, center.Y - 10), HersheyFonts.HersheySimplex, 0.5, green, 1, LineTypes.AntiAlias);
+                }
+            }
+        }
+
+        // 20. Crops (ROI indicator)
+        if (showRoiBoxes && config.Crops is not null)
+        {
+            foreach (var cr in config.Crops)
+            {
+                if (!ShouldRender(cr.Name)) continue;
+                if (cr.CropRoi.Width > 0 && cr.CropRoi.Height > 0)
+                {
+                    DrawRotatedRoi(mat, cr.CropRoi, yellow, 1);
+                    Cv2.PutText(mat, cr.Name, new Point(cr.CropRoi.X + 5, cr.CropRoi.Y + 15), HersheyFonts.HersheySimplex, 0.5, yellow, 1, LineTypes.AntiAlias);
+                }
+            }
+        }
+
+        // 21. TextNodes
         if (config.TextNodes is not null)
         {
             Dictionary<string, ConditionEvaluator.Variable>? vars = null;

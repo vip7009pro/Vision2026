@@ -960,8 +960,22 @@
           - Hiển thị đường mục tiêu vô tận / mở rộng và đoạn thẳng của input `LineB` (`Gold`, 1.5px/2.0px).
           - Hiển thị đoạn thẳng khoảng cách (`ca` $\rightarrow$ `cb`) với màu sắc OK/NG (`Lime` / `Red`, 2.0px) kèm 2 điểm mút và nhãn đo đạc giá trị kích thước kèm đơn vị (`mm` hoặc `px`).
         - Tích hợp hiển thị tức thì cả khi chọn riêng node `SegmentLineDistance` (ở cả chế độ Live Preview và Run mode) lẫn hiển thị tổng hợp trong `ResultView`, `ImageOutput` và ảnh lưu ổ đĩa.
-      - **Tự Động Co Giãn Kích Thước Điểm Sub-pixel Theo Zoom Trong `FastOverlayCanvas`**: Tính toán bán kính `pr = (p.Radius > 0 ? p.Radius : 4.0) / scale;` đảm bảo điểm vàng hiển thị sắc nét, không bị teo nhỏ khi phóng to/thu nhỏ ảnh.
-      - **Kiểm Thử & Biên Dịch**: Viết bộ test `CaliperAndLineTest.cs` với 8 ca kiểm thử thực tế (bao gồm mép ngang $Y=150$ với ROI nghiêng $-5^\circ$, mép nghiêng $30^\circ$, và tính khoảng cách 2 đoạn thẳng), đạt 100% PASS (35/35 tests trong toàn bộ suite). Biên dịch thành công với **0 Errors**.
+      - **Khắc Phục Toàn Diện Cắt Mẫu & Khớp Template Tool `Origin` Khi Nhận Input Từ Node `Crop`**:
+        - Đồng bộ `globalPrepSnap` trong `OpenTrainTemplateWindow` theo đúng không gian tọa độ và kích thước của ảnh đã cắt (`prepSnap`).
+        - Đảm bảo trong `OriginTrainViewModel.cs`, `SaveToOriginDefinition` trích xuất `origin.png` và huấn luyện `ShapeModel` trực tiếp từ `_rawFullMat` (ảnh cắt từ Crop node mà người dùng vẽ ROI), chấm dứt hoàn toàn hiện tượng template bị cắt sai lệch theo ảnh gốc chưa crop.
+        - **Khắc Phục Lỗi Tìm Kiếm & Match Score Thấp Trên Ảnh Crop**:
+          - Trong `OriginMatcher.cs`: Tự động nhận diện chế độ `FullGraph` hoặc khi `SearchRoi` cũ bị lệch ngoài phạm vi ảnh crop ($W_{crop} \times H_{crop}$) để tự động mở rộng vùng tìm kiếm trên toàn bộ ảnh crop (`new Rect(0, 0, image.Width, image.Height)`), không bị co cụm về lát cắt $1\times 1$ pixel.
+          - Trong `OriginTrainViewModel.cs`: Tự động cập nhật `SearchRoi` thích ứng với kích thước ảnh crop khi lưu và dọn sạch bộ nhớ cache template feature pyramid (`OriginMatcher.ClearCache()` & `MvpShapeMatch2Engine.ClearCache()`) tránh sử dụng lại feature cache của template cũ.
+          - Trong `InspectionService.Pipeline.cs`: Nâng cấp `ResolveToolPreprocess` nhận diện chính xác mọi cấu hình đồ thị upstream (Crop $\rightarrow$ Preprocess, Crop $\rightarrow$ Origin, ImgArithmetic...) và giải phóng ràng buộc tên cổng kết nối `ToPort`.
+      - **Khắc Phục Toàn Diện Lỗi Hiện `NaN` & Đánh `Fail` Ở Bảng Kết Quả Đo Đạc Cho Tool `SegmentLineDistance`**:
+        - **Sửa lỗi bỏ qua Preprocess trong `ResolveToolPreprocess` (`InspectionService.Pipeline.cs`)**: Khắc phục lỗi nhánh logic ROI-First trả về ảnh thô (`image`) không qua xử lý cho các tool phía sau (`Caliper`, `Line`, `EdgePairDetect`, `CircleFinder`, `CodeDetection`). Đã cập nhật `ResolveToolPreprocess` để luôn gọi `GetPreprocessNodeOutput` và trả về ma trận đã tiền xử lý, đảm bảo Caliper và các tool đo tìm kiếm chính xác biên cạnh trên ảnh đã lọc.
+        - **Nâng cấp cơ chế `ResolveLine` toàn diện (`InspectionService.Pipeline.cs`)**:
+          - Tự động tra cứu trực tiếp trong toàn bộ tập kết quả `result.Lines`, `result.Calipers`, `result.LinePairDetections`, `result.EdgePairDetections`, `result.CreateLines` theo tên (đã trim khoảng trắng và không phân biệt hoa thường).
+          - Tích hợp fallback tự động tính toán cho tất cả các loại đường nếu chưa có trong bộ nhớ đệm (`foundLines`).
+          - Đảm bảo `SegmentLineDistance`, `LineToLineDistance`, `PointToLineDistance`, `Angle`, `EdgePair` luôn lấy được đường chuẩn xác từ `Caliper` hoặc `Line`.
+        - **Cập nhật danh sách chọn `AvailableLineNames` (`ToolEditorViewModel.cs`)**: Bổ sung `CreateLines`, `LinePairDetections`, `EdgePairDetections` cùng với `Lines` và `Calipers` vào ComboBox chọn đường trên giao diện Properties.
+        - **Khởi tạo đúng Port Node đồ thị (`ToolGraphNodeViewModel.cs`)**: Bổ sung `SegmentLineDistance` vào `RebuildPorts()`, thiết lập Output Port `Distance` và 2 Input Port `L1`, `L2`, cho phép kéo dây kết nối và đồng bộ tự động `SyncInputEdgeForSegmentLineDistancePort` chính xác 100%.
+      - **Kiểm Thử & Biên Dịch**: Toàn bộ Solution biên dịch thành công **0 Errors**.
 
 ## Roadmap
 

@@ -458,6 +458,23 @@ namespace VisionInspectionApp.UI.ViewModels
             _originDef.AngleStep = AngleStep;
             _originDef.WorldPosition = new Point2dModel { X = OriginX, Y = OriginY };
 
+            if (IsFullGraph || _originDef.SearchRoi == null || _originDef.SearchRoi.Width <= 0 || _originDef.SearchRoi.Height <= 0 
+                || _originDef.SearchRoi.X + _originDef.SearchRoi.Width > _rawFullMat.Width 
+                || _originDef.SearchRoi.Y + _originDef.SearchRoi.Height > _rawFullMat.Height)
+            {
+                _originDef.SearchRoi = new Roi
+                {
+                    X = 0,
+                    Y = 0,
+                    Width = _rawFullMat.Width,
+                    Height = _rawFullMat.Height,
+                    Angle = 0
+                };
+            }
+
+            OriginMatcher.ClearCache();
+            MvpShapeMatch2Engine.ClearCache();
+
             // Encode Eraser Mask
             if (_eraserMaskMat is not null)
             {
@@ -472,12 +489,7 @@ namespace VisionInspectionApp.UI.ViewModels
             var templateFile = Path.Combine(templateDir, "origin.png");
 
             var curRoi = _originDef.TemplateRoi;
-            var sourceMatForSave = (_globalPreprocessedMat != null && !_globalPreprocessedMat.Empty()) ? _globalPreprocessedMat : _rawFullMat;
-            if (sourceMatForSave == null || sourceMatForSave.Empty())
-            {
-                sourceMatForSave = _rawFullMat;
-            }
-
+            var sourceMatForSave = _rawFullMat;
             if (sourceMatForSave == null || sourceMatForSave.Empty())
             {
                 return;
