@@ -333,6 +333,27 @@ Lộ trình tích hợp tính năng Chụp ảnh từ camera và hỗ trợ các
 - [x] Task 67: Khắc phục triệt để hiện tượng khựng lag/đơ UI khi click chọn Node ImageSource (nguồn Camera):
   - `Khắc phục Lỗi Quét Thiết Bị Đồng Bộ (ToolPreprocess.cs, ToolEditorViewModel.cs)`: Chuyển đổi `RefreshAvailableCameraItems` sang chạy hoàn toàn dưới nền bất đồng bộ (`Task.Run`) với cơ chế cờ khóa `_isScanningCameras` và kiểm tra `AvailableCameraItems.Count > 0`, loại bỏ việc quét phần cứng DirectShow/Hikrobot lặp đi lặp lại trên UI Dispatcher Thread mỗi khi click chọn node hoặc cập nhật thuộc tính.
   - `Triển khai Cơ Chế Non-Blocking Asynchronous Preview Capture (Engine.cs)`: Tối ưu `LoadImageFromSourceForPreview` khi nguồn là Camera: ưu tiên lấy tức thì từ live stream (`_cameraService.TryGetLatestFrameClone()`) hoặc ảnh dùng chung (`_sharedImage.GetSnapshot()`) với độ trễ 0ms. Nếu chưa có ảnh, kích hoạt `ScheduleAsyncCameraSnapshotFetch` dưới nền thay vì chặn giao diện bằng `Task.Wait(2000)` đồng bộ, đảm bảo giao diện luôn phản hồi tức thì 100% mượt mà.
+- [x] Task 68: Khắc phục toàn diện Tool Caliper (Edge detection sub-pixel, PCA Line Fitting, Pipeline Short-Circuit và Live Preview / Run Overlay):
+  - `Khắc phục Lỗi Origin Short-Circuit (InspectionService.Pipeline.cs)`: Sửa lỗi hệ thống tự động short-circuit và gán Caliper `Found = false` khi flow không có node Origin hoặc chưa dạy template Origin (`hasOriginNode && hasOriginTemplate`).
+  - `Tái cấu trúc Module Thuật toán CaliperDetector (VisionInspectionApp.VisionEngine)`:
+    - Bổ sung `CaliperDetector.cs` độc lập với thuật toán lấy mẫu gradient 1D trung bình theo strip profiles.
+    - Áp dụng bộ lọc 3-point Gaussian smooth `[0.25, 0.5, 0.25]` triệt tiêu nhiễu pixel của sensor/ánh sáng.
+    - Tìm vị trí cực đại sub-pixel parabol `InterpPeak`.
+    - Ánh xạ ngược tọa độ từ ảnh cắt về tọa độ ảnh gốc bằng `Geometry2D.MapToGlobal` với đúng góc xoay tổng hợp `totalAngleDeg = originAngleDeg + def.SearchRoi.Angle`.
+    - Khớp đường thẳng tổng quát bằng ma trận hiệp phương sai trực giao (PCA line fitting).
+  - `Cập nhật Live Preview và Rendering Overlay (ToolEditorViewModel.Engine.cs & GraphOps.cs)`:
+    - Bổ sung khối xử lý Caliper vào `BuildOverlayForNode` để preview chạy trực tiếp (live preview) khi di chuyển ROI hoặc chỉnh slider/thông số kể cả trước khi Run.
+    - Cập nhật `BuildOverlayForNodeFromRun` và `BuildFinalOverlayFromRun` hiển thị đường thẳng Caliper `Lime` nét dày 2.0px và các điểm sub-pixel `Gold` bán kính 2.5px.
+    - Chuẩn hóa vẽ các vạch strip của Caliper trong `AddConfigRoisForNode` theo góc xoay tổng hợp.
+- [x] Task 69: Khắc phục toàn diện Result Overlay cho Tool Caliper và Tool Line (Đường thẳng nhận diện và các Overlay liên quan trên từng Node, ResultView và ImageOutput):
+  - `Khắc phục Lỗi Dấu Góc Xoay Ngược trong ExtractStraightRoi (Class1.cs & InspectionService.Helpers.cs)`: Sửa `GetRotationMatrix2D(center, totalAngleDeg, 1.0)` giúp trích xuất patch ROI xoay chính xác tuyệt đối, loại bỏ hiện tượng xoay ngược khiến Caliper / Line thất bại hoặc lệch góc ($2 \times \theta$).
+  - `Nâng cấp LineDetector Hỗ trợ ROI Xoay & Adaptive Threshold Fallback (Class1.cs)`: Tích hợp `ExtractStraightRoi` và `MapToGlobal` cho `DetectLongestLine` và `DetectTopLines`, kèm cơ chế tự động hạ ngưỡng thích ứng cho các đường thẳng mảnh/ngắn.
+  - `Đồng bộ & Bổ sung Toàn Diện Result Overlay cho ResultView & ImageOutput (Engine.cs)`:
+    - Bổ sung Live Detection cho `Calipers`, `Lines` (xoay đa hướng theo Origin), `CircleFinders`, `LinePairDetections` vào `BuildFinalOverlay` khi `_lastRun` chưa có kết quả.
+    - Bổ sung Live Detection Fallback vào `BuildFinalOverlayFromRunWithConfig` để khi kéo/chỉnh ROI trên Canvas, `ResultView` và `ImageOutput` luôn hiển thị đường thẳng màu xanh lá (`Lime`) và các chấm vàng sub-pixel (`Gold`) tức thì.
+    - Cập nhật `BurnOverlaysToMat` trong `ImageOutputs.cs` vẽ các chấm vàng sub-pixel vào file ảnh lưu trữ.
+  - `Tự động Co Giãn Kích thước Điểm Sub-pixel Theo Zoom (FastOverlayCanvas.cs)`: Tính toán bán kính điểm `pr = (p.Radius > 0 ? p.Radius : 4.0) / scale;` đảm bảo điểm vàng hiển thị rõ nét ở mọi mức thu phóng zoom.
+  - `Kiểm thử Tự động`: 34/34 test cases PASS 100% trong `TestExtractApp`. Biên dịch thành công 0 Errors.
 
 
 

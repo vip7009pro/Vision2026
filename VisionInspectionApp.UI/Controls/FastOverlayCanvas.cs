@@ -119,7 +119,7 @@ public class FastOverlayCanvas : FrameworkElement
             {
                 var vx = p.X * sx;
                 var vy = p.Y * sy;
-                var pr = p.Radius;
+                var pr = (p.Radius > 0 ? p.Radius : 4.0) / scale;
                 dc.DrawEllipse(p.Fill ?? item.Stroke, pen, new Point(vx, vy), pr, pr);
 
                 if (!string.IsNullOrWhiteSpace(p.Label))

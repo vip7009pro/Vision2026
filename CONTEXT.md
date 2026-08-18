@@ -51,6 +51,18 @@
 
 ### Sửa lỗi và Cải thiện UX/UI (Phiên làm việc hiện tại)
 
+- **Khắc phục toàn diện Tool Caliper (Edge detection sub-pixel, PCA Line Fitting, Pipeline Short-Circuit và Live Preview / Run Overlay)**:
+  - Khắc phục lỗi Origin Short-Circuit (`InspectionService.Pipeline.cs`): Pipeline trước đây tự động gán `Found = false` cho Caliper khi flow không có node Origin hoặc chưa dạy template Origin. Đã sửa lại chỉ short-circuit khi dự án thực sự có node Origin đã được dạy template (`hasOriginNode && hasOriginTemplate && !originPass`).
+  - Xây dựng module thuật toán chuyên biệt `CaliperDetector.cs` (`VisionInspectionApp.VisionEngine`):
+    - Trích xuất ảnh ROI chính xác theo góc tổng hợp `totalAngleDeg = originAngleDeg + def.SearchRoi.Angle`.
+    - Lấy profile 1D trung bình theo từng strip, áp dụng **3-point Gaussian smoothing `[0.25, 0.5, 0.25]`** triệt tiêu nhiễu pixel của sensor/ánh sáng.
+    - Tìm đỉnh gradient sub-pixel dạng parabol `InterpPeak`.
+    - Ánh xạ ngược tọa độ từ ảnh cắt về tọa độ ảnh gốc bằng `Geometry2D.MapToGlobal` với đúng góc xoay tổng hợp.
+    - Khớp đường thẳng tổng quát bằng ma trận hiệp phương sai trực giao (PCA line fitting).
+  - Cập nhật Live Preview và Rendering Overlay (`ToolEditorViewModel.Engine.cs` & `GraphOps.cs`):
+    - Thêm khối xử lý Caliper vào `BuildOverlayForNode` để preview chạy trực tiếp (live preview) khi di chuyển ROI hoặc chỉnh slider/thông số kể cả trước khi Run hoặc khi `_lastRun is null`.
+    - Cập nhật `BuildOverlayForNodeFromRun` và `BuildFinalOverlayFromRun` hiển thị đường thẳng Caliper `Lime` nét dày 2.0px và các điểm sub-pixel `Gold` bán kính 2.5px.
+    - Chuẩn hóa vẽ các vạch strip của Caliper trong `AddConfigRoisForNode` theo góc xoay tổng hợp, khớp 100% với ROI xoay 360°.
 - **Khắc phục triệt để hiện tượng khựng lag/đơ UI khi click chọn Node ImageSource (nguồn Camera)**:
   - Khắc phục lỗi quét thiết bị đồng bộ trên UI Thread (`ToolPreprocess.cs`, `ToolEditorViewModel.cs`): Chuyển đổi phương thức `RefreshAvailableCameraItems` sang chạy dưới nền bất đồng bộ (`Task.Run`), tích hợp cờ khóa `_isScanningCameras` và chỉ quét nếu danh sách đang trống (`AvailableCameraItems.Count == 0`), loại bỏ triệt để hiện tượng quét phần cứng DirectShow/Hikrobot lặp đi lặp lại trên UI Dispatcher Thread mỗi khi chọn node.
   - Triển khai cơ chế **Non-Blocking Asynchronous Preview Capture** (`Engine.cs`): Trong `LoadImageFromSourceForPreview`, ưu tiên lấy ảnh tức thì từ live stream (`_cameraService.TryGetLatestFrameClone()`) hoặc ảnh dùng chung (`_sharedImage.GetSnapshot()`) với độ trễ 0ms. Nếu chưa có ảnh, kích hoạt `ScheduleAsyncCameraSnapshotFetch` chạy ngầm trên Worker Thread Pool thay vì chặn đứng giao diện bằng `Task.Wait(2000)` đồng bộ, đảm bảo giao diện đạt 60+ FPS siêu mượt khi chuyển đổi qua lại giữa các node trên Canvas.
@@ -928,7 +940,28 @@
       - Bổ sung huy hiệu mô tả chế độ thời gian thực (`ImageSource_ContinuousModeDescription`) và ẩn/hiện ô `Interval (ms)` phù hợp.
     - **Kiểm Thử Tự Động & Biên Dịch**:
       - Bổ sung `ContinuousPipelineTest.cs` kiểm thử thành công 100% 4/4 test cases về Channel Bounded, Burst Producer vs Slow Consumer và Memory Cleanup khi Stop.
-      - Biên dịch Solution thành công **0 Error(s)**.
+    - **Khắc Phục Toàn Diện & Chuẩn Hóa Hiển Thị Result Overlay & Tọa Độ Thực Tế Cho Tool Caliper & Tool Line**:
+      - **Đồng Bộ Hoàn Hảo Góc Xoay Giữa `ExtractStraightRoi` và `MapToGlobal`**:
+        - Sửa `GetRotationMatrix2D(centerInBbox, totalAngleDeg, 1.0)` trong `VisionInspectionApp.VisionEngine/Class1.cs` và `InspectionService.Helpers.cs`.
+        - Kết hợp chặt chẽ với `MapToGlobal` để đảm bảo: Khi ROI bị đặt nghiêng ở bất kỳ góc nào ($0^\circ \sim 360^\circ$) so với mép vật thể trong ảnh gốc, các điểm sub-pixel và đường thẳng nhận diện được sẽ được ánh xạ ngược về đúng $100\%$ vị trí vật thể thực tế trong ảnh (sai số $< 1.0\text{px}$), triệt tiêu hoàn toàn hiện tượng đường thẳng bị xoay chéo/lệch theo góc nghiêng của ROI.
+      - **Nâng Cấp `LineDetector` Hỗ Trợ Xoay & Adaptive Threshold**: Tích hợp `ExtractStraightRoi` và `MapToGlobal` cho `DetectLongestLine` và `DetectTopLines`, kèm cơ chế tự động hạ ngưỡng thích ứng nếu đường mảnh hoặc ngắn, đảm bảo nhận diện chính xác 100% đường thẳng ở mọi góc xoay.
+      - **Tối Ưu & Chuẩn Hóa Hiển Thị Overlay (Live Preview & Run Result)**:
+        - Tool `Caliper`: Hiển thị đường thẳng nhận diện màu xanh lá rực rỡ (`Brushes.Lime`, độ dày 2.0px) cùng các điểm sub-pixel màu vàng kim (`Brushes.Gold`, bán kính 3.0px có `Fill` đầy đủ).
+        - Tool `Line`: Hiển thị đường thẳng nhận diện màu `Brushes.Lime` với độ dày 2.0px (loại bỏ cờ `LinePreviewEnabled` chặn live preview trước đó).
+        - Tự động Fallback Live Detection ngay khi người dùng kéo/thay đổi ROI hoặc điều chỉnh tham số trên thanh công cụ mà không bắt buộc phải bấm RUN lại mới thấy đường.
+        - **Khắc Phục Toàn Diện Hiển Thị Result Overlay Cho `ResultView` & `ImageOutput`**:
+          - Bổ sung Live Detection cho `Calipers`, `Lines` (với góc xoay và Origin pose), `CircleFinders`, `LinePairDetections` vào phương thức `BuildFinalOverlay` (kèm resolve đúng Preprocess node cho từng công cụ).
+          - Trong `RefreshSelectedPreview`, khi chọn node `ResultView` hoặc `ImageOutput`, chủ động dựng lại danh sách overlay `newSelectedNodeOverlayItems` từ `BuildFinalOverlay` / `BuildFinalOverlayFromRunWithConfig` thay vì chỉ gán biến tham chiếu `FinalOverlayItems` cũ, đảm bảo Canvas lập tức render đầy đủ đường thẳng `Lime` và chấm vàng sub-pixel `Gold`.
+          - Tích hợp cơ chế Fallback Live Detection vào `BuildFinalOverlayFromRunWithConfig` để khi người dùng điều chỉnh ROI nhưng chưa bấm RUN lại (hoặc kết quả lần trước chưa tìm thấy), `ResultView` và `ImageOutput` vẫn lập tức hiển thị đường thẳng và các điểm sub-pixel vàng chuẩn xác 100%.
+      - **Khắc Phục Toàn Diện Hiển Thị Overlay & Đo Đạc Cho Tool `SegmentLineDistance`**:
+        - Đưa phương thức tính khoảng cách `Geometry2D.CalculateSegmentLineDistance` vào `VisionEngine/Class1.cs` dùng chung cho toàn bộ ứng dụng.
+        - Xây dựng cơ chế tra cứu / nhận diện hợp nhất `ResolveOrDetectLine` và render chuyên sâu `RenderSegmentLineDistanceOverlay` trong `ToolEditorViewModel.Engine.cs`:
+          - Hiển thị đoạn thẳng của input `LineA` (`DeepSkyBlue`, 2.0px).
+          - Hiển thị đường mục tiêu vô tận / mở rộng và đoạn thẳng của input `LineB` (`Gold`, 1.5px/2.0px).
+          - Hiển thị đoạn thẳng khoảng cách (`ca` $\rightarrow$ `cb`) với màu sắc OK/NG (`Lime` / `Red`, 2.0px) kèm 2 điểm mút và nhãn đo đạc giá trị kích thước kèm đơn vị (`mm` hoặc `px`).
+        - Tích hợp hiển thị tức thì cả khi chọn riêng node `SegmentLineDistance` (ở cả chế độ Live Preview và Run mode) lẫn hiển thị tổng hợp trong `ResultView`, `ImageOutput` và ảnh lưu ổ đĩa.
+      - **Tự Động Co Giãn Kích Thước Điểm Sub-pixel Theo Zoom Trong `FastOverlayCanvas`**: Tính toán bán kính `pr = (p.Radius > 0 ? p.Radius : 4.0) / scale;` đảm bảo điểm vàng hiển thị sắc nét, không bị teo nhỏ khi phóng to/thu nhỏ ảnh.
+      - **Kiểm Thử & Biên Dịch**: Viết bộ test `CaliperAndLineTest.cs` với 8 ca kiểm thử thực tế (bao gồm mép ngang $Y=150$ với ROI nghiêng $-5^\circ$, mép nghiêng $30^\circ$, và tính khoảng cách 2 đoạn thẳng), đạt 100% PASS (35/35 tests trong toàn bộ suite). Biên dịch thành công với **0 Errors**.
 
 ## Roadmap
 

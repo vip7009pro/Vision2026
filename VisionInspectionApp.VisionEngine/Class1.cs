@@ -74,37 +74,255 @@ public static class Geometry2D
 
         return (min, ca, cb);
     }
+
+    public static Point2d Rotate(Point2d pt, Point2d origin, double angleDeg)
+    {
+        if (Math.Abs(angleDeg) < 0.0001) return pt;
+        var rad = angleDeg * Math.PI / 180.0;
+        var cos = Math.Cos(rad);
+        var sin = Math.Sin(rad);
+        var dx = pt.X - origin.X;
+        var dy = pt.Y - origin.Y;
+        var x = dx * cos - dy * sin;
+        var y = dx * sin + dy * cos;
+        return new Point2d(x + origin.X, y + origin.Y);
+    }
+
+    public static Mat ExtractStraightRoi(Mat source, Roi roiTeach, Point2d originTeach, Point2d originFound, double angleDeg, out Point2d centerFound)
+    {
+        var centerTeach = new Point2d(roiTeach.X + roiTeach.Width / 2.0, roiTeach.Y + roiTeach.Height / 2.0);
+        var centerRot = Rotate(centerTeach, originTeach, angleDeg);
+        var dx = originFound.X - originTeach.X;
+        var dy = originFound.Y - originTeach.Y;
+        centerFound = new Point2d(centerRot.X + dx, centerRot.Y + dy);
+
+        double totalAngleDeg = angleDeg + roiTeach.Angle;
+
+        if (Math.Abs(totalAngleDeg) < 0.001)
+        {
+            var rx = (int)Math.Round(centerFound.X - roiTeach.Width / 2.0);
+            var ry = (int)Math.Round(centerFound.Y - roiTeach.Height / 2.0);
+            var rect = new Rect(rx, ry, roiTeach.Width, roiTeach.Height).Intersect(new Rect(0, 0, source.Width, source.Height));
+            if (rect.Width <= 0 || rect.Height <= 0) return new Mat();
+            return new Mat(source, rect).Clone();
+        }
+
+        int diag = (int)Math.Ceiling(Math.Sqrt(roiTeach.Width * roiTeach.Width + roiTeach.Height * roiTeach.Height));
+        var bbox = new Rect((int)(centerFound.X - diag / 2.0), (int)(centerFound.Y - diag / 2.0), diag, diag);
+        var safeBbox = bbox.Intersect(new Rect(0, 0, source.Width, source.Height));
+        if (safeBbox.Width <= 0 || safeBbox.Height <= 0) return new Mat();
+
+        using var subSource = new Mat(source, safeBbox);
+        var centerInBbox = new Point2f((float)(centerFound.X - safeBbox.X), (float)(centerFound.Y - safeBbox.Y));
+
+        using var M = Cv2.GetRotationMatrix2D(centerInBbox, totalAngleDeg, 1.0);
+        var tx = diag / 2.0 - centerInBbox.X;
+        var ty = diag / 2.0 - centerInBbox.Y;
+        M.Set(0, 2, M.Get<double>(0, 2) + tx);
+        M.Set(1, 2, M.Get<double>(1, 2) + ty);
+        using var rotatedBbox = new Mat();
+        Cv2.WarpAffine(subSource, rotatedBbox, M, new Size(diag, diag), InterpolationFlags.Linear, BorderTypes.Replicate);
+
+        var patch = new Mat();
+        var centerInDst = new Point2f((float)(diag / 2.0), (float)(diag / 2.0));
+        Cv2.GetRectSubPix(rotatedBbox, new Size(roiTeach.Width, roiTeach.Height), centerInDst, patch);
+        return patch;
+    }
+
+    public static Point2d MapToGlobal(Point2d ptLocal, double w, double h, Point2d centerFound, double totalAngleDeg)
+    {
+        var ptCenter = new Point2d(ptLocal.X - w / 2.0, ptLocal.Y - h / 2.0);
+        var ptRot = Rotate(ptCenter, new Point2d(0, 0), totalAngleDeg);
+        return new Point2d(ptRot.X + centerFound.X, ptRot.Y + centerFound.Y);
+    }
+
+    public static (double DistPx, Point2d SegmentPt, Point2d LinePt) CalculateSegmentLineDistance(
+        LineDetectResult la,
+        LineDetectResult lb,
+        SegmentLineDistanceMode mode,
+        SegmentLineExtensionMode extensionMode,
+        Roi? searchRoiA,
+        Point2d originTeach,
+        Point2d originFound,
+        double angleDeg)
+    {
+        var segP1 = la.P1;
+        var segP2 = la.P2;
+
+        if (extensionMode == SegmentLineExtensionMode.ExtendToSearchRoiBounds && searchRoiA is not null && searchRoiA.Width > 0 && searchRoiA.Height > 0)
+        {
+            var dir = segP2 - segP1;
+            if (dir.X * dir.X + dir.Y * dir.Y > 1e-9)
+            {
+                var roiCenter = new Point2d(searchRoiA.X + searchRoiA.Width / 2.0, searchRoiA.Y + searchRoiA.Height / 2.0);
+                if (originFound.X != 0 || originFound.Y != 0)
+                {
+                    var rotC = Rotate(roiCenter, originTeach, angleDeg);
+                    roiCenter = new Point2d(rotC.X + (originFound.X - originTeach.X), rotC.Y + (originFound.Y - originTeach.Y));
+                }
+                var totalAngle = angleDeg + searchRoiA.Angle;
+                var halfW = searchRoiA.Width / 2.0;
+                var halfH = searchRoiA.Height / 2.0;
+
+                var rad = totalAngle * Math.PI / 180.0;
+                var cos = Math.Cos(rad);
+                var sin = Math.Sin(rad);
+
+                Point2d ToLocal(Point2d g)
+                {
+                    var dx = g.X - roiCenter.X;
+                    var dy = g.Y - roiCenter.Y;
+                    return new Point2d(dx * cos + dy * sin, -dx * sin + dy * cos);
+                }
+
+                Point2d ToGlobal(Point2d loc)
+                {
+                    var gx = roiCenter.X + loc.X * cos - loc.Y * sin;
+                    var gy = roiCenter.Y + loc.X * sin + loc.Y * cos;
+                    return new Point2d(gx, gy);
+                }
+
+                var locP1 = ToLocal(segP1);
+                var locP2 = ToLocal(segP2);
+                var locDir = locP2 - locP1;
+
+                if (Math.Abs(locDir.X) > 1e-9 || Math.Abs(locDir.Y) > 1e-9)
+                {
+                    var ts = new List<double>();
+                    if (Math.Abs(locDir.X) > 1e-9)
+                    {
+                        var tLeft = (-halfW - locP1.X) / locDir.X;
+                        var yLeft = locP1.Y + tLeft * locDir.Y;
+                        if (yLeft >= -halfH - 1e-3 && yLeft <= halfH + 1e-3) ts.Add(tLeft);
+
+                        var tRight = (halfW - locP1.X) / locDir.X;
+                        var yRight = locP1.Y + tRight * locDir.Y;
+                        if (yRight >= -halfH - 1e-3 && yRight <= halfH + 1e-3) ts.Add(tRight);
+                    }
+
+                    if (Math.Abs(locDir.Y) > 1e-9)
+                    {
+                        var tTop = (-halfH - locP1.Y) / locDir.Y;
+                        var xTop = locP1.X + tTop * locDir.X;
+                        if (xTop >= -halfW - 1e-3 && xTop <= halfW + 1e-3) ts.Add(tTop);
+
+                        var tBottom = (halfH - locP1.Y) / locDir.Y;
+                        var xBottom = locP1.X + tBottom * locDir.X;
+                        if (xBottom >= -halfW - 1e-3 && xBottom <= halfW + 1e-3) ts.Add(tBottom);
+                    }
+
+                    if (ts.Count >= 2)
+                    {
+                        var minT = ts.Min();
+                        var maxT = ts.Max();
+                        var extLoc1 = new Point2d(locP1.X + minT * locDir.X, locP1.Y + minT * locDir.Y);
+                        var extLoc2 = new Point2d(locP1.X + maxT * locDir.X, locP1.Y + maxT * locDir.Y);
+                        segP1 = ToGlobal(extLoc1);
+                        segP2 = ToGlobal(extLoc2);
+                    }
+                }
+            }
+        }
+
+        static Point2d ClosestPointOnInfiniteLine(Point2d p, Point2d q1, Point2d q2)
+        {
+            var v = q2 - q1;
+            var len2 = v.X * v.X + v.Y * v.Y;
+            if (len2 <= 1e-12) return q1;
+            var t = ((p.X - q1.X) * v.X + (p.Y - q1.Y) * v.Y) / len2;
+            return new Point2d(q1.X + t * v.X, q1.Y + t * v.Y);
+        }
+
+        if (mode == SegmentLineDistanceMode.MidpointToInfiniteLine)
+        {
+            var mid = new Point2d((segP1.X + segP2.X) * 0.5, (segP1.Y + segP2.Y) * 0.5);
+            var proj = ClosestPointOnInfiniteLine(mid, lb.P1, lb.P2);
+            return (Distance(mid, proj), mid, proj);
+        }
+
+        var c1 = ClosestPointOnInfiniteLine(segP1, lb.P1, lb.P2);
+        var c2 = ClosestPointOnInfiniteLine(segP2, lb.P1, lb.P2);
+        var d1 = Distance(segP1, c1);
+        var d2 = Distance(segP2, c2);
+
+        if (mode == SegmentLineDistanceMode.ClosestPointOnSegmentToInfiniteLine)
+        {
+            var vLine = lb.P2 - lb.P1;
+            var cross1 = (lb.P2.X - lb.P1.X) * (segP1.Y - lb.P1.Y) - (lb.P2.Y - lb.P1.Y) * (segP1.X - lb.P1.X);
+            var cross2 = (lb.P2.X - lb.P1.X) * (segP2.Y - lb.P1.Y) - (lb.P2.Y - lb.P1.Y) * (segP2.X - lb.P1.X);
+            if (cross1 * cross2 <= 0 && (Math.Abs(cross1) > 1e-9 || Math.Abs(cross2) > 1e-9))
+            {
+                var denom = (segP2.X - segP1.X) * vLine.Y - (segP2.Y - segP1.Y) * vLine.X;
+                if (Math.Abs(denom) > 1e-9)
+                {
+                    var tSeg = ((lb.P1.X - segP1.X) * vLine.Y - (lb.P1.Y - segP1.Y) * vLine.X) / denom;
+                    var inter = new Point2d(segP1.X + tSeg * (segP2.X - segP1.X), segP1.Y + tSeg * (segP2.Y - segP1.Y));
+                    return (0.0, inter, inter);
+                }
+            }
+
+            return d1 <= d2 ? (d1, segP1, c1) : (d2, segP2, c2);
+        }
+
+        return d1 >= d2 ? (d1, segP1, c1) : (d2, segP2, c2);
+    }
 }
 
 public sealed class LineDetector
 {
-    public LineDetectResult DetectLongestLine(Mat image, Roi searchRoi, int canny1, int canny2, int houghThreshold, int minLineLength, int maxLineGap)
+    public LineDetectResult DetectLongestLine(
+        Mat image,
+        Roi searchRoi,
+        int canny1,
+        int canny2,
+        int houghThreshold,
+        int minLineLength,
+        int maxLineGap,
+        Point2d originTeach = default,
+        Point2d originFound = default,
+        double originAngleDeg = 0.0)
     {
-        if (image is null)
-        {
-            throw new ArgumentNullException(nameof(image));
-        }
-
-        var roiRect = new Rect(searchRoi.X, searchRoi.Y, searchRoi.Width, searchRoi.Height)
-            .Intersect(new Rect(0, 0, image.Width, image.Height));
-        if (roiRect.Width <= 0 || roiRect.Height <= 0)
+        if (image is null || image.Empty() || searchRoi.Width <= 0 || searchRoi.Height <= 0)
         {
             return new LineDetectResult(string.Empty, default, default, 0.0, false);
         }
 
-        using var roi = new Mat(image, roiRect);
-        using var gray = roi.Channels() == 1 ? roi.Clone() : roi.CvtColor(ColorConversionCodes.BGR2GRAY);
+        using var patch = Geometry2D.ExtractStraightRoi(image, searchRoi, originTeach, originFound, originAngleDeg, out var centerFound);
+        if (patch.Empty() || patch.Width <= 0 || patch.Height <= 0)
+        {
+            return new LineDetectResult(string.Empty, default, default, 0.0, false);
+        }
+
+        using var gray = patch.Channels() == 1 ? patch.Clone() : patch.CvtColor(ColorConversionCodes.BGR2GRAY);
         using var edges = new Mat();
 
-        Cv2.Canny(gray, edges, canny1, canny2);
+        int c1 = canny1 > 0 ? canny1 : 50;
+        int c2 = canny2 > 0 ? canny2 : 150;
+        Cv2.Canny(gray, edges, c1, c2);
+
+        int hThr = Math.Max(5, houghThreshold);
+        int minLen = Math.Max(5, minLineLength);
+        int maxGap = Math.Max(1, maxLineGap);
 
         var lines = Cv2.HoughLinesP(
             edges,
             1,
             Math.PI / 180.0,
-            houghThreshold,
-            minLineLength: minLineLength,
-            maxLineGap: maxLineGap);
+            hThr,
+            minLineLength: minLen,
+            maxLineGap: maxGap);
+
+        if (lines is null || lines.Length == 0)
+        {
+            // Adaptive fallback for faint or short lines
+            lines = Cv2.HoughLinesP(
+                edges,
+                1,
+                Math.PI / 180.0,
+                Math.Max(5, hThr / 2),
+                minLineLength: Math.Max(5, minLen / 2),
+                maxLineGap: maxGap * 2);
+        }
 
         if (lines is null || lines.Length == 0)
         {
@@ -125,62 +343,87 @@ public sealed class LineDetector
             }
         }
 
-        var gp1 = new Point2d(best.P1.X + roiRect.X, best.P1.Y + roiRect.Y);
-        var gp2 = new Point2d(best.P2.X + roiRect.X, best.P2.Y + roiRect.Y);
-        var (cp1, cp2, clipped) = ClipInfiniteLineToRect(gp1, gp2, roiRect);
-        if (clipped)
-        {
-            var len = Geometry2D.Distance(cp1, cp2);
-            return new LineDetectResult(string.Empty, cp1, cp2, len, true);
-        }
+        double totalAngleDeg = originAngleDeg + searchRoi.Angle;
+        var pLocal1 = new Point2d(best.P1.X, best.P1.Y);
+        var pLocal2 = new Point2d(best.P2.X, best.P2.Y);
+        var gp1 = Geometry2D.MapToGlobal(pLocal1, patch.Width, patch.Height, centerFound, totalAngleDeg);
+        var gp2 = Geometry2D.MapToGlobal(pLocal2, patch.Width, patch.Height, centerFound, totalAngleDeg);
+        var totalLen = Geometry2D.Distance(gp1, gp2);
 
-        return new LineDetectResult(string.Empty, gp1, gp2, bestLen, true);
+        return new LineDetectResult(string.Empty, gp1, gp2, totalLen, true);
     }
 
-    public List<LineDetectResult> DetectTopLines(Mat image, Roi searchRoi, int canny1, int canny2, int houghThreshold, int minLineLength, int maxLineGap, int topN)
+    public List<LineDetectResult> DetectTopLines(
+        Mat image,
+        Roi searchRoi,
+        int canny1,
+        int canny2,
+        int houghThreshold,
+        int minLineLength,
+        int maxLineGap,
+        int topN,
+        Point2d originTeach = default,
+        Point2d originFound = default,
+        double originAngleDeg = 0.0)
     {
-        if (image is null)
-        {
-            throw new ArgumentNullException(nameof(image));
-        }
-
-        topN = Math.Clamp(topN, 1, 20);
-
-        var roiRect = new Rect(searchRoi.X, searchRoi.Y, searchRoi.Width, searchRoi.Height)
-            .Intersect(new Rect(0, 0, image.Width, image.Height));
-        if (roiRect.Width <= 0 || roiRect.Height <= 0)
+        if (image is null || image.Empty() || searchRoi.Width <= 0 || searchRoi.Height <= 0)
         {
             return new List<LineDetectResult>();
         }
 
-        using var roi = new Mat(image, roiRect);
-        using var gray = roi.Channels() == 1 ? roi.Clone() : roi.CvtColor(ColorConversionCodes.BGR2GRAY);
+        topN = Math.Clamp(topN, 1, 20);
+
+        using var patch = Geometry2D.ExtractStraightRoi(image, searchRoi, originTeach, originFound, originAngleDeg, out var centerFound);
+        if (patch.Empty() || patch.Width <= 0 || patch.Height <= 0)
+        {
+            return new List<LineDetectResult>();
+        }
+
+        using var gray = patch.Channels() == 1 ? patch.Clone() : patch.CvtColor(ColorConversionCodes.BGR2GRAY);
         using var edges = new Mat();
-        Cv2.Canny(gray, edges, canny1, canny2);
+
+        int c1 = canny1 > 0 ? canny1 : 50;
+        int c2 = canny2 > 0 ? canny2 : 150;
+        Cv2.Canny(gray, edges, c1, c2);
+
+        int hThr = Math.Max(5, houghThreshold);
+        int minLen = Math.Max(5, minLineLength);
+        int maxGap = Math.Max(1, maxLineGap);
 
         var lines = Cv2.HoughLinesP(
             edges,
             1,
             Math.PI / 180.0,
-            houghThreshold,
-            minLineLength: minLineLength,
-            maxLineGap: maxLineGap);
+            hThr,
+            minLineLength: minLen,
+            maxLineGap: maxGap);
+
+        if (lines is null || lines.Length == 0)
+        {
+            lines = Cv2.HoughLinesP(
+                edges,
+                1,
+                Math.PI / 180.0,
+                Math.Max(5, hThr / 2),
+                minLineLength: Math.Max(5, minLen / 2),
+                maxLineGap: maxGap * 2);
+        }
 
         if (lines is null || lines.Length == 0)
         {
             return new List<LineDetectResult>();
         }
 
+        double totalAngleDeg = originAngleDeg + searchRoi.Angle;
         var tmp = new List<LineDetectResult>(lines.Length);
         foreach (var l in lines)
         {
-            var gp1 = new Point2d(l.P1.X + roiRect.X, l.P1.Y + roiRect.Y);
-            var gp2 = new Point2d(l.P2.X + roiRect.X, l.P2.Y + roiRect.Y);
-            var (cp1, cp2, clipped) = ClipInfiniteLineToRect(gp1, gp2, roiRect);
-            var p1 = clipped ? cp1 : gp1;
-            var p2 = clipped ? cp2 : gp2;
-            var len = Geometry2D.Distance(p1, p2);
-            tmp.Add(new LineDetectResult(string.Empty, p1, p2, len, true));
+            var pLocal1 = new Point2d(l.P1.X, l.P1.Y);
+            var pLocal2 = new Point2d(l.P2.X, l.P2.Y);
+            var gp1 = Geometry2D.MapToGlobal(pLocal1, patch.Width, patch.Height, centerFound, totalAngleDeg);
+            var gp2 = Geometry2D.MapToGlobal(pLocal2, patch.Width, patch.Height, centerFound, totalAngleDeg);
+            var len = Geometry2D.Distance(gp1, gp2);
+            tmp.Add(new LineDetectResult(string.Empty, gp1, gp2, len, true));
         }
 
         return tmp

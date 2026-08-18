@@ -254,12 +254,15 @@ namespace VisionInspectionApp.UI.ViewModels
 
             BuildFinalOverlayFromRun(run, dst, _config, ShowRoisInSelectedPreview && ShowRoisInFinalPreview);
 
-            foreach (var d in run.SegmentLineDistances)
+            GetOriginPose(out var originTeach, out var originFound, out var originAngleDeg);
+            if (_config?.SegmentLineDistances != null)
             {
-                if (double.IsNaN(d.Value)) continue;
-                dst.Add(new OverlayLineItem { X1 = d.ClosestA.X, Y1 = d.ClosestA.Y, X2 = d.ClosestB.X, Y2 = d.ClosestB.Y, Stroke = d.Pass ? Brushes.Lime : Brushes.Red, Label = $"{d.Name}: {d.Value:0.###}" });
-                dst.Add(new OverlayPointItem { X = d.ClosestA.X, Y = d.ClosestA.Y, Radius = 3.0, Stroke = d.Pass ? Brushes.Lime : Brushes.Red, Label = string.Empty });
-                dst.Add(new OverlayPointItem { X = d.ClosestB.X, Y = d.ClosestB.Y, Radius = 3.0, Stroke = d.Pass ? Brushes.Lime : Brushes.Red, Label = string.Empty });
+                using var snap = _sharedImage.GetSnapshot();
+                var snapToUse = snap ?? new Mat();
+                foreach (var sld in _config.SegmentLineDistances)
+                {
+                    RenderSegmentLineDistanceOverlay(sld, snapToUse, run, dst, originTeach, originFound, originAngleDeg);
+                }
             }
 
             // Angle overlays need image bounds for full infinite-line rendering.
@@ -377,6 +380,63 @@ namespace VisionInspectionApp.UI.ViewModels
                 if (r.Defects.Count > MaxBlobOverlayCount)
                 {
                     dst.Add(new OverlayPointItem { X = sc.InspectRoi.X + 2, Y = sc.InspectRoi.Y + 16, Radius = 1.0, Stroke = Brushes.DeepSkyBlue, Label = $"+{r.Defects.Count - MaxBlobOverlayCount}" });
+                }
+            }
+
+            // Live Fallback for Lines not found in run
+            if (_config.Lines != null)
+            {
+                foreach (var lDef in _config.Lines)
+                {
+                    if (lDef.SearchRoi.Width <= 0 || lDef.SearchRoi.Height <= 0) continue;
+                    var rLine = run.Lines.FirstOrDefault(x => string.Equals(x.Name, lDef.Name, StringComparison.OrdinalIgnoreCase));
+                    if (rLine is null || !rLine.Found)
+                    {
+                        using var snap = _sharedImage.GetSnapshot();
+                        if (snap is not null && !snap.Empty())
+                        {
+                            var lineNode = Nodes.FirstOrDefault(n => string.Equals(n.RefName, lDef.Name, StringComparison.OrdinalIgnoreCase));
+                            using var matForLine = lineNode != null ? ResolveToolPreprocessForPreview(snap, lineNode) : snap.Clone();
+                            var det = _lineDetector.DetectLongestLine(matForLine, lDef.SearchRoi, lDef.Canny1, lDef.Canny2, lDef.HoughThreshold, lDef.MinLineLength, lDef.MaxLineGap, originTeach, originFound, originAngleDeg);
+                            if (det.Found)
+                            {
+                                dst.Add(new OverlayLineItem { X1 = det.P1.X, Y1 = det.P1.Y, X2 = det.P2.X, Y2 = det.P2.Y, Stroke = Brushes.Lime, StrokeThickness = 2.0, Label = lDef.Name });
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Live Fallback for Calipers not found in run
+            if (_config.Calipers != null)
+            {
+                foreach (var cDef in _config.Calipers)
+                {
+                    if (cDef.SearchRoi.Width <= 0 || cDef.SearchRoi.Height <= 0) continue;
+                    var rCal = run.Calipers.FirstOrDefault(x => string.Equals(x.Name, cDef.Name, StringComparison.OrdinalIgnoreCase));
+                    if (rCal is null || !rCal.Found)
+                    {
+                        using var snap = _sharedImage.GetSnapshot();
+                        if (snap is not null && !snap.Empty())
+                        {
+                            var calNode = Nodes.FirstOrDefault(n => string.Equals(n.RefName, cDef.Name, StringComparison.OrdinalIgnoreCase));
+                            using var matForCal = calNode != null ? ResolveToolPreprocessForPreview(snap, calNode) : snap.Clone();
+                            var det = CaliperDetector.Detect(matForCal, cDef, originTeach, originFound, originAngleDeg);
+                            if (det.Found)
+                            {
+                                dst.Add(new OverlayLineItem { X1 = det.LineP1.X, Y1 = det.LineP1.Y, X2 = det.LineP2.X, Y2 = det.LineP2.Y, Stroke = Brushes.Lime, StrokeThickness = 2.0, Label = cDef.Name });
+                                if (det.Points is not null && det.Points.Count > 0)
+                                {
+                                    var step = Math.Max(1, det.Points.Count / 80);
+                                    for (var i = 0; i < det.Points.Count; i += step)
+                                    {
+                                        var p = det.Points[i];
+                                        dst.Add(new OverlayPointItem { X = p.X, Y = p.Y, Radius = 3.0, Stroke = Brushes.Gold, Fill = Brushes.Gold, Label = string.Empty });
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -3278,9 +3338,21 @@ namespace VisionInspectionApp.UI.ViewModels
             
             if (SelectedNode is not null && string.Equals(SelectedNode.Type, "ResultView", StringComparison.OrdinalIgnoreCase))
             {
-                using var resultSnap = _sharedImage.GetSnapshot();
-                SelectedNodePreviewImage = FinalPreviewImage ?? _cachedFinalPreviewImage ?? (resultSnap is null || resultSnap.Empty() ? null : resultSnap.ToBitmapSourceForDisplay());
-                SelectedNodeOverlayItems = FinalOverlayItems;
+                using var rawSnapResult = _sharedImage.GetSnapshot();
+                using var resultSnap = rawSnapResult ?? new Mat();
+                SelectedNodePreviewImage = FinalPreviewImage ?? _cachedFinalPreviewImage ?? (resultSnap.Empty() ? null : resultSnap.ToBitmapSourceForDisplay());
+                
+                AddConfigRois(newSelectedNodeOverlayItems);
+                if (_lastRun is not null)
+                {
+                    BuildFinalOverlayFromRunWithConfig(_lastRun, newSelectedNodeOverlayItems);
+                }
+                else
+                {
+                    BuildFinalOverlay(resultSnap, newSelectedNodeOverlayItems);
+                }
+                SelectedNodeOverlayItems = newSelectedNodeOverlayItems;
+                FinalOverlayItems = newSelectedNodeOverlayItems;
                 ActiveRoiLabel = string.Empty;
                 return;
             }
@@ -3305,7 +3377,17 @@ namespace VisionInspectionApp.UI.ViewModels
                 if (targetNode is null || string.Equals(targetNode.Type, "ResultView", StringComparison.OrdinalIgnoreCase))
                 {
                     SelectedNodePreviewImage = FinalPreviewImage ?? _cachedFinalPreviewImage ?? (snapIO.Empty() ? null : snapIO.ToBitmapSourceForDisplay());
-                    SelectedNodeOverlayItems = FinalOverlayItems;
+                    AddConfigRois(newSelectedNodeOverlayItems);
+                    if (_lastRun is not null)
+                    {
+                        BuildFinalOverlayFromRunWithConfig(_lastRun, newSelectedNodeOverlayItems);
+                    }
+                    else
+                    {
+                        BuildFinalOverlay(snapIO, newSelectedNodeOverlayItems);
+                    }
+                    SelectedNodeOverlayItems = newSelectedNodeOverlayItems;
+                    FinalOverlayItems = newSelectedNodeOverlayItems;
                     return;
                 }
 
@@ -3744,7 +3826,7 @@ namespace VisionInspectionApp.UI.ViewModels
                     continue;
                 }
     
-                dst.Add(new OverlayLineItem { X1 = l.P1.X, Y1 = l.P1.Y, X2 = l.P2.X, Y2 = l.P2.Y, Stroke = Brushes.MediumPurple, Label = l.Name });
+                dst.Add(new OverlayLineItem { X1 = l.P1.X, Y1 = l.P1.Y, X2 = l.P2.X, Y2 = l.P2.Y, Stroke = Brushes.Lime, StrokeThickness = 2.0, Label = l.Name });
             }
     
             var isCalibrated = config is not null && config.PixelsPerMm > 0 && Math.Abs(config.PixelsPerMm - 1.0) > 1e-6;
@@ -3793,12 +3875,15 @@ namespace VisionInspectionApp.UI.ViewModels
                     continue;
                 }
     
-                dst.Add(new OverlayLineItem { X1 = cal.LineP1.X, Y1 = cal.LineP1.Y, X2 = cal.LineP2.X, Y2 = cal.LineP2.Y, Stroke = Brushes.Gold, Label = cal.Name });
-                var step = Math.Max(1, cal.Points.Count / 60);
-                for (var i = 0; i < cal.Points.Count; i += step)
+                dst.Add(new OverlayLineItem { X1 = cal.LineP1.X, Y1 = cal.LineP1.Y, X2 = cal.LineP2.X, Y2 = cal.LineP2.Y, Stroke = Brushes.Lime, StrokeThickness = 2.0, Label = cal.Name });
+                if (cal.Points is not null && cal.Points.Count > 0)
                 {
-                    var p = cal.Points[i];
-                    dst.Add(new OverlayPointItem { X = p.X, Y = p.Y, Radius = 2.0, Stroke = Brushes.Gold, Label = string.Empty });
+                    var step = Math.Max(1, cal.Points.Count / 80);
+                    for (var i = 0; i < cal.Points.Count; i += step)
+                    {
+                        var p = cal.Points[i];
+                        dst.Add(new OverlayPointItem { X = p.X, Y = p.Y, Radius = 3.0, Stroke = Brushes.Gold, Fill = Brushes.Gold, Label = string.Empty });
+                    }
                 }
             }
     
@@ -3845,10 +3930,7 @@ namespace VisionInspectionApp.UI.ViewModels
                 dst.Add(new OverlayLineItem { X1 = dd.ClosestA.X, Y1 = dd.ClosestA.Y, X2 = dd.ClosestB.X, Y2 = dd.ClosestB.Y, Stroke = dd.Pass ? Brushes.Lime : Brushes.Red, Label = $"{dd.Name}: {dd.Value:0.00} {unitStr}" });
             }
     
-            foreach (var sld in run.SegmentLineDistances)
-            {
-                dst.Add(new OverlayLineItem { X1 = sld.ClosestA.X, Y1 = sld.ClosestA.Y, X2 = sld.ClosestB.X, Y2 = sld.ClosestB.Y, Stroke = sld.Pass ? Brushes.Lime : Brushes.Red, Label = $"{sld.Name}: {sld.Value:0.00} {unitStr}" });
-            }
+            // SegmentLineDistances are rendered with full input segments, target line, and distance line in BuildFinalOverlayFromRunWithConfig / RenderSegmentLineDistanceOverlay
     
             foreach (var c in run.CircleFinders)
             {
@@ -4377,38 +4459,72 @@ namespace VisionInspectionApp.UI.ViewModels
             if (string.Equals(node.Type, "Line", StringComparison.OrdinalIgnoreCase))
             {
                 var l = run.Lines.FirstOrDefault(x => string.Equals(x.Name, node.RefName, StringComparison.OrdinalIgnoreCase));
-                if (l is null || !l.Found)
+                if (l is not null && l.Found)
                 {
-                    return;
+                    dst.Add(new OverlayLineItem { X1 = l.P1.X, Y1 = l.P1.Y, X2 = l.P2.X, Y2 = l.P2.Y, Stroke = Brushes.Lime, StrokeThickness = 2.0, Label = l.Name });
                 }
-    
-                dst.Add(new OverlayLineItem { X1 = l.P1.X, Y1 = l.P1.Y, X2 = l.P2.X, Y2 = l.P2.Y, Stroke = Brushes.MediumPurple, Label = l.Name });
+                else
+                {
+                    var lDef = _config?.Lines.FirstOrDefault(x => string.Equals(x.Name, node.RefName, StringComparison.OrdinalIgnoreCase));
+                    if (lDef is not null && lDef.SearchRoi.Width > 0 && lDef.SearchRoi.Height > 0)
+                    {
+                        using var snap = _sharedImage.GetSnapshot();
+                        if (snap is not null && !snap.Empty())
+                        {
+                            using var processed = ResolveToolPreprocessForPreview(snap, node);
+                            var det = _lineDetector.DetectLongestLine(processed, lDef.SearchRoi, lDef.Canny1, lDef.Canny2, lDef.HoughThreshold, lDef.MinLineLength, lDef.MaxLineGap);
+                            if (det.Found)
+                            {
+                                dst.Add(new OverlayLineItem { X1 = det.P1.X, Y1 = det.P1.Y, X2 = det.P2.X, Y2 = det.P2.Y, Stroke = Brushes.Lime, StrokeThickness = 2.0, Label = lDef.Name });
+                            }
+                        }
+                    }
+                }
                 return;
             }
-    
+
             if (string.Equals(node.Type, "Caliper", StringComparison.OrdinalIgnoreCase))
             {
                 var r = run.Calipers.FirstOrDefault(x => string.Equals(x.Name, node.RefName, StringComparison.OrdinalIgnoreCase));
-                if (r is null)
+                if (r is not null && r.Found)
                 {
-                    return;
-                }
-    
-                if (r.Found)
-                {
-                    dst.Add(new OverlayLineItem { X1 = r.LineP1.X, Y1 = r.LineP1.Y, X2 = r.LineP2.X, Y2 = r.LineP2.Y, Stroke = Brushes.Lime, Label = r.Name });
-                }
-    
-                if (r.Points is not null)
-                {
-                    var n = Math.Min(r.Points.Count, 60);
-                    for (var i = 0; i < n; i++)
+                    dst.Add(new OverlayLineItem { X1 = r.LineP1.X, Y1 = r.LineP1.Y, X2 = r.LineP2.X, Y2 = r.LineP2.Y, Stroke = Brushes.Lime, StrokeThickness = 2.0, Label = r.Name });
+                    if (r.Points is not null && r.Points.Count > 0)
                     {
-                        var p = r.Points[i];
-                        dst.Add(new OverlayPointItem { X = p.X, Y = p.Y, Radius = 2.0, Stroke = Brushes.Gold, Label = string.Empty });
+                        var n = Math.Min(r.Points.Count, 80);
+                        for (var i = 0; i < n; i++)
+                        {
+                            var p = r.Points[i];
+                            dst.Add(new OverlayPointItem { X = p.X, Y = p.Y, Radius = 3.0, Stroke = Brushes.Gold, Fill = Brushes.Gold, Label = string.Empty });
+                        }
                     }
                 }
-    
+                else
+                {
+                    var cDef = _config?.Calipers.FirstOrDefault(x => string.Equals(x.Name, node.RefName, StringComparison.OrdinalIgnoreCase));
+                    if (cDef is not null && cDef.SearchRoi.Width > 0 && cDef.SearchRoi.Height > 0)
+                    {
+                        using var snap = _sharedImage.GetSnapshot();
+                        if (snap is not null && !snap.Empty())
+                        {
+                            using var processed = ResolveToolPreprocessForPreview(snap, node);
+                            var det = CaliperDetector.Detect(processed, cDef);
+                            if (det.Found)
+                            {
+                                dst.Add(new OverlayLineItem { X1 = det.LineP1.X, Y1 = det.LineP1.Y, X2 = det.LineP2.X, Y2 = det.LineP2.Y, Stroke = Brushes.Lime, StrokeThickness = 2.0, Label = cDef.Name });
+                            }
+                            if (det.Points is not null && det.Points.Count > 0)
+                            {
+                                var n = Math.Min(det.Points.Count, 80);
+                                for (var i = 0; i < n; i++)
+                                {
+                                    var p = det.Points[i];
+                                    dst.Add(new OverlayPointItem { X = p.X, Y = p.Y, Radius = 3.0, Stroke = Brushes.Gold, Fill = Brushes.Gold, Label = string.Empty });
+                                }
+                            }
+                        }
+                    }
+                }
                 return;
             }
     
@@ -4676,78 +4792,12 @@ namespace VisionInspectionApp.UI.ViewModels
 
             if (string.Equals(node.Type, "SegmentLineDistance", StringComparison.OrdinalIgnoreCase))
             {
-                var dd = run.SegmentLineDistances.FirstOrDefault(x => string.Equals(x.Name, node.RefName, StringComparison.OrdinalIgnoreCase));
-                if (dd is null)
+                var sldDef = _config?.SegmentLineDistances.FirstOrDefault(x => string.Equals(x.Name, node.RefName, StringComparison.OrdinalIgnoreCase));
+                if (sldDef is not null)
                 {
-                    return;
-                }
-
-                LineDetectResult? ResolveLineRef(InspectionResult r, string name)
-                {
-                    var l = r.Lines.FirstOrDefault(x => string.Equals(x.Name, name, StringComparison.OrdinalIgnoreCase));
-                    if (l is not null) return l;
-                    var c = r.Calipers.FirstOrDefault(x => string.Equals(x.Name, name, StringComparison.OrdinalIgnoreCase));
-                    if (c is not null && c.Found)
-                    {
-                        var dx = c.LineP2.X - c.LineP1.X;
-                        var dy = c.LineP2.Y - c.LineP1.Y;
-                        var len = Math.Sqrt(dx * dx + dy * dy);
-                        return new LineDetectResult(c.Name, c.LineP1, c.LineP2, len, Found: true);
-                    }
-                    var lpd = r.LinePairDetections.FirstOrDefault(x => string.Equals(x.Name, name, StringComparison.OrdinalIgnoreCase));
-                    if (lpd is not null && lpd.Found)
-                    {
-                        var dx = lpd.L1P2.X - lpd.L1P1.X;
-                        var dy = lpd.L1P2.Y - lpd.L1P1.Y;
-                        var len = Math.Sqrt(dx * dx + dy * dy);
-                        return new LineDetectResult(lpd.Name, lpd.L1P1, lpd.L1P2, len, Found: true);
-                    }
-                    var epd = r.EdgePairDetections.FirstOrDefault(x => string.Equals(x.Name, name, StringComparison.OrdinalIgnoreCase));
-                    if (epd is not null && epd.Found)
-                    {
-                        var dx = epd.L1P2.X - epd.L1P1.X;
-                        var dy = epd.L1P2.Y - epd.L1P1.Y;
-                        var len = Math.Sqrt(dx * dx + dy * dy);
-                        return new LineDetectResult(epd.Name, epd.L1P1, epd.L1P2, len, Found: true);
-                    }
-                    return null;
-                }
-
-                var la = ResolveLineRef(run, dd.RefA);
-                var lb = ResolveLineRef(run, dd.RefB);
-                if (la is not null && la.Found)
-                {
-                    dst.Add(new OverlayLineItem { X1 = la.P1.X, Y1 = la.P1.Y, X2 = la.P2.X, Y2 = la.P2.Y, Stroke = Brushes.DeepSkyBlue, Label = $"{la.Name} Seg" });
-                }
-                if (lb is not null && lb.Found)
-                {
-                    var ip = new System.Windows.Point(lb.P1.X, lb.P1.Y);
-                    var dir = new System.Windows.Point(lb.P2.X - lb.P1.X, lb.P2.Y - lb.P1.Y);
-                    if (_lastPreviewImageWidth > 0 && _lastPreviewImageHeight > 0 && TryClipInfiniteLineToImage(ip, dir, _lastPreviewImageWidth, _lastPreviewImageHeight, out var p1, out var p2))
-                    {
-                        dst.Add(new OverlayLineItem { X1 = p1.X, Y1 = p1.Y, X2 = p2.X, Y2 = p2.Y, Stroke = Brushes.Gold, Label = $"{lb.Name} (Inf)" });
-                    }
-                    else
-                    {
-                        var len = Math.Sqrt(dir.X * dir.X + dir.Y * dir.Y);
-                        if (len > 1e-6)
-                        {
-                            var uX = dir.X / len;
-                            var uY = dir.Y / len;
-                            dst.Add(new OverlayLineItem { X1 = lb.P1.X - 5000 * uX, Y1 = lb.P1.Y - 5000 * uY, X2 = lb.P1.X + 5000 * uX, Y2 = lb.P1.Y + 5000 * uY, Stroke = Brushes.Gold, Label = $"{lb.Name} (Inf)" });
-                        }
-                        else
-                        {
-                            dst.Add(new OverlayLineItem { X1 = lb.P1.X, Y1 = lb.P1.Y, X2 = lb.P2.X, Y2 = lb.P2.Y, Stroke = Brushes.Gold, Label = $"{lb.Name} (Inf)" });
-                        }
-                    }
-                }
-
-                if (!double.IsNaN(dd.Value))
-                {
-                    dst.Add(new OverlayLineItem { X1 = dd.ClosestA.X, Y1 = dd.ClosestA.Y, X2 = dd.ClosestB.X, Y2 = dd.ClosestB.Y, Stroke = dd.Pass ? Brushes.Lime : Brushes.Red, Label = $"{dd.Name}: {dd.Value:0.###} {unitStr}" });
-                    dst.Add(new OverlayPointItem { X = dd.ClosestA.X, Y = dd.ClosestA.Y, Radius = 3.0, Stroke = dd.Pass ? Brushes.Lime : Brushes.Red, Label = string.Empty });
-                    dst.Add(new OverlayPointItem { X = dd.ClosestB.X, Y = dd.ClosestB.Y, Radius = 3.0, Stroke = dd.Pass ? Brushes.Lime : Brushes.Red, Label = string.Empty });
+                    GetOriginPose(out var originTeach, out var originFound, out var originAngleDeg);
+                    using var snap = _sharedImage.GetSnapshot();
+                    RenderSegmentLineDistanceOverlay(sldDef, snap ?? new Mat(), run, dst, originTeach, originFound, originAngleDeg);
                 }
                 return;
             }
@@ -5074,21 +5124,49 @@ namespace VisionInspectionApp.UI.ViewModels
                     dst.Add(CreateRotatedRoiWithPose(l.SearchRoi, Brushes.MediumPurple, $"{l.Name} L"));
                 }
     
-                if (!LinePreviewEnabled)
-                {
-                    return;
-                }
-    
-                using var processed = _preprocessor.Run(image, _config.Preprocess);
+                using var processed = ResolveToolPreprocessForPreview(image, node);
                 var det = _lineDetector.DetectLongestLine(processed, l.SearchRoi, l.Canny1, l.Canny2, l.HoughThreshold, l.MinLineLength, l.MaxLineGap);
                 if (det.Found)
                 {
-                    dst.Add(new OverlayLineItem { X1 = det.P1.X, Y1 = det.P1.Y, X2 = det.P2.X, Y2 = det.P2.Y, Stroke = Brushes.MediumPurple, Label = l.Name });
+                    dst.Add(new OverlayLineItem { X1 = det.P1.X, Y1 = det.P1.Y, X2 = det.P2.X, Y2 = det.P2.Y, Stroke = Brushes.Lime, StrokeThickness = 2.0, Label = l.Name });
                 }
     
                 return;
             }
-    
+
+            if (string.Equals(node.Type, "Caliper", StringComparison.OrdinalIgnoreCase))
+            {
+                var c = _config.Calipers.FirstOrDefault(x => string.Equals(x.Name, node.RefName, StringComparison.OrdinalIgnoreCase));
+                if (c is null)
+                {
+                    return;
+                }
+
+                if (showRois && c.SearchRoi.Width > 0 && c.SearchRoi.Height > 0)
+                {
+                    AddConfigRoisForNode(node, dst);
+                }
+
+                using var processed = ResolveToolPreprocessForPreview(image, node);
+                var det = CaliperDetector.Detect(processed, c);
+                if (det.Found)
+                {
+                    dst.Add(new OverlayLineItem { X1 = det.LineP1.X, Y1 = det.LineP1.Y, X2 = det.LineP2.X, Y2 = det.LineP2.Y, Stroke = Brushes.Lime, StrokeThickness = 2.0, Label = c.Name });
+                }
+
+                if (det.Points is not null && det.Points.Count > 0)
+                {
+                    var n = Math.Min(det.Points.Count, 80);
+                    for (var i = 0; i < n; i++)
+                    {
+                        var p = det.Points[i];
+                        dst.Add(new OverlayPointItem { X = p.X, Y = p.Y, Radius = 3.0, Stroke = Brushes.Gold, Fill = Brushes.Gold, Label = string.Empty });
+                    }
+                }
+
+                return;
+            }
+
             if (string.Equals(node.Type, "Distance", StringComparison.OrdinalIgnoreCase))
             {
                 var d = _config.Distances.FirstOrDefault(x => string.Equals(x.Name, node.RefName, StringComparison.OrdinalIgnoreCase));
@@ -5173,7 +5251,18 @@ namespace VisionInspectionApp.UI.ViewModels
                 dst.Add(new OverlayLineItem { X1 = pp.X, Y1 = pp.Y, X2 = closestOnSeg.X, Y2 = closestOnSeg.Y, Stroke = Brushes.Lime, Label = $"{dd.Name}: {value:0.###}" });
                 return;
             }
-    
+
+            if (string.Equals(node.Type, "SegmentLineDistance", StringComparison.OrdinalIgnoreCase))
+            {
+                var sldDef = _config?.SegmentLineDistances.FirstOrDefault(x => string.Equals(x.Name, node.RefName, StringComparison.OrdinalIgnoreCase));
+                if (sldDef is not null)
+                {
+                    GetOriginPose(out var originTeach, out var originFound, out var originAngleDeg);
+                    RenderSegmentLineDistanceOverlay(sldDef, image, _lastRun, dst, originTeach, originFound, originAngleDeg);
+                }
+                return;
+            }
+
             if (string.Equals(node.Type, "CodeDetection", StringComparison.OrdinalIgnoreCase))
             {
                 var c = _config.CodeDetections.FirstOrDefault(x => string.Equals(x.Name, node.RefName, StringComparison.OrdinalIgnoreCase));
@@ -5394,10 +5483,38 @@ namespace VisionInspectionApp.UI.ViewModels
             {
                 return;
             }
-    
-            AddConfigRois(dst);
 
             using var processed = _preprocessor.Run(image, _config.Preprocess);
+
+            Point2d originTeach = default;
+            Point2d originFound = default;
+            double originAngleDeg = 0.0;
+
+            if (_config.Origin is not null && (_config.Origin.TemplateRoi.Width > 0 || _config.Origin.SearchRoi.Width > 0))
+            {
+                originTeach = (_config.Origin.TemplateRoi.Width > 0 && _config.Origin.TemplateRoi.Height > 0)
+                    ? new Point2d(_config.Origin.TemplateRoi.X + _config.Origin.TemplateRoi.Width / 2.0, _config.Origin.TemplateRoi.Y + _config.Origin.TemplateRoi.Height / 2.0)
+                    : new Point2d(_config.Origin.SearchRoi.X + _config.Origin.SearchRoi.Width / 2.0, _config.Origin.SearchRoi.Y + _config.Origin.SearchRoi.Height / 2.0);
+                if (_config.Origin.WorldPosition.X != 0 || _config.Origin.WorldPosition.Y != 0)
+                {
+                    originTeach = new Point2d(_config.Origin.WorldPosition.X, _config.Origin.WorldPosition.Y);
+                }
+
+                if (_lastRun?.Origin is not null && _lastRun.Origin.Pass)
+                {
+                    var mr = _lastRun.Origin.MatchRect;
+                    originFound = (mr.Width > 0 && mr.Height > 0)
+                        ? new Point2d(mr.X + mr.Width / 2.0, mr.Y + mr.Height / 2.0)
+                        : new Point2d(_lastRun.Origin.Position.X, _lastRun.Origin.Position.Y);
+                    originAngleDeg = _lastRun.Origin.AngleDeg;
+                }
+                else
+                {
+                    originFound = originTeach;
+                }
+            }
+
+            // 1. Lines
             var detectedLines = new System.Collections.Generic.Dictionary<string, LineDetectResult>(StringComparer.OrdinalIgnoreCase);
             foreach (var l in _config.Lines)
             {
@@ -5405,8 +5522,11 @@ namespace VisionInspectionApp.UI.ViewModels
                 {
                     continue;
                 }
+
+                var lineNode = Nodes.FirstOrDefault(n => string.Equals(n.RefName, l.Name, StringComparison.OrdinalIgnoreCase));
+                using var matForLine = lineNode != null ? ResolveToolPreprocessForPreview(image, lineNode) : processed.Clone();
     
-                var det = _lineDetector.DetectLongestLine(processed, l.SearchRoi, l.Canny1, l.Canny2, l.HoughThreshold, l.MinLineLength, l.MaxLineGap);
+                var det = _lineDetector.DetectLongestLine(matForLine, l.SearchRoi, l.Canny1, l.Canny2, l.HoughThreshold, l.MinLineLength, l.MaxLineGap, originTeach, originFound, originAngleDeg);
                 var named = det with
                 {
                     Name = l.Name
@@ -5414,7 +5534,52 @@ namespace VisionInspectionApp.UI.ViewModels
                 detectedLines[l.Name] = named;
                 if (named.Found)
                 {
-                    dst.Add(new OverlayLineItem { X1 = named.P1.X, Y1 = named.P1.Y, X2 = named.P2.X, Y2 = named.P2.Y, Stroke = Brushes.MediumPurple, Label = named.Name });
+                    dst.Add(new OverlayLineItem { X1 = named.P1.X, Y1 = named.P1.Y, X2 = named.P2.X, Y2 = named.P2.Y, Stroke = Brushes.Lime, StrokeThickness = 2.0, Label = named.Name });
+                }
+            }
+
+            // 2. Calipers
+            foreach (var c in _config.Calipers)
+            {
+                if (c.SearchRoi.Width <= 0 || c.SearchRoi.Height <= 0)
+                {
+                    continue;
+                }
+
+                var calNode = Nodes.FirstOrDefault(n => string.Equals(n.RefName, c.Name, StringComparison.OrdinalIgnoreCase));
+                using var matForCal = calNode != null ? ResolveToolPreprocessForPreview(image, calNode) : processed.Clone();
+
+                var det = CaliperDetector.Detect(matForCal, c, originTeach, originFound, originAngleDeg);
+                if (det.Found)
+                {
+                    dst.Add(new OverlayLineItem { X1 = det.LineP1.X, Y1 = det.LineP1.Y, X2 = det.LineP2.X, Y2 = det.LineP2.Y, Stroke = Brushes.Lime, StrokeThickness = 2.0, Label = c.Name });
+                    if (det.Points is not null && det.Points.Count > 0)
+                    {
+                        var step = Math.Max(1, det.Points.Count / 80);
+                        for (var i = 0; i < det.Points.Count; i += step)
+                        {
+                            var p = det.Points[i];
+                            dst.Add(new OverlayPointItem { X = p.X, Y = p.Y, Radius = 3.0, Stroke = Brushes.Gold, Fill = Brushes.Gold, Label = string.Empty });
+                        }
+                    }
+                }
+            }
+
+            // 3. LinePairDetections
+            foreach (var lpd in _config.LinePairDetections)
+            {
+                if (lpd.SearchRoi.Width <= 0 || lpd.SearchRoi.Height <= 0) continue;
+                var top = _lineDetector.DetectTopLines(processed, lpd.SearchRoi, lpd.Canny1, lpd.Canny2, lpd.HoughThreshold, lpd.MinLineLength, lpd.MaxLineGap, topN: 2, originTeach, originFound, originAngleDeg);
+                if (top.Count >= 2)
+                {
+                    var l1 = top[0];
+                    var l2 = top[1];
+                    var (distPx, ca, cb) = Geometry2D.SegmentToSegmentDistance(l1.P1, l1.P2, l2.P1, l2.P2);
+                    var value = _config.PixelsPerMm > 0 ? distPx / _config.PixelsPerMm : distPx;
+                    var pass = value >= (lpd.Nominal - lpd.ToleranceMinus) && value <= (lpd.Nominal + lpd.TolerancePlus);
+                    dst.Add(new OverlayLineItem { X1 = l1.P1.X, Y1 = l1.P1.Y, X2 = l1.P2.X, Y2 = l1.P2.Y, Stroke = Brushes.MediumPurple, Label = lpd.Name });
+                    dst.Add(new OverlayLineItem { X1 = l2.P1.X, Y1 = l2.P1.Y, X2 = l2.P2.X, Y2 = l2.P2.Y, Stroke = Brushes.MediumPurple, Label = string.Empty });
+                    dst.Add(new OverlayLineItem { X1 = ca.X, Y1 = ca.Y, X2 = cb.X, Y2 = cb.Y, Stroke = pass ? Brushes.Lime : Brushes.Red, Label = $"{lpd.Name}: {value:0.###}" });
                 }
             }
     
@@ -5476,6 +5641,222 @@ namespace VisionInspectionApp.UI.ViewModels
                 var mm = _config.PixelsPerMm > 0 ? distPx / _config.PixelsPerMm : distPx;
                 dst.Add(new OverlayLineItem { X1 = pa.WorldPosition.X, Y1 = pa.WorldPosition.Y, X2 = pb.WorldPosition.X, Y2 = pb.WorldPosition.Y, Stroke = Brushes.Yellow, Label = $"{d.Name}: {mm:0.00} mm" });
             }
+
+            if (_config.SegmentLineDistances != null)
+            {
+                foreach (var sld in _config.SegmentLineDistances)
+                {
+                    RenderSegmentLineDistanceOverlay(sld, image, _lastRun, dst, originTeach, originFound, originAngleDeg);
+                }
+            }
+        }
+
+        private void GetOriginPose(out Point2d originTeach, out Point2d originFound, out double originAngleDeg)
+        {
+            originTeach = default;
+            originFound = default;
+            originAngleDeg = 0.0;
+            if (_config?.Origin is null) return;
+
+            var hasOriginPose = _lastRun?.Origin is not null && _lastRun.Origin.Pass && (_lastRun.Origin.MatchRect.Width > 0 || _lastRun.Origin.Position.X != 0 || _lastRun.Origin.Position.Y != 0);
+            originTeach = (_config.Origin.TemplateRoi.Width > 0 && _config.Origin.TemplateRoi.Height > 0)
+                ? new Point2d(_config.Origin.TemplateRoi.X + _config.Origin.TemplateRoi.Width / 2.0, _config.Origin.TemplateRoi.Height / 2.0 + _config.Origin.TemplateRoi.Y)
+                : new Point2d(_config.Origin.SearchRoi.X + _config.Origin.SearchRoi.Width / 2.0, _config.Origin.SearchRoi.Height / 2.0 + _config.Origin.SearchRoi.Y);
+            if (_config.Origin.WorldPosition.X != 0 || _config.Origin.WorldPosition.Y != 0)
+            {
+                originTeach = new Point2d(_config.Origin.WorldPosition.X, _config.Origin.WorldPosition.Y);
+            }
+
+            var mr = _lastRun?.Origin?.MatchRect ?? default;
+            originFound = (mr.Width > 0 && mr.Height > 0)
+                ? new Point2d(mr.X + mr.Width / 2.0, mr.Y + mr.Height / 2.0)
+                : new Point2d(_lastRun?.Origin?.Position.X ?? originTeach.X, _lastRun?.Origin?.Position.Y ?? originTeach.Y);
+            originAngleDeg = hasOriginPose ? _lastRun!.Origin.AngleDeg : 0.0;
+        }
+
+        private LineDetectResult? ResolveOrDetectLine(
+            string lineName,
+            Mat image,
+            InspectionResult? run,
+            Point2d originTeach,
+            Point2d originFound,
+            double originAngleDeg)
+        {
+            if (string.IsNullOrWhiteSpace(lineName)) return null;
+
+            // 1. Try from run result if available and found
+            if (run is not null)
+            {
+                var l = run.Lines.FirstOrDefault(x => string.Equals(x.Name, lineName, StringComparison.OrdinalIgnoreCase));
+                if (l is not null && l.Found) return l;
+
+                var c = run.Calipers.FirstOrDefault(x => string.Equals(x.Name, lineName, StringComparison.OrdinalIgnoreCase));
+                if (c is not null && c.Found)
+                {
+                    var dx = c.LineP2.X - c.LineP1.X;
+                    var dy = c.LineP2.Y - c.LineP1.Y;
+                    var len = Math.Sqrt(dx * dx + dy * dy);
+                    return new LineDetectResult(c.Name, c.LineP1, c.LineP2, len, Found: true);
+                }
+
+                var lpd = run.LinePairDetections.FirstOrDefault(x => string.Equals(x.Name, lineName, StringComparison.OrdinalIgnoreCase));
+                if (lpd is not null && lpd.Found)
+                {
+                    var dx = lpd.L1P2.X - lpd.L1P1.X;
+                    var dy = lpd.L1P2.Y - lpd.L1P1.Y;
+                    var len = Math.Sqrt(dx * dx + dy * dy);
+                    return new LineDetectResult(lpd.Name, lpd.L1P1, lpd.L1P2, len, Found: true);
+                }
+
+                var epd = run.EdgePairDetections.FirstOrDefault(x => string.Equals(x.Name, lineName, StringComparison.OrdinalIgnoreCase));
+                if (epd is not null && epd.Found)
+                {
+                    var dx = epd.L1P2.X - epd.L1P1.X;
+                    var dy = epd.L1P2.Y - epd.L1P1.Y;
+                    var len = Math.Sqrt(dx * dx + dy * dy);
+                    return new LineDetectResult(epd.Name, epd.L1P1, epd.L1P2, len, Found: true);
+                }
+
+                var cl = run.CreateLines?.FirstOrDefault(x => string.Equals(x.Name, lineName, StringComparison.OrdinalIgnoreCase));
+                if (cl is not null && cl.Success)
+                {
+                    var p1 = new Point2d(cl.X1, cl.Y1);
+                    var p2 = new Point2d(cl.X2, cl.Y2);
+                    var dx = p2.X - p1.X;
+                    var dy = p2.Y - p1.Y;
+                    var len = Math.Sqrt(dx * dx + dy * dy);
+                    return new LineDetectResult(cl.Name, p1, p2, len, Found: true);
+                }
+            }
+
+            // 2. Fallback to live detection on image
+            if (image is null || image.Empty() || _config is null) return null;
+
+            var lDef = _config.Lines.FirstOrDefault(x => string.Equals(x.Name, lineName, StringComparison.OrdinalIgnoreCase));
+            if (lDef is not null && lDef.SearchRoi.Width > 0 && lDef.SearchRoi.Height > 0)
+            {
+                var lineNode = Nodes.FirstOrDefault(n => string.Equals(n.RefName, lDef.Name, StringComparison.OrdinalIgnoreCase));
+                using var matForLine = lineNode != null ? ResolveToolPreprocessForPreview(image, lineNode) : image.Clone();
+                var det = _lineDetector.DetectLongestLine(matForLine, lDef.SearchRoi, lDef.Canny1, lDef.Canny2, lDef.HoughThreshold, lDef.MinLineLength, lDef.MaxLineGap, originTeach, originFound, originAngleDeg);
+                if (det.Found)
+                {
+                    return det with { Name = lDef.Name };
+                }
+            }
+
+            var cDef = _config.Calipers.FirstOrDefault(x => string.Equals(x.Name, lineName, StringComparison.OrdinalIgnoreCase));
+            if (cDef is not null && cDef.SearchRoi.Width > 0 && cDef.SearchRoi.Height > 0)
+            {
+                var calNode = Nodes.FirstOrDefault(n => string.Equals(n.RefName, cDef.Name, StringComparison.OrdinalIgnoreCase));
+                using var matForCal = calNode != null ? ResolveToolPreprocessForPreview(image, calNode) : image.Clone();
+                var det = CaliperDetector.Detect(matForCal, cDef, originTeach, originFound, originAngleDeg);
+                if (det.Found)
+                {
+                    var dx = det.LineP2.X - det.LineP1.X;
+                    var dy = det.LineP2.Y - det.LineP1.Y;
+                    var len = Math.Sqrt(dx * dx + dy * dy);
+                    return new LineDetectResult(cDef.Name, det.LineP1, det.LineP2, len, Found: true);
+                }
+            }
+
+            var lpdDef = _config.LinePairDetections.FirstOrDefault(x => string.Equals(x.Name, lineName, StringComparison.OrdinalIgnoreCase));
+            if (lpdDef is not null && lpdDef.SearchRoi.Width > 0 && lpdDef.SearchRoi.Height > 0)
+            {
+                var lpdNode = Nodes.FirstOrDefault(n => string.Equals(n.RefName, lpdDef.Name, StringComparison.OrdinalIgnoreCase));
+                using var matForLpd = lpdNode != null ? ResolveToolPreprocessForPreview(image, lpdNode) : image.Clone();
+                var top = _lineDetector.DetectTopLines(matForLpd, lpdDef.SearchRoi, lpdDef.Canny1, lpdDef.Canny2, lpdDef.HoughThreshold, lpdDef.MinLineLength, lpdDef.MaxLineGap, topN: 2, originTeach, originFound, originAngleDeg);
+                if (top.Count > 0)
+                {
+                    return top[0] with { Name = lpdDef.Name };
+                }
+            }
+
+            var clDef = _config.CreateLines?.FirstOrDefault(x => string.Equals(x.Name, lineName, StringComparison.OrdinalIgnoreCase));
+            if (clDef is not null)
+            {
+                var pts = GetCurrentPointsMap();
+                var res = GeometryCreationProcessor.EvaluateCreateLine(clDef, pts);
+                if (res.Success)
+                {
+                    var p1 = new Point2d(res.X1, res.Y1);
+                    var p2 = new Point2d(res.X2, res.Y2);
+                    var dx = p2.X - p1.X;
+                    var dy = p2.Y - p1.Y;
+                    var len = Math.Sqrt(dx * dx + dy * dy);
+                    return new LineDetectResult(clDef.Name, p1, p2, len, Found: true);
+                }
+            }
+
+            return null;
+        }
+
+        private void RenderSegmentLineDistanceOverlay(
+            SegmentLineDistance dd,
+            Mat image,
+            InspectionResult? run,
+            List<OverlayItem> dst,
+            Point2d originTeach,
+            Point2d originFound,
+            double originAngleDeg)
+        {
+            if (dd is null || string.IsNullOrWhiteSpace(dd.Name) || string.IsNullOrWhiteSpace(dd.LineA) || string.IsNullOrWhiteSpace(dd.LineB))
+            {
+                return;
+            }
+
+            var isCalibrated = _config is not null && _config.PixelsPerMm > 0 && Math.Abs(_config.PixelsPerMm - 1.0) > 1e-6;
+            var unitStr = isCalibrated ? "mm" : "px";
+
+            var la = ResolveOrDetectLine(dd.LineA, image, run, originTeach, originFound, originAngleDeg);
+            var lb = ResolveOrDetectLine(dd.LineB, image, run, originTeach, originFound, originAngleDeg);
+
+            if (la is not null && la.Found)
+            {
+                dst.Add(new OverlayLineItem { X1 = la.P1.X, Y1 = la.P1.Y, X2 = la.P2.X, Y2 = la.P2.Y, Stroke = Brushes.DeepSkyBlue, StrokeThickness = 2.0, Label = $"{la.Name} (Seg)" });
+            }
+
+            if (lb is not null && lb.Found)
+            {
+                var ip = new System.Windows.Point(lb.P1.X, lb.P1.Y);
+                var dir = new System.Windows.Point(lb.P2.X - lb.P1.X, lb.P2.Y - lb.P1.Y);
+                if (_lastPreviewImageWidth > 0 && _lastPreviewImageHeight > 0 && TryClipInfiniteLineToImage(ip, dir, _lastPreviewImageWidth, _lastPreviewImageHeight, out var p1, out var p2))
+                {
+                    dst.Add(new OverlayLineItem { X1 = p1.X, Y1 = p1.Y, X2 = p2.X, Y2 = p2.Y, Stroke = Brushes.Gold, StrokeThickness = 1.5, Label = $"{lb.Name} (Inf)" });
+                }
+                else
+                {
+                    var len = Math.Sqrt(dir.X * dir.X + dir.Y * dir.Y);
+                    if (len > 1e-6)
+                    {
+                        var uX = dir.X / len;
+                        var uY = dir.Y / len;
+                        dst.Add(new OverlayLineItem { X1 = lb.P1.X - 5000 * uX, Y1 = lb.P1.Y - 5000 * uY, X2 = lb.P1.X + 5000 * uX, Y2 = lb.P1.Y + 5000 * uY, Stroke = Brushes.Gold, StrokeThickness = 1.5, Label = $"{lb.Name} (Inf)" });
+                    }
+                    else
+                    {
+                        dst.Add(new OverlayLineItem { X1 = lb.P1.X, Y1 = lb.P1.Y, X2 = lb.P2.X, Y2 = lb.P2.Y, Stroke = Brushes.Gold, StrokeThickness = 1.5, Label = $"{lb.Name} (Inf)" });
+                    }
+                }
+                dst.Add(new OverlayLineItem { X1 = lb.P1.X, Y1 = lb.P1.Y, X2 = lb.P2.X, Y2 = lb.P2.Y, Stroke = Brushes.Gold, StrokeThickness = 2.0, Label = string.Empty });
+            }
+
+            if (la is null || !la.Found || lb is null || !lb.Found)
+            {
+                return;
+            }
+
+            Roi? searchRoiA = _config?.Lines?.FirstOrDefault(x => string.Equals(x.Name, dd.LineA, StringComparison.OrdinalIgnoreCase))?.SearchRoi
+                ?? _config?.Calipers?.FirstOrDefault(x => string.Equals(x.Name, dd.LineA, StringComparison.OrdinalIgnoreCase))?.SearchRoi
+                ?? _config?.LinePairDetections?.FirstOrDefault(x => string.Equals(x.Name, dd.LineA, StringComparison.OrdinalIgnoreCase))?.SearchRoi;
+
+            var (distPx, ca, cb) = Geometry2D.CalculateSegmentLineDistance(la, lb, dd.Mode, dd.ExtensionMode, searchRoiA, originTeach, originFound, originAngleDeg);
+            var value = _config?.PixelsPerMm > 0 ? distPx / _config.PixelsPerMm : distPx;
+            var pass = value >= (dd.Nominal - dd.ToleranceMinus) && value <= (dd.Nominal + dd.TolerancePlus);
+            var stroke = pass ? Brushes.Lime : Brushes.Red;
+
+            dst.Add(new OverlayLineItem { X1 = ca.X, Y1 = ca.Y, X2 = cb.X, Y2 = cb.Y, Stroke = stroke, StrokeThickness = 2.0, Label = $"{dd.Name}: {value:0.###} {unitStr}" });
+            dst.Add(new OverlayPointItem { X = ca.X, Y = ca.Y, Radius = 3.5, Stroke = stroke, Fill = stroke, Label = string.Empty });
+            dst.Add(new OverlayPointItem { X = cb.X, Y = cb.Y, Radius = 3.5, Stroke = stroke, Fill = stroke, Label = string.Empty });
         }
     
         private void AddEpdSearchStripsOverlay(List<OverlayItem> dst, EdgePairDetectDefinition e, bool showRois)

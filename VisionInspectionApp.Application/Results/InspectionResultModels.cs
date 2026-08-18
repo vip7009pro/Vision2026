@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using OpenCvSharp;
 using VisionInspectionApp.Models;
+using VisionInspectionApp.VisionEngine;
 
 namespace VisionInspectionApp.Application;
 
@@ -156,16 +157,6 @@ public sealed record ColorDiffResult(
     double MaxDeltaE);
 
 public sealed record ImgArithmeticResult(string Name, bool Success, ImgArithmeticOp Op, int Width, int Height);
-
-public sealed record CaliperEdgePoint(double X, double Y, double Strength);
-
-public sealed record CaliperResult(
-    string Name,
-    bool Found,
-    List<CaliperEdgePoint> Points,
-    Point2d LineP1,
-    Point2d LineP2,
-    double AvgStrength);
 
 public sealed record AngleResult(
     string Name,

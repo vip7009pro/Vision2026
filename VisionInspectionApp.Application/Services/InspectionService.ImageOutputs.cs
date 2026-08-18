@@ -395,6 +395,16 @@ public partial class InspectionService
                 var p2 = new Point((int)cRes.LineP2.X, (int)cRes.LineP2.Y);
                 Cv2.Line(mat, p1, p2, green, 2, LineTypes.AntiAlias);
                 Cv2.PutText(mat, cRes.Name, new Point((p1.X + p2.X) / 2 + 5, (p1.Y + p2.Y) / 2 - 5), HersheyFonts.HersheySimplex, 0.5, green, 1, LineTypes.AntiAlias);
+
+                if (cRes.Points is not null && cRes.Points.Count > 0)
+                {
+                    var step = Math.Max(1, cRes.Points.Count / 80);
+                    for (var i = 0; i < cRes.Points.Count; i += step)
+                    {
+                        var p = cRes.Points[i];
+                        Cv2.Circle(mat, new Point((int)Math.Round(p.X), (int)Math.Round(p.Y)), 2, yellow, -1, LineTypes.AntiAlias);
+                    }
+                }
             }
         }
 
@@ -485,6 +495,8 @@ public partial class InspectionService
             var p2 = new Point((int)sld.ClosestB.X, (int)sld.ClosestB.Y);
             var col = sld.Pass ? green : red;
             Cv2.Line(mat, p1, p2, col, 2, LineTypes.AntiAlias);
+            Cv2.Circle(mat, p1, 3, col, -1, LineTypes.AntiAlias);
+            Cv2.Circle(mat, p2, 3, col, -1, LineTypes.AntiAlias);
             var mx = (p1.X + p2.X) / 2;
             var my = (p1.Y + p2.Y) / 2;
             Cv2.PutText(mat, $"{sld.Name}={UnitStr(sld.Value)}", new Point(mx + 5, my - 5), HersheyFonts.HersheySimplex, 0.5, col, 1, LineTypes.AntiAlias);

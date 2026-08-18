@@ -1139,187 +1139,6 @@ public partial class InspectionService
                     FailSegments: failSegmentsList);
             }
 
-            static CaliperResult DetectCaliper(Mat matBgrOrGray, Roi roiTeach, CaliperDefinition def, Point2d originTeach, Point2d originFound, double angleDeg)
-            {
-                if (matBgrOrGray is null || roiTeach.Width <= 0 || roiTeach.Height <= 0)
-                {
-                    return new CaliperResult(def.Name, Found: false, new List<CaliperEdgePoint>(), default, default, 0.0);
-                }
-
-                using var patch = ExtractStraightRoi(matBgrOrGray, roiTeach, originTeach, originFound, angleDeg, out var centerFound);
-                if (patch.Empty())
-                {
-                    return new CaliperResult(def.Name, Found: false, new List<CaliperEdgePoint>(), default, default, 0.0);
-                }
-
-                using var patchGrayOwned = patch.Channels() == 1 ? null : patch.CvtColor(ColorConversionCodes.BGR2GRAY);
-                Mat gray = patchGrayOwned ?? patch;
-
-                var rect = new Rect(0, 0, patch.Width, patch.Height);
-
-                var stripCount = Math.Clamp(def.StripCount, 1, 200);
-                var stripWidth = Math.Clamp(def.StripWidth, 1, Math.Max(1, Math.Min(rect.Width, rect.Height)));
-                var stripLength = Math.Clamp(def.StripLength, 3, Math.Max(3, Math.Max(rect.Width, rect.Height)));
-
-                var points = new List<CaliperEdgePoint>(stripCount);
-                var strengths = new List<double>(stripCount);
-
-                static double InterpPeak(double a, double b, double c)
-                {
-                    var denom = (a - 2 * b + c);
-                    if (Math.Abs(denom) < 1e-12) return 0.0;
-                    return 0.5 * (a - c) / denom;
-                }
-
-                for (var i = 0; i < stripCount; i++)
-                {
-                    if (def.Orientation == CaliperOrientation.Vertical)
-                    {
-                        var xCenter = (i + 0.5) * rect.Width / stripCount;
-                        var x0 = (int)Math.Round(xCenter - stripWidth / 2.0);
-                        var y0 = (int)Math.Round((rect.Height - stripLength) / 2.0);
-                        var sr = new Rect(x0, y0, stripWidth, stripLength)
-                            .Intersect(new Rect(0, 0, rect.Width, rect.Height));
-                        if (sr.Width <= 0 || sr.Height <= 2) continue;
-
-                        using var s = new Mat(gray, sr);
-                        using var prof = new Mat();
-                        Cv2.Reduce(s, prof, dim: ReduceDimension.Column, ReduceTypes.Avg, MatType.CV_64F);
-
-                        var n = prof.Rows;
-                        if (n < 3) continue;
-
-                        var bestIdx = -1;
-                        var bestVal = 0.0;
-                        for (var y = 1; y < n - 1; y++)
-                        {
-                            var v0 = prof.Get<double>(y - 1, 0);
-                            var v1 = prof.Get<double>(y, 0);
-                            var v2 = prof.Get<double>(y + 1, 0);
-                            var g = (v2 - v0) * 0.5;
-                            if (def.Polarity == EdgePolarity.DarkToLight) { if (g <= 0) continue; }
-                            else if (def.Polarity == EdgePolarity.LightToDark) { if (g >= 0) continue; g = -g; }
-                            else { g = Math.Abs(g); }
-
-                            if (g > bestVal)
-                            {
-                                bestVal = g;
-                                bestIdx = y;
-                            }
-                        }
-
-                        if (bestIdx < 1 || bestIdx >= n - 1) continue;
-                        if (bestVal < def.MinEdgeStrength) continue;
-
-                        var gL = Math.Abs(prof.Get<double>(bestIdx, 0) - prof.Get<double>(bestIdx - 1, 0));
-                        var gC = Math.Abs(prof.Get<double>(bestIdx + 1, 0) - prof.Get<double>(bestIdx - 1, 0)) * 0.5;
-                        var gR = Math.Abs(prof.Get<double>(bestIdx + 1, 0) - prof.Get<double>(bestIdx, 0));
-                        var sub = InterpPeak(gL, gC, gR);
-
-                        var ySub = bestIdx + sub;
-                        var xLocal = rect.X + sr.X + sr.Width / 2.0;
-                        var yLocal = rect.Y + sr.Y + ySub;
-                        var ptGlobal = MapToGlobal(new Point2d(xLocal, yLocal), patch.Width, patch.Height, centerFound, angleDeg);
-                        points.Add(new CaliperEdgePoint(ptGlobal.X, ptGlobal.Y, bestVal));
-                        strengths.Add(bestVal);
-                    }
-                    else
-                    {
-                        var yCenter = (i + 0.5) * rect.Height / stripCount;
-                        var y0 = (int)Math.Round(yCenter - stripWidth / 2.0);
-                        var x0 = (int)Math.Round((rect.Width - stripLength) / 2.0);
-                        var sr = new Rect(x0, y0, stripLength, stripWidth)
-                            .Intersect(new Rect(0, 0, rect.Width, rect.Height));
-                        if (sr.Width <= 2 || sr.Height <= 0) continue;
-
-                        using var s = new Mat(gray, sr);
-                        using var prof = new Mat();
-                        Cv2.Reduce(s, prof, dim: ReduceDimension.Row, ReduceTypes.Avg, MatType.CV_64F);
-
-                        var n = prof.Cols;
-                        if (n < 3) continue;
-
-                        var bestIdx = -1;
-                        var bestVal = 0.0;
-                        for (var x = 1; x < n - 1; x++)
-                        {
-                            var v0 = prof.Get<double>(0, x - 1);
-                            var v1 = prof.Get<double>(0, x);
-                            var v2 = prof.Get<double>(0, x + 1);
-                            var g = (v2 - v0) * 0.5;
-                            if (def.Polarity == EdgePolarity.DarkToLight) { if (g <= 0) continue; }
-                            else if (def.Polarity == EdgePolarity.LightToDark) { if (g >= 0) continue; g = -g; }
-                            else { g = Math.Abs(g); }
-
-                            if (g > bestVal)
-                            {
-                                bestVal = g;
-                                bestIdx = x;
-                            }
-                        }
-
-                        if (bestIdx < 1 || bestIdx >= n - 1) continue;
-                        if (bestVal < def.MinEdgeStrength) continue;
-
-                        var gL = Math.Abs(prof.Get<double>(0, bestIdx) - prof.Get<double>(0, bestIdx - 1));
-                        var gC = Math.Abs(prof.Get<double>(0, bestIdx + 1) - prof.Get<double>(0, bestIdx - 1)) * 0.5;
-                        var gR = Math.Abs(prof.Get<double>(0, bestIdx + 1) - prof.Get<double>(0, bestIdx));
-                        var sub = InterpPeak(gL, gC, gR);
-
-                        var xSub = bestIdx + sub;
-                        var xLocal = rect.X + sr.X + xSub;
-                        var yLocal = rect.Y + sr.Y + sr.Height / 2.0;
-                        var ptGlobal = MapToGlobal(new Point2d(xLocal, yLocal), patch.Width, patch.Height, centerFound, angleDeg);
-                        points.Add(new CaliperEdgePoint(ptGlobal.X, ptGlobal.Y, bestVal));
-                        strengths.Add(bestVal);
-                    }
-                }
-
-                if (points.Count < 2)
-                {
-                    var avg0 = strengths.Count == 0 ? 0.0 : strengths.Average();
-                    return new CaliperResult(def.Name, Found: false, points, default, default, avg0);
-                }
-
-                var meanX = points.Average(p => p.X);
-                var meanY = points.Average(p => p.Y);
-
-                var sxx = 0.0;
-                var syy = 0.0;
-                var sxy = 0.0;
-                foreach (var p in points)
-                {
-                    var dx = p.X - meanX;
-                    var dy = p.Y - meanY;
-                    sxx += dx * dx;
-                    syy += dy * dy;
-                    sxy += dx * dy;
-                }
-
-                var theta = 0.5 * Math.Atan2(2 * sxy, (sxx - syy));
-                var dir = new Point2d(Math.Cos(theta), Math.Sin(theta));
-
-                var minT = double.PositiveInfinity;
-                var maxT = double.NegativeInfinity;
-                foreach (var p in points)
-                {
-                    var t = (p.X - meanX) * dir.X + (p.Y - meanY) * dir.Y;
-                    if (t < minT) minT = t;
-                    if (t > maxT) maxT = t;
-                }
-
-                if (!double.IsFinite(minT) || !double.IsFinite(maxT))
-                {
-                    var avg0 = strengths.Average();
-                    return new CaliperResult(def.Name, Found: false, points, default, default, avg0);
-                }
-
-                var p1 = new Point2d(meanX + minT * dir.X, meanY + minT * dir.Y);
-                var p2 = new Point2d(meanX + maxT * dir.X, meanY + maxT * dir.Y);
-                var avg = strengths.Average();
-                return new CaliperResult(def.Name, Found: true, points, p1, p2, avg);
-            }
-
             // 0. Execute BeforeFlow DB Nodes (Read/Write before flow)
             ExecuteDbNodes(config, result, effectiveDbManager, DbExecutionTiming.BeforeFlow);
 
@@ -1332,93 +1151,131 @@ public partial class InspectionService
             var (originMat, originPre) = ResolveToolPreprocess("Origin", config.Origin.Name);
             var originTempl = GetTemplateGray(config.Origin.TemplateImageFile);
 
-            var originDefBase = config.Origin;
-            var originDef = originDefBase;
-            var usedGuidedOrigin = false;
-            if (track.LastOriginPos is not null)
+            var hasOriginNode = nodesById.Values.Any(n => string.Equals(n.Type, "Origin", StringComparison.OrdinalIgnoreCase));
+            var hasOriginTemplate = config.Origin != null && !string.IsNullOrWhiteSpace(config.Origin.TemplateImageFile) && config.Origin.TemplateRoi.Width > 0 && config.Origin.TemplateRoi.Height > 0 && originTempl != null && !originTempl.Empty();
+
+            Point2d originTeach;
+            Point2d originFound;
+            double angleDeg;
+            double templateAngleDeg = 0.0;
+            double poseAngleDeg = 0.0;
+            bool originPass = true;
+            MatchResult originMatch = new MatchResult(new Point2d(0, 0), 1.0, 0.0, new Rect());
+
+            if (hasOriginNode && hasOriginTemplate)
             {
-                var guide = ClampRoiToImage(WindowRoi(track.LastOriginPos.Value, guidedRadiusPx), originMat);
-                var shrunk = IntersectRoi(originDefBase.SearchRoi, guide);
-                if (shrunk.Width > 0 && shrunk.Height > 0)
+                var originDefBase = config.Origin!;
+                var originDef = originDefBase;
+                var usedGuidedOrigin = false;
+                if (track.LastOriginPos is not null)
                 {
-                    usedGuidedOrigin = true;
-                    originDef = new PointDefinition
+                    var guide = ClampRoiToImage(WindowRoi(track.LastOriginPos.Value, guidedRadiusPx), originMat);
+                    var shrunk = IntersectRoi(originDefBase.SearchRoi, guide);
+                    if (shrunk.Width > 0 && shrunk.Height > 0)
                     {
-                        Name = originDefBase.Name,
-                        MatchScoreThreshold = originDefBase.MatchScoreThreshold,
-                        TemplateImageFile = originDefBase.TemplateImageFile,
-                        TemplateRoi = originDefBase.TemplateRoi,
-                        SearchRoi = shrunk,
-                        WorldPosition = originDefBase.WorldPosition,
-                        OffsetPx = originDefBase.OffsetPx,
-                        Algorithm = originDefBase.Algorithm,
-                        OriginAlgorithm = originDefBase.OriginAlgorithm,
-                        MinAngle = originDefBase.MinAngle,
-                        MaxAngle = originDefBase.MaxAngle,
-                        AngleStep = originDefBase.AngleStep,
-                        EdgePoint = originDefBase.EdgePoint,
-                        ShapeModel = originDefBase.ShapeModel,
-                        EdgeThresholdMin = originDefBase.EdgeThresholdMin,
-                        EdgeThresholdMax = originDefBase.EdgeThresholdMax
-                    };
+                        usedGuidedOrigin = true;
+                        originDef = new PointDefinition
+                        {
+                            Name = originDefBase.Name,
+                            MatchScoreThreshold = originDefBase.MatchScoreThreshold,
+                            TemplateImageFile = originDefBase.TemplateImageFile,
+                            TemplateRoi = originDefBase.TemplateRoi,
+                            SearchRoi = shrunk,
+                            WorldPosition = originDefBase.WorldPosition,
+                            OffsetPx = originDefBase.OffsetPx,
+                            Algorithm = originDefBase.Algorithm,
+                            OriginAlgorithm = originDefBase.OriginAlgorithm,
+                            MinAngle = originDefBase.MinAngle,
+                            MaxAngle = originDefBase.MaxAngle,
+                            AngleStep = originDefBase.AngleStep,
+                            EdgePoint = originDefBase.EdgePoint,
+                            ShapeModel = originDefBase.ShapeModel,
+                            EdgeThresholdMin = originDefBase.EdgeThresholdMin,
+                            EdgeThresholdMax = originDefBase.EdgeThresholdMax
+                        };
+                    }
                 }
-            }
 
-            var tOrigin0 = swTotal.ElapsedMilliseconds;
-            var stepDeg = originDef.AngleStep > 0 ? originDef.AngleStep : 1.0;
-            var originMatch = _matcher.MatchWithRotation(originMat, originDef, originTempl, originPre, originDef.MinAngle, originDef.MaxAngle, stepDeg);
-            if (usedGuidedOrigin && originMatch.Score < originDefBase.MatchScoreThreshold)
-            {
-                var stepDegBase = originDefBase.AngleStep > 0 ? originDefBase.AngleStep : 1.0;
-                var retry = _matcher.MatchWithRotation(originMat, originDefBase, originTempl, originPre, originDefBase.MinAngle, originDefBase.MaxAngle, stepDegBase);
-
-                if (retry.Score > originMatch.Score)
+                var tOrigin0 = swTotal.ElapsedMilliseconds;
+                var stepDeg = originDef.AngleStep > 0 ? originDef.AngleStep : 1.0;
+                originMatch = _matcher.MatchWithRotation(originMat, originDef, originTempl, originPre, originDef.MinAngle, originDef.MaxAngle, stepDeg);
+                if (usedGuidedOrigin && originMatch.Score < originDefBase.MatchScoreThreshold)
                 {
-                    originMatch = retry;
+                    var stepDegBase = originDefBase.AngleStep > 0 ? originDefBase.AngleStep : 1.0;
+                    var retry = _matcher.MatchWithRotation(originMat, originDefBase, originTempl, originPre, originDefBase.MinAngle, originDefBase.MaxAngle, stepDegBase);
+
+                    if (retry.Score > originMatch.Score)
+                    {
+                        originMatch = retry;
+                    }
                 }
+                templateAngleDeg = originMatch.AngleDeg;
+                poseAngleDeg = templateAngleDeg - config.Origin.TemplateRoi.Angle;
+                originPass = originMatch.Score >= config.Origin.MatchScoreThreshold;
+                result.Origin = new PointMatchResult(
+                    config.Origin.Name,
+                    originMatch.Position,
+                    originMatch.MatchRect,
+                    originMatch.Score,
+                    config.Origin.MatchScoreThreshold,
+                    originPass,
+                    poseAngleDeg,
+                    originMatch.FeaturePoints);
+                
+                System.Diagnostics.Debug.WriteLine($"[ORIGIN INSPECT] Tool='{config.Origin.Name ?? "Origin"}', Pass={originPass}, Score={originMatch.Score:F4} (Thr={config.Origin.MatchScoreThreshold:F4}) | Pos_px=({originMatch.Position.X:F2}, {originMatch.Position.Y:F2}), PoseAngle={poseAngleDeg:F2}°, MatchAngle={templateAngleDeg:F2}°");
+                Console.WriteLine($"[ORIGIN INSPECT] Tool='{config.Origin.Name ?? "Origin"}', Pass={originPass}, Score={originMatch.Score:F4} (Thr={config.Origin.MatchScoreThreshold:F4}) | Pos_px=({originMatch.Position.X:F2}, {originMatch.Position.Y:F2}), PoseAngle={poseAngleDeg:F2}°, MatchAngle={templateAngleDeg:F2}°");
+                if (config.PixelsPerMm > 0 && Math.Abs(config.PixelsPerMm - 1.0) > 1e-6)
+                {
+                    double pxMm = config.PixelsPerMm;
+                    System.Diagnostics.Debug.WriteLine($"[ORIGIN INSPECT] Calibrated Pos_mm=({originMatch.Position.X / pxMm:F3}, {originMatch.Position.Y / pxMm:F3}) (Scale={pxMm:F4} px/mm)");
+                    Console.WriteLine($"[ORIGIN INSPECT] Calibrated Pos_mm=({originMatch.Position.X / pxMm:F3}, {originMatch.Position.Y / pxMm:F3}) (Scale={pxMm:F4} px/mm)");
+                }
+
+                result.Timings.OriginMs = (int)Math.Max(0, swTotal.ElapsedMilliseconds - tOrigin0);
+                result.Timings.NodeTimings[config.Origin.Name ?? "Origin"] = result.Timings.OriginMs;
+
+                if (!originPass)
+                {
+                    // SHORT-CIRCUIT: Origin failed to match. Skip all downstream vision tools immediately.
+                    PopulateOriginFailedResults(config, result);
+                    result.Pass = false;
+
+                    ExecutePlcNodes(config, result, _plcManager);
+                    ExecuteDbNodes(config, result, effectiveDbManager, DbExecutionTiming.AfterFlow);
+                    ExecuteImageOutputs(config, result, image, GetPreprocessNodeOutput, nodesById, edges);
+
+                    result.Timings.TotalMs = (int)Math.Max(0, swTotal.ElapsedMilliseconds);
+                    return result;
+                }
+
+                originTeach = new Point2d(config.Origin.WorldPosition.X, config.Origin.WorldPosition.Y);
+                originFound = originMatch.Position;
+                angleDeg = poseAngleDeg;
             }
-            var templateAngleDeg = originMatch.AngleDeg;
-            var poseAngleDeg = templateAngleDeg - config.Origin.TemplateRoi.Angle;
-            var originPass = originMatch.Score >= config.Origin.MatchScoreThreshold;
-            result.Origin = new PointMatchResult(
-                config.Origin.Name,
-                originMatch.Position,
-                originMatch.MatchRect,
-                originMatch.Score,
-                config.Origin.MatchScoreThreshold,
-                originPass,
-                poseAngleDeg,
-                originMatch.FeaturePoints);
-            
-            System.Diagnostics.Debug.WriteLine($"[ORIGIN INSPECT] Tool='{config.Origin.Name ?? "Origin"}', Pass={originPass}, Score={originMatch.Score:F4} (Thr={config.Origin.MatchScoreThreshold:F4}) | Pos_px=({originMatch.Position.X:F2}, {originMatch.Position.Y:F2}), PoseAngle={poseAngleDeg:F2}°, MatchAngle={templateAngleDeg:F2}°");
-            Console.WriteLine($"[ORIGIN INSPECT] Tool='{config.Origin.Name ?? "Origin"}', Pass={originPass}, Score={originMatch.Score:F4} (Thr={config.Origin.MatchScoreThreshold:F4}) | Pos_px=({originMatch.Position.X:F2}, {originMatch.Position.Y:F2}), PoseAngle={poseAngleDeg:F2}°, MatchAngle={templateAngleDeg:F2}°");
-            if (config.PixelsPerMm > 0 && Math.Abs(config.PixelsPerMm - 1.0) > 1e-6)
+            else
             {
-                double pxMm = config.PixelsPerMm;
-                System.Diagnostics.Debug.WriteLine($"[ORIGIN INSPECT] Calibrated Pos_mm=({originMatch.Position.X / pxMm:F3}, {originMatch.Position.Y / pxMm:F3}) (Scale={pxMm:F4} px/mm)");
-                Console.WriteLine($"[ORIGIN INSPECT] Calibrated Pos_mm=({originMatch.Position.X / pxMm:F3}, {originMatch.Position.Y / pxMm:F3}) (Scale={pxMm:F4} px/mm)");
+                originPass = true;
+                templateAngleDeg = 0.0;
+                poseAngleDeg = 0.0;
+                result.Origin = new PointMatchResult(
+                    config.Origin?.Name ?? "Origin",
+                    default,
+                    default,
+                    1.0,
+                    config.Origin?.MatchScoreThreshold ?? 0.5,
+                    true,
+                    0.0,
+                    new List<Point2d>());
+                result.Timings.OriginMs = 0;
+                if (!string.IsNullOrWhiteSpace(config.Origin?.Name))
+                {
+                    result.Timings.NodeTimings[config.Origin.Name] = 0;
+                }
+
+                originTeach = new Point2d(0, 0);
+                originFound = new Point2d(0, 0);
+                angleDeg = 0.0;
             }
-
-            result.Timings.OriginMs = (int)Math.Max(0, swTotal.ElapsedMilliseconds - tOrigin0);
-            result.Timings.NodeTimings[config.Origin.Name ?? "Origin"] = result.Timings.OriginMs;
-
-            if (!originPass)
-            {
-                // SHORT-CIRCUIT: Origin failed to match. Skip all downstream vision tools immediately.
-                PopulateOriginFailedResults(config, result);
-                result.Pass = false;
-
-                ExecutePlcNodes(config, result, _plcManager);
-                ExecuteDbNodes(config, result, effectiveDbManager, DbExecutionTiming.AfterFlow);
-                ExecuteImageOutputs(config, result, image, GetPreprocessNodeOutput, nodesById, edges);
-
-                result.Timings.TotalMs = (int)Math.Max(0, swTotal.ElapsedMilliseconds);
-                return result;
-            }
-
-            var originTeach = new Point2d(config.Origin.WorldPosition.X, config.Origin.WorldPosition.Y);
-            var originFound = originMatch.Position;
-            var angleDeg = poseAngleDeg;
 
             var tTools0 = swTotal.ElapsedMilliseconds;
             var pointTasks = (config.Points ?? new List<PointDefinition>())
@@ -1707,9 +1564,8 @@ public partial class InspectionService
                 .Select(l => RunHeavyTool($"Line:{l.Name}", () =>
                 {
                     var __sw = System.Diagnostics.Stopwatch.StartNew();
-                    var roi = TransformRoiKeepSize(l.SearchRoi, originTeach, originFound, angleDeg);
                     var (matForLine, _) = ResolveToolPreprocess("Line", l.Name);
-                    var det = _lineDetector.DetectLongestLine(matForLine, roi, l.Canny1, l.Canny2, l.HoughThreshold, l.MinLineLength, l.MaxLineGap);
+                    var det = _lineDetector.DetectLongestLine(matForLine, l.SearchRoi, l.Canny1, l.Canny2, l.HoughThreshold, l.MinLineLength, l.MaxLineGap, originTeach, originFound, angleDeg);
                     __sw.Stop(); result.Timings.NodeTimings[l.Name] = (int)__sw.ElapsedMilliseconds; return det with { Name = l.Name };
                 }))
                 .ToArray();
@@ -1812,9 +1668,8 @@ public partial class InspectionService
                 .Select(lpd => RunHeavyTool($"LinePair:{lpd.Name}", () =>
                 {
                     var __sw = System.Diagnostics.Stopwatch.StartNew();
-                    var roi = TransformRoiKeepSize(lpd.SearchRoi, originTeach, originFound, angleDeg);
                     var (matForLpd, _) = ResolveToolPreprocess("LinePairDetection", lpd.Name);
-                    var top = _lineDetector.DetectTopLines(matForLpd, roi, lpd.Canny1, lpd.Canny2, lpd.HoughThreshold, lpd.MinLineLength, lpd.MaxLineGap, topN: 2);
+                    var top = _lineDetector.DetectTopLines(matForLpd, lpd.SearchRoi, lpd.Canny1, lpd.Canny2, lpd.HoughThreshold, lpd.MinLineLength, lpd.MaxLineGap, topN: 2, originTeach, originFound, angleDeg);
                     if (top.Count < 2)
                     {
                         __sw.Stop(); result.Timings.NodeTimings[lpd.Name] = (int)__sw.ElapsedMilliseconds; return new LinePairDetectionResult(
@@ -1860,7 +1715,7 @@ public partial class InspectionService
                     var __sw = System.Diagnostics.Stopwatch.StartNew();
                     var roi = TransformRoiKeepSize(c.SearchRoi, originTeach, originFound, angleDeg);
                     var (matForCal, _) = ResolveToolPreprocess("Caliper", c.Name);
-                    var res = DetectCaliper(matForCal, c.SearchRoi, c, originTeach, originFound, angleDeg);
+                    var res = VisionEngine.CaliperDetector.Detect(matForCal, c, originTeach, originFound, angleDeg);
                     __sw.Stop(); result.Timings.NodeTimings[c.Name] = (int)__sw.ElapsedMilliseconds; return res;
                 }))
                 .ToArray();
