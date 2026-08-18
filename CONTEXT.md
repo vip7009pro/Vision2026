@@ -975,6 +975,14 @@
           - Đảm bảo `SegmentLineDistance`, `LineToLineDistance`, `PointToLineDistance`, `Angle`, `EdgePair` luôn lấy được đường chuẩn xác từ `Caliper` hoặc `Line`.
         - **Cập nhật danh sách chọn `AvailableLineNames` (`ToolEditorViewModel.cs`)**: Bổ sung `CreateLines`, `LinePairDetections`, `EdgePairDetections` cùng với `Lines` và `Calipers` vào ComboBox chọn đường trên giao diện Properties.
         - **Khởi tạo đúng Port Node đồ thị (`ToolGraphNodeViewModel.cs`)**: Bổ sung `SegmentLineDistance` vào `RebuildPorts()`, thiết lập Output Port `Distance` và 2 Input Port `L1`, `L2`, cho phép kéo dây kết nối và đồng bộ tự động `SyncInputEdgeForSegmentLineDistancePort` chính xác 100%.
+      - **Nâng Cấp Nét Vẽ & Cỡ Chữ Overlay Thích Ứng Tự Động Theo Kích Thước Ảnh Cho Tool `ImageOutput`**:
+        - **Cơ chế tỉ lệ thích ứng độ phân giải (`InspectionService.ImageOutputs.cs`)**: Tính toán hệ số `autoScale = Math.Max(1.0, Math.Max(mat.Cols, mat.Rows) / 1280.0) * io.OverlayScale`.
+        - **Tự động co giãn toàn bộ thành phần đồ họa**:
+          - Độ dày nét vẽ (`thThin`, `thNormal`, `thThick`) tự động tăng tương ứng (ví dụ: ảnh 20MP $5472\times 3648$ nét vẽ tự động dày $4-8\text{px}$ thay vì $1-2\text{px}$ mảnh mờ).
+          - Kích thước điểm và tâm Crosshair (`ScalePx`) co giãn hài hòa theo độ phân giải.
+          - Cỡ chữ nhãn kết quả (`fontScaleSmall`, `fontScaleNormal`) và độ dày chữ (`fontThickSmall`, `fontThickNormal`) rõ ràng, sắc nét, dễ quan sát 100% mà không cần zoom to.
+          - Khoảng cách lùi chữ (`Text offset`) và chiều cao dòng (`fontHeight`) tự động co giãn không bị đè lấn lên các điểm mút.
+        - **Bổ sung thuộc tính `OverlayScale` (`ImageOutputDefinition`)**: Bổ sung ô nhập tỷ lệ `Overlay Scale` (mặc định `1.0`, tùy chỉnh `0.2` - `5.0`) trên Properties Panel của `ImageOutput` ([ToolEditorView.xaml](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/Views/ToolEditorView.xaml)) cho phép người dùng tùy ý phóng to/thu nhỏ thêm nét vẽ overlay theo nhu cầu.
       - **Kiểm Thử & Biên Dịch**: Toàn bộ Solution biên dịch thành công **0 Errors**.
 
 ## Roadmap

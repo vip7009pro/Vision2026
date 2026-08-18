@@ -244,10 +244,33 @@ public partial class InspectionService
         var white = new Scalar(255, 255, 255);   // White
         var showRoiBoxes = io is null || io.ShowRoi;
 
-        void DrawRotatedRoi(Mat targetMat, Roi teachRoi, Scalar color, int thickness = 1)
+        // Adaptive scaling based on image resolution
+        double autoScale = Math.Max(1.0, Math.Max(mat.Cols, mat.Rows) / 1280.0);
+        if (io is not null && io.OverlayScale > 0.05)
+        {
+            autoScale *= io.OverlayScale;
+        }
+
+        int ScalePx(int px) => Math.Max(1, (int)Math.Round(px * autoScale));
+        int ScaleThick(int th) => Math.Max(1, (int)Math.Round(th * autoScale));
+        double ScaleFont(double baseFontScale) => baseFontScale * autoScale;
+
+        int thThin = ScaleThick(1);
+        int thNormal = ScaleThick(2);
+        int thThick = ScaleThick(3);
+
+        double fontScaleSmall = ScaleFont(0.5);
+        double fontScaleNormal = ScaleFont(0.6);
+
+        int fontThickSmall = Math.Max(1, (int)Math.Round(1.0 * autoScale));
+        int fontThickNormal = Math.Max(1, (int)Math.Round(1.8 * autoScale));
+
+        void DrawRotatedRoi(Mat targetMat, Roi teachRoi, Scalar color, int thickness = -1)
         {
             if (!showRoiBoxes) return;
             if (targetMat is null || targetMat.Empty() || teachRoi is null || teachRoi.Width <= 0 || teachRoi.Height <= 0) return;
+
+            int actualThick = thickness > 0 ? ScaleThick(thickness) : thThin;
 
             Point2d originTeach;
             if (config.Origin is not null && (config.Origin.WorldPosition.X != 0 || config.Origin.WorldPosition.Y != 0))
@@ -311,15 +334,17 @@ public partial class InspectionService
             var p3 = Rotate(new Point2d(halfW, halfH), new Point2d(0, 0), totalAngle) + centerFound;
             var p4 = Rotate(new Point2d(-halfW, halfH), new Point2d(0, 0), totalAngle) + centerFound;
 
-            Cv2.Line(targetMat, new Point((int)Math.Round(p1.X), (int)Math.Round(p1.Y)), new Point((int)Math.Round(p2.X), (int)Math.Round(p2.Y)), color, thickness, LineTypes.AntiAlias);
-            Cv2.Line(targetMat, new Point((int)Math.Round(p2.X), (int)Math.Round(p2.Y)), new Point((int)Math.Round(p3.X), (int)Math.Round(p3.Y)), color, thickness, LineTypes.AntiAlias);
-            Cv2.Line(targetMat, new Point((int)Math.Round(p3.X), (int)Math.Round(p3.Y)), new Point((int)Math.Round(p4.X), (int)Math.Round(p4.Y)), color, thickness, LineTypes.AntiAlias);
-            Cv2.Line(targetMat, new Point((int)Math.Round(p4.X), (int)Math.Round(p4.Y)), new Point((int)Math.Round(p1.X), (int)Math.Round(p1.Y)), color, thickness, LineTypes.AntiAlias);
+            Cv2.Line(targetMat, new Point((int)Math.Round(p1.X), (int)Math.Round(p1.Y)), new Point((int)Math.Round(p2.X), (int)Math.Round(p2.Y)), color, actualThick, LineTypes.AntiAlias);
+            Cv2.Line(targetMat, new Point((int)Math.Round(p2.X), (int)Math.Round(p2.Y)), new Point((int)Math.Round(p3.X), (int)Math.Round(p3.Y)), color, actualThick, LineTypes.AntiAlias);
+            Cv2.Line(targetMat, new Point((int)Math.Round(p3.X), (int)Math.Round(p3.Y)), new Point((int)Math.Round(p4.X), (int)Math.Round(p4.Y)), color, actualThick, LineTypes.AntiAlias);
+            Cv2.Line(targetMat, new Point((int)Math.Round(p4.X), (int)Math.Round(p4.Y)), new Point((int)Math.Round(p1.X), (int)Math.Round(p1.Y)), color, actualThick, LineTypes.AntiAlias);
         }
 
-        void DrawRotatedBoxDirect(Mat targetMat, Rect bb, double angle, Scalar color, int thickness = 1)
+        void DrawRotatedBoxDirect(Mat targetMat, Rect bb, double angle, Scalar color, int thickness = -1)
         {
             if (targetMat is null || targetMat.Empty() || bb.Width <= 0 || bb.Height <= 0) return;
+            int actualThick = thickness > 0 ? ScaleThick(thickness) : thNormal;
+
             var center = new Point2d(bb.X + bb.Width / 2.0, bb.Y + bb.Height / 2.0);
             var halfW = bb.Width / 2.0;
             var halfH = bb.Height / 2.0;
@@ -329,10 +354,10 @@ public partial class InspectionService
             var p3 = Rotate(new Point2d(halfW, halfH), new Point2d(0, 0), angle) + center;
             var p4 = Rotate(new Point2d(-halfW, halfH), new Point2d(0, 0), angle) + center;
 
-            Cv2.Line(targetMat, new Point((int)Math.Round(p1.X), (int)Math.Round(p1.Y)), new Point((int)Math.Round(p2.X), (int)Math.Round(p2.Y)), color, thickness, LineTypes.AntiAlias);
-            Cv2.Line(targetMat, new Point((int)Math.Round(p2.X), (int)Math.Round(p2.Y)), new Point((int)Math.Round(p3.X), (int)Math.Round(p3.Y)), color, thickness, LineTypes.AntiAlias);
-            Cv2.Line(targetMat, new Point((int)Math.Round(p3.X), (int)Math.Round(p3.Y)), new Point((int)Math.Round(p4.X), (int)Math.Round(p4.Y)), color, thickness, LineTypes.AntiAlias);
-            Cv2.Line(targetMat, new Point((int)Math.Round(p4.X), (int)Math.Round(p4.Y)), new Point((int)Math.Round(p1.X), (int)Math.Round(p1.Y)), color, thickness, LineTypes.AntiAlias);
+            Cv2.Line(targetMat, new Point((int)Math.Round(p1.X), (int)Math.Round(p1.Y)), new Point((int)Math.Round(p2.X), (int)Math.Round(p2.Y)), color, actualThick, LineTypes.AntiAlias);
+            Cv2.Line(targetMat, new Point((int)Math.Round(p2.X), (int)Math.Round(p2.Y)), new Point((int)Math.Round(p3.X), (int)Math.Round(p3.Y)), color, actualThick, LineTypes.AntiAlias);
+            Cv2.Line(targetMat, new Point((int)Math.Round(p3.X), (int)Math.Round(p3.Y)), new Point((int)Math.Round(p4.X), (int)Math.Round(p4.Y)), color, actualThick, LineTypes.AntiAlias);
+            Cv2.Line(targetMat, new Point((int)Math.Round(p4.X), (int)Math.Round(p4.Y)), new Point((int)Math.Round(p1.X), (int)Math.Round(p1.Y)), color, actualThick, LineTypes.AntiAlias);
         }
 
         // 1. Origin
@@ -350,10 +375,10 @@ public partial class InspectionService
             var mr = result.Origin.MatchRect;
             var cx = (int)Math.Round(mr.Width > 0 && mr.Height > 0 ? mr.X + mr.Width / 2.0 : result.Origin.Position.X);
             var cyPos = (int)Math.Round(mr.Width > 0 && mr.Height > 0 ? mr.Y + mr.Height / 2.0 : result.Origin.Position.Y);
-            Cv2.Circle(mat, new Point(cx, cyPos), 4, green, -1, LineTypes.AntiAlias);
-            Cv2.Line(mat, new Point(cx - 15, cyPos), new Point(cx + 15, cyPos), red, 2, LineTypes.AntiAlias);
-            Cv2.Line(mat, new Point(cx, cyPos - 15), new Point(cx, cyPos + 15), green, 2, LineTypes.AntiAlias);
-            Cv2.PutText(mat, $"Origin: {result.Origin.Score:0.00}", new Point(cx + 18, cyPos + 5), HersheyFonts.HersheySimplex, 0.5, green, 1, LineTypes.AntiAlias);
+            Cv2.Circle(mat, new Point(cx, cyPos), ScalePx(4), green, -1, LineTypes.AntiAlias);
+            Cv2.Line(mat, new Point(cx - ScalePx(15), cyPos), new Point(cx + ScalePx(15), cyPos), red, thNormal, LineTypes.AntiAlias);
+            Cv2.Line(mat, new Point(cx, cyPos - ScalePx(15)), new Point(cx, cyPos + ScalePx(15)), green, thNormal, LineTypes.AntiAlias);
+            Cv2.PutText(mat, $"Origin: {result.Origin.Score:0.00}", new Point(cx + ScalePx(18), cyPos + ScalePx(5)), HersheyFonts.HersheySimplex, fontScaleNormal, green, fontThickNormal, LineTypes.AntiAlias);
         }
 
         // Map point positions for Distance / Geometry lookups
@@ -376,10 +401,10 @@ public partial class InspectionService
             var color = pRes.Pass ? green : red;
             var px = (int)Math.Round(pRes.Position.X);
             var py = (int)Math.Round(pRes.Position.Y);
-            Cv2.Circle(mat, new Point(px, py), 3, color, -1, LineTypes.AntiAlias);
-            Cv2.Line(mat, new Point(px - 10, py), new Point(px + 10, py), color, 2, LineTypes.AntiAlias);
-            Cv2.Line(mat, new Point(px, py - 10), new Point(px, py + 10), color, 2, LineTypes.AntiAlias);
-            Cv2.PutText(mat, pRes.Name, new Point(px + 12, py - 6), HersheyFonts.HersheySimplex, 0.5, color, 1, LineTypes.AntiAlias);
+            Cv2.Circle(mat, new Point(px, py), ScalePx(3), color, -1, LineTypes.AntiAlias);
+            Cv2.Line(mat, new Point(px - ScalePx(10), py), new Point(px + ScalePx(10), py), color, thNormal, LineTypes.AntiAlias);
+            Cv2.Line(mat, new Point(px, py - ScalePx(10)), new Point(px, py + ScalePx(10)), color, thNormal, LineTypes.AntiAlias);
+            Cv2.PutText(mat, pRes.Name, new Point(px + ScalePx(12), py - ScalePx(6)), HersheyFonts.HersheySimplex, fontScaleSmall, color, fontThickSmall, LineTypes.AntiAlias);
         }
 
         // 3. Lines
@@ -396,8 +421,8 @@ public partial class InspectionService
             {
                 var p1 = new Point((int)lRes.P1.X, (int)lRes.P1.Y);
                 var p2 = new Point((int)lRes.P2.X, (int)lRes.P2.Y);
-                Cv2.Line(mat, p1, p2, green, 2, LineTypes.AntiAlias);
-                Cv2.PutText(mat, lRes.Name, new Point((p1.X + p2.X) / 2 + 5, (p1.Y + p2.Y) / 2 - 5), HersheyFonts.HersheySimplex, 0.5, green, 1, LineTypes.AntiAlias);
+                Cv2.Line(mat, p1, p2, green, thNormal, LineTypes.AntiAlias);
+                Cv2.PutText(mat, lRes.Name, new Point((p1.X + p2.X) / 2 + ScalePx(5), (p1.Y + p2.Y) / 2 - ScalePx(5)), HersheyFonts.HersheySimplex, fontScaleSmall, green, fontThickSmall, LineTypes.AntiAlias);
             }
         }
 
@@ -415,14 +440,14 @@ public partial class InspectionService
             {
                 var p1 = new Point((int)cRes.LineP1.X, (int)cRes.LineP1.Y);
                 var p2 = new Point((int)cRes.LineP2.X, (int)cRes.LineP2.Y);
-                Cv2.Line(mat, p1, p2, green, 2, LineTypes.AntiAlias);
-                Cv2.PutText(mat, cRes.Name, new Point((p1.X + p2.X) / 2 + 5, (p1.Y + p2.Y) / 2 - 5), HersheyFonts.HersheySimplex, 0.5, green, 1, LineTypes.AntiAlias);
+                Cv2.Line(mat, p1, p2, green, thNormal, LineTypes.AntiAlias);
+                Cv2.PutText(mat, cRes.Name, new Point((p1.X + p2.X) / 2 + ScalePx(5), (p1.Y + p2.Y) / 2 - ScalePx(5)), HersheyFonts.HersheySimplex, fontScaleSmall, green, fontThickSmall, LineTypes.AntiAlias);
 
                 if (cRes.Points is not null && cRes.Points.Count > 0)
                 {
                     foreach (var p in cRes.Points)
                     {
-                        Cv2.Circle(mat, new Point((int)Math.Round(p.X), (int)Math.Round(p.Y)), 3, yellow, -1, LineTypes.AntiAlias);
+                        Cv2.Circle(mat, new Point((int)Math.Round(p.X), (int)Math.Round(p.Y)), ScalePx(3), yellow, -1, LineTypes.AntiAlias);
                     }
                 }
             }
@@ -442,10 +467,10 @@ public partial class InspectionService
             {
                 var center = new Point((int)Math.Round(cfRes.Center.X), (int)Math.Round(cfRes.Center.Y));
                 var radius = (int)Math.Round(cfRes.RadiusPx);
-                Cv2.Circle(mat, center, radius, green, 2, LineTypes.AntiAlias);
-                Cv2.Circle(mat, center, 3, green, -1, LineTypes.AntiAlias);
-                Cv2.Line(mat, new Point(center.X - 8, center.Y), new Point(center.X + 8, center.Y), green, 2, LineTypes.AntiAlias);
-                Cv2.Line(mat, new Point(center.X, center.Y - 8), new Point(center.X, center.Y + 8), green, 2, LineTypes.AntiAlias);
+                Cv2.Circle(mat, center, radius, green, thNormal, LineTypes.AntiAlias);
+                Cv2.Circle(mat, center, ScalePx(3), green, -1, LineTypes.AntiAlias);
+                Cv2.Line(mat, new Point(center.X - ScalePx(8), center.Y), new Point(center.X + ScalePx(8), center.Y), green, thNormal, LineTypes.AntiAlias);
+                Cv2.Line(mat, new Point(center.X, center.Y - ScalePx(8)), new Point(center.X, center.Y + ScalePx(8)), green, thNormal, LineTypes.AntiAlias);
 
                 if (cfRes.EdgePoints is not null && cfRes.EdgePoints.Count > 0)
                 {
@@ -454,13 +479,13 @@ public partial class InspectionService
                         var pt = cfRes.EdgePoints[i];
                         var isInlier = cfRes.InlierFlags is not null && i < cfRes.InlierFlags.Count && cfRes.InlierFlags[i];
                         var ptColor = isInlier ? green : red;
-                        Cv2.Circle(mat, new Point((int)Math.Round(pt.X), (int)Math.Round(pt.Y)), 2, ptColor, -1, LineTypes.AntiAlias);
+                        Cv2.Circle(mat, new Point((int)Math.Round(pt.X), (int)Math.Round(pt.Y)), ScalePx(2), ptColor, -1, LineTypes.AntiAlias);
                     }
                 }
 
                 var rVal = isCalibrated ? cfRes.RadiusPx / scale : cfRes.RadiusPx;
                 var lbl = $"{cfRes.Name}: R={rVal:0.##}{(isCalibrated ? "mm" : "px")}";
-                Cv2.PutText(mat, lbl, new Point(center.X + 10, center.Y - 10), HersheyFonts.HersheySimplex, 0.5, green, 1, LineTypes.AntiAlias);
+                Cv2.PutText(mat, lbl, new Point(center.X + ScalePx(10), center.Y - ScalePx(10)), HersheyFonts.HersheySimplex, fontScaleSmall, green, fontThickSmall, LineTypes.AntiAlias);
             }
         }
 
@@ -480,17 +505,17 @@ public partial class InspectionService
                 var l1p2 = new Point((int)lpdRes.L1P2.X, (int)lpdRes.L1P2.Y);
                 var l2p1 = new Point((int)lpdRes.L2P1.X, (int)lpdRes.L2P1.Y);
                 var l2p2 = new Point((int)lpdRes.L2P2.X, (int)lpdRes.L2P2.Y);
-                Cv2.Line(mat, l1p1, l1p2, cyan, 2, LineTypes.AntiAlias);
-                Cv2.Line(mat, l2p1, l2p2, cyan, 2, LineTypes.AntiAlias);
+                Cv2.Line(mat, l1p1, l1p2, cyan, thNormal, LineTypes.AntiAlias);
+                Cv2.Line(mat, l2p1, l2p2, cyan, thNormal, LineTypes.AntiAlias);
 
                 var (distPx, ca, cb) = Geometry2D.SegmentToSegmentDistance(lpdRes.L1P1, lpdRes.L1P2, lpdRes.L2P1, lpdRes.L2P2);
                 var cap = new Point((int)ca.X, (int)ca.Y);
                 var cbp = new Point((int)cb.X, (int)cb.Y);
                 var col = lpdRes.Pass ? green : red;
-                Cv2.Line(mat, cap, cbp, col, 2, LineTypes.AntiAlias);
-                Cv2.Circle(mat, cap, 3, col, -1, LineTypes.AntiAlias);
-                Cv2.Circle(mat, cbp, 3, col, -1, LineTypes.AntiAlias);
-                Cv2.PutText(mat, $"{lpdRes.Name}={UnitStr(lpdRes.Value)}", new Point((cap.X + cbp.X) / 2 + 5, (cap.Y + cbp.Y) / 2 - 5), HersheyFonts.HersheySimplex, 0.5, col, 1, LineTypes.AntiAlias);
+                Cv2.Line(mat, cap, cbp, col, thNormal, LineTypes.AntiAlias);
+                Cv2.Circle(mat, cap, ScalePx(3), col, -1, LineTypes.AntiAlias);
+                Cv2.Circle(mat, cbp, ScalePx(3), col, -1, LineTypes.AntiAlias);
+                Cv2.PutText(mat, $"{lpdRes.Name}={UnitStr(lpdRes.Value)}", new Point((cap.X + cbp.X) / 2 + ScalePx(5), (cap.Y + cbp.Y) / 2 - ScalePx(5)), HersheyFonts.HersheySimplex, fontScaleSmall, col, fontThickSmall, LineTypes.AntiAlias);
             }
         }
 
@@ -502,12 +527,12 @@ public partial class InspectionService
             {
                 var center = new Point((int)Math.Round(dRes.Center.X), (int)Math.Round(dRes.Center.Y));
                 var radius = (int)Math.Round(dRes.RadiusPx);
-                Cv2.Circle(mat, center, radius, green, 2, LineTypes.AntiAlias);
-                Cv2.Circle(mat, center, 3, green, -1, LineTypes.AntiAlias);
-                Cv2.Line(mat, new Point(center.X - 8, center.Y), new Point(center.X + 8, center.Y), green, 2, LineTypes.AntiAlias);
-                Cv2.Line(mat, new Point(center.X, center.Y - 8), new Point(center.X, center.Y + 8), green, 2, LineTypes.AntiAlias);
+                Cv2.Circle(mat, center, radius, green, thNormal, LineTypes.AntiAlias);
+                Cv2.Circle(mat, center, ScalePx(3), green, -1, LineTypes.AntiAlias);
+                Cv2.Line(mat, new Point(center.X - ScalePx(8), center.Y), new Point(center.X + ScalePx(8), center.Y), green, thNormal, LineTypes.AntiAlias);
+                Cv2.Line(mat, new Point(center.X, center.Y - ScalePx(8)), new Point(center.X, center.Y + ScalePx(8)), green, thNormal, LineTypes.AntiAlias);
                 var lbl = $"{dRes.Name}: D={UnitStr(dRes.Value)}";
-                Cv2.PutText(mat, lbl, new Point(center.X + 10, center.Y - 10), HersheyFonts.HersheySimplex, 0.5, green, 1, LineTypes.AntiAlias);
+                Cv2.PutText(mat, lbl, new Point(center.X + ScalePx(10), center.Y - ScalePx(10)), HersheyFonts.HersheySimplex, fontScaleSmall, green, fontThickSmall, LineTypes.AntiAlias);
             }
         }
 
@@ -520,12 +545,12 @@ public partial class InspectionService
                 var p1 = new Point((int)pa.X, (int)pa.Y);
                 var p2 = new Point((int)pb.X, (int)pb.Y);
                 var col = dRes.Pass ? green : red;
-                Cv2.Line(mat, p1, p2, col, 2, LineTypes.AntiAlias);
-                Cv2.Circle(mat, p1, 3, col, -1, LineTypes.AntiAlias);
-                Cv2.Circle(mat, p2, 3, col, -1, LineTypes.AntiAlias);
+                Cv2.Line(mat, p1, p2, col, thNormal, LineTypes.AntiAlias);
+                Cv2.Circle(mat, p1, ScalePx(3), col, -1, LineTypes.AntiAlias);
+                Cv2.Circle(mat, p2, ScalePx(3), col, -1, LineTypes.AntiAlias);
                 var mx = (p1.X + p2.X) / 2;
                 var my = (p1.Y + p2.Y) / 2;
-                Cv2.PutText(mat, $"{dRes.Name}={UnitStr(dRes.Value)}", new Point(mx + 5, my - 5), HersheyFonts.HersheySimplex, 0.5, col, 1, LineTypes.AntiAlias);
+                Cv2.PutText(mat, $"{dRes.Name}={UnitStr(dRes.Value)}", new Point(mx + ScalePx(5), my - ScalePx(5)), HersheyFonts.HersheySimplex, fontScaleSmall, col, fontThickSmall, LineTypes.AntiAlias);
             }
         }
 
@@ -536,12 +561,12 @@ public partial class InspectionService
             var p1 = new Point((int)lld.ClosestA.X, (int)lld.ClosestA.Y);
             var p2 = new Point((int)lld.ClosestB.X, (int)lld.ClosestB.Y);
             var col = lld.Pass ? green : red;
-            Cv2.Line(mat, p1, p2, col, 2, LineTypes.AntiAlias);
-            Cv2.Circle(mat, p1, 3, col, -1, LineTypes.AntiAlias);
-            Cv2.Circle(mat, p2, 3, col, -1, LineTypes.AntiAlias);
+            Cv2.Line(mat, p1, p2, col, thNormal, LineTypes.AntiAlias);
+            Cv2.Circle(mat, p1, ScalePx(3), col, -1, LineTypes.AntiAlias);
+            Cv2.Circle(mat, p2, ScalePx(3), col, -1, LineTypes.AntiAlias);
             var mx = (p1.X + p2.X) / 2;
             var my = (p1.Y + p2.Y) / 2;
-            Cv2.PutText(mat, $"{lld.Name}={UnitStr(lld.Value)}", new Point(mx + 5, my - 5), HersheyFonts.HersheySimplex, 0.5, col, 1, LineTypes.AntiAlias);
+            Cv2.PutText(mat, $"{lld.Name}={UnitStr(lld.Value)}", new Point(mx + ScalePx(5), my - ScalePx(5)), HersheyFonts.HersheySimplex, fontScaleSmall, col, fontThickSmall, LineTypes.AntiAlias);
         }
 
         // 9. PointToLineDistances
@@ -551,12 +576,12 @@ public partial class InspectionService
             var p1 = new Point((int)pld.ClosestA.X, (int)pld.ClosestA.Y);
             var p2 = new Point((int)pld.ClosestB.X, (int)pld.ClosestB.Y);
             var col = pld.Pass ? green : red;
-            Cv2.Line(mat, p1, p2, col, 2, LineTypes.AntiAlias);
-            Cv2.Circle(mat, p1, 3, col, -1, LineTypes.AntiAlias);
-            Cv2.Circle(mat, p2, 3, col, -1, LineTypes.AntiAlias);
+            Cv2.Line(mat, p1, p2, col, thNormal, LineTypes.AntiAlias);
+            Cv2.Circle(mat, p1, ScalePx(3), col, -1, LineTypes.AntiAlias);
+            Cv2.Circle(mat, p2, ScalePx(3), col, -1, LineTypes.AntiAlias);
             var mx = (p1.X + p2.X) / 2;
             var my = (p1.Y + p2.Y) / 2;
-            Cv2.PutText(mat, $"{pld.Name}={UnitStr(pld.Value)}", new Point(mx + 5, my - 5), HersheyFonts.HersheySimplex, 0.5, col, 1, LineTypes.AntiAlias);
+            Cv2.PutText(mat, $"{pld.Name}={UnitStr(pld.Value)}", new Point(mx + ScalePx(5), my - ScalePx(5)), HersheyFonts.HersheySimplex, fontScaleSmall, col, fontThickSmall, LineTypes.AntiAlias);
         }
 
         // 10. SegmentLineDistances
@@ -566,24 +591,24 @@ public partial class InspectionService
             var la = result.Lines.FirstOrDefault(x => string.Equals(x.Name, sld.RefA, StringComparison.OrdinalIgnoreCase));
             if (la is not null && la.Found)
             {
-                Cv2.Line(mat, new Point((int)la.P1.X, (int)la.P1.Y), new Point((int)la.P2.X, (int)la.P2.Y), cyan, 2, LineTypes.AntiAlias);
+                Cv2.Line(mat, new Point((int)la.P1.X, (int)la.P1.Y), new Point((int)la.P2.X, (int)la.P2.Y), cyan, thNormal, LineTypes.AntiAlias);
             }
             var lb = result.Lines.FirstOrDefault(x => string.Equals(x.Name, sld.RefB, StringComparison.OrdinalIgnoreCase));
             if (lb is not null && lb.Found)
             {
-                Cv2.Line(mat, new Point((int)lb.P1.X, (int)lb.P1.Y), new Point((int)lb.P2.X, (int)lb.P2.Y), yellow, 2, LineTypes.AntiAlias);
+                Cv2.Line(mat, new Point((int)lb.P1.X, (int)lb.P1.Y), new Point((int)lb.P2.X, (int)lb.P2.Y), yellow, thNormal, LineTypes.AntiAlias);
             }
             if (!double.IsNaN(sld.Value))
             {
                 var p1 = new Point((int)sld.ClosestA.X, (int)sld.ClosestA.Y);
                 var p2 = new Point((int)sld.ClosestB.X, (int)sld.ClosestB.Y);
                 var col = sld.Pass ? green : red;
-                Cv2.Line(mat, p1, p2, col, 2, LineTypes.AntiAlias);
-                Cv2.Circle(mat, p1, 3, col, -1, LineTypes.AntiAlias);
-                Cv2.Circle(mat, p2, 3, col, -1, LineTypes.AntiAlias);
+                Cv2.Line(mat, p1, p2, col, thNormal, LineTypes.AntiAlias);
+                Cv2.Circle(mat, p1, ScalePx(3), col, -1, LineTypes.AntiAlias);
+                Cv2.Circle(mat, p2, ScalePx(3), col, -1, LineTypes.AntiAlias);
                 var mx = (p1.X + p2.X) / 2;
                 var my = (p1.Y + p2.Y) / 2;
-                Cv2.PutText(mat, $"{sld.Name}={UnitStr(sld.Value)}", new Point(mx + 5, my - 5), HersheyFonts.HersheySimplex, 0.5, col, 1, LineTypes.AntiAlias);
+                Cv2.PutText(mat, $"{sld.Name}={UnitStr(sld.Value)}", new Point(mx + ScalePx(5), my - ScalePx(5)), HersheyFonts.HersheySimplex, fontScaleSmall, col, fontThickSmall, LineTypes.AntiAlias);
             }
         }
 
@@ -593,8 +618,8 @@ public partial class InspectionService
             if (!ShouldRender(a.Name)) continue;
             var col = a.Pass ? green : red;
             var vertex = new Point((int)a.Intersection.X, (int)a.Intersection.Y);
-            Cv2.Circle(mat, vertex, 5, col, 2, LineTypes.AntiAlias);
-            Cv2.PutText(mat, $"{a.Name}={a.ValueDeg:0.##} deg", new Point(vertex.X + 10, vertex.Y - 10), HersheyFonts.HersheySimplex, 0.5, col, 1, LineTypes.AntiAlias);
+            Cv2.Circle(mat, vertex, ScalePx(5), col, thNormal, LineTypes.AntiAlias);
+            Cv2.PutText(mat, $"{a.Name}={a.ValueDeg:0.##} deg", new Point(vertex.X + ScalePx(10), vertex.Y - ScalePx(10)), HersheyFonts.HersheySimplex, fontScaleSmall, col, fontThickSmall, LineTypes.AntiAlias);
         }
 
         // 12. EdgePairs
@@ -606,10 +631,10 @@ public partial class InspectionService
                 var p1 = new Point((int)ep.ClosestA.X, (int)ep.ClosestA.Y);
                 var p2 = new Point((int)ep.ClosestB.X, (int)ep.ClosestB.Y);
                 var col = ep.Pass ? green : red;
-                Cv2.Line(mat, p1, p2, col, 2, LineTypes.AntiAlias);
-                Cv2.Circle(mat, p1, 3, col, -1, LineTypes.AntiAlias);
-                Cv2.Circle(mat, p2, 3, col, -1, LineTypes.AntiAlias);
-                Cv2.PutText(mat, $"{ep.Name}={UnitStr(ep.Value)}", new Point((p1.X + p2.X) / 2, (p1.Y + p2.Y) / 2 - 5), HersheyFonts.HersheySimplex, 0.5, col, 1, LineTypes.AntiAlias);
+                Cv2.Line(mat, p1, p2, col, thNormal, LineTypes.AntiAlias);
+                Cv2.Circle(mat, p1, ScalePx(3), col, -1, LineTypes.AntiAlias);
+                Cv2.Circle(mat, p2, ScalePx(3), col, -1, LineTypes.AntiAlias);
+                Cv2.PutText(mat, $"{ep.Name}={UnitStr(ep.Value)}", new Point((p1.X + p2.X) / 2, (p1.Y + p2.Y) / 2 - ScalePx(5)), HersheyFonts.HersheySimplex, fontScaleSmall, col, fontThickSmall, LineTypes.AntiAlias);
             }
         }
 
@@ -630,14 +655,14 @@ public partial class InspectionService
                 var l2p1 = new Point((int)epdRes.L2P1.X, (int)epdRes.L2P1.Y);
                 var l2p2 = new Point((int)epdRes.L2P2.X, (int)epdRes.L2P2.Y);
                 var col = epdRes.Pass ? green : red;
-                Cv2.Line(mat, l1p1, l1p2, cyan, 2, LineTypes.AntiAlias);
-                Cv2.Line(mat, l2p1, l2p2, cyan, 2, LineTypes.AntiAlias);
+                Cv2.Line(mat, l1p1, l1p2, cyan, thNormal, LineTypes.AntiAlias);
+                Cv2.Line(mat, l2p1, l2p2, cyan, thNormal, LineTypes.AntiAlias);
                 var ca = new Point((int)epdRes.ClosestA.X, (int)epdRes.ClosestA.Y);
                 var cb = new Point((int)epdRes.ClosestB.X, (int)epdRes.ClosestB.Y);
-                Cv2.Line(mat, ca, cb, col, 2, LineTypes.AntiAlias);
-                Cv2.Circle(mat, ca, 3, col, -1, LineTypes.AntiAlias);
-                Cv2.Circle(mat, cb, 3, col, -1, LineTypes.AntiAlias);
-                Cv2.PutText(mat, $"{epdRes.Name}={UnitStr(epdRes.Value)}", new Point((ca.X + cb.X) / 2, (ca.Y + cb.Y) / 2 - 5), HersheyFonts.HersheySimplex, 0.5, col, 1, LineTypes.AntiAlias);
+                Cv2.Line(mat, ca, cb, col, thNormal, LineTypes.AntiAlias);
+                Cv2.Circle(mat, ca, ScalePx(3), col, -1, LineTypes.AntiAlias);
+                Cv2.Circle(mat, cb, ScalePx(3), col, -1, LineTypes.AntiAlias);
+                Cv2.PutText(mat, $"{epdRes.Name}={UnitStr(epdRes.Value)}", new Point((ca.X + cb.X) / 2, (ca.Y + cb.Y) / 2 - ScalePx(5)), HersheyFonts.HersheySimplex, fontScaleSmall, col, fontThickSmall, LineTypes.AntiAlias);
             }
         }
 
@@ -664,9 +689,9 @@ public partial class InspectionService
             foreach (var blob in bRes.Blobs)
             {
                 var r = new Rect(blob.BoundingBox.X, blob.BoundingBox.Y, blob.BoundingBox.Width, blob.BoundingBox.Height);
-                Cv2.Rectangle(mat, r, yellow, 1, LineTypes.AntiAlias);
+                Cv2.Rectangle(mat, r, yellow, thThin, LineTypes.AntiAlias);
                 var pt = new Point((int)blob.Centroid.X, (int)blob.Centroid.Y);
-                Cv2.Circle(mat, pt, 3, yellow, -1, LineTypes.AntiAlias);
+                Cv2.Circle(mat, pt, ScalePx(3), yellow, -1, LineTypes.AntiAlias);
             }
         }
 
@@ -683,7 +708,7 @@ public partial class InspectionService
             foreach (var defect in scRes.Defects)
             {
                 var r = new Rect(defect.BoundingBox.X, defect.BoundingBox.Y, defect.BoundingBox.Width, defect.BoundingBox.Height);
-                Cv2.Rectangle(mat, r, red, 2, LineTypes.AntiAlias);
+                Cv2.Rectangle(mat, r, red, thNormal, LineTypes.AntiAlias);
             }
         }
 
@@ -705,7 +730,7 @@ public partial class InspectionService
                     if (c.Count > 1)
                     {
                         var ptsTpl = c.Select(p => new Point((int)p.X, (int)p.Y)).ToArray();
-                        Cv2.Polylines(mat, new[] { ptsTpl }, true, yellow, 1, LineTypes.AntiAlias);
+                        Cv2.Polylines(mat, new[] { ptsTpl }, true, yellow, thThin, LineTypes.AntiAlias);
                     }
                 }
             }
@@ -717,7 +742,7 @@ public partial class InspectionService
                     if (seg.Points.Count > 1)
                     {
                         var ptsPass = seg.Points.Select(p => new Point((int)p.X, (int)p.Y)).ToArray();
-                        Cv2.Polylines(mat, new[] { ptsPass }, seg.IsClosed, green, 2, LineTypes.AntiAlias);
+                        Cv2.Polylines(mat, new[] { ptsPass }, seg.IsClosed, green, thNormal, LineTypes.AntiAlias);
                     }
                 }
             }
@@ -728,7 +753,7 @@ public partial class InspectionService
                     if (c.Count > 1)
                     {
                         var ptsPass = c.Select(p => new Point((int)p.X, (int)p.Y)).ToArray();
-                        Cv2.Polylines(mat, new[] { ptsPass }, true, green, 2, LineTypes.AntiAlias);
+                        Cv2.Polylines(mat, new[] { ptsPass }, true, green, thNormal, LineTypes.AntiAlias);
                     }
                 }
             }
@@ -740,7 +765,7 @@ public partial class InspectionService
                     if (seg.Points.Count > 1)
                     {
                         var ptsFail = seg.Points.Select(p => new Point((int)p.X, (int)p.Y)).ToArray();
-                        Cv2.Polylines(mat, new[] { ptsFail }, seg.IsClosed, red, 2, LineTypes.AntiAlias);
+                        Cv2.Polylines(mat, new[] { ptsFail }, seg.IsClosed, red, thNormal, LineTypes.AntiAlias);
                     }
                 }
             }
@@ -751,7 +776,7 @@ public partial class InspectionService
                     if (c.Count > 1)
                     {
                         var ptsFail = c.Select(p => new Point((int)p.X, (int)p.Y)).ToArray();
-                        Cv2.Polylines(mat, new[] { ptsFail }, false, red, 2, LineTypes.AntiAlias);
+                        Cv2.Polylines(mat, new[] { ptsFail }, false, red, thNormal, LineTypes.AntiAlias);
                     }
                 }
             }
@@ -778,11 +803,11 @@ public partial class InspectionService
                     }
                     else
                     {
-                        Cv2.Rectangle(mat, new Rect(cdt.BoundingBox.X, cdt.BoundingBox.Y, cdt.BoundingBox.Width, cdt.BoundingBox.Height), col, 2, LineTypes.AntiAlias);
+                        Cv2.Rectangle(mat, new Rect(cdt.BoundingBox.X, cdt.BoundingBox.Y, cdt.BoundingBox.Width, cdt.BoundingBox.Height), col, thNormal, LineTypes.AntiAlias);
                     }
                 }
 
-                Cv2.PutText(mat, $"{cdt.Name}: {cdt.Text}", new Point(cdt.BoundingBox.X, Math.Max(15, cdt.BoundingBox.Y - 5)), HersheyFonts.HersheySimplex, 0.6, col, 2, LineTypes.AntiAlias);
+                Cv2.PutText(mat, $"{cdt.Name}: {cdt.Text}", new Point(cdt.BoundingBox.X, Math.Max(ScalePx(15), cdt.BoundingBox.Y - ScalePx(5))), HersheyFonts.HersheySimplex, fontScaleNormal, col, fontThickNormal, LineTypes.AntiAlias);
             }
         }
 
@@ -798,7 +823,7 @@ public partial class InspectionService
                     var col = cdRes.Pass ? green : red;
                     DrawRotatedRoi(mat, cdDef.InspectRoi, col, 2);
                     var text = $"{cdRes.Name}: dE={cdRes.DeltaE:F2} (L={cdRes.MeasuredL:F1}, a={cdRes.MeasuredA:F1}, b={cdRes.MeasuredB:F1})";
-                    Cv2.PutText(mat, text, new Point(cdDef.InspectRoi.X + 6, cdDef.InspectRoi.Y + 18), HersheyFonts.HersheySimplex, 0.5, col, 1, LineTypes.AntiAlias);
+                    Cv2.PutText(mat, text, new Point(cdDef.InspectRoi.X + ScalePx(6), cdDef.InspectRoi.Y + ScalePx(18)), HersheyFonts.HersheySimplex, fontScaleSmall, col, fontThickSmall, LineTypes.AntiAlias);
                 }
             }
         }
@@ -813,11 +838,11 @@ public partial class InspectionService
                 {
                     var px = (int)Math.Round(cp.X);
                     var py = (int)Math.Round(cp.Y);
-                    Cv2.Circle(mat, new Point(px, py), 5, green, 1, LineTypes.AntiAlias);
-                    Cv2.Circle(mat, new Point(px, py), 2, green, -1, LineTypes.AntiAlias);
-                    Cv2.Line(mat, new Point(px - 8, py), new Point(px + 8, py), green, 1, LineTypes.AntiAlias);
-                    Cv2.Line(mat, new Point(px, py - 8), new Point(px, py + 8), green, 1, LineTypes.AntiAlias);
-                    Cv2.PutText(mat, $"{cp.Name} ({cp.X:F1}, {cp.Y:F1})", new Point(px + 10, py - 5), HersheyFonts.HersheySimplex, 0.5, green, 1, LineTypes.AntiAlias);
+                    Cv2.Circle(mat, new Point(px, py), ScalePx(5), green, thThin, LineTypes.AntiAlias);
+                    Cv2.Circle(mat, new Point(px, py), ScalePx(2), green, -1, LineTypes.AntiAlias);
+                    Cv2.Line(mat, new Point(px - ScalePx(8), py), new Point(px + ScalePx(8), py), green, thThin, LineTypes.AntiAlias);
+                    Cv2.Line(mat, new Point(px, py - ScalePx(8)), new Point(px, py + ScalePx(8)), green, thThin, LineTypes.AntiAlias);
+                    Cv2.PutText(mat, $"{cp.Name} ({cp.X:F1}, {cp.Y:F1})", new Point(px + ScalePx(10), py - ScalePx(5)), HersheyFonts.HersheySimplex, fontScaleSmall, green, fontThickSmall, LineTypes.AntiAlias);
                 }
             }
         }
@@ -832,10 +857,10 @@ public partial class InspectionService
                 {
                     var p1 = new Point((int)Math.Round(cl.X1), (int)Math.Round(cl.Y1));
                     var p2 = new Point((int)Math.Round(cl.X2), (int)Math.Round(cl.Y2));
-                    Cv2.Line(mat, p1, p2, green, 2, LineTypes.AntiAlias);
+                    Cv2.Line(mat, p1, p2, green, thNormal, LineTypes.AntiAlias);
                     var mx = (p1.X + p2.X) / 2;
                     var my = (p1.Y + p2.Y) / 2;
-                    Cv2.PutText(mat, cl.Name, new Point(mx + 5, my - 5), HersheyFonts.HersheySimplex, 0.5, green, 1, LineTypes.AntiAlias);
+                    Cv2.PutText(mat, cl.Name, new Point(mx + ScalePx(5), my - ScalePx(5)), HersheyFonts.HersheySimplex, fontScaleSmall, green, fontThickSmall, LineTypes.AntiAlias);
                 }
             }
         }
@@ -855,9 +880,9 @@ public partial class InspectionService
                     }
                     else
                     {
-                        Cv2.Rectangle(mat, rect, green, 2, LineTypes.AntiAlias);
+                        Cv2.Rectangle(mat, rect, green, thNormal, LineTypes.AntiAlias);
                     }
-                    Cv2.PutText(mat, cr.Name, new Point(rect.X + 5, rect.Y + 15), HersheyFonts.HersheySimplex, 0.5, green, 1, LineTypes.AntiAlias);
+                    Cv2.PutText(mat, cr.Name, new Point(rect.X + ScalePx(5), rect.Y + ScalePx(15)), HersheyFonts.HersheySimplex, fontScaleSmall, green, fontThickSmall, LineTypes.AntiAlias);
                 }
             }
         }
@@ -872,11 +897,11 @@ public partial class InspectionService
                 {
                     var center = new Point((int)Math.Round(cc.CenterX), (int)Math.Round(cc.CenterY));
                     var radius = (int)Math.Round(cc.Radius);
-                    Cv2.Circle(mat, center, radius, green, 2, LineTypes.AntiAlias);
-                    Cv2.Circle(mat, center, 3, green, -1, LineTypes.AntiAlias);
-                    Cv2.Line(mat, new Point(center.X - 8, center.Y), new Point(center.X + 8, center.Y), green, 2, LineTypes.AntiAlias);
-                    Cv2.Line(mat, new Point(center.X, center.Y - 8), new Point(center.X, center.Y + 8), green, 2, LineTypes.AntiAlias);
-                    Cv2.PutText(mat, cc.Name, new Point(center.X + 10, center.Y - 10), HersheyFonts.HersheySimplex, 0.5, green, 1, LineTypes.AntiAlias);
+                    Cv2.Circle(mat, center, radius, green, thNormal, LineTypes.AntiAlias);
+                    Cv2.Circle(mat, center, ScalePx(3), green, -1, LineTypes.AntiAlias);
+                    Cv2.Line(mat, new Point(center.X - ScalePx(8), center.Y), new Point(center.X + ScalePx(8), center.Y), green, thNormal, LineTypes.AntiAlias);
+                    Cv2.Line(mat, new Point(center.X, center.Y - ScalePx(8)), new Point(center.X, center.Y + ScalePx(8)), green, thNormal, LineTypes.AntiAlias);
+                    Cv2.PutText(mat, cc.Name, new Point(center.X + ScalePx(10), center.Y - ScalePx(10)), HersheyFonts.HersheySimplex, fontScaleSmall, green, fontThickSmall, LineTypes.AntiAlias);
                 }
             }
         }
@@ -890,7 +915,7 @@ public partial class InspectionService
                 if (cr.CropRoi.Width > 0 && cr.CropRoi.Height > 0)
                 {
                     DrawRotatedRoi(mat, cr.CropRoi, yellow, 1);
-                    Cv2.PutText(mat, cr.Name, new Point(cr.CropRoi.X + 5, cr.CropRoi.Y + 15), HersheyFonts.HersheySimplex, 0.5, yellow, 1, LineTypes.AntiAlias);
+                    Cv2.PutText(mat, cr.Name, new Point(cr.CropRoi.X + ScalePx(5), cr.CropRoi.Y + ScalePx(15)), HersheyFonts.HersheySimplex, fontScaleSmall, yellow, fontThickSmall, LineTypes.AntiAlias);
                 }
             }
         }
@@ -901,7 +926,9 @@ public partial class InspectionService
             Dictionary<string, ConditionEvaluator.Variable>? vars = null;
             try { vars = ConditionEvaluator.BuildVariableMap(result, config); } catch { }
 
-            double fontScale = (io is not null && io.TextFontSize > 0) ? (io.TextFontSize / 24.0) : 0.7;
+            double baseFontScale = (io is not null && io.TextFontSize > 0) ? (io.TextFontSize / 24.0) : 0.7;
+            double textFontScale = baseFontScale * autoScale;
+            int textThick = Math.Max(1, (int)Math.Round(2 * autoScale * Math.Min(1.2, baseFontScale)));
 
             foreach (var t in config.TextNodes)
             {
@@ -925,7 +952,7 @@ public partial class InspectionService
                     }
                 }
 
-                RenderTextWithNewlines(mat, text, new Point(t.X, t.Y), HersheyFonts.HersheySimplex, fontScale, col, 2);
+                RenderTextWithNewlines(mat, text, new Point(t.X, t.Y), HersheyFonts.HersheySimplex, textFontScale, col, textThick);
             }
         }
     }
@@ -934,7 +961,7 @@ public partial class InspectionService
     {
         if (string.IsNullOrEmpty(text)) return;
         var lines = text.Split(new[] { "\r\n", "\n", "\r" }, StringSplitOptions.None);
-        int fontHeight = Math.Max(15, (int)(32 * fontScale));
+        int fontHeight = Math.Max(15, (int)(34 * fontScale));
         for (int i = 0; i < lines.Length; i++)
         {
             if (string.IsNullOrEmpty(lines[i])) continue;

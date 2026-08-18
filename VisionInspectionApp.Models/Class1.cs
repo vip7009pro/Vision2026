@@ -331,6 +331,8 @@ public sealed class ImageOutputDefinition
 
     public int TextFontSize { get; set; } = 18;
 
+    public double OverlayScale { get; set; } = 1.0;
+
     public ImageOutputCondition SaveCondition { get; set; } = ImageOutputCondition.Always;
 }
 

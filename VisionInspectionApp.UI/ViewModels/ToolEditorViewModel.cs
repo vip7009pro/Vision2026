@@ -1044,7 +1044,9 @@ namespace VisionInspectionApp.UI.ViewModels
             OnPropertyChanged(nameof(ImageOutput_Format));
             OnPropertyChanged(nameof(ImageOutput_EnableOutput));
             OnPropertyChanged(nameof(ImageOutput_IncludeOverlay));
+            OnPropertyChanged(nameof(ImageOutput_ShowRoi));
             OnPropertyChanged(nameof(ImageOutput_TextFontSize));
+            OnPropertyChanged(nameof(ImageOutput_OverlayScale));
             OnPropertyChanged(nameof(ImageOutput_SaveCondition));
             OnPropertyChanged(nameof(IsBlobDetectionNode));
             OnPropertyChanged(nameof(IsSurfaceCompareNode));

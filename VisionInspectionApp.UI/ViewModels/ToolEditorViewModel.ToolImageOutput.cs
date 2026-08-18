@@ -191,6 +191,20 @@ namespace VisionInspectionApp.UI.ViewModels
             }
         }
 
+        public double ImageOutput_OverlayScale
+        {
+            get => SelectedImageOutputDef()?.OverlayScale ?? 1.0;
+            set
+            {
+                var def = SelectedImageOutputDef();
+                if (def is null || Math.Abs(def.OverlayScale - value) < 0.001) return;
+                def.OverlayScale = Math.Clamp(value, 0.2, 5.0);
+                OnPropertyChanged();
+                IsDirty = true;
+                RequestAutoSave();
+            }
+        }
+
         public ImageOutputCondition ImageOutput_SaveCondition
         {
             get => SelectedImageOutputDef()?.SaveCondition ?? ImageOutputCondition.Always;

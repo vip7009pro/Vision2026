@@ -1381,6 +1381,21 @@
                                             <ColumnDefinition Width="*" />
                                         </Grid.ColumnDefinitions>
                                         <Border Background="{DynamicResource WindowBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
+                                            <TextBlock Text="Overlay Scale" VerticalAlignment="Center" Margin="4,2" FontSize="11" Foreground="{DynamicResource TextBrush}"/>
+                                        </Border>
+                                        <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
+                                            <TextBox Text="{Binding ImageOutput_OverlayScale, UpdateSourceTrigger=LostFocus, StringFormat={}{0:F2}}" Margin="2,1" FontSize="11" ToolTip="Hệ số tỷ lệ nét vẽ &amp; chữ overlay (Mặc định: 1.0 = Tự động thích ứng độ phân giải, 0.2 - 5.0)" />
+                                        </Border>
+                                    </Grid>
+                                </Border>
+
+                                <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="120" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <Border Background="{DynamicResource WindowBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
                                             <TextBlock Text="Save Condition" VerticalAlignment="Center" Margin="4,2" FontSize="11" Foreground="{DynamicResource TextBrush}"/>
                                         </Border>
                                         <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
