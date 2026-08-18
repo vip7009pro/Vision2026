@@ -1216,8 +1216,8 @@ namespace VisionInspectionApp.UI.ViewModels
             OnPropertyChanged(nameof(ImageSource_FilePath));
             OnPropertyChanged(nameof(ImageSource_FolderPath));
             OnPropertyChanged(nameof(ImageSource_CameraIndex));
-            // Refresh camera list when selecting a node already in Camera mode
-            if (ImageSource_IsCamera)
+            // Refresh camera list asynchronously when empty
+            if (ImageSource_IsCamera && AvailableCameraItems.Count == 0)
                 RefreshAvailableCameraItems();
             OnPropertyChanged(nameof(SelectedCameraItem));
             OnPropertyChanged(nameof(ImageSource_RtspUrl));

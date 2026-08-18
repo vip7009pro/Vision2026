@@ -1904,6 +1904,46 @@ namespace VisionInspectionApp.UI.ViewModels
             RefreshPreviews();
             RaiseToolPropertyPanelsChanged();
         }
+        private bool _isFetchingCameraPreview;
+        private void ScheduleAsyncCameraSnapshotFetch(ImageSourceDefinition source)
+        {
+            if (_isFetchingCameraPreview) return;
+            _isFetchingCameraPreview = true;
+
+            var camIndex = source.CameraIndex;
+            var rtspUrl = string.IsNullOrWhiteSpace(source.RtspUrl) ? null : source.RtspUrl;
+            var nodeName = source.Name;
+
+            Task.Run(async () =>
+            {
+                try
+                {
+                    var mat = await _cameraService.CaptureSnapshotAsync(camIndex, rtspUrl);
+                    if (mat is not null && !mat.Empty())
+                    {
+                        SetImageSourceCache(nodeName, "camera", mat);
+                        _sharedImage.SetImage(mat);
+
+                        await System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
+                        {
+                            if (SelectedNode is not null && string.Equals(SelectedNode.Type, "ImageSource", StringComparison.OrdinalIgnoreCase))
+                            {
+                                RefreshSelectedPreview();
+                            }
+                        }, System.Windows.Threading.DispatcherPriority.Render);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"Async camera preview fetch exception: {ex.Message}");
+                }
+                finally
+                {
+                    _isFetchingCameraPreview = false;
+                }
+            });
+        }
+
         private Mat? LoadImageFromSourceForPreview(ImageSourceDefinition source)
         {
             try
@@ -1947,19 +1987,28 @@ namespace VisionInspectionApp.UI.ViewModels
                 }
                 else if (source.SourceType == ImageSourceType.Camera)
                 {
-                    try
+                    // 1. If camera service is running in live mode, grab latest frame instantly (0ms)
+                    if (_cameraService.IsRunning)
                     {
-                        var cameraMat = CaptureCameraSnapshotSafe(source.CameraIndex, string.IsNullOrWhiteSpace(source.RtspUrl) ? null : source.RtspUrl);
-                        if (cameraMat is not null && !cameraMat.Empty())
+                        var liveMat = _cameraService.TryGetLatestFrameClone();
+                        if (liveMat is not null && !liveMat.Empty())
                         {
-                            SetImageSourceCache(source.Name, "camera", cameraMat);
-                            return cameraMat;
+                            SetImageSourceCache(source.Name, "camera", liveMat);
+                            return liveMat;
                         }
                     }
-                    catch (Exception ex)
+
+                    // 2. If shared image context already has an image, use it for instant responsive UI (0ms)
+                    using var existingSnap = _sharedImage.GetSnapshot();
+                    if (existingSnap is not null && !existingSnap.Empty())
                     {
-                        System.Diagnostics.Debug.WriteLine($"Exception in LoadImageFromSourceForPreview camera capture: {ex.Message}");
+                        var clone = existingSnap.Clone();
+                        SetImageSourceCache(source.Name, "camera", clone);
+                        return clone;
                     }
+
+                    // 3. Otherwise, fetch snapshot asynchronously in background so UI thread NEVER blocks
+                    ScheduleAsyncCameraSnapshotFetch(source);
                 }
             }
             catch (Exception ex)

@@ -193,39 +193,64 @@ namespace VisionInspectionApp.UI.ViewModels
             }
         }
 
+        private bool _isScanningCameras;
         /// <summary>
-        /// Populates AvailableCameraItems using CameraDriverFactory.ScanAllDevices (Hikrobot GigE/USB3, Basler, USB Webcam DirectShow, Simulator).
+        /// Populates AvailableCameraItems asynchronously using CameraDriverFactory.ScanAllDevices (Hikrobot GigE/USB3, Basler, USB Webcam DirectShow, Simulator).
         /// </summary>
-        private void RefreshAvailableCameraItems()
+        public void RefreshAvailableCameraItems(bool forceRescan = false)
         {
-            AvailableCameraItems.Clear();
-
-            try
+            if (!forceRescan && AvailableCameraItems.Count > 0)
             {
-                var allDevices = CameraDriverFactory.ScanAllDevices();
-                foreach (var dev in allDevices)
+                return;
+            }
+
+            if (_isScanningCameras)
+            {
+                return;
+            }
+
+            _isScanningCameras = true;
+            Task.Run(() =>
+            {
+                var items = new List<ImageSourceCameraItem>();
+                try
                 {
-                    AvailableCameraItems.Add(new ImageSourceCameraItem
+                    var allDevices = CameraDriverFactory.ScanAllDevices();
+                    foreach (var dev in allDevices)
                     {
-                        Index = dev.Index,
-                        DisplayName = dev.DisplayName
+                        items.Add(new ImageSourceCameraItem
+                        {
+                            Index = dev.Index,
+                            DisplayName = dev.DisplayName
+                        });
+                    }
+                }
+                catch
+                {
+                    items.Add(new ImageSourceCameraItem
+                    {
+                        Index = CameraService.SimulatorCameraIndex,
+                        DisplayName = "🎮 Camera Giả Lập (Simulator)"
                     });
                 }
-            }
-            catch
-            {
-                // Fallback nếu có lỗi
-                AvailableCameraItems.Add(new ImageSourceCameraItem
+                finally
                 {
-                    Index = CameraService.SimulatorCameraIndex,
-                    DisplayName = "📷 Camera Giả Lập (Simulator)"
-                });
-            }
+                    _isScanningCameras = false;
+                }
 
-            OnPropertyChanged(nameof(SelectedCameraItem));
-            OnPropertyChanged(nameof(ImageSource_IsIndustrialCamera));
-            OnPropertyChanged(nameof(ImageSource_IsTimerDriven));
-            OnPropertyChanged(nameof(ImageSource_ContinuousModeDescription));
+                System.Windows.Application.Current?.Dispatcher.InvokeAsync(() =>
+                {
+                    AvailableCameraItems.Clear();
+                    foreach (var itm in items)
+                    {
+                        AvailableCameraItems.Add(itm);
+                    }
+                    OnPropertyChanged(nameof(SelectedCameraItem));
+                    OnPropertyChanged(nameof(ImageSource_IsIndustrialCamera));
+                    OnPropertyChanged(nameof(ImageSource_IsTimerDriven));
+                    OnPropertyChanged(nameof(ImageSource_ContinuousModeDescription));
+                }, System.Windows.Threading.DispatcherPriority.Background);
+            });
         }
 
         public bool ImageSource_IsIndustrialCamera

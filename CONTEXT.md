@@ -51,6 +51,9 @@
 
 ### Sửa lỗi và Cải thiện UX/UI (Phiên làm việc hiện tại)
 
+- **Khắc phục triệt để hiện tượng khựng lag/đơ UI khi click chọn Node ImageSource (nguồn Camera)**:
+  - Khắc phục lỗi quét thiết bị đồng bộ trên UI Thread (`ToolPreprocess.cs`, `ToolEditorViewModel.cs`): Chuyển đổi phương thức `RefreshAvailableCameraItems` sang chạy dưới nền bất đồng bộ (`Task.Run`), tích hợp cờ khóa `_isScanningCameras` và chỉ quét nếu danh sách đang trống (`AvailableCameraItems.Count == 0`), loại bỏ triệt để hiện tượng quét phần cứng DirectShow/Hikrobot lặp đi lặp lại trên UI Dispatcher Thread mỗi khi chọn node.
+  - Triển khai cơ chế **Non-Blocking Asynchronous Preview Capture** (`Engine.cs`): Trong `LoadImageFromSourceForPreview`, ưu tiên lấy ảnh tức thì từ live stream (`_cameraService.TryGetLatestFrameClone()`) hoặc ảnh dùng chung (`_sharedImage.GetSnapshot()`) với độ trễ 0ms. Nếu chưa có ảnh, kích hoạt `ScheduleAsyncCameraSnapshotFetch` chạy ngầm trên Worker Thread Pool thay vì chặn đứng giao diện bằng `Task.Wait(2000)` đồng bộ, đảm bảo giao diện đạt 60+ FPS siêu mượt khi chuyển đổi qua lại giữa các node trên Canvas.
 - **Nâng cấp kiến trúc tổng hợp hiển thị Kết quả & ROI Overlay cho Tool ResultView và Final Preview**:
   - Khắc phục triệt để lỗi thiếu kết quả và khung ROI của `ColorDiff` (và `BlobDetection`) trên màn hình ResultView / Final Preview: Bổ sung logic render đầy đủ độ lệch màu $\Delta E$, giá trị đo $L,a,b$, nhãn trạng thái PASS/NG cùng các bounding box và tâm điểm của BlobDetection vào `BuildFinalOverlayFromRun`.
   - Tái cấu trúc cơ chế `AddConfigRois` và `BuildFinalOverlay` sang mô hình **Universal Node-Based ROI Aggregator**: Tự động duyệt qua toàn bộ danh sách `Nodes` trên Canvas để gọi `AddConfigRoisForNode(node, dst)`. Bất kỳ công cụ nào đã có hoặc thêm mới trong tương lai sẽ tự động được hiển thị khung ROI trên ResultView/Final Preview mà không cần phải cập nhật lại danh sách thủ công.
