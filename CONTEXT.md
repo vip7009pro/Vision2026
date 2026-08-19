@@ -988,7 +988,15 @@
         - Badge góc xoay tự động đổi sang màu `LimeGreen` và hiển thị prefix `[Fine]` khi đang ở chế độ xoay mịn, giúp phân biệt trực quan với chế độ xoay thông thường (màu `Orange`).
       - **Khắc Phục Node Đã Xóa Vẫn Chạy Trong Pipeline (Orphaned Node Definition Cleanup)**:
         - Trong [ToolEditorViewModel.GraphOps.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/ToolEditorViewModel.GraphOps.cs) (`DeleteSelectedNode`): Bổ sung 7 case xóa definition bị thiếu cho `Crop`, `ColorDiff`, `ImgArithmetic`, `CreatePoint`, `CreateLine`, `CreateRect`, `CreateCircle` — trước đó khi xóa các node này trên canvas, definition vẫn tồn tại trong config khiến pipeline tiếp tục xử lý và hiển thị timing.
-        - Trong [ToolEditorViewModel.Config.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/ToolEditorViewModel.Config.cs) (`SyncToolGraphToConfig`): Bổ sung 10 danh sách cleanup orphan definitions bị thiếu (`Crops`, `ColorDiffs`, `ImgArithmetics`, `ImageOutputs`, `SegmentLineDistances`, `ContourCompares`, `CreatePoints`, `CreateLines`, `CreateRects`, `CreateCircles`) — đây là safety net đảm bảo mọi definition mồ côi đều bị dọn dẹp.
+      - **Khắc Phục Lỗi Resize ROI Bị Co Giãn Cả 2 Cạnh Khi ROI Đang Ở Góc Xoay Khác 0° (Oriented Bounding Box Resizing)**:
+        - **Phân Tích Nguyên Nhân**: Trước đây trong [ImageViewerControl.xaml.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/Controls/ImageViewerControl.xaml.cs) (`UpdateRoiEdit`), độ dời chuột $(dxMove, dyMove)$ được tính trực tiếp trong hệ toạ độ màn hình toàn cục (World/Screen Space) và gán trực tiếp vào các biên $(left, right, top, bottom)$ của hình chữ nhật không xoay. Khi ROI có góc xoay $\theta \ne 0^\circ$, việc kéo 1 cạnh (ví dụ tay cầm Right) làm thay đổi kích thước theo trục X toàn cục thay vì trục cục bộ của ROI, khiến cả chiều rộng và chiều cao bị méo mó, đồng thời tâm xoay bị dịch chuyển sai lệch khiến các cạnh đối diện bị xê dịch.
+        - **Giải Pháp Chuẩn Hóa Hình Học**:
+          - Chiếu vector độ dời chuột $(dxMove, dyMove)$ về hệ toạ độ cục bộ (Local Coordinate Space) của ROI thông qua ma trận quay ngược $R(-\theta)$:
+            $$dx_{local} = dx \cos\theta + dy \sin\theta$$
+            $$dy_{local} = -dx \sin\theta + dy \cos\theta$$
+          - Thay đổi kích thước cục bộ $(newW, newH)$ và tính toán vector dịch chuyển tâm cục bộ $(\Delta C_{local.X}, \Delta C_{local.Y})$ tương ứng cho từng loại tay cầm (Right, Left, Top, Bottom, 4 góc).
+          - Chuyển vector dịch chuyển tâm ngược về không gian toàn cục qua $R(\theta)$: $\Delta C_{world} = R(\theta) \cdot \Delta C_{local}$.
+          - Đảm bảo khi kéo 1 cạnh (ví dụ Right): **chỉ có chiều rộng thay đổi**, chiều cao giữ nguyên 100%, và **cạnh đối diện (Left edge) được ghim cố định tuyệt đối trong không gian ảnh**.
       - **Kiểm Thử & Biên Dịch**: Toàn bộ Solution biên dịch thành công **0 Errors**.
 
 ## Roadmap

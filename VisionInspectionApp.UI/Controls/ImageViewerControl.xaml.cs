@@ -1754,69 +1754,94 @@ public partial class ImageViewerControl : UserControl
         var dyMove = current.Y - _roiEditStart.Y;
         var start = _roiEditRectStart;
 
-        var left = start.Left;
-        var right = start.Right;
-        var top = start.Top;
-        var bottom = start.Bottom;
-
-        switch (_roiEditMode)
+        if (_roiEditMode == RoiEditMode.Move)
         {
-            case RoiEditMode.Move:
-                left += dxMove;
-                right += dxMove;
-                top += dyMove;
-                bottom += dyMove;
-                break;
-            case RoiEditMode.Left:
-                left += dxMove;
-                break;
-            case RoiEditMode.Right:
-                right += dxMove;
-                break;
-            case RoiEditMode.Top:
-                top += dyMove;
-                break;
-            case RoiEditMode.Bottom:
-                bottom += dyMove;
-                break;
-            case RoiEditMode.TopLeft:
-                left += dxMove;
-                top += dyMove;
-                break;
-            case RoiEditMode.TopRight:
-                right += dxMove;
-                top += dyMove;
-                break;
-            case RoiEditMode.BottomLeft:
-                left += dxMove;
-                bottom += dyMove;
-                break;
-            case RoiEditMode.BottomRight:
-                right += dxMove;
-                bottom += dyMove;
-                break;
+            _roiEditRect = new Rect(start.X + dxMove, start.Y + dyMove, start.Width, start.Height);
+            return;
         }
 
-        if (right < left) (left, right) = (right, left);
-        if (bottom < top) (top, bottom) = (bottom, top);
+        // Check if editing a Circle ROI
+        var isCircleEdit = !string.IsNullOrWhiteSpace(_activeRoiLabel) && OverlayItems?.FirstOrDefault(x => string.Equals(x.Label, _activeRoiLabel, StringComparison.OrdinalIgnoreCase)) is OverlayCircleItem;
+        if (isCircleEdit)
+        {
+            var circleCenter = new Point(start.X + start.Width / 2.0, start.Y + start.Height / 2.0);
+            var newRadius = Math.Max(2.0, Math.Sqrt((current.X - circleCenter.X) * (current.X - circleCenter.X) + (current.Y - circleCenter.Y) * (current.Y - circleCenter.Y)));
+            _roiEditRect = new Rect(circleCenter.X - newRadius, circleCenter.Y - newRadius, newRadius * 2, newRadius * 2);
+            return;
+        }
+
+        // For Rectangle ROIs (both rotated and unrotated):
+        // Transform the displacement vector into the local (unrotated) coordinate space of the ROI
+        var angle = _roiEditRectAngle;
+        var rad = angle * Math.PI / 180.0;
+        var cos = Math.Cos(rad);
+        var sin = Math.Sin(rad);
+
+        // Rotation matrix for local coordinates: R(-angle) * [dxMove, dyMove]^T
+        var dxLocal = dxMove * cos + dyMove * sin;
+        var dyLocal = -dxMove * sin + dyMove * cos;
+
+        var startW = start.Width;
+        var startH = start.Height;
+        var newW = startW;
+        var newH = startH;
+        var deltaCxLocal = 0.0;
+        var deltaCyLocal = 0.0;
 
         const double minSize = 2.0;
 
-        if (right - left < minSize)
+        switch (_roiEditMode)
         {
-            var mid = (left + right) / 2.0;
-            left = mid - minSize / 2.0;
-            right = mid + minSize / 2.0;
+            case RoiEditMode.Right:
+                newW = Math.Max(minSize, startW + dxLocal);
+                deltaCxLocal = (newW - startW) / 2.0;
+                break;
+            case RoiEditMode.Left:
+                newW = Math.Max(minSize, startW - dxLocal);
+                deltaCxLocal = -(newW - startW) / 2.0;
+                break;
+            case RoiEditMode.Bottom:
+                newH = Math.Max(minSize, startH + dyLocal);
+                deltaCyLocal = (newH - startH) / 2.0;
+                break;
+            case RoiEditMode.Top:
+                newH = Math.Max(minSize, startH - dyLocal);
+                deltaCyLocal = -(newH - startH) / 2.0;
+                break;
+            case RoiEditMode.BottomRight:
+                newW = Math.Max(minSize, startW + dxLocal);
+                newH = Math.Max(minSize, startH + dyLocal);
+                deltaCxLocal = (newW - startW) / 2.0;
+                deltaCyLocal = (newH - startH) / 2.0;
+                break;
+            case RoiEditMode.BottomLeft:
+                newW = Math.Max(minSize, startW - dxLocal);
+                newH = Math.Max(minSize, startH + dyLocal);
+                deltaCxLocal = -(newW - startW) / 2.0;
+                deltaCyLocal = (newH - startH) / 2.0;
+                break;
+            case RoiEditMode.TopRight:
+                newW = Math.Max(minSize, startW + dxLocal);
+                newH = Math.Max(minSize, startH - dyLocal);
+                deltaCxLocal = (newW - startW) / 2.0;
+                deltaCyLocal = -(newH - startH) / 2.0;
+                break;
+            case RoiEditMode.TopLeft:
+                newW = Math.Max(minSize, startW - dxLocal);
+                newH = Math.Max(minSize, startH - dyLocal);
+                deltaCxLocal = -(newW - startW) / 2.0;
+                deltaCyLocal = -(newH - startH) / 2.0;
+                break;
         }
 
-        if (bottom - top < minSize)
-        {
-            var mid = (top + bottom) / 2.0;
-            top = mid - minSize / 2.0;
-            bottom = mid + minSize / 2.0;
-        }
+        // Transform deltaCenter from local space back to world space: R(angle) * [deltaCxLocal, deltaCyLocal]^T
+        var deltaCxWorld = deltaCxLocal * cos - deltaCyLocal * sin;
+        var deltaCyWorld = deltaCxLocal * sin + deltaCyLocal * cos;
 
-        _roiEditRect = new Rect(left, top, right - left, bottom - top);
+        var startCenter = new Point(start.X + startW / 2.0, start.Y + startH / 2.0);
+        var newCenter = new Point(startCenter.X + deltaCxWorld, startCenter.Y + deltaCyWorld);
+
+        _roiEditRect = new Rect(newCenter.X - newW / 2.0, newCenter.Y - newH / 2.0, newW, newH);
     }
 
     private void ClearRoiEditVisuals()

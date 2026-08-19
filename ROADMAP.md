@@ -320,6 +320,10 @@ Lộ trình tích hợp tính năng Chụp ảnh từ camera và hỗ trợ các
   - `Bổ Sung Xóa Definition Trong DeleteSelectedNode`: Cập nhật `ToolEditorViewModel.GraphOps.cs` bổ sung các case xóa khỏi danh sách cấu hình tương ứng trong `_config` khi người dùng xóa node: `Crop`, `ColorDiff`, `ImgArithmetic`, `CreatePoint`, `CreateLine`, `CreateRect`, `CreateCircle`.
   - `Nâng Cấp Lưới An Toàn SyncToolGraphToConfig`: Cập nhật `ToolEditorViewModel.Config.cs` tự động dọn dẹp toàn bộ 10 danh sách cấu hình mồ côi (`Crops`, `ColorDiffs`, `ImgArithmetics`, `ImageOutputs`, `SegmentLineDistances`, `ContourCompares`, `CreatePoints`, `CreateLines`, `CreateRects`, `CreateCircles`) không còn node tương ứng trên Canvas, triệt tiêu hoàn toàn hiện tượng pipeline chạy ngầm và tốn thời gian cho các tool đã xóa.
 
+- [x] Task 168: Khắc phục triệt để lỗi Resize ROI bị biến dạng cả 2 cạnh khi ROI đang ở góc xoay khác 0° (Oriented Bounding Box Resizing):
+  - `Chiếu Tọa Độ Cục Bộ Theo Góc Nghiêng`: Trong `ImageViewerControl.xaml.cs`, tại phương thức `UpdateRoiEdit`, chuyển đổi vector di chuyển chuột $(dxMove, dyMove)$ từ hệ toạ độ màn hình sang hệ toạ độ cục bộ của ROI thông qua ma trận quay ngược $R(-\theta)$.
+  - `Độc Lập 2 Trục & Cố Định Cạnh Đối Diện`: Khi kéo 1 cạnh (Left, Right, Top, Bottom), chỉ có kích thước tương ứng (Width hoặc Height) thay đổi, kích thước còn lại giữ nguyên 100%. Tâm của hình chữ nhật được cập nhật chính xác theo góc nghiêng qua $R(\theta) \cdot \Delta C_{local}$, đảm bảo cạnh/góc đối diện được neo cố định tuyệt đối trong không gian ảnh thực.
+
 - [x] Task 64: Tối ưu hoá toàn diện hiệu năng của Tool Preprocessor khi kéo Slider (Properties Panel & Global Preprocess Dialog):
   - `Tối ưu thuật toán Vision Engine (Class1.cs)`:
     - Bổ sung phương thức `EstimateBackground` áp dụng kỹ thuật **Pyramidal Downscale-Blur-Upscale** cho Illumination Correction. Với ảnh kích thước lớn và kernel $k > 15$, ảnh được thu nhỏ về proxy ~480-640px, thực hiện làm mờ Gaussian với kernel tỷ lệ $k_{small}$, sau đó phóng to lại bằng phép nội suy tuyến tính (bilinear). Thời gian ước lượng nền giảm từ **1.500ms - 3.500ms xuống chỉ còn ~3.5ms** (~400x speedup).
