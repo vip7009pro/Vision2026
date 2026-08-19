@@ -9,5 +9,6 @@ class Program
         CaliperAndLineTest.RunTests();
         VariableInjectionTest.RunTests();
         ContinuousPipelineTest.RunTestsAsync().GetAwaiter().GetResult();
+        PlcBridgeTest.RunTestsAsync().GetAwaiter().GetResult();
     }
 }

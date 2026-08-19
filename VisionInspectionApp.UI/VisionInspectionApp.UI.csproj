@@ -45,8 +45,12 @@
       <PlcBridgeFiles Include="..\VisionInspectionApp.PlcBridge\bin\x86\$(Configuration)\net8.0-windows\*.*" />
       <PlcBridgeFiles Include="..\VisionInspectionApp.PlcBridge\bin\$(Platform)\$(Configuration)\net8.0-windows\*.*" />
       <PlcBridgeFiles Include="..\VisionInspectionApp.PlcBridge\bin\$(Configuration)\net8.0-windows\*.*" />
+      <PlcBridgeFiles Include="..\VisionInspectionApp.PlcBridge\bin\x86\Debug\net8.0-windows\*.*" />
+      <PlcBridgeFiles Include="..\VisionInspectionApp.PlcBridge\bin\x86\Release\net8.0-windows\*.*" />
+      <PlcBridgeFiles Include="..\VisionInspectionApp.PlcBridge\bin\Debug\net8.0-windows\*.*" />
+      <PlcBridgeFiles Include="..\VisionInspectionApp.PlcBridge\bin\Release\net8.0-windows\*.*" />
     </ItemGroup>
-    <Copy SourceFiles="@(PlcBridgeFiles)" DestinationFolder="$(TargetDir)" SkipUnchangedFiles="true" ContinueOnError="true" />
+    <Copy SourceFiles="@(PlcBridgeFiles)" DestinationFolder="$(TargetDir)" SkipUnchangedFiles="false" ContinueOnError="true" />
   </Target>
 
 </Project>

@@ -51,6 +51,19 @@
 
 ### Sửa lỗi và Cải thiện UX/UI (Phiên làm việc hiện tại)
 
+- **Khắc phục toàn diện lỗi kết nối PLC Bridge (Port 39871) trên cửa sổ PLC Manager**:
+  - **Tự động tìm kiếm & đồng bộ Binary PLC Bridge (`ResolveBridgePath` trong `MitsubishiMxComponentDriver.cs`)**:
+    - Khắc phục lỗi hardcode đường dẫn tương đối `..\..\..\..` bị sai lệch khi chạy trong thư mục `bin\x64\Debug\net8.0-windows` dẫn đến việc nạp nhầm binary `VisionInspectionApp.PlcBridge.dll` cũ chưa có socket server.
+    - Cài đặt hàm `ResolveBridgePath` duyệt động cây thư mục solution tìm kiếm và so sánh timestamp để chọn binary mới nhất, đồng thời tự động đồng bộ (copy) sang thư mục `BaseDirectory` của ứng dụng khi phát hiện binary mới hơn trong source tree.
+  - **Nâng cấp Post-Build Target `CopyPlcBridgeFiles` (`VisionInspectionApp.UI.csproj`)**:
+    - Bổ sung đầy đủ các đường dẫn `x86\Debug`, `x86\Release`, `Debug`, `Release` của project `PlcBridge` và cấu hình `SkipUnchangedFiles="false"` để luôn ghi đè binary mới nhất sang thư mục output UI khi build.
+  - **Tối ưu hóa Parent Process Watcher & Zombie Cleanup (`PlcBridge\Program.cs`, `MitsubishiMxComponentDriver.cs`)**:
+    - Xử lý an toàn ngoại lệ WOW64 (Access Denied) khi tiến trình 32-bit `PlcBridge` kiểm tra PID của tiến trình cha 64-bit qua `Process.GetProcesses()`, chỉ thoát khi PID cha thực sự không còn tồn tại qua 2 lần kiểm tra liên tiếp (loại bỏ hiện tượng bridge bị thoát nhầm ngay khi vừa khởi động).
+    - Tối ưu `KillExistingZombieBridges` dọn dẹp trực tiếp qua API .NET, loại bỏ việc gọi PowerShell đồng bộ làm chậm quá trình kết nối.
+    - Nâng thời gian timeout thử kết nối socket trong `EnsureBridgeProcessAndSocketConnectedAsync` lên 5s (25 lần x 200ms).
+  - **Dọn dẹp trạng thái cấu hình `plc_config.json` (`PlcManagerService.cs`)**:
+    - Đặt lại `CpuName = string.Empty` khi tải danh sách PLC ở trạng thái `Disconnected` trong `LoadGlobalConfig()`, ngăn ngừa việc hiển thị lại chuỗi thông báo lỗi cũ từ các phiên làm việc trước.
+  - **Kiểm thử thành công 100%**: Đã chạy test kết nối và đọc ghi tag PLC (FX5UCPU Station 1) trong `TestExtractApp` thành công 100%. Biên dịch solution 0 lỗi.
 - **Khắc phục toàn diện Tool Caliper (Edge detection sub-pixel, PCA Line Fitting, Pipeline Short-Circuit và Live Preview / Run Overlay)**:
   - Khắc phục lỗi Origin Short-Circuit (`InspectionService.Pipeline.cs`): Pipeline trước đây tự động gán `Found = false` cho Caliper khi flow không có node Origin hoặc chưa dạy template Origin. Đã sửa lại chỉ short-circuit khi dự án thực sự có node Origin đã được dạy template (`hasOriginNode && hasOriginTemplate && !originPass`).
   - Xây dựng module thuật toán chuyên biệt `CaliperDetector.cs` (`VisionInspectionApp.VisionEngine`):

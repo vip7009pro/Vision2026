@@ -101,27 +101,49 @@ internal static class Program
 
         Task.Run(async () =>
         {
+            int deadConfirmationCount = 0;
             try
             {
                 while (!_cts.IsCancellationRequested)
                 {
                     await Task.Delay(1000, _cts.Token).ConfigureAwait(false);
 
-                    bool isAlive = false;
+                    bool isAlive = true;
                     try
                     {
                         var p = Process.GetProcessById(parentPid);
                         isAlive = !p.HasExited;
                     }
+                    catch (ArgumentException)
+                    {
+                        // Process ID not found in system -> process has exited
+                        isAlive = false;
+                    }
                     catch
                     {
-                        isAlive = false;
+                        // Access denied or WOW64 permission issue -> double check via process enumeration
+                        try
+                        {
+                            isAlive = Process.GetProcesses().Any(pr => pr.Id == parentPid);
+                        }
+                        catch
+                        {
+                            isAlive = true;
+                        }
                     }
 
                     if (!isAlive)
                     {
-                        Log($"Parent process PID {parentPid} no longer exists. Exiting bridge worker.");
-                        Environment.Exit(0);
+                        deadConfirmationCount++;
+                        if (deadConfirmationCount >= 2)
+                        {
+                            Log($"Parent process PID {parentPid} confirmed dead ({deadConfirmationCount} checks). Exiting bridge worker.");
+                            Environment.Exit(0);
+                        }
+                    }
+                    else
+                    {
+                        deadConfirmationCount = 0;
                     }
                 }
             }

@@ -992,8 +992,8 @@ public sealed class MitsubishiMxComponentDriver : IPlcDriver
                     LaunchBridgeProcess();
                 }
 
-                // 3. Retry connection loop up to 4000ms while bridge starts up
-                int maxAttempts = 20;
+                // 3. Retry connection loop up to 5000ms while bridge starts up
+                int maxAttempts = 25;
                 while (maxAttempts-- > 0 && !cancellationToken.IsCancellationRequested)
                 {
                     try
@@ -1031,23 +1031,80 @@ public sealed class MitsubishiMxComponentDriver : IPlcDriver
                 {
                     try { p.Kill(); } catch { }
                 }
+            }
+            catch { }
+        }
 
-                // Also terminate any stray dotnet.exe running PlcBridge
+        private static string? ResolveBridgePath(string baseDir)
+        {
+            var candidatePaths = new List<string>();
+
+            // 1. In current base directory
+            candidatePaths.Add(Path.Combine(baseDir, "VisionInspectionApp.PlcBridge.dll"));
+
+            // 2. Search upwards to find solution/workspace root
+            var dir = new DirectoryInfo(baseDir);
+            for (int i = 0; i < 8 && dir != null; i++)
+            {
+                string bridgeProjDir = Path.Combine(dir.FullName, "VisionInspectionApp.PlcBridge", "bin");
+                if (Directory.Exists(bridgeProjDir))
+                {
+                    candidatePaths.Add(Path.Combine(dir.FullName, "VisionInspectionApp.PlcBridge", "bin", "x86", "Debug", "net8.0-windows", "VisionInspectionApp.PlcBridge.dll"));
+                    candidatePaths.Add(Path.Combine(dir.FullName, "VisionInspectionApp.PlcBridge", "bin", "x86", "Release", "net8.0-windows", "VisionInspectionApp.PlcBridge.dll"));
+                    candidatePaths.Add(Path.Combine(dir.FullName, "VisionInspectionApp.PlcBridge", "bin", "Debug", "net8.0-windows", "VisionInspectionApp.PlcBridge.dll"));
+                    candidatePaths.Add(Path.Combine(dir.FullName, "VisionInspectionApp.PlcBridge", "bin", "Release", "net8.0-windows", "VisionInspectionApp.PlcBridge.dll"));
+                    break;
+                }
+                dir = dir.Parent;
+            }
+
+            string? bestDll = null;
+            DateTime bestTime = DateTime.MinValue;
+            foreach (var p in candidatePaths)
+            {
                 try
                 {
-                    var psi = new ProcessStartInfo
+                    if (File.Exists(p))
                     {
-                        FileName = "powershell",
-                        Arguments = "-NoProfile -Command \"Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object { $_.CommandLine -like '*VisionInspectionApp.PlcBridge*' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }\"",
-                        CreateNoWindow = true,
-                        UseShellExecute = false
-                    };
-                    using var proc = Process.Start(psi);
-                    proc?.WaitForExit(1500);
+                        var writeTime = File.GetLastWriteTimeUtc(p);
+                        if (writeTime > bestTime)
+                        {
+                            bestTime = writeTime;
+                            bestDll = p;
+                        }
+                    }
                 }
                 catch { }
             }
-            catch { }
+
+            // If a newer PlcBridge binary was found in source tree, automatically copy to baseDir
+            if (bestDll != null)
+            {
+                try
+                {
+                    string bestDir = Path.GetDirectoryName(bestDll)!;
+                    if (!string.Equals(bestDir, baseDir.TrimEnd('\\', '/'), StringComparison.OrdinalIgnoreCase))
+                    {
+                        string baseDll = Path.Combine(baseDir, "VisionInspectionApp.PlcBridge.dll");
+                        if (!File.Exists(baseDll) || File.GetLastWriteTimeUtc(bestDll) > File.GetLastWriteTimeUtc(baseDll))
+                        {
+                            foreach (var ext in new[] { ".dll", ".exe", ".pdb", ".deps.json", ".runtimeconfig.json" })
+                            {
+                                string src = Path.Combine(bestDir, "VisionInspectionApp.PlcBridge" + ext);
+                                string dst = Path.Combine(baseDir, "VisionInspectionApp.PlcBridge" + ext);
+                                if (File.Exists(src))
+                                {
+                                    File.Copy(src, dst, overwrite: true);
+                                }
+                            }
+                            bestDll = baseDll;
+                        }
+                    }
+                }
+                catch { }
+            }
+
+            return bestDll;
         }
 
         private void LaunchBridgeProcess()
@@ -1055,46 +1112,15 @@ public sealed class MitsubishiMxComponentDriver : IPlcDriver
             KillExistingZombieBridges();
 
             string baseDir = AppDomain.CurrentDomain.BaseDirectory;
-            string bridgeDll = Path.Combine(baseDir, "VisionInspectionApp.PlcBridge.dll");
+            string? bridgeDll = ResolveBridgePath(baseDir);
             string bridgeExe = Path.Combine(baseDir, "VisionInspectionApp.PlcBridge.exe");
 
-            // Check and pick the newest build of PlcBridge.dll across known output directories
-            string[] searchPaths = new[]
+            if (bridgeDll != null)
             {
-                Path.Combine(baseDir, "VisionInspectionApp.PlcBridge.dll"),
-                Path.Combine(baseDir, "..", "..", "..", "..", "VisionInspectionApp.PlcBridge", "bin", "x86", "Debug", "net8.0-windows", "VisionInspectionApp.PlcBridge.dll"),
-                Path.Combine(baseDir, "..", "..", "..", "..", "VisionInspectionApp.PlcBridge", "bin", "x86", "Release", "net8.0-windows", "VisionInspectionApp.PlcBridge.dll"),
-                Path.Combine(baseDir, "..", "..", "..", "..", "VisionInspectionApp.PlcBridge", "bin", "Debug", "net8.0-windows", "VisionInspectionApp.PlcBridge.dll"),
-                Path.Combine(baseDir, "..", "..", "..", "..", "VisionInspectionApp.PlcBridge", "bin", "Release", "net8.0-windows", "VisionInspectionApp.PlcBridge.dll")
-            };
-
-            string? bestDll = null;
-            DateTime bestTime = DateTime.MinValue;
-            foreach (var path in searchPaths)
-            {
-                try
-                {
-                    string full = Path.GetFullPath(path);
-                    if (File.Exists(full))
-                    {
-                        var writeTime = File.GetLastWriteTime(full);
-                        if (writeTime > bestTime)
-                        {
-                            bestTime = writeTime;
-                            bestDll = full;
-                        }
-                    }
-                }
-                catch { }
+                bridgeExe = Path.ChangeExtension(bridgeDll, ".exe");
             }
 
-            if (bestDll != null)
-            {
-                bridgeDll = bestDll;
-                bridgeExe = Path.ChangeExtension(bestDll, ".exe");
-            }
-
-            if (!File.Exists(bridgeExe) && !File.Exists(bridgeDll))
+            if ((bridgeDll == null || !File.Exists(bridgeDll)) && !File.Exists(bridgeExe))
             {
                 throw new FileNotFoundException($"Cannot find 32-bit PLC Bridge worker executable or assembly in: {baseDir}");
             }
@@ -1103,7 +1129,7 @@ public sealed class MitsubishiMxComponentDriver : IPlcDriver
             string x86Dotnet = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86), "dotnet", "dotnet.exe");
 
             ProcessStartInfo psi;
-            if (File.Exists(x86Dotnet) && File.Exists(bridgeDll))
+            if (File.Exists(x86Dotnet) && bridgeDll != null && File.Exists(bridgeDll))
             {
                 psi = new ProcessStartInfo
                 {

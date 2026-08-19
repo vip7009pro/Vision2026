@@ -365,7 +365,15 @@ Lộ trình tích hợp tính năng Chụp ảnh từ camera và hỗ trợ các
     - Bổ sung Live Detection Fallback vào `BuildFinalOverlayFromRunWithConfig` để khi kéo/chỉnh ROI trên Canvas, `ResultView` và `ImageOutput` luôn hiển thị đường thẳng màu xanh lá (`Lime`) và các chấm vàng sub-pixel (`Gold`) tức thì.
     - Cập nhật `BurnOverlaysToMat` trong `ImageOutputs.cs` vẽ các chấm vàng sub-pixel vào file ảnh lưu trữ.
   - `Tự động Co Giãn Kích thước Điểm Sub-pixel Theo Zoom (FastOverlayCanvas.cs)`: Tính toán bán kính điểm `pr = (p.Radius > 0 ? p.Radius : 4.0) / scale;` đảm bảo điểm vàng hiển thị rõ nét ở mọi mức thu phóng zoom.
-  - `Kiểm thử Tự động`: 34/34 test cases PASS 100% trong `TestExtractApp`. Biên dịch thành công 0 Errors.
+- [x] Task 169: Khắc phục toàn diện lỗi kết nối PLC Bridge (Port 39871) trên cửa sổ PLC Manager:
+  - `Tự Động Tìm & Đồng Bộ Binary PlcBridge (ResolveBridgePath)`: Thay thế việc duyệt tương đối cứng nhắc (`..\..\..\..`) bằng hàm `ResolveBridgePath` duyệt động cây thư mục solution, tự động tìm kiếm và so sánh timestamp để chọn bản build `VisionInspectionApp.PlcBridge.dll` mới nhất; tự động sao chép đồng bộ vào `BaseDirectory` của ứng dụng khi phát hiện binary mới hơn.
+  - `Cải Thiện CopyPlcBridgeFiles Target (UI.csproj)`: Bổ sung đầy đủ các đường dẫn `x86\Debug`, `x86\Release`, `Debug`, `Release` và cấu hình `SkipUnchangedFiles="false"` để luôn ghi đè binary PlcBridge mới nhất vào thư mục output của UI khi build.
+  - `Tối Ưu Watcher & Dọn Dẹp Tiến Trình`:
+    - Cải tiến `StartParentProcessWatcher` trong `PlcBridge\Program.cs` xử lý an toàn phân quyền WOW64 khi tiến trình 32-bit theo dõi tiến trình cha 64-bit, chỉ thoát khi PID cha thực sự không còn tồn tại qua 2 lần kiểm tra liên tiếp.
+    - Tối ưu `KillExistingZombieBridges` dọn dẹp trực tiếp qua API .NET không gọi tiến trình con PowerShell làm chậm quá trình kết nối.
+    - Nâng thời gian timeout thử kết nối TCP socket trong `EnsureBridgeProcessAndSocketConnectedAsync` lên 5s (25 lần x 200ms).
+  - `Dọn Dẹp Trạng Thái Cấu Hình (plc_config.json)`: Đặt lại `CpuName = string.Empty` khi tải danh sách PLC ở trạng thái `Disconnected` trong `LoadGlobalConfig()`, ngăn ngừa việc hiển thị lại chuỗi thông báo lỗi cũ từ các phiên làm việc trước.
+  - `Kiểm Thử Thành Công 100%`: Chạy test kết nối và đọc ghi tag PLC (FX5UCPU Station 1) trong `TestExtractApp` thành công 100%. Biên dịch solution 0 lỗi.
 
 
 

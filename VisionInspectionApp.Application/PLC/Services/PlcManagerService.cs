@@ -146,6 +146,7 @@ public sealed class PlcManagerService : IPlcManagerService, IDisposable
                     foreach (var plc in container.Plcs)
                     {
                         plc.State = PlcConnectionState.Disconnected;
+                        plc.CpuName = string.Empty;
                     }
                     LoadConfigInternal(container.Plcs, container.Tags ?? new List<PlcTag>());
                     return;
