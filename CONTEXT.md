@@ -983,6 +983,12 @@
           - Cỡ chữ nhãn kết quả (`fontScaleSmall`, `fontScaleNormal`) và độ dày chữ (`fontThickSmall`, `fontThickNormal`) rõ ràng, sắc nét, dễ quan sát 100% mà không cần zoom to.
           - Khoảng cách lùi chữ (`Text offset`) và chiều cao dòng (`fontHeight`) tự động co giãn không bị đè lấn lên các điểm mút.
         - **Bổ sung thuộc tính `OverlayScale` (`ImageOutputDefinition`)**: Bổ sung ô nhập tỷ lệ `Overlay Scale` (mặc định `1.0`, tùy chỉnh `0.2` - `5.0`) trên Properties Panel của `ImageOutput` ([ToolEditorView.xaml](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/Views/ToolEditorView.xaml)) cho phép người dùng tùy ý phóng to/thu nhỏ thêm nét vẽ overlay theo nhu cầu.
+      - **Tính Năng Xoay ROI Mịn Bằng Ctrl (Fine Rotation Damping)**:
+        - Trong [ImageViewerControl.xaml.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/Controls/ImageViewerControl.xaml.cs): Bổ sung cơ chế damping 20% khi giữ phím `Ctrl` trong lúc kéo handle xoay ROI. Khi giữ Ctrl, mỗi pixel chuột di chuyển chỉ tạo ra 1/5 góc xoay so với bình thường, giúp người dùng tinh chỉnh góc chính xác đến 0.1°.
+        - Badge góc xoay tự động đổi sang màu `LimeGreen` và hiển thị prefix `[Fine]` khi đang ở chế độ xoay mịn, giúp phân biệt trực quan với chế độ xoay thông thường (màu `Orange`).
+      - **Khắc Phục Node Đã Xóa Vẫn Chạy Trong Pipeline (Orphaned Node Definition Cleanup)**:
+        - Trong [ToolEditorViewModel.GraphOps.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/ToolEditorViewModel.GraphOps.cs) (`DeleteSelectedNode`): Bổ sung 7 case xóa definition bị thiếu cho `Crop`, `ColorDiff`, `ImgArithmetic`, `CreatePoint`, `CreateLine`, `CreateRect`, `CreateCircle` — trước đó khi xóa các node này trên canvas, definition vẫn tồn tại trong config khiến pipeline tiếp tục xử lý và hiển thị timing.
+        - Trong [ToolEditorViewModel.Config.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/ToolEditorViewModel.Config.cs) (`SyncToolGraphToConfig`): Bổ sung 10 danh sách cleanup orphan definitions bị thiếu (`Crops`, `ColorDiffs`, `ImgArithmetics`, `ImageOutputs`, `SegmentLineDistances`, `ContourCompares`, `CreatePoints`, `CreateLines`, `CreateRects`, `CreateCircles`) — đây là safety net đảm bảo mọi definition mồ côi đều bị dọn dẹp.
       - **Kiểm Thử & Biên Dịch**: Toàn bộ Solution biên dịch thành công **0 Errors**.
 
 ## Roadmap

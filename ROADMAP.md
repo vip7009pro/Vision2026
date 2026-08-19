@@ -312,6 +312,14 @@ Lộ trình tích hợp tính năng Chụp ảnh từ camera và hỗ trợ các
     - Bổ sung `ContinuousPipelineTest.cs` kiểm thử thành công 100% 4/4 test cases về Channel Bounded, Burst Producer vs Slow Consumer và Memory Cleanup khi Stop.
     - Biên dịch Solution thành công **0 Error(s)**.
 
+- [x] Task 166: Bổ sung tính năng Xoay ROI Mịn (Fine Rotation Damping) khi giữ phím Ctrl:
+  - `Cơ Chế Damping Góc Xoay`: Trong `ImageViewerControl.xaml.cs`, tại phương thức `UpdateRoiEdit`, khi người dùng kéo handle xoay ROI và giữ phím `Ctrl`, hệ thống áp dụng hệ số giảm tốc 20% (`delta * 0.2`) cho gia số góc xoay, cho phép tinh chỉnh góc cực kỳ êm ái, mịn màng và chính xác đến $0.1^\circ$.
+  - `Phản Hồi Trực Quan (Visual Feedback)`: Khi giữ `Ctrl` trong lúc xoay, badge góc xoay tự động đổi viền và chữ sang màu xanh lá `LimeGreen` kèm tiền tố `[Fine]` (ví dụ: `[Fine] 12.4°`) để người dùng dễ dàng nhận diện trạng thái xoay chính xác.
+
+- [x] Task 167: Khắc phục triệt để lỗi Node đã xóa trên Canvas vẫn tồn tại và xử lý trong Vision Pipeline (Orphaned Definition Cleanup):
+  - `Bổ Sung Xóa Definition Trong DeleteSelectedNode`: Cập nhật `ToolEditorViewModel.GraphOps.cs` bổ sung các case xóa khỏi danh sách cấu hình tương ứng trong `_config` khi người dùng xóa node: `Crop`, `ColorDiff`, `ImgArithmetic`, `CreatePoint`, `CreateLine`, `CreateRect`, `CreateCircle`.
+  - `Nâng Cấp Lưới An Toàn SyncToolGraphToConfig`: Cập nhật `ToolEditorViewModel.Config.cs` tự động dọn dẹp toàn bộ 10 danh sách cấu hình mồ côi (`Crops`, `ColorDiffs`, `ImgArithmetics`, `ImageOutputs`, `SegmentLineDistances`, `ContourCompares`, `CreatePoints`, `CreateLines`, `CreateRects`, `CreateCircles`) không còn node tương ứng trên Canvas, triệt tiêu hoàn toàn hiện tượng pipeline chạy ngầm và tốn thời gian cho các tool đã xóa.
+
 - [x] Task 64: Tối ưu hoá toàn diện hiệu năng của Tool Preprocessor khi kéo Slider (Properties Panel & Global Preprocess Dialog):
   - `Tối ưu thuật toán Vision Engine (Class1.cs)`:
     - Bổ sung phương thức `EstimateBackground` áp dụng kỹ thuật **Pyramidal Downscale-Blur-Upscale** cho Illumination Correction. Với ảnh kích thước lớn và kernel $k > 15$, ảnh được thu nhỏ về proxy ~480-640px, thực hiện làm mờ Gaussian với kernel tỷ lệ $k_{small}$, sau đó phóng to lại bằng phép nội suy tuyến tính (bilinear). Thời gian ước lượng nền giảm từ **1.500ms - 3.500ms xuống chỉ còn ~3.5ms** (~400x speedup).

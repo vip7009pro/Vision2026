@@ -502,6 +502,41 @@ namespace VisionInspectionApp.UI.ViewModels
                 {
                     _config.CodeDetections.RemoveAll(x => string.Equals(x.Name, toRemove.RefName, StringComparison.OrdinalIgnoreCase));
                 }
+
+                if (string.Equals(toRemove.Type, "Crop", StringComparison.OrdinalIgnoreCase))
+                {
+                    _config.Crops.RemoveAll(x => string.Equals(x.Name, toRemove.RefName, StringComparison.OrdinalIgnoreCase));
+                }
+
+                if (string.Equals(toRemove.Type, "ColorDiff", StringComparison.OrdinalIgnoreCase))
+                {
+                    _config.ColorDiffs.RemoveAll(x => string.Equals(x.Name, toRemove.RefName, StringComparison.OrdinalIgnoreCase));
+                }
+
+                if (string.Equals(toRemove.Type, "ImgArithmetic", StringComparison.OrdinalIgnoreCase))
+                {
+                    _config.ImgArithmetics.RemoveAll(x => string.Equals(x.Name, toRemove.RefName, StringComparison.OrdinalIgnoreCase));
+                }
+
+                if (string.Equals(toRemove.Type, "CreatePoint", StringComparison.OrdinalIgnoreCase))
+                {
+                    _config.CreatePoints.RemoveAll(x => string.Equals(x.Name, toRemove.RefName, StringComparison.OrdinalIgnoreCase));
+                }
+
+                if (string.Equals(toRemove.Type, "CreateLine", StringComparison.OrdinalIgnoreCase))
+                {
+                    _config.CreateLines.RemoveAll(x => string.Equals(x.Name, toRemove.RefName, StringComparison.OrdinalIgnoreCase));
+                }
+
+                if (string.Equals(toRemove.Type, "CreateRect", StringComparison.OrdinalIgnoreCase))
+                {
+                    _config.CreateRects.RemoveAll(x => string.Equals(x.Name, toRemove.RefName, StringComparison.OrdinalIgnoreCase));
+                }
+
+                if (string.Equals(toRemove.Type, "CreateCircle", StringComparison.OrdinalIgnoreCase))
+                {
+                    _config.CreateCircles.RemoveAll(x => string.Equals(x.Name, toRemove.RefName, StringComparison.OrdinalIgnoreCase));
+                }
             }
     
             Nodes.RemoveAt(idx);

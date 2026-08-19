@@ -1725,10 +1725,28 @@ public partial class ImageViewerControl : UserControl
             var dx = current.X - center.X;
             var dy = current.Y - center.Y;
             var angleRad = Math.Atan2(dy, dx);
-            var angleDeg = angleRad * 180.0 / Math.PI + 90.0;
-            while (angleDeg > 180.0) angleDeg -= 360.0;
-            while (angleDeg <= -180.0) angleDeg += 360.0;
-            _roiEditRectAngle = Math.Round(angleDeg, 1);
+            var rawAngleDeg = angleRad * 180.0 / Math.PI + 90.0;
+            while (rawAngleDeg > 180.0) rawAngleDeg -= 360.0;
+            while (rawAngleDeg <= -180.0) rawAngleDeg += 360.0;
+
+            if (Keyboard.Modifiers.HasFlag(ModifierKeys.Control))
+            {
+                // Fine rotation mode: apply 20% damping to the delta angle
+                var delta = rawAngleDeg - _roiEditRectAngle;
+                // Normalize delta to [-180, 180] to handle wrap-around
+                while (delta > 180.0) delta -= 360.0;
+                while (delta <= -180.0) delta += 360.0;
+                _roiEditRectAngle += delta * 0.2;
+            }
+            else
+            {
+                _roiEditRectAngle = rawAngleDeg;
+            }
+
+            // Normalize final angle to [-180, 180]
+            while (_roiEditRectAngle > 180.0) _roiEditRectAngle -= 360.0;
+            while (_roiEditRectAngle <= -180.0) _roiEditRectAngle += 360.0;
+            _roiEditRectAngle = Math.Round(_roiEditRectAngle, 1);
             return;
         }
 
@@ -1980,13 +1998,14 @@ public partial class ImageViewerControl : UserControl
             var unrotStemEnd = new Point(cx, _roiEditRect.Top - rotOffsetY);
             var stemEnd = RotatePoint(unrotStemEnd, center, _roiEditRectAngle);
 
-            var angleText = $"{_roiEditRectAngle:F1}°";
+            var isFineMode = _roiEditMode == RoiEditMode.Rotate && Keyboard.Modifiers.HasFlag(ModifierKeys.Control);
+            var angleText = isFineMode ? $"[Fine] {_roiEditRectAngle:F1}°" : $"{_roiEditRectAngle:F1}°";
             var textBlock = new TextBlock
             {
                 Text = angleText,
                 FontSize = Math.Max(11.0, 13.0 / scale),
                 FontWeight = FontWeights.Bold,
-                Foreground = Brushes.Yellow,
+                Foreground = isFineMode ? Brushes.LimeGreen : Brushes.Yellow,
                 HorizontalAlignment = HorizontalAlignment.Center,
                 VerticalAlignment = VerticalAlignment.Center
             };
@@ -1994,7 +2013,7 @@ public partial class ImageViewerControl : UserControl
             var border = new Border
             {
                 Background = new SolidColorBrush(Color.FromArgb(220, 20, 20, 20)),
-                BorderBrush = _roiEditMode == RoiEditMode.Rotate ? Brushes.Orange : Brushes.Cyan,
+                BorderBrush = isFineMode ? Brushes.LimeGreen : (_roiEditMode == RoiEditMode.Rotate ? Brushes.Orange : Brushes.Cyan),
                 BorderThickness = new Thickness(1.5 / scale),
                 CornerRadius = new CornerRadius(4 / scale),
                 Padding = new Thickness(5 / scale, 2 / scale, 5 / scale, 2 / scale),

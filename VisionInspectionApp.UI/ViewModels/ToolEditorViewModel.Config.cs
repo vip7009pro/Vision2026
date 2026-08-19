@@ -292,6 +292,16 @@ namespace VisionInspectionApp.UI.ViewModels
             _config.Diameters.RemoveAll(x => !validRefNames.Contains(x.Name));
             _config.CodeDetections.RemoveAll(x => !validRefNames.Contains(x.Name));
             _config.DbNodes?.RemoveAll(x => !validRefNames.Contains(x.RefName));
+            _config.Crops.RemoveAll(x => !validRefNames.Contains(x.Name));
+            _config.ColorDiffs.RemoveAll(x => !validRefNames.Contains(x.Name));
+            _config.ImgArithmetics.RemoveAll(x => !validRefNames.Contains(x.Name));
+            _config.ImageOutputs?.RemoveAll(x => !validRefNames.Contains(x.Name));
+            _config.SegmentLineDistances?.RemoveAll(x => !validRefNames.Contains(x.Name));
+            _config.ContourCompares.RemoveAll(x => !validRefNames.Contains(x.Name));
+            _config.CreatePoints.RemoveAll(x => !validRefNames.Contains(x.Name));
+            _config.CreateLines.RemoveAll(x => !validRefNames.Contains(x.Name));
+            _config.CreateRects.RemoveAll(x => !validRefNames.Contains(x.Name));
+            _config.CreateCircles.RemoveAll(x => !validRefNames.Contains(x.Name));
             _config.ToolGraph.Nodes.Clear();
             foreach (var n in Nodes)
             {
