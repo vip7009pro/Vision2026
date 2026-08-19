@@ -329,15 +329,41 @@ public sealed class HikCameraDriver : CameraDriverBase
         return 5120 * 3840 * 4;
     }
 
-    public override async Task<Mat?> GrabFrameAsync(int timeoutMs = 1000)
+    public override async Task<Mat?> GrabFrameAsync(int timeoutMs = 3000)
     {
         if (!_isOpened || _camera == null || !IsMvSdkAvailable()) return null;
 
         return await Task.Run(() =>
         {
+            bool needStopGrabbingAfterwards = false;
             IntPtr pData = IntPtr.Zero;
             try
             {
+                // Nếu camera chưa ở trạng thái Grabbing (chế độ Standby để tiết kiệm băng thông mạng 0 Mbps)
+                if (!_isGrabbing)
+                {
+                    int retStart = _camera.MV_CC_StartGrabbing_NET();
+                    if (retStart == MyCamera.MV_OK)
+                    {
+                        needStopGrabbingAfterwards = true;
+                    }
+                    else
+                    {
+                        System.Diagnostics.Debug.WriteLine($"[HikCameraDriver] MV_CC_StartGrabbing_NET failed with code: 0x{retStart:X8}");
+                    }
+                }
+
+                // Gửi lệnh TriggerSoftware nếu ở Trigger Mode Software, hoặc gửi thêm để kích frame khi Standby
+                if (_parameters.TriggerMode == CameraTriggerMode.On && _parameters.TriggerSource == CameraTriggerSource.Software)
+                {
+                    _camera.MV_CC_SetCommandValue_NET("TriggerSoftware");
+                }
+                else if (needStopGrabbingAfterwards)
+                {
+                    // Khi vừa start grabbing ở chế độ TriggerMode = Off hoặc On, thử gửi thêm TriggerSoftware
+                    _camera.MV_CC_SetCommandValue_NET("TriggerSoftware");
+                }
+
                 uint bufferSize = GetPayloadSize();
                 pData = Marshal.AllocHGlobal((int)bufferSize);
                 var frameInfo = new MyCamera.MV_FRAME_OUT_INFO_EX();
@@ -347,11 +373,16 @@ public sealed class HikCameraDriver : CameraDriverBase
                 {
                     return ConvertHikFrameToMat(pData, frameInfo);
                 }
+                else
+                {
+                    System.Diagnostics.Debug.WriteLine($"[HikCameraDriver] MV_CC_GetOneFrameTimeout_NET returned 0x{ret:X8}, w={frameInfo.nWidth}, h={frameInfo.nHeight}");
+                }
 
                 return null;
             }
-            catch
+            catch (Exception ex)
             {
+                System.Diagnostics.Debug.WriteLine($"[HikCameraDriver] GrabFrameAsync exception: {ex.Message}");
                 return null;
             }
             finally
@@ -359,6 +390,11 @@ public sealed class HikCameraDriver : CameraDriverBase
                 if (pData != IntPtr.Zero)
                 {
                     Marshal.FreeHGlobal(pData);
+                }
+
+                if (needStopGrabbingAfterwards)
+                {
+                    try { _camera.MV_CC_StopGrabbing_NET(); } catch { }
                 }
             }
         });
@@ -391,6 +427,13 @@ public sealed class HikCameraDriver : CameraDriverBase
         {
             try
             {
+                // 0. Bật chất lượng chuyển đổi Bayer chất lượng cao của Hikrobot SDK
+                try
+                {
+                    _camera.MV_CC_SetBayerCvtQuality_NET(1);
+                }
+                catch { }
+
                 // 1. Exposure Time & Auto Exposure
                 if (parameters.AutoExposure)
                 {
@@ -413,7 +456,25 @@ public sealed class HikCameraDriver : CameraDriverBase
                     _camera.MV_CC_SetFloatValue_NET("Gain", parameters.GainDb);
                 }
 
-                // 3. Gamma
+                // 3. Cân Bằng Trắng (White Balance)
+                try
+                {
+                    if (parameters.AutoWhiteBalanceOnce)
+                    {
+                        _camera.MV_CC_SetEnumValueByString_NET("BalanceWhiteAuto", "Once");
+                    }
+                    else if (parameters.AutoWhiteBalance)
+                    {
+                        _camera.MV_CC_SetEnumValueByString_NET("BalanceWhiteAuto", "Continuous");
+                    }
+                    else
+                    {
+                        _camera.MV_CC_SetEnumValueByString_NET("BalanceWhiteAuto", "Off");
+                    }
+                }
+                catch { }
+
+                // 4. Gamma
                 try
                 {
                     _camera.MV_CC_SetBoolValue_NET("GammaEnable", true);
@@ -421,7 +482,7 @@ public sealed class HikCameraDriver : CameraDriverBase
                 }
                 catch { }
 
-                // 4. Trigger Mode & Trigger Source
+                // 5. Trigger Mode & Trigger Source
                 if (parameters.TriggerMode == CameraTriggerMode.On)
                 {
                     _camera.MV_CC_SetEnumValueByString_NET("TriggerMode", "On");
@@ -439,11 +500,11 @@ public sealed class HikCameraDriver : CameraDriverBase
                     _camera.MV_CC_SetEnumValueByString_NET("TriggerMode", "Off");
                 }
 
-                // 5. Hardware Reverse X / Y (Flip)
+                // 6. Hardware Reverse X / Y (Flip)
                 try { _camera.MV_CC_SetBoolValue_NET("ReverseX", parameters.ReverseX); } catch { }
                 try { _camera.MV_CC_SetBoolValue_NET("ReverseY", parameters.ReverseY); } catch { }
 
-                // 6. Packet Size & Packet Delay (GigE Vision)
+                // 7. Packet Size & Packet Delay (GigE Vision)
                 if (_deviceInfo.InterfaceType == CameraInterfaceType.GigE && parameters.PacketSize > 0)
                 {
                     try
@@ -482,7 +543,7 @@ public sealed class HikCameraDriver : CameraDriverBase
                 }
                 else
                 {
-                    // Khi chờ Hardware Trigger, timeout 100ms là bình thường, nhường nhịp CPU ngắn
+                    // Khi chờ Hardware Trigger hoặc nhường nhịp CPU
                     Thread.Sleep(5);
                 }
             }
@@ -495,12 +556,53 @@ public sealed class HikCameraDriver : CameraDriverBase
         Marshal.FreeHGlobal(pData);
     }
 
-    private static Mat ConvertHikFrameToMat(IntPtr pData, MyCamera.MV_FRAME_OUT_INFO_EX frameInfo)
+    private Mat ConvertHikFrameToMat(IntPtr pData, MyCamera.MV_FRAME_OUT_INFO_EX frameInfo)
     {
         int w = frameInfo.nWidth;
         int h = frameInfo.nHeight;
         if (w <= 0 || h <= 0) return new Mat();
 
+        // 1. Chuyển đổi màu chính hãng chuẩn MVS bằng bộ xử lý Hikrobot SDK (MV_CC_ConvertPixelTypeEx_NET)
+        if (_camera != null && IsMvSdkAvailable())
+        {
+            uint dstBufferSize = (uint)(w * h * 3);
+            IntPtr pDstData = IntPtr.Zero;
+            try
+            {
+                pDstData = Marshal.AllocHGlobal((int)dstBufferSize);
+                var cvtParam = new MyCamera.MV_CC_PIXEL_CONVERT_PARAM_EX
+                {
+                    nWidth = (uint)w,
+                    nHeight = (uint)h,
+                    enSrcPixelType = frameInfo.enPixelType,
+                    pSrcData = pData,
+                    nSrcDataLen = frameInfo.nFrameLen > 0 ? frameInfo.nFrameLen : (uint)(w * h * 4),
+                    enDstPixelType = MyCamera.MvGvspPixelType.PixelType_Gvsp_BGR8_Packed,
+                    pDstBuffer = pDstData,
+                    nDstBufferSize = dstBufferSize
+                };
+
+                int ret = _camera.MV_CC_ConvertPixelTypeEx_NET(ref cvtParam);
+                if (ret == MyCamera.MV_OK && cvtParam.nDstLen > 0)
+                {
+                    using var bgrDirect = Mat.FromPixelData(h, w, MatType.CV_8UC3, pDstData);
+                    return bgrDirect.Clone();
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[HikCameraDriver] SDK ConvertPixelTypeEx exception: {ex.Message}");
+            }
+            finally
+            {
+                if (pDstData != IntPtr.Zero)
+                {
+                    Marshal.FreeHGlobal(pDstData);
+                }
+            }
+        }
+
+        // 2. Fallback thủ công nếu SDK convert không thực hiện được
         switch (frameInfo.enPixelType)
         {
             case MyCamera.MvGvspPixelType.PixelType_Gvsp_BGR8_Packed:

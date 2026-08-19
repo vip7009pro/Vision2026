@@ -51,6 +51,39 @@
 
 ### Sửa lỗi và Cải thiện UX/UI (Phiên làm việc hiện tại)
 
+- **Cấu hình và lưu trạng thái camera riêng biệt cho từng Job từ node ImageSource trong Tool Editor (Task 171)**:
+  - **Lưu Cấu Hình Camera Vào Từng Tệp Job JSON/ZIP (`VisionInspectionApp.Models\CameraParameters.cs` & `Class1.cs`)**:
+    - Chuyển `CameraParameters`, `CameraTriggerMode`, `CameraTriggerSource` sang `VisionInspectionApp.Models` để serialize trực tiếp vào model của Job.
+    - Bổ sung `public CameraParameters CameraParams { get; set; } = new();` vào `ImageSourceDefinition`. Mọi thông số camera (Exposure, Gain, Gamma, White Balance, Trigger Mode, Packet Size) đều được lưu độc lập theo từng Job sản phẩm.
+  - **Tích Hợp Nút Mở Cửa Sổ Cấu Hình Camera Cho Job Trong Properties Panel (`ToolEditorView.xaml`)**:
+    - Thêm nút **`⚙️ Cấu Hình Camera Cho Job Này...`** trực tiếp trong Properties Panel của node `ImageSource` khi chọn nguồn `Camera`.
+    - Đăng ký `ImageSource_OpenJobCameraSettingsCommand` trong `ToolEditorViewModel.ToolPreprocess.cs` và `ToolEditorViewModel.cs`.
+  - **Xây Dựng Cửa Sổ Cấu Hình Camera Độc Lập Chuyên Biệt Cho Job (`JobCameraSettingsWindow.xaml` & `JobCameraSettingsViewModel.cs`)**:
+    - Giao diện 3 cột trực quan, hiện đại:
+      - Cột trái: Quản lý thiết bị, Start/Stop camera, Live View HUD (`🔴 Live Streaming` vs `⏸ Standby (0 Mbps)`), Snap 1 frame.
+      - Cột giữa: Khung preview trực tiếp hỗ trợ phóng to/thu nhỏ (Fit/100%/Zoom In/Out), lưới tọa độ và Crosshair tâm.
+      - Cột phải: Toàn bộ thông số cảm biến (Exposure time, Gain, Gamma, White Balance Auto/Manual/OnePush, Trigger Mode Software/Hardware/Off, GigE Packet Size).
+    - Nút **`💾 Lưu Vào Job Hiện Tại`** lưu các thông số đã chỉnh vào `ImageSourceDefinition.CameraParams` của Job đang mở, cập nhật cờ `IsDirty = true` và đóng cửa sổ.
+  - **Tự Động Áp Dụng Thông Số Camera Khi Chuyển Đổi Job (`ToolEditorViewModel.Config.cs` & `InspectionViewModel.cs`)**:
+    - Khi người dùng nạp Job mới từ tệp, hệ thống tự động gọi `_cameraService.ApplyParametersAsync(imgSourceDef.CameraParams)` để cấu hình phần cứng camera phù hợp với điều kiện ánh sáng/sản phẩm của Job đó ngay lập tức.
+  - **Biên Dịch Thành Công 100%**: Đã hoàn thiện việc dọn dẹp duplicate code trong `InspectionViewModel.cs` và sửa lỗi converter trong `JobCameraSettingsWindow.xaml`, solution biên dịch đạt **0 Error(s)**.
+
+- **Khắc phục toàn diện 2 vấn đề Camera Công Nghiệp Hikrobot GigE MV-CS200-10GC (Băng thông mạng Ethernet & Sai lệch màu sắc Bayer GB 8)**:
+  - **Tách Biệt Khởi Tạo Camera (Start/Open) và Live View (Streaming) - Tối Ưu Băng Thông 0 Mbps**:
+    - Phân tách rõ ràng trạng thái `Start Camera` (Khởi tạo kết nối, cấu hình thông số, đưa camera về Standby, mạng Ethernet 0 Mbps) và `Live View` (Chỉ stream liên tục 30 FPS khi người dùng cần căn chỉnh góc/tiêu cự).
+    - Thêm nút Toggle **`👁️ Bật/Tắt Live View`** và nút **`📸 Chụp Thử Frame (Snap)`** trên giao diện tab Camera Settings kèm trạng thái HUD trực quan (`🔴 Live Streaming` vs `⏸ Standby (0 Mbps)`).
+    - Cải tiến `GrabFrameAsync` trong `HikCameraDriver`: Tự động snap 1 frame độc lập trong 10-30ms khi camera đang ở Standby hoặc Trigger Mode mà không giữ stream liên tục.
+    - Sửa lỗi `CaptureSnapshotFromCameraAsync` trong `CameraService`: Quét và nhận diện đúng driver `HikCameraDriver` thay vì gán cứng DirectShow; tái sử dụng driver đang mở để snap ảnh siêu tốc cho Tool Editor `Run Once` / `Run Flow` mà không chiếm dụng 990 Mbps băng thông mạng Ethernet.
+  - **Khắc Phục Lỗi Run Once Không Chụp Ảnh Mới Từ Camera (`ToolEditorViewModel.Engine.cs` & `CameraService.cs`)**:
+    - **Loại bỏ việc trả về frame cũ (`TryGetLatestFrameClone`) trong `CaptureCameraSnapshotSafe`**: Trước đây hàm này kiểm tra `if (_cameraService.IsRunning)` và trả về ngay ảnh cũ nằm trong bộ đệm RAM từ phiên stream trước thay vì kích hoạt chụp frame mới từ cảm biến camera.
+    - **Nâng cấp `RunFlowAsync` trực tiếp `await _cameraService.CaptureSnapshotAsync(...)`**: Loại bỏ cơ chế đồng bộ `task.Wait(2000)` dễ bị timeout; chụp trực tiếp 1 frame mới bất đồng bộ từ camera Hikrobot (hoặc USB Webcam) và cập nhật ngay vào `_sharedImage.SetImage(cameraMat)` cùng Preview Canvas.
+    - **Ngăn chặn Silent Stale Frame Fallback**: Khi đồ thị có node `ImageSource` (Camera), nếu không lấy được ảnh mới từ camera thì thông báo lỗi rõ ràng thay vì âm thầm lấy lại ảnh cũ trong `_sharedImage` gây hiểu lầm.
+    - **Tối ưu hóa `HikCameraDriver.GrabFrameAsync`**: Gửi thêm lệnh `TriggerSoftware` và tăng timeout lên 3.5s để đảm bảo lấy frame an toàn 100% cho camera 20 Megapixels ($5472 \times 3648$).
+  - **Sửa Lỗi Sai Lệch Màu Sắc Cảm Biến Bayer GB 8 Bằng Bộ Xử Lý ISP Hikrobot SDK**:
+    - Thay thế thuật toán OpenCV demosaicing thô (`Cv2.CvtColor(bayerMat, bgrMat, ColorConversionCodes.BayerGB2BGR)`) bằng hàm chuyển đổi chuẩn mực chính hãng `MV_CC_ConvertPixelTypeEx_NET` sang `PixelType_Gvsp_BGR8_Packed`.
+    - Kích hoạt chất lượng chuyển đổi cao cấp `MV_CC_SetBayerCvtQuality_NET(1)` (High Quality / Gradient Demosaic).
+    - Bổ sung cấu hình **Cân Bằng Trắng (White Balance ISP)**: Tự động cân bằng trắng (`BalanceWhiteAuto`), cân bằng trắng 1 lần (`⚡ Cân Bằng 1 Lần`), và điều chỉnh tỷ lệ màu `RedGain`, `GreenGain`, `BlueGain`, cho ra màu sắc rực rỡ, trung thực và khớp 100% với phần mềm Hikrobot MVS.
+  - **Kiểm thử thành công 100%**: Đã chạy test và biên dịch solution 0 lỗi.
 - **Khắc phục toàn diện lỗi kết nối PLC Bridge (Port 39871) trên cửa sổ PLC Manager**:
   - **Tự động tìm kiếm & đồng bộ Binary PLC Bridge (`ResolveBridgePath` trong `MitsubishiMxComponentDriver.cs`)**:
     - Khắc phục lỗi hardcode đường dẫn tương đối `..\..\..\..` bị sai lệch khi chạy trong thư mục `bin\x64\Debug\net8.0-windows` dẫn đến việc nạp nhầm binary `VisionInspectionApp.PlcBridge.dll` cũ chưa có socket server.

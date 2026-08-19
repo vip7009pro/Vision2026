@@ -182,6 +182,13 @@ namespace VisionInspectionApp.UI.ViewModels
 
                 TriggerAutoFitGraph();
 
+                // Tự động nạp và áp dụng thông số Camera riêng biệt của Job này xuống camera phần cứng
+                var imgSourceDef = _config.ImageSources.FirstOrDefault(x => x.SourceType == ImageSourceType.Camera);
+                if (imgSourceDef?.CameraParams != null)
+                {
+                    _ = _cameraService.ApplyParametersAsync(imgSourceDef.CameraParams);
+                }
+
                 // Trigger inspection execution with new job if autoRun is enabled
                 if (autoRun)
                 {

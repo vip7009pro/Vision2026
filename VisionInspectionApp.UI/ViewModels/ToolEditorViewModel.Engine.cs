@@ -2083,23 +2083,14 @@ namespace VisionInspectionApp.UI.ViewModels
         {
             try
             {
-                if (_cameraService.IsRunning)
-                {
-                    var liveMat = _cameraService.TryGetLatestFrameClone();
-                    if (liveMat is not null && !liveMat.Empty())
-                    {
-                        return liveMat;
-                    }
-                }
-
                 var task = Task.Run(async () => await _cameraService.CaptureSnapshotAsync(cameraIndex, rtspUrl));
-                if (task.Wait(2000))
+                if (task.Wait(3500))
                 {
                     return task.Result;
                 }
                 else
                 {
-                    System.Diagnostics.Debug.WriteLine("Camera snapshot capture timed out (2000ms limit)");
+                    System.Diagnostics.Debug.WriteLine("Camera snapshot capture timed out (3500ms limit)");
                 }
             }
             catch (Exception ex)
@@ -2946,7 +2937,7 @@ namespace VisionInspectionApp.UI.ViewModels
                             {
                                 try
                                 {
-                                    var cameraMat = CaptureCameraSnapshotSafe(imgSourceDef.CameraIndex, string.IsNullOrWhiteSpace(imgSourceDef.RtspUrl) ? null : imgSourceDef.RtspUrl);
+                                    var cameraMat = await _cameraService.CaptureSnapshotAsync(imgSourceDef.CameraIndex, string.IsNullOrWhiteSpace(imgSourceDef.RtspUrl) ? null : imgSourceDef.RtspUrl);
                                     if (cameraMat is not null && !cameraMat.Empty())
                                     {
                                         SetImageSourceCache(imgSourceDef.Name, "camera", cameraMat);
@@ -2991,8 +2982,8 @@ namespace VisionInspectionApp.UI.ViewModels
                     }
                 }
         
-                // Fallback to shared image if no ImageSource or failed to load
-                if (snap is null)
+                // Fallback to shared image only if no ImageSource node exists in graph
+                if (snap is null && imageSourceNodeRefName == null)
                 {
                     System.Diagnostics.Debug.WriteLine("RunFlow: Using shared image as fallback");
                     snap = _sharedImage.GetSnapshot();
@@ -3001,7 +2992,7 @@ namespace VisionInspectionApp.UI.ViewModels
                 if (snap is null || _config is null)
                 {
                     _lastRun = null;
-                    _lastRunError = "Không có ảnh hoặc cấu hình (config).";
+                    _lastRunError = "Không thể lấy ảnh từ nguồn (ImageSource) hoặc chưa có cấu hình.";
                     RefreshPreviews();
                     return;
                 }

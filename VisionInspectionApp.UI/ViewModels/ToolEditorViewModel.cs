@@ -313,6 +313,7 @@ namespace VisionInspectionApp.UI.ViewModels
             TextNode_PickConditionColorCommand = new RelayCommand<TextColorConditionRow?>(TextNode_PickConditionColor);
             ImageSource_BrowseFileCommand = new RelayCommand(ImageSource_BrowseFile);
             ImageSource_BrowseFolderCommand = new RelayCommand(ImageSource_BrowseFolder);
+            ImageSource_OpenJobCameraSettingsCommand = new RelayCommand(ImageSource_OpenJobCameraSettings);
             SurfaceCompare_SetSearchRoiCommand = new RelayCommand(SurfaceCompare_SetSearchRoi);
             SurfaceCompare_SetTemplateRoiCommand = new RelayCommand(SurfaceCompare_SetTemplateRoi);
             ContourCompare_SetSearchRoiCommand = new RelayCommand(ContourCompare_SetSearchRoi);

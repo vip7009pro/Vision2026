@@ -105,6 +105,7 @@
                         </StackPanel>
                     </Border>
 
+                    <!-- Start / Stop / Live View / Snap Controls -->
                     <Grid Margin="0,4,0,0">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*" />
@@ -129,8 +130,33 @@
                         </Button>
                     </Grid>
 
+                    <!-- Live View Streaming Toggle & Snap Frame Button -->
+                    <Grid Margin="0,6,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <Button Grid.Column="0" Command="{Binding ToggleLiveViewCommand}" 
+                                IsEnabled="{Binding IsCameraRunning}"
+                                Background="{Binding LiveViewButtonBackgroundBrush}" Foreground="White" BorderThickness="0" Padding="6,7" Margin="0,0,3,0" FontWeight="Bold">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="{Binding LiveViewButtonIcon}" Margin="0,0,4,0" />
+                                <TextBlock Text="{Binding LiveViewButtonText}" />
+                            </StackPanel>
+                        </Button>
+
+                        <Button Grid.Column="1" Command="{Binding SnapFrameCommand}" 
+                                IsEnabled="{Binding IsCameraRunning}"
+                                Background="#673AB7" Foreground="White" BorderThickness="0" Padding="6,7" Margin="3,0,0,0" FontWeight="Bold">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="📸 " />
+                                <TextBlock Text="Chụp Thử Frame" />
+                            </StackPanel>
+                        </Button>
+                    </Grid>
+
                     <Button Command="{Binding ExecuteSoftwareTriggerCommand}" IsEnabled="{Binding IsCameraRunning}"
-                            Margin="0,8,0,0" Padding="8,6" Background="#1565C0" Foreground="White" BorderThickness="0" FontWeight="Bold">
+                            Margin="0,6,0,0" Padding="8,6" Background="#1565C0" Foreground="White" BorderThickness="0" FontWeight="Bold">
                         <StackPanel Orientation="Horizontal">
                             <TextBlock Text="⚡ " />
                             <TextBlock Text="Software Trigger Once" />
@@ -147,11 +173,12 @@
                 <Image Source="{Binding LiveImage}" Stretch="Uniform" />
 
                 <!-- HUD Info Overlay -->
-                <Border VerticalAlignment="Top" HorizontalAlignment="Left" Margin="15" Background="#B0000000" Padding="12,8" CornerRadius="6">
+                <Border VerticalAlignment="Top" HorizontalAlignment="Left" Margin="15" Background="#C0000000" Padding="12,8" CornerRadius="6">
                     <StackPanel Orientation="Horizontal">
                         <TextBlock Text="{Binding Fps, StringFormat='FPS: {0}'}" Foreground="#4CAF50" FontWeight="Bold" FontSize="14" Margin="0,0,16,0" />
                         <TextBlock Text="{Binding ResolutionText, StringFormat='Res: {0}'}" Foreground="#00BCD4" FontWeight="Bold" FontSize="14" Margin="0,0,16,0" />
-                        <TextBlock Text="{Binding SelectedDevice.Vendor, StringFormat='Vendor: {0}'}" Foreground="#FFC107" FontWeight="Bold" FontSize="14" />
+                        <TextBlock Text="{Binding SelectedDevice.Vendor, StringFormat='Vendor: {0}'}" Foreground="#FFC107" FontWeight="Bold" FontSize="14" Margin="0,0,16,0" />
+                        <TextBlock Text="{Binding StreamStatusText}" Foreground="#FF9800" FontWeight="Bold" FontSize="13" />
                     </StackPanel>
                 </Border>
 
@@ -159,8 +186,8 @@
                 <Grid Visibility="{Binding LiveImage, Converter={StaticResource NullToVisibilityConverter}}">
                     <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
                         <TextBlock Text="📷" FontSize="56" Foreground="#555" HorizontalAlignment="Center" Margin="0,0,0,10" />
-                        <TextBlock Text="Camera chưa khởi chạy" FontSize="18" FontWeight="Bold" Foreground="#AAA" HorizontalAlignment="Center" />
-                        <TextBlock Text="Chọn thiết bị camera (Hikrobot, Basler, Cognex, USB) và bấm ▶ Start Camera" FontSize="13" Foreground="#777" HorizontalAlignment="Center" Margin="0,6,0,0" />
+                        <TextBlock Text="Camera Chưa Phát Trực Tiếp" FontSize="18" FontWeight="Bold" Foreground="#AAA" HorizontalAlignment="Center" />
+                        <TextBlock Text="Bấm 'Start Camera' để kết nối, sau đó bấm 'Bật Live View' hoặc 'Chụp Thử Frame'" FontSize="13" Foreground="#777" HorizontalAlignment="Center" Margin="0,6,0,0" />
                     </StackPanel>
                 </Grid>
             </Grid>
@@ -177,7 +204,7 @@
 
                 <StackPanel Grid.Row="0" Margin="0,0,0,10">
                     <TextBlock Text="⚙️ Thông Số Camera Công Nghiệp" FontSize="16" FontWeight="Bold" Foreground="{DynamicResource TextBrush}" />
-                    <TextBlock Text="Cấu hình Exposure, Gain, Trigger Mode &amp; GigE Params" FontSize="11" Foreground="#888" Margin="0,2,0,0" />
+                    <TextBlock Text="Cấu hình Exposure, Gain, White Balance, Trigger &amp; GigE" FontSize="11" Foreground="#888" Margin="0,2,0,0" />
                     <Separator Margin="0,8,0,0" />
                 </StackPanel>
 
@@ -225,6 +252,46 @@
                                     </Grid.ColumnDefinitions>
                                     <Slider Grid.Column="0" Minimum="0.1" Maximum="4.0" Value="{Binding Gamma}" VerticalAlignment="Center" />
                                     <TextBox Grid.Column="1" Text="{Binding Gamma, StringFormat='{}{0:F2}'}" Margin="6,0,0,0" Padding="4,2" TextAlignment="Right" />
+                                </Grid>
+                            </StackPanel>
+                        </GroupBox>
+
+                        <!-- Group 2: Cân Bằng Trắng (White Balance ISP - Đặc biệt cho Camera Màu Bayer) -->
+                        <GroupBox Header="🎨 Cân Bằng Trắng (White Balance ISP)" Margin="0,0,0,10" Padding="8" FontWeight="SemiBold">
+                            <StackPanel>
+                                <DockPanel Margin="0,0,0,6">
+                                    <CheckBox Content="Tự Động Cân Bằng Trắng (Auto White Balance)" IsChecked="{Binding AutoWhiteBalance}" VerticalAlignment="Center" />
+                                    <Button Command="{Binding AutoWhiteBalanceOnceCommand}" Content="⚡ Cân Bằng 1 Lần" DockPanel.Dock="Right" HorizontalAlignment="Right" Padding="6,2" FontSize="11" Background="#3F51B5" Foreground="White" BorderThickness="0" />
+                                </DockPanel>
+
+                                <TextBlock Text="Tỷ lệ màu Đỏ (Red Gain):" FontSize="11" Foreground="{DynamicResource TextBrush}" Margin="0,0,0,2" />
+                                <Grid Margin="0,0,0,6">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="60" />
+                                    </Grid.ColumnDefinitions>
+                                    <Slider Grid.Column="0" Minimum="0.1" Maximum="5.0" Value="{Binding RedGain}" VerticalAlignment="Center" />
+                                    <TextBox Grid.Column="1" Text="{Binding RedGain, StringFormat='{}{0:F2}'}" Margin="6,0,0,0" Padding="4,2" TextAlignment="Right" />
+                                </Grid>
+
+                                <TextBlock Text="Tỷ lệ màu Xanh Lá (Green Gain):" FontSize="11" Foreground="{DynamicResource TextBrush}" Margin="0,0,0,2" />
+                                <Grid Margin="0,0,0,6">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="60" />
+                                    </Grid.ColumnDefinitions>
+                                    <Slider Grid.Column="0" Minimum="0.1" Maximum="5.0" Value="{Binding GreenGain}" VerticalAlignment="Center" />
+                                    <TextBox Grid.Column="1" Text="{Binding GreenGain, StringFormat='{}{0:F2}'}" Margin="6,0,0,0" Padding="4,2" TextAlignment="Right" />
+                                </Grid>
+
+                                <TextBlock Text="Tỷ lệ màu Xanh Dương (Blue Gain):" FontSize="11" Foreground="{DynamicResource TextBrush}" Margin="0,0,0,2" />
+                                <Grid Margin="0,0,0,4">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="60" />
+                                    </Grid.ColumnDefinitions>
+                                    <Slider Grid.Column="0" Minimum="0.1" Maximum="5.0" Value="{Binding BlueGain}" VerticalAlignment="Center" />
+                                    <TextBox Grid.Column="1" Text="{Binding BlueGain, StringFormat='{}{0:F2}'}" Margin="6,0,0,0" Padding="4,2" TextAlignment="Right" />
                                 </Grid>
                             </StackPanel>
                         </GroupBox>

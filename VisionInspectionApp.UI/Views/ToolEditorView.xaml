@@ -1089,6 +1089,18 @@
                                     </Grid>
                                 </Border>
 
+                                <!-- Button to open Camera Settings for current Job -->
+                                <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1" Visibility="{Binding ImageSource_IsCamera, Converter={StaticResource BoolToVis}}" Padding="4,6" Background="{DynamicResource PanelBackgroundBrush}">
+                                    <Button Command="{Binding ImageSource_OpenJobCameraSettingsCommand}"
+                                            Background="#1565C0" Foreground="White" FontWeight="Bold"
+                                            Padding="8,7" BorderThickness="0" Cursor="Hand" ToolTip="Mở cửa sổ cấu hình Camera Settings và lưu riêng biệt cho Job hiện tại">
+                                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                                            <TextBlock Text="⚙️ " />
+                                            <TextBlock Text="Cấu Hình Camera Cho Job Này..." />
+                                        </StackPanel>
+                                    </Button>
+                                </Border>
+
                                 <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1" Visibility="{Binding ImageSource_IsCamera, Converter={StaticResource BoolToVis}}">
                                     <Grid>
                                         <Grid.ColumnDefinitions>

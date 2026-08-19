@@ -374,6 +374,32 @@ Lộ trình tích hợp tính năng Chụp ảnh từ camera và hỗ trợ các
     - Nâng thời gian timeout thử kết nối TCP socket trong `EnsureBridgeProcessAndSocketConnectedAsync` lên 5s (25 lần x 200ms).
   - `Dọn Dẹp Trạng Thái Cấu Hình (plc_config.json)`: Đặt lại `CpuName = string.Empty` khi tải danh sách PLC ở trạng thái `Disconnected` trong `LoadGlobalConfig()`, ngăn ngừa việc hiển thị lại chuỗi thông báo lỗi cũ từ các phiên làm việc trước.
   - `Kiểm Thử Thành Công 100%`: Chạy test kết nối và đọc ghi tag PLC (FX5UCPU Station 1) trong `TestExtractApp` thành công 100%. Biên dịch solution 0 lỗi.
+- [x] Task 170: Khắc phục toàn diện 2 vấn đề Camera Công Nghiệp Hikrobot GigE MV-CS200-10GC (Băng thông mạng 990 Mbps & Sai lệch màu sắc Bayer GB 8):
+  - `Tách Biệt Kết Nối Camera (Start/Open) và Live View (Streaming) - Tối Ưu Băng Thông 0 Mbps`:
+    - Phân tách rõ ràng trạng thái `Start Camera` (Khởi tạo kết nối, cấu hình thông số, đưa camera về Standby, mạng 0 Mbps) và `Live View` (Chỉ stream liên tục 30 FPS khi người dùng cần căn chỉnh góc/focus).
+    - Thêm nút Toggle **`👁️ Bật/Tắt Live View`** và **`📸 Chụp Thử Frame (Snap)`** trên giao diện Camera Settings.
+    - Cải tiến `GrabFrameAsync` trong `HikCameraDriver`: Tự động snap 1 frame độc lập trong 10-30ms khi camera đang ở Standby hoặc Trigger Mode mà không giữ stream liên tục.
+    - Cải tiến `CameraService`: Quét và nhận diện đúng driver `HikCameraDriver` thay vì gán cứng DirectShow; tái sử dụng driver đang mở để snap ảnh siêu tốc cho Tool Editor `Run Once` / `Run Flow` mà không chiếm dụng 990 Mbps băng thông mạng Ethernet.
+  - `Khắc Phục Dứt Điểm Lỗi Run Once Không Chụp Frame Mới Từ Camera`:
+    - Loại bỏ việc trả về frame cũ (`TryGetLatestFrameClone`) trong `CaptureCameraSnapshotSafe` gây tình trạng lấy lại ảnh trong RAM từ các phiên trước.
+    - `RunFlowAsync` trực tiếp gọi `await _cameraService.CaptureSnapshotAsync(...)` để kích hoạt camera chụp frame mới tức thời và cập nhật ngay vào `_sharedImage` cùng Preview Canvas.
+    - Ngăn chặn fallback âm thầm sang ảnh cũ khi không thể chụp từ camera, giúp thông báo lỗi rõ ràng nếu mất kết nối.
+  - `Sửa Lỗi Sai Lệch Màu Sắc Cảm Biến Bayer GB 8 Bằng Bộ Xử Lý ISP Hikrobot SDK`:
+    - Thay thế thuật toán OpenCV demosaicing thô (`Cv2.CvtColor`) bằng hàm chuyển đổi chuẩn mực chính hãng `MV_CC_ConvertPixelTypeEx_NET` sang `PixelType_Gvsp_BGR8_Packed`.
+    - Kích hoạt chất lượng chuyển đổi cao cấp `MV_CC_SetBayerCvtQuality_NET(1)` (High Quality / Gradient Demosaic).
+- [x] Task 171: Cấu hình và lưu trạng thái camera riêng biệt cho từng Job từ node ImageSource trong Tool Editor:
+  - `Định Nghĩa CameraParameters trong Models & Serialization vào Job`:
+    - Chuyển `CameraParameters`, `CameraTriggerMode`, `CameraTriggerSource` sang namespace `VisionInspectionApp.Models`.
+    - Bổ sung `public CameraParameters CameraParams { get; set; } = new();` vào `ImageSourceDefinition`. Tự động lưu/nạp cấu hình camera (Exposure, Gain, Gamma, White Balance, Trigger Mode, Packet Size, v.v.) vào tệp `.job` theo từng sản phẩm.
+  - `Tích Hợp Nút Cấu Hình Trực Tiếp Trong Properties Panel của Node ImageSource`:
+    - Bổ sung nút **`⚙️ Cấu Hình Camera Cho Job Này...`** trên Properties Panel của node `ImageSource` khi nguồn ảnh là Camera Công Nghiệp (Hikrobot / USB).
+    - Tạo `ImageSource_OpenJobCameraSettingsCommand` mở cửa sổ cấu hình độc lập `JobCameraSettingsWindow`.
+  - `Xây Dựng Cửa Sổ Cấu Hình Camera Chuyên Dụng Cho Job (JobCameraSettingsWindow & ViewModel)`:
+    - Giao diện 3 cột chuyên nghiệp: Cột 1 (Quản lý kết nối, Start/Stop, Live View HUD, Snap), Cột 2 (Preview trực tiếp kèm thanh công cụ Fit/Zoom/Lưới/Crosshair), Cột 3 (Bảng điều khiển cảm biến: Exposure, Gain, Gamma, Balance White Auto/Manual/OnePush, Trigger Mode, Packet Size).
+    - Nút **`💾 Lưu Vào Job Hiện Tại`** lưu toàn bộ thông số camera vào `ImageSourceDefinition.CameraParams` của Job hiện tại, đánh dấu `IsDirty = true` và đóng cửa sổ.
+  - `Tự Động Áp Dụng Thông Số Camera Khi Chuyển Đổi Job`:
+    - Tự động gọi `_cameraService.ApplyParametersAsync(imgSourceDef.CameraParams)` khi nạp Job mới trong `ToolEditorViewModel.Config.cs` (`LoadJobFromFile`) và `InspectionViewModel.cs` (`LoadConfig`).
+  - `Biên Dịch Thành Công 100%`: Toàn bộ solution biên dịch **0 Error(s)**.
 
 
 

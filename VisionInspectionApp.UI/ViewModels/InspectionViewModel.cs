@@ -1,290 +1,146 @@
 using System.IO;
-
 using System.Windows.Input;
-
 using CommunityToolkit.Mvvm.ComponentModel;
-
 using CommunityToolkit.Mvvm.Input;
-
 using Microsoft.Win32;
-
 using OpenCvSharp;
-
 using OpenCvSharp.WpfExtensions;
-
 using VisionInspectionApp.Application;
-
 using VisionInspectionApp.Models;
-
 using VisionInspectionApp.UI.Controls;
-
 using System.Collections.ObjectModel;
-
 using System.Windows.Media;
-
 using VisionInspectionApp.UI.Services;
-
-
 
 namespace VisionInspectionApp.UI.ViewModels;
 
-
-
 public sealed partial class InspectionViewModel : ObservableObject
-
 {
-
     private readonly IConfigService _configService;
-
     private readonly IInspectionService _inspectionService;
-
     private readonly ConfigStoreOptions _storeOptions;
-
     private readonly CameraService _cameraService;
-
     private readonly IJobService _jobService;
-
-
 
     private bool _isRunning;
 
-
-
     private Mat? _imageMat;
-
-
 
     private const int MaxBlobOverlayCount = 300;
 
-
-
     public InspectionViewModel(IConfigService configService, IInspectionService inspectionService, ConfigStoreOptions storeOptions, CameraService cameraService, IJobService jobService)
-
     {
-
         _configService = configService;
-
         _inspectionService = inspectionService;
-
         _storeOptions = storeOptions;
-
         _cameraService = cameraService;
-
         _jobService = jobService;
 
-
-
         LoadImageCommand = new RelayCommand(LoadImage);
-
         RunInspectionCommand = new AsyncRelayCommand(RunInspectionAsync);
-
         OpenJobCommand = new RelayCommand(OpenJob);
-
         CloseJobCommand = new RelayCommand(CloseJob);
 
-
-
         AvailableConfigs = new ObservableCollection<string>();
-
         SpecResults = new ObservableCollection<SpecResultRow>();
-
         SurfaceCompareDebugItems = new ObservableCollection<SurfaceCompareDebugPick>();
-
     }
 
-
-
     public sealed record SpecResultRow(
-
         string Tool,
-
         string Name,
-
         string RefA,
-
         string RefB,
-
         double Value,
-
         double Nominal,
-
         double TolPlus,
-
         double TolMinus,
-
         bool Pass,
-
         string Unit = "mm");
-
-
 
     public sealed record CodeDetectionRow(string Name, bool Found, string Text);
 
-
-
     /// <summary>Combo item for switching SurfaceCompare debug previews.</summary>
-
     public sealed record SurfaceCompareDebugPick(int Index, string DisplayName);
 
-
-
     [ObservableProperty]
-
     private string _productCode = "";
-
-
 
     public ObservableCollection<string> AvailableConfigs { get; }
 
-
-
     [ObservableProperty]
-
     private string? _currentJobFilePath;
 
-
-
     [ObservableProperty]
-
     private string? _currentTempWorkingDir;
 
-
-
     [ObservableProperty]
-
     private string? _selectedConfig;
 
-
-
     partial void OnSelectedConfigChanged(string? value)
-
     {
-
         if (!string.IsNullOrWhiteSpace(value))
-
         {
-
             ProductCode = value;
-
             LoadConfig();
-
         }
-
         else
-
         {
-
             _config = null;
-
             ProductCode = "";
-
             OverlayItems.Clear();
-
             SpecResults.Clear();
-
             Image = null;
-
             ResultStatusText = "Chờ kiểm tra";
-
             ResultBackgroundBrush = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(240, 240, 240));
-
             ResultBorderBrush = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(220, 220, 220));
-
             ResultForegroundBrush = System.Windows.Media.Brushes.Gray;
-
             NgReasonsText = "";
-
             IsNg = false;
-
         }
-
     }
 
-
-
     [ObservableProperty]
-
     private string _resultStatusText = "Chờ kiểm tra";
 
-
-
     [ObservableProperty]
-
     private System.Windows.Media.Brush _resultBackgroundBrush = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(240, 240, 240));
 
-
-
     [ObservableProperty]
-
     private System.Windows.Media.Brush _resultBorderBrush = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(220, 220, 220));
 
-
-
     [ObservableProperty]
-
     private System.Windows.Media.Brush _resultForegroundBrush = System.Windows.Media.Brushes.Gray;
 
-
-
     [ObservableProperty]
-
     private string _ngReasonsText = "";
 
-
-
     [ObservableProperty]
-
     private bool _isNg = false;
 
-
-
     [ObservableProperty]
-
     private System.Windows.Media.ImageSource? _image;
 
-
-
     [ObservableProperty]
-
     private System.Windows.Media.ImageSource? _debugTemplate;
-
     [ObservableProperty]
-
     private System.Windows.Media.ImageSource? _debugCurrent;
-
     [ObservableProperty]
-
     private System.Windows.Media.ImageSource? _debugBinary;
-
     [ObservableProperty]
-
     private System.Windows.Media.ImageSource? _debugDiff;
 
-
-
     [ObservableProperty]
-
     private InspectionResult? _lastResult;
-
-
 
     public ObservableCollection<CodeDetectionRow> CodeDetectionResults { get; } = new();
 
-
-
     public ObservableCollection<SurfaceCompareDebugPick> SurfaceCompareDebugItems { get; }
 
-
-
     [ObservableProperty]
-
     private SurfaceCompareDebugPick? _selectedSurfaceCompareDebugPick;
 
-
-
     private bool _surfaceCompareDebugRebuildInProgress;
-
-
 
     public event Func<InspectionResult, VisionConfig, Task>? InspectionCompletedAsync;
 
@@ -307,20 +163,12 @@ public sealed partial class InspectionViewModel : ObservableObject
         }
     }
 
-
-
     [ObservableProperty]
-
     private string _originScoreText = "";
 
-
-
     private void UpdateResultSummary(InspectionResult? result)
-
     {
-
         if (result == null)
-
         {
 
             ResultStatusText = "Chờ kiểm tra";
@@ -348,115 +196,63 @@ public sealed partial class InspectionViewModel : ObservableObject
 
 
         // 1. Kiểm tra Origin
-
         if (_config != null && _config.Origin != null && (_config.Origin.TemplateRoi.Width > 0 || _config.Origin.SearchRoi.Width > 0))
-
         {
-
             if (result.Origin != null)
-
             {
-
                 OriginScoreText = $"Origin Score: {result.Origin.Score:F3} / {result.Origin.Threshold:F2} {(result.Origin.Pass ? "(OK)" : "(NG)")}";
-
                 if (!result.Origin.Pass)
-
                 {
-
                     reasons.Add($"• Không bắt được origin (Score: {result.Origin.Score:F3} < Yêu cầu: {result.Origin.Threshold:F2})");
-
                 }
-
             }
-
             else
-
             {
-
                 OriginScoreText = "Origin Score: Không bắt được";
-
                 reasons.Add("• Không bắt được origin");
-
             }
-
         }
-
         else
-
         {
-
             OriginScoreText = "";
-
         }
-
-
 
         // 2. Kiểm tra các phép đo trong SpecResults
-
         foreach (var spec in SpecResults)
-
         {
-
             if (!spec.Pass)
-
             {
-
                 reasons.Add($"• Phép đo NG: {spec.Name} (Giá trị: {spec.Value:F3} mm, Tol: [{spec.TolMinus:F3}, {spec.TolPlus:F3}])");
-
             }
-
         }
-
 
 
         // 3. Kiểm tra các điều kiện (Conditions)
-
         foreach (var cond in result.Conditions)
-
         {
-
             if (!cond.Pass)
-
             {
-
                 reasons.Add($"• Điều kiện NG: {cond.Name}");
-
             }
-
         }
-
-
 
         // 4. Kiểm tra SurfaceCompares (ngoại quan)
-
         foreach (var sc in result.SurfaceCompares)
-
         {
-
             if (!sc.Pass)
-
             {
-
                 reasons.Add($"• Ngoại quan NG: {sc.Name} (Số lỗi: {sc.Count})");
-
             }
-
         }
 
+        // 5. Kiểm tra ContourCompares
         foreach (var cc in result.ContourCompares)
-
         {
-
             if (!cc.Pass)
-
             {
-
                 reasons.Add($"• Contour Compare NG: {cc.Name} (MatchScore: {cc.MatchScore:0.####}, MaxDist: {cc.MaxDistancePx:0.##}px)");
-
             }
-
         }
-
 
 
         if (result.Pass && reasons.Count == 0)
@@ -487,7 +283,7 @@ public sealed partial class InspectionViewModel : ObservableObject
 
             ResultBorderBrush = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(230, 100, 100));     // Viền đỏ
 
-            ResultForegroundBrush = System.Windows.Media.Brushes.Crimson;                                  // Chữ đỏ
+            ResultForegroundBrush = System.Windows.Media.Brushes.Crimson;
 
 
 
@@ -510,33 +306,19 @@ public sealed partial class InspectionViewModel : ObservableObject
 
 
     partial void OnSelectedSurfaceCompareDebugPickChanged(SurfaceCompareDebugPick? value)
-
     {
-
         if (_surfaceCompareDebugRebuildInProgress)
-
         {
-
             return;
-
         }
-
-
 
         if (value is null)
-
         {
-
             ClearSurfaceCompareDebugImages();
-
             return;
-
         }
 
-
-
         ApplySurfaceCompareDebugAtIndex(value.Index);
-
     }
 
 
@@ -560,29 +342,17 @@ public sealed partial class InspectionViewModel : ObservableObject
 
 
     partial void OnOriginScoreThresholdChanged(double value)
-
     {
-
         if (_config != null && _config.Origin != null)
-
         {
-
             _config.Origin.MatchScoreThreshold = value;
-
             var code = SelectedConfig ?? ProductCode;
-
             if (!string.IsNullOrWhiteSpace(code))
-
             {
-
-                _config.ProductCode = code; // Ensure ProductCode is set
-
+                _config.ProductCode = code;
                 _configService.SaveConfig(_config);
-
             }
-
         }
-
     }
 
 
@@ -608,6 +378,7 @@ public sealed partial class InspectionViewModel : ObservableObject
 
 
     [ObservableProperty]
+
     private List<OverlayItem> _overlayItems = new();
 
 
@@ -626,7 +397,11 @@ public sealed partial class InspectionViewModel : ObservableObject
 
     public ICommand OpenJobCommand { get; }
 
+
+
     public ICommand CloseJobCommand { get; }
+
+
 
     public void CloseJob()
     {
@@ -647,6 +422,8 @@ public sealed partial class InspectionViewModel : ObservableObject
         IsNg = false;
         OriginScoreText = "";
     }
+
+
 
     private void OpenJob()
     {
@@ -690,43 +467,23 @@ public sealed partial class InspectionViewModel : ObservableObject
 
     private VisionConfig? _config;
 
-
-
     private static Point2d Rotate(Point2d p, Point2d origin, double angleDeg)
-
     {
-
         if (Math.Abs(angleDeg) < 0.000001)
-
         {
-
             return p;
-
         }
 
-
-
         var a = angleDeg * Math.PI / 180.0;
-
         var cos = Math.Cos(a);
-
         var sin = Math.Sin(a);
 
-
-
         var dx = p.X - origin.X;
-
         var dy = p.Y - origin.Y;
-
         var x = dx * cos - dy * sin;
-
         var y = dx * sin + dy * cos;
-
         return new Point2d(x + origin.X, y + origin.Y);
-
     }
-
-
 
     private static Point2d TransformPose(Point2d p, Point2d originTeach, Point2d originFound, double angleDeg)
 
@@ -775,47 +532,26 @@ public sealed partial class InspectionViewModel : ObservableObject
 
 
         var p1 = TransformPose(new Point2d(roi.X, roi.Y), originTeach, originFound, angleDeg);
-
         var p2 = TransformPose(new Point2d(roi.X + roi.Width, roi.Y), originTeach, originFound, angleDeg);
-
         var p3 = TransformPose(new Point2d(roi.X + roi.Width, roi.Y + roi.Height), originTeach, originFound, angleDeg);
-
         var p4 = TransformPose(new Point2d(roi.X, roi.Y + roi.Height), originTeach, originFound, angleDeg);
 
-
-
         OverlayItems.Add(new OverlayLineItem { X1 = p1.X, Y1 = p1.Y, X2 = p2.X, Y2 = p2.Y, Stroke = stroke, Label = label });
-
         OverlayItems.Add(new OverlayLineItem { X1 = p2.X, Y1 = p2.Y, X2 = p3.X, Y2 = p3.Y, Stroke = stroke });
-
         OverlayItems.Add(new OverlayLineItem { X1 = p3.X, Y1 = p3.Y, X2 = p4.X, Y2 = p4.Y, Stroke = stroke });
-
         OverlayItems.Add(new OverlayLineItem { X1 = p4.X, Y1 = p4.Y, X2 = p1.X, Y2 = p1.Y, Stroke = stroke });
-
     }
 
-
-
     private void AddRotatedCrosshair(Point2d center, double halfW, double halfH, string? label, Brush stroke, double angleDeg)
-
     {
-
         halfW = Math.Max(1.0, halfW);
-
         halfH = Math.Max(1.0, halfH);
 
-
-
         var a = angleDeg * Math.PI / 180.0;
-
         var cos = Math.Cos(a);
-
         var sin = Math.Sin(a);
 
-
-
         var hx = new Point2d(halfW * cos, halfW * sin);
-
         var hy = new Point2d(-halfH * sin, halfH * cos);
 
 
@@ -833,61 +569,33 @@ public sealed partial class InspectionViewModel : ObservableObject
         OverlayItems.Add(new OverlayLineItem { X1 = p1.X, Y1 = p1.Y, X2 = p2.X, Y2 = p2.Y, Stroke = stroke, Label = label });
 
         OverlayItems.Add(new OverlayLineItem { X1 = p3.X, Y1 = p3.Y, X2 = p4.X, Y2 = p4.Y, Stroke = stroke });
-
     }
-
-
 
     private void AddRotatedTemplateAtPoint(Point2d center, int width, int height, string label, Brush stroke, double angleDeg)
-
     {
-
         if (width <= 0 || height <= 0)
-
         {
-
             return;
-
         }
 
-
-
         var hw = width / 2.0;
-
         var hh = height / 2.0;
 
-
-
         var p1 = new Point2d(center.X - hw, center.Y - hh);
-
         var p2 = new Point2d(center.X + hw, center.Y - hh);
-
         var p3 = new Point2d(center.X + hw, center.Y + hh);
-
         var p4 = new Point2d(center.X - hw, center.Y + hh);
 
-
-
         p1 = Rotate(p1, center, angleDeg);
-
         p2 = Rotate(p2, center, angleDeg);
-
         p3 = Rotate(p3, center, angleDeg);
-
         p4 = Rotate(p4, center, angleDeg);
 
-
-
         OverlayItems.Add(new OverlayLineItem { X1 = p1.X, Y1 = p1.Y, X2 = p2.X, Y2 = p2.Y, Stroke = stroke, Label = label });
-
         OverlayItems.Add(new OverlayLineItem { X1 = p2.X, Y1 = p2.Y, X2 = p3.X, Y2 = p3.Y, Stroke = stroke });
-
         OverlayItems.Add(new OverlayLineItem { X1 = p3.X, Y1 = p3.Y, X2 = p4.X, Y2 = p4.Y, Stroke = stroke });
-
         OverlayItems.Add(new OverlayLineItem { X1 = p4.X, Y1 = p4.Y, X2 = p1.X, Y2 = p1.Y, Stroke = stroke });
-
     }
-
 
 
 
@@ -921,8 +629,6 @@ public sealed partial class InspectionViewModel : ObservableObject
 
         Image = _imageMat.ToBitmapSourceForDisplay();
 
-
-
         RefreshOverlayItems();
 
     }
@@ -930,115 +636,68 @@ public sealed partial class InspectionViewModel : ObservableObject
 
 
     private async Task CaptureCameraImageAsync()
-
     {
-
         try
-
         {
-
             var mat = await _cameraService.CaptureSnapshotAsync();
-
             if (mat != null && !mat.Empty())
-
             {
-
                 _imageMat?.Dispose();
-
                 _imageMat = mat;
-
                 Image = _imageMat.ToBitmapSourceForDisplay();
-
                 RefreshOverlayItems();
-
-                
-
-                // Tự động chạy inspection sau khi chụp ảnh
-
                 ResetInspectionTracking();
-
                 await RunInspectionAsync();
-
             }
-
             else
-
             {
-
                 System.Windows.MessageBox.Show("Không thể chụp ảnh từ camera. Vui lòng kiểm tra lại kết nối camera trong tab Live Camera.", "Lỗi camera", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Error);
-
             }
-
         }
-
         catch (Exception ex)
-
         {
-
             System.Windows.MessageBox.Show($"Lỗi chụp ảnh: {ex.Message}", "Lỗi", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Error);
-
         }
-
     }
-
-
 
     private void LoadConfig()
-
     {
-
         var code = SelectedConfig ?? ProductCode;
-
         if (string.IsNullOrWhiteSpace(code))
-
         {
-
             return;
-
         }
-
-
 
         ProductCode = code;
-
         _inspectionService.ResetTracking(code);
-
         _config = _configService.LoadConfig(code);
 
-        if (_config != null && _config.Origin != null)
-
+        if (_config != null)
         {
+            if (_config.Origin != null)
+            {
+                OriginScoreThreshold = _config.Origin.MatchScoreThreshold;
+            }
 
-            OriginScoreThreshold = _config.Origin.MatchScoreThreshold;
-
+            var imgSourceDef = _config.ImageSources?.FirstOrDefault(x => x.SourceType == ImageSourceType.Camera);
+            if (imgSourceDef?.CameraParams != null)
+            {
+                _ = _cameraService.ApplyParametersAsync(imgSourceDef.CameraParams);
+            }
         }
 
-
-
         LastResult = null;
-
         OverlayItems.Clear();
-
         SpecResults.Clear();
-
         UpdateResultSummary(null);
-
         RefreshOverlayItems();
-
     }
 
-
-
     private async Task RunInspectionAsync()
-
     {
-
         if (_isRunning)
-
         {
-
             return;
-
         }
 
 

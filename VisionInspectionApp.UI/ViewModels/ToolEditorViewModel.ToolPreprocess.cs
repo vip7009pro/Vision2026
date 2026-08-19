@@ -543,9 +543,36 @@ namespace VisionInspectionApp.UI.ViewModels
                 ImageSource_FolderPath = dlg.SelectedPath;
             }
         }
+
+        public void ImageSource_OpenJobCameraSettings()
+        {
+            var def = SelectedImageSourceDef();
+            if (def is null) return;
+
+            def.CameraParams ??= new CameraParameters();
+
+            var jobName = !string.IsNullOrWhiteSpace(_config?.ProductName)
+                ? $"{_config.ProductName} ({_config.ProductCode})"
+                : (!string.IsNullOrWhiteSpace(_config?.ProductCode) ? _config.ProductCode : "Job Hiện Tại");
+
+            var vm = new JobCameraSettingsViewModel(_cameraService, def.CameraParams, jobName, (updatedParams) =>
+            {
+                def.CameraParams = updatedParams.Clone();
+                _ = _cameraService.ApplyParametersAsync(def.CameraParams);
+                RequestAutoSave();
+            });
+
+            var win = new Views.JobCameraSettingsWindow(vm)
+            {
+                Owner = System.Windows.Application.Current?.MainWindow
+            };
+
+            win.ShowDialog();
+        }
     
         public ICommand ImageSource_BrowseFileCommand { get; }
         public ICommand ImageSource_BrowseFolderCommand { get; }
+        public ICommand ImageSource_OpenJobCameraSettingsCommand { get; }
 
         public ObservableCollection<PreprocessRoiDefinition> PreprocessRois
         {

@@ -191,6 +191,11 @@ public sealed class ImageSourceDefinition
     public PlcTriggerEdge PlcTriggerEdge { get; set; } = PlcTriggerEdge.RisingEdge;
 
     public bool EnableUndistort { get; set; } = false;
+    
+    /// <summary>
+    /// Cấu hình thông số Camera riêng biệt cho Job hiện tại (Exposure, Gain, White Balance, Gamma, Trigger, GigE).
+    /// </summary>
+    public CameraParameters CameraParams { get; set; } = new();
 }
 
 public sealed class VisionConfig

@@ -367,6 +367,56 @@ public sealed class CameraService : IDisposable
         return null;
     }
 
+    public bool IsLiveViewEnabled
+    {
+        get => _currentParameters.IsLiveViewEnabled;
+        set
+        {
+            _currentParameters.IsLiveViewEnabled = value;
+            SaveSettings();
+        }
+    }
+
+    public async Task<bool> SetLiveViewEnabledAsync(bool enabled)
+    {
+        if (_isDisposed) return false;
+
+        try
+        {
+            await _cameraLock.WaitAsync();
+        }
+        catch (ObjectDisposedException)
+        {
+            return false;
+        }
+
+        try
+        {
+            _currentParameters.IsLiveViewEnabled = enabled;
+            SaveSettings();
+
+            if (_activeDriver != null && _activeDriver.IsOpened)
+            {
+                if (enabled && !_activeDriver.IsGrabbing)
+                {
+                    bool ok = await _activeDriver.StartGrabbingAsync();
+                    _isRunning = _activeDriver.IsOpened;
+                    return ok;
+                }
+                else if (!enabled && _activeDriver.IsGrabbing)
+                {
+                    await _activeDriver.StopGrabbingAsync();
+                    return true;
+                }
+            }
+            return true;
+        }
+        finally
+        {
+            try { _cameraLock.Release(); } catch { }
+        }
+    }
+
     /// <summary>
     /// Khởi động camera công nghiệp bằng Driver đa hãng (Hikrobot, Basler, Cognex, USB, RTSP, Simulator)
     /// Tự động fallback sang Camera Giả Lập nếu thiết bị thực tế chưa cắm hoặc chưa sẵn sàng.
@@ -435,9 +485,18 @@ public sealed class CameraService : IDisposable
 
                     await _activeDriver.OpenAsync(simDev);
                     await _activeDriver.ApplyParametersAsync(_currentParameters);
-                    bool simGrabbing = await _activeDriver.StartGrabbingAsync();
-                    _isRunning = simGrabbing;
-                    return simGrabbing;
+                    
+                    if (_currentParameters.IsLiveViewEnabled)
+                    {
+                        bool simGrabbing = await _activeDriver.StartGrabbingAsync();
+                        _isRunning = simGrabbing;
+                        return simGrabbing;
+                    }
+                    else
+                    {
+                        _isRunning = true;
+                        return true;
+                    }
                 }
 
                 _isRunning = false;
@@ -445,10 +504,18 @@ public sealed class CameraService : IDisposable
             }
 
             await _activeDriver.ApplyParametersAsync(_currentParameters);
-            bool grabbing = await _activeDriver.StartGrabbingAsync();
 
-            _isRunning = grabbing;
-            return grabbing;
+            if (_currentParameters.IsLiveViewEnabled)
+            {
+                bool grabbing = await _activeDriver.StartGrabbingAsync();
+                _isRunning = grabbing;
+                return grabbing;
+            }
+            else
+            {
+                _isRunning = true;
+                return true;
+            }
         }
         catch (Exception ex)
         {
@@ -634,15 +701,35 @@ public sealed class CameraService : IDisposable
 
     public async Task<Mat?> CaptureSnapshotAsync()
     {
-        if (_isRunning && _activeDriver != null)
+        if (_isRunning && _activeDriver != null && _activeDriver.IsOpened)
         {
-            for (int i = 0; i < 10; i++)
+            if (_activeDriver.IsGrabbing)
             {
-                var f = TryGetLatestFrameClone();
-                if (f != null && !f.Empty()) return f;
-                await Task.Delay(50);
+                var freshMat = await _activeDriver.GrabFrameAsync(1500);
+                if (freshMat != null && !freshMat.Empty())
+                {
+                    lock (_lastFrameGate)
+                    {
+                        _lastFrame?.Dispose();
+                        _lastFrame = freshMat.Clone();
+                    }
+                    return freshMat;
+                }
+                return TryGetLatestFrameClone();
             }
-            return TryGetLatestFrameClone();
+            else
+            {
+                var freshMat = await _activeDriver.GrabFrameAsync(3000);
+                if (freshMat != null && !freshMat.Empty())
+                {
+                    lock (_lastFrameGate)
+                    {
+                        _lastFrame?.Dispose();
+                        _lastFrame = freshMat.Clone();
+                    }
+                }
+                return freshMat;
+            }
         }
 
         return await CaptureSnapshotFromCameraAsync(_currentCameraIndex, _lastSelectedRtspUrl);
@@ -650,15 +737,44 @@ public sealed class CameraService : IDisposable
 
     public async Task<Mat?> CaptureSnapshotAsync(int cameraIndex, string? rtspUrl)
     {
-        if (_isRunning && _activeDriver != null)
+        if (_isRunning && _activeDriver != null && _activeDriver.IsOpened)
         {
-            for (int i = 0; i < 10; i++)
+            bool match = false;
+            if (IsSimulator(cameraIndex, rtspUrl) && _activeDeviceInfo?.Vendor == CameraVendor.Simulator) match = true;
+            else if (!string.IsNullOrEmpty(rtspUrl) && _activeDeviceInfo?.Vendor == CameraVendor.Rtsp && string.Equals(_activeDeviceInfo.RtspUrl, rtspUrl, StringComparison.OrdinalIgnoreCase)) match = true;
+            else if (_activeDeviceInfo?.Vendor == CameraVendor.Hikrobot || _activeDeviceInfo?.Vendor == CameraVendor.Basler || _activeDeviceInfo?.Vendor == CameraVendor.Cognex) match = true;
+            else if (_activeDeviceInfo?.Index == cameraIndex) match = true;
+
+            if (match)
             {
-                var f = TryGetLatestFrameClone();
-                if (f != null && !f.Empty()) return f;
-                await Task.Delay(50);
+                if (_activeDriver.IsGrabbing)
+                {
+                    var freshMat = await _activeDriver.GrabFrameAsync(1500);
+                    if (freshMat != null && !freshMat.Empty())
+                    {
+                        lock (_lastFrameGate)
+                        {
+                            _lastFrame?.Dispose();
+                            _lastFrame = freshMat.Clone();
+                        }
+                        return freshMat;
+                    }
+                    return TryGetLatestFrameClone();
+                }
+                else
+                {
+                    var freshMat = await _activeDriver.GrabFrameAsync(3000);
+                    if (freshMat != null && !freshMat.Empty())
+                    {
+                        lock (_lastFrameGate)
+                        {
+                            _lastFrame?.Dispose();
+                            _lastFrame = freshMat.Clone();
+                        }
+                    }
+                    return freshMat;
+                }
             }
-            return TryGetLatestFrameClone();
         }
 
         return await CaptureSnapshotFromCameraAsync(cameraIndex, rtspUrl);
@@ -677,7 +793,9 @@ public sealed class CameraService : IDisposable
         }
         else
         {
-            dev = new CameraDeviceInfo { Vendor = CameraVendor.WebcamDirectShow, InterfaceType = CameraInterfaceType.DirectShow, Index = cameraIndex };
+            var all = CameraDriverFactory.ScanAllDevices();
+            dev = all.FirstOrDefault(d => d.Index == cameraIndex) ??
+                  new CameraDeviceInfo { Vendor = CameraVendor.WebcamDirectShow, InterfaceType = CameraInterfaceType.DirectShow, Index = cameraIndex };
         }
 
         using var driver = CameraDriverFactory.CreateDriver(dev.Vendor);
