@@ -86,6 +86,9 @@ public partial class OqcScannerViewModel
     [ObservableProperty]
     private int _scanTimeoutMs = 3000;
 
+    [ObservableProperty]
+    private bool _useExternalScanner = false;
+
     public IReadOnlyList<string> AvailableCodeTypes { get; } = new List<string>
     {
         "ALL",
@@ -178,6 +181,7 @@ public partial class OqcScannerViewModel
         CropStartIndex = cfg.CropStartIndex;
         CropLength = cfg.CropLength;
         ScanTimeoutMs = cfg.ScanTimeoutMs > 0 ? cfg.ScanTimeoutMs : 3000;
+        UseExternalScanner = cfg.UseExternalScanner;
     }
 
     private void SaveSettingsToConfig()
@@ -212,7 +216,8 @@ public partial class OqcScannerViewModel
             EnableCodeCrop = EnableCodeCrop,
             CropStartIndex = CropStartIndex,
             CropLength = CropLength,
-            ScanTimeoutMs = ScanTimeoutMs > 0 ? ScanTimeoutMs : 3000
+            ScanTimeoutMs = ScanTimeoutMs > 0 ? ScanTimeoutMs : 3000,
+            UseExternalScanner = UseExternalScanner
         };
 
         _oqcService.SaveConfig(cfg);

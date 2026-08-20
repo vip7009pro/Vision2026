@@ -23,6 +23,8 @@ public interface IOqcScannerService
 
     CameraCodeScanResult DecodeCodeFromImage(OpenCvSharp.Mat image, OqcScannerConfig? config = null);
 
+    (bool success, string processedCode, string rawCode, string errorMessage) ProcessRawCodeString(string rawInput, OqcScannerConfig? config = null);
+
     Task<(bool Found, string JobFilePath, string ErrorMessage)> LookupJobAsync(
         string scannedCode, IDbManagerService dbManager);
 

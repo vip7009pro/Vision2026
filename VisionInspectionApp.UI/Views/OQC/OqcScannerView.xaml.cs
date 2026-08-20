@@ -44,10 +44,23 @@ public partial class OqcScannerView : UserControl
 
         if (e.Key == Key.Space)
         {
-            if (vm.ScanFromCameraCommand.CanExecute(null))
+            if (vm.UseExternalScanner)
             {
-                vm.ScanFromCameraCommand.Execute(null);
-                e.Handled = true;
+                // Khi dùng đầu scan ngoài: phím Space dùng để RUN JOB
+                if (vm.RunJobCommand.CanExecute(null))
+                {
+                    vm.RunJobCommand.Execute(null);
+                    e.Handled = true;
+                }
+            }
+            else
+            {
+                // Khi không dùng đầu scan ngoài: phím Space dùng để quét mã từ Camera
+                if (vm.ScanFromCameraCommand.CanExecute(null))
+                {
+                    vm.ScanFromCameraCommand.Execute(null);
+                    e.Handled = true;
+                }
             }
         }
         else if (e.Key == Key.F5)

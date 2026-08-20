@@ -39,6 +39,7 @@ public class OqcScannerConfig
     public int CropStartIndex { get; set; } = 0;
     public int CropLength { get; set; } = 0;
     public int ScanTimeoutMs { get; set; } = 3000;
+    public bool UseExternalScanner { get; set; } = false;
 }
 
 public class OqcScanHistoryEntry : System.ComponentModel.INotifyPropertyChanged

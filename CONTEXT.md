@@ -51,6 +51,19 @@
 
 ### Sửa lỗi và Cải thiện UX/UI (Phiên làm việc hiện tại)
 
+- **Bổ sung tùy chọn 'Dùng Đầu Scanner' & Chuyển đổi phím Space để RUN JOB và tự động áp dụng bộ lọc cắt chuỗi (Task 179)**:
+  - **Bổ sung CheckBox 'Dùng Đầu Scanner' & Quản lý cấu hình OQC Scanner (`OqcScannerConfig.cs`, `OqcScannerViewModel.Settings.cs`, `OqcScannerView.xaml`)**:
+    - `OqcScannerConfig.cs`: Bổ sung thuộc tính `UseExternalScanner` (bool).
+    - `OqcScannerViewModel.Settings.cs`: Nạp và lưu `UseExternalScanner` vào file cấu hình `oqc_scanner_config.json`.
+    - `OqcScannerView.xaml`: Thêm CheckBox `🔫 Dùng Đầu Scanner` đặt ngay dưới `⚡ Tự động chạy Job (Auto Run)`.
+  - **Chuyển đổi tính năng phím Space khi dùng đầu Scanner ngoài (`OqcScannerView.xaml.cs`, `OqcScannerViewModel.cs`)**:
+    - Khi `UseExternalScanner == true`, vô hiệu hóa phím Space chụp quét từ camera; phím `Space` được chuyển sang chức năng **`RUN JOB`** (gọi `RunJobCommand`). Khi `UseExternalScanner == false`, phím `Space` vẫn giữ chức năng quét mã từ Camera (`ScanFromCameraCommand`).
+    - Cập nhật text nút bấm trực quan: Nút quét camera đổi thành `📷 QUÉT CAMERA`, nút chạy Job hiển thị `▶ CHẠY JOB (SPACE)`.
+  - **Tự động áp dụng bộ lọc độ dài & Cắt chuỗi cho chuỗi quét từ đầu Scanner (`OqcScannerService.cs`, `IOqcScannerService.cs`, `OqcScannerViewModel.cs`)**:
+    - Bổ sung phương thức `ProcessRawCodeString(rawInput, config)` dùng chung trong `OqcScannerService`.
+    - Khi nhận mã nhập/quét từ đầu scan ngoài, hệ thống tự động kiểm tra điều kiện độ dài (`EnableLengthFilter`) và cắt chuỗi (`EnableCodeCrop`) theo cấu hình tra cứu OQC trước khi tra cứu Database và nạp Job.
+  - **Kiểm Thử & Biên Dịch Thành Công 100%**: Solution biên dịch thành công **0 Error(s)**, vượt qua toàn bộ unit test.
+
 - **Sửa triệt để lỗi ROI và Overlay không tự động xuất hiện sau khi Job kiểm tra chạy xong (Task 178)**:
   - **Đồng bộ thứ tự render Previews & Overlay trước khi kích hoạt sự kiện hoàn thành kiểm tra (`ToolEditorViewModel.Engine.cs`, `ToolEditorViewModel.cs`)**:
     - Trong cả `RunFlowAsync` và `RunSingleFlowFromImageFileAsync`, di chuyển lời gọi `RefreshPreviews()` lên **TRƯỚC** phép gán `LastResult = _lastRun;`. Khắc phục triệt để tình trạng race condition khi event `InspectionCompletedAsync` bị bắn ra trong lúc `FinalOverlayItems` chưa được dựng xong.

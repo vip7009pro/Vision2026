@@ -449,6 +449,17 @@ Lộ trình tích hợp tính năng Chụp ảnh từ camera và hỗ trợ các
     - Sửa `ToolEditorViewModel.cs`: Bổ sung reset `LastResult = null;`, `FinalPreviewImage = null;`, `SelectedNodePreviewImage = null;` trong `ClearActiveGraph()` khi nạp Job mới để tránh lẫn lộn dữ liệu cũ.
   - `Đồng Bộ Hai Chiều Trực Tiếp Qua PropertyChanged Giữa ToolEditor và OqcScanner`:
     - Cập nhật `OqcScannerViewModel.cs`: Đăng ký lắng nghe sự kiện `_toolEditorViewModel.PropertyChanged`. Khi `FinalOverlayItems`, `FinalPreviewImage`, `SelectedNodePreviewImage` hoặc `SelectedNodeOverlayItems` được cập nhật, `OqcScannerViewModel` tự động cập nhật ngay lập tức sang `PreviewImage` và `OverlayItems` mà người dùng không cần phải click thủ công vào nút "Xem kết quả final".
+- [x] Task 179: Bổ sung tùy chọn 'Dùng Đầu Scanner' & Chuyển đổi phím Space để RUN JOB và tự động áp dụng bộ lọc cắt chuỗi:
+  - `Bổ Sung CheckBox 'Dùng Đầu Scanner' & Quản Lý Cấu Hình OQC Scanner`:
+    - `OqcScannerConfig.cs`: Bổ sung thuộc tính `UseExternalScanner` (bool).
+    - `OqcScannerViewModel.Settings.cs`: Nạp và lưu `UseExternalScanner` vào file cấu hình `oqc_scanner_config.json`.
+    - `OqcScannerView.xaml`: Thêm CheckBox `🔫 Dùng Đầu Scanner` đặt ngay dưới `⚡ Tự động chạy Job (Auto Run)`.
+  - `Chuyển Đổi Tính Năng Phím Space Khi Dùng Đầu Scanner Ngoài`:
+    - Sửa `OqcScannerView.xaml.cs`: Khi `UseExternalScanner == true`, vô hiệu hóa phím Space chụp quét từ camera; phím `Space` được chuyển sang chức năng **`RUN JOB`** (gọi `RunJobCommand`). Khi `UseExternalScanner == false`, phím `Space` vẫn giữ chức năng quét mã từ Camera (`ScanFromCameraCommand`).
+    - Cập nhật text nút bấm trực quan: Nút quét camera đổi thành `📷 QUÉT CAMERA`, nút chạy Job hiển thị `▶ CHẠY JOB (SPACE)`.
+  - `Tự Động Áp Dụng Bộ Lọc Độ Dài & Cắt Chuỗi Cho Chuỗi Quét Từ Đầu Scanner`:
+    - Sửa `OqcScannerService.cs` & `IOqcScannerService.cs`: Bổ sung phương thức `ProcessRawCodeString(rawInput, config)` dùng chung.
+    - Sửa `OqcScannerViewModel.cs`: Khi nhận mã nhập/quét từ đầu scan ngoài, hệ thống tự động kiểm tra điều kiện độ dài (`EnableLengthFilter`) và cắt chuỗi (`EnableCodeCrop`) theo cấu hình tra cứu OQC trước khi tra cứu Database và nạp Job.
   - `Biên Dịch & Kiểm Thử Thành Công 100%`: Solution biên dịch **0 Error(s)**, chạy test thành công.
 
 

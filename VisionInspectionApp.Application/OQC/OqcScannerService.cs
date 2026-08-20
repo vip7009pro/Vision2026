@@ -92,6 +92,54 @@ public sealed class OqcScannerService : IOqcScannerService
         return dst;
     }
 
+    /// <summary>
+    /// Áp dụng cơ cấu kiểm soát độ dài chuỗi và cắt chuỗi cấu hình cho mã nhập/quét từ đầu đọc ngoài hoặc chuỗi mã bất kỳ.
+    /// </summary>
+    public (bool success, string processedCode, string rawCode, string errorMessage) ProcessRawCodeString(string rawInput, OqcScannerConfig? config = null)
+    {
+        if (string.IsNullOrWhiteSpace(rawInput))
+        {
+            return (false, "", "", "Chuỗi mã quét rỗng.");
+        }
+
+        string rawCode = rawInput.Trim();
+        var cfg = config ?? Config ?? new OqcScannerConfig();
+
+        // 1. Kiểm tra bộ lọc độ dài (nếu bật)
+        if (cfg.EnableLengthFilter && cfg.RequiredCodeLength > 0)
+        {
+            if (rawCode.Length != cfg.RequiredCodeLength)
+            {
+                return (false, "", rawCode, $"Độ dài mã ({rawCode.Length}) không khớp với cấu hình yêu cầu ({cfg.RequiredCodeLength} ký tự).");
+            }
+        }
+
+        // 2. Cắt chuỗi (nếu bật)
+        string finalCode = rawCode;
+        if (cfg.EnableCodeCrop)
+        {
+            int start = Math.Max(0, cfg.CropStartIndex);
+            if (start < rawCode.Length)
+            {
+                int cropLen = cfg.CropLength;
+                if (cropLen > 0 && start + cropLen <= rawCode.Length)
+                {
+                    finalCode = rawCode.Substring(start, cropLen);
+                }
+                else
+                {
+                    finalCode = rawCode.Substring(start);
+                }
+            }
+            else
+            {
+                return (false, "", rawCode, $"Vị trí bắt đầu cắt ({start}) vượt quá độ dài mã gốc ({rawCode.Length} ký tự).");
+            }
+        }
+
+        return (true, finalCode, rawCode, "");
+    }
+
     public CameraCodeScanResult DecodeCodeFromImage(Mat image, OqcScannerConfig? config = null)
     {
         var cfg = config ?? Config ?? new OqcScannerConfig();

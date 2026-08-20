@@ -94,11 +94,15 @@ public partial class OqcScannerViewModel : ObservableObject
         {
             if (!AutoRunJob && !string.IsNullOrWhiteSpace(CurrentJobFilePath) && CurrentJobFilePath != "-" && CurrentJobFilePath != "Chưa có Job")
             {
-                return "▶ CHẠY JOB";
+                return UseExternalScanner ? "▶ CHẠY JOB (SPACE)" : "▶ CHẠY JOB";
             }
             return "🔍 QUÉT / TÌM";
         }
     }
+
+    public string CameraScanButtonText => UseExternalScanner
+        ? "📷 QUÉT CAMERA"
+        : "📷 QUÉT CAMERA (SPACE)";
 
     public string PreviewHeaderTitle => IsShowingLiveCamera 
         ? "📷 LIVE CAMERA (Căn chỉnh sản phẩm - F5)" 
@@ -197,6 +201,34 @@ public partial class OqcScannerViewModel : ObservableObject
     partial void OnCurrentJobFilePathChanged(string value)
     {
         OnPropertyChanged(nameof(ScanButtonText));
+    }
+
+    partial void OnUseExternalScannerChanged(bool value)
+    {
+        _oqcService.Config.UseExternalScanner = value;
+        _oqcService.SaveConfig(_oqcService.Config);
+        OnPropertyChanged(nameof(ScanButtonText));
+        OnPropertyChanged(nameof(CameraScanButtonText));
+    }
+
+    [RelayCommand]
+    public void RunJob()
+    {
+        if (!string.IsNullOrWhiteSpace(CurrentJobFilePath) && CurrentJobFilePath != "-" && CurrentJobFilePath != "Chưa có Job")
+        {
+            IsShowingLiveCamera = false;
+            OnPropertyChanged(nameof(PreviewHeaderTitle));
+            OnPropertyChanged(nameof(LiveToggleButtonText));
+            StatusMessage = $"⌛ Đang chạy kiểm tra Job cho sản phẩm '{CurrentProductName}'...";
+            StatusBrush = Brushes.DodgerBlue;
+
+            _toolEditorViewModel.OnRunOnceClicked();
+        }
+        else
+        {
+            StatusMessage = "⚠️ Chưa có Job nào được nạp. Vui lòng quét mã sản phẩm trước!";
+            StatusBrush = Brushes.Orange;
+        }
     }
 
     [RelayCommand]
@@ -396,18 +428,12 @@ public partial class OqcScannerViewModel : ObservableObject
 
     private async Task ExecuteScanInternalAsync()
     {
-        string code = ScannedCode?.Trim() ?? "";
-        if (string.IsNullOrWhiteSpace(code))
+        string rawInput = ScannedCode?.Trim() ?? "";
+        if (string.IsNullOrWhiteSpace(rawInput))
         {
             if (!AutoRunJob && !string.IsNullOrWhiteSpace(CurrentJobFilePath) && CurrentJobFilePath != "-" && CurrentJobFilePath != "Chưa có Job")
             {
-                IsShowingLiveCamera = false;
-                OnPropertyChanged(nameof(PreviewHeaderTitle));
-                OnPropertyChanged(nameof(LiveToggleButtonText));
-                StatusMessage = $"⌛ Đang chạy kiểm tra cho sản phẩm '{CurrentProductName}'...";
-                StatusBrush = Brushes.DodgerBlue;
-
-                _toolEditorViewModel.OnRunOnceClicked();
+                RunJob();
                 return;
             }
 
@@ -416,8 +442,33 @@ public partial class OqcScannerViewModel : ObservableObject
             return;
         }
 
-        _lastScannedRawCode = code;
-        StatusMessage = $"🔍 Đang tra cứu cơ sở dữ liệu cho mã '{code}'...";
+        // Áp dụng bộ lọc độ dài và cắt chuỗi cấu hình cho mã nhập/quét từ đầu đọc ngoài
+        var (valid, processedCode, rawCode, filterError) = _oqcService.ProcessRawCodeString(rawInput);
+        if (!valid)
+        {
+            StatusMessage = $"❌ Mã quét '{rawCode}' không hợp lệ: {filterError}";
+            StatusBrush = Brushes.Red;
+
+            var invalidEntry = new OqcScanHistoryEntry
+            {
+                Time = DateTime.Now,
+                ScannedCode = rawCode,
+                ProductName = "Mã không hợp lệ",
+                JobFilePath = "-",
+                Success = false,
+                InspectResult = "LỖI BỘ LỌC MÃ",
+                ResultBrushHex = "#D32F2F",
+                Message = filterError,
+                InspectDetails = $"Mã gốc '{rawCode}' bị loại bởi bộ lọc: {filterError}"
+            };
+            AddHistory(invalidEntry);
+            ScannedCode = "";
+            return;
+        }
+
+        string code = processedCode;
+        _lastScannedRawCode = rawCode;
+        StatusMessage = $"🔍 Đang tra cứu cơ sở dữ liệu cho mã '{code}'" + (code != rawCode ? $" (Mã gốc: '{rawCode}')" : "") + "...";
         StatusBrush = Brushes.DodgerBlue;
 
         string displayProductName = code;

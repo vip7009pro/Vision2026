@@ -82,25 +82,30 @@
                             <TextBox.InputBindings>
                                 <KeyBinding Key="Enter" Command="{Binding ScanCommand}" />
                                 <KeyBinding Key="F5" Command="{Binding EnableLiveCameraCommand}" />
-                                <KeyBinding Key="Space" Command="{Binding ScanFromCameraCommand}" />
                             </TextBox.InputBindings>
                         </TextBox>
 
-                        <CheckBox Grid.Column="1"
-                                  Content="⚡ Tự động chạy Job (Auto Run)"
-                                  IsChecked="{Binding AutoRunJob, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                                  ToolTip="Khi bật: Tự động chạy kiểm tra ngay sau khi quét mã sản phẩm. Khi tắt: Chỉ nạp Job, căn chỉnh camera rồi bấm 'CHẠY JOB' để kiểm tra."
-                                  FontWeight="Bold"
-                                  FontSize="13"
-                                  VerticalAlignment="Center"
-                                  Margin="0,0,12,0" />
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="0,0,14,0">
+                            <CheckBox Content="⚡ Tự động chạy Job (Auto Run)"
+                                      IsChecked="{Binding AutoRunJob, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                      ToolTip="Khi bật: Tự động chạy kiểm tra ngay sau khi quét mã sản phẩm. Khi tắt: Chỉ nạp Job, căn chỉnh camera rồi bấm 'CHẠY JOB' để kiểm tra."
+                                      FontWeight="Bold"
+                                      FontSize="12"
+                                      Margin="0,0,0,5" />
+
+                            <CheckBox Content="🔫 Dùng Đầu Scanner"
+                                      IsChecked="{Binding UseExternalScanner, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                      ToolTip="Khi bật: Sử dụng đầu đọc mã ngoài để quét mã và nạp Job. Lúc này phím SPACE dùng để RUN JOB (Chạy kiểm tra). Mã quét được cũng áp dụng toàn bộ bộ lọc độ dài và cắt chuỗi cấu hình."
+                                      FontWeight="Bold"
+                                      FontSize="12" />
+                        </StackPanel>
 
                         <Button Grid.Column="2"
-                                Content="📷 QUÉT CAMERA (SPACE)"
+                                Content="{Binding CameraScanButtonText}"
                                 Command="{Binding ScanFromCameraCommand}"
                                 FontSize="12" FontWeight="Bold"
                                 Height="44" Margin="0,0,10,0"
-                                ToolTip="Chụp ảnh Camera, tự động đọc mã QR/Barcode, lọc loại mã, độ dài, cắt chuỗi và nạp/chạy Job. Phím tắt: Space" />
+                                ToolTip="Chụp ảnh Camera, tự động đọc mã QR/Barcode, lọc loại mã, độ dài, cắt chuỗi và nạp/chạy Job." />
 
                         <Button Grid.Column="3"
                                 Content="{Binding ScanButtonText}"
