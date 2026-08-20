@@ -65,6 +65,9 @@
     - **Xử Lý Chuẩn Kiểu Số `float` & Bổ Sung Token Text (`OqcScannerService.cs`, `OqcSettingsDialog.xaml`)**:
       - Các token số `{Spec}`, `{UpperTor}`/`{TolPlus}`, `{LowerTor}`/`{TolMinus}`, `{MinSpec}`/`{Min}`, `{MaxSpec}`/`{Max}`, `{Result}` luôn xuất ra dạng số thực hợp lệ (nếu tool không có spec số như CodeDetection thì trả về `0` cho spec/dung sai và `1`/`0` cho result), giải quyết triệt để lỗi SQL Server `Error converting data type nvarchar to float`.
       - Bổ sung các token text `{TextSpect}`/`{TextSpec}` và `{TextResult}` để người dùng có thể chèn chuỗi spec và chuỗi kết quả đo vào các cột `NVARCHAR` trong CSDL.
+    - **Khắc Phục Lỗi Lọc/Cắt Mã Lần 2 Khi Quét Bằng Camera (`OqcScannerViewModel.cs`)**:
+      - Khi bấm Space hoặc bấm nút quét Camera (uncheck "Dùng đầu scan ngoài"), mã đọc được từ ảnh đã được bóc tách và lọc theo quy tắc (`result.ProcessedCode` và `result.RawCode`).
+      - Hàm `ExecuteScanFromCameraAsync` truyền trực tiếp `directProcessedCode` và `directRawCode` vào `ExecuteScanInternalAsync` để bỏ qua việc chạy lại hàm `ProcessRawCodeString(rawInput)` lần thứ 2, tránh hoàn toàn tình trạng báo lỗi sai lệch độ dài bộ lọc trên chuỗi đã cắt ngắn.
     - In debug log chi tiết câu truy vấn SQL; kiểm tra và báo rõ nếu chưa chọn CSDL trong cài đặt OQC; hiển thị thông báo kết quả ghi DB (hoặc lỗi SQL) ngay trên Status Bar và cột "Ghi DB" trong bảng lịch sử.
   - **Biên Dịch & Kiểm Thử Thành Công 100%**: Solution biên dịch thành công **0 Error(s)**, vượt qua toàn bộ unit test.
 

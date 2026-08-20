@@ -356,12 +356,12 @@ public partial class OqcScannerViewModel : ObservableObject
 
             if (result != null && result.Success && !string.IsNullOrWhiteSpace(result.ProcessedCode))
             {
-                // Nhận diện mã thành công trong thời gian timeout
+                // Nhận diện mã thành công trong thời gian timeout: Mã đã được bóc tách theo quy tắc từ ảnh
                 ScannedCode = result.ProcessedCode;
                 StatusMessage = $"📷 Đã đọc mã từ Camera: '{result.ProcessedCode}' (Mã gốc: '{result.RawCode}', Loại: {result.CodeType}). Đang tra DB...";
                 StatusBrush = Brushes.DodgerBlue;
 
-                await ExecuteScanInternalAsync();
+                await ExecuteScanInternalAsync(directProcessedCode: result.ProcessedCode, directRawCode: result.RawCode);
             }
             else
             {
@@ -414,7 +414,7 @@ public partial class OqcScannerViewModel : ObservableObject
         }
         catch (Exception ex)
         {
-            StatusMessage = $"❌ Lỗi đọc mã từ camera: {ex.Message}";
+            StatusMessage = $"❌ Lỗi nhận diện mã từ Camera: {ex.Message}";
             StatusBrush = Brushes.Red;
         }
         finally
@@ -446,47 +446,61 @@ public partial class OqcScannerViewModel : ObservableObject
         }
     }
 
-    private async Task ExecuteScanInternalAsync()
+    private async Task ExecuteScanInternalAsync(string? directProcessedCode = null, string? directRawCode = null)
     {
-        string rawInput = ScannedCode?.Trim() ?? "";
-        if (string.IsNullOrWhiteSpace(rawInput))
+        string code;
+        string rawCode;
+
+        if (!string.IsNullOrWhiteSpace(directProcessedCode))
         {
-            if (!AutoRunJob && !string.IsNullOrWhiteSpace(CurrentJobFilePath) && CurrentJobFilePath != "-" && CurrentJobFilePath != "Chưa có Job")
+            // Mã được đọc trực tiếp từ Camera: ĐÃ được bóc tách và lọc theo quy tắc, không áp dụng lọc/cắt lại lần 2
+            code = directProcessedCode.Trim();
+            rawCode = !string.IsNullOrWhiteSpace(directRawCode) ? directRawCode.Trim() : code;
+        }
+        else
+        {
+            string rawInput = ScannedCode?.Trim() ?? "";
+            if (string.IsNullOrWhiteSpace(rawInput))
             {
-                RunJob();
+                if (!AutoRunJob && !string.IsNullOrWhiteSpace(CurrentJobFilePath) && CurrentJobFilePath != "-" && CurrentJobFilePath != "Chưa có Job")
+                {
+                    RunJob();
+                    return;
+                }
+
+                StatusMessage = "⚠️ Vui lòng nhập hoặc quét mã sản phẩm!";
+                StatusBrush = Brushes.Orange;
                 return;
             }
 
-            StatusMessage = "⚠️ Vui lòng nhập hoặc quét mã sản phẩm!";
-            StatusBrush = Brushes.Orange;
-            return;
-        }
-
-        // Áp dụng bộ lọc độ dài và cắt chuỗi cấu hình cho mã nhập/quét từ đầu đọc ngoài
-        var (valid, processedCode, rawCode, filterError) = _oqcService.ProcessRawCodeString(rawInput);
-        if (!valid)
-        {
-            StatusMessage = $"❌ Mã quét '{rawCode}' không hợp lệ: {filterError}";
-            StatusBrush = Brushes.Red;
-
-            var invalidEntry = new OqcScanHistoryEntry
+            // Áp dụng bộ lọc độ dài và cắt chuỗi cấu hình cho mã nhập/quét từ đầu đọc ngoài
+            var (valid, processedCode, extractedRawCode, filterError) = _oqcService.ProcessRawCodeString(rawInput);
+            if (!valid)
             {
-                Time = DateTime.Now,
-                ScannedCode = rawCode,
-                ProductName = "Mã không hợp lệ",
-                JobFilePath = "-",
-                Success = false,
-                InspectResult = "LỖI BỘ LỌC MÃ",
-                ResultBrushHex = "#D32F2F",
-                Message = filterError,
-                InspectDetails = $"Mã gốc '{rawCode}' bị loại bởi bộ lọc: {filterError}"
-            };
-            AddHistory(invalidEntry);
-            ScannedCode = "";
-            return;
+                StatusMessage = $"❌ Mã quét '{extractedRawCode}' không hợp lệ: {filterError}";
+                StatusBrush = Brushes.Red;
+
+                var invalidEntry = new OqcScanHistoryEntry
+                {
+                    Time = DateTime.Now,
+                    ScannedCode = extractedRawCode,
+                    ProductName = "Mã không hợp lệ",
+                    JobFilePath = "-",
+                    Success = false,
+                    InspectResult = "LỖI BỘ LỌC MÃ",
+                    ResultBrushHex = "#D32F2F",
+                    Message = filterError,
+                    InspectDetails = $"Mã gốc '{extractedRawCode}' bị loại bởi bộ lọc: {filterError}"
+                };
+                AddHistory(invalidEntry);
+                ScannedCode = "";
+                return;
+            }
+
+            code = processedCode;
+            rawCode = extractedRawCode;
         }
 
-        string code = processedCode;
         _lastScannedProcessedCode = code;
         _lastScannedRawCode = rawCode;
         StatusMessage = $"🔍 Đang tra cứu cơ sở dữ liệu cho mã '{code}'" + (code != rawCode ? $" (Mã gốc: '{rawCode}')" : "") + "...";

@@ -512,6 +512,7 @@ Lộ trình tích hợp tính năng Chụp ảnh từ camera và hỗ trợ các
   - `Sửa Lỗi Hiển Thị Kết Quả Của CodeDetection`: Tách bạch `CustomSpecText` và `CustomResultText`, loại bỏ hoàn toàn hiện tượng ghép số `0.000` hoặc `1.000` vào chuỗi mã QR/Barcode.
   - `Bổ Sung Trường Spec (Chuỗi Văn Bản) Cho Tool CodeDetection`: Thêm `ExpectedText` vào cấu hình và record kết quả; tự động đánh giá PASS/FAIL khi chuỗi đọc được khớp với Spec mà không cần dùng tool Condition.
   - `Phản Hồi Trực Quan & Khắc Phục Lỗi Ghi Log Database`: Inject chuỗi đã cắt gọt `processedCode` vào token `{ScannedCode}` và `{ProductCode}` giúp loại bỏ lỗi `String or binary data would be truncated`. Định dạng các token số `{Spec}, {UpperTor}, {LowerTor}, {MinSpec}, {MaxSpec}, {Result}` thành số thực thuần túy (với tool dạng text trả về 0/1) loại bỏ hoàn toàn lỗi `Error converting data type nvarchar to float`. Bổ sung token `{TextSpect}`/`{TextSpec}` và `{TextResult}` cho các cột chuỗi trong DB. In debug log chi tiết câu truy vấn SQL; hiển thị thông báo kết quả ghi DB ngay trên Status Bar và cột "Ghi DB" trong bảng lịch sử.
+  - `Khắc Phục Lỗi Lọc/Cắt Mã Lần 2 Khi Quét Camera Bằng Phím Space`: Tách biệt luồng xử lý mã từ ảnh camera (`directProcessedCode` đã được bóc tách từ ảnh) và luồng quét ngoài (nhập chuỗi thô), loại bỏ việc áp dụng bộ lọc độ dài lần thứ 2 gây báo lỗi sai lệch.
   - `Biên Dịch & Kiểm Thử Thành Công 100%`: Solution biên dịch **0 Error(s)**.
 
 
