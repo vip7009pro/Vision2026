@@ -2834,7 +2834,6 @@ namespace VisionInspectionApp.UI.ViewModels
             }
 
             _lastRun = inspectionResult;
-            LastResult = _lastRun;
             if (IsRunningFolderFlow)
             {
                 ProcessedImageCount++;
@@ -2844,6 +2843,7 @@ namespace VisionInspectionApp.UI.ViewModels
             RefreshPreviews();
             RaiseToolPropertyPanelsChanged();
             OnPropertyChanged(nameof(Blob_LastRunCount));
+            LastResult = _lastRun;
         }
 
         private void RunSingleFlowFromImageFile(string filePath, string sourceNodeName) => _ = RunSingleFlowFromImageFileAsync(filePath, sourceNodeName);
@@ -3060,7 +3060,6 @@ namespace VisionInspectionApp.UI.ViewModels
                 }
                 _lastRun = inspectionResult;
                 UpdateNodeExecutionTimes();
-                LastResult = _lastRun;
                 if (IsRunningFolderFlow)
                 {
                     ProcessedImageCount++;
@@ -3070,6 +3069,7 @@ namespace VisionInspectionApp.UI.ViewModels
                 RefreshPreviews();
                 RaiseToolPropertyPanelsChanged();
                 OnPropertyChanged(nameof(Blob_LastRunCount));
+                LastResult = _lastRun;
             }
             finally
             {

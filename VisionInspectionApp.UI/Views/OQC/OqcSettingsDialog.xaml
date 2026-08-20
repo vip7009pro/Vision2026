@@ -62,7 +62,7 @@
                         </Border>
 
                         <!-- Trích xuất / Cắt chuỗi -->
-                        <Border Margin="0,0,0,4" Padding="8" Background="{DynamicResource HeaderBackgroundBrush}" CornerRadius="4">
+                        <Border Margin="0,0,0,8" Padding="8" Background="{DynamicResource HeaderBackgroundBrush}" CornerRadius="4">
                             <StackPanel Orientation="Horizontal">
                                 <CheckBox Content="Cắt chuỗi mã đầu ra (Crop Substring):"
                                           IsChecked="{Binding EnableCodeCrop, UpdateSourceTrigger=PropertyChanged}"
@@ -77,6 +77,17 @@
                                          IsEnabled="{Binding EnableCodeCrop}"
                                          Width="60" Height="26" VerticalContentAlignment="Center" FontWeight="Bold" HorizontalContentAlignment="Center"
                                          ToolTip="Nhập 0 để lấy toàn bộ phần còn lại từ vị trí bắt đầu" />
+                            </StackPanel>
+                        </Border>
+
+                        <!-- Thời gian chờ quét mã (Timeout) -->
+                        <Border Margin="0,0,0,4" Padding="8" Background="{DynamicResource HeaderBackgroundBrush}" CornerRadius="4">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="⏱️ Thời gian chờ quét mã (Timeout):" VerticalAlignment="Center" FontWeight="SemiBold" Margin="0,0,12,0" />
+                                <TextBox Text="{Binding ScanTimeoutMs, UpdateSourceTrigger=PropertyChanged}"
+                                         IsEnabled="{Binding EnableCameraBarcodeScan}"
+                                         Width="80" Height="26" VerticalContentAlignment="Center" FontWeight="Bold" HorizontalContentAlignment="Center" />
+                                <TextBlock Text="ms (Mặc định: 3000 ms. Quá thời gian này không tìm thấy mã sẽ tự động trả về FAIL)" VerticalAlignment="Center" Margin="8,0,0,0" Foreground="{DynamicResource TextMutedBrush}" FontSize="11" />
                             </StackPanel>
                         </Border>
                     </StackPanel>

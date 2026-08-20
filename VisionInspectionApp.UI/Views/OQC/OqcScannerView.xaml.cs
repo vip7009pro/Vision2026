@@ -6,6 +6,8 @@ namespace VisionInspectionApp.UI.Views.OQC;
 
 public partial class OqcScannerView : UserControl
 {
+    private bool _hasInitialAutoFit = false;
+
     public OqcScannerView()
     {
         InitializeComponent();
@@ -16,6 +18,15 @@ public partial class OqcScannerView : UserControl
     private void OqcScannerView_Loaded(object sender, RoutedEventArgs e)
     {
         ScanInputTextBox.Focus();
+        if (!_hasInitialAutoFit)
+        {
+            _hasInitialAutoFit = true;
+            ScheduleAutoFit();
+        }
+    }
+
+    private void ScheduleAutoFit()
+    {
         Dispatcher.BeginInvoke(new System.Action(() =>
         {
             OqcImageViewer?.ResetView();
@@ -29,15 +40,22 @@ public partial class OqcScannerView : UserControl
 
     private void OqcScannerView_PreviewKeyDown(object sender, KeyEventArgs e)
     {
+        if (DataContext is not ViewModels.OqcScannerViewModel vm) return;
+
         if (e.Key == Key.Space)
         {
-            if (DataContext is ViewModels.OqcScannerViewModel vm)
+            if (vm.ScanFromCameraCommand.CanExecute(null))
             {
-                if (vm.ScanFromCameraCommand.CanExecute(null))
-                {
-                    vm.ScanFromCameraCommand.Execute(null);
-                    e.Handled = true;
-                }
+                vm.ScanFromCameraCommand.Execute(null);
+                e.Handled = true;
+            }
+        }
+        else if (e.Key == Key.F5)
+        {
+            if (vm.EnableLiveCameraCommand.CanExecute(null))
+            {
+                vm.EnableLiveCameraCommand.Execute(null);
+                e.Handled = true;
             }
         }
     }

@@ -97,8 +97,7 @@ public partial class ImageViewerControl : UserControl
 
         SetupTransforms();
     }
-
-    private readonly MatrixTransform _transform = new();
+    private readonly MatrixTransform _transform = new();
 
     private bool _panning;
     private Point _panStart;
@@ -128,6 +127,10 @@ public partial class ImageViewerControl : UserControl
             {
                 _hasFirstFit = true;
             }
+        }
+        else
+        {
+            Dispatcher.BeginInvoke(new Action(ResetView), System.Windows.Threading.DispatcherPriority.Loaded);
         }
         RedrawOverlays();
     }
@@ -181,10 +184,9 @@ public partial class ImageViewerControl : UserControl
         else
         {
             newBmp.TryGetSourcePixelSize(out var sourceWidth, out var sourceHeight);
-            var changed = c._lastPixelWidth != sourceWidth || c._lastPixelHeight != sourceHeight;
             c._lastPixelWidth = sourceWidth;
             c._lastPixelHeight = sourceHeight;
-            if (changed || !c._hasFirstFit || c._transform.Matrix.IsIdentity)
+            if (!c._hasFirstFit || c._transform.Matrix.IsIdentity)
             {
                 c._hasFirstFit = true;
                 c.ResetView();

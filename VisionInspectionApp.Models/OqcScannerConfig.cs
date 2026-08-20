@@ -38,6 +38,7 @@ public class OqcScannerConfig
     public bool EnableCodeCrop { get; set; } = false;
     public int CropStartIndex { get; set; } = 0;
     public int CropLength { get; set; } = 0;
+    public int ScanTimeoutMs { get; set; } = 3000;
 }
 
 public class OqcScanHistoryEntry : System.ComponentModel.INotifyPropertyChanged

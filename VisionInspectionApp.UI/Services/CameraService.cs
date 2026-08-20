@@ -44,6 +44,14 @@ public sealed class CameraService : IDisposable
     private string _simulatorCustomImagePath = "";
     private bool _simulatorEnableRandomTransform = false;
 
+    // Saved Device Details for persistent reconnect on app startup
+    private string _savedDeviceVendor = "";
+    private string _savedDeviceModelName = "";
+    private string _savedDeviceSerialNumber = "";
+    private string _savedDeviceIpAddress = "";
+    private string _savedDeviceMacAddress = "";
+    private string _savedDeviceInterfaceType = "";
+
     public event EventHandler<Mat>? FrameCaptured;
     public event EventHandler<string>? ErrorOccurred;
 
@@ -193,26 +201,73 @@ public sealed class CameraService : IDisposable
                 return;
             }
 
-            for (int i = 0; i < 3; i++)
+            // 1. Quét danh sách các camera đang cắm vào máy tính
+            var allDevices = CameraDriverFactory.ScanAllDevices();
+
+            CameraDeviceInfo? targetDevice = null;
+
+            // 2. Tìm camera đã dùng gần nhất theo SerialNumber hoặc IP hoặc Vendor
+            if (!string.IsNullOrWhiteSpace(_savedDeviceSerialNumber))
             {
-                if (_isDisposed) break;
-
-                if (SavedIsRtsp && !string.IsNullOrWhiteSpace(SavedRtspUrl))
-                {
-                    await StartCameraCaptureInternalAsync(fps: 30, rtspUrl: SavedRtspUrl);
-                }
-                else
-                {
-                    await StartCameraCaptureInternalAsync(cameraIndex: SavedCameraIndex, fps: 30);
-                }
-
-                if (_isRunning)
-                {
-                    break;
-                }
-
-                await Task.Delay(300);
+                targetDevice = allDevices.FirstOrDefault(d => string.Equals(d.SerialNumber, _savedDeviceSerialNumber, StringComparison.OrdinalIgnoreCase));
             }
+
+            if (targetDevice == null && !string.IsNullOrWhiteSpace(_savedDeviceIpAddress))
+            {
+                targetDevice = allDevices.FirstOrDefault(d => string.Equals(d.IpAddress, _savedDeviceIpAddress, StringComparison.OrdinalIgnoreCase));
+            }
+
+            if (targetDevice == null && Enum.TryParse<CameraVendor>(_savedDeviceVendor, out var savedVendor))
+            {
+                targetDevice = allDevices.FirstOrDefault(d => d.Vendor == savedVendor && (string.IsNullOrEmpty(_savedDeviceModelName) || string.Equals(d.ModelName, _savedDeviceModelName, StringComparison.OrdinalIgnoreCase)))
+                            ?? allDevices.FirstOrDefault(d => d.Vendor == savedVendor);
+            }
+
+            if (targetDevice == null && _savedIsRtsp && !string.IsNullOrWhiteSpace(_savedRtspUrl))
+            {
+                targetDevice = new CameraDeviceInfo
+                {
+                    Vendor = CameraVendor.Rtsp,
+                    InterfaceType = CameraInterfaceType.RTSP,
+                    Index = -1,
+                    ModelName = "Custom RTSP Camera",
+                    RtspUrl = _savedRtspUrl
+                };
+            }
+
+            if (targetDevice == null && _savedCameraIndex >= 0)
+            {
+                targetDevice = allDevices.FirstOrDefault(d => d.Vendor == CameraVendor.WebcamDirectShow && d.Index == _savedCameraIndex);
+            }
+
+            // 3. Nếu không tìm thấy camera cũ, ưu tiên camera công nghiệp thực tế (Hikrobot/Basler/Cognex/USB) hoặc fallback Simulator
+            if (targetDevice == null)
+            {
+                targetDevice = allDevices.FirstOrDefault(d => d.Vendor == CameraVendor.Hikrobot)
+                            ?? allDevices.FirstOrDefault(d => d.Vendor == CameraVendor.Basler)
+                            ?? allDevices.FirstOrDefault(d => d.Vendor == CameraVendor.Cognex)
+                            ?? allDevices.FirstOrDefault(d => d.Vendor == CameraVendor.WebcamDirectShow)
+                            ?? allDevices.FirstOrDefault(d => d.Vendor == CameraVendor.Simulator)
+                            ?? new CameraDeviceInfo
+                            {
+                                Vendor = CameraVendor.Simulator,
+                                InterfaceType = CameraInterfaceType.Virtual,
+                                Index = SimulatorCameraIndex,
+                                ModelName = "🎮 Camera Giả Lập Công Nghiệp"
+                            };
+            }
+
+            // 4. Mở camera và bật Live View ngay lập tức để người dùng sẵn sàng căn chỉnh trên tab OQC Scanner
+            _currentParameters.IsLiveViewEnabled = true;
+            bool ok = await StartDriverCameraInternalAsync(targetDevice, _currentParameters);
+            if (ok && _activeDriver != null)
+            {
+                await _activeDriver.StartGrabbingAsync();
+            }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[CameraService] StartSavedCameraAsync exception: {ex.Message}");
         }
         finally
         {
@@ -504,6 +559,21 @@ public sealed class CameraService : IDisposable
             }
 
             await _activeDriver.ApplyParametersAsync(_currentParameters);
+
+            // Lưu lại thiết bị đã kết nối thành công để tự động kết nối lại khi app khởi động
+            if (device.Vendor != CameraVendor.Simulator)
+            {
+                _savedDeviceVendor = device.Vendor.ToString();
+                _savedDeviceModelName = device.ModelName ?? "";
+                _savedDeviceSerialNumber = device.SerialNumber ?? "";
+                _savedDeviceIpAddress = device.IpAddress ?? "";
+                _savedDeviceMacAddress = device.MacAddress ?? "";
+                _savedDeviceInterfaceType = device.InterfaceType.ToString();
+                _savedCameraIndex = device.Index;
+                _savedRtspUrl = device.RtspUrl ?? "";
+                _savedIsRtsp = device.Vendor == CameraVendor.Rtsp;
+                SaveSettings();
+            }
 
             if (_currentParameters.IsLiveViewEnabled)
             {
@@ -843,8 +913,23 @@ public sealed class CameraService : IDisposable
                     _desiredFps = settings.DesiredFps > 0 ? settings.DesiredFps : 120;
                     _simulatorCustomImagePath = settings.SimulatorCustomImagePath ?? "";
                     _simulatorEnableRandomTransform = settings.SimulatorEnableRandomTransform;
+                    _savedDeviceVendor = settings.SavedDeviceVendor ?? "";
+                    _savedDeviceModelName = settings.SavedDeviceModelName ?? "";
+                    _savedDeviceSerialNumber = settings.SavedDeviceSerialNumber ?? "";
+                    _savedDeviceIpAddress = settings.SavedDeviceIpAddress ?? "";
+                    _savedDeviceMacAddress = settings.SavedDeviceMacAddress ?? "";
+                    _savedDeviceInterfaceType = settings.SavedDeviceInterfaceType ?? "";
+
+                    if (settings.SavedParameters != null)
+                    {
+                        _currentParameters = settings.SavedParameters.Clone();
+                    }
+
                     _currentParameters.CustomImagePath = _simulatorCustomImagePath;
                     _currentParameters.EnableRandomTransform = _simulatorEnableRandomTransform;
+                    _currentParameters.Brightness = _brightness;
+                    _currentParameters.Contrast = _contrast;
+                    _currentParameters.IsGrayscale = _isGrayscale;
                     return;
                 }
             }
@@ -862,6 +947,12 @@ public sealed class CameraService : IDisposable
         _desiredFps = 120;
         _simulatorCustomImagePath = "";
         _simulatorEnableRandomTransform = false;
+        _savedDeviceVendor = "";
+        _savedDeviceModelName = "";
+        _savedDeviceSerialNumber = "";
+        _savedDeviceIpAddress = "";
+        _savedDeviceMacAddress = "";
+        _savedDeviceInterfaceType = "";
         _currentParameters.CustomImagePath = "";
         _currentParameters.EnableRandomTransform = false;
     }
@@ -882,7 +973,14 @@ public sealed class CameraService : IDisposable
                 DesiredHeight = _desiredHeight,
                 DesiredFps = _desiredFps,
                 SimulatorCustomImagePath = _simulatorCustomImagePath ?? "",
-                SimulatorEnableRandomTransform = _simulatorEnableRandomTransform
+                SimulatorEnableRandomTransform = _simulatorEnableRandomTransform,
+                SavedDeviceVendor = _savedDeviceVendor,
+                SavedDeviceModelName = _savedDeviceModelName,
+                SavedDeviceSerialNumber = _savedDeviceSerialNumber,
+                SavedDeviceIpAddress = _savedDeviceIpAddress,
+                SavedDeviceMacAddress = _savedDeviceMacAddress,
+                SavedDeviceInterfaceType = _savedDeviceInterfaceType,
+                SavedParameters = _currentParameters.Clone()
             };
             var json = System.Text.Json.JsonSerializer.Serialize(settings, new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
             System.IO.File.WriteAllText(_settingsPath, json);
@@ -903,6 +1001,13 @@ public sealed class CameraService : IDisposable
         public int DesiredFps { get; set; } = 120;
         public string SimulatorCustomImagePath { get; set; } = "";
         public bool SimulatorEnableRandomTransform { get; set; }
+        public string SavedDeviceVendor { get; set; } = "";
+        public string SavedDeviceModelName { get; set; } = "";
+        public string SavedDeviceSerialNumber { get; set; } = "";
+        public string SavedDeviceIpAddress { get; set; } = "";
+        public string SavedDeviceMacAddress { get; set; } = "";
+        public string SavedDeviceInterfaceType { get; set; } = "";
+        public CameraParameters? SavedParameters { get; set; }
     }
 
     public void Dispose()

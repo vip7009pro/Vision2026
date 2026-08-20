@@ -3013,8 +3013,11 @@ namespace VisionInspectionApp.UI.ViewModels
             SelectedNode = null;
             _config = null;
             _lastRun = null;
+            LastResult = null;
             _lastRunError = null;
-            _sharedImage.SetImage(null); // Clear ?nh preview
+            _sharedImage.SetImage(null); // Clear ảnh preview
+            FinalPreviewImage = null;
+            SelectedNodePreviewImage = null;
             SelectedNodeOverlayItems.Clear();
             FinalOverlayItems.Clear();
             TextNode_ConditionRows.Clear();

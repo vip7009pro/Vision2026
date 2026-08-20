@@ -1,5 +1,6 @@
 using System;
 using System.Collections.ObjectModel;
+using System.ComponentModel;
 using System.Data;
 using System.IO;
 using System.Threading.Tasks;
@@ -132,6 +133,8 @@ public partial class OqcScannerViewModel : ObservableObject
         ToggleLiveCameraCommand = new RelayCommand(ToggleLiveCamera);
 
         _inspectionViewModel.InspectionCompletedAsync += HandleInspectionCompletedAsync;
+        _toolEditorViewModel.InspectionCompletedAsync += HandleInspectionCompletedAsync;
+        _toolEditorViewModel.PropertyChanged += OnToolEditorPropertyChanged;
 
         // Subscribe to CameraService frame stream for live alignment preview
         _cameraService.FrameCaptured += OnCameraFrameCaptured;
@@ -142,6 +145,20 @@ public partial class OqcScannerViewModel : ObservableObject
 
         // Initialize Settings properties
         InitSettingsProperties();
+    }
+
+    private void OnToolEditorPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(ToolEditorViewModel.FinalOverlayItems) ||
+            e.PropertyName == nameof(ToolEditorViewModel.FinalPreviewImage) ||
+            e.PropertyName == nameof(ToolEditorViewModel.SelectedNodePreviewImage) ||
+            e.PropertyName == nameof(ToolEditorViewModel.SelectedNodeOverlayItems))
+        {
+            if (!IsShowingLiveCamera)
+            {
+                RefreshPreviewFromToolEditor();
+            }
+        }
     }
 
     private async Task RunTaskWith1SecLoadingTimeoutAsync(Func<Task> asyncAction, string loadingMsg)
@@ -255,35 +272,93 @@ public partial class OqcScannerViewModel : ObservableObject
         if (IsScanning) return;
 
         IsScanning = true;
-        StatusMessage = "📷 Đang chụp ảnh và nhận diện mã QR/Barcode từ Camera...";
+        int timeoutMs = _oqcService.Config.ScanTimeoutMs > 0 ? _oqcService.Config.ScanTimeoutMs : 3000;
+        StatusMessage = $"📷 Đang nhận diện mã QR/Barcode từ Camera (Timeout: {timeoutMs / 1000.0:F1}s)...";
         StatusBrush = Brushes.DodgerBlue;
 
         try
         {
+            var startTime = DateTime.UtcNow;
+            CameraCodeScanResult? result = null;
+
             await RunTaskWith1SecLoadingTimeoutAsync(async () =>
             {
-                using var snapshot = await _cameraService.CaptureSnapshotAsync();
+                // 1. Chụp 1 ảnh từ camera tại thời điểm bấm Space
+                using var snapshot = _cameraService.TryGetLatestFrameClone() ?? await _cameraService.CaptureSnapshotAsync();
                 if (snapshot == null || snapshot.Empty())
                 {
-                    StatusMessage = "❌ Không lấy được hình ảnh từ Camera! Vui lòng kiểm tra kết nối Camera.";
-                    StatusBrush = Brushes.Red;
                     return;
                 }
 
-                var result = await Task.Run(() => _oqcService.DecodeCodeFromImage(snapshot, _oqcService.Config));
-                if (!result.Success || string.IsNullOrWhiteSpace(result.ProcessedCode))
+                // 2. Chạy thuật toán nhận diện mã với giới hạn thời gian Timeout
+                var decodeTask = Task.Run(() => _oqcService.DecodeCodeFromImage(snapshot, _oqcService.Config));
+                var completedTask = await Task.WhenAny(decodeTask, Task.Delay(timeoutMs));
+
+                if (completedTask == decodeTask)
                 {
-                    StatusMessage = $"❌ {result.ErrorMessage}";
-                    StatusBrush = Brushes.Orange;
-                    return;
+                    result = await decodeTask;
                 }
+            }, $"🔍 Đang phân tích & nhận diện mã 360° đa tầng... (Timeout: {timeoutMs / 1000.0:F1}s)");
 
+            double elapsedSec = (DateTime.UtcNow - startTime).TotalSeconds;
+
+            if (result != null && result.Success && !string.IsNullOrWhiteSpace(result.ProcessedCode))
+            {
+                // Nhận diện mã thành công trong thời gian timeout
                 ScannedCode = result.ProcessedCode;
                 StatusMessage = $"📷 Đã đọc mã từ Camera: '{result.ProcessedCode}' (Mã gốc: '{result.RawCode}', Loại: {result.CodeType}). Đang tra DB...";
                 StatusBrush = Brushes.DodgerBlue;
 
                 await ExecuteScanInternalAsync();
-            }, "🔍 Đang phân tích & nhận diện mã 360° đa tầng... Vui lòng chờ trong giây lát!");
+            }
+            else
+            {
+                // Quá thời gian timeout hoặc không nhận diện được mã -> TỰ ĐỘNG TRẢ VỀ FAIL!
+                string reasonMsg = (result == null)
+                    ? $"Hết thời gian chờ ({elapsedSec:F1}s / Timeout {timeoutMs}ms) khi nhận diện mã"
+                    : (string.IsNullOrWhiteSpace(result.ErrorMessage) ? "Không tìm thấy mã QR/Barcode hợp lệ trong ảnh" : result.ErrorMessage);
+
+                StatusMessage = $"❌ Nhận diện mã thất bại: {reasonMsg}!";
+                StatusBrush = Brushes.Red;
+
+                // Ghi nhận bản ghi FAIL vào lịch sử quét mã
+                var failEntry = new OqcScanHistoryEntry
+                {
+                    Time = DateTime.Now,
+                    ScannedCode = "NO_READ",
+                    ProductName = "Không tìm thấy mã",
+                    JobFilePath = "-",
+                    Success = false,
+                    InspectResult = "FAIL",
+                    ResultBrushHex = "#E53935",
+                    Message = reasonMsg,
+                    InspectDetails = $"Nhận diện mã không thành công sau {elapsedSec:F1}s (Timeout cấu hình: {timeoutMs}ms)."
+                };
+
+                System.Windows.Application.Current?.Dispatcher?.Invoke(() =>
+                {
+                    ScanHistory.Insert(0, failEntry);
+                    if (ScanHistory.Count > 100) ScanHistory.RemoveAt(ScanHistory.Count - 1);
+                });
+
+                // Nếu có cấu hình ghi log lên DB thì ghi nhận kết quả thất bại
+                if (_oqcService.Config.LogResultToDb && !string.IsNullOrWhiteSpace(_oqcService.Config.LogResultDbId))
+                {
+                    _ = Task.Run(async () =>
+                    {
+                        try
+                        {
+                            var failResult = new InspectionResult
+                            {
+                                Pass = false
+                            };
+                            failResult.Timings.TotalMs = (int)(elapsedSec * 1000);
+                            await _oqcService.LogInspectionResultAsync("NO_READ", "-", failResult, new VisionConfig { ProductName = "Timeout No Read Fail" }, _dbManager);
+                        }
+                        catch { }
+                    });
+                }
+            }
         }
         catch (Exception ex)
         {
@@ -506,7 +581,7 @@ public partial class OqcScannerViewModel : ObservableObject
         System.Windows.Application.Current?.Dispatcher?.Invoke(() =>
         {
             PreviewImage = _toolEditorViewModel.FinalPreviewImage ?? _toolEditorViewModel.SelectedNodePreviewImage;
-            var finalOverlays = _toolEditorViewModel.FinalOverlayItems;
+            var finalOverlays = _toolEditorViewModel.FinalOverlayItems ?? _toolEditorViewModel.SelectedNodeOverlayItems;
             _allOverlayItemsCache = finalOverlays != null ? new List<OverlayItem>(finalOverlays) : new List<OverlayItem>();
             UpdatePreviewOverlays();
         });

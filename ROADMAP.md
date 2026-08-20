@@ -419,7 +419,37 @@ Lộ trình tích hợp tính năng Chụp ảnh từ camera và hỗ trợ các
     - Thay thế trình hiển thị tĩnh bằng `ImageViewerControl` trên `JobCameraSettingsWindow.xaml` và `CameraSettingsView.xaml`.
     - Hỗ trợ chọn, di chuyển khung ROI và kéo 8 điểm tay cầm (Handles) để co giãn kích thước ROI trực tiếp bằng chuột trên Canvas.
     - Đồng bộ hóa 2 chiều thời gian thực: Kéo thả trên màn hình Preview tự động cập nhật các ô `Offset X`, `Offset Y`, `Width`, `Height` và Slider bên phải; ngược lại chỉnh sửa ô số bên phải tự động vẽ lại khung ROI vàng/xanh sáng trên Preview.
-  - `Biên Dịch & Kiểm Thử Thành Công 100%`: Solution biên dịch **0 Error(s)**, serialization JSON đạt độ chính xác 100%.
+- [x] Task 174: Tự động kết nối lại Camera đã dùng gần nhất khi khởi động ứng dụng & Bật Live View ngay tại tab OQC Scanner:
+  - `Tự Động Lưu & Khôi Phục Camera Gần Nhất Theo Phần Cứng Thực Tế`:
+    - Mở rộng `CameraAdjustSettings` trong `CameraService.cs` lưu chi tiết: `SavedDeviceVendor`, `SavedDeviceModelName`, `SavedDeviceSerialNumber`, `SavedDeviceIpAddress`, `SavedDeviceMacAddress`, `SavedDeviceInterfaceType`, `SavedCameraIndex`, `SavedRtspUrl`, `SavedParameters`.
+    - Khi khởi động app, hàm `StartSavedCameraAsync()` quét toàn bộ thiết bị qua `CameraDriverFactory.ScanAllDevices()`, thông minh tìm và kết nối lại đúng camera phần cứng công nghiệp (Hikrobot / Basler / Cognex / USB / RTSP) theo Serial Number / IP / Vendor.
+    - Trường hợp không có thiết bị phần cứng cắm vào, tự động chuyển sang Camera giả lập (Simulator) để đảm bảo app luôn sẵn sàng hoạt động.
+  - `Tự Động Bật Live View Sẵn Sàng Căn Chỉnh Trên Tab OQC Scanner`:
+    - Khi app khởi động ở tab OQC Scanner (`SelectedTabIndex = 3`), `CameraService` tự động kích hoạt `IsLiveViewEnabled = true` và `StartGrabbingAsync()`.
+    - Luồng ảnh thời gian thực lập tức hiển thị trên màn hình Preview của tab OQC Scanner mà không cần người dùng thao tác thêm, sẵn sàng cho công nhân/kỹ sư đặt sản phẩm vào căn chỉnh.
+- [x] Task 176: Tích hợp cơ chế Timeout cho quá trình nhận diện mã & Tự động trả về FAIL khi quá thời gian chờ (Task 176):
+  - `Cấu hình Timeout Nhận Diện Mã Trong Cửa Sổ Cấu Hình Tra Cứu & Ghi Log OQC`:
+    - Mở rộng `OqcScannerConfig.cs`: Bổ sung trường `ScanTimeoutMs` (mặc định 3000ms).
+    - Cập nhật `OqcSettingsDialog.xaml`: Bổ sung giao diện thiết lập `⏱️ Thời gian chờ quét mã (Timeout)` tính bằng ms.
+    - Cập nhật `OqcScannerViewModel.Settings.cs`: Đồng bộ nạp và lưu thuộc tính `ScanTimeoutMs` vào file cấu hình `oqc_scanner_config.json`.
+  - `Đếm Timeout Nhận Diện Mã Sau Khi Bấm Space & Tự Động Báo FAIL`:
+    - Cải tiến `ExecuteScanFromCameraAsync` trong `OqcScannerViewModel.cs`: Khi người dùng nhấn phím `Space`, camera chụp 1 frame ảnh và bắt đầu đếm thời gian Timeout cho tác vụ nhận diện mã.
+    - Nếu nhận diện được mã QR/Barcode hợp lệ trong thời gian Timeout: Ngay lập tức tra cứu Database, nạp Job và thực thi kiểm tra tự động.
+    - Nếu thuật toán nhận diện mã chạy hết thời gian Timeout hoặc không tìm thấy mã hợp lệ trong ảnh: Tự động trả về kết quả `FAIL` (màu đỏ), ghi bản ghi `NO_READ` / `FAIL` vào bảng lịch sử `ScanHistory` và ghi log thất bại lên DB (nếu bật `LogResultToDb`).
+- [x] Task 177: Khắc phục triệt để lỗi AutoFit khi Live View & Tự động hiển thị kết quả Final và hỗ trợ phím F5 quay lại Live Cam:
+  - `Khắc Phục AutoFit Chỉ Chạy Duy Nhất 1 Lần Khi Khởi Động`:
+    - Sửa `ImageViewerControl.xaml.cs`: Trong `OnImageSourceChanged`, chỉ thực hiện fit hình ảnh lần đầu tiên (`!_hasFirstFit`). Khi luồng Live View liên tục truyền frame mới đến, giữ nguyên hoàn toàn tỷ lệ zoom và vị trí pan mà người dùng đã kéo/phóng to mà không bị giật hoặc tự động reset về fit.
+    - Sửa `OqcScannerView.xaml.cs`: Xóa bỏ trigger AutoFit lặp lại trên `IsVisibleChanged`. Người dùng có toàn quyền kiểm soát zoom/pan và có thể nhấn nút **🎯 Fit View** bất kỳ lúc nào để Fit lại.
+  - `Tự Động Chuyển Sang Xem Kết Quả Final Khi Chạy Xong Job & Phím F5 Quay Lại Live View`:
+    - Cập nhật `OqcScannerViewModel.cs`: Đăng ký lắng nghe sự kiện `_toolEditorViewModel.InspectionCompletedAsync` trong constructor. Ngay khi Job chạy xong, hệ thống tự động tắt Live Stream (`IsShowingLiveCamera = false`), cập nhật `PreviewImage` thành ảnh Final và vẽ toàn bộ đồ họa `OverlayItems` (kết quả đo, bounding box, nhãn PASS/NG).
+    - Cập nhật `OqcScannerView.xaml.cs`: Thêm xử lý phím tắt **F5** (`Key.F5`) để người dùng có thể ngay lập tức chuyển đổi từ chế độ xem kết quả Final quay trở lại Live Camera một cách nhanh chóng và tiện lợi.
+- [x] Task 178: Sửa triệt để lỗi ROI và Overlay không tự động xuất hiện sau khi Job kiểm tra chạy xong:
+  - `Đồng Bộ Thứ Tự Render Previews & Overlay Trước Khi Kích Hoạt Sự Kiện InspectionCompleted`:
+    - Sửa `ToolEditorViewModel.Engine.cs`: Trong cả `RunFlowAsync` và `RunSingleFlowFromImageFileAsync`, di chuyển lời gọi `RefreshPreviews()` lên **TRƯỚC** phép gán `LastResult = _lastRun;`. Đảm bảo `FinalPreviewImage` và `FinalOverlayItems` đã được tính toán và dựng hoàn tất trước khi bắn sự kiện hoàn thành kiểm tra.
+    - Sửa `ToolEditorViewModel.cs`: Bổ sung reset `LastResult = null;`, `FinalPreviewImage = null;`, `SelectedNodePreviewImage = null;` trong `ClearActiveGraph()` khi nạp Job mới để tránh lẫn lộn dữ liệu cũ.
+  - `Đồng Bộ Hai Chiều Trực Tiếp Qua PropertyChanged Giữa ToolEditor và OqcScanner`:
+    - Cập nhật `OqcScannerViewModel.cs`: Đăng ký lắng nghe sự kiện `_toolEditorViewModel.PropertyChanged`. Khi `FinalOverlayItems`, `FinalPreviewImage`, `SelectedNodePreviewImage` hoặc `SelectedNodeOverlayItems` được cập nhật, `OqcScannerViewModel` tự động cập nhật ngay lập tức sang `PreviewImage` và `OverlayItems` mà người dùng không cần phải click thủ công vào nút "Xem kết quả final".
+  - `Biên Dịch & Kiểm Thử Thành Công 100%`: Solution biên dịch **0 Error(s)**, chạy test thành công.
 
 
 
