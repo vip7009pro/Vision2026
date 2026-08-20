@@ -506,6 +506,13 @@ Lộ trình tích hợp tính năng Chụp ảnh từ camera và hỗ trợ các
   - `Export / Import Cấu Hình OQC`: Nút xuất và nạp cấu hình OQC dạng JSON trong hộp thoại cài đặt để sao lưu và chia sẻ cấu hình giữa các máy.
   - `Hỗ Trợ Token {UUID} & Ghi Log Phép Đo Chi Tiết Vào DB`: Tạo UUID ngẫu nhiên duy nhất cho mỗi lượt quét và thực thi truy vấn log chi tiết từng phép đo vào bảng `OqcInspectResult`.
   - `Biên Dịch & Kiểm Thử Thành Công 100%`: Solution biên dịch **0 Error(s)**.
+- [x] Task 186: Cải tiến OQC Scanner, CodeDetection Spec chuỗi, AutoFit/Zoom/Pan ảnh Output và Database Logging Feedback:
+  - `Tích Hợp ImageViewerControl Cho OqcScanDetailDialog`: Tự động Auto Fit ảnh output khi mở cửa sổ; hỗ trợ Zoom bằng con lăn chuột / nút bấm và Pan kéo chuột mượt mà.
+  - `Định Dạng Tiêu Chuẩn & Dung Sai Cho Tool Không Có Spec Số`: Ẩn hiển thị (để trắng) các cột Spec, Dung sai, Giới hạn với các tool không dùng số đo nominal (`CircleFinder`, `SurfaceCompare`, `BlobDetection`, `CodeDetection`...).
+  - `Sửa Lỗi Hiển Thị Kết Quả Của CodeDetection`: Tách bạch `CustomSpecText` và `CustomResultText`, loại bỏ hoàn toàn hiện tượng ghép số `0.000` hoặc `1.000` vào chuỗi mã QR/Barcode.
+  - `Bổ Sung Trường Spec (Chuỗi Văn Bản) Cho Tool CodeDetection`: Thêm `ExpectedText` vào cấu hình và record kết quả; tự động đánh giá PASS/FAIL khi chuỗi đọc được khớp với Spec mà không cần dùng tool Condition.
+  - `Phản Hồi Trực Quan & Khắc Phục Lỗi Ghi Log Database`: Inject chuỗi đã cắt gọt `processedCode` vào token `{ScannedCode}` và `{ProductCode}` giúp loại bỏ lỗi `String or binary data would be truncated`. Định dạng các token số `{Spec}, {UpperTor}, {LowerTor}, {MinSpec}, {MaxSpec}, {Result}` thành số thực thuần túy (với tool dạng text trả về 0/1) loại bỏ hoàn toàn lỗi `Error converting data type nvarchar to float`. Bổ sung token `{TextSpect}`/`{TextSpec}` và `{TextResult}` cho các cột chuỗi trong DB. In debug log chi tiết câu truy vấn SQL; hiển thị thông báo kết quả ghi DB ngay trên Status Bar và cột "Ghi DB" trong bảng lịch sử.
+  - `Biên Dịch & Kiểm Thử Thành Công 100%`: Solution biên dịch **0 Error(s)**.
 
 
 

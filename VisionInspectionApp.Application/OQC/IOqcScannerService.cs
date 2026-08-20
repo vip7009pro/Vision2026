@@ -45,5 +45,5 @@ public interface IOqcScannerService
         string productCode, string jobFilePath, IDbManagerService dbManager);
 
     Task<(bool Success, string Message)> LogInspectionResultAsync(
-        string scannedCode, string uuid, string jobFilePath, InspectionResult result, VisionConfig config, IDbManagerService dbManager, System.Collections.Generic.List<OqcMeasurementDetail>? measurementDetails = null);
+        string scannedCode, string uuid, string jobFilePath, InspectionResult result, VisionConfig config, IDbManagerService dbManager, System.Collections.Generic.List<OqcMeasurementDetail>? measurementDetails = null, string rawCode = "");
 }

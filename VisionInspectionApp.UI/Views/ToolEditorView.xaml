@@ -2575,8 +2575,13 @@
                                 <CheckBox Content="Aztec" IsChecked="{Binding Cdt_EnableAztec, UpdateSourceTrigger=LostFocus}" Margin="0,0,0,6" />
 
                                 <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
-                                    <TextBlock Text="Text" Width="60" VerticalAlignment="Top" />
-                                    <TextBlock Text="{Binding SelectedRunText, TargetNullValue='-'}" TextWrapping="Wrap" Width="160" />
+                                    <TextBlock Text="Spec" Width="60" VerticalAlignment="Center" FontWeight="SemiBold" ToolTip="Chuỗi mã tiêu chuẩn mong đợi (để trống nếu chấp nhận mọi mã đọc được)" />
+                                    <TextBox Text="{Binding Cdt_ExpectedText, UpdateSourceTrigger=PropertyChanged}" Width="160" ToolTip="Nhập chuỗi mã mong đợi (VD: GH63-22569A). Để trống nếu không kiểm tra chuỗi." />
+                                </StackPanel>
+
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                                    <TextBlock Text="Đọc được" Width="60" VerticalAlignment="Top" Foreground="{DynamicResource TextMutedBrush}" />
+                                    <TextBlock Text="{Binding SelectedRunText, TargetNullValue='-'}" TextWrapping="Wrap" Width="160" FontWeight="SemiBold" Foreground="#2196F3" />
                                 </StackPanel>
                             </StackPanel>
 

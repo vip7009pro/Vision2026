@@ -172,7 +172,7 @@ public sealed record AngleResult(
     Point2d ADir,
     Point2d BDir);
 
-public sealed record CodeDetectionResult(string Name, bool Found, string Text, Rect BoundingBox, double Angle = 0.0);
+public sealed record CodeDetectionResult(string Name, bool Found, string Text, Rect BoundingBox, double Angle = 0.0, bool Pass = true, string ExpectedSpec = "");
 
 public sealed record CreatePointResult(string Name, bool Success, double X, double Y);
 

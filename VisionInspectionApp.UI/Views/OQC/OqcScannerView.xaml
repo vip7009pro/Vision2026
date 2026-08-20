@@ -219,6 +219,7 @@
                                     </DataGridTemplateColumn.CellTemplate>
                                 </DataGridTemplateColumn>
                                 <DataGridTextColumn Header="Tra cứu DB" Binding="{Binding Message}" Width="85" />
+                                <DataGridTextColumn Header="Ghi DB" Binding="{Binding DbLogStatus}" Width="75" />
                                 <DataGridTemplateColumn Header="KQ Kiểm Tra" Width="110">
                                     <DataGridTemplateColumn.CellTemplate>
                                         <DataTemplate>

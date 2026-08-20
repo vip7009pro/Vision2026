@@ -1826,6 +1826,23 @@ namespace VisionInspectionApp.UI.ViewModels
                 RequestAutoSave();
             }
         }
+
+        public string Cdt_ExpectedText
+        {
+            get => SelectedCodeDetectionDef()?.ExpectedText ?? string.Empty;
+            set
+            {
+                var d = SelectedCodeDetectionDef();
+                if (d is null)
+                    return;
+                if (d.ExpectedText == value)
+                    return;
+                d.ExpectedText = value ?? string.Empty;
+                RefreshPreviews();
+                OnPropertyChanged();
+                RequestAutoSave();
+            }
+        }
     
         private bool GetCdtSym(CodeSymbology sym)
         {

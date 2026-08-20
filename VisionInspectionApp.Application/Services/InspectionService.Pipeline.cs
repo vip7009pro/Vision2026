@@ -2246,7 +2246,7 @@ public partial class InspectionService
                     {
                         __swNode.Stop();
                         result.Timings.NodeTimings[cdt.Name] = (int)__swNode.ElapsedMilliseconds;
-                        return new CodeDetectionResult(cdt.Name, Found: false, Text: string.Empty, BoundingBox: default, Angle: totalAngleDeg);
+                        return new CodeDetectionResult(cdt.Name, Found: false, Text: string.Empty, BoundingBox: default, Angle: totalAngleDeg, Pass: false, ExpectedSpec: cdt.ExpectedText ?? "");
                     }
 
                     using var gray = crop.Channels() == 1 ? crop.Clone() : crop.CvtColor(ColorConversionCodes.BGR2GRAY);
@@ -2290,7 +2290,7 @@ public partial class InspectionService
                         }
                     }
 
-                    if (decoded is null || string.IsNullOrWhiteSpace(decoded.Text)) { matchedMatToDispose?.Dispose(); __swNode.Stop(); result.Timings.NodeTimings[cdt.Name] = (int)__swNode.ElapsedMilliseconds; return new CodeDetectionResult(cdt.Name, Found: false, Text: string.Empty, BoundingBox: default, Angle: totalAngleDeg); }
+                    if (decoded is null || string.IsNullOrWhiteSpace(decoded.Text)) { matchedMatToDispose?.Dispose(); __swNode.Stop(); result.Timings.NodeTimings[cdt.Name] = (int)__swNode.ElapsedMilliseconds; return new CodeDetectionResult(cdt.Name, Found: false, Text: string.Empty, BoundingBox: default, Angle: totalAngleDeg, Pass: false, ExpectedSpec: cdt.ExpectedText ?? ""); }
                     var rawPts = decoded.ResultPoints; var ptsInCrop = new List<Point2d>();
                     if (rawPts is not null)
                     {
@@ -2385,7 +2385,20 @@ public partial class InspectionService
                     int hBox = (int)Math.Max(10, Math.Round(codeH));
                     var globalCenter = MapToGlobal(localCenter, crop.Width, crop.Height, centerFound, totalAngleDeg);
                     var bb = new Rect((int)Math.Round(globalCenter.X - wBox / 2.0), (int)Math.Round(globalCenter.Y - hBox / 2.0), wBox, hBox);
-                    __swNode.Stop(); result.Timings.NodeTimings[cdt.Name] = (int)__swNode.ElapsedMilliseconds; return new CodeDetectionResult(cdt.Name, Found: true, Text: decoded.Text, BoundingBox: bb, Angle: totalAngleDeg);
+
+                    bool isCodePass = true;
+                    if (!string.IsNullOrWhiteSpace(cdt.ExpectedText))
+                    {
+                        isCodePass = string.Equals(decoded.Text?.Trim(), cdt.ExpectedText.Trim(), StringComparison.OrdinalIgnoreCase);
+                    }
+                    else
+                    {
+                        isCodePass = !string.IsNullOrWhiteSpace(decoded.Text);
+                    }
+
+                    __swNode.Stop();
+                    result.Timings.NodeTimings[cdt.Name] = (int)__swNode.ElapsedMilliseconds;
+                    return new CodeDetectionResult(cdt.Name, Found: true, Text: decoded.Text, BoundingBox: bb, Angle: totalAngleDeg, Pass: isCodePass, ExpectedSpec: cdt.ExpectedText ?? "");
                 }))
                 .ToArray();
 
@@ -2800,7 +2813,7 @@ public partial class InspectionService
             && result.LinePairDetections.All(x => x.Pass)
             && result.Diameters.All(x => x.Pass)
             && result.SurfaceCompares.All(x => x.Pass)
-            && result.CodeDetections.All(x => x.Found)
+            && result.CodeDetections.All(x => x.Pass)
             && result.Conditions.All(x => x.Pass)
             && (result.Defects?.Defects?.Count ?? 0) == 0;
 
@@ -3132,11 +3145,7 @@ public partial class InspectionService
         {
             foreach (var cdt in config.CodeDetections)
             {
-                if (cdt is not null && !string.IsNullOrWhiteSpace(cdt.Name))
-                {
-                    result.CodeDetections.Add(new CodeDetectionResult(cdt.Name, Found: false, Text: string.Empty, BoundingBox: new Rect(0, 0, 0, 0), Angle: 0.0));
-                    result.Timings.NodeTimings[cdt.Name] = 0;
-                }
+                    result.CodeDetections.Add(new CodeDetectionResult(cdt.Name, Found: false, Text: string.Empty, BoundingBox: new Rect(0, 0, 0, 0), Angle: 0.0, Pass: false, ExpectedSpec: cdt.ExpectedText ?? ""));
             }
         }
 

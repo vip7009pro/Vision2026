@@ -464,6 +464,8 @@ public sealed class CodeDetectionDefinition
     public List<CodeSymbology> Symbologies { get; set; } = new();
 
     public bool TryHarder { get; set; } = true;
+
+    public string ExpectedText { get; set; } = string.Empty;
 }
 
 public enum PreprocessRoiShape

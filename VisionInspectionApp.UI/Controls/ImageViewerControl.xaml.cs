@@ -240,6 +240,56 @@ public partial class ImageViewerControl : UserControl
         RedrawOverlays();
     }
 
+    public void ZoomIn(double factor = 1.25)
+    {
+        double cx = (PART_RootGrid?.ActualWidth ?? 0) / 2.0;
+        double cy = (PART_RootGrid?.ActualHeight ?? 0) / 2.0;
+        var m = _transform.Matrix;
+        m.ScaleAt(factor, factor, cx, cy);
+        _transform.Matrix = m;
+        UpdateInfoText();
+        RedrawOverlays();
+    }
+
+    public void ZoomOut(double factor = 1.25)
+    {
+        double cx = (PART_RootGrid?.ActualWidth ?? 0) / 2.0;
+        double cy = (PART_RootGrid?.ActualHeight ?? 0) / 2.0;
+        var m = _transform.Matrix;
+        m.ScaleAt(1.0 / factor, 1.0 / factor, cx, cy);
+        _transform.Matrix = m;
+        UpdateInfoText();
+        RedrawOverlays();
+    }
+
+    public void ResetView(double targetScale)
+    {
+        _panning = false;
+        if (ImageSource is not BitmapSource bmp || bmp.PixelWidth <= 0 || bmp.PixelHeight <= 0)
+        {
+            _transform.Matrix = Matrix.Identity;
+            UpdateInfoText();
+            return;
+        }
+
+        double containerW = PART_RootGrid?.ActualWidth ?? 0;
+        double containerH = PART_RootGrid?.ActualHeight ?? 0;
+        bmp.TryGetSourcePixelSize(out var sourceWidth, out var sourceHeight);
+        double imgW = sourceWidth;
+        double imgH = sourceHeight;
+
+        var tx = (containerW - imgW * targetScale) / 2.0;
+        var ty = (containerH - imgH * targetScale) / 2.0;
+
+        var m = Matrix.Identity;
+        m.Scale(targetScale, targetScale);
+        m.Translate(tx, ty);
+        _transform.Matrix = m;
+
+        UpdateInfoText();
+        RedrawOverlays();
+    }
+
     private Point? _lastMousePos;
 
     private void UpdateInfoText()

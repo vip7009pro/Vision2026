@@ -18,7 +18,11 @@ public partial class OqcScanDetailDialog : Window
         _entry = entry ?? throw new ArgumentNullException(nameof(entry));
         DataContext = _entry;
 
-        LoadOutputImage();
+        Loaded += (_, _) =>
+        {
+            LoadOutputImage();
+            ImageViewer?.ResetView();
+        };
     }
 
     private void LoadOutputImage()
@@ -34,7 +38,8 @@ public partial class OqcScanDetailDialog : Window
                 bi.EndInit();
                 bi.Freeze();
 
-                ImgOutputPreview.Source = bi;
+                ImageViewer.ImageSource = bi;
+                ImageViewer.Visibility = Visibility.Visible;
                 TxtNoImageMessage.Visibility = Visibility.Collapsed;
                 return;
             }
@@ -44,8 +49,29 @@ public partial class OqcScanDetailDialog : Window
             Debug.WriteLine($"Failed to load output image: {ex.Message}");
         }
 
-        ImgOutputPreview.Source = null;
+        ImageViewer.ImageSource = null;
+        ImageViewer.Visibility = Visibility.Collapsed;
         TxtNoImageMessage.Visibility = Visibility.Visible;
+    }
+
+    private void FitView_Click(object sender, RoutedEventArgs e)
+    {
+        ImageViewer?.ResetView();
+    }
+
+    private void ZoomIn_Click(object sender, RoutedEventArgs e)
+    {
+        ImageViewer?.ZoomIn();
+    }
+
+    private void ZoomOut_Click(object sender, RoutedEventArgs e)
+    {
+        ImageViewer?.ZoomOut();
+    }
+
+    private void Reset100_Click(object sender, RoutedEventArgs e)
+    {
+        ImageViewer?.ResetView(1.0);
     }
 
     private void OpenImageExternal_Click(object sender, RoutedEventArgs e)

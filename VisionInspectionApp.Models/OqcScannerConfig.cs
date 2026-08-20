@@ -52,6 +52,9 @@ public class OqcMeasurementDetail
     public int Index { get; set; } = 1;
     public string ToolName { get; set; } = "";
     public string ToolType { get; set; } = "";
+    public bool HasNumericSpec { get; set; } = true;
+    public string CustomSpecText { get; set; } = "";
+    public string CustomResultText { get; set; } = "";
     public double Spec { get; set; } = 0;
     public double TolPlus { get; set; } = 0;
     public double TolMinus { get; set; } = 0;
@@ -63,10 +66,44 @@ public class OqcMeasurementDetail
 
     public string Judge => Pass ? "PASS" : "NG";
     public string JudgeBrushHex => Pass ? "#2E7D32" : "#D32F2F";
-    public string FormattedSpec => $"{Spec:F3} {Unit}";
-    public string FormattedTol => $"+{TolPlus:F3} / -{TolMinus:F3}";
-    public string FormattedRange => $"[{Min:F3} ~ {Max:F3}]";
-    public string FormattedResult => double.IsNaN(Result) ? "N/A" : $"{Result:F3} {Unit}";
+
+    public string FormattedSpec
+    {
+        get
+        {
+            if (!string.IsNullOrEmpty(CustomSpecText)) return CustomSpecText;
+            if (!HasNumericSpec) return "";
+            return string.IsNullOrWhiteSpace(Unit) ? $"{Spec:F3}" : $"{Spec:F3} {Unit}".Trim();
+        }
+    }
+
+    public string FormattedTol
+    {
+        get
+        {
+            if (!HasNumericSpec) return "";
+            return $"+{TolPlus:F3} / -{TolMinus:F3}";
+        }
+    }
+
+    public string FormattedRange
+    {
+        get
+        {
+            if (!HasNumericSpec) return "";
+            return $"[{Min:F3} ~ {Max:F3}]";
+        }
+    }
+
+    public string FormattedResult
+    {
+        get
+        {
+            if (!string.IsNullOrEmpty(CustomResultText)) return CustomResultText;
+            if (double.IsNaN(Result)) return "N/A";
+            return string.IsNullOrWhiteSpace(Unit) ? $"{Result:F3}" : $"{Result:F3} {Unit}".Trim();
+        }
+    }
 }
 
 public class OqcScanHistoryEntry : System.ComponentModel.INotifyPropertyChanged
@@ -93,6 +130,20 @@ public class OqcScanHistoryEntry : System.ComponentModel.INotifyPropertyChanged
     public string OutputImagePath { get; set; } = "";
     public bool Success { get; set; } = false;
     public string Message { get; set; } = "";
+
+    private string _dbLogStatus = "";
+    public string DbLogStatus
+    {
+        get => _dbLogStatus;
+        set
+        {
+            if (_dbLogStatus != value)
+            {
+                _dbLogStatus = value;
+                PropertyChanged?.Invoke(this, new System.ComponentModel.PropertyChangedEventArgs(nameof(DbLogStatus)));
+            }
+        }
+    }
 
     private string _inspectResult = "-";
     public string InspectResult

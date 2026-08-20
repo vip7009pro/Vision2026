@@ -74,6 +74,7 @@ public partial class OqcScannerViewModel : ObservableObject
     private List<OverlayItem>? _allOverlayItemsCache;
     private bool _isRenderingLiveFrame = false;
     private string _lastScannedRawCode = "";
+    private string _lastScannedProcessedCode = "";
 
     public ObservableCollection<OqcScanHistoryEntry> ScanHistory { get; } = new();
 
@@ -486,6 +487,7 @@ public partial class OqcScannerViewModel : ObservableObject
         }
 
         string code = processedCode;
+        _lastScannedProcessedCode = code;
         _lastScannedRawCode = rawCode;
         StatusMessage = $"🔍 Đang tra cứu cơ sở dữ liệu cho mã '{code}'" + (code != rawCode ? $" (Mã gốc: '{rawCode}')" : "") + "...";
         StatusBrush = Brushes.DodgerBlue;
@@ -606,9 +608,11 @@ public partial class OqcScannerViewModel : ObservableObject
         OnPropertyChanged(nameof(PreviewHeaderTitle));
         OnPropertyChanged(nameof(LiveToggleButtonText));
 
-        string rawCode = !string.IsNullOrWhiteSpace(_lastScannedRawCode)
-            ? _lastScannedRawCode
+        string processedCode = !string.IsNullOrWhiteSpace(_lastScannedProcessedCode)
+            ? _lastScannedProcessedCode
             : (!string.IsNullOrWhiteSpace(_toolEditorViewModel.ProductCode) ? _toolEditorViewModel.ProductCode : config?.ProductCode ?? CurrentProductName);
+
+        string rawCode = !string.IsNullOrWhiteSpace(_lastScannedRawCode) ? _lastScannedRawCode : processedCode;
 
         string productName = CurrentProductName;
         string path = CurrentJobFilePath;
@@ -634,9 +638,10 @@ public partial class OqcScannerViewModel : ObservableObject
         {
             if (ScanHistory.Count > 0)
             {
-                var entry = ScanHistory.FirstOrDefault(e => string.Equals(e.ScannedCode, rawCode, StringComparison.OrdinalIgnoreCase)) 
+                var entry = ScanHistory.FirstOrDefault(e => string.Equals(e.ScannedCode, processedCode, StringComparison.OrdinalIgnoreCase) || string.Equals(e.ScannedCode, rawCode, StringComparison.OrdinalIgnoreCase)) 
                             ?? ScanHistory[0];
 
+                entry.ScannedCode = processedCode;
                 entry.Uuid = uuid;
                 entry.InspectResult = statusStr;
                 entry.InspectDetails = details;
@@ -645,8 +650,8 @@ public partial class OqcScannerViewModel : ObservableObject
                 entry.MeasurementDetails = measurementDetails;
 
                 StatusMessage = result.Pass
-                    ? $"✅ SẢN PHẨM '{productName}' ({rawCode}) -> KẾT QUẢ: PASS (OK)"
-                    : $"❌ SẢN PHẨM '{productName}' ({rawCode}) -> KẾT QUẢ: NG! Lý do: {details}";
+                    ? $"✅ SẢN PHẨM '{productName}' ({processedCode}) -> KẾT QUẢ: PASS (OK)"
+                    : $"❌ SẢN PHẨM '{productName}' ({processedCode}) -> KẾT QUẢ: NG! Lý do: {details}";
                 StatusBrush = statusBrush;
             }
 
@@ -657,7 +662,24 @@ public partial class OqcScannerViewModel : ObservableObject
         // Log result to Database if enabled
         if ((_oqcService.Config.LogResultToDb || _oqcService.Config.LogDetailResultToDb) && config != null)
         {
-            await _oqcService.LogInspectionResultAsync(rawCode, uuid, path, result, config, _dbManager, measurementDetails);
+            var (dbSuccess, dbMsg) = await _oqcService.LogInspectionResultAsync(processedCode, uuid, path, result, config, _dbManager, measurementDetails, rawCode);
+            System.Windows.Application.Current?.Dispatcher?.Invoke(() =>
+            {
+                if (ScanHistory.Count > 0)
+                {
+                    var entry = ScanHistory.FirstOrDefault(e => string.Equals(e.ScannedCode, processedCode, StringComparison.OrdinalIgnoreCase)) ?? ScanHistory[0];
+                    entry.DbLogStatus = dbSuccess ? "DB: OK" : "DB: LỖI";
+                }
+                if (!dbSuccess)
+                {
+                    StatusMessage += $" | ⚠️ Ghi DB thất bại: {dbMsg}";
+                }
+                else
+                {
+                    StatusMessage += $" | 💾 {dbMsg}";
+                }
+                _oqcService.SaveScanHistory(ScanHistory);
+            });
         }
     }
 

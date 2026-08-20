@@ -51,6 +51,23 @@
 
 ### Sửa lỗi và Cải thiện UX/UI (Phiên làm việc hiện tại)
 
+- **Cải tiến OQC Scanner, CodeDetection Spec chuỗi, AutoFit/Zoom/Pan ảnh Output và Database Logging Feedback (Task 186)**:
+  - **Tích Hợp ImageViewerControl Cho Cửa Sổ Chi Tiết OQC (`OqcScanDetailDialog.xaml`, `OqcScanDetailDialog.xaml.cs`)**:
+    - Tự động Auto Fit ảnh output khi mở cửa sổ; hỗ trợ Zoom bằng con lăn chuột / nút bấm và Pan kéo chuột mượt mà.
+  - **Định Dạng Tiêu Chuẩn & Dung Sai Cho Các Tool Không Có Spec Số (`OqcScannerConfig.cs`, `OqcScannerService.cs`)**:
+    - Ẩn hiển thị (để trắng) các cột Spec, Dung sai, Giới hạn với các tool không dùng số đo nominal (`CircleFinder`, `SurfaceCompare`, `BlobDetection`, `CodeDetection`...).
+  - **Khắc Phục Lỗi Hiển Thị Kết Quả Của Tool CodeDetection (`OqcScannerConfig.cs`, `OqcScannerService.cs`)**:
+    - Tách bạch `CustomSpecText` và `CustomResultText`, loại bỏ hoàn toàn hiện tượng ghép số `0.000` hoặc `1.000` vào chuỗi mã QR/Barcode.
+  - **Bổ Sung Trường Spec (Chuỗi Văn Bản) Cho Tool CodeDetection (`Class1.cs`, `InspectionResultModels.cs`, `InspectionService.Pipeline.cs`, `ToolEditorView.xaml`)**:
+    - Thêm trường `ExpectedText` vào cấu hình và record kết quả của CodeDetection; tự động đánh giá PASS/FAIL khi chuỗi đọc được khớp với Spec (hoặc pass khi đọc được bất kỳ mã nào nếu spec để trống) mà không cần dùng tool Condition.
+  - **Phản Hồi Trực Quan & Khắc Phục Lỗi Ghi Log Database (`OqcScannerService.cs`, `OqcScannerViewModel.cs`, `OqcScannerView.xaml`)**:
+    - **Inject Chuỗi Đã Cắt Gọt Vào `{ScannedCode}`**: Sửa tham số truyền vào `LogInspectionResultAsync` sử dụng chuỗi mã đã được cắt gọt `processedCode` (ví dụ `"GH63-22569A"`), khắc phục triệt để lỗi SQL Server `String or binary data would be truncated` do vượt quá độ dài cột `ScannedCode`. Bổ sung token `{RawCode}`, `{FullScannedCode}` nếu cần chuỗi gốc ban đầu.
+    - **Xử Lý Chuẩn Kiểu Số `float` & Bổ Sung Token Text (`OqcScannerService.cs`, `OqcSettingsDialog.xaml`)**:
+      - Các token số `{Spec}`, `{UpperTor}`/`{TolPlus}`, `{LowerTor}`/`{TolMinus}`, `{MinSpec}`/`{Min}`, `{MaxSpec}`/`{Max}`, `{Result}` luôn xuất ra dạng số thực hợp lệ (nếu tool không có spec số như CodeDetection thì trả về `0` cho spec/dung sai và `1`/`0` cho result), giải quyết triệt để lỗi SQL Server `Error converting data type nvarchar to float`.
+      - Bổ sung các token text `{TextSpect}`/`{TextSpec}` và `{TextResult}` để người dùng có thể chèn chuỗi spec và chuỗi kết quả đo vào các cột `NVARCHAR` trong CSDL.
+    - In debug log chi tiết câu truy vấn SQL; kiểm tra và báo rõ nếu chưa chọn CSDL trong cài đặt OQC; hiển thị thông báo kết quả ghi DB (hoặc lỗi SQL) ngay trên Status Bar và cột "Ghi DB" trong bảng lịch sử.
+  - **Biên Dịch & Kiểm Thử Thành Công 100%**: Solution biên dịch thành công **0 Error(s)**, vượt qua toàn bộ unit test.
+
 - **Cải tiến toàn diện Bảng Lịch Sử OQC Scanner & Schema Ghi Log Database Chi Tiết (Task 185)**:
   - **Lưu Trữ Lịch Sử Cục Bộ (`OqcScannerService.cs`, `OqcScannerViewModel.cs`)**:
     - Tự động nạp/lưu bảng lịch sử quét vào file JSON `%AppData%\Vision2026\oqc_scan_history.json` giúp dữ liệu lịch sử được bảo toàn khi tắt/bật lại ứng dụng.

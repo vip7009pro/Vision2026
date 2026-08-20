@@ -901,7 +901,7 @@ public sealed class OqcScannerService : IOqcScannerService
     }
 
     public async Task<(bool Success, string Message)> LogInspectionResultAsync(
-        string scannedCode, string uuid, string jobFilePath, InspectionResult result, VisionConfig config, IDbManagerService dbManager, List<OqcMeasurementDetail>? measurementDetails = null)
+        string scannedCode, string uuid, string jobFilePath, InspectionResult result, VisionConfig config, IDbManagerService dbManager, List<OqcMeasurementDetail>? measurementDetails = null, string rawCode = "")
     {
         if (string.IsNullOrWhiteSpace(uuid))
         {
@@ -910,15 +910,16 @@ public sealed class OqcScannerService : IOqcScannerService
 
         if (!Config.LogResultToDb && !Config.LogDetailResultToDb)
         {
-            return (true, "Ghi log DB bị tắt.");
+            return (true, "Ghi log DB bị tắt trong cấu hình.");
         }
 
         if (dbManager == null)
         {
-            return (false, "DB Manager service not available.");
+            return (false, "Dịch vụ Quản lý Cơ sở dữ liệu (DbManager) chưa sẵn sàng.");
         }
 
         string safeCode = EscapeSqlValue((scannedCode ?? "").Trim());
+        string safeRawCode = EscapeSqlValue(string.IsNullOrWhiteSpace(rawCode) ? safeCode : rawCode.Trim());
         string safeUuid = EscapeSqlValue(uuid.Trim());
         string safeProductName = EscapeSqlValue((config?.ProductName ?? "").Trim());
         string safePath = EscapeSqlValue((jobFilePath ?? "").Trim());
@@ -928,111 +929,202 @@ public sealed class OqcScannerService : IOqcScannerService
 
         int totalMasterRows = 0;
         int totalDetailRows = 0;
-        string lastError = "";
+        var errorList = new List<string>();
 
         // 1. Ghi Master Log vào bảng Log tổng (LogResultQuery)
-        if (Config.LogResultToDb && !string.IsNullOrWhiteSpace(Config.LogResultQuery))
+        if (Config.LogResultToDb)
         {
-            string query = Config.LogResultQuery
-                .Replace("{ScannedCode}", safeCode, StringComparison.OrdinalIgnoreCase)
-                .Replace("{UUID}", safeUuid, StringComparison.OrdinalIgnoreCase)
-                .Replace("{Uuid}", safeUuid, StringComparison.OrdinalIgnoreCase)
-                .Replace("{ProductName}", safeProductName, StringComparison.OrdinalIgnoreCase)
-                .Replace("{JobFilePath}", safePath, StringComparison.OrdinalIgnoreCase)
-                .Replace("{PassBit}", passBit, StringComparison.OrdinalIgnoreCase)
-                .Replace("{Pass}", passBit, StringComparison.OrdinalIgnoreCase)
-                .Replace("{InspectResult}", inspectResultText, StringComparison.OrdinalIgnoreCase)
-                .Replace("{NgReasons}", ngReasons, StringComparison.OrdinalIgnoreCase);
-
-            if (result != null && config != null)
+            if (string.IsNullOrWhiteSpace(Config.LogResultDbId))
             {
-                query = DbNodeRunner.InterpolateSqlQuery(query, result, config);
+                string msg = "Chưa chọn CSDL cho Master Log (Mục 5 trong Cài đặt OQC).";
+                System.Diagnostics.Debug.WriteLine($"[OQC DB Log] ⚠️ {msg}");
+                errorList.Add(msg);
             }
+            else if (!string.IsNullOrWhiteSpace(Config.LogResultQuery))
+            {
+                string query = Config.LogResultQuery
+                    .Replace("{ScannedCode}", safeCode, StringComparison.OrdinalIgnoreCase)
+                    .Replace("{ProductCode}", safeCode, StringComparison.OrdinalIgnoreCase)
+                    .Replace("{RawCode}", safeRawCode, StringComparison.OrdinalIgnoreCase)
+                    .Replace("{RawScannedCode}", safeRawCode, StringComparison.OrdinalIgnoreCase)
+                    .Replace("{FullScannedCode}", safeRawCode, StringComparison.OrdinalIgnoreCase)
+                    .Replace("{UUID}", safeUuid, StringComparison.OrdinalIgnoreCase)
+                    .Replace("{Uuid}", safeUuid, StringComparison.OrdinalIgnoreCase)
+                    .Replace("{ProductName}", safeProductName, StringComparison.OrdinalIgnoreCase)
+                    .Replace("{JobFilePath}", safePath, StringComparison.OrdinalIgnoreCase)
+                    .Replace("{PassBit}", passBit, StringComparison.OrdinalIgnoreCase)
+                    .Replace("{Pass}", passBit, StringComparison.OrdinalIgnoreCase)
+                    .Replace("{InspectResult}", inspectResultText, StringComparison.OrdinalIgnoreCase)
+                    .Replace("{NgReasons}", ngReasons, StringComparison.OrdinalIgnoreCase);
 
-            var (isSafe, safetyError) = DbNodeRunner.ValidateSqlQuerySafety(query, DbNodeMode.Write, allowUpdateDelete: true);
-            if (!isSafe)
-            {
-                return (false, $"Master Log query không an toàn: {safetyError}");
-            }
-
-            var (success, rows, error) = await dbManager.ExecuteNonQueryAsync(Config.LogResultDbId, query);
-            if (success)
-            {
-                totalMasterRows = rows;
-            }
-            else
-            {
-                lastError = error;
-            }
-        }
-
-        // 2. Ghi Detail Log từng phép đo vào bảng Chi tiết (LogDetailResultQuery)
-        if (Config.LogDetailResultToDb && !string.IsNullOrWhiteSpace(Config.LogDetailResultQuery))
-        {
-            measurementDetails ??= (result != null && config != null) ? ExtractMeasurementDetails(result, config) : new List<OqcMeasurementDetail>();
-            if (measurementDetails.Count > 0)
-            {
-                foreach (var detail in measurementDetails)
+                if (result != null && config != null)
                 {
-                    string safeToolName = EscapeSqlValue(detail.ToolName);
-                    string safeToolType = EscapeSqlValue(detail.ToolType);
-                    string safeJudge = EscapeSqlValue(detail.Judge);
-                    string safeUnit = EscapeSqlValue(detail.Unit);
-                    string detailPassBit = detail.Pass ? "1" : "0";
-                    string specStr = double.IsNaN(detail.Spec) ? "NULL" : detail.Spec.ToString(CultureInfo.InvariantCulture);
-                    string tolPlusStr = double.IsNaN(detail.TolPlus) ? "NULL" : detail.TolPlus.ToString(CultureInfo.InvariantCulture);
-                    string tolMinusStr = double.IsNaN(detail.TolMinus) ? "NULL" : detail.TolMinus.ToString(CultureInfo.InvariantCulture);
-                    string minStr = double.IsNaN(detail.Min) ? "NULL" : detail.Min.ToString(CultureInfo.InvariantCulture);
-                    string maxStr = double.IsNaN(detail.Max) ? "NULL" : detail.Max.ToString(CultureInfo.InvariantCulture);
-                    string resultStr = double.IsNaN(detail.Result) ? "NULL" : detail.Result.ToString(CultureInfo.InvariantCulture);
+                    query = DbNodeRunner.InterpolateSqlQuery(query, result, config);
+                }
 
-                    string detailQuery = Config.LogDetailResultQuery
-                        .Replace("{ScannedCode}", safeCode, StringComparison.OrdinalIgnoreCase)
-                        .Replace("{UUID}", safeUuid, StringComparison.OrdinalIgnoreCase)
-                        .Replace("{Uuid}", safeUuid, StringComparison.OrdinalIgnoreCase)
-                        .Replace("{ToolName}", safeToolName, StringComparison.OrdinalIgnoreCase)
-                        .Replace("{ToolType}", safeToolType, StringComparison.OrdinalIgnoreCase)
-                        .Replace("{Spec}", specStr, StringComparison.OrdinalIgnoreCase)
-                        .Replace("{Nominal}", specStr, StringComparison.OrdinalIgnoreCase)
-                        .Replace("{TolPlus}", tolPlusStr, StringComparison.OrdinalIgnoreCase)
-                        .Replace("{Tol +}", tolPlusStr, StringComparison.OrdinalIgnoreCase)
-                        .Replace("{TolMinus}", tolMinusStr, StringComparison.OrdinalIgnoreCase)
-                        .Replace("{Tol -}", tolMinusStr, StringComparison.OrdinalIgnoreCase)
-                        .Replace("{Min}", minStr, StringComparison.OrdinalIgnoreCase)
-                        .Replace("{MinVal}", minStr, StringComparison.OrdinalIgnoreCase)
-                        .Replace("{Max}", maxStr, StringComparison.OrdinalIgnoreCase)
-                        .Replace("{MaxVal}", maxStr, StringComparison.OrdinalIgnoreCase)
-                        .Replace("{Result}", resultStr, StringComparison.OrdinalIgnoreCase)
-                        .Replace("{ResultVal}", resultStr, StringComparison.OrdinalIgnoreCase)
-                        .Replace("{Unit}", safeUnit, StringComparison.OrdinalIgnoreCase)
-                        .Replace("{Judge}", safeJudge, StringComparison.OrdinalIgnoreCase)
-                        .Replace("{PassBit}", detailPassBit, StringComparison.OrdinalIgnoreCase)
-                        .Replace("{JobFilePath}", safePath, StringComparison.OrdinalIgnoreCase);
+                System.Diagnostics.Debug.WriteLine($"[OQC DB Log] 📤 Ghi Master Log vào DB ID='{Config.LogResultDbId}':\n{query}");
 
-                    var (isDetailSafe, detailSafetyError) = DbNodeRunner.ValidateSqlQuerySafety(detailQuery, DbNodeMode.Write, allowUpdateDelete: true);
-                    if (isDetailSafe)
+                var (isSafe, safetyError) = DbNodeRunner.ValidateSqlQuerySafety(query, DbNodeMode.Write, allowUpdateDelete: true);
+                if (!isSafe)
+                {
+                    string msg = $"Master Log query không an toàn: {safetyError}";
+                    System.Diagnostics.Debug.WriteLine($"[OQC DB Log] ❌ {msg}");
+                    errorList.Add(msg);
+                }
+                else
+                {
+                    var (success, rows, error) = await dbManager.ExecuteNonQueryAsync(Config.LogResultDbId, query);
+                    if (success)
                     {
-                        var (dSuccess, dRows, dError) = await dbManager.ExecuteNonQueryAsync(Config.LogDetailResultDbId, detailQuery);
-                        if (dSuccess)
-                        {
-                            totalDetailRows += dRows;
-                        }
-                        else
-                        {
-                            lastError = dError;
-                        }
+                        totalMasterRows = rows;
+                        System.Diagnostics.Debug.WriteLine($"[OQC DB Log] ✅ Ghi Master Log thành công ({rows} dòng).");
+                    }
+                    else
+                    {
+                        string msg = $"Lỗi ghi Master Log (DB ID: '{Config.LogResultDbId}'): {error}";
+                        System.Diagnostics.Debug.WriteLine($"[OQC DB Log] ❌ {msg}");
+                        errorList.Add(msg);
                     }
                 }
             }
         }
 
-        if (string.IsNullOrEmpty(lastError))
+        // 2. Ghi Detail Log từng phép đo vào bảng Chi tiết (LogDetailResultQuery)
+        if (Config.LogDetailResultToDb)
         {
-            return (true, $"✅ Đã lưu kết quả OQC lên DB! (Master: {totalMasterRows} dòng, Chi tiết: {totalDetailRows} dòng)");
+            if (string.IsNullOrWhiteSpace(Config.LogDetailResultDbId))
+            {
+                string msg = "Chưa chọn CSDL cho Detail Log (Mục 6 trong Cài đặt OQC).";
+                System.Diagnostics.Debug.WriteLine($"[OQC DB Log] ⚠️ {msg}");
+                errorList.Add(msg);
+            }
+            else if (!string.IsNullOrWhiteSpace(Config.LogDetailResultQuery))
+            {
+                measurementDetails ??= (result != null && config != null) ? ExtractMeasurementDetails(result, config) : new List<OqcMeasurementDetail>();
+                if (measurementDetails.Count > 0)
+                {
+                    int detailFailCount = 0;
+                    string firstDetailError = "";
+
+                    foreach (var detail in measurementDetails)
+                    {
+                        string safeToolName = EscapeSqlValue(detail.ToolName);
+                        string safeToolType = EscapeSqlValue(detail.ToolType);
+                        string safeJudge = EscapeSqlValue(detail.Judge);
+                        string safeUnit = EscapeSqlValue(detail.Unit);
+                        string detailPassBit = detail.Pass ? "1" : "0";
+
+                        // Giá trị số thực (float/double) thuần túy cho các cột số float trong CSDL SQL
+                        string specStr = detail.HasNumericSpec && !double.IsNaN(detail.Spec) 
+                            ? detail.Spec.ToString(CultureInfo.InvariantCulture) 
+                            : "0";
+
+                        string tolPlusStr = detail.HasNumericSpec && !double.IsNaN(detail.TolPlus) 
+                            ? detail.TolPlus.ToString(CultureInfo.InvariantCulture) 
+                            : "0";
+
+                        string tolMinusStr = detail.HasNumericSpec && !double.IsNaN(detail.TolMinus) 
+                            ? detail.TolMinus.ToString(CultureInfo.InvariantCulture) 
+                            : "0";
+
+                        string minStr = detail.HasNumericSpec && !double.IsNaN(detail.Min) 
+                            ? detail.Min.ToString(CultureInfo.InvariantCulture) 
+                            : "0";
+
+                        string maxStr = detail.HasNumericSpec && !double.IsNaN(detail.Max) 
+                            ? detail.Max.ToString(CultureInfo.InvariantCulture) 
+                            : "0";
+
+                        string resultStr = !double.IsNaN(detail.Result) 
+                            ? detail.Result.ToString(CultureInfo.InvariantCulture) 
+                            : (detail.Pass ? "1" : "0");
+
+                        // Giá trị chuỗi Text cho các cột TextSpect, TextResult nvarchar trong CSDL SQL
+                        string rawTextSpec = !string.IsNullOrEmpty(detail.CustomSpecText) 
+                            ? detail.CustomSpecText 
+                            : (detail.HasNumericSpec ? $"{detail.Spec:F3}" : "");
+                        string safeTextSpec = EscapeSqlValue(rawTextSpec);
+
+                        string rawTextResult = !string.IsNullOrEmpty(detail.CustomResultText) 
+                            ? detail.CustomResultText 
+                            : (!double.IsNaN(detail.Result) ? $"{detail.Result:F3}" : (detail.Pass ? "PASS" : "NG"));
+                        string safeTextResult = EscapeSqlValue(rawTextResult);
+
+                        string detailQuery = Config.LogDetailResultQuery
+                            .Replace("{ScannedCode}", safeCode, StringComparison.OrdinalIgnoreCase)
+                            .Replace("{ProductCode}", safeCode, StringComparison.OrdinalIgnoreCase)
+                            .Replace("{RawCode}", safeRawCode, StringComparison.OrdinalIgnoreCase)
+                            .Replace("{RawScannedCode}", safeRawCode, StringComparison.OrdinalIgnoreCase)
+                            .Replace("{FullScannedCode}", safeRawCode, StringComparison.OrdinalIgnoreCase)
+                            .Replace("{UUID}", safeUuid, StringComparison.OrdinalIgnoreCase)
+                            .Replace("{Uuid}", safeUuid, StringComparison.OrdinalIgnoreCase)
+                            .Replace("{ToolName}", safeToolName, StringComparison.OrdinalIgnoreCase)
+                            .Replace("{ToolType}", safeToolType, StringComparison.OrdinalIgnoreCase)
+                            .Replace("{Spec}", specStr, StringComparison.OrdinalIgnoreCase)
+                            .Replace("{Nominal}", specStr, StringComparison.OrdinalIgnoreCase)
+                            .Replace("{UpperTor}", tolPlusStr, StringComparison.OrdinalIgnoreCase)
+                            .Replace("{TolPlus}", tolPlusStr, StringComparison.OrdinalIgnoreCase)
+                            .Replace("{Tol +}", tolPlusStr, StringComparison.OrdinalIgnoreCase)
+                            .Replace("{LowerTor}", tolMinusStr, StringComparison.OrdinalIgnoreCase)
+                            .Replace("{TolMinus}", tolMinusStr, StringComparison.OrdinalIgnoreCase)
+                            .Replace("{Tol -}", tolMinusStr, StringComparison.OrdinalIgnoreCase)
+                            .Replace("{MinSpec}", minStr, StringComparison.OrdinalIgnoreCase)
+                            .Replace("{Min}", minStr, StringComparison.OrdinalIgnoreCase)
+                            .Replace("{MinVal}", minStr, StringComparison.OrdinalIgnoreCase)
+                            .Replace("{MaxSpec}", maxStr, StringComparison.OrdinalIgnoreCase)
+                            .Replace("{Max}", maxStr, StringComparison.OrdinalIgnoreCase)
+                            .Replace("{MaxVal}", maxStr, StringComparison.OrdinalIgnoreCase)
+                            .Replace("{Result}", resultStr, StringComparison.OrdinalIgnoreCase)
+                            .Replace("{ResultVal}", resultStr, StringComparison.OrdinalIgnoreCase)
+                            .Replace("{TextSpect}", safeTextSpec, StringComparison.OrdinalIgnoreCase)
+                            .Replace("{TextSpec}", safeTextSpec, StringComparison.OrdinalIgnoreCase)
+                            .Replace("{TextResult}", safeTextResult, StringComparison.OrdinalIgnoreCase)
+                            .Replace("{Unit}", safeUnit, StringComparison.OrdinalIgnoreCase)
+                            .Replace("{Judge}", safeJudge, StringComparison.OrdinalIgnoreCase)
+                            .Replace("{PassBit}", detailPassBit, StringComparison.OrdinalIgnoreCase)
+                            .Replace("{JobFilePath}", safePath, StringComparison.OrdinalIgnoreCase);
+
+                        var (isDetailSafe, detailSafetyError) = DbNodeRunner.ValidateSqlQuerySafety(detailQuery, DbNodeMode.Write, allowUpdateDelete: true);
+                        if (isDetailSafe)
+                        {
+                            var (dSuccess, dRows, dError) = await dbManager.ExecuteNonQueryAsync(Config.LogDetailResultDbId, detailQuery);
+                            if (dSuccess)
+                            {
+                                totalDetailRows += dRows;
+                            }
+                            else
+                            {
+                                detailFailCount++;
+                                if (string.IsNullOrEmpty(firstDetailError)) firstDetailError = dError;
+                                System.Diagnostics.Debug.WriteLine($"[OQC DB Log] ❌ Lỗi Detail #{detail.Index} ({detail.ToolName}): {dError}");
+                            }
+                        }
+                        else
+                        {
+                            detailFailCount++;
+                            if (string.IsNullOrEmpty(firstDetailError)) firstDetailError = detailSafetyError;
+                        }
+                    }
+
+                    if (detailFailCount > 0)
+                    {
+                        errorList.Add($"Lỗi ghi Detail Log ({detailFailCount}/{measurementDetails.Count} phép đo bị lỗi). Lỗi đầu tiên: {firstDetailError}");
+                    }
+                    else
+                    {
+                        System.Diagnostics.Debug.WriteLine($"[OQC DB Log] ✅ Ghi toàn bộ Detail Log thành công ({totalDetailRows} dòng).");
+                    }
+                }
+            }
+        }
+
+        if (errorList.Count == 0)
+        {
+            return (true, $"✅ Đã lưu DB thành công! (Master: {totalMasterRows} dòng, Chi tiết: {totalDetailRows} dòng)");
         }
         else
         {
-            return (false, $"Lỗi ghi DB: {lastError} (Master: {totalMasterRows}, Detail: {totalDetailRows})");
+            return (false, string.Join("; ", errorList));
         }
     }
 
@@ -1053,13 +1145,16 @@ public sealed class OqcScannerService : IOqcScannerService
                 Index = idx++,
                 ToolName = "Origin (Gốc tọa độ)",
                 ToolType = "Origin",
-                Spec = config.Origin?.MatchScoreThreshold ?? 0.5,
+                HasNumericSpec = false,
+                CustomSpecText = $">= {(config.Origin?.MatchScoreThreshold ?? 0.5):F2}",
+                CustomResultText = $"{result.Origin.Score:F3}",
+                Spec = 0,
                 TolPlus = 0,
                 TolMinus = 0,
-                Min = config.Origin?.MatchScoreThreshold ?? 0.5,
-                Max = 1.0,
+                Min = 0,
+                Max = 0,
                 Result = result.Origin.Score,
-                Unit = "Score",
+                Unit = "",
                 Pass = result.Origin.Pass
             });
         }
@@ -1076,6 +1171,7 @@ public sealed class OqcScannerService : IOqcScannerService
                 Index = idx++,
                 ToolName = d.Name,
                 ToolType = "Distance",
+                HasNumericSpec = true,
                 Spec = nom,
                 TolPlus = tp,
                 TolMinus = tm,
@@ -1099,6 +1195,7 @@ public sealed class OqcScannerService : IOqcScannerService
                 Index = idx++,
                 ToolName = l2l.Name,
                 ToolType = "LineToLine",
+                HasNumericSpec = true,
                 Spec = nom,
                 TolPlus = tp,
                 TolMinus = tm,
@@ -1122,6 +1219,7 @@ public sealed class OqcScannerService : IOqcScannerService
                 Index = idx++,
                 ToolName = p2l.Name,
                 ToolType = "PointToLine",
+                HasNumericSpec = true,
                 Spec = nom,
                 TolPlus = tp,
                 TolMinus = tm,
@@ -1145,6 +1243,7 @@ public sealed class OqcScannerService : IOqcScannerService
                 Index = idx++,
                 ToolName = sld.Name,
                 ToolType = "SegmentLine",
+                HasNumericSpec = true,
                 Spec = nom,
                 TolPlus = tp,
                 TolMinus = tm,
@@ -1168,6 +1267,7 @@ public sealed class OqcScannerService : IOqcScannerService
                 Index = idx++,
                 ToolName = a.Name,
                 ToolType = "Angle",
+                HasNumericSpec = true,
                 Spec = nom,
                 TolPlus = tp,
                 TolMinus = tm,
@@ -1191,6 +1291,7 @@ public sealed class OqcScannerService : IOqcScannerService
                 Index = idx++,
                 ToolName = dm.Name,
                 ToolType = "Diameter",
+                HasNumericSpec = true,
                 Spec = nom,
                 TolPlus = tp,
                 TolMinus = tm,
@@ -1214,6 +1315,7 @@ public sealed class OqcScannerService : IOqcScannerService
                 Index = idx++,
                 ToolName = ep.Name,
                 ToolType = "EdgePair",
+                HasNumericSpec = true,
                 Spec = nom,
                 TolPlus = tp,
                 TolMinus = tm,
@@ -1237,6 +1339,7 @@ public sealed class OqcScannerService : IOqcScannerService
                 Index = idx++,
                 ToolName = epd.Name,
                 ToolType = "EdgePairDetect",
+                HasNumericSpec = true,
                 Spec = nom,
                 TolPlus = tp,
                 TolMinus = tm,
@@ -1251,18 +1354,22 @@ public sealed class OqcScannerService : IOqcScannerService
         // 10. CircleFinders
         foreach (var cf in result.CircleFinders)
         {
+            double rVal = isCalibrated ? (cf.RadiusPx / config.PixelsPerMm) : cf.RadiusPx;
             list.Add(new OqcMeasurementDetail
             {
                 Index = idx++,
                 ToolName = cf.Name,
                 ToolType = "CircleFinder",
+                HasNumericSpec = false,
+                CustomSpecText = "",
+                CustomResultText = cf.Found ? $"{rVal:F3} {defaultUnit}" : "NOT_FOUND",
                 Spec = 0,
                 TolPlus = 0,
                 TolMinus = 0,
                 Min = 0,
                 Max = 0,
-                Result = isCalibrated ? (cf.RadiusPx / config.PixelsPerMm) : cf.RadiusPx,
-                Unit = defaultUnit,
+                Result = rVal,
+                Unit = "",
                 Pass = cf.Found
             });
         }
@@ -1277,13 +1384,16 @@ public sealed class OqcScannerService : IOqcScannerService
                     Index = idx++,
                     ToolName = cd.Name,
                     ToolType = "ColorDiff",
+                    HasNumericSpec = false,
+                    CustomSpecText = $"<= {cd.MaxDeltaE:F2} dE",
+                    CustomResultText = $"{cd.DeltaE:F2} dE",
                     Spec = 0,
                     TolPlus = cd.MaxDeltaE,
                     TolMinus = 0,
                     Min = 0,
                     Max = cd.MaxDeltaE,
                     Result = cd.DeltaE,
-                    Unit = "dE",
+                    Unit = "",
                     Pass = cd.Pass
                 });
             }
@@ -1297,13 +1407,16 @@ public sealed class OqcScannerService : IOqcScannerService
                 Index = idx++,
                 ToolName = sc.Name,
                 ToolType = "SurfaceCompare",
+                HasNumericSpec = false,
+                CustomSpecText = "0 lỗi",
+                CustomResultText = $"{sc.Defects.Count} lỗi",
                 Spec = 0,
                 TolPlus = 0,
                 TolMinus = 0,
                 Min = 0,
                 Max = 0,
                 Result = sc.Defects.Count,
-                Unit = "Lỗi",
+                Unit = "",
                 Pass = sc.Pass
             });
         }
@@ -1316,13 +1429,16 @@ public sealed class OqcScannerService : IOqcScannerService
                 Index = idx++,
                 ToolName = cc.Name,
                 ToolType = "ContourCompare",
+                HasNumericSpec = false,
+                CustomSpecText = ">= 0.80",
+                CustomResultText = $"{cc.MatchScore:F3}",
                 Spec = 0.8,
                 TolPlus = 0,
                 TolMinus = 0,
                 Min = 0.8,
                 Max = 1.0,
                 Result = cc.MatchScore,
-                Unit = "Score",
+                Unit = "",
                 Pass = cc.Pass
             });
         }
@@ -1335,13 +1451,16 @@ public sealed class OqcScannerService : IOqcScannerService
                 Index = idx++,
                 ToolName = bd.Name,
                 ToolType = "BlobDetection",
+                HasNumericSpec = false,
+                CustomSpecText = "",
+                CustomResultText = $"{bd.Count} blobs",
                 Spec = 0,
                 TolPlus = 0,
                 TolMinus = 0,
                 Min = 0,
                 Max = 100,
                 Result = bd.Count,
-                Unit = "Blobs",
+                Unit = "",
                 Pass = true
             });
         }
@@ -1349,19 +1468,25 @@ public sealed class OqcScannerService : IOqcScannerService
         // 15. CodeDetections
         foreach (var cdt in result.CodeDetections)
         {
+            var def = config.CodeDetections?.FirstOrDefault(x => string.Equals(x.Name, cdt.Name, StringComparison.OrdinalIgnoreCase));
+            string expectedSpec = !string.IsNullOrWhiteSpace(def?.ExpectedText) ? def.ExpectedText : (!string.IsNullOrWhiteSpace(cdt.ExpectedSpec) ? cdt.ExpectedSpec : "");
+
             list.Add(new OqcMeasurementDetail
             {
                 Index = idx++,
                 ToolName = cdt.Name,
                 ToolType = "CodeDetection",
+                HasNumericSpec = false,
+                CustomSpecText = string.IsNullOrWhiteSpace(expectedSpec) ? "" : expectedSpec,
+                CustomResultText = cdt.Found ? (string.IsNullOrWhiteSpace(cdt.Text) ? "(Trống)" : cdt.Text) : "NO_READ",
                 Spec = 0,
                 TolPlus = 0,
                 TolMinus = 0,
                 Min = 0,
                 Max = 0,
                 Result = cdt.Found ? 1 : 0,
-                Unit = cdt.Text,
-                Pass = cdt.Found
+                Unit = "",
+                Pass = cdt.Pass
             });
         }
 
@@ -1470,9 +1595,16 @@ public sealed class OqcScannerService : IOqcScannerService
 
         foreach (var cd in result.CodeDetections)
         {
-            if (!cd.Found)
+            if (!cd.Pass)
             {
-                reasons.Add($"CodeDetect [{cd.Name}] NG (Không đọc được mã)");
+                if (!cd.Found)
+                {
+                    reasons.Add($"Code [{cd.Name}] NG: Không tìm thấy mã (NO_READ)");
+                }
+                else
+                {
+                    reasons.Add($"Code [{cd.Name}] NG: '{cd.Text}' (Tiêu chuẩn: '{cd.ExpectedSpec}')");
+                }
             }
         }
 
