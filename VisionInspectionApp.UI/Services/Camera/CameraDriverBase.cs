@@ -15,9 +15,14 @@ public abstract class CameraDriverBase : ICameraDriver
     protected CancellationTokenSource? _cts;
     protected readonly object _lock = new();
 
+    protected bool _hardwareReverseXApplied;
+    protected bool _hardwareReverseYApplied;
+
     public CameraDeviceInfo DeviceInfo => _deviceInfo;
     public bool IsOpened => _isOpened;
     public bool IsGrabbing => _isGrabbing;
+    public bool IsHardwareReverseXApplied => _hardwareReverseXApplied;
+    public bool IsHardwareReverseYApplied => _hardwareReverseYApplied;
 
     public event EventHandler<Mat>? FrameCaptured;
     public event EventHandler<string>? ErrorOccurred;
@@ -51,21 +56,27 @@ public abstract class CameraDriverBase : ICameraDriver
         if (frame == null || frame.IsDisposed || frame.Empty()) return;
 
         CameraParameters p;
+        bool hwRevX, hwRevY;
         lock (_lock)
         {
             p = _parameters;
+            hwRevX = _hardwareReverseXApplied;
+            hwRevY = _hardwareReverseYApplied;
         }
+
+        bool needFlipX = (p != null) && p.ReverseX && !hwRevX;
+        bool needFlipY = (p != null) && p.ReverseY && !hwRevY;
 
         bool needProcessing = (p != null) &&
             (Math.Abs(p.Contrast - 1.0) > 0.01 ||
              Math.Abs(p.Brightness) > 0.01 ||
              p.IsGrayscale ||
-             p.ReverseX ||
-             p.ReverseY);
+             needFlipX ||
+             needFlipY);
 
         if (needProcessing && p != null)
         {
-            using var processed = ApplySoftwarePostProcessing(frame, p);
+            using var processed = ApplySoftwarePostProcessing(frame, p, hwRevX, hwRevY);
             FrameCaptured?.Invoke(this, processed);
         }
         else
@@ -79,16 +90,19 @@ public abstract class CameraDriverBase : ICameraDriver
         ErrorOccurred?.Invoke(this, message);
     }
 
-    protected static Mat ApplySoftwarePostProcessing(Mat input, CameraParameters paramsObj)
+    public static Mat ApplySoftwarePostProcessing(Mat input, CameraParameters paramsObj, bool hardwareReverseXApplied = false, bool hardwareReverseYApplied = false)
     {
         if (input == null || input.IsDisposed || input.Empty()) return new Mat();
         if (paramsObj == null) return input.Clone();
 
+        bool needFlipX = paramsObj.ReverseX && !hardwareReverseXApplied;
+        bool needFlipY = paramsObj.ReverseY && !hardwareReverseYApplied;
+
         bool needProcessing = Math.Abs(paramsObj.Contrast - 1.0) > 0.01 ||
                               Math.Abs(paramsObj.Brightness) > 0.01 ||
                               paramsObj.IsGrayscale ||
-                              paramsObj.ReverseX ||
-                              paramsObj.ReverseY;
+                              needFlipX ||
+                              needFlipY;
 
         if (!needProcessing)
         {
@@ -120,15 +134,15 @@ public abstract class CameraDriverBase : ICameraDriver
             }
 
             // Software Reverse X / Y if driver doesn't support hardware flip
-            if (paramsObj.ReverseX && paramsObj.ReverseY)
+            if (needFlipX && needFlipY)
             {
                 Cv2.Flip(output, output, FlipMode.XY);
             }
-            else if (paramsObj.ReverseX)
+            else if (needFlipX)
             {
                 Cv2.Flip(output, output, FlipMode.Y);
             }
-            else if (paramsObj.ReverseY)
+            else if (needFlipY)
             {
                 Cv2.Flip(output, output, FlipMode.X);
             }

@@ -250,6 +250,8 @@ public sealed class HikCameraDriver : CameraDriverBase
         }
 
         _isOpened = false;
+        _hardwareReverseXApplied = false;
+        _hardwareReverseYApplied = false;
     }
 
     public override async Task<bool> StartGrabbingAsync()
@@ -388,7 +390,20 @@ public sealed class HikCameraDriver : CameraDriverBase
                 int ret = _camera.MV_CC_GetOneFrameTimeout_NET(pData, bufferSize, ref frameInfo, timeoutMs);
                 if (ret == MyCamera.MV_OK && frameInfo.nWidth > 0 && frameInfo.nHeight > 0)
                 {
-                    return ConvertHikFrameToMat(pData, frameInfo);
+                    using var rawMat = ConvertHikFrameToMat(pData, frameInfo);
+                    if (!rawMat.Empty())
+                    {
+                        CameraParameters p;
+                        bool hwX, hwY;
+                        lock (_lock)
+                        {
+                            p = _parameters;
+                            hwX = _hardwareReverseXApplied;
+                            hwY = _hardwareReverseYApplied;
+                        }
+                        return ApplySoftwarePostProcessing(rawMat, p, hwX, hwY);
+                    }
+                    return null;
                 }
                 else
                 {
@@ -523,8 +538,27 @@ public sealed class HikCameraDriver : CameraDriverBase
                 }
 
                 // 6. Hardware Reverse X / Y (Flip)
-                try { _camera.MV_CC_SetBoolValue_NET("ReverseX", parameters.ReverseX); } catch { }
-                try { _camera.MV_CC_SetBoolValue_NET("ReverseY", parameters.ReverseY); } catch { }
+                bool hwX = false;
+                bool hwY = false;
+                try
+                {
+                    int retX = _camera.MV_CC_SetBoolValue_NET("ReverseX", parameters.ReverseX);
+                    hwX = (retX == MyCamera.MV_OK) && parameters.ReverseX;
+                }
+                catch { hwX = false; }
+
+                try
+                {
+                    int retY = _camera.MV_CC_SetBoolValue_NET("ReverseY", parameters.ReverseY);
+                    hwY = (retY == MyCamera.MV_OK) && parameters.ReverseY;
+                }
+                catch { hwY = false; }
+
+                lock (_lock)
+                {
+                    _hardwareReverseXApplied = hwX;
+                    _hardwareReverseYApplied = hwY;
+                }
 
                 // 7. Packet Size & Packet Delay (GigE Vision)
                 if (_deviceInfo.InterfaceType == CameraInterfaceType.GigE && parameters.PacketSize > 0)
@@ -677,10 +711,20 @@ public sealed class HikCameraDriver : CameraDriverBase
                     using var rawMat = ConvertHikFrameToMat(pData, frameInfo);
                     if (!rawMat.Empty())
                     {
+                        CameraParameters p;
+                        bool hwX, hwY;
+                        lock (_lock)
+                        {
+                            p = _parameters;
+                            hwX = _hardwareReverseXApplied;
+                            hwY = _hardwareReverseYApplied;
+                        }
+
+                        using var postProcessed = ApplySoftwarePostProcessing(rawMat, p, hwX, hwY);
                         lock (_latestContinuousFrameLock)
                         {
                             _latestContinuousFrame?.Dispose();
-                            _latestContinuousFrame = rawMat.Clone();
+                            _latestContinuousFrame = postProcessed.Clone();
                         }
                         RaiseFrameCaptured(rawMat);
                     }

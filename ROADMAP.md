@@ -460,6 +460,12 @@ Lộ trình tích hợp tính năng Chụp ảnh từ camera và hỗ trợ các
   - `Tự Động Áp Dụng Bộ Lọc Độ Dài & Cắt Chuỗi Cho Chuỗi Quét Từ Đầu Scanner`:
     - Sửa `OqcScannerService.cs` & `IOqcScannerService.cs`: Bổ sung phương thức `ProcessRawCodeString(rawInput, config)` dùng chung.
     - Sửa `OqcScannerViewModel.cs`: Khi nhận mã nhập/quét từ đầu scan ngoài, hệ thống tự động kiểm tra điều kiện độ dài (`EnableLengthFilter`) và cắt chuỗi (`EnableCodeCrop`) theo cấu hình tra cứu OQC trước khi tra cứu Database và nạp Job.
+- [x] Task 180: Sửa triệt để lỗi lật ảnh ngang (Reverse X) bị lộn ngược lại do xung đột giữa Hardware Flip và Software Flip:
+  - `Khắc Phục Xung Đột Lật Ảnh Hai Lần (Hardware + Software Deduplication)`:
+    - Sửa `CameraDriverBase.cs`: Bổ sung cờ theo dõi trạng thái lật phần cứng `_hardwareReverseXApplied` và `_hardwareReverseYApplied`. Chỉ thực hiện phần mềm `Cv2.Flip` khi phần cứng camera KHÔNG hỗ trợ hoặc chưa lật trục tương ứng.
+    - Sửa `HikCameraDriver.cs`: Trong `ApplyParametersAsync`, kiểm tra kết quả trả về của SDK `MV_CC_SetBoolValue_NET("ReverseX", ...)` và `MV_CC_SetBoolValue_NET("ReverseY", ...)`. Nếu camera Hikrobot phần cứng đã lật X thành công (`hwX = true`), phần mềm sẽ không gọi thêm lệnh `Cv2.Flip(..., FlipMode.Y)` nữa $\rightarrow$ Triệt tiêu 100% lỗi lật 2 lần khiến ảnh bị quay về như cũ.
+  - `Đồng Bộ Hóa Xử Lý Hậu Kỳ Cho Cả Live Stream Và Snap Frame`:
+    - Cập nhật `ContinuousGrabLoop` và `GrabFrameAsync` trong `HikCameraDriver.cs`: Đảm bảo frame truyền lên UI qua sự kiện `FrameCaptured` lẫn frame lưu trong `_latestContinuousFrame` đều được hậu xử lý (lật X/Y, chỉnh Contrast, Brightness, Grayscale) đúng 1 lần duy nhất một cách hoàn hảo và nhất quán.
   - `Biên Dịch & Kiểm Thử Thành Công 100%`: Solution biên dịch **0 Error(s)**, chạy test thành công.
 
 

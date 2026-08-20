@@ -51,6 +51,14 @@
 
 ### Sửa lỗi và Cải thiện UX/UI (Phiên làm việc hiện tại)
 
+- **Sửa triệt để lỗi lật ảnh ngang (Reverse X) bị lộn ngược lại do xung đột giữa Hardware Flip và Software Flip (Task 180)**:
+  - **Khắc phục xung đột lật ảnh hai lần (Hardware + Software Deduplication) (`CameraDriverBase.cs`, `HikCameraDriver.cs`)**:
+    - Sửa `CameraDriverBase.cs`: Bổ sung cờ theo dõi trạng thái lật phần cứng `_hardwareReverseXApplied` và `_hardwareReverseYApplied`. Chỉ thực hiện phần mềm `Cv2.Flip` khi phần cứng camera KHÔNG hỗ trợ hoặc chưa lật trục tương ứng.
+    - Sửa `HikCameraDriver.cs`: Trong `ApplyParametersAsync`, kiểm tra kết quả trả về của SDK `MV_CC_SetBoolValue_NET("ReverseX", ...)` và `MV_CC_SetBoolValue_NET("ReverseY", ...)`. Nếu camera Hikrobot phần cứng đã lật X thành công (`hwX = true`), phần mềm sẽ không gọi thêm lệnh `Cv2.Flip(..., FlipMode.Y)` nữa $\rightarrow$ Triệt tiêu 100% lỗi lật 2 lần khiến ảnh bị quay về như cũ.
+  - **Đồng bộ hóa xử lý hậu kỳ cho cả Live Stream và Snap Frame (`HikCameraDriver.cs`)**:
+    - Cập nhật `ContinuousGrabLoop` và `GrabFrameAsync` trong `HikCameraDriver.cs`: Đảm bảo frame truyền lên UI qua sự kiện `FrameCaptured` lẫn frame lưu trong `_latestContinuousFrame` đều được hậu xử lý (lật X/Y, chỉnh Contrast, Brightness, Grayscale) đúng 1 lần duy nhất một cách hoàn hảo và nhất quán.
+  - **Kiểm Thử & Biên Dịch Thành Công 100%**: Solution biên dịch thành công **0 Error(s)**, vượt qua toàn bộ unit test.
+
 - **Bổ sung tùy chọn 'Dùng Đầu Scanner' & Chuyển đổi phím Space để RUN JOB và tự động áp dụng bộ lọc cắt chuỗi (Task 179)**:
   - **Bổ sung CheckBox 'Dùng Đầu Scanner' & Quản lý cấu hình OQC Scanner (`OqcScannerConfig.cs`, `OqcScannerViewModel.Settings.cs`, `OqcScannerView.xaml`)**:
     - `OqcScannerConfig.cs`: Bổ sung thuộc tính `UseExternalScanner` (bool).
