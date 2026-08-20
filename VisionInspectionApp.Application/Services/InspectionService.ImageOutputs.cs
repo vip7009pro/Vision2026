@@ -383,9 +383,52 @@ public partial class InspectionService
 
         // Map point positions for Distance / Geometry lookups
         var pointPosMap = new Dictionary<string, Point2d>(StringComparer.OrdinalIgnoreCase);
+        if (result.Origin is not null && (result.Origin.MatchRect.Width > 0 || result.Origin.Position.X != 0 || result.Origin.Position.Y != 0))
+        {
+            var mr = result.Origin.MatchRect;
+            var originFound = (mr.Width > 0 && mr.Height > 0)
+                ? new Point2d(mr.X + mr.Width / 2.0, mr.Y + mr.Height / 2.0)
+                : new Point2d(result.Origin.Position.X, result.Origin.Position.Y);
+            pointPosMap["Origin"] = originFound;
+            if (config.Origin != null && !string.IsNullOrWhiteSpace(config.Origin.Name))
+            {
+                pointPosMap[config.Origin.Name] = originFound;
+            }
+        }
         foreach (var pRes in result.Points)
         {
             pointPosMap[pRes.Name] = pRes.Position;
+        }
+        if (result.CreatePoints is not null)
+        {
+            foreach (var cp in result.CreatePoints)
+            {
+                if (cp.Success) pointPosMap[cp.Name] = new Point2d(cp.X, cp.Y);
+            }
+        }
+        foreach (var c in result.CircleFinders)
+        {
+            if (c is not null && c.Found) pointPosMap[c.Name] = c.Center;
+        }
+        foreach (var d in result.Diameters)
+        {
+            if (d is not null && d.Found) pointPosMap[d.Name] = d.Center;
+        }
+        foreach (var ep in result.EdgePairs)
+        {
+            if (ep is not null && ep.Found) pointPosMap[ep.Name] = new Point2d((ep.ClosestA.X + ep.ClosestB.X) / 2.0, (ep.ClosestA.Y + ep.ClosestB.Y) / 2.0);
+        }
+        foreach (var epd in result.EdgePairDetections)
+        {
+            if (epd is not null && epd.Found) pointPosMap[epd.Name] = new Point2d((epd.ClosestA.X + epd.ClosestB.X) / 2.0, (epd.ClosestA.Y + epd.ClosestB.Y) / 2.0);
+        }
+        foreach (var b in result.BlobDetections)
+        {
+            if (b is not null && b.Blobs != null && b.Blobs.Count > 0) pointPosMap[b.Name] = b.Blobs[0].Centroid;
+        }
+        foreach (var cal in result.Calipers)
+        {
+            if (cal is not null && cal.Found) pointPosMap[cal.Name] = new Point2d((cal.LineP1.X + cal.LineP2.X) / 2.0, (cal.LineP1.Y + cal.LineP2.Y) / 2.0);
         }
 
         // 2. Points
@@ -540,10 +583,10 @@ public partial class InspectionService
         foreach (var dRes in result.Distances)
         {
             if (!ShouldRender(dRes.Name)) continue;
-            if ((dRes.Pass || dRes.Value > 0) && pointPosMap.TryGetValue(dRes.PointA, out var pa) && pointPosMap.TryGetValue(dRes.PointB, out var pb))
+            if (!double.IsNaN(dRes.Value) && pointPosMap.TryGetValue(dRes.PointA, out var pa) && pointPosMap.TryGetValue(dRes.PointB, out var pb))
             {
-                var p1 = new Point((int)pa.X, (int)pa.Y);
-                var p2 = new Point((int)pb.X, (int)pb.Y);
+                var p1 = new Point((int)Math.Round(pa.X), (int)Math.Round(pa.Y));
+                var p2 = new Point((int)Math.Round(pb.X), (int)Math.Round(pb.Y));
                 var col = dRes.Pass ? green : red;
                 Cv2.Line(mat, p1, p2, col, thNormal, LineTypes.AntiAlias);
                 Cv2.Circle(mat, p1, ScalePx(3), col, -1, LineTypes.AntiAlias);

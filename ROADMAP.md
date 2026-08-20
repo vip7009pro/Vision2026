@@ -492,8 +492,19 @@ Lộ trình tích hợp tính năng Chụp ảnh từ camera và hỗ trợ các
     - Cung cấp hàm `RequestLiveStreamAsync(consumerId, enable)`: Tự động kích hoạt `StartGrabbingAsync()` khi có ít nhất 1 consumer yêu cầu xem và tự động dừng `StopGrabbingAsync()` khi không còn ai xem $\rightarrow$ Đưa băng thông mạng Ethernet về đúng **0 Mbps**.
   - `Live View Độc Lập Cho Tab OQC Scanner (OqcScannerViewModel.cs)`:
     - Bổ sung `partial void OnIsShowingLiveCameraChanged(bool value)`: Tự động gửi yêu cầu `RequestLiveStreamAsync("OQCScanner", true)` khi người dùng bật Live Camera trên tab OQC Scanner và hủy đăng ký khi chuyển sang xem kết quả Final hoặc chạy Job.
-    - Tab OQC Scanner hoàn toàn có thể Live View mượt mà bất kể bên tab Camera Settings đang bật hay tắt Live View, đồng thời chỉ thực sự tải luồng ảnh khi cần thiết để tối ưu hóa hiệu năng và băng thông mạng.
+- [x] Task 184: Hiển thị đầy đủ Overlay kết quả phép đo Distance lên ảnh xuất của Tool ImageOutput:
+  - `Mở Rộng Nguồn Điểm Neo pointPosMap (InspectionService.ImageOutputs.cs)`:
+    - Bổ sung tất cả các nguồn tọa độ điểm (Origin, Points, CreatePoints, CircleFinders, Diameters, EdgePairs, EdgePairDetections, BlobDetections, Calipers) vào bảng tra cứu điểm `pointPosMap`.
+  - `Sửa Điều Kiện Vẽ Overlay Cho Tool Distances (InspectionService.ImageOutputs.cs)`:
+    - Sửa điều kiện từ `(dRes.Pass || dRes.Value > 0)` thành `!double.IsNaN(dRes.Value) && pointPosMap.TryGetValue(dRes.PointA, out var pa) && pointPosMap.TryGetValue(dRes.PointB, out var pb)`.
+    - Vẽ đường thẳng nối 2 điểm kèm nhãn kết quả số đo `${dRes.Name}=... mm/px` chuẩn xác 100% lên tệp ảnh xuất của tool ImageOutput.
   - `Biên Dịch & Kiểm Thử Thành Công 100%`: Solution biên dịch **0 Error(s)**, chạy test thành công.
+- [ ] Task 185 (Kế hoạch Mục 2): Cải tiến toàn diện Bảng lịch sử OQC Scanner & Schema ghi Log Database chi tiết:
+  - `Lưu Trữ Lịch Sử Cục Bộ (Local JSON)`: Tự động lưu và tải lại bảng lịch sử khi bật/tắt app.
+  - `Trích Xuất Excel (Export to CSV/Excel)`: Nút xuất file Excel tiếng Việt UTF-8 with BOM.
+  - `Cột Ảnh Output & Cửa Sổ Xem Chi Tiết Phép Đo`: Cột link ảnh output trên DataGrid và cửa sổ `OqcScanDetailDialog` hiển thị ảnh + danh sách toàn bộ phép đo.
+  - `Export / Import Cấu Hình OQC`: Sao lưu và khôi phục cấu hình OQC dạng JSON.
+  - `Hỗ Trợ Token {UUID} & Ghi Log Phép Đo Chi Tiết Vào DB`: Tạo UUID duy nhất và thực thi truy vấn log chi tiết từng phép đo.
 
 
 

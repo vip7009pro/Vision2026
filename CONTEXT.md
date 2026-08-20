@@ -51,6 +51,14 @@
 
 ### Sửa lỗi và Cải thiện UX/UI (Phiên làm việc hiện tại)
 
+- **Hiển thị đầy đủ Overlay kết quả phép đo Distance lên ảnh xuất của Tool ImageOutput (Task 184)**:
+  - **Mở rộng nguồn điểm neo `pointPosMap` (`InspectionService.ImageOutputs.cs`)**:
+    - Bổ sung tất cả các nguồn tọa độ điểm (Origin, Points, CreatePoints, CircleFinders, Diameters, EdgePairs, EdgePairDetections, BlobDetections, Calipers) vào bảng tra cứu điểm `pointPosMap`.
+  - **Sửa điều kiện vẽ Overlay cho Tool Distances (`InspectionService.ImageOutputs.cs`)**:
+    - Sửa điều kiện từ `(dRes.Pass || dRes.Value > 0)` thành `!double.IsNaN(dRes.Value) && pointPosMap.TryGetValue(dRes.PointA, out var pa) && pointPosMap.TryGetValue(dRes.PointB, out var pb)`.
+    - Bảo đảm đường thẳng nối giữa 2 điểm đo khoảng cách kèm nhãn kết quả số đo `${dRes.Name}=... mm/px` luôn được ghi đầy đủ và chuẩn xác 100% vào tệp ảnh xuất của tool ImageOutput.
+  - **Kiểm Thử & Biên Dịch Thành Công 100%**: Solution biên dịch thành công **0 Error(s)**, vượt qua toàn bộ unit test.
+
 - **Cơ chế Live Stream độc lập cho Tab OQC Scanner & Quản lý Consumer theo yêu cầu thực tế (Task 183)**:
   - **Cơ chế Quản lý Multi-Consumer Live Stream (`CameraService.cs`)**:
     - Bổ sung `_activeLiveConsumers` (HashSet các bên đăng ký xem Live Stream: `OQCScanner`, `CameraSettings`, `JobCameraSettings`...).
