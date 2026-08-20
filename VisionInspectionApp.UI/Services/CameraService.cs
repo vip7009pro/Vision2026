@@ -20,6 +20,7 @@ public sealed class CameraService : IDisposable
     private ICameraDriver? _activeDriver;
     private CameraDeviceInfo? _activeDeviceInfo;
     private CameraParameters _currentParameters = new();
+    private CameraParameters _systemParameters = new();
 
     private bool _isRunning;
     private bool _isDisposed;
@@ -58,6 +59,7 @@ public sealed class CameraService : IDisposable
     public ICameraDriver? ActiveDriver => _activeDriver;
     public CameraDeviceInfo? ActiveDeviceInfo => _activeDeviceInfo;
     public CameraParameters CurrentParameters => _currentParameters;
+    public CameraParameters SystemParameters => _systemParameters;
 
     public string SimulatorCustomImagePath
     {
@@ -717,17 +719,65 @@ public sealed class CameraService : IDisposable
     public async Task ApplyParametersAsync(CameraParameters parameters)
     {
         _currentParameters = parameters.Clone();
-        Brightness = parameters.Brightness;
-        Contrast = parameters.Contrast;
-        IsGrayscale = parameters.IsGrayscale;
-        DesiredWidth = parameters.Width;
-        DesiredHeight = parameters.Height;
-        DesiredFps = parameters.TargetFps;
+        _brightness = parameters.Brightness;
+        _contrast = parameters.Contrast;
+        _isGrayscale = parameters.IsGrayscale;
+        _desiredWidth = parameters.Width;
+        _desiredHeight = parameters.Height;
+        _desiredFps = parameters.TargetFps;
 
         if (_activeDriver != null && _activeDriver.IsOpened)
         {
             await _activeDriver.ApplyParametersAsync(_currentParameters);
         }
+    }
+
+    public async Task SaveSystemParametersAsync(CameraParameters parameters)
+    {
+        _systemParameters = parameters.Clone();
+        _currentParameters = parameters.Clone();
+        _brightness = parameters.Brightness;
+        _contrast = parameters.Contrast;
+        _isGrayscale = parameters.IsGrayscale;
+        _desiredWidth = parameters.Width;
+        _desiredHeight = parameters.Height;
+        _desiredFps = parameters.TargetFps;
+        SaveSettings();
+
+        if (_activeDriver != null && _activeDriver.IsOpened)
+        {
+            await _activeDriver.ApplyParametersAsync(_currentParameters);
+        }
+    }
+
+    public async Task RestoreSystemParametersAsync()
+    {
+        await ApplyParametersAsync(_systemParameters);
+    }
+
+    public async Task<CameraParameters?> ReadParametersFromCameraAsync()
+    {
+        if (_activeDriver == null || !_activeDriver.IsOpened) return null;
+        try
+        {
+            var p = await _activeDriver.ReadParametersAsync();
+            if (p != null)
+            {
+                _currentParameters = p.Clone();
+                _brightness = p.Brightness;
+                _contrast = p.Contrast;
+                _isGrayscale = p.IsGrayscale;
+                _desiredWidth = p.Width;
+                _desiredHeight = p.Height;
+                _desiredFps = p.TargetFps;
+                return p;
+            }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[CameraService] ReadParametersFromCameraAsync error: {ex.Message}");
+        }
+        return null;
     }
 
     private void OnDriverFrameCaptured(object? sender, Mat frame)
@@ -922,7 +972,8 @@ public sealed class CameraService : IDisposable
 
                     if (settings.SavedParameters != null)
                     {
-                        _currentParameters = settings.SavedParameters.Clone();
+                        _systemParameters = settings.SavedParameters.Clone();
+                        _currentParameters = _systemParameters.Clone();
                     }
 
                     _currentParameters.CustomImagePath = _simulatorCustomImagePath;
@@ -930,6 +981,12 @@ public sealed class CameraService : IDisposable
                     _currentParameters.Brightness = _brightness;
                     _currentParameters.Contrast = _contrast;
                     _currentParameters.IsGrayscale = _isGrayscale;
+
+                    _systemParameters.CustomImagePath = _simulatorCustomImagePath;
+                    _systemParameters.EnableRandomTransform = _simulatorEnableRandomTransform;
+                    _systemParameters.Brightness = _brightness;
+                    _systemParameters.Contrast = _contrast;
+                    _systemParameters.IsGrayscale = _isGrayscale;
                     return;
                 }
             }
@@ -953,8 +1010,8 @@ public sealed class CameraService : IDisposable
         _savedDeviceIpAddress = "";
         _savedDeviceMacAddress = "";
         _savedDeviceInterfaceType = "";
-        _currentParameters.CustomImagePath = "";
-        _currentParameters.EnableRandomTransform = false;
+        _currentParameters = new CameraParameters();
+        _systemParameters = new CameraParameters();
     }
 
     private void SaveSettings()
@@ -980,7 +1037,7 @@ public sealed class CameraService : IDisposable
                 SavedDeviceIpAddress = _savedDeviceIpAddress,
                 SavedDeviceMacAddress = _savedDeviceMacAddress,
                 SavedDeviceInterfaceType = _savedDeviceInterfaceType,
-                SavedParameters = _currentParameters.Clone()
+                SavedParameters = _systemParameters.Clone()
             };
             var json = System.Text.Json.JsonSerializer.Serialize(settings, new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
             System.IO.File.WriteAllText(_settingsPath, json);

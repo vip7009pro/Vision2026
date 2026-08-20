@@ -51,6 +51,30 @@
 
 ### Sửa lỗi và Cải thiện UX/UI (Phiên làm việc hiện tại)
 
+- **Cải tiến cơ chế đồng bộ trạng thái Lật X, Y và thông số thực tế từ phần cứng Camera vào ứng dụng (Task 182)**:
+  - **Đồng bộ trạng thái lật phần cứng khi kết nối camera (`HikCameraDriver.cs`, `CameraDriverBase.cs`)**:
+    - Trong `HikCameraDriver.OpenAsync`, ngay sau khi mở kết nối thiết bị, ứng dụng chủ động truy vấn giá trị thực tế `ReverseX` và `ReverseY` từ phần cứng camera (`MV_CC_GetBoolValue_NET`) và cập nhật vào `_hardwareReverseXApplied`, `_parameters`.
+  - **Áp dụng công thức XOR Logic cho xử lý lật hình (`CameraDriverBase.cs`)**:
+    - Sửa `ApplySoftwarePostProcessing` và `RaiseFrameCaptured`: Dùng công thức `needFlipX = (paramsObj.ReverseX != hardwareReverseXApplied)` và `needFlipY = (paramsObj.ReverseY != hardwareReverseYApplied)`.
+    - Bảo đảm bất kể camera phần cứng đang ở trạng thái nào (lật hay không lật), nếu app yêu cầu `ReverseX = false` mà camera phần cứng đang bị lật thì OpenCV tự động lật ngược lại đưa về ảnh gốc; nếu app yêu cầu `ReverseX = true` mà camera phần cứng đã lật thì không bị lật đúp 2 lần.
+  - **Cung cấp API đọc trực tiếp thông số từ Camera (`ICameraDriver.cs`, `HikCameraDriver.cs`, `CameraService.cs`)**:
+    - `HikCameraDriver.ReadParametersAsync`: Đọc toàn bộ các node GenICam phần cứng (`ReverseX`, `ReverseY`, `ExposureTime`, `ExposureAuto`, `Gain`, `GainAuto`, `Gamma`, `BalanceWhiteAuto`, `TriggerMode`, `TriggerSource`, `PacketSize`, `PacketDelay`, `ROI`...).
+    - `CameraService.ReadParametersFromCameraAsync`: Cung cấp hàm trung tâm cho UI.
+  - **Giao diện đồng bộ 1-Click '🔄 Đọc Từ Camera' (`CameraSettingsView.xaml`, `JobCameraSettingsWindow.xaml`)**:
+    - Bổ sung nút **`🔄 Đọc Từ Camera`** trên cả màn hình cấu hình Camera hệ thống và cấu hình Camera của Job. Tự động đồng bộ toàn bộ CheckBox, Slider, ComboBox lên UI khi kết nối camera.
+  - **Kiểm Thử & Biên Dịch Thành Công 100%**: Solution biên dịch thành công **0 Error(s)**, vượt qua toàn bộ unit test.
+
+- **Khởi động mặc định Full Screen, Đặt định dạng ảnh xuất mặc định JPG & Tách biệt độc lập hoàn toàn Cấu hình Camera của Job và Camera Settings hệ thống (Task 181)**:
+  - **Khởi động mặc định Full Screen (`MainWindow.xaml`)**:
+    - Bổ sung `WindowState="Maximized"` và `WindowStartupLocation="CenterScreen"` vào `MainWindow.xaml` để ứng dụng luôn mở toàn màn hình chuẩn công nghiệp khi khởi động.
+  - **Tool ImageOutput đặt định dạng xuất mặc định là JPG (`Class1.cs`, `ToolEditorViewModel.ToolImageOutput.cs`)**:
+    - Đổi định dạng mặc định trong `ImageOutputDefinition.Format` và `ImageOutput_Format` từ PNG sang **`JPG`** giúp tiết kiệm tối đa dung lượng lưu trữ ổ đĩa.
+  - **Tách biệt hoàn toàn & độc lập 100% giữa Cấu hình Camera của Job và Camera Settings hệ thống (`CameraService.cs`, `CameraSettingsViewModel.cs`, `JobCameraSettingsViewModel.cs`)**:
+    - `CameraService.cs`: Tách riêng `_systemParameters` (cấu hình camera mặc định hệ thống lưu trong `camera_adjust_settings.json`) và `_currentParameters` (thông số đang kích hoạt trên camera). Cung cấp các phương thức `SaveSystemParametersAsync` và `RestoreSystemParametersAsync`. Loại bỏ hoàn toàn việc Job nạp thông số vô tình ghi đè vào file cài đặt hệ thống.
+    - `CameraSettingsViewModel.cs`: Hoạt động độc lập trên `_cameraService.SystemParameters` và lưu trực tiếp vào cấu hình hệ thống mà không can thiệp vào bất kỳ Job nào.
+    - `JobCameraSettingsViewModel.cs`: Quản lý độc lập bản sao `_cameraParams` của Job đang mở. Bổ sung cơ chế `_originalParams` tự động hoàn trả camera về trạng thái ban đầu khi người dùng bấm Hủy (Cancel) hoặc đóng cửa sổ mà chưa bấm Lưu.
+  - **Kiểm Thử & Biên Dịch Thành Công 100%**: Solution biên dịch thành công **0 Error(s)**, vượt qua toàn bộ unit test.
+
 - **Sửa triệt để lỗi lật ảnh ngang (Reverse X) bị lộn ngược lại do xung đột giữa Hardware Flip và Software Flip (Task 180)**:
   - **Khắc phục xung đột lật ảnh hai lần (Hardware + Software Deduplication) (`CameraDriverBase.cs`, `HikCameraDriver.cs`)**:
     - Sửa `CameraDriverBase.cs`: Bổ sung cờ theo dõi trạng thái lật phần cứng `_hardwareReverseXApplied` và `_hardwareReverseYApplied`. Chỉ thực hiện phần mềm `Cv2.Flip` khi phần cứng camera KHÔNG hỗ trợ hoặc chưa lật trục tương ứng.

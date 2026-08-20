@@ -191,11 +191,18 @@
                         <RowDefinition Height="Auto" />
                     </Grid.RowDefinitions>
 
-                    <StackPanel Grid.Row="0" Margin="0,0,0,8">
-                        <TextBlock Text="⚙️ Thông Số Camera (Lưu Theo Job)" FontSize="15" FontWeight="Bold" Foreground="{DynamicResource TextBrush}" />
-                        <TextBlock Text="Phơi sáng, Gain, White Balance &amp; Trigger" FontSize="11" Foreground="#888" Margin="0,2,0,0" />
-                        <Separator Margin="0,6,0,0" />
-                    </StackPanel>
+                    <Grid Grid.Row="0" Margin="0,0,0,8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0">
+                            <TextBlock Text="⚙️ Thông Số Camera (Lưu Theo Job)" FontSize="15" FontWeight="Bold" Foreground="{DynamicResource TextBrush}" />
+                            <TextBlock Text="Phơi sáng, Gain, White Balance &amp; Trigger" FontSize="11" Foreground="#888" Margin="0,2,0,0" />
+                        </StackPanel>
+                        <Button Grid.Column="1" Command="{Binding SyncFromCameraCommand}" IsEnabled="{Binding IsCameraRunning}"
+                                Content="🔄 Đọc Từ Camera" Padding="6,3" FontSize="10" FontWeight="Bold" Background="#00897B" Foreground="White" BorderThickness="0" VerticalAlignment="Center" ToolTip="Đọc và đồng bộ toàn bộ trạng thái thực tế từ Camera vào Job này" />
+                    </Grid>
 
                     <!-- Scrollable Parameters -->
                     <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">

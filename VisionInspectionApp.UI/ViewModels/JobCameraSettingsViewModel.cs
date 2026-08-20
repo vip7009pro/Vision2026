@@ -514,6 +514,7 @@ public sealed class JobCameraSettingsViewModel : ObservableObject, IDisposable
     public IAsyncRelayCommand ToggleLiveViewCommand { get; }
     public IAsyncRelayCommand SnapFrameCommand { get; }
     public IAsyncRelayCommand AutoWhiteBalanceOnceCommand { get; }
+    public IAsyncRelayCommand SyncFromCameraCommand { get; }
     public IAsyncRelayCommand ExecuteSoftwareTriggerCommand { get; }
     public IRelayCommand SetFullSensorRoiCommand { get; }
     public IRelayCommand CenterRoiCommand { get; }
@@ -524,10 +525,13 @@ public sealed class JobCameraSettingsViewModel : ObservableObject, IDisposable
 
     private readonly System.Windows.Threading.DispatcherTimer _debounceTimer;
     private bool _isUpdatingFromRoiDrag;
+    private readonly CameraParameters _originalParams;
+    private bool _hasSaved;
 
     public JobCameraSettingsViewModel(CameraService cameraService, CameraParameters initialParams, string jobName, Action<CameraParameters>? onSaveCallback = null)
     {
         _cameraService = cameraService;
+        _originalParams = initialParams != null ? initialParams.Clone() : new CameraParameters();
         _cameraParams = initialParams != null ? initialParams.Clone() : new CameraParameters();
         JobName = string.IsNullOrWhiteSpace(jobName) ? "Job Hiện Tại" : jobName;
         _onSaveCallback = onSaveCallback;
@@ -546,12 +550,13 @@ public sealed class JobCameraSettingsViewModel : ObservableObject, IDisposable
         ToggleLiveViewCommand = new AsyncRelayCommand(ToggleLiveViewAsync);
         SnapFrameCommand = new AsyncRelayCommand(SnapFrameAsync);
         AutoWhiteBalanceOnceCommand = new AsyncRelayCommand(AutoWhiteBalanceOnceAsync);
+        SyncFromCameraCommand = new AsyncRelayCommand(SyncFromCameraAsync);
         ExecuteSoftwareTriggerCommand = new AsyncRelayCommand(ExecuteSoftwareTriggerAsync);
         SetFullSensorRoiCommand = new RelayCommand(SetFullSensorRoi);
         CenterRoiCommand = new RelayCommand(CenterRoi);
         ResetSettingsCommand = new RelayCommand(ResetSettings);
         SaveJobCameraSettingsCommand = new RelayCommand(SaveJobCameraSettings);
-        CancelCommand = new RelayCommand(() => RequestClose?.Invoke());
+        CancelCommand = new RelayCommand(ExecuteCancel);
         RoiEditedCommand = new RelayCommand<RoiSelection>(OnRoiEdited);
 
         RefreshAvailableCameras();
@@ -816,6 +821,59 @@ public sealed class JobCameraSettingsViewModel : ObservableObject, IDisposable
         }
     }
 
+    private async Task SyncFromCameraAsync()
+    {
+        if (!IsCameraRunning)
+        {
+            StatusMessage = "Vui lòng kết nối camera trước khi đọc thông số.";
+            return;
+        }
+
+        try
+        {
+            StatusMessage = "🔄 Đang đọc trạng thái thực tế từ phần cứng Camera...";
+            var p = await _cameraService.ReadParametersFromCameraAsync();
+            if (p != null)
+            {
+                _cameraParams = p.Clone();
+
+                OnPropertyChanged(nameof(Brightness));
+                OnPropertyChanged(nameof(Contrast));
+                OnPropertyChanged(nameof(IsGrayscale));
+                OnPropertyChanged(nameof(ExposureTimeUs));
+                OnPropertyChanged(nameof(GainDb));
+                OnPropertyChanged(nameof(Gamma));
+                OnPropertyChanged(nameof(ReverseX));
+                OnPropertyChanged(nameof(ReverseY));
+                OnPropertyChanged(nameof(TriggerModeOn));
+                OnPropertyChanged(nameof(AutoWhiteBalance));
+                OnPropertyChanged(nameof(AutoExposure));
+                OnPropertyChanged(nameof(AutoGain));
+                OnPropertyChanged(nameof(SelectedTriggerSource));
+                OnPropertyChanged(nameof(TriggerDelayUs));
+                OnPropertyChanged(nameof(PacketSize));
+                OnPropertyChanged(nameof(PacketDelay));
+                OnPropertyChanged(nameof(SelectedPixelFormat));
+                OnPropertyChanged(nameof(EnableHardwareRoi));
+                OnPropertyChanged(nameof(RoiOffsetX));
+                OnPropertyChanged(nameof(RoiOffsetY));
+                OnPropertyChanged(nameof(RoiWidth));
+                OnPropertyChanged(nameof(RoiHeight));
+
+                RefreshOverlayItems();
+                StatusMessage = $"✅ Đã đọc thông số từ Camera vào Job! (ReverseX: {(ReverseX ? "BẬT" : "TẮT")}, ReverseY: {(ReverseY ? "BẬT" : "TẮT")})";
+            }
+            else
+            {
+                StatusMessage = "❌ Không thể đọc thông số từ Camera.";
+            }
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = $"Lỗi đọc camera: {ex.Message}";
+        }
+    }
+
     private async Task ExecuteSoftwareTriggerAsync()
     {
         if (_cameraService.IsRunning)
@@ -847,6 +905,7 @@ public sealed class JobCameraSettingsViewModel : ObservableObject, IDisposable
     {
         try
         {
+            _hasSaved = true;
             _debounceTimer.Stop();
             _ = ApplyCameraParametersAsync();
             _onSaveCallback?.Invoke(_cameraParams.Clone());
@@ -856,6 +915,17 @@ public sealed class JobCameraSettingsViewModel : ObservableObject, IDisposable
         {
             StatusMessage = $"Lỗi lưu cấu hình: {ex.Message}";
         }
+    }
+
+    private void ExecuteCancel()
+    {
+        try
+        {
+            _debounceTimer.Stop();
+            _ = _cameraService.ApplyParametersAsync(_originalParams);
+            RequestClose?.Invoke();
+        }
+        catch { }
     }
 
     private bool _isRenderingFrame;
@@ -969,7 +1039,12 @@ public sealed class JobCameraSettingsViewModel : ObservableObject, IDisposable
 
     public void Dispose()
     {
+        _debounceTimer.Stop();
         _cameraService.FrameCaptured -= OnFrameCaptured;
         _cameraService.ErrorOccurred -= OnCameraError;
+        if (!_hasSaved)
+        {
+            _ = _cameraService.ApplyParametersAsync(_originalParams);
+        }
     }
 }

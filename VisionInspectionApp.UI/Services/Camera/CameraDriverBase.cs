@@ -64,8 +64,8 @@ public abstract class CameraDriverBase : ICameraDriver
             hwRevY = _hardwareReverseYApplied;
         }
 
-        bool needFlipX = (p != null) && p.ReverseX && !hwRevX;
-        bool needFlipY = (p != null) && p.ReverseY && !hwRevY;
+        bool needFlipX = (p != null) && (p.ReverseX != hwRevX);
+        bool needFlipY = (p != null) && (p.ReverseY != hwRevY);
 
         bool needProcessing = (p != null) &&
             (Math.Abs(p.Contrast - 1.0) > 0.01 ||
@@ -95,8 +95,8 @@ public abstract class CameraDriverBase : ICameraDriver
         if (input == null || input.IsDisposed || input.Empty()) return new Mat();
         if (paramsObj == null) return input.Clone();
 
-        bool needFlipX = paramsObj.ReverseX && !hardwareReverseXApplied;
-        bool needFlipY = paramsObj.ReverseY && !hardwareReverseYApplied;
+        bool needFlipX = (paramsObj.ReverseX != hardwareReverseXApplied);
+        bool needFlipY = (paramsObj.ReverseY != hardwareReverseYApplied);
 
         bool needProcessing = Math.Abs(paramsObj.Contrast - 1.0) > 0.01 ||
                               Math.Abs(paramsObj.Brightness) > 0.01 ||

@@ -11,6 +11,8 @@
     Title="CMS VINA VISION SYSTEM"
     Height="900"
     Width="1400"
+    WindowState="Maximized"
+    WindowStartupLocation="CenterScreen"
     FontFamily="Segoe UI"
     Background="{DynamicResource WindowBackgroundBrush}"
     Foreground="{DynamicResource TextBrush}"

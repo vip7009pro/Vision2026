@@ -223,6 +223,31 @@ public sealed class HikCameraDriver : CameraDriverBase
                 }
 
                 _isOpened = true;
+
+                // Đồng bộ hóa trạng thái lật phần cứng ban đầu từ camera
+                try
+                {
+                    bool curHwX = false;
+                    if (_camera.MV_CC_GetBoolValue_NET("ReverseX", ref curHwX) == MyCamera.MV_OK)
+                    {
+                        lock (_lock)
+                        {
+                            _hardwareReverseXApplied = curHwX;
+                            _parameters.ReverseX = curHwX;
+                        }
+                    }
+                    bool curHwY = false;
+                    if (_camera.MV_CC_GetBoolValue_NET("ReverseY", ref curHwY) == MyCamera.MV_OK)
+                    {
+                        lock (_lock)
+                        {
+                            _hardwareReverseYApplied = curHwY;
+                            _parameters.ReverseY = curHwY;
+                        }
+                    }
+                }
+                catch { }
+
                 return true;
             }
             catch (Exception ex)
@@ -542,15 +567,19 @@ public sealed class HikCameraDriver : CameraDriverBase
                 bool hwY = false;
                 try
                 {
-                    int retX = _camera.MV_CC_SetBoolValue_NET("ReverseX", parameters.ReverseX);
-                    hwX = (retX == MyCamera.MV_OK) && parameters.ReverseX;
+                    _camera.MV_CC_SetBoolValue_NET("ReverseX", parameters.ReverseX);
+                    bool actualValX = false;
+                    int getRetX = _camera.MV_CC_GetBoolValue_NET("ReverseX", ref actualValX);
+                    hwX = (getRetX == MyCamera.MV_OK) ? actualValX : parameters.ReverseX;
                 }
                 catch { hwX = false; }
 
                 try
                 {
-                    int retY = _camera.MV_CC_SetBoolValue_NET("ReverseY", parameters.ReverseY);
-                    hwY = (retY == MyCamera.MV_OK) && parameters.ReverseY;
+                    _camera.MV_CC_SetBoolValue_NET("ReverseY", parameters.ReverseY);
+                    bool actualValY = false;
+                    int getRetY = _camera.MV_CC_GetBoolValue_NET("ReverseY", ref actualValY);
+                    hwY = (getRetY == MyCamera.MV_OK) ? actualValY : parameters.ReverseY;
                 }
                 catch { hwY = false; }
 
@@ -653,6 +682,147 @@ public sealed class HikCameraDriver : CameraDriverBase
     {
         _driverGate.Release();
     }
+}
+
+public override async Task<CameraParameters> ReadParametersAsync()
+{
+    if (!_isOpened || _camera == null || !IsMvSdkAvailable())
+    {
+        return await base.ReadParametersAsync();
+    }
+
+    return await Task.Run(() =>
+    {
+        var p = new CameraParameters();
+        lock (_lock)
+        {
+            p = _parameters.Clone();
+        }
+
+        try
+        {
+            // 1. Exposure Time & Auto
+            var stExpAuto = new MyCamera.MVCC_ENUMVALUE();
+            if (_camera.MV_CC_GetEnumValue_NET("ExposureAuto", ref stExpAuto) == MyCamera.MV_OK)
+            {
+                p.AutoExposure = (stExpAuto.nCurValue != 0);
+            }
+            var stExp = new MyCamera.MVCC_FLOATVALUE();
+            if (_camera.MV_CC_GetFloatValue_NET("ExposureTime", ref stExp) == MyCamera.MV_OK)
+            {
+                p.ExposureTimeUs = stExp.fCurValue;
+            }
+
+            // 2. Gain & Auto Gain
+            var stGainAuto = new MyCamera.MVCC_ENUMVALUE();
+            if (_camera.MV_CC_GetEnumValue_NET("GainAuto", ref stGainAuto) == MyCamera.MV_OK)
+            {
+                p.AutoGain = (stGainAuto.nCurValue != 0);
+            }
+            var stGain = new MyCamera.MVCC_FLOATVALUE();
+            if (_camera.MV_CC_GetFloatValue_NET("Gain", ref stGain) == MyCamera.MV_OK)
+            {
+                p.GainDb = stGain.fCurValue;
+            }
+
+            // 3. Gamma
+            var stGamma = new MyCamera.MVCC_FLOATVALUE();
+            if (_camera.MV_CC_GetFloatValue_NET("Gamma", ref stGamma) == MyCamera.MV_OK)
+            {
+                p.Gamma = stGamma.fCurValue;
+            }
+
+            // 4. White Balance
+            var stWb = new MyCamera.MVCC_ENUMVALUE();
+            if (_camera.MV_CC_GetEnumValue_NET("BalanceWhiteAuto", ref stWb) == MyCamera.MV_OK)
+            {
+                p.AutoWhiteBalance = (stWb.nCurValue != 0);
+            }
+
+            // 5. Trigger Mode & Source
+            var stTrig = new MyCamera.MVCC_ENUMVALUE();
+            if (_camera.MV_CC_GetEnumValue_NET("TriggerMode", ref stTrig) == MyCamera.MV_OK)
+            {
+                p.TriggerMode = (stTrig.nCurValue == 1) ? CameraTriggerMode.On : CameraTriggerMode.Off;
+            }
+            var stTrigSrc = new MyCamera.MVCC_ENUMVALUE();
+            if (_camera.MV_CC_GetEnumValue_NET("TriggerSource", ref stTrigSrc) == MyCamera.MV_OK)
+            {
+                p.TriggerSource = stTrigSrc.nCurValue switch
+                {
+                    0 => CameraTriggerSource.Line0,
+                    1 => CameraTriggerSource.Line1,
+                    2 => CameraTriggerSource.Line2,
+                    7 => CameraTriggerSource.Software,
+                    _ => CameraTriggerSource.Software
+                };
+            }
+
+            // 6. Reverse X / Y
+            bool hwX = false;
+            if (_camera.MV_CC_GetBoolValue_NET("ReverseX", ref hwX) == MyCamera.MV_OK)
+            {
+                p.ReverseX = hwX;
+            }
+            bool hwY = false;
+            if (_camera.MV_CC_GetBoolValue_NET("ReverseY", ref hwY) == MyCamera.MV_OK)
+            {
+                p.ReverseY = hwY;
+            }
+
+            // 7. GigE Packet Size & Delay
+            if (_deviceInfo.InterfaceType == CameraInterfaceType.GigE)
+            {
+                var stPktSize = new MyCamera.MVCC_INTVALUE_EX();
+                if (_camera.MV_CC_GetIntValueEx_NET("GevSCPSPacketSize", ref stPktSize) == MyCamera.MV_OK)
+                {
+                    p.PacketSize = (int)stPktSize.nCurValue;
+                }
+                var stPktDelay = new MyCamera.MVCC_INTVALUE_EX();
+                if (_camera.MV_CC_GetIntValueEx_NET("GevSCPD", ref stPktDelay) == MyCamera.MV_OK)
+                {
+                    p.PacketDelay = (int)stPktDelay.nCurValue;
+                }
+            }
+
+            // 8. ROI (Width, Height, OffsetX, OffsetY)
+            var stW = new MyCamera.MVCC_INTVALUE_EX();
+            var stH = new MyCamera.MVCC_INTVALUE_EX();
+            var stOx = new MyCamera.MVCC_INTVALUE_EX();
+            var stOy = new MyCamera.MVCC_INTVALUE_EX();
+            var stWmax = new MyCamera.MVCC_INTVALUE_EX();
+            var stHmax = new MyCamera.MVCC_INTVALUE_EX();
+            _camera.MV_CC_GetIntValueEx_NET("Width", ref stW);
+            _camera.MV_CC_GetIntValueEx_NET("Height", ref stH);
+            _camera.MV_CC_GetIntValueEx_NET("OffsetX", ref stOx);
+            _camera.MV_CC_GetIntValueEx_NET("OffsetY", ref stOy);
+            _camera.MV_CC_GetIntValueEx_NET("WidthMax", ref stWmax);
+            _camera.MV_CC_GetIntValueEx_NET("HeightMax", ref stHmax);
+
+            if (stWmax.nCurValue > 0 && stHmax.nCurValue > 0)
+            {
+                bool isCropped = (stW.nCurValue < stWmax.nCurValue || stH.nCurValue < stHmax.nCurValue || stOx.nCurValue > 0 || stOy.nCurValue > 0);
+                p.EnableHardwareRoi = isCropped;
+                p.RoiWidth = (int)stW.nCurValue;
+                p.RoiHeight = (int)stH.nCurValue;
+                p.RoiOffsetX = (int)stOx.nCurValue;
+                p.RoiOffsetY = (int)stOy.nCurValue;
+            }
+
+            lock (_lock)
+            {
+                _hardwareReverseXApplied = p.ReverseX;
+                _hardwareReverseYApplied = p.ReverseY;
+                _parameters = p.Clone();
+            }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[HikCameraDriver] ReadParameters exception: {ex.Message}");
+        }
+
+        return p;
+    });
 }
 
     private static string MapPixelFormatToGenICam(string format)

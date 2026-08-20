@@ -466,6 +466,26 @@ Lộ trình tích hợp tính năng Chụp ảnh từ camera và hỗ trợ các
     - Sửa `HikCameraDriver.cs`: Trong `ApplyParametersAsync`, kiểm tra kết quả trả về của SDK `MV_CC_SetBoolValue_NET("ReverseX", ...)` và `MV_CC_SetBoolValue_NET("ReverseY", ...)`. Nếu camera Hikrobot phần cứng đã lật X thành công (`hwX = true`), phần mềm sẽ không gọi thêm lệnh `Cv2.Flip(..., FlipMode.Y)` nữa $\rightarrow$ Triệt tiêu 100% lỗi lật 2 lần khiến ảnh bị quay về như cũ.
   - `Đồng Bộ Hóa Xử Lý Hậu Kỳ Cho Cả Live Stream Và Snap Frame`:
     - Cập nhật `ContinuousGrabLoop` và `GrabFrameAsync` trong `HikCameraDriver.cs`: Đảm bảo frame truyền lên UI qua sự kiện `FrameCaptured` lẫn frame lưu trong `_latestContinuousFrame` đều được hậu xử lý (lật X/Y, chỉnh Contrast, Brightness, Grayscale) đúng 1 lần duy nhất một cách hoàn hảo và nhất quán.
+- [x] Task 181: Khởi động mặc định Full Screen, Đặt định dạng ảnh xuất mặc định JPG & Tách biệt độc lập hoàn toàn Cấu hình Camera của Job và Camera Settings hệ thống:
+  - `Khởi Động Mặc Định Full Screen (MainWindow.xaml)`:
+    - Bổ sung `WindowState="Maximized"` và `WindowStartupLocation="CenterScreen"` vào `MainWindow.xaml` để ứng dụng luôn mở toàn màn hình chuẩn công nghiệp khi khởi động.
+  - `Tool ImageOutput Đặt Định Dạng Xuất Mặc Định Là JPG (Class1.cs, ToolEditorViewModel.ToolImageOutput.cs)`:
+    - Đổi định dạng mặc định trong `ImageOutputDefinition.Format` và `ImageOutput_Format` từ PNG sang **`JPG`** giúp tiết kiệm tối đa dung lượng lưu trữ ổ đĩa.
+  - `Tách Biệt Hoàn Toàn & Độc Lập 100% Giữa Cấu Hình Camera của Job và Camera Settings Hệ Thống`:
+    - `CameraService.cs`: Tách riêng `_systemParameters` (cấu hình camera mặc định hệ thống lưu trong `camera_adjust_settings.json`) và `_currentParameters` (thông số đang kích hoạt trên camera). Cung cấp các phương thức `SaveSystemParametersAsync` và `RestoreSystemParametersAsync`. Loại bỏ hoàn toàn việc Job nạp thông số vô tình ghi đè vào file cài đặt hệ thống.
+    - `CameraSettingsViewModel.cs`: Hoạt động độc lập trên `_cameraService.SystemParameters` và lưu trực tiếp vào cấu hình hệ thống mà không can thiệp vào bất kỳ Job nào.
+    - `JobCameraSettingsViewModel.cs`: Quản lý độc lập bản sao `_cameraParams` của Job đang mở. Bổ sung cơ chế `_originalParams` tự động hoàn trả camera về trạng thái ban đầu khi người dùng bấm Hủy (Cancel) hoặc đóng cửa sổ mà chưa bấm Lưu.
+- [x] Task 182: Cải tiến cơ chế đồng bộ trạng thái Lật X, Y và thông số thực tế từ phần cứng Camera vào ứng dụng:
+  - `Đồng Bộ Trạng Thái Lật Phần Cứng Khi Kết Nối Camera (HikCameraDriver.cs, CameraDriverBase.cs)`:
+    - Trong `HikCameraDriver.OpenAsync`, ngay sau khi mở kết nối thiết bị, ứng dụng chủ động truy vấn giá trị thực tế `ReverseX` và `ReverseY` từ phần cứng camera (`MV_CC_GetBoolValue_NET`) và cập nhật vào `_hardwareReverseXApplied`, `_parameters`.
+  - `Áp Dụng Công Thức XOR Logic Hoàn Hảo Cho Xử Lý Lật Hình (CameraDriverBase.cs)`:
+    - Sửa `ApplySoftwarePostProcessing` và `RaiseFrameCaptured`: Dùng công thức `needFlipX = (paramsObj.ReverseX != hardwareReverseXApplied)` và `needFlipY = (paramsObj.ReverseY != hardwareReverseYApplied)`.
+    - Bảo đảm bất kể camera phần cứng đang ở trạng thái nào (lật hay không lật), nếu app yêu cầu `ReverseX = false` mà camera phần cứng đang bị lật thì OpenCV tự động lật ngược lại đưa về ảnh gốc; nếu app yêu cầu `ReverseX = true` mà camera phần cứng đã lật thì không bị lật đúp 2 lần.
+  - `Cung Cấp API Đọc Trực Tiếp Thông Số Từ Camera (ICameraDriver.cs, HikCameraDriver.cs, CameraService.cs)`:
+    - `HikCameraDriver.ReadParametersAsync`: Đọc toàn bộ các node GenICam phần cứng (`ReverseX`, `ReverseY`, `ExposureTime`, `ExposureAuto`, `Gain`, `GainAuto`, `Gamma`, `BalanceWhiteAuto`, `TriggerMode`, `TriggerSource`, `PacketSize`, `PacketDelay`, `ROI`...).
+    - `CameraService.ReadParametersFromCameraAsync`: Cung cấp hàm trung tâm cho UI.
+  - `Giao Diện Đồng Bộ 1-Click "🔄 Đọc Từ Camera" (CameraSettingsView.xaml, JobCameraSettingsWindow.xaml)`:
+    - Bổ sung nút **`🔄 Đọc Từ Camera`** trên cả màn hình cấu hình Camera hệ thống và cấu hình Camera của Job. Tự động đồng bộ toàn bộ CheckBox, Slider, ComboBox lên UI khi kết nối camera.
   - `Biên Dịch & Kiểm Thử Thành Công 100%`: Solution biên dịch **0 Error(s)**, chạy test thành công.
 
 

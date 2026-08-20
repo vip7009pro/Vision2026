@@ -581,6 +581,7 @@ public sealed class CameraSettingsViewModel : ObservableObject, IDisposable
     public IAsyncRelayCommand ToggleLiveViewCommand { get; }
     public IAsyncRelayCommand SnapFrameCommand { get; }
     public IAsyncRelayCommand AutoWhiteBalanceOnceCommand { get; }
+    public IAsyncRelayCommand SyncFromCameraCommand { get; }
     public IRelayCommand RefreshAvailableCamerasCommand { get; }
     public IAsyncRelayCommand ExecuteSoftwareTriggerCommand { get; }
     public IRelayCommand SetFullSensorRoiCommand { get; }
@@ -596,7 +597,7 @@ public sealed class CameraSettingsViewModel : ObservableObject, IDisposable
     public CameraSettingsViewModel(CameraService cameraService)
     {
         _cameraService = cameraService;
-        _cameraParams = _cameraService.CurrentParameters.Clone();
+        _cameraParams = _cameraService.SystemParameters.Clone();
 
         _debounceTimer = new System.Windows.Threading.DispatcherTimer
         {
@@ -612,6 +613,7 @@ public sealed class CameraSettingsViewModel : ObservableObject, IDisposable
         ToggleLiveViewCommand = new AsyncRelayCommand(ToggleLiveViewAsync);
         SnapFrameCommand = new AsyncRelayCommand(SnapFrameAsync);
         AutoWhiteBalanceOnceCommand = new AsyncRelayCommand(AutoWhiteBalanceOnceAsync);
+        SyncFromCameraCommand = new AsyncRelayCommand(SyncFromCameraAsync);
         RefreshAvailableCamerasCommand = new RelayCommand(RefreshAvailableCameras);
         ExecuteSoftwareTriggerCommand = new AsyncRelayCommand(ExecuteSoftwareTriggerAsync);
         SetFullSensorRoiCommand = new RelayCommand(SetFullSensorRoi);
@@ -777,6 +779,7 @@ public sealed class CameraSettingsViewModel : ObservableObject, IDisposable
                 IsCameraRunning = true;
                 StatusMessage = $"Đã kết nối thành công [{SelectedDevice.Vendor}] {SelectedDevice.ModelName}. " + 
                                 (_cameraParams.IsLiveViewEnabled ? "Đang phát Live View." : "Trạng thái: Sẵn sàng / Standby (0 Mbps Ethernet). Bấm 'Bật Live View' để xem trực tiếp.");
+                _ = SyncFromCameraAsync();
             }
             else
             {
@@ -892,6 +895,59 @@ public sealed class CameraSettingsViewModel : ObservableObject, IDisposable
         }
     }
 
+    private async Task SyncFromCameraAsync()
+    {
+        if (!IsCameraRunning)
+        {
+            StatusMessage = "Vui lòng bấm ▶ Start Camera trước khi đọc thông số từ Camera.";
+            return;
+        }
+
+        try
+        {
+            StatusMessage = "🔄 Đang đọc trạng thái thực tế từ phần cứng Camera...";
+            var p = await _cameraService.ReadParametersFromCameraAsync();
+            if (p != null)
+            {
+                _cameraParams = p.Clone();
+
+                OnPropertyChanged(nameof(Brightness));
+                OnPropertyChanged(nameof(Contrast));
+                OnPropertyChanged(nameof(IsGrayscale));
+                OnPropertyChanged(nameof(ExposureTimeUs));
+                OnPropertyChanged(nameof(GainDb));
+                OnPropertyChanged(nameof(Gamma));
+                OnPropertyChanged(nameof(ReverseX));
+                OnPropertyChanged(nameof(ReverseY));
+                OnPropertyChanged(nameof(TriggerModeOn));
+                OnPropertyChanged(nameof(AutoWhiteBalance));
+                OnPropertyChanged(nameof(AutoExposure));
+                OnPropertyChanged(nameof(AutoGain));
+                OnPropertyChanged(nameof(SelectedTriggerSource));
+                OnPropertyChanged(nameof(TriggerDelayUs));
+                OnPropertyChanged(nameof(PacketSize));
+                OnPropertyChanged(nameof(PacketDelay));
+                OnPropertyChanged(nameof(SelectedPixelFormat));
+                OnPropertyChanged(nameof(EnableHardwareRoi));
+                OnPropertyChanged(nameof(RoiOffsetX));
+                OnPropertyChanged(nameof(RoiOffsetY));
+                OnPropertyChanged(nameof(RoiWidth));
+                OnPropertyChanged(nameof(RoiHeight));
+
+                RefreshOverlayItems();
+                StatusMessage = $"✅ Đã đồng bộ từ Camera! (ReverseX: {(ReverseX ? "BẬT" : "TẮT")}, ReverseY: {(ReverseY ? "BẬT" : "TẮT")}, Exp: {ExposureTimeUs:F0}µs, Gain: {GainDb:F1}dB)";
+            }
+            else
+            {
+                StatusMessage = "❌ Không thể đọc thông số từ thiết bị Camera hiện tại.";
+            }
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = $"Lỗi đọc thông số camera: {ex.Message}";
+        }
+    }
+
     private void UpdateLiveViewButtonState()
     {
         OnPropertyChanged(nameof(IsLiveViewing));
@@ -914,7 +970,7 @@ public sealed class CameraSettingsViewModel : ObservableObject, IDisposable
     {
         try
         {
-            await _cameraService.ApplyParametersAsync(_cameraParams);
+            await _cameraService.SaveSystemParametersAsync(_cameraParams);
         }
         catch { }
     }

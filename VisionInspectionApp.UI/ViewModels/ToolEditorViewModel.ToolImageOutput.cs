@@ -123,7 +123,7 @@ namespace VisionInspectionApp.UI.ViewModels
 
         public ImageOutputFormat ImageOutput_Format
         {
-            get => SelectedImageOutputDef()?.Format ?? ImageOutputFormat.PNG;
+            get => SelectedImageOutputDef()?.Format ?? ImageOutputFormat.JPG;
             set
             {
                 var def = SelectedImageOutputDef();

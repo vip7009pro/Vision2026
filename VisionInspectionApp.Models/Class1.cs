@@ -326,7 +326,7 @@ public sealed class ImageOutputDefinition
 
     public string FileNameFormat { get; set; } = "IMG_{ProductName}_{YYYY}{MM}{DD}_{HH}{mm}{ss}_{Count}";
 
-    public ImageOutputFormat Format { get; set; } = ImageOutputFormat.PNG;
+    public ImageOutputFormat Format { get; set; } = ImageOutputFormat.JPG;
 
     public bool EnableOutput { get; set; } = true;
 
