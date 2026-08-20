@@ -51,6 +51,13 @@
 
 ### Sửa lỗi và Cải thiện UX/UI (Phiên làm việc hiện tại)
 
+- **Sửa lỗi Tool ImageSource với Camera Giả Lập luôn dùng ảnh đã chọn thay vì video mặc định (Task 187)**:
+  - **Bảo Toàn Đường Dẫn Ảnh Giả Lập Khi Nạp Job (`CameraService.cs`, `SimulatorCameraDriver.cs`)**:
+    - Khắc phục hiện tượng khi mở Job hoặc chạy Job, phương thức `ApplyParametersAsync(imgSourceDef.CameraParams)` làm reset `CustomImagePath` về rỗng, khiến driver camera giả lập fallback về video mặc định Industrial Grid kèm đồng hồ chạy.
+    - Trong `CameraService.cs`: Khi `ApplyParametersAsync`, `SaveSystemParametersAsync` và `CaptureSnapshotFromCameraAsync` được gọi, luôn bảo toàn `_simulatorCustomImagePath` và `_simulatorEnableRandomTransform` vào `_currentParameters` nếu thông số truyền vào không chứa đường dẫn ảnh.
+    - Trong `SimulatorCameraDriver.cs`: Override `ApplyParametersAsync` để bảo lưu `CustomImagePath` hiện tại hoặc fallback đọc từ tệp cấu hình `%AppData%\Vision2026\camera_adjust_settings.json`. Cải tiến `GetOrLoadBaseMat` tự động nạp ảnh tùy chỉnh đã lưu thay vì phát video mặc định.
+  - **Biên Dịch & Kiểm Thử Thành Công 100%**: Solution biên dịch **0 Error(s)**, vượt qua toàn bộ unit test.
+
 - **Cải tiến OQC Scanner, CodeDetection Spec chuỗi, AutoFit/Zoom/Pan ảnh Output và Database Logging Feedback (Task 186)**:
   - **Tích Hợp ImageViewerControl Cho Cửa Sổ Chi Tiết OQC (`OqcScanDetailDialog.xaml`, `OqcScanDetailDialog.xaml.cs`)**:
     - Tự động Auto Fit ảnh output khi mở cửa sổ; hỗ trợ Zoom bằng con lăn chuột / nút bấm và Pan kéo chuột mượt mà.

@@ -506,13 +506,9 @@ Lộ trình tích hợp tính năng Chụp ảnh từ camera và hỗ trợ các
   - `Export / Import Cấu Hình OQC`: Nút xuất và nạp cấu hình OQC dạng JSON trong hộp thoại cài đặt để sao lưu và chia sẻ cấu hình giữa các máy.
   - `Hỗ Trợ Token {UUID} & Ghi Log Phép Đo Chi Tiết Vào DB`: Tạo UUID ngẫu nhiên duy nhất cho mỗi lượt quét và thực thi truy vấn log chi tiết từng phép đo vào bảng `OqcInspectResult`.
   - `Biên Dịch & Kiểm Thử Thành Công 100%`: Solution biên dịch **0 Error(s)**.
-- [x] Task 186: Cải tiến OQC Scanner, CodeDetection Spec chuỗi, AutoFit/Zoom/Pan ảnh Output và Database Logging Feedback:
-  - `Tích Hợp ImageViewerControl Cho OqcScanDetailDialog`: Tự động Auto Fit ảnh output khi mở cửa sổ; hỗ trợ Zoom bằng con lăn chuột / nút bấm và Pan kéo chuột mượt mà.
-  - `Định Dạng Tiêu Chuẩn & Dung Sai Cho Tool Không Có Spec Số`: Ẩn hiển thị (để trắng) các cột Spec, Dung sai, Giới hạn với các tool không dùng số đo nominal (`CircleFinder`, `SurfaceCompare`, `BlobDetection`, `CodeDetection`...).
-  - `Sửa Lỗi Hiển Thị Kết Quả Của CodeDetection`: Tách bạch `CustomSpecText` và `CustomResultText`, loại bỏ hoàn toàn hiện tượng ghép số `0.000` hoặc `1.000` vào chuỗi mã QR/Barcode.
-  - `Bổ Sung Trường Spec (Chuỗi Văn Bản) Cho Tool CodeDetection`: Thêm `ExpectedText` vào cấu hình và record kết quả; tự động đánh giá PASS/FAIL khi chuỗi đọc được khớp với Spec mà không cần dùng tool Condition.
-  - `Phản Hồi Trực Quan & Khắc Phục Lỗi Ghi Log Database`: Inject chuỗi đã cắt gọt `processedCode` vào token `{ScannedCode}` và `{ProductCode}` giúp loại bỏ lỗi `String or binary data would be truncated`. Định dạng các token số `{Spec}, {UpperTor}, {LowerTor}, {MinSpec}, {MaxSpec}, {Result}` thành số thực thuần túy (với tool dạng text trả về 0/1) loại bỏ hoàn toàn lỗi `Error converting data type nvarchar to float`. Bổ sung token `{TextSpect}`/`{TextSpec}` và `{TextResult}` cho các cột chuỗi trong DB. In debug log chi tiết câu truy vấn SQL; hiển thị thông báo kết quả ghi DB ngay trên Status Bar và cột "Ghi DB" trong bảng lịch sử.
-  - `Khắc Phục Lỗi Lọc/Cắt Mã Lần 2 Khi Quét Camera Bằng Phím Space`: Tách biệt luồng xử lý mã từ ảnh camera (`directProcessedCode` đã được bóc tách từ ảnh) và luồng quét ngoài (nhập chuỗi thô), loại bỏ việc áp dụng bộ lọc độ dài lần thứ 2 gây báo lỗi sai lệch.
+- [x] Task 187: Sửa lỗi Tool ImageSource với Camera Giả Lập luôn dùng ảnh đã chọn thay vì video mặc định:
+  - `Bảo Toàn Đường Dẫn CustomImagePath Khi Nạp Job`: Trong `CameraService.cs`, khi `ApplyParametersAsync`, `SaveSystemParametersAsync` và `CaptureSnapshotFromCameraAsync` được gọi, luôn bảo toàn `_simulatorCustomImagePath` và `_simulatorEnableRandomTransform` vào `_currentParameters` nếu thông số truyền vào không chứa đường dẫn ảnh.
+  - `Cải Tiến SimulatorCameraDriver`: Override `ApplyParametersAsync` để bảo lưu `CustomImagePath` hiện tại hoặc fallback đọc từ tệp cấu hình `%AppData%\Vision2026\camera_adjust_settings.json`. Cải tiến `GetOrLoadBaseMat` tự động nạp ảnh tùy chỉnh đã lưu thay vì phát video mặc định.
   - `Biên Dịch & Kiểm Thử Thành Công 100%`: Solution biên dịch **0 Error(s)**.
 
 

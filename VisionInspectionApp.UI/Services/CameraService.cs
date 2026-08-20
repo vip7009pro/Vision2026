@@ -738,6 +738,15 @@ public sealed class CameraService : IDisposable
     public async Task ApplyParametersAsync(CameraParameters parameters)
     {
         _currentParameters = parameters.Clone();
+        if (string.IsNullOrWhiteSpace(_currentParameters.CustomImagePath) && !string.IsNullOrWhiteSpace(_simulatorCustomImagePath))
+        {
+            _currentParameters.CustomImagePath = _simulatorCustomImagePath;
+        }
+        if (!_currentParameters.EnableRandomTransform && _simulatorEnableRandomTransform)
+        {
+            _currentParameters.EnableRandomTransform = _simulatorEnableRandomTransform;
+        }
+
         _brightness = parameters.Brightness;
         _contrast = parameters.Contrast;
         _isGrayscale = parameters.IsGrayscale;
@@ -755,6 +764,17 @@ public sealed class CameraService : IDisposable
     {
         _systemParameters = parameters.Clone();
         _currentParameters = parameters.Clone();
+        if (string.IsNullOrWhiteSpace(_currentParameters.CustomImagePath) && !string.IsNullOrWhiteSpace(_simulatorCustomImagePath))
+        {
+            _currentParameters.CustomImagePath = _simulatorCustomImagePath;
+            _systemParameters.CustomImagePath = _simulatorCustomImagePath;
+        }
+        if (!_currentParameters.EnableRandomTransform && _simulatorEnableRandomTransform)
+        {
+            _currentParameters.EnableRandomTransform = _simulatorEnableRandomTransform;
+            _systemParameters.EnableRandomTransform = _simulatorEnableRandomTransform;
+        }
+
         _brightness = parameters.Brightness;
         _contrast = parameters.Contrast;
         _isGrayscale = parameters.IsGrayscale;
@@ -940,7 +960,20 @@ public sealed class CameraService : IDisposable
         using var driver = CameraDriverFactory.CreateDriver(dev.Vendor);
         if (await driver.OpenAsync(dev))
         {
-            await driver.ApplyParametersAsync(_currentParameters);
+            var p = _currentParameters.Clone();
+            if (dev.Vendor == CameraVendor.Simulator)
+            {
+                if (string.IsNullOrWhiteSpace(p.CustomImagePath) && !string.IsNullOrWhiteSpace(_simulatorCustomImagePath))
+                {
+                    p.CustomImagePath = _simulatorCustomImagePath;
+                }
+                if (!p.EnableRandomTransform && _simulatorEnableRandomTransform)
+                {
+                    p.EnableRandomTransform = _simulatorEnableRandomTransform;
+                }
+            }
+
+            await driver.ApplyParametersAsync(p);
             var mat = await driver.GrabFrameAsync(2000);
             await driver.CloseAsync();
             return mat;

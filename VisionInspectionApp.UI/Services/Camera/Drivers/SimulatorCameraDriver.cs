@@ -83,6 +83,27 @@ public sealed class SimulatorCameraDriver : CameraDriverBase
         await Task.CompletedTask;
     }
 
+    public override Task ApplyParametersAsync(CameraParameters parameters)
+    {
+        lock (_lock)
+        {
+            var p = parameters.Clone();
+            if (string.IsNullOrWhiteSpace(p.CustomImagePath))
+            {
+                if (!string.IsNullOrWhiteSpace(_parameters?.CustomImagePath))
+                {
+                    p.CustomImagePath = _parameters.CustomImagePath;
+                }
+                else
+                {
+                    p.CustomImagePath = TryGetPersistedSimulatorImagePath();
+                }
+            }
+            _parameters = p;
+        }
+        return Task.CompletedTask;
+    }
+
     public override Task<Mat?> GrabFrameAsync(int timeoutMs = 1000)
     {
         lock (_imageLock)
@@ -186,23 +207,33 @@ public sealed class SimulatorCameraDriver : CameraDriverBase
 
     private Mat GetOrLoadBaseMat(string customPath)
     {
+        string targetPath = customPath;
+        if (string.IsNullOrWhiteSpace(targetPath))
+        {
+            targetPath = _parameters?.CustomImagePath?.Trim() ?? "";
+        }
+        if (string.IsNullOrWhiteSpace(targetPath))
+        {
+            targetPath = TryGetPersistedSimulatorImagePath();
+        }
+
         // Kiểm tra xem ảnh đã được nạp và còn hợp lệ không
-        if (!string.IsNullOrEmpty(customPath) && string.Equals(customPath, _cachedImagePath, StringComparison.OrdinalIgnoreCase) && _cachedBaseMat != null && !_cachedBaseMat.IsDisposed && !_cachedBaseMat.Empty())
+        if (!string.IsNullOrEmpty(targetPath) && string.Equals(targetPath, _cachedImagePath, StringComparison.OrdinalIgnoreCase) && _cachedBaseMat != null && !_cachedBaseMat.IsDisposed && !_cachedBaseMat.Empty())
         {
             return _cachedBaseMat;
         }
 
         // Nếu đường dẫn thay đổi hoặc ảnh chưa được cache: nạp lại từ đĩa đúng 1 lần
-        if (!string.IsNullOrEmpty(customPath) && File.Exists(customPath))
+        if (!string.IsNullOrEmpty(targetPath) && File.Exists(targetPath))
         {
             try
             {
-                var loaded = Cv2.ImRead(customPath, ImreadModes.Color);
+                var loaded = Cv2.ImRead(targetPath, ImreadModes.Color);
                 if (loaded != null && !loaded.Empty() && loaded.Width > 0 && loaded.Height > 0)
                 {
                     _cachedBaseMat?.Dispose();
                     _cachedBaseMat = loaded;
-                    _cachedImagePath = customPath;
+                    _cachedImagePath = targetPath;
                     return _cachedBaseMat;
                 }
                 loaded?.Dispose();
@@ -213,7 +244,7 @@ public sealed class SimulatorCameraDriver : CameraDriverBase
             }
         }
 
-        // Nếu không có customPath hoặc file lỗi: Dùng ảnh mặc định Industrial Grid 640x480
+        // Nếu không có targetPath hoặc file lỗi: Dùng ảnh mặc định Industrial Grid 640x480
         if (_cachedBaseMat != null && !_cachedBaseMat.IsDisposed && !_cachedBaseMat.Empty() && string.IsNullOrEmpty(_cachedImagePath))
         {
             return _cachedBaseMat;
@@ -223,6 +254,29 @@ public sealed class SimulatorCameraDriver : CameraDriverBase
         _cachedBaseMat = CreateDefaultIndustrialGridMat();
         _cachedImagePath = string.Empty;
         return _cachedBaseMat;
+    }
+
+    private static string TryGetPersistedSimulatorImagePath()
+    {
+        try
+        {
+            var path = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Vision2026", "camera_adjust_settings.json");
+            if (File.Exists(path))
+            {
+                var json = File.ReadAllText(path);
+                using var doc = System.Text.Json.JsonDocument.Parse(json);
+                if (doc.RootElement.TryGetProperty("SimulatorCustomImagePath", out var prop))
+                {
+                    var str = prop.GetString();
+                    if (!string.IsNullOrWhiteSpace(str) && File.Exists(str))
+                    {
+                        return str;
+                    }
+                }
+            }
+        }
+        catch { }
+        return string.Empty;
     }
 
     private Mat CreateDefaultIndustrialGridMat()
