@@ -85,6 +85,8 @@ public partial class OqcScannerViewModel : ObservableObject
     public IRelayCommand OpenProductAssignCommand { get; }
     public IRelayCommand ManualOpenJobCommand { get; }
     public IRelayCommand ClearHistoryCommand { get; }
+    public IRelayCommand ExportToExcelCommand { get; }
+    public IRelayCommand<OqcScanHistoryEntry> OpenScanDetailCommand { get; }
     public IRelayCommand SwitchToToolEditorCommand { get; }
     public IRelayCommand ToggleLiveCameraCommand { get; }
 
@@ -132,9 +134,14 @@ public partial class OqcScannerViewModel : ObservableObject
         OpenSettingsCommand = new RelayCommand(OpenSettingsDialog);
         OpenProductAssignCommand = new RelayCommand(OpenProductAssignDialog);
         ManualOpenJobCommand = new RelayCommand(ExecuteManualOpenJob);
-        ClearHistoryCommand = new RelayCommand(() => ScanHistory.Clear());
+        ClearHistoryCommand = new RelayCommand(ExecuteClearHistory);
+        ExportToExcelCommand = new RelayCommand(ExecuteExportToExcel);
+        OpenScanDetailCommand = new RelayCommand<OqcScanHistoryEntry>(ExecuteOpenScanDetail);
         SwitchToToolEditorCommand = new RelayCommand(() => RequestSwitchTab?.Invoke(0));
         ToggleLiveCameraCommand = new RelayCommand(ToggleLiveCamera);
+
+        // Load Scan History from local persistence
+        LoadSavedScanHistory();
 
         _inspectionViewModel.InspectionCompletedAsync += HandleInspectionCompletedAsync;
         _toolEditorViewModel.InspectionCompletedAsync += HandleInspectionCompletedAsync;
@@ -397,7 +404,7 @@ public partial class OqcScannerViewModel : ObservableObject
                                 Pass = false
                             };
                             failResult.Timings.TotalMs = (int)(elapsedSec * 1000);
-                            await _oqcService.LogInspectionResultAsync("NO_READ", "-", failResult, new VisionConfig { ProductName = "Timeout No Read Fail" }, _dbManager);
+                            await _oqcService.LogInspectionResultAsync("NO_READ", Guid.NewGuid().ToString("N"), "-", failResult, new VisionConfig { ProductName = "Timeout No Read Fail" }, _dbManager);
                         }
                         catch { }
                     });
@@ -605,6 +612,17 @@ public partial class OqcScannerViewModel : ObservableObject
 
         string productName = CurrentProductName;
         string path = CurrentJobFilePath;
+        string uuid = Guid.NewGuid().ToString("N");
+
+        string outputImagePath = "";
+        if (result.ImageOutputs != null && result.ImageOutputs.Count > 0)
+        {
+            outputImagePath = result.ImageOutputs.FirstOrDefault(x => !string.IsNullOrEmpty(x.SavedFilePath))?.SavedFilePath ?? "";
+        }
+
+        var measurementDetails = (config != null) 
+            ? _oqcService.ExtractMeasurementDetails(result, config) 
+            : new List<OqcMeasurementDetail>();
 
         string details = ExtractDetailedReasons(result);
         string statusStr = result.Pass ? "PASS (OK)" : "NG (LỖI)";
@@ -619,9 +637,12 @@ public partial class OqcScannerViewModel : ObservableObject
                 var entry = ScanHistory.FirstOrDefault(e => string.Equals(e.ScannedCode, rawCode, StringComparison.OrdinalIgnoreCase)) 
                             ?? ScanHistory[0];
 
+                entry.Uuid = uuid;
                 entry.InspectResult = statusStr;
                 entry.InspectDetails = details;
                 entry.ResultBrushHex = colorHex;
+                entry.OutputImagePath = outputImagePath;
+                entry.MeasurementDetails = measurementDetails;
 
                 StatusMessage = result.Pass
                     ? $"✅ SẢN PHẨM '{productName}' ({rawCode}) -> KẾT QUẢ: PASS (OK)"
@@ -629,13 +650,14 @@ public partial class OqcScannerViewModel : ObservableObject
                 StatusBrush = statusBrush;
             }
 
+            _oqcService.SaveScanHistory(ScanHistory);
             RefreshPreviewFromToolEditor();
         });
 
         // Log result to Database if enabled
-        if (_oqcService.Config.LogResultToDb && config != null)
+        if ((_oqcService.Config.LogResultToDb || _oqcService.Config.LogDetailResultToDb) && config != null)
         {
-            await _oqcService.LogInspectionResultAsync(rawCode, path, result, config, _dbManager);
+            await _oqcService.LogInspectionResultAsync(rawCode, uuid, path, result, config, _dbManager, measurementDetails);
         }
     }
 
@@ -722,13 +744,124 @@ public partial class OqcScannerViewModel : ObservableObject
         }
     }
 
+    private void LoadSavedScanHistory()
+    {
+        try
+        {
+            var list = _oqcService.LoadScanHistory();
+            if (list != null && list.Count > 0)
+            {
+                ScanHistory.Clear();
+                foreach (var item in list)
+                {
+                    ScanHistory.Add(item);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"LoadSavedScanHistory error: {ex.Message}");
+        }
+    }
+
     private void AddHistory(OqcScanHistoryEntry entry)
     {
         ScanHistory.Insert(0, entry);
-        while (ScanHistory.Count > 50)
+        while (ScanHistory.Count > 500)
         {
             ScanHistory.RemoveAt(ScanHistory.Count - 1);
         }
+        _oqcService.SaveScanHistory(ScanHistory);
+    }
+
+    private void ExecuteClearHistory()
+    {
+        if (ScanHistory.Count == 0) return;
+        if (MessageBox.Show("Bạn có chắc chắn muốn xóa toàn bộ lịch sử quét mã không?", "Xác Nhận Xóa Lịch Sử", MessageBoxButton.YesNo, MessageBoxImage.Question) == MessageBoxResult.Yes)
+        {
+            ScanHistory.Clear();
+            _oqcService.SaveScanHistory(ScanHistory);
+            StatusMessage = "🗑️ Đã xóa toàn bộ lịch sử quét OQC.";
+            StatusBrush = Brushes.Gray;
+        }
+    }
+
+    public void ExecuteOpenScanDetail(OqcScanHistoryEntry? entry)
+    {
+        if (entry == null)
+        {
+            if (ScanHistory.Count > 0)
+            {
+                entry = ScanHistory[0];
+            }
+            else
+            {
+                MessageBox.Show("Chưa có bản ghi lịch sử nào được chọn.", "Thông Báo", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+        }
+
+        var dlg = new Views.OQC.OqcScanDetailDialog(entry)
+        {
+            Owner = System.Windows.Application.Current?.MainWindow
+        };
+        dlg.ShowDialog();
+    }
+
+    private void ExecuteExportToExcel()
+    {
+        try
+        {
+            if (ScanHistory.Count == 0)
+            {
+                MessageBox.Show("Bảng lịch sử quét hiện đang trống!", "Thông Báo", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+
+            var sfd = new Microsoft.Win32.SaveFileDialog
+            {
+                Title = "Xuất Lịch Sử Quét OQC ra Excel (CSV)",
+                Filter = "Tệp CSV (Excel) (*.csv)|*.csv|All Files (*.*)|*.*",
+                FileName = $"OqcScanHistory_{DateTime.Now:yyyyMMdd_HHmmss}.csv"
+            };
+
+            if (sfd.ShowDialog() == true)
+            {
+                var sb = new System.Text.StringBuilder();
+                sb.AppendLine("Thời Gian,Mã Quét,UUID,Tên Sản Phẩm,Tệp Job,Kết Quả,Lý Do NG / Chi Tiết,Đường Dẫn Ảnh Output");
+
+                foreach (var item in ScanHistory)
+                {
+                    string timeStr = item.Time.ToString("yyyy-MM-dd HH:mm:ss");
+                    string code = EscapeCsv(item.ScannedCode);
+                    string uuid = EscapeCsv(item.Uuid);
+                    string name = EscapeCsv(item.ProductName);
+                    string job = EscapeCsv(item.JobFilePath);
+                    string result = EscapeCsv(item.InspectResult);
+                    string details = EscapeCsv(item.InspectDetails);
+                    string imgPath = EscapeCsv(item.OutputImagePath);
+
+                    sb.AppendLine($"{timeStr},{code},{uuid},{name},{job},{result},{details},{imgPath}");
+                }
+
+                File.WriteAllText(sfd.FileName, sb.ToString(), new System.Text.UTF8Encoding(true));
+                MessageBox.Show($"✅ Đã xuất {ScanHistory.Count} bản ghi ra tệp Excel thành công!\nĐường dẫn: {sfd.FileName}", "Thành Công", MessageBoxButton.OK, MessageBoxImage.Information);
+            }
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"Lỗi xuất Excel: {ex.Message}", "Lỗi", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
+
+    private static string EscapeCsv(string? field)
+    {
+        if (string.IsNullOrEmpty(field)) return "\"\"";
+        if (field.Contains(",") || field.Contains("\"") || field.Contains("\n") || field.Contains("\r"))
+        {
+            return $"\"{field.Replace("\"", "\"\"")}\"";
+        }
+        return $"\"{field}\"";
     }
 
     private void OpenSettingsDialog()

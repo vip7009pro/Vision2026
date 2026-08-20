@@ -227,10 +227,10 @@
                     </StackPanel>
                 </GroupBox>
 
-                <!-- 5. Ghi log kết quả lên DB -->
-                <GroupBox Header="5. Ghi log kết quả kiểm tra OQC lên DB (Upload Result Log)" Margin="0,0,0,8" Padding="8" Foreground="{DynamicResource TextBrush}">
+                <!-- 5. Ghi log kết quả lên DB (Master Log) -->
+                <GroupBox Header="5. Ghi log tổng kết quả kiểm tra OQC lên DB (Master Result Log)" Margin="0,0,0,12" Padding="8" Foreground="{DynamicResource TextBrush}">
                     <StackPanel>
-                        <CheckBox Content="Kích hoạt tự động ghi log kết quả kiểm tra lên DB"
+                        <CheckBox Content="Kích hoạt tự động ghi log kết quả tổng thể lên DB"
                                   IsChecked="{Binding LogResultToDb, UpdateSourceTrigger=PropertyChanged}"
                                   FontWeight="Bold" Margin="0,0,0,8" />
 
@@ -248,10 +248,38 @@
                                       IsEnabled="{Binding LogResultToDb}" />
                         </Grid>
 
-                        <TextBlock Text="Truy vấn SQL Ghi log (hỗ trợ {ScannedCode}, {ProductName}, {JobFilePath}, {PassBit}, {InspectResult}, {NgReasons}):" Margin="0,0,0,4" FontSize="11" Foreground="{DynamicResource TextMutedBrush}" />
+                        <TextBlock Text="Truy vấn SQL Ghi log Master (hỗ trợ {ScannedCode}, {UUID}, {ProductName}, {JobFilePath}, {PassBit}, {InspectResult}, {NgReasons}):" Margin="0,0,0,4" FontSize="11" Foreground="{DynamicResource TextMutedBrush}" />
                         <TextBox Text="{Binding LogResultQuery, UpdateSourceTrigger=PropertyChanged}"
                                  IsEnabled="{Binding LogResultToDb}"
                                  AcceptsReturn="True" TextWrapping="Wrap" FontFamily="Consolas" Height="65" />
+                    </StackPanel>
+                </GroupBox>
+
+                <!-- 6. Ghi log chi tiết từng phép đo lên DB (Detail Measurements Log) -->
+                <GroupBox Header="6. Ghi log chi tiết từng phép đo lên DB (Detail Measurements Log)" Margin="0,0,0,8" Padding="8" Foreground="{DynamicResource TextBrush}">
+                    <StackPanel>
+                        <CheckBox Content="Kích hoạt ghi log chi tiết từng phép đo (ToolName, Spec, Tol+, Tol-, Min, Max, Result, Judge)"
+                                  IsChecked="{Binding LogDetailResultToDb, UpdateSourceTrigger=PropertyChanged}"
+                                  FontWeight="Bold" Margin="0,0,0,8" />
+
+                        <Grid Margin="0,0,0,8">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="160" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="Cơ sở dữ liệu:" VerticalAlignment="Center" FontWeight="SemiBold" />
+                            <ComboBox Grid.Column="0" Grid.ColumnSpan="2" Margin="160,0,0,0"
+                                      ItemsSource="{Binding AvailableDatabases}"
+                                      DisplayMemberPath="Name"
+                                      SelectedValuePath="Id"
+                                      SelectedValue="{Binding LogDetailResultDbId, UpdateSourceTrigger=PropertyChanged}"
+                                      IsEnabled="{Binding LogDetailResultToDb}" />
+                        </Grid>
+
+                        <TextBlock Text="Truy vấn SQL Ghi chi tiết phép đo (hỗ trợ {ScannedCode}, {UUID}, {ToolName}, {Spec}, {TolPlus}, {TolMinus}, {Min}, {Max}, {Result}, {Unit}, {Judge}, {PassBit}):" Margin="0,0,0,4" FontSize="11" Foreground="{DynamicResource TextMutedBrush}" />
+                        <TextBox Text="{Binding LogDetailResultQuery, UpdateSourceTrigger=PropertyChanged}"
+                                 IsEnabled="{Binding LogDetailResultToDb}"
+                                 AcceptsReturn="True" TextWrapping="Wrap" FontFamily="Consolas" Height="70" />
                     </StackPanel>
                 </GroupBox>
 
@@ -260,10 +288,17 @@
 
         <!-- Footer Buttons -->
         <Border Grid.Row="2" Margin="0,12,0,0" Padding="0,8,0,0" BorderThickness="0,1,0,0" BorderBrush="{DynamicResource BorderBrush}">
-            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-                <Button Content="💾 Lưu cấu hình" Click="Save_Click" Width="130" Margin="0,0,8,0" IsDefault="True" />
-                <Button Content="Hủy" Click="Cancel_Click" Width="90" IsCancel="True" />
-            </StackPanel>
+            <DockPanel LastChildFill="False">
+                <StackPanel Orientation="Horizontal" DockPanel.Dock="Left">
+                    <Button Content="📤 Xuất Cấu Hình (Export)" Command="{Binding ExportConfigCommand}" Height="28" Padding="12,2" Margin="0,0,8,0" ToolTip="Lưu toàn bộ cấu hình OQC ra tệp JSON để sao lưu hoặc copy sang máy khác" />
+                    <Button Content="📥 Nạp Cấu Hình (Import)" Command="{Binding ImportConfigCommand}" Height="28" Padding="12,2" ToolTip="Nạp cấu hình OQC từ tệp JSON đã lưu" />
+                </StackPanel>
+
+                <StackPanel Orientation="Horizontal" DockPanel.Dock="Right">
+                    <Button Content="💾 Lưu cấu hình" Click="Save_Click" Width="130" Height="28" Margin="0,0,8,0" IsDefault="True" />
+                    <Button Content="Hủy" Click="Cancel_Click" Width="90" Height="28" IsCancel="True" />
+                </StackPanel>
+            </DockPanel>
         </Border>
     </Grid>
 </Window>

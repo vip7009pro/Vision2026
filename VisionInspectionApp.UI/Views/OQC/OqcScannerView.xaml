@@ -182,19 +182,22 @@
                 <GridSplitter Grid.Column="1" Width="6" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Background="{DynamicResource DarkBorderBrush}" />
 
                 <!-- Column 2: Right Side - Scan History Log Table -->
-                <GroupBox Grid.Column="2" Header="📊 Lịch sử quét mã gần nhất (Scan History Log)" Padding="6" Foreground="{DynamicResource TextBrush}">
+                <GroupBox Grid.Column="2" Header="📊 Lịch sử quét mã gần nhất (Scan History Log - Nhấp đúp dòng để xem chi tiết)" Padding="6" Foreground="{DynamicResource TextBrush}">
                     <Grid>
                         <Grid.RowDefinitions>
                             <RowDefinition Height="*" />
                             <RowDefinition Height="Auto" />
                         </Grid.RowDefinitions>
 
-                        <DataGrid Grid.Row="0"
+                        <DataGrid x:Name="HistoryDataGrid"
+                                  Grid.Row="0"
                                   ItemsSource="{Binding ScanHistory}"
                                   AutoGenerateColumns="False"
                                   IsReadOnly="True"
                                   CanUserAddRows="False"
                                   CanUserDeleteRows="False"
+                                  SelectionMode="Single"
+                                  MouseDoubleClick="HistoryDataGrid_MouseDoubleClick"
                                   GridLinesVisibility="Horizontal"
                                   HeadersVisibility="Column"
                                   Background="{DynamicResource PanelBackgroundBrush}"
@@ -202,10 +205,21 @@
                             <DataGrid.Columns>
                                 <DataGridTextColumn Header="Thời gian" Binding="{Binding Time, StringFormat='HH:mm:ss dd/MM'}" Width="100" />
                                 <DataGridTextColumn Header="Mã Scan (Product)" Binding="{Binding ScannedCode}" Width="140" ElementStyle="{StaticResource BoldStyle}" />
-                                <DataGridTextColumn Header="Tên Sản Phẩm" Binding="{Binding ProductName}" Width="150" ElementStyle="{StaticResource BoldStyle}" />
-                                <DataGridTextColumn Header="Tệp Job" Binding="{Binding JobFilePath}" Width="130" />
-                                <DataGridTextColumn Header="Tra cứu DB" Binding="{Binding Message}" Width="90" />
-                                <DataGridTemplateColumn Header="KQ Kiểm Tra" Width="120">
+                                <DataGridTextColumn Header="Tên Sản Phẩm" Binding="{Binding ProductName}" Width="140" ElementStyle="{StaticResource BoldStyle}" />
+                                <DataGridTextColumn Header="Tệp Job" Binding="{Binding JobFilePath}" Width="120" />
+                                <DataGridTemplateColumn Header="Ảnh Output" Width="85">
+                                    <DataGridTemplateColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <Button Content="🖼️ Xem Ảnh" 
+                                                    Click="ViewOutputImageBtn_Click"
+                                                    Padding="4,1" Height="22" FontSize="11"
+                                                    ToolTip="{Binding OutputImagePath}"
+                                                    HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                        </DataTemplate>
+                                    </DataGridTemplateColumn.CellTemplate>
+                                </DataGridTemplateColumn>
+                                <DataGridTextColumn Header="Tra cứu DB" Binding="{Binding Message}" Width="85" />
+                                <DataGridTemplateColumn Header="KQ Kiểm Tra" Width="110">
                                     <DataGridTemplateColumn.CellTemplate>
                                         <DataTemplate>
                                             <TextBlock Text="{Binding InspectResult}" Foreground="{Binding ResultBrushHex}" FontWeight="Bold" VerticalAlignment="Center" HorizontalAlignment="Center" />
@@ -222,7 +236,9 @@
                             </DataGrid.Columns>
                         </DataGrid>
 
-                        <DockPanel Grid.Row="1" Margin="0,8,0,0">
+                        <DockPanel Grid.Row="1" Margin="0,8,0,0" LastChildFill="False">
+                            <Button Content="📊 Xuất Excel (CSV)" Command="{Binding ExportToExcelCommand}" DockPanel.Dock="Left" Width="130" Height="26" Margin="0,0,8,0" ToolTip="Trích xuất toàn bộ lịch sử quét mã ra tệp Excel (CSV UTF-8 with BOM)" />
+                            <Button Content="🔍 Xem Chi Tiết (Double-Click)" Click="ViewDetailBtn_Click" DockPanel.Dock="Left" Width="180" Height="26" ToolTip="Xem chi tiết các phép đo và ảnh kết quả của dòng được chọn" />
                             <Button Content="🗑️ Xóa lịch sử" Command="{Binding ClearHistoryCommand}" DockPanel.Dock="Right" Width="110" Height="26" />
                         </DockPanel>
                     </Grid>

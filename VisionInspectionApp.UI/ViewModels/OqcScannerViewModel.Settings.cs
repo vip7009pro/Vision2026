@@ -61,6 +61,16 @@ public partial class OqcScannerViewModel
     [ObservableProperty]
     private string _logResultQuery = "";
 
+    // ─── Ghi log chi tiết từng phép đo lên DB ───
+    [ObservableProperty]
+    private bool _logDetailResultToDb = false;
+
+    [ObservableProperty]
+    private string _logDetailResultDbId = "";
+
+    [ObservableProperty]
+    private string _logDetailResultQuery = "";
+
     // ─── Camera Barcode Reader Settings Properties ───
     [ObservableProperty]
     private bool _enableCameraBarcodeScan = true;
@@ -106,6 +116,8 @@ public partial class OqcScannerViewModel
     public IReadOnlyList<DbModel> AvailableDatabases => _dbManager.Databases;
 
     public IRelayCommand SaveConfigCommand { get; private set; } = null!;
+    public IRelayCommand ExportConfigCommand { get; private set; } = null!;
+    public IRelayCommand ImportConfigCommand { get; private set; } = null!;
 
     // ─── Product Assign Dialog Properties ───
     [ObservableProperty]
@@ -140,6 +152,8 @@ public partial class OqcScannerViewModel
     private void InitSettingsProperties()
     {
         SaveConfigCommand = new RelayCommand(SaveSettingsToConfig);
+        ExportConfigCommand = new RelayCommand(ExecuteExportConfig);
+        ImportConfigCommand = new RelayCommand(ExecuteImportConfig);
 
         SearchProductsCommand = new AsyncRelayCommand(ExecuteSearchProductsAsync);
         NextPageCommand = new AsyncRelayCommand(ExecuteNextPageAsync);
@@ -172,6 +186,10 @@ public partial class OqcScannerViewModel
         LogResultToDb = cfg.LogResultToDb;
         LogResultDbId = cfg.LogResultDbId;
         LogResultQuery = cfg.LogResultQuery;
+
+        LogDetailResultToDb = cfg.LogDetailResultToDb;
+        LogDetailResultDbId = cfg.LogDetailResultDbId;
+        LogDetailResultQuery = cfg.LogDetailResultQuery;
 
         EnableCameraBarcodeScan = cfg.EnableCameraBarcodeScan;
         TargetCodeType = cfg.TargetCodeType ?? "ALL";
@@ -209,6 +227,10 @@ public partial class OqcScannerViewModel
             LogResultDbId = LogResultDbId,
             LogResultQuery = LogResultQuery,
 
+            LogDetailResultToDb = LogDetailResultToDb,
+            LogDetailResultDbId = LogDetailResultDbId,
+            LogDetailResultQuery = LogDetailResultQuery,
+
             EnableCameraBarcodeScan = EnableCameraBarcodeScan,
             TargetCodeType = TargetCodeType,
             EnableLengthFilter = EnableLengthFilter,
@@ -223,6 +245,103 @@ public partial class OqcScannerViewModel
         _oqcService.SaveConfig(cfg);
         StatusMessage = "⚙ Đã lưu cấu hình OQC Scanner!";
         StatusBrush = Brushes.Green;
+    }
+
+    private void ExecuteExportConfig()
+    {
+        try
+        {
+            var sfd = new Microsoft.Win32.SaveFileDialog
+            {
+                Title = "Xuất Cấu Hình OQC Scanner",
+                Filter = "Tệp Cấu Hình JSON (*.json)|*.json",
+                FileName = $"OqcScanner_Config_{DateTime.Now:yyyyMMdd_HHmmss}.json"
+            };
+
+            if (sfd.ShowDialog() == true)
+            {
+                var cfg = new OqcScannerConfig
+                {
+                    LookupDbId = LookupDbId,
+                    LookupQuery = LookupQuery,
+                    JobFilePathColumn = JobFilePathColumn,
+                    JobRootDirectory = JobRootDirectory,
+
+                    EnableProductNameLookup = EnableProductNameLookup,
+                    ProductNameDbId = ProductNameDbId,
+                    ProductNameQuery = ProductNameQuery,
+                    ProductNameColumn = ProductNameColumn,
+
+                    ProductListDbId = ProductListDbId,
+                    ProductListQuery = ProductListQuery,
+                    ProductListPageSize = ProductListPageSize > 0 ? ProductListPageSize : 50,
+
+                    AssignDbId = AssignDbId,
+                    AssignQuery = AssignQuery,
+
+                    LogResultToDb = LogResultToDb,
+                    LogResultDbId = LogResultDbId,
+                    LogResultQuery = LogResultQuery,
+
+                    LogDetailResultToDb = LogDetailResultToDb,
+                    LogDetailResultDbId = LogDetailResultDbId,
+                    LogDetailResultQuery = LogDetailResultQuery,
+
+                    EnableCameraBarcodeScan = EnableCameraBarcodeScan,
+                    TargetCodeType = TargetCodeType,
+                    EnableLengthFilter = EnableLengthFilter,
+                    RequiredCodeLength = RequiredCodeLength,
+                    EnableCodeCrop = EnableCodeCrop,
+                    CropStartIndex = CropStartIndex,
+                    CropLength = CropLength,
+                    ScanTimeoutMs = ScanTimeoutMs > 0 ? ScanTimeoutMs : 3000,
+                    UseExternalScanner = UseExternalScanner
+                };
+
+                if (_oqcService.ExportConfigToFile(sfd.FileName, cfg))
+                {
+                    System.Windows.MessageBox.Show($"✅ Xuất cấu hình thành công!\nĐường dẫn: {sfd.FileName}", "Thành Công", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Information);
+                }
+                else
+                {
+                    System.Windows.MessageBox.Show("❌ Lỗi khi ghi tệp cấu hình ra đĩa.", "Lỗi", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Error);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            System.Windows.MessageBox.Show($"Lỗi xuất cấu hình: {ex.Message}", "Lỗi", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Error);
+        }
+    }
+
+    private void ExecuteImportConfig()
+    {
+        try
+        {
+            var ofd = new Microsoft.Win32.OpenFileDialog
+            {
+                Title = "Nạp Cấu Hình OQC Scanner",
+                Filter = "Tệp Cấu Hình JSON (*.json)|*.json"
+            };
+
+            if (ofd.ShowDialog() == true)
+            {
+                var (success, loadedConfig, error) = _oqcService.ImportConfigFromFile(ofd.FileName);
+                if (success && loadedConfig != null)
+                {
+                    LoadSettingsFromConfig();
+                    System.Windows.MessageBox.Show("✅ Nạp cấu hình thành công!", "Thành Công", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Information);
+                }
+                else
+                {
+                    System.Windows.MessageBox.Show($"❌ Không thể nạp cấu hình: {error}", "Lỗi", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Error);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            System.Windows.MessageBox.Show($"Lỗi nạp cấu hình: {ex.Message}", "Lỗi", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Error);
+        }
     }
 
     private async Task ExecuteSearchProductsAsync()

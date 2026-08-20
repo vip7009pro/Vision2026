@@ -51,6 +51,21 @@
 
 ### Sửa lỗi và Cải thiện UX/UI (Phiên làm việc hiện tại)
 
+- **Cải tiến toàn diện Bảng Lịch Sử OQC Scanner & Schema Ghi Log Database Chi Tiết (Task 185)**:
+  - **Lưu Trữ Lịch Sử Cục Bộ (`OqcScannerService.cs`, `OqcScannerViewModel.cs`)**:
+    - Tự động nạp/lưu bảng lịch sử quét vào file JSON `%AppData%\Vision2026\oqc_scan_history.json` giúp dữ liệu lịch sử được bảo toàn khi tắt/bật lại ứng dụng.
+  - **Trích Xuất Bảng Ra Excel (`OqcScannerViewModel.cs`, `OqcScannerView.xaml`)**:
+    - Bổ sung nút **"📊 Xuất Excel (CSV)"** hỗ trợ xuất file CSV chuẩn quốc tế UTF-8 with BOM hiển thị tiếng Việt hoàn hảo trên Microsoft Excel.
+  - **Cột "Ảnh Output" & Cửa Sổ Xem Chi Tiết Phép Đo (`OqcScanDetailDialog.xaml`, `OqcScanDetailDialog.xaml.cs`)**:
+    - Bổ sung thuộc tính `OutputImagePath`, `Uuid`, `MeasurementDetails` vào `OqcScanHistoryEntry`.
+    - Double click vào bất kỳ dòng nào trên bảng lịch sử sẽ mở cửa sổ popup `OqcScanDetailDialog`: hiển thị ảnh output đã lưu kèm bảng danh sách toàn bộ các phép đo chi tiết (*STT, Tên phép đo, Loại tool, Spec, Tol+, Tol-, Min, Max, Result, Đơn vị, Đánh giá*).
+  - **Export / Import Cấu Hình OQC (`OqcSettingsDialog.xaml`, `OqcScannerViewModel.Settings.cs`)**:
+    - Bổ sung 2 nút **"📤 Xuất Cấu Hình (Export)"** và **"📥 Nạp Cấu Hình (Import)"** dạng file JSON trong hộp thoại cài đặt OQC để backup hoặc copy sang máy tính khác.
+  - **Hỗ Trợ Token `{UUID}` & Ghi Log Phép Đo Chi Tiết Vào DB (`OqcScannerConfig.cs`, `OqcScannerService.cs`)**:
+    - Tự động sinh mã UUID cho mỗi lượt quét và thay thế token `{UUID}` vào cả Master Log query và Detail Log query.
+    - Bổ sung cấu hình `LogDetailResultToDb`, `LogDetailResultDbId`, `LogDetailResultQuery` ghi log chi tiết từng phép đo vào bảng `OqcInspectResult`.
+  - **Kiểm Thử & Biên Dịch Thành Công 100%**: Solution biên dịch thành công **0 Error(s)**.
+
 - **Hiển thị đầy đủ Overlay kết quả phép đo Distance lên ảnh xuất của Tool ImageOutput (Task 184)**:
   - **Mở rộng nguồn điểm neo `pointPosMap` (`InspectionService.ImageOutputs.cs`)**:
     - Bổ sung tất cả các nguồn tọa độ điểm (Origin, Points, CreatePoints, CircleFinders, Diameters, EdgePairs, EdgePairDetections, BlobDetections, Calipers) vào bảng tra cứu điểm `pointPosMap`.

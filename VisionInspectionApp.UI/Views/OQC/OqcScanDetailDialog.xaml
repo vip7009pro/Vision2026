@@ -1,0 +1,176 @@
+<Window x:Class="VisionInspectionApp.UI.Views.OQC.OqcScanDetailDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="🔍 Chi Tiết Kết Quả Kiểm Tra OQC"
+        Height="800" Width="1240"
+        MinHeight="600" MinWidth="900"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="CanResize"
+        Background="{DynamicResource WindowBackgroundBrush}"
+        Foreground="{DynamicResource TextBrush}">
+
+    <Window.Resources>
+        <Style x:Key="CenterAlignedStyle" TargetType="TextBlock">
+            <Setter Property="HorizontalAlignment" Value="Center" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+        <Style x:Key="RightAlignedStyle" TargetType="TextBlock">
+            <Setter Property="HorizontalAlignment" Value="Right" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+        <Style x:Key="BoldTextStyle" TargetType="TextBlock">
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+        <Style x:Key="BoldRightAlignedStyle" TargetType="TextBlock">
+            <Setter Property="FontWeight" Value="Bold" />
+            <Setter Property="HorizontalAlignment" Value="Right" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+    </Window.Resources>
+
+    <Grid Margin="14">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <!-- Header Card -->
+        <Border Grid.Row="0" Margin="0,0,0,10" Padding="12" Background="{DynamicResource HeaderBackgroundBrush}" CornerRadius="6" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                    <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                        <TextBlock Text="MÃ SẢN PHẨM:" FontWeight="Bold" FontSize="13" Foreground="{DynamicResource TextMutedBrush}" VerticalAlignment="Center" Margin="0,0,8,0" />
+                        <TextBlock Text="{Binding ScannedCode}" FontWeight="Bold" FontSize="16" Foreground="#2196F3" VerticalAlignment="Center" Margin="0,0,16,0" />
+
+                        <TextBlock Text="TÊN SẢN PHẨM:" FontWeight="Bold" FontSize="13" Foreground="{DynamicResource TextMutedBrush}" VerticalAlignment="Center" Margin="0,0,8,0" />
+                        <TextBlock Text="{Binding ProductName}" FontWeight="Bold" FontSize="14" Foreground="{DynamicResource TextBrush}" VerticalAlignment="Center" Margin="0,0,16,0" />
+
+                        <TextBlock Text="THỜI GIAN:" FontWeight="Bold" FontSize="13" Foreground="{DynamicResource TextMutedBrush}" VerticalAlignment="Center" Margin="0,0,8,0" />
+                        <TextBlock Text="{Binding Time, StringFormat='{}{0:yyyy-MM-dd HH:mm:ss}'}" FontSize="13" Foreground="{DynamicResource TextBrush}" VerticalAlignment="Center" />
+                    </StackPanel>
+
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="UUID:" FontWeight="SemiBold" FontSize="12" Foreground="{DynamicResource TextMutedBrush}" VerticalAlignment="Center" Margin="0,0,8,0" />
+                        <TextBox Text="{Binding Uuid, Mode=OneWay}" IsReadOnly="True" BorderThickness="0" Background="Transparent" Foreground="#FF9800" FontFamily="Consolas" FontSize="12" VerticalAlignment="Center" Margin="0,0,16,0" />
+
+                        <TextBlock Text="TỆP JOB:" FontWeight="SemiBold" FontSize="12" Foreground="{DynamicResource TextMutedBrush}" VerticalAlignment="Center" Margin="0,0,8,0" />
+                        <TextBlock Text="{Binding JobFilePath}" FontSize="12" Foreground="{DynamicResource TextMutedBrush}" VerticalAlignment="Center" />
+                    </StackPanel>
+                </StackPanel>
+
+                <!-- Status Badge -->
+                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                    <Border Background="{Binding ResultBrushHex}" CornerRadius="6" Padding="16,8" Margin="0,0,8,0">
+                        <TextBlock Text="{Binding InspectResult}" FontWeight="Bold" FontSize="20" Foreground="White" VerticalAlignment="Center" HorizontalAlignment="Center" />
+                    </Border>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- Main Body (Split into Left: Output Image, Right: Measurements DataGrid) -->
+        <Grid Grid.Row="1">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="5*" MinWidth="350" />
+                <ColumnDefinition Width="6" />
+                <ColumnDefinition Width="6*" MinWidth="400" />
+            </Grid.ColumnDefinitions>
+
+            <!-- Left Panel: Output Image Viewer -->
+            <GroupBox Grid.Column="0" Header="🖼️ Ảnh Kết Quả Kiểm Tra (Output Image)" Padding="8" Foreground="{DynamicResource TextBrush}">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="*" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+
+                    <Border Grid.Row="0" Background="#111" CornerRadius="4" BorderBrush="#333" BorderThickness="1" ClipToBounds="True">
+                        <Grid>
+                            <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto">
+                                <Image x:Name="ImgOutputPreview" Stretch="Uniform" HorizontalAlignment="Center" VerticalAlignment="Center" RenderOptions.BitmapScalingMode="HighQuality" />
+                            </ScrollViewer>
+
+                            <!-- Placeholder when no image -->
+                            <TextBlock x:Name="TxtNoImageMessage"
+                                       Text="⚠️ Không tìm thấy ảnh output cho lượt quét này&#x0a;(hoặc tệp ảnh đã bị di chuyển / xóa)."
+                                       TextAlignment="Center" Foreground="#888" FontSize="13"
+                                       HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="Collapsed" />
+                        </Grid>
+                    </Border>
+
+                    <!-- Image Info & Action Toolbar -->
+                    <DockPanel Grid.Row="1" Margin="0,8,0,0" LastChildFill="True">
+                        <Button Content="📂 Mở file ngoài" Click="OpenImageExternal_Click" DockPanel.Dock="Right" Padding="10,4" Margin="6,0,0,0" ToolTip="Mở tệp ảnh bằng ứng dụng xem ảnh mặc định của Windows" />
+                        <TextBlock Text="{Binding OutputImagePath}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" Foreground="{DynamicResource TextMutedBrush}" FontSize="11" ToolTip="{Binding OutputImagePath}" />
+                    </DockPanel>
+                </Grid>
+            </GroupBox>
+
+            <!-- GridSplitter -->
+            <GridSplitter Grid.Column="1" HorizontalAlignment="Stretch" Background="Transparent" />
+
+            <!-- Right Panel: Detailed Measurements Table -->
+            <GroupBox Grid.Column="2" Header="📊 Danh Sách Chi Tiết Toàn Bộ Phép Đo (Measurements &amp; Specs)" Padding="8" Foreground="{DynamicResource TextBrush}">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="*" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+
+                    <DataGrid Grid.Row="0"
+                              ItemsSource="{Binding MeasurementDetails}"
+                              AutoGenerateColumns="False"
+                              CanUserAddRows="False"
+                              IsReadOnly="True"
+                              SelectionMode="Single"
+                              GridLinesVisibility="Horizontal"
+                              RowHeaderWidth="0"
+                              Background="{DynamicResource PanelBackgroundBrush}"
+                              Foreground="{DynamicResource TextBrush}"
+                              BorderThickness="1"
+                              BorderBrush="{DynamicResource BorderBrush}">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="#" Binding="{Binding Index}" Width="35" ElementStyle="{StaticResource CenterAlignedStyle}" />
+                            <DataGridTextColumn Header="Tên Phép Đo" Binding="{Binding ToolName}" Width="1.5*" ElementStyle="{StaticResource BoldTextStyle}" />
+                            <DataGridTextColumn Header="Loại Tool" Binding="{Binding ToolType}" Width="*" />
+                            <DataGridTextColumn Header="Tiêu Chuẩn" Binding="{Binding FormattedSpec}" Width="*" ElementStyle="{StaticResource RightAlignedStyle}" />
+                            <DataGridTextColumn Header="Dung Sai" Binding="{Binding FormattedTol}" Width="*" ElementStyle="{StaticResource RightAlignedStyle}" />
+                            <DataGridTextColumn Header="Giới Hạn [Min~Max]" Binding="{Binding FormattedRange}" Width="1.2*" ElementStyle="{StaticResource CenterAlignedStyle}" />
+                            <DataGridTextColumn Header="Giá Trị Đo" Binding="{Binding FormattedResult}" Width="1.2*" ElementStyle="{StaticResource BoldRightAlignedStyle}" />
+
+                            <!-- Judge Column with Color Badge -->
+                            <DataGridTemplateColumn Header="Đánh Giá" Width="80">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <Border Background="{Binding JudgeBrushHex}" CornerRadius="3" Padding="6,2" HorizontalAlignment="Center">
+                                            <TextBlock Text="{Binding Judge}" FontWeight="Bold" Foreground="White" FontSize="11" />
+                                        </Border>
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
+                        </DataGrid.Columns>
+                    </DataGrid>
+
+                    <!-- Summary Bottom Bar -->
+                    <Border Grid.Row="1" Margin="0,8,0,0" Padding="8,6" Background="{DynamicResource HeaderBackgroundBrush}" CornerRadius="4">
+                        <TextBlock Text="{Binding InspectDetails}" TextWrapping="Wrap" Foreground="{DynamicResource TextBrush}" FontSize="12" />
+                    </Border>
+                </Grid>
+            </GroupBox>
+        </Grid>
+
+        <!-- Footer Buttons -->
+        <Border Grid.Row="2" Margin="0,10,0,0" Padding="0,8,0,0" BorderThickness="0,1,0,0" BorderBrush="{DynamicResource BorderBrush}">
+            <DockPanel LastChildFill="False">
+                <Button Content="📋 Copy JSON Dữ Liệu" Click="CopyJson_Click" DockPanel.Dock="Left" Padding="12,6" />
+                <Button Content="Đóng (ESC)" Click="Close_Click" DockPanel.Dock="Right" Width="110" Padding="12,6" IsCancel="True" IsDefault="True" />
+            </DockPanel>
+        </Border>
+    </Grid>
+</Window>

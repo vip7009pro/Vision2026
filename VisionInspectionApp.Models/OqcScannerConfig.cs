@@ -28,7 +28,12 @@ public class OqcScannerConfig
     // ─── Ghi log kết quả OQC vào DB (Upload Log Query) ───
     public bool LogResultToDb { get; set; } = false;
     public string LogResultDbId { get; set; } = "";
-    public string LogResultQuery { get; set; } = "INSERT INTO OqcLogs (ScannedCode, JobFilePath, Pass, NgReasons, InspectDateTime) VALUES ('{ScannedCode}', '{JobFilePath}', {PassBit}, '{NgReasons}', GETDATE())";
+    public string LogResultQuery { get; set; } = "INSERT INTO OqcLogs (CTR_CD, ScannedCode, UUID, JobFilePath, Pass, NgReasons, InspectDateTime) VALUES ('002', '{ScannedCode}', '{UUID}', '{JobFilePath}', {PassBit}, N'{NgReasons}', GETDATE())";
+
+    // ─── Ghi log chi tiết từng phép đo OQC vào DB (Upload Detail Measurements Query) ───
+    public bool LogDetailResultToDb { get; set; } = false;
+    public string LogDetailResultDbId { get; set; } = "";
+    public string LogDetailResultQuery { get; set; } = "INSERT INTO OqcInspectResult (CTR_CD, ScannedCode, UUID, ToolName, Spec, [Tol +], [Tol -], [Min], [Max], Result, Judge, InspectDateTime) VALUES ('002', '{ScannedCode}', '{UUID}', '{ToolName}', {Spec}, {TolPlus}, {TolMinus}, {Min}, {Max}, {Result}, '{Judge}', GETDATE())";
 
     // ─── Cấu hình quét mã Barcode / QR Code từ Camera ───
     public bool EnableCameraBarcodeScan { get; set; } = true;
@@ -42,10 +47,33 @@ public class OqcScannerConfig
     public bool UseExternalScanner { get; set; } = false;
 }
 
+public class OqcMeasurementDetail
+{
+    public int Index { get; set; } = 1;
+    public string ToolName { get; set; } = "";
+    public string ToolType { get; set; } = "";
+    public double Spec { get; set; } = 0;
+    public double TolPlus { get; set; } = 0;
+    public double TolMinus { get; set; } = 0;
+    public double Min { get; set; } = 0;
+    public double Max { get; set; } = 0;
+    public double Result { get; set; } = 0;
+    public string Unit { get; set; } = "mm";
+    public bool Pass { get; set; } = true;
+
+    public string Judge => Pass ? "PASS" : "NG";
+    public string JudgeBrushHex => Pass ? "#2E7D32" : "#D32F2F";
+    public string FormattedSpec => $"{Spec:F3} {Unit}";
+    public string FormattedTol => $"+{TolPlus:F3} / -{TolMinus:F3}";
+    public string FormattedRange => $"[{Min:F3} ~ {Max:F3}]";
+    public string FormattedResult => double.IsNaN(Result) ? "N/A" : $"{Result:F3} {Unit}";
+}
+
 public class OqcScanHistoryEntry : System.ComponentModel.INotifyPropertyChanged
 {
     public DateTime Time { get; set; } = DateTime.Now;
     public string ScannedCode { get; set; } = "";
+    public string Uuid { get; set; } = "";
 
     private string _productName = "";
     public string ProductName
@@ -62,6 +90,7 @@ public class OqcScanHistoryEntry : System.ComponentModel.INotifyPropertyChanged
     }
 
     public string JobFilePath { get; set; } = "";
+    public string OutputImagePath { get; set; } = "";
     public bool Success { get; set; } = false;
     public string Message { get; set; } = "";
 
@@ -106,6 +135,8 @@ public class OqcScanHistoryEntry : System.ComponentModel.INotifyPropertyChanged
             }
         }
     }
+
+    public System.Collections.Generic.List<OqcMeasurementDetail> MeasurementDetails { get; set; } = new();
 
     public event System.ComponentModel.PropertyChangedEventHandler? PropertyChanged;
 }

@@ -17,6 +17,7 @@ namespace VisionInspectionApp.Application.OQC;
 public sealed class OqcScannerService : IOqcScannerService
 {
     private readonly string _configFilePath;
+    private readonly string _historyFilePath;
     public OqcScannerConfig Config { get; private set; } = new();
 
     public OqcScannerService()
@@ -25,6 +26,7 @@ public sealed class OqcScannerService : IOqcScannerService
         var dir = Path.Combine(appData, "Vision2026");
         Directory.CreateDirectory(dir);
         _configFilePath = Path.Combine(dir, "oqc_scanner_config.json");
+        _historyFilePath = Path.Combine(dir, "oqc_scan_history.json");
 
         LoadConfig();
     }
@@ -69,6 +71,84 @@ public sealed class OqcScannerService : IOqcScannerService
         {
             System.Diagnostics.Debug.WriteLine($"Failed to save OQC config: {ex.Message}");
         }
+    }
+
+    public bool ExportConfigToFile(string filePath, OqcScannerConfig config)
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(filePath) || config == null) return false;
+            var json = JsonSerializer.Serialize(config, new JsonSerializerOptions { WriteIndented = true });
+            File.WriteAllText(filePath, json);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"ExportConfigToFile error: {ex.Message}");
+            return false;
+        }
+    }
+
+    public (bool success, OqcScannerConfig? config, string errorMessage) ImportConfigFromFile(string filePath)
+    {
+        try
+        {
+            if (!File.Exists(filePath)) return (false, null, "Tệp cấu hình không tồn tại.");
+            var json = File.ReadAllText(filePath);
+            var loaded = JsonSerializer.Deserialize<OqcScannerConfig>(json, new JsonSerializerOptions
+            {
+                PropertyNameCaseInsensitive = true
+            });
+            if (loaded != null)
+            {
+                SaveConfig(loaded);
+                return (true, loaded, "");
+            }
+            return (false, null, "Nội dung tệp cấu hình không hợp lệ.");
+        }
+        catch (Exception ex)
+        {
+            return (false, null, $"Lỗi đọc tệp cấu hình: {ex.Message}");
+        }
+    }
+
+    public void SaveScanHistory(IEnumerable<OqcScanHistoryEntry> history)
+    {
+        try
+        {
+            if (history == null) return;
+            var list = history.Take(500).ToList();
+            var json = JsonSerializer.Serialize(list, new JsonSerializerOptions { WriteIndented = true });
+            File.WriteAllText(_historyFilePath, json);
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"SaveScanHistory error: {ex.Message}");
+        }
+    }
+
+    public List<OqcScanHistoryEntry> LoadScanHistory()
+    {
+        try
+        {
+            if (File.Exists(_historyFilePath))
+            {
+                var json = File.ReadAllText(_historyFilePath);
+                var loaded = JsonSerializer.Deserialize<List<OqcScanHistoryEntry>>(json, new JsonSerializerOptions
+                {
+                    PropertyNameCaseInsensitive = true
+                });
+                if (loaded != null)
+                {
+                    return loaded;
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"LoadScanHistory error: {ex.Message}");
+        }
+        return new List<OqcScanHistoryEntry>();
     }
 
     private static Mat RotateImageNoClip(Mat src, double angleDeg)
@@ -821,9 +901,14 @@ public sealed class OqcScannerService : IOqcScannerService
     }
 
     public async Task<(bool Success, string Message)> LogInspectionResultAsync(
-        string scannedCode, string jobFilePath, InspectionResult result, VisionConfig config, IDbManagerService dbManager)
+        string scannedCode, string uuid, string jobFilePath, InspectionResult result, VisionConfig config, IDbManagerService dbManager, List<OqcMeasurementDetail>? measurementDetails = null)
     {
-        if (!Config.LogResultToDb || string.IsNullOrWhiteSpace(Config.LogResultQuery))
+        if (string.IsNullOrWhiteSpace(uuid))
+        {
+            uuid = Guid.NewGuid().ToString("N");
+        }
+
+        if (!Config.LogResultToDb && !Config.LogDetailResultToDb)
         {
             return (true, "Ghi log DB bị tắt.");
         }
@@ -834,41 +919,453 @@ public sealed class OqcScannerService : IOqcScannerService
         }
 
         string safeCode = EscapeSqlValue((scannedCode ?? "").Trim());
+        string safeUuid = EscapeSqlValue(uuid.Trim());
         string safeProductName = EscapeSqlValue((config?.ProductName ?? "").Trim());
         string safePath = EscapeSqlValue((jobFilePath ?? "").Trim());
         string passBit = (result != null && result.Pass) ? "1" : "0";
         string inspectResultText = (result != null && result.Pass) ? "PASS" : "NG";
         string ngReasons = result != null ? EscapeSqlValue(ExtractNgReasons(result)) : "";
 
-        string query = Config.LogResultQuery
-            .Replace("{ScannedCode}", safeCode, StringComparison.OrdinalIgnoreCase)
-            .Replace("{ProductName}", safeProductName, StringComparison.OrdinalIgnoreCase)
-            .Replace("{JobFilePath}", safePath, StringComparison.OrdinalIgnoreCase)
-            .Replace("{PassBit}", passBit, StringComparison.OrdinalIgnoreCase)
-            .Replace("{Pass}", passBit, StringComparison.OrdinalIgnoreCase)
-            .Replace("{InspectResult}", inspectResultText, StringComparison.OrdinalIgnoreCase)
-            .Replace("{NgReasons}", ngReasons, StringComparison.OrdinalIgnoreCase);
+        int totalMasterRows = 0;
+        int totalDetailRows = 0;
+        string lastError = "";
 
-        if (result != null && config != null)
+        // 1. Ghi Master Log vào bảng Log tổng (LogResultQuery)
+        if (Config.LogResultToDb && !string.IsNullOrWhiteSpace(Config.LogResultQuery))
         {
-            query = DbNodeRunner.InterpolateSqlQuery(query, result, config);
+            string query = Config.LogResultQuery
+                .Replace("{ScannedCode}", safeCode, StringComparison.OrdinalIgnoreCase)
+                .Replace("{UUID}", safeUuid, StringComparison.OrdinalIgnoreCase)
+                .Replace("{Uuid}", safeUuid, StringComparison.OrdinalIgnoreCase)
+                .Replace("{ProductName}", safeProductName, StringComparison.OrdinalIgnoreCase)
+                .Replace("{JobFilePath}", safePath, StringComparison.OrdinalIgnoreCase)
+                .Replace("{PassBit}", passBit, StringComparison.OrdinalIgnoreCase)
+                .Replace("{Pass}", passBit, StringComparison.OrdinalIgnoreCase)
+                .Replace("{InspectResult}", inspectResultText, StringComparison.OrdinalIgnoreCase)
+                .Replace("{NgReasons}", ngReasons, StringComparison.OrdinalIgnoreCase);
+
+            if (result != null && config != null)
+            {
+                query = DbNodeRunner.InterpolateSqlQuery(query, result, config);
+            }
+
+            var (isSafe, safetyError) = DbNodeRunner.ValidateSqlQuerySafety(query, DbNodeMode.Write, allowUpdateDelete: true);
+            if (!isSafe)
+            {
+                return (false, $"Master Log query không an toàn: {safetyError}");
+            }
+
+            var (success, rows, error) = await dbManager.ExecuteNonQueryAsync(Config.LogResultDbId, query);
+            if (success)
+            {
+                totalMasterRows = rows;
+            }
+            else
+            {
+                lastError = error;
+            }
         }
 
-        var (isSafe, safetyError) = DbNodeRunner.ValidateSqlQuerySafety(query, DbNodeMode.Write, allowUpdateDelete: true);
-        if (!isSafe)
+        // 2. Ghi Detail Log từng phép đo vào bảng Chi tiết (LogDetailResultQuery)
+        if (Config.LogDetailResultToDb && !string.IsNullOrWhiteSpace(Config.LogDetailResultQuery))
         {
-            return (false, safetyError);
+            measurementDetails ??= (result != null && config != null) ? ExtractMeasurementDetails(result, config) : new List<OqcMeasurementDetail>();
+            if (measurementDetails.Count > 0)
+            {
+                foreach (var detail in measurementDetails)
+                {
+                    string safeToolName = EscapeSqlValue(detail.ToolName);
+                    string safeToolType = EscapeSqlValue(detail.ToolType);
+                    string safeJudge = EscapeSqlValue(detail.Judge);
+                    string safeUnit = EscapeSqlValue(detail.Unit);
+                    string detailPassBit = detail.Pass ? "1" : "0";
+                    string specStr = double.IsNaN(detail.Spec) ? "NULL" : detail.Spec.ToString(CultureInfo.InvariantCulture);
+                    string tolPlusStr = double.IsNaN(detail.TolPlus) ? "NULL" : detail.TolPlus.ToString(CultureInfo.InvariantCulture);
+                    string tolMinusStr = double.IsNaN(detail.TolMinus) ? "NULL" : detail.TolMinus.ToString(CultureInfo.InvariantCulture);
+                    string minStr = double.IsNaN(detail.Min) ? "NULL" : detail.Min.ToString(CultureInfo.InvariantCulture);
+                    string maxStr = double.IsNaN(detail.Max) ? "NULL" : detail.Max.ToString(CultureInfo.InvariantCulture);
+                    string resultStr = double.IsNaN(detail.Result) ? "NULL" : detail.Result.ToString(CultureInfo.InvariantCulture);
+
+                    string detailQuery = Config.LogDetailResultQuery
+                        .Replace("{ScannedCode}", safeCode, StringComparison.OrdinalIgnoreCase)
+                        .Replace("{UUID}", safeUuid, StringComparison.OrdinalIgnoreCase)
+                        .Replace("{Uuid}", safeUuid, StringComparison.OrdinalIgnoreCase)
+                        .Replace("{ToolName}", safeToolName, StringComparison.OrdinalIgnoreCase)
+                        .Replace("{ToolType}", safeToolType, StringComparison.OrdinalIgnoreCase)
+                        .Replace("{Spec}", specStr, StringComparison.OrdinalIgnoreCase)
+                        .Replace("{Nominal}", specStr, StringComparison.OrdinalIgnoreCase)
+                        .Replace("{TolPlus}", tolPlusStr, StringComparison.OrdinalIgnoreCase)
+                        .Replace("{Tol +}", tolPlusStr, StringComparison.OrdinalIgnoreCase)
+                        .Replace("{TolMinus}", tolMinusStr, StringComparison.OrdinalIgnoreCase)
+                        .Replace("{Tol -}", tolMinusStr, StringComparison.OrdinalIgnoreCase)
+                        .Replace("{Min}", minStr, StringComparison.OrdinalIgnoreCase)
+                        .Replace("{MinVal}", minStr, StringComparison.OrdinalIgnoreCase)
+                        .Replace("{Max}", maxStr, StringComparison.OrdinalIgnoreCase)
+                        .Replace("{MaxVal}", maxStr, StringComparison.OrdinalIgnoreCase)
+                        .Replace("{Result}", resultStr, StringComparison.OrdinalIgnoreCase)
+                        .Replace("{ResultVal}", resultStr, StringComparison.OrdinalIgnoreCase)
+                        .Replace("{Unit}", safeUnit, StringComparison.OrdinalIgnoreCase)
+                        .Replace("{Judge}", safeJudge, StringComparison.OrdinalIgnoreCase)
+                        .Replace("{PassBit}", detailPassBit, StringComparison.OrdinalIgnoreCase)
+                        .Replace("{JobFilePath}", safePath, StringComparison.OrdinalIgnoreCase);
+
+                    var (isDetailSafe, detailSafetyError) = DbNodeRunner.ValidateSqlQuerySafety(detailQuery, DbNodeMode.Write, allowUpdateDelete: true);
+                    if (isDetailSafe)
+                    {
+                        var (dSuccess, dRows, dError) = await dbManager.ExecuteNonQueryAsync(Config.LogDetailResultDbId, detailQuery);
+                        if (dSuccess)
+                        {
+                            totalDetailRows += dRows;
+                        }
+                        else
+                        {
+                            lastError = dError;
+                        }
+                    }
+                }
+            }
         }
 
-        var (success, rows, error) = await dbManager.ExecuteNonQueryAsync(Config.LogResultDbId, query);
-        if (success)
+        if (string.IsNullOrEmpty(lastError))
         {
-            return (true, $"✅ Đã lưu kết quả kiểm tra lên DB! (Số dòng: {rows})");
+            return (true, $"✅ Đã lưu kết quả OQC lên DB! (Master: {totalMasterRows} dòng, Chi tiết: {totalDetailRows} dòng)");
         }
         else
         {
-            return (false, $"Lỗi ghi log DB: {error}");
+            return (false, $"Lỗi ghi DB: {lastError} (Master: {totalMasterRows}, Detail: {totalDetailRows})");
         }
+    }
+
+    public List<OqcMeasurementDetail> ExtractMeasurementDetails(InspectionResult result, VisionConfig config)
+    {
+        var list = new List<OqcMeasurementDetail>();
+        if (result == null || config == null) return list;
+
+        bool isCalibrated = config.PixelsPerMm > 0 && Math.Abs(config.PixelsPerMm - 1.0) > 1e-6;
+        string defaultUnit = isCalibrated ? "mm" : "px";
+        int idx = 1;
+
+        // 1. Origin Matcher
+        if (result.Origin != null)
+        {
+            list.Add(new OqcMeasurementDetail
+            {
+                Index = idx++,
+                ToolName = "Origin (Gốc tọa độ)",
+                ToolType = "Origin",
+                Spec = config.Origin?.MatchScoreThreshold ?? 0.5,
+                TolPlus = 0,
+                TolMinus = 0,
+                Min = config.Origin?.MatchScoreThreshold ?? 0.5,
+                Max = 1.0,
+                Result = result.Origin.Score,
+                Unit = "Score",
+                Pass = result.Origin.Pass
+            });
+        }
+
+        // 2. Distances (Khoảng cách điểm - điểm)
+        foreach (var d in result.Distances)
+        {
+            var def = config.Distances?.FirstOrDefault(x => string.Equals(x.Name, d.Name, StringComparison.OrdinalIgnoreCase));
+            double nom = def?.Nominal ?? d.Nominal;
+            double tp = def?.TolerancePlus ?? d.TolPlus;
+            double tm = def?.ToleranceMinus ?? d.TolMinus;
+            list.Add(new OqcMeasurementDetail
+            {
+                Index = idx++,
+                ToolName = d.Name,
+                ToolType = "Distance",
+                Spec = nom,
+                TolPlus = tp,
+                TolMinus = tm,
+                Min = nom - tm,
+                Max = nom + tp,
+                Result = d.Value,
+                Unit = defaultUnit,
+                Pass = d.Pass
+            });
+        }
+
+        // 3. LineToLine Distances
+        foreach (var l2l in result.LineToLineDistances)
+        {
+            var def = config.LineToLineDistances?.FirstOrDefault(x => string.Equals(x.Name, l2l.Name, StringComparison.OrdinalIgnoreCase));
+            double nom = def?.Nominal ?? l2l.Nominal;
+            double tp = def?.TolerancePlus ?? l2l.TolPlus;
+            double tm = def?.ToleranceMinus ?? l2l.TolMinus;
+            list.Add(new OqcMeasurementDetail
+            {
+                Index = idx++,
+                ToolName = l2l.Name,
+                ToolType = "LineToLine",
+                Spec = nom,
+                TolPlus = tp,
+                TolMinus = tm,
+                Min = nom - tm,
+                Max = nom + tp,
+                Result = l2l.Value,
+                Unit = defaultUnit,
+                Pass = l2l.Pass
+            });
+        }
+
+        // 4. PointToLine Distances
+        foreach (var p2l in result.PointToLineDistances)
+        {
+            var def = config.PointToLineDistances?.FirstOrDefault(x => string.Equals(x.Name, p2l.Name, StringComparison.OrdinalIgnoreCase));
+            double nom = def?.Nominal ?? p2l.Nominal;
+            double tp = def?.TolerancePlus ?? p2l.TolPlus;
+            double tm = def?.ToleranceMinus ?? p2l.TolMinus;
+            list.Add(new OqcMeasurementDetail
+            {
+                Index = idx++,
+                ToolName = p2l.Name,
+                ToolType = "PointToLine",
+                Spec = nom,
+                TolPlus = tp,
+                TolMinus = tm,
+                Min = nom - tm,
+                Max = nom + tp,
+                Result = p2l.Value,
+                Unit = defaultUnit,
+                Pass = p2l.Pass
+            });
+        }
+
+        // 5. SegmentLine Distances
+        foreach (var sld in result.SegmentLineDistances)
+        {
+            var def = config.SegmentLineDistances?.FirstOrDefault(x => string.Equals(x.Name, sld.Name, StringComparison.OrdinalIgnoreCase));
+            double nom = def?.Nominal ?? sld.Nominal;
+            double tp = def?.TolerancePlus ?? sld.TolPlus;
+            double tm = def?.ToleranceMinus ?? sld.TolMinus;
+            list.Add(new OqcMeasurementDetail
+            {
+                Index = idx++,
+                ToolName = sld.Name,
+                ToolType = "SegmentLine",
+                Spec = nom,
+                TolPlus = tp,
+                TolMinus = tm,
+                Min = nom - tm,
+                Max = nom + tp,
+                Result = sld.Value,
+                Unit = defaultUnit,
+                Pass = sld.Pass
+            });
+        }
+
+        // 6. Angles
+        foreach (var a in result.Angles)
+        {
+            var def = config.Angles?.FirstOrDefault(x => string.Equals(x.Name, a.Name, StringComparison.OrdinalIgnoreCase));
+            double nom = def?.Nominal ?? a.Nominal;
+            double tp = def?.TolerancePlus ?? a.TolPlus;
+            double tm = def?.ToleranceMinus ?? a.TolMinus;
+            list.Add(new OqcMeasurementDetail
+            {
+                Index = idx++,
+                ToolName = a.Name,
+                ToolType = "Angle",
+                Spec = nom,
+                TolPlus = tp,
+                TolMinus = tm,
+                Min = nom - tm,
+                Max = nom + tp,
+                Result = a.ValueDeg,
+                Unit = "deg",
+                Pass = a.Pass
+            });
+        }
+
+        // 7. Diameters
+        foreach (var dm in result.Diameters)
+        {
+            var def = config.Diameters?.FirstOrDefault(x => string.Equals(x.Name, dm.Name, StringComparison.OrdinalIgnoreCase));
+            double nom = def?.Nominal ?? dm.Nominal;
+            double tp = def?.TolerancePlus ?? dm.TolPlus;
+            double tm = def?.ToleranceMinus ?? dm.TolMinus;
+            list.Add(new OqcMeasurementDetail
+            {
+                Index = idx++,
+                ToolName = dm.Name,
+                ToolType = "Diameter",
+                Spec = nom,
+                TolPlus = tp,
+                TolMinus = tm,
+                Min = nom - tm,
+                Max = nom + tp,
+                Result = dm.Value,
+                Unit = defaultUnit,
+                Pass = dm.Pass
+            });
+        }
+
+        // 8. EdgePairs
+        foreach (var ep in result.EdgePairs)
+        {
+            var def = config.EdgePairs?.FirstOrDefault(x => string.Equals(x.Name, ep.Name, StringComparison.OrdinalIgnoreCase));
+            double nom = def?.Nominal ?? ep.Nominal;
+            double tp = def?.TolerancePlus ?? ep.TolPlus;
+            double tm = def?.ToleranceMinus ?? ep.TolMinus;
+            list.Add(new OqcMeasurementDetail
+            {
+                Index = idx++,
+                ToolName = ep.Name,
+                ToolType = "EdgePair",
+                Spec = nom,
+                TolPlus = tp,
+                TolMinus = tm,
+                Min = nom - tm,
+                Max = nom + tp,
+                Result = ep.Value,
+                Unit = defaultUnit,
+                Pass = ep.Pass
+            });
+        }
+
+        // 9. EdgePairDetections
+        foreach (var epd in result.EdgePairDetections)
+        {
+            var def = config.EdgePairDetections?.FirstOrDefault(x => string.Equals(x.Name, epd.Name, StringComparison.OrdinalIgnoreCase));
+            double nom = def?.Nominal ?? epd.Nominal;
+            double tp = def?.TolerancePlus ?? epd.TolPlus;
+            double tm = def?.ToleranceMinus ?? epd.TolMinus;
+            list.Add(new OqcMeasurementDetail
+            {
+                Index = idx++,
+                ToolName = epd.Name,
+                ToolType = "EdgePairDetect",
+                Spec = nom,
+                TolPlus = tp,
+                TolMinus = tm,
+                Min = nom - tm,
+                Max = nom + tp,
+                Result = epd.Value,
+                Unit = defaultUnit,
+                Pass = epd.Pass
+            });
+        }
+
+        // 10. CircleFinders
+        foreach (var cf in result.CircleFinders)
+        {
+            list.Add(new OqcMeasurementDetail
+            {
+                Index = idx++,
+                ToolName = cf.Name,
+                ToolType = "CircleFinder",
+                Spec = 0,
+                TolPlus = 0,
+                TolMinus = 0,
+                Min = 0,
+                Max = 0,
+                Result = isCalibrated ? (cf.RadiusPx / config.PixelsPerMm) : cf.RadiusPx,
+                Unit = defaultUnit,
+                Pass = cf.Found
+            });
+        }
+
+        // 11. ColorDiffs
+        if (result.ColorDiffs != null)
+        {
+            foreach (var cd in result.ColorDiffs)
+            {
+                list.Add(new OqcMeasurementDetail
+                {
+                    Index = idx++,
+                    ToolName = cd.Name,
+                    ToolType = "ColorDiff",
+                    Spec = 0,
+                    TolPlus = cd.MaxDeltaE,
+                    TolMinus = 0,
+                    Min = 0,
+                    Max = cd.MaxDeltaE,
+                    Result = cd.DeltaE,
+                    Unit = "dE",
+                    Pass = cd.Pass
+                });
+            }
+        }
+
+        // 12. SurfaceCompares
+        foreach (var sc in result.SurfaceCompares)
+        {
+            list.Add(new OqcMeasurementDetail
+            {
+                Index = idx++,
+                ToolName = sc.Name,
+                ToolType = "SurfaceCompare",
+                Spec = 0,
+                TolPlus = 0,
+                TolMinus = 0,
+                Min = 0,
+                Max = 0,
+                Result = sc.Defects.Count,
+                Unit = "Lỗi",
+                Pass = sc.Pass
+            });
+        }
+
+        // 13. ContourCompares
+        foreach (var cc in result.ContourCompares)
+        {
+            list.Add(new OqcMeasurementDetail
+            {
+                Index = idx++,
+                ToolName = cc.Name,
+                ToolType = "ContourCompare",
+                Spec = 0.8,
+                TolPlus = 0,
+                TolMinus = 0,
+                Min = 0.8,
+                Max = 1.0,
+                Result = cc.MatchScore,
+                Unit = "Score",
+                Pass = cc.Pass
+            });
+        }
+
+        // 14. BlobDetections
+        foreach (var bd in result.BlobDetections)
+        {
+            list.Add(new OqcMeasurementDetail
+            {
+                Index = idx++,
+                ToolName = bd.Name,
+                ToolType = "BlobDetection",
+                Spec = 0,
+                TolPlus = 0,
+                TolMinus = 0,
+                Min = 0,
+                Max = 100,
+                Result = bd.Count,
+                Unit = "Blobs",
+                Pass = true
+            });
+        }
+
+        // 15. CodeDetections
+        foreach (var cdt in result.CodeDetections)
+        {
+            list.Add(new OqcMeasurementDetail
+            {
+                Index = idx++,
+                ToolName = cdt.Name,
+                ToolType = "CodeDetection",
+                Spec = 0,
+                TolPlus = 0,
+                TolMinus = 0,
+                Min = 0,
+                Max = 0,
+                Result = cdt.Found ? 1 : 0,
+                Unit = cdt.Text,
+                Pass = cdt.Found
+            });
+        }
+
+        return list;
     }
 
     public static string ExtractNgReasons(InspectionResult result)

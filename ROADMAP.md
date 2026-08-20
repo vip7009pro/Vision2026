@@ -499,12 +499,13 @@ Lộ trình tích hợp tính năng Chụp ảnh từ camera và hỗ trợ các
     - Sửa điều kiện từ `(dRes.Pass || dRes.Value > 0)` thành `!double.IsNaN(dRes.Value) && pointPosMap.TryGetValue(dRes.PointA, out var pa) && pointPosMap.TryGetValue(dRes.PointB, out var pb)`.
     - Vẽ đường thẳng nối 2 điểm kèm nhãn kết quả số đo `${dRes.Name}=... mm/px` chuẩn xác 100% lên tệp ảnh xuất của tool ImageOutput.
   - `Biên Dịch & Kiểm Thử Thành Công 100%`: Solution biên dịch **0 Error(s)**, chạy test thành công.
-- [ ] Task 185 (Kế hoạch Mục 2): Cải tiến toàn diện Bảng lịch sử OQC Scanner & Schema ghi Log Database chi tiết:
-  - `Lưu Trữ Lịch Sử Cục Bộ (Local JSON)`: Tự động lưu và tải lại bảng lịch sử khi bật/tắt app.
-  - `Trích Xuất Excel (Export to CSV/Excel)`: Nút xuất file Excel tiếng Việt UTF-8 with BOM.
-  - `Cột Ảnh Output & Cửa Sổ Xem Chi Tiết Phép Đo`: Cột link ảnh output trên DataGrid và cửa sổ `OqcScanDetailDialog` hiển thị ảnh + danh sách toàn bộ phép đo.
-  - `Export / Import Cấu Hình OQC`: Sao lưu và khôi phục cấu hình OQC dạng JSON.
-  - `Hỗ Trợ Token {UUID} & Ghi Log Phép Đo Chi Tiết Vào DB`: Tạo UUID duy nhất và thực thi truy vấn log chi tiết từng phép đo.
+- [x] Task 185: Cải tiến toàn diện Bảng lịch sử OQC Scanner & Schema ghi Log Database chi tiết:
+  - `Lưu Trữ Lịch Sử Cục Bộ (Local JSON)`: Tự động lưu và tải lại bảng lịch sử khi bật/tắt app qua file `%AppData%\Vision2026\oqc_scan_history.json`.
+  - `Trích Xuất Excel (Export to CSV/Excel)`: Nút xuất file Excel tiếng Việt UTF-8 with BOM hiển thị chuẩn xác không lỗi font.
+  - `Cột Ảnh Output & Cửa Sổ Xem Chi Tiết Phép Đo`: Cột link ảnh output trên DataGrid và cửa sổ `OqcScanDetailDialog` hiển thị ảnh output sắc nét + bảng danh sách toàn bộ các phép đo chi tiết (*Spec, Tol+, Tol-, Min, Max, Result, Judge*).
+  - `Export / Import Cấu Hình OQC`: Nút xuất và nạp cấu hình OQC dạng JSON trong hộp thoại cài đặt để sao lưu và chia sẻ cấu hình giữa các máy.
+  - `Hỗ Trợ Token {UUID} & Ghi Log Phép Đo Chi Tiết Vào DB`: Tạo UUID ngẫu nhiên duy nhất cho mỗi lượt quét và thực thi truy vấn log chi tiết từng phép đo vào bảng `OqcInspectResult`.
+  - `Biên Dịch & Kiểm Thử Thành Công 100%`: Solution biên dịch **0 Error(s)**.
 
 
 

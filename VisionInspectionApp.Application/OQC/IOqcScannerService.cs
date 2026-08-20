@@ -20,6 +20,13 @@ public interface IOqcScannerService
 
     void LoadConfig();
     void SaveConfig(OqcScannerConfig config);
+    bool ExportConfigToFile(string filePath, OqcScannerConfig config);
+    (bool success, OqcScannerConfig? config, string errorMessage) ImportConfigFromFile(string filePath);
+
+    void SaveScanHistory(System.Collections.Generic.IEnumerable<OqcScanHistoryEntry> history);
+    System.Collections.Generic.List<OqcScanHistoryEntry> LoadScanHistory();
+
+    System.Collections.Generic.List<OqcMeasurementDetail> ExtractMeasurementDetails(InspectionResult result, VisionConfig config);
 
     CameraCodeScanResult DecodeCodeFromImage(OpenCvSharp.Mat image, OqcScannerConfig? config = null);
 
@@ -38,5 +45,5 @@ public interface IOqcScannerService
         string productCode, string jobFilePath, IDbManagerService dbManager);
 
     Task<(bool Success, string Message)> LogInspectionResultAsync(
-        string scannedCode, string jobFilePath, InspectionResult result, VisionConfig config, IDbManagerService dbManager);
+        string scannedCode, string uuid, string jobFilePath, InspectionResult result, VisionConfig config, IDbManagerService dbManager, System.Collections.Generic.List<OqcMeasurementDetail>? measurementDetails = null);
 }
