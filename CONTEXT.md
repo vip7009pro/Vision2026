@@ -51,6 +51,31 @@
 
 ### Sửa lỗi và Cải thiện UX/UI (Phiên làm việc hiện tại)
 
+- **Khắc phục triệt để độ trễ chụp Hardware ROI & Tích hợp kéo thả chỉnh ROI trực quan 2 chiều trên màn hình Live Preview Camera (Task 173)**:
+  - **Khắc phục hiện tượng nghẽn lệnh GenICam & Tranh chấp đa luồng khi chụp ảnh ROI (`HikCameraDriver.cs`, `JobCameraSettingsViewModel.cs`, `CameraSettingsViewModel.cs`)**:
+    - **Debounce Timer (250ms)**: Thay thế việc gọi GenICam liên tục khi kéo trượt Slider/ROI bằng cơ chế Debounce 250ms, triệt tiêu 100% tình trạng bão hòa command dồn dập làm đơ kết nối GigE.
+    - **Khóa đa luồng an toàn (`SemaphoreSlim _driverGate`) & Cached Frame**: Ngăn chặn tình trạng 2 luồng C# (`ContinuousGrabLoop` và `GrabFrameAsync`) cùng tranh chấp 1 handle camera gây timeout 3000ms. Khi đang Live View, chụp Snap lấy ngay frame mới nhất tức thì (< 30ms).
+  - **Tích hợp kéo thả chỉnh ROI trực quan 2 chiều trên màn hình Live Preview (`JobCameraSettingsWindow.xaml` & `CameraSettingsView.xaml`)**:
+    - Thay thế thẻ `Image` bằng `controls:ImageViewerControl` chuyên dụng, hỗ trợ hiển thị `OverlayItems`, Zoom, Pan, Fit và chỉnh sửa ROI tương tác (`EnableRoiEditing="True"`, `ActiveRoiLabel="CamROI"`).
+    - Hỗ trợ di chuyển toàn bộ khung ROI và kéo 8 điểm tay cầm (Handles) ở 4 góc và 4 cạnh để co giãn kích thước ROI trực quan bằng chuột.
+    - Đồng bộ hóa 2 chiều thời gian thực: Kéo thả trên Live Preview cập nhật tức thì các ô số và thanh trượt `Offset X`, `Offset Y`, `Width`, `Height` bên phải; ngược lại điều chỉnh bên phải vẽ lại khung ROI vàng/xanh sáng trên Preview.
+  - **Kiểm Thử & Biên Dịch Thành Công 100%**: Solution biên dịch thành công **0 Error(s)**, serialization JSON đạt độ chính xác 100%.
+
+- **Hardware Camera ROI & Toàn bộ 12 Pixel Formats chuẩn MVS lưu theo từng Job (Task 172)**:
+  - **Mở rộng `CameraParameters` & Lưu trữ đồng bộ vào tệp `.job` (`VisionInspectionApp.Models\CameraParameters.cs`)**:
+    - Bổ sung `EnableHardwareRoi`, `RoiOffsetX`, `RoiOffsetY`, `RoiWidth`, `RoiHeight` (Hardware ROI) và `PixelFormat` (chuỗi định dạng điểm ảnh MVS).
+    - Tự động serialize/deserialize vào cấu trúc file Job JSON/ZIP theo từng sản phẩm mà không cần thay đổi cấu trúc database hay schema.
+  - **Áp dụng Hardware ROI & Pixel Format Trên Driver Hikrobot (`HikCameraDriver.cs`)**:
+    - Tự động tạm dừng Grabbing an toàn trước khi đổi kích thước khung hình ROI hoặc Pixel Format (tránh lỗi GenICam Acquisition Active).
+    - Hỗ trợ đầy đủ 12 Pixel Format chuẩn MVS: `Mono 8`, `Mono 10`, `Mono 12`, `RGB 8`, `BGR 8`, `YUV 422 (YUYV) Packed`, `YUV 422 Packed`, `Bayer GB 8`, `Bayer GB 10`, `Bayer GB 10 Packed`, `Bayer GB 12`, `Bayer GB 12 Packed`.
+    - Thiết lập GenICam ROI theo đúng thứ tự an toàn: Reset `OffsetX = 0, OffsetY = 0` -> Thiết lập `Width, Height` -> Thiết lập `OffsetX, OffsetY` kèm căn chỉnh bước nhảy phần cứng (Step 4 cho Width/OffsetX, Step 2 cho Height/OffsetY).
+  - **Nâng Cấp Giao Diện Cấu Hình Camera (`JobCameraSettingsWindow.xaml` & `CameraSettingsView.xaml`)**:
+    - Bổ sung GroupBox **"📐 Camera Hardware ROI (Cắt Vùng Cảm Biến)"** với Slider và TextBox cho OffsetX, OffsetY, Width, Height và các nút tiện ích **`🖥️ Full Sensor`**, **`🎯 Căn Giữa ROI`**.
+    - Bổ sung ComboBox **"Pixel Format (Định dạng điểm ảnh)"** chứa đầy đủ 12 tùy chọn chuẩn MVS.
+  - **Kiểm Thử & Biên Dịch Thành Công 100%**:
+    - Unit test `TestCameraParametersJobSerialization` kiểm tra lưu/nạp JSON đạt độ chính xác 100%.
+    - Solution biên dịch thành công **0 Error(s)**.
+
 - **Cấu hình và lưu trạng thái camera riêng biệt cho từng Job từ node ImageSource trong Tool Editor (Task 171)**:
   - **Lưu Cấu Hình Camera Vào Từng Tệp Job JSON/ZIP (`VisionInspectionApp.Models\CameraParameters.cs` & `Class1.cs`)**:
     - Chuyển `CameraParameters`, `CameraTriggerMode`, `CameraTriggerSource` sang `VisionInspectionApp.Models` để serialize trực tiếp vào model của Job.

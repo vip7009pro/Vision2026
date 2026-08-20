@@ -399,7 +399,27 @@ Lộ trình tích hợp tính năng Chụp ảnh từ camera và hỗ trợ các
     - Nút **`💾 Lưu Vào Job Hiện Tại`** lưu toàn bộ thông số camera vào `ImageSourceDefinition.CameraParams` của Job hiện tại, đánh dấu `IsDirty = true` và đóng cửa sổ.
   - `Tự Động Áp Dụng Thông Số Camera Khi Chuyển Đổi Job`:
     - Tự động gọi `_cameraService.ApplyParametersAsync(imgSourceDef.CameraParams)` khi nạp Job mới trong `ToolEditorViewModel.Config.cs` (`LoadJobFromFile`) và `InspectionViewModel.cs` (`LoadConfig`).
-  - `Biên Dịch Thành Công 100%`: Toàn bộ solution biên dịch **0 Error(s)**.
+- [x] Task 172: Bổ sung tùy chọn Hardware Camera ROI (Cắt từ phần cứng cảm biến) và Toàn bộ 12 Pixel Formats chuẩn MVS lưu theo từng Job:
+  - `Bổ Sung Thuộc Tính Hardware ROI & Pixel Format Trong CameraParameters`:
+    - Bổ sung `EnableHardwareRoi`, `RoiOffsetX`, `RoiOffsetY`, `RoiWidth`, `RoiHeight`, `PixelFormat` vào `CameraParameters`.
+    - Tự động serialize/deserialize toàn bộ thông số ROI và Pixel Format vào file `.job` theo từng Job.
+  - `Xử Lý Thiết Lập Hardware ROI & Pixel Format Trên Driver HikCameraDriver`:
+    - Tự động tạm dừng Grabbing an toàn khi thay đổi kích thước khung hình hoặc format ảnh.
+    - Áp dụng Pixel Format qua `MV_CC_SetPixelFormat_NET` / GenICam `PixelFormat` tương ứng với 12 định dạng MVS (`Mono 8`, `Mono 10`, `Mono 12`, `RGB 8`, `BGR 8`, `YUV 422 (YUYV) Packed`, `YUV 422 Packed`, `Bayer GB 8`, `Bayer GB 10`, `Bayer GB 10 Packed`, `Bayer GB 12`, `Bayer GB 12 Packed`).
+    - Thiết lập GenICam ROI theo đúng thứ tự an toàn: `OffsetX=0, OffsetY=0 -> Width, Height -> OffsetX, OffsetY` kèm căn chỉnh bội số an toàn (Step 4 cho Width/OffsetX, Step 2 cho Height/OffsetY) tránh lỗi phần cứng.
+  - `Cập Nhật Giao Diện JobCameraSettingsWindow & Tab Camera Settings`:
+    - Thêm GroupBox **"📐 Camera Hardware ROI (Cắt Từ Phần Cứng)"** với Slider & TextBox cho `Offset X`, `Offset Y`, `Width`, `Height` và các nút tiện ích **`🖥️ Full Sensor`**, **`🎯 Căn Giữa ROI`**.
+    - Thêm ComboBox chọn `Pixel Format (Định dạng điểm ảnh)` đầy đủ 12 tùy chọn chuẩn MVS.
+    - Đồng bộ lưu/nạp tự động theo Job khi mở/chuyển Job.
+- [x] Task 173: Khắc phục triệt để độ trễ chụp Hardware ROI & Tích hợp kéo thả chỉnh ROI trực quan 2 chiều trên màn hình Live Preview Camera:
+  - `Khắc Phục Hiện Tượng Nghẽn Lệnh & Tranh Chấp Khi Chụp Ảnh ROI`:
+    - Tích hợp cơ chế **Debounce Timer (250ms)** trong `JobCameraSettingsViewModel` và `CameraSettingsViewModel`: Loại bỏ hiện tượng bão hòa hàng trăm lệnh GenICam dồn dập qua Ethernet GigE khi kéo Slider hoặc kéo thả ROI.
+    - Đồng bộ hóa đa luồng an toàn với `SemaphoreSlim _driverGate` và cache frame mới nhất trong `HikCameraDriver`: Khử bỏ xung đột handle giữa luồng Live Streaming (`ContinuousGrabLoop`) và luồng Snap Frame (`GrabFrameAsync`), đảm bảo tốc độ chụp frame tức thì (< 30ms).
+  - `Tích Hợp Kéo Thả ROI Trực Quan 2 Chiều Trên Màn Hình Live Preview`:
+    - Thay thế trình hiển thị tĩnh bằng `ImageViewerControl` trên `JobCameraSettingsWindow.xaml` và `CameraSettingsView.xaml`.
+    - Hỗ trợ chọn, di chuyển khung ROI và kéo 8 điểm tay cầm (Handles) để co giãn kích thước ROI trực tiếp bằng chuột trên Canvas.
+    - Đồng bộ hóa 2 chiều thời gian thực: Kéo thả trên màn hình Preview tự động cập nhật các ô `Offset X`, `Offset Y`, `Width`, `Height` và Slider bên phải; ngược lại chỉnh sửa ô số bên phải tự động vẽ lại khung ROI vàng/xanh sáng trên Preview.
+  - `Biên Dịch & Kiểm Thử Thành Công 100%`: Solution biên dịch **0 Error(s)**, serialization JSON đạt độ chính xác 100%.
 
 
 

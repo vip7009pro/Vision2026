@@ -329,17 +329,39 @@ public sealed class HikCameraDriver : CameraDriverBase
         return 5120 * 3840 * 4;
     }
 
+    private readonly SemaphoreSlim _driverGate = new(1, 1);
+    private Mat? _latestContinuousFrame;
+    private readonly object _latestContinuousFrameLock = new();
+
     public override async Task<Mat?> GrabFrameAsync(int timeoutMs = 3000)
     {
         if (!_isOpened || _camera == null || !IsMvSdkAvailable()) return null;
 
+        // 1. Nếu camera đang ở chế độ Live View (Grabbing liên tục)
+        if (_isGrabbing)
+        {
+            // Tránh gọi MV_CC_GetOneFrameTimeout_NET xung đột với ContinuousGrabLoop
+            for (int i = 0; i < 20; i++)
+            {
+                lock (_latestContinuousFrameLock)
+                {
+                    if (_latestContinuousFrame != null && !_latestContinuousFrame.IsDisposed && !_latestContinuousFrame.Empty())
+                    {
+                        return _latestContinuousFrame.Clone();
+                    }
+                }
+                await Task.Delay(25);
+            }
+        }
+
+        // 2. Nếu camera ở chế độ Standby (0 Mbps) hoặc cần chụp frame độc lập
+        await _driverGate.WaitAsync();
         return await Task.Run(() =>
         {
             bool needStopGrabbingAfterwards = false;
             IntPtr pData = IntPtr.Zero;
             try
             {
-                // Nếu camera chưa ở trạng thái Grabbing (chế độ Standby để tiết kiệm băng thông mạng 0 Mbps)
                 if (!_isGrabbing)
                 {
                     int retStart = _camera.MV_CC_StartGrabbing_NET();
@@ -353,14 +375,9 @@ public sealed class HikCameraDriver : CameraDriverBase
                     }
                 }
 
-                // Gửi lệnh TriggerSoftware nếu ở Trigger Mode Software, hoặc gửi thêm để kích frame khi Standby
+                // Gửi lệnh TriggerSoftware nếu ở Trigger Mode Software
                 if (_parameters.TriggerMode == CameraTriggerMode.On && _parameters.TriggerSource == CameraTriggerSource.Software)
                 {
-                    _camera.MV_CC_SetCommandValue_NET("TriggerSoftware");
-                }
-                else if (needStopGrabbingAfterwards)
-                {
-                    // Khi vừa start grabbing ở chế độ TriggerMode = Off hoặc On, thử gửi thêm TriggerSoftware
                     _camera.MV_CC_SetCommandValue_NET("TriggerSoftware");
                 }
 
@@ -396,6 +413,8 @@ public sealed class HikCameraDriver : CameraDriverBase
                 {
                     try { _camera.MV_CC_StopGrabbing_NET(); } catch { }
                 }
+
+                _driverGate.Release();
             }
         });
     }
@@ -423,10 +442,13 @@ public sealed class HikCameraDriver : CameraDriverBase
         await base.ApplyParametersAsync(parameters);
         if (!_isOpened || _camera == null || !IsMvSdkAvailable()) return;
 
-        await Task.Run(() =>
+        await _driverGate.WaitAsync();
+        try
         {
-            try
+            await Task.Run(() =>
             {
+                try
+                {
                 // 0. Bật chất lượng chuyển đổi Bayer chất lượng cao của Hikrobot SDK
                 try
                 {
@@ -514,12 +536,129 @@ public sealed class HikCameraDriver : CameraDriverBase
                     }
                     catch { }
                 }
+
+                // 8. Định dạng điểm ảnh Pixel Format & Hardware Camera ROI
+                bool wasGrabbing = _isGrabbing;
+                if (wasGrabbing)
+                {
+                    try { _camera.MV_CC_StopGrabbing_NET(); } catch { }
+                }
+
+                try
+                {
+                    // 8.1. Áp dụng Pixel Format chuẩn MVS
+                    if (!string.IsNullOrWhiteSpace(parameters.PixelFormat))
+                    {
+                        try
+                        {
+                            uint pixelUint = MapPixelFormatToUint(parameters.PixelFormat);
+                            int ret = _camera.MV_CC_SetPixelFormat_NET(pixelUint);
+                            if (ret != MyCamera.MV_OK)
+                            {
+                                string genicamStr = MapPixelFormatToGenICam(parameters.PixelFormat);
+                                _camera.MV_CC_SetEnumValueByString_NET("PixelFormat", genicamStr);
+                            }
+                        }
+                        catch { }
+                    }
+
+                    // 8.2. Áp dụng Hardware Camera ROI (Cắt từ phần cứng)
+                    if (parameters.EnableHardwareRoi && parameters.RoiWidth > 0 && parameters.RoiHeight > 0)
+                    {
+                        var stWidthMax = new MyCamera.MVCC_INTVALUE_EX();
+                        var stHeightMax = new MyCamera.MVCC_INTVALUE_EX();
+                        _camera.MV_CC_GetIntValueEx_NET("WidthMax", ref stWidthMax);
+                        _camera.MV_CC_GetIntValueEx_NET("HeightMax", ref stHeightMax);
+
+                        long maxW = stWidthMax.nCurValue > 0 ? stWidthMax.nCurValue : 5472;
+                        long maxH = stHeightMax.nCurValue > 0 ? stHeightMax.nCurValue : 3648;
+
+                        int w = Math.Clamp((parameters.RoiWidth / 4) * 4, 32, (int)maxW);
+                        int h = Math.Clamp((parameters.RoiHeight / 2) * 2, 32, (int)maxH);
+                        int ox = Math.Clamp((parameters.RoiOffsetX / 4) * 4, 0, (int)(maxW - w));
+                        int oy = Math.Clamp((parameters.RoiOffsetY / 2) * 2, 0, (int)(maxH - h));
+
+                        _camera.MV_CC_SetIntValueEx_NET("OffsetX", 0);
+                        _camera.MV_CC_SetIntValueEx_NET("OffsetY", 0);
+                        _camera.MV_CC_SetIntValueEx_NET("Width", w);
+                        _camera.MV_CC_SetIntValueEx_NET("Height", h);
+                        _camera.MV_CC_SetIntValueEx_NET("OffsetX", ox);
+                        _camera.MV_CC_SetIntValueEx_NET("OffsetY", oy);
+                    }
+                    else if (!parameters.EnableHardwareRoi)
+                    {
+                        var stWidthMax = new MyCamera.MVCC_INTVALUE_EX();
+                        var stHeightMax = new MyCamera.MVCC_INTVALUE_EX();
+                        _camera.MV_CC_GetIntValueEx_NET("WidthMax", ref stWidthMax);
+                        _camera.MV_CC_GetIntValueEx_NET("HeightMax", ref stHeightMax);
+
+                        long maxW = stWidthMax.nCurValue > 0 ? stWidthMax.nCurValue : 5472;
+                        long maxH = stHeightMax.nCurValue > 0 ? stHeightMax.nCurValue : 3648;
+
+                        _camera.MV_CC_SetIntValueEx_NET("OffsetX", 0);
+                        _camera.MV_CC_SetIntValueEx_NET("OffsetY", 0);
+                        _camera.MV_CC_SetIntValueEx_NET("Width", maxW);
+                        _camera.MV_CC_SetIntValueEx_NET("Height", maxH);
+                    }
+                }
+                finally
+                {
+                    if (wasGrabbing)
+                    {
+                        try { _camera.MV_CC_StartGrabbing_NET(); } catch { }
+                    }
+                }
             }
             catch (Exception ex)
             {
                 System.Diagnostics.Debug.WriteLine($"[HikCameraDriver] Lỗi ApplyParameters: {ex.Message}");
             }
         });
+    }
+    finally
+    {
+        _driverGate.Release();
+    }
+}
+
+    private static string MapPixelFormatToGenICam(string format)
+    {
+        return format switch
+        {
+            "Mono 8" => "Mono8",
+            "Mono 10" => "Mono10",
+            "Mono 12" => "Mono12",
+            "RGB 8" => "RGB8Packed",
+            "BGR 8" => "BGR8Packed",
+            "YUV 422 (YUYV) Packed" => "YUV422_YUYV_Packed",
+            "YUV 422 Packed" => "YUV422Packed",
+            "Bayer GB 8" => "BayerGB8",
+            "Bayer GB 10" => "BayerGB10",
+            "Bayer GB 10 Packed" => "BayerGB10Packed",
+            "Bayer GB 12" => "BayerGB12",
+            "Bayer GB 12 Packed" => "BayerGB12Packed",
+            _ => "BayerGB8"
+        };
+    }
+
+    private static uint MapPixelFormatToUint(string format)
+    {
+        return format switch
+        {
+            "Mono 8" => (uint)MyCamera.MvGvspPixelType.PixelType_Gvsp_Mono8,
+            "Mono 10" => (uint)MyCamera.MvGvspPixelType.PixelType_Gvsp_Mono10,
+            "Mono 12" => (uint)MyCamera.MvGvspPixelType.PixelType_Gvsp_Mono12,
+            "RGB 8" => (uint)MyCamera.MvGvspPixelType.PixelType_Gvsp_RGB8_Packed,
+            "BGR 8" => (uint)MyCamera.MvGvspPixelType.PixelType_Gvsp_BGR8_Packed,
+            "YUV 422 (YUYV) Packed" => (uint)MyCamera.MvGvspPixelType.PixelType_Gvsp_YUV422_YUYV_Packed,
+            "YUV 422 Packed" => (uint)MyCamera.MvGvspPixelType.PixelType_Gvsp_YUV422_Packed,
+            "Bayer GB 8" => (uint)MyCamera.MvGvspPixelType.PixelType_Gvsp_BayerGB8,
+            "Bayer GB 10" => (uint)MyCamera.MvGvspPixelType.PixelType_Gvsp_BayerGB10,
+            "Bayer GB 10 Packed" => (uint)MyCamera.MvGvspPixelType.PixelType_Gvsp_BayerGB10_Packed,
+            "Bayer GB 12" => (uint)MyCamera.MvGvspPixelType.PixelType_Gvsp_BayerGB12,
+            "Bayer GB 12 Packed" => (uint)MyCamera.MvGvspPixelType.PixelType_Gvsp_BayerGB12_Packed,
+            _ => (uint)MyCamera.MvGvspPixelType.PixelType_Gvsp_BayerGB8
+        };
     }
 
     private void ContinuousGrabLoop(CancellationToken token)
@@ -538,6 +677,11 @@ public sealed class HikCameraDriver : CameraDriverBase
                     using var rawMat = ConvertHikFrameToMat(pData, frameInfo);
                     if (!rawMat.Empty())
                     {
+                        lock (_latestContinuousFrameLock)
+                        {
+                            _latestContinuousFrame?.Dispose();
+                            _latestContinuousFrame = rawMat.Clone();
+                        }
                         RaiseFrameCaptured(rawMat);
                     }
                 }

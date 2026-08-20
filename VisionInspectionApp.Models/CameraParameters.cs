@@ -50,6 +50,16 @@ public sealed class CameraParameters
     public int PacketSize { get; set; } = 1500; // GevSCPSPacketSize (Bytes)
     public int PacketDelay { get; set; } = 0;   // GevSCPD (Microseconds)
 
+    // Hardware Camera ROI (Vùng ảnh phần cứng trực tiếp từ Camera)
+    public bool EnableHardwareRoi { get; set; } = false;
+    public int RoiOffsetX { get; set; } = 0;
+    public int RoiOffsetY { get; set; } = 0;
+    public int RoiWidth { get; set; } = 5472;
+    public int RoiHeight { get; set; } = 3648;
+
+    // Định dạng điểm ảnh từ Camera (Pixel Format chuẩn MVS)
+    public string PixelFormat { get; set; } = "Bayer GB 8";
+
     // Xử lý mềm OpenCV (Brightness, Contrast, Grayscale)
     public double Brightness { get; set; } = 0.0;
     public double Contrast { get; set; } = 1.0;

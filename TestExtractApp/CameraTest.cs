@@ -101,4 +101,58 @@ public static class CameraTest
             }
         }
     }
+
+    public static void TestCameraParametersJobSerialization()
+    {
+        Console.WriteLine("\n=== TEST CAMERA PARAMETERS & JOB SERIALIZATION ===");
+        var original = new VisionInspectionApp.Models.CameraParameters
+        {
+            ExposureTimeUs = 15000.0f,
+            GainDb = 6.5f,
+            Gamma = 1.2f,
+            PixelFormat = "Bayer GB 10 Packed",
+            EnableHardwareRoi = true,
+            RoiOffsetX = 500,
+            RoiOffsetY = 300,
+            RoiWidth = 2048,
+            RoiHeight = 1536,
+            PacketSize = 9000,
+            TriggerMode = VisionInspectionApp.Models.CameraTriggerMode.On,
+            TriggerSource = VisionInspectionApp.Models.CameraTriggerSource.Line1
+        };
+
+        var imgDef = new VisionInspectionApp.Models.ImageSourceDefinition
+        {
+            SourceType = VisionInspectionApp.Models.ImageSourceType.Camera,
+            CameraParams = original
+        };
+
+        string json = System.Text.Json.JsonSerializer.Serialize(imgDef, new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
+        Console.WriteLine("Serialized JSON:");
+        Console.WriteLine(json);
+
+        var deserialized = System.Text.Json.JsonSerializer.Deserialize<VisionInspectionApp.Models.ImageSourceDefinition>(json);
+        if (deserialized == null || deserialized.CameraParams == null)
+        {
+            throw new Exception("Deserialization failed!");
+        }
+
+        var p = deserialized.CameraParams;
+        if (p.ExposureTimeUs != 15000.0f ||
+            p.GainDb != 6.5f ||
+            p.PixelFormat != "Bayer GB 10 Packed" ||
+            !p.EnableHardwareRoi ||
+            p.RoiOffsetX != 500 ||
+            p.RoiOffsetY != 300 ||
+            p.RoiWidth != 2048 ||
+            p.RoiHeight != 1536 ||
+            p.PacketSize != 9000 ||
+            p.TriggerMode != VisionInspectionApp.Models.CameraTriggerMode.On ||
+            p.TriggerSource != VisionInspectionApp.Models.CameraTriggerSource.Line1)
+        {
+            throw new Exception("Parameters mismatch after deserialization!");
+        }
+
+        Console.WriteLine("✅ All Hardware ROI & PixelFormat parameters serialized and restored with 100% precision!");
+    }
 }

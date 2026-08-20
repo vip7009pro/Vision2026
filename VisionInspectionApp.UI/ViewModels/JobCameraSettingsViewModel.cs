@@ -9,6 +9,7 @@ using CommunityToolkit.Mvvm.Input;
 using OpenCvSharp;
 using OpenCvSharp.WpfExtensions;
 using VisionInspectionApp.Models;
+using VisionInspectionApp.UI.Controls;
 using VisionInspectionApp.UI.Services;
 using VisionInspectionApp.UI.Services.Camera;
 
@@ -128,7 +129,7 @@ public sealed class JobCameraSettingsViewModel : ObservableObject, IDisposable
         {
             _cameraParams.TargetFps = value;
             OnPropertyChanged();
-            _ = ApplyCameraParametersAsync();
+            ScheduleApplyParameters();
         }
     }
 
@@ -142,7 +143,7 @@ public sealed class JobCameraSettingsViewModel : ObservableObject, IDisposable
             {
                 _cameraParams.ExposureTimeUs = value;
                 OnPropertyChanged();
-                _ = ApplyCameraParametersAsync();
+                ScheduleApplyParameters();
             }
         }
     }
@@ -156,7 +157,7 @@ public sealed class JobCameraSettingsViewModel : ObservableObject, IDisposable
             {
                 _cameraParams.AutoExposure = value;
                 OnPropertyChanged();
-                _ = ApplyCameraParametersAsync();
+                ScheduleApplyParameters();
             }
         }
     }
@@ -170,7 +171,7 @@ public sealed class JobCameraSettingsViewModel : ObservableObject, IDisposable
             {
                 _cameraParams.GainDb = value;
                 OnPropertyChanged();
-                _ = ApplyCameraParametersAsync();
+                ScheduleApplyParameters();
             }
         }
     }
@@ -184,7 +185,7 @@ public sealed class JobCameraSettingsViewModel : ObservableObject, IDisposable
             {
                 _cameraParams.AutoGain = value;
                 OnPropertyChanged();
-                _ = ApplyCameraParametersAsync();
+                ScheduleApplyParameters();
             }
         }
     }
@@ -198,7 +199,7 @@ public sealed class JobCameraSettingsViewModel : ObservableObject, IDisposable
             {
                 _cameraParams.Gamma = value;
                 OnPropertyChanged();
-                _ = ApplyCameraParametersAsync();
+                ScheduleApplyParameters();
             }
         }
     }
@@ -212,7 +213,7 @@ public sealed class JobCameraSettingsViewModel : ObservableObject, IDisposable
             {
                 _cameraParams.AutoWhiteBalance = value;
                 OnPropertyChanged();
-                _ = ApplyCameraParametersAsync();
+                ScheduleApplyParameters();
             }
         }
     }
@@ -226,7 +227,7 @@ public sealed class JobCameraSettingsViewModel : ObservableObject, IDisposable
             {
                 _cameraParams.RedGain = value;
                 OnPropertyChanged();
-                _ = ApplyCameraParametersAsync();
+                ScheduleApplyParameters();
             }
         }
     }
@@ -240,7 +241,7 @@ public sealed class JobCameraSettingsViewModel : ObservableObject, IDisposable
             {
                 _cameraParams.GreenGain = value;
                 OnPropertyChanged();
-                _ = ApplyCameraParametersAsync();
+                ScheduleApplyParameters();
             }
         }
     }
@@ -254,7 +255,7 @@ public sealed class JobCameraSettingsViewModel : ObservableObject, IDisposable
             {
                 _cameraParams.BlueGain = value;
                 OnPropertyChanged();
-                _ = ApplyCameraParametersAsync();
+                ScheduleApplyParameters();
             }
         }
     }
@@ -266,7 +267,7 @@ public sealed class JobCameraSettingsViewModel : ObservableObject, IDisposable
         {
             _cameraParams.TriggerMode = value ? CameraTriggerMode.On : CameraTriggerMode.Off;
             OnPropertyChanged();
-            _ = ApplyCameraParametersAsync();
+            ScheduleApplyParameters();
         }
     }
 
@@ -285,7 +286,7 @@ public sealed class JobCameraSettingsViewModel : ObservableObject, IDisposable
         {
             _cameraParams.TriggerSource = value;
             OnPropertyChanged();
-            _ = ApplyCameraParametersAsync();
+            ScheduleApplyParameters();
         }
     }
 
@@ -296,7 +297,7 @@ public sealed class JobCameraSettingsViewModel : ObservableObject, IDisposable
         {
             _cameraParams.TriggerDelayUs = value;
             OnPropertyChanged();
-            _ = ApplyCameraParametersAsync();
+            ScheduleApplyParameters();
         }
     }
 
@@ -307,7 +308,7 @@ public sealed class JobCameraSettingsViewModel : ObservableObject, IDisposable
         {
             _cameraParams.ReverseX = value;
             OnPropertyChanged();
-            _ = ApplyCameraParametersAsync();
+            ScheduleApplyParameters();
         }
     }
 
@@ -318,7 +319,7 @@ public sealed class JobCameraSettingsViewModel : ObservableObject, IDisposable
         {
             _cameraParams.ReverseY = value;
             OnPropertyChanged();
-            _ = ApplyCameraParametersAsync();
+            ScheduleApplyParameters();
         }
     }
 
@@ -329,7 +330,7 @@ public sealed class JobCameraSettingsViewModel : ObservableObject, IDisposable
         {
             _cameraParams.PacketSize = value;
             OnPropertyChanged();
-            _ = ApplyCameraParametersAsync();
+            ScheduleApplyParameters();
         }
     }
 
@@ -340,7 +341,7 @@ public sealed class JobCameraSettingsViewModel : ObservableObject, IDisposable
         {
             _cameraParams.PacketDelay = value;
             OnPropertyChanged();
-            _ = ApplyCameraParametersAsync();
+            ScheduleApplyParameters();
         }
     }
 
@@ -353,7 +354,7 @@ public sealed class JobCameraSettingsViewModel : ObservableObject, IDisposable
             {
                 _cameraParams.Brightness = value;
                 OnPropertyChanged();
-                _ = ApplyCameraParametersAsync();
+                ScheduleApplyParameters();
             }
         }
     }
@@ -367,7 +368,7 @@ public sealed class JobCameraSettingsViewModel : ObservableObject, IDisposable
             {
                 _cameraParams.Contrast = value;
                 OnPropertyChanged();
-                _ = ApplyCameraParametersAsync();
+                ScheduleApplyParameters();
             }
         }
     }
@@ -381,11 +382,131 @@ public sealed class JobCameraSettingsViewModel : ObservableObject, IDisposable
             {
                 _cameraParams.IsGrayscale = value;
                 OnPropertyChanged();
-                _ = ApplyCameraParametersAsync();
+                ScheduleApplyParameters();
             }
         }
     }
 
+    // Pixel Format chuẩn MVS (Mono, Color RGB/BGR, YUV, Bayer GB)
+    public ObservableCollection<string> PixelFormatOptions { get; } = new()
+    {
+        "Mono 8",
+        "Mono 10",
+        "Mono 12",
+        "RGB 8",
+        "BGR 8",
+        "YUV 422 (YUYV) Packed",
+        "YUV 422 Packed",
+        "Bayer GB 8",
+        "Bayer GB 10",
+        "Bayer GB 10 Packed",
+        "Bayer GB 12",
+        "Bayer GB 12 Packed"
+    };
+
+    public string SelectedPixelFormat
+    {
+        get => string.IsNullOrWhiteSpace(_cameraParams.PixelFormat) ? "Bayer GB 8" : _cameraParams.PixelFormat;
+        set
+        {
+            if (_cameraParams.PixelFormat != value && !string.IsNullOrWhiteSpace(value))
+            {
+                _cameraParams.PixelFormat = value;
+                OnPropertyChanged();
+                ScheduleApplyParameters();
+            }
+        }
+    }
+
+    // Hardware Camera ROI (Cắt từ phần cứng cảm biến Camera)
+    public bool EnableHardwareRoi
+    {
+        get => _cameraParams.EnableHardwareRoi;
+        set
+        {
+            if (_cameraParams.EnableHardwareRoi != value)
+            {
+                _cameraParams.EnableHardwareRoi = value;
+                OnPropertyChanged();
+                RefreshOverlayItems();
+                ScheduleApplyParameters();
+            }
+        }
+    }
+
+    public int RoiOffsetX
+    {
+        get => _cameraParams.RoiOffsetX;
+        set
+        {
+            if (_cameraParams.RoiOffsetX != value)
+            {
+                _cameraParams.RoiOffsetX = Math.Max(0, value);
+                OnPropertyChanged();
+                if (!_isUpdatingFromRoiDrag)
+                {
+                    RefreshOverlayItems();
+                    ScheduleApplyParameters();
+                }
+            }
+        }
+    }
+
+    public int RoiOffsetY
+    {
+        get => _cameraParams.RoiOffsetY;
+        set
+        {
+            if (_cameraParams.RoiOffsetY != value)
+            {
+                _cameraParams.RoiOffsetY = Math.Max(0, value);
+                OnPropertyChanged();
+                if (!_isUpdatingFromRoiDrag)
+                {
+                    RefreshOverlayItems();
+                    ScheduleApplyParameters();
+                }
+            }
+        }
+    }
+
+    public int RoiWidth
+    {
+        get => _cameraParams.RoiWidth;
+        set
+        {
+            if (_cameraParams.RoiWidth != value)
+            {
+                _cameraParams.RoiWidth = Math.Max(32, value);
+                OnPropertyChanged();
+                if (!_isUpdatingFromRoiDrag)
+                {
+                    RefreshOverlayItems();
+                    ScheduleApplyParameters();
+                }
+            }
+        }
+    }
+
+    public int RoiHeight
+    {
+        get => _cameraParams.RoiHeight;
+        set
+        {
+            if (_cameraParams.RoiHeight != value)
+            {
+                _cameraParams.RoiHeight = Math.Max(32, value);
+                OnPropertyChanged();
+                if (!_isUpdatingFromRoiDrag)
+                {
+                    RefreshOverlayItems();
+                    ScheduleApplyParameters();
+                }
+            }
+        }
+    }
+
+    public ObservableCollection<OverlayItem> OverlayItems { get; } = new();
     public CameraParameters CameraParams => _cameraParams;
 
     public IAsyncRelayCommand StartCameraCommand { get; }
@@ -394,9 +515,15 @@ public sealed class JobCameraSettingsViewModel : ObservableObject, IDisposable
     public IAsyncRelayCommand SnapFrameCommand { get; }
     public IAsyncRelayCommand AutoWhiteBalanceOnceCommand { get; }
     public IAsyncRelayCommand ExecuteSoftwareTriggerCommand { get; }
+    public IRelayCommand SetFullSensorRoiCommand { get; }
+    public IRelayCommand CenterRoiCommand { get; }
     public IRelayCommand ResetSettingsCommand { get; }
     public IRelayCommand SaveJobCameraSettingsCommand { get; }
     public IRelayCommand CancelCommand { get; }
+    public IRelayCommand<RoiSelection> RoiEditedCommand { get; }
+
+    private readonly System.Windows.Threading.DispatcherTimer _debounceTimer;
+    private bool _isUpdatingFromRoiDrag;
 
     public JobCameraSettingsViewModel(CameraService cameraService, CameraParameters initialParams, string jobName, Action<CameraParameters>? onSaveCallback = null)
     {
@@ -404,6 +531,12 @@ public sealed class JobCameraSettingsViewModel : ObservableObject, IDisposable
         _cameraParams = initialParams != null ? initialParams.Clone() : new CameraParameters();
         JobName = string.IsNullOrWhiteSpace(jobName) ? "Job Hiện Tại" : jobName;
         _onSaveCallback = onSaveCallback;
+
+        _debounceTimer = new System.Windows.Threading.DispatcherTimer
+        {
+            Interval = TimeSpan.FromMilliseconds(250)
+        };
+        _debounceTimer.Tick += OnDebounceTimerTick;
 
         _cameraService.FrameCaptured += OnFrameCaptured;
         _cameraService.ErrorOccurred += OnCameraError;
@@ -414,15 +547,118 @@ public sealed class JobCameraSettingsViewModel : ObservableObject, IDisposable
         SnapFrameCommand = new AsyncRelayCommand(SnapFrameAsync);
         AutoWhiteBalanceOnceCommand = new AsyncRelayCommand(AutoWhiteBalanceOnceAsync);
         ExecuteSoftwareTriggerCommand = new AsyncRelayCommand(ExecuteSoftwareTriggerAsync);
+        SetFullSensorRoiCommand = new RelayCommand(SetFullSensorRoi);
+        CenterRoiCommand = new RelayCommand(CenterRoi);
         ResetSettingsCommand = new RelayCommand(ResetSettings);
         SaveJobCameraSettingsCommand = new RelayCommand(SaveJobCameraSettings);
         CancelCommand = new RelayCommand(() => RequestClose?.Invoke());
+        RoiEditedCommand = new RelayCommand<RoiSelection>(OnRoiEdited);
 
         RefreshAvailableCameras();
         IsCameraRunning = _cameraService.IsRunning;
+        RefreshOverlayItems();
 
         // Tự động áp dụng thông số của Job xuống Camera khi mở cửa sổ
         _ = ApplyCameraParametersAsync();
+    }
+
+    private void ScheduleApplyParameters()
+    {
+        _debounceTimer.Stop();
+        _debounceTimer.Start();
+    }
+
+    private async void OnDebounceTimerTick(object? sender, EventArgs e)
+    {
+        _debounceTimer.Stop();
+        await ApplyCameraParametersAsync();
+    }
+
+    private void OnRoiEdited(RoiSelection? sel)
+    {
+        if (sel?.Roi == null) return;
+        _isUpdatingFromRoiDrag = true;
+        try
+        {
+            var roi = sel.Roi;
+            int ox = Math.Max(0, (int)Math.Round((double)roi.X));
+            int oy = Math.Max(0, (int)Math.Round((double)roi.Y));
+            int w = Math.Max(32, (int)Math.Round((double)roi.Width));
+            int h = Math.Max(32, (int)Math.Round((double)roi.Height));
+
+            const int maxW = 5472;
+            const int maxH = 3648;
+            w = Math.Min(w, maxW);
+            h = Math.Min(h, maxH);
+            ox = Math.Min(ox, maxW - w);
+            oy = Math.Min(oy, maxH - h);
+
+            _cameraParams.EnableHardwareRoi = true;
+            _cameraParams.RoiOffsetX = (ox / 4) * 4;
+            _cameraParams.RoiOffsetY = (oy / 2) * 2;
+            _cameraParams.RoiWidth = (w / 4) * 4;
+            _cameraParams.RoiHeight = (h / 2) * 2;
+
+            OnPropertyChanged(nameof(EnableHardwareRoi));
+            OnPropertyChanged(nameof(RoiOffsetX));
+            OnPropertyChanged(nameof(RoiOffsetY));
+            OnPropertyChanged(nameof(RoiWidth));
+            OnPropertyChanged(nameof(RoiHeight));
+
+            StatusMessage = $"📐 Đã kéo ROI: {RoiWidth}x{RoiHeight} tại ({RoiOffsetX}, {RoiOffsetY})";
+            RefreshOverlayItems();
+            ScheduleApplyParameters();
+        }
+        finally
+        {
+            _isUpdatingFromRoiDrag = false;
+        }
+    }
+
+    public void RefreshOverlayItems()
+    {
+        OverlayItems.Clear();
+        if (EnableHardwareRoi)
+        {
+            OverlayItems.Add(new OverlayRectItem
+            {
+                Label = "CamROI",
+                X = RoiOffsetX,
+                Y = RoiOffsetY,
+                Width = RoiWidth,
+                Height = RoiHeight,
+                Stroke = Brushes.Gold,
+                StrokeThickness = 2.0,
+                Fill = new SolidColorBrush(Color.FromArgb(30, 255, 215, 0))
+            });
+        }
+    }
+
+    private void SetFullSensorRoi()
+    {
+        EnableHardwareRoi = false;
+        RoiOffsetX = 0;
+        RoiOffsetY = 0;
+        RoiWidth = 5472;
+        RoiHeight = 3648;
+        StatusMessage = "Đã đặt lại về toàn bộ cảm biến (Full Sensor 5472x3648).";
+        RefreshOverlayItems();
+        ScheduleApplyParameters();
+    }
+
+    private void CenterRoi()
+    {
+        int sensorW = 5472;
+        int sensorH = 3648;
+        int targetW = RoiWidth > 0 ? RoiWidth : 1920;
+        int targetH = RoiHeight > 0 ? RoiHeight : 1080;
+
+        RoiOffsetX = Math.Max(0, ((sensorW - targetW) / 8) * 4);
+        RoiOffsetY = Math.Max(0, ((sensorH - targetH) / 4) * 2);
+        EnableHardwareRoi = true;
+        StatusMessage = $"Đã căn giữa Hardware ROI: {targetW}x{targetH} tại Offset ({RoiOffsetX}, {RoiOffsetY}).";
+        RefreshOverlayItems();
+        ScheduleApplyParameters();
     }
 
     public void RefreshAvailableCameras()
@@ -531,6 +767,9 @@ public sealed class JobCameraSettingsViewModel : ObservableObject, IDisposable
     {
         try
         {
+            _debounceTimer.Stop();
+            await ApplyCameraParametersAsync();
+
             StatusMessage = "📸 Đang chụp 1 frame từ camera...";
             var mat = await _cameraService.CaptureSnapshotAsync();
             if (mat != null && !mat.Empty())
@@ -608,6 +847,8 @@ public sealed class JobCameraSettingsViewModel : ObservableObject, IDisposable
     {
         try
         {
+            _debounceTimer.Stop();
+            _ = ApplyCameraParametersAsync();
             _onSaveCallback?.Invoke(_cameraParams.Clone());
             RequestClose?.Invoke();
         }
@@ -698,6 +939,12 @@ public sealed class JobCameraSettingsViewModel : ObservableObject, IDisposable
         _cameraParams.ReverseY = false;
         _cameraParams.TriggerMode = CameraTriggerMode.Off;
         _cameraParams.AutoWhiteBalance = true;
+        _cameraParams.PixelFormat = "Bayer GB 8";
+        _cameraParams.EnableHardwareRoi = false;
+        _cameraParams.RoiOffsetX = 0;
+        _cameraParams.RoiOffsetY = 0;
+        _cameraParams.RoiWidth = 5472;
+        _cameraParams.RoiHeight = 3648;
         
         OnPropertyChanged(nameof(Brightness));
         OnPropertyChanged(nameof(Contrast));
@@ -709,6 +956,12 @@ public sealed class JobCameraSettingsViewModel : ObservableObject, IDisposable
         OnPropertyChanged(nameof(ReverseY));
         OnPropertyChanged(nameof(TriggerModeOn));
         OnPropertyChanged(nameof(AutoWhiteBalance));
+        OnPropertyChanged(nameof(SelectedPixelFormat));
+        OnPropertyChanged(nameof(EnableHardwareRoi));
+        OnPropertyChanged(nameof(RoiOffsetX));
+        OnPropertyChanged(nameof(RoiOffsetY));
+        OnPropertyChanged(nameof(RoiWidth));
+        OnPropertyChanged(nameof(RoiHeight));
 
         StatusMessage = "Đã khôi phục cài đặt mặc định.";
         _ = ApplyCameraParametersAsync();

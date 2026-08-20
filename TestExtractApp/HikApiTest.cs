@@ -24,21 +24,12 @@ public static class HikApiTest
             }
         }
 
-        Console.WriteLine("\n--- Nested Types / Structs in MyCamera ---");
-        foreach (var nt in t.GetNestedTypes())
+        Console.WriteLine("\n--- MvGvspPixelType Enum Values ---");
+        var pixelType = typeof(MyCamera.MvGvspPixelType);
+        foreach (var name in Enum.GetNames(pixelType))
         {
-            if (nt.Name.Contains("CONVERT", StringComparison.OrdinalIgnoreCase) ||
-                nt.Name.Contains("PIXEL", StringComparison.OrdinalIgnoreCase) ||
-                nt.Name.Contains("FRAME", StringComparison.OrdinalIgnoreCase) ||
-                nt.Name.Contains("IMAGE", StringComparison.OrdinalIgnoreCase) ||
-                nt.Name.Contains("BAYER", StringComparison.OrdinalIgnoreCase))
-            {
-                Console.WriteLine($"STRUCT/TYPE: {nt.Name}");
-                foreach (var f in nt.GetFields())
-                {
-                    Console.WriteLine($"    Field: {f.FieldType.Name} {f.Name}");
-                }
-            }
+            var val = (uint)(MyCamera.MvGvspPixelType)Enum.Parse(pixelType, name);
+            Console.WriteLine($"PIXELTYPE: {name} = 0x{val:X8}");
         }
     }
 }

@@ -3,6 +3,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:controls="clr-namespace:VisionInspectionApp.UI.Controls"
              xmlns:converters="clr-namespace:VisionInspectionApp.UI.Converters"
              mc:Ignorable="d"
              d:DesignHeight="750" d:DesignWidth="1280">
@@ -169,11 +170,15 @@
         <!-- Center Panel: Live Preview Display -->
         <Border Grid.Column="1" Background="#1E1E1E" Margin="0,10,0,10" CornerRadius="8" BorderThickness="1" BorderBrush="{DynamicResource BorderBrush}" ClipToBounds="True">
             <Grid>
-                <!-- Live Image Display -->
-                <Image Source="{Binding LiveImage}" Stretch="Uniform" />
+                <!-- Live Image Display with Interactive ROI Handles & Zoom/Pan -->
+                <controls:ImageViewerControl ImageSource="{Binding LiveImage}"
+                                             OverlayItems="{Binding OverlayItems}"
+                                             EnableRoiEditing="True"
+                                             RoiEditedCommand="{Binding RoiEditedCommand}"
+                                             ActiveRoiLabel="CamROI" />
 
                 <!-- HUD Info Overlay -->
-                <Border VerticalAlignment="Top" HorizontalAlignment="Left" Margin="15" Background="#C0000000" Padding="12,8" CornerRadius="6">
+                <Border VerticalAlignment="Top" HorizontalAlignment="Left" Margin="15" Background="#C0000000" Padding="12,8" CornerRadius="6" IsHitTestVisible="False">
                     <StackPanel Orientation="Horizontal">
                         <TextBlock Text="{Binding Fps, StringFormat='FPS: {0}'}" Foreground="#4CAF50" FontWeight="Bold" FontSize="14" Margin="0,0,16,0" />
                         <TextBlock Text="{Binding ResolutionText, StringFormat='Res: {0}'}" Foreground="#00BCD4" FontWeight="Bold" FontSize="14" Margin="0,0,16,0" />
@@ -183,7 +188,7 @@
                 </Border>
 
                 <!-- Offline Placeholder -->
-                <Grid Visibility="{Binding LiveImage, Converter={StaticResource NullToVisibilityConverter}}">
+                <Grid Visibility="{Binding LiveImage, Converter={StaticResource NullToVisibilityConverter}}" IsHitTestVisible="False">
                     <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
                         <TextBlock Text="📷" FontSize="56" Foreground="#555" HorizontalAlignment="Center" Margin="0,0,0,10" />
                         <TextBlock Text="Camera Chưa Phát Trực Tiếp" FontSize="18" FontWeight="Bold" Foreground="#AAA" HorizontalAlignment="Center" />
@@ -310,8 +315,11 @@
                         </GroupBox>
 
                         <!-- Group 3: Định dạng & Lật hình (Format & Orientation) -->
-                        <GroupBox Header="🔄 Định Dạng &amp; Hướng Hình Ảnh" Margin="0,0,0,10" Padding="8" FontWeight="SemiBold">
+                        <GroupBox Header="🔄 Định Dạng Điểm Ảnh &amp; Hướng Hình Ảnh" Margin="0,0,0,10" Padding="8" FontWeight="SemiBold">
                             <StackPanel>
+                                <TextBlock Text="Định dạng điểm ảnh (Pixel Format):" FontSize="11" Foreground="{DynamicResource TextBrush}" Margin="0,0,0,4" />
+                                <ComboBox ItemsSource="{Binding PixelFormatOptions}" SelectedItem="{Binding SelectedPixelFormat}" Margin="0,0,0,8" Padding="6,4" />
+
                                 <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
                                     <CheckBox Content="Lật Ngang (Reverse X)" IsChecked="{Binding ReverseX}" Margin="0,0,16,0" />
                                     <CheckBox Content="Lật Dọc (Reverse Y)" IsChecked="{Binding ReverseY}" />
@@ -322,6 +330,64 @@
 
                                 <TextBlock Text="Tần Số Quét Mục Tiêu (Target FPS):" FontSize="11" Foreground="{DynamicResource TextBrush}" Margin="0,0,0,4" />
                                 <ComboBox ItemsSource="{Binding FpsOptions}" SelectedItem="{Binding SelectedFps}" Margin="0,0,0,4" Padding="6,4" />
+                            </StackPanel>
+                        </GroupBox>
+
+                        <!-- Group 4: Hardware Camera ROI -->
+                        <GroupBox Header="📐 Camera Hardware ROI (Cắt Vùng Cảm Biến)" Margin="0,0,0,10" Padding="8" FontWeight="SemiBold">
+                            <StackPanel>
+                                <DockPanel Margin="0,0,0,8">
+                                    <CheckBox Content="Kích hoạt Hardware ROI (Cắt từ phần cứng)" IsChecked="{Binding EnableHardwareRoi}" FontWeight="Bold" Foreground="{DynamicResource AccentBrush}" VerticalAlignment="Center" />
+                                </DockPanel>
+
+                                <Grid Margin="0,0,0,8">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <Button Grid.Column="0" Command="{Binding SetFullSensorRoiCommand}" Content="🖥️ Full Sensor" Margin="0,0,4,0" Padding="6,4" FontSize="11" Background="{DynamicResource BorderBrush}" Foreground="{DynamicResource TextBrush}" BorderThickness="0" />
+                                    <Button Grid.Column="1" Command="{Binding CenterRoiCommand}" Content="🎯 Căn Giữa ROI" Margin="4,0,0,0" Padding="6,4" FontSize="11" Background="{DynamicResource BorderBrush}" Foreground="{DynamicResource TextBrush}" BorderThickness="0" />
+                                </Grid>
+
+                                <TextBlock Text="Offset X (Vị trí X):" FontSize="11" Foreground="{DynamicResource TextBrush}" Margin="0,0,0,2" />
+                                <Grid Margin="0,0,0,6">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="70" />
+                                    </Grid.ColumnDefinitions>
+                                    <Slider Grid.Column="0" Minimum="0" Maximum="5440" Value="{Binding RoiOffsetX}" IsEnabled="{Binding EnableHardwareRoi}" SmallChange="4" LargeChange="16" VerticalAlignment="Center" />
+                                    <TextBox Grid.Column="1" Text="{Binding RoiOffsetX}" IsEnabled="{Binding EnableHardwareRoi}" Margin="6,0,0,0" Padding="4,2" TextAlignment="Right" />
+                                </Grid>
+
+                                <TextBlock Text="Offset Y (Vị trí Y):" FontSize="11" Foreground="{DynamicResource TextBrush}" Margin="0,0,0,2" />
+                                <Grid Margin="0,0,0,6">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="70" />
+                                    </Grid.ColumnDefinitions>
+                                    <Slider Grid.Column="0" Minimum="0" Maximum="3616" Value="{Binding RoiOffsetY}" IsEnabled="{Binding EnableHardwareRoi}" SmallChange="2" LargeChange="8" VerticalAlignment="Center" />
+                                    <TextBox Grid.Column="1" Text="{Binding RoiOffsetY}" IsEnabled="{Binding EnableHardwareRoi}" Margin="6,0,0,0" Padding="4,2" TextAlignment="Right" />
+                                </Grid>
+
+                                <TextBlock Text="Width (Chiều rộng ROI):" FontSize="11" Foreground="{DynamicResource TextBrush}" Margin="0,0,0,2" />
+                                <Grid Margin="0,0,0,6">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="70" />
+                                    </Grid.ColumnDefinitions>
+                                    <Slider Grid.Column="0" Minimum="32" Maximum="5472" Value="{Binding RoiWidth}" IsEnabled="{Binding EnableHardwareRoi}" SmallChange="4" LargeChange="16" VerticalAlignment="Center" />
+                                    <TextBox Grid.Column="1" Text="{Binding RoiWidth}" IsEnabled="{Binding EnableHardwareRoi}" Margin="6,0,0,0" Padding="4,2" TextAlignment="Right" />
+                                </Grid>
+
+                                <TextBlock Text="Height (Chiều cao ROI):" FontSize="11" Foreground="{DynamicResource TextBrush}" Margin="0,0,0,2" />
+                                <Grid Margin="0,0,0,4">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="70" />
+                                    </Grid.ColumnDefinitions>
+                                    <Slider Grid.Column="0" Minimum="32" Maximum="3648" Value="{Binding RoiHeight}" IsEnabled="{Binding EnableHardwareRoi}" SmallChange="2" LargeChange="8" VerticalAlignment="Center" />
+                                    <TextBox Grid.Column="1" Text="{Binding RoiHeight}" IsEnabled="{Binding EnableHardwareRoi}" Margin="6,0,0,0" Padding="4,2" TextAlignment="Right" />
+                                </Grid>
                             </StackPanel>
                         </GroupBox>
 
