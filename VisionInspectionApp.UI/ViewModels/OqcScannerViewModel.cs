@@ -146,6 +146,10 @@ public partial class OqcScannerViewModel : ObservableObject
         {
             _ = _cameraService.StartSavedCameraAsync();
         }
+        else if (IsShowingLiveCamera)
+        {
+            _ = _cameraService.RequestLiveStreamAsync("OQCScanner", true);
+        }
 
         // Initialize Settings properties
         InitSettingsProperties();
@@ -211,14 +215,27 @@ public partial class OqcScannerViewModel : ObservableObject
         OnPropertyChanged(nameof(CameraScanButtonText));
     }
 
+    partial void OnIsShowingLiveCameraChanged(bool value)
+    {
+        OnPropertyChanged(nameof(PreviewHeaderTitle));
+        OnPropertyChanged(nameof(LiveToggleButtonText));
+        if (value)
+        {
+            OverlayItems = null;
+            _ = _cameraService.RequestLiveStreamAsync("OQCScanner", true);
+        }
+        else
+        {
+            _ = _cameraService.RequestLiveStreamAsync("OQCScanner", false);
+        }
+    }
+
     [RelayCommand]
     public void RunJob()
     {
         if (!string.IsNullOrWhiteSpace(CurrentJobFilePath) && CurrentJobFilePath != "-" && CurrentJobFilePath != "Chưa có Job")
         {
             IsShowingLiveCamera = false;
-            OnPropertyChanged(nameof(PreviewHeaderTitle));
-            OnPropertyChanged(nameof(LiveToggleButtonText));
             StatusMessage = $"⌛ Đang chạy kiểm tra Job cho sản phẩm '{CurrentProductName}'...";
             StatusBrush = Brushes.DodgerBlue;
 
@@ -234,14 +251,11 @@ public partial class OqcScannerViewModel : ObservableObject
     [RelayCommand]
     private void EnableLiveCamera()
     {
-        IsShowingLiveCamera = true;
-        OverlayItems = null; // Clear inspection overlays during live stream
         if (!_cameraService.IsRunning)
         {
             _ = _cameraService.StartSavedCameraAsync();
         }
-        OnPropertyChanged(nameof(PreviewHeaderTitle));
-        OnPropertyChanged(nameof(LiveToggleButtonText));
+        IsShowingLiveCamera = true;
     }
 
     private void ToggleLiveCamera()
@@ -254,8 +268,6 @@ public partial class OqcScannerViewModel : ObservableObject
         {
             IsShowingLiveCamera = false;
             RefreshPreviewFromToolEditor();
-            OnPropertyChanged(nameof(PreviewHeaderTitle));
-            OnPropertyChanged(nameof(LiveToggleButtonText));
         }
     }
 

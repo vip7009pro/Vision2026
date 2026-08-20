@@ -21,6 +21,7 @@ public sealed class CameraService : IDisposable
     private CameraDeviceInfo? _activeDeviceInfo;
     private CameraParameters _currentParameters = new();
     private CameraParameters _systemParameters = new();
+    private readonly HashSet<string> _activeLiveConsumers = new(StringComparer.OrdinalIgnoreCase);
 
     private bool _isRunning;
     private bool _isDisposed;
@@ -434,7 +435,7 @@ public sealed class CameraService : IDisposable
         }
     }
 
-    public async Task<bool> SetLiveViewEnabledAsync(bool enabled)
+    public async Task<bool> RequestLiveStreamAsync(string consumerId, bool enable)
     {
         if (_isDisposed) return false;
 
@@ -449,18 +450,26 @@ public sealed class CameraService : IDisposable
 
         try
         {
-            _currentParameters.IsLiveViewEnabled = enabled;
-            SaveSettings();
+            if (enable)
+            {
+                _activeLiveConsumers.Add(consumerId);
+            }
+            else
+            {
+                _activeLiveConsumers.Remove(consumerId);
+            }
+
+            bool shouldGrab = _activeLiveConsumers.Count > 0;
 
             if (_activeDriver != null && _activeDriver.IsOpened)
             {
-                if (enabled && !_activeDriver.IsGrabbing)
+                if (shouldGrab && !_activeDriver.IsGrabbing)
                 {
                     bool ok = await _activeDriver.StartGrabbingAsync();
                     _isRunning = _activeDriver.IsOpened;
                     return ok;
                 }
-                else if (!enabled && _activeDriver.IsGrabbing)
+                else if (!shouldGrab && _activeDriver.IsGrabbing)
                 {
                     await _activeDriver.StopGrabbingAsync();
                     return true;
@@ -472,6 +481,14 @@ public sealed class CameraService : IDisposable
         {
             try { _cameraLock.Release(); } catch { }
         }
+    }
+
+    public async Task<bool> SetLiveViewEnabledAsync(bool enabled)
+    {
+        _currentParameters.IsLiveViewEnabled = enabled;
+        _systemParameters.IsLiveViewEnabled = enabled;
+        SaveSettings();
+        return await RequestLiveStreamAsync("CameraSettings", enabled);
     }
 
     /// <summary>
@@ -577,7 +594,8 @@ public sealed class CameraService : IDisposable
                 SaveSettings();
             }
 
-            if (_currentParameters.IsLiveViewEnabled)
+            bool shouldGrab = _activeLiveConsumers.Count > 0 || _currentParameters.IsLiveViewEnabled;
+            if (shouldGrab)
             {
                 bool grabbing = await _activeDriver.StartGrabbingAsync();
                 _isRunning = grabbing;
@@ -693,6 +711,7 @@ public sealed class CameraService : IDisposable
     private async Task StopCameraInternalAsync()
     {
         _isRunning = false;
+        _activeLiveConsumers.Clear();
 
         if (_activeDriver != null)
         {

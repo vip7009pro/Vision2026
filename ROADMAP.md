@@ -486,6 +486,13 @@ Lộ trình tích hợp tính năng Chụp ảnh từ camera và hỗ trợ các
     - `CameraService.ReadParametersFromCameraAsync`: Cung cấp hàm trung tâm cho UI.
   - `Giao Diện Đồng Bộ 1-Click "🔄 Đọc Từ Camera" (CameraSettingsView.xaml, JobCameraSettingsWindow.xaml)`:
     - Bổ sung nút **`🔄 Đọc Từ Camera`** trên cả màn hình cấu hình Camera hệ thống và cấu hình Camera của Job. Tự động đồng bộ toàn bộ CheckBox, Slider, ComboBox lên UI khi kết nối camera.
+- [x] Task 183: Cơ chế Live Stream độc lập cho Tab OQC Scanner & Quản lý Consumer theo yêu cầu thực tế:
+  - `Cơ Chế Quản Lý Multi-Consumer Live Stream (CameraService.cs)`:
+    - Bổ sung `_activeLiveConsumers` (HashSet các bên đăng ký xem Live Stream: `OQCScanner`, `CameraSettings`, `JobCameraSettings`...).
+    - Cung cấp hàm `RequestLiveStreamAsync(consumerId, enable)`: Tự động kích hoạt `StartGrabbingAsync()` khi có ít nhất 1 consumer yêu cầu xem và tự động dừng `StopGrabbingAsync()` khi không còn ai xem $\rightarrow$ Đưa băng thông mạng Ethernet về đúng **0 Mbps**.
+  - `Live View Độc Lập Cho Tab OQC Scanner (OqcScannerViewModel.cs)`:
+    - Bổ sung `partial void OnIsShowingLiveCameraChanged(bool value)`: Tự động gửi yêu cầu `RequestLiveStreamAsync("OQCScanner", true)` khi người dùng bật Live Camera trên tab OQC Scanner và hủy đăng ký khi chuyển sang xem kết quả Final hoặc chạy Job.
+    - Tab OQC Scanner hoàn toàn có thể Live View mượt mà bất kể bên tab Camera Settings đang bật hay tắt Live View, đồng thời chỉ thực sự tải luồng ảnh khi cần thiết để tối ưu hóa hiệu năng và băng thông mạng.
   - `Biên Dịch & Kiểm Thử Thành Công 100%`: Solution biên dịch **0 Error(s)**, chạy test thành công.
 
 

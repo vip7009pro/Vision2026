@@ -51,6 +51,15 @@
 
 ### Sửa lỗi và Cải thiện UX/UI (Phiên làm việc hiện tại)
 
+- **Cơ chế Live Stream độc lập cho Tab OQC Scanner & Quản lý Consumer theo yêu cầu thực tế (Task 183)**:
+  - **Cơ chế Quản lý Multi-Consumer Live Stream (`CameraService.cs`)**:
+    - Bổ sung `_activeLiveConsumers` (HashSet các bên đăng ký xem Live Stream: `OQCScanner`, `CameraSettings`, `JobCameraSettings`...).
+    - Cung cấp hàm `RequestLiveStreamAsync(consumerId, enable)`: Tự động kích hoạt `StartGrabbingAsync()` khi có ít nhất 1 consumer yêu cầu xem và tự động dừng `StopGrabbingAsync()` khi không còn ai xem $\rightarrow$ Đưa băng thông mạng Ethernet về đúng **0 Mbps**.
+  - **Live View Độc Lập Cho Tab OQC Scanner (`OqcScannerViewModel.cs`)**:
+    - Bổ sung `partial void OnIsShowingLiveCameraChanged(bool value)`: Tự động gửi yêu cầu `RequestLiveStreamAsync("OQCScanner", true)` khi người dùng bật Live Camera trên tab OQC Scanner và hủy đăng ký khi chuyển sang xem kết quả Final hoặc chạy Job.
+    - Tab OQC Scanner hoàn toàn có thể Live View mượt mà bất kể bên tab Camera Settings đang bật hay tắt Live View, đồng thời chỉ thực sự tải luồng ảnh khi cần thiết để tối ưu hóa hiệu năng và băng thông mạng.
+  - **Kiểm Thử & Biên Dịch Thành Công 100%**: Solution biên dịch thành công **0 Error(s)**, vượt qua toàn bộ unit test.
+
 - **Cải tiến cơ chế đồng bộ trạng thái Lật X, Y và thông số thực tế từ phần cứng Camera vào ứng dụng (Task 182)**:
   - **Đồng bộ trạng thái lật phần cứng khi kết nối camera (`HikCameraDriver.cs`, `CameraDriverBase.cs`)**:
     - Trong `HikCameraDriver.OpenAsync`, ngay sau khi mở kết nối thiết bị, ứng dụng chủ động truy vấn giá trị thực tế `ReverseX` và `ReverseY` từ phần cứng camera (`MV_CC_GetBoolValue_NET`) và cập nhật vào `_hardwareReverseXApplied`, `_parameters`.
