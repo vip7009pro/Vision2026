@@ -577,6 +577,12 @@ Lộ trình tích hợp tính năng Chụp ảnh từ camera và hỗ trợ các
     - Đảm bảo cửa sổ khi Maximize tự động căn chỉnh vừa khít trên thanh Taskbar (không bị taskbar che khuất phần đáy app, không bị tràn màn hình).
     - Hoạt động chuẩn xác trên mọi cấu hình màn hình (đơn màn hình, đa màn hình, DPI Scaling khác nhau, thanh Taskbar ở dưới/trên/trái/phải).
   - `Biên Dịch & Kiểm Thử Thành Công 100%`: Solution biên dịch **0 Error(s)**.
+- [x] Task 194: Cập nhật thông tin tác giả và bản quyền trong hộp thoại About CMS VINA Vision System:
+  - `Cấu Trúc Tham Số Hộp Thoại MessageBox.Show (MainWindowViewModel.cs)`:
+    - Chuyển toàn bộ thông tin tác giả (Nguyễn Văn Hùng, Phone, Email, Website) vào đúng tham số nội dung `messageBoxText` của `MessageBox.Show`.
+    - Giữ nguyên tham số tiêu đề `caption = "About CMS VINA Vision System"` ngắn gọn, trực quan.
+    - Hiển thị đầy đủ thông tin bản quyền và liên hệ tác giả khi click menu `Trợ Giúp -> Giới Thiệu CMS VINA Vision System`.
+  - `Biên Dịch & Kiểm Thử Thành Công 100%`: Solution biên dịch **0 Error(s)**.
 
 
 

@@ -51,6 +51,13 @@
 
 ### Sửa lỗi và Cải thiện UX/UI (Phiên làm việc hiện tại)
 
+- **Cập nhật thông tin tác giả và bản quyền trong hộp thoại About CMS VINA Vision System (Task 194)**:
+  - **Cấu Trúc Tham Số Hộp Thoại MessageBox.Show (`MainWindowViewModel.cs`)**:
+    - Chuyển toàn bộ thông tin tác giả (Nguyễn Văn Hùng, Phone, Email, Website) vào đúng tham số nội dung `messageBoxText` của `MessageBox.Show`.
+    - Giữ nguyên tham số tiêu đề `caption = "About CMS VINA Vision System"` ngắn gọn, trực quan.
+    - Hiển thị đầy đủ thông tin bản quyền và liên hệ tác giả khi click menu `Trợ Giúp -> Giới Thiệu CMS VINA Vision System`.
+  - **Biên Dịch & Kiểm Thử Thành Công 100%**: Solution biên dịch **0 Error(s)**.
+
 - **Khắc phục triệt để lỗi Maximize cửa sổ bị thanh Taskbar của Windows che mất (Task 193)**:
   - **Xử Lý Hook Thông Điệp Win32 WM_GETMINMAXINFO (`MainWindow.xaml.cs`)**:
     - Bổ sung `HwndSourceHook` xử lý thông điệp Win32 `WM_GETMINMAXINFO` (0x0024) khi cửa sổ được phóng to cực đại (Maximize).

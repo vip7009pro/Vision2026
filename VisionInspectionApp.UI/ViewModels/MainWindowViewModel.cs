@@ -57,13 +57,13 @@ public sealed partial class MainWindowViewModel : ObservableObject
             "CMS VINA VISION SYSTEM — Enterprise Industrial Vision Platform\n" +
             "Version 2.6.0 (64-bit Edition)\n\n" +
             "© 2026 CMS VINA Co., Ltd. All rights reserved.\n" +
-            "Industrial Machine Vision, Multi-camera Inspection, OQC & Automation Integration.",
-            "About CMS VINA Vision System\n\n" + 
+            "Industrial Machine Vision, Multi-camera Inspection, OQC & Automation Integration.\n\n" +
+            "────────────────────────────────────────\n" +
             "Tác giả: Nguyễn Văn Hùng\n" +
             "Phone: +84971092454\n" +
             "Email: pagehungnguyen.com\n" +
-            "Web: hungnguyenpage.com"
-            ,
+            "Web: hungnguyenpage.com",
+            "About CMS VINA Vision System",
             MessageBoxButton.OK,
             MessageBoxImage.Information);
     }
