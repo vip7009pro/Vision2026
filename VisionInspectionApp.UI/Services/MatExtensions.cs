@@ -69,7 +69,7 @@ public static class MatExtensions
     /// Tự động scale down tối ưu nếu ảnh quá lớn (> maxDisplayWidth x maxDisplayHeight),
     /// giúp triệt tiêu áp lực LOH allocation (từ 60MB xuống 2-3MB) và tăng FPS hiển thị mượt mà 60 FPS.
     /// </summary>
-    public static BitmapSource? ToBitmapSourceForDisplay(this Mat? mat, int maxDisplayWidth = 1920, int maxDisplayHeight = 1080)
+    public static BitmapSource? ToBitmapSourceForDisplay(this Mat? mat, int maxDisplayWidth = 0, int maxDisplayHeight = 0)
     {
         if (mat is null) return null;
         try
@@ -77,7 +77,7 @@ public static class MatExtensions
             if (mat.IsDisposed || mat.Empty() || mat.Width <= 0 || mat.Height <= 0)
                 return null;
 
-            if (mat.Width > maxDisplayWidth || mat.Height > maxDisplayHeight)
+            if (maxDisplayWidth > 0 && maxDisplayHeight > 0 && (mat.Width > maxDisplayWidth || mat.Height > maxDisplayHeight))
             {
                 double scale = Math.Min((double)maxDisplayWidth / mat.Width, (double)maxDisplayHeight / mat.Height);
                 int targetW = Math.Max(1, (int)Math.Round(mat.Width * scale));

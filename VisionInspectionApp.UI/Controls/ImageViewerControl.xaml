@@ -3,9 +3,45 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:local="clr-namespace:VisionInspectionApp.UI.Controls">
 
-    <Grid x:Name="PART_RootGrid" Background="#111" ClipToBounds="True">
+    <UserControl.Resources>
+        <!-- Nền Grid / Checkerboard Màu Xám Công Nghiệp Chống Nhầm Lẫn Với Nền Đen Của Ảnh/Sản Phẩm -->
+        <DrawingBrush x:Key="GrayGridBackgroundBrush"
+                      Viewport="0,0,24,24"
+                      ViewportUnits="Absolute"
+                      TileMode="Tile">
+            <DrawingBrush.Drawing>
+                <DrawingGroup>
+                    <!-- Màu nền ô xám đậm -->
+                    <GeometryDrawing Brush="#24252A">
+                        <GeometryDrawing.Geometry>
+                            <RectangleGeometry Rect="0,0,24,24" />
+                        </GeometryDrawing.Geometry>
+                    </GeometryDrawing>
+                    <!-- Các ô xám sáng so le tạo hoa văn bàn cờ / grid tinh tế -->
+                    <GeometryDrawing Brush="#2E3038">
+                        <GeometryDrawing.Geometry>
+                            <GeometryGroup>
+                                <RectangleGeometry Rect="0,0,12,12" />
+                                <RectangleGeometry Rect="12,12,12,12" />
+                            </GeometryGroup>
+                        </GeometryDrawing.Geometry>
+                    </GeometryDrawing>
+                    <!-- Đường kẻ viền lưới siêu mảnh phân định các ô -->
+                    <GeometryDrawing Geometry="M 0,24 L 24,24 M 24,0 L 24,24">
+                        <GeometryDrawing.Pen>
+                            <Pen Brush="#1C1D22" Thickness="0.75" />
+                        </GeometryDrawing.Pen>
+                    </GeometryDrawing>
+                </DrawingGroup>
+            </DrawingBrush.Drawing>
+        </DrawingBrush>
+    </UserControl.Resources>
+
+    <Grid x:Name="PART_RootGrid" Background="{StaticResource GrayGridBackgroundBrush}" ClipToBounds="True">
         <Canvas x:Name="PART_Content" HorizontalAlignment="Left" VerticalAlignment="Top" RenderTransformOrigin="0,0">
-            <Image x:Name="PART_Image" Stretch="Fill" />
+            <Image x:Name="PART_Image" Stretch="Fill"
+                   RenderOptions.BitmapScalingMode="HighQuality"
+                   RenderOptions.EdgeMode="Aliased" />
             <local:FastOverlayCanvas x:Name="PART_FastOverlay" />
             <Canvas x:Name="PART_Overlay" Background="Transparent" Focusable="True" />
         </Canvas>

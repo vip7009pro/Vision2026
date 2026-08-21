@@ -6,6 +6,7 @@ using System.IO;
 using System.Threading.Tasks;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Media.Imaging;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using VisionInspectionApp.Application;
@@ -70,6 +71,21 @@ public partial class OqcScannerViewModel : ObservableObject
 
     [ObservableProperty]
     private bool _showRois = true;
+
+    // ─── Origin Live Guide & Template Preview ───
+    [ObservableProperty]
+    private BitmapSource? _originTemplateImage;
+
+    [ObservableProperty]
+    private bool _hasOriginTemplate;
+
+    [ObservableProperty]
+    private string _originGuideDetails = string.Empty;
+
+    [ObservableProperty]
+    private string _originName = string.Empty;
+
+    private readonly ObservableCollection<OverlayItem> _originLiveGuideOverlays = new();
 
     private List<OverlayItem>? _allOverlayItemsCache;
     private bool _isRenderingLiveFrame = false;
@@ -175,6 +191,12 @@ public partial class OqcScannerViewModel : ObservableObject
                 RefreshPreviewFromToolEditor();
             }
         }
+
+        if (e.PropertyName == nameof(ToolEditorViewModel.Origin_TemplatePreviewImage) ||
+            e.PropertyName == "CurrentJobFilePath")
+        {
+            RefreshOriginTemplateFromJob(_toolEditorViewModel.Config, _toolEditorViewModel.CurrentTempWorkingDir);
+        }
     }
 
     private async Task RunTaskWith1SecLoadingTimeoutAsync(Func<Task> asyncAction, string loadingMsg)
@@ -229,12 +251,13 @@ public partial class OqcScannerViewModel : ObservableObject
         OnPropertyChanged(nameof(LiveToggleButtonText));
         if (value)
         {
-            OverlayItems = null;
+            OverlayItems = (ShowRois && _originLiveGuideOverlays.Count > 0) ? _originLiveGuideOverlays : null;
             _ = _cameraService.RequestLiveStreamAsync("OQCScanner", true);
         }
         else
         {
             _ = _cameraService.RequestLiveStreamAsync("OQCScanner", false);
+            RefreshPreviewFromToolEditor();
         }
     }
 
@@ -279,6 +302,128 @@ public partial class OqcScannerViewModel : ObservableObject
         }
     }
 
+    public void UpdateOriginLiveGuideOverlays(VisionConfig? cfg = null)
+    {
+        cfg ??= _toolEditorViewModel.Config;
+        _originLiveGuideOverlays.Clear();
+
+        if (cfg?.Origin is not null)
+        {
+            var origin = cfg.Origin;
+            OriginName = origin.Name;
+
+            // 1. Search ROI (Khung tìm kiếm - Viền nét đứt xanh biển)
+            if (origin.SearchRoi.Width > 0 && origin.SearchRoi.Height > 0)
+            {
+                _originLiveGuideOverlays.Add(new OverlayRectItem
+                {
+                    X = origin.SearchRoi.X,
+                    Y = origin.SearchRoi.Y,
+                    Width = origin.SearchRoi.Width,
+                    Height = origin.SearchRoi.Height,
+                    Angle = origin.SearchRoi.Angle,
+                    Stroke = Brushes.DeepSkyBlue,
+                    StrokeThickness = 1.5,
+                    Label = $"{origin.Name} Search ROI"
+                });
+            }
+
+            // 2. Template ROI (Khung đặt mẫu chuẩn - Viền màu vàng nổi bật)
+            if (origin.TemplateRoi.Width > 0 && origin.TemplateRoi.Height > 0)
+            {
+                _originLiveGuideOverlays.Add(new OverlayRectItem
+                {
+                    X = origin.TemplateRoi.X,
+                    Y = origin.TemplateRoi.Y,
+                    Width = origin.TemplateRoi.Width,
+                    Height = origin.TemplateRoi.Height,
+                    Angle = origin.TemplateRoi.Angle,
+                    Stroke = Brushes.Gold,
+                    StrokeThickness = 2.5,
+                    Label = "🎯 VỊ TRÍ ĐẶT MẪU (ORIGIN)"
+                });
+            }
+
+            // 3. Center Crosshair (Dấu chữ thập định vị tâm Origin)
+            var cx = (origin.WorldPosition.X != 0 || origin.WorldPosition.Y != 0)
+                ? origin.WorldPosition.X
+                : (origin.TemplateRoi.X + origin.TemplateRoi.Width / 2.0);
+            var cy = (origin.WorldPosition.X != 0 || origin.WorldPosition.Y != 0)
+                ? origin.WorldPosition.Y
+                : (origin.TemplateRoi.Y + origin.TemplateRoi.Height / 2.0);
+
+            if (cx > 0 && cy > 0)
+            {
+                const double arm = 30.0;
+                _originLiveGuideOverlays.Add(new OverlayLineItem { X1 = cx - arm, Y1 = cy, X2 = cx + arm, Y2 = cy, Stroke = Brushes.Gold, StrokeThickness = 2.0 });
+                _originLiveGuideOverlays.Add(new OverlayLineItem { X1 = cx, Y1 = cy - arm, X2 = cx, Y2 = cy + arm, Stroke = Brushes.Gold, StrokeThickness = 2.0 });
+                _originLiveGuideOverlays.Add(new OverlayPointItem { X = cx, Y = cy, Radius = 4.0, Fill = Brushes.Gold, Stroke = Brushes.Black, Label = "🎯 Tâm Chuẩn" });
+            }
+        }
+    }
+
+    public void RefreshOriginTemplateFromJob(VisionConfig? cfg = null, string? tempDir = null)
+    {
+        cfg ??= _toolEditorViewModel.Config;
+        if (cfg?.Origin == null)
+        {
+            OriginTemplateImage = null;
+            HasOriginTemplate = false;
+            OriginGuideDetails = "Chưa cấu hình Origin trong Job này.";
+            OriginName = string.Empty;
+            UpdateOriginLiveGuideOverlays(cfg);
+            return;
+        }
+
+        var origin = cfg.Origin;
+        UpdateOriginLiveGuideOverlays(cfg);
+
+        OriginGuideDetails = $"🏷️ Node: {origin.Name} | Loại: {origin.OriginAlgorithm}\n📐 Khung mẫu: {origin.TemplateRoi.Width} × {origin.TemplateRoi.Height} px\n🎯 Tâm chuẩn: ({origin.WorldPosition.X:F0}, {origin.WorldPosition.Y:F0})";
+
+        try
+        {
+            if (!string.IsNullOrWhiteSpace(origin.TemplateImageFile))
+            {
+                var file = origin.TemplateImageFile;
+                if (!Path.IsPathRooted(file))
+                {
+                    var baseDir = tempDir ?? _toolEditorViewModel.CurrentTempWorkingDir ?? string.Empty;
+                    if (!string.IsNullOrWhiteSpace(baseDir))
+                    {
+                        file = Path.Combine(baseDir, "templates", file);
+                    }
+                }
+
+                if (File.Exists(file))
+                {
+                    using var mat = Cv2.ImRead(file, ImreadModes.Color);
+                    if (mat != null && !mat.Empty())
+                    {
+                        OriginTemplateImage = mat.ToBitmapSourceSafe();
+                        HasOriginTemplate = true;
+                        return;
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[OqcScannerViewModel] Error loading origin template: {ex.Message}");
+        }
+
+        // Fallback to ToolEditorViewModel.Origin_TemplatePreviewImage if already loaded
+        if (_toolEditorViewModel.Origin_TemplatePreviewImage != null)
+        {
+            OriginTemplateImage = _toolEditorViewModel.Origin_TemplatePreviewImage;
+            HasOriginTemplate = true;
+        }
+        else
+        {
+            OriginTemplateImage = null;
+            HasOriginTemplate = false;
+        }
+    }
+
     private void OnCameraFrameCaptured(object? sender, Mat frame)
     {
         if (!IsShowingLiveCamera || frame == null || frame.Empty())
@@ -304,7 +449,7 @@ public partial class OqcScannerViewModel : ObservableObject
                     if (IsShowingLiveCamera)
                     {
                         PreviewImage = bitmap;
-                        OverlayItems = null;
+                        OverlayItems = (ShowRois && _originLiveGuideOverlays.Count > 0) ? _originLiveGuideOverlays : null;
                     }
                 }
                 finally
@@ -587,6 +732,8 @@ public partial class OqcScannerViewModel : ObservableObject
                 _toolEditorViewModel.LoadJobFromFile(jobPath, autoRun: false);
             }
 
+            RefreshOriginTemplateFromJob(cfg, tempDir);
+
             OnPropertyChanged(nameof(ScanButtonText));
             OnPropertyChanged(nameof(PreviewHeaderTitle));
             OnPropertyChanged(nameof(LiveToggleButtonText));
@@ -708,8 +855,23 @@ public partial class OqcScannerViewModel : ObservableObject
         });
     }
 
-    partial void OnShowResultOverlayChanged(bool value) => UpdatePreviewOverlays();
-    partial void OnShowRoisChanged(bool value) => UpdatePreviewOverlays();
+    partial void OnShowResultOverlayChanged(bool value)
+    {
+        if (IsShowingLiveCamera) return;
+        UpdatePreviewOverlays();
+    }
+
+    partial void OnShowRoisChanged(bool value)
+    {
+        if (IsShowingLiveCamera)
+        {
+            OverlayItems = (value && _originLiveGuideOverlays.Count > 0) ? _originLiveGuideOverlays : null;
+        }
+        else
+        {
+            UpdatePreviewOverlays();
+        }
+    }
 
     private void UpdatePreviewOverlays()
     {
@@ -766,6 +928,8 @@ public partial class OqcScannerViewModel : ObservableObject
                 _inspectionViewModel.CurrentJobFilePath = dialog.FileName;
                 _inspectionViewModel.CurrentTempWorkingDir = tempDir;
                 _inspectionViewModel.SetConfig(cfg);
+
+                RefreshOriginTemplateFromJob(cfg, tempDir);
 
                 CurrentJobFilePath = dialog.FileName;
                 CurrentProductName = Path.GetFileNameWithoutExtension(dialog.FileName);

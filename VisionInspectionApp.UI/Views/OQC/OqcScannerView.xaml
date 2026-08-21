@@ -168,13 +168,71 @@
                             </StackPanel>
                         </DockPanel>
 
-                        <!-- Image Viewer Control -->
-                        <Border Grid.Row="1" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" Background="Black" CornerRadius="4">
-                            <controls:ImageViewerControl x:Name="OqcImageViewer"
-                                                       ImageSource="{Binding PreviewImage}"
-                                                       OverlayItems="{Binding OverlayItems}"
-                                                       EnableRoiEditing="False" />
-                        </Border>
+                        <!-- Image Viewer & Origin Template Guide Split Grid -->
+                        <Grid Grid.Row="1">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+
+                            <!-- Left: Main Live / Result Image Viewer -->
+                            <Border Grid.Column="0" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" Background="Transparent" CornerRadius="4">
+                                <controls:ImageViewerControl x:Name="OqcImageViewer"
+                                                           ImageSource="{Binding PreviewImage}"
+                                                           OverlayItems="{Binding OverlayItems}"
+                                                           EnableRoiEditing="False" />
+                            </Border>
+
+                            <!-- Right: Origin Template Guide Box (Hiển thị mẫu Origin đã teach từ Job) -->
+                            <Border Grid.Column="1" Width="230" Margin="6,0,0,0"
+                                    Background="{DynamicResource PanelBackgroundBrush}"
+                                    BorderBrush="{DynamicResource BorderBrush}"
+                                    BorderThickness="1"
+                                    CornerRadius="4"
+                                    Visibility="{Binding HasOriginTemplate, Converter={StaticResource BoolToVis}}">
+                                <Grid Margin="8">
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="*" MinHeight="140" MaxHeight="220" />
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                    </Grid.RowDefinitions>
+
+                                    <!-- Header -->
+                                    <Border Grid.Row="0" Margin="0,0,0,6" Padding="6,4" Background="{DynamicResource HeaderBackgroundBrush}" CornerRadius="4">
+                                        <TextBlock Text="🎯 MẪU GỐC ORIGIN (TEACH)" FontSize="11" FontWeight="Bold" Foreground="#FFD700" />
+                                    </Border>
+
+                                    <!-- Template Image -->
+                                    <Border Grid.Row="1" Background="#111" BorderBrush="{DynamicResource DarkBorderBrush}" BorderThickness="1" CornerRadius="4" Padding="2">
+                                        <Image Source="{Binding OriginTemplateImage}"
+                                               Stretch="Uniform"
+                                               RenderOptions.BitmapScalingMode="HighQuality"
+                                               RenderOptions.EdgeMode="Aliased"
+                                               HorizontalAlignment="Center"
+                                               VerticalAlignment="Center" />
+                                    </Border>
+
+                                    <!-- Details & Positioning Parameters -->
+                                    <Border Grid.Row="2" Margin="0,6,0,0" Padding="6" Background="#181818" CornerRadius="4" BorderBrush="{DynamicResource DarkBorderBrush}" BorderThickness="1">
+                                        <TextBlock Text="{Binding OriginGuideDetails}"
+                                                   Foreground="{DynamicResource TextBrush}"
+                                                   FontSize="11"
+                                                   FontFamily="Consolas"
+                                                   TextWrapping="Wrap" />
+                                    </Border>
+
+                                    <!-- Guidance Callout -->
+                                    <Border Grid.Row="3" Margin="0,6,0,0" Padding="6,5" Background="#1B261D" BorderBrush="#2E7D32" BorderThickness="1" CornerRadius="4">
+                                        <TextBlock Text="👉 Hướng dẫn: Đặt vị trí chi tiết trên phôi khớp với khung ROI (Vàng/Xanh) trên màn hình Live Preview."
+                                                   Foreground="#81C784"
+                                                   FontSize="10.5"
+                                                   FontWeight="SemiBold"
+                                                   TextWrapping="Wrap" />
+                                    </Border>
+                                </Grid>
+                            </Border>
+                        </Grid>
                     </Grid>
                 </GroupBox>
 

@@ -51,6 +51,29 @@
 
 ### Sửa lỗi và Cải thiện UX/UI (Phiên làm việc hiện tại)
 
+- **Tự động AutoFit khi thay đổi kích thước cửa sổ & Chuyển nền Preview ảnh sang Grid Xám công nghiệp (Task 191)**:
+  - **Tự Động AutoFit Khi Thay Đổi Kích Thước Cửa Sổ (`ImageViewerControl.xaml.cs`)**:
+    - Cập nhật sự kiện `OnRootGridSizeChanged` tự động kích hoạt `ResetView()` mỗi khi container hoặc cửa sổ ứng dụng thay đổi kích thước (kéo giãn, phóng to cực đại Maximize, thu nhỏ Restore, kéo thanh chia GridSplitter).
+    - Đảm bảo hình ảnh và toàn bộ lớp đồ họa Overlay luôn tự động căn chỉnh vừa khít 100% với khung nhìn mà không cần click thủ công nút Fit View.
+  - **Nền Grid Xám Công Nghiệp Chống Nhầm Lẫn Nền Đen Thực Tế (`ImageViewerControl.xaml`)**:
+    - Thay thế nền đen đặc `#111` bằng `DrawingBrush` hoa văn Grid Checkerboard màu xám công nghiệp (`#24252A` và `#2E3038` với viền lưới mảnh `#1C1D22`).
+    - Giúp người dùng phân biệt rõ ràng giữa viền nền của máy kiểm tra / phôi sản phẩm màu đen và không gian canvas hiển thị của phần mềm.
+    - Áp dụng đồng bộ cho tất cả các màn hình Preview trong toàn bộ ứng dụng (Tool Editor, ResultView, OQC Scanner, Live Camera, Inspection, Calibration, Teach).
+  - **Biên Dịch & Kiểm Thử Thành Công 100%**: Solution biên dịch **0 Error(s)**.
+
+- **Hiển thị ROI dẫn hướng Origin trên Live View OQC Scanner, thêm khung xem ảnh Origin Template và khắc phục độ nét ảnh 20MP khi Zoom (Task 190)**:
+  - **Khung ROI Dẫn Hướng Origin Trên Live View OQC Scanner (`OqcScannerViewModel.cs`)**:
+    - Khi Job được nạp và bật Live Camera (`IsShowingLiveCamera == true`), tự động vẽ các overlay dẫn hướng: Khung `Origin Search ROI` (xanh biển), Khung `Origin Template ROI` (vàng kim nét đậm) và Dấu chữ thập tâm chuẩn (`Crosshair + Point`) tại `WorldPosition`.
+    - Giúp công nhân vận hành nhận biết ngay lập tức vị trí và vùng cần đặt phôi sản phẩm dưới camera.
+  - **Khung Hiển Thị Mẫu Gốc Origin Teach Template (`OqcScannerView.xaml`, `OqcScannerViewModel.cs`)**:
+    - Bổ sung khung phụ **`🎯 MẪU GỐC ORIGIN (TEACH)`** bên cạnh màn hình Preview trên tab OQC Scanner.
+    - Hiển thị hình ảnh template mẫu đã teach trước đó từ Job (`OriginTemplateImage`), thông số vị trí tâm và kích thước khung mẫu kèm dòng hướng dẫn thao tác trực quan.
+  - **Khắc Phục Triệt Để Độ Nét Ảnh 20MP Khi Zoom (`MatExtensions.cs`, `ImageViewerControl.xaml`, `ToolEditorViewModel.Engine.cs`)**:
+    - Xác nhận và bảo toàn nguyên vẹn $100\%$ độ chính xác tính toán của Vision Engine trên ma trận ảnh 20MP gốc ($5472 \times 3648$).
+    - Nâng cấp `MatExtensions.ToBitmapSourceForDisplay` và `ToolEditorViewModel.Engine.cs` bảo toàn độ phân giải 20MP gốc cho ảnh tĩnh và kết quả kiểm tra dưới nền bất đồng bộ kết hợp `.Freeze()` (không gây lag/treo UI).
+    - Cấu hình `RenderOptions.BitmapScalingMode="HighQuality"` và `RenderOptions.EdgeMode="Aliased"` trên `ImageViewerControl.xaml`, giúp render zoom sâu $5\times - 10\times$ cực kỳ sắc nét như phần mềm MVS của Hikrobot.
+  - **Biên Dịch & Kiểm Thử Thành Công 100%**: Solution biên dịch **0 Error(s)**, vượt qua toàn bộ unit test tự động.
+
 - **Quản lý cấu hình Global Chessboard Calibration toàn cục cho toàn bộ ứng dụng (Task 189)**:
   - **Quản Lý Lưu/Nạp Global Calibration Tự Động (`ChessboardCalibrationService.cs`)**:
     - Lưu trữ tệp cấu hình `%AppData%\Vision2026\global_chessboard_calibration.json` kèm khóa luồng an toàn `_fileLock`.

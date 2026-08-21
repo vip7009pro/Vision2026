@@ -3668,7 +3668,7 @@
                         </StackPanel>
                     </Grid>
 
-                    <Border Grid.Row="1" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" Background="Black">
+                    <Border Grid.Row="1" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" Background="Transparent">
                         <controls:ImageViewerControl x:Name="PreviewImageViewer"
                                                    ImageSource="{Binding SelectedNodePreviewImage}"
                                                    OverlayItems="{Binding SelectedNodeOverlayItems}"

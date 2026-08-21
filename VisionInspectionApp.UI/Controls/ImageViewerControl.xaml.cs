@@ -137,9 +137,8 @@ public partial class ImageViewerControl : UserControl
 
     private void OnRootGridSizeChanged(object sender, SizeChangedEventArgs e)
     {
-        if (!_hasFirstFit && PART_RootGrid.ActualWidth > 0 && PART_RootGrid.ActualHeight > 0 && ImageSource is BitmapSource)
+        if (PART_RootGrid.ActualWidth > 0 && PART_RootGrid.ActualHeight > 0 && ImageSource is BitmapSource)
         {
-            _hasFirstFit = true;
             ResetView();
         }
     }

@@ -59,6 +59,8 @@ namespace VisionInspectionApp.UI.ViewModels
         [ObservableProperty]
         private string? _currentTempWorkingDir;
 
+        public VisionConfig? Config => _config;
+
         public ICommand OpenJobCommand { get; }
         public ICommand SaveJobCommand { get; }
         public ICommand SaveJobAsCommand { get; }

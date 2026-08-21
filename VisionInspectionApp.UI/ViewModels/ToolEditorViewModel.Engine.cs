@@ -3171,18 +3171,18 @@ namespace VisionInspectionApp.UI.ViewModels
                         using var processedSel = ResolveToolPreprocessForPreview(snap, selNode);
                         if (token.IsCancellationRequested) return;
 
-                        selectedBmp = processedSel.Empty() ? null : processedSel.ToBitmapSourceForDisplay(1920, 1080);
+                        selectedBmp = processedSel.Empty() ? null : processedSel.ToBitmapSourceSafe();
                         selectedBmp?.Freeze();
 
                         if (PreprocessPreviewEnabled)
                         {
                             using var processedFinal = _preprocessor.Run(snap, config.Preprocess);
-                            finalBmp = processedFinal.Empty() ? null : processedFinal.ToBitmapSourceForDisplay(1920, 1080);
+                            finalBmp = processedFinal.Empty() ? null : processedFinal.ToBitmapSourceSafe();
                             finalBmp?.Freeze();
                         }
                         else
                         {
-                            finalBmp = snap.ToBitmapSourceForDisplay(1920, 1080);
+                            finalBmp = snap.ToBitmapSourceSafe();
                             finalBmp?.Freeze();
                         }
                     }
@@ -3194,12 +3194,12 @@ namespace VisionInspectionApp.UI.ViewModels
                             using var processedFinal = _preprocessor.Run(snap, config.Preprocess);
                             if (token.IsCancellationRequested) return;
 
-                            finalBmp = processedFinal.Empty() ? null : processedFinal.ToBitmapSourceForDisplay(1920, 1080);
+                            finalBmp = processedFinal.Empty() ? null : processedFinal.ToBitmapSourceSafe();
                             finalBmp?.Freeze();
                         }
                         else
                         {
-                            finalBmp = snap.ToBitmapSourceForDisplay(1920, 1080);
+                            finalBmp = snap.ToBitmapSourceSafe();
                             finalBmp?.Freeze();
                         }
 
@@ -3212,7 +3212,7 @@ namespace VisionInspectionApp.UI.ViewModels
                             using var processedSel = ResolveToolPreprocessForPreview(snap, selNode);
                             if (token.IsCancellationRequested) return;
 
-                            selectedBmp = processedSel.Empty() ? null : processedSel.ToBitmapSourceForDisplay(1920, 1080);
+                            selectedBmp = processedSel.Empty() ? null : processedSel.ToBitmapSourceSafe();
                             selectedBmp?.Freeze();
                         }
                     }
