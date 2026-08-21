@@ -15,6 +15,7 @@ using Microsoft.Win32;
 using OpenCvSharp;
 using OpenCvSharp.WpfExtensions;
 using VisionInspectionApp.Application;
+using VisionInspectionApp.Application.Services;
 using VisionInspectionApp.Models;
 using VisionInspectionApp.UI.Controls;
 using VisionInspectionApp.UI.Services;
@@ -1528,37 +1529,43 @@ namespace VisionInspectionApp.UI.ViewModels
                 SelectedColorDiff.InspectRoi = roi;
             }
 
-            int x = Math.Clamp(roi.X, 0, Math.Max(0, inputMat.Width - 1));
-            int y = Math.Clamp(roi.Y, 0, Math.Max(0, inputMat.Height - 1));
-            int w = Math.Min(roi.Width, inputMat.Width - x);
-            int h = Math.Min(roi.Height, inputMat.Height - y);
-
-            if (w <= 0 || h <= 0)
+            // Transform ROI according to current Origin match pose on the active image (symmetric with Inspection pipeline)
+            var originTeach = new OpenCvSharp.Point2d(_config.Origin.WorldPosition.X, _config.Origin.WorldPosition.Y);
+            if (originTeach.X == 0 && originTeach.Y == 0 && _config.Origin.TemplateRoi.Width > 0)
             {
-                System.Windows.MessageBox.Show("ROI lấy mẫu màu không hợp lệ.", "Lỗi", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Warning);
-                return;
+                originTeach = new OpenCvSharp.Point2d(_config.Origin.TemplateRoi.X + _config.Origin.TemplateRoi.Width / 2.0, _config.Origin.TemplateRoi.Y + _config.Origin.TemplateRoi.Height / 2.0);
+            }
+            else if (originTeach.X == 0 && originTeach.Y == 0 && _config.Origin.SearchRoi.Width > 0)
+            {
+                originTeach = new OpenCvSharp.Point2d(_config.Origin.SearchRoi.X + _config.Origin.SearchRoi.Width / 2.0, _config.Origin.SearchRoi.Y + _config.Origin.SearchRoi.Height / 2.0);
             }
 
-            using var roiMat = new OpenCvSharp.Mat(inputMat, new OpenCvSharp.Rect(x, y, w, h));
-            using var bgrMat = new OpenCvSharp.Mat();
-            if (roiMat.Channels() == 1)
-                OpenCvSharp.Cv2.CvtColor(roiMat, bgrMat, OpenCvSharp.ColorConversionCodes.GRAY2BGR);
-            else if (roiMat.Channels() == 4)
-                OpenCvSharp.Cv2.CvtColor(roiMat, bgrMat, OpenCvSharp.ColorConversionCodes.BGRA2BGR);
-            else
-                roiMat.CopyTo(bgrMat);
+            OpenCvSharp.Point2d originFound = originTeach;
+            double angleDeg = 0.0;
 
-            using var labMat = new OpenCvSharp.Mat();
-            OpenCvSharp.Cv2.CvtColor(bgrMat, labMat, OpenCvSharp.ColorConversionCodes.BGR2Lab);
-            OpenCvSharp.Scalar mean = OpenCvSharp.Cv2.Mean(labMat);
+            if (_lastRun?.Origin != null && _lastRun.Origin.Pass && (_lastRun.Origin.Position.X != 0 || _lastRun.Origin.Position.Y != 0))
+            {
+                originFound = new OpenCvSharp.Point2d(_lastRun.Origin.Position.X, _lastRun.Origin.Position.Y);
+                angleDeg = _lastRun.Origin.AngleDeg;
+            }
 
-            double l = Math.Round(mean.Val0 * 100.0 / 255.0, 2);
-            double a = Math.Round(mean.Val1 - 128.0, 2);
-            double b = Math.Round(mean.Val2 - 128.0, 2);
+            var centerTeach = new OpenCvSharp.Point2d(roi.X + roi.Width / 2.0, roi.Y + roi.Height / 2.0);
+            var centerFound = TransformPose(centerTeach, originTeach, originFound, angleDeg);
 
-            SelectedColorDiff.RefL = l;
-            SelectedColorDiff.RefA = a;
-            SelectedColorDiff.RefB = b;
+            var sampleRoi = new Roi
+            {
+                X = (int)Math.Round(centerFound.X - roi.Width / 2.0),
+                Y = (int)Math.Round(centerFound.Y - roi.Height / 2.0),
+                Width = roi.Width,
+                Height = roi.Height,
+                Angle = Math.Round(roi.Angle + angleDeg, 1)
+            };
+
+            var (l, a, b) = ColorDiffProcessor.GetMeanLab(inputMat, sampleRoi);
+
+            SelectedColorDiff.RefL = Math.Round(l, 2);
+            SelectedColorDiff.RefA = Math.Round(a, 2);
+            SelectedColorDiff.RefB = Math.Round(b, 2);
             SelectedColorDiff.UseRefColor = true;
 
             OnPropertyChanged(nameof(ColorDiff_RefL));

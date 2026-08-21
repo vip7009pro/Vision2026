@@ -46,7 +46,7 @@ public static class ColorDiffProcessor
         );
     }
 
-    private static (double L, double A, double B) GetMeanLab(Mat mat, Roi roi)
+    public static (double L, double A, double B) GetMeanLab(Mat mat, Roi roi)
     {
         if (roi == null || roi.Width <= 0 || roi.Height <= 0 || mat.Empty())
         {

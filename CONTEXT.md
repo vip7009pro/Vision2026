@@ -51,6 +51,20 @@
 
 ### Sửa lỗi và Cải thiện UX/UI (Phiên làm việc hiện tại)
 
+- **Khắc phục triệt để lỗi tính DeltaE và đồng bộ tọa độ Origin pose cho Tool ColorDiff (Task 195)**:
+  - **Nguyên Nhân Sai Lệch DeltaE**:
+    - Khi lấy mẫu màu (`ColorDiff_TeachRefColor`), hệ thống lấy trực tiếp pixel tại tọa độ `InspectRoi` thô mà chưa chuyển đổi theo ma trận xoay/tịnh tiến `Origin` match trên ảnh hiện tại.
+    - Trong khi đó, pipeline kiểm tra (`InspectionService.Pipeline.cs`) lại chuyển đổi `InspectRoi` theo `TransformRoiKeepSize` dẫn đến việc lấy mẫu ở vị trí A nhưng kiểm tra ở vị trí B bị dịch chuyển.
+    - Ngoài ra, nếu `WorldPosition` của Origin là `(0, 0)`, `originTeach` trong pipeline thiếu fallback tâm `TemplateRoi` dẫn đến độ lệch toàn bộ $\Delta x, \Delta y$ lớn bằng chính tọa độ tuyệt đối của vật thể.
+  - **Khắc Phục & Đồng Bộ 100% Thuật Toán (`ColorDiffProcessor.cs`, `ToolEditorViewModel.cs`, `InspectionService.Pipeline.cs`, `ToolEditorViewModel.Engine.cs`)**:
+    - Chuyển `ColorDiffProcessor.GetMeanLab` thành public method dùng chung cho cả khâu Teach lấy mẫu lẫn Run kiểm tra, đảm bảo thuật toán chuyển đổi không gian màu CIELab đồng nhất tuyệt đối.
+    - Trong `ColorDiff_TeachRefColor` (`ToolEditorViewModel.cs`): Áp dụng đúng Origin pose (`TransformPose`) của ảnh hiện tại trước khi tính `GetMeanLab`.
+    - Bổ sung fallback chuẩn xác cho `originTeach` trong `InspectionService.Pipeline.cs` và `ToolEditorViewModel.Engine.cs`.
+    - Đồng bộ hiển thị overlay và text kết quả ColorDiff trên Tool Editor (`CreateRotatedRoiWithPose`).
+  - **Kiểm Thử Tự Động & Biên Dịch Thành Công 100%**:
+    - Tạo `TestExtractApp/ColorDiffTest.cs` kiểm tra 4 kịch bản: Khớp màu trên cùng ảnh ($\Delta E = 0.00$), Dịch chuyển Origin ($\Delta E = 0.00$), Xoay góc ROI ($\Delta E = 0.00$), Phát hiện khác màu Red vs Green ($\Delta E = 170.13$). Toàn bộ test đạt **PASS 100%**.
+    - Solution biên dịch **0 Error(s)**.
+
 - **Cập nhật thông tin tác giả và bản quyền trong hộp thoại About CMS VINA Vision System (Task 194)**:
   - **Cấu Trúc Tham Số Hộp Thoại MessageBox.Show (`MainWindowViewModel.cs`)**:
     - Chuyển toàn bộ thông tin tác giả (Nguyễn Văn Hùng, Phone, Email, Website) vào đúng tham số nội dung `messageBoxText` của `MessageBox.Show`.

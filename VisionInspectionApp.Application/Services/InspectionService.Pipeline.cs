@@ -1272,6 +1272,14 @@ public partial class InspectionService
                 }
 
                 originTeach = new Point2d(config.Origin.WorldPosition.X, config.Origin.WorldPosition.Y);
+                if (originTeach.X == 0 && originTeach.Y == 0 && config.Origin.TemplateRoi.Width > 0)
+                {
+                    originTeach = new Point2d(config.Origin.TemplateRoi.X + config.Origin.TemplateRoi.Width / 2.0, config.Origin.TemplateRoi.Y + config.Origin.TemplateRoi.Height / 2.0);
+                }
+                else if (originTeach.X == 0 && originTeach.Y == 0 && config.Origin.SearchRoi.Width > 0)
+                {
+                    originTeach = new Point2d(config.Origin.SearchRoi.X + config.Origin.SearchRoi.Width / 2.0, config.Origin.SearchRoi.Y + config.Origin.SearchRoi.Height / 2.0);
+                }
                 originFound = originMatch.Position;
                 angleDeg = poseAngleDeg;
             }

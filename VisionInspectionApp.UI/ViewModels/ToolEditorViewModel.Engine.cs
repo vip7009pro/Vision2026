@@ -4352,12 +4352,21 @@ namespace VisionInspectionApp.UI.ViewModels
                     var ly = 12.0;
                     if (cdDef is not null && cdDef.InspectRoi.Width > 0 && cdDef.InspectRoi.Height > 0)
                     {
-                        if (run.Origin is not null)
+                        if (run.Origin is not null && run.Origin.Pass)
                         {
                             var originTeach = new Point2d(config!.Origin.WorldPosition.X, config.Origin.WorldPosition.Y);
-                            var tr = TransformPose(new Point2d(cdDef.InspectRoi.X, cdDef.InspectRoi.Y), originTeach, run.Origin.Position, run.Origin.AngleDeg);
-                            lx = tr.X + 4;
-                            ly = tr.Y + 4;
+                            if (originTeach.X == 0 && originTeach.Y == 0 && config.Origin.TemplateRoi.Width > 0)
+                            {
+                                originTeach = new Point2d(config.Origin.TemplateRoi.X + config.Origin.TemplateRoi.Width / 2.0, config.Origin.TemplateRoi.Y + config.Origin.TemplateRoi.Height / 2.0);
+                            }
+                            else if (originTeach.X == 0 && originTeach.Y == 0 && config.Origin.SearchRoi.Width > 0)
+                            {
+                                originTeach = new Point2d(config.Origin.SearchRoi.X + config.Origin.SearchRoi.Width / 2.0, config.Origin.SearchRoi.Y + config.Origin.SearchRoi.Height / 2.0);
+                            }
+                            var centerTeach = new Point2d(cdDef.InspectRoi.X + cdDef.InspectRoi.Width / 2.0, cdDef.InspectRoi.Y + cdDef.InspectRoi.Height / 2.0);
+                            var centerFound = TransformPose(centerTeach, originTeach, run.Origin.Position, run.Origin.AngleDeg);
+                            lx = centerFound.X - cdDef.InspectRoi.Width / 2.0 + 4;
+                            ly = centerFound.Y - cdDef.InspectRoi.Height / 2.0 + 4;
                         }
                         else
                         {
@@ -5041,15 +5050,29 @@ namespace VisionInspectionApp.UI.ViewModels
                 if (cdDef is not null)
                 {
                     var brush = (cdRes?.Pass ?? false) ? Brushes.Lime : Brushes.Red;
-                    dst.Add(CreateRotatedRoi(cdDef.InspectRoi, brush, $"{cdDef.Name} Sample"));
+                    dst.Add(CreateRotatedRoiWithPose(cdDef.InspectRoi, brush, $"{cdDef.Name} Sample"));
 
                     if (cdRes is not null)
                     {
+                        var originTeach = new Point2d(_config!.Origin.WorldPosition.X, _config.Origin.WorldPosition.Y);
+                        if (originTeach.X == 0 && originTeach.Y == 0 && _config.Origin.TemplateRoi.Width > 0)
+                        {
+                            originTeach = new Point2d(_config.Origin.TemplateRoi.X + _config.Origin.TemplateRoi.Width / 2.0, _config.Origin.TemplateRoi.Y + _config.Origin.TemplateRoi.Height / 2.0);
+                        }
+                        else if (originTeach.X == 0 && originTeach.Y == 0 && _config.Origin.SearchRoi.Width > 0)
+                        {
+                            originTeach = new Point2d(_config.Origin.SearchRoi.X + _config.Origin.SearchRoi.Width / 2.0, _config.Origin.SearchRoi.Y + _config.Origin.SearchRoi.Height / 2.0);
+                        }
+                        var centerTeach = new Point2d(cdDef.InspectRoi.X + cdDef.InspectRoi.Width / 2.0, cdDef.InspectRoi.Y + cdDef.InspectRoi.Height / 2.0);
+                        var centerFound = (run.Origin is not null && run.Origin.Pass) 
+                            ? TransformPose(centerTeach, originTeach, run.Origin.Position, run.Origin.AngleDeg) 
+                            : centerTeach;
+
                         var text = $"{cdRes.Name}: ΔE = {cdRes.DeltaE:F2} (L={cdRes.MeasuredL:F1}, a={cdRes.MeasuredA:F1}, b={cdRes.MeasuredB:F1})";
                         dst.Add(new OverlayTextItem
                         {
-                            X = cdDef.InspectRoi.X + 4,
-                            Y = cdDef.InspectRoi.Y + 4,
+                            X = centerFound.X - cdDef.InspectRoi.Width / 2.0 + 4,
+                            Y = centerFound.Y - cdDef.InspectRoi.Height / 2.0 + 4,
                             Text = text,
                             Foreground = brush,
                             Background = new SolidColorBrush(Color.FromArgb(160, 0, 0, 0))
