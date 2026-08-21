@@ -8,36 +8,48 @@
         xmlns:views="clr-namespace:VisionInspectionApp.UI.Views"
         xmlns:oqc="clr-namespace:VisionInspectionApp.UI.Views.OQC"
         mc:Ignorable="d"
-    Title="CMS VINA VISION SYSTEM"
-    Height="900"
-    Width="1400"
-    WindowState="Maximized"
-    WindowStartupLocation="CenterScreen"
-    FontFamily="Segoe UI"
-    Background="{DynamicResource WindowBackgroundBrush}"
-    Foreground="{DynamicResource TextBrush}"
-    Icon="pack://application:,,,/VisionInspectionApp.UI;component/Assets/cms-vina-vision-system.ico">
+        Title="CMS VINA VISION SYSTEM"
+        Height="900"
+        Width="1400"
+        WindowState="Maximized"
+        WindowStartupLocation="CenterScreen"
+        WindowStyle="None"
+        ResizeMode="CanResizeWithGrip"
+        FontFamily="Segoe UI"
+        Background="{DynamicResource WindowBackgroundBrush}"
+        Foreground="{DynamicResource TextBrush}"
+        Icon="pack://application:,,,/VisionInspectionApp.UI;component/Assets/cms-vina-vision-system.ico">
+
+    <WindowChrome.WindowChrome>
+        <WindowChrome CaptionHeight="42"
+                      ResizeBorderThickness="6"
+                      GlassFrameThickness="0"
+                      CornerRadius="0" />
+    </WindowChrome.WindowChrome>
 
     <Window.InputBindings>
+        <KeyBinding Key="N" Modifiers="Control" Command="{Binding ToolEditor.NewGraphCommand}" />
+        <KeyBinding Key="O" Modifiers="Control" Command="{Binding ToolEditor.OpenJobCommand}" />
+        <KeyBinding Key="S" Modifiers="Control" Command="{Binding ToolEditor.SaveJobCommand}" />
+        <KeyBinding Key="F1" Command="{Binding SwitchTabCommand}" CommandParameter="0" />
+        <KeyBinding Key="F2" Command="{Binding SwitchTabCommand}" CommandParameter="1" />
+        <KeyBinding Key="F3" Command="{Binding SwitchTabCommand}" CommandParameter="2" />
+        <KeyBinding Key="F4" Command="{Binding SwitchTabCommand}" CommandParameter="3" />
+        <KeyBinding Key="F5" Command="{Binding ToolEditor.RunOnceCommand}" />
+        <KeyBinding Key="F6" Command="{Binding ToolEditor.RunContinuousCommand}" />
     </Window.InputBindings>
 
     <Window.Resources>
-        <SolidColorBrush x:Key="ShellBg" Color="#F3F6FB" />
-        <SolidColorBrush x:Key="ShellSurface" Color="#FFFFFF" />
-        <SolidColorBrush x:Key="ShellSurfaceSoft" Color="#F8FAFD" />
-        <SolidColorBrush x:Key="ShellBorder" Color="#D9E2EC" />
         <SolidColorBrush x:Key="ShellAccent" Color="#0F5FA8" />
-        <SolidColorBrush x:Key="ShellAccentDark" Color="#32c746" />
-        <SolidColorBrush x:Key="ShellAccentTeal" Color="#18A6A3" />
-        <SolidColorBrush x:Key="ShellText" Color="#132238" />
-        <SolidColorBrush x:Key="ShellTextMuted" Color="#5F6B7A" />
+        <SolidColorBrush x:Key="ShellAccentDark" Color="#0B467D" />
 
+        <!-- Button Style -->
         <Style TargetType="Button">
             <Setter Property="Background" Value="{StaticResource ShellAccent}" />
-            <Setter Property="Foreground" Value="{DynamicResource AccentTextBrush}" />
+            <Setter Property="Foreground" Value="White" />
             <Setter Property="BorderBrush" Value="{StaticResource ShellAccentDark}" />
             <Setter Property="BorderThickness" Value="1" />
-            <Setter Property="Padding" Value="8,4" />
+            <Setter Property="Padding" Value="10,4" />
             <Setter Property="Margin" Value="0" />
             <Setter Property="Cursor" Value="Hand" />
             <Setter Property="FontWeight" Value="SemiBold" />
@@ -49,13 +61,13 @@
                                 Background="{TemplateBinding Background}"
                                 BorderBrush="{TemplateBinding BorderBrush}"
                                 BorderThickness="{TemplateBinding BorderThickness}"
-                                CornerRadius="12"
+                                CornerRadius="4"
                                 Padding="{TemplateBinding Padding}">
                             <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="Bd" Property="Opacity" Value="0.92" />
+                                <Setter TargetName="Bd" Property="Opacity" Value="0.9" />
                             </Trigger>
                             <Trigger Property="IsPressed" Value="True">
                                 <Setter TargetName="Bd" Property="RenderTransform">
@@ -73,6 +85,139 @@
             </Setter>
         </Style>
 
+        <!-- Window TitleBar Action Buttons (Min, Max, Close) -->
+        <Style x:Key="WindowControlButton" TargetType="Button">
+            <Setter Property="Width" Value="46" />
+            <Setter Property="Height" Value="40" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="FontFamily" Value="Segoe UI Symbol" />
+            <Setter Property="Focusable" Value="False" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="BtnBorder" Background="{TemplateBinding Background}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="BtnBorder" Property="Background" Value="#30FFFFFF" />
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="BtnBorder" Property="Background" Value="#50FFFFFF" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="WindowCloseButton" TargetType="Button" BasedOn="{StaticResource WindowControlButton}">
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="BtnBorder" Background="{TemplateBinding Background}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="BtnBorder" Property="Background" Value="#E81123" />
+                                <Setter Property="Foreground" Value="White" />
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="BtnBorder" Property="Background" Value="#B20A17" />
+                                <Setter Property="Foreground" Value="White" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Top Menu & MenuItem Modern Styles -->
+        <Style TargetType="Menu">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="FontSize" Value="12.5" />
+        </Style>
+
+        <Style TargetType="MenuItem">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
+            <Setter Property="Padding" Value="8,5" />
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="MenuItem">
+                        <Border x:Name="ItemBorder" Background="{TemplateBinding Background}" CornerRadius="3" Margin="1,0">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" SharedSizeGroup="IconGroup" />
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" SharedSizeGroup="GestureGroup" />
+                                </Grid.ColumnDefinitions>
+
+                                <!-- Icon -->
+                                <ContentPresenter Grid.Column="0" ContentSource="Icon" Margin="4,0,8,0" VerticalAlignment="Center" />
+
+                                <!-- Header Text -->
+                                <ContentPresenter Grid.Column="1" ContentSource="Header" RecognizesAccessKey="True" VerticalAlignment="Center" Margin="0,0,12,0" />
+
+                                <!-- Shortcut Gesture -->
+                                <TextBlock Grid.Column="2" Text="{TemplateBinding InputGestureText}" Foreground="{DynamicResource TextMutedBrush}" VerticalAlignment="Center" FontSize="11" Margin="8,0,4,0" />
+
+                                <!-- Popup for Submenus -->
+                                <Popup x:Name="PART_Popup" AllowsTransparency="True" Focusable="False"
+                                       IsOpen="{Binding IsSubmenuOpen, RelativeSource={RelativeSource TemplatedParent}}"
+                                       Placement="Bottom" PopupAnimation="Fade" VerticalOffset="2">
+                                    <Border Background="{DynamicResource PanelBackgroundBrush}"
+                                            BorderBrush="{DynamicResource BorderBrush}"
+                                            BorderThickness="1"
+                                            CornerRadius="4"
+                                            Padding="3,4"
+                                            SnapsToDevicePixels="True">
+                                        <Border.Effect>
+                                            <DropShadowEffect BlurRadius="12" ShadowDepth="4" Direction="270" Opacity="0.4" Color="Black" />
+                                        </Border.Effect>
+                                        <ScrollViewer CanContentScroll="True">
+                                            <StackPanel IsItemsHost="True" KeyboardNavigation.DirectionalNavigation="Cycle" />
+                                        </ScrollViewer>
+                                    </Border>
+                                </Popup>
+                            </Grid>
+                        </Border>
+
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsHighlighted" Value="True">
+                                <Setter TargetName="ItemBorder" Property="Background" Value="#250F5FA8" />
+                                <Setter Property="Foreground" Value="{DynamicResource AccentTextBrush}" />
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Opacity" Value="0.4" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style TargetType="Separator" x:Key="{x:Static MenuItem.SeparatorStyleKey}">
+            <Setter Property="Height" Value="1" />
+            <Setter Property="Margin" Value="4,4" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Separator">
+                        <Border Background="{DynamicResource BorderBrush}" />
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Modern Tabs Styling -->
         <Style TargetType="TabControl">
             <Setter Property="Background" Value="Transparent" />
             <Setter Property="BorderThickness" Value="0" />
@@ -86,52 +231,19 @@
                                 <RowDefinition Height="*" />
                             </Grid.RowDefinitions>
 
+                            <!-- Tab Headers Bar -->
                             <Border Grid.Row="0"
-                                    Background="{StaticResource ShellAccentDark}"
-                                    Padding="1"
-                                    CornerRadius="0,0,0,0"
-                                    Margin="0,0,0,0">
-                                <Grid>
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="Auto" />
-                                        <ColumnDefinition Width="*" />
-                                        <ColumnDefinition Width="Auto" />
-                                    </Grid.ColumnDefinitions>
-
-                                    <!-- The Tabs -->
-                                    <TabPanel Grid.Column="1" 
-                                              IsItemsHost="True" 
-                                              Margin="20,0,0,0" 
-                                              VerticalAlignment="Bottom" />
-
-                                    <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
-                                        <Border Background="#1AFFFFFF"
-                                                BorderBrush="#40FFFFFF"
-                                                BorderThickness="1"
-                                                CornerRadius="12"
-                                                Padding="10,6"
-                                                Margin="0,0,10,0"
-                                                VerticalAlignment="Center">
-                                            <StackPanel Orientation="Horizontal">
-                                                <Ellipse Width="8" Height="8" Fill="#31D07D" Margin="0,0,8,0" />
-                                                <TextBlock Text="Ready" Foreground="White" FontSize="12" FontWeight="SemiBold" />
-                                            </StackPanel>
-                                        </Border>
-                                        <Button Content="Close Job"
-                                                Command="{Binding CloseJobCommand}"
-                                                Background="#E53935"
-                                                BorderBrush="#B71C1C"
-                                                Foreground="White" />
-                                    </StackPanel>
-                                </Grid>
+                                    Background="{DynamicResource PanelAltBackgroundBrush}"
+                                    BorderBrush="{DynamicResource BorderBrush}"
+                                    BorderThickness="0,0,0,1"
+                                    Padding="1,1,1,0">
+                                <TabPanel IsItemsHost="True" VerticalAlignment="Bottom" />
                             </Border>
 
+                            <!-- Content -->
                             <Border Grid.Row="1"
-                                    Background="{DynamicResource PanelBackgroundBrush}"
-                                    BorderBrush="{DynamicResource BorderBrush}"
-                                    BorderThickness="1"
-                                    CornerRadius="5"
-                                    Margin="0,0,0,0"
+                                    Background="{DynamicResource WindowBackgroundBrush}"
+                                    Margin="0"
                                     Padding="0">
                                 <ContentPresenter ContentSource="SelectedContent" />
                             </Border>
@@ -143,18 +255,21 @@
 
         <Style TargetType="TabItem">
             <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
-            <Setter Property="Background" Value="{DynamicResource WindowBackgroundBrush}" />
-            <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
-            <Setter Property="Margin" Value="0,0,2,0" />
-            <Setter Property="Padding" Value="10,5" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderBrush" Value="Transparent" />
+            <Setter Property="Margin" Value="0,0,4,0" />
+            <Setter Property="Padding" Value="14,8" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="FontSize" Value="12.5" />
+            <Setter Property="Cursor" Value="Hand" />
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="TabItem">
                         <Border x:Name="TabBorder"
                                 Background="{TemplateBinding Background}"
                                 BorderBrush="{TemplateBinding BorderBrush}"
-                                BorderThickness="1"
-                                CornerRadius="10,10,10,10"
+                                BorderThickness="1,1,1,0"
+                                CornerRadius="6,6,0,0"
                                 Padding="{TemplateBinding Padding}">
                             <ContentPresenter ContentSource="Header"
                                               HorizontalAlignment="Center"
@@ -164,10 +279,10 @@
                             <Trigger Property="IsSelected" Value="True">
                                 <Setter TargetName="TabBorder" Property="Background" Value="{StaticResource ShellAccent}" />
                                 <Setter TargetName="TabBorder" Property="BorderBrush" Value="{StaticResource ShellAccentDark}" />
-                                <Setter Property="Foreground" Value="{DynamicResource AccentTextBrush}" />
+                                <Setter Property="Foreground" Value="White" />
                             </Trigger>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="TabBorder" Property="Opacity" Value="0.95" />
+                                <Setter TargetName="TabBorder" Property="Opacity" Value="0.9" />
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -175,46 +290,192 @@
             </Setter>
         </Style>
 
+        <!-- ViewModels to Views Mapping -->
         <DataTemplate DataType="{x:Type viewModels:ToolEditorViewModel}">
             <views:ToolEditorView />
-        </DataTemplate>
-
-        <DataTemplate DataType="{x:Type viewModels:InspectionViewModel}">
-            <views:InspectionView />
-        </DataTemplate>
-
-        <DataTemplate DataType="{x:Type viewModels:CalibrationViewModel}">
-            <views:CalibrationView />
-        </DataTemplate>
-
-        <DataTemplate DataType="{x:Type viewModels:ManualInspectionViewModel}">
-            <views:ManualInspectionView />
         </DataTemplate>
 
         <DataTemplate DataType="{x:Type viewModels:OqcScannerViewModel}">
             <oqc:OqcScannerView />
         </DataTemplate>
 
+        <DataTemplate DataType="{x:Type viewModels:ManualInspectionViewModel}">
+            <views:ManualInspectionView />
+        </DataTemplate>
+
         <DataTemplate DataType="{x:Type viewModels:CameraSettingsViewModel}">
             <views:CameraSettingsView />
+        </DataTemplate>
+
+        <DataTemplate DataType="{x:Type viewModels:InspectionViewModel}">
+            <views:InspectionView />
         </DataTemplate>
     </Window.Resources>
 
     <Grid Background="{DynamicResource WindowBackgroundBrush}">
-        <TabControl SelectedIndex="{Binding SelectedTabIndex, UpdateSourceTrigger=PropertyChanged}">
-            <TabItem Header="Tool Editor">
+        <Grid.RowDefinitions>
+            <!-- Custom Frameless Title Bar + MenuStrip (Height: 42) -->
+            <RowDefinition Height="Auto" />
+            <!-- Main Content Tabs -->
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <!-- =================================================================== -->
+        <!-- 1. CUSTOM TOP TITLE BAR & MENUSTRIP (CMS VINA BRANDED)               -->
+        <!-- =================================================================== -->
+        <Border Grid.Row="0"
+                Background="{DynamicResource HeaderBackgroundBrush}"
+                BorderBrush="{DynamicResource BorderBrush}"
+                BorderThickness="0,0,0,1"
+                Height="42"
+                MouseLeftButtonDown="Header_MouseLeftButtonDown">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <!-- Col 0: Logo & Brand Title -->
+                    <ColumnDefinition Width="Auto" />
+                    <!-- Col 1: Integrated MenuStrip -->
+                    <ColumnDefinition Width="Auto" />
+                    <!-- Col 2: Job / Product Active Info Banner (Draggable) -->
+                    <ColumnDefinition Width="*" />
+                    <!-- Col 3: Right Status & Window Controls (Min, Max, Close) -->
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <!-- Col 0: Brand Logo & Title -->
+                <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="10,0,14,0">
+                    <Image Source="pack://application:,,,/VisionInspectionApp.UI;component/Assets/cms_vina_logo.png"
+                           Height="22"
+                           VerticalAlignment="Center"
+                           RenderOptions.BitmapScalingMode="HighQuality"
+                           ToolTip="CMS VINA Machine Vision System" />
+                    <Border Width="1" Height="18" Background="{DynamicResource BorderBrush}" Margin="12,0,12,0" VerticalAlignment="Center" />
+                    <TextBlock Text="VISION SYSTEM"
+                               FontWeight="ExtraBold"
+                               FontSize="12.5"
+                               Foreground="{DynamicResource TextBrush}"
+                               VerticalAlignment="Center" />
+                </StackPanel>
+
+                <!-- Col 1: Modern MenuStrip -->
+                <Menu Grid.Column="1" VerticalAlignment="Center" Margin="0,0,10,0" WindowChrome.IsHitTestVisibleInChrome="True">
+                    <!-- File Menu -->
+                    <MenuItem Header="📁 Tệp (File)">
+                        <MenuItem Header="📄 Tạo Job Mới (New Job)" Command="{Binding ToolEditor.NewGraphCommand}" InputGestureText="Ctrl+N" />
+                        <MenuItem Header="📂 Mở Tệp Job... (Open Job)" Command="{Binding ToolEditor.OpenJobCommand}" InputGestureText="Ctrl+O" />
+                        <MenuItem Header="💾 Lưu Job (Save Job)" Command="{Binding ToolEditor.SaveJobCommand}" InputGestureText="Ctrl+S" />
+                        <MenuItem Header="💾 Lưu Thành Job Khác... (Save As)" Command="{Binding ToolEditor.SaveJobAsCommand}" />
+                        <Separator />
+                        <MenuItem Header="🖼️ Nạp Ảnh Xem Trước... (Load Image)" Command="{Binding ToolEditor.LoadPreviewImageCommand}" />
+                        <MenuItem Header="📷 Chụp Ảnh Từ Camera (Capture Snap)" Command="{Binding ToolEditor.CaptureCameraImageCommand}" />
+                        <Separator />
+                        <MenuItem Header="❌ Đóng Job (Close Job)" Command="{Binding CloseJobCommand}" />
+                        <MenuItem Header="🚪 Thoát Ứng Dụng (Exit)" Command="{Binding ExitCommand}" InputGestureText="Alt+F4" />
+                    </MenuItem>
+
+                    <!-- View / Navigation Menu -->
+                    <MenuItem Header="👁️ Màn Hình">
+                        <MenuItem Header="🧰 1. Tool Editor (Thiết Kế Graph &amp; Tools)" Command="{Binding SwitchTabCommand}" CommandParameter="0" InputGestureText="F1" />
+                        <MenuItem Header="📷 2. OQC Scanner (Quét Mã &amp; Chạy Tự Động)" Command="{Binding SwitchTabCommand}" CommandParameter="1" InputGestureText="F2" />
+                        <MenuItem Header="🔍 3. Manual Inspection (Kiểm Tra Thủ Công)" Command="{Binding SwitchTabCommand}" CommandParameter="2" InputGestureText="F3" />
+                        <MenuItem Header="⚙️ 4. Camera Settings (Cài Đặt Camera)" Command="{Binding SwitchTabCommand}" CommandParameter="3" InputGestureText="F4" />
+                    </MenuItem>
+
+                    <!-- Truyền Thông / PLC & HMI Menu -->
+                    <MenuItem Header="🔌 Truyền Thông">
+                        <MenuItem Header="🔌 Quản Lý Kết Nối PLC (PLC Manager...)" Command="{Binding ToolEditor.OpenPlcManagerCommand}" />
+                        <MenuItem Header="🖥️ Quản Lý Giao Diện HMI (HMI Manager...)" Command="{Binding ToolEditor.OpenHmiManagerCommand}" />
+                        <MenuItem Header="📊 Giám Sát Thời Gian Thực (PLC Monitor...)" Command="{Binding ToolEditor.OpenPlcMonitorCommand}" />
+                        <MenuItem Header="🏷️ Tra Cứu Danh Bạ Biến (PLC Tags...)" Command="{Binding ToolEditor.OpenPlcBrowserCommand}" />
+                    </MenuItem>
+
+                    <!-- Dữ Liệu & OQC Menu -->
+                    <MenuItem Header="🗄️ Dữ Liệu">
+                        <MenuItem Header="🗄️ Quản Lý Kết Nối Database (DB Manager...)" Command="{Binding ToolEditor.OpenDbManagerCommand}" />
+                        <MenuItem Header="📋 Gán Mã Sản Phẩm ↔ Tệp Job (Product Assign...)" Command="{Binding OqcScanner.OpenProductAssignCommand}" />
+                        <MenuItem Header="⚙️ Cấu Hình OQC Scanner &amp; Database..." Command="{Binding OqcScanner.OpenSettingsCommand}" />
+                    </MenuItem>
+
+                    <!-- Hiệu Chuẩn Menu -->
+                    <MenuItem Header="📐 Hiệu Chuẩn">
+                        <MenuItem Header="📐 Hiệu Chuẩn Tỉ Lệ Pixels/Mm (2 Điểm)..." Command="{Binding ToolEditor.OpenCalibrationDialogCommand}" />
+                        <MenuItem Header="♟️ Hiệu Chuẩn Camera Bàn Cờ (Chessboard Calib)..." Command="{Binding ToolEditor.OpenChessboardCalibrationDialogCommand}" />
+                    </MenuItem>
+
+                    <!-- Tác Vụ Menu -->
+                    <MenuItem Header="⚡ Tác Vụ">
+                        <MenuItem Header="▶ Chạy Kiểm Tra 1 Lần (Run Once)" Command="{Binding ToolEditor.RunOnceCommand}" InputGestureText="F5" />
+                        <MenuItem Header="🔁 Chạy Kiểm Tra Liên Tục (Run Continuous)" Command="{Binding ToolEditor.RunContinuousCommand}" InputGestureText="F6" />
+                    </MenuItem>
+
+                    <!-- Trợ Giúp Menu -->
+                    <MenuItem Header="❓ Trợ Giúp">
+                        <MenuItem Header="ℹ️ Giới Thiệu CMS VINA Vision System..." Command="{Binding AboutCommand}" />
+                    </MenuItem>
+                </Menu>
+
+                <!-- Col 2: Center Info / Status Pill (Khu vực có thể kéo di chuyển cửa sổ) -->
+                <Grid Grid.Column="2" HorizontalAlignment="Center" VerticalAlignment="Center">
+                    <Border Background="#12000000"
+                            BorderBrush="{DynamicResource BorderBrush}"
+                            BorderThickness="1"
+                            CornerRadius="14"
+                            Padding="12,3">
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                            <Ellipse Width="8" Height="8" Fill="#31D07D" Margin="0,0,8,0" VerticalAlignment="Center" />
+                            <TextBlock Text="READY" Foreground="#31D07D" FontSize="11" FontWeight="Bold" Margin="0,0,10,0" VerticalAlignment="Center" />
+                            <Border Width="1" Height="12" Background="{DynamicResource BorderBrush}" Margin="0,0,10,0" VerticalAlignment="Center" />
+                            <TextBlock Text="{Binding ToolEditor.ProductCode, StringFormat='🏷️ SP: {0}'}"
+                                       Foreground="{DynamicResource TextMutedBrush}"
+                                       FontSize="11.5"
+                                       FontWeight="SemiBold"
+                                       VerticalAlignment="Center" />
+                        </StackPanel>
+                    </Border>
+                </Grid>
+
+                <!-- Col 3: Window Controls (Minimize, Maximize/Restore, Close) -->
+                <StackPanel Grid.Column="3" Orientation="Horizontal" VerticalAlignment="Stretch" WindowChrome.IsHitTestVisibleInChrome="True">
+                    <Button Style="{StaticResource WindowControlButton}"
+                            Click="MinimizeButton_Click"
+                            ToolTip="Thu nhỏ cửa sổ (Minimize)">
+                        <TextBlock Text="─" FontSize="12" VerticalAlignment="Center" HorizontalAlignment="Center" />
+                    </Button>
+                    <Button x:Name="BtnMaximizeRestore"
+                            Style="{StaticResource WindowControlButton}"
+                            Click="MaximizeRestoreButton_Click"
+                            ToolTip="Phóng to tối đa (Maximize)">
+                        <TextBlock x:Name="BtnMaximizeRestoreText" Text="🗖" FontSize="12" VerticalAlignment="Center" HorizontalAlignment="Center" />
+                    </Button>
+                    <Button Style="{StaticResource WindowCloseButton}"
+                            Click="CloseButton_Click"
+                            ToolTip="Đóng ứng dụng (Close)">
+                        <TextBlock Text="✕" FontSize="13" VerticalAlignment="Center" HorizontalAlignment="Center" />
+                    </Button>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- =================================================================== -->
+        <!-- 2. MAIN NAVIGATION TABS                                              -->
+        <!-- =================================================================== -->
+        <TabControl Grid.Row="1" SelectedIndex="{Binding SelectedTabIndex, UpdateSourceTrigger=PropertyChanged}">
+            <!-- Tab 0: Tool Editor -->
+            <TabItem Header="🧰 Tool Editor">
                 <ContentControl Content="{Binding ToolEditor}" />
             </TabItem>
-            <TabItem Header="Calibration">
-                <ContentControl Content="{Binding Calibration}" />
-            </TabItem>
-            <TabItem Header="Manual Inspection">
-                <ContentControl Content="{Binding ManualInspection}" />
-            </TabItem>
-            <TabItem Header="OQC Scanner">
+
+            <!-- Tab 1: OQC Scanner (Mặc định cho sản xuất) -->
+            <TabItem Header="📷 OQC Scanner">
                 <ContentControl Content="{Binding OqcScanner}" />
             </TabItem>
-            <TabItem Header="Camera Settings">
+
+            <!-- Tab 2: Manual Inspection -->
+            <TabItem Header="🔍 Manual Inspection">
+                <ContentControl Content="{Binding ManualInspection}" />
+            </TabItem>
+
+            <!-- Tab 3: Camera Settings -->
+            <TabItem Header="⚙️ Camera Settings">
                 <ContentControl Content="{Binding CameraSettings}" />
             </TabItem>
         </TabControl>

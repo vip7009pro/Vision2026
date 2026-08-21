@@ -34,6 +34,7 @@
 
   <ItemGroup>
     <Resource Include="Assets\cms-vina-vision-system.ico" />
+    <Resource Include="Assets\cms_vina_logo.png" />
   </ItemGroup>
 
   <Target Name="KillPlcBridgeBeforeBuild" BeforeTargets="PreBuildEvent">

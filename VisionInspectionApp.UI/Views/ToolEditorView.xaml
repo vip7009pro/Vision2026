@@ -34,43 +34,31 @@
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
-        <DockPanel Grid.Row="0" LastChildFill="False">
-            <TextBlock Text="Job File" VerticalAlignment="Center" Margin="0,0,6,0" />
-            <Button Content="Open Job" Command="{Binding OpenJobCommand}" Margin="0,0,6,0" />
-            <Button Content="New Graph" Command="{Binding NewGraphCommand}" Margin="0,0,12,0" />
+        <DockPanel Grid.Row="0" LastChildFill="False" Margin="0,0,0,4">
+            <TextBlock Text="Mã Sản Phẩm:" VerticalAlignment="Center" FontWeight="SemiBold" Margin="0,0,6,0" Foreground="{DynamicResource TextBrush}" />
+            <TextBox Width="140" Text="{Binding ProductCode, UpdateSourceTrigger=LostFocus}" Margin="0,0,12,0" VerticalContentAlignment="Center" Padding="4,2" />
 
-            <Button Content="Load Image" Command="{Binding LoadPreviewImageCommand}" Margin="0,0,12,0" />
-            <Button Content="{Binding CaptureButtonText}" Command="{Binding CaptureCameraImageCommand}" Margin="0,0,12,0" />
+            <Button Content="🖼️ Load Image" Command="{Binding LoadPreviewImageCommand}" Margin="0,0,6,0" Padding="10,4" />
+            <Button Content="{Binding CaptureButtonText}" Command="{Binding CaptureCameraImageCommand}" Margin="0,0,14,0" Padding="10,4" />
 
-            <Button Command="{Binding RunOnceCommand}" Margin="0,0,6,0" Padding="10,4" Background="#0F5FA8" Foreground="White" BorderThickness="0" ToolTip="Chạy Flow 1 lần duy nhất (Nguồn thư mục: nạp ảnh kế tiếp)">
+            <Button Command="{Binding RunOnceCommand}" Margin="0,0,6,0" Padding="12,4" Background="#0F5FA8" Foreground="White" BorderThickness="0" ToolTip="Chạy Flow 1 lần duy nhất (Nguồn thư mục: nạp ảnh kế tiếp)">
                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                     <TextBlock Text="▶" FontFamily="Segoe UI Emoji" FontSize="13" Margin="0,0,5,0" VerticalAlignment="Center"/>
                     <TextBlock Text="Run Once" FontWeight="SemiBold" VerticalAlignment="Center"/>
                 </StackPanel>
             </Button>
 
-            <Button Command="{Binding RunContinuousCommand}" Margin="0,0,12,0" Padding="10,4" Background="{Binding RunContinuousButtonBackgroundBrush}" Foreground="White" BorderThickness="0" ToolTip="{Binding RunContinuousButtonToolTip}">
+            <Button Command="{Binding RunContinuousCommand}" Margin="0,0,14,0" Padding="12,4" Background="{Binding RunContinuousButtonBackgroundBrush}" Foreground="White" BorderThickness="0" ToolTip="{Binding RunContinuousButtonToolTip}">
                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                     <TextBlock Text="{Binding RunContinuousButtonIcon}" FontFamily="Segoe UI Emoji" FontSize="13" Margin="0,0,5,0" VerticalAlignment="Center"/>
                     <TextBlock Text="{Binding RunContinuousButtonText}" FontWeight="SemiBold" VerticalAlignment="Center"/>
                 </StackPanel>
             </Button>
 
-            <Button Content="🔌 PLC Manager" Command="{Binding OpenPlcManagerCommand}" Margin="0,0,4,0" Padding="8,4" Background="#1E88E5" Foreground="White" BorderThickness="0" ToolTip="Quản lý kết nối PLC và cấu hình Tag"/>
-            <Button Content="🖥️ HMI Manager" Command="{Binding OpenHmiManagerCommand}" Margin="0,0,4,0" Padding="8,4" Background="#D81B60" Foreground="White" BorderThickness="0" ToolTip="Thiết kế và vận hành màn hình HMI tương tác PLC"/>
-            <Button Content="📊 Monitor" Command="{Binding OpenPlcMonitorCommand}" Margin="0,0,4,0" Padding="8,4" Background="#43A047" Foreground="White" BorderThickness="0" ToolTip="Theo dõi trạng thái kết nối, Latency và Log PLC"/>
-            <Button Content="🏷️ Tags" Command="{Binding OpenPlcBrowserCommand}" Margin="0,0,4,0" Padding="8,4" Background="#8E24AA" Foreground="White" BorderThickness="0" ToolTip="Cửa sổ tra cứu danh sách Tag PLC"/>
-            <Button Content="🗄️ DB Manager" Command="{Binding OpenDbManagerCommand}" Margin="0,0,4,0" Padding="8,4" Background="#0D9488" Foreground="White" BorderThickness="0" ToolTip="Quản lý danh sách kết nối CSDL (SQL Server, MySQL, PostgreSQL, SQLite, ODBC)"/>
-            <Button Content="📐 Calibration" Command="{Binding OpenCalibrationDialogCommand}" Margin="0,0,4,0" Padding="8,4" Background="#E65100" Foreground="White" BorderThickness="0" ToolTip="Hiệu chuẩn tỉ lệ Pixels/mm trực tiếp trên Job hiện tại" />
-            <Button Content="♟ Chessboard Calib" Command="{Binding OpenChessboardCalibrationDialogCommand}" Margin="0,0,12,0" Padding="8,4" Background="#6A1B9A" Foreground="White" BorderThickness="0" ToolTip="Hiệu chuẩn camera bằng bảng Chessboard (tự động tính Intrinsic, Distortion, Pixels/mm)" />
+            <Button Content="📐 Calibration" Command="{Binding OpenCalibrationDialogCommand}" Margin="0,0,6,0" Padding="10,4" Background="#E65100" Foreground="White" BorderThickness="0" ToolTip="Hiệu chuẩn tỉ lệ Pixels/mm trực tiếp trên Job hiện tại" />
+            <Button Content="♟ Chessboard Calib" Command="{Binding OpenChessboardCalibrationDialogCommand}" Margin="0,0,14,0" Padding="10,4" Background="#6A1B9A" Foreground="White" BorderThickness="0" ToolTip="Hiệu chuẩn camera bằng bảng Chessboard (tự động tính Intrinsic, Distortion, Pixels/mm)" />
 
-            <TextBlock Text="Product Code" VerticalAlignment="Center" Margin="0,0,6,0" />
-            <TextBox Width="120" Text="{Binding ProductCode, UpdateSourceTrigger=LostFocus}" Margin="0,0,12,0" />
-
-            <Button Content="Save Job" Command="{Binding SaveJobCommand}" Margin="0,0,6,0" />
-            <Button Content="Save As" Command="{Binding SaveJobAsCommand}" Margin="0,0,12,0" />
-
-            <Border Background="{Binding ResultBackgroundBrush}" BorderBrush="{Binding ResultBorderBrush}" BorderThickness="1" CornerRadius="12" Padding="10,3" VerticalAlignment="Center">
+            <Border Background="{Binding ResultBackgroundBrush}" BorderBrush="{Binding ResultBorderBrush}" BorderThickness="1" CornerRadius="12" Padding="12,3" VerticalAlignment="Center">
                 <StackPanel Orientation="Horizontal">
                     <TextBlock Text="Result: " FontSize="11" Foreground="{DynamicResource TextMutedBrush}" VerticalAlignment="Center"/>
                     <TextBlock Text="{Binding ResultStatusText}" Foreground="{Binding ResultForegroundBrush}" FontSize="12" FontWeight="Bold" VerticalAlignment="Center"/>

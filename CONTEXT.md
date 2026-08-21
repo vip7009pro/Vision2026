@@ -51,6 +51,32 @@
 
 ### Sửa lỗi và Cải thiện UX/UI (Phiên làm việc hiện tại)
 
+- **Khắc phục triệt để lỗi Maximize cửa sổ bị thanh Taskbar của Windows che mất (Task 193)**:
+  - **Xử Lý Hook Thông Điệp Win32 WM_GETMINMAXINFO (`MainWindow.xaml.cs`)**:
+    - Bổ sung `HwndSourceHook` xử lý thông điệp Win32 `WM_GETMINMAXINFO` (0x0024) khi cửa sổ được phóng to cực đại (Maximize).
+    - Sử dụng `MonitorFromWindow` và `GetMonitorInfo` lấy chính xác tọa độ vùng làm việc khả dụng `rcWork` (Work Area đã trừ đi kích thước và vị trí của Taskbar Windows).
+    - Đảm bảo cửa sổ khi Maximize tự động căn chỉnh vừa khít trên thanh Taskbar (không bị taskbar che khuất phần đáy app, không bị tràn màn hình).
+    - Hoạt động chuẩn xác trên mọi cấu hình màn hình (đơn màn hình, đa màn hình, DPI Scaling khác nhau, thanh Taskbar ở dưới/trên/trái/phải).
+  - **Biên Dịch & Kiểm Thử Thành Công 100%**: Solution biên dịch **0 Error(s)**.
+
+- **Cải tổ toàn bộ Navigation, Custom Frameless Title Bar CMS VINA, MenuStrip đa tầng chuyên nghiệp & Dọn dẹp Tool Editor (Task 192)**:
+  - **Thanh Tiêu Đề Liền Mạch Custom Frameless Title Bar (`MainWindow.xaml`, `MainWindow.xaml.cs`)**:
+    - Loại bỏ window chrome mặc định của Windows (`WindowStyle="None"`, `WindowChrome`), đưa giao diện app liền mạch sát đỉnh màn hình.
+    - Tích hợp nhận diện thương hiệu **CMS VINA** (`Assets/cms_vina_logo.png`), tên hệ thống `VISION SYSTEM`, khu vực kéo thả di chuyển cửa sổ kèm thông tin Job/Sản phẩm (`🏷️ SP: ...`) và đèn báo trạng thái `● READY`.
+    - Tích hợp 3 nút điều khiển cửa sổ tiêu chuẩn: Thu nhỏ (Minimize `─`), Phóng to/Khôi phục (Maximize/Restore `🗖`/`🗗`), Đóng ứng dụng (Close `✕`) với hiệu ứng hover mượt mà và hỗ trợ nhấp đúp tiêu đề để phóng to.
+  - **Hệ Thống MenuStrip Đa Tầng Khoa Học & Phím Tắt Tiêu Chuẩn (`MainWindow.xaml`, `MainWindowViewModel.cs`)**:
+    - `📁 Tệp (File)`: Tạo Job mới (`Ctrl+N`), Mở Job (`Ctrl+O`), Lưu Job (`Ctrl+S`), Lưu thành Job khác, Nạp ảnh xem trước, Chụp ảnh camera, Đóng Job, Thoát app (`Alt+F4`).
+    - `👁️ Màn Hình`: Chuyển đổi nhanh 4 tab chức năng (`F1` - Tool Editor, `F2` - OQC Scanner, `F3` - Manual Inspection, `F4` - Camera Settings).
+    - `🔌 Truyền Thông (PLC/HMI)`: PLC Manager, HMI Manager, Real-time Monitor, Tag Browser.
+    - `🗄️ Dữ Liệu (Database/OQC)`: Database Connection Manager, Gán Mã Sản Phẩm ↔ Job File, Cấu Hình OQC Scanner.
+    - `📐 Hiệu Chuẩn`: Pixel/Mm Calibration Dialog, Chessboard Camera Calibration Dialog.
+    - `⚡ Tác Vụ`: Chạy kiểm tra 1 lần (`F5` - Run Once), Chạy kiểm tra liên tục (`F6` - Run Continuous).
+    - `❓ Trợ Giúp`: Hộp thoại thông tin bản quyền CMS VINA Vision System.
+  - **Tối Ưu Hóa Hệ Thống Tab & Dọn Dẹp Toolbar Tool Editor (`MainWindow.xaml`, `ToolEditorView.xaml`)**:
+    - Loại bỏ tab "Calibration" riêng biệt, chuyển sang 4 tab chính tinh gọn (`Tool Editor`, `OQC Scanner`, `Manual Inspection`, `Camera Settings`).
+    - Dọn dẹp thanh Toolbar trong Tool Editor: Loại bỏ các nút quản lý File và PLC/DB dư thừa, chỉ giữ lại các nút cốt lõi: *Mã Sản Phẩm, Load Image, Capture Camera, Run Once, Run Continuous, Calibration, Chessboard Calib, Result Badge*, giúp workspace thông thoáng và tập trung.
+  - **Biên Dịch & Kiểm Thử Thành Công 100%**: Solution biên dịch **0 Error(s)**, toàn bộ unit tests và run test đạt PASS 100%.
+
 - **Tự động AutoFit khi thay đổi kích thước cửa sổ & Chuyển nền Preview ảnh sang Grid Xám công nghiệp (Task 191)**:
   - **Tự Động AutoFit Khi Thay Đổi Kích Thước Cửa Sổ (`ImageViewerControl.xaml.cs`)**:
     - Cập nhật sự kiện `OnRootGridSizeChanged` tự động kích hoạt `ResetView()` mỗi khi container hoặc cửa sổ ứng dụng thay đổi kích thước (kéo giãn, phóng to cực đại Maximize, thu nhỏ Restore, kéo thanh chia GridSplitter).
