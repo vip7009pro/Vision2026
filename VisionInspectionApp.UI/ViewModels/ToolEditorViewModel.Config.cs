@@ -173,6 +173,7 @@ namespace VisionInspectionApp.UI.ViewModels
 
                 SelectedNode = Nodes.Count > 0 ? Nodes[0] : null;
                 RaiseToolPropertyPanelsChanged();
+                OnPropertyChanged(nameof(PixelsPerMm));
                 RefreshPreviews();
                 IsDirty = false;
                 if (System.Windows.Application.Current?.MainWindow != null)

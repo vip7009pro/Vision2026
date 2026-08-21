@@ -38,6 +38,8 @@ public sealed class JobService : IJobService
         var config = JsonSerializer.Deserialize<VisionConfig>(json, CreateJsonOptions());
         if (config is null) throw new InvalidDataException("Failed to deserialize job configuration.");
         
+        VisionInspectionApp.Application.Services.ChessboardCalibrationService.EnsureCalibration(config);
+
         return config;
     }
 

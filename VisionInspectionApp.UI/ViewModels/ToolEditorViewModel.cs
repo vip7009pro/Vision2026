@@ -3092,9 +3092,11 @@ namespace VisionInspectionApp.UI.ViewModels
             {
                 ProductCode = "NewProduct"
             };
+            VisionInspectionApp.Application.Services.ChessboardCalibrationService.EnsureCalibration(_config);
             ProductCode = "NewProduct";
             CurrentJobFilePath = null;
             CurrentTempWorkingDir = null;
+            OnPropertyChanged(nameof(PixelsPerMm));
             RefreshPreviews();
         }
     

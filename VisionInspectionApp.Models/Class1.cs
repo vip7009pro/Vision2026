@@ -158,6 +158,21 @@ public sealed class ChessboardCalibrationData
     public double ReprojectionError { get; set; }
     public double PixelsPerMm { get; set; }
     public bool IsCalibrated { get; set; }
+
+    public ChessboardCalibrationData Clone() => new()
+    {
+        BoardCols = BoardCols,
+        BoardRows = BoardRows,
+        SquareSizeMm = SquareSizeMm,
+        Fx = Fx,
+        Fy = Fy,
+        Cx = Cx,
+        Cy = Cy,
+        DistCoeffs = DistCoeffs is not null ? (double[])DistCoeffs.Clone() : Array.Empty<double>(),
+        ReprojectionError = ReprojectionError,
+        PixelsPerMm = PixelsPerMm,
+        IsCalibrated = IsCalibrated
+    };
 }
 
 public sealed class ImageSourceDefinition

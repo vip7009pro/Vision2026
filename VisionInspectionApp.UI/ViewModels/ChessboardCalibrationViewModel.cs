@@ -37,32 +37,60 @@ public sealed partial class ChessboardCalibrationViewModel : ObservableObject
         ClearAllCommand = new RelayCommand(ClearAll);
         CalibrateCommand = new RelayCommand(RunCalibrate, () => Captures.Count(c => c.Found) >= 3);
         UndistortPreviewCommand = new RelayCommand(UndistortPreview, () => IsCalibrated && _currentMat is not null);
+        SetAsGlobalCalibrationCommand = new RelayCommand(SetAsGlobalCalibration, () => IsCalibrated);
     }
 
     public void Initialize(VisionConfig config)
     {
         _config = config;
-        if (config.ChessboardCalibration is not null)
+        ChessboardCalibrationData? data = null;
+        bool isFromJob = false;
+
+        if (config.ChessboardCalibration is not null && config.ChessboardCalibration.IsCalibrated)
         {
-            var data = config.ChessboardCalibration;
+            data = config.ChessboardCalibration;
+            isFromJob = true;
+        }
+        else
+        {
+            data = ChessboardCalibrationService.GetGlobalCalibration();
+            if (data is not null && data.IsCalibrated)
+            {
+                // Tự động gắn cấu hình Global vào Job hiện tại nếu Job chưa có cấu hình riêng
+                config.ChessboardCalibration = data.Clone();
+                if (config.PixelsPerMm <= 0 || Math.Abs(config.PixelsPerMm - 1.0) < 1e-6)
+                {
+                    config.PixelsPerMm = data.PixelsPerMm;
+                }
+            }
+        }
+
+        if (data is not null && data.IsCalibrated)
+        {
             BoardCols = data.BoardCols;
             BoardRows = data.BoardRows;
             SquareSizeMm = data.SquareSizeMm;
 
-            if (data.IsCalibrated)
-            {
-                IsCalibrated = true;
-                PixelsPerMm = data.PixelsPerMm;
-                ReprojectionError = data.ReprojectionError;
-                FocalX = data.Fx;
-                FocalY = data.Fy;
-                PrincipalX = data.Cx;
-                PrincipalY = data.Cy;
-                DistCoeffsText = data.DistCoeffs is not null
-                    ? string.Join(", ", data.DistCoeffs.Select(d => d.ToString("F6")))
-                    : string.Empty;
-                StatusMessage = "✅ Calibration đã lưu trước đó được nạp lại.";
-            }
+            IsCalibrated = true;
+            PixelsPerMm = data.PixelsPerMm;
+            ReprojectionError = data.ReprojectionError;
+            FocalX = data.Fx;
+            FocalY = data.Fy;
+            PrincipalX = data.Cx;
+            PrincipalY = data.Cy;
+            DistCoeffsText = data.DistCoeffs is not null
+                ? string.Join(", ", data.DistCoeffs.Select(d => d.ToString("F6")))
+                : string.Empty;
+
+            StatusMessage = isFromJob
+                ? "✅ Calibration đã lưu trước đó của Job được nạp lại."
+                : "🌐 Đang áp dụng Global Calibration (do Job hiện tại chưa có cấu hình riêng).";
+        }
+        else if (config.ChessboardCalibration is not null)
+        {
+            BoardCols = config.ChessboardCalibration.BoardCols;
+            BoardRows = config.ChessboardCalibration.BoardRows;
+            SquareSizeMm = config.ChessboardCalibration.SquareSizeMm;
         }
     }
 
@@ -135,6 +163,7 @@ public sealed partial class ChessboardCalibrationViewModel : ObservableObject
     public ICommand ClearAllCommand { get; }
     public ICommand CalibrateCommand { get; }
     public ICommand UndistortPreviewCommand { get; }
+    public ICommand SetAsGlobalCalibrationCommand { get; }
 
     // ======== Load / Capture ========
     private void LoadImage()
@@ -345,12 +374,50 @@ public sealed partial class ChessboardCalibrationViewModel : ObservableObject
         StatusMessage = "🔄 Ảnh đã được Undistort (khử biến dạng ống kính).";
     }
 
+    // ======== Global Calibration ========
+    private void SetAsGlobalCalibration()
+    {
+        if (!IsCalibrated)
+        {
+            StatusMessage = "⚠️ Vui lòng thực hiện Calibrate trước khi lưu Global Calibration.";
+            return;
+        }
+
+        var calibData = _config?.ChessboardCalibration ?? new ChessboardCalibrationData
+        {
+            BoardCols = BoardCols,
+            BoardRows = BoardRows,
+            SquareSizeMm = SquareSizeMm,
+            Fx = FocalX,
+            Fy = FocalY,
+            Cx = PrincipalX,
+            Cy = PrincipalY,
+            DistCoeffs = !string.IsNullOrWhiteSpace(DistCoeffsText)
+                ? DistCoeffsText.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries).Select(s => double.TryParse(s, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out var v) ? v : 0.0).ToArray()
+                : Array.Empty<double>(),
+            ReprojectionError = ReprojectionError,
+            PixelsPerMm = PixelsPerMm,
+            IsCalibrated = true
+        };
+
+        var ok = ChessboardCalibrationService.SaveGlobalCalibration(calibData);
+        if (ok)
+        {
+            StatusMessage = $"🌐 Đã lưu cấu hình làm Global Calibration thành công! (Pixels/mm: {PixelsPerMm:F4}, Error: {ReprojectionError:F4} px). Từ nay các Job mới hoặc chưa có calib sẽ tự động áp dụng.";
+        }
+        else
+        {
+            StatusMessage = "❌ Lưu Global Calibration thất bại. Vui lòng kiểm tra quyền truy cập tệp cấu hình.";
+        }
+    }
+
     // ======== Helpers ========
     private void RefreshCommands()
     {
         (AddCaptureCommand as RelayCommand)?.NotifyCanExecuteChanged();
         (CalibrateCommand as RelayCommand)?.NotifyCanExecuteChanged();
         (UndistortPreviewCommand as RelayCommand)?.NotifyCanExecuteChanged();
+        (SetAsGlobalCalibrationCommand as RelayCommand)?.NotifyCanExecuteChanged();
     }
 }
 

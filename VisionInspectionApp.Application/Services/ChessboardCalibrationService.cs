@@ -217,6 +217,118 @@ public static class ChessboardCalibrationService
             return fallbackDst;
         }
     }
+
+    // ==========================================
+    // GLOBAL CALIBRATION MANAGEMENT
+    // ==========================================
+
+    private static readonly string GlobalCalibrationDir = System.IO.Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Vision2026");
+
+    private static readonly string GlobalCalibrationFilePath = System.IO.Path.Combine(
+        GlobalCalibrationDir, "global_chessboard_calibration.json");
+
+    private static readonly object _fileLock = new();
+
+    /// <summary>
+    /// Lưu cấu hình calibration làm Global mặc định cho toàn bộ ứng dụng.
+    /// </summary>
+    public static bool SaveGlobalCalibration(ChessboardCalibrationData data)
+    {
+        if (data is null) return false;
+        try
+        {
+            lock (_fileLock)
+            {
+                if (!System.IO.Directory.Exists(GlobalCalibrationDir))
+                {
+                    System.IO.Directory.CreateDirectory(GlobalCalibrationDir);
+                }
+
+                var options = new System.Text.Json.JsonSerializerOptions
+                {
+                    WriteIndented = true,
+                    PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase
+                };
+                var json = System.Text.Json.JsonSerializer.Serialize(data, options);
+                System.IO.File.WriteAllText(GlobalCalibrationFilePath, json);
+                return true;
+            }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[ChessboardCalibrationService] Error saving global calibration: {ex.Message}");
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Đọc cấu hình Global calibration nếu có.
+    /// </summary>
+    public static ChessboardCalibrationData? GetGlobalCalibration()
+    {
+        try
+        {
+            lock (_fileLock)
+            {
+                if (!System.IO.File.Exists(GlobalCalibrationFilePath))
+                {
+                    return null;
+                }
+
+                var json = System.IO.File.ReadAllText(GlobalCalibrationFilePath);
+                var options = new System.Text.Json.JsonSerializerOptions
+                {
+                    PropertyNameCaseInsensitive = true
+                };
+                var data = System.Text.Json.JsonSerializer.Deserialize<ChessboardCalibrationData>(json, options);
+                if (data is not null && data.IsCalibrated)
+                {
+                    return data;
+                }
+                return null;
+            }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[ChessboardCalibrationService] Error reading global calibration: {ex.Message}");
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Kiểm tra hệ thống đã có Global calibration hợp lệ hay chưa.
+    /// </summary>
+    public static bool HasGlobalCalibration()
+    {
+        var cal = GetGlobalCalibration();
+        return cal is not null && cal.IsCalibrated;
+    }
+
+    /// <summary>
+    /// Tự động áp dụng Global calibration cho VisionConfig nếu Job chưa có cấu hình riêng.
+    /// </summary>
+    public static bool EnsureCalibration(VisionConfig config)
+    {
+        if (config is null) return false;
+        if (config.ChessboardCalibration is not null && config.ChessboardCalibration.IsCalibrated)
+        {
+            return true; // Đã có cấu hình riêng của Job
+        }
+
+        var globalCal = GetGlobalCalibration();
+        if (globalCal is not null && globalCal.IsCalibrated)
+        {
+            config.ChessboardCalibration = globalCal.Clone();
+            if (config.PixelsPerMm <= 0 || Math.Abs(config.PixelsPerMm - 1.0) < 1e-6)
+            {
+                config.PixelsPerMm = globalCal.PixelsPerMm;
+            }
+            return true;
+        }
+
+        return false;
+    }
 }
 
 public sealed record ChessboardCalibrationResult(

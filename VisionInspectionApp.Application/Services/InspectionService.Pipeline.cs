@@ -58,6 +58,8 @@ public partial class InspectionService
 
         try
         {
+            ChessboardCalibrationService.EnsureCalibration(config);
+
             if (config.ChessboardCalibration is not null && config.ChessboardCalibration.IsCalibrated &&
                 (config.ImageSources?.Any(s => s.EnableUndistort) ?? false))
             {

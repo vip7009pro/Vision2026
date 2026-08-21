@@ -130,5 +130,64 @@ public static class CaliperAndLineTest
         {
             throw new Exception($"SegmentLineDistance accuracy failed: expected 150.0, got {dist}");
         }
+
+        TestGlobalChessboardCalibration();
+    }
+
+    public static void TestGlobalChessboardCalibration()
+    {
+        Console.WriteLine("\n=== Testing Global Chessboard Calibration Serialization & Auto-Apply ===");
+        var mockGlobal = new ChessboardCalibrationData
+        {
+            BoardCols = 9,
+            BoardRows = 7,
+            SquareSizeMm = 25.0,
+            Fx = 2500.5,
+            Fy = 2501.2,
+            Cx = 1920.0,
+            Cy = 1080.0,
+            DistCoeffs = new double[] { -0.05, 0.12, 0.001, -0.002, 0.0 },
+            ReprojectionError = 0.1234,
+            PixelsPerMm = 15.6789,
+            IsCalibrated = true
+        };
+
+        var saved = VisionInspectionApp.Application.Services.ChessboardCalibrationService.SaveGlobalCalibration(mockGlobal);
+        Console.WriteLine($"SaveGlobalCalibration: {saved}");
+        if (!saved) throw new Exception("SaveGlobalCalibration failed.");
+
+        var loaded = VisionInspectionApp.Application.Services.ChessboardCalibrationService.GetGlobalCalibration();
+        if (loaded is null || !loaded.IsCalibrated) throw new Exception("GetGlobalCalibration returned null or uncalibrated data.");
+        Console.WriteLine($"Loaded Global Calibration: BoardCols={loaded.BoardCols}, Fx={loaded.Fx:F1}, PixelsPerMm={loaded.PixelsPerMm:F4}");
+
+        // Test Auto-Apply to empty VisionConfig
+        var emptyConfig = new VisionConfig { ProductCode = "TestEmptyCalib" };
+        VisionInspectionApp.Application.Services.ChessboardCalibrationService.EnsureCalibration(emptyConfig);
+        if (emptyConfig.ChessboardCalibration is null || !emptyConfig.ChessboardCalibration.IsCalibrated || Math.Abs(emptyConfig.PixelsPerMm - 15.6789) > 1e-4)
+        {
+            throw new Exception($"EnsureCalibration failed to apply to empty config. PixelsPerMm={emptyConfig.PixelsPerMm}");
+        }
+        Console.WriteLine($"[PASS] EnsureCalibration automatically populated empty config: PixelsPerMm={emptyConfig.PixelsPerMm:F4}");
+
+        // Test Preserve existing job-specific calibration
+        var specificConfig = new VisionConfig
+        {
+            ProductCode = "TestSpecificCalib",
+            PixelsPerMm = 30.0,
+            ChessboardCalibration = new ChessboardCalibrationData
+            {
+                BoardCols = 8,
+                BoardRows = 6,
+                SquareSizeMm = 20.0,
+                PixelsPerMm = 30.0,
+                IsCalibrated = true
+            }
+        };
+        VisionInspectionApp.Application.Services.ChessboardCalibrationService.EnsureCalibration(specificConfig);
+        if (specificConfig.ChessboardCalibration.BoardCols != 8 || Math.Abs(specificConfig.PixelsPerMm - 30.0) > 1e-4)
+        {
+            throw new Exception("EnsureCalibration incorrectly overwrote existing job-specific calibration.");
+        }
+        Console.WriteLine($"[PASS] EnsureCalibration preserved job-specific calibration: PixelsPerMm={specificConfig.PixelsPerMm:F4}, BoardCols={specificConfig.ChessboardCalibration.BoardCols}");
     }
 }

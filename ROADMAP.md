@@ -521,6 +521,17 @@ Lộ trình tích hợp tính năng Chụp ảnh từ camera và hỗ trợ các
     - Nâng cấp phương thức `Undistort`: Sử dụng `Cv2.GetOptimalNewCameraMatrix` kết hợp `Cv2.InitUndistortRectifyMap` và `Cv2.Remap(BorderTypes.Constant, Scalar.Black)` kèm khử nhiễu đa thức méo, loại bỏ hoàn toàn hiện tượng méo gấp biên ngoài / dải lưỡi liềm méo ở cạnh ảnh.
     - Đồng bộ hóa 100% việc áp dụng `Undistort` giữa màn hình Preview của Tool Editor và Pipeline xuất ảnh qua `ImageOutput`.
   - `Biên Dịch & Kiểm Thử Thành Công 100%`: Solution biên dịch **0 Error(s)**, vượt qua các bài kiểm thử tự động.
+- [x] Task 189: Quản lý cấu hình Global Chessboard Calibration toàn cục cho toàn bộ ứng dụng:
+  - `Quản Lý Lưu/Nạp Global Calibration Tự Động (ChessboardCalibrationService.cs)`:
+    - Lưu trữ tệp cấu hình `%AppData%\Vision2026\global_chessboard_calibration.json` kèm khóa luồng an toàn `_fileLock`.
+    - Cung cấp các phương thức `SaveGlobalCalibration`, `GetGlobalCalibration`, `HasGlobalCalibration`, và `EnsureCalibration(config)`.
+  - `Tự Động Áp Dụng Cho Job Mới Hoặc Job Chưa Có Calib (ToolEditorViewModel.cs, JobService.cs, InspectionService.Pipeline.cs)`:
+    - Khi tạo Job mới (`NewGraph`) hoặc mở Job (`LoadJobFromFile` / `LoadJob` / `InspectAsync`), hệ thống tự động kiểm tra: nếu Job chưa có calibration riêng thì lập tức kế thừa cấu hình Global Calibration và `PixelsPerMm`.
+    - Bảo toàn 100% cấu hình riêng của các Job đã được hiệu chuẩn độc lập trước đó.
+  - `Tích Hợp Nút '🌐 Set As Global Calib' Trong Chessboard Dialog (ChessboardCalibrationDialog.xaml, ChessboardCalibrationViewModel.cs)`:
+    - Thêm nút **`🌐 Set As Global Calib`** bên cạnh **`🔄 Undistort Preview`** cho phép lưu cấu hình hiệu chuẩn hiện tại thành Global chỉ với 1 click.
+    - Cập nhật thông báo trạng thái trực quan phân biệt rõ calibration của Job và Global calibration.
+  - `Biên Dịch & Kiểm Thử Thành Công 100%`: Solution biên dịch **0 Error(s)**, vượt qua toàn bộ unit test tự động.
 
 
 
