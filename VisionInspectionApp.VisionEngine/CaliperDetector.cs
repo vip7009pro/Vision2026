@@ -92,28 +92,31 @@ public static class CaliperDetector
                     smoothProf[y] = 0.25 * rawProf[y - 1] + 0.5 * rawProf[y] + 0.25 * rawProf[y + 1];
                 }
 
-                var bestIdx = -1;
-                var bestVal = 0.0;
+                var gradProf = new double[n];
                 for (var y = 1; y < n - 1; y++)
                 {
                     var g = (smoothProf[y + 1] - smoothProf[y - 1]) * 0.5;
                     if (def.Polarity == EdgePolarity.DarkToLight)
                     {
-                        if (g <= 0) continue;
+                        gradProf[y] = g > 0 ? g : 0.0;
                     }
                     else if (def.Polarity == EdgePolarity.LightToDark)
                     {
-                        if (g >= 0) continue;
-                        g = -g;
+                        gradProf[y] = g < 0 ? -g : 0.0;
                     }
                     else
                     {
-                        g = Math.Abs(g);
+                        gradProf[y] = Math.Abs(g);
                     }
+                }
 
-                    if (g > bestVal)
+                var bestIdx = -1;
+                var bestVal = 0.0;
+                for (var y = 1; y < n - 1; y++)
+                {
+                    if (gradProf[y] > bestVal)
                     {
-                        bestVal = g;
+                        bestVal = gradProf[y];
                         bestIdx = y;
                     }
                 }
@@ -121,9 +124,9 @@ public static class CaliperDetector
                 if (bestIdx < 1 || bestIdx >= n - 1) continue;
                 if (bestVal < minStrength) continue;
 
-                var gL = Math.Abs(smoothProf[bestIdx] - smoothProf[bestIdx - 1]);
+                var gL = gradProf[bestIdx - 1];
                 var gC = bestVal;
-                var gR = Math.Abs(smoothProf[bestIdx + 1] - smoothProf[bestIdx]);
+                var gR = gradProf[bestIdx + 1];
                 var sub = InterpPeak(gL, gC, gR);
 
                 var ySub = bestIdx + Math.Clamp(sub, -0.5, 0.5);
@@ -165,28 +168,31 @@ public static class CaliperDetector
                     smoothProf[x] = 0.25 * rawProf[x - 1] + 0.5 * rawProf[x] + 0.25 * rawProf[x + 1];
                 }
 
-                var bestIdx = -1;
-                var bestVal = 0.0;
+                var gradProf = new double[n];
                 for (var x = 1; x < n - 1; x++)
                 {
                     var g = (smoothProf[x + 1] - smoothProf[x - 1]) * 0.5;
                     if (def.Polarity == EdgePolarity.DarkToLight)
                     {
-                        if (g <= 0) continue;
+                        gradProf[x] = g > 0 ? g : 0.0;
                     }
                     else if (def.Polarity == EdgePolarity.LightToDark)
                     {
-                        if (g >= 0) continue;
-                        g = -g;
+                        gradProf[x] = g < 0 ? -g : 0.0;
                     }
                     else
                     {
-                        g = Math.Abs(g);
+                        gradProf[x] = Math.Abs(g);
                     }
+                }
 
-                    if (g > bestVal)
+                var bestIdx = -1;
+                var bestVal = 0.0;
+                for (var x = 1; x < n - 1; x++)
+                {
+                    if (gradProf[x] > bestVal)
                     {
-                        bestVal = g;
+                        bestVal = gradProf[x];
                         bestIdx = x;
                     }
                 }
@@ -194,9 +200,9 @@ public static class CaliperDetector
                 if (bestIdx < 1 || bestIdx >= n - 1) continue;
                 if (bestVal < minStrength) continue;
 
-                var gL = Math.Abs(smoothProf[bestIdx] - smoothProf[bestIdx - 1]);
+                var gL = gradProf[bestIdx - 1];
                 var gC = bestVal;
-                var gR = Math.Abs(smoothProf[bestIdx + 1] - smoothProf[bestIdx]);
+                var gR = gradProf[bestIdx + 1];
                 var sub = InterpPeak(gL, gC, gR);
 
                 var xSub = bestIdx + Math.Clamp(sub, -0.5, 0.5);

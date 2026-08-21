@@ -8,5 +8,6 @@ class Program
     {
         HikApiTest.PrintApi();
         CameraTest.TestCameraParametersJobSerialization();
+        CaliperAndLineTest.RunTests();
     }
 }

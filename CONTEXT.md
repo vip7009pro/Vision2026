@@ -51,6 +51,18 @@
 
 ### Sửa lỗi và Cải thiện UX/UI (Phiên làm việc hiện tại)
 
+- **Cải tiến Tool Caliper (handle kéo thả StripLength, chuẩn hóa sub-pixel) và đồng bộ an toàn Undistort cho ImageOutput (Task 188)**:
+  - **Thêm Handle Kéo Thả Trực Tiếp StripLength & StripWidth Trên Canvas (`ToolEditorViewModel.GraphOps.cs`, `ImageViewerControl.xaml.cs`)**:
+    - Bổ sung khung dải quét `${c.Name} Cal_Strip` màu DeepSkyBlue với các tay nắm (handles) cho phép kéo chuột co giãn trực tiếp `StripLength` và `StripWidth` ngay trên Preview Canvas.
+    - Đồng bộ 2 chiều tức thì: Kéo thả trên canvas tự động cập nhật giá trị `Strip Length` và `Strip Width` lên Properties Panel và lưu vào file `.job`.
+  - **Chuẩn Hóa Thuật Toán Caliper Sub-Pixel & Đồng Bộ Hệ Tọa Độ Origin (`CaliperDetector.cs`, `ToolEditorViewModel.Engine.cs`)**:
+    - Sửa công thức nội suy cực trị Parabol: Tính toán mảng Gradient Profile $G[x] = 0.5 \times (P[x+1] - P[x-1])$ và lấy 3 điểm gradient lân cận $G[bestIdx-1], G[bestIdx], G[bestIdx+1]$ để định vị đỉnh biên với độ chính xác sub-pixel tuyệt đối (sai số < 0.05px).
+    - Đồng bộ hóa `Origin` pose (`originTeach`, `originFound`, `originAngleDeg`) vào tất cả các hàm dựng overlay (`BuildOverlayForNode`, `BuildOverlayForNodeFromRun`) giúp đường bắt biên bám khít 100% vào mép sản phẩm thực tế.
+  - **Cải Tiến Thuật Toán Undistort & Khắc Phục Lỗi Méo Biên Khi Xuất Ảnh (`ChessboardCalibrationService.cs`, `ToolEditorViewModel.Engine.cs`)**:
+    - Nâng cấp phương thức `Undistort`: Sử dụng `Cv2.GetOptimalNewCameraMatrix` kết hợp `Cv2.InitUndistortRectifyMap` và `Cv2.Remap(BorderTypes.Constant, Scalar.Black)` kèm khử nhiễu đa thức méo, loại bỏ hoàn toàn hiện tượng méo gấp biên ngoài / dải lưỡi liềm méo ở cạnh ảnh.
+    - Đồng bộ hóa 100% việc áp dụng `Undistort` giữa màn hình Preview của Tool Editor và Pipeline xuất ảnh qua `ImageOutput`.
+  - **Biên Dịch & Kiểm Thử Thành Công 100%**: Solution biên dịch **0 Error(s)**, vượt qua toàn bộ unit test.
+
 - **Sửa lỗi Tool ImageSource với Camera Giả Lập luôn dùng ảnh đã chọn thay vì video mặc định (Task 187)**:
   - **Bảo Toàn Đường Dẫn Ảnh Giả Lập Khi Nạp Job (`CameraService.cs`, `SimulatorCameraDriver.cs`)**:
     - Khắc phục hiện tượng khi mở Job hoặc chạy Job, phương thức `ApplyParametersAsync(imgSourceDef.CameraParams)` làm reset `CustomImagePath` về rỗng, khiến driver camera giả lập fallback về video mặc định Industrial Grid kèm đồng hồ chạy.

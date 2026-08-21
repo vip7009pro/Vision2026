@@ -403,6 +403,7 @@ namespace VisionInspectionApp.UI.ViewModels
                 if (def is null) return;
                 def.EnableUndistort = value;
                 OnPropertyChanged();
+                RefreshPreviews();
                 RequestAutoSave();
             }
         }

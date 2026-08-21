@@ -470,6 +470,10 @@ namespace VisionInspectionApp.UI.ViewModels
                     var loadedMat = LoadImageFromSourceForPreview(imgSourceDef);
                     if (loadedMat is not null && !loadedMat.Empty())
                     {
+                        if (imgSourceDef.EnableUndistort && _config.ChessboardCalibration is not null && _config.ChessboardCalibration.IsCalibrated)
+                        {
+                            return ChessboardCalibrationService.Undistort(loadedMat, _config.ChessboardCalibration);
+                        }
                         return loadedMat;
                     }
                 }
@@ -1687,6 +1691,27 @@ namespace VisionInspectionApp.UI.ViewModels
                     if (c is not null)
                     {
                         c.SearchRoi = roi;
+                        RefreshPreviews();
+                        RequestAutoSave();
+                        return;
+                    }
+                }
+
+                if (string.Equals(kind, "Cal_Strip", StringComparison.OrdinalIgnoreCase) || string.Equals(kind, "Strip", StringComparison.OrdinalIgnoreCase))
+                {
+                    var c = _config.Calipers.FirstOrDefault(x => string.Equals(x.Name, name, StringComparison.OrdinalIgnoreCase));
+                    if (c is not null)
+                    {
+                        if (c.Orientation == CaliperOrientation.Horizontal)
+                        {
+                            c.StripLength = Math.Max(3, roi.Width);
+                        }
+                        else
+                        {
+                            c.StripLength = Math.Max(3, roi.Height);
+                        }
+                        OnPropertyChanged(nameof(Caliper_StripLength));
+                        OnPropertyChanged(nameof(Caliper_StripWidth));
                         RefreshPreviews();
                         RequestAutoSave();
                         return;
@@ -4498,8 +4523,23 @@ namespace VisionInspectionApp.UI.ViewModels
                         using var snap = _sharedImage.GetSnapshot();
                         if (snap is not null && !snap.Empty())
                         {
+                            var hasOriginPose = run.Origin is not null && run.Origin.Pass && (run.Origin.MatchRect.Width > 0 || run.Origin.Position.X != 0 || run.Origin.Position.Y != 0);
+                            var originTeach = (_config.Origin.TemplateRoi.Width > 0 && _config.Origin.TemplateRoi.Height > 0)
+                                ? new OpenCvSharp.Point2d(_config.Origin.TemplateRoi.X + _config.Origin.TemplateRoi.Width / 2.0, _config.Origin.TemplateRoi.Y + _config.Origin.TemplateRoi.Height / 2.0)
+                                : new OpenCvSharp.Point2d(_config.Origin.SearchRoi.X + _config.Origin.SearchRoi.Width / 2.0, _config.Origin.SearchRoi.Y + _config.Origin.SearchRoi.Height / 2.0);
+                            if (_config.Origin.WorldPosition.X != 0 || _config.Origin.WorldPosition.Y != 0)
+                            {
+                                originTeach = new OpenCvSharp.Point2d(_config.Origin.WorldPosition.X, _config.Origin.WorldPosition.Y);
+                            }
+
+                            var mr = run.Origin?.MatchRect ?? default;
+                            var originFound = (mr.Width > 0 && mr.Height > 0)
+                                ? new OpenCvSharp.Point2d(mr.X + mr.Width / 2.0, mr.Y + mr.Height / 2.0)
+                                : new OpenCvSharp.Point2d(run.Origin?.Position.X ?? originTeach.X, run.Origin?.Position.Y ?? originTeach.Y);
+                            var angleDeg = hasOriginPose ? run.Origin!.AngleDeg : 0.0;
+
                             using var processed = ResolveToolPreprocessForPreview(snap, node);
-                            var det = CaliperDetector.Detect(processed, cDef);
+                            var det = CaliperDetector.Detect(processed, cDef, originTeach, originFound, angleDeg);
                             if (det.Found)
                             {
                                 dst.Add(new OverlayLineItem { X1 = det.LineP1.X, Y1 = det.LineP1.Y, X2 = det.LineP2.X, Y2 = det.LineP2.Y, Stroke = Brushes.Lime, StrokeThickness = 2.0, Label = cDef.Name });
@@ -5138,8 +5178,23 @@ namespace VisionInspectionApp.UI.ViewModels
                     AddConfigRoisForNode(node, dst);
                 }
 
+                var hasOriginPose = _lastRun?.Origin is not null && _lastRun.Origin.Pass && (_lastRun.Origin.MatchRect.Width > 0 || _lastRun.Origin.Position.X != 0 || _lastRun.Origin.Position.Y != 0);
+                var originTeach = (_config.Origin.TemplateRoi.Width > 0 && _config.Origin.TemplateRoi.Height > 0)
+                    ? new OpenCvSharp.Point2d(_config.Origin.TemplateRoi.X + _config.Origin.TemplateRoi.Width / 2.0, _config.Origin.TemplateRoi.Y + _config.Origin.TemplateRoi.Height / 2.0)
+                    : new OpenCvSharp.Point2d(_config.Origin.SearchRoi.X + _config.Origin.SearchRoi.Width / 2.0, _config.Origin.SearchRoi.Y + _config.Origin.SearchRoi.Height / 2.0);
+                if (_config.Origin.WorldPosition.X != 0 || _config.Origin.WorldPosition.Y != 0)
+                {
+                    originTeach = new OpenCvSharp.Point2d(_config.Origin.WorldPosition.X, _config.Origin.WorldPosition.Y);
+                }
+
+                var mr = _lastRun?.Origin?.MatchRect ?? default;
+                var originFound = (mr.Width > 0 && mr.Height > 0)
+                    ? new OpenCvSharp.Point2d(mr.X + mr.Width / 2.0, mr.Y + mr.Height / 2.0)
+                    : new OpenCvSharp.Point2d(_lastRun?.Origin?.Position.X ?? originTeach.X, _lastRun?.Origin?.Position.Y ?? originTeach.Y);
+                var angleDeg = hasOriginPose ? _lastRun!.Origin.AngleDeg : 0.0;
+
                 using var processed = ResolveToolPreprocessForPreview(image, node);
-                var det = CaliperDetector.Detect(processed, c);
+                var det = CaliperDetector.Detect(processed, c, originTeach, originFound, angleDeg);
                 if (det.Found)
                 {
                     dst.Add(new OverlayLineItem { X1 = det.LineP1.X, Y1 = det.LineP1.Y, X2 = det.LineP2.X, Y2 = det.LineP2.Y, Stroke = Brushes.Lime, StrokeThickness = 2.0, Label = c.Name });

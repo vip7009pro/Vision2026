@@ -171,11 +171,15 @@ public static class ChessboardCalibrationService
 
     /// <summary>
     /// Undistort an image using calibration data.
+    /// Uses GetOptimalNewCameraMatrix and InitUndistortRectifyMap to prevent boundary foldovers.
     /// </summary>
     public static Mat Undistort(Mat src, ChessboardCalibrationData calibData)
     {
         if (src is null || src.IsDisposed || src.Empty() || calibData is null || !calibData.IsCalibrated)
             return src?.Clone() ?? new Mat();
+
+        if (calibData.Fx <= 10 || calibData.Fy <= 10 || calibData.Cx <= 0 || calibData.Cy <= 0)
+            return src.Clone();
 
         var cameraMatrix = new double[3, 3];
         cameraMatrix[0, 0] = calibData.Fx;
@@ -186,12 +190,32 @@ public static class ChessboardCalibrationService
 
         var distCoeffs = calibData.DistCoeffs ?? Array.Empty<double>();
 
+        // Sanitize distortion coefficients to prevent extreme mathematical divergence
+        if (distCoeffs.Length > 0 && distCoeffs.Any(c => double.IsNaN(c) || double.IsInfinity(c) || Math.Abs(c) > 20.0))
+        {
+            return src.Clone();
+        }
+
         using var camMat = Mat.FromArray(cameraMatrix);
         using var distMat = Mat.FromArray(distCoeffs);
 
-        var dst = new Mat();
-        Cv2.Undistort(src, dst, camMat, distMat);
-        return dst;
+        try
+        {
+            using var newCamMat = Cv2.GetOptimalNewCameraMatrix(camMat, distMat, src.Size(), 0.0, src.Size(), out var validRoi);
+            using var map1 = new Mat();
+            using var map2 = new Mat();
+            Cv2.InitUndistortRectifyMap(camMat, distMat, new Mat(), newCamMat, src.Size(), MatType.CV_32FC1, map1, map2);
+
+            var dst = new Mat();
+            Cv2.Remap(src, dst, map1, map2, InterpolationFlags.Linear, BorderTypes.Constant, Scalar.Black);
+            return dst;
+        }
+        catch
+        {
+            var fallbackDst = new Mat();
+            Cv2.Undistort(src, fallbackDst, camMat, distMat);
+            return fallbackDst;
+        }
     }
 }
 

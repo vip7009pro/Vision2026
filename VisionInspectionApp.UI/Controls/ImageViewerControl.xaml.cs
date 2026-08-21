@@ -678,6 +678,7 @@ public partial class ImageViewerControl : UserControl
                     || EndsWith(_activeRoiLabel!, " C")
                     || EndsWith(_activeRoiLabel!, " CIR")
                     || EndsWith(_activeRoiLabel!, " Cal")
+                    || EndsWith(_activeRoiLabel!, " Cal_Strip")
                     || EndsWith(_activeRoiLabel!, " EPD")))
             {
                 return _activeRoiLabel;
@@ -709,6 +710,9 @@ public partial class ImageViewerControl : UserControl
 
             var cal = rectLabels.FirstOrDefault(x => EndsWith(x, " Cal"));
             if (!string.IsNullOrWhiteSpace(cal)) return cal;
+
+            var calStrip = rectLabels.FirstOrDefault(x => EndsWith(x, " Cal_Strip"));
+            if (!string.IsNullOrWhiteSpace(calStrip)) return calStrip;
 
             var epd = rectLabels.FirstOrDefault(x => EndsWith(x, " EPD"));
             if (!string.IsNullOrWhiteSpace(epd)) return epd;

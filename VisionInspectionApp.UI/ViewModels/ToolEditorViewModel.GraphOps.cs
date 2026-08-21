@@ -1121,6 +1121,36 @@ namespace VisionInspectionApp.UI.ViewModels
                     var stripCount = Math.Clamp(c.StripCount, 1, 100);
                     var stripLength = Math.Max(3, c.StripLength);
 
+                    // Interactive Strip Box with handles to adjust StripLength directly on canvas
+                    Roi stripRoi;
+                    if (c.Orientation == CaliperOrientation.Horizontal)
+                    {
+                        var cx = c.SearchRoi.X + c.SearchRoi.Width / 2.0;
+                        var cy = c.SearchRoi.Y + c.SearchRoi.Height / 2.0;
+                        stripRoi = new Roi
+                        {
+                            X = (int)Math.Round(cx - stripLength / 2.0),
+                            Y = (int)Math.Round(cy - c.SearchRoi.Height / 2.0),
+                            Width = stripLength,
+                            Height = c.SearchRoi.Height,
+                            Angle = c.SearchRoi.Angle
+                        };
+                    }
+                    else
+                    {
+                        var cx = c.SearchRoi.X + c.SearchRoi.Width / 2.0;
+                        var cy = c.SearchRoi.Y + c.SearchRoi.Height / 2.0;
+                        stripRoi = new Roi
+                        {
+                            X = (int)Math.Round(cx - c.SearchRoi.Width / 2.0),
+                            Y = (int)Math.Round(cy - stripLength / 2.0),
+                            Width = c.SearchRoi.Width,
+                            Height = stripLength,
+                            Angle = c.SearchRoi.Angle
+                        };
+                    }
+                    dst.Add(CreateRotatedRoiWithPose(stripRoi, Brushes.DeepSkyBlue, $"{c.Name} Cal_Strip"));
+
                     var hasOriginPose = _lastRun?.Origin is not null && _lastRun.Origin.Pass && (_lastRun.Origin.MatchRect.Width > 0 || _lastRun.Origin.Position.X != 0 || _lastRun.Origin.Position.Y != 0);
                     var originTeach = (_config.Origin.TemplateRoi.Width > 0 && _config.Origin.TemplateRoi.Height > 0)
                         ? new OpenCvSharp.Point2d(_config.Origin.TemplateRoi.X + _config.Origin.TemplateRoi.Width / 2.0, _config.Origin.TemplateRoi.Y + _config.Origin.TemplateRoi.Height / 2.0)

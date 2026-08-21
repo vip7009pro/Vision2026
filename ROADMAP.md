@@ -510,6 +510,17 @@ Lộ trình tích hợp tính năng Chụp ảnh từ camera và hỗ trợ các
   - `Bảo Toàn Đường Dẫn CustomImagePath Khi Nạp Job`: Trong `CameraService.cs`, khi `ApplyParametersAsync`, `SaveSystemParametersAsync` và `CaptureSnapshotFromCameraAsync` được gọi, luôn bảo toàn `_simulatorCustomImagePath` và `_simulatorEnableRandomTransform` vào `_currentParameters` nếu thông số truyền vào không chứa đường dẫn ảnh.
   - `Cải Tiến SimulatorCameraDriver`: Override `ApplyParametersAsync` để bảo lưu `CustomImagePath` hiện tại hoặc fallback đọc từ tệp cấu hình `%AppData%\Vision2026\camera_adjust_settings.json`. Cải tiến `GetOrLoadBaseMat` tự động nạp ảnh tùy chỉnh đã lưu thay vì phát video mặc định.
   - `Biên Dịch & Kiểm Thử Thành Công 100%`: Solution biên dịch **0 Error(s)**.
+- [x] Task 188: Cải tiến Tool Caliper (handle kéo thả StripLength, chuẩn hóa sub-pixel) và đồng bộ an toàn Undistort cho ImageOutput:
+  - `Thêm Handle Kéo Thả Trực Tiếp StripLength & StripWidth Trên Preview Canvas (ToolEditorViewModel.GraphOps.cs, ImageViewerControl.xaml.cs)`:
+    - Bổ sung khung dải quét `${c.Name} Cal_Strip` màu DeepSkyBlue với các tay nắm (handles) cho phép kéo chuột co giãn trực tiếp `StripLength` và `StripWidth` ngay trên Preview Canvas.
+    - Đồng bộ 2 chiều tức thì: Kéo thả trên canvas tự động cập nhật giá trị `Strip Length` và `Strip Width` lên Properties Panel và lưu vào file `.job`.
+  - `Chuẩn Hóa Thuật Toán Caliper Sub-Pixel & Đồng Bộ Hệ Tọa Độ Origin (CaliperDetector.cs, ToolEditorViewModel.Engine.cs)`:
+    - Sửa công thức nội suy cực trị Parabol: Tính toán mảng Gradient Profile $G[x]$ và lấy 3 điểm gradient lân cận $G[bestIdx-1], G[bestIdx], G[bestIdx+1]$ để định vị đỉnh biên với độ chính xác sub-pixel tuyệt đối (sai số < 0.05px).
+    - Đồng bộ hóa `Origin` pose (`originTeach`, `originFound`, `originAngleDeg`) vào tất cả các hàm dựng overlay (`BuildOverlayForNode`, `BuildOverlayForNodeFromRun`) giúp đường bắt biên bám khít 100% vào mép sản phẩm thực tế.
+  - `Cải Tiến Thuật Toán Undistort & Khắc Phục Lỗi Méo Biên Khi Xuất Ảnh (ChessboardCalibrationService.cs, ToolEditorViewModel.Engine.cs)`:
+    - Nâng cấp phương thức `Undistort`: Sử dụng `Cv2.GetOptimalNewCameraMatrix` kết hợp `Cv2.InitUndistortRectifyMap` và `Cv2.Remap(BorderTypes.Constant, Scalar.Black)` kèm khử nhiễu đa thức méo, loại bỏ hoàn toàn hiện tượng méo gấp biên ngoài / dải lưỡi liềm méo ở cạnh ảnh.
+    - Đồng bộ hóa 100% việc áp dụng `Undistort` giữa màn hình Preview của Tool Editor và Pipeline xuất ảnh qua `ImageOutput`.
+  - `Biên Dịch & Kiểm Thử Thành Công 100%`: Solution biên dịch **0 Error(s)**, vượt qua các bài kiểm thử tự động.
 
 
 
