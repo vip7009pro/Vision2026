@@ -705,6 +705,18 @@ Lộ trình tích hợp tính năng Chụp ảnh từ camera và hỗ trợ các
     - Xóa bỏ việc lắng nghe `PropertyChanged` của Tool Editor làm nhảy preview ảnh/overlay trên màn hình OQC Scanner.
     - Chuyển đổi mượt mà giữa Live Camera (F5) và ảnh kết quả OQC cuối cùng mà không bị ảnh hưởng bởi các thao tác click node bên Tool Editor.
   - `Biên Dịch & Kiểm Thử Thành Công 100%`: Solution biên dịch **0 Error(s)**, 8/8 unit tests đạt PASS 100%.
+- [x] Task 208: Di chuyển nút Gán Mã - Job sang Tool Editor & Tinh gọn toàn diện Tab OQC Scanner:
+  - `Di Chuyển Nút Gán Mã - Job Sang Toolbar Tool Editor`:
+    - Thêm nút `🏷️ Gán Mã - Job` trên thanh công cụ `ToolEditorView.xaml` (màu xanh `#0288D1`, đặt ngay sau nút `♟ Chessboard Calib`).
+    - Bổ sung lệnh `OpenProductAssignDialogCommand` và method `OpenProductAssignDialog()` trong `ToolEditorViewModel`, tự động pre-fill đường dẫn `CurrentJobFilePath` của Job đang mở và hiển thị hộp thoại `ProductAssignDialog`.
+  - `Loại Bỏ Nút Trùng Lặp & Thừa Thãi Trên OQC Scanner`:
+    - Loại bỏ các nút `⚙ Cấu hình DB / Camera` (đã có trên Menu Bar), `👁️ Xem Tool Editor` (người dùng tự chuyển tab) và `📋 Gán Mã ↔ Job` (đã chuyển sang Tool Editor).
+  - `Tinh Gọn Giao Diện OQC Scanner Khoa Học & Mở Rộng Không Gian`:
+    - Gộp toàn bộ Header + Input Bar thành 1 hàng compact: ô nhập mã `ScanInputTextBox` (cao 30px, font 13.5pt), 2 CheckBox `⚡ Auto Run` / `🔫 Đầu Scanner`, nút `📷 QUÉT MÃ BẰNG CAM (Space/F12)`, `⚡ QUÉT MÃ / ▶ CHẠY JOB (Enter)` và `📁 Mở Job`.
+    - Thu nhỏ Status Bar thành một dải badge mỏng (Slim Status Bar) hiển thị Sản phẩm, Tệp Job và Trạng thái kiểm tra viền màu động theo `StatusBrush`.
+    - Mở rộng $90\%$ diện tích màn hình cho Live/Result Preview và bảng Lịch sử DataGrid.
+  - `Biên Dịch & Kiểm Thử Thành Công 100%`: Solution biên dịch **0 Error(s)**, 8/8 unit tests đạt PASS 100%.
+
 
 
 

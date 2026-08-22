@@ -171,12 +171,14 @@ namespace VisionInspectionApp.UI.ViewModels
         private readonly IRecentJobsService? _recentJobsService;
         private readonly Application.PLC.Services.IPlcManagerService _plcManagerService;
         private readonly Application.DB.Services.IDbManagerService _dbManagerService;
+        private readonly IServiceProvider? _serviceProvider;
         public UndoRedoManager UndoManager { get; }
         public IRelayCommand UndoCommand { get; }
         public IRelayCommand RedoCommand { get; }
 
-        public ToolEditorViewModel(IConfigService configService, ConfigStoreOptions storeOptions, SharedImageContext sharedImage, ImagePreprocessor preprocessor, LineDetector lineDetector, IInspectionService inspectionService, CameraService cameraService, IJobService jobService, UndoRedoManager undoManager, Application.PLC.Services.IPlcManagerService plcManagerService, Application.DB.Services.IDbManagerService dbManagerService, IRecentJobsService? recentJobsService = null)
+        public ToolEditorViewModel(IConfigService configService, ConfigStoreOptions storeOptions, SharedImageContext sharedImage, ImagePreprocessor preprocessor, LineDetector lineDetector, IInspectionService inspectionService, CameraService cameraService, IJobService jobService, UndoRedoManager undoManager, Application.PLC.Services.IPlcManagerService plcManagerService, Application.DB.Services.IDbManagerService dbManagerService, IRecentJobsService? recentJobsService = null, IServiceProvider? serviceProvider = null)
         {
+            _serviceProvider = serviceProvider;
             UndoManager = undoManager;
             UndoCommand = new RelayCommand(() => UndoManager.Undo(), () => UndoManager.CanUndo);
             RedoCommand = new RelayCommand(() => UndoManager.Redo(), () => UndoManager.CanRedo);
@@ -332,6 +334,7 @@ namespace VisionInspectionApp.UI.ViewModels
             Preprocess_RemovePolygonPointCommand = new RelayCommand<Point2dModel?>(Preprocess_RemovePolygonPoint);
             OpenCalibrationDialogCommand = new RelayCommand(OpenCalibrationDialog);
             OpenChessboardCalibrationDialogCommand = new RelayCommand(OpenChessboardCalibrationDialog);
+            OpenProductAssignDialogCommand = new RelayCommand(OpenProductAssignDialog);
             ColorDiff_TeachRefColorCommand = new RelayCommand(ColorDiff_TeachRefColor);
 
             // Line Trigger (Hardware Sensor Signal from Camera)
@@ -1381,6 +1384,38 @@ namespace VisionInspectionApp.UI.ViewModels
                 OnPropertyChanged(nameof(PixelsPerMm));
                 IsDirty = true;
                 RefreshPreviews();
+            }
+        }
+
+        public IRelayCommand OpenProductAssignDialogCommand { get; }
+
+        private void OpenProductAssignDialog()
+        {
+            try
+            {
+                var oqcVm = _serviceProvider?.GetService(typeof(OqcScannerViewModel)) as OqcScannerViewModel;
+                if (oqcVm == null && System.Windows.Application.Current?.MainWindow?.DataContext is MainWindowViewModel mainVm)
+                {
+                    oqcVm = mainVm.OqcScanner;
+                }
+
+                if (oqcVm != null)
+                {
+                    oqcVm.AssignJobFilePath = !string.IsNullOrWhiteSpace(CurrentJobFilePath) && CurrentJobFilePath != "-" ? CurrentJobFilePath : "";
+                    var dlg = new Views.OQC.ProductAssignDialog(oqcVm)
+                    {
+                        Owner = System.Windows.Application.Current?.MainWindow
+                    };
+                    dlg.ShowDialog();
+                }
+                else
+                {
+                    System.Windows.MessageBox.Show("Không thể tìm thấy mô-đun OQC Scanner để mở giao diện Gán Mã Sản Phẩm.", "Thông báo", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Warning);
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Windows.MessageBox.Show($"Lỗi mở hộp thoại Gán Mã Sản Phẩm: {ex.Message}", "Lỗi", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Error);
             }
         }
 

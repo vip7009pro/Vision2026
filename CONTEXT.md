@@ -51,6 +51,21 @@
 
 ### Sửa lỗi và Cải thiện UX/UI (Phiên làm việc hiện tại)
 
+- **Di chuyển nút Gán Mã - Job sang Tool Editor & Tinh gọn toàn diện Tab OQC Scanner (Task 208)**:
+  - **Yêu Cầu & Bối Cảnh**:
+    - Chuyển nút `📋 Gán Mã - Job` từ tab OQC Scanner sang thanh công cụ của tab **Tool Editor**, đặt ngang hàng và ngay sau nút `♟ Chessboard Calib` (tự động pre-fill đường dẫn Job đang mở để gán mã sản phẩm DB nhanh chóng).
+    - Loại bỏ các nút thừa trên tab OQC Scanner: `⚙ Cấu hình DB / Camera` (đã có trong Menu Bar), `👁️ Xem Tool Editor` (người dùng tự chuyển tab), `📋 Gán Mã ↔ Job` (đã chuyển sang Tool Editor).
+    - Tinh gọn tối đa giao diện tab OQC Scanner: gộp Header + Input Bar thành 1 hàng compact duy nhất (TextBox nhỏ gọn, CheckBox inline, nút Quét Cam và Quét Mã/Chạy Job), thu nhỏ thanh Status Bar thành dạng badge mỏng khoa học (📦 Sản phẩm, 📁 Tệp Job, 💡 Trạng thái), tối ưu không gian hiển thị cho màn hình Live/Result Preview và bảng Lịch sử DataGrid.
+  - **Giải Pháp Thực Hiện**:
+    1. **Tool Editor Toolbar (`ToolEditorView.xaml`, `ToolEditorViewModel.cs`)**:
+       - Bổ sung lệnh `OpenProductAssignDialogCommand` và method `OpenProductAssignDialog()` trong `ToolEditorViewModel` (tự động điền `CurrentJobFilePath` và mở `ProductAssignDialog`).
+       - Thêm nút `🏷️ Gán Mã - Job` trên thanh công cụ `ToolEditorView.xaml` với màu xanh `#0288D1`, đặt ngay sau nút `♟ Chessboard Calib`.
+    2. **Tái Cấu Trúc Giao Diện OQC Scanner (`OqcScannerView.xaml`)**:
+       - *Row 0 (Control Toolbar)*: Kết hợp Header badge `📷 OQC SCANNER`, ô nhập mã `ScanInputTextBox` (chiều cao 30px, font 13.5pt), 2 CheckBox `⚡ Auto Run` / `🔫 Đầu Scanner`, nút `📷 QUÉT MÃ BẰNG CAM (Space/F12)`, nút `⚡ QUÉT MÃ / ▶ CHẠY JOB (Enter)` và nút `📁 Mở Job` trong 1 hàng thanh thoát.
+       - *Row 1 (Slim Status Bar)*: Thiết kế dạng dải badge mỏng bo góc 5px hiển thị Sản phẩm, Tệp Job (cắt gọn text trimming kèm Tooltip) và Trạng thái kiểm tra với màu viền/chữ đồng bộ động theo `StatusBrush`.
+       - *Row 2 (Main Split Content)*: Chiếm $90\%$ diện tích màn hình, mở rộng tối đa không gian cho Live Preview / Final Output và bảng Lịch sử DataGrid.
+  - **Biên Dịch & Kiểm Thử Thành Công 100%**: Solution biên dịch **0 Error(s)**, toàn bộ 8/8 unit tests đạt PASS 100%.
+
 - **Cô lập hoàn toàn luồng OQC Scanner khỏi các thao tác độc lập trong Tool Editor (Task 207)**:
   - **Vấn Đề Phát Hiện**:
     - Khi người dùng ở tab **Tool Editor** nạp Job, tinh chỉnh node, hoặc bấm "Chạy thử (Run Once / Run Continuous)", `ToolEditorViewModel` phát sinh sự kiện `InspectionCompletedAsync` và thay đổi các thuộc tính `FinalPreviewImage`, `SelectedNodePreviewImage`.
