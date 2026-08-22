@@ -45,9 +45,45 @@ public sealed class CameraSettingsViewModel : ObservableObject, IDisposable
                 {
                     RtspUrl = value.RtspUrl;
                 }
+
+                OnPropertyChanged(nameof(IsIndustrialCamera));
+                OnPropertyChanged(nameof(IsSimulatorCamera));
+                OnPropertyChanged(nameof(IsStandardOrWebcamCamera));
+                OnPropertyChanged(nameof(IsWebcamCamera));
+                OnPropertyChanged(nameof(IsRtspCamera));
+                OnPropertyChanged(nameof(SelectedDeviceTitle));
+                OnPropertyChanged(nameof(SelectedDeviceBadge));
             }
         }
     }
+
+    public bool IsIndustrialCamera => SelectedDevice?.Vendor is CameraVendor.Hikrobot or CameraVendor.Basler or CameraVendor.Cognex;
+    public bool IsSimulatorCamera => SelectedDevice == null || SelectedDevice.Vendor == CameraVendor.Simulator;
+    public bool IsStandardOrWebcamCamera => SelectedDevice?.Vendor is CameraVendor.WebcamDirectShow or CameraVendor.Rtsp;
+    public bool IsWebcamCamera => SelectedDevice?.Vendor == CameraVendor.WebcamDirectShow;
+    public bool IsRtspCamera => SelectedDevice?.Vendor == CameraVendor.Rtsp;
+
+    public string SelectedDeviceTitle => SelectedDevice switch
+    {
+        { Vendor: CameraVendor.Hikrobot } => $"⚙️ Thông Số Camera Công Nghiệp [Hikrobot] {SelectedDevice.ModelName}",
+        { Vendor: CameraVendor.Basler } => $"⚙️ Thông Số Camera Công Nghiệp [Basler] {SelectedDevice.ModelName}",
+        { Vendor: CameraVendor.Cognex } => $"⚙️ Thông Số Camera Công Nghiệp [Cognex] {SelectedDevice.ModelName}",
+        { Vendor: CameraVendor.WebcamDirectShow } => $"📹 Cấu Hình USB Webcam ({SelectedDevice.ModelName})",
+        { Vendor: CameraVendor.Rtsp } => $"🌐 Cấu Hình Luồng Video RTSP ({SelectedDevice.ModelName})",
+        { Vendor: CameraVendor.Simulator } => "🎮 Cấu Hình Camera Giả Lập (Simulator)",
+        _ => "⚙️ Thông Số Camera"
+    };
+
+    public string SelectedDeviceBadge => SelectedDevice?.Vendor switch
+    {
+        CameraVendor.Hikrobot => "HIKROBOT GIGE/USB3",
+        CameraVendor.Basler => "BASLER PYLON",
+        CameraVendor.Cognex => "COGNEX VISION",
+        CameraVendor.WebcamDirectShow => "USB WEBCAM",
+        CameraVendor.Rtsp => "RTSP STREAM",
+        CameraVendor.Simulator => "VIRTUAL SIMULATOR",
+        _ => "CAMERA"
+    };
 
     public string RtspUrl
     {
@@ -59,6 +95,13 @@ public sealed class CameraSettingsViewModel : ObservableObject, IDisposable
     {
         get => _isRtspSelected;
         private set => SetProperty(ref _isRtspSelected, value);
+    }
+
+    public event Action? RequestFitView;
+
+    public void TriggerFitView()
+    {
+        RequestFitView?.Invoke();
     }
 
     public bool IsCameraRunning
@@ -587,6 +630,7 @@ public sealed class CameraSettingsViewModel : ObservableObject, IDisposable
     public IRelayCommand SetFullSensorRoiCommand { get; }
     public IRelayCommand CenterRoiCommand { get; }
     public IRelayCommand ResetSettingsCommand { get; }
+    public IRelayCommand FitViewCommand { get; }
     public IRelayCommand BrowseSimulatorImageCommand { get; }
     public IRelayCommand ClearSimulatorImageCommand { get; }
     public IRelayCommand<RoiSelection> RoiEditedCommand { get; }
@@ -619,6 +663,7 @@ public sealed class CameraSettingsViewModel : ObservableObject, IDisposable
         SetFullSensorRoiCommand = new RelayCommand(SetFullSensorRoi);
         CenterRoiCommand = new RelayCommand(CenterRoi);
         ResetSettingsCommand = new RelayCommand(ResetSettings);
+        FitViewCommand = new RelayCommand(TriggerFitView);
         BrowseSimulatorImageCommand = new RelayCommand(ExecuteBrowseSimulatorImage);
         ClearSimulatorImageCommand = new RelayCommand(ExecuteClearSimulatorImage);
         RoiEditedCommand = new RelayCommand<RoiSelection>(OnRoiEdited);

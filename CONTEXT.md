@@ -51,6 +51,21 @@
 
 ### Sửa lỗi và Cải thiện UX/UI (Phiên làm việc hiện tại)
 
+- **Cải tổ toàn diện Tab Camera Settings (Layout Khoa Học, Compact Theme-Aware, Dynamic Parameter Panel & Nút Fit View) (Task 206)**:
+  - **Yêu Cầu & Bối Cảnh**:
+    - Danh sách camera trước đây bị hardcode màu nền tối cố định, item to cồng kềnh, không thích ứng theo Theme ứng dụng (Light/Dark).
+    - Thông số camera bị hiển thị dồn cục, các camera thường (Webcam, RTSP) bị hiển thị các mục của camera công nghiệp gây rối mắt.
+    - Phần nguồn ảnh giả lập và tần số/độ phân giải mục tiêu cần được phân nhóm riêng vào thông số của camera giả lập và chỉ hiển thị khi chọn camera giả lập.
+    - Thiếu nút Fit View nhanh trên màn hình preview trực tiếp.
+  - **Giải Pháp Thực Hiện**:
+    1. **Danh sách Camera Compact & Theme-Aware**: Thiết kế lại giao diện thẻ compact cho `ListBox AvailableDevices`, áp dụng `DynamicResource` (`PanelBackgroundBrush`, `PanelAltBackgroundBrush`, `TextBrush`, `TextMutedBrush`, `BorderBrush`, `AccentBrush`...), hiển thị badge Vendor và Interface sắc nét trên mọi theme.
+    2. **Smart Parameter Panel Phân Nhóm Động Theo Loại Camera**:
+       - *Camera Công Nghiệp (Hikrobot, Basler, Cognex)*: Hiển thị đầy đủ thông số cao cấp (Phơi sáng Exposure $\mu s$, Gain dB, Gamma, Auto Exposure/Gain, Cân bằng trắng ISP, Hardware Trigger & I/O, Định dạng Pixel MVS, Hardware ROI cắt cảm biến phần cứng, GigE Packet Size/Delay, Bộ lọc OpenCV).
+       - *Camera Thường / Webcam / RTSP*: Chỉ hiển thị các thông số cơ bản (Độ sáng, Độ tương phản, Đen trắng Grayscale, Lật hình Reverse X/Y, Độ phân giải & FPS cơ bản).
+       - *Camera Giả Lập (Simulator)*: Hiển thị giao diện cấu hình chuyên biệt (Nguồn ảnh giả lập từ máy tính, Tự xoay & di chuyển nhẹ, Tần số quét mục tiêu Target FPS, Độ phân giải mong muốn, Bộ lọc mềm và Mô phỏng phơi sáng).
+    3. **Nút Fit View Nhanh (🖥️ Fit View)**: Tích hợp nút floating ở góc trên bên phải màn hình Live Preview trực tiếp, kết nối với lệnh `CameraImageViewer.ResetView()` giúp người dùng căn chỉnh vừa khung nhìn ngay tức thì sau khi zoom/pan.
+  - **Biên Dịch & Kiểm Thử Thành Công 100%**: Solution biên dịch **0 Error(s)**, 8/8 unit tests đạt PASS 100%.
+
 - **Cập nhật Live Overlay tức thì khi đo đạc & Thêm lớp nền tối (Dark Badge) cho giá trị đo (Task 205)**:
   - **Vấn Đề Phát Hiện**:
     1. Khi tương tác đo trên màn hình preview (click/di chuyển chuột), `OverlayItems` được cập nhật trong `ObservableCollection<OverlayItem>` nhưng `FastOverlayCanvas` và `ImageViewerControl` không lắng nghe sự kiện `INotifyCollectionChanged.CollectionChanged`, dẫn đến việc overlay không được render ngay lập tức mà phải chờ zoom/pan mới hiển thị. Đồng thời sự kiện `MouseMove` chưa chuyển tiếp tới `InteractiveMouseMoveCommand`.

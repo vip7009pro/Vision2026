@@ -684,6 +684,18 @@ Lộ trình tích hợp tính năng Chụp ảnh từ camera và hỗ trợ các
   - `Lớp Nền Tối Bo Góc (Dark Badge) Cho Giá Trị Đo`:
     - Vẽ khung chữ nhật bo góc bán trong suốt màu tối (`#D210141C`) với viền mờ tinh tế lót phía dưới các giá trị đo (mm, px, độ) và nhãn hình học (Line, Circle, Rect, Angle, Point), giúp thông số luôn tương phản cao và rõ nét tuyệt đối trên mọi nền ảnh.
   - `Biên Dịch & Kiểm Thử Thành Công 100%`: Solution biên dịch **0 Error(s)**, 8/8 unit tests đạt PASS 100%.
+- [x] Task 206: Cải tổ toàn diện Tab Camera Settings (Layout Khoa Học, Compact Theme-Aware, Dynamic Parameter Panel & Nút Fit View):
+  - `Danh Sách Camera Compact Theme-Aware`:
+    - Thiết kế lại danh sách camera gọn gàng theo chuẩn thẻ compact, loại bỏ hardcode màu tối, đồng bộ `DynamicResource` theo Dark/Light theme.
+    - Hiển thị badge Vendor (`Hikrobot MVS`, `Basler Pylon`, `Cognex Vision`, `USB Webcam`, `RTSP Stream`, `Simulator`) và Interface (`GigE`, `USB3`, `DirectShow`, `Virtual`) cùng thông tin IP/Serial rõ ràng.
+  - `Smart Parameter Panel Phân Nhóm Động Theo Loại Camera`:
+    - **Camera Công Nghiệp**: Phơi sáng & Gain (Exposure µs, Gain dB, Gamma, Auto), Cân bằng trắng ISP, Trigger & I/O Hardware, Định dạng Pixel MVS, Hardware ROI cắt cảm biến, GigE Packet Size/Delay, Bộ lọc OpenCV.
+    - **Camera Thường / Webcam / RTSP**: Bộ lọc hình ảnh cơ bản (Độ sáng, Độ tương phản, Đen trắng), Hướng ảnh (Reverse X/Y), Cấu hình phân giải & FPS mong muốn.
+    - **Camera Giả Lập**: Nguồn ảnh máy tính (Browse 📁, Transform xoay/xê dịch ngẫu nhiên 🔄, Về mặc định), Độ phân giải & FPS mục tiêu, Bộ lọc mềm & Giả lập phơi sáng.
+  - `Nút Fit View Nhanh (🖥️ Fit View)`:
+    - Bổ sung nút floating ở góc trên bên phải màn hình Live Preview trực tiếp kết nối với lệnh ResetView giúp người dùng căn chỉnh vừa khung nhìn tức thì.
+  - `Biên Dịch & Kiểm Thử Thành Công 100%`: Solution biên dịch **0 Error(s)**, 8/8 unit tests đạt PASS 100%.
+
 
 
 
