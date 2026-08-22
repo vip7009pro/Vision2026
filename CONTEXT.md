@@ -51,6 +51,16 @@
 
 ### Sửa lỗi và Cải thiện UX/UI (Phiên làm việc hiện tại)
 
+- **Thiết kế và đóng gói App Icon EXE chuyên nghiệp chuẩn Windows 11 (Logo CMS VINA + chữ VISION) (Task 203)**:
+  - **Yêu Cầu**:
+    - Tạo lại icon ứng dụng cho file `.exe` thay thế icon cũ. Sử dụng logo CMS VINA hiện có và thêm chữ `VISION` nhỏ gọn, tinh tế ở phía dưới.
+  - **Đã Triển Khai (`TestExtractApp/IconGenerator.cs`)**:
+    - Xây dựng module sinh icon đồ họa Vector/GDI+ chất lượng cao với khử răng cưa `HighQualityBicubic` và font rendering `ClearTypeGridFit`.
+    - Thiết kế định dạng Squircle Windows 11 với 4 góc reticle định vị quang học thị giác máy `[ + ]`, đặt logo gốc CMS VINA ở trung tâm và badge bo góc chữ `V I S I O N` màu trắng trên nền gradient xanh đậm `#0B5394` $\rightarrow$ `#043462`.
+    - Đóng gói file `.ico` nhị phân chuẩn 32-bit ARGB nén PNG với đầy đủ 6 phân giải: **`256x256`, `128x128`, `64x64`, `48x48`, `32x32`, `16x16`**.
+    - Cập nhật trực tiếp vào `VisionInspectionApp.UI/Assets/cms-vina-vision-system.ico`.
+  - **Biên Dịch & Kiểm Thử Thành Công 100%**: Solution biên dịch **0 Error(s)**, toàn bộ unit tests đạt PASS 100%.
+
 - **Khắc phục triệt để lỗi nạp ảnh cũ khi mở Job lần đầu & Chỉ nạp CameraParams duy nhất 1 lần khi load Job (Task 202)**:
   - **Nguyên Nhân Gốc Rễ Đã Rà Soát Chi Tiết**:
     1. Khi gọi `LoadJobFromFile`, lệnh `RefreshPreviews()` ở UI thread chạy trước khi nạp camera, kích hoạt `LoadImageFromSourceForPreview` kéo frame cũ từ driver vào `_sharedImage` và `_imageSourcePreviewCache`.

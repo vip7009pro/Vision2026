@@ -11,5 +11,6 @@ class Program
         CaliperAndLineTest.RunTests();
         ColorDiffTest.RunTests();
         RecentJobsAndCalibrationTest.RunTests();
+        IconGenerator.GenerateAppIcons();
     }
 }
