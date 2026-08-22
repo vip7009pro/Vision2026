@@ -88,6 +88,9 @@ public partial class OqcScannerViewModel : ObservableObject
     private readonly ObservableCollection<OverlayItem> _originLiveGuideOverlays = new();
 
     private List<OverlayItem>? _allOverlayItemsCache;
+    private ImageSource? _lastOqcPreviewImage;
+    private List<OverlayItem>? _lastOqcOverlayItems;
+    private bool _isOqcRunInProgress = false;
     private bool _isRenderingLiveFrame = false;
     private string _lastScannedRawCode = "";
     private string _lastScannedProcessedCode = "";
@@ -181,17 +184,6 @@ public partial class OqcScannerViewModel : ObservableObject
 
     private void OnToolEditorPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName == nameof(ToolEditorViewModel.FinalOverlayItems) ||
-            e.PropertyName == nameof(ToolEditorViewModel.FinalPreviewImage) ||
-            e.PropertyName == nameof(ToolEditorViewModel.SelectedNodePreviewImage) ||
-            e.PropertyName == nameof(ToolEditorViewModel.SelectedNodeOverlayItems))
-        {
-            if (!IsShowingLiveCamera)
-            {
-                RefreshPreviewFromToolEditor();
-            }
-        }
-
         if (e.PropertyName == nameof(ToolEditorViewModel.Origin_TemplatePreviewImage) ||
             e.PropertyName == "CurrentJobFilePath")
         {
@@ -257,7 +249,9 @@ public partial class OqcScannerViewModel : ObservableObject
         else
         {
             _ = _cameraService.RequestLiveStreamAsync("OQCScanner", false);
-            RefreshPreviewFromToolEditor();
+            PreviewImage = _lastOqcPreviewImage;
+            _allOverlayItemsCache = _lastOqcOverlayItems != null ? new List<OverlayItem>(_lastOqcOverlayItems) : new List<OverlayItem>();
+            UpdatePreviewOverlays();
         }
     }
 
@@ -270,6 +264,7 @@ public partial class OqcScannerViewModel : ObservableObject
             StatusMessage = $"⌛ Đang chạy kiểm tra Job cho sản phẩm '{CurrentProductName}'...";
             StatusBrush = Brushes.DodgerBlue;
 
+            _isOqcRunInProgress = true;
             _toolEditorViewModel.OnRunOnceClicked();
         }
         else
@@ -716,16 +711,13 @@ public partial class OqcScannerViewModel : ObservableObject
                 // Auto Run mode: Load job and run graph automatically
                 IsShowingLiveCamera = false;
                 StatusMessage = $"📁 Đang nạp tệp Job: '{Path.GetFileName(jobPath)}' và chạy kiểm tra...";
+                _isOqcRunInProgress = true;
                 _toolEditorViewModel.LoadJobFromFile(jobPath, autoRun: true);
-
-                if (_toolEditorViewModel.LastResult != null)
-                {
-                    await HandleInspectionCompletedAsync(_toolEditorViewModel.LastResult, cfg);
-                }
             }
             else
             {
                 // Manual Run mode: Load job only, keep Live Camera active for product alignment
+                _isOqcRunInProgress = false;
                 IsShowingLiveCamera = true;
                 StatusMessage = $"✅ Đã nạp Job '{Path.GetFileName(jobPath)}' cho mã '{code}'. Căn chỉnh sản phẩm và nhấn '▶ CHẠY JOB' để kiểm tra.";
                 StatusBrush = Brushes.DodgerBlue;
@@ -743,6 +735,7 @@ public partial class OqcScannerViewModel : ObservableObject
         }
         catch (Exception ex)
         {
+            _isOqcRunInProgress = false;
             StatusMessage = $"❌ Lỗi mở Job: {ex.Message}";
             StatusBrush = Brushes.Red;
 
@@ -763,11 +756,17 @@ public partial class OqcScannerViewModel : ObservableObject
 
     public async Task HandleInspectionCompletedAsync(InspectionResult result, VisionConfig config)
     {
-        if (result == null) return;
+        if (result == null || !_isOqcRunInProgress) return;
+        _isOqcRunInProgress = false;
 
         IsShowingLiveCamera = false;
         OnPropertyChanged(nameof(PreviewHeaderTitle));
         OnPropertyChanged(nameof(LiveToggleButtonText));
+
+        _lastOqcPreviewImage = _toolEditorViewModel.FinalPreviewImage;
+        var finalOverlays = _toolEditorViewModel.FinalOverlayItems;
+        _lastOqcOverlayItems = finalOverlays != null ? new List<OverlayItem>(finalOverlays) : new List<OverlayItem>();
+        _allOverlayItemsCache = new List<OverlayItem>(_lastOqcOverlayItems);
 
         string processedCode = !string.IsNullOrWhiteSpace(_lastScannedProcessedCode)
             ? _lastScannedProcessedCode
@@ -817,7 +816,11 @@ public partial class OqcScannerViewModel : ObservableObject
             }
 
             _oqcService.SaveScanHistory(ScanHistory);
-            RefreshPreviewFromToolEditor();
+            if (!IsShowingLiveCamera)
+            {
+                PreviewImage = _lastOqcPreviewImage;
+                UpdatePreviewOverlays();
+            }
         });
 
         // Log result to Database if enabled
@@ -848,9 +851,8 @@ public partial class OqcScannerViewModel : ObservableObject
     {
         System.Windows.Application.Current?.Dispatcher?.Invoke(() =>
         {
-            PreviewImage = _toolEditorViewModel.FinalPreviewImage ?? _toolEditorViewModel.SelectedNodePreviewImage;
-            var finalOverlays = _toolEditorViewModel.FinalOverlayItems ?? _toolEditorViewModel.SelectedNodeOverlayItems;
-            _allOverlayItemsCache = finalOverlays != null ? new List<OverlayItem>(finalOverlays) : new List<OverlayItem>();
+            PreviewImage = _lastOqcPreviewImage;
+            _allOverlayItemsCache = _lastOqcOverlayItems != null ? new List<OverlayItem>(_lastOqcOverlayItems) : new List<OverlayItem>();
             UpdatePreviewOverlays();
         });
     }
@@ -922,7 +924,8 @@ public partial class OqcScannerViewModel : ObservableObject
         {
             try
             {
-                _toolEditorViewModel.LoadJobFromFile(dialog.FileName);
+                _isOqcRunInProgress = false;
+                _toolEditorViewModel.LoadJobFromFile(dialog.FileName, autoRun: false);
 
                 var cfg = _jobService.LoadJob(dialog.FileName, out var tempDir);
                 _inspectionViewModel.CurrentJobFilePath = dialog.FileName;

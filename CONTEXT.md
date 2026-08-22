@@ -51,6 +51,24 @@
 
 ### Sửa lỗi và Cải thiện UX/UI (Phiên làm việc hiện tại)
 
+- **Cô lập hoàn toàn luồng OQC Scanner khỏi các thao tác độc lập trong Tool Editor (Task 207)**:
+  - **Vấn Đề Phát Hiện**:
+    - Khi người dùng ở tab **Tool Editor** nạp Job, tinh chỉnh node, hoặc bấm "Chạy thử (Run Once / Run Continuous)", `ToolEditorViewModel` phát sinh sự kiện `InspectionCompletedAsync` và thay đổi các thuộc tính `FinalPreviewImage`, `SelectedNodePreviewImage`.
+    - `OqcScannerViewModel` trước đây lắng nghe vô điều kiện toàn bộ các sự kiện từ `ToolEditorViewModel`, khiến việc chạy thử nghiệm độc lập bên Tool Editor bị coi là một chu kỳ quét OQC của chuyền sản xuất:
+      1. Ghi log kết quả đo thử nghiệm vào CSDL OQC (`CMS_VINA.dbo.OqcLogs` và `OqcInspectResult`), dẫn đến lỗi cắt chuỗi SQL `String or binary data would be truncated` trên cột `ScannedCode` do mã job test dài hơn định dạng mã sản phẩm.
+      2. Làm nhảy thông báo lỗi trên Status Bar của màn hình OQC Scanner.
+      3. Ghi đè màn hình xem ảnh kết quả/live camera của tab OQC Scanner bằng ảnh node đang chọn trong Tool Editor.
+  - **Giải Pháp Triển Khai (`OqcScannerViewModel.cs`)**:
+    1. **Cờ Kiểm Soát Nguồn Chạy OQC (`_isOqcRunInProgress`)**:
+       - Bổ sung cờ điều hướng `_isOqcRunInProgress`. Cờ này CHỈ được bật lên `true` khi lượt chạy được khởi tạo trực tiếp từ tab OQC Scanner (quét mã vạch tự động chạy, quét mã bằng camera, hoặc người dùng click nút "▶ CHẠY JOB" trong tab OQC Scanner).
+       - Trong phương thức `HandleInspectionCompletedAsync`: Kiểm tra điều kiện `if (!_isOqcRunInProgress) return;`. Nếu cờ bằng `false` (lượt chạy xuất phát từ Tool Editor hoặc tab khác), OQC Scanner bỏ qua hoàn toàn, không ghi DB log, không thay đổi lịch sử và không cập nhật Status Message.
+       - Tắt cờ `_isOqcRunInProgress = false;` ngay khi chu kỳ OQC hoàn tất hoặc khi có ngoại lệ xảy ra.
+    2. **Bảo Tồn Màn Hình Preview & Overlays Của OQC Scanner (`_lastOqcPreviewImage`, `_lastOqcOverlayItems`)**:
+       - Lưu trữ riêng biệt `_lastOqcPreviewImage` và `_lastOqcOverlayItems` của lượt quét OQC gần nhất.
+       - Xóa bỏ việc lắng nghe `FinalPreviewImage` / `SelectedNodePreviewImage` từ `ToolEditorViewModel.PropertyChanged`, ngăn chặn việc click chọn node trong Tool Editor làm thay đổi giao diện OQC Scanner.
+       - Khi bật/tắt Live Camera (F5), OQC Scanner chuyển đổi mượt mà giữa luồng Live Camera từ cảm biến và ảnh kết quả OQC gần nhất mà không bị can thiệp bởi Tool Editor.
+  - **Biên Dịch & Kiểm Thử Thành Công 100%**: Solution biên dịch **0 Error(s)**, toàn bộ 8/8 unit tests đạt PASS 100%.
+
 - **Cải tổ toàn diện Tab Camera Settings (Layout Khoa Học, Compact Theme-Aware, Dynamic Parameter Panel & Nút Fit View) (Task 206)**:
   - **Yêu Cầu & Bối Cảnh**:
     - Danh sách camera trước đây bị hardcode màu nền tối cố định, item to cồng kềnh, không thích ứng theo Theme ứng dụng (Light/Dark).

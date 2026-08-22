@@ -695,6 +695,17 @@ Lộ trình tích hợp tính năng Chụp ảnh từ camera và hỗ trợ các
   - `Nút Fit View Nhanh (🖥️ Fit View)`:
     - Bổ sung nút floating ở góc trên bên phải màn hình Live Preview trực tiếp kết nối với lệnh ResetView giúp người dùng căn chỉnh vừa khung nhìn tức thì.
   - `Biên Dịch & Kiểm Thử Thành Công 100%`: Solution biên dịch **0 Error(s)**, 8/8 unit tests đạt PASS 100%.
+- [x] Task 207: Cô lập hoàn toàn luồng OQC Scanner khỏi các thao tác độc lập trong Tool Editor:
+  - `Cờ Kiểm Soát Nguồn Chạy OQC (_isOqcRunInProgress)`:
+    - Bổ sung cờ `_isOqcRunInProgress`, chỉ bật lên khi lệnh chạy xuất phát từ tab OQC Scanner (quét mã tự động chạy, quét qua camera, hoặc bấm '▶ CHẠY JOB' trên màn hình OQC).
+    - Ngăn chặn triệt để hiện tượng chạy thử nghiệm bên Tool Editor tự động ghi log vào CSDL `CMS_VINA.dbo.OqcLogs` và `OqcInspectResult`, loại bỏ lỗi cắt chuỗi SQL `String or binary data would be truncated`.
+    - Bảo vệ Status Message và Scan History của OQC Scanner không bị nhiễu loạn khi người dùng test hoặc debug trong Tool Editor.
+  - `Bảo Tồn Độc Lập Màn Hình Preview & Overlays Cho OQC Scanner`:
+    - Lưu trữ riêng biệt `_lastOqcPreviewImage` và `_lastOqcOverlayItems` của lượt quét OQC gần nhất.
+    - Xóa bỏ việc lắng nghe `PropertyChanged` của Tool Editor làm nhảy preview ảnh/overlay trên màn hình OQC Scanner.
+    - Chuyển đổi mượt mà giữa Live Camera (F5) và ảnh kết quả OQC cuối cùng mà không bị ảnh hưởng bởi các thao tác click node bên Tool Editor.
+  - `Biên Dịch & Kiểm Thử Thành Công 100%`: Solution biên dịch **0 Error(s)**, 8/8 unit tests đạt PASS 100%.
+
 
 
 
