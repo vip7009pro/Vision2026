@@ -81,6 +81,50 @@ public partial class ImageViewerControl : UserControl
         typeof(ImageViewerControl),
         new PropertyMetadata(null, OnOverlayItemsChanged));
 
+    public static readonly DependencyProperty EnableInteractiveMeasurementProperty = DependencyProperty.Register(
+        nameof(EnableInteractiveMeasurement),
+        typeof(bool),
+        typeof(ImageViewerControl),
+        new PropertyMetadata(false));
+
+    public static readonly DependencyProperty InteractivePointClickedCommandProperty = DependencyProperty.Register(
+        nameof(InteractivePointClickedCommand),
+        typeof(ICommand),
+        typeof(ImageViewerControl),
+        new PropertyMetadata(null));
+
+    public static readonly DependencyProperty InteractiveMouseMoveCommandProperty = DependencyProperty.Register(
+        nameof(InteractiveMouseMoveCommand),
+        typeof(ICommand),
+        typeof(ImageViewerControl),
+        new PropertyMetadata(null));
+
+    public static readonly DependencyProperty InteractiveCancelledCommandProperty = DependencyProperty.Register(
+        nameof(InteractiveCancelledCommand),
+        typeof(ICommand),
+        typeof(ImageViewerControl),
+        new PropertyMetadata(null));
+
+    public static readonly DependencyProperty ViewportMatrixProperty = DependencyProperty.Register(
+        nameof(ViewportMatrix),
+        typeof(Matrix),
+        typeof(ImageViewerControl),
+        new PropertyMetadata(Matrix.Identity));
+
+    public static readonly DependencyProperty CurrentMousePixelPointProperty = DependencyProperty.Register(
+        nameof(CurrentMousePixelPoint),
+        typeof(Point?),
+        typeof(ImageViewerControl),
+        new PropertyMetadata(null));
+
+    public static readonly DependencyProperty CurrentMouseScreenPointProperty = DependencyProperty.Register(
+        nameof(CurrentMouseScreenPoint),
+        typeof(Point?),
+        typeof(ImageViewerControl),
+        new PropertyMetadata(null));
+
+    public event EventHandler? ViewportTransformChanged;
+
     public ImageViewerControl()
     {
         InitializeComponent();
@@ -88,6 +132,7 @@ public partial class ImageViewerControl : UserControl
         PART_Overlay.MouseLeftButtonDown += OverlayOnMouseLeftButtonDown;
         PART_Overlay.MouseMove += OverlayOnMouseMove;
         PART_Overlay.MouseLeftButtonUp += OverlayOnMouseLeftButtonUp;
+        PART_Overlay.MouseRightButtonDown += OverlayOnMouseRightButtonDown;
 
         PART_Overlay.KeyDown += OverlayOnKeyDown;
 
@@ -97,7 +142,7 @@ public partial class ImageViewerControl : UserControl
 
         SetupTransforms();
     }
-    private readonly MatrixTransform _transform = new();
+    private readonly MatrixTransform _transform = new();
 
     private bool _panning;
     private Point _panStart;
@@ -202,6 +247,48 @@ public partial class ImageViewerControl : UserControl
     {
         get => (ICommand?)GetValue(LineSelectedCommandProperty);
         set => SetValue(LineSelectedCommandProperty, value);
+    }
+
+    public bool EnableInteractiveMeasurement
+    {
+        get => (bool)GetValue(EnableInteractiveMeasurementProperty);
+        set => SetValue(EnableInteractiveMeasurementProperty, value);
+    }
+
+    public ICommand? InteractivePointClickedCommand
+    {
+        get => (ICommand?)GetValue(InteractivePointClickedCommandProperty);
+        set => SetValue(InteractivePointClickedCommandProperty, value);
+    }
+
+    public ICommand? InteractiveMouseMoveCommand
+    {
+        get => (ICommand?)GetValue(InteractiveMouseMoveCommandProperty);
+        set => SetValue(InteractiveMouseMoveCommandProperty, value);
+    }
+
+    public ICommand? InteractiveCancelledCommand
+    {
+        get => (ICommand?)GetValue(InteractiveCancelledCommandProperty);
+        set => SetValue(InteractiveCancelledCommandProperty, value);
+    }
+
+    public Matrix ViewportMatrix
+    {
+        get => (Matrix)GetValue(ViewportMatrixProperty);
+        set => SetValue(ViewportMatrixProperty, value);
+    }
+
+    public Point? CurrentMousePixelPoint
+    {
+        get => (Point?)GetValue(CurrentMousePixelPointProperty);
+        set => SetValue(CurrentMousePixelPointProperty, value);
+    }
+
+    public Point? CurrentMouseScreenPoint
+    {
+        get => (Point?)GetValue(CurrentMouseScreenPointProperty);
+        set => SetValue(CurrentMouseScreenPointProperty, value);
     }
 
     private int _lastPixelWidth;
@@ -336,6 +423,17 @@ public partial class ImageViewerControl : UserControl
 
     private void UpdateInfoText()
     {
+        ViewportMatrix = _transform.Matrix;
+        ViewportTransformChanged?.Invoke(this, EventArgs.Empty);
+
+        if (_lastMousePos.HasValue && ImageSource is BitmapSource bmpCoord)
+        {
+            var contentPos = ContainerToContent(_lastMousePos.Value);
+            var pixelPos = ConvertContentPointToPixelPoint(bmpCoord, contentPos.X, contentPos.Y);
+            CurrentMousePixelPoint = new Point(pixelPos.X, pixelPos.Y);
+            CurrentMouseScreenPoint = _lastMousePos.Value;
+        }
+
         if (PART_InfoText != null)
         {
             if (_lastPixelWidth == 0 || _lastPixelHeight == 0)
@@ -481,6 +579,18 @@ public partial class ImageViewerControl : UserControl
         _lastMousePos = mousePos;
         UpdateInfoText();
 
+        if (EnableInteractiveMeasurement && ImageSource is BitmapSource bmpInteractive)
+        {
+            var contentPos = ContainerToContent(mousePos);
+            var pixelPos = ConvertContentPointToPixelPoint(bmpInteractive, contentPos.X, contentPos.Y);
+            var pt = new Point(pixelPos.X, pixelPos.Y);
+
+            if (InteractiveMouseMoveCommand?.CanExecute(pt) == true)
+            {
+                InteractiveMouseMoveCommand.Execute(pt);
+            }
+        }
+
         if (_panning)
         {
             var current = mousePos;
@@ -571,15 +681,30 @@ public partial class ImageViewerControl : UserControl
         get => (IEnumerable<OverlayItem>?)GetValue(OverlayItemsProperty);
         set => SetValue(OverlayItemsProperty, value);
     }
-
     private static void OnOverlayItemsChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
     {
         var c = (ImageViewerControl)d;
+        if (e.OldValue is INotifyCollectionChanged oldColl)
+        {
+            oldColl.CollectionChanged -= c.OnOverlayCollectionChanged;
+        }
+        if (e.NewValue is INotifyCollectionChanged newColl)
+        {
+            newColl.CollectionChanged += c.OnOverlayCollectionChanged;
+        }
         if (c.PART_FastOverlay != null)
         {
             c.PART_FastOverlay.OverlayItems = e.NewValue as IEnumerable<OverlayItem>;
         }
         c.Dispatcher.BeginInvoke(new Action(c.RedrawOverlays), System.Windows.Threading.DispatcherPriority.Render);
+    }
+
+    private void OnOverlayCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
+    {
+        if (PART_FastOverlay != null)
+        {
+            PART_FastOverlay.InvalidateVisual();
+        }
     }
 
     /// <summary>
@@ -840,6 +965,16 @@ public partial class ImageViewerControl : UserControl
 
     private void OverlayOnKeyDown(object sender, KeyEventArgs e)
     {
+        if (e.Key == Key.Escape && EnableInteractiveMeasurement)
+        {
+            if (InteractiveCancelledCommand?.CanExecute(null) == true)
+            {
+                InteractiveCancelledCommand.Execute(null);
+            }
+            e.Handled = true;
+            return;
+        }
+
         if (!EnableRoiEditing)
         {
             return;
@@ -965,6 +1100,20 @@ public partial class ImageViewerControl : UserControl
 
         PART_Overlay.Focus();
 
+        if (EnableInteractiveMeasurement && ImageSource is BitmapSource bmpInteractive)
+        {
+            var contentPos = ViewToContent(e.GetPosition(PART_Overlay));
+            var pixelPos = ConvertContentPointToPixelPoint(bmpInteractive, contentPos.X, contentPos.Y);
+            var pt = new Point(pixelPos.X, pixelPos.Y);
+
+            if (InteractivePointClickedCommand?.CanExecute(pt) == true)
+            {
+                InteractivePointClickedCommand.Execute(pt);
+            }
+            e.Handled = true;
+            return;
+        }
+
         if (_panning)
         {
             return;
@@ -1081,6 +1230,18 @@ public partial class ImageViewerControl : UserControl
 
     private void OverlayOnMouseMove(object sender, MouseEventArgs e)
     {
+        if (EnableInteractiveMeasurement && ImageSource is BitmapSource bmpInteractive)
+        {
+            var contentPos = ViewToContent(e.GetPosition(PART_Overlay));
+            var pixelPos = ConvertContentPointToPixelPoint(bmpInteractive, contentPos.X, contentPos.Y);
+            var pt = new Point(pixelPos.X, pixelPos.Y);
+
+            if (InteractiveMouseMoveCommand?.CanExecute(pt) == true)
+            {
+                InteractiveMouseMoveCommand.Execute(pt);
+            }
+        }
+
         if (_panning)
         {
             return;
@@ -1280,6 +1441,18 @@ public partial class ImageViewerControl : UserControl
         }
 
         RedrawOverlays();
+    }
+
+    private void OverlayOnMouseRightButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        if (EnableInteractiveMeasurement)
+        {
+            if (InteractiveCancelledCommand?.CanExecute(null) == true)
+            {
+                InteractiveCancelledCommand.Execute(null);
+            }
+            e.Handled = true;
+        }
     }
 
     private static Roi ConvertContentRoiToPixelRoi(BitmapSource bmp, double contentX, double contentY, double contentW, double contentH, double contentAngle = 0)

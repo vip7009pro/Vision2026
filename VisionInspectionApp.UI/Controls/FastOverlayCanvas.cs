@@ -1,4 +1,6 @@
+using System;
 using System.Collections.Generic;
+using System.Collections.Specialized;
 using System.Globalization;
 using System.Windows;
 using System.Windows.Media;
@@ -9,6 +11,17 @@ public class FastOverlayCanvas : FrameworkElement
 {
     private static readonly Dictionary<(Brush, double), Pen> _penCache = new();
     private static readonly Typeface _defaultTypeface = new("Segoe UI");
+
+    private static readonly Brush DarkLabelBackgroundBrush = new SolidColorBrush(Color.FromArgb(210, 16, 20, 28)); // #D210141C
+    private static readonly Brush DarkLabelBorderBrush = new SolidColorBrush(Color.FromArgb(100, 255, 255, 255));
+    private static readonly Pen DarkLabelBorderPen = new(DarkLabelBorderBrush, 0.8);
+
+    static FastOverlayCanvas()
+    {
+        DarkLabelBackgroundBrush.Freeze();
+        DarkLabelBorderBrush.Freeze();
+        DarkLabelBorderPen.Freeze();
+    }
 
     private static Pen GetCachedPen(Brush brush, double thickness)
     {
@@ -22,13 +35,14 @@ public class FastOverlayCanvas : FrameworkElement
         _penCache[key] = pen;
         return pen;
     }
+
     public static readonly DependencyProperty OverlayItemsProperty = DependencyProperty.Register(
         nameof(OverlayItems), typeof(IEnumerable<OverlayItem>), typeof(FastOverlayCanvas),
         new FrameworkPropertyMetadata(null, FrameworkPropertyMetadataOptions.AffectsRender, OnOverlayItemsChanged));
 
     public static readonly DependencyProperty ImageSourceProperty = DependencyProperty.Register(
         nameof(ImageSource), typeof(ImageSource), typeof(FastOverlayCanvas),
-        new FrameworkPropertyMetadata(null, FrameworkPropertyMetadataOptions.AffectsRender, OnOverlayItemsChanged));
+        new FrameworkPropertyMetadata(null, FrameworkPropertyMetadataOptions.AffectsRender, OnImageSourceChanged));
 
     public static readonly DependencyProperty ViewScaleProperty = DependencyProperty.Register(
         nameof(ViewScale), typeof(double), typeof(FastOverlayCanvas),
@@ -52,9 +66,28 @@ public class FastOverlayCanvas : FrameworkElement
         set => SetValue(ImageSourceProperty, value);
     }
 
-    private static void OnOverlayItemsChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+    private static void OnImageSourceChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
     {
         ((FastOverlayCanvas)d).InvalidateVisual();
+    }
+
+    private static void OnOverlayItemsChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+    {
+        var canvas = (FastOverlayCanvas)d;
+        if (e.OldValue is INotifyCollectionChanged oldColl)
+        {
+            oldColl.CollectionChanged -= canvas.OnOverlayCollectionChanged;
+        }
+        if (e.NewValue is INotifyCollectionChanged newColl)
+        {
+            newColl.CollectionChanged += canvas.OnOverlayCollectionChanged;
+        }
+        canvas.InvalidateVisual();
+    }
+
+    private void OnOverlayCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
+    {
+        InvalidateVisual();
     }
 
     protected override void OnRender(DrawingContext dc)
@@ -107,7 +140,13 @@ public class FastOverlayCanvas : FrameworkElement
                 if (!string.IsNullOrWhiteSpace(r.Label))
                 {
                     var text = new FormattedText(r.Label, CultureInfo.CurrentUICulture, FlowDirection.LeftToRight, typeface, effFontSize, item.Stroke, dpi);
-                    dc.DrawText(text, new Point(vx, vy - text.Height - 2 / scale));
+                    double tx = vx;
+                    double ty = vy - text.Height - 4 / scale;
+                    double padX = 4 / scale;
+                    double padY = 2 / scale;
+                    var bgRect = new Rect(tx - padX, ty - padY, text.Width + padX * 2, text.Height + padY * 2);
+                    dc.DrawRoundedRectangle(DarkLabelBackgroundBrush, DarkLabelBorderPen, bgRect, 3 / scale, 3 / scale);
+                    dc.DrawText(text, new Point(tx, ty));
                 }
 
                 if (Math.Abs(r.Angle) > 0.001)
@@ -125,7 +164,13 @@ public class FastOverlayCanvas : FrameworkElement
                 if (!string.IsNullOrWhiteSpace(p.Label))
                 {
                     var text = new FormattedText(p.Label, CultureInfo.CurrentUICulture, FlowDirection.LeftToRight, typeface, effFontSize, item.Stroke, dpi);
-                    dc.DrawText(text, new Point(vx + pr + 4 / scale, vy - text.Height / 2.0));
+                    double tx = vx + pr + 6 / scale;
+                    double ty = vy - text.Height / 2.0;
+                    double padX = 4 / scale;
+                    double padY = 2 / scale;
+                    var bgRect = new Rect(tx - padX, ty - padY, text.Width + padX * 2, text.Height + padY * 2);
+                    dc.DrawRoundedRectangle(DarkLabelBackgroundBrush, DarkLabelBorderPen, bgRect, 3 / scale, 3 / scale);
+                    dc.DrawText(text, new Point(tx, ty));
                 }
             }
             else if (item is OverlayCircleItem c)
@@ -138,7 +183,13 @@ public class FastOverlayCanvas : FrameworkElement
                 if (!string.IsNullOrWhiteSpace(c.Label))
                 {
                     var text = new FormattedText(c.Label, CultureInfo.CurrentUICulture, FlowDirection.LeftToRight, typeface, effFontSize, item.Stroke, dpi);
-                    dc.DrawText(text, new Point(cx - text.Width / 2.0, cy - cr - text.Height - 2 / scale));
+                    double tx = cx - text.Width / 2.0;
+                    double ty = cy - cr - text.Height - 4 / scale;
+                    double padX = 4 / scale;
+                    double padY = 2 / scale;
+                    var bgRect = new Rect(tx - padX, ty - padY, text.Width + padX * 2, text.Height + padY * 2);
+                    dc.DrawRoundedRectangle(DarkLabelBackgroundBrush, DarkLabelBorderPen, bgRect, 3 / scale, 3 / scale);
+                    dc.DrawText(text, new Point(tx, ty));
                 }
             }
             else if (item is OverlayLineItem l)
@@ -152,7 +203,15 @@ public class FastOverlayCanvas : FrameworkElement
                 if (!string.IsNullOrWhiteSpace(l.Label))
                 {
                     var text = new FormattedText(l.Label, CultureInfo.CurrentUICulture, FlowDirection.LeftToRight, typeface, effFontSize, item.Stroke, dpi);
-                    dc.DrawText(text, new Point((vx1 + vx2) / 2, (vy1 + vy2) / 2));
+                    double midX = (vx1 + vx2) / 2.0;
+                    double midY = (vy1 + vy2) / 2.0;
+                    double tx = midX - text.Width / 2.0;
+                    double ty = midY - text.Height / 2.0;
+                    double padX = 6 / scale;
+                    double padY = 3 / scale;
+                    var bgRect = new Rect(tx - padX, ty - padY, text.Width + padX * 2, text.Height + padY * 2);
+                    dc.DrawRoundedRectangle(DarkLabelBackgroundBrush, DarkLabelBorderPen, bgRect, 4 / scale, 4 / scale);
+                    dc.DrawText(text, new Point(tx, ty));
                 }
             }
             else if (item is OverlayPolylineItem pl)
@@ -166,7 +225,13 @@ public class FastOverlayCanvas : FrameworkElement
                     {
                         var text = new FormattedText(pl.Label, CultureInfo.CurrentUICulture, FlowDirection.LeftToRight, typeface, effFontSize, item.Stroke, dpi);
                         var firstPt = new Point(pl.Points[0].X * sx, pl.Points[0].Y * sy);
-                        dc.DrawText(text, new Point(firstPt.X, firstPt.Y - text.Height - 2 / scale));
+                        double tx = firstPt.X;
+                        double ty = firstPt.Y - text.Height - 4 / scale;
+                        double padX = 4 / scale;
+                        double padY = 2 / scale;
+                        var bgRect = new Rect(tx - padX, ty - padY, text.Width + padX * 2, text.Height + padY * 2);
+                        dc.DrawRoundedRectangle(DarkLabelBackgroundBrush, DarkLabelBorderPen, bgRect, 3 / scale, 3 / scale);
+                        dc.DrawText(text, new Point(tx, ty));
                     }
                 }
             }
@@ -175,10 +240,11 @@ public class FastOverlayCanvas : FrameworkElement
                 var vx = t.X * sx;
                 var vy = t.Y * sy;
                 var text = new FormattedText(t.Text, CultureInfo.CurrentUICulture, FlowDirection.LeftToRight, typeface, effTextFontSize, t.Foreground, dpi);
-                if (t.Background is not null)
-                {
-                    dc.DrawRectangle(t.Background, null, new Rect(new Point(vx, vy), new Size(text.Width, text.Height)));
-                }
+                var bg = t.Background ?? DarkLabelBackgroundBrush;
+                double padX = 4 / scale;
+                double padY = 2 / scale;
+                var bgRect = new Rect(vx - padX, vy - padY, text.Width + padX * 2, text.Height + padY * 2);
+                dc.DrawRoundedRectangle(bg, DarkLabelBorderPen, bgRect, 3 / scale, 3 / scale);
                 dc.DrawText(text, new Point(vx, vy));
             }
         }

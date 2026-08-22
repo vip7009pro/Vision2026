@@ -1,28 +1,20 @@
-﻿using System.Collections.ObjectModel;
+using System.Collections.ObjectModel;
+using System.IO;
+using System.Windows;
 using System.Windows.Input;
+using System.Windows.Media;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.Win32;
 using OpenCvSharp;
 using OpenCvSharp.WpfExtensions;
 using VisionInspectionApp.UI.Controls;
+using VisionInspectionApp.UI.Models.ManualInspection;
 using VisionInspectionApp.UI.Services;
-using System.Windows.Media;
+using VisionInspectionApp.UI.Services.ManualInspection;
+using VisionInspectionApp.Application.Services;
 
 namespace VisionInspectionApp.UI.ViewModels;
-
-public sealed record ManualDistanceMeasurement(
-    double X1,
-    double Y1,
-    double X2,
-    double Y2,
-    double DistancePx,
-    double DistanceMm)
-{
-    public string P1Text => $"({X1:0},{Y1:0})";
-
-    public string P2Text => $"({X2:0},{Y2:0})";
-}
 
 public sealed partial class ManualInspectionViewModel : ObservableObject
 {
@@ -30,6 +22,8 @@ public sealed partial class ManualInspectionViewModel : ObservableObject
     private readonly CameraService _cameraService;
 
     private Mat? _imageMat;
+    private readonly List<GeoPoint2D> _collectedPoints = new();
+    private readonly List<OverlayItem> _persistentOverlays = new();
 
     public ManualInspectionViewModel(GlobalAppSettingsService settings, CameraService cameraService)
     {
@@ -37,45 +31,111 @@ public sealed partial class ManualInspectionViewModel : ObservableObject
         _cameraService = cameraService;
 
         OverlayItems = new ObservableCollection<OverlayItem>();
-        Measurements = new ObservableCollection<ManualDistanceMeasurement>();
+        Records = new ObservableCollection<ManualMeasurementRecord>();
 
         LoadImageCommand = new RelayCommand(LoadImage);
         CaptureCameraImageCommand = new AsyncRelayCommand(CaptureCameraImageAsync);
         ClearMeasurementsCommand = new RelayCommand(ClearMeasurements);
-        LineSelectedCommand = new RelayCommand<LineSelection?>(OnLineSelected);
+        DeleteRecordCommand = new RelayCommand<ManualMeasurementRecord>(DeleteRecord);
+        ExportCsvCommand = new RelayCommand(ExportCsv);
+        SelectToolCommand = new RelayCommand<ManualMeasurementType>(SelectTool);
+        SelectGroupCommand = new RelayCommand<ManualMeasurementGroup>(SelectGroup);
+        SyncCalibrationFromGlobalCommand = new RelayCommand(SyncCalibrationFromGlobal);
 
-        CalibrationPixelsPerMm = _settings.Settings.ManualPixelsPerMm;
+        InteractivePointClickedCommand = new RelayCommand<System.Windows.Point?>(OnInteractivePointClicked);
+        InteractiveMouseMoveCommand = new RelayCommand<System.Windows.Point?>(OnInteractiveMouseMove);
+        InteractiveCancelledCommand = new RelayCommand(OnInteractiveCancelled);
+
+        SyncCalibrationFromGlobal();
+        UpdatePromptText();
     }
 
     [ObservableProperty]
     private ImageSource? _image;
 
-    public ObservableCollection<OverlayItem> OverlayItems { get; }
-
-    public ObservableCollection<ManualDistanceMeasurement> Measurements { get; }
-
     [ObservableProperty]
     private double _calibrationPixelsPerMm = 1.0;
 
-    partial void OnCalibrationPixelsPerMmChanged(double value)
-    {
-        if (value <= 0)
-        {
-            return;
-        }
+    [ObservableProperty]
+    private ManualMeasurementType _selectedTool = ManualMeasurementType.PointToPointDistance;
 
-        _settings.Settings.ManualPixelsPerMm = value;
-        _settings.Save();
-        RefreshOverlays();
-    }
+    [ObservableProperty]
+    private ManualMeasurementGroup _selectedGroup = ManualMeasurementGroup.PointAndDistance;
+
+    [ObservableProperty]
+    private string _statusPrompt = string.Empty;
+
+    [ObservableProperty]
+    private bool _enableSubpixelSnapping = true;
+
+    public ObservableCollection<OverlayItem> OverlayItems { get; }
+
+    public ObservableCollection<ManualMeasurementRecord> Records { get; }
 
     public ICommand LoadImageCommand { get; }
-
     public ICommand CaptureCameraImageCommand { get; }
-
     public ICommand ClearMeasurementsCommand { get; }
+    public ICommand DeleteRecordCommand { get; }
+    public ICommand ExportCsvCommand { get; }
+    public ICommand SelectToolCommand { get; }
+    public ICommand SelectGroupCommand { get; }
+    public ICommand SyncCalibrationFromGlobalCommand { get; }
 
-    public ICommand LineSelectedCommand { get; }
+    public ICommand InteractivePointClickedCommand { get; }
+    public ICommand InteractiveMouseMoveCommand { get; }
+    public ICommand InteractiveCancelledCommand { get; }
+
+    public void SyncCalibrationFromGlobal()
+    {
+        var globalCal = ChessboardCalibrationService.GetGlobalCalibration();
+        if (globalCal is not null && globalCal.IsCalibrated && globalCal.PixelsPerMm > 0)
+        {
+            CalibrationPixelsPerMm = Math.Round(globalCal.PixelsPerMm, 4);
+        }
+        else if (_settings.Settings.ManualPixelsPerMm > 0)
+        {
+            CalibrationPixelsPerMm = Math.Round(_settings.Settings.ManualPixelsPerMm, 4);
+        }
+    }
+
+    partial void OnCalibrationPixelsPerMmChanged(double value)
+    {
+        if (value <= 0) return;
+        _settings.Settings.ManualPixelsPerMm = value;
+        _settings.Save();
+        RecalculateAllRecordsMm();
+    }
+
+    partial void OnSelectedToolChanged(ManualMeasurementType value)
+    {
+        SelectedGroup = ManualMeasurementTypeExtensions.GetGroup(value);
+        _collectedPoints.Clear();
+        RefreshAllOverlays();
+        UpdatePromptText();
+    }
+
+    partial void OnSelectedGroupChanged(ManualMeasurementGroup value)
+    {
+        // When group changes, auto-select first tool in group if current tool is not in this group
+        if (ManualMeasurementTypeExtensions.GetGroup(SelectedTool) != value)
+        {
+            var toolsInGroup = ManualMeasurementTypeExtensions.GetToolsInGroup(value);
+            if (toolsInGroup.Count > 0)
+            {
+                SelectedTool = toolsInGroup[0];
+            }
+        }
+    }
+
+    private void SelectTool(ManualMeasurementType tool)
+    {
+        SelectedTool = tool;
+    }
+
+    private void SelectGroup(ManualMeasurementGroup group)
+    {
+        SelectedGroup = group;
+    }
 
     private void LoadImage()
     {
@@ -84,15 +144,15 @@ public sealed partial class ManualInspectionViewModel : ObservableObject
             Filter = "Image Files|*.png;*.jpg;*.jpeg;*.bmp|All Files|*.*"
         };
 
-        if (dlg.ShowDialog() != true)
-        {
-            return;
-        }
+        if (dlg.ShowDialog() != true) return;
 
         _imageMat?.Dispose();
         _imageMat = Cv2.ImRead(dlg.FileName, ImreadModes.Color);
         Image = _imageMat.ToBitmapSourceForDisplay();
-        RefreshOverlays();
+
+        _collectedPoints.Clear();
+        RefreshAllOverlays();
+        UpdatePromptText();
     }
 
     private async Task CaptureCameraImageAsync()
@@ -105,59 +165,84 @@ public sealed partial class ManualInspectionViewModel : ObservableObject
                 _imageMat?.Dispose();
                 _imageMat = mat;
                 Image = _imageMat.ToBitmapSourceForDisplay();
-                RefreshOverlays();
+                _collectedPoints.Clear();
+                RefreshAllOverlays();
+                UpdatePromptText();
             }
             else
             {
-                System.Windows.MessageBox.Show("Không thể chụp ảnh từ camera. Vui lòng kiểm tra lại kết nối camera trong tab Live Camera.", "Lỗi camera", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Error);
+                MessageBox.Show("Không thể chụp ảnh từ camera. Vui lòng kiểm tra lại kết nối camera.", "Lỗi camera", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
         catch (Exception ex)
         {
-            System.Windows.MessageBox.Show($"Lỗi chụp ảnh: {ex.Message}", "Lỗi", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Error);
+            MessageBox.Show($"Lỗi chụp ảnh: {ex.Message}", "Lỗi", MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }
 
-    private void ClearMeasurements()
+    public void ClearMeasurements()
     {
-        Measurements.Clear();
-        RefreshOverlays();
+        Records.Clear();
+        _collectedPoints.Clear();
+        _persistentOverlays.Clear();
+        OverlayItems.Clear();
+        UpdatePromptText();
     }
 
-    private void OnLineSelected(LineSelection? sel)
+    private void DeleteRecord(ManualMeasurementRecord? record)
     {
-        if (sel is null)
+        if (record is null) return;
+        Records.Remove(record);
+        RebuildPersistentOverlaysFromRecords();
+        RefreshAllOverlays();
+    }
+
+    private void ExportCsv()
+    {
+        if (Records.Count == 0)
         {
+            MessageBox.Show("Không có dữ liệu đo để xuất báo cáo!", "Thông báo", MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }
 
-        var dx = sel.X2 - sel.X1;
-        var dy = sel.Y2 - sel.Y1;
-        var distPx = Math.Sqrt(dx * dx + dy * dy);
-        var distMm = CalibrationPixelsPerMm > 0 ? distPx / CalibrationPixelsPerMm : distPx;
+        var dlg = new SaveFileDialog
+        {
+            Filter = "CSV Files (*.csv)|*.csv",
+            FileName = $"ManualMeasurement_Report_{DateTime.Now:yyyyMMdd_HHmmss}.csv"
+        };
 
-        Measurements.Add(new ManualDistanceMeasurement(sel.X1, sel.Y1, sel.X2, sel.Y2, distPx, distMm));
-        RefreshOverlays();
+        if (dlg.ShowDialog() == true)
+        {
+            try
+            {
+                ManualMeasurementExporter.ExportToCsv(dlg.FileName, Records, CalibrationPixelsPerMm);
+                MessageBox.Show($"Xuất báo cáo CSV thành công!\nĐường dẫn: {dlg.FileName}", "Thành công", MessageBoxButton.OK, MessageBoxImage.Information);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Lỗi khi xuất file: {ex.Message}", "Lỗi xuất báo cáo", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
     }
 
-    private void RefreshOverlays()
+    private void RecalculateAllRecordsMm()
     {
-        OverlayItems.Clear();
-
-        foreach (var m in Measurements)
+        double scale = CalibrationPixelsPerMm > 0 ? CalibrationPixelsPerMm : 1.0;
+        foreach (var r in Records)
         {
-            OverlayItems.Add(new OverlayPointItem { X = m.X1, Y = m.Y1, Stroke = Brushes.DeepSkyBlue, Label = $"P1 ({m.X1:0},{m.Y1:0})" });
-            OverlayItems.Add(new OverlayPointItem { X = m.X2, Y = m.Y2, Stroke = Brushes.DeepSkyBlue, Label = $"P2 ({m.X2:0},{m.Y2:0})" });
+            r.ValueMm = Math.Round(r.ValuePx / scale, 4);
+        }
+        RebuildPersistentOverlaysFromRecords();
+        RefreshAllOverlays();
+    }
 
-            OverlayItems.Add(new OverlayLineItem
-            {
-                X1 = m.X1,
-                Y1 = m.Y1,
-                X2 = m.X2,
-                Y2 = m.Y2,
-                Stroke = Brushes.Yellow,
-                Label = $"{m.DistancePx:0.0} px / {m.DistanceMm:0.000} mm"
-            });
+    private void RebuildPersistentOverlaysFromRecords()
+    {
+        _persistentOverlays.Clear();
+        foreach (var r in Records)
+        {
+            var overlays = GenerateOverlaysForRecord(r);
+            _persistentOverlays.AddRange(overlays);
         }
     }
 }

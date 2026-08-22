@@ -657,7 +657,35 @@ Lộ trình tích hợp tính năng Chụp ảnh từ camera và hỗ trợ các
     - Đóng gói file `.ico` chuẩn **Win32 DIB BITMAPINFOHEADER (32bpp BGRA + AND mask)** cho các phân giải chuẩn (`16x16`, `24x24`, `32x32`, `48x48`, `64x64`, `128x128`) và PNG cho `256x256`, tương thích $100\%$ với trình biên dịch tài nguyên Roslyn PE (`csc.exe`) và Windows Shell.
     - Cập nhật trực tiếp vào `VisionInspectionApp.UI/Assets/cms-vina-vision-system.ico`.
     - Đã xác thực trích xuất thành công tài nguyên icon từ tệp thực thi `VisionInspectionApp.UI.exe` (`VerifyExeIcon`).
-  - `Biên Dịch & Kiểm Thử Thành Công 100%`: Solution biên dịch **0 Error(s)**, toàn bộ unit tests đạt PASS 100%.
+- [x] Task 204: Nâng cấp toàn diện Tab Manual Inspection (Manual Measurement / 2D Vision CMM System):
+  - `Tương Tác Đo Đo Đạc Tương Tác Click-Click`:
+    - Click điểm 1 -> nhả chuột di chuyển live preview đường vẽ/kích thước bám theo chuột -> click điểm 2 (hoặc 3) để chốt kết quả đo.
+    - Hỗ trợ nhấn chuột phải hoặc phím ESC để hủy phép đo đang thực hiện dở.
+  - `Tỉ Lệ Pixel/mm Toàn Cục`:
+    - Tự động nạp tỉ lệ `PixelsPerMm` từ Global Chessboard Calibration khi khởi tạo hoặc chụp ảnh.
+  - `Dọn Sạch Toàn Diện`:
+    - Nút Xóa kết quả dọn sạch cả danh sách kết quả đo trong bảng và toàn bộ các overlay hình học đã vẽ trên ảnh.
+  - `Thước Đo mm Động (RulerCanvas)`:
+    - Hiển thị thước đo mm ngang (Top) và dọc (Left) bao quanh màn hình xem ảnh, co giãn mượt mà theo mức Zoom và Pan thực tế của ảnh.
+    - Phân chia vạch tự thích ứng với các mức đo chuẩn (100mm, 50mm, 10mm, 1mm, 0.1mm) kèm chỉ báo vạch vàng bám sát vị trí chuột.
+  - `Hệ Thống Công Cụ Đo Đa Dạng Chuẩn 2D CMM`:
+    - Nhóm 1: Điểm & Khoảng cách (Tọa độ XY, Khoảng cách 2 điểm, DeltaX, DeltaY, Khoảng cách Điểm - Đường).
+    - Nhóm 2: Đoạn thẳng & Line (Đoạn thẳng 2 điểm, Trung điểm, Khoảng cách 2 đường, Giao điểm, Góc 2 đường).
+    - Nhóm 3: Đường tròn & Cung (Đường tròn 3P, Tâm & Bán kính, Đường kính/Bán kính, Cung tròn 3P, Khoảng cách 2 đường tròn).
+    - Nhóm 4: Hình học & Diện tích (Hình chữ nhật thẳng 2P, Hình chữ nhật xoay 3P).
+    - Nhóm 5: Góc (Góc 3 điểm đỉnh P2, Góc 2 đường, Góc nghiêng trục ngang).
+    - Nhóm 6: Vision Edge Detection (Dò mép Sub-pixel bằng giải thuật Sobel Gradient scan + Parabolic Peak Refinement).
+    - Nhóm 7: Quản lý Dung sai GD&T (Thiết lập Nominal, Dung sai +/-, Đánh giá PASS/NG trực quan và Xuất báo cáo CSV UTF-8).
+  - `Biên Dịch & Kiểm Thử Thành Công 100%`: Solution biên dịch **0 Error(s)**, 8/8 unit tests đạt PASS 100%.
+- [x] Task 205: Cập nhật Live Overlay tức thì khi đo đạc & Thêm lớp nền tối (Dark Badge) cho giá trị đo:
+  - `Cập Nhật Live Overlay Tức Thì (60 FPS)`:
+    - Bổ sung lắng nghe sự kiện `INotifyCollectionChanged.CollectionChanged` trong `FastOverlayCanvas.cs` và `ImageViewerControl.xaml.cs` để tự động render lại ngay khi danh sách overlay thay đổi mà không cần phải zoom/pan ảnh.
+    - Chuyển tiếp sự kiện `MouseMove` trong `ImageViewerControl` tới `InteractiveMouseMoveCommand`, đảm bảo live rubberband preview và thước đo kích thước bám theo chuột tức thì.
+  - `Lớp Nền Tối Bo Góc (Dark Badge) Cho Giá Trị Đo`:
+    - Vẽ khung chữ nhật bo góc bán trong suốt màu tối (`#D210141C`) với viền mờ tinh tế lót phía dưới các giá trị đo (mm, px, độ) và nhãn hình học (Line, Circle, Rect, Angle, Point), giúp thông số luôn tương phản cao và rõ nét tuyệt đối trên mọi nền ảnh.
+  - `Biên Dịch & Kiểm Thử Thành Công 100%`: Solution biên dịch **0 Error(s)**, 8/8 unit tests đạt PASS 100%.
+
+
 
 
 

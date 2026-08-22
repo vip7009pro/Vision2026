@@ -51,6 +51,34 @@
 
 ### Sửa lỗi và Cải thiện UX/UI (Phiên làm việc hiện tại)
 
+- **Cập nhật Live Overlay tức thì khi đo đạc & Thêm lớp nền tối (Dark Badge) cho giá trị đo (Task 205)**:
+  - **Vấn Đề Phát Hiện**:
+    1. Khi tương tác đo trên màn hình preview (click/di chuyển chuột), `OverlayItems` được cập nhật trong `ObservableCollection<OverlayItem>` nhưng `FastOverlayCanvas` và `ImageViewerControl` không lắng nghe sự kiện `INotifyCollectionChanged.CollectionChanged`, dẫn đến việc overlay không được render ngay lập tức mà phải chờ zoom/pan mới hiển thị. Đồng thời sự kiện `MouseMove` chưa chuyển tiếp tới `InteractiveMouseMoveCommand`.
+    2. Chữ và số hiển thị giá trị đo (mm, px, độ) khó đọc khi nằm trên nền ảnh quá sáng hoặc nhiều chi tiết phức tạp.
+  - **Giải Pháp Thực Hiện**:
+    1. Trong `FastOverlayCanvas.cs` và `ImageViewerControl.xaml.cs`: Đăng ký lắng nghe sự kiện `INotifyCollectionChanged.CollectionChanged` khi `OverlayItems` thay đổi để tự động kích hoạt `InvalidateVisual()` ngay lập tức mỗi khi thêm/xóa/sửa overlay.
+    2. Trong `ImageViewerControl.xaml.cs`: Chuyển tiếp sự kiện di chuyển chuột trong `OverlayOnMouseMove` và `RootOnMouseMove` tới `InteractiveMouseMoveCommand`, đảm bảo live rubberband preview bám sát chuột mượt mà 60 FPS theo thời gian thực.
+    3. Trong `FastOverlayCanvas.cs`: Bổ sung badge nền tối mờ bo góc (`DarkLabelBackgroundBrush = #D210141C`, viền tinh tế `#64FFFFFF`) lót bên dưới tất cả các giá trị đo và nhãn (cho đường thẳng, đường tròn, hình chữ nhật, góc, điểm, polyline), giúp các thông số đo luôn nổi bật, sắc nét và dễ quan sát trên mọi loại ảnh.
+  - **Biên Dịch & Kiểm Thử Thành Công 100%**: Solution biên dịch **0 Error(s)**, toàn bộ unit tests đạt PASS 100%.
+
+- **Nâng cấp toàn diện Tab Manual Inspection (Manual Measurement / 2D Vision CMM System) (Task 204)**:
+  - **Yêu Cầu & Bối Cảnh**:
+    - Cơ chế đo tương tác click-click mượt mà: Click điểm 1 -> nhả chuột di chuyển với live rubberband preview đường vẽ và kích thước bám theo chuột -> click điểm 2 (hoặc 3) chốt kích thước. Hỗ trợ bấm chuột phải hoặc phím ESC để hủy phép đo đang dở.
+    - Tự động đồng bộ tỉ lệ `PixelsPerMm` từ Global Chessboard Calibration (`ChessboardCalibrationService.GetGlobalCalibration()`).
+    - Nút Xóa kết quả (`ClearAllRecordsCommand`) dọn sạch cả danh sách bảng kết quả đo và toàn bộ overlay hình học trên màn hình ảnh.
+    - Bổ sung thước đo mm (`RulerCanvas`) dọc theo biên trên (Top) và biên trái (Left) của ảnh, tự co giãn theo mức Zoom/Pan thực tế của ảnh, chia vạch tự thích ứng ($100, 50, 10, 5, 1, 0.5, 0.1\text{mm}$) và có chỉ báo vạch vàng theo vị trí chuột.
+    - Thanh công cụ đo Ribbon phong phú theo chuẩn 2D CMM với 6 nhóm công cụ:
+      - Nhóm 1: Điểm & Khoảng cách (Tọa độ XY, Khoảng cách 2 điểm, $\Delta X$, $\Delta Y$, Điểm - Đường).
+      - Nhóm 2: Đoạn thẳng & Line (Đoạn 2 điểm, Trung điểm, Khoảng cách 2 đường, Giao điểm, Góc 2 đường).
+      - Nhóm 3: Đường tròn & Cung (Đường tròn 3P, Tâm & Bán kính, Bán kính/Đường kính, Cung tròn 3P, Khoảng cách 2 đường tròn).
+      - Nhóm 4: Hình học & Diện tích (Hình chữ nhật thẳng 2P, Hình chữ nhật xoay 3P).
+      - Nhóm 5: Góc (Góc 3 điểm đỉnh P2, Góc 2 đường, Góc nghiêng trục ngang).
+      - Nhóm 6: Vision Edge Detection (Dò mép Sub-pixel bằng giải thuật Sobel Gradient Scan + Parabolic Peak Refinement).
+      - Nhóm 7: Quản lý Dung sai GD&T (Thiết lập Nominal, Dung sai +/-, Đánh giá PASS/NG trực quan và Xuất báo cáo CSV UTF-8).
+  - **Kiểm Thử & Xác Thực**:
+    - Xây dựng bộ Unit Test tự động `TestExtractApp/ManualInspectionTest.cs` kiểm tra chính xác 100% các phép tính hình học, khớp đường tròn 3P, hình chữ nhật xoay 3P, góc 3P, giao điểm đường thẳng, khoảng cách 2 đường, dò mép sub-pixel, đánh giá PASS/NG và xuất CSV.
+  - **Biên Dịch & Kiểm Thử Thành Công 100%**: Solution biên dịch **0 Error(s)**, toàn bộ unit tests đạt PASS 100%.
+
 - **Thiết kế và đóng gói App Icon EXE chuyên nghiệp chuẩn Windows 11 (Logo CMS VINA + chữ VISION) (Task 203)**:
   - **Yêu Cầu**:
     - Tạo lại icon ứng dụng cho file `.exe` thay thế icon cũ. Sử dụng logo CMS VINA hiện có và thêm chữ `VISION` nhỏ gọn, tinh tế ở phía dưới.

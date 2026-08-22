@@ -13,5 +13,6 @@ class Program
         RecentJobsAndCalibrationTest.RunTests();
         IconGenerator.GenerateAppIcons();
         IconGenerator.VerifyExeIcon();
+        ManualInspectionTest.RunTests();
     }
 }
