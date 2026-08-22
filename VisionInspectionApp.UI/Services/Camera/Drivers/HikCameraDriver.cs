@@ -359,6 +359,7 @@ public sealed class HikCameraDriver : CameraDriverBase
     private readonly SemaphoreSlim _driverGate = new(1, 1);
     private Mat? _latestContinuousFrame;
     private readonly object _latestContinuousFrameLock = new();
+    private int _discardFramesCount;
 
     public override async Task<Mat?> GrabFrameAsync(int timeoutMs = 3000)
     {
@@ -368,7 +369,7 @@ public sealed class HikCameraDriver : CameraDriverBase
         if (_isGrabbing)
         {
             // Tránh gọi MV_CC_GetOneFrameTimeout_NET xung đột với ContinuousGrabLoop
-            for (int i = 0; i < 20; i++)
+            for (int i = 0; i < 40; i++)
             {
                 lock (_latestContinuousFrameLock)
                 {
@@ -401,6 +402,12 @@ public sealed class HikCameraDriver : CameraDriverBase
                         System.Diagnostics.Debug.WriteLine($"[HikCameraDriver] MV_CC_StartGrabbing_NET failed with code: 0x{retStart:X8}");
                     }
                 }
+
+                try
+                {
+                    _camera.MV_CC_ClearImageBuffer_NET();
+                }
+                catch { }
 
                 // Gửi lệnh TriggerSoftware nếu ở Trigger Mode Software
                 if (_parameters.TriggerMode == CameraTriggerMode.On && _parameters.TriggerSource == CameraTriggerSource.Software)
@@ -449,9 +456,13 @@ public sealed class HikCameraDriver : CameraDriverBase
                     Marshal.FreeHGlobal(pData);
                 }
 
-                if (needStopGrabbingAfterwards)
+                if (needStopGrabbingAfterwards && _camera != null)
                 {
-                    try { _camera.MV_CC_StopGrabbing_NET(); } catch { }
+                    try
+                    {
+                        _camera.MV_CC_StopGrabbing_NET();
+                    }
+                    catch { }
                 }
 
                 _driverGate.Release();
@@ -489,6 +500,20 @@ public sealed class HikCameraDriver : CameraDriverBase
             {
                 try
                 {
+                // Invalidate cached continuous frame from old parameters and discard 2 in-flight hardware FIFO frames
+                lock (_latestContinuousFrameLock)
+                {
+                    _latestContinuousFrame?.Dispose();
+                    _latestContinuousFrame = null;
+                    _discardFramesCount = 2;
+                }
+
+                try
+                {
+                    _camera.MV_CC_ClearImageBuffer_NET();
+                }
+                catch { }
+
                 // 0. Bật chất lượng chuyển đổi Bayer chất lượng cao của Hikrobot SDK
                 try
                 {
@@ -878,6 +903,21 @@ public override async Task<CameraParameters> ReadParametersAsync()
                 int ret = _camera != null ? _camera.MV_CC_GetOneFrameTimeout_NET(pData, bufLen, ref frameInfo, 100) : -1;
                 if (ret == MyCamera.MV_OK && frameInfo.nWidth > 0 && frameInfo.nHeight > 0)
                 {
+                    bool shouldDiscard = false;
+                    lock (_latestContinuousFrameLock)
+                    {
+                        if (_discardFramesCount > 0)
+                        {
+                            _discardFramesCount--;
+                            shouldDiscard = true;
+                        }
+                    }
+
+                    if (shouldDiscard)
+                    {
+                        continue;
+                    }
+
                     using var rawMat = ConvertHikFrameToMat(pData, frameInfo);
                     if (!rawMat.Empty())
                     {

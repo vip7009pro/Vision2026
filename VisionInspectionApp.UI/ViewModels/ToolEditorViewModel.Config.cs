@@ -138,6 +138,7 @@ namespace VisionInspectionApp.UI.ViewModels
             }
 
             ClearActiveGraph();
+            ClearAllImageSourceCache();
             try
             {
                 _config = _jobService.LoadJob(filePath, out var tempDir);
@@ -176,7 +177,6 @@ namespace VisionInspectionApp.UI.ViewModels
                 SelectedNode = Nodes.Count > 0 ? Nodes[0] : null;
                 RaiseToolPropertyPanelsChanged();
                 OnPropertyChanged(nameof(PixelsPerMm));
-                RefreshPreviews();
                 IsDirty = false;
                 _recentJobsService?.AddRecentJob(filePath);
                 if (System.Windows.Application.Current?.MainWindow != null)
@@ -186,17 +186,55 @@ namespace VisionInspectionApp.UI.ViewModels
 
                 TriggerAutoFitGraph();
 
-                // Tự động nạp và áp dụng thông số Camera riêng biệt của Job này xuống camera phần cứng
-                var imgSourceDef = _config.ImageSources.FirstOrDefault(x => x.SourceType == ImageSourceType.Camera);
+                // Tự động nạp và áp dụng thông số Camera riêng biệt của Job này khi mở Job lần đầu
+                var imageSourceNode = _config.ToolGraph.Nodes.FirstOrDefault(n => string.Equals(n.Type, "ImageSource", StringComparison.OrdinalIgnoreCase));
+                var imgSourceDef = (imageSourceNode != null 
+                    ? _config.ImageSources.FirstOrDefault(x => string.Equals(x.Name, imageSourceNode.RefName, StringComparison.OrdinalIgnoreCase)) 
+                    : null) 
+                    ?? _config.ImageSources.FirstOrDefault(x => x.SourceType == ImageSourceType.Camera) 
+                    ?? _config.ImageSources.FirstOrDefault();
+
                 if (imgSourceDef?.CameraParams != null)
                 {
-                    _ = _cameraService.ApplyParametersAsync(imgSourceDef.CameraParams);
-                }
+                    _ = Task.Run(async () =>
+                    {
+                        try
+                        {
+                            await _cameraService.ApplyParametersAsync(imgSourceDef.CameraParams);
+                            // Chờ cảm biến camera cập nhật thông số và đẩy frame mới
+                            await Task.Delay(100);
+                        }
+                        catch { }
 
-                // Trigger inspection execution with new job if autoRun is enabled
-                if (autoRun)
+                        var dispatcher = System.Windows.Application.Current?.Dispatcher;
+                        if (autoRun)
+                        {
+                            if (dispatcher != null)
+                            {
+                                await dispatcher.InvokeAsync(OnRunOnceClicked);
+                            }
+                            else
+                            {
+                                OnRunOnceClicked();
+                            }
+                        }
+                        else
+                        {
+                            if (dispatcher != null)
+                            {
+                                await dispatcher.InvokeAsync(RefreshPreviews);
+                            }
+                        }
+                    });
+                }
+                else
                 {
-                    OnRunOnceClicked();
+                    RefreshPreviews();
+                    // Trigger inspection execution with new job if autoRun is enabled
+                    if (autoRun)
+                    {
+                        OnRunOnceClicked();
+                    }
                 }
             }
             catch (Exception ex)

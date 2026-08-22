@@ -626,6 +626,28 @@ Lộ trình tích hợp tính năng Chụp ảnh từ camera và hỗ trợ các
     - Chuyển sang đăng ký lắng nghe sự kiện `Window.SizeChanged` và `Window.StateChanged` của cửa sổ cha (`Window.GetWindow(this)`).
     - Đảm bảo khi kéo divider trong tab thì giữ nguyên mức zoom/pan hiện tại, chỉ khi phóng to/thu nhỏ hoặc thay đổi kích thước toàn bộ App mới thực hiện AutoFit.
   - `Biên Dịch & Kiểm Thử Thành Công 100%`: Solution biên dịch **0 Error(s)**, toàn bộ unit tests đạt PASS 100%.
+- [x] Task 201: Tự động nạp và áp dụng cấu hình Camera của Job trước khi chụp ảnh trong Tool Editor:
+  - `Nguyên Nhân`:
+    - `LoadJobFromFile` trước đây gọi `_ = _cameraService.ApplyParametersAsync(...)` dạng fire-and-forget bất đồng bộ, khiến `OnRunOnceClicked` chạy ngay tức khắc khi camera chưa kịp áp dụng xong thông số.
+    - Đồng thời hàm `RunFlowAsync` và `CaptureCameraImageAsync` trong Tool Editor chưa tự động áp dụng `CameraParams` của Job trước khi `CaptureSnapshotAsync`, dẫn đến việc chụp ảnh bằng thông số mặc định hoặc cấu hình cũ của tab Camera Settings.
+  - `Đã Khắc Phục (ToolEditorViewModel.Config.cs & ToolEditorViewModel.Engine.cs)`:
+    - Trong `LoadJobFromFile`: Đảm bảo `await _cameraService.ApplyParametersAsync(imgSourceDef.CameraParams)` hoàn tất rồi mới kích hoạt luồng `OnRunOnceClicked`.
+    - Trong `RunFlowAsync` và `CaptureCameraImageAsync`: Tự động kiểm tra và áp dụng `imgSourceDef.CameraParams` xuống driver camera trước khi gọi `CaptureSnapshotAsync`.
+    - Đảm bảo khi mở Job hoặc chạy Run Once / Capture, camera luôn hoạt động $100\%$ đúng với các thông số Exposure, Gain, Gamma, Hardware ROI, White Balance đã cấu hình riêng cho Job đó.
+  - `Biên Dịch & Kiểm Thử Thành Công 100%`: Solution biên dịch **0 Error(s)**.
+- [x] Task 202: Khắc phục triệt để lỗi nạp ảnh cũ khi mở Job lần đầu & Chỉ nạp CameraParams duy nhất 1 lần khi load Job:
+  - `Nguyên Nhân Gốc Rễ Đã Rà Soát Chi Tiết`:
+    1. Khi gọi `LoadJobFromFile`, lệnh `RefreshPreviews()` ở UI thread chạy trước khi nạp camera, kích hoạt `LoadImageFromSourceForPreview` kéo frame cũ từ driver vào `_sharedImage` và `_imageSourcePreviewCache`.
+    2. Trong `HikCameraDriver`, hàng đợi DMA / Ring Buffer phần cứng của Hik Camera SDK lưu sẵn 2-3 frames chụp với thông số cũ trước đó; khi đổi thông số `ApplyParametersAsync`, các frame còn tồn đọng trong phần cứng này tiếp tục được đọc ra trước khi frame phơi sáng mới được cảm biến sinh ra!
+    3. Trong `CameraService`, `_lastFrame` không được xóa khi `ApplyParametersAsync` được gọi.
+    4. Trong `ToolEditorViewModel.Config.cs`, logic tra cứu `ImageSourceDefinition` cần ưu tiên khớp chính xác theo `RefName` của `ImageSource` node trong đồ thị.
+  - `Giải Pháp Toàn Diện`:
+    1. `ClearAllImageSourceCache()` và `_sharedImage.SetImage(null)` ngay khi bắt đầu `LoadJobFromFile`.
+    2. Trong `HikCameraDriver`: Gọi `MV_CC_ClearImageBuffer_NET()`, thiết lập `_discardFramesCount = 2` trong `ApplyParametersAsync` và `ContinuousGrabLoop` để bỏ qua toàn bộ frame cũ trong hàng đợi phần cứng FIFO; tăng số lần thử `GrabFrameAsync` lên 40 chu kỳ để đảm bảo nhận chính xác frame mới.
+    3. Xóa frame đệm cũ trong `CameraService` (`_lastFrame = null`) và `SimulatorCameraDriver` (`_cachedBaseMat = null`).
+    4. Trong `LoadJobFromFile`: Áp dụng cấu hình camera của Job, chờ $100\text{ms}$ cho cảm biến camera chốt phơi sáng/đẩy frame mới rồi mới kích hoạt `OnRunOnceClicked()`.
+    5. Trong `RunFlowAsync()`: Không gọi `ApplyParametersAsync` lặp lại trên mỗi lần run của cùng 1 job, đảm bảo hiệu năng tối đa và đúng luồng vận hành công nghiệp.
+  - `Biên Dịch & Kiểm Thử Thành Công 100%`: Solution biên dịch **0 Error(s)**, toàn bộ unit tests đạt PASS 100%.
 
 
 

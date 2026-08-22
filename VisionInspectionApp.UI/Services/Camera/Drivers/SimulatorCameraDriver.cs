@@ -101,6 +101,14 @@ public sealed class SimulatorCameraDriver : CameraDriverBase
             }
             _parameters = p;
         }
+
+        lock (_imageLock)
+        {
+            _cachedBaseMat?.Dispose();
+            _cachedBaseMat = null;
+            _cachedImagePath = string.Empty;
+        }
+
         return Task.CompletedTask;
     }
 

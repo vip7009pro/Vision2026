@@ -754,6 +754,12 @@ public sealed class CameraService : IDisposable
         _desiredHeight = parameters.Height;
         _desiredFps = parameters.TargetFps;
 
+        lock (_lastFrameGate)
+        {
+            _lastFrame?.Dispose();
+            _lastFrame = null;
+        }
+
         if (_activeDriver != null && _activeDriver.IsOpened)
         {
             await _activeDriver.ApplyParametersAsync(_currentParameters);
