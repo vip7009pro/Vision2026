@@ -12,5 +12,6 @@ class Program
         ColorDiffTest.RunTests();
         RecentJobsAndCalibrationTest.RunTests();
         IconGenerator.GenerateAppIcons();
+        IconGenerator.VerifyExeIcon();
     }
 }

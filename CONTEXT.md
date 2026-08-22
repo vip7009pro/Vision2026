@@ -57,8 +57,9 @@
   - **Đã Triển Khai (`TestExtractApp/IconGenerator.cs`)**:
     - Xây dựng module sinh icon đồ họa Vector/GDI+ chất lượng cao với khử răng cưa `HighQualityBicubic` và font rendering `ClearTypeGridFit`.
     - Thiết kế định dạng Squircle Windows 11 với 4 góc reticle định vị quang học thị giác máy `[ + ]`, đặt logo gốc CMS VINA ở trung tâm và badge bo góc chữ `V I S I O N` màu trắng trên nền gradient xanh đậm `#0B5394` $\rightarrow$ `#043462`.
-    - Đóng gói file `.ico` nhị phân chuẩn 32-bit ARGB nén PNG với đầy đủ 6 phân giải: **`256x256`, `128x128`, `64x64`, `48x48`, `32x32`, `16x16`**.
+    - Đóng gói file `.ico` chuẩn **Win32 DIB BITMAPINFOHEADER (32bpp BGRA + AND mask)** cho các phân giải chuẩn (`16x16`, `24x24`, `32x32`, `48x48`, `64x64`, `128x128`) và PNG cho `256x256`, tương thích $100\%$ với trình biên dịch tài nguyên Roslyn PE (`csc.exe`) và Windows Shell.
     - Cập nhật trực tiếp vào `VisionInspectionApp.UI/Assets/cms-vina-vision-system.ico`.
+    - Đã xác thực trích xuất thành công tài nguyên icon từ tệp thực thi `VisionInspectionApp.UI.exe` (`VerifyExeIcon`).
   - **Biên Dịch & Kiểm Thử Thành Công 100%**: Solution biên dịch **0 Error(s)**, toàn bộ unit tests đạt PASS 100%.
 
 - **Khắc phục triệt để lỗi nạp ảnh cũ khi mở Job lần đầu & Chỉ nạp CameraParams duy nhất 1 lần khi load Job (Task 202)**:

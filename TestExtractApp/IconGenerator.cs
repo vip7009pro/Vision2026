@@ -5,6 +5,7 @@ using System.Drawing.Drawing2D;
 using System.Drawing.Imaging;
 using System.Drawing.Text;
 using System.IO;
+using System.Runtime.InteropServices;
 
 namespace TestExtractApp;
 
@@ -25,195 +26,14 @@ public static class IconGenerator
 
         using var srcLogo = new Bitmap(logoPath);
 
-        // Render Design 1: Ultra-Clean Vision Reticle Light (Windows 11 Light Squircle)
+        // Render Design: Ultra-Clean Vision Reticle Light (Windows 11 Squircle)
         using var bmpReticleLight = RenderDesignReticleLight(srcLogo, 512);
         bmpReticleLight.Save(Path.Combine(outputDir, "design_reticle_light_512.png"), ImageFormat.Png);
 
-        // Render Design 2: High-Tech Industrial Dark Squircle
-        using var bmpTechDark = RenderDesignTechDark(srcLogo, 512);
-        bmpTechDark.Save(Path.Combine(outputDir, "design_tech_dark_512.png"), ImageFormat.Png);
+        // Save as standard Windows PE compliant multi-resolution ICO file
+        CreateStandardWindowsIco(bmpReticleLight, targetIcoPath);
 
-        // Render Design 3: Modern Precision Gradient Squircle
-        using var bmpPrecision = RenderDesignPrecision(srcLogo, 512);
-        bmpPrecision.Save(Path.Combine(outputDir, "design_precision_512.png"), ImageFormat.Png);
-
-        // Save the chosen premium icon (bmpReticleLight / bmpPrecision) as the primary multi-resolution ICO for the App
-        CreateMultiResolutionIco(bmpReticleLight, targetIcoPath);
-        CreateMultiResolutionIco(bmpTechDark, Path.Combine(outputDir, "cms-vina-vision-dark.ico"));
-        CreateMultiResolutionIco(bmpPrecision, Path.Combine(outputDir, "cms-vina-vision-precision.ico"));
-
-        Console.WriteLine("Icon designs rendered and ICO saved to " + targetIcoPath);
-    }
-
-    private static Bitmap RenderDesignPrecision(Bitmap srcLogo, int size)
-    {
-        var bmp = new Bitmap(size, size, PixelFormat.Format32bppArgb);
-        using var g = Graphics.FromImage(bmp);
-        ConfigureGraphics(g);
-
-        float margin = size * 0.04f;
-        float cornerRadius = size * 0.22f;
-        var rect = new RectangleF(margin, margin, size - 2 * margin, size - 2 * margin);
-
-        using (var path = GetRoundedRectPath(rect, cornerRadius))
-        {
-            // Drop shadow
-            using (var shadowBrush = new SolidBrush(Color.FromArgb(45, 0, 0, 0)))
-            {
-                var shadowRect = new RectangleF(margin + 1, margin + size * 0.025f, rect.Width, rect.Height);
-                using var shadowPath = GetRoundedRectPath(shadowRect, cornerRadius);
-                g.FillPath(shadowBrush, shadowPath);
-            }
-
-            // Crisp Pure White to Soft Blue/Silver gradient
-            using (var bgBrush = new LinearGradientBrush(rect, Color.FromArgb(255, 255, 255, 255), Color.FromArgb(255, 236, 245, 254), 90f))
-            {
-                g.FillPath(bgBrush, path);
-            }
-
-            // Subtle Machine Vision Optical Reticle Circle
-            float cx = size * 0.5f;
-            float cy = size * 0.40f;
-            using (var penRing = new Pen(Color.FromArgb(30, 11, 83, 148), 1.5f))
-            {
-                g.DrawEllipse(penRing, cx - size * 0.34f, cy - size * 0.34f, size * 0.68f, size * 0.68f);
-                g.DrawLine(penRing, cx - size * 0.36f, cy, cx - size * 0.28f, cy);
-                g.DrawLine(penRing, cx + size * 0.28f, cy, cx + size * 0.36f, cy);
-                g.DrawLine(penRing, cx, cy - size * 0.36f, cx, cy - size * 0.28f);
-                g.DrawLine(penRing, cx, cy + size * 0.28f, cx, cy + size * 0.36f);
-            }
-
-            // Draw Logo in center
-            float logoW = size * 0.76f;
-            float logoH = size * 0.36f;
-            float logoX = (size - logoW) / 2f;
-            float logoY = size * 0.17f;
-            DrawLogoFitted(g, srcLogo, new RectangleF(logoX, logoY, logoW, logoH));
-
-            // Bottom "VISION" Badge with subtle cyan highlight
-            float badgeW = size * 0.68f;
-            float badgeH = size * 0.17f;
-            float badgeX = (size - badgeW) / 2f;
-            float badgeY = size * 0.63f;
-            var badgeRect = new RectangleF(badgeX, badgeY, badgeW, badgeH);
-
-            using (var badgePath = GetRoundedRectPath(badgeRect, size * 0.085f))
-            {
-                using (var badgeBrush = new LinearGradientBrush(badgeRect, Color.FromArgb(255, 11, 83, 148), Color.FromArgb(255, 6, 52, 98), 90f))
-                {
-                    g.FillPath(badgeBrush, badgePath);
-                }
-                using (var badgeBorder = new Pen(Color.FromArgb(160, 56, 189, 248), 1.5f))
-                {
-                    g.DrawPath(badgeBorder, badgePath);
-                }
-            }
-
-            using var font = new Font("Segoe UI", size * 0.086f, FontStyle.Bold, GraphicsUnit.Pixel);
-            using var textBrush = new SolidBrush(Color.White);
-            using var sf = new StringFormat
-            {
-                Alignment = StringAlignment.Center,
-                LineAlignment = StringAlignment.Center
-            };
-            g.DrawString("V I S I O N", font, textBrush, new RectangleF(badgeX, badgeY - 1, badgeW, badgeH), sf);
-
-            // Outer Stroke
-            using (var borderPen = new Pen(Color.FromArgb(180, 186, 218, 245), size * 0.015f))
-            {
-                g.DrawPath(borderPen, path);
-            }
-        }
-
-        return bmp;
-    }
-
-    private static Bitmap RenderDesignTechDark(Bitmap srcLogo, int size)
-    {
-        var bmp = new Bitmap(size, size, PixelFormat.Format32bppArgb);
-        using var g = Graphics.FromImage(bmp);
-        ConfigureGraphics(g);
-
-        float margin = size * 0.04f;
-        float cornerRadius = size * 0.22f;
-        var rect = new RectangleF(margin, margin, size - 2 * margin, size - 2 * margin);
-
-        using (var path = GetRoundedRectPath(rect, cornerRadius))
-        {
-            // Drop shadow
-            using (var shadowBrush = new SolidBrush(Color.FromArgb(60, 0, 0, 0)))
-            {
-                var shadowRect = new RectangleF(margin + 1, margin + size * 0.025f, rect.Width, rect.Height);
-                using var shadowPath = GetRoundedRectPath(shadowRect, cornerRadius);
-                g.FillPath(shadowBrush, shadowPath);
-            }
-
-            // Dark Blue / Slate Gradient
-            using (var bgBrush = new LinearGradientBrush(rect, Color.FromArgb(255, 12, 22, 45), Color.FromArgb(255, 20, 36, 68), 90f))
-            {
-                g.FillPath(bgBrush, path);
-            }
-
-            // White / frosted glass plate behind the logo so the original blue logo pops brilliantly
-            float plateW = size * 0.80f;
-            float plateH = size * 0.38f;
-            float plateX = (size - plateW) / 2f;
-            float plateY = size * 0.16f;
-            var plateRect = new RectangleF(plateX, plateY, plateW, plateH);
-            using (var platePath = GetRoundedRectPath(plateRect, size * 0.07f))
-            {
-                using (var plateBrush = new LinearGradientBrush(plateRect, Color.FromArgb(255, 255, 255, 255), Color.FromArgb(255, 240, 246, 252), 90f))
-                {
-                    g.FillPath(plateBrush, platePath);
-                }
-                using (var plateBorder = new Pen(Color.FromArgb(140, 56, 189, 248), 1.8f))
-                {
-                    g.DrawPath(plateBorder, platePath);
-                }
-            }
-
-            // Draw Logo inside plate
-            float padX = size * 0.04f;
-            float padY = size * 0.03f;
-            DrawLogoFitted(g, srcLogo, new RectangleF(plateX + padX, plateY + padY, plateW - 2 * padX, plateH - 2 * padY));
-
-            // Bottom "VISION" Pill / Badge
-            float badgeW = size * 0.72f;
-            float badgeH = size * 0.18f;
-            float badgeX = (size - badgeW) / 2f;
-            float badgeY = size * 0.62f;
-            var badgeRect = new RectangleF(badgeX, badgeY, badgeW, badgeH);
-
-            using (var badgePath = GetRoundedRectPath(badgeRect, size * 0.06f))
-            {
-                using (var badgeBrush = new LinearGradientBrush(badgeRect, Color.FromArgb(255, 0, 114, 206), Color.FromArgb(255, 0, 75, 150), 90f))
-                {
-                    g.FillPath(badgeBrush, badgePath);
-                }
-                using (var badgeBorder = new Pen(Color.FromArgb(220, 56, 189, 248), 1.8f))
-                {
-                    g.DrawPath(badgeBorder, badgePath);
-                }
-            }
-
-            // Draw Text "VISION"
-            using var font = new Font("Segoe UI", size * 0.092f, FontStyle.Bold, GraphicsUnit.Pixel);
-            using var textBrush = new SolidBrush(Color.White);
-            using var sf = new StringFormat
-            {
-                Alignment = StringAlignment.Center,
-                LineAlignment = StringAlignment.Center
-            };
-            g.DrawString("V I S I O N", font, textBrush, new RectangleF(badgeX, badgeY - 1, badgeW, badgeH), sf);
-
-            // Glowing Outer Border for Squircle
-            using (var borderPen = new Pen(Color.FromArgb(180, 56, 189, 248), size * 0.015f))
-            {
-                g.DrawPath(borderPen, path);
-            }
-        }
-
-        return bmp;
+        Console.WriteLine("✅ Standard Windows PE Multi-Resolution ICO saved to " + targetIcoPath);
     }
 
     private static Bitmap RenderDesignReticleLight(Bitmap srcLogo, int size)
@@ -309,353 +129,6 @@ public static class IconGenerator
         return bmp;
     }
 
-    private static Bitmap RenderDesignReticleDark(Bitmap srcLogo, int size)
-    {
-        var bmp = new Bitmap(size, size, PixelFormat.Format32bppArgb);
-        using var g = Graphics.FromImage(bmp);
-        ConfigureGraphics(g);
-
-        float margin = size * 0.04f;
-        float cornerRadius = size * 0.22f;
-        var rect = new RectangleF(margin, margin, size - 2 * margin, size - 2 * margin);
-
-        using (var path = GetRoundedRectPath(rect, cornerRadius))
-        {
-            // Drop shadow
-            using (var shadowBrush = new SolidBrush(Color.FromArgb(60, 0, 0, 0)))
-            {
-                var shadowRect = new RectangleF(margin + 1, margin + size * 0.025f, rect.Width, rect.Height);
-                using var shadowPath = GetRoundedRectPath(shadowRect, cornerRadius);
-                g.FillPath(shadowBrush, shadowPath);
-            }
-
-            // Dark Blue / Midnight gradient
-            using (var bgBrush = new LinearGradientBrush(rect, Color.FromArgb(255, 10, 20, 38), Color.FromArgb(255, 16, 32, 58), 90f))
-            {
-                g.FillPath(bgBrush, path);
-            }
-
-            // White Inner Card with subtle rounded corners for CMS Logo
-            float cardW = size * 0.80f;
-            float cardH = size * 0.38f;
-            float cardX = (size - cardW) / 2f;
-            float cardY = size * 0.15f;
-            var cardRect = new RectangleF(cardX, cardY, cardW, cardH);
-            using (var cardPath = GetRoundedRectPath(cardRect, size * 0.06f))
-            {
-                using (var cardBrush = new LinearGradientBrush(cardRect, Color.White, Color.FromArgb(242, 247, 252), 90f))
-                {
-                    g.FillPath(cardBrush, cardPath);
-                }
-                using (var cardBorder = new Pen(Color.FromArgb(140, 56, 189, 248), 1.8f))
-                {
-                    g.DrawPath(cardBorder, cardPath);
-                }
-            }
-
-            // Draw Logo inside card
-            float padX = size * 0.04f;
-            float padY = size * 0.03f;
-            DrawLogoFitted(g, srcLogo, new RectangleF(cardX + padX, cardY + padY, cardW - 2 * padX, cardH - 2 * padY));
-
-            // Bottom "VISION" Tech Badge
-            float badgeW = size * 0.72f;
-            float badgeH = size * 0.18f;
-            float badgeX = (size - badgeW) / 2f;
-            float badgeY = size * 0.62f;
-            var badgeRect = new RectangleF(badgeX, badgeY, badgeW, badgeH);
-
-            using (var badgePath = GetRoundedRectPath(badgeRect, size * 0.05f))
-            {
-                using (var badgeBrush = new LinearGradientBrush(badgeRect, Color.FromArgb(255, 0, 114, 206), Color.FromArgb(255, 0, 75, 150), 90f))
-                {
-                    g.FillPath(badgeBrush, badgePath);
-                }
-                using (var badgeBorder = new Pen(Color.FromArgb(220, 56, 189, 248), 1.8f))
-                {
-                    g.DrawPath(badgeBorder, badgePath);
-                }
-            }
-
-            using var font = new Font("Segoe UI", size * 0.092f, FontStyle.Bold, GraphicsUnit.Pixel);
-            using var textBrush = new SolidBrush(Color.White);
-            using var sf = new StringFormat
-            {
-                Alignment = StringAlignment.Center,
-                LineAlignment = StringAlignment.Center
-            };
-            g.DrawString("V I S I O N", font, textBrush, new RectangleF(badgeX, badgeY - 1, badgeW, badgeH), sf);
-
-            // Outer Neon Border
-            using (var borderPen = new Pen(Color.FromArgb(180, 56, 189, 248), size * 0.015f))
-            {
-                g.DrawPath(borderPen, path);
-            }
-        }
-
-        return bmp;
-    }
-
-    private static Bitmap RenderDesignDark(Bitmap srcLogo, int size)
-    {
-        var bmp = new Bitmap(size, size, PixelFormat.Format32bppArgb);
-        using var g = Graphics.FromImage(bmp);
-        ConfigureGraphics(g);
-
-        // Outer rounded squircle
-        float margin = size * 0.04f;
-        float cornerRadius = size * 0.22f;
-        var rect = new RectangleF(margin, margin, size - 2 * margin, size - 2 * margin);
-
-        using (var path = GetRoundedRectPath(rect, cornerRadius))
-        {
-            // Drop shadow
-            using (var shadowBrush = new SolidBrush(Color.FromArgb(50, 0, 0, 0)))
-            {
-                var shadowRect = new RectangleF(margin + 2, margin + size * 0.02f, rect.Width, rect.Height);
-                using var shadowPath = GetRoundedRectPath(shadowRect, cornerRadius);
-                g.FillPath(shadowBrush, shadowPath);
-            }
-
-            // Dark Blue / Slate Gradient background
-            using (var bgBrush = new LinearGradientBrush(rect, Color.FromArgb(255, 12, 22, 45), Color.FromArgb(255, 20, 36, 68), 90f))
-            {
-                g.FillPath(bgBrush, path);
-            }
-
-            // High-tech subtle grid / aperture background accent
-            using (var penGrid = new Pen(Color.FromArgb(25, 56, 189, 248), 1.5f))
-            {
-                float cx = size * 0.5f;
-                float cy = size * 0.42f;
-                g.DrawEllipse(penGrid, cx - size * 0.32f, cy - size * 0.32f, size * 0.64f, size * 0.64f);
-                g.DrawEllipse(penGrid, cx - size * 0.24f, cy - size * 0.24f, size * 0.48f, size * 0.48f);
-                // Reticle crosshair marks
-                g.DrawLine(penGrid, cx - size * 0.36f, cy, cx - size * 0.26f, cy);
-                g.DrawLine(penGrid, cx + size * 0.26f, cy, cx + size * 0.36f, cy);
-                g.DrawLine(penGrid, cx, cy - size * 0.36f, cx, cy - size * 0.26f);
-                g.DrawLine(penGrid, cx, cy + size * 0.26f, cx, cy + size * 0.36f);
-            }
-
-            // White / frosted glass plate behind the logo so the original blue logo pops brilliantly
-            float plateW = size * 0.76f;
-            float plateH = size * 0.36f;
-            float plateX = (size - plateW) / 2f;
-            float plateY = size * 0.18f;
-            var plateRect = new RectangleF(plateX, plateY, plateW, plateH);
-            using (var platePath = GetRoundedRectPath(plateRect, size * 0.08f))
-            {
-                using (var plateBrush = new LinearGradientBrush(plateRect, Color.FromArgb(250, 255, 255, 255), Color.FromArgb(235, 243, 250), 90f))
-                {
-                    g.FillPath(plateBrush, platePath);
-                }
-                using (var plateBorder = new Pen(Color.FromArgb(120, 56, 189, 248), 2f))
-                {
-                    g.DrawPath(plateBorder, platePath);
-                }
-            }
-
-            // Draw Logo inside plate
-            float logoPadding = size * 0.04f;
-            var logoRect = new RectangleF(plateX + logoPadding, plateY + logoPadding * 0.6f, plateW - 2 * logoPadding, plateH - 1.2f * logoPadding);
-            DrawLogoFitted(g, srcLogo, logoRect);
-
-            // Bottom "VISION" Pill / Badge
-            float badgeW = size * 0.72f;
-            float badgeH = size * 0.18f;
-            float badgeX = (size - badgeW) / 2f;
-            float badgeY = size * 0.62f;
-            var badgeRect = new RectangleF(badgeX, badgeY, badgeW, badgeH);
-
-            using (var badgePath = GetRoundedRectPath(badgeRect, size * 0.06f))
-            {
-                using (var badgeBrush = new LinearGradientBrush(badgeRect, Color.FromArgb(255, 0, 114, 206), Color.FromArgb(255, 0, 80, 160), 90f))
-                {
-                    g.FillPath(badgeBrush, badgePath);
-                }
-                using (var badgeBorder = new Pen(Color.FromArgb(200, 56, 189, 248), 2f))
-                {
-                    g.DrawPath(badgeBorder, badgePath);
-                }
-            }
-
-            // Draw Text "VISION"
-            using var font = new Font("Segoe UI", size * 0.095f, FontStyle.Bold, GraphicsUnit.Pixel);
-            using var textBrush = new SolidBrush(Color.White);
-            using var sf = new StringFormat
-            {
-                Alignment = StringAlignment.Center,
-                LineAlignment = StringAlignment.Center
-            };
-            g.DrawString("V I S I O N", font, textBrush, new RectangleF(badgeX, badgeY - 1, badgeW, badgeH), sf);
-
-            // Glowing Outer Border for Squircle
-            using (var borderPen = new Pen(Color.FromArgb(180, 56, 189, 248), size * 0.015f))
-            {
-                g.DrawPath(borderPen, path);
-            }
-        }
-
-        return bmp;
-    }
-
-    private static Bitmap RenderDesignLight(Bitmap srcLogo, int size)
-    {
-        var bmp = new Bitmap(size, size, PixelFormat.Format32bppArgb);
-        using var g = Graphics.FromImage(bmp);
-        ConfigureGraphics(g);
-
-        float margin = size * 0.04f;
-        float cornerRadius = size * 0.22f;
-        var rect = new RectangleF(margin, margin, size - 2 * margin, size - 2 * margin);
-
-        using (var path = GetRoundedRectPath(rect, cornerRadius))
-        {
-            // Drop shadow
-            using (var shadowBrush = new SolidBrush(Color.FromArgb(40, 0, 0, 0)))
-            {
-                var shadowRect = new RectangleF(margin + 2, margin + size * 0.025f, rect.Width, rect.Height);
-                using var shadowPath = GetRoundedRectPath(shadowRect, cornerRadius);
-                g.FillPath(shadowBrush, shadowPath);
-            }
-
-            // Clean crisp white-to-pale-blue gradient
-            using (var bgBrush = new LinearGradientBrush(rect, Color.FromArgb(255, 255, 255, 255), Color.FromArgb(255, 232, 242, 252), 90f))
-            {
-                g.FillPath(bgBrush, path);
-            }
-
-            // Subtle optical target ring in background
-            using (var penRing = new Pen(Color.FromArgb(35, 11, 83, 148), 1.5f))
-            {
-                float cx = size * 0.5f;
-                float cy = size * 0.42f;
-                g.DrawEllipse(penRing, cx - size * 0.32f, cy - size * 0.32f, size * 0.64f, size * 0.64f);
-                g.DrawLine(penRing, cx - size * 0.34f, cy, cx - size * 0.25f, cy);
-                g.DrawLine(penRing, cx + size * 0.25f, cy, cx + size * 0.34f, cy);
-            }
-
-            // Logo centered in upper-middle area
-            float logoW = size * 0.74f;
-            float logoH = size * 0.34f;
-            float logoX = (size - logoW) / 2f;
-            float logoY = size * 0.19f;
-            DrawLogoFitted(g, srcLogo, new RectangleF(logoX, logoY, logoW, logoH));
-
-            // Bottom "VISION" Badge (Deep Blue pill)
-            float badgeW = size * 0.68f;
-            float badgeH = size * 0.17f;
-            float badgeX = (size - badgeW) / 2f;
-            float badgeY = size * 0.63f;
-            var badgeRect = new RectangleF(badgeX, badgeY, badgeW, badgeH);
-
-            using (var badgePath = GetRoundedRectPath(badgeRect, size * 0.085f))
-            {
-                using (var badgeBrush = new LinearGradientBrush(badgeRect, Color.FromArgb(255, 11, 83, 148), Color.FromArgb(255, 5, 50, 95), 90f))
-                {
-                    g.FillPath(badgeBrush, badgePath);
-                }
-            }
-
-            using var font = new Font("Segoe UI", size * 0.088f, FontStyle.Bold, GraphicsUnit.Pixel);
-            using var textBrush = new SolidBrush(Color.White);
-            using var sf = new StringFormat
-            {
-                Alignment = StringAlignment.Center,
-                LineAlignment = StringAlignment.Center
-            };
-            g.DrawString("V I S I O N", font, textBrush, new RectangleF(badgeX, badgeY - 1, badgeW, badgeH), sf);
-
-            // Subtle border
-            using (var borderPen = new Pen(Color.FromArgb(160, 180, 210, 235), size * 0.015f))
-            {
-                g.DrawPath(borderPen, path);
-            }
-        }
-
-        return bmp;
-    }
-
-    private static Bitmap RenderDesignOptic(Bitmap srcLogo, int size)
-    {
-        var bmp = new Bitmap(size, size, PixelFormat.Format32bppArgb);
-        using var g = Graphics.FromImage(bmp);
-        ConfigureGraphics(g);
-
-        float margin = size * 0.04f;
-        float cornerRadius = size * 0.22f;
-        var rect = new RectangleF(margin, margin, size - 2 * margin, size - 2 * margin);
-
-        using (var path = GetRoundedRectPath(rect, cornerRadius))
-        {
-            // Drop shadow
-            using (var shadowBrush = new SolidBrush(Color.FromArgb(60, 0, 0, 0)))
-            {
-                var shadowRect = new RectangleF(margin + 2, margin + size * 0.025f, rect.Width, rect.Height);
-                using var shadowPath = GetRoundedRectPath(shadowRect, cornerRadius);
-                g.FillPath(shadowBrush, shadowPath);
-            }
-
-            // Dark Slate-Navy gradient
-            using (var bgBrush = new LinearGradientBrush(rect, Color.FromArgb(255, 15, 23, 42), Color.FromArgb(255, 30, 41, 59), 135f))
-            {
-                g.FillPath(bgBrush, path);
-            }
-
-            // Top camera sensor / optic aperture element
-            float cx = size * 0.5f;
-            float cy = size * 0.44f;
-            using (var opticPen = new Pen(Color.FromArgb(40, 56, 189, 248), 2f))
-            {
-                g.DrawEllipse(opticPen, cx - size * 0.38f, cy - size * 0.38f, size * 0.76f, size * 0.76f);
-            }
-
-            // White Card for CMS VINA Logo
-            float cardW = size * 0.78f;
-            float cardH = size * 0.36f;
-            float cardX = (size - cardW) / 2f;
-            float cardY = size * 0.16f;
-            var cardRect = new RectangleF(cardX, cardY, cardW, cardH);
-            using (var cardPath = GetRoundedRectPath(cardRect, size * 0.07f))
-            {
-                using (var cardBrush = new LinearGradientBrush(cardRect, Color.White, Color.FromArgb(240, 246, 252), 90f))
-                {
-                    g.FillPath(cardBrush, cardPath);
-                }
-                using (var cardBorder = new Pen(Color.FromArgb(180, 14, 165, 233), 1.8f))
-                {
-                    g.DrawPath(cardBorder, cardPath);
-                }
-            }
-
-            DrawLogoFitted(g, srcLogo, new RectangleF(cardX + size * 0.03f, cardY + size * 0.02f, cardW - size * 0.06f, cardH - size * 0.04f));
-
-            // Bottom "VISION SYSTEM" Tech Strip
-            float textY = size * 0.65f;
-            using var fontVision = new Font("Segoe UI", size * 0.11f, FontStyle.Bold, GraphicsUnit.Pixel);
-            using var fontSub = new Font("Segoe UI", size * 0.045f, FontStyle.Bold, GraphicsUnit.Pixel);
-
-            using var glowBrush = new SolidBrush(Color.FromArgb(255, 56, 189, 248));
-            using var whiteBrush = new SolidBrush(Color.White);
-            using var sf = new StringFormat
-            {
-                Alignment = StringAlignment.Center,
-                LineAlignment = StringAlignment.Center
-            };
-
-            g.DrawString("VISION", fontVision, glowBrush, new RectangleF(0, textY, size, size * 0.14f), sf);
-            g.DrawString("I N S P E C T I O N   S Y S T E M", fontSub, new SolidBrush(Color.FromArgb(180, 203, 213, 225)), new RectangleF(0, textY + size * 0.13f, size, size * 0.06f), sf);
-
-            // Outer Neon Border
-            using (var borderPen = new Pen(Color.FromArgb(200, 14, 165, 233), size * 0.015f))
-            {
-                g.DrawPath(borderPen, path);
-            }
-        }
-
-        return bmp;
-    }
-
     private static void DrawLogoFitted(Graphics g, Bitmap logo, RectangleF targetRect)
     {
         float scale = Math.Min(targetRect.Width / logo.Width, targetRect.Height / logo.Height);
@@ -688,10 +161,15 @@ public static class IconGenerator
         g.TextRenderingHint = TextRenderingHint.ClearTypeGridFit;
     }
 
-    public static void CreateMultiResolutionIco(Bitmap masterBmp, string outputIcoPath)
+    /// <summary>
+    /// Creates a 100% Windows PE (csc.exe / rc.exe / Win32 resource compiler) compliant ICO file.
+    /// Uses 32bpp DIB (BITMAPINFOHEADER + BGRA + AND mask) for standard sizes (16, 24, 32, 48, 64, 128)
+    /// and standard PNG compression for 256x256.
+    /// </summary>
+    public static void CreateStandardWindowsIco(Bitmap masterBmp, string outputIcoPath)
     {
-        int[] sizes = [256, 128, 64, 48, 32, 16];
-        var pngStreams = new List<byte[]>();
+        int[] sizes = [256, 128, 64, 48, 32, 24, 16];
+        var imageEntries = new List<(int size, byte[] data)>();
 
         foreach (var s in sizes)
         {
@@ -702,29 +180,40 @@ public static class IconGenerator
                 g.DrawImage(masterBmp, 0, 0, s, s);
             }
 
-            using var ms = new MemoryStream();
-            resized.Save(ms, ImageFormat.Png);
-            pngStreams.Add(ms.ToArray());
+            byte[] data;
+            if (s >= 256)
+            {
+                // 256x256: PNG compressed format (standard Vista/Win7/10/11)
+                using var ms = new MemoryStream();
+                resized.Save(ms, ImageFormat.Png);
+                data = ms.ToArray();
+            }
+            else
+            {
+                // Standard sizes (16, 24, 32, 48, 64, 128): Standard Win32 DIB format (BITMAPINFOHEADER)
+                data = CreateDibIconData(resized);
+            }
+
+            imageEntries.Add((s, data));
         }
 
         using var fs = new FileStream(outputIcoPath, FileMode.Create, FileAccess.Write);
         using var bw = new BinaryWriter(fs);
 
-        // ICONDIR Header
+        // ICONDIR Header (6 bytes)
         bw.Write((ushort)0); // idReserved
         bw.Write((ushort)1); // idType = 1 (ICON)
-        bw.Write((ushort)sizes.Length); // idCount
+        bw.Write((ushort)imageEntries.Count); // idCount
 
         int headerSize = 6;
         int dirEntrySize = 16;
-        int currentOffset = headerSize + dirEntrySize * sizes.Length;
+        int currentOffset = headerSize + dirEntrySize * imageEntries.Count;
 
-        // Directory Entries
-        for (int i = 0; i < sizes.Length; i++)
+        // Directory Entries (16 bytes each)
+        foreach (var (size, data) in imageEntries)
         {
-            int s = sizes[i];
-            byte w = s >= 256 ? (byte)0 : (byte)s;
-            byte h = s >= 256 ? (byte)0 : (byte)s;
+            byte w = size >= 256 ? (byte)0 : (byte)size;
+            byte h = size >= 256 ? (byte)0 : (byte)size;
 
             bw.Write(w);
             bw.Write(h);
@@ -732,18 +221,83 @@ public static class IconGenerator
             bw.Write((byte)0); // bReserved
             bw.Write((ushort)1); // wPlanes
             bw.Write((ushort)32); // wBitCount
-            bw.Write((uint)pngStreams[i].Length); // dwBytesInRes
+            bw.Write((uint)data.Length); // dwBytesInRes
             bw.Write((uint)currentOffset); // dwImageOffset
 
-            currentOffset += pngStreams[i].Length;
+            currentOffset += data.Length;
         }
 
-        // Image Data (PNG blocks)
-        for (int i = 0; i < sizes.Length; i++)
+        // Image Data blocks
+        foreach (var (_, data) in imageEntries)
         {
-            bw.Write(pngStreams[i]);
+            bw.Write(data);
+        }
+    }
+
+    private static byte[] CreateDibIconData(Bitmap bmp)
+    {
+        int width = bmp.Width;
+        int height = bmp.Height;
+
+        int andMaskStride = ((width + 31) / 32) * 4;
+        int andMaskSize = andMaskStride * height;
+        int xorSize = width * height * 4;
+        int totalSize = 40 + xorSize + andMaskSize;
+
+        using var ms = new MemoryStream(totalSize);
+        using var bw = new BinaryWriter(ms);
+
+        // BITMAPINFOHEADER (40 bytes)
+        bw.Write((uint)40);          // biSize
+        bw.Write((int)width);        // biWidth
+        bw.Write((int)(height * 2)); // biHeight (XOR + AND mask combined as required by Win32 icon format)
+        bw.Write((ushort)1);         // biPlanes
+        bw.Write((ushort)32);        // biBitCount
+        bw.Write((uint)0);           // biCompression = BI_RGB
+        bw.Write((uint)(xorSize + andMaskSize)); // biSizeImage
+        bw.Write((int)0);            // biXPelsPerMeter
+        bw.Write((int)0);            // biYPelsPerMeter
+        bw.Write((uint)0);           // biClrUsed
+        bw.Write((uint)0);           // biClrImportant
+
+        // Pixel data: bottom-up 32bpp BGRA
+        var rect = new Rectangle(0, 0, width, height);
+        var bmpData = bmp.LockBits(rect, ImageLockMode.ReadOnly, PixelFormat.Format32bppArgb);
+        try
+        {
+            byte[] rowBytes = new byte[width * 4];
+            for (int y = height - 1; y >= 0; y--)
+            {
+                IntPtr rowPtr = bmpData.Scan0 + (y * bmpData.Stride);
+                Marshal.Copy(rowPtr, rowBytes, 0, rowBytes.Length);
+                bw.Write(rowBytes);
+            }
+        }
+        finally
+        {
+            bmp.UnlockBits(bmpData);
         }
 
-        Console.WriteLine($"Generated ICO with {sizes.Length} resolutions at: {outputIcoPath}");
+        // AND mask (all 0s for 32-bit alpha icon)
+        byte[] andMask = new byte[andMaskSize];
+        bw.Write(andMask);
+
+        return ms.ToArray();
+    }
+
+    public static void VerifyExeIcon()
+    {
+        string exePath = @"G:\NODEJS\Vision2026\VisionInspectionApp.UI\bin\Debug\net8.0-windows\VisionInspectionApp.UI.exe";
+        if (File.Exists(exePath))
+        {
+            using var icon = Icon.ExtractAssociatedIcon(exePath);
+            if (icon != null)
+            {
+                using var bmp = icon.ToBitmap();
+                string outPath = @"G:\NODEJS\Vision2026\TestExtractApp\IconsOutput\extracted_exe_icon.png";
+                bmp.Save(outPath, ImageFormat.Png);
+                Console.WriteLine("✅ Extracted EXE icon successfully to: " + outPath);
+            }
+        }
     }
 }
