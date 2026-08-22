@@ -596,6 +596,36 @@ Lộ trình tích hợp tính năng Chụp ảnh từ camera và hỗ trợ các
   - `Kiểm Thử Tự Động & Biên Dịch Thành Công 100%`:
     - Tạo `TestExtractApp/ColorDiffTest.cs` kiểm tra 4 kịch bản: Khớp màu trên cùng ảnh ($\Delta E = 0.00$), Dịch chuyển Origin ($\Delta E = 0.00$), Xoay góc ROI ($\Delta E = 0.00$), Phát hiện khác màu Red vs Green ($\Delta E = 170.13$). Toàn bộ test đạt **PASS 100%**.
     - Solution biên dịch **0 Error(s)**.
+- [x] Task 196: Hiển thị Tên Job & Tên Sản Phẩm kèm dấu * khi có chỉnh sửa chưa lưu trên thanh Menu:
+  - `Đồng Bộ Trạng Thái Header (MainWindowViewModel.cs, MainWindow.xaml)`:
+    - Bổ sung `HeaderJobTitle` và `HeaderProductCodeTitle` hiển thị `📁 Job: [Tên Job]*` và `🏷️ SP: [Mã SP]*`.
+    - Lắng nghe sự kiện thay đổi thuộc tính `IsDirty`, `CurrentJobFilePath`, `ProductCode` trên `ToolEditorViewModel` để cập nhật giao diện thời gian thực.
+- [x] Task 197: Sửa lỗi nhập số thập phân trong cửa sổ Hiệu chuẩn Calibration:
+  - `Khắc Phục Thuật Toán FlexibleNumberParser & FlexibleDoubleConverter`:
+    - Tạo `FlexibleNumberParser` trong `VisionInspectionApp.Application.Services` chuẩn hóa cả `,` và `.` thành dấu chấm thập phân, parse bằng `CultureInfo.InvariantCulture` với `NumberStyles.Float` (loại bỏ hoàn toàn việc nhận nhầm `.` là dấu phân cách hàng nghìn trên locale tiếng Việt/châu Âu).
+    - Cập nhật `FlexibleDoubleConverter.cs` sử dụng `FlexibleNumberParser.TryParseDouble`.
+    - Xóa bỏ `Delay=250` trên ô nhập `RealDistanceMm` trong `CalibrationView.xaml` để giá trị cập nhật tức thời khi người dùng nhập số và bấm `Add Measurement`.
+- [x] Task 198: Bổ sung menu "Mở Gần Đây (Open Recent)" lưu trữ 10 Job gần nhất:
+  - `Dịch Vụ RecentJobsService (Application Layer)`:
+    - Tạo `IRecentJobsService` và `RecentJobsService` quản lý danh sách tối đa 10 tệp Job gần nhất lưu trong `recent_jobs.json`.
+    - Cơ chế LIFO, tự động đưa Job vừa mở/lưu lên đầu, loại bỏ trùng lặp và tự động dọn dẹp các tệp không còn tồn tại.
+    - Tích hợp vào `MainWindowViewModel` và `ToolEditorViewModel` (tự động thêm khi mở, lưu job).
+  - `Giao Diện MenuStrip (MainWindow.xaml)`:
+    - Bổ sung submenu `🕒 Mở Gần Đây (Open Recent)` trong menu `📁 Tệp (File)` liên kết lệnh `OpenRecentJobCommand`.
+  - `Kiểm Thử & Biên Dịch Thành Công 100%`:
+    - Tạo test suite `TestExtractApp/RecentJobsAndCalibrationTest.cs`, toàn bộ test suites đạt **PASS 100%**, Solution biên dịch **0 Error(s)**.
+- [x] Task 199: Khắc phục triệt để lỗi WPF tự động xóa dấu chấm khi gõ số thập phân (FlexibleDoubleConverter):
+  - `Nguyên Nhân Gốc Rễ`:
+    - Với `UpdateSourceTrigger=PropertyChanged`, khi người dùng đang gõ `28.`, WPF gọi `ConvertBack("28.")` ra `28.0`, sau đó lập tức gọi `Convert(28.0)` format thành `"28"`, ghi đè ngược lại làm biến mất dấu chấm `.` trên TextBox.
+  - `Giải Pháp`:
+    - Trong `FlexibleDoubleConverter.ConvertBack`: Khi chuỗi kết thúc bằng dấu chấm/phẩy (`.` hoặc `,`) hoặc số `0` sau dấu phẩy (như `28.` hoặc `28.0`), trả về `Binding.DoNothing` để WPF không ghi đè chuỗi đang gõ.
+    - Nhờ đó người dùng có thể thoải mái gõ `28.6`, `0.05`, `123.456` mà không bị gián đoạn hay mất dấu chấm.
+- [x] Task 200: Tối ưu AutoFit chỉ kích hoạt khi toàn bộ cửa sổ ứng dụng (Window) thay đổi kích thước:
+  - `Phân Tách Resize Cửa Sổ vs Kéo Divider (ImageViewerControl.xaml.cs)`:
+    - Loại bỏ sự kiện `PART_RootGrid.SizeChanged += OnRootGridSizeChanged` (vốn gây AutoFit ngoài ý muốn mỗi khi kéo GridSplitter/divider trong Tool Editor).
+    - Chuyển sang đăng ký lắng nghe sự kiện `Window.SizeChanged` và `Window.StateChanged` của cửa sổ cha (`Window.GetWindow(this)`).
+    - Đảm bảo khi kéo divider trong tab thì giữ nguyên mức zoom/pan hiện tại, chỉ khi phóng to/thu nhỏ hoặc thay đổi kích thước toàn bộ App mới thực hiện AutoFit.
+  - `Biên Dịch & Kiểm Thử Thành Công 100%`: Solution biên dịch **0 Error(s)**, toàn bộ unit tests đạt PASS 100%.
 
 
 

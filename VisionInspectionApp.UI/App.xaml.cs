@@ -54,6 +54,7 @@ public partial class App : System.Windows.Application
                 services.AddSingleton<GlobalAppSettingsService>();
                 services.AddSingleton<ThemeService>();
                 services.AddSingleton<SharedImageContext>();
+                services.AddSingleton<VisionInspectionApp.Application.Services.IRecentJobsService, VisionInspectionApp.Application.Services.RecentJobsService>();
 
                 // Camera & Batch Processing Services
                 services.AddSingleton<CameraService>();

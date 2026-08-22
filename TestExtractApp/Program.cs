@@ -10,5 +10,6 @@ class Program
         CameraTest.TestCameraParametersJobSerialization();
         CaliperAndLineTest.RunTests();
         ColorDiffTest.RunTests();
+        RecentJobsAndCalibrationTest.RunTests();
     }
 }

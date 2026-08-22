@@ -114,9 +114,11 @@ public partial class ImageViewerControl : UserControl
         PART_RootGrid.MouseDown += RootOnMouseDown;
         PART_RootGrid.MouseMove += RootOnMouseMove;
         PART_RootGrid.MouseUp += RootOnMouseUp;
-        PART_RootGrid.SizeChanged += OnRootGridSizeChanged;
         Loaded += OnLoaded;
+        Unloaded += OnUnloaded;
     }
+
+    private Window? _parentWindow;
 
     private void OnLoaded(object sender, RoutedEventArgs e)
     {
@@ -133,13 +135,54 @@ public partial class ImageViewerControl : UserControl
             Dispatcher.BeginInvoke(new Action(ResetView), System.Windows.Threading.DispatcherPriority.Loaded);
         }
         RedrawOverlays();
+
+        HookParentWindow();
     }
 
-    private void OnRootGridSizeChanged(object sender, SizeChangedEventArgs e)
+    private void OnUnloaded(object sender, RoutedEventArgs e)
     {
+        UnhookParentWindow();
+    }
+
+    private void HookParentWindow()
+    {
+        UnhookParentWindow();
+        _parentWindow = Window.GetWindow(this);
+        if (_parentWindow != null)
+        {
+            _parentWindow.SizeChanged += OnParentWindowSizeChanged;
+            _parentWindow.StateChanged += OnParentWindowStateChanged;
+        }
+    }
+
+    private void UnhookParentWindow()
+    {
+        if (_parentWindow != null)
+        {
+            _parentWindow.SizeChanged -= OnParentWindowSizeChanged;
+            _parentWindow.StateChanged -= OnParentWindowStateChanged;
+            _parentWindow = null;
+        }
+    }
+
+    private void OnParentWindowSizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        // Chỉ chạy AutoFit khi kích thước thực sự của toàn bộ Cửa sổ ứng dụng thay đổi
+        if (e.WidthChanged || e.HeightChanged)
+        {
+            if (PART_RootGrid.ActualWidth > 0 && PART_RootGrid.ActualHeight > 0 && ImageSource is BitmapSource)
+            {
+                Dispatcher.BeginInvoke(new Action(ResetView), System.Windows.Threading.DispatcherPriority.Loaded);
+            }
+        }
+    }
+
+    private void OnParentWindowStateChanged(object? sender, EventArgs e)
+    {
+        // Khi phóng to (Maximize) hoặc thu nhỏ/khôi phục (Restore) cửa sổ
         if (PART_RootGrid.ActualWidth > 0 && PART_RootGrid.ActualHeight > 0 && ImageSource is BitmapSource)
         {
-            ResetView();
+            Dispatcher.BeginInvoke(new Action(ResetView), System.Windows.Threading.DispatcherPriority.Loaded);
         }
     }
 

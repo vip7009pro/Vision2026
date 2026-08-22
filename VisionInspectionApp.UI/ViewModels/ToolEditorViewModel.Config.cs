@@ -178,6 +178,7 @@ namespace VisionInspectionApp.UI.ViewModels
                 OnPropertyChanged(nameof(PixelsPerMm));
                 RefreshPreviews();
                 IsDirty = false;
+                _recentJobsService?.AddRecentJob(filePath);
                 if (System.Windows.Application.Current?.MainWindow != null)
                 {
                     System.Windows.Application.Current.MainWindow.Title = "CMS VINA VISION SYSTEM - " + Path.GetFileName(CurrentJobFilePath);
@@ -245,6 +246,7 @@ namespace VisionInspectionApp.UI.ViewModels
             {
                 _jobService.SaveJob(_config, CurrentTempWorkingDir, CurrentJobFilePath);
                 IsDirty = false;
+                _recentJobsService?.AddRecentJob(CurrentJobFilePath);
             }
             catch (Exception ex)
             {

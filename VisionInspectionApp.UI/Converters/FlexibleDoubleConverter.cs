@@ -1,7 +1,8 @@
-﻿using System;
+using System;
 using System.Globalization;
 using System.Windows;
 using System.Windows.Data;
+using VisionInspectionApp.Application.Services;
 
 namespace VisionInspectionApp.UI.Converters;
 
@@ -18,7 +19,7 @@ public sealed class FlexibleDoubleConverter : IValueConverter
 
         if (value is double d)
         {
-            return d.ToString(Format, culture);
+            return d.ToString(Format, CultureInfo.InvariantCulture);
         }
 
         return value.ToString() ?? string.Empty;
@@ -39,15 +40,19 @@ public sealed class FlexibleDoubleConverter : IValueConverter
             return Binding.DoNothing;
         }
 
-        var sep = culture.NumberFormat.NumberDecimalSeparator;
-        var normalized = s.Replace(",", sep).Replace(".", sep);
-
-        if (double.TryParse(normalized, NumberStyles.Float, culture, out var parsed))
+        // While the user is actively typing a decimal separator or trailing decimals like "28." or "28.0"
+        // return Binding.DoNothing so WPF doesn't immediately overwrite the TextBox with stripped format "28"
+        if (s.EndsWith('.') || s.EndsWith(','))
         {
-            return parsed;
+            return Binding.DoNothing;
         }
 
-        if (double.TryParse(s, NumberStyles.Float, CultureInfo.InvariantCulture, out parsed))
+        if ((s.Contains('.') || s.Contains(',')) && s.EndsWith('0'))
+        {
+            return Binding.DoNothing;
+        }
+
+        if (FlexibleNumberParser.TryParseDouble(s, out var parsed, culture))
         {
             return parsed;
         }

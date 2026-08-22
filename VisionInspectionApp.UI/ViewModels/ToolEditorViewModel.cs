@@ -168,13 +168,14 @@ namespace VisionInspectionApp.UI.ViewModels
         [ObservableProperty]
         private double _canvasZoom = 1.0;
         private readonly IJobService _jobService;
+        private readonly IRecentJobsService? _recentJobsService;
         private readonly Application.PLC.Services.IPlcManagerService _plcManagerService;
         private readonly Application.DB.Services.IDbManagerService _dbManagerService;
         public UndoRedoManager UndoManager { get; }
         public IRelayCommand UndoCommand { get; }
         public IRelayCommand RedoCommand { get; }
 
-        public ToolEditorViewModel(IConfigService configService, ConfigStoreOptions storeOptions, SharedImageContext sharedImage, ImagePreprocessor preprocessor, LineDetector lineDetector, IInspectionService inspectionService, CameraService cameraService, IJobService jobService, UndoRedoManager undoManager, Application.PLC.Services.IPlcManagerService plcManagerService, Application.DB.Services.IDbManagerService dbManagerService)
+        public ToolEditorViewModel(IConfigService configService, ConfigStoreOptions storeOptions, SharedImageContext sharedImage, ImagePreprocessor preprocessor, LineDetector lineDetector, IInspectionService inspectionService, CameraService cameraService, IJobService jobService, UndoRedoManager undoManager, Application.PLC.Services.IPlcManagerService plcManagerService, Application.DB.Services.IDbManagerService dbManagerService, IRecentJobsService? recentJobsService = null)
         {
             UndoManager = undoManager;
             UndoCommand = new RelayCommand(() => UndoManager.Undo(), () => UndoManager.CanUndo);
@@ -186,6 +187,7 @@ namespace VisionInspectionApp.UI.ViewModels
             };
 
             _jobService = jobService;
+            _recentJobsService = recentJobsService;
             _configService = configService;
             _storeOptions = storeOptions;
             _sharedImage = sharedImage;
