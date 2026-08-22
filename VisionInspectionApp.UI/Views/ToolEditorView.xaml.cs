@@ -1,6 +1,7 @@
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
+using System.Windows.Data;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Threading;
@@ -35,6 +36,9 @@ public partial class ToolEditorView : UserControl
 
         AddHandler(Thumb.MouseLeftButtonDownEvent, new MouseButtonEventHandler(AnyNode_MouseLeftButtonDown), true);
 
+        PreviewMouseDown += ToolEditorView_PreviewMouseDown;
+        PreviewKeyDown += ToolEditorView_PreviewKeyDown;
+
         CanvasScrollViewer.PreviewMouseDown += CanvasScrollViewer_PreviewMouseDown;
         CanvasScrollViewer.PreviewMouseMove += CanvasScrollViewer_PreviewMouseMove;
         CanvasScrollViewer.PreviewMouseUp += CanvasScrollViewer_PreviewMouseUp;
@@ -45,6 +49,52 @@ public partial class ToolEditorView : UserControl
 
         DataContextChanged += ToolEditorView_DataContextChanged;
         Loaded += (s, e) => Dispatcher.BeginInvoke(DispatcherPriority.ContextIdle, AutoFitAndCenterGraph);
+    }
+
+    private void ToolEditorView_PreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Enter && e.OriginalSource is TextBox tb && !tb.AcceptsReturn)
+        {
+            var be = BindingOperations.GetBindingExpression(tb, TextBox.TextProperty);
+            be?.UpdateSource();
+            Keyboard.ClearFocus();
+            e.Handled = true;
+        }
+    }
+
+    private void ToolEditorView_PreviewMouseDown(object sender, MouseButtonEventArgs e)
+    {
+        if (Keyboard.FocusedElement is TextBox focusedTb)
+        {
+            var clickedSource = e.OriginalSource as DependencyObject;
+            if (clickedSource == null || !IsElementOrDescendant(clickedSource, focusedTb))
+            {
+                var be = BindingOperations.GetBindingExpression(focusedTb, TextBox.TextProperty);
+                be?.UpdateSource();
+                Keyboard.ClearFocus();
+            }
+        }
+        else if (Keyboard.FocusedElement is TextBoxBase focusedTbb)
+        {
+            var clickedSource = e.OriginalSource as DependencyObject;
+            if (clickedSource == null || !IsElementOrDescendant(clickedSource, focusedTbb))
+            {
+                var be = BindingOperations.GetBindingExpression(focusedTbb, TextBox.TextProperty);
+                be?.UpdateSource();
+                Keyboard.ClearFocus();
+            }
+        }
+    }
+
+    private static bool IsElementOrDescendant(DependencyObject child, DependencyObject parent)
+    {
+        DependencyObject? current = child;
+        while (current != null)
+        {
+            if (ReferenceEquals(current, parent)) return true;
+            current = VisualTreeHelper.GetParent(current) ?? LogicalTreeHelper.GetParent(current);
+        }
+        return false;
     }
 
     private void ComboBox_PreviewMouseDown(object sender, MouseButtonEventArgs e)
@@ -959,14 +1009,5 @@ public partial class ToolEditorView : UserControl
             DataContext = this.DataContext
         };
         window.Show();
-    }
-
-    private void BtnToggleTheme_Click(object sender, RoutedEventArgs e)
-    {
-        var globalSettings = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService<VisionInspectionApp.UI.Services.GlobalAppSettingsService>((System.Windows.Application.Current as App).ServiceProvider);
-        var themeService = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService<VisionInspectionApp.UI.Services.ThemeService>((System.Windows.Application.Current as App).ServiceProvider);
-
-        globalSettings.Settings.IsDarkMode = !globalSettings.Settings.IsDarkMode;
-        themeService.ApplyTheme(globalSettings.Settings.IsDarkMode);
     }
 }

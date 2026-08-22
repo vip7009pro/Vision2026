@@ -2225,6 +2225,7 @@ namespace VisionInspectionApp.UI.ViewModels
 
         public void OnRunOnceClicked()
         {
+            CommitFocusedBinding();
             if (IsRunningFolderFlow)
             {
                 StopContinuousFlow();

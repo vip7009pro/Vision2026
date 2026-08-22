@@ -258,8 +258,51 @@ namespace VisionInspectionApp.UI.ViewModels
             }
         }
     
+        public static void CommitFocusedBinding()
+        {
+            try
+            {
+                if (System.Windows.Application.Current?.Dispatcher?.CheckAccess() == true)
+                {
+                    var focused = System.Windows.Input.Keyboard.FocusedElement as System.Windows.FrameworkElement;
+                    if (focused is System.Windows.Controls.TextBox tb)
+                    {
+                        var be = System.Windows.Data.BindingOperations.GetBindingExpression(tb, System.Windows.Controls.TextBox.TextProperty);
+                        be?.UpdateSource();
+                    }
+                    else if (focused is System.Windows.Controls.Primitives.TextBoxBase tbb)
+                    {
+                        var be = System.Windows.Data.BindingOperations.GetBindingExpression(tbb, System.Windows.Controls.TextBox.TextProperty);
+                        be?.UpdateSource();
+                    }
+                }
+                else
+                {
+                    System.Windows.Application.Current?.Dispatcher?.Invoke(() =>
+                    {
+                        var focused = System.Windows.Input.Keyboard.FocusedElement as System.Windows.FrameworkElement;
+                        if (focused is System.Windows.Controls.TextBox tb)
+                        {
+                            var be = System.Windows.Data.BindingOperations.GetBindingExpression(tb, System.Windows.Controls.TextBox.TextProperty);
+                            be?.UpdateSource();
+                        }
+                        else if (focused is System.Windows.Controls.Primitives.TextBoxBase tbb)
+                        {
+                            var be = System.Windows.Data.BindingOperations.GetBindingExpression(tbb, System.Windows.Controls.TextBox.TextProperty);
+                            be?.UpdateSource();
+                        }
+                    });
+                }
+            }
+            catch
+            {
+                // Ignore any UI binding update exception during disposal
+            }
+        }
+
         private void SaveJob()
         {
+            CommitFocusedBinding();
             if (string.IsNullOrWhiteSpace(CurrentJobFilePath))
             {
                 SaveJobAs();
@@ -316,6 +359,7 @@ namespace VisionInspectionApp.UI.ViewModels
     
         private void SyncToolGraphToConfig()
         {
+            CommitFocusedBinding();
             if (_config?.ToolGraph is null)
             {
                 return;

@@ -450,8 +450,13 @@
                     </Border>
                 </Grid>
 
-                <!-- Col 3: Window Controls (Minimize, Maximize/Restore, Close) -->
+                <!-- Col 3: Window Controls (Theme Toggle, Minimize, Maximize/Restore, Close) -->
                 <StackPanel Grid.Column="3" Orientation="Horizontal" VerticalAlignment="Stretch" WindowChrome.IsHitTestVisibleInChrome="True">
+                    <Button Style="{StaticResource WindowControlButton}"
+                            Click="ThemeToggleButton_Click"
+                            ToolTip="Chuyển giao diện Sáng / Tối (Toggle Dark / Light Theme)">
+                        <TextBlock Text="🌗" FontSize="13" VerticalAlignment="Center" HorizontalAlignment="Center" />
+                    </Button>
                     <Button Style="{StaticResource WindowControlButton}"
                             Click="MinimizeButton_Click"
                             ToolTip="Thu nhỏ cửa sổ (Minimize)">

@@ -131,6 +131,19 @@ public partial class MainWindow : Window
         }
     }
 
+    private void ThemeToggleButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (System.Windows.Application.Current is App app && app.ServiceProvider != null)
+        {
+            var globalSettings = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService<VisionInspectionApp.UI.Services.GlobalAppSettingsService>(app.ServiceProvider);
+            globalSettings.Settings.IsDarkMode = !globalSettings.Settings.IsDarkMode;
+            globalSettings.Save();
+
+            var themeService = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService<VisionInspectionApp.UI.Services.ThemeService>(app.ServiceProvider);
+            themeService.ApplyTheme(globalSettings.Settings.IsDarkMode);
+        }
+    }
+
     private void MinimizeButton_Click(object sender, RoutedEventArgs e)
     {
         WindowState = WindowState.Minimized;

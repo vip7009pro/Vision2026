@@ -716,6 +716,19 @@ Lộ trình tích hợp tính năng Chụp ảnh từ camera và hỗ trợ các
     - Thu nhỏ Status Bar thành một dải badge mỏng (Slim Status Bar) hiển thị Sản phẩm, Tệp Job và Trạng thái kiểm tra viền màu động theo `StatusBrush`.
     - Mở rộng $90\%$ diện tích màn hình cho Live/Result Preview và bảng Lịch sử DataGrid.
   - `Biên Dịch & Kiểm Thử Thành Công 100%`: Solution biên dịch **0 Error(s)**, 8/8 unit tests đạt PASS 100%.
+- [x] Task 209: Chuyển nút Theme lên Header Bar, Khắc phục lưu thuộc tính Property Panel khi Blur/Save và Sao chép toàn bộ đầu vào khi Copy-Paste Node:
+  - `Nút Theme Toggle Trên Header Bar`:
+    - Chuyển nút toggle Theme sang Column 3 của Header Bar trong `MainWindow.xaml` (nằm trước cụm nút Minimize, Maximize/Restore, Close).
+    - Biểu tượng `🌗` với Tooltip chuyển đổi giao diện Sáng / Tối, lưu vào cấu hình qua `GlobalAppSettingsService` và đổi theme tức thì qua `ThemeService`.
+    - Dọn dẹp nút Theme cũ trên toolbar canvas của Tool Editor.
+  - `Khắc Phục Lưu Thuộc Tính Property Panel Khi Blur & Save Job`:
+    - Tạo cơ chế `CommitFocusedBinding()` tự động update binding source cho bất kỳ TextBox nào đang có focus khi người dùng bấm Save Job, Save As, Run Once, Run Continuous, hoặc khi đồng bộ graph.
+    - Bổ sung sự kiện `PreviewKeyDown` (phím Enter) và `PreviewMouseDown` trong `ToolEditorView.xaml.cs` giúp giá trị được lưu ngay khi nhả focus / blur mà không cần click vào ô nhập liệu khác.
+  - `Sao Chép Đầy Đủ Đầu Vào Khi Copy-Paste Node`:
+    - Tối ưu `PasteNode()` trong `ToolEditorViewModel.GraphOps.cs`: tự động quét toàn bộ `incomingEdges` của node gốc và tạo lại các liên kết đầu vào (Preprocess `PP1`, ImageSource, Point, Line, Caliper...) cho node mới được dán.
+    - Tự động đồng bộ cấu hình graph và cập nhật giao diện thuộc tính, đảm bảo node mới thừa hưởng trọn vẹn toàn bộ luồng dữ liệu đầu vào.
+  - `Biên Dịch & Kiểm Thử Thành Công 100%`: Solution biên dịch **0 Error(s)**, 8/8 unit tests đạt PASS 100%.
+
 
 
 

@@ -51,6 +51,25 @@
 
 ### Sửa lỗi và Cải thiện UX/UI (Phiên làm việc hiện tại)
 
+- **Chuyển nút Theme lên Header Bar, Khắc phục lưu thuộc tính Property Panel khi Blur/Save và Sao chép toàn bộ đầu vào khi Copy-Paste Node (Task 209)**:
+  - **Yêu Cầu & Bối Cảnh**:
+    1. Chuyển nút Theme từ toolbar canvas trong tab Tool Editor về nút toggle dạng biểu tượng (`🌗`) trên Header Bar của cửa sổ chương trình (nằm trước cụm nút Minimize, Maximize/Restore, Close).
+    2. Khắc phục lỗi Properties Panel: khi người dùng nhập xong giá trị (Nominal, Tolerance+, Tolerance-, v.v.) rồi bấm Save Job hoặc click ra ngoài/blur mà không focus vào ô khác thì giá trị không được lưu vào Job.
+    3. Khắc phục lỗi Copy-Paste Node trên Canvas: khi copy node A (có đầu vào là Preprocess `PP1`, ImageSource hoặc các node khác) và paste ra node B, node B chỉ sao chép thông số cấu hình nhưng bị thiếu các kết nối đầu vào (input edges & wires).
+  - **Giải Pháp Thực Hiện**:
+    1. **Nút Theme Toggle Trên Header Bar (`MainWindow.xaml`, `MainWindow.xaml.cs`, `ToolEditorView.xaml`)**:
+       - Thêm nút `🌗` vào Column 3 của Header Bar trong `MainWindow.xaml`, đặt ngay trước nút Minimize.
+       - Xử lý sự kiện `ThemeToggleButton_Click` trong `MainWindow.xaml.cs`: đảo trạng thái `IsDarkMode`, lưu qua `GlobalAppSettingsService.Save()` và áp dụng qua `ThemeService.ApplyTheme()`.
+       - Xóa bỏ nút Theme cũ trong toolbar canvas `ToolEditorView.xaml`.
+    2. **Khắc Phục Lưu Thuộc Tính Property Panel Khi Blur & Save (`ToolEditorViewModel.Config.cs`, `ToolEditorViewModel.Engine.cs`, `ToolEditorView.xaml.cs`)**:
+       - Bổ sung hàm `CommitFocusedBinding()`: cưỡng bức gọi `BindingOperations.GetBindingExpression(tb, TextBox.TextProperty)?.UpdateSource()` đối với bất kỳ TextBox nào đang giữ focus.
+       - Tự động gọi `CommitFocusedBinding()` trước khi thực hiện `SaveJob()`, `SaveJobAs()`, `SyncToolGraphToConfig()`, `OnRunOnceClicked()`, `RunFlow()`.
+       - Bổ sung sự kiện `PreviewKeyDown` (phím `Enter` tự động commit và nhả focus) và `PreviewMouseDown` (khi click ra ngoài canvas, click panel background hoặc click nút bấm thì TextBox lập tức update source và blur).
+    3. **Sao Chép Toàn Bộ Đầu Vào Khi Copy-Paste Node (`ToolEditorViewModel.GraphOps.cs`)**:
+       - Trong phương thức `PasteNode()`: Khi `sourceNode` có các cạnh đầu vào (`incomingEdges`), tự động tạo các `ToolGraphEdgeViewModel` tương ứng nối từ node nguồn vào `newNode` với đúng cổng (`FromPort` $\rightarrow$ `ToPort`).
+       - Gọi `SyncEdgesToConfig()`, `SyncSelectedToolPreprocessChoiceFromGraph()`, `RaiseToolPropertyPanelsChanged()` và `RefreshPreviews()`, giúp node mới thừa hưởng đầy đủ toàn bộ đầu vào và hiển thị trực quan ngay trên canvas.
+  - **Biên Dịch & Kiểm Thử Thành Công 100%**: Solution biên dịch **0 Error(s)**, toàn bộ 8/8 unit tests đạt PASS 100%.
+
 - **Di chuyển nút Gán Mã - Job sang Tool Editor & Tinh gọn toàn diện Tab OQC Scanner (Task 208)**:
   - **Yêu Cầu & Bối Cảnh**:
     - Chuyển nút `📋 Gán Mã - Job` từ tab OQC Scanner sang thanh công cụ của tab **Tool Editor**, đặt ngang hàng và ngay sau nút `♟ Chessboard Calib` (tự động pre-fill đường dẫn Job đang mở để gán mã sản phẩm DB nhanh chóng).

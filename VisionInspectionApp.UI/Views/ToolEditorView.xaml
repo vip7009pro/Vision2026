@@ -3456,7 +3456,6 @@
 
                         <StackPanel Grid.Column="2" Orientation="Horizontal">
                             <Button Content="🎯 Fit View" Height="28" Padding="10,0" Margin="0,0,6,0" Click="BtnFitView_Click" Background="{DynamicResource ButtonBackgroundBrush}" Foreground="{DynamicResource TextBrush}" BorderBrush="{DynamicResource DarkBorderBrush}" FontWeight="SemiBold" ToolTip="Tự động cân chỉnh vị trí &amp; mức Zoom để xem toàn bộ Graph Nodes" />
-                            <Button Content="🌗 Theme" Height="28" Padding="12,0" Margin="0,0,6,0" Click="BtnToggleTheme_Click" Background="{DynamicResource ButtonBackgroundBrush}" Foreground="{DynamicResource TextBrush}" BorderBrush="{DynamicResource DarkBorderBrush}" FontWeight="SemiBold" ToolTip="Toggle Dark/Light Mode" />
                             <Button Content="⚙ Global Pre-processor" Height="28" Padding="12,0" Click="BtnGlobalPreprocess_Click" Background="{DynamicResource ButtonBackgroundBrush}" Foreground="{DynamicResource TextBrush}" BorderBrush="{DynamicResource DarkBorderBrush}" FontWeight="SemiBold" ToolTip="Open Global Image Pre-processor Settings" />
                         </StackPanel>
                     </Grid>

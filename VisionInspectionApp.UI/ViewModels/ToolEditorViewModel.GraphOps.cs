@@ -244,7 +244,25 @@ namespace VisionInspectionApp.UI.ViewModels
             else if (_copiedNodeType.Equals("Preprocess", StringComparison.OrdinalIgnoreCase)) CloneDefinition(_config.PreprocessNodes, _copiedNodeRefName, newName, options);
             
             Nodes.Add(newNode);
+
+            // Copy all incoming edges/inputs from sourceNode to newNode
+            if (sourceNode != null)
+            {
+                var incomingEdges = Edges.Where(e => string.Equals(e.ToNodeId, sourceNode.Id, StringComparison.OrdinalIgnoreCase)).ToList();
+                foreach (var edge in incomingEdges)
+                {
+                    var fromNode = Nodes.FirstOrDefault(n => string.Equals(n.Id, edge.FromNodeId, StringComparison.OrdinalIgnoreCase));
+                    if (fromNode != null)
+                    {
+                        var newEdge = new ToolGraphEdgeViewModel(fromNode, newNode, edge.FromPort, edge.ToPort);
+                        Edges.Add(newEdge);
+                    }
+                }
+                SyncEdgesToConfig();
+            }
+
             SelectedNode = newNode;
+            SyncSelectedToolPreprocessChoiceFromGraph();
             RaiseToolPropertyPanelsChanged();
             RefreshPreviews();
             RequestAutoSave();
