@@ -530,6 +530,26 @@
                                     <TextBlock Text="Caliper Params" FontWeight="Bold" Foreground="{DynamicResource TextBrush}" />
                                 </Border>
 
+                                <!-- Caliper Interactive ROI Mode Selector -->
+                                <Border Background="{DynamicResource PanelAltBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1" Padding="4,3">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <Button Grid.Column="0" Content="🔍 Search ROI" 
+                                                Click="BtnCaliperSearchRoi_Click"
+                                                Height="24" Margin="0,0,2,0" FontSize="10.5" FontWeight="SemiBold"
+                                                Foreground="#FFD700" Background="{DynamicResource ButtonBackgroundBrush}"
+                                                ToolTip="Chỉnh Vùng Tìm Kiếm (Khung Vàng nét liền - Handle vàng)" />
+                                        <Button Grid.Column="1" Content="📏 Strip ROI"
+                                                Click="BtnCaliperStripRoi_Click"
+                                                Height="24" Margin="2,0,0,0" FontSize="10.5" FontWeight="SemiBold"
+                                                Foreground="#00E5FF" Background="{DynamicResource ButtonBackgroundBrush}"
+                                                ToolTip="Chỉnh Kích Thước Strip (Khung Xanh Cyan nét đứt - Handle cyan)" />
+                                    </Grid>
+                                </Border>
+
                                 <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
                                     <Grid>
                                         <Grid.ColumnDefinitions>

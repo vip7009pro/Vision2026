@@ -140,5 +140,32 @@ namespace VisionInspectionApp.UI.ViewModels
     
         public bool? Caliper_LastRunFound => _lastRun?.Calipers.FirstOrDefault(x => string.Equals(x.Name, SelectedNode?.RefName, StringComparison.OrdinalIgnoreCase))?.Found;
         public double? Caliper_LastRunAvgStrength => _lastRun?.Calipers.FirstOrDefault(x => string.Equals(x.Name, SelectedNode?.RefName, StringComparison.OrdinalIgnoreCase))?.AvgStrength;
+
+        public bool Caliper_IsEditingSearchRoi => !Caliper_IsEditingStripRoi;
+
+        public bool Caliper_IsEditingStripRoi
+        {
+            get => !string.IsNullOrWhiteSpace(ActiveRoiLabel) && ActiveRoiLabel.EndsWith("Cal_Strip", StringComparison.OrdinalIgnoreCase);
+            set
+            {
+                if (SelectedNode is not null)
+                {
+                    ActiveRoiLabel = value ? $"{SelectedNode.RefName} Cal_Strip" : $"{SelectedNode.RefName} Cal";
+                    OnPropertyChanged(nameof(Caliper_IsEditingSearchRoi));
+                    OnPropertyChanged(nameof(Caliper_IsEditingStripRoi));
+                    RefreshPreviews();
+                }
+            }
+        }
+
+        public void SelectCaliperSearchRoi()
+        {
+            Caliper_IsEditingStripRoi = false;
+        }
+
+        public void SelectCaliperStripRoi()
+        {
+            Caliper_IsEditingStripRoi = true;
+        }
     }
 }

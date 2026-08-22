@@ -203,6 +203,112 @@
                     </Trigger>
                 </Style.Triggers>
             </Style>
+
+            <!-- Global Modern ContextMenu Style with Perfect Contrast -->
+            <Style TargetType="ContextMenu">
+                <Setter Property="Background" Value="{DynamicResource PanelBackgroundBrush}" />
+                <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
+                <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
+                <Setter Property="BorderThickness" Value="1" />
+                <Setter Property="Padding" Value="4,4" />
+                <Setter Property="SnapsToDevicePixels" Value="True" />
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="ContextMenu">
+                            <Border Background="{DynamicResource PanelBackgroundBrush}"
+                                    BorderBrush="{DynamicResource BorderBrush}"
+                                    BorderThickness="1"
+                                    CornerRadius="6"
+                                    Padding="4,4"
+                                    SnapsToDevicePixels="True">
+                                <Border.Effect>
+                                    <DropShadowEffect BlurRadius="16" ShadowDepth="4" Direction="270" Opacity="0.45" Color="Black" />
+                                </Border.Effect>
+                                <ScrollViewer CanContentScroll="True">
+                                    <StackPanel IsItemsHost="True" KeyboardNavigation.DirectionalNavigation="Cycle" />
+                                </ScrollViewer>
+                            </Border>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
+
+            <!-- Global Modern MenuItem Style -->
+            <Style TargetType="MenuItem">
+                <Setter Property="Background" Value="Transparent" />
+                <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
+                <Setter Property="Padding" Value="8,6" />
+                <Setter Property="FontSize" Value="12" />
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="MenuItem">
+                            <Border x:Name="ItemBorder" Background="{TemplateBinding Background}" CornerRadius="4" Margin="1,1" Padding="{TemplateBinding Padding}">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" SharedSizeGroup="IconGroup" />
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" SharedSizeGroup="GestureGroup" />
+                                    </Grid.ColumnDefinitions>
+
+                                    <!-- Icon or Checkmark Indicator -->
+                                    <ContentPresenter x:Name="IconHost" Grid.Column="0" ContentSource="Icon" Margin="0,0,8,0" VerticalAlignment="Center" />
+
+                                    <!-- Header Text -->
+                                    <ContentPresenter Grid.Column="1" ContentSource="Header" RecognizesAccessKey="True" VerticalAlignment="Center" Margin="0,0,12,0" TextElement.Foreground="{TemplateBinding Foreground}" />
+
+                                    <!-- Shortcut Gesture -->
+                                    <TextBlock Grid.Column="2" Text="{TemplateBinding InputGestureText}" Foreground="{DynamicResource TextMutedBrush}" VerticalAlignment="Center" FontSize="11" Margin="8,0,4,0" />
+
+                                    <!-- Popup for Submenus -->
+                                    <Popup x:Name="PART_Popup" AllowsTransparency="True" Focusable="False"
+                                           IsOpen="{Binding IsSubmenuOpen, RelativeSource={RelativeSource TemplatedParent}}"
+                                           Placement="Right" PopupAnimation="Fade" HorizontalOffset="2">
+                                        <Border Background="{DynamicResource PanelBackgroundBrush}"
+                                                BorderBrush="{DynamicResource BorderBrush}"
+                                                BorderThickness="1"
+                                                CornerRadius="6"
+                                                Padding="4,4"
+                                                SnapsToDevicePixels="True">
+                                            <Border.Effect>
+                                                <DropShadowEffect BlurRadius="16" ShadowDepth="4" Direction="270" Opacity="0.45" Color="Black" />
+                                            </Border.Effect>
+                                            <ScrollViewer CanContentScroll="True">
+                                                <StackPanel IsItemsHost="True" KeyboardNavigation.DirectionalNavigation="Cycle" />
+                                            </ScrollViewer>
+                                        </Border>
+                                    </Popup>
+                                </Grid>
+                            </Border>
+
+                            <ControlTemplate.Triggers>
+                                <Trigger Property="IsChecked" Value="True">
+                                    <Setter TargetName="ItemBorder" Property="Background" Value="{DynamicResource PanelAltBackgroundBrush}" />
+                                    <Setter Property="FontWeight" Value="SemiBold" />
+                                </Trigger>
+                                <Trigger Property="IsHighlighted" Value="True">
+                                    <Setter TargetName="ItemBorder" Property="Background" Value="{DynamicResource AccentBrush}" />
+                                    <Setter Property="Foreground" Value="{DynamicResource AccentTextBrush}" />
+                                </Trigger>
+                                <Trigger Property="IsEnabled" Value="False">
+                                    <Setter Property="Opacity" Value="0.4" />
+                                </Trigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
+
+            <Style TargetType="Separator" x:Key="{x:Static MenuItem.SeparatorStyleKey}">
+                <Setter Property="Height" Value="1" />
+                <Setter Property="Margin" Value="4,4" />
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="Separator">
+                            <Border Background="{DynamicResource BorderBrush}" />
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
         </ResourceDictionary>
     </Application.Resources>
 </Application>

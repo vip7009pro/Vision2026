@@ -9,6 +9,8 @@ public abstract class OverlayItem
     public double StrokeThickness { get; init; } = 2.0;
 
     public string? Label { get; init; }
+
+    public DoubleCollection? DashArray { get; init; }
 }
 
 public sealed class OverlayRectItem : OverlayItem

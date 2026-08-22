@@ -23,17 +23,29 @@ public class FastOverlayCanvas : FrameworkElement
         DarkLabelBorderPen.Freeze();
     }
 
-    private static Pen GetCachedPen(Brush brush, double thickness)
+    private static Pen GetCachedPen(Brush brush, double thickness, DoubleCollection? dashArray = null)
     {
         if (brush is null) return new Pen(Brushes.Transparent, thickness);
-        var key = (brush, thickness);
-        if (_penCache.TryGetValue(key, out var pen))
+        if (dashArray is null || dashArray.Count == 0)
+        {
+            var key = (brush, thickness);
+            if (_penCache.TryGetValue(key, out var pen))
+                return pen;
+            
+            pen = new Pen(brush, thickness);
+            pen.Freeze();
+            _penCache[key] = pen;
             return pen;
-        
-        pen = new Pen(brush, thickness);
-        pen.Freeze();
-        _penCache[key] = pen;
-        return pen;
+        }
+        else
+        {
+            var pen = new Pen(brush, thickness)
+            {
+                DashStyle = new DashStyle(dashArray, 0)
+            };
+            pen.Freeze();
+            return pen;
+        }
     }
 
     public static readonly DependencyProperty OverlayItemsProperty = DependencyProperty.Register(
@@ -119,7 +131,7 @@ public class FastOverlayCanvas : FrameworkElement
         {
             double baseThickness = item.StrokeThickness > 0 ? item.StrokeThickness : 2.0;
             double effThickness = baseThickness / scale;
-            var pen = GetCachedPen(item.Stroke, effThickness);
+            var pen = GetCachedPen(item.Stroke, effThickness, item.DashArray);
 
             if (item is OverlayRectItem r)
             {

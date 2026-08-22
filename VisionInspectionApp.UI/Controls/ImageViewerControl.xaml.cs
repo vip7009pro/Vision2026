@@ -1047,7 +1047,7 @@ public partial class ImageViewerControl : UserControl
 
                 if (showHandles)
                 {
-                    DrawRoiHandles(r.X, r.Y, r.Width, r.Height, r.Angle, string.Equals(r.Label, _activeRoiLabel, StringComparison.OrdinalIgnoreCase));
+                    DrawRoiHandles(r.X, r.Y, r.Width, r.Height, r.Angle, string.Equals(r.Label, _activeRoiLabel, StringComparison.OrdinalIgnoreCase), r.Stroke);
                 }
             }
             else if (item is OverlayCircleItem c)
@@ -1734,6 +1734,19 @@ public partial class ImageViewerControl : UserControl
 
         if (candidates.Count > 0)
         {
+            if (!string.IsNullOrWhiteSpace(_activeRoiLabel))
+            {
+                var activeCandidate = candidates.FirstOrDefault(x => string.Equals(x.Item.Label, _activeRoiLabel, StringComparison.OrdinalIgnoreCase));
+                if (activeCandidate.Item != null)
+                {
+                    if (HitTestRoiHandle(activeCandidate.Rect, activeCandidate.Item.Angle, contentPoint, hitTol, scale) != RoiEditMode.None
+                        || IsNearRoiBorder(activeCandidate.Rect, activeCandidate.Item.Angle, contentPoint, hitTol))
+                    {
+                        return activeCandidate.Item.Label;
+                    }
+                }
+            }
+
             var borderHits = candidates
                 .Where(x => HitTestRoiHandle(x.Rect, x.Item.Angle, contentPoint, hitTol, scale) != RoiEditMode.None || IsNearRoiBorder(x.Rect, x.Item.Angle, contentPoint, hitTol))
                 .OrderBy(x => x.Rect.Width * x.Rect.Height)
@@ -1766,13 +1779,13 @@ public partial class ImageViewerControl : UserControl
         return FindTopRoiLabelAt(bmp, contentPoint);
     }
 
-    private void DrawRoiHandles(double left, double top, double width, double height, double angle, bool isActive)
+    private void DrawRoiHandles(double left, double top, double width, double height, double angle, bool isActive, Brush? customStroke = null)
     {
         var scale = Math.Max(0.001, _transform.Matrix.M11);
         var corner = (isActive ? 12.0 : 10.0) / scale;
         var edge = (isActive ? 8.0 : 6.0) / scale;
         var rotSize = (isActive ? 12.0 : 10.0) / scale;
-        var stroke = isActive ? Brushes.Cyan : Brushes.DeepSkyBlue;
+        var stroke = customStroke ?? (isActive ? Brushes.Cyan : Brushes.DeepSkyBlue);
 
         var center = new Point(left + width / 2.0, top + height / 2.0);
 

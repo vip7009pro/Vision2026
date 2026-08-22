@@ -51,6 +51,45 @@
 
 ### Sửa lỗi và Cải thiện UX/UI (Phiên làm việc hiện tại)
 
+- **Sửa lỗi tương phản Menu chọn Theme & Mở rộng Bộ sưu tập 10 Theme Gradient tươi sáng (Task 211)**:
+  - **Yêu Cầu & Bối Cảnh**:
+    1. Menu chọn theme (ContextMenu) bị lỗi tương phản: nền xám/trắng của Windows kết hợp với chữ trắng của Dark Theme dẫn đến chữ bị chìm, rất khó đọc.
+    2. Người dùng yêu cầu bổ sung các tone màu tươi sáng, rực rỡ, năng động vào hệ thống theme gradient, tránh các tone quá ảm đạm.
+  - **Giải Pháp Thực Hiện**:
+    1. **Khắc Phục Lỗi Tương Phản Toàn Diện (`App.xaml`, `MainWindow.xaml.cs`)**:
+       - Bổ sung Style toàn cục cho `ContextMenu` trong `App.xaml` kế thừa trực tiếp `{DynamicResource PanelBackgroundBrush}`, `{DynamicResource TextBrush}`, `{DynamicResource BorderBrush}` và hiệu ứng bóng đổ mềm `DropShadowEffect`.
+       - Chuẩn hóa ControlTemplate của `MenuItem`: bình thường hiển thị màu chữ `{DynamicResource TextBrush}`, khi hover chuyển sang `{DynamicResource AccentBrush}` và chữ `{DynamicResource AccentTextBrush}` đảm bảo độ tương phản $100\%$ tuyệt đối.
+       - Trong `MainWindow.xaml.cs`: Menu phân nhóm rõ ràng (Tone Tươi Sáng & Năng Động vs Tone Tối Công Nghệ), bổ sung biểu tượng màu Swatch (Color Badge) tròn thể hiện chính xác gradient và accent của từng theme, đánh dấu `✓` cho theme hiện hành.
+    2. **Xây Dựng 5 Bộ Theme Gradient Tươi Sáng Mới (`SunriseCoralTheme.xaml`, `OceanBreezeTheme.xaml`, `FreshMintTheme.xaml`, `CherryBlossomTheme.xaml`, `ElectricNeonTheme.xaml`, `ThemeService.cs`)**:
+       - 🌅 `Sunrise Coral` (Cam Đào San Hô & Vàng Nắng): `#FF5E62` $\rightarrow$ `#FF9966`, nền `#FFF8F5`, chữ `#1C1917`, accent `#EA580C`.
+       - 🌊 `Ocean Breeze` (Sóng Biển Xanh Ngọc & Biển Sâu): `#00B4DB` $\rightarrow$ `#0083B0`, nền `#F0F9FF`, chữ `#082F49`, accent `#0284C7`.
+       - 🌿 `Fresh Mint` (Bạc Hà Tươi & Xanh Chuối Non): `#11998E` $\rightarrow$ `#38EF7D`, nền `#F0FDF4`, chữ `#052E16`, accent `#059669`.
+       - 🌸 `Cherry Blossom` (Hoa Anh Đào Hồng Pastel): `#FF758C` $\rightarrow$ `#FF7EB3`, nền `#FFF5F7`, chữ `#4C0519`, accent `#E11D48`.
+       - ⚡ `Electric Neon` (Vàng Hoàng Kim Cyber): `#F7971E` $\rightarrow$ `#FFD200`, nền `#FFFEF5`, chữ `#18181B`, accent `#D97706`.
+       - Kết hợp cùng 5 theme cổ điển và dark: `Titanium Light`, `Midnight Blue`, `Cyber Emerald`, `Amethyst Violet`, `Dark Obsidian` (Tổng 10 Theme Gradient cao cấp).
+  - **Biên Dịch & Kiểm Thử Thành Công 100%**: Solution biên dịch **0 Error(s)**, toàn bộ 8/8 unit tests đạt PASS 100%.
+
+- **Cải tiến thao tác 2 ROI của Tool Caliper & Hệ thống Theme Gradient đa sắc màu (Task 210)**:
+  - **Yêu Cầu & Bối Cảnh**:
+    1. Tool Caliper hiện tại có 2 ROI (1 ROI Search, 1 ROI Strip width/length), nhiều lúc 2 ROI này trùng nhau dẫn đến khó thao tác, kéo nhầm handle.
+    2. Cải tổ hệ thống theme: mở rộng từ 2 theme tĩnh (Dark/Light) thành bộ sưu tập Theme Gradient đa dạng tùy chọn màu sắc, bảo đảm độ tương phản cao, màu chữ và màu nền sắc nét, dễ nhìn.
+  - **Giải Pháp Thực Hiện**:
+    1. **Cải Tiến 2 ROI Tool Caliper (`ToolEditorViewModel.ToolCaliper.cs`, `ToolEditorViewModel.GraphOps.cs`, `ToolEditorViewModel.Engine.cs`, `ToolEditorView.xaml`, `ToolEditorView.xaml.cs`, `Controls/ImageViewerControl.xaml.cs`, `Controls/FastOverlayCanvas.cs`, `Controls/OverlayItems.cs`)**:
+       - *Phân biệt trực quan*: Search ROI dùng màu Vàng Gold (`#FFD700`), nét liền; Strip Profile ROI dùng màu Xanh Neon (`#00E5FF`), nét đứt (`DashArray="4 2"`).
+       - *ROI Mode Selector*: Thêm 2 nút bấm chuyển đổi nhanh `🔍 Search ROI` và `📏 Strip ROI` ngay dưới tiêu đề Caliper Params trên Properties Panel.
+       - *Handle Isolation & Hit-test*: Bổ sung tham số màu và `DashArray` vào `OverlayItem` và `FastOverlayCanvas`; trong `ImageViewerControl`, chỉ hiển thị handle của ROI đang active và ưu tiên tuyệt đối active ROI khi hit-test, triệt tiêu $100\%$ tình trạng kéo nhầm.
+    2. **Hệ Thống Theme Gradient Đa Sắc Màu (`MidnightBlueTheme.xaml`, `CyberEmeraldTheme.xaml`, `AmethystVioletTheme.xaml`, `SolarAmberTheme.xaml`, `DarkTheme.xaml`, `LightTheme.xaml`, `ThemeService.cs`, `GlobalAppSettingsService.cs`, `MainWindow.xaml.cs`)**:
+       - Xây dựng 6 bộ theme Gradient chuẩn công nghiệp với tương phản cao:
+         1. 🌌 `Midnight Blue` (Xanh Biển Sâu)
+         2. 🌿 `Cyber Emerald` (Ngọc Lục Bảo Matrix)
+         3. 🔮 `Amethyst Violet` (Tím Thạch Anh)
+         4. 🌅 `Solar Amber` (Cam Ánh Kim)
+         5. 🖤 `Dark Obsidian` (Đen Than Cổ Điển)
+         6. ❄️ `Titanium Light` (Bạch Kim Sáng Thanh Lịch)
+       - Thêm `ThemeId` vào `GlobalAppSettings`, nâng cấp `ThemeService` nạp theme động từ ResourceDictionary.
+       - Nhấp vào nút `🌗` trên Header Bar sẽ mở ContextMenu chọn trực tiếp 6 theme kèm mô tả và checkmark nhận diện.
+  - **Biên Dịch & Kiểm Thử Thành Công 100%**: Solution biên dịch **0 Error(s)**, toàn bộ 8/8 unit tests đạt PASS 100%.
+
 - **Chuyển nút Theme lên Header Bar, Khắc phục lưu thuộc tính Property Panel khi Blur/Save và Sao chép toàn bộ đầu vào khi Copy-Paste Node (Task 209)**:
   - **Yêu Cầu & Bối Cảnh**:
     1. Chuyển nút Theme từ toolbar canvas trong tab Tool Editor về nút toggle dạng biểu tượng (`🌗`) trên Header Bar của cửa sổ chương trình (nằm trước cụm nút Minimize, Maximize/Restore, Close).

@@ -5380,12 +5380,12 @@ namespace VisionInspectionApp.UI.ViewModels
             BuildFinalOverlay(image, dst);
         }
 
-        private OverlayRectItem CreateRotatedRoiWithPose(Roi roi, System.Windows.Media.Brush? stroke, string? label)
+        private OverlayRectItem CreateRotatedRoiWithPose(Roi roi, System.Windows.Media.Brush? stroke, string? label, DoubleCollection? dashArray = null)
         {
-            return CreateRotatedRoiWithPose(new OpenCvSharp.Rect(roi.X, roi.Y, roi.Width, roi.Height), stroke, label, roi.Angle);
+            return CreateRotatedRoiWithPose(new OpenCvSharp.Rect(roi.X, roi.Y, roi.Width, roi.Height), stroke, label, roi.Angle, dashArray);
         }
 
-        private OverlayRectItem CreateRotatedRoiWithPose(OpenCvSharp.Rect roi, System.Windows.Media.Brush? stroke, string? label, double roiAngle = 0)
+        private OverlayRectItem CreateRotatedRoiWithPose(OpenCvSharp.Rect roi, System.Windows.Media.Brush? stroke, string? label, double roiAngle = 0, DoubleCollection? dashArray = null)
         {
             if (_lastRun is not null && _config is not null && _lastRun.Origin is not null && (_lastRun.Origin.MatchRect.Width > 0 || _lastRun.Origin.Position.X != 0 || _lastRun.Origin.Position.Y != 0))
             {
@@ -5424,7 +5424,8 @@ namespace VisionInspectionApp.UI.ViewModels
                     Height = roi.Height,
                     Angle = roiAngle + angleDeg,
                     Stroke = _lastRun.Origin.Pass ? stroke : System.Windows.Media.Brushes.Red,
-                    Label = finalLabel
+                    Label = finalLabel,
+                    DashArray = dashArray
                 };
             }
 
@@ -5436,7 +5437,8 @@ namespace VisionInspectionApp.UI.ViewModels
                 Height = roi.Height,
                 Angle = roiAngle,
                 Stroke = stroke,
-                Label = label
+                Label = label,
+                DashArray = dashArray
             };
         }
 

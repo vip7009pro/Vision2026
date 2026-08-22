@@ -1,6 +1,7 @@
 using System;
 using System.Runtime.InteropServices;
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Interop;
 using VisionInspectionApp.UI.ViewModels;
@@ -133,14 +134,73 @@ public partial class MainWindow : Window
 
     private void ThemeToggleButton_Click(object sender, RoutedEventArgs e)
     {
-        if (System.Windows.Application.Current is App app && app.ServiceProvider != null)
+        if (sender is Button btn && System.Windows.Application.Current is App app && app.ServiceProvider != null)
         {
-            var globalSettings = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService<VisionInspectionApp.UI.Services.GlobalAppSettingsService>(app.ServiceProvider);
-            globalSettings.Settings.IsDarkMode = !globalSettings.Settings.IsDarkMode;
-            globalSettings.Save();
-
             var themeService = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService<VisionInspectionApp.UI.Services.ThemeService>(app.ServiceProvider);
-            themeService.ApplyTheme(globalSettings.Settings.IsDarkMode);
+            var currentThemeId = themeService.CurrentThemeId;
+
+            var cm = new ContextMenu
+            {
+                PlacementTarget = btn,
+                Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom
+            };
+
+            string? lastGroup = null;
+            foreach (var theme in VisionInspectionApp.UI.Services.ThemeService.AvailableThemes)
+            {
+                if (theme.Group != lastGroup)
+                {
+                    if (lastGroup != null)
+                    {
+                        cm.Items.Add(new Separator());
+                    }
+                    var groupHeader = new MenuItem
+                    {
+                        Header = theme.Group,
+                        IsEnabled = false,
+                        FontWeight = FontWeights.Bold,
+                        FontSize = 11.5,
+                        Foreground = (System.Windows.Media.Brush)System.Windows.Application.Current.FindResource("TextMutedBrush")
+                    };
+                    cm.Items.Add(groupHeader);
+                    lastGroup = theme.Group;
+                }
+
+                var isCurrent = string.Equals(theme.Id, currentThemeId, StringComparison.OrdinalIgnoreCase);
+
+                // Create color preview swatch icon
+                var swatchBorder = new System.Windows.Controls.Border
+                {
+                    Width = 14,
+                    Height = 14,
+                    CornerRadius = new CornerRadius(7),
+                    BorderThickness = new Thickness(1),
+                    BorderBrush = System.Windows.Media.Brushes.Gray,
+                    Background = new System.Windows.Media.LinearGradientBrush(
+                        (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString(theme.PrimaryColorHex),
+                        (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString(theme.AccentColorHex),
+                        45.0),
+                    Margin = new Thickness(0, 0, 4, 0)
+                };
+
+                var mi = new MenuItem
+                {
+                    Header = $"{theme.Name}  -  {theme.Description}",
+                    Icon = swatchBorder,
+                    IsChecked = isCurrent,
+                    IsCheckable = true
+                };
+
+                var targetThemeId = theme.Id;
+                mi.Click += (_, _) =>
+                {
+                    themeService.ApplyTheme(targetThemeId);
+                };
+
+                cm.Items.Add(mi);
+            }
+
+            cm.IsOpen = true;
         }
     }
 

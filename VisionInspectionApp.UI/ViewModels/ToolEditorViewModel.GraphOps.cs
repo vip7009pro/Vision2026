@@ -1135,7 +1135,7 @@ namespace VisionInspectionApp.UI.ViewModels
 
                 if (showRois && c.SearchRoi.Width > 0 && c.SearchRoi.Height > 0)
                 {
-                    dst.Add(CreateRotatedRoiWithPose(c.SearchRoi, Brushes.Lime, $"{c.Name} Cal"));
+                    dst.Add(CreateRotatedRoiWithPose(c.SearchRoi, Brushes.Gold, $"{c.Name} Cal"));
                     var stripCount = Math.Clamp(c.StripCount, 1, 100);
                     var stripLength = Math.Max(3, c.StripLength);
 
@@ -1167,7 +1167,7 @@ namespace VisionInspectionApp.UI.ViewModels
                             Angle = c.SearchRoi.Angle
                         };
                     }
-                    dst.Add(CreateRotatedRoiWithPose(stripRoi, Brushes.DeepSkyBlue, $"{c.Name} Cal_Strip"));
+                    dst.Add(CreateRotatedRoiWithPose(stripRoi, Brushes.DeepSkyBlue, $"{c.Name} Cal_Strip", new DoubleCollection { 4, 2 }));
 
                     var hasOriginPose = _lastRun?.Origin is not null && _lastRun.Origin.Pass && (_lastRun.Origin.MatchRect.Width > 0 || _lastRun.Origin.Position.X != 0 || _lastRun.Origin.Position.Y != 0);
                     var originTeach = (_config.Origin.TemplateRoi.Width > 0 && _config.Origin.TemplateRoi.Height > 0)

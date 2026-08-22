@@ -728,6 +728,26 @@ Lộ trình tích hợp tính năng Chụp ảnh từ camera và hỗ trợ các
     - Tối ưu `PasteNode()` trong `ToolEditorViewModel.GraphOps.cs`: tự động quét toàn bộ `incomingEdges` của node gốc và tạo lại các liên kết đầu vào (Preprocess `PP1`, ImageSource, Point, Line, Caliper...) cho node mới được dán.
     - Tự động đồng bộ cấu hình graph và cập nhật giao diện thuộc tính, đảm bảo node mới thừa hưởng trọn vẹn toàn bộ luồng dữ liệu đầu vào.
   - `Biên Dịch & Kiểm Thử Thành Công 100%`: Solution biên dịch **0 Error(s)**, 8/8 unit tests đạt PASS 100%.
+- [x] Task 210: Cải tiến thao tác 2 ROI của Tool Caliper & Hệ thống Theme Gradient đa sắc màu:
+  - `Cải Tiến Thao Tác 2 ROI Tool Caliper (Search ROI vs Strip Profile ROI)`:
+    - Phân biệt trực quan rõ ràng: Search ROI vẽ bằng màu Vàng Gold (`#FFD700`) nét liền; Strip Profile ROI vẽ bằng màu Xanh Neon (`#00E5FF`) nét đứt (`DashArray="4 2"`).
+    - Bổ sung 2 nút chuyển chế độ trực quan trên Properties Panel của Caliper: `🔍 Search ROI` (chỉnh vùng tìm kiếm) và `📏 Strip ROI` (chỉnh kích thước strip).
+    - Handle Isolation & Hit-test Optimization: Chỉ hiển thị handle của ROI đang active và ưu tiên active ROI khi hit-test chuột, triệt tiêu $100\%$ tình trạng kéo nhầm khi 2 ROI trùng vị trí.
+    - Nâng cấp `OverlayItem` và `FastOverlayCanvas` hỗ trợ thuộc tính `DashArray` vẽ nét đứt mượt mà và cache hiệu năng cao.
+  - `Hệ Thống Theme Gradient Đa Sắc Màu Chuẩn Công Nghiệp`:
+    - Xây dựng bộ sưu tập 6 Theme Gradient độ tương phản cao: 🌌 `Midnight Blue`, 🌿 `Cyber Emerald`, 🔮 `Amethyst Violet`, 🌅 `Solar Amber`, 🖤 `Dark Obsidian`, ❄️ `Titanium Light`.
+    - Nâng cấp `ThemeService` và `GlobalAppSettings` hỗ trợ nạp theme động và tự động lưu `ThemeId`.
+    - Tích hợp Menu chọn theme một chạm tại nút `🌗` trên Header Bar với đầy đủ tên, mô tả phong cách và checkmark trạng thái.
+  - `Biên Dịch & Kiểm Thử Thành Công 100%`: Solution biên dịch **0 Error(s)**, 8/8 unit tests đạt PASS 100%.
+- [x] Task 211: Sửa lỗi tương phản Menu chọn Theme & Mở rộng Bộ sưu tập 10 Theme Gradient tươi sáng:
+  - `Khắc Phục Triệt Để Lỗi Tương Phản Menu Chọn Theme (ContextMenu)`:
+    - Bổ sung Style toàn cục cho `ContextMenu` trong `App.xaml` kế thừa nền `{DynamicResource PanelBackgroundBrush}`, chữ `{DynamicResource TextBrush}` và viền `{DynamicResource BorderBrush}` bo tròn 6px kèm `DropShadowEffect`.
+    - Chuẩn hóa ControlTemplate `MenuItem`: màu chữ hiển thị theo `TextBrush`, khi hover highlight đổi sang nền `AccentBrush` và chữ `AccentTextBrush`, đảm bảo tương phản 100% trên tất cả theme.
+    - Cải tiến giao diện menu chọn theme: phân nhóm rõ ràng (`☀️ Tone Tươi Sáng & Năng Động` vs `🌙 Tone Tối Công Nghệ`), bổ sung biểu tượng Swatch màu xem trước và checkmark `✓` nhận diện theme hiện hành.
+  - `Bổ Sung 5 Bộ Theme Gradient Tươi Sáng & Năng Động`:
+    - Thêm 5 theme tươi sáng mới: 🌅 `Sunrise Coral`, 🌊 `Ocean Breeze`, 🌿 `Fresh Mint`, 🌸 `Cherry Blossom`, ⚡ `Electric Neon`.
+    - Nâng tổng số theme hệ thống lên 10 bộ Theme Gradient cao cấp, đáp ứng hoàn hảo mọi sở thích và môi trường làm việc phòng QC / nhà xưởng.
+  - `Biên Dịch & Kiểm Thử Thành Công 100%`: Solution biên dịch **0 Error(s)**, 8/8 unit tests đạt PASS 100%.
 
 
 
