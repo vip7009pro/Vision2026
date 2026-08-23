@@ -57,7 +57,8 @@
 
             <Button Content="📐 Calibration" Command="{Binding OpenCalibrationDialogCommand}" Margin="0,0,6,0" Padding="10,4" Background="#E65100" Foreground="White" BorderThickness="0" ToolTip="Hiệu chuẩn tỉ lệ Pixels/mm trực tiếp trên Job hiện tại" />
             <Button Content="♟ Chessboard Calib" Command="{Binding OpenChessboardCalibrationDialogCommand}" Margin="0,0,6,0" Padding="10,4" Background="#6A1B9A" Foreground="White" BorderThickness="0" ToolTip="Hiệu chuẩn camera bằng bảng Chessboard (tự động tính Intrinsic, Distortion, Pixels/mm)" />
-            <Button Content="🏷️ Gán Mã - Job" Command="{Binding OpenProductAssignDialogCommand}" Margin="0,0,14,0" Padding="10,4" Background="#0288D1" Foreground="White" BorderThickness="0" ToolTip="Gán mã sản phẩm trong CSDL cho tệp Job đang mở" />
+            <Button Content="🏷️ Gán Mã - Job" Command="{Binding OpenProductAssignDialogCommand}" Margin="0,0,6,0" Padding="10,4" Background="#0288D1" Foreground="White" BorderThickness="0" ToolTip="Gán mã sản phẩm trong CSDL cho tệp Job đang mở" />
+            <Button Content="💾 Chụp &amp; Lưu Ảnh" Command="{Binding CaptureAndSaveImageCommand}" Margin="0,0,14,0" Padding="10,4" Background="#10B981" Foreground="White" BorderThickness="0" ToolTip="Chụp 1 frame nguyên bản chất lượng cao từ Camera và lưu ra file ảnh (PNG/BMP) để mang đi tạo/chỉnh sửa Job trên máy tính khác" />
 
             <Border Background="{Binding ResultBackgroundBrush}" BorderBrush="{Binding ResultBorderBrush}" BorderThickness="1" CornerRadius="12" Padding="12,3" VerticalAlignment="Center">
                 <StackPanel Orientation="Horizontal">

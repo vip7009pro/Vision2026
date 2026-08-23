@@ -1901,6 +1901,7 @@ namespace VisionInspectionApp.UI.ViewModels
         }
         public ICommand LoadPreviewImageCommand { get; internal set; }
         public ICommand CaptureCameraImageCommand { get; internal set; }
+        public ICommand CaptureAndSaveImageCommand { get; internal set; }
         public ICommand RunFlowCommand { get; internal set; }
         public ICommand RunOnceCommand { get; internal set; }
         public ICommand RunContinuousCommand { get; internal set; }
@@ -2926,6 +2927,63 @@ namespace VisionInspectionApp.UI.ViewModels
             catch (Exception ex)
             {
                 MessageBox.Show($"Lỗi chụp ảnh: {ex.Message}", "Lỗi", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
+        private async Task CaptureAndSaveImageAsync()
+        {
+            try
+            {
+                var imgSourceDef = SelectedImageSourceDef();
+                int camIndex = imgSourceDef?.CameraIndex ?? 0;
+                string? rtsp = (imgSourceDef != null && !string.IsNullOrWhiteSpace(imgSourceDef.RtspUrl)) ? imgSourceDef.RtspUrl : null;
+                
+                Mat? mat = await _cameraService.CaptureSnapshotAsync(camIndex, rtsp);
+                if (mat == null || mat.Empty())
+                {
+                    mat = _sharedImage.GetSnapshot();
+                    if (mat == null || mat.Empty())
+                    {
+                        MessageBox.Show("Không thể chụp ảnh từ camera và chưa có ảnh nào trong bộ nhớ đệm.\nVui lòng kiểm tra lại kết nối camera trong tab Live Camera.", "Chụp ảnh thất bại", MessageBoxButton.OK, MessageBoxImage.Warning);
+                        return;
+                    }
+                }
+                else
+                {
+                    if (imgSourceDef is not null)
+                    {
+                        SetImageSourceCache(imgSourceDef.Name, "camera", mat);
+                    }
+                    _sharedImage.SetImage(mat);
+                    RefreshPreviews();
+                }
+
+                var sfd = new Microsoft.Win32.SaveFileDialog
+                {
+                    Title = "Lưu Ảnh Camera Ra File Để Tạo / Cấu Hình Job",
+                    Filter = "PNG Image (*.png)|*.png|Bitmap Image (*.bmp)|*.bmp|JPEG Image (*.jpg)|*.jpg|TIFF Image (*.tif)|*.tif",
+                    DefaultExt = ".png",
+                    FileName = $"Camera_Capture_{DateTime.Now:yyyyMMdd_HHmmss}.png"
+                };
+
+                if (sfd.ShowDialog() == true)
+                {
+                    bool success = OpenCvSharp.Cv2.ImWrite(sfd.FileName, mat);
+                    if (success)
+                    {
+                        MessageBox.Show($"Ảnh camera chất lượng gốc ({mat.Width} x {mat.Height} px) đã được lưu thành công ra file:\n\n{sfd.FileName}\n\nBạn có thể copy file ảnh này sang máy tính khác để tạo/huấn luyện Job!", "Lưu Ảnh Thành Công", MessageBoxButton.OK, MessageBoxImage.Information);
+                    }
+                    else
+                    {
+                        MessageBox.Show($"Không thể ghi file ảnh tới đường dẫn: {sfd.FileName}", "Lỗi ghi file", MessageBoxButton.OK, MessageBoxImage.Error);
+                    }
+                }
+
+                mat.Dispose();
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Lỗi trong quá trình chụp và lưu ảnh: {ex.Message}", "Lỗi", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
         private bool _isExecutingRunFlow;

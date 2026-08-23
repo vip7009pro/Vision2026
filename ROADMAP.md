@@ -748,6 +748,16 @@ Lộ trình tích hợp tính năng Chụp ảnh từ camera và hỗ trợ các
     - Thêm 5 theme tươi sáng mới: 🌅 `Sunrise Coral`, 🌊 `Ocean Breeze`, 🌿 `Fresh Mint`, 🌸 `Cherry Blossom`, ⚡ `Electric Neon`.
     - Nâng tổng số theme hệ thống lên 10 bộ Theme Gradient cao cấp, đáp ứng hoàn hảo mọi sở thích và môi trường làm việc phòng QC / nhà xưởng.
   - `Biên Dịch & Kiểm Thử Thành Công 100%`: Solution biên dịch **0 Error(s)**, 8/8 unit tests đạt PASS 100%.
+- [x] Task 212: Sửa tương phản bảng Manual Inspection & Thêm nút Chụp & Lưu Ảnh Camera trong Tool Editor:
+  - `Khắc Phục Toàn Diện Tương Phản Bảng Manual Inspection (2D Vision CMM)`:
+    - Chuyển đổi toàn bộ `ManualInspectionView.xaml` (DataGrid, DataGridColumnHeader, DataGridRow, DataGridCell, TextBlocks, Tool Groups/Items Ribbon) sang `DynamicResource` (`PanelBackgroundBrush`, `PanelAltBackgroundBrush`, `TextBrush`, `TextMutedBrush`, `BorderBrush`, `AccentBrush`, `AccentTextBrush`).
+    - Nâng cấp `RulerCanvas.cs`: Tự động nạp động các brush nền, viền, tick mark và chữ số toạ độ mm theo Theme đang chọn.
+  - `Thêm Nút Chụp & Lưu Ảnh Camera Ra File Trong Tool Editor`:
+    - Thêm nút `💾 Chụp & Lưu Ảnh` trên thanh Toolbar `ToolEditorView.xaml` (cạnh `🏷️ Gán Mã - Job` và `♟ Chessboard Calib`).
+    - Triển khai `CaptureAndSaveImageCommand` & `CaptureAndSaveImageAsync()`: Chụp frame nguyên bản từ camera thông qua `_cameraService.CaptureSnapshotAsync()` (với đầy đủ camera parameters).
+    - Mở hộp thoại `SaveFileDialog` và lưu trực tiếp qua OpenCV `Cv2.ImWrite()` ra file `.png`, `.bmp`, `.tif` đảm bảo chất lượng hình ảnh $100\%$ không nén suy hao để mang sang máy tính khác tạo/huấn luyện Job.
+    - Tự động hiển thị và cập nhật frame ảnh vừa chụp lên màn hình Tool Editor.
+  - `Biên Dịch & Kiểm Thử Thành Công 100%`: Solution biên dịch **0 Error(s)**, 8/8 unit tests đạt PASS 100%.
 
 
 

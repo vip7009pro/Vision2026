@@ -51,6 +51,21 @@
 
 ### Sửa lỗi và Cải thiện UX/UI (Phiên làm việc hiện tại)
 
+- **Sửa tương phản bảng Manual Inspection & Thêm nút Chụp & Lưu Ảnh Camera trong Tool Editor (Task 212)**:
+  - **Yêu Cầu & Bối Cảnh**:
+    1. Bảng kết quả đo lường và kiểm tra dung sai trong tab Manual Inspection (2D Vision CMM) có màu chữ và nền hardcoded tối, không áp dụng màu tương phản theo theme tương ứng (nhất là ở các theme sáng).
+    2. Trong tab Tool Editor, thêm 1 nút capture gần nút `🏷️ Gán Mã - Job`, khi bấm vào sẽ chụp ảnh từ Camera và lưu ra file để mang đi tạo/huấn luyện Job ở máy tính khác với yêu cầu chất lượng gốc tương đương 100%.
+  - **Giải Pháp Thực Hiện**:
+    1. **Khắc Phục Tương Phản Bảng Manual Inspection (`ManualInspectionView.xaml`, `RulerCanvas.cs`)**:
+       - Chuyển đổi toàn bộ `ManualInspectionView.xaml` (DataGrid, DataGridColumnHeader, DataGridRow, DataGridCell, TextBlocks, Tool Groups/Items Ribbon) sang `DynamicResource` (`PanelBackgroundBrush`, `PanelAltBackgroundBrush`, `TextBrush`, `TextMutedBrush`, `BorderBrush`, `AccentBrush`, `AccentTextBrush`).
+       - Nâng cấp `RulerCanvas.cs`: Tự động nạp động các brush nền, viền, tick mark và chữ số toạ độ mm theo Theme đang chọn.
+    2. **Thêm Nút "💾 Chụp & Lưu Ảnh" Trong Tool Editor (`ToolEditorView.xaml`, `ToolEditorViewModel.Engine.cs`, `ToolEditorViewModel.cs`)**:
+       - Thêm nút `💾 Chụp & Lưu Ảnh` màu xanh Emerald (`#10B981`) trên thanh công cụ Toolbar của `ToolEditorView.xaml` (cạnh nút `🏷️ Gán Mã - Job` và `♟ Chessboard Calib`).
+       - Triển khai `CaptureAndSaveImageCommand` & `CaptureAndSaveImageAsync()`: Chụp frame nguyên bản từ camera thông qua `_cameraService.CaptureSnapshotAsync()` (với đầy đủ exposure, gain, gamma, white balance, hardware ROI).
+       - Mở hộp thoại `SaveFileDialog` và lưu trực tiếp qua OpenCV `Cv2.ImWrite()` ra file `.png`, `.bmp`, `.tif` đảm bảo chất lượng hình ảnh $100\%$ không nén suy hao.
+       - Tự động hiển thị và cập nhật ảnh vừa chụp lên màn hình Tool Editor.
+  - **Biên Dịch & Kiểm Thử Thành Công 100%**: Solution biên dịch **0 Error(s)**, toàn bộ 8/8 unit tests đạt PASS 100%.
+
 - **Sửa lỗi tương phản Menu chọn Theme & Mở rộng Bộ sưu tập 10 Theme Gradient tươi sáng (Task 211)**:
   - **Yêu Cầu & Bối Cảnh**:
     1. Menu chọn theme (ContextMenu) bị lỗi tương phản: nền xám/trắng của Windows kết hợp với chữ trắng của Dark Theme dẫn đến chữ bị chìm, rất khó đọc.

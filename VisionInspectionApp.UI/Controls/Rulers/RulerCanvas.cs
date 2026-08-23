@@ -169,17 +169,28 @@ public class RulerCanvas : FrameworkElement
         double h = ActualHeight;
         if (w <= 0 || h <= 0) return;
 
+        var bgBrush = (Brush?)TryFindResource("PanelAltBackgroundBrush") ?? BgBrush;
+        var borderBrush = (Brush?)TryFindResource("BorderBrush") ?? BorderBrushRuler;
+        var tickBrush = (Brush?)TryFindResource("TextMutedBrush") ?? TextBrush;
+        var textBrush = (Brush?)TryFindResource("TextMutedBrush") ?? TextBrush;
+        var accentBrush = (Brush?)TryFindResource("AccentBrush") ?? (MouseTrackerPen.Brush);
+
+        var borderPen = new Pen(borderBrush, 1.0);
+        var majorPen = new Pen(textBrush, 1.0);
+        var minorPen = new Pen(tickBrush, 0.7);
+        var trackerPen = new Pen(accentBrush, 1.5);
+
         // Draw background
-        dc.DrawRectangle(BgBrush, null, new Rect(0, 0, w, h));
+        dc.DrawRectangle(bgBrush, null, new Rect(0, 0, w, h));
 
         // Draw border separator
         if (Orientation == Orientation.Horizontal)
         {
-            dc.DrawLine(new Pen(BorderBrushRuler, 1.0), new Point(0, h - 0.5), new Point(w, h - 0.5));
+            dc.DrawLine(borderPen, new Point(0, h - 0.5), new Point(w, h - 0.5));
         }
         else
         {
-            dc.DrawLine(new Pen(BorderBrushRuler, 1.0), new Point(w - 0.5, 0), new Point(w - 0.5, h));
+            dc.DrawLine(borderPen, new Point(w - 0.5, 0), new Point(w - 0.5, h));
         }
 
         double pxPerMm = PixelsPerMm > 0 ? PixelsPerMm : 1.0;
@@ -220,15 +231,15 @@ public class RulerCanvas : FrameworkElement
                 double minorScreenPos = minorMm * screenPxPerMm + offset;
                 if (minorScreenPos >= 0 && minorScreenPos <= totalLength)
                 {
-                    DrawTick(dc, minorScreenPos, isMajor: false, w, h);
+                    DrawTick(dc, minorScreenPos, minorPen, isMajor: false, w, h);
                 }
             }
 
             // Draw Major Tick & Label
             if (majorScreenPos >= 0 && majorScreenPos <= totalLength)
             {
-                DrawTick(dc, majorScreenPos, isMajor: true, w, h);
-                DrawLabel(dc, majorScreenPos, mm, w, h);
+                DrawTick(dc, majorScreenPos, majorPen, isMajor: true, w, h);
+                DrawLabel(dc, majorScreenPos, mm, textBrush, w, h);
             }
         }
 
@@ -238,18 +249,17 @@ public class RulerCanvas : FrameworkElement
             double pos = MousePosition.Value;
             if (Orientation == Orientation.Horizontal)
             {
-                dc.DrawLine(MouseTrackerPen, new Point(pos, 0), new Point(pos, h));
+                dc.DrawLine(trackerPen, new Point(pos, 0), new Point(pos, h));
             }
             else
             {
-                dc.DrawLine(MouseTrackerPen, new Point(0, pos), new Point(w, pos));
+                dc.DrawLine(trackerPen, new Point(0, pos), new Point(w, pos));
             }
         }
     }
 
-    private void DrawTick(DrawingContext dc, double screenPos, bool isMajor, double w, double h)
+    private void DrawTick(DrawingContext dc, double screenPos, Pen pen, bool isMajor, double w, double h)
     {
-        var pen = isMajor ? MajorTickPen : MinorTickPen;
         if (Orientation == Orientation.Horizontal)
         {
             double tickLen = isMajor ? h * 0.45 : h * 0.25;
@@ -262,7 +272,7 @@ public class RulerCanvas : FrameworkElement
         }
     }
 
-    private void DrawLabel(DrawingContext dc, double screenPos, double mm, double w, double h)
+    private void DrawLabel(DrawingContext dc, double screenPos, double mm, Brush textBrush, double w, double h)
     {
         string text = FormatMmValue(mm);
         var formatted = new FormattedText(
@@ -271,7 +281,7 @@ public class RulerCanvas : FrameworkElement
             FlowDirection.LeftToRight,
             RulerTypeface,
             9.0,
-            TextBrush,
+            textBrush,
             1.0);
 
         if (Orientation == Orientation.Horizontal)

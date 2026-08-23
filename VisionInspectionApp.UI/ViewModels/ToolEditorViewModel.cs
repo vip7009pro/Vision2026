@@ -304,6 +304,7 @@ namespace VisionInspectionApp.UI.ViewModels
             PasteNodeCommand = new RelayCommand(PasteNode);
             LoadPreviewImageCommand = new RelayCommand(LoadPreviewImage);
             CaptureCameraImageCommand = new AsyncRelayCommand(CaptureCameraImageAsync);
+            CaptureAndSaveImageCommand = new AsyncRelayCommand(CaptureAndSaveImageAsync);
             RunFlowCommand = new RelayCommand(OnRunFlowClicked);
             RunOnceCommand = new RelayCommand(OnRunOnceClicked);
             RunContinuousCommand = new RelayCommand(OnRunContinuousClicked);

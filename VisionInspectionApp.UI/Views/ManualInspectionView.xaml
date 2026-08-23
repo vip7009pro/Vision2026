@@ -15,9 +15,9 @@
         <conv:ToleranceStatusToBrushConverter x:Key="StatusToBrush" />
 
         <Style x:Key="ToolGroupButtonStyle" TargetType="RadioButton">
-            <Setter Property="Background" Value="#252830" />
-            <Setter Property="Foreground" Value="#CBD5E1" />
-            <Setter Property="BorderBrush" Value="#3B4252" />
+            <Setter Property="Background" Value="{DynamicResource ButtonBackgroundBrush}" />
+            <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource ButtonBorderBrush}" />
             <Setter Property="BorderThickness" Value="1" />
             <Setter Property="Padding" Value="10,6" />
             <Setter Property="Margin" Value="0,0,4,0" />
@@ -39,20 +39,20 @@
             </Setter>
             <Style.Triggers>
                 <Trigger Property="IsChecked" Value="True">
-                    <Setter Property="Background" Value="#0284C7" />
-                    <Setter Property="Foreground" Value="White" />
-                    <Setter Property="BorderBrush" Value="#38BDF8" />
+                    <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+                    <Setter Property="Foreground" Value="{DynamicResource AccentTextBrush}" />
+                    <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
                 </Trigger>
                 <Trigger Property="IsMouseOver" Value="True">
-                    <Setter Property="BorderBrush" Value="#60A5FA" />
+                    <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
                 </Trigger>
             </Style.Triggers>
         </Style>
 
         <Style x:Key="ToolItemButtonStyle" TargetType="RadioButton">
-            <Setter Property="Background" Value="#1E293B" />
-            <Setter Property="Foreground" Value="#94A3B8" />
-            <Setter Property="BorderBrush" Value="#334155" />
+            <Setter Property="Background" Value="{DynamicResource PanelAltBackgroundBrush}" />
+            <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
             <Setter Property="BorderThickness" Value="1" />
             <Setter Property="Padding" Value="8,4" />
             <Setter Property="Margin" Value="0,0,4,0" />
@@ -73,13 +73,13 @@
             </Setter>
             <Style.Triggers>
                 <Trigger Property="IsChecked" Value="True">
-                    <Setter Property="Background" Value="#0EA5E9" />
-                    <Setter Property="Foreground" Value="White" />
-                    <Setter Property="BorderBrush" Value="#7DD3FC" />
+                    <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+                    <Setter Property="Foreground" Value="{DynamicResource AccentTextBrush}" />
+                    <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
                     <Setter Property="FontWeight" Value="SemiBold" />
                 </Trigger>
                 <Trigger Property="IsMouseOver" Value="True">
-                    <Setter Property="BorderBrush" Value="#38BDF8" />
+                    <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
                 </Trigger>
             </Style.Triggers>
         </Style>
@@ -94,20 +94,20 @@
         </Grid.RowDefinitions>
 
         <!-- Top Action Bar -->
-        <Border Grid.Row="0" Background="#1E222B" BorderBrush="#333846" BorderThickness="1" CornerRadius="4" Padding="8,6" Margin="0,0,0,6">
+        <Border Grid.Row="0" Background="{DynamicResource PanelBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="4" Padding="8,6" Margin="0,0,0,6">
             <DockPanel LastChildFill="False">
                 <Button Content="📂 Mở ảnh File" Command="{Binding LoadImageCommand}" Margin="0,0,8,0" Padding="10,4" />
                 <Button Content="📷 Chụp từ Camera" Command="{Binding CaptureCameraImageCommand}" Margin="0,0,12,0" Padding="10,4" />
 
-                <Rectangle Width="1" Height="22" Fill="#475569" Margin="0,0,12,0" />
+                <Rectangle Width="1" Height="22" Fill="{DynamicResource BorderBrush}" Margin="0,0,12,0" />
 
-                <TextBlock Text="Độ phân giải Calib (px/mm):" VerticalAlignment="Center" Foreground="#E2E8F0" FontWeight="SemiBold" Margin="0,0,6,0" />
+                <TextBlock Text="Độ phân giải Calib (px/mm):" VerticalAlignment="Center" Foreground="{DynamicResource TextBrush}" FontWeight="SemiBold" Margin="0,0,6,0" />
                 <TextBox Width="90" Text="{Binding CalibrationPixelsPerMm, Converter={StaticResource DoubleConv}, UpdateSourceTrigger=PropertyChanged, Delay=250}" VerticalAlignment="Center" Margin="0,0,6,0" />
                 <Button Content="🔄 Lấy từ Global Calib" Command="{Binding SyncCalibrationFromGlobalCommand}" ToolTip="Đồng bộ lại tỉ lệ px/mm từ Global Chessboard Calibration" Margin="0,0,16,0" Padding="6,4" />
 
-                <CheckBox Content="Bắt điểm Sub-pixel Edge" IsChecked="{Binding EnableSubpixelSnapping}" VerticalAlignment="Center" Foreground="#38BDF8" ToolTip="Tự động dò mép biên cực kỳ chính xác dưới mức 1 pixel khi click" Margin="0,0,16,0" />
+                <CheckBox Content="Bắt điểm Sub-pixel Edge" IsChecked="{Binding EnableSubpixelSnapping}" VerticalAlignment="Center" Foreground="{DynamicResource AccentBrush}" ToolTip="Tự động dò mép biên cực kỳ chính xác dưới mức 1 pixel khi click" Margin="0,0,16,0" />
 
-                <Rectangle Width="1" Height="22" Fill="#475569" Margin="0,0,12,0" />
+                <Rectangle Width="1" Height="22" Fill="{DynamicResource BorderBrush}" Margin="0,0,12,0" />
 
                 <Button Content="🗑️ Xóa toàn bộ" Command="{Binding ClearMeasurementsCommand}" ToolTip="Xóa toàn bộ danh sách kết quả đo và các hình vẽ overlay trên ảnh" Margin="0,0,8,0" Padding="10,4" Background="#7F1D1D" Foreground="#FCA5A5" BorderBrush="#991B1B" />
                 <Button Content="📊 Xuất file CSV" Command="{Binding ExportCsvCommand}" ToolTip="Xuất bảng kết quả đo lường và kiểm tra dung sai ra file CSV" Margin="0,0,8,0" Padding="10,4" Background="#065F46" Foreground="#6EE7B7" BorderBrush="#047857" />
@@ -115,7 +115,7 @@
         </Border>
 
         <!-- Tool Palette Ribbon -->
-        <Border Grid.Row="1" Background="#161922" BorderBrush="#2A2F3D" BorderThickness="1" CornerRadius="4" Padding="6" Margin="0,0,0,6">
+        <Border Grid.Row="1" Background="{DynamicResource PanelBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="4" Padding="6" Margin="0,0,0,6">
             <StackPanel>
                 <!-- Group Tabs -->
                 <WrapPanel Margin="0,0,0,6">
@@ -145,7 +145,7 @@
                 </WrapPanel>
 
                 <!-- Tool Items Ribbon based on selected group -->
-                <Border Background="#0F172A" BorderBrush="#1E293B" BorderThickness="1" CornerRadius="3" Padding="6,4">
+                <Border Background="{DynamicResource PanelAltBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="3" Padding="6,4">
                     <DockPanel>
                         <!-- Group 1: Point & Distance -->
                         <WrapPanel Visibility="{Binding SelectedGroup, Converter={StaticResource EqToVis}, ConverterParameter={x:Static models:ManualMeasurementGroup.PointAndDistance}}">
@@ -155,10 +155,10 @@
                             <RadioButton Style="{StaticResource ToolItemButtonStyle}" Content="Khoảng cách 2 điểm (2P)"
                                          IsChecked="{Binding SelectedTool, Converter={StaticResource EqToBool}, ConverterParameter={x:Static models:ManualMeasurementType.PointToPointDistance}}"
                                          Command="{Binding SelectToolCommand}" CommandParameter="{x:Static models:ManualMeasurementType.PointToPointDistance}" />
-                            <RadioButton Style="{StaticResource ToolItemButtonStyle}" Content="Độ lệch ΔX"
+                            <RadioButton Style="{StaticResource ToolItemButtonStyle}" Content="Đo độ lệch ΔX"
                                          IsChecked="{Binding SelectedTool, Converter={StaticResource EqToBool}, ConverterParameter={x:Static models:ManualMeasurementType.DeltaXDistance}}"
                                          Command="{Binding SelectToolCommand}" CommandParameter="{x:Static models:ManualMeasurementType.DeltaXDistance}" />
-                            <RadioButton Style="{StaticResource ToolItemButtonStyle}" Content="Độ lệch ΔY"
+                            <RadioButton Style="{StaticResource ToolItemButtonStyle}" Content="Đo độ lệch ΔY"
                                          IsChecked="{Binding SelectedTool, Converter={StaticResource EqToBool}, ConverterParameter={x:Static models:ManualMeasurementType.DeltaYDistance}}"
                                          Command="{Binding SelectToolCommand}" CommandParameter="{x:Static models:ManualMeasurementType.DeltaYDistance}" />
                             <RadioButton Style="{StaticResource ToolItemButtonStyle}" Content="Khoảng cách Điểm - Đường (3P)"
@@ -177,7 +177,7 @@
                             <RadioButton Style="{StaticResource ToolItemButtonStyle}" Content="Khoảng cách 2 đường (4P)"
                                          IsChecked="{Binding SelectedTool, Converter={StaticResource EqToBool}, ConverterParameter={x:Static models:ManualMeasurementType.LineDistance}}"
                                          Command="{Binding SelectToolCommand}" CommandParameter="{x:Static models:ManualMeasurementType.LineDistance}" />
-                            <RadioButton Style="{StaticResource ToolItemButtonStyle}" Content="Giao điểm 2 đường (4P)"
+                            <RadioButton Style="{StaticResource ToolItemButtonStyle}" Content="Gao điểm 2 đường (4P)"
                                          IsChecked="{Binding SelectedTool, Converter={StaticResource EqToBool}, ConverterParameter={x:Static models:ManualMeasurementType.LineIntersection}}"
                                          Command="{Binding SelectToolCommand}" CommandParameter="{x:Static models:ManualMeasurementType.LineIntersection}" />
                             <RadioButton Style="{StaticResource ToolItemButtonStyle}" Content="Góc 2 đường (4P)"
@@ -237,14 +237,14 @@
                 </Border>
 
                 <!-- Prompt Banner -->
-                <Border Background="#0C4A6E" BorderBrush="#0284C7" BorderThickness="1" CornerRadius="3" Padding="8,4" Margin="0,4,0,0">
-                    <TextBlock Text="{Binding StatusPrompt}" Foreground="#E0F2FE" FontWeight="Medium" FontSize="12" />
+                <Border Background="{DynamicResource PanelAltBackgroundBrush}" BorderBrush="{DynamicResource AccentBrush}" BorderThickness="1" CornerRadius="3" Padding="8,4" Margin="0,4,0,0">
+                    <TextBlock Text="{Binding StatusPrompt}" Foreground="{DynamicResource TextBrush}" FontWeight="Medium" FontSize="12" />
                 </Border>
             </StackPanel>
         </Border>
 
         <!-- Center Image Viewport with Rulers -->
-        <Border Grid.Row="2" BorderThickness="1" BorderBrush="#333846" Background="#111318">
+        <Border Grid.Row="2" BorderThickness="1" BorderBrush="{DynamicResource BorderBrush}" Background="{DynamicResource CanvasBackgroundBrush}">
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="26" />
@@ -256,8 +256,8 @@
                 </Grid.RowDefinitions>
 
                 <!-- Top-Left Origin / Unit Display -->
-                <Border Grid.Row="0" Grid.Column="0" Background="#1A1C22" BorderBrush="#373C48" BorderThickness="0,0,1,1">
-                    <TextBlock Text="mm" Foreground="#94A3B8" FontSize="9" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                <Border Grid.Row="0" Grid.Column="0" Background="{DynamicResource PanelAltBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,1">
+                    <TextBlock Text="mm" Foreground="{DynamicResource TextMutedBrush}" FontSize="9" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center" />
                 </Border>
 
                 <!-- Top Horizontal Ruler -->
@@ -287,7 +287,7 @@
         </Border>
 
         <!-- Bottom Measurement Results Grid & Tolerance Table -->
-        <Border Grid.Row="3" BorderThickness="1" BorderBrush="#333846" Background="#181B22" Padding="6" Margin="0,6,0,0">
+        <Border Grid.Row="3" BorderThickness="1" BorderBrush="{DynamicResource BorderBrush}" Background="{DynamicResource PanelBackgroundBrush}" Padding="6" Margin="0,6,0,0">
             <Grid>
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto" />
@@ -295,18 +295,22 @@
                 </Grid.RowDefinitions>
 
                 <DockPanel Grid.Row="0" Margin="0,0,0,4">
-                    <TextBlock Text="📋 BẢNG KẾT QUẢ ĐO LƯỜNG &amp; KIỂM TRA DUNG SAI (2D VISION CMM)" FontWeight="Bold" Foreground="#E2E8F0" FontSize="12" VerticalAlignment="Center" />
-                    <TextBlock Text="{Binding Records.Count, StringFormat='{} (Tổng cộng: {0} phép đo)'}" Foreground="#94A3B8" FontSize="12" VerticalAlignment="Center" Margin="4,0,0,0" />
+                    <TextBlock Text="📋 BẢNG KẾT QUẢ ĐO LƯỜNG &amp; KIỂM TRA DUNG SAI (2D VISION CMM)" FontWeight="Bold" Foreground="{DynamicResource TextBrush}" FontSize="12" VerticalAlignment="Center" />
+                    <TextBlock Text="{Binding Records.Count, StringFormat='{} (Tổng cộng: {0} phép đo)'}" Foreground="{DynamicResource TextMutedBrush}" FontSize="12" VerticalAlignment="Center" Margin="4,0,0,0" />
                 </DockPanel>
 
                 <DataGrid Grid.Row="1" ItemsSource="{Binding Records}" AutoGenerateColumns="False" CanUserAddRows="False"
-                          Background="#111318" RowBackground="#161922" AlternatingRowBackground="#1A1E29"
-                          BorderBrush="#2A2F3D" GridLinesVisibility="Horizontal" HorizontalGridLinesBrush="#262C3A">
+                          Background="{DynamicResource PanelBackgroundBrush}"
+                          RowBackground="{DynamicResource PanelBackgroundBrush}"
+                          AlternatingRowBackground="{DynamicResource PanelAltBackgroundBrush}"
+                          BorderBrush="{DynamicResource BorderBrush}"
+                          GridLinesVisibility="Horizontal"
+                          HorizontalGridLinesBrush="{DynamicResource BorderBrush}">
                     <DataGrid.Columns>
                         <DataGridTextColumn Header="#" Binding="{Binding Id}" Width="40" IsReadOnly="True" />
                         <DataGridTextColumn Header="Loại công cụ" Binding="{Binding ToolName}" Width="170" IsReadOnly="True" FontWeight="SemiBold" />
-                        <DataGridTextColumn Header="Giá trị đo (mm / °)" Binding="{Binding ValueMm, StringFormat={}{0:0.0000}}" Width="120" IsReadOnly="True" Foreground="#38BDF8" FontWeight="Bold" />
-                        <DataGridTextColumn Header="Giá trị (px)" Binding="{Binding ValuePx, StringFormat={}{0:0.0}}" Width="85" IsReadOnly="True" Foreground="#94A3B8" />
+                        <DataGridTextColumn Header="Giá trị đo (mm / °)" Binding="{Binding ValueMm, StringFormat={}{0:0.0000}}" Width="120" IsReadOnly="True" Foreground="{DynamicResource AccentBrush}" FontWeight="Bold" />
+                        <DataGridTextColumn Header="Giá trị (px)" Binding="{Binding ValuePx, StringFormat={}{0:0.0}}" Width="85" IsReadOnly="True" Foreground="{DynamicResource TextMutedBrush}" />
 
                         <!-- Tolerance GD&T Columns -->
                         <DataGridTextColumn Header="Tiêu chuẩn (Nominal)" Binding="{Binding Nominal, Converter={StaticResource DoubleConv}, UpdateSourceTrigger=PropertyChanged}" Width="125" />
@@ -324,7 +328,7 @@
                             </DataGridTemplateColumn.CellTemplate>
                         </DataGridTemplateColumn>
 
-                        <DataGridTextColumn Header="Chi tiết tọa độ / Kết cấu" Binding="{Binding Details}" Width="*" IsReadOnly="True" Foreground="#CBD5E1" />
+                        <DataGridTextColumn Header="Chi tiết tọa độ / Kết cấu" Binding="{Binding Details}" Width="*" IsReadOnly="True" Foreground="{DynamicResource TextBrush}" />
 
                         <!-- Action Column -->
                         <DataGridTemplateColumn Header="Xóa" Width="60">
