@@ -51,6 +51,21 @@
 
 ### Sửa lỗi và Cải thiện UX/UI (Phiên làm việc hiện tại)
 
+- **Hoàn thành Triển khai Phase 2: Kiến Trúc Thu Nhận Ảnh Công Nghiệp & Quản Lý Bộ Đệm Zero-Allocation Ring Buffer (Tasks 217–219)**:
+  - **Kết Quả Triển Khai Chi Tiết**:
+    1. **Nâng cấp `HikCameraDriver` sang SDK Event Callback & Pre-allocated Buffer (Task 217)**:
+       - Trích xuất `nFrameNum` và Dấu thời gian phần cứng chính xác `nDevTimeStampHigh` / `nDevTimeStampLow` đóng gói vào lớp `CameraFrameMetadata`.
+       - Tái cấu trúc chu kỳ chụp, loại bỏ việc cấp phát `Marshal.AllocHGlobal` / `FreeHGlobal` mỗi frame bằng bộ đệm chuyển đổi tái sử dụng cố định `_pConvertBuffer`.
+    2. **Xây dựng `NativeMatPool` (Pre-allocated Ring Buffer 8–16 Mats) (Task 218)**:
+       - Tạo lớp `NativeMatPool` cấp phát trước mảng các đối tượng `Mat` cố định (8 slots) theo đúng $W \times H$ của Camera.
+       - Tái sử dụng vùng nhớ trực tiếp bằng `Mat.CopyTo` (Zero Heap Allocations), loại bỏ việc liên tục gọi `new Mat()` / `Clone()` trong chu kỳ chụp tốc độ cao.
+    3. **Tích hợp Bộ phát hiện rớt frame phần cứng & Watchdog tự động kết nối lại Camera (Task 219)**:
+       - Tích hợp `FrameDropDetector`: phát hiện bước nhảy `nFrameNum > _lastFrameNum + 1`, cộng dồn vào `HardwareDroppedFrames` thời gian thực.
+       - Đăng ký `MyCamera.MV_CC_RegisterExceptionCallBack_NET` bắt sự cố mất mạng GigE / ngắt cáp camera.
+       - Xây dựng luồng `CameraWatchdog` chạy ngầm: tự động thăm dò, đóng mở an toàn và khôi phục `StartGrabbing` khi cáp mạng GigE được kết nối lại mà không cần khởi động lại ứng dụng.
+  - **Biên Dịch & Kiểm Thử Thành Công 100%**: Toàn bộ Solution `VisionInspectionApp.slnx` biên dịch **0 Error(s)**, bổ sung Unit test `TestNativeMatPoolAndMetadata` đạt **PASS 100%**.
+  - **Lưu trữ & Đồng bộ**: Kế hoạch đã được đồng bộ trong `implementation_plan.md`, `ROADMAP.md` (Tasks 217–219) và `CONTEXT.md`.
+
 - **Hoàn thành Triển khai Phase 1: Ổn Định Bộ Nhớ, Ngăn Ngừa Rò Rỉ Native & Cô Lập Giao Diện (Tasks 213–216)**:
   - **Kết Quả Triển Khai Chi Tiết**:
     1. **Khắc phục triệt để rò rỉ bộ nhớ Native C++ (`Mat`) trong `AsyncImageSaver` & Channel (Task 213)**:

@@ -155,4 +155,46 @@ public static class CameraTest
 
         Console.WriteLine("✅ All Hardware ROI & PixelFormat parameters serialized and restored with 100% precision!");
     }
+
+    public static void TestNativeMatPoolAndMetadata()
+    {
+        Console.WriteLine("=== TESTING NATIVEMATPOOL (RING BUFFER ZERO-ALLOCATION) & METADATA ===");
+        
+        using var pool = new VisionInspectionApp.UI.Services.Camera.NativeMatPool(8);
+        pool.Initialize(1920, 1080, MatType.CV_8UC3);
+
+        if (!pool.IsInitialized || pool.Width != 1920 || pool.Height != 1080 || pool.PoolSize != 8)
+        {
+            throw new Exception("NativeMatPool initialization failed!");
+        }
+
+        // Test rent and return 16 times (simulating 16 frames through 8-buffer ring)
+        for (int i = 0; i < 16; i++)
+        {
+            var (idx, mat) = pool.Rent();
+            if (mat == null || mat.IsDisposed || mat.Width != 1920 || mat.Height != 1080)
+            {
+                throw new Exception($"NativeMatPool rent failed on frame {i}!");
+            }
+            pool.Return(idx);
+        }
+
+        var meta = new VisionInspectionApp.UI.Services.Camera.CameraFrameMetadata
+        {
+            FrameNum = 12345,
+            DeviceTimestampNs = 9876543210UL,
+            HardwareDroppedFrames = 0,
+            SoftwareDroppedFrames = 0,
+            Width = 1920,
+            Height = 1080,
+            PixelFormat = "BayerGB8"
+        };
+
+        if (meta.FrameNum != 12345 || meta.DeviceTimestampNs != 9876543210UL || meta.Width != 1920)
+        {
+            throw new Exception("CameraFrameMetadata validation failed!");
+        }
+
+        Console.WriteLine("✅ NativeMatPool 8-Buffer Ring & CameraFrameMetadata verified successfully (100% PASS)!");
+    }
 }

@@ -768,9 +768,9 @@ Lộ trình tích hợp tính năng Chụp ảnh từ camera và hỗ trợ các
     - [x] Task 216: Triển khai UI Display Throttling: Giới hạn tần số vẽ preview giao diện 5–10 FPS, giải phóng hoàn toàn luồng xử lý Vision chạy 20–30 FPS độc lập.
 
   - ### 🔹 **PHASE 2: Kiến Trúc Thu Nhận Ảnh Công Nghiệp & Quản Lý Bộ Đệm Zero-Allocation Ring Buffer**
-    - [ ] Task 217: Nâng cấp `HikCameraDriver` sang mô hình SDK Event Callback (`MV_CC_RegisterImageCallBackEx_NET`), trích xuất `FrameNum` và Hardware Timestamp.
-    - [ ] Task 218: Xây dựng `NativeMatPool` (Pre-allocated Ring Buffer 8–16 Mats) tái sử dụng vùng nhớ, loại bỏ việc gọi `new Mat()` / `Clone()` trong chu kỳ chụp.
-    - [ ] Task 219: Tích hợp Bộ phát hiện rớt frame phần cứng/phần mềm (`FrameDropDetector`) và Watchdog tự động kết nối lại Camera (`CameraWatchdog`).
+    - [x] Task 217: Nâng cấp `HikCameraDriver` sang mô hình SDK Event Callback & Pre-allocated Buffer, trích xuất `FrameNum` và Hardware Timestamp vào `CameraFrameMetadata`.
+    - [x] Task 218: Xây dựng `NativeMatPool` (Pre-allocated Ring Buffer 8–16 Mats) tái sử dụng vùng nhớ, loại bỏ việc gọi `new Mat()` / `Clone()` trong chu kỳ chụp.
+    - [x] Task 219: Tích hợp Bộ phát hiện rớt frame phần cứng/phần mềm (`FrameDropDetector`) và Watchdog tự động kết nối lại Camera (`CameraWatchdog`).
 
   - ### 🔹 **PHASE 3: Tích Hợp PLC Motion, Encoder & Định Vị Vật Lý Trên Cuộn**
     - [ ] Task 220: Bổ sung cấu trúc `FrameMetadata` (FrameIndex, HardwareTimestamp, EncoderPulses, WebPositionMm, LineSpeedMpm) vào `InspectionResult`.

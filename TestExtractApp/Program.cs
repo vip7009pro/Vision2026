@@ -8,6 +8,7 @@ class Program
     {
         HikApiTest.PrintApi();
         CameraTest.TestCameraParametersJobSerialization();
+        CameraTest.TestNativeMatPoolAndMetadata();
         CaliperAndLineTest.RunTests();
         ColorDiffTest.RunTests();
         RecentJobsAndCalibrationTest.RunTests();

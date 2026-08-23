@@ -17,9 +17,68 @@ public sealed class HikCameraDriver : CameraDriverBase
 {
     private MyCamera? _camera;
     private static bool? _isMvSdkAvailable;
+    private MyCamera.cbExceptiondelegate? _exceptionCallback;
+    private readonly NativeMatPool _matPool = new(8);
+    private IntPtr _pConvertBuffer = IntPtr.Zero;
+    private uint _convertBufferSize = 0;
+    private uint _lastFrameNum = 0;
+    private long _hardwareDroppedFrames = 0;
+    private bool _isFirstFrame = true;
+    private readonly object _reconnectGate = new();
+    private bool _isReconnecting = false;
+    private CameraFrameMetadata? _latestMetadata;
+
+    public long HardwareDroppedFrames => Interlocked.Read(ref _hardwareDroppedFrames);
+    public CameraFrameMetadata? LatestMetadata => _latestMetadata;
 
     [DllImport("kernel32.dll", CharSet = CharSet.Auto, SetLastError = true)]
     private static extern bool SetDllDirectory(string lpPathName);
+
+    private void OnExceptionCallback(uint nMsgType, IntPtr pUser)
+    {
+        System.Diagnostics.Debug.WriteLine($"[HikCameraDriver] Exception callback: 0x{nMsgType:X8}");
+        RaiseErrorOccurred($"Camera Hardware Exception: 0x{nMsgType:X8}");
+        StartAutoReconnectWatchdog();
+    }
+
+    private void StartAutoReconnectWatchdog()
+    {
+        lock (_reconnectGate)
+        {
+            if (_isReconnecting || !_isOpened) return;
+            _isReconnecting = true;
+        }
+
+        Task.Run(async () =>
+        {
+            System.Diagnostics.Debug.WriteLine("[HikCameraDriver] Watchdog: Bắt đầu tiến trình tự động khôi phục kết nối Camera...");
+            while (_isOpened && _isReconnecting)
+            {
+                try
+                {
+                    await Task.Delay(1000);
+                    if (_camera != null)
+                    {
+                        try { _camera.MV_CC_StopGrabbing_NET(); } catch { }
+                        try { _camera.MV_CC_CloseDevice_NET(); } catch { }
+
+                        int openRet = _camera.MV_CC_OpenDevice_NET(MyCamera.MV_ACCESS_Exclusive, 0);
+                        if (openRet == MyCamera.MV_OK)
+                        {
+                            int grabRet = _camera.MV_CC_StartGrabbing_NET();
+                            if (grabRet == MyCamera.MV_OK)
+                            {
+                                System.Diagnostics.Debug.WriteLine("[HikCameraDriver] Watchdog: Phục hồi kết nối Camera thành công!");
+                                lock (_reconnectGate) { _isReconnecting = false; }
+                                break;
+                            }
+                        }
+                    }
+                }
+                catch { }
+            }
+        });
+    }
 
     /// <summary>
     /// Tìm đường dẫn file đĩa MvCameraControl.dll hoặc MvCameraControl.Net.dll thực tế trên Windows
@@ -224,6 +283,14 @@ public sealed class HikCameraDriver : CameraDriverBase
 
                 _isOpened = true;
 
+                // Đăng ký Exception Callback từ Hikrobot SDK
+                try
+                {
+                    _exceptionCallback = OnExceptionCallback;
+                    _camera.MV_CC_RegisterExceptionCallBack_NET(_exceptionCallback, IntPtr.Zero);
+                }
+                catch { }
+
                 // Đồng bộ hóa trạng thái lật phần cứng ban đầu từ camera
                 try
                 {
@@ -263,6 +330,15 @@ public sealed class HikCameraDriver : CameraDriverBase
     {
         await StopGrabbingAsync();
 
+        if (_pConvertBuffer != IntPtr.Zero)
+        {
+            try { Marshal.FreeHGlobal(_pConvertBuffer); } catch { }
+            _pConvertBuffer = IntPtr.Zero;
+            _convertBufferSize = 0;
+        }
+
+        _matPool.Dispose();
+
         if (_camera != null && IsMvSdkAvailable())
         {
             try
@@ -297,6 +373,13 @@ public sealed class HikCameraDriver : CameraDriverBase
 
                 _isGrabbing = true;
                 _cts = new CancellationTokenSource();
+                _isFirstFrame = true;
+
+                _convertBufferSize = GetPayloadSize();
+                if (_pConvertBuffer == IntPtr.Zero && _convertBufferSize > 0)
+                {
+                    _pConvertBuffer = Marshal.AllocHGlobal((int)_convertBufferSize);
+                }
 
                 _grabThread = new Thread(() => ContinuousGrabLoop(_cts.Token))
                 {
@@ -327,6 +410,13 @@ public sealed class HikCameraDriver : CameraDriverBase
         {
             _grabThread.Join(500);
             _grabThread = null;
+        }
+
+        if (_pConvertBuffer != IntPtr.Zero)
+        {
+            try { Marshal.FreeHGlobal(_pConvertBuffer); } catch { }
+            _pConvertBuffer = IntPtr.Zero;
+            _convertBufferSize = 0;
         }
 
         if (_camera != null && IsMvSdkAvailable())
@@ -903,6 +993,32 @@ public override async Task<CameraParameters> ReadParametersAsync()
                 int ret = _camera != null ? _camera.MV_CC_GetOneFrameTimeout_NET(pData, bufLen, ref frameInfo, 100) : -1;
                 if (ret == MyCamera.MV_OK && frameInfo.nWidth > 0 && frameInfo.nHeight > 0)
                 {
+                    // 1. Hardware Frame Drop & Sequence Counter Tracking
+                    if (frameInfo.nFrameNum > 0)
+                    {
+                        if (!_isFirstFrame && frameInfo.nFrameNum > _lastFrameNum + 1)
+                        {
+                            uint dropped = frameInfo.nFrameNum - _lastFrameNum - 1;
+                            Interlocked.Add(ref _hardwareDroppedFrames, dropped);
+                            System.Diagnostics.Debug.WriteLine($"[HikCameraDriver] ⚠️ Phát hiện rớt frame phần cứng: {dropped} frame(s), Tổng rơi: {_hardwareDroppedFrames}");
+                        }
+                        _lastFrameNum = frameInfo.nFrameNum;
+                        _isFirstFrame = false;
+                    }
+
+                    ulong devTimestampNs = ((ulong)frameInfo.nDevTimeStampHigh << 32) | (ulong)frameInfo.nDevTimeStampLow;
+
+                    _latestMetadata = new CameraFrameMetadata
+                    {
+                        FrameNum = frameInfo.nFrameNum,
+                        DeviceTimestampNs = devTimestampNs,
+                        HostTimestamp = DateTime.UtcNow,
+                        HardwareDroppedFrames = Interlocked.Read(ref _hardwareDroppedFrames),
+                        Width = frameInfo.nWidth,
+                        Height = frameInfo.nHeight,
+                        PixelFormat = frameInfo.enPixelType.ToString()
+                    };
+
                     bool shouldDiscard = false;
                     lock (_latestContinuousFrameLock)
                     {
@@ -918,7 +1034,7 @@ public override async Task<CameraParameters> ReadParametersAsync()
                         continue;
                     }
 
-                    using var rawMat = ConvertHikFrameToMat(pData, frameInfo);
+                    var rawMat = ConvertHikFrameToMat(pData, frameInfo);
                     if (!rawMat.Empty())
                     {
                         CameraParameters p;
@@ -960,14 +1076,26 @@ public override async Task<CameraParameters> ReadParametersAsync()
         int h = frameInfo.nHeight;
         if (w <= 0 || h <= 0) return new Mat();
 
+        uint dstBufferSize = (uint)(w * h * 3);
+
+        // Khởi tạo trước NativeMatPool nếu chưa có hoặc kích thước thay đổi
+        _matPool.Initialize(w, h, MatType.CV_8UC3);
+
         // 1. Chuyển đổi màu chính hãng chuẩn MVS bằng bộ xử lý Hikrobot SDK (MV_CC_ConvertPixelTypeEx_NET)
         if (_camera != null && IsMvSdkAvailable())
         {
-            uint dstBufferSize = (uint)(w * h * 3);
-            IntPtr pDstData = IntPtr.Zero;
+            if (_pConvertBuffer == IntPtr.Zero || _convertBufferSize < dstBufferSize)
+            {
+                if (_pConvertBuffer != IntPtr.Zero)
+                {
+                    try { Marshal.FreeHGlobal(_pConvertBuffer); } catch { }
+                }
+                _convertBufferSize = Math.Max(dstBufferSize, GetPayloadSize());
+                _pConvertBuffer = Marshal.AllocHGlobal((int)_convertBufferSize);
+            }
+
             try
             {
-                pDstData = Marshal.AllocHGlobal((int)dstBufferSize);
                 var cvtParam = new MyCamera.MV_CC_PIXEL_CONVERT_PARAM_EX
                 {
                     nWidth = (uint)w,
@@ -976,27 +1104,28 @@ public override async Task<CameraParameters> ReadParametersAsync()
                     pSrcData = pData,
                     nSrcDataLen = frameInfo.nFrameLen > 0 ? frameInfo.nFrameLen : (uint)(w * h * 4),
                     enDstPixelType = MyCamera.MvGvspPixelType.PixelType_Gvsp_BGR8_Packed,
-                    pDstBuffer = pDstData,
-                    nDstBufferSize = dstBufferSize
+                    pDstBuffer = _pConvertBuffer,
+                    nDstBufferSize = _convertBufferSize
                 };
 
                 int ret = _camera.MV_CC_ConvertPixelTypeEx_NET(ref cvtParam);
                 if (ret == MyCamera.MV_OK && cvtParam.nDstLen > 0)
                 {
-                    using var bgrDirect = Mat.FromPixelData(h, w, MatType.CV_8UC3, pDstData);
+                    var (bufIdx, pooledMat) = _matPool.Rent();
+                    if (pooledMat != null && !pooledMat.IsDisposed && pooledMat.Width == w && pooledMat.Height == h)
+                    {
+                        using var bgrDirectWrapper = Mat.FromPixelData(h, w, MatType.CV_8UC3, _pConvertBuffer);
+                        bgrDirectWrapper.CopyTo(pooledMat);
+                        return pooledMat;
+                    }
+
+                    using var bgrDirect = Mat.FromPixelData(h, w, MatType.CV_8UC3, _pConvertBuffer);
                     return bgrDirect.Clone();
                 }
             }
             catch (Exception ex)
             {
                 System.Diagnostics.Debug.WriteLine($"[HikCameraDriver] SDK ConvertPixelTypeEx exception: {ex.Message}");
-            }
-            finally
-            {
-                if (pDstData != IntPtr.Zero)
-                {
-                    Marshal.FreeHGlobal(pDstData);
-                }
             }
         }
 
