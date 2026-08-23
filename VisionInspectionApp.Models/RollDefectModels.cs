@@ -67,6 +67,7 @@ public sealed class RollDefectItem
 public sealed class RollSession
 {
     public string SessionId { get; set; } = $"ROLL-{DateTime.Now:yyyyMMdd-HHmmss}";
+    public string RollId { get => SessionId; set => SessionId = value; }
     public string LotNumber { get; set; } = "LOT-001";
     public string OperatorName { get; set; } = "Operator";
     public string JobName { get; set; } = "DefaultJob";
@@ -76,6 +77,7 @@ public sealed class RollSession
     public double RollWidthMm { get; set; } = 500.0; // Khổ cuộn tiêu chuẩn 500mm
     public List<RollDefectItem> Defects { get; set; } = new();
 
+    public int TotalDefects => Defects.Count;
     public int TotalDefectsCount => Defects.Count;
     public int RejectCount => Defects.FindAll(d => d.Severity >= DefectSeverity.Reject).Count;
     public int WarningCount => Defects.FindAll(d => d.Severity == DefectSeverity.Warning).Count;

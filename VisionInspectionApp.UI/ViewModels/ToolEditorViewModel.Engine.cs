@@ -1886,8 +1886,114 @@ namespace VisionInspectionApp.UI.ViewModels
         [ObservableProperty]
         private string _continuousElapsedAndSpeedText = "Time: 00:00:00 (0.0 pcs/s)";
 
+        private static readonly SolidColorBrush EmeraldBrush = new SolidColorBrush(Color.FromRgb(16, 185, 129));
+        private static readonly SolidColorBrush EmeraldBorder = new SolidColorBrush(Color.FromArgb(90, 16, 185, 129));
+        private static readonly SolidColorBrush AmberBrush = new SolidColorBrush(Color.FromRgb(245, 158, 11));
+        private static readonly SolidColorBrush AmberBorder = new SolidColorBrush(Color.FromArgb(90, 245, 158, 11));
+        private static readonly SolidColorBrush RubyBrush = new SolidColorBrush(Color.FromRgb(239, 68, 68));
+        private static readonly SolidColorBrush RubyBorder = new SolidColorBrush(Color.FromArgb(90, 239, 68, 68));
+
+        static ToolEditorViewModel()
+        {
+            EmeraldBrush.Freeze();
+            EmeraldBorder.Freeze();
+            AmberBrush.Freeze();
+            AmberBorder.Freeze();
+            RubyBrush.Freeze();
+            RubyBorder.Freeze();
+        }
+
+        private int _queueCurrentCount = 0;
+        public int QueueCurrentCount
+        {
+            get => _queueCurrentCount;
+            set
+            {
+                if (SetProperty(ref _queueCurrentCount, value))
+                {
+                    UpdateQueueVisuals();
+                }
+            }
+        }
+
+        public int QueueCapacity { get; set; } = 8;
+
+        [ObservableProperty]
+        private string _queueStatusText = "0/8";
+
+        [ObservableProperty]
+        private Brush _queueFillBrush = EmeraldBrush;
+
+        [ObservableProperty]
+        private Brush _queueBorderBrush = EmeraldBorder;
+
+        [ObservableProperty]
+        private bool _isQueueActive;
+
+        [ObservableProperty]
+        private string _queueToolTipText = "📦 Hàng Đợi Xử Lý Ảnh (Inspection Queue):\n• Đang chờ: 0/8 con hàng\n• Trạng thái: Trống";
+
+        [ObservableProperty] private bool _queueSlot0Active;
+        [ObservableProperty] private bool _queueSlot1Active;
+        [ObservableProperty] private bool _queueSlot2Active;
+        [ObservableProperty] private bool _queueSlot3Active;
+        [ObservableProperty] private bool _queueSlot4Active;
+        [ObservableProperty] private bool _queueSlot5Active;
+        [ObservableProperty] private bool _queueSlot6Active;
+        [ObservableProperty] private bool _queueSlot7Active;
+
+        public void UpdateQueueVisuals()
+        {
+            int count = Math.Clamp(_queueCurrentCount, 0, QueueCapacity);
+            QueueStatusText = $"{count}/{QueueCapacity}";
+            IsQueueActive = count > 0 || IsRunningContinuous;
+
+            if (count >= 6)
+            {
+                QueueFillBrush = RubyBrush;
+                QueueBorderBrush = RubyBorder;
+            }
+            else if (count >= 3)
+            {
+                QueueFillBrush = AmberBrush;
+                QueueBorderBrush = AmberBorder;
+            }
+            else
+            {
+                QueueFillBrush = EmeraldBrush;
+                QueueBorderBrush = EmeraldBorder;
+            }
+
+            QueueSlot0Active = count > 0;
+            QueueSlot1Active = count > 1;
+            QueueSlot2Active = count > 2;
+            QueueSlot3Active = count > 3;
+            QueueSlot4Active = count > 4;
+            QueueSlot5Active = count > 5;
+            QueueSlot6Active = count > 6;
+            QueueSlot7Active = count > 7;
+
+            string loadLevel = count >= 6 ? "⚠️ Tải cao (Nguy cơ rớt frame)" : (count >= 3 ? "⚡ Đang xử lý bận rộn" : (count > 0 ? "🟢 Hoạt động mượt mà" : "⚪ Hàng đợi trống"));
+            QueueToolTipText = $"📦 Hàng Đợi Xử Lý Ảnh (Inspection Queue):\n" +
+                               $"• Số con hàng đang chờ xử lý: {count}/{QueueCapacity}\n" +
+                               $"• Tình trạng: {loadLevel}\n" +
+                               $"• Tổng số ảnh đã xử lý: {ProcessedImageCount}\n" +
+                               $"• Số frame bị rớt (Dropped): {_droppedContinuousFramesCount}\n" +
+                               $"• Luồng xử lý: {(IsRunningContinuous ? "▶ Đang chạy liên tục" : "⏹ Tạm dừng")}";
+        }
+
         private void UpdateContinuousStats()
         {
+            int currentQueueCount = _industrialCameraFrameChannel?.Reader?.Count ?? 0;
+            if (_queueCurrentCount != currentQueueCount)
+            {
+                QueueCurrentCount = currentQueueCount;
+            }
+            else
+            {
+                UpdateQueueVisuals();
+            }
+
             if (!_continuousStopwatch.IsRunning)
             {
                 ContinuousElapsedAndSpeedText = "Time: 00:00:00 (0.0 pcs/s)";
@@ -2129,6 +2235,7 @@ namespace VisionInspectionApp.UI.ViewModels
         private CancellationTokenSource? _folderFlowCts;
         private int _folderImageIndex = 0;
         private bool _isRunningFolderFlow;
+        public bool IsRunningContinuous => _isRunningFolderFlow;
 
         public bool IsRunningFolderFlow
         {
@@ -2139,6 +2246,7 @@ namespace VisionInspectionApp.UI.ViewModels
                 {
                     _isRunningFolderFlow = value;
                     OnPropertyChanged();
+                    OnPropertyChanged(nameof(IsRunningContinuous));
                     UpdateRunFlowButtonProperties();
 
                     if (value)
@@ -2374,8 +2482,8 @@ namespace VisionInspectionApp.UI.ViewModels
                 await _cameraService.StartDriverCameraAsync(targetDevice, _cameraService.CurrentParameters);
             }
 
-            // 3. Khởi tạo Bounded Channel với capacity = 4, DropWrite có kiểm soát Dispose để tránh rò rỉ Mat Native
-            var channelOptions = new BoundedChannelOptions(4)
+            // 3. Khởi tạo Bounded Channel với capacity = QueueCapacity (8), DropWrite có kiểm soát Dispose để tránh rò rỉ Mat Native
+            var channelOptions = new BoundedChannelOptions(QueueCapacity)
             {
                 FullMode = BoundedChannelFullMode.DropWrite,
                 SingleReader = true,
@@ -2393,7 +2501,7 @@ namespace VisionInspectionApp.UI.ViewModels
                 var frameClone = frame.Clone();
 
                 // Nếu hàng đợi đầy, chủ động lấy frame cũ ra và gọi Dispose() trước khi ghi frame mới (Zero Memory Leak)
-                while (channel.Reader.Count >= 4)
+                while (channel.Reader.Count >= QueueCapacity)
                 {
                     if (channel.Reader.TryRead(out var droppedMat))
                     {

@@ -55,6 +55,27 @@ public sealed class RollDefectManager
     }
 
     /// <summary>
+    /// Khởi tạo lại một phiên cuộn mới (alias)
+    /// </summary>
+    public RollSession StartNewSession(string rollId = "LOT-001", double rollWidthMm = 500.0, double initialMeters = 0.0)
+    {
+        lock (_lock)
+        {
+            _currentSession = new RollSession
+            {
+                SessionId = string.IsNullOrWhiteSpace(rollId) ? $"ROLL-{DateTime.Now:yyyyMMdd-HHmmss}" : rollId,
+                LotNumber = rollId,
+                RollWidthMm = rollWidthMm,
+                TotalLengthMeters = initialMeters,
+                StartTime = DateTime.UtcNow
+            };
+
+            OnSessionStarted?.Invoke(this, _currentSession);
+            return _currentSession;
+        }
+    }
+
+    /// <summary>
     /// Kết thúc phiên cuộn hiện tại
     /// </summary>
     public RollSession EndSession(double? finalLengthMeters = null)

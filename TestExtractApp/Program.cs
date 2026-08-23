@@ -12,6 +12,8 @@ class Program
         CameraTest.TestPlcMotionSyncService();
         CameraTest.TestRollDefectManagerAndShiftRegister();
         CameraTest.TestPhase5IndustrialHandshakeAndSoakTest();
+        CameraTest.TestIndustrialUIAndQueueVisualization();
+        CameraTest.TestDirectAddressSupport();
         CaliperAndLineTest.RunTests();
         ColorDiffTest.RunTests();
         RecentJobsAndCalibrationTest.RunTests();

@@ -214,6 +214,8 @@ namespace VisionInspectionApp.UI.ViewModels
             _plcHeartbeatWatchdog = new Application.PLC.Services.PlcHeartbeatWatchdog(_plcManagerService);
             _handshakeStateMachine = new Application.PLC.Services.IndustrialHandshakeStateMachine(_plcManagerService);
             _plcHeartbeatWatchdog.Start();
+            ApplyIndustrialConfig(_plcManagerService.IndustrialConfig);
+            _plcManagerService.OnIndustrialConfigChanged += (_, cfg) => ApplyIndustrialConfig(cfg);
             _dbManagerService = dbManagerService;
             _plcManagerService.OnTagChanged += OnPlcTagChangedForTrigger;
             _autoSaveTimer = new DispatcherTimer
@@ -237,7 +239,7 @@ namespace VisionInspectionApp.UI.ViewModels
             _blobThresholdPreviewTimer.Tick += (_, __) => UpdateBlobThresholdPreviewFromSnapshot();
             _continuousStatsTimer = new DispatcherTimer
             {
-                Interval = TimeSpan.FromMilliseconds(200)
+                Interval = TimeSpan.FromMilliseconds(100)
             };
             _continuousStatsTimer.Tick += (_, __) => UpdateContinuousStats();
             AllToolboxItems = new List<ToolboxItemModel>
@@ -352,6 +354,7 @@ namespace VisionInspectionApp.UI.ViewModels
             OpenCalibrationDialogCommand = new RelayCommand(OpenCalibrationDialog);
             OpenChessboardCalibrationDialogCommand = new RelayCommand(OpenChessboardCalibrationDialog);
             OpenProductAssignDialogCommand = new RelayCommand(OpenProductAssignDialog);
+            OpenRollDefectMapCommand = new RelayCommand(OpenRollDefectMap);
             ColorDiff_TeachRefColorCommand = new RelayCommand(ColorDiff_TeachRefColor);
 
             // Line Trigger (Hardware Sensor Signal from Camera)
@@ -1405,6 +1408,7 @@ namespace VisionInspectionApp.UI.ViewModels
         }
 
         public IRelayCommand OpenProductAssignDialogCommand { get; }
+        public IRelayCommand OpenRollDefectMapCommand { get; }
 
         private void OpenProductAssignDialog()
         {
@@ -1433,6 +1437,72 @@ namespace VisionInspectionApp.UI.ViewModels
             catch (Exception ex)
             {
                 System.Windows.MessageBox.Show($"Lỗi mở hộp thoại Gán Mã Sản Phẩm: {ex.Message}", "Lỗi", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Error);
+            }
+        }
+
+        private void OpenRollDefectMap()
+        {
+            try
+            {
+                var vm = new RollDefectMapViewModel(_rollDefectManager, _motionSyncService, _shiftRegisterTracker);
+                var win = new Views.RollDefectMapWindow(vm)
+                {
+                    Owner = System.Windows.Application.Current?.MainWindow
+                };
+                win.Show();
+            }
+            catch (Exception ex)
+            {
+                System.Windows.MessageBox.Show($"Lỗi mở Bản đồ khuyết tật cuộn: {ex.Message}", "Lỗi", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Error);
+            }
+        }
+
+        private void ApplyIndustrialConfig(PlcIndustrialConfig? config)
+        {
+            if (config == null) return;
+
+            if (config.Handshake != null)
+            {
+                _handshakeStateMachine.PlcId = config.Handshake.PlcId;
+                _handshakeStateMachine.ReadyTagName = config.Handshake.ReadyTagName;
+                _handshakeStateMachine.BusyTagName = config.Handshake.BusyTagName;
+                _handshakeStateMachine.DoneTagName = config.Handshake.DoneTagName;
+                _handshakeStateMachine.PassTagName = config.Handshake.PassTagName;
+                _handshakeStateMachine.NgTagName = config.Handshake.NgTagName;
+                _handshakeStateMachine.PlcAckTagName = config.Handshake.PlcAckTagName;
+                _handshakeStateMachine.HandshakeTimeoutMs = config.Handshake.HandshakeTimeoutMs;
+            }
+
+            if (config.Heartbeat != null)
+            {
+                _plcHeartbeatWatchdog.PlcId = config.Heartbeat.PlcId;
+                _plcHeartbeatWatchdog.VisionHeartbeatTagName = config.Heartbeat.VisionHeartbeatTagName;
+                _plcHeartbeatWatchdog.PlcHeartbeatTagName = config.Heartbeat.PlcHeartbeatTagName;
+                _plcHeartbeatWatchdog.IntervalMs = config.Heartbeat.IntervalMs;
+                _plcHeartbeatWatchdog.TimeoutMs = config.Heartbeat.TimeoutMs;
+                _plcHeartbeatWatchdog.EnableEmergencyInterlock = config.Heartbeat.EnableEmergencyInterlock;
+                _plcHeartbeatWatchdog.EmergencyStopTagName = config.Heartbeat.EmergencyStopTagName;
+            }
+
+            if (config.Motion != null)
+            {
+                _motionSyncService.PlcId = config.Motion.PlcId;
+                _motionSyncService.EncoderTagName = config.Motion.EncoderTagName;
+                _motionSyncService.SpeedTagName = config.Motion.SpeedTagName;
+                _motionSyncService.PulsesPerMm = config.Motion.PulsesPerMm;
+                _motionSyncService.MmPerPixel = config.Motion.MmPerPixel;
+                _motionSyncService.NominalSpeedMpm = config.Motion.NominalSpeedMpm;
+                _motionSyncService.BaseExposureTimeUs = config.Motion.BaseExposureTimeUs;
+            }
+
+            if (config.ShiftRegister != null)
+            {
+                _shiftRegisterTracker.PlcId = config.ShiftRegister.PlcId;
+                _shiftRegisterTracker.RejectTagName = config.ShiftRegister.RejectTagName;
+                _shiftRegisterTracker.RejectStationDistanceMm = config.ShiftRegister.RejectStationDistanceMm;
+                _shiftRegisterTracker.RejectToleranceMm = config.ShiftRegister.RejectToleranceMm;
+                _shiftRegisterTracker.PulseDurationMs = config.ShiftRegister.PulseDurationMs;
+                _shiftRegisterTracker.IsEnabled = config.ShiftRegister.IsEnabled;
             }
         }
 

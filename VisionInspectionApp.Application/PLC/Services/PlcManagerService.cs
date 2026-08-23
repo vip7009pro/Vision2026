@@ -17,6 +17,7 @@ public sealed class PlcConfigContainer
 {
     public List<PlcModel> Plcs { get; set; } = new();
     public List<PlcTag> Tags { get; set; } = new();
+    public PlcIndustrialConfig IndustrialConfig { get; set; } = new();
 }
 
 public sealed class PlcManagerService : IPlcManagerService, IDisposable
@@ -25,6 +26,18 @@ public sealed class PlcManagerService : IPlcManagerService, IDisposable
     private readonly string _globalConfigFilePath;
     private bool _disposed;
     private bool _isLoading;
+    private PlcIndustrialConfig _industrialConfig = new();
+
+    public PlcIndustrialConfig IndustrialConfig
+    {
+        get => _industrialConfig;
+        set
+        {
+            _industrialConfig = value ?? new();
+            OnIndustrialConfigChanged?.Invoke(this, _industrialConfig);
+            if (!_isLoading) SaveGlobalConfig();
+        }
+    }
 
     public ObservableCollection<PlcModel> Plcs { get; } = new();
 
@@ -43,6 +56,8 @@ public sealed class PlcManagerService : IPlcManagerService, IDisposable
     public event EventHandler<string>? OnDisconnected;
 
     public event EventHandler<(string PlcId, string Message)>? OnError;
+
+    public event EventHandler<PlcIndustrialConfig>? OnIndustrialConfigChanged;
 
     public PlcManagerService()
     {
@@ -120,7 +135,8 @@ public sealed class PlcManagerService : IPlcManagerService, IDisposable
                 var container = new PlcConfigContainer
                 {
                     Plcs = Plcs.ToList(),
-                    Tags = Tags.ToList()
+                    Tags = Tags.ToList(),
+                    IndustrialConfig = _industrialConfig
                 };
                 string json = JsonSerializer.Serialize(container, new JsonSerializerOptions { WriteIndented = true });
                 File.WriteAllText(_globalConfigFilePath, json);
@@ -141,15 +157,24 @@ public sealed class PlcManagerService : IPlcManagerService, IDisposable
             {
                 string json = File.ReadAllText(_globalConfigFilePath);
                 var container = JsonSerializer.Deserialize<PlcConfigContainer>(json);
-                if (container != null && container.Plcs != null && container.Plcs.Count > 0)
+                if (container != null)
                 {
-                    foreach (var plc in container.Plcs)
+                    if (container.IndustrialConfig != null)
                     {
-                        plc.State = PlcConnectionState.Disconnected;
-                        plc.CpuName = string.Empty;
+                        _industrialConfig = container.IndustrialConfig;
+                        OnIndustrialConfigChanged?.Invoke(this, _industrialConfig);
                     }
-                    LoadConfigInternal(container.Plcs, container.Tags ?? new List<PlcTag>());
-                    return;
+
+                    if (container.Plcs != null && container.Plcs.Count > 0)
+                    {
+                        foreach (var plc in container.Plcs)
+                        {
+                            plc.State = PlcConnectionState.Disconnected;
+                            plc.CpuName = string.Empty;
+                        }
+                        LoadConfigInternal(container.Plcs, container.Tags ?? new List<PlcTag>());
+                        return;
+                    }
                 }
             }
         }
@@ -188,6 +213,190 @@ public sealed class PlcManagerService : IPlcManagerService, IDisposable
         SaveGlobalConfig();
     }
 
+    public static PlcDataType InferDataTypeFromAddress(string address, object? valueHint = null)
+    {
+        if (valueHint is bool) return PlcDataType.Bool;
+        if (valueHint is short || valueHint is ushort || valueHint is int || valueHint is uint) return PlcDataType.Int16;
+        if (valueHint is float || valueHint is double) return PlcDataType.Float;
+        if (valueHint is string) return PlcDataType.String;
+
+        if (string.IsNullOrWhiteSpace(address)) return PlcDataType.Bool;
+
+        string trimmed = address.Trim();
+        string upper = trimmed.ToUpperInvariant();
+
+        // 1. Explicit 2+ char word register prefixes
+        if (upper.StartsWith("MW") || upper.StartsWith("IW") || upper.StartsWith("QW") ||
+            upper.StartsWith("SW") || upper.StartsWith("ZR") || upper.StartsWith("TN") ||
+            upper.StartsWith("CN") || upper.StartsWith("SD") || upper.StartsWith("3X") ||
+            upper.StartsWith("4X") || upper.StartsWith("HOLDING") || upper.StartsWith("INPUT"))
+        {
+            return PlcDataType.Int16;
+        }
+
+        // 2. Explicit 2+ char bit prefixes
+        if (upper.StartsWith("SM") || upper.StartsWith("TS") || upper.StartsWith("TC") ||
+            upper.StartsWith("SS") || upper.StartsWith("SC") || upper.StartsWith("CS") ||
+            upper.StartsWith("CC") || upper.StartsWith("DX") || upper.StartsWith("DY") ||
+            upper.StartsWith("0X") || upper.StartsWith("1X") || upper.StartsWith("COIL") ||
+            upper.StartsWith("DISCRETE"))
+        {
+            return PlcDataType.Bool;
+        }
+
+        // 3. Single-char word prefixes (D, W, R, Z)
+        if (upper.StartsWith("D") || upper.StartsWith("W") || upper.StartsWith("R") || upper.StartsWith("Z"))
+        {
+            return PlcDataType.Int16;
+        }
+
+        // 4. Single-char bit prefixes (X, Y, M, L, B, F, S)
+        if (upper.StartsWith("X") || upper.StartsWith("Y") || upper.StartsWith("M") ||
+            upper.StartsWith("L") || upper.StartsWith("B") || upper.StartsWith("F") ||
+            upper.StartsWith("S"))
+        {
+            return PlcDataType.Bool;
+        }
+
+        return PlcDataType.Bool;
+    }
+
+    public IReadOnlyList<PlcTag> GetAllTagsToPoll()
+    {
+        var result = new List<PlcTag>(Tags);
+        var existingKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var t in Tags)
+        {
+            if (!string.IsNullOrWhiteSpace(t.Name)) existingKeys.Add($"{t.PlcId}:{t.Name}");
+            if (!string.IsNullOrWhiteSpace(t.Address)) existingKeys.Add($"{t.PlcId}:{t.Address}");
+        }
+
+        var defaultPlcId = Plcs.FirstOrDefault()?.Id ?? "PLC1";
+
+        void EnsureTagAddress(string? plcId, string? addressOrName, PlcDataType defaultType)
+        {
+            if (string.IsNullOrWhiteSpace(addressOrName)) return;
+            string targetPlc = string.IsNullOrWhiteSpace(plcId) ? defaultPlcId : plcId;
+            var targetPlcModel = Plcs.FirstOrDefault(p => string.Equals(p.Id, targetPlc, StringComparison.OrdinalIgnoreCase) || string.Equals(p.Name, targetPlc, StringComparison.OrdinalIgnoreCase));
+            string finalPlcId = targetPlcModel?.Id ?? targetPlc;
+
+            string keyName = $"{finalPlcId}:{addressOrName}";
+            if (!existingKeys.Contains(keyName))
+            {
+                existingKeys.Add(keyName);
+                result.Add(new PlcTag
+                {
+                    PlcId = finalPlcId,
+                    Name = addressOrName,
+                    Address = addressOrName,
+                    DataType = InferDataTypeFromAddress(addressOrName, null)
+                });
+            }
+        }
+
+        if (IndustrialConfig != null)
+        {
+            // Handshake
+            EnsureTagAddress(IndustrialConfig.Handshake.PlcId, IndustrialConfig.Handshake.ReadyTagName, PlcDataType.Bool);
+            EnsureTagAddress(IndustrialConfig.Handshake.PlcId, IndustrialConfig.Handshake.BusyTagName, PlcDataType.Bool);
+            EnsureTagAddress(IndustrialConfig.Handshake.PlcId, IndustrialConfig.Handshake.DoneTagName, PlcDataType.Bool);
+            EnsureTagAddress(IndustrialConfig.Handshake.PlcId, IndustrialConfig.Handshake.PassTagName, PlcDataType.Bool);
+            EnsureTagAddress(IndustrialConfig.Handshake.PlcId, IndustrialConfig.Handshake.NgTagName, PlcDataType.Bool);
+            EnsureTagAddress(IndustrialConfig.Handshake.PlcId, IndustrialConfig.Handshake.PlcAckTagName, PlcDataType.Bool);
+
+            // Heartbeat
+            EnsureTagAddress(IndustrialConfig.Heartbeat.PlcId, IndustrialConfig.Heartbeat.VisionHeartbeatTagName, PlcDataType.Bool);
+            EnsureTagAddress(IndustrialConfig.Heartbeat.PlcId, IndustrialConfig.Heartbeat.PlcHeartbeatTagName, PlcDataType.Bool);
+            EnsureTagAddress(IndustrialConfig.Heartbeat.PlcId, IndustrialConfig.Heartbeat.EmergencyStopTagName, PlcDataType.Bool);
+
+            // Motion
+            EnsureTagAddress(IndustrialConfig.Motion.PlcId, IndustrialConfig.Motion.EncoderTagName, PlcDataType.Int32);
+            EnsureTagAddress(IndustrialConfig.Motion.PlcId, IndustrialConfig.Motion.SpeedTagName, PlcDataType.Float);
+
+            // Shift Register
+            EnsureTagAddress(IndustrialConfig.ShiftRegister.PlcId, IndustrialConfig.ShiftRegister.RejectTagName, PlcDataType.Bool);
+        }
+
+        return result;
+    }
+
+    public async Task<object?> ReadTagValueAsync(string plcId, string tagOrAddress, CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(tagOrAddress)) return null;
+
+        var plc = Plcs.FirstOrDefault(p => string.Equals(p.Id, plcId, StringComparison.OrdinalIgnoreCase) || string.Equals(p.Name, plcId, StringComparison.OrdinalIgnoreCase))
+                  ?? Plcs.FirstOrDefault();
+        string targetPlcId = plc?.Id ?? plcId;
+
+        var tag = Tags.FirstOrDefault(t => (string.Equals(t.PlcId, targetPlcId, StringComparison.OrdinalIgnoreCase) || string.Equals(t.PlcId, plcId, StringComparison.OrdinalIgnoreCase))
+                                           && (string.Equals(t.Name, tagOrAddress, StringComparison.OrdinalIgnoreCase) || string.Equals(t.Address, tagOrAddress, StringComparison.OrdinalIgnoreCase)));
+
+        if (tag == null)
+        {
+            tag = new PlcTag
+            {
+                PlcId = targetPlcId,
+                Name = tagOrAddress,
+                Address = tagOrAddress,
+                DataType = InferDataTypeFromAddress(tagOrAddress)
+            };
+        }
+
+        var driver = GetDriver(targetPlcId);
+        if (driver == null && plc != null)
+        {
+            CreateDriverForPlc(plc);
+            driver = GetDriver(targetPlcId);
+        }
+
+        if (driver == null)
+        {
+            return GetTagValue(targetPlcId, tagOrAddress)?.CurrentValue;
+        }
+
+        if (!driver.IsConnected)
+        {
+            try
+            {
+                using var connCts = new CancellationTokenSource(1500);
+                using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, connCts.Token);
+                await driver.ConnectAsync(linkedCts.Token);
+            }
+            catch { }
+        }
+
+        try
+        {
+            using var readCts = new CancellationTokenSource(2000);
+            using var linkedReadCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, readCts.Token);
+            var results = await driver.ReadBatchAsync(new[] { tag }, linkedReadCts.Token);
+            if (results.TryGetValue(tag.Name, out var val))
+            {
+                Cache.Set(targetPlcId, tag.Name, val, TagQuality.Good);
+                if (!string.IsNullOrWhiteSpace(tag.Address))
+                {
+                    Cache.Set(targetPlcId, tag.Address, val, TagQuality.Good);
+                }
+                if (plc != null)
+                {
+                    Cache.Set(plc.Name, tag.Name, val, TagQuality.Good);
+                    if (!string.IsNullOrWhiteSpace(tag.Address))
+                    {
+                        Cache.Set(plc.Name, tag.Address, val, TagQuality.Good);
+                    }
+                }
+                return val;
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogReadError(targetPlcId, tagOrAddress, ex.Message);
+        }
+
+        return GetTagValue(targetPlcId, tagOrAddress)?.CurrentValue;
+    }
+
     public async Task<bool> WriteTagValueAsync(string plcId, string tagName, object value, CancellationToken cancellationToken = default)
     {
         var plc = Plcs.FirstOrDefault(p => string.Equals(p.Id, plcId, StringComparison.OrdinalIgnoreCase) || string.Equals(p.Name, plcId, StringComparison.OrdinalIgnoreCase))
@@ -199,18 +408,12 @@ public sealed class PlcManagerService : IPlcManagerService, IDisposable
 
         if (tag == null)
         {
-            PlcDataType defaultType = PlcDataType.Bool;
-            if (value is bool) defaultType = PlcDataType.Bool;
-            else if (value is short || value is ushort || value is int || value is uint) defaultType = PlcDataType.Int16;
-            else if (value is float || value is double) defaultType = PlcDataType.Float;
-            else if (value is string) defaultType = PlcDataType.String;
-
             tag = new PlcTag
             {
                 PlcId = targetPlcId,
                 Name = tagName,
                 Address = tagName,
-                DataType = defaultType
+                DataType = InferDataTypeFromAddress(tagName, value)
             };
         }
 
@@ -251,9 +454,35 @@ public sealed class PlcManagerService : IPlcManagerService, IDisposable
             bool success = await driver.WriteAsync(tag, value, linkedWriteCts.Token);
             if (success)
             {
-                Cache.Set(targetPlcId, tagName, value, TagQuality.Good);
-                if (plc != null) Cache.Set(plc.Name, tagName, value, TagQuality.Good);
-                OnTagChanged?.Invoke(this, new TagChangedEventArgs(targetPlcId, tagName, null, value, DateTime.Now));
+                Cache.Set(targetPlcId, tag.Name, value, TagQuality.Good);
+                if (!string.IsNullOrWhiteSpace(tag.Address))
+                {
+                    Cache.Set(targetPlcId, tag.Address, value, TagQuality.Good);
+                }
+
+                if (plc != null)
+                {
+                    Cache.Set(plc.Name, tag.Name, value, TagQuality.Good);
+                    if (!string.IsNullOrWhiteSpace(tag.Address))
+                    {
+                        Cache.Set(plc.Name, tag.Address, value, TagQuality.Good);
+                    }
+                }
+
+                OnTagChanged?.Invoke(this, new TagChangedEventArgs(targetPlcId, tag.Name, null, value, DateTime.Now));
+                if (plc != null && !string.Equals(targetPlcId, plc.Name, StringComparison.OrdinalIgnoreCase))
+                {
+                    OnTagChanged?.Invoke(this, new TagChangedEventArgs(plc.Name, tag.Name, null, value, DateTime.Now));
+                }
+
+                if (!string.Equals(tag.Name, tag.Address, StringComparison.OrdinalIgnoreCase) && !string.IsNullOrWhiteSpace(tag.Address))
+                {
+                    OnTagChanged?.Invoke(this, new TagChangedEventArgs(targetPlcId, tag.Address, null, value, DateTime.Now));
+                    if (plc != null && !string.Equals(targetPlcId, plc.Name, StringComparison.OrdinalIgnoreCase))
+                    {
+                        OnTagChanged?.Invoke(this, new TagChangedEventArgs(plc.Name, tag.Address, null, value, DateTime.Now));
+                    }
+                }
             }
             else
             {
@@ -359,17 +588,26 @@ public sealed class PlcManagerService : IPlcManagerService, IDisposable
         if (string.IsNullOrWhiteSpace(plcId) || string.IsNullOrWhiteSpace(tagName)) return null;
 
         var plc = Plcs.FirstOrDefault(p => string.Equals(p.Id, plcId, StringComparison.OrdinalIgnoreCase) || string.Equals(p.Name, plcId, StringComparison.OrdinalIgnoreCase));
+        string targetPlcId = plc?.Id ?? plcId;
+        string targetPlcName = plc?.Name ?? plcId;
 
-        if (plc != null)
+        // 1. Direct cache check by Name / Address
+        var val = Cache.Get(targetPlcId, tagName) ?? Cache.Get(targetPlcName, tagName) ?? Cache.Get(plcId, tagName);
+        if (val != null) return val;
+
+        // 2. Cross-check with configured Tags (if user queried address vs name)
+        var matchedTag = Tags.FirstOrDefault(t => (string.Equals(t.PlcId, targetPlcId, StringComparison.OrdinalIgnoreCase) || string.Equals(t.PlcId, targetPlcName, StringComparison.OrdinalIgnoreCase) || string.Equals(t.PlcId, plcId, StringComparison.OrdinalIgnoreCase))
+                                                   && (string.Equals(t.Name, tagName, StringComparison.OrdinalIgnoreCase) || string.Equals(t.Address, tagName, StringComparison.OrdinalIgnoreCase)));
+        if (matchedTag != null)
         {
-            var valById = Cache.Get(plc.Id, tagName);
-            if (valById != null) return valById;
-
-            var valByName = Cache.Get(plc.Name, tagName);
+            var valByName = Cache.Get(targetPlcId, matchedTag.Name) ?? Cache.Get(targetPlcName, matchedTag.Name);
             if (valByName != null) return valByName;
+
+            var valByAddr = Cache.Get(targetPlcId, matchedTag.Address) ?? Cache.Get(targetPlcName, matchedTag.Address);
+            if (valByAddr != null) return valByAddr;
         }
 
-        return Cache.Get(plcId, tagName);
+        return null;
     }
 
     public async Task ConnectAllAsync(CancellationToken cancellationToken = default)
@@ -473,7 +711,7 @@ public sealed class PlcManagerService : IPlcManagerService, IDisposable
     public async Task StartPollingAsync()
     {
         await ConnectAllAsync();
-        PollingEngine.Start(() => Plcs.ToList(), () => Tags.ToList(), GetDriver);
+        PollingEngine.Start(() => Plcs.ToList(), () => GetAllTagsToPoll(), GetDriver);
     }
 
     public Task StopPollingAsync()

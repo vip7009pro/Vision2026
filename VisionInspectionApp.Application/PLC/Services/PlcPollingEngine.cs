@@ -172,14 +172,38 @@ public sealed class PlcPollingEngine
 
                             _cache.Set(plc.Id, tag.Name, newVal, TagQuality.Good);
                             _cache.Set(plc.Name, tag.Name, newVal, TagQuality.Good);
+
+                            if (!string.IsNullOrWhiteSpace(tag.Address))
+                            {
+                                _cache.Set(plc.Id, tag.Address, newVal, TagQuality.Good);
+                                _cache.Set(plc.Name, tag.Address, newVal, TagQuality.Good);
+                            }
+
                             if (!string.Equals(tag.PlcId, plc.Id, StringComparison.OrdinalIgnoreCase) && !string.Equals(tag.PlcId, plc.Name, StringComparison.OrdinalIgnoreCase))
                             {
                                 _cache.Set(tag.PlcId, tag.Name, newVal, TagQuality.Good);
+                                if (!string.IsNullOrWhiteSpace(tag.Address))
+                                {
+                                    _cache.Set(tag.PlcId, tag.Address, newVal, TagQuality.Good);
+                                }
                             }
 
                             if (!ValuesEqual(oldVal, newVal))
                             {
                                 OnTagChanged?.Invoke(this, new TagChangedEventArgs(plc.Id, tag.Name, oldVal, newVal, DateTime.Now));
+                                if (!string.Equals(plc.Id, plc.Name, StringComparison.OrdinalIgnoreCase))
+                                {
+                                    OnTagChanged?.Invoke(this, new TagChangedEventArgs(plc.Name, tag.Name, oldVal, newVal, DateTime.Now));
+                                }
+
+                                if (!string.Equals(tag.Name, tag.Address, StringComparison.OrdinalIgnoreCase) && !string.IsNullOrWhiteSpace(tag.Address))
+                                {
+                                    OnTagChanged?.Invoke(this, new TagChangedEventArgs(plc.Id, tag.Address, oldVal, newVal, DateTime.Now));
+                                    if (!string.Equals(plc.Id, plc.Name, StringComparison.OrdinalIgnoreCase))
+                                    {
+                                        OnTagChanged?.Invoke(this, new TagChangedEventArgs(plc.Name, tag.Address, oldVal, newVal, DateTime.Now));
+                                    }
+                                }
                             }
                         }
                     }

@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Collections.Specialized;
 using System.Linq;
@@ -20,6 +21,9 @@ public partial class PlcManagerViewModel : ObservableObject
     [ObservableProperty]
     private PlcTag? _selectedTag;
 
+    [ObservableProperty]
+    private int _selectedTabIndex;
+
     public ObservableCollection<PlcModel> Plcs => _plcService.Plcs;
 
     public ObservableCollection<PlcTag> Tags => _plcService.Tags;
@@ -30,6 +34,111 @@ public partial class PlcManagerViewModel : ObservableObject
 
     public Array DataTypes => Enum.GetValues(typeof(PlcDataType));
 
+    public PlcIndustrialConfig IndustrialConfig
+    {
+        get => _plcService.IndustrialConfig;
+        set
+        {
+            _plcService.IndustrialConfig = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(Handshake));
+            OnPropertyChanged(nameof(Heartbeat));
+            OnPropertyChanged(nameof(Motion));
+            OnPropertyChanged(nameof(ShiftRegister));
+        }
+    }
+
+    public IndustrialHandshakeConfig Handshake => IndustrialConfig.Handshake;
+    public PlcHeartbeatConfig Heartbeat => IndustrialConfig.Heartbeat;
+    public PlcMotionConfig Motion => IndustrialConfig.Motion;
+    public PlcShiftRegisterConfig ShiftRegister => IndustrialConfig.ShiftRegister;
+
+    public ObservableCollection<string> AvailableTagNames { get; } = new();
+    public ObservableCollection<string> AvailablePlcNames { get; } = new();
+
+    public void RefreshAvailableTagsAndPlcs()
+    {
+        // 1. Refresh AvailablePlcNames
+        AvailablePlcNames.Clear();
+        if (_plcService.Plcs.Count > 0)
+        {
+            foreach (var p in _plcService.Plcs)
+            {
+                string name = !string.IsNullOrWhiteSpace(p.Name) ? p.Name : p.Id;
+                if (!string.IsNullOrWhiteSpace(name) && !AvailablePlcNames.Contains(name))
+                {
+                    AvailablePlcNames.Add(name);
+                }
+            }
+        }
+
+        // Bổ sung các ID PLC mặc định
+        var defaultPlcs = new[] { "PLC1", "PLC2", "PLC_MAIN", "PLC_01" };
+        foreach (var pName in defaultPlcs)
+        {
+            if (!AvailablePlcNames.Contains(pName))
+            {
+                AvailablePlcNames.Add(pName);
+            }
+        }
+
+        // 2. Refresh AvailableTagNames
+        AvailableTagNames.Clear();
+
+        // Standard Common Addresses (Bit & Word)
+        var commonAddresses = new[]
+        {
+            "X0", "X1", "X2", "X3", "X4", "X5", "X6", "X7", "X10", "X11",
+            "Y0", "Y1", "Y2", "Y3", "Y4", "Y5", "Y6", "Y7", "Y10", "Y11",
+            "M0", "M1", "M2", "M10", "M100",
+            "D0", "D10", "D100", "D200", "D1000", "D1002", "D2000",
+            "MW100", "MW102", "MW200"
+        };
+        foreach (var addr in commonAddresses)
+        {
+            if (!AvailableTagNames.Contains(addr)) AvailableTagNames.Add(addr);
+        }
+
+        // Standard Industrial Tags
+        var standardIndustrialTags = new[]
+        {
+            "Y0_VisionHeartbeat", "X0_PlcHeartbeat", "Y10_VisionFault",
+            "Y1_VisionReady", "Y2_VisionBusy", "Y3_VisionDone", "Y4_VisionPass", "Y5_VisionNG", "X1_PlcAck",
+            "D1000_EncoderPulses", "D1002_LineSpeed",
+            "Y0_RejectPiston", "Y1_RejectMarker"
+        };
+        foreach (var tag in standardIndustrialTags)
+        {
+            if (!AvailableTagNames.Contains(tag)) AvailableTagNames.Add(tag);
+        }
+
+        // Tags from PLC Manager Service (Name and Address)
+        if (_plcService.Tags.Count > 0)
+        {
+            foreach (var t in _plcService.Tags)
+            {
+                if (!string.IsNullOrWhiteSpace(t.Name) && !AvailableTagNames.Contains(t.Name)) AvailableTagNames.Add(t.Name);
+                if (!string.IsNullOrWhiteSpace(t.Address) && !AvailableTagNames.Contains(t.Address)) AvailableTagNames.Add(t.Address);
+            }
+        }
+
+        // Tags from current Industrial Config
+        var configTags = new[]
+        {
+            Handshake?.ReadyTagName, Handshake?.BusyTagName, Handshake?.DoneTagName, Handshake?.PassTagName, Handshake?.NgTagName, Handshake?.PlcAckTagName,
+            Heartbeat?.VisionHeartbeatTagName, Heartbeat?.PlcHeartbeatTagName, Heartbeat?.EmergencyStopTagName,
+            Motion?.EncoderTagName, Motion?.SpeedTagName,
+            ShiftRegister?.RejectTagName
+        };
+        foreach (var ct in configTags)
+        {
+            if (!string.IsNullOrWhiteSpace(ct) && !AvailableTagNames.Contains(ct))
+            {
+                AvailableTagNames.Add(ct);
+            }
+        }
+    }
+
     private bool _isRefreshingFilteredTags;
 
     public PlcManagerViewModel(IPlcManagerService plcService)
@@ -37,7 +146,18 @@ public partial class PlcManagerViewModel : ObservableObject
         _plcService = plcService ?? throw new ArgumentNullException(nameof(plcService));
         SelectedPlc = Plcs.FirstOrDefault();
         
+        RefreshAvailableTagsAndPlcs();
+
         FilteredTags.CollectionChanged += FilteredTags_CollectionChanged;
+        _plcService.Tags.CollectionChanged += (s, e) =>
+        {
+            RefreshAvailableTagsAndPlcs();
+        };
+        _plcService.Plcs.CollectionChanged += (s, e) =>
+        {
+            RefreshAvailableTagsAndPlcs();
+        };
+
         RefreshFilteredTags();
     }
 
@@ -61,6 +181,7 @@ public partial class PlcManagerViewModel : ObservableObject
                 }
             }
             _plcService.SaveGlobalConfig();
+            OnPropertyChanged(nameof(AvailableTagNames));
         }
     }
 
@@ -132,6 +253,7 @@ public partial class PlcManagerViewModel : ObservableObject
         SelectedPlc = newPlc;
         _plcService.SaveGlobalConfig();
         _plcService.StartPollingAsync();
+        RefreshAvailableTagsAndPlcs();
     }
 
     [RelayCommand]
@@ -149,10 +271,11 @@ public partial class PlcManagerViewModel : ObservableObject
             _plcService.Tags.Remove(t);
         }
 
-        _plcService.Plcs.Remove(plcToDelete);
+        Plcs.Remove(plcToDelete);
         SelectedPlc = Plcs.FirstOrDefault();
         _plcService.SaveGlobalConfig();
         _plcService.StartPollingAsync();
+        RefreshAvailableTagsAndPlcs();
     }
 
     [RelayCommand]
@@ -172,6 +295,7 @@ public partial class PlcManagerViewModel : ObservableObject
         FilteredTags.Add(newTag);
         SelectedTag = newTag;
         _plcService.SaveGlobalConfig();
+        RefreshAvailableTagsAndPlcs();
         if (_plcService.IsPollingActive)
         {
             _plcService.StartPollingAsync();
@@ -199,6 +323,7 @@ public partial class PlcManagerViewModel : ObservableObject
         FilteredTags.Remove(tagToDelete);
         SelectedTag = FilteredTags.FirstOrDefault();
         _plcService.SaveGlobalConfig();
+        RefreshAvailableTagsAndPlcs();
         if (_plcService.IsPollingActive)
         {
             _plcService.StartPollingAsync();
@@ -209,7 +334,7 @@ public partial class PlcManagerViewModel : ObservableObject
     private void SaveConfig()
     {
         _plcService.SaveGlobalConfig();
-        System.Windows.MessageBox.Show("Cấu hình PLC và Tags đã được lưu thành công!", "Lưu Cấu Hình PLC", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Information);
+        System.Windows.MessageBox.Show("Toàn bộ Cấu hình Kết nối PLC, Danh bạ Tags và Thông số Công nghiệp (Handshake, Heartbeat, Motion, Shift Register) đã được lưu thành công!", "Lưu Cấu Hình PLC", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Information);
     }
 
     [RelayCommand]

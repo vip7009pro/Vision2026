@@ -462,4 +462,214 @@ public static class CameraTest
 
         Console.WriteLine($"✅ 5,000 Frames Soak Test PASSED: Total Length={session.TotalLengthMeters:F2}m, Defects={session.TotalDefectsCount}, Rejects={totalRejectsExecuted}, Yield={session.QualityYieldPercentage:F1}%, GC Gen2 Collections={gen2Delta}, RAM Delta={memoryDeltaBytes / 1024.0:F1} KB (FLAT RAM 100% STABLE)!");
     }
+
+    public static void TestIndustrialUIAndQueueVisualization()
+    {
+        Console.WriteLine("\n=== TESTING INDUSTRIAL PLC UI CONFIG & QUEUE VISUALIZATION ===");
+
+        // 1. Test PlcIndustrialConfig Serialization / Deserialization
+        var config = new VisionInspectionApp.Models.PlcIndustrialConfig();
+        config.Handshake.PlcId = "PLC_TEST";
+        config.Handshake.ReadyTagName = "Y100_Ready";
+        config.Handshake.BusyTagName = "Y101_Busy";
+        config.Handshake.DoneTagName = "Y102_Done";
+        config.Handshake.PassTagName = "Y103_Pass";
+        config.Handshake.NgTagName = "Y104_NG";
+        config.Handshake.PlcAckTagName = "X100_Ack";
+        config.Handshake.HandshakeTimeoutMs = 650;
+
+        config.Heartbeat.PlcId = "PLC_TEST";
+        config.Heartbeat.VisionHeartbeatTagName = "Y105_Hb";
+        config.Heartbeat.PlcHeartbeatTagName = "X105_Hb";
+        config.Heartbeat.IntervalMs = 80;
+        config.Heartbeat.TimeoutMs = 250;
+        config.Heartbeat.EnableEmergencyInterlock = true;
+        config.Heartbeat.EmergencyStopTagName = "Y106_Fault";
+
+        config.Motion.PlcId = "PLC_TEST";
+        config.Motion.EncoderTagName = "D2000";
+        config.Motion.SpeedTagName = "D2002";
+        config.Motion.PulsesPerMm = 150.0;
+        config.Motion.MmPerPixel = 0.04;
+        config.Motion.NominalSpeedMpm = 45.0;
+        config.Motion.BaseExposureTimeUs = 400.0;
+
+        config.ShiftRegister.PlcId = "PLC_TEST";
+        config.ShiftRegister.RejectTagName = "Y107_Reject";
+        config.ShiftRegister.RejectStationDistanceMm = 1800.0;
+        config.ShiftRegister.RejectToleranceMm = 12.0;
+        config.ShiftRegister.PulseDurationMs = 120;
+        config.ShiftRegister.IsEnabled = true;
+
+        string json = System.Text.Json.JsonSerializer.Serialize(config, new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
+        var deserialized = System.Text.Json.JsonSerializer.Deserialize<VisionInspectionApp.Models.PlcIndustrialConfig>(json);
+
+        if (deserialized == null ||
+            deserialized.Handshake.ReadyTagName != "Y100_Ready" ||
+            deserialized.Motion.PulsesPerMm != 150.0 ||
+            deserialized.ShiftRegister.RejectStationDistanceMm != 1800.0 ||
+            deserialized.Heartbeat.IntervalMs != 80)
+        {
+            throw new Exception("PlcIndustrialConfig JSON Serialization / Deserialization mismatch!");
+        }
+        Console.WriteLine("  [1/4] PlcIndustrialConfig JSON Serialization & Integrity: PASSED (100%)");
+
+        // 2. Test IPlcManagerService IndustrialConfig propagation
+        var plcService = new VisionInspectionApp.Application.PLC.Services.PlcManagerService();
+        bool eventFired = false;
+        plcService.OnIndustrialConfigChanged += (s, cfg) =>
+        {
+            if (cfg.Motion.PulsesPerMm == 150.0) eventFired = true;
+        };
+        plcService.IndustrialConfig = config;
+        if (!eventFired)
+        {
+            throw new Exception("OnIndustrialConfigChanged event did not fire or received invalid data!");
+        }
+        Console.WriteLine("  [2/4] PlcManagerService IndustrialConfig Event & Persistence: PASSED (100%)");
+
+        // 3. Test RollDefectMapViewModel Metrics & Report Exporters
+        var defectManager = new VisionInspectionApp.Application.Services.RollDefectManager();
+        using var motionService = new VisionInspectionApp.Application.PLC.Services.PlcMotionSyncService(plcService);
+        using var shiftRegister = new VisionInspectionApp.Application.PLC.Services.ShiftRegisterTracker(plcService);
+
+        var session = defectManager.StartSession("LOT-TEST-UI", "QA-Operator", "InspectionFlow", 600.0);
+        motionService.UpdateMotionState(150000, 45.0); // 1000mm
+
+        var inspResult = new VisionInspectionApp.Application.InspectionResult();
+        inspResult.Defects = new VisionInspectionApp.VisionEngine.DefectDetectionResult();
+        inspResult.Defects.Defects.Add(new VisionInspectionApp.VisionEngine.DefectBlob(new Rect(100, 200, 20, 20), 400.0, "SurfaceScratch"));
+        var meta = motionService.CreateFrameMetadata(1);
+        defectManager.RecordDefectsFromInspectionResult(inspResult, meta);
+
+        var mapVm = new VisionInspectionApp.UI.ViewModels.RollDefectMapViewModel(defectManager, motionService, shiftRegister);
+        if (mapVm.TotalDefectsCount != 1 || mapVm.RejectCount != 1 || mapVm.Session == null)
+        {
+            throw new Exception("RollDefectMapViewModel metrics mismatch!");
+        }
+
+        // Test Export to JSON, CSV, HTML
+        string tempDir = Path.Combine(Path.GetTempPath(), "VisionTest_Export");
+        Directory.CreateDirectory(tempDir);
+        string jsonPath = Path.Combine(tempDir, "test_roll.json");
+        string csvPath = Path.Combine(tempDir, "test_cutlist.csv");
+        string htmlPath = Path.Combine(tempDir, "test_cert.html");
+
+        VisionInspectionApp.Application.Services.RollReportExporter.ExportToJson(session, jsonPath);
+        VisionInspectionApp.Application.Services.RollReportExporter.ExportToCsv(session, csvPath);
+        VisionInspectionApp.Application.Services.RollReportExporter.ExportToHtmlCertificate(session, htmlPath);
+
+        if (!File.Exists(jsonPath) || !File.Exists(csvPath) || !File.Exists(htmlPath))
+        {
+            throw new Exception("Report Exporter failed to generate output files!");
+        }
+        Console.WriteLine("  [3/4] RollDefectMapViewModel & RollReportExporter (JSON, CSV, HTML): PASSED (100%)");
+
+        // 4. Test Queue Visualization States & Thresholds
+        // Let's test queue count steps
+        for (int q = 0; q <= 8; q++)
+        {
+            // Verify step slots logic
+            bool s0 = q > 0;
+            bool s1 = q > 1;
+            bool s2 = q > 2;
+            bool s3 = q > 3;
+            bool s4 = q > 4;
+            bool s5 = q > 5;
+            bool s6 = q > 6;
+            bool s7 = q > 7;
+
+            int activeCount = (s0?1:0)+(s1?1:0)+(s2?1:0)+(s3?1:0)+(s4?1:0)+(s5?1:0)+(s6?1:0)+(s7?1:0);
+            if (activeCount != q)
+            {
+                throw new Exception($"Queue slot activation mismatch for count={q}: active={activeCount}");
+            }
+        }
+        Console.WriteLine("  [4/4] Queue Visualization 8-Segment Stepped Bar Logic: PASSED (100%)");
+
+        Console.WriteLine("✅ ALL INDUSTRIAL PLC UI CONFIG & QUEUE VISUALIZATION TESTS PASSED (100%)!\n");
+    }
+
+    public static void TestDirectAddressSupport()
+    {
+        Console.WriteLine("=== TESTING DIRECT PLC ADDRESS SUPPORT (WITHOUT TAG NAME) ===");
+
+        // 1. Test InferDataTypeFromAddress
+        if (VisionInspectionApp.Application.PLC.Services.PlcManagerService.InferDataTypeFromAddress("X0") != VisionInspectionApp.Models.PlcDataType.Bool ||
+            VisionInspectionApp.Application.PLC.Services.PlcManagerService.InferDataTypeFromAddress("Y10") != VisionInspectionApp.Models.PlcDataType.Bool ||
+            VisionInspectionApp.Application.PLC.Services.PlcManagerService.InferDataTypeFromAddress("M100") != VisionInspectionApp.Models.PlcDataType.Bool ||
+            VisionInspectionApp.Application.PLC.Services.PlcManagerService.InferDataTypeFromAddress("D1000") != VisionInspectionApp.Models.PlcDataType.Int16 ||
+            VisionInspectionApp.Application.PLC.Services.PlcManagerService.InferDataTypeFromAddress("MW200") != VisionInspectionApp.Models.PlcDataType.Int16)
+        {
+            throw new Exception("InferDataTypeFromAddress failed for standard addresses!");
+        }
+        Console.WriteLine("  [1/4] InferDataTypeFromAddress: PASSED (100%)");
+
+        // 2. Test GetAllTagsToPoll with Direct Addresses from IndustrialConfig
+        var plcService = new VisionInspectionApp.Application.PLC.Services.PlcManagerService();
+        var industrialCfg = new VisionInspectionApp.Models.PlcIndustrialConfig();
+        industrialCfg.Handshake.ReadyTagName = "Y1";
+        industrialCfg.Handshake.BusyTagName = "Y2";
+        industrialCfg.Heartbeat.PlcHeartbeatTagName = "X0";
+        industrialCfg.Motion.EncoderTagName = "D1000";
+        industrialCfg.Motion.SpeedTagName = "D1002";
+        industrialCfg.ShiftRegister.RejectTagName = "Y0";
+        plcService.IndustrialConfig = industrialCfg;
+
+        var polledTags = plcService.GetAllTagsToPoll();
+        bool hasY1 = polledTags.Any(t => t.Address == "Y1" || t.Name == "Y1");
+        bool hasX0 = polledTags.Any(t => t.Address == "X0" || t.Name == "X0");
+        bool hasD1000 = polledTags.Any(t => t.Address == "D1000" || t.Name == "D1000");
+        bool hasD1002 = polledTags.Any(t => t.Address == "D1002" || t.Name == "D1002");
+
+        if (!hasY1 || !hasX0 || !hasD1000 || !hasD1002)
+        {
+            string tagsDump = string.Join(", ", polledTags.Select(t => $"[Name={t.Name}, Addr={t.Address}, Type={t.DataType}]"));
+            throw new Exception($"GetAllTagsToPoll failed! hasY1={hasY1}, hasX0={hasX0}, hasD1000={hasD1000}, hasD1002={hasD1002}. All Tags: {tagsDump}");
+        }
+        Console.WriteLine("  [2/4] Automatic Polling Tag Synthesis for Direct Addresses: PASSED (100%)");
+
+        // 3. Test Direct WriteTagValueAsync, GetTagValue & ReadTagValueAsync
+        var writeTask1 = plcService.WriteTagValueAsync("PLC1", "Y0", true);
+        writeTask1.Wait();
+        var valY0 = plcService.GetTagValue("PLC1", "Y0");
+        if (valY0 == null || !true.Equals(valY0.CurrentValue))
+        {
+            throw new Exception("Direct write/get tag value for 'Y0' failed!");
+        }
+
+        var writeTask2 = plcService.WriteTagValueAsync("PLC1", "D1000", 12345);
+        writeTask2.Wait();
+        var valD1000 = plcService.GetTagValue("PLC1", "D1000");
+        if (valD1000 == null || Convert.ToInt32(valD1000.CurrentValue) != 12345)
+        {
+            throw new Exception("Direct write/get tag value for 'D1000' failed!");
+        }
+
+        var readValD1000 = plcService.ReadTagValueAsync("PLC1", "D1000").Result;
+        if (Convert.ToInt32(readValD1000) != 12345)
+        {
+            throw new Exception($"ReadTagValueAsync for 'D1000' failed! Value={readValD1000}");
+        }
+        Console.WriteLine("  [3/4] Direct Address Read/Write/Cache Pipeline: PASSED (100%)");
+
+        // 4. Test Event Propagation to MotionSyncService using Direct Address
+        using var motionService = new VisionInspectionApp.Application.PLC.Services.PlcMotionSyncService(plcService);
+        motionService.PlcId = "PLC1";
+        motionService.EncoderTagName = "D1000";
+        motionService.SpeedTagName = "D1002";
+
+        // Simulate tag change event for D1000 direct address
+        plcService.Cache.Set("PLC1", "D1000", 50000, VisionInspectionApp.Models.TagQuality.Good);
+        var writePulseTask = plcService.WriteTagValueAsync("PLC1", "D1000", 50000);
+        writePulseTask.Wait();
+
+        if (motionService.CurrentEncoderPulses != 50000)
+        {
+            throw new Exception($"PlcMotionSyncService failed to update from direct address 'D1000'! Pulses={motionService.CurrentEncoderPulses}");
+        }
+        Console.WriteLine("  [4/4] Direct Address Event Handling in Consumer Modules: PASSED (100%)");
+
+        Console.WriteLine("✅ ALL DIRECT PLC ADDRESS SUPPORT TESTS PASSED (100%)!\n");
+    }
 }

@@ -2,167 +2,456 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         x:Name="RootPlcManagerWindow"
-        Title="PLC Manager &amp; Connectivity" Height="560" Width="840"
+        Title="PLC &amp; Industrial Motion Configuration" Height="680" Width="960"
         WindowStartupLocation="CenterOwner"
         Background="{DynamicResource WindowBackgroundBrush}"
         Foreground="{DynamicResource TextBrush}">
 
     <Window.Resources>
         <BooleanToVisibilityConverter x:Key="BoolToVis" />
+        
+        <Style x:Key="IndustrialSectionHeader" TargetType="TextBlock">
+            <Setter Property="FontWeight" Value="Bold"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
+            <Setter Property="Margin" Value="0,0,0,8"/>
+        </Style>
+
+        <Style x:Key="IndustrialCardBorder" TargetType="Border">
+            <Setter Property="Background" Value="{DynamicResource PanelBackgroundBrush}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="CornerRadius" Value="6"/>
+            <Setter Property="Padding" Value="14"/>
+            <Setter Property="Margin" Value="0,0,0,10"/>
+        </Style>
+
+        <Style x:Key="IndustrialFieldLabel" TargetType="TextBlock">
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
+            <Setter Property="FontSize" Value="11.5"/>
+            <Setter Property="Margin" Value="0,4,8,4"/>
+        </Style>
     </Window.Resources>
 
     <Grid Margin="12">
-        <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="260"/>
-            <ColumnDefinition Width="*"/>
-        </Grid.ColumnDefinitions>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
 
-        <!-- Left: PLCs List -->
-        <Border Grid.Column="0" Background="{DynamicResource PanelBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="4" Padding="8" Margin="0,0,8,0">
-            <Grid>
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="Auto"/>
-                    <RowDefinition Height="*"/>
-                    <RowDefinition Height="Auto"/>
-                </Grid.RowDefinitions>
-
-                <TextBlock Text="PLCs List" FontWeight="Bold" FontSize="14" Margin="0,0,0,8" Foreground="{DynamicResource TextBrush}"/>
-
-                <ListBox Grid.Row="1" ItemsSource="{Binding Plcs}" SelectedItem="{Binding SelectedPlc, Mode=TwoWay}" DisplayMemberPath="Name" Margin="0,0,0,8" Background="{DynamicResource InputBackgroundBrush}" Foreground="{DynamicResource InputTextBrush}"/>
-
-                <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right">
-                    <Button Content="➕ Add PLC" Command="{Binding AddPlcCommand}" Padding="8,4" Margin="0,0,4,0"/>
-                    <Button Content="🗑 Delete" Command="{Binding DeletePlcCommand}" Padding="8,4"/>
-                </StackPanel>
-            </Grid>
-        </Border>
-
-        <!-- Right: PLC Config & Tags -->
-        <Grid Grid.Column="1">
-            <Grid.RowDefinitions>
-                <RowDefinition Height="Auto"/>
-                <RowDefinition Height="*"/>
-            </Grid.RowDefinitions>
-
-            <!-- PLC Settings Card -->
-            <Border Grid.Row="0" Background="{DynamicResource PanelBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="4" Padding="12" Margin="0,0,0,8">
-                <Grid>
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="Auto"/>
-                    </Grid.RowDefinitions>
+        <!-- Main Tab Control for All Industrial Modules -->
+        <TabControl Grid.Row="0" SelectedIndex="{Binding SelectedTabIndex}" Background="Transparent" BorderThickness="0">
+            
+            <!-- TAB 1: PLCs & Tags Connection -->
+            <TabItem Header="🔌 1. Kết Nối &amp; Tags" FontSize="12.5" FontWeight="SemiBold" Padding="12,6">
+                <Grid Margin="0,8,0,0">
                     <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="100"/>
-                        <ColumnDefinition Width="*"/>
-                        <ColumnDefinition Width="100"/>
+                        <ColumnDefinition Width="260"/>
                         <ColumnDefinition Width="*"/>
                     </Grid.ColumnDefinitions>
 
-                    <!-- Row 0: PLC Name & Driver -->
-                    <TextBlock Grid.Row="0" Grid.Column="0" Text="PLC Name:" VerticalAlignment="Center" Margin="0,2" Foreground="{DynamicResource TextBrush}"/>
-                    <TextBox Grid.Row="0" Grid.Column="1" Text="{Binding SelectedPlc.Name, UpdateSourceTrigger=PropertyChanged}" Margin="2"/>
+                    <!-- Left: PLCs List -->
+                    <Border Grid.Column="0" Background="{DynamicResource PanelBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="6" Padding="10" Margin="0,0,8,0">
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="*"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
 
-                    <TextBlock Grid.Row="0" Grid.Column="2" Text="Driver:" VerticalAlignment="Center" Margin="8,2,0,2" Foreground="{DynamicResource TextBrush}"/>
-                    <ComboBox Grid.Row="0" Grid.Column="3" ItemsSource="{Binding DriverTypes}" SelectedItem="{Binding SelectedPlc.DriverType, UpdateSourceTrigger=PropertyChanged}" Margin="2"/>
+                            <TextBlock Grid.Row="0" Text="📋 Danh Sách PLC" FontWeight="Bold" FontSize="13" Margin="0,0,0,8" Foreground="{DynamicResource TextBrush}"/>
 
-                    <!-- Row 1: Connection Parameters (Ethernet IP/Port vs MX Component Station No) -->
-                    <!-- MC Protocol Ethernet (Visibility when IsMcProtocol) -->
-                    <TextBlock Grid.Row="1" Grid.Column="0" Text="IP Address:" VerticalAlignment="Center" Margin="0,2" Foreground="{DynamicResource TextBrush}" Visibility="{Binding IsMcProtocol, Converter={StaticResource BoolToVis}}"/>
-                    <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding SelectedPlc.IPAddress, UpdateSourceTrigger=PropertyChanged}" Margin="2" Visibility="{Binding IsMcProtocol, Converter={StaticResource BoolToVis}}"/>
+                            <ListBox Grid.Row="1" ItemsSource="{Binding Plcs}" SelectedItem="{Binding SelectedPlc, Mode=TwoWay}" DisplayMemberPath="Name" Margin="0,0,0,8" Background="{DynamicResource InputBackgroundBrush}" Foreground="{DynamicResource InputTextBrush}"/>
 
-                    <TextBlock Grid.Row="1" Grid.Column="2" Text="Port:" VerticalAlignment="Center" Margin="8,2,0,2" Foreground="{DynamicResource TextBrush}" Visibility="{Binding IsMcProtocol, Converter={StaticResource BoolToVis}}"/>
-                    <TextBox Grid.Row="1" Grid.Column="3" Text="{Binding SelectedPlc.Port, UpdateSourceTrigger=PropertyChanged}" Margin="2" Visibility="{Binding IsMcProtocol, Converter={StaticResource BoolToVis}}"/>
+                            <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right">
+                                <Button Content="➕ Thêm PLC" Command="{Binding AddPlcCommand}" Padding="8,4" Margin="0,0,4,0"/>
+                                <Button Content="🗑 Xóa PLC" Command="{Binding DeletePlcCommand}" Padding="8,4"/>
+                            </StackPanel>
+                        </Grid>
+                    </Border>
 
-                    <!-- MX Component Station Number (Visibility when IsMxComponent) -->
-                    <TextBlock Grid.Row="1" Grid.Column="0" Text="Station No:" VerticalAlignment="Center" Margin="0,2" Foreground="{DynamicResource TextBrush}" Visibility="{Binding IsMxComponent, Converter={StaticResource BoolToVis}}"/>
-                    <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding SelectedPlc.LogicalStationNumber, UpdateSourceTrigger=PropertyChanged}" ToolTip="ActLogicalStationNumber configured in Mitsubishi Communication Utility (MX Component)" Margin="2" Visibility="{Binding IsMxComponent, Converter={StaticResource BoolToVis}}"/>
-                    <TextBlock Grid.Row="1" Grid.Column="2" Grid.ColumnSpan="2" Text="(MX Component Station)" VerticalAlignment="Center" Margin="8,2,0,2" Foreground="{DynamicResource TextMutedBrush}" FontSize="11" Visibility="{Binding IsMxComponent, Converter={StaticResource BoolToVis}}"/>
+                    <!-- Right: PLC Config & Tags -->
+                    <Grid Grid.Column="1">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="*"/>
+                        </Grid.RowDefinitions>
 
-                    <!-- Row 2: Scan Interval & Enabled -->
-                    <TextBlock Grid.Row="2" Grid.Column="0" Text="Scan (ms):" VerticalAlignment="Center" Margin="0,2" Foreground="{DynamicResource TextBrush}"/>
-                    <TextBox Grid.Row="2" Grid.Column="1" Text="{Binding SelectedPlc.ScanIntervalMs, UpdateSourceTrigger=PropertyChanged}" Margin="2"/>
+                        <!-- PLC Settings Card -->
+                        <Border Grid.Row="0" Style="{StaticResource IndustrialCardBorder}">
+                            <Grid>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                </Grid.RowDefinitions>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="100"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="100"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
 
-                    <CheckBox Grid.Row="2" Grid.Column="3" Content="Enabled" IsChecked="{Binding SelectedPlc.Enabled}" VerticalAlignment="Center" Margin="2" Foreground="{DynamicResource TextBrush}"/>
+                                <!-- Row 0: PLC Name & Driver -->
+                                <TextBlock Grid.Row="0" Grid.Column="0" Text="Tên PLC:" Style="{StaticResource IndustrialFieldLabel}"/>
+                                <TextBox Grid.Row="0" Grid.Column="1" Text="{Binding SelectedPlc.Name, UpdateSourceTrigger=PropertyChanged}" Margin="2" Padding="4,2"/>
 
-                    <!-- Row 3: Action Buttons & Connection Status Indicator -->
-                    <DockPanel Grid.Row="3" Grid.Column="0" Grid.ColumnSpan="4" Margin="0,8,0,0">
-                        <Border DockPanel.Dock="Left" Padding="8,4" CornerRadius="3" VerticalAlignment="Center">
-                            <Border.Style>
-                                <Style TargetType="Border">
-                                    <Setter Property="Background" Value="#424242"/>
-                                    <Style.Triggers>
-                                        <DataTrigger Binding="{Binding SelectedPlc.State}" Value="Connected">
-                                            <Setter Property="Background" Value="#2E7D32"/>
-                                        </DataTrigger>
-                                        <DataTrigger Binding="{Binding SelectedPlc.State}" Value="Error">
-                                            <Setter Property="Background" Value="#C62828"/>
-                                        </DataTrigger>
-                                        <DataTrigger Binding="{Binding SelectedPlc.State}" Value="Connecting">
-                                            <Setter Property="Background" Value="#F57F17"/>
-                                        </DataTrigger>
-                                    </Style.Triggers>
-                                </Style>
-                            </Border.Style>
-                            <StackPanel Orientation="Horizontal">
-                                <TextBlock Text="Status: " FontWeight="Bold" Foreground="White"/>
-                                <TextBlock Text="{Binding SelectedPlc.State}" FontWeight="Bold" Foreground="White"/>
-                                <TextBlock Text="{Binding SelectedPlc.CpuName, StringFormat=' ({0})'}" Foreground="White" FontWeight="SemiBold"/>
+                                <TextBlock Grid.Row="0" Grid.Column="2" Text="Driver:" Style="{StaticResource IndustrialFieldLabel}" Margin="8,4,0,4"/>
+                                <ComboBox Grid.Row="0" Grid.Column="3" ItemsSource="{Binding DriverTypes}" SelectedItem="{Binding SelectedPlc.DriverType, UpdateSourceTrigger=PropertyChanged}" Margin="2"/>
+
+                                <!-- Row 1: MC Protocol Ethernet vs MX Component -->
+                                <TextBlock Grid.Row="1" Grid.Column="0" Text="IP Address:" Style="{StaticResource IndustrialFieldLabel}" Visibility="{Binding IsMcProtocol, Converter={StaticResource BoolToVis}}"/>
+                                <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding SelectedPlc.IPAddress, UpdateSourceTrigger=PropertyChanged}" Margin="2" Padding="4,2" Visibility="{Binding IsMcProtocol, Converter={StaticResource BoolToVis}}"/>
+
+                                <TextBlock Grid.Row="1" Grid.Column="2" Text="Port:" Style="{StaticResource IndustrialFieldLabel}" Margin="8,4,0,4" Visibility="{Binding IsMcProtocol, Converter={StaticResource BoolToVis}}"/>
+                                <TextBox Grid.Row="1" Grid.Column="3" Text="{Binding SelectedPlc.Port, UpdateSourceTrigger=PropertyChanged}" Margin="2" Padding="4,2" Visibility="{Binding IsMcProtocol, Converter={StaticResource BoolToVis}}"/>
+
+                                <TextBlock Grid.Row="1" Grid.Column="0" Text="Station No:" Style="{StaticResource IndustrialFieldLabel}" Visibility="{Binding IsMxComponent, Converter={StaticResource BoolToVis}}"/>
+                                <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding SelectedPlc.LogicalStationNumber, UpdateSourceTrigger=PropertyChanged}" ToolTip="ActLogicalStationNumber trong MX Component Communication Utility" Margin="2" Padding="4,2" Visibility="{Binding IsMxComponent, Converter={StaticResource BoolToVis}}"/>
+                                <TextBlock Grid.Row="1" Grid.Column="2" Grid.ColumnSpan="2" Text="(MX Component Station Number)" VerticalAlignment="Center" Margin="8,2,0,2" Foreground="{DynamicResource TextMutedBrush}" FontSize="11" Visibility="{Binding IsMxComponent, Converter={StaticResource BoolToVis}}"/>
+
+                                <!-- Row 2: Scan Interval & Enabled -->
+                                <TextBlock Grid.Row="2" Grid.Column="0" Text="Scan (ms):" Style="{StaticResource IndustrialFieldLabel}"/>
+                                <TextBox Grid.Row="2" Grid.Column="1" Text="{Binding SelectedPlc.ScanIntervalMs, UpdateSourceTrigger=PropertyChanged}" Margin="2" Padding="4,2"/>
+
+                                <CheckBox Grid.Row="2" Grid.Column="3" Content="Kích hoạt (Enabled)" IsChecked="{Binding SelectedPlc.Enabled}" VerticalAlignment="Center" Margin="8,4,0,4" Foreground="{DynamicResource TextBrush}"/>
+
+                                <!-- Row 3: Action Buttons & Connection Status Indicator -->
+                                <DockPanel Grid.Row="3" Grid.Column="0" Grid.ColumnSpan="4" Margin="0,10,0,0">
+                                    <Border DockPanel.Dock="Left" Padding="8,4" CornerRadius="4" VerticalAlignment="Center">
+                                        <Border.Style>
+                                            <Style TargetType="Border">
+                                                <Setter Property="Background" Value="#424242"/>
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding SelectedPlc.State}" Value="Connected">
+                                                        <Setter Property="Background" Value="#2E7D32"/>
+                                                    </DataTrigger>
+                                                    <DataTrigger Binding="{Binding SelectedPlc.State}" Value="Error">
+                                                        <Setter Property="Background" Value="#C62828"/>
+                                                    </DataTrigger>
+                                                    <DataTrigger Binding="{Binding SelectedPlc.State}" Value="Connecting">
+                                                        <Setter Property="Background" Value="#F57F17"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </Border.Style>
+                                        <StackPanel Orientation="Horizontal">
+                                            <TextBlock Text="Trạng thái: " FontWeight="Bold" Foreground="White" FontSize="11.5"/>
+                                            <TextBlock Text="{Binding SelectedPlc.State}" FontWeight="Bold" Foreground="White" FontSize="11.5"/>
+                                            <TextBlock Text="{Binding SelectedPlc.CpuName, StringFormat=' ({0})'}" Foreground="White" FontWeight="SemiBold" FontSize="11.5"/>
+                                        </StackPanel>
+                                    </Border>
+
+                                    <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" HorizontalAlignment="Right">
+                                        <Button Content="⚡ Kết Nối (Connect)" Command="{Binding ConnectSelectedPlcCommand}" Padding="10,5" Margin="0,0,6,0" FontWeight="Bold"/>
+                                        <Button Content="🔌 Ngắt Kết Nối" Command="{Binding DisconnectSelectedPlcCommand}" Padding="10,5"/>
+                                    </StackPanel>
+                                </DockPanel>
+                            </Grid>
+                        </Border>
+
+                        <!-- Tags Table Card -->
+                        <Border Grid.Row="1" Style="{StaticResource IndustrialCardBorder}">
+                            <Grid>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="*"/>
+                                    <RowDefinition Height="Auto"/>
+                                </Grid.RowDefinitions>
+
+                                <TextBlock Grid.Row="0" Text="🏷️ Danh Bạ Biến (PLC Tags)" Style="{StaticResource IndustrialSectionHeader}"/>
+
+                                <DataGrid Grid.Row="1" ItemsSource="{Binding FilteredTags}" SelectedItem="{Binding SelectedTag, Mode=TwoWay}" AutoGenerateColumns="False" CanUserAddRows="False" Background="{DynamicResource InputBackgroundBrush}" Foreground="{DynamicResource TextBrush}">
+                                    <DataGrid.Columns>
+                                        <DataGridTextColumn Header="Tag Name" Binding="{Binding Name, UpdateSourceTrigger=PropertyChanged}" Width="130"/>
+                                        <DataGridTextColumn Header="Address" Binding="{Binding Address, UpdateSourceTrigger=PropertyChanged}" Width="90"/>
+
+                                        <DataGridTemplateColumn Header="Data Type" Width="120">
+                                            <DataGridTemplateColumn.CellTemplate>
+                                                <DataTemplate>
+                                                    <TextBlock Text="{Binding DataType}" VerticalAlignment="Center" Margin="4,2" Foreground="{DynamicResource TextBrush}"/>
+                                                </DataTemplate>
+                                            </DataGridTemplateColumn.CellTemplate>
+                                            <DataGridTemplateColumn.CellEditingTemplate>
+                                                <DataTemplate>
+                                                    <ComboBox ItemsSource="{Binding DataContext.DataTypes, ElementName=RootPlcManagerWindow}" SelectedItem="{Binding DataType, UpdateSourceTrigger=PropertyChanged}" VerticalAlignment="Center"/>
+                                                </DataTemplate>
+                                            </DataGridTemplateColumn.CellEditingTemplate>
+                                        </DataGridTemplateColumn>
+
+                                        <DataGridCheckBoxColumn Header="ReadOnly" Binding="{Binding ReadOnly}" Width="75"/>
+                                        <DataGridTextColumn Header="Mô Tả Chức Năng" Binding="{Binding Description, UpdateSourceTrigger=PropertyChanged}" Width="*"/>
+                                    </DataGrid.Columns>
+                                </DataGrid>
+
+                                <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,8,0,0">
+                                    <Button Content="➕ Thêm Tag" Command="{Binding AddTagCommand}" Padding="8,4" Margin="0,0,6,0"/>
+                                    <Button Content="🗑 Xóa Tag" Command="{Binding DeleteTagCommand}" Padding="8,4"/>
+                                </StackPanel>
+                            </Grid>
+                        </Border>
+                    </Grid>
+                </Grid>
+            </TabItem>
+
+            <!-- TAB 2: Industrial Handshake 24/7 -->
+            <TabItem Header="🤝 2. Bắt Tay 24/7 (Handshake)" FontSize="12.5" FontWeight="SemiBold" Padding="12,6">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" Margin="0,8,0,0">
+                    <StackPanel>
+                        <!-- Banner Info -->
+                        <Border Background="#100288D1" BorderBrush="#0288D1" BorderThickness="1" CornerRadius="6" Padding="12,10" Margin="0,0,0,12">
+                            <StackPanel>
+                                <TextBlock Text="🤝 Chu Trình Bắt Tay Công Nghiệp 2 Chiều Chuẩn Deterministic Protocol" FontWeight="Bold" FontSize="13" Foreground="#0288D1"/>
+                                <TextBlock Text="Đảm bảo tính toàn vẹn 100% của tín hiệu, khóa liên động thời gian thực chống mất frame và xung đột dữ liệu trên băng truyền chạy liên tục 24/7." FontSize="11.5" Foreground="{DynamicResource TextBrush}" Margin="0,4,0,0" TextWrapping="Wrap"/>
                             </StackPanel>
                         </Border>
 
-                        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" HorizontalAlignment="Right">
-                            <Button Content="💾 Save Config" Command="{Binding SaveConfigCommand}" Padding="10,5" Margin="0,0,4,0" Background="#0277BD" Foreground="White" FontWeight="Bold"/>
-                            <Button Content="⚡ Connect" Command="{Binding ConnectSelectedPlcCommand}" Padding="10,5" Margin="0,0,4,0" FontWeight="Bold"/>
-                            <Button Content="🔌 Disconnect" Command="{Binding DisconnectSelectedPlcCommand}" Padding="10,5"/>
-                        </StackPanel>
-                    </DockPanel>
-                </Grid>
-            </Border>
+                        <!-- Config Card -->
+                        <Border Style="{StaticResource IndustrialCardBorder}">
+                            <Grid>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                </Grid.RowDefinitions>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="180"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="180"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
 
-            <!-- Tags Table Card -->
-            <Border Grid.Row="1" Background="{DynamicResource PanelBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="4" Padding="8">
-                <Grid>
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="*"/>
-                        <RowDefinition Height="Auto"/>
-                    </Grid.RowDefinitions>
+                                <TextBlock Grid.Row="0" Grid.Column="0" Grid.ColumnSpan="4" Text="⚙️ Cài Đặt Tham Số &amp; PLC Đích" Style="{StaticResource IndustrialSectionHeader}"/>
 
-                    <TextBlock Grid.Row="0" Text="PLC Tags" FontWeight="Bold" FontSize="14" Margin="0,0,0,8" Foreground="{DynamicResource TextBrush}"/>
+                                <TextBlock Grid.Row="1" Grid.Column="0" Text="PLC Đích (Target PLC):" Style="{StaticResource IndustrialFieldLabel}"/>
+                                <ComboBox Grid.Row="1" Grid.Column="1" ItemsSource="{Binding AvailablePlcNames}" Text="{Binding Handshake.PlcId, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" SelectedItem="{Binding Handshake.PlcId, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" IsEditable="True" IsTextSearchEnabled="True" StaysOpenOnEdit="True" MaxDropDownHeight="220" PreviewMouseDown="ComboBox_PreviewMouseDown" Margin="2"/>
 
-                    <DataGrid Grid.Row="1" ItemsSource="{Binding FilteredTags}" SelectedItem="{Binding SelectedTag, Mode=TwoWay}" AutoGenerateColumns="False" CanUserAddRows="False" Background="{DynamicResource InputBackgroundBrush}" Foreground="{DynamicResource TextBrush}">
-                        <DataGrid.Columns>
-                            <DataGridTextColumn Header="Tag Name" Binding="{Binding Name, UpdateSourceTrigger=PropertyChanged}" Width="120"/>
-                            <DataGridTextColumn Header="Address" Binding="{Binding Address, UpdateSourceTrigger=PropertyChanged}" Width="90"/>
+                                <TextBlock Grid.Row="1" Grid.Column="2" Text="Timeout Bắt Tay (ms):" Style="{StaticResource IndustrialFieldLabel}" Margin="12,4,8,4"/>
+                                <TextBox Grid.Row="1" Grid.Column="3" Text="{Binding Handshake.HandshakeTimeoutMs, UpdateSourceTrigger=PropertyChanged}" Margin="2" Padding="4,2"/>
 
-                            <!-- Data Type Template Column with reliable WPF DataContext binding -->
-                            <DataGridTemplateColumn Header="Data Type" Width="120">
-                                <DataGridTemplateColumn.CellTemplate>
-                                    <DataTemplate>
-                                        <TextBlock Text="{Binding DataType}" VerticalAlignment="Center" Margin="4,2" Foreground="{DynamicResource TextBrush}"/>
-                                    </DataTemplate>
-                                </DataGridTemplateColumn.CellTemplate>
-                                <DataGridTemplateColumn.CellEditingTemplate>
-                                    <DataTemplate>
-                                        <ComboBox ItemsSource="{Binding DataContext.DataTypes, ElementName=RootPlcManagerWindow}" SelectedItem="{Binding DataType, UpdateSourceTrigger=PropertyChanged}" VerticalAlignment="Center"/>
-                                    </DataTemplate>
-                                </DataGridTemplateColumn.CellEditingTemplate>
-                            </DataGridTemplateColumn>
+                                <TextBlock Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="4" Text="🏷️ Cấu Hình Địa Chỉ Các Tag Bắt Tay I/O" Style="{StaticResource IndustrialSectionHeader}" Margin="0,14,0,8"/>
 
-                            <DataGridCheckBoxColumn Header="ReadOnly" Binding="{Binding ReadOnly}" Width="75"/>
-                            <DataGridTextColumn Header="Description" Binding="{Binding Description, UpdateSourceTrigger=PropertyChanged}" Width="*"/>
-                        </DataGrid.Columns>
-                    </DataGrid>
+                                <!-- Vision Ready Tag -->
+                                <TextBlock Grid.Row="3" Grid.Column="0" Text="1. Vision Ready Tag (Y):" Style="{StaticResource IndustrialFieldLabel}"/>
+                                <ComboBox Grid.Row="3" Grid.Column="1" ItemsSource="{Binding AvailableTagNames}" Text="{Binding Handshake.ReadyTagName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" SelectedItem="{Binding Handshake.ReadyTagName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" IsEditable="True" IsTextSearchEnabled="True" StaysOpenOnEdit="True" MaxDropDownHeight="220" PreviewMouseDown="ComboBox_PreviewMouseDown" ToolTip="Tín hiệu Vision PC sẵn sàng nhận Trigger (Mặc định: Y1_VisionReady)" Margin="2"/>
 
-                    <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,8,0,0">
-                        <Button Content="➕ Add Tag" Command="{Binding AddTagCommand}" Padding="8,4" Margin="0,0,4,0"/>
-                        <Button Content="🗑 Delete Tag" Command="{Binding DeleteTagCommand}" Padding="8,4" Margin="0,0,4,0"/>
-                        <Button Content="💾 Save Config" Command="{Binding SaveConfigCommand}" Padding="8,4" Background="#0277BD" Foreground="White"/>
+                                <!-- Vision Busy Tag -->
+                                <TextBlock Grid.Row="3" Grid.Column="2" Text="2. Vision Busy Tag (Y):" Style="{StaticResource IndustrialFieldLabel}" Margin="12,4,8,4"/>
+                                <ComboBox Grid.Row="3" Grid.Column="3" ItemsSource="{Binding AvailableTagNames}" Text="{Binding Handshake.BusyTagName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" SelectedItem="{Binding Handshake.BusyTagName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" IsEditable="True" IsTextSearchEnabled="True" StaysOpenOnEdit="True" MaxDropDownHeight="220" PreviewMouseDown="ComboBox_PreviewMouseDown" ToolTip="Tín hiệu Vision PC đang xử lý ảnh (Mặc định: Y2_VisionBusy)" Margin="2"/>
+
+                                <!-- Vision Done Tag -->
+                                <TextBlock Grid.Row="4" Grid.Column="0" Text="3. Vision Done Tag (Y):" Style="{StaticResource IndustrialFieldLabel}"/>
+                                <ComboBox Grid.Row="4" Grid.Column="1" ItemsSource="{Binding AvailableTagNames}" Text="{Binding Handshake.DoneTagName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" SelectedItem="{Binding Handshake.DoneTagName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" IsEditable="True" IsTextSearchEnabled="True" StaysOpenOnEdit="True" MaxDropDownHeight="220" PreviewMouseDown="ComboBox_PreviewMouseDown" ToolTip="Tín hiệu Vision PC đã hoàn tất kiểm tra (Mặc định: Y3_VisionDone)" Margin="2"/>
+
+                                <!-- PLC Ack Tag -->
+                                <TextBlock Grid.Row="4" Grid.Column="2" Text="4. PLC Ack Tag (X):" Style="{StaticResource IndustrialFieldLabel}" Margin="12,4,8,4"/>
+                                <ComboBox Grid.Row="4" Grid.Column="3" ItemsSource="{Binding AvailableTagNames}" Text="{Binding Handshake.PlcAckTagName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" SelectedItem="{Binding Handshake.PlcAckTagName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" IsEditable="True" IsTextSearchEnabled="True" StaysOpenOnEdit="True" MaxDropDownHeight="220" PreviewMouseDown="ComboBox_PreviewMouseDown" ToolTip="Tín hiệu PLC xác nhận đã chốt dữ liệu kiểm tra (Mặc định: X1_PlcAck)" Margin="2"/>
+
+                                <!-- Vision Pass Tag -->
+                                <TextBlock Grid.Row="5" Grid.Column="0" Text="5. Vision Pass (OK) Tag (Y):" Style="{StaticResource IndustrialFieldLabel}"/>
+                                <ComboBox Grid.Row="5" Grid.Column="1" ItemsSource="{Binding AvailableTagNames}" Text="{Binding Handshake.PassTagName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" SelectedItem="{Binding Handshake.PassTagName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" IsEditable="True" IsTextSearchEnabled="True" StaysOpenOnEdit="True" MaxDropDownHeight="220" PreviewMouseDown="ComboBox_PreviewMouseDown" ToolTip="Tín hiệu kết quả ĐẠT (OK) (Mặc định: Y4_VisionPass)" Margin="2"/>
+
+                                <!-- Vision NG Tag -->
+                                <TextBlock Grid.Row="5" Grid.Column="2" Text="6. Vision NG (Lỗi) Tag (Y):" Style="{StaticResource IndustrialFieldLabel}" Margin="12,4,8,4"/>
+                                <ComboBox Grid.Row="5" Grid.Column="3" ItemsSource="{Binding AvailableTagNames}" Text="{Binding Handshake.NgTagName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" SelectedItem="{Binding Handshake.NgTagName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" IsEditable="True" IsTextSearchEnabled="True" StaysOpenOnEdit="True" MaxDropDownHeight="220" PreviewMouseDown="ComboBox_PreviewMouseDown" ToolTip="Tín hiệu kết quả LỖI (NG) (Mặc định: Y5_VisionNG)" Margin="2"/>
+
+                                <CheckBox Grid.Row="6" Grid.Column="0" Grid.ColumnSpan="2" Content="Kích hoạt Chu trình Bắt tay Công nghiệp (Handshake Enabled)" IsChecked="{Binding Handshake.IsEnabled}" FontWeight="SemiBold" Margin="0,14,0,4" Foreground="{DynamicResource TextBrush}"/>
+                            </Grid>
+                        </Border>
                     </StackPanel>
-                </Grid>
-            </Border>
-        </Grid>
+                </ScrollViewer>
+            </TabItem>
+
+            <!-- TAB 3: Heartbeat Watchdog & Safety Interlock -->
+            <TabItem Header="💓 3. Watchdog &amp; An Toàn" FontSize="12.5" FontWeight="SemiBold" Padding="12,6">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" Margin="0,8,0,0">
+                    <StackPanel>
+                        <!-- Banner Info -->
+                        <Border Background="#10E11D48" BorderBrush="#E11D48" BorderThickness="1" CornerRadius="6" Padding="12,10" Margin="0,0,0,12">
+                            <StackPanel>
+                                <TextBlock Text="💓 Watchdog Heartbeat 2 Chiều &amp; Khóa Liên Động An Toàn (Safety Interlock)" FontWeight="Bold" FontSize="13" Foreground="#E11D48"/>
+                                <TextBlock Text="Gửi nhịp tim định kỳ và giám sát nhịp tim phản hồi từ PLC. Tự động kích hoạt ngắt motor dừng máy liên động khi phát hiện đứt cáp mạng hoặc treo phần mềm." FontSize="11.5" Foreground="{DynamicResource TextBrush}" Margin="0,4,0,0" TextWrapping="Wrap"/>
+                            </StackPanel>
+                        </Border>
+
+                        <Border Style="{StaticResource IndustrialCardBorder}">
+                            <Grid>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                </Grid.RowDefinitions>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="200"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="200"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+
+                                <TextBlock Grid.Row="0" Grid.Column="0" Grid.ColumnSpan="4" Text="⚙️ Cài Đặt Nhịp Tim (Heartbeat Cycle)" Style="{StaticResource IndustrialSectionHeader}"/>
+
+                                <TextBlock Grid.Row="1" Grid.Column="0" Text="PLC Đích (Target PLC):" Style="{StaticResource IndustrialFieldLabel}"/>
+                                <ComboBox Grid.Row="1" Grid.Column="1" ItemsSource="{Binding AvailablePlcNames}" Text="{Binding Heartbeat.PlcId, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" SelectedItem="{Binding Heartbeat.PlcId, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" IsEditable="True" IsTextSearchEnabled="True" StaysOpenOnEdit="True" MaxDropDownHeight="220" PreviewMouseDown="ComboBox_PreviewMouseDown" Margin="2"/>
+
+                                <TextBlock Grid.Row="1" Grid.Column="2" Text="Chu Kỳ Gửi Nhịp Tim (ms):" Style="{StaticResource IndustrialFieldLabel}" Margin="12,4,8,4"/>
+                                <TextBox Grid.Row="1" Grid.Column="3" Text="{Binding Heartbeat.IntervalMs, UpdateSourceTrigger=PropertyChanged}" ToolTip="Mặc định: 100ms" Margin="2" Padding="4,2"/>
+
+                                <TextBlock Grid.Row="2" Grid.Column="0" Text="Timeout Mất Nhịp Tim (ms):" Style="{StaticResource IndustrialFieldLabel}"/>
+                                <TextBox Grid.Row="2" Grid.Column="1" Text="{Binding Heartbeat.TimeoutMs, UpdateSourceTrigger=PropertyChanged}" ToolTip="Mặc định: 300ms (sau 300ms không có phản hồi sẽ báo lỗi)" Margin="2" Padding="4,2"/>
+
+                                <TextBlock Grid.Row="3" Grid.Column="0" Grid.ColumnSpan="4" Text="🏷️ Cấu Hình Địa Chỉ Các Tag Nhịp Tim &amp; Liên Động" Style="{StaticResource IndustrialSectionHeader}" Margin="0,14,0,8"/>
+
+                                <TextBlock Grid.Row="4" Grid.Column="0" Text="Vision Heartbeat Tag (Y):" Style="{StaticResource IndustrialFieldLabel}"/>
+                                <ComboBox Grid.Row="4" Grid.Column="1" ItemsSource="{Binding AvailableTagNames}" Text="{Binding Heartbeat.VisionHeartbeatTagName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" SelectedItem="{Binding Heartbeat.VisionHeartbeatTagName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" IsEditable="True" IsTextSearchEnabled="True" StaysOpenOnEdit="True" MaxDropDownHeight="220" PreviewMouseDown="ComboBox_PreviewMouseDown" ToolTip="Tag gửi xung đảo bit 0/1 từ Vision sang PLC (Mặc định: Y0_VisionHeartbeat)" Margin="2"/>
+
+                                <TextBlock Grid.Row="4" Grid.Column="2" Text="PLC Heartbeat Tag (X):" Style="{StaticResource IndustrialFieldLabel}" Margin="12,4,8,4"/>
+                                <ComboBox Grid.Row="4" Grid.Column="3" ItemsSource="{Binding AvailableTagNames}" Text="{Binding Heartbeat.PlcHeartbeatTagName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" SelectedItem="{Binding Heartbeat.PlcHeartbeatTagName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" IsEditable="True" IsTextSearchEnabled="True" StaysOpenOnEdit="True" MaxDropDownHeight="220" PreviewMouseDown="ComboBox_PreviewMouseDown" ToolTip="Tag đọc tín hiệu nhịp tim từ PLC gửi về (Mặc định: X0_PlcHeartbeat)" Margin="2"/>
+
+                                <TextBlock Grid.Row="5" Grid.Column="0" Text="Tag Báo Lỗi Ngắt Motor (Y):" Style="{StaticResource IndustrialFieldLabel}"/>
+                                <ComboBox Grid.Row="5" Grid.Column="1" ItemsSource="{Binding AvailableTagNames}" Text="{Binding Heartbeat.EmergencyStopTagName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" SelectedItem="{Binding Heartbeat.EmergencyStopTagName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" IsEditable="True" IsTextSearchEnabled="True" StaysOpenOnEdit="True" MaxDropDownHeight="220" PreviewMouseDown="ComboBox_PreviewMouseDown" ToolTip="Tag kích hoạt dừng khẩn cấp liên động (Mặc định: Y10_VisionFault)" Margin="2"/>
+
+                                <StackPanel Grid.Row="5" Grid.Column="2" Grid.ColumnSpan="2" Orientation="Vertical" Margin="12,4,0,0">
+                                    <CheckBox Content="Kích hoạt Khóa Liên Động An Toàn (Emergency Interlock)" IsChecked="{Binding Heartbeat.EnableEmergencyInterlock}" FontWeight="SemiBold" Foreground="{DynamicResource TextBrush}" Margin="0,0,0,4"/>
+                                    <CheckBox Content="Bật Giám Sát Heartbeat Watchdog" IsChecked="{Binding Heartbeat.IsEnabled}" Foreground="{DynamicResource TextBrush}"/>
+                                </StackPanel>
+                            </Grid>
+                        </Border>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
+            <!-- TAB 4: Motion & Encoder Sync -->
+            <TabItem Header="🏃 4. Motion &amp; Encoder" FontSize="12.5" FontWeight="SemiBold" Padding="12,6">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" Margin="0,8,0,0">
+                    <StackPanel>
+                        <!-- Banner Info -->
+                        <Border Background="#10059669" BorderBrush="#059669" BorderThickness="1" CornerRadius="6" Padding="12,10" Margin="0,0,0,12">
+                            <StackPanel>
+                                <TextBlock Text="🏃 Đồng Bộ Chuyển Động Cuộn (Motion &amp; High-Speed Encoder Sync)" FontWeight="Bold" FontSize="13" Foreground="#059669"/>
+                                <TextBlock Text="Đọc xung đếm tốc độ cao (HSC) và vận tốc máy cuộn từ PLC để tính toán toạ độ vật lý mét dài tuyệt đối (X_web, Y_web mm) và tự động bù trừ phơi sáng chống mờ nhòe." FontSize="11.5" Foreground="{DynamicResource TextBrush}" Margin="0,4,0,0" TextWrapping="Wrap"/>
+                            </StackPanel>
+                        </Border>
+
+                        <Border Style="{StaticResource IndustrialCardBorder}">
+                            <Grid>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                </Grid.RowDefinitions>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="200"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="200"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+
+                                <TextBlock Grid.Row="0" Grid.Column="0" Grid.ColumnSpan="4" Text="🏷️ Cấu Hình Địa Chỉ Đọc Dữ Liệu Chuyển Động" Style="{StaticResource IndustrialSectionHeader}"/>
+
+                                <TextBlock Grid.Row="1" Grid.Column="0" Text="PLC Đích (Target PLC):" Style="{StaticResource IndustrialFieldLabel}"/>
+                                <ComboBox Grid.Row="1" Grid.Column="1" ItemsSource="{Binding AvailablePlcNames}" Text="{Binding Motion.PlcId, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" SelectedItem="{Binding Motion.PlcId, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" IsEditable="True" IsTextSearchEnabled="True" StaysOpenOnEdit="True" MaxDropDownHeight="220" PreviewMouseDown="ComboBox_PreviewMouseDown" Margin="2"/>
+
+                                <TextBlock Grid.Row="1" Grid.Column="2" Text="Tag Xung Encoder (D):" Style="{StaticResource IndustrialFieldLabel}" Margin="12,4,8,4"/>
+                                <ComboBox Grid.Row="1" Grid.Column="3" ItemsSource="{Binding AvailableTagNames}" Text="{Binding Motion.EncoderTagName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" SelectedItem="{Binding Motion.EncoderTagName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" IsEditable="True" IsTextSearchEnabled="True" StaysOpenOnEdit="True" MaxDropDownHeight="220" PreviewMouseDown="ComboBox_PreviewMouseDown" ToolTip="Tag đọc xung High-Speed Counter từ PLC (Mặc định: D1000)" Margin="2"/>
+
+                                <TextBlock Grid.Row="2" Grid.Column="0" Text="Tag Vận Tốc Máy Cuộn (D):" Style="{StaticResource IndustrialFieldLabel}"/>
+                                <ComboBox Grid.Row="2" Grid.Column="1" ItemsSource="{Binding AvailableTagNames}" Text="{Binding Motion.SpeedTagName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" SelectedItem="{Binding Motion.SpeedTagName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" IsEditable="True" IsTextSearchEnabled="True" StaysOpenOnEdit="True" MaxDropDownHeight="220" PreviewMouseDown="ComboBox_PreviewMouseDown" ToolTip="Tag đọc vận tốc cuộn m/phút từ PLC (Mặc định: D1002)" Margin="2"/>
+
+                                <TextBlock Grid.Row="3" Grid.Column="0" Grid.ColumnSpan="4" Text="📐 Cấu Hình Tham Số Quang Học &amp; Cơ Khí" Style="{StaticResource IndustrialSectionHeader}" Margin="0,14,0,8"/>
+
+                                <TextBlock Grid.Row="4" Grid.Column="0" Text="Hệ Số Xung (Pulses/mm):" Style="{StaticResource IndustrialFieldLabel}"/>
+                                <TextBox Grid.Row="4" Grid.Column="1" Text="{Binding Motion.PulsesPerMm, UpdateSourceTrigger=PropertyChanged}" ToolTip="Số xung đếm được trên mỗi 1mm di chuyển của cuộn (Mặc định: 100.0)" Margin="2" Padding="4,2"/>
+
+                                <TextBlock Grid.Row="4" Grid.Column="2" Text="Độ Phân Giải (mm/pixel):" Style="{StaticResource IndustrialFieldLabel}" Margin="12,4,8,4"/>
+                                <TextBox Grid.Row="4" Grid.Column="3" Text="{Binding Motion.MmPerPixel, UpdateSourceTrigger=PropertyChanged}" ToolTip="Kích thước 1 pixel trên ảnh thực tế tính bằng mm (Mặc định: 0.05 mm/px)" Margin="2" Padding="4,2"/>
+
+                                <TextBlock Grid.Row="5" Grid.Column="0" Text="Vận Tốc Chuẩn (m/phút):" Style="{StaticResource IndustrialFieldLabel}"/>
+                                <TextBox Grid.Row="5" Grid.Column="1" Text="{Binding Motion.NominalSpeedMpm, UpdateSourceTrigger=PropertyChanged}" ToolTip="Vận tốc vận hành danh định của chuyền sản xuất (Mặc định: 30 m/min)" Margin="2" Padding="4,2"/>
+
+                                <TextBlock Grid.Row="5" Grid.Column="2" Text="Thời Gian Phơi Sáng Chuẩn (µs):" Style="{StaticResource IndustrialFieldLabel}" Margin="12,4,8,4"/>
+                                <TextBox Grid.Row="5" Grid.Column="3" Text="{Binding Motion.BaseExposureTimeUs, UpdateSourceTrigger=PropertyChanged}" ToolTip="Thời gian phơi sáng của camera tại vận tốc chuẩn (Mặc định: 500 µs)" Margin="2" Padding="4,2"/>
+                            </Grid>
+                        </Border>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
+            <!-- TAB 5: Shift Register & Reject Tracker -->
+            <TabItem Header="🎯 5. Shift Register &amp; Loại Bỏ" FontSize="12.5" FontWeight="SemiBold" Padding="12,6">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" Margin="0,8,0,0">
+                    <StackPanel>
+                        <!-- Banner Info -->
+                        <Border Background="#10D97706" BorderBrush="#D97706" BorderThickness="1" CornerRadius="6" Padding="12,10" Margin="0,0,0,12">
+                            <StackPanel>
+                                <TextBlock Text="🎯 Cơ Cấu Shift Register Theo Dõi Mét Dài &amp; Kích Hoạt Trạm Loại Bỏ (Reject Station)" FontWeight="Bold" FontSize="13" Foreground="#D97706"/>
+                                <TextBlock Text="Ghi nhớ vị trí vết lỗi theo chiều dài cuộn, tự động kích hoạt van khí / xi lanh gạt / súng phun mực qua PLC đúng thời điểm vết lỗi đi qua trạm (L_reject mm)." FontSize="11.5" Foreground="{DynamicResource TextBrush}" Margin="0,4,0,0" TextWrapping="Wrap"/>
+                            </StackPanel>
+                        </Border>
+
+                        <Border Style="{StaticResource IndustrialCardBorder}">
+                            <Grid>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                </Grid.RowDefinitions>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="220"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="220"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+
+                                <TextBlock Grid.Row="0" Grid.Column="0" Grid.ColumnSpan="4" Text="🏷️ Cấu Hình Địa Chỉ Tag Điều Khiển Cơ Cấu Reject" Style="{StaticResource IndustrialSectionHeader}"/>
+
+                                <TextBlock Grid.Row="1" Grid.Column="0" Text="PLC Điều Khiển Cơ Cấu:" Style="{StaticResource IndustrialFieldLabel}"/>
+                                <ComboBox Grid.Row="1" Grid.Column="1" ItemsSource="{Binding AvailablePlcNames}" Text="{Binding ShiftRegister.PlcId, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" SelectedItem="{Binding ShiftRegister.PlcId, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" IsEditable="True" IsTextSearchEnabled="True" StaysOpenOnEdit="True" MaxDropDownHeight="220" PreviewMouseDown="ComboBox_PreviewMouseDown" Margin="2"/>
+
+                                <TextBlock Grid.Row="1" Grid.Column="2" Text="Tag Kích Hoạt Reject (Y):" Style="{StaticResource IndustrialFieldLabel}" Margin="12,4,8,4"/>
+                                <ComboBox Grid.Row="1" Grid.Column="3" ItemsSource="{Binding AvailableTagNames}" Text="{Binding ShiftRegister.RejectTagName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" SelectedItem="{Binding ShiftRegister.RejectTagName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" IsEditable="True" IsTextSearchEnabled="True" StaysOpenOnEdit="True" MaxDropDownHeight="220" PreviewMouseDown="ComboBox_PreviewMouseDown" ToolTip="Tag PLC kích hoạt van khí / xi lanh gạt / súng phun mực (Mặc định: Y0_RejectPiston)" Margin="2"/>
+
+                                <TextBlock Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="4" Text="📏 Cấu Hình Khoảng Cách &amp; Dung Sai Trạm Reject" Style="{StaticResource IndustrialSectionHeader}" Margin="0,14,0,8"/>
+
+                                <TextBlock Grid.Row="3" Grid.Column="0" Text="Khoảng Cách Camera ➔ Trạm (mm):" Style="{StaticResource IndustrialFieldLabel}"/>
+                                <TextBox Grid.Row="3" Grid.Column="1" Text="{Binding ShiftRegister.RejectStationDistanceMm, UpdateSourceTrigger=PropertyChanged}" ToolTip="Khoảng cách vật lý từ vị trí Camera soi tới trạm loại bỏ L_reject (Mặc định: 1500 mm)" Margin="2" Padding="4,2"/>
+
+                                <TextBlock Grid.Row="3" Grid.Column="2" Text="Dung Sai Kích Hoạt (± mm):" Style="{StaticResource IndustrialFieldLabel}" Margin="12,4,8,4"/>
+                                <TextBox Grid.Row="3" Grid.Column="3" Text="{Binding ShiftRegister.RejectToleranceMm, UpdateSourceTrigger=PropertyChanged}" ToolTip="Dung sai cho phép khi kích hoạt cơ cấu loại bỏ (Mặc định: ±15 mm)" Margin="2" Padding="4,2"/>
+
+                                <TextBlock Grid.Row="4" Grid.Column="0" Text="Độ Rộng Xung Giữ Lệnh (ms):" Style="{StaticResource IndustrialFieldLabel}"/>
+                                <TextBox Grid.Row="4" Grid.Column="1" Text="{Binding ShiftRegister.PulseDurationMs, UpdateSourceTrigger=PropertyChanged}" ToolTip="Thời gian giữ xung ON trước khi ngắt OFF cho xi lanh/van (Mặc định: 100 ms)" Margin="2" Padding="4,2"/>
+
+                                <CheckBox Grid.Row="4" Grid.Column="2" Grid.ColumnSpan="2" Content="Kích hoạt Cơ cấu Loại Bỏ (Shift Register Enabled)" IsChecked="{Binding ShiftRegister.IsEnabled}" FontWeight="SemiBold" VerticalAlignment="Center" Margin="12,4,0,4" Foreground="{DynamicResource TextBrush}"/>
+                            </Grid>
+                        </Border>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+        </TabControl>
+
+        <!-- Bottom Global Action Bar -->
+        <Border Grid.Row="1" Background="{DynamicResource PanelBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,1,0,0" Padding="0,10,0,0" Margin="0,6,0,0">
+            <DockPanel LastChildFill="False">
+                <TextBlock Text="💡 Cấu hình được tự động áp dụng thời gian thực xuống PLC &amp; Vision Engine khi lưu." VerticalAlignment="Center" FontSize="11.5" Foreground="{DynamicResource TextMutedBrush}"/>
+
+                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                    <Button Content="💾 Lưu Toàn Bộ Cấu Hình (Save Config)" Command="{Binding SaveConfigCommand}" Padding="16,6" Background="#0277BD" Foreground="White" FontWeight="Bold" FontSize="12.5" BorderThickness="0"/>
+                </StackPanel>
+            </DockPanel>
+        </Border>
     </Grid>
 </Window>

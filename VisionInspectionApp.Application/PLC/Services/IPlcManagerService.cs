@@ -20,6 +20,8 @@ public interface IPlcManagerService : IDisposable
 
     PlcPollingEngine PollingEngine { get; }
 
+    PlcIndustrialConfig IndustrialConfig { get; set; }
+
     void LoadConfig(IEnumerable<PlcModel> plcs, IEnumerable<PlcTag> tags);
 
     void SaveGlobalConfig();
@@ -32,7 +34,11 @@ public interface IPlcManagerService : IDisposable
 
     PlcTagValue? GetTagValue(string plcId, string tagName);
 
+    Task<object?> ReadTagValueAsync(string plcId, string tagOrAddress, CancellationToken cancellationToken = default);
+
     Task<bool> WriteTagValueAsync(string plcId, string tagName, object value, CancellationToken cancellationToken = default);
+
+    IReadOnlyList<PlcTag> GetAllTagsToPoll();
 
     bool IsPollingActive { get; }
 
@@ -55,4 +61,6 @@ public interface IPlcManagerService : IDisposable
     event EventHandler<string>? OnDisconnected;
 
     event EventHandler<(string PlcId, string Message)>? OnError;
+
+    event EventHandler<PlcIndustrialConfig>? OnIndustrialConfigChanged;
 }

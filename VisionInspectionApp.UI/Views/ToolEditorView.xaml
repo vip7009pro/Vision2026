@@ -58,7 +58,150 @@
             <Button Content="📐 Calibration" Command="{Binding OpenCalibrationDialogCommand}" Margin="0,0,6,0" Padding="10,4" Background="#E65100" Foreground="White" BorderThickness="0" ToolTip="Hiệu chuẩn tỉ lệ Pixels/mm trực tiếp trên Job hiện tại" />
             <Button Content="♟ Chessboard Calib" Command="{Binding OpenChessboardCalibrationDialogCommand}" Margin="0,0,6,0" Padding="10,4" Background="#6A1B9A" Foreground="White" BorderThickness="0" ToolTip="Hiệu chuẩn camera bằng bảng Chessboard (tự động tính Intrinsic, Distortion, Pixels/mm)" />
             <Button Content="🏷️ Gán Mã - Job" Command="{Binding OpenProductAssignDialogCommand}" Margin="0,0,6,0" Padding="10,4" Background="#0288D1" Foreground="White" BorderThickness="0" ToolTip="Gán mã sản phẩm trong CSDL cho tệp Job đang mở" />
-            <Button Content="💾 Chụp &amp; Lưu Ảnh" Command="{Binding CaptureAndSaveImageCommand}" Margin="0,0,14,0" Padding="10,4" Background="#10B981" Foreground="White" BorderThickness="0" ToolTip="Chụp 1 frame nguyên bản chất lượng cao từ Camera và lưu ra file ảnh (PNG/BMP) để mang đi tạo/chỉnh sửa Job trên máy tính khác" />
+            <Button Content="💾 Chụp &amp; Lưu Ảnh" Command="{Binding CaptureAndSaveImageCommand}" Margin="0,0,6,0" Padding="10,4" Background="#10B981" Foreground="White" BorderThickness="0" ToolTip="Chụp 1 frame nguyên bản chất lượng cao từ Camera và lưu ra file ảnh (PNG/BMP) để mang đi tạo/chỉnh sửa Job trên máy tính khác" />
+            <Button Content="📜 Bản Đồ Cuộn" Command="{Binding OpenRollDefectMapCommand}" Margin="0,0,12,0" Padding="10,4" Background="#7C3AED" Foreground="White" BorderThickness="0" ToolTip="Mở giao diện Bản đồ khuyết tật cuộn thời gian thực và xuất báo cáo chất lượng cuộn (JSON, CSV, HTML)" />
+
+            <!-- Queue Visualization Status Bar (Right-Aligned, Stepped Bar / Segments) -->
+            <Border DockPanel.Dock="Right" Background="{DynamicResource PanelBackgroundBrush}" BorderBrush="{Binding QueueBorderBrush}" BorderThickness="1" CornerRadius="8" Padding="8,4" VerticalAlignment="Center" Margin="8,0,0,0" ToolTip="{Binding QueueToolTipText}">
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <TextBlock Text="📦" FontSize="12" VerticalAlignment="Center" Margin="0,0,4,0"/>
+                    <TextBlock Text="Queue:" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource TextMutedBrush}" VerticalAlignment="Center" Margin="0,0,4,0"/>
+                    <TextBlock Text="{Binding QueueStatusText}" FontWeight="Bold" FontSize="11.5" Foreground="{Binding QueueFillBrush}" VerticalAlignment="Center" Margin="0,0,6,0"/>
+
+                    <!-- Discrete Stepped Slots (8 items) -->
+                    <Border Background="#12000000" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="4" Padding="3,2" VerticalAlignment="Center">
+                        <StackPanel Orientation="Horizontal">
+                            <!-- Slot 0 -->
+                            <Border Width="8" Height="14" CornerRadius="2" Margin="1,0" BorderThickness="1">
+                                <Border.Style>
+                                    <Style TargetType="Border">
+                                        <Setter Property="Background" Value="#15808080"/>
+                                        <Setter Property="BorderBrush" Value="#30808080"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding QueueSlot0Active}" Value="True">
+                                                <Setter Property="Background" Value="{Binding DataContext.QueueFillBrush, RelativeSource={RelativeSource AncestorType=UserControl}}"/>
+                                                <Setter Property="BorderBrush" Value="{Binding DataContext.QueueBorderBrush, RelativeSource={RelativeSource AncestorType=UserControl}}"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Border.Style>
+                            </Border>
+
+                            <!-- Slot 1 -->
+                            <Border Width="8" Height="14" CornerRadius="2" Margin="1,0" BorderThickness="1">
+                                <Border.Style>
+                                    <Style TargetType="Border">
+                                        <Setter Property="Background" Value="#15808080"/>
+                                        <Setter Property="BorderBrush" Value="#30808080"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding QueueSlot1Active}" Value="True">
+                                                <Setter Property="Background" Value="{Binding DataContext.QueueFillBrush, RelativeSource={RelativeSource AncestorType=UserControl}}"/>
+                                                <Setter Property="BorderBrush" Value="{Binding DataContext.QueueBorderBrush, RelativeSource={RelativeSource AncestorType=UserControl}}"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Border.Style>
+                            </Border>
+
+                            <!-- Slot 2 -->
+                            <Border Width="8" Height="14" CornerRadius="2" Margin="1,0" BorderThickness="1">
+                                <Border.Style>
+                                    <Style TargetType="Border">
+                                        <Setter Property="Background" Value="#15808080"/>
+                                        <Setter Property="BorderBrush" Value="#30808080"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding QueueSlot2Active}" Value="True">
+                                                <Setter Property="Background" Value="{Binding DataContext.QueueFillBrush, RelativeSource={RelativeSource AncestorType=UserControl}}"/>
+                                                <Setter Property="BorderBrush" Value="{Binding DataContext.QueueBorderBrush, RelativeSource={RelativeSource AncestorType=UserControl}}"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Border.Style>
+                            </Border>
+
+                            <!-- Slot 3 -->
+                            <Border Width="8" Height="14" CornerRadius="2" Margin="1,0" BorderThickness="1">
+                                <Border.Style>
+                                    <Style TargetType="Border">
+                                        <Setter Property="Background" Value="#15808080"/>
+                                        <Setter Property="BorderBrush" Value="#30808080"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding QueueSlot3Active}" Value="True">
+                                                <Setter Property="Background" Value="{Binding DataContext.QueueFillBrush, RelativeSource={RelativeSource AncestorType=UserControl}}"/>
+                                                <Setter Property="BorderBrush" Value="{Binding DataContext.QueueBorderBrush, RelativeSource={RelativeSource AncestorType=UserControl}}"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Border.Style>
+                            </Border>
+
+                            <!-- Slot 4 -->
+                            <Border Width="8" Height="14" CornerRadius="2" Margin="1,0" BorderThickness="1">
+                                <Border.Style>
+                                    <Style TargetType="Border">
+                                        <Setter Property="Background" Value="#15808080"/>
+                                        <Setter Property="BorderBrush" Value="#30808080"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding QueueSlot4Active}" Value="True">
+                                                <Setter Property="Background" Value="{Binding DataContext.QueueFillBrush, RelativeSource={RelativeSource AncestorType=UserControl}}"/>
+                                                <Setter Property="BorderBrush" Value="{Binding DataContext.QueueBorderBrush, RelativeSource={RelativeSource AncestorType=UserControl}}"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Border.Style>
+                            </Border>
+
+                            <!-- Slot 5 -->
+                            <Border Width="8" Height="14" CornerRadius="2" Margin="1,0" BorderThickness="1">
+                                <Border.Style>
+                                    <Style TargetType="Border">
+                                        <Setter Property="Background" Value="#15808080"/>
+                                        <Setter Property="BorderBrush" Value="#30808080"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding QueueSlot5Active}" Value="True">
+                                                <Setter Property="Background" Value="{Binding DataContext.QueueFillBrush, RelativeSource={RelativeSource AncestorType=UserControl}}"/>
+                                                <Setter Property="BorderBrush" Value="{Binding DataContext.QueueBorderBrush, RelativeSource={RelativeSource AncestorType=UserControl}}"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Border.Style>
+                            </Border>
+
+                            <!-- Slot 6 -->
+                            <Border Width="8" Height="14" CornerRadius="2" Margin="1,0" BorderThickness="1">
+                                <Border.Style>
+                                    <Style TargetType="Border">
+                                        <Setter Property="Background" Value="#15808080"/>
+                                        <Setter Property="BorderBrush" Value="#30808080"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding QueueSlot6Active}" Value="True">
+                                                <Setter Property="Background" Value="{Binding DataContext.QueueFillBrush, RelativeSource={RelativeSource AncestorType=UserControl}}"/>
+                                                <Setter Property="BorderBrush" Value="{Binding DataContext.QueueBorderBrush, RelativeSource={RelativeSource AncestorType=UserControl}}"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Border.Style>
+                            </Border>
+
+                            <!-- Slot 7 -->
+                            <Border Width="8" Height="14" CornerRadius="2" Margin="1,0" BorderThickness="1">
+                                <Border.Style>
+                                    <Style TargetType="Border">
+                                        <Setter Property="Background" Value="#15808080"/>
+                                        <Setter Property="BorderBrush" Value="#30808080"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding QueueSlot7Active}" Value="True">
+                                                <Setter Property="Background" Value="{Binding DataContext.QueueFillBrush, RelativeSource={RelativeSource AncestorType=UserControl}}"/>
+                                                <Setter Property="BorderBrush" Value="{Binding DataContext.QueueBorderBrush, RelativeSource={RelativeSource AncestorType=UserControl}}"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Border.Style>
+                            </Border>
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+            </Border>
 
             <Border Background="{Binding ResultBackgroundBrush}" BorderBrush="{Binding ResultBorderBrush}" BorderThickness="1" CornerRadius="12" Padding="12,3" VerticalAlignment="Center">
                 <StackPanel Orientation="Horizontal">
@@ -1190,7 +1333,7 @@
                                                 <TextBlock Text="PLC Trigger Tag" VerticalAlignment="Center" Margin="4,2" FontSize="11" Foreground="{DynamicResource TextBrush}"/>
                                             </Border>
                                             <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
-                                                <ComboBox ItemsSource="{Binding AvailablePlcTagNames}" SelectedItem="{Binding ImageSource_PlcTriggerTagName, UpdateSourceTrigger=PropertyChanged}" Margin="2,1" FontSize="11" />
+                                                <ComboBox ItemsSource="{Binding AvailablePlcTagNames}" Text="{Binding ImageSource_PlcTriggerTagName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" SelectedItem="{Binding ImageSource_PlcTriggerTagName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" IsEditable="True" IsTextSearchEnabled="True" StaysOpenOnEdit="True" MaxDropDownHeight="220" PreviewMouseDown="ComboBox_PreviewMouseDown" Margin="2,1" FontSize="11" />
                                             </Border>
                                         </Grid>
                                     </Border>
@@ -2620,10 +2763,10 @@
                                     </Grid.RowDefinitions>
 
                                     <TextBlock Grid.Row="0" Grid.Column="0" Text="PLC:" VerticalAlignment="Center" Margin="0,2"/>
-                                    <ComboBox Grid.Row="0" Grid.Column="1" ItemsSource="{Binding AvailablePlcNames}" SelectedItem="{Binding PlcNode_PlcId, UpdateSourceTrigger=PropertyChanged}" Margin="2"/>
+                                    <ComboBox Grid.Row="0" Grid.Column="1" ItemsSource="{Binding AvailablePlcNames}" Text="{Binding PlcNode_PlcId, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" SelectedItem="{Binding PlcNode_PlcId, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" IsEditable="True" IsTextSearchEnabled="True" StaysOpenOnEdit="True" MaxDropDownHeight="220" PreviewMouseDown="ComboBox_PreviewMouseDown" Margin="2"/>
 
-                                    <TextBlock Grid.Row="1" Grid.Column="0" Text="Tag:" VerticalAlignment="Center" Margin="0,2"/>
-                                    <ComboBox Grid.Row="1" Grid.Column="1" ItemsSource="{Binding AvailablePlcTagNames}" SelectedItem="{Binding PlcNode_TagName, UpdateSourceTrigger=PropertyChanged}" Margin="2"/>
+                                    <TextBlock Grid.Row="1" Grid.Column="0" Text="Tag / Address:" VerticalAlignment="Center" Margin="0,2"/>
+                                    <ComboBox Grid.Row="1" Grid.Column="1" ItemsSource="{Binding AvailablePlcTagNames}" Text="{Binding PlcNode_TagName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" SelectedItem="{Binding PlcNode_TagName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" IsEditable="True" IsTextSearchEnabled="True" StaysOpenOnEdit="True" MaxDropDownHeight="220" PreviewMouseDown="ComboBox_PreviewMouseDown" Margin="2"/>
 
                                     <TextBlock Grid.Row="2" Grid.Column="0" Text="Data Type:" VerticalAlignment="Center" Margin="0,2"/>
                                     <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding PlcNode_TagDataType}" FontWeight="SemiBold" VerticalAlignment="Center" Margin="4,2"/>
@@ -2650,10 +2793,10 @@
                                     </Grid.RowDefinitions>
 
                                     <TextBlock Grid.Row="0" Grid.Column="0" Text="PLC:" VerticalAlignment="Center" Margin="0,2"/>
-                                    <ComboBox Grid.Row="0" Grid.Column="1" ItemsSource="{Binding AvailablePlcNames}" SelectedItem="{Binding PlcNode_PlcId, UpdateSourceTrigger=PropertyChanged}" Margin="2"/>
+                                    <ComboBox Grid.Row="0" Grid.Column="1" ItemsSource="{Binding AvailablePlcNames}" Text="{Binding PlcNode_PlcId, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" SelectedItem="{Binding PlcNode_PlcId, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" IsEditable="True" IsTextSearchEnabled="True" StaysOpenOnEdit="True" MaxDropDownHeight="220" PreviewMouseDown="ComboBox_PreviewMouseDown" Margin="2"/>
 
-                                    <TextBlock Grid.Row="1" Grid.Column="0" Text="Tag:" VerticalAlignment="Center" Margin="0,2"/>
-                                    <ComboBox Grid.Row="1" Grid.Column="1" ItemsSource="{Binding AvailablePlcTagNames}" SelectedItem="{Binding PlcNode_TagName, UpdateSourceTrigger=PropertyChanged}" Margin="2"/>
+                                    <TextBlock Grid.Row="1" Grid.Column="0" Text="Tag / Address:" VerticalAlignment="Center" Margin="0,2"/>
+                                    <ComboBox Grid.Row="1" Grid.Column="1" ItemsSource="{Binding AvailablePlcTagNames}" Text="{Binding PlcNode_TagName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" SelectedItem="{Binding PlcNode_TagName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" IsEditable="True" IsTextSearchEnabled="True" StaysOpenOnEdit="True" MaxDropDownHeight="220" PreviewMouseDown="ComboBox_PreviewMouseDown" Margin="2"/>
 
                                     <TextBlock Grid.Row="2" Grid.Column="0" Text="Write Value:" VerticalAlignment="Center" Margin="0,2"/>
                                     <TextBox Grid.Row="2" Grid.Column="1" Text="{Binding PlcNode_WriteValue, UpdateSourceTrigger=LostFocus}" Margin="2"/>
@@ -2682,10 +2825,10 @@
                                     </Grid.RowDefinitions>
 
                                     <TextBlock Grid.Row="0" Grid.Column="0" Text="PLC:" VerticalAlignment="Center" Margin="0,2"/>
-                                    <ComboBox Grid.Row="0" Grid.Column="1" ItemsSource="{Binding AvailablePlcNames}" SelectedItem="{Binding PlcNode_PlcId, UpdateSourceTrigger=PropertyChanged}" Margin="2"/>
+                                    <ComboBox Grid.Row="0" Grid.Column="1" ItemsSource="{Binding AvailablePlcNames}" Text="{Binding PlcNode_PlcId, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" SelectedItem="{Binding PlcNode_PlcId, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" IsEditable="True" IsTextSearchEnabled="True" StaysOpenOnEdit="True" MaxDropDownHeight="220" PreviewMouseDown="ComboBox_PreviewMouseDown" Margin="2"/>
 
-                                    <TextBlock Grid.Row="1" Grid.Column="0" Text="Tag:" VerticalAlignment="Center" Margin="0,2"/>
-                                    <ComboBox Grid.Row="1" Grid.Column="1" ItemsSource="{Binding AvailablePlcTagNames}" SelectedItem="{Binding PlcNode_TagName, UpdateSourceTrigger=PropertyChanged}" Margin="2"/>
+                                    <TextBlock Grid.Row="1" Grid.Column="0" Text="Tag / Address:" VerticalAlignment="Center" Margin="0,2"/>
+                                    <ComboBox Grid.Row="1" Grid.Column="1" ItemsSource="{Binding AvailablePlcTagNames}" Text="{Binding PlcNode_TagName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" SelectedItem="{Binding PlcNode_TagName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" IsEditable="True" IsTextSearchEnabled="True" StaysOpenOnEdit="True" MaxDropDownHeight="220" PreviewMouseDown="ComboBox_PreviewMouseDown" Margin="2"/>
 
                                     <TextBlock Grid.Row="2" Grid.Column="0" Text="Operator:" VerticalAlignment="Center" Margin="0,2"/>
                                     <ComboBox Grid.Row="2" Grid.Column="1" ItemsSource="{Binding AvailablePlcCompareOperators}" SelectedItem="{Binding PlcNode_Operator, UpdateSourceTrigger=PropertyChanged}" Margin="2"/>
@@ -2718,10 +2861,10 @@
                                     </Grid.RowDefinitions>
 
                                     <TextBlock Grid.Row="0" Grid.Column="0" Text="PLC:" VerticalAlignment="Center" Margin="0,2"/>
-                                    <ComboBox Grid.Row="0" Grid.Column="1" ItemsSource="{Binding AvailablePlcNames}" SelectedItem="{Binding PlcNode_PlcId, UpdateSourceTrigger=PropertyChanged}" Margin="2"/>
+                                    <ComboBox Grid.Row="0" Grid.Column="1" ItemsSource="{Binding AvailablePlcNames}" Text="{Binding PlcNode_PlcId, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" SelectedItem="{Binding PlcNode_PlcId, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" IsEditable="True" IsTextSearchEnabled="True" StaysOpenOnEdit="True" MaxDropDownHeight="220" PreviewMouseDown="ComboBox_PreviewMouseDown" Margin="2"/>
 
-                                    <TextBlock Grid.Row="1" Grid.Column="0" Text="Tag:" VerticalAlignment="Center" Margin="0,2"/>
-                                    <ComboBox Grid.Row="1" Grid.Column="1" ItemsSource="{Binding AvailablePlcTagNames}" SelectedItem="{Binding PlcNode_TagName, UpdateSourceTrigger=PropertyChanged}" Margin="2"/>
+                                    <TextBlock Grid.Row="1" Grid.Column="0" Text="Tag / Address:" VerticalAlignment="Center" Margin="0,2"/>
+                                    <ComboBox Grid.Row="1" Grid.Column="1" ItemsSource="{Binding AvailablePlcTagNames}" Text="{Binding PlcNode_TagName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" SelectedItem="{Binding PlcNode_TagName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" IsEditable="True" IsTextSearchEnabled="True" StaysOpenOnEdit="True" MaxDropDownHeight="220" PreviewMouseDown="ComboBox_PreviewMouseDown" Margin="2"/>
 
                                     <TextBlock Grid.Row="2" Grid.Column="0" Text="Edge Mode:" VerticalAlignment="Center" Margin="0,2"/>
                                     <ComboBox Grid.Row="2" Grid.Column="1" ItemsSource="{Binding AvailablePlcTriggerEdges}" SelectedItem="{Binding PlcNode_EdgeMode, UpdateSourceTrigger=PropertyChanged}" Margin="2"/>
@@ -2746,10 +2889,10 @@
                                     </Grid.RowDefinitions>
 
                                     <TextBlock Grid.Row="0" Grid.Column="0" Text="PLC:" VerticalAlignment="Center" Margin="0,2"/>
-                                    <ComboBox Grid.Row="0" Grid.Column="1" ItemsSource="{Binding AvailablePlcNames}" SelectedItem="{Binding PlcNode_PlcId, UpdateSourceTrigger=PropertyChanged}" Margin="2"/>
+                                    <ComboBox Grid.Row="0" Grid.Column="1" ItemsSource="{Binding AvailablePlcNames}" Text="{Binding PlcNode_PlcId, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" SelectedItem="{Binding PlcNode_PlcId, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" IsEditable="True" IsTextSearchEnabled="True" StaysOpenOnEdit="True" MaxDropDownHeight="220" PreviewMouseDown="ComboBox_PreviewMouseDown" Margin="2"/>
 
-                                    <TextBlock Grid.Row="1" Grid.Column="0" Text="Tags List:" VerticalAlignment="Center" Margin="0,2"/>
-                                    <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding PlcNode_BatchTagListString, UpdateSourceTrigger=LostFocus}" ToolTip="Comma separated tag names (e.g. X0, X1, D100)" Margin="2"/>
+                                    <TextBlock Grid.Row="1" Grid.Column="0" Text="Tags / Addresses:" VerticalAlignment="Center" Margin="0,2"/>
+                                    <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding PlcNode_BatchTagListString, UpdateSourceTrigger=LostFocus}" ToolTip="Comma separated tag names or addresses (e.g. X0, X1, D100)" Margin="2"/>
                                 </Grid>
                             </StackPanel>
 
@@ -2768,10 +2911,10 @@
                                     </Grid.RowDefinitions>
 
                                     <TextBlock Grid.Row="0" Grid.Column="0" Text="PLC:" VerticalAlignment="Center" Margin="0,2"/>
-                                    <ComboBox Grid.Row="0" Grid.Column="1" ItemsSource="{Binding AvailablePlcNames}" SelectedItem="{Binding PlcNode_PlcId, UpdateSourceTrigger=PropertyChanged}" Margin="2"/>
+                                    <ComboBox Grid.Row="0" Grid.Column="1" ItemsSource="{Binding AvailablePlcNames}" Text="{Binding PlcNode_PlcId, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" SelectedItem="{Binding PlcNode_PlcId, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" IsEditable="True" IsTextSearchEnabled="True" StaysOpenOnEdit="True" MaxDropDownHeight="220" PreviewMouseDown="ComboBox_PreviewMouseDown" Margin="2"/>
 
-                                    <TextBlock Grid.Row="1" Grid.Column="0" Text="Tag=Value:" VerticalAlignment="Center" Margin="0,2"/>
-                                    <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding PlcNode_BatchWriteValuesString, UpdateSourceTrigger=LostFocus}" ToolTip="Comma separated Tag=Value (e.g. Y0=true, D100=500)" Margin="2"/>
+                                    <TextBlock Grid.Row="1" Grid.Column="0" Text="Tag/Address=Value:" VerticalAlignment="Center" Margin="0,2"/>
+                                    <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding PlcNode_BatchWriteValuesString, UpdateSourceTrigger=LostFocus}" ToolTip="Comma separated Tag/Address=Value (e.g. Y0=true, D100=500)" Margin="2"/>
                                 </Grid>
                             </StackPanel>
 
@@ -2807,21 +2950,21 @@
                                                     </Grid.ColumnDefinitions>
 
                                                     <TextBlock Grid.Row="0" Grid.Column="0" Text="PLC Target:" VerticalAlignment="Center" Foreground="#CCCCCC" FontSize="11"/>
-                                                    <ComboBox Grid.Row="0" Grid.Column="1" ItemsSource="{Binding DataContext.AvailablePlcNames, RelativeSource={RelativeSource AncestorType=UserControl}}" Text="{Binding PlcId, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" IsEditable="True" Margin="2" Height="24"/>
+                                                    <ComboBox Grid.Row="0" Grid.Column="1" ItemsSource="{Binding DataContext.AvailablePlcNames, RelativeSource={RelativeSource AncestorType=UserControl}}" Text="{Binding PlcId, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" IsEditable="True" IsTextSearchEnabled="True" StaysOpenOnEdit="True" MaxDropDownHeight="220" PreviewMouseDown="ComboBox_PreviewMouseDown" Margin="2" Height="24"/>
                                                     <Button Grid.Row="0" Grid.Column="2" Content="❌" Command="{Binding DataContext.RemoveResultTransferItemCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}" Background="Transparent" Foreground="#FF5252" BorderThickness="0" ToolTip="Xóa dòng này" Margin="4,0,0,0" VerticalAlignment="Center"/>
 
-                                                    <TextBlock Grid.Row="1" Grid.Column="0" Text="Tag PLC:" VerticalAlignment="Center" Foreground="#CCCCCC" FontSize="11"/>
-                                                    <ComboBox Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="2" ItemsSource="{Binding DataContext.AvailablePlcAllTagNames, RelativeSource={RelativeSource AncestorType=UserControl}}" Text="{Binding TagName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" IsEditable="True" Margin="2" Height="24"/>
+                                                    <TextBlock Grid.Row="1" Grid.Column="0" Text="Tag / Address:" VerticalAlignment="Center" Foreground="#CCCCCC" FontSize="11"/>
+                                                    <ComboBox Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="2" ItemsSource="{Binding DataContext.AvailablePlcAllTagNames, RelativeSource={RelativeSource AncestorType=UserControl}}" Text="{Binding TagName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" IsEditable="True" IsTextSearchEnabled="True" StaysOpenOnEdit="True" MaxDropDownHeight="220" PreviewMouseDown="ComboBox_PreviewMouseDown" Margin="2" Height="24"/>
 
-                                    <TextBlock Grid.Row="2" Grid.Column="0" Text="Giá trị gửi:" VerticalAlignment="Center" Foreground="#CCCCCC" FontSize="11"/>
-                                    <TextBox Grid.Row="2" Grid.Column="1" Grid.ColumnSpan="2" Text="{Binding ValueExpression, UpdateSourceTrigger=PropertyChanged}" controls:IntellisenseBehavior.Enable="True" Margin="2" Height="24"
-                                             ToolTip="Nhập giá trị hoặc cú pháp: TotalPass, TotalFail, TotalPassBit, TotalFailBit, {Origin.X}, {Origin.Y}, {Origin.AngleDeg}, {Distance1.Value}"/>
+                                                    <TextBlock Grid.Row="2" Grid.Column="0" Text="Giá trị gửi:" VerticalAlignment="Center" Foreground="#CCCCCC" FontSize="11"/>
+                                                    <TextBox Grid.Row="2" Grid.Column="1" Grid.ColumnSpan="2" Text="{Binding ValueExpression, UpdateSourceTrigger=PropertyChanged}" controls:IntellisenseBehavior.Enable="True" Margin="2" Height="24"
+                                                             ToolTip="Nhập giá trị hoặc cú pháp: TotalPass, TotalFail, TotalPassBit, TotalFailBit, {Origin.X}, {Origin.Y}, {Origin.AngleDeg}, {Distance1.Value}"/>
 
-                                    <TextBlock Grid.Row="3" Grid.Column="0" Text="Điều kiện:" VerticalAlignment="Center" Foreground="#CCCCCC" FontSize="11"/>
-                                    <ComboBox Grid.Row="3" Grid.Column="1" Grid.ColumnSpan="2" ItemsSource="{Binding AvailableConditions}" SelectedItem="{Binding Condition, UpdateSourceTrigger=PropertyChanged}" Margin="2" Height="24"/>
-                                </Grid>
-                            </Border>
-                        </DataTemplate>
+                                                    <TextBlock Grid.Row="3" Grid.Column="0" Text="Điều kiện:" VerticalAlignment="Center" Foreground="#CCCCCC" FontSize="11"/>
+                                                    <ComboBox Grid.Row="3" Grid.Column="1" Grid.ColumnSpan="2" ItemsSource="{Binding AvailableConditions}" SelectedItem="{Binding Condition, UpdateSourceTrigger=PropertyChanged}" Margin="2" Height="24"/>
+                                                </Grid>
+                                            </Border>
+                                        </DataTemplate>
                     </ItemsControl.ItemTemplate>
                 </ItemsControl>
 

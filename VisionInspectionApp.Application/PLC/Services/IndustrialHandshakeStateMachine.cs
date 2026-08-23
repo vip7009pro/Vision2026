@@ -34,6 +34,12 @@ public sealed class IndustrialHandshakeStateMachine
     private HandshakeState _currentState = HandshakeState.Idle;
     private string _plcId = "PLC1";
 
+    public string PlcId
+    {
+        get => _plcId;
+        set => _plcId = value ?? "PLC1";
+    }
+
     // Cấu hình các Tag I/O bắt tay
     public string ReadyTagName { get; set; } = "Y1_VisionReady";
     public string BusyTagName { get; set; } = "Y2_VisionBusy";

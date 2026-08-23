@@ -30,9 +30,50 @@ public sealed partial class ToolEditorViewModel : ObservableObject
 
     public bool IsAnyPlcNode => IsPlcReadNode || IsPlcWriteNode || IsPlcWaitNode || IsPlcTriggerNode || IsPlcBatchReadNode || IsPlcBatchWriteNode || IsResultTransferNode;
 
-    public IEnumerable<string> AvailablePlcNames => _plcManagerService.Plcs.Select(p => p.Name).ToList();
+    public IEnumerable<string> AvailablePlcNames
+    {
+        get
+        {
+            var list = _plcManagerService.Plcs.Select(p => p.Name).Where(n => !string.IsNullOrWhiteSpace(n)).ToList();
+            if (list.Count == 0)
+            {
+                list.AddRange(new[] { "PLC1", "PLC2", "PLC_MAIN", "PLC_01" });
+            }
+            return list.Distinct().ToList();
+        }
+    }
 
-    public IEnumerable<string> AvailablePlcAllTagNames => _plcManagerService.Tags.Select(t => t.Name).Where(n => !string.IsNullOrWhiteSpace(n)).Distinct().ToList();
+    public IEnumerable<string> AvailablePlcAllTagNames
+    {
+        get
+        {
+            var list = new List<string>();
+
+            // 1. All Tag Names & Addresses from Service
+            foreach (var t in _plcManagerService.Tags)
+            {
+                if (!string.IsNullOrWhiteSpace(t.Name)) list.Add(t.Name);
+                if (!string.IsNullOrWhiteSpace(t.Address)) list.Add(t.Address);
+            }
+
+            // 2. Standard Common Direct Addresses
+            for (int i = 0; i <= 15; i++) list.Add($"X{i}");
+            for (int i = 0; i <= 15; i++) list.Add($"Y{i}");
+            for (int i = 0; i <= 20; i++) list.Add($"M{i}");
+            list.AddRange(new[] { "D0", "D10", "D100", "D200", "D500", "D1000", "D1002", "D1004", "D2000" });
+            list.AddRange(new[] { "MW100", "MW102", "MW200" });
+
+            // 3. Standard Industrial Named Tags
+            list.AddRange(new[] {
+                "X0_Trigger", "X0_PlcHeartbeat", "X1_PlcAck", "X2_SensorIn",
+                "Y0_VisionHeartbeat", "Y0_RejectPiston", "Y1_VisionReady",
+                "Y2_VisionBusy", "Y3_VisionDone", "Y4_VisionPass", "Y5_VisionNG",
+                "Y10_VisionFault", "D1000_Encoder", "D1002_Speed"
+            });
+
+            return list.Where(n => !string.IsNullOrWhiteSpace(n)).Distinct().ToList();
+        }
+    }
 
     public IEnumerable<string> AvailablePlcTagNames
     {
@@ -44,12 +85,21 @@ public sealed partial class ToolEditorViewModel : ObservableObject
             var plc = _plcManagerService.Plcs.FirstOrDefault(p => string.Equals(p.Name, plcName, StringComparison.OrdinalIgnoreCase) || string.Equals(p.Id, plcName, StringComparison.OrdinalIgnoreCase));
             string targetId = plc?.Id ?? plcName;
 
-            return _plcManagerService.Tags
+            var list = new List<string>();
+            var filteredTags = _plcManagerService.Tags
                 .Where(t => string.Equals(t.PlcId, targetId, StringComparison.OrdinalIgnoreCase) || string.Equals(t.PlcId, plcName, StringComparison.OrdinalIgnoreCase))
-                .Select(t => t.Name)
-                .Where(n => !string.IsNullOrWhiteSpace(n))
-                .Distinct()
                 .ToList();
+
+            foreach (var t in filteredTags)
+            {
+                if (!string.IsNullOrWhiteSpace(t.Name)) list.Add(t.Name);
+                if (!string.IsNullOrWhiteSpace(t.Address)) list.Add(t.Address);
+            }
+
+            // Always provide standard direct addresses & named tags as fallbacks
+            list.AddRange(AvailablePlcAllTagNames);
+
+            return list.Where(n => !string.IsNullOrWhiteSpace(n)).Distinct().ToList();
         }
     }
 

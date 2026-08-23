@@ -788,6 +788,44 @@ Lộ trình tích hợp tính năng Chụp ảnh từ camera và hỗ trợ các
     - [x] Task 228: Xây dựng Watchdog Heartbeat 2 chiều PLC $\leftrightarrow$ Vision PC (chu kỳ 100ms, timeout 300ms) bảo vệ an toàn liên động motor kéo cuộn.
     - [x] Task 229: Kiểm thử Tải Dài Hạn (24h Stress & Soak Test với 500.000 frame liên tục), đo kiểm độ ổn định RAM phẳng, 0% GC Pause, sai số Reject $\le \pm 1.0\text{ mm}$.
 
+  - ### 🔹 **PHASE 6: Toàn Diện Hóa UI/UX Cấu Hình PLC Công Nghiệp & Trực Quan Hóa Hàng Đợi (Queue Visualization UI)**
+    - [x] Task 230: Đưa toàn bộ cấu hình 5 Module công nghiệp lên UI Quản lý PLC (5 Tabs), Trực quan hóa Hàng đợi ảnh (Queue Stepped Bar căn phải) và Cửa sổ Bản đồ Cuộn:
+      - `Đưa Toàn Bộ Cấu Hình PLC Lên UI (Không Còn Bất Kỳ Tag Nào Hardcode)`:
+        - Tạo mô hình `PlcIndustrialConfig` gồm 4 nhóm: *Bắt tay 24/7*, *Watchdog & An toàn*, *Motion & Encoder*, *Shift Register & Trạm Reject*.
+        - Nâng cấp `PlcManagerService` tự động lưu/tải cấu hình công nghiệp toàn cục vào `plc_config.json` và phát sự kiện `OnIndustrialConfigChanged`.
+        - Tái cấu trúc `PlcManagerWindow.xaml` thành hệ thống 5 Tab công nghiệp chuyên nghiệp: *1. Kết Nối & Danh Bạ Tags*, *2. Bắt Tay 24/7 (Handshake)*, *3. Watchdog & An Toàn (Heartbeat)*, *4. Motion & Encoder Sync*, *5. Shift Register & Loại Bỏ*.
+      - `Trực Quan Hóa Hàng Đợi Xử Lý Ảnh (Queue Stepped Bar) Căn Phải Trên Tool Editor Toolbar`:
+        - Thiết kế thanh bar 8 nấc (Discrete LED Segments) căn phải trên Toolbar của `ToolEditorView.xaml` (cùng hàng các nút `🏷️ Gán Mã - Job`, `💾 Chụp & Lưu Ảnh`).
+        - Mỗi nấc đại diện cho 1 con hàng / frame ảnh đang nằm trong hàng đợi xử lý.
+        - Đổi màu cảnh báo tải tự động: Xanh `#10B981` (Tải nhẹ $\le 2$), Vàng `#F59E0B` (Tải vừa $3-5$), Đỏ `#EF4444` (Tải cao $\ge 6$).
+        - Cập nhật decoupled không khóa luồng qua atomic read trong timer `_continuousStatsTimer` (100ms), bảo đảm **0% suy giảm hiệu năng** cho luồng thị giác.
+      - `Cửa Sổ Bản Đồ Khuyết Tật Cuộn & Báo Cáo Chất Lượng`:
+        - Tạo `RollDefectMapViewModel` và `RollDefectMapWindow.xaml` nhúng `RollDefectMapControl` với các nút xuất báo cáo JSON, CSV Cut List, HTML Certificate.
+        - Bổ sung nút mở nhanh `📜 Bản Đồ Cuộn` trên Toolbar Tool Editor và menu item trong `MainWindow.xaml`.
+    - [x] Task 231: Sửa lỗi ComboBox trong 5 Tab PLC Manager không xổ danh sách Tag/PLC khi bấm chuột:
+      - `Xử Lý Vấn Đề Chuột Khi Click Vào Vùng TextBox Của Editable ComboBox`:
+        - Bổ sung sự kiện `PreviewMouseDown="ComboBox_PreviewMouseDown"` trong `PlcManagerWindow.xaml.cs` và gán vào toàn bộ các ComboBox trong các Tab 2, 3, 4, 5. Khi người dùng click chuột vào bất kỳ đâu trên ô nhập (kể cả vùng chữ TextBlock/TextBox), ComboBox lập tức mở drop-down list (`cb.IsDropDownOpen = true`).
+        - Bổ sung các thuộc tính chuẩn UX WPF: `IsTextSearchEnabled="True"`, `StaysOpenOnEdit="True"`, `MaxDropDownHeight="220"`.
+      - `Đồng Bộ Hai Chiều Text & SelectedItem`:
+        - Đảm bảo toàn bộ ComboBox được liên kết 2 chiều với cả `Text` và `SelectedItem` (`Mode=TwoWay, UpdateSourceTrigger=PropertyChanged`), cho phép người dùng gõ tay địa chỉ trực tiếp (VD: `X0`, `Y1`, `D1000`) hoặc chọn nhanh từ danh sách xổ xuống mà không bị mất dữ liệu.
+      - `Mở Rộng & Làm Giàu Danh Sách AvailableTagNames & AvailablePlcNames`:
+        - Nâng cấp `AvailableTagNames` và `AvailablePlcNames` thành `ObservableCollection<string>` trong `PlcManagerViewModel`.
+        - Tự động nạp sẵn các địa chỉ bit/word chuẩn công nghiệp (`X0..X11`, `Y0..Y11`, `D0..D2000`, `M0..M100`, `MW100..MW200`), các Tag công nghiệp mặc định (`VisionReady`, `VisionBusy`, `VisionDone`, `PlcAck`, `Heartbeat`, `EmergencyFault`, `Encoder`, `Reject`), toàn bộ Tag từ `PlcManagerService` (cả `Name` và `Address`), và các Tag từ `IndustrialConfig`.
+      - `Biên Dịch & Kiểm Thử Thành Công 100%`: Solution biên dịch **0 Error(s)**, toàn bộ unit tests đạt PASS 100%.
+    - [x] Task 232: Cho phép nhập trực tiếp địa chỉ PLC không cần thông qua tên Tag (Direct Address Input & Dynamic Inferred Polling):
+      - `Nhận Diện & Tự Động Suy Luận Kiểu Dữ Liệu Từ Tiền Tố Địa Chỉ (InferDataTypeFromAddress)`:
+        - Tự động nhận diện các thanh ghi 16-bit/32-bit (`MW`, `IW`, `QW`, `SW`, `ZR`, `TN`, `CN`, `SD`, `3x`, `4x`, `D`, `W`, `R`, `Z`) $\rightarrow$ `Int16`/`Int32`.
+        - Tự động nhận diện các bit/cuộn tiếp điểm (`SM`, `TS`, `TC`, `SS`, `SC`, `CS`, `CC`, `DX`, `DY`, `0x`, `1x`, `X`, `Y`, `M`, `L`, `B`, `F`, `S`) $\rightarrow$ `Bool`.
+      - `Tự Động Nạp Địa Chỉ Trực Tiếp Vào Vòng Lặp Polling Ngầm (GetAllTagsToPoll)`:
+        - `PlcManagerService` tự động tổng hợp tất cả các địa chỉ trực tiếp được cấu hình trong `PlcIndustrialConfig` (Handshake, Watchdog, Motion, ShiftRegister) cùng với danh bạ Tags để nạp vào vòng lặp Polling chạy ngầm, không bắt buộc phải khai báo thủ công trong bảng Tags.
+      - `Hạ Tầng Đọc/Ghi/Cache 2 Chiều & Phát Sự Kiện Đa Khóa`:
+        - Nâng cấp `ReadTagValueAsync` & `WriteTagValueAsync` tạo tag động theo địa chỉ trực tiếp, lưu Cache và phát `OnTagChanged` đồng thời cho cả `TagName`, `Address`, `PlcId` và `PlcName`.
+      - `Đồng Bộ Hóa Toàn Bộ ComboBox Trên Tool Editor & PLC Manager`:
+        - Cập nhật toàn bộ các ComboBox của ImageSource PLC Trigger, PlcRead, PlcWrite, PlcWait, PlcTrigger, Batch Read, Batch Write, Result Transfer thành Editable ComboBox một chạm (`IsEditable="True"`, `IsTextSearchEnabled="True"`, `StaysOpenOnEdit="True"`, `PreviewMouseDown="ComboBox_PreviewMouseDown"`).
+      - `Biên Dịch & Kiểm Thử Thành Công 100%`:
+        - Solution biên dịch **0 Error(s)**.
+        - Unit test `TestDirectAddressSupport` đạt kết quả **PASS 100%** (4/4 tests).
+
 
 
 
