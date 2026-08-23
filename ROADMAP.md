@@ -773,20 +773,20 @@ Lộ trình tích hợp tính năng Chụp ảnh từ camera và hỗ trợ các
     - [x] Task 219: Tích hợp Bộ phát hiện rớt frame phần cứng/phần mềm (`FrameDropDetector`) và Watchdog tự động kết nối lại Camera (`CameraWatchdog`).
 
   - ### 🔹 **PHASE 3: Tích Hợp PLC Motion, Encoder & Định Vị Vật Lý Trên Cuộn**
-    - [ ] Task 220: Bổ sung cấu trúc `FrameMetadata` (FrameIndex, HardwareTimestamp, EncoderPulses, WebPositionMm, LineSpeedMpm) vào `InspectionResult`.
-    - [ ] Task 221: Xây dựng dịch vụ `PlcMotionSyncService` đọc liên tục thanh ghi Encoder High-Speed Counter và tốc độ cuộn (m/min) từ PLC.
-    - [ ] Task 222: Chuẩn hóa Hệ tọa độ Cuộn (Web Coordinate System $X_{\text{web}}, Y_{\text{web}}$ theo mét dài) và thuật toán bù trừ độ mờ chuyển động (Motion Blur / Exposure Compensation).
+    - [x] Task 220: Bổ sung cấu trúc `FrameMetadata` (FrameIndex, HardwareTimestamp, EncoderPulses, WebPositionMm, LineSpeedMpm) vào `InspectionResult`.
+    - [x] Task 221: Xây dựng dịch vụ `PlcMotionSyncService` đọc liên tục thanh ghi Encoder High-Speed Counter và tốc độ cuộn (m/min) từ PLC.
+    - [x] Task 222: Chuẩn hóa Hệ tọa độ Cuộn (Web Coordinate System $X_{\text{web}}, Y_{\text{web}}$ theo mét dài) và thuật toán bù trừ độ mờ chuyển động (Motion Blur / Exposure Compensation).
 
   - ### 🔹 **PHASE 4: Hệ Thống Ghi Nhớ Vị Trí Lỗi, Bản Đồ Khuyết Tật Cuộn & Theo Dõi Shift Register**
-    - [ ] Task 223: Xây dựng module `RollDefectManager` quản lý phiên cuộn (`RollSession`) và cơ sở dữ liệu lưu trữ lịch sử chi tiết mọi vết lỗi trên cuộn.
-    - [ ] Task 224: Xây dựng cơ cấu `ShiftRegisterTracker`: Theo dõi vị trí lỗi theo xung Encoder thời gian thực, kích hoạt lệnh loại bỏ/đánh dấu đến trạm Reject ($L_{\text{reject}}$ mm) qua PLC.
-    - [ ] Task 225: Thiết kế Giao diện Bản đồ Khuyết tật Cuộn thời gian thực (`Real-time Roll Defect Map Visualizer`) hiển thị trực quan toàn dải cuộn từ 0m đến $N$ mét kèm mã màu phân cấp lỗi.
-    - [ ] Task 226: Xây dựng tính năng Xuất Báo cáo Chất lượng Cuộn (Roll Quality Certificate & Cut List Report) ra PDF/Excel/JSON.
+    - [x] Task 223: Xây dựng module `RollDefectManager` quản lý phiên cuộn (`RollSession`) và cơ sở dữ liệu lưu trữ lịch sử chi tiết mọi vết lỗi trên cuộn.
+    - [x] Task 224: Xây dựng cơ cấu `ShiftRegisterTracker`: Theo dõi vị trí lỗi theo xung Encoder thời gian thực, kích hoạt lệnh loại bỏ/đánh dấu đến trạm Reject ($L_{\text{reject}}$ mm) qua PLC.
+    - [x] Task 225: Thiết kế Giao diện Bản đồ Khuyết tật Cuộn thời gian thực (`Real-time Roll Defect Map Visualizer`) hiển thị trực quan toàn dải cuộn từ 0m đến $N$ mét kèm mã màu phân cấp lỗi.
+    - [x] Task 226: Xây dựng tính năng Xuất Báo cáo Chất lượng Cuộn (Roll Quality Certificate & Cut List Report) ra PDF/Excel/JSON.
 
   - ### 🔹 **PHASE 5: Hoàn Thiện Bắt Tay Công Nghiệp PLC 24/7, Tự Phục Hồi & Kiểm Thử Tải Thực Tế**
-    - [ ] Task 227: Triển khai Máy trạng thái Bắt tay PLC Công nghiệp (Industrial Handshake State Machine: `IDLE` -> `READY` -> `ARMED` -> `TRIGGERED` -> `INSPECTING` -> `LATCH` -> `ACK` -> `DONE`).
-    - [ ] Task 228: Xây dựng Watchdog Heartbeat 2 chiều PLC $\leftrightarrow$ Vision PC (chu kỳ 100ms, timeout 300ms) bảo vệ an toàn liên động motor kéo cuộn.
-    - [ ] Task 229: Kiểm thử Tải Dài Hạn (24h Stress & Soak Test với 500.000 frame liên tục), đo kiểm độ ổn định RAM phẳng, 0% GC Pause, sai số Reject $\le \pm 1.0\text{ mm}$.
+    - [x] Task 227: Triển khai Máy trạng thái Bắt tay PLC Công nghiệp (Industrial Handshake State Machine: `IDLE` -> `READY` -> `ARMED` -> `TRIGGERED` -> `INSPECTING` -> `LATCH` -> `ACK` -> `DONE`).
+    - [x] Task 228: Xây dựng Watchdog Heartbeat 2 chiều PLC $\leftrightarrow$ Vision PC (chu kỳ 100ms, timeout 300ms) bảo vệ an toàn liên động motor kéo cuộn.
+    - [x] Task 229: Kiểm thử Tải Dài Hạn (24h Stress & Soak Test với 500.000 frame liên tục), đo kiểm độ ổn định RAM phẳng, 0% GC Pause, sai số Reject $\le \pm 1.0\text{ mm}$.
 
 
 

@@ -170,11 +170,21 @@ namespace VisionInspectionApp.UI.ViewModels
         private readonly IJobService _jobService;
         private readonly IRecentJobsService? _recentJobsService;
         private readonly Application.PLC.Services.IPlcManagerService _plcManagerService;
+        private readonly Application.PLC.Services.PlcMotionSyncService _motionSyncService;
+        private readonly Application.Services.RollDefectManager _rollDefectManager = new();
+        private readonly Application.PLC.Services.ShiftRegisterTracker _shiftRegisterTracker;
+        private readonly Application.PLC.Services.PlcHeartbeatWatchdog _plcHeartbeatWatchdog;
+        private readonly Application.PLC.Services.IndustrialHandshakeStateMachine _handshakeStateMachine;
         private readonly Application.DB.Services.IDbManagerService _dbManagerService;
         private readonly IServiceProvider? _serviceProvider;
         public UndoRedoManager UndoManager { get; }
         public IRelayCommand UndoCommand { get; }
         public IRelayCommand RedoCommand { get; }
+        public Application.PLC.Services.PlcMotionSyncService MotionSyncService => _motionSyncService;
+        public Application.Services.RollDefectManager RollDefectManager => _rollDefectManager;
+        public Application.PLC.Services.ShiftRegisterTracker ShiftRegisterTracker => _shiftRegisterTracker;
+        public Application.PLC.Services.PlcHeartbeatWatchdog PlcHeartbeatWatchdog => _plcHeartbeatWatchdog;
+        public Application.PLC.Services.IndustrialHandshakeStateMachine HandshakeStateMachine => _handshakeStateMachine;
 
         public ToolEditorViewModel(IConfigService configService, ConfigStoreOptions storeOptions, SharedImageContext sharedImage, ImagePreprocessor preprocessor, LineDetector lineDetector, IInspectionService inspectionService, CameraService cameraService, IJobService jobService, UndoRedoManager undoManager, Application.PLC.Services.IPlcManagerService plcManagerService, Application.DB.Services.IDbManagerService dbManagerService, IRecentJobsService? recentJobsService = null, IServiceProvider? serviceProvider = null)
         {
@@ -198,6 +208,12 @@ namespace VisionInspectionApp.UI.ViewModels
             _inspectionService = inspectionService;
             _cameraService = cameraService;
             _plcManagerService = plcManagerService;
+            _motionSyncService = new Application.PLC.Services.PlcMotionSyncService(_plcManagerService);
+            _shiftRegisterTracker = new Application.PLC.Services.ShiftRegisterTracker(_plcManagerService);
+            _rollDefectManager.OnDefectRecorded += (_, defect) => _shiftRegisterTracker.EnqueueDefect(defect);
+            _plcHeartbeatWatchdog = new Application.PLC.Services.PlcHeartbeatWatchdog(_plcManagerService);
+            _handshakeStateMachine = new Application.PLC.Services.IndustrialHandshakeStateMachine(_plcManagerService);
+            _plcHeartbeatWatchdog.Start();
             _dbManagerService = dbManagerService;
             _plcManagerService.OnTagChanged += OnPlcTagChangedForTrigger;
             _autoSaveTimer = new DispatcherTimer

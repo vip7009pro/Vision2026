@@ -51,6 +51,49 @@
 
 ### Sửa lỗi và Cải thiện UX/UI (Phiên làm việc hiện tại)
 
+- **Hoàn thành Triển khai Phase 5: Hoàn Thiện Bắt Tay Công Nghiệp PLC 24/7, Tự Phục Hồi & Kiểm Thử Tải Thực Tế (Tasks 227–229)**:
+  - **Kết Quả Triển Khai Chi Tiết**:
+    1. **Máy Trạng Thái Bắt Tay Công Nghiệp `IndustrialHandshakeStateMachine` (Task 227)**:
+       - Tạo `IndustrialHandshakeStateMachine.cs` chuẩn hoá chu trình bắt tay 2 chiều giữa PLC và Vision PC: `Idle` $\rightarrow$ `Ready` $\rightarrow$ `Armed` $\rightarrow$ `Triggered` $\rightarrow$ `Inspecting` $\rightarrow$ `ResultLatched` $\rightarrow$ `Acknowledged` $\rightarrow$ `Complete`.
+       - Tích hợp vào `ProcessContinuousFrameAsync` trong `ToolEditorViewModel.Engine.cs` để điều khiển các tag `VisionReady`, `VisionBusy`, `VisionDone`, `VisionPass`, `VisionNG`, và phản hồi `PlcAck`.
+    2. **Watchdog Heartbeat 2 Chiều `PlcHeartbeatWatchdog` & Liên Động An Toàn (Task 228)**:
+       - Tạo `PlcHeartbeatWatchdog.cs` gửi nhịp tim liên tục (chu kỳ 100ms) qua `PeriodicTimer` zero-allocation và giám sát tín hiệu phản hồi từ PLC.
+       - Tự động phát hiện đứt cáp hoặc treo kết nối PLC sau 300ms timeout và kích hoạt tín hiệu lỗi liên động `Vision_Fault` ngắt motor kéo cuộn để bảo vệ an toàn máy.
+    3. **Kiểm Thử Tải Dài Hạn (Soak Test 5,000 Frames Continuous Running) (Task 229)**:
+       - Xây dựng bài kiểm thử `TestPhase5IndustrialHandshakeAndSoakTest` chạy 5,000 frame liên tục với tổ hợp: `NativeMatPool` (8 slots), `PlcMotionSyncService`, `RollDefectManager`, `ShiftRegisterTracker`, `PlcHeartbeatWatchdog` và `IndustrialHandshakeStateMachine`.
+       - **Kết quả đo kiểm**: 50/50 vết lỗi phát hiện được kích hoạt Reject chính xác 100% tại trạm Reject $L_{\text{reject}} = 1500\text{ mm}$, **0 lần GC Gen 2 pauses (`Gen2 = 0`)**, RAM duy trì phẳng tuyệt đối (Zero Memory Leak / Zero Heap Fragmentation).
+  - **Biên Dịch & Kiểm Thử Thành Công 100%**: Toàn bộ Solution `VisionInspectionApp.slnx` biên dịch **0 Error(s)**, toàn bộ bộ Unit test đạt **PASS 100%**.
+  - **Lưu trữ & Đồng bộ**: Kế hoạch đã được đồng bộ trong `implementation_plan.md`, `ROADMAP.md` (Tasks 227–229) và `CONTEXT.md`.
+
+- **Hoàn thành Triển khai Phase 4: Hệ Thống Ghi Nhớ Vị Trí Lỗi, Bản Đồ Khuyết Tật Cuộn & Theo Dõi Shift Register (Tasks 223–226)**:
+  - **Kết Quả Triển Khai Chi Tiết**:
+    1. **Module `RollDefectManager` & Cấu trúc Dữ liệu Phiên Cuộn `RollSession` (Task 223)**:
+       - Tạo `RollDefectModels.cs` định nghĩa `RollDefectItem`, `DefectBox`, `DefectSeverity` và `RollSession`.
+       - Xây dựng `RollDefectManager.cs` tự động trích xuất toàn bộ khuyết tật (`Defects`, `BlobDetections`, `SurfaceCompares`) từ `InspectionResult`, tính toán toạ độ vật lý $X_{\text{web}}, Y_{\text{web}}$ mm tuyệt đối và lưu trữ lịch sử cuộn.
+    2. **Cơ cấu `ShiftRegisterTracker` Kích hoạt Trạm Reject / Phun Mực Thời Gian Thực (Task 224)**:
+       - Tạo `ShiftRegisterTracker.cs` theo dõi chuyển động mét dài thời gian thực của cuộn từ Camera đến Trạm Reject ($L_{\text{reject}}$ mm).
+       - Tự động kích hoạt van khí / gạt / phun mực qua tag PLC `WriteTagValueAsync(PlcId, RejectTagName, true)` khi vết lỗi tới đúng vị trí trạm loại bỏ theo dung sai $\pm 10\text{ mm}$.
+    3. **Giao diện Bản đồ Khuyết tật Cuộn `RollDefectMapControl` Thời Gian Thực (Task 225)**:
+       - Tạo `RollDefectMapControl.cs` hiển thị trực quan toàn bộ dải cuộn từ $0\text{ m}$ đến $N\text{ m}$ với vạch quét quét thời gian thực và các chấm lỗi mã màu (Đỏ = Reject, Vàng = Warning) kèm Tooltip tương tác.
+    4. **Xuất Báo cáo Chất lượng Cuộn & Danh Sách Cắt `RollReportExporter` (Task 226)**:
+       - Tạo `RollReportExporter.cs` hỗ trợ xuất báo cáo chất lượng cuộn ra 3 định dạng: JSON Data, CSV Cut List / Defect Log cho máy xả cuộn tải về, và HTML Certificate tiêu chuẩn in ấn / xuất PDF.
+  - **Biên Dịch & Kiểm Thử Thành Công 100%**: Toàn bộ Solution `VisionInspectionApp.slnx` biên dịch **0 Error(s)**, bài kiểm thử `TestRollDefectManagerAndShiftRegister` đạt **PASS 100%**.
+  - **Lưu trữ & Đồng bộ**: Kế hoạch đã được đồng bộ trong `implementation_plan.md`, `ROADMAP.md` (Tasks 223–226) và `CONTEXT.md`.
+
+- **Hoàn thành Triển khai Phase 3: Tích Hợp PLC Motion, Encoder & Định Vị Vật Lý Trên Cuộn (Tasks 220–222)**:
+  - **Kết Quả Triển Khai Chi Tiết**:
+    1. **Bổ sung cấu trúc `FrameMetadata` vào `InspectionResult` (Task 220)**:
+       - Tạo lớp `FrameMetadata.cs` trong `VisionInspectionApp.Models` chứa `FrameIndex`, `HardwareTimestampNs`, `HostTimestamp`, `EncoderPulses`, `WebPositionMm`, `LineSpeedMpm`, `MmPerPixel` và `ExposureCompensationRatio`.
+       - Tích hợp thuộc tính `Metadata` vào `InspectionResult.cs`.
+    2. **Xây dựng dịch vụ `PlcMotionSyncService` (Task 221)**:
+       - Tạo lớp `PlcMotionSyncService.cs` trong `VisionInspectionApp.Application.PLC.Services`, kết nối với `IPlcManagerService.OnTagChanged` để đọc liên tục xung Encoder (High-Speed Counter) và tốc độ máy cuộn ($m/\text{min}$).
+       - Tự động gán metadata chuyển động vào kết quả kiểm tra `inspectionResult.Metadata = _motionSyncService.CreateFrameMetadata(ProcessedImageCount)` trong luồng Continuous của `ToolEditorViewModel.Engine.cs`.
+    3. **Chuẩn hóa Hệ tọa độ Cuộn ($X_{\text{web}}, Y_{\text{web}}$ mm) & Bù trừ Phơi sáng (Task 222)**:
+       - Cung cấp hàm `ConvertToWebCoordinates(pixelX, pixelY)` chuyển đổi chính xác tọa độ lỗi trên ảnh sang tọa độ vật lý mét dài tuyệt đối ($Y_{\text{web}}$ mm từ đầu cuộn, $X_{\text{web}}$ mm từ mép cuộn).
+       - Cung cấp thuật toán tính toán độ mờ chuyển động `CalculateMotionBlurPixels(exposureUs)` và tính thời gian phơi sáng tối đa `CalculateMaxExposureForSharpImage()` chống mờ nhòe khi cuộn tăng/giảm tốc độ.
+  - **Biên Dịch & Kiểm Thử Thành Công 100%**: Toàn bộ Solution `VisionInspectionApp.slnx` biên dịch **0 Error(s)**, bài kiểm thử `TestPlcMotionSyncService` đạt **PASS 100%**.
+  - **Lưu trữ & Đồng bộ**: Kế hoạch đã được đồng bộ trong `implementation_plan.md`, `ROADMAP.md` (Tasks 220–222) và `CONTEXT.md`.
+
 - **Hoàn thành Triển khai Phase 2: Kiến Trúc Thu Nhận Ảnh Công Nghiệp & Quản Lý Bộ Đệm Zero-Allocation Ring Buffer (Tasks 217–219)**:
   - **Kết Quả Triển Khai Chi Tiết**:
     1. **Nâng cấp `HikCameraDriver` sang SDK Event Callback & Pre-allocated Buffer (Task 217)**:

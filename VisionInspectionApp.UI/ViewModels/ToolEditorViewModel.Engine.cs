@@ -2486,11 +2486,22 @@ namespace VisionInspectionApp.UI.ViewModels
             try
             {
                 _lastRunError = null;
+                await _handshakeStateMachine.StartInspectionAsync();
                 inspectionResult = await Task.Run(() => _inspectionService.Inspect(frameMat, configCopy, _dbManagerService));
                 __sw.Stop();
 
                 if (inspectionResult != null)
                 {
+                    // Gán FrameMetadata kèm thông tin Encoder và vị trí mét dài trên cuộn
+                    inspectionResult.Metadata = _motionSyncService.CreateFrameMetadata(ProcessedImageCount);
+
+                    // Ghi nhận khuyết tật vào phiên cuộn và cập nhật cơ cấu Shift Register theo dõi vị trí Reject
+                    _rollDefectManager.RecordDefectsFromInspectionResult(inspectionResult, inspectionResult.Metadata);
+                    _shiftRegisterTracker.ProcessMotionUpdate(_motionSyncService.CurrentWebPositionMm);
+
+                    // Hoàn tất chu trình bắt tay công nghiệp 2 chiều với PLC
+                    _ = _handshakeStateMachine.CompleteHandshakeAsync(inspectionResult.Pass);
+
                     inspectionResult.Timings.NodeTimings[sourceNodeName] = (int)__sw.ElapsedMilliseconds;
                     if (configCopy.PreprocessNodes != null)
                     {
@@ -2508,11 +2519,16 @@ namespace VisionInspectionApp.UI.ViewModels
                         _ = Application.PLC.Services.PlcResultTransferRunner.ExecuteResultTransfersAsync(configCopy, inspectionResult, _plcManagerService);
                     }
                 }
+                else
+                {
+                    _ = _handshakeStateMachine.CompleteHandshakeAsync(false);
+                }
             }
             catch (Exception ex)
             {
                 inspectionResult = null;
                 _lastRunError = "Lỗi khi chạy Flow: " + ex.Message;
+                _ = _handshakeStateMachine.CompleteHandshakeAsync(false);
             }
 
             _lastRun = inspectionResult;

@@ -9,6 +9,9 @@ class Program
         HikApiTest.PrintApi();
         CameraTest.TestCameraParametersJobSerialization();
         CameraTest.TestNativeMatPoolAndMetadata();
+        CameraTest.TestPlcMotionSyncService();
+        CameraTest.TestRollDefectManagerAndShiftRegister();
+        CameraTest.TestPhase5IndustrialHandshakeAndSoakTest();
         CaliperAndLineTest.RunTests();
         ColorDiffTest.RunTests();
         RecentJobsAndCalibrationTest.RunTests();

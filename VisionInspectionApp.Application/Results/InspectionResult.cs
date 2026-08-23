@@ -29,6 +29,11 @@ public sealed class InspectionResult
 {
     public bool Pass { get; set; }
 
+    /// <summary>
+    /// Siêu dữ liệu vị trí Encoder, Timestamp và toạ độ cuộn vật lý
+    /// </summary>
+    public FrameMetadata? Metadata { get; set; }
+
     public InspectionTimings Timings { get; } = new();
 
     public PointMatchResult? Origin { get; set; }
