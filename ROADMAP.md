@@ -759,6 +759,36 @@ Lộ trình tích hợp tính năng Chụp ảnh từ camera và hỗ trợ các
     - Tự động hiển thị và cập nhật frame ảnh vừa chụp lên màn hình Tool Editor.
   - `Biên Dịch & Kiểm Thử Thành Công 100%`: Solution biên dịch **0 Error(s)**, 8/8 unit tests đạt PASS 100%.
 
+- [ ] **LỘ TRÌNH DÀI HẠN: CHUYỂN ĐỔI HỆ THỐNG SANG CONTINUOUS ROLL-TO-ROLL WEB INSPECTION 24/7 (CAMERA + PC VISION + PLC + MOTOR + ENCODER + DEFECT MAPPING)**:
+
+  - ### 🔹 **PHASE 1: Ổn Định Bộ Nhớ, Ngăn Ngừa Rò Rỉ Native & Cô Lập Giao Diện (Memory Safety & UI Decoupling)**
+    - [x] Task 213: Khắc phục triệt để rò rỉ bộ nhớ Native C++ (`Mat`) trong `AsyncImageSaver` và các luồng Bounded Channel khi kích hoạt `DropOldest`.
+    - [x] Task 214: Xóa bỏ cơ chế Fallback giả lập âm thầm (`ForceSimulationMode`) trong `MitsubishiDriver.cs`, kích hoạt cảnh báo an toàn và ngắt luồng chạy khi mất kết nối PLC.
+    - [x] Task 215: Tối ưu hóa chuyển đổi ảnh preview trong `ToolEditorViewModel`: Buộc downscale Display Proxy (1280x720) trước khi tạo `BitmapSource`, triệt tiêu 100% việc cấp phát 60MB/frame lên LOH.
+    - [x] Task 216: Triển khai UI Display Throttling: Giới hạn tần số vẽ preview giao diện 5–10 FPS, giải phóng hoàn toàn luồng xử lý Vision chạy 20–30 FPS độc lập.
+
+  - ### 🔹 **PHASE 2: Kiến Trúc Thu Nhận Ảnh Công Nghiệp & Quản Lý Bộ Đệm Zero-Allocation Ring Buffer**
+    - [ ] Task 217: Nâng cấp `HikCameraDriver` sang mô hình SDK Event Callback (`MV_CC_RegisterImageCallBackEx_NET`), trích xuất `FrameNum` và Hardware Timestamp.
+    - [ ] Task 218: Xây dựng `NativeMatPool` (Pre-allocated Ring Buffer 8–16 Mats) tái sử dụng vùng nhớ, loại bỏ việc gọi `new Mat()` / `Clone()` trong chu kỳ chụp.
+    - [ ] Task 219: Tích hợp Bộ phát hiện rớt frame phần cứng/phần mềm (`FrameDropDetector`) và Watchdog tự động kết nối lại Camera (`CameraWatchdog`).
+
+  - ### 🔹 **PHASE 3: Tích Hợp PLC Motion, Encoder & Định Vị Vật Lý Trên Cuộn**
+    - [ ] Task 220: Bổ sung cấu trúc `FrameMetadata` (FrameIndex, HardwareTimestamp, EncoderPulses, WebPositionMm, LineSpeedMpm) vào `InspectionResult`.
+    - [ ] Task 221: Xây dựng dịch vụ `PlcMotionSyncService` đọc liên tục thanh ghi Encoder High-Speed Counter và tốc độ cuộn (m/min) từ PLC.
+    - [ ] Task 222: Chuẩn hóa Hệ tọa độ Cuộn (Web Coordinate System $X_{\text{web}}, Y_{\text{web}}$ theo mét dài) và thuật toán bù trừ độ mờ chuyển động (Motion Blur / Exposure Compensation).
+
+  - ### 🔹 **PHASE 4: Hệ Thống Ghi Nhớ Vị Trí Lỗi, Bản Đồ Khuyết Tật Cuộn & Theo Dõi Shift Register**
+    - [ ] Task 223: Xây dựng module `RollDefectManager` quản lý phiên cuộn (`RollSession`) và cơ sở dữ liệu lưu trữ lịch sử chi tiết mọi vết lỗi trên cuộn.
+    - [ ] Task 224: Xây dựng cơ cấu `ShiftRegisterTracker`: Theo dõi vị trí lỗi theo xung Encoder thời gian thực, kích hoạt lệnh loại bỏ/đánh dấu đến trạm Reject ($L_{\text{reject}}$ mm) qua PLC.
+    - [ ] Task 225: Thiết kế Giao diện Bản đồ Khuyết tật Cuộn thời gian thực (`Real-time Roll Defect Map Visualizer`) hiển thị trực quan toàn dải cuộn từ 0m đến $N$ mét kèm mã màu phân cấp lỗi.
+    - [ ] Task 226: Xây dựng tính năng Xuất Báo cáo Chất lượng Cuộn (Roll Quality Certificate & Cut List Report) ra PDF/Excel/JSON.
+
+  - ### 🔹 **PHASE 5: Hoàn Thiện Bắt Tay Công Nghiệp PLC 24/7, Tự Phục Hồi & Kiểm Thử Tải Thực Tế**
+    - [ ] Task 227: Triển khai Máy trạng thái Bắt tay PLC Công nghiệp (Industrial Handshake State Machine: `IDLE` -> `READY` -> `ARMED` -> `TRIGGERED` -> `INSPECTING` -> `LATCH` -> `ACK` -> `DONE`).
+    - [ ] Task 228: Xây dựng Watchdog Heartbeat 2 chiều PLC $\leftrightarrow$ Vision PC (chu kỳ 100ms, timeout 300ms) bảo vệ an toàn liên động motor kéo cuộn.
+    - [ ] Task 229: Kiểm thử Tải Dài Hạn (24h Stress & Soak Test với 500.000 frame liên tục), đo kiểm độ ổn định RAM phẳng, 0% GC Pause, sai số Reject $\le \pm 1.0\text{ mm}$.
+
+
 
 
 

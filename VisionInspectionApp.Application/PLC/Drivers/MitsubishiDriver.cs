@@ -61,10 +61,16 @@ public sealed class MitsubishiDriver : IPlcDriver
             }
             catch
             {
-                // Disconnect TCP client and fall back to simulated mode if physical device unavailable
                 CleanupSocket();
-                Config.State = PlcConnectionState.Connected; // Keep state alive in fallback mode
-                return true;
+                if (ForceSimulationMode)
+                {
+                    Config.CpuName = "Simulated MC Protocol";
+                    Config.State = PlcConnectionState.Connected;
+                    return true;
+                }
+
+                Config.State = PlcConnectionState.Error;
+                return false;
             }
         }
         finally
@@ -129,12 +135,22 @@ public sealed class MitsubishiDriver : IPlcDriver
                 }
                 catch
                 {
-                    // Socket communication error -> fallback to simulation store
                     CleanupSocket();
+                    if (!ForceSimulationMode)
+                    {
+                        Config.State = PlcConnectionState.Error;
+                        return result;
+                    }
                 }
             }
 
-            // Fallback / Simulated mode read
+            if (!ForceSimulationMode)
+            {
+                Config.State = PlcConnectionState.Error;
+                return result;
+            }
+
+            // Fallback / Simulated mode read only when ForceSimulationMode is explicitly enabled
             foreach (var tag in tagList)
             {
                 if (_simulatedMemory.TryGetValue(tag.Address, out var existing))
@@ -178,10 +194,21 @@ public sealed class MitsubishiDriver : IPlcDriver
                 catch
                 {
                     CleanupSocket();
+                    if (!ForceSimulationMode)
+                    {
+                        Config.State = PlcConnectionState.Error;
+                        return false;
+                    }
                 }
             }
 
-            // Simulated memory write
+            if (!ForceSimulationMode)
+            {
+                Config.State = PlcConnectionState.Error;
+                return false;
+            }
+
+            // Simulated memory write only when ForceSimulationMode is explicitly enabled
             foreach (var (tag, val) in values)
             {
                 _simulatedMemory[tag.Address] = val;

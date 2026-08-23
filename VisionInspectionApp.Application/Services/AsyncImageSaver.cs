@@ -43,17 +43,21 @@ public sealed class AsyncImageSaver : IDisposable, IAsyncDisposable
     private readonly CancellationTokenSource _cts = new();
     private readonly Task[] _workerTasks;
     private bool _disposed;
+    private readonly int _capacity;
+    private long _droppedCount;
 
-    // Giới hạn hàng đợi tối đa 100 ảnh để tránh quá tải bộ nhớ RAM nếu camera chụp nhanh hơn tốc độ ghi đĩa
-    public const int DefaultCapacity = 100;
+    // Giới hạn hàng đợi tối đa 30 ảnh để tránh quá tải bộ nhớ RAM nếu camera chụp nhanh hơn tốc độ ghi đĩa
+    public const int DefaultCapacity = 30;
 
     public int PendingCount => _channel.Reader.Count;
+    public long DroppedCount => Interlocked.Read(ref _droppedCount);
 
     public AsyncImageSaver(int capacity = DefaultCapacity, int workerCount = 2)
     {
-        var options = new BoundedChannelOptions(capacity)
+        _capacity = Math.Clamp(capacity, 5, 50);
+        var options = new BoundedChannelOptions(_capacity)
         {
-            FullMode = BoundedChannelFullMode.DropOldest, // Nếu ổ đĩa quá chậm, tự drop ảnh cũ nhất để bảo vệ bộ nhớ RAM
+            FullMode = BoundedChannelFullMode.DropWrite, // Không tự động drop ngầm mà kiểm soát drop tường minh để Dispose() Native Mat
             SingleWriter = false,
             SingleReader = false
         };
@@ -73,6 +77,7 @@ public sealed class AsyncImageSaver : IDisposable, IAsyncDisposable
     /// <summary>
     /// Đẩy yêu cầu lưu ảnh vào hàng đợi bất đồng bộ (Non-blocking, mất < 0.01ms).
     /// Quyền sở hữu Mat được chuyển giao cho AsyncImageSaver, caller KHÔNG dispose Mat này.
+    /// Nếu hàng đợi đầy, request cũ nhất sẽ được giải phóng Native Mat an toàn (No Memory Leak).
     /// </summary>
     public bool Enqueue(Mat imageToSave, string fullPath, string outputName)
     {
@@ -89,11 +94,26 @@ public sealed class AsyncImageSaver : IDisposable, IAsyncDisposable
             OutputName = outputName
         };
 
+        // Nếu hàng đợi đầy, chủ động lấy request cũ nhất ra và gọi Dispose() trước khi đẩy request mới vào
+        while (_channel.Reader.Count >= _capacity)
+        {
+            if (_channel.Reader.TryRead(out var droppedReq))
+            {
+                droppedReq.Dispose();
+                Interlocked.Increment(ref _droppedCount);
+            }
+            else
+            {
+                break;
+            }
+        }
+
         // Ghi vào Channel không khóa luồng
         if (!_channel.Writer.TryWrite(request))
         {
-            // Nếu không ghi được (ví dụ channel đã đóng)
+            // Nếu không ghi được (ví dụ channel đã đóng hoặc đầy)
             request.Dispose();
+            Interlocked.Increment(ref _droppedCount);
             return false;
         }
 

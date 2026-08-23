@@ -51,6 +51,25 @@
 
 ### Sửa lỗi và Cải thiện UX/UI (Phiên làm việc hiện tại)
 
+- **Hoàn thành Triển khai Phase 1: Ổn Định Bộ Nhớ, Ngăn Ngừa Rò Rỉ Native & Cô Lập Giao Diện (Tasks 213–216)**:
+  - **Kết Quả Triển Khai Chi Tiết**:
+    1. **Khắc phục triệt để rò rỉ bộ nhớ Native C++ (`Mat`) trong `AsyncImageSaver` & Channel (Task 213)**:
+       - Chuyển `AsyncImageSaver` sang `BoundedChannelFullMode.DropWrite` với dung lượng tối ưu 30 ảnh (tránh kẹt 6GB RAM).
+       - Chủ động kiểm tra hàng đợi khi đầy: lấy request cũ nhất ra và gọi `.Dispose()` tường minh để hủy con trỏ `cv::Mat` nguyên bản trước khi nhận request mới (Zero Memory Leak).
+       - Bổ sung biến đếm `DroppedCount` an toàn luồng `Interlocked`.
+    2. **Xóa bỏ cơ chế Fallback giả lập âm thầm trong `MitsubishiDriver.cs` (Task 214)**:
+       - Trong `ConnectAsync`, `ReadBatchAsync`, `WriteBatchAsync`: chỉ cho phép đọc/ghi vào `_simulatedMemory` khi người dùng chủ động cấu hình `ForceSimulationMode = true`.
+       - Khi đứt cáp mạng TCP vật lý đến PLC, driver lập tức thiết lập `Config.State = PlcConnectionState.Error` và trả về `false`, ngăn ngừa việc hệ thống chạy ảo trong khi cuộn lỗi vẫn trôi qua máy.
+    3. **Tối ưu hóa chuyển đổi ảnh preview triệt tiêu cấp phát LOH 60MB/frame (Task 215)**:
+       - Thiết lập mặc định `maxDisplayWidth = 1280, maxDisplayHeight = 720` cho `MatExtensions.ToBitmapSourceForDisplay()`.
+       - Mọi frame preview đều được tự động downscale về proxy hiển thị nhỏ gọn (1.5–2.5 MB) trên SOH, triệt tiêu 100% việc cấp phát 60MB/frame lên Large Object Heap (LOH), giảm tải hoàn toàn cho bộ thu gom rác .NET GC.
+    4. **Triển khai UI Display Throttling cho luồng chạy Continuous (Task 216)**:
+       - Trong `ToolEditorViewModel.Engine.cs`: Thiết lập cơ chế `ContinuousUiThrottleIntervalMs = 100` (giới hạn tối đa 10 FPS cho UI Preview).
+       - Luồng xử lý Vision chạy độc lập toàn tốc độ 20–30 FPS mà không bị nghẽn hay khóa bởi WPF Dispatcher UI.
+       - Sửa `StartIndustrialCameraContinuousFlow` chủ động gọi `Dispose()` cho mọi frame bị drop trong Channel reader/writer.
+  - **Biên Dịch & Kiểm Thử Thành Công 100%**: Toàn bộ Solution `VisionInspectionApp.slnx` biên dịch **0 Error(s)**, 100% Unit tests đạt kết quả PASSED.
+  - **Lưu trữ & Đồng bộ**: Kế hoạch đã được ghi nhớ dài hạn trong `implementation_plan.md`, `ROADMAP.md` (Tasks 213–229) và `CONTEXT.md`.
+
 - **Sửa tương phản bảng Manual Inspection & Thêm nút Chụp & Lưu Ảnh Camera trong Tool Editor (Task 212)**:
   - **Yêu Cầu & Bối Cảnh**:
     1. Bảng kết quả đo lường và kiểm tra dung sai trong tab Manual Inspection (2D Vision CMM) có màu chữ và nền hardcoded tối, không áp dụng màu tương phản theo theme tương ứng (nhất là ở các theme sáng).

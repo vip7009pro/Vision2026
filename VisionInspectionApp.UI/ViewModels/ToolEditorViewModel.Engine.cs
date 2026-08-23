@@ -2374,10 +2374,10 @@ namespace VisionInspectionApp.UI.ViewModels
                 await _cameraService.StartDriverCameraAsync(targetDevice, _cameraService.CurrentParameters);
             }
 
-            // 3. Khởi tạo Bounded Channel với capacity = 2, DropOldest (tránh tràn RAM 20MP)
-            var channelOptions = new BoundedChannelOptions(2)
+            // 3. Khởi tạo Bounded Channel với capacity = 4, DropWrite có kiểm soát Dispose để tránh rò rỉ Mat Native
+            var channelOptions = new BoundedChannelOptions(4)
             {
-                FullMode = BoundedChannelFullMode.DropOldest,
+                FullMode = BoundedChannelFullMode.DropWrite,
                 SingleReader = true,
                 SingleWriter = false
             };
@@ -2391,9 +2391,25 @@ namespace VisionInspectionApp.UI.ViewModels
                     return;
 
                 var frameClone = frame.Clone();
+
+                // Nếu hàng đợi đầy, chủ động lấy frame cũ ra và gọi Dispose() trước khi ghi frame mới (Zero Memory Leak)
+                while (channel.Reader.Count >= 4)
+                {
+                    if (channel.Reader.TryRead(out var droppedMat))
+                    {
+                        droppedMat.Dispose();
+                        Interlocked.Increment(ref _droppedContinuousFramesCount);
+                    }
+                    else
+                    {
+                        break;
+                    }
+                }
+
                 if (!channel.Writer.TryWrite(frameClone))
                 {
                     frameClone.Dispose();
+                    Interlocked.Increment(ref _droppedContinuousFramesCount);
                 }
             };
             _cameraService.FrameCaptured += _continuousFrameHandler;
@@ -2446,6 +2462,10 @@ namespace VisionInspectionApp.UI.ViewModels
                 }
             }, token);
         }
+
+        private long _lastContinuousUiRenderTick = 0;
+        private const int ContinuousUiThrottleIntervalMs = 100; // Tối đa 10 FPS cho UI Preview để giải phóng 100% CPU cho Inspection Engine
+        private long _droppedContinuousFramesCount = 0;
 
         private async Task ProcessContinuousFrameAsync(Mat frameMat, string sourceNodeName)
         {
@@ -2500,14 +2520,27 @@ namespace VisionInspectionApp.UI.ViewModels
             ProcessedImageCount++;
             UpdateContinuousStats();
 
-            await System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
+            long nowTick = Environment.TickCount64;
+            bool shouldUpdateUi = (nowTick - _lastContinuousUiRenderTick) >= ContinuousUiThrottleIntervalMs;
+            if (shouldUpdateUi)
             {
-                UpdateNodeExecutionTimes();
-                RefreshInspectionDashboard(_lastRun);
-                RefreshPreviews();
-                RaiseToolPropertyPanelsChanged();
-                OnPropertyChanged(nameof(Blob_LastRunCount));
-            });
+                _lastContinuousUiRenderTick = nowTick;
+                await System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
+                {
+                    UpdateNodeExecutionTimes();
+                    RefreshInspectionDashboard(_lastRun);
+                    RefreshPreviews();
+                    RaiseToolPropertyPanelsChanged();
+                    OnPropertyChanged(nameof(Blob_LastRunCount));
+                });
+            }
+            else
+            {
+                System.Windows.Application.Current?.Dispatcher?.BeginInvoke(System.Windows.Threading.DispatcherPriority.Background, () =>
+                {
+                    OnPropertyChanged(nameof(ProcessedImageCount));
+                });
+            }
         }
 
         private void StartUsbCameraContinuousFlow(ImageSourceDefinition sourceDef)
