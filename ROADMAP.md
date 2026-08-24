@@ -825,6 +825,21 @@ Lộ trình tích hợp tính năng Chụp ảnh từ camera và hỗ trợ các
       - `Biên Dịch & Kiểm Thử Thành Công 100%`:
         - Solution biên dịch **0 Error(s)**.
         - Unit test `TestDirectAddressSupport` đạt kết quả **PASS 100%** (4/4 tests).
+    - [x] Task 233: Xuất bản bộ chương trình PLC mẫu & Sơ đồ thang Ladder trực quan cho Mitsubishi GX Works 3 / GX Works 2:
+      - `Tạo Gói Tài Liệu & Mã Nguồn PLC Tại PLC_Programs/Mitsubishi_GXWorks3/`:
+        - `GlobalLabels_GXWorks3.csv`: File CSV danh sách biến toàn cục (Global Labels) import trực tiếp vào GX Works 3.
+        - `DeviceComments_GXWorks.csv`: File CSV chú thích thiết bị (Device Comments) cho GX Works 2 & GX Works 3.
+      - `5 Khối Chương Trình Structured Text (POU ST) Chuẩn IEC 61131-3`:
+        - `POU_01_Watchdog_Heartbeat.st`: Nhịp tim 100ms & Giám sát Timeout 300ms kèm liên động an toàn `Y10`.
+        - `POU_02_Vision_Handshake.st`: Máy trạng thái chu trình bắt tay công nghiệp 24/7.
+        - `POU_03_Encoder_Tracking.st`: Đọc bộ đếm xung tốc độ cao `D1000`, đổi ra mm `D1004` và tính tốc độ `D1002`.
+        - `POU_04_ShiftRegister_Reject.st`: Hàng đợi FIFO bám sát tọa độ mm trạm loại bỏ $L_{\text{reject}}$ (`D100`), kích hoạt `Y20_RejectPiston`.
+        - `POU_05_Result_Handler.st`: Đọc tọa độ `D200..D210` và cộng dồn sản lượng `D300..D304`.
+      - `Sơ Đồ Thang Trực Quan & Mã Mnemonic IL`:
+        - `Ladder_Diagram_Visual.md`: Sơ đồ thang ASCII và Mermaid trực quan từng Rung mạng logic.
+        - `Ladder_Mnemonic_GXWorks.il`: Mã lệnh Instruction List tương thích GX Works 2/3.
+      - `Tài Liệu Hướng Dẫn Cấu Hình Chi Tiết`:
+        - `README_GXWorks3_Setup_Guide.md`: Hướng dẫn chi tiết từng bước nạp Label, POU và cấu hình SLMP Port 5000/5002.
 
 
 

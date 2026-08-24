@@ -51,6 +51,27 @@
 
 ### Sửa lỗi và Cải thiện UX/UI (Phiên làm việc hiện tại)
 
+- **Xuất Bản Bộ Chương Trình PLC Mẫu & Sơ Đồ Thang Ladder Trực Quan Cho Mitsubishi GX Works 3 / GX Works 2 (Task 233)**:
+  - **Yêu Cầu & Bối Cảnh**:
+    - Cung cấp chương trình PLC tương ứng với toàn bộ các tính năng của phần mềm Vision hiện tại (Handshake 24/7, Watchdog Heartbeat 2 chiều & Liên động an toàn, Motion/Encoder Sync, Shift Register & Precision Reject, Result Transfer tọa độ và sản lượng).
+    - Cung cấp file import trực tiếp cho GX Works 3 / GX Works 2 hoặc sơ đồ thang trực quan / mã lệnh Mnemonic (IL) chuẩn.
+  - **Kết Quả Triển Khai Chi Tiết**:
+    1. **Tạo Thư Mục Gói Chương Trình PLC `PLC_Programs/Mitsubishi_GXWorks3/`**:
+       - `GlobalLabels_GXWorks3.csv`: File CSV danh sách biến toàn cục (Global Labels) import trực tiếp 1-click vào GX Works 3.
+       - `DeviceComments_GXWorks.csv`: File CSV chú thích thiết bị (Device Comments) cho GX Works 2 & GX Works 3.
+    2. **5 Khối Chương Trình Structured Text (POU ST) Chuẩn IEC 61131-3**:
+       - `POU_01_Watchdog_Heartbeat.st`: Tạo nhịp tim PLC 100ms và giám sát nhịp tim Vision PC (Timeout 300ms) kèm liên động an toàn `Y10_Line_E_Stop`.
+       - `POU_02_Vision_Handshake.st`: Máy trạng thái chu trình bắt tay 24/7 (`Idle` $\rightarrow$ `Trigger` $\rightarrow$ `Inspecting` $\rightarrow$ `ResultLatched` $\rightarrow$ `PlcAck` $\rightarrow$ `Complete`).
+       - `POU_03_Encoder_Tracking.st`: Đọc xung High Speed Counter (HSC `D1000`), đổi ra mm (`D1004`) và tính tốc độ chuyền m/phút (`D1002`).
+       - `POU_04_ShiftRegister_Reject.st`: Hàng đợi FIFO mảng `aRejectTargets[0..19]` bám sát tọa độ mm trạm loại bỏ $L_{\text{reject}}$ (`D100`), kích hoạt van điện từ `Y20_RejectPiston` trong 100ms.
+       - `POU_05_Result_Handler.st`: Đọc tọa độ `Origin_X` (`D200`), `Origin_Y` (`D202`), `Origin_Angle` (`D204`), `Measure_Distance1` (`D210`) và cộng dồn sản lượng `Total` (`D300`), `OK` (`D302`), `NG` (`D304`).
+    3. **Sơ Đồ Thang Ladder Trực Quan & Mã Mnemonic IL**:
+       - `Ladder_Diagram_Visual.md`: Sơ đồ thang ASCII và Mermaid trực quan từng Rung mạng logic kèm giải thích chi tiết.
+       - `Ladder_Mnemonic_GXWorks.il`: Mã lệnh Instruction List (`LD`, `ANI`, `OUT`, `PLS`, `ALT`, `DADD`, `TMR`, `SET`, `RST`) tương thích với GX Works 2/3 và GX Developer.
+    4. **Tài Liệu Hướng Dẫn Cấu Hình Ethernet SLMP / MC Protocol**:
+       - `README_GXWorks3_Setup_Guide.md`: Hướng dẫn chi tiết từng bước nạp Label, POU và mở Port SLMP 5000/5002 trên FX5U/Q-Series.
+  - **Biên Dịch & Kiểm Tra Tính Toàn Vẹn**: Toàn bộ dự án biên dịch **0 Error(s)**, tài liệu và mã nguồn lưu trữ chuẩn xác.
+
 - **Hỗ trợ Nhập trực tiếp Địa chỉ PLC không cần thông qua Tên Tag (Task 232)**:
   - **Yêu Cầu & Bối Cảnh**:
     - Cho phép người dùng nhập trực tiếp bất kỳ địa chỉ PLC nào (ví dụ: `X0`, `Y1`, `M10`, `D1000`, `MW100`, `0x10`, `4x100`) vào tất cả các trường cấu hình trên giao diện (5 Tab trong PLC Manager Window, ImageSource PLC Trigger, các Tool PLC Nodes: Read, Write, Wait, Trigger, Batch Read, Batch Write, Result Transfer) mà không bắt buộc phải tạo/gán trước Tag Name trong danh bạ biến.
