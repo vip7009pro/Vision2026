@@ -72,13 +72,15 @@
                         <TextBox Text="{Binding EraserBrushSize, UpdateSourceTrigger=PropertyChanged}" Width="45" Margin="0,0,12,0" TextAlignment="Center"/>
                         <Button Content="Undo" Command="{Binding UndoCommand}" Margin="0,0,6,0" />
                         <Button Content="Redo" Command="{Binding RedoCommand}" Margin="0,0,12,0" />
+                        <Button Content="🎯 Fit View" Click="OnFitViewClicked" Margin="0,0,6,0" ToolTip="Cân chỉnh toàn bộ ảnh vừa khít khung nhìn" />
                         <Button Content="Current Image" Command="{Binding RefreshCurrentImageCommand}" Margin="0,0,6,0" />
                         <Button Content="Train" Command="{Binding TrainCommand}" Background="#007ACC" Foreground="White" FontWeight="SemiBold"/>
                     </WrapPanel>
 
                     <!-- Preview Container with ImageViewerControl (Full handles: 8 resize handles + rotation handle) -->
                     <Border Grid.Row="2" BorderBrush="#434346" BorderThickness="1" Background="#111111" ClipToBounds="True">
-                        <controls:ImageViewerControl ImageSource="{Binding FullPreviewImage}"
+                        <controls:ImageViewerControl x:Name="OriginImageViewer"
+                                                 ImageSource="{Binding FullPreviewImage}"
                                                  OverlayItems="{Binding OverlayItems}"
                                                  EnableRoiEditing="True"
                                                  RoiEditedCommand="{Binding RoiEditedCommand}"/>

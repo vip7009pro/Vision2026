@@ -28,5 +28,10 @@ namespace VisionInspectionApp.UI.Views
             DialogResult = false;
             Close();
         }
+
+        private void OnFitViewClicked(object sender, RoutedEventArgs e)
+        {
+            OriginImageViewer?.ResetView();
+        }
     }
 }

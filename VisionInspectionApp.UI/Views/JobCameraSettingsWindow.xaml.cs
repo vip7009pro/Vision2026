@@ -25,4 +25,9 @@ public partial class JobCameraSettingsWindow : Window
             viewModel.Dispose();
         };
     }
+
+    private void OnFitViewClicked(object sender, RoutedEventArgs e)
+    {
+        JobCameraImageViewer?.ResetView();
+    }
 }

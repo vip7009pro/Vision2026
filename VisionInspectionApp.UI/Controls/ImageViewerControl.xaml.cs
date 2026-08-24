@@ -161,12 +161,29 @@ public partial class ImageViewerControl : UserControl
         PART_RootGrid.MouseUp += RootOnMouseUp;
         Loaded += OnLoaded;
         Unloaded += OnUnloaded;
+        SizeChanged += OnControlSizeChanged;
+    }
+
+    private void OnControlSizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        if (e.WidthChanged || e.HeightChanged)
+        {
+            if (ImageSource is BitmapSource)
+            {
+                if (!_hasFirstFit || _transform.Matrix.IsIdentity)
+                {
+                    _hasFirstFit = true;
+                    ResetView();
+                }
+            }
+        }
     }
 
     private Window? _parentWindow;
 
     private void OnLoaded(object sender, RoutedEventArgs e)
     {
+        UpdateLayout();
         if (PART_RootGrid.ActualWidth > 0 && PART_RootGrid.ActualHeight > 0)
         {
             ResetView();
@@ -177,7 +194,7 @@ public partial class ImageViewerControl : UserControl
         }
         else
         {
-            Dispatcher.BeginInvoke(new Action(ResetView), System.Windows.Threading.DispatcherPriority.Loaded);
+            Dispatcher.BeginInvoke(new Action(ResetView), System.Windows.Threading.DispatcherPriority.Render);
         }
         RedrawOverlays();
 
@@ -215,9 +232,9 @@ public partial class ImageViewerControl : UserControl
         // Chỉ chạy AutoFit khi kích thước thực sự của toàn bộ Cửa sổ ứng dụng thay đổi
         if (e.WidthChanged || e.HeightChanged)
         {
-            if (PART_RootGrid.ActualWidth > 0 && PART_RootGrid.ActualHeight > 0 && ImageSource is BitmapSource)
+            if (ImageSource is BitmapSource)
             {
-                Dispatcher.BeginInvoke(new Action(ResetView), System.Windows.Threading.DispatcherPriority.Loaded);
+                Dispatcher.BeginInvoke(new Action(ResetView), System.Windows.Threading.DispatcherPriority.Render);
             }
         }
     }
@@ -225,9 +242,9 @@ public partial class ImageViewerControl : UserControl
     private void OnParentWindowStateChanged(object? sender, EventArgs e)
     {
         // Khi phóng to (Maximize) hoặc thu nhỏ/khôi phục (Restore) cửa sổ
-        if (PART_RootGrid.ActualWidth > 0 && PART_RootGrid.ActualHeight > 0 && ImageSource is BitmapSource)
+        if (ImageSource is BitmapSource)
         {
-            Dispatcher.BeginInvoke(new Action(ResetView), System.Windows.Threading.DispatcherPriority.Loaded);
+            Dispatcher.BeginInvoke(new Action(ResetView), System.Windows.Threading.DispatcherPriority.Render);
         }
     }
 
@@ -313,9 +330,10 @@ public partial class ImageViewerControl : UserControl
         else
         {
             newBmp.TryGetSourcePixelSize(out var sourceWidth, out var sourceHeight);
+            bool sizeChanged = (c._lastPixelWidth != sourceWidth || c._lastPixelHeight != sourceHeight);
             c._lastPixelWidth = sourceWidth;
             c._lastPixelHeight = sourceHeight;
-            if (!c._hasFirstFit || c._transform.Matrix.IsIdentity)
+            if (!c._hasFirstFit || c._transform.Matrix.IsIdentity || sizeChanged)
             {
                 c._hasFirstFit = true;
                 c.ResetView();
@@ -334,18 +352,23 @@ public partial class ImageViewerControl : UserControl
             return;
         }
 
-        double containerW = PART_RootGrid?.ActualWidth ?? 0;
-        double containerH = PART_RootGrid?.ActualHeight ?? 0;
+        if (PART_RootGrid == null || PART_RootGrid.ActualWidth <= 0 || PART_RootGrid.ActualHeight <= 0)
+        {
+            UpdateLayout();
+        }
+
+        double containerW = PART_RootGrid?.ActualWidth > 0 ? PART_RootGrid.ActualWidth : (ActualWidth > 0 ? ActualWidth : (RenderSize.Width > 0 ? RenderSize.Width : 0));
+        double containerH = PART_RootGrid?.ActualHeight > 0 ? PART_RootGrid.ActualHeight : (ActualHeight > 0 ? ActualHeight : (RenderSize.Height > 0 ? RenderSize.Height : 0));
 
         if (containerW <= 0 || containerH <= 0)
         {
-            Dispatcher.BeginInvoke(new Action(ResetView), System.Windows.Threading.DispatcherPriority.Loaded);
+            Dispatcher.BeginInvoke(new Action(ResetView), System.Windows.Threading.DispatcherPriority.Render);
             return;
         }
 
         bmp.TryGetSourcePixelSize(out var sourceWidth, out var sourceHeight);
-        double imgW = sourceWidth;
-        double imgH = sourceHeight;
+        double imgW = sourceWidth > 0 ? sourceWidth : bmp.PixelWidth;
+        double imgH = sourceHeight > 0 ? sourceHeight : bmp.PixelHeight;
 
         if (imgW <= 0 || imgH <= 0)
         {
@@ -354,7 +377,10 @@ public partial class ImageViewerControl : UserControl
             return;
         }
 
-        var scale = Math.Min(containerW / imgW, containerH / imgH);
+        // Tự động căn chỉnh vừa vặn với một khoảng đệm an toàn nhỏ (padding 4px) để không bị sát viền
+        double availableW = Math.Max(1.0, containerW - 4.0);
+        double availableH = Math.Max(1.0, containerH - 4.0);
+        var scale = Math.Min(availableW / imgW, availableH / imgH);
         if (scale <= 0 || double.IsNaN(scale) || double.IsInfinity(scale)) scale = 1.0;
 
         var tx = (containerW - imgW * scale) / 2.0;
@@ -364,6 +390,17 @@ public partial class ImageViewerControl : UserControl
         m.Scale(scale, scale);
         m.Translate(tx, ty);
         _transform.Matrix = m;
+
+        // Cập nhật ngay lập tức kích thước Content / Image / Overlays trước khi vẽ
+        PART_Content.Width = imgW;
+        PART_Content.Height = imgH;
+        PART_Image.Width = imgW;
+        PART_Image.Height = imgH;
+        PART_Overlay.Width = imgW;
+        PART_Overlay.Height = imgH;
+        PART_FastOverlay.Width = imgW;
+        PART_FastOverlay.Height = imgH;
+        PART_FastOverlay.ViewScale = Math.Max(0.001, scale);
 
         UpdateInfoText();
         RedrawOverlays();
@@ -401,11 +438,16 @@ public partial class ImageViewerControl : UserControl
             return;
         }
 
-        double containerW = PART_RootGrid?.ActualWidth ?? 0;
-        double containerH = PART_RootGrid?.ActualHeight ?? 0;
+        if (PART_RootGrid == null || PART_RootGrid.ActualWidth <= 0 || PART_RootGrid.ActualHeight <= 0)
+        {
+            UpdateLayout();
+        }
+
+        double containerW = PART_RootGrid?.ActualWidth > 0 ? PART_RootGrid.ActualWidth : (ActualWidth > 0 ? ActualWidth : (RenderSize.Width > 0 ? RenderSize.Width : 0));
+        double containerH = PART_RootGrid?.ActualHeight > 0 ? PART_RootGrid.ActualHeight : (ActualHeight > 0 ? ActualHeight : (RenderSize.Height > 0 ? RenderSize.Height : 0));
         bmp.TryGetSourcePixelSize(out var sourceWidth, out var sourceHeight);
-        double imgW = sourceWidth;
-        double imgH = sourceHeight;
+        double imgW = sourceWidth > 0 ? sourceWidth : bmp.PixelWidth;
+        double imgH = sourceHeight > 0 ? sourceHeight : bmp.PixelHeight;
 
         var tx = (containerW - imgW * targetScale) / 2.0;
         var ty = (containerH - imgH * targetScale) / 2.0;
@@ -414,6 +456,16 @@ public partial class ImageViewerControl : UserControl
         m.Scale(targetScale, targetScale);
         m.Translate(tx, ty);
         _transform.Matrix = m;
+
+        PART_Content.Width = imgW;
+        PART_Content.Height = imgH;
+        PART_Image.Width = imgW;
+        PART_Image.Height = imgH;
+        PART_Overlay.Width = imgW;
+        PART_Overlay.Height = imgH;
+        PART_FastOverlay.Width = imgW;
+        PART_FastOverlay.Height = imgH;
+        PART_FastOverlay.ViewScale = Math.Max(0.001, targetScale);
 
         UpdateInfoText();
         RedrawOverlays();

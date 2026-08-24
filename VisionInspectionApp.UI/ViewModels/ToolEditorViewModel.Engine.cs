@@ -1884,7 +1884,7 @@ namespace VisionInspectionApp.UI.ViewModels
         [ObservableProperty]
         private int _processedImageCount = 0;
         [ObservableProperty]
-        private string _continuousElapsedAndSpeedText = "Time: 00:00:00 (0.0 pcs/s)";
+        private string _continuousElapsedAndSpeedText = "Time: 00:00:00 (0.0 pcs/s • 0 EA/h • 0 EA/day)";
 
         private static readonly SolidColorBrush EmeraldBrush = new SolidColorBrush(Color.FromRgb(16, 185, 129));
         private static readonly SolidColorBrush EmeraldBorder = new SolidColorBrush(Color.FromArgb(90, 16, 185, 129));
@@ -2018,14 +2018,16 @@ namespace VisionInspectionApp.UI.ViewModels
 
             if (!_continuousStopwatch.IsRunning)
             {
-                ContinuousElapsedAndSpeedText = "Time: 00:00:00 (0.0 pcs/s)";
+                ContinuousElapsedAndSpeedText = "Time: 00:00:00 (0.0 pcs/s • 0 EA/h • 0 EA/day)";
                 return;
             }
 
             var elapsed = _continuousStopwatch.Elapsed;
             var elapsedSec = elapsed.TotalSeconds;
-            double speed = elapsedSec > 0.05 ? ProcessedImageCount / elapsedSec : 0.0;
-            ContinuousElapsedAndSpeedText = $"Time: {elapsed:hh\\:mm\\:ss} ({speed:F1} pcs/s)";
+            double speedPcs = elapsedSec > 0.05 ? ProcessedImageCount / elapsedSec : 0.0;
+            double speedEaHour = speedPcs * 3600.0;
+            double speedEaDay = speedEaHour * 24.0;
+            ContinuousElapsedAndSpeedText = $"Time: {elapsed:hh\\:mm\\:ss} ({speedPcs:F1} pcs/s • {speedEaHour:N0} EA/h • {speedEaDay:N0} EA/day)";
         }
         public ICommand LoadPreviewImageCommand { get; internal set; }
         public ICommand CaptureCameraImageCommand { get; internal set; }
@@ -2513,8 +2515,9 @@ namespace VisionInspectionApp.UI.ViewModels
                 else
                 {
                     int interval = Math.Max(0, sourceDef.FolderIntervalMs);
+                    double fpsEst = interval > 0 ? (1000.0 / interval) : 0;
                     StatusBarText = interval > 0 
-                        ? $"Đang chạy liên tục: Software Trigger (Chu kỳ {interval} ms, ~{1000.0 / interval:F1} pcs/s)..."
+                        ? $"Đang chạy liên tục: Software Trigger (Chu kỳ {interval} ms, ~{fpsEst:F1} pcs/s • {fpsEst * 3600.0:N0} EA/h • {fpsEst * 86400.0:N0} EA/day)..."
                         : "Đang chạy liên tục: Software Trigger (Tối đa tốc độ / FreeRun)...";
                 }
             }

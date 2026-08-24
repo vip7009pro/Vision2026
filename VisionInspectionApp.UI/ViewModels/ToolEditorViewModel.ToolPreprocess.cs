@@ -292,7 +292,9 @@ namespace VisionInspectionApp.UI.ViewModels
                     return "⏱ Chế độ: Software Trigger - Chạy liên tục tốc độ tối đa (FreeRun 0ms delay).";
                 }
                 double fps = interval > 0 ? (1000.0 / interval) : 0;
-                return $"⏱ Chế độ: Software Trigger - Chu kỳ lấy ảnh: {interval} ms (tốc độ ~{fps:F1} pcs/s).";
+                double eaH = fps * 3600.0;
+                double eaD = eaH * 24.0;
+                return $"⏱ Chế độ: Software Trigger - Chu kỳ lấy ảnh: {interval} ms (tốc độ ~{fps:F1} pcs/s • {eaH:N0} EA/h • {eaD:N0} EA/day).";
             }
         }
 

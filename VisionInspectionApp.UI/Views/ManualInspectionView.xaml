@@ -283,6 +283,19 @@
                                              InteractivePointClickedCommand="{Binding InteractivePointClickedCommand}"
                                              InteractiveMouseMoveCommand="{Binding InteractiveMouseMoveCommand}"
                                              InteractiveCancelledCommand="{Binding InteractiveCancelledCommand}" />
+
+                <!-- Top-Right Floating Quick "Fit View" Button -->
+                <Border Grid.Row="1" Grid.Column="1" VerticalAlignment="Top" HorizontalAlignment="Right" Margin="10" CornerRadius="4" Background="#C0000000" Padding="3">
+                    <Button Height="26" Padding="8,0" Click="OnFitViewClicked"
+                            Background="{DynamicResource ButtonBackgroundBrush}" Foreground="{DynamicResource TextBrush}"
+                            BorderBrush="{DynamicResource DarkBorderBrush}" FontWeight="SemiBold"
+                            ToolTip="Fit View: Phóng to / Thu nhỏ vừa khít toàn bộ khung nhìn ảnh">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="🎯 " FontSize="11" />
+                            <TextBlock Text="Fit View" FontSize="11" FontWeight="Bold" />
+                        </StackPanel>
+                    </Button>
+                </Border>
             </Grid>
         </Border>
 

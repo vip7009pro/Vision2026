@@ -51,10 +51,42 @@
 
 ### Sửa lỗi và Cải thiện UX/UI (Phiên làm việc hiện tại)
 
-- **Khắc Phục Toàn Diện Tab Camera Settings Live View & Lỗi Cập Nhật UI Continuous Run (Task 241)**:
+- **Hiển Thị Mở Rộng Sản Lượng EA/h và EA/day Bên Cạnh pcs/s Trong Tab Tool Editor (Task 243)**:
   - **Yêu Cầu & Bối Cảnh**:
-    1. Khi mở ứng dụng rồi chuyển sang tab Camera Settings, camera ở trạng thái Stop. Khi bấm "Start Camera" thì nút Live View hiển thị "Dừng Live View" (đang bật) nhưng không có hình ảnh; phải bấm "Chụp thử" thì Live View mới hiển thị.
-    2. Khi chạy Continuous với SoftTrigger, Total Time và Queue tăng nấc chuẩn xác nhưng overlay và bảng kết quả đo / thời gian tool không nhảy (bị kẹt dữ liệu cũ).
+    - Hiển thị thêm các đơn vị tính sản lượng công nghiệp phổ biến gồm `EA/h` (Each / Hour) và `EA/day` (Each / Day) ở bên cạnh chỉ số `pcs/s` (Pieces / second) hiện tại trong tab Tool Editor để thuận tiện cho việc giám sát năng suất dây chuyền sản xuất.
+  - **Giải Pháp Đã Triển Khai**:
+    - Trong [ToolEditorViewModel.Engine.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/ToolEditorViewModel.Engine.cs):
+      - Cập nhật hàm `UpdateContinuousStats()`: Tính toán `speedPcs = ProcessedImageCount / elapsedSec`, từ đó suy ra `speedEaHour = speedPcs * 3600.0` và `speedEaDay = speedEaHour * 24.0`.
+      - Định dạng chuỗi hiển thị `ContinuousElapsedAndSpeedText`:
+        `$"Time: {elapsed:hh\\:mm\\:ss} ({speedPcs:F1} pcs/s • {speedEaHour:N0} EA/h • {speedEaDay:N0} EA/day)"`.
+      - Đồng bộ giá trị khởi tạo và chuỗi thông báo trạng thái `StatusBarText` khi kích hoạt Continuous SoftTrigger.
+    - Trong [ToolEditorViewModel.ToolPreprocess.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/ToolEditorViewModel.ToolPreprocess.cs):
+      - Cập nhật mô tả thông số SoftTrigger trong ImageSource Node:
+        `$"⏱ Chế độ: Software Trigger - Chu kỳ lấy ảnh: {interval} ms (tốc độ ~{fps:F1} pcs/s • {eaH:N0} EA/h • {eaD:N0} EA/day)."`
+  - **Hiệu Quả Đo Kiểm**:
+    - Tab Tool Editor hiển thị trực quan, tức thì cả 3 chỉ số tốc độ: `pcs/s` (tức thời/giây), `EA/h` (ước tính mỗi giờ) và `EA/day` (ước tính mỗi ngày 24h) với định dạng số phân cách hàng nghìn rõ ràng (`N0`).
+    - Toàn bộ solution biên dịch 0 Error(s), 100% test suite trong `TestExtractApp` PASS.
+  - **Nguyên Nhân Gốc Rễ Đã Xác Định & Khắc Phục**:
+    1. *`ResetView()` trong `ImageViewerControl` bị fallback về `Matrix.Identity` (Scale = 1.0)*:
+       - Khi bấm Fit View lúc container vừa thay đổi kích thước, chuyển tab hoặc chưa hoàn tất layout, `PART_RootGrid.ActualWidth` và `ActualHeight` trả về `<= 0`.
+       - Lệnh `ResetView()` gặp điều kiện này sẽ thoát sớm hoặc gán `_transform.Matrix = Matrix.Identity` (tương đương Scale = 1.0, Translate = 0, 0), khiến ảnh hiển thị ở kích thước gốc 100% (ví dụ ảnh 20MP 5472x3648 trên màn hình 1080p chỉ nhìn thấy 1 góc trên cùng bên trái).
+       - Đồng thời, khi đổi nguồn ảnh có kích thước phân giải khác nhau (từ 1920x1080 sang 5472x3648), `OnImageSourceChanged` không tự động phát hiện `sizeChanged` để kích hoạt lại `ResetView()`.
+    2. *Thiếu đồng bộ kích thước Canvas `PART_Content` và thiếu lắng nghe `SizeChanged` của UserControl*:
+       - `SetupTransforms()` chỉ lắng nghe `SizeChanged` của `_parentWindow` (cửa sổ chính) mà không lắng nghe `SizeChanged` của chính `ImageViewerControl`. Do đó khi người dùng kéo `GridSplitter` phân chia cột, thay đổi kích thước sidebar hay đổi tab, `ImageViewerControl` không tự động điều chỉnh.
+    3. *Giải Pháp Đã Triển Khai*:
+       - Trong `ResetView()` và `ResetView(targetScale)`:
+         - Chủ động gọi `UpdateLayout()` nếu container chưa có kích thước hợp lệ.
+         - Sử dụng cơ chế phân tầng kích thước container thông minh: `PART_RootGrid.ActualWidth` $\rightarrow$ `this.ActualWidth` $\rightarrow$ `this.RenderSize.Width`.
+         - Lấy kích thước ảnh `imgW / imgH` chuẩn xác từ `TryGetSourcePixelSize` (fallback `bmp.PixelWidth / bmp.PixelHeight`).
+         - Tính toán tỷ lệ `scale` với khoảng đệm an toàn `padding 4px`, ngăn chặn triệt để trường hợp rơi về `scale = 1.0`.
+         - Cập nhật đồng bộ tức thì kích thước `PART_Content`, `PART_Image`, `PART_Overlay`, `PART_FastOverlay` trước khi render.
+       - Trong `OnImageSourceChanged`: Tự động phát hiện khi kích thước ảnh thay đổi (`sizeChanged == true`) để tự động Fit View vừa khít khung nhìn.
+       - Trong `SetupTransforms()`: Lắng nghe sự kiện `SizeChanged` của chính UserControl để duy trì trạng thái hiển thị chuẩn xác.
+       - Bổ sung nút Fit View và hook xử lý chuẩn hóa trên các màn hình: `JobCameraSettingsWindow`, `OriginTrainWindow`, `ManualInspectionView`.
+  - **Hiệu Quả Đo Kiểm**:
+    - Bấm nút Fit View ở bất kỳ màn hình nào: Ảnh 20MP (5472x3648) hay 1080p đều thu nhỏ vừa vặn 100% hoàn hảo trong khung nhìn preview, căn giữa chính xác, không bao giờ bị phóng to 1:1 chỉ thấy 1 góc ảnh.
+    - Kéo thả GridSplitter, thay đổi kích thước cửa sổ hay chuyển tab: Ảnh tự động căn chỉnh tỷ lệ mượt mà.
+    - Toàn bộ solution biên dịch 0 Error(s), 100% test suite trong `TestExtractApp` PASS.
   - **Nguyên Nhân Gốc Rễ Đã Xác Định & Khắc Phục**:
     1. *Tab Camera Settings thiếu Hook đồng bộ khi kích hoạt tab (`MainWindowViewModel` & `CameraSettingsViewModel`)*:
        - Khi app khởi động vào tab OQC Scanner, `CameraService` đã chạy nhưng `CameraSettingsViewModel.IsCameraRunning` và `SelectedDevice` không được đồng bộ khi chuyển tab.
