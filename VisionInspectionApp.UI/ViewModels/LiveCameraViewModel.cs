@@ -248,29 +248,42 @@ public sealed partial class LiveCameraViewModel : ObservableObject
             if (!_isRenderingFrame)
             {
                 _isRenderingFrame = true;
-
-                System.Windows.Application.Current?.Dispatcher?.BeginInvoke(System.Windows.Threading.DispatcherPriority.Render, () =>
+                Mat? renderFrameCopy = null;
+                try
                 {
-                    try
+                    renderFrameCopy = frame.Clone();
+                }
+                catch
+                {
+                    _isRenderingFrame = false;
+                }
+
+                if (renderFrameCopy != null)
+                {
+                    System.Windows.Application.Current?.Dispatcher?.BeginInvoke(System.Windows.Threading.DispatcherPriority.Render, () =>
                     {
-                        if (IsViewActive && frame != null && !frame.IsDisposed && !frame.Empty())
+                        try
                         {
-                            var bitmap = _liveRenderer.UpdateFromMat(frame, 1920, 1080);
-                            if (bitmap != null && !ReferenceEquals(LiveImage, bitmap))
+                            if (IsViewActive && renderFrameCopy != null && !renderFrameCopy.IsDisposed && !renderFrameCopy.Empty())
                             {
-                                LiveImage = bitmap;
+                                var bitmap = _liveRenderer.UpdateFromMat(renderFrameCopy, 1920, 1080);
+                                if (bitmap != null && !ReferenceEquals(LiveImage, bitmap))
+                                {
+                                    LiveImage = bitmap;
+                                }
                             }
                         }
-                    }
-                    catch (Exception ex)
-                    {
-                        System.Diagnostics.Debug.WriteLine($"[LiveCamera] Live render error: {ex.Message}");
-                    }
-                    finally
-                    {
-                        _isRenderingFrame = false;
-                    }
-                });
+                        catch (Exception ex)
+                        {
+                            System.Diagnostics.Debug.WriteLine($"[LiveCamera] Live render error: {ex.Message}");
+                        }
+                        finally
+                        {
+                            renderFrameCopy?.Dispose();
+                            _isRenderingFrame = false;
+                        }
+                    });
+                }
             }
 
             if (frameCopyForInspection != null)

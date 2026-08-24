@@ -433,6 +433,16 @@ public partial class OqcScannerViewModel : ObservableObject
         }
 
         _isRenderingLiveFrame = true;
+        Mat? frameCopy = null;
+        try
+        {
+            frameCopy = frame.Clone();
+        }
+        catch
+        {
+            _isRenderingLiveFrame = false;
+            return;
+        }
 
         try
         {
@@ -440,9 +450,9 @@ public partial class OqcScannerViewModel : ObservableObject
             {
                 try
                 {
-                    if (IsShowingLiveCamera && frame != null && !frame.IsDisposed && !frame.Empty())
+                    if (IsShowingLiveCamera && frameCopy != null && !frameCopy.IsDisposed && !frameCopy.Empty())
                     {
-                        var bitmap = _liveRenderer.UpdateFromMat(frame, 1920, 1080);
+                        var bitmap = _liveRenderer.UpdateFromMat(frameCopy, 1920, 1080);
                         if (bitmap != null && !ReferenceEquals(PreviewImage, bitmap))
                         {
                             PreviewImage = bitmap;
@@ -456,12 +466,14 @@ public partial class OqcScannerViewModel : ObservableObject
                 }
                 finally
                 {
+                    frameCopy?.Dispose();
                     _isRenderingLiveFrame = false;
                 }
             }));
         }
         catch
         {
+            frameCopy?.Dispose();
             _isRenderingLiveFrame = false;
         }
     }

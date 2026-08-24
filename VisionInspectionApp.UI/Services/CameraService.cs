@@ -261,9 +261,11 @@ public sealed class CameraService : IDisposable
             }
 
             // 4. Mở camera và bật Live View ngay lập tức để người dùng sẵn sàng căn chỉnh trên tab OQC Scanner
+            _currentParameters.TriggerMode = CameraTriggerMode.Off;
             _currentParameters.IsLiveViewEnabled = true;
+            _activeLiveConsumers.Add("OQCScanner");
             bool ok = await StartDriverCameraInternalAsync(targetDevice, _currentParameters);
-            if (ok && _activeDriver != null)
+            if (ok && _activeDriver != null && !_activeDriver.IsGrabbing)
             {
                 await _activeDriver.StartGrabbingAsync();
             }
@@ -463,11 +465,24 @@ public sealed class CameraService : IDisposable
 
             if (_activeDriver != null && _activeDriver.IsOpened)
             {
-                if (shouldGrab && !_activeDriver.IsGrabbing)
+                if (shouldGrab)
                 {
-                    bool ok = await _activeDriver.StartGrabbingAsync();
+                    if (_currentParameters.TriggerMode != CameraTriggerMode.Off)
+                    {
+                        var p = _currentParameters.Clone();
+                        p.TriggerMode = CameraTriggerMode.Off;
+                        _currentParameters.TriggerMode = CameraTriggerMode.Off;
+                        await _activeDriver.ApplyParametersAsync(p);
+                    }
+
+                    if (!_activeDriver.IsGrabbing)
+                    {
+                        bool ok = await _activeDriver.StartGrabbingAsync();
+                        _isRunning = _activeDriver.IsOpened;
+                        return ok;
+                    }
                     _isRunning = _activeDriver.IsOpened;
-                    return ok;
+                    return true;
                 }
                 else if (!shouldGrab && _activeDriver.IsGrabbing)
                 {

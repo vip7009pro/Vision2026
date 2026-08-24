@@ -465,28 +465,55 @@ public sealed class HikCameraDriver : CameraDriverBase
         // 1. Nếu camera đang ở chế độ Live View (Grabbing liên tục)
         if (_isGrabbing)
         {
-            // Nếu ở TriggerMode Software, gửi lệnh TriggerSoftware để ContinuousGrabLoop nhận được frame mới
-            if (_parameters.TriggerMode == CameraTriggerMode.On && _parameters.TriggerSource == CameraTriggerSource.Software && _camera != null)
+            bool isSoftwareTrigger = _parameters.TriggerMode == CameraTriggerMode.On
+                                  && _parameters.TriggerSource == CameraTriggerSource.Software;
+
+            // Reset frame cũ để đảm bảo 100% nhận frame mới tinh từ phần cứng
+            lock (_latestContinuousFrameLock)
+            {
+                _latestContinuousFrame?.Dispose();
+                _latestContinuousFrame = null;
+
+                // ĐẶC BIỆT QUAN TRỌNG: Ở SoftTrigger mode, mỗi xung TriggerSoftware
+                // chỉ tạo đúng 1 frame duy nhất. Nếu _discardFramesCount > 0,
+                // GrabLoop sẽ discard frame đó → _latestContinuousFrame mãi mãi null → timeout.
+                // Phải reset discard counter để frame từ trigger được chấp nhận.
+                if (isSoftwareTrigger)
+                {
+                    _discardFramesCount = 0;
+                }
+            }
+
+            // Nếu ở TriggerMode Software, gửi lệnh TriggerSoftware để phần cứng camera chụp frame mới
+            if (isSoftwareTrigger && _camera != null)
             {
                 try
                 {
                     _camera.MV_CC_SetCommandValue_NET("TriggerSoftware");
                 }
-                catch { }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"[HikCameraDriver] Software trigger error: {ex.Message}");
+                }
             }
 
-            // Tránh gọi MV_CC_GetOneFrameTimeout_NET xung đột với ContinuousGrabLoop
-            for (int i = 0; i < 40; i++)
+            // Chờ ContinuousGrabLoop nhận được frame mới từ camera
+            int maxLoops = Math.Max(20, timeoutMs / 20);
+            for (int i = 0; i < maxLoops; i++)
             {
                 lock (_latestContinuousFrameLock)
                 {
                     if (_latestContinuousFrame != null && !_latestContinuousFrame.IsDisposed && !_latestContinuousFrame.Empty())
                     {
-                        return _latestContinuousFrame.Clone();
+                        var freshMat = _latestContinuousFrame.Clone();
+                        _latestContinuousFrame.Dispose();
+                        _latestContinuousFrame = null;
+                        return freshMat;
                     }
                 }
-                await Task.Delay(25);
+                await Task.Delay(20);
             }
+            return null;
         }
 
         // 2. Nếu camera ở chế độ Standby (0 Mbps) hoặc cần chụp frame độc lập
@@ -587,6 +614,10 @@ public sealed class HikCameraDriver : CameraDriverBase
         {
             try
             {
+                lock (_latestContinuousFrameLock)
+                {
+                    _discardFramesCount = 0;
+                }
                 int ret = _camera.MV_CC_SetCommandValue_NET("TriggerSoftware");
                 return ret == MyCamera.MV_OK;
             }
@@ -1065,13 +1096,19 @@ public override async Task<CameraParameters> ReadParametersAsync()
                             hwY = _hardwareReverseYApplied;
                         }
 
-                        using var postProcessed = ApplySoftwarePostProcessing(rawMat, p, hwX, hwY);
+                        var postProcessed = ApplySoftwarePostProcessing(rawMat, p, hwX, hwY);
                         lock (_latestContinuousFrameLock)
                         {
                             _latestContinuousFrame?.Dispose();
                             _latestContinuousFrame = postProcessed.Clone();
                         }
-                        RaiseFrameCaptured(rawMat);
+                        RaiseFrameCaptured(postProcessed);
+
+                        if (!ReferenceEquals(postProcessed, rawMat))
+                        {
+                            postProcessed.Dispose();
+                        }
+                        rawMat.Dispose();
                     }
                 }
                 else

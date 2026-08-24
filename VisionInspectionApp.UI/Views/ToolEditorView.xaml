@@ -1348,21 +1348,6 @@
                                     </Grid>
                                 </Border>
 
-                                <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1" Visibility="{Binding ImageSource_IsFolder, Converter={StaticResource BoolToVis}}">
-                                    <Grid>
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="120" />
-                                            <ColumnDefinition Width="*" />
-                                        </Grid.ColumnDefinitions>
-                                        <Border Background="{DynamicResource WindowBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
-                                            <TextBlock Text="Interval (ms)" VerticalAlignment="Center" Margin="4,2" FontSize="11" Foreground="{DynamicResource TextBrush}"/>
-                                        </Border>
-                                        <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
-                                            <TextBox Text="{Binding ImageSource_FolderIntervalMs, UpdateSourceTrigger=LostFocus}" Margin="2,1" FontSize="11" />
-                                        </Border>
-                                    </Grid>
-                                </Border>
-
                                 <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1" Visibility="{Binding ImageSource_IsCamera, Converter={StaticResource BoolToVis}}">
                                     <Grid>
                                         <Grid.ColumnDefinitions>
@@ -1421,11 +1406,26 @@
                                     </Grid>
                                 </Border>
 
+                                <!-- Interval (ms) Setting (Visible for SoftTrigger / Folder / File) -->
+                                <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1" Visibility="{Binding ImageSource_IsIntervalVisible, Converter={StaticResource BoolToVis}}">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="120" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <Border Background="{DynamicResource WindowBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
+                                            <TextBlock Text="Interval (ms)" VerticalAlignment="Center" Margin="4,2" FontSize="11" Foreground="{DynamicResource TextBrush}" ToolTip="Khoảng thời gian chu kỳ chụp ảnh khi chạy liên tục (ms). Đặt 0 để chụp liên tục tốc độ tối đa."/>
+                                        </Border>
+                                        <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
+                                            <TextBox Text="{Binding ImageSource_FolderIntervalMs, UpdateSourceTrigger=LostFocus}" ToolTip="Khoảng thời gian chu kỳ chụp ảnh khi chạy liên tục (ms). Đặt 0 để chụp liên tục tốc độ tối đa." Margin="2,1" FontSize="11" />
+                                        </Border>
+                                    </Grid>
+                                </Border>
+
                                 <!-- Continuous Mode Status Badge -->
                                 <Border Background="{DynamicResource ControlBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1" Padding="6,4">
                                     <TextBlock Text="{Binding ImageSource_ContinuousModeDescription}" FontSize="10" Foreground="{DynamicResource AccentBrush}" TextWrapping="Wrap" />
                                 </Border>
-
                                 <!-- Line Trigger Settings -->
                                 <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1" Visibility="{Binding ImageSource_IsLineTrigger, Converter={StaticResource BoolToVis}}">
                                     <Grid>

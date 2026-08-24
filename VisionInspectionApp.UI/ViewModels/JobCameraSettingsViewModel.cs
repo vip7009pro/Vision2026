@@ -959,13 +959,24 @@ public sealed class JobCameraSettingsViewModel : ObservableObject, IDisposable
             if (_isRenderingFrame) return;
             _isRenderingFrame = true;
 
+            Mat? renderFrameCopy = null;
+            try
+            {
+                renderFrameCopy = frame.Clone();
+            }
+            catch
+            {
+                _isRenderingFrame = false;
+                return;
+            }
+
             System.Windows.Application.Current?.Dispatcher?.BeginInvoke(System.Windows.Threading.DispatcherPriority.Render, () =>
             {
                 try
                 {
-                    if (IsViewActive && frame != null && !frame.IsDisposed && !frame.Empty())
+                    if (IsViewActive && renderFrameCopy != null && !renderFrameCopy.IsDisposed && !renderFrameCopy.Empty())
                     {
-                        var bitmap = _liveRenderer.UpdateFromMat(frame, 1920, 1080);
+                        var bitmap = _liveRenderer.UpdateFromMat(renderFrameCopy, 1920, 1080);
                         if (bitmap != null && !ReferenceEquals(LiveImage, bitmap))
                         {
                             LiveImage = bitmap;
@@ -982,11 +993,12 @@ public sealed class JobCameraSettingsViewModel : ObservableObject, IDisposable
                 }
                 finally
                 {
+                    renderFrameCopy?.Dispose();
                     _isRenderingFrame = false;
                 }
             });
         }
-        catch
+        catch (Exception ex)
         {
             _isRenderingFrame = false;
         }

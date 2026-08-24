@@ -2509,26 +2509,28 @@ namespace VisionInspectionApp.UI.ViewModels
                 if (sourceDef.TriggerMode == ImageSourceTriggerMode.LineTrigger)
                 {
                     StatusBarText = "Đang chạy liên tục: Chờ Hardware Trigger từ Camera Công Nghiệp (Line 0 / Sensor)...";
-                    var p = _cameraService.CurrentParameters.Clone();
-                    p.TriggerMode = CameraTriggerMode.On;
-                    p.TriggerSource = CameraTriggerSource.Line0;
-                    await _cameraService.ApplyParametersAsync(p);
                 }
                 else
                 {
-                    StatusBarText = "Đang chạy liên tục: Camera Công Nghiệp (Continuous FreeRun / Soft Trigger)...";
-                    var p = _cameraService.CurrentParameters.Clone();
-                    p.TriggerMode = CameraTriggerMode.Off;
-                    await _cameraService.ApplyParametersAsync(p);
+                    int interval = Math.Max(0, sourceDef.FolderIntervalMs);
+                    StatusBarText = interval > 0 
+                        ? $"Đang chạy liên tục: Software Trigger (Chu kỳ {interval} ms, ~{1000.0 / interval:F1} pcs/s)..."
+                        : "Đang chạy liên tục: Software Trigger (Tối đa tốc độ / FreeRun)...";
                 }
             }
             else if (isSimulator)
             {
-                StatusBarText = "Đang chạy liên tục: Camera Giả Lập Công Nghiệp (Simulator)...";
+                int interval = Math.Max(0, sourceDef.FolderIntervalMs);
+                StatusBarText = interval > 0
+                    ? $"Đang chạy liên tục: Camera Giả Lập (Chu kỳ {interval} ms)..."
+                    : "Đang chạy liên tục: Camera Giả Lập (Tối đa tốc độ)...";
             }
             else
             {
-                StatusBarText = "Đang chạy liên tục: Camera Stream (DirectShow / GigE)...";
+                int interval = Math.Max(0, sourceDef.FolderIntervalMs);
+                StatusBarText = interval > 0
+                    ? $"Đang chạy liên tục: Camera Stream (Chu kỳ {interval} ms)..."
+                    : "Đang chạy liên tục: Camera Stream (DirectShow / RTSP)...";
             }
 
             SyncToolGraphToConfig();
@@ -2537,7 +2539,7 @@ namespace VisionInspectionApp.UI.ViewModels
                 EnsureTemplatePathsAbsolute(_config);
             }
 
-            // 1. Khởi động Camera stream/grabbing nếu chưa chạy
+            // 1. Khởi động Camera stream/grabbing nếu chưa chạy (MỞ + GRAB TRƯỚC)
             if (!_cameraService.IsRunning)
             {
                 var allDevices = CameraDriverFactory.ScanAllDevices();
@@ -2557,12 +2559,32 @@ namespace VisionInspectionApp.UI.ViewModels
 
                 await _cameraService.StartDriverCameraAsync(targetDevice, _cameraService.CurrentParameters);
             }
-            else if (_cameraService.ActiveDriver != null && !_cameraService.ActiveDriver.IsGrabbing)
+
+            // Đảm bảo camera đang grabbing (bắt buộc cho SoftTrigger continuous)
+            if (_cameraService.ActiveDriver != null && !_cameraService.ActiveDriver.IsGrabbing)
             {
                 await _cameraService.ActiveDriver.StartGrabbingAsync();
             }
 
-            // 2. Khởi tạo Bounded Channel với capacity = QueueCapacity (8), DropWrite có kiểm soát Dispose để tránh rò rỉ Mat Native
+            // 2. Áp dụng tham số TriggerMode/Source SAU KHI camera đã mở + grabbing
+            //    Điều này đảm bảo lệnh TriggerMode=On được gửi xuống phần cứng thực tế
+            if (isIndustrial)
+            {
+                var p = _cameraService.CurrentParameters.Clone();
+                if (sourceDef.TriggerMode == ImageSourceTriggerMode.LineTrigger)
+                {
+                    p.TriggerMode = CameraTriggerMode.On;
+                    p.TriggerSource = CameraTriggerSource.Line0;
+                }
+                else
+                {
+                    p.TriggerMode = CameraTriggerMode.On;
+                    p.TriggerSource = CameraTriggerSource.Software;
+                }
+                await _cameraService.ApplyParametersAsync(p);
+            }
+
+            // 3. Khởi tạo Pipeline Hàng Đợi (Bounded Channel) Thống Nhất cho Tất Cả Chế Độ
             var channelOptions = new BoundedChannelOptions(QueueCapacity)
             {
                 FullMode = BoundedChannelFullMode.DropWrite,
@@ -2572,7 +2594,6 @@ namespace VisionInspectionApp.UI.ViewModels
             _industrialCameraFrameChannel = Channel.CreateBounded<Mat>(channelOptions);
             var channel = _industrialCameraFrameChannel;
 
-            // 3. Đăng ký nhận frame từ CameraService
             _continuousFrameHandler = (sender, frame) =>
             {
                 if (token.IsCancellationRequested || frame == null || frame.IsDisposed || frame.Empty())
@@ -2604,7 +2625,7 @@ namespace VisionInspectionApp.UI.ViewModels
             };
             _cameraService.FrameCaptured += _continuousFrameHandler;
 
-            // 4. Worker Task chạy ngầm xử lý frame tuần tự
+            // 4. Khởi chạy Worker Task xử lý kiểm tra (Inspection Engine) tuần tự từ Queue
             _ = Task.Run(async () =>
             {
                 try
@@ -2613,7 +2634,7 @@ namespace VisionInspectionApp.UI.ViewModels
                     {
                         while (channel.Reader.TryRead(out var frameMat))
                         {
-                            if (token.IsCancellationRequested)
+                            if (token.IsCancellationRequested || !IsRunningFolderFlow)
                             {
                                 frameMat.Dispose();
                                 break;
@@ -2625,7 +2646,7 @@ namespace VisionInspectionApp.UI.ViewModels
                             }
                             catch (Exception ex)
                             {
-                                System.Diagnostics.Debug.WriteLine($"[Continuous Worker] Error processing frame: {ex.Message}");
+                                System.Diagnostics.Debug.WriteLine($"[Continuous Inspection Worker] Error processing frame: {ex.Message}");
                             }
                             finally
                             {
@@ -2637,7 +2658,7 @@ namespace VisionInspectionApp.UI.ViewModels
                 catch (OperationCanceledException) { }
                 catch (Exception ex)
                 {
-                    System.Diagnostics.Debug.WriteLine($"[Continuous Worker] Exception: {ex.Message}");
+                    System.Diagnostics.Debug.WriteLine($"[Continuous Inspection Worker] Exception: {ex.Message}");
                 }
                 finally
                 {
@@ -2651,12 +2672,78 @@ namespace VisionInspectionApp.UI.ViewModels
                     });
                 }
             }, token);
+
+            // 5. Điều khiển nguồn kích phát (Trigger Generator)
+            if (sourceDef.TriggerMode == ImageSourceTriggerMode.LineTrigger)
+            {
+                // Ở chế độ LineTrigger: Cảm biến phần cứng tự kích phát xung khi có phôi chạy qua
+            }
+            else
+            {
+                // Ở chế độ SoftTrigger: Tự động kích phát xung theo chu kỳ Interval (ms) độc lập với tốc độ xử lý của Worker
+                _ = Task.Run(async () =>
+                {
+                    var sw = new System.Diagnostics.Stopwatch();
+                    int interval = Math.Max(0, sourceDef.FolderIntervalMs);
+                    try
+                    {
+                        while (!token.IsCancellationRequested && IsRunningFolderFlow)
+                        {
+                            sw.Restart();
+
+                            if (isIndustrial)
+                            {
+                                bool triggered = await _cameraService.ExecuteSoftwareTriggerAsync();
+                                if (!triggered)
+                                {
+                                    // Fallback chụp snapshot nếu driver không kích hoạt qua lệnh command
+                                    var snapMat = await _cameraService.CaptureSnapshotAsync(sourceDef.CameraIndex, string.IsNullOrWhiteSpace(sourceDef.RtspUrl) ? null : sourceDef.RtspUrl);
+                                    if (snapMat != null && !snapMat.Empty() && !token.IsCancellationRequested)
+                                    {
+                                        _continuousFrameHandler?.Invoke(this, snapMat);
+                                        snapMat.Dispose();
+                                    }
+                                }
+                            }
+                            else
+                            {
+                                var snapMat = await _cameraService.CaptureSnapshotAsync(sourceDef.CameraIndex, string.IsNullOrWhiteSpace(sourceDef.RtspUrl) ? null : sourceDef.RtspUrl);
+                                if (snapMat != null && !snapMat.Empty() && !token.IsCancellationRequested)
+                                {
+                                    _continuousFrameHandler?.Invoke(this, snapMat);
+                                    snapMat.Dispose();
+                                }
+                            }
+
+                            sw.Stop();
+                            int elapsed = (int)sw.ElapsedMilliseconds;
+                            int delayMs = Math.Max(1, interval - elapsed);
+                            if (delayMs > 0 && !token.IsCancellationRequested && IsRunningFolderFlow)
+                            {
+                                try
+                                {
+                                    await Task.Delay(delayMs, token);
+                                }
+                                catch (OperationCanceledException)
+                                {
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                    catch (OperationCanceledException) { }
+                    catch (Exception ex)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"[Continuous SoftTrigger Generator] Exception: {ex.Message}");
+                    }
+                }, token);
+            }
         }
 
         private Task StartIndustrialCameraContinuousFlow(ImageSourceDefinition sourceDef) => StartContinuousCameraFlow(sourceDef);
 
         private long _lastContinuousUiRenderTick = 0;
-        private const int ContinuousUiThrottleIntervalMs = 100; // Tối đa 10 FPS cho UI Preview để giải phóng 100% CPU cho Inspection Engine
+        private const int ContinuousUiThrottleIntervalMs = 80; // Cập nhật mượt mà cho UI Preview
         private long _droppedContinuousFramesCount = 0;
 
         private async Task ProcessContinuousFrameAsync(Mat frameMat, string sourceNodeName)
@@ -2667,6 +2754,7 @@ namespace VisionInspectionApp.UI.ViewModels
             _inspectionService.ResetTracking();
             var __sw = System.Diagnostics.Stopwatch.StartNew();
 
+            SetImageSourceCache(sourceNodeName, "camera", frameMat);
             _sharedImage.SetImage(frameMat);
 
             var configCopy = _config;
@@ -2729,33 +2817,19 @@ namespace VisionInspectionApp.UI.ViewModels
                 return;
 
             _lastRun = inspectionResult;
-            LastResult = _lastRun;
-            ProcessedImageCount++;
-            UpdateContinuousStats();
 
-            long nowTick = Environment.TickCount64;
-            bool shouldUpdateUi = (nowTick - _lastContinuousUiRenderTick) >= ContinuousUiThrottleIntervalMs;
-            if (shouldUpdateUi)
+            await System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
             {
-                _lastContinuousUiRenderTick = nowTick;
-                await System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
-                {
-                    if (!IsRunningFolderFlow) return;
-                    UpdateNodeExecutionTimes();
-                    RefreshInspectionDashboard(_lastRun);
-                    RefreshPreviews();
-                    RaiseToolPropertyPanelsChanged();
-                    OnPropertyChanged(nameof(Blob_LastRunCount));
-                });
-            }
-            else
-            {
-                System.Windows.Application.Current?.Dispatcher?.BeginInvoke(System.Windows.Threading.DispatcherPriority.Background, () =>
-                {
-                    if (!IsRunningFolderFlow) return;
-                    OnPropertyChanged(nameof(ProcessedImageCount));
-                });
-            }
+                if (!IsRunningFolderFlow) return;
+                LastResult = _lastRun;
+                ProcessedImageCount++;
+                UpdateContinuousStats();
+                UpdateNodeExecutionTimes();
+                RefreshInspectionDashboard(_lastRun);
+                RefreshPreviews();
+                RaiseToolPropertyPanelsChanged();
+                OnPropertyChanged(nameof(Blob_LastRunCount));
+            });
         }
 
         private void StartUsbCameraContinuousFlow(ImageSourceDefinition sourceDef)
@@ -3011,6 +3085,13 @@ namespace VisionInspectionApp.UI.ViewModels
             finally
             {
                 _folderFlowCts = null;
+            }
+
+            if (_cameraService.ActiveDriver != null && _cameraService.ActiveDriver.IsOpened && _cameraService.CurrentParameters.TriggerMode != CameraTriggerMode.Off)
+            {
+                var p = _cameraService.CurrentParameters.Clone();
+                p.TriggerMode = CameraTriggerMode.Off;
+                _ = _cameraService.ApplyParametersAsync(p);
             }
 
             _continuousStopwatch.Reset();

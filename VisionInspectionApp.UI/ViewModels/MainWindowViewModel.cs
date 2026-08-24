@@ -58,12 +58,23 @@ public sealed partial class MainWindowViewModel : ObservableObject
         OpenRecentJobCommand = new RelayCommand<string>(ExecuteOpenRecentJob);
         ClearRecentJobsCommand = new RelayCommand(ExecuteClearRecentJobs);
 
-        CameraSettings.IsViewActive = (_selectedTabIndex == 3);
+        if (_selectedTabIndex == 3)
+        {
+            CameraSettings.OnViewActivated();
+        }
     }
 
     partial void OnSelectedTabIndexChanged(int value)
     {
-        CameraSettings.IsViewActive = (value == 3);
+        if (value == 3)
+        {
+            CameraSettings.OnViewActivated();
+        }
+        else
+        {
+            CameraSettings.OnViewDeactivated();
+        }
+
         Task.Run(() =>
         {
             try

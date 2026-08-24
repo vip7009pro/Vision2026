@@ -269,19 +269,30 @@ namespace VisionInspectionApp.UI.ViewModels
 
         public bool ImageSource_IsTimerDriven => !ImageSource_IsIndustrialCamera && ImageSource_TriggerMode != ImageSourceTriggerMode.PlcTrigger;
 
+        public bool ImageSource_IsIntervalVisible =>
+            ImageSource_IsFolder ||
+            ImageSource_IsFile ||
+            ImageSource_TriggerMode == ImageSourceTriggerMode.SoftTrigger;
+
         public string ImageSource_ContinuousModeDescription
         {
             get
             {
-                if (ImageSource_IsIndustrialCamera)
+                if (ImageSource_IsLineTrigger)
                 {
-                    return "⚡ Chế độ: Event-Driven (Chờ tín hiệu Hardware Trigger / PLC Line 0 từ Camera Hikrobot GigE). Không dùng Interval.";
+                    return $"⚡ Chế độ: Hardware Trigger (Chờ xung kích phát từ {ImageSource_LineTriggerName} / Sensor Line 0). Không dùng Interval.";
                 }
                 if (ImageSource_IsPlcTrigger)
                 {
                     return "⚡ Chế độ: PLC Trigger (Lắng nghe sự kiện đổi trạng thái PLC Tag).";
                 }
-                return "⏱ Chế độ: Timer-Driven (Chạy tuần tự theo chu kỳ Interval đã định).";
+                int interval = ImageSource_FolderIntervalMs;
+                if (interval <= 0)
+                {
+                    return "⏱ Chế độ: Software Trigger - Chạy liên tục tốc độ tối đa (FreeRun 0ms delay).";
+                }
+                double fps = interval > 0 ? (1000.0 / interval) : 0;
+                return $"⏱ Chế độ: Software Trigger - Chu kỳ lấy ảnh: {interval} ms (tốc độ ~{fps:F1} pcs/s).";
             }
         }
 
@@ -302,6 +313,7 @@ namespace VisionInspectionApp.UI.ViewModels
                 OnPropertyChanged(nameof(ImageSource_IsCamera));
                 OnPropertyChanged(nameof(ImageSource_IsIndustrialCamera));
                 OnPropertyChanged(nameof(ImageSource_IsTimerDriven));
+                OnPropertyChanged(nameof(ImageSource_IsIntervalVisible));
                 OnPropertyChanged(nameof(ImageSource_ContinuousModeDescription));
                 // Refresh camera list when switching to Camera source
                 if (value == ImageSourceType.Camera)
@@ -332,6 +344,7 @@ namespace VisionInspectionApp.UI.ViewModels
                 OnPropertyChanged(nameof(ImageSource_IsPlcTrigger));
                 OnPropertyChanged(nameof(ImageSource_IsIndustrialCamera));
                 OnPropertyChanged(nameof(ImageSource_IsTimerDriven));
+                OnPropertyChanged(nameof(ImageSource_IsIntervalVisible));
                 OnPropertyChanged(nameof(ImageSource_ContinuousModeDescription));
                 RaiseToolPropertyPanelsChanged();
                 RequestAutoSave();
@@ -510,9 +523,12 @@ namespace VisionInspectionApp.UI.ViewModels
                 var def = SelectedImageSourceDef();
                 if (def is null)
                     return;
-                if (def.FolderIntervalMs == value)
+                int clamped = Math.Max(0, value);
+                if (def.FolderIntervalMs == clamped)
                     return;
-                def.FolderIntervalMs = value;
+                def.FolderIntervalMs = clamped;
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(ImageSource_ContinuousModeDescription));
                 RaiseToolPropertyPanelsChanged();
                 RefreshPreviews();
                 RequestAutoSave();

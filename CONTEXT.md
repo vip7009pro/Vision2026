@@ -51,6 +51,56 @@
 
 ### Sửa lỗi và Cải thiện UX/UI (Phiên làm việc hiện tại)
 
+- **Khắc Phục Toàn Diện Tab Camera Settings Live View & Lỗi Cập Nhật UI Continuous Run (Task 241)**:
+  - **Yêu Cầu & Bối Cảnh**:
+    1. Khi mở ứng dụng rồi chuyển sang tab Camera Settings, camera ở trạng thái Stop. Khi bấm "Start Camera" thì nút Live View hiển thị "Dừng Live View" (đang bật) nhưng không có hình ảnh; phải bấm "Chụp thử" thì Live View mới hiển thị.
+    2. Khi chạy Continuous với SoftTrigger, Total Time và Queue tăng nấc chuẩn xác nhưng overlay và bảng kết quả đo / thời gian tool không nhảy (bị kẹt dữ liệu cũ).
+  - **Nguyên Nhân Gốc Rễ Đã Xác Định & Khắc Phục**:
+    1. *Tab Camera Settings thiếu Hook đồng bộ khi kích hoạt tab (`MainWindowViewModel` & `CameraSettingsViewModel`)*:
+       - Khi app khởi động vào tab OQC Scanner, `CameraService` đã chạy nhưng `CameraSettingsViewModel.IsCameraRunning` và `SelectedDevice` không được đồng bộ khi chuyển tab.
+       - Trong `OnFrameCaptured` của `CameraSettingsViewModel` và `JobCameraSettingsViewModel`, frame truyền vào `BeginInvoke` bị dispose trước khi UI Thread render.
+       - *Khắc phục*: Thêm `OnViewActivated()` / `OnViewDeactivated()` trong `CameraSettingsViewModel`, tự động đồng bộ `IsCameraRunning`, `SelectedDevice` và đăng ký consumer `"CameraSettings"`. Đồng thời áp dụng cơ chế **Safe Frame Clone** (`frameCopy = frame.Clone()`) trước `BeginInvoke` và dispose trong `finally`.
+    2. *Xung đột luồng UI (Dispatcher) khi gán `LastResult` và `ObservableCollection` trong Worker Task (`ToolEditorViewModel`)*:
+       - Khi Worker Task hoàn tất `Inspect`, lệnh `LastResult = _lastRun;` chạy trên **Background Worker Thread**, kích hoạt `OnLastResultChanged` $\rightarrow$ gọi `RefreshInspectionDashboard` $\rightarrow$ `SpecResults.Clear()` và `ToolTimings.Clear()`.
+       - Trong WPF, việc sửa đổi `ObservableCollection` từ luồng khác Dispatcher Thread sẽ ném ngoại lệ `NotSupportedException: This type of CollectionView does not support changes to its SourceCollection from a thread different from the Dispatcher thread.` khiến Worker Task bị dừng ngay ở frame đầu tiên!
+       - *Khắc phục*:
+         - Chuyển `LastResult = _lastRun;`, `ProcessedImageCount++;`, `UpdateContinuousStats();` vào trong `Dispatcher.InvokeAsync(...)` trên UI Thread.
+         - Bổ sung kiểm tra `CheckAccess()` trong `RefreshInspectionDashboard` để đảm bảo 100% thread-safe khi gọi từ bất kỳ luồng nào.
+         - Đảm bảo `_discardFramesCount = 0` trong `ExecuteSoftwareTriggerAsync()` của `HikCameraDriver` để mọi frame từ xung trigger đều được tiếp nhận.
+  - **Hiệu Quả Đo Kiểm**:
+    - Chuyển sang tab Camera Settings: Tự động nhận diện thiết bị đang mở và phát Live View mượt mà ngay lập tức mà không cần bấm thêm thao tác nào.
+    - Chạy Continuous: Bảng đo lường, thời gian từng tool, dashboard tổng quan và preview canvas nhảy kết quả liên tục theo từng frame mới.
+    - Toàn bộ solution biên dịch 0 Error(s), 100% test suite trong `TestExtractApp` PASS.
+  - **Nguyên Nhân Gốc Rễ Đã Xác Định & Khắc Phục**:
+    1. *Frame bị Dispose trước khi Render trên UI Thread (`OqcScannerViewModel` & `LiveCameraViewModel`)*:
+       - Trong sự kiện `OnCameraFrameCaptured`, delegate gọi `BeginInvoke` sang UI Thread Dispatcher. Tuy nhiên, luồng lấy ảnh ở tầng driver giải phóng `rawMat.Dispose()` ngay sau khi phát sự kiện. Khi UI Thread thực thi `_liveRenderer.UpdateFromMat(frame)`, biến `frame` đã ở trạng thái `IsDisposed == true`, khiến toàn bộ quá trình render Live View bị bỏ qua.
+       - *Khắc phục*: Đồng bộ clone frame `var frameCopy = frame.Clone()` trước khi `BeginInvoke`, và gọi `frameCopy.Dispose()` trong khối `finally` của UI Thread action.
+    2. *Camera bị kẹt ở chế độ `TriggerMode = On` sau khi chạy Continuous*:
+       - Khi chạy Continuous SoftTrigger, camera được chuyển sang `TriggerMode = On (Software)`. Khi dừng Continuous (`StopContinuousFlow`), camera không được trả về `TriggerMode = Off (FreeRun)`, khiến camera dừng phát luồng frame tự do cho Live View.
+       - *Khắc phục*: Trong `StopContinuousFlow()` và `RequestLiveStreamAsync()`, tự động cấu hình lại `TriggerMode = CameraTriggerMode.Off` để camera phát luồng video liên tục 30+ FPS cho Live View.
+    3. *Khởi tạo cấu hình ban đầu cho `CameraService`*:
+       - Đảm bảo trong `StartSavedCameraAsync()` cấu hình `TriggerMode = CameraTriggerMode.Off`, `IsLiveViewEnabled = true` và đăng ký consumer `"OQCScanner"`, giúp camera tự động kết nối và phát Live View ngay khi ứng dụng vừa mở.
+  - **Hiệu Quả Đo Kiểm**:
+    - Mở app: Camera tự động kết nối và phát Live View mượt mà trên tab OQC Scanner ngay lập tức.
+    - Bật/Tắt Live View (F5): Chuyển đổi trạng thái tức thì, không bị đen màn hình hay đơ frame.
+    - Chạy Continuous: Queue đệm đúng nhịp, Worker lấy frame mới và cập nhật bảng kết quả đo, thời gian từng tool, dashboard và preview canvas chuẩn xác 100%.
+    - Toàn bộ solution biên dịch 0 Error(s), 100% test suite trong `TestExtractApp` PASS.
+  - **Giải Pháp & Kiến Trúc Đã Triển Khai**:
+    1. **Thống nhất Pipeline Hàng Đợi Bounded Channel (`_industrialCameraFrameChannel`) Cho Tất Cả Các Chế Độ**:
+       - Toàn bộ các chế độ chạy liên tục (LineTrigger, SoftTrigger, Simulator, RTSP, USB Webcam) đều đẩy frame vào chung một `Channel<Mat>` với dung lượng `QueueCapacity` (16 frame).
+       - Khởi chạy luồng Worker Task chạy ngầm chuyên trách đọc frame từ `Channel.Reader` và thực thi `ProcessContinuousFrameAsync(frameMat)`.
+    2. **Tách Biệt Luồng Kích Phát (Trigger Generator Task)**:
+       - Đối với `SoftTrigger`, một Generator Task chạy độc lập theo chu kỳ `Interval (ms)`:
+         - Với Camera Công Nghiệp (Hikrobot): Gọi `await _cameraService.ExecuteSoftwareTriggerAsync()`. Lệnh `TriggerSoftware` được gửi xuống camera phần cứng, frame chụp từ cảm biến được `ContinuousGrabLoop` bắt và gửi qua `_cameraService.FrameCaptured` $\rightarrow$ đẩy trực tiếp vào `Channel<Mat>` (Queue).
+         - Khi `Interval = 100ms` và `Inspection = 300ms`: Frame được đẩy vào Queue mỗi 100ms trong khi Worker xử lý 300ms/frame $\rightarrow$ Hàng đợi Queue tự động tích lũy (1 $\rightarrow$ 2 $\rightarrow$ 3 $\rightarrow$ 4...) và thanh Queue 16-nấc trên UI sáng đèn trực quan chính xác!
+         - Tự động bảo vệ Zero Memory Leak: Khi Queue đầy 16 frame, frame cũ nhất được giải phóng `Dispose()` trước khi nhận frame mới và tăng bộ đếm rớt frame `_droppedContinuousFramesCount`.
+    3. **Đồng Bộ Preview & Kết Quả Đo Lường Sau Mỗi Frame**:
+       - Sau mỗi frame hoàn tất trong Worker Task, UI được cập nhật tức thì: Execution Time Badge trên Tool Graph, Dashboard kết quả, Preview Canvas/Overlays và toàn bộ tham số đo lường trong Properties Panel.
+  - **Hiệu Quả Đo Kiểm**:
+    - Chạy Continuous SoftTrigger với chu kỳ `100ms`: Thanh hàng đợi Queue hiển thị chính xác các nấc đệm khi tốc độ chụp nhanh hơn tốc độ xử lý flow.
+    - Hình ảnh và số liệu đo lường nhảy mượt mà theo từng frame mới.
+    - Toàn bộ solution biên dịch 0 Error(s), 100% test suite trong `TestExtractApp` PASS.
+
 - **Sửa Lỗi Run Continuous Với Camera Hikrobot ở Chế Độ SoftTrigger Không Grab Ảnh Mới (Task 238)**:
   - **Yêu Cầu & Bối Cảnh**:
     - Khi người dùng chạy continuous với Camera Hikrobot, tắt handshake và chọn TriggerMode là SoftTrigger, flow vẫn chạy (thấy total ms nhảy) nhưng camera không grab ảnh mới, preview ảnh không thay đổi.

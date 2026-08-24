@@ -163,6 +163,12 @@ namespace VisionInspectionApp.UI.ViewModels
 
         private void RefreshInspectionDashboard(InspectionResult? res)
         {
+            if (System.Windows.Application.Current?.Dispatcher != null && !System.Windows.Application.Current.Dispatcher.CheckAccess())
+            {
+                System.Windows.Application.Current.Dispatcher.Invoke(() => RefreshInspectionDashboard(res));
+                return;
+            }
+
             RefreshSpecResults(res);
             RefreshCodeDetectionResults(res);
             RefreshTimings(res);

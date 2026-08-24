@@ -1024,6 +1024,26 @@ public sealed class CameraSettingsViewModel : ObservableObject, IDisposable
     private readonly WriteableBitmapRenderer _liveRenderer = new();
     private bool _isRenderingFrame;
 
+    public void OnViewActivated()
+    {
+        IsViewActive = true;
+        IsCameraRunning = _cameraService.IsRunning;
+        if (_cameraService.ActiveDeviceInfo != null)
+        {
+            SelectedDevice = AvailableDevices.FirstOrDefault(d => d.SerialNumber == _cameraService.ActiveDeviceInfo.SerialNumber)
+                             ?? AvailableDevices.FirstOrDefault(d => d.Index == _cameraService.ActiveDeviceInfo.Index)
+                             ?? _cameraService.ActiveDeviceInfo;
+        }
+        _ = _cameraService.RequestLiveStreamAsync("CameraSettings", true);
+        UpdateLiveViewButtonState();
+    }
+
+    public void OnViewDeactivated()
+    {
+        IsViewActive = false;
+        _ = _cameraService.RequestLiveStreamAsync("CameraSettings", false);
+    }
+
     private void OnFrameCaptured(object? sender, Mat frame)
     {
         try
@@ -1051,13 +1071,24 @@ public sealed class CameraSettingsViewModel : ObservableObject, IDisposable
             if (_isRenderingFrame) return;
             _isRenderingFrame = true;
 
+            Mat? renderFrameCopy = null;
+            try
+            {
+                renderFrameCopy = frame.Clone();
+            }
+            catch
+            {
+                _isRenderingFrame = false;
+                return;
+            }
+
             System.Windows.Application.Current?.Dispatcher?.BeginInvoke(System.Windows.Threading.DispatcherPriority.Render, () =>
             {
                 try
                 {
-                    if (IsViewActive && frame != null && !frame.IsDisposed && !frame.Empty())
+                    if (IsViewActive && renderFrameCopy != null && !renderFrameCopy.IsDisposed && !renderFrameCopy.Empty())
                     {
-                        var bitmap = _liveRenderer.UpdateFromMat(frame, 1920, 1080);
+                        var bitmap = _liveRenderer.UpdateFromMat(renderFrameCopy, 1920, 1080);
                         if (bitmap != null && !ReferenceEquals(LiveImage, bitmap))
                         {
                             LiveImage = bitmap;
@@ -1074,11 +1105,12 @@ public sealed class CameraSettingsViewModel : ObservableObject, IDisposable
                 }
                 finally
                 {
+                    renderFrameCopy?.Dispose();
                     _isRenderingFrame = false;
                 }
             });
         }
-        catch
+        catch (Exception ex)
         {
             _isRenderingFrame = false;
         }

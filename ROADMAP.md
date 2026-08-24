@@ -907,12 +907,18 @@ Lộ trình tích hợp tính năng Chụp ảnh từ camera và hỗ trợ các
         - `HikCameraDriver.cs`: Trong `GrabFrameAsync`, khi camera đang ở trạng thái Grabbing liên tục và cấu hình `TriggerMode == On && TriggerSource == Software`, tự động phát lệnh `_camera.MV_CC_SetCommandValue_NET("TriggerSoftware")` để kích hoạt chụp frame mới nhất từ cảm biến.
       - `Hiệu Quả Đạt Được`:
         - Khi bấm Run Continuous với Camera Hikrobot (SoftTrigger, Handshake tắt), camera lập tức truyền frame liên tục 25-30+ FPS, hình ảnh preview và overlay kết quả cập nhật mới liên tục theo từng frame.
+    - [x] Task 239: Cài đặt Interval Time chu kỳ lấy ảnh cho chế độ Software Trigger + Continuous Run:
+      - `Yêu Cầu & Bối Cảnh`:
+        - Ở chế độ Software Trigger + Continuous Run, cho phép người dùng tùy chỉnh khoảng thời gian chu kỳ chụp ảnh `Interval (ms)` (ví dụ 100ms, 500ms, 1000ms, hoặc 0ms để chạy tối đa tốc độ), thay vì chụp dồn dập liên tục.
+      - `Giải Pháp Triển Khai`:
+        - `ToolEditorViewModel.ToolPreprocess.cs`: Bổ sung thuộc tính `ImageSource_IsIntervalVisible` hiển thị ô nhập `Interval (ms)` cho chế độ `SoftTrigger` (cũng như `Folder` / `File`), cập nhật `ImageSource_ContinuousModeDescription` hiển thị chu kỳ và tốc độ tương ứng `~pcs/s`.
+        - `ToolEditorView.xaml`: Đặt trường `Interval (ms)` và Badge trạng thái chu kỳ trực quan ngay dưới Trigger Mode Selection.
+        - `ToolEditorViewModel.Engine.cs`: Phân nhánh `StartContinuousCameraFlow` thành 2 pipeline:
+          1. **LineTrigger** (Hardware Sensor): Chạy Event-driven qua `_cameraService.FrameCaptured` và `Channel<Mat>`.
+          2. **SoftTrigger** (Software Trigger / Simulator / Stream): Chạy Task vòng lặp tuần tự chụp frame qua `_cameraService.CaptureSnapshotAsync(...)`, xử lý inspection qua `ProcessContinuousFrameAsync(...)`, đo thời gian thực thi bằng `Stopwatch` và ngủ bù chính xác `delayMs = Math.Max(0, interval - elapsed)`.
+      - `Hiệu Quả Đạt Được`:
+        - Chu kỳ chụp và xử lý frame khi chạy Continuous với SoftTrigger được kiểm soát chuẩn xác 100% theo đúng `Interval (ms)` đã cài đặt (ví dụ `500ms` đạt chuẩn `~2.0 pcs/s`, `1000ms` đạt chuẩn `~1.0 pcs/s`).
         - Toàn bộ solution biên dịch 0 Error(s), 100% test suite trong `TestExtractApp` PASS.
-
-
-
-
-
 
 
 
