@@ -61,18 +61,26 @@
             <Button Content="💾 Chụp &amp; Lưu Ảnh" Command="{Binding CaptureAndSaveImageCommand}" Margin="0,0,6,0" Padding="10,4" Background="#10B981" Foreground="White" BorderThickness="0" ToolTip="Chụp 1 frame nguyên bản chất lượng cao từ Camera và lưu ra file ảnh (PNG/BMP) để mang đi tạo/chỉnh sửa Job trên máy tính khác" />
             <Button Content="📜 Bản Đồ Cuộn" Command="{Binding OpenRollDefectMapCommand}" Margin="0,0,12,0" Padding="10,4" Background="#7C3AED" Foreground="White" BorderThickness="0" ToolTip="Mở giao diện Bản đồ khuyết tật cuộn thời gian thực và xuất báo cáo chất lượng cuộn (JSON, CSV, HTML)" />
 
-            <!-- Queue Visualization Status Bar (Right-Aligned, Stepped Bar / Segments) -->
+            <!-- Continuous Running Speed & Time (Right-Aligned) -->
+            <Border DockPanel.Dock="Right" Background="{DynamicResource PanelBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="8" Padding="10,4" VerticalAlignment="Center" Margin="8,0,0,0" ToolTip="Tốc độ kiểm tra tức thời và tổng thời gian chạy liên tục">
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <TextBlock Text="⚡" FontSize="12" VerticalAlignment="Center" Margin="0,0,4,0"/>
+                    <TextBlock Text="{Binding ContinuousElapsedAndSpeedText}" FontWeight="Bold" FontSize="11.5" Foreground="#10B981" VerticalAlignment="Center"/>
+                </StackPanel>
+            </Border>
+
+            <!-- Queue Visualization Status Bar (Right-Aligned, Stepped Bar 16 Segments) -->
             <Border DockPanel.Dock="Right" Background="{DynamicResource PanelBackgroundBrush}" BorderBrush="{Binding QueueBorderBrush}" BorderThickness="1" CornerRadius="8" Padding="8,4" VerticalAlignment="Center" Margin="8,0,0,0" ToolTip="{Binding QueueToolTipText}">
                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                     <TextBlock Text="📦" FontSize="12" VerticalAlignment="Center" Margin="0,0,4,0"/>
                     <TextBlock Text="Queue:" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource TextMutedBrush}" VerticalAlignment="Center" Margin="0,0,4,0"/>
                     <TextBlock Text="{Binding QueueStatusText}" FontWeight="Bold" FontSize="11.5" Foreground="{Binding QueueFillBrush}" VerticalAlignment="Center" Margin="0,0,6,0"/>
 
-                    <!-- Discrete Stepped Slots (8 items) -->
-                    <Border Background="#12000000" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="4" Padding="3,2" VerticalAlignment="Center">
+                    <!-- Discrete Stepped Slots (16 items) -->
+                    <Border Background="#12000000" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="4" Padding="2,2" VerticalAlignment="Center">
                         <StackPanel Orientation="Horizontal">
                             <!-- Slot 0 -->
-                            <Border Width="8" Height="14" CornerRadius="2" Margin="1,0" BorderThickness="1">
+                            <Border Width="6" Height="14" CornerRadius="2" Margin="1,0" BorderThickness="1">
                                 <Border.Style>
                                     <Style TargetType="Border">
                                         <Setter Property="Background" Value="#15808080"/>
@@ -88,7 +96,7 @@
                             </Border>
 
                             <!-- Slot 1 -->
-                            <Border Width="8" Height="14" CornerRadius="2" Margin="1,0" BorderThickness="1">
+                            <Border Width="6" Height="14" CornerRadius="2" Margin="1,0" BorderThickness="1">
                                 <Border.Style>
                                     <Style TargetType="Border">
                                         <Setter Property="Background" Value="#15808080"/>
@@ -104,7 +112,7 @@
                             </Border>
 
                             <!-- Slot 2 -->
-                            <Border Width="8" Height="14" CornerRadius="2" Margin="1,0" BorderThickness="1">
+                            <Border Width="6" Height="14" CornerRadius="2" Margin="1,0" BorderThickness="1">
                                 <Border.Style>
                                     <Style TargetType="Border">
                                         <Setter Property="Background" Value="#15808080"/>
@@ -120,7 +128,7 @@
                             </Border>
 
                             <!-- Slot 3 -->
-                            <Border Width="8" Height="14" CornerRadius="2" Margin="1,0" BorderThickness="1">
+                            <Border Width="6" Height="14" CornerRadius="2" Margin="1,0" BorderThickness="1">
                                 <Border.Style>
                                     <Style TargetType="Border">
                                         <Setter Property="Background" Value="#15808080"/>
@@ -136,7 +144,7 @@
                             </Border>
 
                             <!-- Slot 4 -->
-                            <Border Width="8" Height="14" CornerRadius="2" Margin="1,0" BorderThickness="1">
+                            <Border Width="6" Height="14" CornerRadius="2" Margin="1,0" BorderThickness="1">
                                 <Border.Style>
                                     <Style TargetType="Border">
                                         <Setter Property="Background" Value="#15808080"/>
@@ -152,7 +160,7 @@
                             </Border>
 
                             <!-- Slot 5 -->
-                            <Border Width="8" Height="14" CornerRadius="2" Margin="1,0" BorderThickness="1">
+                            <Border Width="6" Height="14" CornerRadius="2" Margin="1,0" BorderThickness="1">
                                 <Border.Style>
                                     <Style TargetType="Border">
                                         <Setter Property="Background" Value="#15808080"/>
@@ -168,7 +176,7 @@
                             </Border>
 
                             <!-- Slot 6 -->
-                            <Border Width="8" Height="14" CornerRadius="2" Margin="1,0" BorderThickness="1">
+                            <Border Width="6" Height="14" CornerRadius="2" Margin="1,0" BorderThickness="1">
                                 <Border.Style>
                                     <Style TargetType="Border">
                                         <Setter Property="Background" Value="#15808080"/>
@@ -184,13 +192,141 @@
                             </Border>
 
                             <!-- Slot 7 -->
-                            <Border Width="8" Height="14" CornerRadius="2" Margin="1,0" BorderThickness="1">
+                            <Border Width="6" Height="14" CornerRadius="2" Margin="1,0" BorderThickness="1">
                                 <Border.Style>
                                     <Style TargetType="Border">
                                         <Setter Property="Background" Value="#15808080"/>
                                         <Setter Property="BorderBrush" Value="#30808080"/>
                                         <Style.Triggers>
                                             <DataTrigger Binding="{Binding QueueSlot7Active}" Value="True">
+                                                <Setter Property="Background" Value="{Binding DataContext.QueueFillBrush, RelativeSource={RelativeSource AncestorType=UserControl}}"/>
+                                                <Setter Property="BorderBrush" Value="{Binding DataContext.QueueBorderBrush, RelativeSource={RelativeSource AncestorType=UserControl}}"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Border.Style>
+                            </Border>
+
+                            <!-- Slot 8 -->
+                            <Border Width="6" Height="14" CornerRadius="2" Margin="1,0" BorderThickness="1">
+                                <Border.Style>
+                                    <Style TargetType="Border">
+                                        <Setter Property="Background" Value="#15808080"/>
+                                        <Setter Property="BorderBrush" Value="#30808080"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding QueueSlot8Active}" Value="True">
+                                                <Setter Property="Background" Value="{Binding DataContext.QueueFillBrush, RelativeSource={RelativeSource AncestorType=UserControl}}"/>
+                                                <Setter Property="BorderBrush" Value="{Binding DataContext.QueueBorderBrush, RelativeSource={RelativeSource AncestorType=UserControl}}"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Border.Style>
+                            </Border>
+
+                            <!-- Slot 9 -->
+                            <Border Width="6" Height="14" CornerRadius="2" Margin="1,0" BorderThickness="1">
+                                <Border.Style>
+                                    <Style TargetType="Border">
+                                        <Setter Property="Background" Value="#15808080"/>
+                                        <Setter Property="BorderBrush" Value="#30808080"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding QueueSlot9Active}" Value="True">
+                                                <Setter Property="Background" Value="{Binding DataContext.QueueFillBrush, RelativeSource={RelativeSource AncestorType=UserControl}}"/>
+                                                <Setter Property="BorderBrush" Value="{Binding DataContext.QueueBorderBrush, RelativeSource={RelativeSource AncestorType=UserControl}}"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Border.Style>
+                            </Border>
+
+                            <!-- Slot 10 -->
+                            <Border Width="6" Height="14" CornerRadius="2" Margin="1,0" BorderThickness="1">
+                                <Border.Style>
+                                    <Style TargetType="Border">
+                                        <Setter Property="Background" Value="#15808080"/>
+                                        <Setter Property="BorderBrush" Value="#30808080"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding QueueSlot10Active}" Value="True">
+                                                <Setter Property="Background" Value="{Binding DataContext.QueueFillBrush, RelativeSource={RelativeSource AncestorType=UserControl}}"/>
+                                                <Setter Property="BorderBrush" Value="{Binding DataContext.QueueBorderBrush, RelativeSource={RelativeSource AncestorType=UserControl}}"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Border.Style>
+                            </Border>
+
+                            <!-- Slot 11 -->
+                            <Border Width="6" Height="14" CornerRadius="2" Margin="1,0" BorderThickness="1">
+                                <Border.Style>
+                                    <Style TargetType="Border">
+                                        <Setter Property="Background" Value="#15808080"/>
+                                        <Setter Property="BorderBrush" Value="#30808080"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding QueueSlot11Active}" Value="True">
+                                                <Setter Property="Background" Value="{Binding DataContext.QueueFillBrush, RelativeSource={RelativeSource AncestorType=UserControl}}"/>
+                                                <Setter Property="BorderBrush" Value="{Binding DataContext.QueueBorderBrush, RelativeSource={RelativeSource AncestorType=UserControl}}"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Border.Style>
+                            </Border>
+
+                            <!-- Slot 12 -->
+                            <Border Width="6" Height="14" CornerRadius="2" Margin="1,0" BorderThickness="1">
+                                <Border.Style>
+                                    <Style TargetType="Border">
+                                        <Setter Property="Background" Value="#15808080"/>
+                                        <Setter Property="BorderBrush" Value="#30808080"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding QueueSlot12Active}" Value="True">
+                                                <Setter Property="Background" Value="{Binding DataContext.QueueFillBrush, RelativeSource={RelativeSource AncestorType=UserControl}}"/>
+                                                <Setter Property="BorderBrush" Value="{Binding DataContext.QueueBorderBrush, RelativeSource={RelativeSource AncestorType=UserControl}}"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Border.Style>
+                            </Border>
+
+                            <!-- Slot 13 -->
+                            <Border Width="6" Height="14" CornerRadius="2" Margin="1,0" BorderThickness="1">
+                                <Border.Style>
+                                    <Style TargetType="Border">
+                                        <Setter Property="Background" Value="#15808080"/>
+                                        <Setter Property="BorderBrush" Value="#30808080"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding QueueSlot13Active}" Value="True">
+                                                <Setter Property="Background" Value="{Binding DataContext.QueueFillBrush, RelativeSource={RelativeSource AncestorType=UserControl}}"/>
+                                                <Setter Property="BorderBrush" Value="{Binding DataContext.QueueBorderBrush, RelativeSource={RelativeSource AncestorType=UserControl}}"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Border.Style>
+                            </Border>
+
+                            <!-- Slot 14 -->
+                            <Border Width="6" Height="14" CornerRadius="2" Margin="1,0" BorderThickness="1">
+                                <Border.Style>
+                                    <Style TargetType="Border">
+                                        <Setter Property="Background" Value="#15808080"/>
+                                        <Setter Property="BorderBrush" Value="#30808080"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding QueueSlot14Active}" Value="True">
+                                                <Setter Property="Background" Value="{Binding DataContext.QueueFillBrush, RelativeSource={RelativeSource AncestorType=UserControl}}"/>
+                                                <Setter Property="BorderBrush" Value="{Binding DataContext.QueueBorderBrush, RelativeSource={RelativeSource AncestorType=UserControl}}"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Border.Style>
+                            </Border>
+
+                            <!-- Slot 15 -->
+                            <Border Width="6" Height="14" CornerRadius="2" Margin="1,0" BorderThickness="1">
+                                <Border.Style>
+                                    <Style TargetType="Border">
+                                        <Setter Property="Background" Value="#15808080"/>
+                                        <Setter Property="BorderBrush" Value="#30808080"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding QueueSlot15Active}" Value="True">
                                                 <Setter Property="Background" Value="{Binding DataContext.QueueFillBrush, RelativeSource={RelativeSource AncestorType=UserControl}}"/>
                                                 <Setter Property="BorderBrush" Value="{Binding DataContext.QueueBorderBrush, RelativeSource={RelativeSource AncestorType=UserControl}}"/>
                                             </DataTrigger>

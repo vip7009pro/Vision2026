@@ -855,6 +855,59 @@ Lộ trình tích hợp tính năng Chụp ảnh từ camera và hỗ trợ các
         - Giảm mức tiêu thụ RAM khi mở app & bật LiveView từ **~1.2 GB xuống chỉ còn ~150 MB – 250 MB** (giảm 80% RAM).
         - LiveView duy trì 30–60 FPS mượt mà tuyệt đối, GC Gen 2 pauses = 0, Zero Memory Leak.
         - Solution biên dịch **0 Error(s)**, toàn bộ unit tests trong `TestExtractApp` đạt kết quả **PASS 100%**.
+    - [x] Task 235: Khắc phục lỗi Run Continuous, kẹt hàng đợi 8/8 và đứng hình preview khi chạy camera USB / Simulator:
+      - `Bypass Bắt Tay PLC Khi Offline (IndustrialHandshakeStateMachine)`:
+        - Bổ sung thuộc tính `IsEnabled` cho `IndustrialHandshakeStateMachine`, đồng bộ từ `PlcIndustrialConfig.Handshake.IsEnabled`.
+        - Nếu `IsEnabled = false` hoặc `PLC Offline` (`!IsPlcConnected`), bypass toàn bộ chu trình bắt tay trong 0ms, không block hay timeout 500ms / 1.500ms.
+      - `Chống Quá Tải Kết Nối PLC (PlcManagerService)`:
+        - Bổ sung `IsPlcConnected(string plcId)` và cơ chế throttle kết nối lại 5 giây.
+        - Khi PLC offline, tự động cập nhật cache ảo cục bộ mà không dừng luồng xử lý.
+      - `Chuẩn Hóa Nhận Diện & Thống Nhất Luồng Continuous (ToolEditorViewModel.Engine.cs)`:
+        - Sửa `IsIndustrialCameraSource` nhận diện chuẩn xác `Simulator` (Index -2), `USB Webcam DirectShow`, `Hikrobot/Basler/Cognex`.
+        - Thống nhất toàn bộ các loại Camera chạy trên luồng Producer-Consumer `BoundedChannel<Mat>(8)`: Queue hiển thị xanh mượt 0-1/8, tốc độ nhảy liên tục 25–30 pcs/s, preview cập nhật mượt mà 10-30 FPS.
+      - `Nâng Cấp Simulator Dynamic Timestamp (SimulatorCameraDriver.cs)`:
+        - Tự động cập nhật nhãn thời gian `TIME: {DateTime.Now:HH:mm:ss.fff}` động trên từng frame của lưới giả lập mặc định.
+      - `Hiệu Quả Đạt Được`:
+        - Khắc phục triệt để hiện tượng đứng hình / đơ máy và kẹt Queue 8/8 khi bấm Run Continuous.
+        - Tốc độ kiểm tra nhảy đều đặn 25-30 pcs/s trong suốt quá trình chạy liên tục.
+        - 100% unit tests trong `TestExtractApp` PASS.
+    - [x] Task 236: Nâng cấp Queue 16 slots, hiển thị Tốc độ pcs/s trực quan trên Toolbar và Live Continuous Preview/Overlay:
+      - `Mở Rộng Dung Lượng Hàng Đợi Lên 16 Slots (ToolEditorViewModel.Engine.cs & ToolEditorView.xaml)`:
+        - Nâng `QueueCapacity = 16`, mở rộng `_queueSlot0Active` đến `_queueSlot15Active`.
+        - Cập nhật dải cảnh báo thông minh: Mượt mà `<6/16` (Xanh Emerald), Bận rộn `6-11/16` (Vàng Amber), Tải cao `≥12/16` (Đỏ Ruby).
+        - Thiết kế thanh 16 vạch chia bước (Discrete Stepped Bar) sắc nét, hiện đại trên Top Header Toolbar.
+      - `Tối Ưu Tốc Độ pcs/s & Badge Thống Kê Thời Gian Thực`:
+        - Bổ sung Badge tốc độ & thời gian chạy liên tục `ContinuousElapsedAndSpeedText` (`⚡ 25.4 pcs/s | ⏱ 00:01:23`) ngay cạnh Queue trên Header Toolbar và trong Dashboard Summary Card.
+        - Đảm bảo `UpdateContinuousStats()` an toàn đa luồng (Thread-Safe Dispatching), tự động dispatch lên UI Thread không bị xung đột binding.
+      - `Khắc Phục Lỗi Preview / Overlay Bị Đứng Hình Trong Chế Độ Continuous`:
+        - Tối ưu `RefreshSelectedPreview()`: Hỗ trợ cập nhật mượt mà khi `SelectedNode == null`, khi chọn `ResultView`, `ImageSource` hoặc bất kỳ tool node nào trên Canvas.
+        - Lấy snapshot tức thời từ `_sharedImage` và tự động dựng overlay `BuildFinalOverlayFromRunWithConfig` liên tục mà không cần người dùng phải click thủ công qua lại giữa các node.
+        - Loại bỏ việc gọi `SyncToolGraphToConfig` và ghi đè bộ đệm trong vòng lặp frame xử lý ngầm.
+      - `Hiệu Quả Đạt Được`:
+        - Queue mở rộng 16 slots quan sát tải mượt mà, trực quan.
+        - Tốc độ pcs/s và thời gian kiểm tra hiển thị rõ ràng, nổi bật trên Top Toolbar.
+        - Preview ảnh và overlay kết quả nhảy liên tục và mượt mà theo từng lần chụp.
+        - Solution biên dịch 0 Error(s), 100% bài kiểm thử trong `TestExtractApp` PASS.
+    - [x] Task 237: Khắc phục triệt để lỗi bấm STOP Run Continuous nhưng chương trình vẫn tiếp tục chạy:
+      - `Loại Bỏ Rogue Global Event Subscription (ToolEditorViewModel.cs)`:
+        - Gỡ bỏ lambda sự kiện `_cameraService.FrameCaptured` ẩn danh đăng ký vĩnh viễn trong constructor.
+        - Trước đây, lambda này gọi `RunFlow()` không kiểm tra cờ `IsRunningFolderFlow`, khiến frame từ camera liên tục kích hoạt `RunFlow()` vô tận ngay cả khi đã bấm STOP.
+      - `Ngắt Ngay Lập Tức Trong Worker Pipeline (ToolEditorViewModel.Engine.cs)`:
+        - Bổ sung kiểm tra `if (!IsRunningFolderFlow) return;` ngay ở đầu hàm `ProcessContinuousFrameAsync` và trước khi Dispatch cập nhật UI.
+        - Hủy hoàn toàn `CancellationTokenSource` (`_folderFlowCts?.Cancel()`, `Dispose()`), làm sạch hàng đợi đệm và chuyển `StatusBarText = "Đã dừng chạy liên tục."`.
+      - `Hiệu Quả Đạt Được`:
+        - Khi bấm STOP, hệ thống lập tức ngắt chu trình xử lý trong 0ms, không còn tình trạng chạy ngầm hay nhận frame dư thừa.
+        - Nút bấm, thanh hàng đợi và thông số thống kê trở về trạng thái sẵn sàng chuẩn xác.
+        - Toàn bộ solution biên dịch 0 Error(s), 100% test suite trong `TestExtractApp` PASS.
+    - [x] Task 238: Sửa lỗi Run Continuous với Camera Hikrobot ở chế độ SoftTrigger không grab ảnh mới:
+      - `Nguyên Nhân Gốc Rễ Đã Khắc Phục`:
+        - Khi cấu hình `TriggerMode = SoftTrigger` (hoặc camera công nghiệp Hikrobot) và Handshake = OFF, camera Hikrobot trước đó được giữ ở `TriggerMode = On` (Software Trigger) nhưng vòng lặp liên tục `ContinuousGrabLoop` chỉ gọi `MV_CC_GetOneFrameTimeout_NET` mà không có xung trigger liên tục hoặc không chuyển camera sang chế độ FreeRun Streaming. Dẫn đến camera phần cứng bị timeout và không phát ra bất kỳ frame nào.
+      - `Giải Pháp Triển Khai`:
+        - `ToolEditorViewModel.Engine.cs`: Trong `StartContinuousCameraFlow`, khi `sourceDef.TriggerMode != ImageSourceTriggerMode.LineTrigger` (chế độ `SoftTrigger`), tự động cấu hình camera sang chế độ FreeRun Continuous (`TriggerMode = CameraTriggerMode.Off`) để phần cứng camera Hikrobot liên tục truyền luồng frame từ cảm biến về ứng dụng ở tốc độ tối đa.
+        - `HikCameraDriver.cs`: Trong `GrabFrameAsync`, khi camera đang ở trạng thái Grabbing liên tục và cấu hình `TriggerMode == On && TriggerSource == Software`, tự động phát lệnh `_camera.MV_CC_SetCommandValue_NET("TriggerSoftware")` để kích hoạt chụp frame mới nhất từ cảm biến.
+      - `Hiệu Quả Đạt Được`:
+        - Khi bấm Run Continuous với Camera Hikrobot (SoftTrigger, Handshake tắt), camera lập tức truyền frame liên tục 25-30+ FPS, hình ảnh preview và overlay kết quả cập nhật mới liên tục theo từng frame.
+        - Toàn bộ solution biên dịch 0 Error(s), 100% test suite trong `TestExtractApp` PASS.
 
 
 

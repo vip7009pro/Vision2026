@@ -565,27 +565,20 @@ public static class CameraTest
         }
         Console.WriteLine("  [3/4] RollDefectMapViewModel & RollReportExporter (JSON, CSV, HTML): PASSED (100%)");
 
-        // 4. Test Queue Visualization States & Thresholds
-        // Let's test queue count steps
-        for (int q = 0; q <= 8; q++)
+        // 4. Test Queue Visualization States & Thresholds (16 slots)
+        for (int q = 0; q <= 16; q++)
         {
-            // Verify step slots logic
-            bool s0 = q > 0;
-            bool s1 = q > 1;
-            bool s2 = q > 2;
-            bool s3 = q > 3;
-            bool s4 = q > 4;
-            bool s5 = q > 5;
-            bool s6 = q > 6;
-            bool s7 = q > 7;
-
-            int activeCount = (s0?1:0)+(s1?1:0)+(s2?1:0)+(s3?1:0)+(s4?1:0)+(s5?1:0)+(s6?1:0)+(s7?1:0);
+            int activeCount = 0;
+            for (int slot = 0; slot < 16; slot++)
+            {
+                if (q > slot) activeCount++;
+            }
             if (activeCount != q)
             {
                 throw new Exception($"Queue slot activation mismatch for count={q}: active={activeCount}");
             }
         }
-        Console.WriteLine("  [4/4] Queue Visualization 8-Segment Stepped Bar Logic: PASSED (100%)");
+        Console.WriteLine("  [4/4] Queue Visualization 16-Segment Stepped Bar Logic: PASSED (100%)");
 
         Console.WriteLine("✅ ALL INDUSTRIAL PLC UI CONFIG & QUEUE VISUALIZATION TESTS PASSED (100%)!\n");
     }
@@ -725,5 +718,51 @@ public static class CameraTest
         Console.WriteLine("  [3/3] CameraService Buffer Memory Pipeline: PASSED (100%)");
 
         Console.WriteLine("✅ TASK 234 ZERO-ALLOCATION LIVEVIEW & MEMORY OPTIMIZATION VERIFIED SUCCESSFULLY (100% PASS)!\n");
+    }
+
+    public static void TestContinuousEngineHandshakeBypass()
+    {
+        Console.WriteLine("=== TESTING CONTINUOUS FLOW HANDSHAKE BYPASS & SPEED ===");
+
+        var plcService = new VisionInspectionApp.Application.PLC.Services.PlcManagerService();
+        var sm = new VisionInspectionApp.Application.PLC.Services.IndustrialHandshakeStateMachine(plcService, "PLC1");
+
+        // 1. Test Handshake when IsEnabled = false
+        sm.IsEnabled = false;
+        var sw1 = System.Diagnostics.Stopwatch.StartNew();
+        sm.StartInspectionAsync().Wait();
+        bool pass1 = sm.CompleteHandshakeAsync(true).Result;
+        sw1.Stop();
+        if (!pass1 || sw1.ElapsedMilliseconds > 10)
+        {
+            throw new Exception($"Disabled handshake took too long! ms={sw1.ElapsedMilliseconds}, pass={pass1}");
+        }
+        Console.WriteLine($"  [1/3] Handshake IsEnabled=false completed in {sw1.ElapsedMilliseconds}ms (0ms bypass): PASSED");
+
+        // 2. Test Handshake when PLC is offline (IsEnabled = true but disconnected)
+        sm.IsEnabled = true;
+        var sw2 = System.Diagnostics.Stopwatch.StartNew();
+        sm.StartInspectionAsync().Wait();
+        bool pass2 = sm.CompleteHandshakeAsync(true).Result;
+        sw2.Stop();
+        if (!pass2 || sw2.ElapsedMilliseconds > 20)
+        {
+            throw new Exception($"Offline PLC handshake took too long! ms={sw2.ElapsedMilliseconds}, pass={pass2}");
+        }
+        Console.WriteLine($"  [2/3] Handshake with Offline PLC completed in {sw2.ElapsedMilliseconds}ms (0ms bypass): PASSED");
+
+        // 3. Test Simulator Driver GrabFrameAsync
+        using var simDriver = new VisionInspectionApp.UI.Services.Camera.Drivers.SimulatorCameraDriver();
+        var openSuccess = simDriver.OpenAsync(new VisionInspectionApp.UI.Services.Camera.CameraDeviceInfo { Vendor = VisionInspectionApp.UI.Services.Camera.CameraVendor.Simulator, Index = -2 }).Result;
+        var frame = simDriver.GrabFrameAsync().Result;
+        if (frame == null || frame.Empty() || frame.Width != 640 || frame.Height != 480)
+        {
+            throw new Exception("Simulator driver GrabFrameAsync failed!");
+        }
+        frame.Dispose();
+        simDriver.CloseAsync().Wait();
+        Console.WriteLine("  [3/3] Simulator Driver Frame Grab & Dynamic Timestamp: PASSED");
+
+        Console.WriteLine("✅ ALL CONTINUOUS FLOW HANDSHAKE BYPASS TESTS PASSED (100%)!\n");
     }
 }

@@ -1916,10 +1916,10 @@ namespace VisionInspectionApp.UI.ViewModels
             }
         }
 
-        public int QueueCapacity { get; set; } = 8;
+        public int QueueCapacity { get; set; } = 16;
 
         [ObservableProperty]
-        private string _queueStatusText = "0/8";
+        private string _queueStatusText = "0/16";
 
         [ObservableProperty]
         private Brush _queueFillBrush = EmeraldBrush;
@@ -1931,7 +1931,7 @@ namespace VisionInspectionApp.UI.ViewModels
         private bool _isQueueActive;
 
         [ObservableProperty]
-        private string _queueToolTipText = "📦 Hàng Đợi Xử Lý Ảnh (Inspection Queue):\n• Đang chờ: 0/8 con hàng\n• Trạng thái: Trống";
+        private string _queueToolTipText = "📦 Hàng Đợi Xử Lý Ảnh (Inspection Queue):\n• Đang chờ: 0/16 con hàng\n• Trạng thái: Trống";
 
         [ObservableProperty] private bool _queueSlot0Active;
         [ObservableProperty] private bool _queueSlot1Active;
@@ -1941,6 +1941,14 @@ namespace VisionInspectionApp.UI.ViewModels
         [ObservableProperty] private bool _queueSlot5Active;
         [ObservableProperty] private bool _queueSlot6Active;
         [ObservableProperty] private bool _queueSlot7Active;
+        [ObservableProperty] private bool _queueSlot8Active;
+        [ObservableProperty] private bool _queueSlot9Active;
+        [ObservableProperty] private bool _queueSlot10Active;
+        [ObservableProperty] private bool _queueSlot11Active;
+        [ObservableProperty] private bool _queueSlot12Active;
+        [ObservableProperty] private bool _queueSlot13Active;
+        [ObservableProperty] private bool _queueSlot14Active;
+        [ObservableProperty] private bool _queueSlot15Active;
 
         public void UpdateQueueVisuals()
         {
@@ -1948,12 +1956,12 @@ namespace VisionInspectionApp.UI.ViewModels
             QueueStatusText = $"{count}/{QueueCapacity}";
             IsQueueActive = count > 0 || IsRunningContinuous;
 
-            if (count >= 6)
+            if (count >= 12)
             {
                 QueueFillBrush = RubyBrush;
                 QueueBorderBrush = RubyBorder;
             }
-            else if (count >= 3)
+            else if (count >= 6)
             {
                 QueueFillBrush = AmberBrush;
                 QueueBorderBrush = AmberBorder;
@@ -1972,8 +1980,16 @@ namespace VisionInspectionApp.UI.ViewModels
             QueueSlot5Active = count > 5;
             QueueSlot6Active = count > 6;
             QueueSlot7Active = count > 7;
+            QueueSlot8Active = count > 8;
+            QueueSlot9Active = count > 9;
+            QueueSlot10Active = count > 10;
+            QueueSlot11Active = count > 11;
+            QueueSlot12Active = count > 12;
+            QueueSlot13Active = count > 13;
+            QueueSlot14Active = count > 14;
+            QueueSlot15Active = count > 15;
 
-            string loadLevel = count >= 6 ? "⚠️ Tải cao (Nguy cơ rớt frame)" : (count >= 3 ? "⚡ Đang xử lý bận rộn" : (count > 0 ? "🟢 Hoạt động mượt mà" : "⚪ Hàng đợi trống"));
+            string loadLevel = count >= 12 ? "⚠️ Tải cao (Nguy cơ rớt frame)" : (count >= 6 ? "⚡ Đang xử lý bận rộn" : (count > 0 ? "🟢 Hoạt động mượt mà" : "⚪ Hàng đợi trống"));
             QueueToolTipText = $"📦 Hàng Đợi Xử Lý Ảnh (Inspection Queue):\n" +
                                $"• Số con hàng đang chờ xử lý: {count}/{QueueCapacity}\n" +
                                $"• Tình trạng: {loadLevel}\n" +
@@ -1984,6 +2000,12 @@ namespace VisionInspectionApp.UI.ViewModels
 
         private void UpdateContinuousStats()
         {
+            if (System.Windows.Application.Current?.Dispatcher != null && !System.Windows.Application.Current.Dispatcher.CheckAccess())
+            {
+                System.Windows.Application.Current.Dispatcher.BeginInvoke(new Action(UpdateContinuousStats));
+                return;
+            }
+
             int currentQueueCount = _industrialCameraFrameChannel?.Reader?.Count ?? 0;
             if (_queueCurrentCount != currentQueueCount)
             {
@@ -2310,12 +2332,32 @@ namespace VisionInspectionApp.UI.ViewModels
         {
             if (def == null) return false;
             if (def.TriggerMode == ImageSourceTriggerMode.LineTrigger) return true;
+            if (CameraService.IsSimulator(def.CameraIndex, def.RtspUrl)) return false;
 
             var selectedCam = AvailableCameraItems.FirstOrDefault(c => c.Index == def.CameraIndex);
-            if (selectedCam != null && selectedCam.DisplayName.Contains("Hikrobot", StringComparison.OrdinalIgnoreCase)) return true;
-            if (_cameraService.ActiveDeviceInfo?.Vendor == CameraVendor.Hikrobot ||
-                _cameraService.ActiveDeviceInfo?.Vendor == CameraVendor.Basler ||
-                _cameraService.ActiveDeviceInfo?.Vendor == CameraVendor.Cognex) return true;
+            if (selectedCam != null)
+            {
+                if (selectedCam.DisplayName.Contains("Simulator", StringComparison.OrdinalIgnoreCase)) return false;
+                if (selectedCam.DisplayName.Contains("Hikrobot", StringComparison.OrdinalIgnoreCase) ||
+                    selectedCam.DisplayName.Contains("Basler", StringComparison.OrdinalIgnoreCase) ||
+                    selectedCam.DisplayName.Contains("Cognex", StringComparison.OrdinalIgnoreCase))
+                    return true;
+                if (selectedCam.DisplayName.Contains("DirectShow", StringComparison.OrdinalIgnoreCase) ||
+                    selectedCam.DisplayName.Contains("Webcam", StringComparison.OrdinalIgnoreCase) ||
+                    selectedCam.DisplayName.Contains("Camera Port", StringComparison.OrdinalIgnoreCase))
+                    return false;
+            }
+
+            if (_cameraService.ActiveDeviceInfo != null)
+            {
+                if (_cameraService.ActiveDeviceInfo.Vendor == CameraVendor.Simulator ||
+                    _cameraService.ActiveDeviceInfo.Vendor == CameraVendor.WebcamDirectShow)
+                    return false;
+                if (_cameraService.ActiveDeviceInfo.Vendor == CameraVendor.Hikrobot ||
+                    _cameraService.ActiveDeviceInfo.Vendor == CameraVendor.Basler ||
+                    _cameraService.ActiveDeviceInfo.Vendor == CameraVendor.Cognex)
+                    return true;
+            }
 
             return false;
         }
@@ -2432,14 +2474,7 @@ namespace VisionInspectionApp.UI.ViewModels
                     }
                     else if (imgSourceDef.SourceType == ImageSourceType.Camera)
                     {
-                        if (IsIndustrialCameraSource(imgSourceDef))
-                        {
-                            _ = StartIndustrialCameraContinuousFlow(imgSourceDef);
-                        }
-                        else
-                        {
-                            StartUsbCameraContinuousFlow(imgSourceDef);
-                        }
+                        _ = StartContinuousCameraFlow(imgSourceDef);
                         return;
                     }
                     else if (imgSourceDef.SourceType == ImageSourceType.File)
@@ -2453,36 +2488,81 @@ namespace VisionInspectionApp.UI.ViewModels
             RunFlow();
         }
 
-        private async Task StartIndustrialCameraContinuousFlow(ImageSourceDefinition sourceDef)
+        private async Task StartContinuousCameraFlow(ImageSourceDefinition sourceDef)
         {
             StopContinuousFlow();
 
             _folderFlowCts = new CancellationTokenSource();
             var token = _folderFlowCts.Token;
             IsRunningFolderFlow = true;
+            _continuousStopwatch.Restart();
+            _continuousStatsTimer?.Start();
+            ProcessedImageCount = 0;
+            _droppedContinuousFramesCount = 0;
+            UpdateContinuousStats();
 
-            StatusBarText = "Đang chạy liên tục: Chờ Hardware Trigger từ Camera Hikrobot (Line 0 / PLC)...";
+            bool isIndustrial = IsIndustrialCameraSource(sourceDef);
+            bool isSimulator = CameraService.IsSimulator(sourceDef.CameraIndex, sourceDef.RtspUrl);
 
-            // 1. Cấu hình Camera sang Hardware/Line Trigger nếu ImageSource là LineTrigger
-            if (sourceDef.TriggerMode == ImageSourceTriggerMode.LineTrigger)
+            if (isIndustrial)
             {
-                var p = _cameraService.CurrentParameters.Clone();
-                p.TriggerMode = CameraTriggerMode.On;
-                p.TriggerSource = CameraTriggerSource.Line0;
-                await _cameraService.ApplyParametersAsync(p);
+                if (sourceDef.TriggerMode == ImageSourceTriggerMode.LineTrigger)
+                {
+                    StatusBarText = "Đang chạy liên tục: Chờ Hardware Trigger từ Camera Công Nghiệp (Line 0 / Sensor)...";
+                    var p = _cameraService.CurrentParameters.Clone();
+                    p.TriggerMode = CameraTriggerMode.On;
+                    p.TriggerSource = CameraTriggerSource.Line0;
+                    await _cameraService.ApplyParametersAsync(p);
+                }
+                else
+                {
+                    StatusBarText = "Đang chạy liên tục: Camera Công Nghiệp (Continuous FreeRun / Soft Trigger)...";
+                    var p = _cameraService.CurrentParameters.Clone();
+                    p.TriggerMode = CameraTriggerMode.Off;
+                    await _cameraService.ApplyParametersAsync(p);
+                }
+            }
+            else if (isSimulator)
+            {
+                StatusBarText = "Đang chạy liên tục: Camera Giả Lập Công Nghiệp (Simulator)...";
+            }
+            else
+            {
+                StatusBarText = "Đang chạy liên tục: Camera Stream (DirectShow / GigE)...";
             }
 
-            // 2. Khởi động Camera stream/grabbing nếu chưa chạy
+            SyncToolGraphToConfig();
+            if (_config != null)
+            {
+                EnsureTemplatePathsAbsolute(_config);
+            }
+
+            // 1. Khởi động Camera stream/grabbing nếu chưa chạy
             if (!_cameraService.IsRunning)
             {
                 var allDevices = CameraDriverFactory.ScanAllDevices();
-                var targetDevice = allDevices.FirstOrDefault(d => d.Index == sourceDef.CameraIndex && d.Vendor == CameraVendor.Hikrobot)
-                                   ?? allDevices.FirstOrDefault(d => d.Vendor == CameraVendor.Hikrobot)
-                                   ?? new CameraDeviceInfo { Vendor = CameraVendor.Hikrobot, Index = sourceDef.CameraIndex };
+                CameraDeviceInfo? targetDevice = null;
+
+                if (isSimulator)
+                {
+                    targetDevice = allDevices.FirstOrDefault(d => d.Vendor == CameraVendor.Simulator)
+                                   ?? new CameraDeviceInfo { Vendor = CameraVendor.Simulator, Index = CameraService.SimulatorCameraIndex, ModelName = "🎮 Camera Giả Lập Công Nghiệp" };
+                }
+                else
+                {
+                    targetDevice = allDevices.FirstOrDefault(d => d.Index == sourceDef.CameraIndex)
+                                   ?? allDevices.FirstOrDefault()
+                                   ?? new CameraDeviceInfo { Vendor = CameraVendor.Simulator, Index = CameraService.SimulatorCameraIndex };
+                }
+
                 await _cameraService.StartDriverCameraAsync(targetDevice, _cameraService.CurrentParameters);
             }
+            else if (_cameraService.ActiveDriver != null && !_cameraService.ActiveDriver.IsGrabbing)
+            {
+                await _cameraService.ActiveDriver.StartGrabbingAsync();
+            }
 
-            // 3. Khởi tạo Bounded Channel với capacity = QueueCapacity (8), DropWrite có kiểm soát Dispose để tránh rò rỉ Mat Native
+            // 2. Khởi tạo Bounded Channel với capacity = QueueCapacity (8), DropWrite có kiểm soát Dispose để tránh rò rỉ Mat Native
             var channelOptions = new BoundedChannelOptions(QueueCapacity)
             {
                 FullMode = BoundedChannelFullMode.DropWrite,
@@ -2492,7 +2572,7 @@ namespace VisionInspectionApp.UI.ViewModels
             _industrialCameraFrameChannel = Channel.CreateBounded<Mat>(channelOptions);
             var channel = _industrialCameraFrameChannel;
 
-            // 4. Đăng ký nhận frame từ CameraService
+            // 3. Đăng ký nhận frame từ CameraService
             _continuousFrameHandler = (sender, frame) =>
             {
                 if (token.IsCancellationRequested || frame == null || frame.IsDisposed || frame.Empty())
@@ -2519,10 +2599,12 @@ namespace VisionInspectionApp.UI.ViewModels
                     frameClone.Dispose();
                     Interlocked.Increment(ref _droppedContinuousFramesCount);
                 }
+
+                UpdateContinuousStats();
             };
             _cameraService.FrameCaptured += _continuousFrameHandler;
 
-            // 5. Worker Task chạy ngầm xử lý frame tuần tự
+            // 4. Worker Task chạy ngầm xử lý frame tuần tự
             _ = Task.Run(async () =>
             {
                 try
@@ -2571,23 +2653,21 @@ namespace VisionInspectionApp.UI.ViewModels
             }, token);
         }
 
+        private Task StartIndustrialCameraContinuousFlow(ImageSourceDefinition sourceDef) => StartContinuousCameraFlow(sourceDef);
+
         private long _lastContinuousUiRenderTick = 0;
         private const int ContinuousUiThrottleIntervalMs = 100; // Tối đa 10 FPS cho UI Preview để giải phóng 100% CPU cho Inspection Engine
         private long _droppedContinuousFramesCount = 0;
 
         private async Task ProcessContinuousFrameAsync(Mat frameMat, string sourceNodeName)
         {
-            if (frameMat == null || frameMat.IsDisposed || frameMat.Empty() || _config == null)
+            if (frameMat == null || frameMat.IsDisposed || frameMat.Empty() || _config == null || !IsRunningFolderFlow)
                 return;
 
             _inspectionService.ResetTracking();
             var __sw = System.Diagnostics.Stopwatch.StartNew();
 
-            SetImageSourceCache(sourceNodeName, "camera", frameMat);
             _sharedImage.SetImage(frameMat);
-
-            SyncToolGraphToConfig();
-            EnsureTemplatePathsAbsolute(_config);
 
             var configCopy = _config;
             InspectionResult? inspectionResult = null;
@@ -2597,6 +2677,12 @@ namespace VisionInspectionApp.UI.ViewModels
                 await _handshakeStateMachine.StartInspectionAsync();
                 inspectionResult = await Task.Run(() => _inspectionService.Inspect(frameMat, configCopy, _dbManagerService));
                 __sw.Stop();
+
+                if (!IsRunningFolderFlow)
+                {
+                    _ = _handshakeStateMachine.CompleteHandshakeAsync(false);
+                    return;
+                }
 
                 if (inspectionResult != null)
                 {
@@ -2639,6 +2725,9 @@ namespace VisionInspectionApp.UI.ViewModels
                 _ = _handshakeStateMachine.CompleteHandshakeAsync(false);
             }
 
+            if (!IsRunningFolderFlow)
+                return;
+
             _lastRun = inspectionResult;
             LastResult = _lastRun;
             ProcessedImageCount++;
@@ -2651,6 +2740,7 @@ namespace VisionInspectionApp.UI.ViewModels
                 _lastContinuousUiRenderTick = nowTick;
                 await System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
                 {
+                    if (!IsRunningFolderFlow) return;
                     UpdateNodeExecutionTimes();
                     RefreshInspectionDashboard(_lastRun);
                     RefreshPreviews();
@@ -2662,6 +2752,7 @@ namespace VisionInspectionApp.UI.ViewModels
             {
                 System.Windows.Application.Current?.Dispatcher?.BeginInvoke(System.Windows.Threading.DispatcherPriority.Background, () =>
                 {
+                    if (!IsRunningFolderFlow) return;
                     OnPropertyChanged(nameof(ProcessedImageCount));
                 });
             }
@@ -2669,48 +2760,7 @@ namespace VisionInspectionApp.UI.ViewModels
 
         private void StartUsbCameraContinuousFlow(ImageSourceDefinition sourceDef)
         {
-            StopContinuousFlow();
-
-            _folderFlowCts = new CancellationTokenSource();
-            IsRunningFolderFlow = true;
-
-            var token = _folderFlowCts.Token;
-            Task.Run(async () =>
-            {
-                int interval = Math.Max(50, sourceDef.FolderIntervalMs);
-
-                try
-                {
-                    while (!token.IsCancellationRequested)
-                    {
-                        await System.Windows.Application.Current.Dispatcher.InvokeAsync(async () =>
-                        {
-                            ClearImageSourceCache(sourceDef.Name);
-                            await RunFlowAsync();
-                        });
-
-                        try
-                        {
-                            await Task.Delay(interval, token);
-                        }
-                        catch (TaskCanceledException)
-                        {
-                            break;
-                        }
-                    }
-                }
-                catch (Exception ex)
-                {
-                    System.Diagnostics.Debug.WriteLine($"StartUsbCameraContinuousFlow exception: {ex.Message}");
-                }
-                finally
-                {
-                    await System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
-                    {
-                        IsRunningFolderFlow = false;
-                    });
-                }
-            }, token);
+            _ = StartContinuousCameraFlow(sourceDef);
         }
 
         private void StartFileContinuousFlow(ImageSourceDefinition sourceDef)
@@ -2934,6 +2984,8 @@ namespace VisionInspectionApp.UI.ViewModels
 
         private void StopContinuousFlow()
         {
+            IsRunningFolderFlow = false;
+
             if (_continuousFrameHandler != null)
             {
                 _cameraService.FrameCaptured -= _continuousFrameHandler;
@@ -2950,12 +3002,22 @@ namespace VisionInspectionApp.UI.ViewModels
                 _industrialCameraFrameChannel = null;
             }
 
-            _folderFlowCts?.Cancel();
-            IsRunningFolderFlow = false;
+            try
+            {
+                _folderFlowCts?.Cancel();
+                _folderFlowCts?.Dispose();
+            }
+            catch { }
+            finally
+            {
+                _folderFlowCts = null;
+            }
+
             _continuousStopwatch.Reset();
             _continuousStatsTimer?.Stop();
             ProcessedImageCount = 0;
             UpdateContinuousStats();
+            StatusBarText = "Đã dừng chạy liên tục.";
         }
 
         private void StopFolderFlow() => StopContinuousFlow();
@@ -3566,30 +3628,23 @@ namespace VisionInspectionApp.UI.ViewModels
             }
 
             var newSelectedNodeOverlayItems = new List<OverlayItem>();
-            System.Diagnostics.Debug.WriteLine($"RefreshSelectedPreview: SelectedNode={SelectedNode?.Type}, RefName={SelectedNode?.RefName}");
-            
-            if (SelectedNode is not null && string.Equals(SelectedNode.Type, "ResultView", StringComparison.OrdinalIgnoreCase))
+
+            if (SelectedNode is null)
             {
-                using var rawSnapResult = _sharedImage.GetSnapshot();
-                using var resultSnap = rawSnapResult ?? new Mat();
-                SelectedNodePreviewImage = FinalPreviewImage ?? _cachedFinalPreviewImage ?? (resultSnap.Empty() ? null : resultSnap.ToBitmapSourceForDisplay());
-                
-                AddConfigRois(newSelectedNodeOverlayItems);
-                if (_lastRun is not null)
-                {
-                    BuildFinalOverlayFromRunWithConfig(_lastRun, newSelectedNodeOverlayItems);
-                }
-                else
-                {
-                    BuildFinalOverlay(resultSnap, newSelectedNodeOverlayItems);
-                }
-                SelectedNodeOverlayItems = newSelectedNodeOverlayItems;
-                FinalOverlayItems = newSelectedNodeOverlayItems;
+                SelectedNodePreviewImage = FinalPreviewImage ?? _cachedFinalPreviewImage;
+                SelectedNodeOverlayItems = FinalOverlayItems ?? new List<OverlayItem>();
+                return;
+            }
+            
+            if (string.Equals(SelectedNode.Type, "ResultView", StringComparison.OrdinalIgnoreCase))
+            {
+                SelectedNodePreviewImage = FinalPreviewImage ?? _cachedFinalPreviewImage;
+                SelectedNodeOverlayItems = FinalOverlayItems ?? new List<OverlayItem>();
                 ActiveRoiLabel = string.Empty;
                 return;
             }
 
-            if (IsImageOutputNode && SelectedNode is not null)
+            if (IsImageOutputNode)
             {
                 using var rawSnapIO = _sharedImage.GetSnapshot();
                 using var snapIO = rawSnapIO ?? new Mat();
@@ -3646,42 +3701,47 @@ namespace VisionInspectionApp.UI.ViewModels
                 return;
             }
 
-            // Special handling for ImageSource - always load from source regardless of PreprocessPreviewEnabled
-            if (SelectedNode is not null && string.Equals(SelectedNode.Type, "ImageSource", StringComparison.OrdinalIgnoreCase))
+            // Handling for ImageSource - use shared image snapshot first, then fallback to source loader
+            if (string.Equals(SelectedNode.Type, "ImageSource", StringComparison.OrdinalIgnoreCase))
             {
-                System.Diagnostics.Debug.WriteLine("Processing ImageSource node preview (special case)");
-                var imgSourceDef = SelectedImageSourceDef();
-                if (imgSourceDef is not null)
+                using var rawSnapSrc = _sharedImage.GetSnapshot();
+                Mat snapSrc;
+                if (rawSnapSrc is not null && !rawSnapSrc.Empty())
                 {
-                    System.Diagnostics.Debug.WriteLine($"ImageSourceDef found: Name={imgSourceDef.Name}, SourceType={imgSourceDef.SourceType}");
-                    using var loadedMat = LoadImageFromSourceForPreview(imgSourceDef);
-                    if (loadedMat is not null && !loadedMat.Empty())
-                    {
-                        System.Diagnostics.Debug.WriteLine($"Setting SelectedNodePreviewImage from ImageSource: {loadedMat.Width}x{loadedMat.Height}");
-                        if (_config is not null && PreprocessPreviewEnabled)
-                        {
-                            using var processed = _preprocessor.Run(loadedMat, _config.Preprocess);
-                            SelectedNodePreviewImage = processed.ToBitmapSourceForDisplay();
-                        }
-                        else
-                        {
-                            SelectedNodePreviewImage = loadedMat.ToBitmapSourceForDisplay();
-                        }
-    
-                        System.Diagnostics.Debug.WriteLine($"SelectedNodePreviewImage set successfully");
-                    }
-                    else
-                    {
-                        System.Diagnostics.Debug.WriteLine("Failed to load image from ImageSource, setting to null");
-                        SelectedNodePreviewImage = null;
-                    }
+                    snapSrc = rawSnapSrc;
                 }
                 else
                 {
-                    System.Diagnostics.Debug.WriteLine("ImageSourceDef is null, setting to null");
-                    SelectedNodePreviewImage = null;
+                    var imgSourceDef = SelectedImageSourceDef();
+                    snapSrc = (imgSourceDef is not null ? LoadImageFromSourceForPreview(imgSourceDef) : null) ?? new Mat();
                 }
-    
+
+                using (snapSrc)
+                {
+                    if (!snapSrc.Empty())
+                    {
+                        if (_config is not null && PreprocessPreviewEnabled)
+                        {
+                            using var processed = _preprocessor.Run(snapSrc, _config.Preprocess);
+                            SelectedNodePreviewImage = processed.Empty() ? null : processed.ToBitmapSourceForDisplay();
+                        }
+                        else
+                        {
+                            SelectedNodePreviewImage = snapSrc.ToBitmapSourceForDisplay();
+                        }
+                    }
+                    else
+                    {
+                        SelectedNodePreviewImage = null;
+                    }
+                }
+
+                AddConfigRois(newSelectedNodeOverlayItems);
+                if (_lastRun is not null)
+                {
+                    BuildFinalOverlayFromRunWithConfig(_lastRun, newSelectedNodeOverlayItems);
+                }
+                SelectedNodeOverlayItems = newSelectedNodeOverlayItems;
                 UpdateBlobThresholdPreview(new Mat());
                 return;
             }
@@ -3690,14 +3750,14 @@ namespace VisionInspectionApp.UI.ViewModels
             using var snap = rawSnap ?? new Mat();
             if (_config is not null && PreprocessPreviewEnabled)
             {
-                if (SelectedNode is not null && string.Equals(SelectedNode.Type, "Preprocess", StringComparison.OrdinalIgnoreCase))
+                if (string.Equals(SelectedNode.Type, "Preprocess", StringComparison.OrdinalIgnoreCase))
                 {
                     using var processedSel = ResolveToolPreprocessForPreview(snap, SelectedNode);
                     SelectedNodePreviewImage = processedSel.Empty() ? null : processedSel.ToBitmapSourceForDisplay();
                 }
                 else
                 {
-                    if (SelectedNode is not null && (string.Equals(SelectedNode.Type, "Origin", StringComparison.OrdinalIgnoreCase) || string.Equals(SelectedNode.Type, "Point", StringComparison.OrdinalIgnoreCase) || string.Equals(SelectedNode.Type, "Line", StringComparison.OrdinalIgnoreCase) || string.Equals(SelectedNode.Type, "Caliper", StringComparison.OrdinalIgnoreCase) || string.Equals(SelectedNode.Type, "LinePairDetection", StringComparison.OrdinalIgnoreCase) || string.Equals(SelectedNode.Type, "EdgePairDetect", StringComparison.OrdinalIgnoreCase) || string.Equals(SelectedNode.Type, "EdgePair", StringComparison.OrdinalIgnoreCase) || string.Equals(SelectedNode.Type, "BlobDetection", StringComparison.OrdinalIgnoreCase) || string.Equals(SelectedNode.Type, "CircleFinder", StringComparison.OrdinalIgnoreCase) || string.Equals(SelectedNode.Type, "SurfaceCompare", StringComparison.OrdinalIgnoreCase) || string.Equals(SelectedNode.Type, "ContourCompare", StringComparison.OrdinalIgnoreCase) || string.Equals(SelectedNode.Type, "Text", StringComparison.OrdinalIgnoreCase) || string.Equals(SelectedNode.Type, "CodeDetection", StringComparison.OrdinalIgnoreCase) || string.Equals(SelectedNode.Type, "Crop", StringComparison.OrdinalIgnoreCase) || string.Equals(SelectedNode.Type, "ColorDiff", StringComparison.OrdinalIgnoreCase) || string.Equals(SelectedNode.Type, "ImgArithmetic", StringComparison.OrdinalIgnoreCase)))
+                    if (string.Equals(SelectedNode.Type, "Origin", StringComparison.OrdinalIgnoreCase) || string.Equals(SelectedNode.Type, "Point", StringComparison.OrdinalIgnoreCase) || string.Equals(SelectedNode.Type, "Line", StringComparison.OrdinalIgnoreCase) || string.Equals(SelectedNode.Type, "Caliper", StringComparison.OrdinalIgnoreCase) || string.Equals(SelectedNode.Type, "LinePairDetection", StringComparison.OrdinalIgnoreCase) || string.Equals(SelectedNode.Type, "EdgePairDetect", StringComparison.OrdinalIgnoreCase) || string.Equals(SelectedNode.Type, "EdgePair", StringComparison.OrdinalIgnoreCase) || string.Equals(SelectedNode.Type, "BlobDetection", StringComparison.OrdinalIgnoreCase) || string.Equals(SelectedNode.Type, "CircleFinder", StringComparison.OrdinalIgnoreCase) || string.Equals(SelectedNode.Type, "SurfaceCompare", StringComparison.OrdinalIgnoreCase) || string.Equals(SelectedNode.Type, "ContourCompare", StringComparison.OrdinalIgnoreCase) || string.Equals(SelectedNode.Type, "Text", StringComparison.OrdinalIgnoreCase) || string.Equals(SelectedNode.Type, "CodeDetection", StringComparison.OrdinalIgnoreCase) || string.Equals(SelectedNode.Type, "Crop", StringComparison.OrdinalIgnoreCase) || string.Equals(SelectedNode.Type, "ColorDiff", StringComparison.OrdinalIgnoreCase) || string.Equals(SelectedNode.Type, "ImgArithmetic", StringComparison.OrdinalIgnoreCase))
                     {
                         using var processedSel = ResolveToolPreprocessForPreview(snap, SelectedNode);
                         SelectedNodePreviewImage = processedSel.Empty() ? null : processedSel.ToBitmapSourceForDisplay();
@@ -3710,11 +3770,10 @@ namespace VisionInspectionApp.UI.ViewModels
             }
             else
             {
-                System.Diagnostics.Debug.WriteLine("PreprocessPreviewEnabled is false, using cached or raw snap");
                 SelectedNodePreviewImage = _cachedFinalPreviewImage ?? (snap.Empty() ? null : snap.ToBitmapSourceForDisplay());
             }
     
-            if (SelectedNode is not null && string.Equals(SelectedNode.Type, "BlobDetection", StringComparison.OrdinalIgnoreCase))
+            if (string.Equals(SelectedNode.Type, "BlobDetection", StringComparison.OrdinalIgnoreCase))
             {
                 UpdateBlobThresholdPreview(snap);
             }
@@ -3731,7 +3790,7 @@ namespace VisionInspectionApp.UI.ViewModels
                 return;
             }
 
-            if (SelectedNode is not null && string.Equals(SelectedNode.Type, "Line", StringComparison.OrdinalIgnoreCase))
+            if (string.Equals(SelectedNode.Type, "Line", StringComparison.OrdinalIgnoreCase))
             {
                 RefreshLineRoiPreview(snap);
             }
@@ -3740,7 +3799,7 @@ namespace VisionInspectionApp.UI.ViewModels
                 LinePreviewImage = null;
             }
 
-            if (SelectedNode is not null && string.Equals(SelectedNode.Type, "Point", StringComparison.OrdinalIgnoreCase))
+            if (string.Equals(SelectedNode.Type, "Point", StringComparison.OrdinalIgnoreCase))
             {
                 RefreshPointEdgePreview(snap);
             }
@@ -3751,18 +3810,12 @@ namespace VisionInspectionApp.UI.ViewModels
 
             if (_lastRun is not null)
             {
-                if (SelectedNode is not null)
-                {
-                    AddConfigRoisForNode(SelectedNode, newSelectedNodeOverlayItems);
-                    BuildOverlayForNodeFromRunWithConfig(SelectedNode, _lastRun, newSelectedNodeOverlayItems);
-                }
+                AddConfigRoisForNode(SelectedNode, newSelectedNodeOverlayItems);
+                BuildOverlayForNodeFromRunWithConfig(SelectedNode, _lastRun, newSelectedNodeOverlayItems);
             }
             else
             {
-                if (SelectedNode is not null)
-                {
-                    BuildOverlayForNode(SelectedNode, snap, newSelectedNodeOverlayItems);
-                }
+                BuildOverlayForNode(SelectedNode, snap, newSelectedNodeOverlayItems);
             }
             SelectedNodeOverlayItems = newSelectedNodeOverlayItems;
         }

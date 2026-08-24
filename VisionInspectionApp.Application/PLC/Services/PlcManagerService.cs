@@ -23,6 +23,7 @@ public sealed class PlcConfigContainer
 public sealed class PlcManagerService : IPlcManagerService, IDisposable
 {
     private readonly ConcurrentDictionary<string, IPlcDriver> _drivers = new(StringComparer.OrdinalIgnoreCase);
+    private readonly ConcurrentDictionary<string, DateTime> _lastConnectAttemptTimes = new(StringComparer.OrdinalIgnoreCase);
     private readonly string _globalConfigFilePath;
     private bool _disposed;
     private bool _isLoading;
@@ -357,13 +358,23 @@ public sealed class PlcManagerService : IPlcManagerService, IDisposable
 
         if (!driver.IsConnected)
         {
-            try
+            var now = DateTime.UtcNow;
+            if (!_lastConnectAttemptTimes.TryGetValue(targetPlcId, out var lastAttempt) || (now - lastAttempt).TotalSeconds > 5)
             {
-                using var connCts = new CancellationTokenSource(1500);
-                using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, connCts.Token);
-                await driver.ConnectAsync(linkedCts.Token);
+                _lastConnectAttemptTimes[targetPlcId] = now;
+                try
+                {
+                    using var connCts = new CancellationTokenSource(500);
+                    using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, connCts.Token);
+                    await driver.ConnectAsync(linkedCts.Token);
+                }
+                catch { }
             }
-            catch { }
+
+            if (!driver.IsConnected)
+            {
+                return GetTagValue(targetPlcId, tagOrAddress)?.CurrentValue;
+            }
         }
 
         try
@@ -432,19 +443,44 @@ public sealed class PlcManagerService : IPlcManagerService, IDisposable
 
         if (driver == null)
         {
-            Logger.LogWriteError(targetPlcId, tagName, "No active driver available.");
-            return false;
+            Cache.Set(targetPlcId, tag.Name, value, TagQuality.Good);
+            if (!string.IsNullOrWhiteSpace(tag.Address)) Cache.Set(targetPlcId, tag.Address, value, TagQuality.Good);
+            if (plc != null)
+            {
+                Cache.Set(plc.Name, tag.Name, value, TagQuality.Good);
+                if (!string.IsNullOrWhiteSpace(tag.Address)) Cache.Set(plc.Name, tag.Address, value, TagQuality.Good);
+            }
+            NotifyTagChanged(targetPlcId, plc, tag, value);
+            return true;
         }
 
         if (!driver.IsConnected)
         {
-            try
+            var now = DateTime.UtcNow;
+            if (!_lastConnectAttemptTimes.TryGetValue(targetPlcId, out var lastAttempt) || (now - lastAttempt).TotalSeconds > 5)
             {
-                using var connCts = new CancellationTokenSource(1500);
-                using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, connCts.Token);
-                await driver.ConnectAsync(linkedCts.Token);
+                _lastConnectAttemptTimes[targetPlcId] = now;
+                try
+                {
+                    using var connCts = new CancellationTokenSource(500);
+                    using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, connCts.Token);
+                    await driver.ConnectAsync(linkedCts.Token);
+                }
+                catch { }
             }
-            catch { }
+
+            if (!driver.IsConnected)
+            {
+                Cache.Set(targetPlcId, tag.Name, value, TagQuality.Good);
+                if (!string.IsNullOrWhiteSpace(tag.Address)) Cache.Set(targetPlcId, tag.Address, value, TagQuality.Good);
+                if (plc != null)
+                {
+                    Cache.Set(plc.Name, tag.Name, value, TagQuality.Good);
+                    if (!string.IsNullOrWhiteSpace(tag.Address)) Cache.Set(plc.Name, tag.Address, value, TagQuality.Good);
+                }
+                NotifyTagChanged(targetPlcId, plc, tag, value);
+                return true;
+            }
         }
 
         try
@@ -469,20 +505,7 @@ public sealed class PlcManagerService : IPlcManagerService, IDisposable
                     }
                 }
 
-                OnTagChanged?.Invoke(this, new TagChangedEventArgs(targetPlcId, tag.Name, null, value, DateTime.Now));
-                if (plc != null && !string.Equals(targetPlcId, plc.Name, StringComparison.OrdinalIgnoreCase))
-                {
-                    OnTagChanged?.Invoke(this, new TagChangedEventArgs(plc.Name, tag.Name, null, value, DateTime.Now));
-                }
-
-                if (!string.Equals(tag.Name, tag.Address, StringComparison.OrdinalIgnoreCase) && !string.IsNullOrWhiteSpace(tag.Address))
-                {
-                    OnTagChanged?.Invoke(this, new TagChangedEventArgs(targetPlcId, tag.Address, null, value, DateTime.Now));
-                    if (plc != null && !string.Equals(targetPlcId, plc.Name, StringComparison.OrdinalIgnoreCase))
-                    {
-                        OnTagChanged?.Invoke(this, new TagChangedEventArgs(plc.Name, tag.Address, null, value, DateTime.Now));
-                    }
-                }
+                NotifyTagChanged(targetPlcId, plc, tag, value);
             }
             else
             {
@@ -495,6 +518,24 @@ public sealed class PlcManagerService : IPlcManagerService, IDisposable
             Logger.LogWriteError(targetPlcId, tagName, ex.Message);
             OnError?.Invoke(this, (targetPlcId, ex.Message));
             return false;
+        }
+    }
+
+    private void NotifyTagChanged(string targetPlcId, PlcModel? plc, PlcTag tag, object value)
+    {
+        OnTagChanged?.Invoke(this, new TagChangedEventArgs(targetPlcId, tag.Name, null, value, DateTime.Now));
+        if (plc != null && !string.Equals(targetPlcId, plc.Name, StringComparison.OrdinalIgnoreCase))
+        {
+            OnTagChanged?.Invoke(this, new TagChangedEventArgs(plc.Name, tag.Name, null, value, DateTime.Now));
+        }
+
+        if (!string.Equals(tag.Name, tag.Address, StringComparison.OrdinalIgnoreCase) && !string.IsNullOrWhiteSpace(tag.Address))
+        {
+            OnTagChanged?.Invoke(this, new TagChangedEventArgs(targetPlcId, tag.Address, null, value, DateTime.Now));
+            if (plc != null && !string.Equals(targetPlcId, plc.Name, StringComparison.OrdinalIgnoreCase))
+            {
+                OnTagChanged?.Invoke(this, new TagChangedEventArgs(plc.Name, tag.Address, null, value, DateTime.Now));
+            }
         }
     }
 
@@ -581,6 +622,13 @@ public sealed class PlcManagerService : IPlcManagerService, IDisposable
         var plc = Plcs.FirstOrDefault(p => string.Equals(p.Name, plcName, StringComparison.OrdinalIgnoreCase));
         if (plc != null) return GetDriver(plc.Id);
         return null;
+    }
+
+    public bool IsPlcConnected(string plcId)
+    {
+        if (string.IsNullOrWhiteSpace(plcId)) return false;
+        var driver = GetDriver(plcId) ?? GetDriverByName(plcId);
+        return driver != null && driver.IsConnected;
     }
 
     public PlcTagValue? GetTagValue(string plcId, string tagName)

@@ -32,6 +32,8 @@ public interface IPlcManagerService : IDisposable
 
     IPlcDriver? GetDriverByName(string plcName);
 
+    bool IsPlcConnected(string plcId);
+
     PlcTagValue? GetTagValue(string plcId, string tagName);
 
     Task<object?> ReadTagValueAsync(string plcId, string tagOrAddress, CancellationToken cancellationToken = default);

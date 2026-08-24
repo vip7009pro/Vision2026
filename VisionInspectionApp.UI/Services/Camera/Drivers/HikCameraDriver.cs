@@ -465,6 +465,16 @@ public sealed class HikCameraDriver : CameraDriverBase
         // 1. Nếu camera đang ở chế độ Live View (Grabbing liên tục)
         if (_isGrabbing)
         {
+            // Nếu ở TriggerMode Software, gửi lệnh TriggerSoftware để ContinuousGrabLoop nhận được frame mới
+            if (_parameters.TriggerMode == CameraTriggerMode.On && _parameters.TriggerSource == CameraTriggerSource.Software && _camera != null)
+            {
+                try
+                {
+                    _camera.MV_CC_SetCommandValue_NET("TriggerSoftware");
+                }
+                catch { }
+            }
+
             // Tránh gọi MV_CC_GetOneFrameTimeout_NET xung đột với ContinuousGrabLoop
             for (int i = 0; i < 40; i++)
             {
@@ -487,6 +497,8 @@ public sealed class HikCameraDriver : CameraDriverBase
             IntPtr pData = IntPtr.Zero;
             try
             {
+                if (_camera == null) return null;
+
                 if (!_isGrabbing)
                 {
                     int retStart = _camera.MV_CC_StartGrabbing_NET();

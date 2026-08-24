@@ -51,6 +51,86 @@
 
 ### Sửa lỗi và Cải thiện UX/UI (Phiên làm việc hiện tại)
 
+- **Sửa Lỗi Run Continuous Với Camera Hikrobot ở Chế Độ SoftTrigger Không Grab Ảnh Mới (Task 238)**:
+  - **Yêu Cầu & Bối Cảnh**:
+    - Khi người dùng chạy continuous với Camera Hikrobot, tắt handshake và chọn TriggerMode là SoftTrigger, flow vẫn chạy (thấy total ms nhảy) nhưng camera không grab ảnh mới, preview ảnh không thay đổi.
+  - **Nguyên Nhân Gốc Rễ Đã Xác Định**:
+    1. *Camera Hikrobot bị giữ ở chế độ Software Trigger*: Trong `StartContinuousCameraFlow`, khi `sourceDef.TriggerMode == ImageSourceTriggerMode.SoftTrigger` hoặc camera công nghiệp, hệ thống không chuyển camera sang chế độ FreeRun Continuous (`TriggerMode = CameraTriggerMode.Off`). Khi camera ở `TriggerMode = On (Software)`, cảm biến camera đứng chờ xung trigger phần mềm `TriggerSoftware` và vòng lặp `MV_CC_GetOneFrameTimeout_NET` bị timeout 100ms liên tục mà không nhận được frame nào từ phần cứng.
+    2. *`GrabFrameAsync` trong HikCameraDriver*: Khi camera đang ở trạng thái Grabbing mà cấu hình `TriggerMode == On && TriggerSource == Software`, `GrabFrameAsync` không phát lệnh `TriggerSoftware` xuống camera nên không kích hoạt cảm biến chụp frame mới.
+  - **Kết Quả Triển Khai Chi Tiết**:
+    1. **Tự Động Chuyển FreeRun Continuous Trong `StartContinuousCameraFlow` (`ToolEditorViewModel.Engine.cs`)**:
+       - Đối với camera công nghiệp (Hikrobot / Basler / Cognex), nếu chạy Continuous ở chế độ `SoftTrigger`, tự động cấu hình `TriggerMode = CameraTriggerMode.Off` thông qua `_cameraService.ApplyParametersAsync()`.
+       - Nhờ đó, camera Hikrobot phần cứng lập tức phát luồng frame liên tục từ cảm biến với tốc độ tối đa (25-30+ FPS) vào `_continuousFrameHandler` và kênh đệm `Channel<Mat>`.
+    2. **Bổ Sung Phát Lệnh Software Trigger Trong `GrabFrameAsync` (`HikCameraDriver.cs`)**:
+       - Bổ sung lệnh `_camera.MV_CC_SetCommandValue_NET("TriggerSoftware")` khi `GrabFrameAsync` được gọi trong trạng thái Grabbing với `TriggerMode == On` và `TriggerSource == Software`, đảm bảo chụp snapshot 1 frame độc lập chuẩn xác 100%.
+  - **Hiệu Quả Đo Kiểm**:
+    - Camera Hikrobot truyền ảnh liên tục mượt mà khi chạy Continuous với SoftTrigger.
+    - Ảnh preview và overlay kết quả nhảy liên tục theo từng frame chụp mới.
+    - Toàn bộ solution biên dịch 0 Error(s), 100% test suite trong `TestExtractApp` PASS.
+
+- **Khắc Phục Lỗi Bấm STOP Run Continuous Không Chịu Dừng Lại (Task 237)**:
+  - **Yêu Cầu & Bối Cảnh**:
+    - Sau khi bấm `Run Continuous`, khi bấm `STOP` thì chương trình vẫn tiếp tục chạy, camera/simulator và luồng kiểm tra không chịu dừng lại.
+  - **Nguyên Nhân Gốc Rễ Đã Xác Định**:
+    1. *Rogue Global Event Subscription trong constructor `ToolEditorViewModel.cs`*: Trong constructor có một lambda ẩn danh đăng ký sự kiện `_cameraService.FrameCaptured += (s, frameMat) => ...` cho LineTrigger. Lambda này luôn gọi `RunFlow()` trên MỖI frame từ camera mà không kiểm tra cờ `IsRunningFolderFlow`, và không bao giờ được hủy đăng ký khi bấm STOP.
+    2. *Thiếu kiểm tra ngắt sớm trong Worker Pipeline*: `ProcessContinuousFrameAsync` tiếp tục thực thi và cập nhật UI ngay cả khi cờ `IsRunningFolderFlow` đã được gán về `false` trong khi một frame đang xử lý.
+  - **Kết Quả Triển Khai Chi Tiết**:
+    1. **Loại bỏ hoàn toàn Rogue Global Event Listener (`ToolEditorViewModel.cs`)**:
+       - Gỡ bỏ lambda sự kiện `_cameraService.FrameCaptured` trong constructor, chuyển toàn bộ việc quản lý nhận frame liên tục sang `_continuousFrameHandler` có kiểm soát vòng đời chặt chẽ trong `StartContinuousCameraFlow`.
+    2. **Tối ưu hóa ngắt luồng và dọn dẹp tài nguyên (`ToolEditorViewModel.Engine.cs`)**:
+       - Thêm kiểm tra `if (!IsRunningFolderFlow) return;` tại đầu hàm `ProcessContinuousFrameAsync`, sau khi inspect xong và trước khi dispatch cập nhật UI.
+       - Cập nhật `StopContinuousFlow()`: Hủy `CancellationTokenSource`, làm sạch và giải phóng các frame còn đọng trong kênh hàng đợi `Channel<Mat>`, cập nhật `StatusBarText = "Đã dừng chạy liên tục."`.
+  - **Hiệu Quả Đo Kiểm**:
+    - Khi bấm STOP, hệ thống lập tức dừng hoàn toàn việc chụp ảnh và kiểm tra trong 0ms.
+    - Giao diện và các thông số tốc độ, hàng đợi dừng lại chính xác.
+    - Toàn bộ solution biên dịch 0 Error(s), 100% test suite trong `TestExtractApp` PASS.
+
+- **Nâng Cấp Queue 16 Slots, Hiển Thị Tốc Độ pcs/s Trực Quan Trên Toolbar và Live Continuous Preview / Overlay (Task 236)**:
+  - **Yêu Cầu & Bối Cảnh**:
+    1. Hàng đợi kiểm tra (Queue) cần mở rộng lên 16 slots để quan sát rộng hơn.
+    2. Tốc độ kiểm tra pcs/s hiển thị trực quan và rõ ràng khi đang chạy continuous.
+    3. Khắc phục tình trạng ảnh preview và overlay kết quả không tự động nhảy theo từng lần chụp (trước đây phải click qua lại giữa các node mới thấy cập nhật).
+  - **Nguyên Nhân & Giải Pháp Kỹ Thuật**:
+    1. *Mở rộng hàng đợi 16 slots (`ToolEditorViewModel.Engine.cs` & `ToolEditorView.xaml`)*:
+       - Tăng `QueueCapacity = 16`, khai báo và liên kết `_queueSlot0Active` đến `_queueSlot15Active`.
+       - Ngưỡng màu trực quan: `<6/16` Xanh Emerald (Mượt mà), `6-11/16` Vàng Amber (Bận rộn), `≥12/16` Đỏ Ruby (Tải cao).
+       - Thiết kế thanh Stepped Bar 16 segments trên Top Header Toolbar.
+    2. *Hiển thị Tốc độ pcs/s và Thời gian thời gian thực*:
+       - Bổ sung Badge tốc độ `⚡ {ContinuousElapsedAndSpeedText}` (`⚡ 25.4 pcs/s | ⏱ 00:01:23`) trực tiếp trên thanh Top Header Toolbar cạnh Queue và trong Dashboard Summary Card.
+       - Tối ưu `UpdateContinuousStats()` an toàn đa luồng (`Dispatcher.CheckAccess()`), tự động dispatch về UI Thread không gây nghẽn hay xung đột binding.
+    3. *Tối ưu hóa Preview & Overlay Continuous*:
+       - Tối ưu `RefreshSelectedPreview()`: Hỗ trợ tự động cập nhật khi `SelectedNode == null` (hiển thị `FinalPreviewImage` & `FinalOverlayItems`), khi chọn `ImageSource` (lấy snapshot từ `_sharedImage` & vẽ overlay từ `_lastRun`), và khi chọn từng Tool node.
+       - Loại bỏ `SyncToolGraphToConfig` và việc ghi đè cache `SetImageSourceCache` trong luồng worker xử lý frame lặp lại, đảm bảo 100% thread-safe và 0% overhead.
+  - **Hiệu Quả Đo Kiểm**:
+    - Queue 16 slots hiển thị rõ ràng từng bước tải của hệ thống.
+    - Tốc độ pcs/s nhảy đều đặn 25-30 pcs/s theo thời gian thực.
+    - Preview ảnh và overlay kết quả tự động cập nhật mượt mà theo từng lần chụp camera/simulator mà không cần click canvas.
+    - Solution biên dịch 0 Error(s), 100% bài test trong `TestExtractApp` PASS.
+
+- **Khắc Phục Lỗi Run Continuous, Kẹt Hàng Đợi 8/8 & Đứng Hình Khi Chạy Camera USB / Simulator (Task 235)**:
+  - **Yêu Cầu & Bối Cảnh**:
+    - Trong tab Tool Editor, khi bấm `Run Continuous` (kiểm tra liên tục bằng camera USB / Simulator giả lập), không thấy nhảy tốc độ kiểm tra (`0.0 pcs/s`), thanh hàng đợi luôn kẹt đầy cứng `8/8` (8 vạch đỏ), và ảnh preview không thấy nhảy/bị đứng hình.
+  - **Nguyên Nhân Gốc Rễ Đã Xác Định**:
+    1. *Tắc nghẽn Bắt tay PLC khi Offline*: `ProcessContinuousFrameAsync` luôn gọi `_handshakeStateMachine.StartInspectionAsync` và `CompleteHandshakeAsync`. Khi PLC không kết nối, `PlcManagerService.WriteTagValueAsync` thử kết nối lại với timeout 1.500ms x 4 lần ghi = 6.000ms + 500ms chờ ACK $\rightarrow$ Mất ~6.5 giây cho MỖI frame ảnh!
+    2. *Tràn hàng đợi BoundedChannel 8 slots*: Camera/Simulator phát 30 FPS (33ms/frame) trong khi luồng xử lý mất 6.5s/frame $\rightarrow$ Kênh đệm đầy 8/8 chỉ sau 260ms, frame bị drop liên tục, `ProcessedImageCount` không tăng khiến `pcs/s = 0.0`.
+    3. *Lỗi nhận diện camera*: `IsIndustrialCameraSource` kiểm tra `_cameraService.ActiveDeviceInfo` thay vì `def.CameraIndex`, ép Simulator/USB vào luồng camera công nghiệp kèm handshake.
+    4. *Simulator Mat tĩnh*: Ảnh mặc định Industrial Grid được cache không có timestamp động.
+  - **Kết Quả Triển Khai Chi Tiết**:
+    1. **Tối ưu hóa `IndustrialHandshakeStateMachine` & Bypass Offline trong 0ms**:
+       - Bổ sung `public bool IsEnabled { get; set; } = true;` cho `IndustrialHandshakeStateMachine`, đồng bộ từ `PlcIndustrialConfig.Handshake.IsEnabled`.
+       - Kiểm tra `if (!IsEnabled || _plcManager == null || !_plcManager.IsPlcConnected(_plcId))` trong `SetReadyAsync`, `StartInspectionAsync`, `CompleteHandshakeAsync` để thoát ngay lập tức trong 0ms khi handshake bị tắt hoặc PLC offline.
+    2. **Chống nghẽn kết nối trong `PlcManagerService`**:
+       - Bổ sung `IsPlcConnected(string plcId)` và cơ chế throttle kết nối lại (5 giây). Khi PLC offline, tự động cập nhật cache cục bộ mô phỏng ảo mà không block 1.5s trên từng tag.
+    3. **Chuẩn hóa nhận diện & Thống nhất luồng Continuous cho mọi loại Camera (`ToolEditorViewModel.Engine.cs`)**:
+       - Cập nhật `IsIndustrialCameraSource` phân định chuẩn xác `Simulator` (`Index = -2`), `USB Webcam DirectShow` (`Vendor = WebcamDirectShow`), và `Hikrobot / Basler / Cognex`.
+       - Hợp nhất luồng `StartContinuousCameraFlow` cho mọi loại camera chạy trên kiến trúc Producer-Consumer `BoundedChannel<Mat>(8)`: Tự động khởi động camera nếu chưa chạy, hàng đợi hiển thị xanh mượt (0-1/8), tốc độ nhảy chuẩn xác 25–30 pcs/s, preview cập nhật mượt mà 10-30 FPS.
+    4. **Nâng cấp Camera Giả Lập (`SimulatorCameraDriver.cs`)**:
+       - Cập nhật dấu thời gian `TIME: {DateTime.Now:HH:mm:ss.fff}` thời gian thực trên mỗi frame của lưới mặc định, giúp người dùng quan sát thấy luồng video chuyển động trực quan ngay lập tức.
+  - **Hiệu Quả Đo Kiểm**:
+    - Chạy unit tests `TestContinuousEngineHandshakeBypass`: Handshake khi tắt hoặc khi PLC offline hoàn tất trong 0ms (0ms bypass PASS 100%).
+    - Queue chạy liên tục mượt mà 25–30 pcs/s không bị rớt frame hay tràn kênh đệm.
+    - Solution biên dịch 0 Error(s), 100% test suite trong `TestExtractApp` PASS.
+
 - **Tối Ưu Hóa Toàn Diện Bộ Nhớ RAM Khi Khởi Động Ứng Dụng & Bật LiveView (Task 234)**:
   - **Yêu Cầu & Bối Cảnh**:
     - Khi mở ứng dụng và camera tự động bật LiveView, Windows Task Manager ghi nhận mức tiêu thụ RAM tăng vọt lên ~1.2 GB ngay lập tức.

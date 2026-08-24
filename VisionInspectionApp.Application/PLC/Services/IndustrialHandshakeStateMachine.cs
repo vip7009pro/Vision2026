@@ -49,6 +49,7 @@ public sealed class IndustrialHandshakeStateMachine
     public string PlcAckTagName { get; set; } = "X1_PlcAck";
 
     public int HandshakeTimeoutMs { get; set; } = 500;
+    public bool IsEnabled { get; set; } = true;
     public HandshakeState CurrentState
     {
         get
@@ -83,7 +84,13 @@ public sealed class IndustrialHandshakeStateMachine
     public async Task SetReadyAsync(CancellationToken ct = default)
     {
         CurrentState = HandshakeState.Ready;
-        if (_plcManager != null && !string.IsNullOrEmpty(ReadyTagName))
+        if (!IsEnabled || _plcManager == null || !_plcManager.IsPlcConnected(_plcId))
+        {
+            CurrentState = HandshakeState.Armed;
+            return;
+        }
+
+        if (!string.IsNullOrEmpty(ReadyTagName))
         {
             await _plcManager.WriteTagValueAsync(_plcId, ReadyTagName, true, ct);
             if (!string.IsNullOrEmpty(BusyTagName))
@@ -104,16 +111,18 @@ public sealed class IndustrialHandshakeStateMachine
     public async Task StartInspectionAsync(CancellationToken ct = default)
     {
         CurrentState = HandshakeState.Inspecting;
-        if (_plcManager != null)
+        if (!IsEnabled || _plcManager == null || !_plcManager.IsPlcConnected(_plcId))
         {
-            if (!string.IsNullOrEmpty(BusyTagName))
-            {
-                await _plcManager.WriteTagValueAsync(_plcId, BusyTagName, true, ct);
-            }
-            if (!string.IsNullOrEmpty(ReadyTagName))
-            {
-                await _plcManager.WriteTagValueAsync(_plcId, ReadyTagName, false, ct);
-            }
+            return;
+        }
+
+        if (!string.IsNullOrEmpty(BusyTagName))
+        {
+            await _plcManager.WriteTagValueAsync(_plcId, BusyTagName, true, ct);
+        }
+        if (!string.IsNullOrEmpty(ReadyTagName))
+        {
+            await _plcManager.WriteTagValueAsync(_plcId, ReadyTagName, false, ct);
         }
     }
 
@@ -129,7 +138,7 @@ public sealed class IndustrialHandshakeStateMachine
     {
         CurrentState = HandshakeState.ResultLatched;
 
-        if (_plcManager == null)
+        if (!IsEnabled || _plcManager == null || !_plcManager.IsPlcConnected(_plcId))
         {
             CurrentState = HandshakeState.Complete;
             return true;

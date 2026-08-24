@@ -356,25 +356,6 @@ namespace VisionInspectionApp.UI.ViewModels
             OpenProductAssignDialogCommand = new RelayCommand(OpenProductAssignDialog);
             OpenRollDefectMapCommand = new RelayCommand(OpenRollDefectMap);
             ColorDiff_TeachRefColorCommand = new RelayCommand(ColorDiff_TeachRefColor);
-
-            // Line Trigger (Hardware Sensor Signal from Camera)
-            _cameraService.FrameCaptured += (s, frameMat) =>
-            {
-                if (_config?.ImageSources is null) return;
-
-                foreach (var imgSourceDef in _config.ImageSources)
-                {
-                    if (imgSourceDef.SourceType == ImageSourceType.Camera && imgSourceDef.TriggerMode == ImageSourceTriggerMode.LineTrigger)
-                    {
-                        System.Windows.Application.Current.Dispatcher.BeginInvoke(new Action(() =>
-                        {
-                            System.Diagnostics.Debug.WriteLine("[LineTrigger] Hardware sensor frame captured, running Vision Flow");
-                            RunFlow();
-                        }));
-                        break;
-                    }
-                }
-            };
         }
     
         public IlluminationCorrectionPreset IlluminationCorrection
@@ -1463,6 +1444,7 @@ namespace VisionInspectionApp.UI.ViewModels
 
             if (config.Handshake != null)
             {
+                _handshakeStateMachine.IsEnabled = config.Handshake.IsEnabled;
                 _handshakeStateMachine.PlcId = config.Handshake.PlcId;
                 _handshakeStateMachine.ReadyTagName = config.Handshake.ReadyTagName;
                 _handshakeStateMachine.BusyTagName = config.Handshake.BusyTagName;

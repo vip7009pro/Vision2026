@@ -126,6 +126,12 @@ public sealed class SimulatorCameraDriver : CameraDriverBase
             }
 
             Mat rawSim = enableRandom ? ApplyRandomTransform(baseMat) : baseMat.Clone();
+            if (string.IsNullOrEmpty(_cachedImagePath))
+            {
+                Cv2.Rectangle(rawSim, new OpenCvSharp.Rect(15, 440, 250, 30), new Scalar(40, 40, 40), -1);
+                Cv2.PutText(rawSim, $"TIME: {DateTime.Now:HH:mm:ss.fff}", new OpenCvSharp.Point(20, 460), HersheyFonts.HersheySimplex, 0.5, new Scalar(200, 200, 200), 1);
+            }
+
             var processed = ApplySoftwarePostProcessing(rawSim, _parameters);
             if (!ReferenceEquals(processed, rawSim))
             {
@@ -147,6 +153,11 @@ public sealed class SimulatorCameraDriver : CameraDriverBase
             if (baseMat != null && !baseMat.IsDisposed && !baseMat.Empty())
             {
                 using var rawSim = enableRandom ? ApplyRandomTransform(baseMat) : baseMat.Clone();
+                if (string.IsNullOrEmpty(_cachedImagePath))
+                {
+                    Cv2.Rectangle(rawSim, new OpenCvSharp.Rect(15, 440, 250, 30), new Scalar(40, 40, 40), -1);
+                    Cv2.PutText(rawSim, $"TIME: {DateTime.Now:HH:mm:ss.fff}", new OpenCvSharp.Point(20, 460), HersheyFonts.HersheySimplex, 0.5, new Scalar(200, 200, 200), 1);
+                }
                 RaiseFrameCaptured(rawSim);
             }
         }
@@ -181,6 +192,12 @@ public sealed class SimulatorCameraDriver : CameraDriverBase
                         {
                             // Trực tiếp clone ma trận đã cache trong bộ nhớ (Zero Disk I/O)
                             frameToEmit = baseMat.Clone();
+                        }
+
+                        if (string.IsNullOrEmpty(_cachedImagePath) && frameToEmit != null)
+                        {
+                    Cv2.Rectangle(frameToEmit, new OpenCvSharp.Rect(15, 440, 250, 30), new Scalar(40, 40, 40), -1);
+                            Cv2.PutText(frameToEmit, $"TIME: {DateTime.Now:HH:mm:ss.fff}", new OpenCvSharp.Point(20, 460), HersheyFonts.HersheySimplex, 0.5, new Scalar(200, 200, 200), 1);
                         }
                     }
                 }
