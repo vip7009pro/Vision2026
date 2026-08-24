@@ -204,11 +204,15 @@ public sealed partial class LiveCameraViewModel : ObservableObject
         }
     }
 
-    private bool _isRenderingFrame;    private void OnFrameCaptured(object? sender, Mat frame)
+    public bool IsViewActive { get; set; } = false;
+    private readonly WriteableBitmapRenderer _liveRenderer = new();
+    private bool _isRenderingFrame;
+
+    private void OnFrameCaptured(object? sender, Mat frame)
     {
         try
         {
-            if (frame == null || frame.IsDisposed || frame.Empty()) return;
+            if (!IsViewActive || frame == null || frame.IsDisposed || frame.Empty()) return;
 
             // Tính FPS
             _frameCount++;
@@ -228,8 +232,13 @@ public sealed partial class LiveCameraViewModel : ObservableObject
             Mat? frameCopyForInspection = null;
             lock (_frameLock)
             {
-                _currentFrame?.Dispose();
-                _currentFrame = frame.Clone();
+                if (_currentFrame == null || _currentFrame.IsDisposed || _currentFrame.Width != frame.Width || _currentFrame.Height != frame.Height || _currentFrame.Type() != frame.Type())
+                {
+                    _currentFrame?.Dispose();
+                    _currentFrame = new Mat(frame.Height, frame.Width, frame.Type());
+                }
+                frame.CopyTo(_currentFrame);
+
                 if (IsLiveInspectionEnabled && _config != null)
                 {
                     frameCopyForInspection = _currentFrame.Clone();
@@ -240,25 +249,28 @@ public sealed partial class LiveCameraViewModel : ObservableObject
             {
                 _isRenderingFrame = true;
 
-                var bitmap = frame.ToBitmapSourceForDisplay(1920, 1080);
-                if (bitmap != null)
+                System.Windows.Application.Current?.Dispatcher?.BeginInvoke(System.Windows.Threading.DispatcherPriority.Render, () =>
                 {
-                    System.Windows.Application.Current?.Dispatcher?.BeginInvoke(System.Windows.Threading.DispatcherPriority.Render, () =>
+                    try
                     {
-                        try
+                        if (IsViewActive && frame != null && !frame.IsDisposed && !frame.Empty())
                         {
-                            LiveImage = bitmap;
+                            var bitmap = _liveRenderer.UpdateFromMat(frame, 1920, 1080);
+                            if (bitmap != null && !ReferenceEquals(LiveImage, bitmap))
+                            {
+                                LiveImage = bitmap;
+                            }
                         }
-                        finally
-                        {
-                            _isRenderingFrame = false;
-                        }
-                    });
-                }
-                else
-                {
-                    _isRenderingFrame = false;
-                }
+                    }
+                    catch (Exception ex)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"[LiveCamera] Live render error: {ex.Message}");
+                    }
+                    finally
+                    {
+                        _isRenderingFrame = false;
+                    }
+                });
             }
 
             if (frameCopyForInspection != null)
@@ -269,9 +281,10 @@ public sealed partial class LiveCameraViewModel : ObservableObject
                 }
             }
         }
-        catch
+        catch (Exception ex)
         {
             _isRenderingFrame = false;
+            System.Diagnostics.Debug.WriteLine($"[LiveCameraViewModel] OnFrameCaptured error: {ex.Message}");
         }
     }
 

@@ -1020,13 +1020,15 @@ public sealed class CameraSettingsViewModel : ObservableObject, IDisposable
         catch { }
     }
 
+    public bool IsViewActive { get; set; } = false;
+    private readonly WriteableBitmapRenderer _liveRenderer = new();
     private bool _isRenderingFrame;
 
     private void OnFrameCaptured(object? sender, Mat frame)
     {
         try
         {
-            if (frame == null || frame.IsDisposed || frame.Empty()) return;
+            if (!IsViewActive || frame == null || frame.IsDisposed || frame.Empty()) return;
 
             _frameCount++;
             var now = DateTime.Now;
@@ -1049,22 +1051,26 @@ public sealed class CameraSettingsViewModel : ObservableObject, IDisposable
             if (_isRenderingFrame) return;
             _isRenderingFrame = true;
 
-            var bitmap = frame.ToBitmapSourceForDisplay(1920, 1080);
-            if (bitmap == null)
-            {
-                _isRenderingFrame = false;
-                return;
-            }
-
             System.Windows.Application.Current?.Dispatcher?.BeginInvoke(System.Windows.Threading.DispatcherPriority.Render, () =>
             {
                 try
                 {
-                    LiveImage = bitmap;
-                    if (_cameraService.IsRunning)
+                    if (IsViewActive && frame != null && !frame.IsDisposed && !frame.Empty())
                     {
-                        IsCameraRunning = true;
+                        var bitmap = _liveRenderer.UpdateFromMat(frame, 1920, 1080);
+                        if (bitmap != null && !ReferenceEquals(LiveImage, bitmap))
+                        {
+                            LiveImage = bitmap;
+                        }
+                        if (_cameraService.IsRunning)
+                        {
+                            IsCameraRunning = true;
+                        }
                     }
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"[CameraSettings] Live render error: {ex.Message}");
                 }
                 finally
                 {
@@ -1136,5 +1142,6 @@ public sealed class CameraSettingsViewModel : ObservableObject, IDisposable
     {
         _cameraService.FrameCaptured -= OnFrameCaptured;
         _cameraService.ErrorOccurred -= OnCameraError;
+        _liveRenderer.Dispose();
     }
 }

@@ -831,8 +831,12 @@ public sealed class CameraService : IDisposable
 
         lock (_lastFrameGate)
         {
-            _lastFrame?.Dispose();
-            _lastFrame = frame.Clone();
+            if (_lastFrame == null || _lastFrame.IsDisposed || _lastFrame.Width != frame.Width || _lastFrame.Height != frame.Height || _lastFrame.Type() != frame.Type())
+            {
+                _lastFrame?.Dispose();
+                _lastFrame = new Mat(frame.Height, frame.Width, frame.Type());
+            }
+            frame.CopyTo(_lastFrame);
         }
 
         FrameCaptured?.Invoke(this, frame);

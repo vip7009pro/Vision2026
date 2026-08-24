@@ -92,6 +92,7 @@ public partial class OqcScannerViewModel : ObservableObject
     private List<OverlayItem>? _lastOqcOverlayItems;
     private bool _isOqcRunInProgress = false;
     private bool _isRenderingLiveFrame = false;
+    private readonly WriteableBitmapRenderer _liveRenderer = new();
     private string _lastScannedRawCode = "";
     private string _lastScannedProcessedCode = "";
 
@@ -421,7 +422,7 @@ public partial class OqcScannerViewModel : ObservableObject
 
     private void OnCameraFrameCaptured(object? sender, Mat frame)
     {
-        if (!IsShowingLiveCamera || frame == null || frame.Empty())
+        if (!IsShowingLiveCamera || frame == null || frame.IsDisposed || frame.Empty())
         {
             return;
         }
@@ -435,17 +436,23 @@ public partial class OqcScannerViewModel : ObservableObject
 
         try
         {
-            var bitmap = frame.ToBitmapSourceForDisplay(1920, 1080);
-
-            System.Windows.Application.Current?.Dispatcher?.BeginInvoke(new Action(() =>
+            System.Windows.Application.Current?.Dispatcher?.BeginInvoke(System.Windows.Threading.DispatcherPriority.Render, new Action(() =>
             {
                 try
                 {
-                    if (IsShowingLiveCamera)
+                    if (IsShowingLiveCamera && frame != null && !frame.IsDisposed && !frame.Empty())
                     {
-                        PreviewImage = bitmap;
+                        var bitmap = _liveRenderer.UpdateFromMat(frame, 1920, 1080);
+                        if (bitmap != null && !ReferenceEquals(PreviewImage, bitmap))
+                        {
+                            PreviewImage = bitmap;
+                        }
                         OverlayItems = (ShowRois && _originLiveGuideOverlays.Count > 0) ? _originLiveGuideOverlays : null;
                     }
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"[OqcScanner] Live render error: {ex.Message}");
                 }
                 finally
                 {

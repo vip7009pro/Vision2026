@@ -30,6 +30,7 @@
     <ApplicationIcon>Assets\cms-vina-vision-system.ico</ApplicationIcon>
     <PlatformTarget>x64</PlatformTarget>
     <Platforms>AnyCPU;x64</Platforms>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
 
   <ItemGroup>

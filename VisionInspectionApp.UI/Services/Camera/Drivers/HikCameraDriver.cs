@@ -18,7 +18,7 @@ public sealed class HikCameraDriver : CameraDriverBase
     private MyCamera? _camera;
     private static bool? _isMvSdkAvailable;
     private MyCamera.cbExceptiondelegate? _exceptionCallback;
-    private readonly NativeMatPool _matPool = new(8);
+    private readonly NativeMatPool _matPool = new(4);
     private IntPtr _pConvertBuffer = IntPtr.Zero;
     private uint _convertBufferSize = 0;
     private uint _lastFrameNum = 0;
@@ -282,6 +282,13 @@ public sealed class HikCameraDriver : CameraDriverBase
                 }
 
                 _isOpened = true;
+
+                // Tối ưu hóa bộ nhớ: Giới hạn số frame buffer trong unmanaged C++ SDK xuống 3 nodes thay vì 15-30 nodes
+                try
+                {
+                    _camera.MV_CC_SetImageNodeNum_NET(3);
+                }
+                catch { }
 
                 // Đăng ký Exception Callback từ Hikrobot SDK
                 try

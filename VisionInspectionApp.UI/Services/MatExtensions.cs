@@ -24,6 +24,12 @@ public static class MatExtensions
     // keep overlays and ROI coordinates in original-image pixels when a display proxy is used.
     private static readonly ConditionalWeakTable<BitmapSource, DisplaySourceMetadata> DisplaySourceMetadataByBitmap = new();
 
+    public static void RegisterDisplaySourcePixelSize(this BitmapSource bitmap, int sourceWidth, int sourceHeight)
+    {
+        DisplaySourceMetadataByBitmap.Remove(bitmap);
+        DisplaySourceMetadataByBitmap.Add(bitmap, new DisplaySourceMetadata(sourceWidth, sourceHeight));
+    }
+
     public static bool TryGetSourcePixelSize(this BitmapSource bitmap, out int sourceWidth, out int sourceHeight)
     {
         if (DisplaySourceMetadataByBitmap.TryGetValue(bitmap, out var metadata))

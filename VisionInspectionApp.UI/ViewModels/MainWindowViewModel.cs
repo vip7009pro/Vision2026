@@ -57,6 +57,21 @@ public sealed partial class MainWindowViewModel : ObservableObject
         AboutCommand = new RelayCommand(ExecuteAbout);
         OpenRecentJobCommand = new RelayCommand<string>(ExecuteOpenRecentJob);
         ClearRecentJobsCommand = new RelayCommand(ExecuteClearRecentJobs);
+
+        CameraSettings.IsViewActive = (_selectedTabIndex == 3);
+    }
+
+    partial void OnSelectedTabIndexChanged(int value)
+    {
+        CameraSettings.IsViewActive = (value == 3);
+        Task.Run(() =>
+        {
+            try
+            {
+                GC.Collect(1, GCCollectionMode.Optimized);
+            }
+            catch { }
+        });
     }
 
     public string HeaderJobTitle
