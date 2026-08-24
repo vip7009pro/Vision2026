@@ -16,14 +16,18 @@ internal static class Program
     private static readonly CancellationTokenSource _cts = new();
     private static MxComWorker? _worker;
     private static readonly string _logFile = Path.Combine(Path.GetTempPath(), "VisionPlcBridge_debug.log");
+    public static bool EnableDebugLogging { get; set; } = false;
 
     public static void Log(string msg)
     {
         try
         {
-            string line = $"[{DateTime.Now:HH:mm:ss.fff}] {msg}\r\n";
-            File.AppendAllText(_logFile, line);
             Console.WriteLine(msg);
+            if (EnableDebugLogging)
+            {
+                string line = $"[{DateTime.Now:HH:mm:ss.fff}] {msg}\r\n";
+                File.AppendAllText(_logFile, line);
+            }
         }
         catch { }
     }
@@ -213,9 +217,7 @@ internal static class Program
 
                 if (line == null) break;
 
-                Log($"Received command: '{line}'");
                 string response = await ProcessCommandAsync(line);
-                Log($"Sending response: '{response}'");
 
                 try
                 {
@@ -309,6 +311,18 @@ internal static class Program
                     short val = short.TryParse(parts[2], out short v) ? v : (short)0;
                     int rc = await _worker.SetDevice2Async(device, val);
                     return rc == 0 ? "OK" : $"ERR|{rc}";
+                }
+
+                case "READ_RANDOM2":
+                {
+                    if (parts.Length < 2) return "ERR|-1|Missing device list";
+                    string[] devices = parts[1].Split(',', StringSplitOptions.RemoveEmptyEntries);
+                    var (rc, data) = await _worker.ReadDeviceRandom2Async(devices);
+                    if (rc == 0)
+                    {
+                        return $"OK|{string.Join(",", data)}";
+                    }
+                    return $"ERR|{rc}";
                 }
 
                 case "READ_BLOCK":

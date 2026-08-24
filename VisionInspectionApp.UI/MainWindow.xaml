@@ -397,6 +397,7 @@
                         <MenuItem Header="🖥️ Quản Lý Giao Diện HMI (HMI Manager...)" Command="{Binding ToolEditor.OpenHmiManagerCommand}" />
                         <MenuItem Header="📊 Giám Sát Thời Gian Thực (PLC Monitor...)" Command="{Binding ToolEditor.OpenPlcMonitorCommand}" />
                         <MenuItem Header="🏷️ Tra Cứu Danh Bạ Biến (PLC Tags...)" Command="{Binding ToolEditor.OpenPlcBrowserCommand}" />
+                        <MenuItem Header="📈 PLC Oscilloscope (Phân Tích Dạng Sóng &amp; Đo Độ Trễ...)" Command="{Binding ToolEditor.OpenPlcOscilloscopeCommand}" />
                     </MenuItem>
 
                     <!-- Dữ Liệu & OQC Menu -->

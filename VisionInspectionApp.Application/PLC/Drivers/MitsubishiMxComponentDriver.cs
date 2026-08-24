@@ -256,6 +256,14 @@ public sealed class MitsubishiMxComponentDriver : IPlcDriver
                 {
                     try
                     {
+                        // 1. Thử đọc toàn bộ batch trong 1 lệnh duy nhất (ReadDeviceRandom2)
+                        var batchResult = await TryReadBridgeBatchRandom2Async(_bridgeClient, tagList, linkedCts.Token);
+                        if (batchResult != null)
+                        {
+                            return batchResult;
+                        }
+
+                        // 2. Fallback đọc tuần tự từng tag nếu thiết bị không hỗ trợ Random2
                         foreach (var tag in tagList)
                         {
                             object? val = await ReadBridgeTagValueAsync(_bridgeClient, tag, linkedCts.Token);
@@ -272,6 +280,14 @@ public sealed class MitsubishiMxComponentDriver : IPlcDriver
                 {
                     try
                     {
+                        // 1. Thử đọc toàn bộ batch qua in-process COM ReadDeviceRandom2
+                        var batchResult = TryReadComBatchRandom2(tagList);
+                        if (batchResult != null)
+                        {
+                            return batchResult;
+                        }
+
+                        // 2. Fallback đọc tuần tự từng tag
                         foreach (var tag in tagList)
                         {
                             object? val = ReadComTagValue(tag);
@@ -383,6 +399,175 @@ public sealed class MitsubishiMxComponentDriver : IPlcDriver
     }
 
     #region Bridge Read/Write Helpers
+
+    private static async Task<Dictionary<string, object?>?> TryReadBridgeBatchRandom2Async(MxBridgeClient bridge, List<PlcTag> tagList, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var deviceQueries = new List<string>();
+            var tagIndexMap = new List<(PlcTag Tag, int Index1, int Index2)>();
+
+            foreach (var tag in tagList)
+            {
+                string dev = tag.Address.Trim();
+                if (tag.DataType == PlcDataType.Float || tag.DataType == PlcDataType.Int32 || tag.DataType == PlcDataType.UInt32)
+                {
+                    int idx1 = deviceQueries.Count;
+                    deviceQueries.Add(dev);
+                    int idx2 = deviceQueries.Count;
+                    deviceQueries.Add(IncrementDeviceAddress(dev, 1));
+                    tagIndexMap.Add((tag, idx1, idx2));
+                }
+                else
+                {
+                    int idx = deviceQueries.Count;
+                    deviceQueries.Add(dev);
+                    tagIndexMap.Add((tag, idx, -1));
+                }
+            }
+
+            var (rc, data) = await bridge.ReadDeviceRandom2Async(deviceQueries.ToArray(), cancellationToken);
+            if (rc != 0 || data == null || data.Length != deviceQueries.Count)
+            {
+                return null; // Fallback to sequential
+            }
+
+            var result = new Dictionary<string, object?>();
+            foreach (var (tag, idx1, idx2) in tagIndexMap)
+            {
+                if (idx2 >= 0)
+                {
+                    short w1 = data[idx1];
+                    short w2 = data[idx2];
+                    if (tag.DataType == PlcDataType.Float)
+                    {
+                        float fVal = WordsToFloat(new int[] { w1, w2 });
+                        result[tag.Name] = ApplyScale(fVal, tag.Scale);
+                    }
+                    else if (tag.DataType == PlcDataType.Int32)
+                    {
+                        int i32 = (int)((uint)(ushort)w1 | ((uint)(ushort)w2 << 16));
+                        result[tag.Name] = ApplyScale(i32, tag.Scale);
+                    }
+                    else if (tag.DataType == PlcDataType.UInt32)
+                    {
+                        uint u32 = (uint)(ushort)w1 | ((uint)(ushort)w2 << 16);
+                        result[tag.Name] = ApplyScale(u32, tag.Scale);
+                    }
+                }
+                else
+                {
+                    short val = data[idx1];
+                    if (tag.DataType == PlcDataType.Bool)
+                    {
+                        result[tag.Name] = val != 0;
+                    }
+                    else
+                    {
+                        object decoded = ConvertFromShort(val, tag.DataType);
+                        result[tag.Name] = ApplyScale(decoded, tag.Scale);
+                    }
+                }
+            }
+
+            return result;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private Dictionary<string, object?>? TryReadComBatchRandom2(List<PlcTag> tagList)
+    {
+        if (_comObject == null || _comType == null) return null;
+        try
+        {
+            var deviceQueries = new List<string>();
+            var tagIndexMap = new List<(PlcTag Tag, int Index1, int Index2)>();
+
+            foreach (var tag in tagList)
+            {
+                string dev = tag.Address.Trim();
+                if (tag.DataType == PlcDataType.Float || tag.DataType == PlcDataType.Int32 || tag.DataType == PlcDataType.UInt32)
+                {
+                    int idx1 = deviceQueries.Count;
+                    deviceQueries.Add(dev);
+                    int idx2 = deviceQueries.Count;
+                    deviceQueries.Add(IncrementDeviceAddress(dev, 1));
+                    tagIndexMap.Add((tag, idx1, idx2));
+                }
+                else
+                {
+                    int idx = deviceQueries.Count;
+                    deviceQueries.Add(dev);
+                    tagIndexMap.Add((tag, idx, -1));
+                }
+            }
+
+            string deviceList = string.Join("\n", deviceQueries);
+            int size = deviceQueries.Count;
+            short[] buffer = new short[size];
+            object[] args = new object[] { deviceList, size, buffer };
+            ParameterModifier[] modifiers = new ParameterModifier[1];
+            modifiers[0] = new ParameterModifier(3);
+            modifiers[0][2] = true;
+
+            var res = _comType.InvokeMember("ReadDeviceRandom2",
+                BindingFlags.InvokeMethod | BindingFlags.Public | BindingFlags.Instance,
+                null, _comObject, args, modifiers, null, null);
+
+            int rc = res is int c ? c : -1;
+            if (rc != 0) return null;
+
+            short[] data = (args[2] is short[] resArr) ? resArr : buffer;
+            if (data.Length != size) return null;
+
+            var result = new Dictionary<string, object?>();
+            foreach (var (tag, idx1, idx2) in tagIndexMap)
+            {
+                if (idx2 >= 0)
+                {
+                    short w1 = data[idx1];
+                    short w2 = data[idx2];
+                    if (tag.DataType == PlcDataType.Float)
+                    {
+                        float fVal = WordsToFloat(new int[] { w1, w2 });
+                        result[tag.Name] = ApplyScale(fVal, tag.Scale);
+                    }
+                    else if (tag.DataType == PlcDataType.Int32)
+                    {
+                        int i32 = (int)((uint)(ushort)w1 | ((uint)(ushort)w2 << 16));
+                        result[tag.Name] = ApplyScale(i32, tag.Scale);
+                    }
+                    else if (tag.DataType == PlcDataType.UInt32)
+                    {
+                        uint u32 = (uint)(ushort)w1 | ((uint)(ushort)w2 << 16);
+                        result[tag.Name] = ApplyScale(u32, tag.Scale);
+                    }
+                }
+                else
+                {
+                    short val = data[idx1];
+                    if (tag.DataType == PlcDataType.Bool)
+                    {
+                        result[tag.Name] = val != 0;
+                    }
+                    else
+                    {
+                        object decoded = ConvertFromShort(val, tag.DataType);
+                        result[tag.Name] = ApplyScale(decoded, tag.Scale);
+                    }
+                }
+            }
+
+            return result;
+        }
+        catch
+        {
+            return null;
+        }
+    }
 
     private static async Task<object?> ReadBridgeTagValueAsync(MxBridgeClient bridge, PlcTag tag, CancellationToken cancellationToken)
     {
@@ -953,6 +1138,45 @@ public sealed class MitsubishiMxComponentDriver : IPlcDriver
             catch
             {
                 return -99;
+            }
+            finally
+            {
+                _clientLock.Release();
+            }
+        }
+
+        public async Task<(int ResCode, short[] Data)> ReadDeviceRandom2Async(string[] devices, CancellationToken cancellationToken)
+        {
+            if (devices == null || devices.Length == 0) return (0, Array.Empty<short>());
+
+            using var timeoutCts = new CancellationTokenSource(2000);
+            using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutCts.Token);
+
+            try
+            {
+                await _clientLock.WaitAsync(linkedCts.Token);
+            }
+            catch
+            {
+                return (-99, Array.Empty<short>());
+            }
+
+            try
+            {
+                if (!IsConnected) return (-1, Array.Empty<short>());
+                string res = await SendCommandInternalAsync($"READ_RANDOM2|{string.Join(",", devices)}", linkedCts.Token);
+                string[] parts = res.Split('|');
+                if (parts.Length > 1 && string.Equals(parts[0], "OK", StringComparison.OrdinalIgnoreCase))
+                {
+                    short[] data = Array.ConvertAll(parts[1].Split(',', StringSplitOptions.RemoveEmptyEntries), s => short.TryParse(s, out short v) ? v : (short)0);
+                    return (0, data);
+                }
+                int.TryParse(parts.Length > 1 ? parts[1] : "-1", out int errCode);
+                return (errCode, Array.Empty<short>());
+            }
+            catch
+            {
+                return (-99, Array.Empty<short>());
             }
             finally
             {

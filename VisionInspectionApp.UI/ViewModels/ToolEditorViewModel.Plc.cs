@@ -593,6 +593,18 @@ public sealed partial class ToolEditorViewModel : ObservableObject
         win.Show();
     }
 
+    [RelayCommand]
+    private void OpenPlcOscilloscope()
+    {
+        var vm = new PlcOscilloscopeViewModel(_plcManagerService);
+        var activeWin = System.Windows.Application.Current?.Windows.OfType<Window>().FirstOrDefault(w => w.IsActive) ?? System.Windows.Application.Current?.MainWindow;
+        var win = new Views.PLC.PlcOscilloscopeWindow(vm)
+        {
+            Owner = activeWin
+        };
+        win.Show();
+    }
+
     #endregion
 }
 

@@ -218,16 +218,23 @@ public sealed class PlcPollingEngine
 
             swTotal.Stop();
 
-            int minScanMs = enabledPlcs.Min(p => Math.Max(50, p.ScanIntervalMs <= 0 ? 100 : p.ScanIntervalMs));
-            int remainingDelay = Math.Max(50, minScanMs - (int)swTotal.ElapsedMilliseconds);
+            int minScanMs = enabledPlcs.Min(p => Math.Max(1, p.ScanIntervalMs <= 0 ? 50 : p.ScanIntervalMs));
+            int remainingDelay = minScanMs - (int)swTotal.ElapsedMilliseconds;
 
-            try
+            if (remainingDelay > 0)
             {
-                await Task.Delay(remainingDelay, cancellationToken);
+                try
+                {
+                    await Task.Delay(remainingDelay, cancellationToken);
+                }
+                catch (TaskCanceledException)
+                {
+                    break;
+                }
             }
-            catch (TaskCanceledException)
+            else
             {
-                break;
+                await Task.Yield();
             }
         }
     }

@@ -15,6 +15,8 @@
             <converters:InverseBoolConverter x:Key="InverseBoolConverter" />
             <converters:PassFailColorConverter x:Key="PassFailColorConverter" />
             <converters:PassRateConverter x:Key="PassRateConverter" />
+            <converters:ColorToBrushConverter x:Key="ColorToBrushConverter" />
+            <converters:InverseBoolToVisConverter x:Key="InverseBoolToVisConverter" />
             
             
             

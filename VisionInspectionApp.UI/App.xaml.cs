@@ -65,6 +65,7 @@ public partial class App : System.Windows.Application
                 services.AddTransient<ViewModels.PLC.PlcManagerViewModel>();
                 services.AddTransient<ViewModels.PLC.PlcMonitorViewModel>();
                 services.AddTransient<ViewModels.PLC.PlcBrowserViewModel>();
+                services.AddTransient<ViewModels.PLC.PlcOscilloscopeViewModel>();
 
                 // Legacy PLC (MX Component)
                 services.AddSingleton<IPlcClient, MxComponentPlcClient>();

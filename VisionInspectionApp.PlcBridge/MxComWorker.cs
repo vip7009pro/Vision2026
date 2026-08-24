@@ -308,6 +308,41 @@ public sealed class MxComWorker : IDisposable
         }, 2000, (-100, Array.Empty<short>()));
     }
 
+    public Task<(int ResCode, short[] Data)> ReadDeviceRandom2Async(string[] devices)
+    {
+        return InvokeWithTimeoutAsync(() =>
+        {
+            if (_comObject == null || _comType == null || devices == null || devices.Length == 0)
+                return (-1, Array.Empty<short>());
+
+            try
+            {
+                string deviceList = string.Join("\n", devices);
+                int size = devices.Length;
+                short[] buffer = new short[size];
+                object[] args = new object[] { deviceList, size, buffer };
+                ParameterModifier[] modifiers = new ParameterModifier[1];
+                modifiers[0] = new ParameterModifier(3);
+                modifiers[0][2] = true;
+
+                var res = _comType.InvokeMember("ReadDeviceRandom2",
+                    BindingFlags.InvokeMethod | BindingFlags.Public | BindingFlags.Instance,
+                    null, _comObject, args, modifiers, null, null);
+
+                int rc = res is int c ? c : -1;
+                if (args[2] is short[] resultData)
+                {
+                    return (rc, resultData);
+                }
+                return (rc, buffer);
+            }
+            catch
+            {
+                return (-99, Array.Empty<short>());
+            }
+        }, 2000, (-100, Array.Empty<short>()));
+    }
+
     public Task<int> WriteDeviceBlock2Async(string device, short[] data)
     {
         return InvokeWithTimeoutAsync(() =>
