@@ -302,24 +302,27 @@ public sealed class PlcOscilloscopeCanvas : FrameworkElement
             dc.DrawText(valText, new Point(badgeRect.Left + 6, badgeRect.Top + 18));
 
             // Render Waveform Samples
-            if (ch.Samples != null && ch.Samples.Count > 0)
+            double padY = 8.0;
+            double highY = trackTop + padY;
+            double lowY = trackBottom - padY;
+
+            var streamGeom = new StreamGeometry();
+            var fillGeom = new StreamGeometry();
+
+            double targetTimeMs = MaxSessionTimeMs > 0 ? Math.Min(endMs, MaxSessionTimeMs) : endMs;
+            double targetNormX = Math.Clamp((targetTimeMs - startMs) / windowMs, 0.0, 1.0);
+            double targetPx = leftMargin + (targetNormX * plotW);
+
+            using (var ctx = streamGeom.Open())
+            using (var fillCtx = fillGeom.Open())
             {
+                bool isFirst = true;
+                double lastPx = leftMargin;
+                double lastPy = lowY;
+
                 var samples = ch.Samples;
-                double padY = 8.0;
-                double highY = trackTop + padY;
-                double lowY = trackBottom - padY;
-
-                var streamGeom = new StreamGeometry();
-                var fillGeom = new StreamGeometry();
-
-                using (var ctx = streamGeom.Open())
-                using (var fillCtx = fillGeom.Open())
+                if (samples != null && samples.Count > 0)
                 {
-                    bool isFirst = true;
-                    double lastPx = leftMargin;
-                    double lastPy = lowY;
-                    Point firstFillPoint = new Point(leftMargin, lowY);
-
                     for (int sIdx = 0; sIdx < samples.Count; sIdx++)
                     {
                         var s = samples[sIdx];
@@ -350,10 +353,19 @@ public sealed class PlcOscilloscopeCanvas : FrameworkElement
 
                         if (isFirst)
                         {
-                            ctx.BeginFigure(new Point(px, py), false, false);
-                            fillCtx.BeginFigure(new Point(px, lowY), true, true);
-                            fillCtx.LineTo(new Point(px, py), true, false);
-                            firstFillPoint = new Point(px, lowY);
+                            // If first sample in view starts after startMs, connect from left edge with its state
+                            if (px > leftMargin)
+                            {
+                                ctx.BeginFigure(new Point(leftMargin, py), false, false);
+                                fillCtx.BeginFigure(new Point(leftMargin, lowY), true, true);
+                                fillCtx.LineTo(new Point(leftMargin, py), true, false);
+                            }
+                            else
+                            {
+                                ctx.BeginFigure(new Point(px, py), false, false);
+                                fillCtx.BeginFigure(new Point(px, lowY), true, true);
+                                fillCtx.LineTo(new Point(px, py), true, false);
+                            }
                             isFirst = false;
                         }
                         else
@@ -382,13 +394,55 @@ public sealed class PlcOscilloscopeCanvas : FrameworkElement
 
                     if (!isFirst)
                     {
-                        fillCtx.LineTo(new Point(lastPx, lowY), true, false);
+                        // Extend waveform smoothly from last sample up to current real-time leading edge (targetPx)
+                        if (targetPx > lastPx)
+                        {
+                            ctx.LineTo(new Point(targetPx, lastPy), true, false);
+                            fillCtx.LineTo(new Point(targetPx, lastPy), true, false);
+                            fillCtx.LineTo(new Point(targetPx, lowY), true, false);
+                        }
+                        else
+                        {
+                            fillCtx.LineTo(new Point(lastPx, lowY), true, false);
+                        }
+                    }
+                    else
+                    {
+                        // All samples are before startMs: draw continuous line with current value
+                        double py = ch.IsBit ? (ch.CurrentValue > 0.5 ? highY : lowY) : lowY;
+                        if (targetPx > leftMargin)
+                        {
+                            ctx.BeginFigure(new Point(leftMargin, py), false, false);
+                            ctx.LineTo(new Point(targetPx, py), true, false);
+                            fillCtx.BeginFigure(new Point(leftMargin, lowY), true, true);
+                            fillCtx.LineTo(new Point(leftMargin, py), true, false);
+                            fillCtx.LineTo(new Point(targetPx, py), true, false);
+                            fillCtx.LineTo(new Point(targetPx, lowY), true, false);
+                        }
                     }
                 }
+                else
+                {
+                    // No samples yet: draw flat live line up to targetPx
+                    double py = ch.IsBit ? (ch.CurrentValue > 0.5 ? highY : lowY) : lowY;
+                    if (targetPx > leftMargin)
+                    {
+                        ctx.BeginFigure(new Point(leftMargin, py), false, false);
+                        ctx.LineTo(new Point(targetPx, py), true, false);
+                        fillCtx.BeginFigure(new Point(leftMargin, lowY), true, true);
+                        fillCtx.LineTo(new Point(leftMargin, py), true, false);
+                        fillCtx.LineTo(new Point(targetPx, py), true, false);
+                        fillCtx.LineTo(new Point(targetPx, lowY), true, false);
+                    }
+                }
+            }
 
-                streamGeom.Freeze();
-                fillGeom.Freeze();
+            streamGeom.Freeze();
+            fillGeom.Freeze();
 
+            dc.PushClip(new RectangleGeometry(new Rect(leftMargin, topMargin, plotW, plotH)));
+            try
+            {
                 if (ch.IsBit)
                 {
                     var glowBrush = new SolidColorBrush(Color.FromArgb(25, ch.Color.R, ch.Color.G, ch.Color.B));
@@ -397,6 +451,10 @@ public sealed class PlcOscilloscopeCanvas : FrameworkElement
                 }
 
                 dc.DrawGeometry(null, chPen, streamGeom);
+            }
+            finally
+            {
+                dc.Pop();
             }
         }
 

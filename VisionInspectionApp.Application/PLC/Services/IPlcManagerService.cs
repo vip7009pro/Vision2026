@@ -56,7 +56,19 @@ public interface IPlcManagerService : IDisposable
 
     Task DisconnectAllAsync();
 
+    void RegisterDynamicTagProvider(string providerId, Func<IEnumerable<PlcTag>> provider);
+
+    void UnregisterDynamicTagProvider(string providerId);
+
+    void RequestScanInterval(string sourceId, int intervalMs);
+
+    void ReleaseScanInterval(string sourceId);
+
+    int GetEffectiveMinScanInterval(int baseScanMs);
+
     event EventHandler<TagChangedEventArgs>? OnTagChanged;
+
+    event EventHandler<BatchPolledEventArgs>? OnBatchPolled;
 
     event EventHandler<string>? OnConnected;
 

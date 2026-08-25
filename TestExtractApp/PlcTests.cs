@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using VisionInspectionApp.Application.PLC.Drivers;
 using VisionInspectionApp.Application.PLC.Services;
@@ -20,6 +21,8 @@ public static class PlcTests
         await Test3_PollingEngine_TagChangeEventsAsync();
         await Test4_PlcManagerService_LifecycleAsync();
         Test5_MitsubishiMxComponentDriver_SimulationReadWrite();
+        await Test6_PlcManagerService_OnBatchPolled_And_DynamicTagsAsync();
+        await Test7_HighResolutionTimer_And_Sub5msScanAsync();
 
         Console.WriteLine("\n✅ ALL PLC TESTS PASSED SUCCESSFULLY!");
         Console.WriteLine("=========================================");
@@ -154,5 +157,145 @@ public static class PlcTests
         if (Convert.ToInt32(r) != 999) throw new Exception($"MX Component Read mismatch: {r}");
 
         Console.WriteLine("PASSED");
+    }
+
+    private static async Task Test6_PlcManagerService_OnBatchPolled_And_DynamicTagsAsync()
+    {
+        Console.Write("\nTest 6: OnBatchPolled & Dynamic Tag Provider (Oscilloscope Engine)... ");
+
+        using var service = new PlcManagerService();
+        var plc = new PlcModel
+        {
+            Id = "PLC_OSC",
+            Name = "FX_OSC",
+            DriverType = PlcDriverType.Mitsubishi,
+            Enabled = true,
+            ScanIntervalMs = 100 // Base scan is 100ms
+        };
+
+        var tagStatic = new PlcTag { Id = "TS1", PlcId = plc.Id, Name = "Sensor", Address = "X0", DataType = PlcDataType.Bool };
+        service.LoadConfig(new[] { plc }, new[] { tagStatic });
+
+        var driver = service.GetDriver(plc.Id);
+        if (driver is MitsubishiDriver md)
+        {
+            md.ForceSimulationMode = true;
+        }
+
+        // Register dynamic tags (simulating Oscilloscope CH1..CH4)
+        var dynamicOscTags = new List<PlcTag>
+        {
+            new PlcTag { PlcId = plc.Id, Name = "M100", Address = "M100", DataType = PlcDataType.Bool },
+            new PlcTag { PlcId = plc.Id, Name = "D200", Address = "D200", DataType = PlcDataType.Int16 }
+        };
+
+        service.RegisterDynamicTagProvider("TestOscilloscope", () => dynamicOscTags);
+
+        // Verify GetAllTagsToPoll includes both static and dynamic tags
+        var allTags = service.GetAllTagsToPoll();
+        bool hasStatic = allTags.Any(t => t.Address == "X0");
+        bool hasDynM100 = allTags.Any(t => t.Address == "M100");
+        bool hasDynD200 = allTags.Any(t => t.Address == "D200");
+
+        if (!hasStatic || !hasDynM100 || !hasDynD200)
+        {
+            throw new Exception("GetAllTagsToPoll failed to incorporate dynamic tags.");
+        }
+
+        // Request high-speed scan interval (10ms)
+        service.RequestScanInterval("TestOscilloscope", 10);
+        int effectiveScan = service.GetEffectiveMinScanInterval(100);
+        if (effectiveScan != 10)
+        {
+            throw new Exception($"Effective scan interval mismatch: expected 10, got {effectiveScan}");
+        }
+
+        // Write values to simulated memory
+        await service.WriteTagValueAsync(plc.Id, "X0", true);
+        await service.WriteTagValueAsync(plc.Id, "M100", true);
+        await service.WriteTagValueAsync(plc.Id, "D200", (short)789);
+
+        bool batchPolledReceived = false;
+        object? polledM100 = null;
+        object? polledD200 = null;
+
+        service.OnBatchPolled += (s, e) =>
+        {
+            if (e.ReadResults.TryGetValue("M100", out var vM100)) polledM100 = vM100;
+            if (e.ReadResults.TryGetValue("D200", out var vD200)) polledD200 = vD200;
+            batchPolledReceived = true;
+        };
+
+        // Acquire lock to trigger polling
+        service.AcquirePollingLock("TestOscilloscope");
+
+        await Task.Delay(250);
+
+        service.ReleaseScanInterval("TestOscilloscope");
+        service.UnregisterDynamicTagProvider("TestOscilloscope");
+        service.ReleasePollingLock("TestOscilloscope");
+
+        if (!batchPolledReceived)
+        {
+            throw new Exception("OnBatchPolled event was not received during polling.");
+        }
+
+        Console.WriteLine("PASSED");
+    }
+
+    private static async Task Test7_HighResolutionTimer_And_Sub5msScanAsync()
+    {
+        Console.Write("\nTest 7: High-Resolution Timer & Sub-5ms Scan Interval Verification... ");
+
+        // 1. Test NativeTimerUtility activation
+        NativeTimerUtility.TimeBeginPeriod(1);
+
+        // Measure Task.Delay(1) with high-res timer
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        for (int i = 0; i < 5; i++)
+        {
+            await Task.Delay(1);
+        }
+        sw.Stop();
+        double avgDelayMs = sw.Elapsed.TotalMilliseconds / 5.0;
+
+        // With timeBeginPeriod(1), avgDelay is typically 1-3ms instead of 15.6ms
+        if (avgDelayMs > 10.0)
+        {
+            NativeTimerUtility.TimeEndPeriod(1);
+            throw new Exception($"High-Resolution Timer failed: avg Task.Delay(1) took {avgDelayMs:F2}ms (expected < 10ms)");
+        }
+
+        // 2. Test high-speed polling (2ms scan interval)
+        var cache = new PlcTagCache();
+        var logger = new PlcLogger();
+        var engine = new PlcPollingEngine(cache, logger);
+
+        var plc = new PlcModel { Id = "P_FAST", Name = "PLC_FAST", DriverType = PlcDriverType.Mitsubishi, Enabled = true, ScanIntervalMs = 2 };
+        var tag = new PlcTag { Id = "TG_FAST", PlcId = "P_FAST", Name = "HighSpeedTag", Address = "X0", DataType = PlcDataType.Bool };
+        var driver = new MitsubishiDriver(plc) { ForceSimulationMode = true };
+        await driver.ConnectAsync();
+
+        int batchCount = 0;
+        engine.OnBatchPolled += (s, e) =>
+        {
+            Interlocked.Increment(ref batchCount);
+        };
+
+        engine.Start(new[] { plc }, new[] { tag }, id => driver, minScan => 2);
+
+        // Run for 150ms
+        await Task.Delay(150);
+
+        engine.Stop();
+        NativeTimerUtility.TimeEndPeriod(1);
+
+        // In 150ms with 2ms interval (or sub-5ms), batchCount should be well over 15 (typically 40-70 batches)
+        if (batchCount < 15)
+        {
+            throw new Exception($"High-Speed Polling failed: only received {batchCount} batches in 150ms with 2ms scan interval.");
+        }
+
+        Console.WriteLine($"PASSED (Captured {batchCount} batches in 150ms, Avg Delay = {avgDelayMs:F2}ms)");
     }
 }

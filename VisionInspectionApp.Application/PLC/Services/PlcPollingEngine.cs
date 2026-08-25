@@ -27,6 +27,22 @@ public sealed class TagChangedEventArgs : EventArgs
     }
 }
 
+public sealed class BatchPolledEventArgs : EventArgs
+{
+    public string PlcId { get; }
+    public IDictionary<string, object?> ReadResults { get; }
+    public DateTime Timestamp { get; }
+    public double ElapsedMs { get; }
+
+    public BatchPolledEventArgs(string plcId, IDictionary<string, object?> readResults, DateTime timestamp, double elapsedMs)
+    {
+        PlcId = plcId;
+        ReadResults = readResults;
+        Timestamp = timestamp;
+        ElapsedMs = elapsedMs;
+    }
+}
+
 public sealed class PlcPollingMetrics
 {
     public double LatencyMs { get; set; }
@@ -45,6 +61,7 @@ public sealed class PlcPollingEngine
     private readonly object _startLock = new();
 
     public event EventHandler<TagChangedEventArgs>? OnTagChanged;
+    public event EventHandler<BatchPolledEventArgs>? OnBatchPolled;
 
     public ConcurrentMetricsStore Metrics { get; } = new();
 
@@ -54,7 +71,7 @@ public sealed class PlcPollingEngine
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
-    public void Start(Func<IReadOnlyList<PlcModel>> plcsLookup, Func<IReadOnlyList<PlcTag>> tagsLookup, Func<string, IPlcDriver?> driverLookup)
+    public void Start(Func<IReadOnlyList<PlcModel>> plcsLookup, Func<IReadOnlyList<PlcTag>> tagsLookup, Func<string, IPlcDriver?> driverLookup, Func<int, int>? minIntervalLookup = null)
     {
         lock (_startLock)
         {
@@ -66,16 +83,17 @@ public sealed class PlcPollingEngine
 
             Stop();
 
+            NativeTimerUtility.TimeBeginPeriod(1);
             _cts = new CancellationTokenSource();
             var token = _cts.Token;
 
-            _pollingTask = Task.Run(() => PollingLoopAsync(plcsLookup, tagsLookup, driverLookup, token), token);
+            _pollingTask = Task.Run(() => PollingLoopAsync(plcsLookup, tagsLookup, driverLookup, minIntervalLookup, token), token);
         }
     }
 
-    public void Start(IReadOnlyList<PlcModel> plcs, IReadOnlyList<PlcTag> tags, Func<string, IPlcDriver?> driverLookup)
+    public void Start(IReadOnlyList<PlcModel> plcs, IReadOnlyList<PlcTag> tags, Func<string, IPlcDriver?> driverLookup, Func<int, int>? minIntervalLookup = null)
     {
-        Start(() => plcs, () => tags, driverLookup);
+        Start(() => plcs, () => tags, driverLookup, minIntervalLookup);
     }
 
     public void Stop()
@@ -92,6 +110,7 @@ public sealed class PlcPollingEngine
                 catch { }
                 _cts = null;
                 _pollingTask = null;
+                NativeTimerUtility.TimeEndPeriod(1);
             }
         }
     }
@@ -100,6 +119,7 @@ public sealed class PlcPollingEngine
         Func<IReadOnlyList<PlcModel>> plcsLookup,
         Func<IReadOnlyList<PlcTag>> tagsLookup,
         Func<string, IPlcDriver?> driverLookup,
+        Func<int, int>? minIntervalLookup,
         CancellationToken cancellationToken)
     {
         while (!cancellationToken.IsCancellationRequested)
@@ -207,6 +227,13 @@ public sealed class PlcPollingEngine
                             }
                         }
                     }
+
+                    // Dispatch batch polled event for high-speed deterministic subscribers (e.g. Oscilloscope)
+                    OnBatchPolled?.Invoke(this, new BatchPolledEventArgs(plc.Id, readResults, DateTime.Now, elapsedMs));
+                    if (!string.Equals(plc.Id, plc.Name, StringComparison.OrdinalIgnoreCase))
+                    {
+                        OnBatchPolled?.Invoke(this, new BatchPolledEventArgs(plc.Name, readResults, DateTime.Now, elapsedMs));
+                    }
                 }
                 catch (Exception ex)
                 {
@@ -219,6 +246,10 @@ public sealed class PlcPollingEngine
             swTotal.Stop();
 
             int minScanMs = enabledPlcs.Min(p => Math.Max(1, p.ScanIntervalMs <= 0 ? 50 : p.ScanIntervalMs));
+            if (minIntervalLookup != null)
+            {
+                minScanMs = Math.Max(1, minIntervalLookup(minScanMs));
+            }
             int remainingDelay = minScanMs - (int)swTotal.ElapsedMilliseconds;
 
             if (remainingDelay > 0)

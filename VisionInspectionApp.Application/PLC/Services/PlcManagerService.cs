@@ -24,6 +24,8 @@ public sealed class PlcManagerService : IPlcManagerService, IDisposable
 {
     private readonly ConcurrentDictionary<string, IPlcDriver> _drivers = new(StringComparer.OrdinalIgnoreCase);
     private readonly ConcurrentDictionary<string, DateTime> _lastConnectAttemptTimes = new(StringComparer.OrdinalIgnoreCase);
+    private readonly ConcurrentDictionary<string, Func<IEnumerable<PlcTag>>> _dynamicTagProviders = new(StringComparer.OrdinalIgnoreCase);
+    private readonly ConcurrentDictionary<string, int> _scanIntervalOverrides = new(StringComparer.OrdinalIgnoreCase);
     private readonly string _globalConfigFilePath;
     private bool _disposed;
     private bool _isLoading;
@@ -52,6 +54,8 @@ public sealed class PlcManagerService : IPlcManagerService, IDisposable
 
     public event EventHandler<TagChangedEventArgs>? OnTagChanged;
 
+    public event EventHandler<BatchPolledEventArgs>? OnBatchPolled;
+
     public event EventHandler<string>? OnConnected;
 
     public event EventHandler<string>? OnDisconnected;
@@ -64,6 +68,7 @@ public sealed class PlcManagerService : IPlcManagerService, IDisposable
     {
         PollingEngine = new PlcPollingEngine(Cache, Logger);
         PollingEngine.OnTagChanged += (s, e) => OnTagChanged?.Invoke(this, e);
+        PollingEngine.OnBatchPolled += (s, e) => OnBatchPolled?.Invoke(this, e);
 
         string appDataDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Vision2026");
         Directory.CreateDirectory(appDataDir);
@@ -319,7 +324,65 @@ public sealed class PlcManagerService : IPlcManagerService, IDisposable
             EnsureTagAddress(IndustrialConfig.ShiftRegister.PlcId, IndustrialConfig.ShiftRegister.RejectTagName, PlcDataType.Bool);
         }
 
+        // Dynamic Tag Providers (e.g. Oscilloscope channels, High-speed debug monitors)
+        foreach (var provider in _dynamicTagProviders.Values)
+        {
+            try
+            {
+                var dynTags = provider();
+                if (dynTags != null)
+                {
+                    foreach (var dt in dynTags)
+                    {
+                        if (dt != null)
+                        {
+                            string addr = !string.IsNullOrWhiteSpace(dt.Address) ? dt.Address : dt.Name;
+                            EnsureTagAddress(dt.PlcId, addr, dt.DataType);
+                        }
+                    }
+                }
+            }
+            catch { }
+        }
+
         return result;
+    }
+
+    public void RegisterDynamicTagProvider(string providerId, Func<IEnumerable<PlcTag>> provider)
+    {
+        if (string.IsNullOrWhiteSpace(providerId) || provider == null) return;
+        _dynamicTagProviders[providerId] = provider;
+    }
+
+    public void UnregisterDynamicTagProvider(string providerId)
+    {
+        if (string.IsNullOrWhiteSpace(providerId)) return;
+        _dynamicTagProviders.TryRemove(providerId, out _);
+    }
+
+    public void RequestScanInterval(string sourceId, int intervalMs)
+    {
+        if (string.IsNullOrWhiteSpace(sourceId)) return;
+        if (intervalMs > 0)
+        {
+            _scanIntervalOverrides[sourceId] = intervalMs;
+        }
+    }
+
+    public void ReleaseScanInterval(string sourceId)
+    {
+        if (string.IsNullOrWhiteSpace(sourceId)) return;
+        _scanIntervalOverrides.TryRemove(sourceId, out _);
+    }
+
+    public int GetEffectiveMinScanInterval(int baseScanMs)
+    {
+        if (_scanIntervalOverrides.Count > 0)
+        {
+            int minOverride = _scanIntervalOverrides.Values.Min();
+            return Math.Min(baseScanMs, minOverride);
+        }
+        return baseScanMs;
     }
 
     public async Task<object?> ReadTagValueAsync(string plcId, string tagOrAddress, CancellationToken cancellationToken = default)
@@ -445,12 +508,14 @@ public sealed class PlcManagerService : IPlcManagerService, IDisposable
         {
             Cache.Set(targetPlcId, tag.Name, value, TagQuality.Good);
             if (!string.IsNullOrWhiteSpace(tag.Address)) Cache.Set(targetPlcId, tag.Address, value, TagQuality.Good);
+            Cache.Set(plcId, tag.Name, value, TagQuality.Good);
+            if (!string.IsNullOrWhiteSpace(tag.Address)) Cache.Set(plcId, tag.Address, value, TagQuality.Good);
             if (plc != null)
             {
                 Cache.Set(plc.Name, tag.Name, value, TagQuality.Good);
                 if (!string.IsNullOrWhiteSpace(tag.Address)) Cache.Set(plc.Name, tag.Address, value, TagQuality.Good);
             }
-            NotifyTagChanged(targetPlcId, plc, tag, value);
+            NotifyTagChanged(targetPlcId, plcId, plc, tag, value);
             return true;
         }
 
@@ -473,12 +538,14 @@ public sealed class PlcManagerService : IPlcManagerService, IDisposable
             {
                 Cache.Set(targetPlcId, tag.Name, value, TagQuality.Good);
                 if (!string.IsNullOrWhiteSpace(tag.Address)) Cache.Set(targetPlcId, tag.Address, value, TagQuality.Good);
+                Cache.Set(plcId, tag.Name, value, TagQuality.Good);
+                if (!string.IsNullOrWhiteSpace(tag.Address)) Cache.Set(plcId, tag.Address, value, TagQuality.Good);
                 if (plc != null)
                 {
                     Cache.Set(plc.Name, tag.Name, value, TagQuality.Good);
                     if (!string.IsNullOrWhiteSpace(tag.Address)) Cache.Set(plc.Name, tag.Address, value, TagQuality.Good);
                 }
-                NotifyTagChanged(targetPlcId, plc, tag, value);
+                NotifyTagChanged(targetPlcId, plcId, plc, tag, value);
                 return true;
             }
         }
@@ -496,6 +563,12 @@ public sealed class PlcManagerService : IPlcManagerService, IDisposable
                     Cache.Set(targetPlcId, tag.Address, value, TagQuality.Good);
                 }
 
+                Cache.Set(plcId, tag.Name, value, TagQuality.Good);
+                if (!string.IsNullOrWhiteSpace(tag.Address))
+                {
+                    Cache.Set(plcId, tag.Address, value, TagQuality.Good);
+                }
+
                 if (plc != null)
                 {
                     Cache.Set(plc.Name, tag.Name, value, TagQuality.Good);
@@ -505,7 +578,7 @@ public sealed class PlcManagerService : IPlcManagerService, IDisposable
                     }
                 }
 
-                NotifyTagChanged(targetPlcId, plc, tag, value);
+                NotifyTagChanged(targetPlcId, plcId, plc, tag, value);
             }
             else
             {
@@ -521,21 +594,29 @@ public sealed class PlcManagerService : IPlcManagerService, IDisposable
         }
     }
 
-    private void NotifyTagChanged(string targetPlcId, PlcModel? plc, PlcTag tag, object value)
+    private void NotifyTagChanged(string targetPlcId, string originalPlcId, PlcModel? plc, PlcTag tag, object value)
     {
-        OnTagChanged?.Invoke(this, new TagChangedEventArgs(targetPlcId, tag.Name, null, value, DateTime.Now));
-        if (plc != null && !string.Equals(targetPlcId, plc.Name, StringComparison.OrdinalIgnoreCase))
+        var sentPlcIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        void RaiseEvent(string? pid, string? tName)
         {
-            OnTagChanged?.Invoke(this, new TagChangedEventArgs(plc.Name, tag.Name, null, value, DateTime.Now));
+            if (string.IsNullOrWhiteSpace(pid) || string.IsNullOrWhiteSpace(tName)) return;
+            string key = $"{pid}:{tName}";
+            if (sentPlcIds.Add(key))
+            {
+                OnTagChanged?.Invoke(this, new TagChangedEventArgs(pid, tName, null, value, DateTime.Now));
+            }
         }
 
-        if (!string.Equals(tag.Name, tag.Address, StringComparison.OrdinalIgnoreCase) && !string.IsNullOrWhiteSpace(tag.Address))
+        RaiseEvent(targetPlcId, tag.Name);
+        RaiseEvent(originalPlcId, tag.Name);
+        if (plc != null) RaiseEvent(plc.Name, tag.Name);
+
+        if (!string.IsNullOrWhiteSpace(tag.Address))
         {
-            OnTagChanged?.Invoke(this, new TagChangedEventArgs(targetPlcId, tag.Address, null, value, DateTime.Now));
-            if (plc != null && !string.Equals(targetPlcId, plc.Name, StringComparison.OrdinalIgnoreCase))
-            {
-                OnTagChanged?.Invoke(this, new TagChangedEventArgs(plc.Name, tag.Address, null, value, DateTime.Now));
-            }
+            RaiseEvent(targetPlcId, tag.Address);
+            RaiseEvent(originalPlcId, tag.Address);
+            if (plc != null) RaiseEvent(plc.Name, tag.Address);
         }
     }
 
@@ -635,7 +716,8 @@ public sealed class PlcManagerService : IPlcManagerService, IDisposable
     {
         if (string.IsNullOrWhiteSpace(plcId) || string.IsNullOrWhiteSpace(tagName)) return null;
 
-        var plc = Plcs.FirstOrDefault(p => string.Equals(p.Id, plcId, StringComparison.OrdinalIgnoreCase) || string.Equals(p.Name, plcId, StringComparison.OrdinalIgnoreCase));
+        var plc = Plcs.FirstOrDefault(p => string.Equals(p.Id, plcId, StringComparison.OrdinalIgnoreCase) || string.Equals(p.Name, plcId, StringComparison.OrdinalIgnoreCase))
+                  ?? Plcs.FirstOrDefault();
         string targetPlcId = plc?.Id ?? plcId;
         string targetPlcName = plc?.Name ?? plcId;
 
@@ -759,7 +841,7 @@ public sealed class PlcManagerService : IPlcManagerService, IDisposable
     public async Task StartPollingAsync()
     {
         await ConnectAllAsync();
-        PollingEngine.Start(() => Plcs.ToList(), () => GetAllTagsToPoll(), GetDriver);
+        PollingEngine.Start(() => Plcs.ToList(), () => GetAllTagsToPoll(), GetDriver, GetEffectiveMinScanInterval);
     }
 
     public Task StopPollingAsync()

@@ -617,8 +617,7 @@ public static class CameraTest
 
         if (!hasY1 || !hasX0 || !hasD1000 || !hasD1002)
         {
-            string tagsDump = string.Join(", ", polledTags.Select(t => $"[Name={t.Name}, Addr={t.Address}, Type={t.DataType}]"));
-            throw new Exception($"GetAllTagsToPoll failed! hasY1={hasY1}, hasX0={hasX0}, hasD1000={hasD1000}, hasD1002={hasD1002}. All Tags: {tagsDump}");
+            throw new Exception($"GetAllTagsToPoll failed! hasY1={hasY1}, hasX0={hasX0}, hasD1000={hasD1000}, hasD1002={hasD1002}.");
         }
         Console.WriteLine("  [2/4] Automatic Polling Tag Synthesis for Direct Addresses: PASSED (100%)");
 
@@ -628,7 +627,7 @@ public static class CameraTest
         var valY0 = plcService.GetTagValue("PLC1", "Y0");
         if (valY0 == null || !true.Equals(valY0.CurrentValue))
         {
-            throw new Exception("Direct write/get tag value for 'Y0' failed!");
+            throw new Exception($"Direct write/get tag value for 'Y0' failed! valY0={valY0?.CurrentValue}");
         }
 
         var writeTask2 = plcService.WriteTagValueAsync("PLC1", "D1000", 12345);

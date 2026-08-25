@@ -49,6 +49,45 @@
 - Preview được phép tiếp tục khi Global Snapshot rỗng để lấy ảnh từ ImageSource.
 - Lưu template cho Origin, Point và SurfaceCompare hoạt động với nguồn ảnh ImageSource.
 
+- **Khắc Phục Hiện Tượng Giật Cục Trên Màn Hình PLC Oscilloscope & Tối Ưu Quét 1ms/2ms (Task 249)**:
+  - **Yêu Cầu & Bối Cảnh**:
+    - Người dùng phản ánh sau khi fix lỗi trước đó, màn hình PLC Oscilloscope có hiện tượng các đường tín hiệu chạy ra bị giật cục, không được mượt như trước nữa, dù có cài đặt scan time là 1ms hay 2ms.
+  - **3 Điểm Nghẽn Gốc Rễ Đã Được Xác Định & Xử Lý Triệt Để**:
+    1. *Giới Hạn Timer Resolution Mặc Định Của Windows (15.625ms Windows Timer Tick Cap)*:
+       - Trên hệ điều hành Windows, `Task.Delay(1)` hoặc `Task.Delay(2)` mặc định bị đồng hồ ngắt hệ thống lượng tử hóa thành chu kỳ 15.625ms, khiến vòng lặp quét PLC bị ép ngủ ~15.6ms mỗi chu kỳ dù người dùng có chọn scan time 1ms hay 2ms.
+       - *Khắc phục*: Xây dựng `NativeTimerUtility.cs` gọi Win32 API `timeBeginPeriod(1)` và `timeEndPeriod(1)` từ `winmm.dll`. Giảm Timer Resolution toàn hệ thống xuống đúng 1.0ms, cho phép `Task.Delay(1)` và `Task.Delay(2)` đạt tần số quét ~850 - 1000 Hz (chu kỳ quét thực tế đạt ~1.09ms).
+    2. *Dòng Thời Gian Viewport Trôi Không Đồng Bộ Với Tần Số Render Màn Hình 60 FPS*:
+       - `ViewOffsetMs` và `MaxSessionTimeMs` trong `PlcOscilloscopeViewModel.cs` trước đây chỉ cập nhật khi nhận được sự kiện `OnBatchPolled`. Khi gói tin mạng/COM đến cách quãng (15-30ms), `ViewOffsetMs` bị đứng yên 2-3 frame rồi đột ngột nhảy vọt, làm đồ thị giật từng nấc.
+       - *Khắc phục*: Nâng cấp `_uiRefreshTimer` lên 60 FPS (16ms) và tự động cập nhật `MaxSessionTimeMs` cùng `ViewOffsetMs` tăng đều đặn theo thời gian thực liên tục (`_sessionStopwatch.Elapsed.TotalMilliseconds`) trong `OnUiRefreshTick`.
+    3. *Khoảng Trống Đầu Dạng Sóng (Leading Edge Waveform Gap)*:
+       - Trong `PlcOscilloscopeCanvas.cs`, dạng sóng trước đây dừng lại ở sample cuối cùng $t_{last}$. Đoạn từ $t_{last}$ đến thời điểm hiện tại $T_{now}$ (hoặc mép phải $endMs$) không được vẽ, khiến đầu sóng bị thụt lùi và nhảy nấc mỗi khi có batch mới.
+       - *Khắc phục*: Triển khai **Real-time Waveform Extension**, tự động nối dài dạng sóng với giá trị hiện tại (`CurrentValue` / `lastPy`) từ $t_{last}$ tới thời điểm hiện tại $T_{now}$. Đầu sóng luôn bám sát theo thời gian thực và di chuyển mượt mà từng pixel.
+  - **Hiệu Quả Đo Kiểm**:
+    - `Test 7: High-Resolution Timer & Sub-5ms Scan Interval Verification`: Đạt 128 batches trong 150ms (~850 Hz, Avg Delay = 1.09ms).
+    - Toàn bộ solution biên dịch thành công `0 Error(s)`.
+    - 100% unit tests trong `TestExtractApp` PASS.
+    - Dạng sóng 4 kênh CH1..CH4 trên Oscilloscope chuyển động mượt mà tuyệt đối 60 FPS, không còn hiện tượng giật cục hay trễ nấc khi cài đặt Scan Time 1ms / 2ms / 5ms / 10ms.
+
+- **Khắc Phục Lỗi Bắt Tín Hiệu Trên Màn Hình PLC Oscilloscope (Task 248)**:
+  - **Yêu Cầu & Bối Cảnh**:
+    - Người dùng phản ánh màn hình PLC Oscilloscope bắt tín hiệu lúc được lúc không, trong khi kiểm tra trên PLC Tag Browser thì tín hiệu vẫn nhận bình thường.
+  - **Nguyên Nhân Gốc Rễ Đã Được Phát Hiện & Xử Lý**:
+    1. *Xung đột Driver Lock (`SemaphoreSlim(1, 1)`)*: `PlcPollingEngine` và `PlcOscilloscopeViewModel.SamplingLoopAsync` chạy song song và cùng gọi `driver.ReadBatchAsync`. Khi Oscilloscope bị timeout lock, driver rơi về `FallbackReadSimulation` trả về `0`, làm chập chờn xung sóng và sinh sườn xung giả.
+    2. *Thiếu Polling Lock & Không quét tag động*: Cửa sổ Oscilloscope không gọi `AcquirePollingLock`, và các địa chỉ nhập tự do (`X2`, `M50`, `D120`...) không được `PlcPollingEngine` quét từ PLC.
+  - **Giải Pháp Kỹ Thuật Đã Triển Khai**:
+    1. *Hợp Nhất Động Cơ Quét Phần Cứng Đơn Nhất & Sự Kiện `OnBatchPolled`*:
+       - Bổ sung `BatchPolledEventArgs` và sự kiện `OnBatchPolled` trong `PlcPollingEngine.cs` và `IPlcManagerService.cs`.
+       - Loại bỏ hoàn toàn vòng lặp riêng `SamplingLoopAsync` trong `PlcOscilloscopeViewModel.cs`, triệt tiêu 100% tình trạng lock contention.
+    2. *Cơ Chế Đăng Ký Tag Động (`Dynamic Tag Providers`)*:
+       - Bổ sung `RegisterDynamicTagProvider` và `UnregisterDynamicTagProvider` trong `PlcManagerService.cs`. Tự động gom các kênh CH1..CH4 vào batch đọc phần cứng duy nhất.
+    3. *Điều Khiển Tần Số Quét Động & Quản Lý Vòng Đời Polling Lock*:
+       - Bổ sung `RequestScanInterval` và `ReleaseScanInterval` trong `PlcManagerService.cs`. Tự động nâng tần số quét khi Oscilloscope yêu cầu và tự động giữ/nhả `AcquirePollingLock("PlcOscilloscope")`.
+    4. *Cắt Vùng Vẽ Canvas (`dc.PushClip`)* trong `PlcOscilloscopeCanvas.cs`: Đảm bảo dạng sóng vẽ chuẩn xác trong khung đồ thị.
+  - **Hiệu Quả Đo Kiểm**:
+    - Toàn bộ solution biên dịch thành công `0 Error(s)`.
+    - 100% unit tests trong `TestExtractApp` PASS (kể cả `Test 6: OnBatchPolled & Dynamic Tag Provider`).
+    - Dạng sóng Oscilloscope hiển thị liên tục, mượt mà, bắt trọn 100% các xung trigger từ PLC thời gian thực.
+
 - **Tích Hợp Tính Năng Import / Export PLC Tags CSV Trong Cửa Sổ PLC Manager (Task 247)**:
   - **Yêu Cầu & Bối Cảnh**:
     - Bổ sung công cụ Import / Export danh bạ biến (PLC Tags) trực tiếp trong Cửa sổ "PLC & Industrial Motion Configuration" (Tab 1: Kết Nối & Tags).

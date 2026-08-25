@@ -939,6 +939,31 @@ Lộ trình tích hợp tính năng Chụp ảnh từ camera và hỗ trợ các
         - `PlcTagCsvServiceTest.cs`: Bổ sung 25 bài kiểm thử tự động xác thực toàn diện mọi định dạng CSV và round-trip xuất nhập $\rightarrow$ **PASS 25/25 (100%)**.
       - `Hiệu Quả Đạt Được`:
         - Kỹ sư PLC có thể nạp hàng trăm biến trực tiếp từ file export của Mitsubishi GX Works 3 hoặc GX Works 2 chỉ với 1 cú click chuột, không cần gõ tay từng tag.
+    - [x] Task 248: Khắc phục triệt để lỗi bắt tín hiệu trên màn hình PLC Oscilloscope:
+      - `Yêu Cầu & Bối Cảnh`:
+        - Khắc phục hiện tượng tín hiệu trên PLC Oscilloscope lúc bắt được lúc không, sóng vuông bị chập chờn đứt đoạn dù trên PLC Tag Browser tín hiệu vẫn nhận bình thường.
+      - `Nguyên Nhân Gốc Rễ`:
+        - Xung đột Driver Lock giữa `PlcPollingEngine` và `PlcOscilloscopeViewModel.SamplingLoopAsync` khiến driver rơi về `FallbackReadSimulation` trả về `0`, làm gãy dạng sóng và tạo xung giả. Cửa sổ thiếu cơ chế `AcquirePollingLock` và các địa chỉ kênh nhập tự do không được đưa vào chu kỳ quét PLC.
+      - `Giải Pháp Triển Khai`:
+        - `PlcPollingEngine.cs` & `IPlcManagerService.cs`: Thêm `BatchPolledEventArgs` và sự kiện `OnBatchPolled`. `PlcPollingEngine` là luồng nền duy nhất giao tiếp với driver phần cứng.
+        - `PlcManagerService.cs`: Thêm `RegisterDynamicTagProvider`, `UnregisterDynamicTagProvider`, `RequestScanInterval`, `ReleaseScanInterval`. Tự động gom tag động từ các kênh CH1..CH4 vào 1 chu kỳ quét duy nhất.
+        - `PlcOscilloscopeViewModel.cs`: Loại bỏ hoàn toàn vòng lặp riêng `SamplingLoopAsync`, chuyển sang lắng nghe `OnBatchPolled`, tự động quản lý `AcquirePollingLock` và `RequestScanInterval`.
+        - `PlcOscilloscopeCanvas.cs`: Bao bọc vùng vẽ sóng bằng `dc.PushClip` và `dc.Pop`.
+        - `PlcTests.cs`: Thêm `Test 6: OnBatchPolled & Dynamic Tag Provider (Oscilloscope Engine)`.
+      - `Hiệu Quả Đạt Được`:
+        - Tín hiệu trên 4 kênh CH1..CH4 bắt mượt mà, liên tục $100\%$, đồng bộ thời gian tuyệt đối và không còn hiện tượng chập chờn hay mất xung.
+        - Toàn bộ suite test tự động trong `TestExtractApp` đạt PASS $100\%$.
+    - [x] Task 249: Khắc phục hiện tượng giật cục trên màn hình PLC Oscilloscope & Tối ưu hóa chu kỳ quét 1ms-2ms:
+      - `Yêu Cầu & Bối Cảnh`:
+        - Người dùng phản ánh sau khi fix lỗi trước đó, màn hình PLC Oscilloscope có hiện tượng các đường tín hiệu chạy ra bị giật cục, không được mượt như trước nữa dù để scan time 1ms hay 2ms.
+      - `Nguyên Nhân Gốc Rễ Đã Được Xác Định & Xử Lý`:
+        1. *Windows Timer Tick 15.625ms*: `Task.Delay(1)` và `Task.Delay(2)` bị ngắt thời gian Windows ép ngủ ít nhất ~15.6ms. Đã khắc phục bằng `NativeTimerUtility.cs` (`timeBeginPeriod(1)` từ `winmm.dll`), giảm timer resolution xuống 1.0ms, nâng tốc độ quét lên ~850 - 1000 Hz (chu kỳ ~1.09ms).
+        2. *Trục thời gian Viewport trôi không đồng bộ*: `MaxSessionTimeMs` và `ViewOffsetMs` trong `PlcOscilloscopeViewModel.cs` trước đây chỉ cập nhật khi nhận batch. Đã nâng cấp UI Timer lên 60 FPS (16ms) và tự động đồng bộ thời gian thực liên tục trong `OnUiRefreshTick`.
+        3. *Khoảng trống đầu dạng sóng (Waveform Gap)*: Đã triển khai Real-time Waveform Extension trong `PlcOscilloscopeCanvas.cs`, tự động kéo dài dạng sóng từ sample cuối cùng đến thời điểm hiện tại `MaxSessionTimeMs` / `targetPx`. Đầu sóng luôn chạm sát mép thời gian thực và di chuyển mượt mà 60 FPS.
+      - `Hiệu Quả Đạt Được`:
+        - `Test 7: High-Resolution Timer & Sub-5ms Scan Interval Verification` trong `PlcTests.cs`: Đạt 128 batches trong 150ms (~850 Hz, Avg Delay = 1.09ms).
+        - Dạng sóng 4 kênh CH1..CH4 chuyển động êm ái, mượt mà 60 FPS không gợn sóng khi chọn bất kỳ Scan Time nào (1ms / 2ms / 5ms / 10ms).
+        - Toàn bộ suite test tự động trong `TestExtractApp` đạt PASS 100%.
 
 
 

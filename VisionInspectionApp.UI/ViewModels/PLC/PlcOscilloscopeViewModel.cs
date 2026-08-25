@@ -92,8 +92,6 @@ public partial class PlcOscilloscopeViewModel : ObservableObject, IDisposable
 {
     private readonly IPlcManagerService _plcService;
     private readonly Stopwatch _sessionStopwatch = new();
-    private CancellationTokenSource? _samplingCts;
-    private Task? _samplingTask;
     private readonly DispatcherTimer _uiRefreshTimer;
     private bool _disposed;
 
@@ -172,15 +170,48 @@ public partial class PlcOscilloscopeViewModel : ObservableObject, IDisposable
 
         _uiRefreshTimer = new DispatcherTimer
         {
-            Interval = TimeSpan.FromMilliseconds(33) // ~30 FPS UI render update
+            Interval = TimeSpan.FromMilliseconds(16) // ~60 FPS smooth UI render update
         };
         _uiRefreshTimer.Tick += OnUiRefreshTick;
         _uiRefreshTimer.Start();
 
-        _plcService.OnTagChanged += HandlePlcTagChanged;
+        // Register dynamic tags and scan interval with central PollingEngine
+        _plcService.AcquirePollingLock("PlcOscilloscope");
+        _plcService.RequestScanInterval("PlcOscilloscope", SamplingIntervalMs);
+        _plcService.RegisterDynamicTagProvider("PlcOscilloscope", GetOscilloscopeChannelTags);
+        _plcService.OnBatchPolled += HandlePlcBatchPolled;
 
         // Auto start capture
         StartCapture();
+    }
+
+    public IEnumerable<PlcTag> GetOscilloscopeChannelTags()
+    {
+        string targetPlcId = SelectedPlc?.Id ?? "PLC1";
+        var list = new List<PlcTag>();
+        foreach (var ch in Channels)
+        {
+            if (ch.Enabled && !string.IsNullOrWhiteSpace(ch.Address))
+            {
+                list.Add(new PlcTag
+                {
+                    PlcId = targetPlcId,
+                    Name = ch.Address,
+                    Address = ch.Address,
+                    DataType = ch.DataType
+                });
+            }
+        }
+        return list;
+    }
+
+    partial void OnSamplingIntervalMsChanged(int value)
+    {
+        _plcService.RequestScanInterval("PlcOscilloscope", value);
+        if (IsRunning)
+        {
+            StatusText = $"▶ Đang chạy ghi nhận tín hiệu thời gian thực (Chu kỳ quét: {value} ms)...";
+        }
     }
 
     private void InitializeDefaultChannels()
@@ -253,10 +284,9 @@ public partial class PlcOscilloscopeViewModel : ObservableObject, IDisposable
         IsRunning = true;
         _sessionStopwatch.Start();
 
-        _samplingCts = new CancellationTokenSource();
-        var token = _samplingCts.Token;
+        _plcService.AcquirePollingLock("PlcOscilloscope");
+        _plcService.RequestScanInterval("PlcOscilloscope", SamplingIntervalMs);
 
-        _samplingTask = Task.Run(() => SamplingLoopAsync(token), token);
         StatusText = $"▶ Đang chạy ghi nhận tín hiệu thời gian thực (Chu kỳ quét: {SamplingIntervalMs} ms)...";
     }
 
@@ -266,12 +296,6 @@ public partial class PlcOscilloscopeViewModel : ObservableObject, IDisposable
         if (!IsRunning) return;
 
         IsRunning = false;
-        try
-        {
-            _samplingCts?.Cancel();
-        }
-        catch { }
-
         StatusText = "⏸ Đã đóng băng sóng (Frozen Waveform). Bạn có thể kéo Cursor A/B để đo khoảng cách thời gian.";
     }
 
@@ -321,86 +345,54 @@ public partial class PlcOscilloscopeViewModel : ObservableObject, IDisposable
         }
     }
 
-    private async Task SamplingLoopAsync(CancellationToken cancellationToken)
+    private void HandlePlcBatchPolled(object? sender, BatchPolledEventArgs e)
     {
-        while (!cancellationToken.IsCancellationRequested && IsRunning)
+        if (!IsRunning || _disposed || e == null) return;
+
+        string targetPlcId = SelectedPlc?.Id ?? "PLC1";
+        string targetPlcName = SelectedPlc?.Name ?? "PLC1";
+
+        if (!string.Equals(e.PlcId, targetPlcId, StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(e.PlcId, targetPlcName, StringComparison.OrdinalIgnoreCase))
         {
-            var swLoop = Stopwatch.StartNew();
-            double currentMs = _sessionStopwatch.Elapsed.TotalMilliseconds;
-            var now = DateTime.Now;
+            return;
+        }
 
-            var enabledChs = Channels.Where(c => c.Enabled && !string.IsNullOrWhiteSpace(c.Address)).ToList();
-            if (enabledChs.Count > 0)
+        double currentMs = _sessionStopwatch.Elapsed.TotalMilliseconds;
+        var now = e.Timestamp;
+
+        var enabledChs = Channels.Where(c => c.Enabled && !string.IsNullOrWhiteSpace(c.Address)).ToList();
+        if (enabledChs.Count == 0) return;
+
+        foreach (var ch in enabledChs)
+        {
+            double val = 0.0;
+            if (e.ReadResults != null && e.ReadResults.TryGetValue(ch.Address, out var objVal) && objVal != null)
             {
-                string targetPlcId = SelectedPlc?.Id ?? "PLC1";
-                var driver = _plcService.GetDriver(targetPlcId);
-
-                // Build tag list for driver batch read
-                var tagList = enabledChs.Select(c => new PlcTag
-                {
-                    PlcId = targetPlcId,
-                    Name = c.Address,
-                    Address = c.Address,
-                    DataType = c.DataType
-                }).ToList();
-
-                IDictionary<string, object?>? readResults = null;
-                if (driver != null && driver.IsConnected)
-                {
-                    try
-                    {
-                        using var timeoutCts = new CancellationTokenSource(Math.Max(500, SamplingIntervalMs * 5));
-                        using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutCts.Token);
-                        readResults = await driver.ReadBatchAsync(tagList, linked.Token);
-                    }
-                    catch { }
-                }
-
-                foreach (var ch in enabledChs)
-                {
-                    double val = 0.0;
-                    if (readResults != null && readResults.TryGetValue(ch.Address, out var objVal) && objVal != null)
-                    {
-                        val = ConvertToDouble(objVal);
-                    }
-                    else
-                    {
-                        var cached = _plcService.GetTagValue(targetPlcId, ch.Address);
-                        if (cached?.CurrentValue != null)
-                        {
-                            val = ConvertToDouble(cached.CurrentValue);
-                        }
-                    }
-
-                    RecordSample(ch, currentMs, now, val);
-                }
-
-                TotalCapturedSamples += enabledChs.Count;
+                val = ConvertToDouble(objVal);
             }
-
-            MaxSessionTimeMs = currentMs;
-            if (IsRunning && currentMs > TimeWindowMs)
+            else if (e.ReadResults != null && e.ReadResults.TryGetValue(ch.Name, out var objValByName) && objValByName != null)
             {
-                ViewOffsetMs = currentMs - TimeWindowMs;
-            }
-
-            swLoop.Stop();
-            int delayMs = SamplingIntervalMs - (int)swLoop.ElapsedMilliseconds;
-            if (delayMs > 0)
-            {
-                try
-                {
-                    await Task.Delay(delayMs, cancellationToken);
-                }
-                catch (TaskCanceledException)
-                {
-                    break;
-                }
+                val = ConvertToDouble(objValByName);
             }
             else
             {
-                await Task.Yield();
+                var cached = _plcService.GetTagValue(targetPlcId, ch.Address);
+                if (cached?.CurrentValue != null)
+                {
+                    val = ConvertToDouble(cached.CurrentValue);
+                }
             }
+
+            RecordSample(ch, currentMs, now, val);
+        }
+
+        TotalCapturedSamples += enabledChs.Count;
+        MaxSessionTimeMs = currentMs;
+
+        if (currentMs > TimeWindowMs)
+        {
+            ViewOffsetMs = currentMs - TimeWindowMs;
         }
     }
 
@@ -489,21 +481,18 @@ public partial class PlcOscilloscopeViewModel : ObservableObject, IDisposable
         }
     }
 
-    private void HandlePlcTagChanged(object? sender, TagChangedEventArgs e)
-    {
-        if (e == null) return;
-        double currentMs = _sessionStopwatch.Elapsed.TotalMilliseconds;
-        var ch = Channels.FirstOrDefault(c => c.Enabled && (string.Equals(c.Address, e.TagName, StringComparison.OrdinalIgnoreCase) ||
-                                                           string.Equals(c.Name, e.TagName, StringComparison.OrdinalIgnoreCase)));
-        if (ch != null)
-        {
-            double val = ConvertToDouble(e.NewValue);
-            RecordSample(ch, currentMs, e.Timestamp, val);
-        }
-    }
-
     private void OnUiRefreshTick(object? sender, EventArgs e)
     {
+        if (IsRunning)
+        {
+            double currentMs = _sessionStopwatch.Elapsed.TotalMilliseconds;
+            MaxSessionTimeMs = currentMs;
+            if (currentMs > TimeWindowMs)
+            {
+                ViewOffsetMs = currentMs - TimeWindowMs;
+            }
+        }
+
         UpdateRenderData();
         UpdateCursorCalculations();
     }
@@ -610,13 +599,9 @@ public partial class PlcOscilloscopeViewModel : ObservableObject, IDisposable
         _disposed = true;
 
         _uiRefreshTimer.Stop();
-        _plcService.OnTagChanged -= HandlePlcTagChanged;
-
-        try
-        {
-            _samplingCts?.Cancel();
-            _samplingCts?.Dispose();
-        }
-        catch { }
+        _plcService.OnBatchPolled -= HandlePlcBatchPolled;
+        _plcService.UnregisterDynamicTagProvider("PlcOscilloscope");
+        _plcService.ReleaseScanInterval("PlcOscilloscope");
+        _plcService.ReleasePollingLock("PlcOscilloscope");
     }
 }

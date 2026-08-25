@@ -22,6 +22,7 @@ class Program
         IconGenerator.GenerateAppIcons();
         ContinuousPipelineTest.RunTestsAsync().GetAwaiter().GetResult();
         PlcTagCsvServiceTest.RunTests();
+        PlcTests.RunAllTestsAsync().GetAwaiter().GetResult();
         ManualInspectionTest.RunTests();
     }
 }
