@@ -21,11 +21,12 @@ public sealed partial class PlcTagDisplayItem : ObservableObject
     public string Description { get; set; } = string.Empty;
 }
 
-public partial class PlcBrowserViewModel : ObservableObject
+public partial class PlcBrowserViewModel : ObservableObject, IDisposable
 {
     private readonly IPlcManagerService _plcService;
     private readonly System.Windows.Threading.DispatcherTimer _refreshTimer;
     private readonly object _lockObj = new();
+    private bool _disposed;
 
     [ObservableProperty]
     private string _filterText = string.Empty;
@@ -36,14 +37,32 @@ public partial class PlcBrowserViewModel : ObservableObject
     {
         _plcService = plcService ?? throw new ArgumentNullException(nameof(plcService));
 
+        // Tự động giữ Polling Lock để Polling Engine quét dữ liệu từ PLC
+        _plcService.AcquirePollingLock("PlcBrowser");
+
         _refreshTimer = new System.Windows.Threading.DispatcherTimer
         {
-            Interval = TimeSpan.FromMilliseconds(500)
+            Interval = TimeSpan.FromMilliseconds(200)
         };
         _refreshTimer.Tick += (s, e) => RefreshTags();
         _refreshTimer.Start();
 
+        _plcService.OnBatchPolled += HandleBatchPolled;
+        _plcService.OnTagChanged += HandleTagChanged;
+
         RefreshTags();
+    }
+
+    private void HandleBatchPolled(object? sender, BatchPolledEventArgs e)
+    {
+        if (_disposed) return;
+        System.Windows.Application.Current?.Dispatcher?.InvokeAsync(RefreshTags);
+    }
+
+    private void HandleTagChanged(object? sender, TagChangedEventArgs e)
+    {
+        if (_disposed) return;
+        System.Windows.Application.Current?.Dispatcher?.InvokeAsync(RefreshTags);
     }
 
     partial void OnFilterTextChanged(string value)
@@ -53,6 +72,7 @@ public partial class PlcBrowserViewModel : ObservableObject
 
     public void RefreshTags()
     {
+        if (_disposed) return;
         lock (_lockObj)
         {
             var tags = _plcService.Tags.ToList();
@@ -76,8 +96,11 @@ public partial class PlcBrowserViewModel : ObservableObject
                 string key = $"{plcName}:{tag.Name}";
                 validKeys.Add(key);
 
-                var val = _plcService.GetTagValue(tag.PlcId, tag.Name);
-                string newStr = val?.CurrentValue?.ToString() ?? "N/A";
+                var val = _plcService.GetTagValue(tag.PlcId, tag.Name) 
+                          ?? _plcService.GetTagValue(plcName, tag.Name)
+                          ?? _plcService.GetTagValue(tag.PlcId, tag.Address)
+                          ?? _plcService.GetTagValue(plcName, tag.Address);
+                string newStr = val?.CurrentValue != null ? val.CurrentValue.ToString()! : "N/A";
 
                 if (currentItemsDict.TryGetValue(key, out var existingItem))
                 {
@@ -112,5 +135,16 @@ public partial class PlcBrowserViewModel : ObservableObject
                 }
             }
         }
+    }
+
+    public void Dispose()
+    {
+        if (_disposed) return;
+        _disposed = true;
+
+        _refreshTimer.Stop();
+        _plcService.OnBatchPolled -= HandleBatchPolled;
+        _plcService.OnTagChanged -= HandleTagChanged;
+        _plcService.ReleasePollingLock("PlcBrowser");
     }
 }

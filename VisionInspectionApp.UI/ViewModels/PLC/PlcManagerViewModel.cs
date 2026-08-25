@@ -351,6 +351,7 @@ public partial class PlcManagerViewModel : ObservableObject
             if (ok)
             {
                 _plcService.Logger.LogConnect(SelectedPlc.Id, SelectedPlc.Name);
+                _plcService.AcquirePollingLock("PlcManager");
                 System.Windows.MessageBox.Show(
                     $"Connected successfully to PLC '{SelectedPlc.Name}'!\nCPU Name: {SelectedPlc.CpuName}",
                     "PLC Connection Successful",
@@ -359,6 +360,7 @@ public partial class PlcManagerViewModel : ObservableObject
             }
             else
             {
+                _plcService.ReleasePollingLock("PlcManager");
                 _plcService.Logger.LogDisconnect(SelectedPlc.Id, SelectedPlc.Name);
                 string errDetail = string.IsNullOrWhiteSpace(SelectedPlc.CpuName) ? "Connection failed" : SelectedPlc.CpuName;
                 System.Windows.MessageBox.Show(
@@ -374,6 +376,7 @@ public partial class PlcManagerViewModel : ObservableObject
     private async System.Threading.Tasks.Task DisconnectSelectedPlcAsync()
     {
         if (SelectedPlc == null) return;
+        _plcService.ReleasePollingLock("PlcManager");
         var driver = _plcService.GetDriver(SelectedPlc.Id);
         if (driver != null)
         {

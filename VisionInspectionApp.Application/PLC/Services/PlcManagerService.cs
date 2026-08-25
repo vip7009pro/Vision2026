@@ -683,7 +683,24 @@ public sealed class PlcManagerService : IPlcManagerService, IDisposable
             bool isMxDriver = existingDriver is MitsubishiMxComponentDriver;
             bool shouldBeMx = plc.DriverType == PlcDriverType.MitsubishiMxComponent;
 
-            if (isMxDriver != shouldBeMx)
+            // Tự động kiểm tra thay đổi IP / Port / Station No
+            bool configChanged = false;
+            if (existingDriver is MitsubishiDriver md)
+            {
+                if (!string.Equals(md.Config.IPAddress, plc.IPAddress, StringComparison.OrdinalIgnoreCase) || md.Config.Port != plc.Port)
+                {
+                    configChanged = true;
+                }
+            }
+            else if (existingDriver is MitsubishiMxComponentDriver mxd)
+            {
+                if (mxd.Config.LogicalStationNumber != plc.LogicalStationNumber)
+                {
+                    configChanged = true;
+                }
+            }
+
+            if (isMxDriver != shouldBeMx || configChanged)
             {
                 try { existingDriver.Dispose(); } catch { }
                 _drivers.TryRemove(plc.Id, out _);

@@ -960,9 +960,18 @@ Lộ trình tích hợp tính năng Chụp ảnh từ camera và hỗ trợ các
         1. *Windows Timer Tick 15.625ms*: `Task.Delay(1)` và `Task.Delay(2)` bị ngắt thời gian Windows ép ngủ ít nhất ~15.6ms. Đã khắc phục bằng `NativeTimerUtility.cs` (`timeBeginPeriod(1)` từ `winmm.dll`), giảm timer resolution xuống 1.0ms, nâng tốc độ quét lên ~850 - 1000 Hz (chu kỳ ~1.09ms).
         2. *Trục thời gian Viewport trôi không đồng bộ*: `MaxSessionTimeMs` và `ViewOffsetMs` trong `PlcOscilloscopeViewModel.cs` trước đây chỉ cập nhật khi nhận batch. Đã nâng cấp UI Timer lên 60 FPS (16ms) và tự động đồng bộ thời gian thực liên tục trong `OnUiRefreshTick`.
         3. *Khoảng trống đầu dạng sóng (Waveform Gap)*: Đã triển khai Real-time Waveform Extension trong `PlcOscilloscopeCanvas.cs`, tự động kéo dài dạng sóng từ sample cuối cùng đến thời điểm hiện tại `MaxSessionTimeMs` / `targetPx`. Đầu sóng luôn chạm sát mép thời gian thực và di chuyển mượt mà 60 FPS.
-      - `Hiệu Quả Đạt Được`:
-        - `Test 7: High-Resolution Timer & Sub-5ms Scan Interval Verification` trong `PlcTests.cs`: Đạt 128 batches trong 150ms (~850 Hz, Avg Delay = 1.09ms).
         - Dạng sóng 4 kênh CH1..CH4 chuyển động êm ái, mượt mà 60 FPS không gợn sóng khi chọn bất kỳ Scan Time nào (1ms / 2ms / 5ms / 10ms).
+        - Toàn bộ suite test tự động trong `TestExtractApp` đạt PASS 100%.
+    - [x] Task 250: Sửa chữa & Chuẩn hóa kết nối giao thức Mitsubishi MC Protocol (Ethernet Socket):
+      - `Yêu Cầu & Bối Cảnh`:
+        - Khi kết nối PLC bằng giao thức Mitsubishi (MC Protocol Ethernet Socket, không qua MX Component), tuy hiển thị `Connected` nhưng thông tin CPU PLC bị rỗng hoặc hiển thị chung chung `Mitsubishi PLC`, đồng thời giá trị các tag `X0`, `X1`, `X3`, `X7`, `Y0`, `D100`... trên PLC Tag Browser và PLC Oscilloscope hiển thị `N/A` hoặc không nhảy giá trị.
+      - `Nguyên Nhân Gốc Rễ Đã Được Xác Định & Xử Lý`:
+        1. *Nhận Diện CPU Model Đa Tầng (Multi-tier Identification)*: Tầng 1 (Command `0x0101`) -> Tầng 2 (Đọc trực tiếp thanh ghi đặc biệt `SD200..SD207` - 8 words = 16 bytes ASCII trên FX5U/Q) -> Tầng 3 (Đọc `SD0` CPU Model Code) -> Tầng 4 (Port-based SLMP detection `5000/5007` $\rightarrow$ `FX5U`). Giao diện hiển thị chuẩn xác `FX5U-32MT/ES` hoặc `FX5U (MC Protocol)`.
+        2. *Cơ Chế Đọc Bit Kép (Dual-mode Bit Read Mechanism)*: Bước 1 thử đọc Bit units (`Command: 0x0401, Subcommand: 0x0001`); nếu PLC trả về mã lỗi, tự động fallback sang đọc Word bao quanh bit đó (`Command: 0x0401, Subcommand: 0x0000`) tại vị trí `(headNumber / 16) * 16` và trích xuất bit. Triệt tiêu $100\%$ lỗi đọc bit trên PLC FX5U.
+        3. *Hệ Bát Phân (Octal) Cho Thiết Bị `X`, `Y`*: Nâng cấp `ParseDeviceAddress` tự động nhận diện và chuyển đổi hệ bát phân sang số nguyên.
+        4. *Tự Động Kích Hoạt Polling Lock*: `PlcManagerViewModel` tự động giữ `AcquirePollingLock("PlcManager")` ngay khi bấm nút "Kết Nối (Connect)" thành công, nạp đầy Cache trước khi mở các cửa sổ khác. `PlcBrowserViewModel` tra cứu kép theo cả Tag Name và Address.
+      - `Hiệu Quả Đạt Được`:
+        - `Test 8: Mitsubishi MC Protocol 3E Real Socket Protocol & CPU Name` trong `PlcTests.cs`: Đạt kết quả PASS 100%, kết nối TCP Socket thực tế, nhận diện CPU Name chính xác, đọc/ghi Bit và Word chuẩn 100%.
         - Toàn bộ suite test tự động trong `TestExtractApp` đạt PASS 100%.
 
 

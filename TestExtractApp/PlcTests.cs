@@ -23,6 +23,7 @@ public static class PlcTests
         Test5_MitsubishiMxComponentDriver_SimulationReadWrite();
         await Test6_PlcManagerService_OnBatchPolled_And_DynamicTagsAsync();
         await Test7_HighResolutionTimer_And_Sub5msScanAsync();
+        await Test8_MitsubishiMcProtocol_SocketCommunication_And_CpuNameAsync();
 
         Console.WriteLine("\n✅ ALL PLC TESTS PASSED SUCCESSFULLY!");
         Console.WriteLine("=========================================");
@@ -297,5 +298,128 @@ public static class PlcTests
         }
 
         Console.WriteLine($"PASSED (Captured {batchCount} batches in 150ms, Avg Delay = {avgDelayMs:F2}ms)");
+    }
+
+    private static async Task Test8_MitsubishiMcProtocol_SocketCommunication_And_CpuNameAsync()
+    {
+        Console.Write("\nTest 8: Mitsubishi MC Protocol 3E Real Socket Protocol & CPU Name... ");
+
+        // 1. Start a local TCP server mimicking a Mitsubishi FX5U / Q Series PLC
+        var listener = new System.Net.Sockets.TcpListener(System.Net.IPAddress.Loopback, 0);
+        listener.Start();
+        int port = ((System.Net.IPEndPoint)listener.LocalEndpoint).Port;
+
+        var serverTask = Task.Run(async () =>
+        {
+            try
+            {
+                using var client = await listener.AcceptTcpClientAsync();
+                using var stream = client.GetStream();
+                byte[] header = new byte[15];
+
+                while (true)
+                {
+                    int read = await stream.ReadAsync(header, 0, 15);
+                    if (read < 15) break;
+
+                    // header[7] and [8] is request data length
+                    ushort reqLen = (ushort)(header[7] | (header[8] << 8));
+                    int payloadLen = reqLen - 6; // Subtract CPU timer (2B), command (2B), subcmd (2B)
+                    byte[] payload = new byte[payloadLen];
+                    if (payloadLen > 0)
+                    {
+                        await stream.ReadAsync(payload, 0, payloadLen);
+                    }
+
+                    ushort command = (ushort)(header[11] | (header[12] << 8));
+                    ushort subcommand = (ushort)(header[13] | (header[14] << 8));
+
+                    if (command == 0x0101)
+                    {
+                        // Read CPU model name: Return 16 bytes ASCII "FX5U-32MT/ES    " + 2 bytes CPU code
+                        byte[] respHeader = new byte[] {
+                            0xD0, 0x00, 0x00, 0xFF, 0xFF, 0x03, 0x00,
+                            0x14, 0x00, // Data Length = 20 (2B return code + 16B CPU + 2B code)
+                            0x00, 0x00  // End code = 0 (Success)
+                        };
+                        byte[] cpuBytes = System.Text.Encoding.ASCII.GetBytes("FX5U-32MT/ES    ");
+                        byte[] cpuCode = new byte[] { 0x10, 0x02 };
+                        byte[] fullResp = respHeader.Concat(cpuBytes).Concat(cpuCode).ToArray();
+                        await stream.WriteAsync(fullResp, 0, fullResp.Length);
+                    }
+                    else if (command == 0x0401 && subcommand == 0x0001)
+                    {
+                        // Bit Read: Return 1 bit ON (0x10)
+                        byte[] respHeader = new byte[] {
+                            0xD0, 0x00, 0x00, 0xFF, 0xFF, 0x03, 0x00,
+                            0x03, 0x00, // Data Length = 3 (2B return code + 1B data)
+                            0x00, 0x00, // End code = 0
+                            0x10        // Bit ON
+                        };
+                        await stream.WriteAsync(respHeader, 0, respHeader.Length);
+                    }
+                    else if (command == 0x0401 && subcommand == 0x0000)
+                    {
+                        // Word Read: Return Word = 5678 (0x162E -> 2E 16)
+                        byte[] respHeader = new byte[] {
+                            0xD0, 0x00, 0x00, 0xFF, 0xFF, 0x03, 0x00,
+                            0x04, 0x00, // Data Length = 4 (2B return code + 2B data)
+                            0x00, 0x00, // End code = 0
+                            0x2E, 0x16  // 5678
+                        };
+                        await stream.WriteAsync(respHeader, 0, respHeader.Length);
+                    }
+                    else if (command == 0x1401)
+                    {
+                        // Write response
+                        byte[] respHeader = new byte[] {
+                            0xD0, 0x00, 0x00, 0xFF, 0xFF, 0x03, 0x00,
+                            0x02, 0x00, // Data Length = 2 (2B return code)
+                            0x00, 0x00  // End code = 0
+                        };
+                        await stream.WriteAsync(respHeader, 0, respHeader.Length);
+                    }
+                }
+            }
+            catch { }
+        });
+
+        var plc = new PlcModel
+        {
+            Id = "PLC_MC_REAL",
+            Name = "FX5U_REAL",
+            DriverType = PlcDriverType.Mitsubishi,
+            IPAddress = "127.0.0.1",
+            Port = port
+        };
+
+        using var driver = new MitsubishiDriver(plc);
+        bool connected = await driver.ConnectAsync();
+        if (!connected) throw new Exception("Failed to connect to MC Protocol mock server.");
+
+        if (!string.Equals(plc.CpuName, "FX5U-32MT/ES", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new Exception($"CPU Name mismatch: expected 'FX5U-32MT/ES', got '{plc.CpuName}'");
+        }
+
+        // Test Bit Read (X0)
+        var tagX0 = new PlcTag { PlcId = plc.Id, Name = "X0_Trigger", Address = "X0", DataType = PlcDataType.Bool };
+        var tagD100 = new PlcTag { PlcId = plc.Id, Name = "D100_Data", Address = "D100", DataType = PlcDataType.Int16 };
+
+        var rBit = await driver.ReadAsync(tagX0);
+        if (rBit is not true) throw new Exception($"Bit Read failed: expected true, got {rBit}");
+
+        var rWord = await driver.ReadAsync(tagD100);
+        if (Convert.ToInt32(rWord) != 5678) throw new Exception($"Word Read failed: expected 5678, got {rWord}");
+
+        // Test Bit Write & Word Write
+        bool wBit = await driver.WriteAsync(tagX0, true);
+        bool wWord = await driver.WriteAsync(tagD100, (short)9999);
+        if (!wBit || !wWord) throw new Exception("Write failed over MC Protocol 3E socket.");
+
+        await driver.DisconnectAsync();
+        listener.Stop();
+
+        Console.WriteLine($"PASSED (Connected & Identified CPU '{plc.CpuName}', Bit & Word Verified 100%)");
     }
 }

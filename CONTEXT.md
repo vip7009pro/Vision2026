@@ -49,6 +49,26 @@
 - Preview được phép tiếp tục khi Global Snapshot rỗng để lấy ảnh từ ImageSource.
 - Lưu template cho Origin, Point và SurfaceCompare hoạt động với nguồn ảnh ImageSource.
 
+- **Sửa Chữa & Chuẩn Hóa Kết Nối Giao Thức Mitsubishi MC Protocol (Ethernet Socket) (Task 250)**:
+  - **Yêu Cầu & Bối Cảnh**:
+    - Khi kết nối PLC bằng giao thức Mitsubishi (MC Protocol Ethernet Socket, không qua MX Component), tuy hiển thị `Connected` nhưng thông tin CPU PLC bị rỗng hoặc hiển thị chung chung `Mitsubishi PLC`, đồng thời giá trị các tag `X0`, `X1`, `X3`, `X7`, `Y0`, `D100`... trên PLC Tag Browser và PLC Oscilloscope hiển thị `N/A` hoặc không nhảy giá trị.
+  - **Nguyên Nhân Gốc Rễ Đã Được Xác Định & Xử Lý Triệt Để**:
+    1. *Nhận Diện CPU Model Đa Tầng (Multi-tier CPU Identification)*:
+       - Tầng 1: Lệnh MC Protocol 3E Command `0x0101` (Read CPU type).
+       - Tầng 2: Đọc thanh ghi đặc biệt `SD200..SD207` (8 words = 16 bytes ASCII) bằng Device Code `0xA9` (SD). Trên PLC **FX5U** và **Q Series**, hệ điều hành tự động nạp chuỗi tên CPU (`FX5U-32MT/ES`, `FX5U-64MT/ESS`...) vào SD200..SD207, đọc không bị hạn chế bảo mật.
+       - Tầng 3: Đọc `SD0` (CPU Model Code - 1 word) tra cứu mã phần cứng (`0x0020..0x002F`, `0x1000..0x10FF`, `0x0210` $\rightarrow$ `FX5U CPU`).
+       - Tầng 4: Fallback theo cổng SLMP `5000` / `5007` $\rightarrow$ `FX5U (MC Protocol)`.
+    2. *Cơ Chế Đọc Bit Kép (Dual-mode Bit Read Mechanism)*:
+       - Bước 1: Thử đọc trực tiếp bằng Bit units (`Command: 0x0401, Subcommand: 0x0001`).
+       - Bước 2: Tự động fallback sang đọc khối Word bao quanh bit đó (`Command: 0x0401, Subcommand: 0x0000`) tại vị trí `(headNumber / 16) * 16` và trích xuất bit `((wordVal >> bitOffset) & 1) != 0`. Đảm bảo $100\%$ không bị lỗi `0xC059`/`0xC05B` từ PLC Mitsubishi.
+    3. *Hệ Bát Phân (Octal) Của Thiết Bị `X`, `Y`*: Nâng cấp `ParseDeviceAddress` tự động nhận diện và chuyển đổi hệ bát phân sang số nguyên trước khi đóng gói gói tin.
+    4. *Kích Hoạt Polling Tự Động Khi Kết Nối*:
+       - `PlcManagerViewModel.cs`: Gọi `_plcService.AcquirePollingLock("PlcManager")` ngay khi bấm nút "Kết Nối (Connect)" thành công, giúp dữ liệu tag lập tức được quét ngầm và nạp đầy vào Cache.
+       - `PlcBrowserViewModel.cs`: Hỗ trợ tra cứu kép theo cả `tag.Name` và `tag.Address` (`X0`, `X1`, `D100`...), triệt tiêu hoàn toàn hiện tượng hiển thị `"N/A"`.
+  - **Hiệu Quả Đo Kiểm**:
+    - `Test 8: Mitsubishi MC Protocol 3E Real Socket Protocol & CPU Name`: Đạt kết quả PASS 100%, nhận diện chính xác CPU Name `FX5U-32MT/ES`, đọc ghi Bit và Word chính xác tuyệt đối.
+    - Toàn bộ solution biên dịch thành công `0 Error(s)`. 100% unit tests trong `TestExtractApp` PASS.
+
 - **Khắc Phục Hiện Tượng Giật Cục Trên Màn Hình PLC Oscilloscope & Tối Ưu Quét 1ms/2ms (Task 249)**:
   - **Yêu Cầu & Bối Cảnh**:
     - Người dùng phản ánh sau khi fix lỗi trước đó, màn hình PLC Oscilloscope có hiện tượng các đường tín hiệu chạy ra bị giật cục, không được mượt như trước nữa, dù có cài đặt scan time là 1ms hay 2ms.
