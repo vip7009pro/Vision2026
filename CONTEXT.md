@@ -49,6 +49,23 @@
 - Preview được phép tiếp tục khi Global Snapshot rỗng để lấy ảnh từ ImageSource.
 - Lưu template cho Origin, Point và SurfaceCompare hoạt động với nguồn ảnh ImageSource.
 
+- **Thanh 20 Sản Phẩm Gần Nhất (Recent 20 Parts OK/NG Stepped Bar) & Tối Ưu Icon Buttons Trên Tool Editor (Task 251)**:
+  - **Yêu Cầu & Bối Cảnh**:
+    - Bổ sung thanh mô phỏng trực quan dạng 20 nấc (segments) thể hiện lịch sử kiểm tra của 20 con hàng gần nhất. Hàng **OK** hiển thị nấc màu **Xanh lá** (`#10B981`), hàng **NG** hiển thị nấc màu **Đỏ** (`#EF4444`). Luồng chảy xuôi theo chiều từ **Trái sang Phải** (FIFO, con hàng mới nhất ở bên phải, khi đầy 20 nấc thì con cũ nhất bên trái tự động cuộn đi).
+    - Thanh này đặt ngay sau thanh Queue trong thanh công cụ Toolbar của Tool Editor.
+    - Chuyển đổi toàn bộ 9 nút chức năng (`Load Image`, `Capture Camera`, `Run Once`, `Run Continuous`, `Calibration`, `Chessboard Calib`, `Gán Mã - Job`, `Chụp & Lưu Ảnh`, `Bản Đồ Cuộn`) thành các **Icon Button** siêu gọn gàng để thu hẹp tối đa không gian, tạo độ thoáng đãng cho thanh sản phẩm và thanh Queue.
+  - **Giải Pháp Kỹ Thuật Đã Triển Khai**:
+    1. *ViewModel (ToolEditorViewModel.Engine.cs & Inspection.cs)*:
+       - Quản lý vòng đệm `List<bool> _recentPartsHistory` (tối đa 20 con hàng) và 20 cặp Brush thuộc tính `RecentPartSlot0Bg/Border` .. `RecentPartSlot19Bg/Border`.
+       - Hàm `PushRecentPartInspectionResult(bool isOk)` được tự động kích hoạt sau mỗi chu trình kiểm tra (cả Run Once, Run Continuous và PLC Trigger).
+       - Thống kê thời gian thực: `RecentPartsStatusText` (`OK: x | NG: y`), `RecentPartsYieldText` (Tỉ lệ đạt %), và `RecentPartsToolTipText` chi tiết.
+       - Tự động thay đổi màu viền thanh `RecentPartsBorderBrush` (Xanh khi 100% OK, Vàng cam khi có lỗi ít, Đỏ khi có nhiều hơn 5 lỗi NG).
+    2. *Giao Diện View (ToolEditorView.xaml)*:
+       - Chuyển đổi 9 nút thao tác thành Icon Button với kích thước gọn gàng, giữ nguyên màu sắc nhận diện và cung cấp ToolTip giải thích chi tiết.
+       - Bố cục DockPanel thanh công cụ sắp xếp hài hòa từ trái sang phải: `Mã SP` $\rightarrow$ `Icon Buttons` $\rightarrow$ `Queue Bar` $\rightarrow$ `Recent 20 Parts Stepped Bar` $\rightarrow$ `Speed/Time Bar` $\rightarrow$ `Result Badge`.
+    3. *Kiểm Thử Tự Động*:
+       - Thêm `Test 6` trong `ContinuousPipelineTest.cs` kiểm tra chính xác luồng FIFO 20 slot, tỉ lệ Yield rate và reset lịch sử, đạt PASS 100%.
+
 - **Sửa Chữa & Chuẩn Hóa Kết Nối Giao Thức Mitsubishi MC Protocol (Ethernet Socket) (Task 250)**:
   - **Yêu Cầu & Bối Cảnh**:
     - Khi kết nối PLC bằng giao thức Mitsubishi (MC Protocol Ethernet Socket, không qua MX Component), tuy hiển thị `Connected` nhưng thông tin CPU PLC bị rỗng hoặc hiển thị chung chung `Mitsubishi PLC`, đồng thời giá trị các tag `X0`, `X1`, `X3`, `X7`, `Y0`, `D100`... trên PLC Tag Browser và PLC Oscilloscope hiển thị `N/A` hoặc không nhảy giá trị.

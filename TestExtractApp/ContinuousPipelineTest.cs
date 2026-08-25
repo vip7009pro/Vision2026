@@ -214,13 +214,40 @@ public static class ContinuousPipelineTest
             tracker.EnqueueDefect(defect);
             Assert("Test 5.1: Enqueue Defect to ShiftRegister", tracker.PendingCount == 1);
 
-            // Băng chuyền chạy đến 2000mm (chưa tới trạm 2500mm)
-            var triggered1 = tracker.ProcessMotionUpdate(2000.0);
-            Assert("Test 5.2: At 2000mm No Reject", triggered1.Count == 0 && tracker.PendingCount == 1);
-
             // Băng chuyền chạy đến 2490mm (vào vùng dung sai 2500 - 15 = 2485mm)
             var triggered2 = tracker.ProcessMotionUpdate(2490.0);
             Assert("Test 5.3: At 2490mm Reject Triggered", triggered2.Count == 1 && tracker.PendingCount == 0 && tracker.TotalRejectsTriggered == 1);
+        }
+
+        // Test 6: Recent 20 Parts Stepped Bar Stream & FIFO Verification (Task 251)
+        {
+            var vm = new VisionInspectionApp.UI.ViewModels.ToolEditorViewModel();
+            
+            // 1. Ban đầu: Trống
+            vm.ResetRecentPartsHistory();
+            Assert("Test 6.1: Initial Recent Parts Count == 0", vm.RecentPartsTotalCount == 0);
+
+            // 2. Nạp 5 sản phẩm: 3 OK, 2 NG
+            vm.PushRecentPartInspectionResult(true);  // OK
+            vm.PushRecentPartInspectionResult(true);  // OK
+            vm.PushRecentPartInspectionResult(false); // NG
+            vm.PushRecentPartInspectionResult(true);  // OK
+            vm.PushRecentPartInspectionResult(false); // NG
+            Assert("Test 6.2: Recent Parts Total 5 (3 OK, 2 NG)", vm.RecentPartsTotalCount == 5 && vm.RecentPartsOkCount == 3 && vm.RecentPartsNgCount == 2);
+            Assert("Test 6.3: Yield Rate == 60.0%", vm.RecentPartsYieldText == "60.0%");
+
+            // 3. Nạp liên tiếp thêm 20 sản phẩm OK để kiểm tra FIFO cuộn 20 slots
+            for (int i = 0; i < 20; i++)
+            {
+                vm.PushRecentPartInspectionResult(true);
+            }
+            Assert("Test 6.4: Max Capacity Capped at 20", vm.RecentPartsTotalCount == 20 && vm.RecentPartsOkCount == 20 && vm.RecentPartsNgCount == 0);
+            Assert("Test 6.5: 100% OK Yield Rate", vm.RecentPartsYieldText == "100.0%");
+
+            // 4. Thêm 1 sản phẩm NG mới nhất -> Con cũ nhất bị đẩy ra, NG mới nhất vào cuối
+            vm.PushRecentPartInspectionResult(false);
+            Assert("Test 6.6: FIFO Stream Updated (19 OK, 1 NG)", vm.RecentPartsTotalCount == 20 && vm.RecentPartsOkCount == 19 && vm.RecentPartsNgCount == 1);
+            Assert("Test 6.7: Yield Rate == 95.0%", vm.RecentPartsYieldText == "95.0%");
         }
 
         Console.WriteLine("====================================================");

@@ -356,6 +356,8 @@ namespace VisionInspectionApp.UI.ViewModels
 
                 NgReasonsText = string.Join("\n", reasons);
             }
+
+            PushRecentPartInspectionResult(res.Pass);
         }
 
         public string SpecResultsValueHeader => (_config is not null && _config.PixelsPerMm > 0 && Math.Abs(_config.PixelsPerMm - 1.0) > 1e-6) ? "Value (mm)" : "Value (px)";

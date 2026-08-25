@@ -971,12 +971,24 @@ Lộ trình tích hợp tính năng Chụp ảnh từ camera và hỗ trợ các
         3. *Hệ Bát Phân (Octal) Cho Thiết Bị `X`, `Y`*: Nâng cấp `ParseDeviceAddress` tự động nhận diện và chuyển đổi hệ bát phân sang số nguyên.
         4. *Tự Động Kích Hoạt Polling Lock*: `PlcManagerViewModel` tự động giữ `AcquirePollingLock("PlcManager")` ngay khi bấm nút "Kết Nối (Connect)" thành công, nạp đầy Cache trước khi mở các cửa sổ khác. `PlcBrowserViewModel` tra cứu kép theo cả Tag Name và Address.
       - `Hiệu Quả Đạt Được`:
-        - `Test 8: Mitsubishi MC Protocol 3E Real Socket Protocol & CPU Name` trong `PlcTests.cs`: Đạt kết quả PASS 100%, kết nối TCP Socket thực tế, nhận diện CPU Name chính xác, đọc/ghi Bit và Word chuẩn 100%.
+    - [x] Task 251: Bổ sung thanh 20 sản phẩm gần nhất (Recent 20 Parts OK/NG Stepped Bar) & Chuyển đổi các nút Toolbar thành Icon Buttons trên Tool Editor:
+      - `Yêu Cầu & Bối Cảnh`:
+        - Bổ sung thanh mô phỏng trực quan dạng 20 nấc (segments) thể hiện lịch sử kiểm tra của 20 con hàng gần nhất (Xanh = OK, Đỏ = NG), chạy xuôi theo chiều từ Trái sang Phải (FIFO), đặt ngay sau thanh Queue trong Toolbar của Tool Editor.
+        - Chuyển đổi toàn bộ 9 nút chức năng (`Load Image`, `Capture Camera`, `Run Once`, `Run Continuous`, `Calibration`, `Chessboard Calib`, `Gán Mã - Job`, `Chụp & Lưu Ảnh`, `Bản Đồ Cuộn`) thành các Icon Button siêu gọn gàng để thu hẹp không gian, mở rộng diện tích hiển thị cho thanh sản phẩm và thanh Queue.
+      - `Giải Pháp Kỹ Thuật Đã Triển Khai`:
+        1. *ViewModel (ToolEditorViewModel.Engine.cs & Inspection.cs)*:
+           - Quản lý vòng đệm `List<bool> _recentPartsHistory` (tối đa 20 con hàng) và 20 cặp Brush thuộc tính `RecentPartSlot0Bg/Border` .. `RecentPartSlot19Bg/Border`.
+           - Tự động gọi `PushRecentPartInspectionResult(res.Pass)` khi có kết quả kiểm tra mới ở cả chế độ Run Once, Run Continuous và PLC Trigger.
+           - Thống kê thời gian thực `RecentPartsStatusText` (`OK: x | NG: y`), `RecentPartsYieldText` (Tỉ lệ đạt %), và `RecentPartsToolTipText` chi tiết kèm đổi màu viền cảnh báo khi có nhiều lỗi NG.
+        2. *Giao Diện View (ToolEditorView.xaml)*:
+           - Chuyển đổi 9 nút dài thành Icon Buttons với kích thước tiêu chuẩn, padding gọn, icon trực quan và tooltip đầy đủ.
+           - Bố trí DockPanel thanh công cụ hài hòa: `Mã SP` $\rightarrow$ `Icon Buttons` $\rightarrow$ `Queue Bar` $\rightarrow$ `Recent 20 Parts Stepped Bar` $\rightarrow$ `Speed/Time Bar` $\rightarrow$ `Result Badge`.
+        3. *Kiểm Thử Tự Động*:
+           - Bổ sung `Test 6` trong `ContinuousPipelineTest.cs` kiểm tra luồng FIFO 20 slot, tỉ lệ Yield rate và reset lịch sử, đạt PASS 100%.
+      - `Hiệu Quả Đạt Được`:
+        - Tiết kiệm hơn 600px không gian trên Toolbar, giao diện hiện đại, thoáng đãng.
+        - Giúp người vận hành quan sát trực quan ngay tức thì chuỗi 20 con hàng gần nhất chạy từ trái sang phải, nhận biết nhanh tình trạng máy và tỉ lệ lỗi NG trên dây chuyền.
         - Toàn bộ suite test tự động trong `TestExtractApp` đạt PASS 100%.
-
-
-
-
 
 
 

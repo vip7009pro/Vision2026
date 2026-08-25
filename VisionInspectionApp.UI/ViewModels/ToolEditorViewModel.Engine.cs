@@ -1894,6 +1894,13 @@ namespace VisionInspectionApp.UI.ViewModels
         private static readonly SolidColorBrush RubyBrush = new SolidColorBrush(Color.FromRgb(239, 68, 68));
         private static readonly SolidColorBrush RubyBorder = new SolidColorBrush(Color.FromArgb(90, 239, 68, 68));
 
+        private static readonly SolidColorBrush EmptySlotBrush = new SolidColorBrush(Color.FromArgb(24, 128, 128, 128));
+        private static readonly SolidColorBrush EmptySlotBorder = new SolidColorBrush(Color.FromArgb(48, 128, 128, 128));
+        private static readonly SolidColorBrush OkSlotBrush = new SolidColorBrush(Color.FromRgb(16, 185, 129));
+        private static readonly SolidColorBrush OkSlotBorder = new SolidColorBrush(Color.FromRgb(5, 150, 105));
+        private static readonly SolidColorBrush NgSlotBrush = new SolidColorBrush(Color.FromRgb(239, 68, 68));
+        private static readonly SolidColorBrush NgSlotBorder = new SolidColorBrush(Color.FromRgb(220, 38, 38));
+
         static ToolEditorViewModel()
         {
             EmeraldBrush.Freeze();
@@ -1902,6 +1909,13 @@ namespace VisionInspectionApp.UI.ViewModels
             AmberBorder.Freeze();
             RubyBrush.Freeze();
             RubyBorder.Freeze();
+
+            EmptySlotBrush.Freeze();
+            EmptySlotBorder.Freeze();
+            OkSlotBrush.Freeze();
+            OkSlotBorder.Freeze();
+            NgSlotBrush.Freeze();
+            NgSlotBorder.Freeze();
         }
 
         private int _queueCurrentCount = 0;
@@ -1998,6 +2012,179 @@ namespace VisionInspectionApp.UI.ViewModels
                                $"• Số frame bị rớt (Dropped): {_droppedContinuousFramesCount}\n" +
                                $"• Luồng xử lý: {(IsRunningContinuous ? "▶ Đang chạy liên tục" : "⏹ Tạm dừng")}";
         }
+
+        #region Recent 20 Parts Stepped Bar (OK/NG Inspection History)
+
+        private readonly List<bool> _recentPartsHistory = new(20);
+        private readonly object _recentPartsLock = new();
+
+        [ObservableProperty] private string _recentPartsStatusText = "OK: 0 | NG: 0";
+        [ObservableProperty] private string _recentPartsYieldText = "100.0%";
+        [ObservableProperty] private int _recentPartsOkCount = 0;
+        [ObservableProperty] private int _recentPartsNgCount = 0;
+        [ObservableProperty] private int _recentPartsTotalCount = 0;
+        [ObservableProperty] private Brush _recentPartsBorderBrush = EmeraldBorder;
+        [ObservableProperty] private string _recentPartsToolTipText = "🎯 20 Con Hàng Gần Nhất:\n• Chưa có sản phẩm kiểm tra\n• Chạy xuôi: Trái (Cũ) ➔ Phải (Mới)";
+
+        // 20 Slot Brushes cho 20 nấc con hàng (Background & Border)
+        [ObservableProperty] private Brush _recentPartSlot0Bg = EmptySlotBrush;
+        [ObservableProperty] private Brush _recentPartSlot0Border = EmptySlotBorder;
+        [ObservableProperty] private Brush _recentPartSlot1Bg = EmptySlotBrush;
+        [ObservableProperty] private Brush _recentPartSlot1Border = EmptySlotBorder;
+        [ObservableProperty] private Brush _recentPartSlot2Bg = EmptySlotBrush;
+        [ObservableProperty] private Brush _recentPartSlot2Border = EmptySlotBorder;
+        [ObservableProperty] private Brush _recentPartSlot3Bg = EmptySlotBrush;
+        [ObservableProperty] private Brush _recentPartSlot3Border = EmptySlotBorder;
+        [ObservableProperty] private Brush _recentPartSlot4Bg = EmptySlotBrush;
+        [ObservableProperty] private Brush _recentPartSlot4Border = EmptySlotBorder;
+        [ObservableProperty] private Brush _recentPartSlot5Bg = EmptySlotBrush;
+        [ObservableProperty] private Brush _recentPartSlot5Border = EmptySlotBorder;
+        [ObservableProperty] private Brush _recentPartSlot6Bg = EmptySlotBrush;
+        [ObservableProperty] private Brush _recentPartSlot6Border = EmptySlotBorder;
+        [ObservableProperty] private Brush _recentPartSlot7Bg = EmptySlotBrush;
+        [ObservableProperty] private Brush _recentPartSlot7Border = EmptySlotBorder;
+        [ObservableProperty] private Brush _recentPartSlot8Bg = EmptySlotBrush;
+        [ObservableProperty] private Brush _recentPartSlot8Border = EmptySlotBorder;
+        [ObservableProperty] private Brush _recentPartSlot9Bg = EmptySlotBrush;
+        [ObservableProperty] private Brush _recentPartSlot9Border = EmptySlotBorder;
+        [ObservableProperty] private Brush _recentPartSlot10Bg = EmptySlotBrush;
+        [ObservableProperty] private Brush _recentPartSlot10Border = EmptySlotBorder;
+        [ObservableProperty] private Brush _recentPartSlot11Bg = EmptySlotBrush;
+        [ObservableProperty] private Brush _recentPartSlot11Border = EmptySlotBorder;
+        [ObservableProperty] private Brush _recentPartSlot12Bg = EmptySlotBrush;
+        [ObservableProperty] private Brush _recentPartSlot12Border = EmptySlotBorder;
+        [ObservableProperty] private Brush _recentPartSlot13Bg = EmptySlotBrush;
+        [ObservableProperty] private Brush _recentPartSlot13Border = EmptySlotBorder;
+        [ObservableProperty] private Brush _recentPartSlot14Bg = EmptySlotBrush;
+        [ObservableProperty] private Brush _recentPartSlot14Border = EmptySlotBorder;
+        [ObservableProperty] private Brush _recentPartSlot15Bg = EmptySlotBrush;
+        [ObservableProperty] private Brush _recentPartSlot15Border = EmptySlotBorder;
+        [ObservableProperty] private Brush _recentPartSlot16Bg = EmptySlotBrush;
+        [ObservableProperty] private Brush _recentPartSlot16Border = EmptySlotBorder;
+        [ObservableProperty] private Brush _recentPartSlot17Bg = EmptySlotBrush;
+        [ObservableProperty] private Brush _recentPartSlot17Border = EmptySlotBorder;
+        [ObservableProperty] private Brush _recentPartSlot18Bg = EmptySlotBrush;
+        [ObservableProperty] private Brush _recentPartSlot18Border = EmptySlotBorder;
+        [ObservableProperty] private Brush _recentPartSlot19Bg = EmptySlotBrush;
+        [ObservableProperty] private Brush _recentPartSlot19Border = EmptySlotBorder;
+
+        public void PushRecentPartInspectionResult(bool isOk)
+        {
+            lock (_recentPartsLock)
+            {
+                if (_recentPartsHistory.Count >= 20)
+                {
+                    _recentPartsHistory.RemoveAt(0); // Bỏ con hàng cũ nhất ở đầu
+                }
+                _recentPartsHistory.Add(isOk); // Thêm con hàng mới nhất vào cuối (chạy xuôi từ trái sang phải)
+            }
+
+            if (System.Windows.Application.Current?.Dispatcher != null && !System.Windows.Application.Current.Dispatcher.CheckAccess())
+            {
+                System.Windows.Application.Current.Dispatcher.BeginInvoke(new Action(UpdateRecentPartsVisuals));
+            }
+            else
+            {
+                UpdateRecentPartsVisuals();
+            }
+        }
+
+        public void ResetRecentPartsHistory()
+        {
+            lock (_recentPartsLock)
+            {
+                _recentPartsHistory.Clear();
+            }
+
+            if (System.Windows.Application.Current?.Dispatcher != null && !System.Windows.Application.Current.Dispatcher.CheckAccess())
+            {
+                System.Windows.Application.Current.Dispatcher.BeginInvoke(new Action(UpdateRecentPartsVisuals));
+            }
+            else
+            {
+                UpdateRecentPartsVisuals();
+            }
+        }
+
+        public void UpdateRecentPartsVisuals()
+        {
+            List<bool> snapshot;
+            lock (_recentPartsLock)
+            {
+                snapshot = _recentPartsHistory.ToList();
+            }
+
+            int total = snapshot.Count;
+            int okCount = snapshot.Count(x => x);
+            int ngCount = total - okCount;
+            double yield = total > 0 ? (okCount * 100.0 / total) : 100.0;
+
+            RecentPartsTotalCount = total;
+            RecentPartsOkCount = okCount;
+            RecentPartsNgCount = ngCount;
+            RecentPartsStatusText = $"OK: {okCount} | NG: {ngCount}";
+            RecentPartsYieldText = $"{yield:F1}%";
+
+            if (ngCount > 0)
+            {
+                RecentPartsBorderBrush = ngCount >= 5 ? RubyBorder : AmberBorder;
+            }
+            else
+            {
+                RecentPartsBorderBrush = EmeraldBorder;
+            }
+
+            RecentPartsToolTipText = $"🎯 Lịch Sử 20 Sản Phẩm Gần Nhất:\n" +
+                                     $"• Đã kiểm tra: {total}/20 con hàng\n" +
+                                     $"• Đạt (OK): {okCount} con hàng\n" +
+                                     $"• Lỗi (NG): {ngCount} con hàng\n" +
+                                     $"• Tỉ lệ đạt (Yield): {yield:F1}%\n" +
+                                     $"• Chiều luồng: Trái (Cũ) ➔ Phải (Mới nhất)";
+
+            for (int i = 0; i < 20; i++)
+            {
+                Brush bg = EmptySlotBrush;
+                Brush border = EmptySlotBorder;
+
+                if (i < snapshot.Count)
+                {
+                    bool isOk = snapshot[i];
+                    bg = isOk ? OkSlotBrush : NgSlotBrush;
+                    border = isOk ? OkSlotBorder : NgSlotBorder;
+                }
+
+                SetRecentSlotVisual(i, bg, border);
+            }
+        }
+
+        private void SetRecentSlotVisual(int slotIndex, Brush bg, Brush border)
+        {
+            switch (slotIndex)
+            {
+                case 0: RecentPartSlot0Bg = bg; RecentPartSlot0Border = border; break;
+                case 1: RecentPartSlot1Bg = bg; RecentPartSlot1Border = border; break;
+                case 2: RecentPartSlot2Bg = bg; RecentPartSlot2Border = border; break;
+                case 3: RecentPartSlot3Bg = bg; RecentPartSlot3Border = border; break;
+                case 4: RecentPartSlot4Bg = bg; RecentPartSlot4Border = border; break;
+                case 5: RecentPartSlot5Bg = bg; RecentPartSlot5Border = border; break;
+                case 6: RecentPartSlot6Bg = bg; RecentPartSlot6Border = border; break;
+                case 7: RecentPartSlot7Bg = bg; RecentPartSlot7Border = border; break;
+                case 8: RecentPartSlot8Bg = bg; RecentPartSlot8Border = border; break;
+                case 9: RecentPartSlot9Bg = bg; RecentPartSlot9Border = border; break;
+                case 10: RecentPartSlot10Bg = bg; RecentPartSlot10Border = border; break;
+                case 11: RecentPartSlot11Bg = bg; RecentPartSlot11Border = border; break;
+                case 12: RecentPartSlot12Bg = bg; RecentPartSlot12Border = border; break;
+                case 13: RecentPartSlot13Bg = bg; RecentPartSlot13Border = border; break;
+                case 14: RecentPartSlot14Bg = bg; RecentPartSlot14Border = border; break;
+                case 15: RecentPartSlot15Bg = bg; RecentPartSlot15Border = border; break;
+                case 16: RecentPartSlot16Bg = bg; RecentPartSlot16Border = border; break;
+                case 17: RecentPartSlot17Bg = bg; RecentPartSlot17Border = border; break;
+                case 18: RecentPartSlot18Bg = bg; RecentPartSlot18Border = border; break;
+                case 19: RecentPartSlot19Bg = bg; RecentPartSlot19Border = border; break;
+            }
+        }
+
+        #endregion
 
         private void UpdateContinuousStats()
         {

@@ -35,42 +35,109 @@
         </Grid.RowDefinitions>
 
         <DockPanel Grid.Row="0" LastChildFill="False" Margin="0,0,0,4">
-            <TextBlock Text="Mã Sản Phẩm:" VerticalAlignment="Center" FontWeight="SemiBold" Margin="0,0,6,0" Foreground="{DynamicResource TextBrush}" />
-            <TextBox Width="140" Text="{Binding ProductCode, UpdateSourceTrigger=LostFocus}" Margin="0,0,12,0" VerticalContentAlignment="Center" Padding="4,2" />
+            <TextBlock Text="Mã SP:" VerticalAlignment="Center" FontWeight="SemiBold" Margin="0,0,4,0" Foreground="{DynamicResource TextBrush}" />
+            <TextBox Width="110" Text="{Binding ProductCode, UpdateSourceTrigger=LostFocus}" Margin="0,0,8,0" VerticalContentAlignment="Center" Padding="4,2" />
 
-            <Button Content="🖼️ Load Image" Command="{Binding LoadPreviewImageCommand}" Margin="0,0,6,0" Padding="10,4" />
-            <Button Content="{Binding CaptureButtonText}" Command="{Binding CaptureCameraImageCommand}" Margin="0,0,14,0" Padding="10,4" />
-
-            <Button Command="{Binding RunOnceCommand}" Margin="0,0,6,0" Padding="12,4" Background="#0F5FA8" Foreground="White" BorderThickness="0" ToolTip="Chạy Flow 1 lần duy nhất (Nguồn thư mục: nạp ảnh kế tiếp)">
-                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                    <TextBlock Text="▶" FontFamily="Segoe UI Emoji" FontSize="13" Margin="0,0,5,0" VerticalAlignment="Center"/>
-                    <TextBlock Text="Run Once" FontWeight="SemiBold" VerticalAlignment="Center"/>
-                </StackPanel>
+            <!-- 1. Load Image Icon Button -->
+            <Button Command="{Binding LoadPreviewImageCommand}" Margin="0,0,4,0" Padding="8,4" ToolTip="Tải ảnh xem trước từ file (Load Image)">
+                <TextBlock Text="🖼️" FontSize="13" VerticalAlignment="Center"/>
             </Button>
 
-            <Button Command="{Binding RunContinuousCommand}" Margin="0,0,14,0" Padding="12,4" Background="{Binding RunContinuousButtonBackgroundBrush}" Foreground="White" BorderThickness="0" ToolTip="{Binding RunContinuousButtonToolTip}">
-                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                    <TextBlock Text="{Binding RunContinuousButtonIcon}" FontFamily="Segoe UI Emoji" FontSize="13" Margin="0,0,5,0" VerticalAlignment="Center"/>
-                    <TextBlock Text="{Binding RunContinuousButtonText}" FontWeight="SemiBold" VerticalAlignment="Center"/>
-                </StackPanel>
+            <!-- 2. Capture Camera Icon Button -->
+            <Button Command="{Binding CaptureCameraImageCommand}" Margin="0,0,8,0" Padding="8,4" ToolTip="{Binding CaptureButtonText}">
+                <TextBlock Text="📷" FontSize="13" VerticalAlignment="Center"/>
             </Button>
 
-            <Button Content="📐 Calibration" Command="{Binding OpenCalibrationDialogCommand}" Margin="0,0,6,0" Padding="10,4" Background="#E65100" Foreground="White" BorderThickness="0" ToolTip="Hiệu chuẩn tỉ lệ Pixels/mm trực tiếp trên Job hiện tại" />
-            <Button Content="♟ Chessboard Calib" Command="{Binding OpenChessboardCalibrationDialogCommand}" Margin="0,0,6,0" Padding="10,4" Background="#6A1B9A" Foreground="White" BorderThickness="0" ToolTip="Hiệu chuẩn camera bằng bảng Chessboard (tự động tính Intrinsic, Distortion, Pixels/mm)" />
-            <Button Content="🏷️ Gán Mã - Job" Command="{Binding OpenProductAssignDialogCommand}" Margin="0,0,6,0" Padding="10,4" Background="#0288D1" Foreground="White" BorderThickness="0" ToolTip="Gán mã sản phẩm trong CSDL cho tệp Job đang mở" />
-            <Button Content="💾 Chụp &amp; Lưu Ảnh" Command="{Binding CaptureAndSaveImageCommand}" Margin="0,0,6,0" Padding="10,4" Background="#10B981" Foreground="White" BorderThickness="0" ToolTip="Chụp 1 frame nguyên bản chất lượng cao từ Camera và lưu ra file ảnh (PNG/BMP) để mang đi tạo/chỉnh sửa Job trên máy tính khác" />
-            <Button Content="📜 Bản Đồ Cuộn" Command="{Binding OpenRollDefectMapCommand}" Margin="0,0,12,0" Padding="10,4" Background="#7C3AED" Foreground="White" BorderThickness="0" ToolTip="Mở giao diện Bản đồ khuyết tật cuộn thời gian thực và xuất báo cáo chất lượng cuộn (JSON, CSV, HTML)" />
+            <!-- 3. Run Once Icon Button -->
+            <Button Command="{Binding RunOnceCommand}" Margin="0,0,4,0" Padding="10,4" Background="#0F5FA8" Foreground="White" BorderThickness="0" ToolTip="Chạy Flow 1 lần duy nhất (Run Once)">
+                <TextBlock Text="▶" FontFamily="Segoe UI Emoji" FontSize="13" FontWeight="Bold" VerticalAlignment="Center"/>
+            </Button>
 
-            <!-- Continuous Running Speed & Time (Right-Aligned) -->
-            <Border DockPanel.Dock="Right" Background="{DynamicResource PanelBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="8" Padding="10,4" VerticalAlignment="Center" Margin="8,0,0,0" ToolTip="Tốc độ kiểm tra tức thời và tổng thời gian chạy liên tục">
+            <!-- 4. Run Continuous Icon Button -->
+            <Button Command="{Binding RunContinuousCommand}" Margin="0,0,8,0" Padding="10,4" Background="{Binding RunContinuousButtonBackgroundBrush}" Foreground="White" BorderThickness="0" ToolTip="{Binding RunContinuousButtonToolTip}">
+                <TextBlock Text="{Binding RunContinuousButtonIcon}" FontFamily="Segoe UI Emoji" FontSize="13" FontWeight="Bold" VerticalAlignment="Center"/>
+            </Button>
+
+            <!-- 5. Calibration Icon Button -->
+            <Button Command="{Binding OpenCalibrationDialogCommand}" Margin="0,0,4,0" Padding="8,4" Background="#E65100" Foreground="White" BorderThickness="0" ToolTip="Hiệu chuẩn tỉ lệ Pixels/mm trực tiếp trên Job hiện tại (Calibration)">
+                <TextBlock Text="📐" FontSize="13" VerticalAlignment="Center"/>
+            </Button>
+
+            <!-- 6. Chessboard Calib Icon Button -->
+            <Button Command="{Binding OpenChessboardCalibrationDialogCommand}" Margin="0,0,4,0" Padding="8,4" Background="#6A1B9A" Foreground="White" BorderThickness="0" ToolTip="Hiệu chuẩn camera bằng bảng Chessboard (Chessboard Calib)">
+                <TextBlock Text="♟" FontSize="13" VerticalAlignment="Center"/>
+            </Button>
+
+            <!-- 7. Gán Mã - Job Icon Button -->
+            <Button Command="{Binding OpenProductAssignDialogCommand}" Margin="0,0,4,0" Padding="8,4" Background="#0288D1" Foreground="White" BorderThickness="0" ToolTip="Gán mã sản phẩm trong CSDL cho tệp Job đang mở (Assign Product - Job)">
+                <TextBlock Text="🏷️" FontSize="13" VerticalAlignment="Center"/>
+            </Button>
+
+            <!-- 8. Chụp & Lưu Ảnh Icon Button -->
+            <Button Command="{Binding CaptureAndSaveImageCommand}" Margin="0,0,4,0" Padding="8,4" Background="#10B981" Foreground="White" BorderThickness="0" ToolTip="Chụp 1 frame nguyên bản chất lượng cao từ Camera và lưu ra file ảnh PNG/BMP (Capture &amp; Save Image)">
+                <TextBlock Text="💾" FontSize="13" VerticalAlignment="Center"/>
+            </Button>
+
+            <!-- 9. Bản Đồ Cuộn Icon Button -->
+            <Button Command="{Binding OpenRollDefectMapCommand}" Margin="0,0,8,0" Padding="8,4" Background="#7C3AED" Foreground="White" BorderThickness="0" ToolTip="Mở giao diện Bản đồ khuyết tật cuộn thời gian thực &amp; Xuất báo cáo (Roll Defect Map)">
+                <TextBlock Text="📜" FontSize="13" VerticalAlignment="Center"/>
+            </Button>
+
+            <!-- 1. Result Badge (Right-Aligned) -->
+            <Border DockPanel.Dock="Right" Background="{Binding ResultBackgroundBrush}" BorderBrush="{Binding ResultBorderBrush}" BorderThickness="1" CornerRadius="12" Padding="12,3" VerticalAlignment="Center" Margin="6,0,0,0">
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Text="Result: " FontSize="11" Foreground="{DynamicResource TextMutedBrush}" VerticalAlignment="Center"/>
+                    <TextBlock Text="{Binding ResultStatusText}" Foreground="{Binding ResultForegroundBrush}" FontSize="12" FontWeight="Bold" VerticalAlignment="Center"/>
+                </StackPanel>
+            </Border>
+
+            <!-- 2. Continuous Running Speed & Time (Right-Aligned) -->
+            <Border DockPanel.Dock="Right" Background="{DynamicResource PanelBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="8" Padding="10,4" VerticalAlignment="Center" Margin="6,0,0,0" ToolTip="Tốc độ kiểm tra tức thời và tổng thời gian chạy liên tục">
                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                     <TextBlock Text="⚡" FontSize="12" VerticalAlignment="Center" Margin="0,0,4,0"/>
                     <TextBlock Text="{Binding ContinuousElapsedAndSpeedText}" FontWeight="Bold" FontSize="11.5" Foreground="#10B981" VerticalAlignment="Center"/>
                 </StackPanel>
             </Border>
 
-            <!-- Queue Visualization Status Bar (Right-Aligned, Stepped Bar 16 Segments) -->
-            <Border DockPanel.Dock="Right" Background="{DynamicResource PanelBackgroundBrush}" BorderBrush="{Binding QueueBorderBrush}" BorderThickness="1" CornerRadius="8" Padding="8,4" VerticalAlignment="Center" Margin="8,0,0,0" ToolTip="{Binding QueueToolTipText}">
+            <!-- 3. Recent 20 Parts Stepped Bar (Right-Aligned, OK/NG Inspection History) -->
+            <Border DockPanel.Dock="Right" Background="{DynamicResource PanelBackgroundBrush}" BorderBrush="{Binding RecentPartsBorderBrush}" BorderThickness="1" CornerRadius="8" Padding="8,4" VerticalAlignment="Center" Margin="6,0,0,0" ToolTip="{Binding RecentPartsToolTipText}">
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <TextBlock Text="🎯" FontSize="12" VerticalAlignment="Center" Margin="0,0,4,0"/>
+                    <TextBlock Text="Recent:" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource TextMutedBrush}" VerticalAlignment="Center" Margin="0,0,4,0"/>
+                    <TextBlock Text="{Binding RecentPartsStatusText}" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource TextBrush}" VerticalAlignment="Center" Margin="0,0,6,0"/>
+
+                    <!-- Discrete Stepped Slots (20 items, Left-to-Right Stream) -->
+                    <Border Background="#12000000" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="4" Padding="2,2" VerticalAlignment="Center">
+                        <StackPanel Orientation="Horizontal">
+                            <!-- Slot 0 (Oldest) -->
+                            <Border Width="6" Height="14" CornerRadius="2" Margin="1,0" BorderThickness="1" Background="{Binding RecentPartSlot0Bg}" BorderBrush="{Binding RecentPartSlot0Border}"/>
+                            <Border Width="6" Height="14" CornerRadius="2" Margin="1,0" BorderThickness="1" Background="{Binding RecentPartSlot1Bg}" BorderBrush="{Binding RecentPartSlot1Border}"/>
+                            <Border Width="6" Height="14" CornerRadius="2" Margin="1,0" BorderThickness="1" Background="{Binding RecentPartSlot2Bg}" BorderBrush="{Binding RecentPartSlot2Border}"/>
+                            <Border Width="6" Height="14" CornerRadius="2" Margin="1,0" BorderThickness="1" Background="{Binding RecentPartSlot3Bg}" BorderBrush="{Binding RecentPartSlot3Border}"/>
+                            <Border Width="6" Height="14" CornerRadius="2" Margin="1,0" BorderThickness="1" Background="{Binding RecentPartSlot4Bg}" BorderBrush="{Binding RecentPartSlot4Border}"/>
+                            <Border Width="6" Height="14" CornerRadius="2" Margin="1,0" BorderThickness="1" Background="{Binding RecentPartSlot5Bg}" BorderBrush="{Binding RecentPartSlot5Border}"/>
+                            <Border Width="6" Height="14" CornerRadius="2" Margin="1,0" BorderThickness="1" Background="{Binding RecentPartSlot6Bg}" BorderBrush="{Binding RecentPartSlot6Border}"/>
+                            <Border Width="6" Height="14" CornerRadius="2" Margin="1,0" BorderThickness="1" Background="{Binding RecentPartSlot7Bg}" BorderBrush="{Binding RecentPartSlot7Border}"/>
+                            <Border Width="6" Height="14" CornerRadius="2" Margin="1,0" BorderThickness="1" Background="{Binding RecentPartSlot8Bg}" BorderBrush="{Binding RecentPartSlot8Border}"/>
+                            <Border Width="6" Height="14" CornerRadius="2" Margin="1,0" BorderThickness="1" Background="{Binding RecentPartSlot9Bg}" BorderBrush="{Binding RecentPartSlot9Border}"/>
+                            <Border Width="6" Height="14" CornerRadius="2" Margin="1,0" BorderThickness="1" Background="{Binding RecentPartSlot10Bg}" BorderBrush="{Binding RecentPartSlot10Border}"/>
+                            <Border Width="6" Height="14" CornerRadius="2" Margin="1,0" BorderThickness="1" Background="{Binding RecentPartSlot11Bg}" BorderBrush="{Binding RecentPartSlot11Border}"/>
+                            <Border Width="6" Height="14" CornerRadius="2" Margin="1,0" BorderThickness="1" Background="{Binding RecentPartSlot12Bg}" BorderBrush="{Binding RecentPartSlot12Border}"/>
+                            <Border Width="6" Height="14" CornerRadius="2" Margin="1,0" BorderThickness="1" Background="{Binding RecentPartSlot13Bg}" BorderBrush="{Binding RecentPartSlot13Border}"/>
+                            <Border Width="6" Height="14" CornerRadius="2" Margin="1,0" BorderThickness="1" Background="{Binding RecentPartSlot14Bg}" BorderBrush="{Binding RecentPartSlot14Border}"/>
+                            <Border Width="6" Height="14" CornerRadius="2" Margin="1,0" BorderThickness="1" Background="{Binding RecentPartSlot15Bg}" BorderBrush="{Binding RecentPartSlot15Border}"/>
+                            <Border Width="6" Height="14" CornerRadius="2" Margin="1,0" BorderThickness="1" Background="{Binding RecentPartSlot16Bg}" BorderBrush="{Binding RecentPartSlot16Border}"/>
+                            <Border Width="6" Height="14" CornerRadius="2" Margin="1,0" BorderThickness="1" Background="{Binding RecentPartSlot17Bg}" BorderBrush="{Binding RecentPartSlot17Border}"/>
+                            <Border Width="6" Height="14" CornerRadius="2" Margin="1,0" BorderThickness="1" Background="{Binding RecentPartSlot18Bg}" BorderBrush="{Binding RecentPartSlot18Border}"/>
+                            <!-- Slot 19 (Newest) -->
+                            <Border Width="6" Height="14" CornerRadius="2" Margin="1,0" BorderThickness="1" Background="{Binding RecentPartSlot19Bg}" BorderBrush="{Binding RecentPartSlot19Border}"/>
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+            </Border>
+
+            <!-- 4. Queue Visualization Status Bar (Right-Aligned, Stepped Bar 16 Segments) -->
+            <Border DockPanel.Dock="Right" Background="{DynamicResource PanelBackgroundBrush}" BorderBrush="{Binding QueueBorderBrush}" BorderThickness="1" CornerRadius="8" Padding="8,4" VerticalAlignment="Center" Margin="6,0,0,0" ToolTip="{Binding QueueToolTipText}">
                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                     <TextBlock Text="📦" FontSize="12" VerticalAlignment="Center" Margin="0,0,4,0"/>
                     <TextBlock Text="Queue:" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource TextMutedBrush}" VerticalAlignment="Center" Margin="0,0,4,0"/>
@@ -336,13 +403,6 @@
                             </Border>
                         </StackPanel>
                     </Border>
-                </StackPanel>
-            </Border>
-
-            <Border Background="{Binding ResultBackgroundBrush}" BorderBrush="{Binding ResultBorderBrush}" BorderThickness="1" CornerRadius="12" Padding="12,3" VerticalAlignment="Center">
-                <StackPanel Orientation="Horizontal">
-                    <TextBlock Text="Result: " FontSize="11" Foreground="{DynamicResource TextMutedBrush}" VerticalAlignment="Center"/>
-                    <TextBlock Text="{Binding ResultStatusText}" Foreground="{Binding ResultForegroundBrush}" FontSize="12" FontWeight="Bold" VerticalAlignment="Center"/>
                 </StackPanel>
             </Border>
         </DockPanel>

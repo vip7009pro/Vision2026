@@ -186,6 +186,28 @@ namespace VisionInspectionApp.UI.ViewModels
         public Application.PLC.Services.PlcHeartbeatWatchdog PlcHeartbeatWatchdog => _plcHeartbeatWatchdog;
         public Application.PLC.Services.IndustrialHandshakeStateMachine HandshakeStateMachine => _handshakeStateMachine;
 
+        public ToolEditorViewModel()
+        {
+            UndoManager = new UndoRedoManager();
+            UndoCommand = new RelayCommand(() => UndoManager.Undo(), () => UndoManager.CanUndo);
+            RedoCommand = new RelayCommand(() => UndoManager.Redo(), () => UndoManager.CanRedo);
+            _configService = null!;
+            _storeOptions = null!;
+            _sharedImage = null!;
+            _preprocessor = null!;
+            _lineDetector = null!;
+            _inspectionService = null!;
+            _cameraService = null!;
+            _jobService = null!;
+            _plcManagerService = null!;
+            _dbManagerService = null!;
+            _motionSyncService = new Application.PLC.Services.PlcMotionSyncService(null);
+            _shiftRegisterTracker = new Application.PLC.Services.ShiftRegisterTracker(null);
+            _plcHeartbeatWatchdog = new Application.PLC.Services.PlcHeartbeatWatchdog(null);
+            _handshakeStateMachine = new Application.PLC.Services.IndustrialHandshakeStateMachine(null);
+            _autoSaveTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(2) };
+        }
+
         public ToolEditorViewModel(IConfigService configService, ConfigStoreOptions storeOptions, SharedImageContext sharedImage, ImagePreprocessor preprocessor, LineDetector lineDetector, IInspectionService inspectionService, CameraService cameraService, IJobService jobService, UndoRedoManager undoManager, Application.PLC.Services.IPlcManagerService plcManagerService, Application.DB.Services.IDbManagerService dbManagerService, IRecentJobsService? recentJobsService = null, IServiceProvider? serviceProvider = null)
         {
             _serviceProvider = serviceProvider;
