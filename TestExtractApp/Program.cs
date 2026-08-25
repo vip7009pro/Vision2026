@@ -20,7 +20,8 @@ class Program
         ColorDiffTest.RunTests();
         RecentJobsAndCalibrationTest.RunTests();
         IconGenerator.GenerateAppIcons();
-        IconGenerator.VerifyExeIcon();
+        ContinuousPipelineTest.RunTestsAsync().GetAwaiter().GetResult();
+        PlcTagCsvServiceTest.RunTests();
         ManualInspectionTest.RunTests();
     }
 }

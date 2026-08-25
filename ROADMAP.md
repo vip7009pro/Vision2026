@@ -918,7 +918,27 @@ Lộ trình tích hợp tính năng Chụp ảnh từ camera và hỗ trợ các
           2. **SoftTrigger** (Software Trigger / Simulator / Stream): Chạy Task vòng lặp tuần tự chụp frame qua `_cameraService.CaptureSnapshotAsync(...)`, xử lý inspection qua `ProcessContinuousFrameAsync(...)`, đo thời gian thực thi bằng `Stopwatch` và ngủ bù chính xác `delayMs = Math.Max(0, interval - elapsed)`.
       - `Hiệu Quả Đạt Được`:
         - Chu kỳ chụp và xử lý frame khi chạy Continuous với SoftTrigger được kiểm soát chuẩn xác 100% theo đúng `Interval (ms)` đã cài đặt (ví dụ `500ms` đạt chuẩn `~2.0 pcs/s`, `1000ms` đạt chuẩn `~1.0 pcs/s`).
-        - Toàn bộ solution biên dịch 0 Error(s), 100% test suite trong `TestExtractApp` PASS.
+    - [x] Task 246: Tối ưu hóa Bắt tay Handshake PLC & Tracking Reject Không Dừng (Continuous On-the-Fly):
+      - `Nguyên Nhân Gốc Rễ Đã Khắc Phục`:
+        - Cờ `VisionReady` ($Y_1$) không được phục hồi về `1` sau `CompleteHandshakeAsync`, khiến PLC bị đứng im sau con hàng đầu tiên.
+        - Lệnh `CompleteHandshakeAsync` gọi dạng fire-and-forget `_ = ...` gây xung đột Race Condition khi có nhiều frame trong Queue.
+        - `CreateFrameMetadata` được gán sau khi Inspect làm trôi lệch tọa độ Encoder 30-50mm.
+      - `Giải Pháp Triển Khai`:
+        - `IndustrialHandshakeStateMachine.cs`: Tự động phục hồi $Y_1 = 1$ (`ReadyTagName = true`) khi kết thúc chu trình và chuyển trạng thái `Complete` -> `Armed`; bổ sung `SetIdleAsync()` hạ cờ an toàn khi dừng.
+        - `ContinuousFrameEnvelope.cs`: Tạo cấu trúc bao gói `Mat Frame` và `FrameMetadata`, chốt tức thì vị trí Encoder lúc camera bắt frame.
+        - `ToolEditorViewModel.Engine.cs`: Nâng cấp hàng đợi sang `BoundedChannel<ContinuousFrameEnvelope>`, gọi `SetReadyAsync()` khi bắt đầu flow và `await CompleteHandshakeAsync(...)` đồng bộ.
+        - `ContinuousPipelineTest.cs`: Xây dựng 12 unit tests tự động kiểm thử toàn bộ vòng đời Envelope, Burst Producer, Handshake Transitions và Shift Register Millimeter Reject.
+      - `Hiệu Quả Đạt Được`:
+    - [x] Task 247: Tích hợp tính năng Import / Export PLC Tags CSV trong Cửa sổ PLC Manager:
+      - `Yêu Cầu & Bối Cảnh`:
+        - Bổ sung công cụ Import / Export danh bạ biến (PLC Tags) trực tiếp trong Tab 1: Kết Nối & Tags của cửa sổ PLC & Industrial Motion.
+        - Hỗ trợ đầy đủ các định dạng: **Mitsubishi GX Works 3 Global Labels CSV**, **GX Works Device Comments CSV**, và **Standard PLC Tags CSV**.
+      - `Giải Pháp Triển Khai`:
+        - `PlcTagCsvService.cs`: Xây dựng module nhận diện tự động định dạng CSV, parse RFC 4180, chuyển đổi kiểu dữ liệu Mitsubishi GX Works/IEC sang `PlcDataType`, và hỗ trợ 3 kiểu xuất file CSV.
+        - `PlcManagerViewModel.cs` & `PlcManagerWindow.xaml`: Bổ sung các lệnh `ImportTagsCommand`, `ExportTagsCommand`, tích hợp giao diện DockPanel trực quan.
+        - `PlcTagCsvServiceTest.cs`: Bổ sung 25 bài kiểm thử tự động xác thực toàn diện mọi định dạng CSV và round-trip xuất nhập $\rightarrow$ **PASS 25/25 (100%)**.
+      - `Hiệu Quả Đạt Được`:
+        - Kỹ sư PLC có thể nạp hàng trăm biến trực tiếp từ file export của Mitsubishi GX Works 3 hoặc GX Works 2 chỉ với 1 cú click chuột, không cần gõ tay từng tag.
 
 
 

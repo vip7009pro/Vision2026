@@ -186,10 +186,19 @@
                                     </DataGrid.Columns>
                                 </DataGrid>
 
-                                <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,8,0,0">
-                                    <Button Content="➕ Thêm Tag" Command="{Binding AddTagCommand}" Padding="8,4" Margin="0,0,6,0"/>
-                                    <Button Content="🗑 Xóa Tag" Command="{Binding DeleteTagCommand}" Padding="8,4"/>
-                                </StackPanel>
+                                <DockPanel Grid.Row="2" Margin="0,8,0,0">
+                                    <!-- Import / Export CSV (GX Works / Standard) -->
+                                    <StackPanel DockPanel.Dock="Left" Orientation="Horizontal">
+                                        <Button Content="📥 Import CSV (GX Works / Standard)" Command="{Binding ImportTagsCommand}" Padding="10,4" Margin="0,0,6,0" FontWeight="SemiBold" ToolTip="Nạp danh bạ biến từ tệp CSV (Hỗ trợ định dạng GX Works 3 Global Labels, GX Works Device Comments và Standard CSV)"/>
+                                        <Button Content="📤 Export CSV" Command="{Binding ExportTagsCommand}" Padding="10,4" ToolTip="Xuất danh bạ biến của PLC hiện tại ra tệp CSV (Tùy chọn Standard, GX Works Global Labels hoặc Device Comments)"/>
+                                    </StackPanel>
+
+                                    <!-- Add / Delete Tag -->
+                                    <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" HorizontalAlignment="Right">
+                                        <Button Content="➕ Thêm Tag" Command="{Binding AddTagCommand}" Padding="8,4" Margin="0,0,6,0"/>
+                                        <Button Content="🗑 Xóa Tag" Command="{Binding DeleteTagCommand}" Padding="8,4"/>
+                                    </StackPanel>
+                                </DockPanel>
                             </Grid>
                         </Border>
                     </Grid>

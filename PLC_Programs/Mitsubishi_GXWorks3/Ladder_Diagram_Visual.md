@@ -11,8 +11,12 @@ graph LR
         X0["X0 (PLC Heartbeat)"]
         X1["X1 (PLC Ack)"]
         M10["M10 (PLC Trigger)"]
+        M20["M20 (Latch S_trigger Encoder)"]
+        M30["M30 (Push Reject FIFO)"]
+        M31["M31 (Pop In-Flight Pass)"]
         D1000["D1000 (Encoder Pulses)"]
         D1002["D1002 (Line Speed)"]
+        D1004["D1004 (Position mm Float)"]
         Y10["Y10 (Line Interlock / E-Stop)"]
         Y20["Y20 (Reject Cylinder)"]
     end
@@ -30,15 +34,15 @@ graph LR
     X0 -->|100ms Toggle| VISION
     X1 -->|Handshake Ack| VISION
     M10 -->|Capture Frame| VISION
-    D1000 -->|Motion Sync| VISION
-    D1002 -->|Speed Sync| VISION
+    D1000 -->|Motion Sync Pulses| VISION
+    D1004 -->|Absolute Position mm| VISION
 
     VISION -->|100ms Toggle| Y0
-    VISION -->|State Status| Y1
+    VISION -->|Ready for Trigger| Y1
     VISION -->|Inspecting| Y2
     VISION -->|Done Pulse| Y3
-    VISION -->|Results| Y4
-    VISION -->|Results| Y5
+    VISION -->|Pass Result| Y4
+    VISION -->|NG Result| Y5
     VISION -->|Pose & Measurements| D200
 ```
 
@@ -86,25 +90,30 @@ graph LR
 
 ---
 
-### 🟢 MẠNG 3: Bắt Tay Kích Hoạt Chụp Ảnh (Handshake Trigger)
-*Khi cảm biến phôi `X2` phát hiện hàng vào đúng vị trí và Vision PC sẵn sàng (`Y1=1`, `Y2=0`, không lỗi), PLC phát 1 xung `M10` kích camera chụp.*
+### 🟢 MẠNG 3: Bắt Tay Kích Hoạt Chụp Ảnh & Chốt Tọa Độ Encoder Lúc Chụp (In-Flight Latch)
+*Khi cảm biến phôi `X2` phát hiện hàng vào đúng vị trí và Vision PC sẵn sàng (`Y1=1`, `Y2=0`, không lỗi), PLC phát xung `M10` kích camera chụp và `M20` chốt ngay tọa độ $S_{\text{trigger}} = D1004$.*
 
 ```text
   X2 (Sensor)   Y1 (Vision Ready)  M202 (No Fault)  Y2 (Not Busy)
-------[ ]--------------[ ]---------------[/]--------------[/]-----[ PLS M10 ]- (Bắn xung Trigger)
+------[ ]--------------[ ]---------------[/]--------------[/]----+----[ PLS M10 ]- (Bắn xung Trigger)
+                                                                 |
+                                                                 +----[ PLS M20 ]- (Chốt tọa độ S_trigger)
 ```
 
 ---
 
 ### 🟢 MẠNG 4: Nhận Kết Quả Kiểm Tra & Bắn Tín Hiệu PLC Ack (Handshake Complete)
-*Khi Vision hoàn thành tính toán (`Y3=1`), nếu sản phẩm NG (`Y5=1`) thì kích hoạt cờ `M30` nạp vào Shift Register, đồng thời bật `X1 (PLC Ack)` để báo cho Vision PC biết PLC đã chốt kết quả.*
+*Khi Vision hoàn thành tính toán (`Y3=1`), phân loại Pass/NG và bật `X1 (PLC Ack)` báo cho Vision PC biết PLC đã chốt kết quả.*
 
 ```text
   Y3 (Vision Done)
 -------[ ]------------------------------------------------+-------[ OUT X1 ]- (Bật PLC Ack)
                                                           |
                                            Y5 (Vision NG) |
-                                          -------[ ]------+-------[ PLS M30 ]- (Nạp Shift Register)
+                                          -------[ ]------+-------[ PLS M30 ]- (Nạp Shift Register NG)
+                                                          |
+                                           Y4 (Vision OK) |
+                                          -------[ ]------+-------[ PLS M31 ]- (Giải phóng phôi Pass)
 
 
   Y3 (Vision Done)
@@ -114,13 +123,13 @@ graph LR
 ---
 
 ### 🟢 MẠNG 5: Hàng Đợi Shift Register & Thổi Loại Bỏ Sản Phẩm NG (Reject Piston)
-*Khi phôi di chuyển trên băng tải tới đúng tọa độ trạm loại bỏ $L_{\text{reject}}$ (dung sai $\pm 10\text{ mm}$), PLC kích van điện từ / vòi khí `Y20` trong 100ms để thổi sản phẩm lỗi vào thùng NG.*
+*Khi phôi di chuyển trên băng tải tới đúng tọa độ $S_{\text{target}} = S_{\text{trigger}} + L_{\text{reject}}$ (dung sai $\pm 10\text{ mm}$), PLC kích van điện từ / vòi khí `Y20` trong 100ms để thổi sản phẩm lỗi vào thùng NG.*
 
 ```text
-  [ D1000 >= D1010 ] (Vị trí xung >= Đích Reject)
-----------[ ]---------------------------------------------+-------[ OUT M40 ]- (Kích hoạt Reject)
-  [ D1000 <= D1012 ] (Vị trí xung <= Đích + Dung sai)     |
-----------[ ]---------------------------------------------+
+  [ D1004 >= (Target - Tol) ] (Vị trí mm >= Đích Reject)
+--------------[ ]-----------------------------------------+-------[ OUT M40 ]- (Kích hoạt Reject)
+  [ D1004 <= (Target + Tol) ] (Vị trí mm <= Đích + Tol)   |
+--------------[ ]-----------------------------------------+
 
 
   M40                                                 +---[ OUT Y20 ]-+ (Van Xylanh Reject ON)

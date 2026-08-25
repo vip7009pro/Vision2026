@@ -60,3 +60,4 @@ public sealed class FrameMetadata
         return (webXMm, webYMm);
     }
 }
+

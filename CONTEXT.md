@@ -49,6 +49,42 @@
 - Preview được phép tiếp tục khi Global Snapshot rỗng để lấy ảnh từ ImageSource.
 - Lưu template cho Origin, Point và SurfaceCompare hoạt động với nguồn ảnh ImageSource.
 
+- **Tích Hợp Tính Năng Import / Export PLC Tags CSV Trong Cửa Sổ PLC Manager (Task 247)**:
+  - **Yêu Cầu & Bối Cảnh**:
+    - Bổ sung công cụ Import / Export danh bạ biến (PLC Tags) trực tiếp trong Cửa sổ "PLC & Industrial Motion Configuration" (Tab 1: Kết Nối & Tags).
+    - Hỗ trợ đầy đủ các chuẩn xuất/nhập công nghiệp: **Mitsubishi GX Works 3 Global Labels CSV**, **GX Works Device Comments CSV**, và **Standard PLC Tags CSV**.
+  - **Giải Pháp Kỹ Thuật Đã Triển Khai**:
+    1. *Dịch Vụ Chuyên Biệt `PlcTagCsvService` ([PlcTagCsvService.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.Application/PLC/Services/PlcTagCsvService.cs))*:
+       - Thuật toán tự động nhận diện định dạng CSV (`DetectCsvFormat`).
+       - Phân tích cấu trúc Header và dữ liệu RFC 4180 (xử lý an toàn dấu ngoặc kép lồng nhau `""`, dấu phẩy `,`, dấu chấm phẩy `;`).
+       - Ánh xạ chính xác toàn bộ hệ thống Data Types Mitsubishi GX Works / IEC sang `PlcDataType` (`Bit` $\rightarrow$ `Bool`, `Word [Signed]` $\rightarrow$ `Int16`, `Double Word [Signed]` $\rightarrow$ `Int32`, `Single-precision real` $\rightarrow$ `Float`, v.v.).
+       - Tự động trích xuất Tên Tag và Mô tả từ Device Comment (ví dụ: `Vision_Ready (Vision sẵn sàng nhận trigger)` $\rightarrow$ Name: `Vision_Ready`, Address: `Y1`, Description: `Vision_Ready (Vision sẵn sàng...)`).
+       - Cung cấp 3 chế độ Export: `ExportToStandardCsv`, `ExportToGxWorksGlobalLabelsCsv`, `ExportToGxWorksDeviceCommentsCsv`.
+    2. *Tầng UI & ViewModel ([PlcManagerViewModel.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/PLC/PlcManagerViewModel.cs) & [PlcManagerWindow.xaml](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/Views/PLC/PlcManagerWindow.xaml))*:
+       - Bổ sung các nút bấm `📥 Import CSV (GX Works / Standard)` và `📤 Export CSV` vào DockPanel thanh công cụ Tags.
+       - Hỗ trợ nạp tệp linh hoạt, tự động merge / overwrite theo `Address` hoặc `Name`, cập nhật danh bạ biến toàn cục và lưu cấu hình tự động.
+    3. *Bộ Unit Test Toàn Diện ([PlcTagCsvServiceTest.cs](file:///g:/NODEJS/Vision2026/TestExtractApp/PlcTagCsvServiceTest.cs))*:
+       - 25 bài kiểm thử tự động kiểm tra nạp file mẫu GX Works 3 thực tế ([GlobalLabels_GXWorks3.csv](file:///g:/NODEJS/Vision2026/PLC_Programs/Mitsubishi_GXWorks3/GlobalLabels_GXWorks3.csv), [DeviceComments_GXWorks.csv](file:///g:/NODEJS/Vision2026/PLC_Programs/Mitsubishi_GXWorks3/DeviceComments_GXWorks.csv)), Standard CSV, Export Round-trip và xử lý chuỗi đặc biệt $\rightarrow$ **PASS 25/25 (100%)**.
+
+- **Tối Ưu Hóa Bắt Tay Handshake PLC & Tracking Reject Không Dừng (Continuous On-the-Fly) (Task 246)**:
+  - **Yêu Cầu & Bối Cảnh**:
+    - Phân tích và nâng cấp hệ thống khi chạy continuous với camera công nghiệp Hikrobot và bật Handshake PLC.
+    - Giải quyết bài toán định vị – theo dõi chính xác từng con hàng (Tracking & Shift Register) để PLC kích hoạt cơ cấu gạt (Reject) chuẩn 100% thời gian thực.
+  - **Các Vấn Đề Gốc Rễ Đã Được Phát Hiện & Xử Lý Triệt Để**:
+    1. *Khôi Phục Cờ `VisionReady` ($Y_1 = 1$) Sau Chu Trình Handshake*:
+       - Trước đây, `CompleteHandshakeAsync` hạ $Y_3 = 0, Y_2 = 0$ nhưng không bật lại $Y_1 = 1$, khiến PLC bị kẹt không trigger cho con hàng tiếp theo.
+       - *Khắc phục*: Tự động phục hồi $Y_1 = 1$ (`ReadyTagName = true`) sau khi nhận ACK và hạ cờ Done/Busy. Bổ sung `SetIdleAsync()` hạ toàn bộ cờ khi bấm STOP.
+    2. *Chốt Siêu Dữ Liệu Encoder & Timestamp Ngay Khi Bắt Frame (`ContinuousFrameEnvelope`)*:
+       - Trước đây, `CreateFrameMetadata` được gọi sau khi thuật toán `Inspect` hoàn tất (trễ 30-60ms), khiến tọa độ Encoder bị lệch 30-60mm về sau.
+       - *Khắc phục*: Tạo `ContinuousFrameEnvelope` (gói `Mat Frame` và `FrameMetadata`) trong `VisionInspectionApp.Application.PLC.Services`, chốt ngay vị trí Encoder tại thời điểm mili-giây camera nhận frame (`FrameCaptured`) trước khi nạp vào `BoundedChannel<ContinuousFrameEnvelope>`.
+    3. *Đồng Bộ Hóa Handshake Await Triệt Tiêu Race Condition*:
+       - Thay thế lệnh fire-and-forget `_ = CompleteHandshakeAsync(...)` bằng `await CompleteHandshakeAsync(...)` trong Worker Task, đảm bảo tính toàn vẹn 100% của từng chu trình bắt tay với PLC.
+    4. *Bộ Kiểm Thử Tự Động Toàn Diện `ContinuousPipelineTest`*:
+       - Bổ sung 12 bài kiểm thử tự động kiểm tra trọn vẹn: Envelope Pipeline, Burst Backpressure Zero-Leak, Handshake Cycle Transitions, ShiftRegister Precision Millimeter Reject.
+  - **Hiệu Quả Đo Kiểm**:
+    - 100% bài test trong `ContinuousPipelineTest` và toàn bộ solution `TestExtractApp` PASS (12/12 test pipeline thành công).
+    - Chu trình Handshake chuyển trạng thái deterministic, tọa độ mét dài theo dõi lỗi trên cuộn và gạt Reject chính xác tuyệt đối.
+
 - **Tích Hợp Cửa Sổ PLC Oscilloscope Phân Tích Dạng Sóng & Đo Độ Trễ Tín Hiệu Thời Gian Thực (Task 245)**:
   - **Yêu Cầu & Bối Cảnh**:
     - Bổ sung công cụ debug và kiểm chứng thời gian tín hiệu thực tế truyền từ PLC sang PC.

@@ -382,4 +382,170 @@ public partial class PlcManagerViewModel : ObservableObject
             _plcService.Logger.LogDisconnect(SelectedPlc.Id, SelectedPlc.Name);
         }
     }
+
+    [RelayCommand]
+    private void ImportTags()
+    {
+        if (SelectedPlc == null)
+        {
+            System.Windows.MessageBox.Show("Vui lòng chọn một PLC trước khi nạp danh bạ biến!", "Chưa chọn PLC", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Warning);
+            return;
+        }
+
+        var dlg = new Microsoft.Win32.OpenFileDialog
+        {
+            Title = $"Import Danh Bạ Biến PLC cho '{SelectedPlc.Name}' (GX Works / Standard CSV)",
+            Filter = "Tất cả tệp CSV PLC (*.csv;*.txt)|*.csv;*.txt|Mitsubishi GX Works 3 Global Labels (*.csv)|*.csv|Mitsubishi GX Works Device Comments (*.csv)|*.csv|Tất cả các tệp (*.*)|*.*",
+            FilterIndex = 1
+        };
+
+        if (dlg.ShowDialog() == true)
+        {
+            try
+            {
+                string csvContent = System.IO.File.ReadAllText(dlg.FileName, System.Text.Encoding.UTF8);
+                int count = ImportTagsFromCsvText(csvContent, overwriteExisting: true);
+
+                if (count > 0)
+                {
+                    var detectedFormat = PlcTagCsvService.DetectCsvFormat(csvContent);
+                    string formatName = detectedFormat switch
+                    {
+                        PlcTagCsvFormat.GxWorks3GlobalLabels => "Mitsubishi GX Works 3 Global Labels",
+                        PlcTagCsvFormat.GxWorksDeviceComments => "Mitsubishi GX Works Device Comments",
+                        _ => "Standard PLC Tags"
+                    };
+
+                    System.Windows.MessageBox.Show(
+                        $"Đã nạp thành công {count} Tags vào PLC '{SelectedPlc.Name}'!\nĐịnh dạng nhận diện: {formatName}\nNguồn: {System.IO.Path.GetFileName(dlg.FileName)}",
+                        "Import Tags Thành Công",
+                        System.Windows.MessageBoxButton.OK,
+                        System.Windows.MessageBoxImage.Information);
+                }
+                else
+                {
+                    System.Windows.MessageBox.Show(
+                        "Không tìm thấy biến (Tag) hợp lệ nào trong tệp CSV đã chọn.\nVui lòng kiểm tra lại cấu trúc file!",
+                        "Không Có Dữ Liệu Tag",
+                        System.Windows.MessageBoxButton.OK,
+                        System.Windows.MessageBoxImage.Warning);
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Windows.MessageBox.Show(
+                    $"Có lỗi xảy ra trong quá trình đọc file CSV:\n{ex.Message}",
+                    "Lỗi Import CSV",
+                    System.Windows.MessageBoxButton.OK,
+                    System.Windows.MessageBoxImage.Error);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Nạp danh sách Tags từ chuỗi CSV vào SelectedPlc hiện tại
+    /// </summary>
+    public int ImportTagsFromCsvText(string csvContent, bool overwriteExisting = true)
+    {
+        if (SelectedPlc == null || string.IsNullOrWhiteSpace(csvContent)) return 0;
+
+        var importedTags = PlcTagCsvService.ParseCsv(csvContent, SelectedPlc.Id, PlcTagCsvFormat.AutoDetect);
+        if (importedTags.Count == 0) return 0;
+
+        int addedOrUpdatedCount = 0;
+
+        foreach (var tag in importedTags)
+        {
+            tag.PlcId = SelectedPlc.Id;
+
+            // Tìm tag đã tồn tại có cùng Address hoặc cùng Name trong PLC này
+            var existing = _plcService.Tags.FirstOrDefault(t => 
+                (string.Equals(t.PlcId, SelectedPlc.Id, StringComparison.OrdinalIgnoreCase) || 
+                 string.Equals(t.PlcId, SelectedPlc.Name, StringComparison.OrdinalIgnoreCase)) &&
+                (string.Equals(t.Address, tag.Address, StringComparison.OrdinalIgnoreCase) ||
+                 string.Equals(t.Name, tag.Name, StringComparison.OrdinalIgnoreCase)));
+
+            if (existing != null)
+            {
+                if (overwriteExisting)
+                {
+                    existing.Name = tag.Name;
+                    existing.Address = tag.Address;
+                    existing.DataType = tag.DataType;
+                    existing.Description = tag.Description;
+                    existing.ReadOnly = tag.ReadOnly;
+                    addedOrUpdatedCount++;
+                }
+            }
+            else
+            {
+                _plcService.Tags.Add(tag);
+                addedOrUpdatedCount++;
+            }
+        }
+
+        _plcService.SaveGlobalConfig();
+        RefreshFilteredTags();
+        RefreshAvailableTagsAndPlcs();
+
+        if (_plcService.IsPollingActive)
+        {
+            _plcService.StartPollingAsync();
+        }
+
+        return addedOrUpdatedCount;
+    }
+
+    [RelayCommand]
+    private void ExportTags()
+    {
+        if (SelectedPlc == null)
+        {
+            System.Windows.MessageBox.Show("Vui lòng chọn một PLC trước khi xuất danh bạ biến!", "Chưa chọn PLC", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Warning);
+            return;
+        }
+
+        if (FilteredTags.Count == 0)
+        {
+            System.Windows.MessageBox.Show($"PLC '{SelectedPlc.Name}' hiện chưa có biến (Tag) nào để xuất!", "Danh bạ biến rỗng", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Information);
+            return;
+        }
+
+        var dlg = new Microsoft.Win32.SaveFileDialog
+        {
+            Title = $"Export Danh Bạ Biến PLC '{SelectedPlc.Name}' Ra Tệp CSV",
+            Filter = "Standard PLC Tags CSV (*.csv)|*.csv|Mitsubishi GX Works 3 Global Labels (*.csv)|*.csv|Mitsubishi GX Works Device Comments (*.csv)|*.csv",
+            FileName = $"{SelectedPlc.Name}_Tags.csv",
+            FilterIndex = 1
+        };
+
+        if (dlg.ShowDialog() == true)
+        {
+            try
+            {
+                string csvOutput = dlg.FilterIndex switch
+                {
+                    2 => PlcTagCsvService.ExportToGxWorksGlobalLabelsCsv(FilteredTags),
+                    3 => PlcTagCsvService.ExportToGxWorksDeviceCommentsCsv(FilteredTags),
+                    _ => PlcTagCsvService.ExportToStandardCsv(FilteredTags)
+                };
+
+                System.IO.File.WriteAllText(dlg.FileName, csvOutput, System.Text.Encoding.UTF8);
+
+                System.Windows.MessageBox.Show(
+                    $"Đã xuất thành công {FilteredTags.Count} tags ra tệp:\n{dlg.FileName}",
+                    "Export Tags Thành Công",
+                    System.Windows.MessageBoxButton.OK,
+                    System.Windows.MessageBoxImage.Information);
+            }
+            catch (Exception ex)
+            {
+                System.Windows.MessageBox.Show(
+                    $"Có lỗi xảy ra khi xuất file CSV:\n{ex.Message}",
+                    "Lỗi Export CSV",
+                    System.Windows.MessageBoxButton.OK,
+                    System.Windows.MessageBoxImage.Error);
+            }
+        }
+    }
 }

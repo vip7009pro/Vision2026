@@ -197,7 +197,7 @@ public sealed class IndustrialHandshakeStateMachine
                 CurrentState = HandshakeState.Acknowledged;
             }
 
-            // 3. Hạ bit DONE và BUSY xuống 0
+            // 3. Hạ bit DONE và BUSY xuống 0, đồng thời khôi phục READY = 1 cho chu trình tiếp theo
             if (!string.IsNullOrEmpty(DoneTagName))
             {
                 await _plcManager.WriteTagValueAsync(_plcId, DoneTagName, false, ct);
@@ -205,6 +205,10 @@ public sealed class IndustrialHandshakeStateMachine
             if (!string.IsNullOrEmpty(BusyTagName))
             {
                 await _plcManager.WriteTagValueAsync(_plcId, BusyTagName, false, ct);
+            }
+            if (!string.IsNullOrEmpty(ReadyTagName))
+            {
+                await _plcManager.WriteTagValueAsync(_plcId, ReadyTagName, true, ct);
             }
 
             // 4. Hoàn tất chu trình
@@ -217,5 +221,25 @@ public sealed class IndustrialHandshakeStateMachine
             OnHandshakeTimeout?.Invoke(this, $"Lỗi bắt tay PLC: {ex.Message}");
             return false;
         }
+    }
+
+    /// <summary>
+    /// Đưa Vision PC về trạng thái nghỉ (IDLE) và hạ toàn bộ các cờ Ready, Busy, Done
+    /// </summary>
+    public async Task SetIdleAsync(CancellationToken ct = default)
+    {
+        CurrentState = HandshakeState.Idle;
+        if (!IsEnabled || _plcManager == null || !_plcManager.IsPlcConnected(_plcId))
+        {
+            return;
+        }
+
+        try
+        {
+            if (!string.IsNullOrEmpty(ReadyTagName)) await _plcManager.WriteTagValueAsync(_plcId, ReadyTagName, false, ct);
+            if (!string.IsNullOrEmpty(BusyTagName)) await _plcManager.WriteTagValueAsync(_plcId, BusyTagName, false, ct);
+            if (!string.IsNullOrEmpty(DoneTagName)) await _plcManager.WriteTagValueAsync(_plcId, DoneTagName, false, ct);
+        }
+        catch { }
     }
 }

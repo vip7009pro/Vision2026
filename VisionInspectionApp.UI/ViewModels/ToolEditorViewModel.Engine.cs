@@ -16,6 +16,7 @@ using Microsoft.Win32;
 using OpenCvSharp;
 using OpenCvSharp.WpfExtensions;
 using VisionInspectionApp.Application;
+using VisionInspectionApp.Application.PLC.Services;
 using VisionInspectionApp.Application.Services;
 using VisionInspectionApp.Models;
 using VisionInspectionApp.UI.Controls;
@@ -2300,7 +2301,7 @@ namespace VisionInspectionApp.UI.ViewModels
             : new SolidColorBrush(Color.FromRgb(16, 124, 16));
         public string RunFlowButtonToolTip => IsRunningFolderFlow ? "Dừng chạy luồng thư mục" : "Run Flow";
 
-        private Channel<Mat>? _industrialCameraFrameChannel;
+        private Channel<ContinuousFrameEnvelope>? _industrialCameraFrameChannel;
         private EventHandler<Mat>? _continuousFrameHandler;
 
         public string RunContinuousButtonIcon => IsRunningFolderFlow ? "⏹" : "🔁";
@@ -2587,6 +2588,9 @@ namespace VisionInspectionApp.UI.ViewModels
                 await _cameraService.ApplyParametersAsync(p);
             }
 
+            // Đưa máy trạng thái Handshake vào trạng thái sẵn sàng nhận Trigger từ PLC (Y1 = 1)
+            await _handshakeStateMachine.SetReadyAsync(token);
+
             // 3. Khởi tạo Pipeline Hàng Đợi (Bounded Channel) Thống Nhất cho Tất Cả Chế Độ
             var channelOptions = new BoundedChannelOptions(QueueCapacity)
             {
@@ -2594,7 +2598,7 @@ namespace VisionInspectionApp.UI.ViewModels
                 SingleReader = true,
                 SingleWriter = false
             };
-            _industrialCameraFrameChannel = Channel.CreateBounded<Mat>(channelOptions);
+            _industrialCameraFrameChannel = Channel.CreateBounded<ContinuousFrameEnvelope>(channelOptions);
             var channel = _industrialCameraFrameChannel;
 
             _continuousFrameHandler = (sender, frame) =>
@@ -2603,13 +2607,20 @@ namespace VisionInspectionApp.UI.ViewModels
                     return;
 
                 var frameClone = frame.Clone();
+                // Chốt siêu dữ liệu Encoder và Dấu thời gian NGAY TẠI THỜI ĐIỂM CHỤP ẢNH
+                var meta = _motionSyncService.CreateFrameMetadata(ProcessedImageCount);
+                var envelope = new ContinuousFrameEnvelope
+                {
+                    Frame = frameClone,
+                    Metadata = meta
+                };
 
                 // Nếu hàng đợi đầy, chủ động lấy frame cũ ra và gọi Dispose() trước khi ghi frame mới (Zero Memory Leak)
                 while (channel.Reader.Count >= QueueCapacity)
                 {
-                    if (channel.Reader.TryRead(out var droppedMat))
+                    if (channel.Reader.TryRead(out var droppedEnvelope))
                     {
-                        droppedMat.Dispose();
+                        droppedEnvelope.Dispose();
                         Interlocked.Increment(ref _droppedContinuousFramesCount);
                     }
                     else
@@ -2618,9 +2629,9 @@ namespace VisionInspectionApp.UI.ViewModels
                     }
                 }
 
-                if (!channel.Writer.TryWrite(frameClone))
+                if (!channel.Writer.TryWrite(envelope))
                 {
-                    frameClone.Dispose();
+                    envelope.Dispose();
                     Interlocked.Increment(ref _droppedContinuousFramesCount);
                 }
 
@@ -2635,17 +2646,17 @@ namespace VisionInspectionApp.UI.ViewModels
                 {
                     while (await channel.Reader.WaitToReadAsync(token))
                     {
-                        while (channel.Reader.TryRead(out var frameMat))
+                        while (channel.Reader.TryRead(out var envelope))
                         {
                             if (token.IsCancellationRequested || !IsRunningFolderFlow)
                             {
-                                frameMat.Dispose();
+                                envelope.Dispose();
                                 break;
                             }
 
                             try
                             {
-                                await ProcessContinuousFrameAsync(frameMat, sourceDef.Name);
+                                await ProcessContinuousFrameAsync(envelope, sourceDef.Name, token);
                             }
                             catch (Exception ex)
                             {
@@ -2653,7 +2664,7 @@ namespace VisionInspectionApp.UI.ViewModels
                             }
                             finally
                             {
-                                frameMat.Dispose();
+                                envelope.Dispose();
                             }
                         }
                     }
@@ -2749,8 +2760,10 @@ namespace VisionInspectionApp.UI.ViewModels
         private const int ContinuousUiThrottleIntervalMs = 80; // Cập nhật mượt mà cho UI Preview
         private long _droppedContinuousFramesCount = 0;
 
-        private async Task ProcessContinuousFrameAsync(Mat frameMat, string sourceNodeName)
+        private async Task ProcessContinuousFrameAsync(ContinuousFrameEnvelope envelope, string sourceNodeName, CancellationToken token = default)
         {
+            var frameMat = envelope.Frame;
+            var frameMeta = envelope.Metadata;
             if (frameMat == null || frameMat.IsDisposed || frameMat.Empty() || _config == null || !IsRunningFolderFlow)
                 return;
 
@@ -2765,27 +2778,27 @@ namespace VisionInspectionApp.UI.ViewModels
             try
             {
                 _lastRunError = null;
-                await _handshakeStateMachine.StartInspectionAsync();
-                inspectionResult = await Task.Run(() => _inspectionService.Inspect(frameMat, configCopy, _dbManagerService));
+                await _handshakeStateMachine.StartInspectionAsync(token);
+                inspectionResult = await Task.Run(() => _inspectionService.Inspect(frameMat, configCopy, _dbManagerService), token);
                 __sw.Stop();
 
-                if (!IsRunningFolderFlow)
+                if (!IsRunningFolderFlow || token.IsCancellationRequested)
                 {
-                    _ = _handshakeStateMachine.CompleteHandshakeAsync(false);
+                    await _handshakeStateMachine.CompleteHandshakeAsync(false, token);
                     return;
                 }
 
                 if (inspectionResult != null)
                 {
-                    // Gán FrameMetadata kèm thông tin Encoder và vị trí mét dài trên cuộn
-                    inspectionResult.Metadata = _motionSyncService.CreateFrameMetadata(ProcessedImageCount);
+                    // Gán FrameMetadata đã chốt ngay tại thời điểm chụp ảnh (Timestamp & Encoder mm)
+                    inspectionResult.Metadata = frameMeta;
 
                     // Ghi nhận khuyết tật vào phiên cuộn và cập nhật cơ cấu Shift Register theo dõi vị trí Reject
                     _rollDefectManager.RecordDefectsFromInspectionResult(inspectionResult, inspectionResult.Metadata);
                     _shiftRegisterTracker.ProcessMotionUpdate(_motionSyncService.CurrentWebPositionMm);
 
-                    // Hoàn tất chu trình bắt tay công nghiệp 2 chiều với PLC
-                    _ = _handshakeStateMachine.CompleteHandshakeAsync(inspectionResult.Pass);
+                    // Hoàn tất chu trình bắt tay công nghiệp 2 chiều với PLC (AWAIT đồng bộ deterministic)
+                    await _handshakeStateMachine.CompleteHandshakeAsync(inspectionResult.Pass, token);
 
                     inspectionResult.Timings.NodeTimings[sourceNodeName] = (int)__sw.ElapsedMilliseconds;
                     if (configCopy.PreprocessNodes != null)
@@ -2806,17 +2819,17 @@ namespace VisionInspectionApp.UI.ViewModels
                 }
                 else
                 {
-                    _ = _handshakeStateMachine.CompleteHandshakeAsync(false);
+                    await _handshakeStateMachine.CompleteHandshakeAsync(false, token);
                 }
             }
             catch (Exception ex)
             {
                 inspectionResult = null;
                 _lastRunError = "Lỗi khi chạy Flow: " + ex.Message;
-                _ = _handshakeStateMachine.CompleteHandshakeAsync(false);
+                await _handshakeStateMachine.CompleteHandshakeAsync(false, token);
             }
 
-            if (!IsRunningFolderFlow)
+            if (!IsRunningFolderFlow || token.IsCancellationRequested)
                 return;
 
             _lastRun = inspectionResult;
@@ -3078,6 +3091,8 @@ namespace VisionInspectionApp.UI.ViewModels
                 }
                 _industrialCameraFrameChannel = null;
             }
+
+            _ = _handshakeStateMachine.SetIdleAsync();
 
             try
             {
