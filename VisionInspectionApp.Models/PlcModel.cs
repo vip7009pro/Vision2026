@@ -124,4 +124,11 @@ public sealed class PlcModel : INotifyPropertyChanged
         get => _cpuName;
         set { if (_cpuName != value) { _cpuName = value; OnPropertyChanged(); } }
     }
+
+    private bool _isManuallyDisconnected = false;
+    public bool IsManuallyDisconnected
+    {
+        get => _isManuallyDisconnected;
+        set { if (_isManuallyDisconnected != value) { _isManuallyDisconnected = value; OnPropertyChanged(); } }
+    }
 }

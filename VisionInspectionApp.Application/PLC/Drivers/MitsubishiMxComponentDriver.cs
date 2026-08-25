@@ -176,14 +176,12 @@ public sealed class MitsubishiMxComponentDriver : IPlcDriver
 
     public async Task DisconnectAsync()
     {
+        bool lockAcquired = false;
         try
         {
-            await _lock.WaitAsync(TimeSpan.FromMilliseconds(1000));
+            lockAcquired = await _lock.WaitAsync(TimeSpan.FromMilliseconds(500));
         }
-        catch
-        {
-            return;
-        }
+        catch { }
 
         try
         {
@@ -205,7 +203,10 @@ public sealed class MitsubishiMxComponentDriver : IPlcDriver
         }
         finally
         {
-            _lock.Release();
+            if (lockAcquired)
+            {
+                _lock.Release();
+            }
         }
     }
 

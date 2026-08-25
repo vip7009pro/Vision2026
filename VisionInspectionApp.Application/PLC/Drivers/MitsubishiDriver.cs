@@ -100,7 +100,13 @@ public sealed class MitsubishiDriver : IPlcDriver
 
     public async Task DisconnectAsync()
     {
-        await _lock.WaitAsync();
+        bool lockAcquired = false;
+        try
+        {
+            lockAcquired = await _lock.WaitAsync(TimeSpan.FromMilliseconds(500));
+        }
+        catch { }
+
         try
         {
             CleanupSocket();
@@ -108,7 +114,10 @@ public sealed class MitsubishiDriver : IPlcDriver
         }
         finally
         {
-            _lock.Release();
+            if (lockAcquired)
+            {
+                _lock.Release();
+            }
         }
     }
 

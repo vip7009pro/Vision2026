@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using VisionInspectionApp.Application;
 using VisionInspectionApp.Application.PLC.Drivers;
 using VisionInspectionApp.Application.PLC.Services;
 using VisionInspectionApp.Models;
@@ -24,6 +25,9 @@ public static class PlcTests
         await Test6_PlcManagerService_OnBatchPolled_And_DynamicTagsAsync();
         await Test7_HighResolutionTimer_And_Sub5msScanAsync();
         await Test8_MitsubishiMcProtocol_SocketCommunication_And_CpuNameAsync();
+        await Test9_ResultTransfer_PulseMode_And_LevelModeAsync();
+        await Test10_PlcConnection_ManualDisconnect_And_CommandStatesAsync();
+        await Test11_AutoConnectStartup_And_PollingReadinessAsync();
 
         Console.WriteLine("\n✅ ALL PLC TESTS PASSED SUCCESSFULLY!");
         Console.WriteLine("=========================================");
@@ -421,5 +425,181 @@ public static class PlcTests
         listener.Stop();
 
         Console.WriteLine($"PASSED (Connected & Identified CPU '{plc.CpuName}', Bit & Word Verified 100%)");
+    }
+
+    private static async Task Test9_ResultTransfer_PulseMode_And_LevelModeAsync()
+    {
+        Console.Write("Test 9: ResultTransfer Pulse Mode (Toggle & Auto-Restore) & Level Mode... ");
+
+        var plcManager = new PlcManagerService();
+        var plc = new PlcModel { Id = "PLC1", Name = "PLC1", DriverType = PlcDriverType.Mitsubishi, IPAddress = "127.0.0.1", Port = 5007 };
+        var tagY0 = new PlcTag { Id = "T1", PlcId = "PLC1", Name = "Y0_OK", Address = "Y0", DataType = PlcDataType.Bool };
+        var tagY1 = new PlcTag { Id = "T2", PlcId = "PLC1", Name = "Y1_NG", Address = "Y1", DataType = PlcDataType.Bool };
+        var tagY2 = new PlcTag { Id = "T3", PlcId = "PLC1", Name = "Y2_Level", Address = "Y2", DataType = PlcDataType.Bool };
+
+        plcManager.LoadConfig(new[] { plc }, new[] { tagY0, tagY1, tagY2 });
+        var driver = (MitsubishiDriver)plcManager.GetDriver("PLC1")!;
+        driver.ForceSimulationMode = true;
+        await plcManager.ConnectAllAsync();
+
+        // 1. Khởi tạo giá trị ban đầu: Y0 = false, Y1 = true, Y2 = false
+        await plcManager.WriteTagValueAsync("PLC1", "Y0_OK", false);
+        await plcManager.WriteTagValueAsync("PLC1", "Y1_NG", true);
+        await plcManager.WriteTagValueAsync("PLC1", "Y2_Level", false);
+
+        var config = new VisionConfig
+        {
+            ResultTransfers = new List<ResultTransferDefinition>
+            {
+                new ResultTransferDefinition
+                {
+                    Name = "ResultTransfer1",
+                    Items = new List<ResultTransferItem>
+                    {
+                        // Y0: Đang false -> Gửi xung 50ms: false -> true -> false
+                        new ResultTransferItem { PlcId = "PLC1", TagName = "Y0_OK", ValueExpression = "TotalPassBit", Mode = ResultTransferMode.Pulse, PulseDurationMs = 50 },
+                        // Y1: Đang true -> Gửi xung 50ms: true -> false -> true
+                        new ResultTransferItem { PlcId = "PLC1", TagName = "Y1_NG", ValueExpression = "TotalFailBit", Mode = ResultTransferMode.Pulse, PulseDurationMs = 50 },
+                        // Y2: Đang false -> Gửi level: false -> true (giữ nguyên)
+                        new ResultTransferItem { PlcId = "PLC1", TagName = "Y2_Level", ValueExpression = "TotalPass", Mode = ResultTransferMode.Level }
+                    }
+                }
+            }
+        };
+
+        var result = new InspectionResult { Pass = true };
+
+        // 2. Kích hoạt ResultTransfer bất đồng bộ
+        var transferTask = PlcResultTransferRunner.ExecuteResultTransfersAsync(config, result, plcManager);
+
+        // Trong lúc đang ở khoảng giữa xung (sau 20ms)
+        await Task.Delay(20);
+        var y0DuringPulse = plcManager.GetTagValue("PLC1", "Y0_OK")?.CurrentValue;
+        var y1DuringPulse = plcManager.GetTagValue("PLC1", "Y1_NG")?.CurrentValue;
+        var y2Level = plcManager.GetTagValue("PLC1", "Y2_Level")?.CurrentValue;
+
+        if (Convert.ToInt32(y0DuringPulse) != 1) throw new Exception($"Y0 during pulse should be 1/true, got {y0DuringPulse}");
+        if (Convert.ToInt32(y1DuringPulse) != 0) throw new Exception($"Y1 during pulse should be 0/false, got {y1DuringPulse}");
+        if (y2Level is not true) throw new Exception($"Y2 Level should be true, got {y2Level}");
+
+        // Chờ hoàn thành xung (sau 60ms nữa, tổng > 50ms)
+        await transferTask;
+        await Task.Delay(20);
+
+        var y0AfterPulse = plcManager.GetTagValue("PLC1", "Y0_OK")?.CurrentValue;
+        var y1AfterPulse = plcManager.GetTagValue("PLC1", "Y1_NG")?.CurrentValue;
+        var y2AfterLevel = plcManager.GetTagValue("PLC1", "Y2_Level")?.CurrentValue;
+
+        if (Convert.ToInt32(y0AfterPulse) != 0) throw new Exception($"Y0 after pulse should restore to 0/false, got {y0AfterPulse}");
+        if (Convert.ToInt32(y1AfterPulse) != 1) throw new Exception($"Y1 after pulse should restore to 1/true, got {y1AfterPulse}");
+        if (y2AfterLevel is not true) throw new Exception($"Y2 Level should remain true, got {y2AfterLevel}");
+
+        await plcManager.DisconnectAllAsync();
+        plcManager.Dispose();
+
+        Console.WriteLine("PASSED (Pulse Inversion 50ms & Auto-Restore verified 100%)");
+    }
+
+    private static async Task Test10_PlcConnection_ManualDisconnect_And_CommandStatesAsync()
+    {
+        Console.Write("Test 10: Manual Disconnect (No Auto-Reconnect) & Connection Command States... ");
+
+        var plcManager = new PlcManagerService();
+        var plc = new PlcModel { Id = "PLC_TEST", Name = "PLC_TEST", DriverType = PlcDriverType.Mitsubishi, IPAddress = "127.0.0.1", Port = 5007 };
+        var tag = new PlcTag { Id = "T1", PlcId = "PLC_TEST", Name = "D100", Address = "D100", DataType = PlcDataType.Int16 };
+
+        plcManager.LoadConfig(new[] { plc }, new[] { tag });
+        var driver = (MitsubishiDriver)plcManager.GetDriver("PLC_TEST")!;
+        driver.ForceSimulationMode = true;
+
+        // 1. Khởi động kết nối và Polling Engine
+        await plcManager.ConnectAllAsync();
+        plcManager.AcquirePollingLock("TestEngine");
+        await Task.Delay(100);
+
+        if (plc.State != PlcConnectionState.Connected)
+        {
+            throw new Exception($"PLC should be Connected, but was {plc.State}");
+        }
+
+        // 2. Người dùng chủ động bấm Ngắt Kết Nối
+        await plcManager.DisconnectAllAsync();
+        if (plc.State != PlcConnectionState.Disconnected || !plc.IsManuallyDisconnected)
+        {
+            throw new Exception($"PLC should be Disconnected and IsManuallyDisconnected=true after DisconnectAllAsync");
+        }
+
+        // 3. Đợi 250ms trong khi PollingEngine đang chạy nền
+        await Task.Delay(250);
+
+        // PollingEngine KHÔNG được tự ý kết nối lại khi PLC ở trạng thái Disconnected / IsManuallyDisconnected
+        if (plc.State != PlcConnectionState.Disconnected)
+        {
+            throw new Exception($"PLC auto-reconnected unexpectedly after manual disconnect! Current State: {plc.State}");
+        }
+
+        // 4. Khi người dùng chủ động bấm Kết Nối lại
+        await plcManager.ConnectAllAsync();
+        if (plc.State != PlcConnectionState.Connected || plc.IsManuallyDisconnected)
+        {
+            throw new Exception($"PLC should be Connected and IsManuallyDisconnected=false after manual ConnectAllAsync, but State={plc.State}");
+        }
+
+        plcManager.ReleasePollingLock("TestEngine");
+        plcManager.Dispose();
+
+        Console.WriteLine("PASSED (Manual Disconnect respected, Auto-Reconnect prevented 100%)");
+    }
+
+    private static async Task Test11_AutoConnectStartup_And_PollingReadinessAsync()
+    {
+        Console.Write("Test 11: AutoConnectStartup Background Connection & Polling Readiness... ");
+
+        var plcManager = new PlcManagerService();
+        var plc = new PlcModel 
+        { 
+            Id = "PLC_AUTO", 
+            Name = "FX5U_Auto", 
+            DriverType = PlcDriverType.Mitsubishi, 
+            IPAddress = "127.0.0.1", 
+            Port = 5007,
+            Enabled = true 
+        };
+        var tag = new PlcTag { Id = "T_AUTO", PlcId = "PLC_AUTO", Name = "Count_Auto", Address = "D500", DataType = PlcDataType.Int32 };
+
+        plcManager.LoadConfig(new[] { plc }, new[] { tag });
+        var driver = (MitsubishiDriver)plcManager.GetDriver("PLC_AUTO")!;
+        driver.ForceSimulationMode = true;
+
+        // 1. Kích hoạt AutoConnectStartup (như khi App vừa bật lên)
+        await plcManager.AutoConnectStartupAsync();
+
+        if (plc.State != PlcConnectionState.Connected)
+        {
+            throw new Exception($"PLC should be Connected automatically upon startup, but was {plc.State}");
+        }
+
+        if (!plcManager.IsPollingActive)
+        {
+            throw new Exception("Polling Engine should be Active automatically via 'AutoStartup' lock.");
+        }
+
+        // 2. Kiểm tra việc đọc ghi biến qua cache
+        await Task.Delay(100);
+        await plcManager.WriteTagValueAsync("PLC_AUTO", "Count_Auto", 123456);
+        await Task.Delay(100);
+
+        var val = plcManager.GetTagValue("PLC_AUTO", "Count_Auto");
+        if (val == null || Convert.ToInt32(val.CurrentValue) != 123456)
+        {
+            throw new Exception($"Expected auto-polled tag value 123456, got {val?.CurrentValue}");
+        }
+
+        // 3. Người dùng ngắt kết nối
+        await plcManager.DisconnectAllAsync();
+        plcManager.ReleasePollingLock("AutoStartup");
+        plcManager.Dispose();
+
+        Console.WriteLine("PASSED (Auto-connect on Startup & Polling Lock operational 100%)");
     }
 }

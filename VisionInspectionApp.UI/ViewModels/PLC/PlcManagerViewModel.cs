@@ -189,6 +189,22 @@ public partial class PlcManagerViewModel : ObservableObject
 
     public bool IsMcProtocol => SelectedPlc == null || SelectedPlc.DriverType == PlcDriverType.Mitsubishi;
 
+    public bool CanConnectSelectedPlc => SelectedPlc != null 
+        && SelectedPlc.Enabled 
+        && SelectedPlc.State != PlcConnectionState.Connected 
+        && SelectedPlc.State != PlcConnectionState.Connecting;
+
+    public bool CanDisconnectSelectedPlc => SelectedPlc != null 
+        && (SelectedPlc.State == PlcConnectionState.Connected || SelectedPlc.State == PlcConnectionState.Connecting);
+
+    public void UpdateConnectionCommandStates()
+    {
+        OnPropertyChanged(nameof(CanConnectSelectedPlc));
+        OnPropertyChanged(nameof(CanDisconnectSelectedPlc));
+        ConnectSelectedPlcCommand.NotifyCanExecuteChanged();
+        DisconnectSelectedPlcCommand.NotifyCanExecuteChanged();
+    }
+
     partial void OnSelectedPlcChanged(PlcModel? oldValue, PlcModel? newValue)
     {
         if (oldValue != null)
@@ -203,6 +219,7 @@ public partial class PlcManagerViewModel : ObservableObject
 
         OnPropertyChanged(nameof(IsMxComponent));
         OnPropertyChanged(nameof(IsMcProtocol));
+        UpdateConnectionCommandStates();
         RefreshFilteredTags();
     }
 
@@ -212,6 +229,10 @@ public partial class PlcManagerViewModel : ObservableObject
         {
             OnPropertyChanged(nameof(IsMxComponent));
             OnPropertyChanged(nameof(IsMcProtocol));
+        }
+        if (e.PropertyName == nameof(PlcModel.State) || e.PropertyName == nameof(PlcModel.Enabled) || e.PropertyName == nameof(PlcModel.IsManuallyDisconnected))
+        {
+            UpdateConnectionCommandStates();
         }
     }
 
@@ -247,13 +268,19 @@ public partial class PlcManagerViewModel : ObservableObject
             Port = 5007,
             DriverType = PlcDriverType.MitsubishiMxComponent,
             LogicalStationNumber = 1,
-            Enabled = true
+            Enabled = true,
+            State = PlcConnectionState.Disconnected,
+            IsManuallyDisconnected = false
         };
         Plcs.Add(newPlc);
         SelectedPlc = newPlc;
         _plcService.SaveGlobalConfig();
-        _plcService.StartPollingAsync();
+        if (_plcService.IsPollingActive)
+        {
+            _plcService.StartPollingAsync();
+        }
         RefreshAvailableTagsAndPlcs();
+        UpdateConnectionCommandStates();
     }
 
     [RelayCommand]
@@ -274,8 +301,12 @@ public partial class PlcManagerViewModel : ObservableObject
         Plcs.Remove(plcToDelete);
         SelectedPlc = Plcs.FirstOrDefault();
         _plcService.SaveGlobalConfig();
-        _plcService.StartPollingAsync();
+        if (_plcService.IsPollingActive)
+        {
+            _plcService.StartPollingAsync();
+        }
         RefreshAvailableTagsAndPlcs();
+        UpdateConnectionCommandStates();
     }
 
     [RelayCommand]
@@ -337,16 +368,31 @@ public partial class PlcManagerViewModel : ObservableObject
         System.Windows.MessageBox.Show("Toàn bộ Cấu hình Kết nối PLC, Danh bạ Tags và Thông số Công nghiệp (Handshake, Heartbeat, Motion, Shift Register) đã được lưu thành công!", "Lưu Cấu Hình PLC", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Information);
     }
 
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(CanConnectSelectedPlc))]
     private async System.Threading.Tasks.Task ConnectSelectedPlcAsync()
     {
         if (SelectedPlc == null) return;
+        SelectedPlc.IsManuallyDisconnected = false;
         var driver = _plcService.GetDriver(SelectedPlc.Id);
         if (driver != null)
         {
             SelectedPlc.State = PlcConnectionState.Connecting;
-            bool ok = await driver.ConnectAsync();
+            UpdateConnectionCommandStates();
+
+            bool ok = false;
+            try
+            {
+                using var cts = new System.Threading.CancellationTokenSource(6000);
+                ok = await driver.ConnectAsync(cts.Token);
+            }
+            catch (Exception ex)
+            {
+                SelectedPlc.CpuName = ex.Message;
+                ok = false;
+            }
+
             SelectedPlc.State = ok ? PlcConnectionState.Connected : PlcConnectionState.Error;
+            UpdateConnectionCommandStates();
 
             if (ok)
             {
@@ -361,8 +407,9 @@ public partial class PlcManagerViewModel : ObservableObject
             else
             {
                 _plcService.ReleasePollingLock("PlcManager");
+                _plcService.ReleasePollingLock("PlcManagerWindow");
                 _plcService.Logger.LogDisconnect(SelectedPlc.Id, SelectedPlc.Name);
-                string errDetail = string.IsNullOrWhiteSpace(SelectedPlc.CpuName) ? "Connection failed" : SelectedPlc.CpuName;
+                string errDetail = string.IsNullOrWhiteSpace(SelectedPlc.CpuName) ? "Connection failed or timed out" : SelectedPlc.CpuName;
                 System.Windows.MessageBox.Show(
                     $"Failed to connect to PLC '{SelectedPlc.Name}' (Station {SelectedPlc.LogicalStationNumber}).\nDetail: {errDetail}\n\nPlease check:\n1. Mitsubishi MX Component Communication Utility station setup.\n2. Station Number ({SelectedPlc.LogicalStationNumber}) matches Communication Utility.\n3. Physical PLC connection and cable power.",
                     "PLC Connection Failed",
@@ -372,18 +419,30 @@ public partial class PlcManagerViewModel : ObservableObject
         }
     }
 
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(CanDisconnectSelectedPlc))]
     private async System.Threading.Tasks.Task DisconnectSelectedPlcAsync()
     {
         if (SelectedPlc == null) return;
+        SelectedPlc.IsManuallyDisconnected = true;
         _plcService.ReleasePollingLock("PlcManager");
+        _plcService.ReleasePollingLock("PlcManagerWindow");
+        _plcService.ReleasePollingLock("AutoStartup");
+        
+        SelectedPlc.State = PlcConnectionState.Disconnected;
+        SelectedPlc.CpuName = string.Empty;
+        UpdateConnectionCommandStates();
+
         var driver = _plcService.GetDriver(SelectedPlc.Id);
         if (driver != null)
         {
-            await driver.DisconnectAsync();
-            SelectedPlc.State = PlcConnectionState.Disconnected;
+            try
+            {
+                await driver.DisconnectAsync();
+            }
+            catch { }
             _plcService.Logger.LogDisconnect(SelectedPlc.Id, SelectedPlc.Name);
         }
+        UpdateConnectionCommandStates();
     }
 
     [RelayCommand]

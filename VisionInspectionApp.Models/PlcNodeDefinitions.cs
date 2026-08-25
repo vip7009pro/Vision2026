@@ -68,6 +68,12 @@ public sealed class PlcBatchWriteDefinition
     public Dictionary<string, string> TagValues { get; set; } = new();
 }
 
+public enum ResultTransferMode
+{
+    Level = 0, // Gửi mức logic thông thường
+    Pulse = 1  // Gửi xung (đảo trạng thái trong PulseDurationMs rồi tự khôi phục mức ban đầu)
+}
+
 public sealed class ResultTransferItem
 {
     public string PlcId { get; set; } = string.Empty;
@@ -83,6 +89,16 @@ public sealed class ResultTransferItem
     /// Điều kiện gửi: Always, OnPass, OnFail
     /// </summary>
     public ImageOutputCondition Condition { get; set; } = ImageOutputCondition.Always;
+
+    /// <summary>
+    /// Chế độ gửi: Level (mức logic) hoặc Pulse (phát xung tự khôi phục)
+    /// </summary>
+    public ResultTransferMode Mode { get; set; } = ResultTransferMode.Level;
+
+    /// <summary>
+    /// Thời gian giữ xung (mili-giây), mặc định 100ms
+    /// </summary>
+    public int PulseDurationMs { get; set; } = 100;
 }
 
 public sealed class ResultTransferDefinition

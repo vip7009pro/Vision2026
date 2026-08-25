@@ -33,13 +33,19 @@ public sealed class MxComWorker : IDisposable
         _staThread.Start();
     }
 
+    private string _cachedCpuName = "";
+    private string _cachedCpuType = "";
+
     public Task<(int ResCode, string CpuName, string CpuType, string? ErrorMessage)> ConnectAsync(int stationNumber)
     {
         return InvokeWithTimeoutAsync(() =>
         {
             if (_isConnected && _currentStationNumber == stationNumber && _comObject != null)
             {
-                return (0, "Mitsubishi PLC (Connected)", "", (string?)null);
+                if (!string.IsNullOrEmpty(_cachedCpuName))
+                {
+                    return (0, _cachedCpuName, _cachedCpuType, (string?)null);
+                }
             }
 
             DisconnectInternal();
@@ -102,6 +108,9 @@ public sealed class MxComWorker : IDisposable
                     }
                 }
                 catch { }
+
+                _cachedCpuName = cpuName;
+                _cachedCpuType = cpuType;
 
                 return (0, cpuName, cpuType, (string?)null);
             }
@@ -384,6 +393,8 @@ public sealed class MxComWorker : IDisposable
     private void DisconnectInternal()
     {
         _isConnected = false;
+        _cachedCpuName = "";
+        _cachedCpuType = "";
         if (_comObject != null)
         {
             try { InvokeComMethod("Close"); } catch { }

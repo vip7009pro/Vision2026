@@ -989,6 +989,53 @@ Lộ trình tích hợp tính năng Chụp ảnh từ camera và hỗ trợ các
         - Tiết kiệm hơn 600px không gian trên Toolbar, giao diện hiện đại, thoáng đãng.
         - Giúp người vận hành quan sát trực quan ngay tức thì chuỗi 20 con hàng gần nhất chạy từ trái sang phải, nhận biết nhanh tình trạng máy và tỉ lệ lỗi NG trên dây chuyền.
         - Toàn bộ suite test tự động trong `TestExtractApp` đạt PASS 100%.
+    - [x] Task 252: Tùy chọn gửi Xung (Pulse Mode) & Nhập thời gian xung trong node ResultTransfer của Tool Editor:
+      - `Yêu Cầu & Bối Cảnh`:
+        - Trong Tool Editor, node `ResultTransfer` kiểu bool cần có tùy chọn gửi mức logic (Level) hoặc gửi xung (Pulse). Nếu chọn gửi xung, cho phép nhập thời gian xung (`PulseDurationMs`, mặc định 100ms) và tự động thực thi cơ chế đảo xung: nếu địa chỉ đang là `true` thì ghi `false` trong khoảng thời gian xung rồi tự động ghi lại `true`, và ngược lại nếu đang là `false` thì ghi `true` trong thời gian xung và ghi lại `false`.
+      - `Giải Pháp Kỹ Thuật Đã Triển Khai`:
+        1. *Data Model (PlcNodeDefinitions.cs)*: Thêm enum `ResultTransferMode { Level = 0, Pulse = 1 }`, thuộc tính `Mode` và `PulseDurationMs` vào `ResultTransferItem`.
+        2. *Execution Engine (PlcResultTransferRunner.cs)*: Xử lý song song `ExecuteSingleItemTransferAsync`, đọc trạng thái hiện tại, phát xung đảo `!currentBool` $\rightarrow$ `await Task.Delay(pulseMs)` $\rightarrow$ Khôi phục lại trạng thái ban đầu `currentBool`.
+        3. *Giao Diện UI & ViewModel (ToolEditorViewModel.Plc.cs & ToolEditorView.xaml)*: Bổ sung ComboBox `Chế độ gửi:` (`Level`/`Pulse`) và TextBox nhập `Xung (ms):` khi chọn Pulse.
+        4. *Kiểm Thử Tự Động*: Thêm `Test 9: ResultTransfer Pulse Mode (Toggle & Auto-Restore) & Level Mode` trong `PlcTests.cs`, đạt PASS 100%.
+      - `Hiệu Quả Đạt Được`:
+        - Cho phép phát xung trigger kết quả kiểm tra, xung kích hoạt xi-lanh gạt, xung Handshake ACK sang PLC cực kỳ linh hoạt và chuẩn xác mili-giây mà không cần lập trình timer phức tạp trong PLC.
+        - Toàn bộ suite test tự động trong `TestExtractApp` đạt PASS 100%.
+    - [x] Task 253: Chuẩn hóa Quản lý Kết nối PLC, Vô hiệu hóa Nút Kết nối khi Connected & Khắc phục Lỗi Tự động Reconnect sau khi Ngắt kết nối:
+      - `Yêu Cầu & Bối Cảnh`:
+        - Khi bấm "Ngắt Kết Nối", hệ thống không được tự ý kết nối lại.
+        - Khi đang Connected, nút "⚡ Kết Nối" phải bị disabled để tránh bấm trùng lặp.
+        - Giữ nguyên thông tin CPU Name thực (`FX5UCPU Type 18944`) khi kết nối MX Component, không bị đổi thành `Mitsubishi PLC (Connected)`.
+      - `Giải Pháp Kỹ Thuật Đã Triển Khai`:
+        1. *Cơ Chế Phân Biệt Manual Disconnect Trong Polling Engine*: Thêm thuộc tính `IsManuallyDisconnected` vào `PlcModel.cs`. `PlcPollingEngine.cs` chỉ auto-reconnect khi PLC ở trạng thái `Error/Connecting`. Bỏ qua hoàn toàn nếu `IsManuallyDisconnected = true` hoặc `State == Disconnected`.
+        2. *Điều Khiển Nút Bấm CanExecute*: Thêm `CanConnectSelectedPlc` và `CanDisconnectSelectedPlc` trong `PlcManagerViewModel.cs`, tự động kích hoạt `NotifyCanExecuteChanged()` khi trạng thái kết nối thay đổi.
+        3. *Loại Bỏ Hardcode CPU Name*: Thay thế chuỗi hardcode trong `MxComWorker.cs` bằng bộ nhớ đệm CPU Type lấy từ `GetCpuType`.
+        4. *Kiểm Thử Tự Động*: Thêm `Test 10` trong `PlcTests.cs`, đạt PASS 100%.
+      - `Hiệu Quả Đạt Được`:
+        - Quản lý trạng thái kết nối PLC hoàn hảo, thao tác người dùng mượt mà, chính xác và chuyên nghiệp.
+        - Toàn bộ suite test tự động trong `TestExtractApp` đạt PASS 100%.
+    - [x] Task 254: Khắc Phục Hiện Tượng Treo Connecting Khi Mở Cửa Sổ PLC Manager & Tối Ưu Ngắt Kết Nối Tức Thì:
+      - `Yêu Cầu & Bối Cảnh`:
+        - Khi mở cửa sổ "PLC & Industrial Motion Configuration", hệ thống không được tự động ép kết nối sang trạng thái `Connecting` gây treo/đơ giao diện. Nút "Ngắt Kết Nối" phải phản hồi tức thì mà không bị chặn (blocked) bởi luồng kết nối đang chờ.
+      - `Giải Pháp Kỹ Thuật Đã Triển Khai`:
+        1. *Xóa Bỏ Tự Động Chiếm Polling Lock*: Trong `ToolEditorViewModel.Plc.cs`, loại bỏ hoàn toàn `AcquirePollingLock("PlcManagerWindow")`. Chỉ kết nối khi người dùng bấm "⚡ Kết Nối".
+        2. *Chỉ Kích Hoạt Polling Khi Đang Active*: Trong `PlcManagerViewModel.cs`, các hàm `AddPlc`, `DeletePlc`, `AddTag`, `DeleteTag` chỉ gọi `StartPollingAsync` nếu `_plcService.IsPollingActive == true`.
+        3. *Ngắt Kết Nối Non-blocking Tức Thì*: Trong `DisconnectSelectedPlcAsync`, giải phóng toàn bộ lock polling, lập tức gán `State = Disconnected`, `CpuName = string.Empty`, cập nhật UI rồi mới đóng socket/COM ngầm với timeout 500ms.
+        4. *Chống Deadlock Trong Driver*: Cập nhật `MitsubishiDriver.cs` và `MitsubishiMxComponentDriver.cs` với cơ chế timeout cho semaphore lock, luôn chuyển `State = Disconnected` dù kết nối trước đó chưa hoàn thành.
+      - `Hiệu Quả Đạt Được`:
+        - Mở cửa sổ cấu hình PLC mượt mà, không bị lag, không bị chuyển trạng thái Connecting ngoài ý muốn.
+        - Nút "Ngắt Kết Nối" phản hồi tức thì $100\%$, không bao giờ bị treo.
+        - Toàn bộ 10/10 test case PLC trong `TestExtractApp` đạt PASS 100%.
+    - [x] Task 255: Tự Động Kết Nối PLC Đã Lưu Khi Khởi Động Ứng Dụng (Auto-Connect on App Startup):
+      - `Yêu Cầu & Bối Cảnh`:
+        - Khi ứng dụng bật lên, tự động kết nối các PLC trong danh sách đã lưu (`Enabled == true`) và kích hoạt Polling Engine ngầm, không bắt người dùng phải mở cửa sổ PLC để bấm Kết Nối thủ công mỗi lần mở máy.
+      - `Giải Pháp Kỹ Thuật Đã Triển Khai`:
+        1. *Phương Thức AutoConnectStartupAsync*: Bổ sung vào `IPlcManagerService` & `PlcManagerService`, tự động kết nối các PLC Enabled và giữ lock `"AutoStartup"` cho Polling Engine.
+        2. *Tích Hợp Khởi Động App.xaml.cs*: Gọi `_ = plcManager.AutoConnectStartupAsync();` chạy nền không chặn giao diện chính.
+        3. *Đồng Bộ Giao Diện & Thao Tác Ngắt Kết Nối*: Cửa sổ PLC Manager hiển thị ngay trạng thái `Connected` và CPU Name; khi người dùng bấm "Ngắt Kết Nối" thì giải phóng sạch lock `AutoStartup` và `PlcManager`.
+        4. *Kiểm Thử Tự Động*: Bổ sung `Test 11` trong `PlcTests.cs`, đạt PASS 100%.
+      - `Hiệu Quả Đạt Được`:
+        - Người dùng mở ứng dụng lên là hệ thống kết nối PLC sẵn sàng 100%, tag data cập nhật tức thì vào Tool Editor, Oscilloscope và HMI.
+        - Toàn bộ 11/11 bài test PLC trong `TestExtractApp` đạt PASS 100%.
 
 
 

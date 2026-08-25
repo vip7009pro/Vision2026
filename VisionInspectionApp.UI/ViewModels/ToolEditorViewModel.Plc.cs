@@ -531,14 +531,12 @@ public sealed partial class ToolEditorViewModel : ObservableObject
     [RelayCommand]
     private void OpenPlcManager()
     {
-        _plcManagerService.AcquirePollingLock("PlcManagerWindow");
         var vm = new PlcManagerViewModel(_plcManagerService);
         var activeWin = System.Windows.Application.Current?.Windows.OfType<Window>().FirstOrDefault(w => w.IsActive) ?? System.Windows.Application.Current?.MainWindow;
         var win = new PlcManagerWindow(vm)
         {
             Owner = activeWin
         };
-        win.Closed += (s, e) => _plcManagerService.ReleasePollingLock("PlcManagerWindow");
         win.ShowDialog();
 
         _plcManagerService.SaveGlobalConfig();
@@ -616,6 +614,7 @@ public partial class ResultTransferItemVM : ObservableObject
     public IEnumerable<string> AvailablePlcs { get; }
     public IEnumerable<string> AvailableTags { get; }
     public Array AvailableConditions => Enum.GetValues(typeof(ImageOutputCondition));
+    public Array AvailableModes => Enum.GetValues(typeof(ResultTransferMode));
 
     public string PlcId
     {
@@ -667,6 +666,37 @@ public partial class ResultTransferItemVM : ObservableObject
             if (Model.Condition != value)
             {
                 Model.Condition = value;
+                OnPropertyChanged();
+                _onChanged();
+            }
+        }
+    }
+
+    public ResultTransferMode Mode
+    {
+        get => Model.Mode;
+        set
+        {
+            if (Model.Mode != value)
+            {
+                Model.Mode = value;
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(IsPulseMode));
+                _onChanged();
+            }
+        }
+    }
+
+    public bool IsPulseMode => Mode == ResultTransferMode.Pulse;
+
+    public int PulseDurationMs
+    {
+        get => Model.PulseDurationMs;
+        set
+        {
+            if (Model.PulseDurationMs != value)
+            {
+                Model.PulseDurationMs = value;
                 OnPropertyChanged();
                 _onChanged();
             }

@@ -54,6 +54,8 @@ public interface IPlcManagerService : IDisposable
 
     Task ConnectAllAsync(CancellationToken cancellationToken = default);
 
+    Task AutoConnectStartupAsync(CancellationToken cancellationToken = default);
+
     Task DisconnectAllAsync();
 
     void RegisterDynamicTagProvider(string providerId, Func<IEnumerable<PlcTag>> provider);

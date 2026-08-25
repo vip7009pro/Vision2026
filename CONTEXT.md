@@ -49,6 +49,72 @@
 - Preview được phép tiếp tục khi Global Snapshot rỗng để lấy ảnh từ ImageSource.
 - Lưu template cho Origin, Point và SurfaceCompare hoạt động với nguồn ảnh ImageSource.
 
+- **Tự Động Kết Nối PLC Đã Lưu Khi Khởi Động Ứng Dụng (Auto-Connect on App Startup) (Task 255)**:
+  - **Yêu Cầu & Bối Cảnh**:
+    - Người dùng mong muốn khi ứng dụng bật lên thì tự động kết nối các PLC đã có trong danh sách được lưu (`Enabled == true`), không cần phải mỗi lần mở app lên lại phải vào cửa sổ cấu hình PLC để bấm nút kết nối thủ công.
+  - **Giải Pháp Kỹ Thuật Đã Triển Khai**:
+    1. *Tầng Service & Lifecycle ([IPlcManagerService.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.Application/PLC/Services/IPlcManagerService.cs) & [PlcManagerService.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.Application/PLC/Services/PlcManagerService.cs))*:
+       - Bổ sung phương thức `AutoConnectStartupAsync(CancellationToken cancellationToken = default)`.
+       - Lọc các PLC có `Enabled == true`, đặt `IsManuallyDisconnected = false`, gọi kết nối tuần tự không chặn `ConnectAllAsync(cancellationToken)`, sau đó kích hoạt Polling Engine với lock `"AutoStartup"`.
+    2. *Tầng Khởi Động Ứng Dụng ([App.xaml.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/App.xaml.cs))*:
+       - Ngay sau khi khởi chạy `MainWindow`, ứng dụng tự động kích hoạt `_ = plcManager.AutoConnectStartupAsync();` chạy ngầm trong nền (tương tự như `CameraService.StartSavedCameraAsync()`), không làm đơ hoặc chậm quá trình khởi động giao diện chính của người dùng.
+    3. *Đồng Bộ Giao Diện Cửa Sổ PLC & Thao Tác Thủ Công ([PlcManagerViewModel.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/PLC/PlcManagerViewModel.cs))*:
+       - Khi người dùng mở cửa sổ "PLC & Industrial Motion", trạng thái PLC hiển thị sẵn `Connected` màu xanh kèm tên CPU thật.
+       - Nếu người dùng bấm "🔌 Ngắt Kết Nối", hệ thống giải phóng lock `"AutoStartup"` và `"PlcManager"`, chuyển về `Disconnected` và không tự ý reconnect lại.
+    4. *Kiểm Thử Tự Động*:
+       - Bổ sung `Test 11: AutoConnectStartup Background Connection & Polling Readiness` trong `PlcTests.cs`, kiểm tra toàn bộ chu trình khởi động tự động kết nối và quét tag qua cache, đạt kết quả PASS 100%.
+
+- **Khắc Phục Hiện Tượng Treo Connecting Khi Mở Cửa Sổ PLC Manager & Tối Ưu Ngắt Kết Nối Tức Thì (Task 254)**:
+  - **Yêu Cầu & Bối Cảnh**:
+    - Khi bật ứng dụng lên và mở cửa sổ "PLC & Industrial Motion Configuration" (Tab Kết Nối & Tag), hệ thống tự động rơi vào trạng thái `Connecting` và bị treo/đơ (người dùng bấm "Ngắt Kết Nối" không được, phải xóa PLC tạo lại).
+  - **Nguyên Nhân Gốc Rễ Đã Tìm Thấy**:
+    1. *Tự ý chiếm polling lock khi mở cửa sổ*: Trong `ToolEditorViewModel.Plc.cs`, lệnh `OpenPlcManager()` tự động gọi `AcquirePollingLock("PlcManagerWindow")`. Việc này ngay lập tức ép `PlcManagerService` gọi `StartPollingAsync()` $\rightarrow$ `ConnectAllAsync()` $\rightarrow$ ép tất cả PLC Enabled sang `Connecting` dù người dùng chỉ muốn vào xem hoặc chỉnh sửa cấu hình.
+    2. *Tự ý gọi StartPollingAsync khi thêm/xóa/sửa PLC & Tag*: Trong `PlcManagerViewModel.cs`, các hàm `AddPlc()`, `DeletePlc()`, `AddTag()`, `DeleteTag()` vô tình gọi `StartPollingAsync()`, ép kết nối lại trong nền.
+    3. *Deadlock / Block khi bấm Disconnect*: Khi `driver.ConnectAsync` đang chạy trong luồng nền giữ `SemaphoreSlim _lock`, nếu người dùng bấm "Ngắt Kết Nối", hàm `driver.DisconnectAsync()` trước đây cũng đợi `_lock` vô hạn hoặc 1s không giải phóng state, khiến giao diện không thể chuyển trạng thái về `Disconnected`.
+  - **Giải Pháp Kỹ Thuật Đã Triển Khai**:
+    1. *Xóa bỏ toàn bộ tự động chiếm lock trong `OpenPlcManager()`*: Cửa sổ PLC Manager là cửa sổ quản lý cấu hình; không ép kết nối khi mở lên. Chỉ kết nối khi người dùng chủ động bấm "⚡ Kết Nối".
+    2. *Chỉ khởi động lại Polling khi `IsPollingActive == true`*: Trong `AddPlc`, `DeletePlc`, `AddTag`, `DeleteTag`, chỉ kích hoạt `StartPollingAsync()` nếu hệ thống đang thực sự chạy Polling.
+    3. *Xử lý Ngắt Kết Nối Tức Thì*: Trong `DisconnectSelectedPlcAsync()`, ngay khi bấm nút: giải phóng toàn bộ lock polling (`PlcManager` & `PlcManagerWindow`), đặt ngay lập tức `State = Disconnected`, `CpuName = string.Empty`, `IsManuallyDisconnected = true`, cập nhật trạng thái nút bấm rồi mới ngắt socket/COM ngầm mà không làm đơ/treo UI.
+    4. *Cơ Chế Non-blocking Trong Drivers*: `MitsubishiDriver.cs` và `MitsubishiMxComponentDriver.cs` cài đặt cơ chế timeout 500ms cho `_lock` trong `DisconnectAsync()` và luôn luôn dọn dẹp socket/COM và thiết lập `State = Disconnected` ngay cả khi kết nối đang dở dang.
+
+- **Chuẩn Hóa Quản Lý Kết Nối PLC, Vô Hiệu Hóa Nút Kết Nối Khi Đã Connected & Sửa Lỗi Tự Động Reconnect Sau Khi Ngắt Kết Nối (Task 253)**:
+  - **Yêu Cầu & Bối Cảnh**:
+    - Khi người dùng bấm "Ngắt Kết Nối" trên tab PLC & Industrial Motion, chương trình bị hiện tượng tự động kết nối lại chỉ sau vài chục ms do `PlcPollingEngine` chạy nền hiểu nhầm là rớt mạng.
+    - Khi PLC đã ở trạng thái `Connected`, nút "⚡ Kết Nối" vẫn sáng và bấm được thay vì bị disabled đi để tránh người dùng bấm trùng lặp.
+    - Khi chọn driver `MitsubishiMxComponent`, lần kết nối đầu tiên nhận diện đúng `FX5UCPU (Type 18944)`, nhưng nếu bấm kết nối lại thì chuỗi CPU Name bị đổi thành `Mitsubishi PLC (Connected)` do hardcode cũ trong Bridge x86.
+  - **Giải Pháp Kỹ Thuật Đã Triển Khai**:
+    1. *Khắc Phục Tự Động Reconnect Khi Người Dùng Chủ Động Ngắt Kết Nối*:
+       - Bổ sung thuộc tính `IsManuallyDisconnected` trong `PlcModel.cs`.
+       - Trong `PlcPollingEngine.cs`, chỉ thực hiện auto-reconnect khi PLC ở trạng thái `Error` hoặc `Connecting` và đã quá chu kỳ `ReconnectIntervalMs`. Tuyệt đối bỏ qua và KHÔNG tự động kết nối lại nếu `plc.IsManuallyDisconnected` hoặc `plc.State == PlcConnectionState.Disconnected`.
+       - Trong `PlcManagerViewModel.cs`, khi người dùng bấm "Ngắt Kết Nối": giải phóng polling lock `ReleasePollingLock("PlcManager")`, gọi `driver.DisconnectAsync()`, đặt `IsManuallyDisconnected = true`, `State = Disconnected`, `CpuName = string.Empty`.
+    2. *Vô Hiệu Hóa Nút Kết Nối Thông Minh (Command CanExecute & UI Binding)*:
+       - Thêm `CanConnectSelectedPlc`: Chỉ cho phép bấm khi PLC `Enabled` và `State != Connected` và `State != Connecting`.
+       - Thêm `CanDisconnectSelectedPlc`: Chỉ cho phép bấm khi PLC `State == Connected` hoặc `State == Connecting`.
+       - Tự động cập nhật `NotifyCanExecuteChanged()` cho cả 2 command ngay khi `SelectedPlc`, `State`, `Enabled`, `IsManuallyDisconnected` thay đổi.
+    3. *Loại Bỏ Hardcode Chuỗi CPU Name Trong PlcBridge*:
+       - Trong `MxComWorker.cs`: Thay thế chuỗi hardcode `"Mitsubishi PLC (Connected)"` bằng cơ chế cache `_cachedCpuName` và `_cachedCpuType` lấy từ `GetCpuType`. Khi gọi lại `ConnectAsync`, bridge trả về đúng tên CPU thực tế (`FX5UCPU Type 18944`), không làm biến dạng thông tin PLC.
+    4. *Kiểm Thử Tự Động*:
+       - Bổ sung `Test 10: Manual Disconnect (No Auto-Reconnect) & Connection Command States` trong `PlcTests.cs`, đạt kết quả PASS 100%.
+
+- **Tùy Chọn Gửi Xung (Pulse Mode) & Nhập Thời Gian Xung Trong Node ResultTransfer Của Tool Editor (Task 252)**:
+  - **Yêu Cầu & Bối Cảnh**:
+    - Trong Tool Editor, node `ResultTransfer` với kiểu dữ liệu boolean (truyền bit OK/NG, cờ handshake...), trước đây chỉ hỗ trợ ghi theo dạng mức logic (Level), chưa có tùy chọn gửi theo xung (Pulse).
+    - Bổ sung tùy chọn chọn giữa gửi theo Level hoặc gửi theo Xung (Pulse). Khi chọn gửi xung, cho phép nhập thời gian xung (`PulseDurationMs`, mặc định 100ms) và thực thi cơ chế: nếu địa chỉ tương ứng giá trị đang là `true` thì ghi `false` trong khoảng thời gian xung rồi tự động ghi lại `true`, và ngược lại nếu đang là `false` thì ghi `true` trong thời gian xung rồi tự động ghi lại `false`.
+  - **Giải Pháp Kỹ Thuật Đã Triển Khai**:
+    1. *Data Model (PlcNodeDefinitions.cs)*:
+       - Bổ sung enum `ResultTransferMode { Level = 0, Pulse = 1 }`.
+       - Thêm thuộc tính `Mode` (`ResultTransferMode`) và `PulseDurationMs` (`int`, mặc định 100ms) vào `ResultTransferItem`.
+    2. *Execution Engine (PlcResultTransferRunner.cs)*:
+       - Triển khai `ExecuteSingleItemTransferAsync` và thực thi đồng thời (`Task.WhenAll`):
+         - Đọc giá trị hiện tại của tag (từ Cache hoặc đọc trực tiếp PLC).
+         - Ghi giá trị đảo trạng thái `!currentBool` $\rightarrow$ `await Task.Delay(pulseMs)` $\rightarrow$ Tự động ghi trả lại trạng thái ban đầu `currentBool`.
+         - Hỗ trợ cả bit boolean thuần (`true`/`false`) và bit số nguyên (`1`/`0`).
+    3. *Giao Diện UI & ViewModel (ToolEditorViewModel.Plc.cs & ToolEditorView.xaml)*:
+       - Nâng cấp `ResultTransferItemVM`: Thêm `Mode`, `PulseDurationMs`, `IsPulseMode`, `AvailableModes`.
+       - Trong View: Thêm ComboBox chọn `Chế độ gửi:` (`Level` / `Pulse`) và TextBox nhập `Xung (ms):` xuất hiện linh hoạt khi `IsPulseMode = true`.
+    4. *Kiểm Thử Tự Động*:
+       - Bổ sung `Test 9: ResultTransfer Pulse Mode (Toggle & Auto-Restore) & Level Mode` trong `PlcTests.cs`, kiểm tra chính xác cả 2 chiều đảo xung (`false -> true (50ms) -> false` và `true -> false (50ms) -> true`), đạt kết quả PASS 100%.
+
 - **Thanh 20 Sản Phẩm Gần Nhất (Recent 20 Parts OK/NG Stepped Bar) & Tối Ưu Icon Buttons Trên Tool Editor (Task 251)**:
   - **Yêu Cầu & Bối Cảnh**:
     - Bổ sung thanh mô phỏng trực quan dạng 20 nấc (segments) thể hiện lịch sử kiểm tra của 20 con hàng gần nhất. Hàng **OK** hiển thị nấc màu **Xanh lá** (`#10B981`), hàng **NG** hiển thị nấc màu **Đỏ** (`#EF4444`). Luồng chảy xuôi theo chiều từ **Trái sang Phải** (FIFO, con hàng mới nhất ở bên phải, khi đầy 20 nấc thì con cũ nhất bên trái tự động cuộn đi).

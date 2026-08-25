@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
@@ -64,6 +65,8 @@ public sealed class PlcPollingEngine
     public event EventHandler<BatchPolledEventArgs>? OnBatchPolled;
 
     public ConcurrentMetricsStore Metrics { get; } = new();
+
+    private readonly ConcurrentDictionary<string, DateTime> _lastReconnectAttempts = new(StringComparer.OrdinalIgnoreCase);
 
     public PlcPollingEngine(PlcTagCache cache, IPlcLogger logger)
     {
@@ -152,13 +155,26 @@ public sealed class PlcPollingEngine
 
                 if (!driver.IsConnected)
                 {
-                    try
+                    // Nếu người dùng chủ động ngắt kết nối (Disconnected) hoặc có cờ IsManuallyDisconnected -> BỎ QUA không tự ý Reconnect
+                    if (plc.IsManuallyDisconnected || plc.State == PlcConnectionState.Disconnected)
                     {
-                        using var connectCts = new CancellationTokenSource(1500);
-                        using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, connectCts.Token);
-                        await driver.ConnectAsync(linkedCts.Token);
+                        continue;
                     }
-                    catch { }
+
+                    // Chỉ thử reconnect nếu đang ở trạng thái Error/Connecting và đã quá chu kỳ ReconnectIntervalMs
+                    var now = DateTime.UtcNow;
+                    int reconnectDelay = Math.Max(2000, plc.ReconnectIntervalMs <= 0 ? 5000 : plc.ReconnectIntervalMs);
+                    if (!_lastReconnectAttempts.TryGetValue(plc.Id, out var lastAttempt) || (now - lastAttempt).TotalMilliseconds >= reconnectDelay)
+                    {
+                        _lastReconnectAttempts[plc.Id] = now;
+                        try
+                        {
+                            using var connectCts = new CancellationTokenSource(1500);
+                            using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, connectCts.Token);
+                            await driver.ConnectAsync(linkedCts.Token);
+                        }
+                        catch { }
+                    }
                 }
 
                 if (!driver.IsConnected) continue;

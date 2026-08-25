@@ -3138,6 +3138,7 @@
                                                         <RowDefinition Height="Auto"/>
                                                         <RowDefinition Height="Auto"/>
                                                         <RowDefinition Height="Auto"/>
+                                                        <RowDefinition Height="Auto"/>
                                                     </Grid.RowDefinitions>
                                                     <Grid.ColumnDefinitions>
                                                         <ColumnDefinition Width="80"/>
@@ -3158,6 +3159,19 @@
 
                                                     <TextBlock Grid.Row="3" Grid.Column="0" Text="Điều kiện:" VerticalAlignment="Center" Foreground="#CCCCCC" FontSize="11"/>
                                                     <ComboBox Grid.Row="3" Grid.Column="1" Grid.ColumnSpan="2" ItemsSource="{Binding AvailableConditions}" SelectedItem="{Binding Condition, UpdateSourceTrigger=PropertyChanged}" Margin="2" Height="24"/>
+
+                                                    <TextBlock Grid.Row="4" Grid.Column="0" Text="Chế độ gửi:" VerticalAlignment="Center" Foreground="#CCCCCC" FontSize="11"/>
+                                                    <Grid Grid.Row="4" Grid.Column="1" Grid.ColumnSpan="2">
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="*"/>
+                                                            <ColumnDefinition Width="Auto"/>
+                                                        </Grid.ColumnDefinitions>
+                                                        <ComboBox Grid.Column="0" ItemsSource="{Binding AvailableModes}" SelectedItem="{Binding Mode, UpdateSourceTrigger=PropertyChanged}" Margin="2" Height="24" ToolTip="Level: Giữ mức logic. Pulse: Đảo trạng thái trong thời gian xung rồi tự động khôi phục mức ban đầu."/>
+                                                        <StackPanel Grid.Column="1" Orientation="Horizontal" Visibility="{Binding IsPulseMode, Converter={StaticResource BoolToVis}}" VerticalAlignment="Center" Margin="4,0,0,0">
+                                                            <TextBlock Text="Xung (ms):" VerticalAlignment="Center" Foreground="#FFA726" FontSize="11" Margin="0,0,4,0"/>
+                                                            <TextBox Text="{Binding PulseDurationMs, UpdateSourceTrigger=PropertyChanged}" Width="55" Height="24" VerticalContentAlignment="Center" HorizontalContentAlignment="Center" Margin="0,2,2,2" ToolTip="Thời gian giữ xung trước khi tự động trả về mức ban đầu (ms)"/>
+                                                        </StackPanel>
+                                                    </Grid>
                                                 </Grid>
                                             </Border>
                                         </DataTemplate>
@@ -3172,6 +3186,8 @@
                         <TextBlock Text="• {Origin.X}, {Origin.Y}, {Origin.AngleDeg}: Tọa độ gốc" Foreground="#BBDEFB" FontSize="10" TextWrapping="Wrap"/>
                         <TextBlock Text="• {KhoangCach1.Value}, {Caliper1.Value}: Khoảng cách / kích thước" Foreground="#BBDEFB" FontSize="10" TextWrapping="Wrap"/>
                         <TextBlock Text="• {MaBarCode.Text}: Chuỗi văn bản đọc được từ Barcode/OCR" Foreground="#BBDEFB" FontSize="10" TextWrapping="Wrap"/>
+                        <TextBlock Text="• Chế độ Level: Giữ mức logic true/false thông thường." Foreground="#C8E6C9" FontSize="10" TextWrapping="Wrap" Margin="0,2,0,0"/>
+                        <TextBlock Text="• Chế độ Pulse: Đảo trạng thái trong thời gian xung (ms) rồi tự động hoàn trả mức ban đầu." Foreground="#FFE082" FontSize="10" TextWrapping="Wrap"/>
                     </StackPanel>
                 </Border>
             </StackPanel>

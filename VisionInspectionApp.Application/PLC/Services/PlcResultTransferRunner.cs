@@ -17,6 +17,8 @@ public static class PlcResultTransferRunner
             return;
         }
 
+        var tasks = new List<Task>();
+
         foreach (var nodeDef in config.ResultTransfers)
         {
             if (nodeDef.Items == null || nodeDef.Items.Count == 0)
@@ -27,30 +29,105 @@ public static class PlcResultTransferRunner
                 if (string.IsNullOrWhiteSpace(item.TagName))
                     continue;
 
-                try
-                {
-                    // Kiểm tra điều kiện gửi
-                    if (item.Condition == ImageOutputCondition.OnPass && !result.Pass)
-                        continue;
-                    if (item.Condition == ImageOutputCondition.OnFail && result.Pass)
-                        continue;
-
-                    // Tính toán biểu thức giá trị
-                    object writeVal = EvaluateExpression(item.ValueExpression, result, config);
-
-                    // Gửi xuống PLC
-                    string targetPlcId = item.PlcId;
-                    System.Diagnostics.Debug.WriteLine($"[PLC RESULT TRANSFER] Tag='{item.TagName}' (PLC: {targetPlcId}) | Expr='{item.ValueExpression}' => Output: {writeVal} ({writeVal?.GetType().Name})");
-                    Console.WriteLine($"[PLC RESULT TRANSFER] Tag='{item.TagName}' (PLC: {targetPlcId}) | Expr='{item.ValueExpression}' => Output: {writeVal} ({writeVal?.GetType().Name})");
-
-                    await plcManager.WriteTagValueAsync(targetPlcId, item.TagName, writeVal);
-                }
-                catch (Exception ex)
-                {
-                    System.Diagnostics.Debug.WriteLine($"[PLC RESULT TRANSFER ERROR] Item '{item.TagName}': {ex.Message}");
-                    Console.WriteLine($"[PLC RESULT TRANSFER ERROR] Item '{item.TagName}': {ex.Message}");
-                }
+                tasks.Add(ExecuteSingleItemTransferAsync(item, config, result, plcManager));
             }
+        }
+
+        if (tasks.Count > 0)
+        {
+            await Task.WhenAll(tasks);
+        }
+    }
+
+    public static async Task ExecuteSingleItemTransferAsync(ResultTransferItem item, VisionConfig config, InspectionResult result, IPlcManagerService plcManager)
+    {
+        if (string.IsNullOrWhiteSpace(item.TagName))
+            return;
+
+        try
+        {
+            // Kiểm tra điều kiện gửi
+            if (item.Condition == ImageOutputCondition.OnPass && !result.Pass)
+                return;
+            if (item.Condition == ImageOutputCondition.OnFail && result.Pass)
+                return;
+
+            // Tính toán biểu thức giá trị
+            object writeVal = EvaluateExpression(item.ValueExpression, result, config);
+            string targetPlcId = item.PlcId;
+
+            if (item.Mode == ResultTransferMode.Pulse)
+            {
+                int pulseMs = Math.Max(10, item.PulseDurationMs);
+
+                // Xác định trạng thái hiện tại của tag/địa chỉ
+                bool currentBool = false;
+                var cachedVal = plcManager.GetTagValue(targetPlcId, item.TagName);
+                object? rawVal = cachedVal?.CurrentValue;
+
+                if (rawVal == null)
+                {
+                    try
+                    {
+                        rawVal = await plcManager.ReadTagValueAsync(targetPlcId, item.TagName);
+                    }
+                    catch
+                    {
+                        rawVal = null;
+                    }
+                }
+
+                if (rawVal is bool b)
+                {
+                    currentBool = b;
+                }
+                else if (rawVal is int i)
+                {
+                    currentBool = i != 0;
+                }
+                else if (rawVal is short s)
+                {
+                    currentBool = s != 0;
+                }
+                else if (rawVal != null && bool.TryParse(rawVal.ToString(), out bool pb))
+                {
+                    currentBool = pb;
+                }
+                else if (rawVal != null && int.TryParse(rawVal.ToString(), out int pi))
+                {
+                    currentBool = pi != 0;
+                }
+
+                bool pulseValBool = !currentBool;
+                bool restoreValBool = currentBool;
+
+                object pulseVal = (writeVal is int) ? (pulseValBool ? 1 : 0) : pulseValBool;
+                object restoreVal = (writeVal is int) ? (restoreValBool ? 1 : 0) : restoreValBool;
+
+                System.Diagnostics.Debug.WriteLine($"[PLC RESULT TRANSFER PULSE] Tag='{item.TagName}' (PLC: {targetPlcId}) | Curr={currentBool} -> Pulse={pulseValBool} ({pulseMs}ms) -> Restore={restoreValBool}");
+                Console.WriteLine($"[PLC RESULT TRANSFER PULSE] Tag='{item.TagName}' (PLC: {targetPlcId}) | Curr={currentBool} -> Pulse={pulseValBool} ({pulseMs}ms) -> Restore={restoreValBool}");
+
+                // Bước 1: Ghi đảo trạng thái (Phát xung)
+                await plcManager.WriteTagValueAsync(targetPlcId, item.TagName, pulseVal);
+
+                // Bước 2: Chờ thời gian xung
+                await Task.Delay(pulseMs);
+
+                // Bước 3: Ghi hoàn trả về trạng thái ban đầu
+                await plcManager.WriteTagValueAsync(targetPlcId, item.TagName, restoreVal);
+            }
+            else
+            {
+                System.Diagnostics.Debug.WriteLine($"[PLC RESULT TRANSFER LEVEL] Tag='{item.TagName}' (PLC: {targetPlcId}) | Expr='{item.ValueExpression}' => Output: {writeVal} ({writeVal?.GetType().Name})");
+                Console.WriteLine($"[PLC RESULT TRANSFER LEVEL] Tag='{item.TagName}' (PLC: {targetPlcId}) | Expr='{item.ValueExpression}' => Output: {writeVal} ({writeVal?.GetType().Name})");
+
+                await plcManager.WriteTagValueAsync(targetPlcId, item.TagName, writeVal);
+            }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[PLC RESULT TRANSFER ERROR] Item '{item.TagName}': {ex.Message}");
+            Console.WriteLine($"[PLC RESULT TRANSFER ERROR] Item '{item.TagName}': {ex.Message}");
         }
     }
 

@@ -761,40 +761,63 @@ public sealed class PlcManagerService : IPlcManagerService, IDisposable
     {
         foreach (var plc in Plcs.Where(p => p.Enabled))
         {
+            plc.IsManuallyDisconnected = false;
             var driver = GetDriver(plc.Id);
-            if (driver != null && !driver.IsConnected)
+            if (driver != null)
             {
-                plc.State = PlcConnectionState.Connecting;
-                try
+                if (!driver.IsConnected)
                 {
-                    using var connCts = new CancellationTokenSource(2000);
-                    using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, connCts.Token);
-                    bool ok = await driver.ConnectAsync(linkedCts.Token);
-                    if (ok)
+                    plc.State = PlcConnectionState.Connecting;
+                    try
                     {
-                        plc.State = PlcConnectionState.Connected;
-                        Logger.LogConnect(plc.Id, plc.Name);
-                        OnConnected?.Invoke(this, plc.Id);
+                        using var connCts = new CancellationTokenSource(2000);
+                        using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, connCts.Token);
+                        bool ok = await driver.ConnectAsync(linkedCts.Token);
+                        if (ok)
+                        {
+                            plc.State = PlcConnectionState.Connected;
+                            Logger.LogConnect(plc.Id, plc.Name);
+                            OnConnected?.Invoke(this, plc.Id);
+                        }
+                        else
+                        {
+                            plc.State = PlcConnectionState.Error;
+                            Logger.LogDisconnect(plc.Id, plc.Name);
+                            OnDisconnected?.Invoke(this, plc.Id);
+                        }
                     }
-                    else
+                    catch
                     {
                         plc.State = PlcConnectionState.Error;
-                        Logger.LogDisconnect(plc.Id, plc.Name);
-                        OnDisconnected?.Invoke(this, plc.Id);
                     }
                 }
-                catch
+                else
                 {
-                    plc.State = PlcConnectionState.Error;
+                    plc.State = PlcConnectionState.Connected;
                 }
             }
         }
+    }
+
+    public async Task AutoConnectStartupAsync(CancellationToken cancellationToken = default)
+    {
+        var enabledPlcs = Plcs.Where(p => p.Enabled).ToList();
+        if (enabledPlcs.Count == 0) return;
+
+        foreach (var plc in enabledPlcs)
+        {
+            plc.IsManuallyDisconnected = false;
+        }
+
+        await ConnectAllAsync(cancellationToken);
+        AcquirePollingLock("AutoStartup");
     }
 
     public async Task DisconnectAllAsync()
     {
         foreach (var plc in Plcs)
         {
+            plc.IsManuallyDisconnected = true;
             var driver = GetDriver(plc.Id);
             if (driver != null)
             {
@@ -804,6 +827,7 @@ public sealed class PlcManagerService : IPlcManagerService, IDisposable
                 }
                 catch { }
                 plc.State = PlcConnectionState.Disconnected;
+                plc.CpuName = string.Empty;
                 Logger.LogDisconnect(plc.Id, plc.Name);
                 OnDisconnected?.Invoke(this, plc.Id);
             }
