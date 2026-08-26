@@ -49,6 +49,28 @@
 - Preview được phép tiếp tục khi Global Snapshot rỗng để lấy ảnh từ ImageSource.
 - Lưu template cho Origin, Point và SurfaceCompare hoạt động với nguồn ảnh ImageSource.
 
+- **Sửa Lỗi ToolTip Biểu Đồ SPC & Đổi Tên (RefName) Node An Toàn Trên Flow Canvas (Task 259)**:
+  - **Yêu Cầu & Bối Cảnh**:
+    1. Trong màn hình Log, người dùng hover chuột vào các chấm dữ liệu (markers) và cột dữ liệu (bars) trên 4 biểu đồ SPC nhưng không có ToolTip nào hiện ra.
+    2. Trên Flow Canvas, khi người dùng sửa `RefName` của một node bất kỳ (ví dụ: `Preprocess`, `Caliper`, `Origin`, `CreatePoint`...), node đó trở nên không hoạt động hoặc bị mất cấu hình khi lưu Job / chạy Continuous.
+  - **Nguyên Nhân Gốc Rễ**:
+    1. *Lỗi ToolTip*: Trong WPF `ItemsControl` dùng `Canvas` làm ItemsPanel, nếu không dùng `ItemContainerStyle` để gán `Canvas.Left` và `Canvas.Top` trực tiếp lên `ContentPresenter` mà lại dùng `TranslateTransform` bên trong `DataTemplate`, bounding box của `ContentPresenter` nhận Hit Test luôn nằm ở gốc `(0, 0)` của Canvas thay vì vị trí điểm `(X, Y)`. Do đó sự kiện chuột không trúng các điểm dữ liệu. Ngoài ra, các đường `Polyline` vẽ đè lên trên có thể chặn hit test nếu thiếu `IsHitTestVisible="False"`.
+    2. *Lỗi Node Rename*: Hàm `RenameSelectedDefinitionIfNeeded()` trong `ToolEditorViewModel.cs` chỉ hỗ trợ một số ít tool hình học cơ bản và bỏ sót hàng loạt tool quan trọng (`Preprocess`, `ImageSource`, `Caliper`, `SurfaceCompare`, `ContourCompare`, `TextNode`, `ImageOutput`, `Crop`, `ColorDiff`, `ImgArithmetic`, `CreatePoint`, `CreateLine`, `CreateRect`, `CreateCircle`, `Condition`, `Plc*`, `ResultTransfer`, `DbNode`...). Khi đổi `RefName` của các tool này, `_config` vẫn giữ `Name` cũ. Khi hàm `SyncToolGraphToConfig()` chạy, các bộ sưu tập `_config.*.RemoveAll(x => !validRefNames.Contains(x.Name))` thấy tên cũ không khớp với `RefName` mới trên Flow Graph nên đã **xóa sạch toàn bộ cấu hình của node khỏi Job**! Đồng thời, các tool downstream tham chiếu đến `oldName` không được cập nhật sang `newName`.
+  - **Giải Pháp Kỹ Thuật Đã Triển Khai**:
+    1. *Khắc phục ToolTip SPC ([InspectionLogWindow.xaml](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/Views/InspectionLogWindow.xaml))*:
+       - Bổ sung `<ItemsControl.ItemContainerStyle><Style TargetType="ContentPresenter"><Setter Property="Canvas.Left" Value="{Binding X}"/><Setter Property="Canvas.Top" Value="{Binding Y}"/></Style></ItemsControl.ItemContainerStyle>` cho cả 4 `ItemsControl` (Histogram, Xbar, R-chart, Cpk-trend).
+       - Loại bỏ `TranslateTransform` trong `DataTemplate`.
+       - Đặt `IsHitTestVisible="False"` cho tất cả các đường `Polyline` (đường cong chuẩn Gauss, đường trung bình CL/UCL/LCL, đường nối Xbar/R/Cpk).
+       - Cấu hình `ToolTipService.InitialShowDelay="0"`, `ToolTipService.ShowDuration="20000"`, `ToolTipService.BetweenShowDelay="0"` và `Cursor="Hand"` để hover là ToolTip hiện ngay lập tức với giao diện tối viền xanh cyan `#38BDF8` cực nét.
+    2. *Xử lý triệt để Node Rename & Downstream References ([ToolEditorViewModel.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/ToolEditorViewModel.cs))*:
+       - Viết lại toàn diện `RenameSelectedDefinitionIfNeeded()` bao quát 100% các loại node trong hệ thống.
+       - Tự động đổi `def.Name` trong danh sách cấu hình tương ứng trong `_config`.
+       - Quét và cập nhật tự động toàn bộ thuộc tính tham chiếu downstream trong `_config` (`PointA`, `PointB`, `LineA`, `LineB`, `Line`, `Point`, `CircleRef`, `RefA`, `RefB`, `InputNodeName`, `ImageSourceRef`, `PointRef`, `Point1Ref`, `Point2Ref`, `CenterPointRef`, `BoundaryPointRef`, `PreprocessChoice`, v.v.).
+       - Cập nhật `ActiveRoiLabel` nếu đang khớp với node.
+       - Gọi `SyncToolGraphToConfig()` ngay lập tức để đồng bộ hóa `ToolGraph.Nodes` và `_config`, ngăn chặn hoàn toàn việc cấu hình bị xóa mất.
+       - Kích hoạt `RequestAutoSave()`.
+  - **Kiểm Thử & Xác Thực**: Bổ sung `TestFlowCanvasNodeRenameAndDownstreamReferences` trong `CameraTest.cs` kiểm tra đổi tên cho Point, Caliper, Preprocess và cập nhật tự động liên kết downstream `Distances`, `CreatePoints`. Toàn bộ test suite PASSED 100%.
+
 - **Giao Diện Lịch Sử Kiểm Tra (Inspection Log) & Phân Tích Thống Kê Năng Lực Quá Trình SPC / CPK (Task 258)**:
   - **Yêu Cầu & Bối Cảnh**:
     - Trong tab Tool Editor, bên cạnh nút Bản đồ cuộn, bổ sung nút **Log** (📊) mở ra cửa sổ mới quản lý lịch sử kiểm tra và phân tích thống kê SPC/CPK.
@@ -57,12 +79,14 @@
     - Nửa dưới bên phải: Cụm 4 biểu đồ SPC gồm Histogram, Xbar chart, R chart, Cpk trend với cỡ mẫu $n$ tùy chỉnh (mặc định 32, tự hạ về 5 nếu thiếu mẫu, bỏ phần dư $N \pmod n$).
     - Nút chức năng xuất Excel (.xls XML 2003 chuẩn), CSV (UTF-8 BOM), JSON (.json), nút bật/tắt CPK.
     - Background Worker chuyên biệt (Channel-based) ghi log không ảnh hưởng đến tốc độ flow vision.
+    - Khắc phục hiển thị tên sản phẩm "Chưa gán": tự động lấy theo mã sản phẩm lưu trong Job (`ProductCode`, `ProductName`, hoặc tên file `.job`).
+    - Nâng cấp 4 biểu đồ SPC: dùng `Viewbox Stretch="Fill"` lấp đầy 100% diện tích card, bổ sung trục X/Y, vạch chia Ticks, đường lưới phụ và Markers tròn có ToolTip chi tiết khi hover.
   - **Giải Pháp Kỹ Thuật Đã Triển Khai**:
     1. *Data Models ([InspectionLogModels.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.Models/InspectionLogModels.cs))*: Các model `InspectionSessionRecord`, `InspectionPartRecord`, `InspectionItemMeasurement`, `SpcAnalysisResult`, `HistogramBinData`, `SpcSubgroupData`.
     2. *Động cơ SPC ([SpcEngine.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.Application/Services/SpcEngine.cs))*: Bảng tra hệ số Shewhart ($A_2, D_3, D_4, d_2$), tính toán $X\_CL, X\_UCL, X\_LCL, R\_CL, R\_UCL, R\_LCL, C_p, C_{pk}$, tạo dữ liệu Histogram bins và Normal Gauss curve.
-    3. *Dịch vụ Logging & Exporter ([InspectionLogService.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.Application/Services/InspectionLogService.cs) & [InspectionLogExporter.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.Application/Services/InspectionLogExporter.cs))*: Khởi tạo `Channel<InspectionPartEnvelope>` có giới hạn buffer, Background Task ghi đĩa/RAM cache độc lập; xuất báo cáo 3 định dạng Excel, CSV, JSON.
-    4. *Giao Diện ([InspectionLogWindow.xaml](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/Views/InspectionLogWindow.xaml) & [InspectionLogViewModel.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/InspectionLogViewModel.cs))*: Cửa sổ 2 cột co giãn GridSplitter, 4 biểu đồ WPF Canvas thuần siêu mượt, Header thông tin sản phẩm và ComboBox chọn phép đo.
-    5. *Tích Hợp Tool Editor*: Bổ sung nút `📊` cạnh nút Bản đồ cuộn trong `ToolEditorView.xaml` và kết nối lệnh `OpenInspectionLogCommand`.
+    3. *Dịch vụ Logging & Exporter ([InspectionLogService.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.Application/Services/InspectionLogService.cs) & [InspectionLogExporter.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.Application/Services/InspectionLogExporter.cs))*: Khởi tạo `Channel<InspectionPartEnvelope>` có giới hạn buffer, Background Task ghi đĩa/RAM cache độc lập; xuất báo cáo 3 định dạng Excel, CSV, JSON; tự động phân giải tên sản phẩm từ đường dẫn Job.
+    4. *Giao Diện ([InspectionLogWindow.xaml](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/Views/InspectionLogWindow.xaml) & [InspectionLogViewModel.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/InspectionLogViewModel.cs))*: Cửa sổ 2 cột co giãn GridSplitter, 4 biểu đồ WPF Canvas trong `Viewbox` phủ kín toàn bộ chiều cao/rộng, đầy đủ nhãn trục X, Y và ToolTip trên từng điểm/cột.
+    5. *Tích Hợp Tool Editor*: Bổ sung nút `📊` cạnh nút Bản đồ cuộn trong `ToolEditorView.xaml`, kết nối lệnh `OpenInspectionLogCommand` và `GetEffectiveProductName()`.
   - **Kiểm Thử**: Bổ sung `TestInspectionLogAndSpcEngine` trong `CameraTest.cs` kiểm tra phân tích $n=32$, fallback $n=5$, background channel worker và xuất file Excel/CSV/JSON. Toàn bộ test suite PASSED 100%.
 
 - **Tối Ưu Render Canvas Không Chặn Worker & Widget Giám Sát RAM / CPU Đa Lõi (Task 257)**:

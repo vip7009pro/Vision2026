@@ -125,11 +125,24 @@ public sealed class InspectionLogService : IInspectionLogService
 
     public Task<InspectionSessionRecord> StartSessionAsync(string productName, string jobFilePath, string material = "-")
     {
+        string resolvedProdName = productName;
+        if (string.IsNullOrWhiteSpace(resolvedProdName) || resolvedProdName.Equals("Chưa gán", StringComparison.OrdinalIgnoreCase) || resolvedProdName.Equals("Sản phẩm Vision", StringComparison.OrdinalIgnoreCase))
+        {
+            if (!string.IsNullOrWhiteSpace(jobFilePath))
+            {
+                resolvedProdName = Path.GetFileNameWithoutExtension(jobFilePath);
+            }
+        }
+        if (string.IsNullOrWhiteSpace(resolvedProdName))
+        {
+            resolvedProdName = "Job_Default";
+        }
+
         var session = new InspectionSessionRecord
         {
             Id = DateTime.Now.ToString("yyyyMMdd_HHmmss_fff"),
             SessionCode = $"SES-{DateTime.Now:yyyyMMdd-HHmmss}",
-            ProductName = string.IsNullOrWhiteSpace(productName) ? "Chưa gán" : productName,
+            ProductName = resolvedProdName,
             JobFilePath = jobFilePath ?? "",
             Material = string.IsNullOrWhiteSpace(material) ? "-" : material,
             StartTime = DateTime.Now,

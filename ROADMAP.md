@@ -1067,11 +1067,28 @@ Lộ trình tích hợp tính năng Chụp ảnh từ camera và hỗ trợ các
         - Nửa dưới bên phải: Bảng 4 biểu đồ SPC (Histogram, Xbar chart, R chart, Cpk trend) với cỡ mẫu $n$ tùy chỉnh (mặc định 32, tự hạ về 5 nếu thiếu mẫu, bỏ phần dư $N \pmod n$).
         - Nút xuất file Excel (XML Spreadsheet 2003 chuẩn), CSV (UTF-8 BOM), JSON và nút bật/tắt CPK.
         - Background Worker riêng biệt (Channel-based) ghi log không ảnh hưởng đến luồng kiểm tra Vision.
+        - Tự động lấy tên/mã sản phẩm từ Job (`ProductCode`, `ProductName`, hoặc tên file `.job`) tránh hiển thị "Chưa gán".
+        - 4 biểu đồ SPC dùng `Viewbox Stretch="Fill"` lấp đầy 100% diện tích card, đầy đủ trục X/Y, đường lưới, vạch chia và Markers tròn có ToolTip chi tiết.
       - `Giải Pháp Kỹ Thuật Đã Triển Khai`:
         1. `VisionInspectionApp.Models`: Tạo `InspectionLogModels.cs` định nghĩa dữ liệu phiên, con hàng, phép đo và phân tích SPC.
         2. `VisionInspectionApp.Application`: Tạo `SpcEngine.cs` (thuật toán Shewhart, Xbar-R, Cpk, Histogram Gauss), `IInspectionLogService.cs` / `InspectionLogService.cs` (Channel Worker ghi log ngầm), `InspectionLogExporter.cs` (xuất Excel/CSV/JSON).
         3. `VisionInspectionApp.UI`: Tạo `InspectionLogViewModel.cs`, `InspectionLogWindow.xaml`, tích hợp nút `📊` và lệnh `OpenInspectionLogCommand` trong Tool Editor.
       - `Kiểm Thử`: Bổ sung `TestInspectionLogAndSpcEngine` trong `CameraTest.cs`. Toàn bộ test suite PASSED 100%.
+
+- [x] Task 259: Sửa lỗi ToolTip biểu đồ SPC & Khắc phục triệt để lỗi đổi tên (RefName) node trên Flow Canvas khiến node ngừng hoạt động.
+      - `Mục Tiêu & Yêu Cầu`:
+        1. ToolTip trên 4 biểu đồ SPC (Histogram, Xbar, R-chart, Cpk trend) phải hiển thị tức thì khi hover chuột vào các cột hoặc các chấm tròn dữ liệu.
+        2. Khi người dùng sửa RefName của bất kỳ Tool Node nào trên Flow Canvas (`Preprocess`, `Caliper`, `Origin`, `CreatePoint`, `Distance`...), node và toàn bộ liên kết downstream phải hoạt động bình thường, không bị xóa mất cấu hình.
+      - `Giải Pháp Kỹ Thuật Đã Triển Khai`:
+        1. *Sửa ToolTip SPC ([InspectionLogWindow.xaml](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/Views/InspectionLogWindow.xaml))*:
+           - Đưa `Canvas.Left` & `Canvas.Top` lên `ItemContainerStyle` cho `ContentPresenter` của 4 `ItemsControl`, loại bỏ `TranslateTransform` bên trong `DataTemplate`.
+           - Thiết lập `IsHitTestVisible="False"` cho tất cả `Polyline` vẽ đường trung bình / đường cong Gauss để tránh chặn sự kiện chuột.
+           - Cấu hình `ToolTipService.InitialShowDelay="0"`, `ToolTipService.BetweenShowDelay="0"` và style ToolTip nền tối viền xanh cyan `#38BDF8` cực nét.
+        2. *Sửa Đổi Tên Node Flow Canvas ([ToolEditorViewModel.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/ToolEditorViewModel.cs))*:
+           - Mở rộng hàm `RenameSelectedDefinitionIfNeeded()` bao quát 100% các loại Tool Node (`Preprocess`, `ImageSource`, `Caliper`, `SurfaceCompare`, `ContourCompare`, `TextNode`, `ImageOutput`, `Crop`, `ColorDiff`, `ImgArithmetic`, `CreatePoint`, `CreateLine`, `CreateRect`, `CreateCircle`, `Condition`, `Plc*`, `ResultTransfer`, `DbNode`...).
+           - Quét và cập nhật tự động toàn bộ thuộc tính tham chiếu downstream trong `_config` (`PointA`, `PointB`, `LineA`, `LineB`, `Line`, `Point`, `CircleRef`, `RefA`, `RefB`, `InputNodeName`, `ImageSourceRef`, `PointRef`, `Point1Ref`, `Point2Ref`, `CenterPointRef`, `BoundaryPointRef`, `PreprocessChoice`, v.v.).
+           - Đồng bộ `ToolGraph.Nodes` và `_config` ngay lập tức để ngăn ngừa `SyncToolGraphToConfig()` xóa nhầm cấu hình của node.
+      - `Kiểm Thử`: Bổ sung `TestFlowCanvasNodeRenameAndDownstreamReferences` trong `CameraTest.cs`. Toàn bộ test suite PASSED 100%.
 
 
 

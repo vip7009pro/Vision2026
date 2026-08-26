@@ -18,6 +18,7 @@ class Program
         CameraTest.TestContinuousEngineHandshakeBypass();
         CameraTest.TestSystemMonitorAndNonBlockingRender();
         CameraTest.TestInspectionLogAndSpcEngine();
+        CameraTest.TestFlowCanvasNodeRenameAndDownstreamReferences();
         CaliperAndLineTest.RunTests();
         ColorDiffTest.RunTests();
         RecentJobsAndCalibrationTest.RunTests();

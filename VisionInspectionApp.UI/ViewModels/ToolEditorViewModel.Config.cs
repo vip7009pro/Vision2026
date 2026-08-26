@@ -408,5 +408,33 @@ namespace VisionInspectionApp.UI.ViewModels
                 _config.ToolGraph.Edges.Add(new ToolGraphEdge { FromNodeId = e.FromNodeId, ToNodeId = e.ToNodeId, FromPort = e.FromPort, ToPort = e.ToPort });
             }
         }
+
+        public void InitializeWithConfig(VisionConfig config)
+        {
+            ClearActiveGraph();
+            _config = config;
+            ProductCode = config.ProductCode;
+            Nodes.Clear();
+            Edges.Clear();
+            if (config.ToolGraph != null)
+            {
+                foreach (var n in config.ToolGraph.Nodes)
+                {
+                    var vm = new ToolGraphNodeViewModel
+                    {
+                        Id = n.Id,
+                        Type = n.Type,
+                        RefName = n.RefName,
+                        X = n.X,
+                        Y = n.Y,
+                        InputCount = n.InputCount
+                    };
+                    vm.PropertyChanged += Node_PropertyChanged;
+                    Nodes.Add(vm);
+                }
+            }
+            SelectedNode = Nodes.Count > 0 ? Nodes[0] : null;
+            RaiseToolPropertyPanelsChanged();
+        }
     }
 }

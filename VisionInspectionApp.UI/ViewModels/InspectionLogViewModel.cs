@@ -105,6 +105,9 @@ public partial class InspectionLogViewModel : ObservableObject
     private PointCollection _xbarPoints = new();
 
     [ObservableProperty]
+    private ObservableCollection<ChartDataPointVisual> _xbarMarkers = new();
+
+    [ObservableProperty]
     private double _xbarClY = 50;
 
     [ObservableProperty]
@@ -115,6 +118,9 @@ public partial class InspectionLogViewModel : ObservableObject
 
     [ObservableProperty]
     private PointCollection _rChartPoints = new();
+
+    [ObservableProperty]
+    private ObservableCollection<ChartDataPointVisual> _rChartMarkers = new();
 
     [ObservableProperty]
     private double _rClY = 50;
@@ -129,6 +135,9 @@ public partial class InspectionLogViewModel : ObservableObject
     private PointCollection _cpkTrendPoints = new();
 
     [ObservableProperty]
+    private ObservableCollection<ChartDataPointVisual> _cpkTrendMarkers = new();
+
+    [ObservableProperty]
     private double _cpk133Y = 40;
 
     [ObservableProperty]
@@ -136,18 +145,29 @@ public partial class InspectionLogViewModel : ObservableObject
 
     // Chart Axis Labels
     [ObservableProperty] private string _histXMinLabel = "0.0";
+    [ObservableProperty] private string _histXMidLabel = "0.0";
     [ObservableProperty] private string _histXMaxLabel = "0.0";
     [ObservableProperty] private string _histYMaxLabel = "0";
+    [ObservableProperty] private string _histYMidLabel = "0";
 
     [ObservableProperty] private string _xbarYMaxLabel = "0.0";
+    [ObservableProperty] private string _xbarYMidLabel = "0.0";
     [ObservableProperty] private string _xbarYMinLabel = "0.0";
     [ObservableProperty] private string _xbarXMaxLabel = "0";
+    [ObservableProperty] private string _xbarClLabel = "0.0";
+    [ObservableProperty] private string _xbarUclLabel = "0.0";
+    [ObservableProperty] private string _xbarLclLabel = "0.0";
 
     [ObservableProperty] private string _rYMaxLabel = "0.0";
+    [ObservableProperty] private string _rYMidLabel = "0.0";
     [ObservableProperty] private string _rYMinLabel = "0.0";
     [ObservableProperty] private string _rXMaxLabel = "0";
+    [ObservableProperty] private string _rClLabel = "0.0";
+    [ObservableProperty] private string _rUclLabel = "0.0";
+    [ObservableProperty] private string _rLclLabel = "0.0";
 
-    [ObservableProperty] private string _cpkYMaxLabel = "2.0";
+    [ObservableProperty] private string _cpkYMaxLabel = "2.5";
+    [ObservableProperty] private string _cpkYMidLabel = "1.3";
     [ObservableProperty] private string _cpkYMinLabel = "0.0";
     [ObservableProperty] private string _cpkXMaxLabel = "0";
 
@@ -381,11 +401,12 @@ public partial class InspectionLogViewModel : ObservableObject
 
     private void RenderCharts(SpcAnalysisResult spc)
     {
-        const double ChartW = 240.0;
-        const double ChartH = 120.0;
-        const double PaddingTop = 15.0;
-        const double PaddingBottom = 15.0;
-        const double DrawH = ChartH - PaddingTop - PaddingBottom;
+        const double PlotLeft = 38.0;
+        const double PlotRight = 310.0;
+        const double PlotTop = 14.0;
+        const double PlotBottom = 150.0;
+        const double PlotW = PlotRight - PlotLeft; // 272.0
+        const double PlotH = PlotBottom - PlotTop; // 136.0
 
         // ════ 1. HISTOGRAM CHART ════
         HistogramBars.Clear();
@@ -394,35 +415,46 @@ public partial class InspectionLogViewModel : ObservableObject
         if (spc.HistogramBins.Count > 0)
         {
             int maxCount = Math.Max(1, spc.HistogramBins.Max(b => Math.Max(b.Count, (int)Math.Ceiling(b.NormalCurveHeight))));
+            int midCount = maxCount / 2;
             HistYMaxLabel = maxCount.ToString();
-            HistXMinLabel = $"{spc.HistogramBins.First().BinStart:F2}";
-            HistXMaxLabel = $"{spc.HistogramBins.Last().BinEnd:F2}";
+            HistYMidLabel = midCount.ToString();
 
-            double barSlotW = ChartW / spc.HistogramBins.Count;
-            double barW = Math.Max(2, barSlotW - 2);
+            double minX = spc.HistogramBins.First().BinStart;
+            double maxX = spc.HistogramBins.Last().BinEnd;
+            double midX = (minX + maxX) / 2.0;
+
+            HistXMinLabel = $"{minX:F2}";
+            HistXMidLabel = $"{midX:F2}";
+            HistXMaxLabel = $"{maxX:F2}";
+
+            int totalSamples = spc.HistogramBins.Sum(b => b.Count);
+            double barSlotW = PlotW / spc.HistogramBins.Count;
+            double barW = Math.Max(3, barSlotW - 2);
 
             for (int i = 0; i < spc.HistogramBins.Count; i++)
             {
                 var bin = spc.HistogramBins[i];
-                double barH = (bin.Count / (double)maxCount) * DrawH;
-                double x = i * barSlotW + (barSlotW - barW) / 2.0;
-                double y = ChartH - PaddingBottom - barH;
+                double barH = Math.Max(1, (bin.Count / (double)maxCount) * PlotH);
+                double x = PlotLeft + i * barSlotW + (barSlotW - barW) / 2.0;
+                double y = PlotBottom - barH;
 
+                double pct = totalSamples > 0 ? (bin.Count * 100.0 / totalSamples) : 0;
                 HistogramBars.Add(new HistogramBarVisual
                 {
                     X = x,
                     Y = y,
                     Width = barW,
-                    Height = Math.Max(1, barH),
+                    Height = barH,
                     FillBrush = new SolidColorBrush(Color.FromRgb(59, 130, 246)),
                     Count = bin.Count,
-                    RangeText = bin.FormattedRange
+                    RangeText = bin.FormattedRange,
+                    ToolTipText = $"📊 Khoảng: {bin.FormattedRange}\n🔢 Số lượng: {bin.Count} con hàng ({pct:F1}%)\n📈 Gauss density: {bin.NormalCurveHeight:F1}"
                 });
 
                 // Gauss curve point
-                double gH = (bin.NormalCurveHeight / maxCount) * DrawH;
-                double gX = i * barSlotW + barSlotW / 2.0;
-                double gY = Math.Max(PaddingTop, ChartH - PaddingBottom - gH);
+                double gH = (bin.NormalCurveHeight / maxCount) * PlotH;
+                double gX = PlotLeft + i * barSlotW + barSlotW / 2.0;
+                double gY = Math.Clamp(PlotBottom - gH, PlotTop, PlotBottom);
                 gaussPts.Add(new Point(gX, gY));
             }
         }
@@ -430,83 +462,143 @@ public partial class InspectionLogViewModel : ObservableObject
 
         // ════ 2. XBAR CHART ════
         var xbarPts = new PointCollection();
+        XbarMarkers.Clear();
         if (spc.Subgroups.Count > 0)
         {
-            double minY = Math.Min(spc.Subgroups.Min(g => g.Mean), spc.Xbar_LCL);
-            double maxY = Math.Max(spc.Subgroups.Max(g => g.Mean), spc.Xbar_UCL);
+            double rawMin = Math.Min(spc.Subgroups.Min(g => g.Mean), spc.Xbar_LCL);
+            double rawMax = Math.Max(spc.Subgroups.Max(g => g.Mean), spc.Xbar_UCL);
+            double span = Math.Max(1e-4, rawMax - rawMin);
+            double pad = span * 0.15;
+            double minY = rawMin - pad;
+            double maxY = rawMax + pad;
             double rangeY = Math.Max(1e-4, maxY - minY);
 
-            XbarYMinLabel = $"{minY:F2}";
-            XbarYMaxLabel = $"{maxY:F2}";
+            XbarYMinLabel = $"{rawMin:F2}";
+            XbarYMidLabel = $"{((rawMax + rawMin) / 2.0):F2}";
+            XbarYMaxLabel = $"{rawMax:F2}";
             XbarXMaxLabel = spc.Subgroups.Count.ToString();
 
-            Func<double, double> mapY = v => ChartH - PaddingBottom - ((v - minY) / rangeY) * DrawH;
+            XbarClLabel = $"{spc.Xbar_CL:F2}";
+            XbarUclLabel = $"{spc.Xbar_UCL:F2}";
+            XbarLclLabel = $"{spc.Xbar_LCL:F2}";
 
-            XbarClY = mapY(spc.Xbar_CL);
-            XbarUclY = mapY(spc.Xbar_UCL);
-            XbarLclY = mapY(spc.Xbar_LCL);
+            Func<double, double> mapY = v => PlotBottom - ((v - minY) / rangeY) * PlotH;
 
-            double stepX = ChartW / Math.Max(1, spc.Subgroups.Count - 1);
+            XbarClY = Math.Clamp(mapY(spc.Xbar_CL), PlotTop, PlotBottom);
+            XbarUclY = Math.Clamp(mapY(spc.Xbar_UCL), PlotTop, PlotBottom);
+            XbarLclY = Math.Clamp(mapY(spc.Xbar_LCL), PlotTop, PlotBottom);
+
+            double stepX = spc.Subgroups.Count > 1 ? PlotW / (spc.Subgroups.Count - 1) : 0;
             for (int i = 0; i < spc.Subgroups.Count; i++)
             {
-                double x = i * stepX;
-                double y = mapY(spc.Subgroups[i].Mean);
+                var g = spc.Subgroups[i];
+                double x = PlotLeft + (spc.Subgroups.Count == 1 ? PlotW / 2.0 : i * stepX);
+                double y = Math.Clamp(mapY(g.Mean), PlotTop, PlotBottom);
                 xbarPts.Add(new Point(x, y));
+
+                XbarMarkers.Add(new ChartDataPointVisual
+                {
+                    X = x - 4,
+                    Y = y - 4,
+                    Value = g.Mean,
+                    StrokeBrush = new SolidColorBrush(Color.FromRgb(5, 150, 105)),
+                    FillBrush = Brushes.White,
+                    ToolTipText = $"📍 Nhóm #{i + 1} (n={spc.SubgroupSizeN})\n• Trung bình (AVG): {g.Mean:F3} {spc.Unit}\n• Min trong nhóm: {g.Values.Min():F3}\n• Max trong nhóm: {g.Values.Max():F3}\n• Giới hạn UCL: {spc.Xbar_UCL:F3}\n• Giới hạn LCL: {spc.Xbar_LCL:F3}\n• Đường chuẩn CL: {spc.Xbar_CL:F3}"
+                });
             }
         }
         XbarPoints = xbarPts;
 
         // ════ 3. R CHART ════
         var rPts = new PointCollection();
+        RChartMarkers.Clear();
         if (spc.Subgroups.Count > 0)
         {
-            double minY = Math.Min(0, spc.R_LCL);
-            double maxY = Math.Max(spc.Subgroups.Max(g => g.Range), spc.R_UCL);
+            double rawMin = Math.Min(0, spc.R_LCL);
+            double rawMax = Math.Max(spc.Subgroups.Max(g => g.Range), spc.R_UCL);
+            double span = Math.Max(1e-4, rawMax - rawMin);
+            double pad = span * 0.15;
+            double minY = Math.Max(0, rawMin - pad);
+            double maxY = rawMax + pad;
             double rangeY = Math.Max(1e-4, maxY - minY);
 
-            RYMinLabel = $"{minY:F2}";
-            RYMaxLabel = $"{maxY:F2}";
+            RYMinLabel = $"{rawMin:F2}";
+            RYMidLabel = $"{((rawMax + rawMin) / 2.0):F2}";
+            RYMaxLabel = $"{rawMax:F2}";
             RXMaxLabel = spc.Subgroups.Count.ToString();
 
-            Func<double, double> mapY = v => ChartH - PaddingBottom - ((v - minY) / rangeY) * DrawH;
+            RClLabel = $"{spc.R_CL:F2}";
+            RUclLabel = $"{spc.R_UCL:F2}";
+            RLclLabel = $"{spc.R_LCL:F2}";
 
-            RClY = mapY(spc.R_CL);
-            RUclY = mapY(spc.R_UCL);
-            RLclY = mapY(spc.R_LCL);
+            Func<double, double> mapY = v => PlotBottom - ((v - minY) / rangeY) * PlotH;
 
-            double stepX = ChartW / Math.Max(1, spc.Subgroups.Count - 1);
+            RClY = Math.Clamp(mapY(spc.R_CL), PlotTop, PlotBottom);
+            RUclY = Math.Clamp(mapY(spc.R_UCL), PlotTop, PlotBottom);
+            RLclY = Math.Clamp(mapY(spc.R_LCL), PlotTop, PlotBottom);
+
+            double stepX = spc.Subgroups.Count > 1 ? PlotW / (spc.Subgroups.Count - 1) : 0;
             for (int i = 0; i < spc.Subgroups.Count; i++)
             {
-                double x = i * stepX;
-                double y = mapY(spc.Subgroups[i].Range);
+                var g = spc.Subgroups[i];
+                double x = PlotLeft + (spc.Subgroups.Count == 1 ? PlotW / 2.0 : i * stepX);
+                double y = Math.Clamp(mapY(g.Range), PlotTop, PlotBottom);
                 rPts.Add(new Point(x, y));
+
+                RChartMarkers.Add(new ChartDataPointVisual
+                {
+                    X = x - 4,
+                    Y = y - 4,
+                    Value = g.Range,
+                    StrokeBrush = new SolidColorBrush(Color.FromRgb(13, 148, 136)),
+                    FillBrush = Brushes.White,
+                    ToolTipText = $"📍 Nhóm #{i + 1} (n={spc.SubgroupSizeN})\n• Độ biến thiên (R): {g.Range:F3} {spc.Unit}\n• Max: {g.Values.Max():F3}\n• Min: {g.Values.Min():F3}\n• Giới hạn R_UCL: {spc.R_UCL:F3}\n• Giới hạn R_LCL: {spc.R_LCL:F3}\n• Đường chuẩn R_CL: {spc.R_CL:F3}"
+                });
             }
         }
         RChartPoints = rPts;
 
         // ════ 4. CPK TREND CHART ════
         var cpkPts = new PointCollection();
+        CpkTrendMarkers.Clear();
         if (spc.Subgroups.Count > 0)
         {
+            double maxCpkVal = spc.Subgroups.Max(g => g.Cpk);
+            double rawMax = Math.Max(2.5, maxCpkVal + 0.4);
             double minY = 0.0;
-            double maxY = Math.Max(2.0, spc.Subgroups.Max(g => g.Cpk) + 0.3);
+            double maxY = rawMax;
             double rangeY = Math.Max(1e-4, maxY - minY);
 
-            CpkYMinLabel = $"{minY:F1}";
+            CpkYMinLabel = "0.0";
+            CpkYMidLabel = $"{(maxY / 2.0):F1}";
             CpkYMaxLabel = $"{maxY:F1}";
             CpkXMaxLabel = spc.Subgroups.Count.ToString();
 
-            Func<double, double> mapY = v => ChartH - PaddingBottom - ((v - minY) / rangeY) * DrawH;
+            Func<double, double> mapY = v => PlotBottom - ((v - minY) / rangeY) * PlotH;
 
-            Cpk133Y = mapY(1.33);
-            Cpk167Y = mapY(1.67);
+            Cpk133Y = Math.Clamp(mapY(1.33), PlotTop, PlotBottom);
+            Cpk167Y = Math.Clamp(mapY(1.67), PlotTop, PlotBottom);
 
-            double stepX = ChartW / Math.Max(1, spc.Subgroups.Count - 1);
+            double stepX = spc.Subgroups.Count > 1 ? PlotW / (spc.Subgroups.Count - 1) : 0;
             for (int i = 0; i < spc.Subgroups.Count; i++)
             {
-                double x = i * stepX;
-                double y = Math.Clamp(mapY(spc.Subgroups[i].Cpk), PaddingTop, ChartH - PaddingBottom);
+                var g = spc.Subgroups[i];
+                double x = PlotLeft + (spc.Subgroups.Count == 1 ? PlotW / 2.0 : i * stepX);
+                double y = Math.Clamp(mapY(g.Cpk), PlotTop, PlotBottom);
                 cpkPts.Add(new Point(x, y));
+
+                var markerColor = g.Cpk >= 1.67 ? Color.FromRgb(16, 185, 129) : (g.Cpk >= 1.33 ? Color.FromRgb(59, 130, 246) : Color.FromRgb(239, 68, 68));
+                string assess = g.Cpk >= 1.67 ? "🌟 Xuất sắc (Cpk >= 1.67 • 5-6 Sigma)" : (g.Cpk >= 1.33 ? "✅ Đạt chuẩn (Cpk >= 1.33 • 4 Sigma)" : (g.Cpk >= 1.0 ? "⚠️ Tạm chấp nhận (1.0 <= Cpk < 1.33)" : "❌ Không đạt (Cpk < 1.0 • Rủi ro NG cao)"));
+
+                CpkTrendMarkers.Add(new ChartDataPointVisual
+                {
+                    X = x - 4,
+                    Y = y - 4,
+                    Value = g.Cpk,
+                    StrokeBrush = new SolidColorBrush(markerColor),
+                    FillBrush = new SolidColorBrush(markerColor),
+                    ToolTipText = $"📍 Nhóm #{i + 1} (n={spc.SubgroupSizeN})\n• Chỉ số Cpk: {g.Cpk:F2}\n• Đánh giá: {assess}\n• Ngưỡng 1 (Chuẩn 4 Sigma): 1.33\n• Ngưỡng 2 (Chuẩn 5 Sigma): 1.67"
+                });
             }
         }
         CpkTrendPoints = cpkPts;
@@ -517,8 +609,11 @@ public partial class InspectionLogViewModel : ObservableObject
         HistogramBars.Clear();
         HistogramGaussPoints = new PointCollection();
         XbarPoints = new PointCollection();
+        XbarMarkers.Clear();
         RChartPoints = new PointCollection();
+        RChartMarkers.Clear();
         CpkTrendPoints = new PointCollection();
+        CpkTrendMarkers.Clear();
     }
 
     // ─── Export Operations ───────────────────────────────────────────
@@ -543,7 +638,7 @@ public partial class InspectionLogViewModel : ObservableObject
             {
                 InspectionLogExporter.ExportToExcel(SelectedSession, _allCurrentSessionParts, SpcResult, dlg.FileName);
                 StatusMessage = $"Đã xuất Excel thành công: {Path.GetFileName(dlg.FileName)}";
-                MessageBox.Show($"Đã xuất báo cáo Excel thành công ra:\n{dlg.FileName}", "Thành công", MessageBoxButton.OK, MessageBoxImage.Information);
+                MessageBox.Show($"Đã xuất file Excel thành công ra:\n{dlg.FileName}", "Thành công", MessageBoxButton.OK, MessageBoxImage.Information);
             }
             catch (Exception ex)
             {
@@ -674,4 +769,15 @@ public sealed class HistogramBarVisual
     public Brush FillBrush { get; set; } = Brushes.DodgerBlue;
     public int Count { get; set; }
     public string RangeText { get; set; } = "";
+    public string ToolTipText { get; set; } = "";
+}
+
+public sealed class ChartDataPointVisual
+{
+    public double X { get; set; }
+    public double Y { get; set; }
+    public double Value { get; set; }
+    public string ToolTipText { get; set; } = "";
+    public Brush StrokeBrush { get; set; } = Brushes.ForestGreen;
+    public Brush FillBrush { get; set; } = Brushes.White;
 }

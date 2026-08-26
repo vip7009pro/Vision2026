@@ -195,7 +195,7 @@ namespace VisionInspectionApp.UI.ViewModels
             RedoCommand = new RelayCommand(() => UndoManager.Redo(), () => UndoManager.CanRedo);
             _configService = null!;
             _storeOptions = null!;
-            _sharedImage = null!;
+            _sharedImage = new SharedImageContext();
             _preprocessor = null!;
             _lineDetector = null!;
             _inspectionService = null!;
@@ -209,6 +209,15 @@ namespace VisionInspectionApp.UI.ViewModels
             _plcHeartbeatWatchdog = new Application.PLC.Services.PlcHeartbeatWatchdog(null);
             _handshakeStateMachine = new Application.PLC.Services.IndustrialHandshakeStateMachine(null);
             _autoSaveTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(2) };
+            Nodes = new ObservableCollection<ToolGraphNodeViewModel>();
+            Edges = new ObservableCollection<ToolGraphEdgeViewModel>();
+            SelectedNodeOverlayItems = new List<OverlayItem>();
+            FinalOverlayItems = new List<OverlayItem>();
+            TextNode_ConditionRows = new ObservableCollection<TextColorConditionRow>();
+            AvailablePreprocessChoices = new ObservableCollection<string>();
+            AllToolboxItems = new List<ToolboxItemModel>();
+            ToolboxItems = new ObservableCollection<string>();
+            ToolboxCollectionView = System.Windows.Data.CollectionViewSource.GetDefaultView(AllToolboxItems);
         }
 
         public ToolEditorViewModel(IConfigService configService, ConfigStoreOptions storeOptions, SharedImageContext sharedImage, ImagePreprocessor preprocessor, LineDetector lineDetector, IInspectionService inspectionService, CameraService cameraService, IJobService jobService, UndoRedoManager undoManager, Application.PLC.Services.IPlcManagerService plcManagerService, Application.DB.Services.IDbManagerService dbManagerService, IRecentJobsService? recentJobsService = null, IServiceProvider? serviceProvider = null)
@@ -3091,6 +3100,7 @@ namespace VisionInspectionApp.UI.ViewModels
                 return;
             }
     
+            // 1. Đổi tên trong collection định nghĩa tương ứng
             if (string.Equals(SelectedNode.Type, "Point", StringComparison.OrdinalIgnoreCase))
             {
                 var def = _config.Points.FirstOrDefault(x => string.Equals(x.Name, oldName, StringComparison.OrdinalIgnoreCase));
@@ -3109,15 +3119,21 @@ namespace VisionInspectionApp.UI.ViewModels
                 if (def is not null)
                     def.Name = newName;
             }
-            else if (string.Equals(SelectedNode.Type, "LineLineDistance", StringComparison.OrdinalIgnoreCase))
+            else if (string.Equals(SelectedNode.Type, "LineLineDistance", StringComparison.OrdinalIgnoreCase) || string.Equals(SelectedNode.Type, "LineToLineDistance", StringComparison.OrdinalIgnoreCase))
             {
                 var def = _config.LineToLineDistances.FirstOrDefault(x => string.Equals(x.Name, oldName, StringComparison.OrdinalIgnoreCase));
                 if (def is not null)
                     def.Name = newName;
             }
-            else if (string.Equals(SelectedNode.Type, "PointLineDistance", StringComparison.OrdinalIgnoreCase))
+            else if (string.Equals(SelectedNode.Type, "PointLineDistance", StringComparison.OrdinalIgnoreCase) || string.Equals(SelectedNode.Type, "PointToLineDistance", StringComparison.OrdinalIgnoreCase))
             {
                 var def = _config.PointToLineDistances.FirstOrDefault(x => string.Equals(x.Name, oldName, StringComparison.OrdinalIgnoreCase));
+                if (def is not null)
+                    def.Name = newName;
+            }
+            else if (string.Equals(SelectedNode.Type, "SegmentLineDistance", StringComparison.OrdinalIgnoreCase))
+            {
+                var def = _config.SegmentLineDistances?.FirstOrDefault(x => string.Equals(x.Name, oldName, StringComparison.OrdinalIgnoreCase));
                 if (def is not null)
                     def.Name = newName;
             }
@@ -3129,9 +3145,10 @@ namespace VisionInspectionApp.UI.ViewModels
             }
             else if (string.Equals(SelectedNode.Type, "Origin", StringComparison.OrdinalIgnoreCase))
             {
-                _config.Origin.Name = "Origin";
+                if (_config.Origin != null)
+                    _config.Origin.Name = newName;
             }
-            else if (string.Equals(SelectedNode.Type, "BlobDetection", StringComparison.OrdinalIgnoreCase))
+            else if (string.Equals(SelectedNode.Type, "BlobDetection", StringComparison.OrdinalIgnoreCase) || string.Equals(SelectedNode.Type, "Blob", StringComparison.OrdinalIgnoreCase))
             {
                 var def = _config.BlobDetections.FirstOrDefault(x => string.Equals(x.Name, oldName, StringComparison.OrdinalIgnoreCase));
                 if (def is not null)
@@ -3149,6 +3166,12 @@ namespace VisionInspectionApp.UI.ViewModels
                 if (def is not null)
                     def.Name = newName;
             }
+            else if (string.Equals(SelectedNode.Type, "EdgePair", StringComparison.OrdinalIgnoreCase))
+            {
+                var def = _config.EdgePairs.FirstOrDefault(x => string.Equals(x.Name, oldName, StringComparison.OrdinalIgnoreCase));
+                if (def is not null)
+                    def.Name = newName;
+            }
             else if (string.Equals(SelectedNode.Type, "CircleFinder", StringComparison.OrdinalIgnoreCase))
             {
                 var def = _config.CircleFinders.FirstOrDefault(x => string.Equals(x.Name, oldName, StringComparison.OrdinalIgnoreCase));
@@ -3161,20 +3184,293 @@ namespace VisionInspectionApp.UI.ViewModels
                 if (def is not null)
                     def.Name = newName;
             }
-            else if (string.Equals(SelectedNode.Type, "EdgePair", StringComparison.OrdinalIgnoreCase))
-            {
-                var def = _config.EdgePairs.FirstOrDefault(x => string.Equals(x.Name, oldName, StringComparison.OrdinalIgnoreCase));
-                if (def is not null)
-                    def.Name = newName;
-            }
-            else if (string.Equals(SelectedNode.Type, "CodeDetection", StringComparison.OrdinalIgnoreCase))
+            else if (string.Equals(SelectedNode.Type, "CodeDetection", StringComparison.OrdinalIgnoreCase) || string.Equals(SelectedNode.Type, "Code", StringComparison.OrdinalIgnoreCase))
             {
                 var def = _config.CodeDetections.FirstOrDefault(x => string.Equals(x.Name, oldName, StringComparison.OrdinalIgnoreCase));
                 if (def is not null)
                     def.Name = newName;
             }
+            else if (string.Equals(SelectedNode.Type, "Preprocess", StringComparison.OrdinalIgnoreCase))
+            {
+                var def = _config.PreprocessNodes.FirstOrDefault(x => string.Equals(x.Name, oldName, StringComparison.OrdinalIgnoreCase));
+                if (def is not null)
+                    def.Name = newName;
+            }
+            else if (string.Equals(SelectedNode.Type, "Caliper", StringComparison.OrdinalIgnoreCase))
+            {
+                var def = _config.Calipers.FirstOrDefault(x => string.Equals(x.Name, oldName, StringComparison.OrdinalIgnoreCase));
+                if (def is not null)
+                    def.Name = newName;
+            }
+            else if (string.Equals(SelectedNode.Type, "SurfaceCompare", StringComparison.OrdinalIgnoreCase))
+            {
+                var def = _config.SurfaceCompares.FirstOrDefault(x => string.Equals(x.Name, oldName, StringComparison.OrdinalIgnoreCase));
+                if (def is not null)
+                    def.Name = newName;
+            }
+            else if (string.Equals(SelectedNode.Type, "ContourCompare", StringComparison.OrdinalIgnoreCase))
+            {
+                var def = _config.ContourCompares.FirstOrDefault(x => string.Equals(x.Name, oldName, StringComparison.OrdinalIgnoreCase));
+                if (def is not null)
+                    def.Name = newName;
+            }
+            else if (string.Equals(SelectedNode.Type, "TextNode", StringComparison.OrdinalIgnoreCase) || string.Equals(SelectedNode.Type, "Text", StringComparison.OrdinalIgnoreCase))
+            {
+                var def = _config.TextNodes.FirstOrDefault(x => string.Equals(x.Name, oldName, StringComparison.OrdinalIgnoreCase));
+                if (def is not null)
+                    def.Name = newName;
+            }
+            else if (string.Equals(SelectedNode.Type, "ImageSource", StringComparison.OrdinalIgnoreCase))
+            {
+                var def = _config.ImageSources.FirstOrDefault(x => string.Equals(x.Name, oldName, StringComparison.OrdinalIgnoreCase));
+                if (def is not null)
+                    def.Name = newName;
+            }
+            else if (string.Equals(SelectedNode.Type, "ImageOutput", StringComparison.OrdinalIgnoreCase))
+            {
+                var def = _config.ImageOutputs?.FirstOrDefault(x => string.Equals(x.Name, oldName, StringComparison.OrdinalIgnoreCase));
+                if (def is not null)
+                    def.Name = newName;
+            }
+            else if (string.Equals(SelectedNode.Type, "Crop", StringComparison.OrdinalIgnoreCase))
+            {
+                var def = _config.Crops.FirstOrDefault(x => string.Equals(x.Name, oldName, StringComparison.OrdinalIgnoreCase));
+                if (def is not null)
+                    def.Name = newName;
+            }
+            else if (string.Equals(SelectedNode.Type, "ColorDiff", StringComparison.OrdinalIgnoreCase))
+            {
+                var def = _config.ColorDiffs.FirstOrDefault(x => string.Equals(x.Name, oldName, StringComparison.OrdinalIgnoreCase));
+                if (def is not null)
+                    def.Name = newName;
+            }
+            else if (string.Equals(SelectedNode.Type, "ImgArithmetic", StringComparison.OrdinalIgnoreCase))
+            {
+                var def = _config.ImgArithmetics.FirstOrDefault(x => string.Equals(x.Name, oldName, StringComparison.OrdinalIgnoreCase));
+                if (def is not null)
+                    def.Name = newName;
+            }
+            else if (string.Equals(SelectedNode.Type, "CreatePoint", StringComparison.OrdinalIgnoreCase))
+            {
+                var def = _config.CreatePoints.FirstOrDefault(x => string.Equals(x.Name, oldName, StringComparison.OrdinalIgnoreCase));
+                if (def is not null)
+                    def.Name = newName;
+            }
+            else if (string.Equals(SelectedNode.Type, "CreateLine", StringComparison.OrdinalIgnoreCase))
+            {
+                var def = _config.CreateLines.FirstOrDefault(x => string.Equals(x.Name, oldName, StringComparison.OrdinalIgnoreCase));
+                if (def is not null)
+                    def.Name = newName;
+            }
+            else if (string.Equals(SelectedNode.Type, "CreateRect", StringComparison.OrdinalIgnoreCase))
+            {
+                var def = _config.CreateRects.FirstOrDefault(x => string.Equals(x.Name, oldName, StringComparison.OrdinalIgnoreCase));
+                if (def is not null)
+                    def.Name = newName;
+            }
+            else if (string.Equals(SelectedNode.Type, "CreateCircle", StringComparison.OrdinalIgnoreCase))
+            {
+                var def = _config.CreateCircles.FirstOrDefault(x => string.Equals(x.Name, oldName, StringComparison.OrdinalIgnoreCase));
+                if (def is not null)
+                    def.Name = newName;
+            }
+            else if (string.Equals(SelectedNode.Type, "Condition", StringComparison.OrdinalIgnoreCase))
+            {
+                var def = _config.Conditions.FirstOrDefault(x => string.Equals(x.Name, oldName, StringComparison.OrdinalIgnoreCase));
+                if (def is not null)
+                    def.Name = newName;
+            }
+            else if (string.Equals(SelectedNode.Type, "PlcRead", StringComparison.OrdinalIgnoreCase))
+            {
+                var def = _config.PlcReads?.FirstOrDefault(x => string.Equals(x.Name, oldName, StringComparison.OrdinalIgnoreCase));
+                if (def is not null)
+                    def.Name = newName;
+            }
+            else if (string.Equals(SelectedNode.Type, "PlcWrite", StringComparison.OrdinalIgnoreCase))
+            {
+                var def = _config.PlcWrites?.FirstOrDefault(x => string.Equals(x.Name, oldName, StringComparison.OrdinalIgnoreCase));
+                if (def is not null)
+                    def.Name = newName;
+            }
+            else if (string.Equals(SelectedNode.Type, "PlcWait", StringComparison.OrdinalIgnoreCase))
+            {
+                var def = _config.PlcWaits?.FirstOrDefault(x => string.Equals(x.Name, oldName, StringComparison.OrdinalIgnoreCase));
+                if (def is not null)
+                    def.Name = newName;
+            }
+            else if (string.Equals(SelectedNode.Type, "PlcTrigger", StringComparison.OrdinalIgnoreCase))
+            {
+                var def = _config.PlcTriggers?.FirstOrDefault(x => string.Equals(x.Name, oldName, StringComparison.OrdinalIgnoreCase));
+                if (def is not null)
+                    def.Name = newName;
+            }
+            else if (string.Equals(SelectedNode.Type, "PlcBatchRead", StringComparison.OrdinalIgnoreCase))
+            {
+                var def = _config.PlcBatchReads?.FirstOrDefault(x => string.Equals(x.Name, oldName, StringComparison.OrdinalIgnoreCase));
+                if (def is not null)
+                    def.Name = newName;
+            }
+            else if (string.Equals(SelectedNode.Type, "PlcBatchWrite", StringComparison.OrdinalIgnoreCase))
+            {
+                var def = _config.PlcBatchWrites?.FirstOrDefault(x => string.Equals(x.Name, oldName, StringComparison.OrdinalIgnoreCase));
+                if (def is not null)
+                    def.Name = newName;
+            }
+            else if (string.Equals(SelectedNode.Type, "ResultTransfer", StringComparison.OrdinalIgnoreCase))
+            {
+                var def = _config.ResultTransfers?.FirstOrDefault(x => string.Equals(x.Name, oldName, StringComparison.OrdinalIgnoreCase));
+                if (def is not null)
+                    def.Name = newName;
+            }
+            else if (string.Equals(SelectedNode.Type, "DbNode", StringComparison.OrdinalIgnoreCase))
+            {
+                var def = _config.DbNodes?.FirstOrDefault(x => string.Equals(x.RefName, oldName, StringComparison.OrdinalIgnoreCase));
+                if (def is not null)
+                    def.RefName = newName;
+            }
     
+            // 2. Cập nhật các tham chiếu downstream từ các tool khác trỏ sang newName
+            if (_config.Distances != null)
+            {
+                foreach (var d in _config.Distances)
+                {
+                    if (string.Equals(d.PointA, oldName, StringComparison.OrdinalIgnoreCase)) d.PointA = newName;
+                    if (string.Equals(d.PointB, oldName, StringComparison.OrdinalIgnoreCase)) d.PointB = newName;
+                }
+            }
+            if (_config.LineToLineDistances != null)
+            {
+                foreach (var d in _config.LineToLineDistances)
+                {
+                    if (string.Equals(d.LineA, oldName, StringComparison.OrdinalIgnoreCase)) d.LineA = newName;
+                    if (string.Equals(d.LineB, oldName, StringComparison.OrdinalIgnoreCase)) d.LineB = newName;
+                }
+            }
+            if (_config.PointToLineDistances != null)
+            {
+                foreach (var d in _config.PointToLineDistances)
+                {
+                    if (string.Equals(d.Point, oldName, StringComparison.OrdinalIgnoreCase)) d.Point = newName;
+                    if (string.Equals(d.Line, oldName, StringComparison.OrdinalIgnoreCase)) d.Line = newName;
+                }
+            }
+            if (_config.SegmentLineDistances != null)
+            {
+                foreach (var d in _config.SegmentLineDistances)
+                {
+                    if (string.Equals(d.LineA, oldName, StringComparison.OrdinalIgnoreCase)) d.LineA = newName;
+                    if (string.Equals(d.LineB, oldName, StringComparison.OrdinalIgnoreCase)) d.LineB = newName;
+                }
+            }
+            if (_config.Angles != null)
+            {
+                foreach (var a in _config.Angles)
+                {
+                    if (string.Equals(a.LineA, oldName, StringComparison.OrdinalIgnoreCase)) a.LineA = newName;
+                    if (string.Equals(a.LineB, oldName, StringComparison.OrdinalIgnoreCase)) a.LineB = newName;
+                }
+            }
+            if (_config.Diameters != null)
+            {
+                foreach (var d in _config.Diameters)
+                {
+                    if (string.Equals(d.CircleRef, oldName, StringComparison.OrdinalIgnoreCase)) d.CircleRef = newName;
+                }
+            }
+            if (_config.EdgePairs != null)
+            {
+                foreach (var ep in _config.EdgePairs)
+                {
+                    if (string.Equals(ep.RefA, oldName, StringComparison.OrdinalIgnoreCase)) ep.RefA = newName;
+                    if (string.Equals(ep.RefB, oldName, StringComparison.OrdinalIgnoreCase)) ep.RefB = newName;
+                }
+            }
+            if (_config.ImageOutputs != null)
+            {
+                foreach (var io in _config.ImageOutputs)
+                {
+                    if (string.Equals(io.InputNodeName, oldName, StringComparison.OrdinalIgnoreCase)) io.InputNodeName = newName;
+                }
+            }
+            if (_config.Crops != null)
+            {
+                foreach (var c in _config.Crops)
+                {
+                    if (string.Equals(c.ImageSourceRef, oldName, StringComparison.OrdinalIgnoreCase)) c.ImageSourceRef = newName;
+                }
+            }
+            if (_config.ColorDiffs != null)
+            {
+                foreach (var cd in _config.ColorDiffs)
+                {
+                    if (string.Equals(cd.ImageSourceRef, oldName, StringComparison.OrdinalIgnoreCase)) cd.ImageSourceRef = newName;
+                }
+            }
+            if (_config.ImgArithmetics != null)
+            {
+                foreach (var ia in _config.ImgArithmetics)
+                {
+                    if (string.Equals(ia.ImageSourceRefA, oldName, StringComparison.OrdinalIgnoreCase)) ia.ImageSourceRefA = newName;
+                    if (string.Equals(ia.ImageSourceRefB, oldName, StringComparison.OrdinalIgnoreCase)) ia.ImageSourceRefB = newName;
+                }
+            }
+            if (_config.CreatePoints != null)
+            {
+                foreach (var cp in _config.CreatePoints)
+                {
+                    if (string.Equals(cp.ImageSourceRef, oldName, StringComparison.OrdinalIgnoreCase)) cp.ImageSourceRef = newName;
+                    if (string.Equals(cp.PointRef, oldName, StringComparison.OrdinalIgnoreCase)) cp.PointRef = newName;
+                }
+            }
+            if (_config.CreateLines != null)
+            {
+                foreach (var cl in _config.CreateLines)
+                {
+                    if (string.Equals(cl.ImageSourceRef, oldName, StringComparison.OrdinalIgnoreCase)) cl.ImageSourceRef = newName;
+                    if (string.Equals(cl.Point1Ref, oldName, StringComparison.OrdinalIgnoreCase)) cl.Point1Ref = newName;
+                    if (string.Equals(cl.Point2Ref, oldName, StringComparison.OrdinalIgnoreCase)) cl.Point2Ref = newName;
+                    if (string.Equals(cl.PointRef, oldName, StringComparison.OrdinalIgnoreCase)) cl.PointRef = newName;
+                }
+            }
+            if (_config.CreateRects != null)
+            {
+                foreach (var cr in _config.CreateRects)
+                {
+                    if (string.Equals(cr.ImageSourceRef, oldName, StringComparison.OrdinalIgnoreCase)) cr.ImageSourceRef = newName;
+                    if (string.Equals(cr.PointRef, oldName, StringComparison.OrdinalIgnoreCase)) cr.PointRef = newName;
+                }
+            }
+            if (_config.CreateCircles != null)
+            {
+                foreach (var cc in _config.CreateCircles)
+                {
+                    if (string.Equals(cc.ImageSourceRef, oldName, StringComparison.OrdinalIgnoreCase)) cc.ImageSourceRef = newName;
+                    if (string.Equals(cc.CenterPointRef, oldName, StringComparison.OrdinalIgnoreCase)) cc.CenterPointRef = newName;
+                    if (string.Equals(cc.BoundaryPointRef, oldName, StringComparison.OrdinalIgnoreCase)) cc.BoundaryPointRef = newName;
+                }
+            }
+            if (_config.ContourCompares != null)
+            {
+                foreach (var cc in _config.ContourCompares)
+                {
+                    if (string.Equals(cc.PreprocessChoice, oldName, StringComparison.OrdinalIgnoreCase)) cc.PreprocessChoice = newName;
+                }
+            }
+    
+            // 3. Cập nhật ActiveRoiLabel nếu cần
+            if (!string.IsNullOrWhiteSpace(ActiveRoiLabel) && ActiveRoiLabel.StartsWith(oldName, StringComparison.OrdinalIgnoreCase))
+            {
+                ActiveRoiLabel = newName + ActiveRoiLabel.Substring(oldName.Length);
+            }
+    
+            // 4. Đồng bộ ToolGraph để ToolGraph.Nodes mang RefName mới (tránh bị RemoveAll xóa mất)
+            SyncToolGraphToConfig();
+    
+            // 5. Cập nhật biến previous
             _selectedNodePrevRefName = newName;
+    
+            // 6. Yêu cầu tự động lưu và cập nhật UI
+            RequestAutoSave();
         }
     
         private void ClearActiveGraph()
@@ -3191,7 +3487,7 @@ namespace VisionInspectionApp.UI.ViewModels
             _lastRun = null;
             LastResult = null;
             _lastRunError = null;
-            _sharedImage.SetImage(null); // Clear ảnh preview
+            _sharedImage?.SetImage(null); // Clear ảnh preview
             FinalPreviewImage = null;
             SelectedNodePreviewImage = null;
             SelectedNodeOverlayItems.Clear();

@@ -487,7 +487,9 @@ namespace VisionInspectionApp.UI.ViewModels
                 var settings = preDef?.Settings ?? _config.Preprocess;
                 var rois = preDef?.Rois;
                 using var inputMat = GetNodeInputImageForPreview(raw, node, "In");
-                return _preprocessor.Run(inputMat, settings, rois);
+                return (_preprocessor is not null && inputMat is not null && !inputMat.Empty()) 
+                    ? _preprocessor.Run(inputMat, settings, rois) 
+                    : (inputMat is not null && !inputMat.Empty() ? inputMat.Clone() : new Mat());
             }
 
             using var inMat = GetNodeInputImageForPreview(raw, node, "Image");
@@ -2678,6 +2680,19 @@ namespace VisionInspectionApp.UI.ViewModels
             RunFlow();
         }
 
+        private string GetEffectiveProductName()
+        {
+            if (!string.IsNullOrWhiteSpace(_config?.ProductName))
+                return _config.ProductName;
+            if (!string.IsNullOrWhiteSpace(_config?.ProductCode))
+                return _config.ProductCode;
+            if (!string.IsNullOrWhiteSpace(ProductCode))
+                return ProductCode;
+            if (!string.IsNullOrWhiteSpace(CurrentJobFilePath))
+                return Path.GetFileNameWithoutExtension(CurrentJobFilePath);
+            return "Sản Phẩm Vision";
+        }
+
         private async Task StartContinuousCameraFlow(ImageSourceDefinition sourceDef)
         {
             StopContinuousFlow();
@@ -2692,7 +2707,7 @@ namespace VisionInspectionApp.UI.ViewModels
             UpdateContinuousStats();
 
             // Khởi tạo phiên kiểm tra mới trong Inspection Log Service (Background Worker)
-            _ = _inspectionLogService.StartSessionAsync(_config?.ProductName ?? "Sản phẩm Vision", CurrentJobFilePath, "-");
+            _ = _inspectionLogService.StartSessionAsync(GetEffectiveProductName(), CurrentJobFilePath, "-");
 
             bool isIndustrial = IsIndustrialCameraSource(sourceDef);
             bool isSimulator = CameraService.IsSimulator(sourceDef.CameraIndex, sourceDef.RtspUrl);
@@ -3879,7 +3894,7 @@ namespace VisionInspectionApp.UI.ViewModels
                 _lastPreviewImageWidth = snap.Width;
                 _lastPreviewImageHeight = snap.Height;
             }
-            if (_config is not null && PreprocessPreviewEnabled)
+            if (_config is not null && PreprocessPreviewEnabled && _preprocessor is not null && snap is not null && !snap.Empty())
             {
                 using var processedFinal = _preprocessor.Run(snap, _config.Preprocess);
                 _cachedFinalPreviewImage = processedFinal.Empty() ? null : processedFinal.ToBitmapSourceForDisplay();
@@ -3887,7 +3902,7 @@ namespace VisionInspectionApp.UI.ViewModels
             }
             else
             {
-                _cachedFinalPreviewImage = snap.Empty() ? null : snap.ToBitmapSourceForDisplay();
+                _cachedFinalPreviewImage = (snap is null || snap.Empty()) ? null : snap.ToBitmapSourceForDisplay();
                 FinalPreviewImage = _cachedFinalPreviewImage;
             }
     
@@ -6118,7 +6133,9 @@ namespace VisionInspectionApp.UI.ViewModels
                 return;
             }
 
-            using var processed = _preprocessor.Run(image, _config.Preprocess);
+            using var processed = (_preprocessor is not null && image is not null && !image.Empty())
+                ? _preprocessor.Run(image, _config.Preprocess)
+                : (image is not null && !image.Empty() ? image.Clone() : new Mat());
 
             Point2d originTeach = default;
             Point2d originFound = default;

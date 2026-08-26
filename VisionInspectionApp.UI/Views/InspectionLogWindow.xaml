@@ -416,7 +416,7 @@
                             </Grid.ColumnDefinitions>
 
                             <!-- ─── 1. HISTOGRAM CHART ────────────────── -->
-                            <Border Grid.Column="0" Background="#E0F2FE" BorderBrush="#BAE6FD" BorderThickness="1" CornerRadius="4" Margin="2" Padding="4">
+                            <Border Grid.Column="0" Background="#F0F9FF" BorderBrush="#BAE6FD" BorderThickness="1" CornerRadius="6" Margin="2" Padding="4">
                                 <Grid>
                                     <Grid.RowDefinitions>
                                         <RowDefinition Height="Auto"/>
@@ -424,43 +424,75 @@
                                         <RowDefinition Height="*"/>
                                     </Grid.RowDefinitions>
                                     <TextBlock Grid.Row="0" Text="HISTOGRAM CHART" FontWeight="Bold" FontSize="11" Foreground="#0369A1" HorizontalAlignment="Center"/>
-                                    <TextBlock Grid.Row="1" Text="◆ CNT" FontSize="9.5" Foreground="#059669" HorizontalAlignment="Center" Margin="0,1,0,2"/>
+                                    <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,1,0,3">
+                                        <TextBlock Text="■ Tần suất (CNT) " FontSize="9" Foreground="#2563EB"/>
+                                        <TextBlock Text="— Đường Gauss" FontSize="9" Foreground="#EF4444"/>
+                                    </StackPanel>
 
-                                    <Canvas Grid.Row="2" ClipToBounds="True" Background="#E0F2FE">
-                                        <!-- Y Axis Label -->
-                                        <TextBlock Text="{Binding HistYMaxLabel}" FontSize="9" Foreground="#64748B" Canvas.Left="2" Canvas.Top="2"/>
-                                        <TextBlock Text="0" FontSize="9" Foreground="#64748B" Canvas.Left="2" Canvas.Bottom="2"/>
+                                    <!-- Viewbox lấp đầy 100% không gian card -->
+                                    <Viewbox Grid.Row="2" Stretch="Fill">
+                                        <Canvas Width="320" Height="175" ClipToBounds="True" Background="#F0F9FF">
+                                            <!-- Trục Tọa Độ X & Y -->
+                                            <Line X1="38" Y1="14" X2="38" Y2="150" Stroke="#94A3B8" StrokeThickness="1.2"/>
+                                            <Line X1="38" Y1="150" X2="310" Y2="150" Stroke="#94A3B8" StrokeThickness="1.2"/>
 
-                                        <!-- Bars -->
-                                        <ItemsControl ItemsSource="{Binding HistogramBars}">
-                                            <ItemsControl.ItemsPanel>
-                                                <ItemsPanelTemplate>
-                                                    <Canvas />
-                                                </ItemsPanelTemplate>
-                                            </ItemsControl.ItemsPanel>
-                                            <ItemsControl.ItemTemplate>
-                                                <DataTemplate>
-                                                    <Rectangle Width="{Binding Width}" Height="{Binding Height}" Fill="{Binding FillBrush}" Stroke="#2563EB" StrokeThickness="0.5" ToolTip="{Binding RangeText}">
-                                                        <Rectangle.RenderTransform>
-                                                            <TranslateTransform X="{Binding X}" Y="{Binding Y}"/>
-                                                        </Rectangle.RenderTransform>
-                                                    </Rectangle>
-                                                </DataTemplate>
-                                            </ItemsControl.ItemTemplate>
-                                        </ItemsControl>
+                                            <!-- Lưới phụ Gridlines mờ ngang -->
+                                            <Line X1="38" Y1="14" X2="310" Y2="14" Stroke="#E2E8F0" StrokeDashArray="2 2" StrokeThickness="0.8"/>
+                                            <Line X1="38" Y1="82" X2="310" Y2="82" Stroke="#E2E8F0" StrokeDashArray="2 2" StrokeThickness="0.8"/>
 
-                                        <!-- Gauss Bell Curve -->
-                                        <Polyline Points="{Binding HistogramGaussPoints}" Stroke="#EF4444" StrokeThickness="1.5"/>
+                                            <!-- Vạch chia Ticks trục Y -->
+                                            <Line X1="34" Y1="14" X2="38" Y2="14" Stroke="#94A3B8" StrokeThickness="1"/>
+                                            <Line X1="34" Y1="82" X2="38" Y2="82" Stroke="#94A3B8" StrokeThickness="1"/>
+                                            <Line X1="34" Y1="150" X2="38" Y2="150" Stroke="#94A3B8" StrokeThickness="1"/>
 
-                                        <!-- X Axis Labels -->
-                                        <TextBlock Text="{Binding HistXMinLabel}" FontSize="8.5" Foreground="#64748B" Canvas.Left="20" Canvas.Bottom="1"/>
-                                        <TextBlock Text="{Binding HistXMaxLabel}" FontSize="8.5" Foreground="#64748B" Canvas.Right="4" Canvas.Bottom="1"/>
-                                    </Canvas>
+                                            <!-- Y Axis Labels -->
+                                            <TextBlock Text="{Binding HistYMaxLabel}" FontSize="9" FontWeight="SemiBold" Foreground="#64748B" Width="34" TextAlignment="Right" Canvas.Left="2" Canvas.Top="8"/>
+                                            <TextBlock Text="{Binding HistYMidLabel}" FontSize="9" FontWeight="SemiBold" Foreground="#64748B" Width="34" TextAlignment="Right" Canvas.Left="2" Canvas.Top="76"/>
+                                            <TextBlock Text="0" FontSize="9" FontWeight="SemiBold" Foreground="#64748B" Width="34" TextAlignment="Right" Canvas.Left="2" Canvas.Top="144"/>
+
+                                            <!-- Bars (Cột phân bố tần suất có ToolTip trực tiếp) -->
+                                            <ItemsControl ItemsSource="{Binding HistogramBars}">
+                                                <ItemsControl.ItemsPanel>
+                                                    <ItemsPanelTemplate>
+                                                        <Canvas />
+                                                    </ItemsPanelTemplate>
+                                                </ItemsControl.ItemsPanel>
+                                                <ItemsControl.ItemContainerStyle>
+                                                    <Style TargetType="ContentPresenter">
+                                                        <Setter Property="Canvas.Left" Value="{Binding X}"/>
+                                                        <Setter Property="Canvas.Top" Value="{Binding Y}"/>
+                                                    </Style>
+                                                </ItemsControl.ItemContainerStyle>
+                                                <ItemsControl.ItemTemplate>
+                                                    <DataTemplate>
+                                                        <Rectangle Width="{Binding Width}" Height="{Binding Height}" Fill="{Binding FillBrush}" Stroke="#1D4ED8" StrokeThickness="0.6" Cursor="Hand" ToolTipService.InitialShowDelay="0" ToolTipService.ShowDuration="20000" ToolTipService.BetweenShowDelay="0">
+                                                            <Rectangle.ToolTip>
+                                                                <ToolTip Content="{Binding ToolTipText}" Background="#0F172A" Foreground="#F8FAFC" FontSize="11" FontWeight="Medium" BorderBrush="#38BDF8" BorderThickness="1" Padding="8,6"/>
+                                                            </Rectangle.ToolTip>
+                                                        </Rectangle>
+                                                    </DataTemplate>
+                                                </ItemsControl.ItemTemplate>
+                                            </ItemsControl>
+
+                                            <!-- Gauss Bell Curve (Đường cong chuẩn) -->
+                                            <Polyline Points="{Binding HistogramGaussPoints}" Stroke="#EF4444" StrokeThickness="2.0" IsHitTestVisible="False"/>
+
+                                            <!-- Vạch chia Ticks trục X -->
+                                            <Line X1="38" Y1="150" X2="38" Y2="154" Stroke="#94A3B8" StrokeThickness="1"/>
+                                            <Line X1="174" Y1="150" X2="174" Y2="154" Stroke="#94A3B8" StrokeThickness="1"/>
+                                            <Line X1="310" Y1="150" X2="310" Y2="154" Stroke="#94A3B8" StrokeThickness="1"/>
+
+                                            <!-- X Axis Labels -->
+                                            <TextBlock Text="{Binding HistXMinLabel}" FontSize="8.5" FontWeight="SemiBold" Foreground="#64748B" Canvas.Left="34" Canvas.Top="156"/>
+                                            <TextBlock Text="{Binding HistXMidLabel}" FontSize="8.5" FontWeight="SemiBold" Foreground="#64748B" Canvas.Left="155" Canvas.Top="156"/>
+                                            <TextBlock Text="{Binding HistXMaxLabel}" FontSize="8.5" FontWeight="SemiBold" Foreground="#64748B" Canvas.Left="275" Canvas.Top="156"/>
+                                        </Canvas>
+                                    </Viewbox>
                                 </Grid>
                             </Border>
 
                             <!-- ─── 2. XBAR CHART ────────────────────── -->
-                            <Border Grid.Column="1" Background="#E0F2FE" BorderBrush="#BAE6FD" BorderThickness="1" CornerRadius="4" Margin="2" Padding="4">
+                            <Border Grid.Column="1" Background="#F0F9FF" BorderBrush="#BAE6FD" BorderThickness="1" CornerRadius="6" Margin="2" Padding="4">
                                 <Grid>
                                     <Grid.RowDefinitions>
                                         <RowDefinition Height="Auto"/>
@@ -468,41 +500,78 @@
                                         <RowDefinition Height="*"/>
                                     </Grid.RowDefinitions>
                                     <TextBlock Grid.Row="0" Text="{Binding SpcResult.SubgroupSizeN, StringFormat='XBAR CHART (n={0})'}" FontWeight="Bold" FontSize="11" Foreground="#0369A1" HorizontalAlignment="Center"/>
-                                    <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,1,0,2">
-                                        <TextBlock Text="◆ AVG " FontSize="9" Foreground="#059669"/>
-                                        <TextBlock Text="◆ UCL " FontSize="9" Foreground="#EF4444"/>
-                                        <TextBlock Text="◆ LCL " FontSize="9" Foreground="#EF4444"/>
-                                        <TextBlock Text="◆ CL" FontSize="9" Foreground="#2563EB"/>
+                                    <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,1,0,3">
+                                        <TextBlock Text="● AVG " FontSize="9" Foreground="#059669"/>
+                                        <TextBlock Text="-- UCL/LCL " FontSize="9" Foreground="#EF4444"/>
+                                        <TextBlock Text="-- CL" FontSize="9" Foreground="#2563EB"/>
                                     </StackPanel>
 
-                                    <Canvas Grid.Row="2" ClipToBounds="True" Background="#E0F2FE">
-                                        <!-- Y Axis Labels -->
-                                        <TextBlock Text="{Binding XbarYMaxLabel}" FontSize="9" Foreground="#64748B" Canvas.Left="2" Canvas.Top="2"/>
-                                        <TextBlock Text="{Binding XbarYMinLabel}" FontSize="9" Foreground="#64748B" Canvas.Left="2" Canvas.Bottom="2"/>
+                                    <!-- Viewbox lấp đầy 100% không gian card -->
+                                    <Viewbox Grid.Row="2" Stretch="Fill">
+                                        <Canvas Width="320" Height="175" ClipToBounds="True" Background="#F0F9FF">
+                                            <!-- Trục Tọa Độ X & Y -->
+                                            <Line X1="38" Y1="14" X2="38" Y2="150" Stroke="#94A3B8" StrokeThickness="1.2"/>
+                                            <Line X1="38" Y1="150" X2="310" Y2="150" Stroke="#94A3B8" StrokeThickness="1.2"/>
 
-                                        <!-- Grid / Limit lines -->
-                                        <!-- X_CL (Blue Dash) -->
-                                        <Line X1="20" Y1="{Binding XbarClY}" X2="240" Y2="{Binding XbarClY}" Stroke="#2563EB" StrokeDashArray="3 2" StrokeThickness="1"/>
-                                        <!-- X_UCL (Red Dash) -->
-                                        <Line X1="20" Y1="{Binding XbarUclY}" X2="240" Y2="{Binding XbarUclY}" Stroke="#EF4444" StrokeDashArray="3 2" StrokeThickness="1"/>
-                                        <!-- X_LCL (Red Dash) -->
-                                        <Line X1="20" Y1="{Binding XbarLclY}" X2="240" Y2="{Binding XbarLclY}" Stroke="#EF4444" StrokeDashArray="3 2" StrokeThickness="1"/>
+                                            <!-- Lưới phụ Gridlines mờ ngang -->
+                                            <Line X1="38" Y1="14" X2="310" Y2="14" Stroke="#E2E8F0" StrokeDashArray="2 2" StrokeThickness="0.8"/>
+                                            <Line X1="38" Y1="82" X2="310" Y2="82" Stroke="#E2E8F0" StrokeDashArray="2 2" StrokeThickness="0.8"/>
 
-                                        <!-- Main AVG Line -->
-                                        <Polyline Points="{Binding XbarPoints}" Stroke="#059669" StrokeThickness="1.5">
-                                            <Polyline.RenderTransform>
-                                                <TranslateTransform X="20" Y="0"/>
-                                            </Polyline.RenderTransform>
-                                        </Polyline>
+                                            <!-- Vạch chia Ticks trục Y -->
+                                            <Line X1="34" Y1="14" X2="38" Y2="14" Stroke="#94A3B8" StrokeThickness="1"/>
+                                            <Line X1="34" Y1="82" X2="38" Y2="82" Stroke="#94A3B8" StrokeThickness="1"/>
+                                            <Line X1="34" Y1="150" X2="38" Y2="150" Stroke="#94A3B8" StrokeThickness="1"/>
 
-                                        <!-- X Axis Label -->
-                                        <TextBlock Text="{Binding XbarXMaxLabel, StringFormat='1 .. {0}'}" FontSize="8.5" Foreground="#64748B" Canvas.Left="25" Canvas.Bottom="1"/>
-                                    </Canvas>
+                                            <!-- Y Axis Labels -->
+                                            <TextBlock Text="{Binding XbarYMaxLabel}" FontSize="9" FontWeight="SemiBold" Foreground="#64748B" Width="34" TextAlignment="Right" Canvas.Left="2" Canvas.Top="8"/>
+                                            <TextBlock Text="{Binding XbarYMidLabel}" FontSize="9" FontWeight="SemiBold" Foreground="#64748B" Width="34" TextAlignment="Right" Canvas.Left="2" Canvas.Top="76"/>
+                                            <TextBlock Text="{Binding XbarYMinLabel}" FontSize="9" FontWeight="SemiBold" Foreground="#64748B" Width="34" TextAlignment="Right" Canvas.Left="2" Canvas.Top="144"/>
+
+                                            <!-- Giới Hạn Shewhart Limits Kéo Dài Toàn Bộ Đồ Thị -->
+                                            <!-- X_CL (Blue Dash) -->
+                                            <Line X1="38" Y1="{Binding XbarClY}" X2="310" Y2="{Binding XbarClY}" Stroke="#2563EB" StrokeDashArray="4 2" StrokeThickness="1.2"/>
+                                            <!-- X_UCL (Red Dash) -->
+                                            <Line X1="38" Y1="{Binding XbarUclY}" X2="310" Y2="{Binding XbarUclY}" Stroke="#EF4444" StrokeDashArray="3 2" StrokeThickness="1.2"/>
+                                            <!-- X_LCL (Red Dash) -->
+                                            <Line X1="38" Y1="{Binding XbarLclY}" X2="310" Y2="{Binding XbarLclY}" Stroke="#EF4444" StrokeDashArray="3 2" StrokeThickness="1.2"/>
+
+                                            <!-- Main AVG Polyline -->
+                                            <Polyline Points="{Binding XbarPoints}" Stroke="#059669" StrokeThickness="2.0" IsHitTestVisible="False"/>
+
+                                            <!-- Markers (Điểm nút tròn có ToolTip hover) -->
+                                            <ItemsControl ItemsSource="{Binding XbarMarkers}">
+                                                <ItemsControl.ItemsPanel>
+                                                    <ItemsPanelTemplate>
+                                                        <Canvas />
+                                                    </ItemsPanelTemplate>
+                                                </ItemsControl.ItemsPanel>
+                                                <ItemsControl.ItemContainerStyle>
+                                                    <Style TargetType="ContentPresenter">
+                                                        <Setter Property="Canvas.Left" Value="{Binding X}"/>
+                                                        <Setter Property="Canvas.Top" Value="{Binding Y}"/>
+                                                    </Style>
+                                                </ItemsControl.ItemContainerStyle>
+                                                <ItemsControl.ItemTemplate>
+                                                    <DataTemplate>
+                                                        <Ellipse Width="8" Height="8" Fill="{Binding FillBrush}" Stroke="{Binding StrokeBrush}" StrokeThickness="2" Cursor="Hand" ToolTipService.InitialShowDelay="0" ToolTipService.ShowDuration="20000" ToolTipService.BetweenShowDelay="0">
+                                                            <Ellipse.ToolTip>
+                                                                <ToolTip Content="{Binding ToolTipText}" Background="#0F172A" Foreground="#F8FAFC" FontSize="11" FontWeight="Medium" BorderBrush="#38BDF8" BorderThickness="1" Padding="8,6"/>
+                                                            </Ellipse.ToolTip>
+                                                        </Ellipse>
+                                                    </DataTemplate>
+                                                </ItemsControl.ItemTemplate>
+                                            </ItemsControl>
+
+                                            <!-- X Axis Labels -->
+                                            <TextBlock Text="Nhóm 1" FontSize="8.5" FontWeight="SemiBold" Foreground="#64748B" Canvas.Left="34" Canvas.Top="156"/>
+                                            <TextBlock Text="{Binding XbarXMaxLabel, StringFormat='Nhóm {0}'}" FontSize="8.5" FontWeight="SemiBold" Foreground="#64748B" Canvas.Left="265" Canvas.Top="156"/>
+                                        </Canvas>
+                                    </Viewbox>
                                 </Grid>
                             </Border>
 
                             <!-- ─── 3. R CHART ───────────────────────── -->
-                            <Border Grid.Column="2" Background="#E0F2FE" BorderBrush="#BAE6FD" BorderThickness="1" CornerRadius="4" Margin="2" Padding="4">
+                            <Border Grid.Column="2" Background="#F0F9FF" BorderBrush="#BAE6FD" BorderThickness="1" CornerRadius="6" Margin="2" Padding="4">
                                 <Grid>
                                     <Grid.RowDefinitions>
                                         <RowDefinition Height="Auto"/>
@@ -510,38 +579,75 @@
                                         <RowDefinition Height="*"/>
                                     </Grid.RowDefinitions>
                                     <TextBlock Grid.Row="0" Text="{Binding SpcResult.SubgroupSizeN, StringFormat='R CHART (n={0})'}" FontWeight="Bold" FontSize="11" Foreground="#0369A1" HorizontalAlignment="Center"/>
-                                    <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,1,0,2">
-                                        <TextBlock Text="◆ R_VAL " FontSize="9" Foreground="#059669"/>
-                                        <TextBlock Text="◆ R_UCL " FontSize="9" Foreground="#EF4444"/>
-                                        <TextBlock Text="◆ R_LCL " FontSize="9" Foreground="#EF4444"/>
-                                        <TextBlock Text="◆ R_CL" FontSize="9" Foreground="#2563EB"/>
+                                    <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,1,0,3">
+                                        <TextBlock Text="● R_VAL " FontSize="9" Foreground="#0D9488"/>
+                                        <TextBlock Text="-- R_UCL " FontSize="9" Foreground="#EF4444"/>
+                                        <TextBlock Text="-- R_CL" FontSize="9" Foreground="#2563EB"/>
                                     </StackPanel>
 
-                                    <Canvas Grid.Row="2" ClipToBounds="True" Background="#E0F2FE">
-                                        <!-- Y Axis Labels -->
-                                        <TextBlock Text="{Binding RYMaxLabel}" FontSize="9" Foreground="#64748B" Canvas.Left="2" Canvas.Top="2"/>
-                                        <TextBlock Text="{Binding RYMinLabel}" FontSize="9" Foreground="#64748B" Canvas.Left="2" Canvas.Bottom="2"/>
+                                    <!-- Viewbox lấp đầy 100% không gian card -->
+                                    <Viewbox Grid.Row="2" Stretch="Fill">
+                                        <Canvas Width="320" Height="175" ClipToBounds="True" Background="#F0F9FF">
+                                            <!-- Trục Tọa Độ X & Y -->
+                                            <Line X1="38" Y1="14" X2="38" Y2="150" Stroke="#94A3B8" StrokeThickness="1.2"/>
+                                            <Line X1="38" Y1="150" X2="310" Y2="150" Stroke="#94A3B8" StrokeThickness="1.2"/>
 
-                                        <!-- Limit lines -->
-                                        <Line X1="20" Y1="{Binding RClY}" X2="240" Y2="{Binding RClY}" Stroke="#2563EB" StrokeDashArray="3 2" StrokeThickness="1"/>
-                                        <Line X1="20" Y1="{Binding RUclY}" X2="240" Y2="{Binding RUclY}" Stroke="#EF4444" StrokeDashArray="3 2" StrokeThickness="1"/>
-                                        <Line X1="20" Y1="{Binding RLclY}" X2="240" Y2="{Binding RLclY}" Stroke="#EF4444" StrokeDashArray="3 2" StrokeThickness="1"/>
+                                            <!-- Lưới phụ Gridlines mờ ngang -->
+                                            <Line X1="38" Y1="14" X2="310" Y2="14" Stroke="#E2E8F0" StrokeDashArray="2 2" StrokeThickness="0.8"/>
+                                            <Line X1="38" Y1="82" X2="310" Y2="82" Stroke="#E2E8F0" StrokeDashArray="2 2" StrokeThickness="0.8"/>
 
-                                        <!-- Main R Value Line -->
-                                        <Polyline Points="{Binding RChartPoints}" Stroke="#059669" StrokeThickness="1.5">
-                                            <Polyline.RenderTransform>
-                                                <TranslateTransform X="20" Y="0"/>
-                                            </Polyline.RenderTransform>
-                                        </Polyline>
+                                            <!-- Vạch chia Ticks trục Y -->
+                                            <Line X1="34" Y1="14" X2="38" Y2="14" Stroke="#94A3B8" StrokeThickness="1"/>
+                                            <Line X1="34" Y1="82" X2="38" Y2="82" Stroke="#94A3B8" StrokeThickness="1"/>
+                                            <Line X1="34" Y1="150" X2="38" Y2="150" Stroke="#94A3B8" StrokeThickness="1"/>
 
-                                        <!-- X Axis Label -->
-                                        <TextBlock Text="{Binding RXMaxLabel, StringFormat='1 .. {0}'}" FontSize="8.5" Foreground="#64748B" Canvas.Left="25" Canvas.Bottom="1"/>
-                                    </Canvas>
+                                            <!-- Y Axis Labels -->
+                                            <TextBlock Text="{Binding RYMaxLabel}" FontSize="9" FontWeight="SemiBold" Foreground="#64748B" Width="34" TextAlignment="Right" Canvas.Left="2" Canvas.Top="8"/>
+                                            <TextBlock Text="{Binding RYMidLabel}" FontSize="9" FontWeight="SemiBold" Foreground="#64748B" Width="34" TextAlignment="Right" Canvas.Left="2" Canvas.Top="76"/>
+                                            <TextBlock Text="{Binding RYMinLabel}" FontSize="9" FontWeight="SemiBold" Foreground="#64748B" Width="34" TextAlignment="Right" Canvas.Left="2" Canvas.Top="144"/>
+
+                                            <!-- Limit lines -->
+                                            <Line X1="38" Y1="{Binding RClY}" X2="310" Y2="{Binding RClY}" Stroke="#2563EB" StrokeDashArray="4 2" StrokeThickness="1.2"/>
+                                            <Line X1="38" Y1="{Binding RUclY}" X2="310" Y2="{Binding RUclY}" Stroke="#EF4444" StrokeDashArray="3 2" StrokeThickness="1.2"/>
+                                            <Line X1="38" Y1="{Binding RLclY}" X2="310" Y2="{Binding RLclY}" Stroke="#EF4444" StrokeDashArray="3 2" StrokeThickness="1.2"/>
+
+                                            <!-- Main R Value Line -->
+                                            <Polyline Points="{Binding RChartPoints}" Stroke="#0D9488" StrokeThickness="2.0" IsHitTestVisible="False"/>
+
+                                            <!-- Markers (Điểm nút tròn có ToolTip hover) -->
+                                            <ItemsControl ItemsSource="{Binding RChartMarkers}">
+                                                <ItemsControl.ItemsPanel>
+                                                    <ItemsPanelTemplate>
+                                                        <Canvas />
+                                                    </ItemsPanelTemplate>
+                                                </ItemsControl.ItemsPanel>
+                                                <ItemsControl.ItemContainerStyle>
+                                                    <Style TargetType="ContentPresenter">
+                                                        <Setter Property="Canvas.Left" Value="{Binding X}"/>
+                                                        <Setter Property="Canvas.Top" Value="{Binding Y}"/>
+                                                    </Style>
+                                                </ItemsControl.ItemContainerStyle>
+                                                <ItemsControl.ItemTemplate>
+                                                    <DataTemplate>
+                                                        <Ellipse Width="8" Height="8" Fill="{Binding FillBrush}" Stroke="{Binding StrokeBrush}" StrokeThickness="2" Cursor="Hand" ToolTipService.InitialShowDelay="0" ToolTipService.ShowDuration="20000" ToolTipService.BetweenShowDelay="0">
+                                                            <Ellipse.ToolTip>
+                                                                <ToolTip Content="{Binding ToolTipText}" Background="#0F172A" Foreground="#F8FAFC" FontSize="11" FontWeight="Medium" BorderBrush="#38BDF8" BorderThickness="1" Padding="8,6"/>
+                                                            </Ellipse.ToolTip>
+                                                        </Ellipse>
+                                                    </DataTemplate>
+                                                </ItemsControl.ItemTemplate>
+                                            </ItemsControl>
+
+                                            <!-- X Axis Labels -->
+                                            <TextBlock Text="Nhóm 1" FontSize="8.5" FontWeight="SemiBold" Foreground="#64748B" Canvas.Left="34" Canvas.Top="156"/>
+                                            <TextBlock Text="{Binding RXMaxLabel, StringFormat='Nhóm {0}'}" FontSize="8.5" FontWeight="SemiBold" Foreground="#64748B" Canvas.Left="265" Canvas.Top="156"/>
+                                        </Canvas>
+                                    </Viewbox>
                                 </Grid>
                             </Border>
 
                             <!-- ─── 4. CPK TREND CHART ───────────────── -->
-                            <Border Grid.Column="3" Background="#E0F2FE" BorderBrush="#BAE6FD" BorderThickness="1" CornerRadius="4" Margin="2" Padding="4">
+                            <Border Grid.Column="3" Background="#F0F9FF" BorderBrush="#BAE6FD" BorderThickness="1" CornerRadius="6" Margin="2" Padding="4">
                                 <Grid>
                                     <Grid.RowDefinitions>
                                         <RowDefinition Height="Auto"/>
@@ -549,33 +655,74 @@
                                         <RowDefinition Height="*"/>
                                     </Grid.RowDefinitions>
                                     <TextBlock Grid.Row="0" Text="{Binding SpcResult.SubgroupSizeN, StringFormat='CPK TREND (n={0})'}" FontWeight="Bold" FontSize="11" Foreground="#0369A1" HorizontalAlignment="Center"/>
-                                    <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,1,0,2">
-                                        <TextBlock Text="◆ CPK " FontSize="9" Foreground="#059669"/>
-                                        <TextBlock Text="◆ CPK1 (1.33) " FontSize="9" Foreground="#EF4444"/>
-                                        <TextBlock Text="◆ CPK2 (1.67)" FontSize="9" Foreground="#EF4444"/>
+                                    <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,1,0,3">
+                                        <TextBlock Text="● CPK " FontSize="9" Foreground="#059669"/>
+                                        <TextBlock Text="-- 1.33 (4σ) " FontSize="9" Foreground="#EF4444"/>
+                                        <TextBlock Text="-- 1.67 (5σ)" FontSize="9" Foreground="#F59E0B"/>
                                     </StackPanel>
 
-                                    <Canvas Grid.Row="2" ClipToBounds="True" Background="#E0F2FE">
-                                        <!-- Y Axis Labels -->
-                                        <TextBlock Text="{Binding CpkYMaxLabel}" FontSize="9" Foreground="#64748B" Canvas.Left="2" Canvas.Top="2"/>
-                                        <TextBlock Text="{Binding CpkYMinLabel}" FontSize="9" Foreground="#64748B" Canvas.Left="2" Canvas.Bottom="2"/>
+                                    <!-- Viewbox lấp đầy 100% không gian card -->
+                                    <Viewbox Grid.Row="2" Stretch="Fill">
+                                        <Canvas Width="320" Height="175" ClipToBounds="True" Background="#F0F9FF">
+                                            <!-- Trục Tọa Độ X & Y -->
+                                            <Line X1="38" Y1="14" X2="38" Y2="150" Stroke="#94A3B8" StrokeThickness="1.2"/>
+                                            <Line X1="38" Y1="150" X2="310" Y2="150" Stroke="#94A3B8" StrokeThickness="1.2"/>
 
-                                        <!-- Warning Threshold Lines -->
-                                        <!-- CPK1 = 1.33 -->
-                                        <Line X1="20" Y1="{Binding Cpk133Y}" X2="240" Y2="{Binding Cpk133Y}" Stroke="#EF4444" StrokeDashArray="3 2" StrokeThickness="1"/>
-                                        <!-- CPK2 = 1.67 -->
-                                        <Line X1="20" Y1="{Binding Cpk167Y}" X2="240" Y2="{Binding Cpk167Y}" Stroke="#EF4444" StrokeDashArray="3 2" StrokeThickness="1"/>
+                                            <!-- Lưới phụ Gridlines mờ ngang -->
+                                            <Line X1="38" Y1="14" X2="310" Y2="14" Stroke="#E2E8F0" StrokeDashArray="2 2" StrokeThickness="0.8"/>
+                                            <Line X1="38" Y1="82" X2="310" Y2="82" Stroke="#E2E8F0" StrokeDashArray="2 2" StrokeThickness="0.8"/>
 
-                                        <!-- Main Cpk Trend Line -->
-                                        <Polyline Points="{Binding CpkTrendPoints}" Stroke="#059669" StrokeThickness="1.8">
-                                            <Polyline.RenderTransform>
-                                                <TranslateTransform X="20" Y="0"/>
-                                            </Polyline.RenderTransform>
-                                        </Polyline>
+                                            <!-- Vạch chia Ticks trục Y -->
+                                            <Line X1="34" Y1="14" X2="38" Y2="14" Stroke="#94A3B8" StrokeThickness="1"/>
+                                            <Line X1="34" Y1="82" X2="38" Y2="82" Stroke="#94A3B8" StrokeThickness="1"/>
+                                            <Line X1="34" Y1="150" X2="38" Y2="150" Stroke="#94A3B8" StrokeThickness="1"/>
 
-                                        <!-- X Axis Label -->
-                                        <TextBlock Text="{Binding CpkXMaxLabel, StringFormat='1 .. {0}'}" FontSize="8.5" Foreground="#64748B" Canvas.Left="25" Canvas.Bottom="1"/>
-                                    </Canvas>
+                                            <!-- Y Axis Labels -->
+                                            <TextBlock Text="{Binding CpkYMaxLabel}" FontSize="9" FontWeight="SemiBold" Foreground="#64748B" Width="34" TextAlignment="Right" Canvas.Left="2" Canvas.Top="8"/>
+                                            <TextBlock Text="{Binding CpkYMidLabel}" FontSize="9" FontWeight="SemiBold" Foreground="#64748B" Width="34" TextAlignment="Right" Canvas.Left="2" Canvas.Top="76"/>
+                                            <TextBlock Text="0.0" FontSize="9" FontWeight="SemiBold" Foreground="#64748B" Width="34" TextAlignment="Right" Canvas.Left="2" Canvas.Top="144"/>
+
+                                            <!-- Warning Threshold Lines -->
+                                            <!-- CPK1 = 1.33 -->
+                                            <Line X1="38" Y1="{Binding Cpk133Y}" X2="310" Y2="{Binding Cpk133Y}" Stroke="#EF4444" StrokeDashArray="4 2" StrokeThickness="1.2"/>
+                                            <TextBlock Text="1.33" FontSize="8" FontWeight="Bold" Foreground="#EF4444" Canvas.Left="40" Canvas.Top="{Binding Cpk133Y}" Margin="0,-12,0,0"/>
+
+                                            <!-- CPK2 = 1.67 -->
+                                            <Line X1="38" Y1="{Binding Cpk167Y}" X2="310" Y2="{Binding Cpk167Y}" Stroke="#F59E0B" StrokeDashArray="4 2" StrokeThickness="1.2"/>
+                                            <TextBlock Text="1.67" FontSize="8" FontWeight="Bold" Foreground="#F59E0B" Canvas.Left="40" Canvas.Top="{Binding Cpk167Y}" Margin="0,-12,0,0"/>
+
+                                            <!-- Main Cpk Trend Line -->
+                                            <Polyline Points="{Binding CpkTrendPoints}" Stroke="#059669" StrokeThickness="2.0" IsHitTestVisible="False"/>
+
+                                            <!-- Markers (Điểm nút tròn có ToolTip hover) -->
+                                            <ItemsControl ItemsSource="{Binding CpkTrendMarkers}">
+                                                <ItemsControl.ItemsPanel>
+                                                    <ItemsPanelTemplate>
+                                                        <Canvas />
+                                                    </ItemsPanelTemplate>
+                                                </ItemsControl.ItemsPanel>
+                                                <ItemsControl.ItemContainerStyle>
+                                                    <Style TargetType="ContentPresenter">
+                                                        <Setter Property="Canvas.Left" Value="{Binding X}"/>
+                                                        <Setter Property="Canvas.Top" Value="{Binding Y}"/>
+                                                    </Style>
+                                                </ItemsControl.ItemContainerStyle>
+                                                <ItemsControl.ItemTemplate>
+                                                    <DataTemplate>
+                                                        <Ellipse Width="8" Height="8" Fill="{Binding FillBrush}" Stroke="#FFFFFF" StrokeThickness="1.5" Cursor="Hand" ToolTipService.InitialShowDelay="0" ToolTipService.ShowDuration="20000" ToolTipService.BetweenShowDelay="0">
+                                                            <Ellipse.ToolTip>
+                                                                <ToolTip Content="{Binding ToolTipText}" Background="#0F172A" Foreground="#F8FAFC" FontSize="11" FontWeight="Medium" BorderBrush="#38BDF8" BorderThickness="1" Padding="8,6"/>
+                                                            </Ellipse.ToolTip>
+                                                        </Ellipse>
+                                                    </DataTemplate>
+                                                </ItemsControl.ItemTemplate>
+                                            </ItemsControl>
+
+                                            <!-- X Axis Labels -->
+                                            <TextBlock Text="Nhóm 1" FontSize="8.5" FontWeight="SemiBold" Foreground="#64748B" Canvas.Left="34" Canvas.Top="156"/>
+                                            <TextBlock Text="{Binding CpkXMaxLabel, StringFormat='Nhóm {0}'}" FontSize="8.5" FontWeight="SemiBold" Foreground="#64748B" Canvas.Left="265" Canvas.Top="156"/>
+                                        </Canvas>
+                                    </Viewbox>
                                 </Grid>
                             </Border>
                         </Grid>

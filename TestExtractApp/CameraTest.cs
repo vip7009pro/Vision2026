@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using DirectShowLib;
 using OpenCvSharp;
+using VisionInspectionApp.Models;
 
 namespace TestExtractApp;
 
@@ -947,5 +948,95 @@ public static class CameraTest
         }
 
         Console.WriteLine("✅ ALL INSPECTION LOG & SPC/CPK TESTS PASSED (100%)!\n");
+    }
+
+    public static void TestFlowCanvasNodeRenameAndDownstreamReferences()
+    {
+        Console.WriteLine("========================================================");
+        Console.WriteLine("🧪 RUNNING FLOW CANVAS NODE RENAME & REFERENCE TESTS");
+        Console.WriteLine("========================================================");
+
+        var config = new VisionConfig
+        {
+            Points = new List<PointDefinition>
+            {
+                new PointDefinition { Name = "Point1" },
+                new PointDefinition { Name = "Point2" }
+            },
+            Lines = new List<LineToolDefinition>
+            {
+                new LineToolDefinition { Name = "Line1" },
+                new LineToolDefinition { Name = "Line2" }
+            },
+            Calipers = new List<CaliperDefinition>
+            {
+                new CaliperDefinition { Name = "Caliper1" }
+            },
+            PreprocessNodes = new List<PreprocessNodeDefinition>
+            {
+                new PreprocessNodeDefinition { Name = "Pre1" }
+            },
+            Distances = new List<LineDistance>
+            {
+                new LineDistance { Name = "Dist1", PointA = "Point1", PointB = "Point2" }
+            },
+            Angles = new List<AngleDefinition>
+            {
+                new AngleDefinition { Name = "Angle1", LineA = "Line1", LineB = "Line2" }
+            },
+            CreatePoints = new List<CreatePointDefinition>
+            {
+                new CreatePointDefinition { Name = "CP1", PointRef = "Point1" }
+            },
+            ToolGraph = new ToolGraph
+            {
+                Nodes = new List<ToolGraphNode>
+                {
+                    new ToolGraphNode { Id = "1", Type = "Point", RefName = "Point1" },
+                    new ToolGraphNode { Id = "2", Type = "Point", RefName = "Point2" },
+                    new ToolGraphNode { Id = "3", Type = "Caliper", RefName = "Caliper1" },
+                    new ToolGraphNode { Id = "4", Type = "Preprocess", RefName = "Pre1" },
+                    new ToolGraphNode { Id = "5", Type = "Distance", RefName = "Dist1" },
+                    new ToolGraphNode { Id = "6", Type = "Angle", RefName = "Angle1" },
+                    new ToolGraphNode { Id = "7", Type = "CreatePoint", RefName = "CP1" }
+                }
+            }
+        };
+
+        var vm = new VisionInspectionApp.UI.ViewModels.ToolEditorViewModel();
+        vm.InitializeWithConfig(config);
+
+        // 1. Rename Point1 -> Point1_Renamed
+        var node1 = vm.Nodes.First(n => n.RefName == "Point1");
+        vm.SelectedNode = node1;
+        node1.RefName = "Point1_Renamed";
+
+        if (config.Points.First().Name != "Point1_Renamed")
+            throw new Exception("Point definition was not renamed in config!");
+        if (config.Distances.First().PointA != "Point1_Renamed")
+            throw new Exception("Downstream Distance PointA was not updated to Point1_Renamed!");
+        if (config.CreatePoints.First().PointRef != "Point1_Renamed")
+            throw new Exception("Downstream CreatePoint PointRef was not updated to Point1_Renamed!");
+        Console.WriteLine("  [1/3] Point Rename & Downstream Cross-References: PASSED");
+
+        // 2. Rename Caliper1 -> Caliper1_New
+        var nodeCaliper = vm.Nodes.First(n => n.RefName == "Caliper1");
+        vm.SelectedNode = nodeCaliper;
+        nodeCaliper.RefName = "Caliper1_New";
+
+        if (config.Calipers.First().Name != "Caliper1_New")
+            throw new Exception("Caliper definition was not renamed in config!");
+        Console.WriteLine("  [2/3] Caliper Node Rename: PASSED");
+
+        // 3. Rename Preprocess Pre1 -> Pre_Enhance
+        var nodePre = vm.Nodes.First(n => n.RefName == "Pre1");
+        vm.SelectedNode = nodePre;
+        nodePre.RefName = "Pre_Enhance";
+
+        if (config.PreprocessNodes.First().Name != "Pre_Enhance")
+            throw new Exception("Preprocess definition was not renamed in config!");
+        Console.WriteLine("  [3/3] Preprocess Node Rename & Config Preservation: PASSED");
+
+        Console.WriteLine("✅ ALL FLOW CANVAS RENAME TESTS PASSED (100%)!\n");
     }
 }
