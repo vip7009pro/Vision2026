@@ -378,11 +378,25 @@ public partial class InspectionLogViewModel : ObservableObject
         }
 
         var first = measList[0];
-        var values = measList.Select(m => m.MeasuredValue).ToList();
+        var allValues = measList.Select(m => m.MeasuredValue).ToList();
+        var validValues = allValues.Where(v => !double.IsNaN(v) && !double.IsInfinity(v)).ToList();
+        int nanCount = allValues.Count - validValues.Count;
+
+        if (validValues.Count == 0)
+        {
+            SpcResult = null;
+            ClearCharts();
+            SpcHeaderProduct = $"Sản phẩm: {SelectedSession.ProductName}";
+            SpcHeaderMaterial = $"Vật liệu: {SelectedSession.Material}";
+            SpcHeaderItem = $"Hạng mục test: {SelectedMeasurement}";
+            SpcHeaderTotalRows = $"Total: {allValues.Count} rows (Tất cả {nanCount} mẫu là NaN/NG - Không đủ dữ liệu tính SPC)";
+            StatusMessage = "Tất cả các con hàng đều ra kết quả NaN/NG cho hạng mục được chọn.";
+            return;
+        }
 
         SpcResult = SpcEngine.Analyze(
             SelectedMeasurement,
-            values,
+            validValues,
             first.Nominal,
             first.TolPlus,
             first.TolMinus,
@@ -393,7 +407,9 @@ public partial class InspectionLogViewModel : ObservableObject
         SpcHeaderProduct = $"Sản phẩm: {SelectedSession.ProductName}";
         SpcHeaderMaterial = $"Vật liệu: {SelectedSession.Material}";
         SpcHeaderItem = $"Hạng mục test: {SelectedMeasurement}";
-        SpcHeaderTotalRows = $"Total: {values.Count} rows (n={SpcResult.SubgroupSizeN})";
+        SpcHeaderTotalRows = nanCount > 0
+            ? $"Total: {allValues.Count} rows (Hợp lệ: {validValues.Count}, Bỏ qua NaN: {nanCount}) (n={SpcResult.SubgroupSizeN})"
+            : $"Total: {validValues.Count} rows (n={SpcResult.SubgroupSizeN})";
 
         // Render dữ liệu đồ họa cho 4 biểu đồ
         RenderCharts(SpcResult);

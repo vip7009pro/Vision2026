@@ -49,6 +49,22 @@
 - Preview được phép tiếp tục khi Global Snapshot rỗng để lấy ảnh từ ImageSource.
 - Lưu template cho Origin, Point và SurfaceCompare hoạt động với nguồn ảnh ImageSource.
 
+- **Tự Động Lọc Bỏ Mẫu Đo NaN/NG Trong Phân Tích Thống Kê SPC & Hiển Thị Biểu Đồ Histogram, X-bar, R-chart, CPK Trend (Task 265)**:
+  - **Yêu Cầu & Bối Cảnh**:
+    - Trong cửa sổ "Lịch sử kiểm tra & Phân tích thống kê SPC", khi cuộn hàng vừa kiểm tra có những con hàng mà phép đo không tìm thấy đối tượng và trả về kết quả `NaN`, toàn bộ 3 biểu đồ Histogram, X-bar, R-chart và đường xu hướng CPK Trend đều bị biến mất / không hiển thị được.
+    - Yêu cầu: Biểu đồ phải hiển thị bình thường, các phép đo có kết quả `NaN` (hoặc `Infinity`) phải được tự động loại bỏ khỏi tập tính toán thống kê SPC.
+  - **Giải Pháp Kỹ Thuật Đã Triển Khai**:
+    1. [SpcEngine.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.Application/Services/SpcEngine.cs):
+       - Tự động lọc `values = rawValues.Where(v => !double.IsNaN(v) && !double.IsInfinity(v)).ToList();`.
+       - Bảo vệ an toàn tuyệt đối các công thức tính toán độ lệch chuẩn $\sigma$, $X_{bar}$, $R$, $C_p$, $C_{pk}$, $C_{pu}$, $C_{pl}$ và phân bố chuẩn Gauss (PDF) trong Histogram tránh sinh ra `NaN`.
+       - Nếu toàn bộ mẫu là `NaN`, trả về kết quả an toàn rỗng (TotalSamples = 0, Subgroups rỗng) không làm crash hoặc lỗi biểu đồ.
+    2. [InspectionLogViewModel.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/InspectionLogViewModel.cs):
+       - `UpdateSpcAnalysis()`: Tự động tách `validValues` và đếm số lượng `nanCount`.
+       - Cập nhật Header thông minh: `Total: 100 rows (Hợp lệ: 95, Bỏ qua NaN: 5) (n=32)`.
+       - Nếu tất cả mẫu là `NaN/NG`, hiển thị thông báo rõ ràng "Tất cả các con hàng đều ra kết quả NaN/NG cho hạng mục được chọn" và dọn dẹp biểu đồ an toàn.
+       - Trong `RenderCharts()`: Bảo vệ an toàn chống `NaN` và `Infinity` cho mọi điểm vẽ trên Canvas chart.
+  - **Kiểm Thử**: Bổ sung test case `[2b/4] SpcEngine Robust NaN / Infinity Filtering & All-NaN Fallback` trong [CameraTest.cs](file:///g:/NODEJS/Vision2026/TestExtractApp/CameraTest.cs), toàn bộ test suite PASSED 100%.
+
 - **Tối Ưu Hiển Thị Tool Origin: Vẽ Template ROI Dưới Dạng Read-Only Trên Flow Canvas & Mở Khóa Tương Tác Trong Cửa Sổ Train Template (Task 264)**:
   - **Yêu Cầu & Bối Cảnh**:
     - Khi click vào node Origin trên Flow Canvas, vẫn cần vẽ đầy đủ cả Search ROI ("Origin S" màu xanh lá) và Template ROI ("Origin T" màu vàng kim) để quan sát trực quan vị trí mẫu.

@@ -1141,6 +1141,15 @@ Lộ trình tích hợp tính năng Chụp ảnh từ camera và hỗ trợ các
         3. Cửa sổ Train Template (`OriginTrainViewModel.cs`) tiếp tục quản lý, hiển thị và tương tác `TemplateRoi` độc lập.
       - `Kiểm Thử`: Toàn bộ unit tests và hệ thống render PASSED 100%.
 
+- [x] Task 265: Tự động lọc bỏ các mẫu đo NaN/NG trong phân tích thống kê SPC & Hiển thị 4 biểu đồ bình thường.
+      - `Mục Tiêu & Yêu Cầu`:
+        - Khi cuộn danh sách hàng vừa kiểm tra có những con hàng mà kết quả đo ra `NaN` (không tìm thấy đối tượng), toàn bộ 4 biểu đồ (Histogram, X-bar, R-chart, CPK Trend) phải hiển thị bình thường.
+        - Các mẫu đo có kết quả `NaN` hoặc `Infinity` được tự động loại bỏ khỏi tập tính toán thống kê SPC.
+      - `Giải Pháp Kỹ Thuật Đã Triển Khai`:
+        1. `SpcEngine.cs`: Lọc `values = rawValues.Where(v => !double.IsNaN(v) && !double.IsInfinity(v)).ToList()`, bảo vệ an toàn 100% các phép tính thống kê $X_{bar}$, $R$, $\sigma$, $C_p$, $C_{pk}$, $C_{pu}$, $C_{pl}$ và phân bố chuẩn Gauss (PDF).
+        2. `InspectionLogViewModel.cs`: Tự động tách `validValues` và đếm `nanCount`, cập nhật Header hiển thị chi tiết số lượng mẫu hợp lệ và số mẫu NaN được loại bỏ, bảo vệ tọa độ vẽ chart trên Canvas.
+      - `Kiểm Thử`: Bổ sung test case `[2b/4] SpcEngine Robust NaN / Infinity Filtering & All-NaN Fallback` trong `CameraTest.cs`. Toàn bộ test suite PASSED 100%.
+
 
 
 

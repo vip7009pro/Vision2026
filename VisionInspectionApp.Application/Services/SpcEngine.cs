@@ -71,8 +71,22 @@ public static class SpcEngine
         if (rawValues == null || rawValues.Count == 0)
             return result;
 
-        var values = rawValues.ToList();
+        var values = (rawValues ?? Enumerable.Empty<double>())
+            .Where(v => !double.IsNaN(v) && !double.IsInfinity(v))
+            .ToList();
+
         int totalN = values.Count;
+        result.TotalSamples = totalN;
+
+        if (totalN == 0)
+        {
+            result.SubgroupSizeN = 0;
+            result.SubgroupCountK = 0;
+            result.DroppedRemainder = 0;
+            result.Subgroups = new List<SpcSubgroupData>();
+            result.HistogramBins = new List<HistogramBinData>();
+            return result;
+        }
 
         // 1. Quy tắc cỡ mẫu n:
         // Mặc định n = 32. Nếu tổng mẫu < 32 thì giảm về 5. Nếu tổng mẫu < 5 thì dùng toàn bộ (n = totalN).
@@ -107,6 +121,8 @@ public static class SpcEngine
         for (int i = 0; i < k; i++)
         {
             var subValues = values.Skip(i * n).Take(n).ToList();
+            if (subValues.Count == 0) continue;
+
             double mean = subValues.Average();
             double min = subValues.Min();
             double max = subValues.Max();
@@ -114,7 +130,8 @@ public static class SpcEngine
 
             // Độ lệch chuẩn nhóm con (Sample Standard Deviation)
             double sumSq = subValues.Sum(v => Math.Pow(v - mean, 2));
-            double sigma = n > 1 ? Math.Sqrt(sumSq / (n - 1)) : 0.0001;
+            double sigma = subValues.Count > 1 ? Math.Sqrt(sumSq / (subValues.Count - 1)) : 0.0001;
+            if (double.IsNaN(sigma) || double.IsInfinity(sigma) || sigma < 1e-9) sigma = 0.0001;
 
             double cpk = 0;
             if (sigma > 1e-9)
@@ -122,6 +139,7 @@ public static class SpcEngine
                 double cpu = (result.Usl - mean) / (3 * sigma);
                 double cpl = (mean - result.Lsl) / (3 * sigma);
                 cpk = Math.Min(cpu, cpl);
+                if (double.IsNaN(cpk) || double.IsInfinity(cpk)) cpk = 0;
             }
 
             var sg = new SpcSubgroupData
@@ -144,8 +162,9 @@ public static class SpcEngine
         result.Subgroups = subgroups;
 
         // 3. Tính đường trung tâm và các giới hạn kiểm soát
-        double grandMean = sumXbar / k;
-        double rBar = sumR / k;
+        int actualK = Math.Max(1, subgroups.Count);
+        double grandMean = sumXbar / actualK;
+        double rBar = sumR / actualK;
 
         result.OverallMean = values.Average();
         result.OverallMin = values.Min();
@@ -154,6 +173,7 @@ public static class SpcEngine
         // Độ lệch chuẩn toàn thể (Overall Sigma)
         double totalSumSq = values.Sum(v => Math.Pow(v - result.OverallMean, 2));
         double overallSigma = totalN > 1 ? Math.Sqrt(totalSumSq / (totalN - 1)) : 0.0001;
+        if (double.IsNaN(overallSigma) || double.IsInfinity(overallSigma) || overallSigma < 1e-9) overallSigma = 0.0001;
         result.OverallSigma = overallSigma;
 
         // Giới hạn kiểm soát X-bar
@@ -174,6 +194,8 @@ public static class SpcEngine
             result.Cpu = (result.Usl - result.OverallMean) / (3 * overallSigma);
             result.Cpl = (result.OverallMean - result.Lsl) / (3 * overallSigma);
             result.Cpk = Math.Min(result.Cpu, result.Cpl);
+            if (double.IsNaN(result.Cp) || double.IsInfinity(result.Cp)) result.Cp = 0;
+            if (double.IsNaN(result.Cpk) || double.IsInfinity(result.Cpk)) result.Cpk = 0;
         }
         else
         {

@@ -885,6 +885,45 @@ public static class CameraTest
         }
         Console.WriteLine($"  [2/4] SpcEngine Automatic n=5 Fallback (N=23 -> n=5, k=4, rem=3): PASSED");
 
+        // 2b. Test NaN & Infinity filtering in SpcEngine
+        var dirtySamples = new List<double>(sampleValues);
+        dirtySamples.Insert(5, double.NaN);
+        dirtySamples.Insert(15, double.NaN);
+        dirtySamples.Insert(25, double.PositiveInfinity);
+        dirtySamples.Insert(35, double.NegativeInfinity);
+
+        var spcDirty = VisionInspectionApp.Application.Services.SpcEngine.Analyze(
+            "Dimension_Width",
+            dirtySamples,
+            nominal: 45.0,
+            tolPlus: 0.2,
+            tolMinus: 0.2,
+            unit: "mm",
+            requestedSubgroupSizeN: 32);
+
+        if (double.IsNaN(spcDirty.OverallMean) || double.IsNaN(spcDirty.Cpk) || double.IsNaN(spcDirty.OverallSigma) || spcDirty.TotalSamples != 100)
+        {
+            throw new Exception($"SpcEngine failed NaN/Infinity filtering! Mean={spcDirty.OverallMean}, Cpk={spcDirty.Cpk}, TotalSamples={spcDirty.TotalSamples}");
+        }
+        if (spcDirty.HistogramBins.Any(b => double.IsNaN(b.BinStart) || double.IsNaN(b.NormalCurveHeight)))
+        {
+            throw new Exception("SpcEngine HistogramBins contain NaN values!");
+        }
+
+        // Test All-NaN samples safe fallback
+        var allNanSamples = new List<double> { double.NaN, double.NaN, double.PositiveInfinity };
+        var spcAllNan = VisionInspectionApp.Application.Services.SpcEngine.Analyze(
+            "Dimension_Width",
+            allNanSamples,
+            nominal: 45.0,
+            tolPlus: 0.2,
+            tolMinus: 0.2);
+        if (spcAllNan.TotalSamples != 0 || spcAllNan.Subgroups.Count != 0 || double.IsNaN(spcAllNan.OverallMean))
+        {
+            throw new Exception("SpcEngine All-NaN fallback failed!");
+        }
+        Console.WriteLine($"  [2b/4] SpcEngine Robust NaN / Infinity Filtering & All-NaN Fallback: PASSED");
+
         // 3. Test InspectionLogService Background Channel Worker & Non-blocking Enqueue
         using var logService = new VisionInspectionApp.Application.Services.InspectionLogService();
         var sessionTask = logService.StartSessionAsync("TestProduct_GH68", "configs/test.job", "AL6061");
