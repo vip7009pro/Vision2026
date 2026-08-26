@@ -750,7 +750,7 @@ public static class CameraTest
         }
         Console.WriteLine($"  [2/3] Handshake with Offline PLC completed in {sw2.ElapsedMilliseconds}ms (0ms bypass): PASSED");
 
-        // 3. Test Simulator Driver GrabFrameAsync
+        // 3. Test Simulator Driver GrabFrameAsync & Software Trigger Mode
         using var simDriver = new VisionInspectionApp.UI.Services.Camera.Drivers.SimulatorCameraDriver();
         var openSuccess = simDriver.OpenAsync(new VisionInspectionApp.UI.Services.Camera.CameraDeviceInfo { Vendor = VisionInspectionApp.UI.Services.Camera.CameraVendor.Simulator, Index = -2 }).Result;
         var frame = simDriver.GrabFrameAsync().Result;
@@ -759,8 +759,38 @@ public static class CameraTest
             throw new Exception("Simulator driver GrabFrameAsync failed!");
         }
         frame.Dispose();
+
+        // 4. Test TriggerMode=On: Simulator KHÔNG được tự phát frame khi ở chế độ Trigger
+        var triggerParams = new VisionInspectionApp.Models.CameraParameters
+        {
+            TriggerMode = VisionInspectionApp.Models.CameraTriggerMode.On,
+            TriggerSource = VisionInspectionApp.Models.CameraTriggerSource.Software
+        };
+        simDriver.ApplyParametersAsync(triggerParams).Wait();
+        simDriver.StartGrabbingAsync().Wait();
+
+        int capturedCount = 0;
+        simDriver.FrameCaptured += (s, f) => Interlocked.Increment(ref capturedCount);
+
+        // Chờ 150ms trong chế độ Trigger On (không được tự phát frame)
+        System.Threading.Thread.Sleep(150);
+        if (capturedCount > 0)
+        {
+            throw new Exception($"Simulator emitted {capturedCount} frames autonomously while TriggerMode=On! Expected 0.");
+        }
+
+        // Kích hoạt SoftTrigger thủ công 2 lần
+        simDriver.ExecuteSoftwareTriggerAsync().Wait();
+        simDriver.ExecuteSoftwareTriggerAsync().Wait();
+        System.Threading.Thread.Sleep(50);
+        if (capturedCount != 2)
+        {
+            throw new Exception($"Simulator emitted {capturedCount} frames after 2 software triggers! Expected 2.");
+        }
+
+        simDriver.StopGrabbingAsync().Wait();
         simDriver.CloseAsync().Wait();
-        Console.WriteLine("  [3/3] Simulator Driver Frame Grab & Dynamic Timestamp: PASSED");
+        Console.WriteLine("  [3/3] Simulator Driver Frame Grab, SoftTrigger Mode & Accurate Pacing: PASSED");
 
         Console.WriteLine("✅ ALL CONTINUOUS FLOW HANDSHAKE BYPASS TESTS PASSED (100%)!\n");
     }

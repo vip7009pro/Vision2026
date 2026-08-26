@@ -1037,7 +1037,18 @@ Lộ trình tích hợp tính năng Chụp ảnh từ camera và hỗ trợ các
         - Người dùng mở ứng dụng lên là hệ thống kết nối PLC sẵn sàng 100%, tag data cập nhật tức thì vào Tool Editor, Oscilloscope và HMI.
         - Toàn bộ 11/11 bài test PLC trong `TestExtractApp` đạt PASS 100%.
 
-
+- [x] Task 256: Sửa lỗi Run Continuous bỏ qua Interval khi dùng Camera Giả Lập (Simulator) với SoftTrigger.
+      - `Nguyên Nhân Gốc Rễ`:
+        1. `SimulatorCameraDriver.SimLoop` chạy 30 FPS liên tục bắn frame vào `FrameCaptured` mà bỏ qua `TriggerMode`.
+        2. `OpenCvCameraDriver.GrabLoop` tương tự, không kiểm tra `TriggerMode`.
+        3. `StartContinuousCameraFlow` chỉ áp dụng `TriggerMode=On` khi `isIndustrial`, bỏ qua Simulator và Webcam.
+        4. Nhánh `else` trong SoftTrigger Generator tạo ra 2 luồng đẩy frame song song (SimLoop + CaptureSnapshotAsync).
+      - `Giải Pháp Kỹ Thuật Đã Triển Khai`:
+        1. `SimulatorCameraDriver.cs`: `SimLoop` kiểm tra `TriggerMode==On` → sleep & continue. `ExecuteSoftwareTriggerAsync` gọi `ApplySoftwarePostProcessing` + `RaiseFrameCaptured`.
+        2. `OpenCvCameraDriver.cs`: `GrabLoop` kiểm tra `TriggerMode==On` → sleep & continue. `ExecuteSoftwareTriggerAsync` đọc 1 frame + `RaiseFrameCaptured`.
+        3. `ToolEditorViewModel.Engine.cs`: Áp dụng `TriggerMode=On` cho TẤT CẢ loại camera. Thống nhất SoftTrigger Generator dùng `ExecuteSoftwareTriggerAsync()` + fallback.
+        4. `StopContinuousFlow` đã có sẵn logic khôi phục `TriggerMode=Off`.
+      - `Kiểm Thử`: Bổ sung test TriggerMode=On + SoftTrigger trong `CameraTest.cs`. Toàn bộ test suite PASSED 100%.
 
 
 

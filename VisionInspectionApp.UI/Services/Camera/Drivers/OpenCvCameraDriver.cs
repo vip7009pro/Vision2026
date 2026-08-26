@@ -162,8 +162,31 @@ public sealed class OpenCvCameraDriver : CameraDriverBase
 
     public override Task<bool> ExecuteSoftwareTriggerAsync()
     {
-        // For OpenCV Webcams, capture current single frame as trigger
-        return Task.FromResult(true);
+        if (!_isOpened || _cap == null) return Task.FromResult(false);
+
+        try
+        {
+            using var rawFrame = new Mat();
+            if (_cap.Read(rawFrame) && !rawFrame.Empty())
+            {
+                var processed = ApplySoftwarePostProcessing(rawFrame, _parameters);
+                try
+                {
+                    RaiseFrameCaptured(processed);
+                }
+                finally
+                {
+                    if (!ReferenceEquals(processed, rawFrame))
+                    {
+                        processed.Dispose();
+                    }
+                }
+                return Task.FromResult(true);
+            }
+        }
+        catch { }
+
+        return Task.FromResult(false);
     }
 
     private void GrabLoop(CancellationToken token)
@@ -172,6 +195,19 @@ public sealed class OpenCvCameraDriver : CameraDriverBase
 
         while (!token.IsCancellationRequested && _isGrabbing)
         {
+            if (_parameters?.TriggerMode == CameraTriggerMode.On)
+            {
+                try
+                {
+                    Thread.Sleep(30);
+                }
+                catch
+                {
+                    break;
+                }
+                continue;
+            }
+
             try
             {
                 if (_cap != null && _cap.Read(frame) && !frame.Empty())

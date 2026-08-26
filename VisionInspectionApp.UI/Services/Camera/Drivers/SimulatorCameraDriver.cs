@@ -158,7 +158,18 @@ public sealed class SimulatorCameraDriver : CameraDriverBase
                     Cv2.Rectangle(rawSim, new OpenCvSharp.Rect(15, 440, 250, 30), new Scalar(40, 40, 40), -1);
                     Cv2.PutText(rawSim, $"TIME: {DateTime.Now:HH:mm:ss.fff}", new OpenCvSharp.Point(20, 460), HersheyFonts.HersheySimplex, 0.5, new Scalar(200, 200, 200), 1);
                 }
-                RaiseFrameCaptured(rawSim);
+                var processed = ApplySoftwarePostProcessing(rawSim, _parameters);
+                try
+                {
+                    RaiseFrameCaptured(processed);
+                }
+                finally
+                {
+                    if (!ReferenceEquals(processed, rawSim))
+                    {
+                        processed.Dispose();
+                    }
+                }
             }
         }
         return Task.FromResult(true);
@@ -170,6 +181,21 @@ public sealed class SimulatorCameraDriver : CameraDriverBase
 
         while (!token.IsCancellationRequested && _isGrabbing)
         {
+            // Khi đang ở chế độ Trigger On (Software Trigger hoặc Line Trigger),
+            // Simulator tạm dừng phát frame tự do (FreeRun) để tránh bắn frame liên tục vào hàng đợi
+            if (_parameters?.TriggerMode == CameraTriggerMode.On)
+            {
+                try
+                {
+                    Thread.Sleep(30);
+                }
+                catch
+                {
+                    break;
+                }
+                continue;
+            }
+
             sw.Restart();
 
             try
@@ -196,7 +222,7 @@ public sealed class SimulatorCameraDriver : CameraDriverBase
 
                         if (string.IsNullOrEmpty(_cachedImagePath) && frameToEmit != null)
                         {
-                    Cv2.Rectangle(frameToEmit, new OpenCvSharp.Rect(15, 440, 250, 30), new Scalar(40, 40, 40), -1);
+                            Cv2.Rectangle(frameToEmit, new OpenCvSharp.Rect(15, 440, 250, 30), new Scalar(40, 40, 40), -1);
                             Cv2.PutText(frameToEmit, $"TIME: {DateTime.Now:HH:mm:ss.fff}", new OpenCvSharp.Point(20, 460), HersheyFonts.HersheySimplex, 0.5, new Scalar(200, 200, 200), 1);
                         }
                     }

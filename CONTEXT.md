@@ -49,6 +49,21 @@
 - Preview được phép tiếp tục khi Global Snapshot rỗng để lấy ảnh từ ImageSource.
 - Lưu template cho Origin, Point và SurfaceCompare hoạt động với nguồn ảnh ImageSource.
 
+- **Sửa Lỗi Run Continuous Bỏ Qua Interval Khi Dùng Camera Giả Lập (Task 256)**:
+  - **Yêu Cầu & Bối Cảnh**:
+    - Trong tab Tool Editor, khi Run Continuous với Camera Giả Lập (nguồn ảnh tĩnh), SoftTrigger, người dùng đã set Interval (ms) nhưng hệ thống vẫn chạy full tốc độ (như interval = 0).
+  - **Nguyên Nhân Gốc Rễ**:
+    1. `SimulatorCameraDriver.SimLoop` chạy thread nền 30 FPS liên tục bắn frame vào `FrameCaptured` mà **hoàn toàn bỏ qua `TriggerMode`**.
+    2. `OpenCvCameraDriver.GrabLoop` cũng tương tự, không kiểm tra `TriggerMode`.
+    3. Trong `ToolEditorViewModel.Engine.cs`, `StartContinuousCameraFlow` chỉ áp dụng `TriggerMode=On` khi `isIndustrial == true`. Camera Giả Lập và Webcam bị bỏ qua, không được gửi lệnh Trigger xuống driver.
+    4. Vòng lặp SoftTrigger Generator chia nhánh `isIndustrial`/`else` riêng biệt, nhánh `else` gọi `CaptureSnapshotAsync` + invoke handler thêm 1 lần nữa, tạo ra 2 luồng đẩy frame song song.
+  - **Giải Pháp Đã Triển Khai**:
+    1. **`SimulatorCameraDriver.cs`**: `SimLoop` kiểm tra `TriggerMode == On` → sleep 30ms & `continue`, không phát frame tự do. `ExecuteSoftwareTriggerAsync` gọi `ApplySoftwarePostProcessing` + `RaiseFrameCaptured`.
+    2. **`OpenCvCameraDriver.cs`**: `GrabLoop` kiểm tra `TriggerMode == On` → sleep 30ms & `continue`. `ExecuteSoftwareTriggerAsync` đọc 1 frame từ `_cap` + `RaiseFrameCaptured`.
+    3. **`ToolEditorViewModel.Engine.cs`**: Áp dụng `TriggerMode=On` cho **TẤT CẢ** loại camera. Thống nhất SoftTrigger Generator chỉ gọi `ExecuteSoftwareTriggerAsync()` + fallback `CaptureSnapshotAsync`. Tính `delayMs = Math.Max(0, interval - elapsed)`.
+    4. `StopContinuousFlow` đã có sẵn logic khôi phục `TriggerMode=Off`.
+  - **Kiểm Thử**: Bổ sung test TriggerMode=On + SoftTrigger trong `CameraTest.cs`. Toàn bộ test suite PASSED 100%.
+
 - **Tự Động Kết Nối PLC Đã Lưu Khi Khởi Động Ứng Dụng (Auto-Connect on App Startup) (Task 255)**:
   - **Yêu Cầu & Bối Cảnh**:
     - Người dùng mong muốn khi ứng dụng bật lên thì tự động kết nối các PLC đã có trong danh sách được lưu (`Enabled == true`), không cần phải mỗi lần mở app lên lại phải vào cửa sổ cấu hình PLC để bấm nút kết nối thủ công.

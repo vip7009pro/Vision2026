@@ -2758,22 +2758,19 @@ namespace VisionInspectionApp.UI.ViewModels
             }
 
             // 2. Áp dụng tham số TriggerMode/Source SAU KHI camera đã mở + grabbing
-            //    Điều này đảm bảo lệnh TriggerMode=On được gửi xuống phần cứng thực tế
-            if (isIndustrial)
+            //    Điều này đảm bảo lệnh TriggerMode=On được gửi xuống thiết bị thực tế hoặc Simulator
+            var p = _cameraService.CurrentParameters.Clone();
+            if (sourceDef.TriggerMode == ImageSourceTriggerMode.LineTrigger)
             {
-                var p = _cameraService.CurrentParameters.Clone();
-                if (sourceDef.TriggerMode == ImageSourceTriggerMode.LineTrigger)
-                {
-                    p.TriggerMode = CameraTriggerMode.On;
-                    p.TriggerSource = CameraTriggerSource.Line0;
-                }
-                else
-                {
-                    p.TriggerMode = CameraTriggerMode.On;
-                    p.TriggerSource = CameraTriggerSource.Software;
-                }
-                await _cameraService.ApplyParametersAsync(p);
+                p.TriggerMode = CameraTriggerMode.On;
+                p.TriggerSource = CameraTriggerSource.Line0;
             }
+            else
+            {
+                p.TriggerMode = CameraTriggerMode.On;
+                p.TriggerSource = CameraTriggerSource.Software;
+            }
+            await _cameraService.ApplyParametersAsync(p);
 
             // Đưa máy trạng thái Handshake vào trạng thái sẵn sàng nhận Trigger từ PLC (Y1 = 1)
             await _handshakeStateMachine.SetReadyAsync(token);
@@ -2892,22 +2889,10 @@ namespace VisionInspectionApp.UI.ViewModels
                         {
                             sw.Restart();
 
-                            if (isIndustrial)
+                            bool triggered = await _cameraService.ExecuteSoftwareTriggerAsync();
+                            if (!triggered)
                             {
-                                bool triggered = await _cameraService.ExecuteSoftwareTriggerAsync();
-                                if (!triggered)
-                                {
-                                    // Fallback chụp snapshot nếu driver không kích hoạt qua lệnh command
-                                    var snapMat = await _cameraService.CaptureSnapshotAsync(sourceDef.CameraIndex, string.IsNullOrWhiteSpace(sourceDef.RtspUrl) ? null : sourceDef.RtspUrl);
-                                    if (snapMat != null && !snapMat.Empty() && !token.IsCancellationRequested)
-                                    {
-                                        _continuousFrameHandler?.Invoke(this, snapMat);
-                                        snapMat.Dispose();
-                                    }
-                                }
-                            }
-                            else
-                            {
+                                // Fallback chụp snapshot nếu driver không kích hoạt qua lệnh command
                                 var snapMat = await _cameraService.CaptureSnapshotAsync(sourceDef.CameraIndex, string.IsNullOrWhiteSpace(sourceDef.RtspUrl) ? null : sourceDef.RtspUrl);
                                 if (snapMat != null && !snapMat.Empty() && !token.IsCancellationRequested)
                                 {
@@ -2918,12 +2903,23 @@ namespace VisionInspectionApp.UI.ViewModels
 
                             sw.Stop();
                             int elapsed = (int)sw.ElapsedMilliseconds;
-                            int delayMs = Math.Max(1, interval - elapsed);
+                            int delayMs = Math.Max(0, interval - elapsed);
                             if (delayMs > 0 && !token.IsCancellationRequested && IsRunningFolderFlow)
                             {
                                 try
                                 {
                                     await Task.Delay(delayMs, token);
+                                }
+                                catch (OperationCanceledException)
+                                {
+                                    break;
+                                }
+                            }
+                            else if (interval == 0 && !token.IsCancellationRequested && IsRunningFolderFlow)
+                            {
+                                try
+                                {
+                                    await Task.Delay(1, token);
                                 }
                                 catch (OperationCanceledException)
                                 {
