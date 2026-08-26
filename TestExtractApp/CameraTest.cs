@@ -1035,8 +1035,22 @@ public static class CameraTest
 
         if (config.PreprocessNodes.First().Name != "Pre_Enhance")
             throw new Exception("Preprocess definition was not renamed in config!");
-        Console.WriteLine("  [3/3] Preprocess Node Rename & Config Preservation: PASSED");
+        Console.WriteLine("  [3/4] Preprocess Node Rename & Config Preservation: PASSED");
 
-        Console.WriteLine("✅ ALL FLOW CANVAS RENAME TESTS PASSED (100%)!\n");
+        // 4. Thêm ResultTransfer1 và xóa node khỏi Canvas -> Kiểm tra tự động dọn sạch trong config
+        config.ResultTransfers = new List<ResultTransferDefinition>
+        {
+            new ResultTransferDefinition { Name = "RT1", Items = new List<ResultTransferItem> { new ResultTransferItem { TagName = "Y0" } } }
+        };
+        var rtNode = new VisionInspectionApp.UI.ViewModels.ToolGraphNodeViewModel { Id = "8", Type = "ResultTransfer", RefName = "RT1" };
+        vm.Nodes.Add(rtNode);
+        vm.SelectedNode = rtNode;
+        vm.DeleteSelectedNode();
+
+        if (config.ResultTransfers.Any(x => x.Name == "RT1"))
+            throw new Exception("ResultTransfer was not removed from config upon node deletion!");
+        Console.WriteLine("  [4/4] ResultTransfer Node Deletion & Config Synchronization: PASSED");
+
+        Console.WriteLine("✅ ALL FLOW CANVAS RENAME & DELETE TESTS PASSED (100%)!\n");
     }
 }

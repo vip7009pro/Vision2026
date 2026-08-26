@@ -395,7 +395,7 @@ namespace VisionInspectionApp.UI.ViewModels
             DeleteSelectedNode();
         }
 
-        private void DeleteSelectedNode()
+        public void DeleteSelectedNode()
         {
             if (SelectedNode is null)
             {
@@ -554,6 +554,61 @@ namespace VisionInspectionApp.UI.ViewModels
                 if (string.Equals(toRemove.Type, "CreateCircle", StringComparison.OrdinalIgnoreCase))
                 {
                     _config.CreateCircles.RemoveAll(x => string.Equals(x.Name, toRemove.RefName, StringComparison.OrdinalIgnoreCase));
+                }
+
+                if (string.Equals(toRemove.Type, "ResultTransfer", StringComparison.OrdinalIgnoreCase))
+                {
+                    _config.ResultTransfers?.RemoveAll(x => string.Equals(x.Name, toRemove.RefName, StringComparison.OrdinalIgnoreCase));
+                }
+
+                if (string.Equals(toRemove.Type, "PlcRead", StringComparison.OrdinalIgnoreCase))
+                {
+                    _config.PlcReads?.RemoveAll(x => string.Equals(x.Name, toRemove.RefName, StringComparison.OrdinalIgnoreCase));
+                }
+
+                if (string.Equals(toRemove.Type, "PlcWrite", StringComparison.OrdinalIgnoreCase))
+                {
+                    _config.PlcWrites?.RemoveAll(x => string.Equals(x.Name, toRemove.RefName, StringComparison.OrdinalIgnoreCase));
+                }
+
+                if (string.Equals(toRemove.Type, "PlcWait", StringComparison.OrdinalIgnoreCase))
+                {
+                    _config.PlcWaits?.RemoveAll(x => string.Equals(x.Name, toRemove.RefName, StringComparison.OrdinalIgnoreCase));
+                }
+
+                if (string.Equals(toRemove.Type, "PlcTrigger", StringComparison.OrdinalIgnoreCase))
+                {
+                    _config.PlcTriggers?.RemoveAll(x => string.Equals(x.Name, toRemove.RefName, StringComparison.OrdinalIgnoreCase));
+                }
+
+                if (string.Equals(toRemove.Type, "DbNode", StringComparison.OrdinalIgnoreCase) || string.Equals(toRemove.Type, "Database", StringComparison.OrdinalIgnoreCase))
+                {
+                    _config.DbNodes?.RemoveAll(x => string.Equals(x.RefName, toRemove.RefName, StringComparison.OrdinalIgnoreCase));
+                }
+
+                if (string.Equals(toRemove.Type, "TextNode", StringComparison.OrdinalIgnoreCase))
+                {
+                    _config.TextNodes?.RemoveAll(x => string.Equals(x.Name, toRemove.RefName, StringComparison.OrdinalIgnoreCase));
+                }
+
+                if (string.Equals(toRemove.Type, "ImageOutput", StringComparison.OrdinalIgnoreCase) || string.Equals(toRemove.Type, "OutputImage", StringComparison.OrdinalIgnoreCase))
+                {
+                    _config.ImageOutputs?.RemoveAll(x => string.Equals(x.Name, toRemove.RefName, StringComparison.OrdinalIgnoreCase));
+                }
+
+                if (string.Equals(toRemove.Type, "Preprocess", StringComparison.OrdinalIgnoreCase))
+                {
+                    _config.PreprocessNodes?.RemoveAll(x => string.Equals(x.Name, toRemove.RefName, StringComparison.OrdinalIgnoreCase));
+                }
+
+                if (string.Equals(toRemove.Type, "ImageSource", StringComparison.OrdinalIgnoreCase))
+                {
+                    _config.ImageSources?.RemoveAll(x => string.Equals(x.Name, toRemove.RefName, StringComparison.OrdinalIgnoreCase));
+                }
+
+                if (string.Equals(toRemove.Type, "Condition", StringComparison.OrdinalIgnoreCase))
+                {
+                    _config.Conditions?.RemoveAll(x => string.Equals(x.Name, toRemove.RefName, StringComparison.OrdinalIgnoreCase));
                 }
             }
     

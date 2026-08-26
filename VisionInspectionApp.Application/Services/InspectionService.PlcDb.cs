@@ -51,7 +51,18 @@ public partial class InspectionService
                 bool ok = false;
                 if (plcManager != null && !string.IsNullOrWhiteSpace(w.PlcId) && !string.IsNullOrWhiteSpace(w.TagName))
                 {
-                    ok = plcManager.WriteTagValueAsync(w.PlcId, w.TagName, w.WriteValue).GetAwaiter().GetResult();
+                    try
+                    {
+                        var writeTask = plcManager.WriteTagValueAsync(w.PlcId, w.TagName, w.WriteValue);
+                        if (writeTask.Wait(50))
+                        {
+                            ok = writeTask.Result;
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"[PLC WRITE ERROR] {w.TagName}: {ex.Message}");
+                    }
                 }
                 __swNode.Stop();
                 result.Timings.NodeTimings[w.Name] = (int)__swNode.ElapsedMilliseconds;
@@ -108,20 +119,27 @@ public partial class InspectionService
             }
         }
 
-        // 5. ResultTransfers (run asynchronously in background to prevent UI dispatcher freeze)
+        // 5. ResultTransfers (Đẩy vào Dedicated Async Queue: 0ms cho luồng chính, background worker tuần tự truyền PLC)
         if (config.ResultTransfers != null && config.ResultTransfers.Count > 0 && plcManager != null)
         {
-            Task.Run(async () =>
+            try
             {
-                try
+                // Gán ngay runtime của lần gửi trước đó để UI hiển thị đầy đủ
+                foreach (var rt in config.ResultTransfers)
                 {
-                    await PLC.Services.PlcResultTransferRunner.ExecuteResultTransfersAsync(config, result, plcManager);
+                    if (!string.IsNullOrWhiteSpace(rt.Name))
+                    {
+                        result.Timings.NodeTimings[rt.Name] = PLC.Services.PlcResultTransferQueue.GetLatestTiming(rt.Name);
+                    }
                 }
-                catch (Exception ex)
-                {
-                    System.Diagnostics.Debug.WriteLine($"[PLC RESULT TRANSFER ERROR] {ex.Message}");
-                }
-            });
+
+                // Enqueue không khóa, không await (0ms), Background Queue Worker sẽ tự gửi tuần tự
+                PLC.Services.PlcResultTransferQueue.Enqueue(config, result, plcManager);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[PLC RESULT TRANSFER ENQUEUE ERROR] {ex.Message}");
+            }
         }
     }
 

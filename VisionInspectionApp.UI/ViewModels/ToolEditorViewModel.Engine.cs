@@ -2957,8 +2957,9 @@ namespace VisionInspectionApp.UI.ViewModels
 
         private Task StartIndustrialCameraContinuousFlow(ImageSourceDefinition sourceDef) => StartContinuousCameraFlow(sourceDef);
 
+        private int _isUiRenderingContinuous = 0;
         private long _lastContinuousUiRenderTick = 0;
-        private const int ContinuousUiThrottleIntervalMs = 80; // Cập nhật mượt mà cho UI Preview
+        private const int ContinuousUiThrottleIntervalMs = 60; // Giảm tải UI mượt mà ~16 FPS, giải phóng 100% CPU Worker
         private long _droppedContinuousFramesCount = 0;
 
         private async Task ProcessContinuousFrameAsync(ContinuousFrameEnvelope envelope, string sourceNodeName, CancellationToken token = default)
@@ -2969,10 +2970,12 @@ namespace VisionInspectionApp.UI.ViewModels
                 return;
 
             _inspectionService.ResetTracking();
-            var __sw = System.Diagnostics.Stopwatch.StartNew();
+            var __swImg = System.Diagnostics.Stopwatch.StartNew();
 
             SetImageSourceCache(sourceNodeName, "camera", frameMat);
             _sharedImage.SetImage(frameMat);
+            __swImg.Stop();
+            int imageSourceMs = (int)__swImg.ElapsedMilliseconds;
 
             var configCopy = _config;
             InspectionResult? inspectionResult = null;
@@ -2981,7 +2984,6 @@ namespace VisionInspectionApp.UI.ViewModels
                 _lastRunError = null;
                 await _handshakeStateMachine.StartInspectionAsync(token);
                 inspectionResult = await Task.Run(() => _inspectionService.Inspect(frameMat, configCopy, _dbManagerService), token);
-                __sw.Stop();
 
                 if (!IsRunningFolderFlow || token.IsCancellationRequested)
                 {
@@ -3001,7 +3003,8 @@ namespace VisionInspectionApp.UI.ViewModels
                     // Hoàn tất chu trình bắt tay công nghiệp 2 chiều với PLC (AWAIT đồng bộ deterministic)
                     await _handshakeStateMachine.CompleteHandshakeAsync(inspectionResult.Pass, token);
 
-                    inspectionResult.Timings.NodeTimings[sourceNodeName] = (int)__sw.ElapsedMilliseconds;
+                    // ImageSource runtime chỉ đo thời gian chuẩn bị ảnh (< 1ms), không bị gộp thời gian Inspect và PLC handshake
+                    inspectionResult.Timings.NodeTimings[sourceNodeName] = imageSourceMs;
                     if (configCopy.PreprocessNodes != null)
                     {
                         foreach (var preNode in configCopy.PreprocessNodes)
@@ -3011,11 +3014,6 @@ namespace VisionInspectionApp.UI.ViewModels
                                 inspectionResult.Timings.NodeTimings[preNode.Name] = 0;
                             }
                         }
-                    }
-
-                    if (configCopy.ResultTransfers != null && configCopy.ResultTransfers.Count > 0)
-                    {
-                        _ = Application.PLC.Services.PlcResultTransferRunner.ExecuteResultTransfersAsync(configCopy, inspectionResult, _plcManagerService);
                     }
 
                     // Đẩy kết quả vào Background Logging Worker (Non-blocking queue)
@@ -3037,24 +3035,42 @@ namespace VisionInspectionApp.UI.ViewModels
                 return;
 
             _lastRun = inspectionResult;
+            ProcessedImageCount++;
 
-            // Fire-and-forget: Worker KHÔNG đợi UI thread render xong,
-            // tiếp tục lấy frame tiếp ngay lập tức. UI tự render khi rảnh.
-            // Đây là giải pháp cho vấn đề Queue full khi bật Render Canvas.
-            System.Windows.Application.Current.Dispatcher.BeginInvoke(
-                System.Windows.Threading.DispatcherPriority.Background,
-                new Action(() =>
-                {
-                    if (!IsRunningFolderFlow) return;
-                    LastResult = _lastRun;
-                    ProcessedImageCount++;
-                    UpdateContinuousStats();
-                    UpdateNodeExecutionTimes();
-                    RefreshInspectionDashboard(_lastRun);
-                    RefreshPreviews();
-                    RaiseToolPropertyPanelsChanged();
-                    OnPropertyChanged(nameof(Blob_LastRunCount));
-                }));
+            // Cơ chế UI Frame Throttling & Non-blocking Preview Drop:
+            // Chỉ yêu cầu UI render khi:
+            // 1. Đã cách frame render trước ít nhất ContinuousUiThrottleIntervalMs (60ms)
+            // 2. UI Thread KHÔNG ĐANG BẬN render frame trước (_isUiRenderingContinuous == 0)
+            // Nhờ đó, Worker Task xử lý 100% tốc độ tối đa không bao giờ bị nghẽn hay đầy queue 16 nấc!
+            long nowTick = Environment.TickCount64;
+            bool shouldRenderUi = (nowTick - _lastContinuousUiRenderTick >= ContinuousUiThrottleIntervalMs) &&
+                                  (Interlocked.CompareExchange(ref _isUiRenderingContinuous, 1, 0) == 0);
+
+            if (shouldRenderUi)
+            {
+                _lastContinuousUiRenderTick = nowTick;
+                var currentRun = _lastRun;
+                System.Windows.Application.Current.Dispatcher.BeginInvoke(
+                    System.Windows.Threading.DispatcherPriority.Background,
+                    new Action(() =>
+                    {
+                        try
+                        {
+                            if (!IsRunningFolderFlow) return;
+                            LastResult = currentRun;
+                            UpdateContinuousStats();
+                            UpdateNodeExecutionTimes();
+                            RefreshInspectionDashboard(currentRun);
+                            RefreshPreviews();
+                            RaiseToolPropertyPanelsChanged();
+                            OnPropertyChanged(nameof(Blob_LastRunCount));
+                        }
+                        finally
+                        {
+                            Interlocked.Exchange(ref _isUiRenderingContinuous, 0);
+                        }
+                    }));
+            }
         }
 
         private void StartUsbCameraContinuousFlow(ImageSourceDefinition sourceDef)
@@ -3372,10 +3388,6 @@ namespace VisionInspectionApp.UI.ViewModels
                             }
                         }
                     }
-                    if (configCopy.ResultTransfers != null && configCopy.ResultTransfers.Count > 0)
-                    {
-                        _ = Application.PLC.Services.PlcResultTransferRunner.ExecuteResultTransfersAsync(configCopy, inspectionResult, _plcManagerService);
-                    }
                 }
             }
             catch (Exception ex)
@@ -3657,11 +3669,6 @@ namespace VisionInspectionApp.UI.ViewModels
                                     inspectionResult.Timings.NodeTimings[preNode.Name] = 0;
                                 }
                             }
-                        }
-
-                        if (configCopy.ResultTransfers != null && configCopy.ResultTransfers.Count > 0)
-                        {
-                            _ = Application.PLC.Services.PlcResultTransferRunner.ExecuteResultTransfersAsync(configCopy, inspectionResult, _plcManagerService);
                         }
                     }
                 }

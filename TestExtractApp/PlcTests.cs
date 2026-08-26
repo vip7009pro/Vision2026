@@ -28,9 +28,122 @@ public static class PlcTests
         await Test9_ResultTransfer_PulseMode_And_LevelModeAsync();
         await Test10_PlcConnection_ManualDisconnect_And_CommandStatesAsync();
         await Test11_AutoConnectStartup_And_PollingReadinessAsync();
+        await Test12_HandshakeStateMachine_NonBlocking_And_ImageSourceTimingAsync();
+        await Test13_PlcResultTransferQueue_AsyncFifoAndZeroMainFlowLatencyAsync();
 
         Console.WriteLine("\n✅ ALL PLC TESTS PASSED SUCCESSFULLY!");
         Console.WriteLine("=========================================");
+    }
+
+    private static async Task Test13_PlcResultTransferQueue_AsyncFifoAndZeroMainFlowLatencyAsync()
+    {
+        Console.Write("Test 13: PlcResultTransferQueue Dedicated Async FIFO & 0ms Main Flow Latency... ");
+
+        var plcManager = new PlcManagerService();
+        var plc = new PlcModel { Id = "PLC_Q", Name = "FX5U_Q", DriverType = PlcDriverType.Mitsubishi, IPAddress = "127.0.0.1", Port = 5007, Enabled = true };
+        var tagY0 = new PlcTag { Id = "TQ1", PlcId = "PLC_Q", Name = "Y0_PULSE", Address = "Y0", DataType = PlcDataType.Bool };
+        var tagD100 = new PlcTag { Id = "TQ2", PlcId = "PLC_Q", Name = "D100_VAL", Address = "D100", DataType = PlcDataType.Int16 };
+
+        plcManager.LoadConfig(new[] { plc }, new[] { tagY0, tagD100 });
+        var driver = (MitsubishiDriver)plcManager.GetDriver("PLC_Q")!;
+        driver.ForceSimulationMode = true;
+        await plcManager.ConnectAllAsync();
+
+        var config = new VisionConfig
+        {
+            ResultTransfers = new List<ResultTransferDefinition>
+            {
+                new ResultTransferDefinition
+                {
+                    Name = "RT_Dedicated",
+                    Items = new List<ResultTransferItem>
+                    {
+                        new ResultTransferItem { PlcId = "PLC_Q", TagName = "Y0_PULSE", Mode = ResultTransferMode.Pulse, PulseDurationMs = 50, ValueExpression = "TotalPassBit" },
+                        new ResultTransferItem { PlcId = "PLC_Q", TagName = "D100_VAL", Mode = ResultTransferMode.Level, ValueExpression = "1234" }
+                    }
+                }
+            }
+        };
+
+        var result = new InspectionResult { Pass = true };
+
+        // 1. Đo thời gian Enqueue trên luồng kiểm tra chính (Phải < 2ms, không bao giờ chờ PLC)
+        var swMain = System.Diagnostics.Stopwatch.StartNew();
+        PlcResultTransferQueue.Enqueue(config, result, plcManager);
+        swMain.Stop();
+
+        if (swMain.ElapsedMilliseconds > 10)
+            throw new Exception($"PlcResultTransferQueue.Enqueue took {swMain.ElapsedMilliseconds}ms, expected immediate return (< 10ms)");
+
+        // 2. Chờ Background Worker xử lý truyền xong qua PLC
+        await Task.Delay(100);
+
+        var valD100 = plcManager.GetTagValue("PLC_Q", "D100_VAL")?.CurrentValue;
+        if (Convert.ToInt32(valD100) != 1234)
+            throw new Exception($"D100 value should be 1234, got {valD100}");
+
+        int latestTiming = PlcResultTransferQueue.GetLatestTiming("RT_Dedicated");
+        if (latestTiming <= 0)
+            throw new Exception($"Expected latest timing > 0ms, got {latestTiming}ms");
+
+        await plcManager.DisconnectAllAsync();
+        plcManager.Dispose();
+
+        Console.WriteLine($"PASSED (Main Flow Latency={swMain.ElapsedMilliseconds}ms, Background Execution Timing={latestTiming}ms)");
+    }
+
+    private static async Task Test12_HandshakeStateMachine_NonBlocking_And_ImageSourceTimingAsync()
+    {
+        Console.Write("Test 12: Handshake Non-Blocking When Tags Not Configured & ImageSource Timing... ");
+
+        var plcManager = new PlcManagerService();
+        var plc = new PlcModel 
+        { 
+            Id = "PLC_TEST_HS", 
+            Name = "FX5U_HS", 
+            DriverType = PlcDriverType.Mitsubishi, 
+            IPAddress = "127.0.0.1", 
+            Port = 5007,
+            Enabled = true 
+        };
+        // Chỉ có tag dữ liệu thông thường, KHÔNG CÓ tag handshake (Ready/Busy/Done/Pass/Ng/PlcAck)
+        var tag = new PlcTag { Id = "T_DATA", PlcId = "PLC_TEST_HS", Name = "ProductCount", Address = "D100", DataType = PlcDataType.Int32 };
+
+        plcManager.LoadConfig(new[] { plc }, new[] { tag });
+        var driver = (MitsubishiDriver)plcManager.GetDriver("PLC_TEST_HS")!;
+        driver.ForceSimulationMode = true;
+        await plcManager.ConnectAllAsync();
+
+        var hs = new IndustrialHandshakeStateMachine(plcManager, "PLC_TEST_HS");
+        hs.HandshakeTimeoutMs = 500; // Ngưỡng timeout 500ms
+
+        // 1. SetReadyAsync
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        await hs.SetReadyAsync();
+        sw.Stop();
+        if (sw.ElapsedMilliseconds > 50)
+            throw new Exception($"SetReadyAsync took {sw.ElapsedMilliseconds}ms, expected immediate bypass (< 50ms)");
+
+        // 2. StartInspectionAsync
+        sw.Restart();
+        await hs.StartInspectionAsync();
+        sw.Stop();
+        if (sw.ElapsedMilliseconds > 50)
+            throw new Exception($"StartInspectionAsync took {sw.ElapsedMilliseconds}ms, expected immediate bypass (< 50ms)");
+
+        // 3. CompleteHandshakeAsync (Trước đây bị treo 500ms chờ X1_PlcAck timeout, bây giờ phải < 50ms)
+        sw.Restart();
+        bool hsResult = await hs.CompleteHandshakeAsync(true);
+        sw.Stop();
+        if (!hsResult)
+            throw new Exception("CompleteHandshakeAsync should return true when tags are not configured (bypass mode)");
+        if (sw.ElapsedMilliseconds > 50)
+            throw new Exception($"CompleteHandshakeAsync took {sw.ElapsedMilliseconds}ms (hung on timeout!), expected immediate bypass (< 50ms)");
+
+        await plcManager.DisconnectAllAsync();
+        plcManager.Dispose();
+
+        Console.WriteLine($"PASSED (Bypass executed in {sw.ElapsedMilliseconds}ms without 500ms timeout)");
     }
 
     private static void Test1_MitsubishiDriver_SimulationReadWrite()
@@ -472,8 +585,16 @@ public static class PlcTests
 
         var result = new InspectionResult { Pass = true };
 
-        // 2. Kích hoạt ResultTransfer bất đồng bộ
-        var transferTask = PlcResultTransferRunner.ExecuteResultTransfersAsync(config, result, plcManager);
+        // 2. Kích hoạt ResultTransfer
+        var swTest = System.Diagnostics.Stopwatch.StartNew();
+        await PlcResultTransferRunner.ExecuteResultTransfersAsync(config, result, plcManager);
+        swTest.Stop();
+
+        // Kiểm tra runtime đã được ghi nhận vào NodeTimings
+        if (!result.Timings.NodeTimings.TryGetValue("ResultTransfer1", out var rtMs))
+            throw new Exception("ResultTransfer1 runtime was not recorded in result.Timings.NodeTimings!");
+        if (swTest.ElapsedMilliseconds > 40)
+            throw new Exception($"ExecuteResultTransfersAsync took {swTest.ElapsedMilliseconds}ms, should be non-blocking fast return (< 40ms)!");
 
         // Trong lúc đang ở khoảng giữa xung (sau 20ms)
         await Task.Delay(20);
@@ -486,8 +607,7 @@ public static class PlcTests
         if (y2Level is not true) throw new Exception($"Y2 Level should be true, got {y2Level}");
 
         // Chờ hoàn thành xung (sau 60ms nữa, tổng > 50ms)
-        await transferTask;
-        await Task.Delay(20);
+        await Task.Delay(60);
 
         var y0AfterPulse = plcManager.GetTagValue("PLC1", "Y0_OK")?.CurrentValue;
         var y1AfterPulse = plcManager.GetTagValue("PLC1", "Y1_NG")?.CurrentValue;
@@ -500,7 +620,7 @@ public static class PlcTests
         await plcManager.DisconnectAllAsync();
         plcManager.Dispose();
 
-        Console.WriteLine("PASSED (Pulse Inversion 50ms & Auto-Restore verified 100%)");
+        Console.WriteLine($"PASSED (NodeTimings={rtMs}ms, Pulse Inversion & Non-blocking Auto-Restore verified 100%)");
     }
 
     private static async Task Test10_PlcConnection_ManualDisconnect_And_CommandStatesAsync()

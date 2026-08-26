@@ -78,29 +78,40 @@ public sealed class IndustrialHandshakeStateMachine
         _plcId = plcId;
     }
 
+    private bool HasConfiguredHandshakeTags()
+    {
+        if (_plcManager == null) return false;
+        return _plcManager.GetTagValue(_plcId, ReadyTagName) != null ||
+               _plcManager.GetTagValue(_plcId, BusyTagName) != null ||
+               _plcManager.GetTagValue(_plcId, DoneTagName) != null ||
+               _plcManager.GetTagValue(_plcId, PassTagName) != null ||
+               _plcManager.GetTagValue(_plcId, NgTagName) != null ||
+               _plcManager.GetTagValue(_plcId, PlcAckTagName) != null;
+    }
+
     /// <summary>
     /// Đưa Vision PC vào trạng thái sẵn sàng nhận Trigger (READY / ARMED)
     /// </summary>
     public async Task SetReadyAsync(CancellationToken ct = default)
     {
         CurrentState = HandshakeState.Ready;
-        if (!IsEnabled || _plcManager == null || !_plcManager.IsPlcConnected(_plcId))
+        if (!IsEnabled || _plcManager == null || !_plcManager.IsPlcConnected(_plcId) || !HasConfiguredHandshakeTags())
         {
             CurrentState = HandshakeState.Armed;
             return;
         }
 
-        if (!string.IsNullOrEmpty(ReadyTagName))
+        if (!string.IsNullOrEmpty(ReadyTagName) && _plcManager.GetTagValue(_plcId, ReadyTagName) != null)
         {
             await _plcManager.WriteTagValueAsync(_plcId, ReadyTagName, true, ct);
-            if (!string.IsNullOrEmpty(BusyTagName))
-            {
-                await _plcManager.WriteTagValueAsync(_plcId, BusyTagName, false, ct);
-            }
-            if (!string.IsNullOrEmpty(DoneTagName))
-            {
-                await _plcManager.WriteTagValueAsync(_plcId, DoneTagName, false, ct);
-            }
+        }
+        if (!string.IsNullOrEmpty(BusyTagName) && _plcManager.GetTagValue(_plcId, BusyTagName) != null)
+        {
+            await _plcManager.WriteTagValueAsync(_plcId, BusyTagName, false, ct);
+        }
+        if (!string.IsNullOrEmpty(DoneTagName) && _plcManager.GetTagValue(_plcId, DoneTagName) != null)
+        {
+            await _plcManager.WriteTagValueAsync(_plcId, DoneTagName, false, ct);
         }
         CurrentState = HandshakeState.Armed;
     }
@@ -111,16 +122,16 @@ public sealed class IndustrialHandshakeStateMachine
     public async Task StartInspectionAsync(CancellationToken ct = default)
     {
         CurrentState = HandshakeState.Inspecting;
-        if (!IsEnabled || _plcManager == null || !_plcManager.IsPlcConnected(_plcId))
+        if (!IsEnabled || _plcManager == null || !_plcManager.IsPlcConnected(_plcId) || !HasConfiguredHandshakeTags())
         {
             return;
         }
 
-        if (!string.IsNullOrEmpty(BusyTagName))
+        if (!string.IsNullOrEmpty(BusyTagName) && _plcManager.GetTagValue(_plcId, BusyTagName) != null)
         {
             await _plcManager.WriteTagValueAsync(_plcId, BusyTagName, true, ct);
         }
-        if (!string.IsNullOrEmpty(ReadyTagName))
+        if (!string.IsNullOrEmpty(ReadyTagName) && _plcManager.GetTagValue(_plcId, ReadyTagName) != null)
         {
             await _plcManager.WriteTagValueAsync(_plcId, ReadyTagName, false, ct);
         }
@@ -138,7 +149,7 @@ public sealed class IndustrialHandshakeStateMachine
     {
         CurrentState = HandshakeState.ResultLatched;
 
-        if (!IsEnabled || _plcManager == null || !_plcManager.IsPlcConnected(_plcId))
+        if (!IsEnabled || _plcManager == null || !_plcManager.IsPlcConnected(_plcId) || !HasConfiguredHandshakeTags())
         {
             CurrentState = HandshakeState.Complete;
             return true;
@@ -149,22 +160,26 @@ public sealed class IndustrialHandshakeStateMachine
             // 1. Ghi kết quả PASS/NG và DONE = 1
             if (isPass)
             {
-                if (!string.IsNullOrEmpty(PassTagName)) await _plcManager.WriteTagValueAsync(_plcId, PassTagName, true, ct);
-                if (!string.IsNullOrEmpty(NgTagName)) await _plcManager.WriteTagValueAsync(_plcId, NgTagName, false, ct);
+                if (!string.IsNullOrEmpty(PassTagName) && _plcManager.GetTagValue(_plcId, PassTagName) != null) 
+                    await _plcManager.WriteTagValueAsync(_plcId, PassTagName, true, ct);
+                if (!string.IsNullOrEmpty(NgTagName) && _plcManager.GetTagValue(_plcId, NgTagName) != null) 
+                    await _plcManager.WriteTagValueAsync(_plcId, NgTagName, false, ct);
             }
             else
             {
-                if (!string.IsNullOrEmpty(PassTagName)) await _plcManager.WriteTagValueAsync(_plcId, PassTagName, false, ct);
-                if (!string.IsNullOrEmpty(NgTagName)) await _plcManager.WriteTagValueAsync(_plcId, NgTagName, true, ct);
+                if (!string.IsNullOrEmpty(PassTagName) && _plcManager.GetTagValue(_plcId, PassTagName) != null) 
+                    await _plcManager.WriteTagValueAsync(_plcId, PassTagName, false, ct);
+                if (!string.IsNullOrEmpty(NgTagName) && _plcManager.GetTagValue(_plcId, NgTagName) != null) 
+                    await _plcManager.WriteTagValueAsync(_plcId, NgTagName, true, ct);
             }
 
-            if (!string.IsNullOrEmpty(DoneTagName))
+            if (!string.IsNullOrEmpty(DoneTagName) && _plcManager.GetTagValue(_plcId, DoneTagName) != null)
             {
                 await _plcManager.WriteTagValueAsync(_plcId, DoneTagName, true, ct);
             }
 
-            // 2. Chờ PLC phản hồi tín hiệu ACK nếu có cấu hình PlcAckTagName
-            if (!string.IsNullOrEmpty(PlcAckTagName))
+            // 2. Chờ PLC phản hồi tín hiệu ACK nếu có cấu hình PlcAckTagName hợp lệ
+            if (!string.IsNullOrEmpty(PlcAckTagName) && _plcManager.GetTagValue(_plcId, PlcAckTagName) != null)
             {
                 var sw = Stopwatch.StartNew();
                 bool ackReceived = false;
@@ -198,15 +213,15 @@ public sealed class IndustrialHandshakeStateMachine
             }
 
             // 3. Hạ bit DONE và BUSY xuống 0, đồng thời khôi phục READY = 1 cho chu trình tiếp theo
-            if (!string.IsNullOrEmpty(DoneTagName))
+            if (!string.IsNullOrEmpty(DoneTagName) && _plcManager.GetTagValue(_plcId, DoneTagName) != null)
             {
                 await _plcManager.WriteTagValueAsync(_plcId, DoneTagName, false, ct);
             }
-            if (!string.IsNullOrEmpty(BusyTagName))
+            if (!string.IsNullOrEmpty(BusyTagName) && _plcManager.GetTagValue(_plcId, BusyTagName) != null)
             {
                 await _plcManager.WriteTagValueAsync(_plcId, BusyTagName, false, ct);
             }
-            if (!string.IsNullOrEmpty(ReadyTagName))
+            if (!string.IsNullOrEmpty(ReadyTagName) && _plcManager.GetTagValue(_plcId, ReadyTagName) != null)
             {
                 await _plcManager.WriteTagValueAsync(_plcId, ReadyTagName, true, ct);
             }

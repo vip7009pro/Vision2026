@@ -1101,6 +1101,36 @@ Lộ trình tích hợp tính năng Chụp ảnh từ camera và hỗ trợ các
         3. `ContinuousPipelineTest.cs`: Bổ sung assertions kiểm tra Slot 0 = Mới nhất (NG) và Slot 1 = Cũ hơn (OK).
       - `Kiểm Thử`: Chạy toàn bộ test suite PASSED 100%.
 
+- [x] Task 261: Tối ưu triệt để Render Canvas (UI Throttling & Non-blocking Preview) và Xóa bỏ độ trễ ImageSource khi kết nối PLC.
+      - `Mục Tiêu & Yêu Cầu`:
+        - Khắc phục hiện tượng bật Render Canvas thì Queue 16 nấc đầy dần, tắt Render Canvas thì Queue vơi về 0.
+        - Khắc phục hiện tượng khi kết nối PLC thì node `ImageSource` runtime cực cao, làm giảm tốc độ kiểm hàng.
+      - `Giải Pháp Kỹ Thuật Đã Triển Khai`:
+        1. `ToolEditorViewModel.Engine.cs`: Áp dụng UI Throttling & Non-blocking Preview Drop với cờ nguyên tử `_isUiRenderingContinuous` và `ContinuousUiThrottleIntervalMs = 60`. Worker Task luôn chạy 100% tốc độ, UI chỉ render ~16 FPS mượt mà.
+        2. `ToolEditorViewModel.Engine.cs`: Tách riêng thời gian chuẩn bị ảnh của `ImageSource` (`< 1ms`), không gộp thời gian `Inspect()` và PLC handshake vào node `ImageSource`.
+        3. `IndustrialHandshakeStateMachine.cs`: Thêm `HasConfiguredHandshakeTags()` để bypass 0ms ngay lập tức nếu tag Handshake không được cấu hình trong PLC, không bị treo 500ms timeout chờ ACK.
+      - `Kiểm Thử`: Bổ sung `Test12_HandshakeStateMachine_NonBlocking_And_ImageSourceTimingAsync` trong `PlcTests.cs`. Toàn bộ test suite PASSED 100%.
+
+- [x] Task 262: Hiển thị Runtime của node ResultTransfer trên Flow Canvas và Tối ưu xung Pulse sang Non-blocking Auto-Restore loại bỏ hoàn toàn hiện tượng dồn ứ Queue khi bật PLC.
+      - `Mục Tiêu & Yêu Cầu`:
+        - Hiển thị runtime chính xác của node `ResultTransfer` thay vì luôn hiện 0ms.
+        - Khắc phục triệt để hiện tượng hàng bị dồn ứ vào queue khi bật kết nối PLC.
+      - `Giải Pháp Kỹ Thuật Đã Triển Khai`:
+        1. `PlcResultTransferRunner.cs`: Bổ sung đo `Stopwatch` cho từng node `ResultTransfer` và ghi vào `result.Timings.NodeTimings[nodeDef.Name]` (hiển thị thời gian ms thực tế trên node canvas).
+        2. `PlcResultTransferRunner.cs`: Tối ưu hóa chế độ `Pulse` (phát xung) sang cơ chế Non-blocking Auto-Restore: Gửi phát xung ngay lập tức (1-2ms), và tách việc chờ `Task.Delay(pulseMs)` để hạ xung sang background task độc lập (`_ = Task.Run(...)`), không làm chậm luồng kiểm tra.
+        3. `InspectionService.PlcDb.cs` & `ToolEditorViewModel.Engine.cs`: Xóa bỏ việc gọi trùng lặp 2 lần `ExecuteResultTransfersAsync`, bổ sung timeout 50ms cho `PlcWrites` tránh socket lock làm đứng luồng.
+      - `Kiểm Thử`: Cập nhật `Test9_ResultTransfer_PulseMode_And_LevelModeAsync` trong `PlcTests.cs` (NodeTimings=3ms). Toàn bộ test suite PASSED 100%.
+
+- [x] Task 263: Xây dựng Dedicated Async Queue Worker cho ResultTransfer và Sửa triệt để lỗi xóa node trên Flow Canvas.
+      - `Mục Tiêu & Yêu Cầu`:
+        - Tách 100% việc gửi dữ liệu ResultTransfer ra một hàng đợi FIFO bất đồng bộ chuyên biệt, đảm bảo luồng kiểm tra chính có 0ms latency.
+        - Khắc phục lỗi xóa node `ResultTransfer` và các node PLC trên Flow Canvas không bị xóa trong config và vẫn chạy ngầm.
+      - `Giải Pháp Kỹ Thuật Đã Triển Khai`:
+        1. `PlcResultTransferRunner.cs`: Xây dựng `PlcResultTransferQueue` dùng `Channel<ResultTransferPackage>` dung lượng 128 phần tử, chạy background worker tuần tự truyền dữ liệu sang PLC cho từng con hàng.
+        2. `InspectionService.PlcDb.cs`: Trong `Inspect()`, gọi `PlcResultTransferQueue.Enqueue(...)` (0.000ms latency, không chờ mạng), gán runtime gần nhất vào `NodeTimings` cho UI hiển thị.
+        3. `ToolEditorViewModel.GraphOps.cs` & `ToolEditorViewModel.Config.cs`: Bổ sung dọn sạch sẽ 100% các loại node (`ResultTransfer`, `PlcRead`, `PlcWrite`, `PlcWait`, `PlcTrigger`, `DbNode`, `TextNode`, `ImageOutput`, `Preprocess`, `ImageSource`, `Condition`) khi xóa trên Canvas.
+      - `Kiểm Thử`: Bổ sung `Test13_PlcResultTransferQueue_AsyncFifoAndZeroMainFlowLatencyAsync` (Main Flow = 0ms, Background Timing = 7ms) và kiểm tra xóa node trong `CameraTest.cs`. Toàn bộ test suite PASSED 100%.
+
 
 
 

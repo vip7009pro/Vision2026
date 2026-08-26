@@ -34,7 +34,7 @@ public sealed partial class ToolEditorViewModel : ObservableObject
     {
         get
         {
-            var list = _plcManagerService.Plcs.Select(p => p.Name).Where(n => !string.IsNullOrWhiteSpace(n)).ToList();
+            var list = _plcManagerService?.Plcs?.Select(p => p.Name).Where(n => !string.IsNullOrWhiteSpace(n)).ToList() ?? new List<string>();
             if (list.Count == 0)
             {
                 list.AddRange(new[] { "PLC1", "PLC2", "PLC_MAIN", "PLC_01" });
@@ -50,10 +50,13 @@ public sealed partial class ToolEditorViewModel : ObservableObject
             var list = new List<string>();
 
             // 1. All Tag Names & Addresses from Service
-            foreach (var t in _plcManagerService.Tags)
+            if (_plcManagerService?.Tags != null)
             {
-                if (!string.IsNullOrWhiteSpace(t.Name)) list.Add(t.Name);
-                if (!string.IsNullOrWhiteSpace(t.Address)) list.Add(t.Address);
+                foreach (var t in _plcManagerService.Tags)
+                {
+                    if (!string.IsNullOrWhiteSpace(t.Name)) list.Add(t.Name);
+                    if (!string.IsNullOrWhiteSpace(t.Address)) list.Add(t.Address);
+                }
             }
 
             // 2. Standard Common Direct Addresses
@@ -82,13 +85,13 @@ public sealed partial class ToolEditorViewModel : ObservableObject
             var plcName = PlcNode_PlcId;
             if (string.IsNullOrWhiteSpace(plcName)) return AvailablePlcAllTagNames;
 
-            var plc = _plcManagerService.Plcs.FirstOrDefault(p => string.Equals(p.Name, plcName, StringComparison.OrdinalIgnoreCase) || string.Equals(p.Id, plcName, StringComparison.OrdinalIgnoreCase));
+            var plc = _plcManagerService?.Plcs?.FirstOrDefault(p => string.Equals(p.Name, plcName, StringComparison.OrdinalIgnoreCase) || string.Equals(p.Id, plcName, StringComparison.OrdinalIgnoreCase));
             string targetId = plc?.Id ?? plcName;
 
             var list = new List<string>();
-            var filteredTags = _plcManagerService.Tags
+            var filteredTags = _plcManagerService?.Tags?
                 .Where(t => string.Equals(t.PlcId, targetId, StringComparison.OrdinalIgnoreCase) || string.Equals(t.PlcId, plcName, StringComparison.OrdinalIgnoreCase))
-                .ToList();
+                .ToList() ?? new List<PlcTag>();
 
             foreach (var t in filteredTags)
             {

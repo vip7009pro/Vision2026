@@ -8,6 +8,96 @@ using VisionInspectionApp.Models;
 
 namespace VisionInspectionApp.Application.PLC.Services;
 
+public sealed class ResultTransferPackage
+{
+    public VisionConfig Config { get; init; } = new();
+    public InspectionResult Result { get; init; } = new();
+    public IPlcManagerService PlcManager { get; init; } = default!;
+}
+
+/// <summary>
+/// Hàng đợi bất đồng bộ chuyên dụng (Dedicated Async Queue) cho ResultTransfer
+/// Đảm bảo truyền kết quả sang PLC tuần tự FIFO mà 100% không làm chậm hoặc can thiệp luồng kiểm tra chính.
+/// </summary>
+public static class PlcResultTransferQueue
+{
+    private static readonly System.Threading.Channels.Channel<ResultTransferPackage> _channel = 
+        System.Threading.Channels.Channel.CreateBounded<ResultTransferPackage>(
+            new System.Threading.Channels.BoundedChannelOptions(128)
+            {
+                FullMode = System.Threading.Channels.BoundedChannelFullMode.DropOldest,
+                SingleReader = true,
+                SingleWriter = false
+            });
+
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, int> _latestNodeTimings = new(StringComparer.OrdinalIgnoreCase);
+
+    static PlcResultTransferQueue()
+    {
+        _ = Task.Run(ProcessQueueAsync);
+    }
+
+    /// <summary>
+    /// Đẩy kết quả vào hàng đợi truyền PLC (0ms non-blocking)
+    /// </summary>
+    public static void Enqueue(VisionConfig config, InspectionResult result, IPlcManagerService plcManager)
+    {
+        if (config?.ResultTransfers == null || config.ResultTransfers.Count == 0 || result == null || plcManager == null)
+            return;
+
+        _channel.Writer.TryWrite(new ResultTransferPackage
+        {
+            Config = config,
+            Result = result,
+            PlcManager = plcManager
+        });
+    }
+
+    /// <summary>
+    /// Lấy runtime thực tế của lần truyền PLC gần nhất cho node này để hiển thị trên UI Tool Editor
+    /// </summary>
+    public static int GetLatestTiming(string nodeName)
+    {
+        if (string.IsNullOrWhiteSpace(nodeName)) return 0;
+        return _latestNodeTimings.TryGetValue(nodeName, out var ms) ? ms : 0;
+    }
+
+    public static void SetTiming(string nodeName, int ms)
+    {
+        if (!string.IsNullOrWhiteSpace(nodeName))
+            _latestNodeTimings[nodeName] = ms;
+    }
+
+    private static async Task ProcessQueueAsync()
+    {
+        while (await _channel.Reader.WaitToReadAsync())
+        {
+            while (_channel.Reader.TryRead(out var package))
+            {
+                try
+                {
+                    await PlcResultTransferRunner.ExecuteResultTransfersAsync(package.Config, package.Result, package.PlcManager);
+
+                    if (package.Config.ResultTransfers != null)
+                    {
+                        foreach (var def in package.Config.ResultTransfers)
+                        {
+                            if (!string.IsNullOrWhiteSpace(def.Name) && package.Result.Timings.NodeTimings.TryGetValue(def.Name, out var ms))
+                            {
+                                _latestNodeTimings[def.Name] = ms;
+                            }
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"[RESULT TRANSFER QUEUE ERROR]: {ex.Message}");
+                }
+            }
+        }
+    }
+}
+
 public static class PlcResultTransferRunner
 {
     public static async Task ExecuteResultTransfersAsync(VisionConfig config, InspectionResult result, IPlcManagerService plcManager)
@@ -17,12 +107,19 @@ public static class PlcResultTransferRunner
             return;
         }
 
-        var tasks = new List<Task>();
-
         foreach (var nodeDef in config.ResultTransfers)
         {
-            if (nodeDef.Items == null || nodeDef.Items.Count == 0)
+            if (string.IsNullOrWhiteSpace(nodeDef.Name))
                 continue;
+
+            if (nodeDef.Items == null || nodeDef.Items.Count == 0)
+            {
+                result.Timings.NodeTimings[nodeDef.Name] = 0;
+                continue;
+            }
+
+            var swNode = System.Diagnostics.Stopwatch.StartNew();
+            var tasks = new List<Task>();
 
             foreach (var item in nodeDef.Items)
             {
@@ -31,11 +128,13 @@ public static class PlcResultTransferRunner
 
                 tasks.Add(ExecuteSingleItemTransferAsync(item, config, result, plcManager));
             }
-        }
 
-        if (tasks.Count > 0)
-        {
-            await Task.WhenAll(tasks);
+            if (tasks.Count > 0)
+            {
+                await Task.WhenAll(tasks);
+            }
+            swNode.Stop();
+            result.Timings.NodeTimings[nodeDef.Name] = (int)swNode.ElapsedMilliseconds;
         }
     }
 
@@ -107,14 +206,23 @@ public static class PlcResultTransferRunner
                 System.Diagnostics.Debug.WriteLine($"[PLC RESULT TRANSFER PULSE] Tag='{item.TagName}' (PLC: {targetPlcId}) | Curr={currentBool} -> Pulse={pulseValBool} ({pulseMs}ms) -> Restore={restoreValBool}");
                 Console.WriteLine($"[PLC RESULT TRANSFER PULSE] Tag='{item.TagName}' (PLC: {targetPlcId}) | Curr={currentBool} -> Pulse={pulseValBool} ({pulseMs}ms) -> Restore={restoreValBool}");
 
-                // Bước 1: Ghi đảo trạng thái (Phát xung)
+                // Bước 1: Ghi đảo trạng thái (Phát xung) - mất 1-2ms
                 await plcManager.WriteTagValueAsync(targetPlcId, item.TagName, pulseVal);
 
-                // Bước 2: Chờ thời gian xung
-                await Task.Delay(pulseMs);
-
-                // Bước 3: Ghi hoàn trả về trạng thái ban đầu
-                await plcManager.WriteTagValueAsync(targetPlcId, item.TagName, restoreVal);
+                // Bước 2 & 3: Non-blocking Auto-Restore: Khôi phục trạng thái ban đầu sau pulseMs ở background,
+                // KHÔNG làm chậm chu trình frame hiện tại và không làm chậm frame tiếp theo
+                _ = Task.Run(async () =>
+                {
+                    try
+                    {
+                        await Task.Delay(pulseMs);
+                        await plcManager.WriteTagValueAsync(targetPlcId, item.TagName, restoreVal);
+                    }
+                    catch (Exception ex)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"[PLC RESULT TRANSFER AUTO-RESTORE ERROR] Item '{item.TagName}': {ex.Message}");
+                    }
+                });
             }
             else
             {

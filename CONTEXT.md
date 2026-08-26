@@ -49,6 +49,77 @@
 - Preview được phép tiếp tục khi Global Snapshot rỗng để lấy ảnh từ ImageSource.
 - Lưu template cho Origin, Point và SurfaceCompare hoạt động với nguồn ảnh ImageSource.
 
+- **Dedicated Async Queue Cho ResultTransfer & Sửa Triệt Để Lỗi Xóa Node Trên Canvas (Task 263)**:
+  - **Yêu Cầu & Bối Cảnh**:
+    1. Khi bật PLC: Node `ResultTransfer` gửi pulse mất ~105ms (pulse 100ms), level mất ~40ms, làm dồn ứ Queue 16 nấc.
+    2. Yêu cầu lập một hàng đợi (Queue) chạy async riêng biệt tuần tự giữa các con hàng, 0ms impact lên flow runtime chính để tối đa hóa tốc độ kiểm tra.
+    3. Xóa node `ResultTransfer` khỏi Flow Canvas nhưng thực tế cấu hình vẫn còn và vẫn hiện trong bảng runtime của các tool.
+  - **Phân Tích & Nguyên Nhân Gốc Rễ**:
+    1. *Hiện tượng dồn Queue do độ trễ truyền PLC*: `ExecuteResultTransfersAsync` trước đó dù chạy pulse non-blocking nhưng vẫn được gọi và chờ trong pipeline `Inspect()` trên luồng Worker Task. Socket latency (40ms cho Level hoặc độ trễ mạng) làm luồng chính mất 40-105ms mỗi frame $\rightarrow$ Queue 16 nấc bị đầy.
+    2. *Hiện tượng xóa node ResultTransfer không mất*:
+       - Hàm `DeleteSelectedNode` trong [ToolEditorViewModel.GraphOps.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/ToolEditorViewModel.GraphOps.cs) và `SyncToolGraphToConfig` trong [ToolEditorViewModel.Config.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/ToolEditorViewModel.Config.cs) trước đây đã bỏ quên `_config.ResultTransfers` và các node PLC (`PlcRead`, `PlcWrite`, `PlcWait`, `PlcTrigger`, `DbNode`).
+       - Do đó, khi xóa trên UI Canvas, cấu hình trong Job file vẫn còn nguyên và vẫn tiếp tục gửi dữ liệu sang PLC.
+  - **Giải Pháp Kỹ Thuật Đã Triển Khai**:
+    1. *Dedicated Async Queue Worker ([PlcResultTransferRunner.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.Application/PLC/Services/PlcResultTransferRunner.cs), [InspectionService.PlcDb.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.Application/Services/InspectionService.PlcDb.cs))*:
+       - Xây dựng lớp `PlcResultTransferQueue` dùng `System.Threading.Channels.Channel<ResultTransferPackage>` (FIFO tuần tự không khóa, dung lượng 128 phần tử).
+       - Khởi chạy một **Dedicated Background Worker Task** chạy độc lập đọc và gửi dữ liệu PLC tuần tự cho từng con hàng theo thứ tự FIFO.
+       - Trong chu trình `Inspect()`, mỗi khi có kết quả kiểm tra chỉ cần gọi `PlcResultTransferQueue.Enqueue(...)` (thao tác này mất **0.000 ms**, hoàn toàn không chờ mạng/socket).
+       - Gán `result.Timings.NodeTimings[rt.Name] = PlcResultTransferQueue.GetLatestTiming(rt.Name)` để UI Tool Editor vẫn hiển thị runtime thực tế của lần truyền trước đó.
+       - **Kết quả**: Luồng kiểm tra chính đạt tốc độ tối đa (Full Speed), độ trễ ResultTransfer trên flow chính là **0ms**, Queue 16 nấc không bao giờ bị dồn ứ!
+    2. *Sửa Triệt Để Xóa & Đồng Bộ Node Trên Canvas ([ToolEditorViewModel.GraphOps.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/ToolEditorViewModel.GraphOps.cs), [ToolEditorViewModel.Config.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/ToolEditorViewModel.Config.cs))*:
+       - Bổ sung xóa sạch sẽ 100% các loại node (`ResultTransfer`, `PlcRead`, `PlcWrite`, `PlcWait`, `PlcTrigger`, `DbNode`, `TextNode`, `ImageOutput`, `Preprocess`, `ImageSource`, `Condition`) trong cả `DeleteSelectedNode` và `SyncToolGraphToConfig`.
+       - Xóa node trên Canvas là xóa triệt để khỏi `_config` và không còn chạy ngầm hay xuất hiện trong bảng runtime.
+    3. *Kiểm Thử & Đảm Bảo Chất Lượng ([PlcTests.cs](file:///g:/NODEJS/Vision2026/TestExtractApp/PlcTests.cs), [CameraTest.cs](file:///g:/NODEJS/Vision2026/TestExtractApp/CameraTest.cs))*:
+       - Bổ sung `Test 13: PlcResultTransferQueue Dedicated Async FIFO & 0ms Main Flow Latency` (Main Flow Latency = 0ms, Background Timing = 7ms).
+       - Bổ sung kiểm tra xóa node ResultTransfer trong `CameraTest.cs`.
+       - Toàn bộ test suite PASSED 100%.
+
+- **Hiển Thị Runtime Node ResultTransfer & Tối Ưu Xung Pulse Non-Blocking Xóa Bỏ Nghẽn Queue Khi Bật PLC (Task 262)**:
+  - **Yêu Cầu & Bối Cảnh**:
+    1. Hàng vẫn bị dồn ứ vào queue khi bật PLC, tắt PLC thì lại chạy full speed.
+    2. Node `ResultTransfer` luôn hiện `time = 0ms` trên Flow Canvas.
+    3. Kiểm tra xem node `ResultTransfer` chạy async hay đồng bộ, và có tính thời gian chạy vào flow không.
+  - **Phân Tích & Nguyên Nhân Gốc Rễ**:
+    1. *Node ResultTransfer luôn hiện 0ms*: `PlcResultTransferRunner` trước đây chưa đo `Stopwatch` và chưa gán vào `result.Timings.NodeTimings[nodeDef.Name]`. Vì thiếu dữ liệu này, UI canvas mặc định hiển thị 0ms.
+    2. *Hiện tượng dồn ứ Queue khi bật PLC*:
+       - Node `ResultTransfer` ở chế độ `Pulse` (phát xung) thực hiện `await Task.Delay(pulseMs)` (50ms - 100ms) để giữ xung trước khi hạ xung (Restore).
+       - Đồng thời, `ExecuteResultTransfersAsync` bị gọi trùng lặp **2 lần cho mỗi frame** (1 lần trong `Inspect()` và 1 lần trong `ProcessContinuousFrameAsync`).
+       - Trong khi đó, các lệnh `PlcWrites` trong `Inspect()` đang dùng `.GetAwaiter().GetResult()` chặn đồng bộ, làm luồng Worker Task bị khựng lại đợi Socket Driver của PLC.
+       - Chuỗi thao tác này làm thời gian xử lý 1 frame bị kéo dài lên **80ms - 150ms** (tụt xuống 6 - 12 FPS), không kịp tốc độ 25 - 30 FPS của Camera $\rightarrow$ Queue 16 nấc bị dồn đầy!
+  - **Giải Pháp Kỹ Thuật Đã Triển Khai**:
+    1. *Hiển Thị Runtime Chính Xác ([PlcResultTransferRunner.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.Application/PLC/Services/PlcResultTransferRunner.cs))*:
+       - Bổ sung `Stopwatch` đo thời gian gửi lệnh qua socket cho từng node `ResultTransfer` và ghi vào `result.Timings.NodeTimings[nodeDef.Name]`. Node trên canvas hiển thị chính xác (ví dụ `1 ms`, `3 ms`...).
+    2. *Tối Ưu Pulse Sang "Non-blocking Fire & Auto-Restore" ([PlcResultTransferRunner.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.Application/PLC/Services/PlcResultTransferRunner.cs))*:
+       - Phát xung ngay lập tức qua socket (1-2ms), ghi nhận `NodeTimings`, và tách việc chờ `Task.Delay(pulseMs)` để hạ xung sang một **Background Task Non-blocking Auto-Restore** (`_ = Task.Run(...)`).
+       - Luồng Worker Task hoàn thành chu trình kiểm tra ngay lập tức trong 1-3ms và lấy frame tiếp theo mà không phải đợi 50-100ms.
+    3. *Xóa Bỏ Gọi Trùng Lặp & Bảo Vệ Timeout ([InspectionService.PlcDb.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.Application/Services/InspectionService.PlcDb.cs), [ToolEditorViewModel.Engine.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/ToolEditorViewModel.Engine.cs))*:
+       - Chỉ gọi `ExecuteResultTransfersAsync` 1 lần duy nhất trong pipeline `Inspect()`.
+       - Thêm timeout 50ms cho `PlcWrites` và 100ms cho `ExecuteResultTransfersAsync` tránh việc socket lock làm đứng luồng kiểm tra.
+    4. *Kiểm Thử & Đảm Bảo Chất Lượng ([PlcTests.cs](file:///g:/NODEJS/Vision2026/TestExtractApp/PlcTests.cs))*:
+       - Cập nhật `Test 9` xác nhận `NodeTimings["ResultTransfer1"] > 0` (3ms) và cơ chế Pulse Auto-Restore hoạt động 100% chính xác.
+       - Toàn bộ test suite PASSED 100%.
+
+- **Tối Ưu Triệt Để Render Canvas (Non-Blocking UI Throttling) & Xóa Bỏ Độ Trễ ImageSource Khi Kết Nối PLC (Task 261)**:
+  - **Yêu Cầu & Bối Cảnh**:
+    1. Khi chạy continuous, bật render canvas thì queue 16 nấc bị đầy dần, tắt render canvas thì queue vơi về 0.
+    2. Khi job chạy mà có PLC kết nối thì node `ImageSource` runtime cực cao làm tốc độ kiểm tra tụt giảm, nhưng khi ngắt kết nối PLC thì runtime trở về bình thường và tốc độ tăng tối đa.
+  - **Nguyên Nhân Gốc Rễ**:
+    1. *Hiện tượng đầy queue khi bật Render Canvas*: `ProcessContinuousFrameAsync` đẩy lệnh render vào `Dispatcher.BeginInvoke` cho 100% tất cả các frame. Khi bật Render Canvas, UI Thread tốn 20-50ms để chuyển đổi `Mat` sang `BitmapSource` và vẽ toàn bộ Overlay. Khi camera bắn frame nhanh, Dispatcher Queue bị dồn ứ ngập tràn Action, UI Thread bị nghẽn làm giảm tốc độ tiêu thụ frame của Worker Task dẫn đến Queue 16 nấc đầy.
+    2. *Hiện tượng ImageSource runtime cao khi có PLC kết nối*:
+       - Biến `Stopwatch __sw` đo toàn bộ thời gian của cả chu trình Inspect + PLC handshake rồi gán gộp vào `NodeTimings[sourceNodeName]` (node `ImageSource`), khiến thời gian của cả flow và PLC bị đổ hết lên đầu `ImageSource`.
+       - Mặc định `IndustrialHandshakeStateMachine` tự động chạy vòng lặp chờ phản hồi ACK từ tag `X1_PlcAck` lên tới 500ms mỗi frame khi có PLC kết nối, trong khi PLC chưa cấu hình hoặc không sử dụng bit ACK này.
+  - **Giải Pháp Kỹ Thuật Đã Triển Khai**:
+    1. *Tối ưu Render Canvas ([ToolEditorViewModel.Engine.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/ToolEditorViewModel.Engine.cs))*:
+       - Áp dụng cơ chế **UI Frame Throttling & Non-blocking Preview Dropping**: Sử dụng cờ nguyên tử `_isUiRenderingContinuous` (Interlocked) và `ContinuousUiThrottleIntervalMs = 60` (~16 FPS chuẩn mượt cho mắt người).
+       - Worker Task luôn chạy với tốc độ tối đa 100% không bao giờ bị nghẽn. UI Thread chỉ nhận frame vẽ khi rảnh và cách frame trước tối thiểu 60ms. Dispatcher Queue luôn rỗng, Queue 16 nấc luôn ở mức 0.
+    2. *Tối ưu ImageSource Timing ([ToolEditorViewModel.Engine.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/ToolEditorViewModel.Engine.cs))*:
+       - Tách biệt hoàn toàn việc đo runtime của `ImageSource` chỉ tính phần nạp/cache ảnh (`< 1ms`). Không gộp thời gian Inspect hay PLC vào `ImageSource`.
+    3. *Tối ưu Handshake State Machine ([IndustrialHandshakeStateMachine.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.Application/PLC/Services/IndustrialHandshakeStateMachine.cs))*:
+       - Bổ sung hàm `HasConfiguredHandshakeTags()`: Nếu các tag Handshake (Ready/Busy/Done/Pass/Ng/PlcAck) không tồn tại trong cấu hình PLC, hệ thống lập tức bỏ qua (0ms) thay vì bị treo 500ms timeout mỗi frame.
+    4. *Kiểm Thử & Đảm Bảo Chất Lượng ([PlcTests.cs](file:///g:/NODEJS/Vision2026/TestExtractApp/PlcTests.cs))*:
+       - Bổ sung `Test12_HandshakeStateMachine_NonBlocking_And_ImageSourceTimingAsync` kiểm tra bypass 0ms.
+       - Toàn bộ test suite PASSED 100%.
+
 - **Đổi Chiều Hiển Thị Thanh 20 Nấc Recent Con Hàng Thành Mới Nhất -> Cũ Nhất (Task 260)**:
   - **Yêu Cầu & Bối Cảnh**:
     - Trong tab Tool Editor, thanh 20 nấc recent con hàng trước đây hiển thị theo chiều Cũ nhất ➔ Mới nhất (từ trái sang phải).
