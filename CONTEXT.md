@@ -49,18 +49,23 @@
 - Preview được phép tiếp tục khi Global Snapshot rỗng để lấy ảnh từ ImageSource.
 - Lưu template cho Origin, Point và SurfaceCompare hoạt động với nguồn ảnh ImageSource.
 
-- **Tối Ưu Hiển Thị Tool Origin: Chỉ Hiển Thị Search ROI Trên Flow Canvas (Task 264)**:
+- **Tối Ưu Hiển Thị Tool Origin: Vẽ Template ROI Dưới Dạng Read-Only Trên Flow Canvas & Mở Khóa Tương Tác Trong Cửa Sổ Train Template (Task 264)**:
   - **Yêu Cầu & Bối Cảnh**:
-    - Khi click vào node Origin trên Flow Canvas, trước đây hiển thị cả Search ROI ("Origin S") và Template ROI ("Origin T").
-    - Vì Template ROI đã được người dùng lựa chọn và điều chỉnh trực tiếp trong cửa sổ Train Template (Origin Train Window), nên không cần hiển thị Template ROI trên Flow Canvas nữa để tránh rối mắt và thao tác nhầm.
+    - Khi click vào node Origin trên Flow Canvas, vẫn cần vẽ đầy đủ cả Search ROI ("Origin S" màu xanh lá) và Template ROI ("Origin T" màu vàng kim) để quan sát trực quan vị trí mẫu.
+    - Khóa tương tác chuột (kéo thả, sửa kích thước, xoay) với Template ROI trên Canvas Tool Editor để tránh thao tác nhầm (chỉ cho phép kéo thả Search ROI).
+    - Đồng thời, khi mở cửa sổ **Train Template (Origin Train Window)**, Template ROI ("Origin T") PHẢI ĐƯỢC TƯƠNG TÁC KÉO THẢ bình thường để chọn và train mẫu.
   - **Giải Pháp Kỹ Thuật Đã Triển Khai**:
-    1. [ToolEditorViewModel.GraphOps.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/ToolEditorViewModel.GraphOps.cs):
-       - Cập nhật `ActiveRoiLabel = "Origin S"` khi click chọn node Origin (thay vì "Origin T").
-       - Trong `AppendSelectedNodeOverlays`: Bỏ lệnh vẽ `TemplateRoi` (`Origin T`), chỉ giữ lại vẽ Search ROI (`Origin S`).
-    2. [ToolEditorViewModel.Engine.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/ToolEditorViewModel.Engine.cs):
-       - Trong `AppendSelectedNodeOverlays`: Bỏ lệnh vẽ `TemplateRoi` (`Origin T`), chỉ hiển thị `SearchRoi` (`Origin S`).
-    3. Cửa sổ Train Template (`OriginTrainViewModel.cs`) vẫn quản lý, hiển thị và train `TemplateRoi` độc lập, chính xác 100%.
-  - **Kiểm Thử**: Toàn bộ unit tests và kiểm tra hiển thị canvas PASSED 100%.
+    1. [ToolEditorViewModel.GraphOps.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/ToolEditorViewModel.GraphOps.cs) & [ToolEditorViewModel.Engine.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/ToolEditorViewModel.Engine.cs):
+       - Khi chọn node Origin: `ActiveRoiLabel = "Origin S"`.
+       - Vẫn vẽ đầy đủ cả `SearchRoi` ("Origin S") và `TemplateRoi` ("Origin T") ra màn hình Canvas Tool Editor.
+    2. [ImageViewerControl.xaml.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/Controls/ImageViewerControl.xaml.cs):
+       - Phân biệt môi trường chính xác bằng `hasOriginSearch` (sự tồn tại của `Origin S` trên canvas):
+         `if (string.Equals(r.Label, "Origin T", ...) && hasOriginSearch && !string.Equals(_activeRoiLabel, "Origin T", ...)) continue;`
+       - Nhờ đó, trên Tool Editor Canvas (nơi có cả `Origin S` và `Origin T`), `Origin T` hoàn toàn không nhận sự kiện chuột.
+       - Trong cửa sổ Train Template (`OriginTrainWindow`): Không có `Origin S` và `_activeRoiLabel = "Origin T"` $\rightarrow$ `Origin T` được mở khóa 100% để kéo thả, resize và xoay mẫu tự do.
+    3. [OriginTrainViewModel.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/OriginTrainViewModel.cs) & [OriginTrainWindow.xaml](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/Views/OriginTrainWindow.xaml):
+       - Thêm `[ObservableProperty] private string _activeRoiLabel = "Origin T";` và bind 2 chiều vào `ImageViewerControl`.
+  - **Kiểm Thử**: Toàn bộ unit tests và hệ thống render/interact PASSED 100%.
 
 - **Dedicated Async Queue Cho ResultTransfer & Sửa Triệt Để Lỗi Xóa Node Trên Canvas (Task 263)**:
   - **Yêu Cầu & Bối Cảnh**:

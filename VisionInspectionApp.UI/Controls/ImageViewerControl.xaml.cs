@@ -1631,11 +1631,19 @@ public partial class ImageViewerControl : UserControl
         }
 
         // 3. Third Priority: Rectangle items (Checked before Polygon interior body so Rectangles overlapping under/over Polygons can be interacted with)
+        bool hasOriginSearch = OverlayItems.Any(x => x is OverlayRectItem o && string.Equals(o.Label, "Origin S", StringComparison.OrdinalIgnoreCase));
         var candidates = new List<(OverlayRectItem Item, Rect Rect)>();
 
         foreach (var item in OverlayItems)
         {
             if (item is not OverlayRectItem r || string.IsNullOrWhiteSpace(r.Label))
+            {
+                continue;
+            }
+
+            // Origin T chỉ bị khóa khi ở trên Flow Canvas chính (nơi có Search ROI Origin S).
+            // Trong cửa sổ Train Template (nơi không có Origin S hoặc khi _activeRoiLabel == "Origin T"), Origin T tương tác kéo thả bình thường.
+            if (string.Equals(r.Label, "Origin T", StringComparison.OrdinalIgnoreCase) && hasOriginSearch && !string.Equals(_activeRoiLabel, "Origin T", StringComparison.OrdinalIgnoreCase))
             {
                 continue;
             }
@@ -1762,11 +1770,19 @@ public partial class ImageViewerControl : UserControl
             }
         }
 
+        bool hasOriginSearch = OverlayItems.Any(x => x is OverlayRectItem o && string.Equals(o.Label, "Origin S", StringComparison.OrdinalIgnoreCase));
         var candidates = new List<(OverlayRectItem Item, Rect Rect)>();
 
         foreach (var item in OverlayItems)
         {
             if (item is not OverlayRectItem r || string.IsNullOrWhiteSpace(r.Label))
+            {
+                continue;
+            }
+
+            // Origin T chỉ bị khóa khi ở trên Flow Canvas chính (nơi có Search ROI Origin S).
+            // Trong cửa sổ Train Template (nơi không có Origin S hoặc khi _activeRoiLabel == "Origin T"), Origin T tương tác kéo thả bình thường.
+            if (string.Equals(r.Label, "Origin T", StringComparison.OrdinalIgnoreCase) && hasOriginSearch && !string.Equals(_activeRoiLabel, "Origin T", StringComparison.OrdinalIgnoreCase))
             {
                 continue;
             }

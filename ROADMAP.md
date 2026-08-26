@@ -1131,14 +1131,14 @@ Lộ trình tích hợp tính năng Chụp ảnh từ camera và hỗ trợ các
         3. `ToolEditorViewModel.GraphOps.cs` & `ToolEditorViewModel.Config.cs`: Bổ sung dọn sạch sẽ 100% các loại node (`ResultTransfer`, `PlcRead`, `PlcWrite`, `PlcWait`, `PlcTrigger`, `DbNode`, `TextNode`, `ImageOutput`, `Preprocess`, `ImageSource`, `Condition`) khi xóa trên Canvas.
       - `Kiểm Thử`: Bổ sung `Test13_PlcResultTransferQueue_AsyncFifoAndZeroMainFlowLatencyAsync` (Main Flow = 0ms, Background Timing = 7ms) và kiểm tra xóa node trong `CameraTest.cs`. Toàn bộ test suite PASSED 100%.
 
-- [x] Task 264: Tối ưu hiển thị Tool Origin trên Flow Canvas (Chỉ hiển thị Search ROI, loại bỏ Template ROI khỏi canvas).
+- [x] Task 264: Tối ưu hiển thị Tool Origin trên Flow Canvas (Vẽ Template ROI dạng Read-Only, chỉ cho phép tương tác kéo thả với Search ROI).
       - `Mục Tiêu & Yêu Cầu`:
-        - Khi click chọn node Origin trên Flow Canvas, chỉ hiển thị và điều chỉnh Search ROI ("Origin S").
-        - Loại bỏ hiển thị Template ROI ("Origin T") khỏi canvas vì Template ROI đã được chọn và chỉnh sửa trong cửa sổ Train Template.
+        - Khi click chọn node Origin trên Flow Canvas, vẫn vẽ đầy đủ cả Search ROI ("Origin S") và Template ROI ("Origin T") để người dùng quan sát.
+        - Khóa tương tác chuột đối với Template ROI trên canvas để tránh thao tác nhầm, chỉ cho phép kéo thả/chỉnh sửa Search ROI.
       - `Giải Pháp Kỹ Thuật Đã Triển Khai`:
-        1. `ToolEditorViewModel.GraphOps.cs`: Cập nhật `ActiveRoiLabel = "Origin S"` khi chọn node Origin; loại bỏ TemplateRoi khỏi `AppendSelectedNodeOverlays`.
-        2. `ToolEditorViewModel.Engine.cs`: Loại bỏ TemplateRoi khỏi `AppendSelectedNodeOverlays` để canvas chỉ hiển thị `Origin S`.
-        3. Cửa sổ Train Template (`OriginTrainViewModel.cs`) tiếp tục quản lý, hiển thị và train `TemplateRoi` độc lập.
+        1. `ToolEditorViewModel.GraphOps.cs` & `Engine.cs`: `ActiveRoiLabel = "Origin S"`, vẽ đầy đủ `SearchRoi` (xanh lá) và `TemplateRoi` (vàng kim) lên canvas.
+        2. `ImageViewerControl.xaml.cs`: Bỏ qua hit-test và kéo thả đối với `Origin T` khi ở ngoài cửa sổ Train Template.
+        3. Cửa sổ Train Template (`OriginTrainViewModel.cs`) tiếp tục quản lý, hiển thị và tương tác `TemplateRoi` độc lập.
       - `Kiểm Thử`: Toàn bộ unit tests và hệ thống render PASSED 100%.
 
 

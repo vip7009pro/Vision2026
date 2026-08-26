@@ -83,6 +83,7 @@
                                                  ImageSource="{Binding FullPreviewImage}"
                                                  OverlayItems="{Binding OverlayItems}"
                                                  EnableRoiEditing="True"
+                                                 ActiveRoiLabel="{Binding ActiveRoiLabel, Mode=TwoWay}"
                                                  RoiEditedCommand="{Binding RoiEditedCommand}"/>
                     </Border>
                 </Grid>

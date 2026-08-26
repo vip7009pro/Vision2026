@@ -38,6 +38,9 @@ namespace VisionInspectionApp.UI.ViewModels
         private ObservableCollection<OverlayItem> _overlayItems = new();
 
         [ObservableProperty]
+        private string _activeRoiLabel = "Origin T";
+
+        [ObservableProperty]
         private bool _isEraserActive;
 
         [ObservableProperty]
