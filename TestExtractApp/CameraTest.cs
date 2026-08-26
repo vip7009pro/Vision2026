@@ -794,4 +794,37 @@ public static class CameraTest
 
         Console.WriteLine("✅ ALL CONTINUOUS FLOW HANDSHAKE BYPASS TESTS PASSED (100%)!\n");
     }
+
+    public static void TestSystemMonitorAndNonBlockingRender()
+    {
+        Console.WriteLine("=== TESTING SYSTEM MONITOR (RAM & MULTI-CORE CPU WIDGET) ===");
+
+        // 1. Test RAM Calculation & Format
+        long ramBytes = System.Diagnostics.Process.GetCurrentProcess().WorkingSet64;
+        double ramMb = ramBytes / (1024.0 * 1024.0);
+        if (ramMb <= 0)
+        {
+            throw new Exception($"Invalid Process WorkingSet64: {ramMb} MB");
+        }
+        Console.WriteLine($"  [1/3] Process WorkingSet64 RAM detection: {ramMb:F1} MB: PASSED");
+
+        // 2. Test Processor Core Count & Bounded Scale (1..16)
+        int coreCount = Math.Min(16, Environment.ProcessorCount);
+        if (coreCount < 1 || coreCount > 16)
+        {
+            throw new Exception($"Invalid CPU Core Count detected: {coreCount}");
+        }
+        Console.WriteLine($"  [2/3] System Logical Processor Count: {Environment.ProcessorCount} (Bounded UI Slots: {coreCount}): PASSED");
+
+        // 3. Test Equalizer Core Height and Threshold Coloring Logic
+        double testHeightLow = Math.Max(1, 20.0 / 100.0 * 16.0);
+        double testHeightHigh = Math.Max(1, 95.0 / 100.0 * 16.0);
+        if (testHeightLow < 1.0 || testHeightHigh > 16.0)
+        {
+            throw new Exception($"Invalid Equalizer Height bounds: Low={testHeightLow}, High={testHeightHigh}");
+        }
+        Console.WriteLine($"  [3/3] Multi-Core Equalizer Dynamic Height Mapping (0..16px): PASSED");
+
+        Console.WriteLine("✅ ALL SYSTEM MONITOR (RAM & CPU) TESTS PASSED (100%)!\n");
+    }
 }

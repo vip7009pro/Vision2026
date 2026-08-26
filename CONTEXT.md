@@ -49,6 +49,19 @@
 - Preview được phép tiếp tục khi Global Snapshot rỗng để lấy ảnh từ ImageSource.
 - Lưu template cho Origin, Point và SurfaceCompare hoạt động với nguồn ảnh ImageSource.
 
+- **Tối Ưu Render Canvas Không Chặn Worker & Widget Giám Sát RAM / CPU Đa Lõi (Task 257)**:
+  - **Yêu Cầu & Bối Cảnh**:
+    - Trong Tool Editor, khi Run Continuous với camera Hikvision thật (soft trigger, interval=0, ~5.9 FPS), khi bật render canvas và show ROI thì queue tăng dần và đầy 16 nấc; khi tắt render canvas thì queue giảm về 0 nấc.
+    - CPU toàn máy chỉ dùng ~52%, không bị nghẽn phần cứng.
+    - Cần khắc phục hiện tượng render canvas làm nghẽn flow và bổ sung widget hiển thị RAM app cùng % CPU từng lõi và toàn app trực quan, nhỏ gọn, đặt trước và cùng hàng với thanh Queue và Recent.
+  - **Nguyên Nhân Gốc Rễ**:
+    - `ProcessContinuousFrameAsync` sử dụng `await Dispatcher.InvokeAsync(...)` (đồng bộ chặn), khiến Worker Task phải đợi UI Thread render xong (chuyển đổi `ToBitmapSourceForDisplay` và tính toán danh sách `OverlayItem`) mới được quay lại lấy frame tiếp theo.
+  - **Giải Pháp Kỹ Thuật Đã Triển Khai**:
+    1. *Tối Ưu Render*: Chuyển sang `Dispatcher.BeginInvoke(DispatcherPriority.Background, ...)` (Fire-and-forget), giải phóng Worker Task ngay lập tức để lấy frame từ queue mà không bị chặn bởi UI rendering.
+    2. *Module SystemMonitor ([ToolEditorViewModel.SystemMonitor.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/ToolEditorViewModel.SystemMonitor.cs))*: Đo RAM (`Process.WorkingSet64`), CPU App (`TotalProcessorTime`), CPU từng lõi (mảng `PerformanceCounter` 0..16) với độ cao sóng Equalizer và dải màu 4 cấp độ (Xanh/Vàng/Cam/Đỏ).
+    3. *Widget Giao Diện ([ToolEditorView.xaml](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/Views/ToolEditorView.xaml))*: Đặt widget RAM & Multi-core CPU nhỏ gọn ngay trước thanh Queue và Recent trên thanh trạng thái.
+  - **Kiểm Thử**: Bổ sung `TestSystemMonitorAndNonBlockingRender` trong `CameraTest.cs`. Toàn bộ test suite PASSED 100%.
+
 - **Sửa Lỗi Run Continuous Bỏ Qua Interval Khi Dùng Camera Giả Lập (Task 256)**:
   - **Yêu Cầu & Bối Cảnh**:
     - Trong tab Tool Editor, khi Run Continuous với Camera Giả Lập (nguồn ảnh tĩnh), SoftTrigger, người dùng đã set Interval (ms) nhưng hệ thống vẫn chạy full tốc độ (như interval = 0).

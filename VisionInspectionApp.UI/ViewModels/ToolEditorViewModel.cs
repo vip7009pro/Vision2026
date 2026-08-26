@@ -264,6 +264,7 @@ namespace VisionInspectionApp.UI.ViewModels
                 Interval = TimeSpan.FromMilliseconds(100)
             };
             _continuousStatsTimer.Tick += (_, __) => UpdateContinuousStats();
+            InitializeSystemMonitor();
             AllToolboxItems = new List<ToolboxItemModel>
             {
                 new ToolboxItemModel { Name = "ImageSource", Category = "📷 Nguồn & Định Vị", Icon = "📷" },

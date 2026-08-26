@@ -3017,18 +3017,23 @@ namespace VisionInspectionApp.UI.ViewModels
 
             _lastRun = inspectionResult;
 
-            await System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
-            {
-                if (!IsRunningFolderFlow) return;
-                LastResult = _lastRun;
-                ProcessedImageCount++;
-                UpdateContinuousStats();
-                UpdateNodeExecutionTimes();
-                RefreshInspectionDashboard(_lastRun);
-                RefreshPreviews();
-                RaiseToolPropertyPanelsChanged();
-                OnPropertyChanged(nameof(Blob_LastRunCount));
-            });
+            // Fire-and-forget: Worker KHÔNG đợi UI thread render xong,
+            // tiếp tục lấy frame tiếp ngay lập tức. UI tự render khi rảnh.
+            // Đây là giải pháp cho vấn đề Queue full khi bật Render Canvas.
+            System.Windows.Application.Current.Dispatcher.BeginInvoke(
+                System.Windows.Threading.DispatcherPriority.Background,
+                new Action(() =>
+                {
+                    if (!IsRunningFolderFlow) return;
+                    LastResult = _lastRun;
+                    ProcessedImageCount++;
+                    UpdateContinuousStats();
+                    UpdateNodeExecutionTimes();
+                    RefreshInspectionDashboard(_lastRun);
+                    RefreshPreviews();
+                    RaiseToolPropertyPanelsChanged();
+                    OnPropertyChanged(nameof(Blob_LastRunCount));
+                }));
         }
 
         private void StartUsbCameraContinuousFlow(ImageSourceDefinition sourceDef)

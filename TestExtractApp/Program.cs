@@ -16,6 +16,7 @@ class Program
         CameraTest.TestDirectAddressSupport();
         CameraTest.TestZeroAllocationLiveViewAndMemoryOptimization();
         CameraTest.TestContinuousEngineHandshakeBypass();
+        CameraTest.TestSystemMonitorAndNonBlockingRender();
         CaliperAndLineTest.RunTests();
         ColorDiffTest.RunTests();
         RecentJobsAndCalibrationTest.RunTests();

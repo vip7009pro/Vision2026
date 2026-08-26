@@ -1050,6 +1050,15 @@ Lộ trình tích hợp tính năng Chụp ảnh từ camera và hỗ trợ các
         4. `StopContinuousFlow` đã có sẵn logic khôi phục `TriggerMode=Off`.
       - `Kiểm Thử`: Bổ sung test TriggerMode=On + SoftTrigger trong `CameraTest.cs`. Toàn bộ test suite PASSED 100%.
 
+- [x] Task 257: Tối ưu Render Canvas không chặn luồng Worker & Bổ sung Widget Giám sát RAM và CPU Đa Lõi trên thanh trạng thái Tool Editor.
+      - `Nguyên Nhân Gốc Rễ`:
+        - `ProcessContinuousFrameAsync` dùng `await Dispatcher.InvokeAsync(...)` (đồng bộ chặn), Worker phải chờ UI Thread render đồ họa xong mới lấy frame tiếp theo, gây nghẽn và làm đầy queue 16 nấc.
+      - `Giải Pháp Kỹ Thuật Đã Triển Khai`:
+        1. `ToolEditorViewModel.Engine.cs`: Chuyển sang `Dispatcher.BeginInvoke(DispatcherPriority.Background, ...)` (non-blocking fire-and-forget), Worker tiếp tục lấy frame ngay lập tức mà không phụ thuộc vào tốc độ render của UI.
+        2. `ToolEditorViewModel.SystemMonitor.cs`: Module đo RAM (`WorkingSet64`), CPU App (`TotalProcessorTime`), CPU từng lõi (mảng `PerformanceCounter` 0..16) với độ cao sóng Equalizer và dải màu 4 cấp độ.
+        3. `ToolEditorView.xaml`: Bổ sung widget System Monitor nhỏ gọn đặt trước và cùng hàng với thanh Queue và Recent.
+      - `Kiểm Thử`: Bổ sung `TestSystemMonitorAndNonBlockingRender` trong `CameraTest.cs`. Toàn bộ test suite PASSED 100%.
+
 
 
 

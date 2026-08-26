@@ -405,6 +405,92 @@
                     </Border>
                 </StackPanel>
             </Border>
+
+            <!-- 5. System Monitor (RAM & Multi-Core CPU Performance) -->
+            <Border DockPanel.Dock="Right" Background="{DynamicResource PanelBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="8" Padding="6,3" VerticalAlignment="Center" Margin="6,0,0,0" ToolTip="{Binding SystemMonitorToolTip}">
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <!-- RAM Section -->
+                    <TextBlock Text="💾" FontSize="11" VerticalAlignment="Center" Margin="0,0,3,0"/>
+                    <TextBlock Text="{Binding SystemRamText}" FontSize="11" FontWeight="SemiBold" Foreground="{Binding RamBarFillBrush}" VerticalAlignment="Center" Margin="0,0,6,0"/>
+
+                    <Rectangle Width="1" Height="14" Fill="{DynamicResource BorderBrush}" Margin="0,0,6,0"/>
+
+                    <!-- CPU App & System Section -->
+                    <TextBlock Text="⚙️" FontSize="11" VerticalAlignment="Center" Margin="0,0,3,0"/>
+                    <TextBlock Text="{Binding CpuAppText}" FontSize="11" FontWeight="Bold" Foreground="{Binding CpuAppBarFillBrush}" VerticalAlignment="Center" Margin="0,0,4,0"/>
+                    <TextBlock Text="{Binding CpuSystemText}" FontSize="10.5" FontWeight="SemiBold" Foreground="{DynamicResource TextMutedBrush}" VerticalAlignment="Center" Margin="0,0,6,0"/>
+
+                    <!-- Multi-Core Equalizer Bars (Up to 16 Cores) -->
+                    <Border Background="#12000000" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="3" Padding="2,1" VerticalAlignment="Center">
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Bottom" Height="16">
+                            <!-- Core 0 -->
+                            <Grid Width="3" Height="16" Margin="0.5,0" VerticalAlignment="Bottom" Visibility="{Binding CpuCore0Visible, Converter={StaticResource BoolToVis}}">
+                                <Border Width="3" Height="{Binding CpuCore0Height}" VerticalAlignment="Bottom" CornerRadius="1" Background="{Binding CpuCore0Fill}"/>
+                            </Grid>
+                            <!-- Core 1 -->
+                            <Grid Width="3" Height="16" Margin="0.5,0" VerticalAlignment="Bottom" Visibility="{Binding CpuCore1Visible, Converter={StaticResource BoolToVis}}">
+                                <Border Width="3" Height="{Binding CpuCore1Height}" VerticalAlignment="Bottom" CornerRadius="1" Background="{Binding CpuCore1Fill}"/>
+                            </Grid>
+                            <!-- Core 2 -->
+                            <Grid Width="3" Height="16" Margin="0.5,0" VerticalAlignment="Bottom" Visibility="{Binding CpuCore2Visible, Converter={StaticResource BoolToVis}}">
+                                <Border Width="3" Height="{Binding CpuCore2Height}" VerticalAlignment="Bottom" CornerRadius="1" Background="{Binding CpuCore2Fill}"/>
+                            </Grid>
+                            <!-- Core 3 -->
+                            <Grid Width="3" Height="16" Margin="0.5,0" VerticalAlignment="Bottom" Visibility="{Binding CpuCore3Visible, Converter={StaticResource BoolToVis}}">
+                                <Border Width="3" Height="{Binding CpuCore3Height}" VerticalAlignment="Bottom" CornerRadius="1" Background="{Binding CpuCore3Fill}"/>
+                            </Grid>
+                            <!-- Core 4 -->
+                            <Grid Width="3" Height="16" Margin="0.5,0" VerticalAlignment="Bottom" Visibility="{Binding CpuCore4Visible, Converter={StaticResource BoolToVis}}">
+                                <Border Width="3" Height="{Binding CpuCore4Height}" VerticalAlignment="Bottom" CornerRadius="1" Background="{Binding CpuCore4Fill}"/>
+                            </Grid>
+                            <!-- Core 5 -->
+                            <Grid Width="3" Height="16" Margin="0.5,0" VerticalAlignment="Bottom" Visibility="{Binding CpuCore5Visible, Converter={StaticResource BoolToVis}}">
+                                <Border Width="3" Height="{Binding CpuCore5Height}" VerticalAlignment="Bottom" CornerRadius="1" Background="{Binding CpuCore5Fill}"/>
+                            </Grid>
+                            <!-- Core 6 -->
+                            <Grid Width="3" Height="16" Margin="0.5,0" VerticalAlignment="Bottom" Visibility="{Binding CpuCore6Visible, Converter={StaticResource BoolToVis}}">
+                                <Border Width="3" Height="{Binding CpuCore6Height}" VerticalAlignment="Bottom" CornerRadius="1" Background="{Binding CpuCore6Fill}"/>
+                            </Grid>
+                            <!-- Core 7 -->
+                            <Grid Width="3" Height="16" Margin="0.5,0" VerticalAlignment="Bottom" Visibility="{Binding CpuCore7Visible, Converter={StaticResource BoolToVis}}">
+                                <Border Width="3" Height="{Binding CpuCore7Height}" VerticalAlignment="Bottom" CornerRadius="1" Background="{Binding CpuCore7Fill}"/>
+                            </Grid>
+                            <!-- Core 8 -->
+                            <Grid Width="3" Height="16" Margin="0.5,0" VerticalAlignment="Bottom" Visibility="{Binding CpuCore8Visible, Converter={StaticResource BoolToVis}}">
+                                <Border Width="3" Height="{Binding CpuCore8Height}" VerticalAlignment="Bottom" CornerRadius="1" Background="{Binding CpuCore8Fill}"/>
+                            </Grid>
+                            <!-- Core 9 -->
+                            <Grid Width="3" Height="16" Margin="0.5,0" VerticalAlignment="Bottom" Visibility="{Binding CpuCore9Visible, Converter={StaticResource BoolToVis}}">
+                                <Border Width="3" Height="{Binding CpuCore9Height}" VerticalAlignment="Bottom" CornerRadius="1" Background="{Binding CpuCore9Fill}"/>
+                            </Grid>
+                            <!-- Core 10 -->
+                            <Grid Width="3" Height="16" Margin="0.5,0" VerticalAlignment="Bottom" Visibility="{Binding CpuCore10Visible, Converter={StaticResource BoolToVis}}">
+                                <Border Width="3" Height="{Binding CpuCore10Height}" VerticalAlignment="Bottom" CornerRadius="1" Background="{Binding CpuCore10Fill}"/>
+                            </Grid>
+                            <!-- Core 11 -->
+                            <Grid Width="3" Height="16" Margin="0.5,0" VerticalAlignment="Bottom" Visibility="{Binding CpuCore11Visible, Converter={StaticResource BoolToVis}}">
+                                <Border Width="3" Height="{Binding CpuCore11Height}" VerticalAlignment="Bottom" CornerRadius="1" Background="{Binding CpuCore11Fill}"/>
+                            </Grid>
+                            <!-- Core 12 -->
+                            <Grid Width="3" Height="16" Margin="0.5,0" VerticalAlignment="Bottom" Visibility="{Binding CpuCore12Visible, Converter={StaticResource BoolToVis}}">
+                                <Border Width="3" Height="{Binding CpuCore12Height}" VerticalAlignment="Bottom" CornerRadius="1" Background="{Binding CpuCore12Fill}"/>
+                            </Grid>
+                            <!-- Core 13 -->
+                            <Grid Width="3" Height="16" Margin="0.5,0" VerticalAlignment="Bottom" Visibility="{Binding CpuCore13Visible, Converter={StaticResource BoolToVis}}">
+                                <Border Width="3" Height="{Binding CpuCore13Height}" VerticalAlignment="Bottom" CornerRadius="1" Background="{Binding CpuCore13Fill}"/>
+                            </Grid>
+                            <!-- Core 14 -->
+                            <Grid Width="3" Height="16" Margin="0.5,0" VerticalAlignment="Bottom" Visibility="{Binding CpuCore14Visible, Converter={StaticResource BoolToVis}}">
+                                <Border Width="3" Height="{Binding CpuCore14Height}" VerticalAlignment="Bottom" CornerRadius="1" Background="{Binding CpuCore14Fill}"/>
+                            </Grid>
+                            <!-- Core 15 -->
+                            <Grid Width="3" Height="16" Margin="0.5,0" VerticalAlignment="Bottom" Visibility="{Binding CpuCore15Visible, Converter={StaticResource BoolToVis}}">
+                                <Border Width="3" Height="{Binding CpuCore15Height}" VerticalAlignment="Bottom" CornerRadius="1" Background="{Binding CpuCore15Fill}"/>
+                            </Grid>
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+            </Border>
         </DockPanel>
 
 
