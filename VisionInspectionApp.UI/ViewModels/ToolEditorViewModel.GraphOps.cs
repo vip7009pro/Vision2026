@@ -54,7 +54,7 @@ namespace VisionInspectionApp.UI.ViewModels
                 if (string.Equals(value.Type, "CircleFinder", StringComparison.OrdinalIgnoreCase))
                     ActiveRoiLabel = $"{value.RefName} CIR";
                 else if (string.Equals(value.Type, "Origin", StringComparison.OrdinalIgnoreCase))
-                    ActiveRoiLabel = "Origin T";
+                    ActiveRoiLabel = "Origin S";
                 else if (string.Equals(value.Type, "Point", StringComparison.OrdinalIgnoreCase))
                     ActiveRoiLabel = $"{value.RefName} S";
                 else if (string.Equals(value.Type, "Line", StringComparison.OrdinalIgnoreCase))
@@ -1107,11 +1107,6 @@ namespace VisionInspectionApp.UI.ViewModels
                 if (showRois && _config.Origin.SearchRoi.Width > 0 && _config.Origin.SearchRoi.Height > 0)
                 {
                     dst.Add(CreateRotatedRoi(_config.Origin.SearchRoi, Brushes.Lime, "Origin S"));
-                }
-
-                if (showRois && _config.Origin.TemplateRoi.Width > 0 && _config.Origin.TemplateRoi.Height > 0)
-                {
-                    dst.Add(CreateRotatedRoiWithPose(_config.Origin.TemplateRoi, Brushes.Gold, "Origin T"));
                 }
 
                 return;

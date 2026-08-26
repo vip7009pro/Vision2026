@@ -5711,12 +5711,7 @@ namespace VisionInspectionApp.UI.ViewModels
                         Label = "Origin S"
                     });
                 }
-    
-                if (showRois && _config.Origin.TemplateRoi.Width > 0 && _config.Origin.TemplateRoi.Height > 0)
-                {
-                    dst.Add(CreateRotatedRoiWithPose(_config.Origin.TemplateRoi, Brushes.Gold, "Origin T"));
-                }
-    
+
                 return;
             }
     

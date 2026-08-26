@@ -49,6 +49,19 @@
 - Preview được phép tiếp tục khi Global Snapshot rỗng để lấy ảnh từ ImageSource.
 - Lưu template cho Origin, Point và SurfaceCompare hoạt động với nguồn ảnh ImageSource.
 
+- **Tối Ưu Hiển Thị Tool Origin: Chỉ Hiển Thị Search ROI Trên Flow Canvas (Task 264)**:
+  - **Yêu Cầu & Bối Cảnh**:
+    - Khi click vào node Origin trên Flow Canvas, trước đây hiển thị cả Search ROI ("Origin S") và Template ROI ("Origin T").
+    - Vì Template ROI đã được người dùng lựa chọn và điều chỉnh trực tiếp trong cửa sổ Train Template (Origin Train Window), nên không cần hiển thị Template ROI trên Flow Canvas nữa để tránh rối mắt và thao tác nhầm.
+  - **Giải Pháp Kỹ Thuật Đã Triển Khai**:
+    1. [ToolEditorViewModel.GraphOps.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/ToolEditorViewModel.GraphOps.cs):
+       - Cập nhật `ActiveRoiLabel = "Origin S"` khi click chọn node Origin (thay vì "Origin T").
+       - Trong `AppendSelectedNodeOverlays`: Bỏ lệnh vẽ `TemplateRoi` (`Origin T`), chỉ giữ lại vẽ Search ROI (`Origin S`).
+    2. [ToolEditorViewModel.Engine.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/ToolEditorViewModel.Engine.cs):
+       - Trong `AppendSelectedNodeOverlays`: Bỏ lệnh vẽ `TemplateRoi` (`Origin T`), chỉ hiển thị `SearchRoi` (`Origin S`).
+    3. Cửa sổ Train Template (`OriginTrainViewModel.cs`) vẫn quản lý, hiển thị và train `TemplateRoi` độc lập, chính xác 100%.
+  - **Kiểm Thử**: Toàn bộ unit tests và kiểm tra hiển thị canvas PASSED 100%.
+
 - **Dedicated Async Queue Cho ResultTransfer & Sửa Triệt Để Lỗi Xóa Node Trên Canvas (Task 263)**:
   - **Yêu Cầu & Bối Cảnh**:
     1. Khi bật PLC: Node `ResultTransfer` gửi pulse mất ~105ms (pulse 100ms), level mất ~40ms, làm dồn ứ Queue 16 nấc.
