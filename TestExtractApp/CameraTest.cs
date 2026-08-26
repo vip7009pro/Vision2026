@@ -827,4 +827,125 @@ public static class CameraTest
 
         Console.WriteLine("✅ ALL SYSTEM MONITOR (RAM & CPU) TESTS PASSED (100%)!\n");
     }
+
+    public static void TestInspectionLogAndSpcEngine()
+    {
+        Console.WriteLine("=== TESTING INSPECTION LOG, BACKGROUND WORKER & SPC / CPK ENGINE ===");
+
+        // 1. Test SpcEngine (n=32, remainder drop, Xbar, R, Cpk, Histogram)
+        var rnd = new Random(42);
+        var sampleValues = new List<double>();
+        for (int i = 0; i < 100; i++)
+        {
+            // Gaussian random around 45.0 with stddev 0.05
+            double u1 = 1.0 - rnd.NextDouble();
+            double u2 = 1.0 - rnd.NextDouble();
+            double randStdNormal = Math.Sqrt(-2.0 * Math.Log(u1)) * Math.Sin(2.0 * Math.PI * u2);
+            sampleValues.Add(45.0 + 0.05 * randStdNormal);
+        }
+
+        var spc32 = VisionInspectionApp.Application.Services.SpcEngine.Analyze(
+            "Dimension_Width",
+            sampleValues,
+            nominal: 45.0,
+            tolPlus: 0.2,
+            tolMinus: 0.2,
+            unit: "mm",
+            requestedSubgroupSizeN: 32);
+
+        if (spc32.SubgroupSizeN != 32 || spc32.SubgroupCountK != 3 || spc32.DroppedRemainder != 4)
+        {
+            throw new Exception($"SpcEngine failed n=32 partitioning! Expected n=32, k=3, rem=4, got n={spc32.SubgroupSizeN}, k={spc32.SubgroupCountK}, rem={spc32.DroppedRemainder}");
+        }
+        if (spc32.Cpk <= 0 || spc32.Cp <= 0 || spc32.OverallSigma <= 0)
+        {
+            throw new Exception($"Invalid SPC metrics: Cpk={spc32.Cpk}, Cp={spc32.Cp}, Sigma={spc32.OverallSigma}");
+        }
+        if (spc32.HistogramBins.Count < 10)
+        {
+            throw new Exception($"Invalid Histogram bins count: {spc32.HistogramBins.Count}");
+        }
+        Console.WriteLine($"  [1/4] SpcEngine n=32 Subgrouping & Shewhart Xbar-R & Cpk ({spc32.Cpk:F2}) & Histogram: PASSED");
+
+        // 2. Test Fallback to n=5 when samples < 32
+        var smallSamples = sampleValues.Take(23).ToList();
+        var spc5 = VisionInspectionApp.Application.Services.SpcEngine.Analyze(
+            "Dimension_Width",
+            smallSamples,
+            nominal: 45.0,
+            tolPlus: 0.2,
+            tolMinus: 0.2,
+            unit: "mm",
+            requestedSubgroupSizeN: 32);
+
+        if (spc5.SubgroupSizeN != 5 || spc5.SubgroupCountK != 4 || spc5.DroppedRemainder != 3)
+        {
+            throw new Exception($"SpcEngine failed n=5 fallback! Expected n=5, k=4, rem=3, got n={spc5.SubgroupSizeN}, k={spc5.SubgroupCountK}, rem={spc5.DroppedRemainder}");
+        }
+        Console.WriteLine($"  [2/4] SpcEngine Automatic n=5 Fallback (N=23 -> n=5, k=4, rem=3): PASSED");
+
+        // 3. Test InspectionLogService Background Channel Worker & Non-blocking Enqueue
+        using var logService = new VisionInspectionApp.Application.Services.InspectionLogService();
+        var sessionTask = logService.StartSessionAsync("TestProduct_GH68", "configs/test.job", "AL6061");
+        sessionTask.Wait();
+        var session = sessionTask.Result;
+
+        var dummyConfig = new VisionInspectionApp.Models.VisionConfig
+        {
+            ProductName = "TestProduct_GH68",
+            PixelsPerMm = 10.0
+        };
+
+        for (int i = 1; i <= 20; i++)
+        {
+            var res = new VisionInspectionApp.Application.InspectionResult { Pass = (i % 5 != 0) };
+            res.Distances.Add(new VisionInspectionApp.VisionEngine.DistanceCheckResult("Width", "P1", "P2", 45.0 + (i * 0.005), 45.0, 0.2, 0.2, res.Pass));
+            logService.EnqueueInspectionResult(res, dummyConfig, i);
+        }
+
+        // Đợi background channel worker hoàn tất xử lý
+        System.Threading.Thread.Sleep(200);
+
+        var endTask = logService.EndSessionAsync();
+        endTask.Wait();
+
+        var partsTask = logService.GetPartsForSessionAsync(session.Id);
+        partsTask.Wait();
+        var parts = partsTask.Result;
+
+        if (parts.Count != 20)
+        {
+            throw new Exception($"InspectionLogService parts count mismatch! Expected 20, got {parts.Count}");
+        }
+        Console.WriteLine($"  [3/4] InspectionLogService Background Channel Worker (20 parts recorded non-blocking): PASSED");
+
+        // 4. Test InspectionLogExporter (Excel XML, CSV, JSON)
+        string tempDir = Path.Combine(Path.GetTempPath(), "VisionLogTest_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDir);
+        try
+        {
+            string excelPath = Path.Combine(tempDir, "report.xls");
+            string csvPath = Path.Combine(tempDir, "report.csv");
+            string jsonPath = Path.Combine(tempDir, "report.json");
+
+            VisionInspectionApp.Application.Services.InspectionLogExporter.ExportToExcel(session, parts, spc32, excelPath);
+            VisionInspectionApp.Application.Services.InspectionLogExporter.ExportToCsv(session, parts, csvPath);
+            VisionInspectionApp.Application.Services.InspectionLogExporter.ExportToJson(session, parts, spc32, jsonPath);
+
+            if (!File.Exists(excelPath) || new FileInfo(excelPath).Length < 100)
+                throw new Exception("ExportToExcel failed or generated empty file!");
+            if (!File.Exists(csvPath) || new FileInfo(csvPath).Length < 50)
+                throw new Exception("ExportToCsv failed or generated empty file!");
+            if (!File.Exists(jsonPath) || new FileInfo(jsonPath).Length < 50)
+                throw new Exception("ExportToJson failed or generated empty file!");
+
+            Console.WriteLine("  [4/4] InspectionLogExporter (Excel XML 2003, CSV UTF-8, JSON): PASSED");
+        }
+        finally
+        {
+            try { Directory.Delete(tempDir, true); } catch { }
+        }
+
+        Console.WriteLine("✅ ALL INSPECTION LOG & SPC/CPK TESTS PASSED (100%)!\n");
+    }
 }

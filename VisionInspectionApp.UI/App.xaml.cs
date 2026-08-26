@@ -59,6 +59,8 @@ public partial class App : System.Windows.Application
                 // Camera & Batch Processing Services
                 services.AddSingleton<CameraService>();
                 services.AddSingleton<BatchProcessingService>();
+                services.AddSingleton<VisionInspectionApp.Application.Services.IInspectionLogService, VisionInspectionApp.Application.Services.InspectionLogService>();
+                services.AddTransient<InspectionLogViewModel>();
 
                 // PLC Framework
                 services.AddSingleton<Application.PLC.Services.IPlcManagerService, Application.PLC.Services.PlcManagerService>();

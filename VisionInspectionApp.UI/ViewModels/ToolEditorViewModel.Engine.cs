@@ -2691,6 +2691,9 @@ namespace VisionInspectionApp.UI.ViewModels
             _droppedContinuousFramesCount = 0;
             UpdateContinuousStats();
 
+            // Khởi tạo phiên kiểm tra mới trong Inspection Log Service (Background Worker)
+            _ = _inspectionLogService.StartSessionAsync(_config?.ProductName ?? "Sản phẩm Vision", CurrentJobFilePath, "-");
+
             bool isIndustrial = IsIndustrialCameraSource(sourceDef);
             bool isSimulator = CameraService.IsSimulator(sourceDef.CameraIndex, sourceDef.RtspUrl);
 
@@ -2999,6 +3002,9 @@ namespace VisionInspectionApp.UI.ViewModels
                     {
                         _ = Application.PLC.Services.PlcResultTransferRunner.ExecuteResultTransfersAsync(configCopy, inspectionResult, _plcManagerService);
                     }
+
+                    // Đẩy kết quả vào Background Logging Worker (Non-blocking queue)
+                    _inspectionLogService.EnqueueInspectionResult(inspectionResult, configCopy, ProcessedImageCount + 1);
                 }
                 else
                 {
@@ -3263,6 +3269,7 @@ namespace VisionInspectionApp.UI.ViewModels
         private void StopContinuousFlow()
         {
             IsRunningFolderFlow = false;
+            _ = _inspectionLogService.EndSessionAsync();
 
             if (_continuousFrameHandler != null)
             {

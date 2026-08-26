@@ -1059,6 +1059,20 @@ Lộ trình tích hợp tính năng Chụp ảnh từ camera và hỗ trợ các
         3. `ToolEditorView.xaml`: Bổ sung widget System Monitor nhỏ gọn đặt trước và cùng hàng với thanh Queue và Recent.
       - `Kiểm Thử`: Bổ sung `TestSystemMonitorAndNonBlockingRender` trong `CameraTest.cs`. Toàn bộ test suite PASSED 100%.
 
+- [x] Task 258: Xây dựng Giao diện Lịch sử kiểm tra (Inspection Log) & Cụm 4 biểu đồ phân tích thống kê năng lực quá trình SPC / CPK chuyên nghiệp với Background Logging Worker.
+      - `Mục Tiêu & Yêu Cầu`:
+        - Nút Log (📊) trong Tool Editor cạnh nút Bản đồ cuộn, mở cửa sổ mới hiển thị lịch sử kiểm tra.
+        - Cột trái: Danh sách các phiên kiểm tra (Thời gian bắt đầu/kết thúc, tên sản phẩm, tổng mẫu, OK, NG, Yield).
+        - Nửa trên bên phải: Bảng chi tiết từng con hàng và các phép đo (Tên phép đo, spec, min, max, result, judge).
+        - Nửa dưới bên phải: Bảng 4 biểu đồ SPC (Histogram, Xbar chart, R chart, Cpk trend) với cỡ mẫu $n$ tùy chỉnh (mặc định 32, tự hạ về 5 nếu thiếu mẫu, bỏ phần dư $N \pmod n$).
+        - Nút xuất file Excel (XML Spreadsheet 2003 chuẩn), CSV (UTF-8 BOM), JSON và nút bật/tắt CPK.
+        - Background Worker riêng biệt (Channel-based) ghi log không ảnh hưởng đến luồng kiểm tra Vision.
+      - `Giải Pháp Kỹ Thuật Đã Triển Khai`:
+        1. `VisionInspectionApp.Models`: Tạo `InspectionLogModels.cs` định nghĩa dữ liệu phiên, con hàng, phép đo và phân tích SPC.
+        2. `VisionInspectionApp.Application`: Tạo `SpcEngine.cs` (thuật toán Shewhart, Xbar-R, Cpk, Histogram Gauss), `IInspectionLogService.cs` / `InspectionLogService.cs` (Channel Worker ghi log ngầm), `InspectionLogExporter.cs` (xuất Excel/CSV/JSON).
+        3. `VisionInspectionApp.UI`: Tạo `InspectionLogViewModel.cs`, `InspectionLogWindow.xaml`, tích hợp nút `📊` và lệnh `OpenInspectionLogCommand` trong Tool Editor.
+      - `Kiểm Thử`: Bổ sung `TestInspectionLogAndSpcEngine` trong `CameraTest.cs`. Toàn bộ test suite PASSED 100%.
+
 
 
 

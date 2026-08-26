@@ -79,8 +79,13 @@
             </Button>
 
             <!-- 9. Bản Đồ Cuộn Icon Button -->
-            <Button Command="{Binding OpenRollDefectMapCommand}" Margin="0,0,8,0" Padding="8,4" Background="#7C3AED" Foreground="White" BorderThickness="0" ToolTip="Mở giao diện Bản đồ khuyết tật cuộn thời gian thực &amp; Xuất báo cáo (Roll Defect Map)">
+            <Button Command="{Binding OpenRollDefectMapCommand}" Margin="0,0,4,0" Padding="8,4" Background="#7C3AED" Foreground="White" BorderThickness="0" ToolTip="Mở giao diện Bản đồ khuyết tật cuộn thời gian thực &amp; Xuất báo cáo (Roll Defect Map)">
                 <TextBlock Text="📜" FontSize="13" VerticalAlignment="Center"/>
+            </Button>
+
+            <!-- 10. Nút Log Lịch Sử & Thống Kê SPC/CPK Icon Button -->
+            <Button Command="{Binding OpenInspectionLogCommand}" Margin="0,0,8,0" Padding="8,4" Background="#00897B" Foreground="White" BorderThickness="0" ToolTip="Mở giao diện Lịch sử kiểm tra chi tiết &amp; Biểu đồ thống kê SPC/CPK (Inspection Log &amp; SPC/CPK)">
+                <TextBlock Text="📊" FontSize="13" VerticalAlignment="Center"/>
             </Button>
 
             <!-- 1. Result Badge (Right-Aligned) -->

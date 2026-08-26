@@ -176,6 +176,7 @@ namespace VisionInspectionApp.UI.ViewModels
         private readonly Application.PLC.Services.PlcHeartbeatWatchdog _plcHeartbeatWatchdog;
         private readonly Application.PLC.Services.IndustrialHandshakeStateMachine _handshakeStateMachine;
         private readonly Application.DB.Services.IDbManagerService _dbManagerService;
+        private readonly Application.Services.IInspectionLogService _inspectionLogService;
         private readonly IServiceProvider? _serviceProvider;
         public UndoRedoManager UndoManager { get; }
         public IRelayCommand UndoCommand { get; }
@@ -185,6 +186,7 @@ namespace VisionInspectionApp.UI.ViewModels
         public Application.PLC.Services.ShiftRegisterTracker ShiftRegisterTracker => _shiftRegisterTracker;
         public Application.PLC.Services.PlcHeartbeatWatchdog PlcHeartbeatWatchdog => _plcHeartbeatWatchdog;
         public Application.PLC.Services.IndustrialHandshakeStateMachine HandshakeStateMachine => _handshakeStateMachine;
+        public Application.Services.IInspectionLogService InspectionLogService => _inspectionLogService;
 
         public ToolEditorViewModel()
         {
@@ -201,6 +203,7 @@ namespace VisionInspectionApp.UI.ViewModels
             _jobService = null!;
             _plcManagerService = null!;
             _dbManagerService = null!;
+            _inspectionLogService = new Application.Services.InspectionLogService();
             _motionSyncService = new Application.PLC.Services.PlcMotionSyncService(null);
             _shiftRegisterTracker = new Application.PLC.Services.ShiftRegisterTracker(null);
             _plcHeartbeatWatchdog = new Application.PLC.Services.PlcHeartbeatWatchdog(null);
@@ -230,6 +233,7 @@ namespace VisionInspectionApp.UI.ViewModels
             _inspectionService = inspectionService;
             _cameraService = cameraService;
             _plcManagerService = plcManagerService;
+            _inspectionLogService = serviceProvider?.GetService(typeof(Application.Services.IInspectionLogService)) as Application.Services.IInspectionLogService ?? new Application.Services.InspectionLogService();
             _motionSyncService = new Application.PLC.Services.PlcMotionSyncService(_plcManagerService);
             _shiftRegisterTracker = new Application.PLC.Services.ShiftRegisterTracker(_plcManagerService);
             _rollDefectManager.OnDefectRecorded += (_, defect) => _shiftRegisterTracker.EnqueueDefect(defect);
@@ -378,6 +382,7 @@ namespace VisionInspectionApp.UI.ViewModels
             OpenChessboardCalibrationDialogCommand = new RelayCommand(OpenChessboardCalibrationDialog);
             OpenProductAssignDialogCommand = new RelayCommand(OpenProductAssignDialog);
             OpenRollDefectMapCommand = new RelayCommand(OpenRollDefectMap);
+            OpenInspectionLogCommand = new RelayCommand(OpenInspectionLog);
             ColorDiff_TeachRefColorCommand = new RelayCommand(ColorDiff_TeachRefColor);
         }
     
@@ -1413,6 +1418,7 @@ namespace VisionInspectionApp.UI.ViewModels
 
         public IRelayCommand OpenProductAssignDialogCommand { get; }
         public IRelayCommand OpenRollDefectMapCommand { get; }
+        public IRelayCommand OpenInspectionLogCommand { get; }
 
         private void OpenProductAssignDialog()
         {
@@ -1441,6 +1447,23 @@ namespace VisionInspectionApp.UI.ViewModels
             catch (Exception ex)
             {
                 System.Windows.MessageBox.Show($"Lỗi mở hộp thoại Gán Mã Sản Phẩm: {ex.Message}", "Lỗi", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Error);
+            }
+        }
+
+        private void OpenInspectionLog()
+        {
+            try
+            {
+                var vm = new InspectionLogViewModel(_inspectionLogService);
+                var win = new Views.InspectionLogWindow(vm)
+                {
+                    Owner = System.Windows.Application.Current?.MainWindow
+                };
+                win.Show();
+            }
+            catch (Exception ex)
+            {
+                System.Windows.MessageBox.Show($"Lỗi mở Lịch sử kiểm tra & CPK: {ex.Message}", "Lỗi", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Error);
             }
         }
 

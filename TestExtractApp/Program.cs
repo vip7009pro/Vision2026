@@ -17,6 +17,7 @@ class Program
         CameraTest.TestZeroAllocationLiveViewAndMemoryOptimization();
         CameraTest.TestContinuousEngineHandshakeBypass();
         CameraTest.TestSystemMonitorAndNonBlockingRender();
+        CameraTest.TestInspectionLogAndSpcEngine();
         CaliperAndLineTest.RunTests();
         ColorDiffTest.RunTests();
         RecentJobsAndCalibrationTest.RunTests();

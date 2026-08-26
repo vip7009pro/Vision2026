@@ -49,6 +49,22 @@
 - Preview được phép tiếp tục khi Global Snapshot rỗng để lấy ảnh từ ImageSource.
 - Lưu template cho Origin, Point và SurfaceCompare hoạt động với nguồn ảnh ImageSource.
 
+- **Giao Diện Lịch Sử Kiểm Tra (Inspection Log) & Phân Tích Thống Kê Năng Lực Quá Trình SPC / CPK (Task 258)**:
+  - **Yêu Cầu & Bối Cảnh**:
+    - Trong tab Tool Editor, bên cạnh nút Bản đồ cuộn, bổ sung nút **Log** (📊) mở ra cửa sổ mới quản lý lịch sử kiểm tra và phân tích thống kê SPC/CPK.
+    - Cột trái: Danh sách các phiên kiểm tra (Session) gồm Thời gian, Tên sản phẩm, Bắt đầu - Kết thúc, Tổng số lượng, OK, NG, Tỉ lệ Yield (%).
+    - Nửa trên bên phải: Bảng chi tiết từng con hàng và các phép đo (Tên phép đo, Spec/Target, Min, Max, Result, Judge).
+    - Nửa dưới bên phải: Cụm 4 biểu đồ SPC gồm Histogram, Xbar chart, R chart, Cpk trend với cỡ mẫu $n$ tùy chỉnh (mặc định 32, tự hạ về 5 nếu thiếu mẫu, bỏ phần dư $N \pmod n$).
+    - Nút chức năng xuất Excel (.xls XML 2003 chuẩn), CSV (UTF-8 BOM), JSON (.json), nút bật/tắt CPK.
+    - Background Worker chuyên biệt (Channel-based) ghi log không ảnh hưởng đến tốc độ flow vision.
+  - **Giải Pháp Kỹ Thuật Đã Triển Khai**:
+    1. *Data Models ([InspectionLogModels.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.Models/InspectionLogModels.cs))*: Các model `InspectionSessionRecord`, `InspectionPartRecord`, `InspectionItemMeasurement`, `SpcAnalysisResult`, `HistogramBinData`, `SpcSubgroupData`.
+    2. *Động cơ SPC ([SpcEngine.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.Application/Services/SpcEngine.cs))*: Bảng tra hệ số Shewhart ($A_2, D_3, D_4, d_2$), tính toán $X\_CL, X\_UCL, X\_LCL, R\_CL, R\_UCL, R\_LCL, C_p, C_{pk}$, tạo dữ liệu Histogram bins và Normal Gauss curve.
+    3. *Dịch vụ Logging & Exporter ([InspectionLogService.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.Application/Services/InspectionLogService.cs) & [InspectionLogExporter.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.Application/Services/InspectionLogExporter.cs))*: Khởi tạo `Channel<InspectionPartEnvelope>` có giới hạn buffer, Background Task ghi đĩa/RAM cache độc lập; xuất báo cáo 3 định dạng Excel, CSV, JSON.
+    4. *Giao Diện ([InspectionLogWindow.xaml](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/Views/InspectionLogWindow.xaml) & [InspectionLogViewModel.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/InspectionLogViewModel.cs))*: Cửa sổ 2 cột co giãn GridSplitter, 4 biểu đồ WPF Canvas thuần siêu mượt, Header thông tin sản phẩm và ComboBox chọn phép đo.
+    5. *Tích Hợp Tool Editor*: Bổ sung nút `📊` cạnh nút Bản đồ cuộn trong `ToolEditorView.xaml` và kết nối lệnh `OpenInspectionLogCommand`.
+  - **Kiểm Thử**: Bổ sung `TestInspectionLogAndSpcEngine` trong `CameraTest.cs` kiểm tra phân tích $n=32$, fallback $n=5$, background channel worker và xuất file Excel/CSV/JSON. Toàn bộ test suite PASSED 100%.
+
 - **Tối Ưu Render Canvas Không Chặn Worker & Widget Giám Sát RAM / CPU Đa Lõi (Task 257)**:
   - **Yêu Cầu & Bối Cảnh**:
     - Trong Tool Editor, khi Run Continuous với camera Hikvision thật (soft trigger, interval=0, ~5.9 FPS), khi bật render canvas và show ROI thì queue tăng dần và đầy 16 nấc; khi tắt render canvas thì queue giảm về 0 nấc.

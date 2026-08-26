@@ -1,0 +1,597 @@
+<Window x:Class="VisionInspectionApp.UI.Views.InspectionLogWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:vm="clr-namespace:VisionInspectionApp.UI.ViewModels"
+        mc:Ignorable="d"
+        d:DataContext="{d:DesignInstance vm:InspectionLogViewModel}"
+        Title="📊 Lịch Sử Kiểm Tra &amp; Phân Tích Thống Kê SPC / CPK"
+        Height="820" Width="1360"
+        MinHeight="600" MinWidth="1000"
+        WindowStartupLocation="CenterScreen"
+        Background="{DynamicResource WindowBackgroundBrush}">
+
+    <Window.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVis" />
+    </Window.Resources>
+
+    <Grid Margin="10">
+        <Grid.RowDefinitions>
+            <!-- 0. Top Toolbar -->
+            <RowDefinition Height="Auto" />
+            <!-- 1. Main Content Splitter Area -->
+            <RowDefinition Height="*" />
+            <!-- 2. Bottom Status Bar -->
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <!-- ═══════════════════════════════════════════════════════════ -->
+        <!-- 0. TOP TOOLBAR                                              -->
+        <!-- ═══════════════════════════════════════════════════════════ -->
+        <Border Grid.Row="0" Background="{DynamicResource PanelBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="8" Padding="10,8" Margin="0,0,0,10">
+            <DockPanel LastChildFill="False">
+                <!-- Left Title & Actions -->
+                <StackPanel DockPanel.Dock="Left" Orientation="Horizontal" VerticalAlignment="Center">
+                    <TextBlock Text="📊" FontSize="18" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                    <TextBlock Text="Lịch Sử Kiểm Tra (Inspection Log)" FontSize="15" FontWeight="Bold" Foreground="{DynamicResource TextBrush}" VerticalAlignment="Center" Margin="0,0,16,0"/>
+
+                    <Button Command="{Binding LoadSessionsCommand}" Padding="10,5" Margin="0,0,6,0" Background="#3B82F6" Foreground="White" BorderThickness="0" ToolTip="Tải lại danh sách lịch sử">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="🔄" Margin="0,0,4,0"/>
+                            <TextBlock Text="Làm Mới" FontWeight="SemiBold"/>
+                        </StackPanel>
+                    </Button>
+
+                    <Button Command="{Binding DeleteSessionCommand}" Padding="10,5" Margin="0,0,6,0" Background="#EF4444" Foreground="White" BorderThickness="0" ToolTip="Xóa phiên đang chọn">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="🗑️" Margin="0,0,4,0"/>
+                            <TextBlock Text="Xóa Phiên" FontWeight="SemiBold"/>
+                        </StackPanel>
+                    </Button>
+                </StackPanel>
+
+                <!-- Right Action Buttons: Export & CPK Toggle -->
+                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+                    <!-- Export Excel -->
+                    <Button Command="{Binding ExportExcelCommand}" Padding="12,5" Margin="0,0,6,0" Background="#10B981" Foreground="White" BorderThickness="0" ToolTip="Xuất toàn bộ báo cáo phiên kiểm tra và SPC ra file Excel (.xls)">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="📥" Margin="0,0,4,0"/>
+                            <TextBlock Text="Save Excel" FontWeight="Bold"/>
+                        </StackPanel>
+                    </Button>
+
+                    <!-- Export CSV -->
+                    <Button Command="{Binding ExportCsvCommand}" Padding="12,5" Margin="0,0,6,0" Background="#059669" Foreground="White" BorderThickness="0" ToolTip="Xuất dữ liệu chi tiết ra file CSV (.csv)">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="📄" Margin="0,0,4,0"/>
+                            <TextBlock Text="Save CSV" FontWeight="Bold"/>
+                        </StackPanel>
+                    </Button>
+
+                    <!-- Export JSON -->
+                    <Button Command="{Binding ExportJsonCommand}" Padding="12,5" Margin="0,0,10,0" Background="#6366F1" Foreground="White" BorderThickness="0" ToolTip="Xuất dữ liệu có cấu trúc ra file JSON (.json)">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="📦" Margin="0,0,4,0"/>
+                            <TextBlock Text="Save JSON" FontWeight="Bold"/>
+                        </StackPanel>
+                    </Button>
+
+                    <!-- Toggle CPK Panel Button -->
+                    <ToggleButton IsChecked="{Binding IsCpkPanelVisible}" Padding="14,5" Background="#8B5CF6" Foreground="White" BorderThickness="0" ToolTip="Bật / Tắt hiển thị cụm 4 biểu đồ phân tích năng lực SPC / CPK">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="📈" Margin="0,0,4,0"/>
+                            <TextBlock Text="CPK Analysis" FontWeight="Bold"/>
+                        </StackPanel>
+                    </ToggleButton>
+                </StackPanel>
+            </DockPanel>
+        </Border>
+
+        <!-- ═══════════════════════════════════════════════════════════ -->
+        <!-- 1. MAIN CONTENT (Left: Sessions List | Right: Details & SPC) -->
+        <!-- ═══════════════════════════════════════════════════════════ -->
+        <Grid Grid.Row="1">
+            <Grid.ColumnDefinitions>
+                <!-- Cột Trái: Danh sách Lịch sử (Sessions) -->
+                <ColumnDefinition Width="460" MinWidth="320" />
+                <!-- Splitter Dọc -->
+                <ColumnDefinition Width="6" />
+                <!-- Cột Phải: Chi tiết từng con hàng & 4 Biểu đồ CPK -->
+                <ColumnDefinition Width="*" MinWidth="550" />
+            </Grid.ColumnDefinitions>
+
+            <!-- ─── CỘT TRÁI: LỊCH SỬ KIỂM TRA (SESSIONS LIST) ──────── -->
+            <Border Grid.Column="0" Background="{DynamicResource PanelBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="8" Padding="8">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
+
+                    <DockPanel Grid.Row="0" Margin="0,0,0,6">
+                        <TextBlock Text="📋 Danh Sách Phiên (Sessions)" FontWeight="Bold" FontSize="13.5" Foreground="{DynamicResource TextBrush}" VerticalAlignment="Center"/>
+                        <TextBlock Text="{Binding Sessions.Count, StringFormat='({0} phiên)'}" FontSize="12" Foreground="{DynamicResource TextMutedBrush}" VerticalAlignment="Center" Margin="6,0,0,0"/>
+                    </DockPanel>
+
+                    <!-- Search Box -->
+                    <Border Grid.Row="1" Background="{DynamicResource WindowBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="4" Padding="6,4" Margin="0,0,0,8">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="🔍" FontSize="11" VerticalAlignment="Center" Margin="0,0,4,0"/>
+                            <TextBox Grid.Column="1" Text="{Binding SearchSessionText, UpdateSourceTrigger=PropertyChanged}" BorderThickness="0" Background="Transparent" Foreground="{DynamicResource TextBrush}" VerticalAlignment="Center"/>
+                        </Grid>
+                    </Border>
+
+                    <!-- DataGrid Danh Sách Phiên -->
+                    <DataGrid Grid.Row="2"
+                              ItemsSource="{Binding Sessions}"
+                              SelectedItem="{Binding SelectedSession}"
+                              AutoGenerateColumns="False"
+                              IsReadOnly="True"
+                              SelectionMode="Single"
+                              CanUserAddRows="False"
+                              GridLinesVisibility="Horizontal"
+                              HorizontalGridLinesBrush="{DynamicResource BorderBrush}"
+                              Background="Transparent"
+                              BorderThickness="0"
+                              RowHeaderWidth="0">
+                        <DataGrid.Columns>
+                            <!-- Start Time -->
+                            <DataGridTextColumn Header="Bắt Đầu" Binding="{Binding FormattedStartTime}" Width="135" />
+                            
+                            <!-- Product Name -->
+                            <DataGridTemplateColumn Header="Sản Phẩm" Width="*">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <TextBlock Text="{Binding ProductName}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
+
+                            <!-- Total -->
+                            <DataGridTextColumn Header="Tổng" Binding="{Binding TotalParts}" Width="50" />
+
+                            <!-- OK -->
+                            <DataGridTemplateColumn Header="OK" Width="50">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <TextBlock Text="{Binding PassParts}" Foreground="#10B981" FontWeight="Bold"/>
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
+
+                            <!-- NG -->
+                            <DataGridTemplateColumn Header="NG" Width="45">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <TextBlock Text="{Binding FailParts}" Foreground="#EF4444" FontWeight="Bold"/>
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
+
+                            <!-- Yield -->
+                            <DataGridTemplateColumn Header="Yield" Width="60">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <TextBlock Text="{Binding FormattedYield}" FontWeight="Bold" Foreground="#3B82F6"/>
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </Grid>
+            </Border>
+
+            <!-- ─── SPLITTER DỌC ──────────────────────────────────────── -->
+            <GridSplitter Grid.Column="1" Width="6" HorizontalAlignment="Stretch" Background="Transparent" Cursor="SizeWE" />
+
+            <!-- ─── CỘT PHẢI: CHI TIẾT CON HÀNG & BẢNG CPK ───────────── -->
+            <Grid Grid.Column="2">
+                <Grid.RowDefinitions>
+                    <!-- Nửa trên: Bảng Chi Tiết Con Hàng & Phép Đo -->
+                    <RowDefinition Height="1.2*" MinHeight="180" />
+                    <!-- Splitter Ngang (chỉ hiện khi bật CPK) -->
+                    <RowDefinition Height="Auto" />
+                    <!-- Nửa dưới: Cụm 4 Biểu Đồ CPK -->
+                    <RowDefinition Height="{Binding IsCpkPanelVisible, Converter={StaticResource BoolToVis}, FallbackValue='*'}" MinHeight="260" />
+                </Grid.RowDefinitions>
+
+                <!-- ═══════════════════════════════════════════════════════ -->
+                <!-- NỬA TRÊN: CHI TIẾT TỪNG CON HÀNG CỦA TẤT CẢ HẠNG MỤC -->
+                <!-- ═══════════════════════════════════════════════════════ -->
+                <Border Grid.Row="0" Background="{DynamicResource PanelBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="8" Padding="8">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                        </Grid.RowDefinitions>
+
+                        <!-- Header & Filters -->
+                        <DockPanel Grid.Row="0" Margin="0,0,0,6">
+                            <StackPanel DockPanel.Dock="Left" Orientation="Horizontal" VerticalAlignment="Center">
+                                <TextBlock Text="🔍 Kết Quả Kiểm Tra Chi Tiết Con Hàng" FontWeight="Bold" FontSize="13.5" Foreground="{DynamicResource TextBrush}" VerticalAlignment="Center"/>
+                                <TextBlock Text="{Binding Parts.Count, StringFormat='({0} con hàng)'}" FontSize="12" Foreground="{DynamicResource TextMutedBrush}" VerticalAlignment="Center" Margin="6,0,0,0"/>
+                            </StackPanel>
+
+                            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+                                <CheckBox IsChecked="{Binding ShowOnlyNg}" Content="Chỉ xem lỗi (NG)" FontWeight="SemiBold" Foreground="#EF4444" VerticalAlignment="Center" Margin="0,0,12,0"/>
+
+                                <Border Background="{DynamicResource WindowBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="4" Padding="6,2" Width="180">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Text="🔍" FontSize="10" VerticalAlignment="Center" Margin="0,0,4,0"/>
+                                        <TextBox Grid.Column="1" Text="{Binding SearchItemText, UpdateSourceTrigger=PropertyChanged}" BorderThickness="0" Background="Transparent" Foreground="{DynamicResource TextBrush}" VerticalAlignment="Center"/>
+                                    </Grid>
+                                </Border>
+                            </StackPanel>
+                        </DockPanel>
+
+                        <!-- Split List Parts và Bảng Chi Tiết Phép Đo của con hàng được chọn -->
+                        <Grid Grid.Row="1">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="220" MinWidth="160" />
+                                <ColumnDefinition Width="4" />
+                                <ColumnDefinition Width="*" MinWidth="300" />
+                            </Grid.ColumnDefinitions>
+
+                            <!-- Danh Sách Con Hàng (#) -->
+                            <DataGrid Grid.Column="0"
+                                      ItemsSource="{Binding Parts}"
+                                      SelectedItem="{Binding SelectedPart}"
+                                      AutoGenerateColumns="False"
+                                      IsReadOnly="True"
+                                      SelectionMode="Single"
+                                      CanUserAddRows="False"
+                                      GridLinesVisibility="Horizontal"
+                                      HorizontalGridLinesBrush="{DynamicResource BorderBrush}"
+                                      Background="Transparent"
+                                      BorderThickness="0"
+                                      RowHeaderWidth="0">
+                                <DataGrid.Columns>
+                                    <DataGridTextColumn Header="#" Binding="{Binding PartIndex}" Width="45" />
+                                    <DataGridTextColumn Header="Thời Gian" Binding="{Binding FormattedTimestamp}" Width="*" />
+                                    <DataGridTemplateColumn Header="Kết Quả" Width="60">
+                                        <DataGridTemplateColumn.CellTemplate>
+                                            <DataTemplate>
+                                                <Border CornerRadius="4" Padding="6,2" HorizontalAlignment="Center">
+                                                    <Border.Style>
+                                                        <Style TargetType="Border">
+                                                            <Setter Property="Background" Value="#D1FAE5"/>
+                                                            <Style.Triggers>
+                                                                <DataTrigger Binding="{Binding Pass}" Value="False">
+                                                                    <Setter Property="Background" Value="#FEE2E2"/>
+                                                                </DataTrigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </Border.Style>
+                                                    <TextBlock Text="{Binding StatusText}" FontWeight="Bold" FontSize="11">
+                                                        <TextBlock.Style>
+                                                            <Style TargetType="TextBlock">
+                                                                <Setter Property="Foreground" Value="#047857"/>
+                                                                <Style.Triggers>
+                                                                    <DataTrigger Binding="{Binding Pass}" Value="False">
+                                                                        <Setter Property="Foreground" Value="#B91C1C"/>
+                                                                    </DataTrigger>
+                                                                </Style.Triggers>
+                                                            </Style>
+                                                        </TextBlock.Style>
+                                                    </TextBlock>
+                                                </Border>
+                                            </DataTemplate>
+                                        </DataGridTemplateColumn.CellTemplate>
+                                    </DataGridTemplateColumn>
+                                </DataGrid.Columns>
+                            </DataGrid>
+
+                            <GridSplitter Grid.Column="1" Width="4" HorizontalAlignment="Stretch" Background="Transparent" Cursor="SizeWE"/>
+
+                            <!-- Bảng Chi Tiết Các Phép Đo của con hàng đang chọn -->
+                            <DataGrid Grid.Column="2"
+                                      ItemsSource="{Binding Measurements}"
+                                      AutoGenerateColumns="False"
+                                      IsReadOnly="True"
+                                      CanUserAddRows="False"
+                                      GridLinesVisibility="Horizontal"
+                                      HorizontalGridLinesBrush="{DynamicResource BorderBrush}"
+                                      Background="Transparent"
+                                      BorderThickness="0"
+                                      RowHeaderWidth="0">
+                                <DataGrid.Columns>
+                                    <DataGridTextColumn Header="Tên Phép Đo" Binding="{Binding ItemName}" Width="130" FontWeight="SemiBold"/>
+                                    <DataGridTextColumn Header="Loại Tool" Binding="{Binding ToolType}" Width="95" Foreground="{DynamicResource TextMutedBrush}"/>
+                                    <DataGridTextColumn Header="Spec (Target)" Binding="{Binding FormattedNominal}" Width="85" />
+                                    <DataGridTextColumn Header="Min (LSL)" Binding="{Binding FormattedLsl}" Width="80" Foreground="#F59E0B"/>
+                                    <DataGridTextColumn Header="Max (USL)" Binding="{Binding FormattedUsl}" Width="80" Foreground="#F59E0B"/>
+                                    <DataGridTextColumn Header="Result Đo" Binding="{Binding FormattedValue}" Width="90" FontWeight="Bold"/>
+                                    <DataGridTextColumn Header="Đơn Vị" Binding="{Binding Unit}" Width="55" Foreground="{DynamicResource TextMutedBrush}"/>
+                                    <DataGridTemplateColumn Header="Judge" Width="65">
+                                        <DataGridTemplateColumn.CellTemplate>
+                                            <DataTemplate>
+                                                <Border CornerRadius="4" Padding="6,2" HorizontalAlignment="Center">
+                                                    <Border.Style>
+                                                        <Style TargetType="Border">
+                                                            <Setter Property="Background" Value="#D1FAE5"/>
+                                                            <Style.Triggers>
+                                                                <DataTrigger Binding="{Binding Pass}" Value="False">
+                                                                    <Setter Property="Background" Value="#FEE2E2"/>
+                                                                </DataTrigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </Border.Style>
+                                                    <TextBlock Text="{Binding Judge}" FontWeight="Bold" FontSize="11">
+                                                        <TextBlock.Style>
+                                                            <Style TargetType="TextBlock">
+                                                                <Setter Property="Foreground" Value="#047857"/>
+                                                                <Style.Triggers>
+                                                                    <DataTrigger Binding="{Binding Pass}" Value="False">
+                                                                        <Setter Property="Foreground" Value="#B91C1C"/>
+                                                                    </DataTrigger>
+                                                                </Style.Triggers>
+                                                            </Style>
+                                                        </TextBlock.Style>
+                                                    </TextBlock>
+                                                </Border>
+                                            </DataTemplate>
+                                        </DataGridTemplateColumn.CellTemplate>
+                                    </DataGridTemplateColumn>
+                                </DataGrid.Columns>
+                            </DataGrid>
+                        </Grid>
+                    </Grid>
+                </Border>
+
+                <!-- ─── SPLITTER NGANG ────────────────────────────────── -->
+                <GridSplitter Grid.Row="1" Height="6" HorizontalAlignment="Stretch" Background="Transparent" Cursor="SizeNS" Visibility="{Binding IsCpkPanelVisible, Converter={StaticResource BoolToVis}}"/>
+
+                <!-- ═══════════════════════════════════════════════════════ -->
+                <!-- NỬA DƯỚI: PANEL CPK GỒM 4 BIỂU ĐỒ TRỰC QUAN            -->
+                <!-- ═══════════════════════════════════════════════════════ -->
+                <Border Grid.Row="2" Background="{DynamicResource PanelBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="8" Padding="6" Visibility="{Binding IsCpkPanelVisible, Converter={StaticResource BoolToVis}}">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <!-- 0. Header Thông Tin Xanh Nhạt (Giống ảnh đính kèm) -->
+                            <RowDefinition Height="Auto" />
+                            <!-- 1. Cụm 4 Biểu Đồ (Histogram, Xbar, R chart, CPK trend) -->
+                            <RowDefinition Height="*" />
+                        </Grid.RowDefinitions>
+
+                        <!-- Header Thông Tin Xanh Lá Nhạt (Banner phong cách nhà máy) -->
+                        <Border Grid.Row="0" Background="#99F6E4" BorderBrush="#0D9488" BorderThickness="1" CornerRadius="4" Padding="10,4" Margin="0,0,0,6">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+
+                                <!-- Sản phẩm & Vật liệu -->
+                                <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                                    <TextBlock Text="{Binding SpcHeaderProduct}" FontWeight="Bold" FontSize="11.5" Foreground="#115E59" Margin="0,0,16,0"/>
+                                    <TextBlock Text="|" Foreground="#0D9488" Margin="0,0,16,0"/>
+                                    <TextBlock Text="{Binding SpcHeaderMaterial}" FontWeight="SemiBold" FontSize="11.5" Foreground="#115E59"/>
+                                </StackPanel>
+
+                                <!-- Hạng mục test ComboBox -->
+                                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,16,0">
+                                    <TextBlock Text="Hạng mục test: " FontWeight="Bold" FontSize="11.5" Foreground="#115E59" VerticalAlignment="Center"/>
+                                    <ComboBox ItemsSource="{Binding AvailableMeasurements}" SelectedItem="{Binding SelectedMeasurement}" Width="150" Height="24" FontSize="11" FontWeight="Bold" Margin="4,0,0,0" VerticalAlignment="Center"/>
+                                </StackPanel>
+
+                                <!-- Cỡ mẫu n -->
+                                <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,16,0">
+                                    <TextBlock Text="Cỡ mẫu (n): " FontWeight="Bold" FontSize="11.5" Foreground="#115E59" VerticalAlignment="Center"/>
+                                    <TextBox Text="{Binding SubgroupSizeN, UpdateSourceTrigger=PropertyChanged}" Width="40" Height="22" FontSize="11" FontWeight="Bold" HorizontalContentAlignment="Center" VerticalAlignment="Center"/>
+                                </StackPanel>
+
+                                <!-- Chỉ số CPK tóm tắt -->
+                                <StackPanel Grid.Column="3" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,16,0">
+                                    <TextBlock Text="Cpk: " FontWeight="Bold" FontSize="12" Foreground="#115E59"/>
+                                    <TextBlock Text="{Binding SpcResult.Cpk, StringFormat='{}{0:F2}'}" FontWeight="Bold" FontSize="13" Foreground="#047857"/>
+                                </StackPanel>
+
+                                <!-- Total Rows -->
+                                <TextBlock Grid.Column="4" Text="{Binding SpcHeaderTotalRows}" FontWeight="SemiBold" FontSize="11" Foreground="#134E4A" VerticalAlignment="Center"/>
+                            </Grid>
+                        </Border>
+
+                        <!-- ═══════════════════════════════════════════════ -->
+                        <!-- CỤM 4 BIỂU ĐỒ (HISTOGRAM, XBAR, R, CPK TREND)    -->
+                        <!-- ═══════════════════════════════════════════════ -->
+                        <Grid Grid.Row="1">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+
+                            <!-- ─── 1. HISTOGRAM CHART ────────────────── -->
+                            <Border Grid.Column="0" Background="#E0F2FE" BorderBrush="#BAE6FD" BorderThickness="1" CornerRadius="4" Margin="2" Padding="4">
+                                <Grid>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="*"/>
+                                    </Grid.RowDefinitions>
+                                    <TextBlock Grid.Row="0" Text="HISTOGRAM CHART" FontWeight="Bold" FontSize="11" Foreground="#0369A1" HorizontalAlignment="Center"/>
+                                    <TextBlock Grid.Row="1" Text="◆ CNT" FontSize="9.5" Foreground="#059669" HorizontalAlignment="Center" Margin="0,1,0,2"/>
+
+                                    <Canvas Grid.Row="2" ClipToBounds="True" Background="#E0F2FE">
+                                        <!-- Y Axis Label -->
+                                        <TextBlock Text="{Binding HistYMaxLabel}" FontSize="9" Foreground="#64748B" Canvas.Left="2" Canvas.Top="2"/>
+                                        <TextBlock Text="0" FontSize="9" Foreground="#64748B" Canvas.Left="2" Canvas.Bottom="2"/>
+
+                                        <!-- Bars -->
+                                        <ItemsControl ItemsSource="{Binding HistogramBars}">
+                                            <ItemsControl.ItemsPanel>
+                                                <ItemsPanelTemplate>
+                                                    <Canvas />
+                                                </ItemsPanelTemplate>
+                                            </ItemsControl.ItemsPanel>
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate>
+                                                    <Rectangle Width="{Binding Width}" Height="{Binding Height}" Fill="{Binding FillBrush}" Stroke="#2563EB" StrokeThickness="0.5" ToolTip="{Binding RangeText}">
+                                                        <Rectangle.RenderTransform>
+                                                            <TranslateTransform X="{Binding X}" Y="{Binding Y}"/>
+                                                        </Rectangle.RenderTransform>
+                                                    </Rectangle>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+
+                                        <!-- Gauss Bell Curve -->
+                                        <Polyline Points="{Binding HistogramGaussPoints}" Stroke="#EF4444" StrokeThickness="1.5"/>
+
+                                        <!-- X Axis Labels -->
+                                        <TextBlock Text="{Binding HistXMinLabel}" FontSize="8.5" Foreground="#64748B" Canvas.Left="20" Canvas.Bottom="1"/>
+                                        <TextBlock Text="{Binding HistXMaxLabel}" FontSize="8.5" Foreground="#64748B" Canvas.Right="4" Canvas.Bottom="1"/>
+                                    </Canvas>
+                                </Grid>
+                            </Border>
+
+                            <!-- ─── 2. XBAR CHART ────────────────────── -->
+                            <Border Grid.Column="1" Background="#E0F2FE" BorderBrush="#BAE6FD" BorderThickness="1" CornerRadius="4" Margin="2" Padding="4">
+                                <Grid>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="*"/>
+                                    </Grid.RowDefinitions>
+                                    <TextBlock Grid.Row="0" Text="{Binding SpcResult.SubgroupSizeN, StringFormat='XBAR CHART (n={0})'}" FontWeight="Bold" FontSize="11" Foreground="#0369A1" HorizontalAlignment="Center"/>
+                                    <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,1,0,2">
+                                        <TextBlock Text="◆ AVG " FontSize="9" Foreground="#059669"/>
+                                        <TextBlock Text="◆ UCL " FontSize="9" Foreground="#EF4444"/>
+                                        <TextBlock Text="◆ LCL " FontSize="9" Foreground="#EF4444"/>
+                                        <TextBlock Text="◆ CL" FontSize="9" Foreground="#2563EB"/>
+                                    </StackPanel>
+
+                                    <Canvas Grid.Row="2" ClipToBounds="True" Background="#E0F2FE">
+                                        <!-- Y Axis Labels -->
+                                        <TextBlock Text="{Binding XbarYMaxLabel}" FontSize="9" Foreground="#64748B" Canvas.Left="2" Canvas.Top="2"/>
+                                        <TextBlock Text="{Binding XbarYMinLabel}" FontSize="9" Foreground="#64748B" Canvas.Left="2" Canvas.Bottom="2"/>
+
+                                        <!-- Grid / Limit lines -->
+                                        <!-- X_CL (Blue Dash) -->
+                                        <Line X1="20" Y1="{Binding XbarClY}" X2="240" Y2="{Binding XbarClY}" Stroke="#2563EB" StrokeDashArray="3 2" StrokeThickness="1"/>
+                                        <!-- X_UCL (Red Dash) -->
+                                        <Line X1="20" Y1="{Binding XbarUclY}" X2="240" Y2="{Binding XbarUclY}" Stroke="#EF4444" StrokeDashArray="3 2" StrokeThickness="1"/>
+                                        <!-- X_LCL (Red Dash) -->
+                                        <Line X1="20" Y1="{Binding XbarLclY}" X2="240" Y2="{Binding XbarLclY}" Stroke="#EF4444" StrokeDashArray="3 2" StrokeThickness="1"/>
+
+                                        <!-- Main AVG Line -->
+                                        <Polyline Points="{Binding XbarPoints}" Stroke="#059669" StrokeThickness="1.5">
+                                            <Polyline.RenderTransform>
+                                                <TranslateTransform X="20" Y="0"/>
+                                            </Polyline.RenderTransform>
+                                        </Polyline>
+
+                                        <!-- X Axis Label -->
+                                        <TextBlock Text="{Binding XbarXMaxLabel, StringFormat='1 .. {0}'}" FontSize="8.5" Foreground="#64748B" Canvas.Left="25" Canvas.Bottom="1"/>
+                                    </Canvas>
+                                </Grid>
+                            </Border>
+
+                            <!-- ─── 3. R CHART ───────────────────────── -->
+                            <Border Grid.Column="2" Background="#E0F2FE" BorderBrush="#BAE6FD" BorderThickness="1" CornerRadius="4" Margin="2" Padding="4">
+                                <Grid>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="*"/>
+                                    </Grid.RowDefinitions>
+                                    <TextBlock Grid.Row="0" Text="{Binding SpcResult.SubgroupSizeN, StringFormat='R CHART (n={0})'}" FontWeight="Bold" FontSize="11" Foreground="#0369A1" HorizontalAlignment="Center"/>
+                                    <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,1,0,2">
+                                        <TextBlock Text="◆ R_VAL " FontSize="9" Foreground="#059669"/>
+                                        <TextBlock Text="◆ R_UCL " FontSize="9" Foreground="#EF4444"/>
+                                        <TextBlock Text="◆ R_LCL " FontSize="9" Foreground="#EF4444"/>
+                                        <TextBlock Text="◆ R_CL" FontSize="9" Foreground="#2563EB"/>
+                                    </StackPanel>
+
+                                    <Canvas Grid.Row="2" ClipToBounds="True" Background="#E0F2FE">
+                                        <!-- Y Axis Labels -->
+                                        <TextBlock Text="{Binding RYMaxLabel}" FontSize="9" Foreground="#64748B" Canvas.Left="2" Canvas.Top="2"/>
+                                        <TextBlock Text="{Binding RYMinLabel}" FontSize="9" Foreground="#64748B" Canvas.Left="2" Canvas.Bottom="2"/>
+
+                                        <!-- Limit lines -->
+                                        <Line X1="20" Y1="{Binding RClY}" X2="240" Y2="{Binding RClY}" Stroke="#2563EB" StrokeDashArray="3 2" StrokeThickness="1"/>
+                                        <Line X1="20" Y1="{Binding RUclY}" X2="240" Y2="{Binding RUclY}" Stroke="#EF4444" StrokeDashArray="3 2" StrokeThickness="1"/>
+                                        <Line X1="20" Y1="{Binding RLclY}" X2="240" Y2="{Binding RLclY}" Stroke="#EF4444" StrokeDashArray="3 2" StrokeThickness="1"/>
+
+                                        <!-- Main R Value Line -->
+                                        <Polyline Points="{Binding RChartPoints}" Stroke="#059669" StrokeThickness="1.5">
+                                            <Polyline.RenderTransform>
+                                                <TranslateTransform X="20" Y="0"/>
+                                            </Polyline.RenderTransform>
+                                        </Polyline>
+
+                                        <!-- X Axis Label -->
+                                        <TextBlock Text="{Binding RXMaxLabel, StringFormat='1 .. {0}'}" FontSize="8.5" Foreground="#64748B" Canvas.Left="25" Canvas.Bottom="1"/>
+                                    </Canvas>
+                                </Grid>
+                            </Border>
+
+                            <!-- ─── 4. CPK TREND CHART ───────────────── -->
+                            <Border Grid.Column="3" Background="#E0F2FE" BorderBrush="#BAE6FD" BorderThickness="1" CornerRadius="4" Margin="2" Padding="4">
+                                <Grid>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="*"/>
+                                    </Grid.RowDefinitions>
+                                    <TextBlock Grid.Row="0" Text="{Binding SpcResult.SubgroupSizeN, StringFormat='CPK TREND (n={0})'}" FontWeight="Bold" FontSize="11" Foreground="#0369A1" HorizontalAlignment="Center"/>
+                                    <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,1,0,2">
+                                        <TextBlock Text="◆ CPK " FontSize="9" Foreground="#059669"/>
+                                        <TextBlock Text="◆ CPK1 (1.33) " FontSize="9" Foreground="#EF4444"/>
+                                        <TextBlock Text="◆ CPK2 (1.67)" FontSize="9" Foreground="#EF4444"/>
+                                    </StackPanel>
+
+                                    <Canvas Grid.Row="2" ClipToBounds="True" Background="#E0F2FE">
+                                        <!-- Y Axis Labels -->
+                                        <TextBlock Text="{Binding CpkYMaxLabel}" FontSize="9" Foreground="#64748B" Canvas.Left="2" Canvas.Top="2"/>
+                                        <TextBlock Text="{Binding CpkYMinLabel}" FontSize="9" Foreground="#64748B" Canvas.Left="2" Canvas.Bottom="2"/>
+
+                                        <!-- Warning Threshold Lines -->
+                                        <!-- CPK1 = 1.33 -->
+                                        <Line X1="20" Y1="{Binding Cpk133Y}" X2="240" Y2="{Binding Cpk133Y}" Stroke="#EF4444" StrokeDashArray="3 2" StrokeThickness="1"/>
+                                        <!-- CPK2 = 1.67 -->
+                                        <Line X1="20" Y1="{Binding Cpk167Y}" X2="240" Y2="{Binding Cpk167Y}" Stroke="#EF4444" StrokeDashArray="3 2" StrokeThickness="1"/>
+
+                                        <!-- Main Cpk Trend Line -->
+                                        <Polyline Points="{Binding CpkTrendPoints}" Stroke="#059669" StrokeThickness="1.8">
+                                            <Polyline.RenderTransform>
+                                                <TranslateTransform X="20" Y="0"/>
+                                            </Polyline.RenderTransform>
+                                        </Polyline>
+
+                                        <!-- X Axis Label -->
+                                        <TextBlock Text="{Binding CpkXMaxLabel, StringFormat='1 .. {0}'}" FontSize="8.5" Foreground="#64748B" Canvas.Left="25" Canvas.Bottom="1"/>
+                                    </Canvas>
+                                </Grid>
+                            </Border>
+                        </Grid>
+                    </Grid>
+                </Border>
+            </Grid>
+        </Grid>
+
+        <!-- ═══════════════════════════════════════════════════════════ -->
+        <!-- 2. STATUS BAR                                               -->
+        <!-- ═══════════════════════════════════════════════════════════ -->
+        <Border Grid.Row="2" Background="{DynamicResource PanelBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="6" Padding="8,4" Margin="0,8,0,0">
+            <DockPanel LastChildFill="True">
+                <TextBlock DockPanel.Dock="Right" Text="{Binding SpcResult.Assessment}" FontWeight="Bold" Foreground="#10B981" VerticalAlignment="Center"/>
+                <TextBlock Text="{Binding StatusMessage}" FontSize="11.5" Foreground="{DynamicResource TextMutedBrush}" VerticalAlignment="Center"/>
+            </DockPanel>
+        </Border>
+    </Grid>
+</Window>
