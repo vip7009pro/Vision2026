@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using OpenCvSharp;
 using VisionInspectionApp.Application.PLC.Services;
 using VisionInspectionApp.Models;
+using VisionInspectionApp.UI.ViewModels;
 
 namespace TestExtractApp;
 
@@ -244,10 +245,12 @@ public static class ContinuousPipelineTest
             Assert("Test 6.4: Max Capacity Capped at 20", vm.RecentPartsTotalCount == 20 && vm.RecentPartsOkCount == 20 && vm.RecentPartsNgCount == 0);
             Assert("Test 6.5: 100% OK Yield Rate", vm.RecentPartsYieldText == "100.0%");
 
-            // 4. Thêm 1 sản phẩm NG mới nhất -> Con cũ nhất bị đẩy ra, NG mới nhất vào cuối
+            // 4. Thêm 1 sản phẩm NG mới nhất -> Con cũ nhất bị đẩy ra, NG mới nhất vào đầu (Slot 0)
             vm.PushRecentPartInspectionResult(false);
             Assert("Test 6.6: FIFO Stream Updated (19 OK, 1 NG)", vm.RecentPartsTotalCount == 20 && vm.RecentPartsOkCount == 19 && vm.RecentPartsNgCount == 1);
             Assert("Test 6.7: Yield Rate == 95.0%", vm.RecentPartsYieldText == "95.0%");
+            Assert("Test 6.8: Slot 0 is Newest NG", vm.RecentPartSlot0Bg == ToolEditorViewModel.NgSlotBrush);
+            Assert("Test 6.9: Slot 1 is Older OK", vm.RecentPartSlot1Bg == ToolEditorViewModel.OkSlotBrush);
         }
 
         Console.WriteLine("====================================================");

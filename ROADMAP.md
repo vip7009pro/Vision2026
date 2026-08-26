@@ -1090,6 +1090,17 @@ Lộ trình tích hợp tính năng Chụp ảnh từ camera và hỗ trợ các
            - Đồng bộ `ToolGraph.Nodes` và `_config` ngay lập tức để ngăn ngừa `SyncToolGraphToConfig()` xóa nhầm cấu hình của node.
       - `Kiểm Thử`: Bổ sung `TestFlowCanvasNodeRenameAndDownstreamReferences` trong `CameraTest.cs`. Toàn bộ test suite PASSED 100%.
 
+- [x] Task 260: Đổi chiều hiển thị thanh 20 nấc Recent con hàng trong Tool Editor từ Cũ -> Mới thành Mới nhất -> Cũ nhất (từ trái sang phải).
+      - `Mục Tiêu & Yêu Cầu`:
+        - Con hàng vừa kiểm tra xong (mới nhất) sẽ hiển thị ở nấc đầu tiên bên trái ngoài cùng (Slot 0).
+        - Các con hàng cũ hơn sẽ dịch chuyển dần sang các nấc bên phải (Slot 1, Slot 2... Slot 19).
+        - Cập nhật ToolTip giải thích rõ: `• Chiều luồng: Trái (Mới nhất) ➔ Phải (Cũ dần)`.
+      - `Giải Pháp Kỹ Thuật Đã Triển Khai`:
+        1. `ToolEditorViewModel.Engine.cs`: Sửa `PushRecentPartInspectionResult(bool isOk)` dùng `_recentPartsHistory.Insert(0, isOk)` và `RemoveAt(20)`. Cập nhật ToolTipText.
+        2. `ToolEditorViewModel.Engine.cs`: Chuyển `EmptySlotBrush`, `OkSlotBrush`, `NgSlotBrush` sang `public static readonly` phục vụ unit test.
+        3. `ContinuousPipelineTest.cs`: Bổ sung assertions kiểm tra Slot 0 = Mới nhất (NG) và Slot 1 = Cũ hơn (OK).
+      - `Kiểm Thử`: Chạy toàn bộ test suite PASSED 100%.
+
 
 
 

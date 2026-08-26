@@ -1896,12 +1896,12 @@ namespace VisionInspectionApp.UI.ViewModels
         private static readonly SolidColorBrush RubyBrush = new SolidColorBrush(Color.FromRgb(239, 68, 68));
         private static readonly SolidColorBrush RubyBorder = new SolidColorBrush(Color.FromArgb(90, 239, 68, 68));
 
-        private static readonly SolidColorBrush EmptySlotBrush = new SolidColorBrush(Color.FromArgb(24, 128, 128, 128));
-        private static readonly SolidColorBrush EmptySlotBorder = new SolidColorBrush(Color.FromArgb(48, 128, 128, 128));
-        private static readonly SolidColorBrush OkSlotBrush = new SolidColorBrush(Color.FromRgb(16, 185, 129));
-        private static readonly SolidColorBrush OkSlotBorder = new SolidColorBrush(Color.FromRgb(5, 150, 105));
-        private static readonly SolidColorBrush NgSlotBrush = new SolidColorBrush(Color.FromRgb(239, 68, 68));
-        private static readonly SolidColorBrush NgSlotBorder = new SolidColorBrush(Color.FromRgb(220, 38, 38));
+        public static readonly SolidColorBrush EmptySlotBrush = new SolidColorBrush(Color.FromArgb(24, 128, 128, 128));
+        public static readonly SolidColorBrush EmptySlotBorder = new SolidColorBrush(Color.FromArgb(48, 128, 128, 128));
+        public static readonly SolidColorBrush OkSlotBrush = new SolidColorBrush(Color.FromRgb(16, 185, 129));
+        public static readonly SolidColorBrush OkSlotBorder = new SolidColorBrush(Color.FromRgb(5, 150, 105));
+        public static readonly SolidColorBrush NgSlotBrush = new SolidColorBrush(Color.FromRgb(239, 68, 68));
+        public static readonly SolidColorBrush NgSlotBorder = new SolidColorBrush(Color.FromRgb(220, 38, 38));
 
         static ToolEditorViewModel()
         {
@@ -2026,7 +2026,7 @@ namespace VisionInspectionApp.UI.ViewModels
         [ObservableProperty] private int _recentPartsNgCount = 0;
         [ObservableProperty] private int _recentPartsTotalCount = 0;
         [ObservableProperty] private Brush _recentPartsBorderBrush = EmeraldBorder;
-        [ObservableProperty] private string _recentPartsToolTipText = "🎯 20 Con Hàng Gần Nhất:\n• Chưa có sản phẩm kiểm tra\n• Chạy xuôi: Trái (Cũ) ➔ Phải (Mới)";
+        [ObservableProperty] private string _recentPartsToolTipText = "🎯 20 Con Hàng Gần Nhất:\n• Chưa có sản phẩm kiểm tra\n• Chiều luồng: Trái (Mới nhất) ➔ Phải (Cũ dần)";
 
         // 20 Slot Brushes cho 20 nấc con hàng (Background & Border)
         [ObservableProperty] private Brush _recentPartSlot0Bg = EmptySlotBrush;
@@ -2074,11 +2074,11 @@ namespace VisionInspectionApp.UI.ViewModels
         {
             lock (_recentPartsLock)
             {
-                if (_recentPartsHistory.Count >= 20)
+                _recentPartsHistory.Insert(0, isOk); // Thêm con hàng mới nhất vào đầu (Mới nhất ở bên trái ngoài cùng Slot 0)
+                if (_recentPartsHistory.Count > 20)
                 {
-                    _recentPartsHistory.RemoveAt(0); // Bỏ con hàng cũ nhất ở đầu
+                    _recentPartsHistory.RemoveAt(20); // Bỏ con hàng cũ nhất ở cuối danh sách (vượt quá 20 con)
                 }
-                _recentPartsHistory.Add(isOk); // Thêm con hàng mới nhất vào cuối (chạy xuôi từ trái sang phải)
             }
 
             if (System.Windows.Application.Current?.Dispatcher != null && !System.Windows.Application.Current.Dispatcher.CheckAccess())
@@ -2141,7 +2141,7 @@ namespace VisionInspectionApp.UI.ViewModels
                                      $"• Đạt (OK): {okCount} con hàng\n" +
                                      $"• Lỗi (NG): {ngCount} con hàng\n" +
                                      $"• Tỉ lệ đạt (Yield): {yield:F1}%\n" +
-                                     $"• Chiều luồng: Trái (Cũ) ➔ Phải (Mới nhất)";
+                                     $"• Chiều luồng: Trái (Mới nhất) ➔ Phải (Cũ dần)";
 
             for (int i = 0; i < 20; i++)
             {

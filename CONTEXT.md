@@ -49,6 +49,19 @@
 - Preview được phép tiếp tục khi Global Snapshot rỗng để lấy ảnh từ ImageSource.
 - Lưu template cho Origin, Point và SurfaceCompare hoạt động với nguồn ảnh ImageSource.
 
+- **Đổi Chiều Hiển Thị Thanh 20 Nấc Recent Con Hàng Thành Mới Nhất -> Cũ Nhất (Task 260)**:
+  - **Yêu Cầu & Bối Cảnh**:
+    - Trong tab Tool Editor, thanh 20 nấc recent con hàng trước đây hiển thị theo chiều Cũ nhất ➔ Mới nhất (từ trái sang phải).
+    - Người dùng yêu cầu đổi ngược lại thành chiều **Mới nhất ➔ Cũ nhất (từ trái sang phải)**. Tức là con hàng vừa mới kiểm tra xong sẽ xuất hiện ngay ở nấc đầu tiên bên trái ngoài cùng (Slot 0), các con hàng cũ hơn sẽ dịch dần sang các nấc bên phải (Slot 1, Slot 2...).
+  - **Giải Pháp Kỹ Thuật Đã Triển Khai**:
+    1. *Cập nhật ViewModel ([ToolEditorViewModel.Engine.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/ToolEditorViewModel.Engine.cs))*:
+       - Chuyển `PushRecentPartInspectionResult(bool isOk)` sang cơ chế chèn vào đầu: `_recentPartsHistory.Insert(0, isOk)` và loại bỏ phần tử cũ ở cuối nếu vượt quá 20 con hàng (`_recentPartsHistory.RemoveAt(20)`).
+       - Nhờ đó, `_recentPartsHistory[0]` luôn đại diện cho kết quả của con hàng mới nhất và được gán trực tiếp vào Slot 0 (bên trái ngoài cùng trên thanh hiển thị).
+       - Cập nhật ToolTip hiển thị: `• Chiều luồng: Trái (Mới nhất) ➔ Phải (Cũ dần)`.
+    2. *Kiểm Thử & Đảm Bảo Chất Lượng ([ContinuousPipelineTest.cs](file:///g:/NODEJS/Vision2026/TestExtractApp/ContinuousPipelineTest.cs))*:
+       - Bổ sung assertion kiểm tra Slot 0 nhận đúng màu và trạng thái của con hàng mới nhất (Slot 0 = NG mới kiểm tra, Slot 1 = OK trước đó).
+       - Chạy toàn bộ test suite thành công 100% (25/25 PLC tests, toàn bộ Manual Inspection tests, Pipeline tests, SPC tests).
+
 - **Sửa Lỗi ToolTip Biểu Đồ SPC & Đổi Tên (RefName) Node An Toàn Trên Flow Canvas (Task 259)**:
   - **Yêu Cầu & Bối Cảnh**:
     1. Trong màn hình Log, người dùng hover chuột vào các chấm dữ liệu (markers) và cột dữ liệu (bars) trên 4 biểu đồ SPC nhưng không có ToolTip nào hiện ra.
