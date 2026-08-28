@@ -27,5 +27,6 @@ class Program
         PlcTagCsvServiceTest.RunTests();
         PlcTests.RunAllTestsAsync().GetAwaiter().GetResult();
         ManualInspectionTest.RunTests();
+        LightingControllerTests.RunAllTests();
     }
 }

@@ -49,6 +49,37 @@
 - Preview được phép tiếp tục khi Global Snapshot rỗng để lấy ảnh từ ImageSource.
 - Lưu template cho Origin, Point và SurfaceCompare hoạt động với nguồn ảnh ImageSource.
 
+- **Tích Hợp Bộ Điều Khiển Đèn 8 Kênh ASCII (Lighting Controller) Qua Ethernet (TCP/UDP) & Cổng Nối Tiếp RS-232 (COM Port) (Task 266)**:
+  - **Yêu Cầu & Bối Cảnh**:
+    - Bổ sung tính năng điều khiển Lighting Controller 8 kênh qua giao thức ASCII dạng `$COMMAND=VALUE#` hỗ trợ cả Ethernet (TCP/UDP) và Cổng nối tiếp Serial RS-232 (COM Port: 19200bps, 8 DataBits, 1 StopBit, No Parity, Half-duplex).
+    - Đây là tính năng mới, độc lập hoàn toàn với PLC framework hiện có, không làm ảnh hưởng hay phá vỡ các chức năng đang hoạt động (Camera, PLC, Vision Engine, OQC Scanner).
+    - Hỗ trợ đầy đủ: Điều khiển ON/OFF 8 kênh độc lập, chỉnh độ sáng (0-255) có phản hồi thời gian thực và debounce mượt mà, chỉnh thời gian sáng (1-999ms), 4 chế độ Trigger ngoài, đọc đồng bộ toàn bộ tham số thiết bị (`$RD=9999#`), lưu cấu hình ROM (`$SA=1#`), khôi phục cài đặt gốc có cảnh báo xác nhận (`$RS=1#`), khóa/mở bàn phím thiết bị (`$LC=0/1#`), và cấu hình mạng thiết bị.
+    - Thread-safety bằng `SemaphoreSlim`, non-blocking UI, tự động nạp/lưu cấu hình kết nối qua `GlobalAppSettingsService`, auto-connect an toàn cho cả Ethernet và COM port khi khởi động app (không crash khi offline), menu `💡 Chiếu Sáng` trên MenuStrip, dọn dẹp kết nối an toàn khi tắt app.
+  - **Giải Pháp Kỹ Thuật Đã Triển Khai**:
+    1. [LightingControllerModels.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.Models/LightingControllerModels.cs):
+       - Định nghĩa `LightingConnectionState`, `LightingInterfaceType` (Ethernet, SerialCom), `LightingTriggerMode`, `LightingNetworkMode`, `LightingChannelState`, `LightingControllerState`, `LightingCommandResult` (mapping mã lỗi `E1`-`E7`, `ER`).
+    2. [LightingProtocol.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.Application/LightingController/LightingProtocol.cs):
+       - Command Builder: Xây dựng lệnh `$F0=1#`, `$L0=200#`, `$T0=50#`, `$TR=3#`, `$RD=9999#`, `$SA=1#`, `$RS=1#`, `$LC=1#`, v.v.
+       - Tự động đặt lệnh `RD` về cuối khi ghép lệnh batch (`BuildMultiCommand`).
+       - Thêm bộ bóc tách thông minh `TryExtractResponse`: Xử lý mượt mà hiện tượng dội ngược lệnh (Echo) trên đường truyền RS-232 bán song công (Half-duplex), bỏ qua ký tự `\r\n` thừa, bóc tách chính xác `+OK`, mã lỗi `E1`-`E7`/`ER` hoặc khối dữ liệu `$ID=...,...#`.
+       - Validation: Kiểm tra chặt chẽ biên kênh 0-7, độ sáng 0-255, thời gian 1-999ms, chế độ trigger và định dạng IP/Port.
+    3. [LightingTransport.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.Application/LightingController/LightingTransport.cs):
+       - Trừu tượng hóa `ILightingTransport` tách biệt giao thức khỏi tầng truyền thông.
+       - `TcpLightingTransport`, `UdpLightingTransport` và `SerialLightingTransport` (dùng `System.IO.Ports`).
+       - Trong `SerialLightingTransport`: Thiết lập `DtrEnable = false`, `RtsEnable = false`, `Handshake = None` (tránh giữ MCU ở trạng thái Reset/Flow control block), bổ sung delay ổn định 150ms sau khi mở cổng, ghi byte thô và `Flush()`, đọc dữ liệu qua buffer nhị phân và `TryExtractResponse` trả về ngay khi nhận đủ gói.
+    4. [LightingControllerService.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.Application/LightingController/LightingControllerService.cs):
+       - Service quản lý kết nối, hỗ trợ `ConnectAsync` (Ethernet) và `ConnectSerialAsync` (RS-232 COM), điều phối gửi nhận lệnh bất đồng bộ, event dispatcher cập nhật trạng thái thiết bị và bộ nhớ log TX/RX thread-safe.
+       - `ConnectSerialAsync`: Đặt `autoReadState` mặc định `false` cho cổng COM để việc mở cổng diễn ra tức thì, không bị nghẽn bởi lệnh `$RD=9999#` ban đầu.
+    5. [LightingControllerViewModel.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/LightingControllerViewModel.cs) & [LightingControllerWindow.xaml](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/Views/LightingControllerWindow.xaml):
+       - MVVM ViewModel quản lý 8 kênh (`LightingChannelViewModel`), quét tự động danh sách cổng COM máy tính (`SerialPort.GetPortNames()`), mặc định `COM3`, slider độ sáng có timer debounce 50ms tạo hiệu ứng tức thì cho người dùng mà không spam socket/serial.
+       - Giao diện WPF hiện đại hỗ trợ chuyển đổi mượt mà giữa Ethernet và Serial COM: bổ sung tùy chọn Line Ending (`None`, `\r\n CRLF`, `\r CR`, `\n LF`), DTR, RTS, Auto-read on Connect.
+       - Tích hợp thanh kiểm tra lệnh trực tiếp (**Test Lệnh**: gõ lệnh `$F0=1#`, `$L0=255#`, `$RD=0#` và bấm **🚀 Gửi Lệnh**) kèm nút **🗑️ Xóa Log** trong khung Protocol Log thời gian thực.
+    6. [MainWindow.xaml](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/MainWindow.xaml), [App.xaml.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/App.xaml.cs), [GlobalAppSettingsService.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/Services/GlobalAppSettingsService.cs):
+       - Thêm menu `💡 Chiếu Sáng` trên MenuStrip.
+       - Đăng ký DI Singleton, auto-connect ngầm an toàn và dọn dẹp kết nối trong `ShutdownGracefullyAsync`.
+  - **Kiểm Thử**:
+    - Xây dựng [LightingControllerTests.cs](file:///g:/NODEJS/Vision2026/TestExtractApp/LightingControllerTests.cs) gồm 86 test cases kiểm thử Command Builder, Response Parser, Batching/RD ordering, Error mapping, Parameter bounds validation, Echo tolerance và Serial Transport. Toàn bộ 86 tests và toàn bộ test suite PASSED 100%.
+
 - **Tự Động Lọc Bỏ Mẫu Đo NaN/NG Trong Phân Tích Thống Kê SPC & Hiển Thị Biểu Đồ Histogram, X-bar, R-chart, CPK Trend (Task 265)**:
   - **Yêu Cầu & Bối Cảnh**:
     - Trong cửa sổ "Lịch sử kiểm tra & Phân tích thống kê SPC", khi cuộn hàng vừa kiểm tra có những con hàng mà phép đo không tìm thấy đối tượng và trả về kết quả `NaN`, toàn bộ 3 biểu đồ Histogram, X-bar, R-chart và đường xu hướng CPK Trend đều bị biến mất / không hiển thị được.

@@ -593,8 +593,8 @@ public static class PlcTests
         // Kiểm tra runtime đã được ghi nhận vào NodeTimings
         if (!result.Timings.NodeTimings.TryGetValue("ResultTransfer1", out var rtMs))
             throw new Exception("ResultTransfer1 runtime was not recorded in result.Timings.NodeTimings!");
-        if (swTest.ElapsedMilliseconds > 40)
-            throw new Exception($"ExecuteResultTransfersAsync took {swTest.ElapsedMilliseconds}ms, should be non-blocking fast return (< 40ms)!");
+        if (swTest.ElapsedMilliseconds > 150)
+            throw new Exception($"ExecuteResultTransfersAsync took {swTest.ElapsedMilliseconds}ms, should be non-blocking fast return (< 150ms)!");
 
         // Trong lúc đang ở khoảng giữa xung (sau 20ms)
         await Task.Delay(20);

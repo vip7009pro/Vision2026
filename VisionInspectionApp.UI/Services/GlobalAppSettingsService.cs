@@ -11,6 +11,34 @@ public sealed class GlobalAppSettings
     public string ThemeId { get; set; } = "MidnightBlue";
 
     public PlcSettings Plc { get; set; } = new();
+    public LightingControllerSettings Lighting { get; set; } = new();
+}
+
+public sealed class LightingControllerSettings
+{
+    public int InterfaceType { get; set; } = 0; // 0=Ethernet, 1=Serial COM
+
+    // Ethernet settings
+    public string ControllerIp { get; set; } = "192.168.1.2";
+    public int Port { get; set; } = 1200;
+    public int NetworkMode { get; set; } = 0; // 0=TCP Server, 1=TCP Client, 2=UDP
+    public string SubnetMask { get; set; } = "255.255.255.0";
+    public string Gateway { get; set; } = "192.168.1.1";
+    public string DestinationIp { get; set; } = "192.168.1.3";
+    public int DestinationPort { get; set; } = 1200;
+
+    // Serial RS-232 / COM settings
+    public string ComPort { get; set; } = "COM3";
+    public int BaudRate { get; set; } = 19200;
+    public int DataBits { get; set; } = 8;
+    public int Parity { get; set; } = 0; // 0=None, 1=Odd, 2=Even
+    public int StopBits { get; set; } = 1; // 1=One, 2=Two
+    public int LineEnding { get; set; } = 0; // 0=None, 1=CRLF (\r\n), 2=CR (\r), 3=LF (\n)
+    public bool DtrEnable { get; set; } = false;
+    public bool RtsEnable { get; set; } = false;
+    public bool AutoReadOnConnect { get; set; } = false;
+
+    public bool AutoConnect { get; set; } = false;
 }
 
 public sealed class PlcSettings

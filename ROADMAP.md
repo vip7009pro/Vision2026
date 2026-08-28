@@ -1150,6 +1150,24 @@ Lộ trình tích hợp tính năng Chụp ảnh từ camera và hỗ trợ các
         2. `InspectionLogViewModel.cs`: Tự động tách `validValues` và đếm `nanCount`, cập nhật Header hiển thị chi tiết số lượng mẫu hợp lệ và số mẫu NaN được loại bỏ, bảo vệ tọa độ vẽ chart trên Canvas.
       - `Kiểm Thử`: Bổ sung test case `[2b/4] SpcEngine Robust NaN / Infinity Filtering & All-NaN Fallback` trong `CameraTest.cs`. Toàn bộ test suite PASSED 100%.
 
+- [x] Task 266: Tích hợp Bộ Điều Khiển Đèn 8 Kênh ASCII (8-Channel Lighting Controller) qua Ethernet (TCP/UDP) và Cổng Nối Tiếp RS-232 (COM Port) vào ứng dụng WPF.
+      - `Mục Tiêu & Yêu Cầu`:
+        - Tích hợp giao thức điều khiển đèn 8 kênh ASCII (`$COMMAND=VALUE#`) qua cả Ethernet (TCP/UDP) và cổng nối tiếp Serial RS-232 (COM Port: 19200bps, 8 DataBits, 1 StopBit, No Parity, Half-duplex).
+        - Hỗ trợ đầy đủ: Bật/tắt 8 kênh (`F0`-`F7`), độ sáng 0-255 (`L0`-`L7`), thời gian sáng 1-999ms (`T0`-`T7`), 4 chế độ Trigger (`TR=0..3`), đọc đồng bộ toàn bộ tham số (`RD=9999`), lưu cấu hình (`SA=1`), khôi phục cài đặt gốc (`RS=1`), khóa/mở bàn phím (`LC=0/1`), và cấu hình mạng (`NE`, `IP`, `IU`, `IS`, `IL`, `DP`, `DL`).
+        - Đảm bảo thread-safety qua `SemaphoreSlim`, non-blocking UI, debounce slider điều chỉnh độ sáng (50ms), tự động nạp/lưu cấu hình kết nối qua `GlobalAppSettingsService`, hỗ trợ Auto-connect an toàn cho cả Ethernet và COM port, menu riêng biệt trên MenuStrip và dọn dẹp kết nối an toàn khi tắt app.
+      - `Giải Pháp Kỹ Thuật Đã Triển Khai`:
+        1. `VisionInspectionApp.Models`: Tạo [LightingControllerModels.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.Models/LightingControllerModels.cs) định nghĩa `LightingConnectionState`, `LightingInterfaceType` (Ethernet, SerialCom), `LightingTriggerMode`, `LightingNetworkMode`, các class trạng thái `LightingChannelState`, `LightingControllerState` và kết quả lệnh `LightingCommandResult` (ánh xạ mã lỗi `E1`-`E7`, `ER`).
+        2. `VisionInspectionApp.Application`:
+           - [LightingProtocol.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.Application/LightingController/LightingProtocol.cs): Xây dựng command builder (đóng gói khung `$..#`, validate giới hạn tham số, tự động đưa lệnh `RD` về cuối khi gộp batch) và bộ phân tích phản hồi (+OK, mã lỗi, chuỗi dữ liệu `$..#`).
+           - [LightingTransport.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.Application/LightingController/LightingTransport.cs): Trừu tượng hóa `ILightingTransport`, hiện thực `TcpLightingTransport`, `UdpLightingTransport` và `SerialLightingTransport` (System.IO.Ports) với `SemaphoreSlim`, timeout và hỗ trợ CancellationToken.
+           - [LightingControllerService.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.Application/LightingController/LightingControllerService.cs): Service điều phối cấp cao, hỗ trợ `ConnectAsync` (Ethernet) và `ConnectSerialAsync` (RS-232 COM), quản lý vòng đời kết nối, gửi lệnh bất đồng bộ, cập nhật trạng thái thiết bị và ghi nhật ký giao thức TX/RX thread-safe.
+        3. `VisionInspectionApp.UI`:
+           - [LightingControllerViewModel.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/LightingControllerViewModel.cs): MVVM ViewModel quản lý 8 kênh (`LightingChannelViewModel`), tự động quét cổng COM hệ thống (`SerialPort.GetPortNames()`), kết nối Ethernet/Serial, chế độ trigger, gửi lệnh tức thì với debounce slider độ sáng (50ms) mượt mà, lưu cài đặt tự động.
+           - [LightingControllerWindow.xaml](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/Views/LightingControllerWindow.xaml) & [.xaml.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/Views/LightingControllerWindow.xaml.cs): Cửa sổ giao diện hiện đại đồng bộ theme DynamicResource (Dark/Light), chuyển đổi mượt mà giữa Ethernet và Serial COM, bố trí 8 kênh dạng lưới 2x4, thanh trigger, nút tác vụ toàn cục và nhật ký giao thức thời gian thực.
+           - [MainWindow.xaml](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/MainWindow.xaml): Bổ sung menu `💡 Chiếu Sáng` trên MenuStrip mở nhanh cửa sổ Lighting Controller.
+           - [GlobalAppSettingsService.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/Services/GlobalAppSettingsService.cs) & [App.xaml.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/App.xaml.cs): Lưu cấu hình kết nối IP/Port và COM Port, đăng ký DI Singleton và tự động kết nối ngầm an toàn lúc khởi động.
+      - `Kiểm Thử`: Xây dựng [LightingControllerTests.cs](file:///g:/NODEJS/Vision2026/TestExtractApp/LightingControllerTests.cs) bao gồm 86 test cases kiểm thử Command Builder, Response Parser, Batching/RD ordering, Error mapping, Parameter bounds validation, Echo tolerance và Serial Transport. Toàn bộ 86 tests và toàn bộ test suite hiện có PASSED 100%.
+
 
 
 

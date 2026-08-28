@@ -6,6 +6,7 @@ using System.Windows;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using VisionInspectionApp.Application;
+using VisionInspectionApp.Application.LightingController;
 using VisionInspectionApp.Persistence;
 using VisionInspectionApp.UI.Services;
 using VisionInspectionApp.UI.Services.Plc;
@@ -69,6 +70,9 @@ public partial class App : System.Windows.Application
                 services.AddTransient<ViewModels.PLC.PlcBrowserViewModel>();
                 services.AddTransient<ViewModels.PLC.PlcOscilloscopeViewModel>();
 
+                // Lighting Controller
+                services.AddSingleton<LightingControllerService>();
+
                 // Legacy PLC (MX Component)
                 services.AddSingleton<IPlcClient, MxComponentPlcClient>();
                 services.AddSingleton<PlcOrchestratorService>();
@@ -101,6 +105,50 @@ public partial class App : System.Windows.Application
 
         var plcManager = _host.Services.GetRequiredService<Application.PLC.Services.IPlcManagerService>();
         _ = plcManager.AutoConnectStartupAsync();
+
+        // Auto-connect Lighting Controller (non-blocking)
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                var settingsService = _host.Services.GetRequiredService<GlobalAppSettingsService>();
+                var lightingSettings = settingsService.Settings.Lighting;
+                if (lightingSettings.AutoConnect)
+                {
+                    var lightingService = _host.Services.GetRequiredService<LightingControllerService>();
+                    if (lightingSettings.InterfaceType == (int)VisionInspectionApp.Models.LightingInterfaceType.SerialCom)
+                    {
+                        string? le = lightingSettings.LineEnding switch
+                        {
+                            1 => "\r\n",
+                            2 => "\r",
+                            3 => "\n",
+                            _ => null
+                        };
+                        await lightingService.ConnectSerialAsync(
+                            lightingSettings.ComPort,
+                            lightingSettings.BaudRate,
+                            (System.IO.Ports.Parity)lightingSettings.Parity,
+                            lightingSettings.DataBits,
+                            (System.IO.Ports.StopBits)lightingSettings.StopBits,
+                            readTimeoutMs: 3000,
+                            writeTimeoutMs: 3000,
+                            lineEnding: le,
+                            dtrEnable: lightingSettings.DtrEnable,
+                            rtsEnable: lightingSettings.RtsEnable,
+                            autoReadState: lightingSettings.AutoReadOnConnect);
+                    }
+                    else
+                    {
+                        await lightingService.ConnectAsync(
+                            lightingSettings.ControllerIp,
+                            lightingSettings.Port,
+                            (VisionInspectionApp.Models.LightingNetworkMode)lightingSettings.NetworkMode);
+                    }
+                }
+            }
+            catch { /* Lighting Controller auto-connect failure must not crash the app */ }
+        });
     }
 
     protected override void OnExit(ExitEventArgs e)
@@ -145,6 +193,11 @@ public partial class App : System.Windows.Application
             if (services.GetService<VisionInspectionApp.Application.PLC.Services.IPlcManagerService>() is { } plcManager)
             {
                 plcManager.Dispose();
+            }
+
+            if (services.GetService<LightingControllerService>() is { } lightingService)
+            {
+                lightingService.Dispose();
             }
 
             if (services.GetService<CameraService>() is { } camera)

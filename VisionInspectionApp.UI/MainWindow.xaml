@@ -400,6 +400,11 @@
                         <MenuItem Header="📈 PLC Oscilloscope (Phân Tích Dạng Sóng &amp; Đo Độ Trễ...)" Command="{Binding ToolEditor.OpenPlcOscilloscopeCommand}" />
                     </MenuItem>
 
+                    <!-- Chiếu Sáng / Lighting Controller Menu -->
+                    <MenuItem Header="💡 Chiếu Sáng">
+                        <MenuItem Header="💡 Bộ Điều Khiển Đèn 8 Kênh (Lighting Controller...)" Command="{Binding ToolEditor.OpenLightingControllerCommand}" />
+                    </MenuItem>
+
                     <!-- Dữ Liệu & OQC Menu -->
                     <MenuItem Header="🗄️ Dữ Liệu">
                         <MenuItem Header="🗄️ Quản Lý Kết Nối Database (DB Manager...)" Command="{Binding ToolEditor.OpenDbManagerCommand}" />
