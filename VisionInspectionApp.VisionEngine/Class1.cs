@@ -702,7 +702,28 @@ public sealed class ImagePreprocessor
         return bg;
     }
 
-    public Mat Run(Mat inputBgrOrGray, PreprocessSettings settings, List<PreprocessRoiDefinition>? rois = null)
+    private static Point2d TransformPose(Point2d p, Point2d originTeach, Point2d originFound, double angleDeg)
+    {
+        if (Math.Abs(angleDeg) < 0.000001)
+        {
+            var dx0 = originFound.X - originTeach.X;
+            var dy0 = originFound.Y - originTeach.Y;
+            return new Point2d(p.X + dx0, p.Y + dy0);
+        }
+
+        var a = angleDeg * Math.PI / 180.0;
+        var cos = Math.Cos(a);
+        var sin = Math.Sin(a);
+        var dx = p.X - originTeach.X;
+        var dy = p.Y - originTeach.Y;
+        var rx = dx * cos - dy * sin + originTeach.X;
+        var ry = dx * sin + dy * cos + originTeach.Y;
+        var totalDx = originFound.X - originTeach.X;
+        var totalDy = originFound.Y - originTeach.Y;
+        return new Point2d(rx + totalDx, ry + totalDy);
+    }
+
+    public Mat Run(Mat inputBgrOrGray, PreprocessSettings settings, List<PreprocessRoiDefinition>? rois = null, Point2d? originTeach = null, Point2d? originFound = null, double originAngleDeg = 0.0)
     {
         if (inputBgrOrGray is null)
         {
@@ -853,7 +874,7 @@ public sealed class ImagePreprocessor
 
             if (rois is not null && rois.Count > 0)
             {
-                using var roiMask = new Mat(inputBgrOrGray.Size(), MatType.CV_8UC1, new Scalar(0));
+                using var roiMask = new Mat(current.Size(), MatType.CV_8UC1, new Scalar(0));
                 bool hasIncludes = rois.Any(r => r.Mode == PreprocessRoiMode.Include);
 
                 if (!hasIncludes)
@@ -861,12 +882,26 @@ public sealed class ImagePreprocessor
                     roiMask.SetTo(new Scalar(255));
                 }
 
+                bool hasOriginPose = originTeach.HasValue && originFound.HasValue;
+
                 foreach (var roi in rois)
                 {
                     byte fillColor = roi.Mode == PreprocessRoiMode.Include ? (byte)255 : (byte)0;
+                    bool applyPose = roi.FollowOrigin && hasOriginPose;
+
                     if (roi.Shape == PreprocessRoiShape.Circle)
                     {
-                        var center = new Point(roi.CircleCenterX, roi.CircleCenterY);
+                        Point2d circleCenter;
+                        if (applyPose)
+                        {
+                            circleCenter = TransformPose(new Point2d(roi.CircleCenterX, roi.CircleCenterY), originTeach!.Value, originFound!.Value, originAngleDeg);
+                        }
+                        else
+                        {
+                            circleCenter = new Point2d(roi.CircleCenterX, roi.CircleCenterY);
+                        }
+
+                        var center = new Point((int)Math.Round(circleCenter.X), (int)Math.Round(circleCenter.Y));
                         int radius = Math.Max(1, roi.CircleRadius);
                         Cv2.Circle(roiMask, center, radius, new Scalar(fillColor), -1);
                     }
@@ -874,30 +909,65 @@ public sealed class ImagePreprocessor
                     {
                         if (roi.PolygonPoints != null && roi.PolygonPoints.Count >= 3)
                         {
-                            var pts = roi.PolygonPoints.Select(p => new Point((int)p.X, (int)p.Y)).ToArray();
-                            Cv2.FillPoly(roiMask, new[] { pts }, new Scalar(fillColor));
+                            Point[] polyPts;
+                            if (applyPose)
+                            {
+                                polyPts = roi.PolygonPoints.Select(p =>
+                                {
+                                    var pf = TransformPose(new Point2d(p.X, p.Y), originTeach!.Value, originFound!.Value, originAngleDeg);
+                                    return new Point((int)Math.Round(pf.X), (int)Math.Round(pf.Y));
+                                }).ToArray();
+                            }
+                            else
+                            {
+                                polyPts = roi.PolygonPoints.Select(p => new Point((int)Math.Round(p.X), (int)Math.Round(p.Y))).ToArray();
+                            }
+
+                            Cv2.FillPoly(roiMask, new[] { polyPts }, new Scalar(fillColor));
                         }
                     }
                     else
                     {
-                        // Rectangle (Square)
-                        if (Math.Abs(roi.Angle) > 0.001)
+                        // Rectangle (Square / Rotated Rectangle)
+                        double cxTeach = roi.X + roi.Width / 2.0;
+                        double cyTeach = roi.Y + roi.Height / 2.0;
+                        Point2d centerFound;
+                        double totalAngleDeg;
+
+                        if (applyPose)
                         {
-                            var center = new Point2f(roi.X + roi.Width / 2f, roi.Y + roi.Height / 2f);
-                            var size = new Size2f(Math.Max(1, roi.Width), Math.Max(1, roi.Height));
-                            var rotRect = new RotatedRect(center, size, (float)roi.Angle);
-                            var pts = rotRect.Points().Select(p => new Point((int)p.X, (int)p.Y)).ToArray();
-                            Cv2.FillPoly(roiMask, new[] { pts }, new Scalar(fillColor));
+                            centerFound = TransformPose(new Point2d(cxTeach, cyTeach), originTeach!.Value, originFound!.Value, originAngleDeg);
+                            totalAngleDeg = roi.Angle + originAngleDeg;
                         }
                         else
                         {
-                            var r = new Rect(Math.Max(0, roi.X), Math.Max(0, roi.Y), Math.Max(1, roi.Width), Math.Max(1, roi.Height));
-                            Cv2.Rectangle(roiMask, r, new Scalar(fillColor), -1);
+                            centerFound = new Point2d(cxTeach, cyTeach);
+                            totalAngleDeg = roi.Angle;
                         }
+
+                        double halfW = Math.Max(1.0, roi.Width) / 2.0;
+                        double halfH = Math.Max(1.0, roi.Height) / 2.0;
+                        double rad = totalAngleDeg * Math.PI / 180.0;
+                        double cos = Math.Cos(rad);
+                        double sin = Math.Sin(rad);
+
+                        (double dx, double dy)[] corners = {
+                            (-halfW, -halfH),
+                            (halfW, -halfH),
+                            (halfW, halfH),
+                            (-halfW, halfH)
+                        };
+
+                        var pts = corners.Select(c => new Point(
+                            (int)Math.Round(centerFound.X + c.dx * cos - c.dy * sin),
+                            (int)Math.Round(centerFound.Y + c.dx * sin + c.dy * cos)
+                        )).ToArray();
+
+                        Cv2.FillPoly(roiMask, new[] { pts }, new Scalar(fillColor));
                     }
                 }
 
-                var blended = new Mat(inputBgrOrGray.Size(), current.Type(), Scalar.All(0));
+                var blended = new Mat(current.Size(), current.Type(), Scalar.All(0));
                 current.CopyTo(blended, roiMask);
                 AdvanceCurrent(blended);
             }

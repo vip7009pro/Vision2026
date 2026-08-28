@@ -3465,14 +3465,17 @@
                                                     <ColumnDefinition Width="Auto"/>
                                                     <ColumnDefinition Width="Auto"/>
                                                 </Grid.ColumnDefinitions>
-                                                <TextBlock Text="{Binding Shape}" FontWeight="Bold" FontSize="11" VerticalAlignment="Center" Foreground="{DynamicResource TextBrush}"/>
+                                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                                    <TextBlock Text="{Binding Shape}" FontWeight="Bold" FontSize="11" VerticalAlignment="Center" Foreground="{DynamicResource TextBrush}" Margin="0,0,8,0"/>
+                                                    <CheckBox Content="Bám Origin" IsChecked="{Binding FollowOrigin, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" FontSize="10" VerticalAlignment="Center" ToolTip="Tự động xoay và tịnh tiến theo vị trí thực tế của con hàng"/>
+                                                </StackPanel>
                                                 
                                                 <Button Grid.Column="2" Content="{Binding Mode}" Command="{Binding DataContext.Preprocess_ToggleRoiModeCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}" Margin="0,0,4,0" Padding="6,1" FontSize="10" ToolTip="Chuyển đổi giữa Include (Cộng vùng) và Exclude (Trừ vùng)"/>
                                                 <Button Grid.Column="3" Content="🗑️" Command="{Binding DataContext.Preprocess_RemoveRoiCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}" Padding="4,1" FontSize="10" ToolTip="Xóa ROI này"/>
                                             </Grid>
 
                                             <!-- Coordinate Fields for Rectangle/Square ROI -->
-                                            <UniformGrid Columns="4" Margin="0,2,0,0" Visibility="{Binding Shape, Converter={StaticResource EnumToVis}, ConverterParameter=Rectangle}">
+                                            <UniformGrid Columns="5" Margin="0,2,0,0" Visibility="{Binding Shape, Converter={StaticResource EnumToVis}, ConverterParameter=Rectangle}">
                                                 <StackPanel Margin="1,0">
                                                     <TextBlock Text="X:" FontSize="9" Foreground="{DynamicResource TextMutedBrush}"/>
                                                     <TextBox Text="{Binding X, UpdateSourceTrigger=PropertyChanged}" FontSize="10" Padding="1"/>
@@ -3488,6 +3491,10 @@
                                                 <StackPanel Margin="1,0">
                                                     <TextBlock Text="H:" FontSize="9" Foreground="{DynamicResource TextMutedBrush}"/>
                                                     <TextBox Text="{Binding Height, UpdateSourceTrigger=PropertyChanged}" FontSize="10" Padding="1"/>
+                                                </StackPanel>
+                                                <StackPanel Margin="1,0">
+                                                    <TextBlock Text="Angle:" FontSize="9" Foreground="{DynamicResource TextMutedBrush}"/>
+                                                    <TextBox Text="{Binding Angle, UpdateSourceTrigger=PropertyChanged}" FontSize="10" Padding="1" ToolTip="Góc nghiêng (độ)"/>
                                                 </StackPanel>
                                             </UniformGrid>
 

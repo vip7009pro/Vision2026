@@ -1192,3 +1192,20 @@ Lộ trình tích hợp tính năng Chụp ảnh từ camera và hỗ trợ các
 
 
 
+
+
+- [x] Task 267: Ð?ng b? hóa Masking ROI c?a Preprocess Node trên Flow Canvas & Pipeline và H? tr? Tùy ch?n Bám theo Origin (Follow Origin).
+      - M?c Tiêu & Yêu C?u:
+        - S?a l?i vùng den/tr?ng (Mask) render trên ?nh preview b? l?ch so v?i khung ROI th?c t? trong node Preprocess (Tool Editor).
+        - H? tr? tính nang Masking ROI t? d?ng xoay và t?nh ti?n th?c t? theo Origin d? che chính xác các khu v?c trên con hàng khi con hàng b? xoay.
+        - B? sung tùy ch?n checkbox FollowOrigin (Bám Origin) d?c l?p cho t?ng Masking ROI d? ngu?i dùng có th? linh ho?t b?t/t?t (khi t?t: gi? tinh theo t?a d? thô c?a ?nh d?u vào; khi b?t: bám theo Origin c?a con hàng).
+      - Gi?i Pháp K? Thu?t Ðã Tri?n Khai:
+        1. VisionInspectionApp.Models: B? sung thu?c tính FollowOrigin (m?c d?nh 	rue) và cài d?t INotifyPropertyChanged cho [PreprocessRoiDefinition](file:///g:/NODEJS/Vision2026/VisionInspectionApp.Models/Class1.cs) và Point2dModel giúp d?ng b? d? li?u hai chi?u t?c thì khi s?a s? trên panel thu?c tính.
+        2. VisionInspectionApp.VisionEngine: Nâng c?p [ImagePreprocessor.Run](file:///g:/NODEJS/Vision2026/VisionInspectionApp.VisionEngine/Class1.cs) h? tr? nh?n t?a d? m?u (originTeach), t?a d? tìm th?y (originFound) và góc nghiêng (originAngleDeg). S? d?ng gi?i thu?t lu?ng giác 4 d?nh (cos, sin) chu?n xác cho Rectangle/Rotated Rectangle, bi?n d?i tâm cho Circle, bi?n d?i t?ng d?nh cho Polygon d? v? Cv2.FillPoly và Cv2.Circle trùng kh?p 100% t?ng pixel v?i khung overlay canvas.
+        3. VisionInspectionApp.Application: C?p nh?t [InspectionService.Pipeline.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.Application/Services/InspectionService.Pipeline.cs) truy?n Origin Pose vào _preprocessor.Run khi th?c thi inspection flow.
+        4. VisionInspectionApp.UI:
+           - [ToolEditorViewModel.GraphOps.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/ToolEditorViewModel.GraphOps.cs): D?ng OverlayItems cho Preprocess (Rectangle, Circle, Polygon) linh ho?t theo c? FollowOrigin.
+           - [ToolEditorViewModel.Engine.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/ToolEditorViewModel.Engine.cs): C?p nh?t IsRawImageRoi và UnTransformRoi nh?n bi?t c? FollowOrigin, d?ng th?i uu tiên render ResolveToolPreprocessForPreview trong RefreshSelectedPreview.
+           - [ToolEditorViewModel.ToolPreprocess.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/ToolEditorViewModel.ToolPreprocess.cs): Hook s? ki?n PropertyChanged c?a ROI d? t? d?ng g?i SchedulePreprocessPreviewUpdate và RefreshPreviews().
+           - [ToolEditorView.xaml](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/Views/ToolEditorView.xaml): Thêm CheckBox ? Bám Origin và ô nh?p Angle (góc nghiêng) cho t?ng card ROI trong panel Masking ROI c?a Preprocessor.
+      - Ki?m Th?: Xây d?ng [PreprocessRoiMaskingTest.cs](file:///g:/NODEJS/Vision2026/TestExtractApp/PreprocessRoiMaskingTest.cs) ki?m th? t? d?ng 4 k?ch b?n: Rectangle static mask, Rectangle exclude mask, Circle & Polygon composition, và xoay 90° theo Origin Pose (FollowOrigin = true vs FollowOrigin = false). Toàn b? test suite PASSED 100%.

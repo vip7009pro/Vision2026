@@ -1700,6 +1700,23 @@
 - Tài liệu này được lưu ở UTF-8 và toàn bộ nội dung tiếng Việt đã được chuẩn hoá.
 - Các tệp mã nguồn và XAML nên tiếp tục dùng UTF-8 with BOM để tránh lỗi hiển thị tiếng Việt trên môi trường Windows.
 
+      - **Ð?ng B? Hóa Masking ROI C?a Preprocess Node Trên Flow Canvas & Pipeline Và H? Tr? Tùy Ch?n Bám Theo Origin (Follow Origin)**:
+        - **Phân Tích & Xác Ð?nh Nguyên Nhân**:
+          1. Trong ToolEditorViewModel.Engine.cs: IsRawImageRoi tru?c dây không x? lý tru?ng h?p Preprocess ROI có b?t hay t?t FollowOrigin, khi?n vi?c bi?n d?i pose và un-transform khi kéo th? ROI b? xung d?t.
+          2. Trong ImagePreprocessor.Run: Thu?t toán tính 4 d?nh hình ch? nh?t tru?c dây dùng RotatedRect.Points() v?i ép ki?u (int) làm tròn xu?ng và Math.Max(0, roi.X) gây méo góc xoay và l?ch pixel khi ROI ch?m biên ?nh.
+          3. Trong RefreshSelectedPreview: B? qua ResolveToolPreprocessForPreview khi PreprocessPreviewEnabled == false, khi?n ?nh preview không c?p nh?t theo dúng node Preprocess dang ch?n.
+          4. PreprocessRoiDefinition và Point2dModel là POCO class thi?u INotifyPropertyChanged, khi?n vi?c nh?p s? trong TextBox trên b?ng thu?c tính không c?p nh?t preview/canvas real-time.
+        - **Gi?i Pháp Tri?n Khai Toàn Di?n**:
+          1. **VisionInspectionApp.Models**: B? sung c? FollowOrigin (m?c d?nh 	rue) và tri?n khai INotifyPropertyChanged cho PreprocessRoiDefinition và Point2dModel.
+          2. **VisionInspectionApp.VisionEngine**: M? r?ng ImagePreprocessor.Run nh?n originTeach, originFound, originAngleDeg. S? d?ng gi?i thu?t lu?ng giác 4 d?nh chu?n xác ($\cos	heta, \sin	heta$) cho Rectangle xoay quanh tâm, bi?n d?i tâm cho Circle, và bi?n d?i t?ng d?nh cho Polygon.
+          3. **VisionInspectionApp.Application**: C?p nh?t InspectionService.Pipeline.cs t? d?ng truy?n Origin Pose vào _preprocessor.Run khi ch?y pipeline ki?m tra.
+          4. **VisionInspectionApp.UI**:
+             - ToolEditorViewModel.GraphOps.cs: D?ng overlay items cho Rectangle, Circle, Polygon linh ho?t theo c? FollowOrigin.
+             - ToolEditorViewModel.Engine.cs: C?p nh?t IsRawImageRoi và UnTransformRoi nh?n bi?t c? FollowOrigin, uu tiên render preview khi ch?n node Preprocess.
+             - ToolEditorViewModel.ToolPreprocess.cs: Hook s? ki?n PropertyChanged c?a t?ng ROI d? t? d?ng làm m?i preview và overlay real-time.
+             - ToolEditorView.xaml: Thêm CheckBox ? Bám Origin và ô nh?p Angle vào card qu?n lý ROI.
+        - **Ki?m Th?**: B? sung PreprocessRoiMaskingTest.cs v?i 4 k?ch b?n ki?m th?: Static Include/Exclude, Circle/Polygon mask composition, và Origin Pose Rotation 90° (FollowOrigin=true vs FollowOrigin=false). Toàn b? test suite PASSED 100%.
+
 ## Roadmap
 
 ### Ưu tiên cao

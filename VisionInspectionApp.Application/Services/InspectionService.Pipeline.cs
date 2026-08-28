@@ -236,8 +236,21 @@ public partial class InspectionService
                         }
                     }
 
+                    Point2d? originTeach = null;
+                    Point2d? originFound = null;
+                    double originAngleDeg = 0.0;
+                    if (result.Origin != null && result.Origin.Pass && config.Origin != null)
+                    {
+                        originTeach = new Point2d(config.Origin.WorldPosition.X, config.Origin.WorldPosition.Y);
+                        var mr = result.Origin.MatchRect;
+                        originFound = (mr.Width > 0 && mr.Height > 0)
+                            ? new Point2d(mr.X + mr.Width / 2.0, mr.Y + mr.Height / 2.0)
+                            : new Point2d(result.Origin.Position.X, result.Origin.Position.Y);
+                        originAngleDeg = result.Origin.AngleDeg;
+                    }
+
                     var __sw = Stopwatch.StartNew();
-                    var m = _preprocessor.Run(baseMat, settings, rois);
+                    var m = _preprocessor.Run(baseMat, settings, rois, originTeach, originFound, originAngleDeg);
                     __sw.Stop();
                     if (!string.IsNullOrWhiteSpace(node.RefName))
                     {

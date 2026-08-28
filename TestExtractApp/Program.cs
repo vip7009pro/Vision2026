@@ -28,5 +28,6 @@ class Program
         PlcTests.RunAllTestsAsync().GetAwaiter().GetResult();
         ManualInspectionTest.RunTests();
         LightingControllerTests.RunAllTests();
+        PreprocessRoiMaskingTest.RunTests();
     }
 }

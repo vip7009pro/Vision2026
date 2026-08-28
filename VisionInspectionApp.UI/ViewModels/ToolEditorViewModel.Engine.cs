@@ -487,8 +487,23 @@ namespace VisionInspectionApp.UI.ViewModels
                 var settings = preDef?.Settings ?? _config.Preprocess;
                 var rois = preDef?.Rois;
                 using var inputMat = GetNodeInputImageForPreview(raw, node, "In");
+
+                OpenCvSharp.Point2d? originTeach = null;
+                OpenCvSharp.Point2d? originFound = null;
+                double originAngleDeg = 0.0;
+
+                if (_lastRun?.Origin is not null && _lastRun.Origin.Pass && _config.Origin is not null)
+                {
+                    originTeach = new OpenCvSharp.Point2d(_config.Origin.WorldPosition.X, _config.Origin.WorldPosition.Y);
+                    var mr = _lastRun.Origin.MatchRect;
+                    originFound = (mr.Width > 0 && mr.Height > 0)
+                        ? new OpenCvSharp.Point2d(mr.X + mr.Width / 2.0, mr.Y + mr.Height / 2.0)
+                        : new OpenCvSharp.Point2d(_lastRun.Origin.Position.X, _lastRun.Origin.Position.Y);
+                    originAngleDeg = _lastRun.Origin.AngleDeg;
+                }
+
                 return (_preprocessor is not null && inputMat is not null && !inputMat.Empty()) 
-                    ? _preprocessor.Run(inputMat, settings, rois) 
+                    ? _preprocessor.Run(inputMat, settings, rois, originTeach, originFound, originAngleDeg) 
                     : (inputMat is not null && !inputMat.Empty() ? inputMat.Clone() : new Mat());
             }
 
@@ -4064,24 +4079,24 @@ namespace VisionInspectionApp.UI.ViewModels
     
             using var rawSnap = _sharedImage.GetSnapshot();
             using var snap = rawSnap ?? new Mat();
-            if (_config is not null && PreprocessPreviewEnabled)
+
+            if (string.Equals(SelectedNode.Type, "Preprocess", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(SelectedNode.Type, "Crop", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(SelectedNode.Type, "ImgArithmetic", StringComparison.OrdinalIgnoreCase))
             {
-                if (string.Equals(SelectedNode.Type, "Preprocess", StringComparison.OrdinalIgnoreCase))
+                using var processedSel = ResolveToolPreprocessForPreview(snap, SelectedNode);
+                SelectedNodePreviewImage = processedSel.Empty() ? null : processedSel.ToBitmapSourceForDisplay();
+            }
+            else if (_config is not null && PreprocessPreviewEnabled)
+            {
+                if (string.Equals(SelectedNode.Type, "Origin", StringComparison.OrdinalIgnoreCase) || string.Equals(SelectedNode.Type, "Point", StringComparison.OrdinalIgnoreCase) || string.Equals(SelectedNode.Type, "Line", StringComparison.OrdinalIgnoreCase) || string.Equals(SelectedNode.Type, "Caliper", StringComparison.OrdinalIgnoreCase) || string.Equals(SelectedNode.Type, "LinePairDetection", StringComparison.OrdinalIgnoreCase) || string.Equals(SelectedNode.Type, "EdgePairDetect", StringComparison.OrdinalIgnoreCase) || string.Equals(SelectedNode.Type, "EdgePair", StringComparison.OrdinalIgnoreCase) || string.Equals(SelectedNode.Type, "BlobDetection", StringComparison.OrdinalIgnoreCase) || string.Equals(SelectedNode.Type, "CircleFinder", StringComparison.OrdinalIgnoreCase) || string.Equals(SelectedNode.Type, "SurfaceCompare", StringComparison.OrdinalIgnoreCase) || string.Equals(SelectedNode.Type, "ContourCompare", StringComparison.OrdinalIgnoreCase) || string.Equals(SelectedNode.Type, "Text", StringComparison.OrdinalIgnoreCase) || string.Equals(SelectedNode.Type, "CodeDetection", StringComparison.OrdinalIgnoreCase) || string.Equals(SelectedNode.Type, "ColorDiff", StringComparison.OrdinalIgnoreCase))
                 {
                     using var processedSel = ResolveToolPreprocessForPreview(snap, SelectedNode);
                     SelectedNodePreviewImage = processedSel.Empty() ? null : processedSel.ToBitmapSourceForDisplay();
                 }
                 else
                 {
-                    if (string.Equals(SelectedNode.Type, "Origin", StringComparison.OrdinalIgnoreCase) || string.Equals(SelectedNode.Type, "Point", StringComparison.OrdinalIgnoreCase) || string.Equals(SelectedNode.Type, "Line", StringComparison.OrdinalIgnoreCase) || string.Equals(SelectedNode.Type, "Caliper", StringComparison.OrdinalIgnoreCase) || string.Equals(SelectedNode.Type, "LinePairDetection", StringComparison.OrdinalIgnoreCase) || string.Equals(SelectedNode.Type, "EdgePairDetect", StringComparison.OrdinalIgnoreCase) || string.Equals(SelectedNode.Type, "EdgePair", StringComparison.OrdinalIgnoreCase) || string.Equals(SelectedNode.Type, "BlobDetection", StringComparison.OrdinalIgnoreCase) || string.Equals(SelectedNode.Type, "CircleFinder", StringComparison.OrdinalIgnoreCase) || string.Equals(SelectedNode.Type, "SurfaceCompare", StringComparison.OrdinalIgnoreCase) || string.Equals(SelectedNode.Type, "ContourCompare", StringComparison.OrdinalIgnoreCase) || string.Equals(SelectedNode.Type, "Text", StringComparison.OrdinalIgnoreCase) || string.Equals(SelectedNode.Type, "CodeDetection", StringComparison.OrdinalIgnoreCase) || string.Equals(SelectedNode.Type, "Crop", StringComparison.OrdinalIgnoreCase) || string.Equals(SelectedNode.Type, "ColorDiff", StringComparison.OrdinalIgnoreCase) || string.Equals(SelectedNode.Type, "ImgArithmetic", StringComparison.OrdinalIgnoreCase))
-                    {
-                        using var processedSel = ResolveToolPreprocessForPreview(snap, SelectedNode);
-                        SelectedNodePreviewImage = processedSel.Empty() ? null : processedSel.ToBitmapSourceForDisplay();
-                    }
-                    else
-                    {
-                        SelectedNodePreviewImage = _cachedFinalPreviewImage ?? (snap.Empty() ? null : snap.ToBitmapSourceForDisplay());
-                    }
+                    SelectedNodePreviewImage = _cachedFinalPreviewImage ?? (snap.Empty() ? null : snap.ToBitmapSourceForDisplay());
                 }
             }
             else
@@ -6031,14 +6046,49 @@ namespace VisionInspectionApp.UI.ViewModels
             return CreateRotatedRoi(new Roi { X = roi.X, Y = roi.Y, Width = roi.Width, Height = roi.Height }, stroke, label);
         }
 
-        private static bool IsRawImageRoi(string? label)
+        private PreprocessRoiDefinition? GetPreprocessRoiForLabel(string? label)
+        {
+            if (string.IsNullOrWhiteSpace(label) || _config?.PreprocessNodes is null) return null;
+            var parts = label.Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            if (parts.Length < 2) return null;
+            var name = parts[0];
+            var kind = parts[1];
+
+            var preDef = _config.PreprocessNodes.FirstOrDefault(x => string.Equals(x.Name, name, StringComparison.OrdinalIgnoreCase));
+            if (preDef is null || preDef.Rois is null) return null;
+
+            var vParts = kind.Split("_V", StringSplitOptions.RemoveEmptyEntries);
+            var roiKind = vParts[0];
+            var digitsStr = new string(roiKind.Where(char.IsDigit).ToArray());
+            if (int.TryParse(digitsStr, out var idx) && idx >= 1 && idx <= preDef.Rois.Count)
+            {
+                return preDef.Rois[idx - 1];
+            }
+            return null;
+        }
+
+        private bool IsRawImageRoi(string? label)
         {
             if (string.IsNullOrWhiteSpace(label)) return true;
             var l = label.Trim();
-            return l.StartsWith("Origin", StringComparison.OrdinalIgnoreCase) ||
+            if (l.StartsWith("Origin", StringComparison.OrdinalIgnoreCase) ||
                    string.Equals(l, "DefectROI", StringComparison.OrdinalIgnoreCase) ||
                    l.EndsWith("Crop", StringComparison.OrdinalIgnoreCase) ||
-                   l.Contains("Crop", StringComparison.OrdinalIgnoreCase);
+                   l.Contains("Crop", StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+
+            if (l.Contains("PR", StringComparison.OrdinalIgnoreCase))
+            {
+                var preRoi = GetPreprocessRoiForLabel(l);
+                if (preRoi != null)
+                {
+                    return !preRoi.FollowOrigin;
+                }
+            }
+
+            return false;
         }
 
         private Roi UnTransformRoi(Roi roi, string? label = null)

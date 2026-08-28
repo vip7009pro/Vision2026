@@ -496,25 +496,107 @@ public enum PreprocessRoiMode
     Exclude = 1
 }
 
-public sealed class PreprocessRoiDefinition
+public sealed class PreprocessRoiDefinition : System.ComponentModel.INotifyPropertyChanged
 {
-    public PreprocessRoiShape Shape { get; set; } = PreprocessRoiShape.Rectangle;
-    public PreprocessRoiMode Mode { get; set; } = PreprocessRoiMode.Include;
+    private PreprocessRoiShape _shape = PreprocessRoiShape.Rectangle;
+    private PreprocessRoiMode _mode = PreprocessRoiMode.Include;
+    private bool _followOrigin = true;
+    private int _x = 50;
+    private int _y = 50;
+    private int _width = 200;
+    private int _height = 200;
+    private double _angle = 0.0;
+    private int _circleCenterX = 150;
+    private int _circleCenterY = 150;
+    private int _circleRadius = 50;
+    private List<Point2dModel> _polygonPoints = new();
+
+    public event System.ComponentModel.PropertyChangedEventHandler? PropertyChanged;
+
+    private void SetField<T>(ref T field, T value, [System.Runtime.CompilerServices.CallerMemberName] string? propertyName = null)
+    {
+        if (EqualityComparer<T>.Default.Equals(field, value)) return;
+        field = value;
+        PropertyChanged?.Invoke(this, new System.ComponentModel.PropertyChangedEventArgs(propertyName));
+    }
+
+    public PreprocessRoiShape Shape
+    {
+        get => _shape;
+        set => SetField(ref _shape, value);
+    }
+
+    public PreprocessRoiMode Mode
+    {
+        get => _mode;
+        set => SetField(ref _mode, value);
+    }
+
+    /// <summary>
+    /// Cho phép Masking ROI tự động xoay và tịnh tiến theo vị trí thực tế của con hàng (Origin).
+    /// </summary>
+    public bool FollowOrigin
+    {
+        get => _followOrigin;
+        set => SetField(ref _followOrigin, value);
+    }
 
     // Rectangle
-    public int X { get; set; } = 50;
-    public int Y { get; set; } = 50;
-    public int Width { get; set; } = 200;
-    public int Height { get; set; } = 200;
-    public double Angle { get; set; } = 0.0;
+    public int X
+    {
+        get => _x;
+        set => SetField(ref _x, value);
+    }
+
+    public int Y
+    {
+        get => _y;
+        set => SetField(ref _y, value);
+    }
+
+    public int Width
+    {
+        get => _width;
+        set => SetField(ref _width, value);
+    }
+
+    public int Height
+    {
+        get => _height;
+        set => SetField(ref _height, value);
+    }
+
+    public double Angle
+    {
+        get => _angle;
+        set => SetField(ref _angle, value);
+    }
 
     // Circle (Center X, Y, Radius)
-    public int CircleCenterX { get; set; } = 150;
-    public int CircleCenterY { get; set; } = 150;
-    public int CircleRadius { get; set; } = 50;
+    public int CircleCenterX
+    {
+        get => _circleCenterX;
+        set => SetField(ref _circleCenterX, value);
+    }
+
+    public int CircleCenterY
+    {
+        get => _circleCenterY;
+        set => SetField(ref _circleCenterY, value);
+    }
+
+    public int CircleRadius
+    {
+        get => _circleRadius;
+        set => SetField(ref _circleRadius, value);
+    }
 
     // Polygon
-    public List<Point2dModel> PolygonPoints { get; set; } = new();
+    public List<Point2dModel> PolygonPoints
+    {
+        get => _polygonPoints;
+        set => SetField(ref _polygonPoints, value);
+    }
 }
 
 public sealed class PreprocessNodeDefinition
@@ -970,10 +1052,31 @@ public sealed class DefectInspectionConfig
     public int MaxBlobSize { get; set; } = 5000;
 }
 
-public sealed class Point2dModel
+public sealed class Point2dModel : System.ComponentModel.INotifyPropertyChanged
 {
-    public double X { get; set; }
-    public double Y { get; set; }
+    private double _x;
+    private double _y;
+
+    public event System.ComponentModel.PropertyChangedEventHandler? PropertyChanged;
+
+    private void SetField<T>(ref T field, T value, [System.Runtime.CompilerServices.CallerMemberName] string? propertyName = null)
+    {
+        if (EqualityComparer<T>.Default.Equals(field, value)) return;
+        field = value;
+        PropertyChanged?.Invoke(this, new System.ComponentModel.PropertyChangedEventArgs(propertyName));
+    }
+
+    public double X
+    {
+        get => _x;
+        set => SetField(ref _x, value);
+    }
+
+    public double Y
+    {
+        get => _y;
+        set => SetField(ref _y, value);
+    }
 }
 
 public sealed class CropDefinition

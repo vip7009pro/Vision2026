@@ -599,8 +599,33 @@ namespace VisionInspectionApp.UI.ViewModels
             {
                 var def = SelectedPreprocessNodeDef();
                 if (def is null) return new ObservableCollection<PreprocessRoiDefinition>();
+                foreach (var r in def.Rois)
+                {
+                    HookPreprocessRoiEvents(r);
+                }
                 return new ObservableCollection<PreprocessRoiDefinition>(def.Rois);
             }
+        }
+
+        private void HookPreprocessRoiEvents(PreprocessRoiDefinition roi)
+        {
+            roi.PropertyChanged -= OnPreprocessRoiPropertyChanged;
+            roi.PropertyChanged += OnPreprocessRoiPropertyChanged;
+            if (roi.PolygonPoints != null)
+            {
+                foreach (var pt in roi.PolygonPoints)
+                {
+                    pt.PropertyChanged -= OnPreprocessRoiPropertyChanged;
+                    pt.PropertyChanged += OnPreprocessRoiPropertyChanged;
+                }
+            }
+        }
+
+        private void OnPreprocessRoiPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+        {
+            SchedulePreprocessPreviewUpdate();
+            RefreshPreviews();
+            RequestAutoSave();
         }
 
         public void Preprocess_AddRoi(PreprocessRoiShape shape, PreprocessRoiMode mode = PreprocessRoiMode.Include)
@@ -612,6 +637,7 @@ namespace VisionInspectionApp.UI.ViewModels
             {
                 Shape = shape,
                 Mode = mode,
+                FollowOrigin = true,
                 X = 50 + def.Rois.Count * 20,
                 Y = 50 + def.Rois.Count * 20,
                 Width = 200,
@@ -632,10 +658,12 @@ namespace VisionInspectionApp.UI.ViewModels
                 };
             }
 
+            HookPreprocessRoiEvents(newRoi);
             def.Rois.Add(newRoi);
             OnPropertyChanged(nameof(PreprocessRois));
             RaiseToolPropertyPanelsChanged();
             SchedulePreprocessPreviewUpdate();
+            RefreshPreviews();
             RequestAutoSave();
         }
 
@@ -643,10 +671,12 @@ namespace VisionInspectionApp.UI.ViewModels
         {
             var def = SelectedPreprocessNodeDef();
             if (def is null || roi is null) return;
+            roi.PropertyChanged -= OnPreprocessRoiPropertyChanged;
             def.Rois.Remove(roi);
             OnPropertyChanged(nameof(PreprocessRois));
             RaiseToolPropertyPanelsChanged();
             SchedulePreprocessPreviewUpdate();
+            RefreshPreviews();
             RequestAutoSave();
         }
 
@@ -658,6 +688,7 @@ namespace VisionInspectionApp.UI.ViewModels
             OnPropertyChanged(nameof(PreprocessRois));
             RaiseToolPropertyPanelsChanged();
             SchedulePreprocessPreviewUpdate();
+            RefreshPreviews();
             RequestAutoSave();
         }
 
@@ -666,9 +697,11 @@ namespace VisionInspectionApp.UI.ViewModels
             if (roi is null || roi.Shape != PreprocessRoiShape.Polygon) return;
             if (roi.PolygonPoints is null) roi.PolygonPoints = new List<Point2dModel>();
 
+            Point2dModel newPt;
             if (roi.PolygonPoints.Count == 0)
             {
-                roi.PolygonPoints.Add(new Point2dModel { X = 100, Y = 100 });
+                newPt = new Point2dModel { X = 100, Y = 100 };
+                roi.PolygonPoints.Add(newPt);
                 roi.PolygonPoints.Add(new Point2dModel { X = 250, Y = 100 });
                 roi.PolygonPoints.Add(new Point2dModel { X = 175, Y = 250 });
             }
@@ -676,16 +709,19 @@ namespace VisionInspectionApp.UI.ViewModels
             {
                 var last = roi.PolygonPoints.Last();
                 var first = roi.PolygonPoints.First();
-                roi.PolygonPoints.Add(new Point2dModel
+                newPt = new Point2dModel
                 {
                     X = Math.Round((last.X + first.X) / 2.0 + 30),
                     Y = Math.Round((last.Y + first.Y) / 2.0 + 30)
-                });
+                };
+                roi.PolygonPoints.Add(newPt);
             }
 
+            HookPreprocessRoiEvents(roi);
             OnPropertyChanged(nameof(PreprocessRois));
             RaiseToolPropertyPanelsChanged();
             SchedulePreprocessPreviewUpdate();
+            RefreshPreviews();
             RequestAutoSave();
         }
 
@@ -699,10 +735,12 @@ namespace VisionInspectionApp.UI.ViewModels
                 {
                     if (roi.PolygonPoints.Count > 3)
                     {
+                        point.PropertyChanged -= OnPreprocessRoiPropertyChanged;
                         roi.PolygonPoints.Remove(point);
                         OnPropertyChanged(nameof(PreprocessRois));
                         RaiseToolPropertyPanelsChanged();
                         SchedulePreprocessPreviewUpdate();
+                        RefreshPreviews();
                         RequestAutoSave();
                     }
                     break;

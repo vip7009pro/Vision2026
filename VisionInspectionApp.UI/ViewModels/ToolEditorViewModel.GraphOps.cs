@@ -1035,18 +1035,49 @@ namespace VisionInspectionApp.UI.ViewModels
                 var preDef = _config.PreprocessNodes.FirstOrDefault(x => string.Equals(x.Name, node.RefName, StringComparison.OrdinalIgnoreCase));
                 if (preDef is not null && preDef.Rois is not null && showRois)
                 {
+                    bool hasOriginPose = _lastRun is not null && _config.Origin is not null && _lastRun.Origin is not null
+                        && (_lastRun.Origin.MatchRect.Width > 0 || _lastRun.Origin.Position.X != 0 || _lastRun.Origin.Position.Y != 0);
+
+                    var originTeach = new OpenCvSharp.Point2d(0, 0);
+                    var originFound = new OpenCvSharp.Point2d(0, 0);
+                    double angleDeg = 0.0;
+
+                    if (hasOriginPose && _config.Origin is not null && _lastRun?.Origin is not null)
+                    {
+                        originTeach = new OpenCvSharp.Point2d(_config.Origin.WorldPosition.X, _config.Origin.WorldPosition.Y);
+                        if (originTeach.X == 0 && originTeach.Y == 0 && _config.Origin.TemplateRoi.Width > 0)
+                        {
+                            originTeach = new OpenCvSharp.Point2d(_config.Origin.TemplateRoi.X + _config.Origin.TemplateRoi.Width / 2.0, _config.Origin.TemplateRoi.Y + _config.Origin.TemplateRoi.Height / 2.0);
+                        }
+                        else if (originTeach.X == 0 && originTeach.Y == 0 && _config.Origin.SearchRoi.Width > 0)
+                        {
+                            originTeach = new OpenCvSharp.Point2d(_config.Origin.SearchRoi.X + _config.Origin.SearchRoi.Width / 2.0, _config.Origin.SearchRoi.Y + _config.Origin.SearchRoi.Height / 2.0);
+                        }
+
+                        var mr = _lastRun.Origin.MatchRect;
+                        originFound = (mr.Width > 0 && mr.Height > 0)
+                            ? new OpenCvSharp.Point2d(mr.X + mr.Width / 2.0, mr.Y + mr.Height / 2.0)
+                            : new OpenCvSharp.Point2d(_lastRun.Origin.Position.X, _lastRun.Origin.Position.Y);
+                        angleDeg = _lastRun.Origin.AngleDeg;
+                    }
+
                     for (var i = 0; i < preDef.Rois.Count; i++)
                     {
                         var rr = preDef.Rois[i];
                         var stroke = rr.Mode == PreprocessRoiMode.Exclude ? Brushes.Red : Brushes.Lime;
                         var prefix = rr.Mode == PreprocessRoiMode.Exclude ? "PRX" : "PR";
+                        bool applyPose = rr.FollowOrigin && hasOriginPose;
 
                         if (rr.Shape == PreprocessRoiShape.Circle)
                         {
+                            var centerFound = applyPose
+                                ? TransformPose(new OpenCvSharp.Point2d(rr.CircleCenterX, rr.CircleCenterY), originTeach, originFound, angleDeg)
+                                : new OpenCvSharp.Point2d(rr.CircleCenterX, rr.CircleCenterY);
+
                             dst.Add(new OverlayCircleItem
                             {
-                                CenterX = rr.CircleCenterX,
-                                CenterY = rr.CircleCenterY,
+                                CenterX = centerFound.X,
+                                CenterY = centerFound.Y,
                                 Radius = Math.Max(5, rr.CircleRadius),
                                 Stroke = stroke,
                                 StrokeThickness = 2.0,
@@ -1058,7 +1089,14 @@ namespace VisionInspectionApp.UI.ViewModels
                             if (rr.PolygonPoints != null && rr.PolygonPoints.Count >= 3)
                             {
                                 // 1. Closed Polyline outline for the Polygon
-                                var polyPoints = rr.PolygonPoints.Select(p => new System.Windows.Point(p.X, p.Y)).ToList();
+                                var polyPoints = rr.PolygonPoints.Select(p =>
+                                {
+                                    var pf = applyPose
+                                        ? TransformPose(new OpenCvSharp.Point2d(p.X, p.Y), originTeach, originFound, angleDeg)
+                                        : new OpenCvSharp.Point2d(p.X, p.Y);
+                                    return new System.Windows.Point(pf.X, pf.Y);
+                                }).ToList();
+
                                 dst.Add(new OverlayPolylineItem
                                 {
                                     Points = polyPoints,
@@ -1069,9 +1107,9 @@ namespace VisionInspectionApp.UI.ViewModels
                                 });
 
                                 // 2. Clean vertex point markers (Cyan Point Dots) for each corner
-                                for (int vIdx = 0; vIdx < rr.PolygonPoints.Count; vIdx++)
+                                for (int vIdx = 0; vIdx < polyPoints.Count; vIdx++)
                                 {
-                                    var pt = rr.PolygonPoints[vIdx];
+                                    var pt = polyPoints[vIdx];
                                     dst.Add(new OverlayPointItem
                                     {
                                         X = pt.X,
@@ -1095,7 +1133,24 @@ namespace VisionInspectionApp.UI.ViewModels
                                 Height = Math.Max(10, rr.Height),
                                 Angle = rr.Angle
                             };
-                            dst.Add(CreateRotatedRoi(rectRoi, stroke, $"{preDef.Name} {prefix}{i + 1}"));
+
+                            if (applyPose)
+                            {
+                                dst.Add(CreateRotatedRoiWithPose(rectRoi, stroke, $"{preDef.Name} {prefix}{i + 1}"));
+                            }
+                            else
+                            {
+                                dst.Add(new OverlayRectItem
+                                {
+                                    X = rectRoi.X,
+                                    Y = rectRoi.Y,
+                                    Width = rectRoi.Width,
+                                    Height = rectRoi.Height,
+                                    Angle = rectRoi.Angle,
+                                    Stroke = stroke,
+                                    Label = $"{preDef.Name} {prefix}{i + 1}"
+                                });
+                            }
                         }
                     }
                 }
