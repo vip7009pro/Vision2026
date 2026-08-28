@@ -103,12 +103,11 @@ public sealed partial class LightingControllerViewModel : ObservableObject
         _service = service;
         _settingsService = settingsService;
 
-        // Initialize 8 channels
-        for (int i = 0; i < 8; i++)
-            Channels.Add(new LightingChannelViewModel(i, this));
-
         // Load saved settings
         var settings = settingsService.Settings.Lighting;
+        _selectedChannelCount = settings.ChannelCount == 8 ? 8 : 4;
+        UpdateChannels(_selectedChannelCount);
+
         _selectedInterfaceType = (LightingInterfaceType)settings.InterfaceType;
         _controllerIp = settings.ControllerIp;
         _port = settings.Port;
@@ -147,7 +146,7 @@ public sealed partial class LightingControllerViewModel : ObservableObject
         // Subscribe to service events
         _service.OnConnectionStateChanged += (_, state) =>
         {
-            Dispatcher.CurrentDispatcher.BeginInvoke(() =>
+            RunOnUI(() =>
             {
                 ConnectionState = state;
                 OnPropertyChanged(nameof(IsConnected));
@@ -160,12 +159,12 @@ public sealed partial class LightingControllerViewModel : ObservableObject
 
         _service.OnStateUpdated += (_, state) =>
         {
-            Dispatcher.CurrentDispatcher.BeginInvoke(() => SyncFromDeviceState(state));
+            RunOnUI(() => SyncFromDeviceState(state));
         };
 
         _service.OnLogAdded += (_, entry) =>
         {
-            Dispatcher.CurrentDispatcher.BeginInvoke(() =>
+            RunOnUI(() =>
             {
                 var line = $"[{entry.Timestamp:HH:mm:ss.fff}] [{entry.Level}] {entry.Message}";
                 LogText += line + Environment.NewLine;
@@ -177,8 +176,21 @@ public sealed partial class LightingControllerViewModel : ObservableObject
 
         _service.OnError += (_, msg) =>
         {
-            Dispatcher.CurrentDispatcher.BeginInvoke(() => LastError = msg);
+            RunOnUI(() => LastError = msg);
         };
+    }
+
+    private static void RunOnUI(Action action)
+    {
+        var dispatcher = System.Windows.Application.Current?.Dispatcher;
+        if (dispatcher == null || dispatcher.CheckAccess())
+        {
+            action();
+        }
+        else
+        {
+            dispatcher.BeginInvoke(action);
+        }
     }
 
     // =====================================================================
@@ -186,6 +198,34 @@ public sealed partial class LightingControllerViewModel : ObservableObject
     // =====================================================================
 
     public ObservableCollection<LightingChannelViewModel> Channels { get; } = new();
+
+    public int[] AvailableChannelCounts { get; } = { 4, 8 };
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(GridColumns))]
+    [NotifyPropertyChangedFor(nameof(GridRows))]
+    private int _selectedChannelCount = 4;
+
+    public int GridColumns => 4;
+    public int GridRows => SelectedChannelCount == 4 ? 1 : 2;
+
+    partial void OnSelectedChannelCountChanged(int value)
+    {
+        UpdateChannels(value);
+        SaveSettings();
+    }
+
+    private void UpdateChannels(int count)
+    {
+        while (Channels.Count < count)
+        {
+            Channels.Add(new LightingChannelViewModel(Channels.Count, this));
+        }
+        while (Channels.Count > count)
+        {
+            Channels.RemoveAt(Channels.Count - 1);
+        }
+    }
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsEthernetSelected))]
@@ -375,11 +415,17 @@ public sealed partial class LightingControllerViewModel : ObservableObject
                     lineEnding: GetLineEndingString(),
                     dtrEnable: DtrEnable,
                     rtsEnable: RtsEnable,
-                    autoReadState: AutoReadOnConnect);
+                    autoReadState: false);
             }
             else
             {
                 await _service.ConnectAsync(ControllerIp, Port, SelectedNetworkMode);
+            }
+
+            // Immediately query and populate all channel values from controller
+            if (IsConnected)
+            {
+                await ReadAllAsync();
             }
         }
         catch (Exception ex)
@@ -429,7 +475,7 @@ public sealed partial class LightingControllerViewModel : ObservableObject
     {
         if (!IsConnected) return;
         LastError = string.Empty;
-        var result = await _service.ReadAllParametersAsync();
+        var result = await _service.ReadAllParametersAsync(SelectedChannelCount);
         if (!result.IsSuccess)
             LastError = $"Read All failed: {result.ErrorCode} - {result.ErrorMessage}";
     }
@@ -454,10 +500,10 @@ public sealed partial class LightingControllerViewModel : ObservableObject
         var confirm = MessageBox.Show(
             "Are you sure you want to restore the Lighting Controller to factory defaults?\n\nThis will reset ALL parameters.",
             "⚠️ Factory Reset — Lighting Controller",
-            MessageBoxButton.OKCancel,
+            MessageBoxButton.YesNo,
             MessageBoxImage.Warning);
 
-        if (confirm != MessageBoxResult.OK) return;
+        if (confirm != MessageBoxResult.Yes) return;
 
         LastError = string.Empty;
         var result = await _service.RestoreFactoryDefaultsAsync();
@@ -500,26 +546,49 @@ public sealed partial class LightingControllerViewModel : ObservableObject
         if (!IsConnected) return;
         LastError = string.Empty;
 
-        // Build one big batch command
-        var parts = new System.Collections.Generic.List<(string, string)>();
-        foreach (var ch in Channels)
+        // Apply channel settings using standard individual commands ($Fx, $Lx, $Tx)
+        // only for existing hardware channels (e.g. 4 or 8 channels)
+        for (int i = 0; i < Channels.Count; i++)
         {
-            parts.Add(($"F{ch.ChannelIndex}", ch.IsEnabled ? "1" : "0"));
-            parts.Add(($"L{ch.ChannelIndex}", ch.Brightness.ToString()));
-            parts.Add(($"T{ch.ChannelIndex}", ch.LightingTimeMs.ToString()));
-        }
-        parts.Add(("TR", ((int)SelectedTriggerMode).ToString()));
+            var ch = Channels[i];
 
-        var cmd = LightingProtocol.BuildMultiCommand(parts.ToArray());
-        var result = await _service.SendCommandAsync(cmd);
-        if (!result.IsSuccess)
-            LastError = $"Apply All failed: {result.ErrorCode} - {result.ErrorMessage}";
+            // 1. Power (F0-F3 or F0-F7)
+            var pwrResult = await _service.SetChannelPowerAsync(ch.ChannelIndex, ch.IsEnabled);
+            if (!pwrResult.IsSuccess)
+            {
+                LastError = $"Apply All CH{ch.ChannelNumber} power failed: {pwrResult.ErrorCode} - {pwrResult.ErrorMessage}";
+                return;
+            }
+
+            // 2. Brightness (L0-L3 or L0-L7)
+            var brResult = await _service.SetBrightnessAsync(ch.ChannelIndex, ch.Brightness);
+            if (!brResult.IsSuccess)
+            {
+                LastError = $"Apply All CH{ch.ChannelNumber} brightness failed: {brResult.ErrorCode} - {brResult.ErrorMessage}";
+                return;
+            }
+
+            // 3. Lighting Time (T0-T3 or T0-T7)
+            var timeResult = await _service.SetLightingTimeAsync(ch.ChannelIndex, ch.LightingTimeMs);
+            if (!timeResult.IsSuccess)
+            {
+                LastError = $"Apply All CH{ch.ChannelNumber} time failed: {timeResult.ErrorCode} - {timeResult.ErrorMessage}";
+                return;
+            }
+        }
+
+        // 4. Trigger Mode (TR)
+        var trResult = await _service.SetTriggerModeAsync(SelectedTriggerMode);
+        if (!trResult.IsSuccess)
+        {
+            LastError = $"Apply All Trigger failed: {trResult.ErrorCode} - {trResult.ErrorMessage}";
+        }
     }
 
     [RelayCommand]
     private async Task ApplyChannelLightingTimeAsync(int channelIndex)
     {
-        if (!IsConnected || channelIndex < 0 || channelIndex > 7) return;
+        if (!IsConnected || channelIndex < 0 || channelIndex >= Channels.Count) return;
         var ch = Channels[channelIndex];
         var time = Math.Clamp(ch.LightingTimeMs, 1, 999);
         var result = await _service.SetLightingTimeAsync(channelIndex, time);
@@ -538,9 +607,12 @@ public sealed partial class LightingControllerViewModel : ObservableObject
         {
             LastError = $"CH{channel + 1} power failed: {result.ErrorCode}";
             // Revert UI
-            Channels[channel].SuppressCommands = true;
-            Channels[channel].IsEnabled = !on;
-            Channels[channel].SuppressCommands = false;
+            if (channel < Channels.Count)
+            {
+                Channels[channel].SuppressCommands = true;
+                Channels[channel].IsEnabled = !on;
+                Channels[channel].SuppressCommands = false;
+            }
         }
     }
 
@@ -567,7 +639,7 @@ public sealed partial class LightingControllerViewModel : ObservableObject
 
     private void SyncFromDeviceState(LightingControllerState state)
     {
-        for (int i = 0; i < 8 && i < state.Channels.Length; i++)
+        for (int i = 0; i < Channels.Count && i < state.Channels.Length; i++)
         {
             Channels[i].SyncFromDevice(state.Channels[i]);
         }
@@ -585,6 +657,7 @@ public sealed partial class LightingControllerViewModel : ObservableObject
     private void SaveSettings()
     {
         var settings = _settingsService.Settings.Lighting;
+        settings.ChannelCount = SelectedChannelCount;
         settings.InterfaceType = (int)SelectedInterfaceType;
         settings.ControllerIp = ControllerIp;
         settings.Port = Port;

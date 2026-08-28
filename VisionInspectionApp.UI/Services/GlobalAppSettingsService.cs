@@ -37,6 +37,7 @@ public sealed class LightingControllerSettings
     public bool DtrEnable { get; set; } = false;
     public bool RtsEnable { get; set; } = false;
     public bool AutoReadOnConnect { get; set; } = false;
+    public int ChannelCount { get; set; } = 4; // 4 or 8 channels
 
     public bool AutoConnect { get; set; } = false;
 }

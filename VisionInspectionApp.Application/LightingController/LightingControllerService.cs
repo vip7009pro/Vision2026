@@ -270,10 +270,39 @@ public sealed class LightingControllerService : IDisposable
     public Task<LightingCommandResult> ReadChannelAsync(int channel, CancellationToken ct = default)
         => SendCommandAsync(LightingProtocol.BuildReadChannel(channel), ct);
 
-    /// <summary>Read all parameters from the controller.</summary>
-    public async Task<LightingCommandResult> ReadAllParametersAsync(CancellationToken ct = default)
+    /// <summary>Read all parameters from the controller (tries $RD=9999#, fallbacks to $RD=0..N if needed).</summary>
+    public Task<LightingCommandResult> ReadAllParametersAsync(CancellationToken ct = default)
+        => ReadAllParametersAsync(channelCount: 4, ct);
+
+    /// <summary>Read all parameters from the controller with specified channel count for fallback.</summary>
+    public async Task<LightingCommandResult> ReadAllParametersAsync(int channelCount, CancellationToken ct = default)
     {
         var result = await SendCommandAsync(LightingProtocol.BuildReadAll(), ct).ConfigureAwait(false);
+        if (result.IsSuccess && result.Data != null)
+        {
+            return result;
+        }
+
+        // Fallback: If RD=9999 didn't return channel data, read per-channel RD=0..channelCount-1
+        var compositeState = _lastKnownState ?? new LightingControllerState();
+        bool anySuccess = false;
+        for (int ch = 0; ch < channelCount && ch < 8; ch++)
+        {
+            var chResult = await SendCommandAsync(LightingProtocol.BuildReadChannel(ch), ct).ConfigureAwait(false);
+            if (chResult.IsSuccess && chResult.Data != null)
+            {
+                anySuccess = true;
+                compositeState.Channels[ch] = chResult.Data.Channels[ch];
+            }
+        }
+
+        if (anySuccess)
+        {
+            _lastKnownState = compositeState;
+            OnStateUpdated?.Invoke(this, compositeState);
+            return LightingCommandResult.WithData(compositeState, "+OK");
+        }
+
         return result;
     }
 

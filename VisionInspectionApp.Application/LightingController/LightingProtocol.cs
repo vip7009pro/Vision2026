@@ -227,22 +227,22 @@ public static class LightingProtocol
         if (trimmed.Contains("+OK", StringComparison.OrdinalIgnoreCase))
             return "+OK";
 
-        // 2. Check for error code E1-E7 or ER
-        var errMatch = System.Text.RegularExpressions.Regex.Match(trimmed, @"\b(E[1-7]|ER)\b", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        // 2. Check for error code E1-E7 or ER (at start/end of line or preceded by #/space/newline)
+        var errMatch = System.Text.RegularExpressions.Regex.Match(trimmed, @"(^|[\r\n\s\+\#])(E[1-7]|ER)($|[\r\n\s])", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
         if (errMatch.Success)
-            return errMatch.Value.ToUpperInvariant();
+            return errMatch.Groups[2].Value.ToUpperInvariant();
 
         // 3. Check for data block $...# (extract the last complete one if multiple)
         var dataMatches = System.Text.RegularExpressions.Regex.Matches(trimmed, @"\$[^$#]+#");
         if (dataMatches.Count > 0)
         {
-            // If multiple blocks (e.g. echo of $RD=9999# followed by $ID=0,...#), pick the one with data
+            // If multiple blocks (e.g. echo of $RD=9999# followed by $ID=0,...#), pick the one containing response data
             for (int i = dataMatches.Count - 1; i >= 0; i--)
             {
                 var matchVal = dataMatches[i].Value;
                 if (matchVal.Contains("ID=", StringComparison.OrdinalIgnoreCase) ||
-                    matchVal.Contains("L0=", StringComparison.OrdinalIgnoreCase) ||
-                    matchVal.Contains("F0=", StringComparison.OrdinalIgnoreCase) ||
+                    (matchVal.Contains("L", StringComparison.OrdinalIgnoreCase) && matchVal.Contains("T", StringComparison.OrdinalIgnoreCase)) ||
+                    (matchVal.Contains("F", StringComparison.OrdinalIgnoreCase) && matchVal.Contains("L", StringComparison.OrdinalIgnoreCase)) ||
                     dataMatches.Count == 1)
                 {
                     return matchVal;
@@ -250,6 +250,9 @@ public static class LightingProtocol
             }
             return dataMatches[^1].Value;
         }
+
+        if (trimmed.Length <= 3 && trimmed.StartsWith("E", StringComparison.OrdinalIgnoreCase))
+            return trimmed.ToUpperInvariant();
 
         return null;
     }

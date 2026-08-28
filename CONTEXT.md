@@ -69,11 +69,14 @@
        - Trong `SerialLightingTransport`: Thiết lập `DtrEnable = false`, `RtsEnable = false`, `Handshake = None` (tránh giữ MCU ở trạng thái Reset/Flow control block), bổ sung delay ổn định 150ms sau khi mở cổng, ghi byte thô và `Flush()`, đọc dữ liệu qua buffer nhị phân và `TryExtractResponse` trả về ngay khi nhận đủ gói.
     4. [LightingControllerService.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.Application/LightingController/LightingControllerService.cs):
        - Service quản lý kết nối, hỗ trợ `ConnectAsync` (Ethernet) và `ConnectSerialAsync` (RS-232 COM), điều phối gửi nhận lệnh bất đồng bộ, event dispatcher cập nhật trạng thái thiết bị và bộ nhớ log TX/RX thread-safe.
-       - `ConnectSerialAsync`: Đặt `autoReadState` mặc định `false` cho cổng COM để việc mở cổng diễn ra tức thì, không bị nghẽn bởi lệnh `$RD=9999#` ban đầu.
+       - `ReadAllParametersAsync`: Thử đọc toàn bộ bằng `$RD=9999#` và tự động fallback sang đọc tuần tự từng kênh `$RD=0#`..`$RD=7#` nếu firmware thiết bị chỉ hỗ trợ đọc đơn kênh.
     5. [LightingControllerViewModel.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/LightingControllerViewModel.cs) & [LightingControllerWindow.xaml](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/Views/LightingControllerWindow.xaml):
-       - MVVM ViewModel quản lý 8 kênh (`LightingChannelViewModel`), quét tự động danh sách cổng COM máy tính (`SerialPort.GetPortNames()`), mặc định `COM3`, slider độ sáng có timer debounce 50ms tạo hiệu ứng tức thì cho người dùng mà không spam socket/serial.
-       - Giao diện WPF hiện đại hỗ trợ chuyển đổi mượt mà giữa Ethernet và Serial COM: bổ sung tùy chọn Line Ending (`None`, `\r\n CRLF`, `\r CR`, `\n LF`), DTR, RTS, Auto-read on Connect.
-       - Tích hợp thanh kiểm tra lệnh trực tiếp (**Test Lệnh**: gõ lệnh `$F0=1#`, `$L0=255#`, `$RD=0#` và bấm **🚀 Gửi Lệnh**) kèm nút **🗑️ Xóa Log** trong khung Protocol Log thời gian thực.
+       - Hỗ trợ linh hoạt bộ điều khiển **4 Kênh** hoặc **8 Kênh** (`SelectedChannelCount` = 4 hoặc 8, lưu trong Settings):
+         + Khi chọn **4 Kênh**: Giao diện hiển thị gọn gàng 1 hàng 4 kênh (CH1..CH4), hàm `ApplyAllChannelsAsync` chỉ gửi các lệnh cho 4 kênh thực tế (`$F0..$F3`, `$L0..$L3`, `$T0..$T3`, `$TR`), loại bỏ hoàn toàn lỗi gửi kênh ngoài phạm vi phần cứng (CH5..CH8) gây lỗi `E7` (Channel name length error).
+         + Khi chọn **8 Kênh**: Giao diện hiển thị đầy đủ 2 hàng 4 kênh (CH1..CH8).
+       - MVVM ViewModel quản lý danh sách kênh động, sửa lỗi `Dispatcher.CurrentDispatcher` sang `Application.Current.Dispatcher` đảm bảo mọi sự kiện đồng bộ trạng thái thiết bị và log đều được cập nhật tức thì lên giao diện WPF UI thread.
+       - Tự động gọi `ReadAllAsync()` ngay sau khi kết nối thành công để nạp chính xác trạng thái thực tế (bật/tắt các kênh, độ sáng, thời gian sáng, trigger mode) lên form.
+       - Tích hợp thanh kiểm tra lệnh trực tiếp (**Test Lệnh**: gõ lệnh `$F0=1#`, `$L0=255#`, `$RD=0#` và bấm **🚀 Gửi Lệnh**) kèm các nút preset nhanh và nút **🗑️ Xóa Log** trong khung Protocol Log thời gian thực.
     6. [MainWindow.xaml](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/MainWindow.xaml), [App.xaml.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/App.xaml.cs), [GlobalAppSettingsService.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/Services/GlobalAppSettingsService.cs):
        - Thêm menu `💡 Chiếu Sáng` trên MenuStrip.
        - Đăng ký DI Singleton, auto-connect ngầm an toàn và dọn dẹp kết nối trong `ShutdownGracefullyAsync`.

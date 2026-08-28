@@ -83,6 +83,14 @@
                             <RadioButton Content="🔌 Serial RS-232 (COM)" IsChecked="{Binding IsSerialSelected, Mode=TwoWay}"
                                          GroupName="InterfaceGroup" VerticalAlignment="Center" Margin="0,0,10,0" FontWeight="SemiBold"
                                          IsEnabled="{Binding IsNotConnected}" />
+
+                            <Border Background="{DynamicResource PanelAltBackgroundBrush}" CornerRadius="4" Padding="6,2" Margin="4,0,0,0">
+                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                    <TextBlock Text="Kênh:" VerticalAlignment="Center" Margin="0,0,4,0" Style="{StaticResource SmallLabel}" />
+                                    <ComboBox ItemsSource="{Binding AvailableChannelCounts}" SelectedItem="{Binding SelectedChannelCount}"
+                                              VerticalAlignment="Center" Width="60" IsEnabled="{Binding IsNotConnected}" />
+                                </StackPanel>
+                            </Border>
                         </StackPanel>
 
                         <!-- Buttons + Status -->
@@ -247,7 +255,7 @@
         <ItemsControl Grid.Row="1" ItemsSource="{Binding Channels}" Margin="0,4">
             <ItemsControl.ItemsPanel>
                 <ItemsPanelTemplate>
-                    <UniformGrid Rows="2" Columns="4" />
+                    <UniformGrid Rows="{Binding GridRows}" Columns="{Binding GridColumns}" />
                 </ItemsPanelTemplate>
             </ItemsControl.ItemsPanel>
             <ItemsControl.ItemTemplate>
