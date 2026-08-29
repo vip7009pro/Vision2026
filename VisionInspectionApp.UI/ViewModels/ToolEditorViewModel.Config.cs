@@ -194,48 +194,64 @@ namespace VisionInspectionApp.UI.ViewModels
                     ?? _config.ImageSources.FirstOrDefault(x => x.SourceType == ImageSourceType.Camera) 
                     ?? _config.ImageSources.FirstOrDefault();
 
-                if (imgSourceDef?.CameraParams != null)
+                // Đảm bảo cấu hình đèn cho Job và nạp xuống thiết bị khi mở Job
+                if (imgSourceDef != null)
                 {
-                    _ = Task.Run(async () =>
+                    EnsureImageSourceLightingParams(imgSourceDef);
+                }
+
+                _ = Task.Run(async () =>
+                {
+                    // 1. Áp dụng Camera Parameters
+                    if (imgSourceDef?.CameraParams != null)
                     {
                         try
                         {
                             await _cameraService.ApplyParametersAsync(imgSourceDef.CameraParams);
-                            // Chờ cảm biến camera cập nhật thông số và đẩy frame mới
                             await Task.Delay(100);
                         }
                         catch { }
+                    }
 
-                        var dispatcher = System.Windows.Application.Current?.Dispatcher;
-                        if (autoRun)
+                    // 2. Áp dụng Lighting Parameters
+                    if (imgSourceDef?.LightingParams != null && imgSourceDef.LightingParams.Enabled && _lightingControllerService != null && _lightingControllerService.IsConnected)
+                    {
+                        try
                         {
-                            if (dispatcher != null)
+                            int count = imgSourceDef.LightingParams.ChannelCount == 8 ? 8 : 4;
+                            for (int i = 0; i < count && i < imgSourceDef.LightingParams.Channels.Count; i++)
                             {
-                                await dispatcher.InvokeAsync(OnRunOnceClicked);
+                                var ch = imgSourceDef.LightingParams.Channels[i];
+                                await _lightingControllerService.SetChannelPowerAsync(ch.ChannelIndex, ch.IsEnabled);
+                                if (ch.IsEnabled)
+                                {
+                                    await _lightingControllerService.SetBrightnessAsync(ch.ChannelIndex, ch.Brightness);
+                                }
                             }
-                            else
-                            {
-                                OnRunOnceClicked();
-                            }
+                        }
+                        catch { }
+                    }
+
+                    var dispatcher = System.Windows.Application.Current?.Dispatcher;
+                    if (autoRun)
+                    {
+                        if (dispatcher != null)
+                        {
+                            await dispatcher.InvokeAsync(OnRunOnceClicked);
                         }
                         else
                         {
-                            if (dispatcher != null)
-                            {
-                                await dispatcher.InvokeAsync(RefreshPreviews);
-                            }
+                            OnRunOnceClicked();
                         }
-                    });
-                }
-                else
-                {
-                    RefreshPreviews();
-                    // Trigger inspection execution with new job if autoRun is enabled
-                    if (autoRun)
-                    {
-                        OnRunOnceClicked();
                     }
-                }
+                    else
+                    {
+                        if (dispatcher != null)
+                        {
+                            await dispatcher.InvokeAsync(RefreshPreviews);
+                        }
+                    }
+                });
             }
             catch (Exception ex)
             {

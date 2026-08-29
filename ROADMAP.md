@@ -1194,18 +1194,68 @@ Lộ trình tích hợp tính năng Chụp ảnh từ camera và hỗ trợ các
 
 
 
-- [x] Task 267: Ð?ng b? hóa Masking ROI c?a Preprocess Node trên Flow Canvas & Pipeline và H? tr? Tùy ch?n Bám theo Origin (Follow Origin).
-      - M?c Tiêu & Yêu C?u:
-        - S?a l?i vùng den/tr?ng (Mask) render trên ?nh preview b? l?ch so v?i khung ROI th?c t? trong node Preprocess (Tool Editor).
-        - H? tr? tính nang Masking ROI t? d?ng xoay và t?nh ti?n th?c t? theo Origin d? che chính xác các khu v?c trên con hàng khi con hàng b? xoay.
-        - B? sung tùy ch?n checkbox FollowOrigin (Bám Origin) d?c l?p cho t?ng Masking ROI d? ngu?i dùng có th? linh ho?t b?t/t?t (khi t?t: gi? tinh theo t?a d? thô c?a ?nh d?u vào; khi b?t: bám theo Origin c?a con hàng).
-      - Gi?i Pháp K? Thu?t Ðã Tri?n Khai:
-        1. VisionInspectionApp.Models: B? sung thu?c tính FollowOrigin (m?c d?nh 	rue) và cài d?t INotifyPropertyChanged cho [PreprocessRoiDefinition](file:///g:/NODEJS/Vision2026/VisionInspectionApp.Models/Class1.cs) và Point2dModel giúp d?ng b? d? li?u hai chi?u t?c thì khi s?a s? trên panel thu?c tính.
-        2. VisionInspectionApp.VisionEngine: Nâng c?p [ImagePreprocessor.Run](file:///g:/NODEJS/Vision2026/VisionInspectionApp.VisionEngine/Class1.cs) h? tr? nh?n t?a d? m?u (originTeach), t?a d? tìm th?y (originFound) và góc nghiêng (originAngleDeg). S? d?ng gi?i thu?t lu?ng giác 4 d?nh (cos, sin) chu?n xác cho Rectangle/Rotated Rectangle, bi?n d?i tâm cho Circle, bi?n d?i t?ng d?nh cho Polygon d? v? Cv2.FillPoly và Cv2.Circle trùng kh?p 100% t?ng pixel v?i khung overlay canvas.
-        3. VisionInspectionApp.Application: C?p nh?t [InspectionService.Pipeline.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.Application/Services/InspectionService.Pipeline.cs) truy?n Origin Pose vào _preprocessor.Run khi th?c thi inspection flow.
-        4. VisionInspectionApp.UI:
-           - [ToolEditorViewModel.GraphOps.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/ToolEditorViewModel.GraphOps.cs): D?ng OverlayItems cho Preprocess (Rectangle, Circle, Polygon) linh ho?t theo c? FollowOrigin.
-           - [ToolEditorViewModel.Engine.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/ToolEditorViewModel.Engine.cs): C?p nh?t IsRawImageRoi và UnTransformRoi nh?n bi?t c? FollowOrigin, d?ng th?i uu tiên render ResolveToolPreprocessForPreview trong RefreshSelectedPreview.
-           - [ToolEditorViewModel.ToolPreprocess.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/ToolEditorViewModel.ToolPreprocess.cs): Hook s? ki?n PropertyChanged c?a ROI d? t? d?ng g?i SchedulePreprocessPreviewUpdate và RefreshPreviews().
-           - [ToolEditorView.xaml](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/Views/ToolEditorView.xaml): Thêm CheckBox ? Bám Origin và ô nh?p Angle (góc nghiêng) cho t?ng card ROI trong panel Masking ROI c?a Preprocessor.
-      - Ki?m Th?: Xây d?ng [PreprocessRoiMaskingTest.cs](file:///g:/NODEJS/Vision2026/TestExtractApp/PreprocessRoiMaskingTest.cs) ki?m th? t? d?ng 4 k?ch b?n: Rectangle static mask, Rectangle exclude mask, Circle & Polygon composition, và xoay 90° theo Origin Pose (FollowOrigin = true vs FollowOrigin = false). Toàn b? test suite PASSED 100%.
+- [x] Task 268: Tự động kết nối & bật đèn khi khởi động ứng dụng theo cấu hình người dùng, Tái cấu trúc layout Lighting Controller Window responsive không bị che khuất khi mở cửa sổ chuẩn, Quản lý cấu hình đèn theo từng Job trong node ImageSource (Tool Editor) và Tự động bật/tắt đèn khi nạp Job.
+      - Mục Tiêu & Yêu Cầu:
+        - Tự động kết nối lại phương thức gần nhất (Serial RS-232 / Ethernet) khi mở app và tự động bật đèn ở channel tùy chọn với mức sáng tùy chọn do người dùng cài đặt để quan sát Live view camera ngay lập tức.
+        - Bổ sung bảng cài đặt cấu hình khởi động trong màn hình Lighting Controller (cho phép ghi nhớ mức sáng hiện tại làm cấu hình khởi động chỉ bằng 1 cú click).
+        - Chỉnh lại nhóm control kết nối Ethernet và RS-232 ở trên cùng cửa sổ Lighting Controller: Bố cục responsive hiển thị rõ ràng 100% tất cả các nút bấm, ô nhập liệu và combobox khi mở cửa sổ ở kích thước chuẩn (không cần full màn hình).
+        - Bổ sung thuộc tính mức độ sáng từng kênh cho node ImageSource trong Tool Editor; nếu Job cũ chưa có thì tự động đọc mức sáng hiện tại từ thiết bị hoặc fallback an toàn.
+        - Khi mở file job, đọc thông tin đèn và tự động gửi lệnh bật/tắt thiết lập mức sáng theo đúng cấu hình được lưu cùng Job.
+      - Giải Pháp Kỹ Thuật Đã Triển Khai:
+        1. [LightingControllerModels.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.Models/LightingControllerModels.cs) & [Class1.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.Models/Class1.cs):
+           - Bổ sung `LightingStartupChannelSettings` với helper tĩnh `CreateDefaults(count)`.
+           - Bổ sung `JobLightingParameters` và `JobLightingChannelParams` vào `ImageSourceDefinition.LightingParams`.
+        2. [GlobalAppSettingsService.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/Services/GlobalAppSettingsService.cs):
+           - Thêm `AutoConnect = true`, `EnableStartupLighting = true`, `StartupChannels` vào `LightingControllerSettings`.
+        3. [LightingControllerWindow.xaml](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/Views/LightingControllerWindow.xaml) & [LightingControllerViewModel.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/LightingControllerViewModel.cs):
+           - Tái cấu trúc Row 0 thành 2 khối cân đối (Bên trái: Kết nối Ethernet/RS-232; Bên phải: Cài đặt khởi động + Trigger Mode + Global Actions).
+           - Thêm giao diện Checkbox Auto-connect, Checkbox Tự bật đèn khi mở app, nút "📋 Lưu Mức Sáng Này Làm Khởi Động" (`CaptureCurrentAsStartupCommand`).
+        4. [App.xaml.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/App.xaml.cs):
+           - Luồng startup ngầm tự động kết nối phương thức gần nhất và gửi lệnh áp dụng `StartupChannels` khi `EnableStartupLighting == true`.
+        5. [ToolEditorViewModel.ToolPreprocess.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/ToolEditorViewModel.ToolPreprocess.cs) & [ToolEditorView.xaml](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/Views/ToolEditorView.xaml):
+           - Bổ sung `JobLightingChannelItemViewModel`, danh sách `ImageSource_LightingChannels`, `ImageSource_EnableLighting`, `ImageSource_LightingChannelCount`.
+           - Thêm các command `ImageSource_ApplyLightingToDeviceCommand` ("⚡ Test Áp Dụng") và `ImageSource_ReadLightingFromDeviceCommand` ("📥 Đọc Từ Đèn").
+           - Thêm bảng giao diện điều khiển đèn cho từng kênh (ON/OFF toggle, Slider + TextBox độ sáng 0-255) trong Properties Panel của `ImageSource`.
+        6. [ToolEditorViewModel.Config.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/ToolEditorViewModel.Config.cs) & [InspectionViewModel.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/InspectionViewModel.cs):
+           - Khi nạp Job (`LoadJobFromFile` / `LoadJob`), tự động gửi lệnh bật/tắt và thiết lập mức sáng theo `imgSourceDef.LightingParams` xuống `LightingControllerService`.
+      - Kiểm Thử:
+        - Bổ sung 4 bài test unit trong [LightingControllerTests.cs](file:///g:/NODEJS/Vision2026/TestExtractApp/LightingControllerTests.cs) kiểm tra defaults, JSON serialization, backward compatibility cho job cũ không có lighting params, và clone. Toàn bộ 106 test cases Lighting Controller và toàn bộ test suite PASSED 100%.
+
+- [x] Task 269: Xử lý ngoại lệ Timeout / Mất kết nối Bộ điều khiển đèn khi khởi động ứng dụng, ngăn chặn văng app và hiển thị thông báo trạng thái cảnh báo trên Status Bar.
+      - Mục Tiêu & Yêu Cầu:
+        - Xử lý trường hợp bộ điều khiển đèn chưa được kết nối (tắt nguồn / chưa cắm cáp RS-232 / cổng COM không phản hồi) khi bật ứng dụng gây lỗi timeout (`System.TimeoutException`).
+        - Tuyệt đối không để văng app (unhandled exception crash).
+        - Hiển thị thông báo lỗi rõ ràng dưới dạng cảnh báo trên Status Bar (ở cả Global Status Bar của cửa sổ chính và Tool Editor Status Bar) để người dùng nắm được trạng thái và kiểm tra cáp nối/nguồn thiết bị.
+      - Giải Pháp Kỹ Thuật Đã Triển Khai:
+        1. [LightingControllerService.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.Application/LightingController/LightingControllerService.cs):
+           - Bổ sung thuộc tính `LastError`, ghi nhận lỗi chi tiết khi `ConnectSerialAsync` / `ConnectAsync` thất bại hoặc timeout.
+           - Đặt `ConnectionState = LightingConnectionState.Error` và phát sự kiện `OnError` với nội dung lỗi rõ ràng.
+        2. [App.xaml.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/App.xaml.cs):
+           - Bọc khối auto-connect trong `try-catch (Exception ex)` an toàn tuyệt đối.
+           - Khi phát hiện timeout hoặc lỗi kết nối, lập tức đẩy thông báo cảnh báo `⚠️ [Đèn Chiếu Sáng] {ex.Message}` lên `MainWindowViewModel.SetGlobalStatus(warnMsg, "Warning")` và `ToolEditorViewModel.StatusBarText`.
+        3. [MainWindowViewModel.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/MainWindowViewModel.cs) & [MainWindow.xaml](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/MainWindow.xaml):
+           - Thêm Global Status Bar ở đáy cửa sổ chính với cơ chế đổi màu trạng thái (`GlobalStatusSeverity`: Warning `#FFA000`, Error `#E53935`, Success `#4CAF50`, Info `#9E9E9E`).
+           - Tự động lắng nghe sự kiện `OnError` và `OnConnectionStateChanged` của `LightingControllerService` để cập nhật trạng thái thời gian thực.
+        4. [ToolEditorViewModel.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/ToolEditorViewModel.cs):
+           - Đăng ký lắng nghe sự kiện `_lightingControllerService.OnError` để tự động cập nhật thanh `StatusBarText` của Tool Editor.
+      - Kiểm Thử:
+        - Toàn bộ 106 bài kiểm thử của Lighting Controller và toàn bộ test suite của dự án PASSED 100%. Ứng dụng khởi động an toàn, không bị crash ngay cả khi cổng COM không có thiết bị phản hồi.
+
+- [x] Task 270: Duy trì trạng thái kết nối Lighting Controller liên tục, Tái cấu trúc 2 cột giao diện Lighting Window hiển thị hoàn chỉnh ở kích thước chuẩn, và Chuyển toàn bộ các cửa sổ chức năng sang Modeless Window không chặn tương tác.
+      - Mục Tiêu & Yêu Cầu:
+        1. Sửa hiện tượng báo "Kết nối thành công" sau khi đã báo Timeout dù chưa cắm thiết bị: Đảm bảo chỉ phát sự kiện và gán trạng thái `Connected` sau khi handshake / probe thành công.
+        2. Duy trì kết nối liên tục từ khi mở app: Khi mở cửa sổ Lighting Controller, nếu service đã kết nối sẵn thì tự động đồng bộ trạng thái `Connected` và giá trị độ sáng thực tế của các kênh từ thiết bị, không cần bấm kết nối lại từ đầu.
+        3. Tái cấu trúc giao diện cửa sổ Lighting Controller thành dạng 2 cột trực quan (Cột trái: Kết nối + Khởi động + Trigger & Actions; Cột phải: Danh sách các kênh dạng cột dọc mỏng gọn), hiển thị 100% đầy đủ ở kích thước mặc định chuẩn mà không cần maximize cửa sổ.
+        4. Chuyển đổi toàn bộ các cửa sổ chức năng (Lighting Controller, PLC Manager, PLC Monitor, PLC Tag Browser, PLC Oscilloscope, HMI Manager, Database Manager, Calibration, Chessboard Calibration, Roll Defect Map, Inspection Log, Job Camera Settings, Product Assign, OQC Settings, OQC Detail) từ `ShowDialog()` sang `Show()` (Modeless Window) kèm quản lý instance kích hoạt `Activate()`, giúp người dùng thoải mái tương tác song song với màn hình chính và tất cả các cửa sổ khác.
+      - Giải Pháp Kỹ Thuật Đã Triển Khai:
+        1. [LightingControllerService.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.Application/LightingController/LightingControllerService.cs):
+           - Sắp xếp lại thứ tự gán trạng thái trong `ConnectSerialAsync` và `ConnectAsync`: Chỉ gán `ConnectionState = Connected` và ghi log sau khi probe đọc trạng thái thành công. Nếu probe timeout/thất bại, ngắt kết nối an toàn, gán `Error` và phát `OnError`.
+        2. [LightingControllerViewModel.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/LightingControllerViewModel.cs):
+           - Trong constructor, tự động nạp `_connectionState = _service.ConnectionState;` và gọi `SyncFromDeviceState(_service.LastKnownState)` nếu service đã kết nối.
+        3. [LightingControllerWindow.xaml](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/Views/LightingControllerWindow.xaml):
+           - Tái thiết kế bố cục 2 cột responsive (`Column 0: 430px`, `Column 1: *`): Cột trái chứa Connection Panel, Startup Settings Panel, Trigger & Global Actions Panel; Cột phải chứa danh sách thẻ kênh mỏng gọn (Label ON/OFF, Slider + TextBox độ sáng, Thời gian sáng ms); Phía dưới giữ nguyên Protocol Log.
+        4. [ToolEditorViewModel.Lighting.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/ToolEditorViewModel.Lighting.cs), [ToolEditorViewModel.Plc.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/ToolEditorViewModel.Plc.cs), [ToolEditorViewModel.Db.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/ToolEditorViewModel.Db.cs), [ToolEditorViewModel.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/ToolEditorViewModel.cs), [ToolEditorViewModel.ToolPreprocess.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/ToolEditorViewModel.ToolPreprocess.cs), [OqcScannerViewModel.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/OqcScannerViewModel.cs):
+           - Chuyển đổi toàn bộ các lệnh mở Window từ `ShowDialog()` sang `Show()` modeless.
+           - Bổ sung cơ chế quản lý instance thông minh: Kích hoạt `Activate()` và đưa lên phía trước nếu cửa sổ đang mở, tự động hủy tham chiếu khi `Closed`.
+      - Kiểm Thử:
+        - Toàn bộ 106 bài kiểm thử của Lighting Controller và toàn bộ test suite của dự án PASSED 100%. Mọi cửa sổ mở độc lập không chặn UI chính.

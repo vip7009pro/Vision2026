@@ -53,6 +53,9 @@ public sealed class LightingControllerService : IDisposable
     /// <summary>Last known state from the controller (from ReadAll).</summary>
     public LightingControllerState? LastKnownState => _lastKnownState;
 
+    /// <summary>Last error message, if any.</summary>
+    public string? LastError { get; private set; }
+
     /// <summary>Recent log entries.</summary>
     public IReadOnlyCollection<LightingLogEntry> Logs => _logs.ToArray();
 
@@ -71,10 +74,11 @@ public sealed class LightingControllerService : IDisposable
         int connectTimeoutMs = 3000, int receiveTimeoutMs = 3000,
         string? lineEnding = null, CancellationToken cancellationToken = default)
     {
-        if (_disposed) throw new ObjectDisposedException(nameof(LightingControllerService));
+        if (_disposed) return;
 
         try
         {
+            LastError = null;
             ConnectionState = LightingConnectionState.Connecting;
             Log("INFO", $"Connecting to {ip}:{port} (Mode: {mode})...");
 
@@ -93,25 +97,29 @@ public sealed class LightingControllerService : IDisposable
                 _transport = tcp;
             }
 
+            // Probe / Read current state from controller
+            var readResult = await ReadAllParametersAsync(cancellationToken).ConfigureAwait(false);
+            if (!readResult.IsSuccess && readResult.ErrorCode == "TIMEOUT")
+            {
+                var errMsg = $"Không nhận được phản hồi từ bộ điều khiển đèn tại {ip}:{port} sau {receiveTimeoutMs}ms.";
+                Log("WARN", errMsg);
+                LastError = errMsg;
+                ConnectionState = LightingConnectionState.Error;
+                await DisconnectInternalAsync().ConfigureAwait(false);
+                OnError?.Invoke(this, errMsg);
+                return;
+            }
+
             ConnectionState = LightingConnectionState.Connected;
             Log("INFO", $"Connected to {ip}:{port} successfully.");
-
-            // Read current state from controller
-            try
-            {
-                await ReadAllParametersAsync(cancellationToken).ConfigureAwait(false);
-            }
-            catch (Exception ex)
-            {
-                Log("WARN", $"Connected but failed to read initial state: {ex.Message}");
-            }
         }
         catch (Exception ex)
         {
             ConnectionState = LightingConnectionState.Error;
-            Log("ERROR", $"Connection failed: {ex.Message}");
-            OnError?.Invoke(this, $"Cannot connect to Lighting Controller at {ip}:{port}: {ex.Message}");
-            throw;
+            LastError = $"Không thể kết nối đến {ip}:{port}: {ex.Message}";
+            Log("ERROR", LastError);
+            await DisconnectInternalAsync().ConfigureAwait(false);
+            OnError?.Invoke(this, LastError);
         }
     }
 
@@ -130,10 +138,11 @@ public sealed class LightingControllerService : IDisposable
         bool autoReadState = true,
         CancellationToken cancellationToken = default)
     {
-        if (_disposed) throw new ObjectDisposedException(nameof(LightingControllerService));
+        if (_disposed) return;
 
         try
         {
+            LastError = null;
             ConnectionState = LightingConnectionState.Connecting;
             var leDisplay = lineEnding == null ? "None" : lineEnding.Replace("\r", "\\r").Replace("\n", "\\n");
             Log("INFO", $"Connecting to Serial {portName} ({baudRate}bps, {dataBits} bits, Parity: {parity}, StopBits: {stopBits}, LineEnding: '{leDisplay}')...");
@@ -144,28 +153,33 @@ public sealed class LightingControllerService : IDisposable
             await serialTransport.ConnectAsync(portName, baudRate, parity, dataBits, stopBits, cancellationToken).ConfigureAwait(false);
             _transport = serialTransport;
 
-            ConnectionState = LightingConnectionState.Connected;
-            Log("INFO", $"Connected to Serial {portName} successfully.");
-
-            // Read current state from controller if enabled
+            // Probe / Read current state from controller if enabled
             if (autoReadState)
             {
-                try
+                var probeResult = await ReadAllParametersAsync(cancellationToken).ConfigureAwait(false);
+                if (!probeResult.IsSuccess && probeResult.ErrorCode == "TIMEOUT")
                 {
-                    await ReadAllParametersAsync(cancellationToken).ConfigureAwait(false);
-                }
-                catch (Exception ex)
-                {
-                    Log("WARN", $"Initial ReadAll ($RD=9999#) skipped or timed out: {ex.Message}");
+                    // Cổng COM mở được nhưng thiết bị không phản hồi (chưa cắm cáp / tắt nguồn)
+                    var errMsg = $"Không nhận được phản hồi từ cổng {portName} sau {readTimeoutMs}ms. Hãy kiểm tra kết nối cáp RS-232, nguồn bộ điều khiển và cài đặt cổng COM.";
+                    Log("WARN", errMsg);
+                    LastError = errMsg;
+                    ConnectionState = LightingConnectionState.Error;
+                    await DisconnectInternalAsync().ConfigureAwait(false);
+                    OnError?.Invoke(this, errMsg);
+                    return;
                 }
             }
+
+            ConnectionState = LightingConnectionState.Connected;
+            Log("INFO", $"Connected to Serial {portName} successfully.");
         }
         catch (Exception ex)
         {
             ConnectionState = LightingConnectionState.Error;
-            Log("ERROR", $"Serial connection to {portName} failed: {ex.Message}");
-            OnError?.Invoke(this, $"Cannot connect to Lighting Controller on {portName}: {ex.Message}");
-            throw;
+            LastError = $"Không thể mở cổng {portName}: {ex.Message}";
+            Log("ERROR", LastError);
+            await DisconnectInternalAsync().ConfigureAwait(false);
+            OnError?.Invoke(this, LastError);
         }
     }
 
@@ -213,6 +227,40 @@ public sealed class LightingControllerService : IDisposable
             Log("TX", command);
             var rawResponse = await _transport.SendAndReceiveAsync(command, cancellationToken).ConfigureAwait(false);
             Log("RX", rawResponse);
+
+            if (string.IsNullOrWhiteSpace(rawResponse))
+            {
+                var errMsg = "Không nhận được phản hồi từ thiết bị.";
+                Log("ERROR", errMsg);
+                OnError?.Invoke(this, errMsg);
+                return LightingCommandResult.Error("TIMEOUT", errMsg);
+            }
+
+            if (rawResponse.StartsWith("[TIMEOUT]", StringComparison.OrdinalIgnoreCase))
+            {
+                var errMsg = rawResponse.Length > 9 ? rawResponse.Substring(9).Trim() : "Quá thời gian chờ phản hồi từ thiết bị.";
+                Log("ERROR", errMsg);
+                LastError = errMsg;
+                OnError?.Invoke(this, errMsg);
+                return LightingCommandResult.Error("TIMEOUT", errMsg);
+            }
+
+            if (rawResponse.StartsWith("[ERROR]", StringComparison.OrdinalIgnoreCase))
+            {
+                var errMsg = rawResponse.Length > 7 ? rawResponse.Substring(7).Trim() : "Lỗi giao tiếp thiết bị.";
+                Log("ERROR", errMsg);
+                LastError = errMsg;
+                ConnectionState = LightingConnectionState.Error;
+                OnError?.Invoke(this, errMsg);
+                return LightingCommandResult.Error("COMM_ERROR", errMsg);
+            }
+
+            if (rawResponse.StartsWith("[CANCELLED]", StringComparison.OrdinalIgnoreCase))
+            {
+                var errMsg = "Thao tác gửi nhận lệnh đã bị hủy.";
+                Log("WARN", errMsg);
+                return LightingCommandResult.Error("CANCELLED", errMsg);
+            }
 
             var result = LightingProtocol.ParseResponse(rawResponse);
 

@@ -153,7 +153,7 @@ public sealed class TcpLightingTransport : ILightingTransport
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
             if (sb.Length > 0) return sb.ToString().Trim();
-            throw new TimeoutException($"Receive timed out after {_receiveTimeoutMs}ms.");
+            return $"[TIMEOUT] Receive timed out after {_receiveTimeoutMs}ms.";
         }
 
         return sb.ToString().Trim();
@@ -236,7 +236,7 @@ public sealed class UdpLightingTransport : ILightingTransport
             }
             catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
             {
-                throw new TimeoutException($"UDP receive timed out after {_receiveTimeoutMs}ms.");
+                return $"[TIMEOUT] UDP receive timed out after {_receiveTimeoutMs}ms.";
             }
         }
         finally
@@ -349,11 +349,23 @@ public sealed class SerialLightingTransport : ILightingTransport
         {
             return await Task.Run(() =>
             {
-                _serialPort.DiscardInBuffer();
+                try
+                {
+                    _serialPort.DiscardInBuffer();
+                }
+                catch { }
+
                 var payload = _lineEnding != null ? command + _lineEnding : command;
                 var bytes = Encoding.ASCII.GetBytes(payload);
-                _serialPort.Write(bytes, 0, bytes.Length);
-                try { _serialPort.BaseStream.Flush(); } catch { }
+                try
+                {
+                    _serialPort.Write(bytes, 0, bytes.Length);
+                    _serialPort.BaseStream.Flush();
+                }
+                catch (Exception ex)
+                {
+                    return $"[ERROR] Không thể gửi dữ liệu qua cổng {_serialPort.PortName}: {ex.Message}";
+                }
 
                 var sb = new StringBuilder();
                 var buffer = new byte[1024];
@@ -361,26 +373,36 @@ public sealed class SerialLightingTransport : ILightingTransport
 
                 while ((DateTime.UtcNow - startTime).TotalMilliseconds < _readTimeoutMs)
                 {
-                    cancellationToken.ThrowIfCancellationRequested();
-
-                    if (_serialPort.BytesToRead > 0)
+                    if (cancellationToken.IsCancellationRequested)
                     {
-                        int toRead = Math.Min(buffer.Length, _serialPort.BytesToRead);
-                        int bytesRead = _serialPort.Read(buffer, 0, toRead);
-                        if (bytesRead > 0)
-                        {
-                            sb.Append(Encoding.ASCII.GetString(buffer, 0, bytesRead));
+                        return "[CANCELLED] Thao tác đã bị hủy.";
+                    }
 
-                            var extracted = LightingProtocol.TryExtractResponse(sb.ToString());
-                            if (extracted != null)
+                    try
+                    {
+                        if (_serialPort.BytesToRead > 0)
+                        {
+                            int toRead = Math.Min(buffer.Length, _serialPort.BytesToRead);
+                            int bytesRead = _serialPort.Read(buffer, 0, toRead);
+                            if (bytesRead > 0)
                             {
-                                return extracted;
+                                sb.Append(Encoding.ASCII.GetString(buffer, 0, bytesRead));
+
+                                var extracted = LightingProtocol.TryExtractResponse(sb.ToString());
+                                if (extracted != null)
+                                {
+                                    return extracted;
+                                }
                             }
                         }
+                        else
+                        {
+                            Thread.Sleep(2);
+                        }
                     }
-                    else
+                    catch (Exception ex)
                     {
-                        Thread.Sleep(2);
+                        return $"[ERROR] Lỗi khi đọc từ cổng {_serialPort.PortName}: {ex.Message}";
                     }
                 }
 
@@ -389,7 +411,8 @@ public sealed class SerialLightingTransport : ILightingTransport
                     var fallback = LightingProtocol.TryExtractResponse(sb.ToString()) ?? sb.ToString().Trim();
                     return fallback;
                 }
-                throw new TimeoutException($"Không nhận được phản hồi từ cổng {_serialPort.PortName} sau {_readTimeoutMs}ms. Hãy kiểm tra kết nối cáp RS-232, nguồn bộ điều khiển và cài đặt cổng COM.");
+
+                return $"[TIMEOUT] Không nhận được phản hồi từ cổng {_serialPort.PortName} sau {_readTimeoutMs}ms. Hãy kiểm tra kết nối cáp RS-232, nguồn bộ điều khiển và cài đặt cổng COM.";
             }, cancellationToken).ConfigureAwait(false);
         }
         finally

@@ -6,6 +6,7 @@ using Microsoft.Win32;
 using OpenCvSharp;
 using OpenCvSharp.WpfExtensions;
 using VisionInspectionApp.Application;
+using VisionInspectionApp.Application.LightingController;
 using VisionInspectionApp.Models;
 using VisionInspectionApp.UI.Controls;
 using System.Collections.ObjectModel;
@@ -21,6 +22,7 @@ public sealed partial class InspectionViewModel : ObservableObject
     private readonly ConfigStoreOptions _storeOptions;
     private readonly CameraService _cameraService;
     private readonly IJobService _jobService;
+    private readonly LightingControllerService? _lightingService;
 
     private bool _isRunning;
 
@@ -28,13 +30,14 @@ public sealed partial class InspectionViewModel : ObservableObject
 
     private const int MaxBlobOverlayCount = 300;
 
-    public InspectionViewModel(IConfigService configService, IInspectionService inspectionService, ConfigStoreOptions storeOptions, CameraService cameraService, IJobService jobService)
+    public InspectionViewModel(IConfigService configService, IInspectionService inspectionService, ConfigStoreOptions storeOptions, CameraService cameraService, IJobService jobService, LightingControllerService? lightingService = null)
     {
         _configService = configService;
         _inspectionService = inspectionService;
         _storeOptions = storeOptions;
         _cameraService = cameraService;
         _jobService = jobService;
+        _lightingService = lightingService;
 
         LoadImageCommand = new RelayCommand(LoadImage);
         RunInspectionCommand = new AsyncRelayCommand(RunInspectionAsync);
@@ -679,10 +682,31 @@ public sealed partial class InspectionViewModel : ObservableObject
                 OriginScoreThreshold = _config.Origin.MatchScoreThreshold;
             }
 
-            var imgSourceDef = _config.ImageSources?.FirstOrDefault(x => x.SourceType == ImageSourceType.Camera);
+            var imgSourceDef = _config.ImageSources?.FirstOrDefault(x => x.SourceType == ImageSourceType.Camera) ?? _config.ImageSources?.FirstOrDefault();
             if (imgSourceDef?.CameraParams != null)
             {
                 _ = _cameraService.ApplyParametersAsync(imgSourceDef.CameraParams);
+            }
+
+            if (imgSourceDef?.LightingParams != null && imgSourceDef.LightingParams.Enabled && _lightingService != null && _lightingService.IsConnected)
+            {
+                _ = Task.Run(async () =>
+                {
+                    try
+                    {
+                        int count = imgSourceDef.LightingParams.ChannelCount == 8 ? 8 : 4;
+                        for (int i = 0; i < count && i < imgSourceDef.LightingParams.Channels.Count; i++)
+                        {
+                            var ch = imgSourceDef.LightingParams.Channels[i];
+                            await _lightingService.SetChannelPowerAsync(ch.ChannelIndex, ch.IsEnabled);
+                            if (ch.IsEnabled)
+                            {
+                                await _lightingService.SetBrightnessAsync(ch.ChannelIndex, ch.Brightness);
+                            }
+                        }
+                    }
+                    catch { }
+                });
             }
         }
 

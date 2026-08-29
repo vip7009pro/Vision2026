@@ -163,6 +163,73 @@ namespace VisionInspectionApp.UI.ViewModels
         }
     
         /// <summary>
+        /// ViewModel cho từng kênh đèn chiếu sáng của Job trong Tool Editor.
+        /// </summary>
+        public sealed partial class JobLightingChannelItemViewModel : ObservableObject
+        {
+            private readonly ToolEditorViewModel _parent;
+            private readonly JobLightingChannelParams _model;
+
+            public int ChannelIndex => _model.ChannelIndex;
+            public int ChannelNumber => ChannelIndex + 1;
+            public string ChannelLabel => $"CH{ChannelNumber}";
+
+            public bool IsEnabled
+            {
+                get => _model.IsEnabled;
+                set
+                {
+                    if (_model.IsEnabled == value) return;
+                    _model.IsEnabled = value;
+                    OnPropertyChanged();
+                    _parent.RequestAutoSave();
+                }
+            }
+
+            public int Brightness
+            {
+                get => _model.Brightness;
+                set
+                {
+                    int clamped = Math.Clamp(value, 0, 255);
+                    if (_model.Brightness == clamped) return;
+                    _model.Brightness = clamped;
+                    OnPropertyChanged();
+                    _parent.RequestAutoSave();
+                }
+            }
+
+            public int LightingTimeMs
+            {
+                get => _model.LightingTimeMs;
+                set
+                {
+                    int clamped = Math.Clamp(value, 1, 999);
+                    if (_model.LightingTimeMs == clamped) return;
+                    _model.LightingTimeMs = clamped;
+                    OnPropertyChanged();
+                    _parent.RequestAutoSave();
+                }
+            }
+
+            public JobLightingChannelItemViewModel(JobLightingChannelParams model, ToolEditorViewModel parent)
+            {
+                _model = model;
+                _parent = parent;
+            }
+
+            internal void SyncFromParams(JobLightingChannelParams param)
+            {
+                _model.IsEnabled = param.IsEnabled;
+                _model.Brightness = param.Brightness;
+                _model.LightingTimeMs = param.LightingTimeMs;
+                OnPropertyChanged(nameof(IsEnabled));
+                OnPropertyChanged(nameof(Brightness));
+                OnPropertyChanged(nameof(LightingTimeMs));
+            }
+        }
+
+        /// <summary>
         /// Simple camera item for the ImageSource camera selector ComboBox.
         /// </summary>
         public sealed class ImageSourceCameraItem
@@ -581,17 +648,214 @@ namespace VisionInspectionApp.UI.ViewModels
                 RequestAutoSave();
             });
 
-            var win = new Views.JobCameraSettingsWindow(vm)
-            {
-                Owner = System.Windows.Application.Current?.MainWindow
-            };
-
-            win.ShowDialog();
+            var win = new Views.JobCameraSettingsWindow(vm);
+            win.Show();
         }
     
         public ICommand ImageSource_BrowseFileCommand { get; }
         public ICommand ImageSource_BrowseFolderCommand { get; }
         public ICommand ImageSource_OpenJobCameraSettingsCommand { get; }
+        public ICommand ImageSource_ApplyLightingToDeviceCommand { get; }
+        public ICommand ImageSource_ReadLightingFromDeviceCommand { get; }
+
+        public ObservableCollection<JobLightingChannelItemViewModel> ImageSource_LightingChannels { get; } = new();
+
+        public int[] AvailableLightingChannelCounts { get; } = { 4, 8 };
+
+        public bool ImageSource_EnableLighting
+        {
+            get
+            {
+                var def = SelectedImageSourceDef();
+                EnsureImageSourceLightingParams(def);
+                return def?.LightingParams?.Enabled ?? true;
+            }
+            set
+            {
+                var def = SelectedImageSourceDef();
+                if (def is null) return;
+                EnsureImageSourceLightingParams(def);
+                if (def.LightingParams.Enabled == value) return;
+                def.LightingParams.Enabled = value;
+                OnPropertyChanged();
+                RequestAutoSave();
+            }
+        }
+
+        public int ImageSource_LightingChannelCount
+        {
+            get
+            {
+                var def = SelectedImageSourceDef();
+                EnsureImageSourceLightingParams(def);
+                return def?.LightingParams?.ChannelCount ?? 4;
+            }
+            set
+            {
+                var def = SelectedImageSourceDef();
+                if (def is null) return;
+                EnsureImageSourceLightingParams(def);
+                int count = value == 8 ? 8 : 4;
+                if (def.LightingParams.ChannelCount == count) return;
+                def.LightingParams.ChannelCount = count;
+                OnPropertyChanged();
+                SyncLightingChannelViewModels(def);
+                RequestAutoSave();
+            }
+        }
+
+        public void EnsureImageSourceLightingParams(ImageSourceDefinition? def)
+        {
+            if (def is null) return;
+
+            def.LightingParams ??= new JobLightingParameters();
+
+            int targetCount = def.LightingParams.ChannelCount == 8 ? 8 : 4;
+            if (def.LightingParams.Channels == null)
+            {
+                def.LightingParams.Channels = new List<JobLightingChannelParams>();
+            }
+
+            // Nếu Job cũ chưa có channels, khởi tạo và đọc giá trị từ Lighting Controller LastKnownState
+            if (def.LightingParams.Channels.Count == 0)
+            {
+                var lastState = _lightingControllerService?.LastKnownState;
+                for (int i = 0; i < targetCount; i++)
+                {
+                    bool isEnabled = lastState?.Channels != null && i < lastState.Channels.Length
+                        ? lastState.Channels[i].IsEnabled
+                        : (i == 0);
+                    int br = lastState?.Channels != null && i < lastState.Channels.Length
+                        ? lastState.Channels[i].Brightness
+                        : 120;
+                    int time = lastState?.Channels != null && i < lastState.Channels.Length
+                        ? lastState.Channels[i].LightingTimeMs
+                        : 100;
+
+                    def.LightingParams.Channels.Add(new JobLightingChannelParams
+                    {
+                        ChannelIndex = i,
+                        IsEnabled = isEnabled,
+                        Brightness = br,
+                        LightingTimeMs = time
+                    });
+                }
+            }
+            else
+            {
+                // Đảm bảo đủ số lượng targetCount
+                while (def.LightingParams.Channels.Count < targetCount)
+                {
+                    int i = def.LightingParams.Channels.Count;
+                    def.LightingParams.Channels.Add(new JobLightingChannelParams
+                    {
+                        ChannelIndex = i,
+                        IsEnabled = i == 0,
+                        Brightness = 120,
+                        LightingTimeMs = 100
+                    });
+                }
+            }
+
+            SyncLightingChannelViewModels(def);
+        }
+
+        public void SyncLightingChannelViewModels(ImageSourceDefinition? def)
+        {
+            if (def?.LightingParams?.Channels is null)
+            {
+                ImageSource_LightingChannels.Clear();
+                return;
+            }
+
+            int targetCount = def.LightingParams.ChannelCount == 8 ? 8 : 4;
+
+            while (ImageSource_LightingChannels.Count < targetCount && ImageSource_LightingChannels.Count < def.LightingParams.Channels.Count)
+            {
+                int idx = ImageSource_LightingChannels.Count;
+                ImageSource_LightingChannels.Add(new JobLightingChannelItemViewModel(def.LightingParams.Channels[idx], this));
+            }
+            while (ImageSource_LightingChannels.Count > targetCount)
+            {
+                ImageSource_LightingChannels.RemoveAt(ImageSource_LightingChannels.Count - 1);
+            }
+
+            for (int i = 0; i < ImageSource_LightingChannels.Count && i < def.LightingParams.Channels.Count; i++)
+            {
+                ImageSource_LightingChannels[i].SyncFromParams(def.LightingParams.Channels[i]);
+            }
+        }
+
+        public async void ImageSource_ApplyLightingToDevice()
+        {
+            if (_lightingControllerService is null || !_lightingControllerService.IsConnected)
+            {
+                MessageBox.Show("Bộ điều khiển đèn (Lighting Controller) chưa kết nối!\nVui lòng vào menu Chiếu Sáng -> Lighting Controller để kết nối trước.", "Chưa kết nối đèn", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+
+            try
+            {
+                var def = SelectedImageSourceDef();
+                if (def?.LightingParams?.Channels == null) return;
+
+                int count = def.LightingParams.ChannelCount == 8 ? 8 : 4;
+                for (int i = 0; i < count && i < def.LightingParams.Channels.Count; i++)
+                {
+                    var ch = def.LightingParams.Channels[i];
+                    await _lightingControllerService.SetChannelPowerAsync(ch.ChannelIndex, ch.IsEnabled);
+                    if (ch.IsEnabled)
+                    {
+                        await _lightingControllerService.SetBrightnessAsync(ch.ChannelIndex, ch.Brightness);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Lỗi khi áp dụng đèn: {ex.Message}", "Lỗi", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
+        public async void ImageSource_ReadLightingFromDevice()
+        {
+            if (_lightingControllerService is null || !_lightingControllerService.IsConnected)
+            {
+                MessageBox.Show("Bộ điều khiển đèn (Lighting Controller) chưa kết nối!\nVui lòng vào menu Chiếu Sáng -> Lighting Controller để kết nối trước.", "Chưa kết nối đèn", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+
+            try
+            {
+                var def = SelectedImageSourceDef();
+                if (def is null) return;
+
+                int count = def.LightingParams?.ChannelCount == 8 ? 8 : 4;
+                var result = await _lightingControllerService.ReadAllParametersAsync(count);
+                if (result.IsSuccess && result.Data?.Channels != null)
+                {
+                    def.LightingParams ??= new JobLightingParameters();
+                    def.LightingParams.Channels.Clear();
+                    for (int i = 0; i < count && i < result.Data.Channels.Length; i++)
+                    {
+                        var chState = result.Data.Channels[i];
+                        def.LightingParams.Channels.Add(new JobLightingChannelParams
+                        {
+                            ChannelIndex = i,
+                            IsEnabled = chState.IsEnabled,
+                            Brightness = chState.Brightness,
+                            LightingTimeMs = chState.LightingTimeMs
+                        });
+                    }
+
+                    SyncLightingChannelViewModels(def);
+                    RequestAutoSave();
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Lỗi khi đọc thông số đèn: {ex.Message}", "Lỗi", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
 
         public ObservableCollection<PreprocessRoiDefinition> PreprocessRois
         {

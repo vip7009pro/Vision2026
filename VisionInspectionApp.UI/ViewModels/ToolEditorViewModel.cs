@@ -15,6 +15,7 @@ using Microsoft.Win32;
 using OpenCvSharp;
 using OpenCvSharp.WpfExtensions;
 using VisionInspectionApp.Application;
+using VisionInspectionApp.Application.LightingController;
 using VisionInspectionApp.Application.Services;
 using VisionInspectionApp.Models;
 using VisionInspectionApp.UI.Controls;
@@ -177,6 +178,7 @@ namespace VisionInspectionApp.UI.ViewModels
         private readonly Application.PLC.Services.IndustrialHandshakeStateMachine _handshakeStateMachine;
         private readonly Application.DB.Services.IDbManagerService _dbManagerService;
         private readonly Application.Services.IInspectionLogService _inspectionLogService;
+        private readonly LightingControllerService? _lightingControllerService;
         private readonly IServiceProvider? _serviceProvider;
         public UndoRedoManager UndoManager { get; }
         public IRelayCommand UndoCommand { get; }
@@ -187,6 +189,7 @@ namespace VisionInspectionApp.UI.ViewModels
         public Application.PLC.Services.PlcHeartbeatWatchdog PlcHeartbeatWatchdog => _plcHeartbeatWatchdog;
         public Application.PLC.Services.IndustrialHandshakeStateMachine HandshakeStateMachine => _handshakeStateMachine;
         public Application.Services.IInspectionLogService InspectionLogService => _inspectionLogService;
+        public LightingControllerService? LightingControllerService => _lightingControllerService;
 
         public ToolEditorViewModel()
         {
@@ -203,6 +206,7 @@ namespace VisionInspectionApp.UI.ViewModels
             _jobService = null!;
             _plcManagerService = null!;
             _dbManagerService = null!;
+            _lightingControllerService = null;
             _inspectionLogService = new Application.Services.InspectionLogService();
             _motionSyncService = new Application.PLC.Services.PlcMotionSyncService(null);
             _shiftRegisterTracker = new Application.PLC.Services.ShiftRegisterTracker(null);
@@ -220,9 +224,20 @@ namespace VisionInspectionApp.UI.ViewModels
             ToolboxCollectionView = System.Windows.Data.CollectionViewSource.GetDefaultView(AllToolboxItems);
         }
 
-        public ToolEditorViewModel(IConfigService configService, ConfigStoreOptions storeOptions, SharedImageContext sharedImage, ImagePreprocessor preprocessor, LineDetector lineDetector, IInspectionService inspectionService, CameraService cameraService, IJobService jobService, UndoRedoManager undoManager, Application.PLC.Services.IPlcManagerService plcManagerService, Application.DB.Services.IDbManagerService dbManagerService, IRecentJobsService? recentJobsService = null, IServiceProvider? serviceProvider = null)
+        public ToolEditorViewModel(IConfigService configService, ConfigStoreOptions storeOptions, SharedImageContext sharedImage, ImagePreprocessor preprocessor, LineDetector lineDetector, IInspectionService inspectionService, CameraService cameraService, IJobService jobService, UndoRedoManager undoManager, Application.PLC.Services.IPlcManagerService plcManagerService, Application.DB.Services.IDbManagerService dbManagerService, IRecentJobsService? recentJobsService = null, LightingControllerService? lightingControllerService = null, IServiceProvider? serviceProvider = null)
         {
             _serviceProvider = serviceProvider;
+            _lightingControllerService = lightingControllerService ?? (serviceProvider?.GetService(typeof(LightingControllerService)) as LightingControllerService);
+            if (_lightingControllerService != null)
+            {
+                _lightingControllerService.OnError += (_, err) =>
+                {
+                    System.Windows.Application.Current?.Dispatcher.InvokeAsync(() =>
+                    {
+                        StatusBarText = $"⚠️ [Đèn Chiếu Sáng] {err}";
+                    });
+                };
+            }
             UndoManager = undoManager;
             UndoCommand = new RelayCommand(() => UndoManager.Undo(), () => UndoManager.CanUndo);
             RedoCommand = new RelayCommand(() => UndoManager.Redo(), () => UndoManager.CanRedo);
@@ -374,6 +389,8 @@ namespace VisionInspectionApp.UI.ViewModels
             ImageSource_BrowseFileCommand = new RelayCommand(ImageSource_BrowseFile);
             ImageSource_BrowseFolderCommand = new RelayCommand(ImageSource_BrowseFolder);
             ImageSource_OpenJobCameraSettingsCommand = new RelayCommand(ImageSource_OpenJobCameraSettings);
+            ImageSource_ApplyLightingToDeviceCommand = new RelayCommand(ImageSource_ApplyLightingToDevice);
+            ImageSource_ReadLightingFromDeviceCommand = new RelayCommand(ImageSource_ReadLightingFromDevice);
             SurfaceCompare_SetSearchRoiCommand = new RelayCommand(SurfaceCompare_SetSearchRoi);
             SurfaceCompare_SetTemplateRoiCommand = new RelayCommand(SurfaceCompare_SetTemplateRoi);
             ContourCompare_SetSearchRoiCommand = new RelayCommand(ContourCompare_SetSearchRoi);
@@ -1072,6 +1089,14 @@ namespace VisionInspectionApp.UI.ViewModels
             OnPropertyChanged(nameof(IsConditionNode));
             OnPropertyChanged(nameof(IsTextNode));
             OnPropertyChanged(nameof(IsImageSourceNode));
+            if (IsImageSourceNode)
+            {
+                var curDef = SelectedImageSourceDef();
+                EnsureImageSourceLightingParams(curDef);
+                OnPropertyChanged(nameof(ImageSource_EnableLighting));
+                OnPropertyChanged(nameof(ImageSource_LightingChannelCount));
+                OnPropertyChanged(nameof(ImageSource_LightingChannels));
+            }
             OnPropertyChanged(nameof(ImageSource_TriggerMode));
             OnPropertyChanged(nameof(ImageSource_IsSoftTrigger));
             OnPropertyChanged(nameof(ImageSource_IsLineTrigger));
@@ -1371,6 +1396,12 @@ namespace VisionInspectionApp.UI.ViewModels
 
         public ICommand OpenCalibrationDialogCommand { get; }
 
+        private static VisionInspectionApp.UI.Views.CalibrationDialog? _calibrationDialogInstance;
+        private static VisionInspectionApp.UI.Views.ChessboardCalibrationDialog? _chessboardCalibrationDialogInstance;
+        private static Views.OQC.ProductAssignDialog? _productAssignDialogInstance;
+        private static Views.InspectionLogWindow? _inspectionLogWindowInstance;
+        private static Views.RollDefectMapWindow? _rollDefectMapWindowInstance;
+
         private void OpenCalibrationDialog()
         {
             if (_config is null)
@@ -1379,22 +1410,34 @@ namespace VisionInspectionApp.UI.ViewModels
                 return;
             }
 
+            if (_calibrationDialogInstance != null && _calibrationDialogInstance.IsLoaded)
+            {
+                _calibrationDialogInstance.Activate();
+                if (_calibrationDialogInstance.WindowState == WindowState.Minimized)
+                    _calibrationDialogInstance.WindowState = WindowState.Normal;
+                return;
+            }
+
             var calibVm = new CalibrationViewModel(_configService, _storeOptions, _cameraService, _jobService);
             calibVm.InitializeWithConfig(_config, CurrentJobFilePath, SelectedNodePreviewImage);
 
-            var dialog = new VisionInspectionApp.UI.Views.CalibrationDialog
+            _calibrationDialogInstance = new VisionInspectionApp.UI.Views.CalibrationDialog
             {
-                DataContext = calibVm,
-                Owner = System.Windows.Application.Current?.MainWindow
+                DataContext = calibVm
             };
 
-            var res = dialog.ShowDialog();
-            if (res == true || calibVm.IsDirty)
+            _calibrationDialogInstance.Closed += (s, e) =>
             {
-                OnPropertyChanged(nameof(PixelsPerMm));
-                IsDirty = true;
-                RefreshPreviews();
-            }
+                _calibrationDialogInstance = null;
+                if (calibVm.IsDirty)
+                {
+                    OnPropertyChanged(nameof(PixelsPerMm));
+                    IsDirty = true;
+                    RefreshPreviews();
+                }
+            };
+
+            _calibrationDialogInstance.Show();
         }
 
         public ICommand OpenChessboardCalibrationDialogCommand { get; }
@@ -1407,22 +1450,34 @@ namespace VisionInspectionApp.UI.ViewModels
                 return;
             }
 
+            if (_chessboardCalibrationDialogInstance != null && _chessboardCalibrationDialogInstance.IsLoaded)
+            {
+                _chessboardCalibrationDialogInstance.Activate();
+                if (_chessboardCalibrationDialogInstance.WindowState == WindowState.Minimized)
+                    _chessboardCalibrationDialogInstance.WindowState = WindowState.Normal;
+                return;
+            }
+
             var vm = new ChessboardCalibrationViewModel(_cameraService);
             vm.Initialize(_config);
 
-            var dialog = new VisionInspectionApp.UI.Views.ChessboardCalibrationDialog
+            _chessboardCalibrationDialogInstance = new VisionInspectionApp.UI.Views.ChessboardCalibrationDialog
             {
-                DataContext = vm,
-                Owner = System.Windows.Application.Current?.MainWindow
+                DataContext = vm
             };
 
-            var res = dialog.ShowDialog();
-            if (res == true || vm.IsDirty)
+            _chessboardCalibrationDialogInstance.Closed += (s, e) =>
             {
-                OnPropertyChanged(nameof(PixelsPerMm));
-                IsDirty = true;
-                RefreshPreviews();
-            }
+                _chessboardCalibrationDialogInstance = null;
+                if (vm.IsDirty)
+                {
+                    OnPropertyChanged(nameof(PixelsPerMm));
+                    IsDirty = true;
+                    RefreshPreviews();
+                }
+            };
+
+            _chessboardCalibrationDialogInstance.Show();
         }
 
         public IRelayCommand OpenProductAssignDialogCommand { get; }
@@ -1433,6 +1488,14 @@ namespace VisionInspectionApp.UI.ViewModels
         {
             try
             {
+                if (_productAssignDialogInstance != null && _productAssignDialogInstance.IsLoaded)
+                {
+                    _productAssignDialogInstance.Activate();
+                    if (_productAssignDialogInstance.WindowState == WindowState.Minimized)
+                        _productAssignDialogInstance.WindowState = WindowState.Normal;
+                    return;
+                }
+
                 var oqcVm = _serviceProvider?.GetService(typeof(OqcScannerViewModel)) as OqcScannerViewModel;
                 if (oqcVm == null && System.Windows.Application.Current?.MainWindow?.DataContext is MainWindowViewModel mainVm)
                 {
@@ -1442,11 +1505,9 @@ namespace VisionInspectionApp.UI.ViewModels
                 if (oqcVm != null)
                 {
                     oqcVm.AssignJobFilePath = !string.IsNullOrWhiteSpace(CurrentJobFilePath) && CurrentJobFilePath != "-" ? CurrentJobFilePath : "";
-                    var dlg = new Views.OQC.ProductAssignDialog(oqcVm)
-                    {
-                        Owner = System.Windows.Application.Current?.MainWindow
-                    };
-                    dlg.ShowDialog();
+                    _productAssignDialogInstance = new Views.OQC.ProductAssignDialog(oqcVm);
+                    _productAssignDialogInstance.Closed += (s, e) => _productAssignDialogInstance = null;
+                    _productAssignDialogInstance.Show();
                 }
                 else
                 {
@@ -1463,12 +1524,18 @@ namespace VisionInspectionApp.UI.ViewModels
         {
             try
             {
-                var vm = new InspectionLogViewModel(_inspectionLogService);
-                var win = new Views.InspectionLogWindow(vm)
+                if (_inspectionLogWindowInstance != null && _inspectionLogWindowInstance.IsLoaded)
                 {
-                    Owner = System.Windows.Application.Current?.MainWindow
-                };
-                win.Show();
+                    _inspectionLogWindowInstance.Activate();
+                    if (_inspectionLogWindowInstance.WindowState == WindowState.Minimized)
+                        _inspectionLogWindowInstance.WindowState = WindowState.Normal;
+                    return;
+                }
+
+                var vm = new InspectionLogViewModel(_inspectionLogService);
+                _inspectionLogWindowInstance = new Views.InspectionLogWindow(vm);
+                _inspectionLogWindowInstance.Closed += (s, e) => _inspectionLogWindowInstance = null;
+                _inspectionLogWindowInstance.Show();
             }
             catch (Exception ex)
             {
@@ -1480,12 +1547,18 @@ namespace VisionInspectionApp.UI.ViewModels
         {
             try
             {
-                var vm = new RollDefectMapViewModel(_rollDefectManager, _motionSyncService, _shiftRegisterTracker);
-                var win = new Views.RollDefectMapWindow(vm)
+                if (_rollDefectMapWindowInstance != null && _rollDefectMapWindowInstance.IsLoaded)
                 {
-                    Owner = System.Windows.Application.Current?.MainWindow
-                };
-                win.Show();
+                    _rollDefectMapWindowInstance.Activate();
+                    if (_rollDefectMapWindowInstance.WindowState == WindowState.Minimized)
+                        _rollDefectMapWindowInstance.WindowState = WindowState.Normal;
+                    return;
+                }
+
+                var vm = new RollDefectMapViewModel(_rollDefectManager, _motionSyncService, _shiftRegisterTracker);
+                _rollDefectMapWindowInstance = new Views.RollDefectMapWindow(vm);
+                _rollDefectMapWindowInstance.Closed += (s, e) => _rollDefectMapWindowInstance = null;
+                _rollDefectMapWindowInstance.Show();
             }
             catch (Exception ex)
             {

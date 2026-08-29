@@ -165,3 +165,78 @@ public sealed class LightingCommandResult
         _ => $"Unknown error: {code}"
     };
 }
+
+/// <summary>
+/// Cấu hình khởi động cho từng kênh đèn (lưu trong GlobalAppSettings).
+/// </summary>
+public sealed class LightingStartupChannelSettings
+{
+    public int ChannelIndex { get; set; }
+    public bool IsEnabled { get; set; } = true;
+    public int Brightness { get; set; } = 120; // 0-255 (Mức sáng vừa phải mặc định để quan sát Live view)
+    public int LightingTimeMs { get; set; } = 100; // 1-999 ms
+
+    public static List<LightingStartupChannelSettings> CreateDefaults(int count = 8)
+    {
+        var list = new List<LightingStartupChannelSettings>();
+        int total = count == 4 ? 4 : 8;
+        for (int i = 0; i < total; i++)
+        {
+            list.Add(new LightingStartupChannelSettings
+            {
+                ChannelIndex = i,
+                IsEnabled = i == 0,
+                Brightness = 120,
+                LightingTimeMs = 100
+            });
+        }
+        return list;
+    }
+}
+
+/// <summary>
+/// Cấu hình từng kênh đèn được lưu cùng tệp Job.
+/// </summary>
+public sealed class JobLightingChannelParams
+{
+    public int ChannelIndex { get; set; }
+    public bool IsEnabled { get; set; } = true;
+    public int Brightness { get; set; } = 120; // 0-255
+    public int LightingTimeMs { get; set; } = 100; // 1-999 ms
+}
+
+/// <summary>
+/// Cấu hình thông số Đèn chiếu sáng lưu kèm theo Job (gán cho node ImageSource).
+/// </summary>
+public sealed class JobLightingParameters
+{
+    /// <summary>Bật/tắt tự động áp dụng thông số đèn khi nạp Job.</summary>
+    public bool Enabled { get; set; } = true;
+
+    /// <summary>Số lượng kênh (4 hoặc 8).</summary>
+    public int ChannelCount { get; set; } = 4;
+
+    /// <summary>Danh sách cấu hình cho từng kênh đèn.</summary>
+    public List<JobLightingChannelParams> Channels { get; set; } = new();
+
+    public JobLightingParameters Clone()
+    {
+        var clone = new JobLightingParameters
+        {
+            Enabled = Enabled,
+            ChannelCount = ChannelCount,
+            Channels = new List<JobLightingChannelParams>()
+        };
+        foreach (var ch in Channels)
+        {
+            clone.Channels.Add(new JobLightingChannelParams
+            {
+                ChannelIndex = ch.ChannelIndex,
+                IsEnabled = ch.IsEnabled,
+                Brightness = ch.Brightness,
+                LightingTimeMs = ch.LightingTimeMs
+            });
+        }
+        return clone;
+    }
+}

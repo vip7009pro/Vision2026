@@ -1008,6 +1008,10 @@ public partial class OqcScannerViewModel : ObservableObject
         }
     }
 
+    private static Views.OQC.OqcScanDetailDialog? _scanDetailDialogInstance;
+    private static Views.OQC.OqcSettingsDialog? _settingsDialogInstance;
+    private static Views.OQC.ProductAssignDialog? _productAssignDialogInstance;
+
     public void ExecuteOpenScanDetail(OqcScanHistoryEntry? entry)
     {
         if (entry == null)
@@ -1023,11 +1027,17 @@ public partial class OqcScannerViewModel : ObservableObject
             }
         }
 
-        var dlg = new Views.OQC.OqcScanDetailDialog(entry)
+        if (_scanDetailDialogInstance != null && _scanDetailDialogInstance.IsLoaded)
         {
-            Owner = System.Windows.Application.Current?.MainWindow
-        };
-        dlg.ShowDialog();
+            _scanDetailDialogInstance.Activate();
+            if (_scanDetailDialogInstance.WindowState == WindowState.Minimized)
+                _scanDetailDialogInstance.WindowState = WindowState.Normal;
+            return;
+        }
+
+        _scanDetailDialogInstance = new Views.OQC.OqcScanDetailDialog(entry);
+        _scanDetailDialogInstance.Closed += (s, e) => _scanDetailDialogInstance = null;
+        _scanDetailDialogInstance.Show();
     }
 
     private void ExecuteExportToExcel()
@@ -1088,21 +1098,33 @@ public partial class OqcScannerViewModel : ObservableObject
 
     private void OpenSettingsDialog()
     {
-        LoadSettingsFromConfig();
-        var dlg = new Views.OQC.OqcSettingsDialog(this)
+        if (_settingsDialogInstance != null && _settingsDialogInstance.IsLoaded)
         {
-            Owner = System.Windows.Application.Current.MainWindow
-        };
-        dlg.ShowDialog();
+            _settingsDialogInstance.Activate();
+            if (_settingsDialogInstance.WindowState == WindowState.Minimized)
+                _settingsDialogInstance.WindowState = WindowState.Normal;
+            return;
+        }
+
+        LoadSettingsFromConfig();
+        _settingsDialogInstance = new Views.OQC.OqcSettingsDialog(this);
+        _settingsDialogInstance.Closed += (s, e) => _settingsDialogInstance = null;
+        _settingsDialogInstance.Show();
     }
 
     private void OpenProductAssignDialog()
     {
-        AssignJobFilePath = CurrentJobFilePath != "-" ? CurrentJobFilePath : "";
-        var dlg = new Views.OQC.ProductAssignDialog(this)
+        if (_productAssignDialogInstance != null && _productAssignDialogInstance.IsLoaded)
         {
-            Owner = System.Windows.Application.Current.MainWindow
-        };
-        dlg.ShowDialog();
+            _productAssignDialogInstance.Activate();
+            if (_productAssignDialogInstance.WindowState == WindowState.Minimized)
+                _productAssignDialogInstance.WindowState = WindowState.Normal;
+            return;
+        }
+
+        AssignJobFilePath = CurrentJobFilePath != "-" ? CurrentJobFilePath : "";
+        _productAssignDialogInstance = new Views.OQC.ProductAssignDialog(this);
+        _productAssignDialogInstance.Closed += (s, e) => _productAssignDialogInstance = null;
+        _productAssignDialogInstance.Show();
     }
 }

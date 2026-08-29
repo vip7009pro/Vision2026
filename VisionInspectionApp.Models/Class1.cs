@@ -211,6 +211,11 @@ public sealed class ImageSourceDefinition
     /// Cấu hình thông số Camera riêng biệt cho Job hiện tại (Exposure, Gain, White Balance, Gamma, Trigger, GigE).
     /// </summary>
     public CameraParameters CameraParams { get; set; } = new();
+
+    /// <summary>
+    /// Cấu hình thông số Đèn chiếu sáng (Lighting) riêng biệt cho từng kênh được lưu kèm theo Job hiện tại.
+    /// </summary>
+    public JobLightingParameters LightingParams { get; set; } = new();
 }
 
 public sealed class VisionConfig

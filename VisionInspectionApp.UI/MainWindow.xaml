@@ -318,6 +318,8 @@
             <RowDefinition Height="Auto" />
             <!-- Main Content Tabs -->
             <RowDefinition Height="*" />
+            <!-- Bottom Global Status Bar -->
+            <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
         <!-- =================================================================== -->
@@ -508,5 +510,41 @@
                 <ContentControl Content="{Binding CameraSettings}" />
             </TabItem>
         </TabControl>
+
+        <!-- =================================================================== -->
+        <!-- 3. GLOBAL STATUS BAR (BOTTOM)                                        -->
+        <!-- =================================================================== -->
+        <StatusBar Grid.Row="2" Background="{DynamicResource DarkBackgroundBrush}" Foreground="{DynamicResource TextBrush}" BorderThickness="0,1,0,0" BorderBrush="{DynamicResource DarkBorderBrush}" Padding="8,3">
+            <StatusBarItem>
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <TextBlock Text="{Binding GlobalStatusMessage}" FontSize="11.5" VerticalAlignment="Center">
+                        <TextBlock.Style>
+                            <Style TargetType="TextBlock">
+                                <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding GlobalStatusSeverity}" Value="Warning">
+                                        <Setter Property="Foreground" Value="#FFA000" />
+                                        <Setter Property="FontWeight" Value="SemiBold" />
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding GlobalStatusSeverity}" Value="Error">
+                                        <Setter Property="Foreground" Value="#E53935" />
+                                        <Setter Property="FontWeight" Value="Bold" />
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding GlobalStatusSeverity}" Value="Success">
+                                        <Setter Property="Foreground" Value="#4CAF50" />
+                                        <Setter Property="FontWeight" Value="SemiBold" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </TextBlock.Style>
+                    </TextBlock>
+                </StackPanel>
+            </StatusBarItem>
+            <StatusBarItem HorizontalAlignment="Right">
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <TextBlock Text="CMS VINA Vision System" FontSize="11" Foreground="{DynamicResource TextMutedBrush}" Margin="0,0,8,0" />
+                </StackPanel>
+            </StatusBarItem>
+        </StatusBar>
     </Grid>
 </Window>

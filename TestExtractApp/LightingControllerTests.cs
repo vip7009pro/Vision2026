@@ -59,6 +59,12 @@ public static class LightingControllerTests
         // Serial Transport & Interface Type Tests
         TestSerialTransportAndInterfaceType();
 
+        // Startup Settings & Job Lighting Tests
+        TestStartupSettingsDefaults();
+        TestJobLightingParametersSerialization();
+        TestJobLightingParametersBackwardCompatibility();
+        TestJobLightingParametersClone();
+
         // Echo & Newline Tolerance Tests
         TestEchoAndNewlineResponses();
 
@@ -346,5 +352,82 @@ public static class LightingControllerTests
             Console.WriteLine($"  ❌ FAIL: {testName} — Expected {typeof(TException).Name} but got {ex.GetType().Name}: {ex.Message}");
             Console.ResetColor();
         }
+    }
+
+    // =====================================================================
+    // Startup Settings & Job Lighting Tests
+    // =====================================================================
+
+    private static void TestStartupSettingsDefaults()
+    {
+        var channels4 = VisionInspectionApp.Models.LightingStartupChannelSettings.CreateDefaults(4);
+        Assert("CreateDefaultStartupChannels(4) returns 4 channels", channels4.Count, 4);
+        Assert("CH1 default enabled", channels4[0].IsEnabled, true);
+        Assert("CH1 default brightness 120", channels4[0].Brightness, 120);
+        Assert("CH2 default disabled", channels4[1].IsEnabled, false);
+
+        var channels8 = VisionInspectionApp.Models.LightingStartupChannelSettings.CreateDefaults(8);
+        Assert("CreateDefaultStartupChannels(8) returns 8 channels", channels8.Count, 8);
+    }
+
+    private static void TestJobLightingParametersSerialization()
+    {
+        var jobParams = new JobLightingParameters
+        {
+            Enabled = true,
+            ChannelCount = 4,
+            Channels = new List<JobLightingChannelParams>
+            {
+                new JobLightingChannelParams { ChannelIndex = 0, IsEnabled = true, Brightness = 180, LightingTimeMs = 150 },
+                new JobLightingChannelParams { ChannelIndex = 1, IsEnabled = false, Brightness = 120, LightingTimeMs = 100 },
+                new JobLightingChannelParams { ChannelIndex = 2, IsEnabled = true, Brightness = 250, LightingTimeMs = 200 },
+                new JobLightingChannelParams { ChannelIndex = 3, IsEnabled = false, Brightness = 0, LightingTimeMs = 50 }
+            }
+        };
+
+        string json = System.Text.Json.JsonSerializer.Serialize(jobParams);
+        var deserialized = System.Text.Json.JsonSerializer.Deserialize<JobLightingParameters>(json);
+
+        Assert("JobLightingParameters deserialized not null", deserialized != null, true);
+        Assert("JobLightingParameters Enabled", deserialized?.Enabled, true);
+        Assert("JobLightingParameters ChannelCount", deserialized?.ChannelCount, 4);
+        Assert("JobLightingParameters Channels count", deserialized?.Channels.Count, 4);
+        Assert("Job CH1 Brightness", deserialized?.Channels[0].Brightness, 180);
+        Assert("Job CH3 Brightness", deserialized?.Channels[2].Brightness, 250);
+    }
+
+    private static void TestJobLightingParametersBackwardCompatibility()
+    {
+        // Giả lập chuỗi JSON cũ của ImageSourceDefinition không có LightingParams
+        string legacyImageSourceJson = "{\"Name\":\"Cam1\",\"SourceType\":1,\"CameraIndex\":0,\"FilePath\":\"\",\"FolderPath\":\"\"}";
+        var def = System.Text.Json.JsonSerializer.Deserialize<ImageSourceDefinition>(legacyImageSourceJson);
+
+        Assert("Legacy ImageSourceDefinition deserialized not null", def != null, true);
+        Assert("Legacy ImageSourceDefinition LightingParams initialized with default", def?.LightingParams != null, true);
+        Assert("Legacy ImageSourceDefinition LightingParams Enabled default true", def?.LightingParams?.Enabled, true);
+    }
+
+    private static void TestJobLightingParametersClone()
+    {
+        var original = new JobLightingParameters
+        {
+            Enabled = true,
+            ChannelCount = 8,
+            Channels = new List<JobLightingChannelParams>
+            {
+                new JobLightingChannelParams { ChannelIndex = 0, IsEnabled = true, Brightness = 220, LightingTimeMs = 120 }
+            }
+        };
+
+        var clone = original.Clone();
+        Assert("Clone not null", clone != null, true);
+        Assert("Clone has same Enabled", clone.Enabled, original.Enabled);
+        Assert("Clone has same ChannelCount", clone.ChannelCount, original.ChannelCount);
+        Assert("Clone has same Channels count", clone.Channels.Count, 1);
+        Assert("Clone has same Brightness", clone.Channels[0].Brightness, 220);
+
+        // Modify clone and ensure original unchanged
+        clone.Channels[0].Brightness = 50;
+        Assert("Original brightness unmodified", original.Channels[0].Brightness, 220);
     }
 }

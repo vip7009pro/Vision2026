@@ -4,7 +4,9 @@ using System.Windows;
 using System.Windows.Input;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using VisionInspectionApp.Application.LightingController;
 using VisionInspectionApp.Application.Services;
+using VisionInspectionApp.Models;
 using VisionInspectionApp.UI.Services;
 
 namespace VisionInspectionApp.UI.ViewModels;
@@ -14,7 +16,14 @@ public sealed partial class MainWindowViewModel : ObservableObject
     [ObservableProperty]
     private int _selectedTabIndex = 1; // Default to OQC Scanner tab (Index 1)
 
+    [ObservableProperty]
+    private string _globalStatusMessage = "Hệ thống sẵn sàng.";
+
+    [ObservableProperty]
+    private string _globalStatusSeverity = "Info"; // Info, Warning, Error, Success
+
     private readonly IRecentJobsService? _recentJobsService;
+    private readonly LightingControllerService? _lightingService;
 
     public ObservableCollection<string> RecentJobs { get; } = new();
 
@@ -25,7 +34,8 @@ public sealed partial class MainWindowViewModel : ObservableObject
         InspectionViewModel inspection,
         OqcScannerViewModel oqcScanner,
         CameraSettingsViewModel cameraSettings,
-        IRecentJobsService? recentJobsService = null)
+        IRecentJobsService? recentJobsService = null,
+        LightingControllerService? lightingService = null)
     {
         ToolEditor = toolEditor;
         Calibration = calibration;
@@ -35,6 +45,29 @@ public sealed partial class MainWindowViewModel : ObservableObject
         OqcScanner.RequestSwitchTab = idx => SelectedTabIndex = idx;
         CameraSettings = cameraSettings;
         _recentJobsService = recentJobsService;
+        _lightingService = lightingService;
+
+        if (_lightingService != null)
+        {
+            _lightingService.OnError += (s, errMsg) =>
+            {
+                System.Windows.Application.Current?.Dispatcher.InvokeAsync(() =>
+                {
+                    SetGlobalStatus($"⚠️ [Đèn Chiếu Sáng] {errMsg}", "Warning");
+                });
+            };
+
+            _lightingService.OnConnectionStateChanged += (s, state) =>
+            {
+                if (state == LightingConnectionState.Connected)
+                {
+                    System.Windows.Application.Current?.Dispatcher.InvokeAsync(() =>
+                    {
+                        SetGlobalStatus("💡 Đèn Chiếu Sáng: Đã kết nối thành công.", "Success");
+                    });
+                }
+            };
+        }
 
         if (_recentJobsService != null)
         {
@@ -61,6 +94,16 @@ public sealed partial class MainWindowViewModel : ObservableObject
         if (_selectedTabIndex == 3)
         {
             CameraSettings.OnViewActivated();
+        }
+    }
+
+    public void SetGlobalStatus(string message, string severity = "Info")
+    {
+        GlobalStatusMessage = message;
+        GlobalStatusSeverity = severity;
+        if (ToolEditor != null)
+        {
+            ToolEditor.StatusBarText = message;
         }
     }
 

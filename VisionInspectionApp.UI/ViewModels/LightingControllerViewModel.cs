@@ -87,6 +87,56 @@ public sealed partial class LightingChannelViewModel : ObservableObject
 }
 
 // =====================================================================
+// Per-Channel Startup Settings ViewModel
+// =====================================================================
+
+public sealed partial class LightingStartupChannelViewModel : ObservableObject
+{
+    private readonly LightingControllerViewModel _parent;
+
+    public int ChannelIndex { get; }
+    public int ChannelNumber => ChannelIndex + 1;
+    public string ChannelLabel => $"CH{ChannelNumber}";
+
+    [ObservableProperty]
+    private bool _isEnabled;
+
+    [ObservableProperty]
+    private int _brightness = 120;
+
+    [ObservableProperty]
+    private int _lightingTimeMs = 100;
+
+    public LightingStartupChannelViewModel(int channelIndex, LightingControllerViewModel parent, bool isEnabled = true, int brightness = 120, int lightingTimeMs = 100)
+    {
+        ChannelIndex = channelIndex;
+        _parent = parent;
+        _isEnabled = isEnabled;
+        _brightness = brightness;
+        _lightingTimeMs = lightingTimeMs;
+    }
+
+    partial void OnIsEnabledChanged(bool value)
+    {
+        _parent.SaveSettings();
+    }
+
+    partial void OnBrightnessChanged(int value)
+    {
+        if (value < 0) { Brightness = 0; return; }
+        if (value > 255) { Brightness = 255; return; }
+        _parent.SaveSettings();
+    }
+
+    partial void OnLightingTimeMsChanged(int value)
+    {
+        if (value < 1) { LightingTimeMs = 1; return; }
+        if (value > 999) { LightingTimeMs = 999; return; }
+        _parent.SaveSettings();
+    }
+}
+
+// =====================================================================
 // Main Lighting Controller ViewModel
 // =====================================================================
 
@@ -107,6 +157,10 @@ public sealed partial class LightingControllerViewModel : ObservableObject
         var settings = settingsService.Settings.Lighting;
         _selectedChannelCount = settings.ChannelCount == 8 ? 8 : 4;
         UpdateChannels(_selectedChannelCount);
+
+        _autoConnect = settings.AutoConnect;
+        _enableStartupLighting = settings.EnableStartupLighting;
+        UpdateStartupChannels(_selectedChannelCount, settings.StartupChannels);
 
         _selectedInterfaceType = (LightingInterfaceType)settings.InterfaceType;
         _controllerIp = settings.ControllerIp;
@@ -178,6 +232,13 @@ public sealed partial class LightingControllerViewModel : ObservableObject
         {
             RunOnUI(() => LastError = msg);
         };
+
+        // Đồng bộ trạng thái kết nối và tham số hiện tại từ service (nếu đã kết nối sẵn từ khi mở app)
+        _connectionState = _service.ConnectionState;
+        if (_service.IsConnected && _service.LastKnownState != null)
+        {
+            SyncFromDeviceState(_service.LastKnownState);
+        }
     }
 
     private static void RunOnUI(Action action)
@@ -198,8 +259,25 @@ public sealed partial class LightingControllerViewModel : ObservableObject
     // =====================================================================
 
     public ObservableCollection<LightingChannelViewModel> Channels { get; } = new();
+    public ObservableCollection<LightingStartupChannelViewModel> StartupChannels { get; } = new();
 
     public int[] AvailableChannelCounts { get; } = { 4, 8 };
+
+    [ObservableProperty]
+    private bool _autoConnect = true;
+
+    partial void OnAutoConnectChanged(bool value)
+    {
+        SaveSettings();
+    }
+
+    [ObservableProperty]
+    private bool _enableStartupLighting = true;
+
+    partial void OnEnableStartupLightingChanged(bool value)
+    {
+        SaveSettings();
+    }
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(GridColumns))]
@@ -212,6 +290,7 @@ public sealed partial class LightingControllerViewModel : ObservableObject
     partial void OnSelectedChannelCountChanged(int value)
     {
         UpdateChannels(value);
+        UpdateStartupChannels(value, _settingsService.Settings.Lighting.StartupChannels);
         SaveSettings();
     }
 
@@ -224,6 +303,23 @@ public sealed partial class LightingControllerViewModel : ObservableObject
         while (Channels.Count > count)
         {
             Channels.RemoveAt(Channels.Count - 1);
+        }
+    }
+
+    private void UpdateStartupChannels(int count, List<LightingStartupChannelSettings>? savedList = null)
+    {
+        while (StartupChannels.Count < count)
+        {
+            int idx = StartupChannels.Count;
+            var saved = savedList?.FirstOrDefault(x => x.ChannelIndex == idx);
+            bool isEnabled = saved?.IsEnabled ?? (idx == 0);
+            int br = saved?.Brightness ?? 120;
+            int time = saved?.LightingTimeMs ?? 100;
+            StartupChannels.Add(new LightingStartupChannelViewModel(idx, this, isEnabled, br, time));
+        }
+        while (StartupChannels.Count > count)
+        {
+            StartupChannels.RemoveAt(StartupChannels.Count - 1);
         }
     }
 
@@ -650,14 +746,37 @@ public sealed partial class LightingControllerViewModel : ObservableObject
         IsLocked = state.LC != 0;
     }
 
+    [RelayCommand]
+    private void CaptureCurrentAsStartup()
+    {
+        for (int i = 0; i < Channels.Count && i < StartupChannels.Count; i++)
+        {
+            StartupChannels[i].IsEnabled = Channels[i].IsEnabled;
+            StartupChannels[i].Brightness = Channels[i].Brightness;
+            StartupChannels[i].LightingTimeMs = Channels[i].LightingTimeMs;
+        }
+        SaveSettings();
+        LastError = string.Empty;
+    }
+
     // =====================================================================
     // Settings Persistence
     // =====================================================================
 
-    private void SaveSettings()
+    internal void SaveSettings()
     {
         var settings = _settingsService.Settings.Lighting;
         settings.ChannelCount = SelectedChannelCount;
+        settings.AutoConnect = AutoConnect;
+        settings.EnableStartupLighting = EnableStartupLighting;
+        settings.StartupChannels = StartupChannels.Select(x => new LightingStartupChannelSettings
+        {
+            ChannelIndex = x.ChannelIndex,
+            IsEnabled = x.IsEnabled,
+            Brightness = x.Brightness,
+            LightingTimeMs = x.LightingTimeMs
+        }).ToList();
+
         settings.InterfaceType = (int)SelectedInterfaceType;
         settings.ControllerIp = ControllerIp;
         settings.Port = Port;

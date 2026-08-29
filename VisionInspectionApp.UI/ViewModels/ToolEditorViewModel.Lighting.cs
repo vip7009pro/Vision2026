@@ -11,9 +11,19 @@ namespace VisionInspectionApp.UI.ViewModels
 {
     public sealed partial class ToolEditorViewModel : ObservableObject
     {
+        private static LightingControllerWindow? _lightingControllerWindowInstance;
+
         [RelayCommand]
         private void OpenLightingController()
         {
+            if (_lightingControllerWindowInstance != null && _lightingControllerWindowInstance.IsLoaded)
+            {
+                _lightingControllerWindowInstance.Activate();
+                if (_lightingControllerWindowInstance.WindowState == WindowState.Minimized)
+                    _lightingControllerWindowInstance.WindowState = WindowState.Normal;
+                return;
+            }
+
             var lightingService = _serviceProvider?.GetService<LightingControllerService>();
             var settingsService = _serviceProvider?.GetService<GlobalAppSettingsService>();
 
@@ -28,13 +38,9 @@ namespace VisionInspectionApp.UI.ViewModels
             }
 
             var vm = new LightingControllerViewModel(lightingService, settingsService);
-            var activeWin = System.Windows.Application.Current?.Windows.OfType<Window>().FirstOrDefault(w => w.IsActive)
-                            ?? System.Windows.Application.Current?.MainWindow;
-            var win = new LightingControllerWindow(vm)
-            {
-                Owner = activeWin
-            };
-            win.ShowDialog();
+            _lightingControllerWindowInstance = new LightingControllerWindow(vm);
+            _lightingControllerWindowInstance.Closed += (_, _) => _lightingControllerWindowInstance = null;
+            _lightingControllerWindowInstance.Show();
         }
     }
 }

@@ -531,79 +531,122 @@ public sealed partial class ToolEditorViewModel : ObservableObject
 
     #region Commands for Toolbar/UI
 
+    private static PlcManagerWindow? _plcManagerWindowInstance;
+    private static Views.HMI.HmiManagerWindow? _hmiManagerWindowInstance;
+    private static PlcMonitorWindow? _plcMonitorWindowInstance;
+    private static Window? _plcBrowserWindowInstance;
+    private static Views.PLC.PlcOscilloscopeWindow? _plcOscilloscopeWindowInstance;
+
     [RelayCommand]
     private void OpenPlcManager()
     {
-        var vm = new PlcManagerViewModel(_plcManagerService);
-        var activeWin = System.Windows.Application.Current?.Windows.OfType<Window>().FirstOrDefault(w => w.IsActive) ?? System.Windows.Application.Current?.MainWindow;
-        var win = new PlcManagerWindow(vm)
+        if (_plcManagerWindowInstance != null && _plcManagerWindowInstance.IsLoaded)
         {
-            Owner = activeWin
+            _plcManagerWindowInstance.Activate();
+            if (_plcManagerWindowInstance.WindowState == WindowState.Minimized)
+                _plcManagerWindowInstance.WindowState = WindowState.Normal;
+            return;
+        }
+
+        var vm = new PlcManagerViewModel(_plcManagerService);
+        _plcManagerWindowInstance = new PlcManagerWindow(vm);
+        _plcManagerWindowInstance.Closed += (s, e) =>
+        {
+            _plcManagerWindowInstance = null;
+            _plcManagerService.SaveGlobalConfig();
+            OnPropertyChanged(nameof(AvailablePlcNames));
+            OnPropertyChanged(nameof(AvailablePlcTagNames));
+            OnPropertyChanged(nameof(AvailablePlcAllTagNames));
         };
-        win.ShowDialog();
-
-        _plcManagerService.SaveGlobalConfig();
-
-        OnPropertyChanged(nameof(AvailablePlcNames));
-        OnPropertyChanged(nameof(AvailablePlcTagNames));
-        OnPropertyChanged(nameof(AvailablePlcAllTagNames));
+        _plcManagerWindowInstance.Show();
     }
 
     [RelayCommand]
     private void OpenHmiManager()
     {
-        var vm = new HMI.HmiManagerViewModel(_plcManagerService);
-        var activeWin = System.Windows.Application.Current?.Windows.OfType<Window>().FirstOrDefault(w => w.IsActive) ?? System.Windows.Application.Current?.MainWindow;
-        var win = new Views.HMI.HmiManagerWindow(vm)
+        if (_hmiManagerWindowInstance != null && _hmiManagerWindowInstance.IsLoaded)
         {
-            Owner = activeWin
+            _hmiManagerWindowInstance.Activate();
+            if (_hmiManagerWindowInstance.WindowState == WindowState.Minimized)
+                _hmiManagerWindowInstance.WindowState = WindowState.Normal;
+            return;
+        }
+
+        var vm = new HMI.HmiManagerViewModel(_plcManagerService);
+        _hmiManagerWindowInstance = new Views.HMI.HmiManagerWindow(vm);
+        _hmiManagerWindowInstance.Closed += (s, e) =>
+        {
+            _hmiManagerWindowInstance = null;
+            vm.StopRunMode();
         };
-        win.Closed += (s, e) => vm.StopRunMode();
-        win.Show();
+        _hmiManagerWindowInstance.Show();
     }
 
     [RelayCommand]
     private void OpenPlcMonitor()
     {
+        if (_plcMonitorWindowInstance != null && _plcMonitorWindowInstance.IsLoaded)
+        {
+            _plcMonitorWindowInstance.Activate();
+            if (_plcMonitorWindowInstance.WindowState == WindowState.Minimized)
+                _plcMonitorWindowInstance.WindowState = WindowState.Normal;
+            return;
+        }
+
         _plcManagerService.AcquirePollingLock("PlcMonitorWindow");
         var vm = new PlcMonitorViewModel(_plcManagerService);
-        var activeWin = System.Windows.Application.Current?.Windows.OfType<Window>().FirstOrDefault(w => w.IsActive) ?? System.Windows.Application.Current?.MainWindow;
-        var win = new PlcMonitorWindow(vm)
+        _plcMonitorWindowInstance = new PlcMonitorWindow(vm);
+        _plcMonitorWindowInstance.Closed += (s, e) =>
         {
-            Owner = activeWin
+            _plcMonitorWindowInstance = null;
+            _plcManagerService.ReleasePollingLock("PlcMonitorWindow");
         };
-        win.Closed += (s, e) => _plcManagerService.ReleasePollingLock("PlcMonitorWindow");
-        win.Show();
+        _plcMonitorWindowInstance.Show();
     }
 
     [RelayCommand]
     private void OpenPlcBrowser()
     {
+        if (_plcBrowserWindowInstance != null && _plcBrowserWindowInstance.IsLoaded)
+        {
+            _plcBrowserWindowInstance.Activate();
+            if (_plcBrowserWindowInstance.WindowState == WindowState.Minimized)
+                _plcBrowserWindowInstance.WindowState = WindowState.Normal;
+            return;
+        }
+
         _plcManagerService.AcquirePollingLock("PlcBrowserWindow");
-        var activeWin = System.Windows.Application.Current?.Windows.OfType<Window>().FirstOrDefault(w => w.IsActive) ?? System.Windows.Application.Current?.MainWindow;
-        var win = new Window
+        _plcBrowserWindowInstance = new Window
         {
             Title = "PLC Tag Browser",
             Width = 700,
             Height = 450,
             WindowStartupLocation = WindowStartupLocation.CenterScreen,
-            Owner = activeWin,
             Content = new PlcBrowserControl { DataContext = new PlcBrowserViewModel(_plcManagerService) }
         };
-        win.Closed += (s, e) => _plcManagerService.ReleasePollingLock("PlcBrowserWindow");
-        win.Show();
+        _plcBrowserWindowInstance.Closed += (s, e) =>
+        {
+            _plcBrowserWindowInstance = null;
+            _plcManagerService.ReleasePollingLock("PlcBrowserWindow");
+        };
+        _plcBrowserWindowInstance.Show();
     }
 
     [RelayCommand]
     private void OpenPlcOscilloscope()
     {
-        var vm = new PlcOscilloscopeViewModel(_plcManagerService);
-        var activeWin = System.Windows.Application.Current?.Windows.OfType<Window>().FirstOrDefault(w => w.IsActive) ?? System.Windows.Application.Current?.MainWindow;
-        var win = new Views.PLC.PlcOscilloscopeWindow(vm)
+        if (_plcOscilloscopeWindowInstance != null && _plcOscilloscopeWindowInstance.IsLoaded)
         {
-            Owner = activeWin
-        };
-        win.Show();
+            _plcOscilloscopeWindowInstance.Activate();
+            if (_plcOscilloscopeWindowInstance.WindowState == WindowState.Minimized)
+                _plcOscilloscopeWindowInstance.WindowState = WindowState.Normal;
+            return;
+        }
+
+        var vm = new PlcOscilloscopeViewModel(_plcManagerService);
+        _plcOscilloscopeWindowInstance = new Views.PLC.PlcOscilloscopeWindow(vm);
+        _plcOscilloscopeWindowInstance.Closed += (s, e) => _plcOscilloscopeWindowInstance = null;
+        _plcOscilloscopeWindowInstance.Show();
     }
 
     #endregion

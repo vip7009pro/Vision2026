@@ -49,6 +49,79 @@
 - Preview được phép tiếp tục khi Global Snapshot rỗng để lấy ảnh từ ImageSource.
 - Lưu template cho Origin, Point và SurfaceCompare hoạt động với nguồn ảnh ImageSource.
 
+- **Duy Trì Trạng Thái Kết Nối Lighting Controller, Tái Cấu Trúc Giao Diện 2 Cột & Modeless Window (Task 270)**:
+  - **Yêu Cầu & Bối Cảnh**:
+    1. Sửa lỗi logic phát sai trạng thái "Kết nối thành công" sau khi đã báo timeout dù chưa cắm controller: Đảm bảo chỉ xác nhận và phát sự kiện `Connected` sau khi handshake / probe đọc trạng thái từ thiết bị thành công.
+    2. Duy trì trạng thái kết nối liên tục từ khi mở app: Khi mở cửa sổ Lighting Controller, nếu service đã kết nối sẵn thì tự động đồng bộ trạng thái `Connected` và độ sáng thực tế các kênh, không cần bấm kết nối lại từ đầu.
+    3. Tái cấu trúc giao diện cửa sổ Lighting Controller thành dạng 2 cột trực quan (Cột trái: Cài đặt kết nối + Khởi động + Trigger & Actions; Cột phải: Danh sách các kênh dạng cột dọc mỏng gọn), hiển thị 100% đầy đủ ở kích thước mặc định chuẩn mà không cần maximize cửa sổ.
+    4. Chuyển đổi toàn bộ các cửa sổ chức năng (Lighting Controller, PLC Manager, PLC Monitor, PLC Tag Browser, PLC Oscilloscope, HMI Manager, Database Manager, Calibration, Chessboard Calibration, Roll Defect Map, Inspection Log, Job Camera Settings, Product Assign, OQC Settings, OQC Detail) từ `ShowDialog()` sang `Show()` (Modeless Window) kèm quản lý instance kích hoạt `Activate()`, giúp người dùng thoải mái tương tác song song với màn hình chính và tất cả các cửa sổ khác.
+  - **Giải Pháp Kỹ Thuật Đã Triển Khai**:
+    1. [LightingControllerService.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.Application/LightingController/LightingControllerService.cs):
+       - Sắp xếp lại thứ tự gán trạng thái trong `ConnectSerialAsync` và `ConnectAsync`: Chỉ gán `ConnectionState = Connected` sau khi probe đọc trạng thái thành công. Nếu probe timeout/thất bại, ngắt kết nối an toàn, gán `Error` và phát `OnError`.
+    2. [LightingControllerViewModel.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/LightingControllerViewModel.cs):
+       - Trong constructor, tự động nạp `_connectionState = _service.ConnectionState;` và gọi `SyncFromDeviceState(_service.LastKnownState)` nếu service đã kết nối.
+    3. [LightingControllerWindow.xaml](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/Views/LightingControllerWindow.xaml):
+       - Tái thiết kế bố cục 2 cột responsive (`Column 0: 430px`, `Column 1: *`): Cột trái chứa Connection Panel, Startup Settings Panel, Trigger & Global Actions Panel; Cột phải chứa danh sách thẻ kênh mỏng gọn (Label ON/OFF, Slider + TextBox độ sáng, Thời gian sáng ms); Phía dưới giữ nguyên Protocol Log.
+    4. [ToolEditorViewModel.Lighting.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/ToolEditorViewModel.Lighting.cs), [ToolEditorViewModel.Plc.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/ToolEditorViewModel.Plc.cs), [ToolEditorViewModel.Db.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/ToolEditorViewModel.Db.cs), [ToolEditorViewModel.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/ToolEditorViewModel.cs), [ToolEditorViewModel.ToolPreprocess.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/ToolEditorViewModel.ToolPreprocess.cs), [OqcScannerViewModel.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/OqcScannerViewModel.cs):
+       - Chuyển đổi toàn bộ các lệnh mở Window từ `ShowDialog()` sang `Show()` modeless.
+       - Bổ sung cơ chế quản lý instance thông minh: Kích hoạt `Activate()` và đưa lên phía trước nếu cửa sổ đang mở, tự động hủy tham chiếu khi `Closed`.
+  - **Kiểm Thử**:
+    - Toàn bộ 106 bài kiểm thử của Lighting Controller và toàn bộ test suite của dự án PASSED 100%. Mọi cửa sổ mở độc lập không chặn UI chính.
+
+- **Xử Lý Ngoại Lệ Timeout / Mất Kết Nối Bộ Điều Khiển Đèn Khi Khởi Động & Cảnh Báo Trên Status Bar (Task 269)**:
+  - **Yêu Cầu & Bối Cảnh**:
+    - Khi khởi động ứng dụng mà bộ điều khiển đèn chưa được bật nguồn, chưa cắm cáp RS-232 hoặc cổng COM không phản hồi sau 3000ms:
+      Xuất hiện lỗi `System.TimeoutException: 'Không nhận được phản hồi từ cổng COM1 sau 3000ms. Hãy kiểm tra kết nối cáp RS-232, nguồn bộ điều khiển và cài đặt cổng COM.'`
+    - Yêu cầu: Bắt và xử lý ngoại lệ an toàn, tuyệt đối không để văng app; đồng thời hiển thị thông báo lỗi rõ ràng dưới dạng cảnh báo trên Status Bar để người dùng nhận biết tình trạng thiết bị.
+  - **Giải Pháp Kỹ Thuật Đã Triển Khai**:
+    1. [LightingTransport.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.Application/LightingController/LightingTransport.cs):
+       - Triệt tiêu hoàn toàn việc `throw new TimeoutException(...)` ở tầng Transport (`SerialLightingTransport`, `TcpLightingTransport`, `UdpLightingTransport`).
+       - Thay vào đó, khi hết thời gian chờ 3000ms mà không có dữ liệu, phương thức `SendAndReceiveAsync` trả về chuỗi thông báo chuẩn `[TIMEOUT] Không nhận được phản hồi từ cổng {portName} sau {timeout}ms...`.
+       - Nhờ đó triệt tiêu triệt để việc Visual Studio Debugger dừng lại ở First-chance Exception và loại bỏ 100% rủi ro Unhandled Exception làm crash ứng dụng.
+    2. [LightingControllerService.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.Application/LightingController/LightingControllerService.cs):
+       - Bổ sung thuộc tính `LastError`, tự động xóa lỗi khi kết nối thành công (`LastError = null`) và ghi nhận nguyên nhân lỗi khi nhận được `[TIMEOUT]` hoặc `[ERROR]`.
+       - Trong `ConnectSerialAsync` và `ConnectAsync`: Nếu probe đọc trạng thái ban đầu bị timeout, hệ thống tự động ngắt kết nối an toàn (`DisconnectInternalAsync()`), đặt `ConnectionState = LightingConnectionState.Error`, phát sự kiện `OnError` và trả về nhẹ nhàng mà không ném exception.
+    3. [App.xaml.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/App.xaml.cs):
+       - Bọc toàn bộ quá trình auto-connect và startup lighting trong khối `try-catch (Exception ex)`.
+       - Khi phát hiện timeout hoặc lỗi kết nối cổng COM / IP mạng, tự động cập nhật thông báo `⚠️ [Đèn Chiếu Sáng] {ex.Message}` lên `MainWindowViewModel.SetGlobalStatus(..., "Warning")` và `ToolEditorViewModel.StatusBarText`.
+       - Khi kết nối và bật đèn thành công, thông báo `💡 [Đèn Chiếu Sáng] Đã kết nối ({target}) & thiết lập độ sáng khởi động thành công.`
+    4. [MainWindowViewModel.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/MainWindowViewModel.cs) & [MainWindow.xaml](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/MainWindow.xaml):
+       - Tích hợp Global Status Bar ở đáy cửa sổ chính với cơ chế đổi màu trực quan theo `GlobalStatusSeverity` (Warning: Vàng cam `#FFA000`, Error: Đỏ `#E53935`, Success: Xanh lá `#4CAF50`).
+       - Tự động đăng ký lắng nghe sự kiện `OnError` và `OnConnectionStateChanged` của `LightingControllerService`.
+    5. [ToolEditorViewModel.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/ToolEditorViewModel.cs):
+       - Đăng ký lắng nghe sự kiện `_lightingControllerService.OnError` để đồng bộ cập nhật lên `StatusBarText`.
+  - **Kiểm Thử**:
+    - Toàn bộ 106 bài kiểm thử của Lighting Controller và toàn bộ test suite của dự án PASSED 100%. Ứng dụng khởi động an toàn, không bị văng ngay cả khi cổng COM không có thiết bị phản hồi.
+
+- **Tự Động Kết Nối & Bật Đèn Khởi Động, Tái Cấu Trúc Giao Diện Lighting Controller Responsive, Quản Lý Cấu Hình Đèn Theo Từng Job Trong Node ImageSource (Task 268)**:
+  - **Yêu Cầu & Bối Cảnh**:
+    1. Khi ứng dụng mở, tự động kết nối lại vào phương thức gần nhất đã sử dụng (Serial RS-232 COM hoặc Ethernet TCP/UDP), tự động bật đèn ở các kênh và mức sáng đã cài đặt (mặc định mức vừa phải 120/255 hoặc theo mức người dùng cài đặt) để có thể quan sát Live View camera ngay lập tức.
+    2. Bổ sung cài đặt cấu hình khởi động trong màn hình Lighting Controller (cho phép ghi nhớ toàn bộ trạng thái ON/OFF và độ sáng hiện tại làm cấu hình khởi động chỉ bằng 1 cú click: "📋 Lưu Mức Sáng Này Làm Khởi Động").
+    3. Tái cấu trúc nhóm control kết nối Ethernet và RS-232 ở trên cùng cửa sổ Lighting Controller: Thiết kế lại layout responsive, phân bổ hợp lý thành 2 cột cân đối (Cột trái: Kết nối; Cột phải: Cài đặt khởi động + Trigger Mode + Actions). Khi mở cửa sổ ở kích thước chuẩn (không cần full màn hình), tất cả các nút bấm, combobox và ô nhập liệu đều hiển thị 100% rõ ràng, không bị tràn hay che mất.
+    4. Trong Tool Editor, node `ImageSource` được bổ sung thuộc tính mức độ sáng từng kênh (`LightingParams`); nếu Job cũ trước chưa có, tự động đọc mức sáng hiện tại từ Lighting Controller hoặc fallback mặc định.
+    5. Khi mở file Job (`.job`), hệ thống tự động đọc thông tin đèn và gửi lệnh bật/tắt thiết lập mức sáng theo đúng cấu hình được lưu cùng Job.
+  - **Giải Pháp Kỹ Thuật Đã Triển Khai**:
+    1. [LightingControllerModels.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.Models/LightingControllerModels.cs) & [Class1.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.Models/Class1.cs):
+       - Bổ sung model `LightingStartupChannelSettings` với hàm tĩnh `CreateDefaults(count)` phục vụ lưu cấu hình khởi động trong `GlobalAppSettings`.
+       - Bổ sung model `JobLightingParameters` và `JobLightingChannelParams` vào `ImageSourceDefinition.LightingParams` phục vụ lưu cấu hình đèn theo Job.
+    2. [GlobalAppSettingsService.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/Services/GlobalAppSettingsService.cs):
+       - Bổ sung `AutoConnect = true`, `EnableStartupLighting = true`, `StartupChannels` vào `LightingControllerSettings`.
+    3. [LightingControllerWindow.xaml](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/Views/LightingControllerWindow.xaml) & [LightingControllerViewModel.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/LightingControllerViewModel.cs):
+       - Tái cấu trúc Row 0 thành 2 Card trực quan: Card 1 (Kết Nối Ethernet/RS-232 rộng rãi), Card 2 (Cài Đặt Khởi Động + Trigger Mode + Global Actions).
+       - Thêm CheckBox Auto-Connect, CheckBox Tự bật đèn khi mở app, nút "📋 Lưu Mức Sáng Này Làm Khởi Động" (`CaptureCurrentAsStartupCommand`).
+       - Tự động nạp/lưu cài đặt khởi động vào `GlobalAppSettings`.
+    4. [App.xaml.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/App.xaml.cs):
+       - Cập nhật luồng non-blocking auto-connect khi khởi động: Sau khi kết nối thành công, nếu `EnableStartupLighting == true`, tự động gửi lệnh áp dụng các kênh và độ sáng đã cài đặt từ `StartupChannels`.
+    5. [ToolEditorViewModel.ToolPreprocess.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/ToolEditorViewModel.ToolPreprocess.cs) & [ToolEditorView.xaml](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/Views/ToolEditorView.xaml):
+       - Bổ sung `JobLightingChannelItemViewModel`, `ImageSource_LightingChannels`, `ImageSource_EnableLighting`, `ImageSource_LightingChannelCount`.
+       - Thêm commands: `ImageSource_ApplyLightingToDeviceCommand` ("⚡ Test Áp Dụng") và `ImageSource_ReadLightingFromDeviceCommand` ("📥 Đọc Từ Đèn").
+       - Thêm giao diện điều khiển đèn cho từng kênh (ON/OFF, Slider + TextBox độ sáng 0-255) trong Properties Panel của node `ImageSource`.
+    6. [ToolEditorViewModel.Config.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/ToolEditorViewModel.Config.cs) & [InspectionViewModel.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/InspectionViewModel.cs):
+       - Khi nạp Job (`LoadJobFromFile` / `LoadJob`), tự động gửi lệnh bật/tắt và thiết lập mức sáng theo `imgSourceDef.LightingParams` xuống thiết bị qua `LightingControllerService`.
+  - **Kiểm Thử**:
+    - Bổ sung 4 unit tests mới trong [LightingControllerTests.cs](file:///g:/NODEJS/Vision2026/TestExtractApp/LightingControllerTests.cs) kiểm tra defaults, JSON serialization, backward compatibility và clone.
+    - Toàn bộ 106 test cases Lighting Controller và toàn bộ test suite (Vision, PLC, SPC, Manual Inspection, Masking) PASSED 100%.
+
 - **Tích Hợp Bộ Điều Khiển Đèn 8 Kênh ASCII (Lighting Controller) Qua Ethernet (TCP/UDP) & Cổng Nối Tiếp RS-232 (COM Port) (Task 266)**:
   - **Yêu Cầu & Bối Cảnh**:
     - Bổ sung tính năng điều khiển Lighting Controller 8 kênh qua giao thức ASCII dạng `$COMMAND=VALUE#` hỗ trợ cả Ethernet (TCP/UDP) và Cổng nối tiếp Serial RS-232 (COM Port: 19200bps, 8 DataBits, 1 StopBit, No Parity, Half-duplex).

@@ -207,9 +207,19 @@ public partial class ToolEditorViewModel
 
     public ICommand OpenDbManagerCommand => new RelayCommand(OpenDbManager);
 
+    private static DbManagerWindow? _dbManagerWindowInstance;
+
     private void OpenDbManager()
     {
         if (_dbManagerService == null) return;
+
+        if (_dbManagerWindowInstance != null && _dbManagerWindowInstance.IsLoaded)
+        {
+            _dbManagerWindowInstance.Activate();
+            if (_dbManagerWindowInstance.WindowState == WindowState.Minimized)
+                _dbManagerWindowInstance.WindowState = WindowState.Normal;
+            return;
+        }
 
         var vm = new DbManagerViewModel(_dbManagerService, () =>
         {
@@ -218,16 +228,19 @@ public partial class ToolEditorViewModel
             RequestAutoSave();
         });
 
-        var win = new DbManagerWindow
+        _dbManagerWindowInstance = new DbManagerWindow
         {
-            DataContext = vm,
-            Owner = System.Windows.Application.Current.MainWindow
+            DataContext = vm
         };
 
-        win.ShowDialog();
+        _dbManagerWindowInstance.Closed += (s, e) =>
+        {
+            _dbManagerWindowInstance = null;
+            OnPropertyChanged(nameof(AvailableDatabases));
+            OnPropertyChanged(nameof(Db_SelectedDbChoice));
+        };
 
-        OnPropertyChanged(nameof(AvailableDatabases));
-        OnPropertyChanged(nameof(Db_SelectedDbChoice));
+        _dbManagerWindowInstance.Show();
     }
 
     public bool Db_Enable

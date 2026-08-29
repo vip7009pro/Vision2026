@@ -106,7 +106,7 @@ public partial class App : System.Windows.Application
         var plcManager = _host.Services.GetRequiredService<Application.PLC.Services.IPlcManagerService>();
         _ = plcManager.AutoConnectStartupAsync();
 
-        // Auto-connect Lighting Controller (non-blocking)
+        // Auto-connect Lighting Controller & Apply Startup Lighting (non-blocking)
         _ = Task.Run(async () =>
         {
             try
@@ -145,9 +145,65 @@ public partial class App : System.Windows.Application
                             lightingSettings.Port,
                             (VisionInspectionApp.Models.LightingNetworkMode)lightingSettings.NetworkMode);
                     }
+
+                    // Tự động bật đèn ở các channel và mức sáng đã cài đặt khi app khởi động
+                    if (lightingService.IsConnected && lightingSettings.EnableStartupLighting)
+                    {
+                        var channels = lightingSettings.StartupChannels != null && lightingSettings.StartupChannels.Count > 0
+                            ? lightingSettings.StartupChannels
+                            : VisionInspectionApp.Models.LightingStartupChannelSettings.CreateDefaults(lightingSettings.ChannelCount);
+
+                        int chCount = lightingSettings.ChannelCount == 8 ? 8 : 4;
+                        for (int i = 0; i < chCount && i < channels.Count; i++)
+                        {
+                            var ch = channels[i];
+                            await lightingService.SetChannelPowerAsync(ch.ChannelIndex, ch.IsEnabled);
+                            if (ch.IsEnabled)
+                            {
+                                int br = Math.Clamp(ch.Brightness, 0, 255);
+                                await lightingService.SetBrightnessAsync(ch.ChannelIndex, br);
+                            }
+                        }
+                    }
+
+                    if (lightingService.IsConnected)
+                    {
+                        var target = lightingSettings.InterfaceType == (int)VisionInspectionApp.Models.LightingInterfaceType.SerialCom
+                            ? lightingSettings.ComPort
+                            : $"{lightingSettings.ControllerIp}:{lightingSettings.Port}";
+                        var successMsg = $"💡 [Đèn Chiếu Sáng] Đã kết nối ({target}) & thiết lập độ sáng khởi động thành công.";
+                        System.Windows.Application.Current?.Dispatcher.InvokeAsync(() =>
+                        {
+                            try
+                            {
+                                var mainVm = _host.Services.GetService<MainWindowViewModel>();
+                                mainVm?.SetGlobalStatus(successMsg, "Success");
+                            }
+                            catch { }
+                        });
+                    }
                 }
             }
-            catch { /* Lighting Controller auto-connect failure must not crash the app */ }
+            catch (Exception ex)
+            {
+                // Bắt toàn bộ lỗi timeout / không kết nối được để hiển thị thông báo ở status bar và không để văng app
+                var warnMsg = $"⚠️ [Đèn Chiếu Sáng] {ex.Message}";
+                System.Windows.Application.Current?.Dispatcher.InvokeAsync(() =>
+                {
+                    try
+                    {
+                        var mainVm = _host.Services.GetService<MainWindowViewModel>();
+                        mainVm?.SetGlobalStatus(warnMsg, "Warning");
+
+                        var toolEditorVm = _host.Services.GetService<ToolEditorViewModel>();
+                        if (toolEditorVm != null)
+                        {
+                            toolEditorVm.StatusBarText = warnMsg;
+                        }
+                    }
+                    catch { }
+                });
+            }
         });
     }
 

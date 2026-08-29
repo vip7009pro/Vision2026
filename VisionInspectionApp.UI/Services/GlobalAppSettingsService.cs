@@ -39,7 +39,25 @@ public sealed class LightingControllerSettings
     public bool AutoReadOnConnect { get; set; } = false;
     public int ChannelCount { get; set; } = 4; // 4 or 8 channels
 
-    public bool AutoConnect { get; set; } = false;
+    public bool AutoConnect { get; set; } = true;
+    public bool EnableStartupLighting { get; set; } = true;
+    public List<VisionInspectionApp.Models.LightingStartupChannelSettings> StartupChannels { get; set; } = CreateDefaultStartupChannels();
+
+    public static List<VisionInspectionApp.Models.LightingStartupChannelSettings> CreateDefaultStartupChannels(int count = 8)
+    {
+        var list = new List<VisionInspectionApp.Models.LightingStartupChannelSettings>();
+        for (int i = 0; i < count; i++)
+        {
+            list.Add(new VisionInspectionApp.Models.LightingStartupChannelSettings
+            {
+                ChannelIndex = i,
+                IsEnabled = i == 0, // Kênh CH1 mặc định ON
+                Brightness = 120,    // Mức sáng vừa phải mặc định để quan sát Live view
+                LightingTimeMs = 100
+            });
+        }
+        return list;
+    }
 }
 
 public sealed class PlcSettings
