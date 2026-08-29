@@ -844,39 +844,136 @@ namespace VisionInspectionApp.UI.ViewModels
             }
         }
     
+        public string? ResolveTemplatePath(string? currentPath, string? fallbackName = null, string? fallbackPattern = null)
+        {
+            try
+            {
+                // BẮT BUỘC CHỈ TÌM TRONG THƯ MỤC CỦA JOB HIỆN TẠI (CurrentTempWorkingDir)
+                if (string.IsNullOrWhiteSpace(CurrentTempWorkingDir) || !Directory.Exists(CurrentTempWorkingDir))
+                {
+                    if (!string.IsNullOrWhiteSpace(currentPath) && File.Exists(currentPath))
+                        return Path.GetFullPath(currentPath);
+                    return null;
+                }
+
+                var templatesSubdir = Path.Combine(CurrentTempWorkingDir, "templates");
+
+                // Trích xuất tên file sạch (bỏ mọi đường dẫn tuyệt đối cũ nếu có trong json)
+                var cleanFileName = !string.IsNullOrWhiteSpace(currentPath) ? Path.GetFileName(currentPath) : fallbackName;
+
+                // 1. Tìm trong CurrentTempWorkingDir/templates/{cleanFileName}
+                if (!string.IsNullOrWhiteSpace(cleanFileName) && Directory.Exists(templatesSubdir))
+                {
+                    var p1 = Path.Combine(templatesSubdir, cleanFileName);
+                    if (File.Exists(p1)) return Path.GetFullPath(p1);
+                }
+
+                // 2. Tìm trong CurrentTempWorkingDir/{cleanFileName} (gốc zip)
+                if (!string.IsNullOrWhiteSpace(cleanFileName))
+                {
+                    var p2 = Path.Combine(CurrentTempWorkingDir, cleanFileName);
+                    if (File.Exists(p2)) return Path.GetFullPath(p2);
+                }
+
+                // 3. Nếu cleanFileName khác fallbackName, thử tìm fallbackName
+                if (!string.IsNullOrWhiteSpace(fallbackName))
+                {
+                    var fbClean = Path.GetFileName(fallbackName);
+                    if (Directory.Exists(templatesSubdir))
+                    {
+                        var p3 = Path.Combine(templatesSubdir, fbClean);
+                        if (File.Exists(p3)) return Path.GetFullPath(p3);
+                    }
+                    var p4 = Path.Combine(CurrentTempWorkingDir, fbClean);
+                    if (File.Exists(p4)) return Path.GetFullPath(p4);
+                }
+
+                // 4. Tìm kiếm theo wildcard pattern trong CurrentTempWorkingDir/templates
+                if (!string.IsNullOrWhiteSpace(fallbackPattern) && Directory.Exists(templatesSubdir))
+                {
+                    var matches = Directory.GetFiles(templatesSubdir, fallbackPattern);
+                    if (matches.Length > 0) return Path.GetFullPath(matches[0]);
+                }
+
+                // 5. Tìm kiếm theo wildcard pattern trong CurrentTempWorkingDir
+                if (!string.IsNullOrWhiteSpace(fallbackPattern))
+                {
+                    var matches = Directory.GetFiles(CurrentTempWorkingDir, fallbackPattern);
+                    if (matches.Length > 0) return Path.GetFullPath(matches[0]);
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[ResolveTemplatePath] Error resolving path: {ex.Message}");
+            }
+
+            return null;
+        }
+
         private void EnsureTemplatePathsAbsolute(VisionConfig config)
         {
             if (config is null)
             {
                 return;
             }
-    
-            var templateDir = Path.Combine(CurrentTempWorkingDir ?? Path.Combine(Path.GetFullPath(_storeOptions.ConfigRootDirectory), config.ProductCode), "templates");
-            void NormalizePoint(PointDefinition p)
+
+            // Origin
+            if (config.Origin != null)
             {
-                if (string.IsNullOrWhiteSpace(p.TemplateImageFile))
-                    return;
-                if (!Path.IsPathRooted(p.TemplateImageFile))
+                var resolved = ResolveTemplatePath(config.Origin.TemplateImageFile, "origin.png", "origin*.png");
+                if (!string.IsNullOrWhiteSpace(resolved))
                 {
-                    p.TemplateImageFile = Path.GetFullPath(Path.Combine(templateDir, p.TemplateImageFile));
+                    config.Origin.TemplateImageFile = resolved;
                 }
             }
-    
-            void NormalizeSurfaceCompare(SurfaceCompareDefinition sc)
+
+            // Points
+            if (config.Points != null)
             {
-                if (string.IsNullOrWhiteSpace(sc.TemplateImageFile))
-                    return;
-                if (!Path.IsPathRooted(sc.TemplateImageFile))
+                foreach (var p in config.Points)
                 {
-                    sc.TemplateImageFile = Path.GetFullPath(Path.Combine(templateDir, sc.TemplateImageFile));
+                    if (p == null) continue;
+                    var fallback = !string.IsNullOrWhiteSpace(p.Name) ? $"{p.Name.ToLowerInvariant()}.png" : null;
+                    var pattern = !string.IsNullOrWhiteSpace(p.Name) ? $"{p.Name.ToLowerInvariant()}*.png" : null;
+                    var resolved = ResolveTemplatePath(p.TemplateImageFile, fallback, pattern);
+                    if (!string.IsNullOrWhiteSpace(resolved))
+                    {
+                        p.TemplateImageFile = resolved;
+                    }
                 }
             }
-    
-            NormalizePoint(config.Origin);
-            foreach (var p in config.Points)
-                NormalizePoint(p);
-            foreach (var sc in config.SurfaceCompares)
-                NormalizeSurfaceCompare(sc);
+
+            // SurfaceCompares
+            if (config.SurfaceCompares != null)
+            {
+                foreach (var sc in config.SurfaceCompares)
+                {
+                    if (sc == null) continue;
+                    var fallback = !string.IsNullOrWhiteSpace(sc.Name) ? $"{sc.Name.ToLowerInvariant()}.png" : null;
+                    var pattern = !string.IsNullOrWhiteSpace(sc.Name) ? $"{sc.Name.ToLowerInvariant()}*.png" : null;
+                    var resolved = ResolveTemplatePath(sc.TemplateImageFile, fallback, pattern);
+                    if (!string.IsNullOrWhiteSpace(resolved))
+                    {
+                        sc.TemplateImageFile = resolved;
+                    }
+                }
+            }
+
+            // ContourCompares
+            if (config.ContourCompares != null)
+            {
+                foreach (var cc in config.ContourCompares)
+                {
+                    if (cc == null) continue;
+                    var fallback = !string.IsNullOrWhiteSpace(cc.Name) ? $"{cc.Name.ToLowerInvariant()}.png" : null;
+                    var pattern = !string.IsNullOrWhiteSpace(cc.Name) ? $"{cc.Name.ToLowerInvariant()}*.png" : null;
+                    var resolved = ResolveTemplatePath(cc.TemplateImageFile, fallback, pattern);
+                    if (!string.IsNullOrWhiteSpace(resolved))
+                    {
+                        cc.TemplateImageFile = resolved;
+                    }
+                }
+            }
         }
     
         public static OpenCvSharp.Mat ExtractRoiPatch(OpenCvSharp.Mat source, Roi roi)

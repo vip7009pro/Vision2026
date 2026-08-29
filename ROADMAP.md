@@ -1259,3 +1259,45 @@ Lộ trình tích hợp tính năng Chụp ảnh từ camera và hỗ trợ các
            - Bổ sung cơ chế quản lý instance thông minh: Kích hoạt `Activate()` và đưa lên phía trước nếu cửa sổ đang mở, tự động hủy tham chiếu khi `Closed`.
       - Kiểm Thử:
         - Toàn bộ 106 bài kiểm thử của Lighting Controller và toàn bộ test suite của dự án PASSED 100%. Mọi cửa sổ mở độc lập không chặn UI chính.
+
+- [x] Task 271: Sửa lỗi mất Origin Template Preview khi mở Job và Xây dựng Cơ chế Resolve Template Path Đa Tầng Thông Minh.
+      - Mục Tiêu & Yêu Cầu:
+        - Khắc phục hiện tượng: Trong file `.job` đã lưu có chứa Origin Template (`origin.png`), nhưng khi mở Job lên thì trên Properties Panel của Tool Origin phần hiển thị ảnh xem trước Template (`Origin_TemplatePreviewImage`) lại không hiện ra ("Chưa lưu template").
+        - Rà soát toàn bộ luồng đọc template khi mở Job, xử lý các trường hợp: Đường dẫn tuyệt đối cũ từ máy khác/thư mục temp cũ, file template nằm ở thư mục con `templates/` hoặc ở thư mục gốc của Job zip, đường dẫn có tiền tố `templates/`, hoặc tên file bị đổi.
+      - Giải Pháp Kỹ Thuật Đã Triển Khai:
+        1. [ToolEditorViewModel.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/ToolEditorViewModel.cs):
+           - Xây dựng phương thức `ResolveTemplatePath(string? currentPath, string? fallbackName, string? fallbackPattern)` với chiến lược tìm kiếm đa tầng:
+             - Tầng 1: Kiểm tra trực tiếp file tồn tại.
+             - Tầng 2: Quét các thư mục ứng viên (`CurrentTempWorkingDir/templates`, `CurrentTempWorkingDir`, `{ConfigRoot}/{ProductCode}/templates`, `{ConfigRoot}/{ProductCode}`, `{JobDir}/templates`, `{JobDir}`).
+             - Tầng 3: Bóc tách tên file (`Path.GetFileName`), loại bỏ đường dẫn tuyệt đối cũ của máy khác hoặc thư mục temp cũ, loại bỏ tiền tố `templates/` lặp.
+             - Tầng 4: Ghép từng thư mục ứng viên với từng tên file ứng viên.
+             - Tầng 5: Tìm kiếm fallback wildcard pattern (`origin*.png` hoặc `point*.png`).
+           - Nâng cấp `EnsureTemplatePathsAbsolute(VisionConfig config)` tự động resolve và cập nhật đường dẫn chính xác cho `Origin`, `Points`, `SurfaceCompares`, `ContourCompares`.
+        2. [ToolEditorViewModel.Config.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/ToolEditorViewModel.Config.cs):
+           - Trong `LoadJobFromFile`: Gọi `EnsureTemplatePathsAbsolute(_config)` và `RefreshOriginTemplatePreview()` ngay sau khi giải nén Job, đồng thời đảm bảo chạy `RefreshOriginTemplatePreview()` trên Dispatcher UI thread.
+        3. [ToolEditorViewModel.ToolOrigin.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/ToolEditorViewModel.ToolOrigin.cs):
+           - Cập nhật `RefreshOriginTemplatePreview()` sử dụng `ResolveTemplatePath`. Khi tìm thấy file, nạp `Cv2.ImRead` và gán cho `Origin_TemplatePreviewImage` kèm phát sự kiện `OnPropertyChanged(nameof(Origin_TemplatePreviewImage))`.
+        4. [OqcScannerViewModel.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/OqcScannerViewModel.cs):
+           - Nâng cấp `LoadOriginTemplateImage` sử dụng `_toolEditorViewModel.ResolveTemplatePath(...)` giúp hiển thị ảnh Origin Guide đầy đủ 100% trên màn hình OQC.
+      - Kiểm Thử:
+        - Bổ sung bộ test tự động [OriginTemplateJobTest.cs](file:///g:/NODEJS/Vision2026/TestExtractApp/OriginTemplateJobTest.cs) gồm 6 kịch bản kiểm thử: Resolve trong thư mục `templates/`, resolve tại gốc temp directory, bóc tách đường dẫn rooted cũ từ máy khác, resolve tiền tố `templates/origin.png`, fallback wildcard search, và đóng gói/nạp giải nén file `.job` zip thực tế. 100% tests PASSED.
+
+- [x] Task 272: Cách Ly Tuyệt Đối 100% Template Trong File Job, Khử Hoàn Toàn Đường Dẫn Tuyệt Đối Khỏi config.json & Đảm Bảo Tính Di Động Đa Máy.
+      - Mục Tiêu & Yêu Cầu:
+        - Khi mở app/mở Job, bắt buộc phải lấy đúng template (`origin.png`, `point.png`, `surface.png`, `contour.png`) đã lưu bên trong file `.job`, không dùng bất kỳ đường dẫn nào khác ngoài máy gây loạn.
+        - Khắc phục hiện tượng: Trong `config.json` bên trong file `.job` bị lưu chuỗi đường dẫn tuyệt đối của máy tạo job (ví dụ: `"templateImageFile": "G:\\NODEJS\\Vision2026\\VisionInspectionApp.UI\\bin\\x64\\Debug\\net8.0-windows\\configs\\templates\\origin.png"`), khiến app cố mở file từ thư mục `configs` ngoài máy thay vì đọc template nội bộ từ file `.job`.
+        - Đảm bảo copy file `.job` đi bất kỳ máy tính nào cũng hoạt động độc lập và khép kín 100%.
+      - Giải Pháp Kỹ Thuật Đã Triển Khai:
+        1. [JobService.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.Persistence/JobService.cs):
+           - Trong `SaveJob`:
+             - Tự động kiểm tra và đảm bảo toàn bộ file ảnh template (`Origin`, `Points`, `SurfaceCompares`, `ContourCompares`) có mặt trong `tempWorkingDir/templates/` (ưu tiên giữ nguyên file đã tạo trong Job).
+             - Serialize `config.json` với dữ liệu sạch 100%: Toàn bộ các trường `templateImageFile` CHỈ lưu tên file tương đối đơn giản (ví dụ `"origin.png"`, `"p1.png"` - bằng cách dùng `Path.GetFileName`), tuyệt đối không chứa bất kỳ tiền tố đường dẫn ổ đĩa hay thư mục máy nào.
+           - Trong `LoadJob`:
+             - Phương thức `ResolveAndBindJobTemplates(config, tempWorkingDir)`: Bắt buộc CHỈ tìm kiếm và bind file template nằm bên trong thư mục `tempWorkingDir` được giải nén từ chính file `.job`. Tự động bóc tách tên file sạch từ các file Job cũ và trỏ trực tiếp vào thư mục giải nén của Job. Tuyệt đối không đọc ra ngoài máy.
+        2. [ToolEditorViewModel.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/ToolEditorViewModel.cs):
+           - `ResolveTemplatePath`: Giới hạn phạm vi tìm kiếm 100% chỉ trong `CurrentTempWorkingDir` của Job hiện tại, loại bỏ hoàn toàn việc tìm kiếm ra thư mục `configs` bên ngoài máy.
+      - Kiểm Thử:
+        - Bổ sung bộ test tự động [OriginTemplateJobTest.cs](file:///g:/NODEJS/Vision2026/TestExtractApp/OriginTemplateJobTest.cs) với 8 bài kiểm thử độc lập:
+          - Test 7.1-7.4: Kiểm tra `config.json` bên trong gói `.job` sạch 100%, không chứa đường dẫn tuyệt đối `G:\...` hay `C:\...`, chỉ chứa relative filename `"origin.png"`, `"p1.png"`.
+          - Test 8.1-8.7: Kiểm tra `LoadJob` trên máy đích giải nén và bind template trực tiếp vào `tempWorkingDir`, nạp thành công `Mat` ảnh `64x64` và `32x32`.
+        - Toàn bộ test suite của dự án: PASSED 100%.

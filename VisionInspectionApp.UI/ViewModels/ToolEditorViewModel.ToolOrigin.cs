@@ -135,7 +135,7 @@ namespace VisionInspectionApp.UI.ViewModels
 
         public void RefreshOriginTemplatePreview()
         {
-            if (_config?.Origin == null || string.IsNullOrWhiteSpace(_config.Origin.TemplateImageFile))
+            if (_config?.Origin == null)
             {
                 Origin_TemplatePreviewImage = null;
                 return;
@@ -143,28 +143,26 @@ namespace VisionInspectionApp.UI.ViewModels
 
             try
             {
-                var file = _config.Origin.TemplateImageFile;
-                if (!Path.IsPathRooted(file))
+                var resolvedFile = ResolveTemplatePath(_config.Origin.TemplateImageFile, "origin.png", "origin*.png");
+                if (!string.IsNullOrWhiteSpace(resolvedFile) && File.Exists(resolvedFile))
                 {
-                    var templateDir = Path.Combine(CurrentTempWorkingDir ?? Path.Combine(Path.GetFullPath(_storeOptions.ConfigRootDirectory), ProductCode ?? ""), "templates");
-                    file = Path.Combine(templateDir, file);
-                }
-
-                if (File.Exists(file))
-                {
-                    using var mat = Cv2.ImRead(file, ImreadModes.Grayscale);
+                    _config.Origin.TemplateImageFile = resolvedFile;
+                    using var mat = Cv2.ImRead(resolvedFile, ImreadModes.Color);
                     if (mat != null && !mat.Empty())
                     {
                         Origin_TemplatePreviewImage = mat.ToBitmapSourceForDisplay();
+                        OnPropertyChanged(nameof(Origin_TemplatePreviewImage));
                         return;
                     }
                 }
             }
-            catch
+            catch (Exception ex)
             {
+                System.Diagnostics.Debug.WriteLine($"[RefreshOriginTemplatePreview] Exception: {ex.Message}");
             }
 
             Origin_TemplatePreviewImage = null;
+            OnPropertyChanged(nameof(Origin_TemplatePreviewImage));
         }
 
         public ICommand? Origin_TeachTemplateCommand { get; internal set; }

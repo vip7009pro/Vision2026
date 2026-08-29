@@ -145,6 +145,8 @@ namespace VisionInspectionApp.UI.ViewModels
                 CurrentJobFilePath = filePath;
                 CurrentTempWorkingDir = tempDir;
                 ProductCode = _config.ProductCode;
+                EnsureTemplatePathsAbsolute(_config);
+                RefreshOriginTemplatePreview();
                 Nodes.Clear();
                 Edges.Clear();
                 foreach (var n in _config.ToolGraph.Nodes)
@@ -176,6 +178,7 @@ namespace VisionInspectionApp.UI.ViewModels
 
                 SelectedNode = Nodes.Count > 0 ? Nodes[0] : null;
                 RaiseToolPropertyPanelsChanged();
+                RefreshOriginTemplatePreview();
                 OnPropertyChanged(nameof(PixelsPerMm));
                 IsDirty = false;
                 _recentJobsService?.AddRecentJob(filePath);
@@ -237,10 +240,15 @@ namespace VisionInspectionApp.UI.ViewModels
                     {
                         if (dispatcher != null)
                         {
-                            await dispatcher.InvokeAsync(OnRunOnceClicked);
+                            await dispatcher.InvokeAsync(() =>
+                            {
+                                RefreshOriginTemplatePreview();
+                                OnRunOnceClicked();
+                            });
                         }
                         else
                         {
+                            RefreshOriginTemplatePreview();
                             OnRunOnceClicked();
                         }
                     }
@@ -248,7 +256,11 @@ namespace VisionInspectionApp.UI.ViewModels
                     {
                         if (dispatcher != null)
                         {
-                            await dispatcher.InvokeAsync(RefreshPreviews);
+                            await dispatcher.InvokeAsync(() =>
+                            {
+                                RefreshOriginTemplatePreview();
+                                RefreshPreviews();
+                            });
                         }
                     }
                 });

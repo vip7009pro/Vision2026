@@ -49,6 +49,52 @@
 - Preview được phép tiếp tục khi Global Snapshot rỗng để lấy ảnh từ ImageSource.
 - Lưu template cho Origin, Point và SurfaceCompare hoạt động với nguồn ảnh ImageSource.
 
+- **Cách Ly Tuyệt Đối 100% Template Trong File Job, Khử Hoàn Toàn Đường Dẫn Tuyệt Đối Khỏi config.json & Đảm Bảo Tính Di Động Đa Máy (Task 272)**:
+  - **Yêu Cầu & Bối Cảnh**:
+    - Khi mở app/mở Job, bắt buộc phải lấy đúng template (`origin.png`, `point.png`, `surface.png`, `contour.png`) đã lưu bên trong file `.job`, không dùng bất kỳ đường dẫn nào khác ngoài máy gây loạn.
+    - Khắc phục hiện tượng: Trong `config.json` bên trong file `.job` bị lưu chuỗi đường dẫn tuyệt đối của máy tạo job (ví dụ: `"templateImageFile": "G:\\NODEJS\\Vision2026\\VisionInspectionApp.UI\\bin\\x64\\Debug\\net8.0-windows\\configs\\templates\\origin.png"`), khiến app cố mở file từ thư mục `configs` ngoài máy thay vì đọc template nội bộ từ file `.job`.
+    - Đảm bảo copy file `.job` đi bất kỳ máy tính nào cũng hoạt động độc lập và khép kín 100%.
+  - **Giải Pháp Kỹ Thuật Đã Triển Khai**:
+    1. [JobService.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.Persistence/JobService.cs):
+       - Trong `SaveJob`:
+         - Tự động kiểm tra và đảm bảo toàn bộ file ảnh template (`Origin`, `Points`, `SurfaceCompares`, `ContourCompares`) có mặt trong `tempWorkingDir/templates/` (ưu tiên giữ nguyên file đã tạo trong Job).
+         - Serialize `config.json` với dữ liệu sạch 100%: Toàn bộ các trường `templateImageFile` CHỈ lưu tên file tương đối đơn giản (ví dụ `"origin.png"`, `"p1.png"` - bằng cách dùng `Path.GetFileName`), tuyệt đối không chứa bất kỳ tiền tố đường dẫn ổ đĩa hay thư mục máy nào.
+       - Trong `LoadJob`:
+         - Phương thức `ResolveAndBindJobTemplates(config, tempWorkingDir)`: Bắt buộc CHỈ tìm kiếm và bind file template nằm bên trong thư mục `tempWorkingDir` được giải nén từ chính file `.job`. Tự động bóc tách tên file sạch từ các file Job cũ và trỏ trực tiếp vào thư mục giải nén của Job. Tuyệt đối không đọc ra ngoài máy.
+    2. [ToolEditorViewModel.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/ToolEditorViewModel.cs):
+       - `ResolveTemplatePath`: Giới hạn phạm vi tìm kiếm 100% chỉ trong `CurrentTempWorkingDir` của Job hiện tại, loại bỏ hoàn toàn việc tìm kiếm ra thư mục `configs` bên ngoài máy.
+  - **Kiểm Thử**:
+    - Bổ sung bộ test tự động [OriginTemplateJobTest.cs](file:///g:/NODEJS/Vision2026/TestExtractApp/OriginTemplateJobTest.cs) với 8 bài kiểm thử độc lập:
+      - Test 7.1-7.4: Kiểm tra `config.json` bên trong gói `.job` sạch 100%, không chứa đường dẫn tuyệt đối `G:\...` hay `C:\...`, chỉ chứa relative filename `"origin.png"`, `"p1.png"`.
+      - Test 8.1-8.7: Kiểm tra `LoadJob` trên máy đích giải nén và bind template trực tiếp vào `tempWorkingDir`, nạp thành công `Mat` ảnh `64x64` và `32x32`.
+    - Toàn bộ test suite của dự án: PASSED 100%.
+
+- **Sửa Lỗi Mất Origin Template Preview Khi Mở Job & Cơ Chế Multi-tier Template Path Resolution (Task 271)**:
+  - **Yêu Cầu & Bối Cảnh**:
+    - Khi mở một Job (`.job`) đã lưu từ trước (trong file zip có chứa file template `origin.png`), trên Properties Panel của Tool Origin phần hiển thị ảnh xem trước Template (`Origin_TemplatePreviewImage`) lại hiển thị "Chưa lưu template" thay vì hiển thị hình ảnh mẫu đã lưu.
+  - **Nguyên Nhân Gốc Rễ**:
+    1. `EnsureTemplatePathsAbsolute` và `RefreshOriginTemplatePreview` trước đây chỉ kiểm tra đơn giản: `if (!Path.IsPathRooted(file)) file = Path.Combine(templateDir, file);`.
+    2. Nếu trong `config.json` của Job, `TemplateImageFile` lưu đường dẫn tuyệt đối (từ máy khác hoặc từ thư mục temp cũ đã bị dọn), `Path.IsPathRooted` trả về `true` nhưng `File.Exists` trả về `false`, dẫn đến template preview bị gán `null`.
+    3. Nếu file template nằm ở thư mục gốc của Job zip (`tempDir/origin.png`) thay vì thư mục con `templates/`, hoặc đường dẫn có tiền tố `templates/` dẫn đến nối chuỗi `templates/templates/origin.png`, file cũng không được tìm thấy.
+    4. Trong `LoadJobFromFile`, `EnsureTemplatePathsAbsolute` và `RefreshOriginTemplatePreview` không được gọi ngay sau khi giải nén Job.
+  - **Giải Pháp Kỹ Thuật Đã Triển Khai**:
+    1. [ToolEditorViewModel.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/ToolEditorViewModel.cs):
+       - Xây dựng phương thức `ResolveTemplatePath(string? currentPath, string? fallbackName, string? fallbackPattern)` với 5 tầng tìm kiếm:
+         - Tầng 1: Kiểm tra trực tiếp đường dẫn `currentPath`.
+         - Tầng 2: Thu thập toàn bộ thư mục ứng viên (`CurrentTempWorkingDir/templates`, `CurrentTempWorkingDir`, `{ConfigRoot}/{ProductCode}/templates`, `{ConfigRoot}/{ProductCode}`, `{JobDir}/templates`, `{JobDir}`).
+         - Tầng 3: Bóc tách tên file an toàn (`Path.GetFileName`), loại bỏ đường dẫn tuyệt đối của máy khác, khử tiền tố `templates/` lặp.
+         - Tầng 4: Ghép từng thư mục ứng viên với từng tên file ứng viên và kiểm tra `File.Exists`.
+         - Tầng 5: Quét fallback wildcard pattern (`origin*.png` hoặc `point*.png`).
+       - Nâng cấp `EnsureTemplatePathsAbsolute` tự động resolve và cập nhật lại đường dẫn cho `Origin`, `Points`, `SurfaceCompares`, `ContourCompares`.
+    2. [ToolEditorViewModel.Config.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/ToolEditorViewModel.Config.cs):
+       - Trong `LoadJobFromFile`: Gọi `EnsureTemplatePathsAbsolute(_config)` và `RefreshOriginTemplatePreview()` ngay sau khi nạp Job từ `JobService`, đồng thời đảm bảo chạy `RefreshOriginTemplatePreview()` trên Dispatcher UI thread.
+    3. [ToolEditorViewModel.ToolOrigin.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/ToolEditorViewModel.ToolOrigin.cs):
+       - Cập nhật `RefreshOriginTemplatePreview()` dùng `ResolveTemplatePath`. Khi tìm thấy file, nạp `Cv2.ImRead` và gán cho `Origin_TemplatePreviewImage` kèm phát sự kiện `OnPropertyChanged(nameof(Origin_TemplatePreviewImage))`.
+    4. [OqcScannerViewModel.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/OqcScannerViewModel.cs):
+       - Nâng cấp `LoadOriginTemplateImage` sử dụng `_toolEditorViewModel.ResolveTemplatePath(...)`.
+  - **Kiểm Thử**:
+    - Bổ sung bộ test tự động [OriginTemplateJobTest.cs](file:///g:/NODEJS/Vision2026/TestExtractApp/OriginTemplateJobTest.cs) gồm 6 kịch bản kiểm thử: Resolve trong thư mục `templates/`, resolve tại gốc temp directory, bóc tách đường dẫn rooted cũ từ máy khác, resolve tiền tố `templates/origin.png`, fallback wildcard search, và đóng gói/nạp giải nén file `.job` zip thực tế. 100% tests PASSED.
+
 - **Duy Trì Trạng Thái Kết Nối Lighting Controller, Tái Cấu Trúc Giao Diện 2 Cột & Modeless Window (Task 270)**:
   - **Yêu Cầu & Bối Cảnh**:
     1. Sửa lỗi logic phát sai trạng thái "Kết nối thành công" sau khi đã báo timeout dù chưa cắm controller: Đảm bảo chỉ xác nhận và phát sự kiện `Connected` sau khi handshake / probe đọc trạng thái từ thiết bị thành công.

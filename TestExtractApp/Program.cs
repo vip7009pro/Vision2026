@@ -29,5 +29,6 @@ class Program
         ManualInspectionTest.RunTests();
         LightingControllerTests.RunAllTests();
         PreprocessRoiMaskingTest.RunTests();
+        OriginTemplateJobTest.RunTests();
     }
 }

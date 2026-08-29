@@ -378,27 +378,16 @@ public partial class OqcScannerViewModel : ObservableObject
 
         try
         {
-            if (!string.IsNullOrWhiteSpace(origin.TemplateImageFile))
+            var resolvedFile = _toolEditorViewModel?.ResolveTemplatePath(origin.TemplateImageFile, "origin.png", "origin*.png");
+            if (!string.IsNullOrWhiteSpace(resolvedFile) && File.Exists(resolvedFile))
             {
-                var file = origin.TemplateImageFile;
-                if (!Path.IsPathRooted(file))
+                origin.TemplateImageFile = resolvedFile;
+                using var mat = Cv2.ImRead(resolvedFile, ImreadModes.Color);
+                if (mat != null && !mat.Empty())
                 {
-                    var baseDir = tempDir ?? _toolEditorViewModel.CurrentTempWorkingDir ?? string.Empty;
-                    if (!string.IsNullOrWhiteSpace(baseDir))
-                    {
-                        file = Path.Combine(baseDir, "templates", file);
-                    }
-                }
-
-                if (File.Exists(file))
-                {
-                    using var mat = Cv2.ImRead(file, ImreadModes.Color);
-                    if (mat != null && !mat.Empty())
-                    {
-                        OriginTemplateImage = mat.ToBitmapSourceSafe();
-                        HasOriginTemplate = true;
-                        return;
-                    }
+                    OriginTemplateImage = mat.ToBitmapSourceSafe();
+                    HasOriginTemplate = true;
+                    return;
                 }
             }
         }
@@ -408,7 +397,7 @@ public partial class OqcScannerViewModel : ObservableObject
         }
 
         // Fallback to ToolEditorViewModel.Origin_TemplatePreviewImage if already loaded
-        if (_toolEditorViewModel.Origin_TemplatePreviewImage != null)
+        if (_toolEditorViewModel?.Origin_TemplatePreviewImage != null)
         {
             OriginTemplateImage = _toolEditorViewModel.Origin_TemplatePreviewImage;
             HasOriginTemplate = true;
