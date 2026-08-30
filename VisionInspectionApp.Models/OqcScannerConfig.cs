@@ -19,6 +19,8 @@ public class OqcScannerConfig
     // ─── Danh sách sản phẩm (Product List Browser Query) ───
     public string ProductListDbId { get; set; } = "";
     public string ProductListQuery { get; set; } = "SELECT G_CODE, G_NAME_KD FROM M100 WHERE G_CODE LIKE '%{SearchText}%' OR G_NAME_KD LIKE '%{SearchText}%' ORDER BY G_CODE OFFSET {Offset} ROWS FETCH NEXT {PageSize} ROWS ONLY";
+    public string ProductListCodeColumn { get; set; } = "G_CODE";
+    public string ProductListNameColumn { get; set; } = "G_NAME_KD";
     public int ProductListPageSize { get; set; } = 50;
 
     // ─── Gán sản phẩm ↔ Job File (Assign/Upsert Query) ───

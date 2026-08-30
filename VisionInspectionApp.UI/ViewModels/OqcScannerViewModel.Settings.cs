@@ -44,6 +44,12 @@ public partial class OqcScannerViewModel
     private string _productListQuery = "";
 
     [ObservableProperty]
+    private string _productListCodeColumn = "G_CODE";
+
+    [ObservableProperty]
+    private string _productListNameColumn = "G_NAME_KD";
+
+    [ObservableProperty]
     private int _productListPageSize = 50;
 
     [ObservableProperty]
@@ -178,6 +184,8 @@ public partial class OqcScannerViewModel
 
         ProductListDbId = cfg.ProductListDbId;
         ProductListQuery = cfg.ProductListQuery;
+        ProductListCodeColumn = !string.IsNullOrWhiteSpace(cfg.ProductListCodeColumn) ? cfg.ProductListCodeColumn : "G_CODE";
+        ProductListNameColumn = !string.IsNullOrWhiteSpace(cfg.ProductListNameColumn) ? cfg.ProductListNameColumn : "G_NAME_KD";
         ProductListPageSize = cfg.ProductListPageSize;
 
         AssignDbId = cfg.AssignDbId;
@@ -218,6 +226,8 @@ public partial class OqcScannerViewModel
 
             ProductListDbId = ProductListDbId,
             ProductListQuery = ProductListQuery,
+            ProductListCodeColumn = ProductListCodeColumn,
+            ProductListNameColumn = ProductListNameColumn,
             ProductListPageSize = ProductListPageSize > 0 ? ProductListPageSize : 50,
 
             AssignDbId = AssignDbId,
@@ -274,6 +284,8 @@ public partial class OqcScannerViewModel
 
                     ProductListDbId = ProductListDbId,
                     ProductListQuery = ProductListQuery,
+                    ProductListCodeColumn = ProductListCodeColumn,
+                    ProductListNameColumn = ProductListNameColumn,
                     ProductListPageSize = ProductListPageSize > 0 ? ProductListPageSize : 50,
 
                     AssignDbId = AssignDbId,
@@ -403,35 +415,65 @@ public partial class OqcScannerViewModel
             return;
         }
 
-        // Find primary code column (G_CODE, ProductCode, or Column 0)
-        string code = "";
-        if (SelectedProductRow.Row.Table.Columns.Contains("G_CODE"))
+        // 1. Tìm mã sản phẩm (ProductCode) dùng để gán CSDL: Ưu tiên theo cấu hình ProductListCodeColumn
+        string productCode = "";
+        var configuredCodeCol = !string.IsNullOrWhiteSpace(ProductListCodeColumn) ? ProductListCodeColumn.Trim() : "";
+
+        if (!string.IsNullOrEmpty(configuredCodeCol) && SelectedProductRow.Row.Table.Columns.Contains(configuredCodeCol))
         {
-            code = SelectedProductRow["G_CODE"]?.ToString() ?? "";
+            productCode = SelectedProductRow[configuredCodeCol]?.ToString() ?? "";
+        }
+        else if (SelectedProductRow.Row.Table.Columns.Contains("G_CODE"))
+        {
+            productCode = SelectedProductRow["G_CODE"]?.ToString() ?? "";
         }
         else if (SelectedProductRow.Row.Table.Columns.Contains("ProductCode"))
         {
-            code = SelectedProductRow["ProductCode"]?.ToString() ?? "";
+            productCode = SelectedProductRow["ProductCode"]?.ToString() ?? "";
         }
         else if (SelectedProductRow.Row.Table.Columns.Count > 0)
         {
-            code = SelectedProductRow[0]?.ToString() ?? "";
+            productCode = SelectedProductRow[0]?.ToString() ?? "";
         }
 
-        if (string.IsNullOrWhiteSpace(code))
+        if (string.IsNullOrWhiteSpace(productCode))
         {
-            AssignStatusMessage = "⚠️ Sản phẩm được chọn không có mã (cột rỗng)!";
+            AssignStatusMessage = "⚠️ Sản phẩm được chọn không có mã sản phẩm (cột rỗng hoặc sai tên cột cấu hình mã SP)!";
             AssignStatusBrush = Brushes.Red;
             return;
         }
 
-        AssignStatusMessage = $"⏳ Đang gán '{code}' → '{System.IO.Path.GetFileName(AssignJobFilePath)}'...";
+        // 2. Tìm tên sản phẩm (ProductName) dùng để auto-fill vào ô Mã SP trong Tool Editor: Ưu tiên theo cấu hình ProductListNameColumn
+        string productName = "";
+        var configuredNameCol = !string.IsNullOrWhiteSpace(ProductListNameColumn) ? ProductListNameColumn.Trim() : "";
+
+        if (!string.IsNullOrEmpty(configuredNameCol) && SelectedProductRow.Row.Table.Columns.Contains(configuredNameCol))
+        {
+            productName = SelectedProductRow[configuredNameCol]?.ToString() ?? "";
+        }
+        else if (SelectedProductRow.Row.Table.Columns.Contains("G_NAME_KD"))
+        {
+            productName = SelectedProductRow["G_NAME_KD"]?.ToString() ?? "";
+        }
+        else if (SelectedProductRow.Row.Table.Columns.Contains("ProductName"))
+        {
+            productName = SelectedProductRow["ProductName"]?.ToString() ?? "";
+        }
+
+        // Tên dùng để fill vào ô Mã SP trong Tool Editor: Ưu tiên productName, nếu rỗng thì fallback về productCode
+        var nameForToolEditor = !string.IsNullOrWhiteSpace(productName) ? productName : productCode;
+
+        AssignStatusMessage = $"⏳ Đang gán mã '{productCode}' → '{System.IO.Path.GetFileName(AssignJobFilePath)}'...";
         AssignStatusBrush = Brushes.DodgerBlue;
 
-        var (success, msg) = await _oqcService.AssignProductJobAsync(code, AssignJobFilePath, _dbManager);
+        // Gán Job vào sản phẩm trong CSDL theo ProductCode
+        var (success, msg) = await _oqcService.AssignProductJobAsync(productCode, AssignJobFilePath, _dbManager);
         if (success)
         {
-            AssignStatusMessage = msg;
+            // TỰ ĐỘNG ĐIỀN VÀ LƯU VÀO Ô MÃ SP CỦA TOOL EDITOR THEO PRODUCTNAME
+            SyncProductCodeToToolEditor(nameForToolEditor, AssignJobFilePath);
+
+            AssignStatusMessage = $"{msg} (Đã gán Mã SP: '{productCode}', Điền Tool Editor: '{nameForToolEditor}')";
             AssignStatusBrush = Brushes.Green;
         }
         else
@@ -440,4 +482,26 @@ public partial class OqcScannerViewModel
             AssignStatusBrush = Brushes.Red;
         }
     }
+
+    /// <summary>
+    /// Tự động đồng bộ mã sản phẩm vào ô Mã SP của Tool Editor và tự động lưu vào file .job đang mở.
+    /// </summary>
+    private void SyncProductCodeToToolEditor(string productCode, string jobFilePath)
+    {
+        if (string.IsNullOrWhiteSpace(productCode)) return;
+
+        System.Windows.Application.Current?.Dispatcher?.Invoke(() =>
+        {
+            try
+            {
+                _toolEditorViewModel?.ApplyAssignedProductCode(productCode, jobFilePath);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[SyncProductCodeToToolEditor] Error: {ex.Message}");
+            }
+        });
+    }
 }
+
+

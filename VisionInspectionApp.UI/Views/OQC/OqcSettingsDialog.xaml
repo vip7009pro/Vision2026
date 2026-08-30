@@ -194,6 +194,26 @@
                         <TextBox Text="{Binding ProductListQuery, UpdateSourceTrigger=PropertyChanged}"
                                  AcceptsReturn="True" TextWrapping="Wrap" FontFamily="Consolas" Height="65" Margin="0,0,0,8" />
 
+                        <Grid Margin="0,0,0,8">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="160" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="Tên cột mã SP (Code):" VerticalAlignment="Center" FontWeight="SemiBold" />
+                            <TextBox Grid.Column="1" Text="{Binding ProductListCodeColumn, UpdateSourceTrigger=PropertyChanged}"
+                                     ToolTip="Tên cột mã sản phẩm dùng để liên kết / gán vào CSDL (VD: 'G_CODE', 'ProductCode')" />
+                        </Grid>
+
+                        <Grid Margin="0,0,0,8">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="160" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="Tên cột tên SP (Name):" VerticalAlignment="Center" FontWeight="SemiBold" />
+                            <TextBox Grid.Column="1" Text="{Binding ProductListNameColumn, UpdateSourceTrigger=PropertyChanged}"
+                                     ToolTip="Tên cột tên sản phẩm dùng để auto-fill vào ô Mã SP trong Tool Editor (VD: 'G_NAME_KD', 'ProductName')" />
+                        </Grid>
+
                         <Grid>
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="160" />

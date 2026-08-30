@@ -30,5 +30,6 @@ class Program
         LightingControllerTests.RunAllTests();
         PreprocessRoiMaskingTest.RunTests();
         OriginTemplateJobTest.RunTests();
+        ProductAssignAndCodeSyncTest.RunTests();
     }
 }

@@ -469,5 +469,39 @@ namespace VisionInspectionApp.UI.ViewModels
             SelectedNode = Nodes.Count > 0 ? Nodes[0] : null;
             RaiseToolPropertyPanelsChanged();
         }
+
+        /// <summary>
+        /// Tự động cập nhật mã sản phẩm và lưu vào file .job đang mở khi được gán từ ProductAssignDialog.
+        /// </summary>
+        public void ApplyAssignedProductCode(string productCode, string jobFilePath)
+        {
+            if (string.IsNullOrWhiteSpace(productCode)) return;
+
+            ProductCode = productCode;
+
+            if (_config != null &&
+                (string.Equals(CurrentJobFilePath, jobFilePath, StringComparison.OrdinalIgnoreCase) ||
+                 string.IsNullOrWhiteSpace(CurrentJobFilePath) ||
+                 CurrentJobFilePath == "-"))
+            {
+                _config.ProductCode = productCode;
+                IsDirty = true;
+
+                if (!string.IsNullOrWhiteSpace(CurrentJobFilePath) &&
+                    !string.IsNullOrWhiteSpace(CurrentTempWorkingDir) &&
+                    File.Exists(CurrentJobFilePath))
+                {
+                    try
+                    {
+                        _jobService.SaveJob(_config, CurrentTempWorkingDir, CurrentJobFilePath);
+                        IsDirty = false;
+                    }
+                    catch (Exception ex)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"[ApplyAssignedProductCode] SaveJob error: {ex.Message}");
+                    }
+                }
+            }
+        }
     }
 }

@@ -1318,3 +1318,28 @@ Lộ trình tích hợp tính năng Chụp ảnh từ camera và hỗ trợ các
            - Bọc gán `DialogResult` an toàn trong handler `RequestClose` và `CancelButton_Click`.
       - Kiểm Thử:
         - Toàn bộ test suite của dự án PASSED 100%. Các cửa sổ mở và lưu / đóng mượt mà cả ở chế độ Modeless (`Show()`) lẫn Modal (`ShowDialog()`).
+
+- [x] Task 274: Cấu Hình 2 Cột Riêng Biệt (ProductCode & ProductName) trong Product Browser Query & Tự Động Điền ProductName Vào Tool Editor Khi Gán Job.
+      - Mục Tiêu & Yêu Cầu:
+        - Trong màn hình Cấu hình OQC & Database (Mục 3: Danh sách sản phẩm / Product Browser Query): Bổ sung 2 ô TextBox phân định rõ:
+          1. **Tên cột mã sản phẩm (Product Code Column)**: `ProductListCodeColumn` (mặc định `"G_CODE"`).
+          2. **Tên cột tên sản phẩm (Product Name Column)**: `ProductListNameColumn` (mặc định `"G_NAME_KD"`).
+        - **Quy định hoạt động**:
+          - Gán Job vào sản phẩm trong CSDL sẽ dùng giá trị của **cột `ProductCode`**.
+          - Tự động điền và lưu vào ô "Mã SP:" trong Tool Editor sẽ dùng giá trị của **cột `ProductName`** (nếu không có thì fallback sang `ProductCode`).
+      - Giải Pháp Kỹ Thuật Đã Triển Khai:
+        1. [OqcScannerConfig.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.Models/OqcScannerConfig.cs):
+           - Bổ sung 2 thuộc tính `ProductListCodeColumn = "G_CODE"` và `ProductListNameColumn = "G_NAME_KD"`.
+        2. [OqcSettingsDialog.xaml](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/Views/OQC/OqcSettingsDialog.xaml):
+           - Tại Mục 3 "Danh sách sản phẩm (Product Browser Query)", bố trí 2 dòng TextBox rõ ràng: "Tên cột mã SP (Code):" và "Tên cột tên SP (Name):".
+        3. [OqcScannerViewModel.Settings.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/OqcScannerViewModel.Settings.cs):
+           - Bổ sung `_productListCodeColumn` và `_productListNameColumn` kèm nạp / lưu / xuất / nhập cấu hình.
+           - `ExecuteAssignProductAsync`: Trích xuất `productCode` từ cột cấu hình (để gán CSDL `AssignProductJobAsync`) và `productName` từ cột cấu hình (để auto-fill và lưu vào Tool Editor bằng `SyncProductCodeToToolEditor`).
+        4. [ToolEditorViewModel.Config.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/ToolEditorViewModel.Config.cs):
+           - Phương thức `ApplyAssignedProductCode`: Cập nhật `ProductCode = productCode;`, `_config.ProductCode = productCode;` và lưu file `.job`.
+      - Kiểm Thử:
+        - Bổ sung bộ test tự động [ProductAssignAndCodeSyncTest.cs](file:///g:/NODEJS/Vision2026/TestExtractApp/ProductAssignAndCodeSyncTest.cs) kiểm tra:
+          - Test 1: Serialization / Deserialization của `OqcScannerConfig` với cả 2 cột `ProductListCodeColumn` và `ProductListNameColumn`.
+          - Test 2 & 3: Trích xuất chính xác `productCode` cho DB và `productName` cho Tool Editor auto-fill, cùng cơ chế fallback.
+          - Test 4: Đóng gói và lưu Job với `productName` chính xác.
+        - Toàn bộ test suite của dự án: PASSED 100%.
