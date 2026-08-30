@@ -15,7 +15,7 @@ public partial class JobCameraSettingsWindow : Window
         {
             Dispatcher.Invoke(() =>
             {
-                DialogResult = true;
+                try { DialogResult = true; } catch { }
                 Close();
             });
         };

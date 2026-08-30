@@ -49,6 +49,23 @@
 - Preview được phép tiếp tục khi Global Snapshot rỗng để lấy ảnh từ ImageSource.
 - Lưu template cho Origin, Point và SurfaceCompare hoạt động với nguồn ảnh ImageSource.
 
+- **Khắc Phục Ngoại Lệ InvalidOperationException Khi Đóng / Lưu Cửa Sổ Modeless (Task 273)**:
+  - **Yêu Cầu & Bối Cảnh**:
+    - Khi bấm Lưu hoặc Hủy trên các cửa sổ cấu hình (OQC Settings, Database Manager, Calibration, Origin Train, Job Camera Settings), hệ thống ném ra ngoại lệ:
+      `System.InvalidOperationException: 'DialogResult can be set only after Window is created and shown as dialog.'`
+    - **Nguyên Nhân**: Do các cửa sổ đã được chuyển sang chế độ Modeless Window (`Show()`), trong WPF việc gán trực tiếp `DialogResult = true/false` chỉ hợp lệ khi cửa sổ mở bằng `ShowDialog()`.
+  - **Giải Pháp Kỹ Thuật Đã Triển Khai**:
+    1. [OqcSettingsDialog.xaml.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/Views/OQC/OqcSettingsDialog.xaml.cs):
+       - Trong `Save_Click` và `Cancel_Click`: Bọc gán `try { DialogResult = ...; } catch { }` an toàn trước khi gọi `Close()`.
+    2. [DbManagerViewModel.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/DB/DbManagerViewModel.cs):
+       - Trong `SaveAndClose`: Bọc gán `try { window.DialogResult = true; } catch { }` an toàn trước khi gọi `window.Close()`.
+    3. [CalibrationDialog.xaml.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/Views/CalibrationDialog.xaml.cs) & [ChessboardCalibrationDialog.xaml.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/Views/ChessboardCalibrationDialog.xaml.cs):
+       - Bọc gán `DialogResult` an toàn trong các sự kiện Apply và Close.
+    4. [JobCameraSettingsWindow.xaml.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/Views/JobCameraSettingsWindow.xaml.cs) & [OriginTrainWindow.xaml.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/Views/OriginTrainWindow.xaml.cs):
+       - Bọc gán `DialogResult` an toàn trong handler `RequestClose` và `CancelButton_Click`.
+  - **Kiểm Thử**:
+    - Toàn bộ test suite của dự án PASSED 100%. Các cửa sổ mở và lưu / đóng mượt mà cả ở chế độ Modeless (`Show()`) lẫn Modal (`ShowDialog()`).
+
 - **Cách Ly Tuyệt Đối 100% Template Trong File Job, Khử Hoàn Toàn Đường Dẫn Tuyệt Đối Khỏi config.json & Đảm Bảo Tính Di Động Đa Máy (Task 272)**:
   - **Yêu Cầu & Bối Cảnh**:
     - Khi mở app/mở Job, bắt buộc phải lấy đúng template (`origin.png`, `point.png`, `surface.png`, `contour.png`) đã lưu bên trong file `.job`, không dùng bất kỳ đường dẫn nào khác ngoài máy gây loạn.

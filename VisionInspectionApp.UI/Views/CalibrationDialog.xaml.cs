@@ -11,13 +11,13 @@ public partial class CalibrationDialog : Window
 
     private void OnApplyAndCloseClicked(object sender, RoutedEventArgs e)
     {
-        DialogResult = true;
+        try { DialogResult = true; } catch { }
         Close();
     }
 
     private void OnCloseClicked(object sender, RoutedEventArgs e)
     {
-        DialogResult = false;
+        try { DialogResult = false; } catch { }
         Close();
     }
 }

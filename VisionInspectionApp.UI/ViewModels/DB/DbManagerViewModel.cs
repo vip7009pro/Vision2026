@@ -149,7 +149,7 @@ public partial class DbManagerViewModel : ObservableObject
         {
             if (window.DataContext == this || window is Views.DB.DbManagerWindow)
             {
-                window.DialogResult = true;
+                try { window.DialogResult = true; } catch { }
                 window.Close();
                 break;
             }

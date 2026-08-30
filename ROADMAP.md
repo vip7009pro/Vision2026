@@ -1301,3 +1301,20 @@ Lộ trình tích hợp tính năng Chụp ảnh từ camera và hỗ trợ các
           - Test 7.1-7.4: Kiểm tra `config.json` bên trong gói `.job` sạch 100%, không chứa đường dẫn tuyệt đối `G:\...` hay `C:\...`, chỉ chứa relative filename `"origin.png"`, `"p1.png"`.
           - Test 8.1-8.7: Kiểm tra `LoadJob` trên máy đích giải nén và bind template trực tiếp vào `tempWorkingDir`, nạp thành công `Mat` ảnh `64x64` và `32x32`.
         - Toàn bộ test suite của dự án: PASSED 100%.
+
+- [x] Task 273: Khắc Phục Ngoại Lệ InvalidOperationException Khi Đóng / Lưu Cửa Sổ Modeless (OQC Settings, Database Manager, Calibration, Origin Train, Camera Settings).
+      - Mục Tiêu & Yêu Cầu:
+        - Khắc phục lỗi khi người dùng bấm Lưu hoặc Hủy trên các cửa sổ cấu hình (như OQC Settings, Database Manager, Calibration, Origin Train, Job Camera Settings):
+          `System.InvalidOperationException: 'DialogResult can be set only after Window is created and shown as dialog.'`
+        - Nguyên nhân: Khi chuyển đổi các cửa sổ sang `Show()` (Modeless Window) để không khóa UI chính, việc gán trực tiếp thuộc tính `DialogResult = true/false` trong WPF sẽ ném ngoại lệ vì thuộc tính này chỉ hợp lệ khi mở bằng `ShowDialog()`.
+      - Giải Pháp Kỹ Thuật Đã Triển Khai:
+        1. [OqcSettingsDialog.xaml.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/Views/OQC/OqcSettingsDialog.xaml.cs):
+           - Trong `Save_Click` và `Cancel_Click`: Bọc gán `try { DialogResult = ...; } catch { }` an toàn trước khi gọi `Close()`.
+        2. [DbManagerViewModel.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/DB/DbManagerViewModel.cs):
+           - Trong `SaveAndClose`: Bọc gán `try { window.DialogResult = true; } catch { }` an toàn trước khi gọi `window.Close()`.
+        3. [CalibrationDialog.xaml.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/Views/CalibrationDialog.xaml.cs) & [ChessboardCalibrationDialog.xaml.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/Views/ChessboardCalibrationDialog.xaml.cs):
+           - Bọc gán `DialogResult` an toàn trong các sự kiện Apply và Close.
+        4. [JobCameraSettingsWindow.xaml.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/Views/JobCameraSettingsWindow.xaml.cs) & [OriginTrainWindow.xaml.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/Views/OriginTrainWindow.xaml.cs):
+           - Bọc gán `DialogResult` an toàn trong handler `RequestClose` và `CancelButton_Click`.
+      - Kiểm Thử:
+        - Toàn bộ test suite của dự án PASSED 100%. Các cửa sổ mở và lưu / đóng mượt mà cả ở chế độ Modeless (`Show()`) lẫn Modal (`ShowDialog()`).

@@ -35,13 +35,13 @@ public partial class OqcSettingsDialog : Window
         {
             vm.SaveConfigCommand.Execute(null);
         }
-        DialogResult = true;
+        try { DialogResult = true; } catch { }
         Close();
     }
 
     private void Cancel_Click(object sender, RoutedEventArgs e)
     {
-        DialogResult = false;
+        try { DialogResult = false; } catch { }
         Close();
     }
 }

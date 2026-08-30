@@ -17,7 +17,7 @@ namespace VisionInspectionApp.UI.Views
             {
                 viewModel.RequestCloseDialog += () =>
                 {
-                    DialogResult = true;
+                    try { DialogResult = true; } catch { }
                     Close();
                 };
             }
@@ -25,7 +25,7 @@ namespace VisionInspectionApp.UI.Views
 
         private void CancelButton_Click(object sender, RoutedEventArgs e)
         {
-            DialogResult = false;
+            try { DialogResult = false; } catch { }
             Close();
         }
 
