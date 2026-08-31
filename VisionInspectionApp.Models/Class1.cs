@@ -135,7 +135,8 @@ public enum ImageSourceType
 {
     File = 0,
     Folder = 1,
-    Camera = 2
+    Camera = 2,
+    Url = 3
 }
 
 public enum ImageSourceTriggerMode
@@ -190,6 +191,11 @@ public sealed class ImageSourceDefinition
     public int CameraIndex { get; set; } = 0;
 
     public string RtspUrl { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Đường dẫn URL tải ảnh từ máy chủ Web (Remote Server URL) dùng cho huấn luyện (teaching) từ xa.
+    /// </summary>
+    public string ImageUrl { get; set; } = string.Empty;
 
     public bool LoopFolder { get; set; } = true;
 

@@ -853,8 +853,40 @@ public sealed class OqcScannerService : IOqcScannerService
         return (success, table, error);
     }
 
+    public async Task<(bool Success, DataTable? Table, string ErrorMessage)> GetJobManagerListAsync(
+        string searchText, int pageIndex, IDbManagerService dbManager)
+    {
+        if (dbManager == null)
+        {
+            return (false, null, "DB Manager service not available.");
+        }
+
+        if (string.IsNullOrWhiteSpace(Config.JobManagerQuery))
+        {
+            return (false, null, "Chưa cấu hình truy vấn danh sách Job (Job Manager Query).");
+        }
+
+        int pageSize = Math.Max(1, Config.JobManagerPageSize);
+        int offset = Math.Max(0, pageIndex * pageSize);
+        string safeSearch = EscapeSqlValue((searchText ?? "").Trim());
+
+        string query = Config.JobManagerQuery
+            .Replace("{SearchText}", safeSearch, StringComparison.OrdinalIgnoreCase)
+            .Replace("{Offset}", offset.ToString(CultureInfo.InvariantCulture), StringComparison.OrdinalIgnoreCase)
+            .Replace("{PageSize}", pageSize.ToString(CultureInfo.InvariantCulture), StringComparison.OrdinalIgnoreCase);
+
+        var (isSafe, safetyError) = DbNodeRunner.ValidateSqlQuerySafety(query, DbNodeMode.Read, allowUpdateDelete: false);
+        if (!isSafe)
+        {
+            return (false, null, safetyError);
+        }
+
+        var (success, table, error) = await dbManager.ExecuteQueryAsync(Config.JobManagerDbId, query);
+        return (success, table, error);
+    }
+
     public async Task<(bool Success, string Message)> AssignProductJobAsync(
-        string productCode, string jobFilePath, IDbManagerService dbManager)
+        string productCode, string jobFilePath, IDbManagerService dbManager, string teachImagePath = "")
     {
         if (string.IsNullOrWhiteSpace(productCode))
         {
@@ -878,10 +910,12 @@ public sealed class OqcScannerService : IOqcScannerService
 
         string safeCode = EscapeSqlValue(productCode.Trim());
         string safePath = EscapeSqlValue(jobFilePath.Trim());
+        string safeTeachPath = EscapeSqlValue((teachImagePath ?? "").Trim());
 
         string query = Config.AssignQuery
             .Replace("{ProductCode}", safeCode, StringComparison.OrdinalIgnoreCase)
-            .Replace("{JobFilePath}", safePath, StringComparison.OrdinalIgnoreCase);
+            .Replace("{JobFilePath}", safePath, StringComparison.OrdinalIgnoreCase)
+            .Replace("{TeachImagePath}", safeTeachPath, StringComparison.OrdinalIgnoreCase);
 
         var (isSafe, safetyError) = DbNodeRunner.ValidateSqlQuerySafety(query, DbNodeMode.Write, allowUpdateDelete: true);
         if (!isSafe)

@@ -80,6 +80,11 @@ public partial class App : System.Windows.Application
                 // OQC Framework
                 services.AddSingleton<Application.OQC.IOqcScannerService, Application.OQC.OqcScannerService>();
 
+                // Remote Server & Job Manager Framework
+                services.AddSingleton<VisionInspectionApp.Application.Services.IRemoteServerService, VisionInspectionApp.Application.Services.RemoteServerService>();
+                services.AddSingleton<JobManagerViewModel>();
+                services.AddTransient<Views.OQC.JobManagerWindow>();
+
                 services.AddSingleton<TeachViewModel>();
                 services.AddSingleton<ToolEditorViewModel>();
                 services.AddSingleton<CalibrationViewModel>();

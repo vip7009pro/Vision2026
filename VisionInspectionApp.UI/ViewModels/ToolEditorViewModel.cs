@@ -16,6 +16,7 @@ using OpenCvSharp;
 using OpenCvSharp.WpfExtensions;
 using VisionInspectionApp.Application;
 using VisionInspectionApp.Application.LightingController;
+using VisionInspectionApp.Application.OQC;
 using VisionInspectionApp.Application.Services;
 using VisionInspectionApp.Models;
 using VisionInspectionApp.UI.Controls;
@@ -179,6 +180,7 @@ namespace VisionInspectionApp.UI.ViewModels
         private readonly Application.DB.Services.IDbManagerService _dbManagerService;
         private readonly Application.Services.IInspectionLogService _inspectionLogService;
         private readonly LightingControllerService? _lightingControllerService;
+        private readonly VisionInspectionApp.Application.Services.IRemoteServerService _remoteServerService;
         private readonly IServiceProvider? _serviceProvider;
         public UndoRedoManager UndoManager { get; }
         public IRelayCommand UndoCommand { get; }
@@ -190,6 +192,7 @@ namespace VisionInspectionApp.UI.ViewModels
         public Application.PLC.Services.IndustrialHandshakeStateMachine HandshakeStateMachine => _handshakeStateMachine;
         public Application.Services.IInspectionLogService InspectionLogService => _inspectionLogService;
         public LightingControllerService? LightingControllerService => _lightingControllerService;
+        public SharedImageContext SharedImageContext => _sharedImage;
 
         public ToolEditorViewModel()
         {
@@ -207,6 +210,7 @@ namespace VisionInspectionApp.UI.ViewModels
             _plcManagerService = null!;
             _dbManagerService = null!;
             _lightingControllerService = null;
+            _remoteServerService = new VisionInspectionApp.Application.Services.RemoteServerService();
             _inspectionLogService = new Application.Services.InspectionLogService();
             _motionSyncService = new Application.PLC.Services.PlcMotionSyncService(null);
             _shiftRegisterTracker = new Application.PLC.Services.ShiftRegisterTracker(null);
@@ -227,6 +231,7 @@ namespace VisionInspectionApp.UI.ViewModels
         public ToolEditorViewModel(IConfigService configService, ConfigStoreOptions storeOptions, SharedImageContext sharedImage, ImagePreprocessor preprocessor, LineDetector lineDetector, IInspectionService inspectionService, CameraService cameraService, IJobService jobService, UndoRedoManager undoManager, Application.PLC.Services.IPlcManagerService plcManagerService, Application.DB.Services.IDbManagerService dbManagerService, IRecentJobsService? recentJobsService = null, LightingControllerService? lightingControllerService = null, IServiceProvider? serviceProvider = null)
         {
             _serviceProvider = serviceProvider;
+            _remoteServerService = (serviceProvider?.GetService(typeof(VisionInspectionApp.Application.Services.IRemoteServerService)) as VisionInspectionApp.Application.Services.IRemoteServerService) ?? new VisionInspectionApp.Application.Services.RemoteServerService();
             _lightingControllerService = lightingControllerService ?? (serviceProvider?.GetService(typeof(LightingControllerService)) as LightingControllerService);
             if (_lightingControllerService != null)
             {
@@ -407,6 +412,9 @@ namespace VisionInspectionApp.UI.ViewModels
             OpenCalibrationDialogCommand = new RelayCommand(OpenCalibrationDialog);
             OpenChessboardCalibrationDialogCommand = new RelayCommand(OpenChessboardCalibrationDialog);
             OpenProductAssignDialogCommand = new RelayCommand(OpenProductAssignDialog);
+            OpenJobManagerWindowCommand = new RelayCommand(OpenJobManagerWindow);
+            ImageSource_FetchUrlImageCommand = new AsyncRelayCommand(ImageSource_FetchUrlImageAsync);
+            ImageSource_OpenJobManagerCommand = new RelayCommand(OpenJobManagerWindow);
             OpenRollDefectMapCommand = new RelayCommand(OpenRollDefectMap);
             OpenInspectionLogCommand = new RelayCommand(OpenInspectionLog);
             ColorDiff_TeachRefColorCommand = new RelayCommand(ColorDiff_TeachRefColor);
@@ -1578,8 +1586,54 @@ namespace VisionInspectionApp.UI.ViewModels
         }
 
         public IRelayCommand OpenProductAssignDialogCommand { get; }
+        public IRelayCommand OpenJobManagerWindowCommand { get; }
+        public IAsyncRelayCommand ImageSource_FetchUrlImageCommand { get; }
+        public IRelayCommand ImageSource_OpenJobManagerCommand { get; }
         public IRelayCommand OpenRollDefectMapCommand { get; }
         public IRelayCommand OpenInspectionLogCommand { get; }
+
+        private static Views.OQC.JobManagerWindow? _jobManagerWindowInstance;
+
+        public void OpenJobManagerWindow()
+        {
+            try
+            {
+                if (_jobManagerWindowInstance != null && _jobManagerWindowInstance.IsLoaded)
+                {
+                    _jobManagerWindowInstance.Activate();
+                    if (_jobManagerWindowInstance.WindowState == WindowState.Minimized)
+                        _jobManagerWindowInstance.WindowState = WindowState.Normal;
+                    return;
+                }
+
+                var mainVm = System.Windows.Application.Current?.MainWindow?.DataContext as MainWindowViewModel;
+                var oqcVm = _serviceProvider?.GetService(typeof(OqcScannerViewModel)) as OqcScannerViewModel ?? mainVm?.OqcScanner;
+                var oqcService = (_serviceProvider?.GetService(typeof(IOqcScannerService)) as IOqcScannerService) ?? new OqcScannerService();
+                var dbManager = _dbManagerService ?? new Application.DB.Services.DbManagerService();
+
+                var jobVm = new JobManagerViewModel(
+                    oqcService,
+                    dbManager,
+                    _remoteServerService,
+                    _cameraService,
+                    _sharedImage,
+                    this,
+                    mainVm ?? (_serviceProvider?.GetService(typeof(MainWindowViewModel)) as MainWindowViewModel)!,
+                    _jobService
+                );
+
+                _jobManagerWindowInstance = new Views.OQC.JobManagerWindow(jobVm)
+                {
+                    Owner = System.Windows.Application.Current?.MainWindow
+                };
+                _jobManagerWindowInstance.Closed += (s, e) => _jobManagerWindowInstance = null;
+                _jobManagerWindowInstance.Show();
+            }
+            catch (Exception ex)
+            {
+                System.Windows.MessageBox.Show($"Lỗi mở cửa sổ Quản Lý Job: {ex.Message}", "Lỗi", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Error);
+            }
+        }
 
         private void OpenProductAssignDialog()
         {

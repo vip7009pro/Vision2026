@@ -41,8 +41,11 @@ public interface IOqcScannerService
     Task<(bool Success, DataTable? Table, string ErrorMessage)> GetProductListAsync(
         string searchText, int pageIndex, IDbManagerService dbManager);
 
+    Task<(bool Success, DataTable? Table, string ErrorMessage)> GetJobManagerListAsync(
+        string searchText, int pageIndex, IDbManagerService dbManager);
+
     Task<(bool Success, string Message)> AssignProductJobAsync(
-        string productCode, string jobFilePath, IDbManagerService dbManager);
+        string productCode, string jobFilePath, IDbManagerService dbManager, string teachImagePath = "");
 
     Task<(bool Success, string Message)> LogInspectionResultAsync(
         string scannedCode, string uuid, string jobFilePath, InspectionResult result, VisionConfig config, IDbManagerService dbManager, System.Collections.Generic.List<OqcMeasurementDetail>? measurementDetails = null, string rawCode = "");

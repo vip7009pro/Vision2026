@@ -73,6 +73,11 @@
                 <TextBlock Text="🏷️" FontSize="13" VerticalAlignment="Center"/>
             </Button>
 
+            <!-- 7b. Quản Lý Job Server Icon Button -->
+            <Button Command="{Binding OpenJobManagerWindowCommand}" Margin="0,0,4,0" Padding="8,4" Background="#6A1B9A" Foreground="White" BorderThickness="0" ToolTip="Quản Lý Job &amp; Huấn Luyện Từ Xa qua Máy Chủ Web (Remote Job Manager)">
+                <TextBlock Text="🌐" FontSize="13" VerticalAlignment="Center"/>
+            </Button>
+
             <!-- 8. Chụp & Lưu Ảnh Icon Button -->
             <Button Command="{Binding CaptureAndSaveImageCommand}" Margin="0,0,4,0" Padding="8,4" Background="#10B981" Foreground="White" BorderThickness="0" ToolTip="Chụp 1 frame nguyên bản chất lượng cao từ Camera và lưu ra file ảnh PNG/BMP (Capture &amp; Save Image)">
                 <TextBlock Text="💾" FontSize="13" VerticalAlignment="Center"/>
@@ -1464,6 +1469,25 @@
                                             <TextBox Text="{Binding ImageSource_FilePath, UpdateSourceTrigger=LostFocus}" Margin="2,1" FontSize="11" />
                                         </Border>
                                         <Button Grid.Column="2" Content="..." Command="{Binding ImageSource_BrowseFileCommand}" Margin="4" Padding="8,4" />
+                                    </Grid>
+                                </Border>
+
+                                <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1" Visibility="{Binding ImageSource_IsUrl, Converter={StaticResource BoolToVis}}">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="120" />
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <Border Background="{DynamicResource WindowBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
+                                            <TextBlock Text="Server Image URL" VerticalAlignment="Center" Margin="4,2" FontSize="11" Foreground="{DynamicResource TextBrush}"/>
+                                        </Border>
+                                        <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
+                                            <TextBox Text="{Binding ImageSource_ImageUrl, UpdateSourceTrigger=LostFocus}" Margin="2,1" FontSize="11" ToolTip="Đường dẫn URL ảnh mẫu từ máy chủ XAMPP / Web API (VD: uploads/teach_images/teach_XYZ.png hoặc http://...)" />
+                                        </Border>
+                                        <Button Grid.Column="2" Content="📥 Nạp Ảnh" Command="{Binding ImageSource_FetchUrlImageCommand}" Margin="4" Padding="6,3" FontWeight="SemiBold" ToolTip="Tải và nạp ảnh từ Server URL vào Tool Editor" />
+                                        <Button Grid.Column="3" Content="🌐 Quản Lý Job" Command="{Binding ImageSource_OpenJobManagerCommand}" Margin="0,4,4,4" Padding="6,3" Background="#6A1B9A" Foreground="White" FontWeight="SemiBold" ToolTip="Mở cửa sổ Quản Lý Job &amp; Huấn Luyện Từ Xa" />
                                     </Grid>
                                 </Border>
 

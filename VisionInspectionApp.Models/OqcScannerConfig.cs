@@ -25,7 +25,21 @@ public class OqcScannerConfig
 
     // ─── Gán sản phẩm ↔ Job File (Assign/Upsert Query) ───
     public string AssignDbId { get; set; } = "";
-    public string AssignQuery { get; set; } = "IF EXISTS (SELECT 1 FROM ProductJobs WHERE ProductCode = '{ProductCode}') UPDATE ProductJobs SET JobFilePath = '{JobFilePath}' WHERE ProductCode = '{ProductCode}' ELSE INSERT INTO ProductJobs (ProductCode, JobFilePath) VALUES ('{ProductCode}', '{JobFilePath}')";
+    public string AssignQuery { get; set; } = "IF EXISTS (SELECT 1 FROM ProductJobs WHERE ProductCode = '{ProductCode}') UPDATE ProductJobs SET JobFilePath = '{JobFilePath}', TeachImagePath = '{TeachImagePath}' WHERE ProductCode = '{ProductCode}' ELSE INSERT INTO ProductJobs (ProductCode, JobFilePath, TeachImagePath) VALUES ('{ProductCode}', '{JobFilePath}', '{TeachImagePath}')";
+
+    // ─── Cấu hình Máy Chủ Web (Server API / Upload Endpoint) ───
+    public string ServerApiUrl { get; set; } = "http://localhost/vision_upload.php";
+    public string TeachImageColumn { get; set; } = "TeachImagePath";
+
+    // ─── Quản lý Job trên CSDL & Server (Job Manager Query) ───
+    public string JobManagerDbId { get; set; } = "";
+    public string JobManagerQuery { get; set; } = "SELECT ProductCode, ProductName, JobFilePath, TeachImagePath, UpdatedAt FROM ProductJobs WHERE ProductCode LIKE '%{SearchText}%' OR ProductName LIKE '%{SearchText}%' ORDER BY ProductCode OFFSET {Offset} ROWS FETCH NEXT {PageSize} ROWS ONLY";
+    public string JobManagerProductCodeColumn { get; set; } = "ProductCode";
+    public string JobManagerProductNameColumn { get; set; } = "ProductName";
+    public string JobManagerJobFileColumn { get; set; } = "JobFilePath";
+    public string JobManagerTeachImageColumn { get; set; } = "TeachImagePath";
+    public string JobManagerUpdatedColumn { get; set; } = "UpdatedAt";
+    public int JobManagerPageSize { get; set; } = 50;
 
     // ─── Ghi log kết quả OQC vào DB (Upload Log Query) ───
     public bool LogResultToDb { get; set; } = false;

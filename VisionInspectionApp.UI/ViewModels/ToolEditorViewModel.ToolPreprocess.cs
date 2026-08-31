@@ -380,6 +380,7 @@ namespace VisionInspectionApp.UI.ViewModels
                 OnPropertyChanged(nameof(ImageSource_IsFile));
                 OnPropertyChanged(nameof(ImageSource_IsFolder));
                 OnPropertyChanged(nameof(ImageSource_IsCamera));
+                OnPropertyChanged(nameof(ImageSource_IsUrl));
                 OnPropertyChanged(nameof(ImageSource_IsIndustrialCamera));
                 OnPropertyChanged(nameof(ImageSource_IsTimerDriven));
                 OnPropertyChanged(nameof(ImageSource_IsIntervalVisible));
@@ -396,6 +397,7 @@ namespace VisionInspectionApp.UI.ViewModels
         public bool ImageSource_IsFile => ImageSource_SourceType == ImageSourceType.File;
         public bool ImageSource_IsFolder => ImageSource_SourceType == ImageSourceType.Folder;
         public bool ImageSource_IsCamera => ImageSource_SourceType == ImageSourceType.Camera;
+        public bool ImageSource_IsUrl => ImageSource_SourceType == ImageSourceType.Url;
 
         public Array AvailableImageSourceTriggerModes => Enum.GetValues(typeof(ImageSourceTriggerMode));
 
@@ -564,6 +566,78 @@ namespace VisionInspectionApp.UI.ViewModels
                 RaiseToolPropertyPanelsChanged();
                 RefreshPreviews();
                 RequestAutoSave();
+            }
+        }
+
+        public string ImageSource_ImageUrl
+        {
+            get => SelectedImageSourceDef()?.ImageUrl ?? string.Empty;
+            set
+            {
+                var def = SelectedImageSourceDef();
+                if (def is null)
+                    return;
+                value ??= string.Empty;
+                if (string.Equals(def.ImageUrl, value, StringComparison.Ordinal))
+                    return;
+                def.ImageUrl = value;
+                ClearImageSourceCache(def.Name);
+                RaiseToolPropertyPanelsChanged();
+                RefreshPreviews();
+                RequestAutoSave();
+            }
+        }
+
+        public async Task ImageSource_FetchUrlImageAsync()
+        {
+            string url = ImageSource_ImageUrl;
+            if (string.IsNullOrWhiteSpace(url))
+            {
+                System.Windows.MessageBox.Show("Vui lòng nhập đường dẫn URL ảnh từ máy chủ!", "Thông báo", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Warning);
+                return;
+            }
+
+            await FetchAndApplyImageUrlAsync(url);
+        }
+
+        public async Task FetchAndApplyImageUrlAsync(string url)
+        {
+            if (string.IsNullOrWhiteSpace(url)) return;
+
+            try
+            {
+                StatusBarText = $"⏳ Đang tải ảnh từ URL: {url}...";
+                var (success, data, error) = await _remoteServerService.DownloadFileAsync(url);
+                if (!success || data == null || data.Length == 0)
+                {
+                    StatusBarText = $"❌ Lỗi tải ảnh từ URL: {error}";
+                    System.Windows.MessageBox.Show($"Không thể tải ảnh từ URL:\n{url}\nLỗi: {error}", "Lỗi Tải Ảnh", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Error);
+                    return;
+                }
+
+                var mat = Cv2.ImDecode(data, ImreadModes.Color);
+                if (mat == null || mat.Empty())
+                {
+                    StatusBarText = "❌ Giải mã dữ liệu ảnh thất bại.";
+                    System.Windows.MessageBox.Show("Dữ liệu tải về không phải là tệp ảnh hợp lệ!", "Lỗi", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Error);
+                    return;
+                }
+
+                var def = SelectedImageSourceDef();
+                string nodeName = def?.Name ?? "ImageSource1";
+                SetImageSourceCache(nodeName, url, mat);
+                _sharedImage.SetImage(mat);
+
+                await System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
+                {
+                    RefreshPreviews();
+                    StatusBarText = $"✅ Đã tải và nạp ảnh ({mat.Width}x{mat.Height}) từ Server URL!";
+                });
+            }
+            catch (Exception ex)
+            {
+                StatusBarText = $"❌ Ngoại lệ tải ảnh: {ex.Message}";
+                System.Windows.MessageBox.Show($"Ngoại lệ khi tải ảnh từ URL: {ex.Message}", "Lỗi", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Error);
             }
         }
     

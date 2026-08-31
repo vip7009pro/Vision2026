@@ -409,8 +409,9 @@
 
                     <!-- Dữ Liệu & OQC Menu -->
                     <MenuItem Header="🗄️ Dữ Liệu">
-                        <MenuItem Header="🗄️ Quản Lý Kết Nối Database (DB Manager...)" Command="{Binding ToolEditor.OpenDbManagerCommand}" />
+                        <MenuItem Header="🌐 Quản Lý Job &amp; Huấn Luyện Từ Xa (Server Job Manager...)" Command="{Binding OqcScanner.OpenJobManagerCommand}" />
                         <MenuItem Header="📋 Gán Mã Sản Phẩm ↔ Tệp Job (Product Assign...)" Command="{Binding OqcScanner.OpenProductAssignCommand}" />
+                        <MenuItem Header="🗄️ Quản Lý Kết Nối Database (DB Manager...)" Command="{Binding ToolEditor.OpenDbManagerCommand}" />
                         <MenuItem Header="⚙️ Cấu Hình OQC Scanner &amp; Database..." Command="{Binding OqcScanner.OpenSettingsCommand}" />
                     </MenuItem>
 

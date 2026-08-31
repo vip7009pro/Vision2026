@@ -1403,4 +1403,40 @@ Lộ trình tích hợp tính năng Chụp ảnh từ camera và hỗ trợ các
       - Kiểm Thử:
         - Chạy toàn bộ test suite của dự án: PASSED 100% (106 lighting tests, preprocess ROI mask tests, isolated job template tests, product assign tests, PLC bridge connection tests).
 
+- [x] Task 277: Triển Khai Hệ Thống Quản Lý & Huấn Luyện (Teaching) Job Từ Xa Qua Server XAMPP (PHP API) & Đồng Bộ Hai Chiều Đa Máy OQC Scanner.
+      - Mục Tiêu & Yêu Cầu:
+        - Xây dựng giải pháp cho phép kỹ sư cấu hình, huấn luyện (teach) Job từ xa trên máy văn phòng qua mạng LAN/Server XAMPP (PHP) mà không cần trực tiếp cắm máy tính vào dây chuyền sản xuất:
+          1. Máy OQC tại chuyền sản xuất: Chụp ảnh phôi/sản phẩm thực tế từ camera và tải ảnh lên Web Server XAMPP (`vision_upload.php`), tự động gán đường dẫn URL ảnh mẫu vào CSDL `ProductJobs`.
+          2. Máy Kỹ sư tại văn phòng: Mở cửa sổ Quản Lý Job (`JobManagerWindow`), chọn mã sản phẩm và bấm "Remote Teach" $\rightarrow$ tự động nạp ảnh mẫu từ URL Server vào Tool Editor, train Origin/đo đạc/cấu hình tool $\rightarrow$ bấm "Upload Current Job" để đẩy file `.job` hoàn chỉnh lên Server và cập nhật CSDL.
+          3. Máy OQC: Quét mã QR/Barcode sản phẩm $\rightarrow$ tự động nạp tệp Job mới nhất từ Server hoặc đường dẫn CSDL và thực thi kiểm tra tức thì.
+      - Giải Pháp Kỹ Thuật Đã Triển Khai:
+        1. **Server Scripts (PHP & Setup Guide)**:
+           - [vision_upload.php](file:///g:/NODEJS/Vision2026/ServerScripts/vision_upload.php): Cung cấp 3 API endpoint chuẩn REST/JSON: `action=ping`, `action=upload_image`, `action=upload_job` kèm cấu hình bảo mật MIME, CORS và phân cấp thư mục `uploads/teach_images/` & `uploads/jobs/`.
+           - [README_SERVER.md](file:///g:/NODEJS/Vision2026/ServerScripts/README_SERVER.md): Hướng dẫn chi tiết thiết lập XAMPP Apache trên Server nội bộ.
+        2. **Data Models & CSDL**:
+           - [Class1.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.Models/Class1.cs): Bổ sung enum `ImageSourceType.Url = 3` và thuộc tính `ImageUrl`.
+           - [OqcScannerConfig.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.Models/OqcScannerConfig.cs): Thêm thuộc tính cấu hình `ServerApiUrl`, `TeachImageColumn`, `AssignQuery` hỗ trợ token `{TeachImagePath}`, cùng nhóm thuộc tính `JobManager*` (`JobManagerDbId`, `JobManagerQuery`, `JobManagerProductCodeColumn`, `JobManagerProductNameColumn`, `JobManagerJobFileColumn`, `JobManagerTeachImageColumn`, `JobManagerUpdatedColumn`, `JobManagerPageSize`).
+           - [JobManagerItem.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.Models/JobManagerItem.cs): Model MVVM thực thi `INotifyPropertyChanged` quản lý thông tin và cờ trạng thái (`HasJobFile`, `HasTeachImage`).
+        3. **Application Services**:
+           - [IRemoteServerService.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.Application/Services/IRemoteServerService.cs) & [RemoteServerService.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.Application/Services/RemoteServerService.cs): Triển khai các phương thức giao tiếp HTTP multipart: `PingServerAsync`, `UploadImageAsync`, `UploadJobAsync` (hỗ trợ cả đường dẫn tệp và mảng byte), `DownloadFileAsync`.
+           - [IOqcScannerService.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.Application/OQC/IOqcScannerService.cs) & [OqcScannerService.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.Application/OQC/OqcScannerService.cs): Bổ sung `GetJobManagerListAsync` truy vấn danh sách phân trang server-side và mở rộng `AssignProductJobAsync` với tham số `teachImagePath`.
+        4. **ViewModels & Giao Diện WPF**:
+           - [JobManagerViewModel.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/JobManagerViewModel.cs): ViewModel quản lý Job từ xa hỗ trợ tìm kiếm phân trang, kiểm tra ping server, chụp ảnh camera upload, upload ảnh từ file, Remote Teach (nạp thẳng URL vào Tool Editor), upload Job hiện tại lên server, nạp/tải Job về máy, gán Job cục bộ.
+           - [JobManagerWindow.xaml](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/Views/OQC/JobManagerWindow.xaml) & [JobManagerWindow.xaml.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/Views/OQC/JobManagerWindow.xaml.cs): Giao diện Modeless Window với DataGrid trạng thái, thanh tìm kiếm phân trang, thanh công cụ tác vụ và preview ảnh mẫu.
+           - [ToolEditorViewModel.ToolPreprocess.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/ToolEditorViewModel.ToolPreprocess.cs) & [ToolEditorViewModel.Engine.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/ToolEditorViewModel.Engine.cs): Bổ sung `ImageSource_IsUrl`, `ImageSource_ImageUrl`, `FetchAndApplyImageUrlAsync`, xử lý tải ảnh từ URL trong `GetImageSourceMat`, continuous flow và `RunFlow`.
+           - [ToolEditorView.xaml](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/Views/ToolEditorView.xaml): Bổ sung trường nhập URL ảnh cho node `ImageSource` và nút `🌐 Quản Lý Job Server` trên Toolbar.
+           - [OqcScannerViewModel.Settings.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/OqcScannerViewModel.Settings.cs) & [OqcSettingsDialog.xaml](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/Views/OQC/OqcSettingsDialog.xaml): Thêm GroupBox 5 cấu hình Máy chủ Web XAMPP / PHP API và Job Manager Query.
+           - [OqcScannerViewModel.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/OqcScannerViewModel.cs) & [OqcScannerView.xaml](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/Views/OQC/OqcScannerView.xaml): Bổ sung nút `📸 Tải Ảnh Mẫu` và `🌐 Quản Lý Job`.
+           - [MainWindow.xaml](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/MainWindow.xaml): Bổ sung MenuItem `🌐 Quản Lý Job & Huấn Luyện Từ Xa (Server Job Manager...)` trong Menu Dữ Liệu.
+           - [App.xaml.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/App.xaml.cs): Đăng ký DI Container Singleton cho `IRemoteServerService, RemoteServerService`, `JobManagerViewModel`, `JobManagerWindow`.
+      - Kiểm Thử:
+        - Bổ sung bộ test tự động [RemoteServerAndJobManagerTests.cs](file:///g:/NODEJS/Vision2026/TestExtractApp/RemoteServerAndJobManagerTests.cs) kiểm thử toàn diện:
+          + Test 1: `JobManagerItem` property notification & cờ `HasJobFile`/`HasTeachImage`.
+          + Test 2: `OqcScannerConfig` serialization / deserialization với cấu hình Server & Job Manager.
+          + Test 3: `ImageSourceDefinition.ImageUrl` và enum `ImageSourceType.Url`.
+          + Test 4: Thay thế token `{TeachImagePath}` trong câu lệnh SQL Assign.
+          + Test 5: `RemoteServerService` với HTTP Mock Server thực tế (Ping, Upload Image multipart, Download File bytes).
+        - Toàn bộ test suite của dự án PASSED 100%. Solution `dotnet build` 0 errors.
+
+
 

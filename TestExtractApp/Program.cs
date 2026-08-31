@@ -32,5 +32,6 @@ class Program
         OriginTemplateJobTest.RunTests();
         ProductAssignAndCodeSyncTest.RunTests();
         PlcBridgeTest.RunTestsAsync().GetAwaiter().GetResult();
+        RemoteServerAndJobManagerTests.RunTests();
     }
 }

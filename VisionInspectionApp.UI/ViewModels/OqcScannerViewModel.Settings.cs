@@ -77,6 +77,44 @@ public partial class OqcScannerViewModel
     [ObservableProperty]
     private string _logDetailResultQuery = "";
 
+    // ─── Cấu hình Máy Chủ Web (Server API / Upload Endpoint) ───
+    [ObservableProperty]
+    private string _serverApiUrl = "http://localhost/vision_upload.php";
+
+    [ObservableProperty]
+    private string _teachImageColumn = "TeachImagePath";
+
+    [ObservableProperty]
+    private string _pingServerStatusText = "Chưa kiểm tra kết nối";
+
+    [ObservableProperty]
+    private Brush _pingServerStatusBrush = Brushes.Gray;
+
+    // ─── Quản lý Job trên CSDL & Server (Job Manager Query) ───
+    [ObservableProperty]
+    private string _jobManagerDbId = "";
+
+    [ObservableProperty]
+    private string _jobManagerQuery = "SELECT ProductCode, ProductName, JobFilePath, TeachImagePath, UpdatedAt FROM ProductJobs WHERE ProductCode LIKE '%{SearchText}%' OR ProductName LIKE '%{SearchText}%' ORDER BY ProductCode OFFSET {Offset} ROWS FETCH NEXT {PageSize} ROWS ONLY";
+
+    [ObservableProperty]
+    private string _jobManagerProductCodeColumn = "ProductCode";
+
+    [ObservableProperty]
+    private string _jobManagerProductNameColumn = "ProductName";
+
+    [ObservableProperty]
+    private string _jobManagerJobFileColumn = "JobFilePath";
+
+    [ObservableProperty]
+    private string _jobManagerTeachImageColumn = "TeachImagePath";
+
+    [ObservableProperty]
+    private string _jobManagerUpdatedColumn = "UpdatedAt";
+
+    [ObservableProperty]
+    private int _jobManagerPageSize = 50;
+
     // ─── Camera Barcode Reader Settings Properties ───
     [ObservableProperty]
     private bool _enableCameraBarcodeScan = true;
@@ -124,6 +162,7 @@ public partial class OqcScannerViewModel
     public IRelayCommand SaveConfigCommand { get; private set; } = null!;
     public IRelayCommand ExportConfigCommand { get; private set; } = null!;
     public IRelayCommand ImportConfigCommand { get; private set; } = null!;
+    public IAsyncRelayCommand PingServerCommand { get; private set; } = null!;
 
     // ─── Product Assign Dialog Properties ───
     [ObservableProperty]
@@ -160,6 +199,7 @@ public partial class OqcScannerViewModel
         SaveConfigCommand = new RelayCommand(SaveSettingsToConfig);
         ExportConfigCommand = new RelayCommand(ExecuteExportConfig);
         ImportConfigCommand = new RelayCommand(ExecuteImportConfig);
+        PingServerCommand = new AsyncRelayCommand(ExecutePingServerAsync);
 
         SearchProductsCommand = new AsyncRelayCommand(ExecuteSearchProductsAsync);
         NextPageCommand = new AsyncRelayCommand(ExecuteNextPageAsync);
@@ -191,6 +231,18 @@ public partial class OqcScannerViewModel
         AssignDbId = cfg.AssignDbId;
         AssignQuery = cfg.AssignQuery;
 
+        ServerApiUrl = !string.IsNullOrWhiteSpace(cfg.ServerApiUrl) ? cfg.ServerApiUrl : "http://localhost/vision_upload.php";
+        TeachImageColumn = !string.IsNullOrWhiteSpace(cfg.TeachImageColumn) ? cfg.TeachImageColumn : "TeachImagePath";
+
+        JobManagerDbId = cfg.JobManagerDbId;
+        JobManagerQuery = !string.IsNullOrWhiteSpace(cfg.JobManagerQuery) ? cfg.JobManagerQuery : "SELECT ProductCode, ProductName, JobFilePath, TeachImagePath, UpdatedAt FROM ProductJobs WHERE ProductCode LIKE '%{SearchText}%' OR ProductName LIKE '%{SearchText}%' ORDER BY ProductCode OFFSET {Offset} ROWS FETCH NEXT {PageSize} ROWS ONLY";
+        JobManagerProductCodeColumn = !string.IsNullOrWhiteSpace(cfg.JobManagerProductCodeColumn) ? cfg.JobManagerProductCodeColumn : "ProductCode";
+        JobManagerProductNameColumn = !string.IsNullOrWhiteSpace(cfg.JobManagerProductNameColumn) ? cfg.JobManagerProductNameColumn : "ProductName";
+        JobManagerJobFileColumn = !string.IsNullOrWhiteSpace(cfg.JobManagerJobFileColumn) ? cfg.JobManagerJobFileColumn : "JobFilePath";
+        JobManagerTeachImageColumn = !string.IsNullOrWhiteSpace(cfg.JobManagerTeachImageColumn) ? cfg.JobManagerTeachImageColumn : "TeachImagePath";
+        JobManagerUpdatedColumn = !string.IsNullOrWhiteSpace(cfg.JobManagerUpdatedColumn) ? cfg.JobManagerUpdatedColumn : "UpdatedAt";
+        JobManagerPageSize = cfg.JobManagerPageSize > 0 ? cfg.JobManagerPageSize : 50;
+
         LogResultToDb = cfg.LogResultToDb;
         LogResultDbId = cfg.LogResultDbId;
         LogResultQuery = cfg.LogResultQuery;
@@ -208,6 +260,24 @@ public partial class OqcScannerViewModel
         CropLength = cfg.CropLength;
         ScanTimeoutMs = cfg.ScanTimeoutMs > 0 ? cfg.ScanTimeoutMs : 3000;
         UseExternalScanner = cfg.UseExternalScanner;
+    }
+
+    public async Task ExecutePingServerAsync()
+    {
+        PingServerStatusText = "⏳ Đang kết nối tới Server...";
+        PingServerStatusBrush = Brushes.DodgerBlue;
+
+        var (success, msg) = await _remoteServerService.PingServerAsync(ServerApiUrl);
+        if (success)
+        {
+            PingServerStatusText = msg;
+            PingServerStatusBrush = Brushes.Green;
+        }
+        else
+        {
+            PingServerStatusText = $"❌ {msg}";
+            PingServerStatusBrush = Brushes.Red;
+        }
     }
 
     private void SaveSettingsToConfig()
@@ -232,6 +302,18 @@ public partial class OqcScannerViewModel
 
             AssignDbId = AssignDbId,
             AssignQuery = AssignQuery,
+
+            ServerApiUrl = ServerApiUrl,
+            TeachImageColumn = TeachImageColumn,
+
+            JobManagerDbId = JobManagerDbId,
+            JobManagerQuery = JobManagerQuery,
+            JobManagerProductCodeColumn = JobManagerProductCodeColumn,
+            JobManagerProductNameColumn = JobManagerProductNameColumn,
+            JobManagerJobFileColumn = JobManagerJobFileColumn,
+            JobManagerTeachImageColumn = JobManagerTeachImageColumn,
+            JobManagerUpdatedColumn = JobManagerUpdatedColumn,
+            JobManagerPageSize = JobManagerPageSize > 0 ? JobManagerPageSize : 50,
 
             LogResultToDb = LogResultToDb,
             LogResultDbId = LogResultDbId,
@@ -290,6 +372,18 @@ public partial class OqcScannerViewModel
 
                     AssignDbId = AssignDbId,
                     AssignQuery = AssignQuery,
+
+                    ServerApiUrl = ServerApiUrl,
+                    TeachImageColumn = TeachImageColumn,
+
+                    JobManagerDbId = JobManagerDbId,
+                    JobManagerQuery = JobManagerQuery,
+                    JobManagerProductCodeColumn = JobManagerProductCodeColumn,
+                    JobManagerProductNameColumn = JobManagerProductNameColumn,
+                    JobManagerJobFileColumn = JobManagerJobFileColumn,
+                    JobManagerTeachImageColumn = JobManagerTeachImageColumn,
+                    JobManagerUpdatedColumn = JobManagerUpdatedColumn,
+                    JobManagerPageSize = JobManagerPageSize > 0 ? JobManagerPageSize : 50,
 
                     LogResultToDb = LogResultToDb,
                     LogResultDbId = LogResultDbId,

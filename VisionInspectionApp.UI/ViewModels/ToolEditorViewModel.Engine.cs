@@ -2388,6 +2388,22 @@ namespace VisionInspectionApp.UI.ViewModels
                         }
                     }
                 }
+                else if (source.SourceType == ImageSourceType.Url)
+                {
+                    if (!string.IsNullOrWhiteSpace(source.ImageUrl))
+                    {
+                        var (ok, data, err) = _remoteServerService.DownloadFileAsync(source.ImageUrl).GetAwaiter().GetResult();
+                        if (ok && data != null && data.Length > 0)
+                        {
+                            var mat = Cv2.ImDecode(data, ImreadModes.Color);
+                            if (mat != null && !mat.Empty())
+                            {
+                                SetImageSourceCache(source.Name, source.ImageUrl, mat);
+                                return mat;
+                            }
+                        }
+                    }
+                }
                 else if (source.SourceType == ImageSourceType.Folder)
                 {
                     if (!string.IsNullOrWhiteSpace(source.FolderPath) && Directory.Exists(source.FolderPath))
@@ -2684,7 +2700,7 @@ namespace VisionInspectionApp.UI.ViewModels
                         _ = StartContinuousCameraFlow(imgSourceDef);
                         return;
                     }
-                    else if (imgSourceDef.SourceType == ImageSourceType.File)
+                    else if (imgSourceDef.SourceType == ImageSourceType.File || imgSourceDef.SourceType == ImageSourceType.Url)
                     {
                         StartFileContinuousFlow(imgSourceDef);
                         return;
@@ -3613,7 +3629,7 @@ namespace VisionInspectionApp.UI.ViewModels
                             System.Diagnostics.Debug.WriteLine($"RunFlow: ImageSourceDef not found for RefName: {imageSourceNode.RefName}");
                         }
                         __sw.Stop();
-                        imageSourceMs = (imgSourceDef?.SourceType == ImageSourceType.File) ? 0 : (int)__sw.ElapsedMilliseconds;
+                        imageSourceMs = (imgSourceDef?.SourceType == ImageSourceType.File || imgSourceDef?.SourceType == ImageSourceType.Url) ? 0 : (int)__sw.ElapsedMilliseconds;
                     }
                     else
                     {

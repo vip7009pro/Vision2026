@@ -69,6 +69,20 @@
                                 Background="#2E7D32" Foreground="White" BorderThickness="0"
                                 ToolTip="Tra cứu mã / Quét mã và thực thi kiểm tra (Phím Enter)." />
 
+                        <Button Content="📸 Tải Ảnh Mẫu"
+                                Command="{Binding QuickCaptureAndUploadTeachImageCommand}"
+                                Height="30" Padding="8,0" Margin="0,0,6,0"
+                                FontSize="11.5" FontWeight="SemiBold"
+                                Background="#00897B" Foreground="White" BorderThickness="0"
+                                ToolTip="Chụp khung hình hiện tại và tải lên Server XAMPP làm ảnh mẫu huấn luyện từ xa cho mã sản phẩm này." />
+
+                        <Button Content="🌐 Quản Lý Job"
+                                Command="{Binding OpenJobManagerCommand}"
+                                Height="30" Padding="8,0" Margin="0,0,6,0"
+                                FontSize="11.5" FontWeight="SemiBold"
+                                Background="#6A1B9A" Foreground="White" BorderThickness="0"
+                                ToolTip="Mở cửa sổ Quản Lý Job &amp; Huấn Luyện Từ Xa qua Server Web." />
+
                         <Button Content="📁 Mở Job"
                                 Command="{Binding ManualOpenJobCommand}"
                                 Height="30" Padding="8,0"

@@ -28,6 +28,7 @@ public partial class OqcScannerViewModel : ObservableObject
     private readonly InspectionViewModel _inspectionViewModel;
     private readonly ToolEditorViewModel _toolEditorViewModel;
     private readonly CameraService _cameraService;
+    private readonly VisionInspectionApp.Application.Services.IRemoteServerService _remoteServerService;
 
     [ObservableProperty]
     private string _scannedCode = "";
@@ -110,6 +111,8 @@ public partial class OqcScannerViewModel : ObservableObject
     public IRelayCommand<OqcScanHistoryEntry> OpenScanDetailCommand { get; }
     public IRelayCommand SwitchToToolEditorCommand { get; }
     public IRelayCommand ToggleLiveCameraCommand { get; }
+    public IRelayCommand OpenJobManagerCommand { get; }
+    public IAsyncRelayCommand QuickCaptureAndUploadTeachImageCommand { get; }
 
     public string ScanButtonText
     {
@@ -141,7 +144,8 @@ public partial class OqcScannerViewModel : ObservableObject
         IJobService jobService,
         InspectionViewModel inspectionViewModel,
         ToolEditorViewModel toolEditorViewModel,
-        CameraService cameraService)
+        CameraService cameraService,
+        VisionInspectionApp.Application.Services.IRemoteServerService? remoteServerService = null)
     {
         _oqcService = oqcService;
         _dbManager = dbManager;
@@ -149,11 +153,14 @@ public partial class OqcScannerViewModel : ObservableObject
         _inspectionViewModel = inspectionViewModel;
         _toolEditorViewModel = toolEditorViewModel;
         _cameraService = cameraService;
+        _remoteServerService = remoteServerService ?? new VisionInspectionApp.Application.Services.RemoteServerService();
 
         ScanCommand = new AsyncRelayCommand(ExecuteScanAsync);
         ScanFromCameraCommand = new AsyncRelayCommand(ExecuteScanFromCameraAsync);
         OpenSettingsCommand = new RelayCommand(OpenSettingsDialog);
         OpenProductAssignCommand = new RelayCommand(OpenProductAssignDialog);
+        OpenJobManagerCommand = new RelayCommand(OpenJobManagerWindow);
+        QuickCaptureAndUploadTeachImageCommand = new AsyncRelayCommand(ExecuteQuickCaptureAndUploadTeachImageAsync);
         ManualOpenJobCommand = new RelayCommand(ExecuteManualOpenJob);
         ClearHistoryCommand = new RelayCommand(ExecuteClearHistory);
         ExportToExcelCommand = new RelayCommand(ExecuteExportToExcel);
@@ -1115,5 +1122,104 @@ public partial class OqcScannerViewModel : ObservableObject
         _productAssignDialogInstance = new Views.OQC.ProductAssignDialog(this);
         _productAssignDialogInstance.Closed += (s, e) => _productAssignDialogInstance = null;
         _productAssignDialogInstance.Show();
+    }
+
+    private static Views.OQC.JobManagerWindow? _jobManagerWindowInstance;
+
+    public void OpenJobManagerWindow()
+    {
+        if (_jobManagerWindowInstance != null && _jobManagerWindowInstance.IsLoaded)
+        {
+            _jobManagerWindowInstance.Activate();
+            if (_jobManagerWindowInstance.WindowState == WindowState.Minimized)
+                _jobManagerWindowInstance.WindowState = WindowState.Normal;
+            return;
+        }
+
+        var mainVm = System.Windows.Application.Current?.MainWindow?.DataContext as MainWindowViewModel;
+        var jobVm = new JobManagerViewModel(
+            _oqcService,
+            _dbManager,
+            _remoteServerService,
+            _cameraService,
+            _toolEditorViewModel.SharedImageContext,
+            _toolEditorViewModel,
+            mainVm ?? (System.Windows.Application.Current as App)?.ServiceProvider?.GetService(typeof(MainWindowViewModel)) as MainWindowViewModel ?? new MainWindowViewModel(_toolEditorViewModel, null!, null!, _inspectionViewModel, this, null!),
+            _jobService
+        );
+
+        _jobManagerWindowInstance = new Views.OQC.JobManagerWindow(jobVm)
+        {
+            Owner = System.Windows.Application.Current?.MainWindow
+        };
+        _jobManagerWindowInstance.Closed += (s, e) => _jobManagerWindowInstance = null;
+        _jobManagerWindowInstance.Show();
+    }
+
+    public async Task ExecuteQuickCaptureAndUploadTeachImageAsync()
+    {
+        string productCode = !string.IsNullOrWhiteSpace(ScannedCode) ? ScannedCode.Trim() : (!string.IsNullOrWhiteSpace(CurrentProductName) && CurrentProductName != "-" ? CurrentProductName.Trim() : "");
+        if (string.IsNullOrWhiteSpace(productCode))
+        {
+            MessageBox.Show("Vui lòng quét hoặc nhập mã sản phẩm trước khi chụp ảnh mẫu!", "Thông Báo", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        byte[]? imageBytes = null;
+        if (_cameraService.IsRunning)
+        {
+            using var frame = _cameraService.TryGetLatestFrameClone();
+            if (frame != null && !frame.Empty())
+            {
+                imageBytes = frame.ToBytes(".png");
+            }
+        }
+
+        if (imageBytes == null || imageBytes.Length == 0)
+        {
+            using var snap = _toolEditorViewModel.SharedImageContext.GetSnapshot();
+            if (snap != null && !snap.Empty())
+            {
+                imageBytes = snap.ToBytes(".png");
+            }
+        }
+
+        if (imageBytes == null || imageBytes.Length == 0)
+        {
+            MessageBox.Show("Không thể lấy khung hình ảnh từ Camera. Hãy bật Camera trước!", "Lỗi", MessageBoxButton.OK, MessageBoxImage.Error);
+            return;
+        }
+
+        StatusMessage = $"📸 Đang tải ảnh mẫu cho mã '{productCode}' lên Server...";
+        StatusBrush = Brushes.DodgerBlue;
+
+        string fileName = $"teach_{productCode}_{DateTime.Now:yyyyMMdd_HHmmss}.png";
+        var (uploadOk, fullUrl, relPath, uploadErr) = await _remoteServerService.UploadImageAsync(
+            imageBytes, fileName, productCode, _oqcService.Config.ServerApiUrl);
+
+        if (!uploadOk)
+        {
+            StatusMessage = $"❌ Lỗi Upload: {uploadErr}";
+            StatusBrush = Brushes.Red;
+            MessageBox.Show($"Lỗi tải ảnh mẫu lên Server:\n{uploadErr}", "Lỗi Upload", MessageBoxButton.OK, MessageBoxImage.Error);
+            return;
+        }
+
+        string teachPathToSave = !string.IsNullOrWhiteSpace(relPath) ? relPath : fullUrl;
+        string currentJob = CurrentJobFilePath != "-" ? CurrentJobFilePath : "";
+        var (assignOk, assignMsg) = await _oqcService.AssignProductJobAsync(productCode, currentJob, _dbManager, teachPathToSave);
+
+        if (assignOk)
+        {
+            StatusMessage = $"✅ Đã tải ảnh mẫu '{fileName}' lên Server và cập nhật CSDL cho '{productCode}'!";
+            StatusBrush = Brushes.Green;
+            MessageBox.Show($"✅ Đã tải ảnh mẫu lên Server thành công!\nURL: {fullUrl}\nĐã lưu vào CSDL cho mã '{productCode}'.", "Thành Công", MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+        else
+        {
+            StatusMessage = $"⚠️ Ảnh đã upload nhưng lỗi ghi CSDL: {assignMsg}";
+            StatusBrush = Brushes.Orange;
+            MessageBox.Show($"Ảnh đã tải lên Server nhưng lỗi cập nhật CSDL:\n{assignMsg}", "Cảnh Báo", MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
     }
 }
