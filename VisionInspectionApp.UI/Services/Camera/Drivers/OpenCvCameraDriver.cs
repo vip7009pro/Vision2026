@@ -30,28 +30,13 @@ public sealed class OpenCvCameraDriver : CameraDriverBase
         }
         catch { }
 
-        // Fallback USB ports 0-4
-        for (int i = 0; i < 5; i++)
-        {
-            if (!list.Exists(c => c.Index == i))
-            {
-                list.Add(new CameraDeviceInfo
-                {
-                    Vendor = CameraVendor.WebcamDirectShow,
-                    InterfaceType = CameraInterfaceType.DirectShow,
-                    Index = i,
-                    ModelName = $"Camera Port {i} (Fallback)"
-                });
-            }
-        }
-
         // Custom RTSP / IP Camera entry
         list.Add(new CameraDeviceInfo
         {
             Vendor = CameraVendor.Rtsp,
             InterfaceType = CameraInterfaceType.RTSP,
             Index = -1,
-            ModelName = "Custom RTSP / IP Camera",
+            ModelName = "🌐 Custom RTSP / IP Camera",
             RtspUrl = "rtsp://192.168.1.100:554/stream1"
         });
 

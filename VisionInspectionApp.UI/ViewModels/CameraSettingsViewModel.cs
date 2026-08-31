@@ -774,25 +774,47 @@ public sealed class CameraSettingsViewModel : ObservableObject, IDisposable
 
     public void RefreshAvailableCameras()
     {
-        AvailableDevices.Clear();
-
-        var scanned = CameraDriverFactory.ScanAllDevices();
-        foreach (var dev in scanned)
+        if (AvailableDevices.Count == 0)
         {
-            AvailableDevices.Add(dev);
+            AvailableDevices.Add(new CameraDeviceInfo
+            {
+                Vendor = CameraVendor.Simulator,
+                InterfaceType = CameraInterfaceType.Virtual,
+                Index = CameraService.SimulatorCameraIndex,
+                ModelName = "🎮 Camera Giả Lập Công Nghiệp (Simulator)"
+            });
+            SelectedDevice = AvailableDevices[0];
         }
 
-        if (AvailableDevices.Count > 0)
+        Task.Run(() =>
         {
-            if (_cameraService.SavedIsRtsp)
+            var scanned = CameraDriverFactory.ScanAllDevices();
+            System.Windows.Application.Current?.Dispatcher?.BeginInvoke(() =>
             {
-                SelectedDevice = AvailableDevices.FirstOrDefault(c => c.InterfaceType == CameraInterfaceType.RTSP) ?? AvailableDevices[0];
-            }
-            else
-            {
-                SelectedDevice = AvailableDevices.FirstOrDefault(c => c.Index == _cameraService.SavedCameraIndex) ?? AvailableDevices[0];
-            }
-        }
+                AvailableDevices.Clear();
+                foreach (var dev in scanned)
+                {
+                    AvailableDevices.Add(dev);
+                }
+
+                if (AvailableDevices.Count > 0)
+                {
+                    if (_cameraService.ActiveDeviceInfo != null)
+                    {
+                        SelectedDevice = AvailableDevices.FirstOrDefault(c => c.Vendor == _cameraService.ActiveDeviceInfo.Vendor && c.Index == _cameraService.ActiveDeviceInfo.Index)
+                                      ?? AvailableDevices[0];
+                    }
+                    else if (_cameraService.SavedIsRtsp)
+                    {
+                        SelectedDevice = AvailableDevices.FirstOrDefault(c => c.InterfaceType == CameraInterfaceType.RTSP) ?? AvailableDevices[0];
+                    }
+                    else
+                    {
+                        SelectedDevice = AvailableDevices.FirstOrDefault(c => c.Index == _cameraService.SavedCameraIndex) ?? AvailableDevices[0];
+                    }
+                }
+            });
+        });
     }
 
     private async Task StartCameraAsync()
@@ -1027,6 +1049,7 @@ public sealed class CameraSettingsViewModel : ObservableObject, IDisposable
     public void OnViewActivated()
     {
         IsViewActive = true;
+        RefreshAvailableCameras();
         IsCameraRunning = _cameraService.IsRunning;
         if (_cameraService.ActiveDeviceInfo != null)
         {

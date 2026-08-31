@@ -230,10 +230,13 @@ namespace VisionInspectionApp.UI.ViewModels
                 using var freshSnap = GetCurrentWorkingImageSnapshot();
                 return toolNode != null ? ResolveToolImageForPreview(freshSnap, toolNode) : freshSnap.Clone();
             });
-            var win = new Views.OriginTrainWindow(vm)
+            var win = new Views.OriginTrainWindow(vm);
+            var mainWin = System.Windows.Application.Current?.Windows.OfType<MainWindow>().FirstOrDefault()
+                          ?? System.Windows.Application.Current?.MainWindow;
+            if (mainWin != null && mainWin != win && mainWin.IsLoaded)
             {
-                Owner = System.Windows.Application.Current.MainWindow
-            };
+                win.Owner = mainWin;
+            }
 
             if (win.ShowDialog() == true || true)
             {

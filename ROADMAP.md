@@ -1557,5 +1557,28 @@ Lộ trình tích hợp tính năng Chụp ảnh từ camera và hỗ trợ các
         2. **Xử Lý Lỗi & Timeout (`JobCameraSettingsViewModel.cs` & `ToolEditorViewModel.ToolPreprocess.cs`)**:
            - Sửa `ApplyLightingToDeviceAsync`: Bổ sung kiểm tra kết quả `pwrRes.IsSuccess`, `brRes.IsSuccess`, `tmRes.IsSuccess` cho từng lệnh. Khi gặp timeout hoặc lỗi gửi lệnh từ thiết bị, dừng vòng lặp ngay và cập nhật `StatusMessage = $"❌ Lỗi gửi lệnh kênh CH{ch+1}: {errMsg}"`, loại bỏ hoàn toàn việc ghi đè thông báo thành công khi có lỗi.
            - Cập nhật `ReadLightingFromDeviceAsync` và `ImageSource_ApplyLightingToDevice` đồng bộ hiển thị lỗi timeout.
+- [x] Task 287: Lọc Sạch Camera Giả Lập/Cổng Ảo & Tích Hợp Splash Screen Khởi Động Siêu Mượt.
+      - Yêu Cầu & Bối Cảnh:
+        1. Trong tab Camera Settings hiển thị danh sách 5 camera fallback USB Port 0-4 khi không cắm thiết bị thật, làm rối mắt. Cần loại bỏ các cổng USB ảo này, chỉ hiển thị Camera giả lập Simulator, luồng RTSP và các camera vật lý thực tế được cắm vào máy.
+        2. Ứng dụng khởi động mất vài giây mà không có phản hồi hình ảnh khiến người dùng cảm giác bị đơ/lag. Cần tối ưu luồng khởi động và tạo màn hình Splash Screen công nghệ hiện đại thông báo tiến trình nạp hệ thống.
+      - Giải Pháp Đã Triển Khai:
+        1. **Lọc Danh Sách Thiết Bị Camera (`OpenCvCameraDriver.cs` & `CameraSettingsViewModel.cs`)**:
+           - Xóa bỏ vòng lặp 5 cổng USB giả lập `Camera Port 0-4 (Fallback)`. Chỉ hiển thị thiết bị thực tế quét được qua DirectShow, camera công nghiệp (Hikrobot GigE/USB3) và luồng RTSP / Simulator.
+           - Đưa việc quét thiết bị vào `Task.Run` chạy nền để không block UI thread lúc khởi động.
+        2. **Giao Diện Màn Hình Khởi Động (`SplashScreenWindow.xaml` & `SplashScreenWindow.xaml.cs`)**:
+           - Xây dựng giao diện Splash Screen Glassmorphism hiện đại tông màu công nghiệp Dark Slate `#0D131F`, viền phát sáng Cyan Neon `#00E5FF`, thanh tiến trình gradient và nhãn trạng thái từng bước khởi tạo.
+        3. **Quy Trình Khởi Động Ứng Dụng (`App.xaml.cs`)**:
+           - Hiển thị ngay SplashScreenWindow ở frame 0ms, cập nhật tiến trình từng giai đoạn nạp DI $\rightarrow$ Theme $\rightarrow$ MainWindow $\rightarrow$ Camera $\rightarrow$ PLC $\rightarrow$ Fade Out mượt mà khi MainWindow sẵn sàng.
+- [x] Task 288: Khắc Phục Triệt Để Lỗi Ngoại Lệ 'Cannot set Owner property to itself' Khi Mở Job Manager / Dialog.
+      - Yêu Cầu & Bối Cảnh:
+        - Khi mở cửa sổ Job Manager từ OQC Scanner hoặc Tool Editor, ứng dụng phát sinh ngoại lệ `System.ArgumentException: Cannot set Owner property to itself` do thuộc tính `Owner` của cửa sổ con vô tình bị trỏ vào chính nó hoặc `Application.Current.MainWindow` bị gán nhầm sang `SplashScreenWindow` khi khởi động.
+      - Giải Pháp Đã Triển Khai:
+        1. **Gán Tường Minh MainWindow (`App.xaml.cs`)**:
+           - Thiết lập `MainWindow = mainWindow;` ngay khi cửa sổ chính được tạo để cố định đối tượng cửa sổ gốc của toàn ứng dụng trước khi Splash Screen đóng.
+        2. **Bảo Vệ An Toàn Cho Cửa Sổ Job Manager (`OqcScannerViewModel.cs` & `ToolEditorViewModel.cs`)**:
+           - Truy vấn `mainWin` qua `Application.Current?.Windows.OfType<MainWindow>().FirstOrDefault() ?? Application.Current?.MainWindow`.
+           - Kiểm tra `if (mainWin != null && mainWin != _jobManagerWindowInstance && mainWin.IsLoaded)` trước khi gán `_jobManagerWindowInstance.Owner = mainWin`.
+        3. **Rà Soát Toàn Bộ Dialogs (`JobManagerViewModel.cs`, `ToolEditorViewModel.ToolOrigin.cs`, `ToolEditorView.xaml.cs`)**:
+           - Áp dụng kiểm tra an toàn chống tự gán `Owner` cho tất cả các hộp thoại `ProductAssignDialog`, `OqcSettingsDialog`, `OriginTrainWindow`, `GlobalPreprocessWindow`.
       - Kiểm Thử:
         - Chạy toàn bộ test suite dự án $\rightarrow$ 100% PASSED (106 tests). Solution `dotnet build` đạt 0 lỗi (0 errors).

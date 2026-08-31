@@ -49,6 +49,36 @@
 - Preview được phép tiếp tục khi Global Snapshot rỗng để lấy ảnh từ ImageSource.
 - Lưu template cho Origin, Point và SurfaceCompare hoạt động với nguồn ảnh ImageSource.
 
+- **Khắc Phục Triệt Để Lỗi Ngoại Lệ 'Cannot set Owner property to itself' Khi Mở Job Manager / Dialog (Task 288)**:
+  - **Yêu Cầu & Bối Cảnh**:
+    - Khi mở cửa sổ Job Manager từ OQC Scanner hoặc Tool Editor, ứng dụng phát sinh ngoại lệ `System.ArgumentException: Cannot set Owner property to itself` do thuộc tính `Owner` của cửa sổ con vô tình bị trỏ vào chính nó hoặc `Application.Current.MainWindow` bị gán nhầm sang `SplashScreenWindow` khi khởi động.
+  - **Giải Pháp Kỹ Thuật Đã Triển Khai**:
+    1. `App.xaml.cs`:
+       - Gán tường minh `MainWindow = mainWindow;` ngay khi cửa sổ chính `MainWindow` được khởi tạo và hiển thị trước khi `SplashScreenWindow` đóng lại.
+    2. `OqcScannerViewModel.cs` & `ToolEditorViewModel.cs`:
+       - Tìm `mainWin` qua `Application.Current?.Windows.OfType<MainWindow>().FirstOrDefault() ?? Application.Current?.MainWindow`.
+       - Thêm điều kiện kiểm tra an toàn `if (mainWin != null && mainWin != _jobManagerWindowInstance && mainWin.IsLoaded)` trước khi gán `_jobManagerWindowInstance.Owner = mainWin`.
+    3. `JobManagerViewModel.cs`, `ToolEditorViewModel.ToolOrigin.cs`, `ToolEditorView.xaml.cs`:
+       - Thêm kiểm tra an toàn tương tự cho `ProductAssignDialog`, `OqcSettingsDialog`, `OriginTrainWindow`, `GlobalPreprocessWindow` ngăn ngừa mọi trường hợp tự gán `Owner` cho chính mình.
+  - **Kiểm Thử**:
+    - Solution `dotnet build` đạt 0 Errors. Toàn bộ 106 automated tests PASSED 100%.
+
+- **Lọc Sạch Camera Giả Lập/Cổng Ảo & Tích Hợp Splash Screen Khởi Động Siêu Mượt (Task 287)**:
+  - **Yêu Cầu & Bối Cảnh**:
+    1. Trong tab Camera Settings hiển thị danh sách 5 camera fallback USB Port 0-4 khi không cắm thiết bị thật, làm rối mắt. Cần loại bỏ các cổng USB ảo này, chỉ hiển thị Camera giả lập Simulator, luồng RTSP và các camera vật lý thực tế được cắm vào máy.
+    2. Ứng dụng khởi động mất vài giây mà không có phản hồi hình ảnh khiến người dùng cảm giác bị đơ/lag. Cần tối ưu luồng khởi động và tạo màn hình Splash Screen công nghệ hiện đại thông báo tiến trình nạp hệ thống.
+  - **Giải Pháp Kỹ Thuật Đã Triển Khai**:
+    1. `OpenCvCameraDriver.cs`:
+       - Loại bỏ hoàn toàn vòng lặp tạo 5 cổng ảo `Camera Port 0-4 (Fallback)`. Chỉ quét và hiển thị các thiết bị DirectShow thực tế được kết nối qua `DirectShowDeviceEnumerator.GetDevices()` và `Custom RTSP / IP Camera`.
+    2. `CameraSettingsViewModel.cs`:
+       - Tối ưu `RefreshAvailableCameras()`: Đưa việc quét thiết bị DirectShow / GenICam vào `Task.Run` chạy nền, tránh chặn (block) UI thread trong hàm khởi tạo.
+    3. `SplashScreenWindow.xaml` & `SplashScreenWindow.xaml.cs`:
+       - Thiết kế màn hình khởi động Splash Screen hiện đại tông màu công nghiệp Dark Slate `#0F172A` nền đặc 100% (không trong suốt mờ gây khó nhìn), viền phát sáng Cyan/Blue `#0284C7`, dải màu gradient phía trên, container tiến trình nền `#1E293B` sắc nét với chữ trắng sáng `#FFFFFF` và thanh tiến trình Electric Cyan `#00E5FF` giúp đọc rõ ràng trên mọi hình nền desktop.
+    4. `App.xaml.cs`:
+       - Trong `OnStartup`, hiển thị ngay lập tức `SplashScreenWindow` ở frame đầu tiên (0ms), cập nhật tiến trình từng bước nạp DI, Theme, MainWindow, Camera, PLC, sau đó thực hiện hiệu ứng Fade Out mượt mà khi mở MainWindow.
+  - **Kiểm Thử**:
+    - Solution `dotnet build` đạt 0 Errors. Toàn bộ 106 automated tests PASSED 100%.
+
 - **Dọn Dẹp Cấu Hình Đèn Khỏi Properties Panel & Sửa Lỗi Báo Thành Công Khi Timeout Áp Dụng Đèn (Task 286)**:
   - **Yêu Cầu & Bối Cảnh**:
     1. Đã có thông tin cấu hình đèn trong cửa sổ cấu hình Camera & Đèn cho Job (`JobCameraSettingsWindow`), cần bỏ phần cấu hình đèn ở trong Properties Panel (`ToolEditorView.xaml`) để giao diện gọn gàng, tránh dư thừa.

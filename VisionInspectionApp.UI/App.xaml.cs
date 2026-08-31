@@ -23,7 +23,7 @@ public partial class App : System.Windows.Application
     private IHost? _host;
     public IServiceProvider ServiceProvider => _host!.Services;
 
-    protected override void OnStartup(StartupEventArgs e)
+    protected override async void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
 
@@ -32,6 +32,16 @@ public partial class App : System.Windows.Application
         CultureInfo.DefaultThreadCurrentUICulture = culture;
         Thread.CurrentThread.CurrentCulture = culture;
         Thread.CurrentThread.CurrentUICulture = culture;
+
+        // 1. Hiển thị ngay lập tức SplashScreenWindow chuyên nghiệp
+        var splash = new Views.SplashScreenWindow();
+        splash.Show();
+        splash.SetProgress(15, "Đang khởi tạo các dịch vụ & bộ nhớ...");
+
+        // Nhường quyền cho Dispatcher vẽ splash screen ngay tức khắc
+        await System.Windows.Threading.Dispatcher.Yield();
+
+        splash.SetProgress(35, "Đang nạp cấu hình hệ thống & dependency injection...");
 
         _host = Host.CreateDefaultBuilder()
             .ConfigureServices(services =>
@@ -97,19 +107,31 @@ public partial class App : System.Windows.Application
             })
             .Build();
 
-        _host.Start();
+        await _host.StartAsync();
+
+        splash.SetProgress(65, "Đang nạp theme & giao diện chính...");
 
         var themeService = _host.Services.GetRequiredService<ThemeService>();
         themeService.ApplyTheme();
 
         var mainWindow = _host.Services.GetRequiredService<MainWindow>();
-        mainWindow.Show();
+
+        splash.SetProgress(85, "Đang kết nối camera & cảm biến...");
 
         var cameraService = _host.Services.GetRequiredService<CameraService>();
         _ = cameraService.StartSavedCameraAsync();
 
         var plcManager = _host.Services.GetRequiredService<Application.PLC.Services.IPlcManagerService>();
         _ = plcManager.AutoConnectStartupAsync();
+
+        splash.SetProgress(100, "Hoàn tất! Đang mở ứng dụng...");
+
+        // Gán tường minh MainWindow cho Application để tránh lỗi Owner tham chiếu nhầm Splash Screen
+        MainWindow = mainWindow;
+        mainWindow.Show();
+
+        // Đóng Splash Screen với animation mờ dần mượt mà
+        _ = splash.FadeOutAndCloseAsync();
 
         // Auto-connect Lighting Controller & Apply Startup Lighting (non-blocking)
         _ = Task.Run(async () =>

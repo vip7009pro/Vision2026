@@ -1622,10 +1622,13 @@ namespace VisionInspectionApp.UI.ViewModels
                     _jobService
                 );
 
-                _jobManagerWindowInstance = new Views.OQC.JobManagerWindow(jobVm)
+                var mainWin = System.Windows.Application.Current?.Windows.OfType<MainWindow>().FirstOrDefault()
+                              ?? System.Windows.Application.Current?.MainWindow;
+                _jobManagerWindowInstance = new Views.OQC.JobManagerWindow(jobVm);
+                if (mainWin != null && mainWin != _jobManagerWindowInstance && mainWin.IsLoaded)
                 {
-                    Owner = System.Windows.Application.Current?.MainWindow
-                };
+                    _jobManagerWindowInstance.Owner = mainWin;
+                }
                 _jobManagerWindowInstance.Closed += (s, e) => _jobManagerWindowInstance = null;
                 _jobManagerWindowInstance.Show();
             }

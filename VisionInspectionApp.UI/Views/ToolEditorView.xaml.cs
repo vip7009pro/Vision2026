@@ -1003,11 +1003,15 @@ public partial class ToolEditorView : UserControl
 
     private void BtnGlobalPreprocess_Click(object sender, RoutedEventArgs e)
     {
+        var parentWin = Window.GetWindow(this);
         var window = new GlobalPreprocessWindow
         {
-            Owner = Window.GetWindow(this),
             DataContext = this.DataContext
         };
+        if (parentWin != null && parentWin != window && parentWin.IsLoaded)
+        {
+            window.Owner = parentWin;
+        }
         window.Show();
     }
 

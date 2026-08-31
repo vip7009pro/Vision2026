@@ -1141,7 +1141,9 @@ public partial class OqcScannerViewModel : ObservableObject
             return;
         }
 
-        var mainVm = System.Windows.Application.Current?.MainWindow?.DataContext as MainWindowViewModel;
+        var mainWin = System.Windows.Application.Current?.Windows.OfType<MainWindow>().FirstOrDefault()
+                      ?? System.Windows.Application.Current?.MainWindow;
+        var mainVm = mainWin?.DataContext as MainWindowViewModel;
         var jobVm = new JobManagerViewModel(
             _oqcService,
             _dbManager,
@@ -1153,10 +1155,11 @@ public partial class OqcScannerViewModel : ObservableObject
             _jobService
         );
 
-        _jobManagerWindowInstance = new Views.OQC.JobManagerWindow(jobVm)
+        _jobManagerWindowInstance = new Views.OQC.JobManagerWindow(jobVm);
+        if (mainWin != null && mainWin != _jobManagerWindowInstance && mainWin.IsLoaded)
         {
-            Owner = System.Windows.Application.Current?.MainWindow
-        };
+            _jobManagerWindowInstance.Owner = mainWin;
+        }
         _jobManagerWindowInstance.Closed += (s, e) => _jobManagerWindowInstance = null;
         _jobManagerWindowInstance.Show();
     }

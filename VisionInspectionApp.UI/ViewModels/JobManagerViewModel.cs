@@ -842,11 +842,14 @@ public partial class JobManagerViewModel : ObservableObject
                 oqcVm.AssignJobFilePath = jobToAssign;
             }
 
-            var dialog = new ProductAssignDialog(oqcVm)
+            var owner = System.Windows.Application.Current?.Windows.OfType<JobManagerWindow>().FirstOrDefault() 
+                        ?? System.Windows.Application.Current?.Windows.OfType<MainWindow>().FirstOrDefault()
+                        ?? System.Windows.Application.Current?.MainWindow;
+            var dialog = new ProductAssignDialog(oqcVm);
+            if (owner != null && owner != dialog && owner.IsLoaded)
             {
-                Owner = System.Windows.Application.Current?.Windows.OfType<JobManagerWindow>().FirstOrDefault() 
-                        ?? System.Windows.Application.Current?.MainWindow
-            };
+                dialog.Owner = owner;
+            }
             dialog.Closed += async (s, e) =>
             {
                 // Sau khi đóng hộp thoại gán mã, tự động làm mới danh sách để hiển thị mã mới
@@ -908,10 +911,13 @@ public partial class JobManagerViewModel : ObservableObject
         var oqcVm = _mainWindowViewModel.OqcScanner ?? (System.Windows.Application.Current as App)?.ServiceProvider?.GetService(typeof(OqcScannerViewModel)) as OqcScannerViewModel;
         if (oqcVm != null)
         {
-            var win = new OqcSettingsDialog(oqcVm)
+            var mainWin = System.Windows.Application.Current?.Windows.OfType<MainWindow>().FirstOrDefault()
+                          ?? System.Windows.Application.Current?.MainWindow;
+            var win = new OqcSettingsDialog(oqcVm);
+            if (mainWin != null && mainWin != win && mainWin.IsLoaded)
             {
-                Owner = System.Windows.Application.Current?.MainWindow
-            };
+                win.Owner = mainWin;
+            }
             win.Show();
         }
     }
