@@ -214,6 +214,12 @@ public sealed class ImageSourceDefinition
     public bool EnableUndistort { get; set; } = false;
     
     /// <summary>
+    /// Tên hiển thị của thiết bị Camera công nghiệp gốc tại phòng OQC (ví dụ: Hikrobot MV-CS200-10GM - DA123456).
+    /// Giúp bảo lưu tên camera gốc khi mở Job và huấn luyện (teaching) từ xa trên máy văn phòng.
+    /// </summary>
+    public string CameraDeviceDisplayName { get; set; } = string.Empty;
+
+    /// <summary>
     /// Cấu hình thông số Camera riêng biệt cho Job hiện tại (Exposure, Gain, White Balance, Gamma, Trigger, GigE).
     /// </summary>
     public CameraParameters CameraParams { get; set; } = new();

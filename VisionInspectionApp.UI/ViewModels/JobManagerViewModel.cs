@@ -624,6 +624,14 @@ public partial class JobManagerViewModel : ObservableObject
             jobFilePath = ofd.FileName;
         }
 
+        // Tự động chuẩn bị Job cho sản xuất: Nếu đang ở chế độ ảnh mẫu URL (Remote Teach), tự động chuyển về Camera OQC gốc
+        bool autoSwitchedToCamera = false;
+        if (!string.IsNullOrWhiteSpace(_toolEditorViewModel.CurrentJobFilePath) &&
+            string.Equals(_toolEditorViewModel.CurrentJobFilePath, jobFilePath, StringComparison.OrdinalIgnoreCase))
+        {
+            autoSwitchedToCamera = _toolEditorViewModel.PrepareJobForProductionUpload();
+        }
+
         IsBusy = true;
         BusyMessage = "Đang tải tệp Job lên Server XAMPP...";
         StatusMessage = $"📤 Đang tải tệp Job '{Path.GetFileName(jobFilePath)}' lên Server...";
@@ -652,9 +660,13 @@ public partial class JobManagerViewModel : ObservableObject
                 SelectedItem.HasJobFile = true;
                 SelectedItem.StatusMessage = "Đã đồng bộ Job lên Server";
 
+                string cameraNotice = autoSwitchedToCamera
+                    ? "\n\n⚡ Nguồn ảnh đã được tự động cấu hình về Camera OQC gốc (bảo lưu toàn bộ thông số Camera & Đèn) để kích hoạt camera thực tế khi chạy kiểm tra dưới chuyền."
+                    : "";
+
                 StatusMessage = $"✅ Tải tệp Job lên Server thành công và cập nhật CSDL cho '{SelectedItem.ProductCode}'!";
                 StatusBrush = Brushes.Green;
-                MessageBox.Show($"✅ Tải tệp Job lên Server thành công!\nURL: {fullUrl}\nĐã cập nhật liên kết trong CSDL cho mã '{SelectedItem.ProductCode}'.", "Thành Công", MessageBoxButton.OK, MessageBoxImage.Information);
+                MessageBox.Show($"✅ Tải tệp Job lên Server thành công!\nURL: {fullUrl}\nĐã cập nhật liên kết trong CSDL cho mã '{SelectedItem.ProductCode}'.{cameraNotice}", "Thành Công", MessageBoxButton.OK, MessageBoxImage.Information);
             }
             else
             {

@@ -328,7 +328,7 @@ namespace VisionInspectionApp.UI.ViewModels
             }
         }
 
-        private void SaveJob()
+        public void SaveJob()
         {
             CommitFocusedBinding();
             if (string.IsNullOrWhiteSpace(CurrentJobFilePath))
@@ -364,6 +364,29 @@ namespace VisionInspectionApp.UI.ViewModels
             RefreshPreviews();
         }
 
+        /// <summary>
+        /// Chuẩn bị Job cho triển khai thực tế tại chuyền OQC: Nếu Job đang dùng nguồn ảnh Url/File để teach từ xa,
+        /// tự động chuyển về Camera (bảo lưu 100% thông số Camera OQC và đèn gốc) và lưu lại Job trước khi upload lên Server.
+        /// </summary>
+        public bool PrepareJobForProductionUpload()
+        {
+            bool switched = false;
+            if (_config?.ImageSources != null)
+            {
+                foreach (var imgSource in _config.ImageSources)
+                {
+                    if (imgSource.SourceType == ImageSourceType.Url || imgSource.SourceType == ImageSourceType.File)
+                    {
+                        imgSource.SourceType = ImageSourceType.Camera;
+                        switched = true;
+                    }
+                }
+            }
+
+            SaveJob();
+            return switched;
+        }
+
         private void SaveJobAs()
         {
             var dialog = new SaveFileDialog
@@ -375,7 +398,10 @@ namespace VisionInspectionApp.UI.ViewModels
             if (dialog.ShowDialog() == true)
             {
                 CurrentJobFilePath = dialog.FileName;
-                System.Windows.Application.Current.MainWindow.Title = "CMS VINA VISION SYSTEM - " + Path.GetFileName(CurrentJobFilePath);
+                if (System.Windows.Application.Current?.MainWindow != null)
+                {
+                    System.Windows.Application.Current.MainWindow.Title = "CMS VINA VISION SYSTEM - " + Path.GetFileName(CurrentJobFilePath);
+                }
                 if (string.IsNullOrWhiteSpace(CurrentTempWorkingDir))
                 {
                     CurrentTempWorkingDir = Path.Combine(Path.GetTempPath(), "Vision2026", "Jobs", Guid.NewGuid().ToString());
@@ -385,7 +411,7 @@ namespace VisionInspectionApp.UI.ViewModels
             }
         }
     
-        private void SyncToolGraphToConfig()
+        public void SyncToolGraphToConfig()
         {
             CommitFocusedBinding();
             if (_config?.ToolGraph is null)

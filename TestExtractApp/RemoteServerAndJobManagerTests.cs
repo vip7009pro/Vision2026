@@ -25,6 +25,7 @@ public static class RemoteServerAndJobManagerTests
         Test_UpdateTeachImage_SerializationAndSubstitution();
         Test_RemoteServerService_WithHttpMockServerAsync().GetAwaiter().GetResult();
         Test_LookupJobAsync_WithRemoteDownloadAsync().GetAwaiter().GetResult();
+        Test_OqcPreservedCamera_And_SwitchToProductionCamera();
 
         Console.WriteLine("✅ ALL REMOTE SERVER & JOB MANAGER TESTS PASSED!");
         Console.WriteLine("=================================================\n");
@@ -349,5 +350,74 @@ public static class RemoteServerAndJobManagerTests
             await serverTask;
             listener.Stop();
         }
+    }
+
+    private static void Test_OqcPreservedCamera_And_SwitchToProductionCamera()
+    {
+        Console.WriteLine("▶ Running Test_OqcPreservedCamera_And_SwitchToProductionCamera...");
+        var cfg = new VisionConfig
+        {
+            ProductCode = "PRD_OQC_CAM_01",
+            ImageSources = new System.Collections.Generic.List<ImageSourceDefinition>
+            {
+                new ImageSourceDefinition
+                {
+                    Name = "MainCam",
+                    SourceType = ImageSourceType.Url,
+                    ImageUrl = "http://127.0.0.1/uploads/teach_images/teach_PRD_OQC_CAM_01.png",
+                    CameraIndex = 0,
+                    CameraDeviceDisplayName = "Hikrobot MV-CS200-10GM (DA987654)",
+                    CameraParams = new CameraParameters
+                    {
+                        ExposureTimeUs = 4500.0f,
+                        GainDb = 8.5f,
+                        TriggerMode = CameraTriggerMode.On,
+                        TriggerSource = CameraTriggerSource.Software
+                    },
+                    LightingParams = new JobLightingParameters
+                    {
+                        Enabled = true,
+                        ChannelCount = 4,
+                        Channels = new System.Collections.Generic.List<JobLightingChannelParams>
+                        {
+                            new() { ChannelIndex = 0, IsEnabled = true, Brightness = 150 },
+                            new() { ChannelIndex = 1, IsEnabled = true, Brightness = 90 }
+                        }
+                    }
+                }
+            }
+        };
+
+        // 1. Kiểm tra Serialization/Deserialization giữ nguyên CameraDeviceDisplayName
+        string json = JsonSerializer.Serialize(cfg);
+        var readBack = JsonSerializer.Deserialize<VisionConfig>(json);
+        if (readBack?.ImageSources?[0].CameraDeviceDisplayName != "Hikrobot MV-CS200-10GM (DA987654)")
+            throw new Exception("CameraDeviceDisplayName was not preserved during JSON serialization!");
+
+        // 2. Giả lập logic PrepareJobForProductionUpload: Chuyển Url -> Camera
+        bool switched = false;
+        foreach (var imgSource in readBack.ImageSources)
+        {
+            if (imgSource.SourceType == ImageSourceType.Url || imgSource.SourceType == ImageSourceType.File)
+            {
+                imgSource.SourceType = ImageSourceType.Camera;
+                switched = true;
+            }
+        }
+
+        if (!switched)
+            throw new Exception("Failed to switch SourceType from Url to Camera!");
+
+        var mainCam = readBack.ImageSources[0];
+        if (mainCam.SourceType != ImageSourceType.Camera)
+            throw new Exception("SourceType must be Camera after preparation!");
+
+        if (mainCam.CameraDeviceDisplayName != "Hikrobot MV-CS200-10GM (DA987654)")
+            throw new Exception("CameraDeviceDisplayName must remain intact!");
+
+        if (Math.Abs(mainCam.CameraParams.ExposureTimeUs - 4500.0f) > 0.01f || mainCam.LightingParams.Channels[0].Brightness != 150)
+            throw new Exception("CameraParams and LightingParams must be 100% preserved!");
+
+        Console.WriteLine("  ✓ OQC Preserved Camera & Production preparation verified.");
     }
 }

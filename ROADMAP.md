@@ -1474,8 +1474,22 @@ Lộ trình tích hợp tính năng Chụp ảnh từ camera và hỗ trợ các
         3. **Chống Treo Tầng Giao Diện (`OqcScannerViewModel`)**:
            - Cập nhật `RunTaskWith1SecLoadingTimeoutAsync` sử dụng `Dispatcher.InvokeAsync` phi chặn (non-blocking).
            - Đưa toàn bộ tra cứu Tên sản phẩm và Job vào khối `try ... catch` an toàn, luôn đảm bảo ẩn Popup loading và giải phóng trạng thái `IsScanning = false` trong `finally`.
+- [x] Task 280: Tự Động Bảo Lưu Cấu Hình Camera & Đèn OQC Gốc Khi Huấn Luyện Từ Xa (Remote Teach) Trên Máy Văn Phòng & Tự Động Chuyển Về Camera Khi Upload Lên Server.
+      - Vấn Đề & Bối Cảnh:
+        - Quy trình thiết lập Job gồm 2 giai đoạn: (1) Chụp ảnh & lưu thông số camera/đèn OQC vào Job ban đầu tại phòng OQC; (2) Kỹ sư mở Job trên máy văn phòng để teach chi tiết bằng ảnh mẫu qua URL.
+        - Khi kỹ sư teach xong trên máy văn phòng và muốn lưu lại Job để đẩy lên Server, máy văn phòng không cắm camera Vision OQC. Nếu chọn camera giả lập thì thông số Camera Hikrobot gốc bị mất; nếu để nguyên URL thì máy OQC dưới chuyền không kích hoạt camera thật.
+      - Giải Pháp Đã Triển Khai:
+        1. **Model (`ImageSourceDefinition`)**:
+           - Bổ sung thuộc tính `CameraDeviceDisplayName` ghi nhớ tên thiết bị Camera công nghiệp gốc (ví dụ: `Hikrobot MV-CS200-10GM - DA123456`).
+        2. **Giao Diện & Quản Lý Camera (`ToolEditorViewModel.ToolPreprocess.cs`)**:
+           - `RefreshAvailableCameraItems`: Khi quét thiết bị trên máy tính, nếu máy tính hiện tại không có camera OQC gốc nhưng Job đã có cấu hình Camera OQC, tự động chèn mục ảo `📷 [OQC Gốc] {CameraDeviceDisplayName}` lên đầu danh sách `AvailableCameraItems`.
+           - `SelectedCameraItem`: Giúp kỹ sư ở máy văn phòng vẫn thấy và chọn lại Camera OQC gốc mà không bị ép chuyển sang Camera giả lập. Tự động cập nhật `CameraDeviceDisplayName` khi kỹ sư chọn camera thật ở phòng OQC.
+        3. **Tự Động Chuyển Nguồn Ảnh Khi Upload Server (`ToolEditorViewModel.Config.cs` & `JobManagerViewModel.cs`)**:
+           - Bổ sung hàm `PrepareJobForProductionUpload()`: Tự động chuyển các nguồn ảnh `Url` hoặc `File` về `Camera` (bảo lưu 100% `CameraParams`, `CameraIndex`, `CameraDeviceDisplayName`, `LightingParams` gốc) và lưu lại file `.job`.
+           - `JobManagerViewModel.ExecuteUploadCurrentJobAsync`: Tự động gọi `PrepareJobForProductionUpload()` trước khi đẩy file `.job` lên Server XAMPP.
       - Kiểm Thử:
-        - Chạy toàn bộ test suite dự án $\rightarrow$ 100% PASSED (106 tests). Solution `dotnet build` đạt 0 lỗi (0 errors).
+        - Bổ sung bài test `Test_OqcPreservedCamera_And_SwitchToProductionCamera` trong `RemoteServerAndJobManagerTests.cs`.
+        - Chạy toàn bộ test suite dự án $\rightarrow$ 100% PASSED. Solution `dotnet build` đạt 0 lỗi (0 errors).
 
 
 

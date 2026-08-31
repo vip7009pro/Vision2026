@@ -249,20 +249,45 @@ namespace VisionInspectionApp.UI.ViewModels
         {
             get
             {
-                var idx = ImageSource_CameraIndex;
-                return AvailableCameraItems.FirstOrDefault(c => c.Index == idx);
+                var def = SelectedImageSourceDef();
+                if (def == null) return null;
+                var idx = def.CameraIndex;
+                var found = AvailableCameraItems.FirstOrDefault(c => c.Index == idx);
+                if (found != null) return found;
+
+                if (!string.IsNullOrWhiteSpace(def.CameraDeviceDisplayName))
+                {
+                    var foundByName = AvailableCameraItems.FirstOrDefault(c => c.DisplayName.Contains(def.CameraDeviceDisplayName, StringComparison.OrdinalIgnoreCase));
+                    if (foundByName != null) return foundByName;
+                }
+                return AvailableCameraItems.FirstOrDefault();
             }
             set
             {
                 if (value is null) return;
+                var def = SelectedImageSourceDef();
+                if (def != null)
+                {
+                    def.CameraIndex = value.Index;
+                    if (!string.IsNullOrWhiteSpace(value.DisplayName))
+                    {
+                        string cleanName = value.DisplayName.Replace("📷 [OQC Gốc] ", "").Trim();
+                        def.CameraDeviceDisplayName = cleanName;
+                    }
+                }
                 ImageSource_CameraIndex = value.Index;
                 OnPropertyChanged();
+                OnPropertyChanged(nameof(ImageSource_IsIndustrialCamera));
+                OnPropertyChanged(nameof(ImageSource_IsTimerDriven));
+                OnPropertyChanged(nameof(ImageSource_ContinuousModeDescription));
+                RequestAutoSave();
             }
         }
 
         private bool _isScanningCameras;
         /// <summary>
         /// Populates AvailableCameraItems asynchronously using CameraDriverFactory.ScanAllDevices (Hikrobot GigE/USB3, Basler, USB Webcam DirectShow, Simulator).
+        /// Tự động bảo lưu và hiển thị Camera OQC gốc nếu Job trước đó đã lưu thông số Camera OQC.
         /// </summary>
         public void RefreshAvailableCameraItems(bool forceRescan = false)
         {
@@ -303,6 +328,32 @@ namespace VisionInspectionApp.UI.ViewModels
                 finally
                 {
                     _isScanningCameras = false;
+                }
+
+                // Bảo lưu thông số Camera OQC gốc: Nếu Job có thông tin Camera OQC mà máy tính hiện tại không cắm, chèn mục Camera OQC gốc
+                var def = SelectedImageSourceDef();
+                string savedCamName = def?.CameraDeviceDisplayName ?? "";
+                int savedCamIndex = def?.CameraIndex ?? 0;
+
+                bool hasSavedCamInHardware = !string.IsNullOrWhiteSpace(savedCamName) && 
+                    items.Any(i => string.Equals(i.DisplayName, savedCamName, StringComparison.OrdinalIgnoreCase) ||
+                                   i.DisplayName.Contains(savedCamName, StringComparison.OrdinalIgnoreCase));
+
+                if (!string.IsNullOrWhiteSpace(savedCamName) && !hasSavedCamInHardware)
+                {
+                    items.Insert(0, new ImageSourceCameraItem
+                    {
+                        Index = savedCamIndex,
+                        DisplayName = $"📷 [OQC Gốc] {savedCamName}"
+                    });
+                }
+                else if (def != null && def.CameraParams != null && items.Count == 0)
+                {
+                    items.Insert(0, new ImageSourceCameraItem
+                    {
+                        Index = savedCamIndex,
+                        DisplayName = "📷 [OQC Gốc] Hikrobot Camera (Chuyền OQC)"
+                    });
                 }
 
                 System.Windows.Application.Current?.Dispatcher.InvokeAsync(() =>

@@ -49,6 +49,26 @@
 - Preview được phép tiếp tục khi Global Snapshot rỗng để lấy ảnh từ ImageSource.
 - Lưu template cho Origin, Point và SurfaceCompare hoạt động với nguồn ảnh ImageSource.
 
+- **Tự Động Bảo Lưu Cấu Hình Camera & Đèn OQC Gốc Khi Huấn Luyện Từ Xa (Remote Teach) Trên Máy Văn Phòng & Tự Động Chuyển Về Camera Khi Upload Lên Server (Task 280)**:
+  - **Vấn Đề & Bối Cảnh**:
+    - Quy trình thiết lập Job gồm 2 giai đoạn:
+      + **Giai đoạn 1 (Phòng OQC chuyền sản xuất)**: Chụp ảnh sản phẩm thực tế từ camera công nghiệp Hikrobot GigE/USB3, lưu thông số phơi sáng (`ExposureTimeUs`, `GainDb`, `TriggerMode`) và thông số đèn (`LightingParams`) vào Job ban đầu trên Server.
+      + **Giai đoạn 2 (Máy văn phòng kỹ sư)**: Mở Job từ xa để huấn luyện chi tiết bằng ảnh mẫu qua URL.
+    - **Vấn đề**: Khi hoàn thiện Job trên máy văn phòng, máy văn phòng không cắm camera Vision OQC. Nếu kỹ sư chọn lại Camera thì chỉ có Camera giả lập (Simulator/Webcam) làm mất cấu hình Hikrobot OQC gốc; nếu để nguyên `Url` thì khi máy OQC tải về lại không kích hoạt Camera thật.
+  - **Giải Pháp Kỹ Thuật Đã Triển Khai**:
+    1. **Data Model (`ImageSourceDefinition` trong `Class1.cs`)**:
+       - Bổ sung trường `CameraDeviceDisplayName`: Lưu tên thiết bị Camera phần cứng gốc (ví dụ: `Hikrobot MV-CS200-10GM - DA123456`).
+    2. **Quản Lý Camera Trên Giao Diện Tool Editor (`ToolEditorViewModel.ToolPreprocess.cs`)**:
+       - Trong `RefreshAvailableCameraItems`: Khi quét thiết bị, nếu máy tính hiện tại không có camera OQC gốc nhưng Job đã có cấu hình Camera OQC, tự động chèn mục đại diện `📷 [OQC Gốc] {CameraDeviceDisplayName}` lên đầu danh sách `AvailableCameraItems`.
+       - Trong `SelectedCameraItem`: Giúp kỹ sư ở máy văn phòng vẫn thấy và chọn lại Camera OQC gốc mà không bị ép chuyển sang Camera giả lập. Tự động lưu `dev.DisplayName` vào `def.CameraDeviceDisplayName` khi kỹ sư chọn camera thật ở phòng OQC.
+    3. **Tự Động Chuẩn Bị Job Cho Sản Xuất Khi Upload Server (`ToolEditorViewModel.Config.cs` & `JobManagerViewModel.cs`)**:
+       - Bổ sung hàm `PrepareJobForProductionUpload()` trong `ToolEditorViewModel`: Tự động chuyển các nguồn ảnh `Url` hoặc `File` về `Camera` (bảo lưu 100% `CameraParams`, `CameraIndex`, `CameraDeviceDisplayName`, `LightingParams` gốc) và lưu lại file `.job`.
+       - `JobManagerViewModel.ExecuteUploadCurrentJobAsync`: Tự động gọi `PrepareJobForProductionUpload()` trước khi đẩy file `.job` lên Server XAMPP.
+  - **Kiểm Thử**:
+    - Bổ sung bài test `Test_OqcPreservedCamera_And_SwitchToProductionCamera` trong `RemoteServerAndJobManagerTests.cs`.
+    - Toàn bộ test suite trong `TestExtractApp` đạt 100% PASSED (106 tests).
+    - Solution `dotnet build` đạt 0 lỗi (0 errors).
+
 - **Khắc Phục Triệt Để Lỗi Treo Giao Diện Khi Scan Mã OQC, Chống Treo Driver CSDL & Ràng Buộc Timeout Nghiêm Ngặt (Task 279)**:
   - **Vấn Đề & Hiện Tượng**:
     - Khi người dùng quét mã sản phẩm (ví dụ: `GH63-22334ADTA3E116HE01XC01005000` $\rightarrow$ mã trích xuất `16HE01XC`), thanh trạng thái hiển thị `🔍 Đang tra cứu cơ sở dữ liệu cho mã '16HE01XC' (Mã gốc: 'GH63-22334ADTA3E116HE01XC01005000')...`, màn hình bị phủ lớp mờ Loading và toàn bộ ứng dụng bị đơ (treo giao diện không thể click hay thao tác được) mà không báo lỗi hay ngoại lệ gì.
