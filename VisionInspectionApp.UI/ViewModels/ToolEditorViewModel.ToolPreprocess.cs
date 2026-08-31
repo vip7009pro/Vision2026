@@ -779,17 +779,32 @@ namespace VisionInspectionApp.UI.ViewModels
             if (def is null) return;
 
             def.CameraParams ??= new CameraParameters();
+            EnsureImageSourceLightingParams(def);
 
             var jobName = !string.IsNullOrWhiteSpace(_config?.ProductName)
                 ? $"{_config.ProductName} ({_config.ProductCode})"
                 : (!string.IsNullOrWhiteSpace(_config?.ProductCode) ? _config.ProductCode : "Job Hiện Tại");
 
-            var vm = new JobCameraSettingsViewModel(_cameraService, def.CameraParams, jobName, (updatedParams) =>
-            {
-                def.CameraParams = updatedParams.Clone();
-                _ = _cameraService.ApplyParametersAsync(def.CameraParams);
-                RequestAutoSave();
-            });
+            var vm = new JobCameraSettingsViewModel(
+                _cameraService,
+                def.CameraParams,
+                def.LightingParams,
+                _lightingControllerService,
+                jobName,
+                onSaveCallbackWithLighting: (updatedCamera, updatedLighting) =>
+                {
+                    def.CameraParams = updatedCamera.Clone();
+                    def.LightingParams = updatedLighting.Clone();
+                    _ = _cameraService.ApplyParametersAsync(def.CameraParams);
+                    SyncLightingChannelViewModels(def);
+                    RequestAutoSave();
+                },
+                onSaveCallback: (updatedParams) =>
+                {
+                    def.CameraParams = updatedParams.Clone();
+                    _ = _cameraService.ApplyParametersAsync(def.CameraParams);
+                    RequestAutoSave();
+                });
 
             var win = new Views.JobCameraSettingsWindow(vm);
             win.Show();
@@ -946,16 +961,46 @@ namespace VisionInspectionApp.UI.ViewModels
                 for (int i = 0; i < count && i < def.LightingParams.Channels.Count; i++)
                 {
                     var ch = def.LightingParams.Channels[i];
-                    await _lightingControllerService.SetChannelPowerAsync(ch.ChannelIndex, ch.IsEnabled);
+                    var pwrRes = await _lightingControllerService.SetChannelPowerAsync(ch.ChannelIndex, ch.IsEnabled).ConfigureAwait(false);
+                    if (!pwrRes.IsSuccess)
+                    {
+                        var err = !string.IsNullOrWhiteSpace(pwrRes.ErrorMessage) ? pwrRes.ErrorMessage : (pwrRes.ErrorCode ?? "Lỗi gửi lệnh");
+                        MessageBox.Show($"❌ Lỗi gửi lệnh bật/tắt kênh CH{ch.ChannelIndex + 1}: {err}", "Lỗi Áp Dụng Đèn", MessageBoxButton.OK, MessageBoxImage.Error);
+                        return;
+                    }
+
                     if (ch.IsEnabled)
                     {
-                        await _lightingControllerService.SetBrightnessAsync(ch.ChannelIndex, ch.Brightness);
+                        var brRes = await _lightingControllerService.SetBrightnessAsync(ch.ChannelIndex, ch.Brightness).ConfigureAwait(false);
+                        if (!brRes.IsSuccess)
+                        {
+                            var err = !string.IsNullOrWhiteSpace(brRes.ErrorMessage) ? brRes.ErrorMessage : (brRes.ErrorCode ?? "Lỗi gửi độ sáng");
+                            MessageBox.Show($"❌ Lỗi gửi độ sáng kênh CH{ch.ChannelIndex + 1}: {err}", "Lỗi Áp Dụng Đèn", MessageBoxButton.OK, MessageBoxImage.Error);
+                            return;
+                        }
+
+                        var tmRes = await _lightingControllerService.SetLightingTimeAsync(ch.ChannelIndex, ch.LightingTimeMs).ConfigureAwait(false);
+                        if (!tmRes.IsSuccess)
+                        {
+                            var err = !string.IsNullOrWhiteSpace(tmRes.ErrorMessage) ? tmRes.ErrorMessage : (tmRes.ErrorCode ?? "Lỗi gửi thời gian sáng");
+                            MessageBox.Show($"❌ Lỗi gửi thời gian sáng kênh CH{ch.ChannelIndex + 1}: {err}", "Lỗi Áp Dụng Đèn", MessageBoxButton.OK, MessageBoxImage.Error);
+                            return;
+                        }
                     }
                 }
+                MessageBox.Show($"✅ Đã áp dụng thành công mức sáng của {count} kênh đèn xuống thiết bị!", "Áp Dụng Thành Công", MessageBoxButton.OK, MessageBoxImage.Information);
             }
             catch (Exception ex)
             {
                 MessageBox.Show($"Lỗi khi áp dụng đèn: {ex.Message}", "Lỗi", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
+        private async Task _lightingServiceSetLightingTime(int ch, int timeMs)
+        {
+            if (_lightingControllerService != null)
+            {
+                await _lightingControllerService.SetLightingTimeAsync(ch, timeMs).ConfigureAwait(false);
             }
         }
 

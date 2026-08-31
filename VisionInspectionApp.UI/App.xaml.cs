@@ -258,6 +258,19 @@ public partial class App : System.Windows.Application
 
             if (services.GetService<LightingControllerService>() is { } lightingService)
             {
+                try
+                {
+                    var settingsService = services.GetService<GlobalAppSettingsService>();
+                    if (settingsService?.Settings?.Lighting?.AutoTurnOffOnExit == true && lightingService.IsConnected)
+                    {
+                        await lightingService.TurnOffAllChannelsAsync().ConfigureAwait(false);
+                        await Task.Delay(100).ConfigureAwait(false);
+                    }
+                }
+                catch
+                {
+                    // ignore shutdown error
+                }
                 lightingService.Dispose();
             }
 

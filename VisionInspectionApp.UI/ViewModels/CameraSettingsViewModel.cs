@@ -192,7 +192,7 @@ public sealed class CameraSettingsViewModel : ObservableObject, IDisposable
         get => _cameraParams.ExposureTimeUs;
         set
         {
-            if (Math.Abs(_cameraParams.ExposureTimeUs - value) > 1.0f)
+            if (Math.Abs(_cameraParams.ExposureTimeUs - value) > 0.001f)
             {
                 _cameraParams.ExposureTimeUs = value;
                 OnPropertyChanged();
@@ -220,7 +220,7 @@ public sealed class CameraSettingsViewModel : ObservableObject, IDisposable
         get => _cameraParams.GainDb;
         set
         {
-            if (Math.Abs(_cameraParams.GainDb - value) > 0.1f)
+            if (Math.Abs(_cameraParams.GainDb - value) > 0.001f)
             {
                 _cameraParams.GainDb = value;
                 OnPropertyChanged();
@@ -248,7 +248,7 @@ public sealed class CameraSettingsViewModel : ObservableObject, IDisposable
         get => _cameraParams.Gamma;
         set
         {
-            if (Math.Abs(_cameraParams.Gamma - value) > 0.05f)
+            if (Math.Abs(_cameraParams.Gamma - value) > 0.001f)
             {
                 _cameraParams.Gamma = value;
                 OnPropertyChanged();
@@ -461,7 +461,7 @@ public sealed class CameraSettingsViewModel : ObservableObject, IDisposable
         get => _cameraParams.RedGain;
         set
         {
-            if (Math.Abs(_cameraParams.RedGain - value) > 0.05f)
+            if (Math.Abs(_cameraParams.RedGain - value) > 0.001f)
             {
                 _cameraParams.RedGain = value;
                 OnPropertyChanged();
@@ -475,7 +475,7 @@ public sealed class CameraSettingsViewModel : ObservableObject, IDisposable
         get => _cameraParams.GreenGain;
         set
         {
-            if (Math.Abs(_cameraParams.GreenGain - value) > 0.05f)
+            if (Math.Abs(_cameraParams.GreenGain - value) > 0.001f)
             {
                 _cameraParams.GreenGain = value;
                 OnPropertyChanged();
@@ -489,7 +489,7 @@ public sealed class CameraSettingsViewModel : ObservableObject, IDisposable
         get => _cameraParams.BlueGain;
         set
         {
-            if (Math.Abs(_cameraParams.BlueGain - value) > 0.05f)
+            if (Math.Abs(_cameraParams.BlueGain - value) > 0.001f)
             {
                 _cameraParams.BlueGain = value;
                 OnPropertyChanged();

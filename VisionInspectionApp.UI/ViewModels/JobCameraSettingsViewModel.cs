@@ -8,6 +8,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using OpenCvSharp;
 using OpenCvSharp.WpfExtensions;
+using VisionInspectionApp.Application.LightingController;
 using VisionInspectionApp.Models;
 using VisionInspectionApp.UI.Controls;
 using VisionInspectionApp.UI.Services;
@@ -18,9 +19,11 @@ namespace VisionInspectionApp.UI.ViewModels;
 public sealed class JobCameraSettingsViewModel : ObservableObject, IDisposable
 {
     private readonly CameraService _cameraService;
+    private readonly LightingControllerService? _lightingService;
+    private readonly Action<CameraParameters, JobLightingParameters>? _onSaveCallbackWithLighting;
     private readonly Action<CameraParameters>? _onSaveCallback;
     private ImageSource? _liveImage;
-    private string _statusMessage = "Cấu hình thông số Camera riêng biệt cho Job hiện tại.";
+    private string _statusMessage = "Cấu hình thông số Camera & Đèn chiếu sáng riêng biệt cho Job hiện tại.";
     private int _fps;
     private int _frameCount;
     private DateTime _lastFrameTime = DateTime.Now;
@@ -28,9 +31,44 @@ public sealed class JobCameraSettingsViewModel : ObservableObject, IDisposable
     private CameraDeviceInfo? _selectedDevice;
     private bool _isCameraRunning;
     private CameraParameters _cameraParams;
+    private JobLightingParameters _lightingParams;
+    private readonly JobLightingParameters _originalLightingParams;
 
     public string JobName { get; }
     public Action? RequestClose { get; set; }
+
+    public JobLightingParameters LightingParams => _lightingParams;
+
+    public bool EnableLighting
+    {
+        get => _lightingParams?.Enabled ?? true;
+        set
+        {
+            if (_lightingParams == null || _lightingParams.Enabled == value) return;
+            _lightingParams.Enabled = value;
+            OnPropertyChanged();
+        }
+    }
+
+    public ObservableCollection<int> AvailableLightingChannelCounts { get; } = new() { 4, 8 };
+
+    public int LightingChannelCount
+    {
+        get => (_lightingParams?.ChannelCount == 8) ? 8 : 4;
+        set
+        {
+            int count = value == 8 ? 8 : 4;
+            if (_lightingParams == null || _lightingParams.ChannelCount == count) return;
+            _lightingParams.ChannelCount = count;
+            OnPropertyChanged();
+            SyncLightingChannels();
+        }
+    }
+
+    public ObservableCollection<JobCameraLightingChannelViewModel> LightingChannels { get; } = new();
+
+    public IRelayCommand ApplyLightingToDeviceCommand { get; }
+    public IRelayCommand ReadLightingFromDeviceCommand { get; }
 
     public ObservableCollection<CameraDeviceInfo> AvailableDevices { get; } = new();
 
@@ -139,7 +177,7 @@ public sealed class JobCameraSettingsViewModel : ObservableObject, IDisposable
         get => _cameraParams.ExposureTimeUs;
         set
         {
-            if (Math.Abs(_cameraParams.ExposureTimeUs - value) > 1.0f)
+            if (Math.Abs(_cameraParams.ExposureTimeUs - value) > 0.001f)
             {
                 _cameraParams.ExposureTimeUs = value;
                 OnPropertyChanged();
@@ -167,7 +205,7 @@ public sealed class JobCameraSettingsViewModel : ObservableObject, IDisposable
         get => _cameraParams.GainDb;
         set
         {
-            if (Math.Abs(_cameraParams.GainDb - value) > 0.1f)
+            if (Math.Abs(_cameraParams.GainDb - value) > 0.001f)
             {
                 _cameraParams.GainDb = value;
                 OnPropertyChanged();
@@ -195,7 +233,7 @@ public sealed class JobCameraSettingsViewModel : ObservableObject, IDisposable
         get => _cameraParams.Gamma;
         set
         {
-            if (Math.Abs(_cameraParams.Gamma - value) > 0.05f)
+            if (Math.Abs(_cameraParams.Gamma - value) > 0.001f)
             {
                 _cameraParams.Gamma = value;
                 OnPropertyChanged();
@@ -223,7 +261,7 @@ public sealed class JobCameraSettingsViewModel : ObservableObject, IDisposable
         get => _cameraParams.RedGain;
         set
         {
-            if (Math.Abs(_cameraParams.RedGain - value) > 0.05f)
+            if (Math.Abs(_cameraParams.RedGain - value) > 0.001f)
             {
                 _cameraParams.RedGain = value;
                 OnPropertyChanged();
@@ -237,7 +275,7 @@ public sealed class JobCameraSettingsViewModel : ObservableObject, IDisposable
         get => _cameraParams.GreenGain;
         set
         {
-            if (Math.Abs(_cameraParams.GreenGain - value) > 0.05f)
+            if (Math.Abs(_cameraParams.GreenGain - value) > 0.001f)
             {
                 _cameraParams.GreenGain = value;
                 OnPropertyChanged();
@@ -251,7 +289,7 @@ public sealed class JobCameraSettingsViewModel : ObservableObject, IDisposable
         get => _cameraParams.BlueGain;
         set
         {
-            if (Math.Abs(_cameraParams.BlueGain - value) > 0.05f)
+            if (Math.Abs(_cameraParams.BlueGain - value) > 0.001f)
             {
                 _cameraParams.BlueGain = value;
                 OnPropertyChanged();
@@ -528,12 +566,25 @@ public sealed class JobCameraSettingsViewModel : ObservableObject, IDisposable
     private readonly CameraParameters _originalParams;
     private bool _hasSaved;
 
-    public JobCameraSettingsViewModel(CameraService cameraService, CameraParameters initialParams, string jobName, Action<CameraParameters>? onSaveCallback = null)
+    public JobCameraSettingsViewModel(
+        CameraService cameraService,
+        CameraParameters initialParams,
+        JobLightingParameters? initialLightingParams = null,
+        LightingControllerService? lightingService = null,
+        string jobName = "",
+        Action<CameraParameters, JobLightingParameters>? onSaveCallbackWithLighting = null,
+        Action<CameraParameters>? onSaveCallback = null)
     {
         _cameraService = cameraService;
+        _lightingService = lightingService;
         _originalParams = initialParams != null ? initialParams.Clone() : new CameraParameters();
         _cameraParams = initialParams != null ? initialParams.Clone() : new CameraParameters();
+        
+        _originalLightingParams = initialLightingParams != null ? initialLightingParams.Clone() : new JobLightingParameters();
+        _lightingParams = initialLightingParams != null ? initialLightingParams.Clone() : new JobLightingParameters();
+
         JobName = string.IsNullOrWhiteSpace(jobName) ? "Job Hiện Tại" : jobName;
+        _onSaveCallbackWithLighting = onSaveCallbackWithLighting;
         _onSaveCallback = onSaveCallback;
 
         _debounceTimer = new System.Windows.Threading.DispatcherTimer
@@ -559,12 +610,22 @@ public sealed class JobCameraSettingsViewModel : ObservableObject, IDisposable
         CancelCommand = new RelayCommand(ExecuteCancel);
         RoiEditedCommand = new RelayCommand<RoiSelection>(OnRoiEdited);
 
+        ApplyLightingToDeviceCommand = new AsyncRelayCommand(ApplyLightingToDeviceAsync);
+        ReadLightingFromDeviceCommand = new AsyncRelayCommand(ReadLightingFromDeviceAsync);
+
+        SyncLightingChannels();
+
         RefreshAvailableCameras();
         IsCameraRunning = _cameraService.IsRunning;
         RefreshOverlayItems();
 
         // Tự động áp dụng thông số của Job xuống Camera khi mở cửa sổ
         _ = ApplyCameraParametersAsync();
+    }
+
+    public JobCameraSettingsViewModel(CameraService cameraService, CameraParameters initialParams, string jobName, Action<CameraParameters>? onSaveCallback = null)
+        : this(cameraService, initialParams, null, null, jobName, null, onSaveCallback)
+    {
     }
 
     private void ScheduleApplyParameters()
@@ -909,6 +970,7 @@ public sealed class JobCameraSettingsViewModel : ObservableObject, IDisposable
             _debounceTimer.Stop();
             _ = ApplyCameraParametersAsync();
             _onSaveCallback?.Invoke(_cameraParams.Clone());
+            _onSaveCallbackWithLighting?.Invoke(_cameraParams.Clone(), _lightingParams.Clone());
             RequestClose?.Invoke();
         }
         catch (Exception ex)
@@ -1055,6 +1117,146 @@ public sealed class JobCameraSettingsViewModel : ObservableObject, IDisposable
         _ = ApplyCameraParametersAsync();
     }
 
+    private void SyncLightingChannels()
+    {
+        _lightingParams ??= new JobLightingParameters();
+        _lightingParams.Channels ??= new System.Collections.Generic.List<JobLightingChannelParams>();
+
+        int targetCount = _lightingParams.ChannelCount == 8 ? 8 : 4;
+        while (_lightingParams.Channels.Count < targetCount)
+        {
+            int i = _lightingParams.Channels.Count;
+            _lightingParams.Channels.Add(new JobLightingChannelParams
+            {
+                ChannelIndex = i,
+                IsEnabled = i == 0,
+                Brightness = 100,
+                LightingTimeMs = 100
+            });
+        }
+
+        while (LightingChannels.Count < targetCount && LightingChannels.Count < _lightingParams.Channels.Count)
+        {
+            int idx = LightingChannels.Count;
+            LightingChannels.Add(new JobCameraLightingChannelViewModel(_lightingParams.Channels[idx]));
+        }
+        while (LightingChannels.Count > targetCount)
+        {
+            LightingChannels.RemoveAt(LightingChannels.Count - 1);
+        }
+
+        for (int i = 0; i < LightingChannels.Count && i < _lightingParams.Channels.Count; i++)
+        {
+            LightingChannels[i].SyncFromParams(_lightingParams.Channels[i]);
+        }
+    }
+
+    private async Task ApplyLightingToDeviceAsync()
+    {
+        if (_lightingService == null || !_lightingService.IsConnected)
+        {
+            StatusMessage = "❌ Bộ điều khiển đèn chưa kết nối! Vui lòng vào menu Chiếu Sáng -> Lighting Controller để kết nối trước.";
+            System.Windows.MessageBox.Show(
+                "Bộ điều khiển đèn (Lighting Controller) chưa kết nối!\nVui lòng vào menu Chiếu Sáng -> Lighting Controller để kết nối trước.",
+                "Chưa kết nối đèn",
+                System.Windows.MessageBoxButton.OK,
+                System.Windows.MessageBoxImage.Warning);
+            return;
+        }
+
+        try
+        {
+            StatusMessage = "⚡ Đang gửi thông số độ sáng xuống bộ điều khiển đèn...";
+            int count = _lightingParams.ChannelCount == 8 ? 8 : 4;
+            for (int i = 0; i < count && i < _lightingParams.Channels.Count; i++)
+            {
+                var ch = _lightingParams.Channels[i];
+                var pwrRes = await _lightingService.SetChannelPowerAsync(ch.ChannelIndex, ch.IsEnabled).ConfigureAwait(false);
+                if (!pwrRes.IsSuccess)
+                {
+                    var errMsg = !string.IsNullOrWhiteSpace(pwrRes.ErrorMessage) ? pwrRes.ErrorMessage : (pwrRes.ErrorCode ?? "Timeout/Lỗi giao tiếp");
+                    StatusMessage = $"❌ Lỗi gửi trạng thái kênh CH{ch.ChannelIndex + 1}: {errMsg}";
+                    return;
+                }
+
+                if (ch.IsEnabled)
+                {
+                    var brRes = await _lightingService.SetBrightnessAsync(ch.ChannelIndex, ch.Brightness).ConfigureAwait(false);
+                    if (!brRes.IsSuccess)
+                    {
+                        var errMsg = !string.IsNullOrWhiteSpace(brRes.ErrorMessage) ? brRes.ErrorMessage : (brRes.ErrorCode ?? "Timeout/Lỗi gửi độ sáng");
+                        StatusMessage = $"❌ Lỗi gửi độ sáng kênh CH{ch.ChannelIndex + 1}: {errMsg}";
+                        return;
+                    }
+
+                    var tmRes = await _lightingService.SetLightingTimeAsync(ch.ChannelIndex, ch.LightingTimeMs).ConfigureAwait(false);
+                    if (!tmRes.IsSuccess)
+                    {
+                        var errMsg = !string.IsNullOrWhiteSpace(tmRes.ErrorMessage) ? tmRes.ErrorMessage : (tmRes.ErrorCode ?? "Timeout/Lỗi gửi thời gian sáng");
+                        StatusMessage = $"❌ Lỗi gửi thời gian sáng kênh CH{ch.ChannelIndex + 1}: {errMsg}";
+                        return;
+                    }
+                }
+            }
+            StatusMessage = $"✅ Đã áp dụng thông số {count} kênh đèn xuống thiết bị thành công!";
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = $"❌ Lỗi khi gửi cấu hình đèn: {ex.Message}";
+        }
+    }
+
+    private async Task ReadLightingFromDeviceAsync()
+    {
+        if (_lightingService == null || !_lightingService.IsConnected)
+        {
+            StatusMessage = "❌ Bộ điều khiển đèn chưa kết nối! Vui lòng vào menu Chiếu Sáng -> Lighting Controller để kết nối trước.";
+            System.Windows.MessageBox.Show(
+                "Bộ điều khiển đèn (Lighting Controller) chưa kết nối!\nVui lòng vào menu Chiếu Sáng -> Lighting Controller để kết nối trước.",
+                "Chưa kết nối đèn",
+                System.Windows.MessageBoxButton.OK,
+                System.Windows.MessageBoxImage.Warning);
+            return;
+        }
+
+        try
+        {
+            StatusMessage = "📥 Đang đọc thông số các kênh đèn từ thiết bị...";
+            int count = _lightingParams.ChannelCount == 8 ? 8 : 4;
+            var result = await _lightingService.ReadAllParametersAsync(count).ConfigureAwait(false);
+            if (result.IsSuccess && result.Data?.Channels != null)
+            {
+                _lightingParams.Channels.Clear();
+                for (int i = 0; i < count && i < result.Data.Channels.Length; i++)
+                {
+                    var ch = result.Data.Channels[i];
+                    _lightingParams.Channels.Add(new JobLightingChannelParams
+                    {
+                        ChannelIndex = i,
+                        IsEnabled = ch.IsEnabled,
+                        Brightness = ch.Brightness,
+                        LightingTimeMs = ch.LightingTimeMs
+                    });
+                }
+
+                System.Windows.Application.Current?.Dispatcher?.Invoke(() =>
+                {
+                    SyncLightingChannels();
+                    StatusMessage = $"✅ Đã đọc thành công thông số {count} kênh đèn từ thiết bị vào Job!";
+                });
+            }
+            else
+            {
+                var errMsg = !string.IsNullOrWhiteSpace(result.ErrorMessage) ? result.ErrorMessage : (result.ErrorCode ?? "Lỗi phản hồi");
+                StatusMessage = $"❌ Không thể đọc thông số đèn: {errMsg}";
+            }
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = $"❌ Lỗi đọc thông số đèn: {ex.Message}";
+        }
+    }
+
     public void Dispose()
     {
         _debounceTimer.Stop();
@@ -1065,5 +1267,67 @@ public sealed class JobCameraSettingsViewModel : ObservableObject, IDisposable
         {
             _ = _cameraService.ApplyParametersAsync(_originalParams);
         }
+    }
+}
+
+/// <summary>
+/// ViewModel cho từng kênh đèn của Job trong cửa sổ JobCameraSettingsWindow.
+/// </summary>
+public sealed class JobCameraLightingChannelViewModel : ObservableObject
+{
+    private readonly JobLightingChannelParams _model;
+
+    public int ChannelIndex => _model.ChannelIndex;
+    public int ChannelNumber => ChannelIndex + 1;
+    public string ChannelLabel => $"CH{ChannelNumber}";
+
+    public bool IsEnabled
+    {
+        get => _model.IsEnabled;
+        set
+        {
+            if (_model.IsEnabled == value) return;
+            _model.IsEnabled = value;
+            OnPropertyChanged();
+        }
+    }
+
+    public int Brightness
+    {
+        get => _model.Brightness;
+        set
+        {
+            int clamped = Math.Clamp(value, 0, 255);
+            if (_model.Brightness == clamped) return;
+            _model.Brightness = clamped;
+            OnPropertyChanged();
+        }
+    }
+
+    public int LightingTimeMs
+    {
+        get => _model.LightingTimeMs;
+        set
+        {
+            int clamped = Math.Clamp(value, 1, 999);
+            if (_model.LightingTimeMs == clamped) return;
+            _model.LightingTimeMs = clamped;
+            OnPropertyChanged();
+        }
+    }
+
+    public JobCameraLightingChannelViewModel(JobLightingChannelParams model)
+    {
+        _model = model;
+    }
+
+    internal void SyncFromParams(JobLightingChannelParams param)
+    {
+        _model.IsEnabled = param.IsEnabled;
+        _model.Brightness = param.Brightness;
+        _model.LightingTimeMs = param.LightingTimeMs;
+        OnPropertyChanged(nameof(IsEnabled));
+        OnPropertyChanged(nameof(Brightness));
+        OnPropertyChanged(nameof(LightingTimeMs));
     }
 }

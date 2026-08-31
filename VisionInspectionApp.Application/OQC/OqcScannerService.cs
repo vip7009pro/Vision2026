@@ -674,6 +674,31 @@ public sealed class OqcScannerService : IOqcScannerService
         }
     }
 
+    private string ResolveEffectiveDbId(string configuredDbId, IDbManagerService dbManager)
+    {
+        if (dbManager == null) return configuredDbId ?? string.Empty;
+
+        if (!string.IsNullOrWhiteSpace(configuredDbId) && dbManager.GetDatabase(configuredDbId) != null)
+        {
+            return configuredDbId;
+        }
+
+        // Tự động fallback sang các cấu hình DB khác nếu cấu hình hiện tại bị đổi GUID khi chuyển máy
+        if (!string.IsNullOrWhiteSpace(Config.ProductListDbId) && dbManager.GetDatabase(Config.ProductListDbId) != null)
+            return Config.ProductListDbId;
+        if (!string.IsNullOrWhiteSpace(Config.LookupDbId) && dbManager.GetDatabase(Config.LookupDbId) != null)
+            return Config.LookupDbId;
+        if (!string.IsNullOrWhiteSpace(Config.JobManagerDbId) && dbManager.GetDatabase(Config.JobManagerDbId) != null)
+            return Config.JobManagerDbId;
+        if (!string.IsNullOrWhiteSpace(Config.AssignDbId) && dbManager.GetDatabase(Config.AssignDbId) != null)
+            return Config.AssignDbId;
+        if (!string.IsNullOrWhiteSpace(Config.ProductNameDbId) && dbManager.GetDatabase(Config.ProductNameDbId) != null)
+            return Config.ProductNameDbId;
+
+        var firstActive = dbManager.Databases.FirstOrDefault(d => d.IsEnabled);
+        return firstActive?.Id ?? configuredDbId ?? string.Empty;
+    }
+
     public async Task<(bool Found, string JobFilePath, string ErrorMessage)> LookupJobAsync(
         string scannedCode, IDbManagerService dbManager, VisionInspectionApp.Application.Services.IRemoteServerService? remoteServerService = null)
     {
@@ -702,7 +727,8 @@ public sealed class OqcScannerService : IOqcScannerService
             return (false, string.Empty, safetyError);
         }
 
-        var (success, table, error) = await dbManager.ExecuteQueryAsync(Config.LookupDbId, query);
+        string effectiveDbId = ResolveEffectiveDbId(Config.LookupDbId, dbManager);
+        var (success, table, error) = await dbManager.ExecuteQueryAsync(effectiveDbId, query);
         if (!success || table == null || table.Rows.Count == 0)
         {
             return (false, string.Empty, string.IsNullOrWhiteSpace(error) ? $"Không tìm thấy Job cho mã '{scannedCode}' trong cơ sở dữ liệu." : error);
@@ -927,7 +953,8 @@ public sealed class OqcScannerService : IOqcScannerService
             return (false, scannedCode, safetyError);
         }
 
-        var (success, table, error) = await dbManager.ExecuteQueryAsync(Config.ProductNameDbId, query);
+        string effectiveDbId = ResolveEffectiveDbId(Config.ProductNameDbId, dbManager);
+        var (success, table, error) = await dbManager.ExecuteQueryAsync(effectiveDbId, query);
         if (!success || table == null || table.Rows.Count == 0)
         {
             return (false, scannedCode, string.IsNullOrWhiteSpace(error) ? $"Không tìm thấy Tên sản phẩm cho mã '{scannedCode}' trong cơ sở dữ liệu." : error);
@@ -987,7 +1014,8 @@ public sealed class OqcScannerService : IOqcScannerService
             return (false, null, safetyError);
         }
 
-        var (success, table, error) = await dbManager.ExecuteQueryAsync(Config.ProductListDbId, query);
+        string effectiveDbId = ResolveEffectiveDbId(Config.ProductListDbId, dbManager);
+        var (success, table, error) = await dbManager.ExecuteQueryAsync(effectiveDbId, query);
         return (success, table, error);
     }
 
@@ -1001,7 +1029,13 @@ public sealed class OqcScannerService : IOqcScannerService
 
         if (string.IsNullOrWhiteSpace(Config.JobManagerQuery))
         {
-            return (false, null, "Chưa cấu hình truy vấn danh sách Job (Job Manager Query).");
+            return (false, null, "Chưa cấu hình truy vấn danh sách Job (Job Manager Query). Vui lòng vào Cài Đặt OQC -> Mục 5 để kiểm tra.");
+        }
+
+        string effectiveDbId = ResolveEffectiveDbId(Config.JobManagerDbId, dbManager);
+        if (string.IsNullOrWhiteSpace(effectiveDbId) || dbManager.GetDatabase(effectiveDbId) == null)
+        {
+            return (false, null, $"Chưa chọn kết nối CSDL hợp lệ cho Quản Lý Job (DB ID '{Config.JobManagerDbId}' không tồn tại trong danh sách CSDL của máy này). Vui lòng vào menu Cài Đặt OQC -> Mục 5 để chọn lại CSDL.");
         }
 
         int pageSize = Math.Max(1, Config.JobManagerPageSize);
@@ -1019,7 +1053,15 @@ public sealed class OqcScannerService : IOqcScannerService
             return (false, null, safetyError);
         }
 
-        var (success, table, error) = await dbManager.ExecuteQueryAsync(Config.JobManagerDbId, query);
+        var (success, table, error) = await dbManager.ExecuteQueryAsync(effectiveDbId, query);
+        if (!success)
+        {
+            if (!string.IsNullOrWhiteSpace(error) && (error.Contains("Invalid object name", StringComparison.OrdinalIgnoreCase) || error.Contains("doesn't exist", StringComparison.OrdinalIgnoreCase)))
+            {
+                return (false, null, $"Lỗi CSDL '{dbManager.GetDatabase(effectiveDbId)?.Name}': Bảng dữ liệu trong câu truy vấn chưa tồn tại.\nChi tiết: {error}\n\n👉 Hướng dẫn: Vui lòng kiểm tra lại tên bảng trong Job Manager Query (Cài Đặt OQC -> Mục 5) hoặc tạo bảng ProductJobs (ProductCode, ProductName, JobFilePath, TeachImagePath, UpdatedAt) trên máy chủ CSDL.");
+            }
+        }
+
         return (success, table, error);
     }
 
@@ -1065,7 +1107,8 @@ public sealed class OqcScannerService : IOqcScannerService
             return (false, safetyError);
         }
 
-        var (success, rows, error) = await dbManager.ExecuteNonQueryAsync(Config.AssignDbId, query);
+        string effectiveDbId = ResolveEffectiveDbId(Config.AssignDbId, dbManager);
+        var (success, rows, error) = await dbManager.ExecuteNonQueryAsync(effectiveDbId, query);
         if (success)
         {
             return (true, $"✅ Gán sản phẩm '{productCode}' với Job '{Path.GetFileName(jobFilePath)}' thành công! (Số dòng tác động: {rows})");

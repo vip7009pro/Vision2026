@@ -1545,7 +1545,7 @@
                                             Padding="8,7" BorderThickness="0" Cursor="Hand" ToolTip="Mở cửa sổ cấu hình Camera Settings và lưu riêng biệt cho Job hiện tại">
                                         <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
                                             <TextBlock Text="⚙️ " />
-                                            <TextBlock Text="Cấu Hình Camera Cho Job Này..." />
+                                            <TextBlock Text="Cấu Hình Camera &amp; Đèn Cho Job Này..." />
                                         </StackPanel>
                                     </Button>
                                 </Border>
@@ -1680,62 +1680,6 @@
                                         </Border>
                                     </Grid>
                                 </Border>
-
-                                <!-- ========================================================= -->
-                                <!-- Lighting Controller Settings For This Job (ImageSource)    -->
-                                <!-- ========================================================= -->
-                                <Border Background="{DynamicResource BorderBrush}" Padding="3,2" Margin="0,6,0,0">
-                                    <Grid>
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="*" />
-                                            <ColumnDefinition Width="Auto" />
-                                        </Grid.ColumnDefinitions>
-                                        <TextBlock Text="💡 Cấu Hình Đèn Chiếu Sáng (Lighting)" FontWeight="Bold" Foreground="{DynamicResource TextBrush}" VerticalAlignment="Center" />
-                                        <StackPanel Grid.Column="1" Orientation="Horizontal">
-                                            <TextBlock Text="Kênh:" VerticalAlignment="Center" FontSize="11" Margin="0,0,4,0" Foreground="{DynamicResource TextBrush}"/>
-                                            <ComboBox ItemsSource="{Binding AvailableLightingChannelCounts}" SelectedItem="{Binding ImageSource_LightingChannelCount}" Width="50" FontSize="11" />
-                                        </StackPanel>
-                                    </Grid>
-                                </Border>
-
-                                <!-- Enable Lighting Checkbox & Quick Actions -->
-                                <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1" Padding="3,4" Background="{DynamicResource PanelBackgroundBrush}">
-                                    <Grid>
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="*" />
-                                            <ColumnDefinition Width="Auto" />
-                                            <ColumnDefinition Width="Auto" />
-                                        </Grid.ColumnDefinitions>
-                                        <CheckBox Grid.Column="0" Content="Kích hoạt đèn theo Job" IsChecked="{Binding ImageSource_EnableLighting}" FontWeight="SemiBold" FontSize="11" VerticalAlignment="Center" ToolTip="Khi mở Job này sẽ tự động bật/tắt và thiết lập độ sáng đèn theo cấu hình bên dưới" />
-                                        <Button Grid.Column="1" Content="⚡ Test Áp Dụng" Command="{Binding ImageSource_ApplyLightingToDeviceCommand}" Margin="4,0,2,0" Padding="6,2" FontSize="10.5" ToolTip="Gửi các mức sáng này xuống bộ điều khiển đèn ngay bây giờ để kiểm tra" />
-                                        <Button Grid.Column="2" Content="📥 Đọc Từ Đèn" Command="{Binding ImageSource_ReadLightingFromDeviceCommand}" Margin="2,0,0,0" Padding="6,2" FontSize="10.5" ToolTip="Đọc các giá trị đang sáng thực tế trên thiết bị nạp vào Job này" />
-                                    </Grid>
-                                </Border>
-
-                                <!-- Channels Table -->
-                                <ItemsControl ItemsSource="{Binding ImageSource_LightingChannels}">
-                                    <ItemsControl.ItemTemplate>
-                                        <DataTemplate>
-                                            <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1" Background="{DynamicResource PanelBackgroundBrush}" Padding="4,3">
-                                                <Grid>
-                                                    <Grid.ColumnDefinitions>
-                                                        <ColumnDefinition Width="45" />
-                                                        <ColumnDefinition Width="45" />
-                                                        <ColumnDefinition Width="*" />
-                                                        <ColumnDefinition Width="45" />
-                                                    </Grid.ColumnDefinitions>
-                                                    
-                                                    <TextBlock Grid.Column="0" Text="{Binding ChannelLabel}" FontWeight="Bold" FontSize="11.5" Foreground="{DynamicResource AccentBrush}" VerticalAlignment="Center" />
-                                                    <CheckBox Grid.Column="1" Content="ON" IsChecked="{Binding IsEnabled}" FontWeight="SemiBold" FontSize="11" VerticalAlignment="Center" />
-                                                    
-                                                    <!-- Slider Brightness -->
-                                                    <Slider Grid.Column="2" Minimum="0" Maximum="255" Value="{Binding Brightness}" VerticalAlignment="Center" Margin="4,0" TickFrequency="1" IsSnapToTickEnabled="True" IsEnabled="{Binding IsEnabled}" />
-                                                    <TextBox Grid.Column="3" Text="{Binding Brightness, UpdateSourceTrigger=PropertyChanged}" VerticalAlignment="Center" HorizontalContentAlignment="Center" FontSize="11" Padding="2,1" IsEnabled="{Binding IsEnabled}" />
-                                                </Grid>
-                                            </Border>
-                                        </DataTemplate>
-                                    </ItemsControl.ItemTemplate>
-                                </ItemsControl>
                             </StackPanel>
 
                             <StackPanel Visibility="{Binding IsImageOutputNode, Converter={StaticResource BoolToVis}}">

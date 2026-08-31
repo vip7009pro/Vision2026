@@ -41,6 +41,7 @@ public sealed class LightingControllerSettings
 
     public bool AutoConnect { get; set; } = true;
     public bool EnableStartupLighting { get; set; } = true;
+    public bool AutoTurnOffOnExit { get; set; } = true;
     public List<VisionInspectionApp.Models.LightingStartupChannelSettings> StartupChannels { get; set; } = CreateDefaultStartupChannels();
 
     public static List<VisionInspectionApp.Models.LightingStartupChannelSettings> CreateDefaultStartupChannels(int count = 8)

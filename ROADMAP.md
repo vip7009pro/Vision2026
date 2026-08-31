@@ -1502,6 +1502,60 @@ Lộ trình tích hợp tính năng Chụp ảnh từ camera và hỗ trợ các
            - Thêm sự kiện `Loaded` tự động nạp trang đầu danh sách sản phẩm từ DB nếu chưa có dữ liệu, giúp người dùng không cần nhấn nút tìm kiếm thủ công.
       - Kiểm Thử:
         - Chạy toàn bộ test suite dự án $\rightarrow$ 100% PASSED (106 tests). Solution `dotnet build` đạt 0 lỗi (0 errors).
+- [x] Task 282: Thêm Tùy Chọn Tự Động Tắt Đèn Khi Tắt App & Tắt Đèn Toàn Diện Khi Shutdown.
+      - Yêu Cầu & Bối Cảnh:
+        - Khi tắt ứng dụng, đèn kiểm tra vẫn sáng làm tiêu hao tuổi thọ đèn LED và nguồn điện. Cần thêm tùy chọn cho phép người dùng bật/tắt tính năng tự động tắt đèn khi đóng app và thực thi tắt đèn an toàn khi shutdown.
+      - Giải Pháp Đã Triển Khai:
+        1. **Cấu Hình & Lưu Trữ (`GlobalAppSettingsService.cs`)**:
+           - Thêm thuộc tính `AutoTurnOffOnExit = true` trong `LightingControllerSettings`.
+        2. **Dịch Vụ Điều Khiển Đèn (`LightingControllerService.cs`)**:
+           - Bổ sung hàm `TurnOffAllChannelsAsync(int channelCount = 8)` gửi đồng loạt lệnh `$F{ch}=0#` xuống tất cả các kênh đèn kết nối qua Serial COM / Ethernet.
+        3. **Giao Diện Lighting Controller (`LightingControllerWindow.xaml` & `LightingControllerViewModel.cs`)**:
+           - Bổ sung CheckBox *"Tự tắt đèn khi tắt app"* (`AutoTurnOffOnExit`), tự động lưu cấu hình khi người dùng thay đổi.
+        4. **Shutdown Xử Lý Tự Động (`App.xaml.cs`)**:
+           - Trong `ShutdownGracefullyAsync()`, tự động kiểm tra `AutoTurnOffOnExit` và gọi `TurnOffAllChannelsAsync()` trước khi ngắt kết nối và đóng app.
 
+- [x] Task 283: Đồng Bộ Thời Gian Thực Khi Nhập Số Tham Số Camera (Real-time Input & Slider Sync).
+      - Yêu Cầu & Bối Cảnh:
+        - Trong tab Camera Settings và cửa sổ Job Camera Settings, khi gõ giá trị vào các ô TextBox (Exposure, Gain, Gamma, White Balance, Trigger Delay, ROI, v.v.), slider không nhảy theo ngay và tham số không được áp dụng luôn mà phải click vào thanh trượt mới có tác dụng.
+      - Giải Pháp Đã Triển Khai:
+        1. **Binding XAML (`CameraSettingsView.xaml` & `JobCameraSettingsWindow.xaml`)**:
+           - Cập nhật `UpdateSourceTrigger=PropertyChanged` cho toàn bộ các ô nhập TextBox thông số Camera (Exposure, Gain, Gamma, Red/Green/Blue Gain, Trigger Delay, Hardware ROI Offset/Size, Packet Size/Delay, Soft Brightness/Contrast).
+        2. **ViewModel Epsilon & Debounce Timer (`CameraSettingsViewModel.cs` & `JobCameraSettingsViewModel.cs`)**:
+           - Hạ ngưỡng epsilon so sánh float từ `1.0f`, `0.1f`, `0.05f` xuống `0.001f` để tiếp nhận mọi ký tự người dùng gõ vào và kích hoạt `ScheduleApplyParameters()` (debounce 250ms), giúp Slider nhảy ngay theo số gõ và áp dụng lệnh GenICam xuống camera mượt mà mà không làm nghẽn bus Ethernet/USB.
 
+- [x] Task 284: Tích Hợp Cấu Hình Đèn Theo Job Vào Cửa Sổ JobCameraSettingsWindow & Sửa Lỗi Áp Dụng Đèn.
+      - Yêu Cầu & Bối Cảnh:
+        - Người dùng mong muốn cấu hình đèn theo từng Job trực tiếp ngay trong cửa sổ "Cấu hình Camera cho Job" (`JobCameraSettingsWindow`) để kiểm tra ảnh và độ sáng đèn đồng thời.
+        - Khắc phục lỗi bấm test áp dụng mức sáng đèn không có tác dụng.
+      - Giải Pháp Đã Triển Khai:
+        1. **ViewModel (`JobCameraSettingsViewModel.cs`)**:
+           - Bổ sung quản lý `JobLightingParameters`, danh sách `ObservableCollection<JobCameraLightingChannelViewModel> LightingChannels` (CH1..CHn, ON/OFF, Slider/TextBox Brightness `UpdateSourceTrigger=PropertyChanged`).
+           - Thêm lệnh `ApplyLightingToDeviceCommand` (gửi `$F{ch}={1/0}#`, `$L{ch}={brightness}#`, `$T{ch}={timeMs}#`) và `ReadLightingFromDeviceCommand` (đọc dữ liệu đèn thực tế từ controller nạp vào Job).
+           - Tích hợp callback `onSaveCallbackWithLighting` khi bấm "Lưu Cấu Hình Vào Job".
+        2. **Giao Diện (`JobCameraSettingsWindow.xaml`)**:
+           - Bổ sung GroupBox *"💡 Đèn Chiếu Sáng Theo Job (Lighting Controller)"* ngay trong bảng điều khiển bên phải: CheckBox bật tắt, ComboBox chọn số kênh (4/8), nút *"⚡ Test Áp Dụng"*, nút *"📥 Đọc Từ Đèn"*, và bảng danh sách kênh điều khiển độ sáng.
+        3. **Tích Hợp Tool Editor (`ToolEditorViewModel.ToolPreprocess.cs`)**:
+           - Cập nhật `ImageSource_OpenJobCameraSettings` truyền `def.LightingParams` và `_lightingControllerService`, tự động đồng bộ và lưu vào Job.
+           - Hoàn thiện `ImageSource_ApplyLightingToDevice` gửi đầy đủ lệnh Power + Brightness + LightingTime cho từng kênh.
 
+- [x] Task 285: Khắc Phục Lỗi Mã Băm GUID Khi Truy Vấn CSDL Máy Thật & Tự Động Fallback CSDL Cho Quản Lý Job Từ Xa.
+      - Yêu Cầu & Bối Cảnh:
+        - Khi cài ứng dụng lên máy Vision PC thật, màn hình "Gán job cho sản phẩm" hoạt động bình thường, nhưng màn hình "Quản lý job & teaching từ xa" báo lỗi `"Database '{GUID}' not found"` do ID cấu hình CSDL (`JobManagerDbId`) lưu từ máy dev cũ không trùng với GUID CSDL mới tạo trên máy thật.
+      - Giải Pháp Đã Triển Khai:
+        1. **Cơ Chế Smart Fallback CSDL (`OqcScannerService.cs`)**:
+           - Thêm phương thức `ResolveEffectiveDbId`: Tự động kiểm tra `JobManagerDbId`, nếu không tồn tại trong danh sách CSDL của máy thì tự động fallback lần lượt sang `ProductListDbId` $\rightarrow$ `LookupDbId` $\rightarrow$ `AssignDbId` $\rightarrow$ CSDL đầu tiên đang kích hoạt (`IsEnabled`).
+           - Áp dụng `ResolveEffectiveDbId` cho toàn bộ các hàm tra cứu OQC (`GetJobManagerListAsync`, `LookupJobAsync`, `LookupProductNameAsync`, `GetProductListAsync`, `AssignProductJobAsync`).
+- [x] Task 286: Dọn Dẹp Cấu Hình Đèn Khỏi Properties Panel & Sửa Lỗi Hiển Thị Trạng Thái Timeout Khi Test Áp Dụng Đèn.
+      - Yêu Cầu & Bối Cảnh:
+        1. Khi đã có đầy đủ cấu hình đèn trong cửa sổ "Cấu Hình Camera & Đèn Cho Job", loại bỏ phần cấu hình đèn trong Properties Panel (`ToolEditorView.xaml`) để giao diện gọn gàng.
+        2. Khi chưa kết nối hoặc mất kết nối bộ điều khiển đèn, bấm "⚡ Test Áp Dụng" bị timeout nhưng lại thông báo "Đã áp dụng thành công".
+      - Giải Pháp Đã Triển Khai:
+        1. **Giao Diện (`ToolEditorView.xaml`)**:
+           - Gỡ bỏ hoàn toàn khối cấu hình đèn cũ trong Properties Panel của node `ImageSource`.
+           - Cập nhật nhãn nút mở cài đặt thành `"⚙️ Cấu Hình Camera & Đèn Cho Job Này..."`.
+        2. **Xử Lý Lỗi & Timeout (`JobCameraSettingsViewModel.cs` & `ToolEditorViewModel.ToolPreprocess.cs`)**:
+           - Sửa `ApplyLightingToDeviceAsync`: Bổ sung kiểm tra kết quả `pwrRes.IsSuccess`, `brRes.IsSuccess`, `tmRes.IsSuccess` cho từng lệnh. Khi gặp timeout hoặc lỗi gửi lệnh từ thiết bị, dừng vòng lặp ngay và cập nhật `StatusMessage = $"❌ Lỗi gửi lệnh kênh CH{ch+1}: {errMsg}"`, loại bỏ hoàn toàn việc ghi đè thông báo thành công khi có lỗi.
+           - Cập nhật `ReadLightingFromDeviceAsync` và `ImageSource_ApplyLightingToDevice` đồng bộ hiển thị lỗi timeout.
+      - Kiểm Thử:
+        - Chạy toàn bộ test suite dự án $\rightarrow$ 100% PASSED (106 tests). Solution `dotnet build` đạt 0 lỗi (0 errors).

@@ -307,6 +307,23 @@ public sealed class LightingControllerService : IDisposable
     public Task<LightingCommandResult> SetLightingTimeAsync(int channel, int timeMs, CancellationToken ct = default)
         => SendCommandAsync(LightingProtocol.BuildSetLightingTime(channel, timeMs), ct);
 
+    /// <summary>Tắt toàn bộ các kênh đèn (gửi F0=0..F7=0 và L0=0..L7=0).</summary>
+    public async Task<LightingCommandResult> TurnOffAllChannelsAsync(int channelCount = 8, CancellationToken ct = default)
+    {
+        for (int ch = 0; ch < channelCount && ch < 8; ch++)
+        {
+            try
+            {
+                await SetChannelPowerAsync(ch, false, ct).ConfigureAwait(false);
+            }
+            catch
+            {
+                // ignore per-channel error on exit
+            }
+        }
+        return LightingCommandResult.Ok("+OK");
+    }
+
     public Task<LightingCommandResult> SetTriggerModeAsync(LightingTriggerMode mode, CancellationToken ct = default)
         => SendCommandAsync(LightingProtocol.BuildSetTriggerMode(mode), ct);
 

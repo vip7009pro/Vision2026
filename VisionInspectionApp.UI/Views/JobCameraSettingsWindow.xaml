@@ -222,6 +222,59 @@
                     <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
                         <StackPanel Orientation="Vertical">
 
+                            <!-- Group 0: Cấu Hình Đèn Chiếu Sáng Theo Job (Lighting Controller) -->
+                            <GroupBox Header="💡 Đèn Chiếu Sáng Theo Job (Lighting Controller)" Margin="0,0,0,8" Padding="6" FontWeight="SemiBold">
+                                <StackPanel>
+                                    <!-- Header controls: Enable check & Channel count -->
+                                    <Grid Margin="0,0,0,6">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <CheckBox Grid.Column="0" Content="Kích hoạt đèn theo Job" IsChecked="{Binding EnableLighting}" FontWeight="Bold" FontSize="11" VerticalAlignment="Center" ToolTip="Tự động bật và cài đặt mức sáng đèn khi mở Job này" />
+                                        <StackPanel Grid.Column="1" Orientation="Horizontal">
+                                            <TextBlock Text="Kênh:" VerticalAlignment="Center" FontSize="11" Margin="0,0,4,0" Foreground="{DynamicResource TextBrush}"/>
+                                            <ComboBox ItemsSource="{Binding AvailableLightingChannelCounts}" SelectedItem="{Binding LightingChannelCount}" Width="50" FontSize="11" Padding="2,1" />
+                                        </StackPanel>
+                                    </Grid>
+
+                                    <!-- Quick Action Buttons -->
+                                    <Grid Margin="0,0,0,6">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <Button Grid.Column="0" Command="{Binding ApplyLightingToDeviceCommand}" Content="⚡ Test Áp Dụng" Margin="0,0,3,0" Padding="4,3" FontSize="10.5" Background="#00897B" Foreground="White" BorderThickness="0" Cursor="Hand" ToolTip="Gửi ngay mức sáng của các kênh xuống bộ điều khiển đèn để kiểm tra ảnh" />
+                                        <Button Grid.Column="1" Command="{Binding ReadLightingFromDeviceCommand}" Content="📥 Đọc Từ Đèn" Margin="3,0,0,0" Padding="4,3" FontSize="10.5" Background="{DynamicResource BorderBrush}" Foreground="{DynamicResource TextBrush}" BorderThickness="0" Cursor="Hand" ToolTip="Đọc các giá trị đang sáng thực tế trên thiết bị nạp vào Job này" />
+                                    </Grid>
+
+                                    <!-- Channel List ItemsControl -->
+                                    <ItemsControl ItemsSource="{Binding LightingChannels}" Margin="0,2,0,0">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1" Background="{DynamicResource PanelBackgroundBrush}" Padding="4,3">
+                                                    <Grid>
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="42" />
+                                                            <ColumnDefinition Width="46" />
+                                                            <ColumnDefinition Width="*" />
+                                                            <ColumnDefinition Width="46" />
+                                                        </Grid.ColumnDefinitions>
+                                                        
+                                                        <TextBlock Grid.Column="0" Text="{Binding ChannelLabel}" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource AccentBrush}" VerticalAlignment="Center" />
+                                                        <CheckBox Grid.Column="1" Content="ON" IsChecked="{Binding IsEnabled}" FontWeight="SemiBold" FontSize="11" VerticalAlignment="Center" />
+                                                        
+                                                        <!-- Slider Brightness -->
+                                                        <Slider Grid.Column="2" Minimum="0" Maximum="255" Value="{Binding Brightness}" VerticalAlignment="Center" Margin="4,0" TickFrequency="1" IsSnapToTickEnabled="True" IsEnabled="{Binding IsEnabled}" />
+                                                        <TextBox Grid.Column="3" Text="{Binding Brightness, UpdateSourceTrigger=PropertyChanged}" VerticalAlignment="Center" HorizontalContentAlignment="Center" FontSize="11" Padding="2,1" IsEnabled="{Binding IsEnabled}" />
+                                                    </Grid>
+                                                </Border>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </StackPanel>
+                            </GroupBox>
+
                             <!-- Group 1: Phơi sáng & Gain -->
                             <GroupBox Header="💡 Phơi Sáng &amp; Độ Khuếch Đại" Margin="0,0,0,8" Padding="6" FontWeight="SemiBold">
                                 <StackPanel>
@@ -235,7 +288,7 @@
                                             <ColumnDefinition Width="65" />
                                         </Grid.ColumnDefinitions>
                                         <Slider Grid.Column="0" Minimum="100" Maximum="100000" Value="{Binding ExposureTimeUs}" IsEnabled="{Binding AutoExposure, Converter={StaticResource InverseBoolConverter}}" VerticalAlignment="Center" />
-                                        <TextBox Grid.Column="1" Text="{Binding ExposureTimeUs, StringFormat='{}{0:F0}'}" IsEnabled="{Binding AutoExposure, Converter={StaticResource InverseBoolConverter}}" Margin="6,0,0,0" Padding="4,2" TextAlignment="Right" />
+                                        <TextBox Grid.Column="1" Text="{Binding ExposureTimeUs, StringFormat='{}{0:F0}', UpdateSourceTrigger=PropertyChanged}" IsEnabled="{Binding AutoExposure, Converter={StaticResource InverseBoolConverter}}" Margin="6,0,0,0" Padding="4,2" TextAlignment="Right" />
                                     </Grid>
 
                                     <DockPanel Margin="0,0,0,2">
@@ -248,7 +301,7 @@
                                             <ColumnDefinition Width="65" />
                                         </Grid.ColumnDefinitions>
                                         <Slider Grid.Column="0" Minimum="0" Maximum="24" Value="{Binding GainDb}" IsEnabled="{Binding AutoGain, Converter={StaticResource InverseBoolConverter}}" VerticalAlignment="Center" />
-                                        <TextBox Grid.Column="1" Text="{Binding GainDb, StringFormat='{}{0:F1}'}" IsEnabled="{Binding AutoGain, Converter={StaticResource InverseBoolConverter}}" Margin="6,0,0,0" Padding="4,2" TextAlignment="Right" />
+                                        <TextBox Grid.Column="1" Text="{Binding GainDb, StringFormat='{}{0:F1}', UpdateSourceTrigger=PropertyChanged}" IsEnabled="{Binding AutoGain, Converter={StaticResource InverseBoolConverter}}" Margin="6,0,0,0" Padding="4,2" TextAlignment="Right" />
                                     </Grid>
 
                                     <TextBlock Text="Gamma Correction:" FontSize="11" Foreground="{DynamicResource TextBrush}" Margin="0,0,0,2" />
@@ -258,7 +311,7 @@
                                             <ColumnDefinition Width="65" />
                                         </Grid.ColumnDefinitions>
                                         <Slider Grid.Column="0" Minimum="0.1" Maximum="4.0" Value="{Binding Gamma}" VerticalAlignment="Center" />
-                                        <TextBox Grid.Column="1" Text="{Binding Gamma, StringFormat='{}{0:F2}'}" Margin="6,0,0,0" Padding="4,2" TextAlignment="Right" />
+                                        <TextBox Grid.Column="1" Text="{Binding Gamma, StringFormat='{}{0:F2}', UpdateSourceTrigger=PropertyChanged}" Margin="6,0,0,0" Padding="4,2" TextAlignment="Right" />
                                     </Grid>
                                 </StackPanel>
                             </GroupBox>
@@ -278,7 +331,7 @@
                                             <ColumnDefinition Width="55" />
                                         </Grid.ColumnDefinitions>
                                         <Slider Grid.Column="0" Minimum="0.1" Maximum="5.0" Value="{Binding RedGain}" VerticalAlignment="Center" />
-                                        <TextBox Grid.Column="1" Text="{Binding RedGain, StringFormat='{}{0:F2}'}" Margin="4,0,0,0" Padding="2" TextAlignment="Right" FontSize="11" />
+                                        <TextBox Grid.Column="1" Text="{Binding RedGain, StringFormat='{}{0:F2}', UpdateSourceTrigger=PropertyChanged}" Margin="4,0,0,0" Padding="2" TextAlignment="Right" FontSize="11" />
                                     </Grid>
 
                                     <TextBlock Text="Tỷ lệ Xanh Lá (Green Gain):" FontSize="10" Foreground="{DynamicResource TextBrush}" Margin="0,0,0,1" />
@@ -288,7 +341,7 @@
                                             <ColumnDefinition Width="55" />
                                         </Grid.ColumnDefinitions>
                                         <Slider Grid.Column="0" Minimum="0.1" Maximum="5.0" Value="{Binding GreenGain}" VerticalAlignment="Center" />
-                                        <TextBox Grid.Column="1" Text="{Binding GreenGain, StringFormat='{}{0:F2}'}" Margin="4,0,0,0" Padding="2" TextAlignment="Right" FontSize="11" />
+                                        <TextBox Grid.Column="1" Text="{Binding GreenGain, StringFormat='{}{0:F2}', UpdateSourceTrigger=PropertyChanged}" Margin="4,0,0,0" Padding="2" TextAlignment="Right" FontSize="11" />
                                     </Grid>
 
                                     <TextBlock Text="Tỷ lệ Xanh Dương (Blue Gain):" FontSize="10" Foreground="{DynamicResource TextBrush}" Margin="0,0,0,1" />
@@ -298,7 +351,7 @@
                                             <ColumnDefinition Width="55" />
                                         </Grid.ColumnDefinitions>
                                         <Slider Grid.Column="0" Minimum="0.1" Maximum="5.0" Value="{Binding BlueGain}" VerticalAlignment="Center" />
-                                        <TextBox Grid.Column="1" Text="{Binding BlueGain, StringFormat='{}{0:F2}'}" Margin="4,0,0,0" Padding="2" TextAlignment="Right" FontSize="11" />
+                                        <TextBox Grid.Column="1" Text="{Binding BlueGain, StringFormat='{}{0:F2}', UpdateSourceTrigger=PropertyChanged}" Margin="4,0,0,0" Padding="2" TextAlignment="Right" FontSize="11" />
                                     </Grid>
                                 </StackPanel>
                             </GroupBox>
@@ -312,7 +365,7 @@
                                     <ComboBox ItemsSource="{Binding TriggerSources}" SelectedItem="{Binding SelectedTriggerSource}" IsEnabled="{Binding TriggerModeOn}" Margin="0,0,0,6" Padding="4,2" />
 
                                     <TextBlock Text="Độ trễ Trigger (Delay us):" FontSize="11" Foreground="{DynamicResource TextBrush}" Margin="0,0,0,2" />
-                                    <TextBox Text="{Binding TriggerDelayUs}" IsEnabled="{Binding TriggerModeOn}" Padding="4,2" />
+                                    <TextBox Text="{Binding TriggerDelayUs, UpdateSourceTrigger=PropertyChanged}" IsEnabled="{Binding TriggerModeOn}" Padding="4,2" />
                                 </StackPanel>
                             </GroupBox>
 
@@ -358,7 +411,7 @@
                                             <ColumnDefinition Width="65" />
                                         </Grid.ColumnDefinitions>
                                         <Slider Grid.Column="0" Minimum="0" Maximum="5440" Value="{Binding RoiOffsetX}" IsEnabled="{Binding EnableHardwareRoi}" SmallChange="4" LargeChange="16" VerticalAlignment="Center" />
-                                        <TextBox Grid.Column="1" Text="{Binding RoiOffsetX}" IsEnabled="{Binding EnableHardwareRoi}" Margin="4,0,0,0" Padding="2" TextAlignment="Right" FontSize="11" />
+                                        <TextBox Grid.Column="1" Text="{Binding RoiOffsetX, UpdateSourceTrigger=PropertyChanged}" IsEnabled="{Binding EnableHardwareRoi}" Margin="4,0,0,0" Padding="2" TextAlignment="Right" FontSize="11" />
                                     </Grid>
 
                                     <TextBlock Text="Offset Y (Vị trí Y):" FontSize="10" Foreground="{DynamicResource TextBrush}" Margin="0,0,0,1" />
@@ -368,7 +421,7 @@
                                             <ColumnDefinition Width="65" />
                                         </Grid.ColumnDefinitions>
                                         <Slider Grid.Column="0" Minimum="0" Maximum="3616" Value="{Binding RoiOffsetY}" IsEnabled="{Binding EnableHardwareRoi}" SmallChange="2" LargeChange="8" VerticalAlignment="Center" />
-                                        <TextBox Grid.Column="1" Text="{Binding RoiOffsetY}" IsEnabled="{Binding EnableHardwareRoi}" Margin="4,0,0,0" Padding="2" TextAlignment="Right" FontSize="11" />
+                                        <TextBox Grid.Column="1" Text="{Binding RoiOffsetY, UpdateSourceTrigger=PropertyChanged}" IsEnabled="{Binding EnableHardwareRoi}" Margin="4,0,0,0" Padding="2" TextAlignment="Right" FontSize="11" />
                                     </Grid>
 
                                     <TextBlock Text="Width (Chiều rộng ROI):" FontSize="10" Foreground="{DynamicResource TextBrush}" Margin="0,0,0,1" />
@@ -378,7 +431,7 @@
                                             <ColumnDefinition Width="65" />
                                         </Grid.ColumnDefinitions>
                                         <Slider Grid.Column="0" Minimum="32" Maximum="5472" Value="{Binding RoiWidth}" IsEnabled="{Binding EnableHardwareRoi}" SmallChange="4" LargeChange="16" VerticalAlignment="Center" />
-                                        <TextBox Grid.Column="1" Text="{Binding RoiWidth}" IsEnabled="{Binding EnableHardwareRoi}" Margin="4,0,0,0" Padding="2" TextAlignment="Right" FontSize="11" />
+                                        <TextBox Grid.Column="1" Text="{Binding RoiWidth, UpdateSourceTrigger=PropertyChanged}" IsEnabled="{Binding EnableHardwareRoi}" Margin="4,0,0,0" Padding="2" TextAlignment="Right" FontSize="11" />
                                     </Grid>
 
                                     <TextBlock Text="Height (Chiều cao ROI):" FontSize="10" Foreground="{DynamicResource TextBrush}" Margin="0,0,0,1" />
@@ -388,7 +441,7 @@
                                             <ColumnDefinition Width="65" />
                                         </Grid.ColumnDefinitions>
                                         <Slider Grid.Column="0" Minimum="32" Maximum="3648" Value="{Binding RoiHeight}" IsEnabled="{Binding EnableHardwareRoi}" SmallChange="2" LargeChange="8" VerticalAlignment="Center" />
-                                        <TextBox Grid.Column="1" Text="{Binding RoiHeight}" IsEnabled="{Binding EnableHardwareRoi}" Margin="4,0,0,0" Padding="2" TextAlignment="Right" FontSize="11" />
+                                        <TextBox Grid.Column="1" Text="{Binding RoiHeight, UpdateSourceTrigger=PropertyChanged}" IsEnabled="{Binding EnableHardwareRoi}" Margin="4,0,0,0" Padding="2" TextAlignment="Right" FontSize="11" />
                                     </Grid>
                                 </StackPanel>
                             </GroupBox>
@@ -397,10 +450,10 @@
                             <GroupBox Header="🌐 Mạng GigE Vision" Margin="0,0,0,8" Padding="6" FontWeight="SemiBold">
                                 <StackPanel>
                                     <TextBlock Text="Packet Size (Bytes):" FontSize="11" Foreground="{DynamicResource TextBrush}" Margin="0,0,0,2" />
-                                    <TextBox Text="{Binding PacketSize}" Padding="4,2" Margin="0,0,0,6" />
+                                    <TextBox Text="{Binding PacketSize, UpdateSourceTrigger=PropertyChanged}" Padding="4,2" Margin="0,0,0,6" />
 
                                     <TextBlock Text="Packet Delay (us):" FontSize="11" Foreground="{DynamicResource TextBrush}" Margin="0,0,0,2" />
-                                    <TextBox Text="{Binding PacketDelay}" Padding="4,2" />
+                                    <TextBox Text="{Binding PacketDelay, UpdateSourceTrigger=PropertyChanged}" Padding="4,2" />
                                 </StackPanel>
                             </GroupBox>
 
@@ -414,7 +467,7 @@
                                             <ColumnDefinition Width="55" />
                                         </Grid.ColumnDefinitions>
                                         <Slider Grid.Column="0" Minimum="-100" Maximum="100" Value="{Binding Brightness}" VerticalAlignment="Center" />
-                                        <TextBox Grid.Column="1" Text="{Binding Brightness, StringFormat='{}{0:F0}'}" Margin="4,0,0,0" Padding="2" TextAlignment="Right" />
+                                        <TextBox Grid.Column="1" Text="{Binding Brightness, StringFormat='{}{0:F0}', UpdateSourceTrigger=PropertyChanged}" Margin="4,0,0,0" Padding="2" TextAlignment="Right" />
                                     </Grid>
 
                                     <TextBlock Text="Độ tương phản (Contrast):" FontSize="11" Foreground="{DynamicResource TextBrush}" Margin="0,0,0,2" />
@@ -424,7 +477,7 @@
                                             <ColumnDefinition Width="55" />
                                         </Grid.ColumnDefinitions>
                                         <Slider Grid.Column="0" Minimum="0.1" Maximum="3.0" Value="{Binding Contrast}" VerticalAlignment="Center" />
-                                        <TextBox Grid.Column="1" Text="{Binding Contrast, StringFormat='{}{0:F2}'}" Margin="4,0,0,0" Padding="2" TextAlignment="Right" />
+                                        <TextBox Grid.Column="1" Text="{Binding Contrast, StringFormat='{}{0:F2}', UpdateSourceTrigger=PropertyChanged}" Margin="4,0,0,0" Padding="2" TextAlignment="Right" />
                                     </Grid>
 
                                     <CheckBox Content="Ảnh Đen Trắng (Grayscale)" IsChecked="{Binding IsGrayscale}" />
