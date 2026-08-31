@@ -675,7 +675,7 @@ public sealed class OqcScannerService : IOqcScannerService
     }
 
     public async Task<(bool Found, string JobFilePath, string ErrorMessage)> LookupJobAsync(
-        string scannedCode, IDbManagerService dbManager)
+        string scannedCode, IDbManagerService dbManager, VisionInspectionApp.Application.Services.IRemoteServerService? remoteServerService = null)
     {
         if (string.IsNullOrWhiteSpace(scannedCode))
         {
@@ -732,34 +732,171 @@ public sealed class OqcScannerService : IOqcScannerService
             return (false, string.Empty, $"Đường dẫn Job từ DB rỗng cho mã '{scannedCode}'.");
         }
 
-        // Check file existence
-        string resolvedPath = rawPath;
+        string productCodeClean = scannedCode.Trim();
 
-        // 1. Direct existence check
-        if (File.Exists(resolvedPath))
+        // 1. Kiểm tra tồn tại tệp cục bộ (Local Existence Check)
+        // 1.1 Kiểm tra trực tiếp đường dẫn trả về từ DB
+        if (File.Exists(rawPath))
         {
-            return (true, resolvedPath, string.Empty);
+            return (true, rawPath, string.Empty);
         }
 
-        // 2. Combine with JobRootDirectory if relative path or filename
+        // 1.2 Kiểm tra trong thư mục gốc mặc định JobRootDirectory
         if (!string.IsNullOrWhiteSpace(Config.JobRootDirectory))
         {
-            string fileNameOnly = Path.GetFileName(rawPath);
-            string combinedPath = Path.Combine(Config.JobRootDirectory, fileNameOnly);
-            if (File.Exists(combinedPath))
+            string candidate1 = Path.Combine(Config.JobRootDirectory, $"{productCodeClean}.job");
+            if (File.Exists(candidate1))
             {
-                return (true, combinedPath, string.Empty);
+                return (true, candidate1, string.Empty);
             }
 
-            string combinedRelative = Path.Combine(Config.JobRootDirectory, rawPath.TrimStart('\\', '/'));
-            if (File.Exists(combinedRelative))
+            string fileNameOnly = Path.GetFileName(rawPath);
+            string candidate2 = Path.Combine(Config.JobRootDirectory, fileNameOnly);
+            if (File.Exists(candidate2))
             {
-                return (true, combinedRelative, string.Empty);
+                return (true, candidate2, string.Empty);
+            }
+
+            string candidate3 = Path.Combine(Config.JobRootDirectory, rawPath.TrimStart('\\', '/'));
+            if (File.Exists(candidate3))
+            {
+                return (true, candidate3, string.Empty);
+            }
+        }
+
+        // 1.3 Kiểm tra trong thư mục 'jobs' cùng thư mục chạy ứng dụng
+        string localJobsDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "jobs");
+        string localCandidate1 = Path.Combine(localJobsDir, $"{productCodeClean}.job");
+        if (File.Exists(localCandidate1))
+        {
+            return (true, localCandidate1, string.Empty);
+        }
+        string localCandidate2 = Path.Combine(localJobsDir, Path.GetFileName(rawPath));
+        if (File.Exists(localCandidate2))
+        {
+            return (true, localCandidate2, string.Empty);
+        }
+
+        // 1.4 Kiểm tra tại thư mục gốc ứng dụng
+        string appRootCandidate = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, $"{productCodeClean}.job");
+        if (File.Exists(appRootCandidate))
+        {
+            return (true, appRootCandidate, string.Empty);
+        }
+
+        // 2. Nếu cục bộ không có và đường dẫn từ DB là Server/URL -> Tự động tải từ Server về
+        bool isRemotePath = rawPath.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
+                            rawPath.StartsWith("https://", StringComparison.OrdinalIgnoreCase) ||
+                            rawPath.StartsWith("uploads/", StringComparison.OrdinalIgnoreCase) ||
+                            rawPath.EndsWith(".job", StringComparison.OrdinalIgnoreCase);
+
+        if (remoteServerService != null && isRemotePath)
+        {
+            try
+            {
+                string downloadUrl = rawPath;
+                if (!downloadUrl.StartsWith("http://", StringComparison.OrdinalIgnoreCase) &&
+                    !downloadUrl.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+                {
+                    string baseUrl = GetServerBaseUrl(Config.ServerApiUrl);
+                    downloadUrl = $"{baseUrl}/{rawPath.TrimStart('/')}";
+                }
+
+                var (dlOk, jobData, dlErr) = await remoteServerService.DownloadFileAsync(downloadUrl);
+                if (dlOk && jobData != null && jobData.Length > 0)
+                {
+                    string targetDir = !string.IsNullOrWhiteSpace(Config.JobRootDirectory)
+                        ? Config.JobRootDirectory
+                        : Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "jobs");
+                    Directory.CreateDirectory(targetDir);
+
+                    string fileNameToSave = Path.GetFileName(rawPath);
+                    if (string.IsNullOrWhiteSpace(fileNameToSave) || fileNameToSave.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0)
+                    {
+                        fileNameToSave = $"{productCodeClean}.job";
+                    }
+
+                    string targetFilePath = Path.Combine(targetDir, fileNameToSave);
+                    await File.WriteAllBytesAsync(targetFilePath, jobData);
+                    return (true, targetFilePath, string.Empty);
+                }
+                else
+                {
+                    return (false, rawPath, $"Không tìm thấy Job cục bộ và tải từ Server ({downloadUrl}) thất bại: {dlErr}");
+                }
+            }
+            catch (Exception ex)
+            {
+                return (false, rawPath, $"Lỗi tải Job từ Server: {ex.Message}");
             }
         }
 
         return (false, rawPath, $"Không tìm thấy tệp Job tại đường dẫn: '{rawPath}'" +
             (!string.IsNullOrWhiteSpace(Config.JobRootDirectory) ? $" hoặc trong thư mục gốc '{Config.JobRootDirectory}'." : "."));
+    }
+
+    public async Task<(bool Success, string Message)> UpdateTeachImagePathAsync(
+        string productCode, string teachImagePath, IDbManagerService dbManager)
+    {
+        if (string.IsNullOrWhiteSpace(productCode))
+        {
+            return (false, "Mã sản phẩm rỗng.");
+        }
+
+        if (string.IsNullOrWhiteSpace(teachImagePath))
+        {
+            return (false, "Đường dẫn ảnh mẫu rỗng.");
+        }
+
+        if (dbManager == null)
+        {
+            return (false, "Dịch vụ DB Manager chưa được khởi tạo.");
+        }
+
+        string queryTemplate = !string.IsNullOrWhiteSpace(Config.UpdateTeachImageQuery)
+            ? Config.UpdateTeachImageQuery
+            : "IF EXISTS (SELECT 1 FROM ProductJobs WHERE ProductCode = '{ProductCode}') UPDATE ProductJobs SET TeachImagePath = '{TeachImagePath}', UpdatedAt = GETDATE() WHERE ProductCode = '{ProductCode}' ELSE INSERT INTO ProductJobs (ProductCode, TeachImagePath, UpdatedAt) VALUES ('{ProductCode}', '{TeachImagePath}', GETDATE())";
+
+        string safeCode = EscapeSqlValue(productCode.Trim());
+        string safeTeachPath = EscapeSqlValue(teachImagePath.Trim());
+
+        string query = queryTemplate
+            .Replace("{ProductCode}", safeCode, StringComparison.OrdinalIgnoreCase)
+            .Replace("{TeachImagePath}", safeTeachPath, StringComparison.OrdinalIgnoreCase);
+
+        var (isSafe, safetyError) = DbNodeRunner.ValidateSqlQuerySafety(query, DbNodeMode.Write, allowUpdateDelete: true);
+        if (!isSafe)
+        {
+            return (false, safetyError);
+        }
+
+        string dbId = !string.IsNullOrWhiteSpace(Config.UpdateTeachImageDbId)
+            ? Config.UpdateTeachImageDbId
+            : (!string.IsNullOrWhiteSpace(Config.AssignDbId) ? Config.AssignDbId : Config.LookupDbId);
+
+        var (success, rows, error) = await dbManager.ExecuteNonQueryAsync(dbId, query);
+        if (success)
+        {
+            return (true, $"✅ Cập nhật ảnh mẫu cho mã '{productCode}' thành công! (Số dòng tác động: {rows})");
+        }
+        else
+        {
+            return (false, $"Lỗi DB: {error}");
+        }
+    }
+
+    private static string GetServerBaseUrl(string serverApiUrl)
+    {
+        if (string.IsNullOrWhiteSpace(serverApiUrl)) return "http://localhost";
+        try
+        {
+            var uri = new Uri(serverApiUrl.Trim());
+            return $"{uri.Scheme}://{uri.Authority}";
+        }
+        catch
+        {
+            return "http://localhost";
+        }
     }
 
     public async Task<(bool Found, string ProductName, string ErrorMessage)> LookupProductNameAsync(
@@ -895,6 +1032,10 @@ public sealed class OqcScannerService : IOqcScannerService
 
         if (string.IsNullOrWhiteSpace(jobFilePath))
         {
+            if (!string.IsNullOrWhiteSpace(teachImagePath))
+            {
+                return await UpdateTeachImagePathAsync(productCode, teachImagePath, dbManager);
+            }
             return (false, "Đường dẫn tệp Job rỗng.");
         }
 

@@ -684,7 +684,7 @@ public partial class OqcScannerViewModel : ObservableObject
 
         try
         {
-            var (found, jobPath, error) = await _oqcService.LookupJobAsync(code, _dbManager);
+            var (found, jobPath, error) = await _oqcService.LookupJobAsync(code, _dbManager, _remoteServerService);
             if (!found)
             {
                 StatusMessage = $"❌ Lỗi tra cứu DB: {error}";
@@ -1206,8 +1206,7 @@ public partial class OqcScannerViewModel : ObservableObject
         }
 
         string teachPathToSave = !string.IsNullOrWhiteSpace(relPath) ? relPath : fullUrl;
-        string currentJob = CurrentJobFilePath != "-" ? CurrentJobFilePath : "";
-        var (assignOk, assignMsg) = await _oqcService.AssignProductJobAsync(productCode, currentJob, _dbManager, teachPathToSave);
+        var (assignOk, assignMsg) = await _oqcService.UpdateTeachImagePathAsync(productCode, teachPathToSave, _dbManager);
 
         if (assignOk)
         {

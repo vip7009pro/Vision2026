@@ -379,8 +379,8 @@ public partial class JobManagerViewModel : ObservableObject
 
             // Cập nhật CSDL
             string teachPathToSave = !string.IsNullOrWhiteSpace(relPath) ? relPath : fullUrl;
-            var (assignOk, assignMsg) = await _oqcService.AssignProductJobAsync(
-                SelectedItem.ProductCode, SelectedItem.JobFilePath, _dbManager, teachPathToSave);
+            var (assignOk, assignMsg) = await _oqcService.UpdateTeachImagePathAsync(
+                SelectedItem.ProductCode, teachPathToSave, _dbManager);
 
             if (assignOk)
             {
@@ -452,8 +452,8 @@ public partial class JobManagerViewModel : ObservableObject
             }
 
             string teachPathToSave = !string.IsNullOrWhiteSpace(relPath) ? relPath : fullUrl;
-            var (assignOk, assignMsg) = await _oqcService.AssignProductJobAsync(
-                SelectedItem.ProductCode, SelectedItem.JobFilePath, _dbManager, teachPathToSave);
+            var (assignOk, assignMsg) = await _oqcService.UpdateTeachImagePathAsync(
+                SelectedItem.ProductCode, teachPathToSave, _dbManager);
 
             if (assignOk)
             {
@@ -487,73 +487,112 @@ public partial class JobManagerViewModel : ObservableObject
     }
 
     /// <summary>
-    /// Huấn luyện từ xa (Remote Teach): Nạp ảnh Teach Image từ Server URL vào Tool Editor và chuyển sang Tab Tool Editor.
+    /// Huấn luyện từ xa (Remote Teach): Tải Job từ Server về thư mục Teaching (cùng thư mục chương trình),
+    /// nạp Job vào Tool Editor, và tự động chuyển node ImageSource sang URL ảnh mẫu Teach Image từ Server.
     /// </summary>
     public async Task ExecuteRemoteTeachAsync()
     {
         if (SelectedItem == null)
         {
-            MessageBox.Show("Vui lòng chọn một sản phẩm trong danh sách!", "Thông Báo", MessageBoxButton.OK, MessageBoxImage.Warning);
+            MessageBox.Show("Vui lòng chọn một sản phẩm trong danh sách trước khi huấn luyện từ xa!", "Thông Báo", MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
 
         if (string.IsNullOrWhiteSpace(SelectedItem.TeachImagePath))
         {
-            var res = MessageBox.Show($"Sản phẩm '{SelectedItem.ProductCode}' chưa có ảnh mẫu (Teach Image) trên Server.\nBạn có muốn chụp hoặc chọn ảnh mẫu tải lên ngay bây giờ không?", "Chưa Có Ảnh Mẫu", MessageBoxButton.YesNo, MessageBoxImage.Question);
-            if (res == MessageBoxResult.Yes)
-            {
-                await ExecuteUploadTeachFromCameraAsync();
-            }
+            MessageBox.Show($"Sản phẩm '{SelectedItem.ProductCode}' chưa có ảnh mẫu (Teach Image) trên Server!\nHãy chụp hoặc tải ảnh mẫu lên Server trước.", "Thông Báo", MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
 
         IsBusy = true;
-        BusyMessage = "Đang chuẩn bị môi trường Huấn luyện từ xa...";
+        BusyMessage = "Đang chuẩn bị môi trường Huấn luyện từ xa (tải Job & nạp ảnh mẫu)...";
 
         try
         {
+            // 1. Chuẩn bị thư mục Teaching (cùng thư mục chương trình)
+            string teachingDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Teaching");
+            Directory.CreateDirectory(teachingDir);
+
+            // 2. Nếu sản phẩm đã có tệp Job trên Server -> Tải về thư mục Teaching và nạp vào Tool Editor
+            string? localTeachingJobPath = null;
+            if (!string.IsNullOrWhiteSpace(SelectedItem.JobFilePath))
+            {
+                string jobPath = SelectedItem.JobFilePath.Trim();
+                string fullJobUrl = jobPath;
+                if (!jobPath.StartsWith("http://", StringComparison.OrdinalIgnoreCase) &&
+                    !jobPath.StartsWith("https://", StringComparison.OrdinalIgnoreCase) &&
+                    !File.Exists(jobPath))
+                {
+                    string baseUrl = GetServerBaseUrl();
+                    fullJobUrl = $"{baseUrl}/{jobPath.TrimStart('/')}";
+                }
+
+                byte[]? jobBytes = null;
+                if (File.Exists(jobPath))
+                {
+                    jobBytes = await File.ReadAllBytesAsync(jobPath);
+                }
+                else
+                {
+                    var (dlOk, data, dlErr) = await _remoteServerService.DownloadFileAsync(fullJobUrl);
+                    if (dlOk && data != null && data.Length > 0)
+                    {
+                        jobBytes = data;
+                    }
+                }
+
+                if (jobBytes != null && jobBytes.Length > 0)
+                {
+                    string fileName = Path.GetFileName(jobPath);
+                    if (string.IsNullOrWhiteSpace(fileName) || fileName.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0)
+                    {
+                        fileName = $"job_{SelectedItem.ProductCode}.job";
+                    }
+
+                    localTeachingJobPath = Path.Combine(teachingDir, fileName);
+                    await File.WriteAllBytesAsync(localTeachingJobPath, jobBytes);
+
+                    // Nạp Job này vào Tool Editor
+                    await System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
+                    {
+                        _toolEditorViewModel.LoadJobFromFile(localTeachingJobPath);
+                    });
+                }
+            }
+
+            // 3. Chuẩn bị URL ảnh mẫu Teach Image đầy đủ
             string teachPath = SelectedItem.TeachImagePath.Trim();
-            string fullUrl = teachPath;
+            string fullTeachUrl = teachPath;
             if (!teachPath.StartsWith("http://", StringComparison.OrdinalIgnoreCase) &&
-                !teachPath.StartsWith("https://", StringComparison.OrdinalIgnoreCase) &&
-                !File.Exists(teachPath))
+                !teachPath.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
             {
                 string baseUrl = GetServerBaseUrl();
-                fullUrl = $"{baseUrl}/{teachPath.TrimStart('/')}";
+                fullTeachUrl = $"{baseUrl}/{teachPath.TrimStart('/')}";
             }
 
-            // 1. Cập nhật mã sản phẩm vào Tool Editor
-            string nameForEditor = !string.IsNullOrWhiteSpace(SelectedItem.ProductName) ? SelectedItem.ProductName : SelectedItem.ProductCode;
-            _toolEditorViewModel.ProductCode = nameForEditor;
+            // 4. Đồng bộ mã sản phẩm vào Tool Editor
+            _toolEditorViewModel.ProductCode = !string.IsNullOrWhiteSpace(SelectedItem.ProductName) ? SelectedItem.ProductName : SelectedItem.ProductCode;
 
-            // 2. Thiết lập ImageSource sang Url hoặc File
-            if (File.Exists(teachPath))
-            {
-                _toolEditorViewModel.ImageSource_SourceType = ImageSourceType.File;
-                _toolEditorViewModel.ImageSource_FilePath = teachPath;
-            }
-            else
-            {
-                _toolEditorViewModel.ImageSource_SourceType = ImageSourceType.Url;
-                _toolEditorViewModel.ImageSource_ImageUrl = fullUrl;
-            }
+            // 5. Nạp URL ảnh mẫu vào node ImageSource của Tool Editor và tải ảnh về hiển thị
+            await _toolEditorViewModel.FetchAndApplyImageUrlAsync(fullTeachUrl);
 
-            // 3. Tải và nạp ảnh vào canvas Tool Editor
-            await _toolEditorViewModel.FetchAndApplyImageUrlAsync(fullUrl);
+            // 6. Chuyển sang Tab Tool Editor
+            _mainWindowViewModel.SelectedTabIndex = 0;
 
-            // 4. Chuyển sang Tab Tool Editor trên giao diện chính
-            _mainWindowViewModel.SelectedTabIndex = 0; // Tab Tool Editor
-
-            StatusMessage = $"🌐 Đã nạp ảnh mẫu '{SelectedItem.ProductCode}' vào Tool Editor sẵn sàng huấn luyện!";
+            StatusMessage = $"✅ Đã chuẩn bị môi trường Huấn luyện từ xa cho '{SelectedItem.ProductCode}'!";
             StatusBrush = Brushes.Green;
 
-            MessageBox.Show($"🌐 Đã nạp ảnh mẫu của sản phẩm '{SelectedItem.ProductCode}' vào Tool Editor.\nBạn có thể tiến hành đặt ROI, Train Template Origin và cấu hình các tool kiểm tra.", "Huấn Luyện Từ Xa", MessageBoxButton.OK, MessageBoxImage.Information);
+            string jobInfo = localTeachingJobPath != null
+                ? $"\n- Tệp Job đã tải về: {localTeachingJobPath}"
+                : "\n- Chưa có tệp Job trên Server (bắt đầu từ cấu hình hiện tại)";
+
+            MessageBox.Show($"🌐 Đã nạp môi trường Huấn Luyện Từ Xa cho sản phẩm '{SelectedItem.ProductCode}':{jobInfo}\n- Nguồn ảnh ImageSource: {fullTeachUrl}\n\nBạn có thể tiến hành đặt ROI, Train Template Origin và cấu hình các tool kiểm tra.", "Huấn Luyện Từ Xa", MessageBoxButton.OK, MessageBoxImage.Information);
         }
         catch (Exception ex)
         {
-            StatusMessage = $"❌ Lỗi nạp ảnh huấn luyện: {ex.Message}";
+            StatusMessage = $"❌ Lỗi nạp môi trường huấn luyện: {ex.Message}";
             StatusBrush = Brushes.Red;
-            MessageBox.Show($"Lỗi nạp ảnh huấn luyện: {ex.Message}", "Lỗi", MessageBoxButton.OK, MessageBoxImage.Error);
+            MessageBox.Show($"Lỗi nạp môi trường huấn luyện: {ex.Message}", "Lỗi", MessageBoxButton.OK, MessageBoxImage.Error);
         }
         finally
         {
@@ -637,7 +676,7 @@ public partial class JobManagerViewModel : ObservableObject
     }
 
     /// <summary>
-    /// Tải file Job từ Server về máy và mở trong Tool Editor.
+    /// Tải file Job từ Server về máy và mở trong Tool Editor (cho phép người dùng chọn vị trí lưu).
     /// </summary>
     public async Task ExecuteDownloadJobAsync()
     {
@@ -684,10 +723,30 @@ public partial class JobManagerViewModel : ObservableObject
                 jobBytes = data;
             }
 
-            // Lưu ra thư mục jobs cục bộ
-            string localJobDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "jobs");
-            Directory.CreateDirectory(localJobDir);
-            string localJobPath = Path.Combine(localJobDir, $"{SelectedItem.ProductCode}.job");
+            // Hiển thị SaveFileDialog cho phép người dùng chọn thư mục và tên tệp lưu
+            string initialDir = !string.IsNullOrWhiteSpace(_oqcService.Config.JobRootDirectory) && Directory.Exists(_oqcService.Config.JobRootDirectory)
+                ? _oqcService.Config.JobRootDirectory
+                : Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "jobs");
+            Directory.CreateDirectory(initialDir);
+
+            string defaultFileName = Path.GetFileName(SelectedItem.JobFilePath);
+            if (string.IsNullOrWhiteSpace(defaultFileName) || defaultFileName.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0)
+            {
+                defaultFileName = $"job_{SelectedItem.ProductCode}.job";
+            }
+
+            var sfd = new SaveFileDialog
+            {
+                Title = $"Lưu tệp Job (.job) cho sản phẩm '{SelectedItem.ProductCode}'",
+                FileName = defaultFileName,
+                InitialDirectory = initialDir,
+                Filter = "Vision Job Files (*.job)|*.job|All Files (*.*)|*.*",
+                DefaultExt = ".job"
+            };
+
+            if (sfd.ShowDialog() != true) return;
+
+            string localJobPath = sfd.FileName;
             await File.WriteAllBytesAsync(localJobPath, jobBytes);
 
             // Nạp Job vào Tool Editor
@@ -697,7 +756,7 @@ public partial class JobManagerViewModel : ObservableObject
                 _mainWindowViewModel.SelectedTabIndex = 0;
             });
 
-            StatusMessage = $"✅ Đã tải và nạp Job '{SelectedItem.ProductCode}.job' vào Tool Editor!";
+            StatusMessage = $"✅ Đã tải và nạp Job '{Path.GetFileName(localJobPath)}' vào Tool Editor!";
             StatusBrush = Brushes.Green;
             MessageBox.Show($"✅ Đã tải và nạp tệp Job thành công!\nĐường dẫn cục bộ: {localJobPath}", "Thành Công", MessageBoxButton.OK, MessageBoxImage.Information);
         }

@@ -49,6 +49,33 @@
 - Preview được phép tiếp tục khi Global Snapshot rỗng để lấy ảnh từ ImageSource.
 - Lưu template cho Origin, Point và SurfaceCompare hoạt động với nguồn ảnh ImageSource.
 
+- **Hoàn Thiện Cơ Chế Tải Job Chuẩn Tên Server, Quy Trình Huấn Luyện Từ Xa (Remote Teach qua thư mục Teaching & URL ImageSource), Tự Động Đồng Bộ Job Server & Cập Nhật TeachImagePath Vào CSDL (Task 278)**:
+  - **Yêu Cầu & Bối Cảnh**:
+    1. Chuẩn hóa tên file khi tải Job về: Khi bấm nút "Tải Về Máy" trong Remote Job Manager, hộp thoại `SaveFileDialog` mặc định lấy đúng tên tệp gốc đang lưu trên Server (`Path.GetFileName(SelectedItem.JobFilePath)`, ví dụ `job_7B09205A_20260831_061252_eae254.job`) và lưu trong thư mục `JobRootDirectory` (hoặc `jobs/`).
+    2. Tab OQC Scanner: Khi scan mã sản phẩm, kiểm tra file Job cục bộ trước. Nếu chưa có và CSDL chứa đường dẫn Server/URL, tự động tải file từ Server XAMPP về lưu vào `JobRootDirectory` (hoặc `jobs/`) với đúng tên file gốc trên Server (`Path.GetFileName(rawPath)`) rồi nạp vào Engine kiểm tra.
+    3. Quy trình Huấn Luyện Từ Xa (Remote Teach): Khi bấm "Huấn luyện từ xa", hệ thống tự động tải file Job của sản phẩm từ Server về lưu tại thư mục `Teaching/` (cùng cấp với chương trình chạy), nạp Job này vào Tool Editor, tự động chuyển node `ImageSource` sang chế độ URL và nạp ảnh mẫu từ Server URL, rồi chuyển sang Tab Tool Editor để kỹ sư tiến hành huấn luyện.
+    4. Cập nhật `TeachImagePath` vào CSDL: Thêm cấu hình và truy vấn SQL chuyên dụng `UpdateTeachImageQuery` & `UpdateTeachImageDbId` trong Cài đặt DB OQC. Tự động thực thi câu lệnh SQL cập nhật ảnh mẫu ngay khi chụp và upload ảnh mẫu thành công.
+  - **Giải Pháp Kỹ Thuật Đã Triển Khai**:
+    1. **Model & Cấu Hình (`OqcScannerConfig`)**:
+       - Thêm `UpdateTeachImageDbId` và `UpdateTeachImageQuery` (mặc định: `IF EXISTS UPDATE ... ELSE INSERT ...`).
+    2. **Dịch Vụ Nghiệp Vụ (`IOqcScannerService` & `OqcScannerService`)**:
+       - Bổ sung phương thức `UpdateTeachImagePathAsync(productCode, teachImagePath, dbManager)` thay thế các token `{ProductCode}`, `{TeachImagePath}` và thực thi câu lệnh SQL an toàn.
+       - Nâng cấp `LookupJobAsync(scannedCode, dbManager, remoteServerService)`: Tìm kiếm đa tầng cục bộ $\rightarrow$ Nếu chưa có và là đường dẫn Server/URL, tự động tải qua `remoteServerService.DownloadFileAsync` và lưu vào `{JobRootDirectory}/{Path.GetFileName(rawPath)}`.
+       - Cập nhật `AssignProductJobAsync`: Tự động điều hướng sang `UpdateTeachImagePathAsync` khi `jobFilePath` rỗng và có `teachImagePath`.
+    3. **ViewModels & Giao Diện WPF**:
+       - `JobManagerViewModel.ExecuteDownloadJobAsync`: Mở `SaveFileDialog` với `FileName = Path.GetFileName(SelectedItem.JobFilePath)` (fallback `job_{SelectedItem.ProductCode}.job`) và `InitialDirectory = JobRootDirectory` trước khi ghi file và nạp vào Tool Editor.
+       - `JobManagerViewModel.ExecuteRemoteTeachAsync`: Tải file Job từ Server về lưu tại `Teaching/{fileName}`, nạp vào Tool Editor qua `LoadJobFromFile`, nạp URL ảnh mẫu vào `ImageSource` qua `FetchAndApplyImageUrlAsync`, đồng bộ `ProductCode` và chuyển sang Tab 0.
+       - `JobManagerViewModel`: Gọi `UpdateTeachImagePathAsync` ngay sau khi upload ảnh thành công trong `ExecuteCaptureAndUploadTeachImageAsync` và `ExecuteUploadTeachFromFileAsync`.
+       - `ToolEditorViewModel.ToolPreprocess.cs`: `FetchAndApplyImageUrlAsync` tự động thiết lập `def.SourceType = ImageSourceType.Url` và `def.ImageUrl = url` trên node ImageSource, phát sự kiện UI property changes.
+       - `OqcScannerViewModel.LookupJobAndRunAsync`: Truyền `_remoteServerService` vào `_oqcService.LookupJobAsync(...)`.
+       - `OqcScannerViewModel.ExecuteQuickCaptureAndUploadTeachImageAsync`: Gọi `UpdateTeachImagePathAsync` sau khi upload ảnh mẫu.
+       - `OqcScannerViewModel.Settings.cs` & `OqcSettingsDialog.xaml`: Bổ sung cấu hình `UpdateTeachImageDbId`, `UpdateTeachImageQuery` trong Cài đặt OQC.
+  - **Kiểm Thử**:
+    - Bổ sung 2 test tự động mới trong [RemoteServerAndJobManagerTests.cs](file:///g:/NODEJS/Vision2026/TestExtractApp/RemoteServerAndJobManagerTests.cs):
+      + `Test_UpdateTeachImage_SerializationAndSubstitution`
+      + `Test_LookupJobAsync_WithRemoteDownloadAsync`
+    - Toàn bộ test suite dự án đạt 100% PASSED. Solution `dotnet build` đạt 0 lỗi (0 errors).
+
 - **Triển Khai Hệ Thống Quản Lý & Huấn Luyện (Teaching) Job Từ Xa Qua Server XAMPP (PHP API) & Đồng Bộ Hai Chiều Đa Máy OQC Scanner (Task 277)**:
   - **Yêu Cầu & Bối Cảnh**:
     - Xây dựng giải pháp cho phép kỹ sư cấu hình, huấn luyện (teach) Job từ xa trên máy văn phòng qua mạng LAN/Server XAMPP (PHP) mà không cần trực tiếp cắm máy tính vào dây chuyền sản xuất:

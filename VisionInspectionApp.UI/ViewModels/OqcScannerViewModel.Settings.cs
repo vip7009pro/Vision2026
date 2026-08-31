@@ -58,6 +58,13 @@ public partial class OqcScannerViewModel
     [ObservableProperty]
     private string _assignQuery = "";
 
+    // ─── Cập nhật riêng Ảnh Mẫu Teach Image ───
+    [ObservableProperty]
+    private string _updateTeachImageDbId = "";
+
+    [ObservableProperty]
+    private string _updateTeachImageQuery = "IF EXISTS (SELECT 1 FROM ProductJobs WHERE ProductCode = '{ProductCode}') UPDATE ProductJobs SET TeachImagePath = '{TeachImagePath}', UpdatedAt = GETDATE() WHERE ProductCode = '{ProductCode}' ELSE INSERT INTO ProductJobs (ProductCode, TeachImagePath, UpdatedAt) VALUES ('{ProductCode}', '{TeachImagePath}', GETDATE())";
+
     [ObservableProperty]
     private bool _logResultToDb = false;
 
@@ -231,6 +238,9 @@ public partial class OqcScannerViewModel
         AssignDbId = cfg.AssignDbId;
         AssignQuery = cfg.AssignQuery;
 
+        UpdateTeachImageDbId = cfg.UpdateTeachImageDbId;
+        UpdateTeachImageQuery = !string.IsNullOrWhiteSpace(cfg.UpdateTeachImageQuery) ? cfg.UpdateTeachImageQuery : "IF EXISTS (SELECT 1 FROM ProductJobs WHERE ProductCode = '{ProductCode}') UPDATE ProductJobs SET TeachImagePath = '{TeachImagePath}', UpdatedAt = GETDATE() WHERE ProductCode = '{ProductCode}' ELSE INSERT INTO ProductJobs (ProductCode, TeachImagePath, UpdatedAt) VALUES ('{ProductCode}', '{TeachImagePath}', GETDATE())";
+
         ServerApiUrl = !string.IsNullOrWhiteSpace(cfg.ServerApiUrl) ? cfg.ServerApiUrl : "http://localhost/vision_upload.php";
         TeachImageColumn = !string.IsNullOrWhiteSpace(cfg.TeachImageColumn) ? cfg.TeachImageColumn : "TeachImagePath";
 
@@ -303,6 +313,9 @@ public partial class OqcScannerViewModel
             AssignDbId = AssignDbId,
             AssignQuery = AssignQuery,
 
+            UpdateTeachImageDbId = UpdateTeachImageDbId,
+            UpdateTeachImageQuery = UpdateTeachImageQuery,
+
             ServerApiUrl = ServerApiUrl,
             TeachImageColumn = TeachImageColumn,
 
@@ -372,6 +385,9 @@ public partial class OqcScannerViewModel
 
                     AssignDbId = AssignDbId,
                     AssignQuery = AssignQuery,
+
+                    UpdateTeachImageDbId = UpdateTeachImageDbId,
+                    UpdateTeachImageQuery = UpdateTeachImageQuery,
 
                     ServerApiUrl = ServerApiUrl,
                     TeachImageColumn = TeachImageColumn,

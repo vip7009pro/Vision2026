@@ -33,7 +33,7 @@ public interface IOqcScannerService
     (bool success, string processedCode, string rawCode, string errorMessage) ProcessRawCodeString(string rawInput, OqcScannerConfig? config = null);
 
     Task<(bool Found, string JobFilePath, string ErrorMessage)> LookupJobAsync(
-        string scannedCode, IDbManagerService dbManager);
+        string scannedCode, IDbManagerService dbManager, VisionInspectionApp.Application.Services.IRemoteServerService? remoteServerService = null);
 
     Task<(bool Found, string ProductName, string ErrorMessage)> LookupProductNameAsync(
         string scannedCode, IDbManagerService dbManager);
@@ -46,6 +46,9 @@ public interface IOqcScannerService
 
     Task<(bool Success, string Message)> AssignProductJobAsync(
         string productCode, string jobFilePath, IDbManagerService dbManager, string teachImagePath = "");
+
+    Task<(bool Success, string Message)> UpdateTeachImagePathAsync(
+        string productCode, string teachImagePath, IDbManagerService dbManager);
 
     Task<(bool Success, string Message)> LogInspectionResultAsync(
         string scannedCode, string uuid, string jobFilePath, InspectionResult result, VisionConfig config, IDbManagerService dbManager, System.Collections.Generic.List<OqcMeasurementDetail>? measurementDetails = null, string rawCode = "");

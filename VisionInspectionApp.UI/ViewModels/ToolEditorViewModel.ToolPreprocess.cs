@@ -623,14 +623,32 @@ namespace VisionInspectionApp.UI.ViewModels
                     return;
                 }
 
-                var def = SelectedImageSourceDef();
-                string nodeName = def?.Name ?? "ImageSource1";
-                SetImageSourceCache(nodeName, url, mat);
+                var def = SelectedImageSourceDef() ?? _config?.ImageSources?.FirstOrDefault();
+                if (def != null)
+                {
+                    def.SourceType = ImageSourceType.Url;
+                    def.ImageUrl = url;
+                    string nodeName = def.Name ?? "ImageSource1";
+                    SetImageSourceCache(nodeName, url, mat);
+                }
+                else
+                {
+                    SetImageSourceCache("ImageSource1", url, mat);
+                }
+
                 _sharedImage.SetImage(mat);
 
                 await System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
                 {
+                    OnPropertyChanged(nameof(ImageSource_SourceType));
+                    OnPropertyChanged(nameof(ImageSource_IsFile));
+                    OnPropertyChanged(nameof(ImageSource_IsFolder));
+                    OnPropertyChanged(nameof(ImageSource_IsCamera));
+                    OnPropertyChanged(nameof(ImageSource_IsUrl));
+                    OnPropertyChanged(nameof(ImageSource_ImageUrl));
+                    RaiseToolPropertyPanelsChanged();
                     RefreshPreviews();
+                    RequestAutoSave();
                     StatusBarText = $"✅ Đã tải và nạp ảnh ({mat.Width}x{mat.Height}) từ Server URL!";
                 });
             }

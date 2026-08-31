@@ -27,6 +27,10 @@ public class OqcScannerConfig
     public string AssignDbId { get; set; } = "";
     public string AssignQuery { get; set; } = "IF EXISTS (SELECT 1 FROM ProductJobs WHERE ProductCode = '{ProductCode}') UPDATE ProductJobs SET JobFilePath = '{JobFilePath}', TeachImagePath = '{TeachImagePath}' WHERE ProductCode = '{ProductCode}' ELSE INSERT INTO ProductJobs (ProductCode, JobFilePath, TeachImagePath) VALUES ('{ProductCode}', '{JobFilePath}', '{TeachImagePath}')";
 
+    // ─── Cập nhật riêng Ảnh Mẫu Teach Image (Update Teach Image Query) ───
+    public string UpdateTeachImageDbId { get; set; } = "";
+    public string UpdateTeachImageQuery { get; set; } = "IF EXISTS (SELECT 1 FROM ProductJobs WHERE ProductCode = '{ProductCode}') UPDATE ProductJobs SET TeachImagePath = '{TeachImagePath}', UpdatedAt = GETDATE() WHERE ProductCode = '{ProductCode}' ELSE INSERT INTO ProductJobs (ProductCode, TeachImagePath, UpdatedAt) VALUES ('{ProductCode}', '{TeachImagePath}', GETDATE())";
+
     // ─── Cấu hình Máy Chủ Web (Server API / Upload Endpoint) ───
     public string ServerApiUrl { get; set; } = "http://localhost/vision_upload.php";
     public string TeachImageColumn { get; set; } = "TeachImagePath";

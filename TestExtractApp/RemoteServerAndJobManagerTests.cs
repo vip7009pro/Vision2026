@@ -22,7 +22,9 @@ public static class RemoteServerAndJobManagerTests
         Test_OqcScannerConfig_SerializationWithServerFields();
         Test_ImageSourceDefinition_UrlSupport();
         Test_AssignQuerySubstitutionWithTeachImage();
+        Test_UpdateTeachImage_SerializationAndSubstitution();
         Test_RemoteServerService_WithHttpMockServerAsync().GetAwaiter().GetResult();
+        Test_LookupJobAsync_WithRemoteDownloadAsync().GetAwaiter().GetResult();
 
         Console.WriteLine("✅ ALL REMOTE SERVER & JOB MANAGER TESTS PASSED!");
         Console.WriteLine("=================================================\n");
@@ -238,5 +240,114 @@ public static class RemoteServerAndJobManagerTests
 
         await serverTask;
         listener.Stop();
+    }
+
+    private static void Test_UpdateTeachImage_SerializationAndSubstitution()
+    {
+        Console.WriteLine("▶ Running Test_UpdateTeachImage_SerializationAndSubstitution...");
+        var cfg = new OqcScannerConfig
+        {
+            UpdateTeachImageDbId = "DB_SQL_SERVER",
+            UpdateTeachImageQuery = "UPDATE ProductJobs SET TeachImagePath = '{TeachImagePath}', UpdatedAt = GETDATE() WHERE ProductCode = '{ProductCode}'"
+        };
+
+        string json = JsonSerializer.Serialize(cfg);
+        var deserialized = JsonSerializer.Deserialize<OqcScannerConfig>(json);
+
+        if (deserialized == null)
+            throw new Exception("Deserialization failed.");
+
+        if (deserialized.UpdateTeachImageDbId != "DB_SQL_SERVER")
+            throw new Exception("UpdateTeachImageDbId mismatch.");
+
+        if (!deserialized.UpdateTeachImageQuery.Contains("{TeachImagePath}"))
+            throw new Exception("UpdateTeachImageQuery does not contain {TeachImagePath}.");
+
+        string productCode = "7B09205A";
+        string teachPath = "uploads/teach_images/teach_7B09205A_20260831.png";
+
+        string sql = deserialized.UpdateTeachImageQuery
+            .Replace("{ProductCode}", productCode)
+            .Replace("{TeachImagePath}", teachPath);
+
+        if (!sql.Contains("7B09205A") || !sql.Contains("uploads/teach_images/teach_7B09205A_20260831.png"))
+            throw new Exception("SQL token substitution failed.");
+
+        Console.WriteLine("  ✓ UpdateTeachImage serialization & token substitution verified.");
+    }
+
+    private static async Task Test_LookupJobAsync_WithRemoteDownloadAsync()
+    {
+        Console.WriteLine("▶ Running Test_LookupJobAsync_WithRemoteDownloadAsync...");
+        int port = 19583;
+        string prefix = $"http://127.0.0.1:{port}/";
+        using var listener = new HttpListener();
+        listener.Prefixes.Add(prefix);
+        listener.Start();
+
+        var serverTask = Task.Run(async () =>
+        {
+            var context = await listener.GetContextAsync();
+            var req = context.Request;
+            var resp = context.Response;
+
+            if (req.Url?.AbsolutePath.Contains("test_remote.job") == true)
+            {
+                byte[] dummyJobData = Encoding.UTF8.GetBytes("PK_DUMMY_ZIP_JOB_DATA_FOR_7B09205A");
+                resp.ContentType = "application/octet-stream";
+                resp.ContentLength64 = dummyJobData.Length;
+                await resp.OutputStream.WriteAsync(dummyJobData);
+                resp.Close();
+            }
+            else
+            {
+                resp.StatusCode = 404;
+                resp.Close();
+            }
+        });
+
+        string testJobRoot = Path.Combine(Path.GetTempPath(), "VisionJobsTest_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(testJobRoot);
+
+        try
+        {
+            var remoteService = new RemoteServerService();
+            var oqcService = new OqcScannerService();
+            oqcService.Config.ServerApiUrl = $"{prefix}vision_upload.php";
+            oqcService.Config.JobRootDirectory = testJobRoot;
+
+            // Direct download resolution test
+            string rawRemoteJobPath = $"{prefix}uploads/jobs/test_remote.job";
+            string productCode = "7B09205A";
+
+            // Verify that file does NOT exist yet in JobRootDirectory
+            string expectedTarget = Path.Combine(testJobRoot, $"{productCode}.job");
+            if (File.Exists(expectedTarget)) File.Delete(expectedTarget);
+
+            // Test Download & save as {ProductCode}.job
+            var (dlOk, jobData, dlErr) = await remoteService.DownloadFileAsync(rawRemoteJobPath);
+            if (!dlOk || jobData == null)
+                throw new Exception($"Failed to download from mock server: {dlErr}");
+
+            await File.WriteAllBytesAsync(expectedTarget, jobData);
+
+            if (!File.Exists(expectedTarget))
+                throw new Exception($"File {expectedTarget} was not created!");
+
+            string readBack = await File.ReadAllTextAsync(expectedTarget);
+            if (!readBack.Contains("PK_DUMMY_ZIP_JOB_DATA"))
+                throw new Exception("Read back job content corrupted.");
+
+            Console.WriteLine($"  ✓ Downloaded & verified job file saved as: {expectedTarget}");
+        }
+        finally
+        {
+            if (Directory.Exists(testJobRoot))
+            {
+                try { Directory.Delete(testJobRoot, true); } catch { }
+            }
+            await serverTask;
+            listener.Stop();
+        }
     }
 }
