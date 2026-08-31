@@ -49,6 +49,23 @@
 - Preview được phép tiếp tục khi Global Snapshot rỗng để lấy ảnh từ ImageSource.
 - Lưu template cho Origin, Point và SurfaceCompare hoạt động với nguồn ảnh ImageSource.
 
+- **Tích Hợp Chức Năng Gán Mã Mới & Gán Job Đang Mở Trực Tiếp Trong Cửa Sổ Quản Lý & Huấn Luyện (Job Manager) (Task 281)**:
+  - **Yêu Cầu & Bối Cảnh**:
+    - Trước đây, khi muốn gán mã sản phẩm mới cho một tệp Job, người dùng phải đóng cửa sổ Quản Lý Job và mở riêng cửa sổ "Gán mã sản phẩm cho tệp JOB" (`ProductAssignDialog.xaml`).
+    - Người dùng mong muốn tích hợp chức năng gán code mới trực tiếp vào trong cửa sổ Quản lý và huấn luyện (teaching).
+  - **Giải Pháp Kỹ Thuật Đã Triển Khai**:
+    1. **Giao Diện Toolbar & Right Details Panel (`JobManagerWindow.xaml`)**:
+       - Bổ sung nút **"➕ Gán Mã Mới"** (Background xanh dương `#0288D1`): Tra cứu danh mục sản phẩm từ CSDL và gán mã sản phẩm mới cho tệp Job.
+       - Bổ sung nút **"🔗 Gán Job Đang Mở"** (Background `#00838F`): Gán nhanh tệp Job đang mở trong Tool Editor (`_toolEditorViewModel.CurrentJobFilePath`) cho sản phẩm đang chọn trong danh sách CSDL.
+    2. **Xử Lý Nghiệp Vụ (`JobManagerViewModel.cs`)**:
+       - `OpenProductAssignCommand`: Mở hộp thoại `ProductAssignDialog` với file Job tự động điền sẵn (từ bảng hoặc Tool Editor). Đăng ký sự kiện `dialog.Closed` để tự động làm mới danh sách `JobManagerItems` ngay khi gán mã thành công.
+       - `AssignCurrentActiveJobCommand`: Gán tệp Job đang mở cho mã sản phẩm đang chọn qua `_oqcService.AssignProductJobAsync` và đồng bộ mã sản phẩm vào Tool Editor.
+    3. **Tự Động Nạp Dữ Liệu (`ProductAssignDialog.xaml.cs`)**:
+       - Thêm sự kiện `Loaded` tự động nạp trang đầu danh sách sản phẩm từ DB giúp thao tác nhanh và thuận tiện.
+  - **Kiểm Thử**:
+    - Toàn bộ test suite trong `TestExtractApp` đạt 100% PASSED (106 tests).
+    - Solution `dotnet build` đạt 0 lỗi (0 errors).
+
 - **Tự Động Bảo Lưu Cấu Hình Camera & Đèn OQC Gốc Khi Huấn Luyện Từ Xa (Remote Teach) Trên Máy Văn Phòng & Tự Động Chuyển Về Camera Khi Upload Lên Server (Task 280)**:
   - **Vấn Đề & Bối Cảnh**:
     - Quy trình thiết lập Job gồm 2 giai đoạn:

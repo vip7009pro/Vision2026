@@ -102,7 +102,7 @@
                             <!-- Remote Teach Button (Highlighted) -->
                             <Button Command="{Binding RemoteTeachCommand}"
                                     Background="#2E7D32" Foreground="White" FontWeight="Bold"
-                                    Padding="10,4" Margin="0,0,6,0" Height="30" Cursor="Hand"
+                                    Padding="10,4" Margin="0,0,6,4" Height="30" Cursor="Hand"
                                     ToolTip="Nạp ảnh mẫu từ Server vào Tool Editor để huấn luyện và cấu hình Job từ xa">
                                 <StackPanel Orientation="Horizontal">
                                     <TextBlock Text="🌐 " />
@@ -110,10 +110,32 @@
                                 </StackPanel>
                             </Button>
 
+                            <!-- Gán Mã Mới (Tra cứu từ Master DB) -->
+                            <Button Command="{Binding OpenProductAssignCommand}"
+                                    Background="#0288D1" Foreground="White" FontWeight="Bold"
+                                    Padding="10,4" Margin="0,0,6,4" Height="30" Cursor="Hand"
+                                    ToolTip="Tra cứu danh mục sản phẩm từ CSDL và gán mã sản phẩm mới cho tệp Job">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="➕ " />
+                                    <TextBlock Text="Gán Mã Mới" />
+                                </StackPanel>
+                            </Button>
+
+                            <!-- Gán Job Đang Mở Cho SP Đang Chọn -->
+                            <Button Command="{Binding AssignCurrentActiveJobCommand}"
+                                    Background="#00838F" Foreground="White" FontWeight="SemiBold"
+                                    Padding="8,4" Margin="0,0,6,4" Height="30" Cursor="Hand"
+                                    ToolTip="Gán tệp Job đang mở trong Tool Editor cho sản phẩm đang chọn trong danh sách">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="🔗 " />
+                                    <TextBlock Text="Gán Job Đang Mở" />
+                                </StackPanel>
+                            </Button>
+
                             <!-- Upload Teach Camera -->
                             <Button Command="{Binding UploadTeachFromCameraCommand}"
                                     Background="#1565C0" Foreground="White" FontWeight="SemiBold"
-                                    Padding="8,4" Margin="0,0,6,0" Height="30" Cursor="Hand"
+                                    Padding="8,4" Margin="0,0,6,4" Height="30" Cursor="Hand"
                                     ToolTip="Chụp ảnh từ Camera hiện tại và tải lên Server làm Teach Image">
                                 <StackPanel Orientation="Horizontal">
                                     <TextBlock Text="📸 " />
@@ -123,7 +145,7 @@
 
                             <!-- Upload Teach File -->
                             <Button Command="{Binding UploadTeachFromFileCommand}"
-                                    Padding="8,4" Margin="0,0,6,0" Height="30" Cursor="Hand"
+                                    Padding="8,4" Margin="0,0,6,4" Height="30" Cursor="Hand"
                                     ToolTip="Chọn ảnh từ file và tải lên Server làm Teach Image">
                                 <StackPanel Orientation="Horizontal">
                                     <TextBlock Text="📁 " />
@@ -134,7 +156,7 @@
                             <!-- Upload Job -->
                             <Button Command="{Binding UploadCurrentJobCommand}"
                                     Background="#E65100" Foreground="White" FontWeight="SemiBold"
-                                    Padding="8,4" Margin="0,0,6,0" Height="30" Cursor="Hand"
+                                    Padding="8,4" Margin="0,0,6,4" Height="30" Cursor="Hand"
                                     ToolTip="Tải tệp Job (.job) hiện tại lên Server và tự động cập nhật liên kết CSDL">
                                 <StackPanel Orientation="Horizontal">
                                     <TextBlock Text="📤 " />
@@ -144,7 +166,7 @@
 
                             <!-- Download Job -->
                             <Button Command="{Binding DownloadJobCommand}"
-                                    Padding="8,4" Margin="0,0,6,0" Height="30" Cursor="Hand"
+                                    Padding="8,4" Margin="0,0,6,4" Height="30" Cursor="Hand"
                                     ToolTip="Tải tệp Job từ Server về máy cục bộ và mở vào Tool Editor">
                                 <StackPanel Orientation="Horizontal">
                                     <TextBlock Text="📥 " />
@@ -154,7 +176,7 @@
 
                             <!-- Assign Local Job -->
                             <Button Command="{Binding AssignLocalJobCommand}"
-                                    Padding="8,4" Height="30" Cursor="Hand"
+                                    Padding="8,4" Margin="0,0,6,4" Height="30" Cursor="Hand"
                                     ToolTip="Gán file Job cục bộ cho sản phẩm đang chọn trong CSDL">
                                 <StackPanel Orientation="Horizontal">
                                     <TextBlock Text="📋 " />
@@ -343,6 +365,26 @@
                                 <StackPanel Orientation="Horizontal">
                                     <TextBlock Text="🌐 " FontSize="14" />
                                     <TextBlock Text="Huấn Luyện Từ Xa (Remote Teach)" VerticalAlignment="Center" />
+                                </StackPanel>
+                            </Button>
+
+                            <Button Command="{Binding OpenProductAssignCommand}"
+                                    Background="#0288D1" Foreground="White" FontWeight="Bold"
+                                    Height="32" Margin="0,0,0,6" Cursor="Hand"
+                                    ToolTip="Tra cứu danh mục sản phẩm từ CSDL và gán mã sản phẩm mới">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="➕ " FontSize="13" />
+                                    <TextBlock Text="Gán Mã Sản Phẩm Mới (Assign Code)" VerticalAlignment="Center" />
+                                </StackPanel>
+                            </Button>
+
+                            <Button Command="{Binding AssignCurrentActiveJobCommand}"
+                                    Background="#00838F" Foreground="White" FontWeight="SemiBold"
+                                    Height="32" Margin="0,0,0,6" Cursor="Hand"
+                                    ToolTip="Gán tệp Job đang mở trong Tool Editor cho sản phẩm này">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="🔗 " FontSize="13" />
+                                    <TextBlock Text="Gán Job Đang Mở Cho SP Này" VerticalAlignment="Center" />
                                 </StackPanel>
                             </Button>
 

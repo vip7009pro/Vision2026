@@ -9,6 +9,14 @@ public partial class ProductAssignDialog : Window
     {
         InitializeComponent();
         DataContext = viewModel;
+
+        Loaded += async (s, e) =>
+        {
+            if (viewModel.ProductListTable == null)
+            {
+                await viewModel.SearchProductsCommand.ExecuteAsync(null);
+            }
+        };
     }
 
     private void BrowseJobFile_Click(object sender, RoutedEventArgs e)

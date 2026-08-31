@@ -87,6 +87,8 @@ public partial class JobManagerViewModel : ObservableObject
     public IAsyncRelayCommand UploadCurrentJobCommand { get; }
     public IAsyncRelayCommand DownloadJobCommand { get; }
     public IAsyncRelayCommand AssignLocalJobCommand { get; }
+    public IAsyncRelayCommand AssignCurrentActiveJobCommand { get; }
+    public IRelayCommand OpenProductAssignCommand { get; }
     public IRelayCommand OpenSettingsCommand { get; }
 
     public JobManagerViewModel(
@@ -121,6 +123,8 @@ public partial class JobManagerViewModel : ObservableObject
         UploadCurrentJobCommand = new AsyncRelayCommand(ExecuteUploadCurrentJobAsync);
         DownloadJobCommand = new AsyncRelayCommand(ExecuteDownloadJobAsync);
         AssignLocalJobCommand = new AsyncRelayCommand(ExecuteAssignLocalJobAsync);
+        AssignCurrentActiveJobCommand = new AsyncRelayCommand(ExecuteAssignCurrentActiveJobAsync);
+        OpenProductAssignCommand = new RelayCommand(ExecuteOpenProductAssign);
         OpenSettingsCommand = new RelayCommand(ExecuteOpenSettings);
 
         // Auto ping on init
@@ -819,6 +823,83 @@ public partial class JobManagerViewModel : ObservableObject
             StatusMessage = $"❌ {assignMsg}";
             StatusBrush = Brushes.Red;
             MessageBox.Show($"Lỗi gán Job: {assignMsg}", "Lỗi", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
+
+    /// <summary>
+    /// Mở hộp thoại Gán Mã Sản Phẩm Mới (Product Assign Dialog) trực tiếp từ cửa sổ Quản Lý Job & Huấn Luyện Từ Xa.
+    /// Tự động làm mới danh sách Job sau khi gán mã thành công.
+    /// </summary>
+    public void ExecuteOpenProductAssign()
+    {
+        var oqcVm = _mainWindowViewModel.OqcScanner ?? (System.Windows.Application.Current as App)?.ServiceProvider?.GetService(typeof(OqcScannerViewModel)) as OqcScannerViewModel;
+        if (oqcVm != null)
+        {
+            // Tự động điền đường dẫn Job: ưu tiên Job đang chọn trong bảng hoặc Job đang mở trong Tool Editor
+            string jobToAssign = SelectedItem?.JobFilePath ?? _toolEditorViewModel.CurrentJobFilePath ?? "";
+            if (!string.IsNullOrWhiteSpace(jobToAssign))
+            {
+                oqcVm.AssignJobFilePath = jobToAssign;
+            }
+
+            var dialog = new ProductAssignDialog(oqcVm)
+            {
+                Owner = System.Windows.Application.Current?.Windows.OfType<JobManagerWindow>().FirstOrDefault() 
+                        ?? System.Windows.Application.Current?.MainWindow
+            };
+            dialog.Closed += async (s, e) =>
+            {
+                // Sau khi đóng hộp thoại gán mã, tự động làm mới danh sách để hiển thị mã mới
+                await ExecuteRefreshListAsync();
+            };
+            dialog.ShowDialog();
+        }
+        else
+        {
+            MessageBox.Show("Không tìm thấy dịch vụ OqcScannerViewModel!", "Lỗi", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
+
+    /// <summary>
+    /// Gán trực tiếp tệp Job đang mở trong Tool Editor cho sản phẩm đang chọn trong danh sách CSDL.
+    /// </summary>
+    public async Task ExecuteAssignCurrentActiveJobAsync()
+    {
+        if (SelectedItem == null)
+        {
+            MessageBox.Show("Vui lòng chọn một sản phẩm trong danh sách trước khi gán Job!", "Thông Báo", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        string? currentJobPath = _toolEditorViewModel.CurrentJobFilePath;
+        if (string.IsNullOrWhiteSpace(currentJobPath) || !File.Exists(currentJobPath))
+        {
+            MessageBox.Show("Hiện tại chưa có tệp Job nào được mở hoặc lưu trong Tool Editor!\nVui lòng mở hoặc lưu Job trước khi gán.", "Thông Báo", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        var (assignOk, assignMsg) = await _oqcService.AssignProductJobAsync(
+            SelectedItem.ProductCode, currentJobPath, _dbManager, SelectedItem.TeachImagePath);
+
+        if (assignOk)
+        {
+            SelectedItem.JobFilePath = currentJobPath;
+            SelectedItem.HasJobFile = true;
+            SelectedItem.StatusMessage = "Đã gán Job đang mở";
+
+            // Cập nhật ProductCode vào ToolEditor
+            string nameForToolEditor = !string.IsNullOrWhiteSpace(SelectedItem.ProductName) ? SelectedItem.ProductName : SelectedItem.ProductCode;
+            _toolEditorViewModel.ApplyAssignedProductCode(nameForToolEditor, currentJobPath);
+
+            StatusMessage = $"✅ Đã gán tệp Job đang mở '{Path.GetFileName(currentJobPath)}' cho sản phẩm '{SelectedItem.ProductCode}'!";
+            StatusBrush = Brushes.Green;
+            MessageBox.Show($"✅ Đã gán tệp Job đang mở cho sản phẩm '{SelectedItem.ProductCode}' thành công!\nTệp Job: {currentJobPath}", "Thành Công", MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+        else
+        {
+            StatusMessage = $"❌ Lỗi gán Job: {assignMsg}";
+            StatusBrush = Brushes.Red;
+            MessageBox.Show($"Lỗi gán Job:\n{assignMsg}", "Lỗi", MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }
 

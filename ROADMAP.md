@@ -1487,9 +1487,21 @@ Lộ trình tích hợp tính năng Chụp ảnh từ camera và hỗ trợ các
         3. **Tự Động Chuyển Nguồn Ảnh Khi Upload Server (`ToolEditorViewModel.Config.cs` & `JobManagerViewModel.cs`)**:
            - Bổ sung hàm `PrepareJobForProductionUpload()`: Tự động chuyển các nguồn ảnh `Url` hoặc `File` về `Camera` (bảo lưu 100% `CameraParams`, `CameraIndex`, `CameraDeviceDisplayName`, `LightingParams` gốc) và lưu lại file `.job`.
            - `JobManagerViewModel.ExecuteUploadCurrentJobAsync`: Tự động gọi `PrepareJobForProductionUpload()` trước khi đẩy file `.job` lên Server XAMPP.
+- [x] Task 281: Tích Hợp Chức Năng Gán Mã Sản Phẩm Mới & Gán Job Đang Mở Trực Tiếp Trong Cửa Sổ Quản Lý & Huấn Luyện (Job Manager).
+      - Yêu Cầu & Bối Cảnh:
+        - Trước đây, khi muốn gán mã sản phẩm mới cho một tệp Job, người dùng phải đóng cửa sổ Quản Lý Job và mở riêng cửa sổ "Gán mã sản phẩm cho tệp JOB" (`ProductAssignDialog.xaml`).
+        - Người dùng mong muốn tích hợp chức năng gán code mới trực tiếp vào trong cửa sổ Quản lý và huấn luyện (teaching).
+      - Giải Pháp Đã Triển Khai:
+        1. **Thanh Công Cụ (Toolbar) & Bảng Chi Tiết (`JobManagerWindow.xaml`)**:
+           - Bổ sung nút **"➕ Gán Mã Mới"** (Background xanh dương nổi bật `#0288D1`): Cho phép tra cứu danh mục sản phẩm từ CSDL và gán mã sản phẩm mới cho tệp Job.
+           - Bổ sung nút **"🔗 Gán Job Đang Mở"** (Background `#00838F`): Cho phép gán trực tiếp tệp Job đang mở trong Tool Editor cho sản phẩm đang chọn trong bảng.
+        2. **Xử Lý ViewModel (`JobManagerViewModel.cs`)**:
+           - Thêm `OpenProductAssignCommand` (`ExecuteOpenProductAssign`): Tự động điền tệp Job đang chọn / đang mở vào hộp thoại `ProductAssignDialog` và tự động làm mới danh sách `JobManagerItems` ngay khi đóng hộp thoại.
+           - Thêm `AssignCurrentActiveJobCommand` (`ExecuteAssignCurrentActiveJobAsync`): Gán nhanh tệp Job đang mở (`_toolEditorViewModel.CurrentJobFilePath`) cho `SelectedItem.ProductCode`, gọi `_oqcService.AssignProductJobAsync` và đồng bộ mã sản phẩm vào Tool Editor.
+        3. **Auto-Search Khi Mở Hộp Thoại (`ProductAssignDialog.xaml.cs`)**:
+           - Thêm sự kiện `Loaded` tự động nạp trang đầu danh sách sản phẩm từ DB nếu chưa có dữ liệu, giúp người dùng không cần nhấn nút tìm kiếm thủ công.
       - Kiểm Thử:
-        - Bổ sung bài test `Test_OqcPreservedCamera_And_SwitchToProductionCamera` trong `RemoteServerAndJobManagerTests.cs`.
-        - Chạy toàn bộ test suite dự án $\rightarrow$ 100% PASSED. Solution `dotnet build` đạt 0 lỗi (0 errors).
+        - Chạy toàn bộ test suite dự án $\rightarrow$ 100% PASSED (106 tests). Solution `dotnet build` đạt 0 lỗi (0 errors).
 
 
 
