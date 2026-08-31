@@ -1459,9 +1459,23 @@ Lộ trình tích hợp tính năng Chụp ảnh từ camera và hỗ trợ các
            - `OqcScannerViewModel.LookupJobAndRunAsync`: Truyền `_remoteServerService` vào `_oqcService.LookupJobAsync(...)`.
            - `OqcScannerViewModel.ExecuteQuickCaptureAndUploadTeachImageAsync`: Gọi `_oqcService.UpdateTeachImagePathAsync` sau khi upload ảnh thành công.
            - `OqcScannerViewModel.Settings.cs` & `OqcSettingsDialog.xaml`: Thêm thuộc tính `UpdateTeachImageDbId`, `UpdateTeachImageQuery` và giao diện cấu hình trực quan trong Cài đặt DB OQC.
+- [x] Task 279: Khắc Phục Triệt Để Lỗi Treo Giao Diện (UI Freeze) Khi Scan Mã OQC, Chống Treo Driver Cơ Sở Dữ Liệu (ADO.NET) & Ràng Buộc Timeout Nghiêm Ngặt.
+      - Vấn Đề & Nguyên Nhân:
+        1. Khi scan mã (ví dụ `GH63-22334ADTA3E116HE01XC01005000`), hệ thống gọi `LookupProductNameAsync` và `LookupJobAsync` trên DB. Khi cơ sở dữ liệu bị mất kết nối, timeout hoặc chậm, driver SqlClient/ADO.NET mặc định mở kết nối đồng bộ có thể chờ từ 15-30s mà không hủy ngay khi hủy `CancellationToken`.
+        2. `ExecuteScanInternalAsync` chạy trực tiếp trên UI Dispatcher thread khiến toàn bộ luồng giao diện WPF bị khóa cứng (không thể click hay tương tác), modal popup che màn hình không tắt.
+        3. `RemoteServerService.DownloadFileAsync` không có timeout độc lập (mặc định HttpClient 30s) khiến việc tải job qua mạng treo lâu.
+      - Giải Pháp Đã Triển Khai:
+        1. **Chống Treo Tầng Cơ Sở Dữ Liệu (`DbManagerService`)**:
+           - Ràng buộc timeout nghiêm ngặt `ConnectTimeout = Math.Clamp(timeoutSeconds, 1, 5)` trong Connection String cho SQL Server, MySQL, PostgreSQL.
+           - Bọc toàn bộ `conn.OpenAsync`, `cmd.ExecuteReaderAsync`, `cmd.ExecuteNonQueryAsync` trong `Task.Run` kết hợp `Task.WhenAny(..., Task.Delay(...))` đảm bảo không bao giờ block UI thread và tự động trả về lỗi timeout rõ ràng sau 2-3s.
+        2. **Chống Treo Tầng Mạng & Tải Job (`RemoteServerService` & `OqcScannerService`)**:
+           - Thêm `cts.CancelAfter(TimeSpan.FromSeconds(5))` cho `DownloadFileAsync`.
+           - Cập nhật `isRemotePath` trong `LookupJobAsync` để không kích hoạt HTTP request khi đường dẫn là file cục bộ tuyệt đối (`Path.IsPathRooted`).
+        3. **Chống Treo Tầng Giao Diện (`OqcScannerViewModel`)**:
+           - Cập nhật `RunTaskWith1SecLoadingTimeoutAsync` sử dụng `Dispatcher.InvokeAsync` phi chặn (non-blocking).
+           - Đưa toàn bộ tra cứu Tên sản phẩm và Job vào khối `try ... catch` an toàn, luôn đảm bảo ẩn Popup loading và giải phóng trạng thái `IsScanning = false` trong `finally`.
       - Kiểm Thử:
-        - Bổ sung bài test `Test_UpdateTeachImage_SerializationAndSubstitution` và `Test_LookupJobAsync_WithRemoteDownloadAsync` trong `TestExtractApp/RemoteServerAndJobManagerTests.cs`.
-        - Chạy toàn bộ test suite dự án $\rightarrow$ 100% PASSED. Solution `dotnet build` đạt 0 lỗi (0 errors).
+        - Chạy toàn bộ test suite dự án $\rightarrow$ 100% PASSED (106 tests). Solution `dotnet build` đạt 0 lỗi (0 errors).
 
 
 

@@ -144,99 +144,169 @@ public class DbManagerService : IDbManagerService
     {
         if (db == null) return (false, "Database configuration is null.");
 
-        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(Math.Clamp(db.ConnectionTimeout > 0 ? db.ConnectionTimeout : 3, 1, 5)));
-        try
-        {
-            db.State = "Connecting...";
-            using var conn = CreateConnection(db);
-            if (conn == null) return (false, $"Unsupported provider type '{db.ProviderType}'.");
+        int timeoutSec = Math.Clamp(db.ConnectionTimeout > 0 ? db.ConnectionTimeout : 3, 1, 5);
 
-            await conn.OpenAsync(cts.Token);
-            db.State = "Connected";
-            return (true, "Successfully connected to database!");
-        }
-        catch (OperationCanceledException)
+        return await Task.Run(async () =>
         {
-            db.State = "Error";
-            return (false, "Connection timed out.");
-        }
-        catch (Exception ex)
-        {
-            db.State = "Error";
-            return (false, $"Connection failed: {ex.Message}");
-        }
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(timeoutSec));
+            try
+            {
+                db.State = "Connecting...";
+                using var conn = CreateConnection(db, timeoutSec);
+                if (conn == null) return (false, $"Unsupported provider type '{db.ProviderType}'.");
+
+                var openTask = conn.OpenAsync(cts.Token);
+                var completedTask = await Task.WhenAny(openTask, Task.Delay(TimeSpan.FromSeconds(timeoutSec), cts.Token));
+                if (completedTask != openTask)
+                {
+                    db.State = "Error";
+                    return (false, $"Kết nối cơ sở dữ liệu '{db.Name}' quá thời gian ({timeoutSec}s).");
+                }
+
+                await openTask;
+                db.State = "Connected";
+                return (true, "Successfully connected to database!");
+            }
+            catch (OperationCanceledException)
+            {
+                db.State = "Error";
+                return (false, $"Kết nối DB '{db.Name}' hết thời gian chờ ({timeoutSec}s).");
+            }
+            catch (Exception ex)
+            {
+                db.State = "Error";
+                return (false, $"Connection failed: {ex.Message}");
+            }
+        });
     }
 
-    public async Task<(bool Success, int RowsAffected, string ErrorMessage)> ExecuteNonQueryAsync(string dbIdOrName, string sqlQuery, int timeoutSeconds = 1)
+    public async Task<(bool Success, int RowsAffected, string ErrorMessage)> ExecuteNonQueryAsync(string dbIdOrName, string sqlQuery, int timeoutSeconds = 2)
     {
         var db = GetDatabase(dbIdOrName);
         if (db == null) return (false, 0, $"Database '{dbIdOrName}' not found.");
         if (!db.IsEnabled) return (false, 0, $"Database '{db.Name}' is disabled.");
 
-        int effectiveTimeout = Math.Clamp(timeoutSeconds > 0 ? timeoutSeconds : 1, 1, 3);
-        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(effectiveTimeout));
+        int effectiveTimeout = Math.Clamp(timeoutSeconds > 0 ? timeoutSeconds : 2, 1, 5);
 
-        try
+        return await Task.Run(async () =>
         {
-            using var conn = CreateConnection(db);
-            if (conn == null) return (false, 0, $"Unsupported provider type '{db.ProviderType}'.");
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(effectiveTimeout));
+            try
+            {
+                using var conn = CreateConnection(db, effectiveTimeout);
+                if (conn == null) return (false, 0, $"Unsupported provider type '{db.ProviderType}'.");
 
-            await conn.OpenAsync(cts.Token);
-            using var cmd = conn.CreateCommand();
-            cmd.CommandText = sqlQuery;
-            cmd.CommandTimeout = effectiveTimeout;
+                var openTask = conn.OpenAsync(cts.Token);
+                var completedOpen = await Task.WhenAny(openTask, Task.Delay(TimeSpan.FromSeconds(effectiveTimeout), cts.Token));
+                if (completedOpen != openTask)
+                {
+                    return (false, 0, $"Kết nối DB '{db.Name}' quá thời gian ({effectiveTimeout}s).");
+                }
+                await openTask;
 
-            int rowsAffected = await cmd.ExecuteNonQueryAsync(cts.Token);
-            return (true, rowsAffected, string.Empty);
-        }
-        catch (OperationCanceledException)
-        {
-            return (false, 0, "Execution timed out.");
-        }
-        catch (Exception ex)
-        {
-            return (false, 0, ex.Message);
-        }
+                using var cmd = conn.CreateCommand();
+                cmd.CommandText = sqlQuery;
+                cmd.CommandTimeout = effectiveTimeout;
+
+                var execTask = cmd.ExecuteNonQueryAsync(cts.Token);
+                var completedExec = await Task.WhenAny(execTask, Task.Delay(TimeSpan.FromSeconds(effectiveTimeout), cts.Token));
+                if (completedExec != execTask)
+                {
+                    return (false, 0, $"Thực thi truy vấn DB '{db.Name}' quá thời gian ({effectiveTimeout}s).");
+                }
+
+                int rowsAffected = await execTask;
+                return (true, rowsAffected, string.Empty);
+            }
+            catch (OperationCanceledException)
+            {
+                return (false, 0, $"Truy vấn DB '{db.Name}' hết thời gian chờ ({effectiveTimeout}s).");
+            }
+            catch (Exception ex)
+            {
+                return (false, 0, ex.Message);
+            }
+        });
     }
 
-    public async Task<(bool Success, DataTable? Table, string ErrorMessage)> ExecuteQueryAsync(string dbIdOrName, string sqlQuery, int timeoutSeconds = 1)
+    public async Task<(bool Success, DataTable? Table, string ErrorMessage)> ExecuteQueryAsync(string dbIdOrName, string sqlQuery, int timeoutSeconds = 2)
     {
         var db = GetDatabase(dbIdOrName);
         if (db == null) return (false, null, $"Database '{dbIdOrName}' not found.");
         if (!db.IsEnabled) return (false, null, $"Database '{db.Name}' is disabled.");
 
-        int effectiveTimeout = Math.Clamp(timeoutSeconds > 0 ? timeoutSeconds : 1, 1, 3);
-        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(effectiveTimeout));
+        int effectiveTimeout = Math.Clamp(timeoutSeconds > 0 ? timeoutSeconds : 2, 1, 5);
+
+        return await Task.Run(async () =>
+        {
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(effectiveTimeout));
+            try
+            {
+                using var conn = CreateConnection(db, effectiveTimeout);
+                if (conn == null) return (false, null, $"Unsupported provider type '{db.ProviderType}'.");
+
+                var openTask = conn.OpenAsync(cts.Token);
+                var completedOpen = await Task.WhenAny(openTask, Task.Delay(TimeSpan.FromSeconds(effectiveTimeout), cts.Token));
+                if (completedOpen != openTask)
+                {
+                    return (false, null, $"Kết nối DB '{db.Name}' quá thời gian ({effectiveTimeout}s).");
+                }
+                await openTask;
+
+                using var cmd = conn.CreateCommand();
+                cmd.CommandText = sqlQuery;
+                cmd.CommandTimeout = effectiveTimeout;
+
+                var readerTask = cmd.ExecuteReaderAsync(cts.Token);
+                var completedReader = await Task.WhenAny(readerTask, Task.Delay(TimeSpan.FromSeconds(effectiveTimeout), cts.Token));
+                if (completedReader != readerTask)
+                {
+                    return (false, null, $"Đọc kết quả DB '{db.Name}' quá thời gian ({effectiveTimeout}s).");
+                }
+
+                using var reader = await readerTask;
+                var table = new DataTable();
+                table.Load(reader);
+
+                return (true, table, string.Empty);
+            }
+            catch (OperationCanceledException)
+            {
+                return (false, null, $"Truy vấn DB '{db.Name}' hết thời gian chờ ({effectiveTimeout}s).");
+            }
+            catch (Exception ex)
+            {
+                return (false, null, ex.Message);
+            }
+        });
+    }
+
+    private static DbConnection? CreateConnection(DbModel db, int timeoutSeconds = 2)
+    {
+        string connStr = db.BuildConnectionString();
 
         try
         {
-            using var conn = CreateConnection(db);
-            if (conn == null) return (false, null, $"Unsupported provider type '{db.ProviderType}'.");
-
-            await conn.OpenAsync(cts.Token);
-            using var cmd = conn.CreateCommand();
-            cmd.CommandText = sqlQuery;
-            cmd.CommandTimeout = effectiveTimeout;
-
-            using var reader = await cmd.ExecuteReaderAsync(cts.Token);
-            var table = new DataTable();
-            table.Load(reader);
-
-            return (true, table, string.Empty);
+            if (db.ProviderType == DbProviderType.SqlServer)
+            {
+                var builder = new Microsoft.Data.SqlClient.SqlConnectionStringBuilder(connStr);
+                builder.ConnectTimeout = Math.Clamp(timeoutSeconds, 1, 5);
+                connStr = builder.ConnectionString;
+            }
+            else if (db.ProviderType == DbProviderType.MySql)
+            {
+                var builder = new MySqlConnector.MySqlConnectionStringBuilder(connStr);
+                builder.ConnectionTimeout = (uint)Math.Clamp(timeoutSeconds, 1, 5);
+                connStr = builder.ConnectionString;
+            }
+            else if (db.ProviderType == DbProviderType.PostgreSql)
+            {
+                var builder = new Npgsql.NpgsqlConnectionStringBuilder(connStr);
+                builder.Timeout = Math.Clamp(timeoutSeconds, 1, 5);
+                connStr = builder.ConnectionString;
+            }
         }
-        catch (OperationCanceledException)
-        {
-            return (false, null, "Execution timed out.");
-        }
-        catch (Exception ex)
-        {
-            return (false, null, ex.Message);
-        }
-    }
-
-    private static DbConnection? CreateConnection(DbModel db)
-    {
-        string connStr = db.BuildConnectionString();
+        catch { }
 
         return db.ProviderType switch
         {

@@ -788,7 +788,8 @@ public sealed class OqcScannerService : IOqcScannerService
         bool isRemotePath = rawPath.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
                             rawPath.StartsWith("https://", StringComparison.OrdinalIgnoreCase) ||
                             rawPath.StartsWith("uploads/", StringComparison.OrdinalIgnoreCase) ||
-                            rawPath.EndsWith(".job", StringComparison.OrdinalIgnoreCase);
+                            rawPath.StartsWith("/uploads/", StringComparison.OrdinalIgnoreCase) ||
+                            (!Path.IsPathRooted(rawPath) && rawPath.EndsWith(".job", StringComparison.OrdinalIgnoreCase));
 
         if (remoteServerService != null && isRemotePath)
         {

@@ -207,13 +207,14 @@ public partial class OqcScannerViewModel : ObservableObject
             try
             {
                 await Task.Delay(1000, cts.Token);
-                System.Windows.Application.Current?.Dispatcher?.Invoke(() =>
+                await System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
                 {
                     LoadingMessage = loadingMsg;
                     IsLoadingPopupVisible = true;
                 });
             }
             catch (TaskCanceledException) { }
+            catch { }
         });
 
         try
@@ -223,7 +224,10 @@ public partial class OqcScannerViewModel : ObservableObject
         finally
         {
             cts.Cancel();
-            IsLoadingPopupVisible = false;
+            await System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
+            {
+                IsLoadingPopupVisible = false;
+            });
         }
     }
 
@@ -585,10 +589,7 @@ public partial class OqcScannerViewModel : ObservableObject
         IsScanning = true;
         try
         {
-            await RunTaskWith1SecLoadingTimeoutAsync(async () =>
-            {
-                await ExecuteScanInternalAsync();
-            }, "⚡ Đang tra cứu cơ sở dữ liệu & nạp Job... Vui lòng chờ!");
+            await ExecuteScanInternalAsync();
         }
         catch (Exception ex)
         {
@@ -662,17 +663,6 @@ public partial class OqcScannerViewModel : ObservableObject
         StatusBrush = Brushes.DodgerBlue;
 
         string displayProductName = code;
-        if (_oqcService.Config.EnableProductNameLookup)
-        {
-            var (nameFound, resolvedName, _) = await _oqcService.LookupProductNameAsync(code, _dbManager);
-            if (nameFound && !string.IsNullOrWhiteSpace(resolvedName))
-            {
-                displayProductName = resolvedName;
-            }
-        }
-
-        CurrentProductName = displayProductName;
-
         var historyEntry = new OqcScanHistoryEntry
         {
             Time = DateTime.Now,
@@ -684,6 +674,18 @@ public partial class OqcScannerViewModel : ObservableObject
 
         try
         {
+            if (_oqcService.Config.EnableProductNameLookup)
+            {
+                var (nameFound, resolvedName, _) = await _oqcService.LookupProductNameAsync(code, _dbManager);
+                if (nameFound && !string.IsNullOrWhiteSpace(resolvedName))
+                {
+                    displayProductName = resolvedName;
+                }
+            }
+
+            CurrentProductName = displayProductName;
+            historyEntry.ProductName = displayProductName;
+
             var (found, jobPath, error) = await _oqcService.LookupJobAsync(code, _dbManager, _remoteServerService);
             if (!found)
             {
@@ -717,7 +719,10 @@ public partial class OqcScannerViewModel : ObservableObject
             _inspectionViewModel.ProductCode = code;
             _inspectionViewModel.SetConfig(cfg);
 
-            System.Windows.Application.Current.MainWindow.Title = "CMS VINA VISION SYSTEM - [OQC] " + Path.GetFileName(jobPath);
+            if (System.Windows.Application.Current?.MainWindow != null)
+            {
+                System.Windows.Application.Current.MainWindow.Title = "CMS VINA VISION SYSTEM - [OQC] " + Path.GetFileName(jobPath);
+            }
 
             _toolEditorViewModel.ProductCode = code;
 
@@ -751,7 +756,7 @@ public partial class OqcScannerViewModel : ObservableObject
         catch (Exception ex)
         {
             _isOqcRunInProgress = false;
-            StatusMessage = $"❌ Lỗi mở Job: {ex.Message}";
+            StatusMessage = $"❌ Lỗi tra cứu/mở Job: {ex.Message}";
             StatusBrush = Brushes.Red;
 
             historyEntry.Success = false;

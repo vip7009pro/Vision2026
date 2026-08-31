@@ -225,14 +225,21 @@ public class RemoteServerService : IRemoteServerService, IDisposable
 
         try
         {
-            using var response = await _httpClient.GetAsync(url.Trim(), cancellationToken);
+            using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            cts.CancelAfter(TimeSpan.FromSeconds(5));
+
+            using var response = await _httpClient.GetAsync(url.Trim(), cts.Token);
             if (!response.IsSuccessStatusCode)
             {
                 return (false, null, $"HTTP {(int)response.StatusCode}: {response.ReasonPhrase}");
             }
 
-            byte[] bytes = await response.Content.ReadAsByteArrayAsync(cancellationToken);
+            byte[] bytes = await response.Content.ReadAsByteArrayAsync(cts.Token);
             return (true, bytes, "");
+        }
+        catch (OperationCanceledException)
+        {
+            return (false, null, $"Tải tệp từ URL quá thời gian chờ (5s): {url}");
         }
         catch (Exception ex)
         {

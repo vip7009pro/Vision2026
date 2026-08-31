@@ -49,6 +49,29 @@
 - Preview được phép tiếp tục khi Global Snapshot rỗng để lấy ảnh từ ImageSource.
 - Lưu template cho Origin, Point và SurfaceCompare hoạt động với nguồn ảnh ImageSource.
 
+- **Khắc Phục Triệt Để Lỗi Treo Giao Diện Khi Scan Mã OQC, Chống Treo Driver CSDL & Ràng Buộc Timeout Nghiêm Ngặt (Task 279)**:
+  - **Vấn Đề & Hiện Tượng**:
+    - Khi người dùng quét mã sản phẩm (ví dụ: `GH63-22334ADTA3E116HE01XC01005000` $\rightarrow$ mã trích xuất `16HE01XC`), thanh trạng thái hiển thị `🔍 Đang tra cứu cơ sở dữ liệu cho mã '16HE01XC' (Mã gốc: 'GH63-22334ADTA3E116HE01XC01005000')...`, màn hình bị phủ lớp mờ Loading và toàn bộ ứng dụng bị đơ (treo giao diện không thể click hay thao tác được) mà không báo lỗi hay ngoại lệ gì.
+  - **Nguyên Nhân Gốc**:
+    1. **Driver ADO.NET SqlClient blocking trên UI Thread**: `DbManagerService.ExecuteQueryAsync` và `ExecuteNonQueryAsync` gọi trực tiếp `conn.OpenAsync` trên ngữ cảnh UI thread. Trong `Microsoft.Data.SqlClient`, nếu địa chỉ IP máy chủ CSDL bị mất kết nối, tường lửa chặn hoặc tắt máy, `OpenAsync` không hủy ngay mà chờ hết `Connection Timeout` mặc định (15s–30s). Thêm nữa, lệnh `table.Load(reader)` chạy đồng bộ trên UI thread.
+    2. **Tải Job Server Timeout 30s**: Khi đường dẫn file trong CSDL không tồn tại trên máy, phương thức `LookupJobAsync` trước đó có điều kiện `rawPath.EndsWith(".job")` nên gửi HTTP request tải từ Server XAMPP qua `HttpClient` với timeout 30 giây.
+    3. **Tắc Nghẽn Dispatcher trong Modal Loading**: `RunTaskWith1SecLoadingTimeoutAsync` gọi `Dispatcher.Invoke` (synchronous) từ background timer thread khi UI thread đang bận chờ I/O, gây deadlock / lock cứng giao diện.
+    4. **Bắt Ngoại Lệ Chưa Bao Quát**: `LookupProductNameAsync` nằm ngoài khối `try/catch` chính của `ExecuteScanInternalAsync`.
+  - **Giải Pháp Kỹ Thuật Đã Triển Khai**:
+    1. **Tầng Cơ Sở Dữ Liệu (`DbManagerService.cs`)**:
+       - Bọc toàn bộ các hàm `TestConnectionAsync`, `ExecuteNonQueryAsync`, `ExecuteQueryAsync` trong `Task.Run` chạy nền trên ThreadPool, giải phóng hoàn toàn UI Thread.
+       - Thiết lập `ConnectTimeout` trực tiếp trong chuỗi kết nối (`SqlConnectionStringBuilder`, `MySqlConnectionStringBuilder`, `NpgsqlConnectionStringBuilder`) giới hạn tối đa 2–5 giây.
+       - Áp dụng `Task.WhenAny` với timeout cứng cho cả `conn.OpenAsync` và `cmd.ExecuteReaderAsync`/`ExecuteNonQueryAsync` để không bao giờ bị phụ thuộc vào socket OS.
+    2. **Tầng Tải File Server (`RemoteServerService.cs` & `OqcScannerService.cs`)**:
+       - Thêm timeout 5s cho `DownloadFileAsync` qua `cts.CancelAfter(TimeSpan.FromSeconds(5))`.
+       - Sửa `isRemotePath` trong `LookupJobAsync` loại trừ đường dẫn ổ đĩa tuyệt đối (`Path.IsPathRooted(rawPath)`).
+    3. **Tầng Giao Diện OQC (`OqcScannerViewModel.cs`)**:
+       - Chuyển `Dispatcher.Invoke` sang `Dispatcher.InvokeAsync` trong `RunTaskWith1SecLoadingTimeoutAsync`.
+       - Đưa toàn bộ tra cứu Tên sản phẩm và Job vào khối `try ... catch`, đảm bảo luôn ẩn modal popup và reset cờ `IsScanning = false` trong `finally`.
+  - **Kiểm Thử**:
+    - Solution `dotnet build` đạt 0 lỗi (0 errors).
+    - Toàn bộ test suite dự án trong `TestExtractApp` đạt 100% PASSED (106 tests).
+
 - **Hoàn Thiện Cơ Chế Tải Job Chuẩn Tên Server, Quy Trình Huấn Luyện Từ Xa (Remote Teach qua thư mục Teaching & URL ImageSource), Tự Động Đồng Bộ Job Server & Cập Nhật TeachImagePath Vào CSDL (Task 278)**:
   - **Yêu Cầu & Bối Cảnh**:
     1. Chuẩn hóa tên file khi tải Job về: Khi bấm nút "Tải Về Máy" trong Remote Job Manager, hộp thoại `SaveFileDialog` mặc định lấy đúng tên tệp gốc đang lưu trên Server (`Path.GetFileName(SelectedItem.JobFilePath)`, ví dụ `job_7B09205A_20260831_061252_eae254.job`) và lưu trong thư mục `JobRootDirectory` (hoặc `jobs/`).
