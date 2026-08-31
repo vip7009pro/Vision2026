@@ -7,6 +7,7 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <Platforms>x86;AnyCPU;x64</Platforms>
+    <RollForward>LatestMajor</RollForward>
     <ApplicationIcon>..\VisionInspectionApp.UI\Assets\cms-vina-vision-system.ico</ApplicationIcon>
   </PropertyGroup>
 

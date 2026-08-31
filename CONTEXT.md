@@ -49,6 +49,65 @@
 - Preview được phép tiếp tục khi Global Snapshot rỗng để lấy ảnh từ ImageSource.
 - Lưu template cho Origin, Point và SurfaceCompare hoạt động với nguồn ảnh ImageSource.
 
+- **Khắc Phục Lỗi NullReferenceException / Race Condition Khi Tắt Ứng Dụng (ReadBridgeTagValueAsync / WriteBridgeTagValueAsync Khi Dispose PLC Bridge) (Task 276)**:
+  - **Yêu Cầu & Bối Cảnh**:
+    - Khi tắt ứng dụng, xuất hiện ngoại lệ:
+      ```text
+      System.NullReferenceException: 'Object reference not set to an instance of an object.'
+      bridge was null.
+      at VisionInspectionApp.Application.PLC.Drivers.MitsubishiMxComponentDriver.ReadBridgeTagValueAsync(MxBridgeClient bridge, PlcTag tag, CancellationToken cancellationToken)
+      ```
+    - Yêu cầu xử lý triệt để để việc thoát app diễn ra an toàn, không bị crash hoặc văng popup lỗi ngoại lệ.
+  - **Phân Tích & Nguyên Nhân Gốc Rễ**:
+    - Luồng Polling nền (`PlcPollingEngine`) đang trong chu kỳ lặp gọi `driver.ReadBatchAsync(plcTags)` $\rightarrow$ `ReadBridgeTagValueAsync(_bridgeClient, tag)`.
+    - Đồng thời, sự kiện đóng app `App.OnExit` kích hoạt `ShutdownGracefullyAsync` $\rightarrow$ `PlcManagerService.Dispose` $\rightarrow$ `MitsubishiMxComponentDriver.Dispose`, giải phóng `_bridgeClient` và gán `_bridgeClient = null`.
+    - Do `_bridgeClient` bị gán `null` giữa chừng trong khi vòng lặp đọc tag chưa kết thúc, `ReadBridgeTagValueAsync` nhận tham số `bridge == null` và gọi `bridge.GetDeviceAsync`, dẫn đến `NullReferenceException`.
+  - **Giải Pháp Kỹ Thuật Đã Triển Khai**:
+    1. [MitsubishiMxComponentDriver.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.Application/PLC/Drivers/MitsubishiMxComponentDriver.cs):
+       - Trong `ReadBatchAsync` & `WriteBatchAsync`:
+         - Snapshot tham chiếu cục bộ `var bridge = _bridgeClient;` trước khi thực thi.
+         - Thêm kiểm tra `if (_disposed || !bridge.IsConnected) break;` trong các vòng lặp duyệt tag.
+         - Bổ sung kiểm tra `if (_disposed) return ...;` an toàn.
+       - Trong `ReadBridgeTagValueAsync`, `WriteBridgeTagValueAsync`, `TryReadBridgeBatchRandom2Async`:
+         - Đổi kiểu tham số thành nullable `MxBridgeClient? bridge`.
+         - Bổ sung guard clause: `if (bridge == null || !bridge.IsConnected || tag == null) return tag?.DefaultValue;` (hoặc `return;`).
+         - Bọc khối `try { ... } catch { return tag?.DefaultValue; }` triệt tiêu mọi ngoại lệ race condition khi socket đóng lúc shutdown.
+       - Trong `Dispose()`:
+         - Bọc an toàn `try { _lock.Dispose(); } catch { }`.
+  - **Kiểm Thử**:
+    - Chạy toàn bộ test suite của dự án: PASSED 100% (106 lighting tests, preprocess ROI mask tests, isolated job template tests, product assign tests, PLC bridge connection tests).
+
+- **Khắc Phục Lỗi Kết Nối PLC Bridge 32-bit (MX Component & GX Works 3 Simulation) Do Thiếu RollForward .NET x86 & Tối Ưu Batch IDispatch COM (Task 275)**:
+  - **Yêu Cầu & Bối Cảnh**:
+    - Người dùng đã cài đặt Mitsubishi MX Component, cài GX Works 3 và chạy Simulation thành công, đã thiết lập Station trong Communication Setup Utility.
+    - Khi bấm kết nối PLC trong ứng dụng, ứng dụng báo lỗi:
+      `Failed to connect to PLC 'PLC1' (Station 0). Detail: Could not connect to 32-bit PLC Bridge on 127.0.0.1:39871.`
+    - Yêu cầu kiểm tra nguyên nhân gốc rễ và xử lý triệt để giúp hệ thống kết nối thành công 100% với MX Component và GX Works 3 Simulation.
+  - **Phân Tích & Nguyên Nhân Gốc Rễ**:
+    1. *Lỗi Khởi Động Tiến Trình 32-bit PLC Bridge (`VisionInspectionApp.PlcBridge.dll`)*:
+       - Ứng dụng chính `VisionInspectionApp.UI` chạy ở tiến trình 64-bit (x64) để xử lý ảnh và camera hiệu năng cao. Trong khi đó, Mitsubishi MX Component (`ActUtlType.ActUtlType`) là thư viện COM 32-bit (x86).
+       - Do đó, ứng dụng sử dụng tiến trình trung gian `VisionInspectionApp.PlcBridge` (x86) để giao tiếp với COM MX Component và chuyển tiếp lệnh qua socket localhost TCP port 39871.
+       - Máy tính người dùng chỉ cài đặt .NET Desktop Runtime phiên bản mới hơn (.NET 10.0 x86) trong `C:\Program Files (x86)\dotnet`, không cài .NET 8.0 x86.
+       - `VisionInspectionApp.PlcBridge.csproj` trước đây nhắm mục tiêu `net8.0-windows` nhưng chưa khai báo `<RollForward>LatestMajor</RollForward>`.
+       - Khi `MitsubishiMxComponentDriver` gọi `dotnet.exe (x86)` khởi chạy `VisionInspectionApp.PlcBridge.dll`, host `dotnet.exe` từ chối khởi chạy và báo lỗi `You must install or update .NET to run this application. Framework: 'Microsoft.NETCore.App', version '8.0.0' (x86)`.
+       - Do tiến trình bridge không thể khởi động, cổng 39871 không lắng nghe dẫn đến thông báo "Could not connect to 32-bit PLC Bridge on 127.0.0.1:39871".
+    2. *Lỗi Marshaling SAFEARRAY trên IDispatch COM (`DISP_E_TYPEMISMATCH 0x80020005`)*:
+       - Phương thức `ReadDeviceRandom2` và `ReadDeviceBlock2` khi gọi qua `InvokeMember` với `short[]` bị COM IDispatch coi là `SAFEARRAY` thay vì con trỏ đơn, gây lỗi `DISP_E_TYPEMISMATCH`.
+  - **Giải Pháp Kỹ Thuật Đã Triển Khai**:
+    1. [VisionInspectionApp.PlcBridge.csproj](file:///g:/NODEJS/Vision2026/VisionInspectionApp.PlcBridge/VisionInspectionApp.PlcBridge.csproj):
+       - Bổ sung `<RollForward>LatestMajor</RollForward>` vào `<PropertyGroup>`, cho phép tiến trình PLC Bridge tự động tương thích và chạy mượt mà trên bất kỳ phiên bản .NET runtime nào (.NET 8, 9, 10...) có trên máy.
+    2. [MitsubishiMxComponentDriver.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.Application/PLC/Drivers/MitsubishiMxComponentDriver.cs):
+       - Trong `LaunchBridgeProcess`: Thêm tham số `exec --roll-forward LatestMajor` khi gọi `x86Dotnet`, bảo đảm `dotnet.exe` (x86) luôn khởi động thành công ngay cả khi môi trường chỉ có runtime cao hơn.
+    3. [MxComWorker.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.PlcBridge/MxComWorker.cs):
+       - Bổ sung helper `IncrementDeviceAddress`.
+       - Chuẩn hóa các hàm đọc ghi mảng và ngẫu nhiên (`ReadDeviceRandom2Async`, `ReadDeviceBlockAsync`, `WriteDeviceBlockAsync`, `ReadDeviceBlock2Async`, `WriteDeviceBlock2Async`) bằng cơ chế duyệt an toàn qua `GetDevice`/`GetDevice2`/`SetDevice`/`SetDevice2`, loại bỏ 100% rủi ro `DISP_E_TYPEMISMATCH`.
+  - **Kiểm Thử**:
+    - Tích hợp bài test tự động [PlcBridgeTest.cs](file:///g:/NODEJS/Vision2026/TestExtractApp/PlcBridgeTest.cs) kết nối trực tiếp đến Station 0 (GX Works 3 Simulation):
+      - Kết nối thành công đến CPU `FX5UCPU (Type 18944)`.
+      - Đọc ghi thành công biến 16-bit Int (`D0 = 7788`), biến Float 32-bit (`D10 = 123.456`).
+      - Ngắt kết nối sạch sẽ.
+    - Toàn bộ test suite của dự án PASSED 100%.
+
 - **Cấu Hình 2 Cột Riêng Biệt (ProductCode & ProductName) trong Product Browser Query & Tự Động Điền ProductName Vào Tool Editor Khi Gán Job (Task 274)**:
   - **Yêu Cầu & Bối Cảnh**:
     - Trong màn hình Cấu hình OQC & Database (Mục 3: Danh sách sản phẩm / Product Browser Query): Bổ sung 2 ô TextBox phân định rõ ràng:

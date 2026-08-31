@@ -236,6 +236,7 @@ public sealed class MitsubishiMxComponentDriver : IPlcDriver
         var result = new Dictionary<string, object?>();
         var tagList = tags.Where(t => t != null && !string.IsNullOrWhiteSpace(t.Address)).ToList();
         if (tagList.Count == 0) return result;
+        if (_disposed) return FallbackReadSimulation(tagList);
 
         using var timeoutCts = new CancellationTokenSource(2000);
         using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutCts.Token);
@@ -251,14 +252,17 @@ public sealed class MitsubishiMxComponentDriver : IPlcDriver
 
         try
         {
+            if (_disposed) return FallbackReadSimulation(tagList);
+
             if (!ForceSimulationMode && Config.State == PlcConnectionState.Connected)
             {
-                if (_bridgeClient != null && _bridgeClient.IsConnected)
+                var bridge = _bridgeClient;
+                if (bridge != null && bridge.IsConnected)
                 {
                     try
                     {
                         // 1. Thử đọc toàn bộ batch trong 1 lệnh duy nhất (ReadDeviceRandom2)
-                        var batchResult = await TryReadBridgeBatchRandom2Async(_bridgeClient, tagList, linkedCts.Token);
+                        var batchResult = await TryReadBridgeBatchRandom2Async(bridge, tagList, linkedCts.Token);
                         if (batchResult != null)
                         {
                             return batchResult;
@@ -267,7 +271,8 @@ public sealed class MitsubishiMxComponentDriver : IPlcDriver
                         // 2. Fallback đọc tuần tự từng tag nếu thiết bị không hỗ trợ Random2
                         foreach (var tag in tagList)
                         {
-                            object? val = await ReadBridgeTagValueAsync(_bridgeClient, tag, linkedCts.Token);
+                            if (_disposed || !bridge.IsConnected) break;
+                            object? val = await ReadBridgeTagValueAsync(bridge, tag, linkedCts.Token);
                             result[tag.Name] = ApplyScale(val, tag.Scale);
                         }
                         return result;
@@ -291,6 +296,7 @@ public sealed class MitsubishiMxComponentDriver : IPlcDriver
                         // 2. Fallback đọc tuần tự từng tag
                         foreach (var tag in tagList)
                         {
+                            if (_disposed || _comObject == null) break;
                             object? val = ReadComTagValue(tag);
                             result[tag.Name] = ApplyScale(val, tag.Scale);
                         }
@@ -308,7 +314,7 @@ public sealed class MitsubishiMxComponentDriver : IPlcDriver
         }
         finally
         {
-            _lock.Release();
+            try { _lock.Release(); } catch { }
         }
     }
 
@@ -334,6 +340,7 @@ public sealed class MitsubishiMxComponentDriver : IPlcDriver
     public async Task<bool> WriteBatchAsync(IDictionary<PlcTag, object> values, CancellationToken cancellationToken = default)
     {
         if (values == null || values.Count == 0) return true;
+        if (_disposed) return false;
 
         using var timeoutCts = new CancellationTokenSource(2000);
         using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutCts.Token);
@@ -349,15 +356,19 @@ public sealed class MitsubishiMxComponentDriver : IPlcDriver
 
         try
         {
+            if (_disposed) return false;
+
             if (!ForceSimulationMode && Config.State == PlcConnectionState.Connected)
             {
-                if (_bridgeClient != null && _bridgeClient.IsConnected)
+                var bridge = _bridgeClient;
+                if (bridge != null && bridge.IsConnected)
                 {
                     try
                     {
                         foreach (var (tag, val) in values)
                         {
-                            await WriteBridgeTagValueAsync(_bridgeClient, tag, val, linkedCts.Token);
+                            if (_disposed || !bridge.IsConnected) break;
+                            await WriteBridgeTagValueAsync(bridge, tag, val, linkedCts.Token);
                             _simulatedMemory[tag.Address] = val;
                         }
                         return true;
@@ -373,6 +384,7 @@ public sealed class MitsubishiMxComponentDriver : IPlcDriver
                     {
                         foreach (var (tag, val) in values)
                         {
+                            if (_disposed || _comObject == null) break;
                             WriteComTagValue(tag, val);
                             _simulatedMemory[tag.Address] = val;
                         }
@@ -395,14 +407,16 @@ public sealed class MitsubishiMxComponentDriver : IPlcDriver
         }
         finally
         {
-            _lock.Release();
+            try { _lock.Release(); } catch { }
         }
     }
 
     #region Bridge Read/Write Helpers
 
-    private static async Task<Dictionary<string, object?>?> TryReadBridgeBatchRandom2Async(MxBridgeClient bridge, List<PlcTag> tagList, CancellationToken cancellationToken)
+    private static async Task<Dictionary<string, object?>?> TryReadBridgeBatchRandom2Async(MxBridgeClient? bridge, List<PlcTag> tagList, CancellationToken cancellationToken)
     {
+        if (bridge == null || !bridge.IsConnected || tagList == null || tagList.Count == 0) return null;
+
         try
         {
             var deviceQueries = new List<string>();
@@ -570,59 +584,77 @@ public sealed class MitsubishiMxComponentDriver : IPlcDriver
         }
     }
 
-    private static async Task<object?> ReadBridgeTagValueAsync(MxBridgeClient bridge, PlcTag tag, CancellationToken cancellationToken)
+    private static async Task<object?> ReadBridgeTagValueAsync(MxBridgeClient? bridge, PlcTag tag, CancellationToken cancellationToken)
     {
-        string device = tag.Address.Trim();
+        if (bridge == null || !bridge.IsConnected || tag == null) return tag?.DefaultValue;
 
-        if (tag.DataType == PlcDataType.Float)
+        try
         {
-            string nextDevice = IncrementDeviceAddress(device, 1);
-            var (rc1, w1) = await bridge.GetDevice2Async(device, cancellationToken);
-            var (rc2, w2) = await bridge.GetDevice2Async(nextDevice, cancellationToken);
-            if (rc1 == 0 && rc2 == 0)
+            string device = tag.Address.Trim();
+
+            if (tag.DataType == PlcDataType.Float)
             {
-                float fVal = WordsToFloat(new int[] { w1, w2 });
-                return ApplyScale(fVal, tag.Scale);
+                string nextDevice = IncrementDeviceAddress(device, 1);
+                var (rc1, w1) = await bridge.GetDevice2Async(device, cancellationToken);
+                var (rc2, w2) = await bridge.GetDevice2Async(nextDevice, cancellationToken);
+                if (rc1 == 0 && rc2 == 0)
+                {
+                    float fVal = WordsToFloat(new int[] { w1, w2 });
+                    return ApplyScale(fVal, tag.Scale);
+                }
+                return tag.DefaultValue;
             }
+
+            var (rc, val) = await bridge.GetDeviceAsync(device, cancellationToken);
+            if (rc == 0)
+            {
+                if (tag.DataType == PlcDataType.Bool)
+                {
+                    return val != 0;
+                }
+                return ConvertFromInt(val, tag.DataType);
+            }
+
             return tag.DefaultValue;
         }
-
-        var (rc, val) = await bridge.GetDeviceAsync(device, cancellationToken);
-        if (rc == 0)
+        catch
         {
-            if (tag.DataType == PlcDataType.Bool)
-            {
-                return val != 0;
-            }
-            return ConvertFromInt(val, tag.DataType);
+            return tag?.DefaultValue;
         }
-
-        return tag.DefaultValue;
     }
 
-    private static async Task WriteBridgeTagValueAsync(MxBridgeClient bridge, PlcTag tag, object val, CancellationToken cancellationToken)
+    private static async Task WriteBridgeTagValueAsync(MxBridgeClient? bridge, PlcTag tag, object val, CancellationToken cancellationToken)
     {
-        string device = tag.Address.Trim();
+        if (bridge == null || !bridge.IsConnected || tag == null) return;
 
-        if (tag.DataType == PlcDataType.Float)
+        try
         {
-            float fVal = 0f;
-            if (val != null)
+            string device = tag.Address.Trim();
+
+            if (tag.DataType == PlcDataType.Float)
             {
-                if (val is float f) fVal = f;
-                else if (val is double d) fVal = (float)d;
-                else float.TryParse(val.ToString(), System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out fVal);
+                float fVal = 0f;
+                if (val != null)
+                {
+                    if (val is float f) fVal = f;
+                    else if (val is double d) fVal = (float)d;
+                    else float.TryParse(val.ToString(), System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out fVal);
+                }
+
+                int[] words = FloatToWords(fVal);
+                string nextDevice = IncrementDeviceAddress(device, 1);
+                await bridge.SetDevice2Async(device, (short)words[0], cancellationToken);
+                await bridge.SetDevice2Async(nextDevice, (short)words[1], cancellationToken);
+                return;
             }
 
-            int[] words = FloatToWords(fVal);
-            string nextDevice = IncrementDeviceAddress(device, 1);
-            await bridge.SetDevice2Async(device, (short)words[0], cancellationToken);
-            await bridge.SetDevice2Async(nextDevice, (short)words[1], cancellationToken);
-            return;
+            int iVal = ConvertToInt(val, tag.DataType);
+            await bridge.SetDeviceAsync(device, iVal, cancellationToken);
         }
-
-        int iVal = ConvertToInt(val, tag.DataType);
-        await bridge.SetDeviceAsync(device, iVal, cancellationToken);
+        catch
+        {
+            // ignore during disconnect/shutdown
+        }
     }
 
     #endregion
@@ -903,7 +935,7 @@ public sealed class MitsubishiMxComponentDriver : IPlcDriver
         }
 
         CleanupCom();
-        _lock.Dispose();
+        try { _lock.Dispose(); } catch { }
     }
 
     #endregion
@@ -1359,7 +1391,7 @@ public sealed class MitsubishiMxComponentDriver : IPlcDriver
                 psi = new ProcessStartInfo
                 {
                     FileName = x86Dotnet,
-                    Arguments = $"\"{bridgeDll}\" --parent-pid {currentPid} --port {BridgePort}",
+                    Arguments = $"exec --roll-forward LatestMajor \"{bridgeDll}\" --parent-pid {currentPid} --port {BridgePort}",
                     UseShellExecute = false,
                     CreateNoWindow = true,
                     WindowStyle = ProcessWindowStyle.Hidden,

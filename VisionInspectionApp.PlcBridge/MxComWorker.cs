@@ -231,6 +231,19 @@ public sealed class MxComWorker : IDisposable
         }, 1500, -100);
     }
 
+    private static string IncrementDeviceAddress(string address, int offset)
+    {
+        if (string.IsNullOrWhiteSpace(address) || offset == 0) return address;
+        string clean = address.Trim().ToUpperInvariant();
+        string prefix = new string(clean.TakeWhile(char.IsLetter).ToArray());
+        string numStr = new string(clean.SkipWhile(char.IsLetter).ToArray());
+        if (int.TryParse(numStr, out int num))
+        {
+            return $"{prefix}{num + offset}";
+        }
+        return address;
+    }
+
     public Task<(int ResCode, int[] Data)> ReadDeviceBlockAsync(string device, int size)
     {
         return InvokeWithTimeoutAsync(() =>
@@ -239,25 +252,28 @@ public sealed class MxComWorker : IDisposable
 
             try
             {
-                int[] buffer = new int[size];
-                object[] args = new object[] { device, size, buffer };
-                ParameterModifier[] modifiers = new ParameterModifier[1];
-                modifiers[0] = new ParameterModifier(3);
-                modifiers[0][2] = true;
-
-                var res = _comType.InvokeMember("ReadDeviceBlock",
-                    BindingFlags.InvokeMethod | BindingFlags.Public | BindingFlags.Instance,
-                    null, _comObject, args, modifiers, null, null);
-
-                int rc = res is int c ? c : -1;
-                if (args[2] is int[] resultData)
+                int[] list = new int[size];
+                for (int i = 0; i < size; i++)
                 {
-                    return (rc, resultData);
+                    string dev = IncrementDeviceAddress(device, i);
+                    object[] args = new object[] { dev, 0 };
+                    ParameterModifier[] modifiers = new ParameterModifier[1];
+                    modifiers[0] = new ParameterModifier(2);
+                    modifiers[0][1] = true;
+
+                    var res = _comType.InvokeMember("GetDevice",
+                        BindingFlags.InvokeMethod | BindingFlags.Public | BindingFlags.Instance,
+                        null, _comObject, args, modifiers, null, null);
+
+                    int rc = res is int c ? c : -1;
+                    if (rc != 0) return (rc, Array.Empty<int>());
+                    list[i] = Convert.ToInt32(args[1]);
                 }
-                return (rc, buffer);
+                return (0, list);
             }
-            catch
+            catch (Exception ex)
             {
+                Program.Log($"ReadDeviceBlockAsync exception: {ex}");
                 return (-99, Array.Empty<int>());
             }
         }, 2000, (-100, Array.Empty<int>()));
@@ -271,15 +287,22 @@ public sealed class MxComWorker : IDisposable
 
             try
             {
-                object[] args = new object[] { device, data.Length, data };
-                var res = _comType.InvokeMember("WriteDeviceBlock",
-                    BindingFlags.InvokeMethod | BindingFlags.Public | BindingFlags.Instance,
-                    null, _comObject, args);
+                for (int i = 0; i < data.Length; i++)
+                {
+                    string dev = IncrementDeviceAddress(device, i);
+                    object[] args = new object[] { dev, data[i] };
+                    var res = _comType.InvokeMember("SetDevice",
+                        BindingFlags.InvokeMethod | BindingFlags.Public | BindingFlags.Instance,
+                        null, _comObject, args);
 
-                return res is int c ? c : -1;
+                    int rc = res is int c ? c : -1;
+                    if (rc != 0) return rc;
+                }
+                return 0;
             }
-            catch
+            catch (Exception ex)
             {
+                Program.Log($"WriteDeviceBlockAsync exception: {ex}");
                 return -99;
             }
         }, 2000, -100);
@@ -293,25 +316,28 @@ public sealed class MxComWorker : IDisposable
 
             try
             {
-                short[] buffer = new short[size];
-                object[] args = new object[] { device, size, buffer };
-                ParameterModifier[] modifiers = new ParameterModifier[1];
-                modifiers[0] = new ParameterModifier(3);
-                modifiers[0][2] = true;
-
-                var res = _comType.InvokeMember("ReadDeviceBlock2",
-                    BindingFlags.InvokeMethod | BindingFlags.Public | BindingFlags.Instance,
-                    null, _comObject, args, modifiers, null, null);
-
-                int rc = res is int c ? c : -1;
-                if (args[2] is short[] resultData)
+                short[] list = new short[size];
+                for (int i = 0; i < size; i++)
                 {
-                    return (rc, resultData);
+                    string dev = IncrementDeviceAddress(device, i);
+                    object[] args = new object[] { dev, (short)0 };
+                    ParameterModifier[] modifiers = new ParameterModifier[1];
+                    modifiers[0] = new ParameterModifier(2);
+                    modifiers[0][1] = true;
+
+                    var res = _comType.InvokeMember("GetDevice2",
+                        BindingFlags.InvokeMethod | BindingFlags.Public | BindingFlags.Instance,
+                        null, _comObject, args, modifiers, null, null);
+
+                    int rc = res is int c ? c : -1;
+                    if (rc != 0) return (rc, Array.Empty<short>());
+                    list[i] = Convert.ToInt16(args[1]);
                 }
-                return (rc, buffer);
+                return (0, list);
             }
-            catch
+            catch (Exception ex)
             {
+                Program.Log($"ReadDeviceBlock2Async exception: {ex}");
                 return (-99, Array.Empty<short>());
             }
         }, 2000, (-100, Array.Empty<short>()));
@@ -326,27 +352,27 @@ public sealed class MxComWorker : IDisposable
 
             try
             {
-                string deviceList = string.Join("\n", devices);
-                int size = devices.Length;
-                short[] buffer = new short[size];
-                object[] args = new object[] { deviceList, size, buffer };
-                ParameterModifier[] modifiers = new ParameterModifier[1];
-                modifiers[0] = new ParameterModifier(3);
-                modifiers[0][2] = true;
-
-                var res = _comType.InvokeMember("ReadDeviceRandom2",
-                    BindingFlags.InvokeMethod | BindingFlags.Public | BindingFlags.Instance,
-                    null, _comObject, args, modifiers, null, null);
-
-                int rc = res is int c ? c : -1;
-                if (args[2] is short[] resultData)
+                var list = new short[devices.Length];
+                for (int i = 0; i < devices.Length; i++)
                 {
-                    return (rc, resultData);
+                    object[] args = new object[] { devices[i].Trim(), (short)0 };
+                    ParameterModifier[] modifiers = new ParameterModifier[1];
+                    modifiers[0] = new ParameterModifier(2);
+                    modifiers[0][1] = true;
+
+                    var res = _comType.InvokeMember("GetDevice2",
+                        BindingFlags.InvokeMethod | BindingFlags.Public | BindingFlags.Instance,
+                        null, _comObject, args, modifiers, null, null);
+
+                    int rc = res is int c ? c : -1;
+                    if (rc != 0) return (rc, Array.Empty<short>());
+                    list[i] = Convert.ToInt16(args[1]);
                 }
-                return (rc, buffer);
+                return (0, list);
             }
-            catch
+            catch (Exception ex)
             {
+                Program.Log($"ReadDeviceRandom2Async exception: {ex}");
                 return (-99, Array.Empty<short>());
             }
         }, 2000, (-100, Array.Empty<short>()));
@@ -360,15 +386,22 @@ public sealed class MxComWorker : IDisposable
 
             try
             {
-                object[] args = new object[] { device, data.Length, data };
-                var res = _comType.InvokeMember("WriteDeviceBlock2",
-                    BindingFlags.InvokeMethod | BindingFlags.Public | BindingFlags.Instance,
-                    null, _comObject, args);
+                for (int i = 0; i < data.Length; i++)
+                {
+                    string dev = IncrementDeviceAddress(device, i);
+                    object[] args = new object[] { dev, data[i] };
+                    var res = _comType.InvokeMember("SetDevice2",
+                        BindingFlags.InvokeMethod | BindingFlags.Public | BindingFlags.Instance,
+                        null, _comObject, args);
 
-                return res is int c ? c : -1;
+                    int rc = res is int c ? c : -1;
+                    if (rc != 0) return rc;
+                }
+                return 0;
             }
-            catch
+            catch (Exception ex)
             {
+                Program.Log($"WriteDeviceBlock2Async exception: {ex}");
                 return -99;
             }
         }, 2000, -100);

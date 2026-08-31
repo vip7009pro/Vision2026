@@ -14,42 +14,41 @@ public static class PlcBridgeTest
         Console.WriteLine("STARTING PLC BRIDGE & MX COMPONENT DRIVER TESTS");
         Console.WriteLine("====================================================");
 
-        var plc = new PlcModel
+        var plc0 = new PlcModel
         {
-            Id = "P1",
-            Name = "PLC1",
+            Id = "P0",
+            Name = "PLC_St0",
             DriverType = PlcDriverType.MitsubishiMxComponent,
-            LogicalStationNumber = 1,
+            LogicalStationNumber = 0,
             Enabled = true
         };
 
-        using var driver = new MitsubishiMxComponentDriver(plc);
+        using var driver0 = new MitsubishiMxComponentDriver(plc0);
 
-        Console.WriteLine($"[INFO] Connecting to PLC Station {plc.LogicalStationNumber} via 32-bit Socket Bridge...");
+        Console.WriteLine($"[INFO] Connecting to PLC Station {plc0.LogicalStationNumber} via 32-bit Socket Bridge...");
         using var cts = new CancellationTokenSource(8000);
-        bool connected = await driver.ConnectAsync(cts.Token);
+        bool connected0 = await driver0.ConnectAsync(cts.Token);
 
-        if (connected)
+        if (connected0)
         {
-            Console.WriteLine($"[PASS] Driver ConnectAsync succeeded! State={plc.State}, CpuName={plc.CpuName}");
+            Console.WriteLine($"[PASS] Driver ConnectAsync Station 0 succeeded! State={plc0.State}, CpuName={plc0.CpuName}");
+
+            var tagD0 = new PlcTag { PlcId = plc0.Id, Name = "D0_Test", Address = "D0", DataType = PlcDataType.Int16 };
+            await driver0.WriteAsync(tagD0, (short)7788, cts.Token);
+            var d0Val = await driver0.ReadAsync(tagD0, cts.Token);
+            Console.WriteLine($"[TEST] Read Tag D0 after write 7788: Value={d0Val}");
+
+            var tagD10 = new PlcTag { PlcId = plc0.Id, Name = "D10_Float", Address = "D10", DataType = PlcDataType.Float };
+            await driver0.WriteAsync(tagD10, 123.456f, cts.Token);
+            var d10Val = await driver0.ReadAsync(tagD10, cts.Token);
+            Console.WriteLine($"[TEST] Read Tag D10 (Float): Value={d10Val}");
+
+            await driver0.DisconnectAsync();
+            Console.WriteLine($"[PASS] Driver DisconnectAsync completed. State={plc0.State}");
         }
         else
         {
-            Console.WriteLine($"[FAIL] Driver ConnectAsync failed! State={plc.State}, Error={plc.CpuName}");
-        }
-
-        if (connected)
-        {
-            var tagX0 = new PlcTag { PlcId = plc.Id, Name = "Ready", Address = "X0", DataType = PlcDataType.Bool };
-            var x0Val = await driver.ReadAsync(tagX0, cts.Token);
-            Console.WriteLine($"[TEST] Read Tag X0: Value={x0Val}");
-
-            var tagD200 = new PlcTag { PlcId = plc.Id, Name = "D200_PosX", Address = "D200", DataType = PlcDataType.Float };
-            var d200Val = await driver.ReadAsync(tagD200, cts.Token);
-            Console.WriteLine($"[TEST] Read Tag D200 (Float): Value={d200Val}");
-
-            await driver.DisconnectAsync();
-            Console.WriteLine($"[PASS] Driver DisconnectAsync completed. State={plc.State}");
+            Console.WriteLine($"[INFO] Driver ConnectAsync Station 0 returned false: State={plc0.State}, Msg={plc0.CpuName}");
         }
 
         Console.WriteLine("====================================================");

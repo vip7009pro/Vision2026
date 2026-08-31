@@ -31,5 +31,6 @@ class Program
         PreprocessRoiMaskingTest.RunTests();
         OriginTemplateJobTest.RunTests();
         ProductAssignAndCodeSyncTest.RunTests();
+        PlcBridgeTest.RunTestsAsync().GetAwaiter().GetResult();
     }
 }
