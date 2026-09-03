@@ -297,6 +297,12 @@ namespace VisionInspectionApp.UI.ViewModels
                 Interval = TimeSpan.FromMilliseconds(100)
             };
             _continuousStatsTimer.Tick += (_, __) => UpdateContinuousStats();
+            var globalSettings = serviceProvider?.GetService(typeof(GlobalAppSettingsService)) as GlobalAppSettingsService;
+            if (globalSettings != null)
+            {
+                _isOriginalQualityPreview = globalSettings.Settings.UseOriginalQualityPreview;
+                MatExtensions.UseOriginalQualityPreview = _isOriginalQualityPreview;
+            }
             InitializeSystemMonitor();
             AllToolboxItems = new List<ToolboxItemModel>
             {

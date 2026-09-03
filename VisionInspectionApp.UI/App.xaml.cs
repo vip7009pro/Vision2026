@@ -142,6 +142,7 @@ public partial class App : System.Windows.Application
         _ = Task.Run(async () =>
         {
             var settingsService = _host.Services.GetRequiredService<GlobalAppSettingsService>();
+            MatExtensions.UseOriginalQualityPreview = settingsService.Settings.UseOriginalQualityPreview;
             var lightingServer = _host.Services.GetRequiredService<LightingControlServer>();
             var lightingService = _host.Services.GetRequiredService<LightingControllerService>();
 

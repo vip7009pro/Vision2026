@@ -327,13 +327,21 @@ public sealed partial class InspectionViewModel : ObservableObject
 
 
     [ObservableProperty]
-
     private bool _showRois = true;
 
+    [ObservableProperty]
+    private bool _isOriginalQualityPreview = MatExtensions.UseOriginalQualityPreview;
 
+    partial void OnIsOriginalQualityPreviewChanged(bool value)
+    {
+        MatExtensions.UseOriginalQualityPreview = value;
+        if (_imageMat != null && !_imageMat.Empty())
+        {
+            Image = _imageMat.ToBitmapSourceForDisplay();
+        }
+    }
 
     [ObservableProperty]
-
     private bool _showOverlay = true;
 
 

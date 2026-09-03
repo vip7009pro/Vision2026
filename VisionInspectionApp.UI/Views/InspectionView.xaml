@@ -27,6 +27,8 @@
 
             <CheckBox Content="Show ROI" IsChecked="{Binding ShowRois, UpdateSourceTrigger=PropertyChanged}" VerticalAlignment="Center" Margin="0,0,12,0" />
 
+            <CheckBox Content="Ảnh gốc" IsChecked="{Binding IsOriginalQualityPreview, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" VerticalAlignment="Center" Margin="0,0,12,0" ToolTip="Chuyển đổi giữa Preview nguyên gốc (100% độ phân giải, sắc nét khi zoom) và Preview giảm chất lượng (tối ưu hiệu năng, mượt mà)" />
+
             <CheckBox Content="Show Overlay" IsChecked="{Binding ShowOverlay, UpdateSourceTrigger=PropertyChanged}" VerticalAlignment="Center" Margin="0,0,12,0" />
 
             <Button Content="🎯 Fit View" Height="24" Padding="8,0" Click="BtnFitImagePreview_Click" Background="{DynamicResource ButtonBackgroundBrush}" Foreground="{DynamicResource TextBrush}" BorderBrush="{DynamicResource DarkBorderBrush}" FontWeight="SemiBold" ToolTip="Tự động cân chỉnh (Auto Fit) ảnh vừa vặn toàn bộ với khung Preview" VerticalAlignment="Center" Margin="0,0,12,0" />

@@ -1704,6 +1704,44 @@ Lộ trình tích hợp tính năng Chụp ảnh từ camera và hỗ trợ các
            - Bổ sung CheckBox `⚡ Tự khởi động Server LAN` (`AutoStartLightingServer`) trong nhóm Cài Đặt Khởi Động.
       - Kiểm Thử:
         - Toàn bộ test suite dự án trong `TestExtractApp` đạt 100% PASSED (178+ tests). Solution `dotnet build` đạt 0 lỗi (0 errors).
+- [x] Task 295: Chuyển Đổi Preview Ảnh Nguyên Gốc (Full/Original Quality) vs Đã Giảm Chất Lượng (Downscaled/Performance).
+      - Yêu Cầu & Bối Cảnh:
+        - Hệ thống preview ảnh của app mặc định giảm chất lượng (scale down về proxy 1280x720 hoặc 1920x1080) để tăng hiệu năng và FPS.
+        - Người dùng cần một CheckBox để chuyển đổi giữa preview ảnh nguyên gốc (100% độ phân giải, giữ trọn vẹn chi tiết khi zoom) và preview giảm chất lượng.
+        - Vị trí CheckBox: Đặt cạnh CheckBox "Show ROI" (trên tab Tool Editor) và cạnh "Khung ROI" (trên tab OQC Scanner), cũng như màn hình InspectionView.
+        - Trạng thái được lưu bền vững và đồng bộ giữa các màn hình.
+      - Giải Pháp Đã Triển Khai:
+        1. **Hạ Tầng Kết Xuất Ảnh (`MatExtensions.cs` & `WriteableBitmapRenderer.cs`)**:
+           - Thêm cờ `public static bool UseOriginalQualityPreview { get; set; } = false;`.
+           - Cập nhật `ToBitmapSourceForDisplay(this Mat? mat, ..., bool? forceOriginalQuality = null)`:
+             - Khi `forceOriginalQuality == true || (forceOriginalQuality == null && UseOriginalQualityPreview)`: Bỏ qua bước resize tuyến tính, trả về ảnh gốc độ phân giải 100% thông qua `mat.ToBitmapSourceSafe()`.
+             - Khi `false`: Thực hiện resize về kích thước proxy để tối ưu hiệu năng và FPS.
+           - Cập nhật `WriteableBitmapRenderer.UpdateFromMat(..., bool? forceOriginalQuality = null)`:
+             - Khi bật chất lượng gốc: Bỏ qua downscale, ghi trực tiếp frame gốc vào `WriteableBitmap` ở độ phân giải camera gốc.
+        2. **Cấu Hình Bền Vững (`GlobalAppSettingsService.cs` & `App.xaml.cs`)**:
+           - Thêm `public bool UseOriginalQualityPreview { get; set; } = false;` vào `GlobalAppSettings`.
+           - Trong `App.xaml.cs`: Lúc khởi động ứng dụng, nạp và gán `MatExtensions.UseOriginalQualityPreview = settingsService.Settings.UseOriginalQualityPreview;`.
+        3. **Tab Tool Editor (`ToolEditorViewModel.cs`, `ToolEditorViewModel.Engine.cs`, `ToolEditorView.xaml`)**:
+           - Thêm `[ObservableProperty] private bool _isOriginalQualityPreview;`.
+           - `OnIsOriginalQualityPreviewChanged`: Lưu cài đặt vào `GlobalAppSettingsService` và gọi `RefreshPreviews()` ngay lập tức.
+           - Đặt `public void RefreshPreviews()` để các module khác có thể kích hoạt làm mới preview.
+           - Trên `ToolEditorView.xaml`: Thêm CheckBox `Ảnh gốc` nằm ngay cạnh CheckBox `Show ROI`.
+        4. **Tab OQC Scanner (`OqcScannerViewModel.cs`, `OqcScannerView.xaml`)**:
+           - Thêm `[ObservableProperty] private bool _isOriginalQualityPreview;`.
+           - `OnIsOriginalQualityPreviewChanged`: Đồng bộ với `_toolEditorViewModel.IsOriginalQualityPreview`, cập nhật `PreviewImage` ngay lập tức nếu đang xem ảnh kết quả.
+           - Đồng bộ hai chiều trong `OnToolEditorPropertyChanged`.
+           - Trên `OqcScannerView.xaml`: Thêm CheckBox `Ảnh gốc` nằm ngay cạnh CheckBox `Khung ROI`.
+        5. **Màn Hình Inspection (`InspectionViewModel.cs`, `InspectionView.xaml`)**:
+           - Thêm `[ObservableProperty] private bool _isOriginalQualityPreview;`.
+           - `OnIsOriginalQualityPreviewChanged`: Cập nhật lại `Image = _imageMat.ToBitmapSourceForDisplay();` ngay lập tức.
+           - Trên `InspectionView.xaml`: Thêm CheckBox `Ảnh gốc` nằm ngay cạnh CheckBox `Show ROI`.
+        6. **Kiểm Thử Tự Động (`TestExtractApp/PreviewQualityTests.cs`)**:
+           - Thêm bộ test `PreviewQualityTests.cs` kiểm tra 3 khía cạnh:
+             - Chuyển đổi giữa chế độ giảm chất lượng (proxy <= 1280x720) và chế độ ảnh gốc (100% full 3840x2160).
+             - Khả năng lưu và phục hồi qua JSON của `GlobalAppSettings.UseOriginalQualityPreview`.
+             - Khả năng chuyển đổi kích thước render trên `WriteableBitmapRenderer`.
+      - Kiểm Thử:
+        - Toàn bộ test suite dự án trong `TestExtractApp` đạt 100% PASSED (181+ tests). Solution `dotnet build` đạt 0 lỗi (0 errors).
 
 
 

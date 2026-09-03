@@ -2258,6 +2258,22 @@ namespace VisionInspectionApp.UI.ViewModels
         private bool _showResultOverlay = true;
         [ObservableProperty]
         private bool _enableCanvasRendering = true;
+        [ObservableProperty]
+        private bool _isOriginalQualityPreview = MatExtensions.UseOriginalQualityPreview;
+
+        partial void OnIsOriginalQualityPreviewChanged(bool value)
+        {
+            MatExtensions.UseOriginalQualityPreview = value;
+            var settingsService = _serviceProvider?.GetService(typeof(GlobalAppSettingsService)) as GlobalAppSettingsService;
+            if (settingsService != null)
+            {
+                settingsService.Settings.UseOriginalQualityPreview = value;
+                settingsService.Save();
+            }
+            _finalPreviewDirty = true;
+            RefreshPreviews();
+            RaiseToolPropertyPanelsChanged();
+        }
 
         partial void OnEnableCanvasRenderingChanged(bool value)
         {
@@ -3873,7 +3889,7 @@ namespace VisionInspectionApp.UI.ViewModels
             RequestAutoSave();
         }
 
-        private void RefreshPreviews()
+        public void RefreshPreviews()
         {
             if (!EnableCanvasRendering)
             {

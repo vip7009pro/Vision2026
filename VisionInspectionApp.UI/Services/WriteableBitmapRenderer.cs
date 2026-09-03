@@ -42,8 +42,9 @@ public sealed class WriteableBitmapRenderer : IDisposable
     /// <param name="frame">Khung hình nguồn từ Camera hoặc Vision Pipeline</param>
     /// <param name="maxDisplayWidth">Chiều rộng tối đa cho màn hình hiển thị</param>
     /// <param name="maxDisplayHeight">Chiều cao tối đa cho màn hình hiển thị</param>
+    /// <param name="forceOriginalQuality">Bắt buộc giữ độ phân giải gốc nếu true, hoặc tuân theo MatExtensions.UseOriginalQualityPreview</param>
     /// <returns>Đối tượng WriteableBitmap hiện hành (hoặc vừa được cập nhật/khởi tạo)</returns>
-    public WriteableBitmap? UpdateFromMat(Mat? frame, int maxDisplayWidth = 1280, int maxDisplayHeight = 720)
+    public WriteableBitmap? UpdateFromMat(Mat? frame, int maxDisplayWidth = 1280, int maxDisplayHeight = 720, bool? forceOriginalQuality = null)
     {
         if (_isDisposed || frame == null || frame.IsDisposed || frame.Empty() || frame.Width <= 0 || frame.Height <= 0)
         {
@@ -55,7 +56,7 @@ public sealed class WriteableBitmapRenderer : IDisposable
         {
             try
             {
-                return dispatcher.Invoke(() => UpdateFromMat(frame, maxDisplayWidth, maxDisplayHeight));
+                return dispatcher.Invoke(() => UpdateFromMat(frame, maxDisplayWidth, maxDisplayHeight, forceOriginalQuality));
             }
             catch
             {
@@ -71,7 +72,8 @@ public sealed class WriteableBitmapRenderer : IDisposable
             int targetW = srcW;
             int targetH = srcH;
 
-            bool needDownscale = (maxDisplayWidth > 0 && maxDisplayHeight > 0 && (srcW > maxDisplayWidth || srcH > maxDisplayHeight));
+            bool isOriginal = forceOriginalQuality ?? MatExtensions.UseOriginalQualityPreview;
+            bool needDownscale = !isOriginal && (maxDisplayWidth > 0 && maxDisplayHeight > 0 && (srcW > maxDisplayWidth || srcH > maxDisplayHeight));
             if (needDownscale)
             {
                 double scale = Math.Min((double)maxDisplayWidth / srcW, (double)maxDisplayHeight / srcH);

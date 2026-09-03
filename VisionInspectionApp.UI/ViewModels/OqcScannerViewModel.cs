@@ -76,6 +76,9 @@ public partial class OqcScannerViewModel : ObservableObject
     [ObservableProperty]
     private bool _showRois = true;
 
+    [ObservableProperty]
+    private bool _isOriginalQualityPreview = MatExtensions.UseOriginalQualityPreview;
+
     // ─── Origin Live Guide & Template Preview ───
     [ObservableProperty]
     private BitmapSource? _originTemplateImage;
@@ -204,6 +207,13 @@ public partial class OqcScannerViewModel : ObservableObject
             e.PropertyName == "CurrentJobFilePath")
         {
             RefreshOriginTemplateFromJob(_toolEditorViewModel.Config, _toolEditorViewModel.CurrentTempWorkingDir);
+        }
+        else if (e.PropertyName == nameof(ToolEditorViewModel.IsOriginalQualityPreview))
+        {
+            if (IsOriginalQualityPreview != _toolEditorViewModel.IsOriginalQualityPreview)
+            {
+                IsOriginalQualityPreview = _toolEditorViewModel.IsOriginalQualityPreview;
+            }
         }
     }
 
@@ -1065,6 +1075,21 @@ public partial class OqcScannerViewModel : ObservableObject
         else
         {
             UpdatePreviewOverlays();
+        }
+    }
+
+    partial void OnIsOriginalQualityPreviewChanged(bool value)
+    {
+        MatExtensions.UseOriginalQualityPreview = value;
+        if (_toolEditorViewModel != null && _toolEditorViewModel.IsOriginalQualityPreview != value)
+        {
+            _toolEditorViewModel.IsOriginalQualityPreview = value;
+        }
+        if (!IsShowingLiveCamera && _toolEditorViewModel != null)
+        {
+            _toolEditorViewModel.RefreshPreviews();
+            _lastOqcPreviewImage = _toolEditorViewModel.FinalPreviewImage;
+            PreviewImage = _lastOqcPreviewImage;
         }
     }
 

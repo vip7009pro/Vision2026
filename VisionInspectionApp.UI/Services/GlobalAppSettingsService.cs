@@ -14,6 +14,9 @@ public sealed class GlobalAppSettings
     public LightingControllerSettings Lighting { get; set; } = new();
     public LightingServerConfig LightingServer { get; set; } = new();
     public LightingClientConfig LightingClient { get; set; } = new();
+
+    // Preview Display Quality (false = reduced quality proxy, true = 100% full original resolution)
+    public bool UseOriginalQualityPreview { get; set; } = false;
 }
 
 public sealed class LightingServerConfig

@@ -49,6 +49,45 @@
 - Preview được phép tiếp tục khi Global Snapshot rỗng để lấy ảnh từ ImageSource.
 - Lưu template cho Origin, Point và SurfaceCompare hoạt động với nguồn ảnh ImageSource.
 
+- **Chuyển Đổi Preview Ảnh Nguyên Gốc (Full/Original Quality) vs Đã Giảm Chất Lượng (Downscaled/Performance) (Task 295)**:
+  - **Yêu Cầu & Bối Cảnh**:
+    - Hệ thống preview ảnh của ứng dụng mặc định giảm chất lượng (scale down kích thước hiển thị về proxy 1280x720 hoặc 1920x1080) để tăng hiệu năng và đạt 60 FPS mượt mà.
+    - Tuy nhiên, khi cần soi các chi tiết siêu nhỏ hoặc phóng to (zoom in) kiểm tra sản phẩm trên ảnh camera độ phân giải cao (4K, 20MP), việc giảm chất lượng làm vỡ hạt và mờ nét.
+    - Người dùng yêu cầu thêm CheckBox chuyển đổi giữa **Preview ảnh nguyên gốc** (100% độ phân giải, giữ nguyên toàn bộ pixel gốc) và **Preview giảm chất lượng** (tối ưu hiệu năng), đặt cạnh CheckBox "Show ROI" trên tab Tool Editor, cạnh "Khung ROI" trên tab OQC Scanner và tất cả màn hình preview khác.
+  - **Giải Pháp Kỹ Thuật Đã Triển Khai**:
+    1. **Hạ Tầng Kết Xuất Ảnh (`MatExtensions.cs` & `WriteableBitmapRenderer.cs`)**:
+       - Thêm cờ toàn cục `public static bool UseOriginalQualityPreview { get; set; } = false;`.
+       - Mở rộng phương thức `ToBitmapSourceForDisplay`:
+         - Bổ sung tham số `bool? forceOriginalQuality = null`.
+         - Khi bật chất lượng gốc: Bỏ qua hoàn toàn phép `Cv2.Resize`, gọi trực tiếp `mat.ToBitmapSourceSafe()` với `Freeze()` tối ưu GPU.
+         - Khi tắt: Tiếp tục scale về kích thước proxy để tiết kiệm RAM/LOH.
+       - Cập nhật `WriteableBitmapRenderer.UpdateFromMat`:
+         - Hỗ trợ `forceOriginalQuality` và tuân theo `UseOriginalQualityPreview`. Khi bật, tự động phân bổ `WriteableBitmap` ở 100% kích thước pixel camera và vẽ trực tiếp.
+    2. **Cấu Hình Bền Vững & Đồng Bộ Khởi Động (`GlobalAppSettingsService.cs` & `App.xaml.cs`)**:
+       - Thêm `public bool UseOriginalQualityPreview { get; set; } = false;` vào `GlobalAppSettings` để lưu trạng thái người dùng vào `global_settings.json`.
+       - Lúc boot app trong `App.xaml.cs`: Gán `MatExtensions.UseOriginalQualityPreview = settingsService.Settings.UseOriginalQualityPreview;`.
+    3. **Giao Diện & ViewModel Tab Tool Editor (`ToolEditorViewModel.cs`, `ToolEditorViewModel.Engine.cs`, `ToolEditorView.xaml`)**:
+       - Bổ sung `[ObservableProperty] private bool _isOriginalQualityPreview;` khởi tạo từ settings.
+       - Khi thay đổi: Lưu cấu hình xuống JSON và kích hoạt `RefreshPreviews()` để render lại preview ngay lập tức.
+       - Đổi `RefreshPreviews()` sang `public` để các module khác có thể gọi làm mới ảnh.
+       - Trên `ToolEditorView.xaml`: Bổ sung CheckBox `Ảnh gốc` nằm ngay bên cạnh CheckBox `Show ROI` (`Margin="0,0,10,0"`).
+    4. **Giao Diện & ViewModel Tab OQC Scanner (`OqcScannerViewModel.cs`, `OqcScannerView.xaml`)**:
+       - Bổ sung `[ObservableProperty] private bool _isOriginalQualityPreview;`.
+       - Đồng bộ hai chiều với `_toolEditorViewModel`: Khi đổi ở OQC Scanner thì Tool Editor cập nhật, và ngược lại.
+       - Khi đổi checkbox: Lập tức làm mới `PreviewImage` của ảnh kết quả kiểm tra hoặc khung hình live stream kế tiếp.
+       - Trên `OqcScannerView.xaml`: Bổ sung CheckBox `Ảnh gốc` nằm ngay bên cạnh CheckBox `Khung ROI`.
+    5. **Màn Hình Inspection (`InspectionViewModel.cs`, `InspectionView.xaml`)**:
+       - Bổ sung `[ObservableProperty] private bool _isOriginalQualityPreview;`.
+       - Trên `InspectionView.xaml`: Bổ sung CheckBox `Ảnh gốc` cạnh CheckBox `Show ROI`.
+    6. **Kiểm Thử Tự Động (`TestExtractApp/PreviewQualityTests.cs`)**:
+       - Tạo lớp test `PreviewQualityTests.cs` kiểm tra 3 trường hợp:
+         - Verify ảnh 4K (3840x2160) scale down về <= 1280x720 khi cờ tắt, và giữ nguyên 100% 3840x2160 khi cờ bật.
+         - Verify JSON serialization & deserialization trường `UseOriginalQualityPreview`.
+         - Verify `WriteableBitmapRenderer` tự động chuyển đổi kích thước buffer theo cờ.
+  - **Kiểm Thử & Xác Minh**:
+    - `dotnet build VisionInspectionApp.slnx`: 0 errors.
+    - `dotnet run --project TestExtractApp`: 181+ tests PASSED (100%).
+
 - **Đảm Bảo Tự Động Khởi Động Lighting Server Khi Mở App & Trạng Thái Running Trong Modal (Task 294)**:
   - **Yêu Cầu & Bối Cảnh**:
     - Người dùng bật app lên nhưng Lighting Server vẫn chưa tự khởi động, khi vào trong Lighting Server modal thì server vẫn ở trạng thái dừng chưa chạy.

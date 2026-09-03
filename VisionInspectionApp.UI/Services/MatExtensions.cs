@@ -71,11 +71,19 @@ public static class MatExtensions
     }
 
     /// <summary>
+    /// Cờ toàn cục bật/tắt chế độ xem trước ảnh ở độ phân giải nguyên gốc (100% full quality, không scale down).
+    /// Khi bật (true): Bỏ qua scale down, giữ nguyên 100% pixel gốc (sắc nét tuyệt đối khi zoom).
+    /// Khi tắt (false): Tự động giảm kích thước ảnh xuống proxy (1280x720 hoặc 1920x1080) để tăng tối đa hiệu năng và FPS.
+    /// </summary>
+    public static bool UseOriginalQualityPreview { get; set; } = false;
+
+    /// <summary>
     /// Chuyển đổi an toàn từ OpenCvSharp Mat sang WPF BitmapSource phục vụ hiển thị Live Stream Preview.
     /// Tự động scale down tối ưu nếu ảnh quá lớn (> maxDisplayWidth x maxDisplayHeight),
     /// giúp triệt tiêu áp lực LOH allocation (từ 60MB xuống 2-3MB) và tăng FPS hiển thị mượt mà 60 FPS.
+    /// Nếu forceOriginalQuality = true hoặc UseOriginalQualityPreview = true, ảnh sẽ được giữ nguyên vẹn 100% độ phân giải gốc.
     /// </summary>
-    public static BitmapSource? ToBitmapSourceForDisplay(this Mat? mat, int maxDisplayWidth = 1280, int maxDisplayHeight = 720)
+    public static BitmapSource? ToBitmapSourceForDisplay(this Mat? mat, int maxDisplayWidth = 1280, int maxDisplayHeight = 720, bool? forceOriginalQuality = null)
     {
         if (mat is null) return null;
         try
@@ -83,7 +91,9 @@ public static class MatExtensions
             if (mat.IsDisposed || mat.Empty() || mat.Width <= 0 || mat.Height <= 0)
                 return null;
 
-            if (maxDisplayWidth > 0 && maxDisplayHeight > 0 && (mat.Width > maxDisplayWidth || mat.Height > maxDisplayHeight))
+            bool isOriginal = forceOriginalQuality ?? UseOriginalQualityPreview;
+
+            if (!isOriginal && maxDisplayWidth > 0 && maxDisplayHeight > 0 && (mat.Width > maxDisplayWidth || mat.Height > maxDisplayHeight))
             {
                 double scale = Math.Min((double)maxDisplayWidth / mat.Width, (double)maxDisplayHeight / mat.Height);
                 int targetW = Math.Max(1, (int)Math.Round(mat.Width * scale));
