@@ -100,8 +100,10 @@
                                 </Grid.ColumnDefinitions>
 
                                 <Button Grid.Column="0" Content="⚡ Connect" Command="{Binding ConnectCommand}"
+                                        IsEnabled="{Binding IsNotConnected}"
                                         Margin="0,0,4,0" Padding="10,4" MinWidth="85" Background="#0288D1" Foreground="White" FontWeight="SemiBold" />
                                 <Button Grid.Column="1" Content="🔌 Disconnect" Command="{Binding DisconnectCommand}"
+                                        IsEnabled="{Binding IsConnected}"
                                         Margin="0,0,6,0" Padding="10,4" MinWidth="85" />
                                 <TextBlock Grid.Column="2" Text="{Binding ConnectionStatusText}"
                                            VerticalAlignment="Center" FontWeight="Bold" FontSize="11.5" TextTrimming="CharacterEllipsis" />

@@ -28,6 +28,7 @@ class Program
         PlcTests.RunAllTestsAsync().GetAwaiter().GetResult();
         ManualInspectionTest.RunTests();
         LightingControllerTests.RunAllTests();
+        LightingServerClientTests.RunTests();
         PreprocessRoiMaskingTest.RunTests();
         OriginTemplateJobTest.RunTests();
         ProductAssignAndCodeSyncTest.RunTests();

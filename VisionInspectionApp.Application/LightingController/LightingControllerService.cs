@@ -97,6 +97,8 @@ public sealed class LightingControllerService : IDisposable
                 _transport = tcp;
             }
 
+            ConnectionState = LightingConnectionState.Connected;
+
             // Probe / Read current state from controller
             var readResult = await ReadAllParametersAsync(cancellationToken).ConfigureAwait(false);
             if (!readResult.IsSuccess && readResult.ErrorCode == "TIMEOUT")
@@ -110,7 +112,6 @@ public sealed class LightingControllerService : IDisposable
                 return;
             }
 
-            ConnectionState = LightingConnectionState.Connected;
             Log("INFO", $"Connected to {ip}:{port} successfully.");
         }
         catch (Exception ex)
@@ -153,6 +154,8 @@ public sealed class LightingControllerService : IDisposable
             await serialTransport.ConnectAsync(portName, baudRate, parity, dataBits, stopBits, cancellationToken).ConfigureAwait(false);
             _transport = serialTransport;
 
+            ConnectionState = LightingConnectionState.Connected;
+
             // Probe / Read current state from controller if enabled
             if (autoReadState)
             {
@@ -170,7 +173,6 @@ public sealed class LightingControllerService : IDisposable
                 }
             }
 
-            ConnectionState = LightingConnectionState.Connected;
             Log("INFO", $"Connected to Serial {portName} successfully.");
         }
         catch (Exception ex)
@@ -217,7 +219,7 @@ public sealed class LightingControllerService : IDisposable
     /// <summary>Send a raw command and return parsed result.</summary>
     public async Task<LightingCommandResult> SendCommandAsync(string command, CancellationToken cancellationToken = default)
     {
-        if (!IsConnected || _transport == null)
+        if ((!IsConnected && ConnectionState != LightingConnectionState.Connecting) || _transport == null || !_transport.IsConnected)
         {
             return LightingCommandResult.Error("ER", "Not connected");
         }

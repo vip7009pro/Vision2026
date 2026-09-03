@@ -1,0 +1,317 @@
+<Window x:Class="VisionInspectionApp.UI.Views.LightingClientWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d"
+        Title="📡 Lighting Control Client — Điều Khiển Đèn Từ Xa Qua Mạng LAN"
+        Width="1050" Height="720"
+        MinWidth="950" MinHeight="640"
+        WindowStartupLocation="CenterScreen"
+        Background="{DynamicResource WindowBackgroundBrush}"
+        Foreground="{DynamicResource TextBrush}"
+        FontFamily="Segoe UI">
+
+    <Window.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVis" />
+
+        <!-- Card Border Style -->
+        <Style x:Key="CardBorder" TargetType="Border">
+            <Setter Property="Background" Value="{DynamicResource PanelBackgroundBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="6" />
+            <Setter Property="Padding" Value="10" />
+            <Setter Property="Margin" Value="2" />
+        </Style>
+
+        <!-- Section Header -->
+        <Style x:Key="SectionHeader" TargetType="TextBlock">
+            <Setter Property="FontWeight" Value="Bold" />
+            <Setter Property="FontSize" Value="12.5" />
+            <Setter Property="Margin" Value="0,0,0,6" />
+            <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
+        </Style>
+
+        <!-- Small Label -->
+        <Style x:Key="SmallLabel" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
+            <Setter Property="Margin" Value="0,0,0,2" />
+        </Style>
+    </Window.Resources>
+
+    <Grid Margin="6">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="165" />
+        </Grid.RowDefinitions>
+
+        <!-- ROW 0: Main Section (Left: Connection & Global Actions / Right: Channel Cards) -->
+        <Grid Grid.Row="0" Margin="0,0,0,4">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="420" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+
+            <!-- LEFT COLUMN: Server Connection + Global Actions -->
+            <ScrollViewer Grid.Column="0" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                <StackPanel Margin="0,0,3,0">
+                    
+                    <!-- 1. Connection to Lighting Server -->
+                    <Border Style="{StaticResource CardBorder}" Margin="0,0,0,4">
+                        <StackPanel>
+                            <!-- Header & Status -->
+                            <Grid Margin="0,0,0,6">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Grid.Column="0" Style="{StaticResource SectionHeader}" Text="📡 Kết Nối Đến Server Đèn (LAN)" VerticalAlignment="Center" />
+                                <TextBlock Grid.Column="1" Text="{Binding ConnectionStatusText}" FontWeight="Bold" FontSize="11" VerticalAlignment="Center" />
+                            </Grid>
+
+                            <!-- Server IP & Port -->
+                            <Grid Margin="0,0,0,6">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="70" />
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="50" />
+                                </Grid.ColumnDefinitions>
+
+                                <TextBlock Grid.Column="0" Text="IP:" VerticalAlignment="Center" Margin="0,0,4,0" Style="{StaticResource SmallLabel}" />
+                                <TextBox Grid.Column="1" Text="{Binding ServerIp, UpdateSourceTrigger=PropertyChanged}"
+                                         VerticalAlignment="Center" Padding="4,2" Margin="0,0,6,0" FontSize="11"
+                                         IsEnabled="{Binding IsNotConnected}" />
+
+                                <TextBlock Grid.Column="2" Text="Port:" VerticalAlignment="Center" Margin="0,0,4,0" Style="{StaticResource SmallLabel}" />
+                                <TextBox Grid.Column="3" Text="{Binding ServerPort, UpdateSourceTrigger=PropertyChanged}"
+                                         VerticalAlignment="Center" Padding="4,2" Margin="0,0,6,0" FontSize="11"
+                                         IsEnabled="{Binding IsNotConnected}" />
+
+                                <TextBlock Grid.Column="4" Text="Kênh:" VerticalAlignment="Center" Margin="0,0,4,0" Style="{StaticResource SmallLabel}" />
+                                <ComboBox Grid.Column="5" ItemsSource="{Binding AvailableChannelCounts}" SelectedItem="{Binding SelectedChannelCount}"
+                                          VerticalAlignment="Center" FontSize="11" IsEnabled="{Binding IsNotConnected}" />
+                            </Grid>
+
+                            <!-- Connect / Disconnect Buttons -->
+                            <Grid Margin="0,0,0,2">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+
+                                <Button Grid.Column="0" Content="⚡ Kết Nối Server" Command="{Binding ConnectCommand}"
+                                        IsEnabled="{Binding IsNotConnected}"
+                                        Margin="0,0,4,0" Padding="8,5" Background="#0288D1" Foreground="White" FontWeight="SemiBold" />
+                                <Button Grid.Column="1" Content="🔌 Ngắt Kết Nối" Command="{Binding DisconnectCommand}"
+                                        IsEnabled="{Binding IsConnected}"
+                                        Padding="8,5" />
+                            </Grid>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- 2. Global Control Actions Card -->
+                    <Border Style="{StaticResource CardBorder}" Margin="0,0,0,4" IsEnabled="{Binding IsConnected}">
+                        <StackPanel>
+                            <TextBlock Style="{StaticResource SectionHeader}" Text="⚡ Thao Tác Nhanh Toàn Cục" />
+
+                            <Grid Margin="0,0,0,4">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <Button Grid.Column="0" Content="⚡ Áp Dụng Tất Cả Kênh" Command="{Binding ApplyAllChannelsCommand}"
+                                        Margin="0,0,4,0" Padding="6,4" FontWeight="SemiBold" />
+                                <Button Grid.Column="1" Content="📥 Đọc Lại Từ Server" Command="{Binding ReadAllCommand}"
+                                        Padding="6,4" />
+                            </Grid>
+
+                            <Grid Margin="0,0,0,4">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <Button Grid.Column="0" Content="💡 Bật Toàn Bộ Kênh" Command="{Binding TurnOnAllChannelsCommand}"
+                                        Margin="0,0,4,0" Padding="6,4" />
+                                <Button Grid.Column="1" Content="⬛ Tắt Toàn Bộ Kênh" Command="{Binding TurnOffAllChannelsCommand}"
+                                        Padding="6,4" />
+                            </Grid>
+
+                            <Grid Margin="0,0,0,4">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <Button Grid.Column="0" Content="💾 Lưu Vào Bộ Nhớ" Command="{Binding SaveConfigCommand}"
+                                        Margin="0,0,4,0" Padding="6,4" ToolTip="Lưu cấu hình hiện tại vào bộ nhớ Flash/EEPROM của bộ điều khiển" />
+                                
+                                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Margin="4,0,0,0">
+                                    <TextBlock Text="Trigger:" VerticalAlignment="Center" Margin="0,0,4,0" Style="{StaticResource SmallLabel}" />
+                                    <ComboBox ItemsSource="{Binding AvailableTriggerModes}" SelectedItem="{Binding SelectedTriggerMode}"
+                                              VerticalAlignment="Center" FontSize="11" Width="100" />
+                                </StackPanel>
+                            </Grid>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- 3. Manual Command Presets Card -->
+                    <Border Style="{StaticResource CardBorder}" IsEnabled="{Binding IsConnected}">
+                        <StackPanel>
+                            <TextBlock Style="{StaticResource SectionHeader}" Text="📝 Gửi Lệnh Thủ Công (ASCII)" />
+
+                            <!-- Quick Buttons -->
+                            <WrapPanel Margin="0,0,0,6">
+                                <Button Content="$F0=1#" Command="{Binding SetTestCommandCommand}" CommandParameter="$F0=1#" Padding="4,2" Margin="0,0,3,3" ToolTip="Bật Kênh 1" FontSize="10.5" />
+                                <Button Content="$F0=0#" Command="{Binding SetTestCommandCommand}" CommandParameter="$F0=0#" Padding="4,2" Margin="0,0,3,3" ToolTip="Tắt Kênh 1" FontSize="10.5" />
+                                <Button Content="$L0=255#" Command="{Binding SetTestCommandCommand}" CommandParameter="$L0=255#" Padding="4,2" Margin="0,0,3,3" ToolTip="Sáng Max Kênh 1" FontSize="10.5" />
+                                <Button Content="$L0=100#" Command="{Binding SetTestCommandCommand}" CommandParameter="$L0=100#" Padding="4,2" Margin="0,0,3,3" ToolTip="Sáng 100 Kênh 1" FontSize="10.5" />
+                                <Button Content="$RD=9999#" Command="{Binding SetTestCommandCommand}" CommandParameter="$RD=9999#" Padding="4,2" Margin="0,0,3,3" ToolTip="Đọc Toàn Bộ Kênh" FontSize="10.5" />
+                            </WrapPanel>
+
+                            <!-- Command Input & Send -->
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <TextBox Grid.Column="0" Text="{Binding ManualCommandText, UpdateSourceTrigger=PropertyChanged}"
+                                         VerticalAlignment="Center" Padding="4,3" FontFamily="Consolas" FontSize="11" Margin="0,0,4,0" />
+                                <Button Grid.Column="1" Content="🚀 Gửi" Command="{Binding SendManualCommandCommand}"
+                                        Padding="8,3" FontWeight="SemiBold" />
+                            </Grid>
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+            </ScrollViewer>
+
+            <!-- RIGHT COLUMN: 4 or 8 Channel Cards List -->
+            <Border Grid.Column="1" Style="{StaticResource CardBorder}" Margin="3,0,0,0" IsEnabled="{Binding IsConnected}">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
+
+                    <!-- Header -->
+                    <Grid Grid.Row="0" Margin="0,0,0,6">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0" Style="{StaticResource SectionHeader}" Text="💡 Điều Khiển Các Kênh Chiếu Sáng (Remote Channels)" VerticalAlignment="Center" />
+                        <TextBlock Grid.Column="1" Text="{Binding SelectedChannelCount, StringFormat='({0} Kênh)'}"
+                                   FontWeight="SemiBold" FontSize="11.5" Foreground="{DynamicResource AccentBrush}" VerticalAlignment="Center" />
+                    </Grid>
+
+                    <!-- Channel Cards List -->
+                    <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                        <ItemsControl ItemsSource="{Binding Channels}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Border Background="{DynamicResource PanelAltBackgroundBrush}"
+                                            BorderBrush="{DynamicResource BorderBrush}"
+                                            BorderThickness="1"
+                                            CornerRadius="5"
+                                            Padding="8,5"
+                                            Margin="0,0,0,5">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="80" />
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="135" />
+                                            </Grid.ColumnDefinitions>
+
+                                            <!-- Column 1: Channel Label + ON/OFF Switch -->
+                                            <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                                                <TextBlock Text="{Binding ChannelLabel}"
+                                                           FontWeight="Bold" FontSize="13.5"
+                                                           Foreground="{DynamicResource AccentBrush}" Margin="0,0,0,2" />
+                                                <CheckBox IsChecked="{Binding IsEnabled}"
+                                                          Content="ON" FontWeight="Bold" FontSize="11.5"
+                                                          VerticalAlignment="Center" />
+                                            </StackPanel>
+
+                                            <!-- Column 2: Brightness Slider + TextBox -->
+                                            <Grid Grid.Column="1" Margin="6,0,8,0" VerticalAlignment="Center">
+                                                <Grid.RowDefinitions>
+                                                    <RowDefinition Height="Auto" />
+                                                    <RowDefinition Height="Auto" />
+                                                </Grid.RowDefinitions>
+                                                <Grid Grid.Row="0" Margin="0,0,0,2">
+                                                    <TextBlock Style="{StaticResource SmallLabel}" Text="Độ sáng (0-255):" HorizontalAlignment="Left" />
+                                                    <TextBlock Text="{Binding Brightness}" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource AccentBrush}" HorizontalAlignment="Right" />
+                                                </Grid>
+                                                <Grid Grid.Row="1">
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="*" />
+                                                        <ColumnDefinition Width="48" />
+                                                    </Grid.ColumnDefinitions>
+                                                    <Slider Grid.Column="0" Minimum="0" Maximum="255"
+                                                            Value="{Binding Brightness}"
+                                                            VerticalAlignment="Center"
+                                                            TickFrequency="1" IsSnapToTickEnabled="True" />
+                                                    <TextBox Grid.Column="1"
+                                                             Text="{Binding Brightness, UpdateSourceTrigger=PropertyChanged}"
+                                                             VerticalAlignment="Center" Padding="2,1" FontSize="11"
+                                                             HorizontalContentAlignment="Center"
+                                                             Margin="4,0,0,0" />
+                                                </Grid>
+                                            </Grid>
+
+                                            <!-- Column 3: Lighting Time ms -->
+                                            <StackPanel Grid.Column="2" VerticalAlignment="Center">
+                                                <TextBlock Style="{StaticResource SmallLabel}" Text="Thời gian sáng (ms):" />
+                                                <TextBox Text="{Binding LightingTimeMs, UpdateSourceTrigger=PropertyChanged}"
+                                                         VerticalAlignment="Center" Padding="3,1" FontSize="11"
+                                                         HorizontalContentAlignment="Center" />
+                                            </StackPanel>
+                                        </Grid>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
+                </Grid>
+            </Border>
+        </Grid>
+
+        <!-- ROW 1: Status Message Bar -->
+        <Border Grid.Row="1" Margin="2,0,2,3" Padding="6,4" CornerRadius="4"
+                Background="{DynamicResource PanelBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1">
+            <TextBlock Text="{Binding StatusMessage}" FontSize="11.5" FontWeight="SemiBold" TextWrapping="Wrap" />
+        </Border>
+
+        <!-- ROW 2: Live Log -->
+        <Border Grid.Row="2" Style="{StaticResource CardBorder}" Margin="2,0,2,0">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+
+                <Grid Grid.Row="0" Margin="0,0,0,4">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Grid.Column="0" Style="{StaticResource SectionHeader}" Text="📋 Protocol Traffic Log (TX / RX)" VerticalAlignment="Center" />
+                    <Button Grid.Column="1" Content="🗑️ Xóa Log" Command="{Binding ClearLogsCommand}" Padding="6,2" FontSize="10.5" />
+                </Grid>
+
+                <TextBox Grid.Row="1" Text="{Binding LogText, Mode=OneWay}"
+                         IsReadOnly="True" TextWrapping="NoWrap"
+                         VerticalScrollBarVisibility="Auto"
+                         HorizontalScrollBarVisibility="Auto"
+                         FontFamily="Consolas" FontSize="11"
+                         Background="{DynamicResource PanelAltBackgroundBrush}"
+                         Foreground="{DynamicResource TextBrush}"
+                         BorderThickness="0" />
+            </Grid>
+        </Border>
+    </Grid>
+</Window>

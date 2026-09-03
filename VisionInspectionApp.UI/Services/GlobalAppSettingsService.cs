@@ -12,6 +12,26 @@ public sealed class GlobalAppSettings
 
     public PlcSettings Plc { get; set; } = new();
     public LightingControllerSettings Lighting { get; set; } = new();
+    public LightingServerConfig LightingServer { get; set; } = new();
+    public LightingClientConfig LightingClient { get; set; } = new();
+}
+
+public sealed class LightingServerConfig
+{
+    public int Port { get; set; } = 5050;
+    public string ComPort { get; set; } = "COM3";
+    public int BaudRate { get; set; } = 19200;
+    public bool AutoStartServer { get; set; } = false;
+    public bool AutoConnectCom { get; set; } = true;
+    public int ChannelCount { get; set; } = 4;
+}
+
+public sealed class LightingClientConfig
+{
+    public string ServerIp { get; set; } = "127.0.0.1";
+    public int ServerPort { get; set; } = 5050;
+    public bool AutoConnect { get; set; } = false;
+    public int ChannelCount { get; set; } = 4;
 }
 
 public sealed class LightingControllerSettings

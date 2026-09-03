@@ -404,7 +404,10 @@
 
                     <!-- Chiếu Sáng / Lighting Controller Menu -->
                     <MenuItem Header="💡 Chiếu Sáng">
-                        <MenuItem Header="💡 Bộ Điều Khiển Đèn 8 Kênh (Lighting Controller...)" Command="{Binding ToolEditor.OpenLightingControllerCommand}" />
+                        <MenuItem Header="💡 Bộ Điều Khiển Đèn Cục Bộ (Lighting Controller...)" Command="{Binding ToolEditor.OpenLightingControllerCommand}" />
+                        <Separator />
+                        <MenuItem Header="🖥️ Máy Chủ Điều Khiển Đèn (Lighting Control Server...)" Command="{Binding ToolEditor.OpenLightingServerCommand}" />
+                        <MenuItem Header="📡 Điều Khiển Đèn Qua Mạng LAN (Lighting Control Client...)" Command="{Binding ToolEditor.OpenLightingClientCommand}" />
                     </MenuItem>
 
                     <!-- Dữ Liệu & OQC Menu -->

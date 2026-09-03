@@ -1582,3 +1582,36 @@ Lộ trình tích hợp tính năng Chụp ảnh từ camera và hỗ trợ các
            - Áp dụng kiểm tra an toàn chống tự gán `Owner` cho tất cả các hộp thoại `ProductAssignDialog`, `OqcSettingsDialog`, `OriginTrainWindow`, `GlobalPreprocessWindow`.
       - Kiểm Thử:
         - Chạy toàn bộ test suite dự án $\rightarrow$ 100% PASSED (106 tests). Solution `dotnet build` đạt 0 lỗi (0 errors).
+- [x] Task 289: Triển Khai Hệ Thống Lighting Control Server & Client Điều Khiển Đèn Từ Xa Qua Mạng LAN & Ứng Dụng Độc Lập Standalone.
+      - Yêu Cầu & Bối Cảnh:
+        - Bộ điều khiển đèn chiếu sáng 8 kênh lắp dưới máy line OQC được kết nối qua cổng COM nối tiếp RS-232, trong khi máy tính làm việc của kỹ sư ở trên văn phòng.
+        - Cần xây dựng hệ thống Lighting Control Server (chạy tại máy OQC) và Lighting Control Client (chạy tại máy văn phòng hoặc bất kỳ máy nào cùng mạng LAN) để kết nối và điều khiển từ xa.
+        - Tính năng điều khiển phải tương đương với modal Lighting Controller hiện tại (4/8 kênh, bật/tắt nguồn, slider độ sáng 0-255 mượt mà, thời gian sáng ms, áp dụng đồng loạt, đọc tất cả, lưu cấu hình, gửi lệnh thủ công, traffic log thời gian thực).
+        - Cung cấp ứng dụng độc lập `VisionInspectionApp.LightingServer.exe` (WPF) có thể chạy riêng biệt dưới chuyền mà không cần mở toàn bộ hệ thống Vision, đồng thời tích hợp menu khởi động trực tiếp từ menu `💡 Chiếu Sáng` trong Vision Inspection App.
+      - Giải Pháp Đã Triển Khai:
+        1. **Tầng Giao Thức & Dịch Vụ Máy Chủ / Máy Khách (`VisionInspectionApp.Application`)**:
+           - `LightingControlServer.cs`: Lắng nghe TCP trên cổng cấu hình (mặc định 5050), tự động quét và hiển thị tất cả IPv4 LAN; điều phối cổng COM với `SemaphoreSlim(1,1)` chống xung đột half-duplex; bộ đệm trạng thái `LightingControllerState` phản hồi `$RD=9999#` siêu tốc; quản lý danh sách client kết nối và hỗ trợ đầy đủ các lệnh ASCII chuẩn.
+           - `LightingControlClientService.cs`: Kết nối socket TCP đến IP/Port server, hỗ trợ đo độ trễ mạng (latency ping ms), các hàm điều khiển kênh và lắng nghe log truyền nhận.
+        2. **Tầng Cấu Hình (`GlobalAppSettingsService.cs`)**:
+           - Bổ sung `LightingServerConfig` và `LightingClientConfig` lưu vào `global_settings.json`.
+        3. **Tầng Giao Diện Người Dùng (`VisionInspectionApp.UI`)**:
+           - `LightingServerViewModel.cs` & `LightingServerWindow.xaml`: Quản lý Server TCP (Port, danh sách IP LAN kèm nút copy, Start/Stop), quản lý kết nối COM phần cứng, bảng danh sách client kết nối, điều khiển trực tiếp 4/8 kênh trên server, traffic log.
+           - `LightingClientViewModel.cs` & `LightingClientWindow.xaml`: Nhập IP và Port Server, kết nối/ngắt kết nối kèm đo ping latency, điều khiển 4/8 kênh với slider debounce 50ms, nút bật/tắt tất cả, áp dụng tất cả, đọc lại từ server, lưu flash, chọn trigger mode, gửi lệnh thủ công và live log.
+           - Cập nhật menu `💡 Chiếu Sáng` trong `MainWindow.xaml` và `ToolEditorViewModel.Lighting.cs`.
+        4. **Ứng Dụng Độc Lập Standalone (`VisionInspectionApp.LightingServer`)**:
+           - Tạo mới project .NET 8 WPF `VisionInspectionApp.LightingServer.csproj` trong `VisionInspectionApp.slnx` biên dịch ra `VisionInspectionApp.LightingServer.exe`, tích hợp cả 2 tab Server Mode và Client Mode.
+        5. **Kiểm Thử Tự Động (`TestExtractApp`)**:
+           - Bổ sung `LightingServerClientTests.cs` (32 tests): nhận diện IPv4, start/stop server, connect/disconnect client, gửi lệnh bật tắt nguồn, đặt độ sáng, đọc tất cả, thao tác trực tiếp từ server, 3 client đồng thời gửi lệnh song song.
+        6. **Chuẩn Hóa Trạng Thái Nút Bấm Kết Nối / Ngắt Kết Nối**:
+           - Khi chưa kết nối: Nút "Kết Nối" active, nút "Ngắt Kết Nối" disabled, các bảng điều khiển đèn bị khóa chống thao tác rỗng.
+           - Khi đã kết nối thành công: Nút "Kết Nối" disabled, nút "Ngắt Kết Nối" active, toàn bộ bảng điều khiển đèn và thao tác nhanh được kích hoạt.
+           - Áp dụng trên toàn bộ Client, Server, Standalone App và cửa sổ Controller cục bộ.
+        7. **Tự Động Đọc & Đồng Bộ Trạng Thái Đèn Khi Khởi Động Server**:
+           - Sửa lỗi điều kiện `!IsConnected` lúc kết nối COM trong `LightingControllerService.cs`.
+           - Tự động kết nối phần cứng và đọc trạng thái thực tế từ đèn qua `$RD=9999#` (hoặc `$RD={ch}#`) khi bấm "Khởi Động Server" hoặc "Kết Nối Đèn".
+           - Cập nhật và hiển thị tức thì giá trị độ sáng lên Slider, Textbox và Switch ON/OFF của tất cả các kênh trên giao diện Server.
+           - Thêm nút "📥 Đọc Từ Đèn" cho phép người dùng chủ động đọc lại trạng thái từ thiết bị bất kỳ lúc nào.
+      - Kiểm Thử:
+        - Toàn bộ test suite dự án trong `TestExtractApp` đạt 100% PASSED (178+ tests). Solution `dotnet build` đạt 0 lỗi (0 errors).
+
+

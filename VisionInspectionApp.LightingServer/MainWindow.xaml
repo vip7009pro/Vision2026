@@ -1,0 +1,506 @@
+<Window x:Class="VisionInspectionApp.LightingServer.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d"
+        Title="💡 Vision Lighting Control Server &amp; Client — Ứng Dụng Điều Khiển Đèn LAN"
+        Width="1080" Height="750"
+        MinWidth="950" MinHeight="640"
+        WindowStartupLocation="CenterScreen"
+        Background="{StaticResource WindowBackgroundBrush}"
+        Foreground="{StaticResource TextBrush}"
+        FontFamily="Segoe UI">
+
+    <Window.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVis" />
+
+        <Style x:Key="CardBorder" TargetType="Border">
+            <Setter Property="Background" Value="{StaticResource PanelBackgroundBrush}" />
+            <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="6" />
+            <Setter Property="Padding" Value="10" />
+            <Setter Property="Margin" Value="2" />
+        </Style>
+
+        <Style x:Key="SectionHeader" TargetType="TextBlock">
+            <Setter Property="FontWeight" Value="Bold" />
+            <Setter Property="FontSize" Value="12.5" />
+            <Setter Property="Margin" Value="0,0,0,6" />
+            <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
+        </Style>
+
+        <Style x:Key="SmallLabel" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="Foreground" Value="{StaticResource TextMutedBrush}" />
+            <Setter Property="Margin" Value="0,0,0,2" />
+        </Style>
+    </Window.Resources>
+
+    <Grid Margin="6">
+        <TabControl Background="Transparent" BorderThickness="0">
+            
+            <!-- TAB 1: SERVER MODE -->
+            <TabItem Header="🖥️ SERVER MODE (MÁY CHỦ)">
+                <Grid Margin="4,8,4,4">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="*" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="165" />
+                    </Grid.RowDefinitions>
+
+                    <!-- TOP SECTION -->
+                    <Grid Grid.Row="0" Margin="0,0,0,4">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="450" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+
+                        <!-- LEFT: Config & Clients -->
+                        <ScrollViewer Grid.Column="0" VerticalScrollBarVisibility="Auto">
+                            <StackPanel Margin="0,0,3,0">
+                                <!-- Server TCP Card -->
+                                <Border Style="{StaticResource CardBorder}" Margin="0,0,0,4">
+                                    <StackPanel>
+                                        <Grid Margin="0,0,0,6">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Grid.Column="0" Style="{StaticResource SectionHeader}" Text="🖥️ Cấu Hình Máy Chủ TCP" VerticalAlignment="Center" />
+                                            <TextBlock Grid.Column="1" Text="{Binding ServerStatusText}" FontWeight="Bold" FontSize="11" VerticalAlignment="Center" />
+                                        </Grid>
+
+                                        <Grid Margin="0,0,0,6">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto" />
+                                                <ColumnDefinition Width="75" />
+                                                <ColumnDefinition Width="Auto" />
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Grid.Column="0" Text="Cổng nghe:" VerticalAlignment="Center" Margin="0,0,4,0" Style="{StaticResource SmallLabel}" />
+                                            <TextBox Grid.Column="1" Text="{Binding ServerPort, UpdateSourceTrigger=PropertyChanged}"
+                                                     VerticalAlignment="Center" Padding="4,2" Margin="0,0,8,0" FontSize="11" FontWeight="SemiBold"
+                                                     IsEnabled="{Binding IsServerRunning, Converter={StaticResource BoolToVis}}" />
+
+                                            <TextBlock Grid.Column="2" Text="IP LAN:" VerticalAlignment="Center" Margin="0,0,4,0" Style="{StaticResource SmallLabel}" />
+                                            <ComboBox Grid.Column="3" ItemsSource="{Binding LocalIpAddresses}" SelectedItem="{Binding SelectedIpAddress}"
+                                                      VerticalAlignment="Center" FontSize="11" Margin="0,0,4,0" />
+                                            <Button Grid.Column="4" Content="📋 Copy IP" Command="{Binding CopyIpCommand}"
+                                                    Padding="6,2" VerticalAlignment="Center" FontSize="10.5" />
+                                        </Grid>
+
+                                        <Grid Margin="0,0,0,2">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="*" />
+                                            </Grid.ColumnDefinitions>
+                                            <Button Grid.Column="0" Content="▶ Khởi Động Server" Command="{Binding StartServerCommand}"
+                                                    IsEnabled="{Binding IsServerStopped}"
+                                                    Margin="0,0,4,0" Padding="8,5" Background="#2E7D32" Foreground="White" FontWeight="SemiBold" />
+                                            <Button Grid.Column="1" Content="⏹ Dừng Server" Command="{Binding StopServerCommand}"
+                                                    IsEnabled="{Binding IsServerRunning}"
+                                                    Padding="8,5" Background="#C62828" Foreground="White" FontWeight="SemiBold" />
+                                        </Grid>
+                                    </StackPanel>
+                                </Border>
+
+                                <!-- Hardware COM Port Card -->
+                                <Border Style="{StaticResource CardBorder}" Margin="0,0,0,4">
+                                    <StackPanel>
+                                        <Grid Margin="0,0,0,6">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Grid.Column="0" Style="{StaticResource SectionHeader}" Text="🔌 Cổng Nối Tiếp (RS-232 / COM)" VerticalAlignment="Center" />
+                                            <TextBlock Grid.Column="1" Text="{Binding HardwareStatusText}" FontWeight="Bold" FontSize="11" VerticalAlignment="Center" />
+                                        </Grid>
+
+                                        <Grid Margin="0,0,0,6">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto" />
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                                <ColumnDefinition Width="Auto" />
+                                                <ColumnDefinition Width="70" />
+                                                <ColumnDefinition Width="Auto" />
+                                                <ColumnDefinition Width="50" />
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Grid.Column="0" Text="Cổng:" VerticalAlignment="Center" Margin="0,0,4,0" Style="{StaticResource SmallLabel}" />
+                                            <ComboBox Grid.Column="1" ItemsSource="{Binding AvailableComPorts}" SelectedItem="{Binding SelectedComPort}"
+                                                      VerticalAlignment="Center" FontSize="11" Margin="0,0,4,0"
+                                                      IsEnabled="{Binding IsHardwareDisconnected}" />
+                                            <Button Grid.Column="2" Content="🔄" Command="{Binding RefreshComPortsCommand}"
+                                                    Padding="5,2" Margin="0,0,6,0" VerticalAlignment="Center"
+                                                    IsEnabled="{Binding IsHardwareDisconnected}" />
+
+                                            <TextBlock Grid.Column="3" Text="Baud:" VerticalAlignment="Center" Margin="0,0,4,0" Style="{StaticResource SmallLabel}" />
+                                            <ComboBox Grid.Column="4" ItemsSource="{Binding AvailableBaudRates}" SelectedItem="{Binding SelectedBaudRate}"
+                                                      VerticalAlignment="Center" FontSize="11" Margin="0,0,6,0"
+                                                      IsEnabled="{Binding IsHardwareDisconnected}" />
+
+                                            <TextBlock Grid.Column="5" Text="Kênh:" VerticalAlignment="Center" Margin="0,0,4,0" Style="{StaticResource SmallLabel}" />
+                                            <ComboBox Grid.Column="6" ItemsSource="{Binding AvailableChannelCounts}" SelectedItem="{Binding SelectedChannelCount}"
+                                                      VerticalAlignment="Center" FontSize="11"
+                                                      IsEnabled="{Binding IsHardwareDisconnected}" />
+                                        </Grid>
+
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="*" />
+                                            </Grid.ColumnDefinitions>
+                                            <Button Grid.Column="0" Content="🔌 Kết Nối Đèn (COM)" Command="{Binding ConnectHardwareCommand}"
+                                                    IsEnabled="{Binding IsHardwareDisconnected}"
+                                                    Margin="0,0,4,0" Padding="8,4" FontWeight="SemiBold" />
+                                            <Button Grid.Column="1" Content="Ngắt Kết Nối COM" Command="{Binding DisconnectHardwareCommand}"
+                                                    IsEnabled="{Binding IsHardwareConnected}"
+                                                    Padding="8,4" />
+                                        </Grid>
+                                    </StackPanel>
+                                </Border>
+
+                                <!-- Clients List Card -->
+                                <Border Style="{StaticResource CardBorder}" MinHeight="140">
+                                    <Grid>
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto" />
+                                            <RowDefinition Height="*" />
+                                        </Grid.RowDefinitions>
+                                        <Grid Grid.Row="0" Margin="0,0,0,6">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Grid.Column="0" Style="{StaticResource SectionHeader}" Text="👥 Clients Đang Kết Nối" VerticalAlignment="Center" />
+                                            <TextBlock Grid.Column="1" Text="{Binding ClientCountText}" FontWeight="Bold" FontSize="11" Foreground="{StaticResource AccentBrush}" />
+                                        </Grid>
+
+                                        <DataGrid Grid.Row="1" ItemsSource="{Binding ConnectedClients}"
+                                                  AutoGenerateColumns="False" CanUserAddRows="False" IsReadOnly="True"
+                                                  HeadersVisibility="Column" GridLinesVisibility="Horizontal"
+                                                  Background="{StaticResource PanelAltBackgroundBrush}"
+                                                  BorderBrush="{StaticResource BorderBrush}" MaxHeight="140">
+                                            <DataGrid.Columns>
+                                                <DataGridTextColumn Header="Địa Chỉ Client" Binding="{Binding RemoteEndPoint}" Width="*" />
+                                                <DataGridTextColumn Header="Thời Gian" Binding="{Binding ConnectedAt, StringFormat='HH:mm:ss'}" Width="85" />
+                                                <DataGridTextColumn Header="Số Lệnh" Binding="{Binding CommandsProcessed}" Width="65" />
+                                                <DataGridTextColumn Header="Lệnh Cuối" Binding="{Binding LastCommand}" Width="100" />
+                                            </DataGrid.Columns>
+                                        </DataGrid>
+                                    </Grid>
+                                </Border>
+                            </StackPanel>
+                        </ScrollViewer>
+
+                        <!-- RIGHT: Direct Channels Control -->
+                        <Border Grid.Column="1" Style="{StaticResource CardBorder}" Margin="3,0,0,0" IsEnabled="{Binding IsHardwareConnected}">
+                            <Grid>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="*" />
+                                </Grid.RowDefinitions>
+                                <Grid Grid.Row="0" Margin="0,0,0,6">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Grid.Column="0" Style="{StaticResource SectionHeader}" Text="💡 Điều Khiển Trực Tiếp Kênh Chiếu Sáng (Server)" VerticalAlignment="Center" />
+                                    <StackPanel Grid.Column="1" Orientation="Horizontal">
+                                        <Button Content="📥 Đọc Từ Đèn" Command="{Binding ServerReadHardwareStateCommand}" Padding="6,2" Margin="0,0,4,0" FontSize="10.5" ToolTip="Đọc lại trạng thái hiện tại từ bộ điều khiển đèn qua cổng COM" />
+                                        <Button Content="💡 Bật Tất Cả" Command="{Binding ServerTurnOnAllCommand}" Padding="6,2" Margin="0,0,4,0" FontSize="10.5" />
+                                        <Button Content="⬛ Tắt Tất Cả" Command="{Binding ServerTurnOffAllCommand}" Padding="6,2" FontSize="10.5" />
+                                    </StackPanel>
+                                </Grid>
+
+                                <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+                                    <ItemsControl ItemsSource="{Binding ServerChannels}">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <Border Background="{StaticResource PanelAltBackgroundBrush}"
+                                                        BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="5" Padding="8,5" Margin="0,0,0,5">
+                                                    <Grid>
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="80" />
+                                                            <ColumnDefinition Width="*" />
+                                                            <ColumnDefinition Width="135" />
+                                                        </Grid.ColumnDefinitions>
+                                                        <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                                                            <TextBlock Text="{Binding ChannelLabel}" FontWeight="Bold" FontSize="13.5" Foreground="{StaticResource AccentBrush}" Margin="0,0,0,2" />
+                                                            <CheckBox IsChecked="{Binding IsEnabled}" Content="ON" FontWeight="Bold" FontSize="11.5" />
+                                                        </StackPanel>
+
+                                                        <Grid Grid.Column="1" Margin="6,0,8,0" VerticalAlignment="Center">
+                                                            <Grid.RowDefinitions>
+                                                                <RowDefinition Height="Auto" />
+                                                                <RowDefinition Height="Auto" />
+                                                            </Grid.RowDefinitions>
+                                                            <Grid Grid.Row="0" Margin="0,0,0,2">
+                                                                <TextBlock Style="{StaticResource SmallLabel}" Text="Độ sáng (0-255):" HorizontalAlignment="Left" />
+                                                                <TextBlock Text="{Binding Brightness}" FontWeight="Bold" FontSize="11" Foreground="{StaticResource AccentBrush}" HorizontalAlignment="Right" />
+                                                            </Grid>
+                                                            <Grid Grid.Row="1">
+                                                                <Grid.ColumnDefinitions>
+                                                                    <ColumnDefinition Width="*" />
+                                                                    <ColumnDefinition Width="48" />
+                                                                </Grid.ColumnDefinitions>
+                                                                <Slider Grid.Column="0" Minimum="0" Maximum="255" Value="{Binding Brightness}" VerticalAlignment="Center" />
+                                                                <TextBox Grid.Column="1" Text="{Binding Brightness, UpdateSourceTrigger=PropertyChanged}" VerticalAlignment="Center" Padding="2,1" FontSize="11" HorizontalContentAlignment="Center" Margin="4,0,0,0" />
+                                                            </Grid>
+                                                        </Grid>
+
+                                                        <StackPanel Grid.Column="2" VerticalAlignment="Center">
+                                                            <TextBlock Style="{StaticResource SmallLabel}" Text="Thời gian sáng (ms):" />
+                                                            <TextBox Text="{Binding LightingTimeMs, UpdateSourceTrigger=PropertyChanged}" VerticalAlignment="Center" Padding="3,1" FontSize="11" HorizontalContentAlignment="Center" />
+                                                        </StackPanel>
+                                                    </Grid>
+                                                </Border>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </ScrollViewer>
+                            </Grid>
+                        </Border>
+                    </Grid>
+
+                    <!-- STATUS -->
+                    <Border Grid.Row="1" Margin="2,0,2,3" Padding="6,4" CornerRadius="4" Background="{StaticResource PanelBackgroundBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1">
+                        <TextBlock Text="{Binding ServerStatusMessage}" FontSize="11.5" FontWeight="SemiBold" />
+                    </Border>
+
+                    <!-- LOGS -->
+                    <Border Grid.Row="2" Style="{StaticResource CardBorder}" Margin="2,0,2,0">
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="*" />
+                            </Grid.RowDefinitions>
+                            <Grid Grid.Row="0" Margin="0,0,0,4">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Grid.Column="0" Style="{StaticResource SectionHeader}" Text="📋 Traffic Log (LAN Activity)" VerticalAlignment="Center" />
+                                <Button Grid.Column="1" Content="🗑️ Xóa Log" Command="{Binding ClearServerLogsCommand}" Padding="6,2" FontSize="10.5" />
+                            </Grid>
+                            <TextBox Grid.Row="1" Text="{Binding ServerLogText, Mode=OneWay}" IsReadOnly="True" VerticalScrollBarVisibility="Auto" FontFamily="Consolas" FontSize="11" Background="{StaticResource PanelAltBackgroundBrush}" Foreground="{StaticResource TextBrush}" BorderThickness="0" />
+                        </Grid>
+                    </Border>
+                </Grid>
+            </TabItem>
+
+            <!-- TAB 2: CLIENT MODE -->
+            <TabItem Header="📡 CLIENT MODE (MÁY KHÁCH)">
+                <Grid Margin="4,8,4,4">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="*" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="165" />
+                    </Grid.RowDefinitions>
+
+                    <Grid Grid.Row="0" Margin="0,0,0,4">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="420" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+
+                        <!-- LEFT: Connection & Quick Actions -->
+                        <ScrollViewer Grid.Column="0" VerticalScrollBarVisibility="Auto">
+                            <StackPanel Margin="0,0,3,0">
+                                <Border Style="{StaticResource CardBorder}" Margin="0,0,0,4">
+                                    <StackPanel>
+                                        <Grid Margin="0,0,0,6">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Grid.Column="0" Style="{StaticResource SectionHeader}" Text="📡 Kết Nối Server Từ Xa (LAN)" VerticalAlignment="Center" />
+                                            <TextBlock Grid.Column="1" Text="{Binding ClientConnectionStatusText}" FontWeight="Bold" FontSize="11" VerticalAlignment="Center" />
+                                        </Grid>
+
+                                        <Grid Margin="0,0,0,6">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto" />
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                                <ColumnDefinition Width="70" />
+                                                <ColumnDefinition Width="Auto" />
+                                                <ColumnDefinition Width="50" />
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Grid.Column="0" Text="IP:" VerticalAlignment="Center" Margin="0,0,4,0" Style="{StaticResource SmallLabel}" />
+                                            <TextBox Grid.Column="1" Text="{Binding ClientServerIp, UpdateSourceTrigger=PropertyChanged}" VerticalAlignment="Center" Padding="4,2" Margin="0,0,6,0" FontSize="11" IsEnabled="{Binding IsClientNotConnected}" />
+
+                                            <TextBlock Grid.Column="2" Text="Port:" VerticalAlignment="Center" Margin="0,0,4,0" Style="{StaticResource SmallLabel}" />
+                                            <TextBox Grid.Column="3" Text="{Binding ClientServerPort, UpdateSourceTrigger=PropertyChanged}" VerticalAlignment="Center" Padding="4,2" Margin="0,0,6,0" FontSize="11" IsEnabled="{Binding IsClientNotConnected}" />
+
+                                            <TextBlock Grid.Column="4" Text="Kênh:" VerticalAlignment="Center" Margin="0,0,4,0" Style="{StaticResource SmallLabel}" />
+                                            <ComboBox Grid.Column="5" ItemsSource="{Binding AvailableChannelCounts}" SelectedItem="{Binding ClientChannelCount}" VerticalAlignment="Center" FontSize="11" IsEnabled="{Binding IsClientNotConnected}" />
+                                        </Grid>
+
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="*" />
+                                            </Grid.ColumnDefinitions>
+                                            <Button Grid.Column="0" Content="⚡ Kết Nối Server" Command="{Binding ClientConnectCommand}"
+                                                    IsEnabled="{Binding IsClientNotConnected}"
+                                                    Margin="0,0,4,0" Padding="8,5" Background="#0288D1" Foreground="White" FontWeight="SemiBold" />
+                                            <Button Grid.Column="1" Content="🔌 Ngắt Kết Nối" Command="{Binding ClientDisconnectCommand}"
+                                                    IsEnabled="{Binding IsClientConnected}"
+                                                    Padding="8,5" />
+                                        </Grid>
+                                    </StackPanel>
+                                </Border>
+
+                                <Border Style="{StaticResource CardBorder}" Margin="0,0,0,4" IsEnabled="{Binding IsClientConnected}">
+                                    <StackPanel>
+                                        <TextBlock Style="{StaticResource SectionHeader}" Text="⚡ Thao Tác Nhanh Toàn Cục" />
+                                        <Grid Margin="0,0,0,4">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="*" />
+                                            </Grid.ColumnDefinitions>
+                                            <Button Grid.Column="0" Content="⚡ Áp Dụng Tất Cả Kênh" Command="{Binding ClientApplyAllCommand}" Margin="0,0,4,0" Padding="6,4" FontWeight="SemiBold" />
+                                            <Button Grid.Column="1" Content="📥 Đọc Lại Từ Server" Command="{Binding ClientReadAllCommand}" Padding="6,4" />
+                                        </Grid>
+
+                                        <Grid Margin="0,0,0,4">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="*" />
+                                            </Grid.ColumnDefinitions>
+                                            <Button Grid.Column="0" Content="💡 Bật Toàn Bộ Kênh" Command="{Binding ClientTurnOnAllCommand}" Margin="0,0,4,0" Padding="6,4" />
+                                            <Button Grid.Column="1" Content="⬛ Tắt Toàn Bộ Kênh" Command="{Binding ClientTurnOffAllCommand}" Padding="6,4" />
+                                        </Grid>
+
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="*" />
+                                            </Grid.ColumnDefinitions>
+                                            <Button Grid.Column="0" Content="💾 Lưu Vào Bộ Nhớ" Command="{Binding ClientSaveConfigCommand}" Margin="0,0,4,0" Padding="6,4" />
+                                            <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Margin="4,0,0,0">
+                                                <TextBlock Text="Trigger:" VerticalAlignment="Center" Margin="0,0,4,0" Style="{StaticResource SmallLabel}" />
+                                                <ComboBox ItemsSource="{Binding AvailableTriggerModes}" SelectedItem="{Binding SelectedTriggerMode}" VerticalAlignment="Center" FontSize="11" Width="100" />
+                                            </StackPanel>
+                                        </Grid>
+                                    </StackPanel>
+                                </Border>
+
+                                <Border Style="{StaticResource CardBorder}" IsEnabled="{Binding IsClientConnected}">
+                                    <StackPanel>
+                                        <TextBlock Style="{StaticResource SectionHeader}" Text="📝 Gửi Lệnh Thủ Công (ASCII)" />
+                                        <WrapPanel Margin="0,0,0,6">
+                                            <Button Content="$F0=1#" Command="{Binding SetClientTestCommandCommand}" CommandParameter="$F0=1#" Padding="4,2" Margin="0,0,3,3" FontSize="10.5" />
+                                            <Button Content="$F0=0#" Command="{Binding SetClientTestCommandCommand}" CommandParameter="$F0=0#" Padding="4,2" Margin="0,0,3,3" FontSize="10.5" />
+                                            <Button Content="$L0=255#" Command="{Binding SetClientTestCommandCommand}" CommandParameter="$L0=255#" Padding="4,2" Margin="0,0,3,3" FontSize="10.5" />
+                                            <Button Content="$RD=9999#" Command="{Binding SetClientTestCommandCommand}" CommandParameter="$RD=9999#" Padding="4,2" Margin="0,0,3,3" FontSize="10.5" />
+                                        </WrapPanel>
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <TextBox Grid.Column="0" Text="{Binding ClientManualCommandText, UpdateSourceTrigger=PropertyChanged}" VerticalAlignment="Center" Padding="4,3" FontFamily="Consolas" FontSize="11" Margin="0,0,4,0" />
+                                            <Button Grid.Column="1" Content="🚀 Gửi" Command="{Binding ClientSendManualCommandCommand}" Padding="8,3" FontWeight="SemiBold" />
+                                        </Grid>
+                                    </StackPanel>
+                                </Border>
+                            </StackPanel>
+                        </ScrollViewer>
+
+                        <!-- RIGHT: Remote Channel Cards -->
+                        <Border Grid.Column="1" Style="{StaticResource CardBorder}" Margin="3,0,0,0" IsEnabled="{Binding IsClientConnected}">
+                            <Grid>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="*" />
+                                </Grid.RowDefinitions>
+                                <Grid Grid.Row="0" Margin="0,0,0,6">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Grid.Column="0" Style="{StaticResource SectionHeader}" Text="💡 Điều Khiển Các Kênh Chiếu Sáng (Remote)" VerticalAlignment="Center" />
+                                    <TextBlock Grid.Column="1" Text="{Binding ClientChannelCount, StringFormat='({0} Kênh)'}" FontWeight="SemiBold" FontSize="11.5" Foreground="{StaticResource AccentBrush}" VerticalAlignment="Center" />
+                                </Grid>
+
+                                <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+                                    <ItemsControl ItemsSource="{Binding ClientChannels}">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <Border Background="{StaticResource PanelAltBackgroundBrush}"
+                                                        BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="5" Padding="8,5" Margin="0,0,0,5">
+                                                    <Grid>
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="80" />
+                                                            <ColumnDefinition Width="*" />
+                                                            <ColumnDefinition Width="135" />
+                                                        </Grid.ColumnDefinitions>
+                                                        <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                                                            <TextBlock Text="{Binding ChannelLabel}" FontWeight="Bold" FontSize="13.5" Foreground="{StaticResource AccentBrush}" Margin="0,0,0,2" />
+                                                            <CheckBox IsChecked="{Binding IsEnabled}" Content="ON" FontWeight="Bold" FontSize="11.5" />
+                                                        </StackPanel>
+
+                                                        <Grid Grid.Column="1" Margin="6,0,8,0" VerticalAlignment="Center">
+                                                            <Grid.RowDefinitions>
+                                                                <RowDefinition Height="Auto" />
+                                                                <RowDefinition Height="Auto" />
+                                                            </Grid.RowDefinitions>
+                                                            <Grid Grid.Row="0" Margin="0,0,0,2">
+                                                                <TextBlock Style="{StaticResource SmallLabel}" Text="Độ sáng (0-255):" HorizontalAlignment="Left" />
+                                                                <TextBlock Text="{Binding Brightness}" FontWeight="Bold" FontSize="11" Foreground="{StaticResource AccentBrush}" HorizontalAlignment="Right" />
+                                                            </Grid>
+                                                            <Grid Grid.Row="1">
+                                                                <Grid.ColumnDefinitions>
+                                                                    <ColumnDefinition Width="*" />
+                                                                    <ColumnDefinition Width="48" />
+                                                                </Grid.ColumnDefinitions>
+                                                                <Slider Grid.Column="0" Minimum="0" Maximum="255" Value="{Binding Brightness}" VerticalAlignment="Center" />
+                                                                <TextBox Grid.Column="1" Text="{Binding Brightness, UpdateSourceTrigger=PropertyChanged}" VerticalAlignment="Center" Padding="2,1" FontSize="11" HorizontalContentAlignment="Center" Margin="4,0,0,0" />
+                                                            </Grid>
+                                                        </Grid>
+
+                                                        <StackPanel Grid.Column="2" VerticalAlignment="Center">
+                                                            <TextBlock Style="{StaticResource SmallLabel}" Text="Thời gian sáng (ms):" />
+                                                            <TextBox Text="{Binding LightingTimeMs, UpdateSourceTrigger=PropertyChanged}" VerticalAlignment="Center" Padding="3,1" FontSize="11" HorizontalContentAlignment="Center" />
+                                                        </StackPanel>
+                                                    </Grid>
+                                                </Border>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </ScrollViewer>
+                            </Grid>
+                        </Border>
+                    </Grid>
+
+                    <Border Grid.Row="1" Margin="2,0,2,3" Padding="6,4" CornerRadius="4" Background="{StaticResource PanelBackgroundBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1">
+                        <TextBlock Text="{Binding ClientStatusMessage}" FontSize="11.5" FontWeight="SemiBold" />
+                    </Border>
+
+                    <Border Grid.Row="2" Style="{StaticResource CardBorder}" Margin="2,0,2,0">
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="*" />
+                            </Grid.RowDefinitions>
+                            <Grid Grid.Row="0" Margin="0,0,0,4">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Grid.Column="0" Style="{StaticResource SectionHeader}" Text="📋 Live Log (Client TX/RX)" VerticalAlignment="Center" />
+                                <Button Grid.Column="1" Content="🗑️ Xóa Log" Command="{Binding ClearClientLogsCommand}" Padding="6,2" FontSize="10.5" />
+                            </Grid>
+                            <TextBox Grid.Row="1" Text="{Binding ClientLogText, Mode=OneWay}" IsReadOnly="True" VerticalScrollBarVisibility="Auto" FontFamily="Consolas" FontSize="11" Background="{StaticResource PanelAltBackgroundBrush}" Foreground="{StaticResource TextBrush}" BorderThickness="0" />
+                        </Grid>
+                    </Border>
+                </Grid>
+            </TabItem>
+        </TabControl>
+    </Grid>
+</Window>

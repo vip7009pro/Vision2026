@@ -20,6 +20,7 @@
   <Project Path="VisionInspectionApp.UI/VisionInspectionApp.UI.csproj">
     <Platform Solution="*|x64" Project="x64" />
   </Project>
+  <Project Path="VisionInspectionApp.LightingServer/VisionInspectionApp.LightingServer.csproj" />
   <Project Path="VisionInspectionApp.VisionEngine/VisionInspectionApp.VisionEngine.csproj">
     <Platform Solution="*|x64" Project="x64" />
   </Project>
