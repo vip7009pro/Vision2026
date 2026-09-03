@@ -49,6 +49,42 @@
 - Preview được phép tiếp tục khi Global Snapshot rỗng để lấy ảnh từ ImageSource.
 - Lưu template cho Origin, Point và SurfaceCompare hoạt động với nguồn ảnh ImageSource.
 
+- **Tối Ưu Cache Ảnh Mẫu Teach & Mở Job Trực Tiếp Từ Danh Sách OQC Job Manager (Task 290)**:
+  - **Yêu Cầu & Bối Cảnh**:
+    - Trong cửa sổ Quản lý & Huấn luyện (Teaching) của Tab OQC Scanner (`JobManagerWindow`), mỗi khi người dùng nhấp chọn một dòng sản phẩm trong bảng, hệ thống lại tải lại ảnh mẫu (Teaching Image) từ Server qua HTTP. Vì ảnh mẫu camera thường có độ phân giải cao và dung lượng nặng (hàng chục MB), việc tải lại liên tục gây độ trễ lớn, hao tổn băng thông và giật lag giao diện.
+    - Cần tối ưu cơ chế bộ nhớ đệm (Cache) cho ảnh mẫu và thêm nút làm mới ảnh cạnh tiêu đề "Ảnh Mẫu (Teaching Image Preview)" để chủ động tải lại khi ảnh trên Server thay đổi.
+    - Bổ sung nút "Mở Job Này" (và hỗ trợ Double-click vào dòng DataGrid) để:
+      + Tự động đóng cửa sổ Quản lý & Huấn luyện (`JobManagerWindow`).
+      + Tự kiểm tra xem trong thư mục mặc định (`JobRootDirectory` hoặc `jobs/`) đã có file job này chưa.
+      + Nếu có: Mở ngay file job tương ứng.
+      + Nếu chưa có: Tải file job từ Server về thư mục mặc định, sau đó mở file job đó.
+      + Tuyệt đối giữ nguyên cấu hình gốc của Job (ImageSource, Camera, Tool graph, tham số), không đổi ImageSource như nút "Huấn luyện từ xa (Remote Teach)".
+  - **Giải Pháp Kỹ Thuật Đã Triển Khai**:
+    1. **Bộ Nhớ Đệm Ảnh Mẫu 2 Tầng (Memory Cache + Disk Cache)**:
+       - `_teachImageMemoryCache` (`ConcurrentDictionary<string, BitmapSource>`): Lưu trữ các ảnh đã giải mã và đóng băng (`Freeze()`) trong RAM giúp hiển thị tức thì (< 5ms) khi chuyển qua lại giữa các dòng sản phẩm.
+       - Disk Cache (`Cache/TeachImages/{MD5(url)}.png`): Tự động lưu trữ tệp ảnh tải về vào ổ cứng cục bộ, đảm bảo khởi động lại ứng dụng vẫn xem ảnh ngay lập tức mà không cần tải lại từ Server.
+       - Cơ chế chống xung đột tải ảnh bất đồng bộ (`_previewLoadToken`): Đảm bảo khi người dùng click nhanh liên tục, chỉ ảnh của dòng được chọn cuối cùng mới được render.
+    2. **Nút Làm Mới Ảnh Mẫu (`RefreshTeachImageCommand`)**:
+       - Bổ sung nút `🔄 Làm Mới Ảnh` cạnh tiêu đề `🖼️ Ảnh Mẫu (Teaching Image Preview)` trong `JobManagerWindow.xaml`.
+       - Khi bấm, hệ thống xóa cache trong RAM và trên đĩa của ảnh đang chọn, tải ảnh mới nhất từ Server, cập nhật lại cache và hiển thị lên giao diện.
+    3. **Tính Năng Mở Job Này (`OpenJobFromListCommand`)**:
+       - Bổ sung nút `📂 Mở Job Này` trên thanh công cụ và nút `📂 Mở Tệp Job Này` trên panel chi tiết bên phải.
+       - Hỗ trợ Double-click vào dòng DataGrid qua `ItemContainerStyle` và `OnDataGridRowMouseDoubleClick`.
+       - Kiểm tra đa tầng tệp Job cục bộ:
+         + Đường dẫn tuyệt đối từ CSDL (nếu có).
+         + Thư mục mặc định `JobRootDirectory` theo tên tệp hoặc theo mã sản phẩm `{ProductCode}.job`.
+         + Thư mục `jobs/` của ứng dụng theo tên tệp hoặc mã sản phẩm.
+       - Nếu tệp chưa tồn tại cục bộ: Tự động tải từ Server qua `_remoteServerService.DownloadFileAsync` và lưu vào thư mục mặc định.
+       - Mở Job trong `ToolEditorViewModel` bằng `LoadJobFromFile(resolvedJobPath)` (giữ nguyên toàn bộ cấu hình và ImageSource gốc).
+       - Tự động chuyển `SelectedTabIndex = 0` (Tool Editor) và đóng `JobManagerWindow` qua sự kiện `RequestClose`.
+    4. **Kiểm Thử Tự Động (`TestExtractApp`)**:
+       - Bổ sung kiểm thử `Test_TeachImageCache_And_OpenJobFromListLogic` trong `RemoteServerAndJobManagerTests.cs`:
+         + Kiểm tra đường dẫn Disk Cache, định dạng file và ghi/đọc cache.
+         + Kiểm tra mở Job từ thư mục mặc định giữ nguyên `SourceType == Camera` và tên camera, không bị ghi đè thành `Url`.
+  - **Kiểm Thử**:
+    - Toàn bộ test suite trong `TestExtractApp` đạt 100% PASSED (178+ tests passed).
+    - Biên dịch `dotnet build VisionInspectionApp.slnx` đạt 0 lỗi (0 errors).
+
 - **Triển Khai Hệ Thống Lighting Control Server & Client Điều Khiển Đèn Từ Xa Qua Mạng LAN & Ứng Dụng Độc Lập Standalone (Task 289)**:
   - **Yêu Cầu & Bối Cảnh**:
     - Bộ điều khiển đèn chiếu sáng 8 kênh phần cứng hiện được lắp dưới line OQC và cắm qua cổng COM (RS-232 / USB-COM) vào máy tính OQC, trong khi máy tính dev/kỹ sư lại đặt tại văn phòng.

@@ -88,8 +88,12 @@ public partial class JobManagerViewModel : ObservableObject
     public IAsyncRelayCommand DownloadJobCommand { get; }
     public IAsyncRelayCommand AssignLocalJobCommand { get; }
     public IAsyncRelayCommand AssignCurrentActiveJobCommand { get; }
+    public IAsyncRelayCommand OpenJobFromListCommand { get; }
+    public IAsyncRelayCommand RefreshTeachImageCommand { get; }
     public IRelayCommand OpenProductAssignCommand { get; }
     public IRelayCommand OpenSettingsCommand { get; }
+
+    public event Action? RequestClose;
 
     public JobManagerViewModel(
         IOqcScannerService oqcService,
@@ -124,6 +128,8 @@ public partial class JobManagerViewModel : ObservableObject
         DownloadJobCommand = new AsyncRelayCommand(ExecuteDownloadJobAsync);
         AssignLocalJobCommand = new AsyncRelayCommand(ExecuteAssignLocalJobAsync);
         AssignCurrentActiveJobCommand = new AsyncRelayCommand(ExecuteAssignCurrentActiveJobAsync);
+        OpenJobFromListCommand = new AsyncRelayCommand(ExecuteOpenJobFromListAsync);
+        RefreshTeachImageCommand = new AsyncRelayCommand(ExecuteRefreshTeachImageAsync);
         OpenProductAssignCommand = new RelayCommand(ExecuteOpenProductAssign);
         OpenSettingsCommand = new RelayCommand(ExecuteOpenSettings);
 
@@ -147,8 +153,33 @@ public partial class JobManagerViewModel : ObservableObject
         _ = LoadTeachImagePreviewAsync(value.TeachImagePath);
     }
 
-    private async Task LoadTeachImagePreviewAsync(string teachImagePath)
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, BitmapSource> _teachImageMemoryCache = new(StringComparer.OrdinalIgnoreCase);
+    private int _previewLoadToken = 0;
+
+    public static string GetTeachImageCacheDirectory()
     {
+        string dir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Cache", "TeachImages");
+        if (!Directory.Exists(dir))
+        {
+            Directory.CreateDirectory(dir);
+        }
+        return dir;
+    }
+
+    public static string GetDiskCacheFilePath(string urlOrPath)
+    {
+        using var md5 = System.Security.Cryptography.MD5.Create();
+        byte[] hash = md5.ComputeHash(System.Text.Encoding.UTF8.GetBytes(urlOrPath.Trim()));
+        string hashStr = Convert.ToHexString(hash);
+        string ext = Path.GetExtension(urlOrPath);
+        if (string.IsNullOrWhiteSpace(ext) || ext.Length > 5) ext = ".png";
+        return Path.Combine(GetTeachImageCacheDirectory(), $"{hashStr}{ext}");
+    }
+
+    private async Task LoadTeachImagePreviewAsync(string teachImagePath, bool forceRefresh = false)
+    {
+        int currentToken = System.Threading.Interlocked.Increment(ref _previewLoadToken);
+
         if (string.IsNullOrWhiteSpace(teachImagePath))
         {
             SelectedTeachImagePreview = null;
@@ -167,7 +198,10 @@ public partial class JobManagerViewModel : ObservableObject
                 {
                     var bmp = mat.ToBitmapSource();
                     bmp.Freeze();
-                    SelectedTeachImagePreview = bmp;
+                    if (currentToken == _previewLoadToken)
+                    {
+                        SelectedTeachImagePreview = bmp;
+                    }
                     return;
                 }
             }
@@ -181,24 +215,91 @@ public partial class JobManagerViewModel : ObservableObject
                 fullUrl = $"{baseUrl}/{urlOrPath.TrimStart('/')}";
             }
 
+            string diskCachePath = GetDiskCacheFilePath(fullUrl);
+
+            // Kiểm tra cache nếu không ép buộc làm mới
+            if (!forceRefresh)
+            {
+                // 1. Kiểm tra Memory Cache
+                if (_teachImageMemoryCache.TryGetValue(fullUrl, out var memBmp))
+                {
+                    if (currentToken == _previewLoadToken)
+                    {
+                        SelectedTeachImagePreview = memBmp;
+                    }
+                    return;
+                }
+
+                // 2. Kiểm tra Disk Cache
+                if (File.Exists(diskCachePath) && new FileInfo(diskCachePath).Length > 0)
+                {
+                    try
+                    {
+                        using var mat = Cv2.ImRead(diskCachePath, ImreadModes.Color);
+                        if (mat != null && !mat.Empty())
+                        {
+                            var bmp = mat.ToBitmapSource();
+                            bmp.Freeze();
+                            _teachImageMemoryCache[fullUrl] = bmp;
+                            if (currentToken == _previewLoadToken)
+                            {
+                                SelectedTeachImagePreview = bmp;
+                            }
+                            return;
+                        }
+                    }
+                    catch
+                    {
+                        try { File.Delete(diskCachePath); } catch { }
+                    }
+                }
+            }
+            else
+            {
+                // Ép buộc làm mới: Xóa cache cũ
+                _teachImageMemoryCache.TryRemove(fullUrl, out _);
+                try
+                {
+                    if (File.Exists(diskCachePath)) File.Delete(diskCachePath);
+                }
+                catch { }
+            }
+
+            // 3. Tải từ Server qua RemoteServerService
             var (success, data, err) = await _remoteServerService.DownloadFileAsync(fullUrl);
             if (success && data != null && data.Length > 0)
             {
+                try
+                {
+                    await File.WriteAllBytesAsync(diskCachePath, data);
+                }
+                catch { }
+
                 using var mat = Cv2.ImDecode(data, ImreadModes.Color);
                 if (mat != null && !mat.Empty())
                 {
                     var bmp = mat.ToBitmapSource();
                     bmp.Freeze();
-                    SelectedTeachImagePreview = bmp;
+                    _teachImageMemoryCache[fullUrl] = bmp;
+                    if (currentToken == _previewLoadToken)
+                    {
+                        SelectedTeachImagePreview = bmp;
+                    }
                     return;
                 }
             }
 
-            SelectedTeachImagePreview = null;
+            if (currentToken == _previewLoadToken)
+            {
+                SelectedTeachImagePreview = null;
+            }
         }
         catch
         {
-            SelectedTeachImagePreview = null;
+            if (currentToken == _previewLoadToken)
+            {
+                SelectedTeachImagePreview = null;
+            }
         }
     }
 
@@ -943,6 +1044,150 @@ public partial class JobManagerViewModel : ObservableObject
         catch
         {
             return "http://localhost";
+        }
+    }
+
+    public async Task ExecuteRefreshTeachImageAsync()
+    {
+        if (SelectedItem == null || string.IsNullOrWhiteSpace(SelectedItem.TeachImagePath))
+        {
+            MessageBox.Show("Vui lòng chọn một sản phẩm có ảnh mẫu để làm mới!", "Thông Báo", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        StatusMessage = $"🔄 Đang làm mới ảnh mẫu từ Server cho '{SelectedItem.ProductCode}'...";
+        StatusBrush = Brushes.DodgerBlue;
+
+        await LoadTeachImagePreviewAsync(SelectedItem.TeachImagePath, forceRefresh: true);
+
+        if (SelectedTeachImagePreview != null)
+        {
+            StatusMessage = $"✅ Đã làm mới và cập nhật ảnh mẫu cho '{SelectedItem.ProductCode}'!";
+            StatusBrush = Brushes.Green;
+        }
+        else
+        {
+            StatusMessage = $"⚠️ Không thể tải lại ảnh mẫu từ Server cho '{SelectedItem.ProductCode}'.";
+            StatusBrush = Brushes.OrangeRed;
+        }
+    }
+
+    /// <summary>
+    /// Mở tệp Job của sản phẩm đang chọn trong danh sách:
+    /// - Kiểm tra file trong thư mục mặc định (JobRootDirectory hoặc jobs/)
+    /// - Nếu chưa có: Tải từ Server về thư mục mặc định
+    /// - Mở Job trong Tool Editor (giữ nguyên cấu hình gốc, không đổi ImageSource)
+    /// - Tự động đóng cửa sổ JobManager
+    /// </summary>
+    public async Task ExecuteOpenJobFromListAsync()
+    {
+        if (SelectedItem == null)
+        {
+            MessageBox.Show("Vui lòng chọn một sản phẩm trong danh sách để mở Job!", "Thông Báo", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        string rawJobPath = SelectedItem.JobFilePath?.Trim() ?? string.Empty;
+        string productCode = SelectedItem.ProductCode?.Trim() ?? string.Empty;
+
+        // Xác định thư mục lưu Job mặc định
+        string defaultJobDir = !string.IsNullOrWhiteSpace(_oqcService.Config.JobRootDirectory)
+            ? _oqcService.Config.JobRootDirectory
+            : Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "jobs");
+        Directory.CreateDirectory(defaultJobDir);
+
+        string? resolvedJobPath = null;
+
+        // 1. Kiểm tra sự tồn tại của tệp Job cục bộ
+        // 1.1. Đường dẫn trực tiếp từ CSDL nếu là tệp local
+        if (!string.IsNullOrWhiteSpace(rawJobPath) && File.Exists(rawJobPath))
+        {
+            resolvedJobPath = rawJobPath;
+        }
+        // 1.2. Trong thư mục mặc định theo tên tệp từ CSDL
+        else if (!string.IsNullOrWhiteSpace(rawJobPath) && File.Exists(Path.Combine(defaultJobDir, Path.GetFileName(rawJobPath))))
+        {
+            resolvedJobPath = Path.Combine(defaultJobDir, Path.GetFileName(rawJobPath));
+        }
+        // 1.3. Trong thư mục mặc định theo mã sản phẩm {ProductCode}.job
+        else if (!string.IsNullOrWhiteSpace(productCode) && File.Exists(Path.Combine(defaultJobDir, $"{productCode}.job")))
+        {
+            resolvedJobPath = Path.Combine(defaultJobDir, $"{productCode}.job");
+        }
+        // 1.4. Trong thư mục 'jobs' của chương trình theo tên tệp
+        else if (!string.IsNullOrWhiteSpace(rawJobPath) && File.Exists(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "jobs", Path.GetFileName(rawJobPath))))
+        {
+            resolvedJobPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "jobs", Path.GetFileName(rawJobPath));
+        }
+        // 1.5. Trong thư mục 'jobs' của chương trình theo mã sản phẩm
+        else if (!string.IsNullOrWhiteSpace(productCode) && File.Exists(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "jobs", $"{productCode}.job")))
+        {
+            resolvedJobPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "jobs", $"{productCode}.job");
+        }
+
+        // 2. Nếu chưa có trên máy cục bộ -> Tải từ Server về thư mục mặc định
+        if (string.IsNullOrWhiteSpace(resolvedJobPath))
+        {
+            if (string.IsNullOrWhiteSpace(rawJobPath))
+            {
+                MessageBox.Show($"Sản phẩm '{productCode}' chưa có cấu hình đường dẫn tệp Job trên Server hoặc trong CSDL!", "Thông Báo", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+
+            IsBusy = true;
+            BusyMessage = $"Đang tải tệp Job của '{productCode}' từ Server về thư mục mặc định...";
+            StatusMessage = $"📥 Đang tải Job '{productCode}' từ Server...";
+            StatusBrush = Brushes.DodgerBlue;
+
+            try
+            {
+                string downloadUrl = rawJobPath;
+                if (!downloadUrl.StartsWith("http://", StringComparison.OrdinalIgnoreCase) &&
+                    !downloadUrl.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+                {
+                    string baseUrl = GetServerBaseUrl();
+                    downloadUrl = $"{baseUrl}/{rawJobPath.TrimStart('/')}";
+                }
+
+                var (dlOk, jobBytes, dlErr) = await _remoteServerService.DownloadFileAsync(downloadUrl);
+                if (!dlOk || jobBytes == null || jobBytes.Length == 0)
+                {
+                    MessageBox.Show($"Không thể tải tệp Job từ Server ({downloadUrl}):\n{dlErr}", "Lỗi Tải Job", MessageBoxButton.OK, MessageBoxImage.Error);
+                    return;
+                }
+
+                string fileNameToSave = Path.GetFileName(rawJobPath);
+                if (string.IsNullOrWhiteSpace(fileNameToSave) || fileNameToSave.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0)
+                {
+                    fileNameToSave = $"{productCode}.job";
+                }
+
+                string targetFilePath = Path.Combine(defaultJobDir, fileNameToSave);
+                await File.WriteAllBytesAsync(targetFilePath, jobBytes);
+                resolvedJobPath = targetFilePath;
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Lỗi khi tải tệp Job từ Server: {ex.Message}", "Lỗi", MessageBoxButton.OK, MessageBoxImage.Error);
+                return;
+            }
+            finally
+            {
+                IsBusy = false;
+            }
+        }
+
+        // 3. Mở Job trong Tool Editor - GIỮ NGUYÊN CẤU HÌNH GỐC, KHÔNG ĐỔI IMAGESOURCE
+        if (!string.IsNullOrWhiteSpace(resolvedJobPath) && File.Exists(resolvedJobPath))
+        {
+            await System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
+            {
+                _toolEditorViewModel.LoadJobFromFile(resolvedJobPath);
+                _mainWindowViewModel.SelectedTabIndex = 0; // Chuyển sang Tab Tool Editor
+            });
+
+            // Đóng cửa sổ Quản lý & Huấn luyện
+            RequestClose?.Invoke();
         }
     }
 }

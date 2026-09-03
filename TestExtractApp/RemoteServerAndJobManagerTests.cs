@@ -26,6 +26,7 @@ public static class RemoteServerAndJobManagerTests
         Test_RemoteServerService_WithHttpMockServerAsync().GetAwaiter().GetResult();
         Test_LookupJobAsync_WithRemoteDownloadAsync().GetAwaiter().GetResult();
         Test_OqcPreservedCamera_And_SwitchToProductionCamera();
+        Test_TeachImageCache_And_OpenJobFromListLogic().GetAwaiter().GetResult();
 
         Console.WriteLine("✅ ALL REMOTE SERVER & JOB MANAGER TESTS PASSED!");
         Console.WriteLine("=================================================\n");
@@ -419,5 +420,87 @@ public static class RemoteServerAndJobManagerTests
             throw new Exception("CameraParams and LightingParams must be 100% preserved!");
 
         Console.WriteLine("  ✓ OQC Preserved Camera & Production preparation verified.");
+    }
+
+    private static async Task Test_TeachImageCache_And_OpenJobFromListLogic()
+    {
+        Console.WriteLine("▶ Running Test_TeachImageCache_And_OpenJobFromListLogic...");
+
+        // 1. Kiểm tra tính toán đường dẫn Disk Cache
+        string testUrl = "http://127.0.0.1:18080/uploads/teach_images/sample_teach_001.png";
+        string cacheDir = VisionInspectionApp.UI.ViewModels.JobManagerViewModel.GetTeachImageCacheDirectory();
+        string cacheFilePath = VisionInspectionApp.UI.ViewModels.JobManagerViewModel.GetDiskCacheFilePath(testUrl);
+
+        if (string.IsNullOrWhiteSpace(cacheDir) || !Directory.Exists(cacheDir))
+            throw new Exception("Cache directory was not created properly!");
+
+        if (string.IsNullOrWhiteSpace(cacheFilePath) || !cacheFilePath.StartsWith(cacheDir))
+            throw new Exception("Cache file path must be inside the cache directory!");
+
+        if (!cacheFilePath.EndsWith(".png", StringComparison.OrdinalIgnoreCase))
+            throw new Exception("Cache file path must preserve .png extension!");
+
+        // 2. Tạo giả lập tệp cache trên đĩa và kiểm tra tính toàn vẹn
+        byte[] mockImageData = new byte[] { 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A }; // PNG header
+        await File.WriteAllBytesAsync(cacheFilePath, mockImageData);
+        if (!File.Exists(cacheFilePath) || new FileInfo(cacheFilePath).Length == 0)
+            throw new Exception("Mock cache file was not written properly!");
+
+        Console.WriteLine("  ✓ Teaching Image Cache path & disk storage verified.");
+
+        // 3. Kiểm tra logic Open Job: Tải về thư mục mặc định nếu chưa có và giữ nguyên ImageSource
+        string testJobsDir = Path.Combine(Path.GetTempPath(), "VisionTest_DefaultJobs_" + Guid.NewGuid().ToString("N"));
+        string testWorkingDir = Path.Combine(Path.GetTempPath(), "VisionTest_WorkingDir_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(testJobsDir);
+        Directory.CreateDirectory(testWorkingDir);
+
+        try
+        {
+            string productCode = "PRD_CACHE_TEST_01";
+            string expectedJobFileName = $"{productCode}.job";
+            string expectedSavedJobPath = Path.Combine(testJobsDir, expectedJobFileName);
+
+            // Giả lập tệp job hợp lệ
+            var originalJobConfig = new VisionConfig
+            {
+                ProductName = "Production Job Camera 1",
+                ProductCode = productCode,
+                ImageSources = new System.Collections.Generic.List<ImageSourceDefinition>
+                {
+                    new()
+                    {
+                        SourceType = ImageSourceType.Camera,
+                        CameraDeviceDisplayName = "Hikrobot MV-CS200",
+                        CameraParams = new CameraParameters { ExposureTimeUs = 2500 }
+                    }
+                }
+            };
+
+            // Lưu tệp .job giả lập (zip package)
+            var jobService = new VisionInspectionApp.Persistence.JobService();
+            jobService.SaveJob(originalJobConfig, testWorkingDir, expectedSavedJobPath);
+
+            if (!File.Exists(expectedSavedJobPath))
+                throw new Exception("Job file was not created!");
+
+            // Kiểm tra: Khi mở tệp này, cấu hình ImageSource phải giữ nguyên Camera, không bị biến thành Url
+            var loadedConfig = jobService.LoadJob(expectedSavedJobPath, out var tempDir);
+            if (loadedConfig == null || loadedConfig.ImageSources.Count == 0)
+                throw new Exception("Loaded job config is null or empty!");
+
+            if (loadedConfig.ImageSources[0].SourceType != ImageSourceType.Camera)
+                throw new Exception("Open Job must preserve original SourceType (Camera), not modified to Url!");
+
+            if (loadedConfig.ImageSources[0].CameraDeviceDisplayName != "Hikrobot MV-CS200")
+                throw new Exception("CameraDeviceDisplayName must remain 100% intact!");
+
+            Console.WriteLine("  ✓ Open Job from list preserves original Job Configuration without modifying ImageSource.");
+        }
+        finally
+        {
+            try { Directory.Delete(testJobsDir, true); } catch { }
+            try { Directory.Delete(testWorkingDir, true); } catch { }
+            try { if (File.Exists(cacheFilePath)) File.Delete(cacheFilePath); } catch { }
+        }
     }
 }

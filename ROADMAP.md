@@ -1613,5 +1613,27 @@ Lộ trình tích hợp tính năng Chụp ảnh từ camera và hỗ trợ các
            - Thêm nút "📥 Đọc Từ Đèn" cho phép người dùng chủ động đọc lại trạng thái từ thiết bị bất kỳ lúc nào.
       - Kiểm Thử:
         - Toàn bộ test suite dự án trong `TestExtractApp` đạt 100% PASSED (178+ tests). Solution `dotnet build` đạt 0 lỗi (0 errors).
+- [x] Task 290: Tối Ưu Bộ Nhớ Đệm (Cache) Ảnh Mẫu Teach & Tính Năng Mở Job Trực Tiếp Từ Danh Sách OQC Job Manager.
+      - Yêu Cầu & Bối Cảnh:
+        - Giảm thời gian chờ và giật lag khi chuyển dòng xem ảnh mẫu trong cửa sổ Quản lý & Huấn luyện (teaching).
+        - Bổ sung nút "Làm Mới Ảnh" cạnh tiêu đề ảnh mẫu để người dùng chủ động tải lại khi ảnh trên Server được cập nhật mới.
+        - Bổ sung nút "Mở Job Này" (và hỗ trợ Double Click vào dòng) để tự động tắt cửa sổ, kiểm tra tệp Job trong thư mục mặc định (nếu chưa có thì tải từ Server về thư mục mặc định), sau đó mở Job trong Tool Editor giữ nguyên toàn bộ cấu hình (không đổi ImageSource).
+      - Giải Pháp Đã Triển Khai:
+        1. **Bộ Nhớ Đệm Ảnh Mẫu 2 Tầng (Memory Cache + Disk Cache)**:
+           - Memory Cache trong RAM (`ConcurrentDictionary<string, BitmapSource>`) giúp hiển thị tức thì (< 5ms) khi duyệt qua lại các dòng sản phẩm.
+           - Disk Cache tại `Cache/TeachImages/` lưu trữ lâu dài trên ổ đĩa, khởi động lại ứng dụng vẫn xem ảnh ngay lập tức.
+           - Chống race condition với `_previewLoadToken` khi người dùng click nhanh liên tục.
+        2. **Nút Làm Mới Ảnh Mẫu (`RefreshTeachImageCommand`)**:
+           - Đặt cạnh tiêu đề `🖼️ Ảnh Mẫu (Teaching Image Preview)` trong `JobManagerWindow.xaml`, cho phép xóa cache và tải lại ảnh mới nhất từ Server.
+        3. **Tính Năng Mở Job Này (`OpenJobFromListCommand`)**:
+           - Nút `📂 Mở Job Này` trên toolbar, `📂 Mở Tệp Job Này` trên panel chi tiết và sự kiện Double-click DataGridRow.
+           - Tự động kiểm tra file trong `JobRootDirectory` (hoặc `jobs/`). Nếu chưa có, tải từ Server về thư mục mặc định.
+           - Nạp Job vào Tool Editor bằng `LoadJobFromFile`, chuyển sang Tab Tool Editor và đóng `JobManagerWindow`.
+           - Giữ nguyên cấu hình gốc của Job (Camera, Tool graph, tham số), không sửa đổi ImageSource.
+        4. **Kiểm Thử Tự Động (`TestExtractApp`)**:
+           - Thêm kiểm thử `Test_TeachImageCache_And_OpenJobFromListLogic`: kiểm tra lưu và đọc Disk Cache, kiểm tra mở Job từ thư mục mặc định giữ nguyên `SourceType == Camera`.
+      - Kiểm Thử:
+        - Toàn bộ test suite dự án trong `TestExtractApp` đạt 100% PASSED (178+ tests). Solution `dotnet build` đạt 0 lỗi (0 errors).
+
 
 

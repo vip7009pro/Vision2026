@@ -153,6 +153,17 @@
                                 </StackPanel>
                             </Button>
 
+                            <!-- Open Job from List -->
+                            <Button Command="{Binding OpenJobFromListCommand}"
+                                    Background="#007ACC" Foreground="White" FontWeight="Bold"
+                                    Padding="10,4" Margin="0,0,6,4" Height="30" Cursor="Hand"
+                                    ToolTip="Mở tệp Job của sản phẩm đang chọn trong Tool Editor (tự động tải về thư mục mặc định nếu chưa có)">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="📂 " />
+                                    <TextBlock Text="Mở Job Này" />
+                                </StackPanel>
+                            </Button>
+
                             <!-- Upload Job -->
                             <Button Command="{Binding UploadCurrentJobCommand}"
                                     Background="#E65100" Foreground="White" FontWeight="SemiBold"
@@ -202,6 +213,11 @@
                           HeadersVisibility="Column"
                           Background="{DynamicResource PanelBackgroundBrush}"
                           Foreground="{DynamicResource TextBrush}">
+                    <DataGrid.ItemContainerStyle>
+                        <Style TargetType="DataGridRow" BasedOn="{StaticResource {x:Type DataGridRow}}">
+                            <EventSetter Event="MouseDoubleClick" Handler="OnDataGridRowMouseDoubleClick" />
+                        </Style>
+                    </DataGrid.ItemContainerStyle>
                     <DataGrid.Columns>
                         <!-- Mã Sản Phẩm -->
                         <DataGridTextColumn Header="Mã SP (ProductCode)" Binding="{Binding ProductCode}" Width="150" FontWeight="Bold" />
@@ -302,7 +318,18 @@
                 <ScrollViewer VerticalScrollBarVisibility="Auto">
                     <StackPanel>
                         <!-- Header Preview -->
-                        <TextBlock Text="🖼️ Ảnh Mẫu (Teach Image Preview)" FontWeight="Bold" FontSize="13" Foreground="{DynamicResource TextBrush}" Margin="0,0,0,8" />
+                        <DockPanel Margin="0,0,0,8">
+                            <TextBlock Text="🖼️ Ảnh Mẫu (Teaching Image Preview)" FontWeight="Bold" FontSize="13" Foreground="{DynamicResource TextBrush}" VerticalAlignment="Center" />
+                            <Button Command="{Binding RefreshTeachImageCommand}"
+                                    DockPanel.Dock="Right" HorizontalAlignment="Right"
+                                    Padding="8,3" Height="26" FontSize="11" Cursor="Hand"
+                                    ToolTip="Tải lại ảnh mẫu mới nhất từ Server (bỏ qua cache)">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="🔄 " FontSize="11" />
+                                    <TextBlock Text="Làm Mới Ảnh" VerticalAlignment="Center" />
+                                </StackPanel>
+                            </Button>
+                        </DockPanel>
 
                         <!-- Image Preview Box -->
                         <Border Background="#1E1E1E" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="4" Height="240" Margin="0,0,0,10">
@@ -359,6 +386,16 @@
 
                         <!-- Big Action Buttons in Details Panel -->
                         <StackPanel Margin="0,4,0,0">
+                            <Button Command="{Binding OpenJobFromListCommand}"
+                                    Background="#007ACC" Foreground="White" FontWeight="Bold"
+                                    Height="36" Margin="0,0,0,6" Cursor="Hand"
+                                    ToolTip="Mở tệp Job của sản phẩm đang chọn, giữ nguyên cấu hình gốc (không đổi ImageSource)">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="📂 " FontSize="14" />
+                                    <TextBlock Text="Mở Tệp Job Này" VerticalAlignment="Center" />
+                                </StackPanel>
+                            </Button>
+
                             <Button Command="{Binding RemoteTeachCommand}"
                                     Background="#2E7D32" Foreground="White" FontWeight="Bold"
                                     Height="36" Margin="0,0,0,6" Cursor="Hand">
