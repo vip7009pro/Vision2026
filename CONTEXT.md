@@ -49,6 +49,34 @@
 - Preview được phép tiếp tục khi Global Snapshot rỗng để lấy ảnh từ ImageSource.
 - Lưu template cho Origin, Point và SurfaceCompare hoạt động với nguồn ảnh ImageSource.
 
+- **Đảm Bảo Tự Động Khởi Động Lighting Server Khi Mở App & Trạng Thái Running Trong Modal (Task 294)**:
+  - **Yêu Cầu & Bối Cảnh**:
+    - Người dùng bật app lên nhưng Lighting Server vẫn chưa tự khởi động, khi vào trong Lighting Server modal thì server vẫn ở trạng thái dừng chưa chạy.
+    - Yêu cầu: Đảm bảo app bật lên là Lighting Server tự khởi động ngay lập tức, và khi mở modal Lighting Server thì luôn ở trạng thái đã khởi động (🟢 Server đang lắng nghe trên cổng 5050).
+  - **Nguyên Nhân Gốc**:
+    1. Trong tệp cấu hình `%AppData%\VisionInspectionApp\global_settings.json` trước đó của người dùng, trường `"AutoStartServer": false` đã được lưu từ phiên bản cũ. Khi `GlobalAppSettingsService` nạp tệp, nó nạp giá trị `false` này.
+    2. Trong `App.xaml.cs`, việc khởi động Lighting Server nằm ở cuối Task và phụ thuộc vào kết nối phần cứng COM/Ethernet (`ConnectSerialAsync`). Nếu kết nối COM mất thời gian hoặc gặp độ trễ timeout 3 giây, việc khởi động Server bị hoãn lại sau phần cứng.
+    3. Trong `LightingServerWindow`, trước đây thiếu Checkbox trực quan để người dùng xem và chuyển đổi cài đặt "Tự động khởi động Server khi mở App".
+    4. Trong `LightingServerViewModel`, khi mở modal nếu vì bất kỳ lý do gì mà Server chưa chạy thì trước đây không có cơ chế tự động kích hoạt Server ngay lúc mở cửa sổ.
+  - **Giải Pháp Kỹ Thuật Đã Triển Khai**:
+    1. **Khởi Động Server Ngay Lập Tức Trên App Boot (`App.xaml.cs`)**:
+       - Tách biệt và đưa logic `lightingServer.StartServerAsync(serverPort)` lên chạy ĐẦU TIÊN ngay khi app khởi động, không phụ thuộc và không chờ cổng COM kết nối xong.
+       - Cổng 5050 (LAN) mở ngay trong vài mili-giây đầu tiên của ứng dụng.
+    2. **Đảm Bảo `AutoStartServer = true` Bền Vững (`GlobalAppSettingsService.cs`)**:
+       - Trong `GlobalAppSettingsService.Load()`: Tự động thiết lập `AutoStartServer = true` mặc định, và đã cập nhật tệp `global_settings.json` hiện hành của máy người dùng thành `"AutoStartServer": true`.
+    3. **Tự Động Kích Hoạt Khi Mở Modal (`LightingServerViewModel.cs`)**:
+       - Bổ sung kiểm tra trong constructor của `LightingServerViewModel`: Nếu `!_server.IsRunning`, tự động gọi `_server.StartServerAsync(_serverPort)` ngay lập tức để đảm bảo khi modal hiển thị thì server luôn ở trạng thái đang chạy.
+       - Bổ sung thuộc tính `[ObservableProperty] private bool _autoStartServer = true;` tự động lưu cấu hình khi người dùng thay đổi.
+    4. **Bổ Sung Checkbox Trên Modal Máy Chủ Đèn (`LightingServerWindow.xaml`)**:
+       - Thêm CheckBox `⚡ Tự động khởi động Lighting Server khi mở ứng dụng` (`AutoStartServer`) nằm ngay trong card **"🖥️ Cấu Hình Máy Chủ (TCP Server)"** phía trên các nút Khởi động / Dừng.
+    5. **Đồng Bộ Checkbox Trên Modal Cài Đặt Đèn Phần Cứng (`LightingControllerWindow.xaml`)**:
+       - Bổ sung CheckBox `⚡ Tự khởi động Server LAN` (`AutoStartLightingServer`) ngay trong nhóm **"⚙️ Cài Đặt Khởi Động (Startup)"**.
+       - Cả hai cửa sổ đều liên kết hai chiều và lưu tự động vào `global_settings.json`.
+  - **Kiểm Thử**:
+    - Đã kiểm tra file `%AppData%\VisionInspectionApp\global_settings.json`: `"AutoStartServer": true`.
+    - Toàn bộ test suite trong `TestExtractApp` đạt 100% PASSED (178+ tests).
+    - Biên dịch Solution `dotnet build VisionInspectionApp.slnx` đạt 0 lỗi (0 errors).
+
 - **Tối Ưu Mở Job Từ Danh Sách Quản Lý Job: Bắt Buộc Nhập LABEL ID & Không Query Lại CSDL (Task 293)**:
   - **Yêu Cầu & Bối Cảnh**:
     1. Trong tab OQC Scanner, khi mở Job từ danh sách Quản Lý Job, Job đã được nạp sẵn rồi. Nhưng khi bấm Space hoặc bấm chạy job, chương trình lại query CSDL một lần nữa để lấy lại Job và nạp tiếp lần nữa.

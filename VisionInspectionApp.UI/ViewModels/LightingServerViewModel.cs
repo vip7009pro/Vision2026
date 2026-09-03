@@ -150,6 +150,15 @@ public sealed partial class LightingServerViewModel : ObservableObject
     private string _logText = string.Empty;
 
     [ObservableProperty]
+    private bool _autoStartServer = true;
+
+    partial void OnAutoStartServerChanged(bool value)
+    {
+        _settingsService.Settings.LightingServer.AutoStartServer = value;
+        _settingsService.Save();
+    }
+
+    [ObservableProperty]
     private string _statusMessage = "Sẵn sàng khởi động máy chủ Lighting Control Server.";
 
     public LightingServerViewModel(
@@ -161,6 +170,7 @@ public sealed partial class LightingServerViewModel : ObservableObject
         _server = server ?? new LightingControlServer(hardwareService);
 
         var config = settingsService.Settings.LightingServer;
+        _autoStartServer = config.AutoStartServer;
         _serverPort = _server.IsRunning ? _server.ListeningPort : (config.Port > 0 ? config.Port : 5050);
         _selectedComPort = !string.IsNullOrWhiteSpace(_server.HardwareService.ActivePortName)
             ? _server.HardwareService.ActivePortName
@@ -179,6 +189,32 @@ public sealed partial class LightingServerViewModel : ObservableObject
         else if (_isHardwareConnected)
         {
             _statusMessage = $"🟢 Cổng {_selectedComPort} đã kết nối sẵn sàng. Bấm Khởi Động Server để mở cổng LAN.";
+        }
+
+        // Đảm bảo nếu Server chưa chạy thì tự động khởi động ngay khi mở modal
+        if (!_server.IsRunning)
+        {
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    await _server.StartServerAsync(_serverPort).ConfigureAwait(false);
+                    RunOnUI(() =>
+                    {
+                        IsServerRunning = _server.IsRunning;
+                        StatusMessage = $"🟢 Server đang lắng nghe trên cổng {_serverPort}.";
+                        StartServerCommand.NotifyCanExecuteChanged();
+                        StopServerCommand.NotifyCanExecuteChanged();
+                    });
+                }
+                catch (Exception ex)
+                {
+                    RunOnUI(() =>
+                    {
+                        StatusMessage = $"❌ Lỗi khởi động Server: {ex.Message}";
+                    });
+                }
+            });
         }
 
         UpdateChannels(_selectedChannelCount);

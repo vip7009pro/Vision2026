@@ -93,6 +93,15 @@
                                         Padding="6,2" VerticalAlignment="Center" FontSize="10.5" ToolTip="Sao chép địa chỉ IP để nhập vào máy dev văn phòng" />
                             </Grid>
 
+                            <!-- Auto Start Server CheckBox -->
+                            <Border Background="{DynamicResource WindowBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="4" Padding="8,4" Margin="0,2,0,6">
+                                <CheckBox Content="⚡ Tự động khởi động Lighting Server khi mở ứng dụng"
+                                          IsChecked="{Binding AutoStartServer, Mode=TwoWay}"
+                                          FontSize="11.5" FontWeight="SemiBold"
+                                          VerticalAlignment="Center"
+                                          ToolTip="Khi bật: Ứng dụng sẽ tự động mở Server trên cổng mạng LAN ngay khi khởi động để các client có thể kết nối ngay lập tức." />
+                            </Border>
+
                             <!-- Start / Stop Server Buttons -->
                             <Grid Margin="0,0,0,4">
                                 <Grid.ColumnDefinitions>

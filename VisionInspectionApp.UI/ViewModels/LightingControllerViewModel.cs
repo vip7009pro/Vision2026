@@ -161,6 +161,7 @@ public sealed partial class LightingControllerViewModel : ObservableObject
         _autoConnect = settings.AutoConnect;
         _enableStartupLighting = settings.EnableStartupLighting;
         _autoTurnOffOnExit = settings.AutoTurnOffOnExit;
+        _autoStartLightingServer = settingsService.Settings.LightingServer.AutoStartServer;
         UpdateStartupChannels(_selectedChannelCount, settings.StartupChannels);
 
         _selectedInterfaceType = (LightingInterfaceType)settings.InterfaceType;
@@ -286,6 +287,15 @@ public sealed partial class LightingControllerViewModel : ObservableObject
     partial void OnAutoTurnOffOnExitChanged(bool value)
     {
         SaveSettings();
+    }
+
+    [ObservableProperty]
+    private bool _autoStartLightingServer = true;
+
+    partial void OnAutoStartLightingServerChanged(bool value)
+    {
+        _settingsService.Settings.LightingServer.AutoStartServer = value;
+        _settingsService.Save();
     }
 
     [ObservableProperty]
@@ -779,6 +789,7 @@ public sealed partial class LightingControllerViewModel : ObservableObject
         settings.AutoConnect = AutoConnect;
         settings.EnableStartupLighting = EnableStartupLighting;
         settings.AutoTurnOffOnExit = AutoTurnOffOnExit;
+        _settingsService.Settings.LightingServer.AutoStartServer = AutoStartLightingServer;
         settings.StartupChannels = StartupChannels.Select(x => new LightingStartupChannelSettings
         {
             ChannelIndex = x.ChannelIndex,

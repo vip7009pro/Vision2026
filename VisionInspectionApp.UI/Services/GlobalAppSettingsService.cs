@@ -128,12 +128,19 @@ public sealed class GlobalAppSettingsService
         {
             if (!File.Exists(_settingsFilePath))
             {
-                return new GlobalAppSettings();
+                var defaults = new GlobalAppSettings();
+                Save(defaults);
+                return defaults;
             }
 
             var json = File.ReadAllText(_settingsFilePath);
             var s = JsonSerializer.Deserialize<GlobalAppSettings>(json);
-            return s ?? new GlobalAppSettings();
+            var result = s ?? new GlobalAppSettings();
+            if (result.LightingServer == null)
+            {
+                result.LightingServer = new LightingServerConfig { AutoStartServer = true };
+            }
+            return result;
         }
         catch
         {
@@ -141,9 +148,14 @@ public sealed class GlobalAppSettingsService
         }
     }
 
-    public void Save()
+    public void Save(GlobalAppSettings? settings = null)
     {
-        var json = JsonSerializer.Serialize(Settings, new JsonSerializerOptions { WriteIndented = true });
-        File.WriteAllText(_settingsFilePath, json);
+        try
+        {
+            var target = settings ?? Settings;
+            var json = JsonSerializer.Serialize(target, new JsonSerializerOptions { WriteIndented = true });
+            File.WriteAllText(_settingsFilePath, json);
+        }
+        catch { }
     }
 }

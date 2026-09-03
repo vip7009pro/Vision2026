@@ -238,7 +238,8 @@
                             <WrapPanel VerticalAlignment="Center">
                                 <CheckBox Content="Tự động kết nối khi mở app" IsChecked="{Binding AutoConnect}" ToolTip="Tự động kết nối phương thức gần nhất khi mở app" VerticalAlignment="Center" Margin="0,0,12,2" FontSize="11" />
                                 <CheckBox Content="Tự bật đèn khi mở app" IsChecked="{Binding EnableStartupLighting}" ToolTip="Tự động bật sáng các kênh đã chọn với mức sáng cài đặt để quan sát Live view ngay khi mở app" VerticalAlignment="Center" Margin="0,0,12,2" FontSize="11" FontWeight="SemiBold" />
-                                <CheckBox Content="Tự tắt đèn khi tắt app" IsChecked="{Binding AutoTurnOffOnExit}" ToolTip="Tự động tắt toàn bộ các kênh đèn khi đóng hoặc thoát ứng dụng" VerticalAlignment="Center" Margin="0,0,0,2" FontSize="11" FontWeight="SemiBold" />
+                                <CheckBox Content="Tự tắt đèn khi tắt app" IsChecked="{Binding AutoTurnOffOnExit}" ToolTip="Tự động tắt toàn bộ các kênh đèn khi đóng hoặc thoát ứng dụng" VerticalAlignment="Center" Margin="0,0,12,2" FontSize="11" FontWeight="SemiBold" />
+                                <CheckBox Content="⚡ Tự khởi động Server LAN" IsChecked="{Binding AutoStartLightingServer}" ToolTip="Tự động khởi động máy chủ Lighting Control Server trên cổng LAN (5050) ngay khi mở app" VerticalAlignment="Center" Margin="0,0,0,2" FontSize="11" FontWeight="SemiBold" />
                             </WrapPanel>
                         </StackPanel>
                     </Border>

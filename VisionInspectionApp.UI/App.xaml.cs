@@ -138,16 +138,48 @@ public partial class App : System.Windows.Application
         // Đóng Splash Screen với animation mờ dần mượt mà
         _ = splash.FadeOutAndCloseAsync();
 
-        // Auto-connect Lighting Controller & Apply Startup Lighting (non-blocking)
+        // Auto-start Lighting Server LAN & Auto-connect Lighting Controller
         _ = Task.Run(async () =>
         {
+            var settingsService = _host.Services.GetRequiredService<GlobalAppSettingsService>();
+            var lightingServer = _host.Services.GetRequiredService<LightingControlServer>();
+            var lightingService = _host.Services.GetRequiredService<LightingControllerService>();
+
+            // 1. Tự động khởi động Lighting Control Server trên cổng mạng LAN ngay lập tức (không phụ thuộc vào cổng COM)
             try
             {
-                var settingsService = _host.Services.GetRequiredService<GlobalAppSettingsService>();
+                var serverConfig = settingsService.Settings.LightingServer;
+                if (serverConfig.AutoStartServer)
+                {
+                    int serverPort = serverConfig.Port > 0 ? serverConfig.Port : 5050;
+                    if (!lightingServer.IsRunning)
+                    {
+                        await lightingServer.StartServerAsync(serverPort).ConfigureAwait(false);
+                    }
+
+                    var srvMsg = $"🖥️ [Lighting Server] Đang lắng nghe trên cổng {serverPort} (LAN).";
+                    System.Windows.Application.Current?.Dispatcher.InvokeAsync(() =>
+                    {
+                        try
+                        {
+                            var mainVm = _host.Services.GetService<MainWindowViewModel>();
+                            mainVm?.SetGlobalStatus(srvMsg, "Success");
+                        }
+                        catch { }
+                    });
+                }
+            }
+            catch (Exception srvEx)
+            {
+                System.Diagnostics.Debug.WriteLine($"[LightingServer AutoStart Error]: {srvEx.Message}");
+            }
+
+            // 2. Kết nối phần cứng điều khiển đèn (COM / Ethernet) và thiết lập độ sáng khởi động
+            try
+            {
                 var lightingSettings = settingsService.Settings.Lighting;
                 if (lightingSettings.AutoConnect)
                 {
-                    var lightingService = _host.Services.GetRequiredService<LightingControllerService>();
                     if (lightingSettings.InterfaceType == (int)VisionInspectionApp.Models.LightingInterfaceType.SerialCom)
                     {
                         string? le = lightingSettings.LineEnding switch
@@ -235,34 +267,6 @@ public partial class App : System.Windows.Application
                     }
                     catch { }
                 });
-            }
-
-            // Tự động khởi động Lighting Control Server trên cổng mạng LAN (mặc định 5050)
-            try
-            {
-                var settingsService = _host.Services.GetRequiredService<GlobalAppSettingsService>();
-                var serverConfig = settingsService.Settings.LightingServer;
-                if (serverConfig.AutoStartServer)
-                {
-                    var lightingServer = _host.Services.GetRequiredService<LightingControlServer>();
-                    int serverPort = serverConfig.Port > 0 ? serverConfig.Port : 5050;
-                    await lightingServer.StartServerAsync(serverPort);
-
-                    var srvMsg = $"🖥️ [Lighting Server] Đang lắng nghe trên cổng {serverPort} (LAN).";
-                    System.Windows.Application.Current?.Dispatcher.InvokeAsync(() =>
-                    {
-                        try
-                        {
-                            var mainVm = _host.Services.GetService<MainWindowViewModel>();
-                            mainVm?.SetGlobalStatus(srvMsg, "Success");
-                        }
-                        catch { }
-                    });
-                }
-            }
-            catch (Exception srvEx)
-            {
-                System.Diagnostics.Debug.WriteLine($"[LightingServer AutoStart Error]: {srvEx.Message}");
             }
         });
     }

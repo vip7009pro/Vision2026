@@ -1688,6 +1688,23 @@ Lộ trình tích hợp tính năng Chụp ảnh từ camera và hỗ trợ các
            - Thêm kiểm thử `Test_JobManagerOpenJob_LabelIdRequirementAndNoDbRequery`.
       - Kiểm Thử:
         - Toàn bộ test suite dự án trong `TestExtractApp` đạt 100% PASSED (178+ tests). Solution `dotnet build` đạt 0 lỗi (0 errors).
+- [x] Task 294: Đảm Bảo Tự Động Khởi Động Lighting Server Khi Mở App & Luôn Ở Trạng Thái Running Khi Mở Modal.
+      - Yêu Cầu & Bối Cảnh:
+        - Khắc phục lỗi Lighting Server không tự khởi động khi bật app và modal hiển thị trạng thái đã dừng.
+      - Giải Pháp Đã Triển Khai:
+        1. **Khởi Động Server Ngay Lập Tức (`App.xaml.cs`)**:
+           - Tách rời và thực thi `StartServerAsync(serverPort)` ngay đầu tiến trình khởi động, không chờ và không phụ thuộc vào kết nối COM.
+        2. **Cấu Hình Bền Vững (`GlobalAppSettingsService.cs`)**:
+           - Thiết lập `AutoStartServer = true` mặc định khi nạp cài đặt; cập nhật `global_settings.json` hiện hành.
+        3. **Tự Động Kích Hoạt Trong Modal (`LightingServerViewModel.cs`)**:
+           - Kiểm tra nếu `!_server.IsRunning` khi mở modal thì tự khởi động ngay lập tức; thêm property `AutoStartServer`.
+        4. **Giao Diện Modal Máy Chủ Đèn (`LightingServerWindow.xaml`)**:
+           - Thêm CheckBox viền `⚡ Tự động khởi động Lighting Server khi mở ứng dụng` (`AutoStartServer`).
+        5. **Giao Diện Modal Cài Đặt Đèn Phần Cứng (`LightingControllerWindow.xaml`)**:
+           - Bổ sung CheckBox `⚡ Tự khởi động Server LAN` (`AutoStartLightingServer`) trong nhóm Cài Đặt Khởi Động.
+      - Kiểm Thử:
+        - Toàn bộ test suite dự án trong `TestExtractApp` đạt 100% PASSED (178+ tests). Solution `dotnet build` đạt 0 lỗi (0 errors).
+
 
 
 
