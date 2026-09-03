@@ -1634,6 +1634,40 @@ Lộ trình tích hợp tính năng Chụp ảnh từ camera và hỗ trợ các
            - Thêm kiểm thử `Test_TeachImageCache_And_OpenJobFromListLogic`: kiểm tra lưu và đọc Disk Cache, kiểm tra mở Job từ thư mục mặc định giữ nguyên `SourceType == Camera`.
       - Kiểm Thử:
         - Toàn bộ test suite dự án trong `TestExtractApp` đạt 100% PASSED (178+ tests). Solution `dotnet build` đạt 0 lỗi (0 errors).
+- [x] Task 291: Tối Ưu Điều Hướng Tab Khi Mở Job & Tự Khởi Động Lighting Server Dùng Chung Cổng COM.
+      - Yêu Cầu & Bối Cảnh:
+        - Giữ nguyên Tab OQC Scanner khi mở Job từ danh sách (không tự chuyển sang Tool Editor trừ khi bấm "Huấn Luyện Từ Xa").
+        - Tự động khởi động Lighting Server trên mạng LAN ngay khi app khởi động, chia sẻ cổng COM thread-safe không bị lỗi xung đột cổng COM.
+      - Giải Pháp Đã Triển Khai:
+        1. **Điều Hướng Tab Thông Minh (`JobManagerViewModel.cs`)**:
+           - Kiểm tra `SelectedTabIndex != 1`: Chỉ chuyển sang Tool Editor khi không ở Tab OQC; đồng thời cập nhật ngay `CurrentJobFilePath`, `CurrentProductName` và `ScannedCode` vào OQC Scanner.
+        2. **Singleton & Khởi Động Tự Động (`App.xaml.cs`)**:
+           - Đăng ký `LightingControlServer` dưới dạng Singleton dùng chung `LightingControllerService`.
+           - Tự động khởi động Server LAN (mặc định cổng 5050) sau khi kết nối COM và thiết lập độ sáng.
+           - Giải phóng tài nguyên và dừng Server an toàn khi tắt app (`ShutdownGracefullyAsync`).
+        3. **Đồng Bộ Giao Diện Server (`LightingServerViewModel.cs`, `ToolEditorViewModel.Lighting.cs`)**:
+           - Nhận Server Singleton từ DI, phản ánh ngay trạng thái đang chạy, cổng COM đang dùng (`ActivePortName`, `ActiveBaudRate`) và các client đã kết nối.
+      - Kiểm Thử:
+        - Toàn bộ test suite dự án trong `TestExtractApp` đạt 100% PASSED (178+ tests). Solution `dotnet build` đạt 0 lỗi (0 errors).
+- [x] Task 292: Lưu Bền Vững Trạng Thái 2 Checkbox "Auto Run" và "Đầu Scanner" Qua Các Lần Khởi Động App.
+      - Yêu Cầu & Bối Cảnh:
+        - Ghi nhớ trạng thái của 2 checkbox `⚡ Auto Run` (`AutoRunJob`) và `🔫 Đầu Scanner` (`UseExternalScanner`) trên thanh công cụ Tab OQC Scanner kể cả khi tắt và khởi động lại ứng dụng.
+      - Giải Pháp Đã Triển Khai:
+        1. **Model Persistence (`OqcScannerConfig.cs`)**:
+           - Bổ sung `public bool AutoRunJob { get; set; } = true;` vào `OqcScannerConfig`.
+        2. **Nạp & Lưu Đầy Đủ (`OqcScannerViewModel.Settings.cs`, `OqcScannerViewModel.cs`)**:
+           - Thêm cờ `_isSuppressingConfigSave` chống race condition khi nạp cấu hình.
+           - `LoadSettingsFromConfig`: nạp đồng thời `AutoRunJob` và `UseExternalScanner` từ `_oqcService.Config`.
+           - `SaveSettingsToConfig` & `ExecuteExportConfig`: lưu đầy đủ cả 2 trường.
+           - `OnAutoRunJobChanged` & `OnUseExternalScannerChanged`: tự động cập nhật và lưu ngay lập tức xuống tệp JSON khi người dùng tích/bỏ tích.
+        3. **Flush Graceful Shutdown (`App.xaml.cs`)**:
+           - Trong `ShutdownGracefullyAsync`, lưu trạng thái mới nhất từ `OqcScannerViewModel` trước khi thoát.
+        4. **Kiểm Thử Tự Động (`TestExtractApp`)**:
+           - Cập nhật `Test_OqcScannerConfig_SerializationWithServerFields` kiểm tra serialization và khôi phục giá trị của `AutoRunJob` và `UseExternalScanner`.
+      - Kiểm Thử:
+        - Toàn bộ test suite dự án trong `TestExtractApp` đạt 100% PASSED (178+ tests). Solution `dotnet build` đạt 0 lỗi (0 errors).
+
+
 
 
 

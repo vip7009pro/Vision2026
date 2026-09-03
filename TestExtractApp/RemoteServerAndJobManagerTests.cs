@@ -89,6 +89,9 @@ public static class RemoteServerAndJobManagerTests
             JobManagerPageSize = 100
         };
 
+        cfg.AutoRunJob = false;
+        cfg.UseExternalScanner = true;
+
         string json = JsonSerializer.Serialize(cfg, new JsonSerializerOptions { WriteIndented = true });
         var deserialized = JsonSerializer.Deserialize<OqcScannerConfig>(json);
 
@@ -104,7 +107,13 @@ public static class RemoteServerAndJobManagerTests
         if (deserialized.JobManagerPageSize != 100)
             throw new Exception($"JobManagerPageSize mismatch: {deserialized.JobManagerPageSize}");
 
-        Console.WriteLine("  ✓ OqcScannerConfig Server & JobManager serialization verified.");
+        if (deserialized.AutoRunJob != false)
+            throw new Exception($"AutoRunJob mismatch: expected false, got {deserialized.AutoRunJob}");
+
+        if (deserialized.UseExternalScanner != true)
+            throw new Exception($"UseExternalScanner mismatch: expected true, got {deserialized.UseExternalScanner}");
+
+        Console.WriteLine("  ✓ OqcScannerConfig Server, JobManager & AutoRun/Scanner persistence serialization verified.");
     }
 
     private static void Test_ImageSourceDefinition_UrlSupport()

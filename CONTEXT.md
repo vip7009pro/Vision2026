@@ -49,6 +49,56 @@
 - Preview được phép tiếp tục khi Global Snapshot rỗng để lấy ảnh từ ImageSource.
 - Lưu template cho Origin, Point và SurfaceCompare hoạt động với nguồn ảnh ImageSource.
 
+- **Lưu Bền Vững Trạng Thái 2 Checkbox "Auto Run" và "Đầu Scanner" Qua Các Lần Khởi Động App (Task 292)**:
+  - **Yêu Cầu & Bối Cảnh**:
+    - Hai checkbox "⚡ Auto Run" (`AutoRunJob`) và "🔫 Đầu Scanner" (`UseExternalScanner`) trên thanh công cụ Tab OQC Scanner bị reset lại trạng thái mặc định mỗi khi tắt và khởi động lại phần mềm.
+    - Người dùng yêu cầu hệ thống phải ghi nhớ trạng thái của 2 checkbox này bền vững, kể cả khi restart app.
+  - **Nguyên Nhân Gốc**:
+    1. `AutoRunJob`: Thuộc tính này trước đây chỉ là biến cục bộ `[ObservableProperty] private bool _autoRunJob = true;` trong `OqcScannerViewModel.cs`. Nó chưa từng được khai báo trong `OqcScannerConfig`, không được nạp trong `LoadSettingsFromConfig()` và không được lưu khi người dùng tích/bỏ tích. Do đó, mỗi khi khởi động lại ứng dụng, nó luôn bị reset về `true`.
+    2. `UseExternalScanner`: Thuộc tính này đã có trong `OqcScannerConfig` nhưng khi `OqcSettingsDialog` lưu cấu hình hoặc khi nạp config chưa có cờ chống race condition (`_isSuppressingConfigSave`), dẫn đến sự kiện thay đổi giá trị kích hoạt không đúng lúc hoặc bị ghi đè.
+    3. Khi tắt ứng dụng (`ShutdownGracefullyAsync`): Chưa có cơ chế chốt hạ (flush) trạng thái hiện hành của 2 checkbox từ ViewModel xuống cấu hình trước khi tiến trình kết thúc.
+  - **Giải Pháp Kỹ Thuật Đã Triển Khai**:
+    1. **Bổ Sung Thuộc Tính Vào `OqcScannerConfig.cs`**:
+       - Thêm `public bool AutoRunJob { get; set; } = true;` vào model `OqcScannerConfig`.
+       - Giữ nguyên `public bool UseExternalScanner { get; set; } = false;`.
+    2. **Đồng Bộ Nạp & Lưu Tự Động Trong `OqcScannerViewModel.Settings.cs`**:
+       - Bổ sung cờ `_isSuppressingConfigSave` để tránh trigger lưu đè khi đang nạp từ file.
+       - Trong `LoadSettingsFromConfig()`: nạp cả `AutoRunJob = cfg.AutoRunJob;` và `UseExternalScanner = cfg.UseExternalScanner;`.
+       - Trong `SaveSettingsToConfig()` và `ExecuteExportConfig()`: ghi nhận cả `AutoRunJob` và `UseExternalScanner`.
+    3. **Tự Động Lưu Tức Thì Khi Người Dùng Tương Tác (`OqcScannerViewModel.cs`)**:
+       - Cập nhật `OnAutoRunJobChanged(bool value)`: khi người dùng bật/tắt checkbox `⚡ Auto Run`, cập nhật ngay `_oqcService.Config.AutoRunJob = value; _oqcService.SaveConfig(...)`.
+       - Cập nhật `OnUseExternalScannerChanged(bool value)`: khi người dùng bật/tắt checkbox `🔫 Đầu Scanner`, cập nhật ngay `_oqcService.Config.UseExternalScanner = value; _oqcService.SaveConfig(...)`.
+    4. **Flush An Toàn Khi Thoát Ứng Dụng (`App.xaml.cs`)**:
+       - Trong `ShutdownGracefullyAsync()`, đọc trạng thái mới nhất từ `OqcScannerViewModel` và ghi đè an toàn xuống `oqc_scanner_config.json`.
+  - **Kiểm Thử**:
+    - Bổ sung kiểm thử `Test_OqcScannerConfig_SerializationWithServerFields` trong `RemoteServerAndJobManagerTests.cs` kiểm tra cả `AutoRunJob` và `UseExternalScanner`.
+    - Toàn bộ test suite trong `TestExtractApp` đạt 100% PASSED (178+ tests).
+    - `dotnet build VisionInspectionApp.slnx` đạt 0 lỗi (0 errors).
+
+- **Tối Ưu Điều Hướng Tab Khi Mở Job & Tự Khởi Động Lighting Server Dùng Chung Cổng COM (Task 291)**:
+  - **Yêu Cầu & Bối Cảnh**:
+    1. Khi đang ở Tab OQC Scanner (Index 1) và bấm "Mở Job Này" (hoặc double click dòng sản phẩm trong Job Manager), phần mềm trước đây tự chuyển về Tab Tool Editor (Index 0). Người dùng muốn: Nếu đang ở Tab OQC thì giữ nguyên Tab OQC, chỉ khi bấm "Huấn luyện từ xa" thì mới tự chuyển về Tab Tool Editor.
+    2. Khi ứng dụng khởi động, hệ thống tự động kết nối cổng COM để bật đèn chiếu sáng cho camera inspection, khiến cổng COM bị chiếm dụng độc quyền. Do đó, khi người dùng hoặc máy khách muốn bật Lighting Server thì không thể kết nối cổng COM được hoặc bị xung đột. Cần thiết kế lại để:
+       - App khởi động lên là tự động khởi động Lighting Server luôn.
+       - Dùng chung đối tượng `LightingControllerService`, triệt tiêu hoàn toàn xung đột cổng COM.
+  - **Giải Pháp Kỹ Thuật Đã Triển Khai**:
+    1. **Tối Ưu Điều Hướng Tab Trong `JobManagerViewModel.cs`**:
+       - Trong phương thức `ExecuteOpenJobFromListAsync`: kiểm tra `if (_mainWindowViewModel.SelectedTabIndex != 1) { _mainWindowViewModel.SelectedTabIndex = 0; }`.
+       - Nếu đang ở Tab 1 (OQC Scanner), giữ nguyên Tab OQC, đồng thời đồng bộ ngay `CurrentJobFilePath`, `CurrentProductName` và `ScannedCode` vào `OqcScannerViewModel`.
+       - Nút "Huấn Luyện Từ Xa" (`ExecuteRemoteTeachAsync`) vẫn giữ nguyên hành vi chuyển sang Tab Tool Editor (`SelectedTabIndex = 0`) để kỹ sư cấu hình node graph và ROI.
+    2. **Đăng Ký Singleton & Vòng Đời Cho `LightingControlServer` Trong `App.xaml.cs`**:
+       - Đăng ký `LightingControlServer` dưới dạng Singleton trong DI container, tái sử dụng trực tiếp singleton `LightingControllerService` phần cứng.
+       - Khi App khởi động: Sau khi kết nối cổng COM và thiết lập độ sáng khởi động, tự động khởi động `LightingControlServer` lắng nghe trên cổng LAN (mặc định 5050).
+       - Không còn xung đột cổng COM: Vì `LightingControlServer` sử dụng chính `LightingControllerService` đã mở cổng COM, các lệnh từ máy khách qua mạng LAN và các lệnh từ Tool Editor / Inspection chạy trên cùng một pipeline điều khiển thread-safe.
+       - Dọn dẹp an toàn khi tắt App: Trong `ShutdownGracefullyAsync`, tự động dừng Server TCP và giải phóng tài nguyên.
+    3. **Đồng Bộ Giao Diện `LightingServerViewModel.cs`**:
+       - Cập nhật constructor để nhận `LightingControlServer` từ DI container.
+       - Khi mở cửa sổ `LightingServerWindow`, giao diện hiển thị ngay trạng thái server đang chạy, cổng LAN đang nghe, danh sách client đã kết nối, và trạng thái cổng COM thực tế (`ActivePortName`, `ActiveBaudRate`).
+       - Trong `StartServerAsync`: Bỏ qua việc kết nối lại COM nếu cổng COM đã được kết nối trước đó.
+  - **Kiểm Thử**:
+    - Toàn bộ 178+ bài test tự động trong `TestExtractApp` đạt 100% PASSED.
+    - Solution `dotnet build VisionInspectionApp.slnx` đạt 0 lỗi (0 errors).
+
 - **Tối Ưu Cache Ảnh Mẫu Teach & Mở Job Trực Tiếp Từ Danh Sách OQC Job Manager (Task 290)**:
   - **Yêu Cầu & Bối Cảnh**:
     - Trong cửa sổ Quản lý & Huấn luyện (Teaching) của Tab OQC Scanner (`JobManagerWindow`), mỗi khi người dùng nhấp chọn một dòng sản phẩm trong bảng, hệ thống lại tải lại ảnh mẫu (Teaching Image) từ Server qua HTTP. Vì ảnh mẫu camera thường có độ phân giải cao và dung lượng nặng (hàng chục MB), việc tải lại liên tục gây độ trễ lớn, hao tổn băng thông và giật lag giao diện.

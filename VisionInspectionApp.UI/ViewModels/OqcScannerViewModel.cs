@@ -233,6 +233,11 @@ public partial class OqcScannerViewModel : ObservableObject
 
     partial void OnAutoRunJobChanged(bool value)
     {
+        if (!_isSuppressingConfigSave && _oqcService?.Config != null)
+        {
+            _oqcService.Config.AutoRunJob = value;
+            _oqcService.SaveConfig(_oqcService.Config);
+        }
         OnPropertyChanged(nameof(ScanButtonText));
     }
 
@@ -243,8 +248,11 @@ public partial class OqcScannerViewModel : ObservableObject
 
     partial void OnUseExternalScannerChanged(bool value)
     {
-        _oqcService.Config.UseExternalScanner = value;
-        _oqcService.SaveConfig(_oqcService.Config);
+        if (!_isSuppressingConfigSave && _oqcService?.Config != null)
+        {
+            _oqcService.Config.UseExternalScanner = value;
+            _oqcService.SaveConfig(_oqcService.Config);
+        }
         OnPropertyChanged(nameof(ScanButtonText));
         OnPropertyChanged(nameof(CameraScanButtonText));
     }

@@ -1183,7 +1183,23 @@ public partial class JobManagerViewModel : ObservableObject
             await System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
             {
                 _toolEditorViewModel.LoadJobFromFile(resolvedJobPath);
-                _mainWindowViewModel.SelectedTabIndex = 0; // Chuyển sang Tab Tool Editor
+
+                // Nếu đang ở tab OQC Scanner (Index 1) thì KHÔNG tự navigate sang Tool Editor (Index 0).
+                // Chỉ chuyển sang Tool Editor nếu người dùng đang ở tab khác, hoặc khi bấm nút Huấn Luyện Từ Xa.
+                if (_mainWindowViewModel.SelectedTabIndex != 1)
+                {
+                    _mainWindowViewModel.SelectedTabIndex = 0;
+                }
+
+                // Đồng bộ cấu hình Job vào OQC Scanner nếu có
+                if (_mainWindowViewModel.OqcScanner != null)
+                {
+                    _mainWindowViewModel.OqcScanner.CurrentJobFilePath = resolvedJobPath;
+                    _mainWindowViewModel.OqcScanner.CurrentProductName = !string.IsNullOrWhiteSpace(SelectedItem.ProductName) ? SelectedItem.ProductName : productCode;
+                    _mainWindowViewModel.OqcScanner.ScannedCode = productCode;
+                    _mainWindowViewModel.OqcScanner.StatusMessage = $"Đã nạp Job: {Path.GetFileName(resolvedJobPath)} ({productCode})";
+                    _mainWindowViewModel.OqcScanner.StatusBrush = Brushes.LimeGreen;
+                }
             });
 
             // Đóng cửa sổ Quản lý & Huấn luyện

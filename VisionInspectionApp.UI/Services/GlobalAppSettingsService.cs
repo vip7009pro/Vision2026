@@ -21,7 +21,7 @@ public sealed class LightingServerConfig
     public int Port { get; set; } = 5050;
     public string ComPort { get; set; } = "COM3";
     public int BaudRate { get; set; } = 19200;
-    public bool AutoStartServer { get; set; } = false;
+    public bool AutoStartServer { get; set; } = true;
     public bool AutoConnectCom { get; set; } = true;
     public int ChannelCount { get; set; } = 4;
 }

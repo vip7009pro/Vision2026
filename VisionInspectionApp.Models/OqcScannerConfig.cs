@@ -65,6 +65,7 @@ public class OqcScannerConfig
     public int CropLength { get; set; } = 0;
     public int ScanTimeoutMs { get; set; } = 3000;
     public bool UseExternalScanner { get; set; } = false;
+    public bool AutoRunJob { get; set; } = true;
 }
 
 public class OqcMeasurementDetail

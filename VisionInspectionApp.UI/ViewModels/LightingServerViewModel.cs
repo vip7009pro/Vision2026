@@ -152,21 +152,51 @@ public sealed partial class LightingServerViewModel : ObservableObject
     [ObservableProperty]
     private string _statusMessage = "Sẵn sàng khởi động máy chủ Lighting Control Server.";
 
-    public LightingServerViewModel(LightingControllerService hardwareService, GlobalAppSettingsService settingsService)
+    public LightingServerViewModel(
+        LightingControllerService hardwareService,
+        GlobalAppSettingsService settingsService,
+        LightingControlServer? server = null)
     {
         _settingsService = settingsService;
-        _server = new LightingControlServer(hardwareService);
+        _server = server ?? new LightingControlServer(hardwareService);
 
         var config = settingsService.Settings.LightingServer;
-        _serverPort = config.Port > 0 ? config.Port : 5050;
-        _selectedComPort = !string.IsNullOrWhiteSpace(config.ComPort) ? config.ComPort : "COM3";
-        _selectedBaudRate = config.BaudRate > 0 ? config.BaudRate : 19200;
+        _serverPort = _server.IsRunning ? _server.ListeningPort : (config.Port > 0 ? config.Port : 5050);
+        _selectedComPort = !string.IsNullOrWhiteSpace(_server.HardwareService.ActivePortName)
+            ? _server.HardwareService.ActivePortName
+            : (!string.IsNullOrWhiteSpace(config.ComPort) ? config.ComPort : settingsService.Settings.Lighting.ComPort);
+        _selectedBaudRate = _server.HardwareService.ActiveBaudRate > 0
+            ? _server.HardwareService.ActiveBaudRate
+            : (config.BaudRate > 0 ? config.BaudRate : settingsService.Settings.Lighting.BaudRate);
         _selectedChannelCount = config.ChannelCount == 8 ? 8 : 4;
         _isHardwareConnected = _server.HardwareService.IsConnected;
+        _isServerRunning = _server.IsRunning;
+
+        if (_isServerRunning)
+        {
+            _statusMessage = $"🟢 Server đang lắng nghe trên cổng {_serverPort}.";
+        }
+        else if (_isHardwareConnected)
+        {
+            _statusMessage = $"🟢 Cổng {_selectedComPort} đã kết nối sẵn sàng. Bấm Khởi Động Server để mở cổng LAN.";
+        }
 
         UpdateChannels(_selectedChannelCount);
         RefreshLocalIps();
         RefreshComPorts();
+
+        // Nạp danh sách clients đã kết nối nếu server đang chạy sẵn
+        foreach (var c in _server.ConnectedClients)
+        {
+            ConnectedClients.Add(c);
+        }
+        UpdateClientCountText();
+
+        // Đồng bộ trạng thái các kênh đèn
+        if (_server.HardwareService.IsConnected || _server.IsRunning)
+        {
+            SyncAllChannelsFromState();
+        }
 
         _debounceTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(50) };
         _debounceTimer.Tick += async (_, _) =>
@@ -370,8 +400,11 @@ public sealed partial class LightingServerViewModel : ObservableObject
                 }
             }
 
-            // 2. Khởi động TCP Server
-            await _server.StartServerAsync(ServerPort);
+            // 2. Khởi động TCP Server (nếu chưa chạy)
+            if (!_server.IsRunning)
+            {
+                await _server.StartServerAsync(ServerPort);
+            }
 
             // 3. Đọc trạng thái đèn thực tế và đồng bộ lên giao diện
             if (_server.HardwareService.IsConnected)

@@ -62,6 +62,7 @@ namespace VisionInspectionApp.UI.ViewModels
             }
 
             var lightingService = _serviceProvider?.GetService<LightingControllerService>();
+            var lightingServer = _serviceProvider?.GetService<LightingControlServer>();
             var settingsService = _serviceProvider?.GetService<GlobalAppSettingsService>();
 
             if (lightingService == null || settingsService == null)
@@ -74,7 +75,7 @@ namespace VisionInspectionApp.UI.ViewModels
                 return;
             }
 
-            var vm = new LightingServerViewModel(lightingService, settingsService);
+            var vm = new LightingServerViewModel(lightingService, settingsService, lightingServer);
             _lightingServerWindowInstance = new LightingServerWindow(vm);
             var mainWin = System.Windows.Application.Current?.Windows.OfType<MainWindow>().FirstOrDefault() ?? System.Windows.Application.Current?.MainWindow;
             if (mainWin != null && mainWin != _lightingServerWindowInstance && mainWin.IsLoaded)

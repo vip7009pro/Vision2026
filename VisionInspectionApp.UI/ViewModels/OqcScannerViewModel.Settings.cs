@@ -150,6 +150,8 @@ public partial class OqcScannerViewModel
     [ObservableProperty]
     private bool _useExternalScanner = false;
 
+    private bool _isSuppressingConfigSave = false;
+
     public IReadOnlyList<string> AvailableCodeTypes { get; } = new List<string>
     {
         "ALL",
@@ -218,58 +220,67 @@ public partial class OqcScannerViewModel
 
     private void LoadSettingsFromConfig()
     {
-        var cfg = _oqcService.Config;
-        LookupDbId = cfg.LookupDbId;
-        LookupQuery = cfg.LookupQuery;
-        JobFilePathColumn = cfg.JobFilePathColumn;
-        JobRootDirectory = cfg.JobRootDirectory;
+        _isSuppressingConfigSave = true;
+        try
+        {
+            var cfg = _oqcService.Config;
+            LookupDbId = cfg.LookupDbId;
+            LookupQuery = cfg.LookupQuery;
+            JobFilePathColumn = cfg.JobFilePathColumn;
+            JobRootDirectory = cfg.JobRootDirectory;
 
-        EnableProductNameLookup = cfg.EnableProductNameLookup;
-        ProductNameDbId = cfg.ProductNameDbId;
-        ProductNameQuery = cfg.ProductNameQuery;
-        ProductNameColumn = cfg.ProductNameColumn;
+            EnableProductNameLookup = cfg.EnableProductNameLookup;
+            ProductNameDbId = cfg.ProductNameDbId;
+            ProductNameQuery = cfg.ProductNameQuery;
+            ProductNameColumn = cfg.ProductNameColumn;
 
-        ProductListDbId = cfg.ProductListDbId;
-        ProductListQuery = cfg.ProductListQuery;
-        ProductListCodeColumn = !string.IsNullOrWhiteSpace(cfg.ProductListCodeColumn) ? cfg.ProductListCodeColumn : "G_CODE";
-        ProductListNameColumn = !string.IsNullOrWhiteSpace(cfg.ProductListNameColumn) ? cfg.ProductListNameColumn : "G_NAME_KD";
-        ProductListPageSize = cfg.ProductListPageSize;
+            ProductListDbId = cfg.ProductListDbId;
+            ProductListQuery = cfg.ProductListQuery;
+            ProductListCodeColumn = !string.IsNullOrWhiteSpace(cfg.ProductListCodeColumn) ? cfg.ProductListCodeColumn : "G_CODE";
+            ProductListNameColumn = !string.IsNullOrWhiteSpace(cfg.ProductListNameColumn) ? cfg.ProductListNameColumn : "G_NAME_KD";
+            ProductListPageSize = cfg.ProductListPageSize;
 
-        AssignDbId = cfg.AssignDbId;
-        AssignQuery = cfg.AssignQuery;
+            AssignDbId = cfg.AssignDbId;
+            AssignQuery = cfg.AssignQuery;
 
-        UpdateTeachImageDbId = cfg.UpdateTeachImageDbId;
-        UpdateTeachImageQuery = !string.IsNullOrWhiteSpace(cfg.UpdateTeachImageQuery) ? cfg.UpdateTeachImageQuery : "IF EXISTS (SELECT 1 FROM ProductJobs WHERE ProductCode = '{ProductCode}') UPDATE ProductJobs SET TeachImagePath = '{TeachImagePath}', UpdatedAt = GETDATE() WHERE ProductCode = '{ProductCode}' ELSE INSERT INTO ProductJobs (ProductCode, TeachImagePath, UpdatedAt) VALUES ('{ProductCode}', '{TeachImagePath}', GETDATE())";
+            UpdateTeachImageDbId = cfg.UpdateTeachImageDbId;
+            UpdateTeachImageQuery = !string.IsNullOrWhiteSpace(cfg.UpdateTeachImageQuery) ? cfg.UpdateTeachImageQuery : "IF EXISTS (SELECT 1 FROM ProductJobs WHERE ProductCode = '{ProductCode}') UPDATE ProductJobs SET TeachImagePath = '{TeachImagePath}', UpdatedAt = GETDATE() WHERE ProductCode = '{ProductCode}' ELSE INSERT INTO ProductJobs (ProductCode, TeachImagePath, UpdatedAt) VALUES ('{ProductCode}', '{TeachImagePath}', GETDATE())";
 
-        ServerApiUrl = !string.IsNullOrWhiteSpace(cfg.ServerApiUrl) ? cfg.ServerApiUrl : "http://localhost/vision_upload.php";
-        TeachImageColumn = !string.IsNullOrWhiteSpace(cfg.TeachImageColumn) ? cfg.TeachImageColumn : "TeachImagePath";
+            ServerApiUrl = !string.IsNullOrWhiteSpace(cfg.ServerApiUrl) ? cfg.ServerApiUrl : "http://localhost/vision_upload.php";
+            TeachImageColumn = !string.IsNullOrWhiteSpace(cfg.TeachImageColumn) ? cfg.TeachImageColumn : "TeachImagePath";
 
-        JobManagerDbId = cfg.JobManagerDbId;
-        JobManagerQuery = !string.IsNullOrWhiteSpace(cfg.JobManagerQuery) ? cfg.JobManagerQuery : "SELECT ProductCode, ProductName, JobFilePath, TeachImagePath, UpdatedAt FROM ProductJobs WHERE ProductCode LIKE '%{SearchText}%' OR ProductName LIKE '%{SearchText}%' ORDER BY ProductCode OFFSET {Offset} ROWS FETCH NEXT {PageSize} ROWS ONLY";
-        JobManagerProductCodeColumn = !string.IsNullOrWhiteSpace(cfg.JobManagerProductCodeColumn) ? cfg.JobManagerProductCodeColumn : "ProductCode";
-        JobManagerProductNameColumn = !string.IsNullOrWhiteSpace(cfg.JobManagerProductNameColumn) ? cfg.JobManagerProductNameColumn : "ProductName";
-        JobManagerJobFileColumn = !string.IsNullOrWhiteSpace(cfg.JobManagerJobFileColumn) ? cfg.JobManagerJobFileColumn : "JobFilePath";
-        JobManagerTeachImageColumn = !string.IsNullOrWhiteSpace(cfg.JobManagerTeachImageColumn) ? cfg.JobManagerTeachImageColumn : "TeachImagePath";
-        JobManagerUpdatedColumn = !string.IsNullOrWhiteSpace(cfg.JobManagerUpdatedColumn) ? cfg.JobManagerUpdatedColumn : "UpdatedAt";
-        JobManagerPageSize = cfg.JobManagerPageSize > 0 ? cfg.JobManagerPageSize : 50;
+            JobManagerDbId = cfg.JobManagerDbId;
+            JobManagerQuery = !string.IsNullOrWhiteSpace(cfg.JobManagerQuery) ? cfg.JobManagerQuery : "SELECT ProductCode, ProductName, JobFilePath, TeachImagePath, UpdatedAt FROM ProductJobs WHERE ProductCode LIKE '%{SearchText}%' OR ProductName LIKE '%{SearchText}%' ORDER BY ProductCode OFFSET {Offset} ROWS FETCH NEXT {PageSize} ROWS ONLY";
+            JobManagerProductCodeColumn = !string.IsNullOrWhiteSpace(cfg.JobManagerProductCodeColumn) ? cfg.JobManagerProductCodeColumn : "ProductCode";
+            JobManagerProductNameColumn = !string.IsNullOrWhiteSpace(cfg.JobManagerProductNameColumn) ? cfg.JobManagerProductNameColumn : "ProductName";
+            JobManagerJobFileColumn = !string.IsNullOrWhiteSpace(cfg.JobManagerJobFileColumn) ? cfg.JobManagerJobFileColumn : "JobFilePath";
+            JobManagerTeachImageColumn = !string.IsNullOrWhiteSpace(cfg.JobManagerTeachImageColumn) ? cfg.JobManagerTeachImageColumn : "TeachImagePath";
+            JobManagerUpdatedColumn = !string.IsNullOrWhiteSpace(cfg.JobManagerUpdatedColumn) ? cfg.JobManagerUpdatedColumn : "UpdatedAt";
+            JobManagerPageSize = cfg.JobManagerPageSize > 0 ? cfg.JobManagerPageSize : 50;
 
-        LogResultToDb = cfg.LogResultToDb;
-        LogResultDbId = cfg.LogResultDbId;
-        LogResultQuery = cfg.LogResultQuery;
+            LogResultToDb = cfg.LogResultToDb;
+            LogResultDbId = cfg.LogResultDbId;
+            LogResultQuery = cfg.LogResultQuery;
 
-        LogDetailResultToDb = cfg.LogDetailResultToDb;
-        LogDetailResultDbId = cfg.LogDetailResultDbId;
-        LogDetailResultQuery = cfg.LogDetailResultQuery;
+            LogDetailResultToDb = cfg.LogDetailResultToDb;
+            LogDetailResultDbId = cfg.LogDetailResultDbId;
+            LogDetailResultQuery = cfg.LogDetailResultQuery;
 
-        EnableCameraBarcodeScan = cfg.EnableCameraBarcodeScan;
-        TargetCodeType = cfg.TargetCodeType ?? "ALL";
-        EnableLengthFilter = cfg.EnableLengthFilter;
-        RequiredCodeLength = cfg.RequiredCodeLength;
-        EnableCodeCrop = cfg.EnableCodeCrop;
-        CropStartIndex = cfg.CropStartIndex;
-        CropLength = cfg.CropLength;
-        ScanTimeoutMs = cfg.ScanTimeoutMs > 0 ? cfg.ScanTimeoutMs : 3000;
-        UseExternalScanner = cfg.UseExternalScanner;
+            EnableCameraBarcodeScan = cfg.EnableCameraBarcodeScan;
+            TargetCodeType = cfg.TargetCodeType ?? "ALL";
+            EnableLengthFilter = cfg.EnableLengthFilter;
+            RequiredCodeLength = cfg.RequiredCodeLength;
+            EnableCodeCrop = cfg.EnableCodeCrop;
+            CropStartIndex = cfg.CropStartIndex;
+            CropLength = cfg.CropLength;
+            ScanTimeoutMs = cfg.ScanTimeoutMs > 0 ? cfg.ScanTimeoutMs : 3000;
+            UseExternalScanner = cfg.UseExternalScanner;
+            AutoRunJob = cfg.AutoRunJob;
+        }
+        finally
+        {
+            _isSuppressingConfigSave = false;
+        }
     }
 
     public async Task ExecutePingServerAsync()
@@ -344,7 +355,8 @@ public partial class OqcScannerViewModel
             CropStartIndex = CropStartIndex,
             CropLength = CropLength,
             ScanTimeoutMs = ScanTimeoutMs > 0 ? ScanTimeoutMs : 3000,
-            UseExternalScanner = UseExternalScanner
+            UseExternalScanner = UseExternalScanner,
+            AutoRunJob = AutoRunJob
         };
 
         _oqcService.SaveConfig(cfg);
@@ -417,7 +429,8 @@ public partial class OqcScannerViewModel
                     CropStartIndex = CropStartIndex,
                     CropLength = CropLength,
                     ScanTimeoutMs = ScanTimeoutMs > 0 ? ScanTimeoutMs : 3000,
-                    UseExternalScanner = UseExternalScanner
+                    UseExternalScanner = UseExternalScanner,
+                    AutoRunJob = AutoRunJob
                 };
 
                 if (_oqcService.ExportConfigToFile(sfd.FileName, cfg))

@@ -53,6 +53,12 @@ public sealed class LightingControllerService : IDisposable
     /// <summary>Last known state from the controller (from ReadAll).</summary>
     public LightingControllerState? LastKnownState => _lastKnownState;
 
+    /// <summary>Active serial port name if connected via serial COM.</summary>
+    public string? ActivePortName { get; private set; }
+
+    /// <summary>Active baud rate if connected via serial COM.</summary>
+    public int ActiveBaudRate { get; private set; }
+
     /// <summary>Last error message, if any.</summary>
     public string? LastError { get; private set; }
 
@@ -153,6 +159,8 @@ public sealed class LightingControllerService : IDisposable
             var serialTransport = new SerialLightingTransport(readTimeoutMs, writeTimeoutMs, lineEnding, dtrEnable, rtsEnable);
             await serialTransport.ConnectAsync(portName, baudRate, parity, dataBits, stopBits, cancellationToken).ConfigureAwait(false);
             _transport = serialTransport;
+            ActivePortName = portName;
+            ActiveBaudRate = baudRate;
 
             ConnectionState = LightingConnectionState.Connected;
 
@@ -209,6 +217,8 @@ public sealed class LightingControllerService : IDisposable
             }
             catch { /* ignore */ }
             _transport = null;
+            ActivePortName = null;
+            ActiveBaudRate = 0;
         }
     }
 

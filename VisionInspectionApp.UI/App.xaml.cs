@@ -80,8 +80,13 @@ public partial class App : System.Windows.Application
                 services.AddTransient<ViewModels.PLC.PlcBrowserViewModel>();
                 services.AddTransient<ViewModels.PLC.PlcOscilloscopeViewModel>();
 
-                // Lighting Controller
+                // Lighting Controller & Server
                 services.AddSingleton<LightingControllerService>();
+                services.AddSingleton<LightingControlServer>(sp =>
+                {
+                    var hw = sp.GetRequiredService<LightingControllerService>();
+                    return new LightingControlServer(hw);
+                });
 
                 // Legacy PLC (MX Component)
                 services.AddSingleton<IPlcClient, MxComponentPlcClient>();
@@ -231,6 +236,34 @@ public partial class App : System.Windows.Application
                     catch { }
                 });
             }
+
+            // Tự động khởi động Lighting Control Server trên cổng mạng LAN (mặc định 5050)
+            try
+            {
+                var settingsService = _host.Services.GetRequiredService<GlobalAppSettingsService>();
+                var serverConfig = settingsService.Settings.LightingServer;
+                if (serverConfig.AutoStartServer)
+                {
+                    var lightingServer = _host.Services.GetRequiredService<LightingControlServer>();
+                    int serverPort = serverConfig.Port > 0 ? serverConfig.Port : 5050;
+                    await lightingServer.StartServerAsync(serverPort);
+
+                    var srvMsg = $"🖥️ [Lighting Server] Đang lắng nghe trên cổng {serverPort} (LAN).";
+                    System.Windows.Application.Current?.Dispatcher.InvokeAsync(() =>
+                    {
+                        try
+                        {
+                            var mainVm = _host.Services.GetService<MainWindowViewModel>();
+                            mainVm?.SetGlobalStatus(srvMsg, "Success");
+                        }
+                        catch { }
+                    });
+                }
+            }
+            catch (Exception srvEx)
+            {
+                System.Diagnostics.Debug.WriteLine($"[LightingServer AutoStart Error]: {srvEx.Message}");
+            }
         });
     }
 
@@ -276,6 +309,30 @@ public partial class App : System.Windows.Application
             if (services.GetService<VisionInspectionApp.Application.PLC.Services.IPlcManagerService>() is { } plcManager)
             {
                 plcManager.Dispose();
+            }
+
+            if (services.GetService<LightingControlServer>() is { } lightingServer)
+            {
+                try
+                {
+                    await lightingServer.StopServerAsync().ConfigureAwait(false);
+                    lightingServer.Dispose();
+                }
+                catch { }
+            }
+
+            if (services.GetService<OqcScannerViewModel>() is { } oqcVm)
+            {
+                try
+                {
+                    if (services.GetService<Application.OQC.IOqcScannerService>() is { } oqcService)
+                    {
+                        oqcService.Config.AutoRunJob = oqcVm.AutoRunJob;
+                        oqcService.Config.UseExternalScanner = oqcVm.UseExternalScanner;
+                        oqcService.SaveConfig(oqcService.Config);
+                    }
+                }
+                catch { }
             }
 
             if (services.GetService<LightingControllerService>() is { } lightingService)
