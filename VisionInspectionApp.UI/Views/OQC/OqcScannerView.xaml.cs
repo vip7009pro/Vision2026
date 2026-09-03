@@ -44,9 +44,9 @@ public partial class OqcScannerView : UserControl
 
         if (e.Key == Key.Space)
         {
-            if (vm.UseExternalScanner)
+            if (vm.UseExternalScanner || vm.IsJobLoadedFromManager)
             {
-                // Khi dùng đầu scan ngoài: phím Space dùng để RUN JOB
+                // Khi dùng đầu scan ngoài hoặc khi mở Job từ danh sách Quản Lý Job: phím Space dùng để RUN JOB
                 if (vm.RunJobCommand.CanExecute(null))
                 {
                     vm.RunJobCommand.Execute(null);

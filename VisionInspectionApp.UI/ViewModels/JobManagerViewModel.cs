@@ -1194,11 +1194,10 @@ public partial class JobManagerViewModel : ObservableObject
                 // Đồng bộ cấu hình Job vào OQC Scanner nếu có
                 if (_mainWindowViewModel.OqcScanner != null)
                 {
-                    _mainWindowViewModel.OqcScanner.CurrentJobFilePath = resolvedJobPath;
-                    _mainWindowViewModel.OqcScanner.CurrentProductName = !string.IsNullOrWhiteSpace(SelectedItem.ProductName) ? SelectedItem.ProductName : productCode;
-                    _mainWindowViewModel.OqcScanner.ScannedCode = productCode;
-                    _mainWindowViewModel.OqcScanner.StatusMessage = $"Đã nạp Job: {Path.GetFileName(resolvedJobPath)} ({productCode})";
-                    _mainWindowViewModel.OqcScanner.StatusBrush = Brushes.LimeGreen;
+                    _mainWindowViewModel.OqcScanner.SetJobLoadedFromManager(
+                        resolvedJobPath,
+                        !string.IsNullOrWhiteSpace(SelectedItem.ProductName) ? SelectedItem.ProductName : productCode,
+                        productCode);
                 }
             });
 

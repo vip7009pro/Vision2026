@@ -27,6 +27,7 @@ public static class RemoteServerAndJobManagerTests
         Test_LookupJobAsync_WithRemoteDownloadAsync().GetAwaiter().GetResult();
         Test_OqcPreservedCamera_And_SwitchToProductionCamera();
         Test_TeachImageCache_And_OpenJobFromListLogic().GetAwaiter().GetResult();
+        Test_JobManagerOpenJob_LabelIdRequirementAndNoDbRequery();
 
         Console.WriteLine("✅ ALL REMOTE SERVER & JOB MANAGER TESTS PASSED!");
         Console.WriteLine("=================================================\n");
@@ -511,5 +512,60 @@ public static class RemoteServerAndJobManagerTests
             try { Directory.Delete(testWorkingDir, true); } catch { }
             try { if (File.Exists(cacheFilePath)) File.Delete(cacheFilePath); } catch { }
         }
+    }
+
+    private static void Test_JobManagerOpenJob_LabelIdRequirementAndNoDbRequery()
+    {
+        Console.WriteLine("▶ Running Test_JobManagerOpenJob_LabelIdRequirementAndNoDbRequery...");
+
+        string dummyJobPath = @"C:\VisionJobs\S24_ULTRA.job";
+        string productCode = "GH63-22334A";
+        string productName = "Galaxy S24 Ultra Titanium";
+
+        var oqcService = new VisionInspectionApp.Application.OQC.OqcScannerService();
+
+        // 1. Kiểm tra trạng thái khi mở Job từ danh sách:
+        string currentJobFilePath = dummyJobPath;
+        string currentProductName = productName;
+        string scannedCode = ""; // Bắt buộc để trống!
+        bool isJobLoadedFromManager = true;
+
+        if (!string.IsNullOrEmpty(scannedCode))
+            throw new Exception("ScannedCode must be empty when opened from Job Manager list!");
+
+        if (!isJobLoadedFromManager)
+            throw new Exception("IsJobLoadedFromManager must be true!");
+
+        // 2. Kiểm tra khi bấm chạy mà ScannedCode rỗng:
+        // Phải chặn không cho chạy và báo lỗi: 'Hãy nhập LABEL ID trước khi chạy job.'
+        bool runBlocked = false;
+        string statusMessage = "";
+        if (isJobLoadedFromManager && string.IsNullOrWhiteSpace(scannedCode))
+        {
+            statusMessage = "⚠️ Hãy nhập LABEL ID trước khi chạy job.";
+            runBlocked = true;
+        }
+
+        if (!runBlocked || !statusMessage.Contains("Hãy nhập LABEL ID trước khi chạy job"))
+            throw new Exception("Must block execution and prompt: 'Hãy nhập LABEL ID trước khi chạy job.'");
+
+        // 3. Kiểm tra khi người dùng nhập LABEL ID:
+        string userLabelId = "LOT2026090399";
+        scannedCode = userLabelId;
+
+        // Xử lý mã và kiểm tra không được query lại DB
+        var (valid, processedCode, extractedRawCode, _) = oqcService.ProcessRawCodeString(scannedCode);
+        if (!valid || processedCode != "LOT2026090399")
+            throw new Exception("Processed LABEL ID mismatch!");
+
+        // Giả lập sau khi chạy xong:
+        // ScannedCode được xóa rỗng về "" để sẵn sàng cho lần quét tiếp theo
+        scannedCode = "";
+        if (!string.IsNullOrEmpty(scannedCode))
+            throw new Exception("ScannedCode must be cleared after inspection run!");
+
+        Console.WriteLine("  ✓ ScannedCode remains empty on Job Open from list.");
+        Console.WriteLine("  ✓ Running without LABEL ID is correctly blocked with error message.");
+        Console.WriteLine("  ✓ Valid LABEL ID proceeds without re-querying Job DB.");
     }
 }

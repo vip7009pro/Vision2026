@@ -1666,6 +1666,29 @@ Lộ trình tích hợp tính năng Chụp ảnh từ camera và hỗ trợ các
            - Cập nhật `Test_OqcScannerConfig_SerializationWithServerFields` kiểm tra serialization và khôi phục giá trị của `AutoRunJob` và `UseExternalScanner`.
       - Kiểm Thử:
         - Toàn bộ test suite dự án trong `TestExtractApp` đạt 100% PASSED (178+ tests). Solution `dotnet build` đạt 0 lỗi (0 errors).
+- [x] Task 293: Tối Ưu Mở Job Từ Danh Sách Quản Lý Job: Bắt Buộc Nhập LABEL ID & Không Query Lại CSDL.
+      - Yêu Cầu & Bối Cảnh:
+        - Khi mở Job từ danh sách Quản Lý Job, để trống textfield `ScannedCode` thay vì tự điền `ProductCode`.
+        - Khi chạy Job (bấm Space hoặc nút Chạy Job), nếu ô trống thì chặn lại và báo lỗi: *"Hãy nhập LABEL ID trước khi chạy job."*.
+        - Khi đã có LABEL ID, thực thi ngay trên Job đã nạp, không query lại CSDL để nạp lại Job.
+        - Giữ nguyên 100% flow cũ cho các trường hợp khác.
+      - Giải Pháp Đã Triển Khai:
+        1. **SetJobLoadedFromManager (`OqcScannerViewModel.cs`)**:
+           - Thiết lập cờ `IsJobLoadedFromManager = true`.
+           - Để trống `ScannedCode = ""`.
+           - Cập nhật thông báo hướng dẫn người dùng nhập LABEL ID.
+        2. **Chặn Thực Thi Khi Trống Mã (`ExecuteScanInternalAsync`, `RunJob`)**:
+           - Kiểm tra `IsJobLoadedFromManager`: Nếu `ScannedCode` rỗng thì hiển thị cảnh báo `⚠️ Hãy nhập LABEL ID trước khi chạy job.` và return.
+        3. **Không Query Lại CSDL Khi Đã Có Mã**:
+           - Chạy thẳng `RunJob()`, ghi nhận `_lastScannedProcessedCode` là LABEL ID.
+           - Sau khi hoàn thành kiểm tra, ghi log kết quả với mã LABEL ID và xóa rỗng ô `ScannedCode = ""` cho sản phẩm tiếp theo.
+        4. **Hỗ Trợ Phím Space (`OqcScannerView.xaml.cs`)**:
+           - Cho phép phím Space gọi `RunJobCommand` khi `IsJobLoadedFromManager == true`.
+        5. **Kiểm Thử Tự Động (`TestExtractApp`)**:
+           - Thêm kiểm thử `Test_JobManagerOpenJob_LabelIdRequirementAndNoDbRequery`.
+      - Kiểm Thử:
+        - Toàn bộ test suite dự án trong `TestExtractApp` đạt 100% PASSED (178+ tests). Solution `dotnet build` đạt 0 lỗi (0 errors).
+
 
 
 

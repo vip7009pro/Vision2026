@@ -52,6 +52,9 @@ public partial class OqcScannerViewModel : ObservableObject
     private bool _autoRunJob = true;
 
     [ObservableProperty]
+    private bool _isJobLoadedFromManager = false;
+
+    [ObservableProperty]
     private bool _isLoadingPopupVisible = false;
 
     [ObservableProperty]
@@ -118,6 +121,11 @@ public partial class OqcScannerViewModel : ObservableObject
     {
         get
         {
+            if (IsJobLoadedFromManager)
+            {
+                return (UseExternalScanner || true) ? "▶ CHẠY JOB (SPACE)" : "▶ CHẠY JOB";
+            }
+
             if (!AutoRunJob && !string.IsNullOrWhiteSpace(CurrentJobFilePath) && CurrentJobFilePath != "-" && CurrentJobFilePath != "Chưa có Job")
             {
                 return UseExternalScanner ? "▶ CHẠY JOB (SPACE)" : "▶ CHẠY JOB";
@@ -275,9 +283,116 @@ public partial class OqcScannerViewModel : ObservableObject
         }
     }
 
+    partial void OnIsJobLoadedFromManagerChanged(bool value)
+    {
+        OnPropertyChanged(nameof(ScanButtonText));
+    }
+
+    /// <summary>
+    /// Nạp cấu hình Job từ danh sách Quản lý Job.
+    /// Giữ nguyên cấu hình Job, để trống ô ScannedCode và yêu cầu người dùng nhập/quét LABEL ID trước khi chạy.
+    /// </summary>
+    public void SetJobLoadedFromManager(string jobPath, string productName, string productCode)
+    {
+        CurrentJobFilePath = jobPath;
+        CurrentProductName = !string.IsNullOrWhiteSpace(productName) ? productName : productCode;
+        ScannedCode = ""; // Để trống ô textfield theo yêu cầu của người dùng
+        IsJobLoadedFromManager = true;
+        _lastScannedProcessedCode = null;
+        _lastScannedRawCode = null;
+        StatusMessage = $"📁 Đã nạp Job: {Path.GetFileName(jobPath)} ({CurrentProductName}). Hãy nhập LABEL ID trước khi chạy job.";
+        StatusBrush = Brushes.DodgerBlue;
+
+        if (_toolEditorViewModel?.Config != null)
+        {
+            _inspectionViewModel.CurrentJobFilePath = jobPath;
+            _inspectionViewModel.CurrentTempWorkingDir = _toolEditorViewModel.CurrentTempWorkingDir;
+            _inspectionViewModel.ProductCode = productCode;
+            _inspectionViewModel.SetConfig(_toolEditorViewModel.Config);
+            RefreshOriginTemplateFromJob(_toolEditorViewModel.Config, _toolEditorViewModel.CurrentTempWorkingDir);
+        }
+
+        OnPropertyChanged(nameof(ScanButtonText));
+    }
+
     [RelayCommand]
     public void RunJob()
     {
+        // Kiểm tra trường hợp Job mở từ danh sách Quản Lý Job
+        if (IsJobLoadedFromManager)
+        {
+            string rawInput = ScannedCode?.Trim() ?? "";
+            if (string.IsNullOrWhiteSpace(_lastScannedProcessedCode))
+            {
+                if (string.IsNullOrWhiteSpace(rawInput))
+                {
+                    StatusMessage = "⚠️ Hãy nhập LABEL ID trước khi chạy job.";
+                    StatusBrush = Brushes.Orange;
+                    return;
+                }
+
+                var (valid, processedCode, extractedRawCode, filterError) = _oqcService.ProcessRawCodeString(rawInput);
+                if (!valid)
+                {
+                    StatusMessage = $"❌ Mã LABEL ID '{extractedRawCode}' không hợp lệ: {filterError}";
+                    StatusBrush = Brushes.Red;
+                    return;
+                }
+
+                _lastScannedProcessedCode = processedCode;
+                _lastScannedRawCode = extractedRawCode;
+                _toolEditorViewModel.ProductCode = processedCode;
+                _inspectionViewModel.ProductCode = processedCode;
+
+                if (!ScanHistory.Any(e => e.ScannedCode == processedCode && e.InspectResult == "Đang kiểm tra..."))
+                {
+                    var historyEntry = new OqcScanHistoryEntry
+                    {
+                        Time = DateTime.Now,
+                        ScannedCode = processedCode,
+                        ProductName = CurrentProductName,
+                        JobFilePath = CurrentJobFilePath,
+                        InspectResult = "Đang kiểm tra...",
+                        ResultBrushHex = "#1E88E5",
+                        Success = true,
+                        Message = "OK"
+                    };
+                    AddHistory(historyEntry);
+                }
+            }
+            else if (!string.IsNullOrWhiteSpace(rawInput) && rawInput != _lastScannedRawCode && rawInput != _lastScannedProcessedCode)
+            {
+                var (valid, processedCode, extractedRawCode, filterError) = _oqcService.ProcessRawCodeString(rawInput);
+                if (!valid)
+                {
+                    StatusMessage = $"❌ Mã LABEL ID '{extractedRawCode}' không hợp lệ: {filterError}";
+                    StatusBrush = Brushes.Red;
+                    return;
+                }
+
+                _lastScannedProcessedCode = processedCode;
+                _lastScannedRawCode = extractedRawCode;
+                _toolEditorViewModel.ProductCode = processedCode;
+                _inspectionViewModel.ProductCode = processedCode;
+
+                if (!ScanHistory.Any(e => e.ScannedCode == processedCode && e.InspectResult == "Đang kiểm tra..."))
+                {
+                    var historyEntry = new OqcScanHistoryEntry
+                    {
+                        Time = DateTime.Now,
+                        ScannedCode = processedCode,
+                        ProductName = CurrentProductName,
+                        JobFilePath = CurrentJobFilePath,
+                        InspectResult = "Đang kiểm tra...",
+                        ResultBrushHex = "#1E88E5",
+                        Success = true,
+                        Message = "OK"
+                    };
+                    AddHistory(historyEntry);
+                }
+            }
+        }
+
         if (!string.IsNullOrWhiteSpace(CurrentJobFilePath) && CurrentJobFilePath != "-" && CurrentJobFilePath != "Chưa có Job")
         {
             IsShowingLiveCamera = false;
@@ -612,6 +727,49 @@ public partial class OqcScannerViewModel : ObservableObject
 
     private async Task ExecuteScanInternalAsync(string? directProcessedCode = null, string? directRawCode = null)
     {
+        // ─── ĐẶC BIỆT: TRƯỜNG HỢP MỞ JOB TỪ DANH SÁCH QUẢN LÝ JOB ───
+        if (IsJobLoadedFromManager && string.IsNullOrWhiteSpace(directProcessedCode))
+        {
+            string rawInput = ScannedCode?.Trim() ?? "";
+            if (string.IsNullOrWhiteSpace(rawInput))
+            {
+                StatusMessage = "⚠️ Hãy nhập LABEL ID trước khi chạy job.";
+                StatusBrush = Brushes.Orange;
+                return;
+            }
+
+            // Áp dụng bộ lọc độ dài và cắt chuỗi (nếu có cấu hình) cho mã LABEL ID
+            var (valid, processedCode, extractedRawCode, filterError) = _oqcService.ProcessRawCodeString(rawInput);
+            if (!valid)
+            {
+                StatusMessage = $"❌ Mã LABEL ID '{extractedRawCode}' không hợp lệ: {filterError}";
+                StatusBrush = Brushes.Red;
+                return;
+            }
+
+            _lastScannedProcessedCode = processedCode;
+            _lastScannedRawCode = extractedRawCode;
+            _toolEditorViewModel.ProductCode = processedCode;
+            _inspectionViewModel.ProductCode = processedCode;
+
+            var managerHistoryEntry = new OqcScanHistoryEntry
+            {
+                Time = DateTime.Now,
+                ScannedCode = processedCode,
+                ProductName = CurrentProductName,
+                JobFilePath = CurrentJobFilePath,
+                InspectResult = "Đang kiểm tra...",
+                ResultBrushHex = "#1E88E5",
+                Success = true,
+                Message = "OK"
+            };
+            AddHistory(managerHistoryEntry);
+
+            // Chạy Job trực tiếp - KHÔNG QUERY LẠI DATABASE TÌM JOB NỮA
+            RunJob();
+            return;
+        }
+
         string code;
         string rawCode;
 
@@ -841,6 +999,13 @@ public partial class OqcScannerViewModel : ObservableObject
                     ? $"✅ SẢN PHẨM '{productName}' ({processedCode}) -> KẾT QUẢ: PASS (OK)"
                     : $"❌ SẢN PHẨM '{productName}' ({processedCode}) -> KẾT QUẢ: NG! Lý do: {details}";
                 StatusBrush = statusBrush;
+            }
+
+            if (IsJobLoadedFromManager)
+            {
+                _lastScannedProcessedCode = null;
+                _lastScannedRawCode = null;
+                ScannedCode = ""; // Xóa ô nhập liệu để sẵn sàng cho lần quét LABEL ID tiếp theo
             }
 
             _oqcService.SaveScanHistory(ScanHistory);

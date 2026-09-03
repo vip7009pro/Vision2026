@@ -49,6 +49,43 @@
 - Preview được phép tiếp tục khi Global Snapshot rỗng để lấy ảnh từ ImageSource.
 - Lưu template cho Origin, Point và SurfaceCompare hoạt động với nguồn ảnh ImageSource.
 
+- **Tối Ưu Mở Job Từ Danh Sách Quản Lý Job: Bắt Buộc Nhập LABEL ID & Không Query Lại CSDL (Task 293)**:
+  - **Yêu Cầu & Bối Cảnh**:
+    1. Trong tab OQC Scanner, khi mở Job từ danh sách Quản Lý Job, Job đã được nạp sẵn rồi. Nhưng khi bấm Space hoặc bấm chạy job, chương trình lại query CSDL một lần nữa để lấy lại Job và nạp tiếp lần nữa.
+    2. Sau khi chọn Job từ danh sách, trước đây chương trình tự động điền `ProductCode` vào textfield `ScannedCode`. Người dùng muốn để trống và khi chạy Job yêu cầu người dùng phải nhập vào trước khi có thể bấm chạy, và báo lỗi nếu trống: *"Hãy nhập LABEL ID trước khi chạy job."*.
+    3. Thay đổi tuyệt đối không làm ảnh hưởng đến luồng (flow) bình thường đã có sẵn, chỉ giải quyết đúng trường hợp mở Job từ danh sách Quản lý Job này.
+  - **Giải Pháp Kỹ Thuật Đã Triển Khai**:
+    1. **Thêm Cơ Chế `IsJobLoadedFromManager` Trong `OqcScannerViewModel.cs`**:
+       - Thêm cờ `[ObservableProperty] private bool _isJobLoadedFromManager = false;`.
+       - Thêm phương thức `SetJobLoadedFromManager(string jobPath, string productName, string productCode)`:
+         - Thiết lập `CurrentJobFilePath = jobPath`, `CurrentProductName = productName`.
+         - Để trống ô nhập liệu: `ScannedCode = "";` (không tự điền ProductCode nữa).
+         - Đặt cờ `IsJobLoadedFromManager = true;`.
+         - Reset `_lastScannedProcessedCode = null; _lastScannedRawCode = null;`.
+         - Thông báo: `"📁 Đã nạp Job: ... Hãy nhập LABEL ID trước khi chạy job."` (`StatusBrush = Brushes.DodgerBlue`).
+    2. **Chặn Chạy Job Khi Chưa Nhập LABEL ID**:
+       - Trong cả `ExecuteScanInternalAsync()` và `RunJob()`:
+         - Nếu `IsJobLoadedFromManager == true` và `string.IsNullOrWhiteSpace(ScannedCode)`:
+           - Chặn ngay lập tức không cho chạy!
+           - Đặt `StatusMessage = "⚠️ Hãy nhập LABEL ID trước khi chạy job.";` (`StatusBrush = Brushes.Orange;`).
+    3. **Không Query Lại CSDL Khi Đã Có LABEL ID**:
+       - Khi người dùng nhập/quét `LABEL ID` vào `ScannedCode` và bấm Chạy Job (hoặc bấm Enter, hoặc bấm Space):
+         - Bóc tách mã qua `ProcessRawCodeString(rawInput)` (áp dụng bộ lọc độ dài/cắt chuỗi nếu có).
+         - Gán `_lastScannedProcessedCode = processedCode`, `_lastScannedRawCode = extractedRawCode`.
+         - Thêm bản ghi vào `ScanHistory` với mã `processedCode`.
+         - Gọi trực tiếp `RunJob()` để thực thi trên Job đã nạp sẵn, **không query CSDL để tìm kiếm và nạp lại Job nữa**.
+         - Khi kiểm tra hoàn thành (`HandleInspectionCompletedAsync`):
+           - Kết quả kiểm tra được log vào CSDL với `ScannedCode` chính là LABEL ID vừa quét.
+           - Xóa rỗng ô `ScannedCode = "";` để sẵn sàng cho lần quét LABEL ID của sản phẩm tiếp theo, đồng thời ngăn ngừa việc chạy nhầm mã cũ.
+    4. **Hỗ Trợ Phím Space Khi `IsJobLoadedFromManager` Trong `OqcScannerView.xaml.cs`**:
+       - Cập nhật sự kiện `PreviewKeyDown`: Nếu `vm.UseExternalScanner || vm.IsJobLoadedFromManager`, phím Space kích hoạt `RunJobCommand` (thực thi kiểm tra hoặc nhắc nhở nhập LABEL ID).
+    5. **Bảo Toàn 100% Flow Cũ**:
+       - Khi `IsJobLoadedFromManager == false` (luồng quét tự động từ camera, quét barcode ngoài thông thường hoặc mở Job thủ công), logic tìm kiếm và nạp Job theo mã hoàn toàn giữ nguyên như cũ.
+  - **Kiểm Thử**:
+    - Thêm unit test `Test_JobManagerOpenJob_LabelIdRequirementAndNoDbRequery` trong `RemoteServerAndJobManagerTests.cs`.
+    - Toàn bộ test suite trong `TestExtractApp` đạt 100% PASSED (178+ tests).
+    - Biên dịch Solution `dotnet build VisionInspectionApp.slnx` đạt 0 lỗi (0 errors).
+
 - **Lưu Bền Vững Trạng Thái 2 Checkbox "Auto Run" và "Đầu Scanner" Qua Các Lần Khởi Động App (Task 292)**:
   - **Yêu Cầu & Bối Cảnh**:
     - Hai checkbox "⚡ Auto Run" (`AutoRunJob`) và "🔫 Đầu Scanner" (`UseExternalScanner`) trên thanh công cụ Tab OQC Scanner bị reset lại trạng thái mặc định mỗi khi tắt và khởi động lại phần mềm.
