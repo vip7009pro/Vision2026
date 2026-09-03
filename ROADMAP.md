@@ -1775,3 +1775,30 @@ Lộ trình tích hợp tính năng Chụp ảnh từ camera và hỗ trợ các
       - Kiểm Thử:
         - dotnet build VisionInspectionApp.slnx: 0 errors.
         - dotnet run --project TestExtractApp: 100% PASSED.
+
+- [x] Task 297: Khắc Phục Mất Cấu Hình PLC Khi Build, Phân Tích MC Protocol Cổng 5000 & Tích Hợp Bộ Công Cụ Chẩn Đoán Gói Tin Mạng Chuyên Sâu (Diagnostic Packet Probe & Hex Log) Kèm Sao Lưu/Phục Hồi JSON.
+      - Mục Tiêu & Yêu Cầu:
+        - Mỗi lần build lại ứng dụng thì cấu hình PLC và các tag bị mất hết (chỉ tắt/bật lại thì không bị). Cần tìm vị trí lưu trữ và đảm bảo cấu hình không bị mất sau build.
+        - Phân tích nguyên nhân driver Mitsubishi MC Protocol không phản hồi trên cổng 5000 trong khi MX Component kết nối OK và đang có màn hình HMI Weintek kết nối tới 192.168.10.5:5000.
+        - Cung cấp phương án lấy đủ dữ liệu debug từ máy Vision PC dưới xưởng về máy Dev văn phòng khi không cùng mạng LAN.
+      - Giải Pháp Kỹ Thuật Đã Triển Khai:
+        1. **Khắc Phục Triệt Để Lỗi Mất Cấu Hình Khi Build (PlcManagerService.cs, DbManagerService.cs, TestExtractApp)**:
+           - Phát hiện nguyên nhân: Test suite trong TestExtractApp khi build/chạy test tự động gọi LoadConfig(...) với PLC giả lập FX5U_Q và ghi đè trực tiếp lên %AppData%\Vision2026\plc_config.json.
+           - Bổ sung tham số string? customConfigFilePath = null cho constructor PlcManagerService và DbManagerService.
+           - Xây dựng TestPlcConfigHelper.cs và chuyển hướng toàn bộ các bài test trong PlcTests.cs, CameraTest.cs sang thư mục tạm %TEMP%\Vision2026_Tests\test_plc_{guid}.json, bảo vệ 100% cấu hình người dùng trong %AppData%.
+           - Bổ sung 2 nút 💾 Xuất Backup (JSON) và 📥 Nạp Backup (JSON) ở thanh footer của PlcManagerWindow.xaml cho phép sao lưu/phục hồi bất kỳ lúc nào.
+        2. **Dịch Vụ Chẩn Đoán Gói Tin Mạng Chuyên Sâu (PlcDiagnosticService.cs)**:
+           - Thực thi kiểm tra 4 tầng: Ping ICMP, mở kết nối TCP Socket, gửi khung tin thăm dò MC Protocol 3E Binary (50 00 00 FF 03 FF 00 0C 00 10 00 01 01 00 00), thu nhận và phân tích byte phản hồi.
+           - Bắt trọn mảng byte Hex gửi (TX) và Hex nhận (RX), nhận diện tên CPU hoặc mã lỗi Return Code.
+           - Phân tích nguyên nhân và đưa ra khuyến nghị xử lý trực quan bằng tiếng Việt: Cổng 5000 đang là cổng MELSOFT hoặc bị HMI Weintek chiếm dụng độc quyền socket; hướng dẫn mở thêm Connection 2 riêng (port 5007 / 6000) trong GX Works.
+           - Tự động ghi nhật ký chẩn đoán ra đĩa tại %AppData%\Vision2026\logs\plc_diag_{timestamp}.log.
+        3. **Giao Diện Chẩn Đoán Trực Quan (PlcManagerViewModel.cs, PlcManagerWindow.xaml)**:
+           - Thêm nút 🔍 Chẩn Đoán (Ping & Probe) ngay cạnh nút ⚡ Kết Nối ở Tab 1.
+           - Thêm Tab 5: 🔍 5. Chẩn Đoán & Packet Log hiển thị trạng thái Ping, Socket, Terminal Output màu Dark Slate #0F172A với font chữ Consolas, thanh tiến trình ProgressBar khi đang quét.
+           - Bổ sung nút 📋 Sao Chép Báo Cáo (Copy) giúp người vận hành 1-click copy toàn bộ dữ liệu debug gửi về cho dev và nút 📂 Mở Thư Mục Log.
+        4. **Kiểm Thử Tự Động (TestExtractApp/PlcTests.cs)**:
+           - Bổ sung bài test Test 14: PlcDiagnosticService Network Ping, Socket Probe & Hex Log: giả lập Mock TCP Server phản hồi gói tin CPU FX5U-64MT, kiểm tra Hex dump, kiểm tra cổng đóng và ghi file log.
+      - Kiểm Thử:
+        - dotnet build VisionInspectionApp.slnx: 0 errors.
+        - dotnet run --project TestExtractApp: 100% PASSED (bao gồm Test 14).
+        - Đã xác nhận file %AppData%\Vision2026\plc_config.json không bị thay đổi thời gian ghi hay ghi đè sau test.

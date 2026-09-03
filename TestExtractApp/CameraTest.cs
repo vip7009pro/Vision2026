@@ -516,7 +516,7 @@ public static class CameraTest
         Console.WriteLine("  [1/4] PlcIndustrialConfig JSON Serialization & Integrity: PASSED (100%)");
 
         // 2. Test IPlcManagerService IndustrialConfig propagation
-        var plcService = new VisionInspectionApp.Application.PLC.Services.PlcManagerService();
+        var plcService = TestPlcConfigHelper.CreateIsolatedPlcManager();
         bool eventFired = false;
         plcService.OnIndustrialConfigChanged += (s, cfg) =>
         {
@@ -600,7 +600,7 @@ public static class CameraTest
         Console.WriteLine("  [1/4] InferDataTypeFromAddress: PASSED (100%)");
 
         // 2. Test GetAllTagsToPoll with Direct Addresses from IndustrialConfig
-        var plcService = new VisionInspectionApp.Application.PLC.Services.PlcManagerService();
+        var plcService = TestPlcConfigHelper.CreateIsolatedPlcManager();
         var industrialCfg = new VisionInspectionApp.Models.PlcIndustrialConfig();
         industrialCfg.Handshake.ReadyTagName = "Y1";
         industrialCfg.Handshake.BusyTagName = "Y2";
@@ -724,7 +724,7 @@ public static class CameraTest
     {
         Console.WriteLine("=== TESTING CONTINUOUS FLOW HANDSHAKE BYPASS & SPEED ===");
 
-        var plcService = new VisionInspectionApp.Application.PLC.Services.PlcManagerService();
+        var plcService = TestPlcConfigHelper.CreateIsolatedPlcManager();
         var sm = new VisionInspectionApp.Application.PLC.Services.IndustrialHandshakeStateMachine(plcService, "PLC1");
 
         // 1. Test Handshake when IsEnabled = false

@@ -64,15 +64,26 @@ public sealed class PlcManagerService : IPlcManagerService, IDisposable
 
     public event EventHandler<PlcIndustrialConfig>? OnIndustrialConfigChanged;
 
-    public PlcManagerService()
+    public string ConfigFilePath => _globalConfigFilePath;
+
+    public PlcManagerService(string? customConfigFilePath = null)
     {
         PollingEngine = new PlcPollingEngine(Cache, Logger);
         PollingEngine.OnTagChanged += (s, e) => OnTagChanged?.Invoke(this, e);
         PollingEngine.OnBatchPolled += (s, e) => OnBatchPolled?.Invoke(this, e);
 
-        string appDataDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Vision2026");
-        Directory.CreateDirectory(appDataDir);
-        _globalConfigFilePath = Path.Combine(appDataDir, "plc_config.json");
+        if (!string.IsNullOrWhiteSpace(customConfigFilePath))
+        {
+            _globalConfigFilePath = customConfigFilePath;
+            var dir = Path.GetDirectoryName(_globalConfigFilePath);
+            if (!string.IsNullOrWhiteSpace(dir)) Directory.CreateDirectory(dir);
+        }
+        else
+        {
+            string appDataDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Vision2026");
+            Directory.CreateDirectory(appDataDir);
+            _globalConfigFilePath = Path.Combine(appDataDir, "plc_config.json");
+        }
 
         Plcs.CollectionChanged += (s, e) =>
         {

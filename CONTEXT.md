@@ -49,6 +49,34 @@
 - Preview được phép tiếp tục khi Global Snapshot rỗng để lấy ảnh từ ImageSource.
 - Lưu template cho Origin, Point và SurfaceCompare hoạt động với nguồn ảnh ImageSource.
 
+- **Khắc Phục Mất Cấu Hình PLC Khi Build, Phân Tích MC Protocol Cổng 5000 & Tích Hợp Bộ Công Cụ Chẩn Đoán Gói Tin Mạng Chuyên Sâu (Diagnostic Packet Probe & Hex Log) (Task 297)**:
+  - **Yêu Cầu & Bối Cảnh**:
+    1. Trong modal "PLC & Industrial Motion Configuration", mỗi lần build lại ứng dụng thì cấu hình PLC và các tag bị mất hết (chỉ tắt/bật lại ứng dụng thì không bị). Cần kiểm tra vị trí lưu trữ và đảm bảo cấu hình được lưu bền vững trong `%AppData%`, không bị mất sau khi build.
+    2. Driver kết nối PLC Mitsubishi dùng MX Component thì hoạt động bình thường, nhưng dùng driver MC Protocol thì không kết nối được, báo lỗi: `Trạng thái: Error (Port 5000 không phản hồi MC protocol 3E)` mặc dù đã nhập đúng IP và Port. Biết rằng PLC đang chạy và có 1 màn hình HMI Weintek đang kết nối tới `192.168.10.5:5000`. Cần làm rõ các nguyên nhân kỹ thuật có thể xảy ra.
+    3. Máy PC dev văn phòng không cùng mạng LAN với PLC dưới xưởng, cần xây dựng cơ chế để kỹ sư có đủ dữ liệu debug sau khi chạy thử trên máy Vision PC.
+  - **Nguyên Nhân Gốc Rễ**:
+    1. *Mất cấu hình khi build*: Project kiểm thử `TestExtractApp` khi build/chạy test tự động khởi tạo `new PlcManagerService()` trỏ trực tiếp vào `%AppData%\Vision2026\plc_config.json`. Các bài test gọi `LoadConfig(...)` với PLC mẫu `FX5U_Q`, lập tức ghi đè và làm mất sạch cấu hình của người dùng.
+    2. *MC Protocol không phản hồi cổng 5000*: Cổng 5000 trên PLC Mitsubishi là cổng dành riêng cho dịch vụ **MELSOFT Connection** (dùng cho GX Works và MX Component). Driver MX Component chạy được vì dùng giao thức MELSOFT; nhưng driver MC Protocol gửi khung tin **3E Binary** (`50 00...`) khiến CPU PLC không phản hồi. Đồng thời, HMI Weintek đang chiếm dụng độc quyền socket TCP cổng 5000 này.
+  - **Giải Pháp Kỹ Thuật Đã Triển Khai**:
+    1. **Cô Lập Cấu Hình Kiểm Thử & Bảo Vệ Cấu Hình Thật (`PlcManagerService.cs`, `DbManagerService.cs`, `TestExtractApp`)**:
+       - Thêm tham số `string? customConfigFilePath = null` và thuộc tính `ConfigFilePath` cho cả `PlcManagerService` và `DbManagerService`.
+       - Tạo `TestPlcConfigHelper.cs` đưa toàn bộ cấu hình test sang `%TEMP%\Vision2026_Tests\test_plc_{guid}.json`, triệt tiêu hoàn toàn nguy cơ test ghi đè `%AppData%\Vision2026\plc_config.json`.
+       - Bổ sung 2 nút `💾 Xuất Backup (JSON)` và `📥 Nạp Backup (JSON)` ở thanh footer của `PlcManagerWindow.xaml` cho phép người dùng chủ động sao lưu và phục hồi cấu hình.
+    2. **Dịch Vụ Chẩn Đoán Gói Tin Mạng Chuyên Sâu (`PlcDiagnosticService.cs`)**:
+       - Thực thi quy trình chẩn đoán 4 tầng: Ping ICMP, mở socket TCP, gửi khung tin thăm dò 3E Binary (`50 00 00 FF 03 FF 00 0C 00 10 00 01 01 00 00`), thu nhận và giải mã byte phản hồi.
+       - Trích xuất toàn bộ mảng byte Hex gửi (`TX`) và Hex nhận (`RX`), nhận diện tên CPU hoặc mã lỗi Return Code.
+       - Cung cấp phân tích và hướng dẫn khắc phục bằng tiếng Việt: Khuyên mở thêm Connection No 2 trong GX Works (Protocol: TCP, Open System: MC Protocol, Port: 5007 / 6000, Format: Binary).
+       - Tự động lưu báo cáo chi tiết vào đĩa tại `%AppData%\Vision2026\logs\plc_diag_{timestamp}.log`.
+    3. **Giao Diện Chẩn Đoán Trực Quan (`PlcManagerViewModel.cs`, `PlcManagerWindow.xaml`)**:
+       - Thêm nút `🔍 Chẩn Đoán (Ping & Probe)` ngay cạnh nút `⚡ Kết Nối` ở Tab 1.
+       - Bổ sung **Tab 5: 🔍 5. Chẩn Đoán & Packet Log** hiển thị thông số Ping, Socket, Terminal Output màu Dark Slate `#0F172A`, nút `📋 Sao Chép Báo Cáo (Copy)` giúp người vận hành 1-click copy toàn bộ dữ liệu debug gửi về cho dev và nút `📂 Mở Thư Mục Log`.
+    4. **Kiểm Thử Tự Động (`TestExtractApp/PlcTests.cs`)**:
+       - Thêm bài test `Test 14: PlcDiagnosticService Network Ping, Socket Probe & Hex Log`: giả lập Mock TCP Server phản hồi gói tin CPU FX5U-64MT, kiểm tra Hex dump, kiểm tra cổng đóng và ghi file log.
+  - **Kiểm Thử & Xác Minh**:
+    - `dotnet build VisionInspectionApp.slnx`: 0 errors.
+    - `dotnet run --project TestExtractApp`: 100% PASSED (toàn bộ các bài test bao gồm Test 14).
+    - Xác nhận file `%AppData%\Vision2026\plc_config.json` không bị thay đổi LastWriteTime hay bị ghi đè sau test.
+
 - **Cấy Thêm ProductName Vào Tên Tệp Job Khi Upload Lên Hệ Thống Trong Cửa Sổ Quản Lý Job & Huấn Luyện (Teaching) (Task 296)**:
   - **Yêu Cầu & Bối Cảnh**:
     - Trước đây, khi tải tệp Job (`.job`) lên máy chủ thông qua cửa sổ Quản Lý Job & Huấn Luyện (Teaching), tên tệp Job sinh ra trên máy chủ có dạng `job_7A10461A_20260903_052341_b1abf6.job`, chỉ chứa mã sản phẩm (`ProductCode` = `7A10461A`).

@@ -30,6 +30,7 @@ public static class PlcTests
         await Test11_AutoConnectStartup_And_PollingReadinessAsync();
         await Test12_HandshakeStateMachine_NonBlocking_And_ImageSourceTimingAsync();
         await Test13_PlcResultTransferQueue_AsyncFifoAndZeroMainFlowLatencyAsync();
+        await Test14_PlcDiagnosticService_SocketProbeAndReportAsync();
 
         Console.WriteLine("\n✅ ALL PLC TESTS PASSED SUCCESSFULLY!");
         Console.WriteLine("=========================================");
@@ -39,7 +40,7 @@ public static class PlcTests
     {
         Console.Write("Test 13: PlcResultTransferQueue Dedicated Async FIFO & 0ms Main Flow Latency... ");
 
-        var plcManager = new PlcManagerService();
+        var plcManager = TestPlcConfigHelper.CreateIsolatedPlcManager();
         var plc = new PlcModel { Id = "PLC_Q", Name = "FX5U_Q", DriverType = PlcDriverType.Mitsubishi, IPAddress = "127.0.0.1", Port = 5007, Enabled = true };
         var tagY0 = new PlcTag { Id = "TQ1", PlcId = "PLC_Q", Name = "Y0_PULSE", Address = "Y0", DataType = PlcDataType.Bool };
         var tagD100 = new PlcTag { Id = "TQ2", PlcId = "PLC_Q", Name = "D100_VAL", Address = "D100", DataType = PlcDataType.Int16 };
@@ -96,7 +97,7 @@ public static class PlcTests
     {
         Console.Write("Test 12: Handshake Non-Blocking When Tags Not Configured & ImageSource Timing... ");
 
-        var plcManager = new PlcManagerService();
+        var plcManager = TestPlcConfigHelper.CreateIsolatedPlcManager();
         var plc = new PlcModel 
         { 
             Id = "PLC_TEST_HS", 
@@ -236,7 +237,7 @@ public static class PlcTests
     {
         Console.Write("\nTest 4: PlcManagerService Lifecycle & Config Load... ");
 
-        using var service = new PlcManagerService();
+        using var service = TestPlcConfigHelper.CreateIsolatedPlcManager();
         var plc = new PlcModel { Id = "P1", Name = "PLC1", DriverType = PlcDriverType.Mitsubishi, Enabled = true, ScanIntervalMs = 50 };
         var tag = new PlcTag { Id = "T1", PlcId = "P1", Name = "Ready", Address = "M0", DataType = PlcDataType.Bool };
 
@@ -281,7 +282,7 @@ public static class PlcTests
     {
         Console.Write("\nTest 6: OnBatchPolled & Dynamic Tag Provider (Oscilloscope Engine)... ");
 
-        using var service = new PlcManagerService();
+        using var service = TestPlcConfigHelper.CreateIsolatedPlcManager();
         var plc = new PlcModel
         {
             Id = "PLC_OSC",
@@ -547,7 +548,7 @@ public static class PlcTests
     {
         Console.Write("Test 9: ResultTransfer Pulse Mode (Toggle & Auto-Restore) & Level Mode... ");
 
-        var plcManager = new PlcManagerService();
+        var plcManager = TestPlcConfigHelper.CreateIsolatedPlcManager();
         var plc = new PlcModel { Id = "PLC1", Name = "PLC1", DriverType = PlcDriverType.Mitsubishi, IPAddress = "127.0.0.1", Port = 5007 };
         var tagY0 = new PlcTag { Id = "T1", PlcId = "PLC1", Name = "Y0_OK", Address = "Y0", DataType = PlcDataType.Bool };
         var tagY1 = new PlcTag { Id = "T2", PlcId = "PLC1", Name = "Y1_NG", Address = "Y1", DataType = PlcDataType.Bool };
@@ -627,7 +628,7 @@ public static class PlcTests
     {
         Console.Write("Test 10: Manual Disconnect (No Auto-Reconnect) & Connection Command States... ");
 
-        var plcManager = new PlcManagerService();
+        var plcManager = TestPlcConfigHelper.CreateIsolatedPlcManager();
         var plc = new PlcModel { Id = "PLC_TEST", Name = "PLC_TEST", DriverType = PlcDriverType.Mitsubishi, IPAddress = "127.0.0.1", Port = 5007 };
         var tag = new PlcTag { Id = "T1", PlcId = "PLC_TEST", Name = "D100", Address = "D100", DataType = PlcDataType.Int16 };
 
@@ -678,7 +679,7 @@ public static class PlcTests
     {
         Console.Write("Test 11: AutoConnectStartup Background Connection & Polling Readiness... ");
 
-        var plcManager = new PlcManagerService();
+        var plcManager = TestPlcConfigHelper.CreateIsolatedPlcManager();
         var plc = new PlcModel 
         { 
             Id = "PLC_AUTO", 
@@ -724,5 +725,61 @@ public static class PlcTests
         plcManager.Dispose();
 
         Console.WriteLine("PASSED (Auto-connect on Startup & Polling Lock operational 100%)");
+    }
+
+    private static async Task Test14_PlcDiagnosticService_SocketProbeAndReportAsync()
+    {
+        Console.Write("Test 14: PlcDiagnosticService Network Ping, Socket Probe & Hex Log... ");
+
+        int port = 5098;
+        var listener = new System.Net.Sockets.TcpListener(System.Net.IPAddress.Loopback, port);
+        listener.Start();
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                using var client = await listener.AcceptTcpClientAsync();
+                using var stream = client.GetStream();
+                byte[] buffer = new byte[64];
+                int read = await stream.ReadAsync(buffer, 0, buffer.Length);
+                if (read >= 11)
+                {
+                    // Trả về phản hồi MC Protocol 3E chuẩn cho Command 0x0101 (Read CPU)
+                    byte[] cpuBytes = System.Text.Encoding.ASCII.GetBytes("FX5U-64MT/ESS   ");
+                    byte[] respHeader = new byte[] {
+                        0xD0, 0x00, 0x00, 0xFF, 0xFF, 0x03, 0x00,
+                        (byte)(2 + cpuBytes.Length), 0x00, // Data Length
+                        0x00, 0x00  // End code = 0
+                    };
+                    byte[] fullResp = respHeader.Concat(cpuBytes).ToArray();
+                    await stream.WriteAsync(fullResp, 0, fullResp.Length);
+                }
+            }
+            catch { }
+        });
+
+        var report = await PlcDiagnosticService.RunDiagnosticAsync("127.0.0.1", port, PlcDriverType.Mitsubishi);
+        listener.Stop();
+
+        if (!report.SocketConnected) throw new Exception("Expected SocketConnected=true for mock server");
+        if (!report.McProtocolSuccess) throw new Exception("Expected McProtocolSuccess=true for 3E mock response");
+        if (!report.CpuModelDetected.StartsWith("FX5U", StringComparison.OrdinalIgnoreCase))
+            throw new Exception($"Expected CPU FX5U, got '{report.CpuModelDetected}'");
+        if (string.IsNullOrWhiteSpace(report.TxHexDump) || string.IsNullOrWhiteSpace(report.RxHexDump))
+            throw new Exception("Expected non-empty TX and RX Hex dumps");
+        if (string.IsNullOrWhiteSpace(report.FullReportText))
+            throw new Exception("Expected non-empty FullReportText");
+        if (string.IsNullOrWhiteSpace(report.SavedLogFilePath) || !System.IO.File.Exists(report.SavedLogFilePath))
+            throw new Exception("Expected SavedLogFilePath to exist on disk");
+
+        // Thử chẩn đoán cổng đóng (ví dụ port 5099 không mở)
+        var closedReport = await PlcDiagnosticService.RunDiagnosticAsync("127.0.0.1", 5099, PlcDriverType.Mitsubishi);
+        if (closedReport.SocketConnected) throw new Exception("Expected SocketConnected=false for closed port");
+        if (closedReport.McProtocolSuccess) throw new Exception("Expected McProtocolSuccess=false for closed port");
+        if (!closedReport.DiagnosisAdvice.Contains("LỖI CỔNG TCP"))
+            throw new Exception("Expected DiagnosisAdvice to mention closed TCP port");
+
+        Console.WriteLine($"PASSED (Probe OK, CPU='{report.CpuModelDetected}', Hex Log Saved at '{System.IO.Path.GetFileName(report.SavedLogFilePath)}')");
     }
 }

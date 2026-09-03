@@ -18,12 +18,22 @@ public class DbManagerService : IDbManagerService
     private readonly string _globalConfigFilePath;
 
     public IReadOnlyList<DbModel> Databases => _databases.Values.ToList().AsReadOnly();
+    public string ConfigFilePath => _globalConfigFilePath;
 
-    public DbManagerService()
+    public DbManagerService(string? customConfigFilePath = null)
     {
-        string appDataDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Vision2026");
-        Directory.CreateDirectory(appDataDir);
-        _globalConfigFilePath = Path.Combine(appDataDir, "databases_config.json");
+        if (!string.IsNullOrWhiteSpace(customConfigFilePath))
+        {
+            _globalConfigFilePath = customConfigFilePath;
+            var dir = Path.GetDirectoryName(_globalConfigFilePath);
+            if (!string.IsNullOrWhiteSpace(dir)) Directory.CreateDirectory(dir);
+        }
+        else
+        {
+            string appDataDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Vision2026");
+            Directory.CreateDirectory(appDataDir);
+            _globalConfigFilePath = Path.Combine(appDataDir, "databases_config.json");
+        }
 
         LoadFromDisk();
     }

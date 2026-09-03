@@ -22,6 +22,8 @@ public interface IPlcManagerService : IDisposable
 
     PlcIndustrialConfig IndustrialConfig { get; set; }
 
+    string ConfigFilePath { get; }
+
     void LoadConfig(IEnumerable<PlcModel> plcs, IEnumerable<PlcTag> tags);
 
     void SaveGlobalConfig();

@@ -24,6 +24,21 @@ public partial class PlcManagerViewModel : ObservableObject
     [ObservableProperty]
     private int _selectedTabIndex;
 
+    [ObservableProperty]
+    private bool _isDiagnosing;
+
+    [ObservableProperty]
+    private string _diagnosticSummary = string.Empty;
+
+    [ObservableProperty]
+    private string _diagnosticReportText = string.Empty;
+
+    [ObservableProperty]
+    private string _lastDiagnosticLogPath = string.Empty;
+
+    [ObservableProperty]
+    private bool _showDiagnosticPanel;
+
     public ObservableCollection<PlcModel> Plcs => _plcService.Plcs;
 
     public ObservableCollection<PlcTag> Tags => _plcService.Tags;
@@ -610,4 +625,199 @@ public partial class PlcManagerViewModel : ObservableObject
             }
         }
     }
+
+    #region Diagnostic Network & Packet Probe Commands
+
+    [RelayCommand]
+    private async System.Threading.Tasks.Task DiagnoseSelectedPlcAsync()
+    {
+        if (SelectedPlc == null)
+        {
+            System.Windows.MessageBox.Show("Vui lòng chọn một PLC để thực hiện chẩn đoán!", "Chưa Chọn PLC", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Warning);
+            return;
+        }
+
+        SelectedTabIndex = 4;
+        IsDiagnosing = true;
+        ShowDiagnosticPanel = true;
+        DiagnosticSummary = $"Đang chạy chẩn đoán tới {SelectedPlc.IPAddress}:{SelectedPlc.Port}...";
+        DiagnosticReportText = "Đang kiểm tra kết nối mạng ICMP Ping, TCP Socket và gửi gói tin thăm dò MC Protocol 3E Binary. Vui lòng đợi...";
+
+        try
+        {
+            var report = await PlcDiagnosticService.RunDiagnosticAsync(
+                SelectedPlc.IPAddress,
+                SelectedPlc.Port,
+                SelectedPlc.DriverType,
+                SelectedPlc.LogicalStationNumber);
+
+            DiagnosticReportText = report.FullReportText;
+            LastDiagnosticLogPath = report.SavedLogFilePath ?? string.Empty;
+
+            if (report.McProtocolSuccess)
+            {
+                DiagnosticSummary = $"✅ MC Protocol 3E THÀNH CÔNG! CPU: {report.CpuModelDetected} (Ping: {report.PingRoundtripMs}ms)";
+            }
+            else if (report.SocketConnected)
+            {
+                DiagnosticSummary = $"⚠️ Socket TCP mở OK ({report.SocketConnectMs}ms) nhưng PLC không phản hồi 3E (Có thể do Port {SelectedPlc.Port} là cổng MELSOFT hoặc HMI Weintek chiếm dụng)";
+            }
+            else if (report.PingSuccess)
+            {
+                DiagnosticSummary = $"❌ Cổng TCP {SelectedPlc.Port} bị ĐÓNG (Ping IP {report.PingRoundtripMs}ms OK nhưng Port không mở)";
+            }
+            else
+            {
+                DiagnosticSummary = $"❌ Không tìm thấy thiết bị tại IP {SelectedPlc.IPAddress} (Ping & Socket đều thất bại)";
+            }
+        }
+        catch (Exception ex)
+        {
+            DiagnosticSummary = $"❌ Lỗi thực thi chẩn đoán: {ex.Message}";
+            DiagnosticReportText = $"Lỗi ngoại lệ: {ex}\nStackTrace:\n{ex.StackTrace}";
+        }
+        finally
+        {
+            IsDiagnosing = false;
+        }
+    }
+
+    [RelayCommand]
+    private void CopyDiagnosticLog()
+    {
+        if (string.IsNullOrWhiteSpace(DiagnosticReportText))
+        {
+            System.Windows.MessageBox.Show("Chưa có báo cáo chẩn đoán nào để sao chép!", "Báo Cáo Trống", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Information);
+            return;
+        }
+
+        try
+        {
+            System.Windows.Clipboard.SetText(DiagnosticReportText);
+            System.Windows.MessageBox.Show(
+                "Đã sao chép toàn bộ báo cáo chẩn đoán kèm Hex TX/RX Log vào Clipboard!\nBạn có thể dán (Ctrl+V) vào Zalo / Notepad / Email gửi cho bộ phận Dev kiểm tra.",
+                "Đã Sao Chép Báo Cáo",
+                System.Windows.MessageBoxButton.OK,
+                System.Windows.MessageBoxImage.Information);
+        }
+        catch (Exception ex)
+        {
+            System.Windows.MessageBox.Show($"Không thể sao chép vào Clipboard: {ex.Message}", "Lỗi Clipboard", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Error);
+        }
+    }
+
+    [RelayCommand]
+    private void OpenLogFolder()
+    {
+        try
+        {
+            string appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+            string logDir = System.IO.Path.Combine(appData, "Vision2026", "logs");
+            System.IO.Directory.CreateDirectory(logDir);
+
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = logDir,
+                UseShellExecute = true
+            });
+        }
+        catch (Exception ex)
+        {
+            System.Windows.MessageBox.Show($"Không thể mở thư mục Log: {ex.Message}", "Lỗi Mở Thư Mục", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Error);
+        }
+    }
+
+    [RelayCommand]
+    private void CloseDiagnosticPanel()
+    {
+        ShowDiagnosticPanel = false;
+    }
+
+    #endregion
+
+    #region Full PLC Configuration Export / Import (Backup & Restore)
+
+    [RelayCommand]
+    private void ExportPlcConfig()
+    {
+        var dlg = new Microsoft.Win32.SaveFileDialog
+        {
+            Title = "Sao Lưu Toàn Bộ Cấu Hình PLC & Tags Ra Tệp JSON",
+            Filter = "Cấu Hình PLC JSON (*.json)|*.json|Tất cả tệp (*.*)|*.*",
+            FileName = $"plc_config_backup_{DateTime.Now:yyyyMMdd_HHmmss}.json",
+            FilterIndex = 1
+        };
+
+        if (dlg.ShowDialog() == true)
+        {
+            try
+            {
+                var container = new PlcConfigContainer
+                {
+                    Plcs = _plcService.Plcs.ToList(),
+                    Tags = _plcService.Tags.ToList(),
+                    IndustrialConfig = _plcService.IndustrialConfig
+                };
+
+                string json = System.Text.Json.JsonSerializer.Serialize(container, new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
+                System.IO.File.WriteAllText(dlg.FileName, json, System.Text.Encoding.UTF8);
+
+                System.Windows.MessageBox.Show(
+                    $"Đã sao lưu cấu hình thành công!\nSố PLC: {container.Plcs.Count}\nSố Tags: {container.Tags.Count}\nĐường dẫn: {dlg.FileName}",
+                    "Sao Lưu Cấu Hình Thành Công",
+                    System.Windows.MessageBoxButton.OK,
+                    System.Windows.MessageBoxImage.Information);
+            }
+            catch (Exception ex)
+            {
+                System.Windows.MessageBox.Show($"Lỗi sao lưu cấu hình: {ex.Message}", "Lỗi Export", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Error);
+            }
+        }
+    }
+
+    [RelayCommand]
+    private void ImportPlcConfig()
+    {
+        var dlg = new Microsoft.Win32.OpenFileDialog
+        {
+            Title = "Phục Hồi Cấu Hình PLC & Tags Từ Tệp JSON",
+            Filter = "Cấu Hình PLC JSON (*.json)|*.json|Tất cả tệp (*.*)|*.*",
+            FilterIndex = 1
+        };
+
+        if (dlg.ShowDialog() == true)
+        {
+            try
+            {
+                string json = System.IO.File.ReadAllText(dlg.FileName, System.Text.Encoding.UTF8);
+                var container = System.Text.Json.JsonSerializer.Deserialize<PlcConfigContainer>(json);
+
+                if (container != null)
+                {
+                    if (container.IndustrialConfig != null)
+                    {
+                        _plcService.IndustrialConfig = container.IndustrialConfig;
+                        IndustrialConfig = container.IndustrialConfig;
+                    }
+
+                    _plcService.LoadConfig(container.Plcs ?? new List<PlcModel>(), container.Tags ?? new List<PlcTag>());
+                    SelectedPlc = Plcs.FirstOrDefault();
+                    RefreshFilteredTags();
+                    RefreshAvailableTagsAndPlcs();
+
+                    System.Windows.MessageBox.Show(
+                        $"Phục hồi cấu hình thành công!\nSố PLC nạp vào: {Plcs.Count}\nSố Tags nạp vào: {Tags.Count}",
+                        "Phục Hồi Thành Công",
+                        System.Windows.MessageBoxButton.OK,
+                        System.Windows.MessageBoxImage.Information);
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Windows.MessageBox.Show($"Lỗi đọc file cấu hình: {ex.Message}", "Lỗi Import", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Error);
+            }
+        }
+    }
+
+    #endregion
 }
