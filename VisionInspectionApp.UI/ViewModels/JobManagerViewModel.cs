@@ -470,9 +470,12 @@ public partial class JobManagerViewModel : ObservableObject
             }
 
             // Upload lên Server
-            string fileName = $"teach_{SelectedItem.ProductCode}_{DateTime.Now:yyyyMMdd_HHmmss}.png";
+            string safeCode = RemoteServerService.SanitizeIdentifier(SelectedItem.ProductCode);
+            string safeName = RemoteServerService.SanitizeIdentifier(SelectedItem.ProductName);
+            string id = !string.IsNullOrWhiteSpace(safeName) ? $"{safeCode}_{safeName}" : safeCode;
+            string fileName = $"teach_{id}_{DateTime.Now:yyyyMMdd_HHmmss}.png";
             var (uploadOk, fullUrl, relPath, uploadErr) = await _remoteServerService.UploadImageAsync(
-                imageBytes, fileName, SelectedItem.ProductCode, _oqcService.Config.ServerApiUrl);
+                imageBytes, fileName, SelectedItem.ProductCode, _oqcService.Config.ServerApiUrl, SelectedItem.ProductName);
 
             if (!uploadOk)
             {
@@ -651,7 +654,10 @@ public partial class JobManagerViewModel : ObservableObject
                     string fileName = Path.GetFileName(jobPath);
                     if (string.IsNullOrWhiteSpace(fileName) || fileName.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0)
                     {
-                        fileName = $"job_{SelectedItem.ProductCode}.job";
+                        string safeCode = RemoteServerService.SanitizeIdentifier(SelectedItem.ProductCode);
+                        string safeName = RemoteServerService.SanitizeIdentifier(SelectedItem.ProductName);
+                        string id = !string.IsNullOrWhiteSpace(safeName) ? $"{safeCode}_{safeName}" : safeCode;
+                        fileName = $"job_{id}.job";
                     }
 
                     localTeachingJobPath = Path.Combine(teachingDir, fileName);
@@ -745,7 +751,7 @@ public partial class JobManagerViewModel : ObservableObject
         try
         {
             var (uploadOk, fullUrl, relPath, uploadErr) = await _remoteServerService.UploadJobAsync(
-                jobFilePath, SelectedItem.ProductCode, _oqcService.Config.ServerApiUrl);
+                jobFilePath, SelectedItem.ProductCode, _oqcService.Config.ServerApiUrl, SelectedItem.ProductName);
 
             if (!uploadOk)
             {
@@ -849,7 +855,10 @@ public partial class JobManagerViewModel : ObservableObject
             string defaultFileName = Path.GetFileName(SelectedItem.JobFilePath);
             if (string.IsNullOrWhiteSpace(defaultFileName) || defaultFileName.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0)
             {
-                defaultFileName = $"job_{SelectedItem.ProductCode}.job";
+                string safeCode = RemoteServerService.SanitizeIdentifier(SelectedItem.ProductCode);
+                string safeName = RemoteServerService.SanitizeIdentifier(SelectedItem.ProductName);
+                string id = !string.IsNullOrWhiteSpace(safeName) ? $"{safeCode}_{safeName}" : safeCode;
+                defaultFileName = $"job_{id}.job";
             }
 
             var sfd = new SaveFileDialog

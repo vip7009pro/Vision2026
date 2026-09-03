@@ -1749,3 +1749,29 @@ Lộ trình tích hợp tính năng Chụp ảnh từ camera và hỗ trợ các
 
 
 
+
+- [x] Task 296: Cấy Thêm ProductName Vào Tên Tệp Job Khi Upload Lên Hệ Thống Trong Cửa Sổ Quản Lý Job & Huấn Luyện (Teaching).
+      - Mục Tiêu & Yêu Cầu:
+        - Trước đây, khi tải tệp Job (.job) lên máy chủ qua cửa sổ Quản Lý Job & Huấn Luyện (Teaching), tên tệp Job sinh ra trên máy chủ có dạng job_{ProductCode}_{yyyyMMdd_HHmmss}_{hash}.job (ví dụ: job_7A10461A_20260903_052341_b1abf6.job), mới chỉ chứa mã sản phẩm (ProductCode).
+        - Người dùng yêu cầu cấy thêm tên sản phẩm (ProductName) vào định dạng tên file để quản lý trực quan và dễ nhận biết cả mã lẫn tên sản phẩm (Ví dụ: job_7A10461A_Cover_Assembly_S24_20260903_052341_b1abf6.job).
+      - Giải Pháp Kỹ Thuật Đã Triển Khai:
+        1. **Phía Server PHP (ServerScripts/vision_upload.php)**:
+           - Thêm hàm removeVietnameseDiacritics($str) khử dấu tiếng Việt và hàm sanitizeIdentifier($str) làm sạch khoảng trắng, ký tự đặc biệt thành dấu gạch dưới an toàn.
+           - Trong endpoint upload_job: Tiếp nhận $_POST['product_name'], làm sạch và kết hợp định danh $identifier = !empty($cleanName) ? $cleanCode . '_' . $cleanName : $cleanCode;. Sinh tên file: job_{identifier}_{yyyyMMdd_His}_{hash}.job.
+           - Trong endpoint upload_image: Tiếp nhận $_POST['product_name'] và đồng bộ cấu trúc tên ảnh teach: teach_{identifier}_{yyyyMMdd_His}_{hash}.{ext}.
+        2. **Phía Dịch Vụ Ứng Dụng (IRemoteServerService.cs & RemoteServerService.cs)**:
+           - Bổ sung tham số tùy chọn string? productName = null vào UploadJobAsync và UploadImageAsync.
+           - Thêm phương thức tĩnh RemoteServerService.SanitizeIdentifier(string? input): Khử đ/Đ, khử dấu diacritics Unicode FormD, loại bỏ ký tự lạ, co cụm dấu gạch dưới liên tiếp.
+           - Đính kèm trường product_name vào MultipartFormDataContent khi gửi request POST multipart lên Server.
+        3. **Phía ViewModel & Giao Diện (JobManagerViewModel.cs & OqcScannerViewModel.cs)**:
+           - JobManagerViewModel.ExecuteUploadCurrentJobAsync: Truyền SelectedItem.ProductName vào _remoteServerService.UploadJobAsync.
+           - JobManagerViewModel.ExecuteQuickCaptureTeachImageAsync: Truyền SelectedItem.ProductName vào _remoteServerService.UploadImageAsync.
+           - Chuẩn hóa tên file mặc định khi lưu cục bộ và chuẩn bị môi trường dạy học sang định dạng job_{safeCode}_{safeName}.job.
+           - OqcScannerViewModel.ExecuteQuickCaptureAndUploadTeachImageAsync: Truyền CurrentProductName vào UploadImageAsync.
+        4. **Kiểm Thử Tự Động (TestExtractApp/RemoteServerAndJobManagerTests.cs)**:
+           - Thêm kiểm thử Test_SanitizeIdentifier_And_UploadJobWithProductNameAsync:
+             + Kiểm tra hàm SanitizeIdentifier khử dấu tiếng Việt (Nắp lưng Titan (Đen-Bạc) -> Nap_lung_Titan_Den-Bac).
+             + Giả lập HTTP Mock Server kiểm tra payload multipart nhận đủ product_code và product_name, phản hồi tên tệp job_{Code}_{Name}_{Time}_{Hash}.job.
+      - Kiểm Thử:
+        - dotnet build VisionInspectionApp.slnx: 0 errors.
+        - dotnet run --project TestExtractApp: 100% PASSED.

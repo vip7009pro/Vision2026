@@ -80,8 +80,33 @@ public class RemoteServerService : IRemoteServerService, IDisposable
         }
     }
 
+    /// <summary>
+    /// Chuẩn hóa chuỗi (mã sản phẩm, tên sản phẩm) thành chuỗi định danh an toàn cho tên tệp:
+    /// Khử dấu tiếng Việt, thay khoảng trắng và ký tự đặc biệt thành dấu gạch dưới.
+    /// </summary>
+    public static string SanitizeIdentifier(string? input)
+    {
+        if (string.IsNullOrWhiteSpace(input)) return string.Empty;
+        string text = input.Replace("đ", "d").Replace("Đ", "D");
+        string normalized = text.Normalize(System.Text.NormalizationForm.FormD);
+        var sb = new System.Text.StringBuilder();
+        foreach (char c in normalized)
+        {
+            var uc = System.Globalization.CharUnicodeInfo.GetUnicodeCategory(c);
+            if (uc != System.Globalization.UnicodeCategory.NonSpacingMark)
+            {
+                if (char.IsLetterOrDigit(c) || c == '_' || c == '-')
+                    sb.Append(c);
+                else
+                    sb.Append('_');
+            }
+        }
+        string cleaned = System.Text.RegularExpressions.Regex.Replace(sb.ToString(), "_+", "_").Trim('_');
+        return cleaned;
+    }
+
     public async Task<(bool Success, string Url, string RelativePath, string ErrorMessage)> UploadImageAsync(
-        byte[] imageBytes, string fileName, string productCode, string serverApiUrl, CancellationToken cancellationToken = default)
+        byte[] imageBytes, string fileName, string productCode, string serverApiUrl, string? productName = null, CancellationToken cancellationToken = default)
     {
         if (imageBytes == null || imageBytes.Length == 0)
         {
@@ -109,9 +134,17 @@ public class RemoteServerService : IRemoteServerService, IDisposable
             var byteContent = new ByteArrayContent(imageBytes);
             byteContent.Headers.ContentType = MediaTypeHeaderValue.Parse("image/png");
 
-            string safeFileName = string.IsNullOrWhiteSpace(fileName) ? $"teach_{productCode}.png" : Path.GetFileName(fileName);
+            string safeCode = SanitizeIdentifier(productCode);
+            string safeName = SanitizeIdentifier(productName);
+            string identifier = !string.IsNullOrWhiteSpace(safeName) ? $"{safeCode}_{safeName}" : (string.IsNullOrWhiteSpace(safeCode) ? "PROD" : safeCode);
+
+            string safeFileName = string.IsNullOrWhiteSpace(fileName) ? $"teach_{identifier}.png" : Path.GetFileName(fileName);
             content.Add(byteContent, "image_file", safeFileName);
             content.Add(new StringContent(productCode ?? ""), "product_code");
+            if (!string.IsNullOrWhiteSpace(productName))
+            {
+                content.Add(new StringContent(productName), "product_name");
+            }
 
             using var response = await _httpClient.PostAsync(url, content, cancellationToken);
             string resJson = await response.Content.ReadAsStringAsync(cancellationToken);
@@ -143,7 +176,7 @@ public class RemoteServerService : IRemoteServerService, IDisposable
     }
 
     public async Task<(bool Success, string Url, string RelativePath, string ErrorMessage)> UploadJobAsync(
-        string jobFilePath, string productCode, string serverApiUrl, CancellationToken cancellationToken = default)
+        string jobFilePath, string productCode, string serverApiUrl, string? productName = null, CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(jobFilePath) || !File.Exists(jobFilePath))
         {
@@ -151,11 +184,11 @@ public class RemoteServerService : IRemoteServerService, IDisposable
         }
 
         byte[] jobBytes = await File.ReadAllBytesAsync(jobFilePath, cancellationToken);
-        return await UploadJobAsync(jobBytes, Path.GetFileName(jobFilePath), productCode, serverApiUrl, cancellationToken);
+        return await UploadJobAsync(jobBytes, Path.GetFileName(jobFilePath), productCode, serverApiUrl, productName, cancellationToken);
     }
 
     public async Task<(bool Success, string Url, string RelativePath, string ErrorMessage)> UploadJobAsync(
-        byte[] jobBytes, string fileName, string productCode, string serverApiUrl, CancellationToken cancellationToken = default)
+        byte[] jobBytes, string fileName, string productCode, string serverApiUrl, string? productName = null, CancellationToken cancellationToken = default)
     {
         if (jobBytes == null || jobBytes.Length == 0)
         {
@@ -183,9 +216,17 @@ public class RemoteServerService : IRemoteServerService, IDisposable
             var byteContent = new ByteArrayContent(jobBytes);
             byteContent.Headers.ContentType = MediaTypeHeaderValue.Parse("application/octet-stream");
 
-            string safeFileName = string.IsNullOrWhiteSpace(fileName) ? $"job_{productCode}.job" : Path.GetFileName(fileName);
+            string safeCode = SanitizeIdentifier(productCode);
+            string safeName = SanitizeIdentifier(productName);
+            string identifier = !string.IsNullOrWhiteSpace(safeName) ? $"{safeCode}_{safeName}" : (string.IsNullOrWhiteSpace(safeCode) ? "JOB" : safeCode);
+
+            string safeFileName = string.IsNullOrWhiteSpace(fileName) ? $"job_{identifier}.job" : Path.GetFileName(fileName);
             content.Add(byteContent, "job_file", safeFileName);
             content.Add(new StringContent(productCode ?? ""), "product_code");
+            if (!string.IsNullOrWhiteSpace(productName))
+            {
+                content.Add(new StringContent(productName), "product_name");
+            }
 
             using var response = await _httpClient.PostAsync(url, content, cancellationToken);
             string resJson = await response.Content.ReadAsStringAsync(cancellationToken);

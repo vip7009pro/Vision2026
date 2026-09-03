@@ -12,6 +12,7 @@ using CommunityToolkit.Mvvm.Input;
 using VisionInspectionApp.Application;
 using VisionInspectionApp.Application.DB.Services;
 using VisionInspectionApp.Application.OQC;
+using VisionInspectionApp.Application.Services;
 using VisionInspectionApp.Models;
 
 using OpenCvSharp;
@@ -1399,9 +1400,12 @@ public partial class OqcScannerViewModel : ObservableObject
         StatusMessage = $"📸 Đang tải ảnh mẫu cho mã '{productCode}' lên Server...";
         StatusBrush = Brushes.DodgerBlue;
 
-        string fileName = $"teach_{productCode}_{DateTime.Now:yyyyMMdd_HHmmss}.png";
+        string safeCode = RemoteServerService.SanitizeIdentifier(productCode);
+        string safeName = RemoteServerService.SanitizeIdentifier(CurrentProductName != "-" ? CurrentProductName : null);
+        string id = !string.IsNullOrWhiteSpace(safeName) ? $"{safeCode}_{safeName}" : safeCode;
+        string fileName = $"teach_{id}_{DateTime.Now:yyyyMMdd_HHmmss}.png";
         var (uploadOk, fullUrl, relPath, uploadErr) = await _remoteServerService.UploadImageAsync(
-            imageBytes, fileName, productCode, _oqcService.Config.ServerApiUrl);
+            imageBytes, fileName, productCode, _oqcService.Config.ServerApiUrl, CurrentProductName != "-" ? CurrentProductName : null);
 
         if (!uploadOk)
         {

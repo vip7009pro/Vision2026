@@ -49,6 +49,32 @@
 - Preview được phép tiếp tục khi Global Snapshot rỗng để lấy ảnh từ ImageSource.
 - Lưu template cho Origin, Point và SurfaceCompare hoạt động với nguồn ảnh ImageSource.
 
+- **Cấy Thêm ProductName Vào Tên Tệp Job Khi Upload Lên Hệ Thống Trong Cửa Sổ Quản Lý Job & Huấn Luyện (Teaching) (Task 296)**:
+  - **Yêu Cầu & Bối Cảnh**:
+    - Trước đây, khi tải tệp Job (`.job`) lên máy chủ thông qua cửa sổ Quản Lý Job & Huấn Luyện (Teaching), tên tệp Job sinh ra trên máy chủ có dạng `job_7A10461A_20260903_052341_b1abf6.job`, chỉ chứa mã sản phẩm (`ProductCode` = `7A10461A`).
+    - Người dùng yêu cầu cấy thêm tên sản phẩm (`ProductName`) vào tên tệp Job để dễ dàng quản lý trực quan cả mã và tên mặt hàng (ví dụ: `job_7A10461A_Cover_Assembly_S24_20260903_052341_b1abf6.job`).
+  - **Giải Pháp Kỹ Thuật Đã Triển Khai**:
+    1. **Phía Server PHP (`ServerScripts/vision_upload.php`)**:
+       - Thêm hàm `removeVietnameseDiacritics($str)` khử dấu tiếng Việt và hàm `sanitizeIdentifier($str)` làm sạch khoảng trắng, ký tự đặc biệt thành dấu gạch dưới an toàn.
+       - Trong endpoint `upload_job`: Tiếp nhận `$_POST['product_name']`, làm sạch và kết hợp định danh: `$identifier = !empty($cleanName) ? $cleanCode . '_' . $cleanName : $cleanCode;`. Sinh tên file: `job_{identifier}_{yyyyMMdd_His}_{hash}.job`.
+       - Trong endpoint `upload_image`: Tiếp nhận `$_POST['product_name']` và đồng bộ cấu trúc tên ảnh teach: `teach_{identifier}_{yyyyMMdd_His}_{hash}.{ext}`.
+    2. **Phía Dịch Vụ Ứng Dụng (`IRemoteServerService.cs` & `RemoteServerService.cs`)**:
+       - Bổ sung tham số tùy chọn `string? productName = null` vào `UploadJobAsync` và `UploadImageAsync`.
+       - Thêm phương thức tĩnh `RemoteServerService.SanitizeIdentifier(string? input)`: Khử đ/Đ, khử dấu diacritics Unicode FormD, loại bỏ ký tự lạ, co cụm dấu gạch dưới liên tiếp.
+       - Đính kèm trường `product_name` vào `MultipartFormDataContent` khi gửi request POST multipart lên Server.
+    3. **Phía ViewModel & Giao Diện (`JobManagerViewModel.cs` & `OqcScannerViewModel.cs`)**:
+       - `JobManagerViewModel.ExecuteUploadCurrentJobAsync`: Truyền `SelectedItem.ProductName` vào `_remoteServerService.UploadJobAsync`.
+       - `JobManagerViewModel.ExecuteQuickCaptureTeachImageAsync`: Truyền `SelectedItem.ProductName` vào `_remoteServerService.UploadImageAsync`.
+       - Chuẩn hóa tên file mặc định khi lưu cục bộ và chuẩn bị môi trường dạy học sang định dạng `job_{safeCode}_{safeName}.job`.
+       - `OqcScannerViewModel.ExecuteQuickCaptureAndUploadTeachImageAsync`: Truyền `CurrentProductName` vào `UploadImageAsync`.
+    4. **Kiểm Thử Tự Động (`TestExtractApp/RemoteServerAndJobManagerTests.cs`)**:
+       - Thêm kiểm thử `Test_SanitizeIdentifier_And_UploadJobWithProductNameAsync`:
+         + Kiểm tra hàm `SanitizeIdentifier` khử dấu tiếng Việt ("Nắp lưng Titan (Đen-Bạc)" -> "Nap_lung_Titan_Den-Bac").
+         + Giả lập HTTP Mock Server kiểm tra payload multipart nhận đủ `product_code` và `product_name`, phản hồi tên tệp `job_{Code}_{Name}_{Time}_{Hash}.job`.
+  - **Kiểm Thử & Xác Minh**:
+    - `dotnet build VisionInspectionApp.slnx`: 0 errors.
+    - `dotnet run --project TestExtractApp`: 100% PASSED.
+
 - **Chuyển Đổi Preview Ảnh Nguyên Gốc (Full/Original Quality) vs Đã Giảm Chất Lượng (Downscaled/Performance) (Task 295)**:
   - **Yêu Cầu & Bối Cảnh**:
     - Hệ thống preview ảnh của ứng dụng mặc định giảm chất lượng (scale down kích thước hiển thị về proxy 1280x720 hoặc 1920x1080) để tăng hiệu năng và đạt 60 FPS mượt mà.

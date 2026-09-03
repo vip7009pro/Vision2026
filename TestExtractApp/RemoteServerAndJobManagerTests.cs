@@ -28,6 +28,7 @@ public static class RemoteServerAndJobManagerTests
         Test_OqcPreservedCamera_And_SwitchToProductionCamera();
         Test_TeachImageCache_And_OpenJobFromListLogic().GetAwaiter().GetResult();
         Test_JobManagerOpenJob_LabelIdRequirementAndNoDbRequery();
+        Test_SanitizeIdentifier_And_UploadJobWithProductNameAsync().GetAwaiter().GetResult();
 
         Console.WriteLine("✅ ALL REMOTE SERVER & JOB MANAGER TESTS PASSED!");
         Console.WriteLine("=================================================\n");
@@ -567,5 +568,117 @@ public static class RemoteServerAndJobManagerTests
         Console.WriteLine("  ✓ ScannedCode remains empty on Job Open from list.");
         Console.WriteLine("  ✓ Running without LABEL ID is correctly blocked with error message.");
         Console.WriteLine("  ✓ Valid LABEL ID proceeds without re-querying Job DB.");
+    }
+
+    private static async Task Test_SanitizeIdentifier_And_UploadJobWithProductNameAsync()
+    {
+        Console.WriteLine("▶ Running Test_SanitizeIdentifier_And_UploadJobWithProductNameAsync...");
+
+        // 1. Kiểm tra hàm SanitizeIdentifier khử dấu tiếng Việt và ký tự đặc biệt
+        string s1 = RemoteServerService.SanitizeIdentifier("7A10461A");
+        if (s1 != "7A10461A")
+            throw new Exception($"Expected '7A10461A', got '{s1}'");
+
+        string s2 = RemoteServerService.SanitizeIdentifier("Cover Assembly S24");
+        if (s2 != "Cover_Assembly_S24")
+            throw new Exception($"Expected 'Cover_Assembly_S24', got '{s2}'");
+
+        string s3 = RemoteServerService.SanitizeIdentifier("Nắp lưng Titan (Đen-Bạc)");
+        if (s3 != "Nap_lung_Titan_Den-Bac")
+            throw new Exception($"Expected 'Nap_lung_Titan_Den-Bac', got '{s3}'");
+
+        string s4 = RemoteServerService.SanitizeIdentifier("   __Á_À_Ả_Ã_Ạ__   ");
+        if (s4 != "A_A_A_A_A")
+            throw new Exception($"Expected 'A_A_A_A_A', got '{s4}'");
+
+        Console.WriteLine("  ✓ SanitizeIdentifier handles Vietnamese accents, spaces, and symbols perfectly.");
+
+        // 2. Kiểm tra định dạng tên file job kết hợp cả ProductCode và ProductName
+        string productCode = "7A10461A";
+        string productName = "Cover Assembly S24";
+        string safeCode = RemoteServerService.SanitizeIdentifier(productCode);
+        string safeName = RemoteServerService.SanitizeIdentifier(productName);
+        string id = !string.IsNullOrWhiteSpace(safeName) ? $"{safeCode}_{safeName}" : safeCode;
+        string expectedPattern = "job_7A10461A_Cover_Assembly_S24";
+        if (!id.Equals("7A10461A_Cover_Assembly_S24"))
+            throw new Exception($"Combined identifier mismatch: {id}");
+
+        // 3. Giả lập UploadJobAsync gửi lên Mock Server và kiểm tra payload multipart
+        int port = 19583;
+        string prefix = $"http://127.0.0.1:{port}/";
+        using var listener = new HttpListener();
+        listener.Prefixes.Add(prefix);
+        listener.Start();
+
+        bool receivedProductName = false;
+        bool receivedProductCode = false;
+        string receivedFileName = "";
+
+        var serverTask = Task.Run(async () =>
+        {
+            var context = await listener.GetContextAsync();
+            var req = context.Request;
+            var resp = context.Response;
+
+            if (req.Url?.Query.Contains("action=upload_job") == true)
+            {
+                using var reader = new StreamReader(req.InputStream, req.ContentEncoding);
+                string body = await reader.ReadToEndAsync();
+                
+                receivedProductCode = body.Contains("7A10461A");
+                receivedProductName = body.Contains("Cover Assembly S24");
+                
+                // Trích xuất filename từ multipart header nếu có
+                var match = System.Text.RegularExpressions.Regex.Match(body, @"filename=""([^""]+)""");
+                if (match.Success)
+                {
+                    receivedFileName = match.Groups[1].Value;
+                }
+
+                string serverGenFileName = $"job_{safeCode}_{safeName}_20260903_052341_b1abf6.job";
+                string json = JsonSerializer.Serialize(new
+                {
+                    success = true,
+                    message = "Tải tệp Job lên server thành công.",
+                    file_name = serverGenFileName,
+                    relative_path = $"uploads/jobs/{serverGenFileName}",
+                    full_url = $"{prefix}uploads/jobs/{serverGenFileName}",
+                    size_bytes = 2048
+                });
+                byte[] buf = Encoding.UTF8.GetBytes(json);
+                resp.ContentType = "application/json";
+                resp.ContentLength64 = buf.Length;
+                await resp.OutputStream.WriteAsync(buf);
+                resp.Close();
+            }
+            else
+            {
+                resp.StatusCode = 404;
+                resp.Close();
+            }
+        });
+
+        var service = new RemoteServerService();
+        byte[] dummyJobBytes = Encoding.UTF8.GetBytes("{\"Tools\": []}");
+        var (upOk, fullUrl, relPath, upErr) = await service.UploadJobAsync(
+            dummyJobBytes, "", productCode, $"{prefix}vision_upload.php", productName);
+
+        await serverTask;
+        listener.Stop();
+
+        if (!upOk)
+            throw new Exception($"UploadJobAsync failed: {upErr}");
+
+        if (!receivedProductCode)
+            throw new Exception("Server did not receive product_code!");
+
+        if (!receivedProductName)
+            throw new Exception("Server did not receive product_name!");
+
+        if (!relPath.Contains("7A10461A_Cover_Assembly_S24"))
+            throw new Exception($"Server response path '{relPath}' does not contain both code and name!");
+
+        Console.WriteLine($"  ✓ UploadJobAsync with ProductName successfully verified: {relPath}");
+        Console.WriteLine($"  ✓ Multipart payload contained product_code and product_name correctly.");
     }
 }
