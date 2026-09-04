@@ -202,6 +202,15 @@ public sealed class LightingControllerService : IDisposable
         Log("INFO", "Disconnected.");
     }
 
+    /// <summary>
+    /// Gắn trực tiếp transport (mock hoặc custom) phục vụ cho kiểm thử và chẩn đoán.
+    /// </summary>
+    public void AttachTransportForTesting(ILightingTransport transport)
+    {
+        _transport = transport;
+        ConnectionState = LightingConnectionState.Connected;
+    }
+
     private async Task DisconnectInternalAsync()
     {
         if (_transport != null)
@@ -310,14 +319,38 @@ public sealed class LightingControllerService : IDisposable
     // Channel Control
     // =====================================================================
 
-    public Task<LightingCommandResult> SetChannelPowerAsync(int channel, bool on, CancellationToken ct = default)
-        => SendCommandAsync(LightingProtocol.BuildSetChannelPower(channel, on), ct);
+    public async Task<LightingCommandResult> SetChannelPowerAsync(int channel, bool on, CancellationToken ct = default)
+    {
+        var res = await SendCommandAsync(LightingProtocol.BuildSetChannelPower(channel, on), ct).ConfigureAwait(false);
+        if (res.IsSuccess && channel >= 0 && channel < 8)
+        {
+            _lastKnownState ??= new LightingControllerState();
+            _lastKnownState.Channels[channel].IsEnabled = on;
+        }
+        return res;
+    }
 
-    public Task<LightingCommandResult> SetBrightnessAsync(int channel, int brightness, CancellationToken ct = default)
-        => SendCommandAsync(LightingProtocol.BuildSetBrightness(channel, brightness), ct);
+    public async Task<LightingCommandResult> SetBrightnessAsync(int channel, int brightness, CancellationToken ct = default)
+    {
+        var res = await SendCommandAsync(LightingProtocol.BuildSetBrightness(channel, brightness), ct).ConfigureAwait(false);
+        if (res.IsSuccess && channel >= 0 && channel < 8)
+        {
+            _lastKnownState ??= new LightingControllerState();
+            _lastKnownState.Channels[channel].Brightness = brightness;
+        }
+        return res;
+    }
 
-    public Task<LightingCommandResult> SetLightingTimeAsync(int channel, int timeMs, CancellationToken ct = default)
-        => SendCommandAsync(LightingProtocol.BuildSetLightingTime(channel, timeMs), ct);
+    public async Task<LightingCommandResult> SetLightingTimeAsync(int channel, int timeMs, CancellationToken ct = default)
+    {
+        var res = await SendCommandAsync(LightingProtocol.BuildSetLightingTime(channel, timeMs), ct).ConfigureAwait(false);
+        if (res.IsSuccess && channel >= 0 && channel < 8)
+        {
+            _lastKnownState ??= new LightingControllerState();
+            _lastKnownState.Channels[channel].LightingTimeMs = timeMs;
+        }
+        return res;
+    }
 
     /// <summary>Tắt toàn bộ các kênh đèn (gửi F0=0..F7=0 và L0=0..L7=0).</summary>
     public async Task<LightingCommandResult> TurnOffAllChannelsAsync(int channelCount = 8, CancellationToken ct = default)

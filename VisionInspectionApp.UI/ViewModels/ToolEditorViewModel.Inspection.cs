@@ -159,6 +159,26 @@ namespace VisionInspectionApp.UI.ViewModels
             {
                 _ = InspectionCompletedAsync.Invoke(value, _config);
             }
+
+            // Kích hoạt kịch bản nháy đèn cảnh báo NG nếu phát hiện lỗi
+            if (value != null && !value.Pass)
+            {
+                try
+                {
+                    var patternService = _serviceProvider?.GetService(typeof(VisionInspectionApp.Application.LightingController.LightingPatternService)) as VisionInspectionApp.Application.LightingController.LightingPatternService;
+                    var settingsService = _serviceProvider?.GetService(typeof(VisionInspectionApp.UI.Services.GlobalAppSettingsService)) as VisionInspectionApp.UI.Services.GlobalAppSettingsService;
+                    var lSettings = settingsService?.Settings?.Lighting;
+                    if (patternService != null && lSettings != null && lSettings.EnableNgPattern)
+                    {
+                        _ = patternService.PlayNgPatternAsync(
+                            lSettings.EnableNgPattern,
+                            lSettings.NgPatternId,
+                            lSettings.Patterns,
+                            lSettings.ChannelCount);
+                    }
+                }
+                catch { }
+            }
         }
 
         private void RefreshInspectionDashboard(InspectionResult? res)

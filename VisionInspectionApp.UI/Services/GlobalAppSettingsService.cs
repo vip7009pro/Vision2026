@@ -67,6 +67,15 @@ public sealed class LightingControllerSettings
     public bool AutoTurnOffOnExit { get; set; } = true;
     public List<VisionInspectionApp.Models.LightingStartupChannelSettings> StartupChannels { get; set; } = CreateDefaultStartupChannels();
 
+    // Blink Pattern Settings (Kịch bản hiệu ứng nháy đèn)
+    public bool EnableStartupPattern { get; set; } = true;
+    public string StartupPatternId { get; set; } = "pattern_welcome";
+    public bool EnableShutdownPattern { get; set; } = true;
+    public string ShutdownPatternId { get; set; } = "pattern_shutdown";
+    public bool EnableNgPattern { get; set; } = true;
+    public string NgPatternId { get; set; } = "pattern_ng_alert";
+    public List<VisionInspectionApp.Models.LightingPatternModel> Patterns { get; set; } = VisionInspectionApp.Models.LightingPatternModel.CreateDefaultPatterns();
+
     public static List<VisionInspectionApp.Models.LightingStartupChannelSettings> CreateDefaultStartupChannels(int count = 8)
     {
         var list = new List<VisionInspectionApp.Models.LightingStartupChannelSettings>();
@@ -142,6 +151,14 @@ public sealed class GlobalAppSettingsService
             if (result.LightingServer == null)
             {
                 result.LightingServer = new LightingServerConfig { AutoStartServer = true };
+            }
+            if (result.Lighting == null)
+            {
+                result.Lighting = new LightingControllerSettings();
+            }
+            if (result.Lighting.Patterns == null || result.Lighting.Patterns.Count == 0)
+            {
+                result.Lighting.Patterns = VisionInspectionApp.Models.LightingPatternModel.CreateDefaultPatterns();
             }
             return result;
         }

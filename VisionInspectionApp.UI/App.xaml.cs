@@ -80,13 +80,14 @@ public partial class App : System.Windows.Application
                 services.AddTransient<ViewModels.PLC.PlcBrowserViewModel>();
                 services.AddTransient<ViewModels.PLC.PlcOscilloscopeViewModel>();
 
-                // Lighting Controller & Server
+                // Lighting Controller, Server & Pattern Service
                 services.AddSingleton<LightingControllerService>();
                 services.AddSingleton<LightingControlServer>(sp =>
                 {
                     var hw = sp.GetRequiredService<LightingControllerService>();
                     return new LightingControlServer(hw);
                 });
+                services.AddSingleton<LightingPatternService>();
 
                 // Legacy PLC (MX Component)
                 services.AddSingleton<IPlcClient, MxComponentPlcClient>();
@@ -145,6 +146,7 @@ public partial class App : System.Windows.Application
             MatExtensions.UseOriginalQualityPreview = settingsService.Settings.UseOriginalQualityPreview;
             var lightingServer = _host.Services.GetRequiredService<LightingControlServer>();
             var lightingService = _host.Services.GetRequiredService<LightingControllerService>();
+            var lightingPatternService = _host.Services.GetRequiredService<LightingPatternService>();
 
             // 1. Tự động khởi động Lighting Control Server trên cổng mạng LAN ngay lập tức (không phụ thuộc vào cổng COM)
             try
@@ -211,22 +213,42 @@ public partial class App : System.Windows.Application
                             (VisionInspectionApp.Models.LightingNetworkMode)lightingSettings.NetworkMode);
                     }
 
-                    // Tự động bật đèn ở các channel và mức sáng đã cài đặt khi app khởi động
-                    if (lightingService.IsConnected && lightingSettings.EnableStartupLighting)
+                    if (lightingService.IsConnected)
                     {
-                        var channels = lightingSettings.StartupChannels != null && lightingSettings.StartupChannels.Count > 0
-                            ? lightingSettings.StartupChannels
-                            : VisionInspectionApp.Models.LightingStartupChannelSettings.CreateDefaults(lightingSettings.ChannelCount);
-
-                        int chCount = lightingSettings.ChannelCount == 8 ? 8 : 4;
-                        for (int i = 0; i < chCount && i < channels.Count; i++)
+                        // a. Chạy kịch bản hiệu ứng nháy đèn khi bật app (Startup Blink Pattern) nếu được bật
+                        if (lightingSettings.EnableStartupPattern)
                         {
-                            var ch = channels[i];
-                            await lightingService.SetChannelPowerAsync(ch.ChannelIndex, ch.IsEnabled);
-                            if (ch.IsEnabled)
+                            try
                             {
-                                int br = Math.Clamp(ch.Brightness, 0, 255);
-                                await lightingService.SetBrightnessAsync(ch.ChannelIndex, br);
+                                await lightingPatternService.PlayStartupPatternAsync(
+                                    lightingSettings.EnableStartupPattern,
+                                    lightingSettings.StartupPatternId,
+                                    lightingSettings.Patterns,
+                                    lightingSettings.ChannelCount).ConfigureAwait(false);
+                            }
+                            catch (Exception patEx)
+                            {
+                                System.Diagnostics.Debug.WriteLine($"[StartupPattern Error]: {patEx.Message}");
+                            }
+                        }
+
+                        // b. Tự động bật đèn ở các channel và mức sáng đã cài đặt khi app khởi động
+                        if (lightingSettings.EnableStartupLighting)
+                        {
+                            var channels = lightingSettings.StartupChannels != null && lightingSettings.StartupChannels.Count > 0
+                                ? lightingSettings.StartupChannels
+                                : VisionInspectionApp.Models.LightingStartupChannelSettings.CreateDefaults(lightingSettings.ChannelCount);
+
+                            int chCount = lightingSettings.ChannelCount == 8 ? 8 : 4;
+                            for (int i = 0; i < chCount && i < channels.Count; i++)
+                            {
+                                var ch = channels[i];
+                                await lightingService.SetChannelPowerAsync(ch.ChannelIndex, ch.IsEnabled).ConfigureAwait(false);
+                                if (ch.IsEnabled)
+                                {
+                                    int br = Math.Clamp(ch.Brightness, 0, 255);
+                                    await lightingService.SetBrightnessAsync(ch.ChannelIndex, br).ConfigureAwait(false);
+                                }
                             }
                         }
                     }
@@ -345,10 +367,31 @@ public partial class App : System.Windows.Application
                 try
                 {
                     var settingsService = services.GetService<GlobalAppSettingsService>();
-                    if (settingsService?.Settings?.Lighting?.AutoTurnOffOnExit == true && lightingService.IsConnected)
+                    var patternService = services.GetService<LightingPatternService>();
+                    var lSettings = settingsService?.Settings?.Lighting;
+
+                    if (lSettings != null && lightingService.IsConnected)
                     {
-                        await lightingService.TurnOffAllChannelsAsync().ConfigureAwait(false);
-                        await Task.Delay(100).ConfigureAwait(false);
+                        // 1. Chạy kịch bản nháy đèn khi tắt app (Shutdown Blink Pattern) nếu được bật
+                        if (lSettings.EnableShutdownPattern && patternService != null)
+                        {
+                            try
+                            {
+                                await patternService.PlayShutdownPatternAsync(
+                                    lSettings.EnableShutdownPattern,
+                                    lSettings.ShutdownPatternId,
+                                    lSettings.Patterns,
+                                    lSettings.ChannelCount).ConfigureAwait(false);
+                            }
+                            catch { }
+                        }
+
+                        // 2. Tự động tắt toàn bộ các kênh đèn khi đóng app
+                        if (lSettings.AutoTurnOffOnExit)
+                        {
+                            await lightingService.TurnOffAllChannelsAsync().ConfigureAwait(false);
+                            await Task.Delay(100).ConfigureAwait(false);
+                        }
                     }
                 }
                 catch

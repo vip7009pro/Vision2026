@@ -1802,3 +1802,47 @@ Lộ trình tích hợp tính năng Chụp ảnh từ camera và hỗ trợ các
         - dotnet build VisionInspectionApp.slnx: 0 errors.
         - dotnet run --project TestExtractApp: 100% PASSED (bao gồm Test 14).
         - Đã xác nhận file %AppData%\Vision2026\plc_config.json không bị thay đổi thời gian ghi hay ghi đè sau test.
+
+- [x] Task 298: Tích Hợp Hệ Thống Kịch Bản Hiệu Ứng Nháy Đèn (Lighting Blink Pattern & Scenarios) Khi Mở App, Tắt App và Báo Lỗi NG.
+      - Mục Tiêu & Yêu Cầu:
+        - Bổ sung hệ thống kịch bản hiệu ứng nháy đèn (Blink Pattern Scenarios) cho bộ điều khiển đèn Lighting Controller (4/8 kênh).
+        - Cho phép chạy blink pattern trước khi bật mức sáng đã lưu khi mở app (Startup), chạy blink pattern trước khi tắt nguồn đèn khi đóng app (Shutdown), và chạy blink pattern cảnh báo khi kiểm tra sản phẩm có lỗi NG (Inspection NG).
+        - Cung cấp công tắc Bật/Tắt độc lập cho từng sự kiện: Bật app, Tắt app, Kiểm tra hàng NG.
+        - Cho phép chọn pattern riêng cho từng mục.
+        - Quy tắc cú pháp pattern thông minh: Hỗ trợ cú pháp chuỗi phẩy (L1, ON, 300, L1, OFF, L2, ON, 100, L2, OFF...), cú pháp nhiều dòng (ALL OFF; DELAY 150), macro (STROBE, CHASE), cấu hình số chu kỳ lặp lại (RepeatCycles), và hướng dẫn cú pháp chi tiết trực tiếp trên giao diện để người dùng dễ nắm bắt.
+        - Hỗ trợ nút Chạy Thử (Test Run) và Dừng (Stop) trực tiếp trên UI.
+      - Giải Pháp Kỹ Thuật Đã Triển Khai:
+        1. **Mô Hình Dữ Liệu & Kịch Bản Mẫu (LightingPatternModels.cs)**:
+           - Định nghĩa LightingPatternModel (Id, Name, Description, Script, RepeatCycles, IsBuiltIn).
+           - Định nghĩa LightingPatternStep (StepType, Channels, PowerOn, Brightness, DelayMs, SummaryText).
+           - Cung cấp 5 kịch bản mẫu chuẩn công nghiệp: Welcome Chase (Khởi động tuần tự), Shutdown Fade (Tắt dần êm ái), NG Red Alert (Cảnh báo nháy nhanh 3 lần), Dual Alternate (Chớp xen kẽ chẵn/lẻ), Pulse Strobe (Chớp nháy đồng loạt).
+        2. **Bộ Phân Tích Cú Pháp Thông Minh (LightingPatternParser.cs)**:
+           - Hỗ trợ phong cách chuỗi phân tách dấu phẩy (Comma-delimited stream): L1, ON, 300, L1, OFF, L2, ON, 100, L2, OFF...
+           - Hỗ trợ phong cách đa dòng với ghi chú: DELAY 150, L1 ON 255 100, L1 OFF, ALL ON 200, ALL OFF.
+           - Hỗ trợ Macro tiện ích công nghiệp: STROBE [CH] [ON_MS] [OFF_MS] [COUNT] [BRIGHTNESS], CHASE [DELAY_MS] [BRIGHTNESS].
+           - Kiểm tra tính hợp lệ thời gian thực (Validation) và ước tính tổng thời lượng chu kỳ (Timing estimation).
+        3. **Dịch Vụ Điều Phối Kịch Bản (LightingPatternService.cs)**:
+           - Tự động thực thi bất đồng bộ an toàn qua CancellationToken.
+           - PlayStartupPatternAsync: Chạy hiệu ứng nháy trước khi khôi phục độ sáng đã lưu.
+           - PlayShutdownPatternAsync: Chạy hiệu ứng kết thúc trước khi ngắt nguồn đèn khi đóng app.
+           - PlayNgPatternAsync: Tự động chụp ảnh nhanh (snapshot) mức sáng và trạng thái của tất cả các kênh trước khi nháy cảnh báo, sau đó tự động khôi phục nguyên trạng thái làm việc ban đầu.
+           - Cung cấp cơ chế dừng khẩn cấp StopCurrentPattern().
+        4. **Lưu Trữ Bền Vững & Khởi Tạo DI (GlobalAppSettingsService.cs & App.xaml.cs)**:
+           - Tích hợp EnableStartupPattern, StartupPatternId, EnableShutdownPattern, ShutdownPatternId, EnableNgPattern, NgPatternId, Patterns vào LightingControllerSettings trong global_settings.json.
+           - Đăng ký LightingPatternService dưới dạng Singleton trong DI container.
+           - Tích hợp kích hoạt Startup Pattern trong App.xaml.cs và Shutdown Pattern trong ShutdownGracefullyAsync().
+        5. **Tích Hợp Tự Động Kích Hoạt Báo Lỗi NG (OqcScannerViewModel.cs & ToolEditorViewModel.Inspection.cs)**:
+           - Tab OQC Scanner: Tự động gọi PlayNgPatternAsync khi !result.Pass, tự động dừng pattern khi bắt đầu lượt quét mới.
+           - Tab Tool Editor: Tự động gọi PlayNgPatternAsync khi thực thi kiểm tra có kết quả NG.
+        6. **Giao Diện Tab Kịch Bản & Trình Hướng Dẫn Cú Pháp Trực Quan (LightingControllerWindow.xaml & LightingControllerViewModel.BlinkPattern.cs)**:
+           - Chuyển đổi cửa sổ điều khiển đèn thành 2 Tab hiện đại: Tab 1 "Điều Khiển Kênh & Tham Số", Tab 2 "✨ Kịch Bản & Hiệu Ứng (Blink Patterns)".
+           - 3 Khối cấu hình Trigger sự kiện độc lập (Khởi động, Đóng app, Hàng NG) kèm Toggle Switch và ComboBox chọn kịch bản.
+           - Thư viện kịch bản: Thêm mới, Nhân bản (Clone), Đổi tên, Xóa kịch bản tùy chỉnh.
+           - Trình soạn thảo kịch bản với Text Editor, thanh công cụ nạp nhanh cú pháp mẫu (STROBE, CHASE, ALL OFF, Chuỗi phẩy), bộ đếm chu kỳ lặp (RepeatCycles), nhãn ước tính thời lượng (ms) và trạng thái hợp lệ.
+           - Bảng tra cứu cú pháp thông minh (Smart Syntax Guide) trình bày chi tiết các quy tắc, ví dụ trực quan ngay trên giao diện.
+           - Nút bấm Chạy Thử (Test Run) và Dừng (Stop) kèm thanh tiến trình trực quan.
+        7. **Kiểm Thử Tự Động Toàn Diện (TestExtractApp/LightingPatternTests.cs)**:
+           - 42 bài test tự động bao phủ: Parse Comma Style, Parse Structured Multi-Line, Parse STROBE Macro, Parse CHASE Macro, Validation cú pháp & kênh vượt giới hạn, Timing Estimation, PlayPattern lặp chu kỳ & hủy CancellationToken, NG Pattern Snapshot & Restore mức sáng gốc, Sao chép Clone kịch bản.
+      - Kiểm Thử:
+        - dotnet build VisionInspectionApp.slnx: 0 errors.
+        - dotnet run --project TestExtractApp: 100% PASSED (42/42 lighting pattern tests passed).

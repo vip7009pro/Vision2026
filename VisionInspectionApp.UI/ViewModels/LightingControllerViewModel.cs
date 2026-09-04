@@ -147,11 +147,16 @@ public sealed partial class LightingControllerViewModel : ObservableObject
     private readonly DispatcherTimer _brightnessDebounceTimer;
     private int _pendingBrightnessChannel = -1;
     private int _pendingBrightnessValue;
+    private readonly LightingPatternService _patternService;
 
-    public LightingControllerViewModel(LightingControllerService service, GlobalAppSettingsService settingsService)
+    public LightingControllerViewModel(
+        LightingControllerService service,
+        GlobalAppSettingsService settingsService,
+        LightingPatternService? patternService = null)
     {
         _service = service;
         _settingsService = settingsService;
+        _patternService = patternService ?? new LightingPatternService(service);
 
         // Load saved settings
         var settings = settingsService.Settings.Lighting;
@@ -163,6 +168,9 @@ public sealed partial class LightingControllerViewModel : ObservableObject
         _autoTurnOffOnExit = settings.AutoTurnOffOnExit;
         _autoStartLightingServer = settingsService.Settings.LightingServer.AutoStartServer;
         UpdateStartupChannels(_selectedChannelCount, settings.StartupChannels);
+
+        // Khởi tạo hệ thống Kịch Bản Nháy Đèn (Blink Pattern Scenarios)
+        InitBlinkPatternSubsystem();
 
         _selectedInterfaceType = (LightingInterfaceType)settings.InterfaceType;
         _controllerIp = settings.ControllerIp;

@@ -30,6 +30,8 @@ public partial class OqcScannerViewModel : ObservableObject
     private readonly ToolEditorViewModel _toolEditorViewModel;
     private readonly CameraService _cameraService;
     private readonly VisionInspectionApp.Application.Services.IRemoteServerService _remoteServerService;
+    private readonly VisionInspectionApp.Application.LightingController.LightingPatternService? _lightingPatternService;
+    private readonly GlobalAppSettingsService? _globalAppSettings;
 
     [ObservableProperty]
     private string _scannedCode = "";
@@ -157,7 +159,9 @@ public partial class OqcScannerViewModel : ObservableObject
         InspectionViewModel inspectionViewModel,
         ToolEditorViewModel toolEditorViewModel,
         CameraService cameraService,
-        VisionInspectionApp.Application.Services.IRemoteServerService? remoteServerService = null)
+        VisionInspectionApp.Application.Services.IRemoteServerService? remoteServerService = null,
+        VisionInspectionApp.Application.LightingController.LightingPatternService? lightingPatternService = null,
+        GlobalAppSettingsService? globalAppSettings = null)
     {
         _oqcService = oqcService;
         _dbManager = dbManager;
@@ -166,6 +170,8 @@ public partial class OqcScannerViewModel : ObservableObject
         _toolEditorViewModel = toolEditorViewModel;
         _cameraService = cameraService;
         _remoteServerService = remoteServerService ?? new VisionInspectionApp.Application.Services.RemoteServerService();
+        _lightingPatternService = lightingPatternService;
+        _globalAppSettings = globalAppSettings;
 
         ScanCommand = new AsyncRelayCommand(ExecuteScanAsync);
         ScanFromCameraCommand = new AsyncRelayCommand(ExecuteScanFromCameraAsync);
@@ -738,6 +744,9 @@ public partial class OqcScannerViewModel : ObservableObject
 
     private async Task ExecuteScanInternalAsync(string? directProcessedCode = null, string? directRawCode = null)
     {
+        // Dừng ngay kịch bản nháy đèn đang chạy (nếu có) để trả lại ánh sáng ổn định cho camera
+        _lightingPatternService?.StopCurrentPattern();
+
         // ─── ĐẶC BIỆT: TRƯỜNG HỢP MỞ JOB TỪ DANH SÁCH QUẢN LÝ JOB ───
         if (IsJobLoadedFromManager && string.IsNullOrWhiteSpace(directProcessedCode))
         {
@@ -1048,6 +1057,20 @@ public partial class OqcScannerViewModel : ObservableObject
                 }
                 _oqcService.SaveScanHistory(ScanHistory);
             });
+        }
+
+        // Kích hoạt kịch bản nháy đèn cảnh báo NG (NG Blink Pattern) nếu kết quả kiểm tra NG
+        if (!result.Pass && _lightingPatternService != null)
+        {
+            var lSettings = _globalAppSettings?.Settings?.Lighting;
+            if (lSettings != null && lSettings.EnableNgPattern)
+            {
+                _ = _lightingPatternService.PlayNgPatternAsync(
+                    lSettings.EnableNgPattern,
+                    lSettings.NgPatternId,
+                    lSettings.Patterns,
+                    lSettings.ChannelCount);
+            }
         }
     }
 

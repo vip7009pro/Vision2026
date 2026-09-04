@@ -29,6 +29,7 @@ class Program
         ManualInspectionTest.RunTests();
         LightingControllerTests.RunAllTests();
         LightingServerClientTests.RunTests();
+        LightingPatternTests.RunTests();
         PreprocessRoiMaskingTest.RunTests();
         OriginTemplateJobTest.RunTests();
         ProductAssignAndCodeSyncTest.RunTests();
