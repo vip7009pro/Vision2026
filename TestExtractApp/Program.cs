@@ -37,5 +37,6 @@ class Program
         RemoteServerAndJobManagerTests.RunTests();
         PreviewQualityTests.RunTests();
         NewJobAndBlobSpecTests.RunTests();
+        UrlImageSourceAndRecentJobTests.RunTests();
     }
 }

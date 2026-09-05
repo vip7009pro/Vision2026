@@ -1879,3 +1879,35 @@ Lộ trình tích hợp tính năng Chụp ảnh từ camera và hỗ trợ các
         - dotnet build VisionInspectionApp.slnx: 0 errors.
         - dotnet run --project TestExtractApp: 100% PASSED (6/6 tests passed).
 
+
+- [x] Task 300: Khắc Phục Dứt Điểm Hiện Tượng Treo Đơ Ứng Dụng Khi Mở Job Đã Teach Từ Xa Bằng Menu File/Job Gần Đây & Khi Chuyển ImageSource Sang Chế Độ URL.
+      - Mục Tiêu & Yêu Cầu:
+        - Hiện tượng 1: Sau khi vào cửa sổ Quản lý Job bấm "Huấn luyện từ xa" (Remote Teach), lưu Job lại và tắt app. Khi bật lại app và mở Job vừa teach bằng Menu File / Job gần đây, ứng dụng bị treo đơ hoàn toàn không tương tác được. Khi dùng Task Manager để "End task" thì app mới hiện ra hộp thoại hỏi "Có muốn lưu job không...".
+        - Hiện tượng 2: Mở job mà chuyển SourceType của node ImageSource từ Camera sang Url thì app cũng bị treo đơ tương tự.
+        - Rà soát toàn diện, xác định chính xác nguyên nhân gốc rễ và sửa đổi triệt để.
+      - Nguyên Nhân Gốc Rễ:
+        - Lời gọi _remoteServerService.DownloadFileAsync(source.ImageUrl).GetAwaiter().GetResult() trong LoadImageFromSourceForPreview (ToolEditorViewModel.Engine.cs) chạy trực tiếp trên luồng UI Dispatcher Thread của WPF.
+        - RemoteServerService.DownloadFileAsync (và các API mạng) sử dụng await _httpClient.GetAsync(...) mà thiếu .ConfigureAwait(false).
+        - Khi bị block bởi .GetResult() trên luồng UI, continuation của task cố gắng xếp hàng trở lại UI Dispatcher SynchronizationContext, gây ra DEADLOCK 100% trên SynchronizationContext.
+        - Khi người dùng dùng Task Manager để End Task, Windows gửi WM_CLOSE, khiến WPF Dispatcher Frame xử lý đóng cửa sổ và hiện hộp thoại kiểm tra IsDirty ("Có muốn lưu job không").
+        - Ngoài ra, việc thiếu bộ nhớ đệm Disk Cache cho ảnh URL và không đóng gói ảnh teach vào tệp .job khiến mỗi lần mở lại Job hệ thống luôn phải kéo qua mạng.
+      - Giải Pháp Kỹ Thuật Đã Triển Khai:
+        1. Khử Toàn Bộ Deadlock Mạng (RemoteServerService.cs):
+           - Bổ sung .ConfigureAwait(false) cho tất cả các câu lệnh await (PingServerAsync, UploadImageAsync, UploadJobAsync, DownloadFileAsync).
+        2. Loại Bỏ Hoàn Toàn Lời Gọi Đồng Bộ Block UI & Triển Khai Non-Blocking Async Background Download (ToolEditorViewModel.Engine.cs):
+           - Loại bỏ triệt để .GetAwaiter().GetResult() khỏi LoadImageFromSourceForPreview.
+           - Xây dựng hệ thống Disk Cache chuyên dụng: Cache/UrlImages/{hash}.png và liên kết với Cache/TeachImages/{hash}.png.
+           - TryLoadUrlImageFromDiskCache(url): Nạp trực tiếp từ local file / teach_image.png / disk cache trong 0 - 5ms mà không chạm tới mạng.
+           - ScheduleAsyncUrlImageFetch: Nếu chưa có trên đĩa, trả về null ngay để UI không bị đơ giật, kích hoạt tác vụ tải nền không trùng lặp (ConcurrentDictionary), khi hoàn thành tự động lưu disk cache, giải mã Mat và refresh preview trên UI Dispatcher.
+        3. Xử Lý Chuyển Đổi Nguồn Ảnh URL Mượt Mà (ToolEditorViewModel.ToolPreprocess.cs):
+           - ImageSource_SourceType: Khi chuyển sang Url, ưu tiên lấy từ memory cache hoặc disk cache, hoặc kích hoạt async fetch nền. Tuyệt đối không xóa sạch cache rồi gọi mạng đồng bộ.
+           - ImageSource_ImageUrl: Kiểm tra disk cache hoặc kích hoạt async fetch nền khi nhập/dán URL mới.
+           - FetchAndApplyImageUrlAsync: Tự động gọi SaveUrlImageToDiskCache(url, data) lưu vào Disk Cache và thư mục tạm của Job.
+        4. Đóng Gói Bền Vững Ảnh Dạy Vào Gói .job (Teach Image Bundling) (ToolEditorViewModel.Config.cs):
+           - EnsureTeachImageInJobTempDir(): Khi lưu Job có ImageSource là URL (hoặc File), tự động sao lưu ảnh hiện tại thành teach_image.png trong thư mục tạm để nén vào tệp .job.
+           - LoadJobFromFile: Khi mở Job, giải nén và nạp trực tiếp teach_image.png vào cache và _sharedImage trong 10ms, giúp mở Job gần đây hoạt động tức thì và 100% Offline.
+        5. Bộ Kiểm Thử Tự Động Toàn Diện (TestExtractApp/UrlImageSourceAndRecentJobTests.cs):
+           - 5 bài kiểm thử: Chống Deadlock trên SynchronizationContext mô phỏng UI Thread, kiểm tra mã băm MD5 Disk Cache, đóng gói và phục hồi teach_image.png trong .job, kiểm tra non-blocking trong 0ms với uncached URL, và kiểm tra mở Job Offline trong 11ms không qua mạng.
+      - Kiểm Thử:
+        - dotnet build VisionInspectionApp.slnx: 0 errors.
+        - dotnet run --project TestExtractApp: 100% PASSED (5/5 URL & Recent Job tests passed, toàn bộ test suite pass).

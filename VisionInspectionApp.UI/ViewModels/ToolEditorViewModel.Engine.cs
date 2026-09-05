@@ -2395,6 +2395,190 @@ namespace VisionInspectionApp.UI.ViewModels
             });
         }
 
+        private readonly System.Collections.Concurrent.ConcurrentDictionary<string, byte> _pendingUrlDownloads = new(StringComparer.OrdinalIgnoreCase);
+
+        public static string GetUrlImageCacheDirectory()
+        {
+            string dir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Cache", "UrlImages");
+            if (!Directory.Exists(dir))
+            {
+                Directory.CreateDirectory(dir);
+            }
+            return dir;
+        }
+
+        public static string GetUrlImageDiskCachePath(string url)
+        {
+            using var md5 = System.Security.Cryptography.MD5.Create();
+            byte[] hash = md5.ComputeHash(System.Text.Encoding.UTF8.GetBytes(url.Trim()));
+            string hashStr = Convert.ToHexString(hash);
+            string ext = Path.GetExtension(url);
+            if (string.IsNullOrWhiteSpace(ext) || ext.Length > 5) ext = ".png";
+            return Path.Combine(GetUrlImageCacheDirectory(), $"{hashStr}{ext}");
+        }
+
+        public Mat? TryLoadUrlImageFromDiskCache(string url)
+        {
+            if (string.IsNullOrWhiteSpace(url)) return null;
+
+            try
+            {
+                // 1. Nếu URL là đường dẫn tệp cục bộ hợp lệ đã tồn tại
+                if (File.Exists(url))
+                {
+                    var m = Cv2.ImRead(url, ImreadModes.Color);
+                    if (m != null && !m.Empty()) return m;
+                    m?.Dispose();
+                }
+
+                // 2. Kiểm tra trong thư mục làm việc tạm thời của Job (nếu có teach_image.png được đóng gói trong .job)
+                if (!string.IsNullOrWhiteSpace(CurrentTempWorkingDir) && Directory.Exists(CurrentTempWorkingDir))
+                {
+                    string jobTeachPng = Path.Combine(CurrentTempWorkingDir, "teach_image.png");
+                    if (File.Exists(jobTeachPng) && new FileInfo(jobTeachPng).Length > 0)
+                    {
+                        var m = Cv2.ImRead(jobTeachPng, ImreadModes.Color);
+                        if (m != null && !m.Empty()) return m;
+                        m?.Dispose();
+                    }
+
+                    string fnInTemp = Path.GetFileName(url);
+                    if (!string.IsNullOrWhiteSpace(fnInTemp))
+                    {
+                        string pFn = Path.Combine(CurrentTempWorkingDir, fnInTemp);
+                        if (File.Exists(pFn) && new FileInfo(pFn).Length > 0)
+                        {
+                            var m = Cv2.ImRead(pFn, ImreadModes.Color);
+                            if (m != null && !m.Empty()) return m;
+                            m?.Dispose();
+                        }
+                    }
+                }
+
+                // 3. Kiểm tra Disk Cache riêng của URL: Cache/UrlImages/{hash}.png
+                string urlCachePath = GetUrlImageDiskCachePath(url);
+                if (File.Exists(urlCachePath) && new FileInfo(urlCachePath).Length > 0)
+                {
+                    var m = Cv2.ImRead(urlCachePath, ImreadModes.Color);
+                    if (m != null && !m.Empty()) return m;
+                    m?.Dispose();
+                }
+
+                // 4. Kiểm tra Disk Cache của JobManagerViewModel: Cache/TeachImages/{hash}.png
+                string teachCachePath = JobManagerViewModel.GetDiskCacheFilePath(url);
+                if (File.Exists(teachCachePath) && new FileInfo(teachCachePath).Length > 0)
+                {
+                    var m = Cv2.ImRead(teachCachePath, ImreadModes.Color);
+                    if (m != null && !m.Empty()) return m;
+                    m?.Dispose();
+                }
+
+                // 5. Kiểm tra trong thư mục Teaching/{fileName}
+                string fileName = Path.GetFileName(url);
+                if (!string.IsNullOrWhiteSpace(fileName))
+                {
+                    string teachDirPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Teaching", fileName);
+                    if (File.Exists(teachDirPath) && new FileInfo(teachDirPath).Length > 0)
+                    {
+                        var m = Cv2.ImRead(teachDirPath, ImreadModes.Color);
+                        if (m != null && !m.Empty()) return m;
+                        m?.Dispose();
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"TryLoadUrlImageFromDiskCache error: {ex.Message}");
+            }
+
+            return null;
+        }
+
+        public void SaveUrlImageToDiskCache(string url, byte[] data)
+        {
+            if (string.IsNullOrWhiteSpace(url) || data == null || data.Length == 0) return;
+            try
+            {
+                // 1. Lưu vào UrlImages cache
+                string urlCachePath = GetUrlImageDiskCachePath(url);
+                File.WriteAllBytes(urlCachePath, data);
+
+                // 2. Lưu vào TeachImages cache
+                string teachCachePath = JobManagerViewModel.GetDiskCacheFilePath(url);
+                if (!File.Exists(teachCachePath))
+                {
+                    File.WriteAllBytes(teachCachePath, data);
+                }
+
+                // 3. Lưu vào CurrentTempWorkingDir nếu có
+                if (!string.IsNullOrWhiteSpace(CurrentTempWorkingDir) && Directory.Exists(CurrentTempWorkingDir))
+                {
+                    string jobTeachPath = Path.Combine(CurrentTempWorkingDir, "teach_image.png");
+                    File.WriteAllBytes(jobTeachPath, data);
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"SaveUrlImageToDiskCache error: {ex.Message}");
+            }
+        }
+
+        public void ScheduleAsyncUrlImageFetch(string nodeName, string url)
+        {
+            if (string.IsNullOrWhiteSpace(url)) return;
+            string key = $"{nodeName}_{url.Trim()}";
+            if (!_pendingUrlDownloads.TryAdd(key, 0)) return;
+
+            StatusBarText = $"⏳ Đang tải ảnh từ URL: {url}...";
+
+            Task.Run(async () =>
+            {
+                try
+                {
+                    var (ok, data, err) = await _remoteServerService.DownloadFileAsync(url).ConfigureAwait(false);
+                    if (ok && data != null && data.Length > 0)
+                    {
+                        SaveUrlImageToDiskCache(url, data);
+
+                        var mat = Cv2.ImDecode(data, ImreadModes.Color);
+                        if (mat != null && !mat.Empty())
+                        {
+                            SetImageSourceCache(nodeName, url, mat);
+                            _sharedImage.SetImage(mat);
+
+                            await System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
+                            {
+                                StatusBarText = $"✅ Đã tải và nạp ảnh ({mat.Width}x{mat.Height}) từ Server URL!";
+                                if (SelectedNode is not null && string.Equals(SelectedNode.Type, "ImageSource", StringComparison.OrdinalIgnoreCase))
+                                {
+                                    RefreshSelectedPreview();
+                                }
+                                else
+                                {
+                                    RefreshPreviews();
+                                }
+                            }, System.Windows.Threading.DispatcherPriority.Render);
+                        }
+                    }
+                    else
+                    {
+                        await System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
+                        {
+                            StatusBarText = $"⚠️ Không thể tải ảnh từ URL: {err}";
+                        });
+                    }
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"Async URL image preview fetch exception: {ex.Message}");
+                }
+                finally
+                {
+                    _pendingUrlDownloads.TryRemove(key, out _);
+                }
+            });
+        }
+
         private Mat? LoadImageFromSourceForPreview(ImageSourceDefinition source)
         {
             try
@@ -2422,16 +2606,17 @@ namespace VisionInspectionApp.UI.ViewModels
                 {
                     if (!string.IsNullOrWhiteSpace(source.ImageUrl))
                     {
-                        var (ok, data, err) = _remoteServerService.DownloadFileAsync(source.ImageUrl).GetAwaiter().GetResult();
-                        if (ok && data != null && data.Length > 0)
+                        // 1. Thử nạp từ Disk Cache hoặc thư mục tạm của Job (.job zip)
+                        var diskMat = TryLoadUrlImageFromDiskCache(source.ImageUrl);
+                        if (diskMat is not null && !diskMat.Empty())
                         {
-                            var mat = Cv2.ImDecode(data, ImreadModes.Color);
-                            if (mat != null && !mat.Empty())
-                            {
-                                SetImageSourceCache(source.Name, source.ImageUrl, mat);
-                                return mat;
-                            }
+                            SetImageSourceCache(source.Name, source.ImageUrl, diskMat);
+                            return diskMat;
                         }
+
+                        // 2. Tuyệt đối không chặn đồng bộ luồng UI WPF bằng .GetResult(). Kích hoạt tải bất đồng bộ ở background.
+                        ScheduleAsyncUrlImageFetch(source.Name, source.ImageUrl);
+                        return null;
                     }
                 }
                 else if (source.SourceType == ImageSourceType.Folder)

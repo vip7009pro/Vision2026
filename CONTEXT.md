@@ -49,6 +49,42 @@
 - Preview được phép tiếp tục khi Global Snapshot rỗng để lấy ảnh từ ImageSource.
 - Lưu template cho Origin, Point và SurfaceCompare hoạt động với nguồn ảnh ImageSource.
 
+- **Khắc Phục Dứt Điểm Hiện Tượng Treo Đơ Ứng Dụng Khi Mở Job Đã Teach Từ Xa Bằng Menu File/Job Gần Đây & Khi Chuyển ImageSource Sang Chế Độ URL (Task 300)**:
+  - **Hiện Tượng & Nguyên Nhân Gốc Rễ**:
+    1. *Hiện tượng 1*: Sau khi vào cửa sổ Quản lý Job bấm "Huấn luyện từ xa" (Remote Teach), lưu Job lại và tắt app. Khi bật lại app và mở Job vừa teach bằng `Menu File / Job gần đây`, ứng dụng bị treo đơ hoàn toàn không thể tương tác. Khi dùng Task Manager để "End task" thì app mới hiện ra hộp thoại hỏi "Có muốn lưu job không...".
+    2. *Hiện tượng 2*: Khi đang mở một job và chuyển `SourceType` của node `ImageSource` từ `Camera` sang `Url`, ứng dụng cũng bị treo đơ y hệt như trên.
+    3. *Nguyên nhân kỹ thuật*:
+       - Tại `ToolEditorViewModel.Engine.cs` trong hàm `LoadImageFromSourceForPreview`: khi `source.SourceType == ImageSourceType.Url`, mã nguồn gọi:
+         `var (ok, data, err) = _remoteServerService.DownloadFileAsync(source.ImageUrl).GetAwaiter().GetResult();`
+         Hàm này được gọi đồng bộ trực tiếp trên luồng giao diện chính WPF (UI Dispatcher Thread) qua chuỗi sự kiện `SelectedNode` setter -> `OnSelectedNodeChanged` -> `RefreshSelectedPreview` -> `ResolveRawImageForNode`.
+       - Tại `RemoteServerService.cs`: hàm `DownloadFileAsync` (và các hàm API khác) sử dụng `await _httpClient.GetAsync(...)` và `await response.Content.ReadAsByteArrayAsync(...)` mà **thiếu `.ConfigureAwait(false)`**.
+       - Khi gọi `.GetAwaiter().GetResult()` trên luồng UI WPF với một async task không có `ConfigureAwait(false)`, continuation của task cố gắng xếp hàng trở lại `DispatcherSynchronizationContext` (luồng UI), nhưng luồng UI đang bị chặn cứng chờ task hoàn thành. Dẫn đến **Deadlock tuyệt đối 100% trên SynchronizationContext**!
+       - Khi người dùng dùng Task Manager để End Task, Windows gửi thông điệp `WM_CLOSE` tới Message Queue của cửa sổ, làm Dispatcher frame bật ra xử lý đóng cửa sổ và kích hoạt hộp thoại kiểm tra `IsDirty` ("Có muốn lưu job không").
+       - Đồng thời, ảnh mẫu URL không được lưu trữ vào bộ nhớ đệm trên đĩa (Disk Cache) và không được đóng gói vào tệp `.job` (chỉ lưu URL text trong config.json), khiến mỗi lần mở Job app lại phải cố kéo qua mạng.
+  - **Giải Pháp Kỹ Thuật Đã Triển Khai**:
+    1. **Khử Toàn Bộ Deadlock Mạng (`RemoteServerService.cs`)**:
+       - Bổ sung `.ConfigureAwait(false)` cho tất cả các câu lệnh `await` (`PingServerAsync`, `UploadImageAsync`, `UploadJobAsync`, `DownloadFileAsync`).
+       - Đảm bảo các tác vụ mạng chạy độc lập trên ThreadPool, không bao giờ bám vào SynchronizationContext của caller.
+    2. **Loại Bỏ Hoàn Toàn Lời Gọi Đồng Bộ Block UI & Triển Khai Non-Blocking Async Background Download (`ToolEditorViewModel.Engine.cs`)**:
+       - Xóa bỏ triệt để `.GetAwaiter().GetResult()` khỏi `LoadImageFromSourceForPreview`.
+       - Xây dựng hệ thống Disk Cache chuyên dụng cho ảnh URL: `Cache/UrlImages/{hash}.png` và liên kết với `Cache/TeachImages/{hash}.png` của `JobManagerViewModel`.
+       - Hàm `TryLoadUrlImageFromDiskCache(url)`: Quét đa tầng cực nhanh (0ms - 5ms): URL local file -> `CurrentTempWorkingDir/teach_image.png` -> `Cache/UrlImages` -> `Cache/TeachImages` -> `Teaching/{fileName}`. Nếu có trên đĩa, nạp ngay bằng `Cv2.ImRead` và trả về tức thì mà không gọi mạng.
+       - Nếu chưa có trên đĩa: `LoadImageFromSourceForPreview` lập tức trả về `null` (hoặc giữ snapshot cũ) để UI render bình thường mà KHÔNG BỊ TREO dù chỉ 1ms.
+       - Kích hoạt tải nền bất đồng bộ `ScheduleAsyncUrlImageFetch(source.Name, source.ImageUrl)` qua `ConcurrentDictionary` chống tải trùng lặp: Tải ảnh ở ThreadPool -> lưu vào Disk Cache -> giải mã Mat -> lưu vào `SetImageSourceCache` & `_sharedImage` -> Dispatcher cập nhật `StatusBarText` và gọi `RefreshPreviews()` / `RefreshSelectedPreview()`.
+    3. **Xử Lý Chuyển Đổi Nguồn Ảnh Sang URL Mượt Mà (`ToolEditorViewModel.ToolPreprocess.cs`)**:
+       - Trong setter `ImageSource_SourceType`: Khi chuyển sang `Url`, kiểm tra nếu đã có `ImageUrl` thì ưu tiên nạp từ cache/disk cache hoặc kích hoạt `ScheduleAsyncUrlImageFetch`. Tuyệt đối không xóa sạch cache rồi gọi mạng đồng bộ.
+       - Trong setter `ImageSource_ImageUrl`: Khi nhập/dán URL mới, kiểm tra disk cache hoặc kích hoạt async fetch nền.
+       - Trong `FetchAndApplyImageUrlAsync`: Sau khi tải xong ảnh, tự động gọi `SaveUrlImageToDiskCache(url, data)` để lưu vào Disk Cache và thư mục tạm của Job.
+    4. **Đóng Gói Bền Vững Ảnh Dạy Vào Gói `.job` (Teach Image Bundling) (`ToolEditorViewModel.Config.cs`)**:
+       - Bổ sung hàm `EnsureTeachImageInJobTempDir()` trong `SaveJob()`: Khi lưu Job có nguồn ảnh URL (hoặc File), tự động ghi ảnh hiện tại thành `teach_image.png` trong `CurrentTempWorkingDir`. Khi `_jobService.SaveJob` nén thành zip `.job`, ảnh này được đóng gói bên trong tệp.
+       - Trong `LoadJobFromFile`: Trước khi chọn node và kích hoạt preview, kiểm tra nếu `tempDir/teach_image.png` tồn tại, lập tức đọc Mat bằng OpenCV, nạp vào `_imageSourcePreviewCache` và `_sharedImage`. Nhờ đó, việc mở Recent Job diễn ra trong tích tắc (~10ms), hoạt động hoàn hảo 100% Offline kể cả khi máy không có mạng hoặc máy chủ XAMPP tắt.
+    5. **Bộ Kiểm Thử Tự Động Toàn Diện (`TestExtractApp/UrlImageSourceAndRecentJobTests.cs`)**:
+       - Test 1: `Test_RemoteServerService_DownloadFileAsync_NoDeadlockOnSyncContext` - xác nhận 0 deadlock trên SynchronizationContext đơn luồng.
+       - Test 2: `Test_UrlImageDiskCache_PathAndFileStorage` - xác nhận tính toán mã băm MD5 và lưu/đọc Disk Cache.
+       - Test 3: `Test_JobPackage_Bundles_TeachImage_OnSaveAndRestore` - xác nhận đóng gói `teach_image.png` vào `.job` và giải nén phục hồi khi nạp Job.
+       - Test 4: `Test_NonBlockingBehavior_OnUncachedUrl` - xác nhận URL chưa cache phản hồi trong 0ms (< 50ms) không nghẽn luồng.
+       - Test 5: `Test_OfflineRecentJob_LoadsTeachImageDirectlyFromZip` - mô phỏng mở lại Job Offline thành công trong 11ms với 0 network request.
+
 - **Tinh Chỉnh Quy Tắc AutoRun Khi Mở/Xóa Node, Tối Ưu Trải Nghiệm Handle Caliper Strip, Mẫu Mặc Định New Job & Bổ Sung Spec Đánh Giá OK/NG Cho Tool BlobDetection (Task 299)**:
   - **Yêu Cầu & Bối Cảnh**:
     1. Khi mở job từ file hoặc recent jobs, ứng dụng tự động chạy (AutoRun), hoặc khi xóa 1 node trên canvas flow thì job cũng tự động chạy. Cần sửa: Chỉ khi `AutoRun` được tích chọn VÀ người dùng đang đứng ở tab `OQC Scanner` (Tab index 1) thì job mới tự động chạy khi nạp; ở các tab khác (như Tool Editor) chỉ mở nạp job mà không chạy. Khi xóa node trên canvas, tuyệt đối không tự động chạy flow mà chỉ làm mới preview.

@@ -53,8 +53,8 @@ public class RemoteServerService : IRemoteServerService, IDisposable
                 url += "&action=ping";
             }
 
-            using var response = await _httpClient.GetAsync(url, cancellationToken);
-            string content = await response.Content.ReadAsStringAsync(cancellationToken);
+            using var response = await _httpClient.GetAsync(url, cancellationToken).ConfigureAwait(false);
+            string content = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
 
             if (response.IsSuccessStatusCode)
             {
@@ -146,8 +146,8 @@ public class RemoteServerService : IRemoteServerService, IDisposable
                 content.Add(new StringContent(productName), "product_name");
             }
 
-            using var response = await _httpClient.PostAsync(url, content, cancellationToken);
-            string resJson = await response.Content.ReadAsStringAsync(cancellationToken);
+            using var response = await _httpClient.PostAsync(url, content, cancellationToken).ConfigureAwait(false);
+            string resJson = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
 
             if (!response.IsSuccessStatusCode)
             {
@@ -183,8 +183,8 @@ public class RemoteServerService : IRemoteServerService, IDisposable
             return (false, "", "", $"Tệp Job không tồn tại: {jobFilePath}");
         }
 
-        byte[] jobBytes = await File.ReadAllBytesAsync(jobFilePath, cancellationToken);
-        return await UploadJobAsync(jobBytes, Path.GetFileName(jobFilePath), productCode, serverApiUrl, productName, cancellationToken);
+        byte[] jobBytes = await File.ReadAllBytesAsync(jobFilePath, cancellationToken).ConfigureAwait(false);
+        return await UploadJobAsync(jobBytes, Path.GetFileName(jobFilePath), productCode, serverApiUrl, productName, cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<(bool Success, string Url, string RelativePath, string ErrorMessage)> UploadJobAsync(
@@ -228,8 +228,8 @@ public class RemoteServerService : IRemoteServerService, IDisposable
                 content.Add(new StringContent(productName), "product_name");
             }
 
-            using var response = await _httpClient.PostAsync(url, content, cancellationToken);
-            string resJson = await response.Content.ReadAsStringAsync(cancellationToken);
+            using var response = await _httpClient.PostAsync(url, content, cancellationToken).ConfigureAwait(false);
+            string resJson = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
 
             if (!response.IsSuccessStatusCode)
             {
@@ -269,13 +269,13 @@ public class RemoteServerService : IRemoteServerService, IDisposable
             using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             cts.CancelAfter(TimeSpan.FromSeconds(5));
 
-            using var response = await _httpClient.GetAsync(url.Trim(), cts.Token);
+            using var response = await _httpClient.GetAsync(url.Trim(), cts.Token).ConfigureAwait(false);
             if (!response.IsSuccessStatusCode)
             {
                 return (false, null, $"HTTP {(int)response.StatusCode}: {response.ReasonPhrase}");
             }
 
-            byte[] bytes = await response.Content.ReadAsByteArrayAsync(cts.Token);
+            byte[] bytes = await response.Content.ReadAsByteArrayAsync(cts.Token).ConfigureAwait(false);
             return (true, bytes, "");
         }
         catch (OperationCanceledException)

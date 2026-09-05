@@ -427,7 +427,35 @@ namespace VisionInspectionApp.UI.ViewModels
                 if (def.SourceType == value)
                     return;
                 def.SourceType = value;
-                ClearImageSourceCache(def.Name);
+                if (value == ImageSourceType.Url)
+                {
+                    // Khi chuyển sang URL, nếu đã có ImageUrl thì ưu tiên nạp từ cache
+                    if (!string.IsNullOrWhiteSpace(def.ImageUrl))
+                    {
+                        var cached = GetImageSourceCache(def.Name);
+                        if (cached == null || cached.Empty())
+                        {
+                            var diskMat = TryLoadUrlImageFromDiskCache(def.ImageUrl);
+                            if (diskMat != null && !diskMat.Empty())
+                            {
+                                SetImageSourceCache(def.Name, def.ImageUrl, diskMat);
+                                _sharedImage.SetImage(diskMat);
+                            }
+                            else
+                            {
+                                ScheduleAsyncUrlImageFetch(def.Name, def.ImageUrl);
+                            }
+                        }
+                        else
+                        {
+                            _sharedImage.SetImage(cached);
+                        }
+                    }
+                }
+                else
+                {
+                    ClearImageSourceCache(def.Name);
+                }
                 OnPropertyChanged(nameof(ImageSource_IsFile));
                 OnPropertyChanged(nameof(ImageSource_IsFolder));
                 OnPropertyChanged(nameof(ImageSource_IsCamera));
@@ -633,6 +661,19 @@ namespace VisionInspectionApp.UI.ViewModels
                     return;
                 def.ImageUrl = value;
                 ClearImageSourceCache(def.Name);
+                if (def.SourceType == ImageSourceType.Url && !string.IsNullOrWhiteSpace(value))
+                {
+                    var diskMat = TryLoadUrlImageFromDiskCache(value);
+                    if (diskMat != null && !diskMat.Empty())
+                    {
+                        SetImageSourceCache(def.Name, value, diskMat);
+                        _sharedImage.SetImage(diskMat);
+                    }
+                    else
+                    {
+                        ScheduleAsyncUrlImageFetch(def.Name, value);
+                    }
+                }
                 RaiseToolPropertyPanelsChanged();
                 RefreshPreviews();
                 RequestAutoSave();
@@ -673,6 +714,9 @@ namespace VisionInspectionApp.UI.ViewModels
                     System.Windows.MessageBox.Show("Dữ liệu tải về không phải là tệp ảnh hợp lệ!", "Lỗi", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Error);
                     return;
                 }
+
+                // Lưu dữ liệu ảnh vào Disk Cache và thư mục tạm Job để các lần mở Job sau nạp ngay tức khắc mà không cần mạng
+                SaveUrlImageToDiskCache(url, data);
 
                 var def = SelectedImageSourceDef() ?? _config?.ImageSources?.FirstOrDefault();
                 if (def != null)

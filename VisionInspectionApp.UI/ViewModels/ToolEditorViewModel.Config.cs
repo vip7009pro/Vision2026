@@ -180,6 +180,42 @@ namespace VisionInspectionApp.UI.ViewModels
                     Edges.Add(new ToolGraphEdgeViewModel(from, to, e.FromPort, e.ToPort));
                 }
 
+                // Pre-load ảnh mẫu dạy học (teach_image.png) từ gói Job hoặc Disk Cache để hiển thị ngay tức thì (0ms)
+                if (!string.IsNullOrWhiteSpace(tempDir) && Directory.Exists(tempDir))
+                {
+                    string teachImgPath = Path.Combine(tempDir, "teach_image.png");
+                    if (File.Exists(teachImgPath) && new FileInfo(teachImgPath).Length > 0)
+                    {
+                        try
+                        {
+                            var teachMat = Cv2.ImRead(teachImgPath, ImreadModes.Color);
+                            if (teachMat != null && !teachMat.Empty())
+                            {
+                                var srcDef = _config.ImageSources?.FirstOrDefault(x => x.SourceType == ImageSourceType.Url)
+                                             ?? _config.ImageSources?.FirstOrDefault();
+                                if (srcDef != null)
+                                {
+                                    SetImageSourceCache(srcDef.Name, srcDef.ImageUrl ?? "teach_image.png", teachMat);
+                                }
+                                _sharedImage.SetImage(teachMat);
+                            }
+                        }
+                        catch { }
+                    }
+                }
+
+                // Nếu chưa có ảnh trong _sharedImage và ImageSource là URL -> nạp từ Disk Cache
+                var urlSrc = _config.ImageSources?.FirstOrDefault(x => x.SourceType == ImageSourceType.Url);
+                if (urlSrc != null && !string.IsNullOrWhiteSpace(urlSrc.ImageUrl) && GetImageSourceCache(urlSrc.Name) == null)
+                {
+                    var diskMat = TryLoadUrlImageFromDiskCache(urlSrc.ImageUrl);
+                    if (diskMat != null && !diskMat.Empty())
+                    {
+                        SetImageSourceCache(urlSrc.Name, urlSrc.ImageUrl, diskMat);
+                        _sharedImage.SetImage(diskMat);
+                    }
+                }
+
                 SelectedNode = Nodes.Count > 0 ? Nodes[0] : null;
                 RaiseToolPropertyPanelsChanged();
                 RefreshOriginTemplatePreview();
@@ -357,6 +393,7 @@ namespace VisionInspectionApp.UI.ViewModels
             
             try
             {
+                EnsureTeachImageInJobTempDir();
                 _jobService.SaveJob(_config, CurrentTempWorkingDir, CurrentJobFilePath);
                 IsDirty = false;
                 _recentJobsService?.AddRecentJob(CurrentJobFilePath);
@@ -366,6 +403,52 @@ namespace VisionInspectionApp.UI.ViewModels
                 MessageBox.Show($"Failed to save job: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
             RefreshPreviews();
+        }
+
+        private void EnsureTeachImageInJobTempDir()
+        {
+            if (string.IsNullOrWhiteSpace(CurrentTempWorkingDir) || !Directory.Exists(CurrentTempWorkingDir))
+                return;
+
+            try
+            {
+                string destPath = Path.Combine(CurrentTempWorkingDir, "teach_image.png");
+                if (File.Exists(destPath) && new FileInfo(destPath).Length > 0)
+                    return;
+
+                // 1. Lấy từ bộ nhớ đệm cache ImageSource (URL hoặc File)
+                var urlSource = _config?.ImageSources?.FirstOrDefault(x => x.SourceType == ImageSourceType.Url || x.SourceType == ImageSourceType.File);
+                if (urlSource != null)
+                {
+                    var cached = GetImageSourceCache(urlSource.Name);
+                    if (cached != null && !cached.Empty())
+                    {
+                        Cv2.ImWrite(destPath, cached);
+                        return;
+                    }
+
+                    if (!string.IsNullOrWhiteSpace(urlSource.ImageUrl))
+                    {
+                        using var diskMat = TryLoadUrlImageFromDiskCache(urlSource.ImageUrl);
+                        if (diskMat != null && !diskMat.Empty())
+                        {
+                            Cv2.ImWrite(destPath, diskMat);
+                            return;
+                        }
+                    }
+                }
+
+                // 2. Lấy từ _sharedImage nếu đang có ảnh mẫu
+                using var snap = _sharedImage.GetSnapshot();
+                if (snap != null && !snap.Empty())
+                {
+                    Cv2.ImWrite(destPath, snap);
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"EnsureTeachImageInJobTempDir error: {ex.Message}");
+            }
         }
 
         /// <summary>
