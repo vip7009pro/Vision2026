@@ -140,7 +140,7 @@ public partial class InspectionService
         }
     }
 
-    private static void BurnOverlaysToMat(Mat mat, VisionConfig config, InspectionResult result, ImageOutputDefinition? io = null, string? resolvedInputNodeName = null, Dictionary<string, ToolGraphNode>? nodesById = null, List<ToolGraphEdge>? edges = null)
+    public static void BurnOverlaysToMat(Mat mat, VisionConfig config, InspectionResult result, ImageOutputDefinition? io = null, string? resolvedInputNodeName = null, Dictionary<string, ToolGraphNode>? nodesById = null, List<ToolGraphEdge>? edges = null)
     {
         if (mat is null || mat.Empty())
         {
@@ -1014,6 +1014,263 @@ public partial class InspectionService
                 }
 
                 RenderTextWithNewlines(mat, text, new Point(t.X, t.Y), HersheyFonts.HersheySimplex, textFontScale, col, textThick);
+            }
+        }
+
+        // 22. Result Table Overlay (Bảng kết quả đo đạc & thông tin sản phẩm ở góc dưới cùng bên phải)
+        if (io is null || io.ShowResultTable)
+        {
+            DrawResultTableOverlay(mat, config, result, io, autoScale);
+        }
+    }
+
+    private static void DrawResultTableOverlay(Mat mat, VisionConfig config, InspectionResult result, ImageOutputDefinition? io, double autoScale)
+    {
+        if (mat is null || mat.Empty()) return;
+
+        // 1. Thu thập dữ liệu bảng kết quả đo đạc
+        var prodName = !string.IsNullOrWhiteSpace(config.ProductName) ? config.ProductName : (!string.IsNullOrWhiteSpace(config.ProductCode) ? config.ProductCode : "N/A");
+        var prodCode = !string.IsNullOrWhiteSpace(config.ProductCode) ? config.ProductCode : "N/A";
+        var inspectTime = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
+        var overallPass = result.Pass;
+
+        var rows = new List<(string Cat, string Name, string Val, string Spec, bool Pass)>();
+
+        if (result.Origin != null)
+        {
+            rows.Add(("Origin", "Origin", $"({result.Origin.Position.X:F1}, {result.Origin.Position.Y:F1}, {result.Origin.AngleDeg:F1}deg)", $"Sc: {result.Origin.Score:F2}", result.Origin.Pass));
+        }
+
+        if (result.Points != null)
+        {
+            foreach (var p in result.Points)
+            {
+                if (string.IsNullOrWhiteSpace(p.Name)) continue;
+                rows.Add(("Point", p.Name, $"({p.Position.X:F1}, {p.Position.Y:F1})", $"Sc: {p.Score:F2}", p.Pass));
+            }
+        }
+
+        if (result.Distances != null)
+        {
+            foreach (var d in result.Distances)
+            {
+                if (string.IsNullOrWhiteSpace(d.Name)) continue;
+                rows.Add(("Dist", d.Name, $"{d.Value:F2}", $"{d.Nominal:F2} (+{d.TolPlus:F2}/-{d.TolMinus:F2})", d.Pass));
+            }
+        }
+
+        if (result.LineToLineDistances != null)
+        {
+            foreach (var d in result.LineToLineDistances)
+            {
+                if (string.IsNullOrWhiteSpace(d.Name)) continue;
+                rows.Add(("LLD", d.Name, $"{d.Value:F2}", $"{d.Nominal:F2} (+{d.TolPlus:F2}/-{d.TolMinus:F2})", d.Pass));
+            }
+        }
+
+        if (result.PointToLineDistances != null)
+        {
+            foreach (var d in result.PointToLineDistances)
+            {
+                if (string.IsNullOrWhiteSpace(d.Name)) continue;
+                rows.Add(("PLD", d.Name, $"{d.Value:F2}", $"{d.Nominal:F2} (+{d.TolPlus:F2}/-{d.TolMinus:F2})", d.Pass));
+            }
+        }
+
+        if (result.SegmentLineDistances != null)
+        {
+            foreach (var d in result.SegmentLineDistances)
+            {
+                if (string.IsNullOrWhiteSpace(d.Name)) continue;
+                rows.Add(("SLD", d.Name, $"{d.Value:F2}", $"{d.Nominal:F2} (+{d.TolPlus:F2}/-{d.TolMinus:F2})", d.Pass));
+            }
+        }
+
+        if (result.Angles != null)
+        {
+            foreach (var a in result.Angles)
+            {
+                if (string.IsNullOrWhiteSpace(a.Name)) continue;
+                rows.Add(("Angle", a.Name, $"{a.ValueDeg:F2}deg", $"{a.Nominal:F2}deg (+{a.TolPlus:F2}/-{a.TolMinus:F2})", a.Pass));
+            }
+        }
+
+        if (result.EdgePairs != null)
+        {
+            foreach (var ep in result.EdgePairs)
+            {
+                if (string.IsNullOrWhiteSpace(ep.Name)) continue;
+                rows.Add(("EdgePair", ep.Name, $"{ep.Value:F2}", $"{ep.Nominal:F2}", ep.Pass));
+            }
+        }
+
+        if (result.EdgePairDetections != null)
+        {
+            foreach (var epd in result.EdgePairDetections)
+            {
+                if (string.IsNullOrWhiteSpace(epd.Name)) continue;
+                rows.Add(("EdgePairDetect", epd.Name, $"{epd.Value:F2}", $"{epd.Nominal:F2}", epd.Pass));
+            }
+        }
+
+        if (result.Diameters != null)
+        {
+            foreach (var d in result.Diameters)
+            {
+                if (string.IsNullOrWhiteSpace(d.Name)) continue;
+                rows.Add(("Diameter", d.Name, $"{d.Value:F2}", $"{d.Nominal:F2}", d.Pass));
+            }
+        }
+
+        if (result.CircleFinders != null)
+        {
+            foreach (var cf in result.CircleFinders)
+            {
+                if (string.IsNullOrWhiteSpace(cf.Name)) continue;
+                rows.Add(("Circle", cf.Name, $"R={cf.RadiusPx:F1}", cf.Found ? "Found" : "Fail", cf.Found));
+            }
+        }
+
+        if (result.BlobDetections != null)
+        {
+            foreach (var bd in result.BlobDetections)
+            {
+                if (string.IsNullOrWhiteSpace(bd.Name)) continue;
+                rows.Add(("Blob", bd.Name, $"Count={bd.Count}", $"Max: {bd.MaxAllowedBlobs}", bd.Pass));
+            }
+        }
+
+        if (result.SurfaceCompares != null)
+        {
+            foreach (var sc in result.SurfaceCompares)
+            {
+                if (string.IsNullOrWhiteSpace(sc.Name)) continue;
+                rows.Add(("Surface", sc.Name, $"Defects: {sc.Count}", sc.Pass ? "OK" : "NG", sc.Pass));
+            }
+        }
+
+        if (result.ContourCompares != null)
+        {
+            foreach (var cc in result.ContourCompares)
+            {
+                if (string.IsNullOrWhiteSpace(cc.Name)) continue;
+                rows.Add(("Contour", cc.Name, $"Dist: {cc.MaxDistancePx:F1}px", $"Score: {cc.MatchScore:F2}", cc.Pass));
+            }
+        }
+
+        if (result.CodeDetections != null)
+        {
+            foreach (var cd in result.CodeDetections)
+            {
+                if (string.IsNullOrWhiteSpace(cd.Name)) continue;
+                var text = cd.Text ?? "";
+                if (text.Length > 20) text = text[..17] + "...";
+                rows.Add(("Barcode", cd.Name, text, string.IsNullOrWhiteSpace(cd.ExpectedSpec) ? "-" : cd.ExpectedSpec, cd.Pass));
+            }
+        }
+
+        // 2. Tính toán kích thước và vị trí bảng (Góc dưới bên phải)
+        double fontScale = Math.Clamp(0.50 * autoScale, 0.40, 1.6);
+        int fontThick = Math.Max(1, (int)Math.Round(1.3 * autoScale));
+        int rowHeight = Math.Max(20, (int)Math.Round(26 * autoScale));
+        int headerHeight = rowHeight * 2 + (int)(10 * autoScale);
+
+        int maxItemsToShow = Math.Min(rows.Count, 15); // Tối đa 15 dòng để không tràn màn hình
+        int dataHeight = maxItemsToShow > 0 ? (maxItemsToShow + 1) * rowHeight : 0;
+        int totalTableHeight = headerHeight + dataHeight + (int)(10 * autoScale);
+
+        int tableWidth = Math.Min(mat.Width - 20, Math.Max((int)(400 * autoScale), (int)(520 * autoScale)));
+        int margin = Math.Max(10, (int)(15 * autoScale));
+
+        int x0 = mat.Width - tableWidth - margin;
+        int y0 = mat.Height - totalTableHeight - margin;
+        if (x0 < 0) x0 = 0;
+        if (y0 < 0) y0 = 0;
+
+        var tableRect = new Rect(x0, y0, tableWidth, totalTableHeight);
+
+        // 3. Vẽ nền bảng bán trong suốt (Semi-transparent dark overlay)
+        using (var overlay = mat.SubMat(tableRect))
+        using (var darkBox = new Mat(overlay.Size(), overlay.Type(), new Scalar(16, 16, 20)))
+        {
+            Cv2.AddWeighted(darkBox, 0.85, overlay, 0.15, 0, overlay);
+        }
+
+        // Viền bảng
+        var borderColor = new Scalar(90, 90, 95);
+        var passColor = new Scalar(0, 255, 0);       // Lime
+        var failColor = new Scalar(0, 0, 255);       // Red
+        var whiteColor = new Scalar(240, 240, 240);
+        var cyanColor = new Scalar(255, 230, 0);     // Cyan-ish BGR
+        var yellowColor = new Scalar(0, 230, 255);
+        var grayColor = new Scalar(160, 160, 165);
+
+        Cv2.Rectangle(mat, tableRect, borderColor, Math.Max(1, (int)Math.Round(1.5 * autoScale)), LineTypes.AntiAlias);
+
+        // 4. Vẽ phần Header Thông tin sản phẩm
+        int curY = y0 + rowHeight;
+        string h1 = $"TEN SP: {prodName}  |  MA SP: {prodCode}";
+        Cv2.PutText(mat, h1, new Point(x0 + (int)(10 * autoScale), curY - (int)(6 * autoScale)), HersheyFonts.HersheySimplex, fontScale * 0.95, whiteColor, fontThick, LineTypes.AntiAlias);
+
+        curY += rowHeight;
+        string h2_time = $"NGAY KT: {inspectTime}";
+        Cv2.PutText(mat, h2_time, new Point(x0 + (int)(10 * autoScale), curY - (int)(6 * autoScale)), HersheyFonts.HersheySimplex, fontScale * 0.9, grayColor, fontThick, LineTypes.AntiAlias);
+
+        string h2_status = overallPass ? "[ PASS ]" : "[ FAIL ]";
+        var statusColor = overallPass ? passColor : failColor;
+        int statusX = x0 + tableWidth - (int)(110 * autoScale);
+        Cv2.PutText(mat, h2_status, new Point(statusX, curY - (int)(6 * autoScale)), HersheyFonts.HersheySimplex, fontScale * 1.15, statusColor, fontThick + 1, LineTypes.AntiAlias);
+
+        // Kẻ vạch ngăn cách Header và Data
+        curY += (int)(6 * autoScale);
+        Cv2.Line(mat, new Point(x0, curY), new Point(x0 + tableWidth, curY), borderColor, 1, LineTypes.AntiAlias);
+
+        // 5. Vẽ bảng dữ liệu kết quả đo đạc (Data Table)
+        if (maxItemsToShow > 0)
+        {
+            // Vị trí các cột
+            int colCatX = x0 + (int)(10 * autoScale);
+            int colValX = x0 + (int)(150 * autoScale);
+            int colSpecX = x0 + (int)(290 * autoScale);
+            int colStatusX = x0 + tableWidth - (int)(65 * autoScale);
+
+            // Header hàng
+            curY += rowHeight;
+            Cv2.PutText(mat, "HANG MUC", new Point(colCatX, curY - (int)(6 * autoScale)), HersheyFonts.HersheySimplex, fontScale * 0.85, cyanColor, fontThick, LineTypes.AntiAlias);
+            Cv2.PutText(mat, "GIA TRI DO", new Point(colValX, curY - (int)(6 * autoScale)), HersheyFonts.HersheySimplex, fontScale * 0.85, cyanColor, fontThick, LineTypes.AntiAlias);
+            Cv2.PutText(mat, "TIEU CHUAN", new Point(colSpecX, curY - (int)(6 * autoScale)), HersheyFonts.HersheySimplex, fontScale * 0.85, cyanColor, fontThick, LineTypes.AntiAlias);
+            Cv2.PutText(mat, "TT", new Point(colStatusX, curY - (int)(6 * autoScale)), HersheyFonts.HersheySimplex, fontScale * 0.85, cyanColor, fontThick, LineTypes.AntiAlias);
+
+            Cv2.Line(mat, new Point(x0, curY), new Point(x0 + tableWidth, curY), borderColor, 1, LineTypes.AntiAlias);
+
+            // Các hàng dữ liệu
+            for (int i = 0; i < maxItemsToShow; i++)
+            {
+                var r = rows[i];
+                curY += rowHeight;
+
+                string nameStr = $"{r.Cat}: {r.Name}";
+                if (nameStr.Length > 16) nameStr = nameStr[..14] + "..";
+
+                string valStr = r.Val;
+                if (valStr.Length > 15) valStr = valStr[..13] + "..";
+
+                string specStr = r.Spec;
+                if (specStr.Length > 15) specStr = specStr[..13] + "..";
+
+                string stStr = r.Pass ? "OK" : "NG";
+                var stColor = r.Pass ? passColor : failColor;
+
+                Cv2.PutText(mat, nameStr, new Point(colCatX, curY - (int)(6 * autoScale)), HersheyFonts.HersheySimplex, fontScale * 0.85, whiteColor, fontThick, LineTypes.AntiAlias);
+                Cv2.PutText(mat, valStr, new Point(colValX, curY - (int)(6 * autoScale)), HersheyFonts.HersheySimplex, fontScale * 0.85, whiteColor, fontThick, LineTypes.AntiAlias);
+                Cv2.PutText(mat, specStr, new Point(colSpecX, curY - (int)(6 * autoScale)), HersheyFonts.HersheySimplex, fontScale * 0.80, grayColor, fontThick, LineTypes.AntiAlias);
+                Cv2.PutText(mat, stStr, new Point(colStatusX, curY - (int)(6 * autoScale)), HersheyFonts.HersheySimplex, fontScale * 0.90, stColor, fontThick, LineTypes.AntiAlias);
+
+                // Dòng phân cách mờ giữa các hàng
+                if (i < maxItemsToShow - 1)
+                {
+                    Cv2.Line(mat, new Point(x0 + (int)(5 * autoScale), curY), new Point(x0 + tableWidth - (int)(5 * autoScale), curY), new Scalar(45, 45, 50), 1, LineTypes.AntiAlias);
+                }
             }
         }
     }

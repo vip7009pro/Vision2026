@@ -163,6 +163,20 @@ namespace VisionInspectionApp.UI.ViewModels
             }
         }
 
+        public bool ImageOutput_ShowResultTable
+        {
+            get => SelectedImageOutputDef()?.ShowResultTable ?? true;
+            set
+            {
+                var def = SelectedImageOutputDef();
+                if (def is null || def.ShowResultTable == value) return;
+                def.ShowResultTable = value;
+                OnPropertyChanged();
+                IsDirty = true;
+                RequestAutoSave();
+            }
+        }
+
         public bool ImageOutput_EnableOutput
         {
             get => SelectedImageOutputDef()?.EnableOutput ?? true;

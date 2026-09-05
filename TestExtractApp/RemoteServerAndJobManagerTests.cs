@@ -555,9 +555,9 @@ public static class RemoteServerAndJobManagerTests
         scannedCode = userLabelId;
 
         // Xử lý mã và kiểm tra không được query lại DB
-        var (valid, processedCode, extractedRawCode, _) = oqcService.ProcessRawCodeString(scannedCode);
+        var (valid, processedCode, extractedRawCode, _) = oqcService.ProcessRawCodeString(scannedCode, new VisionInspectionApp.Models.OqcScannerConfig());
         if (!valid || processedCode != "LOT2026090399")
-            throw new Exception("Processed LABEL ID mismatch!");
+            throw new Exception($"Processed LABEL ID mismatch! valid={valid}, processedCode={processedCode}, rawCode={extractedRawCode}");
 
         // Giả lập sau khi chạy xong:
         // ScannedCode được xóa rỗng về "" để sẵn sàng cho lần quét tiếp theo

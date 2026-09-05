@@ -1835,6 +1835,21 @@
                                      </Grid>
                                  </Border>
 
+                                 <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+                                     <Grid>
+                                         <Grid.ColumnDefinitions>
+                                             <ColumnDefinition Width="120" />
+                                             <ColumnDefinition Width="*" />
+                                         </Grid.ColumnDefinitions>
+                                         <Border Background="{DynamicResource WindowBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
+                                             <TextBlock Text="Result Table" VerticalAlignment="Center" Margin="4,2" FontSize="11" Foreground="{DynamicResource TextBrush}"/>
+                                         </Border>
+                                         <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
+                                             <CheckBox IsChecked="{Binding ImageOutput_ShowResultTable, UpdateSourceTrigger=PropertyChanged}" Margin="2,1" FontSize="11" VerticalAlignment="Center" Content="B&#x1EA3;ng k&#x1EBF;t qu&#x1EA3; &#x111;o &#x111;&#x1EA1;c (T&#xEA;n SP, M&#xE3; SP, Ng&#xE0;y, K&#x1EBF;t qu&#x1EA3;)" ToolTip="Hi&#x1EC3;n th&#x1ECB; overlay b&#x1EA3;ng th&#xF4;ng tin v&#xE0; k&#x1EBF;t qu&#x1EA3; &#x111;o &#x111;&#x1EA1;c chi ti&#x1EBF;t &#x1EDF; g&#xF3;c d&#x1B0;&#x1EDB;i b&#xEA;n ph&#x1EA3;i &#x1EA3;nh xu&#x1EA5;t" />
+                                         </Border>
+                                     </Grid>
+                                 </Border>
+
                                 <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
                                     <Grid>
                                         <Grid.ColumnDefinitions>
@@ -3496,30 +3511,127 @@
                             <Slider Minimum="0.1" Maximum="10" Value="{Binding ClaheClipLimit, UpdateSourceTrigger=PropertyChanged}" TickFrequency="0.1"/>
                         </StackPanel>
 
-                        <!-- Filters -->
-                        <TextBlock Text="Filters &amp; Binarization" FontWeight="SemiBold" FontSize="11" Margin="0,6,0,4" Foreground="{DynamicResource TextBrush}"/>
+                        <!-- 1. Color Channel & Contrast -->
+                        <TextBlock Text="Color Channel &amp; Contrast" FontWeight="SemiBold" FontSize="11" Margin="0,6,0,4" Foreground="{DynamicResource TextBrush}"/>
+                        <Grid Margin="0,0,0,4">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="90"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="Kênh màu:" VerticalAlignment="Center" FontSize="11" Foreground="{DynamicResource TextMutedBrush}"/>
+                            <ComboBox Grid.Column="1" ItemsSource="{Binding AvailableColorChannels}" SelectedItem="{Binding ColorChannel, UpdateSourceTrigger=PropertyChanged}" FontSize="11" ToolTip="Trích xuất kênh màu cụ thể (H/S/V, Lab-L, R/G/B)"/>
+                        </Grid>
+                        <CheckBox Content="Đảo âm bản (Invert Colors)" IsChecked="{Binding InvertColors, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,4" FontSize="11" Foreground="{DynamicResource TextBrush}"/>
+                        <CheckBox Content="Tự động tương phản (Auto Contrast)" IsChecked="{Binding UseAutoContrast, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,4" FontSize="11" Foreground="{DynamicResource TextBrush}"/>
+                        <CheckBox Content="Hiệu chỉnh Gamma" IsChecked="{Binding UseGamma, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,4" FontSize="11" Foreground="{DynamicResource TextBrush}"/>
+                        <StackPanel Margin="0,0,0,6" IsEnabled="{Binding UseGamma}" Visibility="{Binding UseGamma, Converter={StaticResource BoolToVis}}">
+                            <Grid Margin="0,0,0,2">
+                                <TextBlock Text="Gamma (0.1 - 5.0):" FontSize="11" Foreground="{DynamicResource TextMutedBrush}"/>
+                                <TextBlock Text="{Binding GammaValue, StringFormat={}{0:F2}}" FontWeight="SemiBold" FontSize="11" HorizontalAlignment="Right" Foreground="{DynamicResource TextBrush}"/>
+                            </Grid>
+                            <Slider Minimum="0.1" Maximum="5.0" Value="{Binding GammaValue, UpdateSourceTrigger=PropertyChanged}" TickFrequency="0.05" Margin="0,0,0,4"/>
+                        </StackPanel>
+
+                        <!-- 2. Filters & Denoising -->
+                        <TextBlock Text="Filters &amp; Denoising" FontWeight="SemiBold" FontSize="11" Margin="0,6,0,4" Foreground="{DynamicResource TextBrush}"/>
                         <CheckBox Content="Grayscale" IsChecked="{Binding UseGray, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,4" FontSize="11" Foreground="{DynamicResource TextBrush}"/>
 
                         <CheckBox Content="Gaussian Blur" IsChecked="{Binding UseGaussianBlur, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,4" FontSize="11" Foreground="{DynamicResource TextBrush}"/>
-                        <StackPanel Margin="0,0,0,6" IsEnabled="{Binding UseGaussianBlur}">
+                        <StackPanel Margin="0,0,0,6" IsEnabled="{Binding UseGaussianBlur}" Visibility="{Binding UseGaussianBlur, Converter={StaticResource BoolToVis}}">
                             <Grid Margin="0,0,0,2">
-                                <TextBlock Text="Blur Kernel:" FontSize="11" Foreground="{DynamicResource TextMutedBrush}"/>
+                                <TextBlock Text="Gaussian Kernel:" FontSize="11" Foreground="{DynamicResource TextMutedBrush}"/>
                                 <TextBlock Text="{Binding BlurKernel}" FontWeight="SemiBold" FontSize="11" HorizontalAlignment="Right" Foreground="{DynamicResource TextBrush}"/>
                             </Grid>
                             <Slider Minimum="1" Maximum="21" Value="{Binding BlurKernel, UpdateSourceTrigger=PropertyChanged}" IsSnapToTickEnabled="True" TickFrequency="2"/>
                         </StackPanel>
 
-                        <CheckBox Content="Threshold / Binarize" IsChecked="{Binding UseThreshold, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,4" FontSize="11" Foreground="{DynamicResource TextBrush}"/>
+                        <CheckBox Content="Median Blur (Khử nhiễu muối tiêu)" IsChecked="{Binding UseMedianBlur, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,4" FontSize="11" Foreground="{DynamicResource TextBrush}"/>
+                        <StackPanel Margin="0,0,0,6" IsEnabled="{Binding UseMedianBlur}" Visibility="{Binding UseMedianBlur, Converter={StaticResource BoolToVis}}">
+                            <Grid Margin="0,0,0,2">
+                                <TextBlock Text="Median Kernel:" FontSize="11" Foreground="{DynamicResource TextMutedBrush}"/>
+                                <TextBlock Text="{Binding MedianKernel}" FontWeight="SemiBold" FontSize="11" HorizontalAlignment="Right" Foreground="{DynamicResource TextBrush}"/>
+                            </Grid>
+                            <Slider Minimum="1" Maximum="21" Value="{Binding MedianKernel, UpdateSourceTrigger=PropertyChanged}" IsSnapToTickEnabled="True" TickFrequency="2"/>
+                        </StackPanel>
+
+                        <CheckBox Content="Bilateral Filter (Làm mịn giữ nét biên)" IsChecked="{Binding UseBilateralFilter, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,4" FontSize="11" Foreground="{DynamicResource TextBrush}"/>
+                        <StackPanel Margin="0,0,0,6" IsEnabled="{Binding UseBilateralFilter}" Visibility="{Binding UseBilateralFilter, Converter={StaticResource BoolToVis}}">
+                            <Grid Margin="0,0,0,2">
+                                <TextBlock Text="Diameter:" FontSize="11" Foreground="{DynamicResource TextMutedBrush}"/>
+                                <TextBlock Text="{Binding BilateralDiameter}" FontWeight="SemiBold" FontSize="11" HorizontalAlignment="Right" Foreground="{DynamicResource TextBrush}"/>
+                            </Grid>
+                            <Slider Minimum="1" Maximum="15" Value="{Binding BilateralDiameter, UpdateSourceTrigger=PropertyChanged}" IsSnapToTickEnabled="True" TickFrequency="2" Margin="0,0,0,4"/>
+                            <Grid Margin="0,0,0,2">
+                                <TextBlock Text="Sigma Color / Space:" FontSize="11" Foreground="{DynamicResource TextMutedBrush}"/>
+                                <TextBlock Text="{Binding BilateralSigmaColor, StringFormat={}{0:F0}}" FontWeight="SemiBold" FontSize="11" HorizontalAlignment="Right" Foreground="{DynamicResource TextBrush}"/>
+                            </Grid>
+                            <Slider Minimum="10" Maximum="150" Value="{Binding BilateralSigmaColor, UpdateSourceTrigger=PropertyChanged}" TickFrequency="5"/>
+                        </StackPanel>
+
+                        <!-- 3. Gradient & Edge -->
+                        <TextBlock Text="Gradient &amp; Edge" FontWeight="SemiBold" FontSize="11" Margin="0,6,0,4" Foreground="{DynamicResource TextBrush}"/>
+                        <Grid Margin="0,0,0,4">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="90"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="Gradient:" VerticalAlignment="Center" FontSize="11" Foreground="{DynamicResource TextMutedBrush}"/>
+                            <ComboBox Grid.Column="1" ItemsSource="{Binding AvailableGradientTypes}" SelectedItem="{Binding GradientType, UpdateSourceTrigger=PropertyChanged}" FontSize="11" ToolTip="Sobel, Scharr, Laplacian, MorphGradient"/>
+                        </Grid>
+                        <StackPanel Margin="0,0,0,6" Visibility="{Binding IsGradientActive, Converter={StaticResource BoolToVis}}">
+                            <Grid Margin="0,0,0,2">
+                                <TextBlock Text="Gradient Scale:" FontSize="11" Foreground="{DynamicResource TextMutedBrush}"/>
+                                <TextBlock Text="{Binding GradientScale, StringFormat={}{0:F1}}" FontWeight="SemiBold" FontSize="11" HorizontalAlignment="Right" Foreground="{DynamicResource TextBrush}"/>
+                            </Grid>
+                            <Slider Minimum="0.2" Maximum="3.0" Value="{Binding GradientScale, UpdateSourceTrigger=PropertyChanged}" TickFrequency="0.2"/>
+                        </StackPanel>
+
+                        <CheckBox Content="Canny Edge" IsChecked="{Binding UseCanny, UpdateSourceTrigger=PropertyChanged}" Margin="0,2,0,4" FontSize="11" Foreground="{DynamicResource TextBrush}"/>
+                        <StackPanel Margin="0,0,0,6" IsEnabled="{Binding UseCanny}" Visibility="{Binding UseCanny, Converter={StaticResource BoolToVis}}">
+                            <Grid Margin="0,0,0,2">
+                                <TextBlock Text="Canny Thresh 1 / 2:" FontSize="11" Foreground="{DynamicResource TextMutedBrush}"/>
+                                <TextBlock FontWeight="SemiBold" FontSize="11" HorizontalAlignment="Right" Foreground="{DynamicResource TextBrush}">
+                                    <Run Text="{Binding Canny1}"/><Run Text=" / "/><Run Text="{Binding Canny2}"/>
+                                </TextBlock>
+                            </Grid>
+                            <Slider Minimum="0" Maximum="255" Value="{Binding Canny1, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,2"/>
+                            <Slider Minimum="0" Maximum="255" Value="{Binding Canny2, UpdateSourceTrigger=PropertyChanged}"/>
+                        </StackPanel>
+
+                        <!-- 4. Auto Edge (Smart White-on-White Edge) -->
+                        <TextBlock Text="⚡ Auto Edge (Tự động tìm biên)" FontWeight="SemiBold" FontSize="11" Margin="0,6,0,4" Foreground="{DynamicResource AccentBrush}"/>
+                        <CheckBox Content="Bật Auto Edge (Tem trắng / Tương phản yếu)" IsChecked="{Binding UseAutoEdge, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,4" FontSize="11" Foreground="{DynamicResource AccentBrush}"/>
+                        <StackPanel Margin="0,0,0,6" IsEnabled="{Binding UseAutoEdge}" Visibility="{Binding UseAutoEdge, Converter={StaticResource BoolToVis}}">
+                            <Grid Margin="0,0,0,4">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="90"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="Chiến lược:" VerticalAlignment="Center" FontSize="11" Foreground="{DynamicResource TextMutedBrush}"/>
+                                <ComboBox Grid.Column="1" ItemsSource="{Binding AvailableAutoEdgeMethods}" SelectedItem="{Binding AutoEdgeMethod, UpdateSourceTrigger=PropertyChanged}" FontSize="11"/>
+                            </Grid>
+                            <Grid Margin="0,0,0,2">
+                                <TextBlock Text="Độ tin cậy tối thiểu:" FontSize="11" Foreground="{DynamicResource TextMutedBrush}"/>
+                                <TextBlock Text="{Binding AutoEdgeMinConfidence, StringFormat={}{0:P0}}" FontWeight="SemiBold" FontSize="11" HorizontalAlignment="Right" Foreground="{DynamicResource TextBrush}"/>
+                            </Grid>
+                            <Slider Minimum="0.1" Maximum="0.95" Value="{Binding AutoEdgeMinConfidence, UpdateSourceTrigger=PropertyChanged}" TickFrequency="0.05" Margin="0,0,0,4"/>
+                            <CheckBox Content="Đảo vùng kết quả Auto Edge" IsChecked="{Binding AutoEdgeInvert, UpdateSourceTrigger=PropertyChanged}" FontSize="11" Foreground="{DynamicResource TextBrush}"/>
+                        </StackPanel>
+
+                        <!-- 5. Threshold / Binarize -->
+                        <TextBlock Text="Threshold / Binarization" FontWeight="SemiBold" FontSize="11" Margin="0,6,0,4" Foreground="{DynamicResource TextBrush}"/>
+                        <CheckBox Content="Kích hoạt Threshold / Binarize" IsChecked="{Binding UseThreshold, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,4" FontSize="11" Foreground="{DynamicResource TextBrush}"/>
                         <StackPanel Margin="0,0,0,6" IsEnabled="{Binding UseThreshold}">
                             <Grid Margin="0,0,0,4">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="90"/>
                                     <ColumnDefinition Width="*"/>
                                 </Grid.ColumnDefinitions>
-                                <TextBlock Text="Type:" VerticalAlignment="Center" FontSize="11" Foreground="{DynamicResource TextMutedBrush}"/>
+                                <TextBlock Text="Thuật toán:" VerticalAlignment="Center" FontSize="11" Foreground="{DynamicResource TextMutedBrush}"/>
                                 <ComboBox Grid.Column="1" ItemsSource="{Binding AvailableThresholdTypes}" SelectedItem="{Binding ThresholdType, UpdateSourceTrigger=PropertyChanged}" FontSize="11"/>
                             </Grid>
 
+                            <!-- Binary Threshold -->
                             <StackPanel Visibility="{Binding IsThresholdBinary, Converter={StaticResource BoolToVis}}">
                                 <Grid Margin="0,0,0,2">
                                     <TextBlock Text="Threshold Low:" FontSize="11" Foreground="{DynamicResource TextMutedBrush}"/>
@@ -3532,13 +3644,70 @@
                                     <TextBlock Text="{Binding ThresholdHigh}" FontWeight="SemiBold" FontSize="11" HorizontalAlignment="Right" Foreground="{DynamicResource TextBrush}"/>
                                 </Grid>
                                 <Slider Minimum="0" Maximum="255" Value="{Binding ThresholdHigh, UpdateSourceTrigger=PropertyChanged}" IsSnapToTickEnabled="True" TickFrequency="1" Margin="0,0,0,4"/>
-
-                                <CheckBox Content="Invert Binary" IsChecked="{Binding InvertBinary, UpdateSourceTrigger=PropertyChanged}" FontSize="11" Foreground="{DynamicResource TextBrush}"/>
                             </StackPanel>
+
+                            <!-- Local Adaptive Threshold -->
+                            <StackPanel Visibility="{Binding IsThresholdLocal, Converter={StaticResource BoolToVis}}">
+                                <Grid Margin="0,0,0,2">
+                                    <TextBlock Text="Mask Size:" FontSize="11" Foreground="{DynamicResource TextMutedBrush}"/>
+                                    <TextBlock Text="{Binding MaskWidth}" FontWeight="SemiBold" FontSize="11" HorizontalAlignment="Right" Foreground="{DynamicResource TextBrush}"/>
+                                </Grid>
+                                <Slider Minimum="3" Maximum="101" Value="{Binding MaskWidth, UpdateSourceTrigger=PropertyChanged}" IsSnapToTickEnabled="True" TickFrequency="2" Margin="0,0,0,4"/>
+                                <Grid Margin="0,0,0,2">
+                                    <TextBlock Text="Offset C:" FontSize="11" Foreground="{DynamicResource TextMutedBrush}"/>
+                                    <TextBlock Text="{Binding LocalOffset, StringFormat={}{0:F1}}" FontWeight="SemiBold" FontSize="11" HorizontalAlignment="Right" Foreground="{DynamicResource TextBrush}"/>
+                                </Grid>
+                                <Slider Minimum="-50" Maximum="50" Value="{Binding LocalOffset, UpdateSourceTrigger=PropertyChanged}" TickFrequency="1" Margin="0,0,0,4"/>
+                            </StackPanel>
+
+                            <!-- Sauvola Adaptive Threshold -->
+                            <StackPanel Visibility="{Binding IsThresholdSauvola, Converter={StaticResource BoolToVis}}">
+                                <Grid Margin="0,0,0,2">
+                                    <TextBlock Text="Sauvola Window Size:" FontSize="11" Foreground="{DynamicResource TextMutedBrush}"/>
+                                    <TextBlock Text="{Binding MaskWidth}" FontWeight="SemiBold" FontSize="11" HorizontalAlignment="Right" Foreground="{DynamicResource TextBrush}"/>
+                                </Grid>
+                                <Slider Minimum="3" Maximum="101" Value="{Binding MaskWidth, UpdateSourceTrigger=PropertyChanged}" IsSnapToTickEnabled="True" TickFrequency="2" Margin="0,0,0,4"/>
+                                <Grid Margin="0,0,0,2">
+                                    <TextBlock Text="Tham số k (0.01 - 1.0):" FontSize="11" Foreground="{DynamicResource TextMutedBrush}"/>
+                                    <TextBlock Text="{Binding SauvolaK, StringFormat={}{0:F2}}" FontWeight="SemiBold" FontSize="11" HorizontalAlignment="Right" Foreground="{DynamicResource TextBrush}"/>
+                                </Grid>
+                                <Slider Minimum="0.01" Maximum="0.8" Value="{Binding SauvolaK, UpdateSourceTrigger=PropertyChanged}" TickFrequency="0.02" Margin="0,0,0,4"/>
+                            </StackPanel>
+
+                            <CheckBox Content="Đảo nhị phân (Invert Binary)" IsChecked="{Binding InvertBinary, UpdateSourceTrigger=PropertyChanged}" FontSize="11" Foreground="{DynamicResource TextBrush}"/>
                         </StackPanel>
 
-                        <CheckBox Content="Canny Edge" IsChecked="{Binding UseCanny, UpdateSourceTrigger=PropertyChanged}" Margin="0,4,0,4" FontSize="11" Foreground="{DynamicResource TextBrush}"/>
-                        <CheckBox Content="Morphology Close" IsChecked="{Binding UseMorphology, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,4" FontSize="11" Foreground="{DynamicResource TextBrush}"/>
+                        <!-- 6. Morphology Extended -->
+                        <TextBlock Text="Morphology (Hình thái học)" FontWeight="SemiBold" FontSize="11" Margin="0,6,0,4" Foreground="{DynamicResource TextBrush}"/>
+                        <CheckBox Content="Kích hoạt Morphology" IsChecked="{Binding UseMorphology, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,4" FontSize="11" Foreground="{DynamicResource TextBrush}"/>
+                        <StackPanel Margin="0,0,0,6" IsEnabled="{Binding UseMorphology}" Visibility="{Binding UseMorphology, Converter={StaticResource BoolToVis}}">
+                            <Grid Margin="0,0,0,4">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="90"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="Phép toán:" VerticalAlignment="Center" FontSize="11" Foreground="{DynamicResource TextMutedBrush}"/>
+                                <ComboBox Grid.Column="1" ItemsSource="{Binding AvailableMorphTypes}" SelectedItem="{Binding MorphType, UpdateSourceTrigger=PropertyChanged}" FontSize="11"/>
+                            </Grid>
+                            <Grid Margin="0,0,0,4">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="90"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="Hình dạng kernel:" VerticalAlignment="Center" FontSize="11" Foreground="{DynamicResource TextMutedBrush}"/>
+                                <ComboBox Grid.Column="1" ItemsSource="{Binding AvailableMorphShapes}" SelectedItem="{Binding MorphShape, UpdateSourceTrigger=PropertyChanged}" FontSize="11"/>
+                            </Grid>
+                            <Grid Margin="0,0,0,2">
+                                <TextBlock Text="Kernel Size:" FontSize="11" Foreground="{DynamicResource TextMutedBrush}"/>
+                                <TextBlock Text="{Binding MorphKernelSize}" FontWeight="SemiBold" FontSize="11" HorizontalAlignment="Right" Foreground="{DynamicResource TextBrush}"/>
+                            </Grid>
+                            <Slider Minimum="1" Maximum="31" Value="{Binding MorphKernelSize, UpdateSourceTrigger=PropertyChanged}" IsSnapToTickEnabled="True" TickFrequency="2" Margin="0,0,0,4"/>
+                            <Grid Margin="0,0,0,2">
+                                <TextBlock Text="Số lần lặp (Iterations):" FontSize="11" Foreground="{DynamicResource TextMutedBrush}"/>
+                                <TextBlock Text="{Binding MorphIterations}" FontWeight="SemiBold" FontSize="11" HorizontalAlignment="Right" Foreground="{DynamicResource TextBrush}"/>
+                            </Grid>
+                            <Slider Minimum="1" Maximum="10" Value="{Binding MorphIterations, UpdateSourceTrigger=PropertyChanged}" IsSnapToTickEnabled="True" TickFrequency="1"/>
+                        </StackPanel>
                     </StackPanel>
                 </Border>
 

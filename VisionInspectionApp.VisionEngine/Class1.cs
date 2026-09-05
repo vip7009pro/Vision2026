@@ -723,6 +723,235 @@ public sealed class ImagePreprocessor
         return new Point2d(rx + totalDx, ry + totalDy);
     }
 
+    private static Mat ApplyColorChannel(Mat src, PreprocessColorChannel channel)
+    {
+        if (channel == PreprocessColorChannel.All || src.Channels() < 3)
+        {
+            return src.Clone();
+        }
+
+        var dst = new Mat();
+        switch (channel)
+        {
+            case PreprocessColorChannel.Red:
+                Cv2.ExtractChannel(src, dst, 2);
+                break;
+            case PreprocessColorChannel.Green:
+                Cv2.ExtractChannel(src, dst, 1);
+                break;
+            case PreprocessColorChannel.Blue:
+                Cv2.ExtractChannel(src, dst, 0);
+                break;
+            case PreprocessColorChannel.Hue:
+                using (var hsv = new Mat())
+                {
+                    Cv2.CvtColor(src, hsv, ColorConversionCodes.BGR2HSV);
+                    Cv2.ExtractChannel(hsv, dst, 0);
+                }
+                break;
+            case PreprocessColorChannel.Saturation:
+                using (var hsv = new Mat())
+                {
+                    Cv2.CvtColor(src, hsv, ColorConversionCodes.BGR2HSV);
+                    Cv2.ExtractChannel(hsv, dst, 1);
+                }
+                break;
+            case PreprocessColorChannel.Value:
+                using (var hsv = new Mat())
+                {
+                    Cv2.CvtColor(src, hsv, ColorConversionCodes.BGR2HSV);
+                    Cv2.ExtractChannel(hsv, dst, 2);
+                }
+                break;
+            case PreprocessColorChannel.Lab_L:
+                using (var lab = new Mat())
+                {
+                    Cv2.CvtColor(src, lab, ColorConversionCodes.BGR2Lab);
+                    Cv2.ExtractChannel(lab, dst, 0);
+                }
+                break;
+            default:
+                return src.Clone();
+        }
+        return dst;
+    }
+
+    private static Mat ApplySauvola(Mat gray, int maskW, int maskH, double k, double r, bool invert)
+    {
+        int mw = Math.Max(3, maskW % 2 == 0 ? maskW + 1 : maskW);
+        int mh = Math.Max(3, maskH % 2 == 0 ? maskH + 1 : maskH);
+        var kSize = new Size(mw, mh);
+
+        using var fSrc = new Mat();
+        gray.ConvertTo(fSrc, MatType.CV_32F);
+
+        using var mean = new Mat();
+        Cv2.Blur(fSrc, mean, kSize);
+
+        using var fSrcSq = new Mat();
+        Cv2.Multiply(fSrc, fSrc, fSrcSq);
+
+        using var sqMean = new Mat();
+        Cv2.Blur(fSrcSq, sqMean, kSize);
+
+        using var meanSq = new Mat();
+        Cv2.Multiply(mean, mean, meanSq);
+
+        using var variance = new Mat();
+        Cv2.Subtract(sqMean, meanSq, variance);
+        Cv2.Max(variance, Scalar.All(0), variance);
+
+        using var stdDev = new Mat();
+        Cv2.Sqrt(variance, stdDev);
+
+        using var stdRatio = new Mat();
+        Cv2.Divide(stdDev, Scalar.All(Math.Max(1.0, r)), stdRatio);
+
+        using var stdTerm = new Mat();
+        Cv2.Subtract(stdRatio, Scalar.All(1.0), stdTerm);
+
+        using var scaledTerm = new Mat();
+        Cv2.Multiply(stdTerm, Scalar.All(k), scaledTerm);
+
+        using var factor = new Mat();
+        Cv2.Add(scaledTerm, Scalar.All(1.0), factor);
+
+        using var thresh = new Mat();
+        Cv2.Multiply(mean, factor, thresh);
+
+        using var thresh8U = new Mat();
+        thresh.ConvertTo(thresh8U, MatType.CV_8U);
+
+        var binary = new Mat();
+        if (invert)
+        {
+            Cv2.Compare(gray, thresh8U, binary, CmpType.LE);
+        }
+        else
+        {
+            Cv2.Compare(gray, thresh8U, binary, CmpType.GE);
+        }
+        return binary;
+    }
+
+    private static (Mat? Result, double Confidence) ExecuteAutoEdge(Mat gray, AutoEdgeMethod method, double minConfidence, bool invert)
+    {
+        double ScoreCandidate(Mat bin)
+        {
+            Cv2.FindContours(bin, out var contours, out _, RetrievalModes.External, ContourApproximationModes.ApproxSimple);
+            if (contours == null || contours.Length == 0) return 0.0;
+
+            double totalImgArea = gray.Width * gray.Height;
+            double bestArea = 0;
+            Rect bestBbox = default;
+
+            foreach (var cnt in contours)
+            {
+                double a = Cv2.ContourArea(cnt);
+                if (a > bestArea)
+                {
+                    bestArea = a;
+                    bestBbox = Cv2.BoundingRect(cnt);
+                }
+            }
+
+            if (bestArea < 40 || bestArea > totalImgArea * 0.98) return 0.1;
+            double bboxArea = bestBbox.Width * bestBbox.Height;
+            double rectangularity = bboxArea > 0 ? (bestArea / bboxArea) : 0;
+            double areaRatio = bestArea / totalImgArea;
+            double sizeScore = Math.Clamp(areaRatio * 3.5, 0.1, 1.0);
+            double rectScore = Math.Clamp(rectangularity, 0.1, 1.0);
+            return sizeScore * 0.4 + rectScore * 0.6;
+        }
+
+        Mat GenerateCandidate(int candIdx)
+        {
+            using var k3 = Cv2.GetStructuringElement(MorphShapes.Rect, new Size(3, 3));
+            if (candIdx == 0)
+            {
+                // Scharr + Otsu
+                using var gx = new Mat();
+                using var gy = new Mat();
+                Cv2.Scharr(gray, gx, MatType.CV_16S, 1, 0);
+                Cv2.Scharr(gray, gy, MatType.CV_16S, 0, 1);
+                using var ax = new Mat();
+                using var ay = new Mat();
+                Cv2.ConvertScaleAbs(gx, ax);
+                Cv2.ConvertScaleAbs(gy, ay);
+                using var grad = new Mat();
+                Cv2.AddWeighted(ax, 0.5, ay, 0.5, 0, grad);
+                var c = new Mat();
+                Cv2.Threshold(grad, c, 0, 255, ThresholdTypes.Binary | ThresholdTypes.Otsu);
+                Cv2.MorphologyEx(c, c, MorphTypes.Close, k3);
+                return c;
+            }
+            else if (candIdx == 1)
+            {
+                // Background Diff + Triangle
+                using var bg = EstimateBackground(gray, 35);
+                using var diff = new Mat();
+                Cv2.Absdiff(gray, bg, diff);
+                var c = new Mat();
+                Cv2.Threshold(diff, c, 0, 255, ThresholdTypes.Binary | ThresholdTypes.Triangle);
+                Cv2.MorphologyEx(c, c, MorphTypes.Close, k3);
+                return c;
+            }
+            else if (candIdx == 2)
+            {
+                // Morph Gradient + Sauvola
+                using var mGrad = new Mat();
+                Cv2.MorphologyEx(gray, mGrad, MorphTypes.Gradient, k3);
+                return ApplySauvola(mGrad, 15, 15, 0.15, 128.0, false);
+            }
+            else
+            {
+                // Sauvola direct
+                return ApplySauvola(gray, 17, 17, 0.2, 128.0, false);
+            }
+        }
+
+        var candidatesToTest = new List<int>();
+        if (method == AutoEdgeMethod.ScharrOtsu) candidatesToTest.Add(0);
+        else if (method == AutoEdgeMethod.BackgroundDiffTriangle) candidatesToTest.Add(1);
+        else if (method == AutoEdgeMethod.MorphGradientSauvola) candidatesToTest.Add(2);
+        else if (method == AutoEdgeMethod.LabLumaOtsu) candidatesToTest.Add(3);
+        else
+        {
+            candidatesToTest.AddRange(new[] { 0, 1, 2, 3 });
+        }
+
+        Mat? bestMat = null;
+        double bestConfidence = 0.0;
+
+        foreach (var idx in candidatesToTest)
+        {
+            var mat = GenerateCandidate(idx);
+            double score = ScoreCandidate(mat);
+            if (score > bestConfidence)
+            {
+                bestMat?.Dispose();
+                bestMat = mat;
+                bestConfidence = score;
+            }
+            else
+            {
+                mat.Dispose();
+            }
+        }
+
+        if (bestMat != null && bestConfidence >= minConfidence)
+        {
+            if (invert)
+            {
+                Cv2.BitwiseNot(bestMat, bestMat);
+            }
+            return (bestMat, bestConfidence);
+        }
+
+        bestMat?.Dispose();
+        return (null, bestConfidence);
+    }
+
     public Mat Run(Mat inputBgrOrGray, PreprocessSettings settings, List<PreprocessRoiDefinition>? rois = null, Point2d? originTeach = null, Point2d? originFound = null, double originAngleDeg = 0.0)
     {
         if (inputBgrOrGray is null)
@@ -756,9 +985,20 @@ public sealed class ImagePreprocessor
 
         try
         {
-            bool needsGray = settings.UseGray || settings.UseThreshold || settings.UseCanny || settings.UseMorphology || (settings.IlluminationCorrection != IlluminationCorrectionPreset.None);
+            // 1. Trích xuất kênh màu cụ thể (Color Channel Extraction)
+            if (settings.ColorChannel != PreprocessColorChannel.All && current.Channels() >= 3)
+            {
+                var chMat = ApplyColorChannel(current, settings.ColorChannel);
+                AdvanceCurrent(chMat);
+            }
 
-            // Single-pass Grayscale conversion at the beginning if any single-channel filter is requested
+            // 2. Chuyển Grayscale nếu cần
+            bool needsGray = settings.UseGray || settings.UseThreshold || settings.UseCanny || settings.UseMorphology 
+                || (settings.IlluminationCorrection != IlluminationCorrectionPreset.None)
+                || settings.UseAutoEdge || settings.GradientType != PreprocessGradientType.None 
+                || settings.UseAutoContrast || settings.UseGamma || settings.InvertColors 
+                || settings.UseMedianBlur || settings.UseBilateralFilter;
+
             if (needsGray && current.Channels() > 1)
             {
                 var gray = new Mat();
@@ -766,7 +1006,39 @@ public sealed class ImagePreprocessor
                 AdvanceCurrent(gray);
             }
 
-            // Illumination correction should run early (before threshold/canny) and works on gray.
+            // 3. Đảo màu âm bản (Invert Colors)
+            if (settings.InvertColors)
+            {
+                var inv = new Mat();
+                Cv2.BitwiseNot(current, inv);
+                AdvanceCurrent(inv);
+            }
+
+            // 4. Kéo giãn tương phản tự động (Auto Contrast / Min-Max Stretching)
+            if (settings.UseAutoContrast)
+            {
+                var norm = new Mat();
+                Cv2.Normalize(current, norm, 0, 255, NormTypes.MinMax);
+                AdvanceCurrent(norm);
+            }
+
+            // 5. Hiệu chỉnh Gamma (LUT 256)
+            if (settings.UseGamma && settings.GammaValue > 0.05 && Math.Abs(settings.GammaValue - 1.0) > 0.01)
+            {
+                byte[] lut = new byte[256];
+                double gammaExp = Math.Clamp(settings.GammaValue, 0.05, 10.0);
+                for (int i = 0; i < 256; i++)
+                {
+                    lut[i] = (byte)Math.Clamp(Math.Round(Math.Pow(i / 255.0, gammaExp) * 255.0), 0, 255);
+                }
+                using var lutMat = new Mat(1, 256, MatType.CV_8UC1);
+                System.Runtime.InteropServices.Marshal.Copy(lut, 0, lutMat.Data, 256);
+                var dstGamma = new Mat();
+                Cv2.LUT(current, lutMat, dstGamma);
+                AdvanceCurrent(dstGamma);
+            }
+
+            // 6. Cân bằng chiếu sáng (Illumination correction)
             if (settings.IlluminationCorrection != IlluminationCorrectionPreset.None)
             {
                 var k = MakeOddAtLeast3(settings.IlluminationKernel);
@@ -808,6 +1080,23 @@ public sealed class ImagePreprocessor
                 }
             }
 
+            // 7. Khử nhiễu (Denoising)
+            if (settings.UseMedianBlur)
+            {
+                int mk = MakeOddAtLeast3(settings.MedianKernel);
+                var med = new Mat();
+                Cv2.MedianBlur(current, med, mk);
+                AdvanceCurrent(med);
+            }
+
+            if (settings.UseBilateralFilter)
+            {
+                int d = Math.Max(1, settings.BilateralDiameter);
+                var bil = new Mat();
+                Cv2.BilateralFilter(current, bil, d, settings.BilateralSigmaColor, settings.BilateralSigmaSpace);
+                AdvanceCurrent(bil);
+            }
+
             if (settings.UseGaussianBlur)
             {
                 var k = settings.BlurKernel;
@@ -819,6 +1108,68 @@ public sealed class ImagePreprocessor
                 AdvanceCurrent(blur);
             }
 
+            // 8. Đạo hàm & Gradient
+            if (settings.GradientType != PreprocessGradientType.None)
+            {
+                int gk = MakeOddAtLeast3(settings.GradientKernel);
+                double scale = settings.GradientScale <= 0 ? 1.0 : settings.GradientScale;
+
+                if (settings.GradientType == PreprocessGradientType.Sobel)
+                {
+                    using var gx = new Mat();
+                    using var gy = new Mat();
+                    Cv2.Sobel(current, gx, MatType.CV_16S, 1, 0, gk, scale);
+                    Cv2.Sobel(current, gy, MatType.CV_16S, 0, 1, gk, scale);
+                    using var ax = new Mat();
+                    using var ay = new Mat();
+                    Cv2.ConvertScaleAbs(gx, ax);
+                    Cv2.ConvertScaleAbs(gy, ay);
+                    var grad = new Mat();
+                    Cv2.AddWeighted(ax, 0.5, ay, 0.5, 0, grad);
+                    AdvanceCurrent(grad);
+                }
+                else if (settings.GradientType == PreprocessGradientType.Scharr)
+                {
+                    using var gx = new Mat();
+                    using var gy = new Mat();
+                    Cv2.Scharr(current, gx, MatType.CV_16S, 1, 0, scale);
+                    Cv2.Scharr(current, gy, MatType.CV_16S, 0, 1, scale);
+                    using var ax = new Mat();
+                    using var ay = new Mat();
+                    Cv2.ConvertScaleAbs(gx, ax);
+                    Cv2.ConvertScaleAbs(gy, ay);
+                    var grad = new Mat();
+                    Cv2.AddWeighted(ax, 0.5, ay, 0.5, 0, grad);
+                    AdvanceCurrent(grad);
+                }
+                else if (settings.GradientType == PreprocessGradientType.Laplacian)
+                {
+                    using var lap16 = new Mat();
+                    Cv2.Laplacian(current, lap16, MatType.CV_16S, gk, scale);
+                    var lap = new Mat();
+                    Cv2.ConvertScaleAbs(lap16, lap);
+                    AdvanceCurrent(lap);
+                }
+                else if (settings.GradientType == PreprocessGradientType.MorphGradient)
+                {
+                    using var kMat = Cv2.GetStructuringElement(MorphShapes.Rect, new Size(gk, gk));
+                    var grad = new Mat();
+                    Cv2.MorphologyEx(current, grad, MorphTypes.Gradient, kMat);
+                    AdvanceCurrent(grad);
+                }
+            }
+
+            // 9. Chế độ Tự động tìm biên Auto Edge (Candidate Evaluation & Scoring)
+            if (settings.UseAutoEdge)
+            {
+                var (autoMat, conf) = ExecuteAutoEdge(current, settings.AutoEdgeMethod, settings.AutoEdgeMinConfidence, settings.AutoEdgeInvert);
+                if (autoMat != null)
+                {
+                    AdvanceCurrent(autoMat);
+                }
+            }
+
+            // 10. Phân ngưỡng Binarization / Threshold
             if (settings.UseThreshold)
             {
                 var thr = new Mat();
@@ -830,6 +1181,25 @@ public sealed class ImagePreprocessor
 
                     var adaptiveType = settings.InvertLocal ? ThresholdTypes.BinaryInv : ThresholdTypes.Binary;
                     Cv2.AdaptiveThreshold(current, thr, 255, AdaptiveThresholdTypes.GaussianC, adaptiveType, blockSize, settings.LocalOffset);
+                    AdvanceCurrent(thr);
+                }
+                else if (settings.ThresholdType == PreprocessThresholdType.Otsu)
+                {
+                    var threshType = (settings.InvertBinary ? ThresholdTypes.BinaryInv : ThresholdTypes.Binary) | ThresholdTypes.Otsu;
+                    Cv2.Threshold(current, thr, 0, 255, threshType);
+                    AdvanceCurrent(thr);
+                }
+                else if (settings.ThresholdType == PreprocessThresholdType.Triangle)
+                {
+                    var threshType = (settings.InvertBinary ? ThresholdTypes.BinaryInv : ThresholdTypes.Binary) | ThresholdTypes.Triangle;
+                    Cv2.Threshold(current, thr, 0, 255, threshType);
+                    AdvanceCurrent(thr);
+                }
+                else if (settings.ThresholdType == PreprocessThresholdType.Sauvola)
+                {
+                    thr.Dispose();
+                    var sauvolaMat = ApplySauvola(current, settings.MaskWidth, settings.MaskHeight, settings.SauvolaK, settings.SauvolaR, settings.InvertBinary);
+                    AdvanceCurrent(sauvolaMat);
                 }
                 else
                 {
@@ -853,11 +1223,11 @@ public sealed class ImagePreprocessor
                         var threshType = settings.InvertBinary ? ThresholdTypes.BinaryInv : ThresholdTypes.Binary;
                         Cv2.Threshold(current, thr, tLow, tHigh > 0 ? tHigh : 255, threshType);
                     }
+                    AdvanceCurrent(thr);
                 }
-
-                AdvanceCurrent(thr);
             }
 
+            // 11. Canny Edge
             if (settings.UseCanny)
             {
                 var edges = new Mat();
@@ -865,10 +1235,32 @@ public sealed class ImagePreprocessor
                 AdvanceCurrent(edges);
             }
 
+            // 12. Hình thái học Morphology mở rộng (Toàn diện thao tác, kernel size/shape, iterations)
             if (settings.UseMorphology)
             {
+                int kSize = MakeOddAtLeast3(settings.MorphKernelSize);
+                var shape = settings.MorphShape switch
+                {
+                    PreprocessMorphShape.Cross => MorphShapes.Cross,
+                    PreprocessMorphShape.Ellipse => MorphShapes.Ellipse,
+                    _ => MorphShapes.Rect
+                };
+                using var kElem = Cv2.GetStructuringElement(shape, new Size(kSize, kSize));
+
+                var mType = settings.MorphType switch
+                {
+                    PreprocessMorphType.Open => MorphTypes.Open,
+                    PreprocessMorphType.Erode => MorphTypes.Erode,
+                    PreprocessMorphType.Dilate => MorphTypes.Dilate,
+                    PreprocessMorphType.Gradient => MorphTypes.Gradient,
+                    PreprocessMorphType.TopHat => MorphTypes.TopHat,
+                    PreprocessMorphType.BlackHat => MorphTypes.BlackHat,
+                    _ => MorphTypes.Close
+                };
+
+                int iter = Math.Clamp(settings.MorphIterations, 1, 10);
                 var mor = new Mat();
-                Cv2.MorphologyEx(current, mor, MorphTypes.Close, MorphKernel3x3);
+                Cv2.MorphologyEx(current, mor, mType, kElem, iterations: iter);
                 AdvanceCurrent(mor);
             }
 

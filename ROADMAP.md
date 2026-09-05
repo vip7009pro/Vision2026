@@ -1716,18 +1716,6 @@ Lộ trình tích hợp tính năng Chụp ảnh từ camera và hỗ trợ các
            - Cập nhật `ToBitmapSourceForDisplay(this Mat? mat, ..., bool? forceOriginalQuality = null)`:
              - Khi `forceOriginalQuality == true || (forceOriginalQuality == null && UseOriginalQualityPreview)`: Bỏ qua bước resize tuyến tính, trả về ảnh gốc độ phân giải 100% thông qua `mat.ToBitmapSourceSafe()`.
              - Khi `false`: Thực hiện resize về kích thước proxy để tối ưu hiệu năng và FPS.
-           - Cập nhật `WriteableBitmapRenderer.UpdateFromMat(..., bool? forceOriginalQuality = null)`:
-             - Khi bật chất lượng gốc: Bỏ qua downscale, ghi trực tiếp frame gốc vào `WriteableBitmap` ở độ phân giải camera gốc.
-        2. **Cấu Hình Bền Vững (`GlobalAppSettingsService.cs` & `App.xaml.cs`)**:
-           - Thêm `public bool UseOriginalQualityPreview { get; set; } = false;` vào `GlobalAppSettings`.
-           - Trong `App.xaml.cs`: Lúc khởi động ứng dụng, nạp và gán `MatExtensions.UseOriginalQualityPreview = settingsService.Settings.UseOriginalQualityPreview;`.
-        3. **Tab Tool Editor (`ToolEditorViewModel.cs`, `ToolEditorViewModel.Engine.cs`, `ToolEditorView.xaml`)**:
-           - Thêm `[ObservableProperty] private bool _isOriginalQualityPreview;`.
-           - `OnIsOriginalQualityPreviewChanged`: Lưu cài đặt vào `GlobalAppSettingsService` và gọi `RefreshPreviews()` ngay lập tức.
-           - Đặt `public void RefreshPreviews()` để các module khác có thể kích hoạt làm mới preview.
-           - Trên `ToolEditorView.xaml`: Thêm CheckBox `Ảnh gốc` nằm ngay cạnh CheckBox `Show ROI`.
-        4. **Tab OQC Scanner (`OqcScannerViewModel.cs`, `OqcScannerView.xaml`)**:
-           - Thêm `[ObservableProperty] private bool _isOriginalQualityPreview;`.
            - `OnIsOriginalQualityPreviewChanged`: Đồng bộ với `_toolEditorViewModel.IsOriginalQualityPreview`, cập nhật `PreviewImage` ngay lập tức nếu đang xem ảnh kết quả.
            - Đồng bộ hai chiều trong `OnToolEditorPropertyChanged`.
            - Trên `OqcScannerView.xaml`: Thêm CheckBox `Ảnh gốc` nằm ngay cạnh CheckBox `Khung ROI`.
@@ -2037,3 +2025,35 @@ Lộ trình tích hợp tính năng Chụp ảnh từ camera và hỗ trợ các
       - Kiá»ƒm Thá»­:
         - dotnet build VisionInspectionApp.slnx: 0 errors.
         - dotnet run --project TestExtractApp: 100% PASSED (toÃ n bá»™ test suite vÃ  CrosshairOverlayTests passed).
+
+- [x] Task 305: NÃ¢ng Cáº¥p ToÃ n Diá»‡n Preprocess Tool (CÃ i Äáº·t Cáº£ 3 NhÃ³m Thuáº­t ToÃ¡n: Must Have, Nice To Have, Auto Edge Mode) & ThÃªm Báº£ng Káº¿t Quáº£ Äo Äáº¡c Overlay Cho ImageOutput Tool.
+       - Hiá»‡n TÆ°á»£ng & YÃªu Cáº§u NgÆ°á»i DÃ¹ng:
+         - 1. ImageOutput Tool: ThÃªm checkbox (máº·c Ä‘á»‹nh checked) Ä‘á»ƒ luÃ´n hiá»ƒn thá»‹ overlay text thÃ´ng tin TÃªn sáº£n pháº©m, MÃ£ sáº£n pháº©m, NgÃ y kiá»ƒm tra, vÃ  káº¿t quáº£ Ä‘o Ä‘áº¡c tá»«ng háº¡ng má»¥c (SpecResults) dÆ°á»›i dáº¡ng 1 overlay báº£ng á»Ÿ gÃ³c dÆ°á»›i cÃ¹ng, bÃªn pháº£i cá»§a bá»©c áº£nh xuáº¥t ra.
+         - 2. Preprocess Tool: RÃ  soÃ¡t vÃ  má»Ÿ rá»™ng toÃ n diá»‡n cáº£ 3 nhÃ³m tÃ­nh nÄƒng:
+           + NhÃ³m 1 (Must Have): NgÆ°á»¡ng tá»± Ä‘á»™ng Otsu, Triangle, Sauvola (K, R, BlockSize), Khá»­ nhiá»…u MedianBlur, BilateralFilter, vÃ  HÃ¬nh thÃ¡i há»c má»Ÿ rá»™ng (Shapes: Rect/Cross/Ellipse; Types: Erode, Dilate, Open, Close, TopHat, BlackHat; KernelSize; Iterations).
+           + NhÃ³m 2 (Nice To Have): TrÃ­ch xuáº¥t kÃªnh mÃ u chuyÃªn biá»‡t (R, G, B, H, S, V, Lab_L), Hiá»‡u chá»‰nh Gamma LUT 256 theo luáº­t lÅ©y thá»«a, Tá»± Ä‘á»™ng tÄƒng cÆ°á»ng tÆ°Æ¡ng pháº£n (Auto Contrast), Äáº£o mÃ u (Invert Colors), CÃ¡c bá»™ lá»c Gradient (Sobel, Scharr, Laplacian, MorphGradient).
+           + NhÃ³m 3 (Auto Edge Mode - High Confidence / White-on-White): ÄÃ¡nh giÃ¡ Ä‘a á»©ng viÃªn thÃ´ng minh (Ensemble) cho bÃ i toÃ¡n tÆ°Æ¡ng pháº£n cá»±c tháº¥p (ná»n tráº¯ng chi tiáº¿t tráº¯ng nháº¡t), tÃ­nh Confidence Score, tá»± Ä‘á»™ng nhá»‹ phÃ¢n vÃ  tÃ¹y chá»n AutoEdgeInvert.
+         - 3. RÃ ng buá»™c: Giá»¯ nguyÃªn 100% backward compatibility cho job cÅ©, khÃ´ng memory leak, quáº£n lÃ½ giáº£i phÃ³ng Mat nghiÃªm ngáº·t.
+       - Giáº£i PhÃ¡p Ká»¹ Thuáº­t ÄÃ£ Triá»ƒn Khai:
+         1. Cáº­p Nháº­t Data Models (VisionInspectionApp.Models/Class1.cs):
+            - ThÃªm bool ShowResultTable = true vÃ o ImageOutputDefinition.
+            - Má»Ÿ rá»™ng PreprocessThresholdType: Otsu (2), Triangle (3), Sauvola (4).
+            - ThÃªm cÃ¡c enums: PreprocessMorphShape, PreprocessMorphType, PreprocessGradientType, PreprocessColorChannel, AutoEdgeMethod.
+            - Má»Ÿ rá»™ng PreprocessSettings vá»›i Ä‘áº§y Ä‘á»§ tham sá»‘ cá»§a 3 nhÃ³m tÃ­nh nÄƒng.
+         2. NÃ¢ng Cáº¥p Äá»™ng CÆ¡ Thá»‹ GiÃ¡c (VisionInspectionApp.VisionEngine/Class1.cs):
+            - NÃ¢ng cáº¥p ImagePreprocessor.Run vá»›i pipeline chuáº©n hÃ³a tuáº§n tá»± 11 táº§ng.
+            - CÆ¡ cháº¿ AdvanceCurrent giáº£i phÃ³ng Mat trung gian tá»©c thÃ¬, soak test 100 chu ká»³ RAM á»•n Ä‘á»‹nh tuyá»‡t Ä‘á»‘i.
+            - Triá»ƒn khai thuáº­t toÃ¡n Sauvola vá»›i BoxFilter nhanh.
+            - Triá»ƒn khai thuáº­t toÃ¡n Auto Edge Ensemble vá»›i 4 á»©ng viÃªn cáº¡nh vÃ  bá»™ cháº¥m Ä‘iá»ƒm Ä‘á»™ tÆ°Æ¡ng pháº£n.
+         3. Render Báº£ng Káº¿t Quáº£ Äo Äáº¡c Overlay Cho ImageOutput (InspectionService.ImageOutputs.cs):
+            - Triá»ƒn khai DrawResultTableOverlay váº½ báº£ng ná»n bÃ¡n trong suá»‘t bo gÃ³c viá»n sÃ¡ng á»Ÿ gÃ³c dÆ°á»›i pháº£i.
+            - Hiá»ƒn thá»‹ Ä‘áº§y Ä‘á»§ thÃ´ng tin: Header (ProductName, ProductCode, DateTime, Badge Pass/Fail) vÃ  cÃ¡c dÃ²ng chi tiáº¿t Ä‘o Ä‘áº¡c (Distances, Angles, Circles, Blobs, Surfaces, Contours, Barcodes).
+            - Tá»± Ä‘á»™ng co giÃ£n tá»· lá»‡ fontScale vÃ  rowHeight theo Ä‘á»™ phÃ¢n giáº£i áº£nh gá»‘c.
+         4. NÃ¢ng Cáº¥p UI Properties Panel & ViewModel (ToolEditorViewModel, ToolEditorView.xaml):
+            - ThÃªm CheckBox ImageOutput_ShowResultTable trong báº£ng thuá»™c tÃ­nh ImageOutput.
+            - Bá»• sung cÃ¡c nhÃ³m Ä‘iá»u khiá»ƒn trá»±c quan cho Preprocess: KÃªnh mÃ u & Contrast, Filters & Denoising, Gradient, Auto Edge, Thresholding nÃ¢ng cao vÃ  Morphology má»Ÿ rá»™ng.
+         5. Bá»™ Kiá»ƒm Thá»­ Tá»± Äá»™ng ToÃ n Diá»‡n (TestExtractApp/PreprocessAndImageOutputTests.cs):
+            - 10 bÃ i test bao phá»§: Legacy Preprocess Regression, Otsu/Triangle/Sauvola, Median/Bilateral, ColorChannel/Gamma/AutoContrast/Invert, Gradients, Morphology, AutoEdge White-on-White, ImageOutput ResultTable Overlay, JSON Serialization & Backward Compatibility, vÃ  Memory Leak Soak Loop 100 chu ká»³.
+       - Kiá»ƒm Thá»­:
+         - dotnet build VisionInspectionApp.slnx: 0 errors.
+         - dotnet run --project TestExtractApp: 100% PASSED (10/10 PreprocessAndImageOutputTests passed, toÃ n bá»™ test suite pass).

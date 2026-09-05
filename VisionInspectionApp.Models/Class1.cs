@@ -372,6 +372,8 @@ public sealed class ImageOutputDefinition
 
     public bool ShowRoi { get; set; } = true;
 
+    public bool ShowResultTable { get; set; } = true;
+
     public int TextFontSize { get; set; } = 18;
 
     public double OverlayScale { get; set; } = 1.0;
@@ -836,12 +838,97 @@ public sealed class PreprocessSettings
     public int Canny2 { get; set; } = 150;
 
     public bool UseMorphology { get; set; }
+    public PreprocessMorphShape MorphShape { get; set; } = PreprocessMorphShape.Rect;
+    public PreprocessMorphType MorphType { get; set; } = PreprocessMorphType.Close;
+    public int MorphKernelSize { get; set; } = 3;
+    public int MorphIterations { get; set; } = 1;
+
+    // Sauvola threshold
+    public double SauvolaK { get; set; } = 0.2;
+    public double SauvolaR { get; set; } = 128.0;
+
+    // Noise reduction
+    public bool UseMedianBlur { get; set; }
+    public int MedianKernel { get; set; } = 3;
+    public bool UseBilateralFilter { get; set; }
+    public int BilateralDiameter { get; set; } = 5;
+    public double BilateralSigmaColor { get; set; } = 50.0;
+    public double BilateralSigmaSpace { get; set; } = 50.0;
+
+    // Gradient / Edge
+    public PreprocessGradientType GradientType { get; set; } = PreprocessGradientType.None;
+    public int GradientKernel { get; set; } = 3;
+    public double GradientScale { get; set; } = 1.0;
+
+    // Intensity / Contrast / Channel
+    public PreprocessColorChannel ColorChannel { get; set; } = PreprocessColorChannel.All;
+    public bool UseGamma { get; set; }
+    public double GammaValue { get; set; } = 1.0;
+    public bool UseAutoContrast { get; set; }
+    public bool InvertColors { get; set; }
+
+    // Auto Edge Mode
+    public bool UseAutoEdge { get; set; }
+    public AutoEdgeMethod AutoEdgeMethod { get; set; } = AutoEdgeMethod.Ensemble;
+    public double AutoEdgeMinConfidence { get; set; } = 0.6;
+    public bool AutoEdgeInvert { get; set; }
 }
 
 public enum PreprocessThresholdType
 {
     Binary = 0,
-    Local = 1
+    Local = 1,
+    Otsu = 2,
+    Triangle = 3,
+    Sauvola = 4
+}
+
+public enum PreprocessMorphShape
+{
+    Rect = 0,
+    Cross = 1,
+    Ellipse = 2
+}
+
+public enum PreprocessMorphType
+{
+    Close = 0,
+    Open = 1,
+    Erode = 2,
+    Dilate = 3,
+    Gradient = 4,
+    TopHat = 5,
+    BlackHat = 6
+}
+
+public enum PreprocessGradientType
+{
+    None = 0,
+    Sobel = 1,
+    Scharr = 2,
+    Laplacian = 3,
+    MorphGradient = 4
+}
+
+public enum PreprocessColorChannel
+{
+    All = 0,
+    Red = 1,
+    Green = 2,
+    Blue = 3,
+    Hue = 4,
+    Saturation = 5,
+    Value = 6,
+    Lab_L = 7
+}
+
+public enum AutoEdgeMethod
+{
+    ScharrOtsu = 0,
+    BackgroundDiffTriangle = 1,
+    MorphGradientSauvola = 2,
+    LabLumaOtsu = 3,
+    Ensemble = 4
 }
 
 public enum IlluminationCorrectionPreset

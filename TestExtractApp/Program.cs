@@ -41,5 +41,6 @@ class Program
         BlobCountingModeTests.RunTests();
         OqcLiveViewOnJobLoadTests.RunTests();
         CrosshairOverlayTests.RunTests();
+        PreprocessAndImageOutputTests.RunTests();
     }
 }

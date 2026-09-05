@@ -1175,6 +1175,60 @@ namespace VisionInspectionApp.UI.ViewModels
             RefreshOriginTemplatePreview();
             OnPropertyChanged(nameof(IsPreprocessNode));
             OnPropertyChanged(nameof(PreprocessRois));
+            if (IsPreprocessNode)
+            {
+                OnPropertyChanged(nameof(UseGray));
+                OnPropertyChanged(nameof(IlluminationCorrection));
+                OnPropertyChanged(nameof(IlluminationKernel));
+                OnPropertyChanged(nameof(ClaheClipLimit));
+                OnPropertyChanged(nameof(ClaheTileGrid));
+                OnPropertyChanged(nameof(UseGaussianBlur));
+                OnPropertyChanged(nameof(BlurKernel));
+                OnPropertyChanged(nameof(UseThreshold));
+                OnPropertyChanged(nameof(ThresholdType));
+                OnPropertyChanged(nameof(ThresholdValue));
+                OnPropertyChanged(nameof(ThresholdLow));
+                OnPropertyChanged(nameof(ThresholdHigh));
+                OnPropertyChanged(nameof(InvertBinary));
+                OnPropertyChanged(nameof(IsThresholdBinary));
+                OnPropertyChanged(nameof(IsThresholdLocal));
+                OnPropertyChanged(nameof(IsThresholdOtsu));
+                OnPropertyChanged(nameof(IsThresholdTriangle));
+                OnPropertyChanged(nameof(IsThresholdSauvola));
+                OnPropertyChanged(nameof(MaskWidth));
+                OnPropertyChanged(nameof(MaskHeight));
+                OnPropertyChanged(nameof(LocalOffset));
+                OnPropertyChanged(nameof(InvertLocal));
+                OnPropertyChanged(nameof(SauvolaK));
+                OnPropertyChanged(nameof(SauvolaR));
+                OnPropertyChanged(nameof(UseCanny));
+                OnPropertyChanged(nameof(Canny1));
+                OnPropertyChanged(nameof(Canny2));
+                OnPropertyChanged(nameof(UseMorphology));
+                OnPropertyChanged(nameof(MorphShape));
+                OnPropertyChanged(nameof(MorphType));
+                OnPropertyChanged(nameof(MorphKernelSize));
+                OnPropertyChanged(nameof(MorphIterations));
+                OnPropertyChanged(nameof(UseMedianBlur));
+                OnPropertyChanged(nameof(MedianKernel));
+                OnPropertyChanged(nameof(UseBilateralFilter));
+                OnPropertyChanged(nameof(BilateralDiameter));
+                OnPropertyChanged(nameof(BilateralSigmaColor));
+                OnPropertyChanged(nameof(BilateralSigmaSpace));
+                OnPropertyChanged(nameof(GradientType));
+                OnPropertyChanged(nameof(GradientKernel));
+                OnPropertyChanged(nameof(GradientScale));
+                OnPropertyChanged(nameof(IsGradientActive));
+                OnPropertyChanged(nameof(ColorChannel));
+                OnPropertyChanged(nameof(InvertColors));
+                OnPropertyChanged(nameof(UseAutoContrast));
+                OnPropertyChanged(nameof(UseGamma));
+                OnPropertyChanged(nameof(GammaValue));
+                OnPropertyChanged(nameof(UseAutoEdge));
+                OnPropertyChanged(nameof(AutoEdgeMethod));
+                OnPropertyChanged(nameof(AutoEdgeMinConfidence));
+                OnPropertyChanged(nameof(AutoEdgeInvert));
+            }
             OnPropertyChanged(nameof(IsLineNode));
             OnPropertyChanged(nameof(IsCaliperNode));
             OnPropertyChanged(nameof(IsOriginNode));
@@ -1226,6 +1280,7 @@ namespace VisionInspectionApp.UI.ViewModels
             OnPropertyChanged(nameof(ImageOutput_EnableOutput));
             OnPropertyChanged(nameof(ImageOutput_IncludeOverlay));
             OnPropertyChanged(nameof(ImageOutput_ShowRoi));
+            OnPropertyChanged(nameof(ImageOutput_ShowResultTable));
             OnPropertyChanged(nameof(ImageOutput_TextFontSize));
             OnPropertyChanged(nameof(ImageOutput_OverlayScale));
             OnPropertyChanged(nameof(ImageOutput_SaveCondition));
@@ -2412,11 +2467,17 @@ namespace VisionInspectionApp.UI.ViewModels
                 OnPropertyChanged();
                 OnPropertyChanged(nameof(IsThresholdBinary));
                 OnPropertyChanged(nameof(IsThresholdLocal));
+                OnPropertyChanged(nameof(IsThresholdOtsu));
+                OnPropertyChanged(nameof(IsThresholdTriangle));
+                OnPropertyChanged(nameof(IsThresholdSauvola));
             }
         }
 
         public bool IsThresholdBinary => ThresholdType == PreprocessThresholdType.Binary;
         public bool IsThresholdLocal => ThresholdType == PreprocessThresholdType.Local;
+        public bool IsThresholdOtsu => ThresholdType == PreprocessThresholdType.Otsu;
+        public bool IsThresholdTriangle => ThresholdType == PreprocessThresholdType.Triangle;
+        public bool IsThresholdSauvola => ThresholdType == PreprocessThresholdType.Sauvola;
 
         public int ThresholdLow
         {
@@ -2589,6 +2650,345 @@ namespace VisionInspectionApp.UI.ViewModels
                 if (s.UseMorphology == value)
                     return;
                 s.UseMorphology = value;
+                SchedulePreprocessPreviewUpdate();
+                OnPropertyChanged();
+            }
+        }
+
+        // --- Sauvola Threshold Parameters ---
+        public double SauvolaK
+        {
+            get => GetActivePreprocessSettingsForUi()?.SauvolaK ?? 0.2;
+            set
+            {
+                var s = GetActivePreprocessSettingsForUi();
+                if (s is null || Math.Abs(s.SauvolaK - value) < 1e-6) return;
+                s.SauvolaK = Math.Clamp(value, 0.01, 1.0);
+                SchedulePreprocessPreviewUpdate();
+                OnPropertyChanged();
+            }
+        }
+
+        public double SauvolaR
+        {
+            get => GetActivePreprocessSettingsForUi()?.SauvolaR ?? 128.0;
+            set
+            {
+                var s = GetActivePreprocessSettingsForUi();
+                if (s is null || Math.Abs(s.SauvolaR - value) < 1e-6) return;
+                s.SauvolaR = Math.Clamp(value, 1.0, 255.0);
+                SchedulePreprocessPreviewUpdate();
+                OnPropertyChanged();
+            }
+        }
+
+        // --- Morphology Extended ---
+        public IEnumerable<PreprocessMorphShape> AvailableMorphShapes => Enum.GetValues<PreprocessMorphShape>();
+        public IEnumerable<PreprocessMorphType> AvailableMorphTypes => Enum.GetValues<PreprocessMorphType>();
+
+        public PreprocessMorphShape MorphShape
+        {
+            get => GetActivePreprocessSettingsForUi()?.MorphShape ?? PreprocessMorphShape.Rect;
+            set
+            {
+                var s = GetActivePreprocessSettingsForUi();
+                if (s is null || s.MorphShape == value) return;
+                s.MorphShape = value;
+                SchedulePreprocessPreviewUpdate();
+                OnPropertyChanged();
+            }
+        }
+
+        public PreprocessMorphType MorphType
+        {
+            get => GetActivePreprocessSettingsForUi()?.MorphType ?? PreprocessMorphType.Close;
+            set
+            {
+                var s = GetActivePreprocessSettingsForUi();
+                if (s is null || s.MorphType == value) return;
+                s.MorphType = value;
+                SchedulePreprocessPreviewUpdate();
+                OnPropertyChanged();
+            }
+        }
+
+        public int MorphKernelSize
+        {
+            get => GetActivePreprocessSettingsForUi()?.MorphKernelSize ?? 3;
+            set
+            {
+                var s = GetActivePreprocessSettingsForUi();
+                if (s is null) return;
+                var v = Math.Clamp(value, 1, 31);
+                if (v % 2 == 0) v += 1;
+                if (s.MorphKernelSize == v) return;
+                s.MorphKernelSize = v;
+                SchedulePreprocessPreviewUpdate();
+                OnPropertyChanged();
+            }
+        }
+
+        public int MorphIterations
+        {
+            get => GetActivePreprocessSettingsForUi()?.MorphIterations ?? 1;
+            set
+            {
+                var s = GetActivePreprocessSettingsForUi();
+                if (s is null || s.MorphIterations == value) return;
+                s.MorphIterations = Math.Clamp(value, 1, 10);
+                SchedulePreprocessPreviewUpdate();
+                OnPropertyChanged();
+            }
+        }
+
+        // --- Noise Reduction (Denoising) ---
+        public bool UseMedianBlur
+        {
+            get => GetActivePreprocessSettingsForUi()?.UseMedianBlur ?? false;
+            set
+            {
+                var s = GetActivePreprocessSettingsForUi();
+                if (s is null || s.UseMedianBlur == value) return;
+                s.UseMedianBlur = value;
+                SchedulePreprocessPreviewUpdate();
+                OnPropertyChanged();
+            }
+        }
+
+        public int MedianKernel
+        {
+            get => GetActivePreprocessSettingsForUi()?.MedianKernel ?? 3;
+            set
+            {
+                var s = GetActivePreprocessSettingsForUi();
+                if (s is null) return;
+                var v = Math.Clamp(value, 1, 21);
+                if (v % 2 == 0) v += 1;
+                if (s.MedianKernel == v) return;
+                s.MedianKernel = v;
+                SchedulePreprocessPreviewUpdate();
+                OnPropertyChanged();
+            }
+        }
+
+        public bool UseBilateralFilter
+        {
+            get => GetActivePreprocessSettingsForUi()?.UseBilateralFilter ?? false;
+            set
+            {
+                var s = GetActivePreprocessSettingsForUi();
+                if (s is null || s.UseBilateralFilter == value) return;
+                s.UseBilateralFilter = value;
+                SchedulePreprocessPreviewUpdate();
+                OnPropertyChanged();
+            }
+        }
+
+        public int BilateralDiameter
+        {
+            get => GetActivePreprocessSettingsForUi()?.BilateralDiameter ?? 5;
+            set
+            {
+                var s = GetActivePreprocessSettingsForUi();
+                if (s is null || s.BilateralDiameter == value) return;
+                s.BilateralDiameter = Math.Clamp(value, 1, 15);
+                SchedulePreprocessPreviewUpdate();
+                OnPropertyChanged();
+            }
+        }
+
+        public double BilateralSigmaColor
+        {
+            get => GetActivePreprocessSettingsForUi()?.BilateralSigmaColor ?? 50.0;
+            set
+            {
+                var s = GetActivePreprocessSettingsForUi();
+                if (s is null || Math.Abs(s.BilateralSigmaColor - value) < 1e-6) return;
+                s.BilateralSigmaColor = Math.Clamp(value, 1.0, 150.0);
+                SchedulePreprocessPreviewUpdate();
+                OnPropertyChanged();
+            }
+        }
+
+        public double BilateralSigmaSpace
+        {
+            get => GetActivePreprocessSettingsForUi()?.BilateralSigmaSpace ?? 50.0;
+            set
+            {
+                var s = GetActivePreprocessSettingsForUi();
+                if (s is null || Math.Abs(s.BilateralSigmaSpace - value) < 1e-6) return;
+                s.BilateralSigmaSpace = Math.Clamp(value, 1.0, 150.0);
+                SchedulePreprocessPreviewUpdate();
+                OnPropertyChanged();
+            }
+        }
+
+        // --- Edge / Gradient ---
+        public IEnumerable<PreprocessGradientType> AvailableGradientTypes => Enum.GetValues<PreprocessGradientType>();
+
+        public PreprocessGradientType GradientType
+        {
+            get => GetActivePreprocessSettingsForUi()?.GradientType ?? PreprocessGradientType.None;
+            set
+            {
+                var s = GetActivePreprocessSettingsForUi();
+                if (s is null || s.GradientType == value) return;
+                s.GradientType = value;
+                SchedulePreprocessPreviewUpdate();
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(IsGradientActive));
+            }
+        }
+
+        public bool IsGradientActive => GradientType != PreprocessGradientType.None;
+
+        public int GradientKernel
+        {
+            get => GetActivePreprocessSettingsForUi()?.GradientKernel ?? 3;
+            set
+            {
+                var s = GetActivePreprocessSettingsForUi();
+                if (s is null) return;
+                var v = Math.Clamp(value, 1, 7);
+                if (v % 2 == 0) v += 1;
+                if (s.GradientKernel == v) return;
+                s.GradientKernel = v;
+                SchedulePreprocessPreviewUpdate();
+                OnPropertyChanged();
+            }
+        }
+
+        public double GradientScale
+        {
+            get => GetActivePreprocessSettingsForUi()?.GradientScale ?? 1.0;
+            set
+            {
+                var s = GetActivePreprocessSettingsForUi();
+                if (s is null || Math.Abs(s.GradientScale - value) < 1e-6) return;
+                s.GradientScale = Math.Clamp(value, 0.1, 5.0);
+                SchedulePreprocessPreviewUpdate();
+                OnPropertyChanged();
+            }
+        }
+
+        // --- Color Channel & Intensity / Contrast ---
+        public IEnumerable<PreprocessColorChannel> AvailableColorChannels => Enum.GetValues<PreprocessColorChannel>();
+
+        public PreprocessColorChannel ColorChannel
+        {
+            get => GetActivePreprocessSettingsForUi()?.ColorChannel ?? PreprocessColorChannel.All;
+            set
+            {
+                var s = GetActivePreprocessSettingsForUi();
+                if (s is null || s.ColorChannel == value) return;
+                s.ColorChannel = value;
+                SchedulePreprocessPreviewUpdate();
+                OnPropertyChanged();
+            }
+        }
+
+        public bool InvertColors
+        {
+            get => GetActivePreprocessSettingsForUi()?.InvertColors ?? false;
+            set
+            {
+                var s = GetActivePreprocessSettingsForUi();
+                if (s is null || s.InvertColors == value) return;
+                s.InvertColors = value;
+                SchedulePreprocessPreviewUpdate();
+                OnPropertyChanged();
+            }
+        }
+
+        public bool UseAutoContrast
+        {
+            get => GetActivePreprocessSettingsForUi()?.UseAutoContrast ?? false;
+            set
+            {
+                var s = GetActivePreprocessSettingsForUi();
+                if (s is null || s.UseAutoContrast == value) return;
+                s.UseAutoContrast = value;
+                SchedulePreprocessPreviewUpdate();
+                OnPropertyChanged();
+            }
+        }
+
+        public bool UseGamma
+        {
+            get => GetActivePreprocessSettingsForUi()?.UseGamma ?? false;
+            set
+            {
+                var s = GetActivePreprocessSettingsForUi();
+                if (s is null || s.UseGamma == value) return;
+                s.UseGamma = value;
+                SchedulePreprocessPreviewUpdate();
+                OnPropertyChanged();
+            }
+        }
+
+        public double GammaValue
+        {
+            get => GetActivePreprocessSettingsForUi()?.GammaValue ?? 1.0;
+            set
+            {
+                var s = GetActivePreprocessSettingsForUi();
+                if (s is null || Math.Abs(s.GammaValue - value) < 1e-6) return;
+                s.GammaValue = Math.Clamp(value, 0.1, 5.0);
+                SchedulePreprocessPreviewUpdate();
+                OnPropertyChanged();
+            }
+        }
+
+        // --- Auto Edge Mode ---
+        public IEnumerable<AutoEdgeMethod> AvailableAutoEdgeMethods => Enum.GetValues<AutoEdgeMethod>();
+
+        public bool UseAutoEdge
+        {
+            get => GetActivePreprocessSettingsForUi()?.UseAutoEdge ?? false;
+            set
+            {
+                var s = GetActivePreprocessSettingsForUi();
+                if (s is null || s.UseAutoEdge == value) return;
+                s.UseAutoEdge = value;
+                SchedulePreprocessPreviewUpdate();
+                OnPropertyChanged();
+            }
+        }
+
+        public AutoEdgeMethod AutoEdgeMethod
+        {
+            get => GetActivePreprocessSettingsForUi()?.AutoEdgeMethod ?? AutoEdgeMethod.Ensemble;
+            set
+            {
+                var s = GetActivePreprocessSettingsForUi();
+                if (s is null || s.AutoEdgeMethod == value) return;
+                s.AutoEdgeMethod = value;
+                SchedulePreprocessPreviewUpdate();
+                OnPropertyChanged();
+            }
+        }
+
+        public double AutoEdgeMinConfidence
+        {
+            get => GetActivePreprocessSettingsForUi()?.AutoEdgeMinConfidence ?? 0.6;
+            set
+            {
+                var s = GetActivePreprocessSettingsForUi();
+                if (s is null || Math.Abs(s.AutoEdgeMinConfidence - value) < 1e-6) return;
+                s.AutoEdgeMinConfidence = Math.Clamp(value, 0.1, 1.0);
+                SchedulePreprocessPreviewUpdate();
+                OnPropertyChanged();
+            }
+        }
+
+        public bool AutoEdgeInvert
+        {
+            get => GetActivePreprocessSettingsForUi()?.AutoEdgeInvert ?? false;
+            set
+            {
+                var s = GetActivePreprocessSettingsForUi();
+                if (s is null || s.AutoEdgeInvert == value) return;
+                s.AutoEdgeInvert = value;
                 SchedulePreprocessPreviewUpdate();
                 OnPropertyChanged();
             }
