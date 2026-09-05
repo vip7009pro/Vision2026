@@ -122,6 +122,12 @@ public enum BlobRoiMode
     Exclude = 1
 }
 
+public enum BlobCountingMode
+{
+    Separate = 0,
+    ExcludeContained = 1
+}
+
 public enum CodeSymbology
 {
     Qr = 0,
@@ -643,6 +649,14 @@ public sealed class BlobDetectionDefinition
     public List<BlobRoiDefinition> Rois { get; set; } = new();
 
     public BlobPolarity Polarity { get; set; } = BlobPolarity.DarkOnLight;
+
+    public BlobCountingMode CountingMode { get; set; } = BlobCountingMode.Separate;
+
+    public bool FilterContainedBlobs
+    {
+        get => CountingMode == BlobCountingMode.ExcludeContained;
+        set => CountingMode = value ? BlobCountingMode.ExcludeContained : BlobCountingMode.Separate;
+    }
 
     public int Threshold { get; set; } = 128;
 

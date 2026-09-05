@@ -329,7 +329,7 @@ public partial class InspectionService
                 return (image, defaultSettings);
             }
 
-            static List<BlobInfo> DetectBlobsInCrop(Mat crop, Roi inspectRoi, List<BlobRoiDefinition>? rois, BlobPolarity polarity, int threshold, int minArea, int maxArea, Point2d centerFound, double totalAngle)
+            static List<BlobInfo> DetectBlobsInCrop(Mat crop, Roi inspectRoi, List<BlobRoiDefinition>? rois, BlobPolarity polarity, int threshold, int minArea, int maxArea, Point2d centerFound, double totalAngle, BlobCountingMode countingMode = BlobCountingMode.Separate)
             {
                 var blobs = new List<BlobInfo>();
                 if (crop is null || crop.Empty())
@@ -421,6 +421,8 @@ public partial class InspectionService
                     PixelConnectivity.Connectivity8,
                     MatType.CV_32S);
 
+                var candidates = new List<(int Label, int Left, int Top, int Width, int Height, int AreaPx, double Cx, double Cy, Point2d GlobalCentroid, Rect FullRect)>();
+
                 for (var i = 1; i < nLabels; i++)
                 {
                     var left = stats.Get<int>(i, (int)ConnectedComponentsTypes.Left);
@@ -442,9 +444,92 @@ public partial class InspectionService
                     var bboxCenterGlobal = MapToGlobal(bboxCenterLocal, inspectRoi.Width, inspectRoi.Height, centerFound, totalAngle);
                     var fullRect = new Rect((int)Math.Round(bboxCenterGlobal.X - width / 2.0), (int)Math.Round(bboxCenterGlobal.Y - height / 2.0), width, height);
 
-                    blobs.Add(new BlobInfo(fullRect, globalCentroid, areaPx, totalAngle));
+                    candidates.Add((i, left, top, width, height, areaPx, cx, cy, globalCentroid, fullRect));
                 }
+
+                bool[]? isContained = null;
+                if (countingMode == BlobCountingMode.ExcludeContained && candidates.Count >= 2)
+                {
+                    isContained = new bool[candidates.Count];
+                    var hulls = new Point[candidates.Count][];
+
+                    for (var i = 0; i < candidates.Count; i++)
+                    {
+                        var parent = candidates[i];
+                        for (var j = 0; j < candidates.Count; j++)
+                        {
+                            if (i == j || isContained[j]) continue;
+                            var child = candidates[j];
+
+                            if (child.AreaPx >= parent.AreaPx) continue;
+
+                            // Kiểm tra Bounding Box inclusion với dung sai 1px
+                            if (child.Left >= parent.Left - 1 &&
+                                child.Top >= parent.Top - 1 &&
+                                (child.Left + child.Width) <= (parent.Left + parent.Width + 1) &&
+                                (child.Top + child.Height) <= (parent.Top + parent.Height + 1))
+                            {
+                                if (hulls[i] is null)
+                                {
+                                    hulls[i] = ComputeBlobHull(labels, parent.Left, parent.Top, parent.Width, parent.Height, parent.Label);
+                                }
+
+                                var hull = hulls[i];
+                                if (hull is not null && hull.Length >= 3)
+                                {
+                                    var ptChild = new Point2f((float)child.Cx, (float)child.Cy);
+                                    if (Cv2.PointPolygonTest(hull, ptChild, false) >= 0)
+                                    {
+                                        isContained[j] = true;
+                                    }
+                                }
+                                else
+                                {
+                                    isContained[j] = true;
+                                }
+                            }
+                        }
+                    }
+                }
+
+                for (var i = 0; i < candidates.Count; i++)
+                {
+                    if (isContained is not null && isContained[i])
+                    {
+                        continue;
+                    }
+
+                    var c = candidates[i];
+                    blobs.Add(new BlobInfo(c.FullRect, c.GlobalCentroid, c.AreaPx, totalAngle));
+                }
+
                 return blobs;
+            }
+
+            static Point[]? ComputeBlobHull(Mat labels, int left, int top, int width, int height, int labelId)
+            {
+                try
+                {
+                    var r = new Rect(left, top, width, height);
+                    r = r.Intersect(new Rect(0, 0, labels.Cols, labels.Rows));
+                    if (r.Width <= 0 || r.Height <= 0) return null;
+
+                    using var subLabels = new Mat(labels, r);
+                    using var mask = new Mat();
+                    Cv2.Compare(subLabels, labelId, mask, CmpType.EQ);
+
+                    Cv2.FindContours(mask, out Point[][] contours, out _, RetrievalModes.External, ContourApproximationModes.ApproxSimple);
+                    if (contours is null || contours.Length == 0) return null;
+
+                    var allPts = contours.SelectMany(pts => pts).Select(pt => new Point(pt.X + left, pt.Y + top)).ToArray();
+                    if (allPts.Length < 3) return allPts;
+
+                    return Cv2.ConvexHull(allPts);
+                }
+                catch
+                {
+                    return null;
+                }
             }
 
             static SurfaceCompareResult RunSurfaceCompare(
@@ -1624,7 +1709,7 @@ public partial class InspectionService
                     var (matForBlob, _) = ResolveToolPreprocess("BlobDetection", b.Name);
                     using var crop = ExtractStraightRoi(matForBlob, b.InspectRoi, originTeach, originFound, angleDeg, out var centerFound);
                     var totalAngle = angleDeg + b.InspectRoi.Angle;
-                    var blobs = DetectBlobsInCrop(crop, b.InspectRoi, b.Rois, b.Polarity, b.Threshold, b.MinBlobArea, b.MaxBlobArea, centerFound, totalAngle);
+                    var blobs = DetectBlobsInCrop(crop, b.InspectRoi, b.Rois, b.Polarity, b.Threshold, b.MinBlobArea, b.MaxBlobArea, centerFound, totalAngle, b.CountingMode);
                     __sw.Stop();
                     result.Timings.NodeTimings[b.Name] = (int)__sw.ElapsedMilliseconds;
 

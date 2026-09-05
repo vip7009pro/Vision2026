@@ -38,5 +38,6 @@ class Program
         PreviewQualityTests.RunTests();
         NewJobAndBlobSpecTests.RunTests();
         UrlImageSourceAndRecentJobTests.RunTests();
+        BlobCountingModeTests.RunTests();
     }
 }

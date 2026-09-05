@@ -48,6 +48,27 @@
 - Pipeline đọc đúng kết nối `ImageSource → Preprocess → Tool`.
 - Preview được phép tiếp tục khi Global Snapshot rỗng để lấy ảnh từ ImageSource.
 - Lưu template cho Origin, Point và SurfaceCompare hoạt động với nguồn ảnh ImageSource.
+- **Tùy Chọn Cách Đếm & Loại Bỏ Blob Bị Đè (Lồng Nhau) Cho Tool BlobDetection (Task 301)**:
+  - **Hiện Tượng & Yêu Cầu Người Dùng**:
+    - Trong Tool `BlobDetection`, khi một blob to có cấu trúc rỗng bên trong (như vành khuyên, đốm khuyết tật loang lổ có vùng phản quang, hay chi tiết lồng nhau), thuật toán Connected Components tách cả vùng ngoài to và các đốm con bên trong thành các blob riêng biệt và đếm tất cả, trong khi thực tế người dùng chỉ muốn đếm blob to đại diện và loại bỏ các blob nhỏ nằm hẳn bên trong.
+    - Yêu cầu: Cho phép tùy chọn cách đếm trong Properties Panel của `BlobDetection` để người dùng chủ động chọn "Đếm riêng biệt" hoặc "Loại bỏ blob bị đè".
+  - **Giải Pháp Kỹ Thuật Đã Triển Khai**:
+    1. **Data Model & Serialization (`Class1.cs`)**:
+       - Bổ sung enum `BlobCountingMode` gồm `Separate` (0 - Đếm riêng biệt, mặc định tương thích ngược 100%) và `ExcludeContained` (1 - Loại bỏ blob bị đè).
+       - Bổ sung thuộc tính `CountingMode` và getter/setter boolean `FilterContainedBlobs` vào `BlobDetectionDefinition`.
+    2. **Thuật Toán Phát Hiện & Lọc Blob Lồng Nhau Đa Cấp (`InspectionService.Pipeline.cs`)**:
+       - Cập nhật hàm `DetectBlobsInCrop`: Thêm tham số `BlobCountingMode countingMode = BlobCountingMode.Separate`.
+       - Khi `countingMode == BlobCountingMode.ExcludeContained` và có $\ge 2$ blob:
+         - Kiểm tra 3 tầng hình học: (1) $Area_{parent} > Area_{child}$; (2) Hộp giới hạn $r_{child}$ nằm hoàn toàn bên trong $r_{parent}$ ($Left \ge Left_{p} - 1 \land Top \ge Top_{p} - 1 \land Right \le Right_{p} + 1 \land Bottom \le Bottom_{p} + 1$); (3) Trích xuất bao lồi (`Cv2.ConvexHull`) của blob cha và kiểm tra trọng tâm blob con bằng `Cv2.PointPolygonTest(hull, ptChild, false) >= 0` để triệt tiêu việc nhận nhầm nếu blob to có hình dạng lõm chữ U.
+         - Tự động loại bỏ tất cả các blob con lồng nhau ở mọi cấp độ (A chứa B, B chứa C $\rightarrow$ loại bỏ cả B và C, chỉ giữ lại A).
+       - Toàn bộ kết quả số lượng, khoảng cách tối thiểu, kích thước tối đa và khung Overlay chỉ hiển thị và đánh giá trên các blob độc lập còn lại.
+    3. **Giao Diện Properties Panel & ViewModel (`ToolEditorViewModel.ToolBlob.cs`, `ToolEditorViewModel.cs`, `ToolEditorView.xaml`)**:
+       - Khai báo `AvailableBlobCountingModeNames` ("Đếm riêng biệt", "Loại bỏ blob bị đè"), `Blob_CountingMode`, `Blob_CountingModeText`.
+       - Bổ sung phát thông báo sự kiện trong `RaiseToolPropertyPanelsChanged()` khi chuyển node.
+       - Thêm ComboBox `Cách đếm` ngay dưới `Polarity` trong bảng thuộc tính của `ToolEditorView.xaml`.
+       - Khi đổi chế độ: Tự động `RequestAutoSave()`, làm mới preview canvas tức thì (`RefreshPreviews()`) và cập nhật trạng thái OK/NG (`Blob_PassStatus`).
+    4. **Bộ Kiểm Thử Tự Động Toàn Diện (`TestExtractApp/BlobCountingModeTests.cs`)**:
+       - 6 bài kiểm thử đạt 100%: Kiểm tra chế độ Separate (đếm cả 2 blob), chế độ ExcludeContained (loại bỏ chấm trong, giữ lại 1 blob ngoài), lồng nhau 3 cấp (Separate=3, ExcludeContained=1), 2 blob độc lập (giữ nguyên 2 blob ở cả 2 mode), 1 cặp lồng nhau + 1 blob ngoài (Separate=3, ExcludeContained=2), và kiểm tra Serialization/Deserialization JSON tương thích ngược.
 
 - **Khắc Phục Dứt Điểm Hiện Tượng Treo Đơ Ứng Dụng Khi Mở Job Đã Teach Từ Xa Bằng Menu File/Job Gần Đây & Khi Chuyển ImageSource Sang Chế Độ URL (Task 300)**:
   - **Hiện Tượng & Nguyên Nhân Gốc Rễ**:

@@ -1231,6 +1231,8 @@ namespace VisionInspectionApp.UI.ViewModels
             OnPropertyChanged(nameof(ImageOutput_SaveCondition));
             OnPropertyChanged(nameof(IsBlobDetectionNode));
             OnPropertyChanged(nameof(Blob_Polarity));
+            OnPropertyChanged(nameof(Blob_CountingMode));
+            OnPropertyChanged(nameof(Blob_CountingModeText));
             OnPropertyChanged(nameof(Blob_Threshold));
             OnPropertyChanged(nameof(Blob_MinBlobArea));
             OnPropertyChanged(nameof(Blob_MaxBlobArea));

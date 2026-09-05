@@ -1911,3 +1911,37 @@ Lộ trình tích hợp tính năng Chụp ảnh từ camera và hỗ trợ các
       - Kiểm Thử:
         - dotnet build VisionInspectionApp.slnx: 0 errors.
         - dotnet run --project TestExtractApp: 100% PASSED (5/5 URL & Recent Job tests passed, toàn bộ test suite pass).
+
+
+- [x] Task 301: Tùy Chọn Cách Đếm & Loại Bỏ Blob Bị Đè (Lồng Nhau) Cho Tool BlobDetection.
+      - Mục Tiêu & Yêu Cầu:
+        - Khắc phục hiện tượng blob nhỏ nằm hẳn trong blob to nhưng vẫn bị đếm riêng biệt, trong khi người dùng chỉ cần đếm blob to.
+        - Cho phép tùy chọn cách đếm trong Properties Panel của Tool BlobDetection:
+          - "Đếm riêng biệt" (Separate - Mặc định).
+          - "Loại bỏ blob bị đè" (ExcludeContained - Loại bỏ các blob nhỏ nằm lọt lòng trong blob to, chỉ đếm blob to ngoài cùng).
+        - Lưu trữ và nạp cấu hình bền vững vào tệp .job (tương thích ngược 100% với job cũ).
+        - Cập nhật thuật toán Vision Pipeline tự động lọc các blob lồng nhau ở mọi cấp độ (A chứa B, B chứa C -> chỉ giữ lại A) trước khi tính toán số lượng, khoảng cách tối thiểu, kích thước tối đa và vẽ khung Overlay.
+      - Giải Pháp Kỹ Thuật Đã Triển Khai:
+        1. Data Model & Serialization (VisionInspectionApp.Models/Class1.cs):
+           - Bổ sung enum BlobCountingMode (Separate = 0, ExcludeContained = 1).
+           - Thêm thuộc tính CountingMode và helper FilterContainedBlobs vào BlobDetectionDefinition.
+        2. Thuật Toán Lọc Blob Lồng Nhau Đa Cấp (VisionInspectionApp.Application/Services/InspectionService.Pipeline.cs):
+           - Bổ sung tham số BlobCountingMode countingMode = BlobCountingMode.Separate vào DetectBlobsInCrop.
+           - Thu thập các candidate blob thỏa mãn ngưỡng diện tích [minArea, maxArea].
+           - Khi countingMode == BlobCountingMode.ExcludeContained:
+             - Kiểm tra 3 tầng hình học:
+               a. Area_parent > Area_child.
+               b. Hộp giới hạn r_child nằm hoàn toàn bên trong r_parent (dung sai an toàn 1px).
+               c. Bao lồi (Cv2.ConvexHull) của blob cha chứa trọng tâm của blob con (Cv2.PointPolygonTest(hull, ptChild, false) >= 0), triệt tiêu việc nhận nhầm nếu blob to có hình dạng lõm chữ U.
+             - Đánh dấu và loại bỏ các blob con bị đè, hỗ trợ lồng nhau đa cấp.
+           - Truyền b.CountingMode vào lời gọi DetectBlobsInCrop trong ExecuteBlobDetections.
+        3. Giao Diện Người Dùng & ViewModel (ToolEditorViewModel.ToolBlob.cs, ToolEditorViewModel.cs, ToolEditorView.xaml):
+           - Khai báo AvailableBlobCountingModeNames ("Đếm riêng biệt", "Loại bỏ blob bị đè"), Blob_CountingMode, Blob_CountingModeText.
+           - Bổ sung phát thông báo sự kiện trong RaiseToolPropertyPanelsChanged().
+           - Thêm ComboBox "Cách đếm" ngay dưới "Polarity" trong bảng thuộc tính của Tool Editor.
+           - Khi thay đổi: Tự động kích hoạt RequestAutoSave(), làm mới preview canvas tức thì (RefreshPreviews()) và cập nhật kết quả OK/NG (Blob_PassStatus).
+        4. Bộ Kiểm Thử Tự Động Toàn Diện (TestExtractApp/BlobCountingModeTests.cs):
+           - 6 bài kiểm thử toàn diện: Đếm riêng biệt 2 blob (vành ngoài + chấm trong), loại bỏ chấm trong ở chế độ ExcludeContained (chỉ giữ 1 blob ngoài), lồng nhau 3 cấp (Separate=3, ExcludeContained=1), 2 blob độc lập (cả 2 mode giữ nguyên 2 blob), 1 cặp lồng nhau + 1 blob ngoài (Separate=3, ExcludeContained=2), và kiểm tra Serialization/Deserialization JSON tương thích ngược.
+      - Kiểm Thử:
+        - dotnet build VisionInspectionApp.slnx: 0 errors.
+        - dotnet run --project TestExtractApp: 100% PASSED (6/6 BlobCountingMode tests passed, toàn bộ test suite pass).

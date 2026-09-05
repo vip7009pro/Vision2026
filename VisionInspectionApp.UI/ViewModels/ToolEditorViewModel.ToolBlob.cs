@@ -48,6 +48,45 @@ namespace VisionInspectionApp.UI.ViewModels
                 OnPropertyChanged();
             }
         }
+
+        public IReadOnlyList<string> AvailableBlobCountingModeNames { get; } = new[]
+        {
+            "Đếm riêng biệt",
+            "Loại bỏ blob bị đè"
+        };
+
+        public BlobCountingMode Blob_CountingMode
+        {
+            get => SelectedBlobDetectionDef()?.CountingMode ?? BlobCountingMode.Separate;
+            set
+            {
+                var def = SelectedBlobDetectionDef();
+                if (def is null)
+                    return;
+                if (def.CountingMode == value)
+                    return;
+                def.CountingMode = value;
+                RequestAutoSave();
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(Blob_CountingModeText));
+                OnPropertyChanged(nameof(Blob_PassStatus));
+                OnPropertyChanged(nameof(Blob_PassColor));
+                OnPropertyChanged(nameof(Blob_LastRunCount));
+                RefreshPreviews();
+            }
+        }
+
+        public string Blob_CountingModeText
+        {
+            get => Blob_CountingMode == BlobCountingMode.ExcludeContained ? "Loại bỏ blob bị đè" : "Đếm riêng biệt";
+            set
+            {
+                var mode = string.Equals(value, "Loại bỏ blob bị đè", StringComparison.OrdinalIgnoreCase)
+                    ? BlobCountingMode.ExcludeContained
+                    : BlobCountingMode.Separate;
+                Blob_CountingMode = mode;
+            }
+        }
     
         public int Blob_Threshold
         {
