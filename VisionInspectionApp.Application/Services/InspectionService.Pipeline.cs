@@ -18,6 +18,34 @@ namespace VisionInspectionApp.Application;
 
 public partial class InspectionService
 {
+    private static readonly ConcurrentDictionary<string, (DateTime LastModified, Mat Mat)> _surfaceCompareTemplateCache = new();
+
+    private static Mat? GetCachedSurfaceCompareTemplate(string filePath)
+    {
+        if (string.IsNullOrWhiteSpace(filePath) || !File.Exists(filePath)) return null;
+        try
+        {
+            var lastWrite = File.GetLastWriteTimeUtc(filePath);
+            if (_surfaceCompareTemplateCache.TryGetValue(filePath, out var cached))
+            {
+                if (cached.LastModified == lastWrite && cached.Mat != null && !cached.Mat.IsDisposed && !cached.Mat.Empty())
+                {
+                    return cached.Mat.Clone();
+                }
+                try { cached.Mat?.Dispose(); } catch { }
+            }
+
+            var loaded = Cv2.ImRead(filePath, ImreadModes.Grayscale);
+            if (loaded.Empty()) { loaded.Dispose(); return null; }
+            _surfaceCompareTemplateCache[filePath] = (lastWrite, loaded.Clone());
+            return loaded;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
     public InspectionResult Inspect(Mat image, VisionConfig config, DB.Services.IDbManagerService? dbManagerOverride = null)
     {
         var effectiveDbManager = dbManagerOverride ?? _dbManager;
@@ -329,6 +357,71 @@ public partial class InspectionService
                 return (image, defaultSettings);
             }
 
+            (Mat ImageMat, PreprocessSettings? Settings, ImagePreprocessor? Preprocessor) ResolveToolPreprocessForRoiFirst(string toolType, string toolRefName)
+            {
+                var defaultSettings = config.Preprocess;
+
+                var toolNode = nodesById.Values.FirstOrDefault(n => string.Equals(n.Type, toolType, StringComparison.OrdinalIgnoreCase)
+                                                                    && (string.Equals(toolType, "Origin", StringComparison.OrdinalIgnoreCase) || string.Equals(n.RefName, toolRefName, StringComparison.OrdinalIgnoreCase)));
+                if (toolNode is null)
+                {
+                    return (image, defaultSettings, _preprocessor);
+                }
+
+                var imageEdge = edges.FirstOrDefault(e => string.Equals(e.ToNodeId, toolNode.Id, StringComparison.OrdinalIgnoreCase));
+                if (imageEdge is null || !nodesById.TryGetValue(imageEdge.FromNodeId, out var fromNode))
+                {
+                    return (image, defaultSettings, _preprocessor);
+                }
+
+                if (string.Equals(fromNode.Type, "Preprocess", StringComparison.OrdinalIgnoreCase))
+                {
+                    // For ROI-first tools (like Caliper and SurfaceCompare), do NOT run preprocess on the full 20MP image!
+                    // Instead, extract the source image feed (Crop, ImageSource, or predecessor) and pass the PreprocessSettings
+                    // so the tool can run the preprocessor only on its tiny local ROI patch.
+                    preprocessNodesByName.TryGetValue(fromNode.RefName ?? string.Empty, out var preDef);
+                    var nodeSettings = preDef?.Settings ?? defaultSettings;
+
+                    // Trace upstream of the Preprocess node to get the raw base image
+                    var inEdge = edges.FirstOrDefault(e => string.Equals(e.ToNodeId, fromNode.Id, StringComparison.OrdinalIgnoreCase)
+                                                          && (string.Equals(e.ToPort, "In", StringComparison.OrdinalIgnoreCase) || string.Equals(e.ToPort, "Image", StringComparison.OrdinalIgnoreCase)));
+                    Mat baseMat = image;
+                    if (inEdge is not null && nodesById.TryGetValue(inEdge.FromNodeId, out var grandParentNode))
+                    {
+                        if (string.Equals(grandParentNode.Type, "Crop", StringComparison.OrdinalIgnoreCase))
+                        {
+                            baseMat = GetCropNodeOutput(grandParentNode.Id);
+                        }
+                        else if (string.Equals(grandParentNode.Type, "ImageSource", StringComparison.OrdinalIgnoreCase))
+                        {
+                            baseMat = image;
+                        }
+                        else
+                        {
+                            baseMat = GetNodeOutputImage(grandParentNode.Id);
+                        }
+                    }
+
+                    return (baseMat, nodeSettings, _preprocessor);
+                }
+                else if (string.Equals(fromNode.Type, "Crop", StringComparison.OrdinalIgnoreCase))
+                {
+                    var cropMat = GetCropNodeOutput(fromNode.Id);
+                    return (cropMat, defaultSettings, _preprocessor);
+                }
+                else if (string.Equals(fromNode.Type, "ImgArithmetic", StringComparison.OrdinalIgnoreCase))
+                {
+                    var arithMat = GetNodeOutputImage(fromNode.Id);
+                    return (arithMat, defaultSettings, _preprocessor);
+                }
+                else if (string.Equals(fromNode.Type, "ImageSource", StringComparison.OrdinalIgnoreCase))
+                {
+                    return (image, defaultSettings, _preprocessor);
+                }
+
+                return (image, defaultSettings, _preprocessor);
+            }
+
             static List<BlobInfo> DetectBlobsInCrop(Mat crop, Roi inspectRoi, List<BlobRoiDefinition>? rois, BlobPolarity polarity, int threshold, int minArea, int maxArea, Point2d centerFound, double totalAngle, BlobCountingMode countingMode = BlobCountingMode.Separate)
             {
                 var blobs = new List<BlobInfo>();
@@ -574,9 +667,9 @@ public partial class InspectionService
                     return new SurfaceCompareResult(def.Name, 0, 0.0, new List<SurfaceCompareDefect>(), false);
                 }
 
-                // Load and Preprocess template exactly like the current image.
-                using var templRaw = Cv2.ImRead(def.TemplateImageFile, ImreadModes.Grayscale);
-                if (templRaw.Empty())
+                // Load and Preprocess template exactly like the current image (using RAM Cache)
+                using var templRaw = GetCachedSurfaceCompareTemplate(def.TemplateImageFile);
+                if (templRaw is null || templRaw.Empty())
                 {
                     return new SurfaceCompareResult(def.Name, 0, 0.0, new List<SurfaceCompareDefect>(), false);
                 }
@@ -617,21 +710,89 @@ public partial class InspectionService
                     Cv2.MatchTemplate(testCrop, tplInner, matchRes, TemplateMatchModes.SqDiffNormed);
                     Cv2.MinMaxLoc(matchRes, out double minVal, out _, out Point minLoc, out _);
 
-                    int dx = minLoc.X - shift;
-                    int dy = minLoc.Y - shift;
-                    if (dx != 0 || dy != 0)
+                    // Confidence Guard: minVal > 0.45 indicates severe mismatch / missing content.
+                    // Skip translation in that case to prevent shifting the ROI into unrelated regions.
+                    if (minVal <= 0.45)
                     {
-                        using var M = new Mat(2, 3, MatType.CV_32FC1);
-                        M.Set(0, 0, 1.0f); M.Set(0, 1, 0.0f); M.Set(0, 2, (float)-dx);
-                        M.Set(1, 0, 0.0f); M.Set(1, 1, 1.0f); M.Set(1, 2, (float)-dy);
-                        using var alignedTest = new Mat();
-                        Cv2.WarpAffine(testCrop, alignedTest, M, testCrop.Size(), InterpolationFlags.Linear, BorderTypes.Replicate);
-                        alignedTest.CopyTo(testCrop);
+                        double subX = minLoc.X;
+                        double subY = minLoc.Y;
+
+                        if (def.SubPixelAlign && minLoc.X > 0 && minLoc.X < matchRes.Cols - 1)
+                        {
+                            float v0 = matchRes.At<float>(minLoc.Y, minLoc.X - 1);
+                            float v1 = matchRes.At<float>(minLoc.Y, minLoc.X);
+                            float v2 = matchRes.At<float>(minLoc.Y, minLoc.X + 1);
+                            float denom = 2.0f * (v0 - 2.0f * v1 + v2);
+                            if (Math.Abs(denom) > 1e-6f)
+                            {
+                                float delta = (v0 - v2) / denom;
+                                if (Math.Abs(delta) <= 0.75f) subX += delta;
+                            }
+                        }
+                        if (def.SubPixelAlign && minLoc.Y > 0 && minLoc.Y < matchRes.Rows - 1)
+                        {
+                            float v0 = matchRes.At<float>(minLoc.Y - 1, minLoc.X);
+                            float v1 = matchRes.At<float>(minLoc.Y, minLoc.X);
+                            float v2 = matchRes.At<float>(minLoc.Y + 1, minLoc.X);
+                            float denom = 2.0f * (v0 - 2.0f * v1 + v2);
+                            if (Math.Abs(denom) > 1e-6f)
+                            {
+                                float delta = (v0 - v2) / denom;
+                                if (Math.Abs(delta) <= 0.75f) subY += delta;
+                            }
+                        }
+
+                        double dx = subX - shift;
+                        double dy = subY - shift;
+                        if (Math.Abs(dx) > 1e-3 || Math.Abs(dy) > 1e-3)
+                        {
+                            using var M = new Mat(2, 3, MatType.CV_32FC1);
+                            M.Set(0, 0, 1.0f); M.Set(0, 1, 0.0f); M.Set(0, 2, (float)-dx);
+                            M.Set(1, 0, 0.0f); M.Set(1, 1, 1.0f); M.Set(1, 2, (float)-dy);
+                            using var alignedTest = new Mat();
+                            Cv2.WarpAffine(testCrop, alignedTest, M, testCrop.Size(), InterpolationFlags.Linear, BorderTypes.Replicate);
+                            alignedTest.CopyTo(testCrop);
+                        }
+                    }
+                }
+
+                // Normalize lighting if enabled (adjust test crop mean & stddev toward template crop)
+                if (def.NormalizeLighting)
+                {
+                    Cv2.MeanStdDev(tplCrop, out Scalar tplMean, out Scalar tplStd);
+                    Cv2.MeanStdDev(testCrop, out Scalar testMean, out Scalar testStd);
+
+                    double stdT = tplStd.Val0;
+                    double stdC = testStd.Val0;
+                    if (stdC > 1.0)
+                    {
+                        double alpha = stdT > 1.0 ? Math.Clamp(stdT / stdC, 0.5, 2.0) : 1.0;
+                        double beta = tplMean.Val0 - alpha * testMean.Val0;
+                        testCrop.ConvertTo(testCrop, -1, alpha, beta);
+                    }
+                    else
+                    {
+                        double diff = tplMean.Val0 - testMean.Val0;
+                        testCrop.ConvertTo(testCrop, -1, 1.0, diff);
                     }
                 }
 
                 using var bw = new Mat();
                 var thr = Math.Clamp(def.DiffThreshold, 0, 255);
+
+                void ApplySpatialEdgeToleranceBand(Mat targetBw, Mat referenceTpl, int edgeTolPx, int blurSpreadPx = 0)
+                {
+                    if (edgeTolPx <= 0) return;
+                    var totalRadius = edgeTolPx + Math.Max(0, blurSpreadPx);
+                    using var edgeMap = new Mat();
+                    Cv2.Canny(referenceTpl, edgeMap, 50, 150);
+                    using var tolKernel = Cv2.GetStructuringElement(MorphShapes.Rect, new Size(totalRadius * 2 + 1, totalRadius * 2 + 1));
+                    using var edgeBand = new Mat();
+                    Cv2.Dilate(edgeMap, edgeBand, tolKernel);
+                    using var notBand = new Mat();
+                    Cv2.BitwiseNot(edgeBand, notBand);
+                    Cv2.BitwiseAnd(targetBw, notBand, targetBw);
+                }
 
                 if (def.Algorithm == SurfaceCompareAlgorithm.SSIM)
                 {
@@ -703,12 +864,11 @@ public partial class InspectionService
                     using var dissim8u = new Mat();
                     dissim.ConvertTo(dissim8u, MatType.CV_8UC1);
 
-                    var ssimThr = Math.Clamp(def.SsimThreshold > 0 ? (1.0 - def.SsimThreshold) * 255.0 : 38.0, 5.0, 250.0);
-                    if (def.DiffThreshold > 0 && def.DiffThreshold != 25)
-                    {
-                        ssimThr = (1.0 - Math.Clamp(def.DiffThreshold / 100.0, 0.05, 0.95)) * 255.0;
-                    }
+                    var ssimVal = def.SsimThreshold > 0 ? def.SsimThreshold : 0.85;
+                    var ssimThr = Math.Clamp((1.0 - ssimVal) * 255.0, 5.0, 250.0);
                     Cv2.Threshold(dissim8u, bw, ssimThr, 255, ThresholdTypes.Binary);
+
+                    ApplySpatialEdgeToleranceBand(bw, tplCrop, def.EdgeTolerancePx, winSize / 2);
                 }
                 else if (def.Algorithm == SurfaceCompareAlgorithm.GradientAdaptive)
                 {
@@ -746,6 +906,40 @@ public partial class InspectionService
                     Cv2.AddWeighted(grayDiff, 1.0 - wGrad, gradDiff, wGrad, 0, combinedDiff);
 
                     Cv2.Threshold(combinedDiff, bw, thr, 255, ThresholdTypes.Binary);
+
+                    ApplySpatialEdgeToleranceBand(bw, tplCrop, def.EdgeTolerancePx);
+                }
+                else if (def.Algorithm == SurfaceCompareAlgorithm.EdgeCompare)
+                {
+                    using var grad1X = new Mat();
+                    using var grad1Y = new Mat();
+                    using var grad2X = new Mat();
+                    using var grad2Y = new Mat();
+                    Cv2.Scharr(testCrop, grad1X, MatType.CV_16S, 1, 0);
+                    Cv2.Scharr(testCrop, grad1Y, MatType.CV_16S, 0, 1);
+                    Cv2.Scharr(tplCrop, grad2X, MatType.CV_16S, 1, 0);
+                    Cv2.Scharr(tplCrop, grad2Y, MatType.CV_16S, 0, 1);
+
+                    using var absGrad1X = new Mat();
+                    using var absGrad1Y = new Mat();
+                    using var absGrad2X = new Mat();
+                    using var absGrad2Y = new Mat();
+                    Cv2.ConvertScaleAbs(grad1X, absGrad1X);
+                    Cv2.ConvertScaleAbs(grad1Y, absGrad1Y);
+                    Cv2.ConvertScaleAbs(grad2X, absGrad2X);
+                    Cv2.ConvertScaleAbs(grad2Y, absGrad2Y);
+
+                    using var mag1 = new Mat();
+                    using var mag2 = new Mat();
+                    Cv2.AddWeighted(absGrad1X, 0.5, absGrad1Y, 0.5, 0, mag1);
+                    Cv2.AddWeighted(absGrad2X, 0.5, absGrad2Y, 0.5, 0, mag2);
+
+                    using var edgeDiff = new Mat();
+                    Cv2.Absdiff(mag1, mag2, edgeDiff);
+
+                    Cv2.Threshold(edgeDiff, bw, thr, 255, ThresholdTypes.Binary);
+
+                    ApplySpatialEdgeToleranceBand(bw, tplCrop, def.EdgeTolerancePx);
                 }
                 else
                 {
@@ -856,7 +1050,7 @@ public partial class InspectionService
                 }
 
                 var minArea = Math.Max(0, def.MinBlobArea);
-                var maxArea = Math.Max(minArea, def.MaxBlobArea);
+                var maxArea = def.MaxBlobArea > 0 ? Math.Max(minArea, def.MaxBlobArea) : int.MaxValue;
 
                 var defects = new List<SurfaceCompareDefect>();
                 double maxFoundArea = 0.0;
@@ -1819,8 +2013,8 @@ public partial class InspectionService
                     .Select(sc => RunHeavyTool($"SurfaceCompare:{sc.Name}", () =>
                     {
                         var __sw = System.Diagnostics.Stopwatch.StartNew();
-                        var (_, scSettings) = ResolveToolPreprocess("SurfaceCompare", sc.Name);
-                        var res = RunSurfaceCompare(image, originTeach, originFound, angleDeg, sc, _preprocessor, scSettings);
+                        var (matForSc, scSettings, scPreprocessor) = ResolveToolPreprocessForRoiFirst("SurfaceCompare", sc.Name);
+                        var res = RunSurfaceCompare(matForSc, originTeach, originFound, angleDeg, sc, scPreprocessor ?? _preprocessor, scSettings ?? new PreprocessSettings());
                         __sw.Stop(); result.Timings.NodeTimings[sc.Name] = (int)__sw.ElapsedMilliseconds; return res;
                     }))
                     .ToArray();
@@ -1939,8 +2133,8 @@ public partial class InspectionService
                 {
                     var __sw = System.Diagnostics.Stopwatch.StartNew();
                     var roi = TransformRoiKeepSize(c.SearchRoi, originTeach, originFound, angleDeg);
-                    var (matForCal, _) = ResolveToolPreprocess("Caliper", c.Name);
-                    var res = VisionEngine.CaliperDetector.Detect(matForCal, c, originTeach, originFound, angleDeg);
+                    var (matForCal, calSettings, calPreprocessor) = ResolveToolPreprocessForRoiFirst("Caliper", c.Name);
+                    var res = VisionEngine.CaliperDetector.Detect(matForCal, c, originTeach, originFound, angleDeg, calPreprocessor, calSettings);
                     __sw.Stop(); result.Timings.NodeTimings[c.Name] = (int)__sw.ElapsedMilliseconds; return res;
                 }))
                 .ToArray();
@@ -2779,8 +2973,8 @@ public partial class InspectionService
                 var cDef = config.Calipers?.FirstOrDefault(x => string.Equals(x.Name, trimmed, StringComparison.OrdinalIgnoreCase));
                 if (cDef != null && cDef.SearchRoi.Width > 0 && cDef.SearchRoi.Height > 0)
                 {
-                    var (matForCal, _) = ResolveToolPreprocess("Caliper", cDef.Name);
-                    var det = CaliperDetector.Detect(matForCal, cDef, originTeach, originFound, angleDeg);
+                    var (matForCal, calSettings, calPreprocessor) = ResolveToolPreprocessForRoiFirst("Caliper", cDef.Name);
+                    var det = CaliperDetector.Detect(matForCal, cDef, originTeach, originFound, angleDeg, calPreprocessor, calSettings);
                     if (det.Found)
                     {
                         var dx = det.LineP2.X - det.LineP1.X; var dy = det.LineP2.Y - det.LineP1.Y;

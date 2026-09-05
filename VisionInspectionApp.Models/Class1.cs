@@ -719,13 +719,18 @@ public sealed class SurfaceCompareDefinition
     public bool AutoAlign { get; set; } = false;
 
     public int AutoAlignMaxShiftPx { get; set; } = 5;
+
+    public bool NormalizeLighting { get; set; } = false;
+
+    public bool SubPixelAlign { get; set; } = false;
 }
 
 public enum SurfaceCompareAlgorithm
 {
     AbsDiff = 0,
     SSIM = 1,
-    GradientAdaptive = 2
+    GradientAdaptive = 2,
+    EdgeCompare = 3
 }
 
 public enum ContourMatchMethod

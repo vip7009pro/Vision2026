@@ -291,6 +291,36 @@ namespace VisionInspectionApp.UI.ViewModels
             }
         }
 
+        public bool SurfaceCompare_SubPixelAlign
+        {
+            get => SelectedSurfaceCompareDef()?.SubPixelAlign ?? false;
+            set
+            {
+                var def = SelectedSurfaceCompareDef();
+                if (def is null) return;
+                if (def.SubPixelAlign == value) return;
+                def.SubPixelAlign = value;
+                RaiseToolPropertyPanelsChanged();
+                RefreshPreviews();
+                RequestAutoSave();
+            }
+        }
+
+        public bool SurfaceCompare_NormalizeLighting
+        {
+            get => SelectedSurfaceCompareDef()?.NormalizeLighting ?? false;
+            set
+            {
+                var def = SelectedSurfaceCompareDef();
+                if (def is null) return;
+                if (def.NormalizeLighting == value) return;
+                def.NormalizeLighting = value;
+                RaiseToolPropertyPanelsChanged();
+                RefreshPreviews();
+                RequestAutoSave();
+            }
+        }
+
         public double? SurfaceCompare_LastRunMaxArea
         {
             get

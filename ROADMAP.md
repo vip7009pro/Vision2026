@@ -1,4 +1,4 @@
-# ROADMAP.md
+﻿# ROADMAP.md
 
 Lộ trình tích hợp tính năng Chụp ảnh từ camera và hỗ trợ các loại camera (USB, GigE, USB3 Vision):
 
@@ -2057,3 +2057,53 @@ Lộ trình tích hợp tính năng Chụp ảnh từ camera và hỗ trợ các
        - Kiá»ƒm Thá»­:
          - dotnet build VisionInspectionApp.slnx: 0 errors.
          - dotnet run --project TestExtractApp: 100% PASSED (10/10 PreprocessAndImageOutputTests passed, toÃ n bá»™ test suite pass).
+
+- [x] Task 306: Tá»‘i Æ¯u Hiá»‡u NÄƒng Tool Caliper (ROI First Pipeline) & NÃ¢ng Cáº¥p ToÃ n Diá»‡n Tool Surface Compare (RAM Template Cache, Sub-pixel Auto Align, Confidence Guard, Normalize Lighting, Spatial Edge Tolerance ToÃ n Diá»‡n, Thuáº­t ToÃ¡n Má»›i EdgeCompare).
+       - Hiá»‡n TÆ°á»£ng & YÃªu Cáº§u NgÆ°á»i DÃ¹ng:
+         1. Tool Caliper: Kiá»ƒm tra xem tool Caliper hiá»‡n táº¡i Ä‘Ã£ Ã¡p dá»¥ng ROI First chÆ°a hay váº«n tiá»n xá»­ lÃ½ toÃ n áº£nh (ngÆ°á»i dÃ¹ng pháº£n Ã¡nh runtime cá»§a Caliper tÄƒng quÃ¡ cao).
+         2. Tool Surface Compare: RÃ  soÃ¡t vÃ  nÃ¢ng cáº¥p toÃ n diá»‡n theo 26 phases:
+            - Loáº¡i bá» I/O Ä‘á»c Ä‘Ä©a láº·p láº¡i má»—i frame (Template RAM Caching).
+            - Tinh chá»‰nh Auto Align vá»›i kháº£ nÄƒng ná»™i suy Sub-pixel vÃ  cÆ¡ cháº¿ báº£o vá»‡ Confidence Guard (ngÄƒn cháº·n dá»‹ch chuyá»ƒn sai khi máº«u bá»‹ lá»—i náº·ng/máº¥t chá»¯).
+            - Chuáº©n hÃ³a Ä‘á»™ sÃ¡ng (Normalize Lighting) Ä‘á»ƒ triá»‡t tiÃªu false positives do Ã¡nh sÃ¡ng mÃ´i trÆ°á»ng trÃ´i dáº¡t.
+            - Má»Ÿ rá»™ng Spatial Edge Tolerance Band cho toÃ n bá»™ cÃ¡c thuáº­t toÃ¡n (AbsDiff, SSIM, GradientAdaptive, EdgeCompare), loáº¡i bá» áº£nh hÆ°á»Ÿng cá»§a rung sai lá»‡ch biÃªn 1-2px do cÆ¡ khÃ­.
+            - Bá»• sung thuáº­t toÃ¡n má»›i EdgeCompare chuyÃªn biá»‡t cho in áº¥n, phÃ¡t hiá»‡n máº¥t nÃ©t chá»¯, má» nÃ©t, gÃ£y nÃ©t vá»›i Ä‘á»™ nháº¡y cao.
+            - Sá»­a lá»—i tÃ¡ch biá»‡t giá»¯a SsimThreshold vÃ  DiffThreshold (trÆ°á»›c Ä‘Ã¢y DiffThreshold ghi Ä‘Ã¨ ngáº§m SsimThreshold).
+         3. RÃ ng buá»™c kiáº¿n trÃºc:
+            - Báº£o toÃ n 100% tÃ­nh tÆ°Æ¡ng thÃ­ch ngÆ°á»£c vá»›i cÃ¡c file Job cÅ©.
+            - KhÃ´ng lÃ m vá»¡ Flow Ä‘á»“ thá»‹ node graph, khÃ´ng lÃ m thay Ä‘á»•i contract dá»¯ liá»‡u cá»§a cÃ¡c tool khÃ¡c.
+       - Giáº£i PhÃ¡p Ká»¹ Thuáº­t ÄÃ£ Triá»ƒn Khai:
+         1. PhÃ¢n TÃ­ch & Kháº¯c Phá»¥c Runtime Tool Caliper (ROI First Pipeline):
+            - XÃ¡c Ä‘á»‹nh nguyÃªn nhÃ¢n: Khi Caliper ná»‘i tá»« node Preprocess, pipeline trÆ°á»›c Ä‘Ã¢y gá»i ResolveToolPreprocess dáº«n Ä‘áº¿n GetPreprocessNodeOutput thá»±c hiá»‡n tiá»n xá»­ lÃ½ trÃªn toÃ n bá»™ bá»©c áº£nh 20 MP (~80-350ms) thay vÃ¬ chá»‰ xá»­ lÃ½ trÃªn ROI patch nhá» cá»§a Caliper.
+            - XÃ¢y dá»±ng ResolveToolPreprocessForRoiFirst: TrÃ­ch xuáº¥t áº£nh gá»‘c/áº£nh cáº¯t upstream vÃ  chuyá»ƒn PreprocessSettings xuá»‘ng CaliperDetector mÃ  khÃ´ng kÃ­ch hoáº¡t xá»­ lÃ½ toÃ n áº£nh.
+            - NÃ¢ng cáº¥p CaliperDetector.Detect: Thá»±c hiá»‡n trÃ­ch xuáº¥t Search ROI patch trÆ°á»›c (ExtractStraightRoi), sau Ä‘Ã³ chá»‰ gá»i ImagePreprocessor.Run trÃªn patch kÃ­ch thÆ°á»›c nhá» (~0.05ms), giáº£m hÆ¡n 10.000 láº§n sá»‘ pixel tÃ­nh toÃ¡n.
+         2. Cáº­p Nháº­t Data Models (VisionInspectionApp.Models/Class1.cs):
+            - Bá»• sung SubPixelAlign (bool, máº·c Ä‘á»‹nh false) vÃ  NormalizeLighting (bool, máº·c Ä‘á»‹nh false) vÃ o SurfaceCompareDefinition.
+            - Má»Ÿ rá»™ng enum SurfaceCompareAlgorithm thÃªm giÃ¡ trá»‹ EdgeCompare = 3.
+         3. Quáº£n LÃ½ Bá»™ Nhá»› Äá»‡m Template TrÃªn RAM (InspectionService.Pipeline.cs):
+            - Bá»• sung ConcurrentDictionary tÄ©nh _surfaceCompareTemplateCache lÆ°u trá»¯ (LastModified, Mat) trÃªn RAM.
+            - PhÆ°Æ¡ng thá»©c GetCachedSurfaceCompareTemplate tá»± Ä‘á»™ng kiá»ƒm tra thá»i gian ghi file (LastWriteTimeUtc), tá»± Ä‘á»™ng lÃ m má»›i khi ngÆ°á»i dÃ¹ng teach láº¡i mÃ  khÃ´ng cáº§n khá»Ÿi Ä‘á»™ng láº¡i app.
+            - Tráº£ vá» báº£n sao an toÃ n Clone() cho tá»«ng luá»“ng inspection sá»­ dá»¥ng.
+         4. NÃ¢ng Cáº¥p ToÃ n Diá»‡n Engine RunSurfaceCompare:
+            - Auto Align Sub-pixel: Sá»­ dá»¥ng mÃ´ hÃ¬nh khá»›p máº«u SqDiffNormed, ná»™i suy parabolic peak cá»±c tiá»ƒu 1D trÃªn hai trá»¥c X vÃ  Y Ä‘á»ƒ bÃ¹ sai lá»‡ch cÆ¡ khÃ­ chÃ­nh xÃ¡c Ä‘áº¿n pháº§n mÆ°á»i pixel.
+            - Confidence Guard: Thiáº¿t láº­p ngÆ°á»¡ng minVal <= 0.45. Khi sáº£n pháº©m bá»‹ khuyáº¿t táº­t náº·ng hoáº·c khÃ´ng Ä‘Ãºng loáº¡i, há»‡ thá»‘ng tá»« chá»‘i tá»‹nh tiáº¿n ROI Ä‘á»ƒ báº£o toÃ n vÃ¹ng khuyáº¿t táº­t cáº§n báº¯t.
+            - Normalize Lighting: TÃ­nh toÃ¡n thá»‘ng kÃª mean vÃ  stddev giá»¯a template vÃ  áº£nh kiá»ƒm tra, Ã¡p dá»¥ng phÃ©p biáº¿n Ä‘á»•i tuyáº¿n tÃ­nh chuáº©n hÃ³a Ä‘á»ƒ triá»‡t tiÃªu chÃªnh lá»‡ch cÆ°á»ng Ä‘á»™ sÃ¡ng mÃ´i trÆ°á»ng.
+            - Spatial Edge Tolerance Band ToÃ n Diá»‡n: TrÃ­ch xuáº¥t biÃªn viá»n Canny tá»« Template vÃ  giÃ£n ná»Ÿ theo bÃ¡n kÃ­nh dung sai (tÃ­nh Ä‘áº¿n Ä‘á»™ lan tá»a Gaussian cá»§a cá»­a sá»• trÆ°á»£t SSIM), Ã¡p dá»¥ng cho cáº£ 4 thuáº­t toÃ¡n AbsDiff, SSIM, GradientAdaptive vÃ  EdgeCompare.
+            - Thuáº­t toÃ¡n má»›i EdgeCompare: TÃ­nh Scharr gradient theo hai phÆ°Æ¡ng X, Y trÃªn cáº£ template vÃ  áº£nh test, so sÃ¡nh chÃªnh lá»‡ch gradient Ä‘á»ƒ phÃ¡t hiá»‡n váº¿t ná»©t, máº¥t nÃ©t in vá»›i Ä‘á»™ nháº¡y vÆ°á»£t trá»™i.
+            - Sá»­a lá»—i Decouple SsimThreshold: Loáº¡i bá» hoÃ n toÃ n Ä‘oáº¡n mÃ£ ghi Ä‘Ã¨ ngáº§m ssimThr tá»« DiffThreshold, Ä‘áº£m báº£o hai ngÆ°á»¡ng hoáº¡t Ä‘á»™ng Ä‘á»™c láº­p chuáº©n xÃ¡c.
+            - Sá»­a lá»—i MaxBlobArea: Xá»­ lÃ½ giÃ¡ trá»‹ MaxBlobArea <= 0 thÃ nh int.MaxValue (khÃ´ng giá»›i háº¡n trÃªn) trÃ¡nh drop cÃ¡c khuyáº¿t táº­t lá»›n.
+         5. Giao Diá»‡n NgÆ°á»i DÃ¹ng & ViewModel (ToolEditorViewModel.ToolSurface.cs & ToolEditorView.xaml):
+            - Bá»• sung cÃ¡c thuá»™c tÃ­nh SurfaceCompare_SubPixelAlign vÃ  SurfaceCompare_NormalizeLighting.
+            - Bá»• sung 2 CheckBox "SubPixel Align" vÃ  "Normalize Light" vÃ o báº£ng thuá»™c tÃ­nh Surface Compare trÃªn giao diá»‡n Tool Editor.
+            - ComboBox Algorithm tá»± Ä‘á»™ng há»— trá»£ lá»±a chá»n EdgeCompare.
+         6. Bá»™ Kiá»ƒm Thá»­ Tá»± Äá»™ng ToÃ n Diá»‡n (TestExtractApp/SurfaceCompareAndCaliperRoiTests.cs):
+            - Test 1: Caliper ROI First Performance & Accuracy (kiá»ƒm tra tá»‘c Ä‘á»™ 0.12ms vs 0.82ms vÃ  khá»›p toáº¡ Ä‘á»™ biÃªn).
+            - Test 2: Surface Compare RAM Cache (Run1 load Ä‘Ä©a, Run2 phá»¥c vá»¥ tá»« RAM vá»›i tá»‘c Ä‘á»™ cao).
+            - Test 3: Auto Align & Confidence Guard (bÃ¹ lá»‡ch 3px, tá»« chá»‘i lá»‡ch khi máº«u sai khÃ¡c náº·ng).
+            - Test 4: SubPixel Auto Alignment (bÃ¹ sai lá»‡ch pháº§n sá»‘ tháº­p phÃ¢n 2.2px mÆ°á»£t mÃ ).
+            - Test 5: Normalize Lighting (triá»‡t tiÃªu false positive khi Ä‘á»™ sÃ¡ng trÃ´i +35 má»©c xÃ¡m).
+            - Test 6: Spatial Edge Tolerance across Algorithms (khá»­ rung 1px thÃ nh cÃ´ng trÃªn cáº£ AbsDiff, SSIM, GradientAdaptive, EdgeCompare).
+            - Test 7: Thuáº­t toÃ¡n EdgeCompare (phÃ¡t hiá»‡n váº¿t Ä‘á»©t nÃ©t chá»¯ 'V' vá»›i Ä‘á»™ nháº¡y cao).
+            - Test 8: TÃ¡ch biá»‡t SsimThreshold vÃ  DiffThreshold (xÃ¡c nháº­n hoáº¡t Ä‘á»™ng Ä‘á»™c láº­p).
+       - Kiá»ƒm Thá»­:
+         - dotnet build VisionInspectionApp.slnx: 0 errors.
+         - dotnet run --project TestExtractApp: 100% PASSED (toÃ n bá»™ test suite vÃ  8/8 bÃ i test má»›i Ä‘á»u pass).

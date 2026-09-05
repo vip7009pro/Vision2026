@@ -23,23 +23,36 @@ public static class CaliperDetector
         CaliperDefinition def,
         Point2d originTeach = default,
         Point2d originFound = default,
-        double originAngleDeg = 0.0)
+        double originAngleDeg = 0.0,
+        ImagePreprocessor? preprocessor = null,
+        PreprocessSettings? preprocessSettings = null)
     {
         if (matBgrOrGray is null || matBgrOrGray.Empty() || def is null || def.SearchRoi.Width <= 0 || def.SearchRoi.Height <= 0)
         {
             return new CaliperResult(def?.Name ?? string.Empty, Found: false, new List<CaliperEdgePoint>(), default, default, 0.0);
         }
 
+        // ROI First: Extract Search ROI patch before performing any preprocessing
         using var patch = Geometry2D.ExtractStraightRoi(matBgrOrGray, def.SearchRoi, originTeach, originFound, originAngleDeg, out var centerFound);
         if (patch.Empty())
         {
             return new CaliperResult(def.Name, Found: false, new List<CaliperEdgePoint>(), default, default, 0.0);
         }
 
-        using var patchGrayOwned = patch.Channels() == 1 ? null : patch.CvtColor(ColorConversionCodes.BGR2GRAY);
-        Mat gray = patchGrayOwned ?? patch;
+        // Apply local preprocess only on the small extracted ROI patch
+        Mat processedPatch = patch;
+        using var preprocessedOwned = (preprocessor != null && preprocessSettings != null)
+            ? preprocessor.Run(patch, preprocessSettings)
+            : null;
+        if (preprocessedOwned != null && !preprocessedOwned.Empty())
+        {
+            processedPatch = preprocessedOwned;
+        }
 
-        var rect = new Rect(0, 0, patch.Width, patch.Height);
+        using var patchGrayOwned = processedPatch.Channels() == 1 ? null : processedPatch.CvtColor(ColorConversionCodes.BGR2GRAY);
+        Mat gray = patchGrayOwned ?? processedPatch;
+
+        var rect = new Rect(0, 0, processedPatch.Width, processedPatch.Height);
 
         var stripCount = Math.Clamp(def.StripCount, 1, 200);
         var stripWidth = Math.Clamp(def.StripWidth, 1, Math.Max(1, Math.Min(rect.Width, rect.Height)));

@@ -42,5 +42,6 @@ class Program
         OqcLiveViewOnJobLoadTests.RunTests();
         CrosshairOverlayTests.RunTests();
         PreprocessAndImageOutputTests.RunTests();
+        SurfaceCompareAndCaliperRoiTests.RunTests();
     }
 }
