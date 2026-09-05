@@ -17,6 +17,8 @@ namespace VisionInspectionApp.UI.ViewModels;
 public sealed class CameraSettingsViewModel : ObservableObject, IDisposable
 {
     private readonly CameraService _cameraService;
+    private readonly GlobalAppSettingsService? _globalAppSettings;
+    private bool _showCrosshair;
     private ImageSource? _liveImage;
     private string _statusMessage = "Chọn camera công nghiệp (Hikrobot, Basler, Cognex...) hoặc USB Webcam để bắt đầu.";
     private int _fps;
@@ -102,6 +104,22 @@ public sealed class CameraSettingsViewModel : ObservableObject, IDisposable
     public void TriggerFitView()
     {
         RequestFitView?.Invoke();
+    }
+
+    public bool ShowCrosshair
+    {
+        get => _showCrosshair;
+        set
+        {
+            if (SetProperty(ref _showCrosshair, value))
+            {
+                if (_globalAppSettings != null)
+                {
+                    _globalAppSettings.Settings.ShowCrosshair = value;
+                    _globalAppSettings.Save();
+                }
+            }
+        }
     }
 
     public bool IsCameraRunning
@@ -638,9 +656,11 @@ public sealed class CameraSettingsViewModel : ObservableObject, IDisposable
     private readonly System.Windows.Threading.DispatcherTimer _debounceTimer;
     private bool _isUpdatingFromRoiDrag;
 
-    public CameraSettingsViewModel(CameraService cameraService)
+    public CameraSettingsViewModel(CameraService cameraService, GlobalAppSettingsService? globalAppSettings = null)
     {
         _cameraService = cameraService;
+        _globalAppSettings = globalAppSettings;
+        _showCrosshair = _globalAppSettings?.Settings.ShowCrosshair ?? false;
         _cameraParams = _cameraService.SystemParameters.Clone();
 
         _debounceTimer = new System.Windows.Threading.DispatcherTimer

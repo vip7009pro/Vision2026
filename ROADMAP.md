@@ -2004,3 +2004,36 @@ Lộ trình tích hợp tính năng Chụp ảnh từ camera và hỗ trợ các
       - Kiá»ƒm Thá»­:
         - dotnet build VisionInspectionApp.slnx: 0 errors.
         - dotnet run --project TestExtractApp: 100% PASSED (toÃ n bá»™ test suite pass, file .job nÃ©n chá»‰ 2.4 KB).
+- [x] Task 304: Bá»• sung Checkbox Báº­t/Táº¯t ÄÆ°á»ng TÃ¢m Chá»¯ Tháº­p (Crosshair) Chuáº©n CÃ´ng Nghiá»‡p TrÃªn MÃ n HÃ¬nh Preview Live View Táº¡i Tab OQC Scanner vÃ  Tab Camera Setting.
+      - Hiá»‡n TÆ°á»£ng & YÃªu Cáº§u NgÆ°á»i DÃ¹ng:
+        - TrÃªn mÃ n hÃ¬nh preview live view cá»§a 2 tab OQC Scanner vÃ  Camera Setting, ngÆ°á»i váº­n hÃ nh cáº§n cÄƒn chá»‰nh vá»‹ trÃ­ sáº£n pháº©m, gÃ¡ Ä‘áº·t phÃ´i hoáº·c Ä‘iá»u chá»‰nh quang trá»¥c camera vÃ o Ä‘Ãºng tÃ¢m gÃ³c quÃ©t.
+        - YÃªu cáº§u: Bá»• sung má»™t CheckBox trÃªn thanh Ä‘iá»u khiá»ƒn cá»§a cáº£ 2 tab Ä‘á»ƒ báº­t / táº¯t hiá»ƒn thá»‹ Ä‘Æ°á»ng crosshair (chá»¯ tháº­p tÃ¢m) trá»±c quan, sáº¯c nÃ©t, chuáº©n cÃ´ng nghiá»‡p.
+        - Tráº¡ng thÃ¡i CheckBox Ä‘Æ°á»£c lÆ°u trá»¯ bá»n vá»¯ng qua cÃ¡c phiÃªn lÃ m viá»‡c trong cáº¥u hÃ¬nh á»©ng dá»¥ng (GlobalAppSettings).
+      - Giáº£i PhÃ¡p Ká»¹ Thuáº­t ÄÃ£ Triá»ƒn Khai:
+        1. Bá»• Sung Thuá»™c TÃ­nh Cáº¥u HÃ¬nh Há»‡ Thá»‘ng (VisionInspectionApp.UI/Services/GlobalAppSettingsService.cs):
+           - ThÃªm trÆ°á»ng public bool ShowCrosshair { get; set; } = false; vÃ o lá»›p GlobalAppSettings.
+           - Tá»± Ä‘á»™ng lÆ°u vÃ  náº¡p tá»« tá»‡p ppsettings.json, duy trÃ¬ tráº¡ng thÃ¡i ngÆ°á»i dÃ¹ng lá»±a chá»n giá»¯a cÃ¡c láº§n má»Ÿ pháº§n má»m.
+        2. Váº½ Crosshair Hiá»‡u NÄƒng Cao TrÃªn DrawingContext (VisionInspectionApp.UI/Controls/FastOverlayCanvas.cs):
+           - Bá»• sung ShowCrosshairProperty (ool, AffectsRender) vÃ  method DrawCrosshair(DrawingContext dc, double imgW, double imgH, double scale, double dpi).
+           - Cáº¥u trÃºc Crosshair kÃ©p cÃ´ng nghiá»‡p (Dual-layer stroke):
+             + Lá»›p bÃ³ng viá»n tÆ°Æ¡ng pháº£n Ä‘en #B0000000 (Ä‘á»™ rá»™ng 2.4 / scale px) káº¿t há»£p lá»›p nÃ©t chÃ­nh Cyan sáº¯c nÃ©t #00E5FF (Ä‘á»™ rá»™ng 1.0 / scale px), nhÃ¬n rÃµ trÃªn má»i bá» máº·t áº£nh (sÃ¡ng hoáº·c tá»‘i).
+             + Trá»¥c chá»¯ tháº­p ngang (Horizontal Axis: Y = Cy) vÃ  trá»¥c dá»c (Vertical Axis: X = Cx) kÃ©o dÃ i toÃ n bá»™ chiá»u rá»™ng vÃ  chiá»u cao áº£nh.
+             + 2 vÃ²ng trÃ²n tÃ¢m Ä‘á»“ng tÃ¢m: vÃ²ng  = 30\text{px}$ vÃ  vÃ²ng  = 75\text{px}$.
+             + Cháº¥m tÃ¢m Ä‘iá»ƒm chÃ­nh giá»¯a: bÃ¡n kÃ­nh  = 3.5\text{px}$.
+             + Váº¡ch chia tá»a Ä‘á»™ (Tick marks) bÆ°á»›c \text{px}$ (váº¡ch nhá») vÃ  \text{px}$ (váº¡ch lá»›n) dá»c theo 4 hÆ°á»›ng cá»§a chá»¯ tháº­p.
+             + NhÃ£n thÃ´ng sá»‘ tá»a Ä‘á»™ tÃ¢m áº£nh dáº¡ng FormattedText nhá» gá»n: (Cx, Cy) px.
+           - BÃ¡m dÃ­nh 100% vÃ o há»‡ tá»a Ä‘á»™ pixel cá»§a áº£nh, tá»± Ä‘á»™ng scale mÆ°á»£t mÃ  khi Zoom In, Zoom Out hoáº·c Pan.
+        3. Káº¿t Ná»‘i & Äáº©y Xuá»‘ng ImageViewerControl (VisionInspectionApp.UI/Controls/ImageViewerControl.xaml & .xaml.cs):
+           - Khai bÃ¡o DependencyProperty ShowCrosshairProperty vÃ  liÃªn káº¿t TwoWay / TemplateBinding xuá»‘ng PART_FastOverlay.
+        4. Giao Diá»‡n & Äiá»u Khiá»ƒn Tab OQC Scanner (OqcScannerViewModel.cs & OqcScannerView.xaml):
+           - Trong OqcScannerViewModel: Bá»• sung _showCrosshair ObservableProperty, náº¡p tráº¡ng thÃ¡i tá»« GlobalAppSettingsService khi khá»Ÿi táº¡o, tá»± Ä‘á»™ng lÆ°u cáº¥u hÃ¬nh qua OnShowCrosshairChanged.
+           - Trong OqcScannerView.xaml: ThÃªm CheckBox âœ› Crosshair trÃªn thanh cÃ´ng cá»¥ Ä‘iá»u khiá»ƒn vÃ  liÃªn káº¿t ShowCrosshair="{Binding ShowCrosshair}" tá»›i OqcImageViewer.
+        5. Giao Diá»‡n & Äiá»u Khiá»ƒn Tab Camera Setting (CameraSettingsViewModel.cs & CameraSettingsView.xaml):
+           - Trong CameraSettingsViewModel: Bá»• sung ShowCrosshair property, liÃªn káº¿t vá»›i GlobalAppSettingsService.
+           - Trong CameraSettingsView.xaml: Bá»• sung CheckBox âœ› Crosshair phong cÃ¡ch HUD hiá»‡n Ä‘áº¡i vÃ o Floating Panel gÃ³c trÃªn bÃªn pháº£i mÃ n hÃ¬nh Live Camera vÃ  liÃªn káº¿t ShowCrosshair="{Binding ShowCrosshair}" tá»›i CameraImageViewer.
+        6. Bá»™ Kiá»ƒm Thá»­ Tá»± Äá»™ng ToÃ n Diá»‡n (TestExtractApp/CrosshairOverlayTests.cs):
+           - Kiá»ƒm tra giÃ¡ trá»‹ máº·c Ä‘á»‹nh cá»§a ShowCrosshair trong GlobalAppSettings.
+           - Kiá»ƒm tra tuáº§n tá»± hÃ³a (Serialization) vÃ  giáº£i tuáº§n tá»± hÃ³a (Deserialization) JSON cÃ¹ng tÃ­nh tÆ°Æ¡ng thÃ­ch ngÆ°á»£c vá»›i cáº¥u hÃ¬nh cÅ©.
+      - Kiá»ƒm Thá»­:
+        - dotnet build VisionInspectionApp.slnx: 0 errors.
+        - dotnet run --project TestExtractApp: 100% PASSED (toÃ n bá»™ test suite vÃ  CrosshairOverlayTests passed).

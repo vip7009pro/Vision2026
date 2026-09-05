@@ -40,5 +40,6 @@ class Program
         UrlImageSourceAndRecentJobTests.RunTests();
         BlobCountingModeTests.RunTests();
         OqcLiveViewOnJobLoadTests.RunTests();
+        CrosshairOverlayTests.RunTests();
     }
 }

@@ -206,6 +206,7 @@
                 <controls:ImageViewerControl x:Name="CameraImageViewer"
                                              ImageSource="{Binding LiveImage}"
                                              OverlayItems="{Binding OverlayItems}"
+                                             ShowCrosshair="{Binding ShowCrosshair}"
                                              EnableRoiEditing="True"
                                              RoiEditedCommand="{Binding RoiEditedCommand}"
                                              ActiveRoiLabel="CamROI" />
@@ -226,20 +227,28 @@
                     </StackPanel>
                 </Border>
 
-                <!-- Top-Right Floating Quick "Fit View" Button -->
+                <!-- Top-Right Floating Quick Controls (Crosshair & Fit View) -->
                 <Border VerticalAlignment="Top" HorizontalAlignment="Right" Margin="12"
                         Background="#D01E222D" BorderBrush="#50FFFFFF" BorderThickness="1"
-                        CornerRadius="6">
-                    <Button Command="{Binding FitViewCommand}"
-                            Click="OnFitViewClicked"
-                            Background="Transparent" BorderThickness="0"
-                            Foreground="White" Padding="10,6" Cursor="Hand"
-                            ToolTip="Fit View: Phóng to / Thu nhỏ vừa khít toàn bộ khung nhìn ảnh">
-                        <StackPanel Orientation="Horizontal">
-                            <TextBlock Text="🖥️ " FontSize="12" Margin="0,0,4,0" />
-                            <TextBlock Text="Fit View" FontSize="11" FontWeight="Bold" />
-                        </StackPanel>
-                    </Button>
+                        CornerRadius="6" Padding="6,4">
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                        <CheckBox Content="✛ Crosshair"
+                                  IsChecked="{Binding ShowCrosshair, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                  Foreground="#00E5FF" FontWeight="Bold" FontSize="11"
+                                  VerticalAlignment="Center" Margin="0,0,10,0" Cursor="Hand"
+                                  ToolTip="Bật / tắt hiển thị đường chữ thập tâm (Crosshair) và vạch chia tọa độ" />
+                        <Border Width="1" Height="14" Background="#50FFFFFF" Margin="0,0,8,0" />
+                        <Button Command="{Binding FitViewCommand}"
+                                Click="OnFitViewClicked"
+                                Background="Transparent" BorderThickness="0"
+                                Foreground="White" Padding="6,2" Cursor="Hand"
+                                ToolTip="Fit View: Phóng to / Thu nhỏ vừa khít toàn bộ khung nhìn ảnh">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="🖥️ " FontSize="12" Margin="0,0,4,0" />
+                                <TextBlock Text="Fit View" FontSize="11" FontWeight="Bold" />
+                            </StackPanel>
+                        </Button>
+                    </StackPanel>
                 </Border>
 
                 <!-- Offline Placeholder -->

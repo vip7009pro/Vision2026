@@ -17,6 +17,9 @@ public sealed class GlobalAppSettings
 
     // Preview Display Quality (false = reduced quality proxy, true = 100% full original resolution)
     public bool UseOriginalQualityPreview { get; set; } = false;
+
+    // Crosshair display on live camera preview
+    public bool ShowCrosshair { get; set; } = false;
 }
 
 public sealed class LightingServerConfig

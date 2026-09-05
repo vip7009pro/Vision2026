@@ -42,7 +42,8 @@
             <Image x:Name="PART_Image" Stretch="Fill"
                    RenderOptions.BitmapScalingMode="HighQuality"
                    RenderOptions.EdgeMode="Aliased" />
-            <local:FastOverlayCanvas x:Name="PART_FastOverlay" />
+            <local:FastOverlayCanvas x:Name="PART_FastOverlay"
+                                     ShowCrosshair="{Binding ShowCrosshair, RelativeSource={RelativeSource AncestorType=local:ImageViewerControl}}" />
             <Canvas x:Name="PART_Overlay" Background="Transparent" Focusable="True" />
         </Canvas>
         

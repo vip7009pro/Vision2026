@@ -80,6 +80,18 @@ public partial class OqcScannerViewModel : ObservableObject
     private bool _showRois = true;
 
     [ObservableProperty]
+    private bool _showCrosshair;
+
+    partial void OnShowCrosshairChanged(bool value)
+    {
+        if (_globalAppSettings != null)
+        {
+            _globalAppSettings.Settings.ShowCrosshair = value;
+            _globalAppSettings.Save();
+        }
+    }
+
+    [ObservableProperty]
     private bool _isOriginalQualityPreview = MatExtensions.UseOriginalQualityPreview;
 
     // ─── Origin Live Guide & Template Preview ───
@@ -172,6 +184,7 @@ public partial class OqcScannerViewModel : ObservableObject
         _remoteServerService = remoteServerService ?? new VisionInspectionApp.Application.Services.RemoteServerService();
         _lightingPatternService = lightingPatternService;
         _globalAppSettings = globalAppSettings;
+        _showCrosshair = _globalAppSettings?.Settings.ShowCrosshair ?? false;
 
         ScanCommand = new AsyncRelayCommand(ExecuteScanAsync);
         ScanFromCameraCommand = new AsyncRelayCommand(ExecuteScanFromCameraAsync);

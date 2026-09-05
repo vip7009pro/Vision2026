@@ -123,11 +123,40 @@ public partial class ImageViewerControl : UserControl
         typeof(ImageViewerControl),
         new PropertyMetadata(null));
 
+    public static readonly DependencyProperty ShowCrosshairProperty = DependencyProperty.Register(
+        nameof(ShowCrosshair),
+        typeof(bool),
+        typeof(ImageViewerControl),
+        new PropertyMetadata(false, OnShowCrosshairChanged));
+
+    public bool ShowCrosshair
+    {
+        get => (bool)GetValue(ShowCrosshairProperty);
+        set => SetValue(ShowCrosshairProperty, value);
+    }
+
+    private static void OnShowCrosshairChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+    {
+        var c = (ImageViewerControl)d;
+        if (c.PART_FastOverlay != null)
+        {
+            c.PART_FastOverlay.ShowCrosshair = (bool)e.NewValue;
+        }
+    }
+
     public event EventHandler? ViewportTransformChanged;
 
     public ImageViewerControl()
     {
         InitializeComponent();
+
+        Loaded += (_, __) =>
+        {
+            if (PART_FastOverlay != null)
+            {
+                PART_FastOverlay.ShowCrosshair = ShowCrosshair;
+            }
+        };
 
         PART_Overlay.MouseLeftButtonDown += OverlayOnMouseLeftButtonDown;
         PART_Overlay.MouseMove += OverlayOnMouseMove;

@@ -48,6 +48,31 @@
 - Pipeline đọc đúng kết nối `ImageSource → Preprocess → Tool`.
 - Preview được phép tiếp tục khi Global Snapshot rỗng để lấy ảnh từ ImageSource.
 - Lưu template cho Origin, Point và SurfaceCompare hoạt động với nguồn ảnh ImageSource.
+- **Bá»• sung Checkbox Báº­t/Táº¯t ÄÆ°á»ng TÃ¢m Chá»¯ Tháº­p (Crosshair) Chuáº©n CÃ´ng Nghiá»‡p TrÃªn Preview Live View Táº¡i Tab OQC Scanner vÃ  Tab Camera Setting (Task 304)**:
+  - **Hiá»‡n TÆ°á»£ng & YÃªu Cáº§u NgÆ°á»i DÃ¹ng**:
+    - TrÃªn mÃ n hÃ¬nh preview live camera cá»§a 2 tab OQC Scanner vÃ  Camera Setting, ngÆ°á»i váº­n hÃ nh vÃ  ká»¹ sÆ° cáº§n cÄƒn chá»‰nh gÃ³c Ä‘áº·t sáº£n pháº©m, phÃ´i máº«u hoáº·c tÃ¢m quang há»c camera.
+    - Bá»• sung CheckBox trÃªn thanh Ä‘iá»u khiá»ƒn cá»§a cáº£ 2 tab Ä‘á»ƒ báº­t / táº¯t Ä‘Æ°á»ng crosshair (chá»¯ tháº­p tÃ¢m) trá»±c quan, sáº¯c nÃ©t.
+    - LÆ°u trá»¯ tráº¡ng thÃ¡i lá»±a chá»n bá»n vá»¯ng trong `GlobalAppSettings` (`appsettings.json`) qua cÃ¡c phiÃªn lÃ m viá»‡c.
+  - **Giáº£i PhÃ¡p Ká»¹ Thuáº­t ÄÃ£ Triá»ƒn Khai**:
+    1. **Thuá»™c TÃ­nh Cáº¥u HÃ¬nh Há»‡ Thá»‘ng (GlobalAppSettingsService.cs)**:
+       - Bá»• sung `public bool ShowCrosshair { get; set; } = false;` vÃ o lá»›p `GlobalAppSettings`.
+       - Tá»± Ä‘á»™ng lÆ°u vÃ  náº¡p tá»« `appsettings.json`.
+    2. **Váº½ Crosshair Hiá»‡u NÄƒng Cao Vá»›i DrawingContext WPF (FastOverlayCanvas.cs)**:
+       - Bá»• sung `ShowCrosshairProperty` DependencyProperty vÃ  phÆ°Æ¡ng thá»©c `DrawCrosshair(DrawingContext dc, double imgW, double imgH, double scale, double dpi)`.
+       - ÄÆ°á»ng nÃ©t Dual-layer stroke: Lá»›p viá»n Ä‘en má» tÆ°Æ¡ng pháº£n `#B0000000` (Ä‘á»™ rá»™ng `2.4 / scale` px) káº¿t há»£p nÃ©t chÃ­nh Cyan sáº¯c nÃ©t `#00E5FF` (Ä‘á»™ rá»™ng `1.0 / scale` px), Ä‘áº£m báº£o nhÃ¬n rÃµ 100% trÃªn ná»n áº£nh sÃ¡ng hoáº·c tá»‘i.
+       - Trá»¥c chá»¯ tháº­p ngang vÃ  dá»c cháº¡y suá»‘t khung áº£nh, 2 vÃ²ng trÃ²n tÃ¢m Ä‘á»“ng tÃ¢m ($R_1 = 30\text{px}, R_2 = 75\text{px}$), cháº¥m tÃ¢m $R_0 = 3.5\text{px}$, váº¡ch chia tá»a Ä‘á»™ $50\text{px} / 100\text{px}$ vÃ  nhÃ£n tá»a Ä‘á»™ tÃ¢m $(Cx, Cy)\text{px}$.
+       - Tá»± Ä‘á»™ng co giÃ£n theo `ViewScale` khi Zoom/Pan áº£nh mÃ  khÃ´ng bá»‹ vá»¡ hay mÃ©o hÃ¬nh.
+    3. **Chuyá»ƒn Tiáº¿p Qua ImageViewerControl (ImageViewerControl.xaml & .xaml.cs)**:
+       - Khai bÃ¡o DependencyProperty `ShowCrosshairProperty` vÃ  liÃªn káº¿t vá»›i `PART_FastOverlay`.
+    4. **Giao Diá»‡n Tab OQC Scanner (OqcScannerViewModel.cs & OqcScannerView.xaml)**:
+       - Khai bÃ¡o ObservableProperty `_showCrosshair`, khá»Ÿi táº¡o tá»« `GlobalAppSettingsService` vÃ  tá»± Ä‘á»™ng lÆ°u khi thay Ä‘á»•i.
+       - ThÃªm CheckBox `âœ› Crosshair` trÃªn thanh cÃ´ng cá»¥ vÃ  liÃªn káº¿t `ShowCrosshair` vÃ o `OqcImageViewer`.
+    5. **Giao Diá»‡n Tab Camera Setting (CameraSettingsViewModel.cs & CameraSettingsView.xaml)**:
+       - Khai bÃ¡o thuá»™c tÃ­nh `ShowCrosshair`, náº¡p vÃ  lÆ°u bá»n vá»¯ng qua `GlobalAppSettingsService`.
+       - ThÃªm CheckBox `âœ› Crosshair` vÃ o Floating Panel HUD gÃ³c trÃªn bÃªn pháº£i khung live camera vÃ  liÃªn káº¿t `ShowCrosshair` vÃ o `CameraImageViewer`.
+    6. **Kiá»ƒm Thá»­ Tá»± Äá»™ng (TestExtractApp/CrosshairOverlayTests.cs)**:
+       - Kiá»ƒm tra giÃ¡ trá»‹ máº·c Ä‘á»‹nh, kiá»ƒm tra Serialization/Deserialization JSON vÃ  tÆ°Æ¡ng thÃ­ch ngÆ°á»£c vá»›i cáº¥u hÃ¬nh cÅ©.
+  - **Tráº¡ng ThÃ¡i**: HoÃ n thÃ nh 100%, build 0 errors, toÃ n bá»™ test cases passed.
 - **Tá»‘i Æ¯u HÃ³a Dung LÆ°á»£ng Tá»‡p .JOB Báº±ng CÆ¡ Cháº¿ Decoupled Teach Image Storage & Thumbnail NÃ©n Nháº¹ (Task 303)**:
   - **Hiá»‡n TÆ°á»£ng & YÃªu Cáº§u NgÆ°á»i DÃ¹ng**:
     - TrÆ°á»›c Ä‘Ã¢y, khi lÆ°u Job (SaveJob), há»‡ thá»‘ng nhá»“i toÃ n bá»™ áº£nh máº«u dáº¡y há»c Ä‘á»™ nÃ©t cao (	each_image.png, thÆ°á»ng lÃ  áº£nh camera 20-30 Megapixels dung lÆ°á»£ng 20MB - 35MB) trá»±c tiáº¿p vÃ o trong gÃ³i zip .job.

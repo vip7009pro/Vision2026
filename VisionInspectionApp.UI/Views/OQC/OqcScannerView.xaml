@@ -182,6 +182,7 @@
                             <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
                                 <CheckBox Content="Kết Quả (Overlay)" IsChecked="{Binding ShowResultOverlay, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,10,0" FontSize="11.5" FontWeight="SemiBold" VerticalAlignment="Center" />
                                 <CheckBox Content="Khung ROI" IsChecked="{Binding ShowRois, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,8,0" FontSize="11.5" FontWeight="SemiBold" VerticalAlignment="Center" />
+                                <CheckBox Content="✛ Crosshair" IsChecked="{Binding ShowCrosshair, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,8,0" FontSize="11.5" FontWeight="SemiBold" VerticalAlignment="Center" ToolTip="Bật / tắt hiển thị đường chữ thập tâm (Crosshair) trên khung nhìn camera" />
                                 <CheckBox Content="Ảnh gốc" IsChecked="{Binding IsOriginalQualityPreview, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,8,0" FontSize="11.5" FontWeight="SemiBold" VerticalAlignment="Center" ToolTip="Chuyển đổi giữa Preview nguyên gốc (100% độ phân giải, sắc nét khi zoom) và Preview giảm chất lượng (tối ưu hiệu năng, mượt mà)" />
                                 <Button Content="🎯 Fit View" Height="23" Padding="8,0" Click="BtnFitImagePreview_Click" Background="{DynamicResource ButtonBackgroundBrush}" Foreground="{DynamicResource TextBrush}" BorderBrush="{DynamicResource DarkBorderBrush}" FontSize="11" FontWeight="SemiBold" ToolTip="Tự động cân chỉnh (Auto Fit) ảnh vừa vặn toàn bộ với khung Preview" VerticalAlignment="Center" />
                             </StackPanel>
@@ -199,6 +200,7 @@
                                 <controls:ImageViewerControl x:Name="OqcImageViewer"
                                                            ImageSource="{Binding PreviewImage}"
                                                            OverlayItems="{Binding OverlayItems}"
+                                                           ShowCrosshair="{Binding ShowCrosshair}"
                                                            EnableRoiEditing="False" />
                             </Border>
 
