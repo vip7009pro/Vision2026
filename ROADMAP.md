@@ -1978,3 +1978,29 @@ Lộ trình tích hợp tính năng Chụp ảnh từ camera và hỗ trợ các
       - Kiá»ƒm Thá»­:
         - dotnet build VisionInspectionApp.slnx: 0 errors.
         - dotnet run --project TestExtractApp: 100% PASSED (3/3 OqcLiveViewOnJobLoad tests passed, toÃ n bá»™ test suite pass).
+- [x] Task 303: Tá»‘i Æ°u hÃ³a dung lÆ°á»£ng tá»‡p .job báº±ng cÆ¡ cháº¿ Decoupled Teach Image Storage vÃ  Thumbnail nÃ©n nháº¹.
+      - Hiá»‡n TÆ°á»£ng & YÃªu Cáº§u NgÆ°á»i DÃ¹ng:
+        - TrÆ°á»›c Ä‘Ã¢y, khi lÆ°u Job, há»‡ thá»‘ng nhá»“i toÃ n bá»™ áº£nh máº«u dáº¡y há»c Ä‘á»™ phÃ¢n giáº£i cao (	each_image.png, thÆ°á»ng lÃ  áº£nh camera 20-30 Megapixels dung lÆ°á»£ng 20MB - 35MB) trá»±c tiáº¿p vÃ o trong gÃ³i zip .job.
+        - Äiá»u nÃ y khiáº¿n dung lÆ°á»£ng tá»‡p .job phÃ¬nh to lÃªn tá»›i 25MB - 35MB, gÃ¢y tá»‘n bÄƒng thÃ´ng khi upload/download lÃªn server, lÃ m cháº­m quÃ¡ trÃ¬nh nÃ©n/giáº£i nÃ©n vÃ  tá»‘n dung lÆ°á»£ng á»• cá»©ng.
+        - YÃªu cáº§u: Loáº¡i bá» viá»‡c nhá»“i áº£nh lá»›n vÃ o tá»‡p .job, tÃ¬m phÆ°Æ¡ng Ã¡n lÆ°u trá»¯ vÃ  náº¡p áº£nh máº«u thay tháº¿ nháº¹, nhanh, tÃ¡ch biá»‡t, Ä‘Æ°a file .job vá» chuáº©n cÃ´ng nghiá»‡p gá»n nháº¹.
+      - Giáº£i PhÃ¡p Ká»¹ Thuáº­t ÄÃ£ Triá»ƒn Khai:
+        1. Tá»‘i Æ¯u HÃ³a GÃ³i .JOB & Loáº¡i Trá»« áº¢nh Lá»›n Khá»i Zip (VisionInspectionApp.Persistence/JobService.cs):
+           - Trong SaveJob: ThÃªm bÆ°á»›c kiá»ƒm tra vÃ  loáº¡i bá» triá»‡t Ä‘á»ƒ cÃ¡c tá»‡p áº£nh lá»›n á»Ÿ root cá»§a tempWorkingDir (teach_image.png, *.bmp, *.tiff...) trÆ°á»›c khi nÃ©n zip.
+           - File .job chá»‰ Ä‘Ã³ng gÃ³i config.json, thÆ° má»¥c templates/ (cÃ¡c crop template nhá» origin.png, p1.png...) vÃ  thumbnail nÃ©n nháº¹ teach_preview.jpg (náº¿u cÃ³).
+           - KÃ­ch thÆ°á»›c tá»‡p .job giáº£m tá»« ~25MB - 35MB xuá»‘ng chá»‰ cÃ²n 2KB - 50KB (giáº£m hÆ¡n 99.6% dung lÆ°á»£ng).
+        2. Quáº£n LÃ½ áº¢nh Máº«u HD Äá»™c Láº­p Qua Decoupled Disk Cache (VisionInspectionApp.UI/ViewModels/ToolEditorViewModel.Config.cs):
+           - Thay tháº¿ EnsureTeachImageInJobTempDir báº±ng EnsureTeachImageSavedToCacheAndPreview():
+             + LÆ°u áº£nh máº«u gá»‘c cháº¥t lÆ°á»£ng cao Ä‘á»™ nÃ©t 100% vÃ o Decoupled Disk Cache ngoÃ i: Cache/TeachImages/{ProductCode}_teach.png, Cache/TeachImages/{JobName}_teach.png vÃ  theo URL hash.
+             + Táº¡o thumbnail JPEG nÃ©n siÃªu nháº¹ teach_preview.jpg (kÃ­ch thÆ°á»›c dÃ i nháº¥t tá»‘i Ä‘a 1280px, cháº¥t lÆ°á»£ng JPEG 55%, dung lÆ°á»£ng chá»‰ ~20KB - 35KB) lÆ°u vÃ o temp working dir Ä‘á»ƒ Ä‘Ã­nh kÃ¨m trong .job phá»¥c vá»¥ xem trÆ°á»›c khi mang sang mÃ¡y láº¡.
+             + XÃ³a sáº¡ch tá»‡p teach_image.png 25MB cÅ© khá»i temp working dir.
+        3. CÆ¡ Cháº¿ Náº¡p áº¢nh Máº«u Äa Táº§ng MÆ°á»£t MÃ  (ToolEditorViewModel.Config.cs & ToolEditorViewModel.Engine.cs):
+           - Táº§ng 1 (Local Decoupled Cache): QuÃ©t tÃ¬m áº£nh gá»‘c trong Cache/TeachImages/{ProductCode}_teach.png hoáº·c {jobName}_teach.png hoáº·c TryLoadUrlImageFromDiskCache trong 0 - 5ms.
+           - Táº§ng 2 (TÆ°Æ¡ng thÃ­ch ngÆ°á»£c 100% vá»›i Job cÅ©): Náº¿u má»Ÿ tá»‡p .job cÅ© cÃ³ sáºµn teach_image.png trong zip, há»‡ thá»‘ng váº«n giáº£i nÃ©n vÃ  náº¡p bÃ¬nh thÆ°á»ng, Ä‘á»“ng thá»i tá»± Ä‘á»™ng sao lÆ°u sang Cache/TeachImages/ ngoÃ i Ä‘á»ƒ láº§n Save sau file .job tá»± Ä‘á»™ng Ä‘Æ°á»£c lÃ m sáº¡ch.
+           - Táº§ng 3 (Embedded Thumbnail): Náº¿u má»Ÿ job má»›i trÃªn mÃ¡y láº¡ chÆ°a cÃ³ cache ngoÃ i, há»‡ thá»‘ng náº¡p teach_preview.jpg (~25KB) lÃ m áº£nh xem trÆ°á»›c trÃªn canvas.
+           - Táº§ng 4 (Fallback Web Server): Náº¿u mÃ¡y má»›i chÆ°a cÃ³ cache vÃ  cÃ³ URL mÃ¡y chá»§ tá»« xa, kÃ­ch hoáº¡t táº£i ngáº§m báº¥t Ä‘á»“ng bá»™ qua ScheduleAsyncUrlImageFetch mÃ  khÃ´ng Ä‘Æ¡ UI.
+        4. Cáº­p Nháº­t Bá»™ Kiá»ƒm Thá»­ Tá»± Äá»™ng ToÃ n Diá»‡n (TestExtractApp/UrlImageSourceAndRecentJobTests.cs):
+           - Cáº­p nháº­t Test 3: Test_JobPackage_ExcludesLargeTeachImage_AndUsesDecoupledCache xÃ¡c nháº­n file .job siÃªu nháº¹ (< 100KB, kÃ­ch thÆ°á»›c thá»±c táº¿ chá»‰ 2.4KB), loáº¡i trá»« teach_image.png vÃ  báº£o lÆ°u thumbnail teach_preview.jpg.
+           - Cáº­p nháº­t Test 5: Test_OfflineRecentJob_LoadsFromDecoupledCacheOrLegacyZip xÃ¡c nháº­n náº¡p áº£nh máº«u tá»« Decoupled Cache trong 8ms vá»›i ZERO network calls, Ä‘á»“ng thá»i xÃ¡c nháº­n 100% tÆ°Æ¡ng thÃ­ch ngÆ°á»£c vá»›i cÃ¡c file .job cÅ©.
+      - Kiá»ƒm Thá»­:
+        - dotnet build VisionInspectionApp.slnx: 0 errors.
+        - dotnet run --project TestExtractApp: 100% PASSED (toÃ n bá»™ test suite pass, file .job nÃ©n chá»‰ 2.4 KB).

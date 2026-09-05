@@ -2431,13 +2431,21 @@ namespace VisionInspectionApp.UI.ViewModels
                     m?.Dispose();
                 }
 
-                // 2. Kiểm tra trong thư mục làm việc tạm thời của Job (nếu có teach_image.png được đóng gói trong .job)
+                // 2. Kiểm tra trong thư mục làm việc tạm thời của Job (nếu có teach_image.png từ job cũ hoặc teach_preview.jpg từ job mới)
                 if (!string.IsNullOrWhiteSpace(CurrentTempWorkingDir) && Directory.Exists(CurrentTempWorkingDir))
                 {
                     string jobTeachPng = Path.Combine(CurrentTempWorkingDir, "teach_image.png");
                     if (File.Exists(jobTeachPng) && new FileInfo(jobTeachPng).Length > 0)
                     {
                         var m = Cv2.ImRead(jobTeachPng, ImreadModes.Color);
+                        if (m != null && !m.Empty()) return m;
+                        m?.Dispose();
+                    }
+
+                    string jobTeachPreview = Path.Combine(CurrentTempWorkingDir, "teach_preview.jpg");
+                    if (File.Exists(jobTeachPreview) && new FileInfo(jobTeachPreview).Length > 0)
+                    {
+                        var m = Cv2.ImRead(jobTeachPreview, ImreadModes.Color);
                         if (m != null && !m.Empty()) return m;
                         m?.Dispose();
                     }
@@ -2455,7 +2463,19 @@ namespace VisionInspectionApp.UI.ViewModels
                     }
                 }
 
-                // 3. Kiểm tra Disk Cache riêng của URL: Cache/UrlImages/{hash}.png
+                // 3. Kiểm tra Decoupled Cache theo ProductCode: Cache/TeachImages/{ProductCode}_teach.png
+                if (!string.IsNullOrWhiteSpace(ProductCode))
+                {
+                    string prdCache = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Cache", "TeachImages", $"{ProductCode}_teach.png");
+                    if (File.Exists(prdCache) && new FileInfo(prdCache).Length > 0)
+                    {
+                        var m = Cv2.ImRead(prdCache, ImreadModes.Color);
+                        if (m != null && !m.Empty()) return m;
+                        m?.Dispose();
+                    }
+                }
+
+                // 4. Kiểm tra Disk Cache riêng của URL: Cache/UrlImages/{hash}.png
                 string urlCachePath = GetUrlImageDiskCachePath(url);
                 if (File.Exists(urlCachePath) && new FileInfo(urlCachePath).Length > 0)
                 {
@@ -2464,7 +2484,7 @@ namespace VisionInspectionApp.UI.ViewModels
                     m?.Dispose();
                 }
 
-                // 4. Kiểm tra Disk Cache của JobManagerViewModel: Cache/TeachImages/{hash}.png
+                // 5. Kiểm tra Disk Cache của JobManagerViewModel: Cache/TeachImages/{hash}.png
                 string teachCachePath = JobManagerViewModel.GetDiskCacheFilePath(url);
                 if (File.Exists(teachCachePath) && new FileInfo(teachCachePath).Length > 0)
                 {
@@ -2473,7 +2493,7 @@ namespace VisionInspectionApp.UI.ViewModels
                     m?.Dispose();
                 }
 
-                // 5. Kiểm tra trong thư mục Teaching/{fileName}
+                // 6. Kiểm tra trong thư mục Teaching/{fileName}
                 string fileName = Path.GetFileName(url);
                 if (!string.IsNullOrWhiteSpace(fileName))
                 {
@@ -2510,11 +2530,13 @@ namespace VisionInspectionApp.UI.ViewModels
                     File.WriteAllBytes(teachCachePath, data);
                 }
 
-                // 3. Lưu vào CurrentTempWorkingDir nếu có
-                if (!string.IsNullOrWhiteSpace(CurrentTempWorkingDir) && Directory.Exists(CurrentTempWorkingDir))
+                // 3. Nếu có ProductCode, lưu vào Cache/TeachImages/{ProductCode}_teach.png
+                if (!string.IsNullOrWhiteSpace(ProductCode))
                 {
-                    string jobTeachPath = Path.Combine(CurrentTempWorkingDir, "teach_image.png");
-                    File.WriteAllBytes(jobTeachPath, data);
+                    string teachDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Cache", "TeachImages");
+                    Directory.CreateDirectory(teachDir);
+                    string prdCache = Path.Combine(teachDir, $"{ProductCode}_teach.png");
+                    File.WriteAllBytes(prdCache, data);
                 }
             }
             catch (Exception ex)

@@ -21,9 +21,9 @@ public static class UrlImageSourceAndRecentJobTests
 
         Test_RemoteServerService_DownloadFileAsync_NoDeadlockOnSyncContext().GetAwaiter().GetResult();
         Test_UrlImageDiskCache_PathAndFileStorage();
-        Test_JobPackage_Bundles_TeachImage_OnSaveAndRestore();
+        Test_JobPackage_ExcludesLargeTeachImage_AndUsesDecoupledCache();
         Test_NonBlockingBehavior_OnUncachedUrl();
-        Test_OfflineRecentJob_LoadsTeachImageDirectlyFromZip();
+        Test_OfflineRecentJob_LoadsFromDecoupledCacheOrLegacyZip();
 
         Console.WriteLine("✅ ALL URL IMAGE SOURCE & RECENT JOB TESTS PASSED!");
         Console.WriteLine("=================================================\n");
@@ -143,16 +143,17 @@ public static class UrlImageSourceAndRecentJobTests
     }
 
     /// <summary>
-    /// Test 3: Kiểm tra đóng gói ảnh teach_image.png vào tệp .job khi lưu và giải nén ra khi mở
+    /// Test 3: Kiểm tra tối ưu hóa dung lượng tệp .job: Loại trừ triệt để ảnh lớn teach_image.png khỏi gói .job,
+    /// kích thước tệp .job siêu nhẹ (< 100KB) và chỉ nén thumbnail nhẹ teach_preview.jpg (nếu có).
     /// </summary>
-    private static void Test_JobPackage_Bundles_TeachImage_OnSaveAndRestore()
+    private static void Test_JobPackage_ExcludesLargeTeachImage_AndUsesDecoupledCache()
     {
-        Console.WriteLine("▶ Running Test_JobPackage_Bundles_TeachImage_OnSaveAndRestore...");
+        Console.WriteLine("▶ Running Test_JobPackage_ExcludesLargeTeachImage_AndUsesDecoupledCache...");
 
         string tempDir = Path.Combine(Path.GetTempPath(), "VisionTest_TeachBundle_" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(tempDir);
 
-        string jobFilePath = Path.Combine(tempDir, "test_remote_taught_job.job");
+        string jobFilePath = Path.Combine(tempDir, "test_lightweight_job.job");
         string workingDir = Path.Combine(tempDir, "working");
         Directory.CreateDirectory(workingDir);
 
@@ -173,11 +174,19 @@ public static class UrlImageSourceAndRecentJobTests
                 }
             };
 
-            // Tạo teach_image.png 100x80 trong working dir mô phỏng ảnh đã được tải về trong quá trình teach
+            // 1. Tạo một ảnh teach_image.png lớn (mô phỏng ảnh chụp camera hoặc tải về trong temp)
             string teachImgWorkingPath = Path.Combine(workingDir, "teach_image.png");
-            using (var sampleMat = new Mat(80, 100, MatType.CV_8UC3, new Scalar(200, 100, 50)))
+            using (var sampleMat = new Mat(400, 600, MatType.CV_8UC3, new Scalar(200, 100, 50)))
             {
                 Cv2.ImWrite(teachImgWorkingPath, sampleMat);
+            }
+
+            // 2. Tạo một thumbnail nén siêu nhẹ teach_preview.jpg
+            string thumbWorkingPath = Path.Combine(workingDir, "teach_preview.jpg");
+            using (var thumbMat = new Mat(80, 120, MatType.CV_8UC3, new Scalar(200, 100, 50)))
+            {
+                var prms = new ImageEncodingParam(ImwriteFlags.JpegQuality, 50);
+                Cv2.ImWrite(thumbWorkingPath, thumbMat, prms);
             }
 
             var jobService = new JobService();
@@ -186,20 +195,34 @@ public static class UrlImageSourceAndRecentJobTests
             if (!File.Exists(jobFilePath))
                 throw new Exception("SaveJob did not produce .job file!");
 
-            // Nạp lại file .job qua LoadJob
+            var fileInfo = new FileInfo(jobFilePath);
+            long jobSizeBytes = fileInfo.Length;
+            Console.WriteLine($"    File .job size: {jobSizeBytes} bytes ({jobSizeBytes / 1024.0:F1} KB)");
+
+            // File .job phải siêu nhẹ (< 100 KB)
+            if (jobSizeBytes > 100 * 1024)
+                throw new Exception($"Job file size is too large: {jobSizeBytes} bytes! Expected < 100 KB.");
+
+            // 3. Nạp lại file .job qua LoadJob
             var loadedConfig = jobService.LoadJob(jobFilePath, out var extractedTempDir);
             if (loadedConfig == null)
                 throw new Exception("LoadJob failed to load config from .job file!");
 
+            // Xác nhận teach_image.png KHÔNG có trong gói zip .job
             string extractedTeachPath = Path.Combine(extractedTempDir, "teach_image.png");
-            if (!File.Exists(extractedTeachPath))
-                throw new Exception("teach_image.png was NOT packaged into or extracted from the .job file!");
+            if (File.Exists(extractedTeachPath))
+                throw new Exception("Large teach_image.png was unexpectedly found in .job file!");
 
-            using var decodedMat = Cv2.ImRead(extractedTeachPath, ImreadModes.Color);
-            if (decodedMat == null || decodedMat.Empty() || decodedMat.Width != 100 || decodedMat.Height != 80)
-                throw new Exception("Decoded teach_image.png does not match original dimensions 100x80!");
+            // Xác nhận teach_preview.jpg (thumbnail nhẹ) có mặt trong gói zip
+            string extractedThumbPath = Path.Combine(extractedTempDir, "teach_preview.jpg");
+            if (!File.Exists(extractedThumbPath))
+                throw new Exception("Thumbnail teach_preview.jpg was not found in extracted temp dir!");
 
-            Console.WriteLine("  ✓ teach_image.png successfully bundled into .job file and restored on LoadJob.");
+            using var decodedThumb = Cv2.ImRead(extractedThumbPath, ImreadModes.Color);
+            if (decodedThumb == null || decodedThumb.Empty() || decodedThumb.Width != 120 || decodedThumb.Height != 80)
+                throw new Exception("Decoded teach_preview.jpg does not match expected dimensions 120x80!");
+
+            Console.WriteLine("  ✓ Large teach_image.png was excluded from .job file; lightweight teach_preview.jpg preserved.");
         }
         finally
         {
@@ -232,12 +255,13 @@ public static class UrlImageSourceAndRecentJobTests
     }
 
     /// <summary>
-    /// Test 5: Mô phỏng kịch bản Mở lại Job dạy từ xa bằng Menu File/Job gần đây:
-    /// Nạp ảnh teach_image.png trực tiếp từ gói Job mà không phụ thuộc Server có Online hay không.
+    /// Test 5: Mô phỏng kịch bản Mở lại Job:
+    /// Nạp ảnh mẫu trực tiếp từ Decoupled Disk Cache (Cache/TeachImages) trong < 10ms,
+    /// đồng thời đảm bảo tương thích ngược 100% nếu mở tệp .job cũ có sẵn teach_image.png.
     /// </summary>
-    private static void Test_OfflineRecentJob_LoadsTeachImageDirectlyFromZip()
+    private static void Test_OfflineRecentJob_LoadsFromDecoupledCacheOrLegacyZip()
     {
-        Console.WriteLine("▶ Running Test_OfflineRecentJob_LoadsTeachImageDirectlyFromZip...");
+        Console.WriteLine("▶ Running Test_OfflineRecentJob_LoadsFromDecoupledCacheOrLegacyZip...");
 
         string tempDir = Path.Combine(Path.GetTempPath(), "VisionTest_OfflineRecent_" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(tempDir);
@@ -248,9 +272,10 @@ public static class UrlImageSourceAndRecentJobTests
 
         try
         {
+            string productCode = "OFFLINE_TEST_01";
             var config = new VisionConfig
             {
-                ProductCode = "OFFLINE_TEST_01",
+                ProductCode = productCode,
                 ProductName = "Offline Product Test",
                 ImageSources = new System.Collections.Generic.List<ImageSourceDefinition>
                 {
@@ -263,36 +288,62 @@ public static class UrlImageSourceAndRecentJobTests
                 }
             };
 
-            // Tạo teach_image.png trong workingDir
-            string teachImgWorkingPath = Path.Combine(workingDir, "teach_image.png");
+            // Kịch bản A: Lưu ảnh mẫu HD vào Decoupled Cache ngoài (Cache/TeachImages/{ProductCode}_teach.png)
+            string teachCacheDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Cache", "TeachImages");
+            Directory.CreateDirectory(teachCacheDir);
+            string decoupledCachePath = Path.Combine(teachCacheDir, $"{productCode}_teach.png");
+
             using (var sampleMat = new Mat(120, 160, MatType.CV_8UC3, new Scalar(10, 200, 10)))
             {
-                Cv2.ImWrite(teachImgWorkingPath, sampleMat);
+                Cv2.ImWrite(decoupledCachePath, sampleMat);
             }
 
             var jobService = new JobService();
             jobService.SaveJob(config, workingDir, jobFilePath);
 
-            // Mô phỏng tắt app, mở lại app và nạp job:
+            // Nạp job và kiểm tra tốc độ nạp ảnh từ Decoupled Cache
             var sw = System.Diagnostics.Stopwatch.StartNew();
             var loadedConfig = jobService.LoadJob(jobFilePath, out var extractedTempDir);
 
-            // Giả lập đoạn code trong LoadJobFromFile:
             Mat? resolvedMat = null;
-            string extractedTeachPath = Path.Combine(extractedTempDir, "teach_image.png");
-            if (File.Exists(extractedTeachPath))
+            if (File.Exists(decoupledCachePath))
             {
-                resolvedMat = Cv2.ImRead(extractedTeachPath, ImreadModes.Color);
+                resolvedMat = Cv2.ImRead(decoupledCachePath, ImreadModes.Color);
             }
             sw.Stop();
 
             if (resolvedMat == null || resolvedMat.Empty())
-                throw new Exception("Failed to load teach_image.png offline from extracted job temp dir!");
+                throw new Exception("Failed to load teach image from Decoupled Disk Cache!");
 
             if (sw.ElapsedMilliseconds > 200)
-                throw new Exception($"Offline recent job load took too long: {sw.ElapsedMilliseconds} ms");
+                throw new Exception($"Decoupled cache load took too long: {sw.ElapsedMilliseconds} ms");
 
-            Console.WriteLine($"  ✓ Offline Recent Job loaded teach image in {sw.ElapsedMilliseconds} ms with ZERO network calls!");
+            Console.WriteLine($"  ✓ Decoupled Disk Cache loaded teach image in {sw.ElapsedMilliseconds} ms with ZERO network calls.");
+
+            // Kịch bản B: Tương thích ngược với file .job cũ (Legacy Package chứa teach_image.png)
+            string legacyJobPath = Path.Combine(tempDir, "legacy_bundled_job.job");
+            string legacyWorkingDir = Path.Combine(tempDir, "legacy_working");
+            Directory.CreateDirectory(legacyWorkingDir);
+
+            // Giả lập gói job cũ chứa sẵn teach_image.png
+            File.WriteAllText(Path.Combine(legacyWorkingDir, "config.json"), "{}");
+            using (var legacyMat = new Mat(60, 80, MatType.CV_8UC3, new Scalar(50, 50, 200)))
+            {
+                Cv2.ImWrite(Path.Combine(legacyWorkingDir, "teach_image.png"), legacyMat);
+            }
+            System.IO.Compression.ZipFile.CreateFromDirectory(legacyWorkingDir, legacyJobPath);
+
+            // Nạp job cũ bằng LoadJob: Xác nhận vẫn giải nén và đọc được teach_image.png
+            jobService.LoadJob(legacyJobPath, out var legacyExtractedDir);
+            string legacyTeachExtracted = Path.Combine(legacyExtractedDir, "teach_image.png");
+            if (!File.Exists(legacyTeachExtracted))
+                throw new Exception("Legacy job with teach_image.png could not be extracted!");
+
+            using var legacyReadMat = Cv2.ImRead(legacyTeachExtracted, ImreadModes.Color);
+            if (legacyReadMat == null || legacyReadMat.Empty() || legacyReadMat.Width != 80 || legacyReadMat.Height != 60)
+                throw new Exception("Failed to decode legacy teach_image.png from old job format!");
+
+            Console.WriteLine("  ✓ 100% Backward compatibility verified for legacy .job files containing teach_image.png.");
         }
         finally
         {

@@ -180,40 +180,113 @@ namespace VisionInspectionApp.UI.ViewModels
                     Edges.Add(new ToolGraphEdgeViewModel(from, to, e.FromPort, e.ToPort));
                 }
 
-                // Pre-load ảnh mẫu dạy học (teach_image.png) từ gói Job hoặc Disk Cache để hiển thị ngay tức thì (0ms)
-                if (!string.IsNullOrWhiteSpace(tempDir) && Directory.Exists(tempDir))
+                // Nạp ảnh mẫu dạy học (Teach Image) đa tầng: Ưu tiên ảnh gốc từ Decoupled Disk Cache -> Fallback Thumbnail -> Tương thích ngược Job cũ
+                Mat? loadedTeachMat = null;
+                string? teachMatKey = null;
+
+                // Tầng 1: Kiểm tra Decoupled Disk Cache ngoài
+                string teachCacheDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Cache", "TeachImages");
+                if (!string.IsNullOrWhiteSpace(ProductCode))
                 {
-                    string teachImgPath = Path.Combine(tempDir, "teach_image.png");
-                    if (File.Exists(teachImgPath) && new FileInfo(teachImgPath).Length > 0)
+                    string prdCache = Path.Combine(teachCacheDir, $"{ProductCode}_teach.png");
+                    if (File.Exists(prdCache) && new FileInfo(prdCache).Length > 0)
                     {
                         try
                         {
-                            var teachMat = Cv2.ImRead(teachImgPath, ImreadModes.Color);
-                            if (teachMat != null && !teachMat.Empty())
+                            loadedTeachMat = Cv2.ImRead(prdCache, ImreadModes.Color);
+                            if (loadedTeachMat != null && !loadedTeachMat.Empty())
                             {
-                                var srcDef = _config.ImageSources?.FirstOrDefault(x => x.SourceType == ImageSourceType.Url)
-                                             ?? _config.ImageSources?.FirstOrDefault();
-                                if (srcDef != null)
-                                {
-                                    SetImageSourceCache(srcDef.Name, srcDef.ImageUrl ?? "teach_image.png", teachMat);
-                                }
-                                _sharedImage.SetImage(teachMat);
+                                teachMatKey = prdCache;
                             }
                         }
                         catch { }
                     }
                 }
 
-                // Nếu chưa có ảnh trong _sharedImage và ImageSource là URL -> nạp từ Disk Cache
-                var urlSrc = _config.ImageSources?.FirstOrDefault(x => x.SourceType == ImageSourceType.Url);
-                if (urlSrc != null && !string.IsNullOrWhiteSpace(urlSrc.ImageUrl) && GetImageSourceCache(urlSrc.Name) == null)
+                if ((loadedTeachMat == null || loadedTeachMat.Empty()) && !string.IsNullOrWhiteSpace(filePath))
                 {
-                    var diskMat = TryLoadUrlImageFromDiskCache(urlSrc.ImageUrl);
-                    if (diskMat != null && !diskMat.Empty())
+                    string jobName = Path.GetFileNameWithoutExtension(filePath);
+                    string jobCache = Path.Combine(teachCacheDir, $"{jobName}_teach.png");
+                    if (File.Exists(jobCache) && new FileInfo(jobCache).Length > 0)
                     {
-                        SetImageSourceCache(urlSrc.Name, urlSrc.ImageUrl, diskMat);
-                        _sharedImage.SetImage(diskMat);
+                        try
+                        {
+                            loadedTeachMat = Cv2.ImRead(jobCache, ImreadModes.Color);
+                            if (loadedTeachMat != null && !loadedTeachMat.Empty())
+                            {
+                                teachMatKey = jobCache;
+                            }
+                        }
+                        catch { }
                     }
+                }
+
+                var urlSrc = _config.ImageSources?.FirstOrDefault(x => x.SourceType == ImageSourceType.Url);
+                if ((loadedTeachMat == null || loadedTeachMat.Empty()) && urlSrc != null && !string.IsNullOrWhiteSpace(urlSrc.ImageUrl))
+                {
+                    loadedTeachMat = TryLoadUrlImageFromDiskCache(urlSrc.ImageUrl);
+                    if (loadedTeachMat != null && !loadedTeachMat.Empty())
+                    {
+                        teachMatKey = urlSrc.ImageUrl;
+                    }
+                }
+
+                // Tầng 2: Tương thích ngược với file .job cũ (nếu có teach_image.png được giải nén ra)
+                if ((loadedTeachMat == null || loadedTeachMat.Empty()) && !string.IsNullOrWhiteSpace(tempDir) && Directory.Exists(tempDir))
+                {
+                    string legacyTeachPng = Path.Combine(tempDir, "teach_image.png");
+                    if (File.Exists(legacyTeachPng) && new FileInfo(legacyTeachPng).Length > 0)
+                    {
+                        try
+                        {
+                            loadedTeachMat = Cv2.ImRead(legacyTeachPng, ImreadModes.Color);
+                            if (loadedTeachMat != null && !loadedTeachMat.Empty())
+                            {
+                                teachMatKey = legacyTeachPng;
+                                // Tự động trích xuất sao lưu ra Cache ngoài để lần sau mở nhanh và làm sạch file .job
+                                if (!string.IsNullOrWhiteSpace(ProductCode))
+                                {
+                                    Directory.CreateDirectory(teachCacheDir);
+                                    Cv2.ImWrite(Path.Combine(teachCacheDir, $"{ProductCode}_teach.png"), loadedTeachMat);
+                                }
+                            }
+                        }
+                        catch { }
+                    }
+                }
+
+                // Tầng 3: Nạp Thumbnail nén siêu nhẹ teach_preview.jpg từ gói .job mới (nếu máy mới chưa có ảnh gốc ngoài)
+                if ((loadedTeachMat == null || loadedTeachMat.Empty()) && !string.IsNullOrWhiteSpace(tempDir) && Directory.Exists(tempDir))
+                {
+                    string previewThumb = Path.Combine(tempDir, "teach_preview.jpg");
+                    if (File.Exists(previewThumb) && new FileInfo(previewThumb).Length > 0)
+                    {
+                        try
+                        {
+                            loadedTeachMat = Cv2.ImRead(previewThumb, ImreadModes.Color);
+                            if (loadedTeachMat != null && !loadedTeachMat.Empty())
+                            {
+                                teachMatKey = previewThumb;
+                            }
+                        }
+                        catch { }
+                    }
+                }
+
+                // Áp dụng ảnh mẫu đã nạp vào Cache và SharedImage
+                if (loadedTeachMat != null && !loadedTeachMat.Empty())
+                {
+                    var srcDef = urlSrc ?? _config.ImageSources?.FirstOrDefault();
+                    if (srcDef != null)
+                    {
+                        SetImageSourceCache(srcDef.Name, srcDef.ImageUrl ?? teachMatKey ?? "teach_image", loadedTeachMat);
+                    }
+                    _sharedImage.SetImage(loadedTeachMat);
+                }
+                else if (urlSrc != null && !string.IsNullOrWhiteSpace(urlSrc.ImageUrl))
+                {
+                    // Tầng 4: Nếu hoàn toàn chưa có ảnh và có URL từ xa -> tải ngầm bất đồng bộ
+                    ScheduleAsyncUrlImageFetch(urlSrc.Name, urlSrc.ImageUrl);
                 }
 
                 SelectedNode = Nodes.Count > 0 ? Nodes[0] : null;
@@ -393,7 +466,7 @@ namespace VisionInspectionApp.UI.ViewModels
             
             try
             {
-                EnsureTeachImageInJobTempDir();
+                EnsureTeachImageSavedToCacheAndPreview();
                 _jobService.SaveJob(_config, CurrentTempWorkingDir, CurrentJobFilePath);
                 IsDirty = false;
                 _recentJobsService?.AddRecentJob(CurrentJobFilePath);
@@ -405,49 +478,137 @@ namespace VisionInspectionApp.UI.ViewModels
             RefreshPreviews();
         }
 
-        private void EnsureTeachImageInJobTempDir()
+        private void EnsureTeachImageSavedToCacheAndPreview()
         {
-            if (string.IsNullOrWhiteSpace(CurrentTempWorkingDir) || !Directory.Exists(CurrentTempWorkingDir))
-                return;
-
             try
             {
-                string destPath = Path.Combine(CurrentTempWorkingDir, "teach_image.png");
-                if (File.Exists(destPath) && new FileInfo(destPath).Length > 0)
-                    return;
+                // 1. Dọn dẹp tệp teach_image.png cũ trong CurrentTempWorkingDir (nếu có) để triệt để không nhồi vào gói .job
+                if (!string.IsNullOrWhiteSpace(CurrentTempWorkingDir) && Directory.Exists(CurrentTempWorkingDir))
+                {
+                    string oldTeachPath = Path.Combine(CurrentTempWorkingDir, "teach_image.png");
+                    if (File.Exists(oldTeachPath))
+                    {
+                        try { File.Delete(oldTeachPath); } catch { }
+                    }
+                }
 
-                // 1. Lấy từ bộ nhớ đệm cache ImageSource (URL hoặc File)
+                // 2. Tìm ảnh mẫu gốc chất lượng cao từ cache ImageSource hoặc _sharedImage
+                Mat? originalMat = null;
+                bool shouldDisposeOriginal = false;
+
                 var urlSource = _config?.ImageSources?.FirstOrDefault(x => x.SourceType == ImageSourceType.Url || x.SourceType == ImageSourceType.File);
                 if (urlSource != null)
                 {
                     var cached = GetImageSourceCache(urlSource.Name);
                     if (cached != null && !cached.Empty())
                     {
-                        Cv2.ImWrite(destPath, cached);
-                        return;
+                        originalMat = cached;
                     }
-
-                    if (!string.IsNullOrWhiteSpace(urlSource.ImageUrl))
+                    else if (!string.IsNullOrWhiteSpace(urlSource.ImageUrl))
                     {
-                        using var diskMat = TryLoadUrlImageFromDiskCache(urlSource.ImageUrl);
-                        if (diskMat != null && !diskMat.Empty())
-                        {
-                            Cv2.ImWrite(destPath, diskMat);
-                            return;
-                        }
+                        originalMat = TryLoadUrlImageFromDiskCache(urlSource.ImageUrl);
+                        if (originalMat != null) shouldDisposeOriginal = true;
                     }
                 }
 
-                // 2. Lấy từ _sharedImage nếu đang có ảnh mẫu
-                using var snap = _sharedImage.GetSnapshot();
-                if (snap != null && !snap.Empty())
+                if (originalMat == null || originalMat.Empty())
                 {
-                    Cv2.ImWrite(destPath, snap);
+                    var snap = _sharedImage.GetSnapshot();
+                    if (snap != null && !snap.Empty())
+                    {
+                        originalMat = snap;
+                        shouldDisposeOriginal = true;
+                    }
+                }
+
+                if (originalMat == null || originalMat.Empty())
+                {
+                    return;
+                }
+
+                try
+                {
+                    // 3. Lưu ảnh mẫu gốc độ nét cao vào Decoupled Disk Cache ngoài (Cache/TeachImages/)
+                    string teachCacheDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Cache", "TeachImages");
+                    Directory.CreateDirectory(teachCacheDir);
+
+                    // A. Lưu theo ProductCode
+                    if (!string.IsNullOrWhiteSpace(ProductCode))
+                    {
+                        string prdCache = Path.Combine(teachCacheDir, $"{ProductCode}_teach.png");
+                        Cv2.ImWrite(prdCache, originalMat);
+                    }
+
+                    // B. Lưu theo Job Name
+                    if (!string.IsNullOrWhiteSpace(CurrentJobFilePath))
+                    {
+                        string jobName = Path.GetFileNameWithoutExtension(CurrentJobFilePath);
+                        if (!string.IsNullOrWhiteSpace(jobName) && !string.Equals(jobName, ProductCode, StringComparison.OrdinalIgnoreCase))
+                        {
+                            string jobCache = Path.Combine(teachCacheDir, $"{jobName}_teach.png");
+                            Cv2.ImWrite(jobCache, originalMat);
+                        }
+                    }
+
+                    // C. Nếu có ImageUrl từ xa, lưu vào hash cache
+                    if (urlSource != null && !string.IsNullOrWhiteSpace(urlSource.ImageUrl))
+                    {
+                        string teachPathByHash = JobManagerViewModel.GetDiskCacheFilePath(urlSource.ImageUrl);
+                        Cv2.ImWrite(teachPathByHash, originalMat);
+                    }
+
+                    // 4. Tạo Thumbnail JPEG nén siêu nhẹ teach_preview.jpg trong CurrentTempWorkingDir (khoảng 20KB - 30KB)
+                    // để phục vụ xem trước khi mở Job trên máy tính lạ chưa có cache ngoài
+                    if (!string.IsNullOrWhiteSpace(CurrentTempWorkingDir) && Directory.Exists(CurrentTempWorkingDir))
+                    {
+                        string previewThumbPath = Path.Combine(CurrentTempWorkingDir, "teach_preview.jpg");
+
+                        // Tính toán kích thước thu nhỏ (chiều dài nhất tối đa 1280px)
+                        int maxDim = 1280;
+                        int origW = originalMat.Width;
+                        int origH = originalMat.Height;
+                        Mat? thumbMat = null;
+                        bool shouldDisposeThumb = false;
+
+                        if (origW > maxDim || origH > maxDim)
+                        {
+                            double scale = Math.Min((double)maxDim / origW, (double)maxDim / origH);
+                            int newW = Math.Max(1, (int)Math.Round(origW * scale));
+                            int newH = Math.Max(1, (int)Math.Round(origH * scale));
+                            thumbMat = new Mat();
+                            Cv2.Resize(originalMat, thumbMat, new OpenCvSharp.Size(newW, newH), 0, 0, InterpolationFlags.Area);
+                            shouldDisposeThumb = true;
+                        }
+                        else
+                        {
+                            thumbMat = originalMat;
+                        }
+
+                        try
+                        {
+                            var prms = new ImageEncodingParam(ImwriteFlags.JpegQuality, 55);
+                            Cv2.ImWrite(previewThumbPath, thumbMat, prms);
+                        }
+                        finally
+                        {
+                            if (shouldDisposeThumb && thumbMat != null)
+                            {
+                                thumbMat.Dispose();
+                            }
+                        }
+                    }
+                }
+                finally
+                {
+                    if (shouldDisposeOriginal && originalMat != null)
+                    {
+                        originalMat.Dispose();
+                    }
                 }
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"EnsureTeachImageInJobTempDir error: {ex.Message}");
+                System.Diagnostics.Debug.WriteLine($"EnsureTeachImageSavedToCacheAndPreview error: {ex.Message}");
             }
         }
 

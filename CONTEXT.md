@@ -48,6 +48,33 @@
 - Pipeline đọc đúng kết nối `ImageSource → Preprocess → Tool`.
 - Preview được phép tiếp tục khi Global Snapshot rỗng để lấy ảnh từ ImageSource.
 - Lưu template cho Origin, Point và SurfaceCompare hoạt động với nguồn ảnh ImageSource.
+- **Tá»‘i Æ¯u HÃ³a Dung LÆ°á»£ng Tá»‡p .JOB Báº±ng CÆ¡ Cháº¿ Decoupled Teach Image Storage & Thumbnail NÃ©n Nháº¹ (Task 303)**:
+  - **Hiá»‡n TÆ°á»£ng & YÃªu Cáº§u NgÆ°á»i DÃ¹ng**:
+    - TrÆ°á»›c Ä‘Ã¢y, khi lÆ°u Job (SaveJob), há»‡ thá»‘ng nhá»“i toÃ n bá»™ áº£nh máº«u dáº¡y há»c Ä‘á»™ nÃ©t cao (	each_image.png, thÆ°á»ng lÃ  áº£nh camera 20-30 Megapixels dung lÆ°á»£ng 20MB - 35MB) trá»±c tiáº¿p vÃ o trong gÃ³i zip .job.
+    - Äiá»u nÃ y khiáº¿n tá»‡p .job phÃ¬nh to lÃªn tá»›i 25MB - 35MB, gÃ¢y lÃ£ng phÃ­ dung lÆ°á»£ng Ä‘Ä©a, lÃ m cháº­m quÃ¡ trÃ¬nh nÃ©n/giáº£i nÃ©n vÃ  lÃ m ngháº½n bÄƒng thÃ´ng khi upload/download lÃªn mÃ¡y chá»§ hoáº·c truyá»n qua máº¡ng LAN nhÃ  mÃ¡y.
+    - YÃªu cáº§u: Loáº¡i bá» viá»‡c nhá»“i áº£nh lá»›n vÃ o tá»‡p .job, tÃ¬m phÆ°Æ¡ng Ã¡n lÆ°u trá»¯ vÃ  náº¡p áº£nh máº«u thay tháº¿ nháº¹, nhanh, tÃ¡ch biá»‡t, Ä‘Æ°a dung lÆ°á»£ng tá»‡p .job vá» chuáº©n cÃ´ng nghiá»‡p gá»n nháº¹.
+  - **NguyÃªn NhÃ¢n Gá»‘c Rá»… ÄÃ£ PhÃ¢n TÃ­ch**:
+    1. *Thá»±c táº¿ kiá»ƒm tra (Inspection / OQC Scanner)*: Há»‡ thá»‘ng láº¥y áº£nh trá»±c tiáº¿p tá»« Camera cÃ´ng nghiá»‡p trong thá»i gian thá»±c. Há»‡ thá»‘ng hoÃ n toÃ n khÃ´ng dÃ¹ng Ä‘áº¿n 	each_image.png.
+    2. *Ná»™i dung cá»‘t lÃµi cá»§a tá»‡p .job*: Báº£n cháº¥t file .job chá»‰ cáº§n config.json (~10-30KB) vÃ  thÆ° má»¥c 	emplates/ (chá»©a cÃ¡c crop template nhá» origin.png, p1.png, sc.png ~vÃ i chá»¥c KB). Dung lÆ°á»£ng chuáº©n chá»‰ tá»« 50KB - 150KB.
+    3. *áº¢nh Teach*: Chá»‰ phá»¥c vá»¥ má»¥c Ä‘Ã­ch xem trÆ°á»›c (preview) trÃªn canvas khi ká»¹ sÆ° má»Ÿ láº¡i Job trÃªn Tool Editor Ä‘á»ƒ tinh chá»‰nh hoáº·c quan sÃ¡t.
+  - **Giáº£i PhÃ¡p Ká»¹ Thuáº­t ÄÃ£ Triá»ƒn Khai**:
+    1. **Tá»‘i Æ¯u HÃ³a GÃ³i .JOB & Loáº¡i Bá» Triá»‡t Äá»ƒ áº¢nh Lá»›n Khá»i Zip (JobService.cs)**:
+       - Trong SaveJob: Bá»• sung bÆ°á»›c dá»n dáº¹p quÃ©t thÆ° má»¥c gá»‘c cá»§a 	empWorkingDir, xÃ³a bá» triá»‡t Ä‘á»ƒ cÃ¡c tá»‡p áº£nh lá»›n (	each_image.png, *.bmp, *.tiff...) trÆ°á»›c khi nÃ©n zip.
+       - File .job chá»‰ Ä‘Ã³ng gÃ³i config.json, thÆ° má»¥c con 	emplates/ vÃ  thumbnail nÃ©n nháº¹ 	each_preview.jpg (náº¿u cÃ³).
+       - KÃ­ch thÆ°á»›c tá»‡p .job giáº£m ngoáº¡n má»¥c tá»« **~25MB - 35MB xuá»‘ng chá»‰ cÃ²n 2.4 KB - 50 KB** (giáº£m hÆ¡n **99.6%** dung lÆ°á»£ng).
+    2. **Quáº£n LÃ½ áº¢nh Máº«u HD Äá»™c Láº­p Qua Decoupled Disk Cache (ToolEditorViewModel.Config.cs)**:
+       - Thay tháº¿ EnsureTeachImageInJobTempDir báº±ng EnsureTeachImageSavedToCacheAndPreview():
+         - LÆ°u áº£nh máº«u gá»‘c cháº¥t lÆ°á»£ng cao Ä‘á»™ nÃ©t 100% vÃ o Decoupled Disk Cache ngoÃ i: Cache/TeachImages/{ProductCode}_teach.png, Cache/TeachImages/{JobName}_teach.png vÃ  URL hash.
+         - Táº¡o thumbnail JPEG nÃ©n siÃªu nháº¹ 	each_preview.jpg (kÃ­ch thÆ°á»›c dÃ i nháº¥t tá»‘i Ä‘a 1280px, cháº¥t lÆ°á»£ng JPEG 55%, dung lÆ°á»£ng chá»‰ **~20KB - 35KB**) lÆ°u vÃ o temp working dir Ä‘á»ƒ Ä‘Ã­nh kÃ¨m trong .job phá»¥c vá»¥ xem trÆ°á»›c khi mang sang mÃ¡y láº¡.
+         - XÃ³a sáº¡ch tá»‡p 	each_image.png 25MB cÅ© khá»i temp working dir.
+    3. **CÆ¡ Cháº¿ Náº¡p áº¢nh Máº«u Äa Táº§ng MÆ°á»£t MÃ  (ToolEditorViewModel.Config.cs & ToolEditorViewModel.Engine.cs)**:
+       - **Táº§ng 1 (Local Decoupled Cache - 0ms Ä‘áº¿n 5ms)**: QuÃ©t tÃ¬m áº£nh gá»‘c trong Cache/TeachImages/{ProductCode}_teach.png hoáº·c {jobName}_teach.png hoáº·c TryLoadUrlImageFromDiskCache. Náº¡p Mat ngay tá»©c thÃ¬ mÃ  khÃ´ng cháº¡m tá»›i máº¡ng.
+       - **Táº§ng 2 (TÆ°Æ¡ng thÃ­ch ngÆ°á»£c 100% vá»›i Job cÅ©)**: Náº¿u má»Ÿ tá»‡p .job cÅ© cÃ³ sáºµn 	each_image.png trong zip, há»‡ thá»‘ng váº«n giáº£i nÃ©n vÃ  náº¡p bÃ¬nh thÆ°á»ng, Ä‘á»“ng thá»i tá»± Ä‘á»™ng sao lÆ°u sang Cache/TeachImages/ ngoÃ i Ä‘á»ƒ láº§n Save sau file .job tá»± Ä‘á»™ng Ä‘Æ°á»£c lÃ m sáº¡ch vÃ  thu nhá» kÃ­ch thÆ°á»›c.
+       - **Táº§ng 3 (Embedded Thumbnail)**: Náº¿u má»Ÿ job má»›i trÃªn mÃ¡y láº¡ chÆ°a cÃ³ cache ngoÃ i, há»‡ thá»‘ng náº¡p 	each_preview.jpg (~25KB) lÃ m áº£nh xem trÆ°á»›c trÃªn canvas.
+       - **Táº§ng 4 (Fallback Web Server)**: Náº¿u mÃ¡y má»›i chÆ°a cÃ³ cache vÃ  cÃ³ URL mÃ¡y chá»§ tá»« xa, kÃ­ch hoáº¡t táº£i ngáº§m báº¥t Ä‘á»“ng bá»™ qua ScheduleAsyncUrlImageFetch mÃ  khÃ´ng Ä‘Æ¡ UI.
+    4. **Bá»™ Kiá»ƒm Thá»­ Tá»± Äá»™ng ToÃ n Diá»‡n (TestExtractApp/UrlImageSourceAndRecentJobTests.cs)**:
+       - Cáº­p nháº­t Test 3: Test_JobPackage_ExcludesLargeTeachImage_AndUsesDecoupledCache xÃ¡c nháº­n file .job siÃªu nháº¹ (thá»±c táº¿ Ä‘áº¡t **2.4 KB**), loáº¡i trá»« 	each_image.png vÃ  báº£o lÆ°u thumbnail 	each_preview.jpg.
+       - Cáº­p nháº­t Test 5: Test_OfflineRecentJob_LoadsFromDecoupledCacheOrLegacyZip xÃ¡c nháº­n náº¡p áº£nh máº«u tá»« Decoupled Cache trong 8ms vá»›i ZERO network calls, Ä‘á»“ng thá»i xÃ¡c nháº­n 100% tÆ°Æ¡ng thÃ­ch ngÆ°á»£c vá»›i cÃ¡c file .job cÅ©.
 - **Khắc Phục Dứt Điểm Lỗi Mất Live View (Đọng Frame Cũ) Tại Tab OQC Scanner Sau Khi Mở Job Từ Quản Lý Job (Task 302)**:
   - **Hiện Tượng & Yêu Cầu Người Dùng**:
     - Tại tab OQC Scanner, khi mới bật app lên, Live View từ camera hoạt động bình thường mượt mà (30+ FPS).

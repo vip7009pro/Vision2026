@@ -77,6 +77,31 @@ public sealed class JobService : IJobService
             Directory.CreateDirectory(dirName);
         }
 
+        // 3. Tối ưu hóa dung lượng tệp .job (Decoupled Image Storage):
+        // Loại bỏ triệt để các tệp ảnh lớn ở root của tempWorkingDir (đặc biệt là teach_image.png hoặc các file ảnh chụp 20-30MB)
+        // Chỉ cho phép lưu config.json, thumbnail nén nhẹ teach_preview.jpg (nếu có) và thư mục con templates/
+        try
+        {
+            var rootFiles = Directory.GetFiles(tempWorkingDir, "*.*", SearchOption.TopDirectoryOnly);
+            foreach (var file in rootFiles)
+            {
+                var fileName = Path.GetFileName(file);
+                if (string.Equals(fileName, "config.json", StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(fileName, "teach_preview.jpg", StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                // Xóa các file ảnh không phải thumbnail ở thư mục gốc để không bị nén vào .job
+                var ext = Path.GetExtension(fileName).ToLowerInvariant();
+                if (ext is ".png" or ".bmp" or ".tif" or ".tiff" or ".jpg" or ".jpeg")
+                {
+                    try { File.Delete(file); } catch { }
+                }
+            }
+        }
+        catch { }
+
         ZipFile.CreateFromDirectory(tempWorkingDir, jobFilePath, CompressionLevel.Fastest, includeBaseDirectory: false);
     }
 
