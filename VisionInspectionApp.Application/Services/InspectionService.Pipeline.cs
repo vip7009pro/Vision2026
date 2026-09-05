@@ -382,24 +382,36 @@ public partial class InspectionService
                     preprocessNodesByName.TryGetValue(fromNode.RefName ?? string.Empty, out var preDef);
                     var nodeSettings = preDef?.Settings ?? defaultSettings;
 
-                    // Trace upstream of the Preprocess node to get the raw base image
-                    var inEdge = edges.FirstOrDefault(e => string.Equals(e.ToNodeId, fromNode.Id, StringComparison.OrdinalIgnoreCase)
-                                                          && (string.Equals(e.ToPort, "In", StringComparison.OrdinalIgnoreCase) || string.Equals(e.ToPort, "Image", StringComparison.OrdinalIgnoreCase)));
+                    // Trace upstream of the Preprocess node to get the raw base image (Crop, ImageSource, etc.)
+                    var currNode = fromNode;
                     Mat baseMat = image;
-                    if (inEdge is not null && nodesById.TryGetValue(inEdge.FromNodeId, out var grandParentNode))
+                    while (currNode != null)
                     {
-                        if (string.Equals(grandParentNode.Type, "Crop", StringComparison.OrdinalIgnoreCase))
+                        var inEdge = edges.FirstOrDefault(e => string.Equals(e.ToNodeId, currNode.Id, StringComparison.OrdinalIgnoreCase)
+                                                              && (string.IsNullOrWhiteSpace(e.ToPort) || string.Equals(e.ToPort, "In", StringComparison.OrdinalIgnoreCase) || string.Equals(e.ToPort, "Image", StringComparison.OrdinalIgnoreCase)));
+                        if (inEdge is null || !nodesById.TryGetValue(inEdge.FromNodeId, out var parentNode))
                         {
-                            baseMat = GetCropNodeOutput(grandParentNode.Id);
+                            break;
                         }
-                        else if (string.Equals(grandParentNode.Type, "ImageSource", StringComparison.OrdinalIgnoreCase))
+
+                        if (string.Equals(parentNode.Type, "Preprocess", StringComparison.OrdinalIgnoreCase))
+                        {
+                            currNode = parentNode;
+                            continue;
+                        }
+                        else if (string.Equals(parentNode.Type, "Crop", StringComparison.OrdinalIgnoreCase))
+                        {
+                            baseMat = GetCropNodeOutput(parentNode.Id);
+                        }
+                        else if (string.Equals(parentNode.Type, "ImageSource", StringComparison.OrdinalIgnoreCase))
                         {
                             baseMat = image;
                         }
                         else
                         {
-                            baseMat = GetNodeOutputImage(grandParentNode.Id);
+                            baseMat = GetNodeOutputImage(parentNode.Id);
                         }
+                        break;
                     }
 
                     return (baseMat, nodeSettings, _preprocessor);

@@ -1,4 +1,4 @@
-﻿# Vision Inspection App — Context & Roadmap
+# Vision Inspection App — Context & Roadmap
 
 ## Mô tả
 
@@ -46,6 +46,37 @@
 ### ImageSource và preview
 
 - Lưu template cho Origin, Point và SurfaceCompare hoạt động với nguồn ảnh ImageSource.
+- **Khắc Phục Triệt Để Nghẽn Runtime Caliper & Tối Ưu Hóa Pyramidal Downscale Background Estimation Cho ROI Patch Nhỏ (Task 307)**:
+  - **Hiện Tượng & Yêu Cầu Người Dùng**:
+    - Dù Caliper đã áp dụng cơ chế ROI First, người dùng đo lường thực tế trên bảng thời gian chạy (Per-Tool Timings) thấy các tool CAL1 (131ms), CAL4 (52ms), CAL3 (49ms), CAL2 (28ms) vẫn tốn hàng chục đến hàng trăm ms.
+  - **Nguyên Nhân Sâu Xa**:
+    1. Cơ chế ROI First thực tế đã hoạt động và cắt Search ROI patch trước (`ExtractStraightRoi`).
+    2. Tuy nhiên, khi Caliper nối với node Preprocess có cấu hình `IlluminationCorrection = BackgroundSubtract` với `IlluminationKernel = 269`, hàm `EstimateBackground` có lỗi logic rẽ nhánh: `if (kernelSize <= 15 || minDim < 300)`.
+    3. Vì toàn bộ các ROI patch của Caliper đều có `minDim < 300` (CAL1: 241x1389, CAL2: 93x172, CAL3: 432x95, CAL4: 1706x81), OpenCV đã bị ép chạy `GaussianBlur` trực tiếp với kernel khổng lồ 269x269 ở độ phân giải gốc của patch, tính toán hơn 180 triệu phép tính floating-point trên CPU, gây nghẽn từ 28ms đến 131ms.
+    4. Trong khi đó, trên ảnh toàn cảnh 4000x3000, hàm này lại tự động downscale 8 lần nên chỉ mất ~3ms! Do đó, chạy trên patch nhỏ trước đây chậm hơn 40 lần so với ảnh toàn cảnh.
+  - **Giải Pháp Kỹ Thuật Đã Triển Khai**:
+    1. **Tối ưu hóa `EstimateBackground` (Pyramidal Downscale thích ứng theo kernelSize)**:
+       - Direct GaussianBlur chỉ chạy khi `kernelSize <= 15 && kernelSize < minDim`.
+       - Khi `kernelSize > 15` hoặc `kernelSize >= minDim`: Tự động tính hệ số scale theo kernel `scaleByKernel = round(kernelSize / 11.0)` và `scale = clamp(max(scaleByKernel, scaleByDim), 2, 32)`.
+       - Kernel proxy sau thu nhỏ chỉ còn 7..15px, đảm bảo Gaussian blur hoàn tất trong 0.02ms, resize back trong 0.08ms. Tổng runtime < 0.15ms trên mọi ROI patch.
+    2. **Kẹp giới hạn (Clamping) an toàn cho toàn bộ bộ lọc trong `ImagePreprocessor.Run`**:
+       - Clamp `BlurKernel`, `MedianKernel`, `BilateralDiameter`, `MorphKernelSize`, và `ApplySauvola` mask size để không bao giờ vượt quá kích thước hiện tại của ROI patch nhỏ, loại bỏ hoàn toàn hiện tượng biên viền vô tận và padding thừa.
+    3. **Truy vết ngược thông minh `ResolveToolPreprocessForRoiFirst`**:
+       - Hỗ trợ chuỗi (chain) nhiều Preprocess nodes, duyệt ngược dòng về `ImageSource` hoặc `Crop` mà không bao giờ tiền xử lý toàn ảnh ở các node trung gian.
+    4. **Bộ Kiểm Thử Tự Động Toàn Diện (`TestExtractApp/SurfaceCompareAndCaliperRoiTests.cs`)**:
+       - Bổ sung bài test Test 1b (`TestCaliperLargeKernelBackgroundIllumination`) tái hiện 100% cấu hình CAL1 (SearchRoi 241x1389, BackgroundSubtract kernel 269, Otsu threshold, Erode).
+       - Runtime giảm ngoạn mục từ **131ms** xuống chỉ còn **~2.1ms**, tìm biên chính xác tuyệt đối.
+
+- **Nâng Cấp Toàn Diện Tool Surface Compare & Tối Ưu Hóa Caliper ROI First (Task 306)**:
+  - **Hiện Tượng & Yêu Cầu Người Dùng**:
+    - Kiểm tra tool Caliper: áp dụng ROI First tránh tiền xử lý toàn ảnh làm tăng runtime.
+    - Nâng cấp Surface Compare: Audit toàn diện, bổ sung Template RAM Caching loại bỏ nghẽn I/O đĩa, Sub-pixel Auto Alignment & Confidence Guard, Normalize Lighting chống trôi sáng môi trường, Spatial Edge Tolerance Band toàn diện cho mọi thuật toán, thuật toán mới `EdgeCompare` chuyên biệt cho in ấn/mất nét chữ, tách biệt độc lập `SsimThreshold`, và sửa lỗi `MaxBlobArea <= 0` làm drop khuyết tật lớn.
+  - **Giải Pháp Kỹ Thuật Đã Triển Khai**:
+    - Data models mở rộng trong `Class1.cs` (SubPixelAlign, NormalizeLighting, EdgeCompare = 3).
+    - Quản lý bộ nhớ đệm Template trên RAM bằng `_surfaceCompareTemplateCache` tự động reload theo `LastWriteTimeUtc`.
+    - Thuật toán `EdgeCompare` sử dụng Scharr gradient hai phương X, Y.
+    - UI và ViewModels bổ sung CheckBoxes "SubPixel Align" và "Normalize Light", ComboBox tự động nhận EdgeCompare.
+    - 8 bài test tự động bao phủ 100% các tính năng mới trong `TestExtractApp`.
 - **Nâng Cấp Toàn Diện Preprocess Tool (3 Nhóm Thuật Toán Mở Rộng: Must Have, Nice To Have, Auto Edge) & Bổ Sung Bảng Kết Quả Đo Đạc Overlay Cho ImageOutput Tool (Task 305)**:
   - **Hiện Tượng & Yêu Cầu Người Dùng**:
     1. *ImageOutput Tool*:

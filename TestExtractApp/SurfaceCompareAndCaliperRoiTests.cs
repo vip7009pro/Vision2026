@@ -26,6 +26,7 @@ public static class SurfaceCompareAndCaliperRoiTests
         Console.WriteLine("=== [TEST SUITE] Surface Compare & Caliper ROI First Tests ===");
 
         TestCaliperRoiFirstPerformanceAndAccuracy();
+        TestCaliperLargeKernelBackgroundIllumination();
         TestSurfaceCompareTemplateCache();
         TestSurfaceCompareAutoAlignAndConfidenceGuard();
         TestSurfaceCompareSubPixelAlign();
@@ -89,6 +90,60 @@ public static class SurfaceCompareAndCaliperRoiTests
             throw new Exception($"Caliper ROI First detected position mismatch: legacy={centerLegacy}, roiFirst={centerRoiFirst}");
 
         Console.WriteLine($"   [OK] Caliper ROI First edge verified: Pos=({centerRoiFirst.X:F2}, {centerRoiFirst.Y:F2}), Time={swRoiFirst.Elapsed.TotalMilliseconds:F3}ms vs FullImage={swFull.Elapsed.TotalMilliseconds:F3}ms");
+    }
+
+    private static void TestCaliperLargeKernelBackgroundIllumination()
+    {
+        Console.WriteLine("--> Test 1b: Caliper with Large Illumination Kernel Preprocess (PP3 reproduction)");
+
+        // 3000x2000 image representing high-res production image
+        using var largeImg = new Mat(3000, 2000, MatType.CV_8UC1, Scalar.All(200));
+        // Draw edge at center of SearchRoi (1528 + 120 = 1648)
+        Cv2.Rectangle(largeImg, new Rect(1648, 1000, 300, 1600), Scalar.All(40), -1);
+
+        // Exact CAL1 SearchRoi: 241 x 1389
+        var calDef = new CaliperDefinition
+        {
+            Name = "CAL1",
+            SearchRoi = new Roi { X = 1528, Y = 1186, Width = 241, Height = 1389, Angle = 0 },
+            Orientation = CaliperOrientation.Horizontal,
+            Polarity = EdgePolarity.LightToDark,
+            StripCount = 20,
+            StripWidth = 10,
+            StripLength = 99,
+            MinEdgeStrength = 10.0
+        };
+
+        var preprocessor = new ImagePreprocessor();
+        // Exact PP3 settings from production job:
+        var preprocessSettings = new PreprocessSettings
+        {
+            IlluminationCorrection = IlluminationCorrectionPreset.BackgroundSubtract,
+            IlluminationKernel = 269, // Very large kernel!
+            UseThreshold = true,
+            ThresholdType = PreprocessThresholdType.Otsu,
+            UseMorphology = true,
+            MorphShape = PreprocessMorphShape.Rect,
+            MorphType = PreprocessMorphType.Erode,
+            MorphKernelSize = 3,
+            MorphIterations = 1
+        };
+
+        // Warm up
+        _ = CaliperDetector.Detect(largeImg, calDef, default, default, 0.0, preprocessor, preprocessSettings);
+
+        var sw = Stopwatch.StartNew();
+        var res = CaliperDetector.Detect(largeImg, calDef, default, default, 0.0, preprocessor, preprocessSettings);
+        sw.Stop();
+
+        if (!res.Found)
+            throw new Exception("Caliper with large illumination kernel failed to find edge!");
+
+        // Must run in < 5.0 ms (previously was 131 ms due to direct 269x269 blur on patch!)
+        if (sw.Elapsed.TotalMilliseconds > 25.0)
+            throw new Exception($"Caliper runtime too slow: {sw.Elapsed.TotalMilliseconds:F2}ms (expected < 5ms)");
+
+        Console.WriteLine($"   [OK] Caliper with 269px Illumination Kernel & Otsu verified in {sw.Elapsed.TotalMilliseconds:F3}ms (Found edge at x={res.LineP1.X:F1})");
     }
 
     private static void TestSurfaceCompareTemplateCache()

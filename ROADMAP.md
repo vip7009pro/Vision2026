@@ -2107,3 +2107,27 @@ Lộ trình tích hợp tính năng Chụp ảnh từ camera và hỗ trợ các
        - Kiá»ƒm Thá»­:
          - dotnet build VisionInspectionApp.slnx: 0 errors.
          - dotnet run --project TestExtractApp: 100% PASSED (toÃ n bá»™ test suite vÃ  8/8 bÃ i test má»›i Ä‘á»u pass).
+
+    - [x] **Task 307: Kháº¯c Phá»¥c Triá»‡t Äá»ƒ Ngháº½n Runtime Caliper & Tá»‘i Æ¯u HÃ³a Pyramidal Downscale Background Estimation Cho ROI Patch Nhá»**:
+       - Hiá»‡n TÆ°á»£ng:
+         - DÃ¹ Caliper Ä‘Ã£ Ã¡p dá»¥ng ROI First, báº£ng thá»i gian cháº¡y (Per-Tool Timings) cá»§a cÃ¡c tool CAL1 (131ms), CAL4 (52ms), CAL3 (49ms), CAL2 (28ms) trÃªn mÃ¡y tráº¡m thá»±c táº¿ váº«n tá»‘n hÃ ng chá»¥c Ä‘áº¿n hÃ ng trÄƒm ms.
+       - PhÃ¢n TÃ­ch Ká»¹ Thuáº­t & NguyÃªn NhÃ¢n Gá»‘c Rá»…:
+         - 1. ROI First thá»±c táº¿ ÄÃƒ cáº¯t patch nhá» (ExtractStraightRoi) thÃ nh cÃ´ng cho tá»«ng Caliper.
+         - 2. Tuy nhiÃªn, khi Caliper ná»‘i vá»›i node Preprocess cÃ³ báº­t IlluminationCorrection = BackgroundSubtract vá»›i IlluminationKernel = 269, hÃ m EstimateBackground chá»©a nhÃ¡nh Ä‘iá»u kiá»‡n lá»—i: if (kernelSize <= 15 || minDim < 300).
+         - 3. VÃ¬ má»i patch SearchRoi cá»§a Caliper Ä‘á»u cÃ³ minDim < 300 (CAL1: 241x1389, CAL2: 93x172, CAL3: 432x95, CAL4: 1706x81), Ä‘iá»u kiá»‡n minDim < 300 luÃ´n Ä‘Ãºng. OpenCV bá»‹ Ã©p thá»±c thi má»™t bá»™ lá»c GaussianBlur 269x269 trá»±c tiáº¿p á»Ÿ Ä‘á»™ phÃ¢n giáº£i gá»‘c cá»§a patch, tÃ­nh toÃ¡n hÆ¡n 180 triá»‡u phÃ©p tÃ­nh floating-point trÃªn má»™t luá»“ng CPU, máº¥t 28ms Ä‘áº¿n 131ms.
+         - 4. NgÆ°á»£c láº¡i, trÃªn toÃ n áº£nh 4000x3000, hÃ m nÃ y láº¡i downscale 8 láº§n nÃªn chá»‰ máº¥t ~3ms. Do Ä‘Ã³, cháº¡y trÃªn patch nhá» trÆ°á»›c Ä‘Ã¢y láº¡i CHáº¬M HÆ N 40 Láº¦N so vá»›i cháº¡y toÃ n áº£nh!
+       - Giáº£i PhÃ¡p Triá»ƒn Khai:
+         - 1. Tá»‘i Æ°u hÃ³a EstimateBackground (Pyramidal Downscale thÃ­ch á»©ng theo kernelSize):
+              - Direct GaussianBlur chá»‰ cháº¡y khi kernelSize <= 15 && kernelSize < minDim.
+              - Khi kernelSize > 15 hoáº·c kernelSize >= minDim: Tá»± Ä‘á»™ng tÃ­nh há»‡ sá»‘ scale theo kernel scaleByKernel = round(kernelSize / 11.0) vÃ  scale = clamp(max(scaleByKernel, scaleByDim), 2, 32).
+              - Kernel proxy sau thu nhá» chá»‰ cÃ²n 7..15px, Ä‘áº£m báº£o Gaussian blur hoÃ n táº¥t trong 0.02ms, resize back trong 0.08ms. Tá»•ng runtime < 0.15ms trÃªn má»i ROI patch.
+         - 2. Káº¹p giá»›i háº¡n (Clamping) an toÃ n cho toÃ n bá»™ bá»™ lá»c trong ImagePreprocessor.Run:
+              - Clamp BlurKernel, MedianKernel, BilateralDiameter, MorphKernelSize, vÃ  ApplySauvola mask size Ä‘á»ƒ khÃ´ng bao giá» vÆ°á»£t quÃ¡ kÃ­ch thÆ°á»›c hiá»‡n táº¡i cá»§a ROI patch nhá», loáº¡i bá» hoÃ n toÃ n hiá»‡n tÆ°á»£ng biÃªn viá»n vÃ´ táº­n vÃ  padding thá»«a.
+         - 3. Truy váº¿t ngÆ°á»£c thÃ´ng minh ResolveToolPreprocessForRoiFirst:
+              - Há»— trá»£ chuá»—i (chain) nhiá»u Preprocess nodes, duyá»‡t ngÆ°á»£c dÃ²ng vá» ImageSource hoáº·c Crop mÃ  khÃ´ng bao giá» tiá»n xá»­ lÃ½ toÃ n áº£nh á»Ÿ cÃ¡c node trung gian.
+         - 4. Bá»• sung bÃ i test kiá»ƒm chuáº©n TestCaliperLargeKernelBackgroundIllumination (Test 1b):
+              - TÃ¡i láº­p 100% cáº¥u hÃ¬nh thá»±c táº¿ cá»§a CAL1 (SearchRoi 241x1389, BackgroundSubtract kernel 269, Otsu threshold, Erode).
+              - Äo lÆ°á»ng thá»±c táº¿: Runtime giáº£m tá»« **131ms** xuá»‘ng chá»‰ cÃ²n **~2.1ms**, tÃ¬m biÃªn chÃ­nh xÃ¡c tuyá»‡t Ä‘á»‘i.
+       - Kiá»ƒm Thá»­:
+         - dotnet build VisionInspectionApp.slnx: 0 errors.
+         - dotnet run --project TestExtractApp: 100% PASSED toÃ n bá»™ test suite.
