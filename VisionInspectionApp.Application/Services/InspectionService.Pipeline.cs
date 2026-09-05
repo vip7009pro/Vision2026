@@ -1627,7 +1627,103 @@ public partial class InspectionService
                     var blobs = DetectBlobsInCrop(crop, b.InspectRoi, b.Rois, b.Polarity, b.Threshold, b.MinBlobArea, b.MaxBlobArea, centerFound, totalAngle);
                     __sw.Stop();
                     result.Timings.NodeTimings[b.Name] = (int)__sw.ElapsedMilliseconds;
-                    return new BlobDetectionResult(b.Name, blobs.Count, blobs);
+
+                    var scale = (config.PixelsPerMm > 0 && Math.Abs(config.PixelsPerMm - 1.0) > 1e-6) ? config.PixelsPerMm : 1.0;
+                    var passCount = blobs.Count <= b.MaxAllowedBlobs;
+
+                    double? minDistance = null;
+                    int? minBlobA = null;
+                    int? minBlobB = null;
+                    if (blobs.Count >= 2)
+                    {
+                        for (var i = 0; i < blobs.Count - 1; i++)
+                        {
+                            for (var j = i + 1; j < blobs.Count; j++)
+                            {
+                                var dx = blobs[i].Centroid.X - blobs[j].Centroid.X;
+                                var dy = blobs[i].Centroid.Y - blobs[j].Centroid.Y;
+                                var distPx = Math.Sqrt(dx * dx + dy * dy);
+                                var dist = distPx / scale;
+                                if (!minDistance.HasValue || dist < minDistance.Value)
+                                {
+                                    minDistance = dist;
+                                    minBlobA = i;
+                                    minBlobB = j;
+                                }
+                            }
+                        }
+                    }
+
+                    var passDist = true;
+                    if (b.MinBlobDistance > 0 && blobs.Count >= 2)
+                    {
+                        if (minDistance.HasValue && minDistance.Value < b.MinBlobDistance)
+                        {
+                            passDist = false;
+                        }
+                    }
+
+                    var passSize = true;
+                    double? maxMeasuredW = null;
+                    double? maxMeasuredL = null;
+                    List<int>? invalidBlobs = null;
+                    var checkSize = b.MaxBlobWidth > 0 || b.MaxBlobLength > 0;
+
+                    for (var i = 0; i < blobs.Count; i++)
+                    {
+                        var blob = blobs[i];
+                        var bw = blob.BoundingBox.Width / scale;
+                        var bh = blob.BoundingBox.Height / scale;
+                        var minDim = Math.Min(bw, bh);
+                        var maxDim = Math.Max(bw, bh);
+
+                        if (!maxMeasuredW.HasValue || minDim > maxMeasuredW.Value)
+                            maxMeasuredW = minDim;
+                        if (!maxMeasuredL.HasValue || maxDim > maxMeasuredL.Value)
+                            maxMeasuredL = maxDim;
+
+                        if (checkSize)
+                        {
+                            var fits = true;
+                            if (b.MaxBlobWidth > 0 && b.MaxBlobLength > 0)
+                            {
+                                fits = (bw <= b.MaxBlobWidth && bh <= b.MaxBlobLength) ||
+                                       (bh <= b.MaxBlobWidth && bw <= b.MaxBlobLength);
+                            }
+                            else if (b.MaxBlobWidth > 0)
+                            {
+                                fits = (bw <= b.MaxBlobWidth || bh <= b.MaxBlobWidth);
+                            }
+                            else if (b.MaxBlobLength > 0)
+                            {
+                                fits = (bw <= b.MaxBlobLength || bh <= b.MaxBlobLength);
+                            }
+
+                            if (!fits)
+                            {
+                                passSize = false;
+                                invalidBlobs ??= new List<int>();
+                                invalidBlobs.Add(i);
+                            }
+                        }
+                    }
+
+                    var pass = passCount && passDist && passSize;
+                    return new BlobDetectionResult(
+                        b.Name,
+                        blobs.Count,
+                        blobs,
+                        pass,
+                        b.MaxAllowedBlobs,
+                        b.MinBlobDistance,
+                        minDistance,
+                        minBlobA,
+                        minBlobB,
+                        b.MaxBlobWidth,
+                        b.MaxBlobLength,
+                        maxMeasuredW,
+                        maxMeasuredL,
+                        invalidBlobs);
                 }))
                 .ToArray();
 
@@ -2835,6 +2931,7 @@ public partial class InspectionService
             && result.EdgePairDetections.All(x => x.Pass)
             && result.LinePairDetections.All(x => x.Pass)
             && result.Diameters.All(x => x.Pass)
+            && result.BlobDetections.All(x => x.Pass)
             && result.SurfaceCompares.All(x => x.Pass)
             && result.CodeDetections.All(x => x.Pass)
             && result.Conditions.All(x => x.Pass)
@@ -2909,7 +3006,15 @@ public partial class InspectionService
             {
                 if (b is not null && !string.IsNullOrWhiteSpace(b.Name))
                 {
-                    result.BlobDetections.Add(new BlobDetectionResult(b.Name, 0, new List<BlobInfo>()));
+                    result.BlobDetections.Add(new BlobDetectionResult(
+                        b.Name,
+                        0,
+                        new List<BlobInfo>(),
+                        Pass: false,
+                        MaxAllowedBlobs: b.MaxAllowedBlobs,
+                        MinBlobDistance: b.MinBlobDistance,
+                        MaxBlobWidth: b.MaxBlobWidth,
+                        MaxBlobLength: b.MaxBlobLength));
                     result.Timings.NodeTimings[b.Name] = 0;
                 }
             }

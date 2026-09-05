@@ -759,12 +759,26 @@ public partial class ImageViewerControl : UserControl
         }
     }
 
+    private static bool RoiLabelsMatch(string? a, string? b)
+    {
+        if (string.IsNullOrWhiteSpace(a) || string.IsNullOrWhiteSpace(b)) return false;
+        if (string.Equals(a, b, StringComparison.OrdinalIgnoreCase)) return true;
+        var baseA = a.Split('[')[0].Trim();
+        var baseB = b.Split('[')[0].Trim();
+        return string.Equals(baseA, baseB, StringComparison.OrdinalIgnoreCase);
+    }
+
     /// <summary>
     /// Returns true if the point is within 'tolerance' of any edge of the rect
     /// (but not deep inside). This enables edge-only hit testing for ROI move.
     /// </summary>
-    private static bool IsNearRoiBorder(Rect rect, double angle, Point p, double tolerance)
+    private static bool IsNearRoiBorder(Rect rect, double angle, Point p, double tolerance, bool isCaliperStrip = false, bool isHorizontalStrip = true)
     {
+        if (isCaliperStrip)
+        {
+            return false;
+        }
+
         var center = new Point(rect.Left + rect.Width / 2.0, rect.Top + rect.Height / 2.0);
         var unrotP = RotatePoint(p, center, -angle);
 
@@ -793,7 +807,7 @@ public partial class ImageViewerControl : UserControl
             var r = rects[i];
             if (r.Width <= 0 || r.Height <= 0) continue;
             var roiRect = new Rect(r.X, r.Y, r.Width, r.Height);
-            if (IsNearRoiBorder(roiRect, r.Angle, contentPos, borderTol))
+            if (IsNearRoiBorder(roiRect, r.Angle, contentPos, borderTol, r.IsCaliperStrip, r.IsHorizontalStrip))
             {
                 return r.Label;
             }
@@ -1093,13 +1107,20 @@ public partial class ImageViewerControl : UserControl
             {
                 var showHandles = (!string.IsNullOrWhiteSpace(r.Label)
                     && (
-                        string.Equals(r.Label, _activeRoiLabel, StringComparison.OrdinalIgnoreCase)
-                        || string.Equals(r.Label, _hoverRoiLabel, StringComparison.OrdinalIgnoreCase)
+                        RoiLabelsMatch(r.Label, _activeRoiLabel)
+                        || RoiLabelsMatch(r.Label, _hoverRoiLabel)
                     ));
 
                 if (showHandles)
                 {
-                    DrawRoiHandles(r.X, r.Y, r.Width, r.Height, r.Angle, string.Equals(r.Label, _activeRoiLabel, StringComparison.OrdinalIgnoreCase), r.Stroke);
+                    if (r.IsCaliperStrip)
+                    {
+                        DrawCaliperStripHandles(r.X, r.Y, r.Width, r.Height, r.Angle, string.Equals(r.Label, _activeRoiLabel, StringComparison.OrdinalIgnoreCase), r.IsHorizontalStrip, r.Stroke);
+                    }
+                    else
+                    {
+                        DrawRoiHandles(r.X, r.Y, r.Width, r.Height, r.Angle, string.Equals(r.Label, _activeRoiLabel, StringComparison.OrdinalIgnoreCase), r.Stroke);
+                    }
                 }
             }
             else if (item is OverlayCircleItem c)
@@ -1665,7 +1686,8 @@ public partial class ImageViewerControl : UserControl
         {
             // Direct border or handle hits get top priority (ordered by smallest rect area)
             var borderHits = candidates
-                .Where(x => HitTestRoiHandle(x.Rect, x.Item.Angle, contentPoint, hitTol, scale) != RoiEditMode.None || IsNearRoiBorder(x.Rect, x.Item.Angle, contentPoint, hitTol))
+                .Where(x => HitTestRoiHandle(x.Rect, x.Item.Angle, contentPoint, hitTol, scale, x.Item.IsCaliperStrip, x.Item.IsHorizontalStrip) != RoiEditMode.None 
+                         || IsNearRoiBorder(x.Rect, x.Item.Angle, contentPoint, hitTol, x.Item.IsCaliperStrip, x.Item.IsHorizontalStrip))
                 .OrderBy(x => x.Rect.Width * x.Rect.Height)
                 .ToList();
 
@@ -1674,19 +1696,19 @@ public partial class ImageViewerControl : UserControl
             {
                 picked = borderHits.First();
             }
-            else if (!string.IsNullOrWhiteSpace(_activeRoiLabel) && candidates.Any(x => string.Equals(x.Item.Label, _activeRoiLabel, StringComparison.OrdinalIgnoreCase)))
+            else if (!string.IsNullOrWhiteSpace(_activeRoiLabel) && candidates.Any(x => RoiLabelsMatch(x.Item.Label, _activeRoiLabel)))
             {
-                picked = candidates.First(x => string.Equals(x.Item.Label, _activeRoiLabel, StringComparison.OrdinalIgnoreCase));
+                picked = candidates.First(x => RoiLabelsMatch(x.Item.Label, _activeRoiLabel));
             }
             else
             {
                 picked = candidates.OrderBy(x => x.Rect.Width * x.Rect.Height).First();
             }
 
-            var mode = HitTestRoiHandle(picked.Rect, picked.Item.Angle, contentPoint, tolerance: hitTol, scale: scale);
+            var mode = HitTestRoiHandle(picked.Rect, picked.Item.Angle, contentPoint, tolerance: hitTol, scale: scale, isCaliperStrip: picked.Item.IsCaliperStrip, isHorizontalStrip: picked.Item.IsHorizontalStrip);
             if (mode == RoiEditMode.None)
             {
-                mode = IsNearRoiBorder(picked.Rect, picked.Item.Angle, contentPoint, hitTol) ? RoiEditMode.Move : RoiEditMode.None;
+                mode = IsNearRoiBorder(picked.Rect, picked.Item.Angle, contentPoint, hitTol, picked.Item.IsCaliperStrip, picked.Item.IsHorizontalStrip) ? RoiEditMode.Move : RoiEditMode.None;
             }
 
             if (mode != RoiEditMode.None)
@@ -1804,11 +1826,11 @@ public partial class ImageViewerControl : UserControl
         {
             if (!string.IsNullOrWhiteSpace(_activeRoiLabel))
             {
-                var activeCandidate = candidates.FirstOrDefault(x => string.Equals(x.Item.Label, _activeRoiLabel, StringComparison.OrdinalIgnoreCase));
+                var activeCandidate = candidates.FirstOrDefault(x => RoiLabelsMatch(x.Item.Label, _activeRoiLabel));
                 if (activeCandidate.Item != null)
                 {
-                    if (HitTestRoiHandle(activeCandidate.Rect, activeCandidate.Item.Angle, contentPoint, hitTol, scale) != RoiEditMode.None
-                        || IsNearRoiBorder(activeCandidate.Rect, activeCandidate.Item.Angle, contentPoint, hitTol))
+                    if (HitTestRoiHandle(activeCandidate.Rect, activeCandidate.Item.Angle, contentPoint, hitTol, scale, activeCandidate.Item.IsCaliperStrip, activeCandidate.Item.IsHorizontalStrip) != RoiEditMode.None
+                        || IsNearRoiBorder(activeCandidate.Rect, activeCandidate.Item.Angle, contentPoint, hitTol, activeCandidate.Item.IsCaliperStrip, activeCandidate.Item.IsHorizontalStrip))
                     {
                         return activeCandidate.Item.Label;
                     }
@@ -1816,7 +1838,8 @@ public partial class ImageViewerControl : UserControl
             }
 
             var borderHits = candidates
-                .Where(x => HitTestRoiHandle(x.Rect, x.Item.Angle, contentPoint, hitTol, scale) != RoiEditMode.None || IsNearRoiBorder(x.Rect, x.Item.Angle, contentPoint, hitTol))
+                .Where(x => HitTestRoiHandle(x.Rect, x.Item.Angle, contentPoint, hitTol, scale, x.Item.IsCaliperStrip, x.Item.IsHorizontalStrip) != RoiEditMode.None 
+                         || IsNearRoiBorder(x.Rect, x.Item.Angle, contentPoint, hitTol, x.Item.IsCaliperStrip, x.Item.IsHorizontalStrip))
                 .OrderBy(x => x.Rect.Width * x.Rect.Height)
                 .ToList();
 
@@ -1920,6 +1943,45 @@ public partial class ImageViewerControl : UserControl
         }
     }
 
+    private void DrawCaliperStripHandles(double left, double top, double width, double height, double angle, bool isActive, bool isHorizontal, Brush? customStroke = null)
+    {
+        var scale = Math.Max(0.001, _transform.Matrix.M11);
+        var size = (isActive ? 13.0 : 10.0) / scale;
+        var stroke = Brushes.White;
+        var fill = customStroke ?? (isActive ? Brushes.Cyan : Brushes.DeepSkyBlue);
+        var center = new Point(left + width / 2.0, top + height / 2.0);
+
+        if (isHorizontal)
+        {
+            AddDiamondHandle(new Point(left, top + height / 2.0));
+            AddDiamondHandle(new Point(left + width, top + height / 2.0));
+        }
+        else
+        {
+            AddDiamondHandle(new Point(left + width / 2.0, top));
+            AddDiamondHandle(new Point(left + width / 2.0, top + height));
+        }
+
+        void AddDiamondHandle(Point unrotPt)
+        {
+            var rotPt = RotatePoint(unrotPt, center, angle);
+            var h = new Rectangle
+            {
+                Width = size,
+                Height = size,
+                Stroke = stroke,
+                StrokeThickness = 1.5 / scale,
+                Fill = fill,
+                RenderTransformOrigin = new Point(0.5, 0.5),
+                RenderTransform = new RotateTransform(angle + 45.0)
+            };
+
+            Canvas.SetLeft(h, rotPt.X - size / 2.0);
+            Canvas.SetTop(h, rotPt.Y - size / 2.0);
+            PART_Overlay.Children.Add(h);
+        }
+    }
+
     private void DrawCircleRoiHandles(double cx, double cy, double radius, bool isActive)
     {
         var scale = Math.Max(0.001, _transform.Matrix.M11);
@@ -1994,7 +2056,7 @@ public partial class ImageViewerControl : UserControl
 
         var roiItem = OverlayItems
             .OfType<OverlayRectItem>()
-            .FirstOrDefault(x => string.Equals(x.Label, hoverLabel, StringComparison.OrdinalIgnoreCase));
+            .FirstOrDefault(x => RoiLabelsMatch(x.Label, hoverLabel));
 
         if (roiItem is null)
         {
@@ -2008,11 +2070,11 @@ public partial class ImageViewerControl : UserControl
         var hitTol = GetScreenHitTolerance();
         var scale = Math.Max(0.001, _transform.Matrix.M11);
         var rect = PixelRectToContentRect(bmp, roiItem.X, roiItem.Y, roiItem.Width, roiItem.Height);
-        var mode = HitTestRoiHandle(rect, roiItem.Angle, contentPoint, tolerance: hitTol, scale: scale);
+        var mode = HitTestRoiHandle(rect, roiItem.Angle, contentPoint, tolerance: hitTol, scale: scale, isCaliperStrip: roiItem.IsCaliperStrip, isHorizontalStrip: roiItem.IsHorizontalStrip);
 
         if (mode == RoiEditMode.None)
         {
-            Cursor = IsNearRoiBorder(rect, roiItem.Angle, contentPoint, hitTol) ? Cursors.SizeAll : Cursors.Arrow;
+            Cursor = IsNearRoiBorder(rect, roiItem.Angle, contentPoint, hitTol, roiItem.IsCaliperStrip, roiItem.IsHorizontalStrip) ? Cursors.SizeAll : Cursors.Arrow;
             return;
         }
 
@@ -2032,10 +2094,33 @@ public partial class ImageViewerControl : UserControl
         return new Rect(x, y, w, h);
     }
 
-    private static RoiEditMode HitTestRoiHandle(Rect rect, double angle, Point p, double tolerance, double scale = 1.0)
+    private static RoiEditMode HitTestRoiHandle(Rect rect, double angle, Point p, double tolerance, double scale = 1.0, bool isCaliperStrip = false, bool isHorizontalStrip = true)
     {
         var center = new Point(rect.Left + rect.Width / 2.0, rect.Top + rect.Height / 2.0);
         var unrotP = RotatePoint(p, center, -angle);
+
+        if (isCaliperStrip)
+        {
+            var nearMidXStrip = Math.Abs(unrotP.X - (rect.Left + rect.Right) / 2.0) <= tolerance * 1.5;
+            var nearMidYStrip = Math.Abs(unrotP.Y - (rect.Top + rect.Bottom) / 2.0) <= tolerance * 1.5;
+            var nearLeftStrip = Math.Abs(unrotP.X - rect.Left) <= tolerance * 1.5;
+            var nearRightStrip = Math.Abs(unrotP.X - rect.Right) <= tolerance * 1.5;
+            var nearTopStrip = Math.Abs(unrotP.Y - rect.Top) <= tolerance * 1.5;
+            var nearBottomStrip = Math.Abs(unrotP.Y - rect.Bottom) <= tolerance * 1.5;
+
+            if (isHorizontalStrip)
+            {
+                if (nearLeftStrip && nearMidYStrip) return RoiEditMode.Left;
+                if (nearRightStrip && nearMidYStrip) return RoiEditMode.Right;
+            }
+            else
+            {
+                if (nearMidXStrip && nearTopStrip) return RoiEditMode.Top;
+                if (nearMidXStrip && nearBottomStrip) return RoiEditMode.Bottom;
+            }
+
+            return RoiEditMode.None;
+        }
 
         // Check top rotation handle (25px above top-center)
         var rotOffsetY = 25.0 / scale;
@@ -2135,12 +2220,49 @@ public partial class ImageViewerControl : UserControl
 
         var startW = start.Width;
         var startH = start.Height;
+        const double minSize = 2.0;
+
+        var currentRectItem = OverlayItems?.OfType<OverlayRectItem>()
+            .FirstOrDefault(x => string.Equals(x.Label, _roiEditLabel ?? _activeRoiLabel, StringComparison.OrdinalIgnoreCase));
+        var isCaliperStrip = currentRectItem?.IsCaliperStrip == true;
+        var isHorizontalStrip = currentRectItem?.IsHorizontalStrip ?? true;
+
+        if (isCaliperStrip)
+        {
+            var stripW = startW;
+            var stripH = startH;
+            if (isHorizontalStrip)
+            {
+                if (_roiEditMode == RoiEditMode.Right)
+                {
+                    stripW = Math.Max(minSize, startW + 2.0 * dxLocal);
+                }
+                else if (_roiEditMode == RoiEditMode.Left)
+                {
+                    stripW = Math.Max(minSize, startW - 2.0 * dxLocal);
+                }
+            }
+            else
+            {
+                if (_roiEditMode == RoiEditMode.Bottom)
+                {
+                    stripH = Math.Max(minSize, startH + 2.0 * dyLocal);
+                }
+                else if (_roiEditMode == RoiEditMode.Top)
+                {
+                    stripH = Math.Max(minSize, startH - 2.0 * dyLocal);
+                }
+            }
+
+            var startCenterStrip = new Point(start.X + startW / 2.0, start.Y + startH / 2.0);
+            _roiEditRect = new Rect(startCenterStrip.X - stripW / 2.0, startCenterStrip.Y - stripH / 2.0, stripW, stripH);
+            return;
+        }
+
         var newW = startW;
         var newH = startH;
         var deltaCxLocal = 0.0;
         var deltaCyLocal = 0.0;
-
-        const double minSize = 2.0;
 
         switch (_roiEditMode)
         {
@@ -2366,9 +2488,20 @@ public partial class ImageViewerControl : UserControl
             });
         }
 
-        DrawRoiHandles(_roiEditRect.X, _roiEditRect.Y, _roiEditRect.Width, _roiEditRect.Height, _roiEditRectAngle, isActive: true);
+        var activeRectItem = OverlayItems?.OfType<OverlayRectItem>()
+            .FirstOrDefault(x => RoiLabelsMatch(x.Label, targetLabel));
+        bool isStripItem = activeRectItem?.IsCaliperStrip == true;
 
-        if (_roiEditing && (_roiEditMode == RoiEditMode.Rotate || Math.Abs(_roiEditRectAngle) > 0.001))
+        if (isStripItem)
+        {
+            DrawCaliperStripHandles(_roiEditRect.X, _roiEditRect.Y, _roiEditRect.Width, _roiEditRect.Height, _roiEditRectAngle, isActive: true, isHorizontal: activeRectItem!.IsHorizontalStrip, activeRectItem.Stroke);
+        }
+        else
+        {
+            DrawRoiHandles(_roiEditRect.X, _roiEditRect.Y, _roiEditRect.Width, _roiEditRect.Height, _roiEditRectAngle, isActive: true);
+        }
+
+        if (!isStripItem && _roiEditing && (_roiEditMode == RoiEditMode.Rotate || Math.Abs(_roiEditRectAngle) > 0.001))
         {
             double rotOffsetY = 25.0 / scale;
             var center = new Point(cx, cy);

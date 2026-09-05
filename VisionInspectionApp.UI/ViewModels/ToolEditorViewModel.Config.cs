@@ -130,12 +130,16 @@ namespace VisionInspectionApp.UI.ViewModels
             _config.ToolGraph.Edges = Edges.Select(e => new ToolGraphEdge { FromNodeId = e.FromNodeId, ToNodeId = e.ToNodeId, FromPort = e.FromPort, ToPort = e.ToPort }).ToList();
         }
     
-        public void LoadJobFromFile(string filePath, bool autoRun = true)
+        public Func<bool>? CheckShouldAutoRunOnJobLoad { get; set; }
+
+        public void LoadJobFromFile(string filePath, bool? autoRun = null)
         {
             if (string.IsNullOrWhiteSpace(filePath) || !File.Exists(filePath))
             {
                 return;
             }
+
+            bool shouldRun = autoRun ?? (CheckShouldAutoRunOnJobLoad?.Invoke() ?? false);
 
             ClearActiveGraph();
             ClearAllImageSourceCache();
@@ -236,7 +240,7 @@ namespace VisionInspectionApp.UI.ViewModels
                     }
 
                     var dispatcher = System.Windows.Application.Current?.Dispatcher;
-                    if (autoRun)
+                    if (shouldRun)
                     {
                         if (dispatcher != null)
                         {

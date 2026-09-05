@@ -1167,7 +1167,7 @@ public partial class OqcScannerViewModel : ObservableObject
             try
             {
                 _isOqcRunInProgress = false;
-                _toolEditorViewModel.LoadJobFromFile(dialog.FileName, autoRun: false);
+                _toolEditorViewModel.LoadJobFromFile(dialog.FileName);
 
                 var cfg = _jobService.LoadJob(dialog.FileName, out var tempDir);
                 _inspectionViewModel.CurrentJobFilePath = dialog.FileName;

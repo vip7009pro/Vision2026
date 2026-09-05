@@ -118,5 +118,149 @@ namespace VisionInspectionApp.UI.ViewModels
                 return r is null ? null : r.Count;
             }
         }
+
+        public int Blob_MaxAllowedBlobs
+        {
+            get => SelectedBlobDetectionDef()?.MaxAllowedBlobs ?? 0;
+            set
+            {
+                var def = SelectedBlobDetectionDef();
+                if (def is null)
+                    return;
+                var v = Math.Max(0, value);
+                if (def.MaxAllowedBlobs == v)
+                    return;
+                def.MaxAllowedBlobs = v;
+                RequestAutoSave();
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(Blob_PassStatus));
+                OnPropertyChanged(nameof(Blob_PassColor));
+                RefreshPreviews();
+            }
+        }
+
+        public double Blob_MinBlobDistance
+        {
+            get => SelectedBlobDetectionDef()?.MinBlobDistance ?? 0.0;
+            set
+            {
+                var def = SelectedBlobDetectionDef();
+                if (def is null)
+                    return;
+                var v = Math.Max(0.0, value);
+                if (Math.Abs(def.MinBlobDistance - v) < 1e-6)
+                    return;
+                def.MinBlobDistance = v;
+                RequestAutoSave();
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(Blob_PassStatus));
+                OnPropertyChanged(nameof(Blob_PassColor));
+                OnPropertyChanged(nameof(Blob_LastRunMinDistanceText));
+                RefreshPreviews();
+            }
+        }
+
+        public double Blob_MaxBlobWidth
+        {
+            get => SelectedBlobDetectionDef()?.MaxBlobWidth ?? 0.0;
+            set
+            {
+                var def = SelectedBlobDetectionDef();
+                if (def is null)
+                    return;
+                var v = Math.Max(0.0, value);
+                if (Math.Abs(def.MaxBlobWidth - v) < 1e-6)
+                    return;
+                def.MaxBlobWidth = v;
+                RequestAutoSave();
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(Blob_PassStatus));
+                OnPropertyChanged(nameof(Blob_PassColor));
+                OnPropertyChanged(nameof(Blob_LastRunMaxDimensionsText));
+                RefreshPreviews();
+            }
+        }
+
+        public double Blob_MaxBlobLength
+        {
+            get => SelectedBlobDetectionDef()?.MaxBlobLength ?? 0.0;
+            set
+            {
+                var def = SelectedBlobDetectionDef();
+                if (def is null)
+                    return;
+                var v = Math.Max(0.0, value);
+                if (Math.Abs(def.MaxBlobLength - v) < 1e-6)
+                    return;
+                def.MaxBlobLength = v;
+                RequestAutoSave();
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(Blob_PassStatus));
+                OnPropertyChanged(nameof(Blob_PassColor));
+                OnPropertyChanged(nameof(Blob_LastRunMaxDimensionsText));
+                RefreshPreviews();
+            }
+        }
+
+        public string Blob_DistanceUnitText
+        {
+            get
+            {
+                if (_config is not null && _config.PixelsPerMm > 0 && Math.Abs(_config.PixelsPerMm - 1.0) > 1e-6)
+                    return "mm";
+                return "px";
+            }
+        }
+
+        public string Blob_LastRunMinDistanceText
+        {
+            get
+            {
+                if (_lastRun is null || SelectedNode is null)
+                    return "-";
+                var r = _lastRun.BlobDetections.FirstOrDefault(x => string.Equals(x.Name, SelectedNode.RefName, StringComparison.OrdinalIgnoreCase));
+                if (r is null || !r.MeasuredMinDistance.HasValue)
+                    return "-";
+                return $"{r.MeasuredMinDistance.Value:0.##} {Blob_DistanceUnitText}";
+            }
+        }
+
+        public string Blob_LastRunMaxDimensionsText
+        {
+            get
+            {
+                if (_lastRun is null || SelectedNode is null)
+                    return "-";
+                var r = _lastRun.BlobDetections.FirstOrDefault(x => string.Equals(x.Name, SelectedNode.RefName, StringComparison.OrdinalIgnoreCase));
+                if (r is null || !r.MeasuredMaxWidth.HasValue || !r.MeasuredMaxLength.HasValue)
+                    return "-";
+                return $"{r.MeasuredMaxWidth.Value:0.##} x {r.MeasuredMaxLength.Value:0.##} {Blob_DistanceUnitText}";
+            }
+        }
+
+        public string Blob_PassStatus
+        {
+            get
+            {
+                var def = SelectedBlobDetectionDef();
+                if (def is null || _lastRun is null || SelectedNode is null)
+                    return "-";
+                var r = _lastRun.BlobDetections.FirstOrDefault(x => string.Equals(x.Name, SelectedNode.RefName, StringComparison.OrdinalIgnoreCase));
+                if (r is null)
+                    return "-";
+                return r.Pass ? "OK" : "NG";
+            }
+        }
+
+        public Brush Blob_PassColor
+        {
+            get
+            {
+                var status = Blob_PassStatus;
+                if (status == "OK") return Brushes.LimeGreen;
+                if (status == "NG") return Brushes.Crimson;
+                return Brushes.Gray;
+            }
+        }
     }
 }

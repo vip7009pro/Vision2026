@@ -922,6 +922,45 @@ public sealed partial class InspectionViewModel : ObservableObject
 
         }
 
+        foreach (var bd in LastResult.BlobDetections)
+        {
+            SpecResults.Add(new SpecResultRow("BlobDetection", bd.Name, "-", "-", bd.Count, bd.MaxAllowedBlobs, 0.0, bd.MaxAllowedBlobs, bd.Pass, "blobs"));
+
+            if (bd.MinBlobDistance > 0)
+            {
+                var distPass = !bd.MeasuredMinDistance.HasValue || bd.MeasuredMinDistance.Value >= bd.MinBlobDistance;
+                SpecResults.Add(new SpecResultRow(
+                    "BlobDist",
+                    $"{bd.Name}.MinDist",
+                    "-",
+                    "-",
+                    bd.MeasuredMinDistance ?? 0.0,
+                    bd.MinBlobDistance,
+                    bd.MinBlobDistance,
+                    999999.0,
+                    distPass,
+                    distUnit));
+            }
+
+            if (bd.MaxBlobWidth > 0 || bd.MaxBlobLength > 0)
+            {
+                var sizePass = bd.InvalidSizeBlobIndices == null || bd.InvalidSizeBlobIndices.Count == 0;
+                var maxDimFound = Math.Max(bd.MeasuredMaxWidth ?? 0.0, bd.MeasuredMaxLength ?? 0.0);
+                var specMaxDim = Math.Max(bd.MaxBlobWidth, bd.MaxBlobLength);
+                SpecResults.Add(new SpecResultRow(
+                    "BlobSize",
+                    $"{bd.Name}.MaxSize",
+                    "-",
+                    "-",
+                    maxDimFound,
+                    specMaxDim,
+                    0.0,
+                    specMaxDim,
+                    sizePass,
+                    distUnit));
+            }
+        }
+
     }
 
 

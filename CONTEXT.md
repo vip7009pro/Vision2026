@@ -49,6 +49,62 @@
 - Preview được phép tiếp tục khi Global Snapshot rỗng để lấy ảnh từ ImageSource.
 - Lưu template cho Origin, Point và SurfaceCompare hoạt động với nguồn ảnh ImageSource.
 
+- **Tinh Chỉnh Quy Tắc AutoRun Khi Mở/Xóa Node, Tối Ưu Trải Nghiệm Handle Caliper Strip, Mẫu Mặc Định New Job & Bổ Sung Spec Đánh Giá OK/NG Cho Tool BlobDetection (Task 299)**:
+  - **Yêu Cầu & Bối Cảnh**:
+    1. Khi mở job từ file hoặc recent jobs, ứng dụng tự động chạy (AutoRun), hoặc khi xóa 1 node trên canvas flow thì job cũng tự động chạy. Cần sửa: Chỉ khi `AutoRun` được tích chọn VÀ người dùng đang đứng ở tab `OQC Scanner` (Tab index 1) thì job mới tự động chạy khi nạp; ở các tab khác (như Tool Editor) chỉ mở nạp job mà không chạy. Khi xóa node trên canvas, tuyệt đối không tự động chạy flow mà chỉ làm mới preview.
+    2. Handle của ROI Tool Caliper (Search ROI và Strip ROI) trước đây nằm trùng ở các góc và trung điểm các cạnh dẫn đến việc người dùng dễ bấm nhầm giữa Search ROI và Strip ROI. Cần cải tiến UX chuyên nghiệp để người dùng không thể bấm nhầm.
+    3. Tạo Job mới (`New Job`): Mặc định canvas có sẵn bộ 3 node nền tảng: `ImageSource` (CAM1), `Preprocess` (PRE1), `Origin` (Origin), trong đó Origin lấy nguồn ảnh từ Preprocess, giúp người dùng bắt đầu cấu hình ngay mà không mất công kéo thả lặp lại.
+    4. Tool `BlobDetection`:
+       - Bổ sung Spec số blob tối đa cho phép (`MaxAllowedBlobs`) để đánh giá OK/NG.
+       - Bổ sung Spec khoảng cách tối thiểu cho phép giữa 2 blob bất kỳ (`MinBlobDistance`) tính theo đơn vị quy đổi sau Calibration (`mm` dựa trên `config.PixelsPerMm`) hoặc theo `pixel` nếu chưa có thông số Calibration. Nếu để trống hoặc $\le 0$ thì bỏ qua điều kiện này.
+       - Bổ sung Spec kích thước tối đa Width x Length cho phép của một blob (`MaxBlobWidth`, `MaxBlobLength`) không quy định chiều (kiểm tra xoay cả $(b_w \le S_w \land b_h \le S_l) \lor (b_h \le S_w \land b_w \le S_l)$). Nếu để trống hoặc $\le 0$ thì bỏ qua điều kiện tương ứng.
+       - Hiển thị kết quả đánh giá trong bảng đo đạc `SpecResults` (Tool Editor & Inspection) và bảng chi tiết đo đạc của `OQC Scanner`.
+       - Đổi màu Overlay trực quan: Xanh lá (`LimeGreen`) khi OK, Đỏ (`Crimson`) khi NG (cho khung ROI, bounding box defect, viền đỏ cho blob vi phạm kích thước, và đường line nối giữa 2 blob gần nhất khi vi phạm hoặc có cấu hình khoảng cách). Đồng thời khử hoàn toàn lỗi chữ vẽ đè nhau ở góc trên bên trái ROI.
+  - **Giải Pháp Kỹ Thuật Đã Triển Khai**:
+    1. **Quy Tắc AutoRun Khi Mở Job & Xóa Node**:
+       - `ToolEditorViewModel.Config.cs`: Bổ sung delegate `Func<bool>? CheckShouldAutoRunOnJobLoad`. Trong `LoadJobFromFile`, thiết lập `shouldRun = autoRun ?? (CheckShouldAutoRunOnJobLoad?.Invoke() ?? false)`.
+       - `MainWindowViewModel.cs`: Thiết lập `ToolEditor.CheckShouldAutoRunOnJobLoad = () => SelectedTabIndex == 1 && OqcScanner.AutoRunJob;`. Khi mở recent job từ menu, chuyển cờ `autoRun: null` để tôn trọng điều kiện tab.
+       - `OqcScannerViewModel.cs`: `ExecuteBrowseJobFile` chuyển `autoRun: null` để delegate tự quyết định theo tab và checkbox.
+       - `ToolEditorViewModel.GraphOps.cs`: Trong `DeleteNode`, thay thế lời gọi `RunFlow()` bằng `RefreshPreviews()` để chỉ cập nhật giao diện canvas và preview mà không thực thi flow.
+    2. **Tối Ưu Trải Nghiệm Handle & Phân Định ROI Caliper Strip**:
+       - `OverlayItems.cs`: Bổ sung cờ `IsCaliperStrip` và `IsHorizontalStrip` vào `OverlayRectItem`.
+       - `ImageViewerControl.xaml.cs`:
+         - Triển khai `DrawCaliperStripHandles`: Thay thế cụm 8 hình chữ nhật bằng **2 handle hình thoi (Diamond $\diamond$)** xoay 45°, viền xanh ngọc / tâm trắng bắt mắt đặt ở 2 đầu trục quét hoạt động (Trái & Phải cho Horizontal; Trên & Dưới cho Vertical).
+         - Trong `HitTestRoiHandle`: Vô hiệu hóa toàn bộ 4 góc, các cạnh vuông góc và handle xoay của Caliper Strip.
+         - Trong `IsNearRoiBorder`: Trả về `false` cho Caliper Strip để mọi cú nhấp chuột vào đường viền luôn trúng vào Search ROI một cách dứt khoát.
+         - Trong `UpdateRoiEdit`: Tinh chỉnh kéo giãn strip đối xứng hai bên quanh tâm Search ROI (`stripW = startW +/- 2.0 * dxLocal`), giữ nguyên vị trí tâm và chiều rộng ngang bằng Search ROI.
+         - Bổ sung helper `RoiLabelsMatch` để nhận diện nhãn ROI có hậu tố trạng thái `[OK/NG]`.
+    3. **Khởi Tạo Mẫu Mặc Định Cho New Job**:
+       - `ToolEditorViewModel.cs`: Cập nhật `NewGraph()` khởi tạo tự động 3 node: `CAM1` (`ImageSource`, tọa độ 80, 120), `PRE1` (`Preprocess`, tọa độ 320, 120), `Origin` (`Origin`, tọa độ 560, 120).
+       - Nối tự động 2 cạnh: `CAM1:Output -> PRE1:Input` và `PRE1:Output -> Origin:Image`.
+       - Tự động gọi `SyncToolGraphToConfig()`, `TriggerAutoFitGraph()`, gán `SelectedNode = originNode` và đặt `IsDirty = false`.
+    4. **Hệ Thống Spec Đánh Giá Toàn Diện Cho Tool BlobDetection & Tối Ưu Overlay**:
+       - `BlobDetectionDefinition.cs`: Bổ sung thuộc tính `MaxAllowedBlobs` (int), `MinBlobDistance` (double), `MaxBlobWidth` (double), `MaxBlobLength` (double).
+       - `InspectionResultModels.cs`: Cập nhật record `BlobDetectionResult` với `MinBlobDistance`, `MeasuredMinDistance`, `MinDistBlobAIndex`, `MinDistBlobBIndex`, `MaxBlobWidth`, `MaxBlobLength`, `MeasuredMaxWidth`, `MeasuredMaxLength`, `InvalidSizeBlobIndices`.
+       - `InspectionService.Pipeline.cs`:
+         - Tính hệ số chuẩn hóa Calibration: `scale = (config.PixelsPerMm > 0 && Math.Abs(config.PixelsPerMm - 1.0) > 1e-6) ? config.PixelsPerMm : 1.0;`.
+         - Đánh giá số lượng blob: `passCount = blobs.Count <= b.MaxAllowedBlobs`.
+         - Đánh giá khoảng cách tối thiểu: Quét khoảng cách Euclidean tâm giữa tất cả các cặp blob $(i, j)$ quy đổi theo `scale`. Khi $b.\text{MinBlobDistance} > 0$ và $\text{blobs.Count} \ge 2$, nếu $\text{minDistance} < b.\text{MinBlobDistance}$ thì `passDist = false`.
+         - Đánh giá kích thước tối đa không phụ thuộc chiều xoay: Kiểm tra từng blob với `(bw <= specW && bh <= specL) || (bh <= specW && bw <= specL)`. Nếu có blob vi phạm thì `passSize = false`.
+         - Kết quả tổng thể tool: `pass = passCount && passDist && passSize`.
+       - `OqcScannerService.cs`: Xuất dòng chi tiết đo đạc cho BlobDetection với `CustomSpecText` và `CustomResultText` chứa cả số lượng, MinDist và MaxSize (W x L) kèm đơn vị `mm`/`px`.
+       - `InspectionService.ImageOutputs.cs` & `Engine.cs`: Tô màu xanh lá khi OK và đỏ khi NG; highlight viền đỏ các blob vi phạm kích thước; vẽ đường line nối 2 blob gần nhất kèm nhãn khoảng cách đo được; khử điểm vẽ chữ đè `OverlayPointItem` tại `(X+2, Y+2)`.
+       - `ToolEditorViewModel.ToolBlob.cs` & `ToolEditorView.xaml`: Bổ sung ô nhập `Spec (Min Dist)` và `Spec Max (W x L)` kèm đơn vị và hiển thị thống kê `Min Dist` và `Max Size` thời gian thực.
+       - `SpecResults` (Tool Editor & Inspection): Bổ sung các dòng kết quả kiểm tra `BlobDetection`, `BlobDist`, `BlobSize`.
+    5. **Bộ Kiểm Thử Tự Động Toàn Diện (`TestExtractApp/NewJobAndBlobSpecTests.cs`)**:
+       - Test 1: Đánh giá Spec BlobDetection MaxAllowedBlobs (0, 2, 3 blobs).
+       - Test 2: Đánh giá Spec MinBlobDistance (bỏ qua khi $\le 0$, 0/1 blob, đạt khi $\ge$, lỗi khi $<$, quy đổi calibration).
+       - Test 3: Đánh giá Spec MaxBlobWidth x MaxBlobLength (blob ngang, blob dọc, blob vuông vượt giới hạn, blob quá dài, quy đổi calibration).
+       - Test 4: Bảng chi tiết kết quả OQC Scanner cho BlobDetection đầy đủ các spec.
+       - Test 5: Đánh giá Pass tổng thể của InspectionResult theo kết quả BlobDetection.
+       - Test 6: Hình học và phân định cờ Caliper Strip ROI.
+  - **Kiểm Thử & Xác Minh**:
+    - `dotnet build VisionInspectionApp.slnx`: 0 errors.
+    - `dotnet run --project TestExtractApp`: 100% PASSED (6/6 tests passed).
+  - **Kiểm Thử & Xác Minh**:
+    - `dotnet build VisionInspectionApp.slnx`: 0 errors.
+    - `dotnet run --project TestExtractApp`: 100% PASSED.
+
 - **Tích Hợp Hệ Thống Kịch Bản Hiệu Ứng Nháy Đèn (Lighting Blink Pattern & Scenarios) Khi Mở App, Tắt App và Báo Lỗi NG (Task 298)**:
   - **Yêu Cầu & Bối Cảnh**:
     1. Bổ sung hệ thống kịch bản hiệu ứng nháy đèn (Blink Pattern Scenarios) cho bộ điều khiển đèn Lighting Controller (4/8 kênh).

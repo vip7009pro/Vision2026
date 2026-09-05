@@ -93,7 +93,21 @@ public sealed record ConditionResult(string Name, string Expression, bool Pass, 
 
 public sealed record BlobInfo(Rect BoundingBox, Point2d Centroid, double Area, double Angle = 0.0);
 
-public sealed record BlobDetectionResult(string Name, int Count, List<BlobInfo> Blobs);
+public sealed record BlobDetectionResult(
+    string Name,
+    int Count,
+    List<BlobInfo> Blobs,
+    bool Pass = true,
+    int MaxAllowedBlobs = 0,
+    double MinBlobDistance = 0.0,
+    double? MeasuredMinDistance = null,
+    int? MinDistBlobAIndex = null,
+    int? MinDistBlobBIndex = null,
+    double MaxBlobWidth = 0.0,
+    double MaxBlobLength = 0.0,
+    double? MeasuredMaxWidth = null,
+    double? MeasuredMaxLength = null,
+    List<int>? InvalidSizeBlobIndices = null);
 
 public sealed record SurfaceCompareDefect(Rect BoundingBox, double Angle, Point2d Centroid, double Area);
 

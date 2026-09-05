@@ -43,6 +43,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
         Inspection = inspection;
         OqcScanner = oqcScanner;
         OqcScanner.RequestSwitchTab = idx => SelectedTabIndex = idx;
+        ToolEditor.CheckShouldAutoRunOnJobLoad = () => SelectedTabIndex == 1 && OqcScanner.AutoRunJob;
         CameraSettings = cameraSettings;
         _recentJobsService = recentJobsService;
         _lightingService = lightingService;
@@ -183,7 +184,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
             return;
         }
 
-        ToolEditor.LoadJobFromFile(filePath, autoRun: true);
+        ToolEditor.LoadJobFromFile(filePath);
         SelectedTabIndex = 0; // Chuyển sang màn hình Tool Editor
     }
 

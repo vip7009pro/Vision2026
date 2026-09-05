@@ -22,6 +22,9 @@ public sealed class OverlayRectItem : OverlayItem
     public double Angle { get; init; } = 0;
 
     public Brush? Fill { get; init; }
+
+    public bool IsCaliperStrip { get; init; } = false;
+    public bool IsHorizontalStrip { get; init; } = true;
 }
 
 public sealed class OverlayPointItem : OverlayItem

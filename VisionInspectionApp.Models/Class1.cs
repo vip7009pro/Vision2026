@@ -649,6 +649,14 @@ public sealed class BlobDetectionDefinition
     public int MinBlobArea { get; set; } = 10;
 
     public int MaxBlobArea { get; set; } = 5000;
+
+    public int MaxAllowedBlobs { get; set; } = 0;
+
+    public double MinBlobDistance { get; set; } = 0.0;
+
+    public double MaxBlobWidth { get; set; } = 0.0;
+
+    public double MaxBlobLength { get; set; } = 0.0;
 }
 
 public sealed class BlobRoiDefinition

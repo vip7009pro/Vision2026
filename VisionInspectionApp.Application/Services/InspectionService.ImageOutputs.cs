@@ -714,27 +714,45 @@ public partial class InspectionService
         {
             if (!ShouldRender(bRes.Name)) continue;
             var bDef = config.BlobDetections.FirstOrDefault(x => string.Equals(x.Name, bRes.Name, StringComparison.OrdinalIgnoreCase));
+            var statusColor = bRes.Pass ? green : red;
             if (bDef is not null && bDef.InspectRoi.Width > 0 && bDef.InspectRoi.Height > 0)
             {
-                DrawRotatedRoi(mat, bDef.InspectRoi, cyan, 1);
+                DrawRotatedRoi(mat, bDef.InspectRoi, statusColor, 1);
                 if (bDef.Rois is not null)
                 {
                     foreach (var rr in bDef.Rois)
                     {
                         if (rr?.Roi is not null && rr.Roi.Width > 0 && rr.Roi.Height > 0)
                         {
-                            DrawRotatedRoi(mat, rr.Roi, rr.Mode == BlobRoiMode.Exclude ? red : yellow, 1);
+                            DrawRotatedRoi(mat, rr.Roi, rr.Mode == BlobRoiMode.Exclude ? red : statusColor, 1);
                         }
                     }
                 }
             }
 
-            foreach (var blob in bRes.Blobs)
+            for (var bi = 0; bi < bRes.Blobs.Count; bi++)
             {
+                var blob = bRes.Blobs[bi];
+                var blobColor = (bRes.InvalidSizeBlobIndices != null && bRes.InvalidSizeBlobIndices.Contains(bi)) ? red : statusColor;
                 var r = new Rect(blob.BoundingBox.X, blob.BoundingBox.Y, blob.BoundingBox.Width, blob.BoundingBox.Height);
-                Cv2.Rectangle(mat, r, yellow, thThin, LineTypes.AntiAlias);
+                Cv2.Rectangle(mat, r, blobColor, thThin, LineTypes.AntiAlias);
                 var pt = new Point((int)blob.Centroid.X, (int)blob.Centroid.Y);
-                Cv2.Circle(mat, pt, ScalePx(3), yellow, -1, LineTypes.AntiAlias);
+                Cv2.Circle(mat, pt, ScalePx(3), blobColor, -1, LineTypes.AntiAlias);
+            }
+
+            if (bRes.MeasuredMinDistance.HasValue &&
+                bRes.MinDistBlobAIndex.HasValue && bRes.MinDistBlobBIndex.HasValue &&
+                bRes.MinDistBlobAIndex.Value >= 0 && bRes.MinDistBlobAIndex.Value < bRes.Blobs.Count &&
+                bRes.MinDistBlobBIndex.Value >= 0 && bRes.MinDistBlobBIndex.Value < bRes.Blobs.Count &&
+                bDef is not null && bDef.MinBlobDistance > 0)
+            {
+                var pA = new Point((int)bRes.Blobs[bRes.MinDistBlobAIndex.Value].Centroid.X, (int)bRes.Blobs[bRes.MinDistBlobAIndex.Value].Centroid.Y);
+                var pB = new Point((int)bRes.Blobs[bRes.MinDistBlobBIndex.Value].Centroid.X, (int)bRes.Blobs[bRes.MinDistBlobBIndex.Value].Centroid.Y);
+                var lineCol = bRes.MeasuredMinDistance.Value >= bDef.MinBlobDistance ? green : red;
+                Cv2.Line(mat, pA, pB, lineCol, thThin, LineTypes.AntiAlias);
+                var midPt = new Point((pA.X + pB.X) / 2, (pA.Y + pB.Y) / 2 - ScalePx(4));
+                var distUnitStr = isCalibrated ? "mm" : "px";
+                Cv2.PutText(mat, $"{bRes.MeasuredMinDistance.Value:0.##}{distUnitStr}", midPt, HersheyFonts.HersheySimplex, fontScaleSmall, lineCol, fontThickSmall, LineTypes.AntiAlias);
             }
         }
 

@@ -1230,6 +1230,20 @@ namespace VisionInspectionApp.UI.ViewModels
             OnPropertyChanged(nameof(ImageOutput_OverlayScale));
             OnPropertyChanged(nameof(ImageOutput_SaveCondition));
             OnPropertyChanged(nameof(IsBlobDetectionNode));
+            OnPropertyChanged(nameof(Blob_Polarity));
+            OnPropertyChanged(nameof(Blob_Threshold));
+            OnPropertyChanged(nameof(Blob_MinBlobArea));
+            OnPropertyChanged(nameof(Blob_MaxBlobArea));
+            OnPropertyChanged(nameof(Blob_MaxAllowedBlobs));
+            OnPropertyChanged(nameof(Blob_MinBlobDistance));
+            OnPropertyChanged(nameof(Blob_MaxBlobWidth));
+            OnPropertyChanged(nameof(Blob_MaxBlobLength));
+            OnPropertyChanged(nameof(Blob_DistanceUnitText));
+            OnPropertyChanged(nameof(Blob_LastRunCount));
+            OnPropertyChanged(nameof(Blob_LastRunMinDistanceText));
+            OnPropertyChanged(nameof(Blob_LastRunMaxDimensionsText));
+            OnPropertyChanged(nameof(Blob_PassStatus));
+            OnPropertyChanged(nameof(Blob_PassColor));
             OnPropertyChanged(nameof(IsSurfaceCompareNode));
             OnPropertyChanged(nameof(IsContourCompareNode));
             OnPropertyChanged(nameof(IsCodeDetectionNode));
@@ -3785,7 +3799,57 @@ namespace VisionInspectionApp.UI.ViewModels
             CurrentJobFilePath = null;
             CurrentTempWorkingDir = null;
             OnPropertyChanged(nameof(PixelsPerMm));
+
+            _config.ToolGraph ??= new ToolGraph();
+
+            var camNode = new ToolGraphNodeViewModel
+            {
+                Id = Guid.NewGuid().ToString("N"),
+                Type = "ImageSource",
+                RefName = "CAM1",
+                X = 80,
+                Y = 120
+            };
+            camNode.PropertyChanged += Node_PropertyChanged;
+            Nodes.Add(camNode);
+            EnsureDefinitionForNewNode(camNode);
+            camNode.EnsurePortsInitialized();
+
+            var prepNode = new ToolGraphNodeViewModel
+            {
+                Id = Guid.NewGuid().ToString("N"),
+                Type = "Preprocess",
+                RefName = "PRE1",
+                X = 320,
+                Y = 120
+            };
+            prepNode.PropertyChanged += Node_PropertyChanged;
+            Nodes.Add(prepNode);
+            EnsureDefinitionForNewNode(prepNode);
+            prepNode.EnsurePortsInitialized();
+
+            var originNode = new ToolGraphNodeViewModel
+            {
+                Id = Guid.NewGuid().ToString("N"),
+                Type = "Origin",
+                RefName = "Origin",
+                X = 560,
+                Y = 120
+            };
+            originNode.PropertyChanged += Node_PropertyChanged;
+            Nodes.Add(originNode);
+            EnsureDefinitionForNewNode(originNode);
+            originNode.EnsurePortsInitialized();
+
+            CreateEdge(camNode, prepNode, "Image", "Image");
+            CreateEdge(prepNode, originNode, "Image", "Image");
+
+            SyncToolGraphToConfig();
+            SelectedNode = originNode;
+            RaiseToolPropertyPanelsChanged();
             RefreshPreviews();
+            TriggerAutoFitGraph();
+            IsDirty = false;
         }
     
         private void EnsureDefinitionForNewNode(ToolGraphNodeViewModel node)

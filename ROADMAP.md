@@ -1846,3 +1846,36 @@ Lộ trình tích hợp tính năng Chụp ảnh từ camera và hỗ trợ các
       - Kiểm Thử:
         - dotnet build VisionInspectionApp.slnx: 0 errors.
         - dotnet run --project TestExtractApp: 100% PASSED (42/42 lighting pattern tests passed).
+
+- [x] Task 299: Tinh Chỉnh Quy Tắc AutoRun Khi Mở/Xóa Node, Tối Ưu Trải Nghiệm Handle Caliper Strip, Mẫu Mặc Định New Job & Bổ Sung Spec Đánh Giá OK/NG Cho Tool BlobDetection.
+      - Mục Tiêu & Yêu Cầu:
+        - AutoRun khi mở job: Chỉ tự động chạy (AutoRun) khi ô `AutoRun` được tích chọn VÀ đang đứng tại tab `OQC Scanner` (Tab index 1). Các trường hợp mở job khác (ở Tool Editor hoặc mở recent job) chỉ nạp job mà không chạy.
+        - Xóa node trên Canvas: Tuyệt đối không tự động chạy flow (`RunFlow`) khi người dùng xóa node. Chỉ làm mới preview và canvas.
+        - Trải nghiệm Handle của ROI Tool Caliper: Phân tách rõ ràng giữa Search ROI và Strip ROI để triệt tiêu việc bấm nhầm handle.
+        - Tạo Job mới (New Job): Tự động sinh sẵn 3 node nền tảng: `ImageSource` (CAM1), `Preprocess` (PRE1), `Origin` (Origin), trong đó Origin lấy ảnh từ Preprocess.
+        - Tool BlobDetection: Bổ sung cấu hình Spec số blob tối đa cho phép (`MaxAllowedBlobs`), Spec khoảng cách tối thiểu giữa 2 blob bất kỳ (`MinBlobDistance`) quy đổi sau Calibration hoặc pixel, và Spec kích thước tối đa Width x Length (`MaxBlobWidth`, `MaxBlobLength`) không quy định chiều xoay (kiểm tra cả $(b_w \le S_w \land b_h \le S_l) \lor (b_h \le S_w \land b_w \le S_l)$). Hiển thị trong bảng đo đạc `SpecResults` và `OQC Scanner`; tô màu overlay xanh lá khi OK / đỏ khi NG (khung ROI, defect box, highlight viền đỏ cho blob vi phạm kích thước, và đường line nối giữa 2 blob gần nhất kèm nhãn khoảng cách đo được); xóa chữ vẽ đè ở góc trên bên trái ROI.
+      - Giải Pháp Kỹ Thuật Đã Triển Khai:
+        1. **Quy Tắc AutoRun & Xóa Node (`ToolEditorViewModel.Config.cs`, `MainWindowViewModel.cs`, `OqcScannerViewModel.cs`, `ToolEditorViewModel.GraphOps.cs`)**:
+           - Delegate `CheckShouldAutoRunOnJobLoad` gắn kết điều kiện `SelectedTabIndex == 1 && OqcScanner.AutoRunJob`.
+           - `LoadJobFromFile` chạy flow chỉ khi được cho phép bởi delegate hoặc cờ truyền trực tiếp.
+           - `DeleteNode` thay `RunFlow()` bằng `RefreshPreviews()`.
+        2. **Thiết Kế Handle Chuyên Nghiệp Cho Caliper Strip (`ImageViewerControl.xaml.cs`, `OverlayItems.cs`)**:
+           - Strip ROI chỉ có **2 handle hình thoi (Diamond $\diamond$)** xoay 45° màu Cyan/White tại 2 đầu hoạt động theo trục quét (Trái/Phải cho Horizontal; Trên/Dưới cho Vertical).
+           - Vô hiệu hóa toàn bộ góc, cạnh vuông góc và handle xoay cho strip; `IsNearRoiBorder` trả về false cho strip để click viền luôn trúng Search ROI.
+           - Kéo giãn strip đối xứng hai bên quanh tâm Search ROI, giữ nguyên vị trí tâm và chiều rộng.
+        3. **Mẫu Mặc Định New Job (`ToolEditorViewModel.cs`)**:
+           - `NewGraph()` khởi tạo tự động `CAM1` (ImageSource) -> `PRE1` (Preprocess) -> `Origin` (Origin).
+           - Tự động kết nối dây và chọn sẵn `Origin` node, căn giữa canvas.
+        4. **Hệ Thống Spec Đánh Giá Toàn Diện Cho Tool BlobDetection & Tối Ưu Overlay**:
+           - Bổ sung `MaxAllowedBlobs`, `MinBlobDistance`, `MaxBlobWidth`, `MaxBlobLength` trong model `BlobDetectionDefinition`.
+           - Cập nhật `BlobDetectionResult` lưu trữ `MeasuredMinDistance`, cặp blob gần nhất, `MeasuredMaxWidth`, `MeasuredMaxLength`, `InvalidSizeBlobIndices`.
+           - `InspectionService.Pipeline.cs`: Chuẩn hóa khoảng cách theo `scale` Calibration (hoặc pixel). Quét khoảng cách Euclidean cặp blob; kiểm tra kích thước từng blob xoay không phân biệt chiều; đánh giá `pass = passCount && passDist && passSize`.
+           - Bổ sung trường Spec và nhãn thống kê `Min Dist` và `Max Size` trên Properties Panel của `ToolEditorView.xaml`.
+           - Bổ sung hiển thị kết quả trong `SpecResults` và `OqcScannerService.ExtractMeasurementDetails` (CustomSpecText và CustomResultText đầy đủ các spec).
+           - Đổi màu Overlay xanh lá khi OK và đỏ khi NG; vẽ đường line nối 2 blob gần nhất; highlight viền đỏ các blob vi phạm kích thước; loại bỏ điểm chữ đè `OverlayPointItem` tại `(X+2, Y+2)`.
+        5. **Bộ Kiểm Thử Tự Động Toàn Diện (`TestExtractApp/NewJobAndBlobSpecTests.cs`)**:
+           - 6 bài kiểm thử toàn diện: Spec MaxAllowedBlobs, Spec MinBlobDistance (calibrated & uncalibrated, 0/1 blob), Spec MaxBlobWidth x MaxBlobLength (blob ngang, dọc, vuông, dài), bảng chi tiết OQC, kết quả tổng thể và hình học Caliper Strip.
+      - Kiểm Thử:
+        - dotnet build VisionInspectionApp.slnx: 0 errors.
+        - dotnet run --project TestExtractApp: 100% PASSED (6/6 tests passed).
+

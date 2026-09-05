@@ -312,7 +312,8 @@ namespace VisionInspectionApp.UI.ViewModels
                     continue;
                 }
     
-                dst.Add(new OverlayPointItem { X = b.InspectRoi.X + 2, Y = b.InspectRoi.Y + 2, Radius = 1.0, Stroke = Brushes.Gold, Label = $"{b.Name}: {r.Count}" });
+                var strokeColor = r.Pass ? Brushes.LimeGreen : Brushes.Crimson;
+
                 if (r.Blobs is null || r.Blobs.Count == 0)
                 {
                     continue;
@@ -323,6 +324,7 @@ namespace VisionInspectionApp.UI.ViewModels
                 {
                     var bi = r.Blobs[i];
                     var br = bi.BoundingBox;
+                    var blobColor = (r.InvalidSizeBlobIndices != null && r.InvalidSizeBlobIndices.Contains(i)) ? Brushes.Crimson : strokeColor;
                     if (br.Width > 0 && br.Height > 0)
                     {
                         dst.Add(new OverlayRectItem
@@ -332,17 +334,33 @@ namespace VisionInspectionApp.UI.ViewModels
                             Width = br.Width,
                             Height = br.Height,
                             Angle = bi.Angle,
-                            Stroke = Brushes.Gold,
+                            Stroke = blobColor,
                             Label = string.Empty
                         });
                     }
     
-                    dst.Add(new OverlayPointItem { X = bi.Centroid.X, Y = bi.Centroid.Y, Radius = 3.0, Stroke = Brushes.Gold, Label = string.Empty });
+                    dst.Add(new OverlayPointItem { X = bi.Centroid.X, Y = bi.Centroid.Y, Radius = 3.0, Stroke = blobColor, Label = string.Empty });
                 }
-    
-                if (r.Blobs.Count > MaxBlobOverlayCount)
+
+                if (r.MeasuredMinDistance.HasValue &&
+                    r.MinDistBlobAIndex.HasValue && r.MinDistBlobBIndex.HasValue &&
+                    r.MinDistBlobAIndex.Value >= 0 && r.MinDistBlobAIndex.Value < r.Blobs.Count &&
+                    r.MinDistBlobBIndex.Value >= 0 && r.MinDistBlobBIndex.Value < r.Blobs.Count &&
+                    b.MinBlobDistance > 0)
                 {
-                    dst.Add(new OverlayPointItem { X = b.InspectRoi.X + 2, Y = b.InspectRoi.Y + 16, Radius = 1.0, Stroke = Brushes.Gold, Label = $"+{r.Blobs.Count - MaxBlobOverlayCount}" });
+                    var biA = r.Blobs[r.MinDistBlobAIndex.Value];
+                    var biB = r.Blobs[r.MinDistBlobBIndex.Value];
+                    var lineBrush = r.MeasuredMinDistance.Value >= b.MinBlobDistance ? Brushes.LimeGreen : Brushes.Crimson;
+                    dst.Add(new OverlayLineItem
+                    {
+                        X1 = biA.Centroid.X,
+                        Y1 = biA.Centroid.Y,
+                        X2 = biB.Centroid.X,
+                        Y2 = biB.Centroid.Y,
+                        Stroke = lineBrush,
+                        StrokeThickness = 1.5,
+                        Label = $"{r.MeasuredMinDistance.Value:0.##} {Blob_DistanceUnitText}"
+                    });
                 }
             }
     
@@ -1225,7 +1243,8 @@ namespace VisionInspectionApp.UI.ViewModels
                     return;
                 }
     
-                dst.Add(new OverlayPointItem { X = def.InspectRoi.X + 2, Y = def.InspectRoi.Y + 2, Radius = 1.0, Stroke = Brushes.Gold, Label = $"{def.Name}: {r.Count}" });
+                var strokeColor = r.Pass ? Brushes.LimeGreen : Brushes.Crimson;
+
                 if (r.Blobs is null || r.Blobs.Count == 0)
                 {
                     return;
@@ -1245,17 +1264,12 @@ namespace VisionInspectionApp.UI.ViewModels
                             Width = br.Width,
                             Height = br.Height,
                             Angle = bi.Angle,
-                            Stroke = Brushes.Gold,
+                            Stroke = strokeColor,
                             Label = string.Empty
                         });
                     }
     
-                    dst.Add(new OverlayPointItem { X = bi.Centroid.X, Y = bi.Centroid.Y, Radius = 3.0, Stroke = Brushes.Gold, Label = string.Empty });
-                }
-    
-                if (r.Blobs.Count > MaxBlobOverlayCount)
-                {
-                    dst.Add(new OverlayPointItem { X = def.InspectRoi.X + 2, Y = def.InspectRoi.Y + 16, Radius = 1.0, Stroke = Brushes.Gold, Label = $"+{r.Blobs.Count - MaxBlobOverlayCount}" });
+                    dst.Add(new OverlayPointItem { X = bi.Centroid.X, Y = bi.Centroid.Y, Radius = 3.0, Stroke = strokeColor, Label = string.Empty });
                 }
     
                 return;
@@ -4946,7 +4960,7 @@ namespace VisionInspectionApp.UI.ViewModels
                         }
                     }
 
-                    dst.Add(new OverlayPointItem { X = lx, Y = ly, Radius = 1.0, Stroke = Brushes.Gold, Label = $"{b.Name}: {b.Count}" });
+                    var strokeColor = b.Pass ? Brushes.LimeGreen : Brushes.Crimson;
                     if (b.Blobs is not null && b.Blobs.Count > 0)
                     {
                         var n = Math.Min(b.Blobs.Count, 300);
@@ -4954,6 +4968,7 @@ namespace VisionInspectionApp.UI.ViewModels
                         {
                             var bi = b.Blobs[i];
                             var br = bi.BoundingBox;
+                            var blobColor = (b.InvalidSizeBlobIndices != null && b.InvalidSizeBlobIndices.Contains(i)) ? Brushes.Crimson : strokeColor;
                             if (br.Width > 0 && br.Height > 0)
                             {
                                 dst.Add(new OverlayRectItem
@@ -4963,11 +4978,33 @@ namespace VisionInspectionApp.UI.ViewModels
                                     Width = br.Width,
                                     Height = br.Height,
                                     Angle = bi.Angle,
-                                    Stroke = Brushes.Gold,
+                                    Stroke = blobColor,
                                     Label = string.Empty
                                 });
                             }
-                            dst.Add(new OverlayPointItem { X = bi.Centroid.X, Y = bi.Centroid.Y, Radius = 3.0, Stroke = Brushes.Gold, Label = string.Empty });
+                            dst.Add(new OverlayPointItem { X = bi.Centroid.X, Y = bi.Centroid.Y, Radius = 3.0, Stroke = blobColor, Label = string.Empty });
+                        }
+
+                        if (b.MeasuredMinDistance.HasValue &&
+                            b.MinDistBlobAIndex.HasValue && b.MinDistBlobBIndex.HasValue &&
+                            b.MinDistBlobAIndex.Value >= 0 && b.MinDistBlobAIndex.Value < b.Blobs.Count &&
+                            b.MinDistBlobBIndex.Value >= 0 && b.MinDistBlobBIndex.Value < b.Blobs.Count &&
+                            bDef is not null && bDef.MinBlobDistance > 0)
+                        {
+                            var biA = b.Blobs[b.MinDistBlobAIndex.Value];
+                            var biB = b.Blobs[b.MinDistBlobBIndex.Value];
+                            var lineBrush = b.MeasuredMinDistance.Value >= bDef.MinBlobDistance ? Brushes.LimeGreen : Brushes.Crimson;
+                            var distUnit = (config is not null && config.PixelsPerMm > 0 && Math.Abs(config.PixelsPerMm - 1.0) > 1e-6) ? "mm" : "px";
+                            dst.Add(new OverlayLineItem
+                            {
+                                X1 = biA.Centroid.X,
+                                Y1 = biA.Centroid.Y,
+                                X2 = biB.Centroid.X,
+                                Y2 = biB.Centroid.Y,
+                                Stroke = lineBrush,
+                                StrokeThickness = 1.5,
+                                Label = $"{b.MeasuredMinDistance.Value:0.##} {distUnit}"
+                            });
                         }
                     }
                 }
@@ -6011,13 +6048,15 @@ namespace VisionInspectionApp.UI.ViewModels
             BuildFinalOverlay(image, dst);
         }
 
-        private OverlayRectItem CreateRotatedRoiWithPose(Roi roi, System.Windows.Media.Brush? stroke, string? label, DoubleCollection? dashArray = null)
+        private OverlayRectItem CreateRotatedRoiWithPose(Roi roi, System.Windows.Media.Brush? stroke, string? label, DoubleCollection? dashArray = null, bool isCaliperStrip = false, bool isHorizontalStrip = true)
         {
-            return CreateRotatedRoiWithPose(new OpenCvSharp.Rect(roi.X, roi.Y, roi.Width, roi.Height), stroke, label, roi.Angle, dashArray);
+            return CreateRotatedRoiWithPose(new OpenCvSharp.Rect(roi.X, roi.Y, roi.Width, roi.Height), stroke, label, roi.Angle, dashArray, isCaliperStrip, isHorizontalStrip);
         }
 
-        private OverlayRectItem CreateRotatedRoiWithPose(OpenCvSharp.Rect roi, System.Windows.Media.Brush? stroke, string? label, double roiAngle = 0, DoubleCollection? dashArray = null)
+        private OverlayRectItem CreateRotatedRoiWithPose(OpenCvSharp.Rect roi, System.Windows.Media.Brush? stroke, string? label, double roiAngle = 0, DoubleCollection? dashArray = null, bool isCaliperStrip = false, bool isHorizontalStrip = true)
         {
+            bool isStrip = isCaliperStrip || (!string.IsNullOrWhiteSpace(label) && label.EndsWith(" Cal_Strip", StringComparison.OrdinalIgnoreCase));
+
             if (_lastRun is not null && _config is not null && _lastRun.Origin is not null && (_lastRun.Origin.MatchRect.Width > 0 || _lastRun.Origin.Position.X != 0 || _lastRun.Origin.Position.Y != 0))
             {
                 var originTeach = new OpenCvSharp.Point2d(_config.Origin.WorldPosition.X, _config.Origin.WorldPosition.Y);
@@ -6056,7 +6095,9 @@ namespace VisionInspectionApp.UI.ViewModels
                     Angle = roiAngle + angleDeg,
                     Stroke = _lastRun.Origin.Pass ? stroke : System.Windows.Media.Brushes.Red,
                     Label = finalLabel,
-                    DashArray = dashArray
+                    DashArray = dashArray,
+                    IsCaliperStrip = isStrip,
+                    IsHorizontalStrip = isHorizontalStrip
                 };
             }
 
@@ -6069,7 +6110,9 @@ namespace VisionInspectionApp.UI.ViewModels
                 Angle = roiAngle,
                 Stroke = stroke,
                 Label = label,
-                DashArray = dashArray
+                DashArray = dashArray,
+                IsCaliperStrip = isStrip,
+                IsHorizontalStrip = isHorizontalStrip
             };
         }
 

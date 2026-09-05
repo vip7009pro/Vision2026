@@ -90,6 +90,15 @@ namespace VisionInspectionApp.UI.ViewModels
             RaiseToolPropertyPanelsChanged();
             RefreshSelectedPreview();
             OnPropertyChanged(nameof(Blob_LastRunCount));
+            OnPropertyChanged(nameof(Blob_MaxAllowedBlobs));
+            OnPropertyChanged(nameof(Blob_MinBlobDistance));
+            OnPropertyChanged(nameof(Blob_MaxBlobWidth));
+            OnPropertyChanged(nameof(Blob_MaxBlobLength));
+            OnPropertyChanged(nameof(Blob_DistanceUnitText));
+            OnPropertyChanged(nameof(Blob_LastRunMinDistanceText));
+            OnPropertyChanged(nameof(Blob_LastRunMaxDimensionsText));
+            OnPropertyChanged(nameof(Blob_PassStatus));
+            OnPropertyChanged(nameof(Blob_PassColor));
         }
     
         public void ClearNodeSelection()
@@ -627,7 +636,7 @@ namespace VisionInspectionApp.UI.ViewModels
             _lastRun = null;
             _lastRunError = null;
             SyncToolGraphToConfig();
-            RunFlow();
+            RefreshPreviews();
             RequestAutoSave();
         }
     
@@ -932,6 +941,11 @@ namespace VisionInspectionApp.UI.ViewModels
                 {
                     return;
                 }
+
+                var r = _lastRun?.BlobDetections?.FirstOrDefault(x => string.Equals(x.Name, b.Name, StringComparison.OrdinalIgnoreCase));
+                var stroke = r is not null ? (r.Pass ? Brushes.LimeGreen : Brushes.Crimson) : Brushes.Gold;
+                var distPart = (r is not null && b.MinBlobDistance > 0 && r.MeasuredMinDistance.HasValue) ? $" d:{r.MeasuredMinDistance.Value:0.#}" : string.Empty;
+                var statusSuffix = r is not null ? $" [{r.Count}/{b.MaxAllowedBlobs}{distPart} {(r.Pass ? "OK" : "NG")}]" : string.Empty;
     
                 if (b.Rois is not null && b.Rois.Count > 0)
                 {
@@ -951,13 +965,13 @@ namespace VisionInspectionApp.UI.ViewModels
                         else
                         {
                             hasValidInclude = true;
-                            dst.Add(CreateRotatedRoi(rr.Roi, Brushes.Gold, $"{b.Name} B{i + 1}"));
+                            dst.Add(CreateRotatedRoi(rr.Roi, stroke, $"{b.Name} B{i + 1}{statusSuffix}"));
                         }
                     }
     
                     if (!hasValidInclude && b.InspectRoi.Width > 0 && b.InspectRoi.Height > 0)
                     {
-                        dst.Add(CreateRotatedRoi(b.InspectRoi, Brushes.Gold, $"{b.Name} B"));
+                        dst.Add(CreateRotatedRoi(b.InspectRoi, stroke, $"{b.Name} B{statusSuffix}"));
                     }
     
                     return;
@@ -965,7 +979,7 @@ namespace VisionInspectionApp.UI.ViewModels
     
                 if (b.InspectRoi.Width > 0 && b.InspectRoi.Height > 0)
                 {
-                    dst.Add(CreateRotatedRoi(b.InspectRoi, Brushes.Gold, $"{b.Name} B"));
+                    dst.Add(CreateRotatedRoi(b.InspectRoi, stroke, $"{b.Name} B{statusSuffix}"));
                 }
             }
     
@@ -1277,7 +1291,7 @@ namespace VisionInspectionApp.UI.ViewModels
                             Angle = c.SearchRoi.Angle
                         };
                     }
-                    dst.Add(CreateRotatedRoiWithPose(stripRoi, Brushes.DeepSkyBlue, $"{c.Name} Cal_Strip", new DoubleCollection { 4, 2 }));
+                    dst.Add(CreateRotatedRoiWithPose(stripRoi, Brushes.DeepSkyBlue, $"{c.Name} Cal_Strip", new DoubleCollection { 4, 2 }, isCaliperStrip: true, isHorizontalStrip: c.Orientation == CaliperOrientation.Horizontal));
 
                     var hasOriginPose = _lastRun?.Origin is not null && _lastRun.Origin.Pass && (_lastRun.Origin.MatchRect.Width > 0 || _lastRun.Origin.Position.X != 0 || _lastRun.Origin.Position.Y != 0);
                     var originTeach = (_config.Origin.TemplateRoi.Width > 0 && _config.Origin.TemplateRoi.Height > 0)

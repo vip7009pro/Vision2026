@@ -1665,22 +1665,44 @@ public sealed class OqcScannerService : IOqcScannerService
         // 14. BlobDetections
         foreach (var bd in result.BlobDetections)
         {
+            var def = config.BlobDetections?.FirstOrDefault(x => string.Equals(x.Name, bd.Name, StringComparison.OrdinalIgnoreCase));
+            int maxAllowed = def?.MaxAllowedBlobs ?? bd.MaxAllowedBlobs;
+            double minAllowedDist = def?.MinBlobDistance ?? bd.MinBlobDistance;
+            double maxW = def?.MaxBlobWidth ?? bd.MaxBlobWidth;
+            double maxL = def?.MaxBlobLength ?? bd.MaxBlobLength;
+
+            var specParts = new List<string> { $"<= {maxAllowed}" };
+            if (minAllowedDist > 0)
+                specParts.Add($"Dist >= {minAllowedDist:0.##}{defaultUnit}");
+            if (maxW > 0 && maxL > 0)
+                specParts.Add($"Size <= {maxW:0.##}x{maxL:0.##}{defaultUnit}");
+            else if (maxW > 0)
+                specParts.Add($"W <= {maxW:0.##}{defaultUnit}");
+            else if (maxL > 0)
+                specParts.Add($"L <= {maxL:0.##}{defaultUnit}");
+
+            var resParts = new List<string> { $"{bd.Count} blobs" };
+            if (bd.MeasuredMinDistance.HasValue && minAllowedDist > 0)
+                resParts.Add($"MinDist: {bd.MeasuredMinDistance.Value:0.##}{defaultUnit}");
+            if (bd.MeasuredMaxWidth.HasValue && (maxW > 0 || maxL > 0))
+                resParts.Add($"MaxSize: {bd.MeasuredMaxWidth.Value:0.##}x{bd.MeasuredMaxLength.Value:0.##}{defaultUnit}");
+
             list.Add(new OqcMeasurementDetail
             {
                 Index = idx++,
                 ToolName = bd.Name,
                 ToolType = "BlobDetection",
                 HasNumericSpec = false,
-                CustomSpecText = "",
-                CustomResultText = $"{bd.Count} blobs",
-                Spec = 0,
+                CustomSpecText = string.Join(", ", specParts),
+                CustomResultText = string.Join(" | ", resParts),
+                Spec = maxAllowed,
                 TolPlus = 0,
                 TolMinus = 0,
                 Min = 0,
-                Max = 100,
+                Max = maxAllowed,
                 Result = bd.Count,
-                Unit = "",
-                Pass = true
+                Unit = "blobs",
+                Pass = bd.Pass
             });
         }
 

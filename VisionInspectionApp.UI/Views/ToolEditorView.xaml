@@ -2052,9 +2052,72 @@
                                     </Grid>
                                 </Border>
 
+                                <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="120" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <Border Background="{DynamicResource WindowBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
+                                            <TextBlock Text="Spec (Max Blobs)" VerticalAlignment="Center" Margin="4,2" FontSize="11" Foreground="{DynamicResource TextBrush}"/>
+                                        </Border>
+                                        <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
+                                            <TextBox Text="{Binding Blob_MaxAllowedBlobs, UpdateSourceTrigger=LostFocus}" Margin="2,1" FontSize="11" />
+                                        </Border>
+                                    </Grid>
+                                </Border>
+
+                                <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="120" />
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="32" />
+                                        </Grid.ColumnDefinitions>
+                                        <Border Background="{DynamicResource WindowBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
+                                            <TextBlock Text="Spec (Min Dist)" ToolTip="Khoảng cách tối thiểu giữa 2 blob (0 hoặc để trống = bỏ qua)" VerticalAlignment="Center" Margin="4,2" FontSize="11" Foreground="{DynamicResource TextBrush}"/>
+                                        </Border>
+                                        <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
+                                            <TextBox Text="{Binding Blob_MinBlobDistance, UpdateSourceTrigger=LostFocus, TargetNullValue=0.0, StringFormat='{}{0:0.##}'}" Margin="2,1" FontSize="11" />
+                                        </Border>
+                                        <TextBlock Grid.Column="2" Text="{Binding Blob_DistanceUnitText}" VerticalAlignment="Center" HorizontalAlignment="Center" FontSize="10" Foreground="{DynamicResource TextBrush}" />
+                                    </Grid>
+                                </Border>
+
+                                <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="120" />
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="12" />
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="32" />
+                                        </Grid.ColumnDefinitions>
+                                        <Border Background="{DynamicResource WindowBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
+                                            <TextBlock Text="Spec Max (W x L)" ToolTip="Kích thước tối đa của 1 blob (không phân biệt chiều xoay: kiểm tra cả WxL và LxW)" VerticalAlignment="Center" Margin="4,2" FontSize="11" Foreground="{DynamicResource TextBrush}"/>
+                                        </Border>
+                                        <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
+                                            <TextBox Text="{Binding Blob_MaxBlobWidth, UpdateSourceTrigger=LostFocus, TargetNullValue=0.0, StringFormat='{}{0:0.##}'}" Margin="2,1" FontSize="11" ToolTip="Chiều rộng tối đa (0 = bỏ qua)" />
+                                        </Border>
+                                        <TextBlock Grid.Column="2" Text="x" VerticalAlignment="Center" HorizontalAlignment="Center" FontSize="10" Foreground="{DynamicResource TextBrush}" />
+                                        <Border Grid.Column="3" Background="{DynamicResource PanelBackgroundBrush}">
+                                            <TextBox Text="{Binding Blob_MaxBlobLength, UpdateSourceTrigger=LostFocus, TargetNullValue=0.0, StringFormat='{}{0:0.##}'}" Margin="2,1" FontSize="11" ToolTip="Chiều dài tối đa (0 = bỏ qua)" />
+                                        </Border>
+                                        <TextBlock Grid.Column="4" Text="{Binding Blob_DistanceUnitText}" VerticalAlignment="Center" HorizontalAlignment="Center" FontSize="10" Foreground="{DynamicResource TextBrush}" />
+                                    </Grid>
+                                </Border>
+
+                                <StackPanel Orientation="Horizontal" Margin="0,4,0,2">
+                                    <TextBlock Text="Count:" Width="45" VerticalAlignment="Center" Foreground="{DynamicResource TextBrush}" />
+                                    <TextBlock Text="{Binding Blob_LastRunCount, TargetNullValue='-'}" Width="35" FontWeight="SemiBold" VerticalAlignment="Center" Foreground="{DynamicResource TextBrush}" />
+                                    <TextBlock Text="Status:" Width="45" VerticalAlignment="Center" Foreground="{DynamicResource TextBrush}" Margin="5,0,0,0" />
+                                    <TextBlock Text="{Binding Blob_PassStatus, TargetNullValue='-'}" FontWeight="Bold" Foreground="{Binding Blob_PassColor}" VerticalAlignment="Center" />
+                                </StackPanel>
                                 <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
-                                    <TextBlock Text="Count" Width="60" VerticalAlignment="Center" />
-                                    <TextBlock Text="{Binding Blob_LastRunCount, TargetNullValue='-'}" Width="80" />
+                                    <TextBlock Text="Min Dist:" Width="55" VerticalAlignment="Center" Foreground="{DynamicResource TextBrush}" />
+                                    <TextBlock Text="{Binding Blob_LastRunMinDistanceText, TargetNullValue='-'}" Width="65" FontWeight="SemiBold" VerticalAlignment="Center" Foreground="{DynamicResource TextBrush}" />
+                                    <TextBlock Text="Max Size:" Width="55" VerticalAlignment="Center" Foreground="{DynamicResource TextBrush}" Margin="5,0,0,0" />
+                                    <TextBlock Text="{Binding Blob_LastRunMaxDimensionsText, TargetNullValue='-'}" FontWeight="SemiBold" VerticalAlignment="Center" Foreground="{DynamicResource TextBrush}" />
                                 </StackPanel>
                             </StackPanel>
 
