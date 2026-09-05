@@ -1191,7 +1191,7 @@ public partial class JobManagerViewModel : ObservableObject
         {
             await System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
             {
-                _toolEditorViewModel.LoadJobFromFile(resolvedJobPath);
+                _toolEditorViewModel.LoadJobFromFile(resolvedJobPath, autoRun: false);
 
                 // Nếu đang ở tab OQC Scanner (Index 1) thì KHÔNG tự navigate sang Tool Editor (Index 0).
                 // Chỉ chuyển sang Tool Editor nếu người dùng đang ở tab khác, hoặc khi bấm nút Huấn Luyện Từ Xa.

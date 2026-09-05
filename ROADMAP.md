@@ -1945,3 +1945,36 @@ Lộ trình tích hợp tính năng Chụp ảnh từ camera và hỗ trợ các
       - Kiểm Thử:
         - dotnet build VisionInspectionApp.slnx: 0 errors.
         - dotnet run --project TestExtractApp: 100% PASSED (6/6 BlobCountingMode tests passed, toàn bộ test suite pass).
+
+- [x] Task 302: Kháº¯c phá»¥c lá»—i máº¥t Live View (Ä‘á»ng frame cuá»‘i) trÃªn tab OQC Scanner sau khi má»Ÿ Job tá»« cá»­a sá»• Quáº£n LÃ½ Job.
+      - Má»¥c TiÃªu & YÃªu Cáº§u:
+        - Kháº¯c phá»¥c hiá»‡n tÆ°á»£ng táº¡i tab OQC Scanner, khi má»›i báº­t á»©ng dá»¥ng lÃªn cÃ³ live view, nhÆ°ng sau khi má»Ÿ Job tá»« cá»­a sá»• Quáº£n lÃ½ JOB thÃ¬ Live View bá»‹ máº¥t vÃ  chá»‰ hiá»ƒn thá»‹ frame áº£nh cuá»‘i cÃ¹ng trÆ°á»›c khi má»Ÿ Job.
+        - NgÆ°á»i dÃ¹ng khÃ´ng cáº§n pháº£i báº¥m thá»§ cÃ´ng "Xem káº¿t quáº£ final" rá»“i báº¥m láº¡i "Xem live view" má»™t láº§n ná»¯a.
+        - Sau khi má»Ÿ Job tá»« Quáº£n lÃ½ Job, Live View trÃªn OQC Scanner pháº£i tá»± Ä‘á»™ng phÃ¡t liÃªn tá»¥c thá»i gian thá»±c (30+ FPS), mÆ°á»£t mÃ  cÃ¹ng cÃ¡c khung dÆ°á»¡ng Origin overlay.
+      - NguyÃªn NhÃ¢n Gá»‘c Rá»… ÄÃ£ Kháº¯c Phá»¥c:
+        1. CameraService.ApplyParametersAsync khÃ´ng báº£o vá»‡ tráº¡ng thÃ¡i Live Stream khi cÃ³ consumer Ä‘ang xem:
+           - Khi náº¡p Job, LoadJobFromFile gá»i CameraService.ApplyParametersAsync(imgSourceDef.CameraParams) Ä‘á»ƒ Ã¡p dá»¥ng thÃ´ng sá»‘ camera tá»« Job.
+           - ApplyParametersAsync ghi Ä‘Ã¨ toÃ n bá»™ _currentParameters tá»« Job (trong Ä‘Ã³ IsLiveViewEnabled lÃ  false hoáº·c TriggerMode cÃ³ thá»ƒ lÃ  On).
+           - HÃ m nÃ y khÃ´ng kiá»ƒm tra danh sÃ¡ch _activeLiveConsumers, khiáº¿n camera driver bá»‹ chuyá»ƒn sang TriggerMode=On hoáº·c dá»«ng stream ngáº§m mÃ  consumer OQC Scanner khÃ´ng hay biáº¿t.
+        2. JobManagerViewModel khÃ´ng truyá»n autoRun: false:
+           - ExecuteOpenJobFromListAsync gá»i LoadJobFromFile(resolvedJobPath) mÃ  thiáº¿u autoRun: false.
+           - Do Ä‘ang á»Ÿ tab 1 vÃ  AutoRunJob = true, LoadJobFromFile tá»± Ä‘á»™ng kÃ­ch hoáº¡t OnRunOnceClicked() cháº¡y kiá»ƒm tra ngáº§m vÃ  gá»i CaptureSnapshotAsync gÃ¢y xung Ä‘á»™t luá»“ng frame.
+        3. OqcScannerViewModel.SetJobLoadedFromManager khÃ´ng kÃ­ch hoáº¡t láº¡i Live Stream:
+           - Khi má»Ÿ Job tá»« Manager, IsShowingLiveCamera váº«n giá»¯ nguyÃªn true nÃªn sá»± kiá»‡n OnIsShowingLiveCameraChanged(true) khÃ´ng ná»• ra.
+           - SetJobLoadedFromManager khÃ´ng gá»i RequestLiveStreamAsync("OQCScanner", true) vÃ  khÃ´ng reset cá» _isRenderingLiveFrame, dáº«n Ä‘áº¿n PreviewImage bá»‹ giá»¯ nguyÃªn frame cÅ© khi camera driver ngá»«ng cáº¥p frame.
+      - Giáº£i PhÃ¡p Ká»¹ Thuáº­t ÄÃ£ Triá»ƒn Khai:
+        1. Báº£o Vá»‡ Tuyá»‡t Äá»‘i Luá»“ng Live Stream Khi CÃ³ Consumer Äang Xem (CameraService.cs):
+           - Trong ApplyParametersAsync vÃ  SaveSystemParametersAsync: Kiá»ƒm tra hasActiveLiveConsumers = _activeLiveConsumers.Count > 0.
+           - Náº¿u cÃ³ consumer Ä‘ang xem live, cÆ°á»¡ng cháº¿ duy trÃ¬ _currentParameters.TriggerMode = CameraTriggerMode.Off vÃ  _currentParameters.IsLiveViewEnabled = true.
+           - CÃ¡c thÃ´ng sá»‘ quang há»c (ExposureTimeUs, GainDb, WhiteBalance, HardwareRoi, Contrast, Brightness...) tá»« Job váº«n Ä‘Æ°á»£c Ã¡p dá»¥ng Ä‘áº§y Ä‘á»§.
+           - Sau khi gá»­i thÃ´ng sá»‘ xuá»‘ng driver, náº¿u hasActiveLiveConsumers vÃ  driver chÆ°a grabbing (!_activeDriver.IsGrabbing), láº­p tá»©c gá»i await _activeDriver.StartGrabbingAsync() vÃ  cáº­p nháº­t _isRunning = true.
+        2. NgÄƒn Cháº·n Tá»± Ã Cháº¡y Inspection Khi Má»Ÿ Job Tá»« Danh SÃ¡ch (JobManagerViewModel.cs):
+           - Trong ExecuteOpenJobFromListAsync, gá»i tÆ°á»ng minh _toolEditorViewModel.LoadJobFromFile(resolvedJobPath, autoRun: false) Ä‘á»ƒ tuÃ¢n thá»§ quy trÃ¬nh OQC (chá» ngÆ°á»i dÃ¹ng nháº­p/quÃ©t LABEL ID).
+        3. Tá»± Äá»™ng KÃ­ch Hoáº¡t & KhÃ´i Phá»¥c Live View MÆ°á»£t MÃ  Khi Náº¡p Job (OqcScannerViewModel.cs):
+           - Trong SetJobLoadedFromManager: Reset cá» _isRenderingLiveFrame = false; náº¿u !IsShowingLiveCamera thÃ¬ gá»i EnableLiveCamera(); náº¿u IsShowingLiveCamera thÃ¬ chá»§ Ä‘á»™ng gá»i _cameraService.RequestLiveStreamAsync("OQCScanner", true) vÃ  StartSavedCameraAsync náº¿u camera chÆ°a cháº¡y; cáº­p nháº­t OverlayItems vÃ  phÃ¡t thÃ´ng bÃ¡o PreviewHeaderTitle, LiveToggleButtonText, ScanButtonText.
+           - Trong ExecuteManualOpenJob: Truyá»n autoRun: false vÃ  bá»• sung cÆ¡ cháº¿ khÃ´i phá»¥c Live Stream tÆ°Æ¡ng tá»±.
+        4. Bá»™ Kiá»ƒm Thá»­ Tá»± Äá»™ng ToÃ n Diá»‡n (TestExtractApp/OqcLiveViewOnJobLoadTests.cs):
+           - 3 bÃ i kiá»ƒm thá»­: Duy trÃ¬ Live Stream khi cÃ³ consumer dÃ¹ Job cáº¥u hÃ¬nh TriggerMode=On; Ã¡p dá»¥ng Ä‘Ãºng TriggerMode=On khi khÃ´ng cÃ³ consumer; vÃ  tá»± Ä‘á»™ng StartGrabbingAsync láº¡i khi driver bá»‹ dá»«ng.
+      - Kiá»ƒm Thá»­:
+        - dotnet build VisionInspectionApp.slnx: 0 errors.
+        - dotnet run --project TestExtractApp: 100% PASSED (3/3 OqcLiveViewOnJobLoad tests passed, toÃ n bá»™ test suite pass).

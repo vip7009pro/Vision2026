@@ -39,5 +39,6 @@ class Program
         NewJobAndBlobSpecTests.RunTests();
         UrlImageSourceAndRecentJobTests.RunTests();
         BlobCountingModeTests.RunTests();
+        OqcLiveViewOnJobLoadTests.RunTests();
     }
 }

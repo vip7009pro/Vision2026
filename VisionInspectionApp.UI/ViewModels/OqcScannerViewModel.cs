@@ -329,6 +329,24 @@ public partial class OqcScannerViewModel : ObservableObject
             RefreshOriginTemplateFromJob(_toolEditorViewModel.Config, _toolEditorViewModel.CurrentTempWorkingDir);
         }
 
+        // Đảm bảo Live View từ camera luôn luôn được kích hoạt mượt mà khi mở Job từ Quản lý Job
+        _isRenderingLiveFrame = false;
+        if (!IsShowingLiveCamera)
+        {
+            EnableLiveCamera();
+        }
+        else
+        {
+            _ = _cameraService.RequestLiveStreamAsync("OQCScanner", true);
+            if (!_cameraService.IsRunning)
+            {
+                _ = _cameraService.StartSavedCameraAsync();
+            }
+            OverlayItems = (ShowRois && _originLiveGuideOverlays.Count > 0) ? _originLiveGuideOverlays : null;
+        }
+
+        OnPropertyChanged(nameof(PreviewHeaderTitle));
+        OnPropertyChanged(nameof(LiveToggleButtonText));
         OnPropertyChanged(nameof(ScanButtonText));
     }
 
@@ -1167,7 +1185,7 @@ public partial class OqcScannerViewModel : ObservableObject
             try
             {
                 _isOqcRunInProgress = false;
-                _toolEditorViewModel.LoadJobFromFile(dialog.FileName);
+                _toolEditorViewModel.LoadJobFromFile(dialog.FileName, autoRun: false);
 
                 var cfg = _jobService.LoadJob(dialog.FileName, out var tempDir);
                 _inspectionViewModel.CurrentJobFilePath = dialog.FileName;
@@ -1175,6 +1193,25 @@ public partial class OqcScannerViewModel : ObservableObject
                 _inspectionViewModel.SetConfig(cfg);
 
                 RefreshOriginTemplateFromJob(cfg, tempDir);
+
+                // Đảm bảo Live View từ camera luôn luôn được kích hoạt mượt mà khi mở Job thủ công
+                _isRenderingLiveFrame = false;
+                if (!IsShowingLiveCamera)
+                {
+                    EnableLiveCamera();
+                }
+                else
+                {
+                    _ = _cameraService.RequestLiveStreamAsync("OQCScanner", true);
+                    if (!_cameraService.IsRunning)
+                    {
+                        _ = _cameraService.StartSavedCameraAsync();
+                    }
+                    OverlayItems = (ShowRois && _originLiveGuideOverlays.Count > 0) ? _originLiveGuideOverlays : null;
+                }
+
+                OnPropertyChanged(nameof(PreviewHeaderTitle));
+                OnPropertyChanged(nameof(LiveToggleButtonText));
 
                 CurrentJobFilePath = dialog.FileName;
                 CurrentProductName = Path.GetFileNameWithoutExtension(dialog.FileName);

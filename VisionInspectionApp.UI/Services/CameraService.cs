@@ -762,6 +762,15 @@ public sealed class CameraService : IDisposable
             _currentParameters.EnableRandomTransform = _simulatorEnableRandomTransform;
         }
 
+        // Nếu đang có bên đăng ký xem Live Stream (ví dụ OQC Scanner hoặc Camera Settings),
+        // bắt buộc duy trì TriggerMode là Off và IsLiveViewEnabled là true để luồng Live Stream không bị gián đoạn.
+        bool hasActiveLiveConsumers = _activeLiveConsumers.Count > 0;
+        if (hasActiveLiveConsumers)
+        {
+            _currentParameters.TriggerMode = CameraTriggerMode.Off;
+            _currentParameters.IsLiveViewEnabled = true;
+        }
+
         _brightness = parameters.Brightness;
         _contrast = parameters.Contrast;
         _isGrayscale = parameters.IsGrayscale;
@@ -778,6 +787,13 @@ public sealed class CameraService : IDisposable
         if (_activeDriver != null && _activeDriver.IsOpened)
         {
             await _activeDriver.ApplyParametersAsync(_currentParameters);
+
+            // Nếu đang có consumer xem live mà driver chưa grabbing, lập tức kích hoạt lại grabbing
+            if (hasActiveLiveConsumers && !_activeDriver.IsGrabbing)
+            {
+                await _activeDriver.StartGrabbingAsync();
+            }
+            _isRunning = _activeDriver.IsOpened;
         }
     }
 
@@ -796,6 +812,15 @@ public sealed class CameraService : IDisposable
             _systemParameters.EnableRandomTransform = _simulatorEnableRandomTransform;
         }
 
+        bool hasActiveLiveConsumers = _activeLiveConsumers.Count > 0;
+        if (hasActiveLiveConsumers)
+        {
+            _currentParameters.TriggerMode = CameraTriggerMode.Off;
+            _currentParameters.IsLiveViewEnabled = true;
+            _systemParameters.TriggerMode = CameraTriggerMode.Off;
+            _systemParameters.IsLiveViewEnabled = true;
+        }
+
         _brightness = parameters.Brightness;
         _contrast = parameters.Contrast;
         _isGrayscale = parameters.IsGrayscale;
@@ -807,6 +832,12 @@ public sealed class CameraService : IDisposable
         if (_activeDriver != null && _activeDriver.IsOpened)
         {
             await _activeDriver.ApplyParametersAsync(_currentParameters);
+
+            if (hasActiveLiveConsumers && !_activeDriver.IsGrabbing)
+            {
+                await _activeDriver.StartGrabbingAsync();
+            }
+            _isRunning = _activeDriver.IsOpened;
         }
     }
 

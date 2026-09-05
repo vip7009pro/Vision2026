@@ -1,4 +1,4 @@
-# Vision Inspection App — Context & Roadmap
+﻿# Vision Inspection App — Context & Roadmap
 
 ## Mô tả
 
@@ -48,6 +48,36 @@
 - Pipeline đọc đúng kết nối `ImageSource → Preprocess → Tool`.
 - Preview được phép tiếp tục khi Global Snapshot rỗng để lấy ảnh từ ImageSource.
 - Lưu template cho Origin, Point và SurfaceCompare hoạt động với nguồn ảnh ImageSource.
+- **Khắc Phục Dứt Điểm Lỗi Mất Live View (Đọng Frame Cũ) Tại Tab OQC Scanner Sau Khi Mở Job Từ Quản Lý Job (Task 302)**:
+  - **Hiện Tượng & Yêu Cầu Người Dùng**:
+    - Tại tab OQC Scanner, khi mới bật app lên, Live View từ camera hoạt động bình thường mượt mà (30+ FPS).
+    - Sau khi mở một Job từ cửa sổ Quản Lý JOB (`JobManagerWindow`), quay lại tab OQC Scanner thì Live View bị mất hoàn toàn, chỉ đọng lại khung hình (frame) cuối cùng của camera trước thời điểm mở Job.
+    - Nút chuyển đổi chế độ vẫn hiển thị `"📷 Xem kết quả final"` (`IsShowingLiveCamera == true`). Người dùng phải bấm vào nút này để chuyển sang xem kết quả, rồi bấm lại `"🔴 Xem live view"` thì camera mới phát Live View trở lại.
+  - **Nguyên Nhân Gốc Rễ Đã Khắc Phục**:
+    1. *CameraService.ApplyParametersAsync không bảo vệ luồng Live Stream*:
+       - Khi nạp Job, `LoadJobFromFile` gọi `_cameraService.ApplyParametersAsync(imgSourceDef.CameraParams)`.
+       - Hàm này ghi đè toàn bộ `_currentParameters` từ Job (trong đó `IsLiveViewEnabled` là false hoặc `TriggerMode` có thể là `On`).
+       - Hàm không kiểm tra `_activeLiveConsumers`, khiến driver camera chuyển sang chế độ Trigger hoặc dừng stream ngầm mà consumer OQC Scanner không hay biết.
+    2. *JobManagerViewModel thiếu autoRun: false*:
+       - `ExecuteOpenJobFromListAsync` gọi `LoadJobFromFile(resolvedJobPath)` mà không truyền `autoRun: false`.
+       - Do `SelectedTabIndex == 1` và `AutoRunJob == true`, `CheckShouldAutoRunOnJobLoad` trả về true, khiến app tự động chạy `OnRunOnceClicked()` và chụp snapshot ngầm khi người dùng chưa hề quét mã sản phẩm.
+    3. *OqcScannerViewModel.SetJobLoadedFromManager không kích hoạt lại Live Stream*:
+       - Khi mở Job từ Quản lý Job, `IsShowingLiveCamera` vẫn là true nên sự kiện `OnIsShowingLiveCameraChanged(true)` không được gọi.
+       - Hàm `SetJobLoadedFromManager` không chủ động gửi `RequestLiveStreamAsync("OQCScanner", true)` và không reset cờ `_isRenderingLiveFrame`, dẫn đến PreviewImage bị đứng yên ở frame cũ.
+  - **Giải Pháp Kỹ Thuật Đã Triển Khai**:
+    1. **Bảo Vệ Tuyệt Đối Luồng Live Stream Khi Có Consumer Đang Xem (`CameraService.cs`)**:
+       - Trong `ApplyParametersAsync` và `SaveSystemParametersAsync`: Kiểm tra `hasActiveLiveConsumers = _activeLiveConsumers.Count > 0`.
+       - Nếu có consumer đang xem live, cưỡng chế duy trì `_currentParameters.TriggerMode = CameraTriggerMode.Off` và `_currentParameters.IsLiveViewEnabled = true`.
+       - Các thông số quang học (ExposureTimeUs, GainDb, WhiteBalance, HardwareRoi, Contrast, Brightness...) từ Job vẫn được áp dụng đầy đủ.
+       - Sau khi gửi thông số xuống driver, nếu `hasActiveLiveConsumers` và driver chưa grabbing (`!_activeDriver.IsGrabbing`), lập tức gọi `await _activeDriver.StartGrabbingAsync()` và cập nhật `_isRunning = true`.
+    2. **Ngăn Chặn Tự Ý Chạy Inspection Khi Mở Job Từ Danh Sách (`JobManagerViewModel.cs`)**:
+       - Trong `ExecuteOpenJobFromListAsync`, gọi tường minh `_toolEditorViewModel.LoadJobFromFile(resolvedJobPath, autoRun: false)` để tuân thủ quy trình OQC (chờ người dùng nhập/quét LABEL ID).
+    3. **Tự Động Kích Hoạt & Khôi Phục Live View Mượt Mà Khi Nạp Job (`OqcScannerViewModel.cs`)**:
+       - Trong `SetJobLoadedFromManager`: Reset cờ `_isRenderingLiveFrame = false;` nếu `!IsShowingLiveCamera` thì gọi `EnableLiveCamera()`; nếu `IsShowingLiveCamera` thì chủ động gọi `_cameraService.RequestLiveStreamAsync("OQCScanner", true)` và `StartSavedCameraAsync` nếu camera chưa chạy; cập nhật `OverlayItems` và phát thông báo `PreviewHeaderTitle`, `LiveToggleButtonText`, `ScanButtonText`.
+       - Trong `ExecuteManualOpenJob`: Truyền `autoRun: false` và bổ sung cơ chế khôi phục Live Stream tương tự.
+    4. **Bộ Kiểm Thử Tự Động Toàn Diện (`TestExtractApp/OqcLiveViewOnJobLoadTests.cs`)**:
+       - 3 bài kiểm thử: Duy trì Live Stream khi có consumer dù Job cấu hình TriggerMode=On; áp dụng đúng TriggerMode=On khi không có consumer; và tự động StartGrabbingAsync lại khi driver bị dừng.
+
 - **Tùy Chọn Cách Đếm & Loại Bỏ Blob Bị Đè (Lồng Nhau) Cho Tool BlobDetection (Task 301)**:
   - **Hiện Tượng & Yêu Cầu Người Dùng**:
     - Trong Tool `BlobDetection`, khi một blob to có cấu trúc rỗng bên trong (như vành khuyên, đốm khuyết tật loang lổ có vùng phản quang, hay chi tiết lồng nhau), thuật toán Connected Components tách cả vùng ngoài to và các đốm con bên trong thành các blob riêng biệt và đếm tất cả, trong khi thực tế người dùng chỉ muốn đếm blob to đại diện và loại bỏ các blob nhỏ nằm hẳn bên trong.
