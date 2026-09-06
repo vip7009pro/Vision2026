@@ -1982,13 +1982,13 @@ public partial class ImageViewerControl : UserControl
 
         if (isHorizontal)
         {
-            AddDiamondHandle(new Point(left, top + height / 2.0));
-            AddDiamondHandle(new Point(left + width, top + height / 2.0));
+            AddDiamondHandle(new Point(left, top + height * 0.25));
+            AddDiamondHandle(new Point(left + width, top + height * 0.25));
         }
         else
         {
-            AddDiamondHandle(new Point(left + width / 2.0, top));
-            AddDiamondHandle(new Point(left + width / 2.0, top + height));
+            AddDiamondHandle(new Point(left + width * 0.25, top));
+            AddDiamondHandle(new Point(left + width * 0.25, top + height));
         }
 
         void AddDiamondHandle(Point unrotPt)
@@ -2130,8 +2130,8 @@ public partial class ImageViewerControl : UserControl
 
         if (isCaliperStrip)
         {
-            var nearMidXStrip = Math.Abs(unrotP.X - (rect.Left + rect.Right) / 2.0) <= tolerance * 1.5;
-            var nearMidYStrip = Math.Abs(unrotP.Y - (rect.Top + rect.Bottom) / 2.0) <= tolerance * 1.5;
+            var nearTargetXStrip = Math.Abs(unrotP.X - (rect.Left + rect.Width * 0.25)) <= tolerance * 1.5;
+            var nearTargetYStrip = Math.Abs(unrotP.Y - (rect.Top + rect.Height * 0.25)) <= tolerance * 1.5;
             var nearLeftStrip = Math.Abs(unrotP.X - rect.Left) <= tolerance * 1.5;
             var nearRightStrip = Math.Abs(unrotP.X - rect.Right) <= tolerance * 1.5;
             var nearTopStrip = Math.Abs(unrotP.Y - rect.Top) <= tolerance * 1.5;
@@ -2139,13 +2139,13 @@ public partial class ImageViewerControl : UserControl
 
             if (isHorizontalStrip)
             {
-                if (nearLeftStrip && nearMidYStrip) return RoiEditMode.Left;
-                if (nearRightStrip && nearMidYStrip) return RoiEditMode.Right;
+                if (nearLeftStrip && nearTargetYStrip) return RoiEditMode.Left;
+                if (nearRightStrip && nearTargetYStrip) return RoiEditMode.Right;
             }
             else
             {
-                if (nearMidXStrip && nearTopStrip) return RoiEditMode.Top;
-                if (nearMidXStrip && nearBottomStrip) return RoiEditMode.Bottom;
+                if (nearTargetXStrip && nearTopStrip) return RoiEditMode.Top;
+                if (nearTargetXStrip && nearBottomStrip) return RoiEditMode.Bottom;
             }
 
             return RoiEditMode.None;

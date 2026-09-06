@@ -1723,6 +1723,16 @@ namespace VisionInspectionApp.UI.ViewModels
                     if (c is not null)
                     {
                         c.SearchRoi = roi;
+                        // Tự động đồng bộ StripLength theo kích thước cạnh quét của khung ROI
+                        if (c.Orientation == CaliperOrientation.Horizontal)
+                        {
+                            c.StripLength = Math.Max(3, roi.Width);
+                        }
+                        else
+                        {
+                            c.StripLength = Math.Max(3, roi.Height);
+                        }
+                        OnPropertyChanged(nameof(Caliper_StripLength));
                         RefreshPreviews();
                         RequestAutoSave();
                         return;

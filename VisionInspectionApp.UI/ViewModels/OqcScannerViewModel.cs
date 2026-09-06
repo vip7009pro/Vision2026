@@ -1308,7 +1308,11 @@ public partial class OqcScannerViewModel : ObservableObject
             return;
         }
 
-        _scanDetailDialogInstance = new Views.OQC.OqcScanDetailDialog(entry);
+        var mainWin = System.Windows.Application.Current?.MainWindow;
+        _scanDetailDialogInstance = new Views.OQC.OqcScanDetailDialog(entry)
+        {
+            Owner = mainWin
+        };
         _scanDetailDialogInstance.Closed += (s, e) => _scanDetailDialogInstance = null;
         _scanDetailDialogInstance.Show();
     }
@@ -1380,7 +1384,11 @@ public partial class OqcScannerViewModel : ObservableObject
         }
 
         LoadSettingsFromConfig();
-        _settingsDialogInstance = new Views.OQC.OqcSettingsDialog(this);
+        var mainWin = System.Windows.Application.Current?.MainWindow;
+        _settingsDialogInstance = new Views.OQC.OqcSettingsDialog(this)
+        {
+            Owner = mainWin
+        };
         _settingsDialogInstance.Closed += (s, e) => _settingsDialogInstance = null;
         _settingsDialogInstance.Show();
     }
@@ -1396,7 +1404,11 @@ public partial class OqcScannerViewModel : ObservableObject
         }
 
         AssignJobFilePath = CurrentJobFilePath != "-" ? CurrentJobFilePath : "";
-        _productAssignDialogInstance = new Views.OQC.ProductAssignDialog(this);
+        var mainWin = System.Windows.Application.Current?.MainWindow;
+        _productAssignDialogInstance = new Views.OQC.ProductAssignDialog(this)
+        {
+            Owner = mainWin
+        };
         _productAssignDialogInstance.Closed += (s, e) => _productAssignDialogInstance = null;
         _productAssignDialogInstance.Show();
     }

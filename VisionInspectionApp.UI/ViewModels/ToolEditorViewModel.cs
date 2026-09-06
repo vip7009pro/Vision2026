@@ -1603,9 +1603,11 @@ namespace VisionInspectionApp.UI.ViewModels
             var calibVm = new CalibrationViewModel(_configService, _storeOptions, _cameraService, _jobService);
             calibVm.InitializeWithConfig(_config, CurrentJobFilePath, SelectedNodePreviewImage);
 
+            var mainWin = System.Windows.Application.Current?.MainWindow;
             _calibrationDialogInstance = new VisionInspectionApp.UI.Views.CalibrationDialog
             {
-                DataContext = calibVm
+                DataContext = calibVm,
+                Owner = mainWin
             };
 
             _calibrationDialogInstance.Closed += (s, e) =>
@@ -1643,9 +1645,11 @@ namespace VisionInspectionApp.UI.ViewModels
             var vm = new ChessboardCalibrationViewModel(_cameraService);
             vm.Initialize(_config);
 
+            var mainWin = System.Windows.Application.Current?.MainWindow;
             _chessboardCalibrationDialogInstance = new VisionInspectionApp.UI.Views.ChessboardCalibrationDialog
             {
-                DataContext = vm
+                DataContext = vm,
+                Owner = mainWin
             };
 
             _chessboardCalibrationDialogInstance.Closed += (s, e) =>
@@ -1735,8 +1739,12 @@ namespace VisionInspectionApp.UI.ViewModels
 
                 if (oqcVm != null)
                 {
+                    var mainWin = System.Windows.Application.Current?.MainWindow;
                     oqcVm.AssignJobFilePath = !string.IsNullOrWhiteSpace(CurrentJobFilePath) && CurrentJobFilePath != "-" ? CurrentJobFilePath : "";
-                    _productAssignDialogInstance = new Views.OQC.ProductAssignDialog(oqcVm);
+                    _productAssignDialogInstance = new Views.OQC.ProductAssignDialog(oqcVm)
+                    {
+                        Owner = mainWin
+                    };
                     _productAssignDialogInstance.Closed += (s, e) => _productAssignDialogInstance = null;
                     _productAssignDialogInstance.Show();
                 }
@@ -1763,8 +1771,12 @@ namespace VisionInspectionApp.UI.ViewModels
                     return;
                 }
 
+                var mainWin = System.Windows.Application.Current?.MainWindow;
                 var vm = new InspectionLogViewModel(_inspectionLogService);
-                _inspectionLogWindowInstance = new Views.InspectionLogWindow(vm);
+                _inspectionLogWindowInstance = new Views.InspectionLogWindow(vm)
+                {
+                    Owner = mainWin
+                };
                 _inspectionLogWindowInstance.Closed += (s, e) => _inspectionLogWindowInstance = null;
                 _inspectionLogWindowInstance.Show();
             }
@@ -1786,8 +1798,12 @@ namespace VisionInspectionApp.UI.ViewModels
                     return;
                 }
 
+                var mainWin = System.Windows.Application.Current?.MainWindow;
                 var vm = new RollDefectMapViewModel(_rollDefectManager, _motionSyncService, _shiftRegisterTracker);
-                _rollDefectMapWindowInstance = new Views.RollDefectMapWindow(vm);
+                _rollDefectMapWindowInstance = new Views.RollDefectMapWindow(vm)
+                {
+                    Owner = mainWin
+                };
                 _rollDefectMapWindowInstance.Closed += (s, e) => _rollDefectMapWindowInstance = null;
                 _rollDefectMapWindowInstance.Show();
             }

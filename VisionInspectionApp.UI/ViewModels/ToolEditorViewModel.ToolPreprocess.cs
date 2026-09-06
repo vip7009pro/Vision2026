@@ -850,7 +850,10 @@ namespace VisionInspectionApp.UI.ViewModels
                     RequestAutoSave();
                 });
 
-            var win = new Views.JobCameraSettingsWindow(vm);
+            var win = new Views.JobCameraSettingsWindow(vm)
+            {
+                Owner = System.Windows.Application.Current?.MainWindow
+            };
             win.Show();
         }
     

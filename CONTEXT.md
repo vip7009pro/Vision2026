@@ -46,6 +46,53 @@
 ### ImageSource và preview
 
 - Lưu template cho Origin, Point và SurfaceCompare hoạt động với nguồn ảnh ImageSource.
+- **Hợp Nhất Hoàn Toàn Search ROI & Strip ROI Thành 1 Khung Caliper ROI Thống Nhất Chuẩn Công Nghiệp Cognex/Keyence (Task 310)**:
+  - **Hiện Tượng & Yêu Cầu Người Dùng**:
+    - Người dùng yêu cầu thực hiện hợp nhất hoàn toàn `Search ROI` và `Strip ROI` của tool Caliper thành 1 khung ROI duy nhất để loại bỏ triệt để hiện tượng 2 khung chữ nhật lồng nhau gây rối mắt, nhiều handles và thao tác phức tạp.
+  - **Phân Tích Kỹ Thuật & Kiến Trúc Thiết Kế**:
+    - Khảo sát các hệ thống thị giác máy công nghiệp chuẩn mực (Cognex In-Sight, Keyence CV-X, Halcon): Chỉ sử dụng **1 Khung Caliper ROI duy nhất**.
+    - Kéo cạnh song song với hướng quét -> Tăng/giảm trực tiếp khoảng cách quét của thước đo (`StripLength`).
+    - Kéo cạnh vuông góc với hướng quét -> Tăng/giảm chiều dài đoạn thẳng biên cần tìm (Line Length), các vạch thước đo con (`StripCount`) tự động trải đều.
+    - Toàn bộ các vạch strips con và mũi tên chỉ hướng quét được vẽ trực tiếp, vừa khít bên trong 1 khung ROI duy nhất.
+  - **Giải Pháp Kỹ Thuật Đã Triển Khai**:
+    1. *Loại bỏ hoàn toàn khung phụ `Cal_Strip` trong `ToolEditorViewModel.GraphOps.cs`*:
+       - Khung `c.SearchRoi` trở thành Khung Caliper ROI Thống Nhất duy nhất mang nhãn `{c.Name} Cal`.
+       - Vẽ các vạch strips con (`OverlayLineItem`) vừa khít 100% từ mép này sang mép kia của khung ROI.
+       - Thêm mũi tên hướng quét (Scan Direction Arrow) tại tâm khung ROI (quét Trái sang Phải nếu Horizontal, Trên xuống Dưới nếu Vertical), hiển thị trực quan và thanh lịch.
+    2. *Tương tác đồng bộ hai chiều Canvas <-> Properties Panel*:
+       - Trong `ToolEditorViewModel.Engine.cs` (`OnRoiEdited`): Khi kéo cạnh trên canvas preview, hệ thống tự động đồng bộ `c.StripLength = roi.Width` (nếu Horizontal) hoặc `c.StripLength = roi.Height` (nếu Vertical) và kích hoạt `OnPropertyChanged(nameof(Caliper_StripLength))`.
+       - Trong `ToolEditorViewModel.ToolCaliper.cs`: Khi người dùng nhập số vào ô `StripLength`, hệ thống tự động co giãn cạnh quét của `SearchRoi` đối xứng quanh tâm `(cx, cy)`.
+       - Khi chuyển đổi `Orientation`: Hệ thống tự động hoán đổi kích thước `Width` và `Height` của `SearchRoi` để duy trì hình học nhất quán theo hướng quét mới.
+    3. *Tối giản giao diện người dùng (`ToolEditorView.xaml` & `ToolEditorView.xaml.cs`)*:
+       - Thay thế 2 nút chọn `🔍 Search ROI` và `📏 Strip ROI` bằng 1 nút điều khiển duy nhất: `🎯 Chọn Khung Caliper ROI` (chỉ 1 click là focus ngay vào khung Caliper ROI thống nhất trên canvas).
+    4. *Tương thích ngược 100% dữ liệu & Test Suite*:
+       - Giữ nguyên cấu trúc dữ liệu JSON Job file (`SearchRoi`, `StripLength`), thuật toán `CaliperDetector.Detect` chạy tương thích hoàn hảo.
+       - Cập nhật bài test `TestExtractApp/NewJobAndBlobSpecTests.cs` xác nhận tính năng hình học và đồng bộ 2 chiều bảo toàn tâm tọa độ.
+  - **Kiểm Thử**:
+    - `dotnet build VisionInspectionApp.slnx`: 0 errors.
+    - `dotnet run --project TestExtractApp`: 100% PASSED toàn bộ test suite.
+
+- **Cơ Chế Quản Lý Cửa Sổ Con Toàn Cục (Zero Window Loss / Restore Focus) & Cải Tiến Handle Caliper Strip ROI 1/4 (Task 309)**:
+  - **Hiện Tượng & Yêu Cầu Người Dùng**:
+    1. *Cửa sổ chính bị minimize hoặc mất focus*: Trong toàn bộ app, mỗi khi đóng bất kỳ cửa sổ con nào (`PlcManagerWindow`, `DbManagerWindow`, `CalibrationDialog`, `InspectionLogWindow`, v.v.), `MainWindow` bị Windows OS thu nhỏ hoặc đẩy ra sau các ứng dụng khác (Chrome, VS Code, Explorer), buộc người dùng phải click lại vào taskbar.
+    2. *Handle Caliper Strip ROI dễ bấm nhầm*: Handle của dải quét `Strip ROI` nằm ở chính giữa (50%) của 2 cạnh ROI, trùng khít với handle của `Search ROI`. Yêu cầu chuyển sang vị trí 1/4 (25%) và đánh giá việc hợp nhất `Search ROI` & `Strip ROI`.
+  - **Nguyên Nhân Sâu Xa**:
+    1. *Mất Z-order Win32 khi đóng top-level window độc lập*: Các cửa sổ con mở bằng `.Show()` mà không có `win.Owner = MainWindow` được hệ điều hành Windows xem như ứng dụng độc lập. Khi đóng lại, Win32 tự động kích hoạt cửa sổ tiếp theo trong Z-order hệ thống (app ngoài).
+    2. *Handle trùng tọa độ 50%*: `DrawCaliperStripHandles` và `HitTestRoiHandle` tính toán tại `(top + height / 2.0)` hoặc `(left + width / 2.0)`, trùng đúng Mid-point của Search ROI.
+  - **Giải Pháp Kỹ Thuật Đã Triển Khai**:
+    1. *Cơ chế quản lý Z-order và phục hồi Focus toàn cục trong `App.xaml.cs`*:
+       - Đăng ký `EventManager.RegisterClassHandler(typeof(Window), Window.LoadedEvent, ...)`: Tự động gán Win32 `GWL_HWNDPARENT` trỏ về `MainWindow` cho mọi cửa sổ con chưa có Owner.
+       - Gắn sự kiện `win.Closed`, thực thi qua `Dispatcher.BeginInvoke` gọi `BringWindowToForeground`: khôi phục `WindowState.Normal` nếu đang Minimized, gọi Win32 `ShowWindow(SW_RESTORE)`, `SetForegroundWindow(hwnd)` và `window.Activate()` + `window.Focus()`. Đảm bảo ứng dụng luôn giữ quyền điều khiển màn hình khi đóng cửa sổ con.
+    2. *Gán tường minh `win.Owner = Application.Current.MainWindow` tại các ViewModel*:
+       - Cập nhật các hàm mở cửa sổ trong `ToolEditorViewModel.Plc.cs`, `ToolEditorViewModel.Db.cs`, `ToolEditorViewModel.cs`, `ToolEditorViewModel.ToolPreprocess.cs`, `OqcScannerViewModel.cs`.
+    3. *Chuyển Handle Caliper Strip ROI sang vị trí 1/4 (25%) trong `ImageViewerControl.xaml.cs`*:
+       - Cập nhật `DrawCaliperStripHandles` và `HitTestRoiHandle` tính toán diamond handles tại `rect.Top + rect.Height * 0.25` (ngang) hoặc `rect.Left + rect.Width * 0.25` (dọc). Tách rời khoảng cách an toàn (20–40px) khỏi Search Mid handle, triệt tiêu 100% tình trạng bấm nhầm.
+    4. *Đánh giá chuyên sâu Hợp nhất Search ROI và Strip ROI*:
+       - Phân tích mô hình 1 ROI chuẩn Cognex In-Sight / Keyence CV-X (giảm từ 12 xuống 8 handles, tối ưu ROI First, loại bỏ tab chuyển đổi) và đề xuất kế hoạch đồng bộ `StripLength` vào `SearchRoi` trong tương lai mà vẫn giữ nguyên schema dữ liệu tương thích Job cũ.
+  - **Kiểm Thử**:
+    - `dotnet build VisionInspectionApp.slnx`: 0 errors.
+    - `dotnet run --project TestExtractApp`: 100% PASSED toàn bộ test suite (bao gồm bài test hình học và độ tách biệt handle 1/4 của Caliper Strip).
+
 - **Tối Ưu Bất Đồng Bộ Hoàn Toàn ImageOutput Tool (Zero Main-Thread Blocking) & Mở Rộng Cột Tiêu Chuẩn (Spec) Bảng Kết Quả Overlay (Task 308)**:
   - **Hiện Tượng & Yêu Cầu Người Dùng**:
     1. *ImageOutput Tool*: Người dùng phản ánh khi kích hoạt xuất ảnh (`io.EnableOutput = true`), chương trình bị chậm lại đáng kể (thời gian chạy tăng thêm hàng chục ms) dù trước đó đã có dịch vụ `AsyncImageSaver`.

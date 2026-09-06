@@ -1,8 +1,10 @@
 using System.Configuration;
 using System.Data;
 using System.Globalization;
+using System.Runtime.InteropServices;
 using System.Threading;
 using System.Windows;
+using System.Windows.Interop;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using VisionInspectionApp.Application;
@@ -32,6 +34,9 @@ public partial class App : System.Windows.Application
         CultureInfo.DefaultThreadCurrentUICulture = culture;
         Thread.CurrentThread.CurrentCulture = culture;
         Thread.CurrentThread.CurrentUICulture = culture;
+
+        // Đăng ký quản lý Z-order và trả focus toàn cục cho tất cả các cửa sổ con trong toàn bộ app
+        EventManager.RegisterClassHandler(typeof(Window), Window.LoadedEvent, new RoutedEventHandler(OnSubWindowLoaded));
 
         // 1. Hiển thị ngay lập tức SplashScreenWindow chuyên nghiệp
         var splash = new Views.SplashScreenWindow();
@@ -441,4 +446,112 @@ public partial class App : System.Windows.Application
 
         _host = null;
     }
+
+    #region Global Sub-Window Z-Order & Focus Management
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool SetForegroundWindow(IntPtr hWnd);
+
+    [DllImport("user32.dll", EntryPoint = "SetWindowLongPtr", SetLastError = true)]
+    private static extern IntPtr SetWindowLongPtr64(IntPtr hWnd, int nIndex, IntPtr dwNewLong);
+
+    [DllImport("user32.dll", EntryPoint = "SetWindowLong", SetLastError = true)]
+    private static extern int SetWindowLong32(IntPtr hWnd, int nIndex, int dwNewLong);
+
+    private static IntPtr SetWindowLongPtr(IntPtr hWnd, int nIndex, IntPtr dwNewLong)
+    {
+        if (IntPtr.Size == 8)
+            return SetWindowLongPtr64(hWnd, nIndex, dwNewLong);
+        return new IntPtr(SetWindowLong32(hWnd, nIndex, dwNewLong.ToInt32()));
+    }
+
+    private const int GWL_HWNDPARENT = -8;
+    private const int SW_RESTORE = 9;
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+
+    private void OnSubWindowLoaded(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Window win) return;
+        if (win == MainWindow || win is Views.SplashScreenWindow) return;
+
+        // Nếu window con chưa có Owner và MainWindow đã hiển thị, thiết lập HWND Parent Win32
+        // để Windows OS liên kết Z-order và không đưa ứng dụng ngoài lên trước khi đóng cửa sổ con này
+        if (win.Owner == null && MainWindow != null && MainWindow.IsLoaded)
+        {
+            try
+            {
+                var childHwnd = new WindowInteropHelper(win).Handle;
+                var mainHwnd = new WindowInteropHelper(MainWindow).Handle;
+                if (childHwnd != IntPtr.Zero && mainHwnd != IntPtr.Zero)
+                {
+                    SetWindowLongPtr(childHwnd, GWL_HWNDPARENT, mainHwnd);
+                }
+            }
+            catch
+            {
+                // ignore
+            }
+        }
+
+        win.Closed -= OnSubWindowClosed;
+        win.Closed += OnSubWindowClosed;
+    }
+
+    private void OnSubWindowClosed(object? sender, EventArgs e)
+    {
+        // Chạy bất đồng bộ qua Dispatcher để đảm bảo native HWND của cửa sổ vừa đóng đã bị destroy hoàn toàn
+        Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Normal, new Action(() =>
+        {
+            try
+            {
+                // 1. Kiểm tra xem còn cửa sổ con nào khác đang mở và hiển thị không
+                var activeOtherSubWindow = Windows.OfType<Window>()
+                    .Where(w => w.IsLoaded && w.Visibility == Visibility.Visible && !(w is Views.SplashScreenWindow) && w != MainWindow && w != sender)
+                    .LastOrDefault();
+
+                var target = activeOtherSubWindow ?? MainWindow;
+                if (target != null)
+                {
+                    BringWindowToForeground(target);
+                }
+            }
+            catch
+            {
+                // ignore
+            }
+        }));
+    }
+
+    public static void BringWindowToForeground(Window window)
+    {
+        if (window == null) return;
+        try
+        {
+            if (window.WindowState == WindowState.Minimized)
+            {
+                window.WindowState = WindowState.Normal;
+            }
+
+            var hwnd = new WindowInteropHelper(window).Handle;
+            if (hwnd != IntPtr.Zero)
+            {
+                ShowWindow(hwnd, SW_RESTORE);
+                SetForegroundWindow(hwnd);
+            }
+
+            window.Show();
+            window.Activate();
+            window.Focus();
+        }
+        catch
+        {
+            // ignore
+        }
+    }
+
+    #endregion
 }

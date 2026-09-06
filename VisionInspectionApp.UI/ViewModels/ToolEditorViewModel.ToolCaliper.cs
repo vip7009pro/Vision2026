@@ -43,9 +43,26 @@ namespace VisionInspectionApp.UI.ViewModels
                 if (d.Orientation == value)
                     return;
                 d.Orientation = value;
+
+                // Hoán đổi kích thước SearchRoi theo hướng quét mới để duy trì hình học nhất quán
+                if (d.SearchRoi.Width > 0 && d.SearchRoi.Height > 0)
+                {
+                    var cx = d.SearchRoi.X + d.SearchRoi.Width / 2.0;
+                    var cy = d.SearchRoi.Y + d.SearchRoi.Height / 2.0;
+                    var oldW = d.SearchRoi.Width;
+                    var oldH = d.SearchRoi.Height;
+                    d.SearchRoi.Width = oldH;
+                    d.SearchRoi.Height = oldW;
+                    d.SearchRoi.X = (int)Math.Round(cx - d.SearchRoi.Width / 2.0);
+                    d.SearchRoi.Y = (int)Math.Round(cy - d.SearchRoi.Height / 2.0);
+                    d.StripLength = d.Orientation == CaliperOrientation.Horizontal ? d.SearchRoi.Width : d.SearchRoi.Height;
+                    OnPropertyChanged(nameof(Caliper_StripLength));
+                }
+
                 RunFlow();
                 RequestAutoSave();
                 OnPropertyChanged();
+                RefreshPreviews();
             }
         }
     
@@ -81,6 +98,7 @@ namespace VisionInspectionApp.UI.ViewModels
                 RunFlow();
                 RequestAutoSave();
                 OnPropertyChanged();
+                RefreshPreviews();
             }
         }
     
@@ -114,9 +132,34 @@ namespace VisionInspectionApp.UI.ViewModels
                 if (d.StripLength == v)
                     return;
                 d.StripLength = v;
+
+                // Tự động đồng bộ kích thước cạnh quét của khung Caliper ROI đối xứng quanh tâm
+                if (d.SearchRoi.Width > 0 && d.SearchRoi.Height > 0)
+                {
+                    if (d.Orientation == CaliperOrientation.Horizontal)
+                    {
+                        if (d.SearchRoi.Width != v)
+                        {
+                            var cx = d.SearchRoi.X + d.SearchRoi.Width / 2.0;
+                            d.SearchRoi.Width = v;
+                            d.SearchRoi.X = (int)Math.Round(cx - v / 2.0);
+                        }
+                    }
+                    else
+                    {
+                        if (d.SearchRoi.Height != v)
+                        {
+                            var cy = d.SearchRoi.Y + d.SearchRoi.Height / 2.0;
+                            d.SearchRoi.Height = v;
+                            d.SearchRoi.Y = (int)Math.Round(cy - v / 2.0);
+                        }
+                    }
+                }
+
                 RunFlow();
                 RequestAutoSave();
                 OnPropertyChanged();
+                RefreshPreviews();
             }
         }
     
@@ -141,31 +184,22 @@ namespace VisionInspectionApp.UI.ViewModels
         public bool? Caliper_LastRunFound => _lastRun?.Calipers.FirstOrDefault(x => string.Equals(x.Name, SelectedNode?.RefName, StringComparison.OrdinalIgnoreCase))?.Found;
         public double? Caliper_LastRunAvgStrength => _lastRun?.Calipers.FirstOrDefault(x => string.Equals(x.Name, SelectedNode?.RefName, StringComparison.OrdinalIgnoreCase))?.AvgStrength;
 
-        public bool Caliper_IsEditingSearchRoi => !Caliper_IsEditingStripRoi;
+        public bool Caliper_IsEditingSearchRoi => true;
+        public bool Caliper_IsEditingStripRoi => false;
 
-        public bool Caliper_IsEditingStripRoi
+        public void SelectCaliperRoi()
         {
-            get => !string.IsNullOrWhiteSpace(ActiveRoiLabel) && ActiveRoiLabel.EndsWith("Cal_Strip", StringComparison.OrdinalIgnoreCase);
-            set
+            if (SelectedNode is not null)
             {
-                if (SelectedNode is not null)
-                {
-                    ActiveRoiLabel = value ? $"{SelectedNode.RefName} Cal_Strip" : $"{SelectedNode.RefName} Cal";
-                    OnPropertyChanged(nameof(Caliper_IsEditingSearchRoi));
-                    OnPropertyChanged(nameof(Caliper_IsEditingStripRoi));
-                    RefreshPreviews();
-                }
+                ActiveRoiLabel = $"{SelectedNode.RefName} Cal";
+                OnPropertyChanged(nameof(ActiveRoiLabel));
+                OnPropertyChanged(nameof(Caliper_IsEditingSearchRoi));
+                OnPropertyChanged(nameof(Caliper_IsEditingStripRoi));
+                RefreshPreviews();
             }
         }
 
-        public void SelectCaliperSearchRoi()
-        {
-            Caliper_IsEditingStripRoi = false;
-        }
-
-        public void SelectCaliperStripRoi()
-        {
-            Caliper_IsEditingStripRoi = true;
-        }
+        public void SelectCaliperSearchRoi() => SelectCaliperRoi();
+        public void SelectCaliperStripRoi() => SelectCaliperRoi();
     }
 }

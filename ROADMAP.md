@@ -2162,3 +2162,56 @@ Lộ trình tích hợp tính năng Chụp ảnh từ camera và hỗ trợ các
        - Kiá»ƒm Thá»­:
          - dotnet build VisionInspectionApp.slnx: 0 errors.
          - dotnet run --project TestExtractApp: 100% PASSED toÃ n bá»™ test suite (11/11 tests trong suite Preprocess & ImageOutput).
+
+    - [x] **Task 309: Quáº£n LÃ½ Z-Order & Phá»¥c Há»“i Focus Cá»­a Sá»• Con ToÃ n Cá»¥c (Zero Window Loss) & Chuyá»ƒn Caliper Strip Handle Sang Vá»‹ TrÃ­ 1/4 (Chá»‘ng Báº¥m Nháº§m)**:
+       - Hiá»‡n TÆ°á»£ng & YÃªu Cáº§u NgÆ°á»i DÃ¹ng:
+         1. *Lá»—i máº¥t focus cá»­a sá»• chÃ­nh*: Khi ngÆ°á»i dÃ¹ng Ä‘Ã³ng báº¥t ká»³ cá»­a sá»• con nÃ o (PLC Manager, DB Manager, Calibration Dialog, OQC Dialogs...), toÃ n bá»™ á»©ng dá»¥ng chÃ­nh bá»‹ minimize hoáº·c bá»‹ Ä‘áº©y ra phÃ­a sau cÃ¡c á»©ng dá»¥ng bÃªn thá»© ba (Chrome, VS Code, Explorer). NgÆ°á»i dÃ¹ng buá»™c pháº£i báº¥m láº¡i vÃ o icon trÃªn taskbar Ä‘á»ƒ khÃ´i phá»¥c.
+         2. *Báº¥m nháº§m Caliper Strip Handle*: Tay cáº§m (handle) cá»§a Strip ROI tool Caliper náº±m á»Ÿ chÃ­nh giá»¯a (50%) cá»§a 2 Ä‘oáº¡n ROI, trÃ¹ng khÃ­t vá»›i handle cá»§a Search ROI dáº«n Ä‘áº¿n viá»‡c click/kÃ©o nháº§m liÃªn tá»¥c. YÃªu cáº§u chuyá»ƒn háº³n handle sang vá»‹ trÃ­ 1/4 (25%) vÃ  Ä‘Ã¡nh giÃ¡ viá»‡c há»£p nháº¥t Search ROI vÃ  Strip ROI.
+       - PhÃ¢n TÃ­ch Ká»¹ Thuáº­t & NguyÃªn NhÃ¢n Gá»‘c Rá»…:
+         1. *Máº¥t Z-order khi Ä‘Ã³ng top-level window khÃ´ng cÃ³ Owner*:
+            - CÃ¡c cá»­a sá»• con má»Ÿ báº±ng .Show() khÃ´ng Ä‘Æ°á»£c gÃ¡n win.Owner = MainWindow, khiáº¿n Windows OS xem chÃºng lÃ  cÃ¡c top-level application window Ä‘á»™c láº­p.
+            - Khi cá»­a sá»• Ä‘Ã³ng láº¡i, Win32 OS kÃ­ch hoáº¡t cá»­a sá»• tiáº¿p theo trong Z-order toÃ n há»‡ thá»‘ng thay vÃ¬ MainWindow.
+         2. *TrÃ¹ng tá»a Ä‘á»™ handle Caliper Strip vÃ  Search ROI*:
+            - DrawCaliperStripHandles vÃ  HitTestRoiHandle Ä‘á»u tÃ­nh toÃ¡n vá»‹ trÃ­ táº¡i (top + height / 2.0) hoáº·c (left + width / 2.0), trÃ¹ng khá»›p 100% vá»›i Mid-Left / Mid-Right hoáº·c Mid-Top / Mid-Bottom cá»§a Search ROI.
+       - Giáº£i PhÃ¡p Ká»¹ Thuáº­t ÄÃ£ Triá»ƒn Khai:
+         1. *CÆ¡ Cháº¿ Win32 & WPF Quáº£n LÃ½ Z-Order ToÃ n Cá»¥c trong App.xaml.cs*:
+            - ÄÄƒng kÃ½ EventManager.RegisterClassHandler(typeof(Window), Window.LoadedEvent, ...) tá»± Ä‘á»™ng gÃ¡n Win32 GWL_HWNDPARENT trá» vá» HWND cá»§a MainWindow náº¿u chÆ°a cÃ³ Owner.
+            - Báº¯t sá»± kiá»‡n win.Closed, dÃ¹ng Dispatcher.BeginInvoke(DispatcherPriority.Normal, ...) gá»i BringWindowToForeground: khÃ´i phá»¥c WindowState.Normal náº¿u Ä‘ang Minimized, gá»i Win32 ShowWindow(SW_RESTORE), SetForegroundWindow(hwnd) vÃ  window.Activate() + window.Focus(), Ä‘áº£m báº£o á»©ng dá»¥ng luÃ´n giá»¯ quyá»n kiá»ƒm soÃ¡t mÃ n hÃ¬nh.
+         2. *GÃ¡n TÆ°á»ng Minh win.Owner táº¡i cÃ¡c ViewModel*:
+            - Bá»• sung gÃ¡n Owner = Application.Current?.MainWindow táº¡i ToolEditorViewModel.Plc.cs, ToolEditorViewModel.Db.cs, ToolEditorViewModel.cs, ToolEditorViewModel.ToolPreprocess.cs, OqcScannerViewModel.cs.
+         3. *Chuyá»ƒn Vá»‹ TrÃ­ Caliper Strip Handle Sang 1/4 (25%)*:
+            - Trong ImageViewerControl.xaml.cs: Cáº­p nháº­t DrawCaliperStripHandles vÃ  HitTestRoiHandle tÃ­nh toÃ¡n vá»‹ trÃ­ diamond handles táº¡i rect.Top + rect.Height * 0.25 (vá»›i horizontal) hoáº·c rect.Left + rect.Width * 0.25 (vá»›i vertical).
+            - TÃ¡ch rá»i khoáº£ng cÃ¡ch giá»¯a Strip Handle vÃ  Search Mid Handle an toÃ n (20â€“40px), loáº¡i bá» hoÃ n toÃ n viá»‡c click nháº§m.
+         4. *ÄÃ¡nh GiÃ¡ ChuyÃªn SÃ¢u Há»£p Nháº¥t Search ROI vÃ  Strip ROI*:
+            - Kháº£o sÃ¡t cÃ¡c há»‡ thá»‘ng Cognex In-Sight / Keyence CV-X chá»‰ sá»­ dá»¥ng 1 khung ROI duy nháº¥t (chiá»u dá»c Ä‘á»‹nh nghÄ©a biÃªn, chiá»u ngang Ä‘á»‹nh nghÄ©a khoáº£ng cÃ¡ch quÃ©t StripLength).
+            - ÄÃ¡nh giÃ¡ kháº£ nÄƒng tá»‘i Æ°u hÃ³a ROI First vÃ  láº­p káº¿ hoáº¡ch Ä‘á»“ng bá»™ StripLength vÃ o SearchRoi trong tÆ°Æ¡ng lai mÃ  váº«n Ä‘áº£m báº£o 100% tÆ°Æ¡ng thÃ­ch ngÆ°á»£c vá»›i Job cÅ©.
+       - Kiá»ƒm Thá»­:
+         - dotnet build VisionInspectionApp.slnx: 0 errors.
+         - dotnet run --project TestExtractApp: 100% PASSED toÃ n bá»™ test suite (bao gá»“m Test 6 kiá»ƒm chá»©ng hÃ¬nh há»c vÃ  khoáº£ng cÃ¡ch tÃ¡ch biá»‡t handle 1/4 cá»§a Caliper Strip).
+
+    - [x] **Task 310: Há»£p Nháº¥t HoÃ n ToÃ n Search ROI & Strip ROI ThÃ nh 1 Khung Caliper ROI Thá»‘ng Nháº¥t Chuáº©n Cognex/Keyence**:
+       - Hiá»‡n TÆ°á»£ng & YÃªu Cáº§u NgÆ°á»i DÃ¹ng:
+         - NgÆ°á»i dÃ¹ng yÃªu cáº§u thá»±c hiá»‡n há»£p nháº¥t hoÃ n toÃ n Search ROI vÃ  Strip ROI cá»§a Tool Caliper thÃ nh 1 khung duy nháº¥t Ä‘á»ƒ loáº¡i bá» triá»‡t Ä‘á»ƒ viá»‡c cÃ³ 2 khung lá»“ng nhau gÃ¢y rá»‘i máº¯t vÃ  thao tÃ¡c phá»©c táº¡p.
+       - PhÃ¢n TÃ­ch Ká»¹ Thuáº­t & Kiáº¿n TrÃºc Thiáº¿t Káº¿:
+         - Chuáº©n cÃ´ng nghiá»‡p (Cognex In-Sight, Keyence CV-X) chá»‰ sá»­ dá»¥ng 1 khung Caliper ROI duy nháº¥t.
+         - KÃ©o cáº¡nh song song hÆ°á»›ng quÃ©t -> TÄƒng/giáº£m trá»±c tiáº¿p chiá»u dÃ i quÃ©t Caliper (StripLength).
+         - KÃ©o cáº¡nh vuÃ´ng gÃ³c hÆ°á»›ng quÃ©t -> TÄƒng/giáº£m chiá»u dÃ i Ä‘oáº¡n tháº³ng biÃªn cáº§n tÃ¬m (Line Length).
+         - ToÃ n bá»™ cÃ¡c váº¡ch strip con (StripCount) vÃ  mÅ©i tÃªn hÆ°á»›ng quÃ©t Ä‘Æ°á»£c váº½ trá»±c tiáº¿p, vá»«a khÃ­t bÃªn trong khung duy nháº¥t.
+       - Giáº£i PhÃ¡p Ká»¹ Thuáº­t ÄÃ£ Triá»ƒn Khai:
+         1. *Loáº¡i Bá» Khung Phá»¥ Cal_Strip trong ToolEditorViewModel.GraphOps.cs*:
+            - Triá»‡t tiÃªu hoÃ n toÃ n viá»‡c táº¡o vÃ  hiá»ƒn thá»‹ khung nÃ©t Ä‘á»©t lá»“ng nhau {c.Name} Cal_Strip.
+            - Khung c.SearchRoi trá»Ÿ thÃ nh Khung Caliper ROI Thá»‘ng Nháº¥t duy nháº¥t mang nhÃ£n {c.Name} Cal.
+            - Váº½ cÃ¡c váº¡ch strips con (OverlayLineItem) vá»«a khÃ­t 100% tá»« mÃ©p nÃ y sang mÃ©p kia cá»§a khung ROI.
+            - Bá»• sung váº½ MÅ©i TÃªn HÆ°á»›ng QuÃ©t (Scan Direction Arrow) táº¡i tÃ¢m khung ROI (quÃ©t TrÃ¡i sang Pháº£i náº¿u Horizontal, TrÃªn xuá»‘ng DÆ°á»›i náº¿u Vertical), hiá»ƒn thá»‹ trá»±c quan tuyá»‡t Ä‘á»‘i.
+         2. *TÆ°Æ¡ng TÃ¡c Äá»“ng Bá»™ Hai Chiá»u Canvas <-> Properties Panel*:
+            - Trong ToolEditorViewModel.Engine.cs (OnRoiEdited): Khi ngÆ°á»i dÃ¹ng kÃ©o cáº¡nh trÃªn canvas preview, há»‡ thá»‘ng tá»± Ä‘á»™ng cáº­p nháº­t c.StripLength = roi.Width (náº¿u Horizontal) hoáº·c c.StripLength = roi.Height (náº¿u Vertical) vÃ  kÃ­ch hoáº¡t OnPropertyChanged(nameof(Caliper_StripLength)).
+            - Trong ToolEditorViewModel.ToolCaliper.cs: Khi ngÆ°á»i dÃ¹ng nháº­p sá»‘ vÃ o Ã´ StripLength, há»‡ thá»‘ng tá»± Ä‘á»™ng co giÃ£n cáº¡nh quÃ©t cá»§a SearchRoi Ä‘á»‘i xá»©ng quanh tÃ¢m (cx, cy).
+            - Khi chuyá»ƒn Ä‘á»•i Orientation: Há»‡ thá»‘ng tá»± Ä‘á»™ng hoÃ¡n Ä‘á»•i kÃ­ch thÆ°á»›c Width vÃ  Height cá»§a SearchRoi Ä‘á»ƒ duy trÃ¬ hÃ¬nh há»c nháº¥t quÃ¡n theo hÆ°á»›ng quÃ©t má»›i.
+         3. *Tá»‘i Giáº£n Giao Diá»‡n NgÆ°á»i DÃ¹ng (ToolEditorView.xaml & ToolEditorView.xaml.cs)*:
+            - Thay tháº¿ 2 nÃºt chá»n ðŸ” Search ROI vÃ  ðŸ“ Strip ROI báº±ng 1 nÃºt Ä‘iá»u khiá»ƒn duy nháº¥t: ðŸŽ¯ Chá»n Khung Caliper ROI (chá»‰ 1 click lÃ  focus ngay vÃ o khung Caliper ROI thá»‘ng nháº¥t trÃªn canvas).
+         4. *TÆ°Æ¡ng ThÃ­ch NgÆ°á»£c 100% Dá»¯ Liá»‡u & Test Suite*:
+            - Giá»¯ nguyÃªn cáº¥u trÃºc dá»¯ liá»‡u JSON Job file (SearchRoi, StripLength), thuáº­t toÃ¡n CaliperDetector.Detect cháº¡y tÆ°Æ¡ng thÃ­ch hoÃ n háº£o.
+            - Cáº­p nháº­t bÃ i test [NewJobAndBlobSpecTests.cs](file:///g:/NODEJS/Vision2026/TestExtractApp/NewJobAndBlobSpecTests.cs) xÃ¡c nháº­n tÃ­nh nÄƒng hÃ¬nh há»c vÃ  Ä‘á»“ng bá»™ 2 chiá»u báº£o toÃ n tÃ¢m tá»a Ä‘á»™.
+       - Kiá»ƒm Thá»­:
+         - dotnet build VisionInspectionApp.slnx: 0 errors.
+         - dotnet run --project TestExtractApp: 100% PASSED toÃ n bá»™ test suite.

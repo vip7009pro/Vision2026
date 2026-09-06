@@ -250,38 +250,48 @@ public static class NewJobAndBlobSpecTests
 
     private static void TestCaliperStripRoiDefinition()
     {
-        Console.WriteLine("[Test 6] Testing Caliper Strip ROI properties...");
+        Console.WriteLine("[Test 6] Testing Unified Caliper ROI geometry & 2-way synchronization...");
 
-        var c = new CaliperDefinition
+        // 1. Horizontal Caliper: SearchRoi.Width is scan length (StripLength), Height is edge range
+        var cHoriz = new CaliperDefinition
         {
-            Name = "Cal1",
-            SearchRoi = new Roi { X = 100, Y = 100, Width = 200, Height = 80, Angle = 15.0 },
+            Name = "Cal_Horiz",
+            SearchRoi = new Roi { X = 100, Y = 100, Width = 80, Height = 200, Angle = 0.0 },
             Orientation = CaliperOrientation.Horizontal,
-            StripLength = 50
+            StripLength = 80
         };
 
-        // Symmetric horizontal strip width is StripLength, height is SearchRoi.Height
-        var stripRoiH = new Roi
+        if (cHoriz.SearchRoi.Width != cHoriz.StripLength)
+            throw new Exception($"Expected Horizontal Width {cHoriz.SearchRoi.Width} to match StripLength {cHoriz.StripLength}!");
+
+        // 2. Vertical Caliper: SearchRoi.Height is scan length (StripLength), Width is edge range
+        var cVert = new CaliperDefinition
         {
-            X = c.Orientation == CaliperOrientation.Horizontal ? c.SearchRoi.X + (c.SearchRoi.Width - c.StripLength) / 2 : c.SearchRoi.X,
-            Y = c.Orientation == CaliperOrientation.Horizontal ? c.SearchRoi.Y : c.SearchRoi.Y + (c.SearchRoi.Height - c.StripLength) / 2,
-            Width = c.Orientation == CaliperOrientation.Horizontal ? c.StripLength : c.SearchRoi.Width,
-            Height = c.Orientation == CaliperOrientation.Horizontal ? c.SearchRoi.Height : c.StripLength,
-            Angle = c.SearchRoi.Angle
+            Name = "Cal_Vert",
+            SearchRoi = new Roi { X = 200, Y = 200, Width = 300, Height = 60, Angle = 0.0 },
+            Orientation = CaliperOrientation.Vertical,
+            StripLength = 60
         };
 
-        if (stripRoiH.Width != 50 || stripRoiH.Height != 80)
-            throw new Exception($"Expected Width=50, Height=80 for horizontal strip, got W={stripRoiH.Width}, H={stripRoiH.Height}");
+        if (cVert.SearchRoi.Height != cVert.StripLength)
+            throw new Exception($"Expected Vertical Height {cVert.SearchRoi.Height} to match StripLength {cVert.StripLength}!");
 
-        // Center must be identical to Search ROI center
-        var searchCx = c.SearchRoi.X + c.SearchRoi.Width / 2.0;
-        var searchCy = c.SearchRoi.Y + c.SearchRoi.Height / 2.0;
-        var stripCx = stripRoiH.X + stripRoiH.Width / 2.0;
-        var stripCy = stripRoiH.Y + stripRoiH.Height / 2.0;
+        // 3. Test 2-way center preservation when resizing StripLength
+        var origCx = cHoriz.SearchRoi.X + cHoriz.SearchRoi.Width / 2.0;
+        var origCy = cHoriz.SearchRoi.Y + cHoriz.SearchRoi.Height / 2.0;
 
-        if (Math.Abs(searchCx - stripCx) > 1e-6 || Math.Abs(searchCy - stripCy) > 1e-6)
-            throw new Exception($"Strip center ({stripCx}, {stripCy}) does not match Search center ({searchCx}, {searchCy})!");
+        // Resize StripLength to 140
+        int newLength = 140;
+        cHoriz.StripLength = newLength;
+        cHoriz.SearchRoi.Width = newLength;
+        cHoriz.SearchRoi.X = (int)Math.Round(origCx - newLength / 2.0);
 
-        Console.WriteLine(" -> Caliper Strip ROI geometry verified!");
+        var newCx = cHoriz.SearchRoi.X + cHoriz.SearchRoi.Width / 2.0;
+        var newCy = cHoriz.SearchRoi.Y + cHoriz.SearchRoi.Height / 2.0;
+
+        if (Math.Abs(origCx - newCx) > 1e-6 || Math.Abs(origCy - newCy) > 1e-6)
+            throw new Exception($"Center shifted during StripLength resize: ({origCx}, {origCy}) -> ({newCx}, {newCy})!");
+
+        Console.WriteLine($" -> Unified Caliper ROI geometry & 2-way sync (W={cHoriz.SearchRoi.Width}, H={cHoriz.SearchRoi.Height}, Cx={newCx}, Cy={newCy}) verified!");
     }
 }

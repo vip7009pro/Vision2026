@@ -548,8 +548,12 @@ public sealed partial class ToolEditorViewModel : ObservableObject
             return;
         }
 
+        var mainWin = System.Windows.Application.Current?.MainWindow;
         var vm = new PlcManagerViewModel(_plcManagerService);
-        _plcManagerWindowInstance = new PlcManagerWindow(vm);
+        _plcManagerWindowInstance = new PlcManagerWindow(vm)
+        {
+            Owner = mainWin
+        };
         _plcManagerWindowInstance.Closed += (s, e) =>
         {
             _plcManagerWindowInstance = null;
@@ -572,8 +576,12 @@ public sealed partial class ToolEditorViewModel : ObservableObject
             return;
         }
 
+        var mainWin = System.Windows.Application.Current?.MainWindow;
         var vm = new HMI.HmiManagerViewModel(_plcManagerService);
-        _hmiManagerWindowInstance = new Views.HMI.HmiManagerWindow(vm);
+        _hmiManagerWindowInstance = new Views.HMI.HmiManagerWindow(vm)
+        {
+            Owner = mainWin
+        };
         _hmiManagerWindowInstance.Closed += (s, e) =>
         {
             _hmiManagerWindowInstance = null;
@@ -594,8 +602,12 @@ public sealed partial class ToolEditorViewModel : ObservableObject
         }
 
         _plcManagerService.AcquirePollingLock("PlcMonitorWindow");
+        var mainWin = System.Windows.Application.Current?.MainWindow;
         var vm = new PlcMonitorViewModel(_plcManagerService);
-        _plcMonitorWindowInstance = new PlcMonitorWindow(vm);
+        _plcMonitorWindowInstance = new PlcMonitorWindow(vm)
+        {
+            Owner = mainWin
+        };
         _plcMonitorWindowInstance.Closed += (s, e) =>
         {
             _plcMonitorWindowInstance = null;
@@ -616,12 +628,14 @@ public sealed partial class ToolEditorViewModel : ObservableObject
         }
 
         _plcManagerService.AcquirePollingLock("PlcBrowserWindow");
+        var mainWin = System.Windows.Application.Current?.MainWindow;
         _plcBrowserWindowInstance = new Window
         {
             Title = "PLC Tag Browser",
             Width = 700,
             Height = 450,
             WindowStartupLocation = WindowStartupLocation.CenterScreen,
+            Owner = mainWin,
             Content = new PlcBrowserControl { DataContext = new PlcBrowserViewModel(_plcManagerService) }
         };
         _plcBrowserWindowInstance.Closed += (s, e) =>
@@ -643,8 +657,12 @@ public sealed partial class ToolEditorViewModel : ObservableObject
             return;
         }
 
+        var mainWin = System.Windows.Application.Current?.MainWindow;
         var vm = new PlcOscilloscopeViewModel(_plcManagerService);
-        _plcOscilloscopeWindowInstance = new Views.PLC.PlcOscilloscopeWindow(vm);
+        _plcOscilloscopeWindowInstance = new Views.PLC.PlcOscilloscopeWindow(vm)
+        {
+            Owner = mainWin
+        };
         _plcOscilloscopeWindowInstance.Closed += (s, e) => _plcOscilloscopeWindowInstance = null;
         _plcOscilloscopeWindowInstance.Show();
     }

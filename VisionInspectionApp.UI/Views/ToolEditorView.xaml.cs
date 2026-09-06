@@ -1015,11 +1015,19 @@ public partial class ToolEditorView : UserControl
         window.Show();
     }
 
+    private void BtnCaliperRoi_Click(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is ToolEditorViewModel vm)
+        {
+            vm.SelectCaliperRoi();
+        }
+    }
+
     private void BtnCaliperSearchRoi_Click(object sender, RoutedEventArgs e)
     {
         if (DataContext is ToolEditorViewModel vm)
         {
-            vm.SelectCaliperSearchRoi();
+            vm.SelectCaliperRoi();
         }
     }
 
@@ -1027,7 +1035,7 @@ public partial class ToolEditorView : UserControl
     {
         if (DataContext is ToolEditorViewModel vm)
         {
-            vm.SelectCaliperStripRoi();
+            vm.SelectCaliperRoi();
         }
     }
 }

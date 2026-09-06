@@ -228,9 +228,11 @@ public partial class ToolEditorViewModel
             RequestAutoSave();
         });
 
+        var mainWin = System.Windows.Application.Current?.MainWindow;
         _dbManagerWindowInstance = new DbManagerWindow
         {
-            DataContext = vm
+            DataContext = vm,
+            Owner = mainWin
         };
 
         _dbManagerWindowInstance.Closed += (s, e) =>

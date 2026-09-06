@@ -1259,39 +1259,17 @@ namespace VisionInspectionApp.UI.ViewModels
 
                 if (showRois && c.SearchRoi.Width > 0 && c.SearchRoi.Height > 0)
                 {
+                    // 1. Khung Caliper ROI Thống Nhất Duy Nhất
                     dst.Add(CreateRotatedRoiWithPose(c.SearchRoi, Brushes.Gold, $"{c.Name} Cal"));
-                    var stripCount = Math.Clamp(c.StripCount, 1, 100);
-                    var stripLength = Math.Max(3, c.StripLength);
 
-                    // Interactive Strip Box with handles to adjust StripLength directly on canvas
-                    Roi stripRoi;
-                    if (c.Orientation == CaliperOrientation.Horizontal)
+                    var stripCount = Math.Clamp(c.StripCount, 1, 100);
+
+                    // Tự động đồng bộ StripLength theo kích thước cạnh quét của khung ROI
+                    var scanLength = (c.Orientation == CaliperOrientation.Horizontal) ? c.SearchRoi.Width : c.SearchRoi.Height;
+                    if (c.StripLength != scanLength && scanLength >= 3)
                     {
-                        var cx = c.SearchRoi.X + c.SearchRoi.Width / 2.0;
-                        var cy = c.SearchRoi.Y + c.SearchRoi.Height / 2.0;
-                        stripRoi = new Roi
-                        {
-                            X = (int)Math.Round(cx - stripLength / 2.0),
-                            Y = (int)Math.Round(cy - c.SearchRoi.Height / 2.0),
-                            Width = stripLength,
-                            Height = c.SearchRoi.Height,
-                            Angle = c.SearchRoi.Angle
-                        };
+                        c.StripLength = scanLength;
                     }
-                    else
-                    {
-                        var cx = c.SearchRoi.X + c.SearchRoi.Width / 2.0;
-                        var cy = c.SearchRoi.Y + c.SearchRoi.Height / 2.0;
-                        stripRoi = new Roi
-                        {
-                            X = (int)Math.Round(cx - c.SearchRoi.Width / 2.0),
-                            Y = (int)Math.Round(cy - stripLength / 2.0),
-                            Width = c.SearchRoi.Width,
-                            Height = stripLength,
-                            Angle = c.SearchRoi.Angle
-                        };
-                    }
-                    dst.Add(CreateRotatedRoiWithPose(stripRoi, Brushes.DeepSkyBlue, $"{c.Name} Cal_Strip", new DoubleCollection { 4, 2 }, isCaliperStrip: true, isHorizontalStrip: c.Orientation == CaliperOrientation.Horizontal));
 
                     var hasOriginPose = _lastRun?.Origin is not null && _lastRun.Origin.Pass && (_lastRun.Origin.MatchRect.Width > 0 || _lastRun.Origin.Position.X != 0 || _lastRun.Origin.Position.Y != 0);
                     var originTeach = (_config.Origin.TemplateRoi.Width > 0 && _config.Origin.TemplateRoi.Height > 0)
@@ -1315,13 +1293,23 @@ namespace VisionInspectionApp.UI.ViewModels
                     var cos = Math.Cos(rad);
                     var sin = Math.Sin(rad);
 
+                    void AddLocalLine(double lx1, double ly1, double lx2, double ly2, Brush stroke, double thickness)
+                    {
+                        var gx1 = centerFound.X + (lx1 * cos - ly1 * sin);
+                        var gy1 = centerFound.Y + (lx1 * sin + ly1 * cos);
+                        var gx2 = centerFound.X + (lx2 * cos - ly2 * sin);
+                        var gy2 = centerFound.Y + (lx2 * sin + ly2 * cos);
+                        dst.Add(new OverlayLineItem { X1 = gx1, Y1 = gy1, X2 = gx2, Y2 = gy2, Stroke = stroke, StrokeThickness = thickness });
+                    }
+
+                    // 2. Vẽ các vạch strips con vừa khít bên trong khung ROI duy nhất & Mũi tên hướng quét
                     if (c.Orientation == CaliperOrientation.Vertical)
                     {
                         for (var i = 0; i < stripCount; i++)
                         {
                             var xLocal = (i + 0.5) * c.SearchRoi.Width / stripCount - c.SearchRoi.Width / 2.0;
-                            var y1Local = -stripLength / 2.0;
-                            var y2Local = stripLength / 2.0;
+                            var y1Local = -c.SearchRoi.Height / 2.0;
+                            var y2Local = c.SearchRoi.Height / 2.0;
 
                             var p1x = centerFound.X + (xLocal * cos - y1Local * sin);
                             var p1y = centerFound.Y + (xLocal * sin + y1Local * cos);
@@ -1330,14 +1318,32 @@ namespace VisionInspectionApp.UI.ViewModels
 
                             dst.Add(new OverlayLineItem { X1 = p1x, Y1 = p1y, X2 = p2x, Y2 = p2y, Stroke = Brushes.Lime, StrokeThickness = 1.0 });
                         }
+
+                        // Mũi tên chỉ hướng quét từ Trên xuống Dưới
+                        var arrowHalf = Math.Min(18.0, c.SearchRoi.Height * 0.3);
+                        if (arrowHalf > 4.0)
+                        {
+                            var aStartY = -arrowHalf;
+                            var aEndY = arrowHalf;
+                            var aTipX = 0.0;
+                            var aTipY = aEndY;
+                            var aLeftX = -4.0;
+                            var aLeftY = aEndY - 5.0;
+                            var aRightX = 4.0;
+                            var aRightY = aEndY - 5.0;
+
+                            AddLocalLine(0.0, aStartY, 0.0, aEndY, Brushes.Cyan, 2.0);
+                            AddLocalLine(aTipX, aTipY, aLeftX, aLeftY, Brushes.Cyan, 2.0);
+                            AddLocalLine(aTipX, aTipY, aRightX, aRightY, Brushes.Cyan, 2.0);
+                        }
                     }
                     else
                     {
                         for (var i = 0; i < stripCount; i++)
                         {
                             var yLocal = (i + 0.5) * c.SearchRoi.Height / stripCount - c.SearchRoi.Height / 2.0;
-                            var x1Local = -stripLength / 2.0;
-                            var x2Local = stripLength / 2.0;
+                            var x1Local = -c.SearchRoi.Width / 2.0;
+                            var x2Local = c.SearchRoi.Width / 2.0;
 
                             var p1x = centerFound.X + (x1Local * cos - yLocal * sin);
                             var p1y = centerFound.Y + (x1Local * sin + yLocal * cos);
@@ -1345,6 +1351,24 @@ namespace VisionInspectionApp.UI.ViewModels
                             var p2y = centerFound.Y + (x2Local * sin + yLocal * cos);
 
                             dst.Add(new OverlayLineItem { X1 = p1x, Y1 = p1y, X2 = p2x, Y2 = p2y, Stroke = Brushes.Lime, StrokeThickness = 1.0 });
+                        }
+
+                        // Mũi tên chỉ hướng quét từ Trái sang Phải
+                        var arrowHalf = Math.Min(18.0, c.SearchRoi.Width * 0.3);
+                        if (arrowHalf > 4.0)
+                        {
+                            var aStartX = -arrowHalf;
+                            var aEndX = arrowHalf;
+                            var aTipX = aEndX;
+                            var aTipY = 0.0;
+                            var aTopX = aEndX - 5.0;
+                            var aTopY = -4.0;
+                            var aBottomX = aEndX - 5.0;
+                            var aBottomY = 4.0;
+
+                            AddLocalLine(aStartX, 0.0, aEndX, 0.0, Brushes.Cyan, 2.0);
+                            AddLocalLine(aTipX, aTipY, aTopX, aTopY, Brushes.Cyan, 2.0);
+                            AddLocalLine(aTipX, aTipY, aBottomX, aBottomY, Brushes.Cyan, 2.0);
                         }
                     }
                 }
