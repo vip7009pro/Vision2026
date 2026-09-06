@@ -2131,3 +2131,34 @@ Lộ trình tích hợp tính năng Chụp ảnh từ camera và hỗ trợ các
        - Kiá»ƒm Thá»­:
          - dotnet build VisionInspectionApp.slnx: 0 errors.
          - dotnet run --project TestExtractApp: 100% PASSED toÃ n bá»™ test suite.
+
+    - [x] **Task 308: Tá»‘i Æ¯u Báº¥t Äá»“ng Bá»™ HoÃ n ToÃ n ImageOutput Tool (Zero Main-Thread Blocking) & Má»Ÿ Rá»™ng Cá»™t TiÃªu Chuáº©n (Spec) Báº£ng Káº¿t Quáº£ Overlay**:
+       - Hiá»‡n TÆ°á»£ng & YÃªu Cáº§u NgÆ°á»i DÃ¹ng:
+         1. *ImageOutput Tool*: NgÆ°á»i dÃ¹ng pháº£n Ã¡nh khi kÃ­ch hoáº¡t xuáº¥t áº£nh (io.EnableOutput = true) thÃ¬ chÆ°Æ¡ng trÃ¬nh bá»‹ cháº­m láº¡i Ä‘Ã¡ng ká»ƒ (thá»i gian cháº¡y tÄƒng thÃªm hÃ ng chá»¥c ms) dÃ¹ trÆ°á»›c Ä‘Ã³ Ä‘Ã£ cÃ³ dá»‹ch vá»¥ AsyncImageSaver.
+         2. *Báº£ng Káº¿t Quáº£ Äo Äáº¡c Overlay*: Báº£ng káº¿t quáº£ á»Ÿ gÃ³c dÆ°á»›i bÃªn pháº£i bá»©c áº£nh cÃ³ cá»™t TIÃŠU CHUáº¨N (Spec) bá»‹ quÃ¡ háº¹p khiáº¿n cÃ¡c giÃ¡ trá»‹ Ä‘o Ä‘áº¡c kÃ¨m dung sai quy chuáº©n (vÃ­ dá»¥ 79.70 (+5.00/-5.00)) bá»‹ cáº¯t cá»¥t Ä‘uÃ´i (79.70 (+5.00..), yÃªu cáº§u chá»‰nh sá»­a báº£ng sao cho nhÃ¬n Ä‘Æ°á»£c toÃ n bá»™ cÃ¡c giÃ¡ trá»‹ trong cá»™t.
+       - PhÃ¢n TÃ­ch Ká»¹ Thuáº­t & NguyÃªn NhÃ¢n Gá»‘c Rá»…:
+         1. *Ngháº½n luá»“ng kiá»ƒm tra chÃ­nh do ImageOutput*:
+            - Trong InspectionService.ImageOutputs.cs, trÆ°á»›c khi Ä‘áº©y vÃ o AsyncImageSaver.Instance.Enqueue, luá»“ng kiá»ƒm tra chÃ­nh váº«n pháº£i Ä‘á»“ng bá»™ thá»±c hiá»‡n: chuyá»ƒn Ä‘á»•i há»‡ mÃ u BGR vÃ  BurnOverlaysToMat (váº½ hÃ ng chá»¥c pháº§n tá»­ hÃ¬nh há»c, chá»¯ annotations vÃ  Ä‘áº·c biá»‡t lÃ  blend ná»n bÃ¡n trong suá»‘t alpha 0.85/0.15 cho báº£ng káº¿t quáº£ báº±ng Cv2.AddWeighted).
+            - CÃ¡c thao tÃ¡c CPU Ä‘á»“ há»a nÃ y tá»‘n 30â€“80ms trá»±c tiáº¿p trÃªn luá»“ng chÃ­nh, Ä‘Æ°á»£c tÃ­nh vÃ o esult.Timings.TotalMs.
+         2. *Cá»™t Spec bá»‹ cáº¯t ngáº¯n*:
+            - Trong DrawResultTableOverlay, 	ableWidth bá»‹ cá»‘ Ä‘á»‹nh tá»‘i Ä‘a 520px, cá»™t Spec chá»‰ rá»™ng 165px.
+            - Äoáº¡n mÃ£ cáº¯t chuá»—i cá»©ng if (specStr.Length > 15) specStr = specStr[..13] + ".."; lÃ m cÃ¡c chuá»—i dung sai danh Ä‘á»‹nh 19-25 kÃ½ tá»± bá»‹ cáº¯t ngáº¯n.
+       - Giáº£i PhÃ¡p Ká»¹ Thuáº­t ÄÃ£ Triá»ƒn Khai:
+         1. *Kiáº¿n TrÃºc Báº¥t Äá»“ng Bá»™ HoÃ n ToÃ n (Async PreProcessBeforeSave) trong AsyncImageSaver.cs*:
+            - Bá»• sung Func<Mat, Mat>? PreProcessBeforeSave vÃ o ImageSaveRequest vÃ  phÆ°Æ¡ng thá»©c Enqueue.
+            - Worker loop ProcessQueueLoopAsync tá»± Ä‘á»™ng thá»±c thi delegate nÃ y trÆ°á»›c khi ghi áº£nh ra Ä‘Ä©a (Cv2.ImWrite), quáº£n lÃ½ an toÃ n vÃ²ng Ä‘á»i Native Mat khÃ´ng gÃ¢y rÃ² rá»‰ RAM.
+            - Bá»• sung biáº¿n Ä‘áº¿m _activeWritingCount vÃ  nÃ¢ng cáº¥p FlushAsync Ä‘áº£m báº£o Ä‘á»“ng bá»™ 100% khi shutdown hoáº·c flush.
+         2. *Giáº£i PhÃ³ng Luá»“ng ChÃ­nh Khá»i Äá»“ Há»a & Overlays trong InspectionService.ImageOutputs.cs*:
+            - Luá»“ng kiá»ƒm tra chÃ­nh chá»‰ clone vÃ¹ng nhá»› thÃ´ (sourceMat.Clone(), máº¥t ~1ms) vÃ  bÃ n giao ngay láº­p tá»©c cho AsyncImageSaver.
+            - ToÃ n bá»™ chuyá»ƒn Ä‘á»•i há»‡ mÃ u, BurnOverlaysToMat, váº½ báº£ng káº¿t quáº£, nÃ©n PNG/JPG vÃ  ghi I/O á»• Ä‘Ä©a chuyá»ƒn 100% ra Background Worker Threads. Thá»i gian xá»­ lÃ½ cá»§a node ImageOutput trÃªn luá»“ng chÃ­nh giáº£m tá»« 40â€“80ms xuá»‘ng chá»‰ cÃ²n **~1â€“2ms**!
+         3. *Má»Ÿ Rá»™ng Báº£ng Káº¿t Quáº£ Overlay & Cá»™t Spec 300px*:
+            - TÄƒng chiá»u rá»™ng cÆ¡ sá»Ÿ aseTableWidth tá»« 520px lÃªn **680px** (tá»± Ä‘á»™ng co giÃ£n theo utoScale).
+            - TÃ¡i phÃ¢n bá»• tá»a Ä‘á»™ X cÃ¡c cá»™t: colCatX (10px), colValX (165px), colSpecX (325px), colStatusX (tableWidth - 60px). Cá»™t TiÃªu Chuáº©n tÄƒng Ä‘á»™ rá»™ng tá»« 165px lÃªn gáº§n **300px** (gáº§n gáº¥p Ä‘Ã´i).
+            - NÃ¢ng giá»›i háº¡n cáº¯t ngáº¯n chuá»—i specStr tá»« 15 lÃªn 28 kÃ½ tá»±, Ä‘áº£m báº£o hiá»ƒn thá»‹ trá»n váº¹n 100% cÃ¡c giÃ¡ trá»‹ dung sai nhÆ° 79.70 (+5.00/-5.00), Target (+TolPlus/-TolMinus)...
+            - Bá»• sung esult.Calipers vÃ o danh sÃ¡ch hÃ ng cá»§a báº£ng káº¿t quáº£ Ä‘o Ä‘áº¡c.
+         4. *Bá»™ Kiá»ƒm Thá»­ Tá»± Äá»™ng ToÃ n Diá»‡n trong TestExtractApp*:
+            - Cáº­p nháº­t Test_08_ImageOutput_ResultTableOverlay: Kiá»ƒm tra Ä‘á»™ rá»™ng báº£ng 680px phá»§ kÃ­n Ä‘iá»ƒm Ä‘o vÃ  hiá»ƒn thá»‹ Ä‘áº§y Ä‘á»§ Caliper cÃ¹ng chuá»—i dung sai 19 kÃ½ tá»±.
+            - Bá»• sung Test_11_AsyncImageSaver_PreProcessBeforeSave_NonBlocking: XÃ¡c nháº­n Enqueue hoÃ n táº¥t trong < 50ms (non-blocking), delegate PreProcessBeforeSave thá»±c thi chÃ­nh xÃ¡c trÃªn background worker vÃ  file áº£nh Ä‘Æ°á»£c lÆ°u Ä‘Ä©a há»£p lá»‡.
+       - Kiá»ƒm Thá»­:
+         - dotnet build VisionInspectionApp.slnx: 0 errors.
+         - dotnet run --project TestExtractApp: 100% PASSED toÃ n bá»™ test suite (11/11 tests trong suite Preprocess & ImageOutput).

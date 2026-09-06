@@ -18,16 +18,17 @@ public sealed class AsyncImageSaver : IDisposable, IAsyncDisposable
 
     public sealed class ImageSaveRequest : IDisposable
     {
-        public required Mat Image { get; init; }
+        public Mat Image { get; set; }
         public required string FullPath { get; init; }
         public required string OutputName { get; init; }
         public DateTime EnqueuedTime { get; init; } = DateTime.UtcNow;
+        public Func<Mat, Mat>? PreProcessBeforeSave { get; init; }
 
         public void Dispose()
         {
             try
             {
-                if (!Image.IsDisposed)
+                if (Image is not null && !Image.IsDisposed)
                 {
                     Image.Dispose();
                 }
@@ -45,11 +46,13 @@ public sealed class AsyncImageSaver : IDisposable, IAsyncDisposable
     private bool _disposed;
     private readonly int _capacity;
     private long _droppedCount;
+    private int _activeWritingCount;
 
     // Giới hạn hàng đợi tối đa 30 ảnh để tránh quá tải bộ nhớ RAM nếu camera chụp nhanh hơn tốc độ ghi đĩa
     public const int DefaultCapacity = 30;
 
     public int PendingCount => _channel.Reader.Count;
+    public int ActiveWritingCount => Volatile.Read(ref _activeWritingCount);
     public long DroppedCount => Interlocked.Read(ref _droppedCount);
 
     public AsyncImageSaver(int capacity = DefaultCapacity, int workerCount = 2)
@@ -77,9 +80,10 @@ public sealed class AsyncImageSaver : IDisposable, IAsyncDisposable
     /// <summary>
     /// Đẩy yêu cầu lưu ảnh vào hàng đợi bất đồng bộ (Non-blocking, mất < 0.01ms).
     /// Quyền sở hữu Mat được chuyển giao cho AsyncImageSaver, caller KHÔNG dispose Mat này.
+    /// Cho phép truyền delegate preProcessBeforeSave (ví dụ: vẽ Overlay, đổi hệ màu) để chạy hoàn toàn trên background worker.
     /// Nếu hàng đợi đầy, request cũ nhất sẽ được giải phóng Native Mat an toàn (No Memory Leak).
     /// </summary>
-    public bool Enqueue(Mat imageToSave, string fullPath, string outputName)
+    public bool Enqueue(Mat imageToSave, string fullPath, string outputName, Func<Mat, Mat>? preProcessBeforeSave = null)
     {
         if (_disposed || imageToSave is null || imageToSave.Empty() || string.IsNullOrWhiteSpace(fullPath))
         {
@@ -91,7 +95,8 @@ public sealed class AsyncImageSaver : IDisposable, IAsyncDisposable
         {
             Image = imageToSave,
             FullPath = fullPath,
-            OutputName = outputName
+            OutputName = outputName,
+            PreProcessBeforeSave = preProcessBeforeSave
         };
 
         // Nếu hàng đợi đầy, chủ động lấy request cũ nhất ra và gọi Dispose() trước khi đẩy request mới vào
@@ -132,22 +137,40 @@ public sealed class AsyncImageSaver : IDisposable, IAsyncDisposable
                 {
                     while (reader.TryRead(out var req))
                     {
-                        using (req)
+                        Interlocked.Increment(ref _activeWritingCount);
+                        try
                         {
-                            try
+                            using (req)
                             {
-                                var dir = Path.GetDirectoryName(req.FullPath);
-                                if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
+                                try
                                 {
-                                    Directory.CreateDirectory(dir);
-                                }
+                                    if (req.PreProcessBeforeSave is not null)
+                                    {
+                                        var processed = req.PreProcessBeforeSave(req.Image);
+                                        if (!ReferenceEquals(processed, req.Image))
+                                        {
+                                            req.Image.Dispose();
+                                            req.Image = processed;
+                                        }
+                                    }
 
-                                Cv2.ImWrite(req.FullPath, req.Image);
+                                    var dir = Path.GetDirectoryName(req.FullPath);
+                                    if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
+                                    {
+                                        Directory.CreateDirectory(dir);
+                                    }
+
+                                    Cv2.ImWrite(req.FullPath, req.Image);
+                                }
+                                catch (Exception ex)
+                                {
+                                    System.Diagnostics.Debug.WriteLine($"[AsyncImageSaver] Failed to write image '{req.FullPath}': {ex.Message}");
+                                }
                             }
-                            catch (Exception ex)
-                            {
-                                System.Diagnostics.Debug.WriteLine($"[AsyncImageSaver] Failed to write image '{req.FullPath}': {ex.Message}");
-                            }
+                        }
+                        finally
+                        {
+                            Interlocked.Decrement(ref _activeWritingCount);
                         }
                     }
                 }
@@ -165,21 +188,39 @@ public sealed class AsyncImageSaver : IDisposable, IAsyncDisposable
         // Xử lý nốt các ảnh còn lại trong queue khi shutdown
         while (reader.TryRead(out var remainingReq))
         {
-            using (remainingReq)
+            Interlocked.Increment(ref _activeWritingCount);
+            try
             {
-                try
+                using (remainingReq)
                 {
-                    var dir = Path.GetDirectoryName(remainingReq.FullPath);
-                    if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
+                    try
                     {
-                        Directory.CreateDirectory(dir);
+                        if (remainingReq.PreProcessBeforeSave is not null)
+                        {
+                            var processed = remainingReq.PreProcessBeforeSave(remainingReq.Image);
+                            if (!ReferenceEquals(processed, remainingReq.Image))
+                            {
+                                remainingReq.Image.Dispose();
+                                remainingReq.Image = processed;
+                            }
+                        }
+
+                        var dir = Path.GetDirectoryName(remainingReq.FullPath);
+                        if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
+                        {
+                            Directory.CreateDirectory(dir);
+                        }
+                        Cv2.ImWrite(remainingReq.FullPath, remainingReq.Image);
                     }
-                    Cv2.ImWrite(remainingReq.FullPath, remainingReq.Image);
+                    catch
+                    {
+                        // Ignored during shutdown
+                    }
                 }
-                catch
-                {
-                    // Ignored during shutdown
-                }
+            }
+            finally
+            {
+                Interlocked.Decrement(ref _activeWritingCount);
             }
         }
     }
@@ -187,9 +228,16 @@ public sealed class AsyncImageSaver : IDisposable, IAsyncDisposable
     public async Task FlushAsync(int timeoutMs = 3000)
     {
         using var cts = new CancellationTokenSource(timeoutMs);
-        while (PendingCount > 0 && !cts.IsCancellationRequested)
+        while ((PendingCount > 0 || Volatile.Read(ref _activeWritingCount) > 0) && !cts.IsCancellationRequested)
         {
-            await Task.Delay(50, cts.Token).ConfigureAwait(false);
+            try
+            {
+                await Task.Delay(20, cts.Token).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+                break;
+            }
         }
     }
 

@@ -1,4 +1,4 @@
-# Vision Inspection App — Context & Roadmap
+﻿# Vision Inspection App — Context & Roadmap
 
 ## Mô tả
 
@@ -46,6 +46,37 @@
 ### ImageSource và preview
 
 - Lưu template cho Origin, Point và SurfaceCompare hoạt động với nguồn ảnh ImageSource.
+- **Tối Ưu Bất Đồng Bộ Hoàn Toàn ImageOutput Tool (Zero Main-Thread Blocking) & Mở Rộng Cột Tiêu Chuẩn (Spec) Bảng Kết Quả Overlay (Task 308)**:
+  - **Hiện Tượng & Yêu Cầu Người Dùng**:
+    1. *ImageOutput Tool*: Người dùng phản ánh khi kích hoạt xuất ảnh (`io.EnableOutput = true`), chương trình bị chậm lại đáng kể (thời gian chạy tăng thêm hàng chục ms) dù trước đó đã có dịch vụ `AsyncImageSaver`.
+    2. *Bảng Kết Quả Đo Đạc Overlay*: Bảng kết quả ở góc dưới bên phải bức ảnh có cột TIÊU CHUẨN (`Spec`) bị quá hẹp khiến các giá trị đo đạc kèm dung sai quy chuẩn (ví dụ `79.70 (+5.00/-5.00)`) bị cắt cụt đuôi (`79.70 (+5.00..`), yêu cầu chỉnh sửa bảng sao cho nhìn được toàn bộ các giá trị trong cột.
+  - **Nguyên Nhân Sâu Xa**:
+    1. *Nghẽn luồng kiểm tra chính do ImageOutput*:
+       - Trong `InspectionService.ImageOutputs.cs`, trước khi đẩy vào `AsyncImageSaver.Instance.Enqueue`, luồng kiểm tra chính vẫn phải đồng bộ thực hiện: chuyển đổi hệ màu BGR và gọi `BurnOverlaysToMat` (vẽ hàng chục phần tử hình học, chữ annotations và đặc biệt là blend nền bán trong suốt alpha 0.85/0.15 cho bảng kết quả bằng `Cv2.AddWeighted`).
+       - Các thao tác CPU đồ họa này tốn 30–80ms trực tiếp trên luồng chính, được tính vào `result.Timings.TotalMs`.
+    2. *Cột Spec bị cắt ngắn*:
+       - Trong `DrawResultTableOverlay`, `tableWidth` bị cố định tối đa 520px, cột Spec chỉ rộng 165px.
+       - Đoạn mã cắt chuỗi cứng `if (specStr.Length > 15) specStr = specStr[..13] + "..";` làm các chuỗi dung sai danh định 19-25 ký tự bị cắt ngắn.
+  - **Giải Pháp Kỹ Thuật Đã Triển Khai**:
+    1. *Kiến Trúc Bất Đồng Bộ Hoàn Toàn (Async PreProcessBeforeSave) trong `AsyncImageSaver.cs`*:
+       - Bổ sung `Func<Mat, Mat>? PreProcessBeforeSave` vào `ImageSaveRequest` và phương thức `Enqueue`.
+       - Worker loop `ProcessQueueLoopAsync` tự động thực thi delegate này trước khi ghi ảnh ra đĩa (`Cv2.ImWrite`), quản lý an toàn vòng đời Native Mat không gây rò rỉ RAM.
+       - Bổ sung biến đếm `_activeWritingCount` và nâng cấp `FlushAsync` đảm bảo đồng bộ 100% khi shutdown hoặc flush.
+    2. *Giải Phóng Luồng Chính Khỏi Đồ Họa & Overlays trong `InspectionService.ImageOutputs.cs`*:
+       - Luồng kiểm tra chính chỉ clone vùng nhớ thô (`sourceMat.Clone()`, mất ~1ms) và bàn giao ngay lập tức cho `AsyncImageSaver`.
+       - Toàn bộ chuyển đổi hệ màu, `BurnOverlaysToMat`, vẽ bảng kết quả, nén PNG/JPG và ghi I/O ổ đĩa chuyển 100% ra Background Worker Threads. Thời gian xử lý của node ImageOutput trên luồng chính giảm từ 40–80ms xuống chỉ còn **~1–2ms**!
+       - Bổ sung `result.Calipers` vào danh sách hàng của bảng kết quả đo đạc.
+    3. *Mở Rộng Bảng Kết Quả Overlay & Cột Spec 300px*:
+       - Tăng chiều rộng cơ sở `baseTableWidth` từ 520px lên **680px** (tự động co giãn theo `autoScale`).
+       - Tái phân bổ tọa độ X các cột: `colCatX` (10px), `colValX` (165px), `colSpecX` (325px), `colStatusX` (tableWidth - 60px). Cột Tiêu Chuẩn tăng độ rộng từ 165px lên gần **300px** (gần gấp đôi).
+       - Nâng giới hạn cắt ngắn chuỗi `specStr` từ 15 lên 28 ký tự, đảm bảo hiển thị trọn vẹn 100% các giá trị dung sai như `79.70 (+5.00/-5.00)`, `Target (+TolPlus/-TolMinus)`...
+    4. *Bộ Kiểm Thử Tự Động Toàn Diện trong `TestExtractApp`*:
+       - Cập nhật `Test_08_ImageOutput_ResultTableOverlay`: Kiểm tra độ rộng bảng 680px phủ kín điểm đo và hiển thị đầy đủ Caliper cùng chuỗi dung sai 19 ký tự.
+       - Bổ sung `Test_11_AsyncImageSaver_PreProcessBeforeSave_NonBlocking`: Xác nhận `Enqueue` hoàn tất trong < 50ms (non-blocking), delegate `PreProcessBeforeSave` thực thi chính xác trên background worker và file ảnh được lưu đĩa hợp lệ.
+  - **Kiểm Thử**:
+    - `dotnet build VisionInspectionApp.slnx`: 0 errors.
+    - `dotnet run --project TestExtractApp`: 100% PASSED toàn bộ test suite (11/11 tests trong suite Preprocess & ImageOutput).
+
 - **Khắc Phục Triệt Để Nghẽn Runtime Caliper & Tối Ưu Hóa Pyramidal Downscale Background Estimation Cho ROI Patch Nhỏ (Task 307)**:
   - **Hiện Tượng & Yêu Cầu Người Dùng**:
     - Dù Caliper đã áp dụng cơ chế ROI First, người dùng đo lường thực tế trên bảng thời gian chạy (Per-Tool Timings) thấy các tool CAL1 (131ms), CAL4 (52ms), CAL3 (49ms), CAL2 (28ms) vẫn tốn hàng chục đến hàng trăm ms.

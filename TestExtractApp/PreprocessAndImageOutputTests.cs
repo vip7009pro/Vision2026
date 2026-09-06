@@ -29,10 +29,11 @@ public static class PreprocessAndImageOutputTests
         Test_08_ImageOutput_ResultTableOverlay();
         Test_09_JsonSerialization_And_BackwardCompatibility();
         Test_10_MemoryLeak_SoakLoop();
+        Test_11_AsyncImageSaver_PreProcessBeforeSave_NonBlocking();
 
         Console.ForegroundColor = ConsoleColor.Green;
         Console.WriteLine("----------------------------------------------------------");
-        Console.WriteLine(" ALL PREPROCESS & IMAGE OUTPUT TESTS PASSED (10/10)!");
+        Console.WriteLine(" ALL PREPROCESS & IMAGE OUTPUT TESTS PASSED (11/11)!");
         Console.WriteLine("----------------------------------------------------------\n");
         Console.ResetColor();
     }
@@ -301,6 +302,9 @@ public static class PreprocessAndImageOutputTests
         // Bổ sung các kết quả đo đạc phong phú
         inspectionResult.Distances.Add(new DistanceCheckResult("Dist_Width", "P1", "P2", 50.25, 50.00, 0.5, 0.5, true));
         inspectionResult.Distances.Add(new DistanceCheckResult("Dist_Height", "P3", "P4", 31.80, 30.00, 0.5, 0.5, false));
+        // Thêm kết quả đo Caliper và dung sai dài 79.70 (+5.00/-5.00)
+        inspectionResult.Calipers.Add(new CaliperResult("CAL1", true, new List<CaliperEdgePoint> { new CaliperEdgePoint(10, 10, 50) }, new Point2d(10, 10), new Point2d(20, 20), 50.0));
+        inspectionResult.Distances.Add(new DistanceCheckResult("CAL1_Dis", "CAL1", "CAL2", 79.74, 79.70, 5.0, 5.0, true));
         inspectionResult.Angles.Add(new AngleResult("Angle_Corner", "L1", "L2", 90.15, 90.0, 1.0, 1.0, true, true, new Point2d(100, 100), new Point2d(1, 0), new Point2d(0, 1)));
         inspectionResult.CircleFinders.Add(new CircleFinderResult("Hole_1", true, new Point2d(300, 300), 15.5, 0.98));
         inspectionResult.BlobDetections.Add(new BlobDetectionResult("Defect_Blobs", 0, new List<BlobInfo>(), true, MaxAllowedBlobs: 2));
@@ -328,6 +332,12 @@ public static class PreprocessAndImageOutputTests
         var pixel = testMatWithTable.Get<Vec3b>(checkY, checkX);
         bool modified = (pixel.Item0 != 40 || pixel.Item1 != 40 || pixel.Item2 != 40);
         Assert(modified, "Result table was successfully drawn on bottom-right corner");
+
+        // Kiểm tra độ rộng bảng 680px: Tọa độ x = Width - 600 cũng nằm trong phạm vi bảng (đã được làm tối/blend)
+        int checkTableWidthX = testMatWithTable.Width - 600;
+        var pixelInner = testMatWithTable.Get<Vec3b>(checkY, checkTableWidthX);
+        bool innerModified = (pixelInner.Item0 != 40 || pixelInner.Item1 != 40 || pixelInner.Item2 != 40);
+        Assert(innerModified, "Result table width expanded to 680px covers check point (Width - 600px)");
 
         // Khi ShowResultTable = false thì không vẽ bảng kết quả
         outputDef.ShowResultTable = false;
@@ -444,6 +454,69 @@ public static class PreprocessAndImageOutputTests
         Console.ForegroundColor = ConsoleColor.Green;
         Console.WriteLine("PASSED");
         Console.ResetColor();
+    }
+
+    private static void Test_11_AsyncImageSaver_PreProcessBeforeSave_NonBlocking()
+    {
+        Console.Write("[Test 11] AsyncImageSaver PreProcessBeforeSave (Non-Blocking)... ");
+        var tempFolder = Path.Combine(Path.GetTempPath(), "VisionTest_AsyncSaver_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempFolder);
+        var tempFile = Path.Combine(tempFolder, "async_test.jpg");
+
+        try
+        {
+            var saver = VisionInspectionApp.Application.Services.AsyncImageSaver.Instance;
+            using var sampleMat = new Mat(400, 600, MatType.CV_8UC3, new Scalar(120, 120, 120));
+
+            bool preProcessExecuted = false;
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+
+            // Enqueue kèm delegate preProcess
+            bool enqueued = saver.Enqueue(sampleMat.Clone(), tempFile, "TestOutput", m =>
+            {
+                preProcessExecuted = true;
+                // Vẽ chữ nhật mẫu đánh dấu
+                Cv2.Rectangle(m, new Rect(10, 10, 50, 50), new Scalar(0, 255, 0), -1);
+                return m;
+            });
+
+            sw.Stop();
+
+            Assert(enqueued, "Enqueue must return true");
+            Assert(sw.ElapsedMilliseconds < 50, $"Enqueue must be non-blocking (< 50ms), actual: {sw.ElapsedMilliseconds}ms");
+
+            // Chờ worker background xử lý xong
+            saver.FlushAsync(5000).GetAwaiter().GetResult();
+
+            for (int i = 0; i < 30 && !File.Exists(tempFile); i++)
+            {
+                System.Threading.Thread.Sleep(50);
+            }
+
+            Assert(File.Exists(tempFile), "Saved file must exist on disk");
+            Assert(preProcessExecuted, "PreProcessBeforeSave delegate must be executed on background worker");
+
+            // Đọc lại ảnh đã lưu để xác nhận nội dung đã được xử lý bởi delegate
+            using var savedMat = Cv2.ImRead(tempFile);
+            Assert(savedMat != null && !savedMat.Empty(), "Saved image must be valid and readable");
+            var markPixel = savedMat.Get<Vec3b>(20, 20);
+            Assert(markPixel.Item1 > 200, "Green marker drawn by preProcess must be present in saved file");
+
+            Console.ForegroundColor = ConsoleColor.Green;
+            Console.WriteLine("PASSED");
+            Console.ResetColor();
+        }
+        finally
+        {
+            try
+            {
+                if (Directory.Exists(tempFolder))
+                {
+                    Directory.Delete(tempFolder, true);
+                }
+            }
+            catch { }
+        }
     }
 
     private static void Assert(bool condition, string message)

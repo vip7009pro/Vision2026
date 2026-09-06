@@ -108,25 +108,45 @@ public partial class InspectionService
 
                 var fullPath = Path.Combine(folder, fileName);
 
-                Mat saveMat;
-                if (sourceMat.Channels() == 1)
-                {
-                    saveMat = new Mat();
-                    Cv2.CvtColor(sourceMat, saveMat, ColorConversionCodes.GRAY2BGR);
-                }
-                else
-                {
-                    saveMat = sourceMat.Clone();
-                }
+                // Luồng kiểm tra chính chỉ tạo bản sao bộ nhớ thô (Clone mất ~1ms)
+                // và bàn giao toàn bộ quyền sở hữu Native Mat cho AsyncImageSaver.
+                Mat saveMat = sourceMat.Clone();
 
-                if (io.IncludeOverlay)
+                Func<Mat, Mat>? preProcess = null;
+                if (io.IncludeOverlay || sourceMat.Channels() == 1)
                 {
-                    BurnOverlaysToMat(saveMat, config, result, io, inputName, nodesById, edges);
+                    // Chuyển toàn bộ việc CvtColor sang BGR và BurnOverlaysToMat sang Background Worker của AsyncImageSaver.
+                    // Luồng kiểm tra chính không bị chặn, chu kỳ inspection kết thúc ngay tức thì (< 2ms).
+                    preProcess = m =>
+                    {
+                        Mat colorMat = m;
+                        try
+                        {
+                            if (m.Channels() == 1)
+                            {
+                                colorMat = new Mat();
+                                Cv2.CvtColor(m, colorMat, ColorConversionCodes.GRAY2BGR);
+                                m.Dispose();
+                            }
+
+                            if (io.IncludeOverlay)
+                            {
+                                BurnOverlaysToMat(colorMat, config, result, io, inputName, nodesById, edges);
+                            }
+
+                            return colorMat;
+                        }
+                        catch (Exception ex)
+                        {
+                            System.Diagnostics.Debug.WriteLine($"[ImageOutput] PreProcess overlay failed for {io.Name}: {ex.Message}");
+                            return colorMat;
+                        }
+                    };
                 }
 
                 // Gửi vào hàng đợi bất đồng bộ ngoài luồng chính (Non-blocking, tốn < 0.01ms)
-                // AsyncImageSaver tự quản lý vòng đời và giải phóng saveMat sau khi ghi đĩa xong.
-                bool enqueued = AsyncImageSaver.Instance.Enqueue(saveMat, fullPath, io.Name);
+                // AsyncImageSaver tự quản lý vòng đời, thực thi preProcess trên background worker và giải phóng saveMat sau khi ghi đĩa xong.
+                bool enqueued = AsyncImageSaver.Instance.Enqueue(saveMat, fullPath, io.Name, preProcess);
                 result.ImageOutputs.Add(new ImageOutputResult(io.Name, enqueued, enqueued ? fullPath : "", enqueued ? "" : "Image save queue is full"));
             }
             catch (Exception ex)
@@ -1113,6 +1133,15 @@ public partial class InspectionService
             }
         }
 
+        if (result.Calipers != null)
+        {
+            foreach (var c in result.Calipers)
+            {
+                if (string.IsNullOrWhiteSpace(c.Name)) continue;
+                rows.Add(("Caliper", c.Name, c.Found ? $"Edge: {c.Points.Count}pts" : "Fail", c.Found ? "Found" : "Fail", c.Found));
+            }
+        }
+
         if (result.Diameters != null)
         {
             foreach (var d in result.Diameters)
@@ -1179,7 +1208,9 @@ public partial class InspectionService
         int dataHeight = maxItemsToShow > 0 ? (maxItemsToShow + 1) * rowHeight : 0;
         int totalTableHeight = headerHeight + dataHeight + (int)(10 * autoScale);
 
-        int tableWidth = Math.Min(mat.Width - 20, Math.Max((int)(400 * autoScale), (int)(520 * autoScale)));
+        // Mở rộng bảng lên 680px để hiển thị trọn vẹn cột Spec dung sai (+TolPlus/-TolMinus)
+        int baseTableWidth = 680;
+        int tableWidth = Math.Min(mat.Width - 20, Math.Max((int)(450 * autoScale), (int)(baseTableWidth * autoScale)));
         int margin = Math.Max(10, (int)(15 * autoScale));
 
         int x0 = mat.Width - tableWidth - margin;
@@ -1228,11 +1259,11 @@ public partial class InspectionService
         // 5. Vẽ bảng dữ liệu kết quả đo đạc (Data Table)
         if (maxItemsToShow > 0)
         {
-            // Vị trí các cột
+            // Vị trí các cột: Cột Spec được tăng rộng lên gần 300px để hiển thị đầy đủ mọi tiêu chuẩn & dung sai
             int colCatX = x0 + (int)(10 * autoScale);
-            int colValX = x0 + (int)(150 * autoScale);
-            int colSpecX = x0 + (int)(290 * autoScale);
-            int colStatusX = x0 + tableWidth - (int)(65 * autoScale);
+            int colValX = x0 + (int)(165 * autoScale);
+            int colSpecX = x0 + (int)(325 * autoScale);
+            int colStatusX = x0 + tableWidth - (int)(60 * autoScale);
 
             // Header hàng
             curY += rowHeight;
@@ -1250,13 +1281,14 @@ public partial class InspectionService
                 curY += rowHeight;
 
                 string nameStr = $"{r.Cat}: {r.Name}";
-                if (nameStr.Length > 16) nameStr = nameStr[..14] + "..";
+                if (nameStr.Length > 18) nameStr = nameStr[..16] + "..";
 
                 string valStr = r.Val;
-                if (valStr.Length > 15) valStr = valStr[..13] + "..";
+                if (valStr.Length > 16) valStr = valStr[..14] + "..";
 
+                // Cho phép hiển thị tối đa 28 ký tự để hiển thị trọn vẹn quy cách dung sai như 79.70 (+5.00/-5.00)
                 string specStr = r.Spec;
-                if (specStr.Length > 15) specStr = specStr[..13] + "..";
+                if (specStr.Length > 28) specStr = specStr[..26] + "..";
 
                 string stStr = r.Pass ? "OK" : "NG";
                 var stColor = r.Pass ? passColor : failColor;
