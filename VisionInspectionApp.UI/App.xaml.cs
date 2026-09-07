@@ -467,6 +467,9 @@ public partial class App : System.Windows.Application
     }
 
     private const int GWL_HWNDPARENT = -8;
+    private const int SW_SHOWNORMAL = 1;
+    private const int SW_SHOWMAXIMIZED = 3;
+    private const int SW_SHOW = 5;
     private const int SW_RESTORE = 9;
 
     [DllImport("user32.dll")]
@@ -531,19 +534,40 @@ public partial class App : System.Windows.Application
         if (window == null) return;
         try
         {
+            bool isMaximized = window.WindowState == WindowState.Maximized;
+            if (window is MainWindow && window.WindowState == WindowState.Minimized)
+            {
+                isMaximized = true;
+            }
+
             if (window.WindowState == WindowState.Minimized)
             {
-                window.WindowState = WindowState.Normal;
+                window.WindowState = isMaximized ? WindowState.Maximized : WindowState.Normal;
             }
 
             var hwnd = new WindowInteropHelper(window).Handle;
             if (hwnd != IntPtr.Zero)
             {
-                ShowWindow(hwnd, SW_RESTORE);
+                if (isMaximized)
+                {
+                    ShowWindow(hwnd, SW_SHOWMAXIMIZED);
+                }
+                else if (window.WindowState == WindowState.Minimized)
+                {
+                    ShowWindow(hwnd, SW_RESTORE);
+                }
+                else
+                {
+                    ShowWindow(hwnd, SW_SHOW);
+                }
                 SetForegroundWindow(hwnd);
             }
 
             window.Show();
+            if (isMaximized && window.WindowState != WindowState.Maximized)
+            {
+                window.WindowState = WindowState.Maximized;
+            }
             window.Activate();
             window.Focus();
         }

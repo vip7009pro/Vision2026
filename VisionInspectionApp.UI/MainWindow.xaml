@@ -245,7 +245,7 @@
                                     Background="{DynamicResource WindowBackgroundBrush}"
                                     Margin="0"
                                     Padding="0">
-                                <ContentPresenter ContentSource="SelectedContent" />
+                                <ContentPresenter ContentSource="SelectedContent" TextElement.Foreground="{DynamicResource TextBrush}" />
                             </Border>
                         </Grid>
                     </ControlTemplate>

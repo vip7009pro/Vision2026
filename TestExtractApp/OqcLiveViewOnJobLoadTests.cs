@@ -19,6 +19,7 @@ public static class OqcLiveViewOnJobLoadTests
         TestCameraServiceLiveStreamRetentionOnApplyParameters().GetAwaiter().GetResult();
         TestCameraServiceNormalApplyParametersWhenNoLiveConsumer().GetAwaiter().GetResult();
         TestLiveStreamGrabbingAutoRestart().GetAwaiter().GetResult();
+        TestBringWindowToForegroundPreservesMaximized();
 
         Console.WriteLine("=======================================================");
         Console.WriteLine("✅ ALL OQC SCANNER LIVE VIEW TESTS PASSED!");
@@ -179,5 +180,32 @@ public static class OqcLiveViewOnJobLoadTests
 
         await cameraService.StopCameraAsync();
         cameraService.Dispose();
+    }
+
+    private static void TestBringWindowToForegroundPreservesMaximized()
+    {
+        Console.WriteLine("--- Test 4: Đảm bảo BringWindowToForeground bảo tồn trạng thái Maximized (Full Screen) khi đóng cửa sổ con ---");
+
+        var thread = new System.Threading.Thread(() =>
+        {
+            var win = new System.Windows.Window
+            {
+                WindowState = System.Windows.WindowState.Maximized
+            };
+
+            // Gọi hàm BringWindowToForeground
+            VisionInspectionApp.UI.App.BringWindowToForeground(win);
+
+            if (win.WindowState != System.Windows.WindowState.Maximized)
+            {
+                throw new Exception($"BringWindowToForeground không bảo tồn trạng thái Maximized! Giá trị hiện tại: {win.WindowState}");
+            }
+        });
+
+        thread.SetApartmentState(System.Threading.ApartmentState.STA);
+        thread.Start();
+        thread.Join();
+
+        Console.WriteLine("  -> PASSED: BringWindowToForeground duy trì tuyệt đối trạng thái Maximized (Full Screen).");
     }
 }

@@ -32,8 +32,57 @@ public static class OcrDetectorTests
         TestIntegrationPipeline();
         TestUserCaseLineModeDarkBackground();
         TestCharacterFontTrainingMvs();
+        TestLineSourceTeachingAndWrongModelFallback();
 
         Console.WriteLine("=== [PASSED] All Industrial OCR Tool Tests Completed Successfully! ===");
+    }
+
+    private static void TestLineSourceTeachingAndWrongModelFallback()
+    {
+        Console.WriteLine("--> Test 8: User Case 'Line Source' Teaching & Wrong Model Fallback");
+
+        // 1. Test Dạy chuỗi 'Line Source' (10 ký tự) trên nền tối
+        using var img = new Mat(90, 450, MatType.CV_8UC3, new Scalar(45, 45, 45));
+        Cv2.PutText(img, "Line Source", new Point(25, 55), HersheyFonts.HersheySimplex, 1.2, new Scalar(220, 220, 220), 2, LineTypes.AntiAlias);
+
+        var ocrDef = new OcrDefinition
+        {
+            Name = "OCR_LineSource",
+            SearchRoi = new Roi { X = 10, Y = 10, Width = 430, Height = 75 },
+            EngineMode = OcrEngineMode.HeuristicFast,
+            MatchingMode = OcrMatchingMode.ExactMatch,
+            ExpectedText = "Line Source",
+            BinarizeMethod = OcrBinarizeMethod.Otsu
+        };
+
+        var trained = OcrDetector.TeachCharacters(img, ocrDef, labelSequence: "Line Source");
+        Console.WriteLine($"    [Line Source Training]: Đã học {trained.Count} ký tự mẫu: {string.Join(", ", trained.Select(x => $"'{x.Character}'"))}");
+
+        if (trained.Count < 10)
+            throw new Exception($"Kỳ vọng học đủ 10 ký tự của 'Line Source' nhưng chỉ học được {trained.Count}!");
+
+        ocrDef.TrainedCharacters = trained;
+        var res = OcrDetector.Detect(img, ocrDef, new Point2d(0, 0), new Point2d(0, 0), 0.0);
+        Console.WriteLine($"    [Line Source Recognition]: Text='{res.RecognizedText}', Conf={res.Confidence:P1}, Pass={res.Pass}");
+
+        if (res.RecognizedText != "Line Source")
+            throw new Exception($"Kỳ vọng nhận diện đúng 100% 'Line Source', nhưng nhận được '{res.RecognizedText}'!");
+
+        // 2. Test cảnh báo khi chọn nhầm model doc_ori (phân loại xoay trang)
+        var ocrWrongAiDef = new OcrDefinition
+        {
+            Name = "OCR_WrongModel",
+            SearchRoi = new Roi { X = 10, Y = 10, Width = 430, Height = 75 },
+            EngineMode = OcrEngineMode.DeepLearningOnnx,
+            OnnxModelPath = "G:\\Downloads\\PP-LCNet_x1_0_doc_ori_infer.onnx", // Tên file người dùng tải nhầm
+            ExpectedText = "Line Source"
+        };
+
+        var resWrongModel = OcrDetector.Detect(img, ocrWrongAiDef, new Point2d(0, 0), new Point2d(0, 0), 0.0);
+        Console.WriteLine($"    [Wrong Model Handling]: Found={resWrongModel.Found}, Text='{resWrongModel.RecognizedText}', Message='{resWrongModel.Message}'");
+
+        if (!resWrongModel.Found)
+            throw new Exception("Hệ thống phải tự động fallback sang Non-AI mượt mà khi người dùng chọn model phân loại xoay!");
     }
 
     private static void TestCharacterFontTrainingMvs()

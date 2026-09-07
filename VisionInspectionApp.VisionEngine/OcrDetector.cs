@@ -426,13 +426,34 @@ public static class OcrDetector
         if (matBgrOrGray is null || matBgrOrGray.Empty() || def is null || def.SearchRoi.Width <= 0 || def.SearchRoi.Height <= 0)
             return result;
 
-        using var patch = Geometry2D.ExtractStraightRoi(matBgrOrGray, def.SearchRoi, originTeach, originFound, originAngleDeg, out _);
-        if (patch.Empty() || patch.Width < 8 || patch.Height < 8)
-            return result;
+        string labels = !string.IsNullOrWhiteSpace(labelSequence) ? labelSequence : (def.ExpectedText ?? string.Empty);
+        var cleanLabels = labels.Where(c => c != ' ').ToList();
+        if (cleanLabels.Count == 0) return result;
 
-        Mat processedPatch = patch;
+        // 1. Trích xuất Search ROI (Thử theo biến đổi Origin trước, nếu không có hoặc lệch thì cắt trực tiếp)
+        Mat? patch = null;
+        try
+        {
+            patch = Geometry2D.ExtractStraightRoi(matBgrOrGray, def.SearchRoi, originTeach, originFound, originAngleDeg, out _);
+        }
+        catch { }
+
+        if (patch == null || patch.Empty() || patch.Width < 8 || patch.Height < 8)
+        {
+            patch?.Dispose();
+            int cx = Math.Clamp(def.SearchRoi.X, 0, matBgrOrGray.Width - 1);
+            int cy = Math.Clamp(def.SearchRoi.Y, 0, matBgrOrGray.Height - 1);
+            int cw = Math.Clamp(def.SearchRoi.Width, 1, matBgrOrGray.Width - cx);
+            int ch = Math.Clamp(def.SearchRoi.Height, 1, matBgrOrGray.Height - cy);
+            if (cw < 8 || ch < 8) return result;
+            patch = new Mat(matBgrOrGray, new Rect(cx, cy, cw, ch)).Clone();
+        }
+
+        using var patchOwned = patch;
+
+        Mat processedPatch = patchOwned;
         using var preprocessedOwned = (preprocessor != null && preprocessSettings != null)
-            ? preprocessor.Run(patch, preprocessSettings)
+            ? preprocessor.Run(patchOwned, preprocessSettings)
             : null;
         if (preprocessedOwned != null && !preprocessedOwned.Empty())
             processedPatch = preprocessedOwned;
@@ -452,10 +473,17 @@ public static class OcrDetector
         }
 
         var candidateBoxes = ExtractCandidateBoxes(bin, def);
+        // Nếu chưa tìm thấy ký tự, tự động thử phương pháp Otsu
         if (candidateBoxes.Count == 0 && def.BinarizeMethod != OcrBinarizeMethod.Otsu)
         {
             BinarizePatch(gray, bin, OcrBinarizeMethod.Otsu);
             NormalizeTextPolarity(bin, def.InvertImage);
+            candidateBoxes = ExtractCandidateBoxes(bin, def);
+        }
+        // Thử đảo màu polarity
+        if (candidateBoxes.Count == 0)
+        {
+            Cv2.BitwiseNot(bin, bin);
             candidateBoxes = ExtractCandidateBoxes(bin, def);
         }
 
@@ -465,8 +493,30 @@ public static class OcrDetector
         var separatedBoxes = SplitConnectedGlyphs(mergedBoxes, bin);
         var sortedBoxes = SortReadingOrder(separatedBoxes);
 
-        string labels = !string.IsNullOrWhiteSpace(labelSequence) ? labelSequence : (def.ExpectedText ?? string.Empty);
-        var cleanLabels = labels.Where(c => c != ' ').ToList();
+        // Nếu số lượng box ít hơn số lượng ký tự mẫu do chữ dính nét, tự động phân đoạn thông minh
+        if (sortedBoxes.Count < cleanLabels.Count && sortedBoxes.Count > 0)
+        {
+            int diff = cleanLabels.Count - sortedBoxes.Count;
+            var refinedBoxes = new List<Rect>();
+            foreach (var b in sortedBoxes)
+            {
+                if (diff > 0 && b.Width > b.Height * 1.1)
+                {
+                    int parts = Math.Min(diff + 1, Math.Max(2, (int)Math.Round((double)b.Width / Math.Max(1.0, b.Height * 0.65))));
+                    int partW = b.Width / parts;
+                    for (int p = 0; p < parts; p++)
+                    {
+                        refinedBoxes.Add(new Rect(b.X + p * partW, b.Y, partW, b.Height));
+                    }
+                    diff -= (parts - 1);
+                }
+                else
+                {
+                    refinedBoxes.Add(b);
+                }
+            }
+            sortedBoxes = SortReadingOrder(refinedBoxes);
+        }
 
         const int normW = 24;
         const int normH = 32;
@@ -521,31 +571,80 @@ public static class OcrDetector
         try
         {
             var session = GetOrLoadOnnxSession(modelPath);
-            // Chuẩn hóa tensor ảnh (32xW chuẩn cho CRNN)
-            int targetH = 32;
-            int targetW = Math.Max(32, (int)Math.Round((double)gray.Width * targetH / gray.Height));
-            targetW = (targetW / 8) * 8; // align multiple of 8
+
+            var inputName = session.InputMetadata.Keys.First();
+            var inputMeta = session.InputMetadata[inputName];
+            var dims = inputMeta.Dimensions;
+
+            // Kiểm tra cảnh báo nếu người dùng chọn nhầm model phân loại góc xoay (doc_ori) hoặc classification cố định
+            string lowerName = Path.GetFileName(modelPath).ToLowerInvariant();
+            if (lowerName.Contains("doc_ori") || lowerName.Contains("_cls_") || (dims.Length >= 4 && dims[2] == 224 && dims[3] == 224))
+            {
+                var fallbackRes = RunNonAiOcr(gray, def, totalAngleDeg, centerFound);
+                return fallbackRes with
+                {
+                    ErrorReason = $"[AI Nhắc Nhở: File '{Path.GetFileName(modelPath)}' là model phân loại xoay trang tài liệu (Doc Orientation 224x224), KHÔNG PHẢI model nhận diện chữ OCR. Vui lòng tải model Text Recognition có đuôi '_rec_infer.onnx' (ví dụ: en_PP-OCRv3_rec_infer.onnx). Đã tự động chuyển sang Non-AI.]"
+                };
+            }
+
+            // Dynamic Input Tensor Adapter: Tự động thích ứng với cả PaddleOCR (3 channels, H=48) và CRNN (1 channel, H=32)
+            int reqChannels = dims.Length >= 2 && dims[1] > 0 ? dims[1] : 1;
+            int reqHeight = dims.Length >= 3 && dims[2] > 0 ? dims[2] : 48;
+            int reqWidth = dims.Length >= 4 && dims[3] > 0 ? dims[3] : -1;
+
+            int targetH = reqHeight;
+            int targetW;
+            if (reqWidth > 0)
+            {
+                targetW = reqWidth;
+            }
+            else
+            {
+                targetW = Math.Max(32, (int)Math.Round((double)gray.Width * targetH / Math.Max(1, gray.Height)));
+                targetW = Math.Max(32, (targetW / 8) * 8); // align multiple of 8
+            }
 
             using var resized = new Mat();
             Cv2.Resize(gray, resized, new Size(targetW, targetH));
 
-            var inputTensor = new DenseTensor<float>(new[] { 1, 1, targetH, targetW });
-            for (int y = 0; y < targetH; y++)
+            Mat tensorSrc = resized;
+            using var rgbOwned = reqChannels == 3 ? resized.CvtColor(ColorConversionCodes.GRAY2RGB) : null;
+            if (rgbOwned != null) tensorSrc = rgbOwned;
+
+            var inputTensor = new DenseTensor<float>(new[] { 1, reqChannels, targetH, targetW });
+            if (reqChannels == 3)
             {
-                for (int x = 0; x < targetW; x++)
+                for (int c = 0; c < 3; c++)
                 {
-                    float val = (resized.At<byte>(y, x) / 255.0f - 0.5f) / 0.5f;
-                    inputTensor[0, 0, y, x] = val;
+                    for (int y = 0; y < targetH; y++)
+                    {
+                        for (int x = 0; x < targetW; x++)
+                        {
+                            var vec = tensorSrc.At<Vec3b>(y, x);
+                            float val = (vec[c] / 255.0f - 0.5f) / 0.5f;
+                            inputTensor[0, c, y, x] = val;
+                        }
+                    }
+                }
+            }
+            else
+            {
+                for (int y = 0; y < targetH; y++)
+                {
+                    for (int x = 0; x < targetW; x++)
+                    {
+                        float val = (tensorSrc.At<byte>(y, x) / 255.0f - 0.5f) / 0.5f;
+                        inputTensor[0, 0, y, x] = val;
+                    }
                 }
             }
 
-            var inputName = session.InputMetadata.Keys.First();
             var inputs = new List<NamedOnnxValue> { NamedOnnxValue.CreateFromTensor(inputName, inputTensor) };
 
             using var outputs = session.Run(inputs);
             var outputTensor = outputs.First().AsTensor<float>();
 
-            // CTC Greedy Decoder
+            // CTC Greedy Decoder thông minh
             string recognizedText = DecodeCtcOutput(outputTensor, out double avgConf);
 
             var charResults = new List<OcrCharResult>();
@@ -584,11 +683,27 @@ public static class OcrDetector
 
     private static string DecodeCtcOutput(Tensor<float> tensor, out double avgConfidence)
     {
-        // Bảng ký tự công nghiệp tiêu chuẩn
-        const string alphabet = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ-/. :";
         var dimensions = tensor.Dimensions;
         int timeSteps = dimensions[1];
         int numClasses = dimensions[2];
+
+        // Chuẩn bảng ký tự thích ứng theo số classes của model:
+        string alphabet;
+        if (numClasses >= 95 && numClasses <= 98)
+        {
+            // PaddleOCR English / Latin 96 ký tự
+            alphabet = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ!\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~ ";
+        }
+        else if (numClasses >= 40 && numClasses <= 43)
+        {
+            // CRNN Industrial standard (41 ký tự)
+            alphabet = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ-/. :";
+        }
+        else
+        {
+            // Bảng mở rộng mặc định
+            alphabet = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz-/. :";
+        }
 
         var chars = new List<char>();
         var confs = new List<double>();

@@ -7,7 +7,8 @@
              xmlns:models="clr-namespace:VisionInspectionApp.Models;assembly=VisionInspectionApp.Models"
              xmlns:converters="clr-namespace:VisionInspectionApp.UI.Converters"
              mc:Ignorable="d"
-             Focusable="True">
+             Focusable="True"
+             Foreground="{DynamicResource TextBrush}">
 
     <UserControl.Resources>
         <BooleanToVisibilityConverter x:Key="BoolToVis" />
@@ -587,6 +588,7 @@
                                 <StackPanel.Resources>
                                     <Style TargetType="TextBlock">
                                         <Setter Property="FontSize" Value="12"/>
+                                        <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
                                     </Style>
                                     <Style TargetType="CheckBox">
                                         <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
@@ -3167,102 +3169,110 @@
                                 </Border>
 
                                 <StackPanel Orientation="Horizontal" Margin="0,6,0,4">
-                                    <TextBlock Text="Engine:" Width="85" VerticalAlignment="Center" FontWeight="SemiBold" ToolTip="Engine xử lý OCR: Thuật toán nhanh (Non-AI), AI Deep Learning (ONNX) hoặc Hybrid tự động" />
+                                    <TextBlock Text="Engine:" Width="85" VerticalAlignment="Center" FontWeight="SemiBold" Foreground="{DynamicResource TextBrush}" ToolTip="Engine xử lý OCR: Thuật toán nhanh (Non-AI), AI Deep Learning (ONNX) hoặc Hybrid tự động" />
                                     <ComboBox ItemsSource="{Binding OcrEngineModes}" SelectedItem="{Binding Ocr_EngineMode, Mode=TwoWay}" Width="150" />
                                 </StackPanel>
 
                                 <StackPanel Orientation="Horizontal" Margin="0,2,0,4">
-                                    <TextBlock Text="So khớp:" Width="85" VerticalAlignment="Center" FontWeight="SemiBold" ToolTip="Chế độ đánh giá đạt/không đạt chuỗi ký tự" />
+                                    <TextBlock Text="So khớp:" Width="85" VerticalAlignment="Center" FontWeight="SemiBold" Foreground="{DynamicResource TextBrush}" ToolTip="Chế độ đánh giá đạt/không đạt chuỗi ký tự" />
                                     <ComboBox ItemsSource="{Binding OcrMatchingModes}" SelectedItem="{Binding Ocr_MatchingMode, Mode=TwoWay}" Width="150" />
                                 </StackPanel>
 
                                 <StackPanel Orientation="Horizontal" Margin="0,2,0,4">
-                                    <TextBlock Text="Nhị phân:" Width="85" VerticalAlignment="Center" ToolTip="Phương pháp nhị phân hóa tách ký tự khỏi nền kim loại/vật liệu" />
+                                    <TextBlock Text="Nhị phân:" Width="85" VerticalAlignment="Center" Foreground="{DynamicResource TextBrush}" ToolTip="Phương pháp nhị phân hóa tách ký tự khỏi nền kim loại/vật liệu" />
                                     <ComboBox ItemsSource="{Binding OcrBinarizeMethods}" SelectedItem="{Binding Ocr_BinarizeMethod, Mode=TwoWay}" Width="150" />
                                 </StackPanel>
 
                                 <StackPanel Orientation="Horizontal" Margin="0,2,0,4">
-                                    <TextBlock Text="Chuỗi mẫu:" Width="85" VerticalAlignment="Center" FontWeight="SemiBold" ToolTip="Chuỗi ký tự mong đợi (ExactMatch hoặc Contains)" />
+                                    <TextBlock Text="Chuỗi mẫu:" Width="85" VerticalAlignment="Center" FontWeight="SemiBold" Foreground="{DynamicResource TextBrush}" ToolTip="Chuỗi ký tự mong đợi (ExactMatch hoặc Contains)" />
                                     <TextBox Text="{Binding Ocr_ExpectedText, UpdateSourceTrigger=PropertyChanged}" Width="150" ToolTip="Ví dụ: 2026-09-06, LOT12345" />
                                 </StackPanel>
 
                                 <StackPanel Orientation="Horizontal" Margin="0,2,0,4">
-                                    <TextBlock Text="Regex:" Width="85" VerticalAlignment="Center" ToolTip="Biểu thức chính quy kiểm tra định dạng" />
+                                    <TextBlock Text="Regex:" Width="85" VerticalAlignment="Center" Foreground="{DynamicResource TextBrush}" ToolTip="Biểu thức chính quy kiểm tra định dạng" />
                                     <TextBox Text="{Binding Ocr_RegexPattern, UpdateSourceTrigger=PropertyChanged}" Width="150" ToolTip="Ví dụ: ^[0-9]{4}-[0-9]{2}-[0-9]{2}$" />
                                 </StackPanel>
 
                                 <StackPanel Orientation="Horizontal" Margin="0,2,0,4">
-                                    <TextBlock Text="Whitelist:" Width="85" VerticalAlignment="Center" ToolTip="Tập ký tự hợp lệ cho phép nhận diện" />
+                                    <TextBlock Text="Whitelist:" Width="85" VerticalAlignment="Center" Foreground="{DynamicResource TextBrush}" ToolTip="Tập ký tự hợp lệ cho phép nhận diện" />
                                     <TextBox Text="{Binding Ocr_WhitelistChars, UpdateSourceTrigger=PropertyChanged}" Width="120" ToolTip="Ví dụ: 0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz-/" />
                                     <Button Content="Tất cả" Command="{Binding OcrSetFullWhitelistCommand}" ToolTip="Đặt Whitelist đầy đủ cả chữ hoa, chữ thường và số (A-Z, a-z, 0-9)" Margin="3,0,0,0" Padding="3,1" FontSize="10" />
                                     <Button Content="Từ mẫu" Command="{Binding OcrSetFromExpectedTextCommand}" ToolTip="Tự động lấy tất cả các ký tự trong Chuỗi mẫu đưa vào Whitelist" Margin="2,0,0,0" Padding="3,1" FontSize="10" />
                                 </StackPanel>
 
                                 <StackPanel Orientation="Horizontal" Margin="0,2,0,4">
-                                    <TextBlock Text="Min Conf:" Width="85" VerticalAlignment="Center" ToolTip="Độ tin cậy tối thiểu (0.0 - 1.0)" />
+                                    <TextBlock Text="Min Conf:" Width="85" VerticalAlignment="Center" Foreground="{DynamicResource TextBrush}" ToolTip="Độ tin cậy tối thiểu (0.0 - 1.0)" />
                                     <TextBox Text="{Binding Ocr_MinConfidence, StringFormat='{}{0:F2}', UpdateSourceTrigger=PropertyChanged}" Width="60" />
                                 </StackPanel>
 
                                 <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,1,0,0" Margin="0,6,0,6" />
 
-                                <TextBlock Text="Xử lý In Kim &amp; Phân đoạn" FontWeight="SemiBold" Foreground="{DynamicResource AccentBrush}" Margin="0,0,0,4" />
+                                <Border Background="{DynamicResource BorderBrush}" Padding="4,2" Margin="0,4,0,4">
+                                    <TextBlock Text="Xử lý In Kim &amp; Phân đoạn" FontWeight="Bold" Foreground="{DynamicResource TextBrush}" />
+                                </Border>
 
-                                <CheckBox Content="Nối ký tự in kim (Dot-Matrix)" IsChecked="{Binding Ocr_EnableDotMatrix, UpdateSourceTrigger=PropertyChanged}" ToolTip="Hợp nhất các chấm kim rời rạc thành nét liền trước khi nhận diện" Margin="0,0,0,4" />
+                                <CheckBox Content="Nối ký tự in kim (Dot-Matrix)" IsChecked="{Binding Ocr_EnableDotMatrix, UpdateSourceTrigger=PropertyChanged}" ToolTip="Hợp nhất các chấm kim rời rạc thành nét liền trước khi nhận diện" Margin="0,2,0,4" />
 
                                 <StackPanel Orientation="Horizontal" Margin="0,2,0,4">
-                                    <TextBlock Text="Cỡ hạt nối:" Width="85" VerticalAlignment="Center" ToolTip="Kích thước ma trận nối chấm (2 - 15px)" />
+                                    <TextBlock Text="Cỡ hạt nối:" Width="85" VerticalAlignment="Center" ToolTip="Kích thước ma trận nối chấm (2 - 15px)" Foreground="{DynamicResource TextBrush}" />
                                     <TextBox Text="{Binding Ocr_DotMatrixKernelSize, UpdateSourceTrigger=PropertyChanged}" Width="60" />
                                 </StackPanel>
 
                                 <CheckBox Content="Đảo màu (Chữ sáng trên nền tối)" IsChecked="{Binding Ocr_InvertPolarity, UpdateSourceTrigger=PropertyChanged}" Margin="0,2,0,4" />
 
                                 <StackPanel Orientation="Horizontal" Margin="0,2,0,4">
-                                    <TextBlock Text="Diện tích ký tự:" Width="85" VerticalAlignment="Center" ToolTip="Min và Max Area pixel của 1 ký tự" />
+                                    <TextBlock Text="Diện tích ký tự:" Width="85" VerticalAlignment="Center" ToolTip="Min và Max Area pixel của 1 ký tự" Foreground="{DynamicResource TextBrush}" />
                                     <TextBox Text="{Binding Ocr_MinCharArea, UpdateSourceTrigger=PropertyChanged}" Width="50" ToolTip="Min Area" />
-                                    <TextBlock Text="-" Margin="4,0" VerticalAlignment="Center"/>
+                                    <TextBlock Text="-" Margin="4,0" VerticalAlignment="Center" Foreground="{DynamicResource TextBrush}"/>
                                     <TextBox Text="{Binding Ocr_MaxCharArea, UpdateSourceTrigger=PropertyChanged}" Width="60" ToolTip="Max Area" />
                                 </StackPanel>
 
                                 <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,1,0,0" Margin="0,6,0,6" />
 
-                                <TextBlock Text="Dạy Ký Tự Mẫu (Character Training - MVS)" FontWeight="SemiBold" Foreground="{DynamicResource AccentBrush}" Margin="0,0,0,4" />
-                                <TextBlock Text="{Binding Ocr_TrainedCharactersSummary}" TextWrapping="Wrap" Foreground="{DynamicResource TextMutedBrush}" FontSize="11" Margin="0,0,0,4" />
-                                <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                                <Border Background="{DynamicResource BorderBrush}" Padding="4,2" Margin="0,4,0,4">
+                                    <TextBlock Text="Dạy Ký Tự Mẫu (Character Training - MVS)" FontWeight="Bold" Foreground="{DynamicResource TextBrush}" />
+                                </Border>
+                                <TextBlock Text="{Binding Ocr_TrainedCharactersSummary}" TextWrapping="Wrap" Foreground="{DynamicResource TextBrush}" FontWeight="SemiBold" FontSize="11" Margin="0,2,0,4" />
+                                <StackPanel Orientation="Horizontal" Margin="0,2,0,6">
                                     <Button Content="🎓 Dạy chữ từ ROI" Command="{Binding OcrTeachCharactersCommand}" ToolTip="Học trực tiếp các ký tự mẫu từ ROI ảnh hiện tại theo Chuỗi mẫu, giúp đạt độ chính xác 100% chuẩn Hikrobot MVS" Padding="6,2" Margin="0,0,4,0" FontWeight="SemiBold" />
                                     <Button Content="🗑 Xóa mẫu" Command="{Binding OcrClearTrainedCharactersCommand}" ToolTip="Xóa các ký tự mẫu đã dạy trong node OCR này" Padding="6,2" FontSize="11" />
                                 </StackPanel>
 
                                 <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,1,0,0" Margin="0,6,0,6" />
 
-                                <TextBlock Text="Cấu hình Model AI (ONNX)" FontWeight="SemiBold" Foreground="{DynamicResource AccentBrush}" Margin="0,0,0,4" />
+                                <Border Background="{DynamicResource BorderBrush}" Padding="4,2" Margin="0,4,0,4">
+                                    <TextBlock Text="Cấu hình Model AI (ONNX)" FontWeight="Bold" Foreground="{DynamicResource TextBrush}" />
+                                </Border>
                                 <Grid Margin="0,2,0,2">
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="*" />
                                         <ColumnDefinition Width="Auto" />
                                         <ColumnDefinition Width="Auto" />
                                     </Grid.ColumnDefinitions>
-                                    <TextBox Grid.Column="0" Text="{Binding Ocr_OnnxModelPath, UpdateSourceTrigger=PropertyChanged}" ToolTip="Đường dẫn file .onnx (nếu trống sẽ dùng mặc định models/ocr/crnn_rec.onnx hoặc fallback)" />
-                                    <Button Grid.Column="1" Content="..." Command="{Binding BrowseOcrModelCommand}" Width="26" Margin="4,0,0,0" ToolTip="Chọn file ONNX trên máy tính" />
-                                    <Button Grid.Column="2" Content="📁" Command="{Binding OpenOcrModelFolderCommand}" Width="26" Margin="2,0,0,0" ToolTip="Mở thư mục chứa Model (models/ocr/)" />
+                                    <TextBox Grid.Column="0" Text="{Binding Ocr_OnnxModelPath, UpdateSourceTrigger=PropertyChanged}" ToolTip="Đường dẫn file .onnx (nếu trống sẽ dùng mặc định models/ocr/crnn_rec.onnx hoặc fallback)" VerticalContentAlignment="Center" />
+                                    <Button Grid.Column="1" Content="Duyệt..." Command="{Binding BrowseOcrModelCommand}" Width="60" Margin="4,0,0,0" ToolTip="Chọn file ONNX trên máy tính" />
+                                    <Button Grid.Column="2" Content="Mở thư mục" Command="{Binding OpenOcrModelFolderCommand}" Padding="6,2" Margin="3,0,0,0" ToolTip="Mở thư mục chứa Model (models/ocr/)" />
                                 </Grid>
-                                <TextBlock Text="Tải model CRNN / PaddleOCR ONNX về đặt vào thư mục models/ocr/" Foreground="{DynamicResource TextMutedBrush}" FontSize="10" TextWrapping="Wrap" Margin="0,0,0,6" />
+                                <TextBlock Text="Hỗ trợ model Text Recognition (.onnx). Bấm 'Mở thư mục' để dán file vào models/ocr/" Foreground="{DynamicResource TextBrush}" Opacity="0.75" FontSize="10" TextWrapping="Wrap" Margin="0,2,0,6" />
 
                                 <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,1,0,0" Margin="0,4,0,4" />
 
-                                <TextBlock Text="Kết Quả Kiểm Tra Gần Nhất" FontWeight="SemiBold" Foreground="{DynamicResource AccentBrush}" Margin="0,0,0,4" />
+                                <Border Background="{DynamicResource BorderBrush}" Padding="4,2" Margin="0,4,0,4">
+                                    <TextBlock Text="Kết Quả Kiểm Tra Gần Nhất" FontWeight="Bold" Foreground="{DynamicResource TextBrush}" />
+                                </Border>
 
-                                <StackPanel Orientation="Horizontal" Margin="0,2,0,3">
-                                    <TextBlock Text="Đọc được:" Width="75" VerticalAlignment="Top" Foreground="{DynamicResource TextMutedBrush}" />
+                                <StackPanel Orientation="Horizontal" Margin="0,4,0,3">
+                                    <TextBlock Text="Đọc được:" Width="75" VerticalAlignment="Top" Foreground="{DynamicResource TextBrush}" FontWeight="SemiBold" />
                                     <TextBlock Text="{Binding SelectedRunText, TargetNullValue='-'}" TextWrapping="Wrap" Width="160" FontWeight="Bold" Foreground="#00E676" />
                                 </StackPanel>
 
                                 <StackPanel Orientation="Horizontal" Margin="0,2,0,3">
-                                    <TextBlock Text="Độ tin cậy:" Width="75" VerticalAlignment="Center" Foreground="{DynamicResource TextMutedBrush}" />
-                                    <TextBlock Text="{Binding Ocr_LastRunConfidence, StringFormat='{}{0:P0}', TargetNullValue='-'}" FontWeight="SemiBold" />
+                                    <TextBlock Text="Độ tin cậy:" Width="75" VerticalAlignment="Center" Foreground="{DynamicResource TextBrush}" FontWeight="SemiBold" />
+                                    <TextBlock Text="{Binding Ocr_LastRunConfidence, StringFormat='{}{0:P0}', TargetNullValue='-'}" FontWeight="SemiBold" Foreground="{DynamicResource TextBrush}" />
                                 </StackPanel>
 
                                 <StackPanel Orientation="Horizontal" Margin="0,2,0,4">
-                                    <TextBlock Text="Thông báo:" Width="75" VerticalAlignment="Top" Foreground="{DynamicResource TextMutedBrush}" />
+                                    <TextBlock Text="Thông báo:" Width="75" VerticalAlignment="Top" Foreground="{DynamicResource TextBrush}" FontWeight="SemiBold" />
                                     <TextBlock Text="{Binding Ocr_LastRunMessage, TargetNullValue='-'}" TextWrapping="Wrap" Width="160" Foreground="#FF5252" FontSize="11" />
                                 </StackPanel>
                             </StackPanel>

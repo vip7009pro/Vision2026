@@ -296,6 +296,16 @@ public sealed partial class ToolEditorViewModel : ObservableObject
         var d = SelectedOcrDef();
         if (d == null) return;
 
+        if (string.IsNullOrWhiteSpace(d.ExpectedText))
+        {
+            System.Windows.MessageBox.Show(
+                "Vui lòng nhập Chuỗi mẫu tương ứng với dòng chữ trong Search ROI (ví dụ: Line Source) vào ô 'Chuỗi mẫu' trước khi bấm Dạy chữ.\n\nHệ thống cần biết nội dung chữ mẫu để gán nhãn cho từng ô ký tự được cắt ra.",
+                "Chưa Có Chuỗi Mẫu",
+                System.Windows.MessageBoxButton.OK,
+                System.Windows.MessageBoxImage.Warning);
+            return;
+        }
+
         using var snap = GetCurrentWorkingImageSnapshot();
         if (snap.Empty())
         {
@@ -315,9 +325,25 @@ public sealed partial class ToolEditorViewModel : ObservableObject
             originFound: originFound,
             originAngleDeg: originAngleDeg);
 
+        // Fallback: nếu cắt theo pose Origin không ra kết quả (do lệch pose), thử cắt trực tiếp trên ảnh
+        if (trained.Count == 0 && (originTeach != default || originFound != default || originAngleDeg != 0.0))
+        {
+            trained = VisionInspectionApp.VisionEngine.OcrDetector.TeachCharacters(
+                inputMat,
+                d,
+                labelSequence: d.ExpectedText,
+                originTeach: default,
+                originFound: default,
+                originAngleDeg: 0.0);
+        }
+
         if (trained.Count == 0)
         {
-            System.Windows.MessageBox.Show("Không tìm thấy ký tự hợp lệ trong Search ROI để học mẫu.\nVui lòng kiểm tra lại Search ROI, Phương pháp nhị phân hoặc Chuỗi mẫu.", "Thông báo", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Warning);
+            System.Windows.MessageBox.Show(
+                "Không tìm thấy ký tự hợp lệ trong Search ROI để học mẫu.\n\nGợi ý khắc phục:\n1. Kéo Search ROI bao sát dòng chữ mong muốn (không để quá to chạm vào đường kẻ ngang/viền bảng).\n2. Kiểm tra tùy chọn 'Đảo màu' nếu chữ sáng trên nền tối.\n3. Thử chuyển phương pháp 'Nhị phân' sang Otsu hoặc Sauvola.",
+                "Chưa Tìm Thấy Ký Tự",
+                System.Windows.MessageBoxButton.OK,
+                System.Windows.MessageBoxImage.Warning);
             return;
         }
 
@@ -326,7 +352,11 @@ public sealed partial class ToolEditorViewModel : ObservableObject
         RefreshPreviews();
         RequestAutoSave();
 
-        System.Windows.MessageBox.Show($"Đã học thành công {trained.Count} ký tự mẫu: {string.Join(", ", trained.Select(x => x.Character))}\nĐã lưu vào thư viện ký tự của Job.", "Thành công", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Information);
+        System.Windows.MessageBox.Show(
+            $"Đã học thành công {trained.Count} ký tự mẫu: {string.Join(", ", trained.Select(x => $"'{x.Character}'"))}\n\nĐã lưu vào thư viện ký tự của Job.",
+            "Dạy Chữ Thành Công",
+            System.Windows.MessageBoxButton.OK,
+            System.Windows.MessageBoxImage.Information);
     });
 
     private ICommand? _ocrClearTrainedCharactersCommand;

@@ -46,6 +46,39 @@
 ### ImageSource và preview
 
 - Lưu template cho Origin, Point và SurfaceCompare hoạt động với nguồn ảnh ImageSource.
+- **Tá»± Äá»™ng Báº­t/Táº¯t ROI & Crosshair Trong OQC Scanner & Báº£o Tá»“n Tráº¡ng ThÃ¡i Full Screen Khi ÄÃ³ng Cá»­a Sá»• Con (Task 315)**:
+  - **Hiá»‡n TÆ°á»£ng & YÃªu Cáº§u**:
+    1. OQC Scanner: Náº¡p job vÃ  báº­t live view thÃ nh cÃ´ng -> tá»± Ä‘á»™ng báº­t ROI vÃ  Crosshair Ä‘á»ƒ cÄƒn chá»‰nh; cháº¡y job xong -> tá»± Ä‘á»™ng táº¯t ROI vÃ  Crosshair Ä‘á»ƒ dá»… quan sÃ¡t káº¿t quáº£.
+    2. Cá»­a sá»• chÃ­nh Ä‘ang Full Screen, má»Ÿ cá»­a sá»• con rá»“i táº¯t Ä‘i thÃ¬ cá»­a sá»• chÃ­nh bá»‹ co láº¡i diá»‡n tÃ­ch nhá» hÆ¡n Full Screen.
+  - **Giáº£i PhÃ¡p Triá»ƒn Khai**:
+    1. *OQC Scanner*: Trong `OqcScannerViewModel.cs`, tá»± Ä‘á»™ng gÃ¡n `ShowRois = true` vÃ  `ShowCrosshair = true` khi Live Camera báº­t (má»Ÿ Job tá»« Quáº£n lÃ½ Job, quÃ©t mÃ£ barcode); khi `HandleInspectionCompletedAsync` hoÃ n táº¥t, tá»± Ä‘á»™ng gÃ¡n `ShowRois = false` vÃ  `ShowCrosshair = false` vÃ  cáº­p nháº­t preview overlays sáº¡ch sáº½.
+    2. *Báº£o tá»“n Full Screen*: Trong `App.xaml.cs` hÃ m `BringWindowToForeground`, thay tháº¿ lá»‡nh Win32 `SW_RESTORE` (vá»‘n un-maximize cá»­a sá»•) báº±ng `SW_SHOWMAXIMIZED` khi cá»­a sá»• Ä‘ang á»Ÿ tráº¡ng thÃ¡i Maximized, Ä‘áº£m báº£o MainWindow luÃ´n Full Screen á»•n Ä‘á»‹nh tuyá»‡t Ä‘á»‘i.
+  - **Kiá»ƒm Thá»­**:
+    - Bá»• sung `TestBringWindowToForegroundPreservesMaximized` trong `TestExtractApp/OqcLiveViewOnJobLoadTests.cs` Ä‘áº¡t PASSED.
+    - dotnet build VisionInspectionApp.slnx: 0 errors.
+    - dotnet run --project TestExtractApp: 100% PASSED.
+- **NÃ¢ng Cáº¥p Äá»™ TÆ°Æ¡ng Pháº£n Giao Diá»‡n OCR, Kháº¯c Phá»¥c CÆ¡ Cháº¿ Dáº¡y Chá»¯ 'Line Source' & Há»— Trá»£ Äa Dáº¡ng Model AI ONNX KÃ¨m Cáº£nh BÃ¡o Model Sai Loáº¡i (Task 314)**:
+  - **Hiá»‡n TÆ°á»£ng & Nhu Cáº§u NgÆ°á»i DÃ¹ng**:
+    1. Má»™t sá»‘ tÃªn thuá»™c tÃ­nh trÃªn Properties Panel cá»§a Tool OCR bá»‹ ná»n sÃ¡ng chá»¯ tráº¯ng/má», nÃºt ðŸ“ lá»—i font hiá»ƒn thá»‹ thÃ nh |, nÃºt ... bá»‹ cá»¥t thÃ nh dáº¥u cháº¥m .
+    2. Báº¥m nÃºt "Dáº¡y chá»¯ tá»« ROI" bÃ¡o "KhÃ´ng tÃ¬m tháº¥y kÃ½ tá»± há»£p lá»‡" vá»›i chuá»—i máº«u ngÆ°á»i dÃ¹ng muá»‘n há»c (vÃ­ dá»¥: `Line Source`).
+    3. Táº£i model ONNX (`PP-LCNet_x1_0_doc_ori_infer.onnx`) nhÆ°ng chá»n AI Deep Learning thÃ¬ bÃ¡o lá»—i Ä‘á»: `[AI Error: [ErrorCode:InvalidArgument] Got invalid dimensions for input: x for the following indices index: 1 Got: 1 Expected: 3; index: 2 Got: 32 Expected: 224; index: 3 Got: 112 Expected: 224. Please fix either the inputs/outputs or the model. -> Fallback to Non-AI]`.
+  - **PhÃ¢n TÃ­ch Ká»¹ Thuáº­t & Giáº£i PhÃ¡p Triá»ƒn Khai**:
+    1. *Kháº¯c phá»¥c giao diá»‡n Properties Panel*:
+       - ToÃ n bá»™ tiÃªu Ä‘á» nhÃ³m thuá»™c tÃ­nh OCR chuyá»ƒn sang khá»‘i Header cÃ³ `Border` viá»n bo trÃ²n, ná»n `BorderBrush` vÃ  chá»¯ `TextBrush` tÆ°Æ¡ng pháº£n cao trÃªn cáº£ Light/Dark theme.
+       - Thay icon emoji ðŸ“ thÃ nh nÃºt `"Má»Ÿ thÆ° má»¥c"`, nÃºt `...` thÃ nh `"Duyá»‡t..."` (Width 60px) rÃµ rÃ ng, khÃ´ng lo thiáº¿u font chá»¯ há»‡ thá»‘ng.
+       - Thá»‘ng nháº¥t cÃ¡c nhÃ£n `Ocr_TrainedCharactersSummary` vÃ  chÃº thÃ­ch sang mÃ u `TextBrush`.
+    2. *Cáº£i tiáº¿n cÆ¡ cháº¿ Dáº¡y chá»¯ tá»« ROI*:
+       - Trong `ToolEditorViewModel.ToolOcr.cs`: Kiá»ƒm tra `ExpectedText`, náº¿u rá»—ng hiá»ƒn thá»‹ thÃ´ng bÃ¡o hÆ°á»›ng dáº«n ngÆ°á»i dÃ¹ng nháº­p trÆ°á»›c chuá»—i máº«u (vÃ­ dá»¥: `Line Source`).
+       - Bá»• sung fallback cáº¯t Search ROI trá»±c tiáº¿p trÃªn áº£nh `inputMat` náº¿u ma tráº­n xoay Origin bá»‹ trÃ´i tá»a Ä‘á»™.
+       - Trong `OcrDetector.cs`: ThÃªm thuáº­t toÃ¡n tá»± Ä‘á»™ng phÃ¢n Ä‘oáº¡n cÃ¡c box dÃ­nh nÃ©t khi sá»‘ box < sá»‘ kÃ½ tá»± trong Chuá»—i máº«u (`Line Source`), fallback nhá»‹ phÃ¢n Otsu vÃ  Invert náº¿u candidate rá»—ng.
+    3. *TÆ°Æ¡ng thÃ­ch Dynamic Model AI ONNX & Cáº£nh BÃ¡o Model Sai Loáº¡i*:
+       - PhÃ¡t hiá»‡n model phÃ¢n loáº¡i gÃ³c xoay `doc_ori` hoáº·c input fixed $224 \times 224$: hiá»ƒn thá»‹ cáº£nh bÃ¡o chi tiáº¿t vÃ  thÃ¢n thiá»‡n giáº£i thÃ­ch file lÃ  model xoay trang, nháº¯c nhá»Ÿ táº£i Ä‘Ãºng model OCR cÃ³ Ä‘uÃ´i `_rec_infer.onnx` (vÃ­ dá»¥: `en_PP-OCRv3_rec_infer.onnx`).
+       - Dynamic Tensor Adapter: Tá»± Ä‘á»™ng láº¥y sá»‘ kÃªnh (1 hoáº·c 3) vÃ  chiá»u cao (32 hoáº·c 48) tá»« Onnx Runtime InputMetadata Ä‘á»ƒ cáº¥p Ä‘Ãºng shape cho tensor (tÆ°Æ¡ng thÃ­ch PaddleOCR Recognition vÃ  CRNN).
+       - CTC Decoder Ä‘a nÄƒng: Há»— trá»£ báº£ng 96 kÃ½ tá»± Latin PaddleOCR (`numClasses == 97`), 41 kÃ½ tá»± CRNN (`numClasses == 41`) vÃ  báº£ng má»Ÿ rá»™ng.
+  - **Kiá»ƒm Thá»­ & XÃ¡c Minh**:
+    - ThÃªm bÃ i test `TestLineSourceTeachingAndWrongModelFallback` (Test 8) trong `TestExtractApp`: Há»c 10 kÃ½ tá»± máº«u `Line Source` Ä‘áº¡t 100%, nháº­n diá»‡n vá»›i font Ä‘Ã£ há»c Ä‘áº¡t chÃ­nh xÃ¡c 100.0%, Pass=True. Xá»­ lÃ½ an toÃ n model `PP-LCNet_x1_0_doc_ori_infer.onnx` fallback mÆ°á»£t mÃ  sang Non-AI kÃ¨m thÃ´ng Ä‘iá»‡p hÆ°á»›ng dáº«n rÃµ rÃ ng.
+    - dotnet build VisionInspectionApp.slnx: 0 errors.
+    - dotnet run --project TestExtractApp: 100% PASSED toÃ n bá»™ test suite.
 - **TÃ­nh NÄƒng Dáº¡y KÃ½ Tá»± Máº«u Chuáº©n Hikrobot MVS (Character Font Training) & Náº¡p Model ONNX Linh Hoáº¡t Cho Tool OCR (Task 313)**:
   - **Hiá»‡n TÆ°á»£ng & Nhu Cáº§u NgÆ°á»i DÃ¹ng**:
     - NgÆ°á»i dÃ¹ng cháº¡y nháº­n diá»‡n ra "LineMade" (68%) do chá»¯ 'o' bá»‹ Ä‘á»c nháº§m thÃ nh 'a'. NgÆ°á»i dÃ¹ng nháº­n xÃ©t: cÃ¡c pháº§n má»m vision chuyÃªn nghiá»‡p nhÆ° MVS cho phÃ©p nháº­n diá»‡n vÃ  há»c tá»«ng chá»¯; Ä‘á»“ng thá»i há»i táº£i model ONNX á»Ÿ Ä‘Ã¢u Ä‘á»ƒ sá»­ dá»¥ng.

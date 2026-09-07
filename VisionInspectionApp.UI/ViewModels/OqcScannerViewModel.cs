@@ -301,7 +301,9 @@ public partial class OqcScannerViewModel : ObservableObject
         OnPropertyChanged(nameof(LiveToggleButtonText));
         if (value)
         {
-            OverlayItems = (ShowRois && _originLiveGuideOverlays.Count > 0) ? _originLiveGuideOverlays : null;
+            ShowRois = true;
+            ShowCrosshair = true;
+            OverlayItems = (_originLiveGuideOverlays.Count > 0) ? _originLiveGuideOverlays : null;
             _ = _cameraService.RequestLiveStreamAsync("OQCScanner", true);
         }
         else
@@ -344,6 +346,8 @@ public partial class OqcScannerViewModel : ObservableObject
 
         // Đảm bảo Live View từ camera luôn luôn được kích hoạt mượt mà khi mở Job từ Quản lý Job
         _isRenderingLiveFrame = false;
+        ShowRois = true;
+        ShowCrosshair = true;
         if (!IsShowingLiveCamera)
         {
             EnableLiveCamera();
@@ -355,7 +359,7 @@ public partial class OqcScannerViewModel : ObservableObject
             {
                 _ = _cameraService.StartSavedCameraAsync();
             }
-            OverlayItems = (ShowRois && _originLiveGuideOverlays.Count > 0) ? _originLiveGuideOverlays : null;
+            OverlayItems = (_originLiveGuideOverlays.Count > 0) ? _originLiveGuideOverlays : null;
         }
 
         OnPropertyChanged(nameof(PreviewHeaderTitle));
@@ -955,6 +959,8 @@ public partial class OqcScannerViewModel : ObservableObject
             {
                 // Manual Run mode: Load job only, keep Live Camera active for product alignment
                 _isOqcRunInProgress = false;
+                ShowRois = true;
+                ShowCrosshair = true;
                 IsShowingLiveCamera = true;
                 StatusMessage = $"✅ Đã nạp Job '{Path.GetFileName(jobPath)}' cho mã '{code}'. Căn chỉnh sản phẩm và nhấn '▶ CHẠY JOB' để kiểm tra.";
                 StatusBrush = Brushes.DodgerBlue;
@@ -1058,6 +1064,10 @@ public partial class OqcScannerViewModel : ObservableObject
                 _lastScannedRawCode = null;
                 ScannedCode = ""; // Xóa ô nhập liệu để sẵn sàng cho lần quét LABEL ID tiếp theo
             }
+
+            // Tự động tắt ROI và Crosshair sau khi chạy xong để người dùng dễ dàng quan sát kết quả
+            ShowRois = false;
+            ShowCrosshair = false;
 
             _oqcService.SaveScanHistory(ScanHistory);
             if (!IsShowingLiveCamera)
