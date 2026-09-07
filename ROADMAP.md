@@ -2401,3 +2401,9 @@ Lộ trình tích hợp tính năng Chụp ảnh từ camera và hỗ trợ các
         - Khi unchecked: Hoạt động bình thường theo kết quả tổng hợp của toàn bộ các công cụ kiểm tra.
         - Tự động lưu và đồng bộ cấu hình trong `OqcScannerConfig.json`, đồng bộ DB Master Log và kịch bản đèn nháy NG.
         - Đạt 100% PASSED bài kiểm thử tự động `TestOqcOnlyOriginMode`.
+
+    - [x] **Task 319: Tự Động Chuyển Hiển Thị Sang Trạng Thái Chờ Kiểm Tra (READY) Khi Bắt Đầu Live View Trong OQC Scanner**:
+        - Khi bắt đầu Live View (bật Live Camera, nạp Job, căn chỉnh sản phẩm), tự động reset khối kết quả OK/NG về "READY" (nền xám #1E293B, viền #334155).
+        - Xóa sạch danh sách `CurrentMeasurementDetails` và ẩn cảnh báo lỗi NG cũ để không gây nhầm lẫn với kết quả của lần test trước đó.
+        - Cập nhật dòng tóm tắt `LastResultSummary` hướng dẫn căn chỉnh sản phẩm và bấm chạy kiểm tra.
+        - Đạt 100% PASSED bài kiểm thử tự động `TestOqcWaitingForInspectionStateOnLiveView`.

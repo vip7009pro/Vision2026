@@ -23,6 +23,7 @@ public static class OqcLiveViewOnJobLoadTests
         TestBringWindowToForegroundPreservesMaximized();
         TestOqcMeasurementOverSpecCalculation();
         TestOqcOnlyOriginMode();
+        TestOqcWaitingForInspectionStateOnLiveView();
 
         Console.WriteLine("=======================================================");
         Console.WriteLine("✅ ALL OQC SCANNER LIVE VIEW TESTS PASSED!");
@@ -409,5 +410,71 @@ public static class OqcLiveViewOnJobLoadTests
         }
 
         Console.WriteLine("  -> PASSED: Chế độ chỉ bắt Origin (OnlyOriginMode) hoạt động chuẩn xác 100% (Mặc định = true, Origin OK -> OK, Origin NG -> NG).");
+    }
+
+    private static void TestOqcWaitingForInspectionStateOnLiveView()
+    {
+        Console.WriteLine("--- Test 7: Kiểm tra khi bắt đầu Live View chuyển sang trạng thái Chờ kiểm tra (READY) ---");
+
+        var thread = new System.Threading.Thread(() =>
+        {
+            var vm = (VisionInspectionApp.UI.ViewModels.OqcScannerViewModel)System.Runtime.Serialization.FormatterServices.GetUninitializedObject(typeof(VisionInspectionApp.UI.ViewModels.OqcScannerViewModel));
+
+            // Khởi tạo các trường cần thiết
+            typeof(VisionInspectionApp.UI.ViewModels.OqcScannerViewModel)
+                .GetField("_currentMeasurementDetails", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)?
+                .SetValue(vm, new System.Collections.ObjectModel.ObservableCollection<OqcMeasurementDetail>());
+
+            // 1. Giả lập kết quả test trước đó (như vừa chạy xong 1 sản phẩm bị PASS/NG)
+            vm.BigResultStatusText = "PASS";
+            vm.CurrentMeasurementDetails.Add(new OqcMeasurementDetail
+            {
+                ToolName = "Khoảng cách mẫu cũ",
+                Result = 12.34,
+                Pass = true
+            });
+            vm.HasLastNgDetails = true;
+            vm.LastNgDetails = "Lỗi mẫu trước";
+
+            // Kiểm tra trạng thái giả lập đã có dữ liệu cũ
+            if (vm.BigResultStatusText != "PASS" || vm.CurrentMeasurementDetails.Count != 1)
+            {
+                throw new Exception("Giả lập dữ liệu cũ thất bại!");
+            }
+
+            // 2. Kích hoạt chuyển sang trạng thái Live View (gọi SetWaitingForInspectionState)
+            vm.SetWaitingForInspectionState();
+
+            // 3. Xác minh:
+            // - BigResultStatusText phải chuyển về "READY"
+            if (vm.BigResultStatusText != "READY")
+            {
+                throw new Exception($"BigResultStatusText phải chuyển về 'READY' khi Live View, nhưng nhận được '{vm.BigResultStatusText}'!");
+            }
+
+            // - CurrentMeasurementDetails phải bị xóa sạch (Count == 0) để không hiển thị chi tiết cũ
+            if (vm.CurrentMeasurementDetails.Count != 0)
+            {
+                throw new Exception($"CurrentMeasurementDetails phải bị xóa sạch khi bắt đầu Live View, nhưng còn lại {vm.CurrentMeasurementDetails.Count} dòng!");
+            }
+
+            // - HasLastNgDetails phải bằng false và LastNgDetails rỗng
+            if (vm.HasLastNgDetails || !string.IsNullOrEmpty(vm.LastNgDetails))
+            {
+                throw new Exception("HasLastNgDetails phải là false và LastNgDetails phải rỗng khi bắt đầu Live View!");
+            }
+
+            // - LastResultSummary phải chứa thông điệp chờ kiểm tra
+            if (string.IsNullOrWhiteSpace(vm.LastResultSummary) || (!vm.LastResultSummary.Contains("Chờ") && !vm.LastResultSummary.Contains("Sẵn sàng")))
+            {
+                throw new Exception($"LastResultSummary phải chứa thông báo chờ kiểm tra, nhưng nhận được '{vm.LastResultSummary}'!");
+            }
+        });
+
+        thread.SetApartmentState(System.Threading.ApartmentState.STA);
+        thread.Start();
+        thread.Join();
+
+        Console.WriteLine("  -> PASSED: Khi bắt đầu Live View, hệ thống đã xóa sạch kết quả cũ và chuyển sang trạng thái Chờ kiểm tra (READY) chuẩn xác 100%.");
     }
 }

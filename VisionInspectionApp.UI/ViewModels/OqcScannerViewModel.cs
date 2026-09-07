@@ -235,6 +235,10 @@ public partial class OqcScannerViewModel : ObservableObject
 
         // Load Scan History from local persistence
         LoadSavedScanHistory();
+        if (IsShowingLiveCamera)
+        {
+            SetWaitingForInspectionState();
+        }
 
         _inspectionViewModel.InspectionCompletedAsync += HandleInspectionCompletedAsync;
         _toolEditorViewModel.InspectionCompletedAsync += HandleInspectionCompletedAsync;
@@ -348,6 +352,7 @@ public partial class OqcScannerViewModel : ObservableObject
             ShowCrosshair = true;
             OverlayItems = (_originLiveGuideOverlays.Count > 0) ? _originLiveGuideOverlays : null;
             _ = _cameraService.RequestLiveStreamAsync("OQCScanner", true);
+            SetWaitingForInspectionState();
         }
         else
         {
@@ -404,6 +409,8 @@ public partial class OqcScannerViewModel : ObservableObject
             }
             OverlayItems = (_originLiveGuideOverlays.Count > 0) ? _originLiveGuideOverlays : null;
         }
+
+        SetWaitingForInspectionState($"Đã nạp Job: {Path.GetFileName(jobPath)} ({CurrentProductName}). Căn chỉnh sản phẩm và nhập LABEL ID trước khi chạy.");
 
         OnPropertyChanged(nameof(PreviewHeaderTitle));
         OnPropertyChanged(nameof(LiveToggleButtonText));
@@ -511,7 +518,14 @@ public partial class OqcScannerViewModel : ObservableObject
         {
             _ = _cameraService.StartSavedCameraAsync();
         }
-        IsShowingLiveCamera = true;
+        if (!IsShowingLiveCamera)
+        {
+            IsShowingLiveCamera = true;
+        }
+        else
+        {
+            SetWaitingForInspectionState();
+        }
     }
 
     private void ToggleLiveCamera()
@@ -1005,6 +1019,7 @@ public partial class OqcScannerViewModel : ObservableObject
                 ShowRois = true;
                 ShowCrosshair = true;
                 IsShowingLiveCamera = true;
+                SetWaitingForInspectionState($"Đã nạp Job '{Path.GetFileName(jobPath)}' cho mã '{code}'. Căn chỉnh sản phẩm và nhấn '▶ CHẠY JOB' để kiểm tra.");
                 StatusMessage = $"✅ Đã nạp Job '{Path.GetFileName(jobPath)}' cho mã '{code}'. Căn chỉnh sản phẩm và nhấn '▶ CHẠY JOB' để kiểm tra.";
                 StatusBrush = Brushes.DodgerBlue;
                 _toolEditorViewModel.LoadJobFromFile(jobPath, autoRun: false);
@@ -1335,6 +1350,8 @@ public partial class OqcScannerViewModel : ObservableObject
                     OverlayItems = (ShowRois && _originLiveGuideOverlays.Count > 0) ? _originLiveGuideOverlays : null;
                 }
 
+                SetWaitingForInspectionState($"Đã nạp Job: {Path.GetFileName(dialog.FileName)}. Căn chỉnh sản phẩm và bấm 'CHẠY JOB'.");
+
                 OnPropertyChanged(nameof(PreviewHeaderTitle));
                 OnPropertyChanged(nameof(LiveToggleButtonText));
 
@@ -1403,6 +1420,35 @@ public partial class OqcScannerViewModel : ObservableObject
         {
             Debug.WriteLine($"LoadSavedScanHistory error: {ex.Message}");
         }
+    }
+
+    /// <summary>
+    /// Chuyển hiển thị kết quả sang trạng thái Chờ kiểm tra (READY) khi bắt đầu Live View,
+    /// xóa kết quả và chi tiết của lần đo trước để không gây nhầm lẫn cho người vận hành.
+    /// </summary>
+    public void SetWaitingForInspectionState(string? customSummary = null)
+    {
+        BigResultStatusText = "READY";
+        BigResultBackgroundBrush = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#1E293B"));
+        BigResultBorderBrush = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#334155"));
+        BigResultForegroundBrush = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#94A3B8"));
+
+        if (!string.IsNullOrWhiteSpace(customSummary))
+        {
+            LastResultSummary = customSummary;
+        }
+        else if (!string.IsNullOrWhiteSpace(CurrentProductName) && CurrentProductName != "-")
+        {
+            LastResultSummary = $"Chờ kiểm tra sản phẩm: {CurrentProductName}. Căn chỉnh camera và bấm 'CHẠY JOB'.";
+        }
+        else
+        {
+            LastResultSummary = "Chế độ Live Camera: Sẵn sàng quét mã sản phẩm để bắt đầu đo kiểm.";
+        }
+
+        HasLastNgDetails = false;
+        LastNgDetails = "";
+        CurrentMeasurementDetails.Clear();
     }
 
     private void AddHistory(OqcScanHistoryEntry entry)

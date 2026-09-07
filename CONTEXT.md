@@ -46,6 +46,29 @@
 ### ImageSource và preview
 
 - Lưu template cho Origin, Point và SurfaceCompare hoạt động với nguồn ảnh ImageSource.
+- **Tự Động Chuyển Hiển Thị Sang Trạng Thái Chờ Kiểm Tra (READY) Khi Bắt Đầu Live View Trong OQC Scanner (Task 319)**:
+  - **Hiện Tượng & Yêu Cầu Người Dùng**:
+    - Trong tab OQC Scanner, trước đây bảng hiển thị kết quả (khối OK/NG cỡ lớn và bảng chi tiết phép đo) vẫn giữ nguyên kết quả của lần test trước đó khi người dùng đang căn chỉnh sản phẩm mới ở chế độ Live View.
+    - Yêu cầu: Khi bắt đầu Live View (bật Live Camera, nạp Job mới, chuyển chế độ căn chỉnh) thì phải chuyển ngay sang trạng thái chờ kiểm tra (READY), xóa sạch kết quả và chi tiết của lần đo trước để tránh nhầm lẫn cho người vận hành.
+  - **Giải Pháp Kỹ Thuật Đã Triển Khai**:
+    1. *Phương thức `SetWaitingForInspectionState(string? customSummary = null)` trong `OqcScannerViewModel.cs`*:
+       - Chuyển `BigResultStatusText = "READY"`.
+       - Chuyển màu nền sang xám xanh `#1E293B`, viền `#334155`, màu chữ `#94A3B8`.
+       - Xóa sạch danh sách `CurrentMeasurementDetails.Clear()`, để bảng chi tiết phép đo ở trạng thái chờ đo mới.
+       - Tắt cảnh báo lỗi: `HasLastNgDetails = false; LastNgDetails = "";`.
+       - Cập nhật thông điệp `LastResultSummary` thông báo đang ở chế độ Live View / sẵn sàng kiểm tra sản phẩm.
+    2. *Tự động kích hoạt khi bắt đầu Live View*:
+       - Trong `OnIsShowingLiveCameraChanged(bool value)`: Khi `value == true` (bắt đầu Live Camera) -> Tự động gọi `SetWaitingForInspectionState()`.
+       - Trong constructor: Sau khi nạp lịch sử, nếu camera đang ở trạng thái Live ban đầu -> Tự động chuyển về trạng thái chờ kiểm tra.
+       - Trong `EnableLiveCamera()`, `SetJobLoadedFromManager`, `ExecuteManualOpenJob`, và `ExecuteScanInternalAsync` khi `!AutoRunJob`: Đảm bảo luôn chuyển sang trạng thái chờ kiểm tra khi mở Job và bật Live Camera căn chỉnh.
+  - **Kiểm Thử & Xác Minh**:
+    - Bổ sung bài test tự động `TestOqcWaitingForInspectionStateOnLiveView` (Test 7) trong `TestExtractApp/OqcLiveViewOnJobLoadTests.cs`:
+      - Giả lập dữ liệu kết quả lần đo trước (BigResult = PASS, có phép đo, có cảnh báo).
+      - Kích hoạt Live View / `SetWaitingForInspectionState()`.
+      - Xác minh `BigResultStatusText == "READY"`, `CurrentMeasurementDetails.Count == 0`, `HasLastNgDetails == false`, `LastResultSummary` hiển thị thông báo chờ kiểm tra -> 100% PASSED.
+    - dotnet build VisionInspectionApp.slnx: 0 errors.
+    - dotnet run --project TestExtractApp: 100% PASSED toàn bộ test suite.
+
 - **Bổ Sung CheckBox "Chế Độ Chỉ Bắt Origin" Trong OQC Scanner (Task 318)**:
   - **Hiện Tượng & Yêu Cầu Người Dùng**:
     - Trong tab OQC Scanner, bổ sung 1 CheckBox *"Chế độ chỉ bắt Origin"* (mặc định: Checked / Bật).
