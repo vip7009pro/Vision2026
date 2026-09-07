@@ -15,6 +15,7 @@ public static class RecentJobsAndCalibrationTest
 
         TestDecimalParsing();
         TestRecentJobsService();
+        TestForceApplyGlobalCalibration();
 
         Console.WriteLine("==================================================");
         Console.WriteLine("   ALL CALIBRATION & RECENT JOBS TESTS PASSED     ");
@@ -122,6 +123,117 @@ public static class RecentJobsAndCalibrationTest
         {
             if (File.Exists(tempFile)) File.Delete(tempFile);
             if (Directory.Exists(tempDir)) Directory.Delete(tempDir, true);
+        }
+    }
+
+    private static void TestForceApplyGlobalCalibration()
+    {
+        Console.WriteLine("[TEST 3] Testing ForceApplyGlobalCalibration overrides Job calibration...");
+
+        var globalCalDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Vision2026");
+        var globalCalFile = Path.Combine(globalCalDir, "global_chessboard_calibration.json");
+        var globalSettingsFile = Path.Combine(globalCalDir, "global_chessboard_settings.json");
+
+        string? backupCalJson = File.Exists(globalCalFile) ? File.ReadAllText(globalCalFile) : null;
+        string? backupSettingsJson = File.Exists(globalSettingsFile) ? File.ReadAllText(globalSettingsFile) : null;
+
+        try
+        {
+            // 1. Tạo Global Calib mẫu
+            var globalCalData = new VisionInspectionApp.Models.ChessboardCalibrationData
+            {
+                BoardCols = 9,
+                BoardRows = 7,
+                SquareSizeMm = 25.0,
+                Fx = 1500.0,
+                Fy = 1500.0,
+                Cx = 960.0,
+                Cy = 540.0,
+                PixelsPerMm = 55.55,
+                ReprojectionError = 0.05,
+                IsCalibrated = true
+            };
+            bool saveGlobalOk = ChessboardCalibrationService.SaveGlobalCalibration(globalCalData);
+            if (!saveGlobalOk || !ChessboardCalibrationService.HasGlobalCalibration())
+            {
+                throw new Exception("Failed to save dummy global calibration for testing!");
+            }
+
+            // 2. Tạo Job Config với calib riêng biệt
+            var jobConfig = new VisionInspectionApp.Models.VisionConfig
+            {
+                PixelsPerMm = 10.0,
+                ChessboardCalibration = new VisionInspectionApp.Models.ChessboardCalibrationData
+                {
+                    BoardCols = 8,
+                    BoardRows = 6,
+                    SquareSizeMm = 30.0,
+                    Fx = 800.0,
+                    Fy = 800.0,
+                    Cx = 640.0,
+                    Cy = 480.0,
+                    PixelsPerMm = 10.0,
+                    ReprojectionError = 0.25,
+                    IsCalibrated = true
+                }
+            };
+
+            // 3. Khi IsForceApplyGlobalCalibration = false
+            ChessboardCalibrationService.SaveForceApplyGlobalCalibration(false);
+            if (ChessboardCalibrationService.IsForceApplyGlobalCalibration)
+            {
+                throw new Exception("Expected IsForceApplyGlobalCalibration to be false!");
+            }
+
+            ChessboardCalibrationService.EnsureCalibration(jobConfig);
+            if (Math.Abs(jobConfig.PixelsPerMm - 10.0) > 1e-4 || Math.Abs(jobConfig.ChessboardCalibration.Fx - 800.0) > 1e-4)
+            {
+                throw new Exception($"Expected Job calib to be preserved when force is false, got PxMm: {jobConfig.PixelsPerMm}, Fx: {jobConfig.ChessboardCalibration.Fx}");
+            }
+
+            var effCalibFalse = ChessboardCalibrationService.GetEffectiveCalibration(jobConfig);
+            if (effCalibFalse is null || Math.Abs(effCalibFalse.Fx - 800.0) > 1e-4)
+            {
+                throw new Exception("Expected EffectiveCalibration to return Job calib when force is false!");
+            }
+
+            // 4. Khi IsForceApplyGlobalCalibration = true -> Cưỡng chế ghi đè
+            ChessboardCalibrationService.SaveForceApplyGlobalCalibration(true);
+            if (!ChessboardCalibrationService.IsForceApplyGlobalCalibration)
+            {
+                throw new Exception("Expected IsForceApplyGlobalCalibration to be true!");
+            }
+
+            ChessboardCalibrationService.EnsureCalibration(jobConfig);
+            if (Math.Abs(jobConfig.PixelsPerMm - 55.55) > 1e-4 || Math.Abs(jobConfig.ChessboardCalibration.Fx - 1500.0) > 1e-4)
+            {
+                throw new Exception($"Expected Global calib to OVERRIDE Job calib when force is true, got PxMm: {jobConfig.PixelsPerMm}, Fx: {jobConfig.ChessboardCalibration.Fx}");
+            }
+
+            var effCalibTrue = ChessboardCalibrationService.GetEffectiveCalibration(jobConfig);
+            if (effCalibTrue is null || Math.Abs(effCalibTrue.Fx - 1500.0) > 1e-4)
+            {
+                throw new Exception("Expected EffectiveCalibration to return Global calib when force is true!");
+            }
+
+            // 5. Kiểm tra tính bền vững của file global_chessboard_settings.json
+            if (!File.Exists(globalSettingsFile))
+            {
+                throw new Exception("Expected global_chessboard_settings.json to exist after SaveForceApplyGlobalCalibration(true)!");
+            }
+
+            Console.WriteLine("   => PASS 100% (ForceApplyGlobalCalibration logic, persistence and override verified)");
+        }
+        finally
+        {
+            // Restore original files
+            if (backupCalJson is not null) File.WriteAllText(globalCalFile, backupCalJson);
+            else if (File.Exists(globalCalFile)) File.Delete(globalCalFile);
+
+            if (backupSettingsJson is not null) File.WriteAllText(globalSettingsFile, backupSettingsJson);
+            else if (File.Exists(globalSettingsFile)) File.Delete(globalSettingsFile);
+
+            ChessboardCalibrationService.IsForceApplyGlobalCalibration = backupSettingsJson is not null && backupSettingsJson.Contains("\"forceApplyGlobalCalibration\": true", StringComparison.OrdinalIgnoreCase);
         }
     }
 }

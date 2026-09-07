@@ -88,10 +88,11 @@ public partial class InspectionService
         {
             ChessboardCalibrationService.EnsureCalibration(config);
 
-            if (config.ChessboardCalibration is not null && config.ChessboardCalibration.IsCalibrated &&
+            var effectiveCalib = ChessboardCalibrationService.GetEffectiveCalibration(config);
+            if (effectiveCalib is not null && effectiveCalib.IsCalibrated &&
                 (config.ImageSources?.Any(s => s.EnableUndistort) ?? false))
             {
-                var undistorted = ChessboardCalibrationService.Undistort(image, config.ChessboardCalibration);
+                var undistorted = ChessboardCalibrationService.Undistort(image, effectiveCalib);
                 image = undistorted;
                 matsToDispose.Add(undistorted);
             }

@@ -1,4 +1,4 @@
-﻿# ROADMAP.md
+# ROADMAP.md
 
 Lộ trình tích hợp tính năng Chụp ảnh từ camera và hỗ trợ các loại camera (USB, GigE, USB3 Vision):
 
@@ -2277,6 +2277,27 @@ Lộ trình tích hợp tính năng Chụp ảnh từ camera và hỗ trợ các
         - Kiá»ƒm Thá»­:
           - dotnet build VisionInspectionApp.slnx: 0 errors.
           - dotnet run --project TestExtractApp: 100% PASSED toÃ n bá»™ test suite.
+
+    - [x] **Task 316: Bổ Sung CheckBox Cưỡng Chế Áp Dụng Global Calib (Nếu Có) Trong Chessboard Calibration & Cơ Chế Ghi Đè Toàn Bộ Hệ Thống**:
+        - Hiện Tượng & Yêu Cầu Người Dùng:
+          - Trong cửa sổ Chessboard Calibration, thêm một checkbox "Cưỡng chế áp dụng global calib nếu có" ở gần nút "Set As global Calib".
+          - Khi checked, dù Job có calib riêng, toàn bộ hệ thống vẫn cưỡng chế áp dụng theo thông số Global Calib.
+        - Phân Tích Kỹ Thuật & Giải Pháp:
+          1. *Giao diện CheckBox trong ChessboardCalibrationDialog.xaml*:
+             - Đặt CheckBox ngay dưới hàng nút Undistort Preview và Set As Global Calib.
+             - Binding 2 chiều `ForceApplyGlobalCalibration`, style `DynamicResource TextBrush` tương phản chuẩn cho cả Dark/Light Theme.
+          2. *Lưu trữ bền vững cấu hình toàn cục trong ChessboardCalibrationService.cs*:
+             - Thêm đường dẫn `global_chessboard_settings.json` trong `%AppData%\Vision2026`.
+             - Thêm thuộc tính static `IsForceApplyGlobalCalibration` và các hàm `SaveForceApplyGlobalCalibration`, tự động nạp setting khi khởi động.
+          3. *Cơ chế cưỡng chế áp dụng toàn hệ thống*:
+             - `EnsureCalibration(config)`: Khi `IsForceApplyGlobalCalibration && hasGlobal`, tự động ghi đè thông số `config.ChessboardCalibration = globalCal.Clone()` và `config.PixelsPerMm = globalCal.PixelsPerMm`.
+             - `GetEffectiveCalibration(config)`: Luôn trả về `globalCal` khi cờ cưỡng chế đang bật.
+             - Đồng bộ hóa qua `JobService.LoadJob`, `InspectionService.Pipeline.cs`, `ToolEditorViewModel.Engine.cs` (preview ImageSource node), và `ChessboardCalibrationViewModel.Initialize`.
+             - Tình huống an toàn: Nếu bật cờ nhưng máy chưa có Global Calib, hệ thống giữ nguyên calib của Job và hiển thị thông báo nhắc nhở người dùng thực hiện Calibrate & Set As Global Calib trước.
+        - Kiểm Thử:
+          - Bổ sung `TestForceApplyGlobalCalibration` (Test 3) trong `TestExtractApp/RecentJobsAndCalibrationTest.cs`: Xác minh bảo toàn khi cờ tắt, ghi đè toàn diện khi cờ bật, persistence file JSON 100% PASSED.
+          - dotnet build VisionInspectionApp.slnx: 0 errors.
+          - dotnet run --project TestExtractApp: 100% PASSED toàn bộ test suite.
     - [x] **Task 312b: Khắc Phục Triệt Để Lỗi Nhận Diện Sai Thành 'UNWMOJM' Cho Dòng Chữ 'Line Mode' (Smart Whitelist, Phân Đoạn Chiếu Dọc Không Chém Ký Tự, x-Height & Ràng Buộc Hình Học Quadrant, Tối Ưu Tương Quan Unsafe IoU + CCoeffNormed)**:
         - Hiện Tượng & Yêu Cầu Người Dùng:
           - Người dùng thử nghiệm Tool OCR trên ảnh thực tế giao diện Dark Theme với dòng chữ 'Line Mode', cấu hình NonAi_Heuristic, So khớp: AnyText, Chuỗi mẫu: Line Mode, nhưng nhận diện sai toàn bộ thành chuỗi lạ UNWMOJM (Confidence 53%).

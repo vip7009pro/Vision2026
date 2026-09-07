@@ -46,6 +46,26 @@
 ### ImageSource và preview
 
 - Lưu template cho Origin, Point và SurfaceCompare hoạt động với nguồn ảnh ImageSource.
+- **Bổ Sung CheckBox Cưỡng Chế Áp Dụng Global Calib (Nếu Có) Trong Chessboard Calibration & Cơ Chế Ghi Đè Toàn Bộ Hệ Thống (Task 316)**:
+  - **Hiện Tượng & Yêu Cầu Người Dùng**:
+    - Trong cửa sổ Chessboard Calibration, thêm một CheckBox "Cưỡng chế áp dụng global calib nếu có" ở gần nút "Set As global Calib".
+    - Khi checked, dù Job hiện tại đã có cấu hình calibration riêng, toàn bộ hệ thống vẫn cưỡng chế áp dụng theo thông số Global Calibration (`global_chessboard_calibration.json`).
+  - **Giải Pháp Kỹ Thuật Đã Triển Khai**:
+    1. *Giao diện người dùng (`ChessboardCalibrationDialog.xaml`)*:
+       - Thêm CheckBox *"Cưỡng chế áp dụng Global Calib (nếu có)"* ngay dưới khối nút `Undistort Preview` và `Set As Global Calib`.
+       - Ràng buộc 2 chiều (`TwoWay`) với thuộc tính `ForceApplyGlobalCalibration`, sử dụng `DynamicResource TextBrush` đảm bảo hiển thị sắc nét trên cả Light/Dark Theme kèm tooltip hướng dẫn.
+    2. *Lưu trữ bền vững cấu hình toàn cục (`ChessboardCalibrationService.cs`)*:
+       - Bổ sung tệp cấu hình toàn cục `global_chessboard_settings.json` trong `%AppData%\Vision2026`.
+       - Thuộc tính static `IsForceApplyGlobalCalibration`, tự động nạp cấu hình khi khởi động (static constructor) và phương thức `SaveForceApplyGlobalCalibration(bool enable)` lưu trạng thái an toàn đa luồng.
+    3. *Logic cưỡng chế áp dụng trên toàn bộ hệ thống*:
+       - `ChessboardCalibrationService.EnsureCalibration(config)`: Khi `IsForceApplyGlobalCalibration && hasGlobal`, tự động ghi đè `config.ChessboardCalibration = globalCal.Clone()` và `config.PixelsPerMm = globalCal.PixelsPerMm`.
+       - `ChessboardCalibrationService.GetEffectiveCalibration(config)`: Hàm helper thống nhất trả về calibration thực tế có hiệu lực (luôn ưu tiên Global Calib khi cờ bật).
+       - Tích hợp đồng bộ trong toàn bộ luồng: Nạp Job (`JobService.LoadJob`), chạy kiểm tra tự động & khử biến dạng (`InspectionService.Pipeline.cs`), xem trước ảnh nguồn ImageSource (`ToolEditorViewModel.Engine.cs`), và khởi tạo màn hình hiệu chuẩn (`ChessboardCalibrationViewModel.Initialize`).
+       - Cơ chế bảo vệ "nếu có": Nếu người dùng bật cờ nhưng máy chưa có Global Calib, hệ thống giữ nguyên calib riêng của Job và hiển thị thông báo nhắc nhở người dùng thực hiện Calibrate & Set As Global Calib trước.
+  - **Kiểm Thử & Xác Minh**:
+    - Bổ sung bài kiểm thử tự động `TestForceApplyGlobalCalibration` (Test 3) trong `TestExtractApp/RecentJobsAndCalibrationTest.cs`: Kiểm tra tính bảo toàn khi cờ tắt, ghi đè toàn diện khi cờ bật, kiểm tra tính bền vững của file cấu hình setting JSON -> 100% PASSED.
+    - dotnet build VisionInspectionApp.slnx: 0 errors.
+    - dotnet run --project TestExtractApp: 100% PASSED toàn bộ test suite.
 - **Tá»± Äá»™ng Báº­t/Táº¯t ROI & Crosshair Trong OQC Scanner & Báº£o Tá»“n Tráº¡ng ThÃ¡i Full Screen Khi ÄÃ³ng Cá»­a Sá»• Con (Task 315)**:
   - **Hiá»‡n TÆ°á»£ng & YÃªu Cáº§u**:
     1. OQC Scanner: Náº¡p job vÃ  báº­t live view thÃ nh cÃ´ng -> tá»± Ä‘á»™ng báº­t ROI vÃ  Crosshair Ä‘á»ƒ cÄƒn chá»‰nh; cháº¡y job xong -> tá»± Ä‘á»™ng táº¯t ROI vÃ  Crosshair Ä‘á»ƒ dá»… quan sÃ¡t káº¿t quáº£.

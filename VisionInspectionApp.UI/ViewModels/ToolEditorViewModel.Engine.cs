@@ -487,14 +487,12 @@ namespace VisionInspectionApp.UI.ViewModels
                 if (imgSourceDef is not null)
                 {
                     var loadedMat = LoadImageFromSourceForPreview(imgSourceDef);
-                    if (loadedMat is not null && !loadedMat.Empty())
-                    {
-                        if (imgSourceDef.EnableUndistort && _config.ChessboardCalibration is not null && _config.ChessboardCalibration.IsCalibrated)
+                        var calib = ChessboardCalibrationService.GetEffectiveCalibration(_config);
+                        if (imgSourceDef.EnableUndistort && calib is not null && calib.IsCalibrated)
                         {
-                            return ChessboardCalibrationService.Undistort(loadedMat, _config.ChessboardCalibration);
+                            return ChessboardCalibrationService.Undistort(loadedMat, calib);
                         }
                         return loadedMat;
-                    }
                 }
                 return raw.Clone();
             }

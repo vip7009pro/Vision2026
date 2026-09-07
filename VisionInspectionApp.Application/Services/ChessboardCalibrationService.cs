@@ -228,7 +228,81 @@ public static class ChessboardCalibrationService
     private static readonly string GlobalCalibrationFilePath = System.IO.Path.Combine(
         GlobalCalibrationDir, "global_chessboard_calibration.json");
 
+    private static readonly string GlobalCalibrationSettingsFilePath = System.IO.Path.Combine(
+        GlobalCalibrationDir, "global_chessboard_settings.json");
+
     private static readonly object _fileLock = new();
+
+    /// <summary>
+    /// Cờ cưỡng chế áp dụng Global Calibration cho mọi Job (kể cả khi Job đã có Calib riêng).
+    /// </summary>
+    public static bool IsForceApplyGlobalCalibration { get; set; }
+
+    static ChessboardCalibrationService()
+    {
+        IsForceApplyGlobalCalibration = LoadForceApplyGlobalCalibrationSetting();
+    }
+
+    private static bool LoadForceApplyGlobalCalibrationSetting()
+    {
+        try
+        {
+            lock (_fileLock)
+            {
+                if (!System.IO.File.Exists(GlobalCalibrationSettingsFilePath))
+                    return false;
+
+                var json = System.IO.File.ReadAllText(GlobalCalibrationSettingsFilePath);
+                using var doc = System.Text.Json.JsonDocument.Parse(json);
+                if (doc.RootElement.TryGetProperty("forceApplyGlobalCalibration", out var prop))
+                {
+                    return prop.GetBoolean();
+                }
+                if (doc.RootElement.TryGetProperty("ForceApplyGlobalCalibration", out var propPascal))
+                {
+                    return propPascal.GetBoolean();
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[ChessboardCalibrationService] Error reading global calibration settings: {ex.Message}");
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// Lưu cờ cưỡng chế áp dụng Global Calibration vào file cấu hình toàn cục.
+    /// </summary>
+    public static bool SaveForceApplyGlobalCalibration(bool enable)
+    {
+        IsForceApplyGlobalCalibration = enable;
+        try
+        {
+            lock (_fileLock)
+            {
+                if (!System.IO.Directory.Exists(GlobalCalibrationDir))
+                {
+                    System.IO.Directory.CreateDirectory(GlobalCalibrationDir);
+                }
+
+                var options = new System.Text.Json.JsonSerializerOptions
+                {
+                    WriteIndented = true,
+                    PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase
+                };
+                var payload = new { ForceApplyGlobalCalibration = enable };
+                var json = System.Text.Json.JsonSerializer.Serialize(payload, options);
+                System.IO.File.WriteAllText(GlobalCalibrationSettingsFilePath, json);
+                return true;
+            }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[ChessboardCalibrationService] Error saving global calibration settings: {ex.Message}");
+            return false;
+        }
+    }
 
     /// <summary>
     /// Lưu cấu hình calibration làm Global mặc định cho toàn bộ ứng dụng.
@@ -306,20 +380,59 @@ public static class ChessboardCalibrationService
     }
 
     /// <summary>
-    /// Tự động áp dụng Global calibration cho VisionConfig nếu Job chưa có cấu hình riêng.
+    /// Lấy cấu hình Calibration có hiệu lực cho VisionConfig hiện tại (ưu tiên Global Calib nếu bật cờ cưỡng chế).
+    /// </summary>
+    public static ChessboardCalibrationData? GetEffectiveCalibration(VisionConfig? config)
+    {
+        var globalCal = GetGlobalCalibration();
+        bool hasGlobal = globalCal is not null && globalCal.IsCalibrated;
+
+        // Nếu bật cưỡng chế và đã có Global Calib -> luôn trả về Global Calib
+        if (IsForceApplyGlobalCalibration && hasGlobal)
+        {
+            return globalCal;
+        }
+
+        // Nếu Job đã có calib riêng
+        if (config?.ChessboardCalibration is not null && config.ChessboardCalibration.IsCalibrated)
+        {
+            return config.ChessboardCalibration;
+        }
+
+        // Nếu Job chưa có calib riêng nhưng hệ thống có Global Calib
+        return hasGlobal ? globalCal : null;
+    }
+
+    /// <summary>
+    /// Tự động áp dụng Global calibration cho VisionConfig.
+    /// Nếu bật cờ cưỡng chế (IsForceApplyGlobalCalibration) và có Global Calib, sẽ ghi đè lên calib riêng của Job.
+    /// Nếu không bật cưỡng chế, chỉ áp dụng nếu Job chưa có cấu hình riêng.
     /// </summary>
     public static bool EnsureCalibration(VisionConfig config)
     {
         if (config is null) return false;
-        if (config.ChessboardCalibration is not null && config.ChessboardCalibration.IsCalibrated)
-        {
-            return true; // Đã có cấu hình riêng của Job
-        }
 
         var globalCal = GetGlobalCalibration();
-        if (globalCal is not null && globalCal.IsCalibrated)
+        bool hasGlobal = globalCal is not null && globalCal.IsCalibrated;
+
+        // 1. Nếu đang bật cưỡng chế áp dụng Global Calib VÀ hệ thống đã có Global Calib
+        if (IsForceApplyGlobalCalibration && hasGlobal)
         {
-            config.ChessboardCalibration = globalCal.Clone();
+            config.ChessboardCalibration = globalCal!.Clone();
+            config.PixelsPerMm = globalCal.PixelsPerMm;
+            return true;
+        }
+
+        // 2. Nếu Job đã có cấu hình riêng hợp lệ
+        if (config.ChessboardCalibration is not null && config.ChessboardCalibration.IsCalibrated)
+        {
+            return true; // Giữ nguyên cấu hình riêng của Job
+        }
+
+        // 3. Nếu Job chưa có cấu hình riêng nhưng hệ thống có Global Calib
+        if (hasGlobal)
+        {
+            config.ChessboardCalibration = globalCal!.Clone();
             if (config.PixelsPerMm <= 0 || Math.Abs(config.PixelsPerMm - 1.0) < 1e-6)
             {
                 config.PixelsPerMm = globalCal.PixelsPerMm;

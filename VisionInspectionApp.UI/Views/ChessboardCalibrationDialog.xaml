@@ -193,6 +193,14 @@
                                 <Button Grid.Column="0" Content="🔄 Undistort Preview" Command="{Binding UndistortPreviewCommand}" Padding="6,5" ToolTip="Xem thử ảnh sau khi khử biến dạng ống kính" />
                                 <Button Grid.Column="2" Content="🌐 Set As Global Calib" Command="{Binding SetAsGlobalCalibrationCommand}" Padding="6,5" Background="#1565C0" Foreground="White" FontWeight="SemiBold" ToolTip="Lưu bộ thông số hiệu chuẩn này làm cấu hình Global mặc định cho toàn bộ ứng dụng (tự động áp dụng cho các Job mới hoặc Job chưa có calib)" />
                             </Grid>
+
+                            <CheckBox Margin="0,8,0,2"
+                                      IsChecked="{Binding ForceApplyGlobalCalibration, Mode=TwoWay}"
+                                      Foreground="{DynamicResource TextBrush}"
+                                      FontWeight="SemiBold"
+                                      ToolTip="Khi bật: Toàn bộ hệ thống sẽ cưỡng chế sử dụng thông số Global Calib cho tất cả các Job (kể cả khi Job đã có cấu hình Calib riêng).">
+                                <TextBlock Text="Cưỡng chế áp dụng Global Calib (nếu có)" TextWrapping="Wrap" />
+                            </CheckBox>
                         </StackPanel>
                     </Border>
 

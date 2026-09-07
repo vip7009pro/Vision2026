@@ -40,57 +40,122 @@ public sealed partial class ChessboardCalibrationViewModel : ObservableObject
         SetAsGlobalCalibrationCommand = new RelayCommand(SetAsGlobalCalibration, () => IsCalibrated);
     }
 
-    public void Initialize(VisionConfig config)
-    {
-        _config = config;
-        ChessboardCalibrationData? data = null;
-        bool isFromJob = false;
+    private bool _isInitializing;
 
-        if (config.ChessboardCalibration is not null && config.ChessboardCalibration.IsCalibrated)
+    [ObservableProperty]
+    private bool _forceApplyGlobalCalibration;
+
+    partial void OnForceApplyGlobalCalibrationChanged(bool value)
+    {
+        if (_isInitializing) return;
+
+        ChessboardCalibrationService.SaveForceApplyGlobalCalibration(value);
+
+        if (value)
         {
-            data = config.ChessboardCalibration;
-            isFromJob = true;
+            var globalCal = ChessboardCalibrationService.GetGlobalCalibration();
+            if (globalCal is not null && globalCal.IsCalibrated)
+            {
+                ApplyCalibrationDataToUi(globalCal);
+                if (_config is not null)
+                {
+                    _config.ChessboardCalibration = globalCal.Clone();
+                    _config.PixelsPerMm = globalCal.PixelsPerMm;
+                    IsDirty = true;
+                }
+                StatusMessage = "🔒 Đã BẬT cưỡng chế: Hệ thống sẽ luôn áp dụng thông số Global Calib cho tất cả các Job.";
+            }
+            else
+            {
+                StatusMessage = "⚠️ Đã bật cưỡng chế, nhưng máy chưa có Global Calib. Vui lòng thực hiện Calibrate và bấm [🌐 Set As Global Calib] trước.";
+            }
         }
         else
         {
-            data = ChessboardCalibrationService.GetGlobalCalibration();
-            if (data is not null && data.IsCalibrated)
+            StatusMessage = "🔓 Đã TẮT cưỡng chế: Job có thể tự do sử dụng cấu hình Calib riêng biệt.";
+        }
+    }
+
+    private void ApplyCalibrationDataToUi(ChessboardCalibrationData data)
+    {
+        BoardCols = data.BoardCols;
+        BoardRows = data.BoardRows;
+        SquareSizeMm = data.SquareSizeMm;
+
+        IsCalibrated = true;
+        PixelsPerMm = data.PixelsPerMm;
+        ReprojectionError = data.ReprojectionError;
+        FocalX = data.Fx;
+        FocalY = data.Fy;
+        PrincipalX = data.Cx;
+        PrincipalY = data.Cy;
+        DistCoeffsText = data.DistCoeffs is not null
+            ? string.Join(", ", data.DistCoeffs.Select(d => d.ToString("F6")))
+            : string.Empty;
+    }
+
+    public void Initialize(VisionConfig config)
+    {
+        _isInitializing = true;
+        try
+        {
+            _config = config;
+            ChessboardCalibrationData? data = null;
+            bool isFromJob = false;
+
+            // Nạp trạng thái cưỡng chế từ cấu hình toàn cục
+            ForceApplyGlobalCalibration = ChessboardCalibrationService.IsForceApplyGlobalCalibration;
+
+            var globalCal = ChessboardCalibrationService.GetGlobalCalibration();
+            bool hasGlobal = globalCal is not null && globalCal.IsCalibrated;
+
+            if (ForceApplyGlobalCalibration && hasGlobal)
             {
+                data = globalCal;
+                config.ChessboardCalibration = globalCal!.Clone();
+                config.PixelsPerMm = globalCal.PixelsPerMm;
+            }
+            else if (config.ChessboardCalibration is not null && config.ChessboardCalibration.IsCalibrated)
+            {
+                data = config.ChessboardCalibration;
+                isFromJob = true;
+            }
+            else if (hasGlobal)
+            {
+                data = globalCal;
                 // Tự động gắn cấu hình Global vào Job hiện tại nếu Job chưa có cấu hình riêng
-                config.ChessboardCalibration = data.Clone();
+                config.ChessboardCalibration = globalCal!.Clone();
                 if (config.PixelsPerMm <= 0 || Math.Abs(config.PixelsPerMm - 1.0) < 1e-6)
                 {
-                    config.PixelsPerMm = data.PixelsPerMm;
+                    config.PixelsPerMm = globalCal.PixelsPerMm;
                 }
             }
+
+            if (data is not null && data.IsCalibrated)
+            {
+                ApplyCalibrationDataToUi(data);
+
+                if (ForceApplyGlobalCalibration && hasGlobal)
+                {
+                    StatusMessage = "🔒 Đang CƯỠNG CHẾ áp dụng Global Calibration cho tất cả các Job.";
+                }
+                else
+                {
+                    StatusMessage = isFromJob
+                        ? "✅ Calibration đã lưu trước đó của Job được nạp lại."
+                        : "🌐 Đang áp dụng Global Calibration (do Job hiện tại chưa có cấu hình riêng).";
+                }
+            }
+            else if (config.ChessboardCalibration is not null)
+            {
+                BoardCols = config.ChessboardCalibration.BoardCols;
+                BoardRows = config.ChessboardCalibration.BoardRows;
+                SquareSizeMm = config.ChessboardCalibration.SquareSizeMm;
+            }
         }
-
-        if (data is not null && data.IsCalibrated)
+        finally
         {
-            BoardCols = data.BoardCols;
-            BoardRows = data.BoardRows;
-            SquareSizeMm = data.SquareSizeMm;
-
-            IsCalibrated = true;
-            PixelsPerMm = data.PixelsPerMm;
-            ReprojectionError = data.ReprojectionError;
-            FocalX = data.Fx;
-            FocalY = data.Fy;
-            PrincipalX = data.Cx;
-            PrincipalY = data.Cy;
-            DistCoeffsText = data.DistCoeffs is not null
-                ? string.Join(", ", data.DistCoeffs.Select(d => d.ToString("F6")))
-                : string.Empty;
-
-            StatusMessage = isFromJob
-                ? "✅ Calibration đã lưu trước đó của Job được nạp lại."
-                : "🌐 Đang áp dụng Global Calibration (do Job hiện tại chưa có cấu hình riêng).";
-        }
-        else if (config.ChessboardCalibration is not null)
-        {
-            BoardCols = config.ChessboardCalibration.BoardCols;
-            BoardRows = config.ChessboardCalibration.BoardRows;
-            SquareSizeMm = config.ChessboardCalibration.SquareSizeMm;
+            _isInitializing = false;
         }
     }
 
