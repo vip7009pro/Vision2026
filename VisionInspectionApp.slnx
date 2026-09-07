@@ -24,4 +24,7 @@
   <Project Path="VisionInspectionApp.VisionEngine/VisionInspectionApp.VisionEngine.csproj">
     <Platform Solution="*|x64" Project="x64" />
   </Project>
+  <Project Path="VisionInspectionApp.Updater/VisionInspectionApp.Updater.csproj">
+    <Platform Solution="*|x64" Project="x64" />
+  </Project>
 </Solution>

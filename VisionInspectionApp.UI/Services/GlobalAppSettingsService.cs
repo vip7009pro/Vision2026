@@ -20,6 +20,26 @@ public sealed class GlobalAppSettings
 
     // Crosshair display on live camera preview
     public bool ShowCrosshair { get; set; } = false;
+
+    // OTA Update Settings (Local Server / GitHub Releases)
+    public OtaSettings Ota { get; set; } = new();
+}
+
+public sealed class OtaSettings
+{
+    public bool AutoCheckOnStartup { get; set; } = true;
+    /// <summary>
+    /// Nguồn kiểm tra: "Auto" (tự động nhận biết theo URL), "CustomManifest" (Local/HTTP Server), hoặc "GitHub" (GitHub Releases API)
+    /// </summary>
+    public string UpdateSourceType { get; set; } = "Auto";
+    /// <summary>Đường dẫn API máy chủ nội bộ hoặc URL tệp version.json</summary>
+    public string UpdateServerUrl { get; set; } = "http://192.168.1.100:8080/api/updates/version.json";
+    /// <summary>Repository GitHub dạng "owner/repo" (ví dụ "cmsvina/VisionInspectionApp")</summary>
+    public string GitHubRepo { get; set; } = "";
+    /// <summary>Kênh cập nhật: "Stable" hoặc "Beta"</summary>
+    public string UpdateChannel { get; set; } = "Stable";
+    public DateTime? LastCheckedTime { get; set; }
+    public string IgnoredVersion { get; set; } = "";
 }
 
 public sealed class LightingServerConfig

@@ -1,0 +1,271 @@
+<Window x:Class="VisionInspectionApp.UI.Views.OTA.OtaUpdateDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d"
+        Title="Cập Nhật Phần Mềm Từ Xa — CMS VINA OTA Update"
+        Height="540" Width="680"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="NoResize"
+        Background="{DynamicResource WindowBackgroundBrush}"
+        Foreground="{DynamicResource TextBrush}"
+        FontFamily="Segoe UI"
+        Icon="pack://application:,,,/VisionInspectionApp.UI;component/Assets/cms-vina-vision-system.ico">
+
+    <Window.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVis" />
+    </Window.Resources>
+
+    <Grid Margin="16">
+        <Grid.RowDefinitions>
+            <!-- Header -->
+            <RowDefinition Height="Auto" />
+            <!-- Tab Contents -->
+            <RowDefinition Height="*" />
+            <!-- Footer Status & Action Buttons -->
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <!-- Header Banner -->
+        <Border Grid.Row="0"
+                Background="{DynamicResource PanelBackgroundBrush}"
+                BorderBrush="{DynamicResource BorderBrush}"
+                BorderThickness="1"
+                CornerRadius="8"
+                Padding="14,10"
+                Margin="0,0,0,12">
+            <DockPanel LastChildFill="True">
+                <TextBlock Text="🚀" FontSize="26" VerticalAlignment="Center" Margin="0,0,12,0" />
+                <StackPanel VerticalAlignment="Center">
+                    <TextBlock Text="CMS VINA — CẬP NHẬT PHẦN MỀM TỪ XA (OTA UPDATE)"
+                               FontWeight="Bold"
+                               FontSize="14"
+                               Foreground="{DynamicResource AccentBrush}" />
+                    <TextBlock Text="Tự động kiểm tra, tải về và cập nhật các phiên bản mới nhất an toàn qua mạng."
+                               FontSize="11.5"
+                               Foreground="{DynamicResource TextMutedBrush}"
+                               Margin="0,2,0,0" />
+                </StackPanel>
+            </DockPanel>
+        </Border>
+
+        <!-- Main Tab Control -->
+        <TabControl Grid.Row="1" Background="Transparent" BorderThickness="0">
+            <!-- TAB 1: CẬP NHẬT -->
+            <TabItem Header="🔄 Kiểm Tra &amp; Cập Nhật">
+                <Grid Margin="4,10,4,4">
+                    <Grid.RowDefinitions>
+                        <!-- Version Cards Row -->
+                        <RowDefinition Height="Auto" />
+                        <!-- Release Notes Section -->
+                        <RowDefinition Height="*" />
+                        <!-- Progress Section -->
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+
+                    <!-- Version Comparison Cards -->
+                    <Grid Grid.Row="0" Margin="0,0,0,10">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="30" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+
+                        <!-- Card 1: Current Version -->
+                        <Border Grid.Column="0"
+                                Background="{DynamicResource PanelBackgroundBrush}"
+                                BorderBrush="{DynamicResource BorderBrush}"
+                                BorderThickness="1.5"
+                                CornerRadius="6"
+                                Padding="12,8">
+                            <StackPanel>
+                                <TextBlock Text="Phiên Bản Hiện Tại" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource TextMutedBrush}" />
+                                <TextBlock Text="{Binding CurrentVersionText}" FontSize="18" FontWeight="ExtraBold" Foreground="{DynamicResource TextBrush}" Margin="0,4,0,0" />
+                            </StackPanel>
+                        </Border>
+
+                        <TextBlock Grid.Column="1" Text="➔" FontSize="18" FontWeight="Bold" Foreground="{DynamicResource TextMutedBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+
+                        <!-- Card 2: Latest Version -->
+                        <Border Grid.Column="2"
+                                Background="{DynamicResource PanelBackgroundBrush}"
+                                BorderBrush="{DynamicResource BorderBrush}"
+                                BorderThickness="1.5"
+                                CornerRadius="6"
+                                Padding="12,8">
+                            <StackPanel>
+                                <DockPanel LastChildFill="False">
+                                    <TextBlock Text="Phiên Bản Mới Nhất" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource TextMutedBrush}" DockPanel.Dock="Left" />
+                                    <TextBlock Text="{Binding PackageSizeText, StringFormat='📦 {0}'}" FontSize="11" Foreground="{DynamicResource TextMutedBrush}" DockPanel.Dock="Right" />
+                                </DockPanel>
+                                <DockPanel Margin="0,4,0,0">
+                                    <TextBlock Text="{Binding LatestVersionText}" FontSize="18" FontWeight="ExtraBold" Foreground="#38BDF8" DockPanel.Dock="Left" />
+                                    <TextBlock Text="{Binding ReleaseDateText, StringFormat='📅 {0}'}" FontSize="11" Foreground="{DynamicResource TextMutedBrush}" DockPanel.Dock="Right" VerticalAlignment="Center" />
+                                </DockPanel>
+                            </StackPanel>
+                        </Border>
+                    </Grid>
+
+                    <!-- Release Notes Box -->
+                    <GroupBox Grid.Row="1" Header="📝 GHI CHÚ PHÁT HÀNH &amp; TÍNH NĂNG MỚI" Foreground="{DynamicResource TextBrush}" Padding="6">
+                        <Border Background="{DynamicResource PanelAltBackgroundBrush}"
+                                BorderBrush="{DynamicResource BorderBrush}"
+                                BorderThickness="1"
+                                CornerRadius="4">
+                            <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Padding="10">
+                                <TextBlock Text="{Binding ReleaseNotes}"
+                                           FontSize="12"
+                                           LineHeight="18"
+                                           Foreground="{DynamicResource TextBrush}"
+                                           TextWrapping="Wrap" />
+                            </ScrollViewer>
+                        </Border>
+                    </GroupBox>
+
+                    <!-- Download Progress Bar (Hiển thị khi đang tải) -->
+                    <Border Grid.Row="2"
+                            Visibility="{Binding IsDownloading, Converter={StaticResource BoolToVis}}"
+                            Background="{DynamicResource PanelBackgroundBrush}"
+                            BorderBrush="{DynamicResource BorderBrush}"
+                            BorderThickness="1"
+                            CornerRadius="6"
+                            Padding="10,8"
+                            Margin="0,8,0,0">
+                        <StackPanel>
+                            <DockPanel LastChildFill="False" Margin="0,0,0,4">
+                                <TextBlock Text="{Binding DownloadProgressText}" FontSize="11.5" FontWeight="SemiBold" Foreground="{DynamicResource TextBrush}" DockPanel.Dock="Left" />
+                                <TextBlock Text="{Binding DownloadSpeedText}" FontSize="11.5" FontWeight="Bold" Foreground="#38BDF8" DockPanel.Dock="Right" />
+                            </DockPanel>
+                            <ProgressBar Height="10"
+                                         Minimum="0"
+                                         Maximum="100"
+                                         Value="{Binding DownloadProgress}"
+                                         Foreground="#38BDF8"
+                                         Background="#1E293B"
+                                         BorderBrush="#334155" />
+                        </StackPanel>
+                    </Border>
+                </Grid>
+            </TabItem>
+
+            <!-- TAB 2: CÀI ĐẶT MÁY CHỦ CẬP NHẬT -->
+            <TabItem Header="⚙️ Cài Đặt Máy Chủ OTA">
+                <StackPanel Margin="6,12,6,6">
+                    <TextBlock Text="Cấu hình nguồn kiểm tra cập nhật từ xa (Hỗ trợ cả mạng nội bộ LAN &amp; GitHub):"
+                               FontSize="12"
+                               Foreground="{DynamicResource TextMutedBrush}"
+                               Margin="0,0,0,12" />
+
+                    <!-- Loại Nguồn -->
+                    <TextBlock Text="Loại nguồn cập nhật:" FontWeight="SemiBold" FontSize="12" Margin="0,0,0,4" />
+                    <ComboBox SelectedValue="{Binding SelectedSourceType, Mode=TwoWay}"
+                              SelectedValuePath="Tag"
+                              Height="28" Margin="0,0,0,12" VerticalContentAlignment="Center">
+                        <ComboBoxItem Content="🌐 Tự động nhận diện theo URL (Khuyến nghị)" Tag="Auto" />
+                        <ComboBoxItem Content="🏢 Máy chủ nội bộ LAN / HTTP Manifest (version.json)" Tag="CustomManifest" />
+                        <ComboBoxItem Content="☁️ GitHub Releases API (Public/Private Repo)" Tag="GitHub" />
+                    </ComboBox>
+
+                    <!-- URL Cập Nhật -->
+                    <TextBlock Text="Đường dẫn máy chủ / URL Manifest / GitHub Repo:" FontWeight="SemiBold" FontSize="12" Margin="0,0,0,4" />
+                    <TextBox Text="{Binding ServerUrl, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                             Height="28"
+                             Padding="6,0"
+                             VerticalContentAlignment="Center"
+                             Background="{DynamicResource InputBackgroundBrush}"
+                             Foreground="{DynamicResource TextBrush}"
+                             BorderBrush="{DynamicResource BorderBrush}"
+                             ToolTip="Ví dụ: http://192.168.1.100:8080/api/updates/version.json hoặc cmsvina/VisionInspectionApp"
+                             Margin="0,0,0,12" />
+
+                    <!-- CheckBox Auto check -->
+                    <CheckBox Content="Tự động kiểm tra bản cập nhật khi khởi động phần mềm"
+                              IsChecked="{Binding AutoCheckOnStartup, Mode=TwoWay}"
+                              FontWeight="SemiBold"
+                              FontSize="12"
+                              Margin="0,0,0,16" />
+
+                    <!-- Nút Lưu Cài Đặt -->
+                    <Button Content="💾 Lưu Cấu Hình OTA"
+                            Command="{Binding SaveSettingsCommand}"
+                            HorizontalAlignment="Left"
+                            Padding="16,6"
+                            Height="32" />
+                </StackPanel>
+            </TabItem>
+        </TabControl>
+
+        <!-- Footer: Status Message & Action Buttons -->
+        <Border Grid.Row="2"
+                Background="{DynamicResource PanelBackgroundBrush}"
+                BorderBrush="{DynamicResource BorderBrush}"
+                BorderThickness="1"
+                CornerRadius="6"
+                Padding="10,8"
+                Margin="0,10,0,0">
+            <DockPanel LastChildFill="True">
+                <!-- Action Buttons (Right) -->
+                <StackPanel Orientation="Horizontal" DockPanel.Dock="Right" VerticalAlignment="Center">
+                    <!-- Nút Kiểm Tra Lại -->
+                    <Button Content="🔍 Kiểm Tra Ngay"
+                            Command="{Binding CheckForUpdateCommand}"
+                            IsEnabled="{Binding IsDownloading, Converter={StaticResource BoolToVis}, ConverterParameter=Invert}"
+                            Padding="12,5" Height="30" Margin="0,0,6,0" />
+
+                    <!-- Nút Tải & Cập Nhật (Hiện khi có bản mới và chưa tải xong) -->
+                    <Button Content="⬇️ Tải &amp; Cập Nhật"
+                            Command="{Binding DownloadAndInstallCommand}"
+                            Visibility="{Binding HasUpdate, Converter={StaticResource BoolToVis}}"
+                            Background="#16A34A"
+                            BorderBrush="#15803D"
+                            Foreground="White"
+                            Padding="14,5" Height="30" FontWeight="Bold" Margin="0,0,6,0" />
+
+                    <!-- Nút Hủy Tải (Hiện khi đang tải) -->
+                    <Button Content="⏹ Hủy Tải"
+                            Command="{Binding CancelDownloadCommand}"
+                            Visibility="{Binding IsDownloading, Converter={StaticResource BoolToVis}}"
+                            Background="#DC2626"
+                            BorderBrush="#B91C1C"
+                            Foreground="White"
+                            Padding="10,5" Height="30" Margin="0,0,6,0" />
+
+                    <!-- Nút Cài Đặt & Khởi Động Lại (Hiện khi đã tải xong) -->
+                    <Button Content="🚀 Cài Đặt &amp; Khởi Động Lại"
+                            Command="{Binding LaunchInstallerCommand}"
+                            Visibility="{Binding IsDownloaded, Converter={StaticResource BoolToVis}}"
+                            Background="#2563EB"
+                            BorderBrush="#1D4ED8"
+                            Foreground="White"
+                            Padding="14,5" Height="30" FontWeight="Bold" Margin="0,0,6,0" />
+
+                    <!-- Nút Bỏ Qua Phiên Bản Này -->
+                    <Button Content="Bỏ Qua Bản Này"
+                            Command="{Binding IgnoreThisVersionCommand}"
+                            Visibility="{Binding HasUpdate, Converter={StaticResource BoolToVis}}"
+                            Background="Transparent"
+                            BorderBrush="{DynamicResource BorderBrush}"
+                            Foreground="{DynamicResource TextMutedBrush}"
+                            Padding="10,5" Height="30" Margin="0,0,6,0" />
+
+                    <!-- Nút Đóng -->
+                    <Button Content="Đóng"
+                            Command="{Binding CloseCommand}"
+                            Background="Transparent"
+                            BorderBrush="{DynamicResource BorderBrush}"
+                            Padding="12,5" Height="30" />
+                </StackPanel>
+
+                <!-- Status Message (Left) -->
+                <TextBlock Text="{Binding StatusMessage}"
+                           Foreground="{Binding StatusColorHex}"
+                           FontSize="12"
+                           FontWeight="SemiBold"
+                           VerticalAlignment="Center"
+                           TextTrimming="CharacterEllipsis"
+                           Margin="0,0,10,0" />
+            </DockPanel>
+        </Border>
+    </Grid>
+</Window>

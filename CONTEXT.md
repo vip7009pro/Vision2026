@@ -46,6 +46,45 @@
 ### ImageSource và preview
 
 - Lưu template cho Origin, Point và SurfaceCompare hoạt động với nguồn ảnh ImageSource.
+- **Bổ Sung Chức Năng Cập Nhật Phần Mềm Từ Xa OTA (Over-The-Air Update) Cho Ứng Dụng (Task 321)**:
+  - **Hiện Tượng & Yêu Cầu Người Dùng**:
+    - Nhu cầu cập nhật phần mềm từ xa cho các máy tính công nghiệp IPC lắp đặt tại các dây chuyền nhà máy qua mạng LAN nội bộ hoặc GitHub Releases/Internet mà không cần kỹ sư phải cắm USB cập nhật thủ công từng máy.
+    - Yêu cầu hỗ trợ cả 2 phương thức kết nối: Máy chủ nội bộ LAN (Custom Manifest `version.json`) và GitHub Releases API; đảm bảo an toàn tuyệt đối, xác thực tính toàn vẹn gói cập nhật, tự động sao lưu và khôi phục (Rollback) khi gặp sự cố.
+  - **Giải Pháp Kỹ Thuật Đã Triển Khai**:
+    1. *Tầng Dữ Liệu & Cấu Hình (Models & Settings)*:
+       - Tạo `UpdateManifest.cs` trong `VisionInspectionApp.Models/Ota/`: Định nghĩa `UpdateManifest` (Version, ReleaseDate, Channel, IsMandatory, DownloadUrl, FileSize, Sha256, ReleaseNotes), `UpdateCheckResult` và `UpdateProgressInfo`.
+       - Thêm `OtaSettings` vào `GlobalAppSettings`: Cấu hình `AutoCheckOnStartup`, `UpdateSourceType` ("Auto", "CustomManifest", "GitHub"), `UpdateServerUrl`, `UpdateChannel`, `IgnoredVersion`.
+    2. *Tầng Dịch Vụ Ứng Dụng (Application Services)*:
+       - `IOtaUpdateService` & `OtaUpdateService`:
+         - Tự động nhận diện và đọc thông tin bản mới từ máy chủ HTTP nội bộ hoặc GitHub Releases API (`tag_name`, assets `.zip`).
+         - So sánh phiên bản (`Version.TryParse`) giữa phiên bản hiện tại và phiên bản máy chủ.
+         - Tải gói cập nhật dạng Stream theo chunks 80KB, báo cáo tiến trình % thời gian thực và tốc độ tải (MB/s).
+         - Xác thực mã băm SHA-256 (`VerifyPackageChecksum`) bảo vệ an toàn gói cài đặt.
+         - Khởi chạy trình cập nhật độc lập `VisionUpdater.exe` và đóng ứng dụng an toàn để giải phóng file locks.
+    3. *Trình Cập Nhật Độc Lập (`VisionInspectionApp.Updater` -> `VisionUpdater.exe`)*:
+       - Ứng dụng .NET 8 WPF độc lập, nhẹ, nhận tham số: `--pid <id> --package <zip> --target <app_dir> --restart <exe>`.
+       - Chờ ứng dụng chính kết thúc để nhả file locks.
+       - Tự động sao lưu toàn bộ các file hiện có sang thư mục `backup/backup_{timestamp}/`.
+       - Giải nén ghi đè gói cập nhật mới vào thư mục cài đặt, có cơ chế chống Zip Slip vulnerability.
+       - Nếu xảy ra lỗi giữa chừng (mất điện, lỗi ghi file): Tự động Rollback phục hồi từ bản sao lưu và khởi động lại bản cũ an toàn.
+       - Khởi động lại ứng dụng chính kèm tham số `--updated`.
+    4. *Giao Diện Người Dùng (UI & ViewModels)*:
+       - Cửa sổ `OtaUpdateDialog.xaml` & `OtaUpdateViewModel.cs`:
+         - Thẻ "Kiểm Tra & Cập Nhật": Thẻ so sánh phiên bản (Current vs Latest), khung xem Release Notes / Changelog, thanh tiến trình tải thời gian thực, các nút kiểm tra ngay, tải & cập nhật, hủy tải, cài đặt & khởi động lại, bỏ qua phiên bản này.
+         - Thẻ "Cài Đặt Máy Chủ OTA": Cho phép chuyển đổi linh hoạt giữa Tự động / Local Server / GitHub Releases, nhập URL máy chủ và bật/tắt tự động kiểm tra khi mở app.
+       - Tích hợp vào `MainWindow.xaml`:
+         - Menu `❓ Trợ Giúp` -> Thêm mục `🔄 Kiểm Tra Bản Cập Nhật (OTA Update)...`.
+         - TitleBar Col 3: Huy hiệu / nút nhấp nháy `🚀 Có Bản Mới: vX.X.X` khi phát hiện có bản cập nhật mới từ xa trong chế độ nền.
+  - **Kiểm Thử & Xác Minh**:
+    - Tạo bộ kiểm thử tự động `TestExtractApp/OtaUpdateServiceTests.cs` với 5 test suite toàn diện:
+      1. `TestCustomManifestParsingAndVersionComparison`: PASSED.
+      2. `TestGitHubReleasesApiParsing`: PASSED.
+      3. `TestSha256ChecksumVerification`: PASSED.
+      4. `TestDownloadUpdatePackageWithProgress`: PASSED.
+      5. `TestZipExtractionAndBackupLogic`: PASSED.
+    - Biên dịch Solution `VisionInspectionApp.slnx`: 0 Error(s).
+    - Toàn bộ test suite chạy lệnh `dotnet run --project TestExtractApp`: 100% PASSED.
+
 - **Bổ Sung Khối Hiển Thị Tên Sản Phẩm (Product Name) Cực Đại Full-Width Auto-Scaling & Tái Cấu Trúc Bố Cục 10/45/45 Trong OQC Scanner (Task 320)**:
   - **Hiện Tượng & Yêu Cầu Người Dùng**:
     - Trong tab OQC Scanner, trước đây cột bên phải chia 50/50 gồm ô kết quả OK/NG và bảng kết quả chi tiết phép đo.

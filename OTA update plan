@@ -1,0 +1,202 @@
+# Kế Hoạch Triển Khai: Chức Năng Cập Nhật Phần Mềm Từ Xa OTA (Over-The-Air Update)
+
+Tài liệu này mô tả chi tiết kiến trúc, luồng hoạt động, các thành phần phần mềm và kế hoạch triển khai tính năng **Cập nhật phần mềm từ xa (OTA Update)** cho giải pháp thị giác công nghiệp **CMS VINA Vision System** (.NET 8 WPF).
+
+---
+
+## 1. Bối Cảnh & Mục Tiêu
+
+### 1.1. Mục tiêu
+- Cho phép các máy tính công nghiệp (IPC) lắp đặt tại các dây chuyền nhà máy tự động kiểm tra, tải về và cập nhật phiên bản mới nhất của phần mềm qua mạng nội bộ (Local Server) hoặc Internet mà không cần kỹ sư phải đến trực tiếp từng máy cắm USB copy thủ công.
+- Quá trình cập nhật phải **tự động**, **an toàn tuyệt đối**, có cơ chế **xác thực tính toàn vẹn (Checksum SHA-256)** và **tự động khôi phục (Rollback)** nếu xảy ra sự cố mất điện / lỗi mạng giữa chừng.
+
+### 1.2. Thách thức kỹ thuật trên Windows Desktop (.NET 8)
+- **File Lock**: Khi `VisionInspectionApp.exe` và các thư viện C++ (`OpenCvSharpExtern.dll`, `MvCameraControl.Net.dll`, `VisionInspectionApp.PlcBridge.exe`) đang chạy, hệ điều hành Windows sẽ khoá các file này, không thể ghi đè trực tiếp.
+- **Giải pháp**: Sử dụng mô hình **Bộ cập nhật ngoài độc lập (Standalone Updater - `VisionUpdater.exe`)**:
+  1. Ứng dụng chính kiểm tra phiên bản mới và tải gói cập nhật nén `.zip` về thư mục tạm.
+  2. Xác thực mã băm SHA-256 đảm bảo gói tải về không bị lỗi hay hỏng mạng.
+  3. Ứng dụng chính gọi `VisionUpdater.exe` kèm tham số dòng lệnh (PID của app, đường dẫn gói zip, thư mục cài đặt, đường dẫn app để restart).
+  4. Ứng dụng chính giải phóng camera, dừng PLC bridge, ngắt kết nối an toàn và tắt hoàn toàn (nhả lock file).
+  5. `VisionUpdater.exe` chờ tiến trình chính thoát hẳn, sao lưu phiên bản hiện tại vào thư mục `backup/`, giải nén gói mới ghi đè vào thư mục app, rồi tự động khởi chạy lại ứng dụng chính và tự thoát.
+
+---
+
+## 2. Kiến Trúc Luồng Hoạt Động (OTA Update Workflow)
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor User as Người Vận Hành / Hệ Thống
+    participant App as VisionInspectionApp (Chính)
+    participant Srv as Máy Chủ Cập Nhật (OTA Server)
+    participant Upd as VisionUpdater.exe (Độc lập)
+
+    User->>App: Mở App (hoặc bấm "Kiểm tra bản cập nhật")
+    App->>Srv: GET /api/updates/version.json (Manifest)
+    Srv-->>App: Trả về UpdateManifest (Version, Url, SHA256, ReleaseNotes)
+    App->>App: So sánh Version (Latest > Current?)
+    
+    alt Không có bản mới
+        App-->>User: "Bạn đang sử dụng phiên bản mới nhất"
+    else Có bản cập nhật mới
+        App-->>User: Hiển thị Dialog thông báo phiên bản mới & Changelog
+        User->>App: Bấm "Tải & Cập Nhật Ngay"
+        App->>Srv: Tải file gói cập nhật (.zip) với ProgressBar
+        Srv-->>App: Stream dữ liệu tải về
+        App->>App: Kiểm tra Checksum SHA-256 (Khớp?)
+        App->>Upd: Khởi chạy VisionUpdater.exe (--pid, --package, --target, --restart)
+        App->>App: Đóng Camera, PLC, DB & Thoát an toàn (Process Exit)
+        Upd->>Upd: Chờ App thoát hoàn toàn (Release File Locks)
+        Upd->>Upd: Sao lưu bản cũ sang Backup/
+        Upd->>Upd: Giải nén gói zip ghi đè vào thư mục ứng dụng
+        alt Thành công
+            Upd->>App: Khởi động lại VisionInspectionApp.exe (--updated)
+            Upd->>Upd: Tự thoát
+            App-->>User: Hiển thị thông báo "Cập nhật thành công lên vX.X.X!"
+        else Gặp sự cố
+            Upd->>Upd: Tự động Rollback phục hồi từ thư mục Backup/
+            Upd->>App: Khởi động lại bản cũ
+            App-->>User: Cảnh báo "Cập nhật thất bại, đã khôi phục bản cũ an toàn"
+        end
+    end
+```
+
+---
+
+## 3. Cấu Trúc Gói & Định Dạng Tệp Manifest (`version.json`)
+
+Máy chủ OTA Server chỉ cần đặt 1 tệp JSON tĩnh hoặc API REST trả về định dạng chuẩn:
+
+```json
+{
+  "appName": "CMS VINA Vision System",
+  "version": "1.3.0.0",
+  "releaseDate": "2026-09-10T10:00:00Z",
+  "channel": "Stable",
+  "isMandatory": false,
+  "minSupportedVersion": "1.0.0.0",
+  "downloadUrl": "http://192.168.1.100:8080/updates/VisionInspectionApp_v1.3.0.0.zip",
+  "fileSize": 52428800,
+  "sha256": "3a7bd3e2360a3d29eea436cdfb27982fbf23f964319d179b317d42666ebd0259",
+  "releaseNotes": "🚀 TÍNH NĂNG MỚI:\n- Nâng cấp OQC Scanner: hiển thị Tên Sản Phẩm cực lớn, tỷ lệ 10/45/45.\n- Bổ sung chế độ chỉ bắt Origin.\n- Thêm tính năng OTA Update tự động từ xa.\n\n🛠️ SỬA LỖI & TỐI ƯU:\n- Khử hoàn toàn deadlock mạng và bảo tồn trạng thái Full Screen.\n- Tối ưu bộ nhớ Live Stream 0-allocation."
+}
+```
+
+---
+
+## 4. Các Thay Đổi Đề Xuất (Proposed Changes)
+
+### Component 1: Dữ Liệu & Cấu Hình (Models)
+
+#### [NEW] [UpdateManifest.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.Models/Ota/UpdateManifest.cs)
+- Chứa các class dữ liệu:
+  - `UpdateManifest`: Phiên bản, URL tải, SHA-256, ngày phát hành, changelog, cờ bắt buộc.
+  - `UpdateCheckResult`: Kết quả kiểm tra (Có bản mới, Đã mới nhất, Lỗi kết nối, Bắt buộc).
+  - `UpdateProgressInfo`: Dữ liệu thanh tiến trình (Bytes downloaded, Total bytes, % tiến độ, Tốc độ tải MB/s).
+
+#### [MODIFY] [GlobalAppSettingsService.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/Services/GlobalAppSettingsService.cs)
+- Bổ sung `OtaSettings` vào `GlobalAppSettings`:
+  ```csharp
+  public sealed class OtaSettings
+  {
+      public bool AutoCheckOnStartup { get; set; } = true;
+      public string UpdateServerUrl { get; set; } = "http://192.168.1.100:8080/api/updates/version.json";
+      public string UpdateChannel { get; set; } = "Stable";
+      public DateTime? LastCheckedTime { get; set; }
+      public string IgnoredVersion { get; set; } = "";
+  }
+  ```
+
+---
+
+### Component 2: Tầng Ứng Dụng & Dịch Vụ OTA (Application Services)
+
+#### [NEW] [IOtaUpdateService.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.Application/Services/IOtaUpdateService.cs)
+- Interface định nghĩa:
+  - `Version CurrentVersion { get; }`
+  - `Task<UpdateCheckResult> CheckForUpdateAsync(string? manifestUrl = null, CancellationToken ct = default)`
+  - `Task<string> DownloadUpdatePackageAsync(UpdateManifest manifest, IProgress<UpdateProgressInfo>? progress, CancellationToken ct = default)`
+  - `bool VerifyPackageChecksum(string filePath, string expectedSha256)`
+  - `bool LaunchUpdaterAndShutdown(string zipPackagePath, bool restartAfterUpdate = true)`
+  - `void CleanTempUpdates()`
+
+#### [NEW] [OtaUpdateService.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.Application/Services/OtaUpdateService.cs)
+- Triển khai `IOtaUpdateService` sử dụng `HttpClient` không gây deadlock (`ConfigureAwait(false)`).
+- Xử lý download dạng Stream theo chunk, tính toán tiến trình phần trăm và tốc độ tải.
+- Tính toán băm SHA-256 sử dụng `System.Security.Cryptography.SHA256`.
+- Đóng gói chuẩn bị file `VisionUpdater.exe` trong thư mục chạy và gọi Process độc lập.
+
+---
+
+### Component 3: Công Cụ Cập Nhật Độc Lập (VisionUpdater)
+
+#### [NEW] Dự án con `VisionInspectionApp.Updater` (`VisionUpdater.exe`)
+- Ứng dụng .NET 8 nhỏ gọn, độc lập hoàn toàn (Single-file executable, dung lượng nhỏ ~150KB):
+  - Nhận tham số: `--pid <id> --package <zip_path> --target <app_dir> --restart <exe_path> --backup <backup_dir>`.
+  - Có giao diện tiến trình nhỏ gọn (hoặc console có thanh tiến trình đồ họa) hiển thị: *"Đang đợi ứng dụng đóng..."*, *"Đang sao lưu bản cũ..."*, *"Đang giải nén cập nhật..."*, *"Khởi động lại..."*.
+  - Có cơ chế **Rollback tự động** nếu xảy ra ngoại lệ khi giải nén (ví dụ thiếu quyền ghi, file bị lỗi).
+  - Tự động copy `VisionUpdater.exe` ra thư mục App khi build solution.
+
+---
+
+### Component 4: Giao Diện Người Dùng (UI & ViewModels)
+
+#### [NEW] [OtaUpdateDialog.xaml](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/Views/OTA/OtaUpdateDialog.xaml) & [OtaUpdateDialog.xaml.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/Views/OTA/OtaUpdateDialog.xaml.cs)
+- Cửa sổ giao diện hiện đại đồng bộ Theme (Dark/Light):
+  - Hiển thị so sánh: Phiên bản hiện tại (`v1.2.0`) ➔ Phiên bản mới (`v1.3.0`).
+  - Khung xem nội dung Release Notes (Markdown / Text format).
+  - Nút: *"Tải & Cập Nhật Ngay"*, *"Bỏ Qua Bản Này"*, *"Để Sau"*.
+  - Thanh tiến trình tải (Progress Bar, % tiến độ, Dung lượng đã tải / Tổng dung lượng, Tốc độ tải).
+  - Nút *"Khởi Động Lại Ngay"* khi tải xong và xác thực SHA-256 thành công.
+
+#### [NEW] [OtaUpdateViewModel.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/OtaUpdateViewModel.cs)
+- Quản lý trạng thái và tương tác của cửa sổ cập nhật.
+
+#### [MODIFY] [MainWindow.xaml](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/MainWindow.xaml) & [MainViewModel.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/MainViewModel.cs)
+- Menu `❓ Trợ Giúp`: Bổ sung mục `🔄 Kiểm Tra Bản Cập Nhật (OTA Update)...`
+- TitleBar: Hiển thị Huy hiệu/Nút thông báo nhấp nháy `🚀 Có Bản Cập Nhật Mới!` khi phát hiện có bản update mới từ xa để người dùng chú ý.
+- Tự động kiểm tra cập nhật ở chế độ nền khi mở app (nếu `AutoCheckOnStartup == true`).
+
+---
+
+## 5. User Review Required (Yêu Cầu Ý Kiến Người Dùng)
+
+> [!IMPORTANT]
+> **Phương thức triển khai Server lưu trữ bản cập nhật**:
+> 1. **Local HTTP Server / REST API trong nhà máy**: Thường dùng nhất cho hệ thống máy Vision chạy mạng nội bộ LAN xưởng (đặt file `version.json` và file `.zip` trên một máy chủ web IIS / Nginx / NodeJS / NAS của phòng kỹ thuật).
+> 2. **GitHub Releases / Cloud HTTP Server**: Nếu các máy tính IPC có kết nối Internet ra ngoài.
+>
+> ➜ **Bạn muốn hệ thống mặc định kết nối tới dạng Server nào? (Local Server IP nội bộ hay Cloud/GitHub, hoặc hỗ trợ cả hai thông qua cấu hình URL?)**
+
+> [!NOTE]
+> **Chính sách cập nhật khi đang trong ca sản xuất**:
+> - Khuyến nghị: Chỉ cho phép cập nhật khi hệ thống đang ở trạng thái **Dừng (IDLE)**, **không cập nhật khi đang chạy kiểm tra liên tục (Run Continuous / Auto Run)** để tránh gián đoạn dây chuyền.
+> - Có hỗ trợ cờ `isMandatory` (bắt buộc cập nhật) nếu bản cập nhật có sửa đổi nghiêm trọng về cấu hình DB/PLC.
+
+---
+
+## 6. Kế Hoạch Xác Minh (Verification Plan)
+
+### Kiểm Thử Tự Động (Automated Unit & Integration Tests)
+Tạo tệp kiểm thử `TestExtractApp/OtaUpdateServiceTests.cs`:
+1. **Test 1**: Khởi tạo mock HTTP Server cục bộ trả về `version.json`, kiểm tra `CheckForUpdateAsync` so sánh phiên bản chính xác (`1.3.0` > `1.2.0` $\rightarrow$ Có bản mới, `1.2.0` <= `1.2.0` $\rightarrow$ Đã mới nhất).
+2. **Test 2**: Giả lập tải gói `.zip` dạng stream, xác minh tính toán thanh tiến trình % `UpdateProgressInfo`.
+3. **Test 3**: Kiểm tra xác thực mã băm SHA-256 (Khớp mã $\rightarrow$ True, File bị sửa đổi 1 byte $\rightarrow$ False/Reject).
+4. **Test 4**: Kiểm tra logic an toàn: Không ghi đè khi file hash bị sai, kiểm tra cấu trúc lệnh gọi tham số `VisionUpdater.exe`.
+5. **Test 5**: Chạy toàn bộ test suite của giải pháp: `dotnet run --project TestExtractApp` đảm bảo 100% PASSED không có lỗi hồi quy.
+
+### Kiểm Thử Thủ Công (Manual Verification)
+1. Mở cửa sổ từ Menu `❓ Trợ Giúp` $\rightarrow$ `Kiểm Tra Bản Cập Nhật (OTA Update)...`.
+2. Kiểm tra giao diện hiển thị phiên bản hiện tại, thông tin kết nối máy chủ.
+3. Thử nghiệm trỏ URL về một test manifest local, bấm "Tải & Cập nhật", quan sát thanh tiến trình và thông báo xác thực SHA-256.
+
+---
+
+## 7. Trình Tự Thực Hiện Dự Kiến
+
+1. **Giai đoạn 1**: Xây dựng Model `UpdateManifest`, `OtaSettings` trong `GlobalAppSettings`.
+2. **Giai đoạn 2**: Xây dựng Service `IOtaUpdateService` & `OtaUpdateService` (Check version, Download stream, Checksum SHA256).
+3. **Giai đoạn 3**: Xây dựng ứng dụng độc lập `VisionUpdater.exe` (Wait PID, Backup, Unzip overwrite, Restart, Rollback).
+4. **Giai đoạn 4**: Xây dựng UI Dialog `OtaUpdateDialog.xaml`, ViewModel và tích hợp vào Menu Trợ Giúp / TitleBar của `MainWindow`.
+5. **Giai đoạn 5**: Viết bộ test tự động trong `TestExtractApp`, chạy build và kiểm thử toàn diện 100%.
+6. **Giai đoạn 6**: Cập nhật tài liệu `CONTEXT.md` và `ROADMAP.md`.

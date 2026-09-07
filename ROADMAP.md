@@ -2414,3 +2414,10 @@ Lộ trình tích hợp tính năng Chụp ảnh từ camera và hỗ trợ các
         - Hàng giữa (40%) hiển thị kết quả OK / NG / READY cực lớn kèm auto-scaling Viewbox.
         - Hàng dưới (40%) hiển thị chi tiết toàn bộ phép đo kèm cột Over Spec và Đánh giá.
         - Đạt 100% PASSED bài kiểm thử tự động `TestOqcProductNameAndLayout204040Configuration`.
+
+    - [x] **Task 321: Bổ Sung Chức Năng Cập Nhật Phần Mềm Từ Xa OTA (Over-The-Air Update) Cho Ứng Dụng**:
+        - Hỗ trợ cập nhật từ cả 2 nguồn: Máy chủ nội bộ LAN (Custom Manifest `version.json`) và GitHub Releases API.
+        - Xây dựng dịch vụ `IOtaUpdateService` & `OtaUpdateService` tải gói Stream theo tiến trình và xác thực mã băm SHA-256 Checksum.
+        - Phát triển công cụ cập nhật độc lập `VisionUpdater.exe` (`VisionInspectionApp.Updater`) giải quyết triệt để Windows File Lock, tự động sao lưu (Backup) và tự phục hồi (Rollback) an toàn khi gặp sự cố.
+        - Xây dựng giao diện `OtaUpdateDialog.xaml` hiển thị so sánh phiên bản, Changelog, thanh tiến trình và tích hợp thông báo nhấp nháy trên TitleBar và Menu Trợ Giúp.
+        - Đạt 100% PASSED 5 bài kiểm thử tự động trong `OtaUpdateServiceTests`.

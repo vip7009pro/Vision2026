@@ -22,8 +22,17 @@ public sealed partial class MainWindowViewModel : ObservableObject
     [ObservableProperty]
     private string _globalStatusSeverity = "Info"; // Info, Warning, Error, Success
 
+    [ObservableProperty]
+    private bool _hasUpdateAvailable = false;
+
+    [ObservableProperty]
+    private string _updateBadgeText = "";
+
     private readonly IRecentJobsService? _recentJobsService;
     private readonly LightingControllerService? _lightingService;
+    private readonly IOtaUpdateService? _otaService;
+    private readonly GlobalAppSettingsService? _settingsService;
+    private readonly IServiceProvider? _serviceProvider;
 
     public ObservableCollection<string> RecentJobs { get; } = new();
 
@@ -35,7 +44,10 @@ public sealed partial class MainWindowViewModel : ObservableObject
         OqcScannerViewModel oqcScanner,
         CameraSettingsViewModel cameraSettings,
         IRecentJobsService? recentJobsService = null,
-        LightingControllerService? lightingService = null)
+        LightingControllerService? lightingService = null,
+        IOtaUpdateService? otaService = null,
+        GlobalAppSettingsService? settingsService = null,
+        IServiceProvider? serviceProvider = null)
     {
         ToolEditor = toolEditor;
         Calibration = calibration;
@@ -47,6 +59,9 @@ public sealed partial class MainWindowViewModel : ObservableObject
         CameraSettings = cameraSettings;
         _recentJobsService = recentJobsService;
         _lightingService = lightingService;
+        _otaService = otaService;
+        _settingsService = settingsService;
+        _serviceProvider = serviceProvider;
 
         if (_lightingService != null)
         {
@@ -91,10 +106,16 @@ public sealed partial class MainWindowViewModel : ObservableObject
         AboutCommand = new RelayCommand(ExecuteAbout);
         OpenRecentJobCommand = new RelayCommand<string>(ExecuteOpenRecentJob);
         ClearRecentJobsCommand = new RelayCommand(ExecuteClearRecentJobs);
+        OpenOtaUpdateDialogCommand = new RelayCommand(ExecuteOpenOtaUpdateDialog);
 
         if (_selectedTabIndex == 3)
         {
             CameraSettings.OnViewActivated();
+        }
+
+        if (_settingsService?.Settings.Ota.AutoCheckOnStartup == true && _otaService != null)
+        {
+            _ = CheckUpdateInBackgroundAsync();
         }
     }
 
@@ -106,6 +127,51 @@ public sealed partial class MainWindowViewModel : ObservableObject
         {
             ToolEditor.StatusBarText = message;
         }
+    }
+
+    public ICommand OpenOtaUpdateDialogCommand { get; }
+
+    private void ExecuteOpenOtaUpdateDialog()
+    {
+        if (_otaService == null || _settingsService == null) return;
+
+        var vm = new OtaUpdateViewModel(_otaService, _settingsService);
+        var dialog = new Views.OTA.OtaUpdateDialog(vm)
+        {
+            Owner = System.Windows.Application.Current?.MainWindow
+        };
+        dialog.ShowDialog();
+
+        if (!vm.HasUpdate)
+        {
+            HasUpdateAvailable = false;
+        }
+    }
+
+    private async Task CheckUpdateInBackgroundAsync()
+    {
+        try
+        {
+            await Task.Delay(2500).ConfigureAwait(false); // Chờ 2.5s sau khi mở app để nhường CPU khởi tạo
+            if (_otaService == null || _settingsService == null) return;
+
+            var otaCfg = _settingsService.Settings.Ota;
+            var result = await _otaService.CheckForUpdateAsync(otaCfg.UpdateServerUrl, otaCfg.UpdateSourceType).ConfigureAwait(false);
+
+            if (result.HasUpdate && result.Manifest != null)
+            {
+                if (!string.Equals(result.Manifest.Version, otaCfg.IgnoredVersion, StringComparison.OrdinalIgnoreCase))
+                {
+                    System.Windows.Application.Current?.Dispatcher.InvokeAsync(() =>
+                    {
+                        HasUpdateAvailable = true;
+                        UpdateBadgeText = $"🚀 Có Bản Mới: v{result.Manifest.Version}";
+                        SetGlobalStatus($"🎉 Phát hiện bản cập nhật mới (v{result.Manifest.Version}). Nhấn menu Trợ Giúp để cập nhật.", "Info");
+                    });
+                }
+            }
+        }
+        catch { }
     }
 
     partial void OnSelectedTabIndexChanged(int value)
@@ -209,9 +275,10 @@ public sealed partial class MainWindowViewModel : ObservableObject
 
     private void ExecuteAbout()
     {
+        var currentVer = _otaService?.CurrentVersion?.ToString() ?? "1.0.0.0";
         MessageBox.Show(
-            "CMS VINA VISION SYSTEM — Enterprise Industrial Vision Platform\n" +
-            "Version 2.6.0 (64-bit Edition)\n\n" +
+            $"CMS VINA VISION SYSTEM — Enterprise Industrial Vision Platform\n" +
+            $"Version {currentVer} (64-bit Edition)\n\n" +
             "© 2026 CMS VINA Co., Ltd. All rights reserved.\n" +
             "Industrial Machine Vision, Multi-camera Inspection, OQC & Automation Integration.\n\n" +
             "────────────────────────────────────────\n" +

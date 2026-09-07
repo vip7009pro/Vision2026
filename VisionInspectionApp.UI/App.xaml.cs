@@ -106,6 +106,11 @@ public partial class App : System.Windows.Application
                 services.AddSingleton<JobManagerViewModel>();
                 services.AddTransient<Views.OQC.JobManagerWindow>();
 
+                // OTA Update Framework
+                services.AddSingleton<VisionInspectionApp.Application.Services.IOtaUpdateService, VisionInspectionApp.Application.Services.OtaUpdateService>();
+                services.AddTransient<OtaUpdateViewModel>();
+                services.AddTransient<Views.OTA.OtaUpdateDialog>();
+
                 services.AddSingleton<TeachViewModel>();
                 services.AddSingleton<ToolEditorViewModel>();
                 services.AddSingleton<CalibrationViewModel>();

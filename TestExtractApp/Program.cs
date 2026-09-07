@@ -44,5 +44,6 @@ class Program
         PreprocessAndImageOutputTests.RunTests();
         SurfaceCompareAndCaliperRoiTests.RunTests();
         OcrDetectorTests.RunTests();
+        OtaUpdateServiceTests.RunAllTests();
     }
 }

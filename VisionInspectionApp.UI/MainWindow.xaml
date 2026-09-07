@@ -40,6 +40,7 @@
     </Window.InputBindings>
 
     <Window.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVis" />
         <SolidColorBrush x:Key="ShellAccent" Color="#0F5FA8" />
         <SolidColorBrush x:Key="ShellAccentDark" Color="#0B467D" />
 
@@ -432,6 +433,8 @@
 
                     <!-- Trợ Giúp Menu -->
                     <MenuItem Header="❓ Trợ Giúp">
+                        <MenuItem Header="🔄 Kiểm Tra Bản Cập Nhật (OTA Update)..." Command="{Binding OpenOtaUpdateDialogCommand}" />
+                        <Separator />
                         <MenuItem Header="ℹ️ Giới Thiệu CMS VINA Vision System..." Command="{Binding AboutCommand}" />
                     </MenuItem>
                 </Menu>
@@ -465,6 +468,25 @@
 
                 <!-- Col 3: Window Controls (Theme Toggle, Minimize, Maximize/Restore, Close) -->
                 <StackPanel Grid.Column="3" Orientation="Horizontal" VerticalAlignment="Stretch" WindowChrome.IsHitTestVisibleInChrome="True">
+                    <!-- OTA Update Badge (Hiển thị khi phát hiện có bản cập nhật mới từ xa) -->
+                    <Button Command="{Binding OpenOtaUpdateDialogCommand}"
+                            Visibility="{Binding HasUpdateAvailable, Converter={StaticResource BoolToVis}}"
+                            Background="#16A34A"
+                            BorderBrush="#15803D"
+                            Foreground="White"
+                            FontWeight="Bold"
+                            FontSize="11.5"
+                            Height="28"
+                            Padding="10,0"
+                            Margin="0,0,10,0"
+                            VerticalAlignment="Center"
+                            ToolTip="Có bản cập nhật phần mềm mới từ xa! Nhấn để xem và tải về.">
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                            <TextBlock Text="🚀" Margin="0,0,5,0" VerticalAlignment="Center" />
+                            <TextBlock Text="{Binding UpdateBadgeText}" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </Button>
+
                     <Button Style="{StaticResource WindowControlButton}"
                             Click="ThemeToggleButton_Click"
                             ToolTip="Chuyển giao diện Sáng / Tối (Toggle Dark / Light Theme)">
