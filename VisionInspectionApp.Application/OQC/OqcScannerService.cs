@@ -1731,6 +1731,31 @@ public sealed class OqcScannerService : IOqcScannerService
             });
         }
 
+        // 16. OCR
+        foreach (var ocr in result.Ocrs)
+        {
+            var def = config.Ocrs?.FirstOrDefault(x => string.Equals(x.Name, ocr.Name, StringComparison.OrdinalIgnoreCase));
+            string expectedSpec = !string.IsNullOrWhiteSpace(def?.ExpectedText) ? def.ExpectedText : (!string.IsNullOrWhiteSpace(ocr.ExpectedSpec) ? ocr.ExpectedSpec : "");
+
+            list.Add(new OqcMeasurementDetail
+            {
+                Index = idx++,
+                ToolName = ocr.Name,
+                ToolType = "OCR",
+                HasNumericSpec = false,
+                CustomSpecText = string.IsNullOrWhiteSpace(expectedSpec) ? $"{ocr.Confidence:P0}" : expectedSpec,
+                CustomResultText = ocr.Found ? (string.IsNullOrWhiteSpace(ocr.RecognizedText) ? "(Trống)" : ocr.RecognizedText) : "NO_READ",
+                Spec = 0,
+                TolPlus = 0,
+                TolMinus = 0,
+                Min = 0,
+                Max = 0,
+                Result = ocr.Found ? 1 : 0,
+                Unit = "",
+                Pass = ocr.Pass
+            });
+        }
+
         return list;
     }
 
@@ -1845,6 +1870,21 @@ public sealed class OqcScannerService : IOqcScannerService
                 else
                 {
                     reasons.Add($"Code [{cd.Name}] NG: '{cd.Text}' (Tiêu chuẩn: '{cd.ExpectedSpec}')");
+                }
+            }
+        }
+
+        foreach (var ocr in result.Ocrs)
+        {
+            if (!ocr.Pass)
+            {
+                if (!ocr.Found)
+                {
+                    reasons.Add($"OCR [{ocr.Name}] NG: Không nhận diện được ký tự ({ocr.Message})");
+                }
+                else
+                {
+                    reasons.Add($"OCR [{ocr.Name}] NG: '{ocr.RecognizedText}' (Độ tin cậy: {ocr.Confidence:P0}, Tiêu chuẩn: '{ocr.ExpectedSpec}')");
                 }
             }
         }

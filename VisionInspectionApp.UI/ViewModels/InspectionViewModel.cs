@@ -2934,6 +2934,46 @@ public sealed partial class InspectionViewModel : ObservableObject
             }
         }
 
+        if (LastResult?.Ocrs is not null)
+        {
+            foreach (var ocr in LastResult.Ocrs)
+            {
+                if (!ocr.Found) continue;
+                var brush = ocr.Pass ? Brushes.Lime : Brushes.OrangeRed;
+                if (ocr.BoundingBoxes != null)
+                {
+                    foreach (var b in ocr.BoundingBoxes)
+                    {
+                        OverlayItems.Add(new OverlayRectItem
+                        {
+                            X = b.X,
+                            Y = b.Y,
+                            Width = b.Width,
+                            Height = b.Height,
+                            Angle = 0,
+                            Stroke = Brushes.Yellow,
+                            Label = ""
+                        });
+                    }
+                }
+
+                var ocrDef = _config?.Ocrs?.FirstOrDefault(x => string.Equals(x.Name, ocr.Name, StringComparison.OrdinalIgnoreCase));
+                if (ocrDef != null && ocrDef.SearchRoi.Width > 0 && ocrDef.SearchRoi.Height > 0)
+                {
+                    OverlayItems.Add(new OverlayRectItem
+                    {
+                        X = ocrDef.SearchRoi.X,
+                        Y = Math.Max(0, ocrDef.SearchRoi.Y - 20),
+                        Width = ocrDef.SearchRoi.Width,
+                        Height = 20,
+                        Angle = ocrDef.SearchRoi.Angle,
+                        Stroke = brush,
+                        Label = $"{ocr.Name}: \"{ocr.RecognizedText}\" ({ocr.Confidence:P0})"
+                    });
+                }
+            }
+        }
+
         // TextNode overlays
 
         if (_config?.TextNodes is not null && _config.TextNodes.Count > 0 && LastResult is not null)

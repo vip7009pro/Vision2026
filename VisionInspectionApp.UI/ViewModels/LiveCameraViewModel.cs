@@ -514,6 +514,9 @@ public sealed partial class LiveCameraViewModel : ObservableObject
                 if (result.CodeDetections.Count > 0)
                     LiveResults.Add($"  - Codes: {result.CodeDetections.Count}");
 
+                if (result.Ocrs.Count > 0)
+                    LiveResults.Add($"  - OCR: {result.Ocrs.Count}");
+
                 LastInspectionResult = $"Status: {(result.Pass ? "✓ PASS" : "✗ FAIL")}";
             });
         }

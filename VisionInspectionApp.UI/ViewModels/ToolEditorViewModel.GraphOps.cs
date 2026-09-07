@@ -245,6 +245,7 @@ namespace VisionInspectionApp.UI.ViewModels
             else if (_copiedNodeType.Equals("CircleFinder", StringComparison.OrdinalIgnoreCase)) CloneDefinition(_config.CircleFinders, _copiedNodeRefName, newName, options);
             else if (_copiedNodeType.Equals("Diameter", StringComparison.OrdinalIgnoreCase)) CloneDefinition(_config.Diameters, _copiedNodeRefName, newName, options);
             else if (_copiedNodeType.Equals("CodeDetection", StringComparison.OrdinalIgnoreCase)) CloneDefinition(_config.CodeDetections, _copiedNodeRefName, newName, options);
+            else if (_copiedNodeType.Equals("OCR", StringComparison.OrdinalIgnoreCase)) CloneDefinition(_config.Ocrs, _copiedNodeRefName, newName, options);
             else if (_copiedNodeType.Equals("SurfaceCompare", StringComparison.OrdinalIgnoreCase)) CloneDefinition(_config.SurfaceCompares, _copiedNodeRefName, newName, options);
             else if (_copiedNodeType.Equals("ContourCompare", StringComparison.OrdinalIgnoreCase)) CloneDefinition(_config.ContourCompares, _copiedNodeRefName, newName, options);
             else if (_copiedNodeType.Equals("Text", StringComparison.OrdinalIgnoreCase)) CloneDefinition(_config.TextNodes, _copiedNodeRefName, newName, options);
@@ -528,6 +529,11 @@ namespace VisionInspectionApp.UI.ViewModels
                 if (string.Equals(toRemove.Type, "CodeDetection", StringComparison.OrdinalIgnoreCase))
                 {
                     _config.CodeDetections.RemoveAll(x => string.Equals(x.Name, toRemove.RefName, StringComparison.OrdinalIgnoreCase));
+                }
+
+                if (string.Equals(toRemove.Type, "OCR", StringComparison.OrdinalIgnoreCase))
+                {
+                    _config.Ocrs.RemoveAll(x => string.Equals(x.Name, toRemove.RefName, StringComparison.OrdinalIgnoreCase));
                 }
 
                 if (string.Equals(toRemove.Type, "Crop", StringComparison.OrdinalIgnoreCase))
@@ -1403,6 +1409,19 @@ namespace VisionInspectionApp.UI.ViewModels
                 if (showRois && c.SearchRoi.Width > 0 && c.SearchRoi.Height > 0)
                 {
                     dst.Add(CreateRotatedRoiWithPose(c.SearchRoi, Brushes.Lime, $"{c.Name} C"));
+                }
+
+                return;
+            }
+
+            if (string.Equals(node.Type, "OCR", StringComparison.OrdinalIgnoreCase))
+            {
+                var ocr = _config.Ocrs.FirstOrDefault(x => string.Equals(x.Name, node.RefName, StringComparison.OrdinalIgnoreCase));
+                if (ocr is null) return;
+
+                if (showRois && ocr.SearchRoi.Width > 0 && ocr.SearchRoi.Height > 0)
+                {
+                    dst.Add(CreateRotatedRoiWithPose(ocr.SearchRoi, Brushes.MediumSpringGreen, $"{ocr.Name} OCR"));
                 }
 
                 return;

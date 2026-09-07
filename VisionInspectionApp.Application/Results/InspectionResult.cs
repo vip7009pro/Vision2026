@@ -23,6 +23,7 @@ public sealed class InspectionTimings
     public int ConditionsMs { get; set; }
     public int DefectsMs { get; set; }
     public int CdtMs { get; set; }
+    public int OcrMs { get; set; }
 }
 
 public sealed class InspectionResult
@@ -87,6 +88,7 @@ public sealed class InspectionResult
     public List<CaliperResult> Calipers { get; } = new();
 
     public List<CodeDetectionResult> CodeDetections { get; } = new();
+    public List<OcrResult> Ocrs { get; } = new();
 
     public List<ImageOutputResult> ImageOutputs { get; } = new();
 

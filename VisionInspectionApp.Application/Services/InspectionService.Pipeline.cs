@@ -2812,8 +2812,23 @@ public partial class InspectionService
                 }))
                 .ToArray();
 
-            var allHeavyTasks = new List<Task>(pointTasks.Length + lineTasks.Length + blobTasks.Length + surfaceCompareTasks.Length + contourCompareTasks.Length + colorDiffTasks.Length + cropTasks.Length + imgArithmeticTasks.Length + lpdTasks.Length + caliperTasks.Length + epdTasks.Length + circleTasks.Length + codeDetectionTasks.Length);
-            allHeavyTasks.AddRange(pointTasks); allHeavyTasks.AddRange(lineTasks); allHeavyTasks.AddRange(blobTasks); allHeavyTasks.AddRange(surfaceCompareTasks); allHeavyTasks.AddRange(contourCompareTasks); allHeavyTasks.AddRange(colorDiffTasks); allHeavyTasks.AddRange(cropTasks); allHeavyTasks.AddRange(imgArithmeticTasks); allHeavyTasks.AddRange(lpdTasks); allHeavyTasks.AddRange(caliperTasks); allHeavyTasks.AddRange(epdTasks); allHeavyTasks.AddRange(circleTasks); allHeavyTasks.AddRange(codeDetectionTasks);
+            var ocrTasks = (config.Ocrs ?? new List<OcrDefinition>())
+                .Where(ocr => ocr is not null && !string.IsNullOrWhiteSpace(ocr.Name) && ocr.SearchRoi.Width > 0 && ocr.SearchRoi.Height > 0)
+                .Select(ocr => RunHeavyTool($"OCR:{ocr.Name}", () =>
+                {
+                    var __swNode = System.Diagnostics.Stopwatch.StartNew();
+                    var (matForOcr, _) = ResolveToolPreprocess("OCR", ocr.Name);
+
+                    var ocrRes = OcrDetector.Detect(matForOcr, ocr, originTeach, originFound, angleDeg);
+
+                    __swNode.Stop();
+                    result.Timings.NodeTimings[ocr.Name] = (int)__swNode.ElapsedMilliseconds;
+                    return ocrRes;
+                }))
+                .ToArray();
+
+            var allHeavyTasks = new List<Task>(pointTasks.Length + lineTasks.Length + blobTasks.Length + surfaceCompareTasks.Length + contourCompareTasks.Length + colorDiffTasks.Length + cropTasks.Length + imgArithmeticTasks.Length + lpdTasks.Length + caliperTasks.Length + epdTasks.Length + circleTasks.Length + codeDetectionTasks.Length + ocrTasks.Length);
+            allHeavyTasks.AddRange(pointTasks); allHeavyTasks.AddRange(lineTasks); allHeavyTasks.AddRange(blobTasks); allHeavyTasks.AddRange(surfaceCompareTasks); allHeavyTasks.AddRange(contourCompareTasks); allHeavyTasks.AddRange(colorDiffTasks); allHeavyTasks.AddRange(cropTasks); allHeavyTasks.AddRange(imgArithmeticTasks); allHeavyTasks.AddRange(lpdTasks); allHeavyTasks.AddRange(caliperTasks); allHeavyTasks.AddRange(epdTasks); allHeavyTasks.AddRange(circleTasks); allHeavyTasks.AddRange(codeDetectionTasks); allHeavyTasks.AddRange(ocrTasks);
 
             var tBatch1Start = swTotal.ElapsedMilliseconds;
             if (allHeavyTasks.Count > 0) Task.WaitAll(allHeavyTasks.ToArray());
@@ -2828,6 +2843,7 @@ public partial class InspectionService
             result.Timings.CalipersMs = caliperTasks.Length > 0 ? batch1DurationMs : 0;
             result.Timings.EdgePairDetectMs = epdTasks.Length > 0 ? batch1DurationMs : 0;
             result.Timings.CdtMs = codeDetectionTasks.Length > 0 ? batch1DurationMs : 0;
+            result.Timings.OcrMs = ocrTasks.Length > 0 ? batch1DurationMs : 0;
 
             var foundPoints = new Dictionary<string, Point2d>(StringComparer.OrdinalIgnoreCase);
             foreach (var t in pointTasks) { var pr = t.Result; result.Points.Add(pr); foundPoints[pr.Name] = pr.Position; }
@@ -2844,6 +2860,7 @@ public partial class InspectionService
             foreach (var t in cropTasks) result.Crops.Add(t.Result);
             foreach (var t in imgArithmeticTasks) result.ImgArithmetics.Add(t.Result);
             foreach (var t in codeDetectionTasks) result.CodeDetections.Add(t.Result);
+            foreach (var t in ocrTasks) result.Ocrs.Add(t.Result);
 
             if (result.Origin is not null && result.Origin.Pass) foundPoints["Origin"] = result.Origin.Position;
 
@@ -3225,6 +3242,7 @@ public partial class InspectionService
             && result.BlobDetections.All(x => x.Pass)
             && result.SurfaceCompares.All(x => x.Pass)
             && result.CodeDetections.All(x => x.Pass)
+            && result.Ocrs.All(x => x.Pass)
             && result.Conditions.All(x => x.Pass)
             && (result.Defects?.Defects?.Count ?? 0) == 0;
 
@@ -3565,6 +3583,15 @@ public partial class InspectionService
             foreach (var cdt in config.CodeDetections)
             {
                     result.CodeDetections.Add(new CodeDetectionResult(cdt.Name, Found: false, Text: string.Empty, BoundingBox: new Rect(0, 0, 0, 0), Angle: 0.0, Pass: false, ExpectedSpec: cdt.ExpectedText ?? ""));
+            }
+        }
+
+        // 18.1. Ocrs
+        if (config.Ocrs != null)
+        {
+            foreach (var ocr in config.Ocrs)
+            {
+                result.Ocrs.Add(new OcrResult(ocr.Name, found: false, text: string.Empty, boundingBoxes: new List<Rect>(), confidence: 0.0, pass: false, expectedSpec: ocr.ExpectedText ?? "", message: "Skipped or Origin Not Found"));
             }
         }
 

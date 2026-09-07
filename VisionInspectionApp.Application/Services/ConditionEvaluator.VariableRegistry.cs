@@ -628,6 +628,34 @@ public static partial class ConditionEvaluator
         }
 
         // ==========================================
+        // 11b. OCR (Industrial Text Recognition)
+        // ==========================================
+        for (int i = 0; i < result.Ocrs.Count; i++)
+        {
+            var ocr = result.Ocrs[i];
+            if (string.IsNullOrWhiteSpace(ocr.Name)) continue;
+
+            var ocrAliases = new List<string> { ocr.Name, $"Ocr{i + 1}", $"OCR{i + 1}", $"Text{i + 1}" };
+            var ocrMembers = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["Text"] = ocr.RecognizedText ?? string.Empty,
+                ["Value"] = ocr.RecognizedText ?? string.Empty,
+                ["Found"] = ocr.Found,
+                ["Pass"] = ocr.Pass,
+                ["Status"] = ocr.Pass ? "OK" : "NG",
+                ["PassBit"] = ocr.Pass ? 1 : 0,
+                ["Confidence"] = ocr.Confidence,
+                ["Score"] = ocr.Confidence,
+                ["CharCount"] = (double)(ocr.RecognizedText?.Length ?? 0),
+                ["Expected"] = ocr.ExpectedSpec ?? string.Empty,
+                ["Time"] = result.Timings.NodeTimings.TryGetValue(ocr.Name, out var ocrMs) ? (double)ocrMs : 0.0
+            };
+
+            var ocrVar = new Variable(ocr.Pass, value: ocr.Confidence, found: ocr.Found, text: ocr.RecognizedText ?? string.Empty, rawObject: ocr, members: ocrMembers);
+            RegisterToolVariable(ocr.Name, ocrAliases, ocrVar);
+        }
+
+        // ==========================================
         // 12. SURFACE COMPARE & CONTOUR COMPARE & BLOB DETECTION
         // ==========================================
         for (int i = 0; i < result.SurfaceCompares.Count; i++)

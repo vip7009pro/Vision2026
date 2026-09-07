@@ -317,6 +317,7 @@ namespace VisionInspectionApp.UI.ViewModels
                 new ToolboxItemModel { Name = "CircleFinder", Category = "🔍 Phát Hiện & Tìm Kiếm", Icon = "🔘" },
                 new ToolboxItemModel { Name = "BlobDetection", Category = "🔍 Phát Hiện & Tìm Kiếm", Icon = "🦠" },
                 new ToolboxItemModel { Name = "CodeDetection", Category = "🔍 Phát Hiện & Tìm Kiếm", Icon = "🔳" },
+                new ToolboxItemModel { Name = "OCR", Category = "🔍 Phát Hiện & Tìm Kiếm", Icon = "🔤" },
                 new ToolboxItemModel { Name = "SurfaceCompare", Category = "🔍 Phát Hiện & Tìm Kiếm", Icon = "🔍" },
                 new ToolboxItemModel { Name = "ContourCompare", Category = "🔍 Phát Hiện & Tìm Kiếm", Icon = "🌀" },
                 new ToolboxItemModel { Name = "Crop", Category = "🔍 Phát Hiện & Tìm Kiếm", Icon = "✂️" },
@@ -554,6 +555,7 @@ namespace VisionInspectionApp.UI.ViewModels
         public bool IsDiameterNode => SelectedNode is not null && string.Equals(SelectedNode.Type, "Diameter", StringComparison.OrdinalIgnoreCase);
         public bool IsEdgePairNode => SelectedNode is not null && string.Equals(SelectedNode.Type, "EdgePair", StringComparison.OrdinalIgnoreCase);
         public bool IsCodeDetectionNode => SelectedNode is not null && string.Equals(SelectedNode.Type, "CodeDetection", StringComparison.OrdinalIgnoreCase);
+        public bool IsOcrNode => SelectedNode is not null && string.Equals(SelectedNode.Type, "OCR", StringComparison.OrdinalIgnoreCase);
         public bool IsResultViewNode => SelectedNode is not null && string.Equals(SelectedNode.Type, "ResultView", StringComparison.OrdinalIgnoreCase);
         public bool EnableRoiEditingInPreview => SelectedNode is not null && !string.Equals(SelectedNode.Type, "ResultView", StringComparison.OrdinalIgnoreCase);
         public ObservableCollection<BlobPolarity> AvailableBlobPolarities { get; } = new ObservableCollection<BlobPolarity>((BlobPolarity[])Enum.GetValues(typeof(BlobPolarity)));
@@ -1304,6 +1306,8 @@ namespace VisionInspectionApp.UI.ViewModels
             OnPropertyChanged(nameof(IsSurfaceCompareNode));
             OnPropertyChanged(nameof(IsContourCompareNode));
             OnPropertyChanged(nameof(IsCodeDetectionNode));
+            OnPropertyChanged(nameof(IsOcrNode));
+            RaiseOcrPropertiesChanged();
             OnPropertyChanged(nameof(IsCropNode));
             OnPropertyChanged(nameof(SelectedCrop));
             OnPropertyChanged(nameof(Crop_X));
@@ -3674,6 +3678,12 @@ namespace VisionInspectionApp.UI.ViewModels
                     var d = _lastRun.CodeDetections.FirstOrDefault(x => string.Equals(x.Name, SelectedNode.RefName, StringComparison.OrdinalIgnoreCase));
                     return d?.Text;
                 }
+
+                if (string.Equals(SelectedNode.Type, "OCR", StringComparison.OrdinalIgnoreCase))
+                {
+                    var d = _lastRun.Ocrs?.FirstOrDefault(x => string.Equals(x.Name, SelectedNode.RefName, StringComparison.OrdinalIgnoreCase));
+                    return d?.RecognizedText;
+                }
     
                 if (string.Equals(SelectedNode.Type, "Angle", StringComparison.OrdinalIgnoreCase))
                 {
@@ -3742,6 +3752,12 @@ namespace VisionInspectionApp.UI.ViewModels
                 if (string.Equals(SelectedNode.Type, "Diameter", StringComparison.OrdinalIgnoreCase))
                 {
                     var d = _lastRun.Diameters.FirstOrDefault(x => string.Equals(x.Name, SelectedNode.RefName, StringComparison.OrdinalIgnoreCase));
+                    return d?.Pass;
+                }
+
+                if (string.Equals(SelectedNode.Type, "OCR", StringComparison.OrdinalIgnoreCase))
+                {
+                    var d = _lastRun.Ocrs?.FirstOrDefault(x => string.Equals(x.Name, SelectedNode.RefName, StringComparison.OrdinalIgnoreCase));
                     return d?.Pass;
                 }
     
@@ -3852,6 +3868,12 @@ namespace VisionInspectionApp.UI.ViewModels
             else if (string.Equals(SelectedNode.Type, "CodeDetection", StringComparison.OrdinalIgnoreCase) || string.Equals(SelectedNode.Type, "Code", StringComparison.OrdinalIgnoreCase))
             {
                 var def = _config.CodeDetections.FirstOrDefault(x => string.Equals(x.Name, oldName, StringComparison.OrdinalIgnoreCase));
+                if (def is not null)
+                    def.Name = newName;
+            }
+            else if (string.Equals(SelectedNode.Type, "OCR", StringComparison.OrdinalIgnoreCase))
+            {
+                var def = _config.Ocrs.FirstOrDefault(x => string.Equals(x.Name, oldName, StringComparison.OrdinalIgnoreCase));
                 if (def is not null)
                     def.Name = newName;
             }
@@ -4557,6 +4579,32 @@ namespace VisionInspectionApp.UI.ViewModels
     
                 return;
             }
+
+            if (string.Equals(node.Type, "OCR", StringComparison.OrdinalIgnoreCase))
+            {
+                var existed = _config.Ocrs.Any(x => string.Equals(x.Name, node.RefName, StringComparison.OrdinalIgnoreCase));
+                if (!existed)
+                {
+                    var def = new OcrDefinition
+                    {
+                        Name = node.RefName,
+                        SearchRoi = DefaultRoi(),
+                        EngineMode = OcrEngineMode.HeuristicFast,
+                        MatchingMode = OcrMatchingMode.AnyText,
+                        BinarizeMethod = OcrBinarizeMethod.Sauvola,
+                        MinConfidence = 0.5,
+                        EnableDotMatrixConnector = false,
+                        DotMatrixKernelSize = 3,
+                        InvertPolarity = false,
+                        MinCharArea = 20,
+                        MaxCharArea = 50000,
+                        CharSpacingThreshold = 15
+                    };
+                    _config.Ocrs.Add(def);
+                }
+
+                return;
+            }
     
             if (string.Equals(node.Type, "LineLineDistance", StringComparison.OrdinalIgnoreCase))
             {
@@ -4825,6 +4873,11 @@ namespace VisionInspectionApp.UI.ViewModels
             {
                 baseName = "CDT";
                 exists = n => _config.CodeDetections.Any(x => string.Equals(x.Name, n, StringComparison.OrdinalIgnoreCase));
+            }
+            else if (string.Equals(type, "OCR", StringComparison.OrdinalIgnoreCase))
+            {
+                baseName = "OCR";
+                exists = n => _config.Ocrs.Any(x => string.Equals(x.Name, n, StringComparison.OrdinalIgnoreCase));
             }
             else if (string.Equals(type, "CreatePoint", StringComparison.OrdinalIgnoreCase))
             {

@@ -973,6 +973,14 @@ namespace VisionInspectionApp.UI.ViewModels
                 return;
             }
 
+            if (string.Equals(kind, "OCR", StringComparison.OrdinalIgnoreCase) || (string.Equals(kind, "S", StringComparison.OrdinalIgnoreCase) && _config.Ocrs.Any(x => string.Equals(x.Name, name, StringComparison.OrdinalIgnoreCase))))
+            {
+                var ocr = _config.Ocrs.FirstOrDefault(x => string.Equals(x.Name, name, StringComparison.OrdinalIgnoreCase));
+                if (ocr is not null)
+                    ocr.SearchRoi = roi;
+                return;
+            }
+
             if (string.Equals(kind, "Crop", StringComparison.OrdinalIgnoreCase))
             {
                 var cropDef = _config.Crops.FirstOrDefault(x => string.Equals(x.Name, name, StringComparison.OrdinalIgnoreCase));
@@ -1487,6 +1495,52 @@ namespace VisionInspectionApp.UI.ViewModels
                 }
                 return;
             }
+
+            if (string.Equals(node.Type, "OCR", StringComparison.OrdinalIgnoreCase))
+            {
+                var def = _config.Ocrs.FirstOrDefault(x => string.Equals(x.Name, node.RefName, StringComparison.OrdinalIgnoreCase));
+                if (def is not null && ShowRoisInSelectedPreview && def.SearchRoi.Width > 0 && def.SearchRoi.Height > 0)
+                {
+                    dst.Add(CreateRotatedRoiWithPose(def.SearchRoi, Brushes.MediumSpringGreen, $"{def.Name} OCR"));
+                }
+
+                var ocr = run.Ocrs?.FirstOrDefault(x => string.Equals(x.Name, node.RefName, StringComparison.OrdinalIgnoreCase));
+                if (ocr is not null && ocr.Found)
+                {
+                    var brush = ocr.Pass ? Brushes.Lime : Brushes.OrangeRed;
+                    if (ocr.BoundingBoxes != null)
+                    {
+                        foreach (var b in ocr.BoundingBoxes)
+                        {
+                            dst.Add(new OverlayRectItem
+                            {
+                                X = b.X,
+                                Y = b.Y,
+                                Width = b.Width,
+                                Height = b.Height,
+                                Angle = 0,
+                                Stroke = Brushes.Yellow,
+                                Label = ""
+                            });
+                        }
+                    }
+
+                    if (def != null && def.SearchRoi.Width > 0 && def.SearchRoi.Height > 0)
+                    {
+                        dst.Add(new OverlayRectItem
+                        {
+                            X = def.SearchRoi.X,
+                            Y = Math.Max(0, def.SearchRoi.Y - 20),
+                            Width = def.SearchRoi.Width,
+                            Height = 20,
+                            Angle = def.SearchRoi.Angle,
+                            Stroke = brush,
+                            Label = $"{ocr.Name}: \"{ocr.RecognizedText}\" ({ocr.Confidence:P0})"
+                        });
+                    }
+                }
+                return;
+            }
         }
 
         private Roi? GetRoiForLabel(string labelRaw)
@@ -1546,6 +1600,7 @@ namespace VisionInspectionApp.UI.ViewModels
             if (string.Equals(kind, "Sample", StringComparison.OrdinalIgnoreCase)) return _config.ColorDiffs.FirstOrDefault(x => string.Equals(x.Name, name, StringComparison.OrdinalIgnoreCase))?.InspectRoi;
             if (string.Equals(kind, "Ref", StringComparison.OrdinalIgnoreCase)) return _config.ColorDiffs.FirstOrDefault(x => string.Equals(x.Name, name, StringComparison.OrdinalIgnoreCase))?.RefRoi;
             if (string.Equals(kind, "C", StringComparison.OrdinalIgnoreCase)) return _config.CodeDetections.FirstOrDefault(x => string.Equals(x.Name, name, StringComparison.OrdinalIgnoreCase))?.SearchRoi;
+            if (string.Equals(kind, "OCR", StringComparison.OrdinalIgnoreCase)) return _config.Ocrs.FirstOrDefault(x => string.Equals(x.Name, name, StringComparison.OrdinalIgnoreCase))?.SearchRoi;
             if (kind.StartsWith("B", StringComparison.OrdinalIgnoreCase)) return _config.BlobDetections.FirstOrDefault(x => string.Equals(x.Name, name, StringComparison.OrdinalIgnoreCase))?.InspectRoi;
             if (string.Equals(kind, "SCT", StringComparison.OrdinalIgnoreCase)) return _config.SurfaceCompares.FirstOrDefault(x => string.Equals(x.Name, name, StringComparison.OrdinalIgnoreCase))?.TemplateRoi;
             if (kind.StartsWith("SC", StringComparison.OrdinalIgnoreCase)) return _config.SurfaceCompares.FirstOrDefault(x => string.Equals(x.Name, name, StringComparison.OrdinalIgnoreCase))?.InspectRoi;
@@ -1778,6 +1833,18 @@ namespace VisionInspectionApp.UI.ViewModels
                     if (c is not null)
                     {
                         c.SearchRoi = roi;
+                        RefreshPreviews();
+                        RequestAutoSave();
+                        return;
+                    }
+                }
+
+                if (string.Equals(kind, "OCR", StringComparison.OrdinalIgnoreCase))
+                {
+                    var ocr = _config.Ocrs.FirstOrDefault(x => string.Equals(x.Name, name, StringComparison.OrdinalIgnoreCase));
+                    if (ocr is not null)
+                    {
+                        ocr.SearchRoi = roi;
                         RefreshPreviews();
                         RequestAutoSave();
                         return;
@@ -4788,6 +4855,46 @@ namespace VisionInspectionApp.UI.ViewModels
                     });
                 }
             }
+
+            if (run.Ocrs != null)
+            {
+                foreach (var ocr in run.Ocrs)
+                {
+                    if (!ocr.Found) continue;
+                    var brush = ocr.Pass ? Brushes.Lime : Brushes.OrangeRed;
+                    if (ocr.BoundingBoxes != null)
+                    {
+                        foreach (var b in ocr.BoundingBoxes)
+                        {
+                            dst.Add(new OverlayRectItem
+                            {
+                                X = b.X,
+                                Y = b.Y,
+                                Width = b.Width,
+                                Height = b.Height,
+                                Angle = 0,
+                                Stroke = Brushes.Yellow,
+                                Label = ""
+                            });
+                        }
+                    }
+
+                    var ocrDef = config?.Ocrs?.FirstOrDefault(x => string.Equals(x.Name, ocr.Name, StringComparison.OrdinalIgnoreCase));
+                    if (ocrDef != null && ocrDef.SearchRoi.Width > 0 && ocrDef.SearchRoi.Height > 0)
+                    {
+                        dst.Add(new OverlayRectItem
+                        {
+                            X = ocrDef.SearchRoi.X,
+                            Y = Math.Max(0, ocrDef.SearchRoi.Y - 20),
+                            Width = ocrDef.SearchRoi.Width,
+                            Height = 20,
+                            Angle = ocrDef.SearchRoi.Angle,
+                            Stroke = brush,
+                            Label = $"{ocr.Name}: \"{ocr.RecognizedText}\" ({ocr.Confidence:P0})"
+                        });
+                    }
+                }
+            }
     
             foreach (var d in run.Distances)
             {
@@ -5987,6 +6094,30 @@ namespace VisionInspectionApp.UI.ViewModels
                 }
                 return;
             }
+
+            if (string.Equals(node.Type, "OCR", StringComparison.OrdinalIgnoreCase))
+            {
+                var ocr = run.Ocrs?.FirstOrDefault(x => string.Equals(x.Name, node.RefName, StringComparison.OrdinalIgnoreCase));
+                if (ocr is not null && ocr.Found)
+                {
+                    var brush = ocr.Pass ? Brushes.Lime : Brushes.OrangeRed;
+                    var ocrDef = _config.Ocrs.FirstOrDefault(x => string.Equals(x.Name, node.RefName, StringComparison.OrdinalIgnoreCase));
+                    if (ocrDef != null && ocrDef.SearchRoi.Width > 0 && ocrDef.SearchRoi.Height > 0)
+                    {
+                        dst.Add(new OverlayRectItem
+                        {
+                            X = ocrDef.SearchRoi.X,
+                            Y = Math.Max(0, ocrDef.SearchRoi.Y - 20),
+                            Width = ocrDef.SearchRoi.Width,
+                            Height = 20,
+                            Angle = ocrDef.SearchRoi.Angle,
+                            Stroke = brush,
+                            Label = $"{ocr.Name}: \"{ocr.RecognizedText}\" ({ocr.Confidence:P0})"
+                        });
+                    }
+                }
+                return;
+            }
         }
     
         private void BuildOverlayForNode(ToolGraphNodeViewModel node, Mat image, List<OverlayItem> dst)
@@ -6247,6 +6378,61 @@ namespace VisionInspectionApp.UI.ViewModels
                             Stroke = Brushes.Lime,
                             Label = $"{cdt.Name}: {cdt.Text}"
                         });
+                    }
+                }
+                return;
+            }
+
+            if (string.Equals(node.Type, "OCR", StringComparison.OrdinalIgnoreCase))
+            {
+                var ocrDef = _config.Ocrs.FirstOrDefault(x => string.Equals(x.Name, node.RefName, StringComparison.OrdinalIgnoreCase));
+                if (ocrDef is null) return;
+
+                if (showRois && ocrDef.SearchRoi.Width > 0 && ocrDef.SearchRoi.Height > 0)
+                {
+                    dst.Add(CreateRotatedRoiWithPose(ocrDef.SearchRoi, Brushes.MediumSpringGreen, $"{ocrDef.Name} OCR"));
+                }
+
+                if (_lastRun is not null && _lastRun.Ocrs is not null)
+                {
+                    var ocr = _lastRun.Ocrs.FirstOrDefault(x => string.Equals(x.Name, node.RefName, StringComparison.OrdinalIgnoreCase));
+                    if (ocr is not null)
+                    {
+                        var brush = ocr.Pass ? Brushes.Lime : Brushes.OrangeRed;
+                        if (ocr.Found && ocr.BoundingBoxes != null)
+                        {
+                            foreach (var b in ocr.BoundingBoxes)
+                            {
+                                dst.Add(new OverlayRectItem
+                                {
+                                    X = b.X,
+                                    Y = b.Y,
+                                    Width = b.Width,
+                                    Height = b.Height,
+                                    Angle = 0,
+                                    Stroke = Brushes.Yellow,
+                                    Label = ""
+                                });
+                            }
+                        }
+
+                        if (ocrDef.SearchRoi.Width > 0 && ocrDef.SearchRoi.Height > 0)
+                        {
+                            var textLabel = ocr.Found
+                                ? $"{ocr.Name}: \"{ocr.RecognizedText}\" ({ocr.Confidence:P0}) [{(ocr.Pass ? "OK" : "NG")}]"
+                                : $"{ocr.Name}: [NG] {(string.IsNullOrWhiteSpace(ocr.Message) ? "Không tìm thấy ký tự" : ocr.Message)}";
+
+                            dst.Add(new OverlayRectItem
+                            {
+                                X = ocrDef.SearchRoi.X,
+                                Y = Math.Max(0, ocrDef.SearchRoi.Y - 22),
+                                Width = ocrDef.SearchRoi.Width,
+                                Height = 22,
+                                Angle = ocrDef.SearchRoi.Angle,
+                                Stroke = brush,
+                                Label = textLabel
+                            });
+                        }
                     }
                 }
                 return;

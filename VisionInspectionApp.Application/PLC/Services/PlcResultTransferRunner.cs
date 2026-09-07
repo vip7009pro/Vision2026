@@ -473,6 +473,23 @@ public static class PlcResultTransferRunner
                 return code.Found ? "1" : "0";
         }
 
+        // 5b. OCR
+        var ocr = result.Ocrs.FirstOrDefault(o => string.Equals(o.Name, toolName, StringComparison.OrdinalIgnoreCase));
+        if (ocr != null)
+        {
+            if (string.Equals(propName, "Text", StringComparison.OrdinalIgnoreCase) || string.Equals(propName, "Value", StringComparison.OrdinalIgnoreCase))
+                return ocr.RecognizedText;
+
+            if (string.Equals(propName, "Found", StringComparison.OrdinalIgnoreCase))
+                return ocr.Found ? "1" : "0";
+
+            if (string.Equals(propName, "Pass", StringComparison.OrdinalIgnoreCase))
+                return ocr.Pass ? "1" : "0";
+
+            if (string.Equals(propName, "Confidence", StringComparison.OrdinalIgnoreCase) || string.Equals(propName, "Score", StringComparison.OrdinalIgnoreCase))
+                return ocr.Confidence.ToString("F3");
+        }
+
         // 6. Blob Detections
         var blob = result.BlobDetections.FirstOrDefault(b => string.Equals(b.Name, toolName, StringComparison.OrdinalIgnoreCase));
         if (blob != null)

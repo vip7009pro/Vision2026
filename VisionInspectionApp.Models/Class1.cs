@@ -289,6 +289,8 @@ public sealed class VisionConfig
 
     public List<CodeDetectionDefinition> CodeDetections { get; set; } = new();
 
+    public List<OcrDefinition> Ocrs { get; set; } = new();
+
     public List<SurfaceCompareDefinition> SurfaceCompares { get; set; } = new();
 
     public List<ContourCompareDefinition> ContourCompares { get; set; } = new();
@@ -506,6 +508,93 @@ public sealed class CodeDetectionDefinition
     public bool TryHarder { get; set; } = true;
 
     public string ExpectedText { get; set; } = string.Empty;
+}
+
+public enum OcrEngineMode
+{
+    NonAi_Heuristic = 0,
+    Ai_DeepLearning = 1,
+    HeuristicFast = 0,
+    DeepLearningOnnx = 1,
+    HybridAuto = 2
+}
+
+public enum OcrMatchingMode
+{
+    AnyText = 0,
+    ExactMatch = 1,
+    RegexPattern = 2,
+    Contains = 3
+}
+
+public enum OcrBinarizeMethod
+{
+    Sauvola = 0,
+    Otsu = 1,
+    AdaptiveThreshold = 2,
+    AdaptiveMean = 2,
+    AdaptiveGaussian = 3
+}
+
+public sealed class OcrDefinition
+{
+    public string Name { get; set; } = string.Empty;
+
+    public Roi SearchRoi { get; set; } = new();
+
+    public OcrEngineMode Engine { get; set; } = OcrEngineMode.HeuristicFast;
+    public OcrEngineMode EngineMode
+    {
+        get => Engine;
+        set => Engine = value;
+    }
+
+    public OcrMatchingMode MatchingMode { get; set; } = OcrMatchingMode.AnyText;
+
+    public string ExpectedText { get; set; } = string.Empty;
+
+    public string RegexPattern { get; set; } = string.Empty;
+
+    public string CharWhitelist { get; set; } = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz-/. :";
+    public string WhitelistChars
+    {
+        get => CharWhitelist;
+        set => CharWhitelist = value;
+    }
+
+    public double MinConfidence { get; set; } = 0.5;
+
+    public bool InvertImage { get; set; } = false;
+    public bool InvertPolarity
+    {
+        get => InvertImage;
+        set => InvertImage = value;
+    }
+
+    public bool EnableDotMatrixConnector { get; set; } = true;
+
+    public int DotMatrixKernelSize { get; set; } = 3;
+
+    public int MinCharArea { get; set; } = 20;
+
+    public int MaxCharArea { get; set; } = 50000;
+
+    public int CharSpacingThreshold { get; set; } = 15;
+
+    public string OnnxModelPath { get; set; } = string.Empty;
+
+    public OcrBinarizeMethod BinarizeMethod { get; set; } = OcrBinarizeMethod.Sauvola;
+
+    public List<OcrUserCharacterTemplate> TrainedCharacters { get; set; } = new();
+}
+
+public sealed class OcrUserCharacterTemplate
+{
+    public char Character { get; set; } = ' ';
+    public string ImageBase64 { get; set; } = string.Empty;
+    public int Width { get; set; } = 24;
+    public int Height { get; set; } = 32;
+    public DateTime CreatedAt { get; set; } = DateTime.Now;
 }
 
 public enum PreprocessRoiShape

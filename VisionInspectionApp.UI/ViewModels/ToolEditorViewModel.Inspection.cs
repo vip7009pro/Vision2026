@@ -29,6 +29,7 @@ namespace VisionInspectionApp.UI.ViewModels
             string Unit = "mm");
 
         public sealed record CodeDetectionRow(string Name, bool Found, string Text);
+        public sealed record OcrResultRow(string Name, bool Pass, string Text, double Confidence);
 
         public sealed record SurfaceCompareDebugPick(int Index, string DisplayName);
 
@@ -37,6 +38,7 @@ namespace VisionInspectionApp.UI.ViewModels
         public ObservableCollection<SpecResultRow> SpecResults { get; } = new();
 
         public ObservableCollection<CodeDetectionRow> CodeDetectionResults { get; } = new();
+        public ObservableCollection<OcrResultRow> OcrResults { get; } = new();
 
         public ObservableCollection<SurfaceCompareDebugPick> SurfaceCompareDebugItems { get; } = new();
 
@@ -191,6 +193,7 @@ namespace VisionInspectionApp.UI.ViewModels
 
             RefreshSpecResults(res);
             RefreshCodeDetectionResults(res);
+            RefreshOcrResults(res);
             RefreshTimings(res);
             RebuildSurfaceCompareDebugSelector(res);
             UpdateResultSummary(res);
@@ -363,6 +366,14 @@ namespace VisionInspectionApp.UI.ViewModels
                     foreach (var cd in res.CodeDetections.Where(x => !x.Found))
                     {
                         reasons.Add($"• Lỗi CodeDetection '{cd.Name}': Không đọc được mã");
+                    }
+                }
+
+                if (res.Ocrs is not null)
+                {
+                    foreach (var ocr in res.Ocrs.Where(x => !x.Pass))
+                    {
+                        reasons.Add($"• Lỗi OCR '{ocr.Name}': '{(ocr.Found ? ocr.RecognizedText : "Không đọc được ký tự")}' (Tiêu chuẩn: '{ocr.ExpectedSpec}')");
                     }
                 }
 
@@ -632,6 +643,17 @@ namespace VisionInspectionApp.UI.ViewModels
             foreach (var item in res.CodeDetections)
             {
                 CodeDetectionResults.Add(new CodeDetectionRow(item.Name, item.Found, item.Text ?? "-"));
+            }
+        }
+
+        private void RefreshOcrResults(InspectionResult? res)
+        {
+            OcrResults.Clear();
+            if (res?.Ocrs is null) return;
+
+            foreach (var item in res.Ocrs)
+            {
+                OcrResults.Add(new OcrResultRow(item.Name, item.Pass, item.RecognizedText ?? "-", item.Confidence));
             }
         }
 

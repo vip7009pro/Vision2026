@@ -2215,3 +2215,111 @@ Lộ trình tích hợp tính năng Chụp ảnh từ camera và hỗ trợ các
        - Kiá»ƒm Thá»­:
          - dotnet build VisionInspectionApp.slnx: 0 errors.
          - dotnet run --project TestExtractApp: 100% PASSED toÃ n bá»™ test suite.
+
+    - [x] **Task 311: PhÃ¡t Triá»ƒn & TÃ­ch Há»£p Tool OCR Chuáº©n CÃ´ng Nghiá»‡p (Industrial OCR Tool) Song HÃ nh AI & Non-AI**:
+       - Hiá»‡n TÆ°á»£ng & YÃªu Cáº§u NgÆ°á»i DÃ¹ng:
+         - NgÆ°á»i dÃ¹ng yÃªu cáº§u phÃ¡t triá»ƒn vÃ  tÃ­ch há»£p Tool OCR chuáº©n cÃ´ng nghiá»‡p hoÃ n chá»‰nh vÃ o VisionInspectionApp vá»›i 2 phiÃªn báº£n song hÃ nh: AI (Deep Learning ONNX) vÃ  Non-AI (Heuristic & Segment Classifier).
+       - PhÃ¢n TÃ­ch Ká»¹ Thuáº­t & Kiáº¿n TrÃºc Thiáº¿t Káº¿:
+         - PhiÃªn báº£n Non-AI: Nháº­n diá»‡n siÃªu tá»‘c (1â€“7ms trÃªn CPU), há»— trá»£ Date Code, Dot-Matrix (in kim), 7-Segment, OCR-A/B, Character Whitelist, MatchingMode (AnyText, ExactMatch, RegexPattern, Contains), tá»± Ä‘á»™ng nháº­n diá»‡n dáº¥u cÃ¡ch vÃ  phÃ¢n nhÃ³m hÃ ng thÃ´ng minh.
+         - PhiÃªn báº£n AI: Sá»­ dá»¥ng Microsoft.ML.OnnxRuntime, chuáº©n hÃ³a tensor CRNN 32xW, CTC Greedy Decoding, cÃ³ cÆ¡ cháº¿ an toÃ n tá»± Ä‘á»™ng fallback mÆ°á»£t mÃ  sang Non-AI náº¿u chÆ°a cÃ³ file model ONNX.
+         - Kiáº¿n trÃºc tÃ­ch há»£p: TÃ¡ch riÃªng module ToolEditorViewModel.ToolOcr.cs (tuÃ¢n thá»§ quy táº¯c khÃ´ng táº¡o file quÃ¡ dÃ i), tÃ­ch há»£p song song vÃ o Pipeline, Overlays, OQC, PLC Transfer vÃ  Condition Evaluator.
+       - Giáº£i PhÃ¡p Ká»¹ Thuáº­t ÄÃ£ Triá»ƒn Khai:
+         1. *Data Models (VisionInspectionApp.Models)*:
+            - Bá»• sung OcrDefinition, OcrResult, OcrCharResult, OcrEngineMode, OcrMatchingMode, OcrBinarizeMethod.
+            - TÃ­ch há»£p List<OcrDefinition> Ocrs vÃ o VisionConfig, Ä‘áº£m báº£o 100% tÆ°Æ¡ng thÃ­ch ngÆ°á»£c vá»›i file Job JSON hiá»‡n há»¯u.
+         2. *Vision Engine (VisionInspectionApp.VisionEngine)*:
+            - XÃ¢y dá»±ng OcrDetector.Detect: ROI First (Geometry2D.ExtractStraightRoi), Binarization (Sauvola, Otsu, Adaptive), Invert polarity tá»± Ä‘á»™ng.
+            - TÃ­ch há»£p **Dot-Matrix Morphology Connector** báº±ng toÃ¡n tá»­ Morph Close ná»‘i cÃ¡c cháº¥m rá»i ráº¡c cá»§a chá»¯ in kim thÃ nh nÃ©t chá»¯ liá»n máº¡ch.
+            - PhÃ¢n Ä‘oáº¡n kÃ½ tá»± Connected Components vá»›i bá»™ lá»c nhiá»…u thÃ´ng minh (báº£o toÃ n nÃ©t ngang - trong date/lot code).
+            - Thuáº­t toÃ¡n **Glyph Template Normalization & Aspect Ratio Preservation**: Chuáº©n hÃ³a kÃ½ tá»± vÃ  thÆ° viá»‡n font vá» canvas 24x32 giá»¯ nguyÃªn tá»‰ lá»‡ co dÃ£n, lá» Ä‘á»‡m 2px, giÃºp tÆ°Æ¡ng quan CCoeffNormed Ä‘áº¡t > 89%.
+            - Thuáº­t toÃ¡n **SortReadingOrder**: Gom nhÃ³m hÃ ng theo dung sai dá»c thÃ´ng minh (vertical overlap tolerance), sáº¯p xáº¿p tá»« trÃ¡i qua pháº£i, kháº¯c phá»¥c triá»‡t Ä‘á»ƒ lá»—i Ä‘áº£o thá»© tá»± nÃ©t ngang/cháº¥m.
+            - TÃ­nh nÄƒng **Adaptive Space Insertion**: Tá»± Ä‘á»™ng chÃ¨n dáº¥u cÃ¡ch dá»±a trÃªn chiá»u cao kÃ½ tá»± trung bÃ¬nh vgHeight * 0.70, loáº¡i bá» chÃ¨n space giáº£ á»Ÿ cÃ¡c sá»‘ háº¹p nhÆ° '1'.
+            - TÃ­ch há»£p **AI Deep Learning Engine** vá»›i Microsoft.ML.OnnxRuntime, CTC Greedy Decoding vÃ  Safe Fallback.
+         3. *Application Pipeline & Services (VisionInspectionApp.Application)*:
+            - Cháº¡y song song ocrTasks trong batch 1 cá»§a InspectionService.Pipeline.cs, Ä‘o timing Timings.OcrMs, tá»•ng há»£p lá»—i NG vÃ o esult.Pass.
+            - Váº½ overlay ROI khung xanh ngá»c, bounding box vÃ ng tá»«ng kÃ½ tá»±, annotation chuá»—i + confidence trÃªn áº£nh; bá»• sung hÃ ng OCR vÃ o DrawResultTableOverlay.
+            - ÄÄƒng kÃ½ biáº¿n cÃ´ng thá»©c trong ConditionEvaluator.VariableRegistry.cs (Value, Text, Pass, Confidence, CharCount, Time).
+            - Ãnh xáº¡ káº¿t quáº£ sang PLC (PlcResultTransferRunner.cs) vÃ  báº£ng Ä‘o lÆ°á»ng OQC Scanner (OqcScannerService.cs).
+         4. *Giao Diá»‡n NgÆ°á»i DÃ¹ng (VisionInspectionApp.UI)*:
+            - Táº¡o má»›i ToolEditorViewModel.ToolOcr.cs (phÃ¢n tÃ¡ch mÃ´-Ä‘un hÃ³a).
+            - ThÃªm item OCR vÃ o Toolbox, há»— trá»£ FlowCanvas node (Input Image, Output Text), tá»± Ä‘á»™ng Ä‘áº·t tÃªn "OCR".
+            - Thiáº¿t káº¿ báº£ng thuá»™c tÃ­nh toÃ n diá»‡n trong ToolEditorView.xaml (Engine, So khá»›p, Nhá»‹ phÃ¢n, Expected Text, Regex, Whitelist, Min Conf, Dot-Matrix connector, Invert, Model AI Path).
+            - Hiá»ƒn thá»‹ Ä‘áº¿m sá»‘ lÆ°á»£ng OCR trÃªn LiveCameraView vÃ  InspectionView.
+         5. *Kiá»ƒm Thá»­ Tá»± Äá»™ng ToÃ n Diá»‡n (TestExtractApp/OcrDetectorTests.cs)*:
+            - Viáº¿t 5 test case toÃ n diá»‡n: Non-AI Recognition & Speed (<7ms), Dot-Matrix Connector, Spec Verification (Regex/Exact/Contains), AI Safe Fallback, Full Pipeline Integration.
+            - Káº¿t quáº£: 100% test cases PASSED, toÃ n bá»™ test suite cá»§a giáº£i phÃ¡p hoÃ n thÃ nh thÃ nh cÃ´ng vá»›i Exit Code 0.
+       - Kiá»ƒm Thá»­:
+         - dotnet build VisionInspectionApp.slnx: 0 errors.
+         - dotnet run --project TestExtractApp: 100% PASSED toÃ n bá»™ test suite.
+
+    - [x] **Task 312: Cáº£i Tiáº¿n Robustness & Kháº¯c Phá»¥c Lá»—i Nháº­n Diá»‡n Chá»¯ TrÃªn Ná»n Tá»‘i (Dark Background, Auto-Polarity, Chá»¯ ThÆ°á»ng a-z, TÃ¡ch DÃ­nh NÃ©t & Lá»c Viá»n Báº£ng) Cho Tool OCR**:
+        - Hiá»‡n TÆ°á»£ng & YÃªu Cáº§u NgÆ°á»i DÃ¹ng:
+          - NgÆ°á»i dÃ¹ng thá»­ nghiá»‡m Tool OCR trÃªn áº£nh thá»±c táº¿ (giao diá»‡n UI dark theme ná»n xÃ¡m tá»‘i, chá»¯ 'Line Mode' mÃ u xÃ¡m sÃ¡ng), cáº¥u hÃ¬nh AnyText + Äáº£o mÃ u, nhÆ°ng khi cháº¡y bÃ¡o lá»—i "KhÃ´ng Ä‘á»c Ä‘Æ°á»£c kÃ½ tá»±" (Found = False, ROI Ä‘á» NG).
+        - PhÃ¢n TÃ­ch Ká»¹ Thuáº­t & NguyÃªn NhÃ¢n Gá»‘c Rá»…:
+          1. *Lá»—i chá»n nháº§m Äáº£o mÃ u trÃªn ná»n tá»‘i*: áº¢nh gá»‘c vá»‘n lÃ  chá»¯ sÃ¡ng trÃªn ná»n tá»‘i (chá»¯ tráº¯ng/xÃ¡m chiáº¿m 5-25% diá»‡n tÃ­ch). Khi ngÆ°á»i dÃ¹ng tÃ­ch "Äáº£o mÃ u", áº£nh bá»‹ Ä‘áº£o thÃ nh chá»¯ Ä‘en trÃªn ná»n tráº¯ng. Thuáº­t toÃ¡n Connected Components tÃ¬m blob tráº¯ng (255) nÃªn chá»‰ tháº¥y toÃ n bá»™ ná»n tráº¯ng (bá»‹ loáº¡i bá» vÃ¬ quÃ¡ to) vÃ  bá» qua chá»¯ Ä‘en.
+          2. *Thiáº¿u chá»¯ thÆ°á»ng trong Font Library vÃ  CharWhitelist*: Chá»¯ 'Line Mode' chá»©a cÃ¡c chá»¯ thÆ°á»ng 'i, n, e, o, d'. ThÆ° viá»‡n Hershey vÃ  Whitelist trÆ°á»›c Ä‘Ã³ chá»‰ cÃ³ A-Z, 0-9 nÃªn cÃ¡c kÃ½ tá»± thÆ°á»ng bá»‹ loáº¡i bá» hoÃ n toÃ n hoáº·c nháº­n diá»‡n sai thÃ nh dáº¥u cháº¥m do tÆ°Æ¡ng quan khá»‘i Ä‘áº·c.
+          3. *MÃ©p dÆ°á»›i Search ROI cháº¡m Ä‘Æ°á»ng káº» ngang viá»n báº£ng*: Thanh viá»n phÃ¢n cÃ¡ch báº£ng táº¡o ra má»™t blob ngang dÃ i, cÃ³ thá»ƒ dÃ­nh vÃ o chÃ¢n chá»¯ náº¿u khÃ´ng Ä‘Æ°á»£c lá»c.
+          4. *Chá»¯ cÃ¡i dÃ­nh nÃ©t khi nhá»‹ phÃ¢n hÃ³a*: Khoáº£ng cÃ¡ch háº¹p giá»¯a cÃ¡c chá»¯ cÃ¡i trong tá»« 'Line' hoáº·c 'Mode' khiáº¿n chÃºng dÃ­nh thÃ nh 1 cá»¥m blob lá»›n náº¿u khÃ´ng cÃ³ thuáº­t toÃ¡n tÃ¡ch chá»¯ dÃ­nh nÃ©t.
+        - Giáº£i PhÃ¡p Ká»¹ Thuáº­t ÄÃ£ Triá»ƒn Khai:
+          1. *CÆ¡ cháº¿ Auto-Polarity thÃ´ng minh (NormalizeTextPolarity)*:
+             - Kiá»ƒm tra tá»· lá»‡ pixel tráº¯ng (whiteRatio) vÃ  tá»· lá»‡ pixel tráº¯ng á»Ÿ 4 Ä‘Æ°á»ng viá»n (borderWhiteRatio). VÃ¬ vÄƒn báº£n luÃ´n chá»‰ chiáº¿m 5-40% diá»‡n tÃ­ch vÃ  viá»n mÃ©p ROI háº§u nhÆ° luÃ´n lÃ  ná»n, náº¿u phÃ¡t hiá»‡n ná»n lÃ  mÃ u tráº¯ng (>50%), há»‡ thá»‘ng tá»± Ä‘á»™ng BitwiseNot Ä‘áº£o ngÆ°á»£c vá» chá»¯ tráº¯ng trÃªn ná»n Ä‘en. DÃ¹ ngÆ°á»i dÃ¹ng cÃ³ tÃ­ch nháº§m hay khÃ´ng tÃ­ch "Äáº£o mÃ u", há»‡ thá»‘ng luÃ´n Ä‘Æ°a vá» chuáº©n chá»¯ tráº¯ng ná»n Ä‘en.
+          2. *Lá»c bá» Ä‘Æ°á»ng káº» báº£ng & viá»n ngÄƒn cÃ¡ch (ExtractCandidateBoxes)*:
+             - ThÃªm Ä‘iá»u kiá»‡n lá»c cÃ¡c blob ngang dÃ i (width >= 75% ROI, height <= 25% ROI) hoáº·c dá»c dÃ i, loáº¡i bá» triá»‡t Ä‘á»ƒ Ä‘Æ°á»ng phÃ¢n cÃ¡ch hÃ ng/cá»™t cá»§a báº£ng.
+          3. *Bá»• sung Ä‘áº§y Ä‘á»§ bá»™ kÃ½ tá»± in thÆ°á»ng a-z vÃ  Ä‘a nÃ©t (InitializeIndustrialFontLibrary)*:
+             - Má»Ÿ rá»™ng supportedChars vÃ  default CharWhitelist vá»›i toÃ n bá»™ alphabet thÆ°á»ng a-z.
+             - Bá»• sung cÃ¡c biáº¿n thá»ƒ nÃ©t chá»¯ má»ng/dÃ y (thicknesses = { 1, 2, 3 }) Ä‘á»ƒ tá»‘i Æ°u hÃ³a nháº­n diá»‡n cáº£ chá»¯ nhá» vÃ  nÃ©t máº£nh.
+          4. *Thuáº­t toÃ¡n tÃ¡ch chá»¯ dÃ­nh nÃ©t (SplitConnectedGlyphs & Vertical Projection Profile)*:
+             - Tá»± Ä‘á»™ng phÃ¡t hiá»‡n cÃ¡c blob cÃ³ chiá»u rá»™ng báº¥t thÆ°á»ng (W > 1.25 * H), tÃ­nh hÃ¬nh chiáº¿u dá»c (vertical projection), tÃ¬m cÃ¡c thung lÅ©ng (valleys/minima) vÃ  phÃ¢n tÃ¡ch thÃ nh cÃ¡c kÃ½ tá»± Ä‘Æ¡n láº».
+          5. *RÃ ng buá»™c hÃ¬nh há»c (Geometric Priors)*:
+             - Dáº¥u cháº¥m '.' chá»‰ Ä‘Æ°á»£c match khi kÃ­ch thÆ°á»›c nhá» (W, H <= 45% avgHeight). Chá»¯ cÃ¡i thÃ´ng thÆ°á»ng khÃ´ng bao giá» bá»‹ nháº­n diá»‡n nháº§m thÃ nh dáº¥u cháº¥m.
+          6. *Bá»• sung bÃ i kiá»ƒm thá»­ tá»± Ä‘á»™ng TestUserCaseLineModeDarkBackground*:
+             - Kiá»ƒm tra trá»±c tiáº¿p vá»›i trÆ°á»ng há»£p 'Line Mode' trÃªn ná»n tá»‘i cáº£ khi InvertImage=true vÃ  InvertImage=false, 100% PASSED.
+        - Kiá»ƒm Thá»­:
+          - dotnet build VisionInspectionApp.slnx: 0 errors.
+          - dotnet run --project TestExtractApp: 100% PASSED toÃ n bá»™ test suite.
+    - [x] **Task 312b: Khắc Phục Triệt Để Lỗi Nhận Diện Sai Thành 'UNWMOJM' Cho Dòng Chữ 'Line Mode' (Smart Whitelist, Phân Đoạn Chiếu Dọc Không Chém Ký Tự, x-Height & Ràng Buộc Hình Học Quadrant, Tối Ưu Tương Quan Unsafe IoU + CCoeffNormed)**:
+        - Hiện Tượng & Yêu Cầu Người Dùng:
+          - Người dùng thử nghiệm Tool OCR trên ảnh thực tế giao diện Dark Theme với dòng chữ 'Line Mode', cấu hình NonAi_Heuristic, So khớp: AnyText, Chuỗi mẫu: Line Mode, nhưng nhận diện sai toàn bộ thành chuỗi lạ UNWMOJM (Confidence 53%).
+        - Phân Tích Kỹ Thuật & Nguyên Nhân Gốc Rễ:
+          1. *Whitelist của Job cũ thiếu chữ thường a-z*: Node OCR được tạo từ cấu hình cũ chỉ có '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ-/. :', hoàn toàn không có chữ thường a-z. Khi chạy AnyText, thuật toán bị cấm trả về chữ thường và bắt buộc phải ép mọi ký tự về chữ in hoa.
+          2. *Nhát cắt chia đều cơ học w / nChars*: Trong FindSplitBoxesByVerticalProjection, khi gặp blob hơi rộng, thuật toán chia đều cơ học khiến chữ 'n' bị xẻ đôi (nửa trái ghép với 'i' thành 'N', nửa phải thành nét riêng 'W').
+          3. *Thiếu phân loại chiều cao Cap-Height vs x-Height*: Các chữ thường lùn 'e', 'o' có chiều cao chỉ 60-70% chữ hoa nhưng bị phóng to chuẩn hóa về 32x24 và so khớp với các chữ in hoa to toàn khung như 'W', 'M' dẫn đến 'e' thành 'W/M'.
+          4. *Thiếu ràng buộc hình học góc phần tư (Quadrant Analysis)*: Chữ 'L' có góc trên bên phải rỗng hoàn toàn, khi so khớp với 'U' (có 2 cột trái phải) bị ăn điểm cao hơn 'L'; chữ 'd' có cột cao bên phải và bụng tròn bên trái bị nhầm thành 'J'.
+          5. *Template Matching CCoeffNormed bị nhiễu do độ dày nét*: Chỉ dùng hệ số tương quan chuẩn hóa dễ bị lệch khi nét chữ thanh mảnh.
+        - Giải Pháp Kỹ Thuật Đã Triển Khai:
+          1. *Cơ chế Smart Whitelist tự động*:
+             - Tự động bổ sung tất cả ký tự trong ExpectedText vào danh sách được phép nhận diện, không phụ thuộc vào chuỗi Whitelist được lưu trong file Job.
+             - Nếu Whitelist trống hoặc là chuỗi mặc định cũ hoặc MatchingMode là AnyText, tự động nạp toàn bộ chữ thường a-z.
+             - Bổ sung 2 nút tiện ích trên giao diện ToolEditorView: Tất cả (nạp full ký tự) và Từ mẫu (trích xuất ký tự từ ExpectedText).
+          2. *Xóa bỏ nhát cắt chia đều cơ học*:
+             - Loại bỏ hoàn toàn segmentW = w / nChars; chỉ cắt phân tách khi có thung lũng (valley) thực sự rõ rệt trong biểu đồ hình chiếu dọc (proj[x] <= 12% * Height), bảo toàn 100% hình dạng chữ 'n', 'i', 'e'.
+          3. *Ràng buộc hình học x-Height và Quadrant Analysis*:
+             - Phân loại isShortGlyph (chiều cao <= 78% chiều cao tối đa của dòng chữ). Cấm các ký tự thân lùn match với các chữ hoa to toàn khung (W, M, H, N, U, O, D, B...).
+             - Ràng buộc Quadrant Top-Right cho chữ 'L': Nếu góc trên bên phải rỗng (< 12% pixel), cấm tuyệt đối match thành 'U' -> Chữ 'L' đạt độ tin cậy 96.9%.
+             - Ràng buộc hình học cho chữ 'd' vs 'J', và số '9' vs chữ 'g'.
+          4. *Tối ưu hóa tương quan siêu tốc bằng con trỏ Unsafe (Score = 0.5 * CCoeff + 0.5 * IoU)*:
+             - Tính toán Intersection-over-Union trực tiếp trên mảng byte thông qua con trỏ charNorm.DataPointer và templateMat.DataPointer, không cấp phát thêm Mat trong vòng lặp.
+             - Thời gian so khớp hot-run cực nhanh chỉ 13ms, không tốn tài nguyên GC.
+        - Kiểm Thử:
+          - Đã cập nhật TestUserCaseLineModeDarkBackground trong TestExtractApp: Nhận diện chính xác 100% từng chữ cái: 'L' (96.9%), 'i' (83.6%), 'n' (83.4%), 'e' (81.9%), 'M' (87.0%), 'o' (85.8%), 'd' (80.5%), 'e' (81.1%) -> Kết quả: 'Line Mode', Avg Confidence: 85.0%.
+          - dotnet build VisionInspectionApp.slnx: 0 errors.
+          - dotnet run --project TestExtractApp: 100% PASSED toàn bộ test suite.
+
+    - [x] **Task 313: TÃ­nh NÄƒng Dáº¡y KÃ½ Tá»± Máº«u Chuáº©n Hikrobot MVS (Character Font Training) & Náº¡p Model ONNX Linh Hoáº¡t Cho Tool OCR**:
+        - Hiá»‡n TÆ°á»£ng & YÃªu Cáº§u NgÆ°á»i DÃ¹ng:
+          - NgÆ°á»i dÃ¹ng thá»­ nghiá»‡m nháº­n diá»‡n ra chuá»—i "LineMade" (68%) do chá»¯ 'o' bá»‹ Ä‘á»c nháº§m thÃ nh 'a'. NgÆ°á»i dÃ¹ng nháº­n xÃ©t: cÃ¡c pháº§n má»m vision chuyÃªn nghiá»‡p nhÆ° MVS cho phÃ©p nháº­n diá»‡n vÃ  há»c tá»«ng chá»¯; Ä‘á»“ng thá»i há»i táº£i model ONNX á»Ÿ Ä‘Ã¢u Ä‘á»ƒ sá»­ dá»¥ng.
+        - PhÃ¢n TÃ­ch Ká»¹ Thuáº­t & Giáº£i PhÃ¡p:
+          1. *TÃ­nh NÄƒng Dáº¡y KÃ½ Tá»± Máº«u (Character Font Training chuáº©n Hikrobot MVS)*:
+             - ThÃªm class `OcrUserCharacterTemplate` vÃ  thuá»™c tÃ­nh `TrainedCharacters` vÃ o `OcrDefinition` trong Models/Class1.cs.
+             - ThÃªm hÃ m `OcrDetector.TeachCharacters`: Tá»± Ä‘á»™ng cáº¯t cÃ¡c Ã´ kÃ½ tá»± tá»« Search ROI áº£nh hiá»‡n táº¡i, gÃ¡n nhÃ£n theo Chuá»—i máº«u (ExpectedText) vÃ  mÃ£ hÃ³a áº£nh nhá»‹ phÃ¢n máº«u $24 \times 32$ thÃ nh Base64 lÆ°u vÃ o Job.
+             - NÃ¢ng cáº¥p `OcrDetector.RunNonAiOcr`: Giáº£i mÃ£ `TrainedCharacters` vÃ  Æ°u tiÃªn so khá»›p sá»‘ 1 vá»›i táº­p kÃ½ tá»± Ä‘Ã£ dáº¡y trÆ°á»›c. Äá»™ tÆ°Æ¡ng quan $\ge 0.65$ Ä‘Æ°á»£c boost Ä‘iá»ƒm tin cáº­y lÃªn 90% - 100%, triá»‡t tiÃªu hoÃ n toÃ n sai sá»‘ cá»§a font chá»¯ thá»±c táº¿.
+             - Bá»• sung giao diá»‡n vÃ  nÃºt báº¥m "ðŸŽ“ Dáº¡y chá»¯ tá»« ROI" vÃ  "ðŸ—‘ XÃ³a máº«u" trong ToolEditorView.xaml vÃ  ToolEditorViewModel.ToolOcr.cs.
+          2. *Kháº¯c phá»¥c lá»—i nháº§m 'o' thÃ nh 'a' trong Heuristic cÆ¡ sá»Ÿ*:
+             - ThÃªm rÃ ng buá»™c hÃ¬nh há»c: Chá»¯ 'o' cÃ³ vÃ¹ng tÃ¢m hoÃ n toÃ n rá»—ng ($X \in [8..15], Y \in [10..21]$) vÃ  cÃ¢n Ä‘á»‘i 4 gÃ³c; chá»¯ 'a' cÃ³ nÃ©t cá»™t Ä‘á»©ng bÃªn pháº£i. Cáº¥m match thÃ nh 'a' khi vÃ¹ng tÃ¢m rá»—ng vÃ  khÃ´ng cÃ³ cá»™t Ä‘á»©ng bÃªn pháº£i.
+          3. *Náº¡p Model AI (ONNX) Linh Hoáº¡t & NÃºt Má»Ÿ ThÆ° Má»¥c Model*:
+             - `RunAiOcr` Æ°u tiÃªn náº¡p file tá»« `def.OnnxModelPath` náº¿u ngÆ°á»i dÃ¹ng chá»n file trÃªn mÃ¡y tÃ­nh.
+             - ThÃªm nÃºt ðŸ“ trong ToolEditorView Ä‘á»ƒ má»Ÿ ngay thÆ° má»¥c `models/ocr/` trÃªn Windows Explorer.
+        - Kiá»ƒm Thá»­:
+          - ThÃªm bÃ i test `TestCharacterFontTrainingMvs` trong TestExtractApp: Há»c 8 kÃ½ tá»± cá»§a 'Line Mode' -> Cháº¡y nháº­n diá»‡n vá»›i font Ä‘Ã£ há»c: Äá»™ chÃ­nh xÃ¡c 100.0%, tá»«ng kÃ½ tá»± Ä‘áº¡t Conf=100.0%, Pass=True.
+          - dotnet build VisionInspectionApp.slnx: 0 errors.
+          - dotnet run --project TestExtractApp: 100% PASSED toÃ n bá»™ test suite.

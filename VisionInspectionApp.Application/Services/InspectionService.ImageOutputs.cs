@@ -892,6 +892,37 @@ public partial class InspectionService
             }
         }
 
+        // 15c. OCR
+        if (result.Ocrs is not null)
+        {
+            foreach (var ocr in result.Ocrs)
+            {
+                if (!ShouldRender(ocr.Name)) continue;
+                var ocrDef = config.Ocrs?.FirstOrDefault(x => string.Equals(x.Name, ocr.Name, StringComparison.OrdinalIgnoreCase));
+                if (ocrDef is not null && ocrDef.SearchRoi.Width > 0 && ocrDef.SearchRoi.Height > 0)
+                {
+                    var col = ocr.Pass ? green : red;
+                    DrawRotatedRoi(mat, ocrDef.SearchRoi, col, 2);
+
+                    if (ocr.Found && ocr.BoundingBoxes != null)
+                    {
+                        foreach (var bb in ocr.BoundingBoxes)
+                        {
+                            if (bb.Width > 0 && bb.Height > 0)
+                            {
+                                Cv2.Rectangle(mat, bb, yellow, 1, LineTypes.AntiAlias);
+                            }
+                        }
+                    }
+
+                    var text = ocr.Found
+                        ? $"{ocr.Name}: \"{ocr.RecognizedText}\" ({ocr.Confidence:P0}) [{(ocr.Pass ? "OK" : "NG")}]"
+                        : $"{ocr.Name}: [NG] {(string.IsNullOrWhiteSpace(ocr.Message) ? "Không tìm thấy ký tự" : ocr.Message)}";
+                    Cv2.PutText(mat, text, new Point(ocrDef.SearchRoi.X, Math.Max(ScalePx(15), ocrDef.SearchRoi.Y - ScalePx(6))), HersheyFonts.HersheySimplex, fontScaleNormal, col, fontThickNormal, LineTypes.AntiAlias);
+                }
+            }
+        }
+
         // 15b. ColorDiffs
         if (result.ColorDiffs is not null)
         {
@@ -1195,6 +1226,17 @@ public partial class InspectionService
                 var text = cd.Text ?? "";
                 if (text.Length > 20) text = text[..17] + "...";
                 rows.Add(("Barcode", cd.Name, text, string.IsNullOrWhiteSpace(cd.ExpectedSpec) ? "-" : cd.ExpectedSpec, cd.Pass));
+            }
+        }
+
+        if (result.Ocrs != null)
+        {
+            foreach (var ocr in result.Ocrs)
+            {
+                if (string.IsNullOrWhiteSpace(ocr.Name)) continue;
+                var text = ocr.RecognizedText ?? "";
+                if (text.Length > 20) text = text[..17] + "...";
+                rows.Add(("OCR", ocr.Name, text, string.IsNullOrWhiteSpace(ocr.ExpectedSpec) ? $"{ocr.Confidence:P0}" : ocr.ExpectedSpec, ocr.Pass));
             }
         }
 

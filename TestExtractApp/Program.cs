@@ -43,5 +43,6 @@ class Program
         CrosshairOverlayTests.RunTests();
         PreprocessAndImageOutputTests.RunTests();
         SurfaceCompareAndCaliperRoiTests.RunTests();
+        OcrDetectorTests.RunTests();
     }
 }
