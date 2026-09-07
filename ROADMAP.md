@@ -2407,3 +2407,10 @@ Lộ trình tích hợp tính năng Chụp ảnh từ camera và hỗ trợ các
         - Xóa sạch danh sách `CurrentMeasurementDetails` và ẩn cảnh báo lỗi NG cũ để không gây nhầm lẫn với kết quả của lần test trước đó.
         - Cập nhật dòng tóm tắt `LastResultSummary` hướng dẫn căn chỉnh sản phẩm và bấm chạy kiểm tra.
         - Đạt 100% PASSED bài kiểm thử tự động `TestOqcWaitingForInspectionStateOnLiveView`.
+
+    - [x] **Task 320: Bổ Sung Khối Hiển Thị Tên Sản Phẩm (Product Name) Cực Đại Full-Width Auto-Scaling & Tái Cấu Trúc Bố Cục 10/45/45 Trong OQC Scanner**:
+        - Tái cấu trúc khu vực kết quả OQC Scanner từ tỷ lệ 50/50 sang tỷ lệ 10/45/45 (RowDefinitions: 10*, 45*, 45* kèm GridSplitter linh hoạt).
+        - Thêm hàng trên cùng (20%) hiển thị Tên Sản Phẩm cực lớn, full-width và tự động co giãn font size theo độ rộng khung chứa qua `Viewbox Stretch="Uniform"`.
+        - Hàng giữa (40%) hiển thị kết quả OK / NG / READY cực lớn kèm auto-scaling Viewbox.
+        - Hàng dưới (40%) hiển thị chi tiết toàn bộ phép đo kèm cột Over Spec và Đánh giá.
+        - Đạt 100% PASSED bài kiểm thử tự động `TestOqcProductNameAndLayout204040Configuration`.

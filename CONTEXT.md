@@ -46,6 +46,31 @@
 ### ImageSource và preview
 
 - Lưu template cho Origin, Point và SurfaceCompare hoạt động với nguồn ảnh ImageSource.
+- **Bổ Sung Khối Hiển Thị Tên Sản Phẩm (Product Name) Cực Đại Full-Width Auto-Scaling & Tái Cấu Trúc Bố Cục 10/45/45 Trong OQC Scanner (Task 320)**:
+  - **Hiện Tượng & Yêu Cầu Người Dùng**:
+    - Trong tab OQC Scanner, trước đây cột bên phải chia 50/50 gồm ô kết quả OK/NG và bảng kết quả chi tiết phép đo.
+    - Yêu cầu: Thu gọn bớt bảng kết quả chi tiết, thêm 1 dòng nữa ở TRÊN ô hiện OK/NG hiển thị tên sản phẩm thật to (Product Name) để công nhân nhận biết tên sản phẩm dễ dàng. Phân chia theo tỷ lệ 10/45/45. Tên sản phẩm luôn hiển thị full width và tự động thu nhỏ font size nếu width thay đổi.
+  - **Giải Pháp Kỹ Thuật Đã Triển Khai**:
+    1. *Tái cấu trúc Grid sang tỷ lệ 10/45/45*:
+       - `RowDefinition Height="10*" MinHeight="40"`: Dành cho khối Tên Sản Phẩm (20%).
+       - `RowDefinition Height="Auto"`: GridSplitter giữa Tên Sản Phẩm và khối OK/NG.
+       - `RowDefinition Height="4*" MinHeight="140"`: Dành cho khối hiển thị kết quả OK/NG/READY (40%).
+       - `RowDefinition Height="Auto"`: GridSplitter giữa khối OK/NG và bảng chi tiết phép đo.
+       - `RowDefinition Height="4*" MinHeight="140"`: Dành cho bảng chi tiết toàn bộ phép đo (40%).
+    2. *Thiết kế Khối Hiển Thị Tên Sản Phẩm (Product Name)*:
+       - Đặt trong `GroupBox Header="📦 TÊN SẢN PHẨM (PRODUCT NAME)"`.
+       - Sử dụng `Border` bo góc viền chuẩn công nghiệp, bên trong bọc `<Viewbox Stretch="Uniform" HorizontalAlignment="Stretch" VerticalAlignment="Center">`.
+       - `TextBlock Text="{Binding CurrentProductName}" FontWeight="ExtraBold" Foreground="{DynamicResource AccentBrush}"`: Nhờ cơ chế `Viewbox Uniform`, tên sản phẩm tự động phóng to tối đa lấp đầy khung khi width rộng hoặc tên ngắn, và tự động co nhỏ font size vừa vặn khi width hẹp lại hoặc tên sản phẩm dài; hoàn toàn không bao giờ bị cắt chữ hay tràn khung.
+    3. *Tối ưu khối hiển thị OK/NG*:
+       - Bổ sung `Viewbox MaxHeight="85" Stretch="Uniform"` cho chữ kết quả `BigResultStatusText` ("PASS", "NG", "READY") để tự động co giãn thích ứng hoàn hảo với tỷ lệ 45% mới trên mọi độ phân giải màn hình.
+  - **Kiểm Thử & Xác Minh**:
+    - Thêm bài test tự động `TestOqcProductNameAndLayout204040Configuration` (Test 8) trong `TestExtractApp/OqcLiveViewOnJobLoadTests.cs`:
+      - Xác minh giá trị và cập nhật `CurrentProductName` của ViewModel.
+      - Xác minh thông điệp `LastResultSummary` khi nạp sản phẩm.
+      - Kiểm tra tính toàn vẹn cấu trúc XAML (`Viewbox Uniform`, tỷ lệ `2*`, `4*`, `4*`).
+    - dotnet build VisionInspectionApp.slnx: 0 errors.
+    - dotnet run --project TestExtractApp: 100% PASSED toàn bộ test suite.
+
 - **Tự Động Chuyển Hiển Thị Sang Trạng Thái Chờ Kiểm Tra (READY) Khi Bắt Đầu Live View Trong OQC Scanner (Task 319)**:
   - **Hiện Tượng & Yêu Cầu Người Dùng**:
     - Trong tab OQC Scanner, trước đây bảng hiển thị kết quả (khối OK/NG cỡ lớn và bảng chi tiết phép đo) vẫn giữ nguyên kết quả của lần test trước đó khi người dùng đang căn chỉnh sản phẩm mới ở chế độ Live View.

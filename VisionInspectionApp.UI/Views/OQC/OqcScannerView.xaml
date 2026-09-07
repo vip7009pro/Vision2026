@@ -282,16 +282,54 @@
                 <!-- GridSplitter -->
                 <GridSplitter Grid.Column="1" Width="6" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Background="{DynamicResource DarkBorderBrush}" />
 
-                <!-- Column 2: Right Side - 50/50 Split (Top: Giant OK/NG Judgement, Bottom: Measurement Details) -->
+                <!-- Column 2: Right Side - 10/45/45 Split (Top: Giant Product Name, Center: Giant OK/NG Judgement, Bottom: Measurement Details) -->
                 <Grid Grid.Column="2">
                     <Grid.RowDefinitions>
-                        <RowDefinition Height="1*" MinHeight="180" />
+                        <!-- Row 0: Product Name Banner (10%) -->
+                        <RowDefinition Height="10*" MinHeight="40" />
                         <RowDefinition Height="Auto" />
-                        <RowDefinition Height="1*" MinHeight="180" />
+                        <!-- Row 2: Giant OK / NG Judgement Display (45%) -->
+                        <RowDefinition Height="45*" MinHeight="140" />
+                        <RowDefinition Height="Auto" />
+                        <!-- Row 4: Measurement Details DataGrid (45%) -->
+                        <RowDefinition Height="45*" MinHeight="140" />
                     </Grid.RowDefinitions>
 
-                    <!-- Row 0: Giant OK / NG Judgement Display (50%) -->
-                    <GroupBox Grid.Row="0" Header="🎯 KẾT QUẢ ĐÁNH GIÁ (INSPECTION JUDGEMENT)" Padding="6" Foreground="{DynamicResource TextBrush}">
+                    <!-- Row 0: Product Name Display (10%) -->
+                    <GroupBox Grid.Row="0" Header="📦 TÊN SẢN PHẨM (PRODUCT NAME)" Padding="4" Foreground="{DynamicResource TextBrush}">
+                        <Border Background="{DynamicResource PanelBackgroundBrush}"
+                                BorderBrush="{DynamicResource BorderBrush}"
+                                BorderThickness="1.5"
+                                CornerRadius="6"
+                                Padding="8,2"
+                                HorizontalAlignment="Stretch"
+                                VerticalAlignment="Stretch">
+                            <Viewbox Stretch="Uniform" HorizontalAlignment="Stretch" VerticalAlignment="Center">
+                                <TextBlock Text="{Binding CurrentProductName}"
+                                           FontWeight="ExtraBold"
+                                           Foreground="{DynamicResource AccentBrush}"
+                                           HorizontalAlignment="Center"
+                                           VerticalAlignment="Center"
+                                           TextAlignment="Center"
+                                           Margin="6,2">
+                                    <TextBlock.Effect>
+                                        <DropShadowEffect BlurRadius="6" ShadowDepth="2" Opacity="0.35" />
+                                    </TextBlock.Effect>
+                                </TextBlock>
+                            </Viewbox>
+                        </Border>
+                    </GroupBox>
+
+                    <!-- Row 1: Splitter between Product Name and Judgement -->
+                    <GridSplitter Grid.Row="1"
+                                  Height="5"
+                                  HorizontalAlignment="Stretch"
+                                  VerticalAlignment="Center"
+                                  Background="{DynamicResource DarkBorderBrush}"
+                                  Cursor="SizeNS" />
+
+                    <!-- Row 2: Giant OK / NG Judgement Display (40%) -->
+                    <GroupBox Grid.Row="2" Header="🎯 KẾT QUẢ ĐÁNH GIÁ (INSPECTION JUDGEMENT)" Padding="6" Foreground="{DynamicResource TextBrush}">
                         <Grid>
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="Auto" />
@@ -327,17 +365,18 @@
                                         <RowDefinition Height="Auto" />
                                         <RowDefinition Height="Auto" />
                                     </Grid.RowDefinitions>
-                                    <TextBlock Grid.Row="0"
-                                               Text="{Binding BigResultStatusText}"
-                                               FontSize="76"
-                                               FontWeight="ExtraBold"
-                                               Foreground="{Binding BigResultForegroundBrush}"
-                                               HorizontalAlignment="Center"
-                                               VerticalAlignment="Center">
-                                        <TextBlock.Effect>
-                                            <DropShadowEffect BlurRadius="12" ShadowDepth="3" Opacity="0.6" />
-                                        </TextBlock.Effect>
-                                    </TextBlock>
+                                    <Viewbox Grid.Row="0" MaxHeight="85" Stretch="Uniform" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                        <TextBlock Text="{Binding BigResultStatusText}"
+                                                   FontSize="72"
+                                                   FontWeight="ExtraBold"
+                                                   Foreground="{Binding BigResultForegroundBrush}"
+                                                   HorizontalAlignment="Center"
+                                                   VerticalAlignment="Center">
+                                            <TextBlock.Effect>
+                                                <DropShadowEffect BlurRadius="12" ShadowDepth="3" Opacity="0.6" />
+                                            </TextBlock.Effect>
+                                        </TextBlock>
+                                    </Viewbox>
                                     <TextBlock Grid.Row="1"
                                                Text="{Binding LastResultSummary}"
                                                FontSize="13"
@@ -369,16 +408,16 @@
                         </Grid>
                     </GroupBox>
 
-                    <!-- Row 1: Splitter between Judgement and Details -->
-                    <GridSplitter Grid.Row="1"
-                                  Height="6"
+                    <!-- Row 3: Splitter between Judgement and Details -->
+                    <GridSplitter Grid.Row="3"
+                                  Height="5"
                                   HorizontalAlignment="Stretch"
                                   VerticalAlignment="Center"
                                   Background="{DynamicResource DarkBorderBrush}"
                                   Cursor="SizeNS" />
 
-                    <!-- Row 2: Measurement Details DataGrid (50%) -->
-                    <GroupBox Grid.Row="2" Header="📊 CHI TIẾT CÁC PHÉP ĐO (MEASUREMENT DETAILS &amp; SPECS)" Padding="4" Foreground="{DynamicResource TextBrush}">
+                    <!-- Row 4: Measurement Details DataGrid (40%) -->
+                    <GroupBox Grid.Row="4" Header="📊 CHI TIẾT CÁC PHÉP ĐO (MEASUREMENT DETAILS &amp; SPECS)" Padding="4" Foreground="{DynamicResource TextBrush}">
                         <Grid>
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="*" />
