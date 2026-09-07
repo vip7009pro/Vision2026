@@ -2421,3 +2421,12 @@ Lộ trình tích hợp tính năng Chụp ảnh từ camera và hỗ trợ các
         - Phát triển công cụ cập nhật độc lập `VisionUpdater.exe` (`VisionInspectionApp.Updater`) giải quyết triệt để Windows File Lock, tự động sao lưu (Backup) và tự phục hồi (Rollback) an toàn khi gặp sự cố.
         - Xây dựng giao diện `OtaUpdateDialog.xaml` hiển thị so sánh phiên bản, Changelog, thanh tiến trình và tích hợp thông báo nhấp nháy trên TitleBar và Menu Trợ Giúp.
         - Đạt 100% PASSED 5 bài kiểm thử tự động trong `OtaUpdateServiceTests`.
+
+    - [x] **Task 322: Bổ Sung Tab Tự Động Đóng Gói Zip & Tải Lên Server Kèm version.json Và Script Server PHP (OTA Publisher)**:
+        - Xây dựng script máy chủ PHP `ServerScripts/ota_server.php` tiếp nhận upload tệp zip, hỗ trợ tùy chỉnh thư mục lưu trữ trên server, kiểm tra tính toàn vẹn SHA-256, tự động tạo và cập nhật `version.json`, và phục vụ manifest cho các máy IPC.
+        - Thêm Tab thứ 3 trong cửa sổ OTA Update: *"📦 Đóng Gói & Tải Lên (Publish)"* trên `OtaUpdateDialog.xaml`.
+        - Xây dựng module nghiệp vụ `IOtaPublisherService` & `OtaPublisherService` tự động nén thư mục ứng dụng (tự động loại trừ thư viện non-Windows, Cache ảnh mẫu, tệp rác/tạm/pdb giúp giảm kích thước gói từ 321MB xuống ~35-45MB), tính mã băm SHA-256, tự động cập nhật số phiên bản vào `VisionInspectionApp.UI.csproj`.
+        - Triển khai **Tải lên phân đoạn (Chunked Upload - 6MB/chunk)** vượt qua triệt để mọi giới hạn cấu hình `post_max_size` (40M) của hosting web, kèm tệp cấu hình `ServerScripts/.htaccess` và `ServerScripts/.user.ini`.
+        - Hỗ trợ các nút tăng số phiên bản nhanh (+0.0.0.1 Patch, +0.0.1.0 Minor, +0.1.0.0 Major) và nhập thư mục lưu trữ trên server trực tiếp từ giao diện UI.
+        - Viết bộ kiểm thử tự động `TestExtractApp/OtaPublisherServiceTests.cs` (5 test suite toàn diện) đạt 100% PASSED.
+

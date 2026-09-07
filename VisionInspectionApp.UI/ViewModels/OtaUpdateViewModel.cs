@@ -74,16 +74,19 @@ public partial class OtaUpdateViewModel : ObservableObject
 
     public event Action? RequestClose;
 
-    public OtaUpdateViewModel(IOtaUpdateService otaService, GlobalAppSettingsService settingsService)
+    public OtaUpdateViewModel(IOtaUpdateService otaService, GlobalAppSettingsService settingsService, IOtaPublisherService? publisherService = null)
     {
         _otaService = otaService;
         _settingsService = settingsService;
+        _publisherService = publisherService ?? new OtaPublisherService();
 
         CurrentVersionText = $"v{_otaService.CurrentVersion}";
         var otaCfg = _settingsService.Settings.Ota;
         ServerUrl = otaCfg.UpdateServerUrl;
         SelectedSourceType = otaCfg.UpdateSourceType;
         AutoCheckOnStartup = otaCfg.AutoCheckOnStartup;
+
+        InitializePublisher();
     }
 
     [RelayCommand]

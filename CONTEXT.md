@@ -1,4 +1,4 @@
-﻿# Vision Inspection App — Context & Roadmap
+# Vision Inspection App — Context & Roadmap
 
 ## Mô tả
 
@@ -46,6 +46,42 @@
 ### ImageSource và preview
 
 - Lưu template cho Origin, Point và SurfaceCompare hoạt động với nguồn ảnh ImageSource.
+- **Bổ Sung Tab Tự Động Đóng Gói Zip & Tải Lên Server Kèm version.json Và Script Server PHP (OTA Publisher - Task 322)**:
+  - **Hiện Tượng & Yêu Cầu Người Dùng**:
+    - Trước đây, khi phát hành một bản cập nhật mới OTA, kỹ sư phải thực hiện hoàn toàn thủ công: mở file `.csproj` sửa số phiên bản, chạy lệnh build Release, nén zip thủ công thư mục `bin\Release\net8.0-windows`, tính mã băm SHA-256 bằng PowerShell, sửa file `version.json`, rồi upload thủ công qua FTP hoặc copy vào server.
+    - Yêu cầu người dùng: Trong cửa sổ OTA Update, tạo thêm 1 tab nữa là tab tự gom zip và upload zip lên server, tự upload cả `version.json` (có update version trong file) lên server luôn. Script server thì làm bằng PHP. Đồng thời cho phép cấu hình, chọn thư mục trên server sẽ chứa file update zip từ giao diện.
+  - **Giải Pháp Kỹ Thuật Đã Triển Khai**:
+    1. *Máy Chủ Web - Script PHP (`ServerScripts/ota_server.php`)*:
+       - Script PHP độc lập, đa nền tảng (XAMPP / Apache / Nginx / IIS), hỗ trợ CORS.
+       - Cung cấp API `action=ping`, `action=get_version` (trả về manifest cho các máy IPC kiểm tra OTA), và `action=publish` (tiếp nhận tệp zip, lưu vào thư mục chỉ định, tính/xác thực SHA-256, tự động tạo và cập nhật `version.json` ở cả webroot và thư mục lưu trữ).
+       - Cơ chế bảo mật: Hàm `sanitizeServerFolder` chống tấn công Directory Traversal (`../../`), hỗ trợ tùy chọn xác thực qua API Key (`OTA_API_KEY`).
+    2. *Tầng Dữ Liệu & Mô Hình (`VisionInspectionApp.Models/Ota/OtaPublishModel.cs`)*:
+       - `OtaPublishConfig`: Thư mục nguồn, số phiên bản mới, kênh phát hành, ghi chú, cờ bắt buộc, URL máy chủ upload, thư mục lưu trữ trên server, API token, cờ cập nhật csproj.
+       - `OtaPublishResult`: Trạng thái thành công, thông điệp phản hồi từ máy chủ, URL tải về, URL manifest, thư mục server, mã băm SHA-256, kích thước file.
+    3. *Tầng Dịch Vụ Nghiệp Vụ (`VisionInspectionApp.Application/Services/`)*:
+       - `IOtaPublisherService` & `OtaPublisherService`:
+         - `BuildZipPackageAsync`: Nén toàn bộ thư mục nguồn ra tệp `.zip` với mức nén Optimal. Tự động loại trừ các thư viện native không phải Windows (`runtimes/android`, `runtimes/ios`, `runtimes/linux`, `runtimes/osx`, `runtimes/browser`, `runtimes/maccatalyst`, `runtimes/unix`, `runtimes/win-x86`), thư mục `Cache/` và tệp `*.pdb`, giúp giảm dung lượng gói từ **321 MB xuống chỉ còn ~35 - 45 MB** (giảm gần 90%).
+         - `ComputeSha256`: Tính toán mã băm SHA-256 hex chuẩn của file zip.
+         - `UpdateCsprojVersionAsync`: Tự động tìm và cập nhật các thẻ `<Version>`, `<AssemblyVersion>`, `<FileVersion>`, `<InformationalVersion>` trong `VisionInspectionApp.UI.csproj`.
+         - `PublishToServerAsync` & `PublishChunkedToServerAsync`: Tự động phân đoạn gói cập nhật (6MB/chunk) qua `action=upload_chunk` khi tệp > 6MB, bypass hoàn toàn giới hạn `post_max_size` và `upload_max_filesize` của các hosting web (kể cả giới hạn 40M, 16M hay 8M).
+    4. *Cấu Hình Bền Vững & Giao Diện Người Dùng (`VisionInspectionApp.UI`)*:
+       - Thêm vào `OtaSettings` (`GlobalAppSettingsService.cs`): `PublishServerUploadUrl`, `PublishServerStorageFolder`, `PublishApiToken`, `PublishSourceDirectory`, `PublishAutoUpdateCsproj`, `PublishReleaseChannel`.
+       - `OtaUpdateViewModel.Publisher.cs`: Phân rã partial class sạch sẽ theo Rule 5; tự động nhận diện thư mục build Release/Debug, tự động phát hiện `VisionInspectionApp.UI.csproj`, tự động đề xuất phiên bản mới (+0.0.0.1 Patch), các nút tăng nhanh (+0.0.0.1, +0.0.1.0, +0.1.0.0), nhật ký log terminal chi tiết. Báo cáo tiến trình tải lên từng phân đoạn % thời gian thực và tốc độ mạng (MB/s).
+       - Cửa sổ `OtaUpdateDialog.xaml`: Thêm Tab thứ 3 *"📦 Đóng Gói & Tải Lên (Publish)"*, thiết kế hiện đại, hỗ trợ điều chỉnh kích thước cửa sổ linh hoạt `ResizeMode="CanResizeWithGrip"`.
+    5. *Tài Liệu Hướng Dẫn & Cấu Hình Máy Chủ*:
+       - Tạo tệp `ServerScripts/.htaccess` và `ServerScripts/.user.ini` cấu hình 1024M cho máy chủ Apache/cPanel/PHP-FPM.
+       - Cập nhật `ServerScripts/README_SERVER.md` hướng dẫn triển khai XAMPP, cPanel, Apache và xử lý giới hạn upload.
+       - Cập nhật `ota_update_guide.md` hướng dẫn chi tiết quy trình phát hành tự động qua UI.
+  - **Kiểm Thử & Xác Minh**:
+    - Xây dựng bộ kiểm thử tự động `TestExtractApp/OtaPublisherServiceTests.cs` (5 test suite toàn diện):
+      1. `TestZipCompressionAndSha256`: Nén zip, tính SHA-256, loại trừ tệp rác -> PASSED.
+      2. `TestCsprojVersionUpdate`: Cập nhật 4 thẻ version XML trong .csproj -> PASSED.
+      3. `TestMockHttpUploadWithCustomServerFolder`: Giả lập HTTP server tiếp nhận multipart POST, kiểm tra custom server folder, version, token -> PASSED.
+      4. `TestChunkedHttpUploadWithMultipleChunks`: Giả lập upload phân đoạn 7MB (> 6MB ChunkSize), kiểm tra thứ tự chunk, file_id, total_chunks -> PASSED.
+      5. `TestEndToEndPublisherToOtaUpdateService`: Khớp nối toàn diện Publisher và Receiver (OtaUpdateService) -> PASSED.
+    - Biên dịch Solution Release: 0 Error(s).
+    - Toàn bộ test suite chạy lệnh `dotnet run --project TestExtractApp`: 100% PASSED.
+
 - **Bổ Sung Chức Năng Cập Nhật Phần Mềm Từ Xa OTA (Over-The-Air Update) Cho Ứng Dụng (Task 321)**:
   - **Hiện Tượng & Yêu Cầu Người Dùng**:
     - Nhu cầu cập nhật phần mềm từ xa cho các máy tính công nghiệp IPC lắp đặt tại các dây chuyền nhà máy qua mạng LAN nội bộ hoặc GitHub Releases/Internet mà không cần kỹ sư phải cắm USB cập nhật thủ công từng máy.

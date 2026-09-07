@@ -40,6 +40,14 @@ public sealed class OtaSettings
     public string UpdateChannel { get; set; } = "Stable";
     public DateTime? LastCheckedTime { get; set; }
     public string IgnoredVersion { get; set; } = "";
+
+    // Cấu hình đóng gói và phát hành OTA
+    public string PublishServerUploadUrl { get; set; } = "http://192.168.1.100/ota_server.php";
+    public string PublishServerStorageFolder { get; set; } = "uploads/ota_packages";
+    public string PublishApiToken { get; set; } = "";
+    public string PublishSourceDirectory { get; set; } = "";
+    public bool PublishAutoUpdateCsproj { get; set; } = true;
+    public string PublishReleaseChannel { get; set; } = "Stable";
 }
 
 public sealed class LightingServerConfig

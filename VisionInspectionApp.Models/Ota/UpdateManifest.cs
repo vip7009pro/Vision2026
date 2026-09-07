@@ -71,6 +71,7 @@ public sealed class UpdateProgressInfo
     public long TotalBytes { get; set; }
     public double Percentage { get; set; }
     public double SpeedBytesPerSec { get; set; }
+    public string? StatusText { get; set; }
     public string SpeedFormatted => SpeedBytesPerSec > 1024 * 1024
         ? $"{(SpeedBytesPerSec / (1024 * 1024)):F2} MB/s"
         : $"{(SpeedBytesPerSec / 1024):F1} KB/s";
@@ -78,3 +79,4 @@ public sealed class UpdateProgressInfo
         ? $"{(BytesDownloaded / (1024.0 * 1024.0)):F2} MB / {(TotalBytes / (1024.0 * 1024.0)):F2} MB ({Percentage:F1}%)"
         : $"{(BytesDownloaded / (1024.0 * 1024.0)):F2} MB ({Percentage:F1}%)";
 }
+

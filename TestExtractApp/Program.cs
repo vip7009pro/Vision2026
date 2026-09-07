@@ -45,5 +45,6 @@ class Program
         SurfaceCompareAndCaliperRoiTests.RunTests();
         OcrDetectorTests.RunTests();
         OtaUpdateServiceTests.RunAllTests();
+        OtaPublisherServiceTests.RunAllTests();
     }
 }

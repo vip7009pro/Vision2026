@@ -5,9 +5,10 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         mc:Ignorable="d"
         Title="Cập Nhật Phần Mềm Từ Xa — CMS VINA OTA Update"
-        Height="540" Width="680"
+        Height="620" Width="720"
+        MinHeight="560" MinWidth="680"
         WindowStartupLocation="CenterOwner"
-        ResizeMode="NoResize"
+        ResizeMode="CanResizeWithGrip"
         Background="{DynamicResource WindowBackgroundBrush}"
         Foreground="{DynamicResource TextBrush}"
         FontFamily="Segoe UI"
@@ -193,6 +194,227 @@
                             Padding="16,6"
                             Height="32" />
                 </StackPanel>
+            </TabItem>
+
+            <!-- TAB 3: ĐÓNG GÓI & TẢI LÊN (PUBLISH) -->
+            <TabItem Header="📦 Đóng Gói &amp; Tải Lên (Publish)">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Padding="0,4,6,4">
+                    <Grid Margin="4,8,4,4">
+                        <Grid.RowDefinitions>
+                            <!-- Nguồn & Phiên Bản -->
+                            <RowDefinition Height="Auto" />
+                            <!-- Server & Thư mục lưu trữ trên server -->
+                            <RowDefinition Height="Auto" />
+                            <!-- Ghi chú phát hành -->
+                            <RowDefinition Height="Auto" />
+                            <!-- Tiến trình & Nút hành động -->
+                            <RowDefinition Height="Auto" />
+                            <!-- Log Console -->
+                            <RowDefinition Height="*" MinHeight="110" />
+                        </Grid.RowDefinitions>
+
+                        <!-- KHỐI 1: Thư mục nguồn & Phiên bản -->
+                        <GroupBox Grid.Row="0" Header="📁 1. THƯ MỤC ỨNG DỤNG NGUỒN &amp; PHIÊN BẢN PHÁT HÀNH" Foreground="{DynamicResource TextBrush}" Margin="0,0,0,10" Padding="8">
+                            <StackPanel>
+                                <!-- Thư mục nguồn -->
+                                <TextBlock Text="Đường dẫn thư mục chứa bản build/mã chạy ứng dụng để nén zip:" FontSize="11.5" FontWeight="SemiBold" Margin="0,0,0,4" />
+                                <Grid Margin="0,0,0,8">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBox Grid.Column="0" Text="{Binding PublishSourceDirectory, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                             Height="28" Padding="6,0" VerticalContentAlignment="Center"
+                                             Background="{DynamicResource InputBackgroundBrush}"
+                                             Foreground="{DynamicResource TextBrush}"
+                                             BorderBrush="{DynamicResource BorderBrush}" />
+                                    <Button Grid.Column="1" Content="📁 Duyệt..." Command="{Binding BrowseSourceDirectoryCommand}"
+                                            Height="28" Padding="12,0" Margin="6,0,0,0" />
+                                </Grid>
+
+                                <!-- Phiên bản mới & Nút tăng phiên bản -->
+                                <Grid Margin="0,0,0,4">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="130" />
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+
+                                    <TextBlock Grid.Column="0" Text="Số phiên bản mới:" FontWeight="SemiBold" FontSize="11.5" VerticalAlignment="Center" Margin="0,0,8,0" />
+                                    <TextBox Grid.Column="1" Text="{Binding PublishNewVersion, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                             Height="28" Padding="6,0" VerticalContentAlignment="Center" FontWeight="Bold" FontSize="13" Foreground="#38BDF8"
+                                             Background="{DynamicResource InputBackgroundBrush}"
+                                             BorderBrush="{DynamicResource BorderBrush}" />
+
+                                    <!-- Nút tăng phiên bản nhanh -->
+                                    <StackPanel Grid.Column="2" Orientation="Horizontal" Margin="6,0,0,0" VerticalAlignment="Center">
+                                        <Button Content="+0.0.0.1 (Patch)" Command="{Binding IncrementPatchVersionCommand}"
+                                                Padding="6,4" FontSize="11" Margin="0,0,4,0" ToolTip="Tăng bản vá lỗi (Patch)" />
+                                        <Button Content="+0.0.1.0 (Minor)" Command="{Binding IncrementMinorVersionCommand}"
+                                                Padding="6,4" FontSize="11" Margin="0,0,4,0" ToolTip="Tăng tính năng nhỏ (Minor)" />
+                                        <Button Content="+0.1.0.0 (Major)" Command="{Binding IncrementMajorVersionCommand}"
+                                                Padding="6,4" FontSize="11" ToolTip="Tăng phiên bản lớn (Major)" />
+                                    </StackPanel>
+
+                                    <!-- Kênh phát hành -->
+                                    <DockPanel Grid.Column="3" HorizontalAlignment="Right" VerticalAlignment="Center">
+                                        <TextBlock Text="Kênh:" FontWeight="SemiBold" FontSize="11.5" VerticalAlignment="Center" Margin="0,0,6,0" />
+                                        <ComboBox SelectedValue="{Binding PublishReleaseChannel, Mode=TwoWay}"
+                                                  SelectedValuePath="Tag"
+                                                  Width="90" Height="26" VerticalContentAlignment="Center">
+                                            <ComboBoxItem Content="Stable" Tag="Stable" />
+                                            <ComboBoxItem Content="Beta" Tag="Beta" />
+                                            <ComboBoxItem Content="Hotfix" Tag="Hotfix" />
+                                        </ComboBox>
+                                    </DockPanel>
+                                </Grid>
+
+                                <!-- Tùy chọn Checkboxes -->
+                                <DockPanel LastChildFill="False" Margin="0,6,0,0">
+                                    <CheckBox Content="Bắt buộc cập nhật (IsMandatory)"
+                                              IsChecked="{Binding PublishIsMandatory, Mode=TwoWay}"
+                                              FontSize="11.5" DockPanel.Dock="Left" Margin="0,0,16,0" />
+                                    <CheckBox Content="Tự động cập nhật số Version vào file .csproj"
+                                              IsChecked="{Binding PublishAutoUpdateCsproj, Mode=TwoWay}"
+                                              FontWeight="SemiBold" FontSize="11.5" DockPanel.Dock="Left"
+                                              ToolTip="Tự động sửa thẻ Version trong VisionInspectionApp.UI.csproj" />
+                                </DockPanel>
+                            </StackPanel>
+                        </GroupBox>
+
+                        <!-- KHỐI 2: Cấu hình Server & Thư mục lưu trữ trên server -->
+                        <GroupBox Grid.Row="1" Header="🌐 2. MÁY CHỦ UPLOAD &amp; THƯ MỤC LƯU TRỮ TRÊN SERVER" Foreground="{DynamicResource TextBrush}" Margin="0,0,0,10" Padding="8">
+                            <Grid>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                </Grid.RowDefinitions>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+
+                                <!-- URL máy chủ PHP -->
+                                <StackPanel Grid.Row="0" Grid.Column="0" Margin="0,0,6,6">
+                                    <TextBlock Text="Đường dẫn script máy chủ (ota_server.php):" FontSize="11.5" FontWeight="SemiBold" Margin="0,0,0,4" />
+                                    <TextBox Text="{Binding PublishServerUrl, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                             Height="28" Padding="6,0" VerticalContentAlignment="Center"
+                                             Background="{DynamicResource InputBackgroundBrush}"
+                                             Foreground="{DynamicResource TextBrush}"
+                                             BorderBrush="{DynamicResource BorderBrush}"
+                                             ToolTip="Ví dụ: http://192.168.1.100/ota_server.php" />
+                                </StackPanel>
+
+                                <!-- Thư mục lưu trữ trên server (yêu cầu người dùng) -->
+                                <StackPanel Grid.Row="0" Grid.Column="1" Margin="6,0,0,6">
+                                    <TextBlock Text="Thư mục chứa file zip trên server:" FontSize="11.5" FontWeight="SemiBold" Margin="0,0,0,4" />
+                                    <TextBox Text="{Binding PublishServerStorageFolder, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                             Height="28" Padding="6,0" VerticalContentAlignment="Center"
+                                             Background="{DynamicResource InputBackgroundBrush}"
+                                             Foreground="{DynamicResource TextBrush}"
+                                             BorderBrush="{DynamicResource BorderBrush}"
+                                             ToolTip="Thư mục trên server để chứa file zip, ví dụ: uploads/ota_packages hoặc updates/v1" />
+                                </StackPanel>
+
+                                <!-- Khóa bảo mật API Token -->
+                                <StackPanel Grid.Row="1" Grid.ColumnSpan="2" Margin="0,2,0,0">
+                                    <DockPanel LastChildFill="True">
+                                        <TextBlock Text="Khóa bí mật API Token (nếu máy chủ yêu cầu xác thực):" FontSize="11" Foreground="{DynamicResource TextMutedBrush}" VerticalAlignment="Center" Margin="0,0,8,0" />
+                                        <TextBox Text="{Binding PublishApiToken, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                 Height="26" Padding="6,0" VerticalContentAlignment="Center"
+                                                 Background="{DynamicResource InputBackgroundBrush}"
+                                                 Foreground="{DynamicResource TextBrush}"
+                                                 BorderBrush="{DynamicResource BorderBrush}" />
+                                    </DockPanel>
+                                </StackPanel>
+                            </Grid>
+                        </GroupBox>
+
+                        <!-- KHỐI 3: Ghi chú phát hành -->
+                        <GroupBox Grid.Row="2" Header="📝 3. GHI CHÚ PHÁT HÀNH (RELEASE NOTES / CHANGELOG)" Foreground="{DynamicResource TextBrush}" Margin="0,0,0,10" Padding="8">
+                            <TextBox Text="{Binding PublishReleaseNotes, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                     Height="55"
+                                     TextWrapping="Wrap"
+                                     AcceptsReturn="True"
+                                     VerticalScrollBarVisibility="Auto"
+                                     Padding="6,4"
+                                     Background="{DynamicResource InputBackgroundBrush}"
+                                     Foreground="{DynamicResource TextBrush}"
+                                     BorderBrush="{DynamicResource BorderBrush}" />
+                        </GroupBox>
+
+                        <!-- KHỐI 4: Tiến trình & Nút hành động -->
+                        <Border Grid.Row="3"
+                                Background="{DynamicResource PanelBackgroundBrush}"
+                                BorderBrush="{DynamicResource BorderBrush}"
+                                BorderThickness="1"
+                                CornerRadius="6"
+                                Padding="10,8"
+                                Margin="0,0,0,10">
+                            <Grid>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                </Grid.RowDefinitions>
+
+                                <!-- Thanh trạng thái & Nút lớn -->
+                                <DockPanel Grid.Row="0" LastChildFill="False">
+                                    <!-- Nút phát hành -->
+                                    <Button Content="🚀 Đóng Gói Zip &amp; Tải Lên Server"
+                                            Command="{Binding PackageAndPublishCommand}"
+                                            IsEnabled="{Binding IsPublishing, Converter={StaticResource BoolToVis}, ConverterParameter=Invert}"
+                                            Background="#2563EB"
+                                            BorderBrush="#1D4ED8"
+                                            Foreground="White"
+                                            FontWeight="Bold"
+                                            FontSize="12.5"
+                                            Padding="18,7"
+                                            Height="34"
+                                            DockPanel.Dock="Left" Margin="0,0,10,0" />
+
+                                    <!-- Nút Hủy phát hành (khi đang chạy) -->
+                                    <Button Content="⏹ Hủy Bỏ"
+                                            Command="{Binding CancelPublishCommand}"
+                                            Visibility="{Binding IsPublishing, Converter={StaticResource BoolToVis}}"
+                                            Background="#DC2626"
+                                            BorderBrush="#B91C1C"
+                                            Foreground="White"
+                                            Padding="12,5"
+                                            Height="34"
+                                            DockPanel.Dock="Left" Margin="0,0,10,0" />
+
+                                    <!-- Thông điệp trạng thái -->
+                                    <TextBlock Text="{Binding PublishStatusMessage}"
+                                               Foreground="{Binding PublishStatusColorHex}"
+                                               FontWeight="SemiBold"
+                                               FontSize="12"
+                                               VerticalAlignment="Center"
+                                               TextTrimming="CharacterEllipsis"
+                                               DockPanel.Dock="Right" />
+                                </DockPanel>
+
+                                <!-- ProgressBar khi đang đóng gói/upload -->
+                                <StackPanel Grid.Row="1" Margin="0,8,0,0" Visibility="{Binding IsPublishing, Converter={StaticResource BoolToVis}}">
+                                    <DockPanel LastChildFill="False" Margin="0,0,0,4">
+                                        <TextBlock Text="{Binding PublishProgressText}" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource TextBrush}" DockPanel.Dock="Left" />
+                                        <TextBlock Text="{Binding PublishSpeedText}" FontSize="11" FontWeight="Bold" Foreground="#38BDF8" DockPanel.Dock="Right" />
+                                    </DockPanel>
+                                    <ProgressBar Height="8" Minimum="0" Maximum="100" Value="{Binding PublishProgress}" Foreground="#38BDF8" Background="#1E293B" BorderBrush="#334155" />
+                                </StackPanel>
+                            </Grid>
+                        </Border>
+
+                        <!-- KHỐI 5: Console Logs -->
+                        <GroupBox Grid.Row="4" Header="📜 NHẬT KÝ TIẾN TRÌNH CHI TIẾT" Foreground="{DynamicResource TextBrush}" Padding="4">
+                            <Border Background="#0F172A" BorderBrush="#334155" BorderThickness="1" CornerRadius="4">
+                                <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto" Padding="8">
+                                    <TextBlock Text="{Binding PublishLogs}" FontFamily="Consolas, Cascadia Code, Courier New" FontSize="11" Foreground="#38BDF8" TextWrapping="Wrap" />
+                                </ScrollViewer>
+                            </Border>
+                        </GroupBox>
+                    </Grid>
+                </ScrollViewer>
             </TabItem>
         </TabControl>
 

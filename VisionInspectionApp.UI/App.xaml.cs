@@ -108,6 +108,7 @@ public partial class App : System.Windows.Application
 
                 // OTA Update Framework
                 services.AddSingleton<VisionInspectionApp.Application.Services.IOtaUpdateService, VisionInspectionApp.Application.Services.OtaUpdateService>();
+                services.AddSingleton<VisionInspectionApp.Application.Services.IOtaPublisherService, VisionInspectionApp.Application.Services.OtaPublisherService>();
                 services.AddTransient<OtaUpdateViewModel>();
                 services.AddTransient<Views.OTA.OtaUpdateDialog>();
 
