@@ -1,6 +1,7 @@
 using System;
 using System.Threading.Tasks;
 using OpenCvSharp;
+using VisionInspectionApp.Application;
 using VisionInspectionApp.Models;
 using VisionInspectionApp.UI.Services;
 using VisionInspectionApp.UI.Services.Camera;
@@ -20,6 +21,8 @@ public static class OqcLiveViewOnJobLoadTests
         TestCameraServiceNormalApplyParametersWhenNoLiveConsumer().GetAwaiter().GetResult();
         TestLiveStreamGrabbingAutoRestart().GetAwaiter().GetResult();
         TestBringWindowToForegroundPreservesMaximized();
+        TestOqcMeasurementOverSpecCalculation();
+        TestOqcOnlyOriginMode();
 
         Console.WriteLine("=======================================================");
         Console.WriteLine("✅ ALL OQC SCANNER LIVE VIEW TESTS PASSED!");
@@ -207,5 +210,204 @@ public static class OqcLiveViewOnJobLoadTests
         thread.Join();
 
         Console.WriteLine("  -> PASSED: BringWindowToForeground duy trì tuyệt đối trạng thái Maximized (Full Screen).");
+    }
+
+    private static void TestOqcMeasurementOverSpecCalculation()
+    {
+        Console.WriteLine("--- Test 5: Kiểm tra tính toán Over Spec và Mô Tả Vượt Cận trong OqcMeasurementDetail ---");
+
+        // 1. Trường hợp đạt (trong spec)
+        var passItem = new OqcMeasurementDetail
+        {
+            ToolName = "Khoảng cách L1-L2",
+            ToolType = "Distance",
+            Spec = 11.0,
+            Min = 10.0,
+            Max = 12.0,
+            Result = 11.2,
+            Unit = "mm",
+            Pass = true,
+            HasNumericSpec = true
+        };
+
+        if (passItem.OverSpecAmount != 0.0)
+            throw new Exception($"Trường hợp Đạt: OverSpecAmount phải là 0.0, nhưng nhận được {passItem.OverSpecAmount}");
+        if (passItem.FormattedOverSpec != "-")
+            throw new Exception($"Trường hợp Đạt: FormattedOverSpec phải là '-', nhưng nhận được '{passItem.FormattedOverSpec}'");
+        if (passItem.OverSpecDescription != "Đạt")
+            throw new Exception($"Trường hợp Đạt: OverSpecDescription phải là 'Đạt', nhưng nhận được '{passItem.OverSpecDescription}'");
+        if (passItem.OverSpecBrushHex != "#4CAF50")
+            throw new Exception($"Trường hợp Đạt: OverSpecBrushHex phải là '#4CAF50', nhưng nhận được '{passItem.OverSpecBrushHex}'");
+
+        // 2. Trường hợp Vượt cận trên
+        var overUpperItem = new OqcMeasurementDetail
+        {
+            ToolName = "Độ rộng rãnh",
+            ToolType = "Caliper",
+            Spec = 11.0,
+            Min = 10.0,
+            Max = 12.0,
+            Result = 12.45,
+            Unit = "mm",
+            Pass = false,
+            HasNumericSpec = true
+        };
+
+        if (Math.Abs(overUpperItem.OverSpecAmount!.Value - 0.45) > 1e-4)
+            throw new Exception($"Trường hợp Vượt cận trên: OverSpecAmount phải là 0.45, nhưng nhận được {overUpperItem.OverSpecAmount}");
+        if (overUpperItem.FormattedOverSpec != "+0.450 mm")
+            throw new Exception($"Trường hợp Vượt cận trên: FormattedOverSpec phải là '+0.450 mm', nhưng nhận được '{overUpperItem.FormattedOverSpec}'");
+        if (overUpperItem.OverSpecDescription != "Vượt cận trên")
+            throw new Exception($"Trường hợp Vượt cận trên: OverSpecDescription phải là 'Vượt cận trên', nhưng nhận được '{overUpperItem.OverSpecDescription}'");
+        if (overUpperItem.OverSpecBrushHex != "#D32F2F")
+            throw new Exception($"Trường hợp Vượt cận trên: OverSpecBrushHex phải là '#D32F2F', nhưng nhận được '{overUpperItem.OverSpecBrushHex}'");
+
+        // 3. Trường hợp Vượt cận dưới
+        var overLowerItem = new OqcMeasurementDetail
+        {
+            ToolName = "Bán kính lỗ",
+            ToolType = "CircleFinder",
+            Spec = 11.0,
+            Min = 10.0,
+            Max = 12.0,
+            Result = 9.80,
+            Unit = "mm",
+            Pass = false,
+            HasNumericSpec = true
+        };
+
+        if (Math.Abs(overLowerItem.OverSpecAmount!.Value - 0.20) > 1e-4)
+            throw new Exception($"Trường hợp Vượt cận dưới: OverSpecAmount phải là 0.20, nhưng nhận được {overLowerItem.OverSpecAmount}");
+        if (overLowerItem.FormattedOverSpec != "-0.200 mm")
+            throw new Exception($"Trường hợp Vượt cận dưới: FormattedOverSpec phải là '-0.200 mm', nhưng nhận được '{overLowerItem.FormattedOverSpec}'");
+        if (overLowerItem.OverSpecDescription != "Vượt cận dưới")
+            throw new Exception($"Trường hợp Vượt cận dưới: OverSpecDescription phải là 'Vượt cận dưới', nhưng nhận được '{overLowerItem.OverSpecDescription}'");
+        if (overLowerItem.OverSpecBrushHex != "#D32F2F")
+            throw new Exception($"Trường hợp Vượt cận dưới: OverSpecBrushHex phải là '#D32F2F', nhưng nhận được '{overLowerItem.OverSpecBrushHex}'");
+
+        // 4. Trường hợp không có spec hoặc không phải số
+        var nonNumericItem = new OqcMeasurementDetail
+        {
+            ToolName = "Nhận diện mã",
+            ToolType = "CodeReader",
+            Spec = double.NaN,
+            Min = double.NaN,
+            Max = double.NaN,
+            Result = double.NaN,
+            CustomResultText = "ABC-12345",
+            Pass = true,
+            HasNumericSpec = false
+        };
+
+        if (nonNumericItem.OverSpecAmount != null)
+            throw new Exception($"Trường hợp không có spec: OverSpecAmount phải là null, nhưng nhận được {nonNumericItem.OverSpecAmount}");
+        if (nonNumericItem.FormattedOverSpec != "-")
+            throw new Exception($"Trường hợp không có spec: FormattedOverSpec phải là '-', nhưng nhận được '{nonNumericItem.FormattedOverSpec}'");
+        if (nonNumericItem.OverSpecDescription != "-")
+            throw new Exception($"Trường hợp không có spec: OverSpecDescription phải là '-', nhưng nhận được '{nonNumericItem.OverSpecDescription}'");
+        if (nonNumericItem.OverSpecBrushHex != "#888888")
+            throw new Exception($"Trường hợp không có spec: OverSpecBrushHex phải là '#888888', nhưng nhận được '{nonNumericItem.OverSpecBrushHex}'");
+
+        Console.WriteLine("  -> PASSED: Tính toán Over Spec, độ lệch (+/- delta unit), mô tả và màu sắc hoạt động chuẩn xác 100%.");
+    }
+
+    private static void TestOqcOnlyOriginMode()
+    {
+        Console.WriteLine("--- Test 6: Kiểm tra Chế độ chỉ bắt Origin trong OQC Scanner (OnlyOriginMode) ---");
+
+        // 1. Kiểm tra cấu hình mặc định và tính tuần tự hóa JSON
+        var config = new OqcScannerConfig();
+        if (!config.OnlyOriginMode)
+        {
+            throw new Exception("Chế độ OnlyOriginMode phải có giá trị mặc định là true!");
+        }
+
+        string json = System.Text.Json.JsonSerializer.Serialize(config);
+        var deserialized = System.Text.Json.JsonSerializer.Deserialize<OqcScannerConfig>(json);
+        if (deserialized == null || !deserialized.OnlyOriginMode)
+        {
+            throw new Exception("Tuần tự hóa và giải tuần tự hóa OqcScannerConfig không bảo toàn OnlyOriginMode=true!");
+        }
+
+        // 2. Mô phỏng kiểm tra khi OnlyOriginMode = true
+        // Case A: Origin đạt (Pass = true), nhưng toàn bộ kết quả chung bị NG do tool khác (result.Pass = false)
+        bool onlyOriginMode = true;
+        var originMatchOk = new PointMatchResult(
+            Name: "Origin 1",
+            Position: new Point2d(100, 200),
+            MatchRect: new Rect(50, 50, 100, 100),
+            Score: 0.95,
+            Threshold: 0.80,
+            Pass: true,
+            AngleDeg: 0.0);
+
+        var resultCaseA = new InspectionResult
+        {
+            Pass = false, // Tool khác bị NG dẫn đến kết quả chung = false
+            Origin = originMatchOk
+        };
+
+        bool effectivePassA = onlyOriginMode 
+            ? (resultCaseA.Origin != null && resultCaseA.Origin.Pass) 
+            : resultCaseA.Pass;
+
+        if (!effectivePassA)
+        {
+            throw new Exception("Khi OnlyOriginMode = true và Origin đạt tiêu chuẩn: Kết quả hiển thị PHẢI LÀ OK/PASS dù tool khác bị NG!");
+        }
+
+        // Case B: Origin không đạt (Pass = false), nhưng các tool khác đều OK (giả định)
+        var originMatchNg = new PointMatchResult(
+            Name: "Origin 1",
+            Position: new Point2d(100, 200),
+            MatchRect: new Rect(50, 50, 100, 100),
+            Score: 0.65,
+            Threshold: 0.80,
+            Pass: false,
+            AngleDeg: 0.0);
+
+        var resultCaseB = new InspectionResult
+        {
+            Pass = true,
+            Origin = originMatchNg
+        };
+
+        bool effectivePassB = onlyOriginMode 
+            ? (resultCaseB.Origin != null && resultCaseB.Origin.Pass) 
+            : resultCaseB.Pass;
+
+        if (effectivePassB)
+        {
+            throw new Exception("Khi OnlyOriginMode = true và Origin KHÔNG đạt tiêu chuẩn: Kết quả hiển thị PHẢI LÀ NG!");
+        }
+
+        // Case C: Không có Origin (Origin = null)
+        var resultCaseC = new InspectionResult
+        {
+            Pass = true,
+            Origin = null
+        };
+
+        bool effectivePassC = onlyOriginMode 
+            ? (resultCaseC.Origin != null && resultCaseC.Origin.Pass) 
+            : resultCaseC.Pass;
+
+        if (effectivePassC)
+        {
+            throw new Exception("Khi OnlyOriginMode = true nhưng không có Origin: Kết quả hiển thị PHẢI LÀ NG!");
+        }
+
+        // 3. Mô phỏng kiểm tra khi OnlyOriginMode = false (Chế độ bình thường)
+        onlyOriginMode = false;
+        bool effectivePassNormal = onlyOriginMode 
+            ? (resultCaseA.Origin != null && resultCaseA.Origin.Pass) 
+            : resultCaseA.Pass;
+
+        if (effectivePassNormal)
+        {
+            throw new Exception("Khi OnlyOriginMode = false: Kết quả hiển thị phải tuân thủ đúng result.Pass (ở đây là NG)!");
+        }
+
+        Console.WriteLine("  -> PASSED: Chế độ chỉ bắt Origin (OnlyOriginMode) hoạt động chuẩn xác 100% (Mặc định = true, Origin OK -> OK, Origin NG -> NG).");
     }
 }

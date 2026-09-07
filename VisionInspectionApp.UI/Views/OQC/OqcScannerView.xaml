@@ -16,6 +16,22 @@
         <BooleanToVisibilityConverter x:Key="BoolToVis" />
         <Style x:Key="BoldStyle" TargetType="TextBlock">
             <Setter Property="FontWeight" Value="Bold" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+        <Style x:Key="CenterStyle" TargetType="TextBlock">
+            <Setter Property="HorizontalAlignment" Value="Center" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+        <Style x:Key="RightStyle" TargetType="TextBlock">
+            <Setter Property="HorizontalAlignment" Value="Right" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="Margin" Value="0,0,6,0" />
+        </Style>
+        <Style x:Key="BoldRightStyle" TargetType="TextBlock">
+            <Setter Property="HorizontalAlignment" Value="Right" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="FontWeight" Value="Bold" />
+            <Setter Property="Margin" Value="0,0,6,0" />
         </Style>
     </UserControl.Resources>
 
@@ -123,6 +139,12 @@
                             <CheckBox Content="🔫 Đầu Scanner"
                                       IsChecked="{Binding UseExternalScanner, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                                       ToolTip="Khi bật: Dùng máy quét ngoài nhập mã. Lúc này phím SPACE dùng để RUN JOB."
+                                      FontWeight="SemiBold" FontSize="11.5"
+                                      Margin="0,0,10,0" VerticalAlignment="Center" />
+
+                            <CheckBox Content="🎯 Chỉ Bắt Origin"
+                                      IsChecked="{Binding OnlyOriginMode, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                      ToolTip="Chế độ chỉ bắt Origin: Khi bật, nếu bắt được origin đạt tiêu chuẩn thì hiển thị OK, ngược lại hiển thị NG (cho dù các hạng mục kiểm tra khác có OK hay NG đi nữa). Mặc định: Bật."
                                       FontWeight="SemiBold" FontSize="11.5"
                                       VerticalAlignment="Center" />
                         </StackPanel>
@@ -260,69 +282,186 @@
                 <!-- GridSplitter -->
                 <GridSplitter Grid.Column="1" Width="6" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Background="{DynamicResource DarkBorderBrush}" />
 
-                <!-- Column 2: Right Side - Scan History Log Table -->
-                <GroupBox Grid.Column="2" Header="📊 Lịch sử quét mã gần nhất (Scan History Log - Nhấp đúp dòng để xem chi tiết)" Padding="4" Foreground="{DynamicResource TextBrush}">
-                    <Grid>
-                        <Grid.RowDefinitions>
-                            <RowDefinition Height="*" />
-                            <RowDefinition Height="Auto" />
-                        </Grid.RowDefinitions>
+                <!-- Column 2: Right Side - 50/50 Split (Top: Giant OK/NG Judgement, Bottom: Measurement Details) -->
+                <Grid Grid.Column="2">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="1*" MinHeight="180" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="1*" MinHeight="180" />
+                    </Grid.RowDefinitions>
 
-                        <DataGrid x:Name="HistoryDataGrid"
-                                  Grid.Row="0"
-                                  ItemsSource="{Binding ScanHistory}"
-                                  AutoGenerateColumns="False"
-                                  IsReadOnly="True"
-                                  CanUserAddRows="False"
-                                  CanUserDeleteRows="False"
-                                  SelectionMode="Single"
-                                  MouseDoubleClick="HistoryDataGrid_MouseDoubleClick"
-                                  GridLinesVisibility="Horizontal"
-                                  HeadersVisibility="Column"
-                                  Background="{DynamicResource PanelBackgroundBrush}"
-                                  Foreground="{DynamicResource TextBrush}">
-                            <DataGrid.Columns>
-                                <DataGridTextColumn Header="Thời gian" Binding="{Binding Time, StringFormat='HH:mm:ss dd/MM'}" Width="95" />
-                                <DataGridTextColumn Header="Mã Scan (Product)" Binding="{Binding ScannedCode}" Width="130" ElementStyle="{StaticResource BoldStyle}" />
-                                <DataGridTextColumn Header="Tên Sản Phẩm" Binding="{Binding ProductName}" Width="130" ElementStyle="{StaticResource BoldStyle}" />
-                                <DataGridTextColumn Header="Tệp Job" Binding="{Binding JobFilePath}" Width="110" />
-                                <DataGridTemplateColumn Header="Ảnh Output" Width="80">
-                                    <DataGridTemplateColumn.CellTemplate>
-                                        <DataTemplate>
-                                            <Button Content="🖼️ Xem Ảnh" 
-                                                    Click="ViewOutputImageBtn_Click"
-                                                    Padding="4,1" Height="21" FontSize="10.5"
-                                                    ToolTip="{Binding OutputImagePath}"
-                                                    HorizontalAlignment="Center" VerticalAlignment="Center" />
-                                        </DataTemplate>
-                                    </DataGridTemplateColumn.CellTemplate>
-                                </DataGridTemplateColumn>
-                                <DataGridTextColumn Header="Tra cứu DB" Binding="{Binding Message}" Width="80" />
-                                <DataGridTextColumn Header="Ghi DB" Binding="{Binding DbLogStatus}" Width="70" />
-                                <DataGridTemplateColumn Header="KQ Kiểm Tra" Width="100">
-                                    <DataGridTemplateColumn.CellTemplate>
-                                        <DataTemplate>
-                                            <TextBlock Text="{Binding InspectResult}" Foreground="{Binding ResultBrushHex}" FontWeight="Bold" VerticalAlignment="Center" HorizontalAlignment="Center" />
-                                        </DataTemplate>
-                                    </DataGridTemplateColumn.CellTemplate>
-                                </DataGridTemplateColumn>
-                                <DataGridTextColumn Header="Chi Tiết Lỗi / Thông Số Tool" Binding="{Binding InspectDetails}" Width="*">
-                                    <DataGridTextColumn.CellStyle>
-                                        <Style TargetType="DataGridCell" BasedOn="{StaticResource {x:Type DataGridCell}}">
-                                            <Setter Property="ToolTip" Value="{Binding InspectDetails}" />
-                                        </Style>
-                                    </DataGridTextColumn.CellStyle>
-                                </DataGridTextColumn>
-                            </DataGrid.Columns>
-                        </DataGrid>
+                    <!-- Row 0: Giant OK / NG Judgement Display (50%) -->
+                    <GroupBox Grid.Row="0" Header="🎯 KẾT QUẢ ĐÁNH GIÁ (INSPECTION JUDGEMENT)" Padding="6" Foreground="{DynamicResource TextBrush}">
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="*" />
+                                <RowDefinition Height="Auto" />
+                            </Grid.RowDefinitions>
 
-                        <DockPanel Grid.Row="1" Margin="0,6,0,0" LastChildFill="False">
-                            <Button Content="📊 Xuất CSV (Excel)" Command="{Binding ExportToExcelCommand}" DockPanel.Dock="Left" Width="130" Height="25" Margin="0,0,6,0" FontSize="11" ToolTip="Trích xuất toàn bộ lịch sử quét mã ra tệp Excel (CSV UTF-8 with BOM)" />
-                            <Button Content="🔍 Xem Chi Tiết (Double-Click)" Click="ViewDetailBtn_Click" DockPanel.Dock="Left" Width="170" Height="25" FontSize="11" ToolTip="Xem chi tiết các phép đo và ảnh kết quả của dòng được chọn" />
-                            <Button Content="🗑️ Xóa lịch sử" Command="{Binding ClearHistoryCommand}" DockPanel.Dock="Right" Width="100" Height="25" FontSize="11" />
-                        </DockPanel>
-                    </Grid>
-                </GroupBox>
+                            <!-- Top Toolbar of Judgement Box -->
+                            <DockPanel Grid.Row="0" Margin="0,0,0,6" LastChildFill="False">
+                                <Button Content="📜 Mở Cửa Sổ Lịch Sử Quét Mã..."
+                                        Command="{Binding OpenScanHistoryWindowCommand}"
+                                        DockPanel.Dock="Left"
+                                        Padding="10,3" Height="26" FontWeight="SemiBold"
+                                        ToolTip="Mở cửa sổ danh sách toàn bộ lịch sử quét mã, tìm kiếm và xuất Excel" />
+                                <Button Content="🖼️ Xem Ảnh Output"
+                                        Command="{Binding ViewLatestOutputImageCommand}"
+                                        DockPanel.Dock="Right"
+                                        Padding="10,3" Height="26" FontWeight="SemiBold"
+                                        ToolTip="Xem ảnh kết quả đo kiểm lần gần nhất phóng to" />
+                            </DockPanel>
+
+                            <!-- Big Result Center Banner -->
+                            <Border Grid.Row="1"
+                                    Background="{Binding BigResultBackgroundBrush}"
+                                    BorderBrush="{Binding BigResultBorderBrush}"
+                                    BorderThickness="3"
+                                    CornerRadius="10"
+                                    Padding="16"
+                                    VerticalAlignment="Stretch"
+                                    HorizontalAlignment="Stretch">
+                                <Grid VerticalAlignment="Center" HorizontalAlignment="Center">
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                    </Grid.RowDefinitions>
+                                    <TextBlock Grid.Row="0"
+                                               Text="{Binding BigResultStatusText}"
+                                               FontSize="76"
+                                               FontWeight="ExtraBold"
+                                               Foreground="{Binding BigResultForegroundBrush}"
+                                               HorizontalAlignment="Center"
+                                               VerticalAlignment="Center">
+                                        <TextBlock.Effect>
+                                            <DropShadowEffect BlurRadius="12" ShadowDepth="3" Opacity="0.6" />
+                                        </TextBlock.Effect>
+                                    </TextBlock>
+                                    <TextBlock Grid.Row="1"
+                                               Text="{Binding LastResultSummary}"
+                                               FontSize="13"
+                                               FontWeight="SemiBold"
+                                               Foreground="White"
+                                               HorizontalAlignment="Center"
+                                               VerticalAlignment="Center"
+                                               Margin="0,6,0,0"
+                                               TextWrapping="Wrap"
+                                               TextAlignment="Center" />
+                                </Grid>
+                            </Border>
+
+                            <!-- Bottom Warning if NG -->
+                            <Border Grid.Row="2"
+                                    Visibility="{Binding HasLastNgDetails, Converter={StaticResource BoolToVis}}"
+                                    Background="#33FF0000"
+                                    BorderBrush="#FF5252"
+                                    BorderThickness="1"
+                                    CornerRadius="4"
+                                    Margin="0,6,0,0"
+                                    Padding="8,4">
+                                <TextBlock Text="{Binding LastNgDetails, StringFormat='⚠️ Chi tiết lỗi: {0}'}"
+                                           Foreground="#FF5252"
+                                           FontWeight="Bold"
+                                           FontSize="12"
+                                           TextWrapping="Wrap" />
+                            </Border>
+                        </Grid>
+                    </GroupBox>
+
+                    <!-- Row 1: Splitter between Judgement and Details -->
+                    <GridSplitter Grid.Row="1"
+                                  Height="6"
+                                  HorizontalAlignment="Stretch"
+                                  VerticalAlignment="Center"
+                                  Background="{DynamicResource DarkBorderBrush}"
+                                  Cursor="SizeNS" />
+
+                    <!-- Row 2: Measurement Details DataGrid (50%) -->
+                    <GroupBox Grid.Row="2" Header="📊 CHI TIẾT CÁC PHÉP ĐO (MEASUREMENT DETAILS &amp; SPECS)" Padding="4" Foreground="{DynamicResource TextBrush}">
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="*" />
+                                <RowDefinition Height="Auto" />
+                            </Grid.RowDefinitions>
+
+                            <DataGrid Grid.Row="0"
+                                      ItemsSource="{Binding CurrentMeasurementDetails}"
+                                      AutoGenerateColumns="False"
+                                      CanUserAddRows="False"
+                                      CanUserDeleteRows="False"
+                                      IsReadOnly="True"
+                                      SelectionMode="Single"
+                                      GridLinesVisibility="Horizontal"
+                                      HeadersVisibility="Column"
+                                      Background="{DynamicResource PanelBackgroundBrush}"
+                                      Foreground="{DynamicResource TextBrush}"
+                                      RowHeight="26">
+                                <DataGrid.Columns>
+                                    <DataGridTextColumn Header="#" Binding="{Binding Index}" Width="35" ElementStyle="{StaticResource CenterStyle}" />
+                                    <DataGridTextColumn Header="Tên Phép Đo" Binding="{Binding ToolName}" Width="1.4*" ElementStyle="{StaticResource BoldStyle}" />
+                                    <DataGridTextColumn Header="Loại Tool" Binding="{Binding ToolType}" Width="*" />
+                                    <DataGridTextColumn Header="Tiêu Chuẩn" Binding="{Binding FormattedSpec}" Width="*" ElementStyle="{StaticResource RightStyle}" />
+                                    <DataGridTextColumn Header="Dung Sai" Binding="{Binding FormattedTol}" Width="*" ElementStyle="{StaticResource RightStyle}" />
+                                    <DataGridTextColumn Header="Giới Hạn [Min~Max]" Binding="{Binding FormattedRange}" Width="1.2*" ElementStyle="{StaticResource CenterStyle}" />
+                                    <DataGridTextColumn Header="Giá Trị Đo" Binding="{Binding FormattedResult}" Width="1.2*" ElementStyle="{StaticResource BoldRightStyle}" />
+
+                                    <!-- Over Spec Column -->
+                                    <DataGridTemplateColumn Header="Over Spec" Width="1.1*">
+                                        <DataGridTemplateColumn.CellTemplate>
+                                            <DataTemplate>
+                                                <TextBlock Text="{Binding FormattedOverSpec}"
+                                                           Foreground="{Binding OverSpecBrushHex}"
+                                                           FontWeight="Bold"
+                                                           HorizontalAlignment="Right"
+                                                           VerticalAlignment="Center"
+                                                           Margin="0,0,6,0" />
+                                            </DataTemplate>
+                                        </DataGridTemplateColumn.CellTemplate>
+                                    </DataGridTemplateColumn>
+
+                                    <!-- Over Spec Description Column -->
+                                    <DataGridTemplateColumn Header="Mô Tả Vượt Cận" Width="1.2*">
+                                        <DataGridTemplateColumn.CellTemplate>
+                                            <DataTemplate>
+                                                <TextBlock Text="{Binding OverSpecDescription}"
+                                                           Foreground="{Binding OverSpecBrushHex}"
+                                                           FontWeight="SemiBold"
+                                                           VerticalAlignment="Center"
+                                                           HorizontalAlignment="Center" />
+                                            </DataTemplate>
+                                        </DataGridTemplateColumn.CellTemplate>
+                                    </DataGridTemplateColumn>
+
+                                    <!-- Judgement Status Column -->
+                                    <DataGridTemplateColumn Header="Đánh Giá" Width="85">
+                                        <DataGridTemplateColumn.CellTemplate>
+                                            <DataTemplate>
+                                                <Border Background="{Binding StatusBrushHex}" CornerRadius="3" Padding="4,2" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                                    <TextBlock Text="{Binding Status}" Foreground="White" FontWeight="Bold" FontSize="11" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                                </Border>
+                                            </DataTemplate>
+                                        </DataGridTemplateColumn.CellTemplate>
+                                    </DataGridTemplateColumn>
+                                </DataGrid.Columns>
+                            </DataGrid>
+
+                            <!-- Bottom Action Bar for Details -->
+                            <DockPanel Grid.Row="1" Margin="0,6,0,0" LastChildFill="False">
+                                <Button Content="🔍 Mở Chi Tiết Đầy Đủ &amp; Ảnh..."
+                                        Command="{Binding ViewLatestScanDetailCommand}"
+                                        DockPanel.Dock="Left"
+                                        Padding="10,3" Height="26" FontWeight="SemiBold"
+                                        ToolTip="Mở cửa sổ chi tiết đầy đủ của lần đo này kèm zoom &amp; pan ảnh kết quả" />
+                                <Button Content="📜 Toàn Bộ Lịch Sử Quét"
+                                        Command="{Binding OpenScanHistoryWindowCommand}"
+                                        DockPanel.Dock="Right"
+                                        Padding="10,3" Height="26"
+                                        ToolTip="Mở cửa sổ lịch sử quét mã độc lập" />
+                            </DockPanel>
+                        </Grid>
+                    </GroupBox>
+                </Grid>
             </Grid>
         </Grid>
 

@@ -66,6 +66,7 @@ public class OqcScannerConfig
     public int ScanTimeoutMs { get; set; } = 3000;
     public bool UseExternalScanner { get; set; } = false;
     public bool AutoRunJob { get; set; } = true;
+    public bool OnlyOriginMode { get; set; } = true;
 }
 
 public class OqcMeasurementDetail
@@ -87,6 +88,8 @@ public class OqcMeasurementDetail
 
     public string Judge => Pass ? "PASS" : "NG";
     public string JudgeBrushHex => Pass ? "#2E7D32" : "#D32F2F";
+    public string Status => Judge;
+    public string StatusBrushHex => JudgeBrushHex;
 
     public string FormattedSpec
     {
@@ -123,6 +126,72 @@ public class OqcMeasurementDetail
             if (!string.IsNullOrEmpty(CustomResultText)) return CustomResultText;
             if (double.IsNaN(Result)) return "N/A";
             return string.IsNullOrWhiteSpace(Unit) ? $"{Result:F3}" : $"{Result:F3} {Unit}".Trim();
+        }
+    }
+
+    /// <summary>
+    /// Mức chênh lệch số thực với cận trên (nếu vượt cận trên) hoặc cận dưới (nếu vượt cận dưới).
+    /// </summary>
+    public double? OverSpecAmount
+    {
+        get
+        {
+            if (!HasNumericSpec || double.IsNaN(Result)) return null;
+            if (Result > Max) return Result - Max;
+            if (Result < Min) return Min - Result;
+            return 0.0;
+        }
+    }
+
+    /// <summary>
+    /// Hiển thị mức chênh lệch định dạng kèm dấu (+/-) và đơn vị, chỉ áp dụng với các phép đo ra số.
+    /// Nếu vượt cận trên: +Δ Unit
+    /// Nếu vượt cận dưới: -Δ Unit
+    /// Nếu trong tiêu chuẩn: -
+    /// </summary>
+    public string FormattedOverSpec
+    {
+        get
+        {
+            if (!HasNumericSpec || double.IsNaN(Result)) return "-";
+            if (Result > Max)
+            {
+                double diff = Result - Max;
+                return string.IsNullOrWhiteSpace(Unit) ? $"+{diff:F3}" : $"+{diff:F3} {Unit}".Trim();
+            }
+            if (Result < Min)
+            {
+                double diff = Result - Min;
+                return string.IsNullOrWhiteSpace(Unit) ? $"{diff:F3}" : $"{diff:F3} {Unit}".Trim();
+            }
+            return "-";
+        }
+    }
+
+    /// <summary>
+    /// Mô tả chi tiết trạng thái vượt spec: "Vượt cận trên", "Vượt cận dưới" hoặc "Đạt".
+    /// </summary>
+    public string OverSpecDescription
+    {
+        get
+        {
+            if (!HasNumericSpec || double.IsNaN(Result)) return "-";
+            if (Result > Max) return "Vượt cận trên";
+            if (Result < Min) return "Vượt cận dưới";
+            return "Đạt";
+        }
+    }
+
+    /// <summary>
+    /// Màu sắc hiển thị tương ứng: Đỏ nếu vượt cận (#D32F2F), Xanh nếu đạt (#4CAF50), Xám nếu không áp dụng (#888888).
+    /// </summary>
+    public string OverSpecBrushHex
+    {
+        get
+        {
+            if (!HasNumericSpec || double.IsNaN(Result)) return "#888888";
+            if (Result > Max || Result < Min) return "#D32F2F";
+            return "#4CAF50";
         }
     }
 }

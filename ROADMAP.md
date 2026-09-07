@@ -2383,3 +2383,21 @@ Lộ trình tích hợp tính năng Chụp ảnh từ camera và hỗ trợ các
           - ThÃªm bÃ i test `TestBringWindowToForegroundPreservesMaximized` trong `TestExtractApp/OqcLiveViewOnJobLoadTests.cs`: Äáº¡t PASSED.
           - dotnet build VisionInspectionApp.slnx: 0 errors.
           - dotnet run --project TestExtractApp: 100% PASSED toÃ n bá»™ test suite.
+
+    - [x] **Task 316: Bổ Sung CheckBox Cưỡng Chế Áp Dụng Global Calib (Nếu Có) Trong Chessboard Calibration & Cơ Chế Ghi Đè Toàn Bộ Hệ Thống**:
+        - Thêm CheckBox *"Cưỡng chế áp dụng Global Calib (nếu có)"* trong `ChessboardCalibrationDialog.xaml`.
+        - Lưu trữ cấu hình toàn cục `global_chessboard_settings.json` và cơ chế ghi đè calibration toàn diện khi cờ bật.
+        - Đạt 100% PASSED bài kiểm thử `TestForceApplyGlobalCalibration`.
+
+    - [x] **Task 317: Tách Lịch Sử Quét Mã OQC Thành Cửa Sổ Riêng, Thiết Kế Bố Cục 50/50 Hiển Thị Kết Quả OK/NG Cực Lớn & Chi Tiết Toàn Bộ Phép Đo Kèm Cột Over Spec**:
+        - Tách bảng lịch sử quét mã thành cửa sổ riêng `OqcScanHistoryWindow.xaml`, có lọc tìm kiếm, xuất CSV, xóa lịch sử, mở chi tiết.
+        - Thay vị trí cũ trong OQC Scanner thành 2 hàng 50/50: Nửa trên hiển thị OK/NG 76pt ExtraBold kèm màu sắc và cảnh báo lỗi NG; Nửa dưới hiển thị chi tiết các phép đo của lần đo tương ứng.
+        - Thêm cột *Over spec* (mức chênh lệch +/-\u0394 Unit) và cột *Mô Tả Vượt Cận* ("Vượt cận trên", "Vượt cận dưới", "Đạt") trong `OqcMeasurementDetail`, hiển thị trên cả OQC Scanner và `OqcScanDetailDialog.xaml`.
+        - Đạt 100% PASSED bài kiểm thử tự động `TestOqcMeasurementOverSpecCalculation`.
+
+    - [x] **Task 318: Bổ Sung CheckBox "Chế Độ Chỉ Bắt Origin" Trong OQC Scanner**:
+        - Thêm CheckBox *"🎯 Chỉ Bắt Origin"* trên thanh công cụ OQC Scanner (mặc định: Checked / Bật).
+        - Khi checked: Nếu bắt được Origin đạt tiêu chuẩn thì hiển thị OK (PASS), ngược lại hiển thị NG (bỏ qua kết quả của các công cụ khác).
+        - Khi unchecked: Hoạt động bình thường theo kết quả tổng hợp của toàn bộ các công cụ kiểm tra.
+        - Tự động lưu và đồng bộ cấu hình trong `OqcScannerConfig.json`, đồng bộ DB Master Log và kịch bản đèn nháy NG.
+        - Đạt 100% PASSED bài kiểm thử tự động `TestOqcOnlyOriginMode`.

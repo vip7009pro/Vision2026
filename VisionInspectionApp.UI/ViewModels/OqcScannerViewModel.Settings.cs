@@ -150,6 +150,9 @@ public partial class OqcScannerViewModel
     [ObservableProperty]
     private bool _useExternalScanner = false;
 
+    [ObservableProperty]
+    private bool _onlyOriginMode = true;
+
     private bool _isSuppressingConfigSave = false;
 
     public IReadOnlyList<string> AvailableCodeTypes { get; } = new List<string>
@@ -276,6 +279,7 @@ public partial class OqcScannerViewModel
             ScanTimeoutMs = cfg.ScanTimeoutMs > 0 ? cfg.ScanTimeoutMs : 3000;
             UseExternalScanner = cfg.UseExternalScanner;
             AutoRunJob = cfg.AutoRunJob;
+            OnlyOriginMode = cfg.OnlyOriginMode;
         }
         finally
         {
@@ -356,7 +360,8 @@ public partial class OqcScannerViewModel
             CropLength = CropLength,
             ScanTimeoutMs = ScanTimeoutMs > 0 ? ScanTimeoutMs : 3000,
             UseExternalScanner = UseExternalScanner,
-            AutoRunJob = AutoRunJob
+            AutoRunJob = AutoRunJob,
+            OnlyOriginMode = OnlyOriginMode
         };
 
         _oqcService.SaveConfig(cfg);
@@ -430,7 +435,8 @@ public partial class OqcScannerViewModel
                     CropLength = CropLength,
                     ScanTimeoutMs = ScanTimeoutMs > 0 ? ScanTimeoutMs : 3000,
                     UseExternalScanner = UseExternalScanner,
-                    AutoRunJob = AutoRunJob
+                    AutoRunJob = AutoRunJob,
+                    OnlyOriginMode = OnlyOriginMode
                 };
 
                 if (_oqcService.ExportConfigToFile(sfd.FileName, cfg))

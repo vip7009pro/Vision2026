@@ -118,6 +118,34 @@ public partial class OqcScannerViewModel : ObservableObject
     private string _lastScannedRawCode = "";
     private string _lastScannedProcessedCode = "";
 
+    // ─── Big Result Display & Measurement Details (50/50 Layout) ───
+    [ObservableProperty]
+    private OqcScanHistoryEntry? _latestScanEntry;
+
+    [ObservableProperty]
+    private ObservableCollection<OqcMeasurementDetail> _currentMeasurementDetails = new();
+
+    [ObservableProperty]
+    private string _bigResultStatusText = "READY";
+
+    [ObservableProperty]
+    private Brush _bigResultBackgroundBrush = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#1E293B"));
+
+    [ObservableProperty]
+    private Brush _bigResultForegroundBrush = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#94A3B8"));
+
+    [ObservableProperty]
+    private Brush _bigResultBorderBrush = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#334155"));
+
+    [ObservableProperty]
+    private string _lastResultSummary = "Sẵn sàng quét mã sản phẩm để bắt đầu đo kiểm.";
+
+    [ObservableProperty]
+    private string _lastNgDetails = "";
+
+    [ObservableProperty]
+    private bool _hasLastNgDetails = false;
+
     public ObservableCollection<OqcScanHistoryEntry> ScanHistory { get; } = new();
 
     public Action<int>? RequestSwitchTab { get; set; }
@@ -130,6 +158,9 @@ public partial class OqcScannerViewModel : ObservableObject
     public IRelayCommand ClearHistoryCommand { get; }
     public IRelayCommand ExportToExcelCommand { get; }
     public IRelayCommand<OqcScanHistoryEntry> OpenScanDetailCommand { get; }
+    public IRelayCommand OpenScanHistoryWindowCommand { get; }
+    public IRelayCommand ViewLatestOutputImageCommand { get; }
+    public IRelayCommand ViewLatestScanDetailCommand { get; }
     public IRelayCommand SwitchToToolEditorCommand { get; }
     public IRelayCommand ToggleLiveCameraCommand { get; }
     public IRelayCommand OpenJobManagerCommand { get; }
@@ -196,6 +227,9 @@ public partial class OqcScannerViewModel : ObservableObject
         ClearHistoryCommand = new RelayCommand(ExecuteClearHistory);
         ExportToExcelCommand = new RelayCommand(ExecuteExportToExcel);
         OpenScanDetailCommand = new RelayCommand<OqcScanHistoryEntry>(ExecuteOpenScanDetail);
+        OpenScanHistoryWindowCommand = new RelayCommand(ExecuteOpenScanHistoryWindow);
+        ViewLatestOutputImageCommand = new RelayCommand(ExecuteViewLatestOutputImage);
+        ViewLatestScanDetailCommand = new RelayCommand(() => ExecuteOpenScanDetail(LatestScanEntry));
         SwitchToToolEditorCommand = new RelayCommand(() => RequestSwitchTab?.Invoke(0));
         ToggleLiveCameraCommand = new RelayCommand(ToggleLiveCamera);
 
@@ -293,6 +327,15 @@ public partial class OqcScannerViewModel : ObservableObject
         }
         OnPropertyChanged(nameof(ScanButtonText));
         OnPropertyChanged(nameof(CameraScanButtonText));
+    }
+
+    partial void OnOnlyOriginModeChanged(bool value)
+    {
+        if (!_isSuppressingConfigSave && _oqcService?.Config != null)
+        {
+            _oqcService.Config.OnlyOriginMode = value;
+            _oqcService.SaveConfig(_oqcService.Config);
+        }
     }
 
     partial void OnIsShowingLiveCameraChanged(bool value)
@@ -1031,10 +1074,30 @@ public partial class OqcScannerViewModel : ObservableObject
             ? _oqcService.ExtractMeasurementDetails(result, config) 
             : new List<OqcMeasurementDetail>();
 
+        bool effectivePass = result.Pass;
         string details = ExtractDetailedReasons(result);
-        string statusStr = result.Pass ? "PASS (OK)" : "NG (LỖI)";
-        string colorHex = result.Pass ? "#2E7D32" : "#D32F2F";
-        Brush statusBrush = result.Pass ? Brushes.ForestGreen : Brushes.Crimson;
+
+        if (OnlyOriginMode)
+        {
+            bool isOriginPass = result.Origin != null && result.Origin.Pass;
+            effectivePass = isOriginPass;
+            if (isOriginPass)
+            {
+                details = result.Pass
+                    ? "Bắt Origin đạt tiêu chuẩn (PASS)."
+                    : $"Bắt Origin đạt tiêu chuẩn (Score: {result.Origin?.Score:F3}) - Chế độ chỉ bắt Origin.";
+            }
+            else
+            {
+                details = result.Origin != null
+                    ? $"Origin không đạt tiêu chuẩn (Score: {result.Origin.Score:F3})!"
+                    : "Không tìm thấy Origin / Job chưa có cấu hình Origin!";
+            }
+        }
+
+        string statusStr = effectivePass ? "PASS (OK)" : "NG (LỖI)";
+        string colorHex = effectivePass ? "#2E7D32" : "#D32F2F";
+        Brush statusBrush = effectivePass ? Brushes.ForestGreen : Brushes.Crimson;
 
         // Always update UI Scan History entry & Refresh Preview Image
         System.Windows.Application.Current?.Dispatcher?.Invoke(() =>
@@ -1052,10 +1115,49 @@ public partial class OqcScannerViewModel : ObservableObject
                 entry.OutputImagePath = outputImagePath;
                 entry.MeasurementDetails = measurementDetails;
 
-                StatusMessage = result.Pass
+                StatusMessage = effectivePass
                     ? $"✅ SẢN PHẨM '{productName}' ({processedCode}) -> KẾT QUẢ: PASS (OK)"
                     : $"❌ SẢN PHẨM '{productName}' ({processedCode}) -> KẾT QUẢ: NG! Lý do: {details}";
                 StatusBrush = statusBrush;
+
+                LatestScanEntry = entry;
+            }
+
+            // Update Big Result Display & Measurement Details (50/50 Layout)
+            BigResultStatusText = effectivePass ? "PASS" : "NG";
+            BigResultBackgroundBrush = effectivePass
+                ? new SolidColorBrush((Color)ColorConverter.ConvertFromString("#1B5E20"))
+                : new SolidColorBrush((Color)ColorConverter.ConvertFromString("#B71C1C"));
+            BigResultBorderBrush = effectivePass
+                ? new SolidColorBrush((Color)ColorConverter.ConvertFromString("#4CAF50"))
+                : new SolidColorBrush((Color)ColorConverter.ConvertFromString("#F44336"));
+            BigResultForegroundBrush = Brushes.White;
+
+            if (OnlyOriginMode)
+            {
+                LastResultSummary = effectivePass
+                    ? $"✅ SP: {productName} | Mã: {processedCode} | Origin: ĐẠT ({result.Origin?.Score:F3}) | Chế độ chỉ bắt Origin | Lúc: {DateTime.Now:HH:mm:ss}"
+                    : $"❌ SP: {productName} | Mã: {processedCode} | Origin: KHÔNG ĐẠT | Lúc: {DateTime.Now:HH:mm:ss}";
+            }
+            else
+            {
+                int passCount = measurementDetails.Count(d => d.Pass);
+                int totalCount = measurementDetails.Count;
+                LastResultSummary = effectivePass
+                    ? $"✅ SP: {productName} | Mã: {processedCode} | Đạt: {passCount}/{totalCount} phép đo | Lúc: {DateTime.Now:HH:mm:ss}"
+                    : $"❌ SP: {productName} | Mã: {processedCode} | Lỗi: {totalCount - passCount}/{totalCount} phép đo | Lúc: {DateTime.Now:HH:mm:ss}";
+            }
+
+            HasLastNgDetails = !effectivePass && !string.IsNullOrWhiteSpace(details);
+            LastNgDetails = details;
+
+            // Đồng bộ kết quả chung của result theo effectivePass khi bật chế độ chỉ bắt Origin
+            result.Pass = effectivePass;
+
+            CurrentMeasurementDetails.Clear();
+            foreach (var m in measurementDetails)
+            {
+                CurrentMeasurementDetails.Add(m);
             }
 
             if (IsJobLoadedFromManager)
@@ -1261,6 +1363,40 @@ public partial class OqcScannerViewModel : ObservableObject
                 {
                     ScanHistory.Add(item);
                 }
+
+                // Hiển thị kết quả của lần đo gần nhất lên Big Result & Current Measurement Details
+                var top = ScanHistory[0];
+                LatestScanEntry = top;
+                bool isPass = top.InspectResult.Contains("PASS", StringComparison.OrdinalIgnoreCase) || top.InspectResult.Contains("OK", StringComparison.OrdinalIgnoreCase);
+                bool isNg = top.InspectResult.Contains("NG", StringComparison.OrdinalIgnoreCase);
+
+                if (isPass)
+                {
+                    BigResultStatusText = "PASS";
+                    BigResultBackgroundBrush = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#1B5E20"));
+                    BigResultBorderBrush = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#4CAF50"));
+                    BigResultForegroundBrush = Brushes.White;
+                }
+                else if (isNg)
+                {
+                    BigResultStatusText = "NG";
+                    BigResultBackgroundBrush = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#B71C1C"));
+                    BigResultBorderBrush = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#F44336"));
+                    BigResultForegroundBrush = Brushes.White;
+                }
+
+                LastResultSummary = $"Gần nhất: {top.ProductName} ({top.ScannedCode}) | Lúc {top.Time:HH:mm:ss dd/MM}";
+                HasLastNgDetails = isNg && !string.IsNullOrWhiteSpace(top.InspectDetails);
+                LastNgDetails = top.InspectDetails;
+
+                CurrentMeasurementDetails.Clear();
+                if (top.MeasurementDetails != null)
+                {
+                    foreach (var m in top.MeasurementDetails)
+                    {
+                        CurrentMeasurementDetails.Add(m);
+                    }
+                }
             }
         }
         catch (Exception ex)
@@ -1286,14 +1422,61 @@ public partial class OqcScannerViewModel : ObservableObject
         {
             ScanHistory.Clear();
             _oqcService.SaveScanHistory(ScanHistory);
+
+            CurrentMeasurementDetails.Clear();
+            LatestScanEntry = null;
+            BigResultStatusText = "READY";
+            BigResultBackgroundBrush = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#1E293B"));
+            BigResultBorderBrush = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#334155"));
+            BigResultForegroundBrush = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#94A3B8"));
+            LastResultSummary = "Sẵn sàng quét mã sản phẩm để bắt đầu đo kiểm.";
+            HasLastNgDetails = false;
+            LastNgDetails = "";
+
             StatusMessage = "🗑️ Đã xóa toàn bộ lịch sử quét OQC.";
             StatusBrush = Brushes.Gray;
         }
     }
 
     private static Views.OQC.OqcScanDetailDialog? _scanDetailDialogInstance;
+    private static Views.OQC.OqcScanHistoryWindow? _scanHistoryWindowInstance;
     private static Views.OQC.OqcSettingsDialog? _settingsDialogInstance;
     private static Views.OQC.ProductAssignDialog? _productAssignDialogInstance;
+
+    public void ExecuteOpenScanHistoryWindow()
+    {
+        if (_scanHistoryWindowInstance != null && _scanHistoryWindowInstance.IsLoaded)
+        {
+            _scanHistoryWindowInstance.Activate();
+            if (_scanHistoryWindowInstance.WindowState == WindowState.Minimized)
+                _scanHistoryWindowInstance.WindowState = WindowState.Normal;
+            return;
+        }
+
+        var mainWin = System.Windows.Application.Current?.MainWindow;
+        _scanHistoryWindowInstance = new Views.OQC.OqcScanHistoryWindow(this)
+        {
+            Owner = mainWin
+        };
+        _scanHistoryWindowInstance.Closed += (s, e) => _scanHistoryWindowInstance = null;
+        _scanHistoryWindowInstance.Show();
+    }
+
+    private void ExecuteViewLatestOutputImage()
+    {
+        if (LatestScanEntry != null)
+        {
+            ExecuteOpenScanDetail(LatestScanEntry);
+        }
+        else if (ScanHistory.Count > 0)
+        {
+            ExecuteOpenScanDetail(ScanHistory[0]);
+        }
+        else
+        {
+            MessageBox.Show("Chưa có bản ghi đo nào để xem ảnh.", "Thông Báo", MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+    }
 
     public void ExecuteOpenScanDetail(OqcScanHistoryEntry? entry)
     {

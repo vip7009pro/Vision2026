@@ -1,0 +1,115 @@
+<Window x:Class="VisionInspectionApp.UI.Views.OQC.OqcScanHistoryWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="📊 Lịch Sử Quét Mã OQC (Scan History Log)"
+        Height="700" Width="1180"
+        MinHeight="450" MinWidth="850"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="CanResize"
+        Background="{DynamicResource WindowBackgroundBrush}"
+        Foreground="{DynamicResource TextBrush}">
+
+    <Window.Resources>
+        <Style x:Key="BoldStyle" TargetType="TextBlock">
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+        <Style x:Key="CenterStyle" TargetType="TextBlock">
+            <Setter Property="HorizontalAlignment" Value="Center" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+    </Window.Resources>
+
+    <Grid Margin="12">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <!-- Top Header & Filter Bar -->
+        <Border Grid.Row="0" Margin="0,0,0,10" Padding="10,8" Background="{DynamicResource HeaderBackgroundBrush}" CornerRadius="4" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1">
+            <DockPanel LastChildFill="False">
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center" DockPanel.Dock="Left">
+                    <TextBlock Text="🔍 Lọc nhanh:" FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,8,0" Foreground="{DynamicResource TextBrush}" />
+                    <TextBox x:Name="TxtSearchFilter" Width="240" Height="26" VerticalContentAlignment="Center" Padding="4,0" TextChanged="TxtSearchFilter_TextChanged" ToolTip="Nhập mã barcode hoặc tên sản phẩm để lọc nhanh" />
+                    <Button Content="❌ Xóa lọc" Click="BtnClearFilter_Click" Margin="6,0,0,0" Padding="8,2" Height="26" />
+                </StackPanel>
+
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center" DockPanel.Dock="Right">
+                    <TextBlock Text="Tổng số bản ghi: " VerticalAlignment="Center" Foreground="{DynamicResource TextMutedBrush}" />
+                    <TextBlock x:Name="TxtRecordCount" Text="{Binding ScanHistory.Count, StringFormat='{}{0}'}" FontWeight="Bold" Foreground="#2196F3" VerticalAlignment="Center" Margin="0,0,12,0" />
+                    <Button Content="📊 Xuất Excel (CSV)" Command="{Binding ExportToExcelCommand}" Padding="10,4" Height="26" Margin="0,0,6,0" ToolTip="Xuất toàn bộ lịch sử quét ra file CSV/Excel UTF-8" />
+                    <Button Content="🗑️ Xóa Lịch Sử" Command="{Binding ClearHistoryCommand}" Padding="10,4" Height="26" Background="#C62828" Foreground="White" FontWeight="SemiBold" ToolTip="Xóa toàn bộ lịch sử quét mã hiện tại" />
+                </StackPanel>
+            </DockPanel>
+        </Border>
+
+        <!-- Main History DataGrid -->
+        <Border Grid.Row="1" Background="{DynamicResource PanelBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="4">
+            <DataGrid x:Name="HistoryDataGrid"
+                      ItemsSource="{Binding ScanHistory}"
+                      AutoGenerateColumns="False"
+                      IsReadOnly="True"
+                      CanUserAddRows="False"
+                      CanUserDeleteRows="False"
+                      SelectionMode="Single"
+                      MouseDoubleClick="HistoryDataGrid_MouseDoubleClick"
+                      GridLinesVisibility="Horizontal"
+                      HeadersVisibility="Column"
+                      Background="{DynamicResource PanelBackgroundBrush}"
+                      Foreground="{DynamicResource TextBrush}">
+                <DataGrid.Columns>
+                    <DataGridTextColumn Header="Thời gian" Binding="{Binding Time, StringFormat='HH:mm:ss dd/MM/yyyy'}" Width="135" />
+                    <DataGridTextColumn Header="Mã Scan (Product)" Binding="{Binding ScannedCode}" Width="150" ElementStyle="{StaticResource BoldStyle}" />
+                    <DataGridTextColumn Header="Tên Sản Phẩm" Binding="{Binding ProductName}" Width="140" ElementStyle="{StaticResource BoldStyle}" />
+                    <DataGridTextColumn Header="Tệp Job" Binding="{Binding JobFilePath}" Width="120" />
+                    <DataGridTemplateColumn Header="Ảnh Output" Width="95">
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate>
+                                <Button Content="🖼️ Xem Ảnh" 
+                                        Click="ViewOutputImageBtn_Click"
+                                        Padding="6,2" Height="22" FontSize="11"
+                                        ToolTip="{Binding OutputImagePath}"
+                                        HorizontalAlignment="Center" VerticalAlignment="Center" />
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
+                    <DataGridTextColumn Header="Tra cứu DB" Binding="{Binding Message}" Width="90" />
+                    <DataGridTextColumn Header="Ghi DB" Binding="{Binding DbLogStatus}" Width="80" />
+                    <DataGridTemplateColumn Header="KQ Kiểm Tra" Width="110">
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate>
+                                <Border Background="{Binding ResultBrushHex}" CornerRadius="3" Padding="6,2" HorizontalAlignment="Center">
+                                    <TextBlock Text="{Binding InspectResult}" Foreground="White" FontWeight="Bold" FontSize="11" VerticalAlignment="Center" HorizontalAlignment="Center" />
+                                </Border>
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
+                    <DataGridTextColumn Header="Chi Tiết Lỗi / Thông Số Tool" Binding="{Binding InspectDetails}" Width="*">
+                        <DataGridTextColumn.CellStyle>
+                            <Style TargetType="DataGridCell" BasedOn="{StaticResource {x:Type DataGridCell}}">
+                                <Setter Property="ToolTip" Value="{Binding InspectDetails}" />
+                            </Style>
+                        </DataGridTextColumn.CellStyle>
+                    </DataGridTextColumn>
+                </DataGrid.Columns>
+            </DataGrid>
+        </Border>
+
+        <!-- Bottom Actions Bar -->
+        <Border Grid.Row="2" Margin="0,10,0,0" Padding="0,6,0,0" BorderThickness="0,1,0,0" BorderBrush="{DynamicResource BorderBrush}">
+            <DockPanel LastChildFill="False">
+                <TextBlock Text="💡 Mẹo: Nhấp đúp (Double-click) vào bất kỳ dòng nào để xem màn hình chi tiết đo đạc và ảnh kết quả."
+                           Foreground="{DynamicResource TextMutedBrush}"
+                           VerticalAlignment="Center"
+                           FontSize="11.5"
+                           DockPanel.Dock="Left" />
+                <StackPanel Orientation="Horizontal" DockPanel.Dock="Right">
+                    <Button Content="🔍 Xem Chi Tiết" Click="BtnViewDetail_Click" Padding="14,6" Margin="0,0,8,0" FontWeight="SemiBold" />
+                    <Button Content="❌ Đóng (ESC)" Click="BtnClose_Click" Padding="14,6" Width="100" IsCancel="True" />
+                </StackPanel>
+            </DockPanel>
+        </Border>
+    </Grid>
+</Window>

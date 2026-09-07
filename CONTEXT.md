@@ -46,6 +46,77 @@
 ### ImageSource và preview
 
 - Lưu template cho Origin, Point và SurfaceCompare hoạt động với nguồn ảnh ImageSource.
+- **Bổ Sung CheckBox "Chế Độ Chỉ Bắt Origin" Trong OQC Scanner (Task 318)**:
+  - **Hiện Tượng & Yêu Cầu Người Dùng**:
+    - Trong tab OQC Scanner, bổ sung 1 CheckBox *"Chế độ chỉ bắt Origin"* (mặc định: Checked / Bật).
+    - Khi Checked: Nếu bắt được Origin đạt tiêu chuẩn thì toàn bộ hệ thống đánh giá hiển thị kết quả là OK (PASS), ngược lại nếu không bắt được Origin hoặc Origin không đạt thì hiển thị NG, cho dù các hạng mục đo đạc/công cụ kiểm tra khác có OK hay NG đi nữa.
+    - Khi Unchecked: Đánh giá tổng hợp theo toàn bộ các công cụ kiểm tra (như trước đó).
+  - **Giải Pháp Kỹ Thuật Đã Triển Khai**:
+    1. *Cấu hình bền vững (`OqcScannerConfig.cs`)*:
+       - Thêm thuộc tính `public bool OnlyOriginMode { get; set; } = true;` với giá trị mặc định là `true`.
+       - Tự động lưu trữ và nạp lại qua JSON cấu hình `_oqcService.SaveConfig` / `LoadConfig`.
+    2. *Giao diện người dùng (`OqcScannerView.xaml`)*:
+       - Thêm CheckBox *"🎯 Chỉ Bắt Origin"* vào cụm công cụ điều khiển trên thanh Header (bên cạnh *"⚡ Auto Run"* và *"🔫 Đầu Scanner"*).
+       - Ràng buộc TwoWay với thuộc tính `OnlyOriginMode`, có Tooltip giải thích trực quan: *"Chế độ chỉ bắt Origin: Khi bật, nếu bắt được origin đạt tiêu chuẩn thì hiển thị OK, ngược lại hiển thị NG (cho dù các hạng mục kiểm tra khác có OK hay NG đi nữa). Mặc định: Bật."*
+    3. *Logic điều phối kết quả trong ViewModel (`OqcScannerViewModel.cs` & `OqcScannerViewModel.Settings.cs`)*:
+       - Thuộc tính `[ObservableProperty] private bool _onlyOriginMode = true;`.
+       - Hàm sự kiện `OnOnlyOriginModeChanged(bool value)` tự động lưu trạng thái vào file cấu hình OQC.
+       - Trong `HandleInspectionCompletedAsync`:
+         - Nếu `OnlyOriginMode == true`:
+           - Kiểm tra `isOriginPass = result.Origin != null && result.Origin.Pass`.
+           - Gán `effectivePass = isOriginPass`.
+           - Nếu `isOriginPass`: Trạng thái là PASS (OK), màu xanh `#2E7D32`, Big Result hiển thị PASS cỡ cực đại trên nền xanh `#1B5E20`, ghi chú tóm tắt *"Origin: ĐẠT ({score}) | Chế độ chỉ bắt Origin"*, ẩn cảnh báo lỗi NG.
+           - Nếu `!isOriginPass`: Trạng thái là NG (LỖI), màu đỏ `#D32F2F`, Big Result hiển thị NG trên nền đỏ `#B71C1C`, hiển thị chi tiết nguyên nhân *"Origin không đạt tiêu chuẩn (Score < MinScore)!"* hoặc *"Không tìm thấy Origin!"*.
+         - Nếu `OnlyOriginMode == false`: Giữ nguyên đánh giá tổng hợp `effectivePass = result.Pass`.
+         - Đồng bộ `result.Pass = effectivePass` trước khi ghi log CSDL (`LogInspectionResultAsync`) và kích hoạt kịch bản nháy đèn cảnh báo NG (`PlayNgPatternAsync`), đảm bảo toàn bộ hệ thống đồng nhất tuyệt đối.
+  - **Kiểm Thử & Xác Minh**:
+    - Bổ sung bài kiểm thử tự động `TestOqcOnlyOriginMode` (Test 6) trong `TestExtractApp/OqcLiveViewOnJobLoadTests.cs`:
+      - Case A (Origin PASS, Tool khác NG): `OnlyOriginMode = true` -> `effectivePass = true` (OK/PASS) -> PASSED.
+      - Case B (Origin NG, Tool khác OK): `OnlyOriginMode = true` -> `effectivePass = false` (NG) -> PASSED.
+      - Case C (Origin null): `OnlyOriginMode = true` -> `effectivePass = false` (NG) -> PASSED.
+      - Case Normal (`OnlyOriginMode = false`): Tuân thủ `result.Pass` (NG) -> PASSED.
+      - Kiểm tra giá trị mặc định là `true` và tính toàn vẹn JSON Serialization/Deserialization -> PASSED.
+    - dotnet build VisionInspectionApp.slnx: 0 errors.
+    - dotnet run --project TestExtractApp: 100% PASSED toàn bộ test suite.
+
+- **Tách Lịch Sử Quét Mã OQC Thành Cửa Sổ Riêng, Thiết Kế Bố Cục 50/50 Hiển Thị Kết Quả OK/NG Cực Lớn & Chi Tiết Toàn Bộ Phép Đo Kèm Cột Over Spec (Task 317)**:
+  - **Hiện Tượng & Yêu Cầu Người Dùng**:
+    1. Trong Tab OQC Scanner, bảng *"Lịch sử quét mã gần nhất"* chuyển thành một cửa sổ riêng biệt.
+    2. Tại vị trí của bảng lịch sử quét mã hiện tại, thay bằng 2 hàng tỷ lệ 50/50:
+       - Nửa trên: Hiển thị OK/NG kích thước thật to để tăng hiệu quả thị giác khi vận hành.
+       - Nửa dưới: Hiển thị chi tiết đo đạc của lần đo tương ứng (bảng chi tiết đo đạc).
+    3. Tại danh sách chi tiết toàn bộ phép đo, thêm cột *"Over spec"* sau cột giá trị đo hiển thị mức chênh lệch với cận trên (nếu vượt cận trên) hoặc với cận dưới (nếu vượt cận dưới), kèm cột mô tả là vượt cận trên hay vượt cận dưới (áp dụng cho các phép đo ra số).
+  - **Giải Pháp Kỹ Thuật Đã Triển Khai**:
+    1. *Tách cửa sổ riêng Lịch Sử Quét Mã (`OqcScanHistoryWindow.xaml` & `.cs`)*:
+       - Tạo mới hoàn chỉnh cửa sổ riêng `OqcScanHistoryWindow` quản lý danh sách toàn bộ lịch sử quét mã.
+       - Tích hợp ô lọc tìm kiếm nhanh `TxtSearchFilter` (theo mã scan, tên sản phẩm, kết quả, chi tiết lỗi), tự động đếm số bản ghi hiển thị.
+       - Đầy đủ nút chức năng: Xuất Excel (CSV UTF-8 BOM), Xóa lịch sử (kèm xác nhận), Xem chi tiết (`OqcScanDetailDialog`), Xem ảnh kết quả phóng to.
+       - Tích hợp mở nhanh qua nút *"📜 Mở Cửa Sổ Lịch Sử Quét Mã..."* trên OQC Scanner.
+    2. *Thiết kế bố cục 2 hàng 50/50 tối ưu thị giác trên OQC Scanner (`OqcScannerView.xaml`)*:
+       - *Hàng 0 (Nửa trên 50%)*: GroupBox *"🎯 KẾT QUẢ ĐÁNH GIÁ (INSPECTION JUDGEMENT)"*.
+         - Chữ OK / NG / PASS kích thước cực đại (Font size 76pt ExtraBold) kèm hiệu ứng bóng đổ DropShadowEffect, màu nền và viền biến thiên tương ứng: Xanh lá đậm `#1B5E20` khi PASS, Đỏ thẫm `#B71C1C` khi NG, Xám `#1E293B` khi READY.
+         - Thông tin tóm tắt kết quả đo kiểm (Sản phẩm, Mã barcode, Số lượng phép đo Đạt/Lỗi, Thời gian).
+         - Khối cảnh báo đỏ chi tiết lỗi khi có phép đo bị NG (`LastNgDetails`).
+         - Nút xem nhanh ảnh output và nút mở cửa sổ lịch sử quét mã.
+       - *Hàng 1*: `GridSplitter` (Height 6px) cho phép người vận hành co giãn tỷ lệ giữa 2 nửa linh hoạt.
+       - *Hàng 2 (Nửa dưới 50%)*: GroupBox *"📊 CHI TIẾT CÁC PHÉP ĐO (MEASUREMENT DETAILS & SPECS)"*.
+         - DataGrid hiển thị bảng phép đo của lần đo hiện tại: `#`, `Tên Phép Đo`, `Loại Tool`, `Tiêu Chuẩn`, `Dung Sai`, `Giới Hạn [Min~Max]`, `Giá Trị Đo`, `Over Spec`, `Mô Tả Vượt Cận`, `Đánh Giá`.
+         - Nút mở cửa sổ chi tiết đầy đủ kèm xem ảnh zoom & pan (`ViewLatestScanDetailCommand`).
+    3. *Tính toán Over Spec & Mô Tả Vượt Cận (`OqcScannerConfig.cs` & `OqcMeasurementDetail`)*:
+       - Bổ sung `OverSpecAmount` (`double?`): Mức chênh lệch số thực với cận trên hoặc cận dưới.
+       - Bổ sung `FormattedOverSpec` (`string`): Định dạng dấu `+Δ Unit` (nếu vượt cận trên), `-Δ Unit` (nếu vượt cận dưới), hoặc `"-"` (nếu trong tiêu chuẩn).
+       - Bổ sung `OverSpecDescription` (`string`): Trực quan `"Vượt cận trên"`, `"Vượt cận dưới"`, hoặc `"Đạt"`.
+       - Bổ sung `OverSpecBrushHex` (`string`): Màu đỏ `#D32F2F` khi vượt cận, màu xanh `#4CAF50` khi đạt, màu xám `#888888` khi không áp dụng.
+       - Cập nhật hiển thị 2 cột mới đồng bộ trên cả DataGrid nửa dưới OQC Scanner và hộp thoại `OqcScanDetailDialog.xaml`.
+    4. *Logic ViewModel (`OqcScannerViewModel.cs`)*:
+       - Thêm các thuộc tính Observable: `BigResultStatusText`, `BigResultBackgroundBrush`, `BigResultBorderBrush`, `BigResultForegroundBrush`, `LastResultSummary`, `LastNgDetails`, `HasLastNgDetails`, `CurrentMeasurementDetails`, `LatestScanEntry`.
+       - Thêm RelayCommands: `OpenScanHistoryWindowCommand`, `ViewLatestOutputImageCommand`, `ViewLatestScanDetailCommand`.
+       - Tự động cập nhật Big Result và danh sách chi tiết ngay khi chạy kiểm tra xong, khi nạp lại lịch sử, và reset sạch khi xóa lịch sử.
+  - **Kiểm Thử & Xác Minh**:
+    - Bổ sung bài kiểm thử tự động `TestOqcMeasurementOverSpecCalculation` (Test 5) trong `TestExtractApp/OqcLiveViewOnJobLoadTests.cs`: Kiểm tra chuẩn xác 4 trường hợp (Đạt, Vượt cận trên, Vượt cận dưới, Phép đo phi số) -> 100% PASSED.
+    - dotnet build VisionInspectionApp.slnx: 0 errors.
+    - dotnet run --project TestExtractApp: 100% PASSED toàn bộ test suite.
+
 - **Bổ Sung CheckBox Cưỡng Chế Áp Dụng Global Calib (Nếu Có) Trong Chessboard Calibration & Cơ Chế Ghi Đè Toàn Bộ Hệ Thống (Task 316)**:
   - **Hiện Tượng & Yêu Cầu Người Dùng**:
     - Trong cửa sổ Chessboard Calibration, thêm một CheckBox "Cưỡng chế áp dụng global calib nếu có" ở gần nút "Set As global Calib".

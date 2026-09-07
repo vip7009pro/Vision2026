@@ -72,29 +72,4 @@ public partial class OqcScannerView : UserControl
             }
         }
     }
-
-    private void HistoryDataGrid_MouseDoubleClick(object sender, MouseButtonEventArgs e)
-    {
-        if (DataContext is ViewModels.OqcScannerViewModel vm && HistoryDataGrid.SelectedItem is VisionInspectionApp.Models.OqcScanHistoryEntry selected)
-        {
-            vm.ExecuteOpenScanDetail(selected);
-        }
-    }
-
-    private void ViewDetailBtn_Click(object sender, RoutedEventArgs e)
-    {
-        if (DataContext is ViewModels.OqcScannerViewModel vm)
-        {
-            var selected = HistoryDataGrid.SelectedItem as VisionInspectionApp.Models.OqcScanHistoryEntry;
-            vm.ExecuteOpenScanDetail(selected);
-        }
-    }
-
-    private void ViewOutputImageBtn_Click(object sender, RoutedEventArgs e)
-    {
-        if (sender is Button btn && btn.DataContext is VisionInspectionApp.Models.OqcScanHistoryEntry entry && DataContext is ViewModels.OqcScannerViewModel vm)
-        {
-            vm.ExecuteOpenScanDetail(entry);
-        }
-    }
 }

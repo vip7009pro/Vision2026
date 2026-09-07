@@ -157,6 +157,33 @@
                             <DataGridTextColumn Header="Giới Hạn [Min~Max]" Binding="{Binding FormattedRange}" Width="1.2*" ElementStyle="{StaticResource CenterAlignedStyle}" />
                             <DataGridTextColumn Header="Giá Trị Đo" Binding="{Binding FormattedResult}" Width="1.2*" ElementStyle="{StaticResource BoldRightAlignedStyle}" />
 
+                            <!-- Over Spec Column -->
+                            <DataGridTemplateColumn Header="Over Spec" Width="1.1*">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <TextBlock Text="{Binding FormattedOverSpec}"
+                                                   Foreground="{Binding OverSpecBrushHex}"
+                                                   FontWeight="Bold"
+                                                   HorizontalAlignment="Right"
+                                                   VerticalAlignment="Center"
+                                                   Margin="0,0,6,0" />
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
+
+                            <!-- Over Spec Description Column -->
+                            <DataGridTemplateColumn Header="Mô Tả Vượt Cận" Width="1.2*">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <TextBlock Text="{Binding OverSpecDescription}"
+                                                   Foreground="{Binding OverSpecBrushHex}"
+                                                   FontWeight="SemiBold"
+                                                   HorizontalAlignment="Center"
+                                                   VerticalAlignment="Center" />
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
+
                             <!-- Judge Column with Color Badge -->
                             <DataGridTemplateColumn Header="Đánh Giá" Width="80">
                                 <DataGridTemplateColumn.CellTemplate>
