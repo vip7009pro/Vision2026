@@ -57,6 +57,8 @@
             <TabItem Header="🔄 Kiểm Tra &amp; Cập Nhật">
                 <Grid Margin="4,10,4,4">
                     <Grid.RowDefinitions>
+                        <!-- Error Banner Row -->
+                        <RowDefinition Height="Auto" />
                         <!-- Version Cards Row -->
                         <RowDefinition Height="Auto" />
                         <!-- Release Notes Section -->
@@ -65,8 +67,48 @@
                         <RowDefinition Height="Auto" />
                     </Grid.RowDefinitions>
 
+                    <!-- Last Update Error Alert Banner -->
+                    <Border Grid.Row="0"
+                            Visibility="{Binding HasLastUpdateError, Converter={StaticResource BoolToVis}}"
+                            Background="#451A1A"
+                            BorderBrush="#EF4444"
+                            BorderThickness="1.5"
+                            CornerRadius="6"
+                            Padding="12,10"
+                            Margin="0,0,0,10">
+                        <DockPanel LastChildFill="True">
+                            <StackPanel Orientation="Horizontal" DockPanel.Dock="Right" VerticalAlignment="Center">
+                                <Button Content="📄 Xem Chi Tiết Lỗi"
+                                        Command="{Binding OpenUpdateErrorLogCommand}"
+                                        Background="#DC2626"
+                                        Foreground="White"
+                                        FontWeight="Bold"
+                                        Padding="10,4"
+                                        Margin="0,0,6,0"
+                                        ToolTip="Mở tệp nhật ký lỗi updater_error.log bằng Notepad" />
+                                <Button Content="✕ Đóng"
+                                        Command="{Binding DismissUpdateErrorCommand}"
+                                        Background="Transparent"
+                                        Foreground="#FCA5A5"
+                                        BorderBrush="#7F1D1D"
+                                        Padding="8,4" />
+                            </StackPanel>
+                            <StackPanel VerticalAlignment="Center">
+                                <TextBlock Text="⚠️ LẦN CÀI ĐẶT CẬP NHẬT TRƯỚC ĐÃ PHÁT SINH SỰ CỐ (ĐÃ KHÔI PHỤC BẢN CŨ)"
+                                           FontWeight="Bold"
+                                           FontSize="12"
+                                           Foreground="#FCA5A5" />
+                                <TextBlock Text="{Binding LastUpdateErrorSummary}"
+                                           FontSize="11.5"
+                                           Foreground="#FECACA"
+                                           TextTrimming="CharacterEllipsis"
+                                           Margin="0,2,8,0" />
+                            </StackPanel>
+                        </DockPanel>
+                    </Border>
+
                     <!-- Version Comparison Cards -->
-                    <Grid Grid.Row="0" Margin="0,0,0,10">
+                    <Grid Grid.Row="1" Margin="0,0,0,10">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*" />
                             <ColumnDefinition Width="30" />
@@ -109,7 +151,7 @@
                     </Grid>
 
                     <!-- Release Notes Box -->
-                    <GroupBox Grid.Row="1" Header="📝 GHI CHÚ PHÁT HÀNH &amp; TÍNH NĂNG MỚI" Foreground="{DynamicResource TextBrush}" Padding="6">
+                    <GroupBox Grid.Row="2" Header="📝 GHI CHÚ PHÁT HÀNH &amp; TÍNH NĂNG MỚI" Foreground="{DynamicResource TextBrush}" Padding="6">
                         <Border Background="{DynamicResource PanelAltBackgroundBrush}"
                                 BorderBrush="{DynamicResource BorderBrush}"
                                 BorderThickness="1"
@@ -125,7 +167,7 @@
                     </GroupBox>
 
                     <!-- Download Progress Bar (Hiển thị khi đang tải) -->
-                    <Border Grid.Row="2"
+                    <Border Grid.Row="3"
                             Visibility="{Binding IsDownloading, Converter={StaticResource BoolToVis}}"
                             Background="{DynamicResource PanelBackgroundBrush}"
                             BorderBrush="{DynamicResource BorderBrush}"

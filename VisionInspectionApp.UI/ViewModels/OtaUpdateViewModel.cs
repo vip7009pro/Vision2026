@@ -72,6 +72,12 @@ public partial class OtaUpdateViewModel : ObservableObject
     [ObservableProperty]
     private bool _autoCheckOnStartup = true;
 
+    [ObservableProperty]
+    private bool _hasLastUpdateError = false;
+
+    [ObservableProperty]
+    private string _lastUpdateErrorSummary = "";
+
     public event Action? RequestClose;
 
     public OtaUpdateViewModel(IOtaUpdateService otaService, GlobalAppSettingsService settingsService, IOtaPublisherService? publisherService = null)
@@ -87,6 +93,7 @@ public partial class OtaUpdateViewModel : ObservableObject
         AutoCheckOnStartup = otaCfg.AutoCheckOnStartup;
 
         InitializePublisher();
+        CheckLastUpdateError();
     }
 
     [RelayCommand]
@@ -281,6 +288,71 @@ public partial class OtaUpdateViewModel : ObservableObject
         _settingsService.Save();
         StatusMessage = "Đã lưu cài đặt OTA Update thành công.";
         StatusColorHex = "#4ADE80";
+    }
+
+    public void CheckLastUpdateError()
+    {
+        try
+        {
+            string baseDir = AppDomain.CurrentDomain.BaseDirectory;
+            string logPath = Path.Combine(baseDir, "updater_error.log");
+            if (File.Exists(logPath))
+            {
+                string content = File.ReadAllText(logPath);
+                // Lấy dòng thông báo lỗi
+                string firstLine = "Lần cài đặt cập nhật gần nhất đã phát sinh lỗi và được khôi phục về bản cũ an toàn.";
+                var lines = content.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
+                for (int i = 0; i < lines.Length; i++)
+                {
+                    if (lines[i].Contains("THÔNG BÁO LỖI:", StringComparison.OrdinalIgnoreCase) && i + 1 < lines.Length)
+                    {
+                        firstLine = lines[i + 1].Trim();
+                        break;
+                    }
+                }
+                LastUpdateErrorSummary = firstLine;
+                HasLastUpdateError = true;
+                StatusMessage = $"⚠️ Lỗi cập nhật lần trước: {firstLine}";
+                StatusColorHex = "#F59E0B";
+            }
+        }
+        catch { }
+    }
+
+    [RelayCommand]
+    public void OpenUpdateErrorLog()
+    {
+        try
+        {
+            string logPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "updater_error.log");
+            if (File.Exists(logPath))
+            {
+                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                {
+                    FileName = logPath,
+                    UseShellExecute = true
+                });
+            }
+        }
+        catch { }
+    }
+
+    [RelayCommand]
+    public void DismissUpdateError()
+    {
+        try
+        {
+            string logPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "updater_error.log");
+            if (File.Exists(logPath))
+            {
+                File.Delete(logPath);
+            }
+        }
+        catch { }
+        HasLastUpdateError = false;
+        LastUpdateErrorSummary = "";
+        StatusMessage = "Sẵn sàng kiểm tra phiên bản mới.";
+        StatusColorHex = "#94A3B8";
     }
 
     [RelayCommand]

@@ -269,7 +269,7 @@ public class OtaUpdateService : IOtaUpdateService
     {
         try
         {
-            string appDir = AppDomain.CurrentDomain.BaseDirectory;
+            string appDir = AppDomain.CurrentDomain.BaseDirectory.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
             string updaterPath = Path.Combine(appDir, "VisionUpdater.exe");
 
             if (!File.Exists(updaterPath))
@@ -290,10 +290,16 @@ public class OtaUpdateService : IOtaUpdateService
             string currentExe = Environment.ProcessPath ?? Path.Combine(appDir, "VisionInspectionApp.UI.exe");
             int pid = Environment.ProcessId;
 
+            // Loại bỏ dấu gạch chéo ngược ở cuối để tránh Windows escape dấu ngoặc kép \"
+            string safeAppDir = appDir.TrimEnd('\\', '/');
+            string safeZipPath = zipPackagePath.TrimEnd('\\', '/');
+            string safeExePath = currentExe.TrimEnd('\\', '/');
+
             var startInfo = new ProcessStartInfo
             {
                 FileName = updaterPath,
-                Arguments = $"--pid {pid} --package \"{zipPackagePath}\" --target \"{appDir}\" --restart \"{currentExe}\"",
+                Arguments = $"--pid {pid} --package \"{safeZipPath}\" --target \"{safeAppDir}\" --restart \"{safeExePath}\"",
+                WorkingDirectory = safeAppDir,
                 UseShellExecute = true,
                 CreateNoWindow = false
             };

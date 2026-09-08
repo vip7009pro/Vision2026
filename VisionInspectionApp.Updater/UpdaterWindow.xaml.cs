@@ -31,15 +31,31 @@ public partial class UpdaterWindow : Window
             }
             else if (string.Equals(args[i], "--package", StringComparison.OrdinalIgnoreCase) && i + 1 < args.Length)
             {
-                _packageZipPath = args[++i];
+                _packageZipPath = args[++i].Trim('"', ' ');
             }
             else if (string.Equals(args[i], "--target", StringComparison.OrdinalIgnoreCase) && i + 1 < args.Length)
             {
-                _targetAppDir = args[++i];
+                string targetVal = args[++i].Trim('"', ' ');
+                // Phòng ngừa lỗi Windows escape khi đường dẫn thư mục kết thúc bằng \"
+                int restartIdx = targetVal.IndexOf("--restart", StringComparison.OrdinalIgnoreCase);
+                if (restartIdx >= 0)
+                {
+                    string extractedTarget = targetVal.Substring(0, restartIdx).Trim('"', ' ', '\\', '/');
+                    string extractedRestart = targetVal.Substring(restartIdx + "--restart".Length).Trim('"', ' ');
+                    _targetAppDir = extractedTarget;
+                    if (string.IsNullOrWhiteSpace(_restartExePath))
+                    {
+                        _restartExePath = extractedRestart;
+                    }
+                }
+                else
+                {
+                    _targetAppDir = targetVal.TrimEnd('\\', '/');
+                }
             }
             else if (string.Equals(args[i], "--restart", StringComparison.OrdinalIgnoreCase) && i + 1 < args.Length)
             {
-                _restartExePath = args[++i];
+                _restartExePath = args[++i].Trim('"', ' ');
             }
         }
     }
@@ -90,14 +106,20 @@ public partial class UpdaterWindow : Window
             SetStatus("Cập nhật thành công!", "Đang khởi động lại ứng dụng Vision System...", 100);
             await Task.Delay(800);
 
-            if (!string.IsNullOrWhiteSpace(_restartExePath) && File.Exists(_restartExePath))
+            bool restarted = RestartMainApplication("--updated");
+            if (!restarted)
             {
-                Process.Start(new ProcessStartInfo
-                {
-                    FileName = _restartExePath,
-                    UseShellExecute = true,
-                    Arguments = "--updated"
-                });
+                MessageBox.Show(
+                    this,
+                    "Bản cập nhật đã được cài đặt thành công 100%!\n\nTuy nhiên hệ thống không thể tự động khởi chạy lại ứng dụng.\nVui lòng mở lại ứng dụng từ màn hình Desktop hoặc thư mục cài đặt.",
+                    "Cập Nhật Thành Công - Vision Updater",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Information);
+            }
+            else
+            {
+                // Cho phép tiến trình mới kịp khởi động trước khi Updater tắt hoàn toàn
+                await Task.Delay(600);
             }
 
             // Xóa file zip tạm sau khi thành công
@@ -119,23 +141,164 @@ public partial class UpdaterWindow : Window
                 catch { }
             }
 
-            await Task.Delay(2500);
+            // Ghi nhật ký lỗi chi tiết ra file updater_error.log
+            string errorLogPath = Path.Combine(_targetAppDir, "updater_error.log");
+            string errorLogContent = $@"================================================================================
+CMS VINA VISION UPDATER - BÁO CÁO LỖI CẬP NHẬT
+================================================================================
+Thời gian: {DateTime.Now:yyyy-MM-dd HH:mm:ss}
+Thư mục đích: {_targetAppDir}
+Gói cập nhật: {_packageZipPath}
+PID tiến trình chính: {_targetPid}
+Tệp khởi động lại: {_restartExePath}
+--------------------------------------------------------------------------------
+THÔNG BÁO LỖI:
+{ex.Message}
 
-            // Khởi động lại bản cũ
-            if (!string.IsNullOrWhiteSpace(_restartExePath) && File.Exists(_restartExePath))
+CHI TIẾT NGOẠI LỆ (STACK TRACE):
+{ex}
+================================================================================
+";
+            try
+            {
+                File.WriteAllText(errorLogPath, errorLogContent, System.Text.Encoding.UTF8);
+            }
+            catch { }
+
+            if (!string.IsNullOrWhiteSpace(backupDir) && Directory.Exists(backupDir))
             {
                 try
                 {
-                    Process.Start(new ProcessStartInfo
-                    {
-                        FileName = _restartExePath,
-                        UseShellExecute = true
-                    });
+                    File.WriteAllText(Path.Combine(backupDir, "updater_error.log"), errorLogContent, System.Text.Encoding.UTF8);
                 }
                 catch { }
             }
 
+            // Hiển thị hộp thoại thông báo lỗi chi tiết cho người dùng biết rõ nguyên nhân
+            try
+            {
+                MessageBox.Show(
+                    this,
+                    $"Quá trình cài đặt bản cập nhật gặp sự cố và hệ thống đã tự động khôi phục (Restore) lại phiên bản cũ an toàn.\n\n" +
+                    $"NGUYÊN NHÂN LỖI CỤ THỂ:\n{ex.Message}\n\n" +
+                    $"Nhật ký lỗi chi tiết đã được lưu tại:\n{errorLogPath}",
+                    "Lỗi Cài Đặt Bản Cập Nhật OTA - Vision Updater",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Warning);
+            }
+            catch
+            {
+                // Fallback nếu không có window context
+                MessageBox.Show(
+                    $"Quá trình cài đặt bản cập nhật gặp sự cố và hệ thống đã tự động khôi phục (Restore) lại phiên bản cũ an toàn.\n\n" +
+                    $"NGUYÊN NHÂN LỖI CỤ THỂ:\n{ex.Message}\n\n" +
+                    $"Nhật ký lỗi chi tiết đã được lưu tại:\n{errorLogPath}",
+                    "Lỗi Cài Đặt Bản Cập Nhật OTA - Vision Updater",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Warning);
+            }
+
+            // Khởi động lại bản cũ
+            RestartMainApplication("--update-failed");
+
             Environment.Exit(1);
+        }
+    }
+
+    private string ResolveRestartExecutablePath()
+    {
+        if (string.IsNullOrWhiteSpace(_targetAppDir) || !Directory.Exists(_targetAppDir))
+        {
+            _targetAppDir = AppDomain.CurrentDomain.BaseDirectory.TrimEnd('\\', '/');
+        }
+
+        // 1. Kiểm tra nếu _restartExePath đã được truyền và tồn tại
+        if (!string.IsNullOrWhiteSpace(_restartExePath))
+        {
+            string clean = _restartExePath.Trim('"', ' ');
+            if (File.Exists(clean)) return Path.GetFullPath(clean);
+
+            string combined = Path.Combine(_targetAppDir, clean);
+            if (File.Exists(combined)) return Path.GetFullPath(combined);
+        }
+
+        // 2. Tìm file VisionInspectionApp.UI.exe trong thư mục target
+        string mainAppPath = Path.Combine(_targetAppDir, "VisionInspectionApp.UI.exe");
+        if (File.Exists(mainAppPath))
+        {
+            return Path.GetFullPath(mainAppPath);
+        }
+
+        // 3. Quét các file .exe khác trong _targetAppDir, ưu tiên file có chữ Vision hoặc Inspection
+        try
+        {
+            var exes = Directory.GetFiles(_targetAppDir, "*.exe", SearchOption.TopDirectoryOnly);
+            foreach (var exe in exes)
+            {
+                string name = Path.GetFileName(exe);
+                if (name.StartsWith("VisionUpdater", StringComparison.OrdinalIgnoreCase)) continue;
+                if (name.Contains("Vision", StringComparison.OrdinalIgnoreCase) || name.Contains("Inspection", StringComparison.OrdinalIgnoreCase))
+                {
+                    return Path.GetFullPath(exe);
+                }
+            }
+
+            foreach (var exe in exes)
+            {
+                string name = Path.GetFileName(exe);
+                if (!name.StartsWith("VisionUpdater", StringComparison.OrdinalIgnoreCase))
+                {
+                    return Path.GetFullPath(exe);
+                }
+            }
+        }
+        catch { }
+
+        return "";
+    }
+
+    private bool RestartMainApplication(string arguments)
+    {
+        string exeToStart = ResolveRestartExecutablePath();
+        if (string.IsNullOrWhiteSpace(exeToStart) || !File.Exists(exeToStart))
+        {
+            return false;
+        }
+
+        string workDir = !string.IsNullOrWhiteSpace(_targetAppDir) && Directory.Exists(_targetAppDir)
+            ? _targetAppDir
+            : (Path.GetDirectoryName(exeToStart) ?? AppDomain.CurrentDomain.BaseDirectory);
+
+        try
+        {
+            var psi = new ProcessStartInfo
+            {
+                FileName = exeToStart,
+                WorkingDirectory = workDir,
+                Arguments = arguments,
+                UseShellExecute = true
+            };
+            var proc = Process.Start(psi);
+            return proc != null;
+        }
+        catch
+        {
+            try
+            {
+                var psiFallback = new ProcessStartInfo
+                {
+                    FileName = exeToStart,
+                    WorkingDirectory = workDir,
+                    Arguments = arguments,
+                    UseShellExecute = false
+                };
+                var proc = Process.Start(psiFallback);
+                return proc != null;
+            }
+            catch
+            {
+                return false;
+            }
         }
     }
 
@@ -162,6 +325,36 @@ public partial class UpdaterWindow : Window
         catch (ArgumentException)
         {
             // Process đã thoát từ trước
+        }
+        catch { }
+
+        // Đảm bảo không còn bất kỳ tiến trình VisionInspectionApp hoặc LightingServer nào khác đang chạy ngầm
+        try
+        {
+            foreach (var p in Process.GetProcessesByName("VisionInspectionApp.UI"))
+            {
+                try
+                {
+                    if (!p.HasExited)
+                    {
+                        p.Kill();
+                        p.WaitForExit(3000);
+                    }
+                }
+                catch { }
+            }
+            foreach (var p in Process.GetProcessesByName("VisionInspectionApp.LightingServer"))
+            {
+                try
+                {
+                    if (!p.HasExited)
+                    {
+                        p.Kill();
+                        p.WaitForExit(3000);
+                    }
+                }
+                catch { }
+            }
         }
         catch { }
     }
@@ -195,8 +388,6 @@ public partial class UpdaterWindow : Window
             int total = archive.Entries.Count;
             int current = 0;
 
-            string myExeName = Process.GetCurrentProcess().MainModule?.ModuleName ?? "VisionUpdater.exe";
-
             foreach (var entry in archive.Entries)
             {
                 current++;
@@ -207,8 +398,8 @@ public partial class UpdaterWindow : Window
                     continue;
                 }
 
-                // Không ghi đè chính VisionUpdater đang chạy
-                if (string.Equals(entry.Name, myExeName, StringComparison.OrdinalIgnoreCase))
+                // Không ghi đè các tệp của chính VisionUpdater đang chạy (.exe, .dll, .runtimeconfig.json, v.v.)
+                if (entry.Name.StartsWith("VisionUpdater", StringComparison.OrdinalIgnoreCase))
                 {
                     continue;
                 }
@@ -226,9 +417,10 @@ public partial class UpdaterWindow : Window
                     Directory.CreateDirectory(parentDir);
                 }
 
-                // Thử ghi đè với retry
+                // Thử ghi đè với retry và fallback đổi tên nếu file bị khóa
                 bool success = false;
-                for (int retry = 0; retry < 5; retry++)
+                Exception? lastEx = null;
+                for (int retry = 0; retry < 6; retry++)
                 {
                     try
                     {
@@ -236,15 +428,32 @@ public partial class UpdaterWindow : Window
                         success = true;
                         break;
                     }
-                    catch (IOException)
+                    catch (IOException ioEx)
                     {
-                        System.Threading.Thread.Sleep(200);
+                        lastEx = ioEx;
+                        // Thử đổi tên tệp cũ nếu đang bị khóa (Windows NTFS cho phép đổi tên file đang mở)
+                        try
+                        {
+                            string tempOld = destinationPath + ".old_" + Guid.NewGuid().ToString("N")[..6];
+                            if (File.Exists(tempOld)) File.Delete(tempOld);
+                            File.Move(destinationPath, tempOld);
+                            entry.ExtractToFile(destinationPath, overwrite: true);
+                            success = true;
+                            break;
+                        }
+                        catch { }
+                        System.Threading.Thread.Sleep(300);
+                    }
+                    catch (Exception ex)
+                    {
+                        lastEx = ex;
+                        System.Threading.Thread.Sleep(300);
                     }
                 }
 
                 if (!success)
                 {
-                    throw new IOException($"Không thể ghi đè tệp '{destinationPath}'. Tệp có thể đang bị khóa bởi tiến trình khác.");
+                    throw new IOException($"Không thể ghi đè tệp '{destinationPath}'. Tệp có thể đang bị khóa bởi tiến trình khác. Chi tiết: {lastEx?.Message}", lastEx);
                 }
 
                 if (current % 5 == 0 || current == total)

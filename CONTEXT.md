@@ -46,6 +46,28 @@
 ### ImageSource và preview
 
 - Lưu template cho Origin, Point và SurfaceCompare hoạt động với nguồn ảnh ImageSource.
+- **Khắc Phục Lỗi Ứng Dụng Không Tự Động Khởi Động Lại Sau Khi Cập Nhật Thành Công (Task 324)**:
+  - **Nguyên nhân gốc rễ**: Khi truyền tham số qua CLI từ `OtaUpdateService.cs`, chuỗi `--target "{appDir}"` chứa dấu gạch chéo ngược ở cuối của `AppDomain.CurrentDomain.BaseDirectory` (ví dụ `C:\App\`). Windows CLI parser coi `\"` là escape cho dấu ngoặc kép, khiến giá trị của `--target` nuốt chửng toàn bộ chuỗi `--restart "C:\App\VisionInspectionApp.UI.exe"`. Kết quả là biến `_restartExePath` trong `VisionUpdater` hoàn toàn rỗng, và updater giải nén thành công xong thì tự thoát mà không bật lại app chính.
+  - **Giải pháp đã triển khai**:
+    1. Chuẩn hóa đường dẫn trong `OtaUpdateService.cs`: Dùng `TrimEnd('\\', '/')` cho `safeAppDir`, `safeZipPath`, `safeExePath` để triệt tiêu hoàn toàn trailing slash trước dấu ngoặc kép; thiết lập `WorkingDirectory = safeAppDir`.
+    2. Trong `VisionInspectionApp.Updater/UpdaterWindow.xaml.cs`:
+       - `ParseCommandLineArgs`: Bổ sung cơ chế phòng vệ kép, tự động nhận diện và bóc tách chuỗi `--restart` nếu bị Windows gộp vào `--target`.
+       - `ResolveRestartExecutablePath`: Cơ chế tự động dò tìm `VisionInspectionApp.UI.exe` hoặc các file thực thi trong thư mục cài đặt khi tham số `--restart` bị thiếu hoặc sai đường dẫn.
+       - `RestartMainApplication`: Thiết lập `WorkingDirectory` chuẩn xác cho tiến trình mới để nạp đúng cấu hình tương đối; bổ sung cơ chế fallback `UseShellExecute = false` nếu quyền hạn Windows bị hạn chế; thêm độ trễ đệm trước khi thoát để tiến trình chính kịp nạp vào RAM; hiển thị hộp thoại nhắc nhở nếu việc tự động khởi chạy bị chặn.
+  - **Kiểm thử**: Đạt 100% PASSED toàn bộ bộ kiểm thử TestExtractApp và biên dịch Release 0 lỗi.
+
+- **Khắc Phục Lỗi Cài Đặt Gói Cập Nhật OTA Tại Máy Vision Client (File Lock VisionUpdater.dll), Cơ Chế Retry Đổi Tên NTFS, Ghi Nhật Ký Lỗi updater_error.log Chi Tiết & Banner Cảnh Báo Trên UI (Task 323)**:
+  - **Nguyên nhân gốc rễ**: VisionUpdater.exe (.NET 8 CoreCLR) đang chạy nạp VisionUpdater.dll vào RAM. Gói zip cũ chứa cả VisionUpdater.dll nên khi giải nén đè lên gây ngoại lệ IOException (file đang bị khóa bởi tiến trình khác). Updater cũ rollback backup và tự thoát sau 2.5s mà không ghi file log.
+  - **Giải pháp đã thực hiện**:
+    1. Loại trừ triệt để VisionUpdater* và updater_error.log khi đóng gói zip trong OtaPublisherService.
+    2. Loại trừ VisionUpdater* khi giải nén và backup trong UpdaterWindow.xaml.cs.
+    3. Quét diệt triệt để tiến trình cũ còn treo (VisionInspectionApp.UI, LightingServer).
+    4. Cơ chế retry 6 lần kèm fallback đổi tên file cũ NTFS (.old_{uuid}) trước khi đè.
+    5. Ghi nhật ký lỗi chi tiết ra updater_error.log tại thư mục app và thư mục backup.
+    6. Hiển thị hộp thoại MessageBox.Show dừng màn hình giải thích nguyên nhân rõ ràng.
+    7. Tự động kiểm tra updater_error.log khi mở OTA Update và hiển thị Banner màu đỏ cảnh báo trên giao diện OtaUpdateDialog.xaml kèm nút xem chi tiết qua Notepad.
+  - **Kiểm thử**: Đạt 100% PASSED toàn bộ bộ kiểm thử TestExtractApp và biên dịch Release 0 lỗi.
+
 - **Bổ Sung Tab Tự Động Đóng Gói Zip & Tải Lên Server Kèm version.json Và Script Server PHP (OTA Publisher - Task 322)**:
   - **Hiện Tượng & Yêu Cầu Người Dùng**:
     - Trước đây, khi phát hành một bản cập nhật mới OTA, kỹ sư phải thực hiện hoàn toàn thủ công: mở file `.csproj` sửa số phiên bản, chạy lệnh build Release, nén zip thủ công thư mục `bin\Release\net8.0-windows`, tính mã băm SHA-256 bằng PowerShell, sửa file `version.json`, rồi upload thủ công qua FTP hoặc copy vào server.

@@ -75,6 +75,9 @@ public class OtaPublisherService : IOtaPublisherService
                     rel.StartsWith("runtimes/unix/", StringComparison.OrdinalIgnoreCase) ||
                     rel.StartsWith("runtimes/win-x86/", StringComparison.OrdinalIgnoreCase) ||
                     rel.StartsWith("runtimes/win-x86-", StringComparison.OrdinalIgnoreCase) ||
+                    rel.StartsWith("VisionUpdater", StringComparison.OrdinalIgnoreCase) ||
+                    rel.Contains("/VisionUpdater", StringComparison.OrdinalIgnoreCase) ||
+                    rel.EndsWith("updater_error.log", StringComparison.OrdinalIgnoreCase) ||
                     rel.EndsWith(".pdb", StringComparison.OrdinalIgnoreCase) ||
                     rel.EndsWith(".tmp", StringComparison.OrdinalIgnoreCase) ||
                     rel.EndsWith(".log", StringComparison.OrdinalIgnoreCase))
