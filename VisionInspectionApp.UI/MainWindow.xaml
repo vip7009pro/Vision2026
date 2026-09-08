@@ -31,6 +31,7 @@
         <KeyBinding Key="N" Modifiers="Control" Command="{Binding ToolEditor.NewGraphCommand}" />
         <KeyBinding Key="O" Modifiers="Control" Command="{Binding ToolEditor.OpenJobCommand}" />
         <KeyBinding Key="S" Modifiers="Control" Command="{Binding ToolEditor.SaveJobCommand}" />
+        <KeyBinding Key="F1" Modifiers="Control" Command="{Binding OpenDocumentationCommand}" CommandParameter="portal_readme" />
         <KeyBinding Key="F1" Command="{Binding SwitchTabCommand}" CommandParameter="0" />
         <KeyBinding Key="F2" Command="{Binding SwitchTabCommand}" CommandParameter="1" />
         <KeyBinding Key="F3" Command="{Binding SwitchTabCommand}" CommandParameter="2" />
@@ -433,6 +434,11 @@
 
                     <!-- Trợ Giúp Menu -->
                     <MenuItem Header="❓ Trợ Giúp">
+                        <MenuItem Header="📖 Trung Tâm Tài Liệu &amp; Đào Tạo (Documentation)..." Command="{Binding OpenDocumentationCommand}" CommandParameter="portal_readme" InputGestureText="Ctrl+F1" />
+                        <MenuItem Header="📋 Quy Trình Thao Tác Chuẩn SOP OQC..." Command="{Binding OpenDocumentationCommand}" CommandParameter="sop_oqc" />
+                        <MenuItem Header="🛠️ Tài Liệu Kỹ Thuật Đào Tạo Kỹ Sư Vision..." Command="{Binding OpenDocumentationCommand}" CommandParameter="eng_ch1" />
+                        <MenuItem Header="📂 Mở Thư Mục Tài Liệu (Open Docs Folder)..." Command="{Binding OpenDocsFolderCommand}" />
+                        <Separator />
                         <MenuItem Header="🔄 Kiểm Tra Bản Cập Nhật (OTA Update)..." Command="{Binding OpenOtaUpdateDialogCommand}" />
                         <Separator />
                         <MenuItem Header="ℹ️ Giới Thiệu CMS VINA Vision System..." Command="{Binding AboutCommand}" />

@@ -1,4 +1,4 @@
-# Vision Inspection App — Context & Roadmap
+﻿# Vision Inspection App — Context & Roadmap
 
 ## Mô tả
 
@@ -46,6 +46,90 @@
 ### ImageSource và preview
 
 - Lưu template cho Origin, Point và SurfaceCompare hoạt động với nguồn ảnh ImageSource.
+
+- **Khắc Phục Lỗi Hiển Thị Raw Markdown Tại Mục 2.1 Trong Tài Liệu Đào Tạo Kỹ Sư Vision Phần 3 (Unclosed Code Block Bug - Task 328)**:
+  - **Hiện Tượng & Phản Ánh Người Dùng**:
+    - Trong Tài liệu Phần 3 (`03_tool_editor_and_inspection_flow.md`), từ tiêu đề "### 2.1. So sánh 3 thuật toán Origin cốt lõi" trở xuống, toàn bộ bảng biểu, danh sách và nội dung tài liệu bị rơi vào khối đen dạng code snippet và hiển thị chuỗi markdown thô (raw text), làm hỏng trải nghiệm đọc tài liệu của người dùng.
+  - **Nguyên Nhân Gốc Rễ**:
+    - Ngay phía trên mục 2.1 xuất hiện dấu mở code block thừa (` ``` `) do quá trình chỉnh sửa text trước đó bị dính chuỗi mà không có dấu đóng tương ứng.
+    - Trình chuyển đổi Markdown sang HTML `DocumentationService.cs` ghi nhận `inCodeBlock = true`, do đó chuyển toàn bộ các dòng còn lại vào khối `<pre><code>` với `HtmlEncode`.
+  - **Giải Pháp Kỹ Thuật Đã Triển Khai**:
+    1. *Chuẩn hóa sạch sẽ tệp `03_tool_editor_and_inspection_flow.md`*:
+       - Khôi phục cấu trúc chuẩn mực của khối sơ đồ ASCII Origin, đóng khối code chuẩn.
+       - Làm sạch đoạn văn bị dính chữ ở mục 1.
+       - Định dạng lại bảng so sánh 3 thuật toán Origin cốt lõi (`MvpShapeMatch2`, `TemplateMatch`, `FeatureBased`) hiển thị trực quan dưới dạng thẻ `<table>`.
+    2. *Tăng Cường Cơ Chế Kiểm Thử Tự Động Phòng Ngừa*:
+       - Bổ sung cơ chế phát hiện lỗi unclosed code block vào `TestResolveDocsDirectoryAndAvailableDocuments` trong `DocumentationSystemTests.cs`.
+       - Xác minh tự động tiêu đề `<h3>2.1. So sánh 3 thuật toán Origin cốt lõi</h3>` và thẻ `<table>` được render thành công cho tệp Phần 3.
+    3. *Kết Quả Kiểm Thử & Biên Dịch*:
+       - Toàn bộ bộ kiểm thử trong `TestExtractApp` đạt 100% PASSED.
+       - Biên dịch Solution `VisionInspectionApp.slnx` ở cấu hình Release đạt 0 Error(s).
+
+- **Nâng Cấp Hệ Thống Hiển Thị Công Thức Toán Học & Chuẩn Hóa Toàn Bộ Ký Hiệu LaTeX Trong Tài Liệu Kỹ Thuật (Task 327)**:
+  - **Hiện Tượng & Phản Ánh Người Dùng**:
+    - Trong tài liệu đào tạo và hướng dẫn sử dụng, nhiều công thức tính toán (như công thức tính hệ số quy đổi PixelsPerMm) và các biểu thức toán học vẫn ở dạng mã LaTeX thô (`$$\text{PixelsPerMm} = \frac{...}{...}$$`, `$\rightarrow$`, `$\ge 3$`, `$\le 4\text{ dB}$`, `$\pm 45^\circ$`, `$\Delta X$`, `$10.00\text{ mm}$`...).
+    - Khi người dùng đọc tài liệu trên app hoặc xem trực tiếp file `.md`, các ký tự này làm văn bản bị rối mắt, khó đọc và chưa đạt chuẩn trải nghiệm người dùng cao cấp.
+  - **Giải Pháp Kỹ Thuật Đã Triển Khai**:
+    1. *Bộ Renderer Công Thức Toán Học Thông Minh (`DocumentationService.cs`)*:
+       - Xây dựng phương thức `FormatMathBlock`: Tự động nhận diện khối công thức `$$...$$`, làm sạch các thẻ lồng nhau `\text{...}`, bóc tách vế trái, tử số, mẫu số `\frac{...}{...}` và vế phải.
+       - Render thành giao diện thẻ công thức toán học cao cấp (`math-formula-box`), tử số và mẫu số hiển thị dưới dạng phân số bảng chuẩn (`math-fraction`, `math-numerator`, `math-denominator`), căn giữa hoàn hảo, hỗ trợ tương thích 100% với WebBrowser WPF / IE engine.
+       - Thêm phương thức `CleanMathExpression` và tích hợp vào `FormatInline`: Tự động chuyển đổi các biểu thức inline math `$...$` thành các ký tự Unicode trực quan (`➔`, `↔`, `≥`, `≤`, `≈`, `±`, `°`, `×`, `Δ`, `θ`, `…`), bao bọc bởi thẻ `.math-inline` với màu sắc nổi bật.
+       - Bổ sung hệ thống CSS Math Card hiện đại cho cả Dark Mode (`#131E31` viền `#0284C7`) và Light Mode (`#F0F9FF` viền `#BAE6FD`).
+    2. *Chuẩn Hóa Trực Tiếp Tất Cả Các Tệp Markdown Trong `docs/`*:
+       - Rà soát và làm sạch toàn bộ các ký hiệu LaTeX inline rườm rà trong toàn bộ các tệp tài liệu đào tạo (`01_system_architecture_and_ui.md`, `02_camera_setup_and_calibration.md`, `03_tool_editor_and_inspection_flow.md`, `04_integration_plc_db_lighting.md`, `README.md`) và bản SOP OQC.
+       - Giúp nội dung vừa sạch sẽ, tự nhiên khi mở file `.md` bằng bất kỳ trình soạn thảo nào, vừa render cực kỳ lộng lẫy và dễ hiểu trên ứng dụng.
+    3. *Kiểm Thử & Xác Minh*:
+       - Bổ sung `TestMathFormulaAndEquationFormatting` trong `DocumentationSystemTests.cs` xác minh cấu trúc thẻ phân số và các ký hiệu Unicode. Đạt 100% PASSED toàn bộ bộ kiểm thử `TestExtractApp`.
+       - Biên dịch Solution `VisionInspectionApp.slnx` ở chế độ Release: 0 Error(s).
+
+- **Khắc Phục Lỗi Format Huy Hiệu NG Trong Cửa Sổ Hướng Dẫn Sử Dụng (Word Boundary & Bảo Vệ Tiếng Việt / Code Snippets - Task 326)**:
+  - **Hiện Tượng & Phản Ánh Người Dùng**:
+    - Trong cửa sổ hướng dẫn sử dụng (DocumentationViewerWindow), bất kỳ nơi nào có chữ "NG" đều bị bôi đỏ nền trắng, kể cả chữ "NG" nằm bên trong từ "THẲNG" (ví dụ `THẲNG` bị biến thành `THẲ` + bôi đỏ `NG`).
+    - Các từ tiếng Việt in hoa khác như "NGANG", "NGUYÊN", "HƯỚNG", "ĐƯỜNG", "KHÔNG", "ĐÚNG", "CÔNG NGHIỆP", "ÁNH SÁNG"... cũng bị cắt xén chèn thẻ badge màu đỏ làm hỏng định dạng văn bản.
+    - Yêu cầu: Chỉ format những chỗ thực sự là trạng thái / kết quả "NG" độc lập thôi.
+  - **Nguyên Nhân Gốc Rễ**:
+    - Trong `DocumentationService.cs`, hàm `FormatInline` sử dụng `text.Replace("NG", "<span class='badge-ng'>NG</span>")` thô sơ, thay thế mù quáng mọi chuỗi con "NG" bất kể nằm giữa từ vựng tiếng Việt hay trong đoạn mã inline code.
+  - **Giải Pháp Kỹ Thuật Đã Triển Khai**:
+    1. *Bảo vệ khối inline code*: Trích xuất toàn bộ `` `...` `` ra các placeholder tạm thời `__CODE_TOKEN_{i}__` kèm `WebUtility.HtmlEncode`, ngăn ngừa thẻ badge lọt vào code logic.
+    2. *Định dạng huy hiệu kết quả bằng Word Boundary Regex*:
+       - Sử dụng `Regex.Replace(text, @"\bPASS\b", "<span class='badge-pass'>PASS</span>")`.
+       - Sử dụng `Regex.Replace(text, @"\bOK\b", "<span class='badge-pass'>OK</span>")`.
+       - Sử dụng `Regex.Replace(text, @"\bNG\b", "<span class='badge-ng'>NG</span>")`.
+       - Trong .NET Regex (Unicode-aware), tất cả các nguyên âm có dấu tiếng Việt (`Ă, Ắ, Ằ, Ẳ, Ẵ, Ặ, Â, Ê, Ô, Ơ, Ư, Đ...`) đều thuộc lớp ký tự từ `\w`. Do đó, `\b` giữa `Ă` và `N` trong `THẲNG` không tồn tại; sau `G` trong `NGANG` là `A` (`\w`) nên cũng không có ranh giới từ `\b`.
+       - Nhờ đó, 100% các từ tiếng Việt ("THẲNG", "NGANG", "NGUYÊN", "HƯỚNG", "ĐƯỜNG", "KHÔNG", "ĐÚNG"...) và từ tiếng Anh ("BYPASS", "PASSWORD", "BOOKING"...) được bảo vệ nguyên vẹn tuyệt đối.
+       - Chỉ định dạng khi đứng độc lập: `kết quả NG`, `(NG)`, `PASS/NG`, `| NG |`, `**NG**`, `NG: Vượt cận trên`...
+    3. *Tối ưu CSS Badge Dark/Light Theme*: Cập nhật `.badge-pass` và `.badge-ng` hỗ trợ cả Dark và Light mode thanh lịch, chữ tương phản cao, viền mảnh bo góc 4px chuyên nghiệp.
+    4. *Kiểm Thử & Xác Minh Tự Động*: Bổ sung `TestBadgeWordBoundaryFormatting` trong `DocumentationSystemTests.cs` kiểm tra toàn diện: cấm tuyệt đối xuất hiện các thẻ span bên trong từ tiếng Việt và code block, đảm bảo 100% các vị trí NG/PASS/OK độc lập được gắn badge chuẩn xác.
+    5. *Kết Quả*: Toàn bộ test suite trong `TestExtractApp` đạt 100% PASSED; biên dịch Solution `VisionInspectionApp.slnx` ở chế độ Release đạt 0 Error(s).
+- **Biên Soạn Bộ Tài Liệu Kỹ Thuật Đào Tạo Kỹ Sư Vision, Bản SOP Thao Tác Kiểm Tra Lấy Mẫu OQC & Tích Hợp Trung Tâm Tài Liệu Trực Tiếp Trong Ứng Dụng (Task 325)**:
+  - **Hiện Tượng & Nhu Cầu Người Dùng**:
+    - Cần một bộ tài liệu kỹ thuật đào tạo chuyên sâu dành cho Kỹ sư Vision làm chủ toàn bộ nền tảng CMS VINA VISION SYSTEM (từ camera, hiệu chuẩn, graph node, thuật toán Origin, đo đạc, OverSpec, AI OCR đến tích hợp PLC, DB, Đèn và OTA).
+    - Cần một bản Quy trình Thao tác Chuẩn (SOP) kiểm tra lấy mẫu sản phẩm (Sampling Inspection) dành cho công nhân OQC tại bàn kiểm tra độc lập (không phải chạy line continuous), kèm đầy đủ hình ảnh minh họa công nghiệp trực quan, sống động, dễ hiểu.
+    - Yêu cầu người dùng: Tích hợp luôn mục Document trong phần Trợ Giúp để người dùng luôn có thể mở tài liệu ngay từ trong ứng dụng (Tài liệu là 1 phần của app).
+  - **Giải Pháp Triển Khai**:
+    1. *Hệ thống hình ảnh minh họa công nghiệp sống động (`docs/images/`)*:
+       - Sinh và nhúng 4 ảnh chất lượng cao: `oqc_station_setup.jpg` (bố trí trạm kiểm tra mẫu OQC, camera, đèn vòng, đồ gá, súng barcode, khay PASS/NG), `oqc_pass_vs_ng_screen.jpg` (so sánh màn hình kết quả PASS xanh lá vs NG đỏ thẫm kèm bảng OverSpec), `vision_tool_graph_flow.jpg` (giao diện lập trình Node Graph trên Tool Editor), `optical_calibration_target.jpg` (thiết lập bia bàn cờ hiệu chuẩn thấu kính camera).
+    2. *Bản SOP Thao Tác Chuẩn Kiểm Tra Lấy Mẫu OQC (`docs/sop/SOP_OQC_SAMPLING_INSPECTION.md`)*:
+       - Mã hiệu chuẩn công nghiệp: `SOP-OQC-VIS-01` (Phiên bản 2.0).
+       - Quy trình 6 bước chuẩn: Chuẩn bị đầu ca; Khởi động & Vào OQC Scanner (`F2`); Quét mã vạch sản phẩm; Đặt phôi vào Jig & Căn chỉnh Live View (Mẫu gốc Origin); Kích hoạt kiểm tra (`SPACE` / Foot Pedal); Đọc kết quả PASS/NG, phân loại khay hàng và xử lý cách ly khẩn cấp khi >= 2 mẫu NG liên tiếp.
+    3. *Bộ Tài Liệu Kỹ Thuật Đào Tạo Kỹ Sư Vision (`docs/training/`)*:
+       - Phân rã 4 chuyên đề chuẩn mực dưới 400 dòng/file tuân thủ Rule 5:
+         - `01_system_architecture_and_ui.md`: Kiến trúc 5 lớp Clean Architecture, bố cục 4 tab, phím tắt công nghiệp, đóng gói tệp `.job`.
+         - `02_camera_setup_and_calibration.md`: Cấu hình camera Hikrobot MVS GigE (Jumbo Frame 9014), USB DirectShow, Exposure/Gain, hiệu chuẩn 2 điểm Pixels/mm và bàn cờ Chessboard Calib khử méo thấu kính.
+         - `03_tool_editor_and_inspection_flow.md`: Thiết kế đồ thị Node Graph, làm chủ Tool Origin `MvpShapeMatch2` (3-15ms) xoay 360°, Caliper, CircleFinder RANSAC, Distance, Angle, tính toán OverSpec, AI OCR font training MVS, đọc mã 360°.
+         - `04_integration_plc_db_lighting.md`: Tích hợp PLC Mitsubishi MC Protocol 3E / MX Component, DB Manager 6 loại CSDL, Lighting Controller RS232/TCP, gán mã sản phẩm và phát hành cập nhật OTA.
+         - `README.md`: Lộ trình đào tạo kỹ sư 4 ngày với các bài thực hành thực tế.
+    4. *Cổng Tài Liệu Trung Tâm (`docs/README.md`)*: Tổng quan danh mục và liên kết toàn diện.
+    5. *Tích hợp Tài Liệu Là 1 Phần Của App (Built-in Documentation System)*:
+       - Lớp dịch vụ `DocumentationService.cs`: Tự động định vị thư mục `docs/`, chuyển đổi Markdown sang HTML với CSS đẹp mắt thích ứng Dark/Light theme, hiển thị bảng, badges, ghi chú và hình ảnh thẻ local.
+       - Cửa sổ `DocumentationViewerWindow.xaml` & `.cs`: Cửa sổ tra cứu tài liệu chuyên nghiệp, sidebar danh mục kèm thanh tìm kiếm nhanh, trình duyệt nội dung HTML `WebBrowser`, nút mở trong Chrome/Edge, mở thư mục đĩa cứng và in ấn / xuất PDF.
+       - Tích hợp vào Menu `❓ Trợ Giúp` trên `MainWindow.xaml`: Mục mở Trung tâm tài liệu (`Ctrl+F1`), mở nhanh SOP OQC, mở tài liệu Kỹ sư và mở thư mục tài liệu.
+       - Cấu hình `VisionInspectionApp.UI.csproj`: Tự động sao chép toàn bộ thư mục `docs/` vào thư mục build output và gói phát hành OTA.
+    6. *Kiểm Thử & Xác Minh*:
+       - Bổ sung bộ kiểm thử tự động `TestExtractApp/DocumentationSystemTests.cs` (4 test suite toàn diện): Kiểm tra định vị thư mục docs, tính toàn vẹn 7 tài liệu, chất lượng hình ảnh và nội dung SOP -> 100% PASSED.
+       - Biên dịch Solution Release: 0 Error(s).
+       - Toàn bộ test suite chạy lệnh `dotnet run --project TestExtractApp`: 100% PASSED.
+
 - **Khắc Phục Lỗi Ứng Dụng Không Tự Động Khởi Động Lại Sau Khi Cập Nhật Thành Công (Task 324)**:
   - **Nguyên nhân gốc rễ**: Khi truyền tham số qua CLI từ `OtaUpdateService.cs`, chuỗi `--target "{appDir}"` chứa dấu gạch chéo ngược ở cuối của `AppDomain.CurrentDomain.BaseDirectory` (ví dụ `C:\App\`). Windows CLI parser coi `\"` là escape cho dấu ngoặc kép, khiến giá trị của `--target` nuốt chửng toàn bộ chuỗi `--restart "C:\App\VisionInspectionApp.UI.exe"`. Kết quả là biến `_restartExePath` trong `VisionUpdater` hoàn toàn rỗng, và updater giải nén thành công xong thì tự thoát mà không bật lại app chính.
   - **Giải pháp đã triển khai**:

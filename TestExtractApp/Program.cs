@@ -46,5 +46,6 @@ class Program
         OcrDetectorTests.RunTests();
         OtaUpdateServiceTests.RunAllTests();
         OtaPublisherServiceTests.RunAllTests();
+        DocumentationSystemTests.RunAllTests();
     }
 }

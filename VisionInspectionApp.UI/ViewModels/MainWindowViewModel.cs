@@ -107,6 +107,8 @@ public sealed partial class MainWindowViewModel : ObservableObject
         OpenRecentJobCommand = new RelayCommand<string>(ExecuteOpenRecentJob);
         ClearRecentJobsCommand = new RelayCommand(ExecuteClearRecentJobs);
         OpenOtaUpdateDialogCommand = new RelayCommand(ExecuteOpenOtaUpdateDialog);
+        OpenDocumentationCommand = new RelayCommand<string>(ExecuteOpenDocumentation);
+        OpenDocsFolderCommand = new RelayCommand(ExecuteOpenDocsFolder);
 
         if (_selectedTabIndex == 3)
         {
@@ -130,6 +132,44 @@ public sealed partial class MainWindowViewModel : ObservableObject
     }
 
     public ICommand OpenOtaUpdateDialogCommand { get; }
+    public ICommand OpenDocumentationCommand { get; }
+    public ICommand OpenDocsFolderCommand { get; }
+
+    private void ExecuteOpenDocumentation(string? docId)
+    {
+        try
+        {
+            var win = new Views.Documentation.DocumentationViewerWindow(docId)
+            {
+                Owner = System.Windows.Application.Current?.MainWindow
+            };
+            win.Show();
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"Không thể mở cửa sổ tài liệu: {ex.Message}", "Lỗi", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
+
+    private void ExecuteOpenDocsFolder()
+    {
+        try
+        {
+            var docsDir = DocumentationService.ResolveDocsDirectory();
+            if (Directory.Exists(docsDir))
+            {
+                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("explorer.exe", docsDir) { UseShellExecute = true });
+            }
+            else
+            {
+                MessageBox.Show($"Thư mục tài liệu chưa tồn tại tại: {docsDir}", "Thông báo", MessageBoxButton.OK, MessageBoxImage.Information);
+            }
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"Không thể mở thư mục: {ex.Message}", "Lỗi", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
 
     private void ExecuteOpenOtaUpdateDialog()
     {
