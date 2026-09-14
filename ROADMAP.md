@@ -2618,3 +2618,31 @@ Lộ trình tích hợp tính năng Chụp ảnh từ camera và hỗ trợ các
           4. **Kiểm Thử Toàn Trình**:
              - Kiểm tra luồng: Client mới mở app -> Server tiếp nhận Pending -> Admin Dashboard hiển thị tab 'Chờ Duyệt' -> Admin chọn License Key có sẵn và duyệt -> Client polling nhận gói RSA-2048 và chuyển sang trạng thái Active thành công 100%.
              - Toàn bộ Solution biên dịch 0 Error(s).
+    - [x] **Task 335: Nâng Cấp Cơ Chế Xác Thực Trực Tuyến Khi Khởi Động & Chặn Tuyệt Đối Máy Trạm Bị Xóa Khỏi Hệ Thống**:
+        - **Mục Tiêu & Yêu Cầu**:
+          1. **Khắc phục lỗ hổng khởi động lọt vào app khi máy trạm đã bị xóa trên Admin Web Dashboard**:
+             - Hiện tượng: Khi máy trạm từng được kích hoạt (đã lưu file vault mã hóa DPAPI cục bộ), nếu Quản trị viên xóa máy trạm đó trên Web Dashboard, khi máy trạm mở lại app (có internet), app vẫn cho phép vào thẳng MainWindow với trạng thái "Bản quyền đã kích hoạt".
+             - Nguyên nhân gốc rễ:
+               + `ValidateLicenseAsync` trong `LicenseService` trước đây chỉ kiểm tra file vault cục bộ (chữ ký số RSA, mã máy, hạn dùng) mà KHÔNG kiểm tra với License Server nếu file vault đã tồn tại.
+               + Trong `App.xaml.cs`, sau khi hiển thị `licDialog.ShowDialog()`, kết quả xác thực bị bỏ qua (`_ = licenseService.ValidateLicenseAsync();`), dẫn đến việc nếu người dùng tắt popup mà chưa kích hoạt thì vẫn vào được ứng dụng.
+               + Định kỳ heartbeat trước đây nếu server trả về 404 (Unregistered) thì bỏ qua vì không phải status code 200.
+          2. **Kiến Trúc & Giải Pháp Triển Khai**:
+             - **Xác thực trực tuyến tức thì khi khởi động (Online Startup Verification)**:
+               + Nâng cấp `ValidateLicenseAsync` trong `LicenseService`: Sau khi kiểm tra tính toàn vẹn cục bộ, nếu có kết nối mạng, client gửi request kiểm tra trực tuyến đến server (timeout ngắn 3s không gây lag splash screen).
+               + Nếu Server phản hồi máy trạm không tồn tại (`status: 'Unregistered'` hoặc đã bị Quản trị viên xóa): Lập tức gọi `DeactivateLocalAsync()` xóa sạch file `license.vault` cục bộ, chuyển trạng thái sang `Unlicensed`, tự động đăng ký mới ở trạng thái `Pending`, và trả về `IsValid = false`.
+               + Nếu Server phản hồi bị thu hồi (`Revoked`) hoặc tạm khóa (`Suspended`): Xóa vault và chuyển trạng thái tương ứng.
+               + Khi mất mạng / offline hoàn toàn: Cho phép dự phòng hoạt động bình thường theo chữ ký số RSA cục bộ để đảm bảo tính sẵn sàng cao trong nhà máy.
+             - **Chốt chặn nghiêm ngặt tại SplashScreen (`App.xaml.cs`)**:
+               + Khi `ValidateLicenseAsync` trả về `IsValid = false`, mở hộp thoại bản quyền `licDialog.ShowDialog()`.
+               + Sau khi đóng hộp thoại, kiểm tra lại `licResult`. Nếu vẫn chưa được kích hoạt bản quyền hợp lệ, ứng dụng lập tức gọi `splash.Close(); Shutdown(); return;` ngăn chặn 100% việc lọt vào màn hình chính.
+             - **Đồng bộ Heartbeat Thời Gian Thực**:
+               + Cập nhật API `heartbeat` trên Server: Trả về trạng thái máy trạm kèm gói ký số cập nhật (nếu Admin đổi gói từ xa). Nếu máy không tồn tại trong bảng `machines`, trả về `status: 'Unregistered'`.
+               + Client trong `SendHeartbeatAsync` khi nhận `Unregistered` lập tức xóa vault cục bộ và chuyển sang `Unlicensed`, khóa động cơ kiểm tra ngoại quan.
+          3. **Kiểm Thử Tự Động Toàn Diện**:
+             - Bổ sung **Test 13** vào bộ kiểm thử `TestExtractApp/LicenseSystemTests.cs`:
+               + Khởi tạo và kích hoạt máy trạm thành công -> Có file `license.vault`.
+               + Quản trị viên gọi API xóa máy trạm từ xa (`POST /api/v1/admin/machine/delete`).
+               + Client gọi `ValidateLicenseAsync()` (mô phỏng bật app khi có internet).
+               + Khẳng định: Server phát hiện máy bị xóa, client lập tức xóa file vault cục bộ, tự động chuyển sang `Pending`, trả về `IsValid = false`, và chặn hoàn toàn `AssertCanExecuteInspection()`.
+             - Toàn bộ **13/13 bài kiểm thử Enterprise License System PASSED 100%** và toàn bộ các test suites của dự án đều PASSED (exit code 0).
+             - Solution `VisionInspectionApp.slnx` biên dịch Release 0 Error(s).

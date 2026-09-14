@@ -155,7 +155,15 @@ public partial class App : System.Windows.Application
             splash.SetProgress(95, "Phần mềm chưa kích hoạt bản quyền...");
             var licDialog = _host.Services.GetRequiredService<Views.Licensing.LicenseDialog>();
             licDialog.ShowDialog();
-            _ = licenseService.ValidateLicenseAsync();
+
+            licResult = await licenseService.ValidateLicenseAsync();
+            if (!licResult.IsValid)
+            {
+                // Nếu người dùng đóng hộp thoại mà chưa được kích hoạt bản quyền, thoát ứng dụng an toàn!
+                splash.Close();
+                Shutdown();
+                return;
+            }
         }
 
         splash.SetProgress(100, "Hoàn tất! Đang mở ứng dụng...");

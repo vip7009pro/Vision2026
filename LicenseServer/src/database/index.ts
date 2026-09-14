@@ -767,6 +767,12 @@ export class DatabaseManager {
     `).all() as unknown as ClientRegistrationRecord[];
   }
 
+  public getClientRegistrationByFingerprint(fingerprint: string): ClientRegistrationRecord | undefined {
+    return this.db.prepare(`
+      SELECT * FROM client_registrations WHERE machine_fingerprint = ?
+    `).get(fingerprint) as unknown as ClientRegistrationRecord | undefined;
+  }
+
   public approveClientRegistration(
     registrationId: string,
     options: {

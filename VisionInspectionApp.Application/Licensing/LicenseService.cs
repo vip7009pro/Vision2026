@@ -171,6 +171,44 @@ public sealed class LicenseService : ILicenseService, IDisposable
                 }
             }
 
+            // 7. Xác thực trực tuyến với License Server nếu có kết nối mạng (Online Server Verification)
+            try
+            {
+                using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(3));
+                var onlineCheck = await VerifyOnlineStatusAsync(package, cts.Token);
+                if (onlineCheck != null)
+                {
+                    if (onlineCheck.Status == LicenseStatus.Revoked)
+                    {
+                        await DeactivateLocalAsync();
+                        SetStatus(LicenseStatus.Revoked, null, null);
+                        return new LicenseValidationResult(false, LicenseStatus.Revoked, onlineCheck.Message ?? "Bản quyền máy trạm đã bị thu hồi từ xa bởi Quản trị viên.", null, 0);
+                    }
+                    else if (onlineCheck.Status == LicenseStatus.Suspended)
+                    {
+                        SetStatus(LicenseStatus.Suspended, package.Payload, package);
+                        return new LicenseValidationResult(false, LicenseStatus.Suspended, onlineCheck.Message ?? "Bản quyền máy trạm đang bị tạm khóa từ xa.", package.Payload, 0);
+                    }
+                    else if (onlineCheck.Status == LicenseStatus.Unlicensed)
+                    {
+                        // Máy trạm đã bị Admin XÓA khỏi hệ thống!
+                        // Xóa sạch vault cục bộ ngay lập tức:
+                        await DeactivateLocalAsync();
+                        // Tự động đăng ký lại như một máy mới để Quản trị viên phê duyệt
+                        var autoRegResult = await AutoRegisterOrCheckApprovalAsync();
+                        string msg = _isPendingApproval
+                            ? (_pendingApprovalMessage ?? "Máy trạm đã bị xóa khỏi hệ thống và đang gửi yêu cầu chờ Quản trị viên cấp phép lại.")
+                            : "Máy trạm đã bị xóa khỏi hệ thống. Vui lòng liên hệ Quản trị viên để kích hoạt bản quyền.";
+                        return new LicenseValidationResult(false, LicenseStatus.Unlicensed, msg, null, 0);
+                    }
+                }
+            }
+            catch
+            {
+                // Khi offline hoặc server không phản hồi trong 3 giây:
+                // Tiếp tục cho phép sử dụng offline dựa trên chữ ký số cục bộ (chế độ bảo đảm liên tục trong nhà máy)
+            }
+
             // Hợp lệ!
             SetStatus(LicenseStatus.Active, package.Payload, package);
             StartHeartbeatTimerIfNeeded();
@@ -564,6 +602,76 @@ public sealed class LicenseService : ILicenseService, IDisposable
         _heartbeatTimer = new Timer(async _ => await SendHeartbeatAsync(), null, TimeSpan.FromMinutes(1), interval);
     }
 
+    private async Task<OnlineCheckResult?> VerifyOnlineStatusAsync(SignedLicensePackage? package, CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(_serverUrl) || package?.Payload == null)
+            return null;
+
+        var endpoint = $"{_serverUrl.TrimEnd('/')}/api/v1/license/heartbeat";
+        var payload = new
+        {
+            licenseKey = package.Payload.LicenseKey,
+            machineFingerprint = HardwareFingerprintService.GetMachineFingerprint(),
+            appVersion = "2.1.0"
+        };
+
+        var response = await HttpClient.PostAsJsonAsync(endpoint, payload, cancellationToken);
+        var content = await response.Content.ReadAsStringAsync(cancellationToken);
+        if (string.IsNullOrWhiteSpace(content)) return null;
+
+        using var doc = JsonDocument.Parse(content);
+        var root = doc.RootElement;
+
+        string statusStr = root.TryGetProperty("status", out var st) ? st.GetString() ?? "" : "";
+        string message = root.TryGetProperty("message", out var msg) ? msg.GetString() ?? "" : "";
+
+        if (statusStr.Equals("Active", StringComparison.OrdinalIgnoreCase))
+        {
+            // Kiểm tra xem server có gửi gói mới cập nhật không (ví dụ Admin đổi gói / gia hạn)
+            if (root.TryGetProperty("package", out var pkgEl) && pkgEl.ValueKind != JsonValueKind.Null && pkgEl.ValueKind != JsonValueKind.Undefined)
+            {
+                SignedLicensePackage? updatedPackage = null;
+                if (pkgEl.ValueKind == JsonValueKind.String)
+                {
+                    var pkgJson = pkgEl.GetString();
+                    if (!string.IsNullOrWhiteSpace(pkgJson))
+                        updatedPackage = JsonSerializer.Deserialize<SignedLicensePackage>(pkgJson, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                }
+                else if (pkgEl.ValueKind == JsonValueKind.Object)
+                {
+                    updatedPackage = JsonSerializer.Deserialize<SignedLicensePackage>(pkgEl.GetRawText(), new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                }
+
+                if (updatedPackage?.Payload != null && !string.IsNullOrWhiteSpace(updatedPackage.Signature))
+                {
+                    if (LicenseCryptoService.VerifySignature(updatedPackage.Payload, updatedPackage.Signature))
+                    {
+                        await SavePackageToVaultAsync(updatedPackage);
+                        _currentPackage = updatedPackage;
+                        _currentLicense = updatedPackage.Payload;
+                    }
+                }
+            }
+
+            return new OnlineCheckResult(LicenseStatus.Active, message);
+        }
+        else if (statusStr.Equals("Revoked", StringComparison.OrdinalIgnoreCase))
+        {
+            return new OnlineCheckResult(LicenseStatus.Revoked, message);
+        }
+        else if (statusStr.Equals("Suspended", StringComparison.OrdinalIgnoreCase))
+        {
+            return new OnlineCheckResult(LicenseStatus.Suspended, message);
+        }
+        else if (statusStr.Equals("Unregistered", StringComparison.OrdinalIgnoreCase) || !response.IsSuccessStatusCode)
+        {
+            // Máy trạm không tồn tại trên Server (đã bị Quản trị viên xóa)
+            return new OnlineCheckResult(LicenseStatus.Unlicensed, message);
+        }
+
+        return null;
+    }
+
     private async Task SendHeartbeatAsync()
     {
         if (_currentLicense == null || string.IsNullOrWhiteSpace(_currentLicense.LicenseKey))
@@ -571,7 +679,7 @@ public sealed class LicenseService : ILicenseService, IDisposable
 
         try
         {
-            var endpoint = $"{_serverUrl}/api/v1/license/heartbeat";
+            var endpoint = $"{_serverUrl.TrimEnd('/')}/api/v1/license/heartbeat";
             var payload = new
             {
                 licenseKey = _currentLicense.LicenseKey,
@@ -580,9 +688,9 @@ public sealed class LicenseService : ILicenseService, IDisposable
             };
 
             var response = await HttpClient.PostAsJsonAsync(endpoint, payload);
-            if (response.IsSuccessStatusCode)
+            var content = await response.Content.ReadAsStringAsync();
+            if (!string.IsNullOrWhiteSpace(content))
             {
-                var content = await response.Content.ReadAsStringAsync();
                 using var doc = JsonDocument.Parse(content);
                 var root = doc.RootElement;
 
@@ -599,6 +707,39 @@ public sealed class LicenseService : ILicenseService, IDisposable
                     {
                         SetStatus(LicenseStatus.Suspended, _currentLicense, _currentPackage);
                     }
+                    else if (statusStr.Equals("Unregistered", StringComparison.OrdinalIgnoreCase) || response.StatusCode == System.Net.HttpStatusCode.NotFound)
+                    {
+                        // Máy trạm đã bị Quản trị viên xóa hoàn toàn khỏi hệ thống!
+                        await DeactivateLocalAsync();
+                        SetStatus(LicenseStatus.Unlicensed, null, null);
+                    }
+                    else if (statusStr.Equals("Active", StringComparison.OrdinalIgnoreCase))
+                    {
+                        // Cập nhật gói mới nếu có
+                        if (root.TryGetProperty("package", out var pkgEl) && pkgEl.ValueKind != JsonValueKind.Null && pkgEl.ValueKind != JsonValueKind.Undefined)
+                        {
+                            SignedLicensePackage? updatedPackage = null;
+                            if (pkgEl.ValueKind == JsonValueKind.String)
+                            {
+                                var pkgJson = pkgEl.GetString();
+                                if (!string.IsNullOrWhiteSpace(pkgJson))
+                                    updatedPackage = JsonSerializer.Deserialize<SignedLicensePackage>(pkgJson, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                            }
+                            else if (pkgEl.ValueKind == JsonValueKind.Object)
+                            {
+                                updatedPackage = JsonSerializer.Deserialize<SignedLicensePackage>(pkgEl.GetRawText(), new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                            }
+
+                            if (updatedPackage?.Payload != null && !string.IsNullOrWhiteSpace(updatedPackage.Signature))
+                            {
+                                if (LicenseCryptoService.VerifySignature(updatedPackage.Payload, updatedPackage.Signature))
+                                {
+                                    await SavePackageToVaultAsync(updatedPackage);
+                                    SetStatus(LicenseStatus.Active, updatedPackage.Payload, updatedPackage);
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -611,6 +752,8 @@ public sealed class LicenseService : ILicenseService, IDisposable
             }
         }
     }
+
+    private record OnlineCheckResult(LicenseStatus Status, string Message);
 
     public void Dispose()
     {

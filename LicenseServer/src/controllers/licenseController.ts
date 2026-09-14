@@ -161,10 +161,10 @@ export class LicenseController {
     const serverTimeUtc = new Date().toISOString();
 
     if (!machine) {
-      res.status(404).json({
+      res.status(200).json({
         success: false,
         status: 'Unregistered',
-        message: 'Máy trạm chưa được đăng ký trong hệ thống.',
+        message: 'Máy trạm chưa được đăng ký trong hệ thống hoặc đã bị Quản trị viên xóa.',
         serverTimeUtc
       });
       return;
@@ -191,10 +191,44 @@ export class LicenseController {
       return;
     }
 
+    // Kiểm tra tính hợp lệ của license liên kết
+    if (machine.license_id) {
+      const license = db.getLicenseById(machine.license_id);
+      if (!license || license.status === 'Revoked') {
+        res.json({
+          success: true,
+          status: 'Revoked',
+          message: 'Mã bản quyền liên kết đã bị thu hồi hoặc đã bị xóa.',
+          serverTimeUtc
+        });
+        return;
+      }
+
+      if (license.expires_at && new Date(license.expires_at).getTime() < Date.now()) {
+        res.json({
+          success: true,
+          status: 'Expired',
+          message: `Bản quyền đã hết hạn vào ngày ${new Date(license.expires_at).toLocaleString('vi-VN')}.`,
+          serverTimeUtc
+        });
+        return;
+      }
+    }
+
+    // Kiểm tra xem máy có signed package mới (ví dụ khi Admin đổi gói/thời hạn)
+    const reg = db.getClientRegistrationByFingerprint(machineFingerprint);
+    let pkg = undefined;
+    if (reg && reg.signed_package) {
+      try {
+        pkg = JSON.parse(reg.signed_package);
+      } catch { }
+    }
+
     res.json({
       success: true,
       status: 'Active',
       message: 'Heartbeat OK. Bản quyền đang hoạt động bình thường.',
+      package: pkg,
       serverTimeUtc
     });
   }

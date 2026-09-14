@@ -4163,3 +4163,29 @@
        - Đã dọn dẹp sạch sẽ cache cục bộ: Xóa file `%LOCALAPPDATA%\VisionInspectionApp\Security\license.vault` để máy trạm client ở trạng thái máy mới 100%.
        - Database hiện tại: Duy nhất 1 License Key `V26-ENT-HAYG-HDMN-WJNH` (Khách hàng: CMS OQC, Gói Enterprise, Vĩnh Viễn), danh sách máy trạm rỗng, danh sách chờ duyệt rỗng.
        - Toàn bộ Solution biên dịch 0 Error(s). Bộ test suite kiểm thử tự động 12/12 test cases đạt 100% PASSED.
+
+- **Nâng Cấp Cơ Chế Xác Thực Trực Tuyến Khi Khởi Động & Chặn Tuyệt Đối Máy Trạm Bị Xóa Khỏi Hệ Thống (Task 335)**:
+  - **Vấn Đề Thực Tế & Nguyên Nhân**:
+    + *Hiện tượng*: Khi Admin xóa máy trạm trên Web Dashboard, máy trạm có internet khi mở app lên vẫn vào thẳng MainWindow với trạng thái "Bản quyền đã kích hoạt".
+    + *Nguyên nhân*: 
+      1. Trước đây `ValidateLicenseAsync` trong `LicenseService` chỉ kiểm tra chữ ký số RSA và hạn dùng trên file `license.vault` cục bộ (DPAPI). Nếu file đã tồn tại, client không hề kiểm tra lại với License Server nên máy chủ dù đã xóa máy thì máy trạm vẫn báo hợp lệ.
+      2. Trong `App.xaml.cs`, sau khi mở `licDialog.ShowDialog()`, code cũ bỏ qua kết quả kiểm tra lại (`_ = licenseService.ValidateLicenseAsync();`), khiến cho việc tắt hộp thoại vẫn vào được ứng dụng.
+      3. Cơ chế heartbeat định kỳ bỏ qua mã lỗi 404 (Unregistered) vì chỉ bắt `response.IsSuccessStatusCode`.
+  - **Kiến Trúc & Giải Pháp Triển Khai**:
+    1. *C# Client SDK (`VisionInspectionApp.Application/Licensing/LicenseService.cs`)*:
+       - Nâng cấp `ValidateLicenseAsync`: Sau khi kiểm tra toàn vẹn cục bộ, tự động gọi `VerifyOnlineStatusAsync` (timeout ngắn 3s) để đối soát tức thì với License Server.
+       - Khi Server phản hồi máy trạm không còn tồn tại (`status: 'Unregistered'` do Admin đã xóa):
+         + Lập tức gọi `DeactivateLocalAsync()` xóa sạch file `license.vault` cục bộ.
+         + Tự động gọi `AutoRegisterOrCheckApprovalAsync()` gửi đăng ký mới lên Server ở trạng thái `Pending`.
+         + Chuyển trạng thái sang `Unlicensed` (`_isPendingApproval = true`), trả về `IsValid = false`.
+       - Nâng cấp `SendHeartbeatAsync`: Khi nhận `Unregistered` từ server (hoặc HTTP 404), xóa vault và chuyển `Unlicensed`. Khi nhận gói cập nhật, tự động lưu vault mới mà không cần khởi động lại app.
+    2. *WPF App Startup Chốt Chặn (`VisionInspectionApp.UI/App.xaml.cs`)*:
+       - Trong `OnStartup`: Khi `licResult.IsValid == false`, hiển thị hộp thoại bản quyền `licDialog.ShowDialog()`.
+       - Khi người dùng đóng hộp thoại bản quyền, gọi lại `licResult = await licenseService.ValidateLicenseAsync();`. Nếu vẫn chưa hợp lệ, lập tức gọi `splash.Close(); Shutdown(); return;` ngăn chặn 100% việc lọt vào `MainWindow`.
+    3. *Backend License Server (`LicenseServer/src/`)*:
+       - `src/database/index.ts`: Bổ sung `getClientRegistrationByFingerprint(fingerprint)`.
+       - `src/controllers/licenseController.ts`: Nâng cấp API `heartbeat` trả về `status: 'Unregistered'` khi máy trạm đã bị Quản trị viên xóa, kiểm tra thêm tính hợp lệ của license liên kết, và trả về `package` nếu máy được cập nhật gói mới.
+    4. *Kiểm Thử Toàn Diện*:
+       - Bổ sung `Test 13` trong `TestExtractApp/LicenseSystemTests.cs`: Khẳng định máy trạm bị xóa trên Server khi khởi động lại bị chặn hoàn toàn, vault cục bộ bị xóa sạch, tự động chuyển `Pending` chờ duyệt, và động cơ kiểm tra ngoại quan bị khóa.
+       - Toàn bộ 13/13 bài test License System và toàn bộ test suites của dự án đạt **100% PASSED (exit code 0)**.
+       - Database hiện tại: 1 License Key duy nhất `V26-ENT-HAYG-HDMN-WJNH`, 0 máy trạm, 0 đăng ký chờ duyệt. Cache cục bộ đã được xóa sạch.

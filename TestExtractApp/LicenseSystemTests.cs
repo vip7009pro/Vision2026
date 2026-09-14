@@ -64,8 +64,9 @@ CXHaZZurRVGX356/sxnhBHOf/51FCPI+QBbqBYIbJueeh3ATyCcKRPHExnh4+zyg
         Test10_Revocation_BlocksAutoCheckAndDeactivatesLocalClient().GetAwaiter().GetResult();
         Test11_ChangePlan_UpgradesFeaturesInstantly().GetAwaiter().GetResult();
         Test12_DeleteLicense_CascadeRevokesMachines().GetAwaiter().GetResult();
+        Test13_DeletedMachine_OnlineCheckBlocksStartupAndClearsVault().GetAwaiter().GetResult();
 
-        Console.WriteLine("\n[SUCCESS] ALL 12 ENTERPRISE LICENSE SYSTEM TESTS PASSED 100%!");
+        Console.WriteLine("\n[SUCCESS] ALL 13 ENTERPRISE LICENSE SYSTEM TESTS PASSED 100%!");
         Console.WriteLine("========================================================\n");
     }
 
@@ -891,5 +892,140 @@ CXHaZZurRVGX356/sxnhBHOf/51FCPI+QBbqBYIbJueeh3ATyCcKRPHExnh4+zyg
         }
 
         Console.WriteLine("PASSED (License deleted and associated records cleaned up successfully)");
+    }
+
+    private static async Task Test13_DeletedMachine_OnlineCheckBlocksStartupAndClearsVault()
+    {
+        Console.Write("[Test 13] Deleted Machine Online Check (Blocks Startup & Clears Vault)... ");
+
+        var serverUrl = "http://localhost:4000";
+        var tempTestDir = Path.Combine(Path.GetTempPath(), "V26_Test_DelMachine_" + Guid.NewGuid().ToString("N"));
+        using var client = new HttpClient();
+        try
+        {
+            using var service = new LicenseService(tempTestDir, serverUrl);
+
+            // 1. Admin login
+            var loginPayload = new { username = "admin", password = "admin@vision2026" };
+            var loginRes = await client.PostAsync($"{serverUrl}/api/v1/admin/login",
+                new StringContent(JsonSerializer.Serialize(loginPayload), Encoding.UTF8, "application/json"));
+            var loginJson = await loginRes.Content.ReadAsStringAsync();
+            using var loginDoc = JsonDocument.Parse(loginJson);
+            string token = loginDoc.RootElement.GetProperty("token").GetString()!;
+            client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+
+            // 0. Đảm bảo xóa sạch đăng ký cũ của máy này nếu có trước khi bắt đầu
+            await client.PostAsync($"{serverUrl}/api/v1/admin/machine/delete",
+                new StringContent(JsonSerializer.Serialize(new { machineFingerprint = service.MachineFingerprint }), Encoding.UTF8, "application/json"));
+
+            // 1. Client auto-register
+            var regRes = await service.AutoRegisterOrCheckApprovalAsync();
+            
+            // 2. Admin approve
+            var pendingRes = await client.GetAsync($"{serverUrl}/api/v1/admin/pending-registrations");
+            var pendingJson = await pendingRes.Content.ReadAsStringAsync();
+            using var pendingDoc = JsonDocument.Parse(pendingJson);
+            string? targetRegId = null;
+            foreach (var r in pendingDoc.RootElement.GetProperty("registrations").EnumerateArray())
+            {
+                if (r.GetProperty("machine_fingerprint").GetString() == service.MachineFingerprint)
+                {
+                    targetRegId = r.GetProperty("id").GetString();
+                    break;
+                }
+            }
+
+            if (targetRegId == null)
+            {
+                throw new Exception("Test 13: Registration ID not found in pending registrations!");
+            }
+
+            var approvePayload = new
+            {
+                registrationId = targetRegId,
+                customerName = "Delete Machine Test Line",
+                edition = "Enterprise",
+                durationDays = 0
+            };
+            await client.PostAsync($"{serverUrl}/api/v1/admin/registration/approve",
+                new StringContent(JsonSerializer.Serialize(approvePayload), Encoding.UTF8, "application/json"));
+
+            // 4. Client polls to activate
+            var pollResult = await service.AutoRegisterOrCheckApprovalAsync();
+            if (!pollResult.Success || service.Status != LicenseStatus.Active)
+            {
+                throw new Exception($"Test 13: Client activation failed: {pollResult.Message}");
+            }
+
+            // Verify local vault exists
+            string vaultPath = Path.Combine(tempTestDir, "license.vault");
+            if (!File.Exists(vaultPath))
+            {
+                throw new Exception("Test 13: license.vault file must exist after activation!");
+            }
+
+            // 5. Admin clicks 'Delete Machine' on the Web Dashboard
+            var delMachinePayload = new { machineFingerprint = service.MachineFingerprint };
+            var delRes = await client.PostAsync($"{serverUrl}/api/v1/admin/machine/delete",
+                new StringContent(JsonSerializer.Serialize(delMachinePayload), Encoding.UTF8, "application/json"));
+            if (!delRes.IsSuccessStatusCode)
+            {
+                throw new Exception("Test 13: Failed to delete machine on server!");
+            }
+
+            // 6. Simulate app startup: ValidateLicenseAsync() is called
+            // Even though license.vault exists locally with valid RSA signature,
+            // the online server check MUST detect that this machine was deleted!
+            var valResult = await service.ValidateLicenseAsync();
+
+            // Assert: ValidateLicenseAsync MUST fail (IsValid == false)
+            if (valResult.IsValid)
+            {
+                throw new Exception("CRITICAL SECURITY VIOLATION: Deleted machine was allowed to enter app as valid!");
+            }
+
+            // Assert: Status must be Unlicensed
+            if (service.Status != LicenseStatus.Unlicensed)
+            {
+                throw new Exception($"Test 13: Expected status Unlicensed, got: {service.Status}");
+            }
+
+            // Assert: Local vault file MUST have been deleted!
+            if (File.Exists(vaultPath))
+            {
+                throw new Exception("Test 13: license.vault file was NOT deleted after server detected machine was deleted!");
+            }
+
+            // Assert: Inspection execution is blocked
+            bool blocked = false;
+            try
+            {
+                service.AssertCanExecuteInspection();
+            }
+            catch (InvalidOperationException)
+            {
+                blocked = true;
+            }
+
+            if (!blocked)
+            {
+                throw new Exception("Test 13: AssertCanExecuteInspection must be blocked after machine is deleted!");
+            }
+
+            // Assert: Machine was automatically re-registered as Pending
+            if (!service.IsPendingApproval)
+            {
+                throw new Exception("Test 13: Deleted machine should automatically be in Pending approval state!");
+            }
+
+            Console.WriteLine("PASSED (Deleted machine blocked from entering app, vault cleared, and pending re-registration triggered!)");
+        }
+        finally
+        {
+            if (Directory.Exists(tempTestDir))
+            {
+                try { Directory.Delete(tempTestDir, true); } catch { }
+            }
+        }
     }
 }
