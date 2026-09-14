@@ -1,7 +1,9 @@
 using System;
 using System.Globalization;
 using System.IO;
+using VisionInspectionApp.Application;
 using VisionInspectionApp.Application.Services;
+using VisionInspectionApp.UI.Services;
 
 namespace TestExtractApp;
 
@@ -16,6 +18,7 @@ public static class RecentJobsAndCalibrationTest
         TestDecimalParsing();
         TestRecentJobsService();
         TestForceApplyGlobalCalibration();
+        TestStandaloneGlobalCalibrationWorkflow();
 
         Console.WriteLine("==================================================");
         Console.WriteLine("   ALL CALIBRATION & RECENT JOBS TESTS PASSED     ");
@@ -235,5 +238,166 @@ public static class RecentJobsAndCalibrationTest
 
             ChessboardCalibrationService.IsForceApplyGlobalCalibration = backupSettingsJson is not null && backupSettingsJson.Contains("\"forceApplyGlobalCalibration\": true", StringComparison.OrdinalIgnoreCase);
         }
+    }
+
+    private static void TestStandaloneGlobalCalibrationWorkflow()
+    {
+        Console.WriteLine("[TEST 4] Testing Standalone Global Calibration (Chessboard & TwoPoint Pixels/mm)...");
+
+        // Backup global calibration files
+        var appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+        var dir = Path.Combine(appData, "VisionInspectionApp");
+        var globalCalFile = Path.Combine(dir, "global_chessboard_calibration.json");
+        string? backupCalJson = File.Exists(globalCalFile) ? File.ReadAllText(globalCalFile) : null;
+
+        try
+        {
+            var cameraService = new CameraService();
+
+            // 1. Kiểm tra ChessboardCalibrationViewModel ở chế độ Toàn Cục (Standalone - Không có Job)
+            var chessboardVm = new VisionInspectionApp.UI.ViewModels.ChessboardCalibrationViewModel(cameraService);
+            chessboardVm.Initialize(null);
+
+            if (!chessboardVm.IsGlobalMode)
+            {
+                throw new Exception("ChessboardCalibrationViewModel phải ở chế độ IsGlobalMode khi config == null!");
+            }
+            if (!chessboardVm.WindowTitle.Contains("Toàn Cục", StringComparison.OrdinalIgnoreCase))
+            {
+                throw new Exception($"WindowTitle của ChessboardCalibrationViewModel phải chứa 'Toàn Cục', nhận được: '{chessboardVm.WindowTitle}'");
+            }
+            if (!chessboardVm.ModeBadgeText.Contains("TOÀN CỤC", StringComparison.OrdinalIgnoreCase))
+            {
+                throw new Exception($"ModeBadgeText của ChessboardCalibrationViewModel phải chứa 'TOÀN CỤC', nhận được: '{chessboardVm.ModeBadgeText}'");
+            }
+            if (!chessboardVm.IsLiveActive)
+            {
+                throw new Exception("ChessboardCalibrationViewModel mặc định IsLiveActive phải là true!");
+            }
+
+            // Test toggle live
+            chessboardVm.ToggleLiveStreamCommand.Execute(null);
+            if (chessboardVm.IsLiveActive)
+            {
+                throw new Exception("Sau khi ToggleLiveStreamCommand, IsLiveActive phải là false!");
+            }
+            chessboardVm.ToggleLiveStreamCommand.Execute(null);
+            if (!chessboardVm.IsLiveActive)
+            {
+                throw new Exception("Sau khi ToggleLiveStreamCommand lần 2, IsLiveActive phải là true!");
+            }
+
+            // Kiểm tra khi có Job (_config != null)
+            var jobConfig = new VisionInspectionApp.Models.VisionConfig();
+            chessboardVm.Initialize(jobConfig);
+            if (chessboardVm.IsGlobalMode)
+            {
+                throw new Exception("ChessboardCalibrationViewModel không được ở chế độ IsGlobalMode khi có config!");
+            }
+            if (!chessboardVm.WindowTitle.Contains("Active Job", StringComparison.OrdinalIgnoreCase))
+            {
+                throw new Exception($"WindowTitle của ChessboardCalibrationViewModel phải chứa 'Active Job', nhận được: '{chessboardVm.WindowTitle}'");
+            }
+
+            // 2. Kiểm tra CalibrationViewModel (2-point calib) ở chế độ Toàn Cục (Standalone - Không có Job)
+            var fakeConfigService = new FakeConfigService();
+            var fakeJobService = new FakeJobService();
+            var calibVm = new VisionInspectionApp.UI.ViewModels.CalibrationViewModel(
+                fakeConfigService,
+                new VisionInspectionApp.Application.ConfigStoreOptions(),
+                cameraService,
+                fakeJobService);
+
+            calibVm.InitializeWithConfig(null, null, null);
+
+            if (!calibVm.IsGlobalMode)
+            {
+                throw new Exception("CalibrationViewModel phải ở chế độ IsGlobalMode khi config == null!");
+            }
+            if (!calibVm.WindowTitle.Contains("Toàn Cục", StringComparison.OrdinalIgnoreCase))
+            {
+                throw new Exception($"WindowTitle của CalibrationViewModel phải chứa 'Toàn Cục', nhận được: '{calibVm.WindowTitle}'");
+            }
+            if (!calibVm.ModeBadgeText.Contains("TOÀN CỤC", StringComparison.OrdinalIgnoreCase))
+            {
+                throw new Exception($"ModeBadgeText của CalibrationViewModel phải chứa 'TOÀN CỤC', nhận được: '{calibVm.ModeBadgeText}'");
+            }
+
+            // Giả lập người dùng đo khoảng cách 200 pixels tương ứng 20 mm => 10 px/mm
+            calibVm.CurrentDistancePx = 200.0;
+            calibVm.RealDistanceMm = 20.0;
+            calibVm.AddMeasurementCommand.Execute(null);
+            calibVm.SavePixelsPerMm();
+
+            // Kiểm tra Global Calibration đã lưu giá trị 10.0 px/mm
+            var globalCalib = ChessboardCalibrationService.GetGlobalCalibration();
+            if (globalCalib == null || Math.Abs(globalCalib.PixelsPerMm - 10.0) > 1e-4)
+            {
+                throw new Exception($"Global Calibration PixelsPerMm phải là 10.0 sau khi lưu chế độ Toàn Cục! Nhận được: {globalCalib?.PixelsPerMm}");
+            }
+
+            // Kiểm tra Job mới thừa hưởng giá trị này qua EnsureCalibration
+            var emptyJob = new VisionInspectionApp.Models.VisionConfig { PixelsPerMm = 0 };
+            ChessboardCalibrationService.EnsureCalibration(emptyJob);
+            if (Math.Abs(emptyJob.PixelsPerMm - 10.0) > 1e-4)
+            {
+                throw new Exception($"Job mới phải kế thừa PixelsPerMm = 10.0 từ Global Calib! Nhận được: {emptyJob.PixelsPerMm}");
+            }
+
+            // 3. Kiểm tra CalibrationViewModel ở chế độ Active Job (config != null)
+            var specificJob = new VisionInspectionApp.Models.VisionConfig { PixelsPerMm = 5.0 };
+            calibVm.InitializeWithConfig(specificJob, @"C:\Jobs\MySpecificJob.job", null);
+
+            if (calibVm.IsGlobalMode)
+            {
+                throw new Exception("CalibrationViewModel không được ở chế độ IsGlobalMode khi config != null!");
+            }
+            if (!calibVm.ModeBadgeText.Contains("MySpecificJob.job", StringComparison.OrdinalIgnoreCase))
+            {
+                throw new Exception($"ModeBadgeText phải hiển thị tên job, nhận được: '{calibVm.ModeBadgeText}'");
+            }
+
+            calibVm.ClearMeasurementsCommand.Execute(null);
+            calibVm.CurrentDistancePx = 300.0;
+            calibVm.RealDistanceMm = 10.0; // => 30.0 px/mm
+            calibVm.AddMeasurementCommand.Execute(null);
+            calibVm.SavePixelsPerMm();
+
+            if (Math.Abs(specificJob.PixelsPerMm - 30.0) > 1e-4)
+            {
+                throw new Exception($"Specific Job PixelsPerMm phải là 30.0! Nhận được: {specificJob.PixelsPerMm}");
+            }
+
+            // Global calibration không bị ghi đè khi lưu ở Active Job mode
+            var globalCalibAfter = ChessboardCalibrationService.GetGlobalCalibration();
+            if (globalCalibAfter == null || Math.Abs(globalCalibAfter.PixelsPerMm - 10.0) > 1e-4)
+            {
+                throw new Exception($"Global Calibration PixelsPerMm không được bị thay đổi khi lưu ở Active Job mode! Nhận được: {globalCalibAfter?.PixelsPerMm}");
+            }
+
+            Console.WriteLine("   => PASS 100% (Standalone Global Calibration: Chessboard & TwoPoint workflows verified)");
+        }
+        finally
+        {
+            if (backupCalJson is not null) File.WriteAllText(globalCalFile, backupCalJson);
+            else if (File.Exists(globalCalFile)) File.Delete(globalCalFile);
+        }
+    }
+
+    private sealed class FakeConfigService : IConfigService
+    {
+        public VisionInspectionApp.Models.VisionConfig LoadConfig(string productCode) => new();
+        public void SaveConfig(VisionInspectionApp.Models.VisionConfig config) { }
+    }
+
+    private sealed class FakeJobService : IJobService
+    {
+        public VisionInspectionApp.Models.VisionConfig LoadJob(string jobFilePath, out string tempWorkingDir)
+        {
+            tempWorkingDir = string.Empty;
+            return new VisionInspectionApp.Models.VisionConfig();
+        }
+
+        public void SaveJob(VisionInspectionApp.Models.VisionConfig config, string tempWorkingDir, string jobFilePath) { }
     }
 }

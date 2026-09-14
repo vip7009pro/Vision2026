@@ -6,76 +6,189 @@
              xmlns:controls="clr-namespace:VisionInspectionApp.UI.Controls"
              mc:Ignorable="d">
 
-    <Grid Margin="8">
+    <Grid Margin="4">
         <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
-        <DockPanel Grid.Row="0" LastChildFill="False">
-            <Button Content="Open Job" Command="{Binding OpenJobCommand}" Margin="0,0,6,0" />
-            <TextBlock Text="{Binding CurrentJobFilePath}" VerticalAlignment="Center" Margin="0,0,12,0" MaxWidth="150" TextTrimming="CharacterEllipsis" ToolTip="{Binding CurrentJobFilePath}" />
+        <!-- ROW 0: HEADER BANNER (Mode & Camera Live Indicator) -->
+        <Border Grid.Row="0" Margin="0,0,0,6" Padding="10,6" CornerRadius="4" Background="#1E293B" BorderBrush="#334155" BorderThickness="1">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <TextBlock Text="{Binding ModeBadgeText}" FontWeight="ExtraBold" FontSize="12" Foreground="#38BDF8" VerticalAlignment="Center" />
+                </StackPanel>
+                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                    <TextBlock Text="Luồng Camera:" Foreground="#94A3B8" FontSize="11" VerticalAlignment="Center" Margin="0,0,6,0" />
+                    <Border CornerRadius="3" Padding="8,2">
+                        <Border.Style>
+                            <Style TargetType="Border">
+                                <Setter Property="Background" Value="#475569" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding IsLiveActive}" Value="True">
+                                        <Setter Property="Background" Value="#15803D" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Border.Style>
+                        <TextBlock FontWeight="Bold" FontSize="11" Foreground="White">
+                            <TextBlock.Style>
+                                <Style TargetType="TextBlock">
+                                    <Setter Property="Text" Value="⏸ TẠM DỪNG" />
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding IsLiveActive}" Value="True">
+                                            <Setter Property="Text" Value="🔴 LIVE CAMERA" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TextBlock.Style>
+                        </TextBlock>
+                    </Border>
+                </StackPanel>
+            </Grid>
+        </Border>
 
-            <TextBlock Text="Product Code" VerticalAlignment="Center" Margin="0,0,6,0" />
-            <TextBox Width="120" Text="{Binding ProductCode, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,12,0" />
+        <!-- ROW 1: TOOLBAR (Live Controls & Actions) -->
+        <Border Grid.Row="1" Margin="0,0,0,8" Padding="6" Background="{DynamicResource PanelBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="4">
+            <DockPanel LastChildFill="False">
+                <!-- Camera Live Stream Toggle -->
+                <Button Command="{Binding ToggleLiveStreamCommand}" Margin="0,0,6,0" Padding="10,5" FontWeight="Bold">
+                    <Button.Style>
+                        <Style TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+                            <Setter Property="Background" Value="#37474F" />
+                            <Setter Property="Foreground" Value="White" />
+                            <Setter Property="Content" Value="▶ Bật Live Camera" />
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding IsLiveActive}" Value="True">
+                                    <Setter Property="Background" Value="#C62828" />
+                                    <Setter Property="Content" Value="🔴 Đang Live (Dừng)" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Button.Style>
+                </Button>
 
-            <Button Content="Load Image" Command="{Binding LoadImageCommand}" Margin="0,0,6,0" />
-            <Button Content="Capture Camera" Command="{Binding CaptureCameraImageCommand}" Margin="0,0,6,0" />
-            <Button Content="Save Job" Command="{Binding SaveJobCommand}" />
-        </DockPanel>
+                <!-- Freeze / Snap Frame for Measurement -->
+                <Button Content="📸 Chụp Ảnh Để Đo" Command="{Binding SnapFrameForMeasurementCommand}" Margin="0,0,6,0" Padding="12,5" Background="#1565C0" Foreground="White" FontWeight="Bold" ToolTip="Dừng stream và chụp frame hiện tại để kéo chuột đo khoảng cách 2 điểm" />
 
-        <Grid Grid.Row="1" Margin="0,8,0,0">
+                <!-- Load Image from disk -->
+                <Button Content="📂 Load Image" Command="{Binding LoadImageCommand}" Margin="0,0,12,0" Padding="8,5" ToolTip="Nạp file ảnh có sẵn từ máy tính" />
+
+                <Separator Style="{StaticResource {x:Static ToolBar.SeparatorStyleKey}}" Margin="0,0,12,0" />
+
+                <!-- Job Controls (only visible/relevant when job is open or opening job) -->
+                <Button Content="📁 Open Job" Command="{Binding OpenJobCommand}" Margin="0,0,6,0" Padding="8,5" />
+                <TextBlock Text="{Binding CurrentJobFilePath}" VerticalAlignment="Center" Margin="0,0,12,0" MaxWidth="160" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource TextSecondaryBrush}" ToolTip="{Binding CurrentJobFilePath}" />
+
+                <TextBlock Text="Mã SP:" VerticalAlignment="Center" Margin="0,0,4,0" Foreground="{DynamicResource TextBrush}" />
+                <TextBox Width="100" Text="{Binding ProductCode, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,8,0" VerticalAlignment="Center" />
+
+                <Button Content="💾 Lưu Calib" Command="{Binding SavePixelsPerMmCommand}" Padding="10,5" Background="#2E7D32" Foreground="White" FontWeight="Bold" ToolTip="Lưu hệ số Pixels/mm vào Job hoặc Global Calibration" />
+            </DockPanel>
+        </Border>
+
+        <!-- ROW 2: MAIN CONTENT (Left: Controls & Measurements, Right: Viewer) -->
+        <Grid Grid.Row="2">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="320" />
+                <ColumnDefinition Width="330" />
                 <ColumnDefinition Width="*" />
             </Grid.ColumnDefinitions>
 
-            <StackPanel Grid.Column="0" Margin="0,0,8,0">
-                <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" Padding="8" Margin="0,0,0,8">
-                    <StackPanel>
-                        <TextBlock FontWeight="Bold" Text="Current Selection" Margin="0,0,0,6" />
+            <!-- LEFT CONTROLS -->
+            <ScrollViewer Grid.Column="0" VerticalScrollBarVisibility="Auto" Margin="0,0,8,0">
+                <StackPanel>
+                    <!-- Current Selection -->
+                    <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" Padding="8" Margin="0,0,0,8" Background="{DynamicResource PanelBackgroundBrush}">
+                        <StackPanel>
+                            <TextBlock FontWeight="Bold" Text="📏 ĐO ĐOẠN THẲNG 2 ĐIỂM" Margin="0,0,0,6" Foreground="{DynamicResource TextBrush}" />
 
-                        <TextBlock Text="Distance (px)" />
-                        <TextBox Text="{Binding CurrentDistancePx, StringFormat=0.0}" IsReadOnly="True" />
+                            <Grid Margin="0,2">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="140" />
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="25" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="Khoảng cách ảnh:" VerticalAlignment="Center" Foreground="{DynamicResource TextBrush}" />
+                                <TextBox Grid.Column="1" Text="{Binding CurrentDistancePx, StringFormat=0.0}" IsReadOnly="True" FontWeight="Bold" Foreground="#0284C7" />
+                                <TextBlock Grid.Column="2" Text="px" VerticalAlignment="Center" Margin="4,0" Foreground="{DynamicResource TextSecondaryBrush}" />
+                            </Grid>
 
-                        <TextBlock Text="Real Distance (mm)" Margin="0,6,0,0" />
-                        <TextBox Text="{Binding RealDistanceMm, Converter={StaticResource DoubleConv}, UpdateSourceTrigger=PropertyChanged}" />
+                            <Grid Margin="0,4">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="140" />
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="25" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="Kích thước thực:" VerticalAlignment="Center" Foreground="{DynamicResource TextBrush}" FontWeight="SemiBold" />
+                                <TextBox Grid.Column="1" Text="{Binding RealDistanceMm, Converter={StaticResource DoubleConv}, UpdateSourceTrigger=PropertyChanged}" FontWeight="Bold" />
+                                <TextBlock Grid.Column="2" Text="mm" VerticalAlignment="Center" Margin="4,0" Foreground="{DynamicResource TextSecondaryBrush}" />
+                            </Grid>
 
-                        <Button Content="Add Measurement" Command="{Binding AddMeasurementCommand}" Margin="0,8,0,0" />
-                        <Button Content="Clear" Command="{Binding ClearMeasurementsCommand}" Margin="0,6,0,0" />
-                    </StackPanel>
-                </Border>
+                            <Button Content="➕ Thêm Phép Đo (Add)" Command="{Binding AddMeasurementCommand}" Margin="0,8,0,0" Padding="10,6" Background="#2E7D32" Foreground="White" FontWeight="Bold" ToolTip="Tính tỉ lệ Pixels/mm cho đoạn thẳng này và thêm vào bảng trung bình" />
+                            <Button Content="🗑 Xóa Đoạn Thẳng Vừa Chọn" Command="{Binding ClearMeasurementsCommand}" Margin="0,4,0,0" Padding="8,4" />
+                        </StackPanel>
+                    </Border>
 
-                <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" Padding="8">
-                    <StackPanel>
-                        <TextBlock FontWeight="Bold" Text="Measurements" Margin="0,0,0,6" />
-                        <ListBox Height="180" ItemsSource="{Binding Measurements}">
-                            <ListBox.ItemTemplate>
-                                <DataTemplate>
-                                    <TextBlock>
-                                        <Run Text="{Binding DistancePx, StringFormat=0.0}" />
-                                        <Run Text=" px / " />
-                                        <Run Text="{Binding RealMm, StringFormat=0.###}" />
-                                        <Run Text=" mm = " />
-                                        <Run Text="{Binding PixelsPerMm, StringFormat=0.###}" />
-                                        <Run Text=" px/mm" />
-                                    </TextBlock>
-                                </DataTemplate>
-                            </ListBox.ItemTemplate>
-                        </ListBox>
+                    <!-- Measurements List -->
+                    <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" Padding="8" Margin="0,0,0,8" Background="{DynamicResource PanelBackgroundBrush}">
+                        <StackPanel>
+                            <TextBlock FontWeight="Bold" Text="📊 BẢNG CÁC LẦN ĐO" Margin="0,0,0,6" Foreground="{DynamicResource TextBrush}" />
+                            <ListBox Height="140" ItemsSource="{Binding Measurements}">
+                                <ListBox.ItemTemplate>
+                                    <DataTemplate>
+                                        <TextBlock Margin="1">
+                                            <Run Text="{Binding DistancePx, StringFormat=0.0}" FontWeight="Bold" />
+                                            <Run Text=" px / " />
+                                            <Run Text="{Binding RealMm, StringFormat=0.###}" />
+                                            <Run Text=" mm = " />
+                                            <Run Text="{Binding PixelsPerMm, StringFormat=0.###}" Foreground="#4CAF50" FontWeight="Bold" />
+                                            <Run Text=" px/mm" />
+                                        </TextBlock>
+                                    </DataTemplate>
+                                </ListBox.ItemTemplate>
+                            </ListBox>
 
-                        <TextBlock Text="Average Pixels/mm" Margin="0,8,0,0" />
-                        <TextBox Text="{Binding AveragePixelsPerMm, StringFormat=0.###}" IsReadOnly="True" />
-                    </StackPanel>
-                </Border>
-            </StackPanel>
+                            <Grid Margin="0,8,0,0">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="140" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="Trung Bình (px/mm):" VerticalAlignment="Center" FontWeight="Bold" Foreground="{DynamicResource TextBrush}" />
+                                <TextBox Grid.Column="1" Text="{Binding AveragePixelsPerMm, StringFormat=0.####}" IsReadOnly="True" FontWeight="ExtraBold" FontSize="14" Foreground="#4CAF50" />
+                            </Grid>
+                        </StackPanel>
+                    </Border>
 
+                    <!-- User Guide Box -->
+                    <Border BorderBrush="#0284C7" BorderThickness="1" CornerRadius="4" Padding="8" Margin="0,0,0,8" Background="#0C4A6E">
+                        <StackPanel>
+                            <TextBlock Text="💡 QUY TRÌNH HIỆU CHUẨN 2 ĐIỂM:" FontWeight="Bold" Foreground="#38BDF8" Margin="0,0,0,4" FontSize="11" />
+                            <TextBlock Text="1. Đặt thước hoặc mẫu vật chuẩn dưới camera đang Live." TextWrapping="Wrap" Foreground="#E0F2FE" FontSize="11" Margin="0,1" />
+                            <TextBlock Text="2. Bấm [📸 Chụp Ảnh Để Đo] để đóng băng khung hình." TextWrapping="Wrap" Foreground="#E0F2FE" FontSize="11" Margin="0,1" />
+                            <TextBlock Text="3. Kéo chuột nối 2 vạch / 2 điểm trên ảnh." TextWrapping="Wrap" Foreground="#E0F2FE" FontSize="11" Margin="0,1" />
+                            <TextBlock Text="4. Nhập khoảng cách thực (mm) và bấm [➕ Thêm Phép Đo]." TextWrapping="Wrap" Foreground="#E0F2FE" FontSize="11" Margin="0,1" />
+                            <TextBlock Text="5. Bấm [Hoàn Tất &amp; Áp Dụng Hệ Số] để lưu." TextWrapping="Wrap" Foreground="#E0F2FE" FontSize="11" Margin="0,1" />
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Status Message Box -->
+                    <Border Background="#1A1A2E" Padding="8" CornerRadius="4">
+                        <TextBlock Text="{Binding StatusMessage}" TextWrapping="Wrap" Foreground="#E0E0E0" FontSize="11" />
+                    </Border>
+                </StackPanel>
+            </ScrollViewer>
+
+            <!-- RIGHT VIEWER -->
             <controls:ImageViewerControl Grid.Column="1"
-                                        ImageSource="{Binding Image}"
-                                        OverlayItems="{Binding OverlayItems}"
-                                        EnableLineSelection="True"
-                                        LineSelectedCommand="{Binding LineSelectedCommand}" />
+                                         ImageSource="{Binding Image}"
+                                         OverlayItems="{Binding OverlayItems}"
+                                         EnableLineSelection="True"
+                                         LineSelectedCommand="{Binding LineSelectedCommand}" />
         </Grid>
     </Grid>
 </UserControl>
-

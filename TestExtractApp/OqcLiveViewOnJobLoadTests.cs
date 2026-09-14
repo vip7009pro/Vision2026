@@ -193,17 +193,30 @@ public static class OqcLiveViewOnJobLoadTests
 
         var thread = new System.Threading.Thread(() =>
         {
-            var win = new System.Windows.Window
+            System.Windows.Window? win = null;
+            try
             {
-                WindowState = System.Windows.WindowState.Maximized
-            };
+                win = new System.Windows.Window
+                {
+                    WindowState = System.Windows.WindowState.Maximized
+                };
 
-            // Gọi hàm BringWindowToForeground
-            VisionInspectionApp.UI.App.BringWindowToForeground(win);
+                // Gọi hàm BringWindowToForeground
+                VisionInspectionApp.UI.App.BringWindowToForeground(win);
 
-            if (win.WindowState != System.Windows.WindowState.Maximized)
+                if (win.WindowState != System.Windows.WindowState.Maximized)
+                {
+                    throw new Exception($"BringWindowToForeground không bảo tồn trạng thái Maximized! Giá trị hiện tại: {win.WindowState}");
+                }
+            }
+            finally
             {
-                throw new Exception($"BringWindowToForeground không bảo tồn trạng thái Maximized! Giá trị hiện tại: {win.WindowState}");
+                try
+                {
+                    win?.Close();
+                }
+                catch { }
+                System.Windows.Threading.Dispatcher.CurrentDispatcher.InvokeShutdown();
             }
         });
 

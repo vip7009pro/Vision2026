@@ -1,4 +1,4 @@
-﻿# Vision Inspection App — Context & Roadmap
+# Vision Inspection App — Context & Roadmap
 
 ## Mô tả
 
@@ -46,6 +46,37 @@
 ### ImageSource và preview
 
 - Lưu template cho Origin, Point và SurfaceCompare hoạt động với nguồn ảnh ImageSource.
+
+- **Hiệu Chuẩn Camera Toàn Cục Tự Do Không Cần Nạp Job & Tích Hợp Livestream Thời Gian Thực Cho Cả 2 Màn Hình Calib (Chessboard & Pixels/mm - Task 329)**:
+  - **Hiện Tượng & Yêu Cầu Người Dùng**:
+    - Trước đây, khi chưa mở bất kỳ Job nào (`_config is null`), nếu người dùng bấm nút hiệu chuẩn camera (Chessboard Calibration hoặc Calib 2 điểm Pixels/mm), hệ thống hiển thị thông báo lỗi chặn: `"Vui lòng tạo hoặc mở một Job trước khi hiệu chuẩn bàn cờ/tỉ lệ px/mm."`
+    - Điều này gây bất tiện lớn vì trên thực tế ở nhà máy, kỹ sư thường muốn căn chỉnh ống kính, lấy nét và hiệu chuẩn camera ngay sau khi lắp đặt máy mà chưa cần tạo Job nào.
+    - Hơn nữa, cả hai màn hình calib trước đó chỉ hiển thị ảnh tĩnh chụp từ camera hoặc tải từ tệp ảnh, người dùng không thể nhìn thấy luồng video trực tiếp từ camera để căn chỉnh tấm bàn cờ phẳng hoặc đặt thước đo chính xác dưới góc nhìn quang học.
+  - **Giải Pháp Kỹ Thuật Đã Triển Khai**:
+    1. *Mở Khóa Calib Tự Do Toàn Cục (Standalone Global Calibration)*:
+       - Trong `ToolEditorViewModel.cs`: Gỡ bỏ điều kiện chặn `if (_config is null)` trong `OpenCalibrationDialog()` và `OpenChessboardCalibrationDialog()`. Cho phép khởi tạo ViewModel với `config = null`.
+       - Trong `ChessboardCalibrationViewModel.cs` và `CalibrationViewModel.cs`:
+         - Bổ sung các thuộc tính phân biệt chế độ: `IsGlobalMode => _config is null;`, `WindowTitle` (`[Toàn Cục]` vs `[Active Job]`), và `ModeBadgeText` (`🌐 CHẾ ĐỘ TOÀN CỤC (GLOBAL CALIBRATION)` vs `📁 CẤU HÌNH JOB HIỆN TẠI`).
+         - Khi ở chế độ Toàn Cục: Bấm `Calibrate` hoặc `SavePixelsPerMm` sẽ tự động ghi dữ liệu vào `ChessboardCalibrationService.SaveGlobalCalibration(data)` (lưu vào `global_chessboard_calibration.json`).
+         - Mọi Job mới hoặc Job hiện có khi nạp đều tự động kế thừa hệ số `PixelsPerMm` và thông số khử méo quang học toàn cục thông qua `ChessboardCalibrationService.EnsureCalibration(config)`.
+         - Khi đang mở Job (`_config != null`): Dữ liệu calib được ghi riêng biệt vào Job mà không làm xáo trộn cấu hình toàn cục.
+    2. *Tích Hợp Livestream Camera 60 FPS Thời Gian Thực & Điều Khiển Trực Quan*:
+       - Tích hợp `WriteableBitmapRenderer` (Direct WriteableBitmap back-buffer, tăng tốc đồ họa phần cứng 60 FPS) vào cả hai ViewModel.
+       - Tự động kích hoạt luồng camera với consumer ID độc lập (`"ChessboardCalib"` và `"TwoPointCalib"`) thông qua `CameraService.RequestLiveStreamAsync(..., true)` ngay khi cửa sổ nạp (`Loaded` event).
+       - Thêm Header Banner trực quan hiển thị Huy hiệu Chế độ (Global vs Job) và Đèn trạng thái luồng camera (`🔴 LIVE CAMERA` / `⏸ TẠM DỪNG`).
+       - Bổ sung cụm nút điều khiển thời gian thực:
+         - `🔴 Bật/Tắt Live`: Cho phép tạm dừng livestream để phân tích hoặc tiếp tục stream.
+         - `📸 Chụp Khung Hình`: Đóng băng khung hình hiện tại thành ảnh tĩnh để tiến hành thao tác chấm điểm đo (2-point calib) hoặc kiểm tra góc bàn cờ.
+         - `📸 Chụp & Thêm Nhanh` (trong Chessboard Calib): Vừa freeze khung hình vừa tự động nhận diện góc bàn cờ và thêm vào danh sách góc chụp chỉ với 1 click.
+       - Tự động dừng livestream và giải phóng tài nguyên khi đóng cửa sổ (`Closed` event và `OnWindowClosing`), triệt tiêu hoàn toàn rò rỉ bộ nhớ hoặc giữ chiếm camera.
+    3. *Tương Thích An Toàn Unit Test & Runner Console*:
+       - Trong `CalibrationViewModel.SavePixelsPerMm()`: Kiểm tra `Application.Current != null` trước khi gọi `MessageBox.Show`, tránh chặn tiến trình test tự động ở môi trường headless.
+       - Sửa lỗi giải phóng Window WPF trong luồng STA của `OqcLiveViewOnJobLoadTests.cs` (Test 4) bằng khối `try-finally` kèm `win?.Close()` và `Dispatcher.CurrentDispatcher.InvokeShutdown()`.
+       - Khắc phục race condition của `Progress<T>` trong `OtaPublisherServiceTests.cs` bằng `SynchronousProgress<T>`.
+    4. *Kiểm Thử & Biên Dịch*:
+       - Xây dựng bài kiểm thử `TestStandaloneGlobalCalibrationWorkflow` trong `RecentJobsAndCalibrationTest.cs` kiểm tra toàn diện cả 2 ViewModel ở cả chế độ Toàn Cục và chế độ Job.
+       - Toàn bộ test suite trong `TestExtractApp` đạt **100% PASSED (0 lỗi)**.
+       - Toàn bộ Solution `VisionInspectionApp.slnx` biên dịch Release **0 Error(s)**.
 
 - **Khắc Phục Lỗi Hiển Thị Raw Markdown Tại Mục 2.1 Trong Tài Liệu Đào Tạo Kỹ Sư Vision Phần 3 (Unclosed Code Block Bug - Task 328)**:
   - **Hiện Tượng & Phản Ánh Người Dùng**:

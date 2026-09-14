@@ -1590,12 +1590,6 @@ namespace VisionInspectionApp.UI.ViewModels
 
         private void OpenCalibrationDialog()
         {
-            if (_config is null)
-            {
-                System.Windows.MessageBox.Show("Chưa mở Job nào để thực hiện Calibration.", "Thông báo", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Information);
-                return;
-            }
-
             if (_calibrationDialogInstance != null && _calibrationDialogInstance.IsLoaded)
             {
                 _calibrationDialogInstance.Activate();
@@ -1605,7 +1599,14 @@ namespace VisionInspectionApp.UI.ViewModels
             }
 
             var calibVm = new CalibrationViewModel(_configService, _storeOptions, _cameraService, _jobService);
-            calibVm.InitializeWithConfig(_config, CurrentJobFilePath, SelectedNodePreviewImage);
+            if (_config is not null)
+            {
+                calibVm.InitializeWithConfig(_config, CurrentJobFilePath, SelectedNodePreviewImage);
+            }
+            else
+            {
+                calibVm.InitializeWithConfig(null, null, null);
+            }
 
             var mainWin = System.Windows.Application.Current?.MainWindow;
             _calibrationDialogInstance = new VisionInspectionApp.UI.Views.CalibrationDialog
@@ -1614,10 +1615,16 @@ namespace VisionInspectionApp.UI.ViewModels
                 Owner = mainWin
             };
 
-            _calibrationDialogInstance.Closed += (s, e) =>
+            _calibrationDialogInstance.Closed += async (s, e) =>
             {
                 _calibrationDialogInstance = null;
-                if (calibVm.IsDirty)
+                try
+                {
+                    await calibVm.StopLiveStreamAsync();
+                }
+                catch { }
+
+                if (calibVm.IsDirty && _config is not null)
                 {
                     OnPropertyChanged(nameof(PixelsPerMm));
                     IsDirty = true;
@@ -1632,12 +1639,6 @@ namespace VisionInspectionApp.UI.ViewModels
 
         private void OpenChessboardCalibrationDialog()
         {
-            if (_config is null)
-            {
-                System.Windows.MessageBox.Show("Chưa mở Job nào để thực hiện Chessboard Calibration.", "Thông báo", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Information);
-                return;
-            }
-
             if (_chessboardCalibrationDialogInstance != null && _chessboardCalibrationDialogInstance.IsLoaded)
             {
                 _chessboardCalibrationDialogInstance.Activate();
@@ -1656,10 +1657,16 @@ namespace VisionInspectionApp.UI.ViewModels
                 Owner = mainWin
             };
 
-            _chessboardCalibrationDialogInstance.Closed += (s, e) =>
+            _chessboardCalibrationDialogInstance.Closed += async (s, e) =>
             {
                 _chessboardCalibrationDialogInstance = null;
-                if (vm.IsDirty)
+                try
+                {
+                    await vm.StopLiveStreamAsync();
+                }
+                catch { }
+
+                if (vm.IsDirty && _config is not null)
                 {
                     OnPropertyChanged(nameof(PixelsPerMm));
                     IsDirty = true;

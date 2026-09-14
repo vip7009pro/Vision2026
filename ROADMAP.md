@@ -2478,3 +2478,25 @@ Lộ trình tích hợp tính năng Chụp ảnh từ camera và hỗ trợ các
           1. *Làm sạch tệp markdown*: Sửa triệt để tệp `03_tool_editor_and_inspection_flow.md`, loại bỏ hoàn toàn các ký tự lỗi dính chuỗi, bảo đảm bảng thuật toán và các mục 2, 3, 4 hiển thị chuẩn xác.
           2. *Bổ sung kiểm thử phòng ngừa lỗi code block*: Cập nhật `DocumentationSystemTests.cs` tự động parse và kiểm tra thẻ `<h3>2.1. So sánh 3 thuật toán Origin cốt lõi</h3>` cùng bảng `<table>` của tất cả các tài liệu, đảm bảo không tài liệu nào bị lỗi unclosed code block.
           3. *Kiểm thử & Biên dịch*: Đạt 100% PASSED toàn bộ bộ test `TestExtractApp` và biên dịch Release 0 Error(s).
+
+    - [x] **Task 329: Hiệu Chuẩn Camera Toàn Cục Tự Do Không Cần Nạp Job & Tích Hợp Livestream Thời Gian Thực Cho Cả 2 Màn Hình Calib (Chessboard & Pixels/mm)**:
+        - **Nhu cầu & Vấn đề**: Trước đây, chức năng Calibration bàn cờ (Chessboard Calib) và Calib 2 điểm (Pixels/mm) bị ràng buộc phải mở một Job cụ thể (`_config != null`), nếu chưa mở Job thì bị chặn không cho hiệu chuẩn. Ngoài ra, giao diện calib hiển thị ảnh tĩnh, người dùng không thể nhìn thấy trực tiếp vị trí bàn cờ hoặc thước đo dưới ống kính camera để căn chỉnh.
+        - **Giải pháp triển khai**:
+          1. *Calib Tự Do Toàn Cục (Standalone Global Calibration)*:
+             - Gỡ bỏ hoàn toàn điều kiện chặn `_config is null` trong `ToolEditorViewModel.OpenCalibrationDialog()` và `OpenChessboardCalibrationDialog()`. Người dùng có thể mở hiệu chuẩn bất kỳ lúc nào mà không cần tạo hay nạp Job.
+             - Khi không mở Job (`_config == null`): Giao diện tự động chuyển sang chế độ **Toàn Cục (Global Mode)** với Header Banner chuyên nghiệp (`🌐 CHẾ ĐỘ TOÀN CỤC (GLOBAL CALIBRATION)`).
+             - Kết quả hiệu chuẩn tự động được lưu bền vững vào `global_chessboard_calibration.json` thông qua `ChessboardCalibrationService.SaveGlobalCalibration(data)`.
+             - Mọi Job mới hoặc Job hiện có khi nạp đều tự động kế thừa hệ số `PixelsPerMm` và thông số khử méo quang học toàn cục thông qua `ChessboardCalibrationService.EnsureCalibration(config)`.
+             - Khi đang mở Job (`_config != null`): Giao diện hiển thị chế độ **Active Job**, kết quả được lưu riêng biệt vào Job mà không ghi đè cấu hình toàn cục.
+          2. *Livestream Camera Thời Gian Thực (60 FPS Hardware-Accelerated Stream)*:
+             - Tích hợp `WriteableBitmapRenderer` vào cả `ChessboardCalibrationViewModel` và `CalibrationViewModel`.
+             - Tự động kích hoạt luồng camera với consumer ID tương ứng (`"ChessboardCalib"` và `"TwoPointCalib"`) ngay khi mở cửa sổ.
+             - Đèn trạng thái trực quan: `🔴 LIVE CAMERA` (xanh ngọc khi hoạt động) và `⏸ TẠM DỪNG`.
+             - Cụm nút bấm điều khiển tiện lợi: `🔴 Bật/Tắt Live`, `📸 Chụp Khung Hình`, `📸 Chụp & Thêm Nhanh` (cho Chessboard).
+             - Tự động dọn dẹp dừng stream và unhook sự kiện khi đóng cửa sổ (`Closed` event và `OnWindowClosing`), triệt tiêu rò rỉ tài nguyên.
+             - Trong `CalibrationViewModel.SavePixelsPerMm()`: Bảo vệ an toàn cho cả môi trường UI và Unit Test / Console Test Runner (chỉ hiển thị `MessageBox.Show` khi có `Application.Current`).
+          3. *Kiểm thử tự động & Xác minh chất lượng*:
+             - Xây dựng bài kiểm thử tự động `TestStandaloneGlobalCalibrationWorkflow` trong `RecentJobsAndCalibrationTest.cs`: xác minh khởi tạo chế độ Toàn Cục, kiểm tra thuộc tính giao diện, kiểm tra tính toán và lưu bền vững vào file toàn cục, kiểm tra kế thừa sang Job mới và kiểm tra chế độ Active Job.
+             - Sửa triệt để luồng giải phóng Window STA trong `OqcLiveViewOnJobLoadTests.cs` (Test 4) và dọn dẹp race condition của `Progress<T>` trong `OtaPublisherServiceTests.cs`.
+             - Đạt 100% PASSED toàn bộ bộ kiểm thử tự động `TestExtractApp` và biên dịch 0 lỗi trên toàn bộ giải pháp.
+

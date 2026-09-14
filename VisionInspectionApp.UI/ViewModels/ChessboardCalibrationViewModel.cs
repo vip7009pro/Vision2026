@@ -23,6 +23,20 @@ public sealed partial class ChessboardCalibrationViewModel : ObservableObject
     private VisionConfig? _config;
     private Mat? _currentMat;
     private Mat? _undistortedMat;
+    private readonly WriteableBitmapRenderer _liveRenderer = new();
+    private bool _isRenderingLiveFrame;
+
+    [ObservableProperty]
+    private bool _isLiveActive = true;
+
+    public bool IsGlobalMode => _config is null;
+    public string WindowTitle => IsGlobalMode
+        ? "♟ Hiệu Chuẩn Camera Chessboard (Toàn Cục - Global Calibration)"
+        : "♟ Hiệu Chuẩn Camera Chessboard (Active Job)";
+
+    public string ModeBadgeText => IsGlobalMode
+        ? "🌐 CHẾ ĐỘ TOÀN CỤC (GLOBAL CALIBRATION)"
+        : "📁 CẤU HÌNH JOB HIỆN TẠI (ACTIVE JOB)";
 
     public ChessboardCalibrationViewModel(CameraService cameraService)
     {
@@ -38,6 +52,9 @@ public sealed partial class ChessboardCalibrationViewModel : ObservableObject
         CalibrateCommand = new RelayCommand(RunCalibrate, () => Captures.Count(c => c.Found) >= 3);
         UndistortPreviewCommand = new RelayCommand(UndistortPreview, () => IsCalibrated && _currentMat is not null);
         SetAsGlobalCalibrationCommand = new RelayCommand(SetAsGlobalCalibration, () => IsCalibrated);
+        ToggleLiveStreamCommand = new RelayCommand(ToggleLiveStream);
+        SnapFrameCommand = new AsyncRelayCommand(SnapFrameAsync);
+        SnapAndAddCaptureCommand = new AsyncRelayCommand(SnapAndAddCaptureAsync);
     }
 
     private bool _isInitializing;
@@ -94,12 +111,16 @@ public sealed partial class ChessboardCalibrationViewModel : ObservableObject
             : string.Empty;
     }
 
-    public void Initialize(VisionConfig config)
+    public void Initialize(VisionConfig? config = null)
     {
         _isInitializing = true;
         try
         {
             _config = config;
+            OnPropertyChanged(nameof(IsGlobalMode));
+            OnPropertyChanged(nameof(WindowTitle));
+            OnPropertyChanged(nameof(ModeBadgeText));
+
             ChessboardCalibrationData? data = null;
             bool isFromJob = false;
 
@@ -109,7 +130,14 @@ public sealed partial class ChessboardCalibrationViewModel : ObservableObject
             var globalCal = ChessboardCalibrationService.GetGlobalCalibration();
             bool hasGlobal = globalCal is not null && globalCal.IsCalibrated;
 
-            if (ForceApplyGlobalCalibration && hasGlobal)
+            if (config is null)
+            {
+                if (hasGlobal)
+                {
+                    data = globalCal;
+                }
+            }
+            else if (ForceApplyGlobalCalibration && hasGlobal)
             {
                 data = globalCal;
                 config.ChessboardCalibration = globalCal!.Clone();
@@ -135,7 +163,11 @@ public sealed partial class ChessboardCalibrationViewModel : ObservableObject
             {
                 ApplyCalibrationDataToUi(data);
 
-                if (ForceApplyGlobalCalibration && hasGlobal)
+                if (config is null)
+                {
+                    StatusMessage = "🌐 Chế độ Hiệu Chuẩn Toàn Cục (Global Calibration). Đã nạp thông số Global trước đó. Hãy căn chỉnh bàn cờ qua live stream.";
+                }
+                else if (ForceApplyGlobalCalibration && hasGlobal)
                 {
                     StatusMessage = "🔒 Đang CƯỠNG CHẾ áp dụng Global Calibration cho tất cả các Job.";
                 }
@@ -146,11 +178,16 @@ public sealed partial class ChessboardCalibrationViewModel : ObservableObject
                         : "🌐 Đang áp dụng Global Calibration (do Job hiện tại chưa có cấu hình riêng).";
                 }
             }
-            else if (config.ChessboardCalibration is not null)
+            else if (config?.ChessboardCalibration is not null)
             {
                 BoardCols = config.ChessboardCalibration.BoardCols;
                 BoardRows = config.ChessboardCalibration.BoardRows;
                 SquareSizeMm = config.ChessboardCalibration.SquareSizeMm;
+                StatusMessage = "🔴 Đang bật Livestream camera. Hãy căn chỉnh bàn cờ, chụp ít nhất 3 ảnh rồi bấm Calibrate.";
+            }
+            else
+            {
+                StatusMessage = "🔴 Đang bật Livestream camera. Hãy căn chỉnh bàn cờ, chụp ít nhất 3 ảnh rồi bấm Calibrate.";
             }
         }
         finally
@@ -229,27 +266,89 @@ public sealed partial class ChessboardCalibrationViewModel : ObservableObject
     public ICommand CalibrateCommand { get; }
     public ICommand UndistortPreviewCommand { get; }
     public ICommand SetAsGlobalCalibrationCommand { get; }
+    public ICommand ToggleLiveStreamCommand { get; }
+    public ICommand SnapFrameCommand { get; }
+    public ICommand SnapAndAddCaptureCommand { get; }
 
-    // ======== Load / Capture ========
-    private void LoadImage()
+    // ======== Live Stream ========
+    public async Task StartLiveStreamAsync()
     {
-        var dlg = new OpenFileDialog
+        IsLiveActive = true;
+        _cameraService.FrameCaptured += OnCameraFrameCaptured;
+        if (!_cameraService.IsRunning)
         {
-            Filter = "Image Files|*.png;*.jpg;*.jpeg;*.bmp|All Files|*.*"
-        };
-        if (dlg.ShowDialog() != true) return;
-
-        _currentMat?.Dispose();
-        _currentMat = Cv2.ImRead(dlg.FileName, ImreadModes.Color);
-        ShowCurrentImage();
-        DetectAndShowCorners();
-        RefreshCommands();
+            await _cameraService.StartSavedCameraAsync();
+        }
+        await _cameraService.RequestLiveStreamAsync("ChessboardCalib", true);
+        StatusMessage = "🔴 Đang bật Livestream camera. Hãy căn chỉnh bàn cờ dưới ống kính.";
     }
 
-    private async Task CaptureCameraAsync()
+    public async Task StopLiveStreamAsync()
+    {
+        IsLiveActive = false;
+        _cameraService.FrameCaptured -= OnCameraFrameCaptured;
+        await _cameraService.RequestLiveStreamAsync("ChessboardCalib", false);
+        _liveRenderer.Dispose();
+    }
+
+    private void OnCameraFrameCaptured(object? sender, Mat frame)
+    {
+        if (!IsLiveActive || frame == null || frame.IsDisposed || frame.Empty()) return;
+        if (_isRenderingLiveFrame) return;
+        _isRenderingLiveFrame = true;
+
+        Mat? frameCopy = null;
+        try
+        {
+            frameCopy = frame.Clone();
+        }
+        catch
+        {
+            _isRenderingLiveFrame = false;
+            return;
+        }
+
+        System.Windows.Application.Current?.Dispatcher?.BeginInvoke(System.Windows.Threading.DispatcherPriority.Render, new Action(() =>
+        {
+            try
+            {
+                if (IsLiveActive && frameCopy != null && !frameCopy.IsDisposed && !frameCopy.Empty())
+                {
+                    var bitmap = _liveRenderer.UpdateFromMat(frameCopy, 1920, 1080);
+                    if (bitmap != null && !ReferenceEquals(Image, bitmap))
+                    {
+                        Image = bitmap;
+                    }
+                }
+            }
+            finally
+            {
+                frameCopy?.Dispose();
+                _isRenderingLiveFrame = false;
+            }
+        }));
+    }
+
+    private void ToggleLiveStream()
+    {
+        IsLiveActive = !IsLiveActive;
+        _ = _cameraService.RequestLiveStreamAsync("ChessboardCalib", IsLiveActive);
+        if (IsLiveActive)
+        {
+            StatusMessage = "🔴 Đang bật Livestream camera. Hãy căn chỉnh góc và vị trí bàn cờ.";
+        }
+        else
+        {
+            StatusMessage = "⏸ Đã tạm dừng Livestream camera.";
+        }
+    }
+
+    private async Task SnapFrameAsync()
     {
         try
         {
+            IsLiveActive = false;
+            _ = _cameraService.RequestLiveStreamAsync("ChessboardCalib", false);
             var mat = await _cameraService.CaptureSnapshotAsync();
             if (mat is not null && !mat.Empty())
             {
@@ -268,6 +367,90 @@ public sealed partial class ChessboardCalibrationViewModel : ObservableObject
         {
             StatusMessage = $"❌ Lỗi camera: {ex.Message}";
         }
+    }
+
+    private async Task SnapAndAddCaptureAsync()
+    {
+        try
+        {
+            var mat = await _cameraService.CaptureSnapshotAsync();
+            if (mat is null || mat.Empty())
+            {
+                StatusMessage = "❌ Không thể chụp ảnh từ camera.";
+                return;
+            }
+
+            var patternSize = new OpenCvSharp.Size(InnerCornersX, InnerCornersY);
+            var (found, corners) = ChessboardCalibrationService.DetectCorners(mat, patternSize);
+
+            if (!found || corners.Length == 0)
+            {
+                // Nếu không tìm thấy, tạm dừng live hiển thị ảnh lỗi cho user chỉnh
+                IsLiveActive = false;
+                _ = _cameraService.RequestLiveStreamAsync("ChessboardCalib", false);
+                _currentMat?.Dispose();
+                _currentMat = mat;
+                ShowCurrentImage();
+                StatusMessage = $"⚠️ Không tìm thấy chessboard ({InnerCornersX}×{InnerCornersY} inner corners). Vui lòng điều chỉnh lại góc nghiêng hoặc ánh sáng.";
+                return;
+            }
+
+            // Tạo thumbnail
+            BitmapSource? thumb = null;
+            try
+            {
+                using var small = new Mat();
+                double scale = 80.0 / Math.Max(mat.Width, mat.Height);
+                Cv2.Resize(mat, small, new OpenCvSharp.Size(), scale, scale);
+                thumb = small.ToBitmapSource();
+                thumb.Freeze();
+            }
+            catch { }
+
+            var item = new ChessboardCaptureItem
+            {
+                Index = Captures.Count + 1,
+                Found = true,
+                CornerCount = corners.Length,
+                Thumbnail = thumb,
+                Corners = corners,
+                ImageSize = new OpenCvSharp.Size(mat.Width, mat.Height)
+            };
+
+            Captures.Add(item);
+            _currentMat?.Dispose();
+            _currentMat = mat;
+
+            StatusMessage = $"✅ Đã chụp & thêm Ảnh #{item.Index} ({corners.Length} corners). Hãy di chuyển bàn cờ sang góc khác và bấm chụp tiếp!";
+            RefreshCommands();
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = $"❌ Lỗi chụp ảnh: {ex.Message}";
+        }
+    }
+
+    // ======== Load / Capture ========
+    private void LoadImage()
+    {
+        var dlg = new OpenFileDialog
+        {
+            Filter = "Image Files|*.png;*.jpg;*.jpeg;*.bmp|All Files|*.*"
+        };
+        if (dlg.ShowDialog() != true) return;
+
+        IsLiveActive = false;
+        _ = _cameraService.RequestLiveStreamAsync("ChessboardCalib", false);
+        _currentMat?.Dispose();
+        _currentMat = Cv2.ImRead(dlg.FileName, ImreadModes.Color);
+        ShowCurrentImage();
+        DetectAndShowCorners();
+        RefreshCommands();
+    }
+
+    private async Task CaptureCameraAsync()
+    {
+        await SnapFrameAsync();
     }
 
     private void ShowCurrentImage()
@@ -403,7 +586,7 @@ public sealed partial class ChessboardCalibrationViewModel : ObservableObject
             : string.Empty;
         IsCalibrated = true;
 
-        // Save to config
+        // Save to config or global
         if (_config is not null)
         {
             _config.ChessboardCalibration = new ChessboardCalibrationData
@@ -422,9 +605,28 @@ public sealed partial class ChessboardCalibrationViewModel : ObservableObject
             };
             _config.PixelsPerMm = PixelsPerMm;
             IsDirty = true;
+            StatusMessage = $"✅ Calibration thành công cho Job! Reprojection Error: {ReprojectionError:F4} px | Pixels/mm: {PixelsPerMm:F4}";
         }
-
-        StatusMessage = $"✅ Calibration thành công! Reprojection Error: {ReprojectionError:F4} px | Pixels/mm: {PixelsPerMm:F4}";
+        else
+        {
+            var globalCalib = new ChessboardCalibrationData
+            {
+                BoardCols = BoardCols,
+                BoardRows = BoardRows,
+                SquareSizeMm = SquareSizeMm,
+                Fx = FocalX,
+                Fy = FocalY,
+                Cx = PrincipalX,
+                Cy = PrincipalY,
+                DistCoeffs = result.DistCoeffs ?? Array.Empty<double>(),
+                ReprojectionError = ReprojectionError,
+                PixelsPerMm = PixelsPerMm,
+                IsCalibrated = true
+            };
+            ChessboardCalibrationService.SaveGlobalCalibration(globalCalib);
+            IsDirty = true;
+            StatusMessage = $"🌐 Calibration thành công & ĐÃ LƯU TOÀN CỤC! Reprojection Error: {ReprojectionError:F4} px | Pixels/mm: {PixelsPerMm:F4} (Áp dụng cho mọi Job mới/chưa calib).";
+        }
         RefreshCommands();
     }
 

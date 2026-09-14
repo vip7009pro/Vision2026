@@ -52,7 +52,7 @@ public static class OtaPublisherServiceTests
 
             var publisher = new OtaPublisherService();
             double lastProgress = 0;
-            var progress = new Progress<double>(p => lastProgress = p);
+            var progress = new SynchronousProgress<double>(p => lastProgress = p);
 
             string resultZip = await publisher.BuildZipPackageAsync(sourceDir, outZip, progress);
 
@@ -441,5 +441,12 @@ public static class OtaPublisherServiceTests
         int nextBoundary = body.IndexOf("--", headerEnd);
         if (nextBoundary < 0) nextBoundary = body.Length;
         return body.Substring(headerEnd, nextBoundary - headerEnd).Trim();
+    }
+
+    private sealed class SynchronousProgress<T> : IProgress<T>
+    {
+        private readonly Action<T> _action;
+        public SynchronousProgress(Action<T> action) => _action = action;
+        public void Report(T value) => _action(value);
     }
 }

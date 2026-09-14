@@ -1,5 +1,8 @@
+using System;
 using System.Collections.ObjectModel;
 using System.IO;
+using System.Linq;
+using System.Threading.Tasks;
 using System.Windows.Input;
 using System.Windows.Media;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -8,6 +11,7 @@ using Microsoft.Win32;
 using OpenCvSharp;
 using OpenCvSharp.WpfExtensions;
 using VisionInspectionApp.Application;
+using VisionInspectionApp.Application.Services;
 using VisionInspectionApp.Models;
 using VisionInspectionApp.UI.Controls;
 using VisionInspectionApp.UI.Services;
@@ -26,6 +30,23 @@ public sealed partial class CalibrationViewModel : ObservableObject
 
     private Mat? _imageMat;
     private VisionConfig? _config;
+    private readonly WriteableBitmapRenderer _liveRenderer = new();
+    private bool _isRenderingLiveFrame;
+
+    [ObservableProperty]
+    private bool _isLiveActive = true;
+
+    [ObservableProperty]
+    private string _statusMessage = "🔴 Đang bật Livestream camera. Hãy đặt thước kẻ hoặc mẫu vật chuẩn dưới ống kính.";
+
+    public bool IsGlobalMode => _config is null;
+    public string WindowTitle => IsGlobalMode
+        ? "📐 Hiệu Chuẩn Tỉ Lệ Pixels/Mm (Toàn Cục - Global Calibration)"
+        : "📐 Hiệu Chuẩn Tỉ Lệ Pixels/Mm (Active Job)";
+
+    public string ModeBadgeText => IsGlobalMode
+        ? "🌐 CHẾ ĐỘ TOÀN CỤC (GLOBAL CALIBRATION)"
+        : $"📁 CẤU HÌNH JOB: {(string.IsNullOrEmpty(CurrentJobFilePath) ? "Chưa lưu" : Path.GetFileName(CurrentJobFilePath))}";
 
     public CalibrationViewModel(IConfigService configService, ConfigStoreOptions storeOptions, CameraService cameraService, IJobService jobService)
     {
@@ -45,6 +66,8 @@ public sealed partial class CalibrationViewModel : ObservableObject
         AddMeasurementCommand = new RelayCommand(AddMeasurement);
         ClearMeasurementsCommand = new RelayCommand(ClearMeasurements);
         LineSelectedCommand = new RelayCommand<LineSelection?>(OnLineSelected);
+        ToggleLiveStreamCommand = new RelayCommand(ToggleLiveStream);
+        SnapFrameForMeasurementCommand = new AsyncRelayCommand(SnapFrameForMeasurementAsync);
     }
 
     [ObservableProperty]
@@ -73,21 +96,51 @@ public sealed partial class CalibrationViewModel : ObservableObject
     private double _averagePixelsPerMm;
 
     public ICommand LoadImageCommand { get; }
-
     public ICommand CaptureCameraImageCommand { get; }
-
     public ICommand OpenJobCommand { get; }
     public ICommand SaveJobCommand { get; }
+    public ICommand SavePixelsPerMmCommand { get; }
+    public ICommand AddMeasurementCommand { get; }
+    public ICommand ClearMeasurementsCommand { get; }
+    public ICommand LineSelectedCommand { get; }
+    public ICommand ToggleLiveStreamCommand { get; }
+    public ICommand SnapFrameForMeasurementCommand { get; }
 
-    public void InitializeWithConfig(VisionConfig config, string? jobFilePath, ImageSource? previewImage)
+    public void InitializeWithConfig(VisionConfig? config, string? jobFilePath, ImageSource? previewImage)
     {
         _config = config;
         CurrentJobFilePath = jobFilePath;
-        ProductCode = config.ProductCode ?? string.Empty;
-        AveragePixelsPerMm = config.PixelsPerMm;
+
+        OnPropertyChanged(nameof(IsGlobalMode));
+        OnPropertyChanged(nameof(WindowTitle));
+        OnPropertyChanged(nameof(ModeBadgeText));
+
+        if (config is not null)
+        {
+            ProductCode = config.ProductCode ?? string.Empty;
+            AveragePixelsPerMm = config.PixelsPerMm;
+            StatusMessage = "🔴 Đang bật Livestream camera. Hãy đặt thước hoặc mẫu vật chuẩn dưới ống kính.";
+        }
+        else
+        {
+            ProductCode = "(Toàn Cục - Global)";
+            var globalCal = ChessboardCalibrationService.GetGlobalCalibration();
+            if (globalCal is not null && globalCal.PixelsPerMm > 0)
+            {
+                AveragePixelsPerMm = globalCal.PixelsPerMm;
+                StatusMessage = "🌐 Chế độ Hiệu Chuẩn Toàn Cục (Global Calibration). Đã nạp tỉ lệ Global hiện có. Hãy căn chỉnh mẫu vật qua live stream.";
+            }
+            else
+            {
+                AveragePixelsPerMm = 0.0;
+                StatusMessage = "🌐 Chế độ Hiệu Chuẩn Toàn Cục (Global Calibration). Hãy căn chỉnh mẫu vật qua live stream, bấm chụp ảnh và đo khoảng cách 2 điểm.";
+            }
+        }
+
         if (previewImage != null)
         {
             Image = previewImage;
+            IsLiveActive = false;
         }
     }
 
@@ -101,6 +154,9 @@ public sealed partial class CalibrationViewModel : ObservableObject
         Measurements.Clear();
         Image = null;
         IsDirty = false;
+        OnPropertyChanged(nameof(IsGlobalMode));
+        OnPropertyChanged(nameof(WindowTitle));
+        OnPropertyChanged(nameof(ModeBadgeText));
     }
 
     partial void OnIsDirtyChanged(bool value)
@@ -119,13 +175,105 @@ public sealed partial class CalibrationViewModel : ObservableObject
         }
     }
 
-    public ICommand SavePixelsPerMmCommand { get; }
+    // ======== Live Stream ========
+    public async Task StartLiveStreamAsync()
+    {
+        IsLiveActive = true;
+        _cameraService.FrameCaptured += OnCameraFrameCaptured;
+        if (!_cameraService.IsRunning)
+        {
+            await _cameraService.StartSavedCameraAsync();
+        }
+        await _cameraService.RequestLiveStreamAsync("TwoPointCalib", true);
+        StatusMessage = "🔴 Đang bật Livestream camera. Hãy căn chỉnh thước hoặc mẫu vật dưới ống kính.";
+    }
 
-    public ICommand AddMeasurementCommand { get; }
+    public async Task StopLiveStreamAsync()
+    {
+        IsLiveActive = false;
+        _cameraService.FrameCaptured -= OnCameraFrameCaptured;
+        await _cameraService.RequestLiveStreamAsync("TwoPointCalib", false);
+        _liveRenderer.Dispose();
+    }
 
-    public ICommand ClearMeasurementsCommand { get; }
+    private void OnCameraFrameCaptured(object? sender, Mat frame)
+    {
+        if (!IsLiveActive || frame == null || frame.IsDisposed || frame.Empty()) return;
+        if (_isRenderingLiveFrame) return;
+        _isRenderingLiveFrame = true;
 
-    public ICommand LineSelectedCommand { get; }
+        Mat? frameCopy = null;
+        try
+        {
+            frameCopy = frame.Clone();
+        }
+        catch
+        {
+            _isRenderingLiveFrame = false;
+            return;
+        }
+
+        System.Windows.Application.Current?.Dispatcher?.BeginInvoke(System.Windows.Threading.DispatcherPriority.Render, new Action(() =>
+        {
+            try
+            {
+                if (IsLiveActive && frameCopy != null && !frameCopy.IsDisposed && !frameCopy.Empty())
+                {
+                    var bitmap = _liveRenderer.UpdateFromMat(frameCopy, 1920, 1080);
+                    if (bitmap != null && !ReferenceEquals(Image, bitmap))
+                    {
+                        Image = bitmap;
+                    }
+                }
+            }
+            finally
+            {
+                frameCopy?.Dispose();
+                _isRenderingLiveFrame = false;
+            }
+        }));
+    }
+
+    private void ToggleLiveStream()
+    {
+        IsLiveActive = !IsLiveActive;
+        _ = _cameraService.RequestLiveStreamAsync("TwoPointCalib", IsLiveActive);
+        if (IsLiveActive)
+        {
+            StatusMessage = "🔴 Đang bật Livestream camera. Hãy căn chỉnh mẫu vật / thước kẻ.";
+        }
+        else
+        {
+            StatusMessage = "⏸ Đã tạm dừng Livestream camera.";
+        }
+    }
+
+    private async Task SnapFrameForMeasurementAsync()
+    {
+        try
+        {
+            IsLiveActive = false;
+            _ = _cameraService.RequestLiveStreamAsync("TwoPointCalib", false);
+            var mat = await _cameraService.CaptureSnapshotAsync();
+            if (mat is not null && !mat.Empty())
+            {
+                _imageMat?.Dispose();
+                _imageMat = mat;
+                Image = _imageMat.ToBitmapSourceForDisplay();
+                OverlayItems.Clear();
+                CurrentDistancePx = 0.0;
+                StatusMessage = "📸 Đã chụp khung hình! Hãy dùng chuột kéo vẽ đường thẳng nối 2 điểm trên ảnh để đo khoảng cách.";
+            }
+            else
+            {
+                StatusMessage = "❌ Không thể chụp ảnh từ camera.";
+            }
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = $"❌ Lỗi chụp ảnh: {ex.Message}";
+        }
+    }
 
     private void OpenJob()
     {
@@ -156,6 +304,9 @@ public sealed partial class CalibrationViewModel : ObservableObject
                 OverlayItems.Clear();
                 Measurements.Clear();
                 Image = null;
+                OnPropertyChanged(nameof(IsGlobalMode));
+                OnPropertyChanged(nameof(WindowTitle));
+                OnPropertyChanged(nameof(ModeBadgeText));
             }
             catch (Exception ex)
             {
@@ -198,35 +349,19 @@ public sealed partial class CalibrationViewModel : ObservableObject
             return;
         }
 
+        IsLiveActive = false;
+        _ = _cameraService.RequestLiveStreamAsync("TwoPointCalib", false);
         _imageMat?.Dispose();
         _imageMat = Cv2.ImRead(dlg.FileName, ImreadModes.Color);
         Image = _imageMat.ToBitmapSourceForDisplay();
         OverlayItems.Clear();
         CurrentDistancePx = 0.0;
+        StatusMessage = "📂 Đã nạp ảnh từ tệp! Hãy dùng chuột kéo vẽ đường thẳng nối 2 điểm để đo khoảng cách.";
     }
 
     private async Task CaptureCameraImageAsync()
     {
-        try
-        {
-            var mat = await _cameraService.CaptureSnapshotAsync();
-            if (mat != null && !mat.Empty())
-            {
-                _imageMat?.Dispose();
-                _imageMat = mat;
-                Image = _imageMat.ToBitmapSourceForDisplay();
-                OverlayItems.Clear();
-                CurrentDistancePx = 0.0;
-            }
-            else
-            {
-                System.Windows.MessageBox.Show("Không thể chụp ảnh từ camera. Vui lòng kiểm tra lại kết nối camera trong tab Live Camera.", "Lỗi camera", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Error);
-            }
-        }
-        catch (Exception ex)
-        {
-            System.Windows.MessageBox.Show($"Lỗi chụp ảnh: {ex.Message}", "Lỗi", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Error);
-        }
+        await SnapFrameForMeasurementAsync();
     }
 
     private void OnLineSelected(LineSelection? sel)
@@ -252,6 +387,8 @@ public sealed partial class CalibrationViewModel : ObservableObject
             Stroke = Brushes.Lime,
             Label = $"{CurrentDistancePx:0.0} px"
         });
+
+        StatusMessage = $"Đoạn thẳng: {CurrentDistancePx:F1} px. Nhập khoảng cách thực (mm) và bấm [Add Measurement].";
     }
 
     private void AddMeasurement()
@@ -293,23 +430,64 @@ public sealed partial class CalibrationViewModel : ObservableObject
             _config.PixelsPerMm = AveragePixelsPerMm;
             IsDirty = true;
         }
+        else if (_config == null && AveragePixelsPerMm > 0)
+        {
+            IsDirty = true;
+        }
     }
 
-    private void SavePixelsPerMm()
+    public void SavePixelsPerMm()
     {
-        if (_config == null || string.IsNullOrEmpty(CurrentTempWorkingDir))
+        if (AveragePixelsPerMm <= 0)
         {
+            StatusMessage = "⚠️ Vui lòng thực hiện ít nhất 1 phép đo để xác định tỉ lệ Pixels/mm.";
+            if (System.Windows.Application.Current != null)
+            {
+                System.Windows.MessageBox.Show("Vui lòng thực hiện ít nhất 1 phép đo để xác định tỉ lệ Pixels/mm.", "Chưa có dữ liệu đo", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Warning);
+            }
             return;
         }
 
-        if (AveragePixelsPerMm > 0)
+        if (_config is null)
         {
-            _config.PixelsPerMm = AveragePixelsPerMm;
+            // Lưu vào cấu hình Global Calibration
+            var globalCal = ChessboardCalibrationService.GetGlobalCalibration() ?? new ChessboardCalibrationData();
+            globalCal.PixelsPerMm = AveragePixelsPerMm;
+            globalCal.IsCalibrated = true;
+            bool ok = ChessboardCalibrationService.SaveGlobalCalibration(globalCal);
+            if (ok)
+            {
+                IsDirty = true;
+                StatusMessage = $"🌐 Đã lưu tỉ lệ Pixels/mm TOÀN CỤC thành công: {AveragePixelsPerMm:0.####} px/mm";
+                if (System.Windows.Application.Current != null)
+                {
+                    System.Windows.MessageBox.Show($"🌐 Đã lưu tỉ lệ Pixels/mm TOÀN CỤC thành công: {AveragePixelsPerMm:0.####} px/mm\n(Tất cả Job chưa có cấu hình riêng sẽ tự động áp dụng hệ số này).", "Global Calibration Saved", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Information);
+                }
+            }
+            else
+            {
+                StatusMessage = "❌ Lưu Global Calibration thất bại. Vui lòng kiểm tra quyền ghi tệp.";
+                if (System.Windows.Application.Current != null)
+                {
+                    System.Windows.MessageBox.Show("❌ Lưu Global Calibration thất bại. Vui lòng kiểm tra quyền ghi tệp.", "Lỗi", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Error);
+                }
+            }
+            return;
         }
+
+        // Đang mở Job: Lưu vào Job hiện tại
+        _config.PixelsPerMm = AveragePixelsPerMm;
         _config.ProductCode = ProductCode ?? string.Empty;
-        _jobService.SaveJob(_config, CurrentTempWorkingDir, CurrentJobFilePath ?? "");
+        if (!string.IsNullOrEmpty(CurrentTempWorkingDir) && !string.IsNullOrEmpty(CurrentJobFilePath))
+        {
+            _jobService.SaveJob(_config, CurrentTempWorkingDir, CurrentJobFilePath);
+        }
         IsDirty = false;
-        System.Windows.MessageBox.Show($"Calibration saved: {_config.PixelsPerMm:0.####} px/mm", "Calibration Saved", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Information);
+        StatusMessage = $"💾 Đã lưu hiệu chuẩn Job: {_config.PixelsPerMm:0.####} px/mm";
+        if (System.Windows.Application.Current != null)
+        {
+            System.Windows.MessageBox.Show($"Đã lưu hiệu chuẩn Job: {_config.PixelsPerMm:0.####} px/mm", "Calibration Saved", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Information);
+        }
     }
 
     public sealed record CalibrationMeasurement(double DistancePx, double RealMm, double PixelsPerMm);
