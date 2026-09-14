@@ -8,6 +8,10 @@
         Height="800" Width="1220"
         WindowStartupLocation="CenterOwner"
         Background="{DynamicResource WindowBackgroundBrush}">
+    <Window.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVis" />
+        <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter" />
+    </Window.Resources>
     <Grid Margin="10">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
@@ -136,7 +140,7 @@
 
                             <!-- Progress indicator khi đang xử lý phân tích ảnh -->
                             <ProgressBar Height="4" IsIndeterminate="True" Margin="0,0,0,6" Foreground="#00E5FF"
-                                         Visibility="{Binding IsDetecting, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                                         Visibility="{Binding IsDetecting, Converter={StaticResource BoolToVis}}" />
                             
                             <WrapPanel Margin="0,0,0,4">
                                 <Button Command="{Binding ToggleLiveStreamCommand}" Margin="0,0,6,4" Padding="10,5" FontWeight="Bold">

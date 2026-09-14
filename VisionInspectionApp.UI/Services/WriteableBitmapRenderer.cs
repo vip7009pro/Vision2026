@@ -52,7 +52,7 @@ public sealed class WriteableBitmapRenderer : IDisposable
         }
 
         var dispatcher = System.Windows.Application.Current?.Dispatcher;
-        if (dispatcher != null && !dispatcher.CheckAccess())
+        if (dispatcher != null && !dispatcher.HasShutdownStarted && !dispatcher.HasShutdownFinished && !dispatcher.CheckAccess())
         {
             try
             {

@@ -2530,3 +2530,12 @@ Lộ trình tích hợp tính năng Chụp ảnh từ camera và hỗ trợ các
              - XÃ¢y dá»±ng bá»™ test suite ChessboardRobustnessTests.cs gá»“m 5 bÃ i kiá»ƒm tra chuyÃªn sÃ¢u: BÃ n cá» chuáº©n (nháº­n diá»‡n trong 185ms), BÃ n cá» xoay 90Â°, ChÃªnh lá»‡ch sÃ¡ng gradient, BÃ¹ quy Æ°á»›c nháº­p liá»‡u, vÃ  An toÃ n hiá»‡u nÄƒng trÃªn áº£nh lá»›n 2560Ã—1440 khÃ´ng bÃ n cá» (thoÃ¡t an toÃ n trong 1.9s, khÃ´ng treo mÃ¡y).
              - Cháº¡y dotnet run --project TestExtractApp Ä‘áº¡t **100% PASSED** toÃ n bá»™ cÃ¡c test suites.
              - ToÃ n bá»™ Solution VisionInspectionApp.slnx biÃªn dá»‹ch Release **0 Error(s)**.
+
+    - [x] **Task 331: Kháº¯c Phá»¥c Lá»—i XamlParseException (Missing Resource 'BooleanToVisibilityConverter') Trong Cá»­a Sá»• Hiá»‡u Chuáº©n BÃ n Cá»**:
+        - **Hiá»‡n tÆ°á»£ng**: Khi ngÆ°á»i dÃ¹ng nháº¥n má»Ÿ cá»­a sá»• hiá»‡u chuáº©n bÃ n cá» (ChessboardCalibrationDialog), á»©ng dá»¥ng láº­p tá»©c bá»‹ vÄƒng ngoáº¡i lá»‡ System.Windows.Markup.XamlParseException táº¡i dÃ²ng 139 vá»›i thÃ´ng bÃ¡o: System.Exception: Cannot find resource named 'BooleanToVisibilityConverter'. Resource names are case sensitive. vÃ  á»©ng dá»¥ng bá»‹ crash táº¯t.
+        - **NguyÃªn nhÃ¢n**: Trong ChessboardCalibrationDialog.xaml, thanh tiáº¿n trÃ¬nh ProgressBar gáº¯n thuá»™c tÃ­nh Visibility="{Binding IsDetecting, Converter={StaticResource BooleanToVisibilityConverter}}". Tuy nhiÃªn, trong <Window.Resources> cá»§a Dialog chÆ°a khai bÃ¡o resource nÃ y, Ä‘á»“ng thá»i trong App.xaml (Application.Resources) cÅ©ng chÆ°a cÃ³ Ä‘á»‹nh nghÄ©a toÃ n cá»¥c cho key nÃ y.
+        - **Giáº£i phÃ¡p triá»ƒn khai**:
+          1. Khai bÃ¡o bá»• sung <BooleanToVisibilityConverter x:Key="BoolToVis" /> vÃ  <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter" /> vÃ o Application.Resources trong App.xaml, giÃºp toÃ n bá»™ á»©ng dá»¥ng vÃ  táº¥t cáº£ cÃ¡c cá»­a sá»• con/dialog Ä‘á»u dÃ¹ng Ä‘Æ°á»£c converter nÃ y an toÃ n.
+          2. ThÃªm <Window.Resources> rÃµ rÃ ng vÃ o ChessboardCalibrationDialog.xaml vÃ  Ä‘á»“ng bá»™ khÃ³a sá»­ dá»¥ng sang {StaticResource BoolToVis} theo chuáº©n chung cá»§a dá»± Ã¡n.
+          3. Bá»• sung kiá»ƒm tra an toÃ n trong WriteableBitmapRenderer.cs (!dispatcher.HasShutdownStarted && !dispatcher.HasShutdownFinished), chá»‘ng vÄƒng lá»—i luá»“ng camera background khi á»©ng dá»¥ng Ä‘ang Ä‘Ã³ng.
+          4. BiÃªn dá»‹ch vÃ  kiá»ƒm thá»­ tá»± Ä‘á»™ng toÃ n bá»™ test suite TestExtractApp Ä‘áº¡t 100% PASSED (exit code 0), biÃªn dá»‹ch Release 0 Error(s).

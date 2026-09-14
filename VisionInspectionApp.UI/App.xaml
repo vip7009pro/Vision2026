@@ -17,6 +17,8 @@
             <converters:PassRateConverter x:Key="PassRateConverter" />
             <converters:ColorToBrushConverter x:Key="ColorToBrushConverter" />
             <converters:InverseBoolToVisConverter x:Key="InverseBoolToVisConverter" />
+            <BooleanToVisibilityConverter x:Key="BoolToVis" />
+            <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter" />
             
             
             

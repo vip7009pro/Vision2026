@@ -4016,3 +4016,12 @@
        - XÃ¢y dá»±ng bÃ i test ChessboardRobustnessTests.cs (5 bÃ i test): BÃ n cá» chuáº©n (185ms), BÃ n cá» xoay 90Â°, Gradient shading Ã¡nh sÃ¡ng chÃªnh lá»‡ch, Tá»± Ä‘á»™ng bÃ¹ quy Æ°á»›c, vÃ  Kiá»ƒm tra áº£nh lá»›n 2560Ã—1440 khÃ´ng bÃ n cá» (thoÃ¡t an toÃ n trong 1.9s, khÃ´ng treo mÃ¡y).
        - 100% test suite TestExtractApp Ä‘áº¡t **PASSED**.
        - ToÃ n bá»™ Solution VisionInspectionApp.slnx biÃªn dá»‹ch Release **0 Error(s)**.
+
+- **Kháº¯c Phá»¥c Lá»—i XamlParseException Khi Má»Ÿ Cá»­a Sá»• Hiá»‡u Chuáº©n BÃ n Cá» (Task 331)**:
+  - **Hiá»‡n TÆ°á»£ng**: NgÆ°á»i dÃ¹ng pháº£n Ã¡nh cá»© vÃ o cá»­a sá»• hiá»‡u chuáº©n bÃ n cá» thÃ¬ gáº·p lá»—i System.Windows.Markup.XamlParseException táº¡i dÃ²ng 139: Cannot find resource named 'BooleanToVisibilityConverter'. Resource names are case sensitive. dáº«n Ä‘áº¿n crash á»©ng dá»¥ng.
+  - **NguyÃªn NhÃ¢n**: ChessboardCalibrationDialog.xaml sá»­ dá»¥ng {StaticResource BooleanToVisibilityConverter} cho thanh tiáº¿n trÃ¬nh phÃ¢n tÃ­ch áº£nh ProgressBar khi chÆ°a khai bÃ¡o converter nÃ y trong <Window.Resources> cÅ©ng nhÆ° App.xaml.
+  - **Kháº¯c Phá»¥c**:
+    1. ÄÄƒng kÃ½ cáº£ hai khÃ³a <BooleanToVisibilityConverter x:Key="BoolToVis" /> vÃ  <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter" /> vÃ o App.xaml lÃ m tÃ i nguyÃªn dÃ¹ng chung toÃ n cá»¥c.
+    2. ThÃªm <Window.Resources> cá»¥c bá»™ vÃ o ChessboardCalibrationDialog.xaml vÃ  chuyá»ƒn converter vá» {StaticResource BoolToVis}.
+    3. ThÃªm cá» kiá»ƒm tra tráº¡ng thÃ¡i shutdown cá»§a Dispatcher trong WriteableBitmapRenderer.cs Ä‘á»ƒ chá»‘ng exception Ä‘a luá»“ng khi Ä‘Ã³ng á»©ng dá»¥ng.
+    4. Kiá»ƒm thá»­ dotnet run --project TestExtractApp Ä‘áº¡t 100% PASSED, biÃªn dá»‹ch Release 0 lá»—i.
