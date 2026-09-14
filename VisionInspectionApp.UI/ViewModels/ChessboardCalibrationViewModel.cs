@@ -44,17 +44,17 @@ public sealed partial class ChessboardCalibrationViewModel : ObservableObject
         Captures = new ObservableCollection<ChessboardCaptureItem>();
         OverlayItems = new ObservableCollection<OverlayItem>();
 
-        LoadImageCommand = new RelayCommand(LoadImage);
+        LoadImageCommand = new AsyncRelayCommand(LoadImageAsync);
         CaptureCameraCommand = new AsyncRelayCommand(CaptureCameraAsync);
-        AddCaptureCommand = new RelayCommand(AddCapture, () => _currentMat is not null);
+        AddCaptureCommand = new RelayCommand(AddCapture, () => _currentMat is not null && !IsDetecting);
         RemoveCaptureCommand = new RelayCommand<ChessboardCaptureItem>(RemoveCapture);
-        ClearAllCommand = new RelayCommand(ClearAll);
-        CalibrateCommand = new RelayCommand(RunCalibrate, () => Captures.Count(c => c.Found) >= 3);
-        UndistortPreviewCommand = new RelayCommand(UndistortPreview, () => IsCalibrated && _currentMat is not null);
-        SetAsGlobalCalibrationCommand = new RelayCommand(SetAsGlobalCalibration, () => IsCalibrated);
+        ClearAllCommand = new RelayCommand(ClearAll, () => !IsDetecting);
+        CalibrateCommand = new RelayCommand(RunCalibrate, () => Captures.Count(c => c.Found) >= 3 && !IsDetecting);
+        UndistortPreviewCommand = new RelayCommand(UndistortPreview, () => IsCalibrated && _currentMat is not null && !IsDetecting);
+        SetAsGlobalCalibrationCommand = new RelayCommand(SetAsGlobalCalibration, () => IsCalibrated && !IsDetecting);
         ToggleLiveStreamCommand = new RelayCommand(ToggleLiveStream);
-        SnapFrameCommand = new AsyncRelayCommand(SnapFrameAsync);
-        SnapAndAddCaptureCommand = new AsyncRelayCommand(SnapAndAddCaptureAsync);
+        SnapFrameCommand = new AsyncRelayCommand(SnapFrameAsync, () => !IsDetecting);
+        SnapAndAddCaptureCommand = new AsyncRelayCommand(SnapAndAddCaptureAsync, () => !IsDetecting);
     }
 
     private bool _isInitializing;
@@ -198,7 +198,7 @@ public sealed partial class ChessboardCalibrationViewModel : ObservableObject
 
     // ======== Settings ========
     [ObservableProperty]
-    private int _boardCols = 8;
+    private int _boardCols = 9;
 
     [ObservableProperty]
     private int _boardRows = 6;
@@ -206,12 +206,58 @@ public sealed partial class ChessboardCalibrationViewModel : ObservableObject
     [ObservableProperty]
     private double _squareSizeMm = 29.0;
 
-    // Inner corners = (cols-1, rows-1)
-    public int InnerCornersX => Math.Max(1, BoardCols - 1);
-    public int InnerCornersY => Math.Max(1, BoardRows - 1);
+    [ObservableProperty]
+    private PatternSizeConvention _patternConvention = PatternSizeConvention.InnerCorners;
+
+    public int PatternConventionIndex
+    {
+        get => (int)PatternConvention;
+        set
+        {
+            if ((int)PatternConvention != value)
+            {
+                PatternConvention = (PatternSizeConvention)value;
+                OnPropertyChanged(nameof(PatternConventionIndex));
+            }
+        }
+    }
+
+    [ObservableProperty]
+    private bool _autoSwapDimensions = true;
+
+    [ObservableProperty]
+    private bool _useEnhancedSectorBased = true;
+
+    [ObservableProperty]
+    private bool _isDetecting;
+
+    public bool IsNotDetecting => !IsDetecting;
+
+    partial void OnIsDetectingChanged(bool value)
+    {
+        OnPropertyChanged(nameof(IsNotDetecting));
+        RefreshCommands();
+    }
+
+    // Inner corners dựa trên quy ước được chọn:
+    // - InnerCorners (mặc định): cols và rows chính là số góc trong
+    // - SquareCount: số góc trong = (cols - 1, rows - 1)
+    public int InnerCornersX => PatternConvention == PatternSizeConvention.InnerCorners
+        ? Math.Max(2, BoardCols)
+        : Math.Max(2, BoardCols - 1);
+
+    public int InnerCornersY => PatternConvention == PatternSizeConvention.InnerCorners
+        ? Math.Max(2, BoardRows)
+        : Math.Max(2, BoardRows - 1);
 
     partial void OnBoardColsChanged(int value) => OnPropertyChanged(nameof(InnerCornersX));
     partial void OnBoardRowsChanged(int value) => OnPropertyChanged(nameof(InnerCornersY));
+    partial void OnPatternConventionChanged(PatternSizeConvention value)
+    {
+        OnPropertyChanged(nameof(InnerCornersX));
+        OnPropertyChanged(nameof(InnerCornersY));
+        OnPropertyChanged(nameof(PatternConventionIndex));
+    }
 
     // ======== Preview ========
     [ObservableProperty]
@@ -345,18 +391,21 @@ public sealed partial class ChessboardCalibrationViewModel : ObservableObject
 
     private async Task SnapFrameAsync()
     {
+        if (IsDetecting) return;
         try
         {
+            IsDetecting = true;
             IsLiveActive = false;
             _ = _cameraService.RequestLiveStreamAsync("ChessboardCalib", false);
-            var mat = await _cameraService.CaptureSnapshotAsync();
+            StatusMessage = "⏳ Đang chụp khung hình và phân tích bàn cờ (Sector-Based SB)...";
+
+            var mat = _cameraService.TryGetLatestFrameClone() ?? await _cameraService.CaptureSnapshotAsync();
             if (mat is not null && !mat.Empty())
             {
                 _currentMat?.Dispose();
                 _currentMat = mat;
                 ShowCurrentImage();
-                DetectAndShowCorners();
-                RefreshCommands();
+                await DetectAndShowCornersCoreAsync(_currentMat);
             }
             else
             {
@@ -367,13 +416,22 @@ public sealed partial class ChessboardCalibrationViewModel : ObservableObject
         {
             StatusMessage = $"❌ Lỗi camera: {ex.Message}";
         }
+        finally
+        {
+            IsDetecting = false;
+            RefreshCommands();
+        }
     }
 
     private async Task SnapAndAddCaptureAsync()
     {
+        if (IsDetecting) return;
         try
         {
-            var mat = await _cameraService.CaptureSnapshotAsync();
+            IsDetecting = true;
+            StatusMessage = "⏳ Đang chụp & phân tích bàn cờ...";
+
+            var mat = _cameraService.TryGetLatestFrameClone() ?? await _cameraService.CaptureSnapshotAsync();
             if (mat is null || mat.Empty())
             {
                 StatusMessage = "❌ Không thể chụp ảnh từ camera.";
@@ -381,9 +439,21 @@ public sealed partial class ChessboardCalibrationViewModel : ObservableObject
             }
 
             var patternSize = new OpenCvSharp.Size(InnerCornersX, InnerCornersY);
-            var (found, corners) = ChessboardCalibrationService.DetectCorners(mat, patternSize);
+            bool swap = AutoSwapDimensions;
+            bool enhanced = UseEnhancedSectorBased;
 
-            if (!found || corners.Length == 0)
+            // Chạy phân tích hoàn toàn trên ThreadPool
+            var result = await Task.Run(() =>
+            {
+                return ChessboardCalibrationService.DetectCornersMultiStrategy(
+                    mat,
+                    patternSize,
+                    autoSwapDimensions: swap,
+                    useEnhancedSectorBased: enhanced,
+                    tryAlternativeConvention: true);
+            });
+
+            if (!result.Found || result.Corners.Length == 0)
             {
                 // Nếu không tìm thấy, tạm dừng live hiển thị ảnh lỗi cho user chỉnh
                 IsLiveActive = false;
@@ -391,7 +461,7 @@ public sealed partial class ChessboardCalibrationViewModel : ObservableObject
                 _currentMat?.Dispose();
                 _currentMat = mat;
                 ShowCurrentImage();
-                StatusMessage = $"⚠️ Không tìm thấy chessboard ({InnerCornersX}×{InnerCornersY} inner corners). Vui lòng điều chỉnh lại góc nghiêng hoặc ánh sáng.";
+                StatusMessage = $"⚠️ Không tìm thấy chessboard ({InnerCornersX}×{InnerCornersY} góc). Hãy thử đổi góc chụp, xoay bàn cờ hoặc chỉnh ánh sáng.";
                 return;
             }
 
@@ -411,9 +481,9 @@ public sealed partial class ChessboardCalibrationViewModel : ObservableObject
             {
                 Index = Captures.Count + 1,
                 Found = true,
-                CornerCount = corners.Length,
+                CornerCount = result.Corners.Length,
                 Thumbnail = thumb,
-                Corners = corners,
+                Corners = result.Corners,
                 ImageSize = new OpenCvSharp.Size(mat.Width, mat.Height)
             };
 
@@ -421,31 +491,52 @@ public sealed partial class ChessboardCalibrationViewModel : ObservableObject
             _currentMat?.Dispose();
             _currentMat = mat;
 
-            StatusMessage = $"✅ Đã chụp & thêm Ảnh #{item.Index} ({corners.Length} corners). Hãy di chuyển bàn cờ sang góc khác và bấm chụp tiếp!";
-            RefreshCommands();
+            // Hiển thị ảnh vẽ corners
+            using var drawn = ChessboardCalibrationService.DrawCorners(_currentMat, result.PatternSize, result.Corners, true);
+            Image = drawn.ToBitmapSourceForDisplay();
+
+            StatusMessage = $"✅ Đã chụp & thêm Ảnh #{item.Index} ({result.Corners.Length} corners - {result.StrategyUsed}). Hãy di chuyển bàn cờ sang góc khác và bấm chụp tiếp!";
         }
         catch (Exception ex)
         {
             StatusMessage = $"❌ Lỗi chụp ảnh: {ex.Message}";
         }
+        finally
+        {
+            IsDetecting = false;
+            RefreshCommands();
+        }
     }
 
     // ======== Load / Capture ========
-    private void LoadImage()
+    private async Task LoadImageAsync()
     {
+        if (IsDetecting) return;
         var dlg = new OpenFileDialog
         {
             Filter = "Image Files|*.png;*.jpg;*.jpeg;*.bmp|All Files|*.*"
         };
         if (dlg.ShowDialog() != true) return;
 
-        IsLiveActive = false;
-        _ = _cameraService.RequestLiveStreamAsync("ChessboardCalib", false);
-        _currentMat?.Dispose();
-        _currentMat = Cv2.ImRead(dlg.FileName, ImreadModes.Color);
-        ShowCurrentImage();
-        DetectAndShowCorners();
-        RefreshCommands();
+        try
+        {
+            IsDetecting = true;
+            IsLiveActive = false;
+            _ = _cameraService.RequestLiveStreamAsync("ChessboardCalib", false);
+            _currentMat?.Dispose();
+            _currentMat = Cv2.ImRead(dlg.FileName, ImreadModes.Color);
+            ShowCurrentImage();
+            await DetectAndShowCornersCoreAsync(_currentMat);
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = $"❌ Lỗi tải ảnh: {ex.Message}";
+        }
+        finally
+        {
+            IsDetecting = false;
+            RefreshCommands();
+        }
     }
 
     private async Task CaptureCameraAsync()
@@ -465,7 +556,12 @@ public sealed partial class ChessboardCalibrationViewModel : ObservableObject
 
     private void DetectAndShowCorners()
     {
-        if (_currentMat is null || _currentMat.IsDisposed || _currentMat.Empty())
+        _ = DetectAndShowCornersCoreAsync(_currentMat);
+    }
+
+    private async Task DetectAndShowCornersCoreAsync(Mat? matToDetect)
+    {
+        if (matToDetect is null || matToDetect.IsDisposed || matToDetect.Empty())
         {
             _lastDetection = (false, Array.Empty<Point2f>());
             StatusMessage = "❌ Không có ảnh.";
@@ -473,23 +569,34 @@ public sealed partial class ChessboardCalibrationViewModel : ObservableObject
         }
 
         var patternSize = new OpenCvSharp.Size(InnerCornersX, InnerCornersY);
-        var (found, corners) = ChessboardCalibrationService.DetectCorners(_currentMat, patternSize);
-        _lastDetection = (found, corners);
+        bool swap = AutoSwapDimensions;
+        bool enhanced = UseEnhancedSectorBased;
 
+        StatusMessage = "⏳ Đang phân tích góc bàn cờ (Sector-Based SB)...";
+
+        var result = await Task.Run(() =>
+        {
+            return ChessboardCalibrationService.DetectCornersMultiStrategy(
+                matToDetect,
+                patternSize,
+                autoSwapDimensions: swap,
+                useEnhancedSectorBased: enhanced,
+                tryAlternativeConvention: true);
+        });
+
+        _lastDetection = (result.Found, result.Corners);
         OverlayItems.Clear();
 
-        if (found && corners.Length > 0)
+        if (result.Found && result.Corners.Length > 0)
         {
-            // Draw corners overlay
-            using var drawn = ChessboardCalibrationService.DrawCorners(_currentMat, patternSize, corners, true);
+            using var drawn = ChessboardCalibrationService.DrawCorners(matToDetect, result.PatternSize, result.Corners, true);
             Image = drawn.ToBitmapSourceForDisplay();
-
-            StatusMessage = $"✅ Phát hiện {corners.Length} corners. Bấm [+ Thêm ảnh] để thêm vào danh sách.";
+            StatusMessage = $"✅ Phát hiện {result.Corners.Length} corners ({result.StrategyUsed}). Bấm [+ Thêm ảnh] để thêm vào danh sách.";
         }
         else
         {
-            Image = _currentMat.ToBitmapSourceForDisplay();
-            StatusMessage = $"❌ Không tìm thấy chessboard pattern ({InnerCornersX}×{InnerCornersY} inner corners). Kiểm tra số ô / góc chụp.";
+            Image = matToDetect.ToBitmapSourceForDisplay();
+            StatusMessage = $"❌ Không tìm thấy chessboard pattern ({InnerCornersX}×{InnerCornersY} góc). Kiểm tra số góc, độ nghiêng hoặc ánh sáng.";
         }
     }
 
@@ -682,10 +789,19 @@ public sealed partial class ChessboardCalibrationViewModel : ObservableObject
     private void RefreshCommands()
     {
         (AddCaptureCommand as RelayCommand)?.NotifyCanExecuteChanged();
+        (ClearAllCommand as RelayCommand)?.NotifyCanExecuteChanged();
         (CalibrateCommand as RelayCommand)?.NotifyCanExecuteChanged();
         (UndistortPreviewCommand as RelayCommand)?.NotifyCanExecuteChanged();
         (SetAsGlobalCalibrationCommand as RelayCommand)?.NotifyCanExecuteChanged();
+        (SnapFrameCommand as AsyncRelayCommand)?.NotifyCanExecuteChanged();
+        (SnapAndAddCaptureCommand as AsyncRelayCommand)?.NotifyCanExecuteChanged();
     }
+}
+
+public enum PatternSizeConvention
+{
+    InnerCorners = 0, // Nhập số góc giao nhau bên trong (Inner Corners) - Khuyên dùng
+    SquareCount = 1   // Nhập số ô vuông (Square count) - Hệ thống tự trừ 1
 }
 
 public sealed class ChessboardCaptureItem : ObservableObject

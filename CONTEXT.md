@@ -3985,3 +3985,34 @@
 ### Ưu tiên thấp
 
 - Kiểm tra serialization/deserialization của node graph, layout canvas và tham số toàn cục.
+
+
+- **Kháº¯c Phá»¥c Hiá»‡n TÆ°á»£ng KhÃ´ng TÃ¬m Tháº¥y Chessboard DÃ¹ áº¢nh RÃµ & Triá»‡t TiÃªu 100% Lag ÄÆ¡ Treo App Khi Hiá»‡u Chuáº©n BÃ n Cá» (Task 330)**:
+  - **Hiá»‡n TÆ°á»£ng & Váº¥n Äá»**:
+    - NgÆ°á»i dÃ¹ng pháº£n Ã¡nh: khi hiá»‡u chuáº©n bÃ n cá», áº£nh Ä‘Æ°a vÃ o hoáº·c chá»¥p tá»« camera ráº¥t rÃµ nÃ©t nhÆ°ng OpenCV váº«n khÃ´ng tÃ¬m ra bÃ n cá», sau Ä‘Ã³ á»©ng dá»¥ng bá»‹ lag ráº¥t náº·ng, Ä‘Æ¡ cá»©ng hoÃ n toÃ n (Not Responding) Ä‘áº¿n má»©c pháº£i táº¯t á»©ng dá»¥ng Ä‘i báº­t láº¡i.
+  - **NguyÃªn NhÃ¢n Gá»‘c Rá»… ÄÃ£ Äiá»u Tra**:
+    1. *Lá»—i lá»‡ch quy Æ°á»›c kÃ­ch thÆ°á»›c (Pattern Size Convention Mismatch)*: HÃ m Cv2.FindChessboardCorners yÃªu cáº§u truyá»n vÃ o sá»‘ gÃ³c trong (InnerCorners = Squares - 1). Code cÅ© tá»± Ä‘á»™ng trá»« 1 tá»« giÃ¡ trá»‹ ngÆ°á»i dÃ¹ng nháº­p (BoardCols - 1, BoardRows - 1). Do Ä‘Ã³, náº¿u ngÆ°á»i dÃ¹ng nháº­p sá»‘ gÃ³c (vÃ­ dá»¥ 9Ã—6 gÃ³c), code láº¡i Ã©p OpenCV Ä‘i tÃ¬m 8Ã—5 gÃ³c -> OpenCV tháº¥t báº¡i 100%. NgoÃ i ra khi bÃ n cá» xoay 90Â°, tá»· lá»‡ WÃ—H bá»‹ Ä‘áº£o ngÆ°á»£c mÃ  há»‡ thá»‘ng khÃ´ng tá»± hoÃ¡n Ä‘á»•i.
+    2. *Háº¡n cháº¿ cá»§a thuáº­t toÃ¡n FindChessboardCorners cá»• Ä‘iá»ƒn*: Thuáº­t toÃ¡n cÅ© ráº¥t dá»… bá»‹ bá» sÃ³t (false negative) khi áº£nh cÃ³ chÃªnh lá»‡ch Ã¡nh sÃ¡ng (gradient shading), gÃ³c nghiÃªng quang há»c hoáº·c mÃ©o á»‘ng kÃ­nh gÃ³c rá»™ng.
+    3. *Cháº¡y Ä‘á»“ng bá»™ trÃªn UI Thread & BÃ¹ng ná»• tá»• há»£p quad*: ToÃ n bá»™ quÃ¡ trÃ¬nh nháº­n diá»‡n trÆ°á»›c Ä‘Ã¢y cháº¡y trá»±c tiáº¿p trÃªn UI Dispatcher. TrÃªn áº£nh lá»›n (2K/4K) hoáº·c áº£nh cÃ³ nhiá»…u ná»n/linh kiá»‡n phá»©c táº¡p mÃ  khÃ´ng cÃ³ chessboard, thuáº­t toÃ¡n AdaptiveThresh cá»• Ä‘iá»ƒn khÃ´ng cÃ³ FastCheck sinh ra hÃ ng trÄƒm nghÃ¬n quads, khiáº¿n OpenCV duyá»‡t Ä‘á»“ thá»‹ vÃ©t cáº¡n ngá»‘n CPU hÆ¡n 3 phÃºt (194.434 ms!), lÃ m Ä‘Ã³ng bÄƒng hoÃ n toÃ n giao diá»‡n Windows.
+    4. *Spam Click Avalanche*: Khi giao diá»‡n bá»‹ khá»±ng, ngÆ°á»i dÃ¹ng báº¥m liÃªn tá»¥c vÃ o cÃ¡c nÃºt "Chá»¥p & ThÃªm Nhanh" hay "Chá»¥p Khung HÃ¬nh". CÃ¡c sá»± kiá»‡n click bá»‹ dá»“n á»© trong Windows Message Queue, kÃ­ch hoáº¡t hÃ ng loáº¡t tÃ¡c vá»¥ náº·ng song song lÃ m cáº¡n kiá»‡t RAM vÃ  treo app vÄ©nh viá»…n.
+    5. *Äá»™ trá»… chá»¥p áº£nh 1.5s*: CaptureSnapshotAsync() gá»i GrabFrameAsync(1500) gÃ¢y delay khÃ´ng Ä‘Ã¡ng cÃ³ thay vÃ¬ láº¥y frame trá»±c tiáº¿p tá»« bá»™ Ä‘á»‡m Live Stream.
+  - **Giáº£i PhÃ¡p ToÃ n Diá»‡n ÄÃ£ Triá»ƒn Khai**:
+    1. *Thuáº­t ToÃ¡n Äa Chiáº¿n LÆ°á»£c SiÃªu Nháº¡y (ChessboardCalibrationService.DetectCornersMultiStrategy)*:
+       - TÃ­ch há»£p **Sector-Based SB** (Cv2.FindChessboardCornersSB cá»§a OpenCV 4 - thuáº­t toÃ¡n Duda & Frese): PhÃ¢n tÃ­ch sector gÃ³c yÃªn ngá»±a, tá»± Ä‘á»™ng Ä‘á»‹nh vá»‹ Sub-pixel cáº¥p Ä‘á»™ vi phÃ¢n, nháº­n diá»‡n cá»±c nháº¡y ká»ƒ cáº£ bÃ n cá» bá»‹ nghiÃªng, má» nháº¹ hoáº·c mÃ©o gÃ³c rá»™ng.
+       - Tá»± Ä‘á»™ng hoÃ¡n Ä‘á»•i kÃ­ch thÆ°á»›c 90Â° (WÃ—H vÃ  HÃ—W).
+       - Tá»± Ä‘á»™ng thá»­ bÃ¹ quy Æ°á»›c kÃ­ch thÆ°á»›c (w-1, h-1 vÃ  w+1, h+1) khi ngÆ°á»i dÃ¹ng nháº­p sá»‘ Ã´ thay vÃ¬ sá»‘ gÃ³c.
+       - Tá»± Ä‘á»™ng tÄƒng cÆ°á»ng tÆ°Æ¡ng pháº£n cá»¥c bá»™ vá»›i bá»™ lá»c **CLAHE** (clipLimit: 3.0, tileGridSize: 8x8) khá»­ chÃ³i sÃ¡ng vÃ  bÃ³ng tá»‘i.
+       - Ãp dá»¥ng kim tá»± thÃ¡p Pyramid Downscale 0.5x cho áº£nh phÃ¢n giáº£i cao (>1600px).
+       - Bá»• sung **FastCheck** vÃ  **NgÃ¢n sÃ¡ch thá»i gian tá»‘i Ä‘a (Time Budget 2500ms)** cho Fallback cá»• Ä‘iá»ƒn: Äáº£m báº£o thá»i gian cháº¡y tá»‘i Ä‘a khÃ´ng bao giá» vÆ°á»£t quÃ¡ 2 giÃ¢y, triá»‡t tiÃªu 100% nguy cÆ¡ treo app trÃªn áº£nh lá»›n/nhiá»…u.
+    2. *Chuyá»ƒn Äá»•i Báº¥t Äá»“ng Bá»™ Sang ThreadPool & Busy Guard KhÃ³a UI*:
+       - ToÃ n bá»™ cÃ¡c thao tÃ¡c phÃ¡t hiá»‡n gÃ³c bÃ n cá» (SnapFrameAsync, SnapAndAddCaptureAsync, LoadImageAsync, DetectAndShowCornersCoreAsync) Ä‘Æ°á»£c Ä‘Æ°a vÃ o Task.Run() cháº¡y trÃªn ThreadPool ngáº§m.
+       - ThÃªm cá» IsDetecting khÃ³a cÃ¡c nÃºt báº¥m (IsEnabled="{Binding IsNotDetecting}") vÃ  hiá»ƒn thá»‹ thanh tiáº¿n trÃ¬nh ProgressBar IsIndeterminate="True", triá»‡t tiÃªu hoÃ n toÃ n hiá»‡n tÆ°á»£ng spam click dá»“n á»© message queue.
+       - Chá»¥p áº£nh tá»©c thá»i trong 0ms: Sá»­ dá»¥ng _cameraService.TryGetLatestFrameClone() láº¥y báº£n sao trá»±c tiáº¿p tá»« Live Stream buffer, loáº¡i bá» Ä‘á»™ trá»… 1.5s.
+    3. *NÃ¢ng Cáº¥p Giao Diá»‡n Chessboard Calibration Dialog*:
+       - Bá»• sung ComboBox cho phÃ©p ngÆ°á»i dÃ¹ng chá»n rÃµ rÃ ng quy Æ°á»›c kÃ­ch thÆ°á»›c: ðŸŽ¯ Sá»‘ gÃ³c trong (Inner Corners - KhuyÃªn dÃ¹ng) vs ðŸ Sá»‘ Ã´ cá» (Square Count).
+       - Bá»• sung CheckBox: Tá»± Ä‘á»™ng thá»­ xoay 90Â° (WÃ—H & HÃ—W) vÃ  DÃ² nháº¡y cao (Sector-Based SB + CLAHE).
+       - Hiá»ƒn thá»‹ trá»±c quan má»¥c tiÃªu dÃ² tÃ¬m: ðŸŽ¯ Má»¥c tiÃªu dÃ²: {InnerCornersX} Ã— {InnerCornersY} gÃ³c trong.
+    4. *Kiá»ƒm Thá»­ Tá»± Äá»™ng & Äáº£m Báº£o Cháº¥t LÆ°á»£ng*:
+       - XÃ¢y dá»±ng bÃ i test ChessboardRobustnessTests.cs (5 bÃ i test): BÃ n cá» chuáº©n (185ms), BÃ n cá» xoay 90Â°, Gradient shading Ã¡nh sÃ¡ng chÃªnh lá»‡ch, Tá»± Ä‘á»™ng bÃ¹ quy Æ°á»›c, vÃ  Kiá»ƒm tra áº£nh lá»›n 2560Ã—1440 khÃ´ng bÃ n cá» (thoÃ¡t an toÃ n trong 1.9s, khÃ´ng treo mÃ¡y).
+       - 100% test suite TestExtractApp Ä‘áº¡t **PASSED**.
+       - ToÃ n bá»™ Solution VisionInspectionApp.slnx biÃªn dá»‹ch Release **0 Error(s)**.

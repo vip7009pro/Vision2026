@@ -102,12 +102,30 @@
                                 <TextBlock Grid.Column="2" Text="mm" VerticalAlignment="Center" Margin="4,0" Foreground="{DynamicResource TextSecondaryBrush}" />
                             </Grid>
 
-                            <TextBlock Margin="0,6,0,0" FontSize="11" Foreground="Gray">
-                                <Run Text="Inner corners: " />
-                                <Run Text="{Binding InnerCornersX, Mode=OneWay}" />
-                                <Run Text=" × " />
-                                <Run Text="{Binding InnerCornersY, Mode=OneWay}" />
-                            </TextBlock>
+                            <Grid Margin="0,3">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="140" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="Quy ước nhập" VerticalAlignment="Center" Foreground="{DynamicResource TextBrush}" />
+                                <ComboBox Grid.Column="1" SelectedIndex="{Binding PatternConventionIndex}" ToolTip="Chọn quy ước nhập số góc hay số ô cờ">
+                                    <ComboBoxItem Content="Số góc trong (Corners)" ToolTip="Khuyên dùng: ví dụ bàn cờ 9×6 điểm góc thì nhập 9 và 6" />
+                                    <ComboBoxItem Content="Số ô cờ (Squares)" ToolTip="Nhập số ô: hệ thống tự trừ 1 để ra số góc" />
+                                </ComboBox>
+                            </Grid>
+
+                            <CheckBox IsChecked="{Binding AutoSwapDimensions}" Content="Tự động thử xoay 90° (W×H &amp; H×W)" Margin="0,4,0,2" Foreground="{DynamicResource TextBrush}" ToolTip="Tự động thử cả 2 chiều, chống trường hợp xoay dọc bàn cờ" />
+                            <CheckBox IsChecked="{Binding UseEnhancedSectorBased}" Content="Dò nhạy cao (Sector-Based SB + CLAHE)" Margin="0,2,0,4" Foreground="{DynamicResource TextBrush}" ToolTip="Thuật toán OpenCV 4 hiện đại: tự động sub-pixel, chống chênh lệch sáng và méo góc rộng" />
+
+                            <Border Background="#0A2540" BorderBrush="#00E5FF" BorderThickness="1" CornerRadius="4" Padding="6,4" Margin="0,4,0,0">
+                                <TextBlock FontSize="11" Foreground="#00E5FF" FontWeight="SemiBold">
+                                    <Run Text="🎯 Mục tiêu dò: " />
+                                    <Run Text="{Binding InnerCornersX, Mode=OneWay}" FontWeight="Bold" />
+                                    <Run Text=" × " />
+                                    <Run Text="{Binding InnerCornersY, Mode=OneWay}" FontWeight="Bold" />
+                                    <Run Text=" góc trong (Inner corners)" />
+                                </TextBlock>
+                            </Border>
                         </StackPanel>
                     </Border>
 
@@ -115,6 +133,10 @@
                     <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" Padding="8" Margin="0,0,0,8" Background="{DynamicResource PanelBackgroundBrush}">
                         <StackPanel>
                             <TextBlock FontWeight="Bold" Text="📷 CAMERA &amp; LIVESTREAM" Margin="0,0,0,6" Foreground="{DynamicResource TextBrush}" />
+
+                            <!-- Progress indicator khi đang xử lý phân tích ảnh -->
+                            <ProgressBar Height="4" IsIndeterminate="True" Margin="0,0,0,6" Foreground="#00E5FF"
+                                         Visibility="{Binding IsDetecting, Converter={StaticResource BooleanToVisibilityConverter}}" />
                             
                             <WrapPanel Margin="0,0,0,4">
                                 <Button Command="{Binding ToggleLiveStreamCommand}" Margin="0,0,6,4" Padding="10,5" FontWeight="Bold">
@@ -132,13 +154,13 @@
                                         </Style>
                                     </Button.Style>
                                 </Button>
-                                <Button Content="📸 Chụp Khung Hình" Command="{Binding SnapFrameCommand}" Margin="0,0,0,4" Padding="10,5" FontWeight="SemiBold" ToolTip="Dừng livestream và phân tích corners khung hình hiện tại" />
+                                <Button Content="📸 Chụp Khung Hình" Command="{Binding SnapFrameCommand}" IsEnabled="{Binding IsNotDetecting}" Margin="0,0,0,4" Padding="10,5" FontWeight="SemiBold" ToolTip="Dừng livestream và phân tích corners khung hình hiện tại" />
                             </WrapPanel>
 
                             <WrapPanel>
-                                <Button Content="⚡ Chụp &amp; Thêm Nhanh" Command="{Binding SnapAndAddCaptureCommand}" Margin="0,0,6,4" Padding="10,5" Background="#2E7D32" Foreground="White" FontWeight="Bold" ToolTip="Chụp, nhận diện corners và thêm ngay vào danh sách ảnh Calib mà không dừng Live" />
-                                <Button Content="📂 Load File" Command="{Binding LoadImageCommand}" Margin="0,0,6,4" Padding="8,5" />
-                                <Button Content="➕ Thêm ảnh" Command="{Binding AddCaptureCommand}" Margin="0,0,0,4" Padding="8,5" Background="#1565C0" Foreground="White" FontWeight="Bold" ToolTip="Thêm ảnh tĩnh hiện tại vào danh sách calib" />
+                                <Button Content="⚡ Chụp &amp; Thêm Nhanh" Command="{Binding SnapAndAddCaptureCommand}" IsEnabled="{Binding IsNotDetecting}" Margin="0,0,6,4" Padding="10,5" Background="#2E7D32" Foreground="White" FontWeight="Bold" ToolTip="Chụp, nhận diện corners và thêm ngay vào danh sách ảnh Calib mà không dừng Live" />
+                                <Button Content="📂 Load File" Command="{Binding LoadImageCommand}" IsEnabled="{Binding IsNotDetecting}" Margin="0,0,6,4" Padding="8,5" />
+                                <Button Content="➕ Thêm ảnh" Command="{Binding AddCaptureCommand}" IsEnabled="{Binding IsNotDetecting}" Margin="0,0,0,4" Padding="8,5" Background="#1565C0" Foreground="White" FontWeight="Bold" ToolTip="Thêm ảnh tĩnh hiện tại vào danh sách calib" />
                             </WrapPanel>
                         </StackPanel>
                     </Border>

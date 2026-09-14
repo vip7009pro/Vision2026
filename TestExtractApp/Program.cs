@@ -47,5 +47,6 @@ class Program
         OtaUpdateServiceTests.RunAllTests();
         OtaPublisherServiceTests.RunAllTests();
         DocumentationSystemTests.RunAllTests();
+        ChessboardRobustnessTests.RunAllTests();
     }
 }

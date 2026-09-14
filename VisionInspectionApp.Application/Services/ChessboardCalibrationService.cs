@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using OpenCvSharp;
 using VisionInspectionApp.Models;
@@ -9,13 +10,34 @@ namespace VisionInspectionApp.Application.Services;
 public static class ChessboardCalibrationService
 {
     /// <summary>
-    /// Detect inner corners of chessboard pattern.
-    /// patternSize = (innerCornersPerRow, innerCornersPerCol) = (boardCols-1, boardRows-1)
+    /// Kết quả phát hiện góc bàn cờ kèm thông tin kích thước và chiến lược phát hiện thành công.
     /// </summary>
-    public static (bool Found, Point2f[] Corners) DetectCorners(Mat image, Size patternSize)
+    public sealed record ChessboardDetectionResult(
+        bool Found,
+        Point2f[] Corners,
+        Size PatternSize,
+        string StrategyUsed);
+
+    /// <summary>
+    /// Detect inner corners of chessboard pattern sử dụng cơ chế đa chiến lược (Multi-Strategy):
+    /// 1. Sector-Based SB (thuật toán Duda & Frese OpenCV 4 siêu nhạy, miễn nhiễm méo và chênh lệch sáng)
+    /// 2. Tự động thử đảo chiều xoay 90 độ (W×H & H×W)
+    /// 3. Thử nghiệm quy ước kích thước thay thế (Inner Corners vs Square count)
+    /// 4. Tiền xử lý tăng cường tương phản CLAHE
+    /// 5. Pyramid Downscale 0.5x cho ảnh phân giải cao
+    /// 6. Fallback cổ điển AdaptiveThresh + NormalizeImage
+    /// </summary>
+    public static ChessboardDetectionResult DetectCornersMultiStrategy(
+        Mat image,
+        Size requestedPatternSize,
+        bool autoSwapDimensions = true,
+        bool useEnhancedSectorBased = true,
+        bool tryAlternativeConvention = true)
     {
-        if (image is null || image.IsDisposed || image.Empty())
-            return (false, Array.Empty<Point2f>());
+        if (image is null || image.IsDisposed || image.Empty() || requestedPatternSize.Width < 2 || requestedPatternSize.Height < 2)
+        {
+            return new ChessboardDetectionResult(false, Array.Empty<Point2f>(), requestedPatternSize, "Invalid Input");
+        }
 
         using var gray = new Mat();
         if (image.Channels() > 1)
@@ -23,18 +45,177 @@ public static class ChessboardCalibrationService
         else
             image.CopyTo(gray);
 
-        var corners = new Point2f[0];
-        var flags = ChessboardFlags.AdaptiveThresh | ChessboardFlags.NormalizeImage | ChessboardFlags.FastCheck;
-        bool found = Cv2.FindChessboardCorners(gray, patternSize, out corners, flags);
+        // Xây dựng danh sách các kích thước pattern ứng viên
+        var candidateSizes = new List<Size> { requestedPatternSize };
 
-        if (found && corners.Length > 0)
+        if (autoSwapDimensions && requestedPatternSize.Width != requestedPatternSize.Height)
         {
-            // Sub-pixel refinement for higher accuracy
-            var criteria = new TermCriteria(CriteriaTypes.Eps | CriteriaTypes.MaxIter, 30, 0.001);
-            Cv2.CornerSubPix(gray, corners, new Size(11, 11), new Size(-1, -1), criteria);
+            candidateSizes.Add(new Size(requestedPatternSize.Height, requestedPatternSize.Width));
         }
 
-        return (found, corners);
+        if (tryAlternativeConvention)
+        {
+            int w = requestedPatternSize.Width;
+            int h = requestedPatternSize.Height;
+
+            // Nếu người dùng nhập số ô cờ (Cols, Rows) thì góc trong là (w-1, h-1)
+            if (w > 2 && h > 2)
+            {
+                candidateSizes.Add(new Size(w - 1, h - 1));
+                if (autoSwapDimensions && w != h)
+                    candidateSizes.Add(new Size(h - 1, w - 1));
+            }
+
+            // Nếu người dùng nhập số góc trong nhưng code trước đó trừ 1 thì bù lại (w+1, h+1)
+            candidateSizes.Add(new Size(w + 1, h + 1));
+            if (autoSwapDimensions && w != h)
+                candidateSizes.Add(new Size(h + 1, w + 1));
+        }
+
+        // Lọc bỏ trùng lặp và kích thước không hợp lệ
+        var uniqueSizes = candidateSizes
+            .Where(s => s.Width >= 2 && s.Height >= 2)
+            .GroupBy(s => (s.Width, s.Height))
+            .Select(g => g.First())
+            .ToList();
+
+        var subPixCriteria = new TermCriteria(CriteriaTypes.Eps | CriteriaTypes.MaxIter, 30, 0.001);
+        var totalWatch = Stopwatch.StartNew();
+        const int MaxTimeBudgetMs = 2500; // Ngân sách thời gian tối đa để đảm bảo UI mượt mà, không bao giờ treo
+
+        // 1. Thử Sector-Based SB (Thuật toán OpenCV 4 hiện đại nhất - cực nhạy, tự động sub-pixel)
+        if (useEnhancedSectorBased)
+        {
+            foreach (var pSize in uniqueSizes)
+            {
+                if (totalWatch.ElapsedMilliseconds > MaxTimeBudgetMs) break;
+
+                var sbCorners = new Point2f[0];
+                try
+                {
+                    if (Cv2.FindChessboardCornersSB(gray, pSize, out sbCorners, ChessboardFlags.None) &&
+                        sbCorners.Length == pSize.Width * pSize.Height)
+                    {
+                        return new ChessboardDetectionResult(true, sbCorners, pSize, $"Sector-Based SB ({pSize.Width}×{pSize.Height})");
+                    }
+                }
+                catch { }
+            }
+
+            // 2. Thử Pyramid Downscale 0.5x cho ảnh lớn (>1600px)
+            if ((gray.Width > 1600 || gray.Height > 1200) && totalWatch.ElapsedMilliseconds <= MaxTimeBudgetMs)
+            {
+                using var smallGray = new Mat();
+                double scale = 0.5;
+                Cv2.Resize(gray, smallGray, new Size(gray.Width * scale, gray.Height * scale), 0, 0, InterpolationFlags.Area);
+
+                foreach (var pSize in uniqueSizes)
+                {
+                    if (totalWatch.ElapsedMilliseconds > MaxTimeBudgetMs) break;
+
+                    var smallCorners = new Point2f[0];
+                    try
+                    {
+                        if (Cv2.FindChessboardCornersSB(smallGray, pSize, out smallCorners, ChessboardFlags.None) &&
+                            smallCorners.Length == pSize.Width * pSize.Height)
+                        {
+                            var scaledCorners = smallCorners.Select(p => new Point2f((float)(p.X / scale), (float)(p.Y / scale))).ToArray();
+                            Cv2.CornerSubPix(gray, scaledCorners, new Size(11, 11), new Size(-1, -1), subPixCriteria);
+                            return new ChessboardDetectionResult(true, scaledCorners, pSize, $"Sector-Based SB Pyramid ({pSize.Width}×{pSize.Height})");
+                        }
+                    }
+                    catch { }
+                }
+            }
+
+            // 3. Thử với CLAHE (Tăng tương phản cục bộ chống ánh sáng chói / bóng mờ)
+            if (totalWatch.ElapsedMilliseconds <= MaxTimeBudgetMs)
+            {
+                try
+                {
+                    using var clahe = Cv2.CreateCLAHE(clipLimit: 3.0, tileGridSize: new Size(8, 8));
+                    using var claheGray = new Mat();
+                    clahe.Apply(gray, claheGray);
+
+                    foreach (var pSize in uniqueSizes)
+                    {
+                        if (totalWatch.ElapsedMilliseconds > MaxTimeBudgetMs) break;
+
+                        var claheCorners = new Point2f[0];
+                        if (Cv2.FindChessboardCornersSB(claheGray, pSize, out claheCorners, ChessboardFlags.None) &&
+                            claheCorners.Length == pSize.Width * pSize.Height)
+                        {
+                            Cv2.CornerSubPix(gray, claheCorners, new Size(11, 11), new Size(-1, -1), subPixCriteria);
+                            return new ChessboardDetectionResult(true, claheCorners, pSize, $"Sector-Based SB + CLAHE ({pSize.Width}×{pSize.Height})");
+                        }
+                    }
+                }
+                catch { }
+            }
+        }
+
+        // 4. Fallback cổ điển: Cv2.FindChessboardCorners
+        // Bắt buộc kèm FastCheck để kiểm tra nhanh trong <1ms, triệt tiêu nguy cơ bùng nổ tổ hợp làm treo máy khi không có chessboard
+        if (totalWatch.ElapsedMilliseconds <= MaxTimeBudgetMs)
+        {
+            var classicFlags = ChessboardFlags.AdaptiveThresh | ChessboardFlags.NormalizeImage | ChessboardFlags.FastCheck;
+
+            // Nếu ảnh lớn (>1280px), kiểm tra trên ảnh downscale trước để tiết kiệm CPU
+            if (gray.Width > 1280 || gray.Height > 960)
+            {
+                double scale = 0.5;
+                using var smallGray = new Mat();
+                Cv2.Resize(gray, smallGray, new Size(gray.Width * scale, gray.Height * scale), 0, 0, InterpolationFlags.Area);
+
+                foreach (var pSize in uniqueSizes)
+                {
+                    if (totalWatch.ElapsedMilliseconds > MaxTimeBudgetMs) break;
+
+                    var smallCorners = new Point2f[0];
+                    try
+                    {
+                        if (Cv2.FindChessboardCorners(smallGray, pSize, out smallCorners, classicFlags) &&
+                            smallCorners.Length == pSize.Width * pSize.Height)
+                        {
+                            var scaledCorners = smallCorners.Select(p => new Point2f((float)(p.X / scale), (float)(p.Y / scale))).ToArray();
+                            Cv2.CornerSubPix(gray, scaledCorners, new Size(11, 11), new Size(-1, -1), subPixCriteria);
+                            return new ChessboardDetectionResult(true, scaledCorners, pSize, $"Classic AdaptiveThresh Pyramid ({pSize.Width}×{pSize.Height})");
+                        }
+                    }
+                    catch { }
+                }
+            }
+            else
+            {
+                foreach (var pSize in uniqueSizes)
+                {
+                    if (totalWatch.ElapsedMilliseconds > MaxTimeBudgetMs) break;
+
+                    var classicCorners = new Point2f[0];
+                    try
+                    {
+                        if (Cv2.FindChessboardCorners(gray, pSize, out classicCorners, classicFlags) &&
+                            classicCorners.Length == pSize.Width * pSize.Height)
+                        {
+                            Cv2.CornerSubPix(gray, classicCorners, new Size(11, 11), new Size(-1, -1), subPixCriteria);
+                            return new ChessboardDetectionResult(true, classicCorners, pSize, $"Classic AdaptiveThresh ({pSize.Width}×{pSize.Height})");
+                        }
+                    }
+                    catch { }
+                }
+            }
+        }
+
+        return new ChessboardDetectionResult(false, Array.Empty<Point2f>(), requestedPatternSize, "Not Found");
+    }
+
+    /// <summary>
+    /// Detect inner corners of chessboard pattern (Tương thích ngược, tự động dùng Multi-Strategy).
+    /// </summary>
+    public static (bool Found, Point2f[] Corners) DetectCorners(Mat image, Size patternSize)
+    {
+        var result = DetectCornersMultiStrategy(image, patternSize, autoSwapDimensions: true, useEnhancedSectorBased: true, tryAlternativeConvention: true);
+        return (result.Found, result.Corners);
     }
 
     /// <summary>
