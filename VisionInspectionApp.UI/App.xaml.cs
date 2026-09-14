@@ -64,6 +64,11 @@ public partial class App : System.Windows.Application
                 // Database Framework
                 services.AddSingleton<Application.DB.Services.IDbManagerService, Application.DB.Services.DbManagerService>();
 
+                // Enterprise License Framework
+                services.AddSingleton<VisionInspectionApp.Application.Licensing.ILicenseService, VisionInspectionApp.Application.Licensing.LicenseService>();
+                services.AddTransient<ViewModels.Licensing.LicenseViewModel>();
+                services.AddTransient<Views.Licensing.LicenseDialog>();
+
                 services.AddSingleton<IInspectionService, InspectionService>();
 
                 services.AddSingleton<UndoRedoManager>();
@@ -112,6 +117,7 @@ public partial class App : System.Windows.Application
                 services.AddTransient<OtaUpdateViewModel>();
                 services.AddTransient<Views.OTA.OtaUpdateDialog>();
 
+
                 services.AddSingleton<TeachViewModel>();
                 services.AddSingleton<ToolEditorViewModel>();
                 services.AddSingleton<CalibrationViewModel>();
@@ -140,6 +146,17 @@ public partial class App : System.Windows.Application
 
         var plcManager = _host.Services.GetRequiredService<Application.PLC.Services.IPlcManagerService>();
         _ = plcManager.AutoConnectStartupAsync();
+
+        splash.SetProgress(90, "Đang xác thực bản quyền máy trạm...");
+        var licenseService = _host.Services.GetRequiredService<VisionInspectionApp.Application.Licensing.ILicenseService>();
+        var licResult = await licenseService.ValidateLicenseAsync();
+        if (!licResult.IsValid)
+        {
+            splash.SetProgress(95, "Phần mềm chưa kích hoạt bản quyền...");
+            var licDialog = _host.Services.GetRequiredService<Views.Licensing.LicenseDialog>();
+            licDialog.ShowDialog();
+            _ = licenseService.ValidateLicenseAsync();
+        }
 
         splash.SetProgress(100, "Hoàn tất! Đang mở ứng dụng...");
 

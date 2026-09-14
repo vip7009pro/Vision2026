@@ -25,6 +25,7 @@ public partial class InspectionService : IInspectionService
 
     private readonly PLC.Services.IPlcManagerService? _plcManager;
     private readonly DB.Services.IDbManagerService? _dbManager;
+    private readonly Licensing.ILicenseService? _licenseService;
 
     public InspectionService(
         ImagePreprocessor preprocessor,
@@ -33,7 +34,8 @@ public partial class InspectionService : IInspectionService
         LineDetector lineDetector,
         IDefectDetector defectDetector,
         PLC.Services.IPlcManagerService? plcManager = null,
-        DB.Services.IDbManagerService? dbManager = null)
+        DB.Services.IDbManagerService? dbManager = null,
+        Licensing.ILicenseService? licenseService = null)
     {
         _preprocessor = preprocessor;
         _matcher = matcher;
@@ -42,6 +44,7 @@ public partial class InspectionService : IInspectionService
         _defectDetector = defectDetector;
         _plcManager = plcManager;
         _dbManager = dbManager;
+        _licenseService = licenseService;
     }
 
     public InspectionResult Inspect(Mat image, VisionConfig config)

@@ -2539,3 +2539,39 @@ Lộ trình tích hợp tính năng Chụp ảnh từ camera và hỗ trợ các
           2. ThÃªm <Window.Resources> rÃµ rÃ ng vÃ o ChessboardCalibrationDialog.xaml vÃ  Ä‘á»“ng bá»™ khÃ³a sá»­ dá»¥ng sang {StaticResource BoolToVis} theo chuáº©n chung cá»§a dá»± Ã¡n.
           3. Bá»• sung kiá»ƒm tra an toÃ n trong WriteableBitmapRenderer.cs (!dispatcher.HasShutdownStarted && !dispatcher.HasShutdownFinished), chá»‘ng vÄƒng lá»—i luá»“ng camera background khi á»©ng dá»¥ng Ä‘ang Ä‘Ã³ng.
           4. BiÃªn dá»‹ch vÃ  kiá»ƒm thá»­ tá»± Ä‘á»™ng toÃ n bá»™ test suite TestExtractApp Ä‘áº¡t 100% PASSED (exit code 0), biÃªn dá»‹ch Release 0 Error(s).
+    - [x] **Task 332: Thiết Kế & Xây Dựng Hệ Thống Quản Lý Bản Quyền Phần Mềm Đa Năng (Standalone License Server & Client SDK Online/Offline Bound Hardware)**:
+        - **Mục Tiêu & Yêu Cầu**:
+          - Mỗi bản cài đặt (1 máy tính) được quản lý duy nhất dựa trên Hardware Fingerprint (CPU ID, Motherboard Serial, BIOS UUID, Disk Serial, Windows MachineGuid), chống sao chép và sử dụng lậu phần mềm.
+          - Hỗ trợ song song 2 cơ chế cấp phép:
+            1. **Online Activation**: Kích hoạt trực tiếp qua Internet, tự động gửi Heartbeat định kỳ, hỗ trợ kiểm soát, tạm khóa (Suspend), kích hoạt lại, hoặc thu hồi bản quyền (Revoke) từ xa theo thời gian thực.
+            2. **Offline Activation**: Phù hợp cho môi trường phòng sạch / nhà xưởng không có Internet (Air-gapped Factory Network). Sinh file yêu cầu cấp phép (.req) -> Ký số RSA-2048 SHA-256 từ Admin Dashboard -> Nhập file bản quyền (.lic) trên máy trạm.
+          - **Standalone License Server độc lập**: Xây dựng máy chủ cấp phép độc lập hoàn toàn bằng Node.js + Express + TypeScript + SQLite, có Web Admin Dashboard trực quan, triển khai độc lập ngoài Internet (VPS/Docker/Cloud) không phụ thuộc vào hạ tầng CMS công ty.
+          - **Bảo mật nhiều lớp (Multi-layer Anti-Tampering & Anti-Clock Rollback)**:
+            - Ký số bất đối xứng RSA-2048 PKCS#1 SHA-256 với Canonical JSON synchronization.
+            - Mã hóa lưu trữ thông tin bản quyền cục bộ bằng Windows DPAPI (LocalMachine/CurrentUser).
+            - Chống gian lận lùi đồng hồ hệ thống (Anti-Clock Tampering).
+            - Tích hợp chốt chặn bản quyền tại nhân phân tích `InspectionService.AssertCanExecuteInspection()`.
+            - Hiển thị badge trạng thái bản quyền trực quan trên Header và Menu Trợ Giúp trong `MainWindow`.
+        - **Các Thành Phần Đã Triển Khai**:
+          1. *License Server Độc Lập (`LicenseServer/`)*:
+             - Cấu trúc kiến trúc Express + TypeScript, SQLite database (`DatabaseSync` trong Node.js core).
+             - Quản lý 3 bảng: `licenses`, `machines`, `audit_logs`.
+             - Sinh cặp khóa RSA-2048 (`keys/private.pem` & `keys/public.pem`), Canonical JSON serializer.
+             - REST APIs: `/api/v1/license/activate`, `/heartbeat`, `/public-key`, `/offline-sign`.
+             - Admin APIs & Web Dashboard: Đăng nhập JWT, xem danh sách máy trạm (IP, OS, App version, Heartbeat), Revoke, Suspend, Unsuspend, Transfer máy trạm, Ký offline kéo thả file `.req`.
+             - Triển khai Dockerfile & docker-compose.yml sẵn sàng chạy trên mọi VPS/Cloud.
+          2. *Client SDK C# (`VisionInspectionApp.Application/Licensing`)*:
+             - `HardwareFingerprintService`: Trích xuất thông tin phần cứng sâu qua WMI/Registry, băm SHA-256 kèm Secret Salt, sinh mã máy định dạng `V26-XXXX-XXXX-XXXX-XXXX`, hỗ trợ so khớp dung sai (Fuzzy match).
+             - `LicenseCryptoService`: Xác thực chữ ký số RSA-2048 SHA-256 với Public Key nhúng sẵn, mã hóa DPAPI bảo vệ local cache, phát hiện tua ngược đồng hồ Windows.
+             - `LicenseModels`: Định nghĩa các cấu trúc dữ liệu bản quyền, trạng thái, gói chữ ký số, kết quả xác thực.
+             - `ILicenseService` & `LicenseService`: Tự động kiểm tra bản quyền lúc khởi động, đếm lùi ngày sử dụng, xử lý kích hoạt Online/Offline, chạy ngầm Heartbeat timer, cơ chế ân hạn Grace Period.
+             - `OfflineLicenseGenerator`: Công cụ ký số RSA Private Key độc lập phục vụ Admin/Test.
+          3. *Tích Hợp Chốt Chặn Phân Tích & Giao Diện WPF (`VisionInspectionApp.UI`)*:
+             - Chặn thực thi: `InspectionService.Inspect()` gọi `_licenseService.AssertCanExecuteInspection()`, lập tức dừng kiểm tra và hiển thị cảnh báo nếu bản quyền hết hạn hoặc bị thu hồi từ xa.
+             - Dialog Quản lý Bản quyền (`LicenseDialog.xaml` & `LicenseViewModel.cs`): Xem mã máy, sao chép nhanh, kích hoạt Online bằng License Key, xuất file `.req`, nạp file `.lic`, hủy kích hoạt.
+             - Header Badge & Menu: Nút hiển thị trạng thái bản quyền (Active/Grace/Expired/Revoked/Unlicensed) trên Header và menu "🔑 Quản Lý Bản Quyền / License..." trong Menu Trợ Giúp.
+             - Splash Screen check: Tự động xác thực bản quyền khi khởi động app, nếu chưa kích hoạt thì mở hộp thoại bản quyền hướng dẫn người dùng.
+          4. *Bộ Kiểm Thử Tự Động Toàn Diện (`TestExtractApp/LicenseSystemTests.cs`)*:
+             - Viết và chạy 8 bài kiểm tra chuyên sâu: Tính nhất quán Hardware Fingerprint, Ký & Xác thực RSA-2048 Canonical JSON, Chống sửa đổi ngày hết hạn / edition (Anti-Tampering), Chống sao chép sang máy khác (Anti-Cloning), Chống tua ngược giờ hệ thống, Luồng kích hoạt Offline toàn trình (.req -> .lic), Chặn động cơ Inspection khi chưa có bản quyền, Kích hoạt Online với Live License Server (Port 4000).
+             - Đạt 100% PASSED toàn bộ các test suites của dự án (exit code 0).
+             - Toàn bộ Solution `VisionInspectionApp.slnx` biên dịch Release 0 Error(s).

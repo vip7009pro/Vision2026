@@ -6,6 +6,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using VisionInspectionApp.Application.LightingController;
 using VisionInspectionApp.Application.Services;
+using VisionInspectionApp.Application.Licensing;
 using VisionInspectionApp.Models;
 using VisionInspectionApp.UI.Services;
 
@@ -28,11 +29,24 @@ public sealed partial class MainWindowViewModel : ObservableObject
     [ObservableProperty]
     private string _updateBadgeText = "";
 
+    [ObservableProperty]
+    private string _licenseBadgeText = "Bản Quyền";
+
+    [ObservableProperty]
+    private string _licenseBadgeIcon = "🔑";
+
+    [ObservableProperty]
+    private string _licenseBadgeBrush = "#4B5563";
+
+    [ObservableProperty]
+    private string _licenseStatusTooltip = "Thông tin bản quyền phần mềm";
+
     private readonly IRecentJobsService? _recentJobsService;
     private readonly LightingControllerService? _lightingService;
     private readonly IOtaUpdateService? _otaService;
     private readonly GlobalAppSettingsService? _settingsService;
     private readonly IServiceProvider? _serviceProvider;
+    private readonly VisionInspectionApp.Application.Licensing.ILicenseService? _licenseService;
 
     public ObservableCollection<string> RecentJobs { get; } = new();
 
@@ -47,7 +61,8 @@ public sealed partial class MainWindowViewModel : ObservableObject
         LightingControllerService? lightingService = null,
         IOtaUpdateService? otaService = null,
         GlobalAppSettingsService? settingsService = null,
-        IServiceProvider? serviceProvider = null)
+        IServiceProvider? serviceProvider = null,
+        VisionInspectionApp.Application.Licensing.ILicenseService? licenseService = null)
     {
         ToolEditor = toolEditor;
         Calibration = calibration;
@@ -62,6 +77,16 @@ public sealed partial class MainWindowViewModel : ObservableObject
         _otaService = otaService;
         _settingsService = settingsService;
         _serviceProvider = serviceProvider;
+        _licenseService = licenseService;
+
+        if (_licenseService != null)
+        {
+            _licenseService.StatusChanged += (s, st) =>
+            {
+                System.Windows.Application.Current?.Dispatcher.InvokeAsync(UpdateLicenseBadge);
+            };
+            UpdateLicenseBadge();
+        }
 
         if (_lightingService != null)
         {
@@ -109,6 +134,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
         OpenOtaUpdateDialogCommand = new RelayCommand(ExecuteOpenOtaUpdateDialog);
         OpenDocumentationCommand = new RelayCommand<string>(ExecuteOpenDocumentation);
         OpenDocsFolderCommand = new RelayCommand(ExecuteOpenDocsFolder);
+        OpenLicenseDialogCommand = new RelayCommand(ExecuteOpenLicenseDialog);
 
         if (_selectedTabIndex == 3)
         {
@@ -134,6 +160,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
     public ICommand OpenOtaUpdateDialogCommand { get; }
     public ICommand OpenDocumentationCommand { get; }
     public ICommand OpenDocsFolderCommand { get; }
+    public ICommand OpenLicenseDialogCommand { get; }
 
     private void ExecuteOpenDocumentation(string? docId)
     {
@@ -185,6 +212,89 @@ public sealed partial class MainWindowViewModel : ObservableObject
         if (!vm.HasUpdate)
         {
             HasUpdateAvailable = false;
+        }
+    }
+
+    private void ExecuteOpenLicenseDialog()
+    {
+        try
+        {
+            var dialog = _serviceProvider?.GetService(typeof(Views.Licensing.LicenseDialog)) as Views.Licensing.LicenseDialog
+                         ?? new Views.Licensing.LicenseDialog();
+            dialog.Owner = System.Windows.Application.Current?.MainWindow;
+            dialog.ShowDialog();
+            UpdateLicenseBadge();
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"Không thể mở cửa sổ quản lý bản quyền: {ex.Message}", "Lỗi", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
+
+    private void UpdateLicenseBadge()
+    {
+        if (_licenseService == null)
+        {
+            LicenseBadgeText = "Chưa kích hoạt";
+            LicenseBadgeIcon = "⚠️";
+            LicenseBadgeBrush = "#DC2626";
+            LicenseStatusTooltip = "Phần mềm chưa kích hoạt bản quyền!";
+            return;
+        }
+
+        switch (_licenseService.Status)
+        {
+            case LicenseStatus.Active:
+                var edition = _licenseService.CurrentLicense?.Edition.ToString() ?? "Active";
+                var days = _licenseService.RemainingDays;
+                var daysText = days < 0 ? "Vĩnh viễn" : $"{days} ngày";
+                LicenseBadgeText = $"{edition} ({daysText})";
+                LicenseBadgeIcon = "🛡️";
+                LicenseBadgeBrush = "#16A34A";
+                LicenseStatusTooltip = $"Bản quyền hợp lệ\nKhách hàng: {_licenseService.CurrentLicense?.CustomerName}\nThời hạn: {daysText}\nMã máy: {_licenseService.FormattedMachineCode}";
+                break;
+
+            case LicenseStatus.GracePeriod:
+                LicenseBadgeText = "Ân hạn kết nối";
+                LicenseBadgeIcon = "⏳";
+                LicenseBadgeBrush = "#D97706";
+                LicenseStatusTooltip = "Đang trong thời gian ân hạn kết nối với máy chủ bản quyền!";
+                break;
+
+            case LicenseStatus.Expired:
+                LicenseBadgeText = "Hết hạn";
+                LicenseBadgeIcon = "⚠️";
+                LicenseBadgeBrush = "#DC2626";
+                LicenseStatusTooltip = "Bản quyền phần mềm đã hết hạn sử dụng!";
+                break;
+
+            case LicenseStatus.Revoked:
+                LicenseBadgeText = "Đã thu hồi";
+                LicenseBadgeIcon = "🚫";
+                LicenseBadgeBrush = "#DC2626";
+                LicenseStatusTooltip = "Bản quyền đã bị thu hồi từ xa bởi Quản trị viên!";
+                break;
+
+            case LicenseStatus.Suspended:
+                LicenseBadgeText = "Tạm khóa";
+                LicenseBadgeIcon = "🔒";
+                LicenseBadgeBrush = "#D97706";
+                LicenseStatusTooltip = "Bản quyền đang bị tạm khóa từ xa!";
+                break;
+
+            case LicenseStatus.ClockTampered:
+                LicenseBadgeText = "Lỗi đồng hồ";
+                LicenseBadgeIcon = "⏰";
+                LicenseBadgeBrush = "#DC2626";
+                LicenseStatusTooltip = "Phát hiện gian lận thời gian hệ thống!";
+                break;
+
+            default:
+                LicenseBadgeText = "Chưa kích hoạt";
+                LicenseBadgeIcon = "🔑";
+                LicenseBadgeBrush = "#4B5563";
+                LicenseStatusTooltip = $"Phần mềm chưa kích hoạt bản quyền!\nMã máy: {_licenseService.FormattedMachineCode}";
+                break;
         }
     }
 

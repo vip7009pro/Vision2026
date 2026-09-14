@@ -440,6 +440,7 @@
                         <MenuItem Header="📂 Mở Thư Mục Tài Liệu (Open Docs Folder)..." Command="{Binding OpenDocsFolderCommand}" />
                         <Separator />
                         <MenuItem Header="🔄 Kiểm Tra Bản Cập Nhật (OTA Update)..." Command="{Binding OpenOtaUpdateDialogCommand}" />
+                        <MenuItem Header="🔑 Quản Lý Bản Quyền / License..." Command="{Binding OpenLicenseDialogCommand}" />
                         <Separator />
                         <MenuItem Header="ℹ️ Giới Thiệu CMS VINA Vision System..." Command="{Binding AboutCommand}" />
                     </MenuItem>
@@ -474,6 +475,25 @@
 
                 <!-- Col 3: Window Controls (Theme Toggle, Minimize, Maximize/Restore, Close) -->
                 <StackPanel Grid.Column="3" Orientation="Horizontal" VerticalAlignment="Stretch" WindowChrome.IsHitTestVisibleInChrome="True">
+                    <!-- License Status Badge (Hiển thị trạng thái bản quyền máy trạm) -->
+                    <Button Command="{Binding OpenLicenseDialogCommand}"
+                            Background="{Binding LicenseBadgeBrush}"
+                            BorderBrush="#40000000"
+                            BorderThickness="1"
+                            Foreground="White"
+                            FontWeight="SemiBold"
+                            FontSize="11"
+                            Height="26"
+                            Padding="8,0"
+                            Margin="0,0,8,0"
+                            VerticalAlignment="Center"
+                            ToolTip="{Binding LicenseStatusTooltip}">
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                            <TextBlock Text="{Binding LicenseBadgeIcon}" Margin="0,0,4,0" VerticalAlignment="Center" />
+                            <TextBlock Text="{Binding LicenseBadgeText}" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </Button>
+
                     <!-- OTA Update Badge (Hiển thị khi phát hiện có bản cập nhật mới từ xa) -->
                     <Button Command="{Binding OpenOtaUpdateDialogCommand}"
                             Visibility="{Binding HasUpdateAvailable, Converter={StaticResource BoolToVis}}"

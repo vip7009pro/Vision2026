@@ -59,6 +59,9 @@ public partial class InspectionService
             throw new ArgumentNullException(nameof(config));
         }
 
+        // Chặn thực thi nếu bản quyền không hợp lệ hoặc hết hạn
+        _licenseService?.AssertCanExecuteInspection();
+
         var result = new InspectionResult();
 
         var swTotal = Stopwatch.StartNew();

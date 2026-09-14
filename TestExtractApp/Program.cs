@@ -48,5 +48,6 @@ class Program
         OtaPublisherServiceTests.RunAllTests();
         DocumentationSystemTests.RunAllTests();
         ChessboardRobustnessTests.RunAllTests();
+        LicenseSystemTests.RunAllTests();
     }
 }

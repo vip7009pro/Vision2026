@@ -1,0 +1,181 @@
+<Window x:Class="VisionInspectionApp.UI.Views.Licensing.LicenseDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="🛡️ Quản Lý Bản Quyền Phần Mềm — Vision2026"
+        Height="540" Width="720"
+        WindowStartupLocation="CenterOwner"
+        Background="{DynamicResource WindowBackgroundBrush}"
+        ResizeMode="NoResize">
+    <Window.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVis" />
+    </Window.Resources>
+
+    <Grid Margin="16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <!-- HEADER BANNER -->
+        <Border Grid.Row="0" Margin="0,0,0,12" Padding="14,10" CornerRadius="6" Background="#1E293B" BorderBrush="#334155" BorderThickness="1">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <StackPanel VerticalAlignment="Center">
+                    <TextBlock Text="HỆ THỐNG BẢN QUYỀN MÁY TRẠM CÔNG NGHIỆP" FontWeight="ExtraBold" FontSize="13" Foreground="#38BDF8" />
+                    <TextBlock Text="Mỗi bản cài đặt gắn liền duy nhất với phần cứng của 1 máy tính (Hardware-Bound)" FontSize="11" Foreground="#94A3B8" Margin="0,2,0,0" />
+                </StackPanel>
+                <Border Grid.Column="1" Background="#0F172A" BorderBrush="{Binding StatusBrush}" BorderThickness="1" CornerRadius="4" Padding="10,4">
+                    <TextBlock Text="{Binding StatusText}" FontWeight="Bold" FontSize="11" Foreground="{Binding StatusBrush}" VerticalAlignment="Center" />
+                </Border>
+            </Grid>
+        </Border>
+
+        <!-- TAB CONTENT -->
+        <TabControl Grid.Row="1" Background="Transparent" BorderBrush="{DynamicResource BorderBrush}">
+            <!-- TAB 1: THÔNG TIN MÁY & BẢN QUYỀN -->
+            <TabItem Header="📋 Thông Tin Bản Quyền" FontWeight="SemiBold">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" Margin="0,10,0,0">
+                    <StackPanel>
+                        <!-- Khung Mã Máy Tính -->
+                        <Border Background="#0F172A" BorderBrush="#00E5FF" BorderThickness="1" CornerRadius="6" Padding="12" Margin="0,0,0,12">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel>
+                                    <TextBlock Text="MÃ ĐỊNH DANH PHẦN CỨNG MÁY TÍNH NÀY (HARDWARE ID):" FontSize="11" FontWeight="Bold" Foreground="#94A3B8" />
+                                    <TextBlock Text="{Binding FormattedMachineCode}" FontSize="18" FontWeight="ExtraBold" Foreground="#00E5FF" Margin="0,4,0,2" />
+                                    <TextBlock Text="Mã định danh sinh từ CPU, Mainboard, BIOS và Ổ đĩa hệ điều hành." FontSize="10" Foreground="#64748B" />
+                                </StackPanel>
+                                <Button Grid.Column="1" Content="📋 Sao Chép Mã" Command="{Binding CopyMachineCodeCommand}" 
+                                        Background="#1E293B" Foreground="#38BDF8" BorderBrush="#38BDF8" Padding="12,6" FontWeight="SemiBold" VerticalAlignment="Center" />
+                            </Grid>
+                        </Border>
+
+                        <!-- Thông tin chi tiết -->
+                        <Border Background="{DynamicResource PanelBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="6" Padding="14">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="150" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="30" />
+                                    <RowDefinition Height="30" />
+                                    <RowDefinition Height="30" />
+                                    <RowDefinition Height="30" />
+                                    <RowDefinition Height="30" />
+                                </Grid.RowDefinitions>
+
+                                <TextBlock Grid.Row="0" Grid.Column="0" Text="Khách Hàng / Đơn Vị:" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" />
+                                <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding CustomerName}" FontWeight="Bold" Foreground="{DynamicResource TextBrush}" VerticalAlignment="Center" />
+
+                                <TextBlock Grid.Row="1" Grid.Column="0" Text="Gói Bản Quyền:" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" />
+                                <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding EditionText}" FontWeight="Bold" Foreground="#38BDF8" VerticalAlignment="Center" />
+
+                                <TextBlock Grid.Row="2" Grid.Column="0" Text="Mã Khóa (License Key):" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" />
+                                <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding LicenseKeyInput}" FontFamily="Consolas" Foreground="{DynamicResource TextBrush}" VerticalAlignment="Center" />
+
+                                <TextBlock Grid.Row="3" Grid.Column="0" Text="Thời Hạn Sử Dụng:" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" />
+                                <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding ExpirationText}" FontWeight="SemiBold" Foreground="{Binding StatusBrush}" VerticalAlignment="Center" />
+
+                                <TextBlock Grid.Row="4" Grid.Column="0" Text="Quản Lý:" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" />
+                                <StackPanel Grid.Row="4" Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                                    <Button Content="Hủy Kích Hoạt Máy Này" Command="{Binding DeactivateCommand}" IsEnabled="{Binding IsLicensed}"
+                                            Background="Transparent" Foreground="#F43F5E" BorderBrush="#F43F5E" Padding="8,2" FontSize="11" />
+                                </StackPanel>
+                            </Grid>
+                        </Border>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
+            <!-- TAB 2: KÍCH HOẠT ONLINE -->
+            <TabItem Header="🌐 Kích Hoạt Trực Tuyến (Online)" FontWeight="SemiBold">
+                <StackPanel Margin="0,14,0,0">
+                    <TextBlock Text="Kích hoạt tự động qua Internet (Dành cho máy tính có kết nối mạng)" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,0,0,14" />
+
+                    <TextBlock Text="Mã Bản Quyền (License Key) *" FontWeight="Bold" Foreground="{DynamicResource TextBrush}" Margin="0,0,0,4" />
+                    <TextBox Text="{Binding LicenseKeyInput, UpdateSourceTrigger=PropertyChanged}" 
+                             FontFamily="Consolas" FontSize="14" Padding="10,6" Margin="0,0,0,12" />
+
+                    <TextBlock Text="Địa Chỉ Máy Chủ License (License Server URL)" FontWeight="Bold" Foreground="{DynamicResource TextBrush}" Margin="0,0,0,4" />
+                    <TextBox Text="{Binding ServerUrlInput, UpdateSourceTrigger=PropertyChanged}" 
+                             FontSize="12" Padding="8,4" Margin="0,0,0,16" />
+
+                    <Button Content="⚡ Kích Hoạt Bản Quyền Trực Tuyến" Command="{Binding ActivateOnlineCommand}" IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBoolConverter}}"
+                            Background="#0284C7" Foreground="White" Padding="16,10" FontWeight="Bold" FontSize="13" HorizontalAlignment="Left" />
+                </StackPanel>
+            </TabItem>
+
+            <!-- TAB 3: KÍCH HOẠT OFFLINE -->
+            <TabItem Header="💾 Kích Hoạt Ngoại Tuyến (Offline)" FontWeight="SemiBold">
+                <StackPanel Margin="0,14,0,0">
+                    <TextBlock Text="Dành cho máy trạm công nghiệp không có mạng Internet (Air-gapped OT Network)" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,0,0,14" />
+
+                    <!-- Bước 1 -->
+                    <Border Background="{DynamicResource PanelBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="6" Padding="12" Margin="0,0,0,12">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel>
+                                <TextBlock Text="BƯỚC 1: XUẤT FILE YÊU CẦU CẤP PHÉP (.REQ)" FontWeight="Bold" Foreground="#38BDF8" />
+                                <TextBlock Text="Xuất thông tin phần cứng máy tính này ra file để gửi cho Quản trị viên." FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,2,0,0" />
+                            </StackPanel>
+                            <Button Grid.Column="1" Content="📤 Xuất File Yêu Cầu (.req)" Command="{Binding ExportRequestFileCommand}" 
+                                    Background="#334155" Foreground="White" Padding="12,6" FontWeight="SemiBold" VerticalAlignment="Center" />
+                        </Grid>
+                    </Border>
+
+                    <!-- Bước 2 -->
+                    <Border Background="{DynamicResource PanelBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="6" Padding="12">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel>
+                                <TextBlock Text="BƯỚC 2: NẠP FILE BẢN QUYỀN ĐÃ KÝ SỐ (.LIC)" FontWeight="Bold" Foreground="#10B981" />
+                                <TextBlock Text="Sau khi nhận file bản quyền .lic từ Admin, nạp vào máy để kích hoạt vĩnh viễn." FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,2,0,0" />
+                            </StackPanel>
+                            <Button Grid.Column="1" Content="📥 Nạp File Bản Quyền (.lic)" Command="{Binding ImportLicenseFileCommand}" IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBoolConverter}}"
+                                    Background="#059669" Foreground="White" Padding="12,6" FontWeight="Bold" VerticalAlignment="Center" />
+                        </Grid>
+                    </Border>
+                </StackPanel>
+            </TabItem>
+        </TabControl>
+
+        <!-- STATUS MESSAGE -->
+        <Border Grid.Row="2" Margin="0,10,0,0" Padding="10,6" CornerRadius="4" 
+                Visibility="{Binding HasStatusMessage, Converter={StaticResource BoolToVis}, FallbackValue=Collapsed}">
+            <Border.Style>
+                <Style TargetType="Border">
+                    <Setter Property="Background" Value="#1E293B" />
+                    <Style.Triggers>
+                        <DataTrigger Binding="{Binding IsSuccessMessage}" Value="True">
+                            <Setter Property="Background" Value="#064E3B" />
+                        </DataTrigger>
+                        <DataTrigger Binding="{Binding IsSuccessMessage}" Value="False">
+                            <Setter Property="Background" Value="#881337" />
+                        </DataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </Border.Style>
+            <TextBlock Text="{Binding StatusMessage}" Foreground="White" FontSize="11" FontWeight="SemiBold" TextWrapping="Wrap" />
+        </Border>
+
+        <!-- FOOTER BUTTONS -->
+        <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,12,0,0">
+            <Button Content="Đóng" Click="OnCloseClicked" Padding="16,6" FontWeight="SemiBold" />
+        </StackPanel>
+    </Grid>
+</Window>

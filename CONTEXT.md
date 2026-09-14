@@ -4025,3 +4025,38 @@
     2. ThÃªm <Window.Resources> cá»¥c bá»™ vÃ o ChessboardCalibrationDialog.xaml vÃ  chuyá»ƒn converter vá» {StaticResource BoolToVis}.
     3. ThÃªm cá» kiá»ƒm tra tráº¡ng thÃ¡i shutdown cá»§a Dispatcher trong WriteableBitmapRenderer.cs Ä‘á»ƒ chá»‘ng exception Ä‘a luá»“ng khi Ä‘Ã³ng á»©ng dá»¥ng.
     4. Kiá»ƒm thá»­ dotnet run --project TestExtractApp Ä‘áº¡t 100% PASSED, biÃªn dá»‹ch Release 0 lá»—i.
+- **Thiết Kế & Triển Khai Hệ Thống Quản Lý Bản Quyền Enterprise Độc Lập (Task 332)**:
+  - **Mục Tiêu & Yêu Cầu**:
+    1. Quản lý bản quyền gắn chặt với phần cứng máy tính (Hardware-Bound): Mỗi máy tính có một Hardware Fingerprint bất biến độc nhất (kết hợp CPU ID, Motherboard Serial, BIOS UUID, Disk Serial, Windows MachineGuid), loại bỏ nguy cơ copy file chạy chùa.
+    2. Quản lý từ xa (Remote Client Management): License Server theo dõi trạng thái các máy trạm (IP, OS, App Version, Heartbeat), cho phép Kích hoạt (Activate), Thu hồi (Revoke), Tạm khóa (Suspend), Mở khóa, hoặc Chuyển máy (Transfer) từ xa theo thời gian thực.
+    3. Hỗ trợ song song Online & Offline Activation: Hỗ trợ kích hoạt trực tiếp qua Internet và kích hoạt Offline cho nhà máy biệt lập không có mạng (.req -> Admin Sign -> .lic).
+    4. License Server Độc Lập Hoàn Toàn (Standalone): Xây dựng trên stack Node.js + Express + TypeScript + SQLite, chạy độc lập bên ngoài Internet (VPS/Docker/Cloud) không phụ thuộc CMS nội bộ công ty.
+  - **Kiến Trúc & Giải Pháp Kỹ Thuật Đã Triển Khai**:
+    1. *License Server Độc Lập (`LicenseServer/`)*:
+       - Cặp khóa bất đối xứng RSA-2048 PKCS#1 SHA-256 (`keys/private.pem` & `keys/public.pem`).
+       - Canonical JSON Serializer đảm bảo tính toàn vẹn 100% của chữ ký số giữa Node.js và .NET C#.
+       - Cơ sở dữ liệu SQLite (`DatabaseSync` trong Node.js core) quản lý `licenses`, `machines`, `audit_logs`.
+       - REST API bảo mật: `/api/v1/license/activate`, `/heartbeat`, `/public-key`, `/offline-sign`.
+       - Giao diện Web Admin Dashboard trực quan (`/public/`): KPI Cards, bảng danh sách máy trạm theo thời gian thực, nút thao tác điều khiển từ xa, form ký offline kéo thả file `.req`.
+       - Đóng gói Docker (`Dockerfile`, `docker-compose.yml`, `README.md`) sẵn sàng triển khai.
+    2. *Client SDK C# (`VisionInspectionApp.Application/Licensing`)*:
+       - `HardwareFingerprintService`: Trích xuất WMI/Registry, băm SHA-256 + Secret Salt, mã hóa `V26-XXXX-XXXX-XXXX-XXXX`, hỗ trợ so khớp dung sai (Fuzzy match).
+       - `LicenseCryptoService`: Xác thực chữ ký số RSA-2048, bảo vệ bộ nhớ đệm bản quyền bằng Windows DPAPI, phát hiện tua ngược đồng hồ hệ thống.
+       - `ILicenseService` & `LicenseService`: Quản lý vòng đời bản quyền, ân hạn kết nối (Grace Period), timer chạy ngầm Heartbeat, kích hoạt Online/Offline.
+       - `OfflineLicenseGenerator`: Tiện ích Admin ký file bản quyền độc lập.
+    3. *Tích Hợp Giao Diện WPF & Chốt Chặn Phân Tích (`VisionInspectionApp.UI`)*:
+       - Chặn thực thi: `InspectionService.Pipeline.cs` gọi `_licenseService.AssertCanExecuteInspection()` trước mỗi lần kiểm tra, chặn ngay lập tức nếu bản quyền không hợp lệ.
+       - Giao diện `LicenseDialog.xaml` + `LicenseViewModel.cs`: Trực quan, hỗ trợ copy nhanh mã máy, kích hoạt Online, xuất file `.req`, nhập file `.lic`.
+       - Header Status Badge & Menu: Nút hiển thị trạng thái bản quyền trên thanh tiêu đề và menu "🔑 Quản Lý Bản Quyền / License..." trong Menu Trợ Giúp.
+       - Tự động kiểm tra bản quyền lúc khởi động ứng dụng (Splash Screen).
+    4. *Kiểm Thử Tự Động & Đảm Bảo Chất Lượng (`TestExtractApp/LicenseSystemTests.cs`)*:
+       - Xây dựng 8 bài test chuyên sâu kiểm tra toàn diện tính toàn vẹn phần cứng, chữ ký số, chống sửa đổi ngày/phiên bản (Anti-Tampering), chống sao chép máy khác (Anti-Cloning), chống lùi đồng hồ, luồng kích hoạt Offline, chốt chặn động cơ kiểm tra, và kích hoạt Online trực tiếp qua API Server port 4000.
+       - Chạy `dotnet run --project TestExtractApp` đạt **100% PASSED**.
+       - Biên dịch Release toàn bộ Solution `VisionInspectionApp.slnx` đạt **0 Error(s)**.
+
+- **Cập Nhật Cấu Hình .gitignore Cho Node.js & Thư Mục Build (Prompt Update)**:
+  - Bổ sung quy tắc loại trừ các thư mục phụ thuộc và file build của Node.js: `node_modules/`, `**/node_modules/`, `npm-debug.log*`, `yarn-debug.log*`, `pnpm-debug.log*`.
+  - Bổ sung các thư mục build / output frontend & TypeScript: `dist/`, `**/dist/`, `out/`, `**/out/`, `out-tsc/`, `*.tsbuildinfo`.
+  - Bổ sung loại trừ file database runtime SQLite: `*.sqlite`, `*.sqlite-shm`, `*.sqlite-wal`, `*.db`, `**/data/*.sqlite`.
+  - Bổ sung loại trừ file biến môi trường bí mật: `.env`, `**/.env`, `.env.local`, nhưng giữ lại `!**/.env.example` làm mẫu cấu hình.
+  - Tạo thêm file `LicenseServer/.gitignore` độc lập cho module máy chủ bản quyền.

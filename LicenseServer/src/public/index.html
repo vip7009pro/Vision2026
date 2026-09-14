@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Vision2026 — License & Client Management Portal</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body class="bg-dark">
+
+  <!-- LOGIN SCREEN -->
+  <div id="login-container" class="auth-wrapper">
+    <div class="glass-card login-card">
+      <div class="brand-header">
+        <div class="logo-badge">🛡️</div>
+        <h1>Vision2026</h1>
+        <p class="subtitle">Enterprise License Management Server</p>
+      </div>
+
+      <form id="login-form">
+        <div class="form-group">
+          <label for="username">Tên đăng nhập quản trị</label>
+          <input type="text" id="username" placeholder="Nhập username..." required autocomplete="username" value="admin">
+        </div>
+
+        <div class="form-group">
+          <label for="password">Mật khẩu bảo mật</label>
+          <input type="password" id="password" placeholder="Nhập mật khẩu..." required autocomplete="current-password" value="admin@vision2026">
+        </div>
+
+        <div id="login-error" class="alert-error" style="display: none;"></div>
+
+        <button type="submit" class="btn-primary btn-block">
+          <span class="btn-text">Đăng Nhập Quản Trị</span>
+          <span class="btn-icon">➔</span>
+        </button>
+      </form>
+      <div class="login-footer">
+        <span>Hệ thống máy chủ cấp phép độc lập • Đám mây công nghiệp</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- MAIN DASHBOARD -->
+  <div id="dashboard-container" style="display: none;">
+    <!-- NAVBAR -->
+    <header class="navbar">
+      <div class="nav-left">
+        <div class="logo-badge sm">🛡️</div>
+        <div class="nav-title">
+          <span class="brand-name">Vision2026</span>
+          <span class="portal-tag">License Cloud</span>
+        </div>
+      </div>
+
+      <nav class="nav-tabs">
+        <button class="nav-tab active" data-tab="clients">🖥️ Máy Trạm (Clients)</button>
+        <button class="nav-tab" data-tab="licenses">🔑 Mã Bản Quyền (Licenses)</button>
+        <button class="nav-tab" data-tab="offline">💾 Ký Offline (.req ➔ .lic)</button>
+      </nav>
+
+      <div class="nav-right">
+        <span class="admin-badge">Admin: <strong id="current-user">admin</strong></span>
+        <button id="btn-logout" class="btn-outline-danger btn-sm">Đăng Xuất</button>
+      </div>
+    </header>
+
+    <!-- KPI STATS -->
+    <main class="main-content">
+      <section class="kpi-grid">
+        <div class="kpi-card glass-card">
+          <div class="kpi-icon blue">🔑</div>
+          <div class="kpi-data">
+            <span class="kpi-label">Tổng Số Hợp Đồng License</span>
+            <span class="kpi-value" id="kpi-total-licenses">0</span>
+          </div>
+        </div>
+
+        <div class="kpi-card glass-card">
+          <div class="kpi-icon green">🖥️</div>
+          <div class="kpi-data">
+            <span class="kpi-label">Máy Đang Hoạt Động (Online)</span>
+            <span class="kpi-value" id="kpi-active-machines">0</span>
+          </div>
+        </div>
+
+        <div class="kpi-card glass-card">
+          <div class="kpi-icon red">⛔</div>
+          <div class="kpi-data">
+            <span class="kpi-label">Máy Bị Thu Hồi (Revoked)</span>
+            <span class="kpi-value" id="kpi-revoked-machines">0</span>
+          </div>
+        </div>
+
+        <div class="kpi-card glass-card">
+          <div class="kpi-icon purple">📊</div>
+          <div class="kpi-data">
+            <span class="kpi-label">Tổng Máy Đã Kích Hoạt</span>
+            <span class="kpi-value" id="kpi-total-machines">0</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- TAB 1: CLIENTS MANAGEMENT -->
+      <section id="tab-clients" class="tab-pane active">
+        <div class="pane-header">
+          <div>
+            <h2>Quản Lý Máy Trạm & Điều Khiển Từ Xa</h2>
+            <p class="section-desc">Danh sách tất cả các máy tính công nghiệp đã kết nối và đăng ký bản quyền.</p>
+          </div>
+          <div class="pane-actions">
+            <button id="btn-refresh-clients" class="btn-secondary">🔄 Làm Mới</button>
+          </div>
+        </div>
+
+        <div class="table-card glass-card">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Trạng Thái</th>
+                <th>Tên Máy Tính</th>
+                <th>Khách Hàng / License Key</th>
+                <th>Hardware Fingerprint</th>
+                <th>IP Mạng</th>
+                <th>Phiên Bản</th>
+                <th>Heartbeat Cuối</th>
+                <th class="text-right">Thao Tác Từ Xa</th>
+              </tr>
+            </thead>
+            <tbody id="clients-table-body">
+              <tr>
+                <td colspan="8" class="text-center py-4">Đang tải dữ liệu máy trạm...</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- TAB 2: LICENSES MANAGEMENT -->
+      <section id="tab-licenses" class="tab-pane">
+        <div class="pane-header">
+          <div>
+            <h2>Quản Lý Các Khóa Bản Quyền Đã Cấp</h2>
+            <p class="section-desc">Cấp mới License Key, quy định số lượng máy trạm và hạn dùng.</p>
+          </div>
+          <div class="pane-actions">
+            <button id="btn-open-create-license" class="btn-primary">➕ Tạo License Key Mới</button>
+          </div>
+        </div>
+
+        <div class="table-card glass-card">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>License Key</th>
+                <th>Khách Hàng</th>
+                <th>Gói Cước</th>
+                <th>Loại</th>
+                <th>Số Máy</th>
+                <th>Ngày Cấp</th>
+                <th>Hạn Dùng</th>
+                <th>Trạng Thái</th>
+              </tr>
+            </thead>
+            <tbody id="licenses-table-body">
+              <tr>
+                <td colspan="8" class="text-center py-4">Đang tải danh sách license...</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- TAB 3: OFFLINE SIGNING -->
+      <section id="tab-offline" class="tab-pane">
+        <div class="pane-header">
+          <div>
+            <h2>Ký Số Bản Quyền Ngoại Tuyến (Offline Signing)</h2>
+            <p class="section-desc">Dành cho máy trạm trong nhà máy bị cô lập mạng: Nạp file .req từ USB để sinh file .lic bản quyền.</p>
+          </div>
+        </div>
+
+        <div class="offline-grid">
+          <div class="glass-card offline-form-card">
+            <h3>1. Nạp File Yêu Cầu (.req) Từ Máy Trạm</h3>
+            <div id="drop-zone" class="drop-zone">
+              <div class="drop-icon">📂</div>
+              <p>Kéo thả file <strong>.req</strong> vào đây hoặc click để duyệt file</p>
+              <input type="file" id="file-req-input" accept=".req,.json,.txt" style="display: none;">
+            </div>
+
+            <div id="parsed-req-info" class="req-info-box" style="display: none;">
+              <h4>✅ Đã đọc thông tin máy trạm:</h4>
+              <div class="info-row"><span>Tên Máy:</span> <strong id="req-machine-name">-</strong></div>
+              <div class="info-row"><span>Mã Phần Cứng (Fingerprint):</span> <code id="req-fingerprint">-</code></div>
+              <div class="info-row"><span>Hệ Điều Hành:</span> <span id="req-os">-</span></div>
+              <div class="info-row"><span>Phiên Bản App:</span> <span id="req-app-ver">-</span></div>
+            </div>
+          </div>
+
+          <div class="glass-card offline-form-card">
+            <h3>2. Thiết Lập Bản Quyền & Ký Số</h3>
+            <form id="offline-sign-form">
+              <div class="form-group">
+                <label>Mã License Key</label>
+                <input type="text" id="offline-license-key" placeholder="VD: V26-ENT-DEMO-2026-8888" required>
+              </div>
+
+              <div class="form-group">
+                <label>Tên Khách Hàng / Dự Án</label>
+                <input type="text" id="offline-customer-name" placeholder="VD: Nhà Máy Samsung SEVT" required>
+              </div>
+
+              <div class="form-row">
+                <div class="form-group col">
+                  <label>Gói Bản Quyền</label>
+                  <select id="offline-edition">
+                    <option value="Enterprise" selected>Enterprise (Toàn bộ tính năng)</option>
+                    <option value="Pro">Pro (AI OCR + Surface)</option>
+                    <option value="Basic">Basic (Cơ bản)</option>
+                  </select>
+                </div>
+
+                <div class="form-group col">
+                  <label>Thời Hạn Bản Quyền</label>
+                  <select id="offline-type">
+                    <option value="Perpetual" selected>Vĩnh Viễn (Perpetual)</option>
+                    <option value="Subscription">Thuê Bao (1 Năm)</option>
+                    <option value="Trial">Dùng Thử (30 Ngày)</option>
+                  </select>
+                </div>
+              </div>
+
+              <button type="submit" id="btn-sign-offline" class="btn-success btn-block" disabled>
+                🔐 Ký Số & Tải File Bản Quyền (.lic)
+              </button>
+            </form>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- MODAL: TẠO LICENSE MỚI -->
+  <div id="create-license-modal" class="modal-backdrop" style="display: none;">
+    <div class="modal-card glass-card">
+      <div class="modal-header">
+        <h3>Tạo Mã License Key Mới</h3>
+        <button class="modal-close" id="btn-close-modal">✕</button>
+      </div>
+
+      <form id="create-license-form">
+        <div class="form-group">
+          <label>Tên Khách Hàng / Nhà Máy *</label>
+          <input type="text" id="create-customer" placeholder="VD: Công ty TNHH Cơ Điện Tử ABC" required>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group col">
+            <label>Gói Tính Năng</label>
+            <select id="create-edition">
+              <option value="Enterprise" selected>Enterprise</option>
+              <option value="Pro">Pro</option>
+              <option value="Basic">Basic</option>
+            </select>
+          </div>
+
+          <div class="form-group col">
+            <label>Số Máy Tối Đa</label>
+            <input type="number" id="create-max-machines" value="1" min="1" max="100" required>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group col">
+            <label>Loại Bản Quyền</label>
+            <select id="create-type">
+              <option value="Perpetual" selected>Vĩnh Viễn (Perpetual)</option>
+              <option value="Subscription">Thuê Bao Theo Ngày</option>
+              <option value="Trial">Dùng Thử</option>
+            </select>
+          </div>
+
+          <div class="form-group col" id="expiry-group" style="display: none;">
+            <label>Ngày Hết Hạn</label>
+            <input type="date" id="create-expiry">
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label>Tùy Chỉnh Key (Để trống để hệ thống tự sinh ngẫu nhiên)</label>
+          <input type="text" id="create-custom-key" placeholder="VD: V26-ENT-KHACH-HANG-0001">
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" class="btn-secondary" id="btn-cancel-modal">Hủy</button>
+          <button type="submit" class="btn-primary">Tạo Khóa</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
