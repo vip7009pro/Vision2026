@@ -41,6 +41,7 @@ const reqAppVer = document.getElementById('req-app-ver');
 const offlineSignForm = document.getElementById('offline-sign-form');
 const offlineLicenseKey = document.getElementById('offline-license-key');
 const offlineCustomerName = document.getElementById('offline-customer-name');
+const offlineLicenseSelect = document.getElementById('offline-license-select');
 const btnSignOffline = document.getElementById('btn-sign-offline');
 
 // Pending Approvals
@@ -329,10 +330,41 @@ async function loadLicenses() {
           </tr>
         `;
       }).join('');
+
+      // Cập nhật dropdown chọn License trong tab Ký Offline
+      if (offlineLicenseSelect) {
+        const activeLics = data.licenses.filter(l => l.status === 'Active');
+        offlineLicenseSelect.innerHTML = '<option value="CUSTOM">[Nhập License Key Mới Tùy Ý]</option>' + 
+          activeLics.map(l => 
+            `<option value="${l.id}" data-key="${escapeHtml(l.license_key)}" data-customer="${escapeHtml(l.customer_name)}" data-edition="${escapeHtml(l.edition)}" data-type="${escapeHtml(l.license_type)}">${escapeHtml(l.license_key)} - ${escapeHtml(l.customer_name)} (${l.edition})</option>`
+          ).join('');
+
+        if (activeLics.length > 0) {
+          offlineLicenseSelect.value = activeLics[0].id;
+          offlineLicenseKey.value = activeLics[0].license_key;
+          offlineCustomerName.value = activeLics[0].customer_name;
+          document.getElementById('offline-edition').value = activeLics[0].edition;
+          document.getElementById('offline-type').value = activeLics[0].license_type;
+        }
+      }
     }
   } catch (err) {
     licensesTableBody.innerHTML = `<tr><td colspan="9" class="text-center py-4 text-danger">Lỗi: ${err.message}</td></tr>`;
   }
+}
+
+if (offlineLicenseSelect) {
+  offlineLicenseSelect.addEventListener('change', () => {
+    const opt = offlineLicenseSelect.selectedOptions[0];
+    if (opt && opt.value !== 'CUSTOM') {
+      offlineLicenseKey.value = opt.getAttribute('data-key') || '';
+      offlineCustomerName.value = opt.getAttribute('data-customer') || '';
+      const ed = opt.getAttribute('data-edition');
+      if (ed) document.getElementById('offline-edition').value = ed;
+      const tp = opt.getAttribute('data-type');
+      if (tp) document.getElementById('offline-type').value = tp;
+    }
+  });
 }
 
 // Modal Create License
@@ -414,7 +446,7 @@ function handleReqFile(file) {
   const reader = new FileReader();
   reader.onload = (e) => {
     try {
-      const content = e.target.result;
+      const content = (e.target.result || '').trim();
       let reqData;
       try {
         const decoded = atob(content);
@@ -423,18 +455,34 @@ function handleReqFile(file) {
         reqData = JSON.parse(content);
       }
 
+      const machineFingerprint = (reqData.machineFingerprint || reqData.MachineFingerprint || reqData.fingerprint || reqData.Fingerprint || reqData.machine_fingerprint || '').toString().trim();
+      const machineName = (reqData.machineName || reqData.MachineName || reqData.name || reqData.Name || reqData.machine_name || 'Industrial-PC').toString().trim();
+      const osVersion = (reqData.osVersion || reqData.OsVersion || reqData.os_version || 'Windows').toString().trim();
+      const appVersion = (reqData.appVersion || reqData.AppVersion || reqData.app_version || '2.1.0').toString().trim();
+
       parsedOfflineReq = {
-        rawBase64: btoa(JSON.stringify(reqData)),
-        data: reqData
+        rawBase64: btoa(JSON.stringify({
+          machineFingerprint,
+          machineName,
+          osVersion,
+          appVersion,
+          ...reqData
+        })),
+        data: {
+          machineFingerprint,
+          machineName,
+          osVersion,
+          appVersion
+        }
       };
 
-      reqMachineName.textContent = reqData.machineName || 'Industrial-PC';
-      reqFingerprint.textContent = reqData.machineFingerprint || '-';
-      reqOs.textContent = reqData.osVersion || 'Windows';
-      reqAppVer.textContent = reqData.appVersion || '2.1.0';
+      reqMachineName.textContent = machineName;
+      reqFingerprint.textContent = machineFingerprint || '-';
+      reqOs.textContent = osVersion;
+      reqAppVer.textContent = appVersion;
 
       parsedReqInfo.style.display = 'block';
-      btnSignOffline.disabled = false;
+      btnSignOffline.disabled = !machineFingerprint;
     } catch (err) {
       alert(`Tệp không hợp lệ! Vui lòng chọn đúng file .req do ứng dụng Vision xuất ra. (${err.message})`);
     }

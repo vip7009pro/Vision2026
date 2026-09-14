@@ -434,7 +434,11 @@ public sealed class LicenseService : ILicenseService, IDisposable
             RequestChecksum = HardwareFingerprintService.GetFormattedMachineCode()
         };
 
-        var json = JsonSerializer.Serialize(req, new JsonSerializerOptions { WriteIndented = true });
+        var json = JsonSerializer.Serialize(req, new JsonSerializerOptions
+        {
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+            WriteIndented = true
+        });
         var base64 = Convert.ToBase64String(Encoding.UTF8.GetBytes(json));
         return Task.FromResult(base64);
     }

@@ -2646,3 +2646,16 @@ Lộ trình tích hợp tính năng Chụp ảnh từ camera và hỗ trợ các
                + Khẳng định: Server phát hiện máy bị xóa, client lập tức xóa file vault cục bộ, tự động chuyển sang `Pending`, trả về `IsValid = false`, và chặn hoàn toàn `AssertCanExecuteInspection()`.
              - Toàn bộ **13/13 bài kiểm thử Enterprise License System PASSED 100%** và toàn bộ các test suites của dự án đều PASSED (exit code 0).
              - Solution `VisionInspectionApp.slnx` biên dịch Release 0 Error(s).
+    - [x] **Task 336: Khắc Phục Lỗi Ký Số Offline Khi Thả File .req Lên Web Admin Dashboard**:
+        - **Mục Tiêu & Yêu Cầu**:
+          1. **Khắc phục lỗi 'Lỗi ký số: File yêu cầu không chứa machineFingerprint hợp lệ'**:
+             - Nguyên nhân: Trong C# .NET, class `MachineRequestData` mặc định được serialize bằng PascalCase (`MachineFingerprint`, `MachineName`, `OsVersion`, `AppVersion`). Trong khi đó, backend `licenseController.ts` và frontend `app.js` lại destructure theo camelCase (`machineFingerprint`), dẫn đến biến bị `undefined` khi đọc từ file `.req`.
+             - Khắc phục toàn diện từ Client đến Server:
+               + Client C#: Bổ sung `[JsonPropertyName("machineFingerprint")]` vào `MachineRequestData` và cấu hình `PropertyNamingPolicy = JsonNamingPolicy.CamelCase` trong `LicenseService.GenerateOfflineRequestCodeAsync`.
+               + Server TypeScript (`licenseController.offlineSign`): Hỗ trợ đa dạng casing không phân biệt chữ hoa/thường: `reqData.machineFingerprint || reqData.MachineFingerprint || reqData.fingerprint || reqData.Fingerprint || reqData.machine_fingerprint`.
+               + Web Dashboard (`app.js`): Cập nhật hàm `handleReqFile` trích xuất chính xác thông tin máy tính bất kể PascalCase hay camelCase, hiển thị chuẩn xác Tên máy và Fingerprint trên giao diện.
+          2. **Nâng cấp Giao Diện Ký Offline Trên Web Admin Dashboard**:
+             - Bổ sung Dropdown `Chọn Khóa Bản Quyền Sẵn Có (Hoặc Tự Nhập)` (`#offline-license-select`) trên tab Ký Số Offline.
+             - Tự động nạp các License Keys đang Active trên hệ thống (ví dụ: `V26-ENT-HAYG-HDMN-WJNH`).
+             - Khi Admin thả file `.req` vào, hệ thống tự động nhận diện máy trạm và điền sẵn mã License Key, Tên khách hàng, Gói cước và Thời hạn từ license đã chọn.
+             - Admin chỉ cần bấm 1 click `🔐 Ký Số & Tải File Bản Quyền (.lic)` là hoàn tất!

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Text.Json.Serialization;
 
 namespace VisionInspectionApp.Application.Licensing;
 
@@ -62,11 +63,22 @@ public sealed class SignedLicensePackage
 /// </summary>
 public sealed class MachineRequestData
 {
+    [JsonPropertyName("machineFingerprint")]
     public string MachineFingerprint { get; set; } = string.Empty;
+
+    [JsonPropertyName("machineName")]
     public string MachineName { get; set; } = string.Empty;
+
+    [JsonPropertyName("osVersion")]
     public string OsVersion { get; set; } = string.Empty;
+
+    [JsonPropertyName("requestTimestampUtc")]
     public string RequestTimestampUtc { get; set; } = string.Empty;
+
+    [JsonPropertyName("appVersion")]
     public string AppVersion { get; set; } = string.Empty;
+
+    [JsonPropertyName("requestChecksum")]
     public string RequestChecksum { get; set; } = string.Empty;
 }
 

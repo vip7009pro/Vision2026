@@ -4189,3 +4189,20 @@
        - Bổ sung `Test 13` trong `TestExtractApp/LicenseSystemTests.cs`: Khẳng định máy trạm bị xóa trên Server khi khởi động lại bị chặn hoàn toàn, vault cục bộ bị xóa sạch, tự động chuyển `Pending` chờ duyệt, và động cơ kiểm tra ngoại quan bị khóa.
        - Toàn bộ 13/13 bài test License System và toàn bộ test suites của dự án đạt **100% PASSED (exit code 0)**.
        - Database hiện tại: 1 License Key duy nhất `V26-ENT-HAYG-HDMN-WJNH`, 0 máy trạm, 0 đăng ký chờ duyệt. Cache cục bộ đã được xóa sạch.
+
+- **Khắc Phục Lỗi Ký Số Offline & Tối Ưu Hóa Ký File .req Trên Web Admin Dashboard (Task 336)**:
+  - **Vấn Đề & Nguyên Nhân Gốc Rễ**:
+    + *Lỗi*: Khi thả file `.req` (xuất từ app WPF) vào Web Admin Dashboard để ký số offline, hệ thống báo lỗi *"Lỗi ký số: File yêu cầu không chứa machineFingerprint hợp lệ"*.
+    + *Nguyên nhân*: Class `MachineRequestData` trong C# .NET mặc định serialize theo PascalCase (`MachineFingerprint`), trong khi License Server (`licenseController.ts`) và frontend (`app.js`) chỉ đọc theo camelCase (`reqData.machineFingerprint`), khiến giá trị bị `undefined`.
+  - **Các Giải Pháp Đã Triển Khai**:
+    1. *C# Client SDK (`VisionInspectionApp.Application`)*:
+       - `LicenseModels.cs`: Bổ sung annotation `[JsonPropertyName("machineFingerprint")]`, `[JsonPropertyName("machineName")]`, `[JsonPropertyName("osVersion")]`... cho class `MachineRequestData`.
+       - `LicenseService.cs`: Sử dụng `PropertyNamingPolicy = JsonNamingPolicy.CamelCase` khi serialize chuỗi yêu cầu offline.
+    2. *Backend License Server (`LicenseServer/src/controllers/licenseController.ts`)*:
+       - Trong `offlineSign`: Hỗ trợ đọc cả PascalCase, camelCase và snake_case: `machineFingerprint = reqData.machineFingerprint || reqData.MachineFingerprint || reqData.fingerprint...`.
+    3. *Web Admin Frontend (`LicenseServer/src/public/`)*:
+       - `app.js`: Nâng cấp `handleReqFile` trích xuất không phân biệt chữ hoa/thường, tự động hiển thị đầy đủ Tên máy và Mã phần cứng lên giao diện ngay khi thả file.
+       - `index.html` & `app.js`: Bổ sung Dropdown `#offline-license-select` cho phép Admin chọn trực tiếp License Key có sẵn trong DB (`V26-ENT-HAYG-HDMN-WJNH`) để ký offline cho file `.req`, tự động binding tên khách hàng, gói cước và thời hạn.
+  - **Kiểm Thử & Trạng Thái**:
+    + Đã test trực tiếp API `offlineSign` với cả 2 định dạng PascalCase (từ .NET) và camelCase: Ký số thành công 100%, sinh file `.lic` chuẩn RSA-2048.
+    + Solution `VisionInspectionApp.slnx` biên dịch Release 0 Error(s). License Server đang chạy daemon port 4000.

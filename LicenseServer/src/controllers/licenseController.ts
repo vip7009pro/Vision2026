@@ -278,7 +278,12 @@ export class LicenseController {
         reqData = typeof requestCode === 'string' ? JSON.parse(requestCode) : requestCode;
       }
 
-      const { machineFingerprint, machineName, osVersion, appVersion } = reqData;
+      // Hỗ trợ cả PascalCase (từ .NET serializer), camelCase (JS) và snake_case
+      const machineFingerprint = (reqData.machineFingerprint || reqData.MachineFingerprint || reqData.fingerprint || reqData.Fingerprint || reqData.machine_fingerprint || '').toString().trim();
+      const machineName = (reqData.machineName || reqData.MachineName || reqData.name || reqData.Name || reqData.machine_name || 'Offline-PC').toString().trim();
+      const osVersion = (reqData.osVersion || reqData.OsVersion || reqData.os_version || 'Windows').toString().trim();
+      const appVersion = (reqData.appVersion || reqData.AppVersion || reqData.app_version || '2.1.0').toString().trim();
+
       if (!machineFingerprint) {
         res.status(400).json({ success: false, message: 'File yêu cầu không chứa machineFingerprint hợp lệ.' });
         return;
