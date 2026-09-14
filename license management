@@ -1,0 +1,268 @@
+# Kế Hoạch Thiết Kế Hệ Thống Quản Lý Bản Quyền & License Server Độc Lập (Online & Offline)
+
+## 1. Tôn Chỉ Thiết Kế & Yêu Cầu Cốt Lõi
+
+1. **Độc lập hoàn toàn (Standalone Cloud/Internet-Ready)**:
+   - License Server là một hệ thống **hoạt động độc lập 100%**, tách biệt hoàn toàn khỏi hệ thống mạng và CMS nội bộ của công ty.
+   - Có thể triển khai trực tiếp lên bất kỳ môi trường Internet nào: VPS (Ubuntu/Debian/Windows Server), Docker, Render, Railway, AWS EC2, DigitalOcean... với domain công khai (ví dụ: `https://license.example.com`).
+   - Tự chứa cơ sở dữ liệu (SQLite cho cấu hình nhẹ, hoặc PostgreSQL/MySQL qua biến môi trường), tự quản lý xác thực Admin riêng bằng JWT, có Web Dashboard quản trị riêng biệt.
+2. **Ràng buộc phần cứng duy nhất (Hardware-Bound Fingerprint)**:
+   - Mỗi bản cài đặt trên 1 máy tính chỉ có một mã định danh phần cứng (`Machine Fingerprint`) duy nhất được tính toán từ các linh kiện bất biến: CPU, Mainboard, BIOS, Ổ đĩa cài HĐH.
+   - Không thể sao chép thư mục phần mềm sang máy khác, không thể clone ổ cứng hay nhân bản máy ảo.
+3. **Kích hoạt Online & Offline song song**:
+   - **Online**: Máy trạm có internet gọi thẳng ra License Server công khai để kích hoạt 1-click; định kỳ gửi heartbeat để duy trì bản quyền và kiểm tra lệnh thu hồi từ xa.
+   - **Offline**: Với máy trạm trong nhà máy bị cô lập mạng (Air-gapped), người dùng xuất file `.req` mang ra máy có mạng gửi cho Admin. Admin mở Web Dashboard độc lập trên Internet để ký số tạo file `.lic` mang về nạp vào máy trạm.
+4. **Quản lý Client từ xa (Remote Client Management)**:
+   - Giám sát trạng thái máy trạm: IP Public, IP LAN, Tên máy, OS, Phiên bản app, Thời gian heartbeat cuối cùng.
+   - Admin có thể **Thu hồi bản quyền (Revoke)**, **Tạm khóa (Suspend)**, hoặc **Hủy sử dụng (Decommission / Transfer)** từ xa bất kỳ lúc nào.
+5. **Mật mã học bất đối xứng RSA-2048 + Chống tua ngược đồng hồ (Anti-Clock Tampering)**.
+
+---
+
+## 2. Kiến Trúc Tổng Thể Hệ Thống
+
+```mermaid
+flowchart TD
+    subgraph InternetCloud ["☁️ MÔI TRƯỜNG INTERNET / CLOUD ĐỘC LẬP"]
+        subgraph StandaloneLicenseServer ["🌐 STANDALONE LICENSE SERVER (Node.js / TypeScript)"]
+            AuthAdmin["Xác thực Admin JWT"]
+            WebAdminUI["Web Admin Dashboard<br/>(Quản lý Client, Revoke, Ký Offline)"]
+            
+            subgraph ServerAPIs ["API Gateway & Endpoints"]
+                API_Activate["POST /api/v1/license/activate"]
+                API_Heartbeat["POST /api/v1/license/heartbeat"]
+                API_OfflineSign["POST /api/v1/license/offline-sign"]
+                API_RemoteAction["POST /api/v1/license/revoke & suspend"]
+                API_GetClients["GET /api/v1/license/clients"]
+            end
+
+            subgraph CryptoVault ["🔐 Cryptographic Core"]
+                RSAPrivateKey["RSA-2048 Private Key (keys/private.pem)<br/>Chỉ lưu trên Server, tuyệt đối bí mật"]
+                SigningEngine["SHA-256 Signature Engine"]
+                RSAPrivateKey --> SigningEngine
+            end
+
+            subgraph Database ["💾 Embedded DB (SQLite / PostgreSQL)"]
+                DB_Licenses[("licenses")]
+                DB_Machines[("machines")]
+                DB_Audit[("license_audit_logs")]
+            end
+
+            WebAdminUI --> AuthAdmin
+            WebAdminUI --> ServerAPIs
+            ServerAPIs --> CryptoVault
+            ServerAPIs --> Database
+        end
+    end
+
+    subgraph FactoryA ["🏭 Nhà Máy A (Có Mạng Internet)"]
+        ClientOnline["🖥️ Máy Trạm VisionInspectionApp"]
+        ClientOnline -->|HTTPS Online 1-Click| API_Activate
+        ClientOnline -->|Định kỳ Heartbeat 4h-12h| API_Heartbeat
+        API_Heartbeat -.->|Nhận lệnh Thu Hồi / Khóa| ClientOnline
+    end
+
+    subgraph FactoryB ["🏭 Nhà Máy B (Mạng Nội Bộ Cô Lập - Air-gapped)"]
+        ClientOffline["🖥️ Máy Trạm Không Mạng"]
+        ClientOffline -->|1. Xuất file yêu cầu| ReqFile["MachineRequest_PC01.req"]
+        ReqFile -.->|2. Copy USB / Email ra ngoài| AdminBrowser["📱/💻 Trình duyệt Admin (Có Internet)"]
+        AdminBrowser -->|3. Tải lên ký số| WebAdminUI
+        WebAdminUI -->|4. Xuất file bản quyền| LicFile["LicenseFile_PC01.lic"]
+        LicFile -.->|5. Copy USB mang vào| ClientOffline
+        ClientOffline -->|6. Nạp file .lic & Xác thực bằng RSA Public Key| EngineUnlock["Mở khóa Vision Engine"]
+    end
+```
+
+---
+
+## 3. Thiết Kế Chi Tiết LICENSE SERVER (Dự Án Độc Lập)
+
+### 3.1. Cấu Trúc Thư Mục Dự Án (`LicenseServer/`)
+
+Dự án License Server được đặt độc lập trong thư mục `LicenseServer/`, có thể đóng gói thành Docker container hoặc chạy độc lập bằng Node.js:
+
+```
+LicenseServer/
+├── package.json
+├── tsconfig.json
+├── .env.example
+├── Dockerfile
+├── README.md
+├── keys/                           # Thư mục chứa cặp khóa RSA-2048
+│   ├── private.pem                 # Private Key (Server giữ)
+│   └── public.pem                  # Public Key (Nhúng vào Client C#)
+├── src/
+│   ├── server.ts                   # Điểm khởi động Express HTTP/HTTPS server
+│   ├── config/                     # Cấu hình môi trường (Port, JWT Secret, DB Path...)
+│   ├── database/                   # SQLite database manager & migration tự động
+│   │   └── index.ts
+│   ├── crypto/                     # Module sinh khóa RSA & ký số SHA-256
+│   │   └── licenseCrypto.ts
+│   ├── middlewares/                # Auth middleware (Admin JWT token, Rate limit, CORS)
+│   │   └── auth.ts
+│   ├── controllers/                # Controllers xử lý nghiệp vụ
+│   │   ├── licenseController.ts    # Activate, Heartbeat, Offline-Sign
+│   │   └── adminController.ts      # Quản lý Clients, Revoke, Suspend, Thống kê
+│   ├── routes/                     # Định nghĩa tuyến đường REST API
+│   │   ├── licenseRoutes.ts
+│   │   └── adminRoutes.ts
+│   └── public/                     # Giao diện Web Admin Dashboard (HTML5 / CSS / Vanilla JS & Tailwind UI)
+│       ├── index.html              # Trang đăng nhập & Dashboard quản trị hiện đại
+│       ├── app.js                  # Logic xử lý giao diện, gọi API, hiển thị bảng máy trạm
+│       └── style.css
+```
+
+---
+
+### 3.2. Thiết Kế Cơ Sở Dữ Liệu Tự Chứa (SQLite / PostgreSQL)
+
+Mặc định sử dụng **SQLite** (`data/license.db`) để License Server có thể chạy ngay lập tức (`Zero-Config`) ở bất kỳ đâu mà không cần cài đặt CSDL cồng kềnh. Hỗ trợ chuyển sang PostgreSQL qua cấu hình biến môi trường `DATABASE_URL`.
+
+#### 1. Bảng `licenses`
+- `id`: UUID (Primary Key)
+- `license_key`: Chuỗi định dạng `V26-ENT-XXXX-XXXX-XXXX` (Unique)
+- `customer_name`: Tên khách hàng / Nhà máy
+- `edition`: `Basic` | `Pro` | `Enterprise`
+- `license_type`: `Perpetual` (Vĩnh viễn) | `Subscription` (Thuê bao) | `Trial` (Dùng thử)
+- `max_machines`: Số lượng máy tính tối đa được phép kích hoạt (mặc định 1)
+- `allowed_features`: JSON danh sách module tính năng
+- `max_cameras`: Số camera tối đa cho phép
+- `issued_at`: Ngày phát hành
+- `expires_at`: Ngày hết hạn (NULL nếu vĩnh viễn)
+- `status`: `Active` | `Suspended` | `Revoked` | `Expired`
+
+#### 2. Bảng `machines`
+- `id`: UUID
+- `license_id`: Khóa ngoại liên kết bảng `licenses`
+- `machine_fingerprint`: Mã băm phần cứng bất biến của máy tính (SHA-256)
+- `machine_name`: Tên máy tính (ví dụ `OQC-LINE01-PC`)
+- `os_version`: Phiên bản Windows
+- `app_version`: Phiên bản ứng dụng Vision2026
+- `local_ip`: IP mạng nội bộ của máy trạm
+- `public_ip`: IP Internet của máy trạm khi gửi request
+- `activated_at`: Thời điểm kích hoạt
+- `last_heartbeat`: Thời điểm gửi heartbeat gần nhất
+- `is_revoked`: Trạng thái bị thu hồi từ xa (true/false)
+- `revoked_reason`: Lý do thu hồi
+- `revoked_at`: Thời điểm thu hồi
+- `is_suspended`: Trạng thái tạm khóa
+
+#### 3. Bảng `audit_logs`
+- Lưu nhật ký mọi hành vi: Kích hoạt, Heartbeat, Thu hồi, Ký offline, IP truy cập.
+
+---
+
+### 3.3. Các API Endpoints Chi Tiết
+
+#### A. Dành Cho Client (Máy Trạm VisionInspectionApp)
+
+1. **`POST /api/v1/license/activate`**
+   - **Mục đích**: Kích hoạt máy mới qua internet.
+   - **Body**: `{ licenseKey, machineFingerprint, machineName, osVersion, appVersion, localIp }`
+   - **Xử lý**:
+     - Kiểm tra tính hợp lệ của `licenseKey` trong DB.
+     - Kiểm tra số lượng máy đã kích hoạt: nếu còn slot, thêm `machineFingerprint` vào bảng `machines`.
+     - Ký số payload bằng **RSA-2048 Private Key**.
+   - **Response**: Trả về Payload đã ký số (`payload` + `signatureBase64`).
+
+2. **`POST /api/v1/license/heartbeat`**
+   - **Mục đích**: Báo cáo tình trạng máy trạm và kiểm tra lệnh thu hồi từ xa.
+   - **Body**: `{ licenseKey, machineFingerprint, appVersion }`
+   - **Xử lý**: Cập nhật `last_heartbeat = NOW()` và `public_ip`. Kiểm tra cờ `is_revoked` hoặc `is_suspended`.
+   - **Response**: `{ status: "Active" | "Revoked" | "Suspended", serverTimeUtc: "..." }`.
+
+#### B. Dành Cho Admin Dashboard
+
+1. **`POST /api/v1/admin/login`**: Đăng nhập Admin lấy JWT Token.
+2. **`GET /api/v1/admin/dashboard`**: Lấy thống kê tổng quan (Tổng số license, số máy online, số máy hết hạn, số máy bị thu hồi).
+3. **`GET /api/v1/admin/clients`**: Lấy danh sách toàn bộ các máy trạm client kèm trạng thái trực tiếp.
+4. **`POST /api/v1/admin/license/create`**: Tạo mã License Key mới theo yêu cầu khách hàng.
+5. **`POST /api/v1/admin/machine/revoke`**: **Thu hồi bản quyền từ xa** của 1 máy tính cụ thể.
+6. **`POST /api/v1/admin/machine/suspend`**: Tạm khóa máy trạm (ví dụ khi khách hàng chậm thanh toán).
+7. **`POST /api/v1/admin/machine/transfer`**: Hủy liên kết máy cũ để khách hàng đổi sang máy tính mới khi máy cũ bị hỏng.
+8. **`POST /api/v1/admin/license/offline-sign`**: Nạp file `.req` từ máy cô lập mạng $\rightarrow$ Server ký số và xuất file `.lic`.
+
+---
+
+### 3.4. Giao Diện Web Admin Dashboard Độc Lập
+
+Web Dashboard được thiết kế sẵn trong thư mục `LicenseServer/public/`, giao diện Dark/Light hiện đại, responsive chạy trên cả máy tính và điện thoại:
+- **Trang Đăng Nhập Bảo Mật**: Bảo vệ bằng mật khẩu quản trị và JWT Token.
+- **Thẻ Thống Kê (KPI Cards)**: `Tổng License` | `Máy Đang Hoạt Động (Heartbeat < 12h)` | `Máy Bị Thu Hồi` | `Sắp Hết Hạn`.
+- **Bảng Quản Lý Máy Trạm (Real-time Client Monitor)**:
+  - Hiển thị: Tên Khách Hàng, Tên Máy, IP Public/LAN, Mã Phần Cứng (Fingerprint), Phiên Bản App, Trạng Thái (Xanh: Active, Đỏ: Revoked, Vàng: Suspended, Xám: Offline).
+  - Nút bấm trực tiếp: 🔴 **Thu Hồi (Revoke)** | ⏸ **Tạm Khóa** | 🔄 **Chuyển Máy**.
+- **Công Cụ Ký Offline (Offline License Generator)**:
+  - Kéo thả file `.req` vào trình duyệt $\rightarrow$ Xem thông tin máy trạm $\rightarrow$ Chọn thời hạn $\rightarrow$ Bấm **"Ký & Tải File .lic"** chỉ mất 2 giây.
+- **Tạo Khóa Bản Quyền Mới (License Key Generator)**:
+  - Nhập tên khách hàng, chọn gói (Basic/Pro/Enterprise), số lượng máy tối đa cho phép, hạn dùng $\rightarrow$ Bấm sinh mã.
+
+---
+
+## 4. Thiết Kế Phía Client C# WPF (`VisionInspectionApp`)
+
+### 4.1. Thuật Toán Trích Xuất Phần Cứng (`HardwareFingerprintService.cs`)
+- Trích xuất thông tin phần cứng vật lý qua Windows WMI / Registry:
+  - **CPU ID**: `Win32_Processor` -> `ProcessorId`
+  - **Mainboard Serial**: `Win32_BaseBoard` -> `SerialNumber`
+  - **BIOS UUID**: `Win32_ComputerSystemProduct` -> `UUID`
+  - **Ổ đĩa hệ điều hành**: `Win32_DiskDrive` chứa phân vùng `C:` -> `SerialNumber`
+- Băm kết hợp bằng **HMAC-SHA256** với Secret Salt $\rightarrow$ Định dạng chuỗi máy: `V26-XXXX-XXXX-XXXX-XXXX`.
+- Có cơ chế chấp nhận sai số phần cứng (Fuzzy Tolerance): Cho phép thay thế 1 linh kiện nhỏ (ổ đĩa thứ hai hoặc card mạng) mà không làm mất bản quyền, nhưng nếu thay Mainboard/CPU thì coi như máy tính mới.
+
+### 4.2. Mật Mã Học & Lưu Trữ An Toàn (`LicenseCryptoService.cs`)
+- Nhúng **RSA-2048 Public Key** vào Client để xác thực chữ ký số của Server.
+- Mọi dữ liệu license trên máy trạm được mã hóa bằng **Windows DPAPI** (`ProtectedData.Protect` với `DataProtectionScope.LocalMachine`), chỉ chính máy tính đó mới đọc được.
+- **Chống tua ngược đồng hồ hệ thống (Anti-Clock Tampering)**:
+  - Lưu vết timestamp mã hóa `LastSeenUtc` vào Registry và File ẩn.
+  - Nếu phát hiện `CurrentUtc < LastSeenUtc - 15 phút` (người dùng chỉnh lùi đồng hồ Windows) $\rightarrow$ Khóa phần mềm ngay lập tức.
+
+### 4.3. Dịch Vụ Bản Quyền Client (`LicenseService.cs`)
+- Quản lý trạng thái: `Unlicensed`, `Active`, `GracePeriod`, `Expired`, `Revoked`, `ClockTampered`.
+- Chạy ngầm background timer gửi Heartbeat lên License Server Internet mỗi 4–12 giờ.
+- Nếu Server báo `Revoked`: lập tức xóa license local, dừng `InspectionService` và hiển thị thông báo thu hồi.
+- Cho phép thời gian ân hạn mạng (Grace Period mặc định 7 ngày) nếu nhà máy tạm mất kết nối Internet.
+
+### 4.4. Giao Diện Người Dùng Client (`LicenseDialog.xaml`)
+- Cửa sổ quản lý bản quyền hiện đại, đồng bộ theme của app:
+  - **Tab 1: Thông tin Bản quyền**: Hiển thị Hardware ID (nút Copy), Tên khách hàng, Gói bản quyền, Hạn dùng, Trạng thái.
+  - **Tab 2: Kích hoạt Online**: Ô nhập License Key + Nút **Kích hoạt Trực Tuyến**.
+  - **Tab 3: Kích hoạt Offline**: Nút **Xuất file yêu cầu (.req)** + Nút **Nạp file bản quyền (.lic)**.
+- Tích hợp vào:
+  - Màn hình Splash Screen lúc khởi động: nếu chưa kích hoạt, tự động mở `LicenseDialog`.
+  - Tiêu đề Title Bar của `MainWindow`: Huy hiệu bản quyền (`🔑 Enterprise License` hoặc `⚠️ Hết hạn trong 3 ngày`).
+  - Menu `Trợ Giúp` $\rightarrow$ `Quản lý Bản quyền / License...`.
+  - Bộ chặn kiểm tra: `InspectionService` và nút Run Flow bị vô hiệu hóa nếu trạng thái không phải `Active` hoặc `GracePeriod`.
+
+---
+
+## 5. Các Giai Đoạn Triển Khai
+
+| Giai đoạn | Nội dung công việc | Kết quả bàn giao |
+|:---|:---|:---|
+| **Giai đoạn 1 (GĐ1)** | **Xây dựng License Server Độc Lập (`LicenseServer/`)**: Cài đặt dự án Node.js/TypeScript, SQLite database, mã hóa RSA-2048, các API endpoints (activate, heartbeat, offline-sign, revoke), và Web Admin Dashboard hoàn chỉnh. | License Server sẵn sàng chạy độc lập, có thể deploy lên bất kỳ VPS/Cloud nào. |
+| **Giai đoạn 2 (GĐ2)** | **Xây dựng Core Client Licensing C# (`VisionInspectionApp.Application`)**: `HardwareFingerprintService.cs`, `LicenseCryptoService.cs`, `LicenseModels.cs`, `LicenseService.cs`, cơ chế chống tua ngược đồng hồ, lưu trữ DPAPI. | Bộ lõi định danh phần cứng và xác thực chữ ký RSA trên Client. |
+| **Giai đoạn 3 (GĐ3)** | **Giao Diện Client & Tích Hợp Hệ Thống (`VisionInspectionApp.UI`)**: Cửa sổ `LicenseDialog.xaml`, ViewModel, tích hợp Splash Screen và chặn `InspectionService`. | Người dùng máy trạm có thể kích hoạt online, xuất/nạp file offline dễ dàng. |
+| **Giai đoạn 4 (GĐ4)** | **Kiểm Thử Tự Động Toàn Diện & Tài Liệu Hướng Dẫn**: Bộ test `LicenseSystemTests.cs` (100% Passed) kiểm tra Fingerprint, RSA Verify, Chống tua ngược giờ, Kích hoạt Online & Offline, Thu hồi từ xa. Viết hướng dẫn triển khai Server lên VPS/Docker. | Toàn bộ hệ sinh thái chạy trơn tru, biên dịch Release 0 lỗi. |
+
+---
+
+## 6. Kế Hoạch Xác Minh (Verification Plan)
+
+### Kiểm Thử Tự Động
+- Chạy toàn bộ test suite trong `TestExtractApp`:
+  ```powershell
+  dotnet run --project TestExtractApp
+  ```
+  Xác minh 100% test cases về Fingerprint, Chữ ký số RSA, Giả mạo phần cứng, Tua ngược đồng hồ, Thu hồi từ xa đều **PASSED**.
+
+### Kiểm Thử License Server Độc Lập
+- Khởi chạy License Server tại `LicenseServer/`:
+  ```bash
+  npm run dev
+  ```
+- Kiểm tra truy cập Web Admin Dashboard tại `http://localhost:4000`, thực hiện kích hoạt online, gửi heartbeat, thu hồi từ xa và ký file offline thành công 100%.
+
+### Biên Dịch Toàn Bộ Solution
+- Lệnh: `dotnet build VisionInspectionApp.slnx -c Release`
+- Đạt kết quả: **0 Error(s)**.
