@@ -2603,3 +2603,18 @@ Lộ trình tích hợp tính năng Chụp ảnh từ camera và hỗ trợ các
                + Test 12: Delete License Key & Cascade Machine Revocation (Xóa license, kiểm tra cascade thu hồi và xóa sạch khỏi DB).
              - Đạt 100% PASSED toàn bộ 12 bài kiểm thử License và toàn bộ các test suites của dự án (exit code 0).
              - Toàn bộ Solution VisionInspectionApp.slnx biên dịch Release 0 Error(s).
+    - [x] **Task 334: Tối Ưu Hóa Quy Trình Tự Động Đăng Ký (Auto-Register Pending) & Phê Duyệt Gán Khóa Bản Quyền Sẵn Có Trên Web Admin Dashboard**:
+        - **Mục Tiêu & Yêu Cầu**:
+          1. **Khắc phục lỗi 'Yêu cầu đăng ký kích hoạt bị từ chối' khi mở ứng dụng mới cài đặt**:
+             - Nguyên nhân: Trước đó khi Admin xóa máy trạm hoặc license cũ, hàm deleteMachine / deleteLicense cập nhật status = 'Rejected' trong bảng client_registrations. Khi mở app lên, client gọi auto-register, server tìm thấy bản ghi cũ và giữ nguyên Rejected, khiến app hiển thị thông báo từ chối.
+             - Khắc phục: Sửa deleteMachine xóa triệt để máy trạm khỏi bảng client_registrations. Nâng cấp hàm upsertClientRegistration trong DB: nếu máy trạm chưa có bản quyền hợp lệ hoặc từng bị từ chối trước đó mà không bị Admin cố tình thu hồi (is_revoked !== 1), hệ thống tự động thiết lập trạng thái thành Pending để Quản trị viên duyệt lại.
+          2. **Tính năng Phê duyệt gán vào Khóa Bản Quyền (License Key) đã tạo sẵn trên Web Dashboard**:
+             - Trước đây khi Admin bấm Duyệt từ tab 'Chờ Duyệt', hệ thống luôn tự động sinh ra một License Key ngẫu nhiên mới, không tận dụng được các License Key doanh nghiệp đã tạo sẵn trước đó.
+             - Nâng cấp Modal Phê Duyệt (#modal-approve) trên Web Admin Dashboard: bổ sung Dropdown "Chọn Khóa Bản Quyền (License Key)" tự động tải danh sách License Active.
+             - Cho phép Admin chọn một License Key có sẵn (ví dụ: V26-ENT-HAYG-HDMN-WJNH) hoặc chọn [Tạo License Key Mới Tự Động]. Khi chọn key có sẵn, hệ thống tự động điền Tên Khách Hàng, Gói Cước và tính toán thời hạn theo license gốc.
+             - Backend approveClientRegistration nhận license_id, kiểm tra số lượng máy tối đa (max_machines), gán máy trạm vào license có sẵn, ký số RSA-2048 gói bản quyền và kích hoạt thành công cho máy trạm.
+          3. **Bổ sung nút Xóa Hoàn Toàn Máy Trạm (deleteMachinePermanently) trên Web Dashboard**:
+             - Thêm nút '🗑️ Xóa' trên bảng Quản lý Máy Trạm và route POST /api/v1/admin/machine/delete, cho phép Admin dọn dẹp sạch sẽ máy trạm khỏi hệ thống để máy có thể đăng ký lại từ đầu như máy mới.
+          4. **Kiểm Thử Toàn Trình**:
+             - Kiểm tra luồng: Client mới mở app -> Server tiếp nhận Pending -> Admin Dashboard hiển thị tab 'Chờ Duyệt' -> Admin chọn License Key có sẵn và duyệt -> Client polling nhận gói RSA-2048 và chuyển sang trạng thái Active thành công 100%.
+             - Toàn bộ Solution biên dịch 0 Error(s).

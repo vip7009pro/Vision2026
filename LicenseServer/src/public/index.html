@@ -365,6 +365,13 @@
           <input type="text" id="approve-formatted-code" readonly style="background: rgba(255,255,255,0.05); font-family: monospace; color: #38BDF8;">
         </div>
         <div class="form-group">
+          <label>Khóa Bản Quyền Cần Cấp (License Key)</label>
+          <select id="approve-license-select">
+            <option value="NEW">✨ Tự động tạo License Key mới theo thông tin dưới</option>
+          </select>
+          <small class="text-muted" id="approve-license-hint" style="display:block; margin-top:4px;">Nếu chọn Khóa có sẵn, thông tin Khách hàng và Gói sẽ tự động khớp theo Khóa đó.</small>
+        </div>
+        <div class="form-group">
           <label>Tên Khách Hàng / Nhà Máy</label>
           <input type="text" id="approve-customer-name" placeholder="VD: CMS VINA Factory Line 1" required>
         </div>

@@ -430,13 +430,8 @@ export class DatabaseManager {
 
   public deleteMachine(machineFingerprint: string): boolean {
     const result = this.db.prepare('DELETE FROM machines WHERE machine_fingerprint = ?').run(machineFingerprint);
-    this.db.prepare(`
-      UPDATE client_registrations SET
-        status = 'Rejected',
-        signed_package = null,
-        notes = 'Máy trạm đã bị xóa khỏi hệ thống'
-      WHERE machine_fingerprint = ?
-    `).run(machineFingerprint);
+    // Xóa sạch đăng ký để máy tính có thể tự do đăng ký lại như một máy mới
+    this.db.prepare('DELETE FROM client_registrations WHERE machine_fingerprint = ?').run(machineFingerprint);
     return Number(result.changes) > 0;
   }
 
@@ -454,14 +449,8 @@ export class DatabaseManager {
       WHERE license_id = ?
     `).run(now, licenseId);
 
-    // 2. Thu hồi các đăng ký máy trạm liên quan
-    this.db.prepare(`
-      UPDATE client_registrations SET
-        status = 'Rejected',
-        signed_package = null,
-        notes = 'License đã bị Quản trị viên xóa hoàn toàn'
-      WHERE assigned_license_id = ?
-    `).run(licenseId);
+    // 2. Xóa các đăng ký máy trạm liên quan để các máy đó có thể tự do gửi yêu cầu cấp license mới
+    this.db.prepare('DELETE FROM client_registrations WHERE assigned_license_id = ?').run(licenseId);
 
     // 3. Xóa license khỏi bảng licenses
     const res = this.db.prepare('DELETE FROM licenses WHERE id = ?').run(licenseId);
@@ -661,16 +650,56 @@ export class DatabaseManager {
     const now = new Date().toISOString();
 
     if (existing) {
+      let targetStatus: 'Pending' | 'Approved' | 'Rejected' = existing.status;
+      let targetPackage: string | null = existing.signed_package ?? null;
+      let targetLicenseId: string | null = existing.assigned_license_id ?? null;
+      let targetNotes: string | null = existing.notes ?? null;
+
+      // 1. Nếu trước đó là Approved nhưng license liên kết đã bị xóa hoặc không còn Active -> chuyển về Pending để Admin cấp lại
+      if (existing.status === 'Approved') {
+        if (existing.assigned_license_id) {
+          const lic = this.getLicenseById(existing.assigned_license_id);
+          if (!lic || lic.status !== 'Active') {
+            targetStatus = 'Pending';
+            targetPackage = null;
+            targetLicenseId = null;
+            targetNotes = null;
+          }
+        } else {
+          targetStatus = 'Pending';
+          targetPackage = null;
+          targetNotes = null;
+        }
+      }
+
+      // 2. Nếu trước đó là Rejected (do xóa máy, xóa license hoặc reject tạm thời)
+      // Kiểm tra xem máy có đang bị thu hồi cố ý bởi Admin trong bảng machines không:
+      const machine = this.getMachineByFingerprint(data.machine_fingerprint);
+      if (existing.status === 'Rejected') {
+        if (!machine || machine.is_revoked !== 1) {
+          // Máy KHÔNG bị Admin cố tình revoke -> máy mở app lên để xin cấp phép lại -> tự động chuyển về Pending!
+          targetStatus = 'Pending';
+          targetPackage = null;
+          targetLicenseId = null;
+          targetNotes = null;
+        }
+      }
+
       this.db.prepare(`
         UPDATE client_registrations
-        SET machine_name = ?, os_version = ?, app_version = ?, local_ip = ?, public_ip = ?, last_seen_at = ?
+        SET machine_name = ?, os_version = ?, app_version = ?, local_ip = ?, public_ip = ?,
+            status = ?, signed_package = ?, assigned_license_id = ?, notes = ?, last_seen_at = ?
         WHERE id = ?
       `).run(
         data.machine_name || existing.machine_name,
-        data.os_version || existing.os_version,
-        data.app_version || existing.app_version,
-        data.local_ip || existing.local_ip,
-        data.public_ip || existing.public_ip,
+        data.os_version || existing.os_version || 'Windows',
+        data.app_version || existing.app_version || '2.1.0',
+        data.local_ip || existing.local_ip || '127.0.0.1',
+        data.public_ip || existing.public_ip || '',
+        targetStatus,
+        targetPackage,
+        targetLicenseId,
+        targetNotes,
         now,
         existing.id
       );
@@ -741,6 +770,7 @@ export class DatabaseManager {
   public approveClientRegistration(
     registrationId: string,
     options: {
+      license_id?: string;
       customer_name?: string;
       edition?: string;
       license_type?: string;
@@ -760,45 +790,61 @@ export class DatabaseManager {
 
     const now = new Date();
     const nowIso = now.toISOString();
-    const customerName = options.customer_name?.trim() || `Client - ${reg.machine_name}`;
-    const edition = options.edition || 'Enterprise';
-    const licenseType = options.expiration_days && options.expiration_days > 0 ? 'Subscription' : 'Perpetual';
-    const expiresAt = options.expiration_days && options.expiration_days > 0
-      ? new Date(now.getTime() + options.expiration_days * 86400000).toISOString()
-      : null;
 
-    const licenseKey = LicenseCrypto.generateLicenseKey('ENT');
-    const defaultFeatures = options.allowed_features && options.allowed_features.length > 0
-      ? options.allowed_features
-      : [
-        'InspectionEngine',
-        'HighSpeedCamera',
-        'PlcBridge',
-        'OqcScanner',
-        'AI_OCR_Industrial',
-        'LightingController',
-        'DatabaseIntegration',
-        'MultiCameraSupport',
-        'SurfaceCompare',
-        'ContourCompare'
-      ];
+    let license: LicenseRecord | undefined;
 
-    // 1. Tạo license record mới
-    const license = this.createLicense({
-      license_key: licenseKey,
-      customer_name: customerName,
-      edition: edition,
-      license_type: licenseType,
-      max_machines: 1,
-      allowed_features: JSON.stringify(defaultFeatures),
-      max_cameras: options.max_cameras || 4,
-      issued_at: nowIso,
-      expires_at: expiresAt,
-      status: 'Active',
-      notes: options.notes || `Tự động phê duyệt từ máy trạm ${reg.machine_name}`
-    });
+    // 1. Nếu Admin chọn gán vào một License Key có sẵn trong hệ thống
+    if (options.license_id && options.license_id !== 'NEW') {
+      license = this.getLicenseById(options.license_id);
+      if (!license || license.status !== 'Active') {
+        return { success: false, message: 'Khóa bản quyền được chọn không tồn tại hoặc đã bị khóa/hết hạn.' };
+      }
 
-    // 2. Ký số RSA-2048
+      // Kiểm tra số lượng máy trạm đã kích hoạt trên license này
+      const activeCount = this.countActiveMachinesForLicense(license.id);
+      const isAlreadyOnThisLic = this.getMachine(license.id, reg.machine_fingerprint);
+      if (!isAlreadyOnThisLic && activeCount >= license.max_machines) {
+        return {
+          success: false,
+          message: `Khóa bản quyền [${license.license_key}] đã đạt tối đa số máy cho phép (${license.max_machines} máy). Vui lòng chọn khóa khác hoặc tăng số lượng máy.`
+        };
+      }
+    } else {
+      // Tự động tạo license mới
+      const customerName = options.customer_name?.trim() || `Client - ${reg.machine_name}`;
+      const edition = options.edition || 'Enterprise';
+      const licenseType = options.expiration_days && options.expiration_days > 0 ? 'Subscription' : 'Perpetual';
+      const expiresAt = options.expiration_days && options.expiration_days > 0
+        ? new Date(now.getTime() + options.expiration_days * 86400000).toISOString()
+        : null;
+
+      const licenseKey = LicenseCrypto.generateLicenseKey('ENT');
+      const defaultFeatures = options.allowed_features && options.allowed_features.length > 0
+        ? options.allowed_features
+        : (edition === 'Enterprise' ? [
+          'InspectionEngine', 'HighSpeedCamera', 'PlcBridge', 'OqcScanner', 'AI_OCR_Industrial',
+          'LightingController', 'DatabaseIntegration', 'MultiCameraSupport', 'SurfaceCompare', 'ContourCompare'
+        ] : edition === 'Pro' ? [
+          'InspectionEngine', 'HighSpeedCamera', 'PlcBridge', 'OqcScanner', 'LightingController', 'DatabaseIntegration'
+        ] : ['InspectionEngine', 'PlcBridge']);
+
+      license = this.createLicense({
+        license_key: licenseKey,
+        customer_name: customerName,
+        edition: edition,
+        license_type: licenseType,
+        max_machines: 1,
+        allowed_features: JSON.stringify(defaultFeatures),
+        max_cameras: options.max_cameras || 4,
+        issued_at: nowIso,
+        expires_at: expiresAt,
+        status: 'Active',
+        notes: options.notes || `Tự động phê duyệt từ máy trạm ${reg.machine_name}`
+      });
+    }
+
+    // 2. Ký số RSA-2048 cho máy trạm
+    const features: string[] = JSON.parse(license.allowed_features || '[]');
     const payload: LicensePayload = {
       licenseId: license.id,
       licenseKey: license.license_key,
@@ -809,7 +855,7 @@ export class DatabaseManager {
       licenseType: (license.license_type as any) || 'Perpetual',
       issuedDateUtc: license.issued_at,
       expirationDateUtc: license.expires_at,
-      allowedFeatures: defaultFeatures,
+      allowedFeatures: features,
       maxCameraCount: license.max_cameras,
       heartbeatIntervalHours: 1,
       gracePeriodDays: 1
@@ -840,10 +886,15 @@ export class DatabaseManager {
       machine_fingerprint: reg.machine_fingerprint,
       license_key: license.license_key,
       action: 'REGISTRATION_APPROVED',
-      details: { customerName, edition, licenseType, expiresAt }
+      details: {
+        customerName: license.customer_name,
+        edition: license.edition,
+        licenseType: license.license_type,
+        expiresAt: license.expires_at
+      }
     });
 
-    return { success: true, package: signedPackage, message: 'Phê duyệt và ký số bản quyền máy trạm thành công!' };
+    return { success: true, package: signedPackage, message: `Phê duyệt và ký số bản quyền máy trạm thành công với khóa [${license.license_key}]!` };
   }
 
   public rejectClientRegistration(registrationId: string, reason?: string): boolean {

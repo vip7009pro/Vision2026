@@ -4137,3 +4137,29 @@
          + **Test 12**: Delete License Key & Cascade Machine Revocation (Khẳng định xóa license key thành công, cascade thu hồi toàn bộ máy trạm liên quan và dọn dẹp sạch sẽ DB).
        - Toàn bộ 12/12 bài kiểm thử License và toàn bộ các test suites trong `TestExtractApp` đạt **100% PASSED (exit code 0)**.
        - Toàn bộ Solution `VisionInspectionApp.slnx` biên dịch Release đạt **0 Error(s)**.
+
+- **Tối Ưu Hóa Quy Trình Tự Động Đăng Ký (Auto-Register Pending) & Phê Duyệt Gán Khóa Bản Quyền Sẵn Có Trên Web Admin Dashboard (Task 334)**:
+  - **Vấn Đề Thực Tế & Nguyên Nhân**:
+    + *Hiện tượng*: Khi Admin tạo mới 1 License Key trên Web Dashboard (chưa có máy trạm nào), mở app lên trên máy tính mới thì cửa sổ bản quyền báo lỗi *"Yêu cầu đăng ký kích hoạt bị từ chối"*.
+    + *Nguyên nhân gốc rễ*: Trước đó khi Admin xóa máy trạm hoặc license cũ trên giao diện Web, hệ thống cập nhật `status = 'Rejected', signed_package = null, notes = 'Máy trạm đã bị xóa khỏi hệ thống'` trong bảng `client_registrations`. Khi client mở app lên và gọi API `auto-register`, hàm `upsertClientRegistration` trong DB tìm thấy bản ghi cũ và giữ nguyên trạng thái `status = 'Rejected'`, dẫn đến máy trạm bị từ chối kích hoạt. Đồng thời, trước đây quy trình phê duyệt trong modal luôn tự động sinh ngẫu nhiên một License Key mới thay vì cho phép Admin chọn gán vào License Key doanh nghiệp đã tạo sẵn.
+  - **Kiến Trúc & Các Giải Pháp Đã Triển Khai**:
+    1. *Backend License Server (`LicenseServer/src/`)*:
+       - `src/database/index.ts`:
+         + Sửa `deleteMachine(fingerprint)`: Thay vì đánh dấu `Rejected`, thực hiện `DELETE FROM client_registrations WHERE machine_fingerprint = ?` để giải phóng máy trạm hoàn toàn khỏi DB.
+         + Sửa `deleteLicense(licenseId)`: Thực hiện `DELETE FROM client_registrations WHERE assigned_license_id = ?`.
+         + Nâng cấp `upsertClientRegistration`: Nếu máy trạm chưa có bản quyền hợp lệ hoặc từng có trạng thái cũ mà không bị Admin cố tình thu hồi (`is_revoked !== 1` trong `machines`), tự động chuyển trạng thái thành `status = 'Pending'` để máy trạm chờ Quản trị viên duyệt lại.
+         + Nâng cấp `approveClientRegistration(registrationId, options)`: Bổ sung tham số `license_id`. Nếu Admin chọn một License Key có sẵn trong hệ thống (khác 'NEW'): Server dùng chính license đó để kiểm tra giới hạn `max_machines`, gán máy vào license, tự động ký số RSA-2048 gói bản quyền với đầy đủ tính năng của license gốc, và cập nhật đăng ký thành công mà không sinh ra license rác.
+       - `src/controllers/adminController.ts` & `src/routes/adminRoutes.ts`:
+         + Bổ sung route `POST /api/v1/admin/machine/delete` -> `AdminController.deleteMachine`.
+         + Cập nhật `approveRegistration` tiếp nhận `licenseId` từ body request và truyền xuống database service.
+    2. *Web Admin Frontend (`LicenseServer/src/public/`)*:
+       - `index.html`:
+         + Trong Modal Phê Duyệt (`#modal-approve`): Bổ sung dropdown `<select id="approve-license-select">` cho phép Admin chọn License Key có sẵn trong hệ thống hoặc chọn [Tạo License Key Mới Tự Động].
+       - `app.js`:
+         + Nâng cấp `openCustomApprove`: Tự động gọi API tải danh sách License Keys Active, điền vào dropdown. Khi Admin chọn một license có sẵn, form tự động điền Tên Khách Hàng và Gói Cước tương ứng.
+         + Nâng cấp `quickApprove`: Ưu tiên tự động tìm kiếm License Key Active có sẵn để gán cho máy trạm.
+         + Nâng cấp bảng Quản lý Máy Trạm: Bổ sung nút '🗑️ Xóa' và hàm `deleteMachinePermanently` để Admin xóa sạch máy trạm và đăng ký khỏi hệ thống.
+    3. *Dọn Dẹp & Trạng Thái Hệ Thống Thực Tế*:
+       - Đã dọn dẹp sạch sẽ cache cục bộ: Xóa file `%LOCALAPPDATA%\VisionInspectionApp\Security\license.vault` để máy trạm client ở trạng thái máy mới 100%.
+       - Database hiện tại: Duy nhất 1 License Key `V26-ENT-HAYG-HDMN-WJNH` (Khách hàng: CMS OQC, Gói Enterprise, Vĩnh Viễn), danh sách máy trạm rỗng, danh sách chờ duyệt rỗng.
+       - Toàn bộ Solution biên dịch 0 Error(s). Bộ test suite kiểm thử tự động 12/12 test cases đạt 100% PASSED.

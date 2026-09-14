@@ -438,6 +438,7 @@ CXHaZZurRVGX356/sxnhBHOf/51FCPI+QBbqBYIbJueeh3ATyCcKRPHExnh4+zyg
             return;
         }
 
+        string testKey = "V26-ENT-DEMO-2026-8888";
         // Đảm bảo máy trạm ở trạng thái sẵn sàng (nếu trước đó bị thu hồi trong các test khác thì khôi phục lại)
         try
         {
@@ -454,12 +455,43 @@ CXHaZZurRVGX356/sxnhBHOf/51FCPI+QBbqBYIbJueeh3ATyCcKRPHExnh4+zyg
                 var actMachinePayload = new { machineFingerprint = HardwareFingerprintService.GetMachineFingerprint() };
                 await adminClient.PostAsync($"{serverUrl}/api/v1/admin/machine/activate",
                     new StringContent(JsonSerializer.Serialize(actMachinePayload), Encoding.UTF8, "application/json"));
+
+                // Tìm key Active có sẵn
+                var licsRes = await adminClient.GetAsync($"{serverUrl}/api/v1/admin/licenses");
+                var licsJson = await licsRes.Content.ReadAsStringAsync();
+                using var licsDoc = JsonDocument.Parse(licsJson);
+                var licsArray = licsDoc.RootElement.GetProperty("licenses");
+                bool found = false;
+                foreach (var l in licsArray.EnumerateArray())
+                {
+                    if (l.GetProperty("status").GetString() == "Active")
+                    {
+                        testKey = l.GetProperty("license_key").GetString()!;
+                        found = true;
+                        break;
+                    }
+                }
+
+                if (!found)
+                {
+                    var createPayload = new
+                    {
+                        customerName = "Industrial Demo Customer",
+                        edition = "Enterprise",
+                        maxMachines = 10,
+                        licenseType = "Perpetual",
+                        customKey = "V26-ENT-DEMO-2026-8888"
+                    };
+                    await adminClient.PostAsync($"{serverUrl}/api/v1/admin/license/create",
+                        new StringContent(JsonSerializer.Serialize(createPayload), Encoding.UTF8, "application/json"));
+                    testKey = "V26-ENT-DEMO-2026-8888";
+                }
             }
         }
         catch { }
 
         var service = new LicenseService();
-        var actResult = await service.ActivateOnlineAsync("V26-ENT-DEMO-2026-8888", serverUrl);
+        var actResult = await service.ActivateOnlineAsync(testKey, serverUrl);
 
         if (!actResult.Success)
         {

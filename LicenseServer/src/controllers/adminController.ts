@@ -233,6 +233,7 @@ export class AdminController {
     const db = DatabaseManager.getInstance(config.dbPath);
     const {
       registrationId,
+      licenseId,
       customerName,
       edition,
       licenseType,
@@ -249,6 +250,7 @@ export class AdminController {
 
     const expDays = req.body.expirationDays !== undefined ? req.body.expirationDays : req.body.durationDays;
     const result = db.approveClientRegistration(registrationId, {
+      license_id: licenseId,
       customer_name: customerName,
       edition: edition || 'Enterprise',
       license_type: licenseType || (expDays && parseInt(expDays, 10) > 0 ? 'Trial' : 'Perpetual'),
@@ -263,6 +265,21 @@ export class AdminController {
     } else {
       res.status(400).json(result);
     }
+  }
+
+  /**
+   * POST /api/v1/admin/machine/delete
+   * Xóa hoàn toàn máy trạm khỏi hệ thống
+   */
+  public static async deleteMachine(req: Request, res: Response): Promise<void> {
+    const db = DatabaseManager.getInstance(config.dbPath);
+    const { machineFingerprint } = req.body;
+    if (!machineFingerprint) {
+      res.status(400).json({ success: false, message: 'Thiếu machineFingerprint.' });
+      return;
+    }
+    const success = db.deleteMachine(machineFingerprint);
+    res.json({ success, message: success ? 'Đã xóa hoàn toàn máy trạm khỏi hệ thống.' : 'Không tìm thấy máy trạm.' });
   }
 
   /**

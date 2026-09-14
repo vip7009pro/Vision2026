@@ -228,6 +228,7 @@ async function loadClients() {
                 <button class="btn-outline-danger btn-sm" onclick="revokeMachine('${c.machine_fingerprint}', '${escapeHtml(c.machine_name)}')">Thu Hồi</button>
               `}
               <button class="btn-secondary btn-sm" onclick="transferMachine('${c.machine_fingerprint}', '${escapeHtml(c.machine_name)}')">Đổi Máy</button>
+              <button class="btn-outline-danger btn-sm" onclick="deleteMachinePermanently('${c.machine_fingerprint}', '${escapeHtml(c.machine_name)}')">🗑️ Xóa</button>
             </td>
           </tr>
         `;
@@ -542,17 +543,30 @@ if (btnRefreshPending) {
   btnRefreshPending.addEventListener('click', loadPendingRegistrations);
 }
 
-// Quick Approve: Enterprise + Perpetual
+// Quick Approve: Enterprise + Perpetual (Ưu tiên gán vào License Key Active có sẵn)
 async function quickApprove(id, machineName) {
-  if (!confirm(`Xác nhận DUYỆT NHANH máy "${machineName || id}" với gói Enterprise Vĩnh Viễn?`)) {
+  if (!confirm(`Xác nhận DUYỆT NHANH máy "${machineName || id}"?`)) {
     return;
   }
 
   try {
+    let licenseId = undefined;
+    try {
+      const lRes = await authFetch(`${API_BASE}/api/v1/admin/licenses`);
+      const lData = await lRes.json();
+      if (lData.success && lData.licenses && lData.licenses.length > 0) {
+        const activeLics = lData.licenses.filter(l => l.status === 'Active');
+        if (activeLics.length > 0) {
+          licenseId = activeLics[0].id;
+        }
+      }
+    } catch (e) {}
+
     const res = await authFetch(`${API_BASE}/api/v1/admin/registration/approve`, {
       method: 'POST',
       body: JSON.stringify({
         registrationId: id,
+        licenseId,
         customerName: machineName ? `Khách Hàng (${machineName})` : 'Khách Hàng Vision2026',
         edition: 'Enterprise',
         durationDays: 0
@@ -561,8 +575,9 @@ async function quickApprove(id, machineName) {
 
     const data = await res.json();
     if (data.success) {
-      alert(`✅ Đã phê duyệt và ký số bản quyền cho máy "${machineName}"!\nClient sẽ tự động kích hoạt bản quyền trong vài giây.`);
+      alert(`✅ ${data.message || `Đã phê duyệt và ký số bản quyền cho máy "${machineName}"!`}\nClient sẽ tự động kích hoạt bản quyền trong vài giây.`);
       loadPendingRegistrations();
+      loadClients();
       loadDashboardData();
     } else {
       alert(`Lỗi phê duyệt: ${data.message}`);
@@ -573,13 +588,60 @@ async function quickApprove(id, machineName) {
 }
 
 // Open Custom Approve Modal
-function openCustomApprove(id, machineName, formattedCode) {
+async function openCustomApprove(id, machineName, formattedCode) {
   approveRegId.value = id;
   approveMachineName.value = machineName || 'Industrial-PC';
   approveFormattedCode.value = formattedCode || '-';
   approveCustomerName.value = machineName ? `Nhà Máy (${machineName})` : '';
   approveEdition.value = 'Enterprise';
   approveDuration.value = '0';
+
+  // Load danh sách license keys có sẵn
+  const licenseSelect = document.getElementById('approve-license-select');
+  const licenseHint = document.getElementById('approve-license-hint');
+  if (licenseSelect) {
+    licenseSelect.innerHTML = '<option value="NEW">✨ Tự động tạo License Key mới theo thông tin dưới</option>';
+    try {
+      const res = await authFetch(`${API_BASE}/api/v1/admin/licenses`);
+      const data = await res.json();
+      if (data.success && data.licenses && data.licenses.length > 0) {
+        data.licenses.filter(l => l.status === 'Active').forEach(l => {
+          const opt = document.createElement('option');
+          opt.value = l.id;
+          opt.textContent = `🔑 ${l.license_key} — ${l.customer_name} (${l.edition}, tối đa ${l.max_machines} máy)`;
+          opt.dataset.customer = l.customer_name;
+          opt.dataset.edition = l.edition;
+          opt.dataset.type = l.license_type;
+          licenseSelect.appendChild(opt);
+        });
+
+        // Nếu chỉ có 1 key và là key người dùng vừa tạo, tự động chọn luôn key đó
+        if (data.licenses.length === 1 && data.licenses[0].status === 'Active') {
+          licenseSelect.value = data.licenses[0].id;
+          approveCustomerName.value = data.licenses[0].customer_name;
+          approveEdition.value = data.licenses[0].edition;
+          if (licenseHint) licenseHint.textContent = `Đang chọn gán trực tiếp vào Khóa ${data.licenses[0].license_key}`;
+        }
+      }
+    } catch (e) {
+      console.warn('Could not load licenses list:', e);
+    }
+
+    licenseSelect.onchange = () => {
+      const selectedOpt = licenseSelect.selectedOptions[0];
+      if (licenseSelect.value === 'NEW') {
+        approveCustomerName.readOnly = false;
+        approveEdition.disabled = false;
+        approveDuration.disabled = false;
+        if (licenseHint) licenseHint.textContent = 'Hệ thống sẽ tự động tạo một License Key mới.';
+      } else if (selectedOpt) {
+        approveCustomerName.value = selectedOpt.dataset.customer || approveCustomerName.value;
+        approveEdition.value = selectedOpt.dataset.edition || 'Enterprise';
+        if (licenseHint) licenseHint.textContent = `Khóa [${selectedOpt.textContent}] sẽ được gán cho máy trạm này.`;
+      }
+    };
+  }
+
   modalApprove.style.display = 'flex';
 }
 
@@ -598,12 +660,15 @@ if (approveForm) {
     const customerName = approveCustomerName.value.trim();
     const edition = approveEdition.value;
     const durationDays = parseInt(approveDuration.value, 10) || 0;
+    const licenseSelect = document.getElementById('approve-license-select');
+    const licenseId = licenseSelect && licenseSelect.value !== 'NEW' ? licenseSelect.value : undefined;
 
     try {
       const res = await authFetch(`${API_BASE}/api/v1/admin/registration/approve`, {
         method: 'POST',
         body: JSON.stringify({
           registrationId: id,
+          licenseId,
           customerName,
           edition,
           durationDays
@@ -612,9 +677,10 @@ if (approveForm) {
 
       const data = await res.json();
       if (data.success) {
-        alert(`✅ Đã phê duyệt và ký số bản quyền thành công cho máy!\nClient sẽ tự động nhận bản quyền.`);
+        alert(`✅ ${data.message || 'Đã phê duyệt và ký số bản quyền thành công cho máy!'}\nClient sẽ tự động nhận bản quyền.`);
         closeApproveModal();
         loadPendingRegistrations();
+        loadClients();
         loadDashboardData();
       } else {
         alert(`Lỗi: ${data.message}`);
@@ -656,6 +722,30 @@ async function rejectRegistration(id, machineName) {
 window.quickApprove = quickApprove;
 window.openCustomApprove = openCustomApprove;
 window.rejectRegistration = rejectRegistration;
+
+// Delete Machine Permanently
+window.deleteMachinePermanently = async function(fingerprint, name) {
+  if (!confirm(`Xác nhận XÓA HOÀN TOÀN máy trạm [${name}] khỏi hệ thống?\n\nSau khi xóa, máy tính này có thể tự do đăng ký lại như một máy mới.`)) {
+    return;
+  }
+  try {
+    const res = await authFetch(`${API_BASE}/api/v1/admin/machine/delete`, {
+      method: 'POST',
+      body: JSON.stringify({ machineFingerprint: fingerprint })
+    });
+    const data = await res.json();
+    if (data.success) {
+      alert(data.message || 'Đã xóa hoàn toàn máy trạm khỏi hệ thống.');
+      loadDashboardData();
+      loadClients();
+      loadPendingRegistrations();
+    } else {
+      alert(`Lỗi: ${data.message}`);
+    }
+  } catch (err) {
+    alert(`Lỗi: ${err.message}`);
+  }
+};
 
 // Delete License Function
 window.deleteLicense = async function(id, key, customer) {

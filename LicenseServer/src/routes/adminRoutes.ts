@@ -16,6 +16,7 @@ router.post('/machine/revoke', AdminController.revokeMachine);
 router.post('/machine/suspend', AdminController.suspendMachine);
 router.post('/machine/activate', AdminController.activateMachine);
 router.post('/machine/transfer', AdminController.transferMachine);
+router.post('/machine/delete', AdminController.deleteMachine);
 
 router.get('/licenses', AdminController.listLicenses);
 router.post('/license/create', AdminController.createLicense);
