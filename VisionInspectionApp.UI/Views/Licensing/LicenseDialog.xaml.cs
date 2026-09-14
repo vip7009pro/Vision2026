@@ -13,6 +13,7 @@ public partial class LicenseDialog : Window
     {
         InitializeComponent();
         DataContext = vm;
+        Closed += (s, e) => (DataContext as LicenseViewModel)?.Cleanup();
     }
 
     private void OnCloseClicked(object sender, RoutedEventArgs e)

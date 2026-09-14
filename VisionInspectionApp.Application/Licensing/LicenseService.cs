@@ -21,6 +21,8 @@ public sealed class LicenseService : ILicenseService, IDisposable
     private SignedLicensePackage? _currentPackage;
     private Timer? _heartbeatTimer;
     private string _serverUrl = "http://localhost:4000";
+    private bool _isPendingApproval;
+    private string? _pendingApprovalMessage;
 
     public event EventHandler<LicenseStatus>? StatusChanged;
 
@@ -28,6 +30,8 @@ public sealed class LicenseService : ILicenseService, IDisposable
     public LicensePayload? CurrentLicense => _currentLicense;
     public string FormattedMachineCode => HardwareFingerprintService.GetFormattedMachineCode();
     public string MachineFingerprint => HardwareFingerprintService.GetMachineFingerprint();
+    public bool IsPendingApproval => _isPendingApproval;
+    public string? PendingApprovalMessage => _pendingApprovalMessage;
     public string ServerUrl
     {
         get => _serverUrl;
@@ -89,8 +93,27 @@ public sealed class LicenseService : ILicenseService, IDisposable
         // 1. Kiểm tra tồn tại file license.vault
         if (!File.Exists(_licenseVaultPath))
         {
+            // Thử tự động kiểm tra xem máy đã được duyệt trên Server chưa (Auto-Registration / Approval)
+            try
+            {
+                var autoResult = await AutoRegisterOrCheckApprovalAsync();
+                if (autoResult.Success && autoResult.License != null)
+                {
+                    int autoRemDays = RemainingDays;
+                    string autoRemMsg = autoRemDays < 0 ? "Vĩnh viễn" : $"{autoRemDays} ngày";
+                    return new LicenseValidationResult(true, LicenseStatus.Active, $"Bản quyền {autoResult.License.Edition} hợp lệ ({autoRemMsg}).", autoResult.License, autoRemDays);
+                }
+            }
+            catch
+            {
+                // Offline hoặc không kết nối được server
+            }
+
             SetStatus(LicenseStatus.Unlicensed, null, null);
-            return new LicenseValidationResult(false, LicenseStatus.Unlicensed, "Phần mềm chưa được kích hoạt bản quyền.", null, 0);
+            string unlicMsg = _isPendingApproval 
+                ? (_pendingApprovalMessage ?? "Máy tính đang chờ quản trị viên phê duyệt trên hệ thống.")
+                : "Phần mềm chưa được kích hoạt bản quyền.";
+            return new LicenseValidationResult(false, LicenseStatus.Unlicensed, unlicMsg, null, 0);
         }
 
         // 2. Kiểm tra tính toàn vẹn thời gian hệ thống (Anti-Clock Tampering)
@@ -160,6 +183,132 @@ public sealed class LicenseService : ILicenseService, IDisposable
         {
             SetStatus(LicenseStatus.Unlicensed, null, null);
             return new LicenseValidationResult(false, LicenseStatus.Unlicensed, $"Lỗi xác thực bản quyền: {ex.Message}", null, 0);
+        }
+    }
+
+    public async Task<LicenseActivationResult> AutoRegisterOrCheckApprovalAsync(string? customServerUrl = null)
+    {
+        string targetUrl = (!string.IsNullOrWhiteSpace(customServerUrl) ? customServerUrl.TrimEnd('/') : _serverUrl);
+        var endpoint = $"{targetUrl}/api/v1/license/auto-register";
+
+        try
+        {
+            var p = HardwareFingerprintService.GetHardwareProfile();
+            var payload = new
+            {
+                machineFingerprint = HardwareFingerprintService.GetMachineFingerprint(),
+                formattedMachineCode = HardwareFingerprintService.GetFormattedMachineCode(),
+                formattedCode = HardwareFingerprintService.GetFormattedMachineCode(),
+                machineName = p.MachineName,
+                osVersion = p.OsVersion,
+                appVersion = "2.1.0",
+                localIp = "127.0.0.1",
+                ipAddress = "127.0.0.1"
+            };
+
+            var response = await HttpClient.PostAsJsonAsync(endpoint, payload);
+            var content = await response.Content.ReadAsStringAsync();
+
+            using var doc = JsonDocument.Parse(content);
+            var root = doc.RootElement;
+            bool success = root.TryGetProperty("success", out var s) && s.GetBoolean();
+            string status = root.TryGetProperty("status", out var st) ? st.GetString() ?? "" : "";
+            string message = root.TryGetProperty("message", out var m) ? m.GetString() ?? "" : "";
+
+            if (status.Equals("Approved", StringComparison.OrdinalIgnoreCase))
+            {
+                // Máy đã được phê duyệt! Kiểm tra package bản quyền đi kèm
+                if (root.TryGetProperty("package", out var pkgEl))
+                {
+                    SignedLicensePackage? package = null;
+                    if (pkgEl.ValueKind == JsonValueKind.String)
+                    {
+                        var pkgJson = pkgEl.GetString();
+                        if (!string.IsNullOrWhiteSpace(pkgJson))
+                        {
+                            package = JsonSerializer.Deserialize<SignedLicensePackage>(pkgJson, new JsonSerializerOptions
+                            {
+                                PropertyNameCaseInsensitive = true
+                            });
+                        }
+                    }
+                    else if (pkgEl.ValueKind == JsonValueKind.Object)
+                    {
+                        package = JsonSerializer.Deserialize<SignedLicensePackage>(pkgEl.GetRawText(), new JsonSerializerOptions
+                        {
+                            PropertyNameCaseInsensitive = true
+                        });
+                    }
+
+                    if (package != null && package.Payload != null && !string.IsNullOrWhiteSpace(package.Signature))
+                    {
+                        // Xác thực chữ ký số RSA
+                        if (LicenseCryptoService.VerifySignature(package.Payload, package.Signature))
+                        {
+                            // So khớp phần cứng
+                            string currentFp = HardwareFingerprintService.GetMachineFingerprint();
+                            if (HardwareFingerprintService.IsFingerprintMatch(package.Payload.MachineFingerprint, currentFp))
+                            {
+                                await SavePackageToVaultAsync(package);
+                                SetStatus(LicenseStatus.Active, package.Payload, package);
+                                StartHeartbeatTimerIfNeeded();
+
+                                _isPendingApproval = false;
+                                _pendingApprovalMessage = null;
+
+                                return new LicenseActivationResult(true, "Máy tính đã được Quản trị viên phê duyệt và tự động kích hoạt bản quyền thành công!", package.Payload);
+                            }
+                        }
+                    }
+                }
+
+                return new LicenseActivationResult(false, "Máy tính đã được phê duyệt nhưng gói bản quyền không hợp lệ.", null);
+            }
+            else if (status.Equals("Pending", StringComparison.OrdinalIgnoreCase))
+            {
+                _isPendingApproval = true;
+                _pendingApprovalMessage = !string.IsNullOrWhiteSpace(message) ? message : "Máy tính đang chờ Quản trị viên phê duyệt trên Web Dashboard.";
+                return new LicenseActivationResult(false, _pendingApprovalMessage, null);
+            }
+            else if (status.Equals("Revoked", StringComparison.OrdinalIgnoreCase))
+            {
+                _isPendingApproval = false;
+                _pendingApprovalMessage = !string.IsNullOrWhiteSpace(message) ? message : "Bản quyền máy trạm này đã bị thu hồi từ xa bởi Quản trị viên!";
+                await DeactivateLocalAsync();
+                SetStatus(LicenseStatus.Revoked, null, null);
+                return new LicenseActivationResult(false, _pendingApprovalMessage, null);
+            }
+            else if (status.Equals("Suspended", StringComparison.OrdinalIgnoreCase))
+            {
+                _isPendingApproval = false;
+                _pendingApprovalMessage = !string.IsNullOrWhiteSpace(message) ? message : "Bản quyền máy trạm đang bị tạm khóa!";
+                SetStatus(LicenseStatus.Suspended, _currentLicense, _currentPackage);
+                return new LicenseActivationResult(false, _pendingApprovalMessage, null);
+            }
+            else if (status.Equals("Expired", StringComparison.OrdinalIgnoreCase))
+            {
+                _isPendingApproval = false;
+                _pendingApprovalMessage = !string.IsNullOrWhiteSpace(message) ? message : "Bản quyền máy trạm đã hết hạn!";
+                SetStatus(LicenseStatus.Expired, _currentLicense, _currentPackage);
+                return new LicenseActivationResult(false, _pendingApprovalMessage, null);
+            }
+            else if (status.Equals("Rejected", StringComparison.OrdinalIgnoreCase))
+            {
+                _isPendingApproval = false;
+                string reason = root.TryGetProperty("reason", out var r) ? r.GetString() ?? "" : "";
+                _pendingApprovalMessage = $"Yêu cầu đăng ký kích hoạt đã bị từ chối: {reason}";
+                await DeactivateLocalAsync();
+                SetStatus(LicenseStatus.Unlicensed, null, null);
+                return new LicenseActivationResult(false, _pendingApprovalMessage, null);
+            }
+            else
+            {
+                return new LicenseActivationResult(false, !string.IsNullOrWhiteSpace(message) ? message : "Không thể kiểm tra phê duyệt bản quyền.", null);
+            }
+        }
+        catch (Exception ex)
+        {
+            return new LicenseActivationResult(false, $"Không thể kết nối đến máy chủ quản lý ({targetUrl}): {ex.Message}", null);
         }
     }
 

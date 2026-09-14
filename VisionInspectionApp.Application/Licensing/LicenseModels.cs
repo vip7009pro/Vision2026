@@ -44,8 +44,8 @@ public sealed class LicensePayload
     public string? ExpirationDateUtc { get; set; }
     public List<string> AllowedFeatures { get; set; } = new();
     public int MaxCameraCount { get; set; } = 4;
-    public int HeartbeatIntervalHours { get; set; } = 12;
-    public int GracePeriodDays { get; set; } = 7;
+    public int HeartbeatIntervalHours { get; set; } = 1;
+    public int GracePeriodDays { get; set; } = 1;
 }
 
 /// <summary>

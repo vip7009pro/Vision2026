@@ -43,6 +43,22 @@ const offlineLicenseKey = document.getElementById('offline-license-key');
 const offlineCustomerName = document.getElementById('offline-customer-name');
 const btnSignOffline = document.getElementById('btn-sign-offline');
 
+// Pending Approvals
+const pendingTableBody = document.getElementById('pending-table-body');
+const btnRefreshPending = document.getElementById('btn-refresh-pending');
+const pendingBadge = document.getElementById('pending-badge');
+const kpiPending = document.getElementById('kpi-pending-registrations');
+const modalApprove = document.getElementById('modal-approve');
+const btnCloseApproveModal = document.getElementById('btn-close-approve-modal');
+const btnCancelApprove = document.getElementById('btn-cancel-approve');
+const approveForm = document.getElementById('approve-form');
+const approveRegId = document.getElementById('approve-reg-id');
+const approveMachineName = document.getElementById('approve-machine-name');
+const approveFormattedCode = document.getElementById('approve-formatted-code');
+const approveCustomerName = document.getElementById('approve-customer-name');
+const approveEdition = document.getElementById('approve-edition');
+const approveDuration = document.getElementById('approve-duration');
+
 // --- AUTHENTICATION ---
 
 function checkAuth() {
@@ -123,6 +139,7 @@ navTabs.forEach(tab => {
 
     if (target === 'clients') loadClients();
     if (target === 'licenses') loadLicenses();
+    if (target === 'pending') loadPendingRegistrations();
   });
 });
 
@@ -137,6 +154,14 @@ async function loadDashboardData() {
       document.getElementById('kpi-active-machines').textContent = data.stats.activeOnlineMachines;
       document.getElementById('kpi-revoked-machines').textContent = data.stats.revokedMachines;
       document.getElementById('kpi-total-machines').textContent = data.stats.totalMachines;
+      if (kpiPending) {
+        kpiPending.textContent = data.stats.pendingRegistrations || 0;
+      }
+      if (pendingBadge) {
+        const count = data.stats.pendingRegistrations || 0;
+        pendingBadge.textContent = count;
+        pendingBadge.style.display = count > 0 ? 'inline-block' : 'none';
+      }
     }
   } catch (err) {
     console.error('Error loading KPI:', err);
@@ -196,6 +221,7 @@ async function loadClients() {
             <td>v${escapeHtml(c.app_version || '2.1.0')}</td>
             <td>${formatDate(c.last_heartbeat)}</td>
             <td class="text-right">
+              <button class="btn-primary btn-sm" onclick="openChangePlan('${c.machine_fingerprint}', '${escapeHtml(c.machine_name)}', '${escapeHtml(c.edition || 'Enterprise')}', '${escapeHtml(c.license_type || 'Perpetual')}')">✏️ Đổi Gói / Hạn</button>
               ${c.is_revoked === 1 ? `
                 <button class="btn-secondary btn-sm" onclick="activateMachine('${c.machine_fingerprint}')">Khôi Phục</button>
               ` : `
@@ -273,14 +299,14 @@ window.transferMachine = async function(fingerprint, name) {
 // --- TAB 2: LICENSES TABLE & CREATION ---
 
 async function loadLicenses() {
-  licensesTableBody.innerHTML = '<tr><td colspan="8" class="text-center py-4">Đang tải danh sách license...</td></tr>';
+  licensesTableBody.innerHTML = '<tr><td colspan="9" class="text-center py-4">Đang tải danh sách license...</td></tr>';
   try {
     const res = await authFetch(`${API_BASE}/api/v1/admin/licenses`);
     const data = await res.json();
 
     if (data.success && data.licenses) {
       if (data.licenses.length === 0) {
-        licensesTableBody.innerHTML = '<tr><td colspan="8" class="text-center py-4 text-muted">Chưa có license nào.</td></tr>';
+        licensesTableBody.innerHTML = '<tr><td colspan="9" class="text-center py-4 text-muted">Chưa có license nào.</td></tr>';
         return;
       }
 
@@ -296,12 +322,15 @@ async function loadLicenses() {
             <td>${formatDate(l.issued_at)}</td>
             <td>${l.expires_at ? formatDate(l.expires_at) : '<span class="text-success">Vĩnh viễn</span>'}</td>
             <td><span class="badge badge-online">${escapeHtml(l.status)}</span></td>
+            <td class="text-right">
+              <button class="btn-outline-danger btn-sm" onclick="deleteLicense('${l.id}', '${escapeHtml(l.license_key)}', '${escapeHtml(l.customer_name)}')">🗑️ Xóa</button>
+            </td>
           </tr>
         `;
       }).join('');
     }
   } catch (err) {
-    licensesTableBody.innerHTML = `<tr><td colspan="8" class="text-center py-4 text-danger">Lỗi: ${err.message}</td></tr>`;
+    licensesTableBody.innerHTML = `<tr><td colspan="9" class="text-center py-4 text-danger">Lỗi: ${err.message}</td></tr>`;
   }
 }
 
@@ -455,6 +484,280 @@ offlineSignForm.addEventListener('submit', async (e) => {
     alert(`Lỗi: ${err.message}`);
   }
 });
+
+// --- TAB PENDING: PENDING REGISTRATIONS ---
+
+async function loadPendingRegistrations() {
+  if (!pendingTableBody) return;
+  pendingTableBody.innerHTML = '<tr><td colspan="7" class="text-center py-4">Đang tải danh sách máy chờ duyệt...</td></tr>';
+
+  try {
+    const res = await authFetch(`${API_BASE}/api/v1/admin/pending-registrations`);
+    const data = await res.json();
+
+    if (!data.success || !data.registrations || data.registrations.length === 0) {
+      pendingTableBody.innerHTML = '<tr><td colspan="7" class="text-center py-4 text-muted">🎉 Hiện không có máy trạm nào đang chờ duyệt.</td></tr>';
+      if (pendingBadge) pendingBadge.style.display = 'none';
+      if (kpiPending) kpiPending.textContent = '0';
+      return;
+    }
+
+    if (pendingBadge) {
+      pendingBadge.textContent = data.registrations.length;
+      pendingBadge.style.display = 'inline-block';
+    }
+    if (kpiPending) {
+      kpiPending.textContent = data.registrations.length;
+    }
+
+    pendingTableBody.innerHTML = data.registrations.map(r => {
+      const formattedCode = r.formattedCode || (r.fingerprint ? r.fingerprint.substring(0, 16) : '-');
+      const machineName = escapeHtml(r.machineName || 'Industrial-PC');
+      const osVer = escapeHtml(`${r.osVersion || 'Windows'} / ${r.appVersion || '2.1.0'}`);
+      const ip = escapeHtml(r.ipAddress || '127.0.0.1');
+      const updated = formatDate(r.updatedAt);
+
+      return `
+        <tr>
+          <td><strong>${machineName}</strong></td>
+          <td><span class="mono-code">${formattedCode}</span></td>
+          <td>${ip}</td>
+          <td>${osVer}</td>
+          <td>${updated}</td>
+          <td><span class="badge badge-warning">⏳ Chờ duyệt</span></td>
+          <td class="text-right">
+            <button class="btn-sm btn-quick-approve" onclick="quickApprove('${r.id}', '${escapeHtml(r.machineName || '')}')" title="Kích hoạt ngay gói Enterprise Vĩnh Viễn">⚡ Duyệt Nhanh</button>
+            <button class="btn-sm btn-custom-approve" onclick="openCustomApprove('${r.id}', '${escapeHtml(r.machineName || '')}', '${formattedCode}')" title="Tùy chỉnh thời hạn hoặc gói bản quyền">⚙️ Tùy Chỉnh</button>
+            <button class="btn-sm btn-reject" onclick="rejectRegistration('${r.id}', '${escapeHtml(r.machineName || '')}')" title="Từ chối yêu cầu">✕</button>
+          </td>
+        </tr>
+      `;
+    }).join('');
+  } catch (err) {
+    pendingTableBody.innerHTML = `<tr><td colspan="7" class="text-center py-4 text-danger">Lỗi tải danh sách: ${err.message}</td></tr>`;
+  }
+}
+
+if (btnRefreshPending) {
+  btnRefreshPending.addEventListener('click', loadPendingRegistrations);
+}
+
+// Quick Approve: Enterprise + Perpetual
+async function quickApprove(id, machineName) {
+  if (!confirm(`Xác nhận DUYỆT NHANH máy "${machineName || id}" với gói Enterprise Vĩnh Viễn?`)) {
+    return;
+  }
+
+  try {
+    const res = await authFetch(`${API_BASE}/api/v1/admin/registration/approve`, {
+      method: 'POST',
+      body: JSON.stringify({
+        registrationId: id,
+        customerName: machineName ? `Khách Hàng (${machineName})` : 'Khách Hàng Vision2026',
+        edition: 'Enterprise',
+        durationDays: 0
+      })
+    });
+
+    const data = await res.json();
+    if (data.success) {
+      alert(`✅ Đã phê duyệt và ký số bản quyền cho máy "${machineName}"!\nClient sẽ tự động kích hoạt bản quyền trong vài giây.`);
+      loadPendingRegistrations();
+      loadDashboardData();
+    } else {
+      alert(`Lỗi phê duyệt: ${data.message}`);
+    }
+  } catch (err) {
+    alert(`Lỗi: ${err.message}`);
+  }
+}
+
+// Open Custom Approve Modal
+function openCustomApprove(id, machineName, formattedCode) {
+  approveRegId.value = id;
+  approveMachineName.value = machineName || 'Industrial-PC';
+  approveFormattedCode.value = formattedCode || '-';
+  approveCustomerName.value = machineName ? `Nhà Máy (${machineName})` : '';
+  approveEdition.value = 'Enterprise';
+  approveDuration.value = '0';
+  modalApprove.style.display = 'flex';
+}
+
+function closeApproveModal() {
+  modalApprove.style.display = 'none';
+}
+
+if (btnCloseApproveModal) btnCloseApproveModal.addEventListener('click', closeApproveModal);
+if (btnCancelApprove) btnCancelApprove.addEventListener('click', closeApproveModal);
+
+// Submit Custom Approve Form
+if (approveForm) {
+  approveForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const id = approveRegId.value;
+    const customerName = approveCustomerName.value.trim();
+    const edition = approveEdition.value;
+    const durationDays = parseInt(approveDuration.value, 10) || 0;
+
+    try {
+      const res = await authFetch(`${API_BASE}/api/v1/admin/registration/approve`, {
+        method: 'POST',
+        body: JSON.stringify({
+          registrationId: id,
+          customerName,
+          edition,
+          durationDays
+        })
+      });
+
+      const data = await res.json();
+      if (data.success) {
+        alert(`✅ Đã phê duyệt và ký số bản quyền thành công cho máy!\nClient sẽ tự động nhận bản quyền.`);
+        closeApproveModal();
+        loadPendingRegistrations();
+        loadDashboardData();
+      } else {
+        alert(`Lỗi: ${data.message}`);
+      }
+    } catch (err) {
+      alert(`Lỗi kết nối: ${err.message}`);
+    }
+  });
+}
+
+// Reject Registration
+async function rejectRegistration(id, machineName) {
+  const reason = prompt(`Nhập lý do từ chối kích hoạt máy "${machineName || id}":`, 'Yêu cầu không được phê duyệt từ quản trị viên');
+  if (reason === null) return;
+
+  try {
+    const res = await authFetch(`${API_BASE}/api/v1/admin/registration/reject`, {
+      method: 'POST',
+      body: JSON.stringify({
+        registrationId: id,
+        reason
+      })
+    });
+
+    const data = await res.json();
+    if (data.success) {
+      alert(`Đã từ chối máy "${machineName}".`);
+      loadPendingRegistrations();
+      loadDashboardData();
+    } else {
+      alert(`Lỗi: ${data.message}`);
+    }
+  } catch (err) {
+    alert(`Lỗi: ${err.message}`);
+  }
+}
+
+// Expose functions globally for onclick in template strings
+window.quickApprove = quickApprove;
+window.openCustomApprove = openCustomApprove;
+window.rejectRegistration = rejectRegistration;
+
+// Delete License Function
+window.deleteLicense = async function(id, key, customer) {
+  if (!confirm(`CẢNH BÁO NGUY HIỂM:\nBạn có chắc chắn muốn XÓA HOÀN TOÀN License Key [${key}] của khách hàng [${customer}]?\n\nHành động này sẽ xóa license khỏi hệ thống và THU HỒI TẤT CẢ máy trạm đang sử dụng license này!`)) {
+    return;
+  }
+
+  try {
+    const res = await authFetch(`${API_BASE}/api/v1/admin/license/delete`, {
+      method: 'POST',
+      body: JSON.stringify({ licenseId: id })
+    });
+    const data = await res.json();
+    if (data.success) {
+      alert(`Đã xóa thành công License [${key}]!`);
+      loadLicenses();
+      loadClients();
+      loadDashboardData();
+    } else {
+      alert(`Lỗi: ${data.message}`);
+    }
+  } catch (err) {
+    alert(`Lỗi: ${err.message}`);
+  }
+};
+
+// Change Machine Plan & Duration Functions
+const modalChangePlan = document.getElementById('modal-change-plan');
+const changePlanForm = document.getElementById('change-plan-form');
+const btnCloseChangePlanModal = document.getElementById('btn-close-change-plan-modal');
+const btnCancelChangePlan = document.getElementById('btn-cancel-change-plan');
+
+window.openChangePlan = function(fingerprint, name, currentEdition, currentType) {
+  document.getElementById('change-plan-fingerprint').value = fingerprint;
+  document.getElementById('change-plan-machine-name').value = name;
+  document.getElementById('change-plan-edition').value = currentEdition || 'Enterprise';
+
+  const durationSelect = document.getElementById('change-plan-duration');
+  if (currentType === 'Trial') {
+    durationSelect.value = '30';
+  } else if (currentType === 'Perpetual') {
+    durationSelect.value = '0';
+  } else {
+    durationSelect.value = '365';
+  }
+
+  if (modalChangePlan) {
+    modalChangePlan.style.display = 'flex';
+  }
+};
+
+if (btnCloseChangePlanModal) {
+  btnCloseChangePlanModal.addEventListener('click', () => {
+    modalChangePlan.style.display = 'none';
+  });
+}
+
+if (btnCancelChangePlan) {
+  btnCancelChangePlan.addEventListener('click', () => {
+    modalChangePlan.style.display = 'none';
+  });
+}
+
+if (changePlanForm) {
+  changePlanForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const fingerprint = document.getElementById('change-plan-fingerprint').value;
+    const edition = document.getElementById('change-plan-edition').value;
+    const durationDays = parseInt(document.getElementById('change-plan-duration').value, 10);
+
+    let licenseType = 'Perpetual';
+    if (durationDays === 7 || durationDays === 30) {
+      licenseType = 'Trial';
+    } else if (durationDays > 0) {
+      licenseType = 'Subscription';
+    }
+
+    try {
+      const res = await authFetch(`${API_BASE}/api/v1/admin/machine/change-plan`, {
+        method: 'POST',
+        body: JSON.stringify({
+          machineFingerprint: fingerprint,
+          edition,
+          licenseType,
+          durationDays
+        })
+      });
+
+      const data = await res.json();
+      if (data.success) {
+        alert(`Cập nhật thành công!\nMáy trạm [${document.getElementById('change-plan-machine-name').value}] đã được chuyển sang gói ${edition} (${licenseType}).\nGói bản quyền mới đã được ký số RSA và sẽ tự động cập nhật xuống máy trạm.`);
+        modalChangePlan.style.display = 'none';
+        loadClients();
+        loadDashboardData();
+      } else {
+        alert(`Lỗi: ${data.message}`);
+      }
+    } catch (err) {
+      alert(`Lỗi kết nối: ${err.message}`);
+    }
+  });
+}
 
 // Utilities
 function escapeHtml(str) {

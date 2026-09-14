@@ -19,5 +19,15 @@ router.post('/machine/transfer', AdminController.transferMachine);
 
 router.get('/licenses', AdminController.listLicenses);
 router.post('/license/create', AdminController.createLicense);
+router.post('/license/delete', AdminController.deleteLicense);
+
+// Machine plan change (Edition & Duration)
+router.post('/machine/change-plan', AdminController.changeMachinePlan);
+
+// Pending registrations & 1-click approvals
+router.get('/pending-registrations', AdminController.listPendingRegistrations);
+router.post('/registration/approve', AdminController.approveRegistration);
+router.post('/registration/reject', AdminController.rejectRegistration);
+router.post('/registration/reset', AdminController.resetRegistration);
 
 export default router;

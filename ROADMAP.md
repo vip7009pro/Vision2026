@@ -2223,20 +2223,20 @@ Lộ trình tích hợp tính năng Chụp ảnh từ camera và hỗ trợ các
          - PhiÃªn báº£n Non-AI: Nháº­n diá»‡n siÃªu tá»‘c (1â€“7ms trÃªn CPU), há»— trá»£ Date Code, Dot-Matrix (in kim), 7-Segment, OCR-A/B, Character Whitelist, MatchingMode (AnyText, ExactMatch, RegexPattern, Contains), tá»± Ä‘á»™ng nháº­n diá»‡n dáº¥u cÃ¡ch vÃ  phÃ¢n nhÃ³m hÃ ng thÃ´ng minh.
          - PhiÃªn báº£n AI: Sá»­ dá»¥ng Microsoft.ML.OnnxRuntime, chuáº©n hÃ³a tensor CRNN 32xW, CTC Greedy Decoding, cÃ³ cÆ¡ cháº¿ an toÃ n tá»± Ä‘á»™ng fallback mÆ°á»£t mÃ  sang Non-AI náº¿u chÆ°a cÃ³ file model ONNX.
          - Kiáº¿n trÃºc tÃ­ch há»£p: TÃ¡ch riÃªng module ToolEditorViewModel.ToolOcr.cs (tuÃ¢n thá»§ quy táº¯c khÃ´ng táº¡o file quÃ¡ dÃ i), tÃ­ch há»£p song song vÃ o Pipeline, Overlays, OQC, PLC Transfer vÃ  Condition Evaluator.
-       - Giáº£i PhÃ¡p Ká»¹ Thuáº­t ÄÃ£ Triá»ƒn Khai:
+         - Kiá» fns trÃºc tÃ­ch há»£p: TÃ¡ch riÃªng module ToolEditorViewModel.ToolOcr.cs (tuÃ¢n thá»§ quy táº¯c khÃ´ng táº¡o file quÃ¡ dÃ i), tÃ­ch há»£p song song vÃ o Pipeline, Overlays, OQC, PLC Transfer vÃ  Condition Evaluator.
+       - Giáº£i PhÃ¡p Ká»¹ Thuáº­t Ä Ã£ Triá»ƒn Khai:
          1. *Data Models (VisionInspectionApp.Models)*:
             - Bá»• sung OcrDefinition, OcrResult, OcrCharResult, OcrEngineMode, OcrMatchingMode, OcrBinarizeMethod.
             - TÃ­ch há»£p List<OcrDefinition> Ocrs vÃ o VisionConfig, Ä‘áº£m báº£o 100% tÆ°Æ¡ng thÃ­ch ngÆ°á»£c vá»›i file Job JSON hiá»‡n há»¯u.
          2. *Vision Engine (VisionInspectionApp.VisionEngine)*:
             - XÃ¢y dá»±ng OcrDetector.Detect: ROI First (Geometry2D.ExtractStraightRoi), Binarization (Sauvola, Otsu, Adaptive), Invert polarity tá»± Ä‘á»™ng.
-            - TÃ­ch há»£p **Dot-Matrix Morphology Connector** báº±ng toÃ¡n tá»­ Morph Close ná»‘i cÃ¡c cháº¥m rá»i ráº¡c cá»§a chá»¯ in kim thÃ nh nÃ©t chá»¯ liá»n máº¡ch.
-            - PhÃ¢n Ä‘oáº¡n kÃ½ tá»± Connected Components vá»›i bá»™ lá»c nhiá»…u thÃ´ng minh (báº£o toÃ n nÃ©t ngang - trong date/lot code).
-            - Thuáº­t toÃ¡n **Glyph Template Normalization & Aspect Ratio Preservation**: Chuáº©n hÃ³a kÃ½ tá»± vÃ  thÆ° viá»‡n font vá» canvas 24x32 giá»¯ nguyÃªn tá»‰ lá»‡ co dÃ£n, lá» Ä‘á»‡m 2px, giÃºp tÆ°Æ¡ng quan CCoeffNormed Ä‘áº¡t > 89%.
-            - Thuáº­t toÃ¡n **SortReadingOrder**: Gom nhÃ³m hÃ ng theo dung sai dá»c thÃ´ng minh (vertical overlap tolerance), sáº¯p xáº¿p tá»« trÃ¡i qua pháº£i, kháº¯c phá»¥c triá»‡t Ä‘á»ƒ lá»—i Ä‘áº£o thá»© tá»± nÃ©t ngang/cháº¥m.
-            - TÃ­nh nÄƒng **Adaptive Space Insertion**: Tá»± Ä‘á»™ng chÃ¨n dáº¥u cÃ¡ch dá»±a trÃªn chiá»u cao kÃ½ tá»± trung bÃ¬nh vgHeight * 0.70, loáº¡i bá» chÃ¨n space giáº£ á»Ÿ cÃ¡c sá»‘ háº¹p nhÆ° '1'.
+            - TÃ­ch há»£p **Dot-Matrix Morphology Connector** báº±ng toÃ¡n tá»­ Morph Close ná»‘i cÃ¡c cháº¥m rá» i ráº¡c cá»§a chá»¯ in kim thÃ nh nÃ©t chá»¯ liá» n máº¡ch.
+            - PhÃ¢n Ä‘oáº¡n kÃ½ tá»± Connected Components vá»›i bá»™ lá» c nhiá»…u thÃ´ng minh (báº£o toÃ n nÃ©t ngang - trong date/lot code).
+            - Thuáº­t toÃ¡n **Glyph Template Normalization & Aspect Ratio Preservation**: Chuáº©n hÃ³a kÃ½ tá»± vÃ  thÆ° viá»‡n font vá»  canvas 24x32 giá»¯ nguyÃªn tá»‰ lá»‡ co dÃ£n, lá»  Ä‘á»‡m 2px, giÃºp tÆ°Æ¡ng quan CCoeffNormed Ä‘áº¡t > 89%.
+            - Thuáº­t toÃ¡n **SortReadingOrder**: Gom nhÃ³m hÃ ng theo dung sai dá» c thÃ´ng minh (vertical overlap tolerance), sáº¯p xáº¿p tá»« trÃ¡i qua pháº£i, kháº¯c phá»¥c triá»‡t Ä‘á»ƒ lá»—i Ä‘áº£o thá»© tá»± nÃ©t ngang/cháº¥m.
+            - TÃ­nh nÄƒng **Adaptive Space Insertion**: Tá»­ Ä‘á»™ng chÃ¨n dáº¥u cÃ¡ch dá»±a trÃªn chiá» u cao kÃ½ tá»± trung bÃ¬nh vgHeight * 0.70, loáº¡i bá»  chÃ¨n space giáº£ á»Ÿ cÃ¡c sá»‘ háº¹p nhÆ° '1'.
             - TÃ­ch há»£p **AI Deep Learning Engine** vá»›i Microsoft.ML.OnnxRuntime, CTC Greedy Decoding vÃ  Safe Fallback.
          3. *Application Pipeline & Services (VisionInspectionApp.Application)*:
-            - Cháº¡y song song ocrTasks trong batch 1 cá»§a InspectionService.Pipeline.cs, Ä‘o timing Timings.OcrMs, tá»•ng há»£p lá»—i NG vÃ o esult.Pass.
             - Váº½ overlay ROI khung xanh ngá»c, bounding box vÃ ng tá»«ng kÃ½ tá»±, annotation chuá»—i + confidence trÃªn áº£nh; bá»• sung hÃ ng OCR vÃ o DrawResultTableOverlay.
             - ÄÄƒng kÃ½ biáº¿n cÃ´ng thá»©c trong ConditionEvaluator.VariableRegistry.cs (Value, Text, Pass, Confidence, CharCount, Time).
             - Ãnh xáº¡ káº¿t quáº£ sang PLC (PlcResultTransferRunner.cs) vÃ  báº£ng Ä‘o lÆ°á»ng OQC Scanner (OqcScannerService.cs).
@@ -2571,7 +2571,35 @@ Lộ trình tích hợp tính năng Chụp ảnh từ camera và hỗ trợ các
              - Dialog Quản lý Bản quyền (`LicenseDialog.xaml` & `LicenseViewModel.cs`): Xem mã máy, sao chép nhanh, kích hoạt Online bằng License Key, xuất file `.req`, nạp file `.lic`, hủy kích hoạt.
              - Header Badge & Menu: Nút hiển thị trạng thái bản quyền (Active/Grace/Expired/Revoked/Unlicensed) trên Header và menu "🔑 Quản Lý Bản Quyền / License..." trong Menu Trợ Giúp.
              - Splash Screen check: Tự động xác thực bản quyền khi khởi động app, nếu chưa kích hoạt thì mở hộp thoại bản quyền hướng dẫn người dùng.
-          4. *Bộ Kiểm Thử Tự Động Toàn Diện (`TestExtractApp/LicenseSystemTests.cs`)*:
-             - Viết và chạy 8 bài kiểm tra chuyên sâu: Tính nhất quán Hardware Fingerprint, Ký & Xác thực RSA-2048 Canonical JSON, Chống sửa đổi ngày hết hạn / edition (Anti-Tampering), Chống sao chép sang máy khác (Anti-Cloning), Chống tua ngược giờ hệ thống, Luồng kích hoạt Offline toàn trình (.req -> .lic), Chặn động cơ Inspection khi chưa có bản quyền, Kích hoạt Online với Live License Server (Port 4000).
-             - Đạt 100% PASSED toàn bộ các test suites của dự án (exit code 0).
-             - Toàn bộ Solution `VisionInspectionApp.slnx` biên dịch Release 0 Error(s).
+          4. *Cơ Chế Tự Động Đăng Ký Client & Phê Duyệt 1-Click Từ Xa (Auto-Registration & Admin Approval)*:
+              - **Client Auto-Registration (Upsert)**: Khi máy trạm mới bật lên mà chưa có bản quyền, client tự động gửi thông tin phần cứng (Hardware ID, Tên máy tính, OS, Phiên bản app, IP mạng) lên Server qua API `POST /api/v1/license/auto-register`. Người dùng không cần copy mã máy thủ công.
+              - **Web Admin Dashboard Phê Duyệt Nhanh**: Bổ sung Tab "⏳ Chờ Duyệt" với Badge đếm số máy trạm thời gian thực, KPI Card "Máy Đang Chờ Duyệt", cho phép Quản trị viên:
+                + **⚡ Duyệt Nhanh (1-Click Quick Approve)**: Tức thì cấp phép gói Enterprise Vĩnh Viễn.
+                + **⚙️ Tùy Chỉnh (Custom Approve)**: Chọn gói (Enterprise/Pro/Basic), thời hạn (Vĩnh viễn/1 năm/6 tháng/Dùng thử 30 ngày), gán tên khách hàng / nhà máy.
+                + **✖️ Từ Chối (Reject)**: Từ chối kèm lý do phản hồi cho máy trạm.
+              - **Client Auto-Activation (Polling)**: Máy trạm tự động thăm dò mỗi 10 giây qua background timer hoặc nút "🔄 Kiểm Tra Duyệt Ngay" trên `LicenseDialog`. Khi được Admin duyệt, Client tự động nhận gói bản quyền ký số RSA-2048 từ Server, lưu vào vault DPAPI và kích hoạt bản quyền ngay lập tức.
+           5. *Bộ Kiểm Thử Tự Động Toàn Diện (`TestExtractApp/LicenseSystemTests.cs`)*:
+              - Viết và chạy 9 bài kiểm tra chuyên sâu: Tính nhất quán Hardware Fingerprint, Ký & Xác thực RSA-2048 Canonical JSON, Chống sửa đổi ngày hết hạn / edition (Anti-Tampering), Chống sao chép sang máy khác (Anti-Cloning), Chống tua ngược giờ hệ thống, Luồng kích hoạt Offline toàn trình (.req -> .lic), Chặn động cơ Inspection khi chưa có bản quyền, Kích hoạt Online với Live License Server (Port 4000), và Quy trình Tự động Đăng ký & Quản trị viên Phê duyệt Từ xa (Test 9: Auto-Registration & Admin Approval Workflow).
+              - Đạt 100% PASSED toàn bộ 9 bài kiểm thử License và toàn bộ các test suites của dự án (exit code 0).
+              - Toàn bộ Solution `VisionInspectionApp.slnx` biên dịch Release 0 Error(s).
+    - [x] **Task 333: Nâng Cấp Bảo Mật Thu Hồi Bản Quyền Tức Thì, Chuyển Đổi Gói/Thời Hạn & Xóa Khóa Bản Quyền Trên Web Admin Dashboard**:
+        - **Mục Tiêu & Yêu Cầu**:
+          1. **Khắc phục triệt để lỗi thu hồi bản quyền (Instant Revocation & Re-Check Protection)**:
+             - Khắc phục hiện tượng khi máy/khóa bị thu hồi từ xa trên server, người dùng tại máy trạm bấm nút "🔄 Thử kiểm tra duyệt bản quyền" lại được báo kích hoạt thành công (do API auto-register trả về signed_package cũ còn lưu trong DB); phải một thời gian sau (khi heartbeat chạy) máy mới bị out.
+             - Server đồng bộ dọn dẹp và hủy ngay gói đã ký trong client_registrations (status = 'Rejected', signed_package = null, notes = reason).
+             - Cả 2 API auto-register và check-registration kiểm tra bảng machines: nếu máy trạm có is_revoked === 1 hoặc is_suspended === 1, lập tức từ chối và trả về { success: false, status: 'Revoked' | 'Suspended' }.
+             - Client C# SDK (LicenseService.AutoRegisterOrCheckApprovalAsync): Bổ sung nhánh xử lý khi API trả về status: "Revoked" -> lập tức xóa sạch file license vault mã hóa DPAPI cục bộ (DeactivateLocalAsync()), dừng heartbeat timer, chuyển trạng thái sang LicenseStatus.Revoked và cập nhật UI badge màu đỏ tức thì.
+          2. **Quản trị viên chuyển đổi loại bản quyền & gói tính năng cho máy trạm từ xa (Change Machine Plan & Duration)**:
+             - Bổ sung chức năng và modal modal-change-plan trên Web Admin Dashboard cho phép Quản trị viên đổi gói (Enterprise / Pro / Basic) và thời hạn (Vĩnh viễn / 1 Năm / 6 Tháng / Dùng thử 30 ngày / Dùng thử 7 ngày) cho một máy trạm cụ thể.
+             - Server tự động tính toán lại ngày hết hạn mới, gán đúng danh sách allowedFeatures theo gói, tự động ký số RSA-2048 gói mới và cập nhật client_registrations.
+             - Máy trạm nhận gói mới ngay lập tức qua Auto-Polling hoặc Heartbeat và mở rộng tính năng tương ứng.
+          3. **Chức năng Xóa hoàn toàn License Key (Delete License & Cascade Revocation)**:
+             - Bổ sung cột Thao tác, nút "🗑️ Xóa" trên bảng License và API POST /api/v1/admin/license/delete.
+             - Tự động cascade thu hồi tất cả máy trạm đang gắn với License Key bị xóa (is_revoked = 1), dọn dẹp client_registrations và ghi audit log.
+          4. **Bộ kiểm thử tự động toàn diện (TestExtractApp/LicenseSystemTests.cs)**:
+             - Mở rộng bộ kiểm thử từ 9 bài test lên 12 bài test chuyên sâu:
+               + Test 10: Revocation & Re-Check Protection (Thu hồi từ xa, máy trạm bấm kiểm tra bị từ chối tức thì, vault bị xóa, chặn kiểm tra inspection).
+               + Test 11: Admin Change Plan (Chuyển đổi gói Basic -> Enterprise, thời hạn Trial -> Perpetual, tái ký số RSA-2048, mở khóa tính năng AI_OCR_Industrial).
+               + Test 12: Delete License Key & Cascade Machine Revocation (Xóa license, kiểm tra cascade thu hồi và xóa sạch khỏi DB).
+             - Đạt 100% PASSED toàn bộ 12 bài kiểm thử License và toàn bộ các test suites của dự án (exit code 0).
+             - Toàn bộ Solution VisionInspectionApp.slnx biên dịch Release 0 Error(s).

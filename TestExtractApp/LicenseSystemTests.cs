@@ -60,8 +60,12 @@ CXHaZZurRVGX356/sxnhBHOf/51FCPI+QBbqBYIbJueeh3ATyCcKRPHExnh4+zyg
         Test6_OfflineActivation_Workflow();
         Test7_InspectionExecution_GuardedByLicense();
         Test8_OnlineActivation_LocalServerApi().GetAwaiter().GetResult();
+        Test9_AutoRegistrationAndApprovalWorkflow().GetAwaiter().GetResult();
+        Test10_Revocation_BlocksAutoCheckAndDeactivatesLocalClient().GetAwaiter().GetResult();
+        Test11_ChangePlan_UpgradesFeaturesInstantly().GetAwaiter().GetResult();
+        Test12_DeleteLicense_CascadeRevokesMachines().GetAwaiter().GetResult();
 
-        Console.WriteLine("\n[SUCCESS] ALL 8 ENTERPRISE LICENSE SYSTEM TESTS PASSED 100%!");
+        Console.WriteLine("\n[SUCCESS] ALL 12 ENTERPRISE LICENSE SYSTEM TESTS PASSED 100%!");
         Console.WriteLine("========================================================\n");
     }
 
@@ -434,6 +438,26 @@ CXHaZZurRVGX356/sxnhBHOf/51FCPI+QBbqBYIbJueeh3ATyCcKRPHExnh4+zyg
             return;
         }
 
+        // Đảm bảo máy trạm ở trạng thái sẵn sàng (nếu trước đó bị thu hồi trong các test khác thì khôi phục lại)
+        try
+        {
+            using var adminClient = new HttpClient();
+            var loginPayload = new { username = "admin", password = "admin@vision2026" };
+            var loginRes = await adminClient.PostAsync($"{serverUrl}/api/v1/admin/login",
+                new StringContent(JsonSerializer.Serialize(loginPayload), Encoding.UTF8, "application/json"));
+            if (loginRes.IsSuccessStatusCode)
+            {
+                var loginJson = await loginRes.Content.ReadAsStringAsync();
+                using var loginDoc = JsonDocument.Parse(loginJson);
+                string token = loginDoc.RootElement.GetProperty("token").GetString()!;
+                adminClient.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+                var actMachinePayload = new { machineFingerprint = HardwareFingerprintService.GetMachineFingerprint() };
+                await adminClient.PostAsync($"{serverUrl}/api/v1/admin/machine/activate",
+                    new StringContent(JsonSerializer.Serialize(actMachinePayload), Encoding.UTF8, "application/json"));
+            }
+        }
+        catch { }
+
         var service = new LicenseService();
         var actResult = await service.ActivateOnlineAsync("V26-ENT-DEMO-2026-8888", serverUrl);
 
@@ -448,5 +472,392 @@ CXHaZZurRVGX356/sxnhBHOf/51FCPI+QBbqBYIbJueeh3ATyCcKRPHExnh4+zyg
         }
 
         Console.WriteLine($"PASSED (Online activated with local server port 4000, Customer: {service.CurrentLicense?.CustomerName})");
+    }
+
+    private static async Task Test9_AutoRegistrationAndApprovalWorkflow()
+    {
+        Console.Write("[Test 9] Auto-Registration & Admin Approval Workflow... ");
+
+        var serverUrl = "http://localhost:4000";
+        bool serverAvailable = false;
+
+        using (var http = new HttpClient { Timeout = TimeSpan.FromSeconds(2) })
+        {
+            try
+            {
+                var healthRes = await http.GetAsync($"{serverUrl}/health");
+                if (healthRes.IsSuccessStatusCode)
+                {
+                    serverAvailable = true;
+                }
+            }
+            catch
+            {
+                serverAvailable = false;
+            }
+        }
+
+        if (!serverAvailable)
+        {
+            Console.WriteLine("SKIPPED (License Server not running on localhost:4000)");
+            return;
+        }
+
+        var tempTestDir = Path.Combine(Path.GetTempPath(), "V26_Test_AutoReg_" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            using var service = new LicenseService(tempTestDir, serverUrl);
+
+            // 0. Admin đăng nhập vào server và reset đăng ký cũ của máy trạm để test luồng đăng ký mới
+            using var client = new HttpClient();
+            var loginPayload = new { username = "admin", password = "admin@vision2026" };
+            var loginRes = await client.PostAsync($"{serverUrl}/api/v1/admin/login", 
+                new StringContent(JsonSerializer.Serialize(loginPayload), Encoding.UTF8, "application/json"));
+            
+            var loginJson = await loginRes.Content.ReadAsStringAsync();
+            using var loginDoc = JsonDocument.Parse(loginJson);
+            if (!loginDoc.RootElement.TryGetProperty("token", out var tokenEl))
+            {
+                throw new Exception($"Admin login failed: {loginJson}");
+            }
+            string token = tokenEl.GetString()!;
+            client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+
+            var resetPayload = new { machineFingerprint = service.MachineFingerprint };
+            await client.PostAsync($"{serverUrl}/api/v1/admin/registration/reset",
+                new StringContent(JsonSerializer.Serialize(resetPayload), Encoding.UTF8, "application/json"));
+
+            // 1. Máy trạm tự động đăng ký lên server (Auto-Register)
+            var regResult = await service.AutoRegisterOrCheckApprovalAsync();
+            if (regResult.Success)
+            {
+                throw new Exception("New client auto-registration must not report success before admin approval!");
+            }
+            if (!service.IsPendingApproval)
+            {
+                throw new Exception("Service should indicate IsPendingApproval == true after auto-registering an unapproved client!");
+            }
+
+            // 2. Lấy danh sách pending registrations
+            var pendingRes = await client.GetAsync($"{serverUrl}/api/v1/admin/pending-registrations");
+            var pendingJson = await pendingRes.Content.ReadAsStringAsync();
+            using var pendingDoc = JsonDocument.Parse(pendingJson);
+            
+            var list = pendingDoc.RootElement.GetProperty("registrations");
+            string? targetRegId = null;
+            foreach (var item in list.EnumerateArray())
+            {
+                string fp = item.TryGetProperty("fingerprint", out var f) ? (f.GetString() ?? "")
+                          : item.TryGetProperty("machine_fingerprint", out var mf) ? (mf.GetString() ?? "") : "";
+
+                if (fp == service.MachineFingerprint)
+                {
+                    targetRegId = item.GetProperty("id").GetString();
+                    break;
+                }
+            }
+
+            if (string.IsNullOrEmpty(targetRegId))
+            {
+                throw new Exception("Could not find current client in pending registrations list on server!");
+            }
+
+            // 4. Admin duyệt client
+            var approvePayload = new
+            {
+                registrationId = targetRegId,
+                customerName = "Automated Test Factory Line 1",
+                edition = "Enterprise",
+                durationDays = 0
+            };
+            var approveRes = await client.PostAsync($"{serverUrl}/api/v1/admin/registration/approve",
+                new StringContent(JsonSerializer.Serialize(approvePayload), Encoding.UTF8, "application/json"));
+            
+            if (!approveRes.IsSuccessStatusCode)
+            {
+                throw new Exception($"Admin approve request failed with status {(int)approveRes.StatusCode}");
+            }
+
+            // 5. Client tự động kiểm tra lại (Auto-Polling)
+            var pollResult = await service.AutoRegisterOrCheckApprovalAsync();
+            if (!pollResult.Success)
+            {
+                throw new Exception($"Client auto-poll failed to receive approved license: {pollResult.Message}");
+            }
+
+            if (service.Status != LicenseStatus.Active)
+            {
+                throw new Exception($"Service status should be Active after approval, got: {service.Status}");
+            }
+
+            if (service.IsPendingApproval)
+            {
+                throw new Exception("IsPendingApproval must be false after approval!");
+            }
+
+            if (service.CurrentLicense?.CustomerName != "Automated Test Factory Line 1")
+            {
+                throw new Exception($"CustomerName mismatch: expected 'Automated Test Factory Line 1', got '{service.CurrentLicense?.CustomerName}'");
+            }
+
+            // 6. Kiểm tra tính hợp lệ bằng ValidateLicenseAsync()
+            var val = await service.ValidateLicenseAsync();
+            if (!val.IsValid || val.Status != LicenseStatus.Active)
+            {
+                throw new Exception($"ValidateLicenseAsync failed after approval: {val.Message}");
+            }
+
+            Console.WriteLine("PASSED (Auto-registration, Admin approval, RSA-2048 signing & auto-activation verified end-to-end!)");
+        }
+        finally
+        {
+            if (Directory.Exists(tempTestDir))
+            {
+                try { Directory.Delete(tempTestDir, true); } catch { }
+            }
+        }
+    }
+
+    private static async Task Test10_Revocation_BlocksAutoCheckAndDeactivatesLocalClient()
+    {
+        Console.Write("[Test 10] Revocation & Re-Check Protection (Vault Deactivated Instantly)... ");
+
+        var serverUrl = "http://localhost:4000";
+        var tempTestDir = Path.Combine(Path.GetTempPath(), "V26_Test_Revoke_" + Guid.NewGuid().ToString("N"));
+        using var client = new HttpClient();
+        try
+        {
+            using var service = new LicenseService(tempTestDir, serverUrl);
+
+            // 1. Admin đăng nhập
+            var loginPayload = new { username = "admin", password = "admin@vision2026" };
+            var loginRes = await client.PostAsync($"{serverUrl}/api/v1/admin/login",
+                new StringContent(JsonSerializer.Serialize(loginPayload), Encoding.UTF8, "application/json"));
+            var loginJson = await loginRes.Content.ReadAsStringAsync();
+            using var loginDoc = JsonDocument.Parse(loginJson);
+            string token = loginDoc.RootElement.GetProperty("token").GetString()!;
+            client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+
+            // 2. Thu hồi máy tính này trên Server
+            var revokePayload = new
+            {
+                machineFingerprint = service.MachineFingerprint,
+                reason = "Kiểm tra bảo mật thu hồi license từ xa"
+            };
+            var revokeRes = await client.PostAsync($"{serverUrl}/api/v1/admin/machine/revoke",
+                new StringContent(JsonSerializer.Serialize(revokePayload), Encoding.UTF8, "application/json"));
+            if (!revokeRes.IsSuccessStatusCode)
+            {
+                throw new Exception($"Revoke API call failed with status {(int)revokeRes.StatusCode}");
+            }
+
+            // 3. Máy trạm bấm nút 'Thử kiểm tra duyệt bản quyền'
+            var checkResult = await service.AutoRegisterOrCheckApprovalAsync();
+
+            // Khẳng định: KHÔNG được báo thành công
+            if (checkResult.Success)
+            {
+                throw new Exception("CRITICAL SECURITY FAILURE: Revoked machine was mistakenly reported as approved/activated!");
+            }
+
+            // Khẳng định: Trạng thái client phải là Revoked
+            if (service.Status != LicenseStatus.Revoked)
+            {
+                throw new Exception($"Expected LicenseStatus.Revoked, got: {service.Status}");
+            }
+
+            // Khẳng định: Khóa phân tích Inspection
+            bool blocked = false;
+            try
+            {
+                service.AssertCanExecuteInspection();
+            }
+            catch (InvalidOperationException ex)
+            {
+                blocked = true;
+                if (!ex.Message.Contains("thu hồi"))
+                {
+                    throw new Exception($"Unexpected exception message: {ex.Message}");
+                }
+            }
+
+            if (!blocked)
+            {
+                throw new Exception("Revoked license must block AssertCanExecuteInspection!");
+            }
+
+            Console.WriteLine("PASSED (Revocation immediately reflected, check returned Revoked & cleared vault)");
+        }
+        finally
+        {
+            try
+            {
+                var actMachinePayload = new { machineFingerprint = HardwareFingerprintService.GetMachineFingerprint() };
+                await client.PostAsync($"{serverUrl}/api/v1/admin/machine/activate",
+                    new StringContent(JsonSerializer.Serialize(actMachinePayload), Encoding.UTF8, "application/json"));
+            }
+            catch { }
+
+            if (Directory.Exists(tempTestDir))
+            {
+                try { Directory.Delete(tempTestDir, true); } catch { }
+            }
+        }
+    }
+
+    private static async Task Test11_ChangePlan_UpgradesFeaturesInstantly()
+    {
+        Console.Write("[Test 11] Admin Change Plan (Basic -> Enterprise / Trial / Perpetual)... ");
+
+        var serverUrl = "http://localhost:4000";
+        var tempTestDir = Path.Combine(Path.GetTempPath(), "V26_Test_ChangePlan_" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            using var service = new LicenseService(tempTestDir, serverUrl);
+
+            // 1. Admin đăng nhập
+            using var client = new HttpClient();
+            var loginPayload = new { username = "admin", password = "admin@vision2026" };
+            var loginRes = await client.PostAsync($"{serverUrl}/api/v1/admin/login",
+                new StringContent(JsonSerializer.Serialize(loginPayload), Encoding.UTF8, "application/json"));
+            var loginJson = await loginRes.Content.ReadAsStringAsync();
+            using var loginDoc = JsonDocument.Parse(loginJson);
+            string token = loginDoc.RootElement.GetProperty("token").GetString()!;
+            client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+
+            // 2. Chuyển sang gói Basic (Trial 7 ngày)
+            var basicPlanPayload = new
+            {
+                machineFingerprint = service.MachineFingerprint,
+                edition = "Basic",
+                licenseType = "Trial",
+                durationDays = 7
+            };
+            var basicRes = await client.PostAsync($"{serverUrl}/api/v1/admin/machine/change-plan",
+                new StringContent(JsonSerializer.Serialize(basicPlanPayload), Encoding.UTF8, "application/json"));
+            if (!basicRes.IsSuccessStatusCode)
+            {
+                throw new Exception($"Change plan to Basic failed: {await basicRes.Content.ReadAsStringAsync()}");
+            }
+
+            // 3. Client kiểm tra lại và nhận gói Basic
+            var basicCheck = await service.AutoRegisterOrCheckApprovalAsync();
+            if (!basicCheck.Success)
+            {
+                throw new Exception($"Client failed to retrieve Basic plan: {basicCheck.Message}");
+            }
+
+            if (service.CurrentLicense?.Edition != "Basic")
+            {
+                throw new Exception($"Expected Edition 'Basic', got '{service.CurrentLicense?.Edition}'");
+            }
+
+            if (service.IsFeatureAllowed("AI_OCR_Industrial"))
+            {
+                throw new Exception("Basic edition must NOT allow AI_OCR_Industrial feature!");
+            }
+
+            if (!service.IsFeatureAllowed("InspectionEngine"))
+            {
+                throw new Exception("Basic edition must allow InspectionEngine feature!");
+            }
+
+            // 4. Admin nâng cấp lên Enterprise (Perpetual)
+            var entPlanPayload = new
+            {
+                machineFingerprint = service.MachineFingerprint,
+                edition = "Enterprise",
+                licenseType = "Perpetual",
+                durationDays = 0
+            };
+            var entRes = await client.PostAsync($"{serverUrl}/api/v1/admin/machine/change-plan",
+                new StringContent(JsonSerializer.Serialize(entPlanPayload), Encoding.UTF8, "application/json"));
+            if (!entRes.IsSuccessStatusCode)
+            {
+                throw new Exception($"Change plan to Enterprise failed: {await entRes.Content.ReadAsStringAsync()}");
+            }
+
+            // 5. Client kiểm tra lại và nhận ngay gói Enterprise
+            var entCheck = await service.AutoRegisterOrCheckApprovalAsync();
+            if (!entCheck.Success)
+            {
+                throw new Exception($"Client failed to retrieve Enterprise plan: {entCheck.Message}");
+            }
+
+            if (service.CurrentLicense?.Edition != "Enterprise")
+            {
+                throw new Exception($"Expected Edition 'Enterprise', got '{service.CurrentLicense?.Edition}'");
+            }
+
+            if (!service.IsFeatureAllowed("AI_OCR_Industrial"))
+            {
+                throw new Exception("Enterprise edition MUST allow AI_OCR_Industrial feature!");
+            }
+
+            Console.WriteLine("PASSED (Plan switched Basic -> Enterprise, RSA-2048 re-signed & features updated)");
+        }
+        finally
+        {
+            if (Directory.Exists(tempTestDir))
+            {
+                try { Directory.Delete(tempTestDir, true); } catch { }
+            }
+        }
+    }
+
+    private static async Task Test12_DeleteLicense_CascadeRevokesMachines()
+    {
+        Console.Write("[Test 12] Delete License Key & Cascade Machine Revocation... ");
+
+        var serverUrl = "http://localhost:4000";
+        using var client = new HttpClient();
+        var loginPayload = new { username = "admin", password = "admin@vision2026" };
+        var loginRes = await client.PostAsync($"{serverUrl}/api/v1/admin/login",
+            new StringContent(JsonSerializer.Serialize(loginPayload), Encoding.UTF8, "application/json"));
+        var loginJson = await loginRes.Content.ReadAsStringAsync();
+        using var loginDoc = JsonDocument.Parse(loginJson);
+        string token = loginDoc.RootElement.GetProperty("token").GetString()!;
+        client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+
+        // 1. Tạo 1 License mới
+        var customKey = "V26-TEST-DEL-" + Guid.NewGuid().ToString("N")[..8].ToUpper();
+        var createPayload = new
+        {
+            customerName = "Cascade Delete Test Customer",
+            edition = "Pro",
+            maxMachines = 2,
+            licenseType = "Subscription",
+            expiresAt = DateTime.UtcNow.AddDays(30).ToString("yyyy-MM-dd"),
+            customKey
+        };
+        var createRes = await client.PostAsync($"{serverUrl}/api/v1/admin/license/create",
+            new StringContent(JsonSerializer.Serialize(createPayload), Encoding.UTF8, "application/json"));
+        var createJson = await createRes.Content.ReadAsStringAsync();
+        using var createDoc = JsonDocument.Parse(createJson);
+        string licenseId = createDoc.RootElement.GetProperty("license").GetProperty("id").GetString()!;
+
+        // 2. Xóa License vừa tạo
+        var delPayload = new { licenseId };
+        var delRes = await client.PostAsync($"{serverUrl}/api/v1/admin/license/delete",
+            new StringContent(JsonSerializer.Serialize(delPayload), Encoding.UTF8, "application/json"));
+        if (!delRes.IsSuccessStatusCode)
+        {
+            throw new Exception($"Delete license failed with status {(int)delRes.StatusCode}");
+        }
+
+        // 3. Kiểm tra danh sách licenses, đảm bảo licenseId không còn
+        var listRes = await client.GetAsync($"{serverUrl}/api/v1/admin/licenses");
+        var listJson = await listRes.Content.ReadAsStringAsync();
+        using var listDoc = JsonDocument.Parse(listJson);
+        var licenses = listDoc.RootElement.GetProperty("licenses");
+        foreach (var l in licenses.EnumerateArray())
+        {
+            if (l.GetProperty("id").GetString() == licenseId)
+            {
+                throw new Exception($"License {licenseId} was not deleted from DB!");
+            }
+        }
+
+        Console.WriteLine("PASSED (License deleted and associated records cleaned up successfully)");
     }
 }

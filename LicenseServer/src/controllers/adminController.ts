@@ -205,4 +205,144 @@ export class AdminController {
       license
     });
   }
+
+  /**
+   * GET /api/v1/admin/pending-registrations
+   */
+  public static async listPendingRegistrations(req: Request, res: Response): Promise<void> {
+    const db = DatabaseManager.getInstance(config.dbPath);
+    const rawList = db.listPendingRegistrations();
+    const pending = rawList.map(r => ({
+      ...r,
+      fingerprint: r.machine_fingerprint,
+      formattedCode: r.formatted_machine_code,
+      machineName: r.machine_name,
+      osVersion: r.os_version,
+      appVersion: r.app_version,
+      ipAddress: r.local_ip || r.public_ip,
+      updatedAt: r.last_seen_at
+    }));
+    res.json({ success: true, pending, registrations: pending, count: pending.length });
+  }
+
+  /**
+   * POST /api/v1/admin/registration/approve
+   * 1-Click Approve hoặc Custom Approve
+   */
+  public static async approveRegistration(req: Request, res: Response): Promise<void> {
+    const db = DatabaseManager.getInstance(config.dbPath);
+    const {
+      registrationId,
+      customerName,
+      edition,
+      licenseType,
+      expirationDays,
+      maxCameras,
+      allowedFeatures,
+      notes
+    } = req.body;
+
+    if (!registrationId) {
+      res.status(400).json({ success: false, message: 'Thiếu registrationId.' });
+      return;
+    }
+
+    const expDays = req.body.expirationDays !== undefined ? req.body.expirationDays : req.body.durationDays;
+    const result = db.approveClientRegistration(registrationId, {
+      customer_name: customerName,
+      edition: edition || 'Enterprise',
+      license_type: licenseType || (expDays && parseInt(expDays, 10) > 0 ? 'Trial' : 'Perpetual'),
+      expiration_days: expDays !== undefined ? parseInt(expDays, 10) : undefined,
+      max_cameras: maxCameras ? parseInt(maxCameras, 10) : 4,
+      allowed_features: allowedFeatures,
+      notes
+    });
+
+    if (result.success) {
+      res.json(result);
+    } else {
+      res.status(400).json(result);
+    }
+  }
+
+  /**
+   * POST /api/v1/admin/registration/reject
+   */
+  public static async rejectRegistration(req: Request, res: Response): Promise<void> {
+    const db = DatabaseManager.getInstance(config.dbPath);
+    const { registrationId, reason } = req.body;
+
+    if (!registrationId) {
+      res.status(400).json({ success: false, message: 'Thiếu registrationId.' });
+      return;
+    }
+
+    const ok = db.rejectClientRegistration(registrationId, reason);
+    if (ok) {
+      res.json({ success: true, message: 'Đã từ chối yêu cầu cấp phép cho máy trạm này.' });
+    } else {
+      res.status(404).json({ success: false, message: 'Không tìm thấy yêu cầu đăng ký.' });
+    }
+  }
+
+  /**
+   * POST /api/v1/admin/license/delete
+   * Xóa vĩnh viễn một License và thu hồi toàn bộ máy trạm đang dùng
+   */
+  public static async deleteLicense(req: Request, res: Response): Promise<void> {
+    const db = DatabaseManager.getInstance(config.dbPath);
+    const { licenseId } = req.body;
+
+    if (!licenseId) {
+      res.status(400).json({ success: false, message: 'Thiếu licenseId.' });
+      return;
+    }
+
+    const ok = db.deleteLicense(licenseId);
+    if (ok) {
+      res.json({ success: true, message: 'Đã xóa vĩnh viễn License Key và thu hồi toàn bộ máy trạm liên kết thành công!' });
+    } else {
+      res.status(404).json({ success: false, message: 'Không tìm thấy License Key cần xóa.' });
+    }
+  }
+
+  /**
+   * POST /api/v1/admin/machine/change-plan
+   * Thay đổi gói cước (Basic/Pro/Enterprise) hoặc thời hạn (Vĩnh viễn/1 năm/Dùng thử) cho máy trạm cụ thể
+   */
+  public static async changeMachinePlan(req: Request, res: Response): Promise<void> {
+    const db = DatabaseManager.getInstance(config.dbPath);
+    const { machineFingerprint, edition, licenseType, durationDays } = req.body;
+
+    if (!machineFingerprint) {
+      res.status(400).json({ success: false, message: 'Thiếu machineFingerprint.' });
+      return;
+    }
+
+    const result = db.changeMachinePlan(machineFingerprint, {
+      edition: edition || 'Enterprise',
+      licenseType: licenseType || 'Perpetual',
+      durationDays: durationDays !== undefined ? parseInt(durationDays, 10) : 0
+    });
+
+    if (result.success) {
+      res.json(result);
+    } else {
+      res.status(400).json(result);
+    }
+  }
+
+  /**
+   * POST /api/v1/admin/registration/reset
+   */
+  public static async resetRegistration(req: Request, res: Response): Promise<void> {
+    const db = DatabaseManager.getInstance(config.dbPath);
+    const { machineFingerprint } = req.body;
+    if (!machineFingerprint) {
+      res.status(400).json({ success: false, message: 'Thiếu machineFingerprint.' });
+      return;
+    }
+    db.resetClientRegistration(machineFingerprint);
+    res.json({ success: true, message: 'Đã xóa đăng ký cũ của máy trạm để test đăng ký mới.' });
+  }
 }

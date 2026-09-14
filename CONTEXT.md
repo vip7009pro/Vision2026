@@ -4060,3 +4060,80 @@
   - Bổ sung loại trừ file database runtime SQLite: `*.sqlite`, `*.sqlite-shm`, `*.sqlite-wal`, `*.db`, `**/data/*.sqlite`.
   - Bổ sung loại trừ file biến môi trường bí mật: `.env`, `**/.env`, `.env.local`, nhưng giữ lại `!**/.env.example` làm mẫu cấu hình.
   - Tạo thêm file `LicenseServer/.gitignore` độc lập cho module máy chủ bản quyền.
+
+- **Cơ Chế Tự Động Đăng Ký Client (Auto-Registration Upsert) & Phê Duyệt Bản Quyền 1-Click Từ Xa (Task 332 Nâng Cấp)**:
+  - **Mục Tiêu & Yêu Cầu Người Dùng**:
+    1. Khi máy trạm mới bật lên lần đầu, phần mềm tự động đăng ký client mới lên License Server mà người dùng không cần sao chép mã máy thủ công.
+    2. Admin chỉ cần mở Web Dashboard là thấy máy tính mới trong danh sách chờ duyệt, bấm nút duyệt (1-Click Quick Approve hoặc Custom Approve với thời hạn/gói tùy chọn).
+    3. Ngay sau khi Admin duyệt, máy trạm tự động nhận gói bản quyền đã ký số RSA-2048, lưu vào DPAPI local vault và kích hoạt bản quyền 100% tự động mà không cần thao tác thêm.
+    4. Giải đáp thắc mắc: Trường hợp máy tính đã có bản quyền hợp lệ nhưng License Server bị tắt hoặc mất mạng Internet, máy trạm vẫn hoạt động bình thường, không gián đoạn (xác thực RSA-2048 offline bằng DPAPI local vault + cơ chế Grace Period 14-30 ngày cho Online heartbeat).
+  - **Kiến Trúc & Thành Phần Triển Khai**:
+    1. *Backend LicenseServer (`LicenseServer/`)*:
+       - Bổ sung bảng `client_registrations` trong SQLite (`initTables`).
+       - API `POST /api/v1/license/auto-register`: Nhận thông tin phần cứng, upsert vào DB, trả về trạng thái (`Pending` hoặc `Approved` kèm signed package nếu đã duyệt).
+       - API `GET /api/v1/license/check-registration`: Kiểm tra trạng thái phê duyệt qua fingerprint.
+       - API `GET /api/v1/admin/pending-registrations`: Lấy danh sách máy đang chờ duyệt.
+       - API `POST /api/v1/admin/registration/approve`: Hỗ trợ 1-Click Quick Approve hoặc Custom Approve (chọn thời hạn, gói Enterprise/Pro/Basic, gán tên nhà máy). Ký số RSA-2048 tức thì, lưu `signed_package` và đồng bộ vào bảng `machines`.
+       - API `POST /api/v1/admin/registration/reject`: Từ chối yêu cầu kèm lý do.
+       - Thống kê `pendingRegistrations` trong `getDashboardStats()`.
+    2. *Web Admin Dashboard (`LicenseServer/src/public/`)*:
+       - Tab mới "⏳ Chờ Duyệt" kèm Badge đếm số lượng máy chờ duyệt thời gian thực.
+       - KPI Card "Máy Đang Chờ Duyệt".
+       - Bảng danh sách máy chờ duyệt với nút ⚡ Duyệt Nhanh, ⚙️ Tùy Chỉnh, ✖️ Từ Chối.
+       - Modal tùy chỉnh thời hạn và gói bản quyền trước khi ký số.
+    3. *Client SDK C# (`VisionInspectionApp.Application/Licensing`)*:
+       - Bổ sung `IsPendingApproval`, `PendingApprovalMessage` và `AutoRegisterOrCheckApprovalAsync(string? serverUrl)` vào `ILicenseService` và `LicenseService`.
+       - Tích hợp tự động gọi trong `ValidateLicenseAsync()` khi máy trạm chưa có bản quyền.
+    4. *Client UI WPF (`VisionInspectionApp.UI`)*:
+       - `LicenseViewModel`: Bổ sung properties `IsPendingApproval`, `PendingApprovalMessage`, lệnh `CheckPendingApprovalCommand`, và `DispatcherTimer` tự động thăm dò mỗi 10 giây khi dialog mở. Tự động dừng timer và giải phóng tài nguyên khi đã kích hoạt hoặc đóng dialog.
+       - `LicenseDialog.xaml`: Banner cảnh báo màu vàng hổ phách thông báo "⏳ Máy trạm đang chờ Quản trị viên phê duyệt trên hệ thống" kèm nút "🔄 Kiểm Tra Duyệt Ngay".
+       - `App.xaml.cs`: Trong Splash screen startup, tự động kiểm tra đăng ký ngầm. Nếu máy đã được duyệt trước đó trên Web thì tự động nạp bản quyền và vào thẳng màn hình chính không cần mở popup.
+    5. *Kiểm Thử Tự Động Toàn Diện*:
+       - Bổ sung `Test9_AutoRegistrationAndApprovalWorkflow` vào `TestExtractApp/LicenseSystemTests.cs`.
+       - Chạy kiểm thử tự động toàn trình end-to-end: Client auto-register -> Admin login & approve -> Client auto-poll & RSA verify & DPAPI vault save -> Validate active thành công 100%.
+       - Bộ test suite đạt 100% PASSED (9/9 tests).
+       - Toàn bộ Solution `VisionInspectionApp.slnx` biên dịch Release 0 Error(s).
+
+- **Nâng Cấp Bảo Mật Thu Hồi Bản Quyền Tức Thì, Chuyển Đổi Gói/Thời Hạn & Xóa Khóa Bản Quyền Trên Web Admin Dashboard (Task 333)**:
+  - **Mục Tiêu & Yêu Cầu Người Dùng**:
+    1. *Khắc phục lỗi thu hồi bản quyền*: Trước đây khi máy trạm hoặc license key bị Admin thu hồi trên Server, người dùng tại máy trạm bấm nút "🔄 Thử kiểm tra duyệt bản quyền" lại được báo kích hoạt thành công (do API `auto-register` trả về `signed_package` cũ còn lưu trong database); phải một thời gian sau (khi heartbeat 12h/1h chạy) máy mới bị out. Cần khắc phục dứt điểm để khi máy đã bị thu hồi thì bấm kiểm tra phải lập tức bị báo thu hồi và xóa bản quyền cục bộ ngay lập tức.
+    2. *Chuyển đổi gói và thời hạn máy trạm từ xa*: Trên Web Admin Dashboard, bổ sung tính năng chuyển loại bản quyền của một máy trạm cụ thể (chuyển qua lại giữa Vĩnh viễn, Dùng thử 7/30 ngày, Theo năm 1 Năm/6 Tháng) và chuyển gói bản quyền (Enterprise / Pro / Basic). Server tự động tái ký số RSA-2048 gói mới và đẩy xuống máy trạm tức thì.
+    3. *Xóa hoàn toàn License Key*: Trên Web Admin Dashboard, bổ sung nút và API xóa hoàn toàn license bản quyền cụ thể. Khi xóa license, hệ thống tự động cascade thu hồi toàn bộ máy trạm liên kết và dọn dẹp các đăng ký liên quan.
+  - **Kiến Trúc & Thành Phần Đã Triển Khai**:
+    1. *Backend LicenseServer (`LicenseServer/`)*:
+       - `src/database/index.ts`:
+         + Sửa `setMachineRevoked`: Khi `revoked = true`, đồng bộ xóa ngay trong `client_registrations` (`status = 'Rejected', signed_package = null, notes = reason`). Khi khôi phục (`revoked = false`), tái ký số RSA-2048 và khôi phục `status = 'Approved'`.
+         + Sửa `deleteMachine`: Đồng bộ cập nhật `client_registrations` sang `Rejected`.
+         + Bổ sung `deleteLicense(licenseId)`: Cascade thu hồi toàn bộ máy trạm gắn với license (`is_revoked = 1`), dọn dẹp `client_registrations`, xóa khỏi bảng `licenses` và ghi audit log.
+         + Bổ sung `changeMachinePlan(machineFingerprint, options)`: Cập nhật `edition` (Basic / Pro / Enterprise), `license_type`, tính `expires_at` mới, phân bổ danh sách `allowed_features` theo gói, tự động ký số RSA-2048 gói mới bằng `LicenseCrypto.signPayload`, cập nhật `signed_package` và `status = 'Approved'` trong `client_registrations`, mở khóa máy (`is_revoked = 0, is_suspended = 0`) và ghi audit log.
+         + Bổ sung `resetClientRegistration(machineFingerprint)`: Hỗ trợ dọn dẹp đăng ký cũ phục vụ test và quản trị.
+       - `src/controllers/licenseController.ts`:
+         + Trong cả 2 API `autoRegister` và `checkRegistration`: Kiểm tra bảng `machines` theo `machineFingerprint`. Nếu máy trạm có `is_revoked === 1`, lập tức trả về `{ success: false, status: 'Revoked', message: ... }`. Nếu `is_suspended === 1`, trả về `{ success: false, status: 'Suspended' }`.
+         + Kiểm tra license liên kết: Nếu license bị thu hồi hoặc đã hết hạn `expires_at < Date.now()`, lập tức trả về `Revoked` hoặc `Expired`.
+         + Trong API `activate`: Kiểm tra `db.getMachine(license.id, machineFingerprint)` để đảm bảo máy chỉ bị chặn nếu bị thu hồi trên chính license đó, cho phép kích hoạt bình thường khi chuyển sang license mới.
+       - `src/controllers/adminController.ts` & `src/routes/adminRoutes.ts`:
+         + Bổ sung route `POST /api/v1/admin/license/delete` -> `AdminController.deleteLicense`.
+         + Bổ sung route `POST /api/v1/admin/machine/change-plan` -> `AdminController.changeMachinePlan`.
+         + Bổ sung route `POST /api/v1/admin/registration/reset` -> `AdminController.resetRegistration`.
+    2. *Web Admin Frontend (`LicenseServer/src/public/`)*:
+       - `index.html`:
+         + Bổ sung cột "Thao Tác" và nút "🗑️ Xóa" trên bảng License Management (`#tab-licenses`).
+         + Bổ sung nút "✏️ Đổi Gói / Hạn" ở cột thao tác trong bảng Quản lý máy trạm (`#tab-clients`).
+         + Thêm Modal "Chuyển Gói & Thời Hạn Bản Quyền Máy Trạm" (`#modal-change-plan`) hỗ trợ chọn gói (Enterprise / Pro / Basic) và thời hạn (Vĩnh Viễn, 1 Năm, 6 Tháng, Dùng Thử 30 Ngày, Dùng Thử 7 Ngày).
+       - `app.js`:
+         + Bổ sung hàm `deleteLicense(id, key, customer)` hiển thị cảnh báo xác nhận nguy hiểm và gọi API xóa license.
+         + Bổ sung hàm `openChangePlan(fingerprint, name, currentEdition, currentType)` và trình xử lý submit form `change-plan-form`.
+    3. *Client SDK C# & UI WPF (`VisionInspectionApp`)*:
+       - `LicenseService.cs`: Trong `AutoRegisterOrCheckApprovalAsync`:
+         + Khi API trả về `status: "Revoked"`: Lập tức gọi `await DeactivateLocalAsync()`, xóa sạch file vault mã hóa DPAPI, hủy heartbeat timer, gán `SetStatus(LicenseStatus.Revoked, null, null)`, chuyển `_isPendingApproval = false`.
+         + Khi API trả về `status: "Suspended"`: Chuyển `SetStatus(LicenseStatus.Suspended, ...)`.
+         + Khi API trả về `status: "Expired"`: Chuyển `SetStatus(LicenseStatus.Expired, ...)`.
+         + Khi API trả về `status: "Rejected"`: Xóa local vault và chuyển `LicenseStatus.Unlicensed`.
+       - `LicenseViewModel.cs`: Sau khi gọi `AutoRegisterOrCheckApprovalAsync`, lập tức gọi `RefreshLicenseInfo()` cập nhật UI badge màu đỏ Revoked và thông báo lỗi rõ ràng.
+    4. *Kiểm Thử Tự Động Toàn Diện (`TestExtractApp/LicenseSystemTests.cs`)*:
+       - Mở rộng bộ kiểm thử lên 12 bài test:
+         + **Test 10**: Revocation & Re-Check Protection (Khẳng định sau khi thu hồi, client bấm kiểm tra nhận ngay Revoked, xóa sạch vault cục bộ, khóa phân tích inspection).
+         + **Test 11**: Admin Change Plan (Khẳng định chuyển gói Basic -> Enterprise, thời hạn Trial -> Perpetual, tái ký số RSA-2048, mở rộng tính năng `AI_OCR_Industrial`).
+         + **Test 12**: Delete License Key & Cascade Machine Revocation (Khẳng định xóa license key thành công, cascade thu hồi toàn bộ máy trạm liên quan và dọn dẹp sạch sẽ DB).
+       - Toàn bộ 12/12 bài kiểm thử License và toàn bộ các test suites trong `TestExtractApp` đạt **100% PASSED (exit code 0)**.
+       - Toàn bộ Solution `VisionInspectionApp.slnx` biên dịch Release đạt **0 Error(s)**.

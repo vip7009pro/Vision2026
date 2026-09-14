@@ -318,4 +318,207 @@ export class LicenseController {
       res.status(500).json({ success: false, message: `Lỗi xử lý file yêu cầu: ${err.message}` });
     }
   }
+
+  /**
+   * POST /api/v1/license/auto-register
+   * Máy trạm mới khởi động tự động gửi thông tin đăng ký lên Server
+   */
+  public static async autoRegister(req: Request, res: Response): Promise<void> {
+    const db = DatabaseManager.getInstance(config.dbPath);
+    const clientIp = (req.headers['x-forwarded-for'] as string) || req.socket.remoteAddress || '';
+
+    const {
+      machineFingerprint,
+      machineName,
+      osVersion,
+      appVersion
+    } = req.body;
+
+    const formattedMachineCode = (req.body.formattedMachineCode || req.body.formattedCode || '').trim();
+    const localIp = req.body.localIp || req.body.ipAddress || '127.0.0.1';
+
+    if (!machineFingerprint || !formattedMachineCode) {
+      res.status(400).json({
+        success: false,
+        message: 'Yêu cầu thiếu machineFingerprint hoặc formattedMachineCode.'
+      });
+      return;
+    }
+
+    const { registration, isNew } = db.upsertClientRegistration({
+      machine_fingerprint: machineFingerprint.trim(),
+      formatted_machine_code: formattedMachineCode.trim(),
+      machine_name: (machineName || 'Unknown-PC').trim(),
+      os_version: osVersion || 'Windows',
+      app_version: appVersion || '2.1.0',
+      local_ip: localIp || '127.0.0.1',
+      public_ip: clientIp
+    });
+
+    // 1. Kiểm tra trạng thái máy trạm trong bảng machines nếu đã từng tồn tại
+    const machine = db.getMachineByFingerprint(machineFingerprint.trim());
+    if (machine) {
+      if (machine.is_revoked === 1) {
+        res.json({
+          success: false,
+          status: 'Revoked',
+          message: `Bản quyền máy trạm đã bị thu hồi từ xa: "${machine.revoked_reason || 'Thu hồi bởi Quản trị viên'}".`
+        });
+        return;
+      }
+
+      if (machine.is_suspended === 1) {
+        res.json({
+          success: false,
+          status: 'Suspended',
+          message: 'Bản quyền máy trạm đang bị tạm khóa từ xa.'
+        });
+        return;
+      }
+    }
+
+    // 2. Kiểm tra nếu đã được duyệt bản quyền hợp lệ
+    if (registration.status === 'Approved' && registration.signed_package) {
+      // Kiểm tra license liên kết
+      if (registration.assigned_license_id) {
+        const lic = db.getLicenseById(registration.assigned_license_id);
+        if (!lic || lic.status === 'Revoked') {
+          res.json({
+            success: false,
+            status: 'Revoked',
+            message: 'Mã bản quyền liên kết đã bị thu hồi hoặc bị xóa.'
+          });
+          return;
+        }
+        if (lic.expires_at && new Date(lic.expires_at).getTime() < Date.now()) {
+          res.json({
+            success: false,
+            status: 'Expired',
+            message: `Bản quyền đã hết hạn vào ngày ${new Date(lic.expires_at).toLocaleString('vi-VN')}.`
+          });
+          return;
+        }
+      }
+
+      try {
+        const pkg = JSON.parse(registration.signed_package);
+        res.json({
+          success: true,
+          status: 'Approved',
+          message: 'Máy trạm đã được phê duyệt bản quyền.',
+          package: pkg,
+          licenseKey: registration.license_key,
+          customerName: registration.customer_name
+        });
+        return;
+      } catch { }
+    }
+
+    if (registration.status === 'Rejected') {
+      res.json({
+        success: false,
+        status: 'Rejected',
+        message: registration.notes || 'Yêu cầu cấp phép cho máy trạm này đã bị từ chối.'
+      });
+      return;
+    }
+
+    res.json({
+      success: true,
+      status: 'Pending',
+      isNew,
+      message: 'Máy trạm đã được tự động đăng ký và đang chờ Quản trị viên phê duyệt trên Web Dashboard.',
+      registration: {
+        id: registration.id,
+        machineName: registration.machine_name,
+        formattedMachineCode: registration.formatted_machine_code,
+        status: registration.status,
+        lastSeenAt: registration.last_seen_at
+      }
+    });
+  }
+
+  /**
+   * GET /api/v1/license/check-registration
+   * Máy trạm kiểm tra trạng thái phê duyệt của mình
+   */
+  public static async checkRegistration(req: Request, res: Response): Promise<void> {
+    const db = DatabaseManager.getInstance(config.dbPath);
+    const fingerprint = (req.query.fingerprint as string)?.trim();
+
+    if (!fingerprint) {
+      res.status(400).json({ success: false, message: 'Thiếu tham số fingerprint.' });
+      return;
+    }
+
+    // Kiểm tra máy trạm trong bảng machines
+    const machine = db.getMachineByFingerprint(fingerprint);
+    if (machine) {
+      if (machine.is_revoked === 1) {
+        res.json({
+          success: false,
+          status: 'Revoked',
+          message: `Bản quyền máy trạm đã bị thu hồi từ xa: "${machine.revoked_reason || 'Thu hồi bởi Quản trị viên'}".`
+        });
+        return;
+      }
+      if (machine.is_suspended === 1) {
+        res.json({
+          success: false,
+          status: 'Suspended',
+          message: 'Bản quyền máy trạm đang bị tạm khóa từ xa.'
+        });
+        return;
+      }
+    }
+
+    const reg = db.getRegistrationByFingerprint(fingerprint);
+    if (!reg) {
+      res.status(404).json({ success: false, status: 'NotRegistered', message: 'Máy trạm chưa từng đăng ký.' });
+      return;
+    }
+
+    if (reg.status === 'Approved' && reg.signed_package) {
+      if (reg.assigned_license_id) {
+        const lic = db.getLicenseById(reg.assigned_license_id);
+        if (!lic || lic.status === 'Revoked') {
+          res.json({
+            success: false,
+            status: 'Revoked',
+            message: 'Mã bản quyền liên kết đã bị thu hồi hoặc bị xóa.'
+          });
+          return;
+        }
+        if (lic.expires_at && new Date(lic.expires_at).getTime() < Date.now()) {
+          res.json({
+            success: false,
+            status: 'Expired',
+            message: `Bản quyền đã hết hạn vào ngày ${new Date(lic.expires_at).toLocaleString('vi-VN')}.`
+          });
+          return;
+        }
+      }
+
+      try {
+        const pkg = JSON.parse(reg.signed_package);
+        res.json({
+          success: true,
+          status: 'Approved',
+          message: 'Máy trạm đã được phê duyệt.',
+          package: pkg,
+          licenseKey: reg.license_key,
+          customerName: reg.customer_name
+        });
+        return;
+      } catch { }
+    }
+
+    res.json({
+      success: true,
+      status: reg.status,
+      message: reg.status === 'Rejected'
+        ? (reg.notes || 'Yêu cầu cấp phép đã bị từ chối.')
+        : 'Máy trạm đang chờ Quản trị viên phê duyệt trên Web Dashboard.'
+    });
+  }
 }

@@ -58,6 +58,7 @@
 
       <nav class="nav-tabs">
         <button class="nav-tab active" data-tab="clients">🖥️ Máy Trạm (Clients)</button>
+        <button class="nav-tab" data-tab="pending">⏳ Chờ Duyệt <span class="badge-pill" id="badge-pending" style="display: none;">0</span></button>
         <button class="nav-tab" data-tab="licenses">🔑 Mã Bản Quyền (Licenses)</button>
         <button class="nav-tab" data-tab="offline">💾 Ký Offline (.req ➔ .lic)</button>
       </nav>
@@ -102,6 +103,14 @@
             <span class="kpi-value" id="kpi-total-machines">0</span>
           </div>
         </div>
+
+        <div class="kpi-card glass-card">
+          <div class="kpi-icon yellow">⏳</div>
+          <div class="kpi-data">
+            <span class="kpi-label">Máy Đang Chờ Duyệt</span>
+            <span class="kpi-value" id="kpi-pending-registrations">0</span>
+          </div>
+        </div>
       </section>
 
       <!-- TAB 1: CLIENTS MANAGEMENT -->
@@ -139,6 +148,40 @@
         </div>
       </section>
 
+      <!-- TAB PENDING: PENDING CLIENT APPROVALS -->
+      <section id="tab-pending" class="tab-pane">
+        <div class="pane-header">
+          <div>
+            <h2>Phê Duyệt Máy Trạm Tự Động (Pending Approvals)</h2>
+            <p class="section-desc">Danh sách các máy tính mới mở phần mềm và tự động gửi thông tin phần cứng lên. Bấm duyệt để kích hoạt bản quyền từ xa tức thì.</p>
+          </div>
+          <div class="pane-actions">
+            <button id="btn-refresh-pending" class="btn-secondary">🔄 Làm Mới</button>
+          </div>
+        </div>
+
+        <div class="table-card glass-card">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Tên Máy Tính</th>
+                <th>Mã Rút Gọn (Hardware ID)</th>
+                <th>IP Mạng (LAN / WAN)</th>
+                <th>Hệ Điều Hành / Phiên Bản</th>
+                <th>Thời Gian Gửi</th>
+                <th>Trạng Thái</th>
+                <th class="text-right">Thao Tác Phê Duyệt</th>
+              </tr>
+            </thead>
+            <tbody id="pending-table-body">
+              <tr>
+                <td colspan="7" class="text-center py-4">Đang tải danh sách máy chờ duyệt...</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
       <!-- TAB 2: LICENSES MANAGEMENT -->
       <section id="tab-licenses" class="tab-pane">
         <div class="pane-header">
@@ -163,11 +206,12 @@
                 <th>Ngày Cấp</th>
                 <th>Hạn Dùng</th>
                 <th>Trạng Thái</th>
+                <th class="text-right">Thao Tác</th>
               </tr>
             </thead>
             <tbody id="licenses-table-body">
               <tr>
-                <td colspan="8" class="text-center py-4">Đang tải danh sách license...</td>
+                <td colspan="9" class="text-center py-4">Đang tải danh sách license...</td>
               </tr>
             </tbody>
           </table>
@@ -298,6 +342,95 @@
         <div class="modal-footer">
           <button type="button" class="btn-secondary" id="btn-cancel-modal">Hủy</button>
           <button type="submit" class="btn-primary">Tạo Khóa</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL APPROVE CLIENT -->
+  <div id="modal-approve" class="modal-backdrop" style="display: none;">
+    <div class="modal-card glass-card">
+      <div class="modal-header">
+        <h3>✅ Phê Duyệt & Cấp Bản Quyền Cho Máy Trạm</h3>
+        <button id="btn-close-approve-modal" class="btn-close">✕</button>
+      </div>
+      <form id="approve-form">
+        <input type="hidden" id="approve-reg-id">
+        <div class="form-group">
+          <label>Tên Máy Trạm</label>
+          <input type="text" id="approve-machine-name" readonly style="background: rgba(255,255,255,0.05); color: #94A3B8;">
+        </div>
+        <div class="form-group">
+          <label>Mã Máy (Hardware ID)</label>
+          <input type="text" id="approve-formatted-code" readonly style="background: rgba(255,255,255,0.05); font-family: monospace; color: #38BDF8;">
+        </div>
+        <div class="form-group">
+          <label>Tên Khách Hàng / Nhà Máy</label>
+          <input type="text" id="approve-customer-name" placeholder="VD: CMS VINA Factory Line 1" required>
+        </div>
+        <div class="form-row">
+          <div class="form-group col">
+            <label>Gói Bản Quyền</label>
+            <select id="approve-edition">
+              <option value="Enterprise" selected>Enterprise (Đầy đủ tính năng)</option>
+              <option value="Pro">Pro</option>
+              <option value="Basic">Basic</option>
+            </select>
+          </div>
+          <div class="form-group col">
+            <label>Thời Hạn Cấp Phép</label>
+            <select id="approve-duration">
+              <option value="0" selected>Vĩnh Viễn (Perpetual)</option>
+              <option value="365">1 Năm (365 Ngày)</option>
+              <option value="180">6 Tháng (180 Ngày)</option>
+              <option value="30">Dùng Thử (30 Ngày)</option>
+            </select>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" id="btn-cancel-approve" class="btn-secondary">Hủy</button>
+          <button type="submit" class="btn-primary">⚡ Ký Số & Kích Hoạt Ngay</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL CHANGE PLAN / DURATION -->
+  <div id="modal-change-plan" class="modal-backdrop" style="display: none;">
+    <div class="modal-card glass-card">
+      <div class="modal-header">
+        <h3>✏️ Chuyển Gói & Thời Hạn Bản Quyền Máy Trạm</h3>
+        <button id="btn-close-change-plan-modal" class="btn-close">✕</button>
+      </div>
+      <form id="change-plan-form">
+        <input type="hidden" id="change-plan-fingerprint">
+        <div class="form-group">
+          <label>Tên Máy Trạm</label>
+          <input type="text" id="change-plan-machine-name" readonly style="background: rgba(255,255,255,0.05); color: #94A3B8;">
+        </div>
+        <div class="form-row">
+          <div class="form-group col">
+            <label>Gói Tính Năng (Edition)</label>
+            <select id="change-plan-edition">
+              <option value="Enterprise">Enterprise (Đầy đủ tính năng)</option>
+              <option value="Pro">Pro (Nâng cao)</option>
+              <option value="Basic">Basic (Cơ bản)</option>
+            </select>
+          </div>
+          <div class="form-group col">
+            <label>Loại Bản Quyền & Thời Hạn</label>
+            <select id="change-plan-duration">
+              <option value="0">Vĩnh Viễn (Perpetual)</option>
+              <option value="365">1 Năm (365 Ngày)</option>
+              <option value="180">6 Tháng (180 Ngày)</option>
+              <option value="30">Dùng Thử (30 Ngày)</option>
+              <option value="7">Dùng Thử (7 Ngày)</option>
+            </select>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" id="btn-cancel-change-plan" class="btn-secondary">Hủy</button>
+          <button type="submit" class="btn-primary">⚡ Cập Nhật & Ký Lại Bản Quyền</button>
         </div>
       </form>
     </div>

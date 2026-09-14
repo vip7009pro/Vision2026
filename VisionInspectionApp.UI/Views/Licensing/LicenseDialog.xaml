@@ -13,13 +13,14 @@
     <Grid Margin="16">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
         <!-- HEADER BANNER -->
-        <Border Grid.Row="0" Margin="0,0,0,12" Padding="14,10" CornerRadius="6" Background="#1E293B" BorderBrush="#334155" BorderThickness="1">
+        <Border Grid.Row="0" Margin="0,0,0,10" Padding="14,10" CornerRadius="6" Background="#1E293B" BorderBrush="#334155" BorderThickness="1">
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*" />
@@ -35,8 +36,28 @@
             </Grid>
         </Border>
 
+        <!-- AUTO-REGISTRATION & PENDING APPROVAL BANNER -->
+        <Border Grid.Row="1" Margin="0,0,0,12" Padding="12,10" CornerRadius="6" 
+                Background="#451A03" BorderBrush="#F59E0B" BorderThickness="1"
+                Visibility="{Binding IsPendingApproval, Converter={StaticResource BoolToVis}, FallbackValue=Collapsed}">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <StackPanel VerticalAlignment="Center">
+                    <TextBlock Text="⏳ MÁY TRẠM ĐANG CHỜ QUẢN TRỊ VIÊN PHÊ DUYỆT TRÊN HỆ THỐNG" FontWeight="Bold" FontSize="12" Foreground="#FDE68A" />
+                    <TextBlock Text="Máy tính đã tự động gửi Hardware ID lên License Server. Khi Admin bấm 'Duyệt' trên Web Dashboard, máy sẽ tự động kích hoạt ngay lập tức mà không cần nhập mã thủ công." FontSize="11" Foreground="#FCD34D" TextWrapping="Wrap" Margin="0,3,10,0" />
+                </StackPanel>
+                <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                    <Button Content="🔄 Kiểm Tra Duyệt Ngay" Command="{Binding CheckPendingApprovalCommand}" IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBoolConverter}}"
+                            Background="#D97706" Foreground="White" BorderBrush="#F59E0B" Padding="12,6" FontWeight="Bold" FontSize="11" />
+                </StackPanel>
+            </Grid>
+        </Border>
+
         <!-- TAB CONTENT -->
-        <TabControl Grid.Row="1" Background="Transparent" BorderBrush="{DynamicResource BorderBrush}">
+        <TabControl Grid.Row="2" Background="Transparent" BorderBrush="{DynamicResource BorderBrush}">
             <!-- TAB 1: THÔNG TIN MÁY & BẢN QUYỀN -->
             <TabItem Header="📋 Thông Tin Bản Quyền" FontWeight="SemiBold">
                 <ScrollViewer VerticalScrollBarVisibility="Auto" Margin="0,10,0,0">
@@ -155,7 +176,7 @@
         </TabControl>
 
         <!-- STATUS MESSAGE -->
-        <Border Grid.Row="2" Margin="0,10,0,0" Padding="10,6" CornerRadius="4" 
+        <Border Grid.Row="3" Margin="0,10,0,0" Padding="10,6" CornerRadius="4" 
                 Visibility="{Binding HasStatusMessage, Converter={StaticResource BoolToVis}, FallbackValue=Collapsed}">
             <Border.Style>
                 <Style TargetType="Border">
@@ -174,8 +195,14 @@
         </Border>
 
         <!-- FOOTER BUTTONS -->
-        <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,12,0,0">
-            <Button Content="Đóng" Click="OnCloseClicked" Padding="16,6" FontWeight="SemiBold" />
-        </StackPanel>
+        <Grid Grid.Row="4" Margin="0,12,0,0">
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Left" VerticalAlignment="Center">
+                <Button Content="🔄 Thử Kiểm Tra Duyệt Bản Quyền" Command="{Binding CheckPendingApprovalCommand}" IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBoolConverter}}"
+                        Background="#0F766E" Foreground="White" BorderBrush="#14B8A6" Padding="12,6" FontWeight="SemiBold" FontSize="11" />
+            </StackPanel>
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+                <Button Content="Đóng" Click="OnCloseClicked" Padding="18,6" FontWeight="SemiBold" />
+            </StackPanel>
+        </Grid>
     </Grid>
 </Window>

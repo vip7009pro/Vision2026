@@ -31,9 +31,25 @@ public interface ILicenseService
     int RemainingDays { get; }
 
     /// <summary>
+    /// Cho biết máy trạm có đang trong trạng thái chờ quản trị viên phê duyệt trên Server hay không
+    /// </summary>
+    bool IsPendingApproval { get; }
+
+    /// <summary>
+    /// Thông báo trạng thái phê duyệt (nếu đang chờ hoặc bị từ chối)
+    /// </summary>
+    string? PendingApprovalMessage { get; }
+
+    /// <summary>
     /// Kiểm tra và xác thực tính hợp lệ của bản quyền trên máy
     /// </summary>
     Task<LicenseValidationResult> ValidateLicenseAsync();
+
+    /// <summary>
+    /// Tự động đăng ký máy mới lên Server hoặc thăm dò trạng thái phê duyệt.
+    /// Nếu Admin đã duyệt trên Web, hàm sẽ tự động lưu bản quyền và kích hoạt máy trạm.
+    /// </summary>
+    Task<LicenseActivationResult> AutoRegisterOrCheckApprovalAsync(string? customServerUrl = null);
 
     /// <summary>
     /// Kích hoạt bản quyền Online qua License Server trên Internet

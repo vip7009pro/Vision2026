@@ -52,6 +52,14 @@ public partial class LicenseViewModel : ObservableObject
     [ObservableProperty]
     private bool _isLicensed;
 
+    [ObservableProperty]
+    private bool _isPendingApproval;
+
+    [ObservableProperty]
+    private string _pendingApprovalMessage = string.Empty;
+
+    private System.Windows.Threading.DispatcherTimer? _autoPollTimer;
+
     public LicenseViewModel(ILicenseService licenseService)
     {
         _licenseService = licenseService;
@@ -61,6 +69,46 @@ public partial class LicenseViewModel : ObservableObject
         MachineFingerprint = _licenseService.MachineFingerprint;
 
         RefreshLicenseInfo();
+
+        if (!IsLicensed)
+        {
+            StartPolling();
+            // Kích hoạt kiểm tra / auto-register ngầm lần đầu
+            _ = CheckPendingApprovalAsync();
+        }
+    }
+
+    private void StartPolling()
+    {
+        if (_autoPollTimer != null) return;
+
+        _autoPollTimer = new System.Windows.Threading.DispatcherTimer
+        {
+            Interval = TimeSpan.FromSeconds(10)
+        };
+        _autoPollTimer.Tick += async (_, _) =>
+        {
+            if (!IsLicensed && !IsBusy)
+            {
+                await CheckPendingApprovalAsync();
+            }
+        };
+        _autoPollTimer.Start();
+    }
+
+    public void StopPolling()
+    {
+        if (_autoPollTimer != null)
+        {
+            _autoPollTimer.Stop();
+            _autoPollTimer = null;
+        }
+    }
+
+    public void Cleanup()
+    {
+        StopPolling();
+        _licenseService.StatusChanged -= OnLicenseStatusChanged;
     }
 
     private void OnLicenseStatusChanged(object? sender, LicenseStatus status)
@@ -126,6 +174,45 @@ public partial class LicenseViewModel : ObservableObject
             CustomerName = "Chưa đăng ký";
             EditionText = "None";
             ExpirationText = "Chưa có";
+        }
+
+        IsPendingApproval = _licenseService.IsPendingApproval;
+        PendingApprovalMessage = _licenseService.PendingApprovalMessage ?? string.Empty;
+
+        if (IsLicensed)
+        {
+            StopPolling();
+        }
+    }
+
+    [RelayCommand]
+    public async Task CheckPendingApprovalAsync()
+    {
+        IsBusy = true;
+        ShowMessage("Đang kiểm tra trạng thái phê duyệt từ máy chủ...", true);
+
+        try
+        {
+            var result = await _licenseService.AutoRegisterOrCheckApprovalAsync(ServerUrlInput?.Trim());
+            RefreshLicenseInfo();
+
+            if (result.Success)
+            {
+                ShowMessage(result.Message, true);
+                StopPolling();
+            }
+            else
+            {
+                ShowMessage(result.Message, false);
+            }
+        }
+        catch (Exception ex)
+        {
+            ShowMessage($"Lỗi kiểm tra phê duyệt: {ex.Message}", false);
+        }
+        finally
+        {
+            IsBusy = false;
         }
     }
 
