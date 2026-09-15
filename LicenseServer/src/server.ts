@@ -52,9 +52,10 @@ app.get('*', (req, res) => {
 });
 
 // Start listening
-const server = app.listen(config.port, () => {
-  console.log(`✅ License Server is running at: http://localhost:${config.port}`);
-  console.log(`🌐 Web Admin Dashboard: http://localhost:${config.port}/`);
+const server = app.listen(config.port, config.host, () => {
+  console.log(`✅ License Server is running at: http://${config.host}:${config.port}`);
+  console.log(`🌐 Local Web Admin Dashboard: http://localhost:${config.port}/`);
+  console.log(`📡 Network / Public NAT: http://${config.host === '0.0.0.0' ? '127.0.0.1' : config.host}:${config.port}/`);
   console.log(`🔑 Public Key API: http://localhost:${config.port}/api/v1/license/public-key`);
   console.log('=======================================================\n');
 });

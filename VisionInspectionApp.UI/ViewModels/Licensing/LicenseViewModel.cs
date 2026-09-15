@@ -38,7 +38,7 @@ public partial class LicenseViewModel : ObservableObject
     private string _licenseKeyInput = string.Empty;
 
     [ObservableProperty]
-    private string _serverUrlInput = "http://localhost:4000";
+    private string _serverUrlInput = string.Empty;
 
     [ObservableProperty]
     private bool _isBusy;
@@ -64,6 +64,8 @@ public partial class LicenseViewModel : ObservableObject
     {
         _licenseService = licenseService;
         _licenseService.StatusChanged += OnLicenseStatusChanged;
+
+        ServerUrlInput = _licenseService.ServerUrl;
 
         FormattedMachineCode = _licenseService.FormattedMachineCode;
         MachineFingerprint = _licenseService.MachineFingerprint;
@@ -185,9 +187,41 @@ public partial class LicenseViewModel : ObservableObject
         }
     }
 
+    partial void OnServerUrlInputChanged(string value)
+    {
+        if (!string.IsNullOrWhiteSpace(value) && Uri.TryCreate(value.Trim(), UriKind.Absolute, out _))
+        {
+            _licenseService.ServerUrl = value.Trim();
+        }
+    }
+
+    [RelayCommand]
+    public void SaveServerUrl()
+    {
+        if (string.IsNullOrWhiteSpace(ServerUrlInput))
+        {
+            ServerUrlInput = "http://localhost:4000";
+        }
+
+        var url = ServerUrlInput.Trim();
+        if (!Uri.TryCreate(url, UriKind.Absolute, out _))
+        {
+            ShowMessage("Địa chỉ máy chủ không hợp lệ (cần bắt đầu bằng http:// hoặc https://)!", false);
+            return;
+        }
+
+        _licenseService.SaveServerUrl(url);
+        ShowMessage($"Đã ghi nhớ địa chỉ máy chủ: {url}", true);
+    }
+
     [RelayCommand]
     public async Task CheckPendingApprovalAsync()
     {
+        if (!string.IsNullOrWhiteSpace(ServerUrlInput) && Uri.TryCreate(ServerUrlInput.Trim(), UriKind.Absolute, out _))
+        {
+            _licenseService.ServerUrl = ServerUrlInput.Trim();
+        }
+
         IsBusy = true;
         ShowMessage("Đang kiểm tra trạng thái phê duyệt từ máy chủ...", true);
 
@@ -219,6 +253,11 @@ public partial class LicenseViewModel : ObservableObject
     [RelayCommand]
     private async Task ActivateOnlineAsync()
     {
+        if (!string.IsNullOrWhiteSpace(ServerUrlInput) && Uri.TryCreate(ServerUrlInput.Trim(), UriKind.Absolute, out _))
+        {
+            _licenseService.ServerUrl = ServerUrlInput.Trim();
+        }
+
         if (string.IsNullOrWhiteSpace(LicenseKeyInput))
         {
             ShowMessage("Vui lòng nhập mã License Key!", false);

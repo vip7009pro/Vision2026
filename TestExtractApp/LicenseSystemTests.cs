@@ -65,8 +65,9 @@ CXHaZZurRVGX356/sxnhBHOf/51FCPI+QBbqBYIbJueeh3ATyCcKRPHExnh4+zyg
         Test11_ChangePlan_UpgradesFeaturesInstantly().GetAwaiter().GetResult();
         Test12_DeleteLicense_CascadeRevokesMachines().GetAwaiter().GetResult();
         Test13_DeletedMachine_OnlineCheckBlocksStartupAndClearsVault().GetAwaiter().GetResult();
+        Test14_ServerUrl_PersistenceAcrossRestarts();
 
-        Console.WriteLine("\n[SUCCESS] ALL 13 ENTERPRISE LICENSE SYSTEM TESTS PASSED 100%!");
+        Console.WriteLine("\n[SUCCESS] ALL 14 ENTERPRISE LICENSE SYSTEM TESTS PASSED 100%!");
         Console.WriteLine("========================================================\n");
     }
 
@@ -410,32 +411,33 @@ CXHaZZurRVGX356/sxnhBHOf/51FCPI+QBbqBYIbJueeh3ATyCcKRPHExnh4+zyg
         Console.WriteLine("PASSED (Inspection correctly blocked when unlicensed & unlocked when active)");
     }
 
+    private static async Task<string?> GetLiveLicenseServerUrlAsync()
+    {
+        string[] candidates = ["http://localhost:3006", "http://localhost:4000"];
+        foreach (var url in candidates)
+        {
+            try
+            {
+                using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(1) };
+                var healthRes = await http.GetAsync($"{url}/health");
+                if (healthRes.IsSuccessStatusCode)
+                {
+                    return url;
+                }
+            }
+            catch { }
+        }
+        return null;
+    }
+
     private static async Task Test8_OnlineActivation_LocalServerApi()
     {
         Console.Write("[Test 8] Online Activation & Local License Server API Integration... ");
 
-        var serverUrl = "http://localhost:4000";
-        bool serverAvailable = false;
-
-        using (var http = new HttpClient { Timeout = TimeSpan.FromSeconds(2) })
+        var serverUrl = await GetLiveLicenseServerUrlAsync();
+        if (serverUrl == null)
         {
-            try
-            {
-                var healthRes = await http.GetAsync($"{serverUrl}/health");
-                if (healthRes.IsSuccessStatusCode)
-                {
-                    serverAvailable = true;
-                }
-            }
-            catch
-            {
-                serverAvailable = false;
-            }
-        }
-
-        if (!serverAvailable)
-        {
-            Console.WriteLine("SKIPPED (License Server not running on localhost:4000 - run 'npm start' in LicenseServer/ to test live HTTP)");
+            Console.WriteLine("SKIPPED (License Server not running on localhost:3006 or 4000 - run 'npm start' in LicenseServer/ to test live HTTP)");
             return;
         }
 
@@ -511,28 +513,10 @@ CXHaZZurRVGX356/sxnhBHOf/51FCPI+QBbqBYIbJueeh3ATyCcKRPHExnh4+zyg
     {
         Console.Write("[Test 9] Auto-Registration & Admin Approval Workflow... ");
 
-        var serverUrl = "http://localhost:4000";
-        bool serverAvailable = false;
-
-        using (var http = new HttpClient { Timeout = TimeSpan.FromSeconds(2) })
+        var serverUrl = await GetLiveLicenseServerUrlAsync();
+        if (serverUrl == null)
         {
-            try
-            {
-                var healthRes = await http.GetAsync($"{serverUrl}/health");
-                if (healthRes.IsSuccessStatusCode)
-                {
-                    serverAvailable = true;
-                }
-            }
-            catch
-            {
-                serverAvailable = false;
-            }
-        }
-
-        if (!serverAvailable)
-        {
-            Console.WriteLine("SKIPPED (License Server not running on localhost:4000)");
+            Console.WriteLine("SKIPPED (License Server not running on localhost:3006 or 4000)");
             return;
         }
 
@@ -655,7 +639,13 @@ CXHaZZurRVGX356/sxnhBHOf/51FCPI+QBbqBYIbJueeh3ATyCcKRPHExnh4+zyg
     {
         Console.Write("[Test 10] Revocation & Re-Check Protection (Vault Deactivated Instantly)... ");
 
-        var serverUrl = "http://localhost:4000";
+        var serverUrl = await GetLiveLicenseServerUrlAsync();
+        if (serverUrl == null)
+        {
+            Console.WriteLine("SKIPPED (License Server not running on localhost:3006 or 4000)");
+            return;
+        }
+
         var tempTestDir = Path.Combine(Path.GetTempPath(), "V26_Test_Revoke_" + Guid.NewGuid().ToString("N"));
         using var client = new HttpClient();
         try
@@ -742,7 +732,13 @@ CXHaZZurRVGX356/sxnhBHOf/51FCPI+QBbqBYIbJueeh3ATyCcKRPHExnh4+zyg
     {
         Console.Write("[Test 11] Admin Change Plan (Basic -> Enterprise / Trial / Perpetual)... ");
 
-        var serverUrl = "http://localhost:4000";
+        var serverUrl = await GetLiveLicenseServerUrlAsync();
+        if (serverUrl == null)
+        {
+            Console.WriteLine("SKIPPED (License Server not running on localhost:3006 or 4000)");
+            return;
+        }
+
         var tempTestDir = Path.Combine(Path.GetTempPath(), "V26_Test_ChangePlan_" + Guid.NewGuid().ToString("N"));
         try
         {
@@ -842,7 +838,13 @@ CXHaZZurRVGX356/sxnhBHOf/51FCPI+QBbqBYIbJueeh3ATyCcKRPHExnh4+zyg
     {
         Console.Write("[Test 12] Delete License Key & Cascade Machine Revocation... ");
 
-        var serverUrl = "http://localhost:4000";
+        var serverUrl = await GetLiveLicenseServerUrlAsync();
+        if (serverUrl == null)
+        {
+            Console.WriteLine("SKIPPED (License Server not running on localhost:3006 or 4000)");
+            return;
+        }
+
         using var client = new HttpClient();
         var loginPayload = new { username = "admin", password = "admin@vision2026" };
         var loginRes = await client.PostAsync($"{serverUrl}/api/v1/admin/login",
@@ -898,7 +900,13 @@ CXHaZZurRVGX356/sxnhBHOf/51FCPI+QBbqBYIbJueeh3ATyCcKRPHExnh4+zyg
     {
         Console.Write("[Test 13] Deleted Machine Online Check (Blocks Startup & Clears Vault)... ");
 
-        var serverUrl = "http://localhost:4000";
+        var serverUrl = await GetLiveLicenseServerUrlAsync();
+        if (serverUrl == null)
+        {
+            Console.WriteLine("SKIPPED (License Server not running on localhost:3006 or 4000)");
+            return;
+        }
+
         var tempTestDir = Path.Combine(Path.GetTempPath(), "V26_Test_DelMachine_" + Guid.NewGuid().ToString("N"));
         using var client = new HttpClient();
         try
@@ -1019,6 +1027,80 @@ CXHaZZurRVGX356/sxnhBHOf/51FCPI+QBbqBYIbJueeh3ATyCcKRPHExnh4+zyg
             }
 
             Console.WriteLine("PASSED (Deleted machine blocked from entering app, vault cleared, and pending re-registration triggered!)");
+        }
+        finally
+        {
+            if (Directory.Exists(tempTestDir))
+            {
+                try { Directory.Delete(tempTestDir, true); } catch { }
+            }
+        }
+    }
+
+    private static void Test14_ServerUrl_PersistenceAcrossRestarts()
+    {
+        Console.Write("[Test 14] License Server URL Persistence Across Restarts... ");
+
+        var tempTestDir = Path.Combine(Path.GetTempPath(), "V26_Test_ServerUrl_" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            // 1. Khởi tạo instance lần đầu với thư mục cấu hình tạm
+            using (var service1 = new LicenseService(tempTestDir))
+            {
+                // Mặc định phải là localhost:4000 (nếu không có env override)
+                if (string.IsNullOrWhiteSpace(service1.ServerUrl))
+                {
+                    throw new Exception("Default ServerUrl must not be empty!");
+                }
+
+                // Người dùng thay đổi URL máy chủ trên giao diện sang địa chỉ khác
+                string customServer = "http://192.168.1.188:4000";
+                service1.ServerUrl = customServer;
+
+                // Kiểm tra tệp server.cfg đã được tạo trên đĩa
+                string cfgPath = Path.Combine(tempTestDir, "server.cfg");
+                if (!File.Exists(cfgPath))
+                {
+                    throw new Exception("server.cfg must be written immediately when ServerUrl is updated!");
+                }
+
+                string writtenContent = File.ReadAllText(cfgPath).Trim();
+                if (writtenContent != customServer)
+                {
+                    throw new Exception($"server.cfg content mismatch! Expected: {customServer}, got: {writtenContent}");
+                }
+            }
+
+            // 2. Mô phỏng TẮT APP VÀ BẬT LẠI:
+            // Khởi tạo instance mới hoàn toàn trỏ vào cùng thư mục lưu trữ tempTestDir (không truyền initialServerUrl)
+            using (var service2 = new LicenseService(tempTestDir))
+            {
+                // Assert: ServerUrl phải được khôi phục chính xác từ server.cfg mà không bị quay về localhost:4000!
+                if (service2.ServerUrl != "http://192.168.1.188:4000")
+                {
+                    throw new Exception($"ServerUrl persistence failed! Expected 'http://192.168.1.188:4000', but got: '{service2.ServerUrl}'");
+                }
+
+                // Thử cập nhật qua phương thức SaveServerUrl
+                string customServer2 = "https://license.visioninspection.vn";
+                service2.SaveServerUrl(customServer2);
+
+                if (service2.ServerUrl != customServer2)
+                {
+                    throw new Exception($"SaveServerUrl failed! Expected '{customServer2}', got '{service2.ServerUrl}'");
+                }
+            }
+
+            // 3. Khởi tạo instance thứ 3 để kiểm tra tiếp
+            using (var service3 = new LicenseService(tempTestDir))
+            {
+                if (service3.ServerUrl != "https://license.visioninspection.vn")
+                {
+                    throw new Exception($"Second persistence check failed! Got: '{service3.ServerUrl}'");
+                }
+            }
+
+            Console.WriteLine("PASSED (ServerUrl saved to disk and loaded correctly across app restarts!)");
         }
         finally
         {

@@ -5,7 +5,7 @@
   "main": "dist/server.js",
   "scripts": {
     "dev": "ts-node src/server.ts",
-    "build": "tsc",
+    "build": "tsc && node -e \"require('fs').cpSync('src/public', 'dist/public', {recursive: true})\"",
     "start": "node dist/server.js",
     "gen-keys": "node -e \"require('./dist/crypto/licenseCrypto').LicenseCrypto.ensureKeyPair()\""
   },

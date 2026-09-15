@@ -2659,3 +2659,55 @@ Lộ trình tích hợp tính năng Chụp ảnh từ camera và hỗ trợ các
              - Tự động nạp các License Keys đang Active trên hệ thống (ví dụ: `V26-ENT-HAYG-HDMN-WJNH`).
              - Khi Admin thả file `.req` vào, hệ thống tự động nhận diện máy trạm và điền sẵn mã License Key, Tên khách hàng, Gói cước và Thời hạn từ license đã chọn.
              - Admin chỉ cần bấm 1 click `🔐 Ký Số & Tải File Bản Quyền (.lic)` là hoàn tất!
+    - [x] **Task 337: Lưu Trữ Bền Vững Địa Chỉ Máy Chủ Bản Quyền (License Server URL Persistence)**:
+        - **Mục Tiêu & Yêu Cầu**:
+          1. **Khắc phục lỗi địa chỉ máy chủ bị reset về mặc định khi tắt và mở lại ứng dụng**:
+             - Hiện tượng: Người dùng đã thay thế địa chỉ License Server trên form (ví dụ http://localhost:3006 hoặc server mạng LAN/Internet), nhưng khi tắt ứng dụng rồi bật lại thì địa chỉ máy chủ bị trả về mặc định http://localhost:4000.
+             - Nguyên nhân gốc rễ:
+               + LicenseService chỉ lưu _serverUrl tạm thời trong bộ nhớ RAM, không đọc/ghi ra tệp cấu hình bền vững.
+               + LicenseViewModel gán cứng _serverUrlInput = "http://localhost:4000", constructor không khởi tạo từ _licenseService.ServerUrl, và không tự động lưu khi người dùng nhập URL mới.
+               + Giao diện ILicenseService thiếu thuộc tính ServerUrl và hàm SaveServerUrl(string url).
+          2. **Kiến Trúc & Giải Pháp Kỹ Thuật Đã Triển Khai**:
+             - **Bền vững hóa tại LicenseService (server.cfg)**:
+               + Khai báo đường dẫn lưu trữ cấu hình _serverConfigPath = Path.Combine(_storageDir, "server.cfg") nằm trong thư mục bảo mật an toàn %LOCALAPPDATA%\VisionInspectionApp\Security\.
+               + Constructor tự động nạp server.cfg nếu tồn tại; ưu tiên: initialServerUrl > server.cfg > VISION_LICENSE_SERVER_URL > "http://localhost:4000".
+               + Property ServerUrl: Khi gán giá trị mới, tự động chuẩn hóa URL (TrimEnd('/')) và ghi ngay xuống tệp server.cfg.
+               + Phương thức SaveServerUrl(string url): Cho phép ghi nhận và lưu địa chỉ máy chủ từ bất kỳ tầng nào.
+               + Đồng bộ tự động trong AutoRegisterOrCheckApprovalAsync và ActivateOnlineAsync: Tự động lưu server URL mới khi người dùng truyền customServerUrl.
+             - **Đồng bộ hai chiều trong LicenseViewModel**:
+               + Khởi tạo ServerUrlInput = _licenseService.ServerUrl; ngay trong constructor.
+               + Bổ sung partial method OnServerUrlInputChanged(string value): Tự động cập nhật _licenseService.ServerUrl và lưu vào đĩa khi người dùng gõ địa chỉ máy chủ hợp lệ.
+               + Bổ sung RelayCommand SaveServerUrlCommand: Kiểm tra định dạng URL (http:// / https://), lưu vào file và hiển thị thông báo trực quan "Đã ghi nhớ địa chỉ máy chủ: {url}".
+             - **Cải tiến Trực Quan Giao Diện LicenseDialog.xaml**:
+               + Tab 2 (Kích Hoạt Trực Tuyến): Bổ sung nút bấm "💾 Lưu Địa Chỉ" bên cạnh ô nhập URL máy chủ.
+               + Banner Chờ Duyệt (Pending Approval): Hiển thị trực tiếp địa chỉ máy chủ đang kết nối (Máy chủ kết nối: {ServerUrlInput}) giúp người dùng nhận biết ngay lập tức máy trạm đang gửi Hardware ID tới máy chủ nào.
+               + Tab 1 (Thông Tin Bản Quyền): Thêm dòng Máy Chủ Bản Quyền: hiển thị rõ ràng địa chỉ máy chủ hiện hành.
+          3. **Kiểm Thử Toàn Diện**:
+             - Bổ sung Test 14 vào LicenseSystemTests.cs: Khởi tạo LicenseService, đổi URL sang máy chủ tùy chọn, hủy instance, mô phỏng khởi động lại app bằng cách tạo instance mới từ cùng thư mục và khẳng định URL máy chủ được khôi phục chính xác 100%.
+             - Nâng cấp helper GetLiveLicenseServerUrlAsync tự động phát hiện server live trên cả port 3006 và 4000.
+             - Đạt 100% PASSED toàn bộ 14/14 bài kiểm thử Enterprise License System và toàn bộ các test suites của dự án (exit code 0).
+             - Solution VisionInspectionApp.slnx biên dịch Release 0 Error(s).
+    - [x] **Task 338: Cấu Hình Lắng Nghe Toàn Cục (0.0.0.0 Host Binding) & Hỗ Trợ Truy Cập License Server Qua IP Public NAT (14.160.33.94:3006)**:
+        - **Mục Tiêu & Yêu Cầu**:
+          1. **Khắc phục lỗi License Server chỉ truy cập được qua localhost:3006, không truy cập được từ IP Public WAN 14.160.33.94:3006 dù đã mở port và NAT trên Router**:
+             - Hiện tượng: Người dùng đã cấu hình NAT Port Forwarding trên Router từ 14.160.33.94:3006 vào máy chủ, nhưng khi gọi từ IP ngoài hoặc IP WAN thì không kết nối được, server chỉ nhận kết nối từ localhost.
+             - Nguyên nhân gốc rễ:
+               + Trong server.ts trước đó, Express gọi app.listen(config.port) mà KHÔNG truyền host (0.0.0.0). Trên Windows, Node.js mặc định tạo socket IPv6 [::] hoặc loopback, làm cho các gói tin IPv4 từ card mạng LAN (do router NAT chuyển tiếp tới 192.168.1.136:3006) bị từ chối kết nối.
+               + Tệp .env và config/index.ts chưa cấu hình biến môi trường HOST=0.0.0.0.
+               + Quá trình build (tsc) trước đây không tự động sao chép các tài nguyên tĩnh (HTML/CSS/JS) từ src/public sang dist/public.
+          2. **Kiến Trúc & Giải Pháp Kỹ Thuật Đã Triển Khai**:
+             - **Cấu hình Host Binding 0.0.0.0 tại License Server**:
+               + config/index.ts: Bổ sung thuộc tính host: process.env.HOST || '0.0.0.0'.
+               + server.ts: Nâng cấp hàm lắng nghe thành app.listen(config.port, config.host, ...), đảm bảo Node.js tạo socket IPv4 INADDR_ANY (0.0.0.0) nhận diện toàn bộ các card mạng LAN và luồng NAT từ Router.
+               + .env: Bổ sung cấu hình HOST=0.0.0.0 song song với PORT=3006.
+             - **Đồng bộ Tự Động Tài Nguyên Giao Diện Dashboard (dist/public)**:
+               + Nâng cấp script build trong package.json: tsc && node -e "require('fs').cpSync('src/public', 'dist/public', {recursive: true})".
+               + Đảm bảo sau khi build, thư mục dist/ luôn sẵn sàng phục vụ Web Admin Dashboard cho mọi client kết nối từ xa.
+             - **Kiểm Tra & Tương Thích Tường Lửa (Windows Defender Firewall)**:
+               + Kiểm tra Inbound Rule "License server" đã cho phép giao thức TCP cổng 3006 cho mọi profile (Domain, Private, Public).
+          3. **Kiểm Thử Toàn Diện Đa Điểm (Multi-Endpoint Verification)**:
+             - Kiểm tra Localhost: http://localhost:3006/health -> STATUS 200 OK.
+             - Kiểm tra Mạng LAN nội bộ: http://192.168.1.136:3006/health -> STATUS 200 OK.
+             - Kiểm tra IP Public Internet qua Router NAT: http://14.160.33.94:3006/health -> STATUS 200 OK.
+             - Toàn bộ 14/14 bài kiểm thử Enterprise License System PASSED 100%.
+             - Solution VisionInspectionApp.slnx biên dịch Release 0 Error(s).

@@ -4206,3 +4206,54 @@
   - **Kiểm Thử & Trạng Thái**:
     + Đã test trực tiếp API `offlineSign` với cả 2 định dạng PascalCase (từ .NET) và camelCase: Ký số thành công 100%, sinh file `.lic` chuẩn RSA-2048.
     + Solution `VisionInspectionApp.slnx` biên dịch Release 0 Error(s). License Server đang chạy daemon port 4000.
+
+- **Lưu Trữ Bền Vững Địa Chỉ Máy Chủ Bản Quyền Giữa Các Phiên Chạy Ứng Dụng (Task 337)**:
+  - **Hiện Tượng & Phản Ánh Người Dùng**:
+    + Người dùng thay đổi địa chỉ máy chủ License Server trên giao diện kích hoạt bản quyền (ví dụ: http://localhost:3006 hoặc máy chủ mạng LAN/Internet), nhưng khi tắt ứng dụng bật lại thì địa chỉ máy chủ lại bị reset trở về mặc định http://localhost:4000.
+  - **Nguyên Nhân Gốc Rễ**:
+    1. *LicenseService*: Biến `_serverUrl` chỉ tồn tại trong bộ nhớ RAM tạm thời, không được lưu trữ ra file cấu hình trên đĩa và không nạp lại khi khởi tạo mới instance.
+    2. *LicenseViewModel*: Khai báo `_serverUrlInput = "http://localhost:4000"` bị gán cứng mặc định, constructor không gán từ `_licenseService.ServerUrl`, và không cập nhật ghi nhớ khi người dùng thay đổi giá trị trên UI.
+    3. *ILicenseService*: Chưa khai báo property `ServerUrl` và phương thức `SaveServerUrl(string url)`.
+  - **Giải Pháp Kỹ Thuật Đã Triển Khai**:
+    1. *Cơ Chế Bền Vững Hóa `server.cfg` trong `LicenseService.cs`*:
+       - Định vị tệp lưu trữ `_serverConfigPath = Path.Combine(_storageDir, "server.cfg")` trong thư mục an toàn `%LOCALAPPDATA%\VisionInspectionApp\Security\`.
+       - Hàm khởi tạo tự động đọc `server.cfg` khi khởi động app (với thứ tự ưu tiên: `initialServerUrl` > `server.cfg` > biến môi trường `VISION_LICENSE_SERVER_URL` > mặc định `http://localhost:4000`).
+       - Thuộc tính `ServerUrl`: Trong setter, tự động chuẩn hóa URL (`TrimEnd('/')`) và ghi ngay xuống tệp `server.cfg` thông qua `PersistServerUrlToFile`.
+       - Bổ sung `SaveServerUrl(string serverUrl)` vào `ILicenseService` và `LicenseService`.
+       - Trong `AutoRegisterOrCheckApprovalAsync` và `ActivateOnlineAsync`: Khi truyền `customServerUrl`, tự động lưu giá trị đó làm ServerUrl bền vững.
+    2. *Đồng Bộ Hai Chiều & Phản Hồi Trực Quan trong `LicenseViewModel.cs`*:
+       - Khởi tạo `ServerUrlInput = _licenseService.ServerUrl;` ngay trong constructor.
+       - Triển khai partial method `OnServerUrlInputChanged(string value)`: Tự động đồng bộ `_licenseService.ServerUrl` và lưu vào đĩa khi người dùng nhập địa chỉ hợp lệ.
+       - Bổ sung RelayCommand `SaveServerUrlCommand`: Kiểm tra định dạng URL (`http://` hoặc `https://`), lưu vào file và gửi thông báo phản hồi trực quan.
+       - Tự động đồng bộ `ServerUrlInput` trong các lệnh `CheckPendingApprovalAsync` và `ActivateOnlineAsync`.
+    3. *Cải Tiến Giao Diện `LicenseDialog.xaml`*:
+       - Thêm nút `💾 Lưu Địa Chỉ` bên cạnh ô nhập URL máy chủ tại Tab 2 (Kích Hoạt Trực Tuyến).
+       - Bổ sung hiển thị máy chủ đang kết nối trên Banner Chờ Phê Duyệt (`Máy chủ kết nối: {ServerUrlInput}`) giúp người vận hành biết rõ máy trạm đang liên lạc với máy chủ nào.
+       - Bổ sung dòng `Máy Chủ Bản Quyền:` tại bảng thông tin chi tiết Tab 1.
+    4. *Kiểm Thử Tự Động Toàn Diện*:
+       - Thêm **Test 14** vào bộ kiểm thử `LicenseSystemTests.cs`: Xác minh tính năng lưu trữ xuống `server.cfg` và khôi phục thành công 100% khi khởi tạo instance mới mô phỏng tắt/bật lại app.
+       - Cập nhật helper `GetLiveLicenseServerUrlAsync` tự động phát hiện License Server đang chạy live (cả port 3006 và 4000).
+       - Toàn bộ **14/14 bài kiểm thử Enterprise License System PASSED 100%**.
+       - Toàn bộ Solution `VisionInspectionApp.slnx` biên dịch Release **0 Error(s)**.
+
+- **Hỗ Trợ Truy Cập License Server Qua Mạng LAN & IP Public NAT (14.160.33.94:3006 - Task 338)**:
+  - **Hiện Tượng & Yêu Cầu Người Dùng**:
+    + Người dùng đã mở port và cấu hình NAT trên Router cho cổng 3006, nhưng License Server chỉ cho phép truy cập qua `http://localhost:3006`, khi gọi qua địa chỉ Public WAN `http://14.160.33.94:3006` thì không kết nối được.
+  - **Nguyên Nhân Gốc Rễ**:
+    1. *Host Binding*: Hàm `app.listen(config.port)` trong Express không chỉ định tham số `host`. Trên Windows, Node.js mặc định tạo socket IPv6 `::` hoặc loopback cục bộ, khiến các gói tin IPv4 chuyển tiếp từ Router NAT vào IP LAN `192.168.1.136:3006` bị từ chối kết nối.
+    2. *Cấu hình Môi Trường*: Thiếu biến `HOST=0.0.0.0` trong `.env` và `src/config/index.ts`.
+    3. *Tài nguyên Web Dashboard*: Thư mục tĩnh `src/public` chưa được copy sang `dist/public` khi chạy lệnh `npm run build`.
+  - **Giải Pháp Đã Triển Khai**:
+    1. *Cấu hình Host 0.0.0.0*:
+       - Cập nhật `LicenseServer/src/config/index.ts`: Thêm `host: process.env.HOST || '0.0.0.0'`.
+       - Cập nhật `LicenseServer/.env`: Thêm `HOST=0.0.0.0`.
+       - Cập nhật `LicenseServer/src/server.ts`: Gọi `app.listen(config.port, config.host, ...)` lắng nghe toàn cục trên mọi giao diện mạng.
+    2. *Tự Động Sao Chép Giao Diện Web Dashboard*:
+       - Cập nhật `package.json`: Thêm lệnh copy tự động `src/public` sang `dist/public` sau khi `tsc`.
+    3. *Kiểm Thử Kết Nối Thực Tế*:
+       - Đã xác minh thành công 100% bằng HTTP Request trực tiếp tới:
+         + `http://localhost:3006/health` (Localhost): STATUS 200 OK
+         + `http://192.168.1.136:3006/health` (LAN IP): STATUS 200 OK
+         + `http://14.160.33.94:3006/health` (Public IP NAT): STATUS 200 OK
+       - Toàn bộ 14/14 bài kiểm thử bản quyền Enterprise License System PASSED 100%.
+       - License Server đang hoạt động ổn định ở chế độ nền.

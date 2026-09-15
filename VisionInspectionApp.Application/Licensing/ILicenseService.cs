@@ -41,6 +41,16 @@ public interface ILicenseService
     string? PendingApprovalMessage { get; }
 
     /// <summary>
+    /// Địa chỉ máy chủ bản quyền (License Server URL)
+    /// </summary>
+    string ServerUrl { get; set; }
+
+    /// <summary>
+    /// Lưu cấu hình địa chỉ máy chủ bản quyền vào ổ đĩa để ghi nhớ vĩnh viễn giữa các phiên chạy
+    /// </summary>
+    void SaveServerUrl(string serverUrl);
+
+    /// <summary>
     /// Kiểm tra và xác thực tính hợp lệ của bản quyền trên máy
     /// </summary>
     Task<LicenseValidationResult> ValidateLicenseAsync();

@@ -48,6 +48,10 @@
                 <StackPanel VerticalAlignment="Center">
                     <TextBlock Text="⏳ MÁY TRẠM ĐANG CHỜ QUẢN TRỊ VIÊN PHÊ DUYỆT TRÊN HỆ THỐNG" FontWeight="Bold" FontSize="12" Foreground="#FDE68A" />
                     <TextBlock Text="Máy tính đã tự động gửi Hardware ID lên License Server. Khi Admin bấm 'Duyệt' trên Web Dashboard, máy sẽ tự động kích hoạt ngay lập tức mà không cần nhập mã thủ công." FontSize="11" Foreground="#FCD34D" TextWrapping="Wrap" Margin="0,3,10,0" />
+                    <TextBlock FontSize="11" Foreground="#FDE68A" Margin="0,3,0,0">
+                        <Run Text="Máy chủ kết nối: " />
+                        <Run Text="{Binding ServerUrlInput}" FontWeight="Bold" Foreground="#38BDF8" />
+                    </TextBlock>
                 </StackPanel>
                 <StackPanel Grid.Column="1" VerticalAlignment="Center">
                     <Button Content="🔄 Kiểm Tra Duyệt Ngay" Command="{Binding CheckPendingApprovalCommand}" IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBoolConverter}}"
@@ -92,6 +96,7 @@
                                     <RowDefinition Height="30" />
                                     <RowDefinition Height="30" />
                                     <RowDefinition Height="30" />
+                                    <RowDefinition Height="30" />
                                 </Grid.RowDefinitions>
 
                                 <TextBlock Grid.Row="0" Grid.Column="0" Text="Khách Hàng / Đơn Vị:" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" />
@@ -106,8 +111,11 @@
                                 <TextBlock Grid.Row="3" Grid.Column="0" Text="Thời Hạn Sử Dụng:" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" />
                                 <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding ExpirationText}" FontWeight="SemiBold" Foreground="{Binding StatusBrush}" VerticalAlignment="Center" />
 
-                                <TextBlock Grid.Row="4" Grid.Column="0" Text="Quản Lý:" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" />
-                                <StackPanel Grid.Row="4" Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                                <TextBlock Grid.Row="4" Grid.Column="0" Text="Máy Chủ Bản Quyền:" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" />
+                                <TextBlock Grid.Row="4" Grid.Column="1" Text="{Binding ServerUrlInput}" Foreground="#38BDF8" VerticalAlignment="Center" />
+
+                                <TextBlock Grid.Row="5" Grid.Column="0" Text="Quản Lý:" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" />
+                                <StackPanel Grid.Row="5" Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
                                     <Button Content="Hủy Kích Hoạt Máy Này" Command="{Binding DeactivateCommand}" IsEnabled="{Binding IsLicensed}"
                                             Background="Transparent" Foreground="#F43F5E" BorderBrush="#F43F5E" Padding="8,2" FontSize="11" />
                                 </StackPanel>
@@ -126,9 +134,18 @@
                     <TextBox Text="{Binding LicenseKeyInput, UpdateSourceTrigger=PropertyChanged}" 
                              FontFamily="Consolas" FontSize="14" Padding="10,6" Margin="0,0,0,12" />
 
-                    <TextBlock Text="Địa Chỉ Máy Chủ License (License Server URL)" FontWeight="Bold" Foreground="{DynamicResource TextBrush}" Margin="0,0,0,4" />
-                    <TextBox Text="{Binding ServerUrlInput, UpdateSourceTrigger=PropertyChanged}" 
-                             FontSize="12" Padding="8,4" Margin="0,0,0,16" />
+                    <TextBlock Text="Địa Chỉ Máy Chủ License (License Server URL) *" FontWeight="Bold" Foreground="{DynamicResource TextBrush}" Margin="0,0,0,4" />
+                    <Grid Margin="0,0,0,16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBox Text="{Binding ServerUrlInput, UpdateSourceTrigger=PropertyChanged}" 
+                                 FontSize="12" Padding="8,6" VerticalContentAlignment="Center" />
+                        <Button Grid.Column="1" Content="💾 Lưu Địa Chỉ" Command="{Binding SaveServerUrlCommand}"
+                                Margin="8,0,0,0" Padding="14,6" FontWeight="SemiBold" FontSize="12"
+                                Background="#1E293B" Foreground="#38BDF8" BorderBrush="#38BDF8" />
+                    </Grid>
 
                     <Button Content="⚡ Kích Hoạt Bản Quyền Trực Tuyến" Command="{Binding ActivateOnlineCommand}" IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBoolConverter}}"
                             Background="#0284C7" Foreground="White" Padding="16,10" FontWeight="Bold" FontSize="13" HorizontalAlignment="Left" />

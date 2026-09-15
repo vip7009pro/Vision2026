@@ -15,6 +15,7 @@ public sealed class LicenseService : ILicenseService, IDisposable
     private readonly string _storageDir;
     private readonly string _licenseVaultPath;
     private readonly string _clockVaultPath;
+    private readonly string _serverConfigPath;
 
     private LicenseStatus _status = LicenseStatus.Unlicensed;
     private LicensePayload? _currentLicense;
@@ -35,7 +36,38 @@ public sealed class LicenseService : ILicenseService, IDisposable
     public string ServerUrl
     {
         get => _serverUrl;
-        set => _serverUrl = value?.TrimEnd('/') ?? "http://localhost:4000";
+        set
+        {
+            var normalized = value?.Trim().TrimEnd('/') ?? "http://localhost:4000";
+            if (string.IsNullOrWhiteSpace(normalized))
+            {
+                normalized = "http://localhost:4000";
+            }
+
+            if (_serverUrl != normalized)
+            {
+                _serverUrl = normalized;
+                PersistServerUrlToFile(_serverUrl);
+            }
+        }
+    }
+
+    public void SaveServerUrl(string serverUrl)
+    {
+        ServerUrl = serverUrl;
+    }
+
+    private void PersistServerUrlToFile(string url)
+    {
+        try
+        {
+            if (!Directory.Exists(_storageDir))
+            {
+                Directory.CreateDirectory(_storageDir);
+            }
+            File.WriteAllText(_serverConfigPath, url);
+        }
+        catch { }
     }
 
     public int RemainingDays
@@ -56,19 +88,6 @@ public sealed class LicenseService : ILicenseService, IDisposable
 
     public LicenseService(string? customStorageDir = null, string? initialServerUrl = null)
     {
-        if (!string.IsNullOrWhiteSpace(initialServerUrl))
-        {
-            _serverUrl = initialServerUrl.TrimEnd('/');
-        }
-        else
-        {
-            var envUrl = Environment.GetEnvironmentVariable("VISION_LICENSE_SERVER_URL");
-            if (!string.IsNullOrWhiteSpace(envUrl))
-            {
-                _serverUrl = envUrl.TrimEnd('/');
-            }
-        }
-
         if (!string.IsNullOrWhiteSpace(customStorageDir))
         {
             _storageDir = customStorageDir;
@@ -86,6 +105,43 @@ public sealed class LicenseService : ILicenseService, IDisposable
 
         _licenseVaultPath = Path.Combine(_storageDir, "license.vault");
         _clockVaultPath = Path.Combine(_storageDir, "clock.vault");
+        _serverConfigPath = Path.Combine(_storageDir, "server.cfg");
+
+        // Xác định địa chỉ License Server URL theo thứ tự ưu tiên:
+        // 1. Tham số khởi tạo trực tiếp (initialServerUrl)
+        // 2. Tệp cấu hình lưu trữ cục bộ (server.cfg)
+        // 3. Biến môi trường VISION_LICENSE_SERVER_URL
+        // 4. Mặc định "http://localhost:4000"
+        if (!string.IsNullOrWhiteSpace(initialServerUrl))
+        {
+            _serverUrl = initialServerUrl.Trim().TrimEnd('/');
+        }
+        else
+        {
+            bool loadedFromDisk = false;
+            try
+            {
+                if (File.Exists(_serverConfigPath))
+                {
+                    var savedUrl = File.ReadAllText(_serverConfigPath).Trim();
+                    if (!string.IsNullOrWhiteSpace(savedUrl) && Uri.TryCreate(savedUrl, UriKind.Absolute, out _))
+                    {
+                        _serverUrl = savedUrl.TrimEnd('/');
+                        loadedFromDisk = true;
+                    }
+                }
+            }
+            catch { }
+
+            if (!loadedFromDisk)
+            {
+                var envUrl = Environment.GetEnvironmentVariable("VISION_LICENSE_SERVER_URL");
+                if (!string.IsNullOrWhiteSpace(envUrl))
+                {
+                    _serverUrl = envUrl.Trim().TrimEnd('/');
+                }
+            }
+        }
     }
 
     public async Task<LicenseValidationResult> ValidateLicenseAsync()
@@ -226,7 +282,12 @@ public sealed class LicenseService : ILicenseService, IDisposable
 
     public async Task<LicenseActivationResult> AutoRegisterOrCheckApprovalAsync(string? customServerUrl = null)
     {
-        string targetUrl = (!string.IsNullOrWhiteSpace(customServerUrl) ? customServerUrl.TrimEnd('/') : _serverUrl);
+        if (!string.IsNullOrWhiteSpace(customServerUrl))
+        {
+            ServerUrl = customServerUrl;
+        }
+
+        string targetUrl = _serverUrl;
         var endpoint = $"{targetUrl}/api/v1/license/auto-register";
 
         try
@@ -357,7 +418,12 @@ public sealed class LicenseService : ILicenseService, IDisposable
             return new LicenseActivationResult(false, "Vui lòng nhập License Key.", null);
         }
 
-        string targetUrl = (!string.IsNullOrWhiteSpace(customServerUrl) ? customServerUrl.TrimEnd('/') : _serverUrl);
+        if (!string.IsNullOrWhiteSpace(customServerUrl))
+        {
+            ServerUrl = customServerUrl;
+        }
+
+        string targetUrl = _serverUrl;
         var endpoint = $"{targetUrl}/api/v1/license/activate";
 
         try
