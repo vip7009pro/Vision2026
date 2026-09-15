@@ -148,6 +148,11 @@ public sealed class PlcSettings
     public int TriggerDebounceMs { get; set; } = 20;
     public int DonePulseMs { get; set; } = 50;
     public int ComTimeoutMs { get; set; } = 500;
+
+    /// <summary>
+    /// Bỏ qua hộp thoại nhắc nhở cài đặt .NET Desktop Runtime (x86) khi khởi động ứng dụng
+    /// </summary>
+    public bool SuppressDotnetX86Prompt { get; set; } = false;
 }
 
 public sealed class GlobalAppSettingsService

@@ -4311,3 +4311,25 @@
        - Toàn bộ các bộ kiểm thử tự động của dự án PASSED 100% (exit code 0).
        - Solution `VisionInspectionApp.slnx` biên dịch Release 0 Error(s).
 
+- **Giải Quyết Vấn Đề Nhắc Nhở & Cài Đặt .NET Desktop Runtime (x86) Cho Module PLC Bridge Chạy Ngầm (Task 341)**:
+  - **Hiện Tượng & Phản Ánh Người Dùng**:
+    + Khi cài đặt ứng dụng vào một máy tính mới chưa có .NET, chương trình chỉ hiển thị hộp thoại native yêu cầu tải .NET Desktop Runtime x64 (do file thực thi chính `VisionInspectionApp.exe` là 64-bit).
+    + Sau khi cài x64, ứng dụng mở được nhưng module `VisionInspectionApp.PlcBridge.exe` dùng 32-bit (x86) bị chạy ẩn ngầm bên trong, dẫn đến việc Windows không thể hiển thị hộp thoại native nhắc tải .NET x86. Kết quả là module PLC Bridge không thể khởi chạy và kết nối PLC Mitsubishi bị lỗi ngầm không rõ nguyên nhân.
+  - **Giải Pháp Kỹ Thuật Đã Triển Khai**:
+    1. *Xây Dựng Dịch Vụ Môi Trường Runtime (`IDotnetRuntimeService` & `DotnetRuntimeService`)*:
+       - Kiểm tra đa tầng tính sẵn sàng của runtime x86 thông qua thư mục hệ thống (`%ProgramFiles(x86)%\dotnet\shared`), Registry Windows WOW6432Node, lệnh `dotnet.exe --list-runtimes` và kiểm tra chế độ self-contained.
+       - Cung cấp link tải trực tiếp chính thức từ Microsoft CDN: `https://aka.ms/dotnet/8.0/windowsdesktop-runtime-win-x86.exe`.
+       - Hỗ trợ tải tệp tự động kèm báo cáo tiến trình % và thực thi bộ cài Microsoft với cờ `/install /passive /norestart`.
+    2. *Thiết Kế Cửa Sổ Thông Báo & Cài Đặt 1-Click (`DotnetRuntimePromptDialog.xaml`)*:
+       - Giao diện Dark theme sang trọng theo chuẩn Design System, giải thích lý do kỹ thuật (app 64-bit nhưng PLC Bridge cần 32-bit để gọi COM Mitsubishi ActUtlType).
+       - Cung cấp 3 nút chức năng: **⚡ Tự Động Tải & Cài Đặt (1-Click)**, **🌐 Tải Bằng Trình Duyệt**, **⏩ Bỏ Qua (Chưa Dùng PLC)** và checkbox *"Không nhắc lại trên máy tính này"*.
+    3. *Tích Hợp Khởi Động Ứng Dụng (`App.xaml.cs`)*:
+       - Đăng ký `IDotnetRuntimeService` vào DI Container.
+       - Kiểm tra ngay trong quá trình SplashScreen; nếu thiếu runtime x86, hiển thị hộp thoại để người dùng cài đặt ngay trước khi khởi động dịch vụ PLC.
+    4. *Cải Tiến Tầng Driver & Giao Diện Quản Lý PLC (`MitsubishiMxComponentDriver.cs` & `PlcManagerWindow.xaml`)*:
+       - Bắt lỗi chính xác và phát sinh thông báo hướng dẫn chi tiết kèm đường dẫn tải về khi thiếu runtime x86.
+       - Hiển thị banner cảnh báo và nút cài đặt nhanh `⚡ Cài Đặt .NET x86 Ngay` trong màn hình Quản lý PLC khi chọn driver Mitsubishi MX Component.
+    5. *Kiểm Thử & Đảm Bảo Chất Lượng*:
+       - Bổ sung `TestExtractApp/DotnetRuntimeTests.cs` với 4 bài kiểm thử tự động, xác minh toàn bộ cơ chế hoạt động chính xác 100%.
+       - Toàn bộ Solution `VisionInspectionApp.slnx` biên dịch Release 0 Error(s).
+

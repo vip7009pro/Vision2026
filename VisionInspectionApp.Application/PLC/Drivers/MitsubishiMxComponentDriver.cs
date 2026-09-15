@@ -1272,6 +1272,15 @@ public sealed class MitsubishiMxComponentDriver : IPlcDriver
 
             if (!connected || _tcpClient == null || !_tcpClient.Connected)
             {
+                if (!VisionInspectionApp.Application.Services.DotnetRuntimeService.IsX86Installed())
+                {
+                    throw new IOException(
+                        "Không thể khởi chạy module 32-bit PLC Bridge vì máy tính chưa cài đặt .NET Desktop Runtime 8.0 (x86 / 32-bit).\n" +
+                        "Module giao tiếp PLC Mitsubishi (ActUtlType COM) bắt buộc chạy ở chế độ 32-bit.\n" +
+                        "Vui lòng cài đặt .NET Desktop Runtime 8.0 (x86) để sử dụng tính năng PLC Mitsubishi: " +
+                        VisionInspectionApp.Application.Services.DotnetRuntimeService.MicrosoftX86DirectDownloadUrl);
+                }
+
                 throw new IOException($"Could not connect to 32-bit PLC Bridge on 127.0.0.1:{BridgePort}.");
             }
 

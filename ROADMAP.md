@@ -2771,4 +2771,42 @@ Lộ trình tích hợp tính năng Chụp ảnh từ camera và hỗ trợ các
                * Kiểm tra ngắt kết nối an toàn đúng 1s theo timeout cấu hình (`1003ms`) khi máy chủ bị trễ phản hồi.
              - Toàn bộ các bộ kiểm thử tự động của dự án PASSED 100% (exit code 0).
              - Toàn bộ Solution `VisionInspectionApp.slnx` biên dịch Release **0 Error(s)**.
+    - [x] **Task 341: Giải Quyết Triệt Để Vấn Đề Nhắc Nhở & Cài Đặt .NET Desktop Runtime (x86) Cho Module PLC Bridge Chạy Ngầm**:
+        - **Mục Tiêu & Yêu Cầu**:
+          1. **Khắc phục hiện tượng chỉ prompt yêu cầu tải .NET x64 mà không prompt .NET x86 khi cài đặt trên máy tính mới**:
+             - Hiện tượng: Khi cài app trên máy tính chưa có .NET, chương trình chỉ hiển thị hộp thoại native của Windows yêu cầu tải .NET Desktop Runtime x64 (do file thực thi chính `VisionInspectionApp.exe` là 64-bit). Sau khi cài xong x64, app khởi động được nhưng module giao tiếp PLC Mitsubishi (`VisionInspectionApp.PlcBridge.exe`) chạy ngầm 32-bit (x86) không bao giờ hiển thị được thông báo native của Windows do chạy ở chế độ ẩn (`WindowStyle = Hidden`, `CreateNoWindow = true`), dẫn đến lỗi kết nối PLC ngầm không rõ nguyên nhân.
+             - Nguyên nhân gốc rễ:
+               + Module PLC Bridge bắt buộc phải là x86 (32-bit) để giao tiếp với thư viện COM `ActUtlType.ActUtlType` của Mitsubishi Electric.
+               + Ứng dụng chính x64 không kiểm tra điều kiện tiên quyết của tiến trình con x86 trước khi gọi.
+               + Khi thiếu runtime x86, tiến trình `VisionInspectionApp.PlcBridge.exe` lập tức thoát ngầm với mã lỗi `0x80008088`, dẫn đến lỗi timeout kết nối TCP socket `127.0.0.1:39871` chung chung.
+          2. **Kiến Trúc & Giải Pháp Kỹ Thuật Đã Triển Khai**:
+             - **Xây dựng Dịch vụ Quản lý Môi trường Runtime (`IDotnetRuntimeService` & `DotnetRuntimeService`)**:
+               + Kiểm tra đa tầng tính sẵn sàng của runtime x86: Thư mục hệ thống (`%ProgramFiles(x86)%\dotnet\shared\Microsoft.WindowsDesktop.App` & `Microsoft.NETCore.App` version >= 8.0), Registry Windows (`HKLM\SOFTWARE\WOW6432Node\dotnet\Setup\InstalledVersions\x86`), lệnh `dotnet.exe --list-runtimes`, và chế độ self-contained cục bộ.
+               + Cung cấp URL chính thức tải trực tiếp từ Microsoft CDN: `https://aka.ms/dotnet/8.0/windowsdesktop-runtime-win-x86.exe`.
+               + Triển khai phương thức `DownloadX86InstallerAsync` tải stream 64KB kèm tiến trình % và tốc độ MB/s, cùng `RunInstallerAsync` kích hoạt bộ cài Microsoft với cờ `/install /passive /norestart`.
+             - **Thiết kế Hộp Thoại Trực Quan (`DotnetRuntimePromptDialog.xaml`)**:
+               + Thiết kế giao diện Dark theme sang trọng theo chuẩn Design System của hệ thống, viền nổi bật màu hổ phách/cam báo hiệu (`#F59E0B`).
+               + Cung cấp 3 lựa chọn trực quan:
+                 * ⚡ **Tự Động Tải & Cài Đặt (1-Click)**: Tải trực tiếp gói cài đặt từ Microsoft CDN và tự động chạy cài đặt với thanh tiến độ thời gian thực.
+                 * 🌐 **Tải Bằng Trình Duyệt**: Mở trình duyệt trực tiếp đến link tải Microsoft.
+                 * ⏩ **Bỏ Qua**: Dành cho người dùng chưa có nhu cầu sử dụng PLC trên máy trạm này (kèm checkbox *"Không nhắc lại trên máy tính này"*).
+             - **Tích Hợp Chủ Động Vào Vòng Đời Ứng Dụng (`App.xaml.cs` & SplashScreen)**:
+               + Đăng ký `IDotnetRuntimeService` vào DI container.
+               + Trong quá trình khởi động, SplashScreen kiểm tra runtime x86; nếu thiếu và chưa bị tắt nhắc nhở, tự động hiển thị hộp thoại `DotnetRuntimePromptDialog`.
+             - **Bảo Vệ Tại Tầng Driver PLC (`MitsubishiMxComponentDriver.cs`)**:
+               + Kiểm tra `DotnetRuntimeService.IsX86Installed()` khi kết nối PLC Bridge.
+               + Nếu thiếu, phát sinh thông báo lỗi chi tiết, hướng dẫn cụ thể kèm đường dẫn tải về thay vì báo lỗi socket chung chung.
+             - **Cảnh Báo Nhanh Trong Giao Diện Quản Lý PLC (`PlcManagerViewModel.cs` & `PlcManagerWindow.xaml`)**:
+               + Bổ sung thuộc tính `IsMissingDotnetX86` và lệnh `OpenDotnetX86PromptDialogCommand`.
+               + Hiển thị banner cảnh báo màu đỏ-hồng kèm nút `⚡ Cài Đặt .NET x86 Ngay` khi người dùng cấu hình driver Mitsubishi MX Component mà máy chưa có runtime x86.
+             - **Lưu Trữ Bền Vững Tùy Chọn Người Dùng (`GlobalAppSettingsService.cs`)**:
+               + Bổ sung cấu hình `SuppressDotnetX86Prompt` trong `PlcSettings`.
+          3. **Kiểm Thử Toàn Diện**:
+             - Bổ sung bộ test tự động `TestExtractApp/DotnetRuntimeTests.cs` (4 bài kiểm thử):
+               * Kiểm tra hàm phân tích phiên bản `IsVersionAtLeast` và nhận diện runtime x64/x86.
+               * Kiểm tra URL tải trực tiếp Microsoft CDN và trang web chính thức.
+               * Kiểm tra tính bền vững của cấu hình `SuppressDotnetX86Prompt` trong JSON.
+               * Kiểm tra định dạng thông báo lỗi chi tiết của `MitsubishiMxComponentDriver`.
+             - Toàn bộ các bộ kiểm thử tự động của dự án PASSED 100% (exit code 0).
+             - Toàn bộ Solution `VisionInspectionApp.slnx` biên dịch Release **0 Error(s)**.
 

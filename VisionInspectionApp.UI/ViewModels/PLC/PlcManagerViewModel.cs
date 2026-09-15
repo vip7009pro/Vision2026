@@ -7,7 +7,9 @@ using System.Windows.Input;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using VisionInspectionApp.Application.PLC.Services;
+using VisionInspectionApp.Application.Services;
 using VisionInspectionApp.Models;
+using VisionInspectionApp.UI.Services;
 
 namespace VisionInspectionApp.UI.ViewModels.PLC;
 
@@ -155,10 +157,17 @@ public partial class PlcManagerViewModel : ObservableObject
     }
 
     private bool _isRefreshingFilteredTags;
+    private readonly IDotnetRuntimeService _dotnetRuntimeService;
+    private readonly GlobalAppSettingsService? _settingsService;
 
-    public PlcManagerViewModel(IPlcManagerService plcService)
+    public PlcManagerViewModel(
+        IPlcManagerService plcService,
+        IDotnetRuntimeService? dotnetRuntimeService = null,
+        GlobalAppSettingsService? settingsService = null)
     {
         _plcService = plcService ?? throw new ArgumentNullException(nameof(plcService));
+        _dotnetRuntimeService = dotnetRuntimeService ?? VisionInspectionApp.Application.Services.DotnetRuntimeService.Instance;
+        _settingsService = settingsService;
         SelectedPlc = Plcs.FirstOrDefault();
         
         RefreshAvailableTagsAndPlcs();
@@ -179,7 +188,6 @@ public partial class PlcManagerViewModel : ObservableObject
     private void FilteredTags_CollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
     {
         if (_isRefreshingFilteredTags) return;
-
         if (e.Action == NotifyCollectionChangedAction.Remove && e.OldItems != null)
         {
             foreach (PlcTag tag in e.OldItems)
@@ -201,6 +209,17 @@ public partial class PlcManagerViewModel : ObservableObject
     }
 
     public bool IsMxComponent => SelectedPlc != null && SelectedPlc.DriverType == PlcDriverType.MitsubishiMxComponent;
+
+    public bool IsMissingDotnetX86 => IsMxComponent && !_dotnetRuntimeService.IsX86RuntimeInstalled();
+
+    [RelayCommand]
+    public void OpenDotnetX86PromptDialog()
+    {
+        var dlg = new Views.PLC.DotnetRuntimePromptDialog(_dotnetRuntimeService, _settingsService);
+        dlg.Owner = System.Windows.Application.Current?.MainWindow;
+        dlg.ShowDialog();
+        OnPropertyChanged(nameof(IsMissingDotnetX86));
+    }
 
     public bool IsMcProtocol => SelectedPlc == null || SelectedPlc.DriverType == PlcDriverType.Mitsubishi;
 
@@ -233,6 +252,7 @@ public partial class PlcManagerViewModel : ObservableObject
         }
 
         OnPropertyChanged(nameof(IsMxComponent));
+        OnPropertyChanged(nameof(IsMissingDotnetX86));
         OnPropertyChanged(nameof(IsMcProtocol));
         UpdateConnectionCommandStates();
         RefreshFilteredTags();
@@ -243,6 +263,7 @@ public partial class PlcManagerViewModel : ObservableObject
         if (e.PropertyName == nameof(PlcModel.DriverType))
         {
             OnPropertyChanged(nameof(IsMxComponent));
+            OnPropertyChanged(nameof(IsMissingDotnetX86));
             OnPropertyChanged(nameof(IsMcProtocol));
         }
         if (e.PropertyName == nameof(PlcModel.State) || e.PropertyName == nameof(PlcModel.Enabled) || e.PropertyName == nameof(PlcModel.IsManuallyDisconnected))

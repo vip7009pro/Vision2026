@@ -49,5 +49,6 @@ class Program
         DocumentationSystemTests.RunAllTests();
         ChessboardRobustnessTests.RunAllTests();
         LicenseSystemTests.RunAllTests();
+        DotnetRuntimeTests.RunAllTests();
     }
 }

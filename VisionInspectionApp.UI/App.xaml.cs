@@ -117,6 +117,10 @@ public partial class App : System.Windows.Application
                 services.AddTransient<OtaUpdateViewModel>();
                 services.AddTransient<Views.OTA.OtaUpdateDialog>();
 
+                // .NET Runtime Environment & Prerequisite Service
+                services.AddSingleton<VisionInspectionApp.Application.Services.IDotnetRuntimeService, VisionInspectionApp.Application.Services.DotnetRuntimeService>();
+                services.AddTransient<Views.PLC.DotnetRuntimePromptDialog>();
+
 
                 services.AddSingleton<TeachViewModel>();
                 services.AddSingleton<ToolEditorViewModel>();
@@ -143,6 +147,16 @@ public partial class App : System.Windows.Application
 
         var cameraService = _host.Services.GetRequiredService<CameraService>();
         _ = cameraService.StartSavedCameraAsync();
+
+        // Kiểm tra điều kiện tiên quyết: .NET Desktop Runtime (x86) cho module PLC Bridge
+        var dotnetService = _host.Services.GetRequiredService<VisionInspectionApp.Application.Services.IDotnetRuntimeService>();
+        var settingsService = _host.Services.GetRequiredService<GlobalAppSettingsService>();
+        if (!dotnetService.IsX86RuntimeInstalled() && !settingsService.Settings.Plc.SuppressDotnetX86Prompt)
+        {
+            splash.SetProgress(82, "Phát hiện máy tính chưa có .NET Desktop Runtime (x86)...");
+            var promptDlg = new Views.PLC.DotnetRuntimePromptDialog(dotnetService, settingsService);
+            promptDlg.ShowDialog();
+        }
 
         var plcManager = _host.Services.GetRequiredService<Application.PLC.Services.IPlcManagerService>();
         _ = plcManager.AutoConnectStartupAsync();
