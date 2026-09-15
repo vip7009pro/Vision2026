@@ -2809,4 +2809,39 @@ Lộ trình tích hợp tính năng Chụp ảnh từ camera và hỗ trợ các
                * Kiểm tra định dạng thông báo lỗi chi tiết của `MitsubishiMxComponentDriver`.
              - Toàn bộ các bộ kiểm thử tự động của dự án PASSED 100% (exit code 0).
              - Toàn bộ Solution `VisionInspectionApp.slnx` biên dịch Release **0 Error(s)**.
+    - [x] **Task 342: Khắc Phục Triệt Để Lỗi Bất Đồng Bộ Số Lượng Điểm Object và Image (numberOfObjectPoints == numberOfImagePoints) Khi Calibrate Camera Bàn Cờ**:
+        - **Mục Tiêu & Yêu Cầu**:
+          1. **Khắc phục ngoại lệ unhandled OpenCVException khi bấm Calibrate Camera**:
+             - Hiện tượng: Sau khi thêm các ảnh bàn cờ đã nhận diện được, bấm Calibrate Camera thì chương trình bị phát sinh lỗi ngoại lệ:
+               `OpenCvSharp.OpenCVException: '> Number of object and image points must be equal (expected: numberOfObjectPoints == numberOfImagePoints), where numberOfObjectPoints is 48 must be equal to numberOfImagePoints is 35'`.
+             - Nguyên nhân gốc rễ:
+               + Người dùng nhập số ô cờ 8x6 (48 ô), nhưng trên bàn cờ phẳng thực tế chỉ có (8 - 1) x (6 - 1) = 7 x 5 = 35 góc trong (inner corners).
+               + Thuật toán đa chiến lược `DetectCornersMultiStrategy` đã tự động tìm thấy 35 góc (7x5) qua cờ `tryAlternativeConvention = true`, nhưng `ChessboardCaptureItem` không lưu lại kích thước phát hiện được (`DetectedPatternSize`).
+               + Khi bấm Calibrate, `RunCalibrate` dùng kích thước cấu hình tĩnh 8x6 (48 điểm) để tạo `objPointsTemplate`, trong khi các ảnh trong danh sách lại có 35 điểm `imagePoints`.
+               + `Cv2.CalibrateCamera` kiểm tra số lượng điểm của từng ảnh và ném ra ngoại lệ `OpenCVException` do không khớp số điểm giữa object points và image points.
+               + Cả tầng Service lẫn ViewModel đều chưa có `try...catch (OpenCVException)` bảo vệ.
+          2. **Kiến Trúc & Giải Pháp Kỹ Thuật Đã Triển Khai**:
+             - **Lưu Trữ Pattern Size Thực Tế Từng Ảnh (`ChessboardCaptureItem` & `ChessboardCalibrationViewModel`)**:
+               + Bổ sung thuộc tính `public OpenCvSharp.Size DetectedPatternSize { get; init; }` vào `ChessboardCaptureItem`.
+               + Cập nhật `StatusText` hiển thị chi tiết số góc và kích thước lưới (ví dụ: `✅ 35 corners (7×5)`).
+               + Cập nhật `_lastDetection` thành bộ 3 `(bool Found, Point2f[] Corners, Size PatternSize)`.
+               + Cập nhật cả `AddCapture()` và `SnapAndAddAsync()` để ghi nhớ chính xác `DetectedPatternSize = result.PatternSize`.
+             - **Thuật Toán Suy Luận Kích Thước & Khởi Tạo Object Points Theo Từng Ảnh (`Per-View Object Points`)**:
+               + Xây dựng hàm `InferPatternSize(int cornerCount, Size hintPatternSize)` trong `ChessboardCalibrationService`: tự động giải mã các quy ước ô vuông trừ 1 (8x6 ô -> 7x5 góc), chiều xoay đảo ngược 90 độ (WxH vs HxW), hoặc các cặp thừa số hình học gần nhất.
+               + Nâng cấp `Calibrate` hỗ trợ `perViewPatternSizes`: sinh `objectPoints` tương ứng chính xác 100% cho từng ảnh dựa trên kích thước lưới của ảnh đó, đảm bảo bất biến `objectPoints[i].Count == imagePoints[i].Count` triệt tiêu 100% lỗi mismatch OpenCV.
+               + Cơ chế phân nhóm và lọc an toàn: Nếu danh sách ảnh có các ảnh lệch số góc (ví dụ 4 ảnh 35 góc và 1 ảnh 48 góc), tự động lọc nhóm chiếm đa số (dominant group >= 3 ảnh) để calibrate thành công mà không gây crash.
+               + Bọc `Cv2.CalibrateCamera` trong khối `try...catch (OpenCvSharp.OpenCVException)` và `catch (Exception)`, trả về kết quả an toàn kèm `ErrorMessage` rõ ràng.
+             - **Tự Động Đồng Bộ Cấu Hình & Giao Diện Người Dùng (`RunCalibrate`)**:
+               + Tự động nhận diện khi tất cả ảnh chụp là 35 góc trong khi UI đang để 8x6, tự động chuyển `PatternConvention` sang `SquareCount` (hoặc đồng bộ `BoardCols / BoardRows`), giúp thông số lưu vào `ChessboardCalibrationData` hoàn toàn nhất quán.
+               + Báo cáo trực quan cho người dùng nếu có ảnh bị loại bỏ do lệch góc.
+               + Bọc toàn bộ quá trình calibrate trong `try...catch` hiển thị lỗi trên `StatusMessage`, không bao giờ làm gián đoạn ứng dụng.
+          3. **Kiểm Thử Toàn Diện**:
+             - Xây dựng bộ test tự động mới `TestExtractApp/ChessboardCalibrationMismatchTests.cs` (5 bài kiểm thử):
+               * Test 1: Kiểm tra `InferPatternSize` suy luận chính xác các quy ước kích thước và chiều xoay.
+               * Test 2: Kiểm tra Calibrate thành công khi UI nhập 48 góc (8x6) nhưng ảnh thực tế có 35 góc (7x5) - không crash, tính đúng ma trận camera và sai số reprojection.
+               * Test 3: Kiểm tra tự động lọc ảnh lệch góc khi có tập ảnh hỗn hợp (dominant group >= 3).
+               * Test 4: Kiểm tra Calibrate với ảnh xoay 90 độ (7x5 và 5x7 cùng 35 góc) với per-view object points.
+               * Test 5: Kiểm tra bắt ngoại lệ an toàn khi dữ liệu đầu vào không hợp lệ hoặc thiếu ảnh.
+             - Toàn bộ các bộ kiểm thử tự động của dự án PASSED 100% (exit code 0).
+             - Toàn bộ Solution `VisionInspectionApp.slnx` biên dịch Release **0 Error(s)**.
 

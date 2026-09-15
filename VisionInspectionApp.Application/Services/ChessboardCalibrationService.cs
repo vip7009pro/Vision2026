@@ -247,54 +247,220 @@ public static class ChessboardCalibrationService
     }
 
     /// <summary>
+    /// Suy luận kích thước lưới bàn cờ (Width, Height) dựa trên số lượng góc thực tế và gợi ý ban đầu.
+    /// Giúp giải quyết các trường hợp người dùng nhập số ô vuông thay vì số góc trong (ví dụ 8x6 ô cờ -> 7x5 góc),
+    /// hoặc ảnh bị xoay 90 độ (Width và Height bị đảo chiều).
+    /// </summary>
+    public static Size InferPatternSize(int cornerCount, Size hintPatternSize)
+    {
+        if (cornerCount <= 0)
+            return new Size(0, 0);
+
+        int hw = Math.Max(1, hintPatternSize.Width);
+        int hh = Math.Max(1, hintPatternSize.Height);
+
+        // 1. Khớp chính xác với hintPatternSize
+        if (hw * hh == cornerCount)
+            return hintPatternSize;
+
+        // 2. Khớp với chiều xoay đảo ngược (h x w)
+        if (hh * hw == cornerCount)
+            return new Size(hh, hw);
+
+        // 3. Khớp quy ước số ô vuông trừ 1: (hw - 1) x (hh - 1) (ví dụ: 8x6 ô cờ => 7x5 = 35 góc)
+        if (hw > 2 && hh > 2)
+        {
+            if ((hw - 1) * (hh - 1) == cornerCount)
+                return new Size(hw - 1, hh - 1);
+            if ((hh - 1) * (hw - 1) == cornerCount)
+                return new Size(hh - 1, hw - 1);
+        }
+
+        // 4. Khớp quy ước số góc cộng 1: (hw + 1) x (hh + 1)
+        if ((hw + 1) * (hh + 1) == cornerCount)
+            return new Size(hw + 1, hh + 1);
+        if ((hh + 1) * (hw + 1) == cornerCount)
+            return new Size(hh + 1, hw + 1);
+
+        // 5. Kiểm tra nếu chia hết cho (hw - 1) hoặc (hh - 1)
+        if (hw > 2 && cornerCount % (hw - 1) == 0 && (cornerCount / (hw - 1)) >= 2)
+            return new Size(hw - 1, cornerCount / (hw - 1));
+        if (hh > 2 && cornerCount % (hh - 1) == 0 && (cornerCount / (hh - 1)) >= 2)
+            return new Size(cornerCount / (hh - 1), hh - 1);
+
+        // 6. Kiểm tra nếu chia hết cho hw hoặc hh
+        if (hw >= 2 && cornerCount % hw == 0 && (cornerCount / hw) >= 2)
+            return new Size(hw, cornerCount / hw);
+        if (hh >= 2 && cornerCount % hh == 0 && (cornerCount / hh) >= 2)
+            return new Size(cornerCount / hh, hh);
+
+        // 7. Tìm cặp thừa số (w, h) của cornerCount gần nhất với tỉ lệ hw/hh
+        var factorPairs = new List<Size>();
+        for (int w = 2; w * w <= cornerCount; w++)
+        {
+            if (cornerCount % w == 0)
+            {
+                int h = cornerCount / w;
+                factorPairs.Add(new Size(w, h));
+                factorPairs.Add(new Size(h, w));
+            }
+        }
+
+        if (factorPairs.Count > 0)
+        {
+            return factorPairs
+                .OrderBy(p => Math.Abs(p.Width - hw) + Math.Abs(p.Height - hh))
+                .First();
+        }
+
+        return new Size(cornerCount, 1);
+    }
+
+    /// <summary>
     /// Calibrate camera using multiple chessboard images.
-    /// Returns (success, cameraMatrix, distCoeffs, reprojectionError, rvecs, tvecs).
+    /// Returns (success, cameraMatrix, distCoeffs, reprojectionError, pixelsPerMm, errorMessage).
     /// Requires at least 3 images with successfully detected corners.
+    /// Tự động đồng bộ số điểm object points và image points cho từng ảnh, chống lỗi OpenCVException.
     /// </summary>
     public static ChessboardCalibrationResult Calibrate(
         List<Point2f[]> allCorners,
         Size imageSize,
         Size patternSize,
-        double squareSizeMm)
+        double squareSizeMm,
+        IReadOnlyList<Size>? perViewPatternSizes = null)
     {
         if (allCorners is null || allCorners.Count < 3)
         {
-            return new ChessboardCalibrationResult(false, null, null, double.MaxValue, 0);
+            return new ChessboardCalibrationResult(false, null, null, double.MaxValue, 0,
+                "Cần ít nhất 3 ảnh có góc bàn cờ hợp lệ.");
         }
 
-        var objPointsTemplate = GenerateObjectPoints(patternSize, squareSizeMm);
+        if (imageSize.Width <= 0 || imageSize.Height <= 0)
+        {
+            return new ChessboardCalibrationResult(false, null, null, double.MaxValue, 0,
+                "Kích thước ảnh không hợp lệ.");
+        }
 
-        // Build list of object points and image points
+        if (squareSizeMm <= 0)
+        {
+            return new ChessboardCalibrationResult(false, null, null, double.MaxValue, 0,
+                "Kích thước ô cờ (SquareSizeMm) phải lớn hơn 0.");
+        }
+
+        // 1. Phân tích và ghép nối từng ảnh với pattern size tương ứng
+        var candidateViews = new List<(Point2f[] Corners, Size ViewPatternSize)>();
+        for (int i = 0; i < allCorners.Count; i++)
+        {
+            var corners = allCorners[i];
+            if (corners is null || corners.Length < 4)
+                continue;
+
+            Size viewSize;
+            if (perViewPatternSizes is not null && i < perViewPatternSizes.Count &&
+                perViewPatternSizes[i].Width * perViewPatternSizes[i].Height == corners.Length)
+            {
+                viewSize = perViewPatternSizes[i];
+            }
+            else if (patternSize.Width * patternSize.Height == corners.Length)
+            {
+                viewSize = patternSize;
+            }
+            else if (patternSize.Height * patternSize.Width == corners.Length)
+            {
+                viewSize = new Size(patternSize.Height, patternSize.Width);
+            }
+            else
+            {
+                viewSize = InferPatternSize(corners.Length, patternSize);
+            }
+
+            candidateViews.Add((corners, viewSize));
+        }
+
+        if (candidateViews.Count < 3)
+        {
+            return new ChessboardCalibrationResult(false, null, null, double.MaxValue, 0,
+                $"Cần ít nhất 3 ảnh hợp lệ (hiện có {candidateViews.Count}).");
+        }
+
+        // 2. Nhóm theo số lượng góc để chọn nhóm đồng nhất chiếm đa số (dominant group)
+        var groups = candidateViews
+            .GroupBy(v => v.Corners.Length)
+            .OrderByDescending(g => g.Count())
+            .ToList();
+
+        if (groups.Count == 0 || groups[0].Count() < 3)
+        {
+            var summary = string.Join(", ", groups.Select(g => $"{g.Count()} ảnh có {g.Key} góc"));
+            return new ChessboardCalibrationResult(false, null, null, double.MaxValue, 0,
+                $"Số lượng góc bàn cờ không đồng nhất giữa các ảnh ({summary}). Cần ít nhất 3 ảnh có cùng kích thước góc.");
+        }
+
+        var dominantViews = groups[0].ToList();
+        var basePatternSize = dominantViews[0].ViewPatternSize;
+
+        // 3. Xây dựng danh sách object points và image points tương ứng chính xác 100%
         var objectPointsList = new List<IEnumerable<Point3f>>();
         var imagePointsList = new List<IEnumerable<Point2f>>();
+        var validCornersList = new List<Point2f[]>();
 
-        foreach (var corners in allCorners)
+        foreach (var view in dominantViews)
         {
-            objectPointsList.Add(objPointsTemplate);
-            imagePointsList.Add(corners);
+            var pSize = view.ViewPatternSize;
+            // Đảm bảo tuyệt đối pSize khớp với corners.Length
+            if (pSize.Width * pSize.Height != view.Corners.Length)
+            {
+                pSize = InferPatternSize(view.Corners.Length, patternSize);
+            }
+
+            var objPts = GenerateObjectPoints(pSize, squareSizeMm);
+            if (objPts.Count != view.Corners.Length)
+            {
+                // Phòng ngừa tuyệt đối sai lệch điểm
+                continue;
+            }
+
+            objectPointsList.Add(objPts);
+            imagePointsList.Add(view.Corners);
+            validCornersList.Add(view.Corners);
+        }
+
+        if (objectPointsList.Count < 3)
+        {
+            return new ChessboardCalibrationResult(false, null, null, double.MaxValue, 0,
+                "Không đủ ảnh hợp lệ sau khi đồng bộ kích thước lưới bàn cờ.");
         }
 
         var cameraMatrix = new double[3, 3];
         var distCoeffs = new double[5];
 
-        double rpe = Cv2.CalibrateCamera(
-            objectPointsList,
-            imagePointsList,
-            imageSize,
-            cameraMatrix,
-            distCoeffs,
-            out var rvecs,
-            out var tvecs,
-            CalibrationFlags.None);
+        try
+        {
+            double rpe = Cv2.CalibrateCamera(
+                objectPointsList,
+                imagePointsList,
+                imageSize,
+                cameraMatrix,
+                distCoeffs,
+                out var rvecs,
+                out var tvecs,
+                CalibrationFlags.None);
 
-        // Compute pixels per mm from focal length and square size
-        double fx = cameraMatrix[0, 0];
-        double fy = cameraMatrix[1, 1];
+            // Compute pixels per mm from focal length and square size
+            double pxPerMm = ComputePixelsPerMm(validCornersList, basePatternSize, squareSizeMm);
 
-        // Compute average distance between adjacent corners in pixels (more robust px/mm estimate)
-        double pxPerMm = ComputePixelsPerMm(allCorners, patternSize, squareSizeMm);
-
-        return new ChessboardCalibrationResult(true, cameraMatrix, distCoeffs, rpe, pxPerMm);
+            return new ChessboardCalibrationResult(true, cameraMatrix, distCoeffs, rpe, pxPerMm);
+        }
+        catch (OpenCvSharp.OpenCVException cvEx)
+        {
+            return new ChessboardCalibrationResult(false, null, null, double.MaxValue, 0,
+                $"Lỗi OpenCV CalibrateCamera: {cvEx.Message}");
+        }
+        catch (Exception ex)
+        {
+            return new ChessboardCalibrationResult(false, null, null, double.MaxValue, 0,
+                $"Lỗi CalibrateCamera: {ex.Message}");
+        }
     }
 
     /// <summary>
@@ -630,4 +796,6 @@ public sealed record ChessboardCalibrationResult(
     double[,]? CameraMatrix,
     double[]? DistCoeffs,
     double ReprojectionError,
-    double PixelsPerMm);
+    double PixelsPerMm,
+    string? ErrorMessage = null);
+

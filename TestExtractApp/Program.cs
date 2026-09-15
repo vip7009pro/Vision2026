@@ -48,6 +48,7 @@ class Program
         OtaPublisherServiceTests.RunAllTests();
         DocumentationSystemTests.RunAllTests();
         ChessboardRobustnessTests.RunAllTests();
+        ChessboardCalibrationMismatchTests.RunAllTests();
         LicenseSystemTests.RunAllTests();
         DotnetRuntimeTests.RunAllTests();
     }

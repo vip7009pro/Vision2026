@@ -484,6 +484,7 @@ public sealed partial class ChessboardCalibrationViewModel : ObservableObject
                 CornerCount = result.Corners.Length,
                 Thumbnail = thumb,
                 Corners = result.Corners,
+                DetectedPatternSize = result.PatternSize,
                 ImageSize = new OpenCvSharp.Size(mat.Width, mat.Height)
             };
 
@@ -552,7 +553,7 @@ public sealed partial class ChessboardCalibrationViewModel : ObservableObject
     }
 
     // ======== Detect corners ========
-    private (bool, Point2f[]) _lastDetection = (false, Array.Empty<Point2f>());
+    private (bool Found, Point2f[] Corners, OpenCvSharp.Size PatternSize) _lastDetection = (false, Array.Empty<Point2f>(), new OpenCvSharp.Size());
 
     private void DetectAndShowCorners()
     {
@@ -563,7 +564,7 @@ public sealed partial class ChessboardCalibrationViewModel : ObservableObject
     {
         if (matToDetect is null || matToDetect.IsDisposed || matToDetect.Empty())
         {
-            _lastDetection = (false, Array.Empty<Point2f>());
+            _lastDetection = (false, Array.Empty<Point2f>(), new OpenCvSharp.Size());
             StatusMessage = "❌ Không có ảnh.";
             return;
         }
@@ -584,7 +585,7 @@ public sealed partial class ChessboardCalibrationViewModel : ObservableObject
                 tryAlternativeConvention: true);
         });
 
-        _lastDetection = (result.Found, result.Corners);
+        _lastDetection = (result.Found, result.Corners, result.PatternSize);
         OverlayItems.Clear();
 
         if (result.Found && result.Corners.Length > 0)
@@ -605,7 +606,7 @@ public sealed partial class ChessboardCalibrationViewModel : ObservableObject
     {
         if (_currentMat is null || _currentMat.IsDisposed) return;
 
-        var (found, corners) = _lastDetection;
+        var (found, corners, detectedSize) = _lastDetection;
 
         // Create thumbnail
         BitmapSource? thumb = null;
@@ -626,6 +627,7 @@ public sealed partial class ChessboardCalibrationViewModel : ObservableObject
             CornerCount = corners.Length,
             Thumbnail = thumb,
             Corners = found ? corners : null,
+            DetectedPatternSize = found ? detectedSize : new OpenCvSharp.Size(),
             ImageSize = new OpenCvSharp.Size(_currentMat.Width, _currentMat.Height)
         };
 
@@ -658,24 +660,85 @@ public sealed partial class ChessboardCalibrationViewModel : ObservableObject
     // ======== Calibrate ========
     private void RunCalibrate()
     {
-        var validCaptures = Captures.Where(c => c.Found && c.Corners is not null).ToList();
+        var validCaptures = Captures.Where(c => c.Found && c.Corners is not null && c.Corners.Length >= 4).ToList();
         if (validCaptures.Count < 3)
         {
-            StatusMessage = $"❌ Cần ít nhất 3 ảnh có corners (hiện có {validCaptures.Count}).";
+            StatusMessage = $"❌ Cần ít nhất 3 ảnh có corners hợp lệ (hiện có {validCaptures.Count}).";
             return;
         }
 
+        // 1. Phân nhóm theo số lượng góc để kiểm tra tính đồng nhất
+        var groupsByCount = validCaptures.GroupBy(c => c.Corners!.Length).OrderByDescending(g => g.Count()).ToList();
+        int skippedCount = 0;
+
+        if (groupsByCount.Count > 1)
+        {
+            var dominantGroup = groupsByCount[0].ToList();
+            if (dominantGroup.Count < 3)
+            {
+                var summary = string.Join(", ", groupsByCount.Select(g => $"{g.Count()} ảnh có {g.Key} góc"));
+                StatusMessage = $"❌ Số lượng góc bàn cờ không đồng nhất giữa các ảnh ({summary}). Cần ít nhất 3 ảnh có cùng kích thước góc.";
+                return;
+            }
+
+            skippedCount = validCaptures.Count - dominantGroup.Count;
+            validCaptures = dominantGroup;
+        }
+
+        int targetCornerCount = validCaptures[0].Corners!.Length;
+        var detectedSample = validCaptures.FirstOrDefault(c => c.DetectedPatternSize.Width * c.DetectedPatternSize.Height == targetCornerCount)?.DetectedPatternSize;
+
+        // 2. Xác định PatternSize mục tiêu và tự động đồng bộ UI nếu cần
+        OpenCvSharp.Size targetPatternSize;
+        if (InnerCornersX * InnerCornersY == targetCornerCount)
+        {
+            targetPatternSize = new OpenCvSharp.Size(InnerCornersX, InnerCornersY);
+        }
+        else if (detectedSample.HasValue && detectedSample.Value.Width > 1 && detectedSample.Value.Height > 1)
+        {
+            targetPatternSize = detectedSample.Value;
+        }
+        else
+        {
+            targetPatternSize = ChessboardCalibrationService.InferPatternSize(targetCornerCount, new OpenCvSharp.Size(InnerCornersX, InnerCornersY));
+        }
+
+        // Tự động điều chỉnh UI cho khớp quy ước nếu người dùng nhập số ô vuông (vd 8x6 ô vuông => 7x5 góc trong)
+        if (PatternConvention == PatternSizeConvention.InnerCorners && (BoardCols - 1) * (BoardRows - 1) == targetCornerCount)
+        {
+            PatternConvention = PatternSizeConvention.SquareCount;
+        }
+        else if (InnerCornersX != targetPatternSize.Width || InnerCornersY != targetPatternSize.Height)
+        {
+            BoardCols = targetPatternSize.Width;
+            BoardRows = targetPatternSize.Height;
+            PatternConvention = PatternSizeConvention.InnerCorners;
+        }
+
         var allCorners = validCaptures.Select(c => c.Corners!).ToList();
+        var perViewPatternSizes = validCaptures.Select(c => c.DetectedPatternSize).ToList();
         var imgSize = validCaptures.First().ImageSize;
-        var patternSize = new OpenCvSharp.Size(InnerCornersX, InnerCornersY);
 
-        StatusMessage = "⏳ Đang calibrate...";
+        StatusMessage = skippedCount > 0
+            ? $"⏳ Đang calibrate với {validCaptures.Count} ảnh ({targetCornerCount} góc, bỏ qua {skippedCount} ảnh lệch kích thước)..."
+            : "⏳ Đang calibrate camera...";
 
-        var result = ChessboardCalibrationService.Calibrate(allCorners, imgSize, patternSize, SquareSizeMm);
+        ChessboardCalibrationResult result;
+        try
+        {
+            result = ChessboardCalibrationService.Calibrate(allCorners, imgSize, targetPatternSize, SquareSizeMm, perViewPatternSizes);
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = $"❌ Lỗi khi calibrate: {ex.Message}";
+            return;
+        }
 
         if (!result.Success || result.CameraMatrix is null)
         {
-            StatusMessage = "❌ Calibration thất bại. Kiểm tra ảnh và thông số.";
+            StatusMessage = !string.IsNullOrEmpty(result.ErrorMessage)
+                ? $"❌ Calibration thất bại: {result.ErrorMessage}"
+                : "❌ Calibration thất bại. Kiểm tra lại ảnh và thông số.";
             return;
         }
 
@@ -692,6 +755,8 @@ public sealed partial class ChessboardCalibrationViewModel : ObservableObject
             ? string.Join(", ", result.DistCoeffs.Select(d => d.ToString("F6")))
             : string.Empty;
         IsCalibrated = true;
+
+        string skipNotice = skippedCount > 0 ? $" (Đã tự động lọc {skippedCount} ảnh lệch góc)" : string.Empty;
 
         // Save to config or global
         if (_config is not null)
@@ -712,7 +777,7 @@ public sealed partial class ChessboardCalibrationViewModel : ObservableObject
             };
             _config.PixelsPerMm = PixelsPerMm;
             IsDirty = true;
-            StatusMessage = $"✅ Calibration thành công cho Job! Reprojection Error: {ReprojectionError:F4} px | Pixels/mm: {PixelsPerMm:F4}";
+            StatusMessage = $"✅ Calibration thành công cho Job!{skipNotice} Reprojection Error: {ReprojectionError:F4} px | Pixels/mm: {PixelsPerMm:F4}";
         }
         else
         {
@@ -732,7 +797,7 @@ public sealed partial class ChessboardCalibrationViewModel : ObservableObject
             };
             ChessboardCalibrationService.SaveGlobalCalibration(globalCalib);
             IsDirty = true;
-            StatusMessage = $"🌐 Calibration thành công & ĐÃ LƯU TOÀN CỤC! Reprojection Error: {ReprojectionError:F4} px | Pixels/mm: {PixelsPerMm:F4} (Áp dụng cho mọi Job mới/chưa calib).";
+            StatusMessage = $"🌐 Calibration thành công & ĐÃ LƯU TOÀN CỤC!{skipNotice} Reprojection Error: {ReprojectionError:F4} px | Pixels/mm: {PixelsPerMm:F4} (Áp dụng cho mọi Job mới/chưa calib).";
         }
         RefreshCommands();
     }
@@ -817,8 +882,13 @@ public sealed class ChessboardCaptureItem : ObservableObject
     public int CornerCount { get; init; }
     public BitmapSource? Thumbnail { get; init; }
     public Point2f[]? Corners { get; init; }
+    public OpenCvSharp.Size DetectedPatternSize { get; init; }
     public OpenCvSharp.Size ImageSize { get; init; }
 
-    public string StatusText => Found ? $"✅ {CornerCount} corners" : "❌ Not found";
+    public string StatusText => Found
+        ? (DetectedPatternSize.Width > 0 && DetectedPatternSize.Height > 0
+            ? $"✅ {CornerCount} corners ({DetectedPatternSize.Width}×{DetectedPatternSize.Height})"
+            : $"✅ {CornerCount} corners")
+        : "❌ Not found";
     public System.Windows.Media.Brush StatusBrush => Found ? System.Windows.Media.Brushes.LimeGreen : System.Windows.Media.Brushes.OrangeRed;
 }
