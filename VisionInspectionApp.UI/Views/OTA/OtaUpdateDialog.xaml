@@ -313,15 +313,20 @@
                                 </Grid>
 
                                 <!-- Tùy chọn Checkboxes -->
-                                <DockPanel LastChildFill="False" Margin="0,6,0,0">
+                                <WrapPanel Margin="0,6,0,0">
                                     <CheckBox Content="Bắt buộc cập nhật (IsMandatory)"
                                               IsChecked="{Binding PublishIsMandatory, Mode=TwoWay}"
-                                              FontSize="11.5" DockPanel.Dock="Left" Margin="0,0,16,0" />
+                                              FontSize="11.5" Margin="0,0,16,4" />
                                     <CheckBox Content="Tự động cập nhật số Version vào file .csproj"
                                               IsChecked="{Binding PublishAutoUpdateCsproj, Mode=TwoWay}"
-                                              FontWeight="SemiBold" FontSize="11.5" DockPanel.Dock="Left"
+                                              FontWeight="SemiBold" FontSize="11.5" Margin="0,0,16,4"
                                               ToolTip="Tự động sửa thẻ Version trong VisionInspectionApp.UI.csproj" />
-                                </DockPanel>
+                                    <CheckBox Content="Tự động biên dịch dự án (.NET Publish) với phiên bản mới trước khi đóng gói"
+                                              IsChecked="{Binding PublishAutoBuildProject, Mode=TwoWay}"
+                                              FontWeight="SemiBold" FontSize="11.5" Margin="0,0,16,4"
+                                              Foreground="#38BDF8"
+                                              ToolTip="Tự động chạy dotnet publish để biên dịch mã nhị phân với đúng version mới vào thư mục Staging trước khi nén zip, đảm bảo 100% ruột app mang phiên bản mới." />
+                                </WrapPanel>
                             </StackPanel>
                         </GroupBox>
 
@@ -405,7 +410,7 @@
                                     <!-- Nút phát hành -->
                                     <Button Content="🚀 Đóng Gói Zip &amp; Tải Lên Server"
                                             Command="{Binding PackageAndPublishCommand}"
-                                            IsEnabled="{Binding IsPublishing, Converter={StaticResource BoolToVis}, ConverterParameter=Invert}"
+                                            IsEnabled="{Binding IsBusyPublishingOrBuilding, Converter={StaticResource BoolToVis}, ConverterParameter=Invert}"
                                             Background="#2563EB"
                                             BorderBrush="#1D4ED8"
                                             Foreground="White"
@@ -413,12 +418,27 @@
                                             FontSize="12.5"
                                             Padding="18,7"
                                             Height="34"
-                                            DockPanel.Dock="Left" Margin="0,0,10,0" />
+                                            DockPanel.Dock="Left" Margin="0,0,8,0"
+                                            ToolTip="Tự động biên dịch phiên bản mới (nếu bật), nén zip và upload lên server." />
 
-                                    <!-- Nút Hủy phát hành (khi đang chạy) -->
+                                    <!-- Nút Biên dịch độc lập -->
+                                    <Button Content="🔨 Biên Dịch Dự Án Ngay"
+                                            Command="{Binding BuildProjectOnlyCommand}"
+                                            IsEnabled="{Binding IsBusyPublishingOrBuilding, Converter={StaticResource BoolToVis}, ConverterParameter=Invert}"
+                                            Background="#0284C7"
+                                            BorderBrush="#0369A1"
+                                            Foreground="White"
+                                            FontWeight="SemiBold"
+                                            FontSize="12"
+                                            Padding="14,7"
+                                            Height="34"
+                                            DockPanel.Dock="Left" Margin="0,0,8,0"
+                                            ToolTip="Chạy dotnet publish độc lập để kiểm tra và nạp mã nhị phân mới vào thư mục nguồn mà chưa tải lên server." />
+
+                                    <!-- Nút Hủy phát hành / build (khi đang chạy) -->
                                     <Button Content="⏹ Hủy Bỏ"
                                             Command="{Binding CancelPublishCommand}"
-                                            Visibility="{Binding IsPublishing, Converter={StaticResource BoolToVis}}"
+                                            Visibility="{Binding IsBusyPublishingOrBuilding, Converter={StaticResource BoolToVis}}"
                                             Background="#DC2626"
                                             BorderBrush="#B91C1C"
                                             Foreground="White"
@@ -436,8 +456,8 @@
                                                DockPanel.Dock="Right" />
                                 </DockPanel>
 
-                                <!-- ProgressBar khi đang đóng gói/upload -->
-                                <StackPanel Grid.Row="1" Margin="0,8,0,0" Visibility="{Binding IsPublishing, Converter={StaticResource BoolToVis}}">
+                                <!-- ProgressBar khi đang đóng gói/build/upload -->
+                                <StackPanel Grid.Row="1" Margin="0,8,0,0" Visibility="{Binding IsBusyPublishingOrBuilding, Converter={StaticResource BoolToVis}}">
                                     <DockPanel LastChildFill="False" Margin="0,0,0,4">
                                         <TextBlock Text="{Binding PublishProgressText}" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource TextBrush}" DockPanel.Dock="Left" />
                                         <TextBlock Text="{Binding PublishSpeedText}" FontSize="11" FontWeight="Bold" Foreground="#38BDF8" DockPanel.Dock="Right" />

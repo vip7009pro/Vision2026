@@ -29,4 +29,19 @@ public interface IOtaPublisherService
     /// Tải gói .zip và dữ liệu manifest lên máy chủ qua HTTP POST multipart.
     /// </summary>
     Task<OtaPublishResult> PublishToServerAsync(OtaPublishConfig config, string zipFilePath, UpdateManifest manifest, IProgress<UpdateProgressInfo>? progress = null, CancellationToken ct = default);
+
+    /// <summary>
+    /// Tự động biên dịch và xuất bản dự án vào thư mục Staging với số phiên bản xác định trước khi đóng gói zip.
+    /// </summary>
+    Task<(bool Success, string Output, string StagingDir, string? ErrorMessage)> BuildAndStageProjectAsync(
+        string csprojPath,
+        string targetVersion,
+        string stagingDirectory,
+        IProgress<string>? logProgress = null,
+        CancellationToken ct = default);
+
+    /// <summary>
+    /// Đọc thông tin phiên bản nhị phân của tệp Assembly (.dll hoặc .exe).
+    /// </summary>
+    (Version? AssemblyVersion, string? FileVersion, string? ProductVersion) GetBinaryAssemblyVersion(string assemblyFilePath);
 }

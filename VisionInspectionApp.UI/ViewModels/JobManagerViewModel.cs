@@ -68,6 +68,33 @@ public partial class JobManagerViewModel : ObservableObject
     private BitmapSource? _selectedTeachImagePreview;
 
     [ObservableProperty]
+    private bool _isLoadingPreview;
+
+    [ObservableProperty]
+    private double _previewDownloadProgress;
+
+    [ObservableProperty]
+    private string _previewDownloadStatusText = string.Empty;
+
+    [ObservableProperty]
+    private bool _hasPreviewError;
+
+    [ObservableProperty]
+    private string _previewErrorText = string.Empty;
+
+    public bool CanRefreshTeachImage => !IsLoadingPreview;
+    public bool ShowEmptyNotice => SelectedTeachImagePreview == null && !IsLoadingPreview && !HasPreviewError;
+
+    partial void OnIsLoadingPreviewChanged(bool value)
+    {
+        OnPropertyChanged(nameof(CanRefreshTeachImage));
+        OnPropertyChanged(nameof(ShowEmptyNotice));
+    }
+
+    partial void OnHasPreviewErrorChanged(bool value) => OnPropertyChanged(nameof(ShowEmptyNotice));
+    partial void OnSelectedTeachImagePreviewChanged(BitmapSource? value) => OnPropertyChanged(nameof(ShowEmptyNotice));
+
+    [ObservableProperty]
     private bool _isBusy;
 
     [ObservableProperty]
@@ -183,11 +210,18 @@ public partial class JobManagerViewModel : ObservableObject
         if (string.IsNullOrWhiteSpace(teachImagePath))
         {
             SelectedTeachImagePreview = null;
+            IsLoadingPreview = false;
+            HasPreviewError = false;
+            PreviewErrorText = string.Empty;
+            PreviewDownloadStatusText = string.Empty;
             return;
         }
 
         try
         {
+            HasPreviewError = false;
+            PreviewErrorText = string.Empty;
+
             string urlOrPath = teachImagePath.Trim();
 
             // Case 1: Local file
@@ -201,6 +235,10 @@ public partial class JobManagerViewModel : ObservableObject
                     if (currentToken == _previewLoadToken)
                     {
                         SelectedTeachImagePreview = bmp;
+                        IsLoadingPreview = false;
+                        HasPreviewError = false;
+                        PreviewErrorText = string.Empty;
+                        PreviewDownloadStatusText = string.Empty;
                     }
                     return;
                 }
@@ -226,6 +264,10 @@ public partial class JobManagerViewModel : ObservableObject
                     if (currentToken == _previewLoadToken)
                     {
                         SelectedTeachImagePreview = memBmp;
+                        IsLoadingPreview = false;
+                        HasPreviewError = false;
+                        PreviewErrorText = string.Empty;
+                        PreviewDownloadStatusText = string.Empty;
                     }
                     return;
                 }
@@ -244,6 +286,10 @@ public partial class JobManagerViewModel : ObservableObject
                             if (currentToken == _previewLoadToken)
                             {
                                 SelectedTeachImagePreview = bmp;
+                                IsLoadingPreview = false;
+                                HasPreviewError = false;
+                                PreviewErrorText = string.Empty;
+                                PreviewDownloadStatusText = string.Empty;
                             }
                             return;
                         }
@@ -265,8 +311,28 @@ public partial class JobManagerViewModel : ObservableObject
                 catch { }
             }
 
-            // 3. Tải từ Server qua RemoteServerService
-            var (success, data, err) = await _remoteServerService.DownloadFileAsync(fullUrl);
+            // 3. Tải từ Server qua RemoteServerService với báo cáo tiến trình theo thời gian thực
+            if (currentToken == _previewLoadToken)
+            {
+                IsLoadingPreview = true;
+                PreviewDownloadProgress = 0;
+                PreviewDownloadStatusText = "Đang kết nối tới máy chủ...";
+            }
+
+            var progress = new Progress<FileDownloadProgressInfo>(info =>
+            {
+                if (currentToken == _previewLoadToken)
+                {
+                    PreviewDownloadProgress = info.Percentage;
+                    PreviewDownloadStatusText = info.TotalBytes.HasValue && info.TotalBytes.Value > 0
+                        ? $"{info.Percentage:F0}% ({info.BytesDownloaded / (1024.0 * 1024.0):F1} MB / {info.TotalBytes.Value / (1024.0 * 1024.0):F1} MB) • {info.SpeedFormatted}"
+                        : $"Đã tải: {info.BytesDownloaded / (1024.0 * 1024.0):F1} MB • {info.SpeedFormatted}";
+                }
+            });
+
+            // Tăng timeout lên 60s cho ảnh dung lượng lớn
+            var (success, data, err) = await _remoteServerService.DownloadFileAsync(fullUrl, timeoutSeconds: 60, progress: progress);
+
             if (success && data != null && data.Length > 0)
             {
                 try
@@ -284,6 +350,21 @@ public partial class JobManagerViewModel : ObservableObject
                     if (currentToken == _previewLoadToken)
                     {
                         SelectedTeachImagePreview = bmp;
+                        IsLoadingPreview = false;
+                        HasPreviewError = false;
+                        PreviewErrorText = string.Empty;
+                        PreviewDownloadStatusText = string.Empty;
+                    }
+                    return;
+                }
+                else
+                {
+                    if (currentToken == _previewLoadToken)
+                    {
+                        SelectedTeachImagePreview = null;
+                        IsLoadingPreview = false;
+                        HasPreviewError = true;
+                        PreviewErrorText = "Dữ liệu tải về từ máy chủ không phải định dạng ảnh hợp lệ.";
                     }
                     return;
                 }
@@ -292,13 +373,19 @@ public partial class JobManagerViewModel : ObservableObject
             if (currentToken == _previewLoadToken)
             {
                 SelectedTeachImagePreview = null;
+                IsLoadingPreview = false;
+                HasPreviewError = true;
+                PreviewErrorText = !string.IsNullOrWhiteSpace(err) ? err : "Không thể tải ảnh mẫu từ máy chủ.";
             }
         }
-        catch
+        catch (Exception ex)
         {
             if (currentToken == _previewLoadToken)
             {
                 SelectedTeachImagePreview = null;
+                IsLoadingPreview = false;
+                HasPreviewError = true;
+                PreviewErrorText = $"Lỗi: {ex.Message}";
             }
         }
     }
@@ -1058,6 +1145,8 @@ public partial class JobManagerViewModel : ObservableObject
 
     public async Task ExecuteRefreshTeachImageAsync()
     {
+        if (IsLoadingPreview) return;
+
         if (SelectedItem == null || string.IsNullOrWhiteSpace(SelectedItem.TeachImagePath))
         {
             MessageBox.Show("Vui lòng chọn một sản phẩm có ảnh mẫu để làm mới!", "Thông Báo", MessageBoxButton.OK, MessageBoxImage.Warning);

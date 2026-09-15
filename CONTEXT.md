@@ -4257,3 +4257,57 @@
          + `http://14.160.33.94:3006/health` (Public IP NAT): STATUS 200 OK
        - Toàn bộ 14/14 bài kiểm thử bản quyền Enterprise License System PASSED 100%.
        - License Server đang hoạt động ổn định ở chế độ nền.
+
+- **Tự Động Biên Dịch Dự Án (Auto-Build & Stage) Khi Đóng Gói Và Tải Lên Bản Phát Hành OTA Mới (Task 339)**:
+  - **Hiện Tượng & Phản Ánh Người Dùng**:
+    + Trong màn hình Đóng gói và tải lên bản cập nhật OTA (Tab 3), người dùng chỉnh phiên bản mới (ví dụ từ 1.0.0.10 lên 1.0.0.11) nhưng khi upload lên thì lõi nhị phân của app tải về vẫn là 1.0.0.10.
+    + Nguyên nhân: Quá trình đóng gói trước đây chỉ sửa thẻ Version trong file `VisionInspectionApp.UI.csproj` dạng văn bản, không biên dịch lại code và nén trực tiếp thư mục chạy hiện hành (`bin/Release/net8.0-windows`) vốn chứa các file nhị phân cũ. Dẫn đến file `version.json` trên server ghi 1.0.0.11 nhưng ruột file DLL/EXE trong gói zip vẫn là 1.0.0.10, khiến máy trạm sau khi cập nhật bị lặp vô tận thông báo có bản cập nhật mới.
+  - **Giải Pháp Kỹ Thuật Đã Triển Khai**:
+    1. *Cơ Chế Tự Động Biên Dịch Vào Thư Mục Staging Cách Ly (`BuildAndStageProjectAsync`)*:
+       - Trong `IOtaPublisherService` và `OtaPublisherService`: Bổ sung phương thức `BuildAndStageProjectAsync` và `GetBinaryAssemblyVersion`.
+       - Lệnh thực thi: `dotnet publish "<csprojPath>" -c Release -o "<stagingDir>" --no-self-contained -p:Version=<ver> -p:AssemblyVersion=<ver> -p:FileVersion=<ver> -p:InformationalVersion=<ver>`.
+       - MSBuild property injection tiêm trực tiếp số phiên bản vào metadata nhị phân khi biên dịch, đảm bảo 100% file DLL/EXE sinh ra mang đúng version mới.
+       - Thư mục Staging độc lập (`temp_publish/staged_build`) triệt tiêu hoàn toàn lỗi khóa tệp Windows (file locking MSB3027) khi ứng dụng đang chạy.
+       - Ghi nhận và hiển thị nhật ký biên dịch theo thời gian thực (live build streaming log) lên giao diện.
+       - Tự động kiểm tra file `VisionInspectionApp.UI.dll` trong thư mục staging và đọc `AssemblyVersion`/`FileVersion` bằng `GetBinaryAssemblyVersion` khẳng định tính hợp lệ trước khi nén zip.
+       - Tự động nén zip từ thư mục Staging và xóa dọn dẹp thư mục staging sau khi hoàn tất.
+    2. *Kiểm Tra Cảnh Báo Lệch Phiên Bản Khi Tắt Tự Động Build*:
+       - Nếu người dùng tắt tự động biên dịch, hệ thống tự động quét file `VisionInspectionApp.UI.dll` trong thư mục nguồn và bật cảnh báo màu vàng rõ ràng trên nhật ký nếu version nhị phân không khớp với phiên bản phát hành.
+    3. *Cấu Hình Bền Vững & Nút Biên Dịch Độc Lập*:
+       - Bổ sung `PublishAutoBuildProject = true` vào `OtaSettings` (`GlobalAppSettingsService.cs`).
+       - Thêm RelayCommand `BuildProjectOnlyAsync` (`🔨 Biên Dịch Dự Án Ngay`) và thuộc tính `IsBusyPublishingOrBuilding` trong `OtaUpdateViewModel.Publisher.cs`.
+       - Cập nhật giao diện `OtaUpdateDialog.xaml`:
+         + Bổ sung CheckBox `☑ Tự động biên dịch dự án (.NET Publish) với phiên bản mới trước khi đóng gói`.
+         + Bổ sung Nút `🔨 Biên Dịch Dự Án Ngay` bên cạnh nút `🚀 Đóng Gói Zip & Tải Lên Server`.
+    4. *Kiểm Thử & Đảm Bảo Chất Lượng*:
+       - Thêm **Test 6** vào `TestExtractApp/OtaPublisherServiceTests.cs` kiểm tra việc đọc `AssemblyVersion`, xử lý đường dẫn không hợp lệ và luồng staging.
+       - Toàn bộ bài kiểm thử OTA Publisher, OTA Update, License System (14/14 tests) và các test suites khác đều PASSED 100%.
+       - Solution `VisionInspectionApp.slnx` biên dịch Release 0 Error(s).
+
+- **Cải Thiện Trải Nghiệm Tải Ảnh Mẫu Huấn Luyện Từ Xa & Quản Lý Job (Stream Chunking, Real-time Progress, Network Speed & 60s Timeout - Task 340)**:
+  - **Hiện Tượng & Phản Ánh Người Dùng**:
+    + Trong cửa sổ quản lý Job và huấn luyện từ xa, ảnh mẫu huấn luyện (Teaching Image) có dung lượng lớn (5MB - 30MB) từ camera độ phân giải cao tải khá lâu qua mạng.
+    + Timeout của hàm tải ảnh trước đó bị gán cứng 5 giây, dẫn đến việc thường xuyên bị hủy ngang với lỗi `OperationCanceledException` ("Tải tệp từ URL quá thời gian chờ (5s)").
+    + Người dùng không có phản hồi trạng thái: trong suốt quá trình tải chỉ thấy một ô đen trống rỗng, không biết tiến trình tải đến đâu hay ứng dụng đang bị lag/đơ.
+  - **Giải Pháp Kỹ Thuật Đã Triển Khai**:
+    1. *Nâng Cấp Tầng Dịch Vụ Tải Tệp (`IRemoteServerService` & `RemoteServerService`)*:
+       - Bổ sung cấu trúc dữ liệu `FileDownloadProgressInfo` cung cấp: `BytesDownloaded`, `TotalBytes`, `Percentage`, `SpeedBytesPerSec`, `SpeedFormatted` (KB/s, MB/s), `ProgressFormatted` và `StatusText`.
+       - Mở rộng phương thức `DownloadFileAsync(string url, int timeoutSeconds, IProgress<FileDownloadProgressInfo>? progress, CancellationToken cancellationToken)`.
+       - Tăng thời gian chờ mặc định lên 60 giây (hỗ trợ tùy biến theo từng tác vụ).
+       - Đọc dữ liệu dạng stream phân đoạn (chunked 64KB) với `HttpCompletionOption.ResponseHeadersRead`, tính toán tốc độ truyền tải mạng tức thời và debounce cập nhật 100ms.
+       - Bảo toàn 100% tương thích ngược cho các vị trí gọi hiện tại.
+    2. *Nâng Cấp Quản Lý Trạng Thái Trong `JobManagerViewModel`*:
+       - Bổ sung các thuộc tính Observable: `IsLoadingPreview`, `PreviewDownloadProgress`, `PreviewDownloadStatusText`, `HasPreviewError`, `PreviewErrorText`.
+       - Bổ sung các thuộc tính tính toán: `CanRefreshTeachImage` (vô hiệu hóa nút làm mới khi đang tải), `ShowEmptyNotice` (hiển thị thông báo khi không có ảnh và không lỗi).
+       - Nâng cấp `LoadTeachImagePreviewAsync` kết nối trực tiếp với `Progress<FileDownloadProgressInfo>`, lưu cache ổ đĩa/RAM khi thành công và bắt lỗi trực quan khi thất bại.
+       - Thêm guard bảo vệ chặn spam bấm nút làm mới ảnh khi đang nạp ảnh (`if (IsLoadingPreview) return;`).
+    3. *Hiện Đại Hóa Giao Diện Hộp Xem Trước Ảnh (`JobManagerWindow.xaml`)*:
+       - Thiết kế lớp phủ Loading Glassmorphism với màu nền bán trong suốt `#DD0B132B`, icon `📥 Đang Tải Ảnh Mẫu Từ Server...`.
+       - Thanh tiến độ Cyan Neon (`#38BDF8`) mượt mà kết hợp dòng trạng thái chi tiết font Consolas: `% (MB đã tải / Tổng MB) • Tốc độ MB/s`.
+       - Khối thông báo lỗi chuyên nghiệp viền đỏ rực (`#EF4444`) kèm mô tả lỗi và nút bấm `🔄 Thử Tải Lại`.
+       - Placeholder trạng thái trống rỗng tinh tế với icon lớn mờ.
+    4. *Kiểm Thử & Đảm Bảo Chất Lượng*:
+       - Bổ sung `Test_DownloadFileAsync_WithProgressAndConfigurableTimeoutAsync` vào `TestExtractApp/RemoteServerAndJobManagerTests.cs`: kiểm tra stream chunking 256KB, ghi nhận đầy đủ 5 báo cáo tiến trình, tính toán đúng dung lượng và tốc độ, và ngắt kết nối chuẩn xác theo timeout 1s khi máy chủ bị trễ.
+       - Toàn bộ các bộ kiểm thử tự động của dự án PASSED 100% (exit code 0).
+       - Solution `VisionInspectionApp.slnx` biên dịch Release 0 Error(s).
+

@@ -24,6 +24,7 @@ public static class OtaPublisherServiceTests
         TestMockHttpUploadWithCustomServerFolder().GetAwaiter().GetResult();
         TestChunkedHttpUploadWithMultipleChunks().GetAwaiter().GetResult();
         TestEndToEndPublisherToOtaUpdateService().GetAwaiter().GetResult();
+        TestBuildAndStageProjectAsync_And_BinaryVersionVerification().GetAwaiter().GetResult();
 
         Console.WriteLine("=======================================================");
         Console.WriteLine("✅ ALL OTA PUBLISHER SERVICE TESTS PASSED (100%)!");
@@ -424,6 +425,53 @@ public static class OtaPublisherServiceTests
         }
 
         Console.WriteLine($"  -> PASSED: Khớp nối 100% giữa Publisher và OtaUpdateService (Nhận diện bản v4.0.0.0, HasUpdate = True).");
+    }
+
+    private static async Task TestBuildAndStageProjectAsync_And_BinaryVersionVerification()
+    {
+        Console.WriteLine("--- Test 6: Kiểm tra BuildAndStageProjectAsync & Nhận Diện Binary Version ---");
+
+        var publisher = new OtaPublisherService();
+
+        // 1. Kiểm tra đọc version của file không tồn tại
+        var nonExistentVer = publisher.GetBinaryAssemblyVersion("C:\\non_existent_folder\\fake.dll");
+        if (nonExistentVer.AssemblyVersion != null || nonExistentVer.FileVersion != null)
+        {
+            throw new Exception("File không tồn tại nhưng GetBinaryAssemblyVersion lại trả về version khác null.");
+        }
+
+        // 2. Kiểm tra đọc version của DLL hiện có
+        string baseDir = AppDomain.CurrentDomain.BaseDirectory;
+        string currentDll = Path.Combine(baseDir, "VisionInspectionApp.Application.dll");
+        if (!File.Exists(currentDll))
+        {
+            currentDll = Path.Combine(baseDir, "TestExtractApp.dll");
+        }
+
+        if (File.Exists(currentDll))
+        {
+            var liveVer = publisher.GetBinaryAssemblyVersion(currentDll);
+            if (liveVer.AssemblyVersion == null)
+            {
+                throw new Exception($"Không đọc được AssemblyVersion từ tệp DLL hợp lệ: {currentDll}");
+            }
+            Console.WriteLine($"  -> Đã đọc AssemblyVersion thành công: {liveVer.AssemblyVersion}, FileVersion: {liveVer.FileVersion}");
+        }
+
+        // 3. Kiểm tra BuildAndStageProjectAsync với file csproj không tồn tại
+        string fakeCsproj = Path.Combine(Path.GetTempPath(), "non_existent.csproj");
+        string fakeStaging = Path.Combine(Path.GetTempPath(), "fake_staging_" + Guid.NewGuid().ToString("N"));
+        var failResult = await publisher.BuildAndStageProjectAsync(fakeCsproj, "2.0.0.1", fakeStaging);
+        if (failResult.Success)
+        {
+            throw new Exception("BuildAndStageProjectAsync phải trả về Success = false khi csproj không tồn tại.");
+        }
+        if (string.IsNullOrWhiteSpace(failResult.ErrorMessage))
+        {
+            throw new Exception("ErrorMessage phải có nội dung mô tả lỗi khi csproj không tồn tại.");
+        }
+
+        Console.WriteLine($"  -> PASSED: Cơ chế kiểm tra tính hợp lệ và đọc Binary Assembly Version hoạt động chính xác 100%.");
     }
 
     private static string ExtractMultipartField(string body, string fieldName)

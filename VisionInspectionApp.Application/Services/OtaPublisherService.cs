@@ -568,6 +568,181 @@ public class OtaPublisherService : IOtaPublisherService
         }
     }
 
+    public async Task<(bool Success, string Output, string StagingDir, string? ErrorMessage)> BuildAndStageProjectAsync(
+        string csprojPath,
+        string targetVersion,
+        string stagingDirectory,
+        IProgress<string>? logProgress = null,
+        CancellationToken ct = default)
+    {
+        if (!File.Exists(csprojPath))
+        {
+            return (false, "", stagingDirectory, $"Không tìm thấy tệp dự án .csproj: '{csprojPath}'");
+        }
+
+        try
+        {
+            // Đảm bảo thư mục Staging sạch sẽ
+            if (Directory.Exists(stagingDirectory))
+            {
+                try
+                {
+                    Directory.Delete(stagingDirectory, true);
+                }
+                catch (Exception ex)
+                {
+                    logProgress?.Report($"⚠️ Không thể xóa sạch thư mục staging cũ: {ex.Message}");
+                }
+            }
+            Directory.CreateDirectory(stagingDirectory);
+
+            logProgress?.Report($"🔨 Bắt đầu thực thi: dotnet publish \"{Path.GetFileName(csprojPath)}\" với phiên bản v{targetVersion}...");
+
+            var outputBuilder = new StringBuilder();
+            var errorBuilder = new StringBuilder();
+
+            // Cấu hình lệnh dotnet publish với tham số MSBuild ghi đè phiên bản trực tiếp
+            string args = $"publish \"{csprojPath}\" -c Release -o \"{stagingDirectory}\" --no-self-contained " +
+                          $"-p:Version={targetVersion} " +
+                          $"-p:AssemblyVersion={targetVersion} " +
+                          $"-p:FileVersion={targetVersion} " +
+                          $"-p:InformationalVersion={targetVersion}";
+
+            var psi = new ProcessStartInfo
+            {
+                FileName = "dotnet",
+                Arguments = args,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                CreateNoWindow = true,
+                StandardOutputEncoding = Encoding.UTF8,
+                StandardErrorEncoding = Encoding.UTF8
+            };
+
+            using var process = new Process { StartInfo = psi };
+
+            process.OutputDataReceived += (_, e) =>
+            {
+                if (!string.IsNullOrEmpty(e.Data))
+                {
+                    lock (outputBuilder)
+                    {
+                        outputBuilder.AppendLine(e.Data);
+                    }
+                    logProgress?.Report(e.Data);
+                }
+            };
+
+            process.ErrorDataReceived += (_, e) =>
+            {
+                if (!string.IsNullOrEmpty(e.Data))
+                {
+                    lock (errorBuilder)
+                    {
+                        errorBuilder.AppendLine(e.Data);
+                    }
+                    logProgress?.Report($"[STDERR] {e.Data}");
+                }
+            };
+
+            process.Start();
+            process.BeginOutputReadLine();
+            process.BeginErrorReadLine();
+
+            using (ct.Register(() =>
+            {
+                try
+                {
+                    if (!process.HasExited)
+                    {
+                        process.Kill(true);
+                    }
+                }
+                catch { }
+            }))
+            {
+                await process.WaitForExitAsync(ct).ConfigureAwait(false);
+            }
+
+            string allOutput = outputBuilder.ToString();
+            string allErrors = errorBuilder.ToString();
+
+            if (process.ExitCode != 0)
+            {
+                string errMsg = $"Lệnh 'dotnet publish' thất bại với mã thoát {process.ExitCode}. {allErrors.Trim()}";
+                logProgress?.Report($"❌ {errMsg}");
+                return (false, allOutput, stagingDirectory, errMsg);
+            }
+
+            // Kiểm tra tệp thực thi chính đã được sinh ra chưa
+            string mainDll = Path.Combine(stagingDirectory, "VisionInspectionApp.UI.dll");
+            if (!File.Exists(mainDll))
+            {
+                // Thử tìm bất kỳ file DLL trùng tên csproj
+                string projName = Path.GetFileNameWithoutExtension(csprojPath);
+                mainDll = Path.Combine(stagingDirectory, $"{projName}.dll");
+            }
+
+            if (File.Exists(mainDll))
+            {
+                var binVer = GetBinaryAssemblyVersion(mainDll);
+                logProgress?.Report($"  ✓ Đã sinh mã nhị phân thành công: {Path.GetFileName(mainDll)}");
+                logProgress?.Report($"  ✓ Phiên bản nhị phân thực tế: AssemblyVersion={binVer.AssemblyVersion}, FileVersion={binVer.FileVersion}");
+
+                if (binVer.AssemblyVersion != null && !string.Equals(binVer.AssemblyVersion.ToString(), targetVersion, StringComparison.OrdinalIgnoreCase))
+                {
+                    logProgress?.Report($"  ⚠️ Lưu ý: AssemblyVersion ({binVer.AssemblyVersion}) khác định dạng với targetVersion ({targetVersion})");
+                }
+            }
+            else
+            {
+                logProgress?.Report($"  ⚠️ Cảnh báo: Không tìm thấy file DLL chính trong thư mục staging.");
+            }
+
+            logProgress?.Report($"✅ Biên dịch và xuất bản vào thư mục Staging thành công!");
+            return (true, allOutput, stagingDirectory, null);
+        }
+        catch (OperationCanceledException)
+        {
+            logProgress?.Report("⚠️ Tiến trình biên dịch đã bị hủy bỏ bởi người dùng.");
+            return (false, "", stagingDirectory, "Tiến trình biên dịch bị hủy.");
+        }
+        catch (Exception ex)
+        {
+            string errMsg = $"Ngoại lệ khi thực thi dotnet publish: {ex.Message}";
+            logProgress?.Report($"❌ {errMsg}");
+            return (false, "", stagingDirectory, errMsg);
+        }
+    }
+
+    public (Version? AssemblyVersion, string? FileVersion, string? ProductVersion) GetBinaryAssemblyVersion(string assemblyFilePath)
+    {
+        if (!File.Exists(assemblyFilePath))
+            return (null, null, null);
+
+        Version? asmVer = null;
+        string? fileVer = null;
+        string? prodVer = null;
+
+        try
+        {
+            var fvi = FileVersionInfo.GetVersionInfo(assemblyFilePath);
+            fileVer = fvi.FileVersion;
+            prodVer = fvi.ProductVersion;
+        }
+        catch { }
+
+        try
+        {
+            var asmName = System.Reflection.AssemblyName.GetAssemblyName(assemblyFilePath);
+            asmVer = asmName.Version;
+        }
+        catch { }
+
+        return (asmVer, fileVer, prodVer);
+    }
+
     /// <summary>
     /// Lớp StreamContent tùy biến cho phép báo cáo tiến trình upload và tốc độ mạng.
     /// </summary>

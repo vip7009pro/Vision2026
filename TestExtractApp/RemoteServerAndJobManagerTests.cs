@@ -29,6 +29,7 @@ public static class RemoteServerAndJobManagerTests
         Test_TeachImageCache_And_OpenJobFromListLogic().GetAwaiter().GetResult();
         Test_JobManagerOpenJob_LabelIdRequirementAndNoDbRequery();
         Test_SanitizeIdentifier_And_UploadJobWithProductNameAsync().GetAwaiter().GetResult();
+        Test_DownloadFileAsync_WithProgressAndConfigurableTimeoutAsync().GetAwaiter().GetResult();
 
         Console.WriteLine("✅ ALL REMOTE SERVER & JOB MANAGER TESTS PASSED!");
         Console.WriteLine("=================================================\n");
@@ -681,4 +682,116 @@ public static class RemoteServerAndJobManagerTests
         Console.WriteLine($"  ✓ UploadJobAsync with ProductName successfully verified: {relPath}");
         Console.WriteLine($"  ✓ Multipart payload contained product_code and product_name correctly.");
     }
+
+    private static async Task Test_DownloadFileAsync_WithProgressAndConfigurableTimeoutAsync()
+    {
+        Console.WriteLine("▶ Running Test_DownloadFileAsync_WithProgressAndConfigurableTimeoutAsync...");
+        int port = 19584;
+        string prefix = $"http://127.0.0.1:{port}/";
+        using var listener = new HttpListener();
+        listener.Prefixes.Add(prefix);
+        listener.Start();
+
+        var serverTask = Task.Run(async () =>
+        {
+            for (int i = 0; i < 2; i++)
+            {
+                var context = await listener.GetContextAsync();
+                var req = context.Request;
+                var resp = context.Response;
+
+                if (req.Url?.AbsolutePath.Contains("chunked_large_image.png") == true)
+                {
+                    int totalSize = 256 * 1024; // 256 KB
+                    byte[] payload = new byte[totalSize];
+                    for (int b = 0; b < totalSize; b++) payload[b] = (byte)(b % 256);
+
+                    resp.ContentType = "image/png";
+                    resp.ContentLength64 = totalSize;
+
+                    // Send in 4 chunks with small delay
+                    int chunkSize = 64 * 1024;
+                    for (int offset = 0; offset < totalSize; offset += chunkSize)
+                    {
+                        await resp.OutputStream.WriteAsync(payload, offset, chunkSize);
+                        await resp.OutputStream.FlushAsync();
+                        await Task.Delay(120);
+                    }
+                    resp.Close();
+                }
+                else if (req.Url?.AbsolutePath.Contains("hang_timeout") == true)
+                {
+                    // Delay longer than timeout
+                    await Task.Delay(3000);
+                    resp.StatusCode = 200;
+                    resp.Close();
+                }
+                else
+                {
+                    resp.StatusCode = 404;
+                    resp.Close();
+                }
+            }
+        });
+
+        var service = new RemoteServerService();
+
+        // 1. Kiểm tra tải tệp với IProgress theo dõi % và tốc độ MB/s
+        var progressReports = new System.Collections.Generic.List<FileDownloadProgressInfo>();
+        var progress = new Progress<FileDownloadProgressInfo>(info =>
+        {
+            lock (progressReports)
+            {
+                progressReports.Add(info);
+            }
+        });
+
+        string testUrl = $"{prefix}chunked_large_image.png";
+        var (ok, data, err) = await service.DownloadFileAsync(testUrl, timeoutSeconds: 15, progress: progress);
+
+        if (!ok || data == null)
+            throw new Exception($"DownloadFileAsync with progress failed: {err}");
+
+        if (data.Length != 256 * 1024)
+            throw new Exception($"Downloaded byte length mismatch: expected 262144, got {data.Length}");
+
+        // Chờ các Progress event dispatch xong
+        await Task.Delay(100);
+
+        lock (progressReports)
+        {
+            if (progressReports.Count < 2)
+                throw new Exception($"Expected multiple progress reports, got {progressReports.Count}");
+
+            var finalReport = progressReports[^1];
+            if (Math.Abs(finalReport.Percentage - 100.0) > 0.01)
+                throw new Exception($"Final progress percentage mismatch: {finalReport.Percentage}");
+
+            if (string.IsNullOrEmpty(finalReport.ProgressFormatted))
+                throw new Exception("ProgressFormatted was empty.");
+
+            Console.WriteLine($"  ✓ Downloaded 256KB with {progressReports.Count} progress notifications.");
+            Console.WriteLine($"  ✓ Final report: {finalReport.ProgressFormatted}, Speed: {finalReport.SpeedFormatted}");
+        }
+
+        // 2. Kiểm tra timeout có thể cấu hình (ví dụ 1 giây)
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        var (timeoutOk, timeoutData, timeoutErr) = await service.DownloadFileAsync($"{prefix}hang_timeout", timeoutSeconds: 1);
+        sw.Stop();
+
+        if (timeoutOk)
+            throw new Exception("Expected timeout failure, but operation reported success!");
+
+        if (!timeoutErr.Contains("quá thời gian chờ (1s)"))
+            throw new Exception($"Expected timeout message containing '(1s)', got: {timeoutErr}");
+
+        if (sw.ElapsedMilliseconds > 3000)
+            throw new Exception($"Timeout took too long: {sw.ElapsedMilliseconds}ms (expected ~1000ms)");
+
+        Console.WriteLine($"  ✓ Configurable timeout (1s) correctly triggered in {sw.ElapsedMilliseconds}ms with message: {timeoutErr}");
+
+        await serverTask;
+        listener.Stop();
+    }
 }
+

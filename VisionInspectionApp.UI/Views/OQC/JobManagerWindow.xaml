@@ -321,6 +321,7 @@
                         <DockPanel Margin="0,0,0,8">
                             <TextBlock Text="🖼️ Ảnh Mẫu (Teaching Image Preview)" FontWeight="Bold" FontSize="13" Foreground="{DynamicResource TextBrush}" VerticalAlignment="Center" />
                             <Button Command="{Binding RefreshTeachImageCommand}"
+                                    IsEnabled="{Binding CanRefreshTeachImage}"
                                     DockPanel.Dock="Right" HorizontalAlignment="Right"
                                     Padding="8,3" Height="26" FontSize="11" Cursor="Hand"
                                     ToolTip="Tải lại ảnh mẫu mới nhất từ Server (bỏ qua cache)">
@@ -332,14 +333,54 @@
                         </DockPanel>
 
                         <!-- Image Preview Box -->
-                        <Border Background="#1E1E1E" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="4" Height="240" Margin="0,0,0,10">
+                        <Border Background="#0F172A" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="6" Height="250" Margin="0,0,0,10" ClipToBounds="True">
                             <Grid>
+                                <!-- Ảnh xem trước chính -->
                                 <Image Source="{Binding SelectedTeachImagePreview}" Stretch="Uniform" HorizontalAlignment="Center" VerticalAlignment="Center" />
-                                
-                                <!-- Empty Notice -->
-                                <TextBlock Text="Chưa có ảnh mẫu xem trước"
-                                           Foreground="#888888" FontSize="12" HorizontalAlignment="Center" VerticalAlignment="Center"
-                                           Visibility="{Binding SelectedTeachImagePreview, Converter={StaticResource BoolToVis}, ConverterParameter=invert}" />
+
+                                <!-- Empty Notice (Khi không có ảnh và không đang tải) -->
+                                <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"
+                                            Visibility="{Binding ShowEmptyNotice, Converter={StaticResource BoolToVis}}">
+                                    <TextBlock Text="🖼️" FontSize="30" HorizontalAlignment="Center" Opacity="0.4" Margin="0,0,0,6" />
+                                    <TextBlock Text="Chưa có ảnh mẫu xem trước" Foreground="{DynamicResource TextMutedBrush}" FontSize="12" HorizontalAlignment="Center" />
+                                </StackPanel>
+
+                                <!-- Lỗi Tải Ảnh (Nếu tải thất bại hoặc timeout) -->
+                                <Border Background="#2D1515" BorderBrush="#EF4444" BorderThickness="1" CornerRadius="6" Margin="14" Padding="12"
+                                        HorizontalAlignment="Center" VerticalAlignment="Center" MaxWidth="300"
+                                        Visibility="{Binding HasPreviewError, Converter={StaticResource BoolToVis}}">
+                                    <StackPanel HorizontalAlignment="Center">
+                                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,0,0,4">
+                                            <TextBlock Text="⚠️ " FontSize="12" VerticalAlignment="Center" />
+                                            <TextBlock Text="TẢI ẢNH MẪU THẤT BẠI" Foreground="#F87171" FontWeight="Bold" FontSize="11.5" VerticalAlignment="Center" />
+                                        </StackPanel>
+                                        <TextBlock Text="{Binding PreviewErrorText}" Foreground="#FCA5A5" FontSize="10.5" TextWrapping="Wrap" TextAlignment="Center" Margin="0,0,0,8" />
+                                        <Button Command="{Binding RefreshTeachImageCommand}" Content="🔄 Thử Tải Lại"
+                                                Background="#DC2626" Foreground="White" FontWeight="SemiBold" FontSize="11" Padding="12,4" Height="26" HorizontalAlignment="Center" Cursor="Hand" />
+                                    </StackPanel>
+                                </Border>
+
+                                <!-- Loading Overlay (Khi đang tải ảnh từ server) -->
+                                <Border Background="#DD0B132B" Padding="16" Visibility="{Binding IsLoadingPreview, Converter={StaticResource BoolToVis}}">
+                                    <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Width="280">
+                                        <!-- Tiêu đề & Icon tải -->
+                                        <DockPanel LastChildFill="False" Margin="0,0,0,8">
+                                            <StackPanel Orientation="Horizontal" DockPanel.Dock="Left">
+                                                <TextBlock Text="📥 " FontSize="13" VerticalAlignment="Center" />
+                                                <TextBlock Text="Đang Tải Ảnh Mẫu Từ Server..." Foreground="#38BDF8" FontWeight="Bold" FontSize="12" VerticalAlignment="Center" />
+                                            </StackPanel>
+                                        </DockPanel>
+
+                                        <!-- ProgressBar tiến độ tải -->
+                                        <ProgressBar Height="8" Minimum="0" Maximum="100" Value="{Binding PreviewDownloadProgress}"
+                                                     Foreground="#38BDF8" Background="#1E293B" BorderBrush="#334155" Margin="0,0,0,6" />
+
+                                        <!-- Text thông số: Dung lượng & Tốc độ mạng MB/s -->
+                                        <TextBlock Text="{Binding PreviewDownloadStatusText}" Foreground="#E2E8F0" FontSize="11"
+                                                   FontFamily="Consolas, Cascadia Code, Segoe UI"
+                                                   HorizontalAlignment="Center" TextAlignment="Center" TextWrapping="Wrap" />
+                                    </StackPanel>
+                                </Border>
                             </Grid>
                         </Border>
 

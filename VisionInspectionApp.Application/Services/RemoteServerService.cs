@@ -257,30 +257,111 @@ public class RemoteServerService : IRemoteServerService, IDisposable
         }
     }
 
-    public async Task<(bool Success, byte[]? Data, string ErrorMessage)> DownloadFileAsync(string url, CancellationToken cancellationToken = default)
+    public Task<(bool Success, byte[]? Data, string ErrorMessage)> DownloadFileAsync(string url, CancellationToken cancellationToken = default)
+    {
+        return DownloadFileAsync(url, timeoutSeconds: 60, progress: null, cancellationToken: cancellationToken);
+    }
+
+    public async Task<(bool Success, byte[]? Data, string ErrorMessage)> DownloadFileAsync(
+        string url,
+        int timeoutSeconds,
+        IProgress<FileDownloadProgressInfo>? progress = null,
+        CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(url))
         {
             return (false, null, "URL tải về rỗng.");
         }
 
+        int effectiveTimeout = timeoutSeconds > 0 ? timeoutSeconds : 60;
+
         try
         {
             using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-            cts.CancelAfter(TimeSpan.FromSeconds(5));
+            cts.CancelAfter(TimeSpan.FromSeconds(effectiveTimeout));
 
-            using var response = await _httpClient.GetAsync(url.Trim(), cts.Token).ConfigureAwait(false);
+            using var response = await _httpClient.GetAsync(
+                url.Trim(),
+                HttpCompletionOption.ResponseHeadersRead,
+                cts.Token).ConfigureAwait(false);
+
             if (!response.IsSuccessStatusCode)
             {
                 return (false, null, $"HTTP {(int)response.StatusCode}: {response.ReasonPhrase}");
             }
 
-            byte[] bytes = await response.Content.ReadAsByteArrayAsync(cts.Token).ConfigureAwait(false);
-            return (true, bytes, "");
+            long? totalBytes = response.Content.Headers.ContentLength;
+            using var stream = await response.Content.ReadAsStreamAsync(cts.Token).ConfigureAwait(false);
+            using var memoryStream = new MemoryStream();
+
+            byte[] buffer = new byte[65536]; // 64 KB buffer
+            int bytesRead;
+            long totalDownloaded = 0;
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+            long lastReportTime = 0;
+            long lastReportBytes = 0;
+
+            // Báo cáo ban đầu
+            progress?.Report(new FileDownloadProgressInfo
+            {
+                BytesDownloaded = 0,
+                TotalBytes = totalBytes,
+                Percentage = 0,
+                SpeedBytesPerSec = 0,
+                StatusText = totalBytes.HasValue && totalBytes.Value > 0
+                    ? $"0% (0.0 MB / {totalBytes.Value / (1024.0 * 1024.0):F1} MB)"
+                    : "Đang tải dữ liệu..."
+            });
+
+            while ((bytesRead = await stream.ReadAsync(buffer.AsMemory(0, buffer.Length), cts.Token).ConfigureAwait(false)) > 0)
+            {
+                await memoryStream.WriteAsync(buffer.AsMemory(0, bytesRead), cts.Token).ConfigureAwait(false);
+                totalDownloaded += bytesRead;
+
+                long elapsed = sw.ElapsedMilliseconds;
+                if (elapsed - lastReportTime >= 100 || (totalBytes.HasValue && totalDownloaded >= totalBytes.Value))
+                {
+                    double deltaSec = (elapsed - lastReportTime) / 1000.0;
+                    double speed = deltaSec > 0 ? (totalDownloaded - lastReportBytes) / deltaSec : 0;
+                    double pct = totalBytes.HasValue && totalBytes.Value > 0
+                        ? Math.Min(100.0, (double)totalDownloaded / totalBytes.Value * 100.0)
+                        : 0;
+
+                    progress?.Report(new FileDownloadProgressInfo
+                    {
+                        BytesDownloaded = totalDownloaded,
+                        TotalBytes = totalBytes,
+                        Percentage = pct,
+                        SpeedBytesPerSec = speed,
+                        StatusText = totalBytes.HasValue && totalBytes.Value > 0
+                            ? $"{pct:F0}% ({totalDownloaded / (1024.0 * 1024.0):F1} MB / {totalBytes.Value / (1024.0 * 1024.0):F1} MB)"
+                            : $"Đã tải: {totalDownloaded / (1024.0 * 1024.0):F1} MB"
+                    });
+
+                    lastReportTime = elapsed;
+                    lastReportBytes = totalDownloaded;
+                }
+            }
+
+            // Báo cáo hoàn tất
+            progress?.Report(new FileDownloadProgressInfo
+            {
+                BytesDownloaded = totalDownloaded,
+                TotalBytes = totalBytes ?? totalDownloaded,
+                Percentage = 100.0,
+                SpeedBytesPerSec = 0,
+                StatusText = $"Hoàn tất: {totalDownloaded / (1024.0 * 1024.0):F2} MB"
+            });
+
+            return (true, memoryStream.ToArray(), "");
         }
         catch (OperationCanceledException)
         {
-            return (false, null, $"Tải tệp từ URL quá thời gian chờ (5s): {url}");
+            if (cancellationToken.IsCancellationRequested)
+            {
+                return (false, null, "Quá trình tải tệp đã bị hủy bởi người dùng.");
+            }
+            return (false, null, $"Tải tệp từ URL quá thời gian chờ ({effectiveTimeout}s): {url}");
         }
         catch (Exception ex)
         {

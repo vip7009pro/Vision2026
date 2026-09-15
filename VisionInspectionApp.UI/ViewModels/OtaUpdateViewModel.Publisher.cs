@@ -44,7 +44,18 @@ public partial class OtaUpdateViewModel
     private bool _publishAutoUpdateCsproj = true;
 
     [ObservableProperty]
+    private bool _publishAutoBuildProject = true;
+
+    [ObservableProperty]
+    private bool _isBuildingProject = false;
+
+    [ObservableProperty]
     private bool _isPublishing = false;
+
+    public bool IsBusyPublishingOrBuilding => IsPublishing || IsBuildingProject;
+
+    partial void OnIsPublishingChanged(bool value) => OnPropertyChanged(nameof(IsBusyPublishingOrBuilding));
+    partial void OnIsBuildingProjectChanged(bool value) => OnPropertyChanged(nameof(IsBusyPublishingOrBuilding));
 
     [ObservableProperty]
     private double _publishProgress = 0.0;
@@ -74,6 +85,7 @@ public partial class OtaUpdateViewModel
             PublishServerStorageFolder = otaCfg.PublishServerStorageFolder;
         PublishApiToken = otaCfg.PublishApiToken;
         PublishAutoUpdateCsproj = otaCfg.PublishAutoUpdateCsproj;
+        PublishAutoBuildProject = otaCfg.PublishAutoBuildProject;
         if (!string.IsNullOrWhiteSpace(otaCfg.PublishReleaseChannel))
             PublishReleaseChannel = otaCfg.PublishReleaseChannel;
 
@@ -261,16 +273,18 @@ public partial class OtaUpdateViewModel
             _settingsService.Settings.Ota.PublishApiToken = PublishApiToken;
             _settingsService.Settings.Ota.PublishSourceDirectory = PublishSourceDirectory;
             _settingsService.Settings.Ota.PublishAutoUpdateCsproj = PublishAutoUpdateCsproj;
+            _settingsService.Settings.Ota.PublishAutoBuildProject = PublishAutoBuildProject;
             _settingsService.Settings.Ota.PublishReleaseChannel = PublishReleaseChannel;
             _settingsService.Save();
 
             AppendPublishLog($"=======================================================");
             AppendPublishLog($"🚀 BẮT ĐẦU ĐÓNG GÓI & PHÁT HÀNH BẢN CẬP NHẬT v{PublishNewVersion}");
             AppendPublishLog($"=======================================================");
-            AppendPublishLog($"📁 Thư mục nguồn: {PublishSourceDirectory}");
+            AppendPublishLog($"📁 Thư mục nguồn ban đầu: {PublishSourceDirectory}");
             AppendPublishLog($"🏢 Máy chủ upload: {PublishServerUrl}");
             AppendPublishLog($"📂 Thư mục trên server: {PublishServerStorageFolder}");
             AppendPublishLog($"🏷️ Kênh phát hành: {PublishReleaseChannel} | Bắt buộc: {PublishIsMandatory}");
+            AppendPublishLog($"⚙️ Tùy chọn: AutoUpdateCsproj={PublishAutoUpdateCsproj}, AutoBuildProject={PublishAutoBuildProject}");
 
             // BƯỚC 1: Tự động cập nhật phiên bản vào file .csproj (nếu được bật)
             if (PublishAutoUpdateCsproj && !string.IsNullOrWhiteSpace(_detectedCsprojPath) && File.Exists(_detectedCsprojPath))
@@ -283,16 +297,63 @@ public partial class OtaUpdateViewModel
                 }
             }
 
+            string actualSourceDirectory = PublishSourceDirectory;
+            string? stagedBuildDir = null;
+
+            // BƯỚC 1.1: Tự động biên dịch dự án (.NET Publish) với phiên bản mới vào thư mục Staging
+            if (PublishAutoBuildProject && !string.IsNullOrWhiteSpace(_detectedCsprojPath) && File.Exists(_detectedCsprojPath))
+            {
+                stagedBuildDir = Path.Combine(tempZipDir, "staged_build");
+                PublishStatusMessage = $"Đang biên dịch dự án với phiên bản v{PublishNewVersion}...";
+                PublishProgress = 5;
+                PublishProgressText = "Đang biên dịch dự án (.NET Publish)...";
+                AppendPublishLog($"🔨 Đang tự động biên dịch dự án (dotnet publish) với phiên bản v{PublishNewVersion} vào thư mục Staging...");
+
+                var buildProgress = new Progress<string>(msg => AppendPublishLog(msg));
+                var buildResult = await _publisherService.BuildAndStageProjectAsync(
+                    _detectedCsprojPath,
+                    PublishNewVersion,
+                    stagedBuildDir,
+                    buildProgress,
+                    _publishCts.Token).ConfigureAwait(true);
+
+                if (!buildResult.Success)
+                {
+                    PublishStatusMessage = "❌ Biên dịch dự án thất bại. Đã dừng đóng gói.";
+                    PublishStatusColorHex = "#EF4444";
+                    AppendPublishLog($"❌ DỪNG PHÁT HÀNH: {buildResult.ErrorMessage}");
+                    return;
+                }
+
+                actualSourceDirectory = stagedBuildDir;
+                AppendPublishLog($"  ✓ Đã hoàn tất biên dịch! Thư mục đóng gói cập nhật: {actualSourceDirectory}");
+            }
+            else
+            {
+                // Nếu không auto-build, kiểm tra xem DLL trong PublishSourceDirectory có bị lệch version không
+                string checkDll = Path.Combine(PublishSourceDirectory, "VisionInspectionApp.UI.dll");
+                if (File.Exists(checkDll))
+                {
+                    var binVer = _publisherService.GetBinaryAssemblyVersion(checkDll);
+                    string binVerStr = binVer.AssemblyVersion?.ToString() ?? binVer.FileVersion ?? "không xác định";
+                    if (!string.Equals(binVerStr, PublishNewVersion, StringComparison.OrdinalIgnoreCase))
+                    {
+                        AppendPublishLog($"⚠️ CẢNH BÁO: Phiên bản nhị phân hiện tại trong thư mục ({binVerStr}) KHÔNG KHỚP với phiên bản phát hành ({PublishNewVersion})!");
+                        AppendPublishLog($"   Để phiên bản mới có hiệu lực trong app, hãy bật tùy chọn 'Tự động biên dịch dự án' hoặc nhấn 'Biên Dịch Dự Án Ngay' trước khi đóng gói.");
+                    }
+                }
+            }
+
             // BƯỚC 2: Nén thư mục nguồn thành tệp .zip
-            AppendPublishLog($"📦 Đang nén các tệp ứng dụng thành gói .zip...");
+            AppendPublishLog($"📦 Đang nén các tệp ứng dụng thành gói .zip từ: {actualSourceDirectory}...");
             PublishStatusMessage = "Đang nén thư mục ứng dụng thành tệp .zip...";
             var zipProgress = new Progress<double>(pct =>
             {
-                PublishProgress = pct * 0.4; // 0 - 40% cho bước nén
+                PublishProgress = 15.0 + (pct * 0.3); // 15 - 45% cho bước nén
                 PublishProgressText = $"Đang nén tệp: {pct:F0}%";
             });
 
-            await _publisherService.BuildZipPackageAsync(PublishSourceDirectory, zipFilePath, zipProgress, _publishCts.Token).ConfigureAwait(true);
+            await _publisherService.BuildZipPackageAsync(actualSourceDirectory, zipFilePath, zipProgress, _publishCts.Token).ConfigureAwait(true);
 
             long fileSizeBytes = new FileInfo(zipFilePath).Length;
             double sizeMb = fileSizeBytes / (1024.0 * 1024.0);
@@ -300,7 +361,7 @@ public partial class OtaUpdateViewModel
 
             // BƯỚC 3: Tính toán mã băm SHA-256
             AppendPublishLog($"🔒 Đang tính toán mã băm SHA-256 xác thực tính toàn vẹn...");
-            PublishProgress = 45;
+            PublishProgress = 48;
             PublishProgressText = "Đang tính toán SHA-256...";
             string sha256 = _publisherService.ComputeSha256(zipFilePath);
             AppendPublishLog($"  ✓ SHA-256: {sha256}");
@@ -323,7 +384,7 @@ public partial class OtaUpdateViewModel
                 ServerUploadUrl = PublishServerUrl,
                 ServerStorageFolder = PublishServerStorageFolder,
                 ApiToken = PublishApiToken,
-                SourceDirectory = PublishSourceDirectory,
+                SourceDirectory = actualSourceDirectory,
                 TargetVersion = PublishNewVersion,
                 ReleaseChannel = PublishReleaseChannel,
                 ReleaseNotes = PublishReleaseNotes,
@@ -404,6 +465,104 @@ public partial class OtaUpdateViewModel
                 if (File.Exists(zipFilePath)) File.Delete(zipFilePath);
             }
             catch { }
+
+            // Dọn dẹp thư mục staging nếu có
+            try
+            {
+                string stagedDir = Path.Combine(tempZipDir, "staged_build");
+                if (Directory.Exists(stagedDir))
+                {
+                    Directory.Delete(stagedDir, true);
+                }
+            }
+            catch { }
+        }
+    }
+
+    [RelayCommand]
+    public async Task BuildProjectOnlyAsync()
+    {
+        if (IsPublishing || IsBuildingProject) return;
+
+        if (string.IsNullOrWhiteSpace(_detectedCsprojPath) || !File.Exists(_detectedCsprojPath))
+        {
+            PublishStatusMessage = "❌ Không tìm thấy tệp dự án VisionInspectionApp.UI.csproj.";
+            PublishStatusColorHex = "#EF4444";
+            AppendPublishLog("❌ Lỗi: Không tìm thấy tệp dự án .csproj để biên dịch.");
+            return;
+        }
+
+        if (!Version.TryParse(PublishNewVersion, out _))
+        {
+            PublishStatusMessage = "❌ Số phiên bản mới không đúng định dạng.";
+            PublishStatusColorHex = "#EF4444";
+            AppendPublishLog($"❌ Phiên bản '{PublishNewVersion}' không hợp lệ.");
+            return;
+        }
+
+        IsBuildingProject = true;
+        PublishProgress = 0;
+        PublishProgressText = "Đang bắt đầu biên dịch dự án...";
+        PublishStatusMessage = $"Đang biên dịch dự án với phiên bản v{PublishNewVersion}...";
+        PublishStatusColorHex = "#38BDF8";
+        PublishLogs = "";
+
+        _publishCts = new CancellationTokenSource();
+        string tempZipDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "temp_publish");
+        string targetStagingDir = Path.Combine(tempZipDir, "build_output");
+
+        try
+        {
+            // Cập nhật csproj trước nếu được bật
+            if (PublishAutoUpdateCsproj)
+            {
+                AppendPublishLog($"📝 Cập nhật Version vào .csproj: {Path.GetFileName(_detectedCsprojPath)}...");
+                await _publisherService.UpdateCsprojVersionAsync(_detectedCsprojPath, PublishNewVersion).ConfigureAwait(true);
+            }
+
+            AppendPublishLog($"=======================================================");
+            AppendPublishLog($"🔨 BẮT ĐẦU BIÊN DỊCH DỰ ÁN (.NET PUBLISH) v{PublishNewVersion}");
+            AppendPublishLog($"=======================================================");
+
+            var progress = new Progress<string>(msg => AppendPublishLog(msg));
+            var result = await _publisherService.BuildAndStageProjectAsync(_detectedCsprojPath, PublishNewVersion, targetStagingDir, progress, _publishCts.Token).ConfigureAwait(true);
+
+            if (result.Success)
+            {
+                PublishSourceDirectory = targetStagingDir;
+                PublishProgress = 100;
+                PublishProgressText = "100% — Biên dịch hoàn tất!";
+                PublishStatusMessage = $"✅ Biên dịch thành công phiên bản v{PublishNewVersion}!";
+                PublishStatusColorHex = "#4ADE80";
+                AppendPublishLog($"=======================================================");
+                AppendPublishLog($"🎉 BIÊN DỊCH DỰ ÁN THÀNH CÔNG!");
+                AppendPublishLog($"📁 Thư mục xuất bản đã gán vào nguồn đóng gói: {targetStagingDir}");
+                AppendPublishLog($"=======================================================");
+            }
+            else
+            {
+                PublishStatusMessage = $"❌ Biên dịch thất bại: {result.ErrorMessage}";
+                PublishStatusColorHex = "#EF4444";
+                AppendPublishLog($"❌ BIÊN DỊCH THẤT BẠI: {result.ErrorMessage}");
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            PublishStatusMessage = "Đã hủy tiến trình biên dịch.";
+            PublishStatusColorHex = "#94A3B8";
+            AppendPublishLog("⚠️ Tiến trình biên dịch đã bị người dùng hủy.");
+        }
+        catch (Exception ex)
+        {
+            PublishStatusMessage = $"Lỗi: {ex.Message}";
+            PublishStatusColorHex = "#EF4444";
+            AppendPublishLog($"❌ NGOẠI LỆ: {ex.Message}");
+        }
+        finally
+        {
+            IsBuildingProject = false;
+            _publishCts?.Dispose();
+            _publishCts = null;
         }
     }
 

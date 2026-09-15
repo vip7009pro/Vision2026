@@ -47,6 +47,7 @@ public sealed class OtaSettings
     public string PublishApiToken { get; set; } = "";
     public string PublishSourceDirectory { get; set; } = "";
     public bool PublishAutoUpdateCsproj { get; set; } = true;
+    public bool PublishAutoBuildProject { get; set; } = true;
     public string PublishReleaseChannel { get; set; } = "Stable";
 }
 

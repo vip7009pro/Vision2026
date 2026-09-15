@@ -2711,3 +2711,64 @@ Lộ trình tích hợp tính năng Chụp ảnh từ camera và hỗ trợ các
              - Kiểm tra IP Public Internet qua Router NAT: http://14.160.33.94:3006/health -> STATUS 200 OK.
              - Toàn bộ 14/14 bài kiểm thử Enterprise License System PASSED 100%.
              - Solution VisionInspectionApp.slnx biên dịch Release 0 Error(s).
+    - [x] **Task 339: Tự Động Biên Dịch Dự Án (Auto-Build & Stage) Khi Đóng Gói Và Tải Lên Bản Phát Hành OTA Mới**:
+        - **Mục Tiêu & Yêu Cầu**:
+          1. **Khắc phục lỗi lệch version giữa ruột file binary (.dll, .exe) và thông tin version.json**:
+             - Hiện tượng: Khi phát hành bản cập nhật mới trong màn hình Đóng gói và tải lên (Tab 3), người dùng chỉnh phiên bản mới (ví dụ 1.0.0.11) nhưng khi upload lên thì lõi nhị phân của app vẫn là 1.0.0.10.
+             - Nguyên nhân gốc rễ:
+               + Quá trình đóng gói trước đây chỉ sửa chuỗi văn bản trong file `VisionInspectionApp.UI.csproj` mà KHÔNG thực thi lệnh biên dịch lại dự án.
+               + Quá trình nén zip lấy trực tiếp từ thư mục chạy hiện tại (`bin/Release/net8.0-windows`) - vốn chứa các file DLL/EXE cũ từ lần build trước đó.
+               + Máy trạm tải bản cập nhật về, ghi đè file nhưng khi khởi động ứng dụng thì `AssemblyVersion` đọc từ DLL vẫn là 1.0.0.10, đối chiếu thấy nhỏ hơn 1.0.0.11 trên server và liên tục báo có bản cập nhật mới (infinite update prompt loop).
+               + Nếu cố tình build đè vào thư mục app đang chạy thì bị lỗi khóa tệp Windows (file locking).
+          2. **Kiến Trúc & Giải Pháp Kỹ Thuật Đã Triển Khai**:
+             - **Cơ Chế Tự Động Biên Dịch Vào Thư Mục Staging Cách Ly (`BuildAndStageProjectAsync`)**:
+               + `IOtaPublisherService` & `OtaPublisherService`: Bổ sung phương thức `BuildAndStageProjectAsync` và `GetBinaryAssemblyVersion`.
+               + Thực thi lệnh: `dotnet publish "<csprojPath>" -c Release -o "<stagingDir>" --no-self-contained -p:Version=<ver> -p:AssemblyVersion=<ver> -p:FileVersion=<ver> -p:InformationalVersion=<ver>`.
+               + Tiêm trực tiếp tham số MSBuild vào metadata nhị phân, đảm bảo 100% các tệp DLL/EXE sinh ra mang đúng phiên bản phát hành mới và triệt tiêu hoàn toàn xung đột file-lock.
+               + Bắt luồng xuất chuẩn `stdout`/`stderr` và truyền trực tiếp thời gian thực về bảng điều khiển nhật ký giao diện (`PublishLogs`).
+               + Tự động xác thực tính toàn vẹn của tệp `VisionInspectionApp.UI.dll` trong thư mục staging và đọc `AssemblyVersion`/`FileVersion` khẳng định tính hợp lệ trước khi đóng gói.
+               + Nén zip trực tiếp từ thư mục Staging và tự động dọn dẹp an toàn sau khi tải lên.
+             - **Kiểm Tra Cảnh Báo Lệch Version Khi Tắt Tự Động Build**:
+               + Nếu người dùng tắt tự động biên dịch và chọn thư mục ngoài, hệ thống tự động quét file DLL nguồn và phát cảnh báo trực quan nếu version binary khác với version phát hành.
+             - **Tùy Chọn Bền Vững & Nút Biên Dịch Độc Lập Trên Giao Diện**:
+               + `GlobalAppSettingsService.cs`: Thêm `PublishAutoBuildProject = true` vào `OtaSettings`.
+               + `OtaUpdateViewModel.Publisher.cs`: Thêm property `PublishAutoBuildProject`, `IsBuildingProject`, `IsBusyPublishingOrBuilding`, và RelayCommand `BuildProjectOnlyAsync` (`🔨 Biên Dịch Dự Án Ngay`).
+               + `OtaUpdateDialog.xaml` (Tab 3):
+                 * Khối 1: Bổ sung CheckBox `☑ Tự động biên dịch dự án (.NET Publish) với phiên bản mới trước khi đóng gói`.
+                 * Khối 4: Bổ sung Nút `🔨 Biên Dịch Dự Án Ngay` bên cạnh nút `🚀 Đóng Gói Zip & Tải Lên Server`, hỗ trợ kiểm tra và biên dịch độc lập theo thời gian thực.
+          3. **Kiểm Thử Toàn Diện**:
+             - Bổ sung **Test 6** vào `TestExtractApp/OtaPublisherServiceTests.cs`: Kiểm tra nhận diện binary assembly version, xử lý lỗi file không tồn tại và xác nhận luồng staging.
+             - Toàn bộ các bộ kiểm thử tự động của dự án (OTA Publisher, OTA Update, License System 14/14 tests, PLC Framework, Industrial OCR, Documentation, Chessboard Robustness) PASSED 100% (exit code 0).
+             - Toàn bộ Solution `VisionInspectionApp.slnx` biên dịch Release **0 Error(s)**.
+    - [x] **Task 340: Cải Thiện Trải Nghiệm Tải Ảnh Mẫu Huấn Luyện Từ Xa & Quản Lý Job (Stream Chunking, Real-time Progress, Network Speed & 60s Timeout)**:
+        - **Mục Tiêu & Yêu Cầu**:
+          1. **Khắc phục lỗi timeout 5s và thiếu phản hồi trạng thái khi tải ảnh mẫu huấn luyện (Teaching Image)**:
+             - Hiện tượng: Ảnh mẫu huấn luyện có dung lượng lớn (5MB - 30MB) từ xa qua mạng LAN/Internet tải khá lâu, trong khi timeout chỉ có 5s dẫn đến thường xuyên phát sinh ngoại lệ `OperationCanceledException` ("Tải tệp từ URL quá thời gian chờ (5s)"). Đồng thời, người dùng chỉ nhìn thấy khung đen trống rỗng, không biết quá trình tải ảnh diễn ra tới đâu hay ứng dụng đang bị lag/đơ.
+             - Nguyên nhân gốc rễ:
+               + `RemoteServerService.cs` (`DownloadFileAsync`) gán cứng `cts.CancelAfter(TimeSpan.FromSeconds(5))`, quá ngắn cho ảnh độ phân giải cao từ camera công nghiệp 12MP - 20MP.
+               + Phương thức nạp dữ liệu không hỗ trợ Stream Chunking và không phát sinh tiến trình `IProgress`.
+               + Khung xem trước ảnh (`JobManagerWindow.xaml`) và `JobManagerViewModel.cs` không có lớp phủ Loading, không hiển thị thanh tiến độ, không tính tốc độ truyền tải và xử lý lỗi ngầm không trực quan.
+          2. **Kiến Trúc & Giải Pháp Kỹ Thuật Đã Triển Khai**:
+             - **Mở rộng Giao diện & Dịch vụ Tải Tệp (`IRemoteServerService` & `RemoteServerService`)**:
+               + Định nghĩa lớp `FileDownloadProgressInfo` cung cấp: `BytesDownloaded`, `TotalBytes`, `Percentage`, `SpeedBytesPerSec`, `SpeedFormatted` (KB/s, MB/s), `ProgressFormatted` và `StatusText`.
+               + Bổ sung overload `DownloadFileAsync(string url, int timeoutSeconds, IProgress<FileDownloadProgressInfo>? progress, CancellationToken cancellationToken)`.
+               + Tăng timeout mặc định từ 5s lên 60s (hỗ trợ tùy biến theo từng tác vụ).
+               + Triển khai stream phân đoạn 64KB với `HttpCompletionOption.ResponseHeadersRead`, đo tốc độ tức thời và debounce cập nhật 100ms.
+               + Giữ nguyên overload cũ tương thích 100% với các vị trí gọi hiện tại.
+             - **Nâng Cấp Quản Lý Trạng Thái Trong `JobManagerViewModel`**:
+               + Bổ sung các Observable properties: `IsLoadingPreview`, `PreviewDownloadProgress`, `PreviewDownloadStatusText`, `HasPreviewError`, `PreviewErrorText`.
+               + Bổ sung computed properties: `CanRefreshTeachImage` (vô hiệu hóa nút làm mới khi đang tải), `ShowEmptyNotice` (hiển thị placeholder khi không có ảnh và không lỗi).
+               + Nâng cấp `LoadTeachImagePreviewAsync` tích hợp lắng nghe tiến trình thời gian thực, lưu cache ổ đĩa/RAM khi tải xong, và bắt lỗi chi tiết khi tải thất bại.
+               + Thêm guard chặn spam click nút làm mới ảnh khi đang nạp ảnh.
+             - **Hiện Đại Hóa Giao Diện Hộp Xem Trước Ảnh (`JobManagerWindow.xaml`)**:
+               + Lớp phủ Loading Glassmorphism với màu nền `#DD0B132B`, tiêu đề icon `📥 Đang Tải Ảnh Mẫu Từ Server...`.
+               + Thanh tiến độ Cyan Neon (`#38BDF8`) mượt mà cùng thông số chi tiết font Consolas: `% (MB tải / Tổng MB) • Tốc độ MB/s`.
+               + Hộp thông báo lỗi chuyên nghiệp viền đỏ rực (`#EF4444`) kèm mô tả nguyên nhân và nút bấm `🔄 Thử Tải Lại`.
+               + Placeholder trống rỗng tinh tế với icon lớn mờ.
+          3. **Kiểm Thử Toàn Diện**:
+             - Bổ sung kiểm thử tự động `Test_DownloadFileAsync_WithProgressAndConfigurableTimeoutAsync` vào `TestExtractApp/RemoteServerAndJobManagerTests.cs`:
+               * Kiểm tra stream chunking 256KB qua mock HttpListener, xác nhận nhận đầy đủ 5 thông báo tiến trình, tính toán đúng 100% dung lượng và tốc độ.
+               * Kiểm tra ngắt kết nối an toàn đúng 1s theo timeout cấu hình (`1003ms`) khi máy chủ bị trễ phản hồi.
+             - Toàn bộ các bộ kiểm thử tự động của dự án PASSED 100% (exit code 0).
+             - Toàn bộ Solution `VisionInspectionApp.slnx` biên dịch Release **0 Error(s)**.
+
