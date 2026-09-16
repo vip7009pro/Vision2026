@@ -21,6 +21,8 @@ public static class ManualInspectionTest
         TestLineIntersection();
         TestLineLineDistance();
         TestSubpixelEdgeDetection();
+        TestSubpixelDistantEdgeRejection();
+        TestManualInspectionViewModelSnappingDefault();
         TestToleranceEvaluation();
         TestCsvExport();
 
@@ -113,12 +115,59 @@ public static class ManualInspectionTest
         // Draw bright step edge at X >= 50
         mat.ColRange(50, 100).SetTo(Scalar.All(200));
 
-        bool ok = ManualVisionMeasurementService.TryFindSubpixelEdgePoint(mat, new GeoPoint2D(48, 50), 15, out var edgePt);
+        bool ok = ManualVisionMeasurementService.TryFindSubpixelEdgePoint(mat, new GeoPoint2D(48, 50), 5, out var edgePt);
         if (!ok || Math.Abs(edgePt.X - 50.0) > 1.5)
         {
             throw new Exception($"Sub-pixel edge detection failed! Found X={edgePt.X:F3}, Y={edgePt.Y:F3}");
         }
         Console.WriteLine($"PASSED (Found Sub-pixel Edge at X={edgePt.X:F3}, Y={edgePt.Y:F3})");
+    }
+
+    private static void TestSubpixelDistantEdgeRejection()
+    {
+        Console.Write("  [Test 6b] Distant Edge & Flat Region Rejection (Prevent Unexpected Point Jumping)... ");
+        using var mat = new Mat(100, 100, MatType.CV_8UC1, Scalar.All(50));
+        // Draw bright step edge at X >= 50
+        mat.ColRange(50, 100).SetTo(Scalar.All(200));
+
+        // Case 1: Click at (40, 50) - edge is at X=50 (10px away, outside radius 5)
+        // Must reject snapping and keep original point to avoid jumping
+        var clickFar = new GeoPoint2D(40, 50);
+        bool okFar = ManualVisionMeasurementService.TryFindSubpixelEdgePoint(mat, clickFar, 5, out var resultFar);
+        if (okFar && Math.Abs(resultFar.X - clickFar.X) > 5.0)
+        {
+            throw new Exception($"Snapping should NOT jump to edge 10px away! Got X={resultFar.X}");
+        }
+
+        // Case 2: Click in completely flat area (50, 50) with all pixels = 80
+        using var flatMat = new Mat(100, 100, MatType.CV_8UC1, Scalar.All(80));
+        var clickFlat = new GeoPoint2D(50, 50);
+        bool okFlat = ManualVisionMeasurementService.TryFindSubpixelEdgePoint(flatMat, clickFlat, 5, out var resultFlat);
+        if (okFlat)
+        {
+            throw new Exception("Flat region with no edges must return false!");
+        }
+        if (Math.Abs(resultFlat.X - clickFlat.X) > 1e-4 || Math.Abs(resultFlat.Y - clickFlat.Y) > 1e-4)
+        {
+            throw new Exception("Flat region fallback must retain original click position exactly!");
+        }
+
+        Console.WriteLine("PASSED (Distance constraint & flat rejection verified)");
+    }
+
+    private static void TestManualInspectionViewModelSnappingDefault()
+    {
+        Console.Write("  [Test 6c] ManualInspectionViewModel Default Snapping Flag & Point Click Stability... ");
+        var settings = new VisionInspectionApp.UI.Services.GlobalAppSettingsService();
+        var camService = new VisionInspectionApp.UI.Services.CameraService();
+        var vm = new VisionInspectionApp.UI.ViewModels.ManualInspectionViewModel(settings, camService);
+
+        if (vm.EnableSubpixelSnapping)
+        {
+            throw new Exception("EnableSubpixelSnapping MUST default to false to prevent unexpected point jumping on user click!");
+        }
+
+        Console.WriteLine("PASSED (EnableSubpixelSnapping is false by default)");
     }
 
     private static void TestToleranceEvaluation()

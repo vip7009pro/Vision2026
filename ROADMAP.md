@@ -2945,3 +2945,33 @@ Lộ trình tích hợp tính năng Chụp ảnh từ camera và hỗ trợ các
                * Chạy Job bất kỳ qua `InspectionService.Inspect` -> `PixelsPerMm` bị cưỡng chế sang Global Calib (55.55 px/mm).
              - Toàn bộ test suite tự động đạt **100% PASSED**.
              - Solution `VisionInspectionApp.slnx` biên dịch Release **0 Error(s)**.
+
+    - [x] **Task 347: Khắc Phục Triệt Để Hiện Tượng Điểm Bị Nhảy Vị Trí Khi Click Đo Trong Tab Manual Inspection (2D Vision CMM)**:
+        - **Hiện Tượng & Yêu Cầu Người Dùng**:
+          + Trong tab Manual Inspection, khi đo khoảng cách 2 điểm click chọn điểm, người dùng chọn điểm, vừa nhấc chuột lên thì điểm ghi nhận bị nhảy ra chỗ khác, không đúng chỗ vừa click.
+          + Người dùng yêu cầu kiểm tra xem các tool khác có bị không và sửa lại dứt điểm vấn đề này.
+        - **Phân Tích Nguyên Nhân Gốc Rễ**:
+          1. *Phạm vi ảnh hưởng*: Bị ảnh hưởng trên TẤT CẢ 22 công cụ đo lường trong Tab Manual Inspection (Khoảng cách 2 điểm, Đoạn thẳng 2 điểm, Tọa độ XY, Delta X, Delta Y, Điểm đến đường, Giao điểm 2 đường, Đường tròn 3P, Hình chữ nhật 2P, Hình chữ nhật xoay 3P, Góc, v.v.) vì toàn bộ các tool này đều dùng chung luồng click `OnInteractivePointClicked` (`ManualInspectionViewModel.Tools.cs`).
+          2. *Cờ EnableSubpixelSnapping mặc định bật (`true`)*: Trong `ManualInspectionViewModel.cs`, thuộc tính `_enableSubpixelSnapping` đang mặc định là `true`. Mọi cú click của người dùng đều tự động bị ép qua thuật toán dò cạnh subpixel `TryFindSubpixelEdgePoint` dù người dùng chỉ muốn click đo thủ công thông thường.
+          3. *Thuật toán dò cạnh subpixel thiếu ràng buộc khoảng cách*: Trong `ManualVisionMeasurementService.cs`, hàm `TryFindSubpixelEdgePoint` trước đây dùng bán kính quét quá lớn `roiRadius = 15` (vùng 31x31 px) và dùng `Cv2.MinMaxLoc` lấy cực đại gradient thô trong toàn vùng mà không có hàm phạt theo khoảng cách. Nếu cách điểm click 10-14px có cạnh biên độ tương phản cao, điểm click của người dùng bị hút văng 10-14px sang cạnh đó. Đồng thời ngưỡng gradient quá thấp (`10.0`) dễ bắt nhầm vào nhiễu hạt nền.
+          4. *Thiếu hiển thị Marker cố định khi click*: Trong `OnInteractivePointClicked`, khi số điểm thu thập `< requiredPoints`, hàm chỉ gọi `RefreshAllOverlays()` mà không vẽ các điểm đã chọn trong `_collectedPoints`. Người dùng click điểm 1 thì điểm 1 biến mất tạm thời; vừa nhấc chuột lên di chuyển (`MouseMove`) thì `GenerateRubberbandOverlays` mới vẽ điểm 1 và đồng thời vẽ một điểm chấm vàng to tại vị trí chuột hiện tại kèm đường dây cao su, tạo cảm giác điểm click bị trôi/nhảy theo tay nhấc chuột.
+        - **Giải Pháp Kỹ Thuật Đã Triển Khai**:
+          1. *Đặt mặc định `EnableSubpixelSnapping = false` (`ManualInspectionViewModel.cs`)*:
+             - Mặc định khi người dùng click đo, điểm click được ghi nhận chính xác 100% tại đúng tọa độ pixel con trỏ chuột mà người dùng đã bấm, tuyệt đối không tự ý dịch chuyển điểm.
+             - Chỉ khi người dùng chủ động tích chọn CheckBox *"Bắt điểm Sub-pixel Edge"* trên thanh công cụ thì tính năng này mới được kích hoạt.
+          2. *Nâng Cấp Thuật Toán `TryFindSubpixelEdgePoint` (`ManualVisionMeasurementService.cs`)*:
+             - Thu hẹp bán kính quét mặc định xuống 5px (`roiRadius = Math.Clamp(roiRadius, 3, 10)`).
+             - Bổ sung hàm trọng số khoảng cách không gian Gaussian: $Score(x, y) = Magnitude(x, y) \times \exp\left(-\frac{dist^2}{2 \sigma^2}\right)$ với $\sigma = \max(1.5, roiRadius / 2.0)$. Ưu tiên tuyệt đối cạnh biên nằm sát điểm click nhất, ngăn chặn hoàn toàn việc hút sang cạnh ở xa.
+             - Nâng ngưỡng gradient tối thiểu lên $\ge 25.0$ để loại bỏ nhiễu nền phẳng.
+             - Ràng buộc độ dịch chuyển tối đa: Nếu điểm cạnh subpixel cách điểm click ban đầu $> roiRadius$, hàm từ chối snap và giữ nguyên 100% tọa độ click gốc của người dùng.
+          3. *Hiển Thị Tức Thì Marker Cố Định & Chuẩn Hóa Rubberband Overlays (`ManualInspectionViewModel.Tools.cs`)*:
+             - Bổ sung hàm `GenerateOverlaysForCollectedPoints(List<GeoPoint2D> collected)`: Ngay khi click điểm số 1 ($P_1$), điểm $P_1$ lập tức hiển thị marker cố định trên ảnh với viền xanh lá neon `#10B981` (`LimeGreen`), nền bán trong suốt, nhãn rõ ràng `P1 (X, Y)`.
+             - Cập nhật `GenerateRubberbandOverlays`: Giữ marker cố định `P1`, `P2` màu xanh lá, con trỏ chuột `curPt` là điểm preview dẫn hướng màu vàng với kích thước nhỏ gọn (`Radius = 3.5`), hiển thị dây cao su đo đạc thời gian thực từ các điểm đã chốt tới con trỏ chuột.
+          4. *Kiểm Thử Toàn Diện*:
+             - Mở rộng `ManualInspectionTest.cs` trong `TestExtractApp` với 3 bài test chuyên sâu:
+               * `TestSubpixelEdgeDetection`: Xác minh độ chính xác dò cạnh trong bán kính $\le 5$px.
+               * `TestSubpixelDistantEdgeRejection`: Xác minh từ chối hút sang cạnh ở xa $> 5$px và bảo toàn 100% tọa độ khi click trên vùng phẳng.
+               * `TestManualInspectionViewModelSnappingDefault`: Xác minh cờ `EnableSubpixelSnapping == false` mặc định và độ ổn định click.
+             - Toàn bộ test suite `TestExtractApp` đạt **100% PASSED**.
+             - Solution `VisionInspectionApp.slnx` biên dịch Release **0 Error(s)**.
+

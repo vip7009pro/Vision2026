@@ -53,6 +53,32 @@
 
 ## Cập nhật 2026-07-19
 
+- **Khắc Phục Triệt Để Hiện Tượng Điểm Bị Nhảy Vị Trí Khi Click Đo Trong Tab Manual Inspection / 2D Vision CMM (Task 347)**:
+  - **Hiện Tượng & Yêu Cầu Người Dùng**:
+    + Trong tab Manual Inspection, khi đo khoảng cách 2 điểm click chọn điểm, người dùng chọn điểm, vừa nhấc chuột lên thì điểm ghi nhận bị nhảy ra chỗ khác, không đúng chỗ vừa click.
+    + Kiểm tra và sửa lỗi trên tất cả các công cụ đo thủ công khác.
+  - **Nguyên Nhân Gốc Rễ & Phạm Vi Ảnh Hưởng**:
+    + *Phạm vi ảnh hưởng*: Toàn bộ 22 công cụ đo đạc trong Tab Manual Inspection (Khoảng cách 2 điểm, Đoạn thẳng 2 điểm, Tọa độ XY, Delta X, Delta Y, Điểm đến đường, Giao điểm 2 đường, Đường tròn 3P, Hình chữ nhật 2P, Hình chữ nhật xoay 3P, Góc, v.v.) đều dùng chung luồng click `OnInteractivePointClicked` trong `ManualInspectionViewModel.Tools.cs`.
+    + *Cờ Sub-pixel Snapping bật mặc định*: Trong `ManualInspectionViewModel.cs`, thuộc tính `_enableSubpixelSnapping` đang mặc định `true`, khiến mọi thao tác click thủ công bình thường đều bị ép chạy qua thuật toán dò mép biên sub-pixel.
+    + *Thuật toán dò mép quét quá rộng và không phạt theo khoảng cách*: Trong `ManualVisionMeasurementService.cs`, hàm `TryFindSubpixelEdgePoint` quét bán kính tới 15px (vùng 31x31 px) và dùng `Cv2.MinMaxLoc` lấy cực đại gradient thô trong toàn vùng mà không có hàm phạt theo khoảng cách. Nếu cách vị trí click 10-14px có cạnh biên có tương phản cao hơn, điểm click bị hút văng 10-14px sang cạnh đó.
+    + *Thiếu Marker cố định khi vừa click*: Khi người dùng vừa click điểm $P_1$, `_collectedPoints` có 1 điểm nhưng hệ thống không vẽ marker cho điểm 1 mà chỉ vẽ lại khi chuột di chuyển (`MouseMove`), đồng thời vẽ một chấm vàng to tướng ngay tại vị trí chuột di chuyển, gây cảm giác điểm vừa click bị trôi lệch theo tay nhấc chuột.
+  - **Kiến Trúc & Giải Pháp Kỹ Thuật Đã Triển Khai**:
+    1. *Đặt mặc định `EnableSubpixelSnapping = false` (`ManualInspectionViewModel.cs`)*:
+       - Đổi giá trị khởi tạo `private bool _enableSubpixelSnapping = false;`.
+       - Mặc định người dùng click vào đâu thì tọa độ ghi nhận chính xác 100% tại đúng pixel đó, không bao giờ tự ý dịch chuyển điểm. Chỉ khi người dùng chủ động tích CheckBox "Bắt điểm Sub-pixel Edge" trên toolbar thì tính năng dò mép mới được kích hoạt.
+    2. *Nâng Cấp Thuật Toán `TryFindSubpixelEdgePoint` (`ManualVisionMeasurementService.cs`)*:
+       - Thu hẹp bán kính quét mặc định xuống 5px (`roiRadius = Math.Clamp(roiRadius, 3, 10)`).
+       - Bổ sung hàm phạt trọng số khoảng cách Gaussian: $Score(x, y) = Magnitude(x, y) \times \exp\left(-\frac{dist^2}{2 \sigma^2}\right)$ với $\sigma = \max(1.5, roiRadius / 2.0)$. Ưu tiên tuyệt đối cạnh biên nằm sát điểm click nhất ($\le 2$px), loại trừ hoàn toàn việc bị hút sang các cạnh ở xa.
+       - Nâng ngưỡng gradient tối thiểu lên $\ge 25.0$ để loại trừ nền phẳng và hạt nhiễu mờ.
+       - Ràng buộc độ dịch chuyển tối đa: Nếu điểm cạnh subpixel cách điểm click ban đầu $> roiRadius$, hàm từ chối snap và giữ nguyên 100% tọa độ click gốc của người dùng.
+    3. *Hiển Thị Tức Thì Marker Cố Định & Chuẩn Hóa Rubberband Overlays (`ManualInspectionViewModel.Tools.cs`)*:
+       - Thêm hàm `GenerateOverlaysForCollectedPoints(List<GeoPoint2D> collected)`: Ngay khi click điểm số 1 ($P_1$), điểm $P_1$ lập tức hiển thị marker cố định trên ảnh với viền xanh lá neon `#10B981` (`LimeGreen`), nền bán trong suốt, nhãn rõ ràng `P1 (X, Y)`.
+       - Cập nhật `GenerateRubberbandOverlays`: Giữ marker cố định `P1`, `P2` màu xanh lá, con trỏ chuột `curPt` là điểm preview dẫn hướng màu vàng với kích thước nhỏ gọn (`Radius = 3.5`), hiển thị dây cao su đo đạc thời gian thực từ các điểm đã chốt tới con trỏ chuột.
+    4. *Kiểm Thử Toàn Diện (`TestExtractApp`)*:
+       - Mở rộng `ManualInspectionTest.cs` kiểm tra dò cạnh gần $\le 5$px (`TestSubpixelEdgeDetection`), từ chối cạnh xa $> 5$px và bảo toàn tọa độ trên vùng phẳng (`TestSubpixelDistantEdgeRejection`), và cờ ViewModel mặc định `false` (`TestManualInspectionViewModelSnappingDefault`).
+       - Toàn bộ test suite `TestExtractApp` đạt **100% PASSED**.
+       - Solution `VisionInspectionApp.slnx` biên dịch Release **0 Error(s)**.
+
 - **Thêm Checkbox Cưỡng Chế Sử Dụng Global Calibration Trong Cửa Sổ Hiệu Chuẩn Bàn Cờ (Task 346)**:
   - **Hiện Tượng & Yêu Cầu Người Dùng**:
     + Trong cửa sổ hiệu chuẩn bàn cờ (`ChessboardCalibrationDialog.xaml`), bổ sung thêm 1 checkbox "Cưỡng chế sử dụng global calibration".

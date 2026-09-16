@@ -66,7 +66,7 @@ public sealed partial class ManualInspectionViewModel : ObservableObject
     private string _statusPrompt = string.Empty;
 
     [ObservableProperty]
-    private bool _enableSubpixelSnapping = true;
+    private bool _enableSubpixelSnapping = false;
 
     public ObservableCollection<OverlayItem> OverlayItems { get; }
 

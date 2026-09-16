@@ -20,7 +20,7 @@ public sealed partial class ManualInspectionViewModel
         // Sub-pixel snapping if enabled and image mat is available
         if (EnableSubpixelSnapping && _imageMat is not null && !_imageMat.Empty())
         {
-            if (ManualVisionMeasurementService.TryFindSubpixelEdgePoint(_imageMat, pt, 15, out var subpixelPt))
+            if (ManualVisionMeasurementService.TryFindSubpixelEdgePoint(_imageMat, pt, 5, out var subpixelPt))
             {
                 pt = subpixelPt;
             }
@@ -36,7 +36,8 @@ public sealed partial class ManualInspectionViewModel
         }
         else
         {
-            RefreshAllOverlays();
+            var tempOverlays = GenerateOverlaysForCollectedPoints(_collectedPoints);
+            RefreshAllOverlays(tempOverlays);
             UpdatePromptText();
         }
     }
@@ -431,19 +432,42 @@ public sealed partial class ManualInspectionViewModel
         }
     }
 
+    private static List<OverlayItem> GenerateOverlaysForCollectedPoints(List<GeoPoint2D> collected)
+    {
+        var list = new List<OverlayItem>();
+        for (int i = 0; i < collected.Count; i++)
+        {
+            var pt = collected[i];
+            list.Add(new OverlayPointItem
+            {
+                X = pt.X,
+                Y = pt.Y,
+                Radius = 5.0,
+                Stroke = Brushes.LimeGreen,
+                Fill = new SolidColorBrush(Color.FromArgb(120, 16, 185, 129)),
+                Label = $"P{i + 1} ({pt.X:0.0},{pt.Y:0.0})"
+            });
+        }
+        return list;
+    }
+
     private List<OverlayItem> GenerateRubberbandOverlays(ManualMeasurementType tool, List<GeoPoint2D> collected, GeoPoint2D curPt)
     {
         var list = new List<OverlayItem>();
         double scale = CalibrationPixelsPerMm > 0 ? CalibrationPixelsPerMm : 1.0;
 
-        foreach (var pt in collected)
+        // Pinned / collected points
+        for (int i = 0; i < collected.Count; i++)
         {
+            var pt = collected[i];
             list.Add(new OverlayPointItem
             {
                 X = pt.X,
                 Y = pt.Y,
-                Stroke = Brushes.DeepSkyBlue,
-                Label = $"({pt.X:0.0},{pt.Y:0.0})"
+                Radius = 5.0,
+                Stroke = Brushes.LimeGreen,
+                Fill = new SolidColorBrush(Color.FromArgb(120, 16, 185, 129)),
+                Label = $"P{i + 1} ({pt.X:0.0},{pt.Y:0.0})"
             });
         }
 
@@ -452,6 +476,7 @@ public sealed partial class ManualInspectionViewModel
         {
             X = curPt.X,
             Y = curPt.Y,
+            Radius = 3.5,
             Stroke = Brushes.Yellow,
             Label = $"({curPt.X:0.0},{curPt.Y:0.0})"
         });

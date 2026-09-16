@@ -121,12 +121,15 @@ public static class ManualVisionMeasurementService
     }
 
     /// <summary>
-    /// Finds sub-pixel edge point on image around click position by scanning local gradient peaks
+    /// Finds sub-pixel edge point on image around click position by scanning local gradient peaks with spatial distance weighting.
     /// </summary>
     public static bool TryFindSubpixelEdgePoint(Mat? srcMat, GeoPoint2D clickPos, int roiRadius, out GeoPoint2D edgePoint)
     {
         edgePoint = clickPos;
         if (srcMat == null || srcMat.Empty()) return false;
+
+        // Clamp ROI search radius to prevent snapping to distant edges
+        roiRadius = Math.Clamp(roiRadius, 3, 10);
 
         int cx = (int)Math.Round(clickPos.X);
         int cy = (int)Math.Round(clickPos.Y);
@@ -164,22 +167,56 @@ public static class ManualVisionMeasurementService
         using var magnitude = new Mat();
         Cv2.Magnitude(gradX, gradY, magnitude);
 
-        // Find max gradient magnitude inside ROI
-        Cv2.MinMaxLoc(magnitude, out _, out double maxVal, out _, out OpenCvSharp.Point maxLoc);
-        if (maxVal < 10.0)
+        // Find candidate edge pixel with distance-weighted score to favor edges closest to click
+        double clickRoiX = clickPos.X - x1;
+        double clickRoiY = clickPos.Y - y1;
+        double sigma = Math.Max(1.5, roiRadius / 2.0);
+        double twoSigmaSq = 2.0 * sigma * sigma;
+
+        double bestScore = 0.0;
+        int bestX = -1;
+        int bestY = -1;
+        double bestMagnitude = 0.0;
+
+        for (int y = 0; y < rh; y++)
         {
-            return false; // No significant edge found
+            for (int x = 0; x < rw; x++)
+            {
+                float mag = magnitude.At<float>(y, x);
+                if (mag < 25.0f) continue; // Minimum gradient threshold to avoid background noise
+
+                double dx = x - clickRoiX;
+                double dy = y - clickRoiY;
+                double distSq = dx * dx + dy * dy;
+                if (distSq > roiRadius * roiRadius) continue; // Must be inside circular radius
+
+                double spatialWeight = Math.Exp(-distSq / twoSigmaSq);
+                double score = mag * spatialWeight;
+
+                if (score > bestScore)
+                {
+                    bestScore = score;
+                    bestX = x;
+                    bestY = y;
+                    bestMagnitude = mag;
+                }
+            }
         }
 
-        // Sub-pixel parabolic refinement in 3x3 patch around maxLoc
-        double subX = maxLoc.X;
-        double subY = maxLoc.Y;
-
-        if (maxLoc.X > 0 && maxLoc.X < rw - 1 && maxLoc.Y > 0 && maxLoc.Y < rh - 1)
+        if (bestX < 0 || bestY < 0 || bestMagnitude < 25.0)
         {
-            float vLeft = magnitude.At<float>(maxLoc.Y, maxLoc.X - 1);
-            float vMid = magnitude.At<float>(maxLoc.Y, maxLoc.X);
-            float vRight = magnitude.At<float>(maxLoc.Y, maxLoc.X + 1);
+            return false; // No significant edge nearby click position
+        }
+
+        // Sub-pixel parabolic refinement in 3x3 patch around best pixel
+        double subX = bestX;
+        double subY = bestY;
+
+        if (bestX > 0 && bestX < rw - 1 && bestY > 0 && bestY < rh - 1)
+        {
+            float vLeft = magnitude.At<float>(bestY, bestX - 1);
+            float vMid = magnitude.At<float>(bestY, bestX);
+            float vRight = magnitude.At<float>(bestY, bestX + 1);
 
             double denomX = 2.0 * (2.0 * vMid - vLeft - vRight);
             if (Math.Abs(denomX) > 1e-6)
@@ -188,8 +225,8 @@ public static class ManualVisionMeasurementService
                 subX += Math.Clamp(deltaX, -0.5, 0.5);
             }
 
-            float vTop = magnitude.At<float>(maxLoc.Y - 1, maxLoc.X);
-            float vBottom = magnitude.At<float>(maxLoc.Y + 1, maxLoc.X);
+            float vTop = magnitude.At<float>(bestY - 1, bestX);
+            float vBottom = magnitude.At<float>(bestY + 1, bestX);
 
             double denomY = 2.0 * (2.0 * vMid - vTop - vBottom);
             if (Math.Abs(denomY) > 1e-6)
@@ -199,7 +236,14 @@ public static class ManualVisionMeasurementService
             }
         }
 
-        edgePoint = new GeoPoint2D(x1 + subX, y1 + subY);
+        var candidatePoint = new GeoPoint2D(x1 + subX, y1 + subY);
+        // Do not allow snapping farther than roiRadius from original click position
+        if (GeoPoint2D.Distance(candidatePoint, clickPos) > roiRadius)
+        {
+            return false;
+        }
+
+        edgePoint = candidatePoint;
         return true;
     }
 }

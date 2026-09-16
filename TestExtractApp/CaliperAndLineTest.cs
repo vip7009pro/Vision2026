@@ -152,6 +152,7 @@ public static class CaliperAndLineTest
             IsCalibrated = true
         };
 
+        VisionInspectionApp.Application.Services.ChessboardCalibrationService.IsForceApplyGlobalCalibration = false;
         var saved = VisionInspectionApp.Application.Services.ChessboardCalibrationService.SaveGlobalCalibration(mockGlobal);
         Console.WriteLine($"SaveGlobalCalibration: {saved}");
         if (!saved) throw new Exception("SaveGlobalCalibration failed.");
