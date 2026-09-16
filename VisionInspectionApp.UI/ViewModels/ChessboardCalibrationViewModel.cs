@@ -82,16 +82,16 @@ public sealed partial class ChessboardCalibrationViewModel : ObservableObject
                     _config.PixelsPerMm = globalCal.PixelsPerMm;
                     IsDirty = true;
                 }
-                StatusMessage = "🔒 Đã BẬT cưỡng chế: Hệ thống sẽ luôn áp dụng thông số Global Calib cho tất cả các Job.";
+                StatusMessage = "🔒 Đã BẬT cưỡng chế sử dụng global calibration: Tất cả các job khi chạy sẽ áp dụng global calib, bất kể job có thông số hiệu chuẩn riêng hay không.";
             }
             else
             {
-                StatusMessage = "⚠️ Đã bật cưỡng chế, nhưng máy chưa có Global Calib. Vui lòng thực hiện Calibrate và bấm [🌐 Set As Global Calib] trước.";
+                StatusMessage = "⚠️ Đã bật cưỡng chế sử dụng global calibration, nhưng hệ thống chưa có dữ liệu Global Calib. Vui lòng thực hiện Calibrate và bấm [🌐 Set As Global Calib] trước.";
             }
         }
         else
         {
-            StatusMessage = "🔓 Đã TẮT cưỡng chế: Job có thể tự do sử dụng cấu hình Calib riêng biệt.";
+            StatusMessage = "🔓 Đã TẮT cưỡng chế: Các job khi chạy sẽ sử dụng thông số hiệu chuẩn riêng của từng job.";
         }
     }
 
@@ -880,7 +880,20 @@ public sealed partial class ChessboardCalibrationViewModel : ObservableObject
         var ok = ChessboardCalibrationService.SaveGlobalCalibration(calibData);
         if (ok)
         {
-            StatusMessage = $"🌐 Đã lưu cấu hình làm Global Calibration thành công! (Pixels/mm: {PixelsPerMm:F4}, Error: {ReprojectionError:F4} px). Từ nay các Job mới hoặc chưa có calib sẽ tự động áp dụng.";
+            if (ForceApplyGlobalCalibration)
+            {
+                if (_config is not null)
+                {
+                    _config.ChessboardCalibration = calibData.Clone();
+                    _config.PixelsPerMm = calibData.PixelsPerMm;
+                    IsDirty = true;
+                }
+                StatusMessage = $"🌐 Đã lưu cấu hình làm Global Calibration thành công! (Pixels/mm: {PixelsPerMm:F4}, Error: {ReprojectionError:F4} px). 🔒 Đang BẬT cưỡng chế: Tất cả các job khi chạy sẽ áp dụng global calib này.";
+            }
+            else
+            {
+                StatusMessage = $"🌐 Đã lưu cấu hình làm Global Calibration thành công! (Pixels/mm: {PixelsPerMm:F4}, Error: {ReprojectionError:F4} px). Từ nay các Job mới hoặc chưa có calib sẽ tự động áp dụng.";
+            }
         }
         else
         {

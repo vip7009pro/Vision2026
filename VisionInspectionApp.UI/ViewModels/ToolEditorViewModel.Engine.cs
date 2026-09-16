@@ -3407,6 +3407,7 @@ namespace VisionInspectionApp.UI.ViewModels
                             RefreshPreviews();
                             RaiseToolPropertyPanelsChanged();
                             OnPropertyChanged(nameof(Blob_LastRunCount));
+                            OnPropertyChanged(nameof(PixelsPerMm));
                         }
                         finally
                         {
@@ -3753,6 +3754,7 @@ namespace VisionInspectionApp.UI.ViewModels
             RefreshPreviews();
             RaiseToolPropertyPanelsChanged();
             OnPropertyChanged(nameof(Blob_LastRunCount));
+            OnPropertyChanged(nameof(PixelsPerMm));
             LastResult = _lastRun;
         }
 
@@ -4031,6 +4033,7 @@ namespace VisionInspectionApp.UI.ViewModels
                 RefreshPreviews();
                 RaiseToolPropertyPanelsChanged();
                 OnPropertyChanged(nameof(Blob_LastRunCount));
+                OnPropertyChanged(nameof(PixelsPerMm));
                 LastResult = _lastRun;
             }
             finally
@@ -4320,7 +4323,7 @@ namespace VisionInspectionApp.UI.ViewModels
                     }
                 }
 
-                if (targetNode is null || string.Equals(targetNode.Type, "ResultView", StringComparison.OrdinalIgnoreCase))
+                if (targetNode is null || string.Equals(targetNode.Type, "ResultView", StringComparison.OrdinalIgnoreCase) || string.Equals(targetNode.Type, "Origin", StringComparison.OrdinalIgnoreCase))
                 {
                     SelectedNodePreviewImage = FinalPreviewImage ?? _cachedFinalPreviewImage ?? (snapIO.Empty() ? null : snapIO.ToBitmapSourceForDisplay());
                     AddConfigRois(newSelectedNodeOverlayItems);

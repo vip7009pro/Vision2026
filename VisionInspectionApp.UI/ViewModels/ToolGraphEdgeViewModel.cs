@@ -22,6 +22,8 @@ namespace VisionInspectionApp.UI.ViewModels
 
         private bool _isSelected;
         public bool IsSelected { get => _isSelected; set => SetProperty(ref _isSelected, value); }
+        public ToolGraphNodeViewModel FromNode => _from;
+        public ToolGraphNodeViewModel ToNode => _to;
         public string FromNodeId => _from.Id;
         public string ToNodeId => _to.Id;
         public string FromPort { get; }

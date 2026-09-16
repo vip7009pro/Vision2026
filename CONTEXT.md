@@ -52,6 +52,61 @@
 - Template rỗng hoặc ROI không hợp lệ trả về kết quả không đạt thay vì làm OpenCV phát sinh ngoại lệ.
 
 ## Cập nhật 2026-07-19
+
+- **Thêm Checkbox Cưỡng Chế Sử Dụng Global Calibration Trong Cửa Sổ Hiệu Chuẩn Bàn Cờ (Task 346)**:
+  - **Hiện Tượng & Yêu Cầu Người Dùng**:
+    + Trong cửa sổ hiệu chuẩn bàn cờ (`ChessboardCalibrationDialog.xaml`), bổ sung thêm 1 checkbox "Cưỡng chế sử dụng global calibration".
+    + Khi được checked, tất cả các job khi chạy sẽ áp dụng global calib, bất kể job có thông số hiệu chuẩn riêng hay không.
+  - **Kiến Trúc & Giải Pháp Kỹ Thuật Đã Triển Khai**:
+    1. *Giao diện người dùng (`ChessboardCalibrationDialog.xaml`)*:
+       - Thiết kế Border Card nổi bật **`🌐 CƠ CHẾ ÁP DỤNG CALIBRATION`** đặt trang trọng ngay đầu cột điều khiển Left Panel (viền Amber `#F59E0B`, nền `#1E293B`).
+       - Checkbox binding trực tiếp hai chiều với `ForceApplyGlobalCalibration` trên ViewModel.
+       - Nhãn chính xác: **`Cưỡng chế sử dụng global calibration`** (`FontWeight="Bold"`, màu chữ vàng `#FDE68A`).
+       - Dòng giải thích trực quan: *"Khi bật: Tất cả các job khi chạy sẽ áp dụng global calib, bất kể job có thông số hiệu chuẩn riêng hay không."*
+       - Gỡ bỏ checkbox cũ nằm sâu ở đáy panel Kết Quả để giao diện gọn gàng, người dùng mở cửa sổ là nhìn thấy ngay lập tức.
+    2. *ViewModel (`ChessboardCalibrationViewModel.cs`)*:
+       - Cập nhật `OnForceApplyGlobalCalibrationChanged(bool value)`:
+         + Khi bật cờ (`value == true`): Lưu bền vững vào `global_chessboard_settings.json`, đồng bộ thông số Global Calib vào Job đang mở nếu có, và hiển thị thông báo: *"🔒 Đã BẬT cưỡng chế sử dụng global calibration: Tất cả các job khi chạy sẽ áp dụng global calib, bất kể job có thông số hiệu chuẩn riêng hay không."*
+         + Khi tắt cờ (`value == false`): Lưu `false` vào file settings, thông báo: *"🔓 Đã TẮT cưỡng chế: Các job khi chạy sẽ sử dụng thông số hiệu chuẩn riêng của từng job."*
+       - Cập nhật `SetAsGlobalCalibration()`: Tự động đồng bộ và thông báo trạng thái cưỡng chế khi lưu cấu hình Global Calib mới.
+    3. *Toàn bộ quy trình chạy Job (`InspectionService.Pipeline.cs`, `ToolEditorViewModel.Engine.cs`)*:
+       - `InspectionService.Inspect(..., config, ...)` gọi `ChessboardCalibrationService.EnsureCalibration(config)` ngay đầu pipeline. Khi cờ bật và có Global Calib, tự động ghi đè `config.ChessboardCalibration = globalCal.Clone()` và `config.PixelsPerMm = globalCal.PixelsPerMm`.
+       - Mọi công cụ kiểm tra (Caliper, Distance, CircleFinder, LinePairDetect, EdgePairDetect, SegmentLineDistance, OCR, Code...) đều tính toán mm theo `globalCal.PixelsPerMm`.
+       - Khử méo ảnh (`Undistort`) luôn dùng `globalCal`.
+       - Bổ sung `OnPropertyChanged(nameof(PixelsPerMm))` trong `ToolEditorViewModel.Engine.cs` sau khi chạy `RunFlowAsync`, `RunSingleFlowFromImageFileAsync` và `RunContinuousLoopAsync` để UI luôn phản ánh giá trị Global Pixels/mm mới nhất.
+    4. *Kiểm Thử Toàn Diện*:
+       - Mở rộng bài test tự động `TestForceApplyGlobalCalibration` trong `RecentJobsAndCalibrationTest.cs`: Xác minh tính bền vững của file settings, ViewModel binding, và chạy pipeline với Job có calib riêng bị cưỡng chế sang Global Calib (55.55 px/mm).
+       - Toàn bộ test suite `TestExtractApp` đạt **100% PASSED**.
+       - Solution `VisionInspectionApp.slnx` biên dịch Release **0 Error(s)**.
+
+
+- **Bổ Sung Tool ImageOutput Làm Mặc Định Khi Tạo Job Mới (Ctrl+N / Menu File) & Tự Động Bỏ Check Vẽ Ô Vuông ROI (Task 345)**:
+  - **Hiện Tượng & Yêu Cầu Người Dùng**:
+    + Khi bấm `Ctrl + N` hoặc chọn menu `File / Tạo Job Mới (New Job)`, hệ thống trước đó chỉ tạo sẵn 3 tool: `ImageSource` (CAM1), `Preprocess` (PRE1), `Origin` (Origin).
+    + Người dùng muốn có sẵn thêm tool `ImageOutput` trong flow mặc định, đồng thời tự động bỏ chọn CheckBox "Vẽ ô vuông ROI tìm kiếm" (`ShowRoi = false`) để ảnh xuất chỉ tập trung thể hiện các kết quả kiểm tra/overlay mà không bị vướng các khung hộp chữ nhật ROI tìm kiếm.
+  - **Nguyên Nhân & Điểm Cần Xử Lý**:
+    1. Hàm `NewGraph()` trong `ToolEditorViewModel.cs` chỉ khởi tạo 3 node `CAM1`, `PRE1`, `Origin` và 2 cạnh nối `CAM1 -> PRE1`, `PRE1 -> Origin`.
+    2. Class `ImageOutputDefinition` trong `VisionInspectionApp.Models/Class1.cs` đặt mặc định `ShowRoi = true`.
+    3. Trình xuất ảnh `BurnOverlaysToMat` trong `InspectionService.ImageOutputs.cs` có cờ `renderAll` chỉ áp dụng cho `ResultView`, `Preprocess`, `ImageSource` mà chưa bao gồm `Origin`. Khi ImageOutput nối trực tiếp sau Origin, nếu không có cờ này thì chỉ Origin được vẽ vào ảnh xuất.
+    4. Cần đồng bộ trạng thái `ShowRoi = false` ở cả Model, Service, ViewModel và giao diện XAML.
+  - **Giải Pháp Kỹ Thuật Đã Triển Khai**:
+    1. *Chuẩn Hóa Model & ViewModel Tự Động Bỏ Check Vẽ Ô Vuông ROI*:
+       - Đổi giá trị mặc định của `ImageOutputDefinition.ShowRoi` thành `false`.
+       - Cập nhật `EnsureDefinitionForNewNode` và `SelectedImageOutputDef()` khởi tạo `ImageOutputDefinition` mới với `ShowRoi = false`.
+       - Cập nhật thuộc tính `ImageOutput_ShowRoi` trên `ToolEditorViewModel.ToolImageOutput.cs` dùng fallback `false`.
+    2. *Mở Rộng Động Cơ Xuất Ảnh `BurnOverlaysToMat`*:
+       - Bổ sung `Origin` vào điều kiện `renderAll` trong `InspectionService.ImageOutputs.cs`.
+       - Khi `ImageOutput` lấy nguồn ảnh từ `Origin`, toàn bộ kết quả đo đạc (Caliper, Distance, Angle, OCR, Code, Circle, Blob, ...) của chuỗi kiểm tra đều được ghi đè lên ảnh xuất; đồng thời nhờ `ShowRoi = false`, toàn bộ khung chữ nhật ROI tìm kiếm được ẩn sạch sẽ.
+    3. *Tự Động Sinh Tool ImageOutput Trong `NewGraph()`*:
+       - Tự động tạo node `outputNode` (`Type = "ImageOutput"`, `RefName = "IMG_OUT1"`, tọa độ $X = 800, Y = 120$ thẳng hàng ngay sau Origin cách đều 240px).
+       - Khởi tạo cạnh nối `CreateEdge(originNode, outputNode, "OutOrigin", "Image")`, tự động gán `InputNodeName = "Origin"`.
+       - Đảm bảo `outputDef.ShowRoi = false`.
+       - Bổ sung khởi tạo `NewGraphCommand` trong cả parameterless constructor để an toàn cho unit test và runner.
+       - Cập nhật preview canvas của node ImageOutput hỗ trợ nguồn Origin hiển thị toàn bộ kết quả inspection.
+    4. *Kiểm Thử Toàn Diện*:
+       - Xây dựng bài kiểm thử tự động `NewJobDefaultToolsTests.cs` (4 test suite) kiểm tra: tạo đủ 4 tool, liên kết 3 cạnh chính xác, `InputNodeName == "Origin"`, cờ `ShowRoi == false` và UI binding tự động Uncheck.
+       - Toàn bộ bộ test tự động của giải pháp đạt **100% PASSED**.
+       - Solution `VisionInspectionApp.slnx` biên dịch Release **0 Error(s)**.
 - **Tối Ưu Nhận Diện Bảng Calib Chessboard & Tự Động Dò Kích Thước Bàn Cờ Công Nghiệp (Task 344)**:
   - **Hiện Tượng & Phản Ánh Người Dùng**:
     + Người dùng phản ánh ảnh chụp bảng cờ thực tế rất nét, rõ ràng (ảnh bàn cờ in trên giấy trắng gồm 8 ô ngang × 6 ô dọc), nhưng khi nạp ảnh vào phần mềm hoặc chụp trực tiếp từ camera thì hệ thống bắt góc rất khó hoặc báo "Not Found".

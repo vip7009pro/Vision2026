@@ -68,6 +68,19 @@
             <!-- LEFT PANEL -->
             <ScrollViewer Grid.Column="0" VerticalScrollBarVisibility="Auto" Margin="0,0,8,0">
                 <StackPanel>
+                    <!-- GLOBAL CALIBRATION POLICY -->
+                    <Border BorderBrush="#F59E0B" BorderThickness="1.5" CornerRadius="4" Padding="10,8" Margin="0,0,0,8" Background="#1E293B">
+                        <StackPanel>
+                            <CheckBox IsChecked="{Binding ForceApplyGlobalCalibration, Mode=TwoWay}"
+                                      Foreground="#FDE68A" FontWeight="Bold" FontSize="12"
+                                      ToolTip="Khi được checked, tất cả các job khi chạy sẽ áp dụng global calib, bất kể job có thông số hiệu chuẩn riêng hay không.">
+                                <TextBlock Text="Cưỡng chế sử dụng global calibration" TextWrapping="Wrap" />
+                            </CheckBox>
+                            <TextBlock Text="Khi bật: Tất cả các job khi chạy sẽ áp dụng global calib, bất kể job có thông số hiệu chuẩn riêng hay không."
+                                       Foreground="#94A3B8" FontSize="11" TextWrapping="Wrap" Margin="22,3,0,0" />
+                        </StackPanel>
+                    </Border>
+
                     <!-- Settings -->
                     <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" Padding="8" Margin="0,0,0,8" Background="{DynamicResource PanelBackgroundBrush}">
                         <StackPanel>
@@ -290,14 +303,6 @@
                                     Margin="0,6,0,0" Padding="8,7" 
                                     Background="#0D9488" Foreground="White" FontWeight="Bold"
                                     ToolTip="Áp dụng ngay bộ thông số Global Calibration đã lưu trên máy tính này vào Job đang mở (Focal, Distortion, Pixels/mm)" />
-
-                            <CheckBox Margin="0,8,0,2"
-                                      IsChecked="{Binding ForceApplyGlobalCalibration, Mode=TwoWay}"
-                                      Foreground="{DynamicResource TextBrush}"
-                                      FontWeight="SemiBold"
-                                      ToolTip="Khi bật: Toàn bộ hệ thống sẽ cưỡng chế sử dụng thông số Global Calib cho tất cả các Job (kể cả khi Job đã có cấu hình Calib riêng).">
-                                <TextBlock Text="Cưỡng chế áp dụng Global Calib (nếu có)" TextWrapping="Wrap" />
-                            </CheckBox>
                         </StackPanel>
                     </Border>
 

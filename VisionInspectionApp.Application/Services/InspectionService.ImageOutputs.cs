@@ -173,9 +173,11 @@ public partial class InspectionService
                          string.Equals(targetNodeName, "ResultView", StringComparison.OrdinalIgnoreCase) ||
                          string.Equals(targetNodeName, "Preprocess", StringComparison.OrdinalIgnoreCase) ||
                          string.Equals(targetNodeName, "ImageSource", StringComparison.OrdinalIgnoreCase) ||
+                         string.Equals(targetNodeName, "Origin", StringComparison.OrdinalIgnoreCase) ||
                          targetNodeName.StartsWith("ResultView", StringComparison.OrdinalIgnoreCase) ||
                          targetNodeName.StartsWith("Preprocess", StringComparison.OrdinalIgnoreCase) ||
-                         targetNodeName.StartsWith("ImageSource", StringComparison.OrdinalIgnoreCase);
+                         targetNodeName.StartsWith("ImageSource", StringComparison.OrdinalIgnoreCase) ||
+                         targetNodeName.StartsWith("Origin", StringComparison.OrdinalIgnoreCase);
 
         var allowedNodes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         if (!renderAll && !string.IsNullOrWhiteSpace(targetNodeName))

@@ -225,7 +225,75 @@ public static class RecentJobsAndCalibrationTest
                 throw new Exception("Expected global_chessboard_settings.json to exist after SaveForceApplyGlobalCalibration(true)!");
             }
 
-            Console.WriteLine("   => PASS 100% (ForceApplyGlobalCalibration logic, persistence and override verified)");
+            // 6. Kiểm tra qua ViewModel binding (STA / Dispatcher safe)
+            var cameraService = new VisionInspectionApp.UI.Services.CameraService();
+            var vm = new VisionInspectionApp.UI.ViewModels.ChessboardCalibrationViewModel(cameraService);
+            var testJobConfig = new VisionInspectionApp.Models.VisionConfig
+            {
+                ProductCode = "TestJobSpecific",
+                PixelsPerMm = 12.34,
+                ChessboardCalibration = new VisionInspectionApp.Models.ChessboardCalibrationData
+                {
+                    BoardCols = 7,
+                    BoardRows = 5,
+                    SquareSizeMm = 20.0,
+                    PixelsPerMm = 12.34,
+                    IsCalibrated = true
+                }
+            };
+
+            // Khởi tạo ViewModel với Job có calib riêng khi cờ cưỡng chế đang bật
+            vm.Initialize(testJobConfig);
+            if (!vm.ForceApplyGlobalCalibration)
+            {
+                throw new Exception("Expected ViewModel.ForceApplyGlobalCalibration to be true from global settings!");
+            }
+            if (Math.Abs(testJobConfig.PixelsPerMm - 55.55) > 1e-4)
+            {
+                throw new Exception($"Expected Job PixelsPerMm to be forced to Global (55.55) during Initialize, got {testJobConfig.PixelsPerMm}");
+            }
+
+            // Tắt cờ cưỡng chế qua ViewModel
+            vm.ForceApplyGlobalCalibration = false;
+            if (ChessboardCalibrationService.IsForceApplyGlobalCalibration)
+            {
+                throw new Exception("Expected ChessboardCalibrationService.IsForceApplyGlobalCalibration to become false when vm property changed!");
+            }
+
+            // Bật lại cờ cưỡng chế qua ViewModel
+            vm.ForceApplyGlobalCalibration = true;
+            if (!ChessboardCalibrationService.IsForceApplyGlobalCalibration)
+            {
+                throw new Exception("Expected ChessboardCalibrationService.IsForceApplyGlobalCalibration to become true when vm property changed!");
+            }
+
+            // 7. Kiểm tra với InspectionService khi chạy Job bất kỳ có calib riêng
+            var runJobConfig = new VisionInspectionApp.Models.VisionConfig
+            {
+                ProductCode = "RunJobTest",
+                PixelsPerMm = 99.99,
+                ChessboardCalibration = new VisionInspectionApp.Models.ChessboardCalibrationData
+                {
+                    BoardCols = 8,
+                    BoardRows = 6,
+                    PixelsPerMm = 99.99,
+                    IsCalibrated = true
+                }
+            };
+            var inspectionService = new VisionInspectionApp.Application.InspectionService(
+                new VisionInspectionApp.VisionEngine.ImagePreprocessor(),
+                new VisionInspectionApp.VisionEngine.PatternMatcher(),
+                new VisionInspectionApp.VisionEngine.DistanceCalculator(),
+                new VisionInspectionApp.VisionEngine.LineDetector(),
+                new VisionInspectionApp.VisionEngine.DefectDetector());
+            using var dummyMat = new OpenCvSharp.Mat(480, 640, OpenCvSharp.MatType.CV_8UC3, new OpenCvSharp.Scalar(128, 128, 128));
+            var runResult = inspectionService.Inspect(dummyMat, runJobConfig);
+            if (Math.Abs(runJobConfig.PixelsPerMm - 55.55) > 1e-4)
+            {
+                throw new Exception($"Expected runJobConfig.PixelsPerMm to be forced to 55.55 during inspection run, but got {runJobConfig.PixelsPerMm}");
+            }
+
+            Console.WriteLine("   => PASS 100% (ForceApplyGlobalCalibration logic, persistence, ViewModel and Inspection pipeline override verified)");
         }
         finally
         {

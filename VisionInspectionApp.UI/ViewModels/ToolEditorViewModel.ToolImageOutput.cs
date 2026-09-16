@@ -38,7 +38,7 @@ namespace VisionInspectionApp.UI.ViewModels
             var def = _config.ImageOutputs.FirstOrDefault(x => string.Equals(x.Name, SelectedNode.RefName, StringComparison.OrdinalIgnoreCase));
             if (def is null)
             {
-                def = new ImageOutputDefinition { Name = SelectedNode.RefName };
+                def = new ImageOutputDefinition { Name = SelectedNode.RefName, ShowRoi = false };
                 _config.ImageOutputs.Add(def);
             }
             return def;
@@ -151,7 +151,7 @@ namespace VisionInspectionApp.UI.ViewModels
 
         public bool ImageOutput_ShowRoi
         {
-            get => SelectedImageOutputDef()?.ShowRoi ?? true;
+            get => SelectedImageOutputDef()?.ShowRoi ?? false;
             set
             {
                 var def = SelectedImageOutputDef();

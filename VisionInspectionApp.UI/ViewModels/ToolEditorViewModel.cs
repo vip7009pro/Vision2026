@@ -226,6 +226,7 @@ namespace VisionInspectionApp.UI.ViewModels
             AllToolboxItems = new List<ToolboxItemModel>();
             ToolboxItems = new ObservableCollection<string>();
             ToolboxCollectionView = System.Windows.Data.CollectionViewSource.GetDefaultView(AllToolboxItems);
+            NewGraphCommand = new RelayCommand(NewGraph);
         }
 
         public ToolEditorViewModel(IConfigService configService, ConfigStoreOptions storeOptions, SharedImageContext sharedImage, ImagePreprocessor preprocessor, LineDetector lineDetector, IInspectionService inspectionService, CameraService cameraService, IJobService jobService, UndoRedoManager undoManager, Application.PLC.Services.IPlcManagerService plcManagerService, Application.DB.Services.IDbManagerService dbManagerService, IRecentJobsService? recentJobsService = null, LightingControllerService? lightingControllerService = null, IServiceProvider? serviceProvider = null)
@@ -4288,8 +4289,28 @@ namespace VisionInspectionApp.UI.ViewModels
             EnsureDefinitionForNewNode(originNode);
             originNode.EnsurePortsInitialized();
 
+            var outputNode = new ToolGraphNodeViewModel
+            {
+                Id = Guid.NewGuid().ToString("N"),
+                Type = "ImageOutput",
+                RefName = "IMG_OUT1",
+                X = 800,
+                Y = 120
+            };
+            outputNode.PropertyChanged += Node_PropertyChanged;
+            Nodes.Add(outputNode);
+            EnsureDefinitionForNewNode(outputNode);
+            outputNode.EnsurePortsInitialized();
+
+            var outputDef = _config.ImageOutputs?.FirstOrDefault(x => string.Equals(x.Name, outputNode.RefName, StringComparison.OrdinalIgnoreCase));
+            if (outputDef is not null)
+            {
+                outputDef.ShowRoi = false;
+            }
+
             CreateEdge(camNode, prepNode, "Image", "Image");
             CreateEdge(prepNode, originNode, "Image", "Image");
+            CreateEdge(originNode, outputNode, originNode.OutPorts.FirstOrDefault()?.Name ?? "Out", "Image");
 
             SyncToolGraphToConfig();
             SelectedNode = originNode;
@@ -4487,7 +4508,7 @@ namespace VisionInspectionApp.UI.ViewModels
                 var existed = _config.ImageOutputs.Any(x => string.Equals(x.Name, node.RefName, StringComparison.OrdinalIgnoreCase));
                 if (!existed)
                 {
-                    _config.ImageOutputs.Add(new ImageOutputDefinition { Name = node.RefName, SaveFolderPath = @"C:\VisionOutput" });
+                    _config.ImageOutputs.Add(new ImageOutputDefinition { Name = node.RefName, SaveFolderPath = @"C:\VisionOutput", ShowRoi = false });
                 }
     
                 return;

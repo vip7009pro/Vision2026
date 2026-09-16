@@ -51,5 +51,6 @@ class Program
         ChessboardCalibrationMismatchTests.RunAllTests();
         LicenseSystemTests.RunAllTests();
         DotnetRuntimeTests.RunAllTests();
+        NewJobDefaultToolsTests.RunAllTests();
     }
 }

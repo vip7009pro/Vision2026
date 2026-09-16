@@ -2357,19 +2357,20 @@ Lộ trình tích hợp tính năng Chụp ảnh từ camera và hỗ trợ các
              - Thá»‘ng nháº¥t cÃ¡c nhÃ£n `Ocr_TrainedCharactersSummary` vÃ  chÃº thÃ­ch sang mÃ u `TextBrush`.
           2. *Cáº£i tiáº¿n cÆ¡ cháº¿ Dáº¡y chá»¯ tá»« ROI*:
              - Trong `ToolEditorViewModel.ToolOcr.cs`: Kiá»ƒm tra `ExpectedText`, náº¿u rá»—ng hiá»ƒn thá»‹ thÃ´ng bÃ¡o hÆ°á»›ng dáº«n ngÆ°á»i dÃ¹ng nháº­p trÆ°á»›c chuá»—i máº«u (vÃ­ dá»¥: `Line Source`).
-             - Bá»• sung fallback cáº¯t Search ROI trá»±c tiáº¿p trÃªn áº£nh `inputMat` náº¿u ma tráº­n xoay Origin bá»‹ trÃ´i tá»a Ä‘á»™.
+             - Trong `ToolEditorViewModel.ToolOcr.cs`: Kiá»ƒm tra `ExpectedText`, náº¿u rá»—ng hiá»ƒn thá»‹ thÃ´ng bÃ¡o hÆ°á»›ng dáº«n ngÆ°á» i dÃ¹ng nháº­p trÆ°á»›c chuá»—i máº«u (vÃ­ dá»¥: `Line Source`).
+             - Bá»• sung fallback cáº¯t Search ROI trá»±c tiáº¿p trÃªn áº£nh `inputMat` náº¿u ma tráº­n xoay Origin bá»‹ trÃ´i tá» a Ä‘á»™.
              - Trong `OcrDetector.cs`: ThÃªm thuáº­t toÃ¡n tá»± Ä‘á»™ng phÃ¢n Ä‘oáº¡n cÃ¡c box dÃ­nh nÃ©t khi sá»‘ box < sá»‘ kÃ½ tá»± trong Chuá»—i máº«u (`Line Source`), fallback nhá»‹ phÃ¢n Otsu vÃ  Invert náº¿u candidate rá»—ng.
           3. *TÆ°Æ¡ng thÃ­ch Dynamic Model AI ONNX & Cáº£nh BÃ¡o Model Sai Loáº¡i*:
              - PhÃ¡t hiá»‡n model phÃ¢n loáº¡i gÃ³c xoay `doc_ori` hoáº·c input fixed $224 \times 224$: hiá»ƒn thá»‹ cáº£nh bÃ¡o chi tiáº¿t vÃ  thÃ¢n thiá»‡n giáº£i thÃ­ch file lÃ  model xoay trang, nháº¯c nhá»Ÿ táº£i Ä‘Ãºng model OCR cÃ³ Ä‘uÃ´i `_rec_infer.onnx` (vÃ­ dá»¥: `en_PP-OCRv3_rec_infer.onnx`).
-             - Dynamic Tensor Adapter: Tá»± Ä‘á»™ng láº¥y sá»‘ kÃªnh (1 hoáº·c 3) vÃ  chiá»u cao (32 hoáº·c 48) tá»« Onnx Runtime InputMetadata Ä‘á»ƒ cáº¥p Ä‘Ãºng shape cho tensor (tÆ°Æ¡ng thÃ­ch PaddleOCR Recognition vÃ  CRNN).
+             - Dynamic Tensor Adapter: Tá»± Ä‘á»™ng láº¥y sá»‘ kÃªnh (1 hoáº·c 3) vÃ  chiá» u cao (32 hoáº·c 48) tá»« Onnx Runtime InputMetadata Ä‘á»ƒ cáº¥p Ä‘Ãºng shape cho tensor (tÆ°Æ¡ng thÃ­ch PaddleOCR Recognition vÃ  CRNN).
              - CTC Decoder Ä‘a nÄƒng: Há»— trá»£ báº£ng 96 kÃ½ tá»± Latin PaddleOCR (`numClasses == 97`), 41 kÃ½ tá»± CRNN (`numClasses == 41`) vÃ  báº£ng má»Ÿ rá»™ng.
         - Kiá»ƒm Thá»­:
-          - ThÃªm bÃ i test `TestLineSourceTeachingAndWrongModelFallback` (Test 8) trong `TestExtractApp`: Há»c 10 kÃ½ tá»± máº«u `Line Source` Ä‘áº¡t 100%, nháº­n diá»‡n vá»›i font Ä‘Ã£ há»c Ä‘áº¡t chÃ­nh xÃ¡c 100.0%, Pass=True. Xá»­ lÃ½ an toÃ n model `PP-LCNet_x1_0_doc_ori_infer.onnx` fallback mÆ°á»£t mÃ  sang Non-AI kÃ¨m thÃ´ng Ä‘iá»‡p hÆ°á»›ng dáº«n rÃµ rÃ ng.
+          - ThÃªm bÃ i test `TestLineSourceTeachingAndWrongModelFallback` (Test 8) trong `TestExtractApp`: Há» c 10 kÃ½ tá»± máº«u `Line Source` Ä‘áº¡t 100%, nháº­n diá»‡n vá»›i font Ä‘Ã£ há» c Ä‘áº¡t chÃ­nh xÃ¡c 100.0%, Pass=True. Xá»­ lÃ½ an toÃ n model `PP-LCNet_x1_0_doc_ori_infer.onnx` fallback mÆ°á»£t mÃ  sang Non-AI kÃ¨m thÃ´ng điá»‡p hÆ°á»›ng dáº«n rÃµ rÃ ng.
           - dotnet build VisionInspectionApp.slnx: 0 errors.
           - dotnet run --project TestExtractApp: 100% PASSED toÃ n bá»™ test suite.
 
-    - [x] **Task 315: Tá»± Äá»™ng Báº­t/Táº¯t ROI & Crosshair Trong OQC Scanner & Báº£o Tá»“n Tráº¡ng ThÃ¡i Full Screen Cá»§a Cá»­a Sá»• ChÃ­nh Khi ÄÃ³ng Cá»­a Sá»• Con**:
-        - Hiá»‡n TÆ°á»£ng & YÃªu Cáº§u NgÆ°á»i DÃ¹ng:
+    - [x] **Task 315: Tá»± Ä‘á»™ng Báº­t/Táº¯t ROI & Crosshair Trong OQC Scanner & Báº£o Tá»“n Tráº¡ng ThÃ¡i Full Screen Cá»§a Cá»­a Sá»• ChÃ­nh Khi Ä Ã³ng Cá»­a Sá»• Con**:
+        - Hiá»‡n TÆ°á»£ng & YÃªu Câ€u NgÆ°á» i DÃ¹ng:
           1. Trong tab OQC Scanner: Khi náº¡p job thÃ nh cÃ´ng vÃ  báº­t live view thÃ nh cÃ´ng thÃ¬ auto báº­t ROI vÃ  Crosshair Ä‘á»ƒ cÄƒn chá»‰nh sáº£n pháº©m, nhÆ°ng sau khi job cháº¡y xong thÃ¬ tá»± táº¯t ROI vÃ  crosshair Ä‘á»ƒ dá»… dÃ ng quan sÃ¡t káº¿t quáº£.
           2. Cá»­a sá»• chÃ­nh Ä‘ang full screen (Maximized), khi má»Ÿ cá»­a sá»• con rá»“i Ä‘Ã³ng láº¡i thÃ¬ cá»­a sá»• chÃ­nh láº¡i bá»‹ thu nhá» vá» kÃ­ch thÆ°á»›c Normal (nhá» hÆ¡n full screen), ngÆ°á»i dÃ¹ng pháº£i báº¥m nÃºt Maximize láº¡i.
         - PhÃ¢n TÃ­ch Ká»¹ Thuáº­t & Giáº£i PhÃ¡p:
@@ -2894,3 +2895,53 @@ Lộ trình tích hợp tính năng Chụp ảnh từ camera và hỗ trợ các
              - Toàn bộ test suite tự động chạy thành công 100% (exit code 0).
              - Solution VisionInspectionApp.slnx biên dịch Release 0 Error(s).
 
+    - [x] **Task 345: Bổ Sung Tool ImageOutput Làm Mặc Định Khi Tạo Job Mới (Ctrl+N / Menu File) & Tự Động Bỏ Check Vẽ Ô Vuông ROI**:
+        - **Hiện Tượng & Yêu Cầu Người Dùng**:
+          + Khi bấm `Ctrl + N` hoặc vào menu `File / Tạo Job Mới (New Job)`, hệ thống mặc định tạo sẵn 3 tool: `ImageSource` (CAM1), `Preprocess` (PRE1), `Origin` (Origin).
+          + Yêu cầu: Bổ sung thêm tool `ImageOutput` vào làm mặc định trong chuỗi flow canvas, và tự động bỏ check "Vẽ ô vuông ROI" (`ShowRoi = false`).
+        - **Giải Pháp Kỹ Thuật Đã Triển Khai**:
+          1. *Cập Nhật Model ImageOutputDefinition*:
+             - Đặt giá trị mặc định của thuộc tính `public bool ShowRoi { get; set; } = false;` (thay vì `true`), giúp mọi cấu hình ImageOutput mới đều tự động tắt vẽ khung ô vuông tìm kiếm ROI.
+          2. *Động Cơ Xuất Ảnh BurnOverlaysToMat*:
+             - Bổ sung `Origin` vào điều kiện `renderAll` (`string.Equals(targetNodeName, "Origin", StringComparison.OrdinalIgnoreCase) || targetNodeName.StartsWith("Origin", StringComparison.OrdinalIgnoreCase)`). Khi ImageOutput nối sau Origin trong pipeline mặc định, toàn bộ các overlay kết quả đo đạc (Caliper, Distance, Angle, OCR, Barcode, CircleFinder, Blob...) đều được ghi vào ảnh xuất mà không bị giới hạn riêng Origin.
+          3. *Khởi Tạo Chuỗi Graph Mặc Định 4 Tool trong `NewGraph()` (`ToolEditorViewModel.cs`)*:
+             - Tự động sinh node `ImageOutput` với `RefName = "IMG_OUT1"`, tọa độ X = 800, Y = 120 thẳng hàng ngay sau `Origin` (X = 560).
+             - Tự động tạo cạnh nối `Origin -> IMG_OUT1` (`CreateEdge(originNode, outputNode, "OutOrigin", "Image")`), tự động điền `InputNodeName = "Origin"`.
+             - Đảm bảo `outputDef.ShowRoi = false`.
+             - Khởi tạo `NewGraphCommand` trong cả parameterless constructor và DI constructor.
+             - Cập nhật `SelectedImageOutputDef()` và `ImageOutput_ShowRoi` trên ViewModel sử dụng fallback `false`.
+             - Hỗ trợ xem preview toàn bộ kết quả inspection khi chọn node `ImageOutput` trên Canvas.
+          4. *Kiểm Thử Toàn Diện*:
+             - Xây dựng bộ test tự động `NewJobDefaultToolsTests.cs` (4 test suite toàn diện):
+               * Test 1: Khởi tạo New Job (Ctrl+N) tạo đủ 4 tool (`CAM1` -> `PRE1` -> `Origin` -> `IMG_OUT1`), tọa độ thẳng hàng cách đều 240px.
+               * Test 2: Kiểm tra liên kết dây (Edges) và `InputNodeName == "Origin"` của ImageOutput.
+               * Test 3: Cờ `ShowRoi == false` và UI binding `ImageOutput_ShowRoi` tự động Uncheck.
+               * Test 4: Model `ImageOutputDefinition` mặc định `ShowRoi = false`.
+             - Toàn bộ test suite tự động đạt **100% PASSED**.
+             - Toàn bộ Solution `VisionInspectionApp.slnx` biên dịch Release **0 Error(s)**.
+
+
+
+    - [x] **Task 346: Thêm Checkbox 'Cưỡng Chế Sử Dụng Global Calibration' Trong Cửa Sổ Hiệu Chuẩn Bàn Cờ (Chessboard Calibration)**:
+        - **Hiện Tượng & Yêu Cầu Người Dùng**:
+          + Trong cửa sổ hiệu chuẩn bàn cờ (`ChessboardCalibrationDialog`), bổ sung 1 checkbox với nhãn "Cưỡng chế sử dụng global calibration".
+          + Khi được checked, tất cả các job khi chạy sẽ áp dụng global calib, bất kể job có thông số hiệu chuẩn riêng hay không.
+        - **Phân Tích Hiện Trạng & Kiến Trúc Xử Lý**:
+          1. *Giao Diện Người Dùng (`ChessboardCalibrationDialog.xaml`)*:
+             - Trước đây có checkbox nằm sâu ở đáy panel Kết Quả Calibration với nhãn chưa sát (`Cưỡng chế áp dụng Global Calib (nếu có)`), người dùng khó thấy nếu không cuộn chuột.
+             - Đã tái cấu trúc giao diện: Đưa lên vị trí trang trọng ngay đầu cột điều khiển Left Panel với Border Card riêng biệt màu Amber `#F59E0B` trên nền tối `#1E293B`, icon toàn cục, nhãn chính xác: **`Cưỡng chế sử dụng global calibration`** kèm dòng giải thích rõ ràng: *"Khi bật: Tất cả các job khi chạy sẽ áp dụng global calib, bất kể job có thông số hiệu chuẩn riêng hay không."*
+          2. *Cơ Chế Cưỡng Chế Áp Dụng Toàn Cục (`ChessboardCalibrationService.cs`)*:
+             - Thuộc tính tĩnh `IsForceApplyGlobalCalibration` được lưu trữ bền vững vào `%AppData%\Vision2026\global_chessboard_settings.json`.
+             - Phương thức `EnsureCalibration(VisionConfig config)`: Khi `IsForceApplyGlobalCalibration == true` và có Global Calib (`global_chessboard_calibration.json`), tự động ghi đè thông số `config.ChessboardCalibration = globalCal.Clone()` và `config.PixelsPerMm = globalCal.PixelsPerMm`.
+             - Phương thức `GetEffectiveCalibration(config)`: Luôn trả về `globalCal` khi cờ cưỡng chế đang bật.
+          3. *Thực Thi Khi Chạy Mọi Job (`InspectionService.Pipeline.cs`, `ToolEditorViewModel.Engine.cs`)*:
+             - Toàn bộ các luồng chạy Job (`RunFlowAsync`, `RunOnce`, `RunContinuous`, `Main Inspection`, `LiveCamera`) đều đi qua `InspectionService.Inspect(..., config, ...)`.
+             - `Inspect()` gọi `EnsureCalibration(config)` ngay đầu pipeline, đảm bảo bất kể Job có thông số riêng hay không, toàn bộ phép tính đo lường (Caliper, Distance, CircleFinder, LinePairDetect, EdgePairDetect, SegmentLineDistance, OCR, Barcode...) đều chia theo tỉ lệ `globalCal.PixelsPerMm` và khử méo quang học bằng `globalCal`.
+             - Bổ sung `OnPropertyChanged(nameof(PixelsPerMm))` sau khi chạy flow giúp UI Tool Editor lập tức phản ánh giá trị Global Pixels/mm mới.
+          4. *Kiểm Thử Toàn Diện*:
+             - Mở rộng bài test `TestForceApplyGlobalCalibration` trong `RecentJobsAndCalibrationTest.cs`:
+               * Kiểm tra bật/tắt cờ qua ViewModel và tính bền vững lưu file setting.
+               * Khởi tạo ViewModel với Job có calib riêng khi cờ bật -> tự động cưỡng chế nạp Global Calib (55.55 px/mm).
+               * Chạy Job bất kỳ qua `InspectionService.Inspect` -> `PixelsPerMm` bị cưỡng chế sang Global Calib (55.55 px/mm).
+             - Toàn bộ test suite tự động đạt **100% PASSED**.
+             - Solution `VisionInspectionApp.slnx` biên dịch Release **0 Error(s)**.

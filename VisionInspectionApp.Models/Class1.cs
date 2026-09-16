@@ -372,7 +372,7 @@ public sealed class ImageOutputDefinition
 
     public bool IncludeOverlay { get; set; } = true;
 
-    public bool ShowRoi { get; set; } = true;
+    public bool ShowRoi { get; set; } = false;
 
     public bool ShowResultTable { get; set; } = true;
 
