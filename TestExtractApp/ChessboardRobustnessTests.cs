@@ -18,6 +18,7 @@ public static class ChessboardRobustnessTests
         TestGradientLightingAndClaheSectorBased();
         TestAlternativeConventionDetection();
         TestHighResolutionNoiseImageNoHang();
+        TestAutoDetectCommonChessboardPatterns();
 
         Console.WriteLine("=======================================================");
         Console.WriteLine("✅ ALL CHESSBOARD DETECTION ROBUSTNESS TESTS PASSED!");
@@ -224,5 +225,61 @@ public static class ChessboardRobustnessTests
         }
 
         Console.WriteLine($"  -> PASSED: Thoát an toàn trong {sw.ElapsedMilliseconds} ms, không bị nghẽn CPU hoặc treo app.");
+    }
+
+    private static void TestAutoDetectCommonChessboardPatterns()
+    {
+        Console.WriteLine("--- Test 6: Tự động dò mẫu bàn cờ thông dụng khi người dùng nhập mặc định (9×6) nhưng bảng thực tế là 8×6 ô cờ (7×5 góc) ---");
+
+        string userImg = @"C:\Users\Admin\.gemini\antigravity-ide\brain\4352ed59-a37c-4f4a-ad02-fa9834310d0b\.user_uploaded\media_1789521239129.png";
+        Mat mat;
+        if (System.IO.File.Exists(userImg))
+        {
+            mat = Cv2.ImRead(userImg, ImreadModes.Color);
+        }
+        else
+        {
+            // Bàn cờ 8 ô x 6 ô với nền trắng 255 chuẩn như giấy in
+            mat = new Mat(6 * 50 + 80, 8 * 50 + 80, MatType.CV_8UC1, new Scalar(255));
+            for (int r = 0; r < 6; r++)
+            {
+                for (int c = 0; c < 8; c++)
+                {
+                    if ((r + c) % 2 == 0)
+                    {
+                        Cv2.Rectangle(mat, new Rect(40 + c * 50, 40 + r * 50, 50, 50), Scalar.All(0), -1);
+                    }
+                }
+            }
+        }
+
+        using (mat)
+        {
+            // Người dùng để mặc định (9, 6) trên UI
+            var result = ChessboardCalibrationService.DetectCornersMultiStrategy(
+                mat,
+                new Size(9, 6),
+                autoSwapDimensions: true,
+                useEnhancedSectorBased: true,
+                tryAlternativeConvention: true);
+
+            if (!result.Found)
+            {
+                throw new Exception("Thất bại khi tự động dò tìm kích thước bàn cờ thực tế 7x5!");
+            }
+
+            if (result.Corners.Length != 35)
+            {
+                throw new Exception($"Số góc phát hiện phải là 35 (7×5)! Thực tế: {result.Corners.Length}");
+            }
+
+            if ((result.PatternSize.Width != 7 || result.PatternSize.Height != 5) &&
+                (result.PatternSize.Width != 5 || result.PatternSize.Height != 7))
+            {
+                throw new Exception($"Kích thước pattern nhận diện phải là 7×5 (hoặc 5×7)! Thực tế: {result.PatternSize.Width}×{result.PatternSize.Height}");
+            }
+
+            Console.WriteLine($"  -> PASSED: Tự động khóa chính xác mẫu {result.PatternSize.Width}×{result.PatternSize.Height} ({result.Corners.Length} corners - {result.StrategyUsed}) dù cấu hình ban đầu là 9×6.");
+        }
     }
 }

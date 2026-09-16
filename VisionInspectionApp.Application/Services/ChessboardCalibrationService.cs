@@ -70,6 +70,26 @@ public static class ChessboardCalibrationService
             candidateSizes.Add(new Size(w + 1, h + 1));
             if (autoSwapDimensions && w != h)
                 candidateSizes.Add(new Size(h + 1, w + 1));
+
+            // Bổ sung các kích thước bàn cờ công nghiệp thông dụng làm fallback
+            // Giúp tự động nhận diện thành công ngay cả khi người dùng để mặc định (9×6) hoặc đếm lệch ô/góc
+            var commonFallbackSizes = new[]
+            {
+                new Size(7, 5), new Size(5, 7),
+                new Size(8, 6), new Size(6, 8),
+                new Size(8, 5), new Size(5, 8),
+                new Size(7, 6), new Size(6, 7),
+                new Size(6, 4), new Size(4, 6),
+                new Size(7, 4), new Size(4, 7),
+                new Size(5, 4), new Size(4, 5)
+            };
+            foreach (var cs in commonFallbackSizes)
+            {
+                if (!candidateSizes.Any(s => s.Width == cs.Width && s.Height == cs.Height))
+                {
+                    candidateSizes.Add(cs);
+                }
+            }
         }
 
         // Lọc bỏ trùng lặp và kích thước không hợp lệ

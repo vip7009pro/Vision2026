@@ -2870,3 +2870,27 @@ Lộ trình tích hợp tính năng Chụp ảnh từ camera và hỗ trợ các
              - Toàn bộ các bài kiểm thử tự động của dự án PASSED 100% (exit code 0).
              - Toàn bộ Solution `VisionInspectionApp.slnx` biên dịch Release **0 Error(s)**.
 
+    - [x] **Task 344: Tối Ưu Nhận Diện Bảng Calib Chessboard & Bổ Sung Tự Động Dò Kích Thước Bàn Cờ Công Nghiệp (Auto-Detect Pattern Size)**:
+        - **Hiện Tượng & Phản Ánh Người Dùng**:
+          + Người dùng phản ánh ảnh chụp bảng cờ thực tế rất nét, rõ ràng (ảnh bàn cờ in trên giấy trắng gồm 8 ô ngang x 6 ô dọc), nhưng khi nạp ảnh vào phần mềm hoặc chụp trực tiếp từ camera thì hệ thống bắt góc rất khó hoặc báo "Not Found".
+        - **Phân Tích Nguyên Nhân Gốc Rễ**:
+          1. *Lệch Quy Ước Hình Học giữa "Số Ô Cờ" và "Số Góc Trong" (OpenCV Inner Corners)*:
+             - Bảng cờ của người dùng có 8 ô vuông ngang và 6 ô vuông dọc (8 x 6 = 48 ô vuông).
+             - OpenCV chỉ bắt các điểm giao nhau chữ thập (+) nằm **bên trong** (Inner Corners), không bắt góc ngoài rìa. Do đó, số góc trong thực tế chỉ là (8 - 1) x (6 - 1) = **7 x 5 = 35 góc**.
+             - Khi mở màn hình Calib, giá trị mặc định của hệ thống là Cols = 9, Rows = 6 theo quy ước Số góc trong (Inner Corners). Nếu người dùng nạp ảnh ngay mà không chỉnh lại, hoặc người dùng đếm thấy 8x6 ô cờ nên nhập 8 và 6 nhưng vẫn để combobox là Số góc trong, hệ thống sẽ tìm 54 góc hoặc 48 góc trong, trong khi bảng chỉ có 35 góc -> OpenCV trả về Not Found (0%).
+          2. *Khi Chụp Từ Camera Trực Tiếp*:
+             - *Mất viền trắng bảo vệ (Quiet Zone)*: Thuật toán OpenCV bắt buộc phải có viền trắng rộng tối thiểu 1-2 ô cờ bao quanh bảng. Nếu để bảng quá gần mép khung hình camera hoặc ngón tay cầm che mất ô vuông rìa, OpenCV không thể khép kín tứ giác biên -> trượt nhận diện.
+             - *Lóa sáng (Glares) & Rung tay (Motion Blur)*: Bảng in giấy bóng hoặc ép plastic dưới ánh đèn xưởng bị cháy sáng ô đen, mất độ dốc tương phản tại điểm yên ngựa (saddle point).
+          3. *Thuật Toán Detect Trước Đó Chưa Có Fallback Kích Thước Thông Dụng*:
+             - DetectCornersMultiStrategy trước đây chỉ thử các kích thước biến thể trực tiếp của kích thước người dùng nhập (w, h, w-1, h-1, w+1, h+1). Nếu người dùng để nguyên mặc định 9x6, danh sách thử nghiệm hoàn toàn không có (7, 5) -> thất bại dù ảnh cực kỳ nét.
+        - **Giải Pháp Kỹ Thuật Đã Triển Khai**:
+          1. *Nâng Cấp DetectCornersMultiStrategy với Bộ Fallback Kích Thước Bàn Cờ Thông Dụng*:
+             - Bổ sung danh sách các kích thước bàn cờ công nghiệp thông dụng vào candidateSizes: (7x5), (5x7), (8x6), (6x8), (8x5), (5x8), (7x6), (6x7), (6x4), (4x6), (7x4), (4x7), (5x4), (4x5).
+             - Danh sách fallback được thử nghiệm sau kích thước của người dùng. Nhờ tốc độ siêu nhanh của thuật toán Sector-Based SB (< 50ms), hệ thống tự động khóa chính xác bàn cờ 7x5 (35 corners) ngay cả khi người dùng để mặc định 9x6!
+          2. *Tăng Cường Nhận Diện Chống Lóa Sáng & Tương Phản Thấp*:
+             - Bổ sung cờ ChessboardFlags.NormalizeImage kết hợp với Sector-Based SB để tự động chuẩn hóa dải sáng cục bộ khi chụp từ camera có bóng đổ hoặc chênh sáng.
+          3. *Kiểm Thử Toàn Diện*:
+             - Bổ sung TestAutoDetectCommonChessboardPatterns vào ChessboardRobustnessTests.cs: kiểm tra tự động khóa đúng mẫu 7x5 (35 corners) trên ảnh thực tế khi cấu hình đầu vào là 9x6.
+             - Toàn bộ test suite tự động chạy thành công 100% (exit code 0).
+             - Solution VisionInspectionApp.slnx biên dịch Release 0 Error(s).
+

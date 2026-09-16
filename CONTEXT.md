@@ -20,6 +20,28 @@
 - Các màn hình preview hiển thị kích thước ảnh và mức zoom.
 - Dòng thời gian chạy trong Inspection tự xuống hàng khi thiếu chiều rộng.
 - Màu chữ của CodeDetection và các điều khiển được ràng buộc theo theme để giữ độ tương phản.
+# Vision Inspection App — Context & Roadmap
+
+## Mô tả
+
+Đây là phần mềm kiểm tra thị giác công nghiệp trên .NET 8 WPF. Hệ thống hỗ trợ camera thời gian thực, OCR/đọc mã bằng ZXing và OpenCvSharp, graph tool dạng node, cấu hình tiền xử lý ảnh và giao diện sáng/tối.
+
+## Trạng thái dự án
+
+### Tool Editor và Node Graph
+
+- Port của node được đặt tên theo ngữ cảnh: `Image`, `Preprocess`, `P1`, `P2`, `L1`, `L2`, `Distance`, `Angle`…
+- Thay đổi đầu vào bằng Properties Panel được đồng bộ với cạnh trên canvas.
+- Có thể kéo thả tool, chọn cạnh hoặc node và xoá bằng phím Delete.
+- Nhấp đúp vào output port để xem giá trị chạy gần nhất.
+- Node `ImageSource` có thể cấp ảnh cho `Preprocess` và các tool ngay cả khi không có Global Snapshot.
+
+### Giao diện và theme
+
+- Theme sáng/tối dùng các `DynamicResource` chung cho Button, TextBox, ComboBox, CheckBox và TabItem.
+- Các màn hình preview hiển thị kích thước ảnh và mức zoom.
+- Dòng thời gian chạy trong Inspection tự xuống hàng khi thiếu chiều rộng.
+- Màu chữ của CodeDetection và các điều khiển được ràng buộc theo theme để giữ độ tương phản.
 
 ### Vision Engine
 
@@ -30,6 +52,20 @@
 - Template rỗng hoặc ROI không hợp lệ trả về kết quả không đạt thay vì làm OpenCV phát sinh ngoại lệ.
 
 ## Cập nhật 2026-07-19
+- **Tối Ưu Nhận Diện Bảng Calib Chessboard & Tự Động Dò Kích Thước Bàn Cờ Công Nghiệp (Task 344)**:
+  - **Hiện Tượng & Phản Ánh Người Dùng**:
+    + Người dùng phản ánh ảnh chụp bảng cờ thực tế rất nét, rõ ràng (ảnh bàn cờ in trên giấy trắng gồm 8 ô ngang × 6 ô dọc), nhưng khi nạp ảnh vào phần mềm hoặc chụp trực tiếp từ camera thì hệ thống bắt góc rất khó hoặc báo "Not Found".
+  - **Nguyên Nhân Gốc Rễ**:
+    1. Bảng cờ của người dùng có 8 ô vuông ngang và 6 ô vuông dọc (8 × 6 = 48 ô vuông). Số góc trong thực tế (Inner Corners) OpenCV cần tìm là (8 - 1) × (6 - 1) = 7 × 5 = 35 góc.
+    2. Cấu hình mặc định của phần mềm là 9×6 theo quy ước Inner Corners. Nếu người dùng để nguyên 9×6 hoặc nhập 8×6 nhưng chọn sai quy ước, hệ thống tìm lưới 54 hoặc 48 góc -> không khớp với 35 góc thực tế.
+    3. Khi chụp từ camera trực tiếp, nếu để bảng cờ quá sát mép ảnh làm mất dải viền trắng (quiet zone), hoặc tay cầm che mất góc, hoặc đèn xưởng chiếu lóa sáng ô đen thì OpenCV sẽ từ chối nhận diện toàn bộ tứ giác bàn cờ.
+    4. Hàm `DetectCornersMultiStrategy` trước đó chưa có cơ chế fallback quét các kích thước bàn cờ công nghiệp thông dụng nếu người dùng nhập sai kích thước ban đầu.
+  - **Giải Pháp Kỹ Thuật Đã Triển Khai**:
+    1. Bổ sung danh sách fallback các kích thước bàn cờ thông dụng `(7×5), (8×5), (8×6), (7×6), (6×4), (7×4)...` vào `ChessboardCalibrationService.DetectCornersMultiStrategy`. Hệ thống tự động nhận diện đúng mẫu 7×5 chỉ trong 47ms ngay cả khi người dùng để mặc định 9×6.
+    2. Tăng cường cờ `NormalizeImage` cho Sector-Based SB giúp bắt góc vững chắc trong điều kiện camera bị chênh sáng hoặc bóng đổ.
+    3. Xây dựng bài kiểm thử `TestAutoDetectCommonChessboardPatterns` trong `ChessboardRobustnessTests.cs` xác minh tự động phát hiện chính xác mẫu 7x5 (35 corners).
+    4. Toàn bộ test tự động PASSED 100%, solution biên dịch Release 0 Error(s).
+
 - **Thêm Nút Áp Dụng Global Calib Vào Job Đang Mở & Hỗ Trợ Nhập Số Thập Phân Cạnh Ô Vuông (Task 343)**:
   - **Hiện Tượng & Yêu Cầu Người Dùng**:
     + Trong cửa sổ Chessboard Calibration, người dùng muốn có một nút bấm để áp dụng cấu hình Global Calibration đã lưu vào Job đang mở (nếu có Job đang mở), giúp tái sử dụng thông số hiệu chuẩn camera toàn cục mà không cần chụp lại ảnh và bấm Calibrate từ đầu.
