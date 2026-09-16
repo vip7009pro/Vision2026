@@ -262,6 +262,10 @@ public static class RecentJobsAndCalibrationTest
             {
                 throw new Exception("ChessboardCalibrationViewModel phải ở chế độ IsGlobalMode khi config == null!");
             }
+            if (chessboardVm.HasActiveJob)
+            {
+                throw new Exception("ChessboardCalibrationViewModel phải có HasActiveJob == false khi config == null!");
+            }
             if (!chessboardVm.WindowTitle.Contains("Toàn Cục", StringComparison.OrdinalIgnoreCase))
             {
                 throw new Exception($"WindowTitle của ChessboardCalibrationViewModel phải chứa 'Toàn Cục', nhận được: '{chessboardVm.WindowTitle}'");
@@ -294,9 +298,59 @@ public static class RecentJobsAndCalibrationTest
             {
                 throw new Exception("ChessboardCalibrationViewModel không được ở chế độ IsGlobalMode khi có config!");
             }
+            if (!chessboardVm.HasActiveJob)
+            {
+                throw new Exception("ChessboardCalibrationViewModel phải có HasActiveJob == true khi có config!");
+            }
             if (!chessboardVm.WindowTitle.Contains("Active Job", StringComparison.OrdinalIgnoreCase))
             {
                 throw new Exception($"WindowTitle của ChessboardCalibrationViewModel phải chứa 'Active Job', nhận được: '{chessboardVm.WindowTitle}'");
+            }
+
+            // Kiểm tra nhập số thập phân (dấu chấm '.' và dấu phẩy ',') cho Cạnh ô vuông
+            chessboardVm.SquareSizeMmText = "25.4";
+            if (Math.Abs(chessboardVm.SquareSizeMm - 25.4) > 1e-6)
+            {
+                throw new Exception($"SquareSizeMmText '25.4' phải cập nhật SquareSizeMm = 25.4, nhận được: {chessboardVm.SquareSizeMm}");
+            }
+            chessboardVm.SquareSizeMmText = "12,7";
+            if (Math.Abs(chessboardVm.SquareSizeMm - 12.7) > 1e-6)
+            {
+                throw new Exception($"SquareSizeMmText '12,7' phải cập nhật SquareSizeMm = 12.7, nhận được: {chessboardVm.SquareSizeMm}");
+            }
+
+            // Kiểm tra lệnh ApplyGlobalToJobCommand khi có Job đang mở
+            var mockGlobalCal = new VisionInspectionApp.Models.ChessboardCalibrationData
+            {
+                BoardCols = 9,
+                BoardRows = 6,
+                SquareSizeMm = 30.5,
+                Fx = 1250.0,
+                Fy = 1250.0,
+                Cx = 640.0,
+                Cy = 480.0,
+                PixelsPerMm = 45.5,
+                ReprojectionError = 0.05,
+                IsCalibrated = true
+            };
+            ChessboardCalibrationService.SaveGlobalCalibration(mockGlobalCal);
+
+            chessboardVm.ApplyGlobalToJobCommand.Execute(null);
+            if (jobConfig.ChessboardCalibration == null || Math.Abs(jobConfig.ChessboardCalibration.Fx - 1250.0) > 1e-4)
+            {
+                throw new Exception("ApplyGlobalToJobCommand phải cập nhật ChessboardCalibration của Job!");
+            }
+            if (Math.Abs(jobConfig.PixelsPerMm - 45.5) > 1e-4)
+            {
+                throw new Exception("ApplyGlobalToJobCommand phải cập nhật PixelsPerMm của Job!");
+            }
+            if (!chessboardVm.IsCalibrated)
+            {
+                throw new Exception("chessboardVm.IsCalibrated phải là true sau khi ApplyGlobalToJobCommand!");
+            }
+            if (Math.Abs(chessboardVm.SquareSizeMm - 30.5) > 1e-4)
+            {
+                throw new Exception($"chessboardVm.SquareSizeMm phải cập nhật thành 30.5! Nhận được: {chessboardVm.SquareSizeMm}");
             }
 
             // 2. Kiểm tra CalibrationViewModel (2-point calib) ở chế độ Toàn Cục (Standalone - Không có Job)

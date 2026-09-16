@@ -30,6 +30,24 @@
 - Template rỗng hoặc ROI không hợp lệ trả về kết quả không đạt thay vì làm OpenCV phát sinh ngoại lệ.
 
 ## Cập nhật 2026-07-19
+- **Thêm Nút Áp Dụng Global Calib Vào Job Đang Mở & Hỗ Trợ Nhập Số Thập Phân Cạnh Ô Vuông (Task 343)**:
+  - **Hiện Tượng & Yêu Cầu Người Dùng**:
+    + Trong cửa sổ Chessboard Calibration, người dùng muốn có một nút bấm để áp dụng cấu hình Global Calibration đã lưu vào Job đang mở (nếu có Job đang mở), giúp tái sử dụng thông số hiệu chuẩn camera toàn cục mà không cần chụp lại ảnh và bấm Calibrate từ đầu.
+    + Ô nhập "Cạnh ô vuông (mm)" trước đó chỉ gõ được số nguyên, khi gõ dấu chấm `.` hoặc dấu phẩy `,` thì bị mất ký tự do cơ chế convert hai chiều của WPF với thuộc tính double.
+  - **Giải Pháp Kỹ Thuật Đã Triển Khai**:
+    1. *Nút Áp Dụng Global Calib Vào Job Đang Mở (`ApplyGlobalToJobCommand`)*:
+       - Bổ sung thuộc tính `HasActiveJob => _config is not null;`.
+       - Khởi tạo lệnh `ApplyGlobalToJobCommand` cho phép thực thi khi có Job đang mở.
+       - Khi bấm nút, hệ thống nạp dữ liệu Global từ `ChessboardCalibrationService.GetGlobalCalibration()`, sao chép toàn bộ thông số hiệu chuẩn (Focal, Distortion, ReprojectionError, Pixels/mm) vào `_config.ChessboardCalibration`, cập nhật giao diện và kích hoạt cờ `IsCalibrated = true`.
+       - Nút bấm được bố trí nổi bật màu Teal (`#0D9488`) trong khung Kết quả Calibration với `Visibility="{Binding HasActiveJob, Converter={StaticResource BoolToVis}}"`.
+    2. *Hỗ Trợ Nhập Số Thập Phân Linh Hoạt Cho Cạnh Ô Vuông (`SquareSizeMmText`)*:
+       - Triển khai thuộc tính chuỗi `SquareSizeMmText` chuẩn hóa cả dấu chấm `.` và dấu phẩy `,`.
+       - Thêm bộ đệm thông minh kiểm tra sai số `Math.Abs(currentVal - value) > 1e-9` trong `OnSquareSizeMmChanged`, giữ nguyên vẹn ký tự dấu chấm/phẩy khi người dùng đang gõ dở số thập phân mà không bị WPF ghi đè chuỗi.
+    3. *Kiểm Thử Toàn Diện*:
+       - Bổ sung test tự động kiểm tra nhận diện `HasActiveJob`, khả năng parse số thập phân `25.4` và `12,7`, cùng thao tác nạp `ApplyGlobalToJobCommand` trong `RecentJobsAndCalibrationTest.cs`.
+       - Toàn bộ bộ test tự động của ứng dụng PASSED 100% (exit code 0).
+       - Toàn bộ Solution `VisionInspectionApp.slnx` biên dịch Release **0 Error(s)**.
+
 - **Khắc Phục Lỗi Bất Đồng Bộ Số Lượng Điểm Object và Image Khi Calibrate Camera Bàn Cờ (Task 342)**:
   - **Hiện Tượng & Phản Ánh Người Dùng**:
     + Trong màn hình Calib Bàn Cờ (`ChessboardCalibrationViewModel`), sau khi thêm các ảnh bàn cờ đã nhận diện được, bấm nút "Calibrate Camera" thì chương trình phát sinh ngoại lệ OpenCV:

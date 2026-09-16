@@ -30,6 +30,7 @@ public sealed partial class ChessboardCalibrationViewModel : ObservableObject
     private bool _isLiveActive = true;
 
     public bool IsGlobalMode => _config is null;
+    public bool HasActiveJob => _config is not null;
     public string WindowTitle => IsGlobalMode
         ? "♟ Hiệu Chuẩn Camera Chessboard (Toàn Cục - Global Calibration)"
         : "♟ Hiệu Chuẩn Camera Chessboard (Active Job)";
@@ -52,6 +53,7 @@ public sealed partial class ChessboardCalibrationViewModel : ObservableObject
         CalibrateCommand = new RelayCommand(RunCalibrate, () => Captures.Count(c => c.Found) >= 3 && !IsDetecting);
         UndistortPreviewCommand = new RelayCommand(UndistortPreview, () => IsCalibrated && _currentMat is not null && !IsDetecting);
         SetAsGlobalCalibrationCommand = new RelayCommand(SetAsGlobalCalibration, () => IsCalibrated && !IsDetecting);
+        ApplyGlobalToJobCommand = new RelayCommand(ApplyGlobalToJob, () => HasActiveJob && !IsDetecting);
         ToggleLiveStreamCommand = new RelayCommand(ToggleLiveStream);
         SnapFrameCommand = new AsyncRelayCommand(SnapFrameAsync, () => !IsDetecting);
         SnapAndAddCaptureCommand = new AsyncRelayCommand(SnapAndAddCaptureAsync, () => !IsDetecting);
@@ -118,6 +120,7 @@ public sealed partial class ChessboardCalibrationViewModel : ObservableObject
         {
             _config = config;
             OnPropertyChanged(nameof(IsGlobalMode));
+            OnPropertyChanged(nameof(HasActiveJob));
             OnPropertyChanged(nameof(WindowTitle));
             OnPropertyChanged(nameof(ModeBadgeText));
 
@@ -193,6 +196,7 @@ public sealed partial class ChessboardCalibrationViewModel : ObservableObject
         finally
         {
             _isInitializing = false;
+            RefreshCommands();
         }
     }
 
@@ -205,6 +209,39 @@ public sealed partial class ChessboardCalibrationViewModel : ObservableObject
 
     [ObservableProperty]
     private double _squareSizeMm = 29.0;
+
+    private string _squareSizeMmText = "29";
+
+    public string SquareSizeMmText
+    {
+        get => _squareSizeMmText;
+        set
+        {
+            if (SetProperty(ref _squareSizeMmText, value))
+            {
+                if (string.IsNullOrWhiteSpace(value)) return;
+                var normalized = value.Replace(',', '.').Trim();
+                if (double.TryParse(normalized, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out var parsed) && parsed > 0)
+                {
+                    if (Math.Abs(SquareSizeMm - parsed) > 1e-9)
+                    {
+                        SquareSizeMm = parsed;
+                    }
+                }
+            }
+        }
+    }
+
+    partial void OnSquareSizeMmChanged(double value)
+    {
+        var normalized = _squareSizeMmText.Replace(',', '.').Trim();
+        if (!double.TryParse(normalized, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out var currentVal) ||
+            Math.Abs(currentVal - value) > 1e-9)
+        {
+            _squareSizeMmText = value.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture);
+            OnPropertyChanged(nameof(SquareSizeMmText));
+        }
+    }
 
     [ObservableProperty]
     private PatternSizeConvention _patternConvention = PatternSizeConvention.InnerCorners;
@@ -312,6 +349,7 @@ public sealed partial class ChessboardCalibrationViewModel : ObservableObject
     public ICommand CalibrateCommand { get; }
     public ICommand UndistortPreviewCommand { get; }
     public ICommand SetAsGlobalCalibrationCommand { get; }
+    public ICommand ApplyGlobalToJobCommand { get; }
     public ICommand ToggleLiveStreamCommand { get; }
     public ICommand SnapFrameCommand { get; }
     public ICommand SnapAndAddCaptureCommand { get; }
@@ -850,6 +888,31 @@ public sealed partial class ChessboardCalibrationViewModel : ObservableObject
         }
     }
 
+    private void ApplyGlobalToJob()
+    {
+        if (_config is null)
+        {
+            StatusMessage = "⚠️ Hiện không có Job nào đang mở để áp dụng Global Calib.";
+            return;
+        }
+
+        var globalCal = ChessboardCalibrationService.GetGlobalCalibration();
+        if (globalCal is null || !globalCal.IsCalibrated)
+        {
+            StatusMessage = "⚠️ Chưa có dữ liệu Global Calibration để áp dụng. Vui lòng thực hiện Calibrate và bấm [🌐 Set As Global Calib] trước.";
+            return;
+        }
+
+        _config.ChessboardCalibration = globalCal.Clone();
+        _config.PixelsPerMm = globalCal.PixelsPerMm;
+        IsDirty = true;
+
+        ApplyCalibrationDataToUi(globalCal);
+
+        StatusMessage = $"📥 Đã áp dụng Global Calib vào Job đang mở thành công! (Pixels/mm: {globalCal.PixelsPerMm:F4}, Error: {globalCal.ReprojectionError:F4} px).";
+        RefreshCommands();
+    }
+
     // ======== Helpers ========
     private void RefreshCommands()
     {
@@ -858,6 +921,7 @@ public sealed partial class ChessboardCalibrationViewModel : ObservableObject
         (CalibrateCommand as RelayCommand)?.NotifyCanExecuteChanged();
         (UndistortPreviewCommand as RelayCommand)?.NotifyCanExecuteChanged();
         (SetAsGlobalCalibrationCommand as RelayCommand)?.NotifyCanExecuteChanged();
+        (ApplyGlobalToJobCommand as RelayCommand)?.NotifyCanExecuteChanged();
         (SnapFrameCommand as AsyncRelayCommand)?.NotifyCanExecuteChanged();
         (SnapAndAddCaptureCommand as AsyncRelayCommand)?.NotifyCanExecuteChanged();
     }

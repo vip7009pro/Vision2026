@@ -102,7 +102,7 @@
                                     <ColumnDefinition Width="30" />
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Text="Cạnh ô vuông (mm)" VerticalAlignment="Center" Foreground="{DynamicResource TextBrush}" />
-                                <TextBox Grid.Column="1" Text="{Binding SquareSizeMm, UpdateSourceTrigger=PropertyChanged}" />
+                                <TextBox Grid.Column="1" Text="{Binding SquareSizeMmText, UpdateSourceTrigger=PropertyChanged}" />
                                 <TextBlock Grid.Column="2" Text="mm" VerticalAlignment="Center" Margin="4,0" Foreground="{DynamicResource TextSecondaryBrush}" />
                             </Grid>
 
@@ -282,6 +282,14 @@
                                 <Button Grid.Column="0" Content="🔄 Undistort Preview" Command="{Binding UndistortPreviewCommand}" Padding="6,5" ToolTip="Xem thử ảnh sau khi khử biến dạng ống kính" />
                                 <Button Grid.Column="2" Content="🌐 Set As Global Calib" Command="{Binding SetAsGlobalCalibrationCommand}" Padding="6,5" Background="#1565C0" Foreground="White" FontWeight="SemiBold" ToolTip="Lưu bộ thông số hiệu chuẩn này làm cấu hình Global mặc định cho toàn bộ ứng dụng (tự động áp dụng cho các Job mới hoặc Job chưa có calib)" />
                             </Grid>
+
+                            <!-- Nút áp dụng Global Calib vào Job đang mở (nếu có Job đang mở) -->
+                            <Button Content="📥 Áp Dụng Global Calib Vào Job Đang Mở" 
+                                    Command="{Binding ApplyGlobalToJobCommand}" 
+                                    Visibility="{Binding HasActiveJob, Converter={StaticResource BoolToVis}}"
+                                    Margin="0,6,0,0" Padding="8,7" 
+                                    Background="#0D9488" Foreground="White" FontWeight="Bold"
+                                    ToolTip="Áp dụng ngay bộ thông số Global Calibration đã lưu trên máy tính này vào Job đang mở (Focal, Distortion, Pixels/mm)" />
 
                             <CheckBox Margin="0,8,0,2"
                                       IsChecked="{Binding ForceApplyGlobalCalibration, Mode=TwoWay}"

@@ -2844,4 +2844,29 @@ Lộ trình tích hợp tính năng Chụp ảnh từ camera và hỗ trợ các
                * Test 5: Kiểm tra bắt ngoại lệ an toàn khi dữ liệu đầu vào không hợp lệ hoặc thiếu ảnh.
              - Toàn bộ các bộ kiểm thử tự động của dự án PASSED 100% (exit code 0).
              - Toàn bộ Solution `VisionInspectionApp.slnx` biên dịch Release **0 Error(s)**.
+    - [x] **Task 343: Thêm Nút Áp Dụng Global Calib Vào Job Đang Mở & Hỗ Trợ Nhập Số Thập Phân Cho Cạnh Ô Vuông Trong Cửa Sổ Chessboard Calibration**:
+        - **Mục Tiêu & Yêu Cầu**:
+          1. **Nút áp dụng Global Calibration vào Job đang mở**:
+             - Yêu cầu: Trong cửa sổ Hiệu Chuẩn Bàn Cờ (`ChessboardCalibrationDialog`), thêm 1 nút bấm cho phép kỹ sư/người dùng nhanh chóng nạp bộ thông số hiệu chuẩn toàn cục đã lưu trên máy tính (`global_chessboard_calibration.json`) vào cấu hình Job đang mở hiện tại (`_config != null`) mà không cần phải thực hiện lại thao tác chụp ảnh và hiệu chuẩn.
+             - Điều kiện: Nút chỉ hiển thị và kích hoạt khi có Job đang mở (`HasActiveJob == true`), tự động ẩn khi ở chế độ Toàn Cục (Standalone).
+          2. **Hỗ trợ nhập số thập phân (dấu chấm '.' và dấu phẩy ',') cho Cạnh ô vuông (Square Size mm)**:
+             - Hiện tượng: Trước đây ô TextBox Cạnh ô vuông liên kết trực tiếp với thuộc tính `double SquareSizeMm` với cờ `UpdateSourceTrigger=PropertyChanged`. Khi người dùng gõ dấu chấm `.` hoặc dấu phẩy `,`, cơ chế ép kiểu hai chiều của WPF ngay lập tức convert về số thực rồi trả ngược về chuỗi, làm mất dấu chấm/phẩy khiến người dùng chỉ gõ được số nguyên.
+             - Giải pháp: Sử dụng thuộc tính chuỗi trung gian `SquareSizeMmText` chuẩn hóa linh hoạt cả dấu `,` và `.`, đồng thời có cơ chế chống ghi đè text khi người dùng đang nhập dở số thập phân.
+          3. **Kiến Trúc & Giải Pháp Kỹ Thuật Đã Triển Khai**:
+             - **Quản lý trạng thái và lệnh trong ViewModel (`ChessboardCalibrationViewModel.cs`)**:
+               + Bổ sung thuộc tính `public bool HasActiveJob => _config is not null;`.
+               + Bổ sung thuộc tính `SquareSizeMmText` và phương thức `OnSquareSizeMmChanged` hỗ trợ nhập số thập phân mượt mà, không bao giờ bị nhảy mất dấu chấm/phẩy.
+               + Khai báo và khởi tạo `ApplyGlobalToJobCommand = new RelayCommand(ApplyGlobalToJob, () => HasActiveJob && !IsDetecting);`.
+               + Triển khai phương thức `ApplyGlobalToJob()`: kiểm tra dữ liệu Global từ `ChessboardCalibrationService.GetGlobalCalibration()`, sao chép vào `_config.ChessboardCalibration`, cập nhật tỉ lệ `_config.PixelsPerMm`, đồng bộ thông số lên giao diện qua `ApplyCalibrationDataToUi(globalCal)`, kích hoạt cờ `IsCalibrated = true` và hiển thị thông báo thành công.
+               + Bổ sung `OnPropertyChanged(nameof(HasActiveJob))` và cập nhật `RefreshCommands()`.
+             - **Thiết kế giao diện trong XAML (`ChessboardCalibrationDialog.xaml`)**:
+               + Cập nhật binding của ô nhập Cạnh ô vuông sang `SquareSizeMmText`.
+               + Bổ sung nút bấm `📥 Áp Dụng Global Calib Vào Job Đang Mở` với nền màu Teal (`#0D9488`), chữ trắng đậm, ràng buộc `Visibility="{Binding HasActiveJob, Converter={StaticResource BoolToVis}}"`.
+          4. **Kiểm Thử Toàn Diện**:
+             - Cập nhật bài test tự động `TestStandaloneGlobalCalibrationWorkflow` trong `RecentJobsAndCalibrationTest.cs`:
+               * Kiểm tra `HasActiveJob` đúng `false` khi không có Job và `true` khi có Job.
+               * Kiểm tra nhập số thập phân với cả dấu chấm (`"25.4"` -> `25.4`) và dấu phẩy (`"12,7"` -> `12.7`).
+               * Kiểm tra `ApplyGlobalToJobCommand` nạp chuẩn xác `Fx`, `PixelsPerMm`, `IsCalibrated` và `SquareSizeMm` từ Global Calib vào Job.
+             - Toàn bộ các bài kiểm thử tự động của dự án PASSED 100% (exit code 0).
+             - Toàn bộ Solution `VisionInspectionApp.slnx` biên dịch Release **0 Error(s)**.
 
