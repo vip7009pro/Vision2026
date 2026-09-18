@@ -844,6 +844,76 @@ public static class ChessboardCalibrationService
 
         return false;
     }
+
+    /// <summary>
+    /// Xuất thông số hiệu chuẩn camera ra tệp JSON bất kỳ để lưu trữ hoặc chia sẻ.
+    /// </summary>
+    public static bool ExportCalibration(ChessboardCalibrationData data, string filePath)
+    {
+        if (data is null || string.IsNullOrWhiteSpace(filePath)) return false;
+        try
+        {
+            var dir = System.IO.Path.GetDirectoryName(filePath);
+            if (!string.IsNullOrWhiteSpace(dir) && !System.IO.Directory.Exists(dir))
+            {
+                System.IO.Directory.CreateDirectory(dir);
+            }
+
+            var options = new System.Text.Json.JsonSerializerOptions
+            {
+                WriteIndented = true,
+                PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase
+            };
+            var json = System.Text.Json.JsonSerializer.Serialize(data, options);
+            System.IO.File.WriteAllText(filePath, json, System.Text.Encoding.UTF8);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[ChessboardCalibrationService] Error exporting calibration to '{filePath}': {ex.Message}");
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Nhập thông số hiệu chuẩn camera từ tệp JSON.
+    /// </summary>
+    public static (bool Success, ChessboardCalibrationData? Data, string ErrorMessage) ImportCalibration(string filePath)
+    {
+        if (string.IsNullOrWhiteSpace(filePath))
+            return (false, null, "Đường dẫn tệp không hợp lệ.");
+
+        if (!System.IO.File.Exists(filePath))
+            return (false, null, $"Tệp không tồn tại: {filePath}");
+
+        try
+        {
+            var json = System.IO.File.ReadAllText(filePath, System.Text.Encoding.UTF8);
+            if (string.IsNullOrWhiteSpace(json))
+                return (false, null, "Nội dung tệp rỗng.");
+
+            var options = new System.Text.Json.JsonSerializerOptions
+            {
+                PropertyNameCaseInsensitive = true
+            };
+            var data = System.Text.Json.JsonSerializer.Deserialize<ChessboardCalibrationData>(json, options);
+            if (data is null)
+                return (false, null, "Không thể giải mã dữ liệu hiệu chuẩn từ JSON.");
+
+            if (!data.IsCalibrated || data.Fx <= 0 || data.Fy <= 0)
+            {
+                return (false, null, "Dữ liệu trong tệp không hợp lệ hoặc chưa được hiệu chuẩn (Focal fx/fy <= 0).");
+            }
+
+            data.DistCoeffs ??= Array.Empty<double>();
+            return (true, data, string.Empty);
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[ChessboardCalibrationService] Error importing calibration from '{filePath}': {ex.Message}");
+            return (false, null, $"Lỗi định dạng tệp: {ex.Message}");
+        }
+    }
 }
 
 public sealed record ChessboardCalibrationResult(

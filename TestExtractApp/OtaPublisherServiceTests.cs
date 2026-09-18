@@ -152,11 +152,20 @@ public static class OtaPublisherServiceTests
         }
     }
 
+    private static int GetAvailablePort()
+    {
+        using var tcp = new System.Net.Sockets.TcpListener(System.Net.IPAddress.Loopback, 0);
+        tcp.Start();
+        int port = ((System.Net.IPEndPoint)tcp.LocalEndpoint).Port;
+        tcp.Stop();
+        return port;
+    }
+
     private static async Task TestMockHttpUploadWithCustomServerFolder()
     {
         Console.WriteLine("--- Test 3: Kiểm tra Upload Multipart Lên Máy Chủ & Tùy Chỉnh Thư Mục Server ---");
 
-        int port = 59134;
+        int port = GetAvailablePort();
         string prefix = $"http://127.0.0.1:{port}/";
         using var listener = new HttpListener();
         listener.Prefixes.Add(prefix);
@@ -260,7 +269,7 @@ public static class OtaPublisherServiceTests
     {
         Console.WriteLine("--- Test 4: Kiểm tra Tải Lên Phân Đoạn (Chunked Upload) Cho Gói Lớn ---");
 
-        int port = 59136;
+        int port = GetAvailablePort();
         string prefix = $"http://127.0.0.1:{port}/";
         using var listener = new HttpListener();
         listener.Prefixes.Add(prefix);
@@ -379,7 +388,7 @@ public static class OtaPublisherServiceTests
     {
         Console.WriteLine("--- Test 4: Kiểm tra Khớp Nối Toàn Diện Giữa Publisher Và Receiver (OtaUpdateService) ---");
 
-        int port = 59135;
+        int port = GetAvailablePort();
         string prefix = $"http://127.0.0.1:{port}/";
         using var listener = new HttpListener();
         listener.Prefixes.Add(prefix);

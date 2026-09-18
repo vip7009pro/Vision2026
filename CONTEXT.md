@@ -53,6 +53,28 @@
 
 ## Cập nhật 2026-07-19
 
+- **Bổ Sung Nút Nhập Calib Từ File (.json) Đầy Đủ Bộ Cặp Import / Export (Task 355)**:
+  - **Yêu Cầu**: Hoàn thiện trọn bộ cặp tính năng Nhập (Import) & Xuất (Export) thông số hiệu chuẩn camera trong cửa sổ Chessboard Calibration.
+  - **Triển Khai Chi Tiết**:
+    + Bổ sung hàm `ChessboardCalibrationService.ImportCalibration(filePath)` xác thực file, parse JSON, kiểm tra tính hợp lệ của camera matrix và distortion coefficients.
+    + Thêm lệnh `ImportCalibrationCommand` và phương thức `ImportCalibration()` trong `ChessboardCalibrationViewModel.cs`: mở `OpenFileDialog`, nạp dữ liệu lên UI, cập nhật ma trận máy ảnh vào Job hiện tại (hoặc lưu Global Calib nếu chưa mở Job).
+    + Cập nhật `ChessboardCalibrationDialog.xaml`: bố trí nút `📥 Nhập Calib File` (#0284C7) song song với nút `💾 Xuất Calib File` (#4F46E5) ở cả bảng Kết Quả bên trái và thanh Bottom Bar dưới cùng.
+    + Bổ sung kiểm thử tự động `Test5_ImportCalibrationFromFileAndVerify` trong `TestExtractApp/UndistortResolutionTests.cs` (kiểm thử tệp hợp lệ, tệp không tồn tại, tệp rỗng/hỏng).
+  - **Trạng Thái & Kiểm Thử**:
+    + Solution biên dịch Release: **0 Error(s)**.
+    + Bộ kiểm thử tự động `TestExtractApp`: **100% PASSED**.
+
+- **Thêm Nút Xuất Calib Ra File Trong Cửa Sổ Chessboard Calibration (Task 354)**:
+  - **Yêu Cầu**: Bổ sung nút Export thông số hiệu chuẩn camera (Export Calib) ra file JSON trong cửa sổ Chessboard Calibration.
+  - **Triển Khai Chi Tiết**:
+    + Bổ sung hàm `ChessboardCalibrationService.ExportCalibration(data, filePath)` hỗ trợ serialize thông số camera matrix, distortion, pixels/mm và image size sang JSON UTF-8.
+    + Thêm lệnh `ExportCalibrationCommand` và phương thức `ExportCalibration()` mở `SaveFileDialog` trong `ChessboardCalibrationViewModel.cs`.
+    + Bố trí 2 vị trí nút bấm trực quan: trong panel KẾT QUẢ CALIBRATION bên trái và thanh nút điều hướng dưới cùng của `ChessboardCalibrationDialog.xaml`.
+    + Bổ sung ca kiểm thử tự động `Test4_ExportCalibrationToFileAndVerify` trong `TestExtractApp/UndistortResolutionTests.cs`.
+  - **Trạng Thái & Kiểm Thử**:
+    + Solution biên dịch Release: **0 Error(s)**.
+    + Bộ kiểm thử tự động `TestExtractApp`: **100% PASSED**.
+
 - **Hiển Thị Số Lượng Mẫu Test Trong OQC Scanner & Mặc Định EnableUndistort Cho ImageSource (Task 353)**:
   - **Yêu Cầu**: Hiển thị số mẫu đã test cho mỗi Job vừa nạp trong tab OQC Scanner (to hợp lý bên phải nút "Mở cửa sổ lịch sử quét mã", tự động reset khi nạp Job mới), đồng thời đặt mặc định Checkbox Undistort cho node ImageSource là `true`.
   - **Triển Khai Chi Tiết**:

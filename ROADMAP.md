@@ -3146,3 +3146,50 @@ Lộ trình tích hợp tính năng Chụp ảnh từ camera và hỗ trợ các
         - **Kết Quả Biên Dịch & Kiểm Thử**:
           + Solution biên dịch Release: **0 Error(s)**.
           + Toàn bộ test suite `TestExtractApp` (gồm 7 test New Job và toàn bộ pipeline): **100% PASSED**.
+
+    - [x] **Task 354: Thêm Nút Xuất Calib Ra File (.json) Trong Cửa Sổ Chessboard Calibration**:
+        - **Yêu Cầu Người Dùng**:
+          + Trong cửa sổ Chessboard Calibration, bổ sung nút xuất thông số hiệu chuẩn camera (Export Calib) ra file.
+        - **Phân Tích & Giải Pháp Kỹ Thuật Đã Triển Khai**:
+          1. *Phương Thức Export Calibration Độc Lập (`ChessboardCalibrationService.cs`)*:
+             - Xây dựng hàm `ExportCalibration(ChessboardCalibrationData data, string filePath)`.
+             - Tự động tạo thư mục đích nếu chưa có, serialize cấu hình đầy đủ (Focal fx/fy, Principal cx/cy, Distortion k1..k5, Pixels/mm, Phân giải ảnh ImageWidth/Height, Trạng thái IsCalibrated) sang JSON UTF-8 định dạng chuẩn indent đẹp mắt.
+          2. *Lệnh Export & Hộp Thoại Lưu Tệp Trong ViewModel (`ChessboardCalibrationViewModel.cs`)*:
+             - Bổ sung lệnh `ExportCalibrationCommand` (chỉ cho phép bấm khi đã có kết quả hiệu chuẩn `IsCalibrated && !IsDetecting`).
+             - Mở hộp thoại chuẩn `SaveFileDialog` (Filter: `JSON Calibration Files (*.json)|*.json|All Files (*.*)|*.*`, DefaultExt: `.json`, tên file mặc định: `{ProductCode}_chessboard_calib.json` hoặc `chessboard_calibration.json`).
+             - Xuất file an toàn và thông báo phản hồi trạng thái `StatusMessage` tức thì cho người dùng.
+          3. *Giao Diện Nút Bấm Trực Quan Trong Dialog (`ChessboardCalibrationDialog.xaml`)*:
+             - Bổ sung nút `💾 Xuất Calib Ra File (.json)` nổi bật với màu nền `#4F46E5` trong panel Kết quả Calibration bên trái.
+             - Bổ sung nút `💾 Xuất Calib Ra File...` ở góc trái thanh công cụ điều hướng dưới cùng (Bottom bar), giúp người dùng dễ dàng thao tác từ bất kỳ vị trí nào trên màn hình.
+          4. *Kiểm Thử Tự Động Toàn Diện (`TestExtractApp/UndistortResolutionTests.cs`)*:
+             - Bổ sung `Test4_ExportCalibrationToFileAndVerify` xuất dữ liệu hiệu chuẩn ra file tạm và parse JSON xác thực đầy đủ 100% các trường quang học và kích thước cảm biến.
+             - Nâng cấp dynamic port cho `OtaPublisherServiceTests.cs` với `GetAvailablePort()` để triệt tiêu xung đột port mạng.
+        - **Kết Quả Biên Dịch & Kiểm Thử**:
+          + Solution biên dịch Release: **0 Error(s)**.
+          + Toàn bộ test suite `TestExtractApp`: **100% PASSED**.
+
+    - [x] **Task 355: Bổ Sung Nút Nhập Calib Từ File (.json) Đầy Đủ Bộ Cặp Import / Export Trong Cửa Sổ Chessboard Calibration**:
+        - **Yêu Cầu Người Dùng**:
+          + "Tạo nút xuất thì fai có nút nhập nữa chứ (đủ import, export)": Bổ sung tính năng và nút Nhập/Import Calib từ file JSON để hoàn thiện cặp chức năng Import/Export thông số hiệu chuẩn camera.
+        - **Phân Tích & Giải Pháp Kỹ Thuật Đã Triển Khai**:
+          1. *Phương Thức Import Calibration An Toàn (`ChessboardCalibrationService.cs`)*:
+             - Xây dựng hàm `ImportCalibration(string filePath)` trả về `(bool Success, ChessboardCalibrationData? Data, string ErrorMessage)`.
+             - Xác thực file tồn tại, deserialize JSON không phân biệt hoa thường (`PropertyNameCaseInsensitive = true`).
+             - Kiểm tra tính hợp lệ của dữ liệu hiệu chuẩn (`IsCalibrated == true`, `Fx > 0`, `Fy > 0`), tự động cấp phát `DistCoeffs` nếu rỗng.
+          2. *Lệnh Import & Nạp Vào Job/Global Trong ViewModel (`ChessboardCalibrationViewModel.cs`)*:
+             - Bổ sung lệnh `ImportCalibrationCommand = new RelayCommand(ImportCalibration, () => !IsDetecting)`.
+             - Mở hộp thoại chuẩn `OpenFileDialog` (Filter: `JSON Calibration Files (*.json)|*.json|All Files (*.*)|*.*`).
+             - Nạp thông số quang học vào UI (`ApplyCalibrationDataToUi`), tái tạo ma trận camera `_cameraMatrix` và hệ số méo `_distCoeffs`.
+             - Tự động gán vào Job đang mở (`_config.ChessboardCalibration` và `_config.PixelsPerMm`) hoặc lưu làm Global Calibration nếu không có Job nào đang mở.
+             - Cập nhật thông báo trực quan `StatusMessage` và làm mới trạng thái các lệnh (`RefreshCommands`).
+          3. *Giao Diện Nút Bấm Cân Đối Cặp Đôi Trong Dialog (`ChessboardCalibrationDialog.xaml`)*:
+             - Tại panel Kết quả: Bố trí Grid 2 cột song song chứa nút `💾 Xuất Calib File` (#4F46E5) và `📥 Nhập Calib File` (#0284C7 Sky Blue).
+             - Tại Bottom bar: Đặt nút `📥 Nhập Calib Từ File...` nằm cạnh nút `💾 Xuất Calib Ra File...` ở góc trái dock.
+          4. *Kiểm Thử Tự Động Toàn Diện (`TestExtractApp/UndistortResolutionTests.cs`)*:
+             - Bổ sung `Test5_ImportCalibrationFromFileAndVerify` kiểm thử:
+               * Import tệp JSON hợp lệ và xác thực khớp 100% tất cả các trường dữ liệu (Focal, Center, Distortion 5 hệ số, Px/mm, Image Size).
+               * Import tệp không tồn tại -> bắt lỗi trả về thông báo lỗi rõ ràng.
+               * Import tệp JSON lỗi/chưa calib -> bắt lỗi an toàn không gây crash.
+        - **Kết Quả Biên Dịch & Kiểm Thử**:
+          + Solution biên dịch Release: **0 Error(s)**.
+          + Toàn bộ test suite `TestExtractApp`: **100% PASSED**.

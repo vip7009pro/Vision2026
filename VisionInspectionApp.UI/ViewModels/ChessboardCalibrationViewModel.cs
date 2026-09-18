@@ -54,6 +54,8 @@ public sealed partial class ChessboardCalibrationViewModel : ObservableObject
         UndistortPreviewCommand = new RelayCommand(UndistortPreview, () => IsCalibrated && _currentMat is not null && !IsDetecting);
         SetAsGlobalCalibrationCommand = new RelayCommand(SetAsGlobalCalibration, () => IsCalibrated && !IsDetecting);
         ApplyGlobalToJobCommand = new RelayCommand(ApplyGlobalToJob, () => HasActiveJob && !IsDetecting);
+        ExportCalibrationCommand = new RelayCommand(ExportCalibration, () => IsCalibrated && !IsDetecting);
+        ImportCalibrationCommand = new RelayCommand(ImportCalibration, () => !IsDetecting);
         ToggleLiveStreamCommand = new RelayCommand(ToggleLiveStream);
         SnapFrameCommand = new AsyncRelayCommand(SnapFrameAsync, () => !IsDetecting);
         SnapAndAddCaptureCommand = new AsyncRelayCommand(SnapAndAddCaptureAsync, () => !IsDetecting);
@@ -356,6 +358,8 @@ public sealed partial class ChessboardCalibrationViewModel : ObservableObject
     public ICommand UndistortPreviewCommand { get; }
     public ICommand SetAsGlobalCalibrationCommand { get; }
     public ICommand ApplyGlobalToJobCommand { get; }
+    public ICommand ExportCalibrationCommand { get; }
+    public ICommand ImportCalibrationCommand { get; }
     public ICommand ToggleLiveStreamCommand { get; }
     public ICommand SnapFrameCommand { get; }
     public ICommand SnapAndAddCaptureCommand { get; }
@@ -938,6 +942,106 @@ public sealed partial class ChessboardCalibrationViewModel : ObservableObject
         RefreshCommands();
     }
 
+    // ======== Export Calibration ========
+    private void ExportCalibration()
+    {
+        if (!IsCalibrated)
+        {
+            StatusMessage = "⚠️ Chưa có dữ liệu hiệu chuẩn để xuất. Vui lòng thực hiện Calibrate hoặc nạp dữ liệu trước khi xuất file.";
+            return;
+        }
+
+        var calibData = _config?.ChessboardCalibration ?? new ChessboardCalibrationData
+        {
+            BoardCols = BoardCols,
+            BoardRows = BoardRows,
+            SquareSizeMm = SquareSizeMm,
+            Fx = FocalX,
+            Fy = FocalY,
+            Cx = PrincipalX,
+            Cy = PrincipalY,
+            DistCoeffs = !string.IsNullOrWhiteSpace(DistCoeffsText)
+                ? DistCoeffsText.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
+                    .Select(s => double.TryParse(s, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out var v) ? v : 0.0).ToArray()
+                : Array.Empty<double>(),
+            ReprojectionError = ReprojectionError,
+            PixelsPerMm = PixelsPerMm,
+            ImageWidth = (_currentMat?.Width > 0 ? _currentMat.Width : (_config?.ChessboardCalibration?.ImageWidth ?? 0)),
+            ImageHeight = (_currentMat?.Height > 0 ? _currentMat.Height : (_config?.ChessboardCalibration?.ImageHeight ?? 0)),
+            IsCalibrated = true
+        };
+
+        var dialog = new SaveFileDialog
+        {
+            Title = "Xuất Thông Số Hiệu Chuẩn Chessboard Ra File",
+            Filter = "JSON Calibration Files (*.json)|*.json|All Files (*.*)|*.*",
+            DefaultExt = ".json",
+            FileName = !string.IsNullOrWhiteSpace(_config?.ProductCode)
+                ? $"{_config.ProductCode}_chessboard_calib.json"
+                : "chessboard_calibration.json"
+        };
+
+        if (dialog.ShowDialog() == true)
+        {
+            bool ok = ChessboardCalibrationService.ExportCalibration(calibData, dialog.FileName);
+            if (ok)
+            {
+                StatusMessage = $"💾 Đã xuất file cấu hình Calibration thành công: {dialog.FileName}";
+            }
+            else
+            {
+                StatusMessage = "❌ Xuất file Calibration thất bại. Vui lòng kiểm tra quyền ghi đĩa.";
+            }
+        }
+    }
+
+    // ======== Import Calibration ========
+    private void ImportCalibration()
+    {
+        var dialog = new OpenFileDialog
+        {
+            Title = "Nhập Thông Số Hiệu Chuẩn Chessboard Từ File",
+            Filter = "JSON Calibration Files (*.json)|*.json|All Files (*.*)|*.*",
+            DefaultExt = ".json"
+        };
+
+        if (dialog.ShowDialog() == true)
+        {
+            var (success, data, errorMsg) = ChessboardCalibrationService.ImportCalibration(dialog.FileName);
+            if (!success || data is null)
+            {
+                StatusMessage = $"❌ Nhập file Calibration thất bại: {errorMsg}";
+                return;
+            }
+
+            ApplyCalibrationDataToUi(data);
+
+            _cameraMatrix = new double[3, 3]
+            {
+                { data.Fx, 0, data.Cx },
+                { 0, data.Fy, data.Cy },
+                { 0, 0, 1 }
+            };
+            _distCoeffs = data.DistCoeffs;
+
+            if (_config is not null)
+            {
+                _config.ChessboardCalibration = data.Clone();
+                _config.PixelsPerMm = data.PixelsPerMm;
+                IsDirty = true;
+                StatusMessage = $"📥 Đã nạp thành công thông số Calibration cho Job từ: {System.IO.Path.GetFileName(dialog.FileName)} (Pixels/mm: {data.PixelsPerMm:F4}, Error: {data.ReprojectionError:F4} px).";
+            }
+            else
+            {
+                ChessboardCalibrationService.SaveGlobalCalibration(data);
+                IsDirty = true;
+                StatusMessage = $"📥 Đã nạp & LƯU TOÀN CỤC thông số Calibration từ: {System.IO.Path.GetFileName(dialog.FileName)} (Pixels/mm: {data.PixelsPerMm:F4}, Error: {data.ReprojectionError:F4} px).";
+            }
+
+            RefreshCommands();
+        }
+    }
+
     // ======== Helpers ========
     private void RefreshCommands()
     {
@@ -947,6 +1051,8 @@ public sealed partial class ChessboardCalibrationViewModel : ObservableObject
         (UndistortPreviewCommand as RelayCommand)?.NotifyCanExecuteChanged();
         (SetAsGlobalCalibrationCommand as RelayCommand)?.NotifyCanExecuteChanged();
         (ApplyGlobalToJobCommand as RelayCommand)?.NotifyCanExecuteChanged();
+        (ExportCalibrationCommand as RelayCommand)?.NotifyCanExecuteChanged();
+        (ImportCalibrationCommand as RelayCommand)?.NotifyCanExecuteChanged();
         (SnapFrameCommand as AsyncRelayCommand)?.NotifyCanExecuteChanged();
         (SnapAndAddCaptureCommand as AsyncRelayCommand)?.NotifyCanExecuteChanged();
     }

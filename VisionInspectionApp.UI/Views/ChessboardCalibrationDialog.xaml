@@ -368,6 +368,25 @@
                                     Margin="0,6,0,0" Padding="8,7" 
                                     Background="#0D9488" Foreground="White" FontWeight="Bold"
                                     ToolTip="Áp dụng ngay bộ thông số Global Calibration đã lưu trên máy tính này vào Job đang mở (Focal, Distortion, Pixels/mm)" />
+
+                            <!-- Nút Xuất và Nhập Calib Ra/Vào File JSON -->
+                            <Grid Margin="0,6,0,0">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="6" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <Button Grid.Column="0" Content="💾 Xuất Calib File" 
+                                        Command="{Binding ExportCalibrationCommand}" 
+                                        Padding="6,7" 
+                                        Background="#4F46E5" Foreground="White" FontWeight="Bold"
+                                        ToolTip="Xuất toàn bộ thông số hiệu chuẩn camera (Focal, Distortion, Pixels/mm, Phân giải ảnh) ra tệp JSON để lưu trữ hoặc nạp vào máy khác" />
+                                <Button Grid.Column="2" Content="📥 Nhập Calib File" 
+                                        Command="{Binding ImportCalibrationCommand}" 
+                                        Padding="6,7" 
+                                        Background="#0284C7" Foreground="White" FontWeight="Bold"
+                                        ToolTip="Nhập bộ thông số hiệu chuẩn camera từ tệp JSON đã lưu trữ trước đó vào ứng dụng" />
+                            </Grid>
                         </StackPanel>
                     </Border>
 
@@ -385,9 +404,23 @@
         </Grid>
 
         <!-- Bottom buttons -->
-        <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,10,0,0">
-            <Button Content="✅ Áp Dụng &amp; Đóng" Click="OnApplyClicked" Background="#2E7D32" Foreground="White" Padding="14,6" FontWeight="Bold" Margin="0,0,8,0" />
-            <Button Content="❌ Đóng" Click="OnCloseClicked" Padding="14,6" />
-        </StackPanel>
+        <DockPanel Grid.Row="2" Margin="0,10,0,0" LastChildFill="False">
+            <StackPanel Orientation="Horizontal" DockPanel.Dock="Left">
+                <Button Content="💾 Xuất Calib Ra File..." 
+                        Command="{Binding ExportCalibrationCommand}" 
+                        Padding="14,6" FontWeight="SemiBold" 
+                        Background="#4F46E5" Foreground="White"
+                        ToolTip="Xuất toàn bộ thông số hiệu chuẩn camera hiện tại ra tệp JSON để sao lưu hoặc nạp vào máy khác" />
+                <Button Content="📥 Nhập Calib Từ File..." 
+                        Command="{Binding ImportCalibrationCommand}" 
+                        Margin="6,0,0,0" Padding="14,6" FontWeight="SemiBold" 
+                        Background="#0284C7" Foreground="White"
+                        ToolTip="Nhập bộ thông số hiệu chuẩn camera từ tệp JSON để áp dụng ngay vào phiên làm việc" />
+            </StackPanel>
+            <StackPanel Orientation="Horizontal" DockPanel.Dock="Right">
+                <Button Content="✅ Áp Dụng &amp; Đóng" Click="OnApplyClicked" Background="#2E7D32" Foreground="White" Padding="14,6" FontWeight="Bold" Margin="0,0,8,0" />
+                <Button Content="❌ Đóng" Click="OnCloseClicked" Padding="14,6" />
+            </StackPanel>
+        </DockPanel>
     </Grid>
 </Window>
