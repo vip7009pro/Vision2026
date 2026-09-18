@@ -568,10 +568,11 @@ public static class ChessboardCalibrationService
 
         try
         {
-            using var newCamMat = Cv2.GetOptimalNewCameraMatrix(camMat, distMat, src.Size(), 0.0, src.Size(), out var validRoi);
+            // Bảo toàn ma trận camera gốc K: giữ nguyên 100% quang tâm (Cx, Cy), tiêu cự (Fx, Fy)
+            // và hệ số PixelsPerMm vật lý, tránh hiện tượng phóng to (zoom in) / dịch chuyển pixel làm trôi dạt ROI của các Tool
             using var map1 = new Mat();
             using var map2 = new Mat();
-            Cv2.InitUndistortRectifyMap(camMat, distMat, new Mat(), newCamMat, src.Size(), MatType.CV_32FC1, map1, map2);
+            Cv2.InitUndistortRectifyMap(camMat, distMat, new Mat(), camMat, src.Size(), MatType.CV_32FC1, map1, map2);
 
             var dst = new Mat();
             Cv2.Remap(src, dst, map1, map2, InterpolationFlags.Linear, BorderTypes.Constant, Scalar.Black);

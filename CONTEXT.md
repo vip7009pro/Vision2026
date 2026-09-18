@@ -53,6 +53,41 @@
 
 ## Cập nhật 2026-07-19
 
+- **Khắc Phục Lỗi Caliper Bị Dịch Lệch Khi Bật Undistort (ImageSource) & Đồng Bộ Toàn Bộ Pipeline Các Tool (Task 350)**:
+  - **Hiện Tượng & Yêu Cầu Người Dùng**:
+    + Người dùng phản ánh: khi KHÔNG check `undistort` ở node `ImageSource` thì tool Caliper bắt đường rất chuẩn; nhưng khi CHECK `undistort` thì Caliper lại bắt bị dịch sang bên cạnh.
+    + Yêu cầu: Kiểm tra xem ảnh vào pipeline có phải ảnh đã khử méo không? Rà soát toàn bộ các tool trong pipeline xem có tool nào bị ảnh hưởng không?
+  - **Phân Tích Nguyên Nhân Gốc Rễ**:
+    1. *Ảnh vào các Tool có phải ảnh đã khử méo không?*:
+       - **Trong thuật toán Pipeline (`InspectionService.Pipeline.cs`)**: ĐÚNG, ảnh đầu vào `image` ĐÃ ĐƯỢC KHỬ MÉO qua `ChessboardCalibrationService.Undistort()` khi `ImageSources.Any(s => s.EnableUndistort)`. Tất cả các tool (Origin, Preprocess, Caliper, Point, Line, Blob, Circle...) đều chạy trên ảnh này.
+       - **Trên giao diện hiển thị (`ToolEditorViewModel`)**: ẢNH NỀN CANVAS LẠI LÀ ẢNH RAW CHƯA KHỬ MÉO! `_sharedImage` chỉ nhận ảnh raw gốc đọc từ file/camera. Khi chạy xong `Inspect()`, tọa độ Caliper (tính trên ảnh phẳng đã nắn) được vẽ Overlay đè lên Canvas (ảnh thô bị méo cong), khiến mắt người dùng thấy vạch Caliper bị trôi lệch sang bên cạnh so với mép trên màn hình.
+    2. *Sai số quang học từ `Cv2.GetOptimalNewCameraMatrix(..., alpha = 0.0, ...)`*:
+       - `alpha = 0.0` yêu cầu OpenCV cắt viền đen và phóng to (zoom in 5-20%) bức ảnh, đồng thời dịch chuyển tâm quang học $(c_x, c_y)$. Thao tác zoom nhân tạo này làm xê dịch vị trí pixel của vật thể tới 30-150px, khiến hộp quét `SearchRoi` của Caliper (chỉ rộng 20-40px) bị văng khỏi mép đối tượng hoặc quét trúng vân bên cạnh.
+       - *Chuẩn công nghiệp*: Phải dùng chính ma trận camera gốc $K$ (`newCameraMatrix = camMat`) để bảo toàn tuyệt đối 100% quang tâm và tỉ lệ `PixelsPerMm`.
+    3. *Lệch hệ tọa độ khi Dạy học (Teach) trên ảnh RAW*:
+       - Nếu vẽ ROI hoặc Teach Origin trên ảnh raw, khi chuyển sang ảnh phẳng tọa độ và hình học mẫu bị thay đổi.
+  - **Bảng Rà Soát Toàn Bộ Tool**:
+    + *Origin*: Chạy trên ảnh phẳng. Cần dạy Origin trên ảnh phẳng để không lệch tọa độ con.
+    + *Caliper, Point, Line, EdgePair, LinePair*: Chạy trên ảnh phẳng, dải strip và overlay khớp 100% khi canvas và ảnh nguồn cùng là ảnh phẳng.
+    + *CircleFinder, BlobDetection*: Tọa độ tâm và diện tích tính trên ảnh phẳng chuẩn xác không bị biến dạng elip.
+    + *SurfaceCompare, ContourCompare*: Golden Template phải chụp/lưu từ ảnh phẳng khi bật `EnableUndistort`.
+    + *OCR, CodeDetection (ZXing)*: Hưởng lợi lớn vì ký tự và mã vạch phẳng, dễ đọc hơn.
+  - **Giải Pháp Kỹ Thuật Đã Triển Khai**:
+    1. *Bảo Toàn Ma Trận Nội Suy Camera $K$ (`ChessboardCalibrationService.cs`)**:
+       - Cập nhật hàm `Undistort()` dùng trực tiếp `camMat` làm ma trận camera mới trong `Cv2.InitUndistortRectifyMap(camMat, distMat, new Mat(), camMat, src.Size(), MatType.CV_32FC1, map1, map2)`.
+       - Triệt tiêu 100% hiện tượng phóng to và dịch tâm của `alpha = 0.0` (đạt sai số dịch chuyển tâm = 0.00px), giữ vững tỷ lệ quy đổi `PixelsPerMm`.
+    2. *Đồng Bộ Ảnh Hiển Thị Cho Canvas & Preview (`ToolEditorViewModel.Engine.cs` & `ToolPreprocess.cs`)**:
+       - Bổ sung helper `PrepareDisplayImageForSharedContext(Mat rawMat, ImageSourceDefinition? sourceDef)` và `UpdateSharedImageForImageSource()`.
+       - Khi `ImageSource.EnableUndistort == true`, ảnh nạp vào `_sharedImage` tự động được nắn thẳng đồng bộ với thuật toán pipeline.
+       - Khi người dùng bật/tắt CheckBox `ImageSource_EnableUndistort`, tự động xóa cache và nắn thẳng/hoàn nguyên ảnh trên Canvas tức thì.
+       - Cập nhật các luồng nạp ảnh `RunSingleFlowFromImageFileAsync`, `ProcessContinuousFrameAsync`, `RunFlowAsync`, `RefreshFinalPreview`, `RefreshSelectedPreview`.
+    3. *Kiểm Thử Toàn Diện (`TestExtractApp`)*:
+       - Xây dựng test suite mới `UndistortPipelineTests.cs`:
+         * Test 1: Kiểm tra tính bảo toàn quang tâm sau `Undistort` (shift = 0.00px, không bị zoom nhân tạo).
+         * Test 2: Kiểm tra độ chính xác phát hiện mép của Caliper dưới pipeline khử méo (Offset = 1.05px, hoàn toàn nằm trong dung sai cho phép).
+       - Chạy kiểm thử tự động toàn bộ solution: **100% PASSED**.
+       - Biên dịch Release `VisionInspectionApp.slnx`: **0 Error(s)**.
+
 - **Tích Hợp Bảng Hướng Dẫn Kỹ Thuật Trực Quan (Visual Guideline & 3x3 Coverage Map) Theo Phương Pháp Zhang Cho Cửa Sổ Chessboard Calibration (Task 349)**:
   - **Hiện Tượng & Yêu Cầu Người Dùng**:
     + Người dùng đặt câu hỏi chuyên sâu: *"Cách hiệu chuẩn bàn cờ đúng là gì? Mỗi lần chụp phải xoay phải xê dịch chessboard đi đúng không? Bản chất là gì?"*

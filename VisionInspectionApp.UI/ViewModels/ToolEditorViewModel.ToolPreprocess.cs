@@ -566,6 +566,8 @@ namespace VisionInspectionApp.UI.ViewModels
                 if (def is null) return;
                 def.EnableUndistort = value;
                 OnPropertyChanged();
+                ClearImageSourceCache(def.Name);
+                UpdateSharedImageForImageSource(def);
                 RefreshPreviews();
                 RequestAutoSave();
             }
@@ -584,6 +586,7 @@ namespace VisionInspectionApp.UI.ViewModels
                     return;
                 def.FilePath = value;
                 ClearImageSourceCache(def.Name);
+                UpdateSharedImageForImageSource(def);
                 RaiseToolPropertyPanelsChanged();
                 RefreshPreviews();
                 RequestAutoSave();
@@ -604,6 +607,7 @@ namespace VisionInspectionApp.UI.ViewModels
                 def.FolderPath = value;
                 ClearImageSourceCache(def.Name);
                 _folderImageIndex = 0;
+                UpdateSharedImageForImageSource(def);
                 RaiseToolPropertyPanelsChanged();
                 RefreshPreviews();
                 RequestAutoSave();

@@ -52,5 +52,6 @@ class Program
         LicenseSystemTests.RunAllTests();
         DotnetRuntimeTests.RunAllTests();
         NewJobDefaultToolsTests.RunAllTests();
+        UndistortPipelineTests.RunAllTests();
     }
 }

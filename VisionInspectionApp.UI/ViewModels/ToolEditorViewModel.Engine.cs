@@ -527,6 +527,32 @@ namespace VisionInspectionApp.UI.ViewModels
             return inMat.Clone();
         }
 
+        public Mat PrepareDisplayImageForSharedContext(Mat rawMat, ImageSourceDefinition? sourceDef = null)
+        {
+            if (rawMat is null || rawMat.Empty()) return rawMat?.Clone() ?? new Mat();
+            sourceDef ??= SelectedImageSourceDef() ?? _config?.ImageSources?.FirstOrDefault();
+            if (sourceDef != null && sourceDef.EnableUndistort)
+            {
+                var calib = ChessboardCalibrationService.GetEffectiveCalibration(_config);
+                if (calib != null && calib.IsCalibrated)
+                {
+                    return ChessboardCalibrationService.Undistort(rawMat, calib);
+                }
+            }
+            return rawMat.Clone();
+        }
+
+        public void UpdateSharedImageForImageSource(ImageSourceDefinition? sourceDef)
+        {
+            if (sourceDef == null) return;
+            var rawMat = LoadImageFromSourceForPreview(sourceDef);
+            if (rawMat != null && !rawMat.Empty())
+            {
+                using var displayMat = PrepareDisplayImageForSharedContext(rawMat, sourceDef);
+                _sharedImage.SetImage(displayMat);
+            }
+        }
+
         private Mat GetNodeInputImageForPreview(Mat raw, ToolGraphNodeViewModel node, string targetPort = "Image")
         {
             if (_config is null || node is null) return raw.Clone();
@@ -3316,7 +3342,10 @@ namespace VisionInspectionApp.UI.ViewModels
             var __swImg = System.Diagnostics.Stopwatch.StartNew();
 
             SetImageSourceCache(sourceNodeName, "camera", frameMat);
-            _sharedImage.SetImage(frameMat);
+            using (var displayMat = PrepareDisplayImageForSharedContext(frameMat))
+            {
+                _sharedImage.SetImage(displayMat);
+            }
             __swImg.Stop();
             int imageSourceMs = (int)__swImg.ElapsedMilliseconds;
 
@@ -3704,7 +3733,11 @@ namespace VisionInspectionApp.UI.ViewModels
             var __sw = System.Diagnostics.Stopwatch.StartNew();
 
             SetImageSourceCache(sourceNodeName, filePath, mat);
-            _sharedImage.SetImage(mat);
+            var srcDef = _config?.ImageSources?.FirstOrDefault(s => string.Equals(s.Name, sourceNodeName, StringComparison.OrdinalIgnoreCase));
+            using (var displayMat = PrepareDisplayImageForSharedContext(mat, srcDef))
+            {
+                _sharedImage.SetImage(displayMat);
+            }
 
             SyncToolGraphToConfig();
             EnsureTemplatePathsAbsolute(_config);
@@ -3910,7 +3943,10 @@ namespace VisionInspectionApp.UI.ViewModels
                                     if (cameraMat is not null && !cameraMat.Empty())
                                     {
                                         SetImageSourceCache(imgSourceDef.Name, "camera", cameraMat);
-                                        _sharedImage.SetImage(cameraMat);
+                                        using (var displayMat = PrepareDisplayImageForSharedContext(cameraMat, imgSourceDef))
+                                        {
+                                            _sharedImage.SetImage(displayMat);
+                                        }
                                         snap = cameraMat;
                                     }
                                 }
@@ -3924,7 +3960,10 @@ namespace VisionInspectionApp.UI.ViewModels
                                 snap = LoadImageFromSourceForPreview(imgSourceDef);
                                 if (snap is not null && !snap.Empty())
                                 {
-                                    _sharedImage.SetImage(snap);
+                                    using (var displayMat = PrepareDisplayImageForSharedContext(snap, imgSourceDef))
+                                    {
+                                        _sharedImage.SetImage(displayMat);
+                                    }
                                 }
                             }
                             if (snap is not null && !snap.Empty())
@@ -4233,7 +4272,10 @@ namespace VisionInspectionApp.UI.ViewModels
                 var firstImgSource = _config?.ImageSources?.FirstOrDefault();
                 if (firstImgSource is not null)
                 {
-                    snapToUse = LoadImageFromSourceForPreview(firstImgSource) ?? new Mat();
+                    var loaded = LoadImageFromSourceForPreview(firstImgSource);
+                    snapToUse = (loaded != null && !loaded.Empty()) 
+                        ? PrepareDisplayImageForSharedContext(loaded, firstImgSource) 
+                        : new Mat();
                 }
                 else
                 {
@@ -4375,7 +4417,10 @@ namespace VisionInspectionApp.UI.ViewModels
                 else
                 {
                     var imgSourceDef = SelectedImageSourceDef();
-                    snapSrc = (imgSourceDef is not null ? LoadImageFromSourceForPreview(imgSourceDef) : null) ?? new Mat();
+                    var loaded = imgSourceDef is not null ? LoadImageFromSourceForPreview(imgSourceDef) : null;
+                    snapSrc = (loaded != null && !loaded.Empty())
+                        ? PrepareDisplayImageForSharedContext(loaded, imgSourceDef)
+                        : new Mat();
                 }
 
                 using (snapSrc)
