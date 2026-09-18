@@ -344,6 +344,47 @@
                                         DockPanel.Dock="Left"
                                         Padding="10,3" Height="26" FontWeight="SemiBold"
                                         ToolTip="Mở cửa sổ danh sách toàn bộ lịch sử quét mã, tìm kiếm và xuất Excel" />
+
+                                <!-- Badge hiển thị số mẫu đã test cho Job hiện tại -->
+                                <Border DockPanel.Dock="Left"
+                                        Margin="10,0,0,0"
+                                        Padding="10,1,8,1"
+                                        Height="26"
+                                        Background="{DynamicResource PanelAltBackgroundBrush}"
+                                        BorderBrush="{DynamicResource AccentBrush}"
+                                        BorderThickness="1.5"
+                                        CornerRadius="4"
+                                        VerticalAlignment="Center">
+                                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                        <TextBlock Text="🧪 ĐÃ TEST: "
+                                                   FontSize="11"
+                                                   FontWeight="Bold"
+                                                   VerticalAlignment="Center"
+                                                   Foreground="{DynamicResource TextMutedBrush}" />
+                                        <TextBlock Text="{Binding CurrentJobTestedCount}"
+                                                   FontSize="16"
+                                                   FontWeight="Bold"
+                                                   Foreground="{DynamicResource AccentBrush}"
+                                                   VerticalAlignment="Center"
+                                                   Margin="2,0,2,0" />
+                                        <TextBlock Text="MẪU"
+                                                   FontSize="11"
+                                                   FontWeight="Bold"
+                                                   VerticalAlignment="Center"
+                                                   Foreground="{DynamicResource TextMutedBrush}" />
+                                        <Button Command="{Binding ResetJobTestedCountCommand}"
+                                                Content="↺"
+                                                Margin="8,0,0,0"
+                                                Padding="4,0"
+                                                Height="18"
+                                                Width="22"
+                                                FontSize="11"
+                                                FontWeight="Bold"
+                                                ToolTip="Đặt lại số mẫu đã test của Job này về 0 (để test lô mẫu mới)"
+                                                Cursor="Hand" />
+                                    </StackPanel>
+                                </Border>
+
                                 <Button Content="🖼️ Xem Ảnh Output"
                                         Command="{Binding ViewLatestOutputImageCommand}"
                                         DockPanel.Dock="Right"

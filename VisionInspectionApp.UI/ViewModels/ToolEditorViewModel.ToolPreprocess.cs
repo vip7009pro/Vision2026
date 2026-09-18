@@ -559,7 +559,7 @@ namespace VisionInspectionApp.UI.ViewModels
 
         public bool ImageSource_EnableUndistort
         {
-            get => SelectedImageSourceDef()?.EnableUndistort ?? false;
+            get => SelectedImageSourceDef()?.EnableUndistort ?? true;
             set
             {
                 var def = SelectedImageSourceDef();

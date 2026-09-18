@@ -53,6 +53,18 @@
 
 ## Cập nhật 2026-07-19
 
+- **Hiển Thị Số Lượng Mẫu Test Trong OQC Scanner & Mặc Định EnableUndistort Cho ImageSource (Task 353)**:
+  - **Yêu Cầu**: Hiển thị số mẫu đã test cho mỗi Job vừa nạp trong tab OQC Scanner (to hợp lý bên phải nút "Mở cửa sổ lịch sử quét mã", tự động reset khi nạp Job mới), đồng thời đặt mặc định Checkbox Undistort cho node ImageSource là `true`.
+  - **Triển Khai Chi Tiết**:
+    + Cập nhật model `ImageSourceDefinition.EnableUndistort = true` trong `VisionInspectionApp.Models/Class1.cs` và fallback trong `ToolEditorViewModel.ToolPreprocess.cs`.
+    + Khai báo thuộc tính `CurrentJobTestedCount` và lệnh `ResetJobTestedCountCommand` trong `OqcScannerViewModel.cs`.
+    + Tự động reset `CurrentJobTestedCount = 0` khi nạp Job mới (`SetJobLoadedFromManager`, `OnCurrentJobFilePathChanged`) và tăng `CurrentJobTestedCount++` khi hoàn thành kiểm tra mẫu trong `HandleInspectionCompletedAsync`.
+    + Thêm Badge thẩm mỹ hiển thị `🧪 ĐÃ TEST: [N] MẪU ↺` trên toolbar của GroupBox Kết quả đánh giá trong `OqcScannerView.xaml`.
+    + Bổ sung kiểm thử tự động `Test_06` và `Test_07` trong `TestExtractApp/NewJobDefaultToolsTests.cs`.
+  - **Trạng Thái & Kiểm Thử**:
+    + Solution biên dịch Release: **0 Error(s)**.
+    + Bộ kiểm thử tự động `TestExtractApp`: **100% PASSED**.
+
 - **Thiết Lập Thuật Toán Mặc Định Cho Tool Origin Là MvpShapeMatch2 (Task 352)**:
   - **Yêu Cầu**: Cấu hình Tool Origin sử dụng thuật toán tìm kiếm mặc định là `MvpShapeMatch2` thay cho `ShapeBased` cũ.
   - **Triển Khai Chi Tiết**:

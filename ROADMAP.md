@@ -3118,3 +3118,31 @@ Lộ trình tích hợp tính năng Chụp ảnh từ camera và hỗ trợ các
         - **Kết Quả Biên Dịch & Kiểm Thử**:
           + Solution biên dịch Release: **0 Error(s)**.
           + Toàn bộ test suite `TestExtractApp` (bao gồm cả Test 5 mới): **100% PASSED**.
+
+    - [x] **Task 353: Hiển Thị Số Lượng Mẫu Test Cho Mỗi Job Trong OQC Scanner & Mặc Định EnableUndistort Cho ImageSource**:
+        - **Yêu Cầu Người Dùng**:
+          + Trong tab OQC Scanner, hiển thị số mẫu đã test được cho mỗi Job vừa được nạp vào (phục vụ thực tế OQC thường lấy sample 5 mẫu kiểm tra từng mẫu một, tích lũy số lượng cho đến khi nạp Job mới).
+          + Số lượng mẫu vừa test được hiển thị to hợp lý ở bên phải nút "📜 Mở Cửa Sổ Lịch Sử Quét Mã...".
+          + Node ImageSource mặc định được check `EnableUndistort = true`.
+        - **Phân Tích & Giải Pháp Kỹ Thuật Đã Triển Khai**:
+          1. *Bộ Đếm Mẫu Tích Lũy & Tự Động Reset Khi Nạp Job Mới (`OqcScannerViewModel.cs`)*:
+             - Bổ sung thuộc tính `[ObservableProperty] private int _currentJobTestedCount = 0;`.
+             - Bổ sung lệnh `[RelayCommand] public void ResetJobTestedCount() => CurrentJobTestedCount = 0;` cho phép người dùng reset nhanh về 0 bằng nút `↺` để test lô mẫu tiếp theo mà không cần nạp lại Job.
+             - Tự động reset `CurrentJobTestedCount = 0` khi:
+               * Nạp Job từ danh sách Quản lý Job (`SetJobLoadedFromManager`).
+               * Nạp Job từ quét mã tra cứu cơ sở dữ liệu hoặc đổi đường dẫn Job file (`OnCurrentJobFilePathChanged`).
+             - Tự động tăng `CurrentJobTestedCount++` bên trong `Dispatcher.Invoke` của `HandleInspectionCompletedAsync` mỗi khi một mẫu chạy kiểm tra hoàn tất.
+          2. *Thiết Kế Badge Hiển Thị Nổi Bật Trên UI (`OqcScannerView.xaml`)*:
+             - Thêm Badge hiển thị ở bên phải nút "📜 Mở Cửa Sổ Lịch Sử Quét Mã..." với chiều cao chuẩn 26px đồng bộ.
+             - Sử dụng layout thẻ bo góc thẩm mỹ với nền `PanelAltBackgroundBrush` và viền `AccentBrush`.
+             - Hiển thị nhãn `🧪 ĐÃ TEST: `, con số `CurrentJobTestedCount` to rõ nét (16px Bold, màu `AccentBrush`), đơn vị `MẪU` và nút nhỏ `↺` bo tròn tiện lợi.
+          3. *Mặc Định EnableUndistort Cho ImageSource (`Class1.cs` & `ToolEditorViewModel.ToolPreprocess.cs`)*:
+             - Cập nhật model: `public bool EnableUndistort { get; set; } = true;` trong `ImageSourceDefinition`.
+             - Cập nhật fallback getter `ImageSource_EnableUndistort` trong `ToolEditorViewModel.ToolPreprocess.cs` thành `true`.
+             - Đảm bảo các node ImageSource tạo mới (như CAM1 khi tạo New Job) đều tự động bật cờ khử méo.
+          4. *Kiểm Thử Tự Động Hồi Quy Toàn Diện (`TestExtractApp/NewJobDefaultToolsTests.cs`)*:
+             - Bổ sung `Test_06_ImageSourceEnableUndistortDefaultsToTrue` kiểm tra 3 tầng: Model, New Job CAM1, UI ViewModel.
+             - Bổ sung `Test_07_OqcScannerTestedSampleCountTrackingAndReset` kiểm tra đếm mẫu 5 lần, nút Reset thủ công và cơ chế tự động reset khi nạp Job mới.
+        - **Kết Quả Biên Dịch & Kiểm Thử**:
+          + Solution biên dịch Release: **0 Error(s)**.
+          + Toàn bộ test suite `TestExtractApp` (gồm 7 test New Job và toàn bộ pipeline): **100% PASSED**.

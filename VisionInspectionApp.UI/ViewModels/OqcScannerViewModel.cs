@@ -43,6 +43,9 @@ public partial class OqcScannerViewModel : ObservableObject
     private string _currentJobFilePath = "-";
 
     [ObservableProperty]
+    private int _currentJobTestedCount = 0;
+
+    [ObservableProperty]
     private string _statusMessage = "Sẵn sàng quét mã QR/Barcode sản phẩm.";
 
     [ObservableProperty]
@@ -317,8 +320,15 @@ public partial class OqcScannerViewModel : ObservableObject
         OnPropertyChanged(nameof(ScanButtonText));
     }
 
+    private string _lastLoadedJobFilePath = "";
+
     partial void OnCurrentJobFilePathChanged(string value)
     {
+        if (!string.Equals(_lastLoadedJobFilePath, value, StringComparison.OrdinalIgnoreCase))
+        {
+            _lastLoadedJobFilePath = value ?? "";
+            CurrentJobTestedCount = 0;
+        }
         OnPropertyChanged(nameof(ScanButtonText));
     }
 
@@ -375,6 +385,7 @@ public partial class OqcScannerViewModel : ObservableObject
     public void SetJobLoadedFromManager(string jobPath, string productName, string productCode)
     {
         CurrentJobFilePath = jobPath;
+        CurrentJobTestedCount = 0;
         CurrentProductName = !string.IsNullOrWhiteSpace(productName) ? productName : productCode;
         ScannedCode = ""; // Để trống ô textfield theo yêu cầu của người dùng
         IsJobLoadedFromManager = true;
@@ -415,6 +426,12 @@ public partial class OqcScannerViewModel : ObservableObject
         OnPropertyChanged(nameof(PreviewHeaderTitle));
         OnPropertyChanged(nameof(LiveToggleButtonText));
         OnPropertyChanged(nameof(ScanButtonText));
+    }
+
+    [RelayCommand]
+    public void ResetJobTestedCount()
+    {
+        CurrentJobTestedCount = 0;
     }
 
     [RelayCommand]
@@ -1117,6 +1134,7 @@ public partial class OqcScannerViewModel : ObservableObject
         // Always update UI Scan History entry & Refresh Preview Image
         System.Windows.Application.Current?.Dispatcher?.Invoke(() =>
         {
+            CurrentJobTestedCount++;
             if (ScanHistory.Count > 0)
             {
                 var entry = ScanHistory.FirstOrDefault(e => string.Equals(e.ScannedCode, processedCode, StringComparison.OrdinalIgnoreCase) || string.Equals(e.ScannedCode, rawCode, StringComparison.OrdinalIgnoreCase)) 

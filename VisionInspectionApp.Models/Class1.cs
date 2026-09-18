@@ -221,7 +221,7 @@ public sealed class ImageSourceDefinition
 
     public PlcTriggerEdge PlcTriggerEdge { get; set; } = PlcTriggerEdge.RisingEdge;
 
-    public bool EnableUndistort { get; set; } = false;
+    public bool EnableUndistort { get; set; } = true;
     
     /// <summary>
     /// Tên hiển thị của thiết bị Camera công nghiệp gốc tại phòng OQC (ví dụ: Hikrobot MV-CS200-10GM - DA123456).

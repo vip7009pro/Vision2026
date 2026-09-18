@@ -24,6 +24,8 @@ public static class NewJobDefaultToolsTests
                 Test_03_ImageOutputShowRoiUncheckedByDefault();
                 Test_04_ImageOutputDefinitionDefaultModelShowRoiFalse();
                 Test_05_OriginAlgorithmDefaultsToMvpShapeMatch2();
+                Test_06_ImageSourceEnableUndistortDefaultsToTrue();
+                Test_07_OqcScannerTestedSampleCountTrackingAndReset();
             }
             catch (Exception ex)
             {
@@ -177,6 +179,91 @@ public static class NewJobDefaultToolsTests
 
         Console.ForegroundColor = ConsoleColor.Green;
         Console.WriteLine("PASSED: OriginAlgorithm mặc định là MvpShapeMatch2 (Model & UI ViewModel)");
+        Console.ResetColor();
+    }
+
+    private static void Test_06_ImageSourceEnableUndistortDefaultsToTrue()
+    {
+        Console.Write("--- Test 6: Kiểm tra Node ImageSource mặc định EnableUndistort = true... ");
+
+        // 1. Model ImageSourceDefinition
+        var def = new ImageSourceDefinition();
+        if (def.EnableUndistort != true)
+            throw new Exception($"Mong đợi ImageSourceDefinition.EnableUndistort = true, thực tế là {def.EnableUndistort}!");
+
+        // 2. ViewModel New Job (CAM1)
+        var vm = new ToolEditorViewModel();
+        vm.NewGraphCommand.Execute(null);
+
+        var camDef = vm.Config.ImageSources?.FirstOrDefault(s => s.Name == "CAM1");
+        if (camDef is null)
+            throw new Exception("Không tìm thấy cấu hình CAM1 trong ImageSources!");
+
+        if (camDef.EnableUndistort != true)
+            throw new Exception($"Mong đợi CAM1.EnableUndistort = true, thực tế là {camDef.EnableUndistort}!");
+
+        // 3. UI binding ImageSource_EnableUndistort
+        var camNode = vm.Nodes.FirstOrDefault(n => n.RefName == "CAM1");
+        vm.SelectedNode = camNode;
+
+        if (vm.ImageSource_EnableUndistort != true)
+            throw new Exception($"Mong đợi vm.ImageSource_EnableUndistort = true, thực tế là {vm.ImageSource_EnableUndistort}!");
+
+        Console.ForegroundColor = ConsoleColor.Green;
+        Console.WriteLine("PASSED: ImageSource mặc định EnableUndistort = true (Model, Config & ViewModel)");
+        Console.ResetColor();
+    }
+
+    private static void Test_07_OqcScannerTestedSampleCountTrackingAndReset()
+    {
+        Console.Write("--- Test 7: Kiểm tra OqcScannerViewModel số lượng mẫu test & tự động reset khi nạp Job... ");
+
+        var vm = (VisionInspectionApp.UI.ViewModels.OqcScannerViewModel)System.Runtime.Serialization.FormatterServices.GetUninitializedObject(typeof(VisionInspectionApp.UI.ViewModels.OqcScannerViewModel));
+
+        // Khởi tạo các backing field cần thiết
+        typeof(VisionInspectionApp.UI.ViewModels.OqcScannerViewModel)
+            .GetField("_currentJobFilePath", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)?
+            .SetValue(vm, "-");
+
+        typeof(VisionInspectionApp.UI.ViewModels.OqcScannerViewModel)
+            .GetField("_lastLoadedJobFilePath", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)?
+            .SetValue(vm, "");
+
+        typeof(VisionInspectionApp.UI.ViewModels.OqcScannerViewModel)
+            .GetField("_currentJobTestedCount", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)?
+            .SetValue(vm, 0);
+
+        // 1. Mặc định là 0
+        if (vm.CurrentJobTestedCount != 0)
+            throw new Exception($"Mong đợi CurrentJobTestedCount ban đầu = 0, thực tế là {vm.CurrentJobTestedCount}!");
+
+        // 2. Tăng số mẫu đã test (giả lập hoàn thành 5 mẫu)
+        for (int i = 1; i <= 5; i++)
+        {
+            vm.CurrentJobTestedCount++;
+        }
+        if (vm.CurrentJobTestedCount != 5)
+            throw new Exception($"Mong đợi CurrentJobTestedCount = 5 sau khi test 5 mẫu, thực tế là {vm.CurrentJobTestedCount}!");
+
+        // 3. Gọi Reset đếm thủ công
+        vm.ResetJobTestedCount();
+        if (vm.CurrentJobTestedCount != 0)
+            throw new Exception($"Mong đợi CurrentJobTestedCount = 0 sau khi ResetJobTestedCount, thực tế là {vm.CurrentJobTestedCount}!");
+
+        // 4. Test lại 3 mẫu và đổi sang Job mới
+        vm.CurrentJobTestedCount = 3;
+        vm.CurrentJobFilePath = @"C:\VisionJobs\ProductA.job";
+        if (vm.CurrentJobTestedCount != 0)
+            throw new Exception($"Mong đợi CurrentJobTestedCount tự động reset về 0 khi nạp Job mới, thực tế là {vm.CurrentJobTestedCount}!");
+
+        // 5. Test tiếp 4 mẫu và nạp lại Job khác
+        vm.CurrentJobTestedCount = 4;
+        vm.CurrentJobFilePath = @"C:\VisionJobs\ProductB.job";
+        if (vm.CurrentJobTestedCount != 0)
+            throw new Exception($"Mong đợi CurrentJobTestedCount tự động reset về 0 khi chuyển sang ProductB.job, thực tế là {vm.CurrentJobTestedCount}!");
+
+        Console.ForegroundColor = ConsoleColor.Green;
+        Console.WriteLine("PASSED: Đếm mẫu & tự động reset khi nạp Job mới hoạt động chuẩn xác 100%");
         Console.ResetColor();
     }
 }
