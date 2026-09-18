@@ -53,6 +53,16 @@
 
 ## Cập nhật 2026-07-19
 
+- **Thiết Lập Thuật Toán Mặc Định Cho Tool Origin Là MvpShapeMatch2 (Task 352)**:
+  - **Yêu Cầu**: Cấu hình Tool Origin sử dụng thuật toán tìm kiếm mặc định là `MvpShapeMatch2` thay cho `ShapeBased` cũ.
+  - **Triển Khai Chi Tiết**:
+    + Cập nhật giá trị khởi tạo của thuộc tính `OriginAlgorithm` trong model `PointDefinition` (`VisionInspectionApp.Models/Class1.cs`) thành `OriginAlgorithm.MvpShapeMatch2`.
+    + Cập nhật fallback getter `Origin_Algorithm` trong `ToolEditorViewModel.ToolOrigin.cs` thành `OriginAlgorithm.MvpShapeMatch2`.
+    + Bổ sung kịch bản kiểm thử tự động hồi quy `Test_05_OriginAlgorithmDefaultsToMvpShapeMatch2` trong `TestExtractApp/NewJobDefaultToolsTests.cs`.
+  - **Trạng Thái & Kiểm Thử**:
+    + Solution biên dịch cấu hình Release: **0 Error(s)**.
+    + Bộ kiểm thử tự động `TestExtractApp`: **100% PASSED**.
+
 - **Khắc Phục Triệt Để Lỗi Ảnh 20Mpx Bị Thu Nhỏ Về 1280x853 Sau Khi Bật Undistort & Thích Ứng Tự Động Độ Phân Giải Hiệu Chuẩn (Task 351)**:
   - **Hiện Tượng & Yêu Cầu Người Dùng**:
     + Người dùng phản ánh: Ảnh gốc đang ở độ phân giải 20Mpx ($5472 \times 3648$), nhưng sau khi bấm/bật Undistort (trên node ImageSource hoặc Preview) thì ảnh lại bị co rút về $1280 \times 853$.

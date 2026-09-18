@@ -17,7 +17,7 @@ namespace VisionInspectionApp.UI.ViewModels
 
         public OriginAlgorithm Origin_Algorithm
         {
-            get => _config?.Origin?.OriginAlgorithm ?? OriginAlgorithm.ShapeBased;
+            get => _config?.Origin?.OriginAlgorithm ?? OriginAlgorithm.MvpShapeMatch2;
             set
             {
                 if (_config?.Origin != null)

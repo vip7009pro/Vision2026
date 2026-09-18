@@ -23,6 +23,7 @@ public static class NewJobDefaultToolsTests
                 Test_02_NewJobGraphEdgesAndImageOutputWiring();
                 Test_03_ImageOutputShowRoiUncheckedByDefault();
                 Test_04_ImageOutputDefinitionDefaultModelShowRoiFalse();
+                Test_05_OriginAlgorithmDefaultsToMvpShapeMatch2();
             }
             catch (Exception ex)
             {
@@ -151,6 +152,31 @@ public static class NewJobDefaultToolsTests
 
         Console.ForegroundColor = ConsoleColor.Green;
         Console.WriteLine("PASSED: Model ImageOutputDefinition mặc định ShowRoi = false");
+        Console.ResetColor();
+    }
+
+    private static void Test_05_OriginAlgorithmDefaultsToMvpShapeMatch2()
+    {
+        Console.Write("--- Test 5: Kiểm tra Tool Origin thuật toán mặc định là MvpShapeMatch2... ");
+
+        // 1. Model PointDefinition
+        var def = new PointDefinition();
+        if (def.OriginAlgorithm != OriginAlgorithm.MvpShapeMatch2)
+            throw new Exception($"Mong đợi PointDefinition.OriginAlgorithm = MvpShapeMatch2, thực tế là {def.OriginAlgorithm}!");
+
+        // 2. ViewModel New Job
+        var vm = new ToolEditorViewModel();
+        vm.NewGraphCommand.Execute(null);
+
+        if (vm.Config.Origin.OriginAlgorithm != OriginAlgorithm.MvpShapeMatch2)
+            throw new Exception($"Mong đợi vm.Config.Origin.OriginAlgorithm = MvpShapeMatch2, thực tế là {vm.Config.Origin.OriginAlgorithm}!");
+
+        // 3. ViewModel Origin_Algorithm property
+        if (vm.Origin_Algorithm != OriginAlgorithm.MvpShapeMatch2)
+            throw new Exception($"Mong đợi vm.Origin_Algorithm = MvpShapeMatch2, thực tế là {vm.Origin_Algorithm}!");
+
+        Console.ForegroundColor = ConsoleColor.Green;
+        Console.WriteLine("PASSED: OriginAlgorithm mặc định là MvpShapeMatch2 (Model & UI ViewModel)");
         Console.ResetColor();
     }
 }

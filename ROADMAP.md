@@ -3101,3 +3101,20 @@ Lộ trình tích hợp tính năng Chụp ảnh từ camera và hỗ trợ các
                * Test 3: Kiểm tra serialization `ImageWidth`/`ImageHeight` và `Clone()` trong `ChessboardCalibrationData`.
              - Chạy kiểm thử tự động: **100% PASSED**.
              - Biên dịch Release `VisionInspectionApp.slnx`: **0 Error(s)**.
+
+    - [x] **Task 352: Thiết Lập Thuật Toán Mặc Định Cho Tool Origin Là MvpShapeMatch2**:
+        - **Yêu Cầu Người Dùng**:
+          + Chuyển đổi thuật toán mặc định của Tool Origin sang `MvpShapeMatch2` (thay cho thuật toán `ShapeBased` cũ).
+        - **Phân Tích & Thay Đổi Triển Khai**:
+          1. *Cập Nhật Giá Trị Khởi Tạo Mặc Định Trong Model PointDefinition (`VisionInspectionApp.Models/Class1.cs`)*:
+             - Cập nhật thuộc tính `public OriginAlgorithm OriginAlgorithm { get; set; } = OriginAlgorithm.MvpShapeMatch2;` (trước đó là `OriginAlgorithm.ShapeBased`).
+             - Đảm bảo khi tạo mới bất kỳ đối tượng `PointDefinition` nào (bao gồm `VisionConfig.Origin = new()`) thì thuật toán mặc định luôn là `MvpShapeMatch2`.
+          2. *Cập Nhật Fallback Property Trong ViewModel (`ToolEditorViewModel.ToolOrigin.cs`)*:
+             - Sửa getter của `Origin_Algorithm`: `get => _config?.Origin?.OriginAlgorithm ?? OriginAlgorithm.MvpShapeMatch2;`.
+             - Đảm bảo trên giao diện Tool Editor ComboBox tự động trỏ vào `MvpShapeMatch2` khi mở Job mới hoặc tạo node Origin.
+          3. *Bổ Sung Kiểm Thử Tự Động Hồi Quy (`TestExtractApp/NewJobDefaultToolsTests.cs`)*:
+             - Bổ sung `Test_05_OriginAlgorithmDefaultsToMvpShapeMatch2` vào test suite mặc định của New Job.
+             - Xác thực 3 tầng: Khởi tạo model `PointDefinition`, thực thi lệnh `NewGraphCommand`, và thuộc tính binding trên ViewModel `Origin_Algorithm` đều trả về đúng `OriginAlgorithm.MvpShapeMatch2`.
+        - **Kết Quả Biên Dịch & Kiểm Thử**:
+          + Solution biên dịch Release: **0 Error(s)**.
+          + Toàn bộ test suite `TestExtractApp` (bao gồm cả Test 5 mới): **100% PASSED**.

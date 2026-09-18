@@ -1103,7 +1103,7 @@ public sealed class PointDefinition
 
     public PointFindAlgorithm Algorithm { get; set; } = PointFindAlgorithm.TemplateMatch;
 
-    public OriginAlgorithm OriginAlgorithm { get; set; } = OriginAlgorithm.ShapeBased;
+    public OriginAlgorithm OriginAlgorithm { get; set; } = OriginAlgorithm.MvpShapeMatch2;
 
     public double MinAngle { get; set; } = -20.0;
     public double MaxAngle { get; set; } = 20.0;
