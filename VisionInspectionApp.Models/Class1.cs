@@ -164,6 +164,8 @@ public sealed class ChessboardCalibrationData
     public double[] DistCoeffs { get; set; } = Array.Empty<double>();
     public double ReprojectionError { get; set; }
     public double PixelsPerMm { get; set; }
+    public int ImageWidth { get; set; }
+    public int ImageHeight { get; set; }
     public bool IsCalibrated { get; set; }
 
     public ChessboardCalibrationData Clone() => new()
@@ -178,6 +180,8 @@ public sealed class ChessboardCalibrationData
         DistCoeffs = DistCoeffs is not null ? (double[])DistCoeffs.Clone() : Array.Empty<double>(),
         ReprojectionError = ReprojectionError,
         PixelsPerMm = PixelsPerMm,
+        ImageWidth = ImageWidth,
+        ImageHeight = ImageHeight,
         IsCalibrated = IsCalibrated
     };
 }

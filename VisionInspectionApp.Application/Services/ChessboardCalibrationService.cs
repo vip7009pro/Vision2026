@@ -548,11 +548,45 @@ public static class ChessboardCalibrationService
         if (calibData.Fx <= 10 || calibData.Fy <= 10 || calibData.Cx <= 0 || calibData.Cy <= 0)
             return src.Clone();
 
+        double fx = calibData.Fx;
+        double fy = calibData.Fy;
+        double cx = calibData.Cx;
+        double cy = calibData.Cy;
+
+        // Tự động điều chỉnh ma trận camera K theo tỉ lệ độ phân giải của ảnh nguồn src
+        // Giúp bảo toàn 100% kích thước và quang tâm khi calibrate ở một độ phân giải nhưng áp dụng cho ảnh 20MP (5472x3648)
+        if (calibData.ImageWidth > 0 && calibData.ImageHeight > 0 &&
+            (src.Width != calibData.ImageWidth || src.Height != calibData.ImageHeight))
+        {
+            double scaleX = (double)src.Width / calibData.ImageWidth;
+            double scaleY = (double)src.Height / calibData.ImageHeight;
+            fx *= scaleX;
+            fy *= scaleY;
+            cx *= scaleX;
+            cy *= scaleY;
+        }
+        else if ((calibData.ImageWidth <= 0 || calibData.ImageHeight <= 0) &&
+                 (cx < src.Width * 0.25 || cy < src.Height * 0.25))
+        {
+            // Dự phòng thông minh cho dữ liệu calib cũ chưa lưu ImageWidth/Height (ví dụ cx=320, cy=240 khi nắn ảnh 20MP)
+            double approxCalibW = cx * 2.0;
+            double approxCalibH = cy * 2.0;
+            if (approxCalibW > 100 && approxCalibH > 100)
+            {
+                double scaleX = (double)src.Width / approxCalibW;
+                double scaleY = (double)src.Height / approxCalibH;
+                fx *= scaleX;
+                fy *= scaleY;
+                cx *= scaleX;
+                cy *= scaleY;
+            }
+        }
+
         var cameraMatrix = new double[3, 3];
-        cameraMatrix[0, 0] = calibData.Fx;
-        cameraMatrix[1, 1] = calibData.Fy;
-        cameraMatrix[0, 2] = calibData.Cx;
-        cameraMatrix[1, 2] = calibData.Cy;
+        cameraMatrix[0, 0] = fx;
+        cameraMatrix[1, 1] = fy;
+        cameraMatrix[0, 2] = cx;
+        cameraMatrix[1, 2] = cy;
         cameraMatrix[2, 2] = 1.0;
 
         var distCoeffs = calibData.DistCoeffs ?? Array.Empty<double>();

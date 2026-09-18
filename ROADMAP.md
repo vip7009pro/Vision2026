@@ -3067,3 +3067,37 @@ Lộ trình tích hợp tính năng Chụp ảnh từ camera và hỗ trợ các
                * Test 2: Kiểm tra độ chính xác phát hiện mép của Caliper dưới pipeline khử méo (Offset = 1.05px, hoàn toàn nằm trong dung sai cho phép).
              - Chạy kiểm thử tự động toàn bộ solution: **100% PASSED**.
              - Biên dịch Release `VisionInspectionApp.slnx`: **0 Error(s)**.
+
+    - [x] **Task 351: Khắc Phục Triệt Để Lỗi Ảnh 20Mpx Bị Thu Nhỏ Về 1280x853 Sau Khi Bật Undistort & Thích Ứng Tự Động Độ Phân Giải Hiệu Chuẩn**:
+        - **Hiện Tượng & Yêu Cầu Người Dùng**:
+          + Người dùng phản ánh: Ảnh gốc đang ở độ phân giải 20Mpx ($5472 \times 3648$), nhưng sau khi bấm/bật Undistort (trên node ImageSource hoặc Preview) thì ảnh lại bị co rút về $1280 \times 853$.
+          + Yêu cầu: Kiểm tra chính xác nguyên nhân và bảo toàn nguyên vẹn 100% kích thước pixel gốc 20Mpx khi chạy Undistort.
+        - **Phân Tích Nguyên Nhân Gốc Rễ**:
+          1. *Nguồn gốc con số 1280x853*:
+             - Khi lưu Job hoặc AutoSave, hàm `EnsureTeachImageSavedToCacheAndPreview` ([ToolEditorViewModel.Config.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/ToolEditorViewModel.Config.cs#L567)) tạo ra file thumbnail JPEG nén nhẹ `teach_preview.jpg` với cạnh dài nhất `maxDim = 1280`px. Với ảnh 20Mpx ($5472 \times 3648$, tỉ lệ 1.5), kích thước nén ra đúng bằng $1280 \times 853$ ($3648 \times 1280 / 5472 = 853.33$).
+          2. *Xóa cache RAM khi bật Checkbox Undistort*:
+             - Setter `ImageSource_EnableUndistort` trong [ToolEditorViewModel.ToolPreprocess.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/ToolEditorViewModel.ToolPreprocess.cs#L560) gọi `ClearImageSourceCache(def.Name)`, vô tình xóa sạch bản sao ảnh RAW 20Mpx trong bộ nhớ RAM (`_imageSourcePreviewCache`).
+          3. *Thứ tự nạp đệm sai ưu tiên trong `TryLoadUrlImageFromDiskCache`*:
+             - Do cache RAM bị xóa, hệ thống gọi `LoadImageFromSourceForPreview` nạp lại ảnh từ đĩa. Hàm `TryLoadUrlImageFromDiskCache` lại ưu tiên kiểm tra `teach_preview.jpg` ở bước 2 (đứng trước cả ảnh gốc chất lượng cao `{ProductCode}_teach.png` và URL hash cache). Kết quả: hệ thống nạp đúng file thumbnail $1280 \times 853$, đưa qua Undistort và gán vào `_sharedImage`, làm biến dạng kích thước ảnh hiển thị.
+          4. *Độ phân giải hiệu chuẩn không tương thích (Calibration Resolution Mismatch)*:
+             - Cấu hình `ChessboardCalibrationData` chưa lưu `ImageWidth` và `ImageHeight` lúc calibrate. Khi dùng ma trận $K$ được tính từ ảnh nhỏ (hoặc VGA $640 \times 480$, $cx=320, cy=240$) áp dụng cho ảnh 20Mpx mà không scale ma trận camera, quang tâm và tiêu cự bị lệch hàng nghìn pixel.
+        - **Giải Pháp Kỹ Thuật Đã Triển Khai**:
+          1. *Bảo Toàn Cache RAM Khi Bật/Tắt Undistort (`ToolEditorViewModel.ToolPreprocess.cs` & `Engine.cs`)*:
+             - Loại bỏ lệnh `ClearImageSourceCache(def.Name)` khỏi setter `ImageSource_EnableUndistort`. Ảnh RAW gốc trong cache RAM luôn được bảo toàn nguyên vẹn 100%.
+             - Nâng cấp `UpdateSharedImageForImageSource`: Ưu tiên lấy trực tiếp ảnh RAW từ `GetImageSourceCache` hoặc snapshot `_sharedImage` trước khi nạp lại từ disk.
+          2. *Đảo Lại Thứ Tự Ưu Tiên Nạp Ảnh Đĩa (`ToolEditorViewModel.Engine.cs`)*:
+             - Trong `TryLoadUrlImageFromDiskCache`: Ưu tiên tuyệt đối nạp ảnh gốc nét cao (`File.Exists(url)`, `Cache/TeachImages/{ProductCode}_teach.png`, `{JobName}_teach.png`, `UrlImages/{hash}.png`, `teach_image.png`).
+             - Đẩy `teach_preview.jpg` ($1280 \times 853$) xuống vị trí fallback cuối cùng (Last Resort), chỉ nạp khi máy mới chưa có bất kỳ ảnh gốc nào khác.
+             - Trong `RunSingleFlowFromImageFileAsync`: Tự động đồng bộ `srcDef.FilePath = filePath` cho nguồn File.
+          3. *Tự Động Thích Ứng & Scale Ma Trận Camera K (`ChessboardCalibrationService.cs` & `Class1.cs`)*:
+             - Bổ sung `ImageWidth` và `ImageHeight` vào class `ChessboardCalibrationData` và `Clone()`.
+             - Trong `ChessboardCalibrationViewModel.RunCalibrate()` & `SetAsGlobalCalibration()`: Tự động lưu `ImageWidth` và `ImageHeight` vào calibration data.
+             - Trong `ChessboardCalibrationService.Undistort()`: Tự động phát hiện chênh lệch độ phân giải và co giãn ma trận $K$ ($Fx, Fy, Cx, Cy$) theo tỉ lệ $scaleX = src.Width / calibData.ImageWidth$ và $scaleY = src.Height / calibData.ImageHeight$.
+             - Tự động nhận diện dữ liệu calib cũ (VGA $640 \times 480$, $cx=320, cy=240$) để dịch chuyển tâm quang học chính xác về giữa ảnh 20MP ($2736, 1824$).
+          4. *Kiểm Thử Toàn Diện (`TestExtractApp`)*:
+             - Xây dựng test suite mới `UndistortResolutionTests.cs`:
+               * Test 1: Khử méo ảnh 20MP ($5472 \times 3648$) với dữ liệu hiệu chuẩn $1280 \times 853$ -> Đầu ra bảo toàn $100\%$ kích thước $5472 \times 3648$.
+               * Test 2: Tự động scale ma trận camera $K$ cho calibration cũ ($cx=320, cy=240$) lên 20MP -> Điểm tâm và quang tâm bảo toàn chính xác.
+               * Test 3: Kiểm tra serialization `ImageWidth`/`ImageHeight` và `Clone()` trong `ChessboardCalibrationData`.
+             - Chạy kiểm thử tự động: **100% PASSED**.
+             - Biên dịch Release `VisionInspectionApp.slnx`: **0 Error(s)**.

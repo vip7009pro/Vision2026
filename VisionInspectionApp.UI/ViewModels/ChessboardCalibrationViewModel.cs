@@ -817,6 +817,8 @@ public sealed partial class ChessboardCalibrationViewModel : ObservableObject
                 DistCoeffs = result.DistCoeffs ?? Array.Empty<double>(),
                 ReprojectionError = ReprojectionError,
                 PixelsPerMm = PixelsPerMm,
+                ImageWidth = imgSize.Width,
+                ImageHeight = imgSize.Height,
                 IsCalibrated = true
             };
             _config.PixelsPerMm = PixelsPerMm;
@@ -837,6 +839,8 @@ public sealed partial class ChessboardCalibrationViewModel : ObservableObject
                 DistCoeffs = result.DistCoeffs ?? Array.Empty<double>(),
                 ReprojectionError = ReprojectionError,
                 PixelsPerMm = PixelsPerMm,
+                ImageWidth = imgSize.Width,
+                ImageHeight = imgSize.Height,
                 IsCalibrated = true
             };
             ChessboardCalibrationService.SaveGlobalCalibration(globalCalib);
@@ -880,6 +884,8 @@ public sealed partial class ChessboardCalibrationViewModel : ObservableObject
                 : Array.Empty<double>(),
             ReprojectionError = ReprojectionError,
             PixelsPerMm = PixelsPerMm,
+            ImageWidth = _currentMat?.Width ?? 0,
+            ImageHeight = _currentMat?.Height ?? 0,
             IsCalibrated = true
         };
 

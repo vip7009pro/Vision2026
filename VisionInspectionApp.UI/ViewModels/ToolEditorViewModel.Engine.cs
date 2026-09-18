@@ -545,7 +545,22 @@ namespace VisionInspectionApp.UI.ViewModels
         public void UpdateSharedImageForImageSource(ImageSourceDefinition? sourceDef)
         {
             if (sourceDef == null) return;
-            var rawMat = LoadImageFromSourceForPreview(sourceDef);
+            // Ưu tiên lấy trực tiếp ảnh RAW gốc từ cache RAM để bảo toàn 100% độ phân giải (ví dụ 20MP)
+            var rawMat = GetImageSourceCache(sourceDef.Name);
+            if (rawMat == null || rawMat.Empty())
+            {
+                rawMat = LoadImageFromSourceForPreview(sourceDef);
+            }
+            if (rawMat == null || rawMat.Empty())
+            {
+                using var currentSnap = _sharedImage.GetSnapshot();
+                if (currentSnap != null && !currentSnap.Empty())
+                {
+                    rawMat = currentSnap.Clone();
+                    SetImageSourceCache(sourceDef.Name, sourceDef.FilePath ?? "shared_snap", rawMat);
+                }
+            }
+
             if (rawMat != null && !rawMat.Empty())
             {
                 using var displayMat = PrepareDisplayImageForSharedContext(rawMat, sourceDef);
@@ -2532,7 +2547,7 @@ namespace VisionInspectionApp.UI.ViewModels
                     m?.Dispose();
                 }
 
-                // 2. Kiểm tra trong thư mục làm việc tạm thời của Job (nếu có teach_image.png từ job cũ hoặc teach_preview.jpg từ job mới)
+                // 2. Kiểm tra tệp ảnh gốc nét cao teach_image.png trong thư mục tạm thời của Job
                 if (!string.IsNullOrWhiteSpace(CurrentTempWorkingDir) && Directory.Exists(CurrentTempWorkingDir))
                 {
                     string jobTeachPng = Path.Combine(CurrentTempWorkingDir, "teach_image.png");
@@ -2543,16 +2558,8 @@ namespace VisionInspectionApp.UI.ViewModels
                         m?.Dispose();
                     }
 
-                    string jobTeachPreview = Path.Combine(CurrentTempWorkingDir, "teach_preview.jpg");
-                    if (File.Exists(jobTeachPreview) && new FileInfo(jobTeachPreview).Length > 0)
-                    {
-                        var m = Cv2.ImRead(jobTeachPreview, ImreadModes.Color);
-                        if (m != null && !m.Empty()) return m;
-                        m?.Dispose();
-                    }
-
                     string fnInTemp = Path.GetFileName(url);
-                    if (!string.IsNullOrWhiteSpace(fnInTemp))
+                    if (!string.IsNullOrWhiteSpace(fnInTemp) && !string.Equals(fnInTemp, "teach_preview.jpg", StringComparison.OrdinalIgnoreCase))
                     {
                         string pFn = Path.Combine(CurrentTempWorkingDir, fnInTemp);
                         if (File.Exists(pFn) && new FileInfo(pFn).Length > 0)
@@ -2564,10 +2571,11 @@ namespace VisionInspectionApp.UI.ViewModels
                     }
                 }
 
-                // 3. Kiểm tra Decoupled Cache theo ProductCode: Cache/TeachImages/{ProductCode}_teach.png
+                // 3. Kiểm tra Decoupled Cache ảnh gốc nét cao theo ProductCode: Cache/TeachImages/{ProductCode}_teach.png
+                string teachCacheDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Cache", "TeachImages");
                 if (!string.IsNullOrWhiteSpace(ProductCode))
                 {
-                    string prdCache = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Cache", "TeachImages", $"{ProductCode}_teach.png");
+                    string prdCache = Path.Combine(teachCacheDir, $"{ProductCode}_teach.png");
                     if (File.Exists(prdCache) && new FileInfo(prdCache).Length > 0)
                     {
                         var m = Cv2.ImRead(prdCache, ImreadModes.Color);
@@ -2576,7 +2584,23 @@ namespace VisionInspectionApp.UI.ViewModels
                     }
                 }
 
-                // 4. Kiểm tra Disk Cache riêng của URL: Cache/UrlImages/{hash}.png
+                // 4. Kiểm tra Decoupled Cache ảnh gốc nét cao theo JobName: Cache/TeachImages/{JobName}_teach.png
+                if (!string.IsNullOrWhiteSpace(CurrentJobFilePath))
+                {
+                    string jobName = Path.GetFileNameWithoutExtension(CurrentJobFilePath);
+                    if (!string.IsNullOrWhiteSpace(jobName))
+                    {
+                        string jobCache = Path.Combine(teachCacheDir, $"{jobName}_teach.png");
+                        if (File.Exists(jobCache) && new FileInfo(jobCache).Length > 0)
+                        {
+                            var m = Cv2.ImRead(jobCache, ImreadModes.Color);
+                            if (m != null && !m.Empty()) return m;
+                            m?.Dispose();
+                        }
+                    }
+                }
+
+                // 5. Kiểm tra Disk Cache riêng của URL: Cache/UrlImages/{hash}.png
                 string urlCachePath = GetUrlImageDiskCachePath(url);
                 if (File.Exists(urlCachePath) && new FileInfo(urlCachePath).Length > 0)
                 {
@@ -2585,7 +2609,7 @@ namespace VisionInspectionApp.UI.ViewModels
                     m?.Dispose();
                 }
 
-                // 5. Kiểm tra Disk Cache của JobManagerViewModel: Cache/TeachImages/{hash}.png
+                // 6. Kiểm tra Disk Cache của JobManagerViewModel: Cache/TeachImages/{hash}.png
                 string teachCachePath = JobManagerViewModel.GetDiskCacheFilePath(url);
                 if (File.Exists(teachCachePath) && new FileInfo(teachCachePath).Length > 0)
                 {
@@ -2594,7 +2618,7 @@ namespace VisionInspectionApp.UI.ViewModels
                     m?.Dispose();
                 }
 
-                // 6. Kiểm tra trong thư mục Teaching/{fileName}
+                // 7. Kiểm tra trong thư mục Teaching/{fileName}
                 string fileName = Path.GetFileName(url);
                 if (!string.IsNullOrWhiteSpace(fileName))
                 {
@@ -2602,6 +2626,18 @@ namespace VisionInspectionApp.UI.ViewModels
                     if (File.Exists(teachDirPath) && new FileInfo(teachDirPath).Length > 0)
                     {
                         var m = Cv2.ImRead(teachDirPath, ImreadModes.Color);
+                        if (m != null && !m.Empty()) return m;
+                        m?.Dispose();
+                    }
+                }
+
+                // 8. FALLBACK CUỐI CÙNG (Last Resort): Chỉ nạp thumbnail nhẹ teach_preview.jpg nếu không tìm thấy bất kỳ ảnh gốc nét cao nào
+                if (!string.IsNullOrWhiteSpace(CurrentTempWorkingDir) && Directory.Exists(CurrentTempWorkingDir))
+                {
+                    string jobTeachPreview = Path.Combine(CurrentTempWorkingDir, "teach_preview.jpg");
+                    if (File.Exists(jobTeachPreview) && new FileInfo(jobTeachPreview).Length > 0)
+                    {
+                        var m = Cv2.ImRead(jobTeachPreview, ImreadModes.Color);
                         if (m != null && !m.Empty()) return m;
                         m?.Dispose();
                     }
@@ -3734,6 +3770,10 @@ namespace VisionInspectionApp.UI.ViewModels
 
             SetImageSourceCache(sourceNodeName, filePath, mat);
             var srcDef = _config?.ImageSources?.FirstOrDefault(s => string.Equals(s.Name, sourceNodeName, StringComparison.OrdinalIgnoreCase));
+            if (srcDef != null && srcDef.SourceType == ImageSourceType.File)
+            {
+                srcDef.FilePath = filePath;
+            }
             using (var displayMat = PrepareDisplayImageForSharedContext(mat, srcDef))
             {
                 _sharedImage.SetImage(displayMat);

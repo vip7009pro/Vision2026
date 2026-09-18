@@ -566,7 +566,6 @@ namespace VisionInspectionApp.UI.ViewModels
                 if (def is null) return;
                 def.EnableUndistort = value;
                 OnPropertyChanged();
-                ClearImageSourceCache(def.Name);
                 UpdateSharedImageForImageSource(def);
                 RefreshPreviews();
                 RequestAutoSave();

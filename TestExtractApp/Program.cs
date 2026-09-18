@@ -53,5 +53,6 @@ class Program
         DotnetRuntimeTests.RunAllTests();
         NewJobDefaultToolsTests.RunAllTests();
         UndistortPipelineTests.RunAllTests();
+        UndistortResolutionTests.RunAll();
     }
 }
