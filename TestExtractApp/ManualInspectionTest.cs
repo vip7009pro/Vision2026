@@ -23,6 +23,7 @@ public static class ManualInspectionTest
         TestSubpixelEdgeDetection();
         TestSubpixelDistantEdgeRejection();
         TestManualInspectionViewModelSnappingDefault();
+        TestManualInspectionApplyGlobalUndistortWorkflow();
         TestToleranceEvaluation();
         TestCsvExport();
 
@@ -168,6 +169,74 @@ public static class ManualInspectionTest
         }
 
         Console.WriteLine("PASSED (EnableSubpixelSnapping is false by default)");
+    }
+
+    private static void TestManualInspectionApplyGlobalUndistortWorkflow()
+    {
+        Console.Write("  [Test 6d] ManualInspectionViewModel Global Undistort Workflow & Persistence... ");
+
+        var settings = new VisionInspectionApp.UI.Services.GlobalAppSettingsService();
+        var camService = new VisionInspectionApp.UI.Services.CameraService();
+
+        // 1. Check default
+        settings.Settings.ManualApplyGlobalUndistort = false;
+        settings.Save();
+
+        using var vm = new VisionInspectionApp.UI.ViewModels.ManualInspectionViewModel(settings, camService);
+        if (vm.ApplyGlobalUndistort)
+        {
+            throw new Exception("ApplyGlobalUndistort should initially be false!");
+        }
+
+        // 2. Set up dummy Global Calibration data with distortion
+        var calibData = new VisionInspectionApp.Models.ChessboardCalibrationData
+        {
+            IsCalibrated = true,
+            Fx = 800.0,
+            Fy = 800.0,
+            Cx = 320.0,
+            Cy = 240.0,
+            DistCoeffs = new[] { -0.15, 0.05, 0.0, 0.0, 0.0 },
+            PixelsPerMm = 25.5,
+            ReprojectionError = 0.042
+        };
+        VisionInspectionApp.Application.Services.ChessboardCalibrationService.SaveGlobalCalibration(calibData);
+
+        // 3. Create test Mat
+        using var testMat = new Mat(480, 640, MatType.CV_8UC3, new Scalar(50, 50, 50));
+        Cv2.Circle(testMat, new Point(320, 240), 100, new Scalar(255, 255, 255), 2);
+        Cv2.Line(testMat, new Point(50, 50), new Point(590, 430), new Scalar(0, 255, 0), 2);
+
+        // 4. Test loading image with ApplyGlobalUndistort = false
+        vm.ApplyCalibrationAndDisplayImage(testMat.Clone());
+        if (vm.Image is null)
+        {
+            throw new Exception("Image should not be null after loading!");
+        }
+
+        // 5. Toggle ApplyGlobalUndistort = true
+        vm.ApplyGlobalUndistort = true;
+        if (!settings.Settings.ManualApplyGlobalUndistort)
+        {
+            throw new Exception("ManualApplyGlobalUndistort was not saved to settings!");
+        }
+        if (Math.Abs(vm.CalibrationPixelsPerMm - 25.5) > 1e-4)
+        {
+            throw new Exception($"CalibrationPixelsPerMm should be synced to 25.5, got {vm.CalibrationPixelsPerMm}");
+        }
+        if (!vm.StatusPrompt.Contains("khử méo"))
+        {
+            throw new Exception($"StatusPrompt should mention undistort, got: {vm.StatusPrompt}");
+        }
+
+        // 6. Toggle ApplyGlobalUndistort = false
+        vm.ApplyGlobalUndistort = false;
+        if (settings.Settings.ManualApplyGlobalUndistort)
+        {
+            throw new Exception("ManualApplyGlobalUndistort setting should be false after toggle!");
+        }
+
+        Console.WriteLine("PASSED (Global Undistort toggle, calibration sync & persistence verified)");
     }
 
     private static void TestToleranceEvaluation()

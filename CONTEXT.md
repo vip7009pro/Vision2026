@@ -53,6 +53,65 @@
 
 ## Cập nhật 2026-07-19
 
+- **Tích Hợp Bảng Hướng Dẫn Kỹ Thuật Trực Quan (Visual Guideline & 3x3 Coverage Map) Theo Phương Pháp Zhang Cho Cửa Sổ Chessboard Calibration (Task 349)**:
+  - **Hiện Tượng & Yêu Cầu Người Dùng**:
+    + Người dùng đặt câu hỏi chuyên sâu: *"Cách hiệu chuẩn bàn cờ đúng là gì? Mỗi lần chụp phải xoay phải xê dịch chessboard đi đúng không? Bản chất là gì?"*
+    + Yêu cầu: Bổ sung guideline sinh động và hướng dẫn trực quan để user làm theo trực tiếp trong cửa sổ Chessboard Calibration.
+  - **Phân Tích Bản Chất Quang Học & Toán Học (Zhang's Calibration Method)**:
+    1. *Bản chất mô hình phối cảnh Pin-hole & Hệ số méo Brown-Conrady*:
+       - Ma trận nội suy camera $K$ gồm 4 tham số: Tiêu cự $f_x, f_y$, tọa độ quang tâm $c_x, c_y$.
+       - Hệ số méo thấu kính gồm méo cầu hướng tâm ($k_1, k_2, k_3$) và méo tiếp tuyến ($p_1, p_2$).
+       - Mỗi góc chụp ảnh $i$ có ma trận xoay $R_i$ và tịnh tiến $t_i$.
+    2. *Tại sao BẮT BUỘC phải xê dịch và nghiêng bàn cờ?*:
+       - **ĐÚNG 100%!** Nếu chỉ để bàn cờ đứng yên một vị trí phẳng: Ta chỉ có duy nhất 1 ma trận đồng cấu Homography $H$ giữa mặt phẳng cờ và mặt phẳng ảnh. Hệ phương trình bị **suy biến (degenerate/rank-deficient)**. OpenCV không thể tách biệt giữa tiêu cự $f$ và khoảng cách $Z$, không giải được tọa độ quang tâm $(c_x, c_y)$.
+       - **Bắt buộc phải đưa bàn cờ ra 4 góc và 4 mép**: Mép và góc ảnh là nơi thấu kính có bán kính $r$ lớn nhất, nơi méo thấu kính $k_1 r^2 + k_2 r^4$ thể hiện rõ rệt nhất. Nếu không có bàn cờ ở các góc, thuật toán không có điểm dữ liệu thực tế tại đó $\rightarrow$ sai lệch méo rìa!
+       - **Bắt buộc phải nghiêng góc ($15^\circ - 25^\circ$)**: Hiệu ứng phối cảnh (các ô ở gần to hơn, ô ở xa nhỏ hơn) giúp thuật toán xác định chính xác trục quang học và tiêu cự.
+    3. *Số lượng ảnh khuyến nghị*: Phải từ **10 đến 20 ảnh** (tối thiểu $\ge 5$ ảnh) bao phủ toàn bộ 9 vùng cảm biến.
+  - **Kiến Trúc & Giải Pháp Kỹ Thuật Đã Triển Khai**:
+    1. *Thẻ Guideline Trực Quan Trên Giao Diện (`ChessboardCalibrationDialog.xaml`)*:
+       - Thiết kế card **`💡 QUY TẮC VÀNG HIỆU CHUẨN BÀN CỜ`** đặt trang trọng trên Left Panel viền Cyan `#38BDF8`, nền `#0F172A`.
+       - Nhúng **Sơ đồ lưới 3x3 (`UniformGrid`)** mô phỏng 9 phân vùng cảm biến (Tâm + 4 góc + 4 mép) với nhãn trực quan.
+       - Hướng dẫn quy tắc nghiêng góc 3D ($15^\circ - 25^\circ$, Yaw/Pitch), thay đổi độ sâu $Z$ và hộp cảnh báo điều kiện mặt phẳng cờ.
+    2. *Nút Bật/Tắt Nhanh Trên Header Banner (`ToggleGuideCommand`)*:
+       - Nút **`💡 Hướng Dẫn Chụp Chuẩn (Guide)`** trên Header Banner giúp kỹ sư dễ dàng ẩn/hiện bảng hướng dẫn theo ý muốn.
+       - Bổ sung `IsGuideExpanded` và `ToggleGuideCommand` trên [ChessboardCalibrationViewModel.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/ChessboardCalibrationViewModel.cs).
+    3. *Cập Nhật Tài Liệu Đào Tạo Kỹ Sư ([02_camera_setup_and_calibration.md](file:///g:/NODEJS/Vision2026/docs/training/02_camera_setup_and_calibration.md))*:
+       - Đồng bộ hướng dẫn 9 vùng và góc nghiêng chuẩn Zhang vào giáo trình đào tạo.
+    4. *Kiểm Thử Toàn Diện*:
+       - Toàn bộ test suite `TestExtractApp` đạt **100% PASSED**.
+       - Solution `VisionInspectionApp.slnx` biên dịch Release **0 Error(s)**.
+
+- **Tích Hợp Khử Méo Thấu Kính (Global Undistort) Cho Tab Manual Inspection / 2D Vision CMM (Task 348)**:
+  - **Hiện Tượng & Yêu Cầu Người Dùng**:
+    + Tab Manual Inspection trước đó chỉ sử dụng calibration kiểu tuyến tính tỉ lệ `PixelsPerMm`, dẫn đến không cover được trường hợp ảnh bị méo quang học do lens (Radial Barrel / Pincushion Distortion).
+    + Hiện tượng thực tế: mẫu đo càng ở gần tâm ảnh thì kích thước đo càng chuẩn; mẫu càng ra xa tâm ảnh (vùng rìa/góc bức ảnh) thì kích thước đo càng bị sai lệch.
+    + Người dùng yêu cầu bổ sung Checkbox "Khử méo lens (Global Undistort)" cho ảnh được nạp (File/Camera) trên Tab Manual Inspection để kiểm chứng độ chính xác đo kích thước.
+  - **Phân Tích Nguyên Nhân Kỹ Thuật**:
+    1. Hệ số quy đổi `PixelsPerMm` là phép biến đổi tỉ lệ tuyến tính 1D ($1\text{ mm} = S\text{ px}$).
+    2. Trong thực tế quang học công nghiệp, thấu kính camera luôn có độ méo hình học (Radial Distortion $k_1, k_2, k_3$ và Tangential Distortion $p_1, p_2$). Tại tâm quang học $(C_x, C_y)$, bán kính méo $r \approx 0$ nên tỉ lệ pixel-per-mm gần đúng. Tuy nhiên, khi ra xa tâm, bán kính $r$ tăng lên kéo theo sai số phi tuyến tính $k_1 r^2 + k_2 r^4$ làm dãn/nén mật độ pixel, dẫn đến cùng 1 kích thước vật lý $10\text{ mm}$ ở tâm là $200\text{ px}$ nhưng ra góc có thể bị biến dạng thành $185\text{ px}$ hoặc $215\text{ px}$.
+    3. Cần áp dụng thuật toán nắn thẳng ảnh `Cv2.InitUndistortRectifyMap` & `Cv2.Remap` (hoặc `Cv2.Undistort`) từ thông số hiệu chuẩn bàn cờ toàn cục (`Global Chessboard Calibration`) để duỗi phẳng toàn bộ không gian ảnh quang học thành ảnh phối cảnh lý tưởng đồng nhất trước khi tiến hành đo đạc.
+  - **Kiến Trúc & Giải Pháp Kỹ Thuật Đã Triển Khai**:
+    1. *Lưu Trữ Cấu Hình Bền Vững (`GlobalAppSettingsService.cs`)*:
+       - Bổ sung thuộc tính `public bool ManualApplyGlobalUndistort { get; set; } = false;` vào `GlobalAppSettings` và lưu bền vững vào `global_settings.json`.
+    2. *Nâng Cấp ViewModel Manual Inspection (`ManualInspectionViewModel.cs`)*:
+       - Bổ sung trường `private Mat? _rawImageMat;` luôn lưu giữ vẹn nguyên khung hình gốc chưa qua xử lý.
+       - Bổ sung thuộc tính `[ObservableProperty] private bool _applyGlobalUndistort;` đồng bộ hai chiều với settings.
+       - Xây dựng phương thức chuẩn hóa `ApplyCalibrationAndDisplayImage(Mat? sourceMat = null)`:
+         * Khi `ApplyGlobalUndistort == true`: tự động trích xuất `globalCal = ChessboardCalibrationService.GetGlobalCalibration()`. Nếu camera đã được hiệu chuẩn bàn cờ (`IsCalibrated == true`), gọi `ChessboardCalibrationService.Undistort(_rawImageMat, globalCal)` nắn thẳng ảnh, đồng bộ `CalibrationPixelsPerMm = globalCal.PixelsPerMm` và thông báo trạng thái. Nếu chưa calib bàn cờ, cảnh báo trực quan và giữ ảnh gốc an toàn.
+         * Khi `ApplyGlobalUndistort == false`: sao chép `_rawImageMat.Clone()` sang `_imageMat` và hiển thị ảnh thô.
+       - Cơ chế chuyển đổi tức thì (Instant Live Toggle): Khi người dùng bật/tắt checkbox trên ảnh đang mở, `OnApplyGlobalUndistortChanged` tự động kích hoạt `ApplyCalibrationAndDisplayImage()` biến đổi ngay lập tức ảnh trên màn hình giữa ảnh méo gốc và ảnh đã khử méo mà không cần chọn lại file hay chụp lại camera.
+       - Bổ sung phương thức `Dispose()` giải phóng an toàn bộ nhớ C++ OpenCV Mat cho cả `_rawImageMat` và `_imageMat`.
+    3. *Giao Diện Người Dùng Thẩm Mỹ (`ManualInspectionView.xaml`)*:
+       - Bố trí CheckBox **`🌐 Khử méo lens (Global Undistort)`** nổi bật trên Top Action Bar ngay cạnh nút `🔄 Lấy từ Global Calib`.
+       - Sử dụng màu Accent neon, font chữ SemiBold và ToolTip hướng dẫn chi tiết cơ chế khử méo thấu kính.
+    4. *Kiểm Thử Toàn Diện (`TestExtractApp`)*:
+       - Bổ sung bài kiểm thử tự động `TestManualInspectionApplyGlobalUndistortWorkflow` trong `ManualInspectionTest.cs`:
+         * Xác minh cờ khởi tạo và tính năng lưu bền vững vào `global_settings.json`.
+         * Kiểm tra nạp ảnh, kiểm tra áp dụng `ChessboardCalibrationService.Undistort`, kiểm tra đồng bộ `PixelsPerMm` và thông báo trạng thái.
+         * Kiểm tra cơ chế chuyển đổi tức thì (Toggle qua lại) giữa raw mat và undistorted mat trong bộ nhớ.
+       - Toàn bộ test suite `TestExtractApp` đạt **100% PASSED**.
+       - Solution `VisionInspectionApp.slnx` biên dịch Release **0 Error(s)**.
+
 - **Khắc Phục Triệt Để Hiện Tượng Điểm Bị Nhảy Vị Trí Khi Click Đo Trong Tab Manual Inspection / 2D Vision CMM (Task 347)**:
   - **Hiện Tượng & Yêu Cầu Người Dùng**:
     + Trong tab Manual Inspection, khi đo khoảng cách 2 điểm click chọn điểm, người dùng chọn điểm, vừa nhấc chuột lên thì điểm ghi nhận bị nhảy ra chỗ khác, không đúng chỗ vừa click.

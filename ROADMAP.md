@@ -2975,3 +2975,66 @@ Lộ trình tích hợp tính năng Chụp ảnh từ camera và hỗ trợ các
              - Toàn bộ test suite `TestExtractApp` đạt **100% PASSED**.
              - Solution `VisionInspectionApp.slnx` biên dịch Release **0 Error(s)**.
 
+    - [x] **Task 348: Tích Hợp Khử Méo Thấu Kính (Global Undistort) Cho Tab Manual Inspection (2D Vision CMM)**:
+        - **Hiện Tượng & Yêu Cầu Người Dùng**:
+          + Tab Manual Inspection trước đó chỉ sử dụng calibration kiểu tuyến tính tỉ lệ PixelsPerMm, dẫn đến không cover được trường hợp ảnh bị méo quang học do lens (Barrel/Pincushion Distortion).
+          + Hiện tượng thực tế: mẫu đo càng ở gần tâm ảnh thì kích thước đo càng chuẩn; mẫu càng ra xa tâm ảnh (vùng rìa/góc bức ảnh) thì kích thước đo càng bị sai lệch.
+          + Người dùng yêu cầu bổ sung Checkbox "Khử méo lens (Global Undistort)" cho ảnh được nạp (File/Camera) trên Tab Manual Inspection để kiểm chứng độ chính xác đo kích thước.
+        - **Phân Tích Nguyên Nhân Kỹ Thuật**:
+          1. Hệ số quy đổi PixelsPerMm là phép phóng to/thu nhỏ tuyến tính thuần túy ($1\text{ mm} = S\text{ px}$).
+          2. Trong thực tế quang học công nghiệp, thấu kính camera luôn có độ méo hình học (Radial Distortion $k_1, k_2, k_3$ và Tangential Distortion $p_1, p_2$). Tại tâm quang học $(C_x, C_y)$, bán kính méo $r \approx 0$ nên tỉ lệ pixel-per-mm gần đúng. Tuy nhiên, khi ra xa tâm, bán kính $r$ tăng lên kéo theo sai số phi tuyến tính $k_1 r^2 + k_2 r^4$ làm dãn/nén mật độ pixel, dẫn đến cùng 1 kích thước vật lý $10\text{ mm}$ ở tâm là $200\text{ px}$ nhưng ra góc có thể bị biến dạng thành $185\text{ px}$ hoặc $215\text{ px}$.
+          3. Cần áp dụng thuật toán nắn thẳng ảnh `Cv2.InitUndistortRectifyMap` & `Cv2.Remap` (hoặc `Cv2.Undistort`) từ thông số hiệu chuẩn bàn cờ toàn cục (`Global Chessboard Calibration`) để duỗi phẳng toàn bộ không gian ảnh quang học thành ảnh phối cảnh lý tưởng đồng nhất trước khi tiến hành đo đạc.
+        - **Giải Pháp Kỹ Thuật Đã Triển Khai**:
+          1. *Lưu Trữ Cấu Hình Bền Vững (`GlobalAppSettingsService.cs`)*:
+             - Bổ sung thuộc tính `public bool ManualApplyGlobalUndistort { get; set; } = false;` vào `GlobalAppSettings` và lưu bền vững vào `global_settings.json`.
+          2. *Nâng Cấp ViewModel Manual Inspection (`ManualInspectionViewModel.cs`)*:
+             - Bổ sung trường `private Mat? _rawImageMat;` luôn lưu giữ vẹn nguyên khung hình gốc chưa qua xử lý.
+             - Bổ sung thuộc tính `[ObservableProperty] private bool _applyGlobalUndistort;` đồng bộ hai chiều với settings.
+             - Xây dựng phương thức chuẩn hóa `ApplyCalibrationAndDisplayImage(Mat? sourceMat = null)`:
+               * Khi `ApplyGlobalUndistort == true`: tự động trích xuất `globalCal = ChessboardCalibrationService.GetGlobalCalibration()`. Nếu camera đã được hiệu chuẩn bàn cờ (`IsCalibrated == true`), gọi `ChessboardCalibrationService.Undistort(_rawImageMat, globalCal)` nắn thẳng ảnh, đồng bộ `CalibrationPixelsPerMm = globalCal.PixelsPerMm` và thông báo trạng thái. Nếu chưa calib bàn cờ, cảnh báo trực quan và giữ ảnh gốc an toàn.
+               * Khi `ApplyGlobalUndistort == false`: sao chép `_rawImageMat.Clone()` sang `_imageMat` và hiển thị ảnh thô.
+             - Cơ chế chuyển đổi tức thì (Instant Live Toggle): Khi người dùng bật/tắt checkbox trên ảnh đang mở, `OnApplyGlobalUndistortChanged` tự động kích hoạt `ApplyCalibrationAndDisplayImage()` biến đổi ngay lập tức ảnh trên màn hình giữa ảnh méo gốc và ảnh đã khử méo mà không cần chọn lại file hay chụp lại camera.
+             - Bổ sung phương thức `Dispose()` giải phóng an toàn bộ nhớ C++ OpenCV Mat cho cả `_rawImageMat` và `_imageMat`.
+          3. *Giao Diện Người Dùng Thẩm Mỹ (`ManualInspectionView.xaml`)*:
+             - Bố trí CheckBox **`🌐 Khử méo lens (Global Undistort)`** nổi bật trên Top Action Bar ngay cạnh nút `🔄 Lấy từ Global Calib`.
+             - Sử dụng màu Accent neon, font chữ SemiBold và ToolTip hướng dẫn chi tiết cơ chế khử méo thấu kính.
+          4. *Kiểm Thử Toàn Diện (`TestExtractApp`)*:
+             - Bổ sung bài kiểm thử tự động `TestManualInspectionApplyGlobalUndistortWorkflow` trong `ManualInspectionTest.cs`:
+               * Xác minh cờ khởi tạo và tính năng lưu bền vững vào `global_settings.json`.
+               * Kiểm tra nạp ảnh, kiểm tra áp dụng `ChessboardCalibrationService.Undistort`, kiểm tra đồng bộ `PixelsPerMm` và thông báo trạng thái.
+               * Kiểm tra cơ chế chuyển đổi tức thì (Toggle qua lại) giữa raw mat và undistorted mat trong bộ nhớ.
+             - Toàn bộ test suite `TestExtractApp` đạt **100% PASSED**.
+             - Solution `VisionInspectionApp.slnx` biên dịch Release **0 Error(s)**.
+
+    - [x] **Task 349: Tích Hợp Bảng Hướng Dẫn Kỹ Thuật Trực Quan (Visual Guideline & 3x3 Coverage Map) Theo Phương Pháp Zhang Cho Cửa Sổ Chessboard Calibration**:
+        - **Hiện Tượng & Yêu Cầu Người Dùng**:
+          + Người dùng thắc mắc: "Cách hiệu chuẩn bàn cờ đúng là gì? Mỗi lần chụp phải xoay phải xê dịch chessboard đi đúng không? Bản chất là gì?"
+          + Yêu cầu: Thêm guideline sinh động và hướng dẫn trực quan để user làm theo trực tiếp trong cửa sổ Chessboard Calibration.
+        - **Phân Tích Bản Chất Quang Học & Toán Học (Zhang's Calibration Method - 1999)**:
+          1. *Bản chất mô hình phối cảnh Pin-hole & Độ méo thấu kính Brown-Conrady*:
+             - Camera matrix $K$ gồm 4 tham số nội tại (Focal length $f_x, f_y$, Optical center $c_x, c_y$).
+             - Hệ số méo gồm méo cầu hướng tâm ($k_1, k_2, k_3$) và méo tiếp tuyến ($p_1, p_2$).
+             - Mỗi góc chụp $i$ có ma trận xoay $R_i$ và tịnh tiến $t_i$.
+          2. *Tại sao bắt buộc phải xê dịch và nghiêng bàn cờ?*:
+             - Nếu chỉ để bàn cờ đứng yên 1 vị trí song song với cảm biến: hệ phương trình Homography 2D bị **suy biến (degenerate / rank-deficient)**. OpenCV không thể tách biệt giữa tiêu cự $f$ và khoảng cách trục $Z$, không giải được tọa độ quang tâm $(c_x, c_y)$.
+             - Nếu không đưa bàn cờ ra 4 góc và 4 mép: vùng ngoài rìa thấu kính ($r$ lớn) hoàn toàn không có điểm dữ liệu để tối ưu hóa $k_1, k_2$, dẫn đến sai lệch méo ở góc.
+             - Khi nghiêng tấm cờ ($15^\circ - 25^\circ$), hiệu ứng phối cảnh 3D (các ô gần to hơn, xa nhỏ hơn) giúp thuật toán xác định chính xác trục quang học.
+          3. *Số lượng ảnh khuyến nghị*: Phải từ **10 đến 20 ảnh** bao phủ kín toàn bộ 9 vùng cảm biến (Tâm + 4 góc + 4 mép) để đạt sai số tái chiếu cực tiểu ($< 0.1$ px).
+        - **Giải Pháp Kỹ Thuật Đã Triển Khai**:
+          1. *Thiết Kế Thẻ Guideline Trực Quan (`ChessboardCalibrationDialog.xaml`)*:
+             - Thiết kế Card **`💡 QUY TẮC VÀNG HIỆU CHUẨN BÀN CỜ`** đặt trang trọng trên Left Panel với viền Cyan `#38BDF8`, nền `#0F172A`.
+             - Giải thích súc tích bản chất toán học vì sao phải nghiêng và di chuyển tấm cờ.
+             - Nhúng **Sơ Đồ Lưới Trực Quan 3x3 (`UniformGrid`)** mô phỏng 9 phân vùng cảm biến (↖ Góc TL, ↑ Mép Trên, ↗ Góc TR, ← Mép Trái, 🎯 Tâm Ảnh, Mép Phải →, ↙ Góc BL, ↓ Mép Dưới, ↘ Góc BR).
+             - Hướng dẫn quy tắc nghiêng góc 3D ($15^\circ - 25^\circ$, Yaw & Pitch) và thay đổi độ sâu trục $Z$.
+             - Hộp cảnh báo công nghiệp: tấm cờ phẳng mica/nhôm/kính, chống lóa sáng và chừa dải viền trắng quiet zone.
+          2. *Nút Điều Khiển Nhanh Trên Header Banner (`ToggleGuideCommand`)*:
+             - Nút bấm **`💡 Hướng Dẫn Chụp Chuẩn (Guide)`** trên thanh tiêu đề cho phép bật/tắt khung hướng dẫn nhanh chóng theo ý muốn.
+             - Đồng bộ với thuộc tính `IsGuideExpanded` trên [ChessboardCalibrationViewModel.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/ChessboardCalibrationViewModel.cs).
+          3. *Cập Nhật Tài Liệu Đào Tạo Kỹ Sư ([02_camera_setup_and_calibration.md](file:///g:/NODEJS/Vision2026/docs/training/02_camera_setup_and_calibration.md))*:
+             - Bổ sung chi tiết quy tắc 9 vùng và góc nghiêng theo phương pháp Zhang vào giáo trình kỹ sư vision.
+          4. *Kiểm Thử Toàn Diện*:
+             - Toàn bộ test suite `TestExtractApp` đạt **100% PASSED**.
+             - Solution `VisionInspectionApp.slnx` biên dịch Release **0 Error(s)**.
+
+
+

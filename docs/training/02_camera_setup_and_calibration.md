@@ -1,4 +1,4 @@
-﻿# TÀI LIỆU ĐÀO TẠO KỸ SƯ VISION — PHẦN 2
+# TÀI LIỆU ĐÀO TẠO KỸ SƯ VISION — PHẦN 2
 ## THIẾT LẬP CAMERA CÔNG NGHIỆP VÀ HIỆU CHUẨN QUANG HỌC (CAMERA & CALIBRATION)
 
 ---
@@ -112,9 +112,11 @@ Nếu không khử biến dạng, một đường thẳng kim loại ngoài th�
    - Kích thước mỗi ô vuông tiêu chuẩn: 29.00 mm (hoặc tấm chính xác 10.00 mm, 5.00 mm tùy trường nhìn FOV).
 2. **Mở cửa sổ hiệu chuẩn bàn cờ:**
    - Vào menu **`📐 Hiệu Chuẩn` ➔ `♟️ Hiệu Chuẩn Camera Bàn Cờ (Chessboard Calib)...`**.
-3. **Thu thập tập ảnh mẫu (≥ 3 ảnh ở các góc độ khác nhau):**
-   - Đặt tấm bàn cờ phẳng dưới camera, nhấp **"📷 Chụp Ảnh Mẫu"** (hoặc nạp từ thư mục).
-   - Xê dịch tấm bàn cờ sang trái, sang phải, lên trên, xuống dưới và nghiêng nhẹ một góc 5° - 10° để camera chụp được đầy đủ các vùng biên của thấu kính.
+3. **Thu thập tập ảnh mẫu (Khuyến nghị 10 - 20 ảnh theo phương pháp Zhang):**
+   - Đặt tấm bàn cờ phẳng dưới camera, dùng tính năng **"⚡ Chụp & Thêm Nhanh"** trên luồng Live hoặc **"📸 Chụp Khung Hình"**.
+   - **Quy tắc 9 vùng (Coverage):** Chụp 1 ảnh ở Tâm, 4 ảnh ở 4 góc (Góc Trên-Trái, Trên-Phải, Dưới-Trái, Dưới-Phải) và 4 ảnh ở 4 mép cạnh (Mép Trên, Dưới, Trái, Phải). Bắt buộc phải chụp ở các góc và mép vì đây là nơi thấu kính bị méo nặng nhất ($k_1, k_2$).
+   - **Quy tắc nghiêng góc (Tilt 15° - 25°):** Nghiêng tấm cờ sang trái/phải (Yaw) và chúc lên/xuống (Pitch). Hiệu ứng phối cảnh 3D là điều kiện tiên quyết để OpenCV giải ma trận nội suy tách biệt tiêu cự $f_x, f_y$ và tâm quang học $c_x, c_y$.
+   - **Quy tắc độ sâu (Z-Distance):** Đưa tấm cờ lại gần hơn (chiếm 60-70% FOV) và lùi xa hơn (chiếm 30-40% FOV).
    - Khi phát hiện thành công, phần mềm sẽ vẽ các đường nối cầu vồng rực rỡ bám chặt vào các góc ô cờ (`CornerSubPix` với độ chính xác dưới 0.1 pixel).
 4. **Tính toán ma trận và khử méo (Calibrate):**
    - Nhấp nút **"📐 Tính Toán Hiệu Chuẩn (Calibrate)"**.

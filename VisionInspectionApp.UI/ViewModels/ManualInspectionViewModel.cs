@@ -16,11 +16,12 @@ using VisionInspectionApp.Application.Services;
 
 namespace VisionInspectionApp.UI.ViewModels;
 
-public sealed partial class ManualInspectionViewModel : ObservableObject
+public sealed partial class ManualInspectionViewModel : ObservableObject, IDisposable
 {
     private readonly GlobalAppSettingsService _settings;
     private readonly CameraService _cameraService;
 
+    private Mat? _rawImageMat;
     private Mat? _imageMat;
     private readonly List<GeoPoint2D> _collectedPoints = new();
     private readonly List<OverlayItem> _persistentOverlays = new();
@@ -29,6 +30,8 @@ public sealed partial class ManualInspectionViewModel : ObservableObject
     {
         _settings = settings;
         _cameraService = cameraService;
+
+        _applyGlobalUndistort = _settings.Settings.ManualApplyGlobalUndistort;
 
         OverlayItems = new ObservableCollection<OverlayItem>();
         Records = new ObservableCollection<ManualMeasurementRecord>();
@@ -55,6 +58,9 @@ public sealed partial class ManualInspectionViewModel : ObservableObject
 
     [ObservableProperty]
     private double _calibrationPixelsPerMm = 1.0;
+
+    [ObservableProperty]
+    private bool _applyGlobalUndistort = false;
 
     [ObservableProperty]
     private ManualMeasurementType _selectedTool = ManualMeasurementType.PointToPointDistance;
@@ -95,6 +101,41 @@ public sealed partial class ManualInspectionViewModel : ObservableObject
         else if (_settings.Settings.ManualPixelsPerMm > 0)
         {
             CalibrationPixelsPerMm = Math.Round(_settings.Settings.ManualPixelsPerMm, 4);
+        }
+
+        if (ApplyGlobalUndistort && _rawImageMat is not null && !_rawImageMat.Empty())
+        {
+            ApplyCalibrationAndDisplayImage();
+        }
+    }
+
+    partial void OnApplyGlobalUndistortChanged(bool value)
+    {
+        _settings.Settings.ManualApplyGlobalUndistort = value;
+        _settings.Save();
+
+        if (_rawImageMat is not null && !_rawImageMat.Empty())
+        {
+            ApplyCalibrationAndDisplayImage();
+        }
+        else
+        {
+            if (value)
+            {
+                var globalCal = ChessboardCalibrationService.GetGlobalCalibration();
+                if (globalCal is not null && globalCal.IsCalibrated)
+                {
+                    StatusPrompt = $"🌐 Đã bật khử méo Lens (Undistort) bằng Global Calib (Pixels/mm: {globalCal.PixelsPerMm:F4})";
+                }
+                else
+                {
+                    StatusPrompt = "⚠️ Chưa có dữ liệu Global Chessboard Calibration để khử méo lens!";
+                }
+            }
+            else
+            {
+                UpdatePromptText();
+            }
         }
     }
 
@@ -137,6 +178,47 @@ public sealed partial class ManualInspectionViewModel : ObservableObject
         SelectedGroup = group;
     }
 
+    public void ApplyCalibrationAndDisplayImage(Mat? sourceMat = null)
+    {
+        if (sourceMat is not null)
+        {
+            _rawImageMat?.Dispose();
+            _rawImageMat = sourceMat;
+        }
+
+        if (_rawImageMat is null || _rawImageMat.Empty()) return;
+
+        _imageMat?.Dispose();
+
+        if (ApplyGlobalUndistort)
+        {
+            var globalCal = ChessboardCalibrationService.GetGlobalCalibration();
+            if (globalCal is not null && globalCal.IsCalibrated && globalCal.DistCoeffs is not null && globalCal.DistCoeffs.Length > 0)
+            {
+                _imageMat = ChessboardCalibrationService.Undistort(_rawImageMat, globalCal);
+                if (globalCal.PixelsPerMm > 0)
+                {
+                    CalibrationPixelsPerMm = Math.Round(globalCal.PixelsPerMm, 4);
+                }
+                StatusPrompt = $"🌐 Đã áp dụng khử méo Lens (Undistort) từ Global Calib | Tỉ lệ: {CalibrationPixelsPerMm:F4} px/mm";
+            }
+            else
+            {
+                _imageMat = _rawImageMat.Clone();
+                StatusPrompt = "⚠️ Chưa có dữ liệu Global Chessboard Calibration để khử méo! Đang hiển thị ảnh gốc.";
+            }
+        }
+        else
+        {
+            _imageMat = _rawImageMat.Clone();
+            UpdatePromptText();
+        }
+
+        Image = _imageMat.ToBitmapSourceForDisplay();
+        _collectedPoints.Clear();
+        RefreshAllOverlays();
+    }
+
     private void LoadImage()
     {
         var dlg = new OpenFileDialog
@@ -146,13 +228,14 @@ public sealed partial class ManualInspectionViewModel : ObservableObject
 
         if (dlg.ShowDialog() != true) return;
 
-        _imageMat?.Dispose();
-        _imageMat = Cv2.ImRead(dlg.FileName, ImreadModes.Color);
-        Image = _imageMat.ToBitmapSourceForDisplay();
+        var loadedMat = Cv2.ImRead(dlg.FileName, ImreadModes.Color);
+        if (loadedMat.Empty())
+        {
+            loadedMat.Dispose();
+            return;
+        }
 
-        _collectedPoints.Clear();
-        RefreshAllOverlays();
-        UpdatePromptText();
+        ApplyCalibrationAndDisplayImage(loadedMat);
     }
 
     private async Task CaptureCameraImageAsync()
@@ -162,12 +245,7 @@ public sealed partial class ManualInspectionViewModel : ObservableObject
             var mat = await _cameraService.CaptureSnapshotAsync();
             if (mat != null && !mat.Empty())
             {
-                _imageMat?.Dispose();
-                _imageMat = mat;
-                Image = _imageMat.ToBitmapSourceForDisplay();
-                _collectedPoints.Clear();
-                RefreshAllOverlays();
-                UpdatePromptText();
+                ApplyCalibrationAndDisplayImage(mat);
             }
             else
             {
@@ -244,5 +322,13 @@ public sealed partial class ManualInspectionViewModel : ObservableObject
             var overlays = GenerateOverlaysForRecord(r);
             _persistentOverlays.AddRange(overlays);
         }
+    }
+
+    public void Dispose()
+    {
+        _imageMat?.Dispose();
+        _rawImageMat?.Dispose();
+        _imageMat = null;
+        _rawImageMat = null;
     }
 }

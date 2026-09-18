@@ -30,6 +30,9 @@
                     <TextBlock Text="{Binding ModeBadgeText}" FontWeight="ExtraBold" FontSize="12" Foreground="#38BDF8" VerticalAlignment="Center" />
                 </StackPanel>
                 <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                    <Button Content="💡 Hướng Dẫn Chụp Chuẩn (Guide)" Command="{Binding ToggleGuideCommand}" 
+                            Padding="8,3" Margin="0,0,10,0" Background="#0284C7" Foreground="White" FontWeight="Bold" FontSize="11" 
+                            ToolTip="Bật/Tắt bảng hướng dẫn quy tắc vàng hiệu chuẩn camera bàn cờ" />
                     <TextBlock Text="Luồng Camera:" Foreground="#94A3B8" FontSize="11" VerticalAlignment="Center" Margin="0,0,6,0" />
                     <Border CornerRadius="3" Padding="8,2">
                         <Border.Style>
@@ -78,6 +81,68 @@
                             </CheckBox>
                             <TextBlock Text="Khi bật: Tất cả các job khi chạy sẽ áp dụng global calib, bất kể job có thông số hiệu chuẩn riêng hay không."
                                        Foreground="#94A3B8" FontSize="11" TextWrapping="Wrap" Margin="22,3,0,0" />
+                        </StackPanel>
+                    </Border>
+
+                    <!-- VISUAL CALIBRATION GUIDELINE -->
+                    <Border BorderBrush="#38BDF8" BorderThickness="1.5" CornerRadius="4" Padding="8" Margin="0,0,0,8" Background="#0F172A"
+                            Visibility="{Binding IsGuideExpanded, Converter={StaticResource BoolToVis}}">
+                        <StackPanel>
+                            <DockPanel Margin="0,0,0,6">
+                                <TextBlock Text="💡 QUY TẮC VÀNG HIỆU CHUẨN BÀN CỜ" FontWeight="ExtraBold" FontSize="11.5" Foreground="#38BDF8" VerticalAlignment="Center" />
+                                <Button DockPanel.Dock="Right" Content="✕ Đóng" Command="{Binding ToggleGuideCommand}" 
+                                        Background="Transparent" BorderThickness="0" Foreground="#94A3B8" FontSize="10" Cursor="Hand" />
+                            </DockPanel>
+
+                            <TextBlock Text="Bản chất: Để giải tiêu cự f, tâm ảnh (cx, cy) và khử méo rìa (k1, k2), bàn cờ BẮT BUỘC phải chụp ở nhiều vị trí và góc nghiêng khác nhau (không để đứng yên 1 chỗ)."
+                                       Foreground="#CBD5E1" FontSize="10.5" TextWrapping="Wrap" Margin="0,0,0,6" />
+
+                            <!-- 3x3 Coverage Grid Diagram -->
+                            <TextBlock Text="🎯 1. Phủ kín 9 vùng cảm biến (Tâm + 4 góc + 4 mép):" FontWeight="Bold" FontSize="11" Foreground="#FDE047" Margin="0,2,0,4" />
+                            <UniformGrid Rows="3" Columns="3" Margin="4,0,4,6">
+                                <Border BorderBrush="#0284C7" BorderThickness="1" Background="#1E293B" Margin="1" Padding="2" CornerRadius="2">
+                                    <TextBlock Text="↖ Góc TL" HorizontalAlignment="Center" FontSize="9.5" Foreground="#7DD3FC" />
+                                </Border>
+                                <Border BorderBrush="#0284C7" BorderThickness="1" Background="#1E293B" Margin="1" Padding="2" CornerRadius="2">
+                                    <TextBlock Text="↑ Mép Trên" HorizontalAlignment="Center" FontSize="9.5" Foreground="#7DD3FC" />
+                                </Border>
+                                <Border BorderBrush="#0284C7" BorderThickness="1" Background="#1E293B" Margin="1" Padding="2" CornerRadius="2">
+                                    <TextBlock Text="↗ Góc TR" HorizontalAlignment="Center" FontSize="9.5" Foreground="#7DD3FC" />
+                                </Border>
+
+                                <Border BorderBrush="#0284C7" BorderThickness="1" Background="#1E293B" Margin="1" Padding="2" CornerRadius="2">
+                                    <TextBlock Text="← Mép Trái" HorizontalAlignment="Center" FontSize="9.5" Foreground="#7DD3FC" />
+                                </Border>
+                                <Border BorderBrush="#10B981" BorderThickness="1.5" Background="#064E3B" Margin="1" Padding="2" CornerRadius="2">
+                                    <TextBlock Text="🎯 TÂM ẢNH" HorizontalAlignment="Center" FontWeight="Bold" FontSize="9.5" Foreground="#6EE7B7" />
+                                </Border>
+                                <Border BorderBrush="#0284C7" BorderThickness="1" Background="#1E293B" Margin="1" Padding="2" CornerRadius="2">
+                                    <TextBlock Text="Mép Phải →" HorizontalAlignment="Center" FontSize="9.5" Foreground="#7DD3FC" />
+                                </Border>
+
+                                <Border BorderBrush="#0284C7" BorderThickness="1" Background="#1E293B" Margin="1" Padding="2" CornerRadius="2">
+                                    <TextBlock Text="↙ Góc BL" HorizontalAlignment="Center" FontSize="9.5" Foreground="#7DD3FC" />
+                                </Border>
+                                <Border BorderBrush="#0284C7" BorderThickness="1" Background="#1E293B" Margin="1" Padding="2" CornerRadius="2">
+                                    <TextBlock Text="↓ Mép Dưới" HorizontalAlignment="Center" FontSize="9.5" Foreground="#7DD3FC" />
+                                </Border>
+                                <Border BorderBrush="#0284C7" BorderThickness="1" Background="#1E293B" Margin="1" Padding="2" CornerRadius="2">
+                                    <TextBlock Text="↘ Góc BR" HorizontalAlignment="Center" FontSize="9.5" Foreground="#7DD3FC" />
+                                </Border>
+                            </UniformGrid>
+
+                            <!-- Tilt & Distance Rule -->
+                            <TextBlock Text="📐 2. Nghiêng góc nhẹ (Tilt 15° - 25°):" FontWeight="Bold" FontSize="11" Foreground="#FDE047" Margin="0,2,0,2" />
+                            <TextBlock Text="• Nghiêng Trái/Phải (Yaw) &amp; Chúc Lên/Xuống (Pitch) để camera nhìn thấy phối cảnh 3D." Foreground="#E2E8F0" FontSize="10.5" TextWrapping="Wrap" Margin="4,0,0,4" />
+
+                            <TextBlock Text="📏 3. Khoảng cách &amp; Số lượng ảnh:" FontWeight="Bold" FontSize="11" Foreground="#FDE047" Margin="0,2,0,2" />
+                            <TextBlock Text="• Đưa lại gần hơn và lùi xa hơn khoảng làm việc danh định." Foreground="#E2E8F0" FontSize="10.5" TextWrapping="Wrap" Margin="4,0,0,2" />
+                            <TextBlock Text="• Khuyến nghị: Chụp từ 10 - 20 ảnh khác nhau (tối thiểu ≥ 5 ảnh) để đạt độ chính xác cực đại!" Foreground="#4ADE80" FontWeight="SemiBold" FontSize="10.5" TextWrapping="Wrap" Margin="4,0,0,4" />
+
+                            <!-- Tip note -->
+                            <Border Background="#1E1B4B" BorderBrush="#6366F1" BorderThickness="1" CornerRadius="3" Padding="6,4" Margin="0,4,0,0">
+                                <TextBlock Text="⚠️ Chú ý: Bàn cờ phải phẳng tuyệt đối (mica/nhôm/kính), không bị bóng lóa đèn và phải chừa dải viền trắng quanh mép cờ." Foreground="#C7D2FE" FontSize="10" TextWrapping="Wrap" />
+                            </Border>
                         </StackPanel>
                     </Border>
 

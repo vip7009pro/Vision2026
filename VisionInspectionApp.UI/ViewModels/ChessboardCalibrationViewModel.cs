@@ -64,6 +64,12 @@ public sealed partial class ChessboardCalibrationViewModel : ObservableObject
     [ObservableProperty]
     private bool _forceApplyGlobalCalibration;
 
+    [ObservableProperty]
+    private bool _isGuideExpanded = true;
+
+    [RelayCommand]
+    private void ToggleGuide() => IsGuideExpanded = !IsGuideExpanded;
+
     partial void OnForceApplyGlobalCalibrationChanged(bool value)
     {
         if (_isInitializing) return;

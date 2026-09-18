@@ -7,6 +7,7 @@ namespace VisionInspectionApp.UI.Services;
 public sealed class GlobalAppSettings
 {
     public double ManualPixelsPerMm { get; set; } = 1.0;
+    public bool ManualApplyGlobalUndistort { get; set; } = false;
     public bool IsDarkMode { get; set; } = true;
     public string ThemeId { get; set; } = "MidnightBlue";
 

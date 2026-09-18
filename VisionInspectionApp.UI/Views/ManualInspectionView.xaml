@@ -105,6 +105,14 @@
                 <TextBox Width="90" Text="{Binding CalibrationPixelsPerMm, Converter={StaticResource DoubleConv}, UpdateSourceTrigger=PropertyChanged, Delay=250}" VerticalAlignment="Center" Margin="0,0,6,0" />
                 <Button Content="🔄 Lấy từ Global Calib" Command="{Binding SyncCalibrationFromGlobalCommand}" ToolTip="Đồng bộ lại tỉ lệ px/mm từ Global Chessboard Calibration" Margin="0,0,16,0" Padding="6,4" />
 
+                <CheckBox Content="🌐 Khử méo lens (Global Undistort)"
+                          IsChecked="{Binding ApplyGlobalUndistort}"
+                          VerticalAlignment="Center"
+                          Foreground="{DynamicResource AccentBrush}"
+                          FontWeight="SemiBold"
+                          ToolTip="Tự động áp dụng thuật toán khử méo thấu kính quang học (Undistort) sử dụng ma trận camera và hệ số méo từ Global Chessboard Calibration khi nạp/chụp ảnh"
+                          Margin="0,0,16,0" />
+
                 <CheckBox Content="Bắt điểm Sub-pixel Edge" IsChecked="{Binding EnableSubpixelSnapping}" VerticalAlignment="Center" Foreground="{DynamicResource AccentBrush}" ToolTip="Tự động dò mép biên cực kỳ chính xác dưới mức 1 pixel khi click" Margin="0,0,16,0" />
 
                 <Rectangle Width="1" Height="22" Fill="{DynamicResource BorderBrush}" Margin="0,0,12,0" />
