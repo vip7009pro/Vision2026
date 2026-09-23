@@ -57,5 +57,6 @@ class Program
         PerformanceOptimizationTests.RunAllTests();
         ContinuousFlowRegressionTests.RunAllTests();
         ToolEditorAndOqcUxTests.RunAllTests();
+        TimingAccountingTests.RunAllTests();
     }
 }

@@ -4666,7 +4666,8 @@
                                     <UniformGrid Grid.Column="1" Columns="3" VerticalAlignment="Center">
                                         <Border Margin="2,0" Padding="7,4" CornerRadius="4"
                                                 Background="{DynamicResource PanelBackgroundBrush}"
-                                                BorderBrush="#4CAF50" BorderThickness="1">
+                                                BorderBrush="#4CAF50" BorderThickness="1"
+                                                ToolTip="Tổng thời gian engine chạy flow (InspectionService.Inspect). KHÔNG gồm thời gian chụp/đọc ảnh nguồn — xem dòng 'Phân bổ thời gian' bên dưới để biết thời gian đó.">
                                             <StackPanel>
                                                 <TextBlock Text="TỔNG (ms)" Style="{StaticResource DashChipLabelStyle}" />
                                                 <TextBlock Text="{Binding LastResult.Timings.TotalMs, StringFormat='{}{0:0.0}'}"
@@ -4675,7 +4676,8 @@
                                         </Border>
                                         <Border Margin="2,0" Padding="7,4" CornerRadius="4"
                                                 Background="{DynamicResource PanelBackgroundBrush}"
-                                                BorderBrush="{DynamicResource AccentBrush}" BorderThickness="1">
+                                                BorderBrush="{DynamicResource AccentBrush}" BorderThickness="1"
+                                                ToolTip="Số sản phẩm đã kiểm tra trong phiên hiện tại (đếm từ lúc bắt đầu chạy / reset).">
                                             <StackPanel>
                                                 <TextBlock Text="COUNT" Style="{StaticResource DashChipLabelStyle}" />
                                                 <TextBlock Text="{Binding ProcessedImageCount}"
@@ -4685,7 +4687,8 @@
                                         </Border>
                                         <Border Margin="2,0" Padding="7,4" CornerRadius="4"
                                                 Background="{DynamicResource PanelBackgroundBrush}"
-                                                BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1">
+                                                BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"
+                                                ToolTip="Tỉ lệ đạt của 20 con hàng gần nhất.">
                                             <StackPanel>
                                                 <TextBlock Text="YIELD 20" Style="{StaticResource DashChipLabelStyle}" />
                                                 <TextBlock Text="{Binding RecentPartsYieldText}"
@@ -4716,54 +4719,48 @@
                     <!-- Scrollable inspection tables & runtime details -->
                     <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
                         <StackPanel Margin="2">
-                            <!-- Thẻ phân bổ thời gian từng tầng xử lý -->
+                            <!-- Thẻ phân bổ thời gian — HIỂN THỊ ĐỘNG: chỉ các tool CÓ TRÊN CANVAS + các pha không thuộc tool -->
                             <Border Style="{StaticResource DashCardStyle}" Padding="8,6">
                                 <StackPanel>
-                                    <TextBlock Text="⏱ PHÂN BỔ THỜI GIAN (TIMING BREAKDOWN)" Style="{StaticResource DashHeaderTextStyle}" Margin="0,0,0,6" />
-                                    <UniformGrid Columns="7">
-                                        <Border Margin="2,0" Padding="4,3" CornerRadius="4" Background="{DynamicResource PanelBackgroundBrush}" BorderBrush="#4CAF50" BorderThickness="1">
-                                            <StackPanel>
-                                                <TextBlock Text="TỔNG" Style="{StaticResource DashChipLabelStyle}" />
-                                                <TextBlock Text="{Binding LastResult.Timings.TotalMs, StringFormat='{}{0:0.0}'}" Style="{StaticResource DashChipValueStyle}" Foreground="#4CAF50" />
-                                            </StackPanel>
-                                        </Border>
-                                        <Border Margin="2,0" Padding="4,3" CornerRadius="4" Background="{DynamicResource PanelBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1">
-                                            <StackPanel>
-                                                <TextBlock Text="Origin" Style="{StaticResource DashChipLabelStyle}" />
-                                                <TextBlock Text="{Binding LastResult.Timings.OriginMs, StringFormat='{}{0:0.0}'}" Style="{StaticResource DashChipValueStyle}" Foreground="{DynamicResource TextBrush}" />
-                                            </StackPanel>
-                                        </Border>
-                                        <Border Margin="2,0" Padding="4,3" CornerRadius="4" Background="{DynamicResource PanelBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1">
-                                            <StackPanel>
-                                                <TextBlock Text="Point" Style="{StaticResource DashChipLabelStyle}" />
-                                                <TextBlock Text="{Binding LastResult.Timings.PointsMs, StringFormat='{}{0:0.0}'}" Style="{StaticResource DashChipValueStyle}" Foreground="{DynamicResource TextBrush}" />
-                                            </StackPanel>
-                                        </Border>
-                                        <Border Margin="2,0" Padding="4,3" CornerRadius="4" Background="{DynamicResource PanelBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1">
-                                            <StackPanel>
-                                                <TextBlock Text="Line" Style="{StaticResource DashChipLabelStyle}" />
-                                                <TextBlock Text="{Binding LastResult.Timings.LinesMs, StringFormat='{}{0:0.0}'}" Style="{StaticResource DashChipValueStyle}" Foreground="{DynamicResource TextBrush}" />
-                                            </StackPanel>
-                                        </Border>
-                                        <Border Margin="2,0" Padding="4,3" CornerRadius="4" Background="{DynamicResource PanelBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1">
-                                            <StackPanel>
-                                                <TextBlock Text="Distance" Style="{StaticResource DashChipLabelStyle}" />
-                                                <TextBlock Text="{Binding LastResult.Timings.DistancesMs, StringFormat='{}{0:0.0}'}" Style="{StaticResource DashChipValueStyle}" Foreground="{DynamicResource TextBrush}" />
-                                            </StackPanel>
-                                        </Border>
-                                        <Border Margin="2,0" Padding="4,3" CornerRadius="4" Background="{DynamicResource PanelBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1">
-                                            <StackPanel>
-                                                <TextBlock Text="Condition" Style="{StaticResource DashChipLabelStyle}" />
-                                                <TextBlock Text="{Binding LastResult.Timings.ConditionsMs, StringFormat='{}{0:0.0}'}" Style="{StaticResource DashChipValueStyle}" Foreground="{DynamicResource TextBrush}" />
-                                            </StackPanel>
-                                        </Border>
-                                        <Border Margin="2,0" Padding="4,3" CornerRadius="4" Background="{DynamicResource PanelBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1">
-                                            <StackPanel>
-                                                <TextBlock Text="Defect" Style="{StaticResource DashChipLabelStyle}" />
-                                                <TextBlock Text="{Binding LastResult.Timings.DefectsMs, StringFormat='{}{0:0.0}'}" Style="{StaticResource DashChipValueStyle}" Foreground="{DynamicResource TextBrush}" />
-                                            </StackPanel>
-                                        </Border>
-                                    </UniformGrid>
+                                    <Grid Margin="0,0,0,6">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Grid.Column="0" Text="⏱ PHÂN BỔ THỜI GIAN (TIMING BREAKDOWN)" Style="{StaticResource DashHeaderTextStyle}" />
+                                        <TextBlock Grid.Column="1" Text="TỔNG = Khởi tạo + Hiệu chuẩn + Tải template + Chờ slot + Preprocess + Σ(Tool) + Điều kiện + Defect + Ghép KQ"
+                                                   FontSize="9.5" Foreground="{DynamicResource TextMutedBrush}"
+                                                   VerticalAlignment="Center" Margin="8,0,0,0" TextWrapping="Wrap"
+                                                   ToolTip="Mọi pha trong TỔNG đều được đo tường minh. Ô 'Ghép KQ &amp; làm tròn' là phần còn lại (luôn nhỏ).
+Ô màu cam = thời gian đo ở tầng UI, NẰM NGOÀI tổng." />
+                                    </Grid>
+
+                                    <ItemsControl ItemsSource="{Binding TimingBreakdown}">
+                                        <ItemsControl.ItemsPanel>
+                                            <ItemsPanelTemplate>
+                                                <WrapPanel Orientation="Horizontal" />
+                                            </ItemsPanelTemplate>
+                                        </ItemsControl.ItemsPanel>
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <Border Margin="0,0,6,6" Padding="8,4" MinWidth="62" CornerRadius="4"
+                                                        Background="{DynamicResource PanelBackgroundBrush}"
+                                                        BorderBrush="{Binding ChipBrush}" BorderThickness="1.2"
+                                                        ToolTip="{Binding ToolTip}">
+                                                    <StackPanel>
+                                                        <TextBlock Text="{Binding Label}" Style="{StaticResource DashChipLabelStyle}" />
+                                                        <TextBlock Text="{Binding ValueText}" Style="{StaticResource DashChipValueStyle}"
+                                                                   Foreground="{Binding ChipBrush}" />
+                                                    </StackPanel>
+                                                </Border>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+
+                                    <TextBlock Text="🟠 Ô màu cam = thời gian đo ở tầng UI (NẰM NGOÀI tổng). Các ô còn lại đều nằm trong TỔNG."
+                                               FontSize="9.5" Foreground="{DynamicResource TextMutedBrush}"
+                                               TextWrapping="Wrap" Margin="0,0,0,2"
+                                               Visibility="{Binding HasOutOfTotalTimingChip, Converter={StaticResource BoolToVis}}" />
                                 </StackPanel>
                             </Border>
 

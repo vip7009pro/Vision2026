@@ -3297,6 +3297,36 @@ namespace VisionInspectionApp.UI.ViewModels
         }
 
         /// <summary>
+        /// Ghi thời gian chuẩn bị ảnh nguồn (chụp camera / đọc file / tải URL) — đo Ở TẦNG UI nên
+        /// NẰM NGOÀI <c>TotalMs</c> của engine — và bổ sung 0 ms cho các node Preprocess chưa từng chạy.
+        ///
+        /// ⚠️ KHÔNG ghi đè số đo thật: trước đây code luôn ép mọi node Preprocess về 0, làm mất
+        /// thời gian preprocess có thật và khiến "thời gian ẩn" = TotalMs - Σ(tool) tăng vọt.
+        /// </summary>
+        private static void ApplySourceAndPreprocessTimings(
+            InspectionResult result, string? sourceNodeName, int sourceMs, VisionConfig? config)
+        {
+            if (!string.IsNullOrWhiteSpace(sourceNodeName))
+            {
+                result.Timings.NodeTimings[sourceNodeName] = sourceMs;
+                result.Timings.SourceCaptureMs = sourceMs;
+                result.Timings.SourceNodeNames.Add(sourceNodeName);
+            }
+
+            if (config?.PreprocessNodes is null) return;
+
+            foreach (var preNode in config.PreprocessNodes)
+            {
+                if (string.IsNullOrWhiteSpace(preNode.Name)) continue;
+
+                if (!result.Timings.NodeTimings.ContainsKey(preNode.Name))
+                {
+                    result.Timings.NodeTimings[preNode.Name] = 0;
+                }
+            }
+        }
+
+        /// <summary>
         /// Nút "Reset Phiên &amp; Hàng Đợi" cạnh thanh Queue:
         ///  - Xả sạch các frame đang chờ trong hàng đợi (giải phóng Mat, không rò rỉ bộ nhớ).
         ///  - Đưa các bộ đếm về 0 (Count, frame rớt, thanh 20 con hàng gần nhất).
@@ -3700,17 +3730,7 @@ namespace VisionInspectionApp.UI.ViewModels
                     await _handshakeStateMachine.CompleteHandshakeAsync(inspectionResult.Pass, token);
 
                     // ImageSource runtime chỉ đo thời gian chuẩn bị ảnh (< 1ms), không bị gộp thời gian Inspect và PLC handshake
-                    inspectionResult.Timings.NodeTimings[sourceNodeName] = imageSourceMs;
-                    if (configCopy.PreprocessNodes != null)
-                    {
-                        foreach (var preNode in configCopy.PreprocessNodes)
-                        {
-                            if (!string.IsNullOrWhiteSpace(preNode.Name))
-                            {
-                                inspectionResult.Timings.NodeTimings[preNode.Name] = 0;
-                            }
-                        }
-                    }
+                    ApplySourceAndPreprocessTimings(inspectionResult, sourceNodeName, imageSourceMs, configCopy);
 
                     // Đẩy kết quả vào Background Logging Worker + thanh 20 con hàng gần nhất (gọi 1 lần)
                     PublishInspectionResult(inspectionResult);
@@ -4097,17 +4117,8 @@ namespace VisionInspectionApp.UI.ViewModels
 
                 if (inspectionResult != null)
                 {
-                    inspectionResult.Timings.NodeTimings[sourceNodeName] = 0;
-                    if (configCopy.PreprocessNodes != null)
-                    {
-                        foreach (var preNode in configCopy.PreprocessNodes)
-                        {
-                            if (!string.IsNullOrWhiteSpace(preNode.Name))
-                            {
-                                inspectionResult.Timings.NodeTimings[preNode.Name] = 0;
-                            }
-                        }
-                    }
+                    // Ảnh đã nạp sẵn từ file => thời gian nguồn ảnh = 0 (nằm ngoài TotalMs)
+                    ApplySourceAndPreprocessTimings(inspectionResult, sourceNodeName, 0, configCopy);
                 }
             }
             catch (Exception ex)
@@ -4394,17 +4405,12 @@ namespace VisionInspectionApp.UI.ViewModels
                     {
                         if (imageSourceMs.HasValue && !string.IsNullOrWhiteSpace(imageSourceNodeRefName))
                         {
-                            inspectionResult.Timings.NodeTimings[imageSourceNodeRefName] = imageSourceMs.Value;
+                            ApplySourceAndPreprocessTimings(
+                                inspectionResult, imageSourceNodeRefName, imageSourceMs.Value, configCopy);
                         }
-                        if (configCopy.PreprocessNodes != null)
+                        else if (configCopy.PreprocessNodes != null)
                         {
-                            foreach (var preNode in configCopy.PreprocessNodes)
-                            {
-                                if (!string.IsNullOrWhiteSpace(preNode.Name))
-                                {
-                                    inspectionResult.Timings.NodeTimings[preNode.Name] = 0;
-                                }
-                            }
+                            ApplySourceAndPreprocessTimings(inspectionResult, null, 0, configCopy);
                         }
                     }
                 }

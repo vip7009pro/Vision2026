@@ -18,6 +18,19 @@ namespace VisionInspectionApp.Application;
 
 public partial class InspectionService
 {
+    /// <summary>
+    /// Bộ đếm thời gian chờ slot của các heavy tool trong MỘT lần Inspect.
+    /// Dùng lớp tham chiếu (không dùng biến local) để có thể <c>ref</c> trong lambda đa luồng.
+    /// </summary>
+    private sealed class ToolWaitCounter
+    {
+        public long Ticks;
+    }
+
+    /// <summary>Đổi số tick của Stopwatch sang mili-giây (làm tròn XUỐNG như các timing khác).</summary>
+    private static int TicksToMs(long ticks)
+        => (int)Math.Max(0, ticks * 1000L / Stopwatch.Frequency);
+
     private static readonly ConcurrentDictionary<string, (DateTime LastModified, Mat Mat)> _surfaceCompareTemplateCache = new();
 
     private static Mat? GetCachedSurfaceCompareTemplate(string filePath)
@@ -71,10 +84,19 @@ public partial class InspectionService
         var maxConcurrentHeavyTools = Math.Clamp(config.MaxConcurrentHeavyTools, 1, Math.Max(1, Environment.ProcessorCount));
         using var heavyToolGate = new SemaphoreSlim(maxConcurrentHeavyTools, maxConcurrentHeavyTools);
         var flowDiagnostics = VisionDiagnostics.Begin("Inspection");
+        // Bộ đếm thời gian chờ slot của các heavy tool (tường minh phần "chờ tool").
+        var toolWait = new ToolWaitCounter();
 
         Task<T> RunHeavyTool<T>(string toolName, Func<T> action) => Task.Run(() =>
         {
+            // Đo thời gian tool PHẢI CHỜ slot (semaphore) + độ trễ scheduling của Task.
+            // Thời gian này KHÔNG nằm trong stopwatch riêng của từng tool (stopwatch đó chỉ
+            // bắt đầu sau khi đã vào được slot) nên trước đây bị "ẩn" khỏi mọi bảng thời gian.
+            var swWait = Stopwatch.StartNew();
             heavyToolGate.Wait();
+            swWait.Stop();
+            Interlocked.Add(ref toolWait.Ticks, swWait.ElapsedTicks);
+
             var diagnostics = VisionDiagnostics.Begin(toolName);
             try
             {
@@ -89,6 +111,10 @@ public partial class InspectionService
 
         try
         {
+            // Đo riêng pha hiệu chuẩn + Undistort: đây là thời gian THỰC nằm trong TotalMs
+            // nhưng không thuộc bất kỳ tool nào (trước đây bị "ẩn" khỏi bảng thời gian).
+            var swCalib = Stopwatch.StartNew();
+
             ChessboardCalibrationService.EnsureCalibration(config);
 
             var effectiveCalib = ChessboardCalibrationService.GetEffectiveCalibration(config);
@@ -99,6 +125,13 @@ public partial class InspectionService
                 image = undistorted;
                 matsToDispose.Add(undistorted);
             }
+
+            swCalib.Stop();
+            result.Timings.CalibrationUndistortMs = (int)Math.Max(0, swCalib.ElapsedMilliseconds);
+
+            // Đo giai đoạn "khởi tạo khung chạy": dựng chỉ mục node/edge, các dictionary tra cứu,
+            // Lazy/cache và khai báo local function.
+            var swSetup = Stopwatch.StartNew();
 
             const int guidedRadiusPx = 50;
             var track = _trackByProductCode.GetOrAdd(config.ProductCode ?? string.Empty, _ => new TrackState());
@@ -167,7 +200,12 @@ public partial class InspectionService
             // Default (backward-compatible) processing path (lazy + thread-safe).
             var processedDefault = new Lazy<Mat>(() =>
             {
+                // Đo riêng Preprocess toàn ảnh: cũng nằm TRONG TotalMs nhưng không thuộc tool nào
+                // (các tool dùng chung ảnh này, nếu gán cho 1 tool sẽ bị tính trùng).
+                var swGlobalPre = Stopwatch.StartNew();
                 var m = _preprocessor.Run(image, config.Preprocess);
+                swGlobalPre.Stop();
+                result.Timings.GlobalPreprocessMs = (int)Math.Max(0, swGlobalPre.ElapsedMilliseconds);
                 lock (matsLock) matsToDispose.Add(m);
                 return m;
             });
@@ -1471,6 +1509,10 @@ public partial class InspectionService
             }
 
             // 0. Execute BeforeFlow DB Nodes (Read/Write before flow)
+            swSetup.Stop();
+            result.Timings.FrameworkSetupMs = (int)Math.Max(0, swSetup.ElapsedMilliseconds);
+            result.Timings.ToolQueueWaitMs = TicksToMs(Interlocked.Read(ref toolWait.Ticks));
+
             ExecuteDbNodes(config, result, effectiveDbManager, DbExecutionTiming.BeforeFlow);
 
             // Origin
@@ -1480,7 +1522,12 @@ public partial class InspectionService
             //   Template:      Image 1 (origin.png) → PreprocessTemplateForMatch(originPre) = Image 2
             // This ensures symmetric comparison in the same "space".
             var (originMat, originPre) = ResolveToolPreprocess("Origin", config.Origin.Name);
+
+            // Nạp/chuyển gray ảnh template Origin — nằm TRONG TotalMs, trước cửa sổ đo Origin.
+            var swOriginTempl = Stopwatch.StartNew();
             var originTempl = GetTemplateGray(config.Origin.TemplateImageFile);
+            swOriginTempl.Stop();
+            result.Timings.OriginTemplateLoadMs = (int)Math.Max(0, swOriginTempl.ElapsedMilliseconds);
 
             var hasOriginNode = nodesById.Values.Any(n => string.Equals(n.Type, "Origin", StringComparison.OrdinalIgnoreCase));
             var hasOriginTemplate = config.Origin != null && !string.IsNullOrWhiteSpace(config.Origin.TemplateImageFile) && config.Origin.TemplateRoi.Width > 0 && config.Origin.TemplateRoi.Height > 0 && originTempl != null && !originTempl.Empty();
@@ -1575,6 +1622,7 @@ public partial class InspectionService
                     ExecuteDbNodes(config, result, effectiveDbManager, DbExecutionTiming.AfterFlow);
                     ExecuteImageOutputs(config, result, image, GetNodeOutputImage, nodesById, edges);
 
+                    result.Timings.ToolQueueWaitMs = TicksToMs(Interlocked.Read(ref toolWait.Ticks));
                     result.Timings.TotalMs = (int)Math.Max(0, swTotal.ElapsedMilliseconds);
                     return result;
                 }
@@ -3270,6 +3318,7 @@ public partial class InspectionService
 
             ExecuteImageOutputs(config, result, image, GetNodeOutputImage, nodesById, edges);
 
+            result.Timings.ToolQueueWaitMs = TicksToMs(Interlocked.Read(ref toolWait.Ticks));
             result.Timings.TotalMs = (int)Math.Max(0, swTotal.ElapsedMilliseconds);
 
             return result;

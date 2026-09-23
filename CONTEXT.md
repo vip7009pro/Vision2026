@@ -51,6 +51,143 @@
 - ROI của Caliper, EdgePair và Point được xoay theo pose của Origin. `ExtractStraightRoi` và `MapToGlobal` chuẩn hoá việc cắt ROI thẳng và chuyển toạ độ về ảnh gốc.
 - Template rỗng hoặc ROI không hợp lệ trả về kết quả không đạt thay vì làm OpenCV phát sinh ngoại lệ.
 
+## Cập nhật 2026-09-23 (Phiên làm việc mới nhất)
+
+- **Kế Toán Thời Gian Tường Minh Trong Tool Editor: Bóc Tách Toàn Bộ "Thời Gian Ẩn" & Dải Phân Bổ Thời Gian Động (Task 364)**:
+  - **Yêu Cầu & Hiện Tượng Người Dùng Phản Ánh**:
+    + Chip "TỔNG (ms)" hiển thị **27ms** nhưng bảng "thời gian chạy từng tool" chỉ có `Origin 15ms + CAM1 4ms` ⇒ hụt mất 8ms không biết đi đâu.
+    + Dải "PHÂN BỔ THỜI GIAN (TIMING BREAKDOWN)" chỉ hiển thị 7 ô cố định (`Total / Origin / Point / Line / Distance / Condition / Defect`) nên **thiếu rất nhiều tool** thực tế trên canvas (Caliper, CircleFinder, Diameter, Ocr, CodeDetection, Blob, SurfaceCompare…).
+  - **Nguyên Nhân Gốc Rễ Đã Điều Tra**:
+    1. *Trộn lẫn hai thước đo*: thời gian chụp/đọc ảnh nguồn (CAM1) được đo ở **tầng UI** trước khi gọi `InspectionService.Inspect()`, nhưng lại bị ghi vào `Timings.NodeTimings` khiến nó trông như nằm trong `TotalMs` (thực tế `swTotal` bắt đầu SAU khi đã chuẩn bị ảnh xong).
+    2. *Hai pha tốn thời gian thật chưa bao giờ được đo*: `ChessboardCalibrationService.EnsureCalibration` + `Undistort(ảnh 20MP)`, và preprocess toàn ảnh (lazy global preprocess).
+    3. *Lỗi nặng nhất — xóa mất số đo thật của Preprocess*: tầng UI ép **mọi** node Preprocess về `0` (`NodeTimings[preNode.Name] = 0`) sau khi engine đã đo xong ⇒ thời gian preprocess chỉ còn nằm trong `TotalMs` mà không tool nào hiển thị.
+    4. *Yếu tố khác bị gom vào ô "Khác"*: khối khởi tạo khung chạy (chỉ mục node/edge, dictionary, Lazy/cache), nạp template Origin (`Cv2.ImRead` + convert gray), **thời gian heavy tool CHỜ SLOT** (`heavyToolGate.Wait()` + độ trễ scheduling — nằm NGOÀI stopwatch riêng của tool vì stopwatch chỉ chạy sau khi đã vào slot), khối Điều kiện logic, khối Defect.
+    5. *Sai số làm tròn*: mỗi node đo bằng `(int)ElapsedMilliseconds` nên bị làm tròn XUỐNG (tối đa ~1ms/node) ⇒ Σ tool luôn hụt so với Total.
+  - **Giải Pháp Triển Khai**:
+    + **Mở rộng `InspectionTimings`** với các trường pha tường minh: `FrameworkSetupMs`, `CalibrationUndistortMs`, `OriginTemplateLoadMs`, `ToolQueueWaitMs`, `GlobalPreprocessMs`, `ConditionsMs`, `DefectsNetMs` (= `DefectsMs − GlobalPreprocessMs` do preprocess xảy ra BÊN TRONG cửa sổ đo Defect, tránh tính trùng), cùng `SourceCaptureMs` / `SourceNodeNames` / `EngineNodeSumMs` (loại node nguồn ảnh) / `AccountedMs` / `ResultAssemblyMs`.
+    + **Hằng đẳng thức kế toán**: `TotalMs = Khởi tạo + Hiệu chuẩn + Tải template + Chờ slot + Preprocess + Σ(Tool trong engine) + Điều kiện + Defect + Ghép KQ & làm tròn`.
+    + **`InspectionService.Pipeline.cs`**: thêm `swSetup` đo khối khởi tạo khung chạy; `swOriginTempl` đo riêng `GetTemplateGray()` của template Origin; lớp `ToolWaitCounter` + `Interlocked.Add` bên trong local function `RunHeavyTool` để cộng dồn thời gian chờ slot của mọi heavy tool; ghi `ToolQueueWaitMs` trước cả hai điểm gán `TotalMs`.
+    + **`ToolEditorViewModel.ApplySourceAndPreprocessTimings()`** (hàm dùng chung cho cả 3 luồng Continuous / File / Run Once): đánh dấu node nguồn ảnh vào `SourceNodeNames` + ghi `SourceCaptureMs`, và **chỉ ghi 0 cho node Preprocess CHƯA TỪNG CHẠY** (guard `ContainsKey`) — không còn ghi đè số đo thật.
+    + **Dải phân bổ ĐỘNG** (`TimingBreakdown` : `ObservableCollection<TimingChipRow>` + `RefreshTimingBreakdown()`): một ô cho **mỗi tool CÓ TRÊN CANVAS và ĐÃ CHẠY** (theo đúng thứ tự `ToolGraph.Nodes`), cộng các ô pha tường minh + ô "Ghép KQ & làm tròn" (tự ẩn khi bằng 0). Ô thời gian nguồn ảnh tô **màu cam, xếp cuối, ghi rõ "nằm ngoài tổng"** kèm dòng chú thích + tooltip giải thích từng ô.
+    + **XAML**: thay `UniformGrid Columns="7"` cố định bằng `ItemsControl` + `WrapPanel` để chịu được số ô thay đổi; caption nêu công thức đầy đủ; thêm tooltip cho chip `TỔNG (ms)` / `COUNT` / `YIELD 20`.
+  - **Trạng Thái & Kiểm Thử**:
+    + `TestExtractApp/TimingAccountingTests.cs` (mới, 6 bài test): loại node nguồn khỏi tổng engine (và tái hiện đúng lỗi cũ 19ms khi chưa đánh dấu); dải chỉ hiện tool có trên canvas (thiếu `DIA2` chưa chạy, đủ `CIR1/DIA1/IMG_OUT1`); **Σ ô thành phần = TỔNG**; chạy flow THẬT kiểm tra đánh dấu nguồn + không vượt Total; engine đã đo `PRE1 = 7ms` thì không bị ghi đè thành 0; **khi mọi pha tường minh thì phần dư = 0**.
+    + Negative control: khôi phục dòng `NodeTimings[preNode.Name] = 0` ⇒ test báo `Thời gian Preprocess thật (7ms) KHÔNG được bị ghi đè thành 0, thực tế 0ms`; khôi phục bản sửa ⇒ xanh lại.
+    + Solution biên dịch Release **0 Error(s)**, bộ test suite `TestExtractApp` **exit code 0**.
+
+- **OQC Scanner: Nút "Đóng Job" & Xóa Chọn Lọc Từng Dòng Trong Lịch Sử Quét Mã (Task 363)**:
+  - **Yêu Cầu Người Dùng**:
+    1. Bổ sung nút **Đóng Job**: khi Job đã nạp nhưng **không kiểm tra**, luôn tồn tại một dòng lịch sử OQC ở trạng thái `Đã nạp Job` nằm mãi trong bảng; bấm "Đóng Job" phải xóa luôn dòng đó.
+    2. Bảng "Lịch Sử Quét mã OQC" trước đây chỉ có nút xóa TẤT CẢ; cần cho phép người dùng **xóa đúng những dòng mình muốn**.
+  - **Triển Khai Chi Tiết**:
+    + `OqcScannerViewModel.CloseLoadedJobCommand`: chỉ xóa các dòng có `InspectResult == "Đã nạp Job"` (so khớp không phân biệt hoa/thường & khoảng trắng), **giữ nguyên** mọi dòng `PASS`/`NG`/`LỖI…`; sau đó giải phóng Job khỏi OQC (`IsJobLoadedFromManager = false`, `CurrentJobFilePath = "Chưa có Job"`, `CurrentProductName = "-"`, `CurrentJobTestedCount = 0`) và đưa màn hình về trạng thái READY. Có hộp thoại xác nhận nêu rõ số dòng sẽ xóa.
+    + Tách logic thuần để kiểm thử được mà không cần dựng cả ViewModel OQC: `FindPendingJobEntries()`, `RemoveHistoryEntries()`, `IsPendingJobEntry()` (static).
+    + `OqcScannerViewModel.DeleteHistoryEntries(entries, askConfirmation)`: xóa chọn lọc, lưu xuống đĩa, và nếu dòng đang hiển thị ở Big Result bị xóa thì tự chuyển sang dòng mới nhất còn lại.
+    + `OqcScannerView.xaml`: thêm nút `🔒 Đóng Job` (#B23A48) cạnh nút `📁 Mở Job`, chỉ hiện khi `IsJobLoadedFromManager`.
+    + `OqcScanHistoryWindow.xaml`: `SelectionMode="Extended"` + `SelectionUnit="FullRow"` (chọn nhiều bằng Ctrl/Shift), thêm nút `🗑️ Xóa Dòng Đã Chọn` trên thanh công cụ và cột nút `🗑️` xóa riêng từng hàng; cả hai đều hỏi xác nhận.
+    + `OqcScanHistoryWindow.xaml.cs`: thêm handler `BtnDeleteSelected_Click` và `DeleteRowBtn_Click`.
+  - **Trạng Thái & Kiểm Thử**:
+    + Test 4 & 5 trong `TestExtractApp/ToolEditorAndOqcUxTests.cs`: chỉ 2 dòng `Đã nạp Job` bị xóa / 4 dòng kết quả thật được giữ; xóa từng dòng + xóa nhiều dòng + an toàn với `null` và dòng không tồn tại.
+    + Solution biên dịch Release **0 Error(s)**, bộ test suite **exit code 0**.
+
+- **Tool Editor: Nút "Reset Phiên & Hàng Đợi" + Sửa Lỗi Tương Phản Giao Diện Tối & Tái Cấu Trúc Khu Vực Kết Quả (Task 362)**:
+  - **Yêu Cầu Người Dùng**:
+    1. Thêm nút Reset (phiên và queue) đặt gần thanh Queue.
+    2. Khu vực hiển thị OK/NG, nội dung lỗi, count… (cột thứ 4 bên phải trên cùng) **lỗi giao diện tối**: nền sáng nhưng chữ sáng nên không đọc được nội dung; đồng thời sắp xếp lại toàn bộ khu vực đó cho khoa học.
+  - **Nguyên Nhân Gốc Rễ (Lỗi Tương Phản)**:
+    + Thẻ kết quả dùng `ResultBackgroundBrush` = màu pastel SÁNG hardcode (`#E8F5E9` / `#FFEBEE`), nhưng `OriginScoreText`, `ProcessedImageCount`, `ContinuousElapsedAndSpeedText` lại bind `{DynamicResource TextBrush}` — ở theme tối giá trị này gần như MÀU TRẮNG ⇒ trắng trên nền sáng, mất chữ hoàn toàn.
+    + Ứng dụng có **11 theme** (5 theme sáng + 6 theme tối), nên mọi nền hardcode màu sáng đều là bẫy.
+  - **Giải Pháp Triển Khai**:
+    + **Nút Reset** (`ToolEditorViewModel.ResetSessionAndQueueCommand` + nút `🔄 Reset` cạnh thanh Queue): gọi `ResetQueueAndCounters()` — đọc & `Dispose()` **từng** `ContinuousFrameEnvelope` còn trong `_industrialCameraFrameChannel` (không rò rỉ Mat native ~60MB/frame), đưa `_droppedContinuousFramesCount` / `ProcessedImageCount` / `QueueCurrentCount` về 0, reset thanh 20 con hàng và vẽ lại slot queue; và `RestartInspectionLogSessionAsync()` — `EndSessionAsync()` (drain log rồi lưu) → `StartSessionAsync()` để số liệu SPC/CPK bắt đầu lại từ 0. Có hộp thoại xác nhận nêu rõ 3 việc sẽ làm.
+    + **Thẻ kết quả chuyển sang theme-adaptive**: nền `PanelAltBackgroundBrush`, chỉ giữ màu ở phần accent — sọc accent 5px bên trái + viền + chữ OK/NG lấy màu trạng thái; 3 ô chỉ số `TỔNG (ms) / COUNT / YIELD 20` nền `PanelBackgroundBrush` viền màu; **banner chi tiết lỗi NG** tách riêng, nhãn nền đỏ đặc + chữ trắng (đảm bảo tương phản ở cả 11 theme), nội dung lỗi dùng `TextBrush`.
+    + **Tái cấu trúc khu vực kết quả**: hàng timing thô (`WrapPanel` 7 TextBlock) → thẻ "⏱ PHÂN BỔ THỜI GIAN" với các ô chip; 4 khối bên dưới (Spec / Conditions / Per-Tool Timings / Code Detection) dùng chung `DashCardStyle`, mỗi khối có header gạch màu accent riêng (xanh dương / cam / xanh lá / tím).
+  - **Trạng Thái & Kiểm Thử**:
+    + Test 1, 2, 3, 6 trong `TestExtractApp/ToolEditorAndOqcUxTests.cs`: reset xả sạch queue (3 frame được dispose, mọi bộ đếm về 0); reset chốt phiên cũ (giữ đủ con hàng) và mở phiên mới từ 0; command tồn tại đúng tên XAML bind.
+    + Negative control: vô hiệu vòng drain ⇒ test báo `Hàng đợi phải được XẢ SẠCH, còn lại 3 frame`.
+    + Solution biên dịch Release **0 Error(s)**, bộ test suite **exit code 0**.
+
+- **Khắc Phục Lỗi Kế Toán Thanh Queue 16 Nấc & Thanh 20 Con Hàng Nhảy 2 Nấc Mỗi Lần Run Once (Task 361)**:
+  - **Hiện Tượng Người Dùng Phản Ánh**:
+    1. Thanh queue 16 nấc thiết kế nay chỉ hiển thị `0/4` trong khi giao diện vẫn vẽ đủ 16 nấc.
+    2. Thanh 20 nấc thể hiện OK/NG của 20 con hàng gần nhất **tăng 2 nấc mỗi lần bấm Run Once** thay vì 1 nấc.
+  - **Nguyên Nhân Gốc Rễ**:
+    1. Trong đợt tối ưu bộ nhớ trước đó, `QueueCapacity` bị hạ từ 16 xuống **4**. Nhưng `QueueCapacity` không chỉ là sức chứa kênh dữ liệu — nó còn là **nguồn số cho nhãn UI** (`QueueStatusText = $"{count}/{QueueCapacity}"`) ⇒ giao diện vẫn vẽ 16 slot cứng nhưng nhãn lại tính theo 4, và kênh thật cũng chỉ nhận 4 frame.
+    2. `PushRecentPartInspectionResult(res.Pass)` bị đặt ở cuối hàm **`UpdateResultSummary()`** — một hàm *render*; mà `RefreshInspectionDashboard()` chạy **2 lần cho mỗi lần kiểm tra** (1 lần gọi tường minh + 1 lần qua setter `LastResult` → `OnLastResultChanged`) ⇒ nấc bị đẩy 2 lần.
+  - **Giải Pháp Triển Khai**:
+    + Trả `QueueCapacity` về **16** (khớp 16 nấc UI + `BoundedChannelOptions` + ngưỡng cảnh báo 6/12).
+    + Gỡ `PushRecentPartInspectionResult` khỏi `UpdateResultSummary()`; thêm **điểm vào duy nhất** `PublishInspectionResult(result)` = ghi Lịch sử kiểm tra + đẩy ĐÚNG 1 nấc, gọi một lần cho mỗi kết quả tại cả 3 luồng (`RunFlowAsync` / `RunSingleFlowFromImageFileAsync` / `ProcessContinuousFrameAsync`).
+    + Chặn việc dựng dashboard 2 lần ở 2 nhánh flow: `if (ReferenceEquals(LastResult, _lastRun)) RefreshInspectionDashboard(_lastRun);` — setter `LastResult` lo trường hợp bình thường, nhánh `if` chỉ chạy khi setter không phát `PropertyChanged`.
+  - **Trạng Thái & Kiểm Thử**:
+    + Test `[3/4]` & `[4/4]` trong `TestExtractApp/ContinuousFlowRegressionTests.cs` và Test 6 trong `ToolEditorAndOqcUxTests.cs`.
+    + Negative control: đặt lại 2 lỗi ⇒ test báo `thanh 20 nấc ... thực tế 4` (đúng triệu chứng "tăng 2 nấc"), và `QueueCapacity` trả về 4 ⇒ test queue fail.
+    + Solution biên dịch Release **0 Error(s)**, bộ test suite **exit code 0**.
+
+- **Khắc Phục Lỗi Mất Kết Quả Trong "Lịch Sử Kiểm Tra & SPC/CPK" Cho Mọi Luồng Kiểm Tra (Task 360)**:
+  - **Hiện Tượng Người Dùng Phản Ánh**: chạy Continuous một lúc thì kết quả không được ghi vào "Lịch sử kiểm tra & phân tích thống kê SPC/CPK" sau khi bấm STOP.
+  - **Nguyên Nhân Gốc Rễ (2 vòng điều tra)**:
+    1. *Vòng 1 — mất kết quả ở cuối phiên*: `InspectionLogService.EndSessionAsync()` lưu file + xóa phiên NGAY, không đợi Background Log Worker xử lý hết các part còn nằm trong channel ⇒ mất ~25% số con hàng cuối (đo được: chỉ còn **1455/2000**).
+    2. *Vòng 2 — nguyên nhân thật*: chỉ `StartContinuousCameraFlow` gọi `StartSessionAsync()` và chỉ `ProcessContinuousFrameAsync` gọi `EnqueueInspectionResult()`. Các luồng **Folder / File / URL / PLC Trigger / Run Once** không bao giờ tạo phiên ⇒ `EnqueueInspectionResult()` thoát sớm vì `_currentSession == null` ⇒ **không ghi được kết quả nào**.
+  - **Giải Pháp Triển Khai**:
+    + `InspectionLogService`: bổ sung `Sequence` / `_enqueuedSequence` / `_processedSequence`; `EndSessionAsync()` nay **drain** channel (`DrainPendingPartsAsync(3000)`, poll 10ms) trước khi lưu & xóa phiên, và chỉ null `_currentSession` nếu vẫn đúng instance đó; `Dispose()` dùng `FlushPendingPartsSync(1500)` + `EndCurrentSessionSync()`.
+    + `ToolEditorViewModel`: thêm `EnsureInspectionLogSession()` (tự tạo phiên nếu chưa có) + `LogInspectionResultToHistory(result)` (auto-ensure + `EnqueueInspectionResult`) và gọi từ **mọi** luồng, TRƯỚC khi tăng `ProcessedImageCount` để `PartIndex` là 1-based.
+    + `OpenInspectionLog()` gọi thêm `LoadSessionsAsync()` khi kích hoạt lại cửa sổ đã mở (trước đây phiên mới không xuất hiện). `CloseJob()` và `Dispose()` flush phiên đang mở.
+  - **Trạng Thái & Kiểm Thử**:
+    + `TestExtractApp/ContinuousFlowRegressionTests.cs` (mới, 4 bài test): STOP ngay sau con hàng cuối không mất kết quả (2000 parts được ghi đủ cả RAM và đĩa, có sleep 0ms); hợp đồng `SharedImageContext.SetImage(transferOwnership)`; luồng FOLDER ghi Lịch sử + thanh 20 nấc tăng đúng 1 nấc/lần; `QueueCapacity` khớp 16 nấc.
+    + Negative control: bỏ lệnh ghi log ở luồng Folder ⇒ test 3 fail (đã xác nhận).
+    + Solution biên dịch Release **0 Error(s)**, bộ test suite **exit code 0**.
+
+- **Triệt Tiêu Lag Tăng Dần & Rò Rỉ Bộ Nhớ Khi Chạy Run Continuous (Task 359)**:
+  - **Hiện Tượng Người Dùng Phản Ánh**: chạy Run Continuous một lúc (sau vài chục con hàng) ứng dụng bị lag tăng dần rồi đơ.
+  - **Nguyên Nhân Gốc Rễ (điều tra bằng subagent, ~10 vấn đề độc lập)**:
+    1. *Rò rỉ 60MB native mỗi frame bị bỏ*: kênh frame dùng `BoundedChannelFullMode.DropWrite` / `DropOldest` ⇒ `TryWrite()` trả về **true** trong khi item bị âm thầm bỏ đi ⇒ nhánh `envelope.Dispose()` không bao giờ chạy ⇒ Mat không được giải phóng.
+    2. `UpdateSharedImageForImageSource` không bao giờ `Dispose()` `rawMat` (~60MB mỗi lần nạp Job / đổi nguồn ảnh).
+    3. 4 bản clone ảnh full-size cho mỗi frame (thiếu `transferOwnership: true`).
+    4. `RefreshInspectionDashboard` chạy 2 lần cho mỗi frame được render.
+    5. `RefreshOriginTemplatePreview()` thực hiện `Directory.GetFiles` + `Cv2.ImRead` + convert bitmap **mỗi frame** (được gọi từ `RaiseToolPropertyPanelsChanged()`).
+    6. `UpdateContinuousStats()` tự `BeginInvoke` 1 action lên UI Dispatcher cho MỖI frame chụp ⇒ ngập Dispatcher khi UI bận.
+    7. `ShiftRegisterTracker._pendingItems` không bao giờ được dọn (rò rỉ RAM dài hạn).
+    8. `RollDefectManager.CurrentSession.Defects` không có giới hạn.
+  - **Giải Pháp Triển Khai**:
+    + Kênh frame đổi sang `BoundedChannelFullMode.Wait`; vòng lặp chủ động TryRead + Dispose envelope cũ trước khi ghi frame mới (Zero Memory Leak), tăng `_droppedContinuousFramesCount`.
+    + `PrepareDisplayImageForSharedContext(frameMat)` + `_sharedImage.SetImage(displayMat, transferOwnership: true)`; `UpdateSharedImageForImageSource` bọc try/finally để `Dispose()` `rawMat` (đồng thời gỡ một khối code chết bị lặp sau hàm).
+    + Bỏ `UpdateContinuousStats()` khỏi capture handler (đã có `_continuousStatsTimer` 100ms); tăng `ContinuousUiThrottleIntervalMs` 60 → 120; thêm guard `alreadySameResult` để không gọi `RefreshInspectionDashboard` lần hai.
+    + `RefreshOriginTemplatePreview()` thêm cache theo `(path, LastWriteTimeUtc, Length)` + `InvalidateOriginTemplatePreviewCache()`.
+    + `StopContinuousFlow()` gọi `_shiftRegisterTracker.Reset()` trước `EndSessionAsync()`.
+    + `RollDefectManager`: `MaxDefectsInMemory = 50_000` + `AddDefectLocked()` cắt bớt phần tử cũ khi vượt ngưỡng.
+  - **Trạng Thái & Kiểm Thử**:
+    + Solution biên dịch Release **0 Error(s)**, bộ test suite **exit code 0** sau mỗi thay đổi.
+
+- **Tối Ưu Hiệu Năng Pipeline Kiểm Tra (Phase 1-5): Hợp Nhất Snapshot/Preprocess, Gộp Refresh & Bộ Test Kiểm Chứng (Task 358)**:
+  - **Yêu Cầu Người Dùng**: rà soát lại pipeline `run flow` vì thấy hiện tượng lag; **đưa kế hoạch trước, chưa sửa code**, sau đó triển khai Phase 1-3 trong một lượt, rồi Phase 4-5.
+  - **Giải Pháp Triển Khai**:
+    + **Phase 1 — Gộp refresh (coalescing)**: `RefreshDebounceIntervalMs = 15` + `_refreshThrottleTimer` (`DispatcherTimer`, priority Background); `RefreshPreviews()` (gộp, marshals về UI thread, fallback đồng bộ khi headless) và `RefreshPreviewsNow()` (đồng bộ) tách bạch; thêm `CancelPendingRefresh()`, `EnsureRefreshThrottleTimer()`, `ClearAllPreviewState()`, guard `_inRefreshPass`.
+    + **Phase 2 — Một snapshot & một preprocess cho mỗi lượt refresh**: `RefreshPreviewsCore()` dùng ĐÚNG MỘT `SharedImageContext.GetSnapshot()` (`_currentPassSnapshot`) và ĐÚNG MỘT preprocess toàn cục (`GetPassPreprocessed()`, lazy). Các overlay builder tái sử dụng qua `AcquireSnapshotForOverlay(out bool)`, `AcquireSnapshotScope()` (struct `SnapshotScope : IDisposable`), `OwnForPass()` + `_passOwnedMats`. Gỡ bản clone cho `SegmentLineDistances` và đưa snapshot ra khỏi vòng lặp "live fallback" của Line/Caliper.
+    + **Phase 3 — Sửa hồi quy "ROI giật về size cũ"** do chính Phase 1 gây ra: thêm biến đếm `_forceSyncPreviewRefresh` (khi > 0 thì `RefreshPreviews()` chạy đồng bộ) bọc quanh `OnRoiEditedCore` / `OnRoiSelectedCore` ⇒ overlay ROI được dựng lại TRƯỚC khi `ImageViewerControl` gọi `RedrawOverlays()`.
+    + **Phase 4 — Tối ưu render**: `FastOverlayCanvas` cache `FormattedText` theo `(text, brushKey, fontSize, dpi)` — 6 điểm vẽ nhãn dùng `GetCachedText(...)`; `OverlayPolylineItem.GetOrCreateGeometry(sx, sy)` cache `StreamGeometry` theo scale; `ImageViewerControl.RequestRedrawOverlays()` (gộp ở `DispatcherPriority.Render`) chỉ dùng cho các đường KHÔNG commit ROI (zoom, hover-label, size change, ZoomIn/ZoomOut/ResetView) — nhánh commit ROI vẫn gọi `RedrawOverlays()` TỨC THÌ.
+    + Bỏ lệnh `UpdateBlobThresholdPreview(new Mat())` dư thừa trong nhánh `ImageSource`.
+  - **Kết Quả Đo Được**: từ 2-3 snapshot clone + 11+ lần preprocess cho mỗi lượt refresh ⇒ còn **1 snapshot clone + 1 preprocess**; thời gian refresh ~**8-14ms** trên ảnh 2560×1920.
+  - **Trạng Thái & Kiểm Thử**:
+    + `TestExtractApp/PerformanceOptimizationTests.cs` (mới, 9 bài test) gồm đo đếm qua `SharedImageContext.SnapshotCloneCount` / `ImagePreprocessor.RunCallCount` và benchmark smoke test.
+    + Negative control đã dùng 3 lần trong phiên để chứng minh test bắt đúng lỗi.
+    + Solution biên dịch Release **0 Error(s)**, bộ test suite **exit code 0**.
+
+- **Tool Point: Sửa Phím Tắt Vẽ Template ROI, Thêm Thuộc Tính Score (Min) Gating OK/NG & Chuẩn Hóa Phím Tắt Offset (Task 356-357)**:
+  - **Hiện Tượng Người Dùng Phản Ánh**:
+    1. Phím tắt vẽ Template ROI trong Tool Editor **không hoạt động**.
+    2. Cần thêm thuộc tính **Score**: nếu điểm khớp ≥ Score đặt trước thì tool mới báo OK, ngược lại trả NG.
+    3. Phím tắt `Ctrl+Shift+Click` để chỉnh offset bị "quên".
+  - **Nguyên Nhân Gốc Rễ (lỗi phím tắt có 2 nguyên nhân độc lập)**:
+    1. `ImageViewerControl.TrySwapSuffix()` thay hậu tố một cách mù quáng: nhãn `P1 S` bị đổi thành `P1 CCT` ⇒ `ApplyRoiForLabel` không tìm thấy ContourCompare tên `P1` ⇒ no-op im lặng.
+    2. Khối `Ctrl && Shift` trong `OverlayOnMouseLeftButtonDown` thực thi `PointClickedCommand` rồi `return` TRƯỚC khi tới code vẽ ROI.
+  - **Giải Pháp Triển Khai**:
+    + `TrySwapSuffix(active, fromSuffix, toSuffix)` chỉ đổi khi hậu tố nguồn khớp; nhánh Template dùng `TrySwapSuffix(_activeRoiLabel, " CC", "CCT") ?? (" SC","SCT") ?? (" S","T")`, nhánh Search dùng `(" CCT","CC") ?? (" SCT","SC") ?? (" T","S")`.
+    + Chuyển cử chỉ `Ctrl+Shift` sang cơ chế **quyết định khi nhả chuột**: `_ctrlShiftDeferredClick`, `_ctrlShiftStartScreen`, ngưỡng `CtrlShiftClickMoveThresholdPx = 4.0` — di chuyển ngắn ⇒ `PointClickedCommand` với `Control|Shift`; di chuyển dài ⇒ commit ROI.
+    + `ToolEditorViewModel.ToolPoint.cs`: thêm `Point_MinScore` (đọc/ghi từ `MatchScoreThreshold`, mặc định 0.8, clamp 0-1, gọi `RefreshPreviews()` + `RequestAutoSave()`); `RaiseToolPropertyPanelsChanged()` raise thêm `Point_MinScore` / `Point_OffsetX` / `Point_OffsetY`.
+    + `ToolEditorView.xaml`: thêm hàng "Score (Min)" (bind `Point_MinScore`, format `0.00`, `LostFocus`, tooltip) + 3 dòng gợi ý phím tắt tiếng Việt trong panel `Point Params`.
+  - **Trạng Thái & Kiểm Thử**:
+    + Test 1, 2, 8 trong `TestExtractApp/PerformanceOptimizationTests.cs`: clamp `Point_MinScore`; routing nhãn ROI đúng cho cả 3 họ tool (Point `S`/`T`, SurfaceCompare `SC`/`SCT`, ContourCompare `CC`/`CCT`); pipeline trả OK/NG đúng theo ngưỡng Score (khớp mẫu = 1.0000, khác mẫu = 0.2323).
+    + Solution biên dịch Release **0 Error(s)**, bộ test suite **exit code 0**.
+
 ## Cập nhật 2026-07-19
 
 - **Bổ Sung Nút Nhập Calib Từ File (.json) Đầy Đủ Bộ Cặp Import / Export (Task 355)**:

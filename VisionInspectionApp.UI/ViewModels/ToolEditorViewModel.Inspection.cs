@@ -35,6 +35,18 @@ namespace VisionInspectionApp.UI.ViewModels
 
         public sealed record ToolTimingRow(string Name, int TimeMs);
 
+        /// <summary>
+        /// Một ô trong "Phân bổ thời gian" (timing breakdown): 1 ô cho TỔNG, các ô cho pha
+        /// không thuộc tool nào (hiệu chuẩn/undistort, preprocess), và 1 ô cho MỖI TOOL CÓ TRÊN CANVAS.
+        /// </summary>
+        public sealed record TimingChipRow(string Label, string ValueText, Brush ChipBrush, string ToolTip);
+
+        public ObservableCollection<TimingChipRow> TimingBreakdown { get; } = new();
+
+        /// <summary>True khi dải phân bổ thời gian có ô "nằm ngoài tổng" (thời gian chụp/đọc ảnh nguồn).</summary>
+        [ObservableProperty]
+        private bool _hasOutOfTotalTimingChip;
+
         public ObservableCollection<SpecResultRow> SpecResults { get; } = new();
 
         public ObservableCollection<CodeDetectionRow> CodeDetectionResults { get; } = new();
@@ -195,6 +207,7 @@ namespace VisionInspectionApp.UI.ViewModels
             RefreshCodeDetectionResults(res);
             RefreshOcrResults(res);
             RefreshTimings(res);
+            RefreshTimingBreakdown(res);
             RebuildSurfaceCompareDebugSelector(res);
             UpdateResultSummary(res);
         }
@@ -208,6 +221,158 @@ namespace VisionInspectionApp.UI.ViewModels
             {
                 ToolTimings.Add(new ToolTimingRow(kvp.Key, kvp.Value));
             }
+        }
+
+        private static readonly Brush TimingTotalBrush = FrozenBrush(0x4C, 0xAF, 0x50);
+        private static readonly Brush TimingPhaseBrush = FrozenBrush(0x29, 0xB6, 0xF6);
+        private static readonly Brush TimingToolBrush = FrozenBrush(0xCE, 0x93, 0xD8);
+        private static readonly Brush TimingSourceBrush = FrozenBrush(0xFF, 0xB7, 0x4D);
+
+        private static Brush FrozenBrush(byte r, byte g, byte b)
+        {
+            var brush = new SolidColorBrush(Color.FromRgb(r, g, b));
+            brush.Freeze();
+            return brush;
+        }
+
+        /// <summary>
+        /// Dựng dải "PHÂN BỔ THỜI GIAN" ĐỘNG theo đúng các tool CÓ TRÊN CANVAS
+        /// (trước đây là 7 ô cố định: Total/Origin/Point/Line/Distance/Condition/Defect
+        /// nên thiếu rất nhiều tool và không khớp với tổng thời gian).
+        ///
+        /// Nguyên tắc kế toán thời gian:
+        ///   TotalMs (engine) = Hiệu chuẩn/Undistort + Preprocess toàn ảnh + Σ(tool trong engine) + Khác
+        ///   Thời gian ảnh nguồn (chụp/đọc ảnh) do UI đo và NẰM NGOÀI TotalMs → hiển thị riêng.
+        /// </summary>
+        private void RefreshTimingBreakdown(InspectionResult? res)
+        {
+            TimingBreakdown.Clear();
+
+            var timings = res?.Timings;
+            if (timings is null) return;
+
+            // 1) TỔNG thời gian engine (đúng bằng giá trị chip "TỔNG (ms)" ở thẻ kết quả).
+            TimingBreakdown.Add(new TimingChipRow(
+                "TỔNG",
+                $"{timings.TotalMs:0.0}",
+                TimingTotalBrush,
+                $"Tổng thời gian engine chạy flow (InspectionService.Inspect): {timings.TotalMs} ms.\n" +
+                "KHÔNG bao gồm thời gian chụp/đọc ảnh nguồn (đo ở tầng UI)."));
+
+            // 2) Từng pha "khung" nằm trong TotalMs nhưng không thuộc tool nào — TƯỜNG MINH từng pha.
+            AddTimingPhaseChip("Khởi tạo", timings.FrameworkSetupMs,
+                "Dựng chỉ mục node/edge, dictionary tra cứu, Lazy/cache và khai báo local function.");
+
+            AddTimingPhaseChip("Hiệu chuẩn", timings.CalibrationUndistortMs,
+                "EnsureCalibration + Undistort ảnh full-size (20MP).");
+
+            AddTimingPhaseChip("Tải template", timings.OriginTemplateLoadMs,
+                "Nạp file ảnh template của tool Origin + chuyển sang ảnh gray.");
+
+            AddTimingPhaseChip("Chờ slot tool", timings.ToolQueueWaitMs,
+                "Tổng thời gian các heavy tool phải CHỜ slot chạy (semaphore) + độ trễ scheduling.\n" +
+                "Đây là thời gian xếp hàng, KHÔNG phải thời gian tính toán của tool.");
+
+            AddTimingPhaseChip("Preprocess", timings.GlobalPreprocessMs,
+                "Preprocess toàn ảnh (global preprocess) dùng chung cho nhiều tool — không thuộc riêng tool nào.");
+
+            // 3) Một ô cho MỖI TOOL CÓ TRÊN CANVAS, theo đúng thứ tự trong ToolGraph.
+            //    Node nguồn ảnh (ImageSource) được đo ở UI nên xếp cuối và ghi rõ "ngoài tổng".
+            var sourceNodes = new List<(string Name, int Ms)>();
+            var placed = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            var graphNodes = _config?.ToolGraph?.Nodes;
+            if (graphNodes is not null)
+            {
+                foreach (var node in graphNodes)
+                {
+                    var name = node?.RefName;
+                    if (string.IsNullOrWhiteSpace(name)) continue;
+
+                    if (!timings.NodeTimings.TryGetValue(name, out var ms)) continue;
+                    if (!placed.Add(name)) continue;
+
+                    if (timings.SourceNodeNames.Contains(name))
+                    {
+                        sourceNodes.Add((name, ms));
+                        continue;
+                    }
+
+                    TimingBreakdown.Add(new TimingChipRow(
+                        ShortChipLabel(name),
+                        $"{ms:0.0}",
+                        TimingToolBrush,
+                        $"{name} ({node!.Type}): {ms} ms — nằm trong TỔNG."));
+                }
+            }
+
+            // 3b) Các node khác đã chạy nhưng không (còn) nằm trong ToolGraph
+            //     (node PLC/DB, node thuộc nhánh đã đổi...). Vẫn hiển thị để không mất dữ liệu.
+            foreach (var kvp in timings.NodeTimings)
+            {
+                if (placed.Contains(kvp.Key)) continue;
+                if (timings.SourceNodeNames.Contains(kvp.Key)) continue;
+                placed.Add(kvp.Key);
+
+                TimingBreakdown.Add(new TimingChipRow(
+                    ShortChipLabel(kvp.Key),
+                    $"{kvp.Value:0.0}",
+                    TimingToolBrush,
+                    $"{kvp.Key}: {kvp.Value} ms — nằm trong TỔNG."));
+            }
+
+            // 4) Hai khối đánh giá gộp (mỗi khối không có node riêng để đo).
+            AddTimingPhaseChip("Điều kiện", timings.ConditionsMs,
+                "Đánh giá toàn bộ biểu thức điều kiện logic (Conditions) của job.");
+
+            AddTimingPhaseChip("Defect", timings.DefectsNetMs,
+                $"Phát hiện khuyết tật (defect detection): {timings.DefectsNetMs} ms.\n" +
+                $"Đã trừ {timings.GlobalPreprocessMs} ms preprocess toàn ảnh dùng chung (hiển thị riêng).");
+
+            // 5) Phần còn lại — chỉ còn là ghép kết quả + sai số làm tròn ms.
+            AddTimingPhaseChip("Ghép KQ & làm tròn", timings.ResultAssemblyMs,
+                $"Phần còn lại của TỔNG sau khi trừ HẾT mọi pha đo được: {timings.ResultAssemblyMs} ms.\n" +
+                "Bao gồm: ghép/khởi tạo đối tượng kết quả, cập nhật tracking sản phẩm,\n" +
+                "và sai số làm tròn (mỗi tool/node được làm tròn XUỐNG theo ms).\n" +
+                "Con số này LUÔN nhỏ; nếu phình to nghĩa là có pha chưa được đo.");
+
+            // 6) Thời gian ảnh nguồn — NẰM NGOÀI TỔNG, hiển thị riêng để không gây nhầm lẫn.
+            foreach (var (name, ms) in sourceNodes)
+            {
+                TimingBreakdown.Add(new TimingChipRow(
+                    ShortChipLabel(name),
+                    $"{ms:0.0}",
+                    TimingSourceBrush,
+                    $"{name} (nguồn ảnh: chụp camera / đọc file): {ms} ms.\n" +
+                    "⚠️ NẰM NGOÀI TỔNG — thời gian này được đo ở tầng UI trước khi gọi engine."));
+            }
+
+            if (timings.SourceCaptureMs > 0 && sourceNodes.Count == 0)
+            {
+                TimingBreakdown.Add(new TimingChipRow(
+                    "Chụp ảnh",
+                    $"{timings.SourceCaptureMs:0.0}",
+                    TimingSourceBrush,
+                    $"Chuẩn bị ảnh nguồn: {timings.SourceCaptureMs} ms.\n⚠️ NẰM NGOÀI TỔNG."));
+            }
+
+            HasOutOfTotalTimingChip = sourceNodes.Count > 0 || timings.SourceCaptureMs > 0;
+        }
+
+        /// <summary>Thêm 1 ô thời gian cho một pha (bỏ qua nếu pha không tốn thời gian).</summary>
+        private void AddTimingPhaseChip(string label, int ms, string toolTip)
+        {
+            if (ms <= 0) return;
+
+            TimingBreakdown.Add(new TimingChipRow(label, $"{ms:0.0}", TimingPhaseBrush, $"{label}: {ms} ms — nằm trong TỔNG.\n{toolTip}"));
+        }
+
+        /// <summary>Rút ngắn nhãn ô thời gian cho vừa (giữ tối đa 10 ký tự).</summary>
+        private static string ShortChipLabel(string name)
+        {
+            if (string.IsNullOrWhiteSpace(name)) return "-";
+            var trimmed = name.Trim();
+            return trimmed.Length <= 10 ? trimmed : trimmed[..9] + "…";
         }
 
         private void UpdateResultSummary(InspectionResult? res)
