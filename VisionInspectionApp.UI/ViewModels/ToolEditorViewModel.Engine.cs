@@ -622,26 +622,43 @@ namespace VisionInspectionApp.UI.ViewModels
         public void UpdateSharedImageForImageSource(ImageSourceDefinition? sourceDef)
         {
             if (sourceDef == null) return;
-            // Ưu tiên lấy trực tiếp ảnh RAW gốc từ cache RAM để bảo toàn 100% độ phân giải (ví dụ 20MP)
-            var rawMat = GetImageSourceCache(sourceDef.Name);
-            if (rawMat == null || rawMat.Empty())
+
+            Mat? rawMat = null;
+            try
             {
-                rawMat = LoadImageFromSourceForPreview(sourceDef);
-            }
-            if (rawMat == null || rawMat.Empty())
-            {
-                using var currentSnap = _sharedImage.GetSnapshot();
-                if (currentSnap != null && !currentSnap.Empty())
+                // Ưu tiên lấy trực tiếp ảnh RAW gốc từ cache RAM để bảo toàn 100% độ phân giải (ví dụ 20MP)
+                rawMat = GetImageSourceCache(sourceDef.Name);
+                if (rawMat == null || rawMat.IsDisposed || rawMat.Empty())
                 {
-                    rawMat = currentSnap.Clone();
-                    SetImageSourceCache(sourceDef.Name, sourceDef.FilePath ?? "shared_snap", rawMat);
+                    rawMat?.Dispose();
+                    rawMat = LoadImageFromSourceForPreview(sourceDef);
+                }
+
+                if (rawMat == null || rawMat.IsDisposed || rawMat.Empty())
+                {
+                    rawMat?.Dispose();
+                    rawMat = null;
+
+                    using var currentSnap = _sharedImage.GetSnapshot();
+                    if (currentSnap != null && !currentSnap.Empty())
+                    {
+                        rawMat = currentSnap.Clone();
+                        SetImageSourceCache(sourceDef.Name, sourceDef.FilePath ?? "shared_snap", rawMat);
+                    }
+                }
+
+                if (rawMat != null && !rawMat.IsDisposed && !rawMat.Empty())
+                {
+                    using var displayMat = PrepareDisplayImageForSharedContext(rawMat, sourceDef);
+                    _sharedImage.SetImage(displayMat);
                 }
             }
-
-            if (rawMat != null && !rawMat.Empty())
+            finally
             {
-                using var displayMat = PrepareDisplayImageForSharedContext(rawMat, sourceDef);
-                _sharedImage.SetImage(displayMat);
+                // ✅ FIX RÒ RỈ: rawMat luôn là ảnh/bản clone do CHÍNH HÀM NÀY sở hữu
+                // (từ GetImageSourceCache, LoadImageFromSourceForPreview hoặc currentSnap.Clone()).
+                // Trước đây không dispose nên mỗi lần nạp Job / đổi nguồn ảnh rò rỉ ~1 ảnh full-size (~60MB).
+                try { rawMat?.Dispose(); } catch { }
             }
         }
 
@@ -2200,7 +2217,13 @@ namespace VisionInspectionApp.UI.ViewModels
             }
         }
 
-        public int QueueCapacity { get; set; } = 16;
+        /// <summary>
+        /// Sức chứa hàng đợi frame cho Run Continuous.
+        /// Mỗi slot giữ 1 bản clone ảnh full-size (~60MB với ảnh 20MP) => sức chứa càng lớn càng tốn RAM.
+        /// Hàng đợi sâu KHÔNG giúp tăng thông lượng (worker vẫn là nút cố chế), chỉ làm tăng độ trễ và
+        /// khiến worker xử lý ảnh cũ hơn => giảm còn 4 slot (~240MB) để tối ưu bộ nhớ & độ trễ.
+        /// </summary>
+        public int QueueCapacity { get; set; } = 4;
 
         [ObservableProperty]
         private string _queueStatusText = "0/16";
@@ -3183,6 +3206,8 @@ namespace VisionInspectionApp.UI.ViewModels
                     else if (imgSourceDef.TriggerMode == ImageSourceTriggerMode.PlcTrigger)
                     {
                         IsRunningFolderFlow = true;
+                        // ✅ FIX: tạo phiên Lịch sử kiểm tra cho chế độ PLC Trigger
+                        EnsureInspectionLogSession();
                         StatusBarText = $"Đang chạy liên tục chế độ PLC Trigger ({imgSourceDef.PlcTriggerPlcId}.{imgSourceDef.PlcTriggerTagName})...";
                         return;
                     }
@@ -3215,6 +3240,48 @@ namespace VisionInspectionApp.UI.ViewModels
             return "Sản Phẩm Vision";
         }
 
+        /// <summary>
+        /// Đảm bảo luôn có MỘT phiên đang mở trong "Lịch sử kiểm tra &amp; SPC/CPK" cho MỌI loại nguồn ảnh
+        /// (Camera / Folder / File / URL / PLC Trigger / Run Once).
+        ///
+        /// ✅ FIX: Trước đây chỉ StartContinuousCameraFlow() mới gọi StartSessionAsync(), nên chạy
+        /// Continuous với nguồn Folder / File / URL / PLC Trigger (và cả Run Once) thì KHÔNG ghi được
+        /// kết quả nào vào Lịch sử kiểm tra (EnqueueInspectionResult() thoát sớm vì _currentSession == null).
+        /// </summary>
+        private void EnsureInspectionLogSession()
+        {
+            try
+            {
+                if (_inspectionLogService is null) return;
+                if (_inspectionLogService.CurrentSession is not null) return;
+
+                _ = _inspectionLogService.StartSessionAsync(GetEffectiveProductName(), CurrentJobFilePath, "-");
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[EnsureInspectionLogSession] {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Ghi kết quả kiểm tra vừa chạy vào Lịch sử kiểm tra (non-blocking qua Background Log Worker).
+        /// Tự động tạo phiên nếu chưa có. Gọi TRƯỚC khi tăng ProcessedImageCount để PartIndex là 1-based.
+        /// </summary>
+        private void LogInspectionResultToHistory(InspectionResult? result)
+        {
+            if (result is null) return;
+
+            try
+            {
+                EnsureInspectionLogSession();
+                _inspectionLogService?.EnqueueInspectionResult(result, _config, ProcessedImageCount + 1);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[LogInspectionResultToHistory] {ex.Message}");
+            }
+        }
+
         private async Task StartContinuousCameraFlow(ImageSourceDefinition sourceDef)
         {
             StopContinuousFlow();
@@ -3229,7 +3296,7 @@ namespace VisionInspectionApp.UI.ViewModels
             UpdateContinuousStats();
 
             // Khởi tạo phiên kiểm tra mới trong Inspection Log Service (Background Worker)
-            _ = _inspectionLogService.StartSessionAsync(GetEffectiveProductName(), CurrentJobFilePath, "-");
+            EnsureInspectionLogSession();
 
             bool isIndustrial = IsIndustrialCameraSource(sourceDef);
             bool isSimulator = CameraService.IsSimulator(sourceDef.CameraIndex, sourceDef.RtspUrl);
@@ -3318,7 +3385,10 @@ namespace VisionInspectionApp.UI.ViewModels
             // 3. Khởi tạo Pipeline Hàng Đợi (Bounded Channel) Thống Nhất cho Tất Cả Chế Độ
             var channelOptions = new BoundedChannelOptions(QueueCapacity)
             {
-                FullMode = BoundedChannelFullMode.DropWrite,
+                // ✅ LƯU Ý: KHÔNG dùng DropWrite/DropOldest vì khi đó TryWrite() vẫn trả về TRUE
+                // dù item bị âm thầm bỏ đi => Mat của envelope đó KHÔNG BAO GIỜ được Dispose (rò rỉ bộ nhớ).
+                // Dùng Wait => TryWrite() trả về false khi đầy, code bên dưới sẽ tự Dispose đúng cách.
+                FullMode = BoundedChannelFullMode.Wait,
                 SingleReader = true,
                 SingleWriter = false
             };
@@ -3359,7 +3429,9 @@ namespace VisionInspectionApp.UI.ViewModels
                     Interlocked.Increment(ref _droppedContinuousFramesCount);
                 }
 
-                UpdateContinuousStats();
+                // KHÔNG gọi UpdateContinuousStats() ở đây nữa:
+                // hàm này tự BeginInvoke 1 action lên UI Dispatcher cho MỖI frame chụp, gây ngập
+                // Dispatcher khi UI đang bận. Đã có _continuousStatsTimer (100ms) cập nhật định kỳ.
             };
             _cameraService.FrameCaptured += _continuousFrameHandler;
 
@@ -3481,7 +3553,14 @@ namespace VisionInspectionApp.UI.ViewModels
 
         private int _isUiRenderingContinuous = 0;
         private long _lastContinuousUiRenderTick = 0;
-        private const int ContinuousUiThrottleIntervalMs = 60; // Giảm tải UI mượt mà ~16 FPS, giải phóng 100% CPU Worker
+
+        /// <summary>
+        /// Nhịp cập nhật Preview/Overlay trong Run Continuous.
+        /// Mỗi lượt render phải clone ảnh full-size + Global Preprocess + Resize/convert bitmap + dựng overlay,
+        /// trên ảnh 20MP tốn cỡ vài chục tới hơn trăm ms. Ở 60ms (~16 FPS) UI thread bị bão hoà dẫn tới lag;
+        /// 120ms (~8 FPS) vẫn đủ mượt cho màn hình vận hành mà giải phóng đáng kể UI thread.
+        /// </summary>
+        private const int ContinuousUiThrottleIntervalMs = 120;
         private long _droppedContinuousFramesCount = 0;
 
         private async Task ProcessContinuousFrameAsync(ContinuousFrameEnvelope envelope, string sourceNodeName, CancellationToken token = default)
@@ -3495,10 +3574,12 @@ namespace VisionInspectionApp.UI.ViewModels
             var __swImg = System.Diagnostics.Stopwatch.StartNew();
 
             SetImageSourceCache(sourceNodeName, "camera", frameMat);
-            using (var displayMat = PrepareDisplayImageForSharedContext(frameMat))
-            {
-                _sharedImage.SetImage(displayMat);
-            }
+
+            // ✅ TỐI ƯU: Chuyển quyền sở hữu Mat cho SharedImageContext thay vì để nó clone lại.
+            // Trước đây mỗi frame tốn thêm 1 bản clone ảnh full-size (~60MB với ảnh 20MP)
+            // => LOH/GC pressure rất lớn khi chạy Continuous.
+            var displayMat = PrepareDisplayImageForSharedContext(frameMat);
+            _sharedImage.SetImage(displayMat, transferOwnership: true);
             __swImg.Stop();
             int imageSourceMs = (int)__swImg.ElapsedMilliseconds;
 
@@ -3542,7 +3623,7 @@ namespace VisionInspectionApp.UI.ViewModels
                     }
 
                     // Đẩy kết quả vào Background Logging Worker (Non-blocking queue)
-                    _inspectionLogService.EnqueueInspectionResult(inspectionResult, configCopy, ProcessedImageCount + 1);
+                    LogInspectionResultToHistory(inspectionResult);
                 }
                 else
                 {
@@ -3582,10 +3663,16 @@ namespace VisionInspectionApp.UI.ViewModels
                         try
                         {
                             if (!IsRunningFolderFlow) return;
+                            // Lưu ý: set LastResult sẽ tự động gọi RefreshInspectionDashboard() qua
+                            // OnLastResultChanged, nên KHÔNG gọi lại lần hai ở đây (tránh dựng dashboard 2 lần/frame).
+                            var alreadySameResult = ReferenceEquals(LastResult, currentRun);
                             LastResult = currentRun;
+                            if (alreadySameResult)
+                            {
+                                RefreshInspectionDashboard(currentRun);
+                            }
                             UpdateContinuousStats();
                             UpdateNodeExecutionTimes();
-                            RefreshInspectionDashboard(currentRun);
                             RefreshPreviews();
                             RaiseToolPropertyPanelsChanged();
                             OnPropertyChanged(nameof(Blob_LastRunCount));
@@ -3610,6 +3697,8 @@ namespace VisionInspectionApp.UI.ViewModels
 
             _folderFlowCts = new CancellationTokenSource();
             IsRunningFolderFlow = true;
+            // ✅ FIX: tạo phiên Lịch sử kiểm tra cho nguồn File / URL (trước đây chỉ Camera mới có)
+            EnsureInspectionLogSession();
 
             var token = _folderFlowCts.Token;
             Task.Run(async () =>
@@ -3764,6 +3853,8 @@ namespace VisionInspectionApp.UI.ViewModels
 
             _folderFlowCts = new CancellationTokenSource();
             IsRunningFolderFlow = true;
+            // ✅ FIX: tạo phiên Lịch sử kiểm tra cho nguồn Folder (trước đây chỉ Camera mới có)
+            EnsureInspectionLogSession();
 
             var token = _folderFlowCts.Token;
             Task.Run(async () =>
@@ -3826,6 +3917,11 @@ namespace VisionInspectionApp.UI.ViewModels
         private void StopContinuousFlow()
         {
             IsRunningFolderFlow = false;
+
+            // ✅ Dọn hàng đợi Shift Register (Reject tracking). Nếu Encoder không tiến (PLC offline /
+            // sai MmPerPixel) thì các item chờ sẽ không bao giờ được dequeue => phình bộ nhớ vô hạn.
+            try { _shiftRegisterTracker.Reset(); } catch { }
+
             _ = _inspectionLogService.EndSessionAsync();
 
             if (_continuousFrameHandler != null)
@@ -3935,6 +4031,8 @@ namespace VisionInspectionApp.UI.ViewModels
             }
 
             _lastRun = inspectionResult;
+            // ✅ FIX: ghi kết quả vào Lịch sử kiểm tra cho luồng Folder (trước đây bị bỏ qua hoàn toàn)
+            LogInspectionResultToHistory(inspectionResult);
             if (IsRunningFolderFlow)
             {
                 ProcessedImageCount++;
@@ -4220,6 +4318,8 @@ namespace VisionInspectionApp.UI.ViewModels
                     _lastRunError = "Lỗi khi chạy Flow: " + ex.Message;
                 }
                 _lastRun = inspectionResult;
+                // ✅ FIX: ghi kết quả vào Lịch sử kiểm tra cho luồng Run Once / PLC Trigger
+                LogInspectionResultToHistory(inspectionResult);
                 UpdateNodeExecutionTimes();
                 if (IsRunningFolderFlow)
                 {

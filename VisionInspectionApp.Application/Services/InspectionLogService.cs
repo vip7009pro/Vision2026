@@ -31,6 +31,12 @@ public sealed class InspectionLogService : IInspectionLogService
     private CancellationTokenSource? _workerCts;
     private Task? _workerTask;
 
+    /// <summary>Số thứ tự part đã được đẩy vào hàng đợi log.</summary>
+    private long _enqueuedSequence;
+
+    /// <summary>Số thứ tự part cuối cùng đã được Background Worker xử lý xong.</summary>
+    private long _processedSequence;
+
     public InspectionSessionRecord? CurrentSession => _currentSession;
 
     public event EventHandler<InspectionSessionRecord>? SessionUpdated;
@@ -104,23 +110,33 @@ public sealed class InspectionLogService : IInspectionLogService
 
     private void ProcessPartEnvelope(InspectionPartEnvelope env)
     {
-        var session = _sessions.TryGetValue(env.SessionId, out var s) ? s : null;
-        if (session == null) return;
-
-        var part = ExtractPartRecord(env.SessionId, env.PartIndex, env.Result, env.Config);
-
-        lock (_lock)
+        try
         {
-            var list = _partsCache.GetOrAdd(env.SessionId, _ => new List<InspectionPartRecord>());
-            list.Add(part);
+            var session = _sessions.TryGetValue(env.SessionId, out var s) ? s : null;
+            if (session == null) return;
 
-            session.TotalParts++;
-            if (part.Pass) session.PassParts++;
-            else session.FailParts++;
+            var part = ExtractPartRecord(env.SessionId, env.PartIndex, env.Result, env.Config);
+
+            lock (_lock)
+            {
+                var list = _partsCache.GetOrAdd(env.SessionId, _ => new List<InspectionPartRecord>());
+                list.Add(part);
+
+                session.TotalParts++;
+                if (part.Pass) session.PassParts++;
+                else session.FailParts++;
+            }
+
+            PartLogged?.Invoke(this, part);
+            SessionUpdated?.Invoke(this, session);
         }
-
-        PartLogged?.Invoke(this, part);
-        SessionUpdated?.Invoke(this, session);
+        finally
+        {
+            // Đánh dấu đã xử lý xong part này — EndSessionAsync dùng mốc này để biết
+            // khi nào toàn bộ kết quả đã được ghi xong trước khi chốt phiên.
+            // (Channel có SingleReader => thứ tự xử lý trùng với thứ tự enqueue.)
+            Interlocked.Exchange(ref _processedSequence, env.Sequence);
+        }
     }
 
     public Task<InspectionSessionRecord> StartSessionAsync(string productName, string jobFilePath, string material = "-")
@@ -159,15 +175,32 @@ public sealed class InspectionLogService : IInspectionLogService
         return Task.FromResult(session);
     }
 
-    public Task<InspectionSessionRecord?> EndSessionAsync()
+    public async Task<InspectionSessionRecord?> EndSessionAsync()
     {
-        if (_currentSession == null) return Task.FromResult<InspectionSessionRecord?>(null);
-
         var session = _currentSession;
+        if (session == null) return null;
+
+        // ✅ FIX: Đợi Background Worker xử lý hết các part còn nằm trong hàng đợi TRƯỚC khi chốt phiên.
+        // Trước đây hàm này lưu file + xoá session NGAY, nên các kết quả vừa enqueue (đặc biệt là
+        // con hàng CUỐI vừa kiểm tra xong khi bấm STOP) bị mất khỏi Lịch sử kiểm tra.
+        try
+        {
+            await DrainPendingPartsAsync().ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[InspectionLogService] Drain error: {ex.Message}");
+        }
+
         session.EndTime = DateTime.Now;
         session.IsRunning = false;
 
-        _currentSession = null;
+        // Chỉ xoá session hiện tại nếu nó vẫn đúng là session này
+        // (tránh xoá nhầm phiên mới vừa được StartSessionAsync tạo ra trong lúc đang drain).
+        if (ReferenceEquals(_currentSession, session))
+        {
+            _currentSession = null;
+        }
 
         // Lưu dữ liệu parts của session ra đĩa
         SaveSessionPartsToDisk(session.Id);
@@ -175,7 +208,24 @@ public sealed class InspectionLogService : IInspectionLogService
 
         SessionUpdated?.Invoke(this, session);
 
-        return Task.FromResult<InspectionSessionRecord?>(session);
+        return session;
+    }
+
+    /// <summary>
+    /// Đợi Background Worker xử lý hết toàn bộ part đã enqueue (hoặc tối đa <paramref name="timeoutMs"/> ms).
+    /// Có timeout để không bao giờ treo ứng dụng khi tắt máy/thay Job.
+    /// </summary>
+    private async Task DrainPendingPartsAsync(int timeoutMs = 3000)
+    {
+        var target = Interlocked.Read(ref _enqueuedSequence);
+        if (target <= 0) return;
+
+        var deadline = DateTime.UtcNow.AddMilliseconds(Math.Max(50, timeoutMs));
+        while (Interlocked.Read(ref _processedSequence) < target)
+        {
+            if (DateTime.UtcNow >= deadline) break;
+            await Task.Delay(10).ConfigureAwait(false);
+        }
     }
 
     public void EnqueueInspectionResult(InspectionResult result, VisionConfig? config, int partIndex)
@@ -184,6 +234,7 @@ public sealed class InspectionLogService : IInspectionLogService
 
         var env = new InspectionPartEnvelope
         {
+            Sequence = Interlocked.Increment(ref _enqueuedSequence),
             SessionId = _currentSession.Id,
             PartIndex = partIndex,
             Result = result,
@@ -575,6 +626,18 @@ public sealed class InspectionLogService : IInspectionLogService
 
     public void Dispose()
     {
+        // ✅ FIX: Trước khi dừng worker phải FLUSH nốt các part còn trong hàng đợi và chốt phiên,
+        // nếu không các kết quả cuối cùng sẽ mất khi tắt ứng dụng.
+        try
+        {
+            FlushPendingPartsSync(1500);
+            EndCurrentSessionSync();
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[InspectionLogService] Dispose flush error: {ex.Message}");
+        }
+
         try
         {
             _workerCts?.Cancel();
@@ -583,8 +646,42 @@ public sealed class InspectionLogService : IInspectionLogService
         catch { }
     }
 
+    /// <summary>Bản đồng bộ của DrainPendingPartsAsync — dùng trong Dispose (không thể await).</summary>
+    private void FlushPendingPartsSync(int timeoutMs)
+    {
+        var target = Interlocked.Read(ref _enqueuedSequence);
+        if (target <= 0) return;
+
+        var deadline = DateTime.UtcNow.AddMilliseconds(Math.Max(50, timeoutMs));
+        while (Interlocked.Read(ref _processedSequence) < target)
+        {
+            if (DateTime.UtcNow >= deadline) break;
+            Thread.Sleep(5);
+        }
+    }
+
+    /// <summary>Chốt phiên hiện tại một cách đồng bộ (lưu parts + index).</summary>
+    private void EndCurrentSessionSync()
+    {
+        var session = _currentSession;
+        if (session == null) return;
+
+        session.EndTime = DateTime.Now;
+        session.IsRunning = false;
+
+        if (ReferenceEquals(_currentSession, session))
+        {
+            _currentSession = null;
+        }
+
+        SaveSessionPartsToDisk(session.Id);
+        SaveSessionsIndex();
+        SessionUpdated?.Invoke(this, session);
+    }
+
     private sealed class InspectionPartEnvelope
     {
+        public long Sequence { get; set; }
         public string SessionId { get; set; } = "";
         public int PartIndex { get; set; }
         public InspectionResult Result { get; set; } = null!;

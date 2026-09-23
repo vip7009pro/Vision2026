@@ -513,7 +513,7 @@ public static class ChessboardCalibrationService
                     }
                 }
             }
-
+            
             // Vertical distances
             for (int r = 0; r < rows - 1; r++)
             {

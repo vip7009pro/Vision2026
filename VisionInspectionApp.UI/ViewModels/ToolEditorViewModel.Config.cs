@@ -67,6 +67,10 @@ namespace VisionInspectionApp.UI.ViewModels
     
         public void CloseJob()
         {
+            // ✅ FIX: Chốt phiên Lịch sử kiểm tra (flush hết part còn trong hàng đợi xuống đĩa)
+            // trước khi xoá Job, tránh mất kết quả của phiên đang mở.
+            try { _ = _inspectionLogService?.EndSessionAsync(); } catch { }
+
             Nodes.Clear();
             Edges.Clear();
             _config = null;

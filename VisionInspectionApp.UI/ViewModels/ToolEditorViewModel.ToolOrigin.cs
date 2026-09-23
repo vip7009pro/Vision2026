@@ -133,24 +133,76 @@ namespace VisionInspectionApp.UI.ViewModels
         [ObservableProperty]
         private BitmapSource? _origin_TemplatePreviewImage;
 
+        // ===== Cache cho ảnh preview Template Origin =====
+        // RefreshOriginTemplatePreview() bị gọi mỗi lần RaiseToolPropertyPanelsChanged() (kể cả MỖI FRAME
+        // khi chạy Run Continuous). Trước đây mỗi lần gọi đều resolve đường dẫn (File.Exists/Directory.GetFiles)
+        // + Cv2.ImRead (đọc đĩa + decode PNG) + ToBitmapSourceForDisplay => cực kỳ tốn và làm UI giật.
+        private string? _originTemplatePreviewSource;
+        private string? _originTemplatePreviewPath;
+        private DateTime _originTemplatePreviewWriteTimeUtc;
+        private long _originTemplatePreviewLength;
+
+        private void InvalidateOriginTemplatePreviewCache()
+        {
+            _originTemplatePreviewPath = null;
+            _originTemplatePreviewSource = null;
+            _originTemplatePreviewWriteTimeUtc = default;
+            _originTemplatePreviewLength = 0;
+        }
+
         public void RefreshOriginTemplatePreview()
         {
-            if (_config?.Origin == null)
+            var origin = _config?.Origin;
+            if (origin == null)
             {
-                Origin_TemplatePreviewImage = null;
+                InvalidateOriginTemplatePreviewCache();
+                if (Origin_TemplatePreviewImage is not null)
+                {
+                    Origin_TemplatePreviewImage = null;
+                    OnPropertyChanged(nameof(Origin_TemplatePreviewImage));
+                }
                 return;
+            }
+
+            // ✅ FAST-PATH: config không đổi + file template không đổi => dùng lại ảnh đã cache,
+            // bỏ qua toàn bộ việc resolve đường dẫn, đọc đĩa và giải mã PNG.
+            if (Origin_TemplatePreviewImage is not null
+                && !string.IsNullOrWhiteSpace(_originTemplatePreviewPath)
+                && string.Equals(_originTemplatePreviewSource, origin.TemplateImageFile, StringComparison.OrdinalIgnoreCase))
+            {
+                try
+                {
+                    var cachedInfo = new FileInfo(_originTemplatePreviewPath!);
+                    if (cachedInfo.Exists
+                        && cachedInfo.LastWriteTimeUtc == _originTemplatePreviewWriteTimeUtc
+                        && cachedInfo.Length == _originTemplatePreviewLength)
+                    {
+                        return;
+                    }
+                }
+                catch
+                {
+                    // Đọc metadata lỗi => rơi xuống slow-path bên dưới.
+                }
             }
 
             try
             {
-                var resolvedFile = ResolveTemplatePath(_config.Origin.TemplateImageFile, "origin.png", "origin*.png");
+                var resolvedFile = ResolveTemplatePath(origin.TemplateImageFile, "origin.png", "origin*.png");
                 if (!string.IsNullOrWhiteSpace(resolvedFile) && File.Exists(resolvedFile))
                 {
-                    _config.Origin.TemplateImageFile = resolvedFile;
+                    origin.TemplateImageFile = resolvedFile;
                     using var mat = Cv2.ImRead(resolvedFile, ImreadModes.Color);
                     if (mat != null && !mat.Empty())
                     {
                         Origin_TemplatePreviewImage = mat.ToBitmapSourceForDisplay();
+
+                        var info = new FileInfo(resolvedFile);
+                        _originTemplatePreviewSource = origin.TemplateImageFile;
+                        _originTemplatePreviewPath = resolvedFile;
+                        _originTemplatePreviewWriteTimeUtc = info.LastWriteTimeUtc;
+                        _originTemplatePreviewLength = info.Length;
+
                         OnPropertyChanged(nameof(Origin_TemplatePreviewImage));
                         return;
                     }
@@ -161,8 +213,12 @@ namespace VisionInspectionApp.UI.ViewModels
                 System.Diagnostics.Debug.WriteLine($"[RefreshOriginTemplatePreview] Exception: {ex.Message}");
             }
 
-            Origin_TemplatePreviewImage = null;
-            OnPropertyChanged(nameof(Origin_TemplatePreviewImage));
+            InvalidateOriginTemplatePreviewCache();
+            if (Origin_TemplatePreviewImage is not null)
+            {
+                Origin_TemplatePreviewImage = null;
+                OnPropertyChanged(nameof(Origin_TemplatePreviewImage));
+            }
         }
 
         public ICommand? Origin_TeachTemplateCommand { get; internal set; }

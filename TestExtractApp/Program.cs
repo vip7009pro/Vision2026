@@ -55,5 +55,6 @@ class Program
         UndistortPipelineTests.RunAllTests();
         UndistortResolutionTests.RunAll();
         PerformanceOptimizationTests.RunAllTests();
+        ContinuousFlowRegressionTests.RunAllTests();
     }
 }

@@ -13,6 +13,13 @@ public sealed class RollDefectManager
     private readonly object _lock = new();
     private RollSession _currentSession = new();
 
+    /// <summary>
+    /// Giới hạn số vết lỗi giữ trong bộ nhớ cho mỗi phiên cuộn.
+    /// Chạy Continuous 24/7 thì danh sách Defects sẽ phình vô hạn nếu không chặn
+    /// => tiến trình càng chạy càng chậm. Vượt ngưỡng sẽ loại bỏ các vết lỗi CŨ NHẤT.
+    /// </summary>
+    public int MaxDefectsInMemory { get; set; } = 50_000;
+
     public RollSession CurrentSession
     {
         get
@@ -72,6 +79,27 @@ public sealed class RollDefectManager
 
             OnSessionStarted?.Invoke(this, _currentSession);
             return _currentSession;
+        }
+    }
+
+    /// <summary>
+    /// Thêm vết lỗi vào phiên hiện tại (đã trong lock) và dọn bớt nếu vượt ngưỡng bộ nhớ.
+    /// </summary>
+    private void AddDefectLocked(RollDefectItem item)
+    {
+        _currentSession.Defects.Add(item);
+
+        var max = MaxDefectsInMemory;
+        if (max <= 0 || _currentSession.Defects.Count <= max)
+        {
+            return;
+        }
+
+        // Giữ lại các vết lỗi mới nhất, loại bỏ dần các vết lỗi cũ nhất.
+        int removeCount = _currentSession.Defects.Count - max;
+        if (removeCount > 0)
+        {
+            _currentSession.Defects.RemoveRange(0, removeCount);
         }
     }
 
@@ -136,7 +164,7 @@ public sealed class RollDefectManager
                         BoundingBox = new DefectBox(defectBlob.BoundingBox.X, defectBlob.BoundingBox.Y, defectBlob.BoundingBox.Width, defectBlob.BoundingBox.Height)
                     };
 
-                    _currentSession.Defects.Add(item);
+                    AddDefectLocked(item);
                     recordedItems.Add(item);
                     OnDefectRecorded?.Invoke(this, item);
                 }
@@ -167,7 +195,7 @@ public sealed class RollDefectManager
                                 BoundingBox = new DefectBox(blob.BoundingBox.X, blob.BoundingBox.Y, blob.BoundingBox.Width, blob.BoundingBox.Height)
                             };
 
-                            _currentSession.Defects.Add(item);
+                            AddDefectLocked(item);
                             recordedItems.Add(item);
                             OnDefectRecorded?.Invoke(this, item);
                         }
@@ -200,7 +228,7 @@ public sealed class RollDefectManager
                                 BoundingBox = new DefectBox(defect.BoundingBox.X, defect.BoundingBox.Y, defect.BoundingBox.Width, defect.BoundingBox.Height)
                             };
 
-                            _currentSession.Defects.Add(item);
+                            AddDefectLocked(item);
                             recordedItems.Add(item);
                             OnDefectRecorded?.Invoke(this, item);
                         }

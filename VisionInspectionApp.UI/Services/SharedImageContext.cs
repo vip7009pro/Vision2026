@@ -20,6 +20,15 @@ public sealed class SharedImageContext
 
     public event EventHandler? ImageChanged;
 
+    /// <summary>
+    /// Gán ảnh dùng chung cho toàn bộ Preview.
+    /// </summary>
+    /// <param name="image">Ảnh nguồn.</param>
+    /// <param name="transferOwnership">
+    /// true = context nhận trách nhiệm dispose <paramref name="image"/> (KHÔNG clone lại) — dùng khi
+    /// caller vừa tạo một Mat mới chỉ để đưa vào đây (tiết kiệm 1 lần clone ảnh lớn mỗi frame).
+    /// false = context tự clone.
+    /// </param>
     public void SetImage(Mat? image, bool transferOwnership = false)
     {
         lock (this)
@@ -35,6 +44,13 @@ public sealed class SharedImageContext
                 if (image is null || image.IsDisposed || image.Empty())
                 {
                     _image = null;
+
+                    // Nếu caller đã chuyển quyền sở hữu mà ảnh không dùng được thì phải tự dispose
+                    // để không rò rỉ bộ nhớ unmanaged (trước đây nhánh này bỏ quên).
+                    if (transferOwnership && image is not null && !image.IsDisposed)
+                    {
+                        image.Dispose();
+                    }
                 }
                 else
                 {

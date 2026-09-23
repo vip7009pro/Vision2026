@@ -1590,6 +1590,7 @@ namespace VisionInspectionApp.UI.ViewModels
         private static VisionInspectionApp.UI.Views.ChessboardCalibrationDialog? _chessboardCalibrationDialogInstance;
         private static Views.OQC.ProductAssignDialog? _productAssignDialogInstance;
         private static Views.InspectionLogWindow? _inspectionLogWindowInstance;
+        private static InspectionLogViewModel? _inspectionLogWindowVm;
         private static Views.RollDefectMapWindow? _rollDefectMapWindowInstance;
 
         private void OpenCalibrationDialog()
@@ -1783,16 +1784,29 @@ namespace VisionInspectionApp.UI.ViewModels
                     _inspectionLogWindowInstance.Activate();
                     if (_inspectionLogWindowInstance.WindowState == WindowState.Minimized)
                         _inspectionLogWindowInstance.WindowState = WindowState.Normal;
+
+                    // ✅ FIX: Nạp lại danh sách phiên mỗi lần mở lại cửa sổ.
+                    // Trước đây chỉ Activate() rồi return => phiên vừa chạy xong (sau khi bấm STOP)
+                    // KHÔNG xuất hiện trong danh sách Lịch sử kiểm tra.
+                    if (_inspectionLogWindowVm is not null)
+                    {
+                        _ = _inspectionLogWindowVm.LoadSessionsAsync();
+                    }
                     return;
                 }
 
                 var mainWin = System.Windows.Application.Current?.MainWindow;
                 var vm = new InspectionLogViewModel(_inspectionLogService);
+                _inspectionLogWindowVm = vm;
                 _inspectionLogWindowInstance = new Views.InspectionLogWindow(vm)
                 {
                     Owner = mainWin
                 };
-                _inspectionLogWindowInstance.Closed += (s, e) => _inspectionLogWindowInstance = null;
+                _inspectionLogWindowInstance.Closed += (s, e) =>
+                {
+                    _inspectionLogWindowInstance = null;
+                    _inspectionLogWindowVm = null;
+                };
                 _inspectionLogWindowInstance.Show();
             }
             catch (Exception ex)
