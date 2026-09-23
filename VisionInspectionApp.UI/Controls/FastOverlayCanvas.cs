@@ -12,6 +12,39 @@ public class FastOverlayCanvas : FrameworkElement
     private static readonly Dictionary<(Brush, double), Pen> _penCache = new();
     private static readonly Typeface _defaultTypeface = new("Segoe UI");
 
+    // ==================== PERFORMANCE PHASE 4: FormattedText CACHE ====================
+    // FormattedText thực hiện text shaping/layout — rất tốn CPU nếu tạo mới cho từng nhãn
+    // ở MỖI lần OnRender (mỗi lần zoom / hover / cập nhật overlay). Cache lại theo
+    // (nội dung, màu, cỡ chữ, DPI) giúp render overlay nhanh hơn nhiều lần.
+    private static readonly Dictionary<(string Text, string BrushKey, double FontSize, double Dpi), FormattedText> _textCache = new();
+    private const int MaxTextCacheEntries = 800;
+
+    private static string GetBrushKey(Brush? brush)
+    {
+        if (brush is null) return "null";
+        if (brush is SolidColorBrush solid) return solid.Color.ToString();
+        return brush.GetType().Name;
+    }
+
+    private static FormattedText GetCachedText(string text, Brush? brush, double fontSize, double dpi)
+    {
+        var key = (text, GetBrushKey(brush), Math.Round(fontSize, 3), Math.Round(dpi, 3));
+        if (_textCache.TryGetValue(key, out var cached))
+        {
+            return cached;
+        }
+
+        // Giới hạn kích thước cache: nhãn kết quả đo thay đổi liên tục khi chạy liên tục.
+        if (_textCache.Count >= MaxTextCacheEntries)
+        {
+            _textCache.Clear();
+        }
+
+        var formatted = new FormattedText(text, CultureInfo.CurrentUICulture, FlowDirection.LeftToRight, _defaultTypeface, fontSize, brush, dpi);
+        _textCache[key] = formatted;
+        return formatted;
+    }
+
     private static readonly Brush DarkLabelBackgroundBrush = new SolidColorBrush(Color.FromArgb(210, 16, 20, 28)); // #D210141C
     private static readonly Brush DarkLabelBorderBrush = new SolidColorBrush(Color.FromArgb(100, 255, 255, 255));
     private static readonly Pen DarkLabelBorderPen = new(DarkLabelBorderBrush, 0.8);
@@ -130,7 +163,6 @@ public class FastOverlayCanvas : FrameworkElement
             sy = bmp.Height / bmp.PixelHeight;
         }
 
-        var typeface = _defaultTypeface;
         var dpi = VisualTreeHelper.GetDpi(this).PixelsPerDip;
         double scale = Math.Max(0.001, ViewScale);
         double effFontSize = 13.0 / scale;
@@ -163,7 +195,7 @@ public class FastOverlayCanvas : FrameworkElement
 
                     if (!string.IsNullOrWhiteSpace(r.Label))
                     {
-                        var text = new FormattedText(r.Label, CultureInfo.CurrentUICulture, FlowDirection.LeftToRight, typeface, effFontSize, item.Stroke, dpi);
+                        var text = GetCachedText(r.Label, item.Stroke, effFontSize, dpi);
                         double tx = vx;
                         double ty = vy - text.Height - 4 / scale;
                         double padX = 4 / scale;
@@ -187,7 +219,7 @@ public class FastOverlayCanvas : FrameworkElement
 
                     if (!string.IsNullOrWhiteSpace(p.Label))
                     {
-                        var text = new FormattedText(p.Label, CultureInfo.CurrentUICulture, FlowDirection.LeftToRight, typeface, effFontSize, item.Stroke, dpi);
+                        var text = GetCachedText(p.Label, item.Stroke, effFontSize, dpi);
                         double tx = vx + pr + 6 / scale;
                         double ty = vy - text.Height / 2.0;
                         double padX = 4 / scale;
@@ -206,7 +238,7 @@ public class FastOverlayCanvas : FrameworkElement
 
                     if (!string.IsNullOrWhiteSpace(c.Label))
                     {
-                        var text = new FormattedText(c.Label, CultureInfo.CurrentUICulture, FlowDirection.LeftToRight, typeface, effFontSize, item.Stroke, dpi);
+                        var text = GetCachedText(c.Label, item.Stroke, effFontSize, dpi);
                         double tx = cx - text.Width / 2.0;
                         double ty = cy - cr - text.Height - 4 / scale;
                         double padX = 4 / scale;
@@ -226,7 +258,7 @@ public class FastOverlayCanvas : FrameworkElement
 
                     if (!string.IsNullOrWhiteSpace(l.Label))
                     {
-                        var text = new FormattedText(l.Label, CultureInfo.CurrentUICulture, FlowDirection.LeftToRight, typeface, effFontSize, item.Stroke, dpi);
+                        var text = GetCachedText(l.Label, item.Stroke, effFontSize, dpi);
                         double midX = (vx1 + vx2) / 2.0;
                         double midY = (vy1 + vy2) / 2.0;
                         double tx = midX - text.Width / 2.0;
@@ -247,7 +279,7 @@ public class FastOverlayCanvas : FrameworkElement
 
                         if (!string.IsNullOrWhiteSpace(pl.Label))
                         {
-                            var text = new FormattedText(pl.Label, CultureInfo.CurrentUICulture, FlowDirection.LeftToRight, typeface, effFontSize, item.Stroke, dpi);
+                            var text = GetCachedText(pl.Label, item.Stroke, effFontSize, dpi);
                             var firstPt = new Point(pl.Points[0].X * sx, pl.Points[0].Y * sy);
                             double tx = firstPt.X;
                             double ty = firstPt.Y - text.Height - 4 / scale;
@@ -263,7 +295,7 @@ public class FastOverlayCanvas : FrameworkElement
                 {
                     var vx = t.X * sx;
                     var vy = t.Y * sy;
-                    var text = new FormattedText(t.Text, CultureInfo.CurrentUICulture, FlowDirection.LeftToRight, typeface, effTextFontSize, t.Foreground, dpi);
+                    var text = GetCachedText(t.Text, t.Foreground, effTextFontSize, dpi);
                     var bg = t.Background ?? DarkLabelBackgroundBrush;
                     double padX = 4 / scale;
                     double padY = 2 / scale;

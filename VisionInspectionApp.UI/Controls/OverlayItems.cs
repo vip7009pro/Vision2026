@@ -58,10 +58,20 @@ public sealed class OverlayPolylineItem : OverlayItem
     public bool IsClosed { get; init; } = true;
 
     private StreamGeometry? _cachedGeometry;
+    private double _cachedSx = double.NaN;
+    private double _cachedSy = double.NaN;
 
+    /// <summary>
+    /// PERFORMANCE PHASE 4: cache StreamGeometry theo scale đã dùng.
+    /// Trước đây chỉ cache khi scale == 1.0 chính xác, nên khi màn hình có DPI scaling khác 1
+    /// (hoặc bitmap proxy) thì geometry bị dựng lại ở MỖI frame render.
+    /// Vì <see cref="Points"/> là init-only nên cache không bao giờ bị cũ.
+    /// </summary>
     public StreamGeometry GetOrCreateGeometry(double sx = 1.0, double sy = 1.0)
     {
-        if (_cachedGeometry is not null && sx == 1.0 && sy == 1.0)
+        if (_cachedGeometry is not null
+            && Math.Abs(_cachedSx - sx) < 1e-6
+            && Math.Abs(_cachedSy - sy) < 1e-6)
         {
             return _cachedGeometry;
         }
@@ -79,10 +89,9 @@ public sealed class OverlayPolylineItem : OverlayItem
         }
         geo.Freeze();
 
-        if (sx == 1.0 && sy == 1.0)
-        {
-            _cachedGeometry = geo;
-        }
+        _cachedGeometry = geo;
+        _cachedSx = sx;
+        _cachedSy = sy;
         return geo;
     }
 }

@@ -27,6 +27,14 @@ public partial class ToolEditorView : UserControl
     private Point _dragStartMouseLogical;
     private const double GridSnapSize = 10.0;
 
+    /// <summary>
+    /// PERFORMANCE PHASE 4: Toạ độ neo (X0/X1/X2 và Y0/Y1/Y2) của các node KHÔNG được chọn,
+    /// tính MỘT LẦN lúc bắt đầu kéo. Trước đây UpdateSmartSnapLines() tạo mảng mới cho từng node
+    /// ở MỖI frame kéo chuột (LINQ Where().ToList() + new double[3] × 2 vòng lặp) gây GC pressure.
+    /// </summary>
+    private (double X0, double X1, double X2, double Y0, double Y1, double Y2)[]? _snapOtherAnchors;
+
+
     private bool _isRangeSelecting;
     private Point _rangeSelectStart;
 
@@ -353,6 +361,17 @@ public partial class ToolEditorView : UserControl
 
         _dragStartMouseLogical = GetCanvasLogicalPosition(Mouse.GetPosition(EditorCanvas));
         _multiDragStart = vm.SelectedNodes.ToDictionary(x => x, x => new Point(x.X, x.Y));
+
+        // PERFORMANCE PHASE 4: precompute anchors của các node không được chọn (1 lần cho cả thao tác kéo).
+        _snapOtherAnchors = vm.Nodes
+            .Where(x => !x.IsSelected)
+            .Select(x =>
+            {
+                var h = x.NodeHeight > 0 ? x.NodeHeight : 100.0;
+                return (x.X, x.X + NodeStandardWidth / 2.0, x.X + NodeStandardWidth,
+                        x.Y, x.Y + h / 2.0, x.Y + h);
+            })
+            .ToArray();
     }
 
     private void NodeThumb_DragDelta(object sender, DragDeltaEventArgs e)
@@ -367,10 +386,10 @@ public partial class ToolEditorView : UserControl
             return;
         }
 
-        if (_multiDragStart is null || _multiDragStart.Count == 0)
+        if (_multiDragStart is null)
         {
-            _dragStartMouseLogical = GetCanvasLogicalPosition(Mouse.GetPosition(EditorCanvas));
             _multiDragStart = vm.SelectedNodes.ToDictionary(x => x, x => new Point(x.X, x.Y));
+            _dragStartMouseLogical = GetCanvasLogicalPosition(Mouse.GetPosition(EditorCanvas));
         }
 
         var currentMouseLogical = GetCanvasLogicalPosition(Mouse.GetPosition(EditorCanvas));
@@ -405,8 +424,9 @@ public partial class ToolEditorView : UserControl
         snappedPrimaryX = Math.Round(rawPrimaryX / GridSnapSize) * GridSnapSize;
         snappedPrimaryY = Math.Round(rawPrimaryY / GridSnapSize) * GridSnapSize;
 
-        var otherNodes = vm.Nodes.Where(x => !x.IsSelected).ToList();
-        if (otherNodes.Count == 0)
+        // PERFORMANCE PHASE 4: dùng anchors đã precompute từ DragStarted (không LINQ/mảng mỗi frame).
+        var others = _snapOtherAnchors;
+        if (others is null || others.Length == 0)
         {
             HideSnapLines();
             return;
@@ -414,19 +434,21 @@ public partial class ToolEditorView : UserControl
 
         double primaryH = primaryNode.NodeHeight > 0 ? primaryNode.NodeHeight : 100.0;
 
-        (double Val, double Offset)[] primaryXCandidates = new[]
-        {
-            (rawPrimaryX, 0.0),
-            (rawPrimaryX + NodeStandardWidth / 2.0, NodeStandardWidth / 2.0),
-            (rawPrimaryX + NodeStandardWidth, NodeStandardWidth)
-        };
+        // 3 điểm neo của node đang kéo (X) và (Y) — tính bằng biến cục bộ, không cấp phát mảng.
+        double pX0 = rawPrimaryX;
+        double pX1 = rawPrimaryX + NodeStandardWidth / 2.0;
+        double pX2 = rawPrimaryX + NodeStandardWidth;
 
-        (double Val, double Offset)[] primaryYCandidates = new[]
-        {
-            (rawPrimaryY, 0.0),
-            (rawPrimaryY + primaryH / 2.0, primaryH / 2.0),
-            (rawPrimaryY + primaryH, primaryH)
-        };
+        double pY0 = rawPrimaryY;
+        double pY1 = rawPrimaryY + primaryH / 2.0;
+        double pY2 = rawPrimaryY + primaryH;
+
+        const double offsetX0 = 0.0;
+        const double offsetX1 = NodeStandardWidth / 2.0;
+        const double offsetX2 = NodeStandardWidth;
+        const double offsetY0 = 0.0;
+        double offsetY1 = primaryH / 2.0;
+        double offsetY2 = primaryH;
 
         double bestDx = SmartSnapTolerance + 1.0;
         double? vSnapLineX = null;
@@ -434,29 +456,71 @@ public partial class ToolEditorView : UserControl
         double vMaxY = double.MinValue;
         double? vSnapXVal = null;
 
-        foreach (var other in otherNodes)
+        double bestDy = SmartSnapTolerance + 1.0;
+        double? hSnapLineY = null;
+        double hMinX = double.MaxValue;
+        double hMaxX = double.MinValue;
+        double? hSnapYVal = null;
+
+        // Local functions: không cấp phát mảng/tuple, giữ nguyên thứ tự duyệt của bản gốc
+        // để kết quả snap (kể cả khi hòa khoảng cách) không thay đổi.
+        void ConsiderX(double otherX, double primaryVal, double primaryOffset, double otherTop, double otherBottom)
         {
-            double otherH = other.NodeHeight > 0 ? other.NodeHeight : 100.0;
-            double[] otherXPositions = new[] { other.X, other.X + NodeStandardWidth / 2.0, other.X + NodeStandardWidth };
-
-            foreach (var (pVal, offset) in primaryXCandidates)
+            double diff = Math.Abs(primaryVal - otherX);
+            if (diff >= bestDx)
             {
-                foreach (var oX in otherXPositions)
-                {
-                    double diff = Math.Abs(pVal - oX);
-                    if (diff < bestDx)
-                    {
-                        bestDx = diff;
-                        vSnapLineX = oX;
-                        vSnapXVal = oX - offset;
-
-                        double top = Math.Min(rawPrimaryY, other.Y) - 30.0;
-                        double bot = Math.Max(rawPrimaryY + primaryH, other.Y + otherH) + 30.0;
-                        vMinY = Math.Min(vMinY, top);
-                        vMaxY = Math.Max(vMaxY, bot);
-                    }
-                }
+                return;
             }
+
+            bestDx = diff;
+            vSnapLineX = otherX;
+            vSnapXVal = otherX - primaryOffset;
+
+            double otherH = otherBottom - otherTop;
+            vMinY = Math.Min(vMinY, Math.Min(rawPrimaryY, otherTop) - 30.0);
+            vMaxY = Math.Max(vMaxY, Math.Max(rawPrimaryY + primaryH, otherTop + otherH) + 30.0);
+        }
+
+        void ConsiderY(double otherY, double primaryVal, double primaryOffset, double otherLeft, double otherRight)
+        {
+            double diff = Math.Abs(primaryVal - otherY);
+            if (diff >= bestDy)
+            {
+                return;
+            }
+
+            bestDy = diff;
+            hSnapLineY = otherY;
+            hSnapYVal = otherY - primaryOffset;
+
+            double otherW = otherRight - otherLeft;
+            hMinX = Math.Min(hMinX, Math.Min(rawPrimaryX, otherLeft) - 30.0);
+            hMaxX = Math.Max(hMaxX, Math.Max(rawPrimaryX + NodeStandardWidth, otherLeft + otherW) + 30.0);
+        }
+
+        foreach (var other in others)
+        {
+            // Trục dọc (snap X): primary 0 -> 1 -> 2, mỗi primary so với X0, X1, X2 của node kia.
+            ConsiderX(other.X0, pX0, offsetX0, other.Y0, other.Y2);
+            ConsiderX(other.X1, pX0, offsetX0, other.Y0, other.Y2);
+            ConsiderX(other.X2, pX0, offsetX0, other.Y0, other.Y2);
+            ConsiderX(other.X0, pX1, offsetX1, other.Y0, other.Y2);
+            ConsiderX(other.X1, pX1, offsetX1, other.Y0, other.Y2);
+            ConsiderX(other.X2, pX1, offsetX1, other.Y0, other.Y2);
+            ConsiderX(other.X0, pX2, offsetX2, other.Y0, other.Y2);
+            ConsiderX(other.X1, pX2, offsetX2, other.Y0, other.Y2);
+            ConsiderX(other.X2, pX2, offsetX2, other.Y0, other.Y2);
+
+            // Trục ngang (snap Y): primary 0 -> 1 -> 2, mỗi primary so với Y0, Y1, Y2 của node kia.
+            ConsiderY(other.Y0, pY0, offsetY0, other.X0, other.X2);
+            ConsiderY(other.Y1, pY0, offsetY0, other.X0, other.X2);
+            ConsiderY(other.Y2, pY0, offsetY0, other.X0, other.X2);
+            ConsiderY(other.Y0, pY1, offsetY1, other.X0, other.X2);
+            ConsiderY(other.Y1, pY1, offsetY1, other.X0, other.X2);
+            ConsiderY(other.Y2, pY1, offsetY1, other.X0, other.X2);
+            ConsiderY(other.Y0, pY2, offsetY2, other.X0, other.X2);
+            ConsiderY(other.Y1, pY2, offsetY2, other.X0, other.X2);
+            ConsiderY(other.Y2, pY2, offsetY2, other.X0, other.X2);
         }
 
         if (bestDx <= SmartSnapTolerance && vSnapXVal.HasValue)
@@ -466,37 +530,6 @@ public partial class ToolEditorView : UserControl
         else
         {
             vSnapLineX = null;
-        }
-
-        double bestDy = SmartSnapTolerance + 1.0;
-        double? hSnapLineY = null;
-        double hMinX = double.MaxValue;
-        double hMaxX = double.MinValue;
-        double? hSnapYVal = null;
-
-        foreach (var other in otherNodes)
-        {
-            double otherH = other.NodeHeight > 0 ? other.NodeHeight : 100.0;
-            double[] otherYPositions = new[] { other.Y, other.Y + otherH / 2.0, other.Y + otherH };
-
-            foreach (var (pVal, offset) in primaryYCandidates)
-            {
-                foreach (var oY in otherYPositions)
-                {
-                    double diff = Math.Abs(pVal - oY);
-                    if (diff < bestDy)
-                    {
-                        bestDy = diff;
-                        hSnapLineY = oY;
-                        hSnapYVal = oY - offset;
-
-                        double left = Math.Min(rawPrimaryX, other.X) - 30.0;
-                        double right = Math.Max(rawPrimaryX + NodeStandardWidth, other.X + NodeStandardWidth) + 30.0;
-                        hMinX = Math.Min(hMinX, left);
-                        hMaxX = Math.Max(hMaxX, right);
-                    }
-                }
-            }
         }
 
         if (bestDy <= SmartSnapTolerance && hSnapYVal.HasValue)
@@ -519,6 +552,7 @@ public partial class ToolEditorView : UserControl
             {
                 group.Children.Add(new LineGeometry(new Point(hMinX, hSnapLineY.Value), new Point(hMaxX, hSnapLineY.Value)));
             }
+            group.Freeze();
 
             SnapLinesPath.Data = group;
             SnapLinesPath.Visibility = Visibility.Visible;
@@ -538,6 +572,7 @@ public partial class ToolEditorView : UserControl
     private void NodeThumb_DragCompleted(object sender, DragCompletedEventArgs e)
     {
         HideSnapLines();
+        _snapOtherAnchors = null;
         if (DataContext is ToolEditorViewModel vm && _multiDragStart is not null && _multiDragStart.Count > 0)
         {
             // Ensure final positions are perfectly snapped to grid

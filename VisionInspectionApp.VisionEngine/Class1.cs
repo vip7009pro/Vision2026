@@ -658,6 +658,17 @@ public sealed class ImagePreprocessor
 {
     private static readonly Mat MorphKernel3x3 = Cv2.GetStructuringElement(MorphShapes.Rect, new Size(3, 3));
 
+    // ==================== DIAGNOSTICS / PERFORMANCE TESTS ====================
+    private static long _runCallCount;
+
+    /// <summary>
+    /// Tổng số lần chạy Global Preprocess. Dùng cho chẩn đoán hiệu năng và test tự động
+    /// kiểm chứng "Global Preprocess chỉ chạy 1 lần cho mỗi lượt refresh Preview".
+    /// </summary>
+    public static long RunCallCount => System.Threading.Interlocked.Read(ref _runCallCount);
+
+    public static void ResetRunCallCount() => System.Threading.Interlocked.Exchange(ref _runCallCount, 0);
+
     private static int MakeOddAtLeast3(int k)
     {
         if (k < 3) k = 3;
@@ -967,6 +978,8 @@ public sealed class ImagePreprocessor
 
     public Mat Run(Mat inputBgrOrGray, PreprocessSettings settings, List<PreprocessRoiDefinition>? rois = null, Point2d? originTeach = null, Point2d? originFound = null, double originAngleDeg = 0.0)
     {
+        System.Threading.Interlocked.Increment(ref _runCallCount);
+
         if (inputBgrOrGray is null)
         {
             throw new ArgumentNullException(nameof(inputBgrOrGray));

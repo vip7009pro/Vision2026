@@ -117,6 +117,25 @@ namespace VisionInspectionApp.UI.ViewModels
         /// <summary>Timer gộp (coalesce) các yêu cầu làm mới Preview.</summary>
         private DispatcherTimer? _refreshThrottleTimer;
 
+        /// <summary>
+        /// Khi &gt; 0, MỌI lời gọi RefreshPreviews() sẽ chạy ĐỒNG BỘ ngay lập tức (bỏ qua debounce).
+        ///
+        /// Bắt buộc dùng trong ngữ cảnh thao tác ROI (kéo / resize / xoay / vẽ ROI mới):
+        /// sau khi commit ROI, ImageViewerControl gọi RedrawOverlays() NGAY để vẽ lại overlay.
+        /// Nếu lúc đó RefreshPreviews() còn bị debounce thì OverlayItems vẫn là danh sách CŨ,
+        /// khiến ROI bị "giật về kích thước/vị trí cũ" trong ~15ms rồi mới vẽ lại đúng.
+        /// </summary>
+        private int _forceSyncPreviewRefresh;
+
+        /// <summary>
+        /// Cho phép chỉ định Dispatcher dùng cho cơ chế coalesce refresh.
+        ///
+        /// Production: để null → dùng <c>Application.Current?.Dispatcher</c> (và tự động chạy đồng bộ
+        /// khi không có Application, ví dụ unit test headless).
+        /// Test: gán Dispatcher của thread test để kiểm chứng đúng hành vi debounce/coalesce.
+        /// </summary>
+        public System.Windows.Threading.Dispatcher? RefreshCoalescingDispatcherOverride { get; set; }
+
         // ==================== PERFORMANCE PHASE 2: ONE SNAPSHOT / ONE PREPROCESS PER PASS ====================
         /// <summary>Đang trong 1 lượt refresh (dùng để tái sử dụng snapshot & ảnh preprocess).</summary>
         private bool _inRefreshPass;
@@ -690,7 +709,29 @@ namespace VisionInspectionApp.UI.ViewModels
             UpdateBlobThresholdPreview(snap);
         }
     
+        /// <summary>
+        /// Kéo vẽ ROI mới trên Canvas. Buộc RefreshPreviews() chạy ĐỒNG BỘ để overlay được dựng xong
+        /// trước khi ImageViewerControl gọi RedrawOverlays() ngay sau lệnh commit.
+        /// </summary>
         private void OnRoiSelected(object? arg)
+        {
+            if (_config is null)
+            {
+                return;
+            }
+
+            System.Threading.Interlocked.Increment(ref _forceSyncPreviewRefresh);
+            try
+            {
+                OnRoiSelectedCore(arg);
+            }
+            finally
+            {
+                System.Threading.Interlocked.Decrement(ref _forceSyncPreviewRefresh);
+            }
+        }
+
+        private void OnRoiSelectedCore(object? arg)
         {
             if (_config is null)
             {
@@ -1742,7 +1783,30 @@ namespace VisionInspectionApp.UI.ViewModels
             return null;
         }
 
+        /// <summary>
+        /// Thao tác chỉnh sửa ROI (move / resize / rotate / kéo vẽ ROI mới) hoặc xoá ROI.
+        /// Trong suốt thời gian xử lý, buộc RefreshPreviews() chạy ĐỒNG BỘ để OverlayItems được
+        /// cập nhật xong TRƯỚC khi ImageViewerControl vẽ lại overlay (RedrawOverlays).
+        /// </summary>
         private void OnRoiEdited(RoiSelection? sel)
+        {
+            if (sel is null || _config is null || string.IsNullOrWhiteSpace(sel.Label))
+            {
+                return;
+            }
+
+            System.Threading.Interlocked.Increment(ref _forceSyncPreviewRefresh);
+            try
+            {
+                OnRoiEditedCore(sel);
+            }
+            finally
+            {
+                System.Threading.Interlocked.Decrement(ref _forceSyncPreviewRefresh);
+            }
+        }
+
+        private void OnRoiEditedCore(RoiSelection? sel)
         {
             if (sel is null || _config is null)
             {
@@ -4335,6 +4399,14 @@ namespace VisionInspectionApp.UI.ViewModels
         /// </summary>
         public void RefreshPreviews()
         {
+            // Trong ngữ cảnh thao tác ROI: refresh ĐỒNG BỘ để overlay không bị hiển thị trễ
+            // (tránh hiện tượng ROI giật về kích thước/vị trí cũ sau khi nhả chuột).
+            if (System.Threading.Volatile.Read(ref _forceSyncPreviewRefresh) > 0)
+            {
+                RefreshPreviewsNow();
+                return;
+            }
+
             if (!EnableCanvasRendering)
             {
                 CancelPendingRefresh();
@@ -4342,7 +4414,7 @@ namespace VisionInspectionApp.UI.ViewModels
                 return;
             }
 
-            var dispatcher = System.Windows.Application.Current?.Dispatcher;
+            var dispatcher = RefreshCoalescingDispatcherOverride ?? System.Windows.Application.Current?.Dispatcher;
             if (dispatcher is null)
             {
                 // Không có Dispatcher (unit test headless) => chạy đồng bộ như hành vi cũ.
@@ -4397,7 +4469,7 @@ namespace VisionInspectionApp.UI.ViewModels
                 return;
             }
 
-            var dispatcher = System.Windows.Application.Current?.Dispatcher;
+            var dispatcher = RefreshCoalescingDispatcherOverride ?? System.Windows.Application.Current?.Dispatcher;
             if (dispatcher is null)
             {
                 return;

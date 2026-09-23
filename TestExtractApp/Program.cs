@@ -54,5 +54,6 @@ class Program
         NewJobDefaultToolsTests.RunAllTests();
         UndistortPipelineTests.RunAllTests();
         UndistortResolutionTests.RunAll();
+        PerformanceOptimizationTests.RunAllTests();
     }
 }

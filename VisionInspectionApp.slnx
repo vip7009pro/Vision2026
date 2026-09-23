@@ -4,6 +4,7 @@
     <Platform Name="x64" />
     <Platform Name="x86" />
   </Configurations>
+  <Project Path="TestExtractApp/TestExtractApp.csproj" />
   <Project Path="VisionInspectionApp.Application/VisionInspectionApp.Application.csproj">
     <Platform Solution="*|x64" Project="x64" />
   </Project>

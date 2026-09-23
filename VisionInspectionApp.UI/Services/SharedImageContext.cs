@@ -7,6 +7,17 @@ public sealed class SharedImageContext
 {
     private Mat? _image;
 
+    // ==================== DIAGNOSTICS / PERFORMANCE TESTS ====================
+    private static long _snapshotCloneCount;
+
+    /// <summary>
+    /// Tổng số lần clone snapshot (mỗi lần clone tốn ~60MB cho ảnh 20MP).
+    /// Dùng cho chẩn đoán hiệu năng và test tự động kiểm chứng "1 snapshot cho mỗi lượt refresh".
+    /// </summary>
+    public static long SnapshotCloneCount => System.Threading.Interlocked.Read(ref _snapshotCloneCount);
+
+    public static void ResetSnapshotCloneCount() => System.Threading.Interlocked.Exchange(ref _snapshotCloneCount, 0);
+
     public event EventHandler? ImageChanged;
 
     public void SetImage(Mat? image, bool transferOwnership = false)
@@ -48,6 +59,7 @@ public sealed class SharedImageContext
 
             try
             {
+                System.Threading.Interlocked.Increment(ref _snapshotCloneCount);
                 return _image.Clone();
             }
             catch

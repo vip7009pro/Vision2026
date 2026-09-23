@@ -165,7 +165,7 @@ public partial class ImageViewerControl : UserControl
 
         PART_Overlay.KeyDown += OverlayOnKeyDown;
 
-        PART_Overlay.SizeChanged += (_, __) => RedrawOverlays();
+        PART_Overlay.SizeChanged += (_, __) => RequestRedrawOverlays();
 
         Loaded += (_, __) => RedrawOverlays();
 
@@ -432,7 +432,7 @@ public partial class ImageViewerControl : UserControl
         PART_FastOverlay.ViewScale = Math.Max(0.001, scale);
 
         UpdateInfoText();
-        RedrawOverlays();
+        RequestRedrawOverlays();
     }
 
     public void ZoomIn(double factor = 1.25)
@@ -443,7 +443,7 @@ public partial class ImageViewerControl : UserControl
         m.ScaleAt(factor, factor, cx, cy);
         _transform.Matrix = m;
         UpdateInfoText();
-        RedrawOverlays();
+        RequestRedrawOverlays();
     }
 
     public void ZoomOut(double factor = 1.25)
@@ -454,7 +454,7 @@ public partial class ImageViewerControl : UserControl
         m.ScaleAt(1.0 / factor, 1.0 / factor, cx, cy);
         _transform.Matrix = m;
         UpdateInfoText();
-        RedrawOverlays();
+        RequestRedrawOverlays();
     }
 
     public void ResetView(double targetScale)
@@ -497,7 +497,7 @@ public partial class ImageViewerControl : UserControl
         PART_FastOverlay.ViewScale = Math.Max(0.001, targetScale);
 
         UpdateInfoText();
-        RedrawOverlays();
+        RequestRedrawOverlays();
     }
 
     private Point? _lastMousePos;
@@ -638,7 +638,7 @@ public partial class ImageViewerControl : UserControl
         _transform.Matrix = m;
 
         UpdateInfoText();
-        RedrawOverlays();
+        RequestRedrawOverlays();
         e.Handled = true;
     }
 
@@ -693,7 +693,7 @@ public partial class ImageViewerControl : UserControl
             if (!string.Equals(_hoverRoiLabel, hover, StringComparison.OrdinalIgnoreCase))
             {
                 _hoverRoiLabel = hover;
-                RedrawOverlays();
+                RequestRedrawOverlays();
             }
         }
     }
@@ -750,11 +750,13 @@ public partial class ImageViewerControl : UserControl
         set => SetValue(ActiveRoiLabelProperty, value);
     }
 
+    private bool _redrawPending;
+
     private static void OnActiveRoiLabelChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
     {
         var c = (ImageViewerControl)d;
         c._activeRoiLabel = e.NewValue as string;
-        c.Dispatcher.BeginInvoke(new Action(c.RedrawOverlays), System.Windows.Threading.DispatcherPriority.Render);
+        c.RequestRedrawOverlays();
     }
 
     public IEnumerable<OverlayItem>? OverlayItems
@@ -1110,6 +1112,36 @@ public partial class ImageViewerControl : UserControl
             RoiDeletedCommand.Execute(label);
             e.Handled = true;
         }
+    }
+
+    /// <summary>
+    /// PERFORMANCE PHASE 4: gộp (coalesce) nhiều yêu cầu RedrawOverlays() phát sinh trong cùng một
+    /// frame render thành ĐÚNG 1 lần vẽ. Trước đây mỗi sự kiện zoom/hover/resize đều Clear và tạo lại
+    /// toàn bộ handle của lớp PART_Overlay ngay lập tức => tốn CPU khi thao tác dồn dập.
+    ///
+    /// LƯU Ý: KHÔNG dùng hàm này cho các thao tác "commit" ROI (nhả chuột sau khi kéo/resize/xoay),
+    /// vì ở đó cần vẽ lại NGAY để tránh chớp ROI cũ. Các chỗ đó vẫn gọi RedrawOverlays() trực tiếp.
+    /// </summary>
+    private void RequestRedrawOverlays()
+    {
+        if (_redrawPending)
+        {
+            return;
+        }
+
+        _redrawPending = true;
+        Dispatcher.BeginInvoke(new Action(() =>
+        {
+            _redrawPending = false;
+            try
+            {
+                RedrawOverlays();
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[RequestRedrawOverlays] {ex.Message}");
+            }
+        }), System.Windows.Threading.DispatcherPriority.Render);
     }
 
     private void RedrawOverlays()
