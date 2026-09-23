@@ -16,6 +16,35 @@
         <converters:ToolToIconConverter x:Key="ToolToIcon" />
         <converters:ToolToColorConverter x:Key="ToolToColor" />
         <converters:EnumToVisibilityConverter x:Key="EnumToVis" />
+
+        <!-- ===== Style dùng chung cho khu vực Dashboard kết quả (theme-adaptive: đọc được cả Light & Dark) ===== -->
+        <!-- Thẻ bao từng khối thông tin -->
+        <Style x:Key="DashCardStyle" TargetType="Border">
+            <Setter Property="Background" Value="{DynamicResource PanelAltBackgroundBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="6" />
+            <Setter Property="Margin" Value="0,0,0,8" />
+        </Style>
+        <!-- Thanh tiêu đề của từng khối (có sọc màu accent bên trái) -->
+        <Style x:Key="DashHeaderTextStyle" TargetType="TextBlock">
+            <Setter Property="FontWeight" Value="Bold" />
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+        </Style>
+        <Style x:Key="DashChipLabelStyle" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="9.5" />
+            <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
+            <Setter Property="HorizontalAlignment" Value="Center" />
+        </Style>
+        <Style x:Key="DashChipValueStyle" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="FontWeight" Value="Bold" />
+            <Setter Property="HorizontalAlignment" Value="Center" />
+            <Setter Property="Margin" Value="0,1,0,0" />
+        </Style>
     </UserControl.Resources>
 
     <UserControl.InputBindings>
@@ -416,6 +445,19 @@
                     </Border>
                 </StackPanel>
             </Border>
+
+            <!-- 4b. Reset Phiên & Hàng Đợi (đặt ngay cạnh thanh Queue) -->
+            <Button DockPanel.Dock="Right"
+                    Command="{Binding ResetSessionAndQueueCommand}"
+                    Margin="6,0,0,0" Padding="9,4" Height="26"
+                    Background="#B23A48" Foreground="White" BorderThickness="0"
+                    VerticalAlignment="Center" FontWeight="SemiBold"
+                    ToolTip="Reset phiên làm việc: xả sạch hàng đợi (Queue), đưa Count &amp; thanh 20 con hàng gần nhất về 0, chốt phiên 'Lịch sử kiểm tra' hiện tại và mở phiên MỚI.">
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <TextBlock Text="🔄" FontSize="12" VerticalAlignment="Center" Margin="0,0,4,0" />
+                    <TextBlock Text="Reset" FontSize="11" FontWeight="SemiBold" VerticalAlignment="Center" />
+                </StackPanel>
+            </Button>
 
             <!-- 5. System Monitor (RAM & Multi-Core CPU Performance) -->
             <Border DockPanel.Dock="Right" Background="{DynamicResource PanelBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="8" Padding="6,3" VerticalAlignment="Center" Margin="6,0,0,0" ToolTip="{Binding SystemMonitorToolTip}">
@@ -4579,29 +4621,94 @@
                         <RowDefinition Height="*" />
                     </Grid.RowDefinitions>
 
-                    <!-- Status Pill Badge & Summary Card -->
-                    <Border Grid.Row="0" Padding="10,6" CornerRadius="8" Margin="0,0,0,6"
-                            Background="{Binding ResultBackgroundBrush}"
+                    <!-- ═══ Thẻ tổng kết kết quả (OK/NG + Count + Tổng thời gian) — theme-adaptive ═══ -->
+                    <Border Grid.Row="0" CornerRadius="6" Margin="0,0,0,8"
+                            Background="{DynamicResource PanelAltBackgroundBrush}"
                             BorderBrush="{Binding ResultBorderBrush}"
-                            BorderThickness="1">
+                            BorderThickness="1.5">
                         <Grid>
                             <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="5" />
                                 <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="Auto" />
                             </Grid.ColumnDefinitions>
 
-                            <TextBlock Text="{Binding ResultStatusText}" FontSize="24" FontWeight="Bold" Foreground="{Binding ResultForegroundBrush}" VerticalAlignment="Center" Margin="0,0,12,0"/>
+                            <!-- Sọc accent đổi màu theo trạng thái OK / NG / Chờ kiểm tra -->
+                            <Border Grid.Column="0" Background="{Binding ResultForegroundBrush}" CornerRadius="5,0,0,5" />
 
-                            <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                                <TextBlock Text="{Binding OriginScoreText}" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource TextBrush}" />
-                                <TextBlock Text="{Binding NgReasonsText}" FontSize="10" Foreground="#D32F2F" TextWrapping="Wrap" MaxHeight="36" Visibility="{Binding IsNg, Converter={StaticResource BoolToVis}}" />
-                            </StackPanel>
+                            <StackPanel Grid.Column="1" Margin="12,9,12,9">
+                                <!-- Hàng 1: Trạng thái lớn + các ô chỉ số -->
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
 
-                            <StackPanel Grid.Column="2" VerticalAlignment="Center" HorizontalAlignment="Right">
-                                <TextBlock Text="{Binding LastResult.Timings.TotalMs, StringFormat='Total: {0} ms'}" Foreground="#4CAF50" FontWeight="Bold" FontSize="13" HorizontalAlignment="Right" />
-                                <TextBlock Text="{Binding ProcessedImageCount, StringFormat='Count: {0}'}" Foreground="{DynamicResource TextBrush}" FontWeight="SemiBold" FontSize="11" HorizontalAlignment="Right" Margin="0,1,0,0" />
-                                <TextBlock Text="{Binding ContinuousElapsedAndSpeedText}" Foreground="{DynamicResource TextBrush}" FontSize="10.5" HorizontalAlignment="Right" Margin="0,1,0,0" />
+                                    <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                                        <TextBlock Text="{Binding ResultStatusText}"
+                                                   FontSize="30" FontWeight="Bold"
+                                                   Foreground="{Binding ResultForegroundBrush}" />
+                                        <TextBlock Text="{Binding OriginScoreText}"
+                                                   FontSize="11" FontWeight="SemiBold"
+                                                   Foreground="{DynamicResource TextMutedBrush}"
+                                                   TextWrapping="Wrap" Margin="0,3,0,0">
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock">
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding OriginScoreText}" Value="">
+                                                            <Setter Property="Visibility" Value="Collapsed" />
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
+                                        </TextBlock>
+                                    </StackPanel>
+
+                                    <UniformGrid Grid.Column="1" Columns="3" VerticalAlignment="Center">
+                                        <Border Margin="2,0" Padding="7,4" CornerRadius="4"
+                                                Background="{DynamicResource PanelBackgroundBrush}"
+                                                BorderBrush="#4CAF50" BorderThickness="1">
+                                            <StackPanel>
+                                                <TextBlock Text="TỔNG (ms)" Style="{StaticResource DashChipLabelStyle}" />
+                                                <TextBlock Text="{Binding LastResult.Timings.TotalMs, StringFormat='{}{0:0.0}'}"
+                                                           Style="{StaticResource DashChipValueStyle}" Foreground="#4CAF50" />
+                                            </StackPanel>
+                                        </Border>
+                                        <Border Margin="2,0" Padding="7,4" CornerRadius="4"
+                                                Background="{DynamicResource PanelBackgroundBrush}"
+                                                BorderBrush="{DynamicResource AccentBrush}" BorderThickness="1">
+                                            <StackPanel>
+                                                <TextBlock Text="COUNT" Style="{StaticResource DashChipLabelStyle}" />
+                                                <TextBlock Text="{Binding ProcessedImageCount}"
+                                                           Style="{StaticResource DashChipValueStyle}"
+                                                           Foreground="{DynamicResource TextBrush}" />
+                                            </StackPanel>
+                                        </Border>
+                                        <Border Margin="2,0" Padding="7,4" CornerRadius="4"
+                                                Background="{DynamicResource PanelBackgroundBrush}"
+                                                BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1">
+                                            <StackPanel>
+                                                <TextBlock Text="YIELD 20" Style="{StaticResource DashChipLabelStyle}" />
+                                                <TextBlock Text="{Binding RecentPartsYieldText}"
+                                                           Style="{StaticResource DashChipValueStyle}"
+                                                           Foreground="{DynamicResource TextBrush}" />
+                                            </StackPanel>
+                                        </Border>
+                                    </UniformGrid>
+                                </Grid>
+
+                                <!-- Hàng 2: Banner chi tiết lỗi — chỉ hiện khi NG, dùng chữ trên nền đỏ đặc để đọc được ở mọi theme -->
+                                <Border Margin="0,8,0,0" Padding="9,6" CornerRadius="4"
+                                        Background="#26EF5350" BorderBrush="#80EF5350" BorderThickness="1"
+                                        Visibility="{Binding IsNg, Converter={StaticResource BoolToVis}}">
+                                    <StackPanel>
+                                        <Border Background="#E53935" CornerRadius="3" Padding="6,1" HorizontalAlignment="Left">
+                                            <TextBlock Text="⚠ CHI TIẾT LỖI (NG)" FontSize="10" FontWeight="Bold" Foreground="White" />
+                                        </Border>
+                                        <TextBlock Text="{Binding NgReasonsText}" FontSize="11"
+                                                   Foreground="{DynamicResource TextBrush}"
+                                                   TextWrapping="Wrap" Margin="0,5,0,0" />
+                                    </StackPanel>
+                                </Border>
                             </StackPanel>
                         </Grid>
                     </Border>
@@ -4609,22 +4716,68 @@
                     <!-- Scrollable inspection tables & runtime details -->
                     <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
                         <StackPanel Margin="2">
-                            <!-- Timing Breakdown Bar -->
-                            <WrapPanel Margin="0,0,0,8" TextElement.Foreground="{DynamicResource TextBrush}">
-                                <TextBlock Text="{Binding LastResult.Pass, StringFormat='PASS: {0}'}" FontWeight="Bold" Margin="0,0,10,0" />
-                                <TextBlock Text="{Binding LastResult.Timings.TotalMs, StringFormat='Total: {0}ms'}" Foreground="#4CAF50" FontWeight="Bold" Margin="0,0,10,0" />
-                                <TextBlock Text="{Binding LastResult.Timings.OriginMs, StringFormat='O: {0}ms'}" Margin="0,0,6,0" />
-                                <TextBlock Text="{Binding LastResult.Timings.PointsMs, StringFormat='P: {0}ms'}" Margin="0,0,6,0" />
-                                <TextBlock Text="{Binding LastResult.Timings.LinesMs, StringFormat='L: {0}ms'}" Margin="0,0,6,0" />
-                                <TextBlock Text="{Binding LastResult.Timings.DistancesMs, StringFormat='D: {0}ms'}" Margin="0,0,6,0" />
-                                <TextBlock Text="{Binding LastResult.Timings.ConditionsMs, StringFormat='Cnd: {0}ms'}" Margin="0,0,6,0" />
-                                <TextBlock Text="{Binding LastResult.Timings.DefectsMs, StringFormat='Def: {0}ms'}" Margin="0,0,6,0" />
-                            </WrapPanel>
+                            <!-- Thẻ phân bổ thời gian từng tầng xử lý -->
+                            <Border Style="{StaticResource DashCardStyle}" Padding="8,6">
+                                <StackPanel>
+                                    <TextBlock Text="⏱ PHÂN BỔ THỜI GIAN (TIMING BREAKDOWN)" Style="{StaticResource DashHeaderTextStyle}" Margin="0,0,0,6" />
+                                    <UniformGrid Columns="7">
+                                        <Border Margin="2,0" Padding="4,3" CornerRadius="4" Background="{DynamicResource PanelBackgroundBrush}" BorderBrush="#4CAF50" BorderThickness="1">
+                                            <StackPanel>
+                                                <TextBlock Text="TỔNG" Style="{StaticResource DashChipLabelStyle}" />
+                                                <TextBlock Text="{Binding LastResult.Timings.TotalMs, StringFormat='{}{0:0.0}'}" Style="{StaticResource DashChipValueStyle}" Foreground="#4CAF50" />
+                                            </StackPanel>
+                                        </Border>
+                                        <Border Margin="2,0" Padding="4,3" CornerRadius="4" Background="{DynamicResource PanelBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1">
+                                            <StackPanel>
+                                                <TextBlock Text="Origin" Style="{StaticResource DashChipLabelStyle}" />
+                                                <TextBlock Text="{Binding LastResult.Timings.OriginMs, StringFormat='{}{0:0.0}'}" Style="{StaticResource DashChipValueStyle}" Foreground="{DynamicResource TextBrush}" />
+                                            </StackPanel>
+                                        </Border>
+                                        <Border Margin="2,0" Padding="4,3" CornerRadius="4" Background="{DynamicResource PanelBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1">
+                                            <StackPanel>
+                                                <TextBlock Text="Point" Style="{StaticResource DashChipLabelStyle}" />
+                                                <TextBlock Text="{Binding LastResult.Timings.PointsMs, StringFormat='{}{0:0.0}'}" Style="{StaticResource DashChipValueStyle}" Foreground="{DynamicResource TextBrush}" />
+                                            </StackPanel>
+                                        </Border>
+                                        <Border Margin="2,0" Padding="4,3" CornerRadius="4" Background="{DynamicResource PanelBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1">
+                                            <StackPanel>
+                                                <TextBlock Text="Line" Style="{StaticResource DashChipLabelStyle}" />
+                                                <TextBlock Text="{Binding LastResult.Timings.LinesMs, StringFormat='{}{0:0.0}'}" Style="{StaticResource DashChipValueStyle}" Foreground="{DynamicResource TextBrush}" />
+                                            </StackPanel>
+                                        </Border>
+                                        <Border Margin="2,0" Padding="4,3" CornerRadius="4" Background="{DynamicResource PanelBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1">
+                                            <StackPanel>
+                                                <TextBlock Text="Distance" Style="{StaticResource DashChipLabelStyle}" />
+                                                <TextBlock Text="{Binding LastResult.Timings.DistancesMs, StringFormat='{}{0:0.0}'}" Style="{StaticResource DashChipValueStyle}" Foreground="{DynamicResource TextBrush}" />
+                                            </StackPanel>
+                                        </Border>
+                                        <Border Margin="2,0" Padding="4,3" CornerRadius="4" Background="{DynamicResource PanelBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1">
+                                            <StackPanel>
+                                                <TextBlock Text="Condition" Style="{StaticResource DashChipLabelStyle}" />
+                                                <TextBlock Text="{Binding LastResult.Timings.ConditionsMs, StringFormat='{}{0:0.0}'}" Style="{StaticResource DashChipValueStyle}" Foreground="{DynamicResource TextBrush}" />
+                                            </StackPanel>
+                                        </Border>
+                                        <Border Margin="2,0" Padding="4,3" CornerRadius="4" Background="{DynamicResource PanelBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1">
+                                            <StackPanel>
+                                                <TextBlock Text="Defect" Style="{StaticResource DashChipLabelStyle}" />
+                                                <TextBlock Text="{Binding LastResult.Timings.DefectsMs, StringFormat='{}{0:0.0}'}" Style="{StaticResource DashChipValueStyle}" Foreground="{DynamicResource TextBrush}" />
+                                            </StackPanel>
+                                        </Border>
+                                    </UniformGrid>
+                                </StackPanel>
+                            </Border>
 
                             <!-- Section 1: Spec Measurements Table -->
-                            <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" Padding="4" Margin="0,0,0,8" Background="{DynamicResource PanelBackgroundBrush}">
+                            <Border Style="{StaticResource DashCardStyle}" Padding="6">
                                 <StackPanel>
-                                    <TextBlock Text="📏 BẢNG KẾT QUẢ ĐO ĐẠC (SPEC MEASUREMENTS)" FontWeight="Bold" FontSize="11" Margin="2,2,0,4" Foreground="{DynamicResource TextBrush}" />
+                                    <Grid Margin="0,0,0,6">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="4" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <Border Grid.Column="0" Background="#2196F3" CornerRadius="2" Margin="0,0,7,0" />
+                                        <TextBlock Grid.Column="1" Text="📏 BẢNG KẾT QUẢ ĐO ĐẠC (SPEC MEASUREMENTS)" Style="{StaticResource DashHeaderTextStyle}" />
+                                    </Grid>
                                     <DataGrid ItemsSource="{Binding SpecResults}" AutoGenerateColumns="False" CanUserAddRows="False" GridLinesVisibility="Horizontal" MinHeight="80" MaxHeight="220" VerticalScrollBarVisibility="Auto">
                                         <DataGrid.RowStyle>
                                             <Style TargetType="DataGridRow">
@@ -4669,9 +4822,16 @@
                             </Border>
 
                             <!-- Section 2: Conditions Logic Table -->
-                            <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" Padding="4" Margin="0,0,0,8" Background="{DynamicResource PanelBackgroundBrush}">
+                            <Border Style="{StaticResource DashCardStyle}" Padding="6">
                                 <StackPanel>
-                                    <TextBlock Text="❓ ĐIỀU KIỆN LOGIC (CONDITIONS LOGIC)" FontWeight="Bold" FontSize="11" Margin="2,2,0,4" Foreground="{DynamicResource TextBrush}" />
+                                    <Grid Margin="0,0,0,6">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="4" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <Border Grid.Column="0" Background="#FF9800" CornerRadius="2" Margin="0,0,7,0" />
+                                        <TextBlock Grid.Column="1" Text="❓ ĐIỀU KIỆN LOGIC (CONDITIONS LOGIC)" Style="{StaticResource DashHeaderTextStyle}" />
+                                    </Grid>
                                     <DataGrid ItemsSource="{Binding LastResult.Conditions}" AutoGenerateColumns="False" CanUserAddRows="False" GridLinesVisibility="Horizontal" MinHeight="60" MaxHeight="160" VerticalScrollBarVisibility="Auto">
                                         <DataGrid.Columns>
                                             <DataGridTextColumn Header="Name" Binding="{Binding Name}" Width="95" />
@@ -4684,9 +4844,16 @@
                             </Border>
 
                             <!-- Section 3: Per-Tool Execution Timings -->
-                            <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" Padding="4" Margin="0,0,0,8" Background="{DynamicResource PanelBackgroundBrush}">
+                            <Border Style="{StaticResource DashCardStyle}" Padding="6">
                                 <StackPanel>
-                                    <TextBlock Text="⏱ THỜI GIAN CHẠY TỪNG TOOL (PER-TOOL TIMINGS)" FontWeight="Bold" FontSize="11" Margin="2,2,0,4" Foreground="{DynamicResource TextBrush}" />
+                                    <Grid Margin="0,0,0,6">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="4" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <Border Grid.Column="0" Background="#4CAF50" CornerRadius="2" Margin="0,0,7,0" />
+                                        <TextBlock Grid.Column="1" Text="⏱ THỜI GIAN CHẠY TỪNG TOOL (PER-TOOL TIMINGS)" Style="{StaticResource DashHeaderTextStyle}" />
+                                    </Grid>
                                     <DataGrid ItemsSource="{Binding ToolTimings}" AutoGenerateColumns="False" CanUserAddRows="False" GridLinesVisibility="Horizontal" MinHeight="60" MaxHeight="180" VerticalScrollBarVisibility="Auto">
                                         <DataGrid.Columns>
                                             <DataGridTextColumn Header="Tool Node Name" Binding="{Binding Name}" Width="*" />
@@ -4697,9 +4864,16 @@
                             </Border>
 
                             <!-- Section 4: Code Detection & SurfaceCompare Debugger -->
-                            <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" Padding="4" Margin="0,0,0,4" Background="{DynamicResource PanelBackgroundBrush}">
+                            <Border Style="{StaticResource DashCardStyle}" Padding="6">
                                 <StackPanel>
-                                    <TextBlock Text="📷 ĐỌC MÃ VẠCH / QR &amp; SURFACE COMPARE DEBUG" FontWeight="Bold" FontSize="11" Margin="2,2,0,4" Foreground="{DynamicResource TextBrush}" />
+                                    <Grid Margin="0,0,0,6">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="4" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <Border Grid.Column="0" Background="#9C27B0" CornerRadius="2" Margin="0,0,7,0" />
+                                        <TextBlock Grid.Column="1" Text="📷 ĐỌC MÃ VẠCH / QR &amp; SURFACE COMPARE DEBUG" Style="{StaticResource DashHeaderTextStyle}" />
+                                    </Grid>
                                     
                                     <ItemsControl ItemsSource="{Binding CodeDetectionResults}" Margin="0,0,0,6">
                                         <ItemsControl.ItemTemplate>

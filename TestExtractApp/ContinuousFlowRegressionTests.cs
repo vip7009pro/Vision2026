@@ -17,6 +17,9 @@ namespace TestExtractApp;
 /// Kiểm thử hồi quy cho luồng Run Continuous Flow:
 ///  - Không mất kết quả kiểm tra CUỐI khi bấm STOP (InspectionLogService phải drain hàng đợi trước khi chốt phiên).
 ///  - Hợp đồng sở hữu Mat của SharedImageContext.SetImage(transferOwnership: true) — không clone thừa, không rò rỉ.
+///  - Mọi luồng (Folder/Run Once/PLC) đều ghi vào Lịch sử kiểm tra.
+///  - Thanh "20 con hàng gần nhất" tăng ĐÚNG 1 nấc cho mỗi lần kiểm tra (không nhảy 2 do render 2 lần).
+///  - Thanh Queue phải khớp 16 nấc thiết kế trên giao diện.
 /// </summary>
 public static class ContinuousFlowRegressionTests
 {
@@ -28,7 +31,7 @@ public static class ContinuousFlowRegressionTests
 
         Test_01_InspectionLog_DoesNotLoseLastPartsOnStop();
         Test_02_SharedImageContext_TransferOwnershipContract();
-        Test_03_FolderFlow_LogsResultToInspectionHistory();
+        Test_03_FolderFlow_LogsResult_AndRecentBarAdvancesByOne();
 
         Console.WriteLine("✅ ALL CONTINUOUS FLOW & LOGGING REGRESSION TESTS PASSED!");
         Console.WriteLine("=========================================================\n");
@@ -160,11 +163,11 @@ public static class ContinuousFlowRegressionTests
     }
 
     // ==================================================================
-    // 3. Chạy luồng FOLDER (không phải Camera) cũng phải ghi vào Lịch sử kiểm tra
+    // 3. Luồng FOLDER: ghi Lịch sử kiểm tra + thanh 20 nấc chỉ tăng ĐÚNG 1 nấc/lần
     // ==================================================================
-    private static void Test_03_FolderFlow_LogsResultToInspectionHistory()
+    private static void Test_03_FolderFlow_LogsResult_AndRecentBarAdvancesByOne()
     {
-        Console.Write("--- [3/3] Luồng FOLDER cũng phải ghi kết quả vào Lịch sử kiểm tra... ");
+        Console.Write("--- [3/3] Luồng FOLDER ghi Lịch sử + thanh 20 nấc tăng đúng 1 nấc/lần... ");
 
         var tempDir = Path.Combine(Path.GetTempPath(), "Vision2026_FolderLog_" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(tempDir);
@@ -174,12 +177,6 @@ public static class ContinuousFlowRegressionTests
 
         try
         {
-            var imgPath = Path.Combine(tempDir, "part_001.png");
-            using (var img = new Mat(120, 160, MatType.CV_8UC3, Scalar.All(180)))
-            {
-                Cv2.ImWrite(imgPath, img);
-            }
-
             var config = new VisionConfig
             {
                 ProductCode = "PERF_FOLDER_LOG",
@@ -201,16 +198,29 @@ public static class ContinuousFlowRegressionTests
 
             vm.InitializeWithConfig(config);
             vm.CurrentTempWorkingDir = tempDir;
+            vm.ResetRecentPartsHistory();
 
-            // Gọi đúng method mà StartFolderFlow() dùng cho mỗi ảnh trong thư mục.
             var method = typeof(ToolEditorViewModel).GetMethod(
                 "RunSingleFlowFromImageFileAsync",
                 BindingFlags.Instance | BindingFlags.NonPublic)
                 ?? throw new Exception("Không tìm thấy method 'RunSingleFlowFromImageFileAsync'");
 
-            var task = (Task?)method.Invoke(vm, new object[] { imgPath, "CAM1" })
-                       ?? throw new Exception("RunSingleFlowFromImageFileAsync không trả về Task");
-            task.GetAwaiter().GetResult();
+            // Chạy 2 con hàng (giống StartFolderFlow duyệt 2 ảnh trong thư mục).
+            // Bơm thẳng backing field: setter của IsRunningFolderFlow cần _plcManagerService (không có trong test).
+            InjectField(vm, "_isRunningFolderFlow", true);
+            for (var i = 1; i <= 2; i++)
+            {
+                var imgPath = Path.Combine(tempDir, $"part_{i:000}.png");
+                using (var img = new Mat(120, 160, MatType.CV_8UC3, Scalar.All(150 + i * 10)))
+                {
+                    Cv2.ImWrite(imgPath, img);
+                }
+
+                var task = (Task?)method.Invoke(vm, new object[] { imgPath, "CAM1" })
+                           ?? throw new Exception("RunSingleFlowFromImageFileAsync không trả về Task");
+                task.GetAwaiter().GetResult();
+            }
+            InjectField(vm, "_isRunningFolderFlow", false);
 
             var log = vm.InspectionLogService;
             session = log.CurrentSession;
@@ -220,12 +230,17 @@ public static class ContinuousFlowRegressionTests
             log.EndSessionAsync().GetAwaiter().GetResult();
 
             var parts = log.GetPartsForSessionAsync(session!.Id).GetAwaiter().GetResult();
-            Assert(parts.Count == 1,
-                $"Lịch sử kiểm tra phải có đúng 1 con hàng cho luồng Folder, thực tế {parts.Count}");
-            Assert(parts[0].PartIndex == 1,
-                $"PartIndex phải là 1 (1-based), thực tế {parts[0].PartIndex}");
+            Assert(parts.Count == 2,
+                $"Lịch sử kiểm tra phải có đúng 2 con hàng cho luồng Folder, thực tế {parts.Count}");
+            Assert(parts[0].PartIndex == 1 && parts[1].PartIndex == 2,
+                $"PartIndex phải là 1 và 2 (1-based), thực tế {parts[0].PartIndex} và {parts[1].PartIndex}");
 
-            Console.WriteLine($"PASSED (phiên '{session.SessionCode}', {parts.Count} part được ghi)");
+            // 🔴 Hồi quy thanh 20 nấc: trước đây PushRecentPartInspectionResult() nằm trong hàm RENDER
+            // UpdateResultSummary() (chạy 2 lần/lần kiểm tra) nên 2 con hàng => nhảy 4 nấc.
+            Assert(vm.RecentPartsTotalCount == 2,
+                $"Thanh 20 con hàng gần nhất phải tăng ĐÚNG 1 nấc/lần kiểm tra (2 lần => 2), thực tế {vm.RecentPartsTotalCount}");
+
+            Console.WriteLine($"PASSED (phiên '{session.SessionCode}', {parts.Count} part, thanh 20 nấc = {vm.RecentPartsTotalCount})");
         }
         finally
         {
@@ -243,7 +258,40 @@ public static class ContinuousFlowRegressionTests
         }
     }
 
+    // ==================================================================
+    // 4. Thanh queue phải khớp 16 nấc thiết kế trên giao diện
+    //    (chi tiết hơn được kiểm trong ToolEditorAndOqcUxTests)
+    // ==================================================================
+    private static void Test_04_QueueCapacity_Matches16SlotUi()
+    {
+        Console.Write("--- [4/4] Thanh Queue phải là 16 nấc khớp giao diện (không phải 0/4)... ");
+
+        var vm = new ToolEditorViewModel();
+        vm.NewGraphCommand.Execute(null);
+
+        Assert(vm.QueueCapacity == 16,
+            $"QueueCapacity mặc định phải là 16 (khớp 16 slot trên UI), thực tế {vm.QueueCapacity}");
+
+        vm.QueueCurrentCount = 0;
+        Assert(vm.QueueStatusText == "0/16",
+            $"Nhãn queue phải là '0/16', thực tế '{vm.QueueStatusText}'");
+
+        // Đổ đầy 16 nấc: slot cuối (15) chỉ sáng khi count > 15.
+        vm.QueueCurrentCount = 16;
+        Assert(vm.QueueSlot15Active,
+            "Slot thứ 16 phải sáng khi hàng đợi đầy 16/16");
+        Assert(vm.QueueStatusText == "16/16",
+            $"Nhãn queue phải là '16/16', thực tế '{vm.QueueStatusText}'");
+
+        vm.QueueCurrentCount = 15;
+        Assert(!vm.QueueSlot15Active && vm.QueueSlot14Active,
+            "Với 15 con hàng, chỉ 15 slot đầu sáng");
+
+        Console.WriteLine("PASSED");
+    }
+
     private static InspectionService CreateInspectionService()
+
     {
         return new InspectionService(
             new ImagePreprocessor(),

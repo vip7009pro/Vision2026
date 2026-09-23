@@ -388,7 +388,11 @@ namespace VisionInspectionApp.UI.ViewModels
                 NgReasonsText = string.Join("\n", reasons);
             }
 
-            PushRecentPartInspectionResult(res.Pass);
+            // ⚠️ KHÔNG đẩy vào thanh "20 con hàng gần nhất" ở đây nữa!
+            // UpdateResultSummary() là hàm RENDER, được gọi từ RefreshInspectionDashboard(), mà hàm này
+            // lại chạy 2 lần cho mỗi lần kiểm tra (1 lần trực tiếp + 1 lần qua setter LastResult)
+            // => thanh 20 nấc bị nhảy 2 nấc mỗi lần Run Once.
+            // Việc đẩy lịch sử nay do PublishInspectionResult() đảm nhiệm, gọi ĐÚNG 1 LẦN cho mỗi kết quả.
         }
 
         public string SpecResultsValueHeader => (_config is not null && _config.PixelsPerMm > 0 && Math.Abs(_config.PixelsPerMm - 1.0) > 1e-6) ? "Value (mm)" : "Value (px)";

@@ -104,6 +104,14 @@
                                 Height="30" Padding="8,0"
                                 FontSize="11.5" FontWeight="SemiBold"
                                 ToolTip="Mở tệp Vision Job (.job) thủ công từ máy tính." />
+
+                        <Button Content="🔒 Đóng Job"
+                                Command="{Binding CloseLoadedJobCommand}"
+                                Height="30" Padding="8,0" Margin="6,0,0,0"
+                                FontSize="11.5" FontWeight="SemiBold"
+                                Background="#B23A48" Foreground="White" BorderThickness="0"
+                                Visibility="{Binding IsJobLoadedFromManager, Converter={StaticResource BoolToVis}}"
+                                ToolTip="Đóng Job đang nạp và xóa các dòng lịch sử ở trạng thái 'Đã nạp Job' (nạp Job nhưng chưa từng được kiểm tra)." />
                     </StackPanel>
 
                     <!-- Center: Input Box & Mode Checkboxes -->

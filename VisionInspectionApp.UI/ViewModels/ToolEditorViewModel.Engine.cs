@@ -2218,12 +2218,10 @@ namespace VisionInspectionApp.UI.ViewModels
         }
 
         /// <summary>
-        /// Sức chứa hàng đợi frame cho Run Continuous.
-        /// Mỗi slot giữ 1 bản clone ảnh full-size (~60MB với ảnh 20MP) => sức chứa càng lớn càng tốn RAM.
-        /// Hàng đợi sâu KHÔNG giúp tăng thông lượng (worker vẫn là nút cố chế), chỉ làm tăng độ trễ và
-        /// khiến worker xử lý ảnh cũ hơn => giảm còn 4 slot (~240MB) để tối ưu bộ nhớ & độ trễ.
+        /// Sức chứa hàng đợi frame cho Run Continuous (tương ứng thanh 16 nấc trên giao diện).
+        /// Mỗi slot giữ 1 bản clone ảnh full-size (~60MB với ảnh 20MP) nên sức chứa càng lớn càng tốn RAM.
         /// </summary>
-        public int QueueCapacity { get; set; } = 4;
+        public int QueueCapacity { get; set; } = 16;
 
         [ObservableProperty]
         private string _queueStatusText = "0/16";
@@ -3282,6 +3280,98 @@ namespace VisionInspectionApp.UI.ViewModels
             }
         }
 
+        /// <summary>
+        /// Công bố một kết quả kiểm tra vừa hoàn thành: ghi vào Lịch sử kiểm tra +
+        /// đẩy 1 nấc vào thanh "20 con hàng gần nhất" (OK/NG).
+        ///
+        /// ✅ PHẢI gọi ĐÚNG MỘT LẦN cho mỗi kết quả (trước khi tăng ProcessedImageCount).
+        /// Trước đây việc đẩy nấc nằm trong UpdateResultSummary() — vốn là hàm render chạy 2 lần/lần kiểm tra
+        /// => thanh 20 nấc bị nhảy 2 nấc mỗi lần Run Once.
+        /// </summary>
+        private void PublishInspectionResult(InspectionResult? result)
+        {
+            if (result is null) return;
+
+            LogInspectionResultToHistory(result);
+            PushRecentPartInspectionResult(result.Pass);
+        }
+
+        /// <summary>
+        /// Nút "Reset Phiên &amp; Hàng Đợi" cạnh thanh Queue:
+        ///  - Xả sạch các frame đang chờ trong hàng đợi (giải phóng Mat, không rò rỉ bộ nhớ).
+        ///  - Đưa các bộ đếm về 0 (Count, frame rớt, thanh 20 con hàng gần nhất).
+        ///  - Chốt phiên trong "Lịch sử kiểm tra &amp; SPC/CPK" và mở PHIÊN MỚI để số liệu SPC/CPK bắt đầu lại.
+        /// </summary>
+        [RelayCommand]
+        private void ResetSessionAndQueue()
+        {
+            var confirm = MessageBox.Show(
+                "Reset phiên làm việc hiện tại?\n\n" +
+                "  • Hàng đợi (Queue) sẽ được xả sạch.\n" +
+                "  • Count sản phẩm, số frame rớt và thanh 20 con hàng gần nhất về 0.\n" +
+                "  • Phiên trong 'Lịch sử kiểm tra & SPC/CPK' sẽ được CHỐT và mở phiên MỚI (số liệu bắt đầu lại từ 0).",
+                "Xác Nhận Reset Phiên & Hàng Đợi",
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Question);
+
+            if (confirm != MessageBoxResult.Yes) return;
+
+            ResetQueueAndCounters();
+            _ = RestartInspectionLogSessionAsync();
+
+            StatusBarText = "🔄 Đã reset phiên làm việc: hàng đợi đã xả sạch, phiên Lịch sử kiểm tra mới đã mở.";
+        }
+
+        /// <summary>
+        /// Xả sạch hàng đợi frame đang chờ + đưa mọi bộ đếm/thanh trạng thái về 0.
+        /// Có thể gọi trực tiếp (không hỏi xác nhận) từ code hoặc test.
+        /// </summary>
+        public void ResetQueueAndCounters()
+        {
+            try
+            {
+                var channel = _industrialCameraFrameChannel;
+                if (channel is not null)
+                {
+                    // Đọc & Dispose từng envelope để KHÔNG rò rỉ Mat native của các frame bị bỏ.
+                    while (channel.Reader.TryRead(out var pendingEnvelope))
+                    {
+                        pendingEnvelope.Dispose();
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[ResetQueueAndCounters] Xả hàng đợi: {ex.Message}");
+            }
+
+            Interlocked.Exchange(ref _droppedContinuousFramesCount, 0);
+            ProcessedImageCount = 0;
+            QueueCurrentCount = 0;
+            UpdateQueueVisuals();
+            ResetRecentPartsHistory();
+            UpdateContinuousStats();
+        }
+
+        /// <summary>
+        /// Chốt phiên kiểm tra hiện tại (drain hàng đợi log rồi lưu) và mở phiên mới
+        /// để số liệu SPC/CPK của ca mới bắt đầu lại từ 0.
+        /// </summary>
+        public async Task RestartInspectionLogSessionAsync()
+        {
+            try
+            {
+                if (_inspectionLogService is null) return;
+
+                await _inspectionLogService.EndSessionAsync();
+                await _inspectionLogService.StartSessionAsync(GetEffectiveProductName(), CurrentJobFilePath, "-");
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[RestartInspectionLogSessionAsync] {ex.Message}");
+            }
+        }
+
         private async Task StartContinuousCameraFlow(ImageSourceDefinition sourceDef)
         {
             StopContinuousFlow();
@@ -3622,8 +3712,8 @@ namespace VisionInspectionApp.UI.ViewModels
                         }
                     }
 
-                    // Đẩy kết quả vào Background Logging Worker (Non-blocking queue)
-                    LogInspectionResultToHistory(inspectionResult);
+                    // Đẩy kết quả vào Background Logging Worker + thanh 20 con hàng gần nhất (gọi 1 lần)
+                    PublishInspectionResult(inspectionResult);
                 }
                 else
                 {
@@ -4031,14 +4121,20 @@ namespace VisionInspectionApp.UI.ViewModels
             }
 
             _lastRun = inspectionResult;
-            // ✅ FIX: ghi kết quả vào Lịch sử kiểm tra cho luồng Folder (trước đây bị bỏ qua hoàn toàn)
-            LogInspectionResultToHistory(inspectionResult);
+            // ✅ FIX: ghi vào Lịch sử kiểm tra + đẩy 1 nấc thanh 20 con hàng (trước đây luồng Folder bị bỏ qua)
+            PublishInspectionResult(inspectionResult);
             if (IsRunningFolderFlow)
             {
                 ProcessedImageCount++;
                 UpdateContinuousStats();
             }
-            RefreshInspectionDashboard(_lastRun);
+            // ✅ Tránh dựng dashboard 2 lần/frame: setter LastResult ở cuối hàm sẽ tự gọi
+            // RefreshInspectionDashboard(). Chỉ gọi trực tiếp khi reference không đổi
+            // (lúc đó setter không phát PropertyChanged nên dashboard sẽ không được cập nhật).
+            if (ReferenceEquals(LastResult, _lastRun))
+            {
+                RefreshInspectionDashboard(_lastRun);
+            }
             // Bắt buộc làm mới ĐỒNG BỘ trước khi bắn sự kiện hoàn thành kiểm tra.
             RefreshPreviewsNow();
             RaiseToolPropertyPanelsChanged();
@@ -4318,15 +4414,20 @@ namespace VisionInspectionApp.UI.ViewModels
                     _lastRunError = "Lỗi khi chạy Flow: " + ex.Message;
                 }
                 _lastRun = inspectionResult;
-                // ✅ FIX: ghi kết quả vào Lịch sử kiểm tra cho luồng Run Once / PLC Trigger
-                LogInspectionResultToHistory(inspectionResult);
+                // ✅ FIX: ghi Lịch sử kiểm tra + đẩy 1 nấc thanh 20 con hàng (Run Once / PLC Trigger)
+                PublishInspectionResult(inspectionResult);
                 UpdateNodeExecutionTimes();
                 if (IsRunningFolderFlow)
                 {
                     ProcessedImageCount++;
                     UpdateContinuousStats();
                 }
-                RefreshInspectionDashboard(_lastRun);
+                // ✅ Tránh dựng dashboard 2 lần/frame: setter LastResult ở cuối hàm sẽ tự gọi
+                // RefreshInspectionDashboard(). Chỉ gọi trực tiếp khi reference không đổi.
+                if (ReferenceEquals(LastResult, _lastRun))
+                {
+                    RefreshInspectionDashboard(_lastRun);
+                }
                 // Bắt buộc làm mới ĐỒNG BỘ trước khi bán sự kiện hoàn thành kiểm tra
                 // (OQC Scanner đọc FinalPreviewImage ngay sau sự kiện).
                 RefreshPreviewsNow();

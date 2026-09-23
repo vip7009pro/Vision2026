@@ -40,6 +40,7 @@
                     <TextBlock Text="Tổng số bản ghi: " VerticalAlignment="Center" Foreground="{DynamicResource TextMutedBrush}" />
                     <TextBlock x:Name="TxtRecordCount" Text="{Binding ScanHistory.Count, StringFormat='{}{0}'}" FontWeight="Bold" Foreground="#2196F3" VerticalAlignment="Center" Margin="0,0,12,0" />
                     <Button Content="📊 Xuất Excel (CSV)" Command="{Binding ExportToExcelCommand}" Padding="10,4" Height="26" Margin="0,0,6,0" ToolTip="Xuất toàn bộ lịch sử quét ra file CSV/Excel UTF-8" />
+                    <Button Content="🗑️ Xóa Dòng Đã Chọn" Click="BtnDeleteSelected_Click" Padding="10,4" Height="26" Margin="0,0,6,0" Background="#E65100" Foreground="White" FontWeight="SemiBold" ToolTip="Chọn 1 hoặc nhiều dòng (giữ Ctrl / Shift để chọn nhiều) rồi bấm nút này để xóa đúng những dòng đã chọn" />
                     <Button Content="🗑️ Xóa Lịch Sử" Command="{Binding ClearHistoryCommand}" Padding="10,4" Height="26" Background="#C62828" Foreground="White" FontWeight="SemiBold" ToolTip="Xóa toàn bộ lịch sử quét mã hiện tại" />
                 </StackPanel>
             </DockPanel>
@@ -53,13 +54,25 @@
                       IsReadOnly="True"
                       CanUserAddRows="False"
                       CanUserDeleteRows="False"
-                      SelectionMode="Single"
+                      SelectionMode="Extended"
+                      SelectionUnit="FullRow"
                       MouseDoubleClick="HistoryDataGrid_MouseDoubleClick"
                       GridLinesVisibility="Horizontal"
                       HeadersVisibility="Column"
                       Background="{DynamicResource PanelBackgroundBrush}"
                       Foreground="{DynamicResource TextBrush}">
                 <DataGrid.Columns>
+                    <DataGridTemplateColumn Header="" Width="38">
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate>
+                                <Button Content="🗑️"
+                                        Click="DeleteRowBtn_Click"
+                                        Padding="2,0" Height="20" Width="26" FontSize="11"
+                                        ToolTip="Xóa riêng dòng lịch sử này"
+                                        HorizontalAlignment="Center" VerticalAlignment="Center" />
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
                     <DataGridTextColumn Header="Thời gian" Binding="{Binding Time, StringFormat='HH:mm:ss dd/MM/yyyy'}" Width="135" />
                     <DataGridTextColumn Header="Mã Scan (Product)" Binding="{Binding ScannedCode}" Width="150" ElementStyle="{StaticResource BoldStyle}" />
                     <DataGridTextColumn Header="Tên Sản Phẩm" Binding="{Binding ProductName}" Width="140" ElementStyle="{StaticResource BoldStyle}" />
@@ -100,7 +113,7 @@
         <!-- Bottom Actions Bar -->
         <Border Grid.Row="2" Margin="0,10,0,0" Padding="0,6,0,0" BorderThickness="0,1,0,0" BorderBrush="{DynamicResource BorderBrush}">
             <DockPanel LastChildFill="False">
-                <TextBlock Text="💡 Mẹo: Nhấp đúp (Double-click) vào bất kỳ dòng nào để xem màn hình chi tiết đo đạc và ảnh kết quả."
+                <TextBlock Text="💡 Mẹo: Nhấp đúp (Double-click) vào bất kỳ dòng nào để xem màn hình chi tiết đo đạc và ảnh kết quả. Giữ Ctrl / Shift để chọn nhiều dòng cần xóa."
                            Foreground="{DynamicResource TextMutedBrush}"
                            VerticalAlignment="Center"
                            FontSize="11.5"

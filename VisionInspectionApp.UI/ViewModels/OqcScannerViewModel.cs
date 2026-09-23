@@ -1503,6 +1503,146 @@ public partial class OqcScannerViewModel : ObservableObject
         }
     }
 
+    // ────────────────────────────────────────────────────────────────────────
+    // Trạng thái "Đã nạp Job" = Job đã nạp nhưng CHƯA từng được kiểm tra.
+    // Các dòng này nằm mãi trong Lịch sử quét mã OQC => cần nút "Đóng Job" để dọn.
+    // ────────────────────────────────────────────────────────────────────────
+    private const string PendingJobResultText = "Đã nạp Job";
+
+    /// <summary>True nếu dòng lịch sử đang ở trạng thái "mới nạp Job nhưng chưa kiểm tra".</summary>
+    public static bool IsPendingJobEntry(OqcScanHistoryEntry? entry)
+    {
+        return entry is not null
+            && !string.IsNullOrWhiteSpace(entry.InspectResult)
+            && entry.InspectResult.Trim().Equals(PendingJobResultText, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Lọc ra các dòng lịch sử đang ở trạng thái "Đã nạp Job" (thuần logic, không phụ thuộc UI/DB).
+    /// </summary>
+    public static List<OqcScanHistoryEntry> FindPendingJobEntries(IEnumerable<OqcScanHistoryEntry>? history)
+    {
+        return history is null
+            ? new List<OqcScanHistoryEntry>()
+            : history.Where(IsPendingJobEntry).ToList();
+    }
+
+    /// <summary>
+    /// Xóa các dòng chỉ định khỏi danh sách lịch sử (thuần logic). Trả về số dòng đã xóa thực tế.
+    /// </summary>
+    public static int RemoveHistoryEntries(
+        IList<OqcScanHistoryEntry>? history,
+        IEnumerable<OqcScanHistoryEntry>? targets)
+    {
+        if (history is null || targets is null) return 0;
+
+        var toRemove = targets
+            .Where(t => t is not null && history.Contains(t))
+            .Distinct()
+            .ToList();
+
+        foreach (var entry in toRemove)
+        {
+            history.Remove(entry);
+        }
+
+        return toRemove.Count;
+    }
+
+    /// <summary>
+    /// Nút "Đóng Job" trên tab OQC Scanner: đóng Job đang nạp và XÓA các dòng lịch sử
+    /// còn nằm ở trạng thái "Đã nạp Job" (nạp Job nhưng không bao giờ được kiểm tra).
+    /// </summary>
+    [RelayCommand]
+    public void CloseLoadedJob()
+    {
+        var pendingEntries = FindPendingJobEntries(ScanHistory);
+
+        var confirmMessage = pendingEntries.Count > 0
+            ? $"Đóng Job đang nạp và xóa {pendingEntries.Count} dòng lịch sử ở trạng thái \"{PendingJobResultText}\"?\n\n" +
+              "Các dòng này sẽ bị xóa khỏi 'Lịch sử quét mã OQC'."
+            : "Đóng Job đang nạp?\n\n" +
+              $"(Hiện không có dòng lịch sử nào ở trạng thái \"{PendingJobResultText}\" để xóa.)";
+
+        if (MessageBox.Show(confirmMessage, "Xác Nhận Đóng Job", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes)
+        {
+            return;
+        }
+
+        if (pendingEntries.Count > 0)
+        {
+            RemoveHistoryEntries(ScanHistory, pendingEntries);
+            _oqcService.SaveScanHistory(ScanHistory);
+
+            // Nếu dòng đang hiển thị ở Big Result bị xóa thì chuyển sang dòng mới nhất còn lại.
+            if (LatestScanEntry is not null && pendingEntries.Contains(LatestScanEntry))
+            {
+                LatestScanEntry = ScanHistory.FirstOrDefault();
+            }
+        }
+
+        // Giải phóng Job khỏi OQC Scanner (không còn Job nào được nạp).
+        IsJobLoadedFromManager = false;
+        CurrentJobFilePath = "Chưa có Job";
+        CurrentProductName = "-";
+        CurrentJobTestedCount = 0;
+        _lastScannedProcessedCode = null;
+        _lastScannedRawCode = null;
+
+        SetWaitingForInspectionState("Sẵn sàng quét mã sản phẩm để bắt đầu đo kiểm.");
+
+        StatusMessage = pendingEntries.Count > 0
+            ? $"🔒 Đã đóng Job và xóa {pendingEntries.Count} dòng lịch sử \"{PendingJobResultText}\"."
+            : "🔒 Đã đóng Job đang nạp.";
+        StatusBrush = Brushes.Gray;
+
+        OnPropertyChanged(nameof(ScanButtonText));
+        OnPropertyChanged(nameof(PreviewHeaderTitle));
+        OnPropertyChanged(nameof(LiveToggleButtonText));
+    }
+
+    /// <summary>
+    /// Xóa CÁC dòng lịch sử quét được chọn (dùng cho nút xóa từng dòng / xóa dòng đã chọn
+    /// trong cửa sổ "Lịch Sử Quét Mã OQC"). Trả về số dòng đã xóa.
+    /// </summary>
+    public int DeleteHistoryEntries(IEnumerable<OqcScanHistoryEntry>? entries, bool askConfirmation = true)
+    {
+        var targets = entries?
+            .Where(e => e is not null && ScanHistory.Contains(e))
+            .Distinct()
+            .ToList() ?? new List<OqcScanHistoryEntry>();
+
+        if (targets.Count == 0) return 0;
+
+        if (askConfirmation)
+        {
+            var message = targets.Count == 1
+                ? $"Xóa dòng lịch sử quét của mã '{targets[0].ScannedCode}' ({targets[0].InspectResult})?\n\nHành động này không thể hoàn tác."
+                : $"Xóa {targets.Count} dòng lịch sử quét đã chọn?\n\nHành động này không thể hoàn tác.";
+
+            if (MessageBox.Show(message, "Xác Nhận Xóa Dòng Lịch Sử", MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes)
+            {
+                return 0;
+            }
+        }
+
+        var removed = RemoveHistoryEntries(ScanHistory, targets);
+        if (removed == 0) return 0;
+
+        _oqcService.SaveScanHistory(ScanHistory);
+
+        // Nếu dòng đang hiển thị ở Big Result bị xóa thì chuyển sang dòng mới nhất còn lại.
+        if (LatestScanEntry is not null && targets.Contains(LatestScanEntry))
+        {
+            LatestScanEntry = ScanHistory.FirstOrDefault();
+        }
+
+        StatusMessage = $"🗑️ Đã xóa {removed} dòng lịch sử quét OQC.";
+        StatusBrush = Brushes.Gray;
+
+        return removed;
+    }
+
     private static Views.OQC.OqcScanDetailDialog? _scanDetailDialogInstance;
     private static Views.OQC.OqcScanHistoryWindow? _scanHistoryWindowInstance;
     private static Views.OQC.OqcSettingsDialog? _settingsDialogInstance;

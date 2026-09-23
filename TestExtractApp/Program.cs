@@ -56,5 +56,6 @@ class Program
         UndistortResolutionTests.RunAll();
         PerformanceOptimizationTests.RunAllTests();
         ContinuousFlowRegressionTests.RunAllTests();
+        ToolEditorAndOqcUxTests.RunAllTests();
     }
 }

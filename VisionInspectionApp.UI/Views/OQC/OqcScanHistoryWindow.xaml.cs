@@ -87,6 +87,49 @@ public partial class OqcScanHistoryWindow : Window
         }
     }
 
+    /// <summary>
+    /// Xóa ĐÚNG dòng lịch sử của nút 🗑️ trên từng hàng (không xóa toàn bộ lịch sử).
+    /// </summary>
+    private void DeleteRowBtn_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Button btn || btn.DataContext is not OqcScanHistoryEntry entry)
+        {
+            return;
+        }
+
+        if (_viewModel.DeleteHistoryEntries(new[] { entry }) > 0)
+        {
+            _historyView?.Refresh();
+            UpdateCount();
+        }
+    }
+
+    /// <summary>
+    /// Xóa các dòng lịch sử đang được chọn (hỗ trợ chọn nhiều bằng Ctrl / Shift).
+    /// </summary>
+    private void BtnDeleteSelected_Click(object sender, RoutedEventArgs e)
+    {
+        var selected = HistoryDataGrid.SelectedItems
+            .OfType<OqcScanHistoryEntry>()
+            .ToList();
+
+        if (selected.Count == 0)
+        {
+            MessageBox.Show(
+                "Bạn chưa chọn dòng lịch sử nào.\n\nHãy chọn 1 hoặc nhiều dòng (giữ Ctrl / Shift để chọn nhiều) rồi bấm lại nút 'Xóa Dòng Đã Chọn'.",
+                "Chưa Chọn Dòng Nào",
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
+            return;
+        }
+
+        if (_viewModel.DeleteHistoryEntries(selected) > 0)
+        {
+            _historyView?.Refresh();
+            UpdateCount();
+        }
+    }
+
     private void BtnClose_Click(object sender, RoutedEventArgs e)
     {
         Close();
