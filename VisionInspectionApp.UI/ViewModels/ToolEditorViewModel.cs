@@ -1411,6 +1411,9 @@ namespace VisionInspectionApp.UI.ViewModels
             OnPropertyChanged(nameof(ContourCompare_LastRunMaxDist));
             OnPropertyChanged(nameof(AvailablePointFindAlgorithms));
             OnPropertyChanged(nameof(Point_Algorithm));
+            OnPropertyChanged(nameof(Point_MinScore));
+            OnPropertyChanged(nameof(Point_OffsetX));
+            OnPropertyChanged(nameof(Point_OffsetY));
             OnPropertyChanged(nameof(IsPointEdgePointAlgorithm));
             OnPropertyChanged(nameof(Point_Edge_Orientation));
             OnPropertyChanged(nameof(Point_Edge_Polarity));

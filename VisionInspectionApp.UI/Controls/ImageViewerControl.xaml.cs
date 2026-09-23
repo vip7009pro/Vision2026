@@ -861,15 +861,21 @@ public partial class ImageViewerControl : UserControl
 
         bool EndsWith(string label, string suffix) => label.EndsWith(suffix, StringComparison.OrdinalIgnoreCase);
 
-        // Helper: if active label is for the same tool name, try swapping suffix.
-        // Important: when teaching a brand-new Template ROI, the "... T" overlay may not exist yet.
-        // In that case we still return the expected label so the VM can create/update it.
-        string? TrySwapSuffix(string? active, string toSuffix)
+        // Helper: swap the trailing ROI-kind suffix ONLY when the active label actually ends with
+        // the expected source suffix. This keeps each tool's own label family intact:
+        //   Point           : "P1 S"     <-> "P1 T"
+        //   SurfaceCompare  : "SC1 SC"   <-> "SC1 SCT"
+        //   ContourCompare  : "CC1 CC"   <-> "CC1 CCT"
+        // Important: when teaching a brand-new Template ROI, the "... T"/"... CCT" overlay may not
+        // exist yet. In that case we still return the expected label so the VM can create/update it.
+        string? TrySwapSuffix(string? active, string fromSuffix, string toSuffix)
         {
             if (string.IsNullOrWhiteSpace(active)) return null;
-            var parts = active.Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries);
-            if (parts.Length != 2) return null;
-            return $"{parts[0]} {toSuffix}";
+            var a = active.Trim();
+            if (!a.EndsWith(fromSuffix, StringComparison.OrdinalIgnoreCase)) return null;
+            var head = a.Substring(0, a.Length - fromSuffix.Length).TrimEnd();
+            if (head.Length == 0) return null;
+            return $"{head} {toSuffix}";
         }
 
         if (kind == RoiDrawKind.Template)
@@ -877,7 +883,9 @@ public partial class ImageViewerControl : UserControl
             // Prefer active CCT, SCT or T; otherwise swap CC->CCT, SC->SCT or S->T; otherwise any CCT/SCT/T in overlays.
             if (!string.IsNullOrWhiteSpace(_activeRoiLabel) && (EndsWith(_activeRoiLabel!, " CCT") || EndsWith(_activeRoiLabel!, " SCT") || EndsWith(_activeRoiLabel!, " T"))) return _activeRoiLabel;
 
-            var swapped = TrySwapSuffix(_activeRoiLabel, "CCT") ?? TrySwapSuffix(_activeRoiLabel, "SCT") ?? TrySwapSuffix(_activeRoiLabel, "T");
+            var swapped = TrySwapSuffix(_activeRoiLabel, " CC", "CCT")
+                ?? TrySwapSuffix(_activeRoiLabel, " SC", "SCT")
+                ?? TrySwapSuffix(_activeRoiLabel, " S", "T");
             if (!string.IsNullOrWhiteSpace(swapped)) return swapped;
 
             var cct = rectLabels.FirstOrDefault(x => EndsWith(x, " CCT"));
@@ -946,7 +954,9 @@ public partial class ImageViewerControl : UserControl
                 return _activeRoiLabel;
             }
 
-            var swapped = TrySwapSuffix(_activeRoiLabel, "CC") ?? TrySwapSuffix(_activeRoiLabel, "SC") ?? TrySwapSuffix(_activeRoiLabel, "S");
+            var swapped = TrySwapSuffix(_activeRoiLabel, " CCT", "CC")
+                ?? TrySwapSuffix(_activeRoiLabel, " SCT", "SC")
+                ?? TrySwapSuffix(_activeRoiLabel, " T", "S");
             if (!string.IsNullOrWhiteSpace(swapped)) return swapped;
 
             var cc1 = rectLabels.FirstOrDefault(x => EndsWith(x, " CC"));
@@ -1011,6 +1021,15 @@ public partial class ImageViewerControl : UserControl
     }
 
     private RoiDrawKind _roiDrawKind;
+
+    // Deferred Ctrl+Shift gesture disambiguation:
+    //   - Ctrl+Shift + (short) Click  => Point offset / Text position (PointClickedCommand)
+    //   - Ctrl+Shift + Drag           => draw the Template ROI
+    // We cannot tell a click from a drag on mouse-down, so the gesture starts as a Template-ROI
+    // drag and is converted to a click on mouse-up when the pointer barely moved.
+    private bool _ctrlShiftDeferredClick;
+    private Point _ctrlShiftStartScreen;
+    private const double CtrlShiftClickMoveThresholdPx = 4.0;
 
     private bool _lineDragging;
     private Point _lineStart;
@@ -1188,6 +1207,9 @@ public partial class ImageViewerControl : UserControl
             return;
         }
 
+        // Clear any leftover deferred-gesture state from a previous interaction.
+        _ctrlShiftDeferredClick = false;
+
         if (e.ClickCount >= 2)
         {
             var viewPos = ViewToContent(e.GetPosition(PART_Overlay));
@@ -1281,14 +1303,11 @@ public partial class ImageViewerControl : UserControl
 
         if (Keyboard.Modifiers.HasFlag(ModifierKeys.Control) && Keyboard.Modifiers.HasFlag(ModifierKeys.Shift))
         {
-            var viewPos = ViewToContent(e.GetPosition(PART_Overlay));
-            var payload = new PointClickSelection(viewPos.X, viewPos.Y, Keyboard.Modifiers);
-            if (PointClickedCommand is not null && PointClickedCommand.CanExecute(payload))
-            {
-                PointClickedCommand.Execute(payload);
-                e.Handled = true;
-                return;
-            }
+            // Deferred gesture: a short Ctrl+Shift+Click sets the Point offset / Text position,
+            // while Ctrl+Shift+Drag teaches the Template ROI. The decision is made on mouse-up
+            // (see OverlayOnMouseLeftButtonUp) so both gestures can share the same shortcut.
+            _ctrlShiftDeferredClick = true;
+            _ctrlShiftStartScreen = e.GetPosition(PART_Overlay);
         }
 
         // Deterministic ROI teaching gesture:
@@ -1418,6 +1437,9 @@ public partial class ImageViewerControl : UserControl
 
     private void OverlayOnMouseLeftButtonUp(object sender, MouseButtonEventArgs e)
     {
+        var deferredCtrlShiftClick = _ctrlShiftDeferredClick;
+        _ctrlShiftDeferredClick = false;
+
         if (_panning)
         {
             _panning = false;
@@ -1504,6 +1526,26 @@ public partial class ImageViewerControl : UserControl
 
         _dragCrosshairH = null;
         _dragCrosshairV = null;
+
+        // Ctrl+Shift + click (barely any movement) => Point offset / Text position, not a ROI draw.
+        if (deferredCtrlShiftClick)
+        {
+            var upPos = e.GetPosition(PART_Overlay);
+            var movedX = Math.Abs(upPos.X - _ctrlShiftStartScreen.X);
+            var movedY = Math.Abs(upPos.Y - _ctrlShiftStartScreen.Y);
+            if (movedX < CtrlShiftClickMoveThresholdPx && movedY < CtrlShiftClickMoveThresholdPx)
+            {
+                var clickContent = ViewToContent(upPos);
+                var clickPayload = new PointClickSelection(clickContent.X, clickContent.Y, ModifierKeys.Control | ModifierKeys.Shift);
+                if (PointClickedCommand is not null && PointClickedCommand.CanExecute(clickPayload))
+                {
+                    PointClickedCommand.Execute(clickPayload);
+                }
+
+                RedrawOverlays();
+                return;
+            }
+        }
 
         if (_rect is null)
         {

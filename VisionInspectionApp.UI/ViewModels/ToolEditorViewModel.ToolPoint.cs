@@ -62,6 +62,28 @@ namespace VisionInspectionApp.UI.ViewModels
             }
         }
     
+        /// <summary>
+        /// Ngưỡng điểm tối thiểu (Score) để Tool Point được đánh giá OK.
+        /// Nếu điểm match được &gt;= MinScore thì Point.Pass = true, ngược lại là NG.
+        /// </summary>
+        public double Point_MinScore
+        {
+            get => SelectedPointDef()?.MatchScoreThreshold ?? 0.8;
+            set
+            {
+                var def = SelectedPointDef();
+                if (def is null)
+                    return;
+                var v = Math.Clamp(value, 0.0, 1.0);
+                if (Math.Abs(def.MatchScoreThreshold - v) < 0.000001)
+                    return;
+                def.MatchScoreThreshold = v;
+                RefreshPreviews();
+                RequestAutoSave();
+                OnPropertyChanged();
+            }
+        }
+
         public CaliperOrientation Point_Edge_Orientation
         {
             get => SelectedPointDef()?.EdgePoint.Orientation ?? CaliperOrientation.Vertical;
