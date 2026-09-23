@@ -109,6 +109,28 @@ namespace VisionInspectionApp.UI.ViewModels
         private readonly object _preprocessPreviewLock = new();
         private int _lastPreviewImageWidth;
         private int _lastPreviewImageHeight;
+
+        // ==================== PERFORMANCE PHASE 1: REFRESH COALESCING ====================
+        /// <summary>Khoảng debounce gộp nhiều yêu cầu RefreshPreviews() vào 1 lượt duy nhất.</summary>
+        private const int RefreshDebounceIntervalMs = 15;
+
+        /// <summary>Timer gộp (coalesce) các yêu cầu làm mới Preview.</summary>
+        private DispatcherTimer? _refreshThrottleTimer;
+
+        // ==================== PERFORMANCE PHASE 2: ONE SNAPSHOT / ONE PREPROCESS PER PASS ====================
+        /// <summary>Đang trong 1 lượt refresh (dùng để tái sử dụng snapshot & ảnh preprocess).</summary>
+        private bool _inRefreshPass;
+
+        /// <summary>Snapshot ảnh dùng chung cho toàn bộ lượt refresh (chỉ clone 1 lần thay vì ≥2 lần 60MB).</summary>
+        private Mat? _currentPassSnapshot;
+
+        /// <summary>Ảnh đã áp dụng Global Preprocess, tính 1 lần duy nhất cho cả lượt refresh (lazy).</summary>
+        private Mat? _currentPassPreprocessed;
+        private bool _currentPassPreprocessComputed;
+
+        /// <summary>Các Mat tạm phát sinh trong lượt refresh, sẽ được giải phóng khi kết thúc lượt.</summary>
+        private readonly List<Mat> _passOwnedMats = new();
+
         private const int MaxBlobOverlayCount = 1000;
         private void OnRoiDeleted(string? labelRaw)
         {
@@ -256,13 +278,23 @@ namespace VisionInspectionApp.UI.ViewModels
             BuildFinalOverlayFromRun(run, dst, _config, ShowRoisInSelectedPreview && ShowRoisInFinalPreview);
 
             GetOriginPose(out var originTeach, out var originFound, out var originAngleDeg);
-            if (_config?.SegmentLineDistances != null)
+            if (_config?.SegmentLineDistances != null && _config.SegmentLineDistances.Count > 0)
             {
-                using var snap = _sharedImage.GetSnapshot();
-                var snapToUse = snap ?? new Mat();
-                foreach (var sld in _config.SegmentLineDistances)
+                // ✅ PHASE 2: dùng lại snapshot chung của lượt refresh thay vì clone thêm 60MB mỗi lần.
+                var snap = AcquireSnapshotForOverlay(out var ownsSnap);
+                try
                 {
-                    RenderSegmentLineDistanceOverlay(sld, snapToUse, run, dst, originTeach, originFound, originAngleDeg);
+                    if (snap is not null && !snap.IsDisposed && !snap.Empty())
+                    {
+                        foreach (var sld in _config.SegmentLineDistances)
+                        {
+                            RenderSegmentLineDistanceOverlay(sld, snap, run, dst, originTeach, originFound, originAngleDeg);
+                        }
+                    }
+                }
+                finally
+                {
+                    if (ownsSnap) snap?.Dispose();
                 }
             }
 
@@ -403,59 +435,85 @@ namespace VisionInspectionApp.UI.ViewModels
             }
 
             // Live Fallback for Lines not found in run
-            if (_config.Lines != null)
+            if (_config.Lines != null && _config.Lines.Count > 0)
             {
-                foreach (var lDef in _config.Lines)
+                // ✅ PHASE 2: chỉ lấy snapshot 1 LẦN cho cả vòng lặp (trước đây clone 60MB mỗi line chưa found).
+                Mat? fbLineSnap = null;
+                var ownsLineSnap = false;
+                try
                 {
-                    if (lDef.SearchRoi.Width <= 0 || lDef.SearchRoi.Height <= 0) continue;
-                    var rLine = run.Lines.FirstOrDefault(x => string.Equals(x.Name, lDef.Name, StringComparison.OrdinalIgnoreCase));
-                    if (rLine is null || !rLine.Found)
+                    foreach (var lDef in _config.Lines)
                     {
-                        using var snap = _sharedImage.GetSnapshot();
-                        if (snap is not null && !snap.Empty())
+                        if (lDef.SearchRoi.Width <= 0 || lDef.SearchRoi.Height <= 0) continue;
+                        var rLine = run.Lines.FirstOrDefault(x => string.Equals(x.Name, lDef.Name, StringComparison.OrdinalIgnoreCase));
+                        if (rLine is null || !rLine.Found)
                         {
-                            var lineNode = Nodes.FirstOrDefault(n => string.Equals(n.RefName, lDef.Name, StringComparison.OrdinalIgnoreCase));
-                            using var matForLine = lineNode != null ? ResolveToolPreprocessForPreview(snap, lineNode) : snap.Clone();
-                            var det = _lineDetector.DetectLongestLine(matForLine, lDef.SearchRoi, lDef.Canny1, lDef.Canny2, lDef.HoughThreshold, lDef.MinLineLength, lDef.MaxLineGap, originTeach, originFound, originAngleDeg);
-                            if (det.Found)
+                            if (fbLineSnap is null || fbLineSnap.IsDisposed || fbLineSnap.Empty())
                             {
-                                dst.Add(new OverlayLineItem { X1 = det.P1.X, Y1 = det.P1.Y, X2 = det.P2.X, Y2 = det.P2.Y, Stroke = Brushes.Lime, StrokeThickness = 2.0, Label = lDef.Name });
+                                fbLineSnap = AcquireSnapshotForOverlay(out ownsLineSnap);
+                            }
+                            if (fbLineSnap is not null && !fbLineSnap.IsDisposed && !fbLineSnap.Empty())
+                            {
+                                var lineNode = Nodes.FirstOrDefault(n => string.Equals(n.RefName, lDef.Name, StringComparison.OrdinalIgnoreCase));
+                                using var matForLine = lineNode != null ? ResolveToolPreprocessForPreview(fbLineSnap, lineNode) : fbLineSnap.Clone();
+                                var det = _lineDetector.DetectLongestLine(matForLine, lDef.SearchRoi, lDef.Canny1, lDef.Canny2, lDef.HoughThreshold, lDef.MinLineLength, lDef.MaxLineGap, originTeach, originFound, originAngleDeg);
+                                if (det.Found)
+                                {
+                                    dst.Add(new OverlayLineItem { X1 = det.P1.X, Y1 = det.P1.Y, X2 = det.P2.X, Y2 = det.P2.Y, Stroke = Brushes.Lime, StrokeThickness = 2.0, Label = lDef.Name });
+                                }
                             }
                         }
                     }
                 }
+                finally
+                {
+                    if (ownsLineSnap) fbLineSnap?.Dispose();
+                }
             }
 
             // Live Fallback for Calipers not found in run
-            if (_config.Calipers != null)
+            if (_config.Calipers != null && _config.Calipers.Count > 0)
             {
-                foreach (var cDef in _config.Calipers)
+                // ✅ PHASE 2: chỉ lấy snapshot 1 LẦN cho cả vòng lặp.
+                Mat? fbCalSnap = null;
+                var ownsCalSnap = false;
+                try
                 {
-                    if (cDef.SearchRoi.Width <= 0 || cDef.SearchRoi.Height <= 0) continue;
-                    var rCal = run.Calipers.FirstOrDefault(x => string.Equals(x.Name, cDef.Name, StringComparison.OrdinalIgnoreCase));
-                    if (rCal is null || !rCal.Found)
+                    foreach (var cDef in _config.Calipers)
                     {
-                        using var snap = _sharedImage.GetSnapshot();
-                        if (snap is not null && !snap.Empty())
+                        if (cDef.SearchRoi.Width <= 0 || cDef.SearchRoi.Height <= 0) continue;
+                        var rCal = run.Calipers.FirstOrDefault(x => string.Equals(x.Name, cDef.Name, StringComparison.OrdinalIgnoreCase));
+                        if (rCal is null || !rCal.Found)
                         {
-                            var calNode = Nodes.FirstOrDefault(n => string.Equals(n.RefName, cDef.Name, StringComparison.OrdinalIgnoreCase));
-                            using var matForCal = calNode != null ? ResolveToolPreprocessForPreview(snap, calNode) : snap.Clone();
-                            var det = CaliperDetector.Detect(matForCal, cDef, originTeach, originFound, originAngleDeg);
-                            if (det.Found)
+                            if (fbCalSnap is null || fbCalSnap.IsDisposed || fbCalSnap.Empty())
                             {
-                                dst.Add(new OverlayLineItem { X1 = det.LineP1.X, Y1 = det.LineP1.Y, X2 = det.LineP2.X, Y2 = det.LineP2.Y, Stroke = Brushes.Lime, StrokeThickness = 2.0, Label = cDef.Name });
-                                if (det.Points is not null && det.Points.Count > 0)
+                                fbCalSnap = AcquireSnapshotForOverlay(out ownsCalSnap);
+                            }
+                            if (fbCalSnap is not null && !fbCalSnap.IsDisposed && !fbCalSnap.Empty())
+                            {
+                                var calNode = Nodes.FirstOrDefault(n => string.Equals(n.RefName, cDef.Name, StringComparison.OrdinalIgnoreCase));
+                                using var matForCal = calNode != null ? ResolveToolPreprocessForPreview(fbCalSnap, calNode) : fbCalSnap.Clone();
+                                var det = CaliperDetector.Detect(matForCal, cDef, originTeach, originFound, originAngleDeg);
+                                if (det.Found)
                                 {
-                                    var step = Math.Max(1, det.Points.Count / 80);
-                                    for (var i = 0; i < det.Points.Count; i += step)
+                                    dst.Add(new OverlayLineItem { X1 = det.LineP1.X, Y1 = det.LineP1.Y, X2 = det.LineP2.X, Y2 = det.LineP2.Y, Stroke = Brushes.Lime, StrokeThickness = 2.0, Label = cDef.Name });
+                                    if (det.Points is not null && det.Points.Count > 0)
                                     {
-                                        var p = det.Points[i];
-                                        dst.Add(new OverlayPointItem { X = p.X, Y = p.Y, Radius = 3.0, Stroke = Brushes.Gold, Fill = Brushes.Gold, Label = string.Empty });
+                                        var step = Math.Max(1, det.Points.Count / 80);
+                                        for (var i = 0; i < det.Points.Count; i += step)
+                                        {
+                                            var p = det.Points[i];
+                                            dst.Add(new OverlayPointItem { X = p.X, Y = p.Y, Radius = 3.0, Stroke = Brushes.Gold, Fill = Brushes.Gold, Label = string.Empty });
+                                        }
                                     }
                                 }
                             }
                         }
                     }
+                }
+                finally
+                {
+                    if (ownsCalSnap) fbCalSnap?.Dispose();
                 }
             }
         }
@@ -2495,7 +2553,8 @@ namespace VisionInspectionApp.UI.ViewModels
                         {
                             if (SelectedNode is not null && string.Equals(SelectedNode.Type, "ImageSource", StringComparison.OrdinalIgnoreCase))
                             {
-                                RefreshSelectedPreview();
+                                // Ảnh vừa thay đổi => cần cập nhật Preview ngay lập tức.
+                                RefreshPreviewsNow();
                             }
                         }, System.Windows.Threading.DispatcherPriority.Render);
                     }
@@ -2708,14 +2767,8 @@ namespace VisionInspectionApp.UI.ViewModels
                             await System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
                             {
                                 StatusBarText = $"✅ Đã tải và nạp ảnh ({mat.Width}x{mat.Height}) từ Server URL!";
-                                if (SelectedNode is not null && string.Equals(SelectedNode.Type, "ImageSource", StringComparison.OrdinalIgnoreCase))
-                                {
-                                    RefreshSelectedPreview();
-                                }
-                                else
-                                {
-                                    RefreshPreviews();
-                                }
+                                // Ảnh vừa tải xong => cập nhật Preview ngay lập tức (không debounce).
+                                RefreshPreviewsNow();
                             }, System.Windows.Threading.DispatcherPriority.Render);
                         }
                     }
@@ -3824,7 +3877,8 @@ namespace VisionInspectionApp.UI.ViewModels
                 UpdateContinuousStats();
             }
             RefreshInspectionDashboard(_lastRun);
-            RefreshPreviews();
+            // Bắt buộc làm mới ĐỒNG BỘ trước khi bắn sự kiện hoàn thành kiểm tra.
+            RefreshPreviewsNow();
             RaiseToolPropertyPanelsChanged();
             OnPropertyChanged(nameof(Blob_LastRunCount));
             OnPropertyChanged(nameof(PixelsPerMm));
@@ -4109,7 +4163,9 @@ namespace VisionInspectionApp.UI.ViewModels
                     UpdateContinuousStats();
                 }
                 RefreshInspectionDashboard(_lastRun);
-                RefreshPreviews();
+                // Bắt buộc làm mới ĐỒNG BỘ trước khi bán sự kiện hoàn thành kiểm tra
+                // (OQC Scanner đọc FinalPreviewImage ngay sau sự kiện).
+                RefreshPreviewsNow();
                 RaiseToolPropertyPanelsChanged();
                 OnPropertyChanged(nameof(Blob_LastRunCount));
                 OnPropertyChanged(nameof(PixelsPerMm));
@@ -4267,24 +4323,298 @@ namespace VisionInspectionApp.UI.ViewModels
             RequestAutoSave();
         }
 
+        /// <summary>
+        /// Yêu cầu làm mới Preview (ảnh + overlay) — CƠ CHẾ COALESCING.
+        ///
+        /// Trước đây: mỗi property setter, mỗi thao tác ROI, mỗi lần chọn/xóa node đều gọi trực tiếp
+        /// RefreshPreviews() => chạy 1 lượt ĐẦY ĐỦ (clone ảnh 20MP + Global Preprocess + dựng overlay)
+        /// ngay trên UI thread. Một thao tác logic (ví dụ xóa node) lại gọi 2-3 lần => giật/đơ.
+        ///
+        /// Nay: mọi lời gọi trong cùng khoảng debounce (~15ms) được GỘP vào ĐÚNG 1 lượt refresh duy nhất
+        /// (RefreshPreviewsCore), nhờ đó thao tác chọn node / xóa node / kéo ROI chỉ tốn 1 lượt.
+        /// </summary>
         public void RefreshPreviews()
         {
             if (!EnableCanvasRendering)
             {
-                SelectedNodePreviewImage = null;
-                FinalPreviewImage = null;
-                _cachedFinalPreviewImage = null;
-                SelectedNodeOverlayItems = null;
-                FinalOverlayItems = null;
-                _finalPreviewDirty = false;
+                CancelPendingRefresh();
+                ClearAllPreviewState();
                 return;
             }
-            _finalPreviewDirty = true;
-            RefreshFinalPreview();
-            RefreshSelectedPreview();
+
+            var dispatcher = System.Windows.Application.Current?.Dispatcher;
+            if (dispatcher is null)
+            {
+                // Không có Dispatcher (unit test headless) => chạy đồng bộ như hành vi cũ.
+                RefreshPreviewsCore();
+                return;
+            }
+
+            if (!dispatcher.CheckAccess())
+            {
+                dispatcher.BeginInvoke(new Action(RefreshPreviews), System.Windows.Threading.DispatcherPriority.Background);
+                return;
+            }
+
+            EnsureRefreshThrottleTimer();
+            if (_refreshThrottleTimer is null)
+            {
+                RefreshPreviewsCore();
+                return;
+            }
+
+            _refreshThrottleTimer.Stop();
+            _refreshThrottleTimer.Start();
         }
-    
-        private void RefreshFinalPreview()
+
+        /// <summary>
+        /// Làm mới Preview NGAY LẬP TỨC (đồng bộ, bỏ qua debounce).
+        /// Dùng cho các luồng cần kết quả tức thời: Run Once / Run Flow / Run Continuous,
+        /// nạp Job, đóng Job, đổi chế độ chất lượng ảnh (Original vs Downscaled).
+        /// </summary>
+        public void RefreshPreviewsNow()
+        {
+            CancelPendingRefresh();
+            RefreshPreviewsCore();
+        }
+
+        private void CancelPendingRefresh()
+        {
+            try
+            {
+                _refreshThrottleTimer?.Stop();
+            }
+            catch
+            {
+                // Bỏ qua: timer có thể đã bị dispose khi app shutdown.
+            }
+        }
+
+        private void EnsureRefreshThrottleTimer()
+        {
+            if (_refreshThrottleTimer is not null)
+            {
+                return;
+            }
+
+            var dispatcher = System.Windows.Application.Current?.Dispatcher;
+            if (dispatcher is null)
+            {
+                return;
+            }
+
+            _refreshThrottleTimer = new DispatcherTimer(System.Windows.Threading.DispatcherPriority.Background, dispatcher)
+            {
+                Interval = TimeSpan.FromMilliseconds(RefreshDebounceIntervalMs)
+            };
+            _refreshThrottleTimer.Tick += (_, _) =>
+            {
+                _refreshThrottleTimer.Stop();
+                RefreshPreviewsCore();
+            };
+        }
+
+        private void ClearAllPreviewState()
+        {
+            SelectedNodePreviewImage = null;
+            FinalPreviewImage = null;
+            _cachedFinalPreviewImage = null;
+            SelectedNodeOverlayItems = null;
+            FinalOverlayItems = null;
+            _finalPreviewDirty = false;
+        }
+
+        /// <summary>
+        /// Lượt refresh thực tế: lấy ĐÚNG 1 snapshot cho cả final preview + selected preview,
+        /// và chạy Global Preprocess ĐÚNG 1 LẦN cho cả lượt (thay vì 2-3 lần như trước).
+        /// </summary>
+        private void RefreshPreviewsCore()
+        {
+            if (!EnableCanvasRendering)
+            {
+                ClearAllPreviewState();
+                return;
+            }
+
+            // Chống tái nhập (reentrancy): không bao giờ lồng nhiều lượt refresh vào nhau.
+            if (_inRefreshPass)
+            {
+                return;
+            }
+
+            _finalPreviewDirty = true;
+
+            // ---- 1 snapshot duy nhất cho cả lượt refresh ----
+            Mat? snap = null;
+            try
+            {
+                snap = _sharedImage.GetSnapshot();
+                if (snap is null || snap.IsDisposed || snap.Empty())
+                {
+                    snap?.Dispose();
+                    snap = null;
+
+                    var firstImgSource = _config?.ImageSources?.FirstOrDefault();
+                    if (firstImgSource is not null)
+                    {
+                        var loaded = LoadImageFromSourceForPreview(firstImgSource);
+                        if (loaded is not null && !loaded.Empty())
+                        {
+                            try
+                            {
+                                snap = PrepareDisplayImageForSharedContext(loaded, firstImgSource);
+                            }
+                            finally
+                            {
+                                loaded.Dispose();
+                            }
+                        }
+                        else
+                        {
+                            loaded?.Dispose();
+                        }
+                    }
+                }
+
+                snap ??= new Mat();
+
+                _inRefreshPass = true;
+                _currentPassSnapshot = snap;
+                _currentPassPreprocessed = null;
+                _currentPassPreprocessComputed = false;
+
+                RefreshFinalPreview(snap);
+                RefreshSelectedPreview(snap);
+            }
+            finally
+            {
+                // Giải phóng mọi Mat tạm phát sinh trong lượt (overlay detection, preprocess dự phòng...)
+                foreach (var owned in _passOwnedMats)
+                {
+                    try { owned?.Dispose(); } catch { }
+                }
+                _passOwnedMats.Clear();
+
+                try { _currentPassPreprocessed?.Dispose(); } catch { }
+                _currentPassPreprocessed = null;
+                _currentPassPreprocessComputed = false;
+
+                _inRefreshPass = false;
+                _currentPassSnapshot = null;
+
+                try { snap?.Dispose(); } catch { }
+            }
+        }
+
+        /// <summary>
+        /// Trả về ảnh đã áp dụng Global Preprocess cho lượt refresh hiện tại.
+        /// Lazy: chỉ chạy preprocess MỘT LẦN mỗi lượt, sau đó mọi nơi tái sử dụng.
+        /// Mat trả về thuộc sở hữu của lượt refresh — CALLER KHÔNG ĐƯỢC DISPOSE.
+        /// </summary>
+        private Mat? GetPassPreprocessed()
+        {
+            if (_currentPassPreprocessComputed)
+            {
+                return _currentPassPreprocessed;
+            }
+
+            _currentPassPreprocessComputed = true;
+
+            var src = _currentPassSnapshot;
+            if (src is null || src.IsDisposed || src.Empty() || _config is null || _preprocessor is null)
+            {
+                return null;
+            }
+
+            try
+            {
+                var result = _preprocessor.Run(src, _config.Preprocess);
+                if (result is not null && !result.Empty())
+                {
+                    _currentPassPreprocessed = result;
+                }
+                else
+                {
+                    result?.Dispose();
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[GetPassPreprocessed] {ex.Message}");
+            }
+
+            return _currentPassPreprocessed;
+        }
+
+        /// <summary>
+        /// Đăng ký 1 Mat tạm để tự động giải phóng khi kết thúc lượt refresh (tránh rò rỉ bộ nhớ unmanaged).
+        /// </summary>
+        private Mat OwnForPass(Mat mat)
+        {
+            if (mat is not null)
+            {
+                _passOwnedMats.Add(mat);
+            }
+            return mat;
+        }
+
+        /// <summary>
+        /// Lấy snapshot ảnh cho việc dựng overlay.
+        /// Trong lượt refresh: dùng lại snapshot chung (không clone, KHÔNG dispose).
+        /// Ngoài lượt refresh: clone mới (caller phải dispose theo ownsSnapshot=true).
+        /// </summary>
+        private Mat? AcquireSnapshotForOverlay(out bool ownsSnapshot)
+        {
+            var borrowed = _currentPassSnapshot;
+            if (borrowed is not null && !borrowed.IsDisposed && !borrowed.Empty())
+            {
+                ownsSnapshot = false;
+                return borrowed;
+            }
+
+            ownsSnapshot = true;
+            return _sharedImage.GetSnapshot();
+        }
+
+        /// <summary>
+        /// Wrapper IDisposable cho snapshot: tự động chỉ dispose khi là bản clone do chính nó tạo ra.
+        /// Trong 1 lượt refresh, snapshot được BORROW từ _currentPassSnapshot (không clone, không dispose).
+        /// Dùng: <c>using var scope = AcquireSnapshotScope(); var snap = scope.Mat;</c>
+        /// </summary>
+        private readonly struct SnapshotScope : IDisposable
+        {
+            public Mat? Mat { get; }
+            private readonly bool _owns;
+
+            public SnapshotScope(Mat? mat, bool owns)
+            {
+                Mat = mat;
+                _owns = owns;
+            }
+
+            public void Dispose()
+            {
+                if (!_owns)
+                {
+                    return;
+                }
+
+                try { Mat?.Dispose(); } catch { }
+            }
+        }
+
+        private SnapshotScope AcquireSnapshotScope()
+        {
+            var borrowed = _currentPassSnapshot;
+            if (borrowed is not null && !borrowed.IsDisposed && !borrowed.Empty())
+            {
+                return new SnapshotScope(borrowed, owns: false);
+            }
+
+            return new SnapshotScope(_sharedImage.GetSnapshot(), owns: true);
+        }
+
+        private void RefreshFinalPreview(Mat snap)
         {
             if (!EnableCanvasRendering)
             {
@@ -4299,40 +4629,22 @@ namespace VisionInspectionApp.UI.ViewModels
             {
                 return;
             }
-    
+
             var newFinalItems = new List<OverlayItem>();
-            using var rawSnap = _sharedImage.GetSnapshot();
-            Mat snapToUse;
-            if (rawSnap is not null && !rawSnap.Empty())
-            {
-                snapToUse = rawSnap;
-            }
-            else
-            {
-                var firstImgSource = _config?.ImageSources?.FirstOrDefault();
-                if (firstImgSource is not null)
-                {
-                    var loaded = LoadImageFromSourceForPreview(firstImgSource);
-                    snapToUse = (loaded != null && !loaded.Empty()) 
-                        ? PrepareDisplayImageForSharedContext(loaded, firstImgSource) 
-                        : new Mat();
-                }
-                else
-                {
-                    snapToUse = new Mat();
-                }
-            }
-    
-            using var snap = snapToUse;
-            if (snap is not null && !snap.Empty())
+
+            if (snap is not null && !snap.IsDisposed && !snap.Empty())
             {
                 _lastPreviewImageWidth = snap.Width;
                 _lastPreviewImageHeight = snap.Height;
             }
+
+            // ✅ PHASE 2: tái sử dụng ảnh đã Global Preprocess của lượt (không chạy lại lần 2/3).
             if (_config is not null && PreprocessPreviewEnabled && _preprocessor is not null && snap is not null && !snap.Empty())
             {
-                using var processedFinal = _preprocessor.Run(snap, _config.Preprocess);
-                _cachedFinalPreviewImage = processedFinal.Empty() ? null : processedFinal.ToBitmapSourceForDisplay();
+                var passProcessed = GetPassPreprocessed();
+                _cachedFinalPreviewImage = (passProcessed is not null && !passProcessed.Empty())
+                    ? passProcessed.ToBitmapSourceForDisplay()
+                    : snap.ToBitmapSourceForDisplay();
                 FinalPreviewImage = _cachedFinalPreviewImage;
             }
             else
@@ -4362,7 +4674,7 @@ namespace VisionInspectionApp.UI.ViewModels
             _finalPreviewDirty = false;
         }
     
-        private void RefreshSelectedPreview()
+        private void RefreshSelectedPreview(Mat snap)
         {
             if (!EnableCanvasRendering)
             {
@@ -4390,8 +4702,8 @@ namespace VisionInspectionApp.UI.ViewModels
 
             if (IsImageOutputNode)
             {
-                using var rawSnapIO = _sharedImage.GetSnapshot();
-                using var snapIO = rawSnapIO ?? new Mat();
+                // ✅ PHASE 2: dùng lại snapshot chung của lượt refresh (không clone, không dispose).
+                var snapIO = snap ?? OwnForPass(new Mat());
                 
                 var ioDef = SelectedImageOutputDef();
                 var inputName = ioDef?.InputNodeName;
@@ -4445,42 +4757,55 @@ namespace VisionInspectionApp.UI.ViewModels
                 return;
             }
 
-            // Handling for ImageSource - use shared image snapshot first, then fallback to source loader
+            // Handling for ImageSource - use the shared snapshot of this refresh pass
             if (string.Equals(SelectedNode.Type, "ImageSource", StringComparison.OrdinalIgnoreCase))
             {
-                using var rawSnapSrc = _sharedImage.GetSnapshot();
-                Mat snapSrc;
-                if (rawSnapSrc is not null && !rawSnapSrc.Empty())
-                {
-                    snapSrc = rawSnapSrc;
-                }
-                else
+                var snapSrc = snap;
+                if (snapSrc is null || snapSrc.IsDisposed || snapSrc.Empty())
                 {
                     var imgSourceDef = SelectedImageSourceDef();
                     var loaded = imgSourceDef is not null ? LoadImageFromSourceForPreview(imgSourceDef) : null;
-                    snapSrc = (loaded != null && !loaded.Empty())
-                        ? PrepareDisplayImageForSharedContext(loaded, imgSourceDef)
-                        : new Mat();
-                }
-
-                using (snapSrc)
-                {
-                    if (!snapSrc.Empty())
+                    if (loaded is not null && !loaded.Empty())
                     {
-                        if (_config is not null && PreprocessPreviewEnabled)
+                        try
                         {
-                            using var processed = _preprocessor.Run(snapSrc, _config.Preprocess);
-                            SelectedNodePreviewImage = processed.Empty() ? null : processed.ToBitmapSourceForDisplay();
+                            snapSrc = OwnForPass(PrepareDisplayImageForSharedContext(loaded, imgSourceDef));
                         }
-                        else
+                        finally
                         {
-                            SelectedNodePreviewImage = snapSrc.ToBitmapSourceForDisplay();
+                            loaded.Dispose();
                         }
                     }
                     else
                     {
-                        SelectedNodePreviewImage = null;
+                        loaded?.Dispose();
                     }
+                }
+
+                if (snapSrc is not null && !snapSrc.IsDisposed && !snapSrc.Empty())
+                {
+                    if (_config is not null && PreprocessPreviewEnabled && _preprocessor is not null)
+                    {
+                        var passProcessed = GetPassPreprocessed();
+                        // Chỉ dùng ảnh global-preprocessed khi nó thực sự được tính từ chính snapshot này.
+                        if (passProcessed is not null && !passProcessed.Empty() && ReferenceEquals(_currentPassSnapshot, snap))
+                        {
+                            SelectedNodePreviewImage = passProcessed.ToBitmapSourceForDisplay();
+                        }
+                        else
+                        {
+                            using var processed = _preprocessor.Run(snapSrc, _config.Preprocess);
+                            SelectedNodePreviewImage = processed.Empty() ? null : processed.ToBitmapSourceForDisplay();
+                        }
+                    }
+                    else
+                    {
+                        SelectedNodePreviewImage = snapSrc.ToBitmapSourceForDisplay();
+                    }
+                }
+                else
+                {
+                    SelectedNodePreviewImage = null;
                 }
 
                 AddConfigRois(newSelectedNodeOverlayItems);
@@ -4489,40 +4814,40 @@ namespace VisionInspectionApp.UI.ViewModels
                     BuildFinalOverlayFromRunWithConfig(_lastRun, newSelectedNodeOverlayItems);
                 }
                 SelectedNodeOverlayItems = newSelectedNodeOverlayItems;
-                UpdateBlobThresholdPreview(new Mat());
+                // Node ImageSource không phải BlobDetection => không cần preview nhị phân (tránh cấp phát Mat vô ích).
+                BlobThresholdPreviewImage = null;
                 return;
             }
-    
-            using var rawSnap = _sharedImage.GetSnapshot();
-            using var snap = rawSnap ?? new Mat();
+
+            var snapForNode = snap ?? new Mat();
 
             if (string.Equals(SelectedNode.Type, "Preprocess", StringComparison.OrdinalIgnoreCase) ||
                 string.Equals(SelectedNode.Type, "Crop", StringComparison.OrdinalIgnoreCase) ||
                 string.Equals(SelectedNode.Type, "ImgArithmetic", StringComparison.OrdinalIgnoreCase))
             {
-                using var processedSel = ResolveToolPreprocessForPreview(snap, SelectedNode);
+                using var processedSel = ResolveToolPreprocessForPreview(snapForNode, SelectedNode);
                 SelectedNodePreviewImage = processedSel.Empty() ? null : processedSel.ToBitmapSourceForDisplay();
             }
             else if (_config is not null && PreprocessPreviewEnabled)
             {
                 if (string.Equals(SelectedNode.Type, "Origin", StringComparison.OrdinalIgnoreCase) || string.Equals(SelectedNode.Type, "Point", StringComparison.OrdinalIgnoreCase) || string.Equals(SelectedNode.Type, "Line", StringComparison.OrdinalIgnoreCase) || string.Equals(SelectedNode.Type, "Caliper", StringComparison.OrdinalIgnoreCase) || string.Equals(SelectedNode.Type, "LinePairDetection", StringComparison.OrdinalIgnoreCase) || string.Equals(SelectedNode.Type, "EdgePairDetect", StringComparison.OrdinalIgnoreCase) || string.Equals(SelectedNode.Type, "EdgePair", StringComparison.OrdinalIgnoreCase) || string.Equals(SelectedNode.Type, "BlobDetection", StringComparison.OrdinalIgnoreCase) || string.Equals(SelectedNode.Type, "CircleFinder", StringComparison.OrdinalIgnoreCase) || string.Equals(SelectedNode.Type, "SurfaceCompare", StringComparison.OrdinalIgnoreCase) || string.Equals(SelectedNode.Type, "ContourCompare", StringComparison.OrdinalIgnoreCase) || string.Equals(SelectedNode.Type, "Text", StringComparison.OrdinalIgnoreCase) || string.Equals(SelectedNode.Type, "CodeDetection", StringComparison.OrdinalIgnoreCase) || string.Equals(SelectedNode.Type, "ColorDiff", StringComparison.OrdinalIgnoreCase))
                 {
-                    using var processedSel = ResolveToolPreprocessForPreview(snap, SelectedNode);
+                    using var processedSel = ResolveToolPreprocessForPreview(snapForNode, SelectedNode);
                     SelectedNodePreviewImage = processedSel.Empty() ? null : processedSel.ToBitmapSourceForDisplay();
                 }
                 else
                 {
-                    SelectedNodePreviewImage = _cachedFinalPreviewImage ?? (snap.Empty() ? null : snap.ToBitmapSourceForDisplay());
+                    SelectedNodePreviewImage = _cachedFinalPreviewImage ?? (snapForNode.Empty() ? null : snapForNode.ToBitmapSourceForDisplay());
                 }
             }
             else
             {
-                SelectedNodePreviewImage = _cachedFinalPreviewImage ?? (snap.Empty() ? null : snap.ToBitmapSourceForDisplay());
+                SelectedNodePreviewImage = _cachedFinalPreviewImage ?? (snapForNode.Empty() ? null : snapForNode.ToBitmapSourceForDisplay());
             }
     
             if (string.Equals(SelectedNode.Type, "BlobDetection", StringComparison.OrdinalIgnoreCase))
             {
-                UpdateBlobThresholdPreview(snap);
+                UpdateBlobThresholdPreview(snapForNode);
             }
             else
             {
@@ -4539,7 +4864,7 @@ namespace VisionInspectionApp.UI.ViewModels
 
             if (string.Equals(SelectedNode.Type, "Line", StringComparison.OrdinalIgnoreCase))
             {
-                RefreshLineRoiPreview(snap);
+                RefreshLineRoiPreview(snapForNode);
             }
             else
             {
@@ -4548,7 +4873,7 @@ namespace VisionInspectionApp.UI.ViewModels
 
             if (string.Equals(SelectedNode.Type, "Point", StringComparison.OrdinalIgnoreCase))
             {
-                RefreshPointEdgePreview(snap);
+                RefreshPointEdgePreview(snapForNode);
             }
             else
             {
@@ -4562,7 +4887,7 @@ namespace VisionInspectionApp.UI.ViewModels
             }
             else
             {
-                BuildOverlayForNode(SelectedNode, snap, newSelectedNodeOverlayItems);
+                BuildOverlayForNode(SelectedNode, snapForNode, newSelectedNodeOverlayItems);
             }
             SelectedNodeOverlayItems = newSelectedNodeOverlayItems;
         }
@@ -5572,7 +5897,9 @@ namespace VisionInspectionApp.UI.ViewModels
                     var lDef = _config?.Lines.FirstOrDefault(x => string.Equals(x.Name, node.RefName, StringComparison.OrdinalIgnoreCase));
                     if (lDef is not null && lDef.SearchRoi.Width > 0 && lDef.SearchRoi.Height > 0)
                     {
-                        using var snap = _sharedImage.GetSnapshot();
+                        // ✅ PHASE 2: dùng lại snapshot chung của lượt refresh.
+                        using var snapScope = AcquireSnapshotScope();
+                        var snap = snapScope.Mat;
                         if (snap is not null && !snap.Empty())
                         {
                             using var processed = ResolveToolPreprocessForPreview(snap, node);
@@ -5608,7 +5935,9 @@ namespace VisionInspectionApp.UI.ViewModels
                     var cDef = _config?.Calipers.FirstOrDefault(x => string.Equals(x.Name, node.RefName, StringComparison.OrdinalIgnoreCase));
                     if (cDef is not null && cDef.SearchRoi.Width > 0 && cDef.SearchRoi.Height > 0)
                     {
-                        using var snap = _sharedImage.GetSnapshot();
+                        // ✅ PHASE 2: dùng lại snapshot chung của lượt refresh.
+                        using var snapScope = AcquireSnapshotScope();
+                        var snap = snapScope.Mat;
                         if (snap is not null && !snap.Empty())
                         {
                             var hasOriginPose = run.Origin is not null && run.Origin.Pass && (run.Origin.MatchRect.Width > 0 || run.Origin.Position.X != 0 || run.Origin.Position.Y != 0);
@@ -5915,8 +6244,13 @@ namespace VisionInspectionApp.UI.ViewModels
                 if (sldDef is not null)
                 {
                     GetOriginPose(out var originTeach, out var originFound, out var originAngleDeg);
-                    using var snap = _sharedImage.GetSnapshot();
-                    RenderSegmentLineDistanceOverlay(sldDef, snap ?? new Mat(), run, dst, originTeach, originFound, originAngleDeg);
+                    // ✅ PHASE 2: dùng lại snapshot chung của lượt refresh.
+                    using var snapScope = AcquireSnapshotScope();
+                    var snap = snapScope.Mat;
+                    if (snap is not null && !snap.IsDisposed && !snap.Empty())
+                    {
+                        RenderSegmentLineDistanceOverlay(sldDef, snap, run, dst, originTeach, originFound, originAngleDeg);
+                    }
                 }
                 return;
             }
@@ -6377,7 +6711,8 @@ namespace VisionInspectionApp.UI.ViewModels
                     return;
                 }
     
-                using var processed = _preprocessor.Run(image, _config.Preprocess);
+                // ✅ PHASE 2: tái sử dụng ảnh Global-Preprocess của lượt refresh.
+                var processed = GetPassPreprocessed() ?? OwnForPass(_preprocessor.Run(image, _config.Preprocess));
                 var la = _lineDetector.DetectLongestLine(processed, a.SearchRoi, a.Canny1, a.Canny2, a.HoughThreshold, a.MinLineLength, a.MaxLineGap);
                 var lb = _lineDetector.DetectLongestLine(processed, b.SearchRoi, b.Canny1, b.Canny2, b.HoughThreshold, b.MinLineLength, b.MaxLineGap);
                 if (!la.Found || !lb.Found)
@@ -6408,7 +6743,8 @@ namespace VisionInspectionApp.UI.ViewModels
                     return;
                 }
     
-                using var processed = _preprocessor.Run(image, _config.Preprocess);
+                // ✅ PHASE 2: tái sử dụng ảnh Global-Preprocess của lượt refresh.
+                var processed = GetPassPreprocessed() ?? OwnForPass(_preprocessor.Run(image, _config.Preprocess));
                 var l = _lineDetector.DetectLongestLine(processed, ldef.SearchRoi, ldef.Canny1, ldef.Canny2, ldef.HoughThreshold, ldef.MinLineLength, ldef.MaxLineGap);
                 if (!l.Found)
                 {
@@ -6754,9 +7090,20 @@ namespace VisionInspectionApp.UI.ViewModels
                 return;
             }
 
-            using var processed = (_preprocessor is not null && image is not null && !image.Empty())
-                ? _preprocessor.Run(image, _config.Preprocess)
-                : (image is not null && !image.Empty() ? image.Clone() : new Mat());
+            // ✅ PHASE 2: Tái sử dụng ảnh đã Global-Preprocess của lượt refresh hiện tại
+            // (trước đây hàm này chạy lại _preprocessor.Run trên ảnh full-size 20MP một lần nữa).
+            Mat processed;
+            var passProcessed = GetPassPreprocessed();
+            if (passProcessed is not null && !passProcessed.IsDisposed && !passProcessed.Empty())
+            {
+                processed = passProcessed;   // thuộc sở hữu của lượt refresh — KHÔNG dispose ở đây
+            }
+            else
+            {
+                processed = OwnForPass((_preprocessor is not null && image is not null && !image.Empty())
+                    ? _preprocessor.Run(image, _config.Preprocess)
+                    : (image is not null && !image.Empty() ? image.Clone() : new Mat()));
+            }
 
             Point2d originTeach = default;
             Point2d originFound = default;

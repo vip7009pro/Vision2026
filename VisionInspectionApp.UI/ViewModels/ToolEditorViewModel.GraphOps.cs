@@ -30,7 +30,9 @@ namespace VisionInspectionApp.UI.ViewModels
         {
             OnPropertyChanged(nameof(EnableRoiEditingInPreview));
             OnPropertyChanged(nameof(IsResultViewNode));
-            RaiseToolPropertyPanelsChanged();
+            // LƯU Ý (PERFORMANCE): RaiseToolPropertyPanelsChanged() chỉ được gọi MỘT LẦN ở cuối hàm.
+            // Trước đây gọi 2 lần (đầu + cuối) khiến mỗi lần chọn node phải raise ~60 property
+            // và đọc lại file template Origin 2 lần => gây lag khi chuyển qua lại giữa các node.
             SelectedEdge = null;
             if (_selectedNodeHook is not null)
             {
@@ -88,7 +90,10 @@ namespace VisionInspectionApp.UI.ViewModels
             SyncSelectedToolPreprocessChoiceFromGraph();
             SyncTextNodeConditionRows();
             RaiseToolPropertyPanelsChanged();
-            RefreshSelectedPreview();
+            // Dùng RefreshPreviews() (có cơ chế coalescing) thay vì RefreshSelectedPreview() đồng bộ:
+            // nhờ đó thao tác chọn node + xóa node + đổi thuộc tính trong cùng 1 khoảng debounce
+            // chỉ tốn ĐÚNG 1 lượt dựng Preview => hết lag khi chuyển qua lại giữa các node.
+            RefreshPreviews();
             OnPropertyChanged(nameof(Blob_LastRunCount));
             OnPropertyChanged(nameof(Blob_MaxAllowedBlobs));
             OnPropertyChanged(nameof(Blob_MinBlobDistance));

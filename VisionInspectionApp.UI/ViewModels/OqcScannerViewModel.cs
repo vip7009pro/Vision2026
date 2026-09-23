@@ -1287,7 +1287,8 @@ public partial class OqcScannerViewModel : ObservableObject
         }
         if (!IsShowingLiveCamera && _toolEditorViewModel != null)
         {
-            _toolEditorViewModel.RefreshPreviews();
+            // Đọc FinalPreviewImage ngay sau đó => phải làm mới ĐỒNG BỘ.
+            _toolEditorViewModel.RefreshPreviewsNow();
             _lastOqcPreviewImage = _toolEditorViewModel.FinalPreviewImage;
             PreviewImage = _lastOqcPreviewImage;
         }
