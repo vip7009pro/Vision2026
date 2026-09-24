@@ -500,7 +500,7 @@ namespace VisionInspectionApp.UI.ViewModels
                 Mat? originalMat = null;
                 bool shouldDisposeOriginal = false;
 
-                var urlSource = _config?.ImageSources?.FirstOrDefault(x => x.SourceType == ImageSourceType.Url || x.SourceType == ImageSourceType.File);
+                var urlSource = _config?.ImageSources?.FirstOrDefault(x => x.SourceType == ImageSourceType.Url || x.SourceType == ImageSourceType.File || x.SourceType == ImageSourceType.Pdf);
                 if (urlSource != null)
                 {
                     var cached = GetImageSourceCache(urlSource.Name);
@@ -512,6 +512,11 @@ namespace VisionInspectionApp.UI.ViewModels
                     {
                         originalMat = TryLoadUrlImageFromDiskCache(urlSource.ImageUrl);
                         if (originalMat != null) shouldDisposeOriginal = true;
+                    }
+                    else if (urlSource.SourceType == ImageSourceType.Pdf && !string.IsNullOrWhiteSpace(urlSource.PdfRenderedImagePath) && File.Exists(urlSource.PdfRenderedImagePath))
+                    {
+                        originalMat = Cv2.ImRead(urlSource.PdfRenderedImagePath);
+                        if (originalMat != null && !originalMat.Empty()) shouldDisposeOriginal = true;
                     }
                 }
 

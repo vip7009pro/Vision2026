@@ -181,6 +181,7 @@ namespace VisionInspectionApp.UI.ViewModels
         private readonly Application.Services.IInspectionLogService _inspectionLogService;
         private readonly LightingControllerService? _lightingControllerService;
         private readonly VisionInspectionApp.Application.Services.IRemoteServerService _remoteServerService;
+        private readonly VisionInspectionApp.Application.Services.IPdfDocumentService _pdfDocumentService;
         private readonly IServiceProvider? _serviceProvider;
         public UndoRedoManager UndoManager { get; }
         public IRelayCommand UndoCommand { get; }
@@ -211,6 +212,7 @@ namespace VisionInspectionApp.UI.ViewModels
             _dbManagerService = null!;
             _lightingControllerService = null;
             _remoteServerService = new VisionInspectionApp.Application.Services.RemoteServerService();
+            _pdfDocumentService = new VisionInspectionApp.Application.Services.PdfDocumentService();
             _inspectionLogService = new Application.Services.InspectionLogService();
             _motionSyncService = new Application.PLC.Services.PlcMotionSyncService(null);
             _shiftRegisterTracker = new Application.PLC.Services.ShiftRegisterTracker(null);
@@ -233,6 +235,7 @@ namespace VisionInspectionApp.UI.ViewModels
         {
             _serviceProvider = serviceProvider;
             _remoteServerService = (serviceProvider?.GetService(typeof(VisionInspectionApp.Application.Services.IRemoteServerService)) as VisionInspectionApp.Application.Services.IRemoteServerService) ?? new VisionInspectionApp.Application.Services.RemoteServerService();
+            _pdfDocumentService = (serviceProvider?.GetService(typeof(VisionInspectionApp.Application.Services.IPdfDocumentService)) as VisionInspectionApp.Application.Services.IPdfDocumentService) ?? new VisionInspectionApp.Application.Services.PdfDocumentService();
             _lightingControllerService = lightingControllerService ?? (serviceProvider?.GetService(typeof(LightingControllerService)) as LightingControllerService);
             if (_lightingControllerService != null)
             {
@@ -401,6 +404,10 @@ namespace VisionInspectionApp.UI.ViewModels
             TextNode_PickConditionColorCommand = new RelayCommand<TextColorConditionRow?>(TextNode_PickConditionColor);
             ImageSource_BrowseFileCommand = new RelayCommand(ImageSource_BrowseFile);
             ImageSource_BrowseFolderCommand = new RelayCommand(ImageSource_BrowseFolder);
+            ImageSource_BrowsePdfCommand = new RelayCommand(ImageSource_BrowsePdf);
+            ImageSource_ConvertPdfToImageCommand = new RelayCommand(ImageSource_ConvertPdfToImage);
+            ImageSource_PdfPrevPageCommand = new RelayCommand(ImageSource_PdfPrevPage);
+            ImageSource_PdfNextPageCommand = new RelayCommand(ImageSource_PdfNextPage);
             ImageSource_OpenJobCameraSettingsCommand = new RelayCommand(ImageSource_OpenJobCameraSettings);
             ImageSource_ApplyLightingToDeviceCommand = new RelayCommand(ImageSource_ApplyLightingToDevice);
             ImageSource_ReadLightingFromDeviceCommand = new RelayCommand(ImageSource_ReadLightingFromDevice);
@@ -1478,6 +1485,14 @@ namespace VisionInspectionApp.UI.ViewModels
             OnPropertyChanged(nameof(ImageSource_IsFile));
             OnPropertyChanged(nameof(ImageSource_IsFolder));
             OnPropertyChanged(nameof(ImageSource_IsCamera));
+            OnPropertyChanged(nameof(ImageSource_IsPdf));
+            OnPropertyChanged(nameof(ImageSource_PdfPath));
+            OnPropertyChanged(nameof(ImageSource_PdfPageNumber));
+            OnPropertyChanged(nameof(ImageSource_PdfTotalPages));
+            OnPropertyChanged(nameof(ImageSource_PdfScale));
+            OnPropertyChanged(nameof(ImageSource_PdfRenderedImagePath));
+            OnPropertyChanged(nameof(ImageSource_PdfImageInfo));
+            OnPropertyChanged(nameof(ImageSource_HasPdfRenderedImage));
             OnPropertyChanged(nameof(ImageSource_FilePath));
             OnPropertyChanged(nameof(ImageSource_FolderPath));
             OnPropertyChanged(nameof(ImageSource_CameraIndex));
@@ -2207,11 +2222,17 @@ namespace VisionInspectionApp.UI.ViewModels
     
         private ImageSourceDefinition? SelectedImageSourceDef()
         {
-            if (_config is null || SelectedNode is null)
+            if (_config is null)
                 return null;
-            if (!string.Equals(SelectedNode.Type, "ImageSource", StringComparison.OrdinalIgnoreCase))
-                return null;
-            return _config.ImageSources.FirstOrDefault(x => string.Equals(x.Name, SelectedNode.RefName, StringComparison.OrdinalIgnoreCase));
+            if (SelectedNode != null && string.Equals(SelectedNode.Type, "ImageSource", StringComparison.OrdinalIgnoreCase))
+            {
+                return _config.ImageSources.FirstOrDefault(x => string.Equals(x.Name, SelectedNode.RefName, StringComparison.OrdinalIgnoreCase));
+            }
+            if (SelectedNode == null && _config.ImageSources.Count > 0)
+            {
+                return _config.ImageSources[0];
+            }
+            return null;
         }
     
         private void SyncInputEdgeForAnglePort(string port, string? lineName)

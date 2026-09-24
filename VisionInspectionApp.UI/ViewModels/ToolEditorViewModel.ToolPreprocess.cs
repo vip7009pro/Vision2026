@@ -452,6 +452,15 @@ namespace VisionInspectionApp.UI.ViewModels
                         }
                     }
                 }
+                else if (value == ImageSourceType.Pdf)
+                {
+                    if (!string.IsNullOrWhiteSpace(def.PdfPath) && File.Exists(def.PdfPath))
+                    {
+                        int pages = _pdfDocumentService.GetPageCount(def.PdfPath);
+                        ImageSource_PdfTotalPages = Math.Max(1, pages);
+                    }
+                    UpdateSharedImageForImageSource(def);
+                }
                 else
                 {
                     ClearImageSourceCache(def.Name);
@@ -460,6 +469,7 @@ namespace VisionInspectionApp.UI.ViewModels
                 OnPropertyChanged(nameof(ImageSource_IsFolder));
                 OnPropertyChanged(nameof(ImageSource_IsCamera));
                 OnPropertyChanged(nameof(ImageSource_IsUrl));
+                OnPropertyChanged(nameof(ImageSource_IsPdf));
                 OnPropertyChanged(nameof(ImageSource_IsIndustrialCamera));
                 OnPropertyChanged(nameof(ImageSource_IsTimerDriven));
                 OnPropertyChanged(nameof(ImageSource_IsIntervalVisible));
@@ -477,6 +487,7 @@ namespace VisionInspectionApp.UI.ViewModels
         public bool ImageSource_IsFolder => ImageSource_SourceType == ImageSourceType.Folder;
         public bool ImageSource_IsCamera => ImageSource_SourceType == ImageSourceType.Camera;
         public bool ImageSource_IsUrl => ImageSource_SourceType == ImageSourceType.Url;
+        public bool ImageSource_IsPdf => ImageSource_SourceType == ImageSourceType.Pdf;
 
         public Array AvailableImageSourceTriggerModes => Enum.GetValues(typeof(ImageSourceTriggerMode));
 
@@ -820,6 +831,287 @@ namespace VisionInspectionApp.UI.ViewModels
             }
         }
 
+        #region PDF Image Source Properties & Methods
+
+        public sealed class PdfScaleOption
+        {
+            public double Scale { get; set; }
+            public string DisplayText { get; set; } = string.Empty;
+            public override string ToString() => DisplayText;
+        }
+
+        public ObservableCollection<PdfScaleOption> AvailablePdfScales { get; } = new()
+        {
+            new() { Scale = 300.0 / 72.0, DisplayText = "🌟 300 DPI (Chuẩn nét công nghiệp - Khuyên dùng)" },
+            new() { Scale = 200.0 / 72.0, DisplayText = "200 DPI (Nét cao 2.78x)" },
+            new() { Scale = 150.0 / 72.0, DisplayText = "150 DPI (Độ nét trung bình 2.08x)" },
+            new() { Scale = 400.0 / 72.0, DisplayText = "400 DPI (Siêu nét 5.56x)" },
+            new() { Scale = 600.0 / 72.0, DisplayText = "600 DPI (Cực nét Ultra-HD 8.33x)" },
+            new() { Scale = 1.0, DisplayText = "72 DPI (Tỉ lệ 1:1 điểm point gốc - Thô 1.0x)" }
+        };
+
+        public string ImageSource_PdfPath
+        {
+            get => SelectedImageSourceDef()?.PdfPath ?? string.Empty;
+            set
+            {
+                var def = SelectedImageSourceDef();
+                if (def is null) return;
+                value ??= string.Empty;
+                if (string.Equals(def.PdfPath, value, StringComparison.Ordinal)) return;
+                def.PdfPath = value;
+                ClearImageSourceCache(def.Name);
+                if (!string.IsNullOrWhiteSpace(value) && File.Exists(value))
+                {
+                    int pages = _pdfDocumentService.GetPageCount(value);
+                    ImageSource_PdfTotalPages = Math.Max(1, pages);
+                    if (def.PdfPageNumber < 1 || def.PdfPageNumber > ImageSource_PdfTotalPages)
+                    {
+                        def.PdfPageNumber = 1;
+                        OnPropertyChanged(nameof(ImageSource_PdfPageNumber));
+                    }
+                }
+                OnPropertyChanged();
+                RaiseToolPropertyPanelsChanged();
+                RefreshPreviews();
+                RequestAutoSave();
+            }
+        }
+
+        private int _imageSourcePdfTotalPages = 1;
+        public int ImageSource_PdfTotalPages
+        {
+            get
+            {
+                var def = SelectedImageSourceDef();
+                if (def != null && !string.IsNullOrWhiteSpace(def.PdfPath) && File.Exists(def.PdfPath))
+                {
+                    int p = _pdfDocumentService.GetPageCount(def.PdfPath);
+                    if (p > 0) _imageSourcePdfTotalPages = p;
+                }
+                return _imageSourcePdfTotalPages;
+            }
+            set
+            {
+                if (_imageSourcePdfTotalPages != value)
+                {
+                    _imageSourcePdfTotalPages = value;
+                    OnPropertyChanged();
+                }
+            }
+        }
+
+        public int ImageSource_PdfPageNumber
+        {
+            get => SelectedImageSourceDef()?.PdfPageNumber ?? 1;
+            set
+            {
+                var def = SelectedImageSourceDef();
+                if (def is null) return;
+                int maxPages = Math.Max(1, ImageSource_PdfTotalPages);
+                int clamped = Math.Clamp(value, 1, maxPages);
+                if (def.PdfPageNumber == clamped) return;
+                def.PdfPageNumber = clamped;
+                OnPropertyChanged();
+                if (!string.IsNullOrWhiteSpace(def.PdfPath) && File.Exists(def.PdfPath))
+                {
+                    ImageSource_ConvertPdfToImage();
+                }
+                else
+                {
+                    RequestAutoSave();
+                }
+            }
+        }
+
+        public double ImageSource_PdfScale
+        {
+            get
+            {
+                var def = SelectedImageSourceDef();
+                if (def == null) return 300.0 / 72.0;
+                // Nếu là giá trị 1.0 (72 DPI thô cũ) hoặc <= 0, ưu tiên 300 DPI chuẩn nét cao
+                if (def.PdfScale <= 1.01) return 300.0 / 72.0;
+                return def.PdfScale;
+            }
+            set
+            {
+                var def = SelectedImageSourceDef();
+                if (def is null) return;
+                double scaleVal = value > 0 ? value : (300.0 / 72.0);
+                if (Math.Abs(def.PdfScale - scaleVal) < 0.001) return;
+                def.PdfScale = scaleVal;
+                def.PdfDpi = (int)Math.Round(scaleVal * 72.0);
+                OnPropertyChanged();
+                if (!string.IsNullOrWhiteSpace(def.PdfPath) && File.Exists(def.PdfPath))
+                {
+                    ImageSource_ConvertPdfToImage();
+                }
+                else
+                {
+                    RequestAutoSave();
+                }
+            }
+        }
+
+        public string ImageSource_PdfRenderedImagePath
+        {
+            get => SelectedImageSourceDef()?.PdfRenderedImagePath ?? string.Empty;
+            set
+            {
+                var def = SelectedImageSourceDef();
+                if (def is null) return;
+                def.PdfRenderedImagePath = value ?? string.Empty;
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(ImageSource_HasPdfRenderedImage));
+                RequestAutoSave();
+            }
+        }
+
+        public bool ImageSource_HasPdfRenderedImage => !string.IsNullOrWhiteSpace(ImageSource_PdfRenderedImagePath) && File.Exists(ImageSource_PdfRenderedImagePath);
+
+        private string _imageSourcePdfImageInfo = string.Empty;
+        public string ImageSource_PdfImageInfo
+        {
+            get
+            {
+                if (string.IsNullOrWhiteSpace(_imageSourcePdfImageInfo))
+                {
+                    var def = SelectedImageSourceDef();
+                    if (def != null && !string.IsNullOrWhiteSpace(def.PdfRenderedImagePath) && File.Exists(def.PdfRenderedImagePath))
+                    {
+                        try
+                        {
+                            using var mat = Cv2.ImRead(def.PdfRenderedImagePath, ImreadModes.Color);
+                            if (mat != null && !mat.Empty())
+                            {
+                                _imageSourcePdfImageInfo = $"{mat.Width} × {mat.Height} px (Tỉ lệ {def.PdfScale * 100:0}%)";
+                            }
+                        }
+                        catch { }
+                    }
+                    else if (def != null && !string.IsNullOrWhiteSpace(def.PdfPath) && File.Exists(def.PdfPath))
+                    {
+                        var dims = _pdfDocumentService.GetPageDimensions(def.PdfPath, def.PdfPageNumber, def.PdfScale);
+                        if (dims.Width > 0 && dims.Height > 0)
+                        {
+                            _imageSourcePdfImageInfo = $"{dims.Width} × {dims.Height} px (Tỉ lệ {def.PdfScale * 100:0}%)";
+                        }
+                    }
+                }
+                return _imageSourcePdfImageInfo;
+            }
+            set
+            {
+                if (_imageSourcePdfImageInfo != value)
+                {
+                    _imageSourcePdfImageInfo = value;
+                    OnPropertyChanged();
+                }
+            }
+        }
+
+        private void ImageSource_BrowsePdf()
+        {
+            var dlg = new Microsoft.Win32.OpenFileDialog
+            {
+                Filter = "Bản vẽ PDF (*.pdf)|*.pdf|Tất cả tệp (*.*)|*.*",
+                Title = "Chọn bản vẽ kỹ thuật PDF để dạy học (Teach)"
+            };
+            if (dlg.ShowDialog() == true)
+            {
+                var def = SelectedImageSourceDef();
+                if (def == null) return;
+                def.PdfPath = dlg.FileName;
+                OnPropertyChanged(nameof(ImageSource_PdfPath));
+
+                // Tự động chuyển sang 300 DPI (chuẩn công nghiệp siêu nét) nếu đang ở mức 1.0 (72 DPI thô)
+                if (def.PdfScale <= 1.01)
+                {
+                    def.PdfScale = 300.0 / 72.0;
+                    def.PdfDpi = 300;
+                    OnPropertyChanged(nameof(ImageSource_PdfScale));
+                }
+
+                int totalPages = _pdfDocumentService.GetPageCount(dlg.FileName);
+                ImageSource_PdfTotalPages = Math.Max(1, totalPages);
+                if (def.PdfPageNumber < 1 || def.PdfPageNumber > ImageSource_PdfTotalPages)
+                {
+                    def.PdfPageNumber = 1;
+                    OnPropertyChanged(nameof(ImageSource_PdfPageNumber));
+                }
+
+                // Tự động chuyển đổi bản vẽ PDF ra ảnh độ nét cao và nạp lên canvas để teach
+                ImageSource_ConvertPdfToImage();
+            }
+        }
+
+        public void ImageSource_ConvertPdfToImage()
+        {
+            var def = SelectedImageSourceDef();
+            if (def == null || string.IsNullOrWhiteSpace(def.PdfPath) || !File.Exists(def.PdfPath))
+            {
+                System.Windows.MessageBox.Show("Vui lòng chọn tệp PDF hợp lệ trước khi chuyển đổi.", "Thông báo", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Warning);
+                return;
+            }
+
+            try
+            {
+                double scale = def.PdfScale > 0 ? def.PdfScale : (300.0 / 72.0);
+                int page = Math.Max(1, def.PdfPageNumber);
+                int dpi = (int)Math.Round(scale * 72.0);
+
+                string targetDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Cache", "PdfImages");
+                if (!string.IsNullOrWhiteSpace(CurrentTempWorkingDir) && Directory.Exists(CurrentTempWorkingDir))
+                {
+                    targetDir = Path.Combine(CurrentTempWorkingDir, "pdf_renders");
+                }
+                Directory.CreateDirectory(targetDir);
+
+                string imagePath = _pdfDocumentService.ConvertPdfToImageFile(def.PdfPath, page, scale, targetDir);
+                def.PdfRenderedImagePath = imagePath;
+                OnPropertyChanged(nameof(ImageSource_PdfRenderedImagePath));
+
+                var dims = _pdfDocumentService.GetPageDimensions(def.PdfPath, page, scale);
+                ImageSource_PdfImageInfo = $"{dims.Width} × {dims.Height} px ({dpi} DPI • Nét cao)";
+
+                ClearImageSourceCache(def.Name);
+                var rawMat = Cv2.ImRead(imagePath);
+                if (rawMat != null && !rawMat.Empty())
+                {
+                    SetImageSourceCache(def.Name, imagePath, rawMat);
+                    using var displayMat = PrepareDisplayImageForSharedContext(rawMat, def);
+                    _sharedImage.SetImage(displayMat);
+                }
+
+                RaiseToolPropertyPanelsChanged();
+                RefreshPreviews();
+                RequestAutoSave();
+
+                StatusBarText = $"✅ Đã chuyển đổi bản vẽ PDF trang {page} sang ảnh ({dims.Width}x{dims.Height}px, {dpi} DPI) nền trắng sắc nét và nạp vào Canvas để dạy học.";
+            }
+            catch (Exception ex)
+            {
+                System.Windows.MessageBox.Show($"Lỗi khi chuyển đổi PDF sang ảnh: {ex.Message}", "Lỗi PDF", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Error);
+            }
+        }
+
+        private void ImageSource_PdfPrevPage()
+        {
+            var def = SelectedImageSourceDef();
+            if (def == null || def.PdfPageNumber <= 1) return;
+            ImageSource_PdfPageNumber = def.PdfPageNumber - 1;
+        }
+
+        private void ImageSource_PdfNextPage()
+        {
+            var def = SelectedImageSourceDef();
+            if (def == null || def.PdfPageNumber >= ImageSource_PdfTotalPages) return;
+            ImageSource_PdfPageNumber = def.PdfPageNumber + 1;
+        }
+
+        #endregion
+
         public void ImageSource_OpenJobCameraSettings()
         {
             var def = SelectedImageSourceDef();
@@ -862,6 +1154,10 @@ namespace VisionInspectionApp.UI.ViewModels
     
         public ICommand ImageSource_BrowseFileCommand { get; }
         public ICommand ImageSource_BrowseFolderCommand { get; }
+        public ICommand ImageSource_BrowsePdfCommand { get; }
+        public ICommand ImageSource_ConvertPdfToImageCommand { get; }
+        public ICommand ImageSource_PdfPrevPageCommand { get; }
+        public ICommand ImageSource_PdfNextPageCommand { get; }
         public ICommand ImageSource_OpenJobCameraSettingsCommand { get; }
         public ICommand ImageSource_ApplyLightingToDeviceCommand { get; }
         public ICommand ImageSource_ReadLightingFromDeviceCommand { get; }

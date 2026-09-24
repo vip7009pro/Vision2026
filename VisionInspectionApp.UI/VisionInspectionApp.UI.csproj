@@ -12,6 +12,7 @@
   <ItemGroup>
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.0" />
     <PackageReference Include="DirectShowLib.Standard" Version="2.1.0" />
+    <PackageReference Include="Docnet.Core" Version="2.6.0" />
     <PackageReference Include="Microsoft.Extensions.Hosting" Version="9.0.0" />
     <PackageReference Include="MvCameraControl.Net" Version="1.1.0" />
     <PackageReference Include="OpenCvSharp4" Version="4.10.0.20240616" />
@@ -33,10 +34,10 @@
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
 
     <!-- Application Version (Dùng cho OTA Update & Windows File Properties) -->
-    <Version>1.0.0.21</Version>
-    <AssemblyVersion>1.0.0.21</AssemblyVersion>
-    <FileVersion>1.0.0.21</FileVersion>
-    <InformationalVersion>1.0.0.21</InformationalVersion>
+    <Version>1.0.0.22</Version>
+    <AssemblyVersion>1.0.0.22</AssemblyVersion>
+    <FileVersion>1.0.0.22</FileVersion>
+    <InformationalVersion>1.0.0.22</InformationalVersion>
   </PropertyGroup>
 
   <ItemGroup>

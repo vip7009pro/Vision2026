@@ -142,7 +142,8 @@ public enum ImageSourceType
     File = 0,
     Folder = 1,
     Camera = 2,
-    Url = 3
+    Url = 3,
+    Pdf = 4
 }
 
 public enum ImageSourceTriggerMode
@@ -206,6 +207,31 @@ public sealed class ImageSourceDefinition
     /// Đường dẫn URL tải ảnh từ máy chủ Web (Remote Server URL) dùng cho huấn luyện (teaching) từ xa.
     /// </summary>
     public string ImageUrl { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Đường dẫn tệp bản vẽ kỹ thuật PDF dùng làm nguồn ảnh dạy học (teach) và chạy flow.
+    /// </summary>
+    public string PdfPath { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Số thứ tự trang PDF cần chuyển đổi ra ảnh (1-based, mặc định = 1).
+    /// </summary>
+    public int PdfPageNumber { get; set; } = 1;
+
+    /// <summary>
+    /// Tỉ lệ xuất ảnh so với kích thước gốc của bản vẽ PDF (mặc định = 300/72 ~ 4.167x cho độ phân giải chuẩn in ấn và thị giác máy tính 300 DPI sắc nét).
+    /// </summary>
+    public double PdfScale { get; set; } = 300.0 / 72.0;
+
+    /// <summary>
+    /// Độ phân giải DPI kết xuất từ PDF (mặc định = 300 DPI cho độ nét công nghiệp cao, đọc rõ mọi chữ và nét vẽ nhỏ).
+    /// </summary>
+    public int PdfDpi { get; set; } = 300;
+
+    /// <summary>
+    /// Đường dẫn tệp ảnh PNG đã chuyển đổi từ trang PDF để cấp cho các tool dạy học và kiểm tra.
+    /// </summary>
+    public string PdfRenderedImagePath { get; set; } = string.Empty;
 
     public bool LoopFolder { get; set; } = true;
 

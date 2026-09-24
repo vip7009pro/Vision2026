@@ -2876,7 +2876,7 @@ namespace VisionInspectionApp.UI.ViewModels
             });
         }
 
-        private Mat? LoadImageFromSourceForPreview(ImageSourceDefinition source)
+        public Mat? LoadImageFromSourceForPreview(ImageSourceDefinition source)
         {
             try
             {
@@ -2914,6 +2914,46 @@ namespace VisionInspectionApp.UI.ViewModels
                         // 2. Tuyệt đối không chặn đồng bộ luồng UI WPF bằng .GetResult(). Kích hoạt tải bất đồng bộ ở background.
                         ScheduleAsyncUrlImageFetch(source.Name, source.ImageUrl);
                         return null;
+                    }
+                }
+                else if (source.SourceType == ImageSourceType.Pdf)
+                {
+                    // 1. Thử nạp từ ảnh PNG đã render từ bản vẽ PDF nếu có sẵn
+                    if (!string.IsNullOrWhiteSpace(source.PdfRenderedImagePath) && File.Exists(source.PdfRenderedImagePath))
+                    {
+                        var mat = Cv2.ImRead(source.PdfRenderedImagePath);
+                        if (mat is not null && !mat.Empty())
+                        {
+                            SetImageSourceCache(source.Name, source.PdfRenderedImagePath, mat);
+                            return mat;
+                        }
+                    }
+
+                    // 2. Nếu chưa có ảnh render nhưng có tệp PDF, tự động kết xuất ra ảnh 100%
+                    if (!string.IsNullOrWhiteSpace(source.PdfPath) && File.Exists(source.PdfPath))
+                    {
+                        try
+                        {
+                            double scale = source.PdfScale > 0 ? source.PdfScale : 1.0;
+                            int page = Math.Max(1, source.PdfPageNumber);
+                            string targetDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Cache", "PdfImages");
+                            if (!string.IsNullOrWhiteSpace(CurrentTempWorkingDir) && Directory.Exists(CurrentTempWorkingDir))
+                            {
+                                targetDir = Path.Combine(CurrentTempWorkingDir, "pdf_renders");
+                            }
+                            string imageFile = _pdfDocumentService.ConvertPdfToImageFile(source.PdfPath, page, scale, targetDir);
+                            source.PdfRenderedImagePath = imageFile;
+                            var mat = Cv2.ImRead(imageFile);
+                            if (mat is not null && !mat.Empty())
+                            {
+                                SetImageSourceCache(source.Name, imageFile, mat);
+                                return mat;
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            System.Diagnostics.Debug.WriteLine($"[LoadImageFromSourceForPreview] Lỗi kết xuất PDF '{source.PdfPath}': {ex.Message}");
+                        }
                     }
                 }
                 else if (source.SourceType == ImageSourceType.Folder)
@@ -3214,7 +3254,7 @@ namespace VisionInspectionApp.UI.ViewModels
                         _ = StartContinuousCameraFlow(imgSourceDef);
                         return;
                     }
-                    else if (imgSourceDef.SourceType == ImageSourceType.File || imgSourceDef.SourceType == ImageSourceType.Url)
+                    else if (imgSourceDef.SourceType == ImageSourceType.File || imgSourceDef.SourceType == ImageSourceType.Url || imgSourceDef.SourceType == ImageSourceType.Pdf)
                     {
                         StartFileContinuousFlow(imgSourceDef);
                         return;
@@ -4345,7 +4385,7 @@ namespace VisionInspectionApp.UI.ViewModels
                             System.Diagnostics.Debug.WriteLine($"RunFlow: ImageSourceDef not found for RefName: {imageSourceNode.RefName}");
                         }
                         __sw.Stop();
-                        imageSourceMs = (imgSourceDef?.SourceType == ImageSourceType.File || imgSourceDef?.SourceType == ImageSourceType.Url) ? 0 : (int)__sw.ElapsedMilliseconds;
+                        imageSourceMs = (imgSourceDef?.SourceType == ImageSourceType.File || imgSourceDef?.SourceType == ImageSourceType.Url || imgSourceDef?.SourceType == ImageSourceType.Pdf) ? 0 : (int)__sw.ElapsedMilliseconds;
                     }
                     else
                     {

@@ -121,6 +121,9 @@ public partial class App : System.Windows.Application
                 services.AddSingleton<VisionInspectionApp.Application.Services.IDotnetRuntimeService, VisionInspectionApp.Application.Services.DotnetRuntimeService>();
                 services.AddTransient<Views.PLC.DotnetRuntimePromptDialog>();
 
+                // PDF Document Rendering Service (Bản vẽ PDF 100%)
+                services.AddSingleton<VisionInspectionApp.Application.Services.IPdfDocumentService, VisionInspectionApp.Application.Services.PdfDocumentService>();
+
 
                 services.AddSingleton<TeachViewModel>();
                 services.AddSingleton<ToolEditorViewModel>();

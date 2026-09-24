@@ -58,5 +58,6 @@ class Program
         ContinuousFlowRegressionTests.RunAllTests();
         ToolEditorAndOqcUxTests.RunAllTests();
         TimingAccountingTests.RunAllTests();
+        PdfSourceTests.RunAllTests();
     }
 }
