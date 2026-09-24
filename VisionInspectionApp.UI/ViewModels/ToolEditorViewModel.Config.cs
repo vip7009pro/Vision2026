@@ -59,6 +59,16 @@ namespace VisionInspectionApp.UI.ViewModels
         [ObservableProperty]
         private string? _currentTempWorkingDir;
 
+        public string EnsureCurrentTempWorkingDir()
+        {
+            if (string.IsNullOrWhiteSpace(CurrentTempWorkingDir) || !Directory.Exists(CurrentTempWorkingDir))
+            {
+                CurrentTempWorkingDir = Path.Combine(Path.GetTempPath(), "Vision2026", "Jobs", Guid.NewGuid().ToString());
+                Directory.CreateDirectory(CurrentTempWorkingDir);
+            }
+            return CurrentTempWorkingDir;
+        }
+
         public VisionConfig? Config => _config;
 
         public ICommand OpenJobCommand { get; }

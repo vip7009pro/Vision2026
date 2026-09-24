@@ -25,6 +25,7 @@ public static class PdfSourceTests
         Test4_JobPipeline_RunWithPdfImageInput();
         Test5_PdfMatchingCamera_20MP_And_CustomPresets();
         Test6_PdfPanAndRotationFeatures();
+        Test7_PdfOriginTrainTemplatePreview();
         Console.WriteLine("=== [ALL PDF SOURCE TESTS PASSED (100%)] ===\n");
     }
 
@@ -449,6 +450,88 @@ public static class PdfSourceTests
             throw new Exception($"PanReset failed: X={vm.ImageSource_PdfCanvasOffsetX}, Y={vm.ImageSource_PdfCanvasOffsetY}");
 
         Console.WriteLine("PASSED! (Rotation=90°, Pan Offset & Manual PixelsPerMm verified)");
+    }
+
+    private static void Test7_PdfOriginTrainTemplatePreview()
+    {
+        Console.Write("Test 7: PDF ImageSource Origin Train Template & Preview (Avoid 'Chưa lưu template')... ");
+        string pdfPath = EnsureSamplePdf();
+
+        var config = new VisionConfig
+        {
+            ProductCode = "TEST_PDF_ORIGIN_TRAIN",
+            ProductName = "Test PDF Origin Train",
+            PixelsPerMm = 10.0,
+            Origin = new PointDefinition
+            {
+                Name = "Origin",
+                OriginAlgorithm = OriginAlgorithm.MvpShapeMatch2,
+                TemplateRoi = new Roi { X = 50, Y = 50, Width = 120, Height = 100 },
+                SearchRoi = new Roi { X = 0, Y = 0, Width = 1000, Height = 1000 }
+            },
+            ImageSources = new System.Collections.Generic.List<ImageSourceDefinition>
+            {
+                new ImageSourceDefinition
+                {
+                    Name = "CAM1",
+                    SourceType = ImageSourceType.Pdf,
+                    PdfPath = pdfPath,
+                    PdfPageNumber = 1,
+                    PdfRenderMode = PdfRenderMode.MatchCamera1to1,
+                    PdfFitToCameraCanvas = true,
+                    PdfCameraWidth = 1280,
+                    PdfCameraHeight = 960,
+                    PdfPixelsPerMm = 10.0
+                }
+            },
+            ToolGraph = new ToolGraph
+            {
+                Nodes = new System.Collections.Generic.List<ToolGraphNode>
+                {
+                    new ToolGraphNode { Id = "node_src", Type = "ImageSource", RefName = "CAM1" },
+                    new ToolGraphNode { Id = "node_origin", Type = "Origin", RefName = "Origin" }
+                }
+            }
+        };
+
+        var vm = new ToolEditorViewModel();
+        vm.InitializeWithConfig(config);
+
+        // Ban đầu chưa train/lưu template -> Origin_TemplatePreviewImage phải là null
+        vm.RefreshOriginTemplatePreview();
+        if (vm.Origin_TemplatePreviewImage != null)
+            throw new Exception("Initially Origin_TemplatePreviewImage should be null before training");
+
+        // 1. Nạp ảnh từ nguồn PDF
+        var imgSource = config.ImageSources[0];
+        using var loadedMat = vm.LoadImageFromSourceForPreview(imgSource);
+        if (loadedMat == null || loadedMat.Empty())
+            throw new Exception("Failed to load PDF preview image");
+
+        // 2. Mở Train Template với workingDir từ EnsureCurrentTempWorkingDir
+        var workingDir = vm.EnsureCurrentTempWorkingDir();
+        using (var trainVm = new OriginTrainViewModel(loadedMat, config.Origin, workingDir))
+        {
+            trainVm.UpdateRoi(60, 60, 150, 120);
+            trainVm.OkCommand.Execute(null);
+        }
+
+        // 3. Sau khi bấm OK, gọi RefreshOriginTemplatePreview
+        vm.RefreshOriginTemplatePreview();
+
+        // 4. Assert: TemplatePreviewImage PHẢI KHÁC NULL (hiển thị ảnh mẫu thay vì 'Chưa lưu template')
+        if (vm.Origin_TemplatePreviewImage == null)
+            throw new Exception("FAILED: Origin_TemplatePreviewImage is still null ('Chưa lưu template') after train OK!");
+
+        if (string.IsNullOrWhiteSpace(config.Origin.TemplateImageFile) || !File.Exists(config.Origin.TemplateImageFile))
+            throw new Exception($"FAILED: Template file does not exist on disk: {config.Origin.TemplateImageFile}");
+
+        // 5. Kiểm tra ResolveTemplatePath tìm thấy file
+        var resolved = vm.ResolveTemplatePath(config.Origin.TemplateImageFile, "origin.png", "origin*.png");
+        if (string.IsNullOrWhiteSpace(resolved) || !File.Exists(resolved))
+            throw new Exception($"ResolveTemplatePath failed to find template: {resolved}");
+
+        Console.WriteLine("PASSED! (Origin template trained from PDF & displayed in Preview successfully)");
     }
 
     private static void InjectField(object target, string fieldName, object? value)

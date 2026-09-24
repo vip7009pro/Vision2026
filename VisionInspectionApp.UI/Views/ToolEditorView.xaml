@@ -1711,11 +1711,11 @@
                                                         <TextBlock Grid.Column="2" Text="Y:" VerticalAlignment="Center" Margin="4,0,2,0" FontSize="10" Foreground="{DynamicResource TextBrush}"/>
                                                         <TextBox Grid.Column="3" Text="{Binding ImageSource_PdfCanvasOffsetY, UpdateSourceTrigger=LostFocus}" TextAlignment="Center" FontSize="11" VerticalContentAlignment="Center" ToolTip="Dịch chuyển tọa độ Y (pixel)"/>
                                                         <StackPanel Grid.Column="4" Orientation="Horizontal" HorizontalAlignment="Right">
-                                                            <Button Content="⬅" Command="{Binding ImageSource_PdfPanLeftCommand}" Width="20" Height="20" Margin="1,0" FontSize="9" ToolTip="Dịch sang trái 200px" />
-                                                            <Button Content="➡" Command="{Binding ImageSource_PdfPanRightCommand}" Width="20" Height="20" Margin="1,0" FontSize="9" ToolTip="Dịch sang phải 200px" />
-                                                            <Button Content="⬆" Command="{Binding ImageSource_PdfPanUpCommand}" Width="20" Height="20" Margin="1,0" FontSize="9" ToolTip="Dịch lên trên 200px" />
-                                                            <Button Content="⬇" Command="{Binding ImageSource_PdfPanDownCommand}" Width="20" Height="20" Margin="1,0" FontSize="9" ToolTip="Dịch xuống dưới 200px" />
-                                                            <Button Content="🎯" Command="{Binding ImageSource_PdfPanResetCommand}" Width="22" Height="20" Margin="1,0" FontSize="10" ToolTip="Reset về tâm (X=0, Y=0)" />
+                                                            <Button Content="◀" Command="{Binding ImageSource_PdfPanLeftCommand}" Width="25" Height="22" Margin="1,0" Padding="0" FontWeight="Bold" FontSize="12" Foreground="{DynamicResource TextBrush}" ToolTip="Dịch sang trái (Pan X -200px)" />
+                                                            <Button Content="▶" Command="{Binding ImageSource_PdfPanRightCommand}" Width="25" Height="22" Margin="1,0" Padding="0" FontWeight="Bold" FontSize="12" Foreground="{DynamicResource TextBrush}" ToolTip="Dịch sang phải (Pan X +200px)" />
+                                                            <Button Content="▲" Command="{Binding ImageSource_PdfPanUpCommand}" Width="25" Height="22" Margin="1,0" Padding="0" FontWeight="Bold" FontSize="12" Foreground="{DynamicResource TextBrush}" ToolTip="Dịch lên trên (Pan Y -200px)" />
+                                                            <Button Content="▼" Command="{Binding ImageSource_PdfPanDownCommand}" Width="25" Height="22" Margin="1,0" Padding="0" FontWeight="Bold" FontSize="12" Foreground="{DynamicResource TextBrush}" ToolTip="Dịch xuống dưới (Pan Y +200px)" />
+                                                            <Button Content="⟲ 0" Command="{Binding ImageSource_PdfPanResetCommand}" Width="32" Height="22" Margin="1,0" Padding="0" FontWeight="Bold" FontSize="10" Foreground="{DynamicResource TextBrush}" ToolTip="Reset Pan về gốc (X=0, Y=0)" />
                                                         </StackPanel>
                                                     </Grid>
                                                 </Border>

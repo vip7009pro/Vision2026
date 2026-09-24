@@ -511,7 +511,7 @@ namespace VisionInspectionApp.UI.ViewModels
             }
 
             Cv2.ImWrite(templateFile, grayToSave);
-            _originDef.TemplateImageFile = "origin.png";
+            _originDef.TemplateImageFile = templateFile;
 
             // Train ShapeModel from Image 2 (_rawFullMat = tool input after local preprocess)
             // This matches the actual runtime pipeline: origin.png → PreprocessTemplateForMatch(localPre) = Image 2

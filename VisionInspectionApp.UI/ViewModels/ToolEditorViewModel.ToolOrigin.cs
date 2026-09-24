@@ -233,6 +233,7 @@ namespace VisionInspectionApp.UI.ViewModels
             _config.Origin.WorldPosition = RoiCenterToWorld(roi);
             TrySaveTemplateImage("origin", roi, isOrigin: true, pointName: null);
 
+            InvalidateOriginTemplatePreviewCache();
             RefreshOriginTemplatePreview();
             RefreshPreviews();
             RequestAutoSave();
@@ -280,7 +281,7 @@ namespace VisionInspectionApp.UI.ViewModels
             using var prepSnap = toolNode != null ? ResolveToolImageForPreview(snap, toolNode) : snap.Clone();
             using var globalPrepSnap = prepSnap.Clone();
 
-            var workingDir = CurrentTempWorkingDir ?? Path.Combine(Path.GetFullPath(_storeOptions.ConfigRootDirectory), ProductCode ?? "");
+            var workingDir = EnsureCurrentTempWorkingDir();
             var vm = new OriginTrainViewModel(prepSnap, globalPrepSnap, _config.Origin, workingDir, () =>
             {
                 using var freshSnap = GetCurrentWorkingImageSnapshot();
@@ -296,8 +297,13 @@ namespace VisionInspectionApp.UI.ViewModels
 
             if (win.ShowDialog() == true || true)
             {
+                InvalidateOriginTemplatePreviewCache();
                 OnPropertyChanged(nameof(Origin_Algorithm));
                 OnPropertyChanged(nameof(IsOriginShapePyramid));
+                OnPropertyChanged(nameof(Origin_MinScore));
+                OnPropertyChanged(nameof(Origin_MinAngle));
+                OnPropertyChanged(nameof(Origin_MaxAngle));
+                OnPropertyChanged(nameof(Origin_AngleStep));
                 RefreshOriginTemplatePreview();
                 RefreshPreviews();
                 RequestAutoSave();

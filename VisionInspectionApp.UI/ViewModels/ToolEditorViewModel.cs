@@ -881,58 +881,79 @@ namespace VisionInspectionApp.UI.ViewModels
         {
             try
             {
-                // BẮT BUỘC CHỈ TÌM TRONG THƯ MỤC CỦA JOB HIỆN TẠI (CurrentTempWorkingDir)
-                if (string.IsNullOrWhiteSpace(CurrentTempWorkingDir) || !Directory.Exists(CurrentTempWorkingDir))
+                // 0. Nếu currentPath là đường dẫn file hợp lệ và tồn tại trên đĩa -> trả về ngay
+                if (!string.IsNullOrWhiteSpace(currentPath) && File.Exists(currentPath))
+                    return Path.GetFullPath(currentPath);
+
+                // Tự động đảm bảo CurrentTempWorkingDir luôn tồn tại
+                EnsureCurrentTempWorkingDir();
+
+                if (!string.IsNullOrWhiteSpace(CurrentTempWorkingDir) && Directory.Exists(CurrentTempWorkingDir))
                 {
-                    if (!string.IsNullOrWhiteSpace(currentPath) && File.Exists(currentPath))
-                        return Path.GetFullPath(currentPath);
-                    return null;
-                }
+                    var templatesSubdir = Path.Combine(CurrentTempWorkingDir, "templates");
 
-                var templatesSubdir = Path.Combine(CurrentTempWorkingDir, "templates");
+                    // Trích xuất tên file sạch (bỏ mọi đường dẫn tuyệt đối cũ nếu có trong json)
+                    var cleanFileName = !string.IsNullOrWhiteSpace(currentPath) ? Path.GetFileName(currentPath) : fallbackName;
 
-                // Trích xuất tên file sạch (bỏ mọi đường dẫn tuyệt đối cũ nếu có trong json)
-                var cleanFileName = !string.IsNullOrWhiteSpace(currentPath) ? Path.GetFileName(currentPath) : fallbackName;
-
-                // 1. Tìm trong CurrentTempWorkingDir/templates/{cleanFileName}
-                if (!string.IsNullOrWhiteSpace(cleanFileName) && Directory.Exists(templatesSubdir))
-                {
-                    var p1 = Path.Combine(templatesSubdir, cleanFileName);
-                    if (File.Exists(p1)) return Path.GetFullPath(p1);
-                }
-
-                // 2. Tìm trong CurrentTempWorkingDir/{cleanFileName} (gốc zip)
-                if (!string.IsNullOrWhiteSpace(cleanFileName))
-                {
-                    var p2 = Path.Combine(CurrentTempWorkingDir, cleanFileName);
-                    if (File.Exists(p2)) return Path.GetFullPath(p2);
-                }
-
-                // 3. Nếu cleanFileName khác fallbackName, thử tìm fallbackName
-                if (!string.IsNullOrWhiteSpace(fallbackName))
-                {
-                    var fbClean = Path.GetFileName(fallbackName);
-                    if (Directory.Exists(templatesSubdir))
+                    // 1. Tìm trong CurrentTempWorkingDir/templates/{cleanFileName}
+                    if (!string.IsNullOrWhiteSpace(cleanFileName) && Directory.Exists(templatesSubdir))
                     {
-                        var p3 = Path.Combine(templatesSubdir, fbClean);
-                        if (File.Exists(p3)) return Path.GetFullPath(p3);
+                        var p1 = Path.Combine(templatesSubdir, cleanFileName);
+                        if (File.Exists(p1)) return Path.GetFullPath(p1);
                     }
-                    var p4 = Path.Combine(CurrentTempWorkingDir, fbClean);
-                    if (File.Exists(p4)) return Path.GetFullPath(p4);
+
+                    // 2. Tìm trong CurrentTempWorkingDir/{cleanFileName} (gốc zip)
+                    if (!string.IsNullOrWhiteSpace(cleanFileName))
+                    {
+                        var p2 = Path.Combine(CurrentTempWorkingDir, cleanFileName);
+                        if (File.Exists(p2)) return Path.GetFullPath(p2);
+                    }
+
+                    // 3. Nếu cleanFileName khác fallbackName, thử tìm fallbackName
+                    if (!string.IsNullOrWhiteSpace(fallbackName))
+                    {
+                        var fbClean = Path.GetFileName(fallbackName);
+                        if (Directory.Exists(templatesSubdir))
+                        {
+                            var p3 = Path.Combine(templatesSubdir, fbClean);
+                            if (File.Exists(p3)) return Path.GetFullPath(p3);
+                        }
+                        var p4 = Path.Combine(CurrentTempWorkingDir, fbClean);
+                        if (File.Exists(p4)) return Path.GetFullPath(p4);
+                    }
+
+                    // 4. Tìm kiếm theo wildcard pattern trong CurrentTempWorkingDir/templates
+                    if (!string.IsNullOrWhiteSpace(fallbackPattern) && Directory.Exists(templatesSubdir))
+                    {
+                        var matches = Directory.GetFiles(templatesSubdir, fallbackPattern);
+                        if (matches.Length > 0) return Path.GetFullPath(matches[0]);
+                    }
+
+                    // 5. Tìm kiếm theo wildcard pattern trong CurrentTempWorkingDir
+                    if (!string.IsNullOrWhiteSpace(fallbackPattern))
+                    {
+                        var matches = Directory.GetFiles(CurrentTempWorkingDir, fallbackPattern);
+                        if (matches.Length > 0) return Path.GetFullPath(matches[0]);
+                    }
                 }
 
-                // 4. Tìm kiếm theo wildcard pattern trong CurrentTempWorkingDir/templates
-                if (!string.IsNullOrWhiteSpace(fallbackPattern) && Directory.Exists(templatesSubdir))
+                // 6. Fallback tìm kiếm trong thư mục ConfigRootDirectory / ProductCode (khi chưa đóng gói job)
+                if (!string.IsNullOrWhiteSpace(_storeOptions?.ConfigRootDirectory))
                 {
-                    var matches = Directory.GetFiles(templatesSubdir, fallbackPattern);
-                    if (matches.Length > 0) return Path.GetFullPath(matches[0]);
-                }
+                    var cfgDir = Path.Combine(Path.GetFullPath(_storeOptions.ConfigRootDirectory), ProductCode ?? "");
+                    var cfgTemplates = Path.Combine(cfgDir, "templates");
+                    var cleanFileName = !string.IsNullOrWhiteSpace(currentPath) ? Path.GetFileName(currentPath) : fallbackName;
 
-                // 5. Tìm kiếm theo wildcard pattern trong CurrentTempWorkingDir
-                if (!string.IsNullOrWhiteSpace(fallbackPattern))
-                {
-                    var matches = Directory.GetFiles(CurrentTempWorkingDir, fallbackPattern);
-                    if (matches.Length > 0) return Path.GetFullPath(matches[0]);
+                    if (!string.IsNullOrWhiteSpace(cleanFileName) && Directory.Exists(cfgTemplates))
+                    {
+                        var pCfg1 = Path.Combine(cfgTemplates, cleanFileName);
+                        if (File.Exists(pCfg1)) return Path.GetFullPath(pCfg1);
+                    }
+                    if (!string.IsNullOrWhiteSpace(cleanFileName) && Directory.Exists(cfgDir))
+                    {
+                        var pCfg2 = Path.Combine(cfgDir, cleanFileName);
+                        if (File.Exists(pCfg2)) return Path.GetFullPath(pCfg2);
+                    }
                 }
             }
             catch (Exception ex)
@@ -1070,7 +1091,8 @@ namespace VisionInspectionApp.UI.ViewModels
             rawMat = toolNode != null ? ResolveToolImageForPreview(snap, toolNode) : _preprocessor.Run(snap, _config?.Preprocess ?? new PreprocessSettings());
             using var tempDisposeMat = rawMat;
 
-            var templateDir = Path.Combine(CurrentTempWorkingDir ?? Path.Combine(Path.GetFullPath(_storeOptions.ConfigRootDirectory), ProductCode), "templates");
+            var workingDir = EnsureCurrentTempWorkingDir();
+            var templateDir = Path.Combine(workingDir, "templates");
             Directory.CreateDirectory(templateDir);
             var safeName = name.Trim();
             var fileName = $"{safeName}.png";
@@ -1091,7 +1113,7 @@ namespace VisionInspectionApp.UI.ViewModels
     
             if (isOrigin)
             {
-                _config.Origin.TemplateImageFile = fileName;
+                _config.Origin.TemplateImageFile = fullPath;
                 // Train ShapeModel from Image 2 (tool input after local preprocess) to match runtime pipeline
                 var originNode = Nodes.FirstOrDefault(n => string.Equals(n.Type, "Origin", StringComparison.OrdinalIgnoreCase));
                 using var image2Mat = originNode != null ? ResolveToolImageForPreview(snap, originNode) : rawMat.Clone();
