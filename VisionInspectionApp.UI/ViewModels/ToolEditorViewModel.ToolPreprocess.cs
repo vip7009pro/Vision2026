@@ -850,6 +850,429 @@ namespace VisionInspectionApp.UI.ViewModels
             new() { Scale = 1.0, DisplayText = "72 DPI (Tỉ lệ 1:1 điểm point gốc - Thô 1.0x)" }
         };
 
+        public sealed class CameraPresetOption
+        {
+            public string Name { get; set; } = string.Empty;
+            public int Width { get; set; }
+            public int Height { get; set; }
+            public string DisplayText => Width > 0 && Height > 0 ? $"{Name} ({Width} × {Height})" : Name;
+            public override string ToString() => DisplayText;
+        }
+
+        public ObservableCollection<CameraPresetOption> AvailableCameraPresets { get; } = new()
+        {
+            new() { Name = "🎯 Camera 20MP (Mặc định)", Width = 5472, Height = 3648 },
+            new() { Name = "Camera 12MP", Width = 4096, Height = 3000 },
+            new() { Name = "Camera 6MP", Width = 3072, Height = 2048 },
+            new() { Name = "Camera 5MP", Width = 2448, Height = 2048 },
+            new() { Name = "Full HD (2MP)", Width = 1920, Height = 1080 },
+            new() { Name = "⚙️ Tùy chỉnh (Custom)", Width = 0, Height = 0 }
+        };
+
+        private CameraPresetOption? _selectedCameraPreset;
+        public CameraPresetOption? SelectedCameraPreset
+        {
+            get
+            {
+                if (_selectedCameraPreset == null)
+                {
+                    int w = ImageSource_PdfCameraWidth;
+                    int h = ImageSource_PdfCameraHeight;
+                    _selectedCameraPreset = AvailableCameraPresets.FirstOrDefault(p => p.Width == w && p.Height == h) 
+                                         ?? AvailableCameraPresets.LastOrDefault();
+                }
+                return _selectedCameraPreset;
+            }
+            set
+            {
+                if (value != null)
+                {
+                    _selectedCameraPreset = value;
+                    if (value.Width > 0 && value.Height > 0)
+                    {
+                        ImageSource_PdfCameraWidth = value.Width;
+                        ImageSource_PdfCameraHeight = value.Height;
+                    }
+                    OnPropertyChanged();
+                    OnPropertyChanged(nameof(ImageSource_PdfOpticalInfoText));
+                }
+            }
+        }
+
+        public PdfRenderMode ImageSource_PdfRenderMode
+        {
+            get => SelectedImageSourceDef()?.PdfRenderMode ?? PdfRenderMode.MatchCamera1to1;
+            set
+            {
+                var def = SelectedImageSourceDef();
+                if (def is null || def.PdfRenderMode == value) return;
+                def.PdfRenderMode = value;
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(ImageSource_PdfIsMatchCamera));
+                OnPropertyChanged(nameof(ImageSource_PdfIsFixedDpi));
+                RaiseToolPropertyPanelsChanged();
+                RequestAutoSave();
+            }
+        }
+
+        public bool ImageSource_PdfIsMatchCamera
+        {
+            get => ImageSource_PdfRenderMode == PdfRenderMode.MatchCamera1to1;
+            set
+            {
+                if (value)
+                    ImageSource_PdfRenderMode = PdfRenderMode.MatchCamera1to1;
+            }
+        }
+
+        public bool ImageSource_PdfIsFixedDpi
+        {
+            get => ImageSource_PdfRenderMode == PdfRenderMode.FixedDpi;
+            set
+            {
+                if (value)
+                    ImageSource_PdfRenderMode = PdfRenderMode.FixedDpi;
+            }
+        }
+
+        public bool ImageSource_PdfFitToCameraCanvas
+        {
+            get => SelectedImageSourceDef()?.PdfFitToCameraCanvas ?? true;
+            set
+            {
+                var def = SelectedImageSourceDef();
+                if (def is null || def.PdfFitToCameraCanvas == value) return;
+                def.PdfFitToCameraCanvas = value;
+                OnPropertyChanged();
+                RequestAutoSave();
+            }
+        }
+
+        public int ImageSource_PdfCameraWidth
+        {
+            get
+            {
+                var def = SelectedImageSourceDef();
+                return def?.PdfCameraWidth is > 0 ? def.PdfCameraWidth : 5472;
+            }
+            set
+            {
+                var def = SelectedImageSourceDef();
+                if (def is null) return;
+                int clamped = Math.Max(100, value);
+                if (def.PdfCameraWidth == clamped) return;
+                def.PdfCameraWidth = clamped;
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(ImageSource_PdfOpticalInfoText));
+                RequestAutoSave();
+            }
+        }
+
+        public int ImageSource_PdfCameraHeight
+        {
+            get
+            {
+                var def = SelectedImageSourceDef();
+                return def?.PdfCameraHeight is > 0 ? def.PdfCameraHeight : 3648;
+            }
+            set
+            {
+                var def = SelectedImageSourceDef();
+                if (def is null) return;
+                int clamped = Math.Max(100, value);
+                if (def.PdfCameraHeight == clamped) return;
+                def.PdfCameraHeight = clamped;
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(ImageSource_PdfOpticalInfoText));
+                RequestAutoSave();
+            }
+        }
+
+        public sealed class PdfCanvasAlignmentOption
+        {
+            public string Key { get; set; } = "Center";
+            public string DisplayText { get; set; } = string.Empty;
+            public override string ToString() => DisplayText;
+        }
+
+        public ObservableCollection<PdfCanvasAlignmentOption> AvailablePdfCanvasAlignments { get; } = new()
+        {
+            new() { Key = "Center", DisplayText = "🎯 Tâm Giữa (Center)" },
+            new() { Key = "TopCenter", DisplayText = "⬆️ Đỉnh - Giữa (Top-Center)" },
+            new() { Key = "BottomCenter", DisplayText = "⬇️ Đáy - Giữa (Bottom-Center)" },
+            new() { Key = "TopLeft", DisplayText = "↖️ Góc Trên - Trái (Top-Left)" },
+            new() { Key = "TopRight", DisplayText = "↗️ Góc Trên - Phải (Top-Right)" },
+            new() { Key = "Custom", DisplayText = "⚙️ Tùy Chỉnh (Pan Tự Do)" }
+        };
+
+        public PdfCanvasAlignmentOption? SelectedPdfCanvasAlignment
+        {
+            get
+            {
+                string cur = ImageSource_PdfCanvasAlignment;
+                return AvailablePdfCanvasAlignments.FirstOrDefault(a => string.Equals(a.Key, cur, StringComparison.OrdinalIgnoreCase))
+                    ?? AvailablePdfCanvasAlignments.FirstOrDefault();
+            }
+            set
+            {
+                if (value != null && !string.Equals(ImageSource_PdfCanvasAlignment, value.Key, StringComparison.OrdinalIgnoreCase))
+                {
+                    ImageSource_PdfCanvasAlignment = value.Key;
+                    OnPropertyChanged();
+                    var def = SelectedImageSourceDef();
+                    if (def != null && !string.IsNullOrWhiteSpace(def.PdfPath) && File.Exists(def.PdfPath))
+                    {
+                        ImageSource_ConvertPdfToImage();
+                    }
+                }
+            }
+        }
+
+        public string ImageSource_PdfCanvasAlignment
+        {
+            get => SelectedImageSourceDef()?.PdfCanvasAlignment ?? "Center";
+            set
+            {
+                var def = SelectedImageSourceDef();
+                if (def is null || def.PdfCanvasAlignment == value) return;
+                def.PdfCanvasAlignment = value ?? "Center";
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(SelectedPdfCanvasAlignment));
+                RequestAutoSave();
+            }
+        }
+
+        public int ImageSource_PdfCanvasOffsetX
+        {
+            get => SelectedImageSourceDef()?.PdfCanvasOffsetX ?? 0;
+            set
+            {
+                var def = SelectedImageSourceDef();
+                if (def is null || def.PdfCanvasOffsetX == value) return;
+                def.PdfCanvasOffsetX = value;
+                OnPropertyChanged();
+                RequestAutoSave();
+            }
+        }
+
+        public int ImageSource_PdfCanvasOffsetY
+        {
+            get => SelectedImageSourceDef()?.PdfCanvasOffsetY ?? 0;
+            set
+            {
+                var def = SelectedImageSourceDef();
+                if (def is null || def.PdfCanvasOffsetY == value) return;
+                def.PdfCanvasOffsetY = value;
+                OnPropertyChanged();
+                RequestAutoSave();
+            }
+        }
+
+        public double ImageSource_PdfPixelsPerMm
+        {
+            get
+            {
+                var def = SelectedImageSourceDef();
+                if (def != null && def.PdfPixelsPerMm > 0.0001)
+                    return def.PdfPixelsPerMm;
+                if (_config?.PixelsPerMm is > 0.0001)
+                    return _config.PixelsPerMm;
+                return 34.2; // Mặc định Camera 20MP
+            }
+            set
+            {
+                var def = SelectedImageSourceDef();
+                if (def is null) return;
+                double clamped = Math.Max(0.001, Math.Round(value, 4));
+                if (Math.Abs(def.PdfPixelsPerMm - clamped) < 0.0001) return;
+                def.PdfPixelsPerMm = clamped;
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(ImageSource_PdfOpticalInfoText));
+                OnPropertyChanged(nameof(ImageSource_PdfEquivalentDpiText));
+                RequestAutoSave();
+            }
+        }
+
+        public string ImageSource_PdfEquivalentDpiText => $"~ {(int)Math.Round(ImageSource_PdfPixelsPerMm * 25.4)} DPI";
+
+        public int ImageSource_PdfRotation
+        {
+            get => SelectedImageSourceDef()?.PdfRotation ?? 0;
+            set
+            {
+                var def = SelectedImageSourceDef();
+                if (def is null) return;
+                int norm = (value % 360 + 360) % 360;
+                if (def.PdfRotation == norm) return;
+                def.PdfRotation = norm;
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(ImageSource_PdfRotationText));
+                RequestAutoSave();
+            }
+        }
+
+        public string ImageSource_PdfRotationText => $"{ImageSource_PdfRotation}°";
+
+        public void ImageSource_PdfSyncPixelsPerMmFromCalib()
+        {
+            double calibPpm = 0.0;
+            if (_config?.PixelsPerMm is > 0.0001)
+                calibPpm = _config.PixelsPerMm;
+            else if (_config?.ChessboardCalibration != null && _config.ChessboardCalibration.PixelsPerMm > 0.0001)
+                calibPpm = _config.ChessboardCalibration.PixelsPerMm;
+
+            if (calibPpm > 0.0001)
+            {
+                ImageSource_PdfPixelsPerMm = calibPpm;
+                StatusBarText = $"✅ Đã đồng bộ tỉ lệ quang học {calibPpm:F2} px/mm từ Calib vào nguồn PDF.";
+            }
+            else
+            {
+                ImageSource_PdfPixelsPerMm = 34.2;
+                StatusBarText = "ℹ️ Job chưa có dữ liệu Calib, đã đặt tỉ lệ mặc định 34.20 px/mm (Camera 20MP).";
+            }
+            var def = SelectedImageSourceDef();
+            if (def != null && !string.IsNullOrWhiteSpace(def.PdfPath) && File.Exists(def.PdfPath))
+            {
+                ImageSource_ConvertPdfToImage();
+            }
+        }
+
+        public void ImageSource_PdfApplyPixelsPerMmToJob()
+        {
+            if (_config != null)
+            {
+                _config.PixelsPerMm = ImageSource_PdfPixelsPerMm;
+                RequestAutoSave();
+                OnPropertyChanged(nameof(ImageSource_PdfOpticalInfoText));
+                StatusBarText = $"✅ Đã áp dụng hệ số {ImageSource_PdfPixelsPerMm:F2} px/mm vào thông số đo lường chung của Job!";
+            }
+        }
+
+        public void ImageSource_PdfRotate90()
+        {
+            ImageSource_PdfRotation = (ImageSource_PdfRotation + 90) % 360;
+            StatusBarText = $"🔄 Đã xoay bản vẽ PDF sang {ImageSource_PdfRotation}°";
+            var def = SelectedImageSourceDef();
+            if (def != null && !string.IsNullOrWhiteSpace(def.PdfPath) && File.Exists(def.PdfPath))
+            {
+                ImageSource_ConvertPdfToImage();
+            }
+        }
+
+        public void ImageSource_PdfPanUp()
+        {
+            ImageSource_PdfCanvasOffsetY -= 200;
+            var def = SelectedImageSourceDef();
+            if (def != null && !string.IsNullOrWhiteSpace(def.PdfPath) && File.Exists(def.PdfPath))
+            {
+                ImageSource_ConvertPdfToImage();
+            }
+        }
+
+        public void ImageSource_PdfPanDown()
+        {
+            ImageSource_PdfCanvasOffsetY += 200;
+            var def = SelectedImageSourceDef();
+            if (def != null && !string.IsNullOrWhiteSpace(def.PdfPath) && File.Exists(def.PdfPath))
+            {
+                ImageSource_ConvertPdfToImage();
+            }
+        }
+
+        public void ImageSource_PdfPanLeft()
+        {
+            ImageSource_PdfCanvasOffsetX -= 200;
+            var def = SelectedImageSourceDef();
+            if (def != null && !string.IsNullOrWhiteSpace(def.PdfPath) && File.Exists(def.PdfPath))
+            {
+                ImageSource_ConvertPdfToImage();
+            }
+        }
+
+        public void ImageSource_PdfPanRight()
+        {
+            ImageSource_PdfCanvasOffsetX += 200;
+            var def = SelectedImageSourceDef();
+            if (def != null && !string.IsNullOrWhiteSpace(def.PdfPath) && File.Exists(def.PdfPath))
+            {
+                ImageSource_ConvertPdfToImage();
+            }
+        }
+
+        public void ImageSource_PdfPanReset()
+        {
+            ImageSource_PdfCanvasOffsetX = 0;
+            ImageSource_PdfCanvasOffsetY = 0;
+            var def = SelectedImageSourceDef();
+            if (def != null && !string.IsNullOrWhiteSpace(def.PdfPath) && File.Exists(def.PdfPath))
+            {
+                ImageSource_ConvertPdfToImage();
+            }
+        }
+
+        public string ImageSource_PdfOpticalInfoText
+        {
+            get
+            {
+                double ppm = ImageSource_PdfPixelsPerMm;
+                int camW = ImageSource_PdfCameraWidth;
+                int camH = ImageSource_PdfCameraHeight;
+                double fovW = camW / ppm;
+                double fovH = camH / ppm;
+                double dpi = ppm * 25.4;
+                return $"📐 Tỉ Lệ: {ppm:F2} px/mm (~{dpi:F0} DPI) • Vùng nhìn FOV: {fovW:F1} × {fovH:F1} mm";
+            }
+        }
+
+        public void ImageSource_PdfSyncFromCamera()
+        {
+            try
+            {
+                int detectedW = 0;
+                int detectedH = 0;
+
+                // 1. Thử lấy từ ảnh sharedImage hiện tại nếu có
+                using var snap = _sharedImage?.GetSnapshot();
+                if (snap != null && !snap.Empty())
+                {
+                    detectedW = snap.Width;
+                    detectedH = snap.Height;
+                }
+                // 2. Thử lấy từ ChessboardCalibration nếu có
+                else if (_config?.ChessboardCalibration != null && _config.ChessboardCalibration.ImageWidth > 0 && _config.ChessboardCalibration.ImageHeight > 0)
+                {
+                    detectedW = _config.ChessboardCalibration.ImageWidth;
+                    detectedH = _config.ChessboardCalibration.ImageHeight;
+                }
+
+                if (detectedW > 0 && detectedH > 0)
+                {
+                    ImageSource_PdfCameraWidth = detectedW;
+                    ImageSource_PdfCameraHeight = detectedH;
+                    _selectedCameraPreset = AvailableCameraPresets.FirstOrDefault(p => p.Width == detectedW && p.Height == detectedH)
+                                         ?? AvailableCameraPresets.LastOrDefault();
+                    OnPropertyChanged(nameof(SelectedCameraPreset));
+                    OnPropertyChanged(nameof(ImageSource_PdfOpticalInfoText));
+                    StatusBarText = $"✅ Đã tự động nhận diện kích thước Camera: {detectedW} × {detectedH} px.";
+                }
+                else
+                {
+                    // Đặt về mặc định Camera 20MP 5472x3648
+                    ImageSource_PdfCameraWidth = 5472;
+                    ImageSource_PdfCameraHeight = 3648;
+                    _selectedCameraPreset = AvailableCameraPresets.FirstOrDefault(p => p.Width == 5472 && p.Height == 3648);
+                    OnPropertyChanged(nameof(SelectedCameraPreset));
+                    OnPropertyChanged(nameof(ImageSource_PdfOpticalInfoText));
+                    StatusBarText = "ℹ️ Đã đặt kích thước Camera về chuẩn 20MP: 5472 × 3648 px.";
+                }
+            }
+            catch (Exception ex)
+            {
+                StatusBarText = $"❌ Lỗi đọc kích thước Camera: {ex.Message}";
+            }
+        }
+
         public string ImageSource_PdfPath
         {
             get => SelectedImageSourceDef()?.PdfPath ?? string.Empty;
@@ -985,7 +1408,7 @@ namespace VisionInspectionApp.UI.ViewModels
                             using var mat = Cv2.ImRead(def.PdfRenderedImagePath, ImreadModes.Color);
                             if (mat != null && !mat.Empty())
                             {
-                                _imageSourcePdfImageInfo = $"{mat.Width} × {mat.Height} px (Tỉ lệ {def.PdfScale * 100:0}%)";
+                                _imageSourcePdfImageInfo = $"{mat.Width} × {mat.Height} px";
                             }
                         }
                         catch { }
@@ -995,7 +1418,7 @@ namespace VisionInspectionApp.UI.ViewModels
                         var dims = _pdfDocumentService.GetPageDimensions(def.PdfPath, def.PdfPageNumber, def.PdfScale);
                         if (dims.Width > 0 && dims.Height > 0)
                         {
-                            _imageSourcePdfImageInfo = $"{dims.Width} × {dims.Height} px (Tỉ lệ {def.PdfScale * 100:0}%)";
+                            _imageSourcePdfImageInfo = $"{dims.Width} × {dims.Height} px";
                         }
                     }
                 }
@@ -1025,7 +1448,7 @@ namespace VisionInspectionApp.UI.ViewModels
                 def.PdfPath = dlg.FileName;
                 OnPropertyChanged(nameof(ImageSource_PdfPath));
 
-                // Tự động chuyển sang 300 DPI (chuẩn công nghiệp siêu nét) nếu đang ở mức 1.0 (72 DPI thô)
+                // Tự động chuyển sang 300 DPI nếu đang ở mức 1.0 (72 DPI thô)
                 if (def.PdfScale <= 1.01)
                 {
                     def.PdfScale = 300.0 / 72.0;
@@ -1041,7 +1464,7 @@ namespace VisionInspectionApp.UI.ViewModels
                     OnPropertyChanged(nameof(ImageSource_PdfPageNumber));
                 }
 
-                // Tự động chuyển đổi bản vẽ PDF ra ảnh độ nét cao và nạp lên canvas để teach
+                // Tự động chuyển đổi bản vẽ PDF ra ảnh và nạp lên canvas để teach
                 ImageSource_ConvertPdfToImage();
             }
         }
@@ -1057,10 +1480,7 @@ namespace VisionInspectionApp.UI.ViewModels
 
             try
             {
-                double scale = def.PdfScale > 0 ? def.PdfScale : (300.0 / 72.0);
                 int page = Math.Max(1, def.PdfPageNumber);
-                int dpi = (int)Math.Round(scale * 72.0);
-
                 string targetDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Cache", "PdfImages");
                 if (!string.IsNullOrWhiteSpace(CurrentTempWorkingDir) && Directory.Exists(CurrentTempWorkingDir))
                 {
@@ -1068,12 +1488,67 @@ namespace VisionInspectionApp.UI.ViewModels
                 }
                 Directory.CreateDirectory(targetDir);
 
-                string imagePath = _pdfDocumentService.ConvertPdfToImageFile(def.PdfPath, page, scale, targetDir);
+                string imagePath;
+                int imgW, imgH;
+                string detailNote;
+
+                if (def.PdfRenderMode == PdfRenderMode.MatchCamera1to1)
+                {
+                    double ppm = ImageSource_PdfPixelsPerMm;
+                    int camW = def.PdfCameraWidth > 0 ? def.PdfCameraWidth : 5472;
+                    int camH = def.PdfCameraHeight > 0 ? def.PdfCameraHeight : 3648;
+                    bool fitCanvas = def.PdfFitToCameraCanvas;
+                    string align = string.IsNullOrWhiteSpace(def.PdfCanvasAlignment) ? "Center" : def.PdfCanvasAlignment;
+                    int offX = def.PdfCanvasOffsetX;
+                    int offY = def.PdfCanvasOffsetY;
+                    int rot = def.PdfRotation;
+
+                    imagePath = _pdfDocumentService.ConvertPdfToImageFileMatchingCamera(
+                        def.PdfPath,
+                        page,
+                        ppm,
+                        fitCanvas,
+                        camW,
+                        camH,
+                        align,
+                        offX,
+                        offY,
+                        rot,
+                        targetDir);
+
+                    double dpi = ppm * 25.4;
+                    string rotInfo = rot != 0 ? $" • {rot}°" : "";
+                    string panInfo = (offX != 0 || offY != 0) ? $" • Pan({offX:+0;-0;0},{offY:+0;-0;0})" : "";
+                    if (fitCanvas)
+                    {
+                        imgW = camW;
+                        imgH = camH;
+                        detailNote = $"{camW}×{camH} px • Khớp 1:1 Camera ({ppm:F2} px/mm ~ {dpi:F0} DPI{rotInfo}{panInfo})";
+                    }
+                    else
+                    {
+                        var dims = _pdfDocumentService.GetPageDimensions(def.PdfPath, page, dpi / 72.0);
+                        imgW = dims.Width;
+                        imgH = dims.Height;
+                        detailNote = $"{imgW}×{imgH} px • Khớp Tỉ lệ 1:1 ({ppm:F2} px/mm{rotInfo}{panInfo})";
+                    }
+                }
+                else
+                {
+                    double scale = def.PdfScale > 0 ? def.PdfScale : (300.0 / 72.0);
+                    int dpi = (int)Math.Round(scale * 72.0);
+
+                    imagePath = _pdfDocumentService.ConvertPdfToImageFile(def.PdfPath, page, scale, targetDir);
+                    var dims = _pdfDocumentService.GetPageDimensions(def.PdfPath, page, scale);
+                    imgW = dims.Width;
+                    imgH = dims.Height;
+                    detailNote = $"{imgW} × {imgH} px ({dpi} DPI • Cố định)";
+                }
+
                 def.PdfRenderedImagePath = imagePath;
                 OnPropertyChanged(nameof(ImageSource_PdfRenderedImagePath));
-
-                var dims = _pdfDocumentService.GetPageDimensions(def.PdfPath, page, scale);
-                ImageSource_PdfImageInfo = $"{dims.Width} × {dims.Height} px ({dpi} DPI • Nét cao)";
+                OnPropertyChanged(nameof(ImageSource_HasPdfRenderedImage));
+                ImageSource_PdfImageInfo = detailNote;
 
                 ClearImageSourceCache(def.Name);
                 var rawMat = Cv2.ImRead(imagePath);
@@ -1088,7 +1563,7 @@ namespace VisionInspectionApp.UI.ViewModels
                 RefreshPreviews();
                 RequestAutoSave();
 
-                StatusBarText = $"✅ Đã chuyển đổi bản vẽ PDF trang {page} sang ảnh ({dims.Width}x{dims.Height}px, {dpi} DPI) nền trắng sắc nét và nạp vào Canvas để dạy học.";
+                StatusBarText = $"✅ Đã chuyển PDF trang {page} sang ảnh ({detailNote}) nền trắng tinh khiết và nạp vào Canvas để dạy học.";
             }
             catch (Exception ex)
             {
@@ -1158,6 +1633,15 @@ namespace VisionInspectionApp.UI.ViewModels
         public ICommand ImageSource_ConvertPdfToImageCommand { get; }
         public ICommand ImageSource_PdfPrevPageCommand { get; }
         public ICommand ImageSource_PdfNextPageCommand { get; }
+        public ICommand ImageSource_PdfSyncFromCameraCommand { get; }
+        public ICommand ImageSource_PdfSyncPixelsPerMmFromCalibCommand { get; }
+        public ICommand ImageSource_PdfApplyPixelsPerMmToJobCommand { get; }
+        public ICommand ImageSource_PdfRotate90Command { get; }
+        public ICommand ImageSource_PdfPanUpCommand { get; }
+        public ICommand ImageSource_PdfPanDownCommand { get; }
+        public ICommand ImageSource_PdfPanLeftCommand { get; }
+        public ICommand ImageSource_PdfPanRightCommand { get; }
+        public ICommand ImageSource_PdfPanResetCommand { get; }
         public ICommand ImageSource_OpenJobCameraSettingsCommand { get; }
         public ICommand ImageSource_ApplyLightingToDeviceCommand { get; }
         public ICommand ImageSource_ReadLightingFromDeviceCommand { get; }

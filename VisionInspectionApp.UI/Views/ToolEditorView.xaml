@@ -1541,7 +1541,7 @@
                                     </Grid>
                                 </Border>
 
-                                <!-- Nguồn Bản Vẽ PDF (Tỉ lệ 100%) -->
+                                <!-- Nguồn Bản Vẽ PDF (Khớp 1:1 Camera & Khung hình) -->
                                 <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1" Visibility="{Binding ImageSource_IsPdf, Converter={StaticResource BoolToVis}}">
                                     <StackPanel>
                                         <!-- PDF File Path -->
@@ -1581,27 +1581,189 @@
                                             </Border>
                                         </Grid>
 
-                                        <!-- PDF Scale Selection -->
+                                        <!-- PDF Mode Selector (Match Camera vs Fixed DPI) -->
                                         <Grid Margin="0,0,0,1">
                                             <Grid.ColumnDefinitions>
                                                 <ColumnDefinition Width="120" />
                                                 <ColumnDefinition Width="*" />
                                             </Grid.ColumnDefinitions>
                                             <Border Background="{DynamicResource WindowBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
-                                                <TextBlock Text="Tỉ Lệ Xuất" VerticalAlignment="Center" Margin="4,2" FontSize="11" Foreground="{DynamicResource TextBrush}" ToolTip="Tỉ lệ kết xuất so với kích thước gốc của bản vẽ PDF"/>
+                                                <TextBlock Text="Chế Độ Kết Xuất" VerticalAlignment="Center" Margin="4,2" FontSize="11" Foreground="{DynamicResource TextBrush}" ToolTip="Chọn chế độ kết xuất bản vẽ PDF để dạy học"/>
                                             </Border>
                                             <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
-                                                <ComboBox ItemsSource="{Binding AvailablePdfScales}" SelectedValuePath="Scale" SelectedValue="{Binding ImageSource_PdfScale, UpdateSourceTrigger=PropertyChanged}" DisplayMemberPath="DisplayText" Margin="2,1" FontSize="11" ToolTip="Chọn tỉ lệ xuất ảnh (Mặc định 100% bảo toàn tỉ lệ chuẩn bản vẽ)" />
+                                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="4,2">
+                                                    <RadioButton Content="🎯 Khớp Chuẩn Camera 1:1" IsChecked="{Binding ImageSource_PdfIsMatchCamera, Mode=TwoWay}" Margin="0,0,12,0" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource TextBrush}" ToolTip="Tự động tính tỉ lệ theo hệ số quang học Calib (PixelsPerMm) và đặt vào kích thước cảm biến Camera để dạy học chuẩn 100% như đặt hàng thật"/>
+                                                    <RadioButton Content="⚙️ DPI Cố Định" IsChecked="{Binding ImageSource_PdfIsFixedDpi, Mode=TwoWay}" FontSize="11" Foreground="{DynamicResource TextBrush}" ToolTip="Kết xuất bản vẽ theo độ phân giải DPI cố định (150, 200, 300, 600 DPI)"/>
+                                                </StackPanel>
+                                            </Border>
+                                        </Grid>
+
+                                        <!-- Panels for Camera Matching Mode -->
+                                        <StackPanel Visibility="{Binding ImageSource_PdfIsMatchCamera, Converter={StaticResource BoolToVis}}">
+                                            <!-- Camera Preset Selection -->
+                                            <Grid Margin="0,0,0,1">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="120" />
+                                                    <ColumnDefinition Width="*" />
+                                                </Grid.ColumnDefinitions>
+                                                <Border Background="{DynamicResource WindowBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
+                                                    <TextBlock Text="Mẫu Cảm Biến" VerticalAlignment="Center" Margin="4,2" FontSize="11" Foreground="{DynamicResource TextBrush}"/>
+                                                </Border>
+                                                <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
+                                                    <ComboBox ItemsSource="{Binding AvailableCameraPresets}" SelectedItem="{Binding SelectedCameraPreset, Mode=TwoWay}" Margin="2,1" FontSize="11" ToolTip="Chọn kích thước cảm biến Camera (20MP mặc định, hoặc tùy biến)" />
+                                                </Border>
+                                            </Grid>
+
+                                            <!-- Camera Sensor Dimensions (Width x Height px) & Sync Button -->
+                                            <Grid Margin="0,0,0,1">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="120" />
+                                                    <ColumnDefinition Width="*" />
+                                                </Grid.ColumnDefinitions>
+                                                <Border Background="{DynamicResource WindowBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
+                                                    <TextBlock Text="Cảm Biến (W × H)" VerticalAlignment="Center" Margin="4,2" FontSize="11" Foreground="{DynamicResource TextBrush}"/>
+                                                </Border>
+                                                <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
+                                                    <Grid Margin="2,1">
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="65" />
+                                                            <ColumnDefinition Width="Auto" />
+                                                            <ColumnDefinition Width="65" />
+                                                            <ColumnDefinition Width="Auto" />
+                                                            <ColumnDefinition Width="*" />
+                                                        </Grid.ColumnDefinitions>
+                                                        <TextBox Text="{Binding ImageSource_PdfCameraWidth, UpdateSourceTrigger=LostFocus}" TextAlignment="Center" FontSize="11" ToolTip="Chiều rộng cảm biến Camera (pixel)" VerticalContentAlignment="Center"/>
+                                                        <TextBlock Grid.Column="1" Text="×" Margin="4,0" VerticalAlignment="Center" FontWeight="Bold" Foreground="{DynamicResource TextBrush}"/>
+                                                        <TextBox Grid.Column="2" Text="{Binding ImageSource_PdfCameraHeight, UpdateSourceTrigger=LostFocus}" TextAlignment="Center" FontSize="11" ToolTip="Chiều cao cảm biến Camera (pixel)" VerticalContentAlignment="Center"/>
+                                                        <TextBlock Grid.Column="3" Text="px" Margin="4,0,8,0" VerticalAlignment="Center" FontSize="11" Foreground="{DynamicResource TextBrush}"/>
+                                                        <Button Grid.Column="4" Content="⚡ Nhận Diện Cam" Command="{Binding ImageSource_PdfSyncFromCameraCommand}" Padding="6,2" FontSize="10" HorizontalAlignment="Right" ToolTip="Đọc kích thước từ Camera thực tế hoặc Calib đang kết nối" />
+                                                    </Grid>
+                                                </Border>
+                                            </Grid>
+
+                                            <!-- Optical PixelsPerMm Manual Input & Calib Sync -->
+                                            <Grid Margin="0,0,0,1">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="120" />
+                                                    <ColumnDefinition Width="*" />
+                                                </Grid.ColumnDefinitions>
+                                                <Border Background="{DynamicResource WindowBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
+                                                    <TextBlock Text="Tỉ Lệ (px/mm)" VerticalAlignment="Center" Margin="4,2" FontSize="11" Foreground="{DynamicResource TextBrush}" ToolTip="Hệ số pixel trên mỗi milimet thực tế của Camera"/>
+                                                </Border>
+                                                <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
+                                                    <Grid Margin="2,1">
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="65" />
+                                                            <ColumnDefinition Width="Auto" />
+                                                            <ColumnDefinition Width="*" />
+                                                        </Grid.ColumnDefinitions>
+                                                        <TextBox Text="{Binding ImageSource_PdfPixelsPerMm, UpdateSourceTrigger=LostFocus}" TextAlignment="Center" FontSize="11" FontWeight="SemiBold" ToolTip="Nhập tay tỉ lệ pixel/mm thực tế" VerticalContentAlignment="Center"/>
+                                                        <TextBlock Grid.Column="1" Text="{Binding ImageSource_PdfEquivalentDpiText}" VerticalAlignment="Center" Margin="4,0,4,0" FontSize="10" Foreground="#10B981" FontWeight="SemiBold"/>
+                                                        <StackPanel Grid.Column="2" Orientation="Horizontal" HorizontalAlignment="Right">
+                                                            <Button Content="⚡ Từ Calib" Command="{Binding ImageSource_PdfSyncPixelsPerMmFromCalibCommand}" Padding="5,2" FontSize="10" Margin="0,0,3,0" ToolTip="Đồng bộ tỉ lệ px/mm từ Calib của Job hoặc Chessboard" />
+                                                            <Button Content="💾 Cho Job" Command="{Binding ImageSource_PdfApplyPixelsPerMmToJobCommand}" Padding="5,2" FontSize="10" ToolTip="Ghi đè tỉ lệ này vào toàn bộ Job để các công cụ đo lường tính đúng mm" />
+                                                        </StackPanel>
+                                                    </Grid>
+                                                </Border>
+                                            </Grid>
+
+                                            <!-- Canvas Alignment & Rotation -->
+                                            <Grid Margin="0,0,0,1">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="120" />
+                                                    <ColumnDefinition Width="*" />
+                                                </Grid.ColumnDefinitions>
+                                                <Border Background="{DynamicResource WindowBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
+                                                    <TextBlock Text="Căn Lề &amp; Xoay" VerticalAlignment="Center" Margin="4,2" FontSize="11" Foreground="{DynamicResource TextBrush}"/>
+                                                </Border>
+                                                <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
+                                                    <Grid Margin="2,1">
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="*" />
+                                                            <ColumnDefinition Width="Auto" />
+                                                        </Grid.ColumnDefinitions>
+                                                        <ComboBox ItemsSource="{Binding AvailablePdfCanvasAlignments}" SelectedItem="{Binding SelectedPdfCanvasAlignment, Mode=TwoWay}" FontSize="11" Margin="0,0,4,0" ToolTip="Chọn vị trí đặt bản vẽ: Tâm, Đỉnh-Giữa (cho bản vẽ đứng), Đáy-Giữa, v.v." />
+                                                        <Button Grid.Column="1" Content="🔄 Xoay 90°" Command="{Binding ImageSource_PdfRotate90Command}" Padding="6,2" FontSize="10" ToolTip="Xoay bản vẽ 90 độ (Xoay ngang bản vẽ đứng để khớp vừa Camera)" />
+                                                    </Grid>
+                                                </Border>
+                                            </Grid>
+
+                                            <!-- Pan Offset Controls (Move viewport) -->
+                                            <Grid Margin="0,0,0,1">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="120" />
+                                                    <ColumnDefinition Width="*" />
+                                                </Grid.ColumnDefinitions>
+                                                <Border Background="{DynamicResource WindowBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
+                                                    <TextBlock Text="Pan Dịch Chuyển" VerticalAlignment="Center" Margin="4,2" FontSize="11" Foreground="{DynamicResource TextBrush}" ToolTip="Dịch chuyển bản vẽ để đưa phần muốn hiển thị vào trong khung hình"/>
+                                                </Border>
+                                                <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
+                                                    <Grid Margin="2,1">
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="Auto" />
+                                                            <ColumnDefinition Width="42" />
+                                                            <ColumnDefinition Width="Auto" />
+                                                            <ColumnDefinition Width="42" />
+                                                            <ColumnDefinition Width="*" />
+                                                        </Grid.ColumnDefinitions>
+                                                        <TextBlock Text="X:" VerticalAlignment="Center" Margin="2,0,2,0" FontSize="10" Foreground="{DynamicResource TextBrush}"/>
+                                                        <TextBox Grid.Column="1" Text="{Binding ImageSource_PdfCanvasOffsetX, UpdateSourceTrigger=LostFocus}" TextAlignment="Center" FontSize="11" VerticalContentAlignment="Center" ToolTip="Dịch chuyển tọa độ X (pixel)"/>
+                                                        <TextBlock Grid.Column="2" Text="Y:" VerticalAlignment="Center" Margin="4,0,2,0" FontSize="10" Foreground="{DynamicResource TextBrush}"/>
+                                                        <TextBox Grid.Column="3" Text="{Binding ImageSource_PdfCanvasOffsetY, UpdateSourceTrigger=LostFocus}" TextAlignment="Center" FontSize="11" VerticalContentAlignment="Center" ToolTip="Dịch chuyển tọa độ Y (pixel)"/>
+                                                        <StackPanel Grid.Column="4" Orientation="Horizontal" HorizontalAlignment="Right">
+                                                            <Button Content="⬅" Command="{Binding ImageSource_PdfPanLeftCommand}" Width="20" Height="20" Margin="1,0" FontSize="9" ToolTip="Dịch sang trái 200px" />
+                                                            <Button Content="➡" Command="{Binding ImageSource_PdfPanRightCommand}" Width="20" Height="20" Margin="1,0" FontSize="9" ToolTip="Dịch sang phải 200px" />
+                                                            <Button Content="⬆" Command="{Binding ImageSource_PdfPanUpCommand}" Width="20" Height="20" Margin="1,0" FontSize="9" ToolTip="Dịch lên trên 200px" />
+                                                            <Button Content="⬇" Command="{Binding ImageSource_PdfPanDownCommand}" Width="20" Height="20" Margin="1,0" FontSize="9" ToolTip="Dịch xuống dưới 200px" />
+                                                            <Button Content="🎯" Command="{Binding ImageSource_PdfPanResetCommand}" Width="22" Height="20" Margin="1,0" FontSize="10" ToolTip="Reset về tâm (X=0, Y=0)" />
+                                                        </StackPanel>
+                                                    </Grid>
+                                                </Border>
+                                            </Grid>
+
+                                            <!-- Sensor Canvas Placement Options -->
+                                            <Grid Margin="0,0,0,1">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="120" />
+                                                    <ColumnDefinition Width="*" />
+                                                </Grid.ColumnDefinitions>
+                                                <Border Background="{DynamicResource WindowBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
+                                                    <TextBlock Text="Khung Hình Canvas" VerticalAlignment="Center" Margin="4,2" FontSize="11" Foreground="{DynamicResource TextBrush}"/>
+                                                </Border>
+                                                <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
+                                                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="4,2">
+                                                        <CheckBox Content="Ghép vào Khung hình Sensor Camera (Nền trắng)" IsChecked="{Binding ImageSource_PdfFitToCameraCanvas, Mode=TwoWay}" FontSize="11" VerticalAlignment="Center" Margin="0,0,12,0" ToolTip="Tạo canvas đúng bằng cảm biến camera với nền trắng, dán bản vẽ đúng vị trí đã căn lề/pan" />
+                                                    </StackPanel>
+                                                </Border>
+                                            </Grid>
+
+                                            <!-- Optical & FOV Info Card -->
+                                            <Border Background="{DynamicResource WindowBackgroundBrush}" BorderBrush="#3B82F6" BorderThickness="1" CornerRadius="3" Margin="4,3,4,3" Padding="6,4">
+                                                <TextBlock Text="{Binding ImageSource_PdfOpticalInfoText}" FontSize="10.5" FontWeight="SemiBold" Foreground="#3B82F6" TextWrapping="Wrap" />
+                                            </Border>
+                                        </StackPanel>
+
+                                        <!-- Panels for Fixed DPI Mode -->
+                                        <Grid Margin="0,0,0,1" Visibility="{Binding ImageSource_PdfIsFixedDpi, Converter={StaticResource BoolToVis}}">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="120" />
+                                                <ColumnDefinition Width="*" />
+                                            </Grid.ColumnDefinitions>
+                                            <Border Background="{DynamicResource WindowBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
+                                                <TextBlock Text="Độ Phân Giải (DPI)" VerticalAlignment="Center" Margin="4,2" FontSize="11" Foreground="{DynamicResource TextBrush}" ToolTip="Tỉ lệ kết xuất DPI cố định"/>
+                                            </Border>
+                                            <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
+                                                <ComboBox ItemsSource="{Binding AvailablePdfScales}" SelectedValuePath="Scale" SelectedValue="{Binding ImageSource_PdfScale, UpdateSourceTrigger=PropertyChanged}" DisplayMemberPath="DisplayText" Margin="2,1" FontSize="11" ToolTip="Chọn tỉ lệ xuất ảnh (Khuyên dùng 300 DPI)" />
                                             </Border>
                                         </Grid>
 
                                         <!-- Convert Button & Status -->
                                         <Border Background="{DynamicResource PanelBackgroundBrush}" Padding="4,4">
                                             <StackPanel>
-                                                <Button Command="{Binding ImageSource_ConvertPdfToImageCommand}" Background="#7C3AED" Foreground="White" FontWeight="Bold" Padding="8,5" Margin="0,2,0,4" ToolTip="Chuyển trang PDF ra hình ảnh tỉ lệ 100% và nạp trực tiếp vào Canvas để làm dữ liệu mẫu dạy học (Teach)">
+                                                <Button Command="{Binding ImageSource_ConvertPdfToImageCommand}" Background="#6D28D9" Foreground="White" FontWeight="Bold" Padding="8,6" Margin="0,2,0,4" ToolTip="Chuyển bản vẽ PDF ra hình ảnh chuẩn tỉ lệ 1:1 Camera và nạp trực tiếp vào Canvas để làm dữ liệu mẫu dạy học (Teach)">
                                                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                                                        <TextBlock Text="📄" Margin="0,0,6,0" FontSize="13" />
-                                                        <TextBlock Text="Chuyển PDF Ra Ảnh (100%) &amp; Nạp Teach" FontSize="11" VerticalAlignment="Center" />
+                                                        <TextBlock Text="🎯" Margin="0,0,6,0" FontSize="13" />
+                                                        <TextBlock Text="Chuyển PDF Khớp 1:1 Camera &amp; Nạp Teach" FontSize="11" VerticalAlignment="Center" />
                                                     </StackPanel>
                                                 </Button>
 

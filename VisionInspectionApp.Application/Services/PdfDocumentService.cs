@@ -171,4 +171,158 @@ public sealed class PdfDocumentService : IPdfDocumentService
 
         return outputPath;
     }
+
+    /// <summary>
+    /// Chuyển đổi trang PDF khớp tỉ lệ quang học 1:1 theo hệ số hiệu chuẩn của Camera (PixelsPerMm)
+    /// và tùy chọn đặt lên khung hình cảm biến của Camera (ví dụ 20MP: 5472x3648).
+    /// </summary>
+    public Mat RenderPageMatchingCamera(
+        string pdfFilePath,
+        int pageNumber,
+        double pixelsPerMm,
+        bool fitToCameraCanvas = true,
+        int cameraWidth = 5472,
+        int cameraHeight = 3648,
+        string alignment = "Center",
+        int offsetX = 0,
+        int offsetY = 0,
+        int rotationDegrees = 0)
+    {
+        if (pixelsPerMm <= 0.0001) pixelsPerMm = 1.0;
+        double scale = (pixelsPerMm * 25.4) / 72.0;
+
+        using var rawMat = RenderPageToMat(pdfFilePath, pageNumber, scale);
+
+        // Xoay bản vẽ nếu có yêu cầu (đặc biệt khi bản vẽ đứng portrait cần xoay ngang để vừa camera ngang landscape)
+        Mat matToPlace;
+        int normRot = (rotationDegrees % 360 + 360) % 360;
+        if (normRot == 90)
+        {
+            matToPlace = new Mat();
+            Cv2.Rotate(rawMat, matToPlace, RotateFlags.Rotate90Clockwise);
+        }
+        else if (normRot == 180)
+        {
+            matToPlace = new Mat();
+            Cv2.Rotate(rawMat, matToPlace, RotateFlags.Rotate180);
+        }
+        else if (normRot == 270)
+        {
+            matToPlace = new Mat();
+            Cv2.Rotate(rawMat, matToPlace, RotateFlags.Rotate90Counterclockwise);
+        }
+        else
+        {
+            matToPlace = rawMat.Clone();
+        }
+
+        using (matToPlace)
+        {
+            if (!fitToCameraCanvas)
+            {
+                return matToPlace.Clone();
+            }
+
+            if (cameraWidth <= 0) cameraWidth = 5472;
+            if (cameraHeight <= 0) cameraHeight = 3648;
+
+            // Tạo khung hình đúng bằng kích thước cảm biến Camera (nền trắng tinh khiết)
+            var canvas = new Mat(cameraHeight, cameraWidth, MatType.CV_8UC3, new Scalar(255, 255, 255));
+
+            // Tính vị trí dán bản vẽ lên khung hình camera kết hợp Pan Offset
+            int dstX, dstY;
+            if (string.Equals(alignment, "TopCenter", StringComparison.OrdinalIgnoreCase))
+            {
+                dstX = (cameraWidth - matToPlace.Width) / 2 + offsetX;
+                dstY = offsetY;
+            }
+            else if (string.Equals(alignment, "BottomCenter", StringComparison.OrdinalIgnoreCase))
+            {
+                dstX = (cameraWidth - matToPlace.Width) / 2 + offsetX;
+                dstY = (cameraHeight - matToPlace.Height) + offsetY;
+            }
+            else if (string.Equals(alignment, "TopLeft", StringComparison.OrdinalIgnoreCase))
+            {
+                dstX = offsetX;
+                dstY = offsetY;
+            }
+            else if (string.Equals(alignment, "TopRight", StringComparison.OrdinalIgnoreCase))
+            {
+                dstX = (cameraWidth - matToPlace.Width) + offsetX;
+                dstY = offsetY;
+            }
+            else
+            {
+                // Mặc định: Center hoặc Custom (Pan tự do từ tâm)
+                dstX = (cameraWidth - matToPlace.Width) / 2 + offsetX;
+                dstY = (cameraHeight - matToPlace.Height) / 2 + offsetY;
+            }
+
+            // Cắt dán an toàn có kiểm tra ranh giới
+            int srcX = 0;
+            int srcY = 0;
+            int copyW = matToPlace.Width;
+            int copyH = matToPlace.Height;
+
+            if (dstX < 0)
+            {
+                srcX = -dstX;
+                copyW += dstX;
+                dstX = 0;
+            }
+            if (dstY < 0)
+            {
+                srcY = -dstY;
+                copyH += dstY;
+                dstY = 0;
+            }
+
+            copyW = Math.Min(copyW, cameraWidth - dstX);
+            copyH = Math.Min(copyH, cameraHeight - dstY);
+
+            if (copyW > 0 && copyH > 0 && srcX + copyW <= matToPlace.Width && srcY + copyH <= matToPlace.Height)
+            {
+                using var srcRoi = new Mat(matToPlace, new Rect(srcX, srcY, copyW, copyH));
+                using var dstRoi = new Mat(canvas, new Rect(dstX, dstY, copyW, copyH));
+                srcRoi.CopyTo(dstRoi);
+            }
+
+            return canvas;
+        }
+    }
+
+    /// <summary>
+    /// Chuyển đổi và lưu ra tệp ảnh PNG khớp 1:1 theo Camera.
+    /// </summary>
+    public string ConvertPdfToImageFileMatchingCamera(
+        string pdfFilePath,
+        int pageNumber,
+        double pixelsPerMm,
+        bool fitToCameraCanvas = true,
+        int cameraWidth = 5472,
+        int cameraHeight = 3648,
+        string alignment = "Center",
+        int offsetX = 0,
+        int offsetY = 0,
+        int rotationDegrees = 0,
+        string? outputDirectory = null)
+    {
+        if (string.IsNullOrWhiteSpace(pdfFilePath) || !File.Exists(pdfFilePath))
+            throw new FileNotFoundException($"Không tìm thấy tệp bản vẽ PDF: {pdfFilePath}");
+
+        string targetDir = outputDirectory ?? Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Cache", "PdfImages");
+        Directory.CreateDirectory(targetDir);
+
+        string baseName = Path.GetFileNameWithoutExtension(pdfFilePath);
+        string canvasSuffix = fitToCameraCanvas ? $"_cam{cameraWidth}x{cameraHeight}" : "";
+        string rotSuffix = rotationDegrees != 0 ? $"_rot{rotationDegrees}" : "";
+        string panSuffix = (offsetX != 0 || offsetY != 0) ? $"_pan{offsetX}_{offsetY}" : "";
+        string outputFileName = $"{baseName}_p{pageNumber}_{pixelsPerMm:F2}pxmm{canvasSuffix}{rotSuffix}{panSuffix}.png";
+        string outputPath = Path.Combine(targetDir, outputFileName);
+
+        using var mat = RenderPageMatchingCamera(pdfFilePath, pageNumber, pixelsPerMm, fitToCameraCanvas, cameraWidth, cameraHeight, alignment, offsetX, offsetY, rotationDegrees);
+        Cv2.ImWrite(outputPath, mat);
+
+        return outputPath;
+    }
 }

@@ -2929,19 +2929,40 @@ namespace VisionInspectionApp.UI.ViewModels
                         }
                     }
 
-                    // 2. Nếu chưa có ảnh render nhưng có tệp PDF, tự động kết xuất ra ảnh 100%
+                    // 2. Nếu chưa có ảnh render nhưng có tệp PDF, tự động kết xuất ra ảnh theo chế độ cấu hình
                     if (!string.IsNullOrWhiteSpace(source.PdfPath) && File.Exists(source.PdfPath))
                     {
                         try
                         {
-                            double scale = source.PdfScale > 0 ? source.PdfScale : 1.0;
                             int page = Math.Max(1, source.PdfPageNumber);
                             string targetDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Cache", "PdfImages");
                             if (!string.IsNullOrWhiteSpace(CurrentTempWorkingDir) && Directory.Exists(CurrentTempWorkingDir))
                             {
                                 targetDir = Path.Combine(CurrentTempWorkingDir, "pdf_renders");
                             }
-                            string imageFile = _pdfDocumentService.ConvertPdfToImageFile(source.PdfPath, page, scale, targetDir);
+                            string imageFile;
+                            if (source.PdfRenderMode == PdfRenderMode.MatchCamera1to1)
+                            {
+                                double ppm = source.PdfPixelsPerMm > 0.0001 ? source.PdfPixelsPerMm : (_config?.PixelsPerMm ?? 0.0);
+                                if (ppm <= 0.001) ppm = 34.2;
+                                imageFile = _pdfDocumentService.ConvertPdfToImageFileMatchingCamera(
+                                    source.PdfPath,
+                                    page,
+                                    ppm,
+                                    source.PdfFitToCameraCanvas,
+                                    source.PdfCameraWidth > 0 ? source.PdfCameraWidth : 5472,
+                                    source.PdfCameraHeight > 0 ? source.PdfCameraHeight : 3648,
+                                    source.PdfCanvasAlignment,
+                                    source.PdfCanvasOffsetX,
+                                    source.PdfCanvasOffsetY,
+                                    source.PdfRotation,
+                                    targetDir);
+                            }
+                            else
+                            {
+                                double scale = source.PdfScale > 0 ? source.PdfScale : (300.0 / 72.0);
+                                imageFile = _pdfDocumentService.ConvertPdfToImageFile(source.PdfPath, page, scale, targetDir);
+                            }
                             source.PdfRenderedImagePath = imageFile;
                             var mat = Cv2.ImRead(imageFile);
                             if (mat is not null && !mat.Empty())

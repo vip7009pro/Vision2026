@@ -23,6 +23,8 @@ public static class PdfSourceTests
         Test2_PdfDocumentService_PageCountAndConversion();
         Test3_ToolEditorViewModel_PdfSourceIntegration();
         Test4_JobPipeline_RunWithPdfImageInput();
+        Test5_PdfMatchingCamera_20MP_And_CustomPresets();
+        Test6_PdfPanAndRotationFeatures();
         Console.WriteLine("=== [ALL PDF SOURCE TESTS PASSED (100%)] ===\n");
     }
 
@@ -239,6 +241,214 @@ public static class PdfSourceTests
             throw new Exception("RunFlow did not produce LastResult with PDF image source");
 
         Console.WriteLine($"PASSED! (Run completed, Success={result.Pass})");
+    }
+
+    private static void Test5_PdfMatchingCamera_20MP_And_CustomPresets()
+    {
+        Console.Write("Test 5: PDF Match Camera 1:1 (20MP 5472x3648 & Custom Sensor)... ");
+        string pdfPath = EnsureSamplePdf();
+        IPdfDocumentService service = new PdfDocumentService();
+
+        // 1. Kiểm tra RenderPageMatchingCamera với canvas 20MP (5472 x 3648) khi bản vẽ nằm gọn trong cảm biến
+        using (var matCanvas = service.RenderPageMatchingCamera(
+            pdfPath,
+            pageNumber: 1,
+            pixelsPerMm: 5.0,
+            fitToCameraCanvas: true,
+            cameraWidth: 5472,
+            cameraHeight: 3648,
+            alignment: "Center"))
+        {
+            if (matCanvas.Width != 5472 || matCanvas.Height != 3648)
+                throw new Exception($"Expected 20MP canvas 5472x3648, got {matCanvas.Width}x{matCanvas.Height}");
+
+            // 4 góc của khung hình camera phải là màu trắng tinh khiết (255, 255, 255)
+            var pTopLeft = matCanvas.At<Vec3b>(10, 10);
+            var pTopRight = matCanvas.At<Vec3b>(10, 5460);
+            var pBottomLeft = matCanvas.At<Vec3b>(3630, 10);
+            var pBottomRight = matCanvas.At<Vec3b>(3630, 5460);
+
+            if (pTopLeft.Item0 != 255 || pTopLeft.Item1 != 255 || pTopLeft.Item2 != 255 ||
+                pTopRight.Item0 != 255 || pTopRight.Item1 != 255 || pTopRight.Item2 != 255 ||
+                pBottomLeft.Item0 != 255 || pBottomLeft.Item1 != 255 || pBottomLeft.Item2 != 255 ||
+                pBottomRight.Item0 != 255 || pBottomRight.Item1 != 255 || pBottomRight.Item2 != 255)
+            {
+                throw new Exception($"Lỗi: Nền ngoài khung hình cảm biến 20MP không phải màu trắng tinh khiết! (TL={pTopLeft}, TR={pTopRight}, BL={pBottomLeft}, BR={pBottomRight})");
+            }
+        }
+
+        // 1b. Kiểm tra với tỉ lệ quang học chuẩn Camera 20MP (34.2 px/mm ~ FOV 160mm)
+        using (var mat20Mp = service.RenderPageMatchingCamera(
+            pdfPath,
+            pageNumber: 1,
+            pixelsPerMm: 34.2,
+            fitToCameraCanvas: true,
+            cameraWidth: 5472,
+            cameraHeight: 3648,
+            alignment: "Center"))
+        {
+            if (mat20Mp.Width != 5472 || mat20Mp.Height != 3648)
+                throw new Exception($"Expected 20MP canvas 5472x3648, got {mat20Mp.Width}x{mat20Mp.Height}");
+        }
+
+        // 2. Kiểm tra RenderPageMatchingCamera với Camera 12MP tùy biến (4096 x 3000)
+        using (var mat12Mp = service.RenderPageMatchingCamera(
+            pdfPath,
+            pageNumber: 1,
+            pixelsPerMm: 25.0,
+            fitToCameraCanvas: true,
+            cameraWidth: 4096,
+            cameraHeight: 3000,
+            alignment: "Center"))
+        {
+            if (mat12Mp.Width != 4096 || mat12Mp.Height != 3000)
+                throw new Exception($"Expected 12MP canvas 4096x3000, got {mat12Mp.Width}x{mat12Mp.Height}");
+        }
+
+        // 3. Kiểm tra tích hợp trong ToolEditorViewModel với chế độ MatchCamera1to1
+        var config = new VisionConfig
+        {
+            ProductCode = "TEST_MATCH_CAM",
+            ProductName = "Test Camera Match 1:1",
+            PixelsPerMm = 34.2,
+            ImageSources = new System.Collections.Generic.List<ImageSourceDefinition>
+            {
+                new ImageSourceDefinition
+                {
+                    Name = "CAM_20MP",
+                    SourceType = ImageSourceType.Pdf,
+                    PdfPath = pdfPath,
+                    PdfPageNumber = 1,
+                    PdfRenderMode = PdfRenderMode.MatchCamera1to1,
+                    PdfFitToCameraCanvas = true,
+                    PdfCameraWidth = 5472,
+                    PdfCameraHeight = 3648
+                }
+            }
+        };
+
+        var vm = new ToolEditorViewModel();
+        vm.InitializeWithConfig(config);
+
+        // Kiểm tra thuộc tính ViewModel
+        if (!vm.ImageSource_PdfIsMatchCamera)
+            throw new Exception("ImageSource_PdfIsMatchCamera should be true");
+        if (vm.ImageSource_PdfCameraWidth != 5472 || vm.ImageSource_PdfCameraHeight != 3648)
+            throw new Exception($"ViewModel camera size incorrect: {vm.ImageSource_PdfCameraWidth}x{vm.ImageSource_PdfCameraHeight}");
+
+        // Chuyển đổi PDF theo chế độ khớp camera
+        vm.ImageSource_ConvertPdfToImage();
+
+        var sourceDef = config.ImageSources[0];
+        using var loadedMat = vm.LoadImageFromSourceForPreview(sourceDef);
+        if (loadedMat == null || loadedMat.Empty() || loadedMat.Width != 5472 || loadedMat.Height != 3648)
+            throw new Exception($"Expected preview to load 5472x3648 image, got {loadedMat?.Width}x{loadedMat?.Height}");
+
+        Console.WriteLine($"PASSED! (Generated 5472x3648 20MP Canvas, Optical PPM={config.PixelsPerMm:F1}, Background=White)");
+    }
+
+    private static void Test6_PdfPanAndRotationFeatures()
+    {
+        Console.Write("Test 6: PDF Manual PixelsPerMm, Rotation (90deg) & Pan Offset... ");
+        string pdfPath = EnsureSamplePdf();
+        IPdfDocumentService service = new PdfDocumentService();
+
+        // 1. Kiểm tra xoay 90 độ (Vertical sang Horizontal)
+        using (var normalMat = service.RenderPageMatchingCamera(
+            pdfPath,
+            pageNumber: 1,
+            pixelsPerMm: 1.0,
+            fitToCameraCanvas: false,
+            rotationDegrees: 0))
+        using (var rotatedMat = service.RenderPageMatchingCamera(
+            pdfPath,
+            pageNumber: 1,
+            pixelsPerMm: 1.0,
+            fitToCameraCanvas: false,
+            rotationDegrees: 90))
+        {
+            if (rotatedMat.Width != normalMat.Height || rotatedMat.Height != normalMat.Width)
+                throw new Exception($"Expected 90-degree rotated dimensions {normalMat.Height}x{normalMat.Width}, got {rotatedMat.Width}x{rotatedMat.Height}");
+        }
+
+        // 2. Kiểm tra Căn Lề TopCenter kết hợp Pan Offset Y
+        using (var canvasMat = service.RenderPageMatchingCamera(
+            pdfPath,
+            pageNumber: 1,
+            pixelsPerMm: 2.0,
+            fitToCameraCanvas: true,
+            cameraWidth: 2000,
+            cameraHeight: 2000,
+            alignment: "TopCenter",
+            offsetX: 50,
+            offsetY: 100,
+            rotationDegrees: 0))
+        {
+            if (canvasMat.Width != 2000 || canvasMat.Height != 2000)
+                throw new Exception($"Expected canvas 2000x2000, got {canvasMat.Width}x{canvasMat.Height}");
+        }
+
+        // 3. Kiểm tra ViewModel: Nhập tay PixelsPerMm, Pan và Xoay
+        var config = new VisionConfig
+        {
+            ProductCode = "TEST_PAN_ROT",
+            ProductName = "Test Pan & Rotation",
+            PixelsPerMm = 10.0,
+            ImageSources = new System.Collections.Generic.List<ImageSourceDefinition>
+            {
+                new ImageSourceDefinition
+                {
+                    Name = "CAM_TEST",
+                    SourceType = ImageSourceType.Pdf,
+                    PdfPath = pdfPath,
+                    PdfPageNumber = 1,
+                    PdfRenderMode = PdfRenderMode.MatchCamera1to1,
+                    PdfFitToCameraCanvas = true,
+                    PdfCameraWidth = 3000,
+                    PdfCameraHeight = 2000,
+                    PdfPixelsPerMm = 28.5,
+                    PdfRotation = 0,
+                    PdfCanvasAlignment = "TopCenter",
+                    PdfCanvasOffsetX = 0,
+                    PdfCanvasOffsetY = 0
+                }
+            }
+        };
+
+        var vm = new ToolEditorViewModel();
+        vm.InitializeWithConfig(config);
+
+        // Kiểm tra PixelsPerMm nhập tay
+        if (Math.Abs(vm.ImageSource_PdfPixelsPerMm - 28.5) > 0.001)
+            throw new Exception($"Expected PixelsPerMm 28.5, got {vm.ImageSource_PdfPixelsPerMm}");
+
+        if (!vm.ImageSource_PdfEquivalentDpiText.Contains("724 DPI"))
+            throw new Exception($"Expected DPI ~724, got {vm.ImageSource_PdfEquivalentDpiText}");
+
+        // Kiểm tra nút Áp dụng vào Job
+        vm.ImageSource_PdfApplyPixelsPerMmToJob();
+        if (Math.Abs(config.PixelsPerMm - 28.5) > 0.001)
+            throw new Exception($"Job PixelsPerMm not updated: {config.PixelsPerMm}");
+
+        // Kiểm tra nút Xoay 90°
+        vm.ImageSource_PdfRotate90();
+        if (vm.ImageSource_PdfRotation != 90)
+            throw new Exception($"Expected rotation 90, got {vm.ImageSource_PdfRotation}");
+
+        // Kiểm tra các thao tác Pan
+        vm.ImageSource_PdfPanUp();
+        if (vm.ImageSource_PdfCanvasOffsetY != -200)
+            throw new Exception($"Expected Pan Y -200, got {vm.ImageSource_PdfCanvasOffsetY}");
+
+        vm.ImageSource_PdfPanRight();
+        if (vm.ImageSource_PdfCanvasOffsetX != 200)
+            throw new Exception($"Expected Pan X 200, got {vm.ImageSource_PdfCanvasOffsetX}");
+
+        vm.ImageSource_PdfPanReset();
+        if (vm.ImageSource_PdfCanvasOffsetX != 0 || vm.ImageSource_PdfCanvasOffsetY != 0)
+            throw new Exception($"PanReset failed: X={vm.ImageSource_PdfCanvasOffsetX}, Y={vm.ImageSource_PdfCanvasOffsetY}");
+
+        Console.WriteLine("PASSED! (Rotation=90°, Pan Offset & Manual PixelsPerMm verified)");
     }
 
     private static void InjectField(object target, string fieldName, object? value)

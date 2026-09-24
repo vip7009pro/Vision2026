@@ -146,6 +146,12 @@ public enum ImageSourceType
     Pdf = 4
 }
 
+public enum PdfRenderMode
+{
+    MatchCamera1to1 = 0,
+    FixedDpi = 1
+}
+
 public enum ImageSourceTriggerMode
 {
     SoftTrigger = 0,
@@ -232,6 +238,51 @@ public sealed class ImageSourceDefinition
     /// Đường dẫn tệp ảnh PNG đã chuyển đổi từ trang PDF để cấp cho các tool dạy học và kiểm tra.
     /// </summary>
     public string PdfRenderedImagePath { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Chế độ kết xuất PDF: Khớp tỉ lệ 1:1 camera thật (MatchCamera1to1) hoặc Chọn DPI cố định (FixedDpi).
+    /// </summary>
+    public PdfRenderMode PdfRenderMode { get; set; } = PdfRenderMode.MatchCamera1to1;
+
+    /// <summary>
+    /// Khi ở chế độ khớp Camera: Có đặt bản vẽ vào đúng khung hình kích thước camera hay không (mặc định = true).
+    /// </summary>
+    public bool PdfFitToCameraCanvas { get; set; } = true;
+
+    /// <summary>
+    /// Chiều rộng cảm biến camera thực tế (mặc định 5472 px cho camera 20MP, hoặc tùy chỉnh).
+    /// </summary>
+    public int PdfCameraWidth { get; set; } = 5472;
+
+    /// <summary>
+    /// Chiều cao cảm biến camera thực tế (mặc định 3648 px cho camera 20MP, hoặc tùy chỉnh).
+    /// </summary>
+    public int PdfCameraHeight { get; set; } = 3648;
+
+    /// <summary>
+    /// Căn lề bản vẽ trên khung hình camera: "Center", "TopLeft", "Custom".
+    /// </summary>
+    public string PdfCanvasAlignment { get; set; } = "Center";
+
+    /// <summary>
+    /// Tọa độ dịch chuyển X khi đặt bản vẽ trên khung hình camera.
+    /// </summary>
+    public int PdfCanvasOffsetX { get; set; } = 0;
+
+    /// <summary>
+    /// Tọa độ dịch chuyển Y khi đặt bản vẽ trên khung hình camera.
+    /// </summary>
+    public int PdfCanvasOffsetY { get; set; } = 0;
+
+    /// <summary>
+    /// Tỉ lệ quang học riêng cho bản vẽ PDF (pixel/mm). Nếu = 0 thì kế thừa từ PixelsPerMm của Job/Global.
+    /// </summary>
+    public double PdfPixelsPerMm { get; set; } = 0.0;
+
+    /// <summary>
+    /// Góc xoay bản vẽ PDF (0, 90, 180, 270 độ). Rất hữu ích khi bản vẽ đứng (portrait) đặt vào camera ngang (landscape).
+    /// </summary>
+    public int PdfRotation { get; set; } = 0;
 
     public bool LoopFolder { get; set; } = true;
 

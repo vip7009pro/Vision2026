@@ -42,4 +42,36 @@ public interface IPdfDocumentService
     /// <param name="outputDirectory">Thư mục đích lưu ảnh (nếu null sẽ dùng Cache/PdfImages/).</param>
     /// <returns>Đường dẫn tệp ảnh PNG đã lưu trên đĩa.</returns>
     string ConvertPdfToImageFile(string pdfFilePath, int pageNumber = 1, double scale = 1.0, string? outputDirectory = null);
+
+    /// <summary>
+    /// Chuyển đổi trang PDF khớp tỉ lệ quang học 1:1 theo hệ số hiệu chuẩn của Camera (PixelsPerMm)
+    /// và tùy chọn đặt lên khung hình cảm biến của Camera (ví dụ 20MP: 5472x3648).
+    /// </summary>
+    Mat RenderPageMatchingCamera(
+        string pdfFilePath,
+        int pageNumber,
+        double pixelsPerMm,
+        bool fitToCameraCanvas = true,
+        int cameraWidth = 5472,
+        int cameraHeight = 3648,
+        string alignment = "Center",
+        int offsetX = 0,
+        int offsetY = 0,
+        int rotationDegrees = 0);
+
+    /// <summary>
+    /// Chuyển đổi và lưu ra tệp ảnh PNG khớp 1:1 theo Camera.
+    /// </summary>
+    string ConvertPdfToImageFileMatchingCamera(
+        string pdfFilePath,
+        int pageNumber,
+        double pixelsPerMm,
+        bool fitToCameraCanvas = true,
+        int cameraWidth = 5472,
+        int cameraHeight = 3648,
+        string alignment = "Center",
+        int offsetX = 0,
+        int offsetY = 0,
+        int rotationDegrees = 0,
+        string? outputDirectory = null);
 }

@@ -408,6 +408,15 @@ namespace VisionInspectionApp.UI.ViewModels
             ImageSource_ConvertPdfToImageCommand = new RelayCommand(ImageSource_ConvertPdfToImage);
             ImageSource_PdfPrevPageCommand = new RelayCommand(ImageSource_PdfPrevPage);
             ImageSource_PdfNextPageCommand = new RelayCommand(ImageSource_PdfNextPage);
+            ImageSource_PdfSyncFromCameraCommand = new RelayCommand(ImageSource_PdfSyncFromCamera);
+            ImageSource_PdfSyncPixelsPerMmFromCalibCommand = new RelayCommand(ImageSource_PdfSyncPixelsPerMmFromCalib);
+            ImageSource_PdfApplyPixelsPerMmToJobCommand = new RelayCommand(ImageSource_PdfApplyPixelsPerMmToJob);
+            ImageSource_PdfRotate90Command = new RelayCommand(ImageSource_PdfRotate90);
+            ImageSource_PdfPanUpCommand = new RelayCommand(ImageSource_PdfPanUp);
+            ImageSource_PdfPanDownCommand = new RelayCommand(ImageSource_PdfPanDown);
+            ImageSource_PdfPanLeftCommand = new RelayCommand(ImageSource_PdfPanLeft);
+            ImageSource_PdfPanRightCommand = new RelayCommand(ImageSource_PdfPanRight);
+            ImageSource_PdfPanResetCommand = new RelayCommand(ImageSource_PdfPanReset);
             ImageSource_OpenJobCameraSettingsCommand = new RelayCommand(ImageSource_OpenJobCameraSettings);
             ImageSource_ApplyLightingToDeviceCommand = new RelayCommand(ImageSource_ApplyLightingToDevice);
             ImageSource_ReadLightingFromDeviceCommand = new RelayCommand(ImageSource_ReadLightingFromDevice);
