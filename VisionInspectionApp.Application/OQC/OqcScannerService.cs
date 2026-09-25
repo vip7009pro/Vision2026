@@ -678,9 +678,13 @@ public sealed class OqcScannerService : IOqcScannerService
     {
         if (dbManager == null) return configuredDbId ?? string.Empty;
 
-        if (!string.IsNullOrWhiteSpace(configuredDbId) && dbManager.GetDatabase(configuredDbId) != null)
+        if (!string.IsNullOrWhiteSpace(configuredDbId))
         {
-            return configuredDbId;
+            var db = dbManager.GetDatabase(configuredDbId);
+            if (db != null)
+            {
+                return db.Id;
+            }
         }
 
         // Tự động fallback sang các cấu hình DB khác nếu cấu hình hiện tại bị đổi GUID khi chuyển máy

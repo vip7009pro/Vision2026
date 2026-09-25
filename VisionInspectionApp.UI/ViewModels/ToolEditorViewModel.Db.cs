@@ -17,6 +17,12 @@ public partial class ToolEditorViewModel
 
     public ObservableCollection<DbModel> AvailableDatabases => new(_dbManagerService?.Databases ?? Array.Empty<DbModel>());
 
+    public void RefreshAvailableDatabases()
+    {
+        OnPropertyChanged(nameof(AvailableDatabases));
+        OnPropertyChanged(nameof(Db_SelectedDbChoice));
+    }
+
     public DbNodeMode[] DbNodeModes => Enum.GetValues<DbNodeMode>();
     public DbExecutionTiming[] DbExecutionTimings => Enum.GetValues<DbExecutionTiming>();
     public DbReadOutputFormat[] DbReadOutputFormats => Enum.GetValues<DbReadOutputFormat>();

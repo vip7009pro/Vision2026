@@ -124,6 +124,11 @@ public partial class App : System.Windows.Application
                 // PDF Document Rendering Service (Bản vẽ PDF 100%)
                 services.AddSingleton<VisionInspectionApp.Application.Services.IPdfDocumentService, VisionInspectionApp.Application.Services.PdfDocumentService>();
 
+                // System Configuration Backup & Restore Framework (Toàn bộ App, PLC, Database, OQC)
+                services.AddSingleton<VisionInspectionApp.Application.Services.ISystemConfigBackupService, VisionInspectionApp.Application.Services.SystemConfigBackupService>();
+                services.AddTransient<ViewModels.SystemConfigBackupViewModel>();
+                services.AddTransient<Views.SystemConfigBackupWindow>();
+
 
                 services.AddSingleton<TeachViewModel>();
                 services.AddSingleton<ToolEditorViewModel>();

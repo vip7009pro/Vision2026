@@ -3,6 +3,7 @@ using System.IO;
 using System.Text.Json;
 using System.Threading;
 using VisionInspectionApp.Application.Services;
+using VisionInspectionApp.Models;
 using VisionInspectionApp.UI.Services;
 
 namespace TestExtractApp;

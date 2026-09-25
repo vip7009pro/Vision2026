@@ -218,41 +218,110 @@ public partial class OqcScannerViewModel
         PrevPageCommand = new AsyncRelayCommand(ExecutePrevPageAsync);
         AssignProductCommand = new AsyncRelayCommand(ExecuteAssignProductAsync);
 
+        if (_dbManager != null)
+        {
+            _dbManager.DatabasesChanged += (s, e) =>
+            {
+                System.Windows.Application.Current?.Dispatcher.InvokeAsync(() =>
+                {
+                    OnPropertyChanged(nameof(AvailableDatabases));
+                    LoadSettingsFromConfig();
+                });
+            };
+        }
+
         LoadSettingsFromConfig();
     }
 
-    private void LoadSettingsFromConfig()
+    public string ResolveDatabaseId(string? dbId, string? dbName)
+    {
+        return ResolveDatabaseId(dbId, dbName, _dbManager?.Databases);
+    }
+
+    public static string ResolveDatabaseId(string? dbId, string? dbName, IEnumerable<DbModel>? databases)
+    {
+        if (databases == null)
+            return dbId ?? "";
+
+        var dbList = databases as IList<DbModel> ?? databases.ToList();
+        if (dbList.Count == 0)
+            return dbId ?? "";
+
+        // 1. Khớp chính xác theo ID (GUID)
+        if (!string.IsNullOrWhiteSpace(dbId))
+        {
+            var matchById = dbList.FirstOrDefault(d => string.Equals(d.Id, dbId, StringComparison.OrdinalIgnoreCase));
+            if (matchById != null)
+                return matchById.Id;
+
+            // 2. Khớp nếu dbId lưu tên database (VD: "MainDB", "CMS_DB", "DB_OQC")
+            var matchByNameFromId = dbList.FirstOrDefault(d => string.Equals(d.Name, dbId, StringComparison.OrdinalIgnoreCase));
+            if (matchByNameFromId != null)
+                return matchByNameFromId.Id;
+
+            // 3. Khớp nếu dbId lưu tên catalog DB (DatabaseName)
+            var matchByDbCatalogFromId = dbList.FirstOrDefault(d => string.Equals(d.DatabaseName, dbId, StringComparison.OrdinalIgnoreCase));
+            if (matchByDbCatalogFromId != null)
+                return matchByDbCatalogFromId.Id;
+        }
+
+        // 4. Khớp theo tên dbName lưu kèm khi xuất cấu hình
+        if (!string.IsNullOrWhiteSpace(dbName))
+        {
+            var matchByName = dbList.FirstOrDefault(d => string.Equals(d.Name, dbName, StringComparison.OrdinalIgnoreCase));
+            if (matchByName != null)
+                return matchByName.Id;
+
+            var matchByDbCatalog = dbList.FirstOrDefault(d => string.Equals(d.DatabaseName, dbName, StringComparison.OrdinalIgnoreCase));
+            if (matchByDbCatalog != null)
+                return matchByDbCatalog.Id;
+        }
+
+        // 5. Fallback thông minh: Nếu trường này có giá trị nhưng không khớp GUID máy cũ, fallback sang DB đang bật hoặc DB đầu tiên
+        if (!string.IsNullOrWhiteSpace(dbId) || !string.IsNullOrWhiteSpace(dbName))
+        {
+            var activeDb = dbList.FirstOrDefault(d => d.IsEnabled) ?? dbList.FirstOrDefault();
+            if (activeDb != null)
+                return activeDb.Id;
+        }
+
+        return dbId ?? "";
+    }
+
+    public void LoadSettingsFromConfig()
     {
         _isSuppressingConfigSave = true;
         try
         {
+            OnPropertyChanged(nameof(AvailableDatabases));
+
             var cfg = _oqcService.Config;
-            LookupDbId = cfg.LookupDbId;
+            LookupDbId = ResolveDatabaseId(cfg.LookupDbId, cfg.LookupDbName);
             LookupQuery = cfg.LookupQuery;
             JobFilePathColumn = cfg.JobFilePathColumn;
             JobRootDirectory = cfg.JobRootDirectory;
 
             EnableProductNameLookup = cfg.EnableProductNameLookup;
-            ProductNameDbId = cfg.ProductNameDbId;
+            ProductNameDbId = ResolveDatabaseId(cfg.ProductNameDbId, cfg.ProductNameDbName);
             ProductNameQuery = cfg.ProductNameQuery;
             ProductNameColumn = cfg.ProductNameColumn;
 
-            ProductListDbId = cfg.ProductListDbId;
+            ProductListDbId = ResolveDatabaseId(cfg.ProductListDbId, cfg.ProductListDbName);
             ProductListQuery = cfg.ProductListQuery;
             ProductListCodeColumn = !string.IsNullOrWhiteSpace(cfg.ProductListCodeColumn) ? cfg.ProductListCodeColumn : "G_CODE";
             ProductListNameColumn = !string.IsNullOrWhiteSpace(cfg.ProductListNameColumn) ? cfg.ProductListNameColumn : "G_NAME_KD";
             ProductListPageSize = cfg.ProductListPageSize;
 
-            AssignDbId = cfg.AssignDbId;
+            AssignDbId = ResolveDatabaseId(cfg.AssignDbId, cfg.AssignDbName);
             AssignQuery = cfg.AssignQuery;
 
-            UpdateTeachImageDbId = cfg.UpdateTeachImageDbId;
+            UpdateTeachImageDbId = ResolveDatabaseId(cfg.UpdateTeachImageDbId, cfg.UpdateTeachImageDbName);
             UpdateTeachImageQuery = !string.IsNullOrWhiteSpace(cfg.UpdateTeachImageQuery) ? cfg.UpdateTeachImageQuery : "IF EXISTS (SELECT 1 FROM ProductJobs WHERE ProductCode = '{ProductCode}') UPDATE ProductJobs SET TeachImagePath = '{TeachImagePath}', UpdatedAt = GETDATE() WHERE ProductCode = '{ProductCode}' ELSE INSERT INTO ProductJobs (ProductCode, TeachImagePath, UpdatedAt) VALUES ('{ProductCode}', '{TeachImagePath}', GETDATE())";
 
             ServerApiUrl = !string.IsNullOrWhiteSpace(cfg.ServerApiUrl) ? cfg.ServerApiUrl : "http://localhost/vision_upload.php";
             TeachImageColumn = !string.IsNullOrWhiteSpace(cfg.TeachImageColumn) ? cfg.TeachImageColumn : "TeachImagePath";
 
-            JobManagerDbId = cfg.JobManagerDbId;
+            JobManagerDbId = ResolveDatabaseId(cfg.JobManagerDbId, cfg.JobManagerDbName);
             JobManagerQuery = !string.IsNullOrWhiteSpace(cfg.JobManagerQuery) ? cfg.JobManagerQuery : "SELECT ProductCode, ProductName, JobFilePath, TeachImagePath, UpdatedAt FROM ProductJobs WHERE ProductCode LIKE '%{SearchText}%' OR ProductName LIKE '%{SearchText}%' ORDER BY ProductCode OFFSET {Offset} ROWS FETCH NEXT {PageSize} ROWS ONLY";
             JobManagerProductCodeColumn = !string.IsNullOrWhiteSpace(cfg.JobManagerProductCodeColumn) ? cfg.JobManagerProductCodeColumn : "ProductCode";
             JobManagerProductNameColumn = !string.IsNullOrWhiteSpace(cfg.JobManagerProductNameColumn) ? cfg.JobManagerProductNameColumn : "ProductName";
@@ -262,11 +331,11 @@ public partial class OqcScannerViewModel
             JobManagerPageSize = cfg.JobManagerPageSize > 0 ? cfg.JobManagerPageSize : 50;
 
             LogResultToDb = cfg.LogResultToDb;
-            LogResultDbId = cfg.LogResultDbId;
+            LogResultDbId = ResolveDatabaseId(cfg.LogResultDbId, cfg.LogResultDbName);
             LogResultQuery = cfg.LogResultQuery;
 
             LogDetailResultToDb = cfg.LogDetailResultToDb;
-            LogDetailResultDbId = cfg.LogDetailResultDbId;
+            LogDetailResultDbId = ResolveDatabaseId(cfg.LogDetailResultDbId, cfg.LogDetailResultDbName);
             LogDetailResultQuery = cfg.LogDetailResultQuery;
 
             EnableCameraBarcodeScan = cfg.EnableCameraBarcodeScan;
@@ -310,31 +379,37 @@ public partial class OqcScannerViewModel
         var cfg = new OqcScannerConfig
         {
             LookupDbId = LookupDbId,
+            LookupDbName = _dbManager.GetDatabase(LookupDbId)?.Name ?? "",
             LookupQuery = LookupQuery,
             JobFilePathColumn = JobFilePathColumn,
             JobRootDirectory = JobRootDirectory,
 
             EnableProductNameLookup = EnableProductNameLookup,
             ProductNameDbId = ProductNameDbId,
+            ProductNameDbName = _dbManager.GetDatabase(ProductNameDbId)?.Name ?? "",
             ProductNameQuery = ProductNameQuery,
             ProductNameColumn = ProductNameColumn,
 
             ProductListDbId = ProductListDbId,
+            ProductListDbName = _dbManager.GetDatabase(ProductListDbId)?.Name ?? "",
             ProductListQuery = ProductListQuery,
             ProductListCodeColumn = ProductListCodeColumn,
             ProductListNameColumn = ProductListNameColumn,
             ProductListPageSize = ProductListPageSize > 0 ? ProductListPageSize : 50,
 
             AssignDbId = AssignDbId,
+            AssignDbName = _dbManager.GetDatabase(AssignDbId)?.Name ?? "",
             AssignQuery = AssignQuery,
 
             UpdateTeachImageDbId = UpdateTeachImageDbId,
+            UpdateTeachImageDbName = _dbManager.GetDatabase(UpdateTeachImageDbId)?.Name ?? "",
             UpdateTeachImageQuery = UpdateTeachImageQuery,
 
             ServerApiUrl = ServerApiUrl,
             TeachImageColumn = TeachImageColumn,
 
             JobManagerDbId = JobManagerDbId,
+            JobManagerDbName = _dbManager.GetDatabase(JobManagerDbId)?.Name ?? "",
             JobManagerQuery = JobManagerQuery,
             JobManagerProductCodeColumn = JobManagerProductCodeColumn,
             JobManagerProductNameColumn = JobManagerProductNameColumn,
@@ -345,10 +420,12 @@ public partial class OqcScannerViewModel
 
             LogResultToDb = LogResultToDb,
             LogResultDbId = LogResultDbId,
+            LogResultDbName = _dbManager.GetDatabase(LogResultDbId)?.Name ?? "",
             LogResultQuery = LogResultQuery,
 
             LogDetailResultToDb = LogDetailResultToDb,
             LogDetailResultDbId = LogDetailResultDbId,
+            LogDetailResultDbName = _dbManager.GetDatabase(LogDetailResultDbId)?.Name ?? "",
             LogDetailResultQuery = LogDetailResultQuery,
 
             EnableCameraBarcodeScan = EnableCameraBarcodeScan,
@@ -385,31 +462,37 @@ public partial class OqcScannerViewModel
                 var cfg = new OqcScannerConfig
                 {
                     LookupDbId = LookupDbId,
+                    LookupDbName = _dbManager.GetDatabase(LookupDbId)?.Name ?? "",
                     LookupQuery = LookupQuery,
                     JobFilePathColumn = JobFilePathColumn,
                     JobRootDirectory = JobRootDirectory,
 
                     EnableProductNameLookup = EnableProductNameLookup,
                     ProductNameDbId = ProductNameDbId,
+                    ProductNameDbName = _dbManager.GetDatabase(ProductNameDbId)?.Name ?? "",
                     ProductNameQuery = ProductNameQuery,
                     ProductNameColumn = ProductNameColumn,
 
                     ProductListDbId = ProductListDbId,
+                    ProductListDbName = _dbManager.GetDatabase(ProductListDbId)?.Name ?? "",
                     ProductListQuery = ProductListQuery,
                     ProductListCodeColumn = ProductListCodeColumn,
                     ProductListNameColumn = ProductListNameColumn,
                     ProductListPageSize = ProductListPageSize > 0 ? ProductListPageSize : 50,
 
                     AssignDbId = AssignDbId,
+                    AssignDbName = _dbManager.GetDatabase(AssignDbId)?.Name ?? "",
                     AssignQuery = AssignQuery,
 
                     UpdateTeachImageDbId = UpdateTeachImageDbId,
+                    UpdateTeachImageDbName = _dbManager.GetDatabase(UpdateTeachImageDbId)?.Name ?? "",
                     UpdateTeachImageQuery = UpdateTeachImageQuery,
 
                     ServerApiUrl = ServerApiUrl,
                     TeachImageColumn = TeachImageColumn,
 
                     JobManagerDbId = JobManagerDbId,
+                    JobManagerDbName = _dbManager.GetDatabase(JobManagerDbId)?.Name ?? "",
                     JobManagerQuery = JobManagerQuery,
                     JobManagerProductCodeColumn = JobManagerProductCodeColumn,
                     JobManagerProductNameColumn = JobManagerProductNameColumn,
@@ -420,10 +503,12 @@ public partial class OqcScannerViewModel
 
                     LogResultToDb = LogResultToDb,
                     LogResultDbId = LogResultDbId,
+                    LogResultDbName = _dbManager.GetDatabase(LogResultDbId)?.Name ?? "",
                     LogResultQuery = LogResultQuery,
 
                     LogDetailResultToDb = LogDetailResultToDb,
                     LogDetailResultDbId = LogDetailResultDbId,
+                    LogDetailResultDbName = _dbManager.GetDatabase(LogDetailResultDbId)?.Name ?? "",
                     LogDetailResultQuery = LogDetailResultQuery,
 
                     EnableCameraBarcodeScan = EnableCameraBarcodeScan,
@@ -470,8 +555,11 @@ public partial class OqcScannerViewModel
                 var (success, loadedConfig, error) = _oqcService.ImportConfigFromFile(ofd.FileName);
                 if (success && loadedConfig != null)
                 {
+                    OnPropertyChanged(nameof(AvailableDatabases));
                     LoadSettingsFromConfig();
-                    System.Windows.MessageBox.Show("✅ Nạp cấu hình thành công!", "Thành Công", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Information);
+                    // Lưu lại cấu hình đã ánh xạ ID tự động để lần mở sau không cần nạp lại
+                    SaveSettingsToConfig();
+                    System.Windows.MessageBox.Show("✅ Nạp cấu hình thành công!\nCác mục cơ sở dữ liệu đã được tự động khớp và chọn sẵn.", "Thành Công", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Information);
                 }
                 else
                 {

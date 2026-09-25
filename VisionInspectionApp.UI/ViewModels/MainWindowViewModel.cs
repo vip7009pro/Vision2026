@@ -47,6 +47,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
     private readonly GlobalAppSettingsService? _settingsService;
     private readonly IServiceProvider? _serviceProvider;
     private readonly VisionInspectionApp.Application.Licensing.ILicenseService? _licenseService;
+    private readonly VisionInspectionApp.Application.Services.ISystemConfigBackupService? _backupService;
 
     public ObservableCollection<string> RecentJobs { get; } = new();
 
@@ -62,7 +63,8 @@ public sealed partial class MainWindowViewModel : ObservableObject
         IOtaUpdateService? otaService = null,
         GlobalAppSettingsService? settingsService = null,
         IServiceProvider? serviceProvider = null,
-        VisionInspectionApp.Application.Licensing.ILicenseService? licenseService = null)
+        VisionInspectionApp.Application.Licensing.ILicenseService? licenseService = null,
+        VisionInspectionApp.Application.Services.ISystemConfigBackupService? backupService = null)
     {
         ToolEditor = toolEditor;
         Calibration = calibration;
@@ -78,6 +80,21 @@ public sealed partial class MainWindowViewModel : ObservableObject
         _settingsService = settingsService;
         _serviceProvider = serviceProvider;
         _licenseService = licenseService;
+        _backupService = backupService ?? _serviceProvider?.GetService(typeof(VisionInspectionApp.Application.Services.ISystemConfigBackupService)) as VisionInspectionApp.Application.Services.ISystemConfigBackupService;
+
+        if (_backupService != null)
+        {
+            _backupService.SystemConfigRestored += (s, e) =>
+            {
+                System.Windows.Application.Current?.Dispatcher.InvokeAsync(() =>
+                {
+                    _settingsService?.Reload();
+                    OqcScanner?.LoadSettingsFromConfig();
+                    ToolEditor?.RefreshAvailableDatabases();
+                    SetGlobalStatus("📦 Cấu hình hệ thống đã được phục hồi thành công.", "Success");
+                });
+            };
+        }
 
         if (_licenseService != null)
         {
@@ -135,6 +152,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
         OpenDocumentationCommand = new RelayCommand<string>(ExecuteOpenDocumentation);
         OpenDocsFolderCommand = new RelayCommand(ExecuteOpenDocsFolder);
         OpenLicenseDialogCommand = new RelayCommand(ExecuteOpenLicenseDialog);
+        OpenSystemConfigBackupCommand = new RelayCommand(OpenSystemConfigBackup);
 
         if (_selectedTabIndex == 3)
         {
@@ -161,6 +179,41 @@ public sealed partial class MainWindowViewModel : ObservableObject
     public ICommand OpenDocumentationCommand { get; }
     public ICommand OpenDocsFolderCommand { get; }
     public ICommand OpenLicenseDialogCommand { get; }
+    public ICommand OpenSystemConfigBackupCommand { get; }
+
+    private static Views.SystemConfigBackupWindow? _systemConfigBackupWindowInstance;
+
+    private void OpenSystemConfigBackup()
+    {
+        if (_systemConfigBackupWindowInstance != null && _systemConfigBackupWindowInstance.IsLoaded)
+        {
+            _systemConfigBackupWindowInstance.Activate();
+            if (_systemConfigBackupWindowInstance.WindowState == WindowState.Minimized)
+                _systemConfigBackupWindowInstance.WindowState = WindowState.Normal;
+            return;
+        }
+
+        var backupService = _backupService ?? _serviceProvider?.GetService(typeof(VisionInspectionApp.Application.Services.ISystemConfigBackupService)) as VisionInspectionApp.Application.Services.ISystemConfigBackupService;
+        var dbManager = _serviceProvider?.GetService(typeof(VisionInspectionApp.Application.DB.Services.IDbManagerService)) as VisionInspectionApp.Application.DB.Services.IDbManagerService;
+        var plcManager = _serviceProvider?.GetService(typeof(VisionInspectionApp.Application.PLC.Services.IPlcManagerService)) as VisionInspectionApp.Application.PLC.Services.IPlcManagerService;
+        var oqcService = _serviceProvider?.GetService(typeof(VisionInspectionApp.Application.OQC.IOqcScannerService)) as VisionInspectionApp.Application.OQC.IOqcScannerService;
+        var appSettingsService = _settingsService ?? (_serviceProvider?.GetService(typeof(GlobalAppSettingsService)) as GlobalAppSettingsService);
+
+        if (backupService == null || dbManager == null || plcManager == null || oqcService == null || appSettingsService == null)
+        {
+            MessageBox.Show("Các dịch vụ quản lý cấu hình chưa được khởi tạo đầy đủ.", "Lỗi", MessageBoxButton.OK, MessageBoxImage.Error);
+            return;
+        }
+
+        var vm = new SystemConfigBackupViewModel(backupService, dbManager, plcManager, oqcService, appSettingsService);
+        var mainWin = System.Windows.Application.Current?.MainWindow;
+        _systemConfigBackupWindowInstance = new Views.SystemConfigBackupWindow(vm)
+        {
+            Owner = mainWin
+        };
+        _systemConfigBackupWindowInstance.Closed += (s, e) => _systemConfigBackupWindowInstance = null;
+        _systemConfigBackupWindowInstance.Show();
+    }
 
     private void ExecuteOpenDocumentation(string? docId)
     {

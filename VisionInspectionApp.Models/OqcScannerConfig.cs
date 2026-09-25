@@ -6,6 +6,7 @@ public class OqcScannerConfig
 {
     // ─── Job File Tra cứu (Lookup Query) ───
     public string LookupDbId { get; set; } = "";
+    public string LookupDbName { get; set; } = "";
     public string LookupQuery { get; set; } = "SELECT JobFilePath FROM ProductJobs WHERE ProductCode = '{ScannedCode}'";
     public string JobFilePathColumn { get; set; } = "JobFilePath";
     public string JobRootDirectory { get; set; } = @"C:\VisionJobs";
@@ -13,11 +14,13 @@ public class OqcScannerConfig
     // ─── Tên sản phẩm Tra cứu (Product Name Lookup Query) ───
     public bool EnableProductNameLookup { get; set; } = true;
     public string ProductNameDbId { get; set; } = "";
+    public string ProductNameDbName { get; set; } = "";
     public string ProductNameQuery { get; set; } = "SELECT G_NAME_KD FROM M100 WHERE G_CODE = '{ScannedCode}'";
     public string ProductNameColumn { get; set; } = "G_NAME_KD";
 
     // ─── Danh sách sản phẩm (Product List Browser Query) ───
     public string ProductListDbId { get; set; } = "";
+    public string ProductListDbName { get; set; } = "";
     public string ProductListQuery { get; set; } = "SELECT G_CODE, G_NAME_KD FROM M100 WHERE G_CODE LIKE '%{SearchText}%' OR G_NAME_KD LIKE '%{SearchText}%' ORDER BY G_CODE OFFSET {Offset} ROWS FETCH NEXT {PageSize} ROWS ONLY";
     public string ProductListCodeColumn { get; set; } = "G_CODE";
     public string ProductListNameColumn { get; set; } = "G_NAME_KD";
@@ -25,10 +28,12 @@ public class OqcScannerConfig
 
     // ─── Gán sản phẩm ↔ Job File (Assign/Upsert Query) ───
     public string AssignDbId { get; set; } = "";
+    public string AssignDbName { get; set; } = "";
     public string AssignQuery { get; set; } = "IF EXISTS (SELECT 1 FROM ProductJobs WHERE ProductCode = '{ProductCode}') UPDATE ProductJobs SET JobFilePath = '{JobFilePath}', TeachImagePath = '{TeachImagePath}' WHERE ProductCode = '{ProductCode}' ELSE INSERT INTO ProductJobs (ProductCode, JobFilePath, TeachImagePath) VALUES ('{ProductCode}', '{JobFilePath}', '{TeachImagePath}')";
 
     // ─── Cập nhật riêng Ảnh Mẫu Teach Image (Update Teach Image Query) ───
     public string UpdateTeachImageDbId { get; set; } = "";
+    public string UpdateTeachImageDbName { get; set; } = "";
     public string UpdateTeachImageQuery { get; set; } = "IF EXISTS (SELECT 1 FROM ProductJobs WHERE ProductCode = '{ProductCode}') UPDATE ProductJobs SET TeachImagePath = '{TeachImagePath}', UpdatedAt = GETDATE() WHERE ProductCode = '{ProductCode}' ELSE INSERT INTO ProductJobs (ProductCode, TeachImagePath, UpdatedAt) VALUES ('{ProductCode}', '{TeachImagePath}', GETDATE())";
 
     // ─── Cấu hình Máy Chủ Web (Server API / Upload Endpoint) ───
@@ -37,6 +42,7 @@ public class OqcScannerConfig
 
     // ─── Quản lý Job trên CSDL & Server (Job Manager Query) ───
     public string JobManagerDbId { get; set; } = "";
+    public string JobManagerDbName { get; set; } = "";
     public string JobManagerQuery { get; set; } = "SELECT ProductCode, ProductName, JobFilePath, TeachImagePath, UpdatedAt FROM ProductJobs WHERE ProductCode LIKE '%{SearchText}%' OR ProductName LIKE '%{SearchText}%' ORDER BY ProductCode OFFSET {Offset} ROWS FETCH NEXT {PageSize} ROWS ONLY";
     public string JobManagerProductCodeColumn { get; set; } = "ProductCode";
     public string JobManagerProductNameColumn { get; set; } = "ProductName";
@@ -48,11 +54,13 @@ public class OqcScannerConfig
     // ─── Ghi log kết quả OQC vào DB (Upload Log Query) ───
     public bool LogResultToDb { get; set; } = false;
     public string LogResultDbId { get; set; } = "";
+    public string LogResultDbName { get; set; } = "";
     public string LogResultQuery { get; set; } = "INSERT INTO OqcLogs (CTR_CD, ScannedCode, UUID, JobFilePath, Pass, NgReasons, InspectDateTime) VALUES ('002', '{ScannedCode}', '{UUID}', '{JobFilePath}', {PassBit}, N'{NgReasons}', GETDATE())";
 
     // ─── Ghi log chi tiết từng phép đo OQC vào DB (Upload Detail Measurements Query) ───
     public bool LogDetailResultToDb { get; set; } = false;
     public string LogDetailResultDbId { get; set; } = "";
+    public string LogDetailResultDbName { get; set; } = "";
     public string LogDetailResultQuery { get; set; } = "INSERT INTO OqcInspectResult (CTR_CD, ScannedCode, UUID, ToolName, Spec, [Tol +], [Tol -], [Min], [Max], Result, Judge, InspectDateTime) VALUES ('002', '{ScannedCode}', '{UUID}', '{ToolName}', {Spec}, {TolPlus}, {TolMinus}, {Min}, {Max}, {Result}, '{Judge}', GETDATE())";
 
     // ─── Cấu hình quét mã Barcode / QR Code từ Camera ───

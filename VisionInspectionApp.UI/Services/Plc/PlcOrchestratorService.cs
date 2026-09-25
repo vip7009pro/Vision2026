@@ -1,7 +1,8 @@
-﻿using System;
+using System;
 using System.Threading;
 using System.Threading.Tasks;
 using VisionInspectionApp.Application;
+using VisionInspectionApp.Models;
 
 namespace VisionInspectionApp.UI.Services.Plc;
 

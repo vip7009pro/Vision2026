@@ -1,6 +1,7 @@
 using System;
 using System.Text.Json;
 using OpenCvSharp;
+using VisionInspectionApp.Models;
 using VisionInspectionApp.UI.Services;
 
 namespace TestExtractApp;

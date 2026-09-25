@@ -8,9 +8,11 @@ namespace VisionInspectionApp.Application.DB.Services;
 
 public interface IDbManagerService
 {
+    event EventHandler? DatabasesChanged;
     IReadOnlyList<DbModel> Databases { get; }
 
     void LoadDatabases(IEnumerable<DbModel> databases);
+    void ReloadFromDisk();
     
     void AddDatabase(DbModel db);
 

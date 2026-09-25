@@ -1,0 +1,281 @@
+<Window x:Class="VisionInspectionApp.UI.Views.SystemConfigBackupWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Cấu Hình Hệ Thống — Sao Lưu &amp; Phục Hồi Toàn Diện"
+        Height="720" Width="880"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="CanResize"
+        Background="{DynamicResource WindowBackgroundBrush}"
+        Foreground="{DynamicResource TextBrush}">
+
+    <Window.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVis" />
+    </Window.Resources>
+
+    <Grid Margin="16">
+        <Grid.RowDefinitions>
+            <!-- Header Banner -->
+            <RowDefinition Height="Auto" />
+            <!-- Main Content Tabs -->
+            <RowDefinition Height="*" />
+            <!-- Footer Status & Action -->
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <!-- Header -->
+        <Border Grid.Row="0" Margin="0,0,0,12" Padding="14,12" Background="{DynamicResource HeaderBackgroundBrush}" CornerRadius="6" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <StackPanel Grid.Column="0">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="📦" FontSize="20" Margin="0,0,8,0" VerticalAlignment="Center" />
+                        <TextBlock Text="Quản Trị Cấu Hình Hệ Thống — Sao Lưu &amp; Phục Hồi Toàn Diện" FontSize="16" FontWeight="Bold" Foreground="{DynamicResource TextBrush}" VerticalAlignment="Center" />
+                    </StackPanel>
+                    <TextBlock Text="Xuất và nạp toàn bộ cấu hình (Ứng dụng, PLC, Cơ sở dữ liệu, OQC Scanner, Camera, Calib) chỉ với 1 tệp duy nhất. Copy sang máy khác chạy được ngay."
+                               FontSize="12" Foreground="{DynamicResource TextMutedBrush}" Margin="28,4,0,0" TextWrapping="Wrap" />
+                </StackPanel>
+
+                <!-- Current System Pill -->
+                <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="6" Padding="10,6" VerticalAlignment="Center">
+                    <StackPanel>
+                        <TextBlock Text="🖥️ THÔNG TIN MÁY HIỆN TẠI" FontSize="10" FontWeight="Bold" Foreground="{DynamicResource TextMutedBrush}" />
+                        <TextBlock Text="{Binding CurrentSystemSummary}" FontSize="11.5" FontWeight="SemiBold" Foreground="{DynamicResource TextBrush}" Margin="0,2,0,0" />
+                    </StackPanel>
+                </Border>
+            </Grid>
+        </Border>
+
+        <!-- Main Body Tabs -->
+        <TabControl Grid.Row="1">
+            <!-- TAB 1: XUẤT CẤU HÌNH (EXPORT) -->
+            <TabItem Header="📤 Xuất Cấu Hình (Export Backup)">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" Margin="0,8,0,0">
+                    <StackPanel Margin="8,4,12,8">
+                        <Border Padding="12" Background="{DynamicResource PanelBackgroundBrush}" CornerRadius="6" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" Margin="0,0,0,12">
+                            <StackPanel>
+                                <TextBlock Text="💡 Hướng dẫn sao lưu sang máy khác:" FontWeight="Bold" FontSize="13" Foreground="{DynamicResource AccentTextBrush}" Margin="0,0,0,6" />
+                                <TextBlock Text="Chức năng này sẽ đóng gói toàn bộ các thiết lập trên máy tính này vào một tệp JSON duy nhất. Khi chuyển sang máy mới hoặc cài lại máy, bạn chỉ cần nạp lại tệp này 1 lần duy nhất là toàn bộ kết nối PLC, CSDL, OQC Scanner và Cài đặt sẽ tự động hoạt động."
+                                           FontSize="12" Foreground="{DynamicResource TextBrush}" TextWrapping="Wrap" />
+                            </StackPanel>
+                        </Border>
+
+                        <GroupBox Header="Chọn các thành phần muốn đóng gói vào bản sao lưu:" Padding="12" Margin="0,0,0,16" Foreground="{DynamicResource TextBrush}">
+                            <Grid>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                </Grid.RowDefinitions>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+
+                                <!-- Item 1: App Settings -->
+                                <CheckBox Grid.Row="0" Grid.Column="0" IsChecked="{Binding IncludeAppSettings}" FontWeight="SemiBold" Margin="0,6,0,10">
+                                    <StackPanel>
+                                        <TextBlock Text="🖥️ Cài đặt Ứng dụng &amp; Chiếu sáng &amp; OTA" FontWeight="Bold" />
+                                        <TextBlock Text="Theme, Dark Mode, cấu hình cổng COM/LAN đèn và máy chủ cập nhật OTA" FontSize="11" Foreground="{DynamicResource TextMutedBrush}" />
+                                    </StackPanel>
+                                </CheckBox>
+
+                                <!-- Item 2: PLC Config -->
+                                <CheckBox Grid.Row="0" Grid.Column="1" IsChecked="{Binding IncludePlcConfig}" FontWeight="SemiBold" Margin="0,6,0,10">
+                                    <StackPanel>
+                                        <TextBlock Text="🔌 Cấu hình Kết nối PLC &amp; Danh bạ Tags" FontWeight="Bold" />
+                                        <TextBlock Text="Địa chỉ IP PLC, cổng kết nối, danh sách tags và khóa liên động motion" FontSize="11" Foreground="{DynamicResource TextMutedBrush}" />
+                                    </StackPanel>
+                                </CheckBox>
+
+                                <!-- Item 3: Database Config -->
+                                <CheckBox Grid.Row="1" Grid.Column="0" IsChecked="{Binding IncludeDatabaseConfig}" FontWeight="SemiBold" Margin="0,6,0,10">
+                                    <StackPanel>
+                                        <TextBlock Text="🗄️ Cấu hình Cơ sở dữ liệu (Database Connections)" FontWeight="Bold" />
+                                        <TextBlock Text="Danh sách máy chủ SQL Server, MySQL, SQLite, Port, thông tin đăng nhập" FontSize="11" Foreground="{DynamicResource TextMutedBrush}" />
+                                    </StackPanel>
+                                </CheckBox>
+
+                                <!-- Item 4: OQC Config -->
+                                <CheckBox Grid.Row="1" Grid.Column="1" IsChecked="{Binding IncludeOqcConfig}" FontWeight="SemiBold" Margin="0,6,0,10">
+                                    <StackPanel>
+                                        <TextBlock Text="📷 Cấu hình OQC Scanner &amp; SQL Queries" FontWeight="Bold" />
+                                        <TextBlock Text="Tự động đọc mã Barcode/QR, câu lệnh tra cứu Job, Tên SP, ghi log Master &amp; Detail" FontSize="11" Foreground="{DynamicResource TextMutedBrush}" />
+                                    </StackPanel>
+                                </CheckBox>
+
+                                <!-- Item 5: Calibration -->
+                                <CheckBox Grid.Row="2" Grid.Column="0" IsChecked="{Binding IncludeCalibrationConfig}" FontWeight="SemiBold" Margin="0,6,0,10">
+                                    <StackPanel>
+                                        <TextBlock Text="♟️ Dữ liệu Hiệu chuẩn thấu kính (Chessboard Calibration)" FontWeight="Bold" />
+                                        <TextBlock Text="Ma trận camera, hệ số méo quang học lens và thông số kích thước ô cờ" FontSize="11" Foreground="{DynamicResource TextMutedBrush}" />
+                                    </StackPanel>
+                                </CheckBox>
+
+                                <!-- Item 6: Camera Settings -->
+                                <CheckBox Grid.Row="2" Grid.Column="1" IsChecked="{Binding IncludeCameraConfig}" FontWeight="SemiBold" Margin="0,6,0,10">
+                                    <StackPanel>
+                                        <TextBlock Text="📷 Cấu hình Cảm biến Camera" FontWeight="Bold" />
+                                        <TextBlock Text="Thông số chỉnh sáng phơi sáng, tương phản, Gain và cân bằng trắng" FontSize="11" Foreground="{DynamicResource TextMutedBrush}" />
+                                    </StackPanel>
+                                </CheckBox>
+                            </Grid>
+                        </GroupBox>
+
+                        <!-- Action Button -->
+                        <Border Padding="16" Background="{DynamicResource HeaderBackgroundBrush}" CornerRadius="6" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1">
+                            <DockPanel LastChildFill="False">
+                                <StackPanel DockPanel.Dock="Left" VerticalAlignment="Center">
+                                    <TextBlock Text="Đóng gói và xuất tệp sao lưu:" FontWeight="Bold" FontSize="13" />
+                                    <TextBlock Text="Tệp xuất ra có định dạng chuẩn .json, có thể lưu trữ lên máy chủ nội bộ hoặc USB." FontSize="11" Foreground="{DynamicResource TextMutedBrush}" Margin="0,2,0,0" />
+                                </StackPanel>
+                                <Button DockPanel.Dock="Right" Content="📤 Xuất Toàn Bộ Cấu Hình Ra Tệp (.json)..."
+                                        Command="{Binding ExportCommand}"
+                                        Height="38" Padding="18,4" FontSize="13" FontWeight="Bold" />
+                            </DockPanel>
+                        </Border>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
+            <!-- TAB 2: NẠP CẤU HÌNH (IMPORT) -->
+            <TabItem Header="📥 Nạp Cấu Hình (Import Restore)">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" Margin="0,8,0,0">
+                    <StackPanel Margin="8,4,12,8">
+                        <!-- Chọn Tệp -->
+                        <GroupBox Header="1. Chọn tệp cấu hình nguồn (.json):" Padding="12" Margin="0,0,0,12" Foreground="{DynamicResource TextBrush}">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="130" />
+                                </Grid.ColumnDefinitions>
+                                <TextBox Grid.Column="0" Text="{Binding SelectedImportFilePath, UpdateSourceTrigger=PropertyChanged}"
+                                         Height="30" VerticalContentAlignment="Center" FontFamily="Consolas" IsReadOnly="True" Margin="0,0,8,0" />
+                                <Button Grid.Column="1" Content="📁 Chọn Tệp..." Command="{Binding BrowseImportFileCommand}" Height="30" FontWeight="SemiBold" />
+                            </Grid>
+                        </GroupBox>
+
+                        <!-- Xem trước thông tin gói -->
+                        <GroupBox Header="2. Thông tin gói cấu hình phát hiện được:" Padding="12" Margin="0,0,0,12" Foreground="{DynamicResource TextBrush}">
+                            <StackPanel>
+                                <TextBlock Text="Chưa chọn tệp cấu hình nào."
+                                           FontStyle="Italic" Foreground="{DynamicResource TextMutedBrush}"
+                                           Visibility="{Binding IsPackageLoaded, Converter={StaticResource BoolToVis}, ConverterParameter=Inverse}" />
+
+                                <Grid Visibility="{Binding IsPackageLoaded, Converter={StaticResource BoolToVis}}">
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                    </Grid.RowDefinitions>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="150" />
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="150" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+
+                                    <TextBlock Grid.Row="0" Grid.Column="0" Text="Máy tính xuất gốc:" FontWeight="Bold" Margin="0,0,0,6" />
+                                    <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding InspectedPackage.ExportedFromMachine}" Foreground="{DynamicResource AccentTextBrush}" FontWeight="Bold" Margin="0,0,0,6" />
+
+                                    <TextBlock Grid.Row="0" Grid.Column="2" Text="Thời gian xuất:" FontWeight="Bold" Margin="0,0,0,6" />
+                                    <TextBlock Grid.Row="0" Grid.Column="3" Text="{Binding InspectedPackage.ExportedAt, StringFormat='{}{0:dd/MM/yyyy HH:mm:ss}'}" Margin="0,0,0,6" />
+
+                                    <TextBlock Grid.Row="1" Grid.Column="0" Text="Cơ sở dữ liệu:" FontWeight="Bold" Margin="0,0,0,6" />
+                                    <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding InspectedPackage.DatabaseCount, StringFormat='{}{0} kết nối'}" Margin="0,0,0,6" />
+
+                                    <TextBlock Grid.Row="1" Grid.Column="2" Text="PLC &amp; Tags:" FontWeight="Bold" Margin="0,0,0,6" />
+                                    <StackPanel Grid.Row="1" Grid.Column="3" Orientation="Horizontal" Margin="0,0,0,6">
+                                        <TextBlock Text="{Binding InspectedPackage.PlcCount, StringFormat='{}{0} trạm'}" />
+                                        <TextBlock Text=" - " Margin="4,0" />
+                                        <TextBlock Text="{Binding InspectedPackage.TagCount, StringFormat='{}{0} tags'}" />
+                                    </StackPanel>
+
+                                    <TextBlock Grid.Row="2" Grid.Column="0" Text="OQC Scanner:" FontWeight="Bold" Margin="0,0,0,6" />
+                                    <TextBlock Grid.Row="2" Grid.Column="1" Text="Đầy đủ truy vấn SQL &amp; Tự khớp DB" Foreground="Green" FontWeight="SemiBold" Margin="0,0,0,6" />
+
+                                    <TextBlock Grid.Row="2" Grid.Column="2" Text="Cài đặt chung:" FontWeight="Bold" Margin="0,0,0,6" />
+                                    <TextBlock Grid.Row="2" Grid.Column="3" Text="Có (Theme, Đèn, OTA)" Margin="0,0,0,6" />
+                                </Grid>
+                            </StackPanel>
+                        </GroupBox>
+
+                        <!-- Tùy chọn nạp -->
+                        <GroupBox Header="3. Tùy chọn các mục muốn phục hồi vào máy này:" Padding="12" Margin="0,0,0,16" Foreground="{DynamicResource TextBrush}"
+                                  IsEnabled="{Binding IsPackageLoaded}">
+                            <Grid>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                </Grid.RowDefinitions>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+
+                                <CheckBox Grid.Row="0" Grid.Column="0" Content="Khôi phục Cơ sở dữ liệu (Database)" IsChecked="{Binding RestoreDatabaseConfig}" FontWeight="SemiBold" Margin="0,4,0,8" />
+                                <CheckBox Grid.Row="0" Grid.Column="1" Content="Khôi phục Cấu hình PLC &amp; Danh bạ Tags" IsChecked="{Binding RestorePlcConfig}" FontWeight="SemiBold" Margin="0,4,0,8" />
+                                <CheckBox Grid.Row="1" Grid.Column="0" Content="Khôi phục OQC Scanner (Tự khớp DB ComboBox)" IsChecked="{Binding RestoreOqcConfig}" FontWeight="SemiBold" Margin="0,4,0,8" />
+                                <CheckBox Grid.Row="1" Grid.Column="1" Content="Khôi phục Cài đặt Ứng dụng &amp; Chiếu sáng" IsChecked="{Binding RestoreAppSettings}" FontWeight="SemiBold" Margin="0,4,0,8" />
+                                <CheckBox Grid.Row="2" Grid.Column="0" Content="Khôi phục Hiệu chuẩn thấu kính Chessboard" IsChecked="{Binding RestoreCalibrationConfig}" FontWeight="SemiBold" Margin="0,4,0,8" />
+                                <CheckBox Grid.Row="2" Grid.Column="1" Content="Khôi phục Cấu hình Cảm biến Camera" IsChecked="{Binding RestoreCameraConfig}" FontWeight="SemiBold" Margin="0,4,0,8" />
+                            </Grid>
+                        </GroupBox>
+
+                        <!-- Action Button Restore -->
+                        <Border Padding="16" Background="{DynamicResource HeaderBackgroundBrush}" CornerRadius="6" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1">
+                            <DockPanel LastChildFill="False">
+                                <StackPanel DockPanel.Dock="Left" VerticalAlignment="Center">
+                                    <TextBlock Text="Bắt đầu nạp cấu hình (1-Click Restore):" FontWeight="Bold" FontSize="13" />
+                                    <TextBlock Text="Hệ thống sẽ cập nhật ngay lập tức vào bộ nhớ mà không cần khởi động lại phần mềm." FontSize="11" Foreground="{DynamicResource TextMutedBrush}" Margin="0,2,0,0" />
+                                </StackPanel>
+                                <Button DockPanel.Dock="Right" Content="📥 Bắt Đầu Nạp Cấu Hình (1-Click Restore)"
+                                        Command="{Binding RestoreCommand}"
+                                        IsEnabled="{Binding IsPackageLoaded}"
+                                        Height="38" Padding="18,4" FontSize="13" FontWeight="Bold" Background="#059669" />
+                            </DockPanel>
+                        </Border>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
+            <!-- TAB 3: NHẬT KÝ TIẾN TRÌNH (LOGS) -->
+            <TabItem Header="📋 Nhật Ký Hoạt Động (Logs)">
+                <Grid Margin="8">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="*" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+
+                    <Border Grid.Row="0" Background="#111827" CornerRadius="4" Padding="8" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1">
+                        <ListBox ItemsSource="{Binding OperationLogs}"
+                                 Background="Transparent" BorderThickness="0"
+                                 Foreground="#E5E7EB" FontFamily="Consolas" FontSize="11.5" />
+                    </Border>
+
+                    <Button Grid.Row="1" Content="Xóa Nhật Ký" Command="{Binding ClearLogsCommand}"
+                            HorizontalAlignment="Right" Margin="0,8,0,0" Padding="12,4" Height="26" />
+                </Grid>
+            </TabItem>
+        </TabControl>
+
+        <!-- Footer -->
+        <Border Grid.Row="2" Margin="0,12,0,0" Padding="0,8,0,0" BorderThickness="0,1,0,0" BorderBrush="{DynamicResource BorderBrush}">
+            <DockPanel LastChildFill="False">
+                <StackPanel Orientation="Horizontal" DockPanel.Dock="Left" VerticalAlignment="Center">
+                    <TextBlock Text="Trạng thái: " FontWeight="Bold" FontSize="12" />
+                    <TextBlock Text="{Binding StatusMessage}" Foreground="{Binding StatusBrush}" FontWeight="SemiBold" FontSize="12" />
+                </StackPanel>
+
+                <Button DockPanel.Dock="Right" Content="Đóng" Click="Close_Click" Width="90" Height="28" IsCancel="True" />
+            </DockPanel>
+        </Border>
+    </Grid>
+</Window>

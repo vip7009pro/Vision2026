@@ -1,5 +1,6 @@
 using System;
 using System.Text.Json;
+using VisionInspectionApp.Models;
 using VisionInspectionApp.UI.Services;
 
 namespace TestExtractApp;

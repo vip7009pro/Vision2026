@@ -6,6 +6,12 @@ class Program
 {
     static void Main(string[] args)
     {
+        if (args.Length > 0 && args[0].Equals("backup", StringComparison.OrdinalIgnoreCase))
+        {
+            SystemConfigBackupAndOqcDbMatchTests.RunAllTests();
+            return;
+        }
+
         HikApiTest.PrintApi();
         CameraTest.TestCameraParametersJobSerialization();
         CameraTest.TestNativeMatPoolAndMetadata();
@@ -59,5 +65,6 @@ class Program
         ToolEditorAndOqcUxTests.RunAllTests();
         TimingAccountingTests.RunAllTests();
         PdfSourceTests.RunAllTests();
+        SystemConfigBackupAndOqcDbMatchTests.RunAllTests();
     }
 }

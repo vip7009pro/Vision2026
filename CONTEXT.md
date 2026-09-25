@@ -2,31 +2,29 @@
 
 ## 1. Giới thiệu dự án
 Ứng dụng kiểm tra thị giác công nghiệp (.NET 8 WPF, MVVM, OpenCvSharp4, Docnet.Core PDFium, Hikrobot MVS SDK, Industrial PLC & Database).
-Hỗ trợ Camera GigE/USB3/USB/RTSP, nạp ảnh tệp/thư mục, và nạp bản vẽ kỹ thuật PDF để dạy học (teach) và kiểm tra tự động khớp 100% với sản phẩm thật.
+Hỗ trợ Camera GigE/USB3/USB/RTSP, nạp ảnh tệp/thư mục, nạp bản vẽ kỹ thuật PDF, quản lý CSDL MES/ERP và giao tiếp PLC đa hãng.
 
 ## 2. Trạng thái mã nguồn gần nhất
 - **Phiên bản hiện tại**: .NET 8 WPF, x64/x86 Multi-targeting, C# 12.
-- **Biên dịch Release**: 0 Errors, toàn bộ hệ thống kiểm thử tự động PASSED 100% (7/7 PDF tests).
+- **Biên dịch**: 0 Errors toàn solution (`VisionInspectionApp.slnx`).
+- **Kiểm thử tự động**: PASSED 100% toàn bộ hệ thống kiểm thử (6/6 tests Backup & OqcDbMatch mới, 7/7 PDF tests, cùng toàn bộ regression tests).
 
-## 3. Bản Vẽ PDF: Khắc Phục Nút Pan & Lỗi Train Template Origin (Task 369)
-- **Giao diện Nút Pan Rõ Ràng**:
-  - Khắc phục lỗi 4 nút Pan không có biểu tượng/text do ký tự emoji bị thiếu glyph font trên Windows.
-  - Thay thế bằng các ký tự tam giác hình học chuẩn: `◀` (Trái), `▶` (Phải), `▲` (Lên), `▼` (Xuống) và nút `⟲ 0` (Reset về 0,0).
-  - Tăng kích thước nút lên $25 \times 22\text{px}$, `Padding="0"`, `FontWeight="Bold"`, font size 12 và ràng buộc `Foreground` tương phản cao.
-- **Khắc phục Triệt Để Lỗi Train Template Origin Báo "Chưa Lưu Template"**:
-  - Nguyên nhân: Khi chưa lưu Job ra đĩa, `CurrentTempWorkingDir` là null. Template được lưu ở thư mục khác nhưng `ResolveTemplatePath` chỉ tìm trong thư mục tạm, dẫn đến không tìm thấy file và preview trả về null.
-  - Giải pháp:
-    1. Bổ sung `EnsureCurrentTempWorkingDir()` đảm bảo thư mục tạm luôn tồn tại ngay khi cần.
-    2. Cập nhật `ResolveTemplatePath` hỗ trợ kiểm tra file tồn tại trực tiếp, tìm trong `templates/` của temp dir và fallback sang `ConfigRootDirectory`.
-    3. `OriginTrainViewModel` lưu đường dẫn tệp đầy đủ cho `_originDef.TemplateImageFile`.
-    4. Thêm `InvalidateOriginTemplatePreviewCache()` xóa cache trước khi refresh preview.
-- **Kiểm thử tự động**:
-  - `PdfSourceTests.cs`: Bổ sung `Test 7: PDF ImageSource Origin Train Template & Preview` xác nhận 100% không còn lỗi "Chưa lưu template".
+## 3. Tự Động Khớp CSDL OQC Scanner & Sao Lưu/Nạp Toàn Bộ Cấu Hình (Task 370)
+- **Tự động chọn ComboBox CSDL khi nạp cấu hình OQC**:
+  - Khắc phục lỗi tất cả ComboBox CSDL rỗng khi nạp file cấu hình từ máy khác do lệch ID (GUID).
+  - Bổ sung 8 trường `DbName` tương ứng trong `OqcScannerConfig` (`LookupDbName`, `ProductNameDbName`, v.v.).
+  - Triển khai thuật toán phân giải 5 cấp `ResolveDatabaseId`: Khớp ID -> Khớp dbId theo Name -> Khớp dbId theo DatabaseName -> Khớp dbName theo Name/Catalog -> Fallback DB đầu tiên.
+  - Bổ sung event `DatabasesChanged` trong `IDbManagerService` để UI tự động tải lại ComboBox nóng.
+- **Trung tâm Xuất & Nạp Toàn Bộ Cấu Hình Hệ Thống (`SystemConfigBackupWindow`)**:
+  - Menu `🗄️ Dữ Liệu` -> `📦 Cấu Hình...` mở cửa sổ quản trị cấu hình 3 tab (Xuất, Nạp, Nhật ký).
+  - Đóng gói toàn bộ: Cài đặt App (`global_settings.json`), PLC (`plc_configs.json`), CSDL (`databases_config.json`), OQC Scanner (`oqc_scanner_config.json`), Camera & Calibration Chessboard vào 1 tệp `.viscfg` duy nhất.
+  - Sao chép sang máy tính mới chỉ cần nạp 1 lần duy nhất là chạy được ngay, tự động ánh xạ lại CSDL ID cho OQC Scanner và kích hoạt cập nhật nóng không cần khởi động lại app.
 
 ## 4. Các sự kiện & thay đổi gần đây
+- Task 370: Tự động khớp ComboBox CSDL OQC & Trung tâm Xuất/Nạp toàn bộ cấu hình hệ thống (1-click migrate).
 - Task 369: Cải thiện nút Pan hiển thị rõ nét & sửa lỗi Origin Train Template từ nguồn PDF báo "Chưa lưu template".
-- Task 368: Nhập tỉ lệ PixelsPerMm (nhập tay & đồng bộ 2 chiều Calib), Pan dịch chuyển bản vẽ và Xoay 90°.
-- Task 367: Tự động khớp bản vẽ PDF 1:1 theo Camera (20MP & tùy biến) & Khung hình cảm biến.
+- Task 368: Nhập tỉ lệ PixelsPerMm, Căn lề, Pan dịch chuyển & Xoay bản vẽ 90° trên Canvas Camera.
+- Task 367: Tự động khớp bản vẽ PDF 1:1 theo Camera & Khung hình cảm biến (Scale quang học theo calib & Canvas 20MP nền trắng).
 - Task 366: Khắc phục triệt để lỗi Nền Đen & Ảnh Vỡ khi trích xuất bản vẽ PDF.
 - Task 365: Bổ sung chế độ nguồn ảnh từ bản vẽ PDF (`ImageSourceType.Pdf`) cho Tool Editor.
 - Task 364: Kế toán thời gian tường minh trong Tool Editor (Timing Breakdown động).

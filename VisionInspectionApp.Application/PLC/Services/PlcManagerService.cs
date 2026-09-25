@@ -13,13 +13,6 @@ using VisionInspectionApp.Models;
 
 namespace VisionInspectionApp.Application.PLC.Services;
 
-public sealed class PlcConfigContainer
-{
-    public List<PlcModel> Plcs { get; set; } = new();
-    public List<PlcTag> Tags { get; set; } = new();
-    public PlcIndustrialConfig IndustrialConfig { get; set; } = new();
-}
-
 public sealed class PlcManagerService : IPlcManagerService, IDisposable
 {
     private readonly ConcurrentDictionary<string, IPlcDriver> _drivers = new(StringComparer.OrdinalIgnoreCase);

@@ -100,10 +100,19 @@ public class DbManagerService : IDbManagerService
         }
     }
 
+    public event EventHandler? DatabasesChanged;
+
+    public void ReloadFromDisk()
+    {
+        LoadFromDisk();
+        DatabasesChanged?.Invoke(this, EventArgs.Empty);
+    }
+
     public void LoadDatabases(IEnumerable<DbModel> databases)
     {
-        if (databases != null && databases.Any())
+        if (databases != null)
         {
+            _databases.Clear();
             foreach (var db in databases)
             {
                 if (!string.IsNullOrWhiteSpace(db.Id))
@@ -112,6 +121,7 @@ public class DbManagerService : IDbManagerService
                 }
             }
             SaveToDisk();
+            DatabasesChanged?.Invoke(this, EventArgs.Empty);
         }
     }
 
@@ -124,6 +134,7 @@ public class DbManagerService : IDbManagerService
         }
         _databases[db.Id] = db;
         SaveToDisk();
+        DatabasesChanged?.Invoke(this, EventArgs.Empty);
     }
 
     public void UpdateDatabase(DbModel db)
@@ -131,6 +142,7 @@ public class DbManagerService : IDbManagerService
         if (db == null || string.IsNullOrWhiteSpace(db.Id)) return;
         _databases[db.Id] = db;
         SaveToDisk();
+        DatabasesChanged?.Invoke(this, EventArgs.Empty);
     }
 
     public void DeleteDatabase(string dbId)
@@ -138,6 +150,7 @@ public class DbManagerService : IDbManagerService
         if (string.IsNullOrWhiteSpace(dbId)) return;
         _databases.TryRemove(dbId, out _);
         SaveToDisk();
+        DatabasesChanged?.Invoke(this, EventArgs.Empty);
     }
 
     public DbModel? GetDatabase(string dbIdOrName)
