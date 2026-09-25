@@ -362,5 +362,22 @@ namespace VisionInspectionApp.UI.ViewModels
                 OnPropertyChanged();
             }
         }
+
+        public double Cf_NominalDiameter
+        {
+            get => SelectedCircleFinderDef()?.NominalDiameter ?? 0.0;
+            set
+            {
+                var d = SelectedCircleFinderDef();
+                if (d is null)
+                    return;
+                var v = Math.Max(0.0, value);
+                if (Math.Abs(d.NominalDiameter - v) < 0.0000001)
+                    return;
+                d.NominalDiameter = v;
+                RequestAutoSave();
+                OnPropertyChanged();
+            }
+        }
     }
 }

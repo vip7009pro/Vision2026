@@ -1292,6 +1292,7 @@ namespace VisionInspectionApp.UI.ViewModels
             OnPropertyChanged(nameof(IsEdgePairNode));
             OnPropertyChanged(nameof(IsEdgePairDetectNode));
             OnPropertyChanged(nameof(IsDiameterNode));
+            OnPropertyChanged(nameof(IsDistanceCalibratableNode));
             OnPropertyChanged(nameof(IsConditionNode));
             OnPropertyChanged(nameof(IsTextNode));
             OnPropertyChanged(nameof(IsImageSourceNode));
@@ -1570,6 +1571,7 @@ namespace VisionInspectionApp.UI.ViewModels
             OnPropertyChanged(nameof(Distance_Nominal));
             OnPropertyChanged(nameof(Distance_TolPlus));
             OnPropertyChanged(nameof(Distance_TolMinus));
+            OnPropertyChanged(nameof(Cf_NominalDiameter));
             OnPropertyChanged(nameof(SelectedRunValue));
             OnPropertyChanged(nameof(SelectedRunPass));
             OnPropertyChanged(nameof(SelectedRunText));

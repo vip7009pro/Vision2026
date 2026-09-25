@@ -89,6 +89,11 @@ public sealed class CircleFinderDefinition
     public int Canny2 { get; set; } = 200;
 
     public double MinCircularity { get; set; } = 0.6;
+
+    /// <summary>
+    /// Đường kính danh định (Nominal Diameter tính bằng mm) dùng cho hiệu chuẩn hoặc kiểm tra kích thước.
+    /// </summary>
+    public double NominalDiameter { get; set; } = 0.0;
 }
 
 public sealed class DiameterDefinition

@@ -12,6 +12,12 @@ class Program
             return;
         }
 
+        if (args.Length > 0 && args[0].Equals("calib", StringComparison.OrdinalIgnoreCase))
+        {
+            ToolCalibFactorTests.RunAllTests();
+            return;
+        }
+
         HikApiTest.PrintApi();
         CameraTest.TestCameraParametersJobSerialization();
         CameraTest.TestNativeMatPoolAndMetadata();
@@ -66,5 +72,6 @@ class Program
         TimingAccountingTests.RunAllTests();
         PdfSourceTests.RunAllTests();
         SystemConfigBackupAndOqcDbMatchTests.RunAllTests();
+        ToolCalibFactorTests.RunAllTests();
     }
 }

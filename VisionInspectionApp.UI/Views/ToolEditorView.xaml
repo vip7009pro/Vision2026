@@ -1441,6 +1441,13 @@
                                     <TextBlock Text="Pass" Width="60" VerticalAlignment="Center" />
                                     <TextBlock Text="{Binding SelectedRunPass, TargetNullValue='-'}" Width="80" />
                                 </StackPanel>
+
+                                <Button Content="🎯 Đặt làm Hệ Số Calib (Set as Calib Factor)"
+                                        Command="{Binding SetAsCalibFactorCommand}"
+                                        Visibility="{Binding IsDistanceCalibratableNode, Converter={StaticResource BoolToVis}}"
+                                        Margin="0,4,0,6" Padding="6,4"
+                                        Background="#1B5E20" Foreground="White" FontWeight="Bold" FontSize="11" Cursor="Hand"
+                                        ToolTip="Lấy kết quả đo pixel chia cho Nominal (mm) để tính tỉ lệ pixel/mm và lưu vào cấu hình Job" />
                             </StackPanel>
 
                             <StackPanel Visibility="{Binding IsConditionNode, Converter={StaticResource BoolToVis}}">
@@ -3240,6 +3247,21 @@
                                 </Border>
                                 </StackPanel>
 
+                                <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="120" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <Border Background="{DynamicResource WindowBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
+                                            <TextBlock Text="Nom Dia (mm)" VerticalAlignment="Center" Margin="4,2" FontSize="11" Foreground="{DynamicResource TextBrush}"/>
+                                        </Border>
+                                        <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
+                                            <TextBox Text="{Binding Cf_NominalDiameter, UpdateSourceTrigger=LostFocus}" Margin="2,1" FontSize="11" ToolTip="Đường kính danh định chuẩn (mm) dùng để hiệu chuẩn hệ số Calib" />
+                                        </Border>
+                                    </Grid>
+                                </Border>
+
                                 <StackPanel Orientation="Horizontal" Margin="0,0,0,2">
                                     <TextBlock Text="Value" Width="60" VerticalAlignment="Center" />
                                     <TextBlock Text="{Binding SelectedRunValue, TargetNullValue='-'}" Width="120" />
@@ -3248,6 +3270,12 @@
                                     <TextBlock Text="Found" Width="60" VerticalAlignment="Center" />
                                     <TextBlock Text="{Binding SelectedRunPass, TargetNullValue='-'}" Width="120" />
                                 </StackPanel>
+
+                                <Button Content="🎯 Đặt làm Hệ Số Calib (Set as Calib Factor)" 
+                                        Command="{Binding SetAsCalibFactorCommand}" 
+                                        Margin="0,4,0,6" Padding="6,4" 
+                                        Background="#1B5E20" Foreground="White" FontWeight="Bold" FontSize="11" Cursor="Hand"
+                                        ToolTip="Lấy đường kính pixel đo được chia cho Nom Dia (mm) để tính tỉ lệ pixel/mm và lưu vào làm Calib của Job" />
                             </StackPanel>
 
                             <StackPanel Visibility="{Binding IsDiameterNode, Converter={StaticResource BoolToVis}}">
@@ -3434,6 +3462,12 @@
                                     <TextBlock Text="Pass" Width="60" VerticalAlignment="Center" />
                                     <TextBlock Text="{Binding SelectedRunPass, TargetNullValue='-'}" Width="120" />
                                 </StackPanel>
+
+                                <Button Content="🎯 Đặt làm Hệ Số Calib (Set as Calib Factor)" 
+                                        Command="{Binding SetAsCalibFactorCommand}" 
+                                        Margin="0,4,0,6" Padding="6,4" 
+                                        Background="#1B5E20" Foreground="White" FontWeight="Bold" FontSize="11" Cursor="Hand"
+                                        ToolTip="Lấy khoảng cách pixel đo được giữa 2 cạnh chia cho Nominal (mm) để tính tỉ lệ pixel/mm và lưu vào làm Calib của Job" />
                             </StackPanel>
 
                             <StackPanel Visibility="{Binding IsCodeDetectionNode, Converter={StaticResource BoolToVis}}">
