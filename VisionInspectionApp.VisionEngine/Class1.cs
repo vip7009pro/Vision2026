@@ -22,6 +22,18 @@ public static class Geometry2D
         return Math.Sqrt(dx * dx + dy * dy);
     }
 
+    public static double DistanceMm(Point2d a, Point2d b, double ppmX, double ppmY)
+    {
+        if (ppmX <= 0.0001 && ppmY <= 0.0001)
+            return Distance(a, b);
+
+        var effPpmX = ppmX > 0.0001 ? ppmX : (ppmY > 0.0001 ? ppmY : 1.0);
+        var effPpmY = ppmY > 0.0001 ? ppmY : (ppmX > 0.0001 ? ppmX : 1.0);
+        var dxMm = (b.X - a.X) / effPpmX;
+        var dyMm = (b.Y - a.Y) / effPpmY;
+        return Math.Sqrt(dxMm * dxMm + dyMm * dyMm);
+    }
+
     public static (double Dist, Point2d ClosestOnSegment) PointToSegmentDistance(Point2d p, Point2d a, Point2d b)
     {
         var ab = b - a;
@@ -2757,8 +2769,21 @@ public sealed class DistanceCalculator
 
     public DistanceCheckResult CheckDistance(LineDistance spec, Point2d a, Point2d b, double pixelsPerMm)
     {
-        var distPx = Distance(a, b);
-        var value = pixelsPerMm > 0 ? distPx / pixelsPerMm : distPx;
+        return CheckDistance(spec, a, b, pixelsPerMm, pixelsPerMm);
+    }
+
+    public DistanceCheckResult CheckDistance(LineDistance spec, Point2d a, Point2d b, double pixelsPerMmX, double pixelsPerMmY)
+    {
+        double value;
+        if (pixelsPerMmX > 0.0001 || pixelsPerMmY > 0.0001)
+        {
+            value = Geometry2D.DistanceMm(a, b, pixelsPerMmX, pixelsPerMmY);
+        }
+        else
+        {
+            value = Distance(a, b);
+        }
+
         var min = spec.Nominal - spec.ToleranceMinus;
         var max = spec.Nominal + spec.TolerancePlus;
         var pass = value >= min && value <= max;

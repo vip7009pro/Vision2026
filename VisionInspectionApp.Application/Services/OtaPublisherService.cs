@@ -700,6 +700,27 @@ public class OtaPublisherService : IOtaPublisherService
                 logProgress?.Report($"  ⚠️ Cảnh báo: Không tìm thấy file DLL chính trong thư mục staging.");
             }
 
+            // Đồng bộ cấu hình hệ thống hạt giống sang thư mục Staging để đóng gói phát hành
+            try
+            {
+                string seedDir = Path.Combine(stagingDirectory, "configs", "system");
+                Directory.CreateDirectory(seedDir);
+                string standardConfig = VisionInspectionApp.Models.AppStoragePaths.StandardConfigDirectory;
+                if (Directory.Exists(standardConfig))
+                {
+                    foreach (var file in Directory.GetFiles(standardConfig, "*.json"))
+                    {
+                        string dest = Path.Combine(seedDir, Path.GetFileName(file));
+                        File.Copy(file, dest, true);
+                    }
+                }
+                logProgress?.Report("  ✓ Đã đồng bộ các tệp cấu hình hệ thống (configs/system) vào gói phát hành.");
+            }
+            catch (Exception ex)
+            {
+                logProgress?.Report($"  ⚠️ Cảnh báo đồng bộ cấu hình vào Staging: {ex.Message}");
+            }
+
             logProgress?.Report($"✅ Biên dịch và xuất bản vào thư mục Staging thành công!");
             return (true, allOutput, stagingDirectory, null);
         }

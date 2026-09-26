@@ -1073,4 +1073,14 @@ public partial class ToolEditorView : UserControl
             vm.SelectCaliperRoi();
         }
     }
+
+    private void TimingBreakdownScrollViewer_PreviewMouseWheel(object sender, MouseWheelEventArgs e)
+    {
+        if (sender is ScrollViewer sv && sv.ScrollableWidth > 0)
+        {
+            // Cuộn ngang mượt theo hướng lăn chuột: lăn xuống (Delta < 0) cuộn sang phải, lăn lên (Delta > 0) cuộn sang trái
+            sv.ScrollToHorizontalOffset(sv.HorizontalOffset - e.Delta);
+            e.Handled = true;
+        }
+    }
 }

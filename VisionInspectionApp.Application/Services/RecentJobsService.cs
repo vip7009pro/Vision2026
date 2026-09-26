@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
+using VisionInspectionApp.Models;
 
 namespace VisionInspectionApp.Application.Services;
 
@@ -26,12 +27,8 @@ public sealed class RecentJobsService : IRecentJobsService
 
     public RecentJobsService()
     {
-        var appDataDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "CMS_VINA_Vision");
-        if (!Directory.Exists(appDataDir))
-        {
-            try { Directory.CreateDirectory(appDataDir); } catch { }
-        }
-        _storageFilePath = Path.Combine(appDataDir, "recent_jobs.json");
+        AppStoragePaths.EnsureStorageStructureAndMigrate();
+        _storageFilePath = AppStoragePaths.RecentJobsFilePath;
         LoadFromDisk();
     }
 

@@ -13,10 +13,8 @@ public sealed class GlobalAppSettingsService
 
     public GlobalAppSettingsService()
     {
-        var appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
-        var dir = Path.Combine(appData, "VisionInspectionApp");
-        Directory.CreateDirectory(dir);
-        _settingsFilePath = Path.Combine(dir, "global_settings.json");
+        AppStoragePaths.EnsureStorageStructureAndMigrate();
+        _settingsFilePath = AppStoragePaths.GlobalSettingsFilePath;
 
         Settings = Load();
     }
@@ -41,14 +39,47 @@ public sealed class GlobalAppSettingsService
     {
         try
         {
-            if (!File.Exists(_settingsFilePath))
+            string? loadPath = null;
+            if (File.Exists(_settingsFilePath))
+            {
+                loadPath = _settingsFilePath;
+            }
+            else
+            {
+                // Fallback 1: Thư mục cũ VisionInspectionApp
+                string legacyPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "VisionInspectionApp", "global_settings.json");
+                if (File.Exists(legacyPath))
+                {
+                    loadPath = legacyPath;
+                }
+                else
+                {
+                    // Fallback 2: Thư mục hạt giống đi kèm ứng dụng
+                    string seedPath = Path.Combine(AppStoragePaths.AppSeedConfigDirectory, "global_settings.json");
+                    if (File.Exists(seedPath))
+                    {
+                        loadPath = seedPath;
+                    }
+                    else
+                    {
+                        // Fallback 3: Thư mục BaseDirectory
+                        string basePath = Path.Combine(AppStoragePaths.AppBaseDirectory, "global_settings.json");
+                        if (File.Exists(basePath))
+                        {
+                            loadPath = basePath;
+                        }
+                    }
+                }
+            }
+
+            if (loadPath == null)
             {
                 var defaults = new GlobalAppSettings();
                 Save(defaults);
                 return defaults;
             }
 
-            var json = File.ReadAllText(_settingsFilePath);
+            var json = File.ReadAllText(loadPath);
             var s = JsonSerializer.Deserialize<GlobalAppSettings>(json);
             var result = s ?? new GlobalAppSettings();
             if (result.LightingServer == null)
@@ -63,6 +94,13 @@ public sealed class GlobalAppSettingsService
             {
                 result.Lighting.Patterns = VisionInspectionApp.Models.LightingPatternModel.CreateDefaultPatterns();
             }
+
+            // Nếu load từ nguồn fallback, lưu ngay vào đường dẫn chuẩn
+            if (loadPath != _settingsFilePath)
+            {
+                Save(result);
+            }
+
             return result;
         }
         catch
@@ -77,7 +115,21 @@ public sealed class GlobalAppSettingsService
         {
             var target = settings ?? Settings;
             var json = JsonSerializer.Serialize(target, new JsonSerializerOptions { WriteIndented = true });
+            
+            // 1. Lưu vào thư mục chuẩn %AppData%\Vision2026
             File.WriteAllText(_settingsFilePath, json);
+
+            // 2. Đồng bộ bản sao sang thư mục ứng dụng (configs\system) để phục vụ deploy/release
+            AppStoragePaths.SyncConfigToAppBackup("global_settings.json", json);
+
+            // 3. Lưu bản sao sang thư mục cũ %AppData%\VisionInspectionApp để tương thích ngược 100%
+            try
+            {
+                string legacyDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "VisionInspectionApp");
+                Directory.CreateDirectory(legacyDir);
+                File.WriteAllText(Path.Combine(legacyDir, "global_settings.json"), json);
+            }
+            catch { }
         }
         catch { }
     }

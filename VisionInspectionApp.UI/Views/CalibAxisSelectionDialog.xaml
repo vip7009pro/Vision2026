@@ -1,0 +1,122 @@
+<Window x:Class="VisionInspectionApp.UI.Views.CalibAxisSelectionDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="🎯 Hiệu Chuẩn Tỉ Lệ Pixels/Mm Cho Job"
+        Width="520" Height="490"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="NoResize"
+        ShowInTaskbar="False"
+        Background="{DynamicResource WindowBackgroundBrush}"
+        Foreground="{DynamicResource TextBrush}">
+    <Border Padding="16">
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+
+            <!-- Header -->
+            <StackPanel Grid.Row="0" Margin="0,0,0,12">
+                <TextBlock Text="🎯 THIẾT LẬP TỈ LỆ HIỆU CHUẨN CALIB CHO JOB" FontWeight="Bold" FontSize="14" Foreground="#4CAF50" />
+                <TextBlock Text="Hỗ trợ bù trừ sai số quang học và góc nghiêng camera theo 2 trục X và Y độc lập" FontSize="11" Foreground="{DynamicResource TextMutedBrush}" Margin="0,2,0,0" />
+            </StackPanel>
+
+            <!-- Card 1: Measured Tool Info -->
+            <Border Grid.Row="1" Background="{DynamicResource PanelBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="6" Padding="10" Margin="0,0,0,12">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+
+                    <StackPanel Grid.Row="0" Grid.Column="0" Margin="0,0,0,6">
+                        <TextBlock Text="Công cụ đo:" FontSize="11" Foreground="{DynamicResource TextMutedBrush}" />
+                        <TextBlock x:Name="TxtToolName" Text="Tool (Type)" FontWeight="SemiBold" FontSize="12" Foreground="{DynamicResource TextBrush}" />
+                    </StackPanel>
+
+                    <StackPanel Grid.Row="0" Grid.Column="1" Margin="0,0,0,6">
+                        <TextBlock Text="Hướng vector đo:" FontSize="11" Foreground="{DynamicResource TextMutedBrush}" />
+                        <TextBlock x:Name="TxtOrientation" Text="0.0° (Phương Ngang - Trục X)" FontWeight="SemiBold" FontSize="12" Foreground="#03A9F4" />
+                    </StackPanel>
+
+                    <StackPanel Grid.Row="1" Grid.Column="0" Margin="0,0,0,4">
+                        <TextBlock Text="Kích thước đo được:" FontSize="11" Foreground="{DynamicResource TextMutedBrush}" />
+                        <TextBlock x:Name="TxtMeasuredPx" Text="0.00 px" FontWeight="Bold" FontSize="13" Foreground="{DynamicResource TextBrush}" />
+                    </StackPanel>
+
+                    <StackPanel Grid.Row="1" Grid.Column="1" Margin="0,0,0,4">
+                        <TextBlock Text="Kích thước chuẩn (Nominal):" FontSize="11" Foreground="{DynamicResource TextMutedBrush}" />
+                        <TextBlock x:Name="TxtNominalMm" Text="0.000 mm" FontWeight="Bold" FontSize="13" Foreground="#FF9800" />
+                    </StackPanel>
+
+                    <StackPanel Grid.Row="2" Grid.ColumnSpan="2" Margin="0,4,0,0">
+                        <TextBlock Text="Tỉ lệ tính toán (measuredPx / nominal):" FontSize="11" Foreground="{DynamicResource TextMutedBrush}" />
+                        <TextBlock x:Name="TxtCalculatedPpm" Text="0.0000 px/mm" FontWeight="Bold" FontSize="14" Foreground="#4CAF50" />
+                    </StackPanel>
+                </Grid>
+            </Border>
+
+            <!-- Card 2: Axis Selection -->
+            <Border Grid.Row="2" Background="{DynamicResource PanelBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="6" Padding="12" Margin="0,0,0,10">
+                <StackPanel>
+                    <TextBlock Text="LỰA CHỌN TRỤC CẦN ÁP DỤNG:" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource TextBrush}" Margin="0,0,0,8" />
+
+                    <!-- Radio Option X -->
+                    <Border Background="{DynamicResource WindowBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="4" Padding="8,6" Margin="0,0,0,6">
+                        <RadioButton x:Name="RadioAxisX" GroupName="CalibAxisGroup" IsChecked="True">
+                            <StackPanel Margin="6,0,0,0">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="🎯 Áp dụng cho TRỤC X (Chiều Ngang)" FontWeight="SemiBold" FontSize="12" Foreground="{DynamicResource TextBrush}" />
+                                    <TextBlock x:Name="TxtRecX" Text=" (Khuyến nghị)" FontWeight="Bold" FontSize="11" Foreground="#4CAF50" Visibility="Collapsed" />
+                                </StackPanel>
+                                <TextBlock x:Name="TxtDiffX" Text="Tỉ lệ X: 10.0000 ➔ 10.0000 px/mm (0.00%)" FontSize="11" Foreground="{DynamicResource TextMutedBrush}" Margin="0,2,0,0" />
+                            </StackPanel>
+                        </RadioButton>
+                    </Border>
+
+                    <!-- Radio Option Y -->
+                    <Border Background="{DynamicResource WindowBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="4" Padding="8,6" Margin="0,0,0,6">
+                        <RadioButton x:Name="RadioAxisY" GroupName="CalibAxisGroup">
+                            <StackPanel Margin="6,0,0,0">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="🎯 Áp dụng cho TRỤC Y (Chiều Dọc)" FontWeight="SemiBold" FontSize="12" Foreground="{DynamicResource TextBrush}" />
+                                    <TextBlock x:Name="TxtRecY" Text=" (Khuyến nghị)" FontWeight="Bold" FontSize="11" Foreground="#4CAF50" Visibility="Collapsed" />
+                                </StackPanel>
+                                <TextBlock x:Name="TxtDiffY" Text="Tỉ lệ Y: 10.0000 ➔ 10.0000 px/mm (0.00%)" FontSize="11" Foreground="{DynamicResource TextMutedBrush}" Margin="0,2,0,0" />
+                            </StackPanel>
+                        </RadioButton>
+                    </Border>
+
+                    <!-- Radio Option Both -->
+                    <Border Background="{DynamicResource WindowBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="4" Padding="8,6">
+                        <RadioButton x:Name="RadioBothAxes" GroupName="CalibAxisGroup">
+                            <StackPanel Margin="6,0,0,0">
+                                <TextBlock Text="🔄 Áp dụng chung cho CẢ 2 TRỤC (X &amp; Y đồng bộ)" FontWeight="SemiBold" FontSize="12" Foreground="{DynamicResource TextBrush}" />
+                                <TextBlock Text="Gán cùng hệ số này cho cả chiều ngang và chiều dọc" FontSize="11" Foreground="{DynamicResource TextMutedBrush}" Margin="0,2,0,0" />
+                            </StackPanel>
+                        </RadioButton>
+                    </Border>
+                </StackPanel>
+            </Border>
+
+            <!-- Warning Banner -->
+            <Border x:Name="BorderWarning" Grid.Row="3" Background="#33FF9800" BorderBrush="#FF9800" BorderThickness="1" CornerRadius="4" Padding="8,4" Margin="0,0,0,10" Visibility="Collapsed">
+                <TextBlock x:Name="TxtWarning" Text="⚠️ Cảnh báo: Tỉ lệ mới chênh lệch trên 10% so với tỉ lệ cũ!" Foreground="#FFB74D" FontSize="11" TextWrapping="Wrap" />
+            </Border>
+
+            <!-- Bottom Action Buttons -->
+            <StackPanel Grid.Row="4" Orientation="Horizontal" HorizontalAlignment="Right">
+                <Button Content="❌ Hủy Bỏ" Width="100" Height="30" Margin="0,0,10,0" Background="#424242" Foreground="White" FontWeight="SemiBold" FontSize="12" Click="CancelButton_Click" />
+                <Button Content="💾 Xác Nhận Áp Dụng" Width="150" Height="30" Background="#2E7D32" Foreground="White" FontWeight="Bold" FontSize="12" Click="ApplyButton_Click" />
+            </StackPanel>
+        </Grid>
+    </Border>
+</Window>

@@ -428,6 +428,8 @@ public sealed partial class CalibrationViewModel : ObservableObject
         if (_config != null && AveragePixelsPerMm > 0)
         {
             _config.PixelsPerMm = AveragePixelsPerMm;
+            _config.PixelsPerMmX = AveragePixelsPerMm;
+            _config.PixelsPerMmY = AveragePixelsPerMm;
             IsDirty = true;
         }
         else if (_config == null && AveragePixelsPerMm > 0)
@@ -477,6 +479,8 @@ public sealed partial class CalibrationViewModel : ObservableObject
 
         // Đang mở Job: Lưu vào Job hiện tại
         _config.PixelsPerMm = AveragePixelsPerMm;
+        _config.PixelsPerMmX = AveragePixelsPerMm;
+        _config.PixelsPerMmY = AveragePixelsPerMm;
         _config.ProductCode = ProductCode ?? string.Empty;
         if (!string.IsNullOrEmpty(CurrentTempWorkingDir) && !string.IsNullOrEmpty(CurrentJobFilePath))
         {

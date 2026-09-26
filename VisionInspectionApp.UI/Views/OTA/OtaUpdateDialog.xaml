@@ -435,6 +435,20 @@
                                             DockPanel.Dock="Left" Margin="0,0,8,0"
                                             ToolTip="Chạy dotnet publish độc lập để kiểm tra và nạp mã nhị phân mới vào thư mục nguồn mà chưa tải lên server." />
 
+                                    <!-- Nút Lưu Cấu Hình -->
+                                    <Button Content="💾 Lưu Cấu Hình"
+                                            Command="{Binding SaveSettingsCommand}"
+                                            IsEnabled="{Binding IsBusyPublishingOrBuilding, Converter={StaticResource BoolToVis}, ConverterParameter=Invert}"
+                                            Background="#10B981"
+                                            BorderBrush="#059669"
+                                            Foreground="White"
+                                            FontWeight="SemiBold"
+                                            FontSize="12"
+                                            Padding="14,7"
+                                            Height="34"
+                                            DockPanel.Dock="Left" Margin="0,0,8,0"
+                                            ToolTip="Lưu các thông tin cấu hình máy chủ phát hành, token, thư mục vào tệp cấu hình bền vững." />
+
                                     <!-- Nút Hủy phát hành / build (khi đang chạy) -->
                                     <Button Content="⏹ Hủy Bỏ"
                                             Command="{Binding CancelPublishCommand}"
@@ -532,6 +546,16 @@
                             BorderBrush="{DynamicResource BorderBrush}"
                             Foreground="{DynamicResource TextMutedBrush}"
                             Padding="10,5" Height="30" Margin="0,0,6,0" />
+
+                    <!-- Nút Lưu Cài Đặt -->
+                    <Button Content="💾 Lưu Cài Đặt"
+                            Command="{Binding SaveSettingsCommand}"
+                            Background="#10B981"
+                            BorderBrush="#059669"
+                            Foreground="White"
+                            FontWeight="SemiBold"
+                            Padding="12,5" Height="30" Margin="0,0,6,0"
+                            ToolTip="Lưu toàn bộ cài đặt OTA Update &amp; Máy chủ phát hành" />
 
                     <!-- Nút Đóng -->
                     <Button Content="Đóng"

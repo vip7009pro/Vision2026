@@ -12,6 +12,12 @@ class Program
             return;
         }
 
+        if (args.Length > 0 && (args[0].Equals("config", StringComparison.OrdinalIgnoreCase) || args[0].Equals("config-persist", StringComparison.OrdinalIgnoreCase)))
+        {
+            ReleaseConfigPersistenceTests.RunAllTests();
+            return;
+        }
+
         if (args.Length > 0 && args[0].Equals("calib", StringComparison.OrdinalIgnoreCase))
         {
             ToolCalibFactorTests.RunAllTests();
@@ -73,5 +79,6 @@ class Program
         PdfSourceTests.RunAllTests();
         SystemConfigBackupAndOqcDbMatchTests.RunAllTests();
         ToolCalibFactorTests.RunAllTests();
+        ReleaseConfigPersistenceTests.RunAllTests();
     }
 }

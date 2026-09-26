@@ -73,9 +73,8 @@ public sealed class PlcManagerService : IPlcManagerService, IDisposable
         }
         else
         {
-            string appDataDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Vision2026");
-            Directory.CreateDirectory(appDataDir);
-            _globalConfigFilePath = Path.Combine(appDataDir, "plc_config.json");
+            AppStoragePaths.EnsureStorageStructureAndMigrate();
+            _globalConfigFilePath = AppStoragePaths.PlcConfigFilePath;
         }
 
         Plcs.CollectionChanged += (s, e) =>
@@ -149,7 +148,12 @@ public sealed class PlcManagerService : IPlcManagerService, IDisposable
                     IndustrialConfig = _industrialConfig
                 };
                 string json = JsonSerializer.Serialize(container, new JsonSerializerOptions { WriteIndented = true });
+                
+                // 1. Lưu vào thư mục chuẩn %AppData%\Vision2026
                 File.WriteAllText(_globalConfigFilePath, json);
+
+                // 2. Đồng bộ bản sao sang thư mục ứng dụng (configs\system) để phục vụ deploy/release
+                AppStoragePaths.SyncConfigToAppBackup("plc_config.json", json);
             }
             catch (Exception ex)
             {
@@ -163,9 +167,33 @@ public sealed class PlcManagerService : IPlcManagerService, IDisposable
         _isLoading = true;
         try
         {
+            string? loadPath = null;
             if (File.Exists(_globalConfigFilePath))
             {
-                string json = File.ReadAllText(_globalConfigFilePath);
+                loadPath = _globalConfigFilePath;
+            }
+            else
+            {
+                // Fallback 1: Tìm trong thư mục hạt giống configs\system
+                string seedInConfigs = Path.Combine(AppStoragePaths.AppSeedConfigDirectory, "plc_config.json");
+                if (File.Exists(seedInConfigs))
+                {
+                    loadPath = seedInConfigs;
+                }
+                else
+                {
+                    // Fallback 2: Tìm ở thư mục gốc BaseDirectory
+                    string seedInBase = Path.Combine(AppStoragePaths.AppBaseDirectory, "plc_config.json");
+                    if (File.Exists(seedInBase))
+                    {
+                        loadPath = seedInBase;
+                    }
+                }
+            }
+
+            if (loadPath != null)
+            {
+                string json = File.ReadAllText(loadPath);
                 var container = JsonSerializer.Deserialize<PlcConfigContainer>(json);
                 if (container != null)
                 {
@@ -183,6 +211,12 @@ public sealed class PlcManagerService : IPlcManagerService, IDisposable
                             plc.CpuName = string.Empty;
                         }
                         LoadConfigInternal(container.Plcs, container.Tags ?? new List<PlcTag>());
+
+                        // Nếu nạp từ hạt giống fallback, lưu ngay vào đường dẫn chuẩn
+                        if (loadPath != _globalConfigFilePath)
+                        {
+                            SaveGlobalConfig();
+                        }
                         return;
                     }
                 }

@@ -34,10 +34,10 @@
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
 
     <!-- Application Version (Dùng cho OTA Update & Windows File Properties) -->
-    <Version>1.0.0.24</Version>
-    <AssemblyVersion>1.0.0.24</AssemblyVersion>
-    <FileVersion>1.0.0.24</FileVersion>
-    <InformationalVersion>1.0.0.24</InformationalVersion>
+    <Version>1.0.0.25</Version>
+    <AssemblyVersion>1.0.0.25</AssemblyVersion>
+    <FileVersion>1.0.0.25</FileVersion>
+    <InformationalVersion>1.0.0.25</InformationalVersion>
   </PropertyGroup>
 
   <ItemGroup>
@@ -76,6 +76,47 @@
       <UpdaterFiles Include="..\VisionInspectionApp.Updater\bin\Release\net8.0-windows\VisionUpdater.*" />
     </ItemGroup>
     <Copy SourceFiles="@(UpdaterFiles)" DestinationFolder="$(TargetDir)" SkipUnchangedFiles="false" ContinueOnError="true" />
+  </Target>
+
+  <!-- Tự động đồng bộ toàn bộ cấu hình hệ thống (OTA, DB, OQC, Camera, PLC, Jobs, Configs) sang thư mục Output Release -->
+  <Target Name="SyncReleaseConfigurations" AfterTargets="Build">
+    <PropertyGroup>
+      <AppDataDir>$(APPDATA)\Vision2026</AppDataDir>
+      <AppDataLegacyDir>$(APPDATA)\VisionInspectionApp</AppDataLegacyDir>
+      <SystemConfigDest>$(TargetDir)configs\system</SystemConfigDest>
+      <JobsDest>$(TargetDir)jobs</JobsDest>
+      <ConfigsDest>$(TargetDir)configs</ConfigsDest>
+    </PropertyGroup>
+
+    <ItemGroup>
+      <ConfigFilesToCopy Include="$(AppDataDir)\databases_config.json" Condition="Exists('$(AppDataDir)\databases_config.json')" />
+      <ConfigFilesToCopy Include="$(AppDataDir)\oqc_scanner_config.json" Condition="Exists('$(AppDataDir)\oqc_scanner_config.json')" />
+      <ConfigFilesToCopy Include="$(AppDataDir)\plc_config.json" Condition="Exists('$(AppDataDir)\plc_config.json')" />
+      <ConfigFilesToCopy Include="$(AppDataDir)\camera_adjust_settings.json" Condition="Exists('$(AppDataDir)\camera_adjust_settings.json')" />
+      <ConfigFilesToCopy Include="$(AppDataDir)\global_settings.json" Condition="Exists('$(AppDataDir)\global_settings.json')" />
+      <ConfigFilesToCopy Include="$(AppDataLegacyDir)\global_settings.json" Condition="!Exists('$(AppDataDir)\global_settings.json') and Exists('$(AppDataLegacyDir)\global_settings.json')" />
+      <ConfigFilesToCopy Include="$(AppDataDir)\global_chessboard_calibration.json" Condition="Exists('$(AppDataDir)\global_chessboard_calibration.json')" />
+      <ConfigFilesToCopy Include="$(AppDataDir)\global_chessboard_settings.json" Condition="Exists('$(AppDataDir)\global_chessboard_settings.json')" />
+      <ConfigFilesToCopy Include="$(AppDataDir)\recent_jobs.json" Condition="Exists('$(AppDataDir)\recent_jobs.json')" />
+    </ItemGroup>
+
+    <!-- Sao chép vào $(TargetDir)configs\system và $(TargetDir) -->
+    <Copy SourceFiles="@(ConfigFilesToCopy)" DestinationFolder="$(SystemConfigDest)" SkipUnchangedFiles="true" ContinueOnError="true" />
+    <Copy SourceFiles="@(ConfigFilesToCopy)" DestinationFolder="$(TargetDir)" SkipUnchangedFiles="true" ContinueOnError="true" />
+
+    <!-- Đồng bộ jobs từ AppData\Vision2026\jobs hoặc Debug sang $(TargetDir)jobs -->
+    <ItemGroup>
+      <JobsToCopy Include="$(AppDataDir)\jobs\*.job" Condition="Exists('$(AppDataDir)\jobs')" />
+      <JobsToCopy Include="$(ProjectDir)bin\x64\Debug\net8.0-windows\jobs\*.job" Condition="Exists('$(ProjectDir)bin\x64\Debug\net8.0-windows\jobs')" />
+      <JobsToCopy Include="$(ProjectDir)bin\Debug\net8.0-windows\jobs\*.job" Condition="Exists('$(ProjectDir)bin\Debug\net8.0-windows\jobs')" />
+    </ItemGroup>
+    <Copy SourceFiles="@(JobsToCopy)" DestinationFolder="$(JobsDest)" SkipUnchangedFiles="true" ContinueOnError="true" />
+
+    <!-- Đồng bộ configs recipes từ Debug sang $(TargetDir)configs -->
+    <ItemGroup>
+      <DebugConfigs Include="$(ProjectDir)bin\Debug\net8.0-windows\configs\**\*.*" Condition="Exists('$(ProjectDir)bin\Debug\net8.0-windows\configs')" />
+    </ItemGroup>
+    <Copy SourceFiles="@(DebugConfigs)" DestinationFolder="$(ConfigsDest)\%(RecursiveDir)" SkipUnchangedFiles="true" ContinueOnError="true" />
   </Target>
 
 </Project>

@@ -7030,8 +7030,12 @@ namespace VisionInspectionApp.UI.ViewModels
     
                 dst.Add(new OverlayPointItem { X = pa.WorldPosition.X, Y = pa.WorldPosition.Y, Stroke = Brushes.DeepSkyBlue, Label = pa.Name });
                 dst.Add(new OverlayPointItem { X = pb.WorldPosition.X, Y = pb.WorldPosition.Y, Stroke = Brushes.DeepSkyBlue, Label = pb.Name });
-                var distPx = Geometry2D.Distance(new Point2d(pa.WorldPosition.X, pa.WorldPosition.Y), new Point2d(pb.WorldPosition.X, pb.WorldPosition.Y));
-                var value = _config.PixelsPerMm > 0 ? distPx / _config.PixelsPerMm : distPx;
+                var paPt = new Point2d(pa.WorldPosition.X, pa.WorldPosition.Y);
+                var pbPt = new Point2d(pb.WorldPosition.X, pb.WorldPosition.Y);
+                var distPx = Geometry2D.Distance(paPt, pbPt);
+                var value = (_config != null && (_config.PixelsPerMmX > 0.0001 || _config.PixelsPerMmY > 0.0001))
+                    ? Geometry2D.DistanceMm(paPt, pbPt, _config.GetEffectivePpmX(), _config.GetEffectivePpmY())
+                    : (_config?.PixelsPerMm > 0 ? distPx / _config.PixelsPerMm : distPx);
                 dst.Add(new OverlayLineItem { X1 = pa.WorldPosition.X, Y1 = pa.WorldPosition.Y, X2 = pb.WorldPosition.X, Y2 = pb.WorldPosition.Y, Stroke = Brushes.Lime, Label = $"{d.Name}: {value:0.###}" });
                 return;
             }
@@ -7063,7 +7067,9 @@ namespace VisionInspectionApp.UI.ViewModels
                 dst.Add(new OverlayLineItem { X1 = la.P1.X, Y1 = la.P1.Y, X2 = la.P2.X, Y2 = la.P2.Y, Stroke = Brushes.MediumPurple, Label = a.Name });
                 dst.Add(new OverlayLineItem { X1 = lb.P1.X, Y1 = lb.P1.Y, X2 = lb.P2.X, Y2 = lb.P2.Y, Stroke = Brushes.MediumPurple, Label = b.Name });
                 var(distPx, ca, cb) = Geometry2D.SegmentToSegmentDistance(la.P1, la.P2, lb.P1, lb.P2);
-                var value = _config.PixelsPerMm > 0 ? distPx / _config.PixelsPerMm : distPx;
+                var value = (_config != null && (_config.PixelsPerMmX > 0.0001 || _config.PixelsPerMmY > 0.0001))
+                    ? Geometry2D.DistanceMm(ca, cb, _config.GetEffectivePpmX(), _config.GetEffectivePpmY())
+                    : (_config?.PixelsPerMm > 0 ? distPx / _config.PixelsPerMm : distPx);
                 dst.Add(new OverlayLineItem { X1 = ca.X, Y1 = ca.Y, X2 = cb.X, Y2 = cb.Y, Stroke = Brushes.Lime, Label = $"{dd.Name}: {value:0.###}" });
                 return;
             }
@@ -7093,7 +7099,9 @@ namespace VisionInspectionApp.UI.ViewModels
     
                 var pp = new Point2d(p.WorldPosition.X, p.WorldPosition.Y);
                 var(distPx, closestOnSeg) = Geometry2D.PointToSegmentDistance(pp, l.P1, l.P2);
-                var value = _config.PixelsPerMm > 0 ? distPx / _config.PixelsPerMm : distPx;
+                var value = (_config != null && (_config.PixelsPerMmX > 0.0001 || _config.PixelsPerMmY > 0.0001))
+                    ? Geometry2D.DistanceMm(pp, closestOnSeg, _config.GetEffectivePpmX(), _config.GetEffectivePpmY())
+                    : (_config?.PixelsPerMm > 0 ? distPx / _config.PixelsPerMm : distPx);
                 dst.Add(new OverlayPointItem { X = pp.X, Y = pp.Y, Stroke = Brushes.DeepSkyBlue, Label = p.Name });
                 dst.Add(new OverlayLineItem { X1 = l.P1.X, Y1 = l.P1.Y, X2 = l.P2.X, Y2 = l.P2.Y, Stroke = Brushes.MediumPurple, Label = ldef.Name });
                 dst.Add(new OverlayLineItem { X1 = pp.X, Y1 = pp.Y, X2 = closestOnSeg.X, Y2 = closestOnSeg.Y, Stroke = Brushes.Lime, Label = $"{dd.Name}: {value:0.###}" });
@@ -7534,7 +7542,9 @@ namespace VisionInspectionApp.UI.ViewModels
                     var l1 = top[0];
                     var l2 = top[1];
                     var (distPx, ca, cb) = Geometry2D.SegmentToSegmentDistance(l1.P1, l1.P2, l2.P1, l2.P2);
-                    var value = _config.PixelsPerMm > 0 ? distPx / _config.PixelsPerMm : distPx;
+                    var value = (_config != null && (_config.PixelsPerMmX > 0.0001 || _config.PixelsPerMmY > 0.0001))
+                        ? Geometry2D.DistanceMm(ca, cb, _config.GetEffectivePpmX(), _config.GetEffectivePpmY())
+                        : (_config?.PixelsPerMm > 0 ? distPx / _config.PixelsPerMm : distPx);
                     var pass = value >= (lpd.Nominal - lpd.ToleranceMinus) && value <= (lpd.Nominal + lpd.TolerancePlus);
                     dst.Add(new OverlayLineItem { X1 = l1.P1.X, Y1 = l1.P1.Y, X2 = l1.P2.X, Y2 = l1.P2.Y, Stroke = Brushes.MediumPurple, Label = lpd.Name });
                     dst.Add(new OverlayLineItem { X1 = l2.P1.X, Y1 = l2.P1.Y, X2 = l2.P2.X, Y2 = l2.P2.Y, Stroke = Brushes.MediumPurple, Label = string.Empty });
@@ -7555,7 +7565,9 @@ namespace VisionInspectionApp.UI.ViewModels
                 }
     
                 var(distPx, ca, cb) = CalculateLineLineDistance(la, lb, dd.Mode);
-                var mm = _config.PixelsPerMm > 0 ? distPx / _config.PixelsPerMm : distPx;
+                var mm = (_config != null && (_config.PixelsPerMmX > 0.0001 || _config.PixelsPerMmY > 0.0001))
+                    ? Geometry2D.DistanceMm(ca, cb, _config.GetEffectivePpmX(), _config.GetEffectivePpmY())
+                    : (_config?.PixelsPerMm > 0 ? distPx / _config.PixelsPerMm : distPx);
                 var pass = mm >= (dd.Nominal - dd.ToleranceMinus) && mm <= (dd.Nominal + dd.TolerancePlus);
                 dst.Add(new OverlayLineItem { X1 = ca.X, Y1 = ca.Y, X2 = cb.X, Y2 = cb.Y, Stroke = pass ? Brushes.Lime : Brushes.Red, Label = $"{dd.Name}: {mm:0.00} mm" });
             }
@@ -7580,7 +7592,9 @@ namespace VisionInspectionApp.UI.ViewModels
     
                 var pp = new Point2d(p.WorldPosition.X, p.WorldPosition.Y);
                 var(distPx, closest) = CalculatePointLineDistance(pp, l, dd.Mode);
-                var mm = _config.PixelsPerMm > 0 ? distPx / _config.PixelsPerMm : distPx;
+                var mm = (_config != null && (_config.PixelsPerMmX > 0.0001 || _config.PixelsPerMmY > 0.0001))
+                    ? Geometry2D.DistanceMm(pp, closest, _config.GetEffectivePpmX(), _config.GetEffectivePpmY())
+                    : (_config?.PixelsPerMm > 0 ? distPx / _config.PixelsPerMm : distPx);
                 var pass = mm >= (dd.Nominal - dd.ToleranceMinus) && mm <= (dd.Nominal + dd.TolerancePlus);
                 dst.Add(new OverlayLineItem { X1 = pp.X, Y1 = pp.Y, X2 = closest.X, Y2 = closest.Y, Stroke = pass ? Brushes.Lime : Brushes.Red, Label = $"{dd.Name}: {mm:0.00} mm" });
             }
@@ -7594,10 +7608,12 @@ namespace VisionInspectionApp.UI.ViewModels
                     continue;
                 }
     
-                var dx = pb.WorldPosition.X - pa.WorldPosition.X;
-                var dy = pb.WorldPosition.Y - pa.WorldPosition.Y;
-                var distPx = Math.Sqrt(dx * dx + dy * dy);
-                var mm = _config.PixelsPerMm > 0 ? distPx / _config.PixelsPerMm : distPx;
+                var paPoint = new Point2d(pa.WorldPosition.X, pa.WorldPosition.Y);
+                var pbPoint = new Point2d(pb.WorldPosition.X, pb.WorldPosition.Y);
+                var distPx = Geometry2D.Distance(paPoint, pbPoint);
+                var mm = (_config != null && (_config.PixelsPerMmX > 0.0001 || _config.PixelsPerMmY > 0.0001))
+                    ? Geometry2D.DistanceMm(paPoint, pbPoint, _config.GetEffectivePpmX(), _config.GetEffectivePpmY())
+                    : (_config?.PixelsPerMm > 0 ? distPx / _config.PixelsPerMm : distPx);
                 dst.Add(new OverlayLineItem { X1 = pa.WorldPosition.X, Y1 = pa.WorldPosition.Y, X2 = pb.WorldPosition.X, Y2 = pb.WorldPosition.Y, Stroke = Brushes.Yellow, Label = $"{d.Name}: {mm:0.00} mm" });
             }
 
@@ -7763,7 +7779,7 @@ namespace VisionInspectionApp.UI.ViewModels
                 return;
             }
 
-            var isCalibrated = _config is not null && _config.PixelsPerMm > 0 && Math.Abs(_config.PixelsPerMm - 1.0) > 1e-6;
+            var isCalibrated = _config is not null && ((_config.PixelsPerMmX > 0.0001 || _config.PixelsPerMmY > 0.0001) || (_config.PixelsPerMm > 0 && Math.Abs(_config.PixelsPerMm - 1.0) > 1e-6));
             var unitStr = isCalibrated ? "mm" : "px";
 
             var la = ResolveOrDetectLine(dd.LineA, image, run, originTeach, originFound, originAngleDeg);
@@ -7809,7 +7825,9 @@ namespace VisionInspectionApp.UI.ViewModels
                 ?? _config?.LinePairDetections?.FirstOrDefault(x => string.Equals(x.Name, dd.LineA, StringComparison.OrdinalIgnoreCase))?.SearchRoi;
 
             var (distPx, ca, cb) = Geometry2D.CalculateSegmentLineDistance(la, lb, dd.Mode, dd.ExtensionMode, searchRoiA, originTeach, originFound, originAngleDeg);
-            var value = _config?.PixelsPerMm > 0 ? distPx / _config.PixelsPerMm : distPx;
+            var value = (_config != null && (_config.PixelsPerMmX > 0.0001 || _config.PixelsPerMmY > 0.0001))
+                ? Geometry2D.DistanceMm(ca, cb, _config.GetEffectivePpmX(), _config.GetEffectivePpmY())
+                : (_config?.PixelsPerMm > 0 ? distPx / _config.PixelsPerMm : distPx);
             var pass = value >= (dd.Nominal - dd.ToleranceMinus) && value <= (dd.Nominal + dd.TolerancePlus);
             var stroke = pass ? Brushes.Lime : Brushes.Red;
 

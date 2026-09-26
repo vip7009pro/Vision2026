@@ -16,6 +16,11 @@ public partial class OtaUpdateDialog : Window
             Dispatcher.Invoke(Close);
         };
 
+        Closing += (_, _) =>
+        {
+            viewModel.SaveAllSettings();
+        };
+
         Loaded += async (_, _) =>
         {
             // Tự động kiểm tra bản cập nhật khi mở dialog

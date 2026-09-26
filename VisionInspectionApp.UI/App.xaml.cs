@@ -48,6 +48,9 @@ public partial class App : System.Windows.Application
 
         splash.SetProgress(35, "Đang nạp cấu hình hệ thống & dependency injection...");
 
+        // Khởi tạo thư mục dữ liệu chuẩn & tự động migrate / seed cấu hình
+        VisionInspectionApp.Models.AppStoragePaths.EnsureStorageStructureAndMigrate();
+
         _host = Host.CreateDefaultBuilder()
             .ConfigureServices(services =>
             {

@@ -936,7 +936,7 @@ public partial class JobManagerViewModel : ObservableObject
             // Hiển thị SaveFileDialog cho phép người dùng chọn thư mục và tên tệp lưu
             string initialDir = !string.IsNullOrWhiteSpace(_oqcService.Config.JobRootDirectory) && Directory.Exists(_oqcService.Config.JobRootDirectory)
                 ? _oqcService.Config.JobRootDirectory
-                : Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "jobs");
+                : AppStoragePaths.JobsDirectory;
             Directory.CreateDirectory(initialDir);
 
             string defaultFileName = Path.GetFileName(SelectedItem.JobFilePath);
@@ -1189,9 +1189,9 @@ public partial class JobManagerViewModel : ObservableObject
         string productCode = SelectedItem.ProductCode?.Trim() ?? string.Empty;
 
         // Xác định thư mục lưu Job mặc định
-        string defaultJobDir = !string.IsNullOrWhiteSpace(_oqcService.Config.JobRootDirectory)
+        string defaultJobDir = !string.IsNullOrWhiteSpace(_oqcService.Config.JobRootDirectory) && Directory.Exists(_oqcService.Config.JobRootDirectory)
             ? _oqcService.Config.JobRootDirectory
-            : Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "jobs");
+            : AppStoragePaths.JobsDirectory;
         Directory.CreateDirectory(defaultJobDir);
 
         string? resolvedJobPath = null;
@@ -1212,12 +1212,21 @@ public partial class JobManagerViewModel : ObservableObject
         {
             resolvedJobPath = Path.Combine(defaultJobDir, $"{productCode}.job");
         }
-        // 1.4. Trong thư mục 'jobs' của chương trình theo tên tệp
+        // 1.4. Trong thư mục Jobs chuẩn %AppData%\Vision2026\jobs
+        else if (!string.IsNullOrWhiteSpace(rawJobPath) && File.Exists(Path.Combine(AppStoragePaths.JobsDirectory, Path.GetFileName(rawJobPath))))
+        {
+            resolvedJobPath = Path.Combine(AppStoragePaths.JobsDirectory, Path.GetFileName(rawJobPath));
+        }
+        else if (!string.IsNullOrWhiteSpace(productCode) && File.Exists(Path.Combine(AppStoragePaths.JobsDirectory, $"{productCode}.job")))
+        {
+            resolvedJobPath = Path.Combine(AppStoragePaths.JobsDirectory, $"{productCode}.job");
+        }
+        // 1.5. Trong thư mục 'jobs' của chương trình theo tên tệp (BaseDirectory\jobs)
         else if (!string.IsNullOrWhiteSpace(rawJobPath) && File.Exists(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "jobs", Path.GetFileName(rawJobPath))))
         {
             resolvedJobPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "jobs", Path.GetFileName(rawJobPath));
         }
-        // 1.5. Trong thư mục 'jobs' của chương trình theo mã sản phẩm
+        // 1.6. Trong thư mục 'jobs' của chương trình theo mã sản phẩm
         else if (!string.IsNullOrWhiteSpace(productCode) && File.Exists(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "jobs", $"{productCode}.job")))
         {
             resolvedJobPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "jobs", $"{productCode}.job");

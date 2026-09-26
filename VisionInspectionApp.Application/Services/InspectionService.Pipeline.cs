@@ -2171,7 +2171,7 @@ public partial class InspectionService
                     var l1 = top[0];
                     var l2 = top[1];
                     var (distPx, ca, cb) = Geometry2D.SegmentToSegmentDistance(l1.P1, l1.P2, l2.P1, l2.P2);
-                    var value = config.PixelsPerMm > 0 ? distPx / config.PixelsPerMm : distPx;
+                    var value = (config.PixelsPerMmX > 0.0001 || config.PixelsPerMmY > 0.0001) ? Geometry2D.DistanceMm(ca, cb, config.GetEffectivePpmX(), config.GetEffectivePpmY()) : (config.PixelsPerMm > 0 ? distPx / config.PixelsPerMm : distPx);
                     var pass = value >= (lpd.Nominal - lpd.ToleranceMinus) && value <= (lpd.Nominal + lpd.TolerancePlus);
 
                     __sw.Stop(); result.Timings.NodeTimings[lpd.Name] = (int)__sw.ElapsedMilliseconds; return new LinePairDetectionResult(
@@ -2217,7 +2217,7 @@ public partial class InspectionService
             Task.WaitAll(surfaceCompareTasks);
             Task.WaitAll(contourCompareTasks);
             var tScDone = swTotal.ElapsedMilliseconds;
-            static EdgePairDetectResult DetectEdgePair(Mat matBgrOrGray, Roi roiTeach, EdgePairDetectDefinition def, double pixelsPerMm, Point2d originTeach, Point2d originFound, double angleDeg)
+            static EdgePairDetectResult DetectEdgePair(Mat matBgrOrGray, Roi roiTeach, EdgePairDetectDefinition def, double pixelsPerMm, Point2d originTeach, Point2d originFound, double angleDeg, double pixelsPerMmX = 0, double pixelsPerMmY = 0)
             {
                 if (matBgrOrGray is null || roiTeach.Width <= 0 || roiTeach.Height <= 0)
                 {
@@ -2478,7 +2478,7 @@ public partial class InspectionService
                 var (l1p1, l1p2) = FitLineFromPoints(e1);
                 var (l2p1, l2p2) = FitLineFromPoints(e2);
                 var (distPx, ca, cb) = Geometry2D.SegmentToSegmentDistance(l1p1, l1p2, l2p1, l2p2);
-                var value = pixelsPerMm > 0 ? distPx / pixelsPerMm : distPx;
+                var value = (pixelsPerMmX > 0.0001 || pixelsPerMmY > 0.0001) ? Geometry2D.DistanceMm(ca, cb, pixelsPerMmX, pixelsPerMmY) : (pixelsPerMm > 0 ? distPx / pixelsPerMm : distPx);
                 var pass = value >= (def.Nominal - def.ToleranceMinus) && value <= (def.Nominal + def.TolerancePlus);
 
                 return new EdgePairDetectResult(def.Name, Found: true, l1p1, l1p2, l2p1, l2p2, value, def.Nominal, def.TolerancePlus, def.ToleranceMinus, pass, ca, cb, e1, e2);
@@ -2657,7 +2657,7 @@ public partial class InspectionService
                 {
                     var __sw = System.Diagnostics.Stopwatch.StartNew();
                     var (matForEpd, _) = ResolveToolPreprocess("EdgePairDetect", epd.Name);
-                    var res = DetectEdgePair(matForEpd, epd.SearchRoi, epd, config.PixelsPerMm, originTeach, originFound, angleDeg);
+                    var res = DetectEdgePair(matForEpd, epd.SearchRoi, epd, config.PixelsPerMm, originTeach, originFound, angleDeg, config.GetEffectivePpmX(), config.GetEffectivePpmY());
                     __sw.Stop(); result.Timings.NodeTimings[epd.Name] = (int)__sw.ElapsedMilliseconds; return res;
                 }))
                 .ToArray();
@@ -3097,7 +3097,7 @@ public partial class InspectionService
                 if (epdDef != null && epdDef.SearchRoi.Width > 0 && epdDef.SearchRoi.Height > 0)
                 {
                     var (matForEpd, _) = ResolveToolPreprocess("EdgePairDetect", epdDef.Name);
-                    var epdRes = DetectEdgePair(matForEpd, epdDef.SearchRoi, epdDef, config.PixelsPerMm, originTeach, originFound, angleDeg);
+                    var epdRes = DetectEdgePair(matForEpd, epdDef.SearchRoi, epdDef, config.PixelsPerMm, originTeach, originFound, angleDeg, config.GetEffectivePpmX(), config.GetEffectivePpmY());
                     if (epdRes.Pass || epdRes.Found)
                     {
                         var dx = epdRes.L1P2.X - epdRes.L1P1.X; var dy = epdRes.L1P2.Y - epdRes.L1P1.Y;
@@ -3118,7 +3118,7 @@ public partial class InspectionService
                 var __swNode = System.Diagnostics.Stopwatch.StartNew();
                 if (d is null || string.IsNullOrWhiteSpace(d.Name) || string.IsNullOrWhiteSpace(d.CircleRef)) continue;
                 if (!foundCircles.TryGetValue(d.CircleRef, out var c) || !c.Found) { __swNode.Stop(); result.Timings.NodeTimings[d.Name] = (int)__swNode.ElapsedMilliseconds; result.Diameters.Add(new DiameterResult(d.Name, d.CircleRef, Found: false, double.NaN, d.Nominal, d.TolerancePlus, d.ToleranceMinus, Pass: false, default, 0.0)); continue; }
-                var diameterPx = 2.0 * c.RadiusPx; var value = config.PixelsPerMm > 0 ? diameterPx / config.PixelsPerMm : diameterPx; var pass = value >= (d.Nominal - d.ToleranceMinus) && value <= (d.Nominal + d.TolerancePlus);
+                var diameterPx = 2.0 * c.RadiusPx; var meanPpm = Math.Sqrt(config.GetEffectivePpmX() * config.GetEffectivePpmY()); var value = meanPpm > 0.0001 ? diameterPx / meanPpm : diameterPx; var pass = value >= (d.Nominal - d.ToleranceMinus) && value <= (d.Nominal + d.TolerancePlus);
                 __swNode.Stop(); result.Timings.NodeTimings[d.Name] = (int)__swNode.ElapsedMilliseconds; result.Diameters.Add(new DiameterResult(d.Name, d.CircleRef, Found: true, value, d.Nominal, d.TolerancePlus, d.ToleranceMinus, pass, c.Center, c.RadiusPx));
             }
 
@@ -3131,7 +3131,7 @@ public partial class InspectionService
                 var lb = ResolveLine(ep.RefB);
                 if (la == null || lb == null || !la.Found || !lb.Found) { __swNode.Stop(); result.Timings.NodeTimings[ep.Name] = (int)__swNode.ElapsedMilliseconds; result.EdgePairs.Add(new EdgePairResult(ep.Name, ep.RefA, ep.RefB, Found: false, default, default, default, default, double.NaN, ep.Nominal, ep.TolerancePlus, ep.ToleranceMinus, Pass: false, default, default)); continue; }
                 var (distPx, ca, cb) = Geometry2D.SegmentToSegmentDistance(la.P1, la.P2, lb.P1, lb.P2);
-                var value = config.PixelsPerMm > 0 ? distPx / config.PixelsPerMm : distPx; var pass = value >= (ep.Nominal - ep.ToleranceMinus) && value <= (ep.Nominal + ep.TolerancePlus);
+                var value = (config.PixelsPerMmX > 0.0001 || config.PixelsPerMmY > 0.0001) ? Geometry2D.DistanceMm(ca, cb, config.GetEffectivePpmX(), config.GetEffectivePpmY()) : (config.PixelsPerMm > 0 ? distPx / config.PixelsPerMm : distPx); var pass = value >= (ep.Nominal - ep.ToleranceMinus) && value <= (ep.Nominal + ep.TolerancePlus);
                 __swNode.Stop(); result.Timings.NodeTimings[ep.Name] = (int)__swNode.ElapsedMilliseconds; result.EdgePairs.Add(new EdgePairResult(ep.Name, ep.RefA, ep.RefB, Found: true, la.P1, la.P2, lb.P1, lb.P2, value, ep.Nominal, ep.TolerancePlus, ep.ToleranceMinus, pass, ca, cb));
             }
             result.Timings.EdgePairsMs = (int)Math.Max(0, swTotal.ElapsedMilliseconds - tEdgePairs0);
@@ -3169,7 +3169,7 @@ public partial class InspectionService
             {
                 var __swNode = System.Diagnostics.Stopwatch.StartNew();
                 if (!distanceAnchors.TryGetValue(d.PointA, out var a) || !distanceAnchors.TryGetValue(d.PointB, out var b)) { __swNode.Stop(); result.Timings.NodeTimings[d.Name] = (int)__swNode.ElapsedMilliseconds; result.Distances.Add(new DistanceCheckResult(d.Name, d.PointA, d.PointB, double.NaN, d.Nominal, d.TolerancePlus, d.ToleranceMinus, false)); continue; }
-                var checkRes = _distanceCalculator.CheckDistance(d, a, b, config.PixelsPerMm); __swNode.Stop(); result.Timings.NodeTimings[d.Name] = (int)__swNode.ElapsedMilliseconds; result.Distances.Add(checkRes);
+                var checkRes = _distanceCalculator.CheckDistance(d, a, b, config.GetEffectivePpmX(), config.GetEffectivePpmY()); __swNode.Stop(); result.Timings.NodeTimings[d.Name] = (int)__swNode.ElapsedMilliseconds; result.Distances.Add(checkRes);
             }
 
             foreach (var dd in config.LineToLineDistances)
@@ -3178,7 +3178,7 @@ public partial class InspectionService
                 var la = ResolveLine(dd.LineA);
                 var lb = ResolveLine(dd.LineB);
                 if (la == null || lb == null || !la.Found || !lb.Found) { __swNode.Stop(); result.Timings.NodeTimings[dd.Name] = (int)__swNode.ElapsedMilliseconds; result.LineToLineDistances.Add(new SegmentDistanceResult(dd.Name, dd.LineA, dd.LineB, double.NaN, dd.Nominal, dd.TolerancePlus, dd.ToleranceMinus, false, default, default)); continue; }
-                var (distPx, ca, cb) = CalculateLineLineDistance(la, lb, dd.Mode); var value = config.PixelsPerMm > 0 ? distPx / config.PixelsPerMm : distPx; var pass = value >= (dd.Nominal - dd.ToleranceMinus) && value <= (dd.Nominal + dd.TolerancePlus);
+                var (distPx, ca, cb) = CalculateLineLineDistance(la, lb, dd.Mode); var value = (config.PixelsPerMmX > 0.0001 || config.PixelsPerMmY > 0.0001) ? Geometry2D.DistanceMm(ca, cb, config.GetEffectivePpmX(), config.GetEffectivePpmY()) : (config.PixelsPerMm > 0 ? distPx / config.PixelsPerMm : distPx); var pass = value >= (dd.Nominal - dd.ToleranceMinus) && value <= (dd.Nominal + dd.TolerancePlus);
                 __swNode.Stop(); result.Timings.NodeTimings[dd.Name] = (int)__swNode.ElapsedMilliseconds; result.LineToLineDistances.Add(new SegmentDistanceResult(dd.Name, dd.LineA, dd.LineB, value, dd.Nominal, dd.TolerancePlus, dd.ToleranceMinus, pass, ca, cb));
             }
 
@@ -3187,7 +3187,7 @@ public partial class InspectionService
                 var __swNode = System.Diagnostics.Stopwatch.StartNew();
                 var l = ResolveLine(dd.Line);
                 if (!foundPoints.TryGetValue(dd.Point, out var p) || l == null || !l.Found) { __swNode.Stop(); result.Timings.NodeTimings[dd.Name] = (int)__swNode.ElapsedMilliseconds; result.PointToLineDistances.Add(new SegmentDistanceResult(dd.Name, dd.Point, dd.Line, double.NaN, dd.Nominal, dd.TolerancePlus, dd.ToleranceMinus, false, default, default)); continue; }
-                var (distPx, closest) = CalculatePointLineDistance(p, l, dd.Mode); var value = config.PixelsPerMm > 0 ? distPx / config.PixelsPerMm : distPx; var pass = value >= (dd.Nominal - dd.ToleranceMinus) && value <= (dd.Nominal + dd.TolerancePlus);
+                var (distPx, closest) = CalculatePointLineDistance(p, l, dd.Mode); var value = (config.PixelsPerMmX > 0.0001 || config.PixelsPerMmY > 0.0001) ? Geometry2D.DistanceMm(p, closest, config.GetEffectivePpmX(), config.GetEffectivePpmY()) : (config.PixelsPerMm > 0 ? distPx / config.PixelsPerMm : distPx); var pass = value >= (dd.Nominal - dd.ToleranceMinus) && value <= (dd.Nominal + dd.TolerancePlus);
                 __swNode.Stop(); result.Timings.NodeTimings[dd.Name] = (int)__swNode.ElapsedMilliseconds; result.PointToLineDistances.Add(new SegmentDistanceResult(dd.Name, dd.Point, dd.Line, value, dd.Nominal, dd.TolerancePlus, dd.ToleranceMinus, pass, p, closest));
             }
             foreach (var dd in config.SegmentLineDistances)
@@ -3261,7 +3261,7 @@ public partial class InspectionService
                     ?? config.EdgePairDetections?.FirstOrDefault(x => string.Equals(x.Name, lineAName, StringComparison.OrdinalIgnoreCase))?.SearchRoi;
 
                 var (distPx, ca, cb) = CalculateSegmentLineDistance(la, lb, dd.Mode, dd.ExtensionMode, searchRoiA, originTeach, originFound, angleDeg);
-                var value = config.PixelsPerMm > 0 ? distPx / config.PixelsPerMm : distPx;
+                var value = (config.PixelsPerMmX > 0.0001 || config.PixelsPerMmY > 0.0001) ? Geometry2D.DistanceMm(ca, cb, config.GetEffectivePpmX(), config.GetEffectivePpmY()) : (config.PixelsPerMm > 0 ? distPx / config.PixelsPerMm : distPx);
                 var pass = value >= (dd.Nominal - dd.ToleranceMinus) && value <= (dd.Nominal + dd.TolerancePlus);
                 System.Diagnostics.Debug.WriteLine($"[SLD] OK '{dd.Name}': distPx={distPx:F3}, value={value:F3}, nominal={dd.Nominal}, tol=[{dd.Nominal - dd.ToleranceMinus},{dd.Nominal + dd.TolerancePlus}], pass={pass}");
                 __swNode.Stop();

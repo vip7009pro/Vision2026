@@ -35,15 +35,12 @@ public class SystemConfigBackupService : ISystemConfigBackupService
         _oqcScanner = oqcScanner;
     }
 
-    private static string AppSettingsPath => Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "VisionInspectionApp", "global_settings.json");
+    private static string AppSettingsPath => AppStoragePaths.GlobalSettingsFilePath;
+    private static string Vision2026Dir => AppStoragePaths.StandardConfigDirectory;
 
-    private static string Vision2026Dir => Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Vision2026");
-
-    private static string CameraSettingsPath => Path.Combine(Vision2026Dir, "camera_adjust_settings.json");
-    private static string CalibrationMatrixPath => Path.Combine(Vision2026Dir, "global_chessboard_calibration.json");
-    private static string CalibrationSettingsPath => Path.Combine(Vision2026Dir, "global_chessboard_settings.json");
+    private static string CameraSettingsPath => AppStoragePaths.CameraAdjustSettingsFilePath;
+    private static string CalibrationMatrixPath => AppStoragePaths.ChessboardCalibrationFilePath;
+    private static string CalibrationSettingsPath => AppStoragePaths.ChessboardSettingsFilePath;
 
     public async Task<SystemConfigPackage> CreateBackupPackageAsync(SystemConfigBackupOptions? options = null)
     {
@@ -139,9 +136,12 @@ public class SystemConfigBackupService : ISystemConfigBackupService
         {
             try
             {
-                if (File.Exists(CameraSettingsPath))
+                string camPath = File.Exists(CameraSettingsPath)
+                    ? CameraSettingsPath
+                    : Path.Combine(AppStoragePaths.AppBaseDirectory, "camera_adjust_settings.json");
+                if (File.Exists(camPath))
                 {
-                    package.CameraSettingsJson = await File.ReadAllTextAsync(CameraSettingsPath);
+                    package.CameraSettingsJson = await File.ReadAllTextAsync(camPath);
                 }
             }
             catch (Exception ex)
@@ -360,6 +360,15 @@ public class SystemConfigBackupService : ISystemConfigBackupService
                     }
                     string appJson = JsonSerializer.Serialize(package.AppSettings, JsonOptions);
                     await File.WriteAllTextAsync(AppSettingsPath, appJson);
+                    AppStoragePaths.SyncConfigToAppBackup("global_settings.json", appJson);
+                    try
+                    {
+                        string legacyPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "VisionInspectionApp", "global_settings.json");
+                        Directory.CreateDirectory(Path.GetDirectoryName(legacyPath)!);
+                        await File.WriteAllTextAsync(legacyPath, appJson);
+                    }
+                    catch { }
+
                     result.AppSettingsRestored = true;
                     result.Logs.Add("[Cài đặt Ứng dụng] ✅ Đã khôi phục cài đặt chung, bộ điều khiển đèn và OTA.");
                 }
@@ -376,6 +385,14 @@ public class SystemConfigBackupService : ISystemConfigBackupService
                 {
                     if (!Directory.Exists(Vision2026Dir)) Directory.CreateDirectory(Vision2026Dir);
                     await File.WriteAllTextAsync(CameraSettingsPath, package.CameraSettingsJson);
+                    AppStoragePaths.SyncConfigToAppBackup("camera_adjust_settings.json", package.CameraSettingsJson);
+                    try
+                    {
+                        string baseCam = Path.Combine(AppStoragePaths.AppBaseDirectory, "camera_adjust_settings.json");
+                        await File.WriteAllTextAsync(baseCam, package.CameraSettingsJson);
+                    }
+                    catch { }
+
                     result.CameraRestored = true;
                     result.Logs.Add("[Camera] ✅ Đã khôi phục thông số cảm biến Camera.");
                 }

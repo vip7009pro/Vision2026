@@ -31,7 +31,7 @@ public sealed class CameraService : IDisposable
     private readonly object _lastFrameGate = new();
     private Mat? _lastFrame;
 
-    private readonly string _settingsPath = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "camera_adjust_settings.json");
+    private readonly string _settingsPath = VisionInspectionApp.Models.AppStoragePaths.CameraAdjustSettingsFilePath;
 
     // Camera settings properties
     private double _brightness = 0.0;
@@ -1053,9 +1053,33 @@ public sealed class CameraService : IDisposable
     {
         try
         {
+            string? loadPath = null;
             if (System.IO.File.Exists(_settingsPath))
             {
-                var json = System.IO.File.ReadAllText(_settingsPath);
+                loadPath = _settingsPath;
+            }
+            else
+            {
+                // Fallback 1: BaseDirectory
+                string basePath = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "camera_adjust_settings.json");
+                if (System.IO.File.Exists(basePath))
+                {
+                    loadPath = basePath;
+                }
+                else
+                {
+                    // Fallback 2: Thư mục hạt giống
+                    string seedPath = System.IO.Path.Combine(VisionInspectionApp.Models.AppStoragePaths.AppSeedConfigDirectory, "camera_adjust_settings.json");
+                    if (System.IO.File.Exists(seedPath))
+                    {
+                        loadPath = seedPath;
+                    }
+                }
+            }
+
+            if (loadPath != null)
+            {
+                var json = System.IO.File.ReadAllText(loadPath);
                 var settings = System.Text.Json.JsonSerializer.Deserialize<CameraAdjustSettings>(json);
                 if (settings != null)
                 {
@@ -1094,6 +1118,12 @@ public sealed class CameraService : IDisposable
                     _systemParameters.Brightness = _brightness;
                     _systemParameters.Contrast = _contrast;
                     _systemParameters.IsGrayscale = _isGrayscale;
+
+                    // Nếu nạp từ hạt giống hoặc BaseDirectory, lưu ngay vào đường dẫn chuẩn
+                    if (loadPath != _settingsPath)
+                    {
+                        SaveSettings();
+                    }
                     return;
                 }
             }
@@ -1147,7 +1177,20 @@ public sealed class CameraService : IDisposable
                 SavedParameters = _systemParameters.Clone()
             };
             var json = System.Text.Json.JsonSerializer.Serialize(settings, new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
+            
+            // 1. Lưu vào đường dẫn chuẩn %AppData%\Vision2026
             System.IO.File.WriteAllText(_settingsPath, json);
+
+            // 2. Đồng bộ bản sao sang thư mục ứng dụng (configs\system) để phục vụ deploy/release
+            VisionInspectionApp.Models.AppStoragePaths.SyncConfigToAppBackup("camera_adjust_settings.json", json);
+
+            // 3. Lưu thêm bản sao vào BaseDirectory nếu có thể
+            try
+            {
+                string baseFilePath = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "camera_adjust_settings.json");
+                System.IO.File.WriteAllText(baseFilePath, json);
+            }
+            catch { }
         }
         catch { }
     }

@@ -22,10 +22,152 @@ public static class ToolCalibFactorTests
         TestDiameterAndCircleFinderMeasurementExtraction();
         TestValidationAndEdgeCases();
         TestCircleFinderDefinitionSerialization();
+        TestDualAxisCalibrationRectangularPart();
+        TestAngleOrientationDetection();
+        TestDistanceMmArbitraryAngleVector();
+        TestBackwardCompatibilityWhenDualAxisZero();
 
         Console.WriteLine("=======================================================");
-        Console.WriteLine("✅ ALL TOOL CALIB FACTOR TESTS PASSED 100%!");
+        Console.WriteLine("✅ ALL TOOL CALIB FACTOR (1D & 2D) TESTS PASSED 100%!");
         Console.WriteLine("=======================================================\n");
+    }
+
+    private static void TestDualAxisCalibrationRectangularPart()
+    {
+        Console.Write("Testing Dual-Axis (X & Y) Calibration for Rectangular Part... ");
+
+        // BÀI TOÁN THỰC TẾ CỦA KHÁCH HÀNG:
+        // Phôi hình chữ nhật:
+        // - Chiều dài (Phương ngang X): Nominal = 50.0 mm, Tolerance = ±0.5 mm
+        //   Ống kính/Camera chụp được: dx = 500 px, dy = 0 px. => Tỉ lệ thực tế: ppmX = 10.0 px/mm.
+        // - Chiều rộng (Phương dọc Y): Nominal = 20.0 mm, Tolerance = ±0.5 mm
+        //   Do méo quang học ống kính dọc theo trục Y, chụp được: dx = 0 px, dy = 160 px. => Tỉ lệ thực tế: ppmY = 8.0 px/mm.
+
+        // TRƯỜNG HỢP 1: Cơ chế cũ (Chung 1 hệ số calib)
+        // Nếu chọn chiều ngang làm chuẩn: PixelsPerMm = 10.0
+        double oldPpm = 10.0;
+        double oldMeasuredLen = 500.0 / oldPpm; // = 50.0 mm (PASS)
+        double oldMeasuredWid = 160.0 / oldPpm; // = 16.0 mm (NG nghiêm trọng! Nominal 20 ± 0.5)
+        bool oldLenPass = oldMeasuredLen >= 49.5 && oldMeasuredLen <= 50.5;
+        bool oldWidPass = oldMeasuredWid >= 19.5 && oldMeasuredWid <= 20.5;
+
+        if (!oldLenPass) throw new Exception("Expected old length to pass with ppm=10");
+        if (oldWidPass) throw new Exception("Expected old width to FAIL (NG) with 1D calibration");
+
+        // TRƯỜNG HỢP 2: Cơ chế mới (2 trục độc lập X & Y)
+        var config = new VisionConfig
+        {
+            PixelsPerMmX = 10.0,
+            PixelsPerMmY = 8.0,
+            PixelsPerMm = 10.0
+        };
+
+        var pLenA = new Point2d(100, 100);
+        var pLenB = new Point2d(600, 100); // dx = 500, dy = 0 (Chiều ngang)
+
+        var pWidA = new Point2d(100, 100);
+        var pWidB = new Point2d(100, 260); // dx = 0, dy = 160 (Chiều dọc)
+
+        double newMeasuredLen = Geometry2D.DistanceMm(pLenA, pLenB, config.GetEffectivePpmX(), config.GetEffectivePpmY());
+        double newMeasuredWid = Geometry2D.DistanceMm(pWidA, pWidB, config.GetEffectivePpmX(), config.GetEffectivePpmY());
+
+        bool newLenPass = newMeasuredLen >= 49.5 && newMeasuredLen <= 50.5;
+        bool newWidPass = newMeasuredWid >= 19.5 && newWidPassLen(newMeasuredWid);
+
+        static bool newWidPassLen(double w) => w >= 19.5 && w <= 20.5;
+
+        if (Math.Abs(newMeasuredLen - 50.0) > 1e-4) throw new Exception($"Expected new length 50.0 mm, got {newMeasuredLen}");
+        if (Math.Abs(newMeasuredWid - 20.0) > 1e-4) throw new Exception($"Expected new width 20.0 mm, got {newMeasuredWid}");
+        if (!newLenPass || !newWidPass) throw new Exception("Both Length and Width MUST PASS with 2-axis calibration!");
+
+        // Kiểm tra thông qua DistanceCalculator
+        var distCalc = new DistanceCalculator();
+        var specLen = new LineDistance { Name = "Length", PointA = "P1", PointB = "P2", Nominal = 50.0, TolerancePlus = 0.5, ToleranceMinus = 0.5 };
+        var specWid = new LineDistance { Name = "Width", PointA = "P1", PointB = "P3", Nominal = 20.0, TolerancePlus = 0.5, ToleranceMinus = 0.5 };
+
+        var resLen = distCalc.CheckDistance(specLen, pLenA, pLenB, config.GetEffectivePpmX(), config.GetEffectivePpmY());
+        var resWid = distCalc.CheckDistance(specWid, pWidA, pWidB, config.GetEffectivePpmX(), config.GetEffectivePpmY());
+
+        if (!resLen.Pass) throw new Exception($"resLen failed: Value={resLen.Value}");
+        if (!resWid.Pass) throw new Exception($"resWid failed: Value={resWid.Value}");
+
+        Console.WriteLine("PASSED");
+    }
+
+    private static void TestAngleOrientationDetection()
+    {
+        Console.Write("Testing angle & orientation detection for axis suggestion... ");
+
+        static double CalcAngle(Point2d p1, Point2d p2)
+        {
+            var dx = Math.Abs(p2.X - p1.X);
+            var dy = Math.Abs(p2.Y - p1.Y);
+            if (dx < 1e-9 && dy < 1e-9) return 0.0;
+            return Math.Atan2(dy, dx) * 180.0 / Math.PI;
+        }
+
+        // 1. Đoạn ngang: angle = 0 deg -> Trục X
+        var aHorizontal = CalcAngle(new Point2d(0, 0), new Point2d(200, 0));
+        if (Math.Abs(aHorizontal - 0.0) > 1e-4) throw new Exception($"Expected 0 deg, got {aHorizontal}");
+        if (aHorizontal >= 45.0) throw new Exception("Horizontal should be < 45 deg (Axis X)");
+
+        // 2. Đoạn nghiêng nhẹ: dx=100, dy=15 -> angle ~ 8.53 deg -> Trục X
+        var aSlight = CalcAngle(new Point2d(0, 0), new Point2d(100, 15));
+        if (aSlight >= 45.0) throw new Exception("Slight angle should suggest Axis X");
+
+        // 3. Đoạn thẳng đứng: angle = 90 deg -> Trục Y
+        var aVertical = CalcAngle(new Point2d(0, 0), new Point2d(0, 200));
+        if (Math.Abs(aVertical - 90.0) > 1e-4) throw new Exception($"Expected 90 deg, got {aVertical}");
+        if (aVertical < 45.0) throw new Exception("Vertical should be >= 45 deg (Axis Y)");
+
+        // 4. Đoạn nghiêng dốc: dx=20, dy=100 -> angle ~ 78.69 deg -> Trục Y
+        var aSteep = CalcAngle(new Point2d(0, 0), new Point2d(20, 100));
+        if (aSteep < 45.0) throw new Exception("Steep angle should suggest Axis Y");
+
+        Console.WriteLine("PASSED");
+    }
+
+    private static void TestDistanceMmArbitraryAngleVector()
+    {
+        Console.Write("Testing arbitrary angle 2D vector Euclidean conversion... ");
+
+        // Vector xiên: A(100, 100), B(400, 500)
+        // dx = 300 px, dy = 400 px
+        // ppmX = 10.0 px/mm, ppmY = 8.0 px/mm
+        // dxMm = 300 / 10 = 30 mm
+        // dyMm = 400 / 8 = 50 mm
+        // distMm = sqrt(30^2 + 50^2) = sqrt(900 + 2500) = sqrt(3400) ~ 58.3095189 mm
+        var a = new Point2d(100, 100);
+        var b = new Point2d(400, 500);
+        double dist = Geometry2D.DistanceMm(a, b, 10.0, 8.0);
+        double expected = Math.Sqrt(30.0 * 30.0 + 50.0 * 50.0);
+
+        if (Math.Abs(dist - expected) > 1e-4)
+            throw new Exception($"Expected {expected}, got {dist}");
+
+        Console.WriteLine("PASSED");
+    }
+
+    private static void TestBackwardCompatibilityWhenDualAxisZero()
+    {
+        Console.Write("Testing backward compatibility when dual axis is zero/unset... ");
+
+        var config = new VisionConfig
+        {
+            PixelsPerMm = 12.5,
+            PixelsPerMmX = 0.0,
+            PixelsPerMmY = 0.0
+        };
+
+        if (Math.Abs(config.GetEffectivePpmX() - 12.5) > 1e-4) throw new Exception("Expected fallback to PixelsPerMm for X");
+        if (Math.Abs(config.GetEffectivePpmY() - 12.5) > 1e-4) throw new Exception("Expected fallback to PixelsPerMm for Y");
+
+        var a = new Point2d(0, 0);
+        var b = new Point2d(125, 0);
+        double dist = Geometry2D.DistanceMm(a, b, config.GetEffectivePpmX(), config.GetEffectivePpmY());
+        if (Math.Abs(dist - 10.0) > 1e-4) throw new Exception($"Expected 10.0 mm with legacy PixelsPerMm, got {dist}");
+
+        Console.WriteLine("PASSED");
     }
 
     private static void TestDistanceMeasurementExtraction()

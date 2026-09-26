@@ -279,14 +279,34 @@ public partial class OtaUpdateViewModel : ObservableObject
         RequestClose?.Invoke();
     }
 
+    public void SaveAllSettings()
+    {
+        try
+        {
+            // 1. Cấu hình OTA Client
+            _settingsService.Settings.Ota.UpdateServerUrl = ServerUrl;
+            _settingsService.Settings.Ota.UpdateSourceType = SelectedSourceType;
+            _settingsService.Settings.Ota.AutoCheckOnStartup = AutoCheckOnStartup;
+
+            // 2. Cấu hình OTA Publisher
+            _settingsService.Settings.Ota.PublishServerUploadUrl = PublishServerUrl;
+            _settingsService.Settings.Ota.PublishServerStorageFolder = PublishServerStorageFolder;
+            _settingsService.Settings.Ota.PublishApiToken = PublishApiToken;
+            _settingsService.Settings.Ota.PublishSourceDirectory = PublishSourceDirectory;
+            _settingsService.Settings.Ota.PublishAutoUpdateCsproj = PublishAutoUpdateCsproj;
+            _settingsService.Settings.Ota.PublishAutoBuildProject = PublishAutoBuildProject;
+            _settingsService.Settings.Ota.PublishReleaseChannel = PublishReleaseChannel;
+
+            _settingsService.Save();
+        }
+        catch { }
+    }
+
     [RelayCommand]
     public void SaveSettings()
     {
-        _settingsService.Settings.Ota.UpdateServerUrl = ServerUrl;
-        _settingsService.Settings.Ota.UpdateSourceType = SelectedSourceType;
-        _settingsService.Settings.Ota.AutoCheckOnStartup = AutoCheckOnStartup;
-        _settingsService.Save();
-        StatusMessage = "Đã lưu cài đặt OTA Update thành công.";
+        SaveAllSettings();
+        StatusMessage = "✅ Đã lưu toàn bộ cài đặt OTA & Máy chủ phát hành thành công.";
         StatusColorHex = "#4ADE80";
     }
 
@@ -358,6 +378,7 @@ public partial class OtaUpdateViewModel : ObservableObject
     [RelayCommand]
     public void Close()
     {
+        SaveAllSettings();
         RequestClose?.Invoke();
     }
 }

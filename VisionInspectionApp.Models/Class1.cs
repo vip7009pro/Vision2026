@@ -9,6 +9,13 @@ public enum LineLineDistanceMode
     ExtendToOtherEndpoints = 4
 }
 
+public enum CalibAxisTarget
+{
+    AxisX = 0,
+    AxisY = 1,
+    BothAxes = 2
+}
+
 public sealed class EdgePairDetectDefinition
 {
     public string Name { get; set; } = string.Empty;
@@ -328,6 +335,26 @@ public sealed class VisionConfig
     public string ProductName { get; set; } = string.Empty;
 
     public double PixelsPerMm { get; set; } = 1.0;
+
+    /// <summary>
+    /// Tỉ lệ pixel/mm theo trục X (chiều ngang). Nếu bằng 0 hoặc chưa cài đặt, sẽ lấy theo PixelsPerMm.
+    /// </summary>
+    public double PixelsPerMmX { get; set; } = 0.0;
+
+    /// <summary>
+    /// Tỉ lệ pixel/mm theo trục Y (chiều dọc). Nếu bằng 0 hoặc chưa cài đặt, sẽ lấy theo PixelsPerMm.
+    /// </summary>
+    public double PixelsPerMmY { get; set; } = 0.0;
+
+    /// <summary>
+    /// Lấy hệ số hiệu chuẩn hiệu dụng cho trục X.
+    /// </summary>
+    public double GetEffectivePpmX() => PixelsPerMmX > 0.0001 ? PixelsPerMmX : (PixelsPerMm > 0.0001 ? PixelsPerMm : 1.0);
+
+    /// <summary>
+    /// Lấy hệ số hiệu chuẩn hiệu dụng cho trục Y.
+    /// </summary>
+    public double GetEffectivePpmY() => PixelsPerMmY > 0.0001 ? PixelsPerMmY : (PixelsPerMm > 0.0001 ? PixelsPerMm : 1.0);
 
     /// <summary>
     /// Maximum number of CPU/native-memory intensive vision tools that may execute at once.

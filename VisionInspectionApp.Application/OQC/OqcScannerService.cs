@@ -22,11 +22,9 @@ public sealed class OqcScannerService : IOqcScannerService
 
     public OqcScannerService()
     {
-        var appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
-        var dir = Path.Combine(appData, "Vision2026");
-        Directory.CreateDirectory(dir);
-        _configFilePath = Path.Combine(dir, "oqc_scanner_config.json");
-        _historyFilePath = Path.Combine(dir, "oqc_scan_history.json");
+        AppStoragePaths.EnsureStorageStructureAndMigrate();
+        _configFilePath = AppStoragePaths.OqcScannerConfigFilePath;
+        _historyFilePath = AppStoragePaths.OqcScanHistoryFilePath;
 
         LoadConfig();
     }
@@ -35,9 +33,33 @@ public sealed class OqcScannerService : IOqcScannerService
     {
         try
         {
+            string? loadPath = null;
             if (File.Exists(_configFilePath))
             {
-                var json = File.ReadAllText(_configFilePath);
+                loadPath = _configFilePath;
+            }
+            else
+            {
+                // Fallback 1: Tìm trong thư mục hạt giống configs\system
+                string seedInConfigs = Path.Combine(AppStoragePaths.AppSeedConfigDirectory, "oqc_scanner_config.json");
+                if (File.Exists(seedInConfigs))
+                {
+                    loadPath = seedInConfigs;
+                }
+                else
+                {
+                    // Fallback 2: Tìm ở thư mục gốc BaseDirectory
+                    string seedInBase = Path.Combine(AppStoragePaths.AppBaseDirectory, "oqc_scanner_config.json");
+                    if (File.Exists(seedInBase))
+                    {
+                        loadPath = seedInBase;
+                    }
+                }
+            }
+
+            if (loadPath != null)
+            {
+                var json = File.ReadAllText(loadPath);
                 var loaded = JsonSerializer.Deserialize<OqcScannerConfig>(json, new JsonSerializerOptions
                 {
                     PropertyNameCaseInsensitive = true
@@ -45,6 +67,12 @@ public sealed class OqcScannerService : IOqcScannerService
                 if (loaded != null)
                 {
                     Config = loaded;
+
+                    // Nếu nạp từ hạt giống fallback, lưu ngay vào đường dẫn chuẩn
+                    if (loadPath != _configFilePath)
+                    {
+                        SaveConfig(Config);
+                    }
                     return;
                 }
             }
@@ -65,7 +93,12 @@ public sealed class OqcScannerService : IOqcScannerService
         try
         {
             var json = JsonSerializer.Serialize(Config, new JsonSerializerOptions { WriteIndented = true });
+            
+            // 1. Lưu vào thư mục chuẩn %AppData%\Vision2026
             File.WriteAllText(_configFilePath, json);
+
+            // 2. Đồng bộ bản sao sang thư mục ứng dụng (configs\system) để phục vụ deploy/release
+            AppStoragePaths.SyncConfigToAppBackup("oqc_scanner_config.json", json);
         }
         catch (Exception ex)
         {

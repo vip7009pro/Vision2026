@@ -5008,27 +5008,34 @@
 Ô màu cam = thời gian đo ở tầng UI, NẰM NGOÀI tổng." />
                                     </Grid>
 
-                                    <ItemsControl ItemsSource="{Binding TimingBreakdown}">
-                                        <ItemsControl.ItemsPanel>
-                                            <ItemsPanelTemplate>
-                                                <WrapPanel Orientation="Horizontal" />
-                                            </ItemsPanelTemplate>
-                                        </ItemsControl.ItemsPanel>
-                                        <ItemsControl.ItemTemplate>
-                                            <DataTemplate>
-                                                <Border Margin="0,0,6,6" Padding="8,4" MinWidth="62" CornerRadius="4"
-                                                        Background="{DynamicResource PanelBackgroundBrush}"
-                                                        BorderBrush="{Binding ChipBrush}" BorderThickness="1.2"
-                                                        ToolTip="{Binding ToolTip}">
-                                                    <StackPanel>
-                                                        <TextBlock Text="{Binding Label}" Style="{StaticResource DashChipLabelStyle}" />
-                                                        <TextBlock Text="{Binding ValueText}" Style="{StaticResource DashChipValueStyle}"
-                                                                   Foreground="{Binding ChipBrush}" />
-                                                    </StackPanel>
-                                                </Border>
-                                            </DataTemplate>
-                                        </ItemsControl.ItemTemplate>
-                                    </ItemsControl>
+                                    <ScrollViewer x:Name="TimingBreakdownScrollViewer"
+                                                  HorizontalScrollBarVisibility="Auto"
+                                                  VerticalScrollBarVisibility="Disabled"
+                                                  PreviewMouseWheel="TimingBreakdownScrollViewer_PreviewMouseWheel"
+                                                  Margin="0,0,0,4"
+                                                  Padding="0,0,0,2">
+                                        <ItemsControl ItemsSource="{Binding TimingBreakdown}">
+                                            <ItemsControl.ItemsPanel>
+                                                <ItemsPanelTemplate>
+                                                    <StackPanel Orientation="Horizontal" />
+                                                </ItemsPanelTemplate>
+                                            </ItemsControl.ItemsPanel>
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate>
+                                                    <Border Margin="0,0,6,2" Padding="8,4" MinWidth="62" CornerRadius="4"
+                                                            Background="{DynamicResource PanelBackgroundBrush}"
+                                                            BorderBrush="{Binding ChipBrush}" BorderThickness="1.2"
+                                                            ToolTip="{Binding ToolTip}">
+                                                        <StackPanel>
+                                                            <TextBlock Text="{Binding Label}" Style="{StaticResource DashChipLabelStyle}" />
+                                                            <TextBlock Text="{Binding ValueText}" Style="{StaticResource DashChipValueStyle}"
+                                                                       Foreground="{Binding ChipBrush}" />
+                                                        </StackPanel>
+                                                    </Border>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                    </ScrollViewer>
 
                                     <TextBlock Text="🟠 Ô màu cam = thời gian đo ở tầng UI (NẰM NGOÀI tổng). Các ô còn lại đều nằm trong TỔNG."
                                                FontSize="9.5" Foreground="{DynamicResource TextMutedBrush}"

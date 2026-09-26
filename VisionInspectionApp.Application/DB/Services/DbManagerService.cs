@@ -30,9 +30,8 @@ public class DbManagerService : IDbManagerService
         }
         else
         {
-            string appDataDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Vision2026");
-            Directory.CreateDirectory(appDataDir);
-            _globalConfigFilePath = Path.Combine(appDataDir, "databases_config.json");
+            AppStoragePaths.EnsureStorageStructureAndMigrate();
+            _globalConfigFilePath = AppStoragePaths.DatabasesConfigFilePath;
         }
 
         LoadFromDisk();
@@ -42,9 +41,33 @@ public class DbManagerService : IDbManagerService
     {
         try
         {
+            string? loadPath = null;
             if (File.Exists(_globalConfigFilePath))
             {
-                string json = File.ReadAllText(_globalConfigFilePath);
+                loadPath = _globalConfigFilePath;
+            }
+            else
+            {
+                // Fallback 1: Tìm trong thư mục hạt giống configs\system
+                string seedInConfigs = Path.Combine(AppStoragePaths.AppSeedConfigDirectory, "databases_config.json");
+                if (File.Exists(seedInConfigs))
+                {
+                    loadPath = seedInConfigs;
+                }
+                else
+                {
+                    // Fallback 2: Tìm ở thư mục gốc BaseDirectory
+                    string seedInBase = Path.Combine(AppStoragePaths.AppBaseDirectory, "databases_config.json");
+                    if (File.Exists(seedInBase))
+                    {
+                        loadPath = seedInBase;
+                    }
+                }
+            }
+
+            if (loadPath != null)
+            {
+                string json = File.ReadAllText(loadPath);
                 var list = JsonSerializer.Deserialize<List<DbModel>>(json);
                 if (list != null && list.Count > 0)
                 {
@@ -55,6 +78,12 @@ public class DbManagerService : IDbManagerService
                         {
                             _databases[db.Id] = db;
                         }
+                    }
+
+                    // Nếu nạp từ hạt giống fallback, lưu ngay vào đường dẫn chuẩn
+                    if (loadPath != _globalConfigFilePath)
+                    {
+                        SaveToDisk();
                     }
                     return;
                 }
@@ -92,7 +121,12 @@ public class DbManagerService : IDbManagerService
             var list = _databases.Values.ToList();
             var options = new JsonSerializerOptions { WriteIndented = true };
             string json = JsonSerializer.Serialize(list, options);
+
+            // 1. Lưu vào thư mục chuẩn %AppData%\Vision2026
             File.WriteAllText(_globalConfigFilePath, json);
+
+            // 2. Đồng bộ bản sao sang thư mục ứng dụng (configs\system) để phục vụ deploy/release
+            AppStoragePaths.SyncConfigToAppBackup("databases_config.json", json);
         }
         catch (Exception ex)
         {
