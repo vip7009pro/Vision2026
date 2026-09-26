@@ -7,18 +7,21 @@ Hỗ trợ Camera GigE/USB3/USB/RTSP, nạp ảnh tệp/thư mục, nạp bản 
 ## 2. Trạng thái mã nguồn gần nhất
 - **Phiên bản hiện tại**: .NET 8 WPF, x64/x86 Multi-targeting, C# 12.
 - **Biên dịch**: 0 Errors toàn solution (`VisionInspectionApp.slnx`) cả Debug lẫn Release.
-- **Kiểm thử tự động**: PASSED 100% (6/6 tests Release Config Persistence & Seeding, 10/10 Calib tests).
+- **Kiểm thử tự động**: PASSED 100% (8/8 tests PDF Source, 6/6 tests Release Config, 10/10 Calib tests).
 
-## 3. Khắc Phục Triệt Để Mất Cấu Hình Khi Build & Triển Khai Release (Task 374)
-- **Vấn đề giải quyết**: Khi build Release hoặc chạy bản Release, ứng dụng bị mất trắng cấu hình OTA, cấu hình OQC Scanner & Database, Camera, PLC, Recent Jobs và Jobs.
-- **Nguyên nhân**: Phân mảnh thư mục lưu trữ (`%AppData%\VisionInspectionApp\`, `%AppData%\Vision2026\`, `%AppData%\CMS_VINA_Vision\`, `BaseDir\`), thiếu seeding dự phòng khi AppData rỗng khiến service khởi tạo default ghi đè, thư mục output Release thiếu `jobs\` và `configs\`, OtaUpdateViewModel thiếu lưu trường Publisher và thiếu trigger lưu khi đóng dialog.
-- **Giải pháp triển khai**:
-  - `AppStoragePaths.cs`: Thống nhất mọi cấu hình vào `%AppData%\Vision2026\`, tự động di chuyển (Auto-migration) bảo toàn dữ liệu cũ từ mọi thư mục, và nạp hạt giống (Application Seeding) từ `BaseDirectory\configs\system\` khi chạy trên máy mới.
-  - Cơ chế đồng bộ 2 chiều (`SyncConfigToAppBackup`): Mọi thao tác lưu cấu hình vào AppData đều tự động sao lưu dự phòng vào `BaseDirectory\configs\system\`.
-  - MSBuild Target `SyncReleaseConfigurations`: Tự động đồng bộ toàn bộ file cấu hình JSON, thư mục `configs/` và thư mục `jobs/` vào `bin\Release\` và `bin\x64\Release\` sau mỗi lần build.
-  - `OtaUpdateViewModel.SaveAllSettings()` & `OtaUpdateDialog.Closing`: Bổ sung lưu toàn diện cả Receiver và Publisher, tự động lưu khi bấm nút [X] đóng cửa sổ.
+## 3. Thao Tác Kéo Chuột Trực Tiếp Trên Canvas Để Pan PDF (Task 375)
+- **Tính năng mới**: Trong tab Tool Editor, ở tool `ImageSource` với nguồn bản vẽ kỹ thuật PDF, người dùng có thể kéo chuột trái trực tiếp trên Canvas xem trước (`PreviewImageViewer`) để dịch chuyển (Pan) bản vẽ vào đúng vị trí mong muốn trên khung hình cảm biến Camera.
+- **Hiệu năng 60 FPS in-memory**:
+  - `IPdfDocumentService.RenderRotatedPage` và `PlacePageOnCameraCanvas`: Trong suốt quá trình rê chuột, chỉ thực hiện phép ghép Rect OpenCV in-memory (<1ms), không gọi lại PDFium và không ghi file đĩa PNG liên tục.
+  - Cập nhật tức thời số Offset X và Y trong bảng thuộc tính thời gian thực.
+  - Khi nhả chuột (MouseUp): Tự động chốt vị trí, kết xuất ảnh chuẩn tỉ lệ lưu đĩa và nạp Teach cho toàn Job.
+  - Phím `Escape`: Hủy thao tác kéo và hoàn trả lại vị trí offset ban đầu.
+- **Giao diện & Cử chỉ**:
+  - `ImageViewerControl`: Hỗ trợ `EnablePdfPan`, `PdfPanChangedCommand`, con trỏ `SizeAll` / `Hand` và hiển thị HUD hướng dẫn trên `PART_InfoText`.
+  - Nút ToggleButton `🖐️ Kéo Pan` trong panel thuộc tính Pan và `🖐️ Pan PDF` trên thanh công cụ xem trước Preview Header.
 
 ## 4. Các sự kiện & thay đổi gần đây
+- Task 375: Kéo chuột trực tiếp trên Canvas xem trước để Pan vùng hiển thị PDF (60 FPS in-memory, HUD, Esc cancel).
 - Task 374: Khắc phục triệt để mất cấu hình OTA, OQC Scanner & Database khi build Release (Kiến trúc 2 tầng AppStoragePaths & MSBuild Sync).
 - Task 373: Dải ô vuông Timing Breakdown nằm gọn trên 1 hàng ngang có thể cuộn ngang mượt mà bằng thanh cuộn hoặc con lăn chuột.
 - Task 372: Nâng cấp toàn diện hệ thống Calib sang cơ chế 2 trục độc lập ($X$ và $Y$), giải quyết triệt để lỗi đo phôi chữ nhật.

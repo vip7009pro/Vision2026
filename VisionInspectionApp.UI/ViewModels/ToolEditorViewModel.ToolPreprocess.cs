@@ -470,6 +470,8 @@ namespace VisionInspectionApp.UI.ViewModels
                 OnPropertyChanged(nameof(ImageSource_IsCamera));
                 OnPropertyChanged(nameof(ImageSource_IsUrl));
                 OnPropertyChanged(nameof(ImageSource_IsPdf));
+                OnPropertyChanged(nameof(ImageSource_IsPdfPanActive));
+                OnPropertyChanged(nameof(ImageSource_PdfIsPanDragEnabled));
                 OnPropertyChanged(nameof(ImageSource_IsIndustrialCamera));
                 OnPropertyChanged(nameof(ImageSource_IsTimerDriven));
                 OnPropertyChanged(nameof(ImageSource_IsIntervalVisible));
@@ -488,6 +490,21 @@ namespace VisionInspectionApp.UI.ViewModels
         public bool ImageSource_IsCamera => ImageSource_SourceType == ImageSourceType.Camera;
         public bool ImageSource_IsUrl => ImageSource_SourceType == ImageSourceType.Url;
         public bool ImageSource_IsPdf => ImageSource_SourceType == ImageSourceType.Pdf;
+
+        private bool _imageSource_PdfIsPanDragEnabled = true;
+        public bool ImageSource_PdfIsPanDragEnabled
+        {
+            get => _imageSource_PdfIsPanDragEnabled;
+            set
+            {
+                if (_imageSource_PdfIsPanDragEnabled == value) return;
+                _imageSource_PdfIsPanDragEnabled = value;
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(ImageSource_IsPdfPanActive));
+            }
+        }
+
+        public bool ImageSource_IsPdfPanActive => ImageSource_IsPdf && ImageSource_PdfIsPanDragEnabled;
 
         public Array AvailableImageSourceTriggerModes => Enum.GetValues(typeof(ImageSourceTriggerMode));
 
@@ -1211,6 +1228,101 @@ namespace VisionInspectionApp.UI.ViewModels
             }
         }
 
+        private bool _isPdfDraggingVm;
+        private int _pdfDragStartOffsetX;
+        private int _pdfDragStartOffsetY;
+        private OpenCvSharp.Mat? _cachedPdfRotatedPageMat;
+
+        /// <summary>
+        /// Xử lý thao tác kéo chuột trực tiếp trên Canvas xem trước để Pan vùng hiển thị PDF.
+        /// </summary>
+        public void OnImageSourcePdfPanDrag(Controls.PdfPanDragInfo? info)
+        {
+            if (info == null) return;
+            var def = SelectedImageSourceDef();
+            if (def == null || string.IsNullOrWhiteSpace(def.PdfPath) || !File.Exists(def.PdfPath)) return;
+
+            if (info.IsCancelled)
+            {
+                if (_isPdfDraggingVm)
+                {
+                    _isPdfDraggingVm = false;
+                    _cachedPdfRotatedPageMat?.Dispose();
+                    _cachedPdfRotatedPageMat = null;
+                    ImageSource_PdfCanvasOffsetX = _pdfDragStartOffsetX;
+                    ImageSource_PdfCanvasOffsetY = _pdfDragStartOffsetY;
+                    ImageSource_ConvertPdfToImage();
+                    StatusBarText = "❌ Đã hủy thao tác kéo chuột Pan bản vẽ PDF.";
+                }
+                return;
+            }
+
+            if (!_isPdfDraggingVm)
+            {
+                _isPdfDraggingVm = true;
+                _pdfDragStartOffsetX = ImageSource_PdfCanvasOffsetX;
+                _pdfDragStartOffsetY = ImageSource_PdfCanvasOffsetY;
+                try
+                {
+                    _cachedPdfRotatedPageMat?.Dispose();
+                    _cachedPdfRotatedPageMat = _pdfDocumentService.RenderRotatedPage(
+                        def.PdfPath,
+                        Math.Max(1, def.PdfPageNumber),
+                        ImageSource_PdfPixelsPerMm,
+                        def.PdfRotation);
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"[PDF Pan Drag] Lỗi chuẩn bị trang xoay: {ex.Message}");
+                    _cachedPdfRotatedPageMat = null;
+                }
+            }
+
+            int newX = _pdfDragStartOffsetX + info.DeltaX;
+            int newY = _pdfDragStartOffsetY + info.DeltaY;
+
+            ImageSource_PdfCanvasOffsetX = newX;
+            ImageSource_PdfCanvasOffsetY = newY;
+
+            if (info.IsCompleted)
+            {
+                _isPdfDraggingVm = false;
+                _cachedPdfRotatedPageMat?.Dispose();
+                _cachedPdfRotatedPageMat = null;
+
+                ImageSource_ConvertPdfToImage();
+                StatusBarText = $"✅ Đã Pan bản vẽ PDF thành công: X = {newX:+0;-0;0}, Y = {newY:+0;-0;0} (ΔX: {info.DeltaX:+0;-0;0}, ΔY: {info.DeltaY:+0;-0;0})";
+                return;
+            }
+
+            // Live in-memory preview during drag (siêu mượt 60 FPS, không ghi đĩa)
+            if (_cachedPdfRotatedPageMat != null && !_cachedPdfRotatedPageMat.IsDisposed && !_cachedPdfRotatedPageMat.Empty())
+            {
+                try
+                {
+                    int camW = def.PdfCameraWidth > 0 ? def.PdfCameraWidth : 5472;
+                    int camH = def.PdfCameraHeight > 0 ? def.PdfCameraHeight : 3648;
+                    string align = string.IsNullOrWhiteSpace(def.PdfCanvasAlignment) ? "Center" : def.PdfCanvasAlignment;
+
+                    using var liveCanvas = _pdfDocumentService.PlacePageOnCameraCanvas(
+                        _cachedPdfRotatedPageMat,
+                        camW,
+                        camH,
+                        align,
+                        newX,
+                        newY);
+
+                    SelectedNodePreviewImage = liveCanvas.ToBitmapSourceForDisplay();
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"[PDF Pan Drag] Lỗi live canvas: {ex.Message}");
+                }
+            }
+
+            StatusBarText = $"🖐️ Đang kéo Pan bản vẽ PDF: X = {newX:+0;-0;0}, Y = {newY:+0;-0;0} (ΔX: {info.DeltaX:+0;-0;0}, ΔY: {info.DeltaY:+0;-0;0}) — Thả chuột để áp dụng, nhấn Esc để hủy";
+        }
+
         public string ImageSource_PdfOpticalInfoText
         {
             get
@@ -1642,6 +1754,7 @@ namespace VisionInspectionApp.UI.ViewModels
         public ICommand ImageSource_PdfPanLeftCommand { get; }
         public ICommand ImageSource_PdfPanRightCommand { get; }
         public ICommand ImageSource_PdfPanResetCommand { get; }
+        public ICommand ImageSource_PdfPanDragCommand { get; }
         public ICommand ImageSource_OpenJobCameraSettingsCommand { get; }
         public ICommand ImageSource_ApplyLightingToDeviceCommand { get; }
         public ICommand ImageSource_ReadLightingFromDeviceCommand { get; }

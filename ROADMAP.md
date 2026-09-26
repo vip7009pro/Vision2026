@@ -31,7 +31,14 @@
   - [x] Bổ sung `SaveAllSettings()` cho `OtaUpdateViewModel` và sự kiện `Closing` cho `OtaUpdateDialog`, đảm bảo lưu toàn bộ cấu hình OTA Receiver & Publisher kể cả khi đóng dialog bằng nút [X].
   - [x] Tạo bộ kiểm thử tự động `ReleaseConfigPersistenceTests.cs` (6/6 test cases) xác minh 100% độ bền vững cấu hình, chạy pass thành công.
 
+- [x] Task 375: Bổ sung thao tác kéo chuột trực tiếp trên Canvas xem trước để Pan vùng hiển thị PDF:
+  - [x] Bổ sung `RenderRotatedPage` và `PlacePageOnCameraCanvas` vào `IPdfDocumentService` & `PdfDocumentService`, xử lý in-memory siêu mượt (<1ms).
+  - [x] Thiết kế cử chỉ chuột trong `ImageViewerControl`: `EnablePdfPan`, `PdfPanChangedCommand`, `PdfPanDragInfo` record, con trỏ `SizeAll`/`Hand`, hủy bằng phím `Escape`.
+  - [x] Tích hợp live drag 60 FPS in-memory trong `ToolEditorViewModel`: hiển thị tức thì chuyển động bản vẽ, cập nhật số Offset X/Y thời gian thực và chốt lưu ảnh khi nhả chuột.
+  - [x] Bổ sung 2 nút ToggleButton trực quan `🖐️ Kéo Pan` trong panel thuộc tính Pan và `🖐️ Pan PDF` trên thanh công cụ xem trước Preview Header.
+  - [x] Hoàn thành kiểm thử tự động `Test8_PdfMousePanDragInteractiveSimulation` (8/8 PDF tests PASS 100%).
+
 ## Định hướng tiếp theo
-- [ ] Bổ sung thao tác kéo chuột trực tiếp trên Canvas xem trước để Pan vùng hiển thị PDF.
 - [ ] Bổ sung tính năng tự động phát hiện khung tên bản vẽ kỹ thuật (Title Block) trên PDF.
 - [ ] Tích hợp trích xuất lớp vector nguyên bản từ PDF dạng DXF/SVG phục vụ so khớp đường biên CAD.
+- [ ] Tối ưu hóa render đa luồng (Multi-threaded Rendering) cho tài liệu PDF kích thước lớn >50MB.

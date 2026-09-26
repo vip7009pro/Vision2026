@@ -24,6 +24,12 @@ class Program
             return;
         }
 
+        if (args.Length > 0 && args[0].Equals("pdf", StringComparison.OrdinalIgnoreCase))
+        {
+            PdfSourceTests.RunAllTests();
+            return;
+        }
+
         HikApiTest.PrintApi();
         CameraTest.TestCameraParametersJobSerialization();
         CameraTest.TestNativeMatPoolAndMetadata();

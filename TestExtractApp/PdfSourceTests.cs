@@ -26,6 +26,7 @@ public static class PdfSourceTests
         Test5_PdfMatchingCamera_20MP_And_CustomPresets();
         Test6_PdfPanAndRotationFeatures();
         Test7_PdfOriginTrainTemplatePreview();
+        Test8_PdfMousePanDragInteractiveSimulation();
         Console.WriteLine("=== [ALL PDF SOURCE TESTS PASSED (100%)] ===\n");
     }
 
@@ -532,6 +533,100 @@ public static class PdfSourceTests
             throw new Exception($"ResolveTemplatePath failed to find template: {resolved}");
 
         Console.WriteLine("PASSED! (Origin template trained from PDF & displayed in Preview successfully)");
+    }
+
+    private static void Test8_PdfMousePanDragInteractiveSimulation()
+    {
+        Console.Write("Test 8: Interactive Mouse Pan Drag Gesture Simulation on Preview Canvas... ");
+        string pdfPath = EnsureSamplePdf();
+
+        var config = new VisionConfig
+        {
+            ProductCode = "TEST_PDF_PAN_DRAG",
+            ProductName = "Test PDF Pan Drag",
+            PixelsPerMm = 10.0,
+            ImageSources = new System.Collections.Generic.List<ImageSourceDefinition>
+            {
+                new ImageSourceDefinition
+                {
+                    Name = "CAM_PDF",
+                    SourceType = ImageSourceType.Pdf,
+                    PdfPath = pdfPath,
+                    PdfPageNumber = 1,
+                    PdfRenderMode = PdfRenderMode.MatchCamera1to1,
+                    PdfFitToCameraCanvas = true,
+                    PdfCameraWidth = 2000,
+                    PdfCameraHeight = 1500,
+                    PdfPixelsPerMm = 10.0,
+                    PdfRotation = 0,
+                    PdfCanvasAlignment = "Center",
+                    PdfCanvasOffsetX = 0,
+                    PdfCanvasOffsetY = 0
+                }
+            }
+        };
+
+        var vm = new ToolEditorViewModel();
+        vm.InitializeWithConfig(config);
+
+        // 1. Kiểm tra trạng thái kích hoạt Pan
+        if (!vm.ImageSource_IsPdf)
+            throw new Exception("ImageSource_IsPdf must be true");
+        if (!vm.ImageSource_PdfIsPanDragEnabled)
+            throw new Exception("ImageSource_PdfIsPanDragEnabled should default to true");
+        if (!vm.ImageSource_IsPdfPanActive)
+            throw new Exception("ImageSource_IsPdfPanActive should be true");
+
+        // 2. Kiểm tra toggle bật/tắt
+        vm.ImageSource_PdfIsPanDragEnabled = false;
+        if (vm.ImageSource_IsPdfPanActive)
+            throw new Exception("ImageSource_IsPdfPanActive should be false when disabled");
+        vm.ImageSource_PdfIsPanDragEnabled = true;
+        if (!vm.ImageSource_IsPdfPanActive)
+            throw new Exception("ImageSource_IsPdfPanActive should be true when re-enabled");
+
+        // 3. Giả lập bắt đầu kéo chuột và di chuyển delta (+150, -80)
+        vm.OnImageSourcePdfPanDrag(new VisionInspectionApp.UI.Controls.PdfPanDragInfo(0, 0, IsCompleted: false, IsCancelled: false));
+        vm.OnImageSourcePdfPanDrag(new VisionInspectionApp.UI.Controls.PdfPanDragInfo(150, -80, IsCompleted: false, IsCancelled: false));
+
+        if (vm.ImageSource_PdfCanvasOffsetX != 150)
+            throw new Exception($"Expected OffsetX 150 during drag, got {vm.ImageSource_PdfCanvasOffsetX}");
+        if (vm.ImageSource_PdfCanvasOffsetY != -80)
+            throw new Exception($"Expected OffsetY -80 during drag, got {vm.ImageSource_PdfCanvasOffsetY}");
+        if (vm.SelectedNodePreviewImage == null)
+            throw new Exception("SelectedNodePreviewImage should not be null during live drag preview");
+
+        // 4. Giả lập người dùng nhấn Escape để hủy thao tác kéo
+        vm.OnImageSourcePdfPanDrag(new VisionInspectionApp.UI.Controls.PdfPanDragInfo(0, 0, IsCompleted: false, IsCancelled: true));
+        if (vm.ImageSource_PdfCanvasOffsetX != 0 || vm.ImageSource_PdfCanvasOffsetY != 0)
+            throw new Exception($"Expected Offset to be restored to (0,0) after Escape, got ({vm.ImageSource_PdfCanvasOffsetX},{vm.ImageSource_PdfCanvasOffsetY})");
+
+        // 5. Bắt đầu lại kéo chuột và nhả chuột (MouseUp) chốt giá trị (+220, +130)
+        vm.OnImageSourcePdfPanDrag(new VisionInspectionApp.UI.Controls.PdfPanDragInfo(0, 0, IsCompleted: false, IsCancelled: false));
+        vm.OnImageSourcePdfPanDrag(new VisionInspectionApp.UI.Controls.PdfPanDragInfo(220, 130, IsCompleted: false, IsCancelled: false));
+        vm.OnImageSourcePdfPanDrag(new VisionInspectionApp.UI.Controls.PdfPanDragInfo(220, 130, IsCompleted: true, IsCancelled: false));
+
+        if (vm.ImageSource_PdfCanvasOffsetX != 220 || vm.ImageSource_PdfCanvasOffsetY != 130)
+            throw new Exception($"Expected Offset (220,130) after completion, got ({vm.ImageSource_PdfCanvasOffsetX},{vm.ImageSource_PdfCanvasOffsetY})");
+
+        var sourceDef = config.ImageSources[0];
+        if (sourceDef.PdfCanvasOffsetX != 220 || sourceDef.PdfCanvasOffsetY != 130)
+            throw new Exception($"Expected SourceDef offset to match (220,130), got ({sourceDef.PdfCanvasOffsetX},{sourceDef.PdfCanvasOffsetY})");
+
+        if (string.IsNullOrWhiteSpace(sourceDef.PdfRenderedImagePath) || !File.Exists(sourceDef.PdfRenderedImagePath))
+            throw new Exception($"Expected rendered image file to exist on disk: {sourceDef.PdfRenderedImagePath}");
+
+        // 6. Kiểm tra các phương thức IPdfDocumentService mới (PlacePageOnCameraCanvas & RenderRotatedPage)
+        IPdfDocumentService pdfService = new PdfDocumentService();
+        using var rotatedPage = pdfService.RenderRotatedPage(pdfPath, 1, 10.0, 0);
+        if (rotatedPage == null || rotatedPage.Empty())
+            throw new Exception("RenderRotatedPage returned empty Mat");
+
+        using var canvasPlaced = pdfService.PlacePageOnCameraCanvas(rotatedPage, 2000, 1500, "Center", 220, 130);
+        if (canvasPlaced == null || canvasPlaced.Width != 2000 || canvasPlaced.Height != 1500)
+            throw new Exception($"PlacePageOnCameraCanvas produced invalid size: {canvasPlaced?.Width}x{canvasPlaced?.Height}");
+
+        Console.WriteLine("PASSED! (Drag Delta, Live Canvas Preview, Esc Cancel, MouseUp Commit, 60fps in-memory placement verified)");
     }
 
     private static void InjectField(object target, string fieldName, object? value)

@@ -417,6 +417,7 @@ namespace VisionInspectionApp.UI.ViewModels
             ImageSource_PdfPanLeftCommand = new RelayCommand(ImageSource_PdfPanLeft);
             ImageSource_PdfPanRightCommand = new RelayCommand(ImageSource_PdfPanRight);
             ImageSource_PdfPanResetCommand = new RelayCommand(ImageSource_PdfPanReset);
+            ImageSource_PdfPanDragCommand = new RelayCommand<Controls.PdfPanDragInfo?>(OnImageSourcePdfPanDrag);
             ImageSource_OpenJobCameraSettingsCommand = new RelayCommand(ImageSource_OpenJobCameraSettings);
             ImageSource_ApplyLightingToDeviceCommand = new RelayCommand(ImageSource_ApplyLightingToDevice);
             ImageSource_ReadLightingFromDeviceCommand = new RelayCommand(ImageSource_ReadLightingFromDevice);
@@ -1518,6 +1519,8 @@ namespace VisionInspectionApp.UI.ViewModels
             OnPropertyChanged(nameof(ImageSource_IsFolder));
             OnPropertyChanged(nameof(ImageSource_IsCamera));
             OnPropertyChanged(nameof(ImageSource_IsPdf));
+            OnPropertyChanged(nameof(ImageSource_IsPdfPanActive));
+            OnPropertyChanged(nameof(ImageSource_PdfIsPanDragEnabled));
             OnPropertyChanged(nameof(ImageSource_PdfPath));
             OnPropertyChanged(nameof(ImageSource_PdfPageNumber));
             OnPropertyChanged(nameof(ImageSource_PdfTotalPages));

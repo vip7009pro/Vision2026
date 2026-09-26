@@ -188,14 +188,31 @@ public sealed class PdfDocumentService : IPdfDocumentService
         int offsetY = 0,
         int rotationDegrees = 0)
     {
+        using var matToPlace = RenderRotatedPage(pdfFilePath, pageNumber, pixelsPerMm, rotationDegrees);
+        if (!fitToCameraCanvas)
+        {
+            return matToPlace.Clone();
+        }
+
+        return PlacePageOnCameraCanvas(matToPlace, cameraWidth, cameraHeight, alignment, offsetX, offsetY);
+    }
+
+    /// <summary>
+    /// Kết xuất trang PDF ở tỉ lệ PixelsPerMm và xoay theo góc quy định (phục vụ cache nhanh khi kéo Pan).
+    /// </summary>
+    public Mat RenderRotatedPage(
+        string pdfFilePath,
+        int pageNumber,
+        double pixelsPerMm,
+        int rotationDegrees = 0)
+    {
         if (pixelsPerMm <= 0.0001) pixelsPerMm = 1.0;
         double scale = (pixelsPerMm * 25.4) / 72.0;
 
         using var rawMat = RenderPageToMat(pdfFilePath, pageNumber, scale);
 
-        // Xoay bản vẽ nếu có yêu cầu (đặc biệt khi bản vẽ đứng portrait cần xoay ngang để vừa camera ngang landscape)
-        Mat matToPlace;
         int normRot = (rotationDegrees % 360 + 360) % 360;
+        Mat matToPlace;
         if (normRot == 90)
         {
             matToPlace = new Mat();
@@ -216,79 +233,88 @@ public sealed class PdfDocumentService : IPdfDocumentService
             matToPlace = rawMat.Clone();
         }
 
-        using (matToPlace)
+        return matToPlace;
+    }
+
+    /// <summary>
+    /// Ghép nhanh trang bản vẽ đã xoay lên khung hình cảm biến Camera với vị trí căn lề và Pan offset (in-memory, siêu nhanh <1ms).
+    /// </summary>
+    public Mat PlacePageOnCameraCanvas(
+        Mat matToPlace,
+        int cameraWidth = 5472,
+        int cameraHeight = 3648,
+        string alignment = "Center",
+        int offsetX = 0,
+        int offsetY = 0)
+    {
+        if (matToPlace == null || matToPlace.Empty())
+            throw new ArgumentNullException(nameof(matToPlace), "Dữ liệu trang PDF không được rỗng khi ghép khung hình.");
+
+        if (cameraWidth <= 0) cameraWidth = 5472;
+        if (cameraHeight <= 0) cameraHeight = 3648;
+
+        // Tạo khung hình đúng bằng kích thước cảm biến Camera (nền trắng tinh khiết)
+        var canvas = new Mat(cameraHeight, cameraWidth, MatType.CV_8UC3, new Scalar(255, 255, 255));
+
+        // Tính vị trí dán bản vẽ lên khung hình camera kết hợp Pan Offset
+        int dstX, dstY;
+        if (string.Equals(alignment, "TopCenter", StringComparison.OrdinalIgnoreCase))
         {
-            if (!fitToCameraCanvas)
-            {
-                return matToPlace.Clone();
-            }
-
-            if (cameraWidth <= 0) cameraWidth = 5472;
-            if (cameraHeight <= 0) cameraHeight = 3648;
-
-            // Tạo khung hình đúng bằng kích thước cảm biến Camera (nền trắng tinh khiết)
-            var canvas = new Mat(cameraHeight, cameraWidth, MatType.CV_8UC3, new Scalar(255, 255, 255));
-
-            // Tính vị trí dán bản vẽ lên khung hình camera kết hợp Pan Offset
-            int dstX, dstY;
-            if (string.Equals(alignment, "TopCenter", StringComparison.OrdinalIgnoreCase))
-            {
-                dstX = (cameraWidth - matToPlace.Width) / 2 + offsetX;
-                dstY = offsetY;
-            }
-            else if (string.Equals(alignment, "BottomCenter", StringComparison.OrdinalIgnoreCase))
-            {
-                dstX = (cameraWidth - matToPlace.Width) / 2 + offsetX;
-                dstY = (cameraHeight - matToPlace.Height) + offsetY;
-            }
-            else if (string.Equals(alignment, "TopLeft", StringComparison.OrdinalIgnoreCase))
-            {
-                dstX = offsetX;
-                dstY = offsetY;
-            }
-            else if (string.Equals(alignment, "TopRight", StringComparison.OrdinalIgnoreCase))
-            {
-                dstX = (cameraWidth - matToPlace.Width) + offsetX;
-                dstY = offsetY;
-            }
-            else
-            {
-                // Mặc định: Center hoặc Custom (Pan tự do từ tâm)
-                dstX = (cameraWidth - matToPlace.Width) / 2 + offsetX;
-                dstY = (cameraHeight - matToPlace.Height) / 2 + offsetY;
-            }
-
-            // Cắt dán an toàn có kiểm tra ranh giới
-            int srcX = 0;
-            int srcY = 0;
-            int copyW = matToPlace.Width;
-            int copyH = matToPlace.Height;
-
-            if (dstX < 0)
-            {
-                srcX = -dstX;
-                copyW += dstX;
-                dstX = 0;
-            }
-            if (dstY < 0)
-            {
-                srcY = -dstY;
-                copyH += dstY;
-                dstY = 0;
-            }
-
-            copyW = Math.Min(copyW, cameraWidth - dstX);
-            copyH = Math.Min(copyH, cameraHeight - dstY);
-
-            if (copyW > 0 && copyH > 0 && srcX + copyW <= matToPlace.Width && srcY + copyH <= matToPlace.Height)
-            {
-                using var srcRoi = new Mat(matToPlace, new Rect(srcX, srcY, copyW, copyH));
-                using var dstRoi = new Mat(canvas, new Rect(dstX, dstY, copyW, copyH));
-                srcRoi.CopyTo(dstRoi);
-            }
-
-            return canvas;
+            dstX = (cameraWidth - matToPlace.Width) / 2 + offsetX;
+            dstY = offsetY;
         }
+        else if (string.Equals(alignment, "BottomCenter", StringComparison.OrdinalIgnoreCase))
+        {
+            dstX = (cameraWidth - matToPlace.Width) / 2 + offsetX;
+            dstY = (cameraHeight - matToPlace.Height) + offsetY;
+        }
+        else if (string.Equals(alignment, "TopLeft", StringComparison.OrdinalIgnoreCase))
+        {
+            dstX = offsetX;
+            dstY = offsetY;
+        }
+        else if (string.Equals(alignment, "TopRight", StringComparison.OrdinalIgnoreCase))
+        {
+            dstX = (cameraWidth - matToPlace.Width) + offsetX;
+            dstY = offsetY;
+        }
+        else
+        {
+            // Mặc định: Center hoặc Custom (Pan tự do từ tâm)
+            dstX = (cameraWidth - matToPlace.Width) / 2 + offsetX;
+            dstY = (cameraHeight - matToPlace.Height) / 2 + offsetY;
+        }
+
+        // Cắt dán an toàn có kiểm tra ranh giới
+        int srcX = 0;
+        int srcY = 0;
+        int copyW = matToPlace.Width;
+        int copyH = matToPlace.Height;
+
+        if (dstX < 0)
+        {
+            srcX = -dstX;
+            copyW += dstX;
+            dstX = 0;
+        }
+        if (dstY < 0)
+        {
+            srcY = -dstY;
+            copyH += dstY;
+            dstY = 0;
+        }
+
+        copyW = Math.Min(copyW, cameraWidth - dstX);
+        copyH = Math.Min(copyH, cameraHeight - dstY);
+
+        if (copyW > 0 && copyH > 0 && srcX + copyW <= matToPlace.Width && srcY + copyH <= matToPlace.Height)
+        {
+            using var srcRoi = new Mat(matToPlace, new Rect(srcX, srcY, copyW, copyH));
+            using var dstRoi = new Mat(canvas, new Rect(dstX, dstY, copyW, copyH));
+            srcRoi.CopyTo(dstRoi);
+        }
+
+        return canvas;
     }
 
     /// <summary>

@@ -13,6 +13,11 @@ using VisionInspectionApp.UI.Services;
 
 namespace VisionInspectionApp.UI.Controls;
 
+/// <summary>
+/// Chứa thông tin cử chỉ kéo chuột Pan bản vẽ PDF trên Canvas xem trước.
+/// </summary>
+public record PdfPanDragInfo(int DeltaX, int DeltaY, bool IsCompleted, bool IsCancelled);
+
 public partial class ImageViewerControl : UserControl
 {
     public static readonly DependencyProperty ImageSourceProperty = DependencyProperty.Register(
@@ -129,10 +134,40 @@ public partial class ImageViewerControl : UserControl
         typeof(ImageViewerControl),
         new PropertyMetadata(false, OnShowCrosshairChanged));
 
+    public static readonly DependencyProperty EnablePdfPanProperty = DependencyProperty.Register(
+        nameof(EnablePdfPan),
+        typeof(bool),
+        typeof(ImageViewerControl),
+        new PropertyMetadata(false, OnEnablePdfPanChanged));
+
+    public static readonly DependencyProperty PdfPanChangedCommandProperty = DependencyProperty.Register(
+        nameof(PdfPanChangedCommand),
+        typeof(ICommand),
+        typeof(ImageViewerControl),
+        new PropertyMetadata(null));
+
     public bool ShowCrosshair
     {
         get => (bool)GetValue(ShowCrosshairProperty);
         set => SetValue(ShowCrosshairProperty, value);
+    }
+
+    public bool EnablePdfPan
+    {
+        get => (bool)GetValue(EnablePdfPanProperty);
+        set => SetValue(EnablePdfPanProperty, value);
+    }
+
+    public ICommand? PdfPanChangedCommand
+    {
+        get => (ICommand?)GetValue(PdfPanChangedCommandProperty);
+        set => SetValue(PdfPanChangedCommandProperty, value);
+    }
+
+    private static void OnEnablePdfPanChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+    {
+        var c = (ImageViewerControl)d;
+        c.Cursor = c.EnablePdfPan ? Cursors.SizeAll : Cursors.Arrow;
     }
 
     private static void OnShowCrosshairChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
@@ -164,6 +199,7 @@ public partial class ImageViewerControl : UserControl
         PART_Overlay.MouseRightButtonDown += OverlayOnMouseRightButtonDown;
 
         PART_Overlay.KeyDown += OverlayOnKeyDown;
+        PART_Overlay.LostMouseCapture += OverlayOnLostMouseCapture;
 
         PART_Overlay.SizeChanged += (_, __) => RequestRedrawOverlays();
 
@@ -176,6 +212,22 @@ public partial class ImageViewerControl : UserControl
     private bool _panning;
     private Point _panStart;
     private Matrix _panStartMatrix;
+
+    private bool _isPdfDragging;
+    private Point _pdfDragStartPoint;
+    private int _lastPdfDeltaX;
+    private int _lastPdfDeltaY;
+
+    private void OverlayOnLostMouseCapture(object sender, MouseEventArgs e)
+    {
+        if (_isPdfDragging)
+        {
+            _isPdfDragging = false;
+            PdfPanChangedCommand?.Execute(new PdfPanDragInfo(_lastPdfDeltaX, _lastPdfDeltaY, IsCompleted: true, IsCancelled: false));
+            Cursor = EnablePdfPan ? Cursors.SizeAll : Cursors.Arrow;
+            UpdateInfoText();
+        }
+    }
 
     private bool _hasFirstFit;
 
@@ -1081,6 +1133,20 @@ public partial class ImageViewerControl : UserControl
 
     private void OverlayOnKeyDown(object sender, KeyEventArgs e)
     {
+        if (e.Key == Key.Escape && _isPdfDragging)
+        {
+            _isPdfDragging = false;
+            if (PART_Overlay.IsMouseCaptured)
+            {
+                PART_Overlay.ReleaseMouseCapture();
+            }
+            PdfPanChangedCommand?.Execute(new PdfPanDragInfo(0, 0, IsCompleted: false, IsCancelled: true));
+            Cursor = EnablePdfPan ? Cursors.SizeAll : Cursors.Arrow;
+            UpdateInfoText();
+            e.Handled = true;
+            return;
+        }
+
         if (e.Key == Key.Escape && EnableInteractiveMeasurement)
         {
             if (InteractiveCancelledCommand?.CanExecute(null) == true)
@@ -1275,6 +1341,19 @@ public partial class ImageViewerControl : UserControl
             return;
         }
 
+        if (EnablePdfPan)
+        {
+            _isPdfDragging = true;
+            _pdfDragStartPoint = e.GetPosition(PART_Overlay);
+            _lastPdfDeltaX = 0;
+            _lastPdfDeltaY = 0;
+            PART_Overlay.CaptureMouse();
+            Cursor = Cursors.Hand;
+            PdfPanChangedCommand?.Execute(new PdfPanDragInfo(0, 0, IsCompleted: false, IsCancelled: false));
+            e.Handled = true;
+            return;
+        }
+
         if (EnableRoiEditing
             && !EnableLineSelection
             && !Keyboard.Modifiers.HasFlag(ModifierKeys.Control)
@@ -1400,6 +1479,31 @@ public partial class ImageViewerControl : UserControl
             return;
         }
 
+        if (_isPdfDragging)
+        {
+            var curPos = e.GetPosition(PART_Overlay);
+            int dx = (int)Math.Round(curPos.X - _pdfDragStartPoint.X);
+            int dy = (int)Math.Round(curPos.Y - _pdfDragStartPoint.Y);
+            if (dx != _lastPdfDeltaX || dy != _lastPdfDeltaY)
+            {
+                _lastPdfDeltaX = dx;
+                _lastPdfDeltaY = dy;
+                PdfPanChangedCommand?.Execute(new PdfPanDragInfo(dx, dy, IsCompleted: false, IsCancelled: false));
+            }
+            if (PART_InfoText != null)
+            {
+                PART_InfoText.Visibility = Visibility.Visible;
+                PART_InfoText.Text = $"🖐️ PAN PDF: ΔX = {dx:+0;-0;0} px, ΔY = {dy:+0;-0;0} px [Thả chuột để lưu • Esc hủy]";
+            }
+            e.Handled = true;
+            return;
+        }
+
+        if (EnablePdfPan && !_isPdfDragging)
+        {
+            Cursor = Cursors.SizeAll;
+        }
+
         if (EnableRoiEditing && !_roiEditing && !_dragging && !_lineDragging && ImageSource is BitmapSource bmp && OverlayItems is not null)
         {
             var viewPos = e.GetPosition(PART_Overlay);
@@ -1471,6 +1575,23 @@ public partial class ImageViewerControl : UserControl
     {
         var deferredCtrlShiftClick = _ctrlShiftDeferredClick;
         _ctrlShiftDeferredClick = false;
+
+        if (_isPdfDragging)
+        {
+            _isPdfDragging = false;
+            if (PART_Overlay.IsMouseCaptured)
+            {
+                PART_Overlay.ReleaseMouseCapture();
+            }
+            var upPos = e.GetPosition(PART_Overlay);
+            int dx = (int)Math.Round(upPos.X - _pdfDragStartPoint.X);
+            int dy = (int)Math.Round(upPos.Y - _pdfDragStartPoint.Y);
+            PdfPanChangedCommand?.Execute(new PdfPanDragInfo(dx, dy, IsCompleted: true, IsCancelled: false));
+            Cursor = EnablePdfPan ? Cursors.SizeAll : Cursors.Arrow;
+            UpdateInfoText();
+            e.Handled = true;
+            return;
+        }
 
         if (_panning)
         {

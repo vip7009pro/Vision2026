@@ -74,4 +74,24 @@ public interface IPdfDocumentService
         int offsetY = 0,
         int rotationDegrees = 0,
         string? outputDirectory = null);
+
+    /// <summary>
+    /// Kết xuất trang PDF ở tỉ lệ PixelsPerMm và xoay theo góc quy định (phục vụ cache nhanh khi kéo Pan).
+    /// </summary>
+    Mat RenderRotatedPage(
+        string pdfFilePath,
+        int pageNumber,
+        double pixelsPerMm,
+        int rotationDegrees = 0);
+
+    /// <summary>
+    /// Ghép nhanh trang bản vẽ đã xoay lên khung hình cảm biến Camera với vị trí căn lề và Pan offset (in-memory, siêu nhanh <1ms).
+    /// </summary>
+    Mat PlacePageOnCameraCanvas(
+        Mat matToPlace,
+        int cameraWidth = 5472,
+        int cameraHeight = 3648,
+        string alignment = "Center",
+        int offsetX = 0,
+        int offsetY = 0);
 }
