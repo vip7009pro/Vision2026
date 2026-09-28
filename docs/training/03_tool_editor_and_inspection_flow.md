@@ -95,6 +95,17 @@ Mỗi phép đo đều cho phép kỹ sư nhập tiêu chuẩn kỹ thuật:
 - Nếu giá trị đo được là `12.18 mm`: Hệ thống đánh giá **NG**, tự động tính độ lệch Over Spec là **`+0.18 mm`** và gán mô tả **`"Vượt cận trên"`** hiển thị màu đỏ trên bảng kết quả.
 - Nếu giá trị đo được là `11.90 mm`: Hệ thống đánh giá **NG**, Over Spec là **`-0.05 mm`** và gán mô tả **`"Vượt cận dưới"`**.
 
+### 3.5. Hiệu Chuẩn Hệ Số Calib (Pixels/mm) & Ô Nhập "Số Đo Thực Tế"
+
+Mỗi tool đo khoảng cách/đường kính đều có nút **"🎯 Đặt Hệ Số Calib (Set as Calib Factor)"** ở cuối bảng thuộc tính (Properties):
+
+- **Ô nhập `Đo thực tế (mm)`** nằm ngay **BÊN TRÁI** nút này (riêng Circle Finder dùng nhãn `Đo thực tế Ø (mm)`): nhập kết quả đo thực tế của cữ mẫu (đo bằng thước/panme/dụng cụ ngoài).
+- Ô này là **field riêng, hoàn toàn tách biệt** với ô `Nominal` (phần Spec) nên **không ghi đè** kích thước danh định và dung sai của sản phẩm. Chấp nhận cả dấu chấm (`50.02`) lẫn dấu phẩy (`50,02`).
+- Dòng ghi chú ✅ ngay dưới nút xác nhận: *"Calib theo số đo thực tế X mm — ô Nominal (Spec) được giữ nguyên"*.
+- Bấm nút ➔ phần mềm tính `ppm = (kích thước pixel đo trên ảnh) / (số đo thực tế)` rồi mở hộp thoại `CalibAxisSelectionDialog` để chọn áp dụng cho **Trục X (Ngang)**, **Trục Y (Dọc)** hoặc **Cả 2 trục**, kèm cảnh báo nếu tỉ lệ mới lệch trên `10%` so với tỉ lệ đang dùng.
+- Nếu để trống ô `Đo thực tế (mm)`, hệ thống sẽ dùng `Nominal` / `Nom Dia` trong phần Spec để tính (giữ tương thích ngược với cách làm cũ).
+- Ô `Đo thực tế (mm)` tự động được xóa khi chuyển sang công cụ khác để tránh hiệu chuẩn nhầm số đo cũ.
+
 ---
 
 ## 4. BỘ CÔNG CỤ KIỂM TRA NGOẠI QUAN & AI OCR

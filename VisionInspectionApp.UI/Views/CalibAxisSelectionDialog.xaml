@@ -53,12 +53,12 @@
                     </StackPanel>
 
                     <StackPanel Grid.Row="1" Grid.Column="1" Margin="0,0,0,4">
-                        <TextBlock Text="Kích thước chuẩn (Nominal):" FontSize="11" Foreground="{DynamicResource TextMutedBrush}" />
+                        <TextBlock x:Name="TxtNominalLabel" Text="Kích thước chuẩn (Nominal):" FontSize="11" Foreground="{DynamicResource TextMutedBrush}" />
                         <TextBlock x:Name="TxtNominalMm" Text="0.000 mm" FontWeight="Bold" FontSize="13" Foreground="#FF9800" />
                     </StackPanel>
 
                     <StackPanel Grid.Row="2" Grid.ColumnSpan="2" Margin="0,4,0,0">
-                        <TextBlock Text="Tỉ lệ tính toán (measuredPx / nominal):" FontSize="11" Foreground="{DynamicResource TextMutedBrush}" />
+                        <TextBlock x:Name="TxtFormulaLabel" Text="Tỉ lệ tính toán (measuredPx / nominal):" FontSize="11" Foreground="{DynamicResource TextMutedBrush}" />
                         <TextBlock x:Name="TxtCalculatedPpm" Text="0.0000 px/mm" FontWeight="Bold" FontSize="14" Foreground="#4CAF50" />
                     </StackPanel>
                 </Grid>

@@ -30,6 +30,14 @@ namespace VisionInspectionApp.UI.ViewModels
         {
             OnPropertyChanged(nameof(EnableRoiEditingInPreview));
             OnPropertyChanged(nameof(IsResultViewNode));
+
+            // Xóa ô nhập SỐ ĐO THỰC TẾ khi chuyển sang công cụ KHÁC (giữ nguyên nếu vẫn là chính công cụ đó,
+            // ví dụ sau khi chạy lại Flow hoặc calib xong) để tránh calib nhầm số đo của công cụ trước.
+            if (!string.Equals(_selectedNodePrevRefName, value?.RefName, StringComparison.OrdinalIgnoreCase))
+            {
+                ResetCalibActualMm();
+            }
+
             // LƯU Ý (PERFORMANCE): RaiseToolPropertyPanelsChanged() chỉ được gọi MỘT LẦN ở cuối hàm.
             // Trước đây gọi 2 lần (đầu + cuối) khiến mỗi lần chọn node phải raise ~60 property
             // và đọc lại file template Origin 2 lần => gây lag khi chuyển qua lại giữa các node.

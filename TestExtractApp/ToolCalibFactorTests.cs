@@ -26,10 +26,54 @@ public static class ToolCalibFactorTests
         TestAngleOrientationDetection();
         TestDistanceMmArbitraryAngleVector();
         TestBackwardCompatibilityWhenDualAxisZero();
+        TestCalibActualMmInputParsing();
+        TestCalibActualMmSeparateFieldDoesNotOverwriteSpec();
 
         Console.WriteLine("=======================================================");
         Console.WriteLine("✅ ALL TOOL CALIB FACTOR (1D & 2D) TESTS PASSED 100%!");
         Console.WriteLine("=======================================================\n");
+    }
+
+    /// <summary>
+    /// Kiểm thử ô nhập SỐ ĐO THỰC TẾ (mm) mới (Task 376): phân tích dữ liệu vào,
+    /// ưu tiên số đo thực tế và fallback về Nominal (Spec) để tương thích ngược.
+    /// </summary>
+    private static void TestCalibActualMmInputParsing()
+    {
+        Console.Write("Testing 'Đo thực tế (mm)' input parsing & fallback resolution... ");
+
+        // 1. Nhập hợp lệ với cả dấu chấm và dấu phẩy (thói quen nhập liệu Việt Nam)
+        if (Math.Abs(CalibFactorMath.ParseMeasuredMm("50.02") - 50.02) > 1e-9)
+            throw new Exception("Parse '50.02' failed");
+        if (Math.Abs(CalibFactorMath.ParseMeasuredMm(" 50,02 ") - 50.02) > 1e-9)
+            throw new Exception("Parse ' 50,02 ' failed");
+        if (Math.Abs(CalibFactorMath.ParseMeasuredMm("12.3456") - 12.3456) > 1e-9)
+            throw new Exception("Parse '12.3456' failed");
+
+        // 2. Ô để trống hoặc dữ liệu không hợp lệ => coi như chưa nhập (0)
+        if (CalibFactorMath.ParseMeasuredMm(null) != 0.0) throw new Exception("Null must be 0");
+        if (CalibFactorMath.ParseMeasuredMm("") != 0.0) throw new Exception("Empty must be 0");
+        if (CalibFactorMath.ParseMeasuredMm("   ") != 0.0) throw new Exception("Whitespace must be 0");
+        if (CalibFactorMath.ParseMeasuredMm("abc") != 0.0) throw new Exception("Text must be 0");
+        if (CalibFactorMath.ParseMeasuredMm("-12.5") != 0.0) throw new Exception("Negative must be 0");
+        if (CalibFactorMath.ParseMeasuredMm("0") != 0.0) throw new Exception("Zero must be 0");
+
+        // 3. Ưu tiên số đo thực tế; chỉ khi ô để trống mới dùng Nominal (Spec) - tương thích ngược 100%
+        if (Math.Abs(CalibFactorMath.ResolveNominalMm(50.02, 50.0) - 50.02) > 1e-9)
+            throw new Exception("Số đo thực tế phải được ưu tiên hơn Nominal");
+        if (Math.Abs(CalibFactorMath.ResolveNominalMm(0.0, 50.0) - 50.0) > 1e-9)
+            throw new Exception("Phải fallback về Nominal khi ô 'Đo thực tế' để trống");
+        if (CalibFactorMath.ResolveNominalMm(0.0, 0.0) != 0.0)
+            throw new Exception("Cả 2 ô rỗng phải trả về 0 (báo lỗi cho người dùng)");
+
+        // 4. Tính tỉ lệ px/mm và chặn dữ liệu không hợp lệ (không trả NaN/Infinity cho tầng giao diện)
+        if (Math.Abs(CalibFactorMath.ComputePixelsPerMm(500.0, 50.0) - 10.0) > 1e-9)
+            throw new Exception("500 px / 50 mm phải bằng 10 px/mm");
+        if (CalibFactorMath.ComputePixelsPerMm(0.0, 50.0) != 0.0) throw new Exception("0 px phải không hợp lệ");
+        if (CalibFactorMath.ComputePixelsPerMm(500.0, 0.0) != 0.0) throw new Exception("0 mm phải không hợp lệ");
+        if (CalibFactorMath.ComputePixelsPerMm(double.NaN, 50.0) != 0.0) throw new Exception("NaN px phải không hợp lệ");
+
+        Console.WriteLine("PASSED");
     }
 
     private static void TestDualAxisCalibrationRectangularPart()
@@ -355,4 +399,61 @@ public static class ToolCalibFactorTests
 
         Console.WriteLine("PASSED");
     }
+
+    /// <summary>
+    /// Kiểm thử tình huống thực tế của khách hàng (Task 376): trước đây kỹ sư phải nhập số đo thực tế
+    /// vào ô Nominal rồi thường QUÊN nhập lại Spec ban đầu. Với ô "Đo thực tế (mm)" riêng, Spec luôn được giữ nguyên.
+    /// </summary>
+    private static void TestCalibActualMmSeparateFieldDoesNotOverwriteSpec()
+    {
+        Console.Write("Testing dedicated 'Đo thực tế (mm)' field keeps Nominal Spec intact... ");
+
+        // BÀI TOÁN THỰC TẾ:
+        // - Công cụ Distance 'Dist1' có Spec: Nominal = 50.00 mm, Tolerance = ±0.02 mm (dung sai rất chặt).
+        // - Cữ mẫu (Golden Sample) đo bằng dụng cụ ngoài: 50.04 mm.
+        // - Ảnh camera đo được: measuredPx = 500.0 px  =>  ppm thực tế = 500 / 50.04 = 9.9920 px/mm.
+        const double goldenActualMm = 50.04;
+        const double measuredPx = 500.0;
+        const double specNominalMm = 50.00;
+        const double specTolerance = 0.02;
+
+        double ppm = CalibFactorMath.ComputePixelsPerMm(
+            measuredPx,
+            CalibFactorMath.ResolveNominalMm(goldenActualMm, specNominalMm));
+        if (Math.Abs(ppm - 9.992006394884093) > 1e-6)
+            throw new Exception($"Expected ppm ~9.992006, got {ppm}");
+
+        // Chi tiết SẢN XUẤT đúng tâm dung sai: 50.00 mm (phải luôn PASS trên phôi thật)
+        var partA = new Point2d(100, 100);
+        var partB = new Point2d(100 + specNominalMm * ppm, 100);
+
+        var distCalc = new DistanceCalculator();
+
+        // 1. CƠ CHẾ MỚI (Task 376): số đo thực tế nhập ở ô riêng => Nominal (Spec) vẫn là 50.00 mm
+        var specKeep = new LineDistance
+        {
+            Name = "Dist1", PointA = "P1", PointB = "P2",
+            Nominal = specNominalMm, TolerancePlus = specTolerance, ToleranceMinus = specTolerance
+        };
+        var resNew = distCalc.CheckDistance(specKeep, partA, partB, ppm, ppm);
+        if (!resNew.Pass)
+            throw new Exception($"Phôi 50.00 mm phải PASS, nhưng Value={resNew.Value:F4} mm");
+        if (Math.Abs(resNew.Value - specNominalMm) > 0.001)
+            throw new Exception($"Expected measured value {specNominalMm} mm, got {resNew.Value}");
+        if (Math.Abs(specKeep.Nominal - specNominalMm) > 1e-9)
+            throw new Exception("Nominal Spec KHÔNG được bị ghi đè khi calib bằng ô 'Đo thực tế (mm)'!");
+
+        // 2. CƠ CHẾ CŨ (lỗi khách hàng báo): nhập 50.04 vào ô Nominal rồi QUÊN nhập lại Spec 50.00
+        var specForgot = new LineDistance
+        {
+            Name = "Dist1", PointA = "P1", PointB = "P2",
+            Nominal = goldenActualMm, TolerancePlus = specTolerance, ToleranceMinus = specTolerance
+        };
+        var resOld = distCalc.CheckDistance(specForgot, partA, partB, ppm, ppm);
+        if (resOld.Pass)
+            throw new Exception("Trường hợp quên nhập lại Spec phải bị NG (false NG) để chứng minh lỗi cũ!");
+
+        Console.WriteLine("PASSED");
+    }
 }
+

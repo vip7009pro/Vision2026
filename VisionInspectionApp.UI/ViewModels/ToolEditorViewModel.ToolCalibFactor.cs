@@ -17,8 +17,10 @@ public sealed partial class ToolEditorViewModel
     private ICommand? _setAsCalibFactorCommand;
 
     /// <summary>
-    /// Lệnh lấy kết quả đo pixel từ công cụ hiện tại chia cho kích thước danh định (Nominal mm)
-    /// để tính ra tỉ lệ PixelsPerMm (Trục X hoặc Trục Y) và áp dụng vào cấu hình Job.
+    /// Lệnh lấy kết quả đo pixel từ công cụ hiện tại chia cho kích thước thực tế (mm) để tính ra
+    /// tỉ lệ PixelsPerMm (Trục X hoặc Trục Y) và áp dụng vào cấu hình Job.
+    /// Kích thước thực tế được ưu tiên lấy từ ô "Đo thực tế (mm)" nằm ngay bên trái nút này;
+    /// nếu ô đó để trống mới dùng kích thước danh định Nominal trong Spec (Spec luôn được giữ nguyên).
     /// </summary>
     public ICommand SetAsCalibFactorCommand => _setAsCalibFactorCommand ??= new RelayCommand(ExecuteSetAsCalibFactor);
 
@@ -28,6 +30,44 @@ public sealed partial class ToolEditorViewModel
     public bool IsDistanceCalibratableNode =>
         IsDistanceNode || IsLineLineDistanceNode || IsPointLineDistanceNode ||
         IsSegmentLineDistanceNode || IsEdgePairNode || IsDiameterNode;
+
+    private string _calibActualMmText = string.Empty;
+
+    /// <summary>
+    /// Ô nhập SỐ ĐO THỰC TẾ (mm) của cữ mẫu, nằm ngay bên trái nút "Đặt làm Hệ Số Calib".
+    /// Ô này TÁCH RIÊNG hoàn toàn khỏi ô 'Nominal' trong phần Spec: giá trị nhập ở đây chỉ dùng để
+    /// tính tỉ lệ Calib (px/mm), không ghi đè kích thước danh định nên không làm sai lệch Spec/Tolerance.
+    /// </summary>
+    public string CalibActualMmText
+    {
+        get => _calibActualMmText;
+        set
+        {
+            var v = value ?? string.Empty;
+            if (string.Equals(_calibActualMmText, v, StringComparison.Ordinal))
+                return;
+
+            _calibActualMmText = v;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(CalibActualMm));
+            OnPropertyChanged(nameof(HasCalibActualMm));
+            OnPropertyChanged(nameof(CalibActualMmHint));
+        }
+    }
+
+    /// <summary>Số đo thực tế (mm) đã phân tích từ <see cref="CalibActualMmText"/>; bằng 0 khi ô để trống.</summary>
+    public double CalibActualMm => CalibFactorMath.ParseMeasuredMm(_calibActualMmText);
+
+    /// <summary>Cho biết kỹ sư đã nhập số đo thực tế hay chưa (dùng để ẩn/hiện dòng ghi chú nhắc nhở).</summary>
+    public bool HasCalibActualMm => CalibActualMm > CalibFactorMath.MinValidValue;
+
+    /// <summary>Dòng ghi chú khẳng định ô Nominal (Spec) vẫn được giữ nguyên khi calib theo số đo thực tế.</summary>
+    public string CalibActualMmHint => HasCalibActualMm
+        ? $"✅ Calib theo số đo thực tế {CalibActualMm:F4} mm — ô Nominal (Spec) được giữ nguyên."
+        : string.Empty;
+
+    /// <summary>Xóa ô "Đo thực tế (mm)" khi chuyển sang công cụ đo khác để tránh calib nhầm số đo cũ.</summary>
+    public void ResetCalibActualMm() => CalibActualMmText = string.Empty;
 
     public double PixelsPerMmX
     {
@@ -302,25 +342,32 @@ public sealed partial class ToolEditorViewModel
             return;
         }
 
-        if (measuredPx <= 0.0001)
+        if (measuredPx <= CalibFactorMath.MinValidValue)
         {
             MessageBox.Show($"Kích thước đo được không hợp lệ ({measuredPx:F2} px).\nVui lòng kiểm tra lại kết quả chạy của tool!", 
                 "Hiệu Chuẩn Calib", MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
 
-        if (nominalMm <= 0.0001)
+        // Ưu tiên SỐ ĐO THỰC TẾ nhập ở ô riêng cạnh nút; chỉ khi ô đó để trống mới dùng Nominal (Spec).
+        double actualMm = CalibActualMm;
+        bool usingActualMeasured = actualMm > CalibFactorMath.MinValidValue;
+        double effectiveNominalMm = CalibFactorMath.ResolveNominalMm(actualMm, nominalMm);
+
+        if (effectiveNominalMm <= CalibFactorMath.MinValidValue)
         {
             MessageBox.Show(
-                $"Kích thước chuẩn danh định (Nominal) đang bằng 0 hoặc chưa được nhập!\n\n" +
-                $"Vui lòng nhập kích thước thực tế của cữ mẫu vào ô 'Nominal' (đối với đo khoảng cách) " +
-                $"hoặc 'Nom Dia' (đối với Circle Finder) trước khi bấm 'Đặt làm Hệ Số Calib'.",
+                "Chưa có kích thước chuẩn (mm) để hiệu chuẩn!\n\n" +
+                "Vui lòng nhập số đo THỰC TẾ của cữ mẫu vào ô 'Đo thực tế (mm)' ngay bên trái nút này " +
+                "(khuyến nghị), hoặc nhập kích thước danh định vào ô 'Nominal' (đối với đo khoảng cách) " +
+                "/ 'Nom Dia' (đối với Circle Finder) rồi bấm lại nút 'Đặt làm Hệ Số Calib'.\n\n" +
+                "Lưu ý: ô 'Đo thực tế (mm)' là ô nhập riêng, KHÔNG ghi đè kích thước Spec của công cụ.",
                 "Chưa Nhập Kích Thước Chuẩn", MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
 
-        double newPixelsPerMm = measuredPx / nominalMm;
-        if (double.IsNaN(newPixelsPerMm) || double.IsInfinity(newPixelsPerMm) || newPixelsPerMm <= 0.0001)
+        double newPixelsPerMm = CalibFactorMath.ComputePixelsPerMm(measuredPx, effectiveNominalMm);
+        if (newPixelsPerMm <= CalibFactorMath.MinValidValue)
         {
             MessageBox.Show("Tỉ lệ tính toán không hợp lệ hoặc quá nhỏ. Vui lòng kiểm tra lại kích thước.", 
                 "Lỗi Tính Toán", MessageBoxButton.OK, MessageBoxImage.Error);
@@ -335,11 +382,12 @@ public sealed partial class ToolEditorViewModel
             toolName,
             toolType,
             measuredPx,
-            nominalMm,
+            effectiveNominalMm,
             newPixelsPerMm,
             angleDeg,
             curPpmX,
-            curPpmY)
+            curPpmY,
+            usingActualMeasured)
         {
             Owner = System.Windows.Application.Current?.MainWindow
         };
@@ -351,6 +399,11 @@ public sealed partial class ToolEditorViewModel
         {
             double finalPpm = dialog.NewPixelsPerMm;
 
+            // Ghi rõ nguồn kích thước chuẩn đã dùng (giữ nguyên Spec hay dùng số đo thực tế) để kỹ sư đối chiếu.
+            string sizeSourceText = usingActualMeasured
+                ? $" [dùng số đo thực tế {effectiveNominalMm:F4} mm — Nominal Spec giữ nguyên]"
+                : $" [dùng Nominal Spec {effectiveNominalMm:F4} mm]";
+
             switch (dialog.SelectedTarget)
             {
                 case CalibAxisTarget.AxisX:
@@ -358,7 +411,7 @@ public sealed partial class ToolEditorViewModel
                     if (_config.PixelsPerMmY <= 0.0001)
                         _config.PixelsPerMmY = curPpmY;
                     _config.PixelsPerMm = finalPpm;
-                    StatusBarText = $"🎯 Đã áp dụng Calib TRỤC X (Ngang): {finalPpm:F4} px/mm từ [{toolName}]! (Hiện tại: X={_config.PixelsPerMmX:F2}, Y={_config.PixelsPerMmY:F2})";
+                    StatusBarText = $"🎯 Đã áp dụng Calib TRỤC X (Ngang): {finalPpm:F4} px/mm từ [{toolName}]{sizeSourceText}! (Hiện tại: X={_config.PixelsPerMmX:F2}, Y={_config.PixelsPerMmY:F2})";
                     break;
 
                 case CalibAxisTarget.AxisY:
@@ -366,7 +419,7 @@ public sealed partial class ToolEditorViewModel
                     if (_config.PixelsPerMmX <= 0.0001)
                         _config.PixelsPerMmX = curPpmX;
                     _config.PixelsPerMm = finalPpm;
-                    StatusBarText = $"🎯 Đã áp dụng Calib TRỤC Y (Dọc): {finalPpm:F4} px/mm từ [{toolName}]! (Hiện tại: X={_config.PixelsPerMmX:F2}, Y={_config.PixelsPerMmY:F2})";
+                    StatusBarText = $"🎯 Đã áp dụng Calib TRỤC Y (Dọc): {finalPpm:F4} px/mm từ [{toolName}]{sizeSourceText}! (Hiện tại: X={_config.PixelsPerMmX:F2}, Y={_config.PixelsPerMmY:F2})";
                     break;
 
                 case CalibAxisTarget.BothAxes:
@@ -374,7 +427,7 @@ public sealed partial class ToolEditorViewModel
                     _config.PixelsPerMmX = finalPpm;
                     _config.PixelsPerMmY = finalPpm;
                     _config.PixelsPerMm = finalPpm;
-                    StatusBarText = $"🎯 Đã áp dụng Calib ĐỒNG BỘ 2 TRỤC: {finalPpm:F4} px/mm từ [{toolName}]!";
+                    StatusBarText = $"🎯 Đã áp dụng Calib ĐỒNG BỘ 2 TRỤC: {finalPpm:F4} px/mm từ [{toolName}]{sizeSourceText}!";
                     break;
             }
 

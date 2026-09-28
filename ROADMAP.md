@@ -38,6 +38,14 @@
   - [x] Bổ sung 2 nút ToggleButton trực quan `🖐️ Kéo Pan` trong panel thuộc tính Pan và `🖐️ Pan PDF` trên thanh công cụ xem trước Preview Header.
   - [x] Hoàn thành kiểm thử tự động `Test8_PdfMousePanDragInteractiveSimulation` (8/8 PDF tests PASS 100%).
 
+- [x] Task 376: Tách ô nhập SỐ ĐO THỰC TẾ (mm) thành field riêng cạnh nút "Đặt Hệ Số Calib" để không còn ghi đè ô Nominal (Spec):
+  - [x] Bổ sung `CalibActualMmText`, `CalibActualMm`, `HasCalibActualMm`, `CalibActualMmHint`, `ResetCalibActualMm()` trong `ToolEditorViewModel.ToolCalibFactor.cs`.
+  - [x] Thêm lớp toán học thuần (unit-testable) `CalibFactorMath` trong `VisionInspectionApp.VisionEngine`: `ParseMeasuredMm` (nhận cả `50.02` và `50,02`), `ResolveNominalMm` (ưu tiên số đo thực tế, fallback về Nominal để tương thích ngược 100%), `ComputePixelsPerMm` (chặn NaN/Infinity/giá trị ≤ 0).
+  - [x] Giao diện: ô `Đo thực tế (mm)` nằm ngay BÊN TRÁI nút `🎯 Đặt Hệ Số Calib` tại cả 3 vị trí (Distance Spec dùng chung, Circle Finder với nhãn `Đo thực tế Ø (mm)`, Edge Pair Detect) kèm dòng ghi chú xác nhận ô Nominal (Spec) được giữ nguyên.
+  - [x] Hộp thoại `CalibAxisSelectionDialog` hiển thị rõ nguồn kích thước đang dùng (`Số đo THỰC TẾ (mm)` hay `Nominal Spec`).
+  - [x] Tự động xóa ô "Đo thực tế (mm)" khi chuyển sang công cụ khác; Status Bar ghi rõ nguồn kích thước đã dùng để calib.
+  - [x] Bổ sung 2 test cases `TestCalibActualMmInputParsing` và `TestCalibActualMmSeparateFieldDoesNotOverwriteSpec` — 12/12 Calib tests PASS 100%.
+
 ## Định hướng tiếp theo
 - [ ] Bổ sung tính năng tự động phát hiện khung tên bản vẽ kỹ thuật (Title Block) trên PDF.
 - [ ] Tích hợp trích xuất lớp vector nguyên bản từ PDF dạng DXF/SVG phục vụ so khớp đường biên CAD.

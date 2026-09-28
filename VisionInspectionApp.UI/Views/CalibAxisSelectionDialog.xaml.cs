@@ -17,7 +17,8 @@ public partial class CalibAxisSelectionDialog : Window
         double calculatedPpm,
         double angleDeg,
         double currentPpmX,
-        double currentPpmY)
+        double currentPpmY,
+        bool isActualMeasured = false)
     {
         InitializeComponent();
 
@@ -27,6 +28,19 @@ public partial class CalibAxisSelectionDialog : Window
         TxtMeasuredPx.Text = $"{measuredPx:F2} px";
         TxtNominalMm.Text = $"{nominalMm:F3} mm";
         TxtCalculatedPpm.Text = $"{NewPixelsPerMm:F4} px/mm";
+
+        // Phân biệt rõ nguồn kích thước: ô "Đo thực tế (mm)" hay ô Nominal trong Spec của công cụ.
+        if (isActualMeasured)
+        {
+            TxtNominalLabel.Text = "Số đo THỰC TẾ (mm):";
+            TxtNominalLabel.Foreground = System.Windows.Media.Brushes.Orange;
+            TxtFormulaLabel.Text = "Tỉ lệ tính toán (measuredPx / số đo thực tế):";
+        }
+        else
+        {
+            TxtNominalLabel.Text = "Kích thước chuẩn (Nominal Spec):";
+            TxtFormulaLabel.Text = "Tỉ lệ tính toán (measuredPx / nominal):";
+        }
 
         double diffX = currentPpmX > 0.0001 ? ((NewPixelsPerMm - currentPpmX) / currentPpmX) * 100.0 : 0.0;
         double diffY = currentPpmY > 0.0001 ? ((NewPixelsPerMm - currentPpmY) / currentPpmY) * 100.0 : 0.0;

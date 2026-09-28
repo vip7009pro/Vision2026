@@ -1400,7 +1400,7 @@
                                             <TextBlock Text="Nominal" VerticalAlignment="Center" Margin="4,2" FontSize="11" Foreground="{DynamicResource TextBrush}"/>
                                         </Border>
                                         <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
-                                            <TextBox Text="{Binding Distance_Nominal, UpdateSourceTrigger=LostFocus}" Margin="2,1" FontSize="11" />
+                                            <TextBox Text="{Binding Distance_Nominal, UpdateSourceTrigger=LostFocus}" Margin="2,1" FontSize="11" ToolTip="Kích thước danh định (Nominal) dùng cho Spec/Tolerance khi đo kiểm. Muốn hiệu chuẩn Calib theo số đo thực tế, hãy nhập vào ô 'Đo thực tế (mm)' nằm cạnh nút Đặt Hệ Số Calib - ô đó là field riêng, không ghi đè giá trị Nominal này." />
                                         </Border>
                                     </Grid>
                                 </Border>
@@ -1442,12 +1442,33 @@
                                     <TextBlock Text="{Binding SelectedRunPass, TargetNullValue='-'}" Width="80" />
                                 </StackPanel>
 
-                                <Button Content="🎯 Đặt làm Hệ Số Calib (Set as Calib Factor)"
-                                        Command="{Binding SetAsCalibFactorCommand}"
-                                        Visibility="{Binding IsDistanceCalibratableNode, Converter={StaticResource BoolToVis}}"
-                                        Margin="0,4,0,6" Padding="6,4"
-                                        Background="#1B5E20" Foreground="White" FontWeight="Bold" FontSize="11" Cursor="Hand"
-                                        ToolTip="Lấy kết quả đo pixel chia cho Nominal (mm) để tính tỉ lệ pixel/mm và lưu vào cấu hình Job" />
+                                <Grid Margin="0,4,0,2"
+                                      Visibility="{Binding IsDistanceCalibratableNode, Converter={StaticResource BoolToVis}}">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+
+                                    <!-- Task 376: Ô nhập SỐ ĐO THỰC TẾ (mm) - field riêng, tách khỏi ô Nominal (Spec) -->
+                                    <TextBlock Grid.Column="0" Text="Đo thực tế (mm)" VerticalAlignment="Center" Margin="0,0,4,0"
+                                               FontSize="11" Foreground="{DynamicResource TextBrush}"
+                                               ToolTip="Nhập kết quả đo THỰC TẾ (mm) của cữ mẫu/chi tiết chuẩn (đo bằng thước hoặc dụng cụ ngoài). Đây là field riêng, KHÔNG ghi đè ô Nominal (Spec) nên Spec/Tolerance của công cụ vẫn giữ nguyên." />
+                                    <TextBox Grid.Column="1" Width="52" FontSize="11" Margin="0,0,6,0"
+                                             VerticalContentAlignment="Center"
+                                             Text="{Binding CalibActualMmText, UpdateSourceTrigger=PropertyChanged}"
+                                             ToolTip="Số đo thực tế (mm) dùng riêng cho hiệu chuẩn Calib. Ví dụ: 50.02 hoặc 50,02. Để trống thì hệ số Calib sẽ được tính theo ô Nominal (Spec)." />
+                                    <Button Grid.Column="2" Content="🎯 Đặt Hệ Số Calib"
+                                            Command="{Binding SetAsCalibFactorCommand}"
+                                            Padding="4,4" FontSize="11" FontWeight="Bold" Cursor="Hand"
+                                            Background="#1B5E20" Foreground="White"
+                                            ToolTip="Đặt làm Hệ Số Calib (Set as Calib Factor): Lấy kết quả đo pixel của công cụ chia cho SỐ ĐO THỰC TẾ (mm) ở ô bên trái để tính tỉ lệ pixel/mm và lưu vào cấu hình Job. Nếu để trống ô đó sẽ dùng ô Nominal (Spec)." />
+                                </Grid>
+
+                                <TextBlock Text="{Binding CalibActualMmHint}"
+                                           Visibility="{Binding HasCalibActualMm, Converter={StaticResource BoolToVis}}"
+                                           FontSize="10" FontWeight="SemiBold" Foreground="{DynamicResource TextBrush}"
+                                           TextWrapping="Wrap" Margin="0,0,0,4" />
                             </StackPanel>
 
                             <StackPanel Visibility="{Binding IsConditionNode, Converter={StaticResource BoolToVis}}">
@@ -2872,7 +2893,7 @@
                                             <TextBlock Text="Nom" VerticalAlignment="Center" Margin="4,2" FontSize="11" Foreground="{DynamicResource TextBrush}"/>
                                         </Border>
                                         <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
-                                            <TextBox Text="{Binding Distance_Nominal, UpdateSourceTrigger=LostFocus}" Margin="2,1" FontSize="11" />
+                                            <TextBox Text="{Binding Distance_Nominal, UpdateSourceTrigger=LostFocus}" Margin="2,1" FontSize="11" ToolTip="Kích thước danh định (Nominal) dùng cho Spec/Tolerance khi đo kiểm. Muốn hiệu chuẩn Calib theo số đo thực tế, hãy nhập vào ô 'Đo thực tế (mm)' nằm cạnh nút Đặt Hệ Số Calib - ô đó là field riêng, không ghi đè giá trị Nominal này." />
                                         </Border>
                                     </Grid>
                                 </Border>
@@ -3258,7 +3279,7 @@
                                             <TextBlock Text="Nom Dia (mm)" VerticalAlignment="Center" Margin="4,2" FontSize="11" Foreground="{DynamicResource TextBrush}"/>
                                         </Border>
                                         <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
-                                            <TextBox Text="{Binding Cf_NominalDiameter, UpdateSourceTrigger=LostFocus}" Margin="2,1" FontSize="11" ToolTip="Đường kính danh định chuẩn (mm) dùng để hiệu chuẩn hệ số Calib" />
+                                            <TextBox Text="{Binding Cf_NominalDiameter, UpdateSourceTrigger=LostFocus}" Margin="2,1" FontSize="11" ToolTip="Đường kính danh định (mm) dùng cho Spec/Tolerance khi đo kiểm. Muốn hiệu chuẩn Calib theo số đo thực tế, hãy nhập vào ô 'Đo thực tế (mm)' nằm cạnh nút Đặt Hệ Số Calib - ô đó là field riêng, không ghi đè giá trị này." />
                                         </Border>
                                     </Grid>
                                 </Border>
@@ -3272,11 +3293,32 @@
                                     <TextBlock Text="{Binding SelectedRunPass, TargetNullValue='-'}" Width="120" />
                                 </StackPanel>
 
-                                <Button Content="🎯 Đặt làm Hệ Số Calib (Set as Calib Factor)" 
-                                        Command="{Binding SetAsCalibFactorCommand}" 
-                                        Margin="0,4,0,6" Padding="6,4" 
-                                        Background="#1B5E20" Foreground="White" FontWeight="Bold" FontSize="11" Cursor="Hand"
-                                        ToolTip="Lấy đường kính pixel đo được chia cho Nom Dia (mm) để tính tỉ lệ pixel/mm và lưu vào làm Calib của Job" />
+                                <Grid Margin="0,4,0,2">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+
+                                    <!-- Task 376: Ô nhập SỐ ĐO THỰC TẾ (mm) - field riêng, tách khỏi ô Nom Dia (Spec) -->
+                                    <TextBlock Grid.Column="0" Text="Đo thực tế Ø (mm)" VerticalAlignment="Center" Margin="0,0,4,0"
+                                               FontSize="11" Foreground="{DynamicResource TextBrush}"
+                                               ToolTip="Nhập ĐƯỜNG KÍNH THỰC TẾ (mm) của cữ mẫu/chi tiết chuẩn (đo bằng thước hoặc dụng cụ ngoài). Đây là field riêng, KHÔNG ghi đè ô Nom Dia (Spec) nên Spec/Tolerance của công cụ vẫn giữ nguyên." />
+                                    <TextBox Grid.Column="1" Width="52" FontSize="11" Margin="0,0,6,0"
+                                             VerticalContentAlignment="Center"
+                                             Text="{Binding CalibActualMmText, UpdateSourceTrigger=PropertyChanged}"
+                                             ToolTip="Đường kính thực tế (mm) dùng riêng cho hiệu chuẩn Calib. Ví dụ: 12.02 hoặc 12,02. Để trống thì hệ số Calib sẽ được tính theo ô Nom Dia (Spec)." />
+                                    <Button Grid.Column="2" Content="🎯 Đặt Hệ Số Calib"
+                                            Command="{Binding SetAsCalibFactorCommand}"
+                                            Padding="4,4" FontSize="11" FontWeight="Bold" Cursor="Hand"
+                                            Background="#1B5E20" Foreground="White"
+                                            ToolTip="Đặt làm Hệ Số Calib (Set as Calib Factor): Lấy đường kính pixel đo được chia cho SỐ ĐO THỰC TẾ (mm) ở ô bên trái để tính tỉ lệ pixel/mm và lưu vào làm Calib của Job. Nếu để trống ô đó sẽ dùng ô Nom Dia (Spec)." />
+                                </Grid>
+
+                                <TextBlock Text="{Binding CalibActualMmHint}"
+                                           Visibility="{Binding HasCalibActualMm, Converter={StaticResource BoolToVis}}"
+                                           FontSize="10" FontWeight="SemiBold" Foreground="{DynamicResource TextBrush}"
+                                           TextWrapping="Wrap" Margin="0,0,0,4" />
                             </StackPanel>
 
                             <StackPanel Visibility="{Binding IsDiameterNode, Converter={StaticResource BoolToVis}}">
@@ -3422,7 +3464,7 @@
                                             <TextBlock Text="Nominal" VerticalAlignment="Center" Margin="4,2" FontSize="11" Foreground="{DynamicResource TextBrush}"/>
                                         </Border>
                                         <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
-                                            <TextBox Text="{Binding Distance_Nominal, UpdateSourceTrigger=LostFocus}" Margin="2,1" FontSize="11" />
+                                            <TextBox Text="{Binding Distance_Nominal, UpdateSourceTrigger=LostFocus}" Margin="2,1" FontSize="11" ToolTip="Kích thước danh định (Nominal) dùng cho Spec/Tolerance khi đo kiểm. Muốn hiệu chuẩn Calib theo số đo thực tế, hãy nhập vào ô 'Đo thực tế (mm)' nằm cạnh nút Đặt Hệ Số Calib - ô đó là field riêng, không ghi đè giá trị Nominal này." />
                                         </Border>
                                     </Grid>
                                 </Border>
@@ -3464,11 +3506,32 @@
                                     <TextBlock Text="{Binding SelectedRunPass, TargetNullValue='-'}" Width="120" />
                                 </StackPanel>
 
-                                <Button Content="🎯 Đặt làm Hệ Số Calib (Set as Calib Factor)" 
-                                        Command="{Binding SetAsCalibFactorCommand}" 
-                                        Margin="0,4,0,6" Padding="6,4" 
-                                        Background="#1B5E20" Foreground="White" FontWeight="Bold" FontSize="11" Cursor="Hand"
-                                        ToolTip="Lấy khoảng cách pixel đo được giữa 2 cạnh chia cho Nominal (mm) để tính tỉ lệ pixel/mm và lưu vào làm Calib của Job" />
+                                <Grid Margin="0,4,0,2">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+
+                                    <!-- Task 376: Ô nhập SỐ ĐO THỰC TẾ (mm) - field riêng, tách khỏi ô Nominal (Spec) -->
+                                    <TextBlock Grid.Column="0" Text="Đo thực tế (mm)" VerticalAlignment="Center" Margin="0,0,4,0"
+                                               FontSize="11" Foreground="{DynamicResource TextBrush}"
+                                               ToolTip="Nhập kết quả đo THỰC TẾ (mm) của cữ mẫu/chi tiết chuẩn (đo bằng thước hoặc dụng cụ ngoài). Đây là field riêng, KHÔNG ghi đè ô Nominal (Spec) nên Spec/Tolerance của công cụ vẫn giữ nguyên." />
+                                    <TextBox Grid.Column="1" Width="52" FontSize="11" Margin="0,0,6,0"
+                                             VerticalContentAlignment="Center"
+                                             Text="{Binding CalibActualMmText, UpdateSourceTrigger=PropertyChanged}"
+                                             ToolTip="Số đo thực tế (mm) dùng riêng cho hiệu chuẩn Calib. Ví dụ: 50.02 hoặc 50,02. Để trống thì hệ số Calib sẽ được tính theo ô Nominal (Spec)." />
+                                    <Button Grid.Column="2" Content="🎯 Đặt Hệ Số Calib"
+                                            Command="{Binding SetAsCalibFactorCommand}"
+                                            Padding="4,4" FontSize="11" FontWeight="Bold" Cursor="Hand"
+                                            Background="#1B5E20" Foreground="White"
+                                            ToolTip="Đặt làm Hệ Số Calib (Set as Calib Factor): Lấy khoảng cách pixel đo được giữa 2 cạnh chia cho SỐ ĐO THỰC TẾ (mm) ở ô bên trái để tính tỉ lệ pixel/mm và lưu vào làm Calib của Job. Nếu để trống ô đó sẽ dùng ô Nominal (Spec)." />
+                                </Grid>
+
+                                <TextBlock Text="{Binding CalibActualMmHint}"
+                                           Visibility="{Binding HasCalibActualMm, Converter={StaticResource BoolToVis}}"
+                                           FontSize="10" FontWeight="SemiBold" Foreground="{DynamicResource TextBrush}"
+                                           TextWrapping="Wrap" Margin="0,0,0,4" />
                             </StackPanel>
 
                             <StackPanel Visibility="{Binding IsCodeDetectionNode, Converter={StaticResource BoolToVis}}">
