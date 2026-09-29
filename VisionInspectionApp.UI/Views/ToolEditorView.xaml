@@ -992,7 +992,7 @@
                                                     IsEnabled="{Binding AutoTuneCanRun}"
                                                     FontWeight="SemiBold"
                                                     Background="#007ACC" Foreground="White"
-                                                    ToolTip="Tự động thử nhiều cấu hình Preprocess và chọn cấu hình cho điểm nhận diện cao nhất" />
+                                                    ToolTip="Tự động quét toàn bộ tổ hợp thông số Preprocess (màu, chiếu sáng, khử nhiễu, tông màu, cạnh, nhị phân, morphology) và chọn cấu hình cho điểm nhận diện cao nhất" />
                                             <Button Grid.Column="1" Content="⏹ Hủy" Height="26" Padding="10,0"
                                                     Command="{Binding CancelAutoTuneCommand}"
                                                     IsEnabled="{Binding AutoTuneIsRunning}"

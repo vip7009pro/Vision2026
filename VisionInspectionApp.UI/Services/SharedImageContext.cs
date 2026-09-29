@@ -18,6 +18,15 @@ public sealed class SharedImageContext
 
     public static void ResetSnapshotCloneCount() => System.Threading.Interlocked.Exchange(ref _snapshotCloneCount, 0);
 
+    /// <summary>
+    /// Phiên bản ảnh dùng chung — tăng mỗi khi <see cref="SetImage"/> thay ảnh.
+    /// Cho phép tầng UI cache các ảnh đã dựng (bitmap/overlay) và BỎ QUA việc dựng lại
+    /// khi ảnh KHÔNG đổi (ví dụ: chỉ chuyển qua lại giữa các node trong Tool Editor),
+    /// tránh clone ảnh 20MP + chạy lại preprocess/overlay không cần thiết.
+    /// </summary>
+    private long _version;
+    public long Version => System.Threading.Interlocked.Read(ref _version);
+
     public event EventHandler? ImageChanged;
 
     /// <summary>
@@ -63,6 +72,8 @@ public sealed class SharedImageContext
             }
         }
 
+        // Ảnh đã thay đổi (kể cả trường hợp thất bại => ảnh rỗng) => tăng phiên bản để tầng UI dựng lại preview.
+        System.Threading.Interlocked.Increment(ref _version);
         ImageChanged?.Invoke(this, EventArgs.Empty);
     }
 

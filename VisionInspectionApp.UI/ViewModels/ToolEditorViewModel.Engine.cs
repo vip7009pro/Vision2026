@@ -2611,6 +2611,8 @@ namespace VisionInspectionApp.UI.ViewModels
     
         partial void OnPreprocessPreviewEnabledChanged(bool value)
         {
+            // Đổi chế độ xem Global Preprocess => preview Final phải dựng lại bitmap.
+            _finalPreviewDirty = true;
             RefreshPreviews();
             RaiseToolPropertyPanelsChanged();
         }
@@ -2632,7 +2634,8 @@ namespace VisionInspectionApp.UI.ViewModels
                     if (mat is not null && !mat.Empty())
                     {
                         SetImageSourceCache(nodeName, "camera", mat);
-                        _sharedImage.SetImage(mat);
+                        // Chuyển quyền sở hữu để tránh clone ảnh lớn và đảm bảo Mat được giải phóng.
+                        _sharedImage.SetImage(mat, transferOwnership: true);
 
                         await System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
                         {
@@ -2846,15 +2849,23 @@ namespace VisionInspectionApp.UI.ViewModels
                         var mat = Cv2.ImDecode(data, ImreadModes.Color);
                         if (mat != null && !mat.Empty())
                         {
+                            // ✅ FIX RÒ RỈ: ảnh URL 20MP trước đây không bao giờ được dispose (~60MB mỗi lần tải).
+                            // Chuyển quyền sở hữu cho SharedImageContext vừa tránh clone 60MB vừa đảm bảo giải phóng.
+                            int matW = mat.Width;
+                            int matH = mat.Height;
                             SetImageSourceCache(nodeName, url, mat);
-                            _sharedImage.SetImage(mat);
+                            _sharedImage.SetImage(mat, transferOwnership: true);
 
                             await System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
                             {
-                                StatusBarText = $"✅ Đã tải và nạp ảnh ({mat.Width}x{mat.Height}) từ Server URL!";
+                                StatusBarText = $"✅ Đã tải và nạp ảnh ({matW}x{matH}) từ Server URL!";
                                 // Ảnh vừa tải xong => cập nhật Preview ngay lập tức (không debounce).
                                 RefreshPreviewsNow();
                             }, System.Windows.Threading.DispatcherPriority.Render);
+                        }
+                        else
+                        {
+                            mat?.Dispose();
                         }
                     }
                     else
@@ -4715,6 +4726,8 @@ namespace VisionInspectionApp.UI.ViewModels
         public void RefreshPreviewsNow()
         {
             CancelPendingRefresh();
+            // Đây là các luồng "thay đổi thật" (Run, nạp Job, đổi ảnh, commit ROI) => luôn dựng lại preview Final.
+            _finalPreviewDirty = true;
             RefreshPreviewsCore();
         }
 
@@ -4782,7 +4795,17 @@ namespace VisionInspectionApp.UI.ViewModels
                 return;
             }
 
-            _finalPreviewDirty = true;
+            // Chỉ dựng lại preview "Final" (ảnh + overlay toàn bộ Flow) khi ẢNH đổi,
+            // hoặc NỘI DUNG job đổi (ROI/thuộc tính/cạnh nối...), hoặc kết quả Run đổi.
+            // Trước đây luôn đặt _finalPreviewDirty = true mỗi lượt => chỉ cần trỏ qua lại
+            // giữa các node cũng phải clone ảnh 20MP + chạy lại preprocess + overlay cho MỌI tool
+            // => cực kỳ lag. Nay chuyển node (không đổi ảnh/nội dung) sẽ bỏ qua bước này.
+            if (_sharedImage.Version != _finalPreviewBuiltImageVersion
+                || _previewContentRevision != _finalPreviewBuiltContentRevision
+                || !ReferenceEquals(_lastRun, _finalPreviewBuiltRun))
+            {
+                _finalPreviewDirty = true;
+            }
 
             // ---- 1 snapshot duy nhất cho cả lượt refresh ----
             Mat? snap = null;
@@ -4995,6 +5018,7 @@ namespace VisionInspectionApp.UI.ViewModels
     
             if (_config is null)
             {
+                MarkFinalPreviewBuilt();
                 _finalPreviewDirty = false;
                 return;
             }
@@ -5011,7 +5035,16 @@ namespace VisionInspectionApp.UI.ViewModels
             
             FinalOverlayItems = newFinalItems;
 
+            MarkFinalPreviewBuilt();
             _finalPreviewDirty = false;
+        }
+
+        /// <summary>Ghi nhận trạng thái (phiên bản ảnh + revision nội dung + kết quả Run) của lần dựng preview Final gần nhất.</summary>
+        private void MarkFinalPreviewBuilt()
+        {
+            _finalPreviewBuiltImageVersion = _sharedImage.Version;
+            _finalPreviewBuiltContentRevision = _previewContentRevision;
+            _finalPreviewBuiltRun = _lastRun;
         }
     
         private void RefreshSelectedPreview(Mat snap)

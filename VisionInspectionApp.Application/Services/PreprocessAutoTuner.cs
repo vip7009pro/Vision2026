@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Threading;
+using System.Threading.Tasks;
 using OpenCvSharp;
 using VisionInspectionApp.Models;
 using VisionInspectionApp.VisionEngine;
@@ -69,31 +70,41 @@ public static class PreprocessAutoTuner
             return new AutoTuneOutcome(false, CloneSettings(baseline), 0.0, string.Empty, "Không có ảnh đầu vào để Auto Tune.");
         }
 
-        var candidates = BuildCandidates(CloneSettings(baseline), kind);
-        var total = candidates.Count;
         var bestScore = double.NegativeInfinity;
         PreprocessSettings bestSettings = CloneSettings(baseline);
         var bestDesc = string.Empty;
-        var baselineScore = 0.0;
+        var evaluatorCount = 0;
+        var bestLock = new object();
 
-        for (var i = 0; i < total; i++)
+        // ĐA LUỒNG ĐA NHÂN: chừa 1 nhân cho UI; giới hạn theo kích thước ảnh để tránh đỉnh RAM quá lớn
+        // (mỗi ứng viên giữ 1 ảnh đã preprocess full-size ~60MB với ảnh 20MP).
+        var pixels = (long)baseImage.Width * baseImage.Height;
+        var perImageCap = pixels > 2_000_000 ? 4 : 8;
+        var maxParallel = Math.Clamp(Environment.ProcessorCount - 1, 1, perImageCap);
+        var parallelOptions = new ParallelOptions { CancellationToken = ct, MaxDegreeOfParallelism = maxParallel };
+
+        // Stage 1: danh sách preset bao quát nhiều phương pháp.
+        // Stage 2: COORDINATE DESCENT — quét toàn bộ giá trị của TỪNG nhóm thông số
+        //          (màu, chiếu sáng, khử nhiễu, tông màu, cạnh, nhị phân, morphology, đảo)
+        //          và lặp lại nhiều vòng cho tới khi hội tụ => bao phủ tổ hợp thông số sâu hơn.
+        const int maxPasses = 3;
+        var presets = BuildCandidates(CloneSettings(baseline), kind);
+        var groups = BuildGroups();
+        var totalUpper = presets.Count + groups.Sum(g => g.Options.Count) * maxPasses + 8;
+
+        // Chấm điểm 1 ứng viên. AN TOÀN ĐA LUỒNG: chỉ đọc dữ liệu dùng chung (ảnh, định nghĩa tool),
+        // tự tạo và thu hồi Mat riêng cho mỗi lần chạy, cập nhật "điểm cao nhất" qua lock.
+        double Evaluate(PreprocessSettings settings, string desc)
         {
             ct.ThrowIfCancellationRequested();
-            var (desc, settings) = candidates[i];
-
             Mat? processed = null;
             double score;
             try
             {
                 processed = preprocessor.Run(baseImage, settings, rois, originTeach, originFound, originAngleDeg);
-                if (processed is null || processed.Empty())
-                {
-                    score = 0.0;
-                }
-                else
-                {
-                    score = Score(processed, kind, caliper, line, edgePair, circle, code, originTeach, originFound, originAngleDeg, lineDetector);
-                }
+                score = (processed is null || processed.Empty())
+                    ? 0.0
+                    : Score(processed, kind, caliper, line, edgePair, circle, code, originTeach, originFound, originAngleDeg, lineDetector);
             }
             catch
             {
@@ -104,28 +115,248 @@ public static class PreprocessAutoTuner
                 processed?.Dispose();
             }
 
-            if (i == 0)
+            var n = Interlocked.Increment(ref evaluatorCount);
+
+            double snapshotBest;
+            lock (bestLock)
             {
-                baselineScore = score;
+                if (score > bestScore)
+                {
+                    bestScore = score;
+                    bestSettings = CloneSettings(settings);
+                    bestDesc = desc;
+                }
+                snapshotBest = bestScore;
             }
 
-            if (score > bestScore)
+            progress?.Report(new AutoTuneProgress(n, totalUpper, desc, snapshotBest, $"Đang thử: {desc} → điểm {score:0.00} (cao nhất {snapshotBest:0.00})"));
+            return score;
+        }
+
+        // ---- Baseline ----
+        var baselineScore = Evaluate(CloneSettings(baseline), "Giữ nguyên (baseline)");
+
+        // ---- Stage 1: presets (chạy SONG SONG) ----
+        Parallel.For(0, presets.Count, parallelOptions, i =>
+        {
+            Evaluate(presets[i].Settings, presets[i].Desc);
+        });
+
+        // ---- Stage 2: coordinate descent (mỗi nhóm quét SONG SONG các giá trị) ----
+        var current = CloneSettings(bestSettings);
+        var currentScore = bestScore;
+
+        for (var pass = 0; pass < maxPasses; pass++)
+        {
+            var improvedInPass = false;
+
+            foreach (var group in groups)
             {
-                bestScore = score;
-                bestSettings = settings;
-                bestDesc = desc;
+                var optionCount = group.Options.Count;
+                var results = new double[optionCount];
+
+                Parallel.For(0, optionCount, parallelOptions, i =>
+                {
+                    var cand = CloneSettings(current);
+                    group.Options[i].Apply(cand);
+                    results[i] = Evaluate(cand, $"[{group.Name}] {group.Options[i].Desc}");
+                });
+
+                // Chọn giá trị tốt nhất của nhóm (ưu tiên thứ tự đầu tiên khi bằng điểm => tất định).
+                var groupBestIdx = -1;
+                var groupBestScore = currentScore;
+                for (var i = 0; i < optionCount; i++)
+                {
+                    if (results[i] > groupBestScore + 1e-6)
+                    {
+                        groupBestScore = results[i];
+                        groupBestIdx = i;
+                    }
+                }
+
+                if (groupBestIdx >= 0)
+                {
+                    var cand = CloneSettings(current);
+                    group.Options[groupBestIdx].Apply(cand);
+                    current = cand;
+                    currentScore = groupBestScore;
+                    improvedInPass = true;
+                }
             }
 
-            progress?.Report(new AutoTuneProgress(i + 1, total, desc, bestScore, $"Đang thử: {desc} → điểm {score:0.00} (cao nhất {bestScore:0.00})"));
+            if (!improvedInPass)
+            {
+                break; // Đã hội tụ
+            }
         }
 
         var improved = bestScore > baselineScore + 1e-6;
         var summary = bestDesc.Length == 0
             ? "Không tìm được cấu hình phù hợp."
-            : $"Cấu hình tốt nhất: {bestDesc} (điểm {bestScore:0.00}, baseline {baselineScore:0.00}).";
+            : $"Cấu hình tốt nhất: {bestDesc} (điểm {bestScore:0.00}, baseline {baselineScore:0.00}, đã thử {evaluatorCount} tổ hợp trên {maxParallel} luồng).";
 
         // Nếu không có cải thiện, vẫn trả về baseline để giữ nguyên hành vi cũ.
         return new AutoTuneOutcome(true, improved ? bestSettings : CloneSettings(baseline), improved ? bestScore : baselineScore, bestDesc, summary);
+    }
+
+    // ============================ NHÓM THÔNG SỐ (COORDINATE DESCENT) ============================
+
+    private sealed record ParamOption(string Desc, Action<PreprocessSettings> Apply);
+
+    private static List<(string Name, List<ParamOption> Options)> BuildGroups()
+    {
+        var groups = new List<(string, List<ParamOption>)>();
+
+        // --- Màu / Kênh ---
+        var color = new List<ParamOption>();
+        void AddColor(string desc, PreprocessColorChannel ch) => color.Add(new ParamOption(desc, s => s.ColorChannel = ch));
+        AddColor("Kênh All", PreprocessColorChannel.All);
+        AddColor("Kênh Red", PreprocessColorChannel.Red);
+        AddColor("Kênh Green", PreprocessColorChannel.Green);
+        AddColor("Kênh Blue", PreprocessColorChannel.Blue);
+        AddColor("Kênh Hue", PreprocessColorChannel.Hue);
+        AddColor("Kênh Saturation", PreprocessColorChannel.Saturation);
+        AddColor("Kênh Value", PreprocessColorChannel.Value);
+        AddColor("Kênh Lab-L", PreprocessColorChannel.Lab_L);
+        groups.Add(("Màu", color));
+
+        // --- Chiếu sáng ---
+        var illum = new List<ParamOption>
+        {
+            new("Tắt", s => { s.IlluminationCorrection = IlluminationCorrectionPreset.None; s.IlluminationKernel = 51; })
+        };
+        foreach (var k in new[] { 15, 31, 51, 101, 201 })
+        {
+            var kk = k;
+            illum.Add(new($"BackgroundSubtract k{kk}", s => { s.IlluminationCorrection = IlluminationCorrectionPreset.BackgroundSubtract; s.IlluminationKernel = kk; }));
+        }
+        foreach (var k in new[] { 51, 101 })
+        {
+            var kk = k;
+            illum.Add(new($"FlatField k{kk}", s => { s.IlluminationCorrection = IlluminationCorrectionPreset.FlatFieldNormalize; s.IlluminationKernel = kk; }));
+        }
+        illum.Add(new("CLAHE clip2 tile8", s => { s.IlluminationCorrection = IlluminationCorrectionPreset.Clahe; s.ClaheClipLimit = 2; s.ClaheTileGrid = 8; }));
+        illum.Add(new("CLAHE clip3 tile8", s => { s.IlluminationCorrection = IlluminationCorrectionPreset.Clahe; s.ClaheClipLimit = 3; s.ClaheTileGrid = 8; }));
+        illum.Add(new("CLAHE clip4 tile16", s => { s.IlluminationCorrection = IlluminationCorrectionPreset.Clahe; s.ClaheClipLimit = 4; s.ClaheTileGrid = 16; }));
+        groups.Add(("Chiếu sáng", illum));
+
+        // --- Khử nhiễu ---
+        var denoise = new List<ParamOption>
+        {
+            new("Tắt", s => { s.UseGaussianBlur = false; s.UseMedianBlur = false; s.UseBilateralFilter = false; })
+        };
+        foreach (var k in new[] { 3, 5, 7, 9 })
+        {
+            var kk = k;
+            denoise.Add(new($"Gaussian {kk}", s => { s.UseGaussianBlur = true; s.BlurKernel = kk; s.UseMedianBlur = false; s.UseBilateralFilter = false; }));
+        }
+        foreach (var k in new[] { 3, 5, 7 })
+        {
+            var kk = k;
+            denoise.Add(new($"Median {kk}", s => { s.UseMedianBlur = true; s.MedianKernel = kk; s.UseGaussianBlur = false; s.UseBilateralFilter = false; }));
+        }
+        foreach (var d in new[] { 3, 5, 9 })
+        {
+            var dd = d;
+            denoise.Add(new($"Bilateral {dd}", s => { s.UseBilateralFilter = true; s.BilateralDiameter = dd; s.UseGaussianBlur = false; s.UseMedianBlur = false; }));
+        }
+        groups.Add(("Khử nhiễu", denoise));
+
+        // --- Tông màu ---
+        var tone = new List<ParamOption>
+        {
+            new("Tắt", s => { s.UseGamma = false; s.UseAutoContrast = false; s.InvertColors = false; })
+        };
+        foreach (var g in new[] { 0.5, 0.7, 1.5, 2.0 })
+        {
+            var gg = g;
+            tone.Add(new($"Gamma {gg:0.0}", s => { s.UseGamma = true; s.GammaValue = gg; }));
+        }
+        tone.Add(new("Auto Contrast", s => s.UseAutoContrast = true));
+        tone.Add(new("Đảo màu", s => s.InvertColors = true));
+        groups.Add(("Tông màu", tone));
+
+        // --- Cạnh (Canny / Gradient / AutoEdge) ---
+        var edge = new List<ParamOption>
+        {
+            new("Tắt", s => { s.UseCanny = false; s.GradientType = PreprocessGradientType.None; s.UseAutoEdge = false; })
+        };
+        foreach (var (c1, c2) in new[] { (30, 90), (50, 150), (80, 200), (100, 250) })
+        {
+            edge.Add(new($"Canny {c1}/{c2}", s => { s.UseCanny = true; s.Canny1 = c1; s.Canny2 = c2; s.GradientType = PreprocessGradientType.None; s.UseAutoEdge = false; }));
+        }
+        foreach (var (type, name) in new[]
+        {
+            (PreprocessGradientType.Sobel, "Sobel 3"),
+            (PreprocessGradientType.Scharr, "Scharr 3"),
+            (PreprocessGradientType.Laplacian, "Laplacian 3"),
+            (PreprocessGradientType.MorphGradient, "MorphGradient 3")
+        })
+        {
+            var tt = type;
+            edge.Add(new($"Gradient {name}", s => { s.GradientType = tt; s.GradientKernel = 3; s.UseCanny = false; s.UseAutoEdge = false; }));
+        }
+        foreach (var (method, name) in new[]
+        {
+            (AutoEdgeMethod.Ensemble, "Ensemble"),
+            (AutoEdgeMethod.ScharrOtsu, "Scharr+Otsu"),
+            (AutoEdgeMethod.BackgroundDiffTriangle, "BackgroundDiff+Triangle"),
+            (AutoEdgeMethod.MorphGradientSauvola, "MorphGradient+Sauvola"),
+            (AutoEdgeMethod.LabLumaOtsu, "LabLuma+Otsu")
+        })
+        {
+            var mm = method;
+            edge.Add(new($"AutoEdge {name}", s => { s.UseAutoEdge = true; s.AutoEdgeMethod = mm; s.AutoEdgeMinConfidence = 0.5; s.UseCanny = false; s.GradientType = PreprocessGradientType.None; }));
+        }
+        groups.Add(("Cạnh", edge));
+
+        // --- Nhị phân hóa ---
+        var binarize = new List<ParamOption>
+        {
+            new("Tắt", s => s.UseThreshold = false)
+        };
+        foreach (var v in new[] { 64, 96, 128, 160, 192, 224 })
+        {
+            var vv = v;
+            binarize.Add(new($"Binary {vv}", s => { s.UseThreshold = true; s.ThresholdType = PreprocessThresholdType.Binary; s.ThresholdLow = vv; }));
+        }
+        binarize.Add(new("Otsu", s => { s.UseThreshold = true; s.ThresholdType = PreprocessThresholdType.Otsu; }));
+        binarize.Add(new("Triangle", s => { s.UseThreshold = true; s.ThresholdType = PreprocessThresholdType.Triangle; }));
+        foreach (var (m, off) in new[] { (11, 5), (21, 5), (31, 10), (51, 10) })
+        {
+            binarize.Add(new($"Local mask{m} off{off}", s => { s.UseThreshold = true; s.ThresholdType = PreprocessThresholdType.Local; s.MaskWidth = m; s.MaskHeight = m; s.LocalOffset = off; }));
+        }
+        foreach (var (k, m) in new[] { (0.1, 15), (0.2, 15), (0.3, 31) })
+        {
+            binarize.Add(new($"Sauvola k{k} mask{m}", s => { s.UseThreshold = true; s.ThresholdType = PreprocessThresholdType.Sauvola; s.SauvolaK = k; s.MaskWidth = m; s.MaskHeight = m; }));
+        }
+        groups.Add(("Nhị phân", binarize));
+
+        // --- Đảo ---
+        var invert = new List<ParamOption>
+        {
+            new("Bình thường", s => { s.InvertBinary = false; s.InvertLocal = false; s.AutoEdgeInvert = false; }),
+            new("Đảo nhị phân/cục bộ", s => { s.InvertBinary = true; s.InvertLocal = true; s.AutoEdgeInvert = true; })
+        };
+        groups.Add(("Đảo", invert));
+
+        // --- Morphology ---
+        var morph = new List<ParamOption>
+        {
+            new("Tắt", s => s.UseMorphology = false)
+        };
+        void AddMorph(string desc, PreprocessMorphType type, int k, int iter) =>
+            morph.Add(new(desc, s => { s.UseMorphology = true; s.MorphType = type; s.MorphKernelSize = k; s.MorphIterations = iter; }));
+        AddMorph("Close 3", PreprocessMorphType.Close, 3, 1);
+        AddMorph("Close 5", PreprocessMorphType.Close, 5, 1);
+        AddMorph("Open 3", PreprocessMorphType.Open, 3, 1);
+        AddMorph("Open 5", PreprocessMorphType.Open, 5, 1);
+        AddMorph("Erode 3", PreprocessMorphType.Erode, 3, 1);
+        AddMorph("Dilate 3", PreprocessMorphType.Dilate, 3, 1);
+        AddMorph("Close 3 x2", PreprocessMorphType.Close, 3, 2);
+        groups.Add(("Morphology", morph));
+
+        return groups;
     }
 
     // ============================ CHẤM ĐIỂM ============================
@@ -368,15 +599,37 @@ public static class PreprocessAutoTuner
             Cv2.Threshold(gray, otsu, 0, 255, ThresholdTypes.Binary | ThresholdTypes.Otsu);
             decoded = TryDecode(otsu);
         }
-        if (decoded is null)
+
+        // Đọc được mã => điểm áp đảo (mục tiêu: làm rõ barcode/QR để decode thành công).
+        if (decoded is not null && !string.IsNullOrWhiteSpace(decoded.Text))
         {
-            using var inv = new Mat();
-            Cv2.BitwiseNot(gray, inv);
-            decoded = TryDecode(inv);
+            return 1000.0 + Math.Min(decoded.Text.Length, 100) * 0.5;
         }
 
-        if (decoded is null || string.IsNullOrWhiteSpace(decoded.Text)) return 0.0;
-        return 100.0 + Math.Min(decoded.Text.Length, 100) * 0.1;
+        // Chưa decode được: dùng chỉ số "độ nét biên" để dẫn hướng tìm kiếm
+        // (biên/barcode càng rõ, tương phản càng cao => điểm càng cao).
+        return GradientClarity(gray);
+    }
+
+    /// <summary>
+    /// Chỉ số "độ rõ" của ảnh dựa trên phương sai Laplacian (độ nét biên) — dùng làm
+    /// hàm mục tiêu phụ khi công cụ chưa bắt được đối tượng (ví dụ barcode chưa decode được).
+    /// </summary>
+    private static double GradientClarity(Mat gray)
+    {
+        try
+        {
+            using var lap = new Mat();
+            Cv2.Laplacian(gray, lap, MatType.CV_64F);
+            Cv2.MeanStdDev(lap, out _, out var std);
+            var v = std.Val0;
+            if (double.IsNaN(v) || double.IsInfinity(v)) return 0.0;
+            return Math.Min(v, 60.0);
+        }
+        catch
+        {
+            return 0.0;
+        }
     }
 
     private static BarcodeFormat[] ResolveFormats(List<CodeSymbology>? sym)

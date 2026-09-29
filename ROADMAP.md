@@ -53,6 +53,21 @@
   - [x] Thêm panel `🎯 Auto Tune Preprocess` trong Tool Editor: nút Auto Tune/Hủy, hiển thị Preprocess cha, tiến trình (bước x/y), thông số đang thử và điểm cao nhất.
   - [x] Sau khi Auto Tune: tự động gán thông số tốt nhất vào tool Preprocess cha và refresh preview + autosave.
 
+- [x] Task 378: Tối ưu hiệu năng/UX Tool Editor (ảnh 20MP nạp qua URL) & mở rộng Auto Tune:
+  - [x] `SharedImageContext.Version`: tăng mỗi lần SetImage; dùng làm khoá cache dựng lại preview.
+  - [x] Tool Editor: preview "Final" (ảnh + overlay toàn Flow) chỉ dựng lại khi ẢNH đổi / NỘI DUNG job đổi (`_previewContentRevision` theo `IsDirty`) / kết quả Run đổi. Trước đây luôn dựng lại mỗi lượt → trỏ qua lại giữa các node cũng phải clone ảnh 20MP + chạy lại preprocess + overlay cho MỌI tool (nguyên nhân lag chính).
+  - [x] Sửa rò rỉ ~60MB mỗi lần tải/nạp ảnh URL (Mat không được dispose) bằng `SetImage(mat, transferOwnership: true)`; sửa luôn nhánh chụp snapshot camera.
+  - [x] Auto Tune: nâng từ ~40 preset lên quy trình 2 tầng — Preset bao quát + **Coordinate Descent** quét toàn bộ giá trị của từng nhóm thông số (Màu, Chiếu sáng, Khử nhiễu, Tông màu, Cạnh, Nhị phân, Đảo, Morphology), lặp 3 vòng tới khi hội tụ (≈250–300 tổ hợp/lần).
+  - [x] Hàm mục tiêu theo công cụ: Line/Caliper/EdgePairDetect tối đa độ phủ + độ mạnh cạnh; CircleFinder tối đa điểm số đường tròn; CodeDetection ưu tiên decode được mã, nếu chưa thì tối đa "độ nét biên" (Laplacian variance) để làm rõ barcode.
+  - [x] Hiển thị tiến trình kèm thời gian chạy (`Bước x/y • t.giây`).
+
+- [x] Task 379: Tăng tốc Auto Tune bằng ĐA LUỒNG ĐA NHÂN:
+  - [x] `PreprocessAutoTuner.Tune`: Stage 1 (preset) và mỗi nhóm của Stage 2 (Coordinate Descent) chạy `Parallel.For` trên nhiều nhân.
+  - [x] Số luồng `MaxDegreeOfParallelism = clamp(ProcessorCount - 1, 1, cap)`; `cap = 4` với ảnh > 2MP (20MP), `cap = 8` với ảnh nhỏ — chừa 1 nhân cho UI và giới hạn đỉnh RAM (~60MB/ứng viên).
+  - [x] Ghi nhận "điểm cao nhất" an toàn đa luồng (lock) + đếm tiến trình bằng `Interlocked`; chọn giá trị tốt nhất mỗi nhóm theo thứ tự cố định (kết quả tất định).
+  - [x] Hủy giữa chừng vẫn hoạt động (hỗ trợ cả `OperationCanceledException` bọc trong `AggregateException` của `Parallel.For`).
+  - [x] An toàn đa luồng: mỗi ứng viên tự tạo/thu hồi Mat riêng; `ImagePreprocessor` chỉ đọc kernel tĩnh dùng chung.
+
 ## Định hướng tiếp theo
 - [ ] Bổ sung tính năng tự động phát hiện khung tên bản vẽ kỹ thuật (Title Block) trên PDF.
 - [ ] Tích hợp trích xuất lớp vector nguyên bản từ PDF dạng DXF/SVG phục vụ so khớp đường biên CAD.

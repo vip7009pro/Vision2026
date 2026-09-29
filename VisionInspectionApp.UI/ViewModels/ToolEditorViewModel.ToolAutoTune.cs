@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -19,7 +20,6 @@ namespace VisionInspectionApp.UI.ViewModels
 
         [ObservableProperty]
         private string _autoTuneStatusText = "Chọn công cụ nhận diện (Caliper, Line, EdgePairDetect, Circle Finder, CodeDetection) để Auto Tune thông số Preprocess.";
-
         [ObservableProperty]
         private string _autoTuneParamText = string.Empty;
 
@@ -41,6 +41,7 @@ namespace VisionInspectionApp.UI.ViewModels
         partial void OnAutoTuneIsRunningChanged(bool value) => OnPropertyChanged(nameof(AutoTuneCanRun));
 
         private CancellationTokenSource? _autoTuneCts;
+        private readonly Stopwatch _autoTuneStopwatch = new();
 
         /// <summary>Cập nhật lại trạng thái panel Auto Tune mỗi khi đổi node đang chọn.</summary>
         private void RefreshAutoTunePanelState()
@@ -63,7 +64,7 @@ namespace VisionInspectionApp.UI.ViewModels
             var preNode = FindParentPreprocessNode();
             AutoTunePreprocessName = preNode is not null ? preNode.RefName : "(chưa nối)";
             AutoTuneStatusText = preNode is not null
-                ? $"Preprocess nguồn: {preNode.RefName}. Bấm Auto Tune để tìm thông số tối ưu."
+                ? $"Preprocess nguồn: {preNode.RefName}. Bấm Auto Tune để quét toàn bộ tổ hợp thông số tìm cấu hình tối ưu."
                 : $"Công cụ {SelectedNode!.RefName} chưa được nối với tool Preprocess. Hãy kéo Preprocess vào đầu vào Image của công cụ.";
         }
 
@@ -151,12 +152,13 @@ namespace VisionInspectionApp.UI.ViewModels
 
             var progress = new Progress<AutoTuneProgress>(p =>
             {
-                AutoTuneStepText = $"{p.Step}/{p.Total}";
+                AutoTuneStepText = $"{p.Step}/{p.Total} • {_autoTuneStopwatch.Elapsed.TotalSeconds:0.0}s";
                 AutoTuneParamText = p.ParameterText;
                 AutoTuneBestScoreText = $"Điểm cao nhất: {p.BestScore:0.00}";
                 AutoTuneStatusText = p.Message;
             });
 
+            _autoTuneStopwatch.Restart();
             try
             {
                 using var snap = _sharedImage.GetSnapshot();
@@ -201,12 +203,18 @@ namespace VisionInspectionApp.UI.ViewModels
             {
                 AutoTuneStatusText = "Đã hủy Auto Tune.";
             }
+            catch (AggregateException aex) when (aex.InnerExceptions.Any(e => e is OperationCanceledException))
+            {
+                // Parallel.For có thể bọc OperationCanceledException => coi như người dùng đã hủy.
+                AutoTuneStatusText = "Đã hủy Auto Tune.";
+            }
             catch (Exception ex)
             {
                 AutoTuneStatusText = "❌ Lỗi Auto Tune: " + ex.Message;
             }
             finally
             {
+                _autoTuneStopwatch.Stop();
                 AutoTuneIsRunning = false;
                 if (ReferenceEquals(_autoTuneCts, cts))
                 {

@@ -29,6 +29,22 @@ namespace VisionInspectionApp.UI.ViewModels
         [ObservableProperty]
         private bool _isDirty;
 
+        // ==================== CACHE DỰNG LẠI PREVIEW ====================
+        // Preview "Final" (toàn bộ Flow: ảnh + overlay tất cả tool) rất tốn kém trên ảnh 20MP
+        // (clone ảnh + Global Preprocess + chạy nhận diện overlay cho mọi tool). Nó KHÔNG phụ thuộc
+        // vào node đang chọn, nên khi chỉ trỏ qua lại giữa các node ta BỎ QUA việc dựng lại.
+        private long _previewContentRevision;
+        private long _finalPreviewBuiltImageVersion = -1;
+        private long _finalPreviewBuiltContentRevision = -1;
+        private object? _finalPreviewBuiltRun;
+
+        private void InvalidateFinalPreviewCache()
+        {
+            _finalPreviewBuiltImageVersion = -1;
+            _finalPreviewBuiltContentRevision = -1;
+            _finalPreviewBuiltRun = null;
+        }
+
         [ObservableProperty]
         private string _statusBarText = "Ready.";
         public void ShowPortValueDialog(ToolGraphNodeViewModel node, string portName)
@@ -4260,6 +4276,7 @@ namespace VisionInspectionApp.UI.ViewModels
             LastResult = null;
             _lastRunError = null;
             _sharedImage?.SetImage(null); // Clear ảnh preview
+            InvalidateFinalPreviewCache();
             FinalPreviewImage = null;
             SelectedNodePreviewImage = null;
             SelectedNodeOverlayItems.Clear();

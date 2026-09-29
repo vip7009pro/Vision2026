@@ -120,6 +120,14 @@ namespace VisionInspectionApp.UI.ViewModels
 
         partial void OnIsDirtyChanged(bool value)
         {
+            // Mọi thay đổi nội dung (định nghĩa tool, ROI, cạnh nối...) đều set IsDirty = true.
+            // Dùng làm "revision" để quyết định có phải dựng lại preview Final hay không
+            // (tránh dựng lại preview rất tốn kém khi chỉ trỏ qua lại giữa các node).
+            if (value)
+            {
+                _previewContentRevision++;
+            }
+
             if (System.Windows.Application.Current?.MainWindow != null)
             {
                 var title = System.Windows.Application.Current.MainWindow.Title;
