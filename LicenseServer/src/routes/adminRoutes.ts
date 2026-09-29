@@ -31,4 +31,8 @@ router.post('/registration/approve', AdminController.approveRegistration);
 router.post('/registration/reject', AdminController.rejectRegistration);
 router.post('/registration/reset', AdminController.resetRegistration);
 
+// Backup & Migration (Xuất / Nhập toàn bộ dữ liệu sang máy chủ mới)
+router.get('/data/export', AdminController.exportData);
+router.post('/data/import', AdminController.importData);
+
 export default router;

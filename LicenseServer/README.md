@@ -10,6 +10,7 @@ Máy chủ quản lý bản quyền độc lập trên Internet cho giải pháp
   - Máy cô lập mạng (Air-gapped): Ký file `.req` để tạo file bản quyền `.lic`.
 - **Quản Lý Client Từ Xa**: Xem trạng thái online, thu hồi bản quyền (Revoke), tạm dừng (Suspend), chuyển đổi máy trạm (Transfer).
 - **Mật Mã Học Bất Đối Xứng RSA-2048**: Server giữ Private Key ký số, Client chỉ giữ Public Key để xác thực.
+- **Sao Lưu & Di Trú 1-Click**: Xuất toàn bộ dữ liệu (License, Máy trạm, Đăng ký, Nhật ký và cặp khóa RSA) ra 1 file JSON duy nhất, nhập lại trên máy chủ mới để chuyển server trong vài giây.
 
 ## 2. Cách Chạy License Server Tại Local / VPS
 
@@ -66,3 +67,20 @@ server {
 - `GET  /api/v1/admin/clients`: Danh sách máy trạm.
 - `POST /api/v1/admin/machine/revoke`: Thu hồi bản quyền từ xa.
 - `POST /api/v1/admin/machine/transfer`: Chuyển máy.
+- `GET  /api/v1/admin/data/export`: Xuất toàn bộ dữ liệu (CSDL + cặp khóa RSA) ra JSON.
+- `POST /api/v1/admin/data/import`: Phục hồi toàn bộ dữ liệu từ file JSON (`replace`, `restoreKeys`).
+
+## 5. Sao Lưu & Di Trú Máy Chủ (Backup / Migrate)
+
+Mở Web Admin Dashboard ➜ tab **🗄️ Sao Lưu & Di Trú**.
+
+1. **Xuất toàn bộ dữ liệu (Export)**: Tải về file `vision2026-license-backup-<timestamp>.json` chứa toàn bộ bảng `licenses`, `machines`, `client_registrations`, `audit_logs` **và cặp khóa RSA** (`private.pem`/`public.pem`).
+2. **Nhập & Phục hồi (Import)**: Chọn/kéo-thả file `.json` vừa xuất, rồi bấm nhập.
+   - `Ghi đè toàn bộ` (mặc định): xóa sạch dữ liệu hiện có trên máy chủ rồi phục hồi (dùng khi chuyển server).
+   - Bỏ chọn để **nhập bổ sung** (chỉ thêm bản ghi chưa tồn tại).
+   - `Phục hồi cả cặp khóa RSA`: bắt buộc chọn nếu muốn các file `.lic` đã cấp trước đó còn hợp lệ trên máy chủ mới.
+
+> ⚠️ File sao lưu chứa Private Key ký bản quyền — hãy lưu trữ ở nơi an toàn.
+> Sau khi phục hồi có khóa RSA, nên **khởi động lại** License Server để áp dụng hoàn toàn.
+>
+> Quy trình chuyển server gọn nhất: (1) Export trên server cũ ➜ (2) cài đặt server mới ➜ (3) Import file JSON trên server mới ➜ (4) restart server.

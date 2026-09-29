@@ -164,6 +164,17 @@
                                 </StackPanel>
                             </Button>
 
+                            <!-- Mở Bản Vẽ PDF trên trình duyệt -->
+                            <Button Command="{Binding OpenDrawingCommand}"
+                                    Background="#5E35B1" Foreground="White" FontWeight="Bold"
+                                    Padding="10,4" Margin="0,0,6,4" Height="30" Cursor="Hand"
+                                    ToolTip="Mở bản vẽ kỹ thuật PDF của sản phẩm đang chọn trên trình duyệt (server/banve/&lt;MãSP&gt;.pdf)">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="📄 " />
+                                    <TextBlock Text="Mở Bản Vẽ" />
+                                </StackPanel>
+                            </Button>
+
                             <!-- Upload Job -->
                             <Button Command="{Binding UploadCurrentJobCommand}"
                                     Background="#E65100" Foreground="White" FontWeight="SemiBold"

@@ -916,5 +916,168 @@ function formatDate(isoStr) {
   }
 }
 
+// --- BACKUP & MIGRATION (Export / Import toàn bộ dữ liệu) ---
+
+const btnExportData = document.getElementById('btn-export-data');
+const exportSummary = document.getElementById('export-summary');
+const importDropZone = document.getElementById('import-drop-zone');
+const fileBackupInput = document.getElementById('file-backup-input');
+const importFileInfo = document.getElementById('import-file-info');
+const importReplaceMode = document.getElementById('import-replace-mode');
+const importRestoreKeys = document.getElementById('import-restore-keys');
+const btnImportData = document.getElementById('btn-import-data');
+
+let pendingBackup = null;
+
+function renderBackupCounts(container, counts, titleHtml) {
+  if (!container) return;
+  container.innerHTML = `
+    ${titleHtml}
+    <div class="info-row"><span>License:</span> <strong>${counts.licenses || 0}</strong></div>
+    <div class="info-row"><span>Máy trạm:</span> <strong>${counts.machines || 0}</strong></div>
+    <div class="info-row"><span>Đăng ký chờ duyệt:</span> <strong>${counts.clientRegistrations || 0}</strong></div>
+    <div class="info-row"><span>Nhật ký (audit):</span> <strong>${counts.auditLogs || 0}</strong></div>
+  `;
+  container.style.display = 'block';
+}
+
+async function handleBackupFile(file) {
+  if (!file) return;
+  try {
+    const text = await file.text();
+    const parsed = JSON.parse(text);
+    pendingBackup = parsed.backup || parsed.data || parsed;
+
+    const counts = (pendingBackup.meta && pendingBackup.meta.counts) || {
+      licenses: (pendingBackup.licenses || []).length,
+      machines: (pendingBackup.machines || []).length,
+      clientRegistrations: (pendingBackup.clientRegistrations || []).length,
+      auditLogs: (pendingBackup.auditLogs || []).length
+    };
+
+    const hasKeys = !!(pendingBackup.keys && pendingBackup.keys.privateKey);
+    renderBackupCounts(
+      importFileInfo,
+      counts,
+      `<h4>📄 File: ${escapeHtml(file.name)}${hasKeys ? ' • 🔑 có khóa RSA' : ''}</h4>`
+    );
+
+    btnImportData.disabled = false;
+  } catch (err) {
+    pendingBackup = null;
+    btnImportData.disabled = true;
+    if (importFileInfo) importFileInfo.style.display = 'none';
+    alert(`File sao lưu không hợp lệ: ${err.message}`);
+  }
+}
+
+if (importDropZone && fileBackupInput) {
+  importDropZone.addEventListener('click', () => fileBackupInput.click());
+  importDropZone.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    importDropZone.classList.add('dragover');
+  });
+  importDropZone.addEventListener('dragleave', () => importDropZone.classList.remove('dragover'));
+  importDropZone.addEventListener('drop', (e) => {
+    e.preventDefault();
+    importDropZone.classList.remove('dragover');
+    if (e.dataTransfer.files && e.dataTransfer.files.length) {
+      handleBackupFile(e.dataTransfer.files[0]);
+    }
+  });
+  fileBackupInput.addEventListener('change', () => {
+    if (fileBackupInput.files && fileBackupInput.files.length) {
+      handleBackupFile(fileBackupInput.files[0]);
+    }
+  });
+}
+
+if (btnExportData) {
+  btnExportData.addEventListener('click', async () => {
+    const originalText = btnExportData.textContent;
+    btnExportData.disabled = true;
+    btnExportData.textContent = '⏳ Đang xuất dữ liệu...';
+    try {
+      const res = await authFetch(`${API_BASE}/api/v1/admin/data/export`);
+      const data = await res.json();
+      if (!data.success || !data.backup) {
+        throw new Error(data.message || 'Xuất dữ liệu thất bại.');
+      }
+
+      const backup = data.backup;
+      const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+      const fileName = `vision2026-license-backup-${stamp}.json`;
+      const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = fileName;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+
+      const counts = (backup.meta && backup.meta.counts) || {};
+      renderBackupCounts(exportSummary, counts, `<h4>✅ Đã xuất: ${escapeHtml(fileName)}</h4>`);
+    } catch (err) {
+      alert(`Lỗi xuất dữ liệu: ${err.message}`);
+    } finally {
+      btnExportData.disabled = false;
+      btnExportData.textContent = originalText;
+    }
+  });
+}
+
+if (btnImportData) {
+  btnImportData.addEventListener('click', async () => {
+    if (!pendingBackup) {
+      alert('Vui lòng chọn file sao lưu trước.');
+      return;
+    }
+
+    const replace = importReplaceMode ? importReplaceMode.checked : true;
+    const restoreKeys = importRestoreKeys ? importRestoreKeys.checked : true;
+    const warn = replace
+      ? 'Toàn bộ dữ liệu hiện có sẽ bị XÓA và thay thế bằng dữ liệu trong file.'
+      : 'Dữ liệu sẽ được bổ sung (KHÔNG xóa dữ liệu hiện có).';
+
+    if (!confirm(`${warn}\n\nBạn có chắc chắn muốn phục hồi từ file sao lưu này?`)) return;
+
+    const originalText = btnImportData.textContent;
+    btnImportData.disabled = true;
+    btnImportData.textContent = '⏳ Đang phục hồi dữ liệu...';
+    try {
+      const res = await authFetch(`${API_BASE}/api/v1/admin/data/import`, {
+        method: 'POST',
+        body: JSON.stringify({ backup: pendingBackup, replace, restoreKeys })
+      });
+      const data = await res.json();
+      if (!data.success) {
+        throw new Error(data.message || 'Phục hồi dữ liệu thất bại.');
+      }
+
+      const imp = data.imported || {};
+      let msg = `${data.message}\n\nĐã nhập: ${imp.licenses || 0} License, ${imp.machines || 0} Máy trạm, ${imp.clientRegistrations || 0} Đăng ký, ${imp.auditLogs || 0} Nhật ký.`;
+      if (data.keysRestored) {
+        msg += '\n\n✅ Đã phục hồi cặp khóa RSA. Vui lòng KHỞI ĐỘNG LẠI server để áp dụng hoàn toàn.';
+      }
+      if (data.keysWarning) {
+        msg += `\n\n⚠️ ${data.keysWarning}`;
+      }
+      alert(msg);
+
+      pendingBackup = null;
+      if (importFileInfo) importFileInfo.style.display = 'none';
+      if (fileBackupInput) fileBackupInput.value = '';
+      loadDashboardData();
+    } catch (err) {
+      alert(`Lỗi phục hồi dữ liệu: ${err.message}`);
+    } finally {
+      btnImportData.textContent = originalText;
+      btnImportData.disabled = !pendingBackup;
+    }
+  });
+}
+
 // Initial Run
 checkAuth();

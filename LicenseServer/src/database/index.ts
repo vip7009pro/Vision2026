@@ -3,6 +3,14 @@ import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { LicenseCrypto, LicensePayload } from '../crypto/licenseCrypto';
+import {
+  BackupPayload,
+  ImportOptions,
+  ImportResult,
+  exportDatabase,
+  importDatabase,
+  getTableCounts
+} from './dataMigration';
 
 export interface LicenseRecord {
   id: string;
@@ -630,6 +638,28 @@ export class DatabaseManager {
       revokedMachines,
       pendingRegistrations
     };
+  }
+
+  // --- BACKUP / MIGRATION (Xuất & Nhập toàn bộ dữ liệu) ---
+
+  /** Trả về kết nối SQLite thô (dùng cho sao lưu / di trú). */
+  public getConnection(): DatabaseSync {
+    return this.db;
+  }
+
+  /** Xuất toàn bộ dữ liệu (licenses, machines, registrations, audit_logs) ra payload JSON. */
+  public exportAllData(): BackupPayload {
+    return exportDatabase(this.db);
+  }
+
+  /** Phục hồi dữ liệu từ payload export. replace=false sẽ chỉ bổ sung bản ghi mới. */
+  public importAllData(payload: BackupPayload, options: ImportOptions = {}): ImportResult {
+    return importDatabase(this.db, payload, options);
+  }
+
+  /** Số lượng bản ghi hiện có theo từng bảng. */
+  public getTableCounts() {
+    return getTableCounts(this.db);
   }
 
   // --- CLIENT REGISTRATION & 1-CLICK APPROVAL ---

@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import jwt from 'jsonwebtoken';
 import { DatabaseManager } from '../database';
+import { BackupPayload } from '../database/dataMigration';
 import { LicenseCrypto } from '../crypto/licenseCrypto';
 import { config } from '../config';
 
@@ -361,5 +362,98 @@ export class AdminController {
     }
     db.resetClientRegistration(machineFingerprint);
     res.json({ success: true, message: 'Đã xóa đăng ký cũ của máy trạm để test đăng ký mới.' });
+  }
+
+  /**
+   * GET /api/v1/admin/data/export
+   * Xuất toàn bộ dữ liệu (CSDL + cặp khóa RSA) để sao lưu hoặc di trú sang máy chủ mới.
+   */
+  public static async exportData(req: Request, res: Response): Promise<void> {
+    const db = DatabaseManager.getInstance(config.dbPath);
+    const backup = db.exportAllData();
+
+    try {
+      backup.keys = LicenseCrypto.exportKeyPair(config.keysDir);
+    } catch {
+      backup.keys = null;
+    }
+
+    if (backup.meta) {
+      backup.meta.source = req.headers.host || '';
+    }
+
+    db.logAudit({
+      action: 'ADMIN_EXPORT_DATA',
+      ip_address: req.ip,
+      details: backup.meta?.counts
+    });
+
+    res.json({
+      success: true,
+      message: 'Xuất toàn bộ dữ liệu thành công!',
+      backup
+    });
+  }
+
+  /**
+   * POST /api/v1/admin/data/import
+   * Phục hồi toàn bộ dữ liệu từ file sao lưu (mặc định ghi đè toàn bộ).
+   */
+  public static async importData(req: Request, res: Response): Promise<void> {
+    const db = DatabaseManager.getInstance(config.dbPath);
+    const backup: BackupPayload | undefined = req.body?.backup || req.body?.data || req.body;
+    const replace = req.body?.replace !== false;
+    const restoreKeys = req.body?.restoreKeys !== false;
+
+    if (!backup || (!Array.isArray(backup.licenses) && !Array.isArray(backup.machines))) {
+      res.status(400).json({
+        success: false,
+        message: 'File sao lưu không hợp lệ hoặc thiếu dữ liệu licenses/machines.'
+      });
+      return;
+    }
+
+    const before = db.getTableCounts();
+
+    let result;
+    try {
+      result = db.importAllData(backup, { replace });
+    } catch (err: any) {
+      res.status(400).json({ success: false, message: `Phục hồi dữ liệu thất bại: ${err.message}` });
+      return;
+    }
+
+    let keysRestored = false;
+    let keysWarning: string | null = null;
+    if (restoreKeys && backup.keys && backup.keys.privateKey && backup.keys.publicKey) {
+      try {
+        LicenseCrypto.importKeyPair(config.keysDir, backup.keys.privateKey, backup.keys.publicKey);
+        keysRestored = true;
+      } catch (err: any) {
+        keysWarning = `Không thể phục hồi khóa RSA: ${err.message}`;
+      }
+    }
+
+    const after = db.getTableCounts();
+
+    db.logAudit({
+      action: 'ADMIN_IMPORT_DATA',
+      ip_address: req.ip,
+      details: { replace, ...result.imported, keysRestored }
+    });
+
+    res.json({
+      success: true,
+      message: replace
+        ? 'Đã phục hồi (ghi đè) toàn bộ dữ liệu thành công!'
+        : 'Đã nhập bổ sung dữ liệu mới thành công!',
+      replaced: result.replaced,
+      imported: result.imported,
+      keysRestored,
+      keysWarning,
+      needsRestart: keysRestored,
+      before,
+      after
+    });
   }
 }

@@ -89,6 +89,35 @@ export class LicenseCrypto {
   }
 
   /**
+   * Xuất cặp khóa RSA hiện tại dưới dạng PEM (phục vụ sao lưu / di trú máy chủ).
+   * Bắt buộc phải di trú kèm khóa, nếu không các file .lic đã cấp sẽ không còn hợp lệ.
+   */
+  public static exportKeyPair(keysDir: string = './keys'): { privateKey: string; publicKey: string } {
+    return this.ensureKeyPair(keysDir);
+  }
+
+  /** Ghi đè cặp khóa RSA từ bản sao lưu rồi xóa cache trong RAM. */
+  public static importKeyPair(keysDir: string, privateKey: string, publicKey: string): void {
+    if (!privateKey || !publicKey) {
+      throw new Error('Cặp khóa RSA không hợp lệ (thiếu privateKey hoặc publicKey).');
+    }
+
+    if (!fs.existsSync(keysDir)) {
+      fs.mkdirSync(keysDir, { recursive: true });
+    }
+
+    fs.writeFileSync(path.join(keysDir, 'private.pem'), privateKey, { encoding: 'utf8', mode: 0o600 });
+    fs.writeFileSync(path.join(keysDir, 'public.pem'), publicKey, { encoding: 'utf8', mode: 0o644 });
+    this.resetCache();
+  }
+
+  /** Xóa cache khóa trong RAM để buộc đọc lại từ đĩa ở lần kế tiếp. */
+  public static resetCache(): void {
+    this.privateKeyPem = null;
+    this.publicKeyPem = null;
+  }
+
+  /**
    * Tạo chuỗi Canonical JSON (sắp xếp khóa thuộc tính theo bảng chữ cái)
    * Đảm bảo dữ liệu băm đồng nhất 100% giữa Node.js và C# .NET.
    */

@@ -119,6 +119,7 @@ public partial class JobManagerViewModel : ObservableObject
     public IAsyncRelayCommand RefreshTeachImageCommand { get; }
     public IRelayCommand OpenProductAssignCommand { get; }
     public IRelayCommand OpenSettingsCommand { get; }
+    public IRelayCommand OpenDrawingCommand { get; }
 
     public event Action? RequestClose;
 
@@ -159,6 +160,7 @@ public partial class JobManagerViewModel : ObservableObject
         RefreshTeachImageCommand = new AsyncRelayCommand(ExecuteRefreshTeachImageAsync);
         OpenProductAssignCommand = new RelayCommand(ExecuteOpenProductAssign);
         OpenSettingsCommand = new RelayCommand(ExecuteOpenSettings);
+        OpenDrawingCommand = new RelayCommand(ExecuteOpenDrawing);
 
         // Auto ping on init
         _ = Task.Run(async () =>
@@ -1116,6 +1118,37 @@ public partial class JobManagerViewModel : ObservableObject
                 win.Owner = mainWin;
             }
             win.Show();
+        }
+    }
+
+    /// <summary>
+    /// Mở bản vẽ kỹ thuật PDF của sản phẩm đang chọn trên trình duyệt:
+    /// {ServerBaseUrl}/banve/{ProductCode}.pdf?v={random} (tham số v dùng để chống cache trình duyệt).
+    /// </summary>
+    public void ExecuteOpenDrawing()
+    {
+        if (SelectedItem == null || string.IsNullOrWhiteSpace(SelectedItem.ProductCode))
+        {
+            MessageBox.Show("Vui lòng chọn một sản phẩm trong danh sách để mở bản vẽ!", "Thông Báo", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        string baseUrl = GetServerBaseUrl().TrimEnd('/');
+        string productCode = Uri.EscapeDataString(SelectedItem.ProductCode.Trim());
+        long cacheBuster = DateTime.UtcNow.Ticks % 1_000_000_000;
+        string drawingUrl = $"{baseUrl}/banve/{productCode}.pdf?v={cacheBuster}";
+
+        try
+        {
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(drawingUrl) { UseShellExecute = true });
+            StatusMessage = $"📄 Đã mở bản vẽ cho '{SelectedItem.ProductCode}' trên trình duyệt.";
+            StatusBrush = Brushes.DodgerBlue;
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = $"❌ Không thể mở bản vẽ: {ex.Message}";
+            StatusBrush = Brushes.Red;
+            MessageBox.Show($"Không thể mở bản vẽ:\n{ex.Message}", "Lỗi", MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }
 

@@ -61,6 +61,7 @@
         <button class="nav-tab" data-tab="pending">⏳ Chờ Duyệt <span class="badge-pill" id="badge-pending" style="display: none;">0</span></button>
         <button class="nav-tab" data-tab="licenses">🔑 Mã Bản Quyền (Licenses)</button>
         <button class="nav-tab" data-tab="offline">💾 Ký Offline (.req ➔ .lic)</button>
+        <button class="nav-tab" data-tab="backup">🗄️ Sao Lưu & Di Trú</button>
       </nav>
 
       <div class="nav-right">
@@ -289,6 +290,66 @@
                 🔐 Ký Số & Tải File Bản Quyền (.lic)
               </button>
             </form>
+          </div>
+        </div>
+      </section>
+
+      <!-- TAB 4: BACKUP & MIGRATION -->
+      <section id="tab-backup" class="tab-pane">
+        <div class="pane-header">
+          <div>
+            <h2>Sao Lưu &amp; Di Trú Máy Chủ (Backup / Migrate)</h2>
+            <p class="section-desc">Xuất toàn bộ dữ liệu (License, Máy trạm, Đăng ký chờ duyệt, Nhật ký và cặp khóa RSA) ra 1 file JSON duy nhất, sau đó nhập lại trên máy chủ mới để chuyển server chỉ trong vài giây.</p>
+          </div>
+        </div>
+
+        <div class="offline-grid">
+          <!-- EXPORT -->
+          <div class="glass-card offline-form-card">
+            <h3>1. Xuất Toàn Bộ Dữ Liệu (Export)</h3>
+            <p class="text-muted" style="font-size:12px; line-height:1.6; margin-bottom:16px;">
+              Tải về 1 file <code>.json</code> chứa toàn bộ CSDL và cặp khóa RSA.
+              Hãy lưu file này ở nơi an toàn — file chứa <strong>khóa riêng (private key)</strong> dùng để ký bản quyền.
+            </p>
+
+            <div id="export-summary" class="req-info-box" style="display: none;"></div>
+
+            <button id="btn-export-data" class="btn-primary btn-block" style="margin-top: 8px;">
+              ⬇️ Xuất Toàn Bộ Dữ Liệu (.json)
+            </button>
+          </div>
+
+          <!-- IMPORT -->
+          <div class="glass-card offline-form-card">
+            <h3>2. Nhập &amp; Phục Hồi Dữ Liệu (Import)</h3>
+            <div class="alert-error" style="display: block; margin-bottom: 14px;">
+              ⚠️ Chế độ "Ghi đè toàn bộ" sẽ <strong>xóa sạch</strong> dữ liệu hiện có trên máy chủ này trước khi phục hồi. Hãy chắc chắn bạn đã sao lưu dữ liệu hiện tại.
+            </div>
+
+            <div id="import-drop-zone" class="drop-zone">
+              <div class="drop-icon">🗂️</div>
+              <p>Kéo thả file sao lưu <strong>.json</strong> vào đây hoặc click để chọn file</p>
+              <input type="file" id="file-backup-input" accept=".json,application/json" style="display: none;">
+            </div>
+
+            <div id="import-file-info" class="req-info-box" style="display: none;"></div>
+
+            <div class="form-group" style="margin-top: 14px;">
+              <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                <input type="checkbox" id="import-replace-mode" checked style="width: auto;">
+                Ghi đè toàn bộ dữ liệu hiện có (khuyên dùng khi chuyển server)
+              </label>
+            </div>
+            <div class="form-group">
+              <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                <input type="checkbox" id="import-restore-keys" checked style="width: auto;">
+                Phục hồi cả cặp khóa RSA (bắt buộc để các file .lic cũ còn hợp lệ)
+              </label>
+            </div>
+
+            <button id="btn-import-data" class="btn-success btn-block" disabled>
+              ⬆️ Nhập &amp; Phục Hồi Dữ Liệu
+            </button>
           </div>
         </div>
       </section>
