@@ -387,6 +387,8 @@ namespace VisionInspectionApp.UI.ViewModels
             DeleteSelectionCommand = new RelayCommand(DeleteSelection);
             CopySelectedNodeCommand = new RelayCommand(CopySelectedNode);
             PasteNodeCommand = new RelayCommand(PasteNode);
+            AutoTunePreprocessCommand = new AsyncRelayCommand(AutoTunePreprocessAsync);
+            CancelAutoTuneCommand = new RelayCommand(CancelAutoTune);
             LoadPreviewImageCommand = new RelayCommand(LoadPreviewImage);
             CaptureCameraImageCommand = new AsyncRelayCommand(CaptureCameraImageAsync);
             CaptureAndSaveImageCommand = new AsyncRelayCommand(CaptureAndSaveImageAsync);
@@ -1215,6 +1217,7 @@ namespace VisionInspectionApp.UI.ViewModels
         {
             SyncSelectedDbNode(SelectedNode);
             RefreshOriginTemplatePreview();
+            RefreshAutoTunePanelState();
             OnPropertyChanged(nameof(IsPreprocessNode));
             OnPropertyChanged(nameof(PreprocessRois));
             if (IsPreprocessNode)

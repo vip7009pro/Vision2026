@@ -970,6 +970,57 @@
                                 </StackPanel>
                             </StackPanel>
 
+                            <StackPanel Visibility="{Binding IsAutoTuneCapable, Converter={StaticResource BoolToVis}}">
+                                <Border Background="{DynamicResource BorderBrush}" Padding="3,1" Margin="0,3,0,0">
+                                    <TextBlock Text="🎯 Auto Tune Preprocess" FontWeight="Bold" Foreground="{DynamicResource TextBrush}" />
+                                </Border>
+
+                                <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" Padding="6" Margin="0,4,0,6" Background="{DynamicResource PanelAltBackgroundBrush}">
+                                    <StackPanel>
+                                        <TextBlock Margin="0,0,0,4" FontSize="11" TextWrapping="Wrap" Foreground="{DynamicResource TextBrush}">
+                                            <Run Text="Preprocess cha:" FontWeight="SemiBold" />
+                                            <Run Text="{Binding AutoTunePreprocessName, Mode=OneWay}" />
+                                        </TextBlock>
+
+                                        <Grid Margin="0,0,0,6">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <Button Grid.Column="0" Content="🎯 Auto Tune" Height="26" Margin="0,0,4,0"
+                                                    Command="{Binding AutoTunePreprocessCommand}"
+                                                    IsEnabled="{Binding AutoTuneCanRun}"
+                                                    FontWeight="SemiBold"
+                                                    Background="#007ACC" Foreground="White"
+                                                    ToolTip="Tự động thử nhiều cấu hình Preprocess và chọn cấu hình cho điểm nhận diện cao nhất" />
+                                            <Button Grid.Column="1" Content="⏹ Hủy" Height="26" Padding="10,0"
+                                                    Command="{Binding CancelAutoTuneCommand}"
+                                                    IsEnabled="{Binding AutoTuneIsRunning}"
+                                                    Background="{DynamicResource ButtonBackgroundBrush}"
+                                                    Foreground="{DynamicResource TextBrush}"
+                                                    BorderBrush="{DynamicResource DarkBorderBrush}"
+                                                    ToolTip="Dừng quá trình Auto Tune" />
+                                        </Grid>
+
+                                        <TextBlock Text="{Binding AutoTuneStatusText}" FontSize="11" TextWrapping="Wrap" Foreground="{DynamicResource TextBrush}" Margin="0,0,0,4" />
+
+                                        <TextBlock FontSize="11" Foreground="{DynamicResource TextBrush}" Margin="0,0,0,2">
+                                            <Run Text="Bước:" FontWeight="SemiBold" />
+                                            <Run Text="{Binding AutoTuneStepText, Mode=OneWay}" />
+                                        </TextBlock>
+
+                                        <TextBlock FontSize="11" TextWrapping="Wrap" Foreground="{DynamicResource TextBrush}" Margin="0,0,0,2">
+                                            <Run Text="Thông số đang thử:" FontWeight="SemiBold" />
+                                            <Run Text="{Binding AutoTuneParamText, Mode=OneWay}" />
+                                        </TextBlock>
+
+                                        <TextBlock FontSize="11" TextWrapping="Wrap" Foreground="{DynamicResource TextBrush}">
+                                            <Run Text="{Binding AutoTuneBestScoreText, Mode=OneWay}" />
+                                        </TextBlock>
+                                    </StackPanel>
+                                </Border>
+                            </StackPanel>
+
                             <StackPanel Visibility="{Binding IsLineNode, Converter={StaticResource BoolToVis}}">
                                 <Border Background="{DynamicResource BorderBrush}" Padding="3,1" Margin="0,3,0,0">
                                     <TextBlock Text="Line Params" FontWeight="Bold" Foreground="{DynamicResource TextBrush}" />

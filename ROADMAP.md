@@ -46,6 +46,13 @@
   - [x] Tự động xóa ô "Đo thực tế (mm)" khi chuyển sang công cụ khác; Status Bar ghi rõ nguồn kích thước đã dùng để calib.
   - [x] Bổ sung 2 test cases `TestCalibActualMmInputParsing` và `TestCalibActualMmSeparateFieldDoesNotOverwriteSpec` — 12/12 Calib tests PASS 100%.
 
+- [x] Task 377: Sửa lỗi Copy/Paste nhiều node trong Tool Editor & thêm nút Auto Tune cho công cụ nhận diện:
+  - [x] `ToolEditorViewModel.GraphOps.cs`: thay cơ chế clipboard 1 node (chỉ lưu `RefName`/`Type`) bằng danh sách snapshot nhiều node; paste nhân bản đầy đủ tất cả node trong vùng chọn (kèm định nghĩa + vị trí + cạnh nội bộ + cạnh vào từ node ngoài).
+  - [x] Tách hàm dùng chung `CloneNodeDefinition(type, oldName, newName)` hỗ trợ 30+ loại node.
+  - [x] Thêm `PreprocessAutoTuner` (VisionInspectionApp.Application): thử ~40 cấu hình Preprocess, chấm điểm theo kết quả nhận diện của Caliper / Line / EdgePairDetect / CircleFinder / CodeDetection, trả về cấu hình điểm cao nhất.
+  - [x] Thêm panel `🎯 Auto Tune Preprocess` trong Tool Editor: nút Auto Tune/Hủy, hiển thị Preprocess cha, tiến trình (bước x/y), thông số đang thử và điểm cao nhất.
+  - [x] Sau khi Auto Tune: tự động gán thông số tốt nhất vào tool Preprocess cha và refresh preview + autosave.
+
 ## Định hướng tiếp theo
 - [ ] Bổ sung tính năng tự động phát hiện khung tên bản vẽ kỹ thuật (Title Block) trên PDF.
 - [ ] Tích hợp trích xuất lớp vector nguyên bản từ PDF dạng DXF/SVG phục vụ so khớp đường biên CAD.

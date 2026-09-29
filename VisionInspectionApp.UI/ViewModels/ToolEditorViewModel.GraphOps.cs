@@ -171,6 +171,8 @@ namespace VisionInspectionApp.UI.ViewModels
         public ICommand DeleteSelectionCommand { get; }
         public ICommand CopySelectedNodeCommand { get; }
         public ICommand PasteNodeCommand { get; }
+        public ICommand AutoTunePreprocessCommand { get; }
+        public ICommand CancelAutoTuneCommand { get; }
     
         public void SelectEdge(ToolGraphEdgeViewModel? edge)
         {
@@ -206,89 +208,187 @@ namespace VisionInspectionApp.UI.ViewModels
             RequestAutoSave();
         }
 
-        private string? _copiedNodeRefName;
-        private string? _copiedNodeType;
+        /// <summary>Ảnh chụp nhanh một node được copy (đủ để nhân bản định nghĩa + vị trí).</summary>
+        private sealed class CopiedNodeSnapshot
+        {
+            public string RefName { get; set; } = string.Empty;
+            public string Type { get; set; } = string.Empty;
+            public double X { get; set; }
+            public double Y { get; set; }
+        }
+
+        private readonly List<CopiedNodeSnapshot> _copiedNodes = new();
+        private readonly List<(int FromIndex, int ToIndex, string FromPort, string ToPort)> _copiedInternalEdges = new();
+        private readonly List<(int ToIndex, string FromNodeId, string FromPort, string ToPort)> _copiedIncomingEdges = new();
 
         private void CopySelectedNode()
         {
-            if (SelectedNode is null || string.Equals(SelectedNode.Type, "Origin", StringComparison.OrdinalIgnoreCase))
+            bool IsCopyable(ToolGraphNodeViewModel? n) =>
+                n is not null && !string.Equals(n.Type, "Origin", StringComparison.OrdinalIgnoreCase);
+
+            // Copy toàn bộ vùng chọn (multi-select). Nếu chưa có multi-select thì chỉ copy node đang chọn.
+            var sources = SelectedNodes.Where(IsCopyable).ToList();
+            if (sources.Count == 0 && IsCopyable(SelectedNode))
+            {
+                sources.Add(SelectedNode!);
+            }
+
+            _copiedNodes.Clear();
+            _copiedInternalEdges.Clear();
+            _copiedIncomingEdges.Clear();
+            if (sources.Count == 0)
             {
                 return;
             }
-            _copiedNodeRefName = SelectedNode.RefName;
-            _copiedNodeType = SelectedNode.Type;
+
+            var indexById = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+            for (var i = 0; i < sources.Count; i++)
+            {
+                var n = sources[i];
+                _copiedNodes.Add(new CopiedNodeSnapshot { RefName = n.RefName, Type = n.Type, X = n.X, Y = n.Y });
+                if (!string.IsNullOrWhiteSpace(n.Id))
+                {
+                    indexById[n.Id] = i;
+                }
+            }
+
+            // Ghi nhớ các cạnh: cạnh nội bộ (2 đầu đều thuộc vùng chọn) và cạnh đi vào từ node bên ngoài.
+            foreach (var e in Edges)
+            {
+                var fromInternal = indexById.TryGetValue(e.FromNodeId, out var fromIdx);
+                var toInternal = indexById.TryGetValue(e.ToNodeId, out var toIdx);
+
+                if (fromInternal && toInternal)
+                {
+                    _copiedInternalEdges.Add((fromIdx, toIdx, e.FromPort, e.ToPort));
+                }
+                else if (!fromInternal && toInternal)
+                {
+                    _copiedIncomingEdges.Add((toIdx, e.FromNodeId, e.FromPort, e.ToPort));
+                }
+            }
         }
 
         private void PasteNode()
         {
-            if (string.IsNullOrWhiteSpace(_copiedNodeRefName) || string.IsNullOrWhiteSpace(_copiedNodeType) || _config is null)
+            if (_copiedNodes.Count == 0 || _config is null)
             {
                 return;
             }
 
-            var newName = GenerateDefaultRefName(_copiedNodeType);
-            var sourceNode = Nodes.FirstOrDefault(n => n.RefName == _copiedNodeRefName && n.Type == _copiedNodeType);
-            var canvasX = sourceNode != null ? Math.Round((sourceNode.X + 20) / 10.0) * 10.0 : 100;
-            var canvasY = sourceNode != null ? Math.Round((sourceNode.Y + 20) / 10.0) * 10.0 : 100;
-
-            var newNode = new ToolGraphNodeViewModel
-            {
-                Id = Guid.NewGuid().ToString("N"),
-                Type = _copiedNodeType,
-                RefName = newName,
-                X = canvasX,
-                Y = canvasY
-            };
-            newNode.PropertyChanged += Node_PropertyChanged;
-
             var options = new System.Text.Json.JsonSerializerOptions();
-            if (_copiedNodeType.Equals("Point", StringComparison.OrdinalIgnoreCase)) CloneDefinition(_config.Points, _copiedNodeRefName, newName, options);
-            else if (_copiedNodeType.Equals("Line", StringComparison.OrdinalIgnoreCase)) CloneDefinition(_config.Lines, _copiedNodeRefName, newName, options);
-            else if (_copiedNodeType.Equals("Caliper", StringComparison.OrdinalIgnoreCase)) CloneDefinition(_config.Calipers, _copiedNodeRefName, newName, options);
-            else if (_copiedNodeType.Equals("Distance", StringComparison.OrdinalIgnoreCase)) CloneDefinition(_config.Distances, _copiedNodeRefName, newName, options);
-            else if (_copiedNodeType.Equals("LineLineDistance", StringComparison.OrdinalIgnoreCase)) CloneDefinition(_config.LineToLineDistances, _copiedNodeRefName, newName, options);
-            else if (_copiedNodeType.Equals("PointLineDistance", StringComparison.OrdinalIgnoreCase)) CloneDefinition(_config.PointToLineDistances, _copiedNodeRefName, newName, options);
-            else if (_copiedNodeType.Equals("SegmentLineDistance", StringComparison.OrdinalIgnoreCase)) CloneDefinition(_config.SegmentLineDistances, _copiedNodeRefName, newName, options);
-            else if (_copiedNodeType.Equals("Angle", StringComparison.OrdinalIgnoreCase)) CloneDefinition(_config.Angles, _copiedNodeRefName, newName, options);
-            else if (_copiedNodeType.Equals("Condition", StringComparison.OrdinalIgnoreCase)) CloneDefinition(_config.Conditions, _copiedNodeRefName, newName, options);
-            else if (_copiedNodeType.Equals("BlobDetection", StringComparison.OrdinalIgnoreCase)) CloneDefinition(_config.BlobDetections, _copiedNodeRefName, newName, options);
-            else if (_copiedNodeType.Equals("LinePairDetection", StringComparison.OrdinalIgnoreCase)) CloneDefinition(_config.LinePairDetections, _copiedNodeRefName, newName, options);
-            else if (_copiedNodeType.Equals("EdgePair", StringComparison.OrdinalIgnoreCase)) CloneDefinition(_config.EdgePairs, _copiedNodeRefName, newName, options);
-            else if (_copiedNodeType.Equals("EdgePairDetect", StringComparison.OrdinalIgnoreCase)) CloneDefinition(_config.EdgePairDetections, _copiedNodeRefName, newName, options);
-            else if (_copiedNodeType.Equals("CircleFinder", StringComparison.OrdinalIgnoreCase)) CloneDefinition(_config.CircleFinders, _copiedNodeRefName, newName, options);
-            else if (_copiedNodeType.Equals("Diameter", StringComparison.OrdinalIgnoreCase)) CloneDefinition(_config.Diameters, _copiedNodeRefName, newName, options);
-            else if (_copiedNodeType.Equals("CodeDetection", StringComparison.OrdinalIgnoreCase)) CloneDefinition(_config.CodeDetections, _copiedNodeRefName, newName, options);
-            else if (_copiedNodeType.Equals("OCR", StringComparison.OrdinalIgnoreCase)) CloneDefinition(_config.Ocrs, _copiedNodeRefName, newName, options);
-            else if (_copiedNodeType.Equals("SurfaceCompare", StringComparison.OrdinalIgnoreCase)) CloneDefinition(_config.SurfaceCompares, _copiedNodeRefName, newName, options);
-            else if (_copiedNodeType.Equals("ContourCompare", StringComparison.OrdinalIgnoreCase)) CloneDefinition(_config.ContourCompares, _copiedNodeRefName, newName, options);
-            else if (_copiedNodeType.Equals("Text", StringComparison.OrdinalIgnoreCase)) CloneDefinition(_config.TextNodes, _copiedNodeRefName, newName, options);
-            else if (_copiedNodeType.Equals("ImageSource", StringComparison.OrdinalIgnoreCase)) CloneDefinition(_config.ImageSources, _copiedNodeRefName, newName, options);
-            else if (_copiedNodeType.Equals("ImageOutput", StringComparison.OrdinalIgnoreCase) || _copiedNodeType.Equals("OutputImage", StringComparison.OrdinalIgnoreCase)) CloneDefinition(_config.ImageOutputs, _copiedNodeRefName, newName, options);
-            else if (_copiedNodeType.Equals("Preprocess", StringComparison.OrdinalIgnoreCase)) CloneDefinition(_config.PreprocessNodes, _copiedNodeRefName, newName, options);
-            
-            Nodes.Add(newNode);
+            var newNodes = new List<ToolGraphNodeViewModel>(_copiedNodes.Count);
 
-            // Copy all incoming edges/inputs from sourceNode to newNode
-            if (sourceNode != null)
+            // Dịch chuyển nhẹ để các bản sao không nằm đè lên node gốc.
+            const double pasteOffset = 30.0;
+
+            foreach (var snap in _copiedNodes)
             {
-                var incomingEdges = Edges.Where(e => string.Equals(e.ToNodeId, sourceNode.Id, StringComparison.OrdinalIgnoreCase)).ToList();
-                foreach (var edge in incomingEdges)
+                var newName = GenerateDefaultRefName(snap.Type);
+                var newNode = new ToolGraphNodeViewModel
                 {
-                    var fromNode = Nodes.FirstOrDefault(n => string.Equals(n.Id, edge.FromNodeId, StringComparison.OrdinalIgnoreCase));
-                    if (fromNode != null)
-                    {
-                        var newEdge = new ToolGraphEdgeViewModel(fromNode, newNode, edge.FromPort, edge.ToPort);
-                        Edges.Add(newEdge);
-                    }
-                }
-                SyncEdgesToConfig();
+                    Id = Guid.NewGuid().ToString("N"),
+                    Type = snap.Type,
+                    RefName = newName,
+                    X = Math.Round((snap.X + pasteOffset) / 10.0) * 10.0,
+                    Y = Math.Round((snap.Y + pasteOffset) / 10.0) * 10.0
+                };
+                newNode.PropertyChanged += Node_PropertyChanged;
+                newNode.EnsurePortsInitialized();
+
+                CloneNodeDefinition(snap.Type, snap.RefName, newName, options);
+
+                Nodes.Add(newNode);
+                newNodes.Add(newNode);
             }
 
-            SelectedNode = newNode;
+            // Tái tạo các cạnh nối giữa những node vừa được nhân bản (giữ nguyên cấu trúc graph con).
+            foreach (var (fromIdx, toIdx, fromPort, toPort) in _copiedInternalEdges)
+            {
+                if (fromIdx < 0 || fromIdx >= newNodes.Count || toIdx < 0 || toIdx >= newNodes.Count)
+                {
+                    continue;
+                }
+                Edges.Add(new ToolGraphEdgeViewModel(newNodes[fromIdx], newNodes[toIdx], fromPort, toPort));
+            }
+
+            // Tái tạo các cạnh đi vào từ node bên ngoài vùng chọn (ví dụ Preprocess -> Caliper).
+            foreach (var (toIdx, fromNodeId, fromPort, toPort) in _copiedIncomingEdges)
+            {
+                if (toIdx < 0 || toIdx >= newNodes.Count)
+                {
+                    continue;
+                }
+                var fromNode = Nodes.FirstOrDefault(n => string.Equals(n.Id, fromNodeId, StringComparison.OrdinalIgnoreCase));
+                if (fromNode is not null)
+                {
+                    Edges.Add(new ToolGraphEdgeViewModel(fromNode, newNodes[toIdx], fromPort, toPort));
+                }
+            }
+
+            SyncEdgesToConfig();
+
+            // Chọn toàn bộ các node vừa dán để người dùng thấy kết quả multi-copy.
+            ClearNodeSelection();
+            foreach (var n in newNodes)
+            {
+                n.IsSelected = true;
+                SelectedNodes.Add(n);
+            }
+            SelectedNode = newNodes[newNodes.Count - 1];
+
             SyncSelectedToolPreprocessChoiceFromGraph();
             RaiseToolPropertyPanelsChanged();
             RefreshPreviews();
             RequestAutoSave();
+        }
+
+        /// <summary>
+        /// Nhân bản định nghĩa (definition) của một node theo Type. Tách riêng để dùng chung cho
+        /// cả copy 1 node lẫn copy nhiều node cùng lúc.
+        /// </summary>
+        private void CloneNodeDefinition(string type, string oldName, string newName, System.Text.Json.JsonSerializerOptions options)
+        {
+            if (_config is null || string.IsNullOrWhiteSpace(type))
+            {
+                return;
+            }
+
+            if (type.Equals("Point", StringComparison.OrdinalIgnoreCase)) CloneDefinition(_config.Points, oldName, newName, options);
+            else if (type.Equals("Line", StringComparison.OrdinalIgnoreCase)) CloneDefinition(_config.Lines, oldName, newName, options);
+            else if (type.Equals("Caliper", StringComparison.OrdinalIgnoreCase)) CloneDefinition(_config.Calipers, oldName, newName, options);
+            else if (type.Equals("Distance", StringComparison.OrdinalIgnoreCase)) CloneDefinition(_config.Distances, oldName, newName, options);
+            else if (type.Equals("LineLineDistance", StringComparison.OrdinalIgnoreCase)) CloneDefinition(_config.LineToLineDistances, oldName, newName, options);
+            else if (type.Equals("PointLineDistance", StringComparison.OrdinalIgnoreCase)) CloneDefinition(_config.PointToLineDistances, oldName, newName, options);
+            else if (type.Equals("SegmentLineDistance", StringComparison.OrdinalIgnoreCase)) CloneDefinition(_config.SegmentLineDistances, oldName, newName, options);
+            else if (type.Equals("Angle", StringComparison.OrdinalIgnoreCase)) CloneDefinition(_config.Angles, oldName, newName, options);
+            else if (type.Equals("Condition", StringComparison.OrdinalIgnoreCase)) CloneDefinition(_config.Conditions, oldName, newName, options);
+            else if (type.Equals("BlobDetection", StringComparison.OrdinalIgnoreCase)) CloneDefinition(_config.BlobDetections, oldName, newName, options);
+            else if (type.Equals("LinePairDetection", StringComparison.OrdinalIgnoreCase)) CloneDefinition(_config.LinePairDetections, oldName, newName, options);
+            else if (type.Equals("EdgePair", StringComparison.OrdinalIgnoreCase)) CloneDefinition(_config.EdgePairs, oldName, newName, options);
+            else if (type.Equals("EdgePairDetect", StringComparison.OrdinalIgnoreCase)) CloneDefinition(_config.EdgePairDetections, oldName, newName, options);
+            else if (type.Equals("CircleFinder", StringComparison.OrdinalIgnoreCase)) CloneDefinition(_config.CircleFinders, oldName, newName, options);
+            else if (type.Equals("Diameter", StringComparison.OrdinalIgnoreCase)) CloneDefinition(_config.Diameters, oldName, newName, options);
+            else if (type.Equals("CodeDetection", StringComparison.OrdinalIgnoreCase)) CloneDefinition(_config.CodeDetections, oldName, newName, options);
+            else if (type.Equals("OCR", StringComparison.OrdinalIgnoreCase)) CloneDefinition(_config.Ocrs, oldName, newName, options);
+            else if (type.Equals("SurfaceCompare", StringComparison.OrdinalIgnoreCase)) CloneDefinition(_config.SurfaceCompares, oldName, newName, options);
+            else if (type.Equals("ContourCompare", StringComparison.OrdinalIgnoreCase)) CloneDefinition(_config.ContourCompares, oldName, newName, options);
+            else if (type.Equals("Text", StringComparison.OrdinalIgnoreCase) || type.Equals("TextNode", StringComparison.OrdinalIgnoreCase)) CloneDefinition(_config.TextNodes, oldName, newName, options);
+            else if (type.Equals("ImageSource", StringComparison.OrdinalIgnoreCase)) CloneDefinition(_config.ImageSources, oldName, newName, options);
+            else if (type.Equals("ImageOutput", StringComparison.OrdinalIgnoreCase) || type.Equals("OutputImage", StringComparison.OrdinalIgnoreCase)) CloneDefinition(_config.ImageOutputs, oldName, newName, options);
+            else if (type.Equals("Preprocess", StringComparison.OrdinalIgnoreCase)) CloneDefinition(_config.PreprocessNodes, oldName, newName, options);
+            else if (type.Equals("Crop", StringComparison.OrdinalIgnoreCase)) CloneDefinition(_config.Crops, oldName, newName, options);
+            else if (type.Equals("ColorDiff", StringComparison.OrdinalIgnoreCase)) CloneDefinition(_config.ColorDiffs, oldName, newName, options);
+            else if (type.Equals("ImgArithmetic", StringComparison.OrdinalIgnoreCase)) CloneDefinition(_config.ImgArithmetics, oldName, newName, options);
+            else if (type.Equals("CreatePoint", StringComparison.OrdinalIgnoreCase)) CloneDefinition(_config.CreatePoints, oldName, newName, options);
+            else if (type.Equals("CreateLine", StringComparison.OrdinalIgnoreCase)) CloneDefinition(_config.CreateLines, oldName, newName, options);
+            else if (type.Equals("CreateRect", StringComparison.OrdinalIgnoreCase)) CloneDefinition(_config.CreateRects, oldName, newName, options);
+            else if (type.Equals("CreateCircle", StringComparison.OrdinalIgnoreCase)) CloneDefinition(_config.CreateCircles, oldName, newName, options);
+            else if (type.Equals("ResultTransfer", StringComparison.OrdinalIgnoreCase) && _config.ResultTransfers is not null) CloneDefinition(_config.ResultTransfers, oldName, newName, options);
+            else if (type.Equals("PlcRead", StringComparison.OrdinalIgnoreCase) && _config.PlcReads is not null) CloneDefinition(_config.PlcReads, oldName, newName, options);
+            else if (type.Equals("PlcWrite", StringComparison.OrdinalIgnoreCase) && _config.PlcWrites is not null) CloneDefinition(_config.PlcWrites, oldName, newName, options);
+            else if (type.Equals("PlcWait", StringComparison.OrdinalIgnoreCase) && _config.PlcWaits is not null) CloneDefinition(_config.PlcWaits, oldName, newName, options);
+            else if (type.Equals("PlcTrigger", StringComparison.OrdinalIgnoreCase) && _config.PlcTriggers is not null) CloneDefinition(_config.PlcTriggers, oldName, newName, options);
         }
 
         private void CloneDefinition<T>(List<T> list, string oldName, string newName, System.Text.Json.JsonSerializerOptions options) where T : class
