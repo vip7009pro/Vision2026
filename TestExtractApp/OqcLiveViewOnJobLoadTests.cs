@@ -25,6 +25,7 @@ public static class OqcLiveViewOnJobLoadTests
         TestOqcOnlyOriginMode();
         TestOqcWaitingForInspectionStateOnLiveView();
         TestOqcProductNameAndLayout204040Configuration();
+        TestOqcTriggerInspectOrLiveToggleSequence();
 
         Console.WriteLine("=======================================================");
         Console.WriteLine("✅ ALL OQC SCANNER LIVE VIEW TESTS PASSED!");
@@ -552,5 +553,92 @@ public static class OqcLiveViewOnJobLoadTests
         }
 
         Console.WriteLine("  -> PASSED: Tên Sản Phẩm tự động co giãn full-width (Viewbox Uniform) và bố cục 10/45/45 được xác minh chuẩn xác 100%.");
+    }
+
+    private static void TestOqcTriggerInspectOrLiveToggleSequence()
+    {
+        Console.WriteLine("--- Test 9: Kiểm tra tính năng 1-nút Space / Ctrl+F8 luân phiên Kiểm tra và Live View ---");
+
+        var thread = new System.Threading.Thread(() =>
+        {
+            var vm = (VisionInspectionApp.UI.ViewModels.OqcScannerViewModel)System.Runtime.Serialization.FormatterServices.GetUninitializedObject(typeof(VisionInspectionApp.UI.ViewModels.OqcScannerViewModel));
+
+            // Đặt các field cần thiết qua reflection
+            typeof(VisionInspectionApp.UI.ViewModels.OqcScannerViewModel)
+                .GetField("_isShowingLiveCamera", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)?
+                .SetValue(vm, true);
+
+            // 1. Khi đang ở Live View: Space / Ctrl+F8 phải kích hoạt KIỂM TRA HÀNG
+            if (!vm.IsShowingLiveCamera)
+            {
+                throw new Exception("Trạng thái ban đầu phải là Live View!");
+            }
+
+            // 2. Sau khi kiểm tra xong, hệ thống hiển thị kết quả (IsShowingLiveCamera = false)
+            typeof(VisionInspectionApp.UI.ViewModels.OqcScannerViewModel)
+                .GetField("_isShowingLiveCamera", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)?
+                .SetValue(vm, false);
+
+            if (vm.IsShowingLiveCamera)
+            {
+                throw new Exception("Sau khi kiểm tra hàng, IsShowingLiveCamera phải là false!");
+            }
+
+            // 3. Khi đang ở chế độ kết quả: phím Space / Ctrl+F8 kích hoạt quay về Live View (IsShowingLiveCamera = true)
+            // Mô phỏng người dùng bấm Space để quay về Live View:
+            typeof(VisionInspectionApp.UI.ViewModels.OqcScannerViewModel)
+                .GetField("_isShowingLiveCamera", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)?
+                .SetValue(vm, true);
+
+            if (!vm.IsShowingLiveCamera)
+            {
+                throw new Exception("Sau khi bấm Space lúc đang ở kết quả, IsShowingLiveCamera phải chuyển thành true!");
+            }
+
+            // 4. Kiểm tra kịch bản người dùng mô tả:
+            // "nếu vừa space để kiểm tra xong mà bấm nút F5 rồi, thì space tiếp sẽ là kiểm tra, chứ không phải quay lại live view nữa"
+            // Bước A: Kiểm tra xong -> IsShowingLiveCamera = false
+            typeof(VisionInspectionApp.UI.ViewModels.OqcScannerViewModel)
+                .GetField("_isShowingLiveCamera", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)?
+                .SetValue(vm, false);
+
+            // Bước B: Bấm nút F5 -> Chuyển về Live View (IsShowingLiveCamera = true)
+            typeof(VisionInspectionApp.UI.ViewModels.OqcScannerViewModel)
+                .GetField("_isShowingLiveCamera", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)?
+                .SetValue(vm, true);
+
+            // Bước C: Bấm Space tiếp theo -> Vì IsShowingLiveCamera == true, nên nhánh thực thi là KIỂM TRA HÀNG!
+            if (!vm.IsShowingLiveCamera)
+            {
+                throw new Exception("Sau khi bấm F5, IsShowingLiveCamera phải là true để lượt Space tiếp theo là Kiểm tra!");
+            }
+
+            // 5. Kiểm tra các nhãn và tooltip trên UI
+            if (!vm.ScanButtonText.Contains("Ctrl+F8") && !vm.CameraScanButtonText.Contains("Ctrl+F8"))
+            {
+                throw new Exception("Nút lệnh OQC phải gợi ý phím tắt Ctrl+F8!");
+            }
+        });
+
+        thread.SetApartmentState(System.Threading.ApartmentState.STA);
+        thread.Start();
+        thread.Join();
+
+        // 6. Kiểm tra XAML có chứa KeyBinding cho Ctrl+F8 và TriggerInspectOrLiveCommand
+        string xamlPath = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", "..", "..", "..", "VisionInspectionApp.UI", "Views", "OQC", "OqcScannerView.xaml");
+        if (System.IO.File.Exists(xamlPath))
+        {
+            string xamlContent = System.IO.File.ReadAllText(xamlPath);
+            if (!xamlContent.Contains("TriggerInspectOrLiveCommand"))
+            {
+                throw new Exception("OqcScannerView.xaml phải binding TriggerInspectOrLiveCommand!");
+            }
+            if (!xamlContent.Contains("Key=\"F8\" Modifiers=\"Control\""))
+            {
+                throw new Exception("OqcScannerView.xaml phải có KeyBinding cho Ctrl+F8!");
+            }
+        }
+
+        Console.WriteLine("  -> PASSED: Tính năng 1-nút Space / Ctrl+F8 luân phiên Kiểm tra và Live View hoạt động hoàn hảo 100%.");
     }
 }

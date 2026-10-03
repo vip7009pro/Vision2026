@@ -158,6 +158,7 @@
                     <controls:ImageViewerControl x:Name="JobCameraImageViewer"
                                                  ImageSource="{Binding LiveImage}"
                                                  OverlayItems="{Binding OverlayItems}"
+                                                 ShowCrosshair="{Binding ShowCrosshair}"
                                                  EnableRoiEditing="True"
                                                  RoiEditedCommand="{Binding RoiEditedCommand}"
                                                  ActiveRoiLabel="CamROI" />
@@ -172,17 +173,27 @@
                         </StackPanel>
                     </Border>
 
-                    <!-- Top-Right Floating Quick "Fit View" Button -->
-                    <Border VerticalAlignment="Top" HorizontalAlignment="Right" Margin="15" CornerRadius="6" Background="#C0000000" Padding="4">
-                        <Button Height="28" Padding="10,0" Click="OnFitViewClicked"
-                                Background="{DynamicResource ButtonBackgroundBrush}" Foreground="{DynamicResource TextBrush}"
-                                BorderBrush="{DynamicResource DarkBorderBrush}" FontWeight="SemiBold"
-                                ToolTip="Fit View: Phóng to / Thu nhỏ vừa khít toàn bộ khung nhìn ảnh">
-                            <StackPanel Orientation="Horizontal">
-                                <TextBlock Text="🎯 " FontSize="12" />
-                                <TextBlock Text="Fit View" FontSize="11" FontWeight="Bold" />
-                            </StackPanel>
-                        </Button>
+                    <!-- Top-Right Floating Quick Controls (Crosshair & Fit View) -->
+                    <Border VerticalAlignment="Top" HorizontalAlignment="Right" Margin="15"
+                            CornerRadius="6" Background="#D01E222D" BorderBrush="#50FFFFFF" BorderThickness="1"
+                            Padding="8,4">
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                            <CheckBox Content="✛ Crosshair"
+                                      IsChecked="{Binding ShowCrosshair, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                      Foreground="#00E5FF" FontWeight="Bold" FontSize="11.5"
+                                      VerticalAlignment="Center" Margin="0,0,10,0" Cursor="Hand"
+                                      ToolTip="Bật / tắt hiển thị đường chữ thập tâm (Crosshair) để công nhân căn hàng vào tâm cho chuẩn (Mặc định bật)" />
+                            <Border Width="1" Height="14" Background="#50FFFFFF" Margin="0,0,8,0" />
+                            <Button Height="26" Padding="8,0" Click="OnFitViewClicked"
+                                    Background="Transparent" Foreground="White"
+                                    BorderThickness="0" FontWeight="SemiBold" Cursor="Hand"
+                                    ToolTip="Fit View: Phóng to / Thu nhỏ vừa khít toàn bộ khung nhìn ảnh">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="🎯 " FontSize="12" Margin="0,0,4,0" />
+                                    <TextBlock Text="Fit View" FontSize="11" FontWeight="Bold" />
+                                </StackPanel>
+                            </Button>
+                        </StackPanel>
                     </Border>
 
                     <!-- Offline Placeholder -->

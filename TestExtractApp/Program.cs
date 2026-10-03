@@ -30,6 +30,13 @@ class Program
             return;
         }
 
+        if (args.Length > 0 && (args[0].Equals("oqc", StringComparison.OrdinalIgnoreCase) || args[0].Equals("crosshair", StringComparison.OrdinalIgnoreCase)))
+        {
+            OqcLiveViewOnJobLoadTests.RunTests();
+            CrosshairOverlayTests.RunTests();
+            return;
+        }
+
         HikApiTest.PrintApi();
         CameraTest.TestCameraParametersJobSerialization();
         CameraTest.TestNativeMatPoolAndMetadata();

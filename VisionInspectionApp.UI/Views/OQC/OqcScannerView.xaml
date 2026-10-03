@@ -9,7 +9,8 @@
 
     <UserControl.InputBindings>
         <KeyBinding Key="F5" Command="{Binding EnableLiveCameraCommand}" />
-        <KeyBinding Key="Space" Command="{Binding ScanFromCameraCommand}" />
+        <KeyBinding Key="Space" Command="{Binding TriggerInspectOrLiveCommand}" />
+        <KeyBinding Key="F8" Modifiers="Control" Command="{Binding TriggerInspectOrLiveCommand}" />
     </UserControl.InputBindings>
 
     <UserControl.Resources>
@@ -76,7 +77,7 @@
                                 Height="30" Padding="10,0" Margin="0,0,6,0"
                                 FontSize="11.5" FontWeight="Bold"
                                 Background="#1976D2" Foreground="White" BorderThickness="0"
-                                ToolTip="Chụp ảnh Camera, tự động đọc mã QR/Barcode, lọc loại mã, độ dài, cắt chuỗi và nạp/chạy Job (Phím Space / F12)." />
+                                ToolTip="Chụp ảnh Camera, tự động đọc mã QR/Barcode, lọc loại mã, độ dài, cắt chuỗi và nạp/chạy Job (Phím Space / Ctrl+F8)." />
 
                         <Button Content="{Binding ScanButtonText}"
                                 Command="{Binding ScanCommand}"
@@ -134,6 +135,7 @@
                             <TextBox.InputBindings>
                                 <KeyBinding Key="Enter" Command="{Binding ScanCommand}" />
                                 <KeyBinding Key="F5" Command="{Binding EnableLiveCameraCommand}" />
+                                <KeyBinding Key="F8" Modifiers="Control" Command="{Binding TriggerInspectOrLiveCommand}" />
                             </TextBox.InputBindings>
                         </TextBox>
 

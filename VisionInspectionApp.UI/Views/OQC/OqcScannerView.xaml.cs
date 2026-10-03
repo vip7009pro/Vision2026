@@ -42,28 +42,18 @@ public partial class OqcScannerView : UserControl
     {
         if (DataContext is not ViewModels.OqcScannerViewModel vm) return;
 
-        if (e.Key == Key.Space)
+        bool isCtrlF8 = (e.Key == Key.F8 && (Keyboard.Modifiers & ModifierKeys.Control) == ModifierKeys.Control);
+        bool isSpace = (e.Key == Key.Space && Keyboard.Modifiers == ModifierKeys.None);
+
+        if (isSpace || isCtrlF8)
         {
-            if (vm.UseExternalScanner || vm.IsJobLoadedFromManager)
+            if (vm.TriggerInspectOrLiveCommand.CanExecute(null))
             {
-                // Khi dùng đầu scan ngoài hoặc khi mở Job từ danh sách Quản Lý Job: phím Space dùng để RUN JOB
-                if (vm.RunJobCommand.CanExecute(null))
-                {
-                    vm.RunJobCommand.Execute(null);
-                    e.Handled = true;
-                }
-            }
-            else
-            {
-                // Khi không dùng đầu scan ngoài: phím Space dùng để quét mã từ Camera
-                if (vm.ScanFromCameraCommand.CanExecute(null))
-                {
-                    vm.ScanFromCameraCommand.Execute(null);
-                    e.Handled = true;
-                }
+                vm.TriggerInspectOrLiveCommand.Execute(null);
+                e.Handled = true;
             }
         }
-        else if (e.Key == Key.F5)
+        else if (e.Key == Key.F5 && Keyboard.Modifiers == ModifierKeys.None)
         {
             if (vm.EnableLiveCameraCommand.CanExecute(null))
             {

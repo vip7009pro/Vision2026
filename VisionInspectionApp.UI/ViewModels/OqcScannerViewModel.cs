@@ -155,6 +155,7 @@ public partial class OqcScannerViewModel : ObservableObject
 
     public IAsyncRelayCommand ScanCommand { get; }
     public IAsyncRelayCommand ScanFromCameraCommand { get; }
+    public IAsyncRelayCommand TriggerInspectOrLiveCommand { get; }
     public IRelayCommand OpenSettingsCommand { get; }
     public IRelayCommand OpenProductAssignCommand { get; }
     public IRelayCommand ManualOpenJobCommand { get; }
@@ -175,12 +176,12 @@ public partial class OqcScannerViewModel : ObservableObject
         {
             if (IsJobLoadedFromManager)
             {
-                return (UseExternalScanner || true) ? "▶ CHẠY JOB (SPACE)" : "▶ CHẠY JOB";
+                return (UseExternalScanner || true) ? "▶ CHẠY JOB (SPACE / Ctrl+F8)" : "▶ CHẠY JOB";
             }
 
             if (!AutoRunJob && !string.IsNullOrWhiteSpace(CurrentJobFilePath) && CurrentJobFilePath != "-" && CurrentJobFilePath != "Chưa có Job")
             {
-                return UseExternalScanner ? "▶ CHẠY JOB (SPACE)" : "▶ CHẠY JOB";
+                return UseExternalScanner ? "▶ CHẠY JOB (SPACE / Ctrl+F8)" : "▶ CHẠY JOB";
             }
             return "🔍 QUÉT / TÌM";
         }
@@ -188,15 +189,15 @@ public partial class OqcScannerViewModel : ObservableObject
 
     public string CameraScanButtonText => UseExternalScanner
         ? "📷 QUÉT CAMERA"
-        : "📷 QUÉT CAMERA (SPACE)";
+        : "📷 QUÉT CAMERA (SPACE / Ctrl+F8)";
 
     public string PreviewHeaderTitle => IsShowingLiveCamera 
-        ? "📷 LIVE CAMERA (Căn chỉnh sản phẩm - F5)" 
-        : "🖼️ XEM TRƯỚC KẾT QUẢ FINAL (ResultView - Nút F5 để bật Live Cam)";
+        ? "📷 LIVE CAMERA (Căn chỉnh sản phẩm - Space / Ctrl+F8 để kiểm tra)" 
+        : "🖼️ XEM TRƯỚC KẾT QUẢ FINAL (Space / Ctrl+F8 / F5 để bật Live Cam)";
 
     public string LiveToggleButtonText => IsShowingLiveCamera 
         ? "🖼️ Xem Kết Quả Final" 
-        : "📷 Live Camera (F5)";
+        : "📷 Live Camera (F5 / Space / Ctrl+F8)";
 
     public OqcScannerViewModel(
         IOqcScannerService oqcService,
@@ -235,6 +236,7 @@ public partial class OqcScannerViewModel : ObservableObject
         ViewLatestScanDetailCommand = new RelayCommand(() => ExecuteOpenScanDetail(LatestScanEntry));
         SwitchToToolEditorCommand = new RelayCommand(() => RequestSwitchTab?.Invoke(0));
         ToggleLiveCameraCommand = new RelayCommand(ToggleLiveCamera);
+        TriggerInspectOrLiveCommand = new AsyncRelayCommand(ExecuteTriggerInspectOrLiveAsync);
 
         // Load Scan History from local persistence
         LoadSavedScanHistory();
@@ -555,6 +557,29 @@ public partial class OqcScannerViewModel : ObservableObject
         {
             IsShowingLiveCamera = false;
             RefreshPreviewFromToolEditor();
+        }
+    }
+
+    public async Task ExecuteTriggerInspectOrLiveAsync()
+    {
+        if (IsScanning || _isOqcRunInProgress) return;
+
+        if (IsShowingLiveCamera)
+        {
+            // 1. Đang ở chế độ Live View -> Kích hoạt kiểm tra hàng
+            if (UseExternalScanner || IsJobLoadedFromManager || (!AutoRunJob && !string.IsNullOrWhiteSpace(CurrentJobFilePath) && CurrentJobFilePath != "-" && CurrentJobFilePath != "Chưa có Job"))
+            {
+                RunJob();
+            }
+            else
+            {
+                await ExecuteScanFromCameraAsync();
+            }
+        }
+        else
+        {
+            // 2. Đang ở chế độ hiển thị kết quả kiểm tra (không Live) -> Kích hoạt quay trở lại Live View
+            EnableLiveCamera();
         }
     }
 

@@ -121,6 +121,13 @@ public sealed class JobCameraSettingsViewModel : ObservableObject, IDisposable
         private set => SetProperty(ref _resolutionText, value);
     }
 
+    private bool _showCrosshair = true; // Mặc định bật theo yêu cầu để công nhân căn hàng vào tâm cho chuẩn
+    public bool ShowCrosshair
+    {
+        get => _showCrosshair;
+        set => SetProperty(ref _showCrosshair, value);
+    }
+
     public ObservableCollection<string> ResolutionOptions { get; } = new()
     {
         "1920 x 1080 (1080p Full HD - Mặc định)",
