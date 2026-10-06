@@ -1929,6 +1929,7 @@ namespace VisionInspectionApp.UI.ViewModels
                 _handshakeStateMachine.NgTagName = config.Handshake.NgTagName;
                 _handshakeStateMachine.PlcAckTagName = config.Handshake.PlcAckTagName;
                 _handshakeStateMachine.HandshakeTimeoutMs = config.Handshake.HandshakeTimeoutMs;
+                _handshakeStateMachine.SimulatePlcAck = config.Handshake.SimulatePlcAck;
             }
 
             if (config.Heartbeat != null)

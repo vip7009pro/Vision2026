@@ -292,6 +292,7 @@
                                 <ComboBox Grid.Row="5" Grid.Column="3" ItemsSource="{Binding AvailableTagNames}" Text="{Binding Handshake.NgTagName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" SelectedItem="{Binding Handshake.NgTagName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" IsEditable="True" IsTextSearchEnabled="True" StaysOpenOnEdit="True" MaxDropDownHeight="220" PreviewMouseDown="ComboBox_PreviewMouseDown" ToolTip="Tín hiệu kết quả LỖI (NG) (Mặc định: Y5_VisionNG)" Margin="2"/>
 
                                 <CheckBox Grid.Row="6" Grid.Column="0" Grid.ColumnSpan="2" Content="Kích hoạt Chu trình Bắt tay Công nghiệp (Handshake Enabled)" IsChecked="{Binding Handshake.IsEnabled}" FontWeight="SemiBold" Margin="0,14,0,4" Foreground="{DynamicResource TextBrush}"/>
+                                <CheckBox Grid.Row="6" Grid.Column="2" Grid.ColumnSpan="2" Content="🧪 Mô Phỏng PLC Tự Động Ack (Simulate Auto-Ack khi test offline)" IsChecked="{Binding Handshake.SimulatePlcAck}" FontWeight="SemiBold" Margin="12,14,0,4" Foreground="#10B981" ToolTip="Tự động mô phỏng PLC phản hồi tín hiệu Ack (M11) sau 20ms khi Vision hoàn thành kiểm tra. Dùng để test chu trình handshake khi chưa có PLC thật hoặc đang giả lập trên máy tính!"/>
                             </Grid>
                         </Border>
                     </StackPanel>

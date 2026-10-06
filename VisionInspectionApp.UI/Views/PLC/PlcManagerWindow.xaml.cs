@@ -13,6 +13,15 @@ public partial class PlcManagerWindow : Window
         DataContext = viewModel;
     }
 
+    protected override void OnClosing(System.ComponentModel.CancelEventArgs e)
+    {
+        base.OnClosing(e);
+        if (DataContext is PlcManagerViewModel vm)
+        {
+            vm.AutoSaveOnClose();
+        }
+    }
+
     private void ComboBox_PreviewMouseDown(object sender, MouseButtonEventArgs e)
     {
         if (sender is ComboBox cb && cb.IsEditable && !cb.IsDropDownOpen)

@@ -16,6 +16,7 @@ public sealed class IndustrialHandshakeConfig
     public string PlcAckTagName { get; set; } = "X1_PlcAck";
     public int HandshakeTimeoutMs { get; set; } = 500;
     public bool IsEnabled { get; set; } = true;
+    public bool SimulatePlcAck { get; set; } = false;
 }
 
 /// <summary>

@@ -404,6 +404,11 @@ public partial class PlcManagerViewModel : ObservableObject
         System.Windows.MessageBox.Show("Toàn bộ Cấu hình Kết nối PLC, Danh bạ Tags và Thông số Công nghiệp (Handshake, Heartbeat, Motion, Shift Register) đã được lưu thành công!", "Lưu Cấu Hình PLC", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Information);
     }
 
+    public void AutoSaveOnClose()
+    {
+        _plcService.SaveGlobalConfig();
+    }
+
     [RelayCommand(CanExecute = nameof(CanConnectSelectedPlc))]
     private async System.Threading.Tasks.Task ConnectSelectedPlcAsync()
     {

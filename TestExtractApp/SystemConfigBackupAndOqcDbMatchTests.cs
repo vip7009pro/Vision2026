@@ -115,7 +115,7 @@ public static class SystemConfigBackupAndOqcDbMatchTests
             });
 
             var oqcService = new OqcScannerService();
-            var plcManager = new PlcManagerService();
+            using var plcManager = TestPlcConfigHelper.CreateIsolatedPlcManager();
 
             var backupService = new SystemConfigBackupService(dbService, plcManager, oqcService);
 
@@ -210,7 +210,7 @@ public static class SystemConfigBackupAndOqcDbMatchTests
             var dbConfigBPath = Path.Combine(tempDir, "db_b.json");
             var dbServiceB = new DbManagerService(dbConfigBPath);
             var oqcServiceB = new OqcScannerService();
-            var plcManagerB = new PlcManagerService();
+            using var plcManagerB = TestPlcConfigHelper.CreateIsolatedPlcManager();
             var backupServiceB = new SystemConfigBackupService(dbServiceB, plcManagerB, oqcServiceB);
 
             // Giả sử máy B đã có sẵn DB tên 'OQC_MASTER' nhưng ID khác: 'machine-b-guid'

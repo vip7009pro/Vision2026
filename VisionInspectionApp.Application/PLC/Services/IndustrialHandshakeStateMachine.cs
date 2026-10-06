@@ -50,6 +50,7 @@ public sealed class IndustrialHandshakeStateMachine
 
     public int HandshakeTimeoutMs { get; set; } = 500;
     public bool IsEnabled { get; set; } = true;
+    public bool SimulatePlcAck { get; set; } = false;
     public HandshakeState CurrentState
     {
         get
@@ -218,22 +219,56 @@ public sealed class IndustrialHandshakeStateMachine
                 var sw = Stopwatch.StartNew();
                 bool ackReceived = false;
 
-                while (sw.ElapsedMilliseconds < HandshakeTimeoutMs && !ct.IsCancellationRequested)
+                if (SimulatePlcAck)
                 {
-                    var tagVal = _plcManager.GetTagValue(_plcId, ackTag);
-                    var ackVal = tagVal?.CurrentValue;
-                    if (ackVal is bool b && b)
+                    // Chế độ mô phỏng PLC Auto-Ack khi test không có PLC thật: trễ 20ms mô phỏng chu kỳ quét PLC
+                    await Task.Delay(20, ct);
+                    ackReceived = true;
+                    if (_plcManager != null)
                     {
-                        ackReceived = true;
-                        break;
+                        await _plcManager.WriteTagValueAsync(_plcId, ackTag, true, ct);
                     }
-                    else if (ackVal is int i && i != 0)
+                }
+                else
+                {
+                    int pollDirectCount = 0;
+                    while (sw.ElapsedMilliseconds < HandshakeTimeoutMs && !ct.IsCancellationRequested)
                     {
-                        ackReceived = true;
-                        break;
-                    }
+                        var tagVal = _plcManager?.GetTagValue(_plcId, ackTag);
+                        var ackVal = tagVal?.CurrentValue;
+                        if (ackVal is bool b && b)
+                        {
+                            ackReceived = true;
+                            break;
+                        }
+                        else if (ackVal is int i && i != 0)
+                        {
+                            ackReceived = true;
+                            break;
+                        }
 
-                    await Task.Delay(5, ct);
+                        // Nếu sau 30ms (6 vòng lặp x 5ms) chưa thấy trong cache, ép đọc trực tiếp từ Driver xuống PLC
+                        if (++pollDirectCount % 6 == 0 && _plcManager != null)
+                        {
+                            try
+                            {
+                                var directVal = await _plcManager.ReadTagValueAsync(_plcId, ackTag, ct);
+                                if (directVal is bool db && db)
+                                {
+                                    ackReceived = true;
+                                    break;
+                                }
+                                else if (directVal is int di && di != 0)
+                                {
+                                    ackReceived = true;
+                                    break;
+                                }
+                            }
+                            catch { }
+                        }
+
+                        await Task.Delay(5, ct);
+                    }
                 }
 
                 if (!ackReceived)
@@ -250,6 +285,12 @@ public sealed class IndustrialHandshakeStateMachine
             if (!string.IsNullOrEmpty(doneTag))
             {
                 await _plcManager.WriteTagValueAsync(_plcId, doneTag, false, ct);
+            }
+            if (SimulatePlcAck && !string.IsNullOrEmpty(ackTag) && _plcManager != null)
+            {
+                // Khi giả lập, tự động hạ Ack = 0 sau khi Done đã hạ
+                await Task.Delay(10, ct);
+                await _plcManager.WriteTagValueAsync(_plcId, ackTag, false, ct);
             }
             if (!string.IsNullOrEmpty(busyTag))
             {

@@ -1,8 +1,15 @@
 # ROADMAP.md — Lộ trình phát triển & Trạng thái nhiệm vụ
 
-## Các nhiệm vụ gần đây & Đang triển khai
+- [x] Task 388: Khắc phục Mất Cấu Hình PLC Khi Build & Cơ Chế Test Handshake Giả Lập GX Works 3:
+  - [x] Rà soát và tìm ra nguyên nhân gốc lỗi mất cấu hình PLC khi build lại app: Bộ test `SystemConfigBackupAndOqcDbMatchTests.cs` nạp cấu hình trống và ghi đè `%AppData%\Vision2026\plc_config.json`. Khắc phục bằng cách cô lập môi trường test sang thư mục tạm độc lập (`TestPlcConfigHelper.CreateIsolatedPlcManager()`).
+  - [x] Bổ sung cơ chế tự động lưu an toàn `AutoSaveOnClose()` khi đóng cửa sổ PLC Manager và khôi phục 100% các giá trị Tag PLC FX5U chuẩn (`M101`..`M105`, `M10`, `M11`, `M100`, `M108`, `Y21`, `D1000`, `D1002`).
+  - [x] Giải quyết vấn đề kiểm thử Handshake khi không có PLC thật / giả lập GX Works 3:
+    - [x] Bổ sung tính năng `SimulatePlcAck` (Mô Phỏng PLC Tự Động Ack) ngay trong Handshake State Machine và giao diện Tab 2 PLC Manager, tự động phát xung Ack (`M11`) trễ 20ms và tự động hạ khi xong chu trình. Cho phép test 100% flow offline mà không cần PLC.
+    - [x] Bổ sung cơ chế Fast Direct Read: Sau 30ms nếu Cache chưa cập nhật, State Machine tự động đọc trực tiếp từ Driver xuống PLC để triệt tiêu độ trễ Polling Engine.
+    - [x] Làm rõ nguyên lý giả lập GX Works 3 (không mở cổng MC Protocol TCP thật) và hướng dẫn kết nối qua MX Component.
+  - [x] Toàn bộ solution biên dịch 0 lỗi, kiểm thử tự động PASSED 100%.
 
-- [x] Task 376: Tách ô nhập SỐ ĐO THỰC TẾ (mm) thành field riêng cạnh nút "Đặt Hệ Số Calib" để không ghi đè Spec.
+- [x] Task 387: Hiển thị Trực Quan Trạng Thái PLC Handshake trên UI Tool Editor & Phân tích Trigger Flow:
 - [x] Task 377: Sửa lỗi Copy/Paste nhiều node trong Tool Editor & thêm nút Auto Tune cho công cụ nhận diện.
 - [x] Task 378: Tối ưu hiệu năng/UX Tool Editor (cache preview Final, chống rò rỉ RAM Mat, thuật toán Coordinate Descent).
 - [x] Task 379: Tăng tốc Auto Tune bằng ĐA LUỒNG ĐA NHÂN (`Parallel.For`, cap 4-8 luồng).
