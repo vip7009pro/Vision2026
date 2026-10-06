@@ -45,6 +45,34 @@
             <Setter Property="HorizontalAlignment" Value="Center" />
             <Setter Property="Margin" Value="0,1,0,0" />
         </Style>
+
+        <!-- ===== Style cho 20 nấc sản phẩm gần nhất (OK/NG) — bấm xem lại ảnh ===== -->
+        <Style x:Key="RecentSlotButtonStyle" TargetType="Button">
+            <Setter Property="Width" Value="12" />
+            <Setter Property="Height" Value="18" />
+            <Setter Property="Margin" Value="1.5,0" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="BorderThickness" Value="1.5" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="slotBorder"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="3">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="slotBorder" Property="Opacity" Value="0.75" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
     </UserControl.Resources>
 
     <UserControl.InputBindings>
@@ -146,33 +174,40 @@
                     <TextBlock Text="Recent:" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource TextMutedBrush}" VerticalAlignment="Center" Margin="0,0,4,0"/>
                     <TextBlock Text="{Binding RecentPartsStatusText}" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource TextBrush}" VerticalAlignment="Center" Margin="0,0,6,0"/>
 
-                    <!-- Discrete Stepped Slots (20 items, Left-to-Right Stream) -->
-                    <Border Background="#12000000" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="4" Padding="2,2" VerticalAlignment="Center">
+                    <!-- Discrete Stepped Slots (20 items, Clickable to view OK/NG images) -->
+                    <Border Background="#12000000" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="4" Padding="3,2" VerticalAlignment="Center">
                         <StackPanel Orientation="Horizontal">
-                            <!-- Slot 0 (Oldest) -->
-                            <Border Width="6" Height="14" CornerRadius="2" Margin="1,0" BorderThickness="1" Background="{Binding RecentPartSlot0Bg}" BorderBrush="{Binding RecentPartSlot0Border}"/>
-                            <Border Width="6" Height="14" CornerRadius="2" Margin="1,0" BorderThickness="1" Background="{Binding RecentPartSlot1Bg}" BorderBrush="{Binding RecentPartSlot1Border}"/>
-                            <Border Width="6" Height="14" CornerRadius="2" Margin="1,0" BorderThickness="1" Background="{Binding RecentPartSlot2Bg}" BorderBrush="{Binding RecentPartSlot2Border}"/>
-                            <Border Width="6" Height="14" CornerRadius="2" Margin="1,0" BorderThickness="1" Background="{Binding RecentPartSlot3Bg}" BorderBrush="{Binding RecentPartSlot3Border}"/>
-                            <Border Width="6" Height="14" CornerRadius="2" Margin="1,0" BorderThickness="1" Background="{Binding RecentPartSlot4Bg}" BorderBrush="{Binding RecentPartSlot4Border}"/>
-                            <Border Width="6" Height="14" CornerRadius="2" Margin="1,0" BorderThickness="1" Background="{Binding RecentPartSlot5Bg}" BorderBrush="{Binding RecentPartSlot5Border}"/>
-                            <Border Width="6" Height="14" CornerRadius="2" Margin="1,0" BorderThickness="1" Background="{Binding RecentPartSlot6Bg}" BorderBrush="{Binding RecentPartSlot6Border}"/>
-                            <Border Width="6" Height="14" CornerRadius="2" Margin="1,0" BorderThickness="1" Background="{Binding RecentPartSlot7Bg}" BorderBrush="{Binding RecentPartSlot7Border}"/>
-                            <Border Width="6" Height="14" CornerRadius="2" Margin="1,0" BorderThickness="1" Background="{Binding RecentPartSlot8Bg}" BorderBrush="{Binding RecentPartSlot8Border}"/>
-                            <Border Width="6" Height="14" CornerRadius="2" Margin="1,0" BorderThickness="1" Background="{Binding RecentPartSlot9Bg}" BorderBrush="{Binding RecentPartSlot9Border}"/>
-                            <Border Width="6" Height="14" CornerRadius="2" Margin="1,0" BorderThickness="1" Background="{Binding RecentPartSlot10Bg}" BorderBrush="{Binding RecentPartSlot10Border}"/>
-                            <Border Width="6" Height="14" CornerRadius="2" Margin="1,0" BorderThickness="1" Background="{Binding RecentPartSlot11Bg}" BorderBrush="{Binding RecentPartSlot11Border}"/>
-                            <Border Width="6" Height="14" CornerRadius="2" Margin="1,0" BorderThickness="1" Background="{Binding RecentPartSlot12Bg}" BorderBrush="{Binding RecentPartSlot12Border}"/>
-                            <Border Width="6" Height="14" CornerRadius="2" Margin="1,0" BorderThickness="1" Background="{Binding RecentPartSlot13Bg}" BorderBrush="{Binding RecentPartSlot13Border}"/>
-                            <Border Width="6" Height="14" CornerRadius="2" Margin="1,0" BorderThickness="1" Background="{Binding RecentPartSlot14Bg}" BorderBrush="{Binding RecentPartSlot14Border}"/>
-                            <Border Width="6" Height="14" CornerRadius="2" Margin="1,0" BorderThickness="1" Background="{Binding RecentPartSlot15Bg}" BorderBrush="{Binding RecentPartSlot15Border}"/>
-                            <Border Width="6" Height="14" CornerRadius="2" Margin="1,0" BorderThickness="1" Background="{Binding RecentPartSlot16Bg}" BorderBrush="{Binding RecentPartSlot16Border}"/>
-                            <Border Width="6" Height="14" CornerRadius="2" Margin="1,0" BorderThickness="1" Background="{Binding RecentPartSlot17Bg}" BorderBrush="{Binding RecentPartSlot17Border}"/>
-                            <Border Width="6" Height="14" CornerRadius="2" Margin="1,0" BorderThickness="1" Background="{Binding RecentPartSlot18Bg}" BorderBrush="{Binding RecentPartSlot18Border}"/>
-                            <!-- Slot 19 (Newest) -->
-                            <Border Width="6" Height="14" CornerRadius="2" Margin="1,0" BorderThickness="1" Background="{Binding RecentPartSlot19Bg}" BorderBrush="{Binding RecentPartSlot19Border}"/>
+                            <!-- 20 Clickable Stepped Slots with widened buttons (12x18px) -->
+                            <Button Style="{StaticResource RecentSlotButtonStyle}" Background="{Binding RecentPartSlot0Bg}" BorderBrush="{Binding RecentPartSlot0Border}" ToolTip="{Binding RecentPartSlot0ToolTip}" Command="{Binding SelectRecentPartSlotCommand}" CommandParameter="0"/>
+                            <Button Style="{StaticResource RecentSlotButtonStyle}" Background="{Binding RecentPartSlot1Bg}" BorderBrush="{Binding RecentPartSlot1Border}" ToolTip="{Binding RecentPartSlot1ToolTip}" Command="{Binding SelectRecentPartSlotCommand}" CommandParameter="1"/>
+                            <Button Style="{StaticResource RecentSlotButtonStyle}" Background="{Binding RecentPartSlot2Bg}" BorderBrush="{Binding RecentPartSlot2Border}" ToolTip="{Binding RecentPartSlot2ToolTip}" Command="{Binding SelectRecentPartSlotCommand}" CommandParameter="2"/>
+                            <Button Style="{StaticResource RecentSlotButtonStyle}" Background="{Binding RecentPartSlot3Bg}" BorderBrush="{Binding RecentPartSlot3Border}" ToolTip="{Binding RecentPartSlot3ToolTip}" Command="{Binding SelectRecentPartSlotCommand}" CommandParameter="3"/>
+                            <Button Style="{StaticResource RecentSlotButtonStyle}" Background="{Binding RecentPartSlot4Bg}" BorderBrush="{Binding RecentPartSlot4Border}" ToolTip="{Binding RecentPartSlot4ToolTip}" Command="{Binding SelectRecentPartSlotCommand}" CommandParameter="4"/>
+                            <Button Style="{StaticResource RecentSlotButtonStyle}" Background="{Binding RecentPartSlot5Bg}" BorderBrush="{Binding RecentPartSlot5Border}" ToolTip="{Binding RecentPartSlot5ToolTip}" Command="{Binding SelectRecentPartSlotCommand}" CommandParameter="5"/>
+                            <Button Style="{StaticResource RecentSlotButtonStyle}" Background="{Binding RecentPartSlot6Bg}" BorderBrush="{Binding RecentPartSlot6Border}" ToolTip="{Binding RecentPartSlot6ToolTip}" Command="{Binding SelectRecentPartSlotCommand}" CommandParameter="6"/>
+                            <Button Style="{StaticResource RecentSlotButtonStyle}" Background="{Binding RecentPartSlot7Bg}" BorderBrush="{Binding RecentPartSlot7Border}" ToolTip="{Binding RecentPartSlot7ToolTip}" Command="{Binding SelectRecentPartSlotCommand}" CommandParameter="7"/>
+                            <Button Style="{StaticResource RecentSlotButtonStyle}" Background="{Binding RecentPartSlot8Bg}" BorderBrush="{Binding RecentPartSlot8Border}" ToolTip="{Binding RecentPartSlot8ToolTip}" Command="{Binding SelectRecentPartSlotCommand}" CommandParameter="8"/>
+                            <Button Style="{StaticResource RecentSlotButtonStyle}" Background="{Binding RecentPartSlot9Bg}" BorderBrush="{Binding RecentPartSlot9Border}" ToolTip="{Binding RecentPartSlot9ToolTip}" Command="{Binding SelectRecentPartSlotCommand}" CommandParameter="9"/>
+                            <Button Style="{StaticResource RecentSlotButtonStyle}" Background="{Binding RecentPartSlot10Bg}" BorderBrush="{Binding RecentPartSlot10Border}" ToolTip="{Binding RecentPartSlot10ToolTip}" Command="{Binding SelectRecentPartSlotCommand}" CommandParameter="10"/>
+                            <Button Style="{StaticResource RecentSlotButtonStyle}" Background="{Binding RecentPartSlot11Bg}" BorderBrush="{Binding RecentPartSlot11Border}" ToolTip="{Binding RecentPartSlot11ToolTip}" Command="{Binding SelectRecentPartSlotCommand}" CommandParameter="11"/>
+                            <Button Style="{StaticResource RecentSlotButtonStyle}" Background="{Binding RecentPartSlot12Bg}" BorderBrush="{Binding RecentPartSlot12Border}" ToolTip="{Binding RecentPartSlot12ToolTip}" Command="{Binding SelectRecentPartSlotCommand}" CommandParameter="12"/>
+                            <Button Style="{StaticResource RecentSlotButtonStyle}" Background="{Binding RecentPartSlot13Bg}" BorderBrush="{Binding RecentPartSlot13Border}" ToolTip="{Binding RecentPartSlot13ToolTip}" Command="{Binding SelectRecentPartSlotCommand}" CommandParameter="13"/>
+                            <Button Style="{StaticResource RecentSlotButtonStyle}" Background="{Binding RecentPartSlot14Bg}" BorderBrush="{Binding RecentPartSlot14Border}" ToolTip="{Binding RecentPartSlot14ToolTip}" Command="{Binding SelectRecentPartSlotCommand}" CommandParameter="14"/>
+                            <Button Style="{StaticResource RecentSlotButtonStyle}" Background="{Binding RecentPartSlot15Bg}" BorderBrush="{Binding RecentPartSlot15Border}" ToolTip="{Binding RecentPartSlot15ToolTip}" Command="{Binding SelectRecentPartSlotCommand}" CommandParameter="15"/>
+                            <Button Style="{StaticResource RecentSlotButtonStyle}" Background="{Binding RecentPartSlot16Bg}" BorderBrush="{Binding RecentPartSlot16Border}" ToolTip="{Binding RecentPartSlot16ToolTip}" Command="{Binding SelectRecentPartSlotCommand}" CommandParameter="16"/>
+                            <Button Style="{StaticResource RecentSlotButtonStyle}" Background="{Binding RecentPartSlot17Bg}" BorderBrush="{Binding RecentPartSlot17Border}" ToolTip="{Binding RecentPartSlot17ToolTip}" Command="{Binding SelectRecentPartSlotCommand}" CommandParameter="17"/>
+                            <Button Style="{StaticResource RecentSlotButtonStyle}" Background="{Binding RecentPartSlot18Bg}" BorderBrush="{Binding RecentPartSlot18Border}" ToolTip="{Binding RecentPartSlot18ToolTip}" Command="{Binding SelectRecentPartSlotCommand}" CommandParameter="18"/>
+                            <Button Style="{StaticResource RecentSlotButtonStyle}" Background="{Binding RecentPartSlot19Bg}" BorderBrush="{Binding RecentPartSlot19Border}" ToolTip="{Binding RecentPartSlot19ToolTip}" Command="{Binding SelectRecentPartSlotCommand}" CommandParameter="19"/>
                         </StackPanel>
                     </Border>
+
+                    <!-- Nút quay lại Live khi đang xem lại ảnh lịch sử -->
+                    <Button Content="✕ Live"
+                            Command="{Binding ExitRecentPartViewCommand}"
+                            Visibility="{Binding IsViewingHistoricalRecentPart, Converter={StaticResource BoolToVis}}"
+                            Margin="6,0,0,0" Padding="6,1" Height="20" FontSize="10.5" FontWeight="Bold"
+                            Background="#DC2626" Foreground="White" BorderThickness="0"
+                            ToolTip="Đang xem ảnh lịch sử. Bấm vào đây để quay lại Live camera!"/>
                 </StackPanel>
             </Border>
 
@@ -4948,10 +4983,11 @@
                 <Grid>
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
                         <RowDefinition Height="*" />
                     </Grid.RowDefinitions>
 
-                    <Grid Margin="0,0,0,6">
+                    <Grid Grid.Row="0" Margin="0,0,0,6">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*" />
                             <ColumnDefinition Width="Auto" />
@@ -4985,7 +5021,30 @@
                         </StackPanel>
                     </Grid>
 
-                    <Border Grid.Row="1" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" Background="Transparent">
+                    <!-- Banner trạng thái Xem lại ảnh lịch sử (OK/NG) từ thanh 20 nấc -->
+                    <Border Grid.Row="1" Background="#26F59E0B" BorderBrush="#F59E0B" BorderThickness="1" CornerRadius="6" Padding="10,6" Margin="0,0,0,6"
+                            Visibility="{Binding IsViewingHistoricalRecentPart, Converter={StaticResource BoolToVis}}">
+                        <DockPanel LastChildFill="True">
+                            <StackPanel Orientation="Horizontal" DockPanel.Dock="Right">
+                                <Button Content="📁 Mở thư mục ảnh" Command="{Binding OpenRecentPartImageFolderCommand}"
+                                        Margin="0,0,8,0" Padding="8,3" FontSize="11" FontWeight="SemiBold"
+                                        Background="{DynamicResource ButtonBackgroundBrush}" Foreground="{DynamicResource TextBrush}"
+                                        BorderBrush="{DynamicResource BorderBrush}"
+                                        ToolTip="Mở thư mục chứa ảnh chụp của con hàng này"/>
+                                <Button Content="✕ Quay lại Live" Command="{Binding ExitRecentPartViewCommand}"
+                                        Padding="10,3" FontSize="11" FontWeight="Bold"
+                                        Background="#DC2626" Foreground="White" BorderThickness="0"
+                                        ToolTip="Thoát xem lại ảnh lịch sử và quay về giám sát Live camera"/>
+                            </StackPanel>
+                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                <TextBlock Text="🔍 " FontSize="13" VerticalAlignment="Center" Margin="0,0,4,0"/>
+                                <TextBlock Text="{Binding HistoricalViewingStatusText}" FontWeight="SemiBold" FontSize="11.5"
+                                           Foreground="{DynamicResource TextBrush}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                            </StackPanel>
+                        </DockPanel>
+                    </Border>
+
+                    <Border Grid.Row="2" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" Background="Transparent">
                         <controls:ImageViewerControl x:Name="PreviewImageViewer"
                                                    ImageSource="{Binding SelectedNodePreviewImage}"
                                                    OverlayItems="{Binding SelectedNodeOverlayItems}"

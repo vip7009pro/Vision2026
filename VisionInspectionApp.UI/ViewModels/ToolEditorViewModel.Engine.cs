@@ -2305,8 +2305,37 @@ namespace VisionInspectionApp.UI.ViewModels
 
         #region Recent 20 Parts Stepped Bar (OK/NG Inspection History)
 
+        public sealed class RecentPartInspectionSlotItem : IDisposable
+        {
+            public int SlotIndex { get; set; }
+            public bool IsOk { get; set; }
+            public DateTime Timestamp { get; set; } = DateTime.Now;
+            public string FormattedTimestamp => Timestamp.ToString("HH:mm:ss.fff");
+            public string StatusText => IsOk ? "OK" : "NG";
+            public string NgReason { get; set; } = "";
+            public string? SavedImagePath { get; set; }
+            public Mat? MemorySnapshot { get; set; }
+            public InspectionResult? Result { get; set; }
+
+            public void Dispose()
+            {
+                try
+                {
+                    if (MemorySnapshot != null && !MemorySnapshot.IsDisposed)
+                    {
+                        MemorySnapshot.Dispose();
+                        MemorySnapshot = null;
+                    }
+                }
+                catch { }
+            }
+        }
+
         private readonly List<bool> _recentPartsHistory = new(20);
+        private readonly List<RecentPartInspectionSlotItem> _recentPartItems = new(20);
         private readonly object _recentPartsLock = new();
+
+        private static readonly Brush HighlightSlotBorder = new SolidColorBrush(Color.FromRgb(255, 213, 79)); // Amber / Gold #FFD54F
 
         [ObservableProperty] private string _recentPartsStatusText = "OK: 0 | NG: 0";
         [ObservableProperty] private string _recentPartsYieldText = "100.0%";
@@ -2314,7 +2343,11 @@ namespace VisionInspectionApp.UI.ViewModels
         [ObservableProperty] private int _recentPartsNgCount = 0;
         [ObservableProperty] private int _recentPartsTotalCount = 0;
         [ObservableProperty] private Brush _recentPartsBorderBrush = EmeraldBorder;
-        [ObservableProperty] private string _recentPartsToolTipText = "🎯 20 Con Hàng Gần Nhất:\n• Chưa có sản phẩm kiểm tra\n• Chiều luồng: Trái (Mới nhất) ➔ Phải (Cũ dần)";
+        [ObservableProperty] private string _recentPartsToolTipText = "🎯 20 Con Hàng Gần Nhất:\n• Chưa có sản phẩm kiểm tra\n• Chiều luồng: Trái (Mới nhất #0) ➔ Phải (Cũ dần #19)\n👉 Click vào từng nấc để xem lại ảnh kết quả OK/NG!";
+
+        [ObservableProperty] private int _selectedRecentSlotIndex = -1;
+        [ObservableProperty] private bool _isViewingHistoricalRecentPart = false;
+        [ObservableProperty] private string _historicalViewingStatusText = string.Empty;
 
         // 20 Slot Brushes cho 20 nấc con hàng (Background & Border)
         [ObservableProperty] private Brush _recentPartSlot0Bg = EmptySlotBrush;
@@ -2358,14 +2391,77 @@ namespace VisionInspectionApp.UI.ViewModels
         [ObservableProperty] private Brush _recentPartSlot19Bg = EmptySlotBrush;
         [ObservableProperty] private Brush _recentPartSlot19Border = EmptySlotBorder;
 
+        // 20 Slot Tooltips
+        [ObservableProperty] private string _recentPartSlot0ToolTip = "⚪ Nấc #0: Trống";
+        [ObservableProperty] private string _recentPartSlot1ToolTip = "⚪ Nấc #1: Trống";
+        [ObservableProperty] private string _recentPartSlot2ToolTip = "⚪ Nấc #2: Trống";
+        [ObservableProperty] private string _recentPartSlot3ToolTip = "⚪ Nấc #3: Trống";
+        [ObservableProperty] private string _recentPartSlot4ToolTip = "⚪ Nấc #4: Trống";
+        [ObservableProperty] private string _recentPartSlot5ToolTip = "⚪ Nấc #5: Trống";
+        [ObservableProperty] private string _recentPartSlot6ToolTip = "⚪ Nấc #6: Trống";
+        [ObservableProperty] private string _recentPartSlot7ToolTip = "⚪ Nấc #7: Trống";
+        [ObservableProperty] private string _recentPartSlot8ToolTip = "⚪ Nấc #8: Trống";
+        [ObservableProperty] private string _recentPartSlot9ToolTip = "⚪ Nấc #9: Trống";
+        [ObservableProperty] private string _recentPartSlot10ToolTip = "⚪ Nấc #10: Trống";
+        [ObservableProperty] private string _recentPartSlot11ToolTip = "⚪ Nấc #11: Trống";
+        [ObservableProperty] private string _recentPartSlot12ToolTip = "⚪ Nấc #12: Trống";
+        [ObservableProperty] private string _recentPartSlot13ToolTip = "⚪ Nấc #13: Trống";
+        [ObservableProperty] private string _recentPartSlot14ToolTip = "⚪ Nấc #14: Trống";
+        [ObservableProperty] private string _recentPartSlot15ToolTip = "⚪ Nấc #15: Trống";
+        [ObservableProperty] private string _recentPartSlot16ToolTip = "⚪ Nấc #16: Trống";
+        [ObservableProperty] private string _recentPartSlot17ToolTip = "⚪ Nấc #17: Trống";
+        [ObservableProperty] private string _recentPartSlot18ToolTip = "⚪ Nấc #18: Trống";
+        [ObservableProperty] private string _recentPartSlot19ToolTip = "⚪ Nấc #19: Trống";
+
         public void PushRecentPartInspectionResult(bool isOk)
         {
+            PushRecentPartInspectionResult(isOk, null, null, null, "");
+        }
+
+        public void PushRecentPartInspectionResult(InspectionResult result, Mat? currentFrame = null)
+        {
+            string? savedPath = result.ImageOutputs?.FirstOrDefault(x => x.Saved && !string.IsNullOrEmpty(x.SavedFilePath))?.SavedFilePath;
+            string ngReason = !result.Pass ? (string.IsNullOrWhiteSpace(NgReasonsText) ? "Phát hiện lỗi ngoại quan/kích thước" : NgReasonsText.Replace("\n", "; ")) : "";
+            PushRecentPartInspectionResult(result.Pass, savedPath, currentFrame, result, ngReason);
+        }
+
+        public void PushRecentPartInspectionResult(bool isOk, string? savedImagePath, Mat? currentFrame, InspectionResult? result = null, string ngReason = "")
+        {
+            Mat? snapshotClone = null;
+            if (currentFrame != null && !currentFrame.IsDisposed && !currentFrame.Empty())
+            {
+                try
+                {
+                    snapshotClone = currentFrame.Clone();
+                }
+                catch { }
+            }
+
+            var item = new RecentPartInspectionSlotItem
+            {
+                IsOk = isOk,
+                Timestamp = DateTime.Now,
+                SavedImagePath = savedImagePath,
+                MemorySnapshot = snapshotClone,
+                Result = result,
+                NgReason = ngReason
+            };
+
             lock (_recentPartsLock)
             {
-                _recentPartsHistory.Insert(0, isOk); // Thêm con hàng mới nhất vào đầu (Mới nhất ở bên trái ngoài cùng Slot 0)
+                _recentPartsHistory.Insert(0, isOk);
+                _recentPartItems.Insert(0, item);
+
                 if (_recentPartsHistory.Count > 20)
                 {
-                    _recentPartsHistory.RemoveAt(20); // Bỏ con hàng cũ nhất ở cuối danh sách (vượt quá 20 con)
+                    _recentPartsHistory.RemoveAt(20);
+                }
+
+                if (_recentPartItems.Count > 20)
+                {
+                    var oldest = _recentPartItems[20];
+                    _recentPartItems.RemoveAt(20);
+                    oldest.Dispose();
                 }
             }
 
@@ -2383,8 +2479,17 @@ namespace VisionInspectionApp.UI.ViewModels
         {
             lock (_recentPartsLock)
             {
+                foreach (var item in _recentPartItems)
+                {
+                    item.Dispose();
+                }
+                _recentPartItems.Clear();
                 _recentPartsHistory.Clear();
             }
+
+            SelectedRecentSlotIndex = -1;
+            IsViewingHistoricalRecentPart = false;
+            HistoricalViewingStatusText = string.Empty;
 
             if (System.Windows.Application.Current?.Dispatcher != null && !System.Windows.Application.Current.Dispatcher.CheckAccess())
             {
@@ -2399,9 +2504,11 @@ namespace VisionInspectionApp.UI.ViewModels
         public void UpdateRecentPartsVisuals()
         {
             List<bool> snapshot;
+            List<RecentPartInspectionSlotItem> itemsSnapshot;
             lock (_recentPartsLock)
             {
                 snapshot = _recentPartsHistory.ToList();
+                itemsSnapshot = _recentPartItems.ToList();
             }
 
             int total = snapshot.Count;
@@ -2429,21 +2536,35 @@ namespace VisionInspectionApp.UI.ViewModels
                                      $"• Đạt (OK): {okCount} con hàng\n" +
                                      $"• Lỗi (NG): {ngCount} con hàng\n" +
                                      $"• Tỉ lệ đạt (Yield): {yield:F1}%\n" +
-                                     $"• Chiều luồng: Trái (Mới nhất) ➔ Phải (Cũ dần)";
+                                     $"• Chiều luồng: Trái (Mới nhất #0) ➔ Phải (Cũ dần #19)\n" +
+                                     $"👉 Bấm vào từng nấc để xem lại ảnh kết quả OK/NG!";
 
             for (int i = 0; i < 20; i++)
             {
                 Brush bg = EmptySlotBrush;
                 Brush border = EmptySlotBorder;
+                string tip = $"⚪ Nấc #{i}: Trống (Chưa có sản phẩm)";
 
                 if (i < snapshot.Count)
                 {
                     bool isOk = snapshot[i];
                     bg = isOk ? OkSlotBrush : NgSlotBrush;
-                    border = isOk ? OkSlotBorder : NgSlotBorder;
+                    border = (SelectedRecentSlotIndex == i) ? HighlightSlotBorder : (isOk ? OkSlotBorder : NgSlotBorder);
+
+                    if (i < itemsSnapshot.Count)
+                    {
+                        var it = itemsSnapshot[i];
+                        string fileInfo = !string.IsNullOrEmpty(it.SavedImagePath) ? $"Có file: {System.IO.Path.GetFileName(it.SavedImagePath)}" : (it.MemorySnapshot != null ? "Lưu trong RAM" : "Không có file");
+                        string reasonInfo = !isOk && !string.IsNullOrEmpty(it.NgReason) ? $"\n• Lỗi: {it.NgReason}" : "";
+                        tip = $"🎯 Nấc #{i}: {(isOk ? "OK (Đạt)" : "NG (Lỗi)")}\n" +
+                              $"• Giờ kiểm tra: {it.FormattedTimestamp}{reasonInfo}\n" +
+                              $"• Tệp ảnh: {fileInfo}\n" +
+                              $"👉 Click để xem lại ảnh con hàng này!";
+                    }
                 }
 
                 SetRecentSlotVisual(i, bg, border);
+                SetRecentSlotToolTip(i, tip);
             }
         }
 
@@ -2471,6 +2592,170 @@ namespace VisionInspectionApp.UI.ViewModels
                 case 17: RecentPartSlot17Bg = bg; RecentPartSlot17Border = border; break;
                 case 18: RecentPartSlot18Bg = bg; RecentPartSlot18Border = border; break;
                 case 19: RecentPartSlot19Bg = bg; RecentPartSlot19Border = border; break;
+            }
+        }
+
+        private void SetRecentSlotToolTip(int slotIndex, string tip)
+        {
+            switch (slotIndex)
+            {
+                case 0: RecentPartSlot0ToolTip = tip; break;
+                case 1: RecentPartSlot1ToolTip = tip; break;
+                case 2: RecentPartSlot2ToolTip = tip; break;
+                case 3: RecentPartSlot3ToolTip = tip; break;
+                case 4: RecentPartSlot4ToolTip = tip; break;
+                case 5: RecentPartSlot5ToolTip = tip; break;
+                case 6: RecentPartSlot6ToolTip = tip; break;
+                case 7: RecentPartSlot7ToolTip = tip; break;
+                case 8: RecentPartSlot8ToolTip = tip; break;
+                case 9: RecentPartSlot9ToolTip = tip; break;
+                case 10: RecentPartSlot10ToolTip = tip; break;
+                case 11: RecentPartSlot11ToolTip = tip; break;
+                case 12: RecentPartSlot12ToolTip = tip; break;
+                case 13: RecentPartSlot13ToolTip = tip; break;
+                case 14: RecentPartSlot14ToolTip = tip; break;
+                case 15: RecentPartSlot15ToolTip = tip; break;
+                case 16: RecentPartSlot16ToolTip = tip; break;
+                case 17: RecentPartSlot17ToolTip = tip; break;
+                case 18: RecentPartSlot18ToolTip = tip; break;
+                case 19: RecentPartSlot19ToolTip = tip; break;
+            }
+        }
+
+        [RelayCommand]
+        public void SelectRecentPartSlot(object? param)
+        {
+            if (param == null) return;
+            int slotIndex = Convert.ToInt32(param);
+
+            RecentPartInspectionSlotItem? item = null;
+            lock (_recentPartsLock)
+            {
+                if (slotIndex >= 0 && slotIndex < _recentPartItems.Count)
+                {
+                    item = _recentPartItems[slotIndex];
+                }
+            }
+
+            if (item == null)
+            {
+                StatusBarText = $"Nấc #{slotIndex} chưa có dữ liệu sản phẩm.";
+                return;
+            }
+
+            SelectedRecentSlotIndex = slotIndex;
+            IsViewingHistoricalRecentPart = true;
+
+            // Kiểm tra cấu hình Node Image Output
+            var imageOutputDefs = _config?.ImageOutputs ?? new List<ImageOutputDefinition>();
+            var primaryIo = imageOutputDefs.FirstOrDefault(x => x.EnableOutput) ?? imageOutputDefs.FirstOrDefault();
+            var saveCondition = primaryIo?.SaveCondition ?? ImageOutputCondition.Always;
+
+            bool loadedFromFile = false;
+            if (!string.IsNullOrEmpty(item.SavedImagePath) && System.IO.File.Exists(item.SavedImagePath))
+            {
+                try
+                {
+                    using var fileMat = OpenCvSharp.Cv2.ImRead(item.SavedImagePath, OpenCvSharp.ImreadModes.Color);
+                    if (fileMat != null && !fileMat.Empty())
+                    {
+                        var bmp = fileMat.ToBitmapSourceForDisplay();
+                        if (bmp != null)
+                        {
+                            SelectedNodePreviewImage = bmp;
+                            loadedFromFile = true;
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"[SelectRecentPartSlot] Read file error: {ex.Message}");
+                }
+            }
+
+            if (loadedFromFile)
+            {
+                HistoricalViewingStatusText = $"🔍 Đang xem lại nấc #{slotIndex} ({item.StatusText}) lúc {item.FormattedTimestamp} — Tệp ảnh: {System.IO.Path.GetFileName(item.SavedImagePath)}";
+                StatusBarText = $"🔍 Đang xem lại ảnh {item.StatusText} của con hàng nấc #{slotIndex} lúc {item.FormattedTimestamp}. Tệp: {item.SavedImagePath}";
+            }
+            else if (item.MemorySnapshot != null && !item.MemorySnapshot.IsDisposed && !item.MemorySnapshot.Empty())
+            {
+                try
+                {
+                    var bmp = item.MemorySnapshot.ToBitmapSourceForDisplay();
+                    if (bmp != null)
+                    {
+                        SelectedNodePreviewImage = bmp;
+                    }
+
+                    string conditionNotice = "";
+                    if (item.IsOk && saveCondition == ImageOutputCondition.OnFail)
+                    {
+                        conditionNotice = " (Node Image Output đang đặt [Chỉ lưu ảnh NG], con hàng này OK nên không xuất file đĩa)";
+                    }
+                    else if (!item.IsOk && saveCondition == ImageOutputCondition.OnPass)
+                    {
+                        conditionNotice = " (Node Image Output đang đặt [Chỉ lưu ảnh OK], con hàng này NG nên không xuất file đĩa)";
+                    }
+                    else if (primaryIo == null || !primaryIo.EnableOutput)
+                    {
+                        conditionNotice = " (Chưa kích hoạt xuất file trong node Image Output)";
+                    }
+
+                    HistoricalViewingStatusText = $"🔍 Đang xem lại nấc #{slotIndex} ({item.StatusText}) lúc {item.FormattedTimestamp} — Ảnh từ RAM{conditionNotice}";
+                    StatusBarText = $"🔍 Đang xem lại ảnh {item.StatusText} nấc #{slotIndex} lúc {item.FormattedTimestamp} (Ảnh snapshot từ bộ nhớ RAM){conditionNotice}";
+                }
+                catch (Exception ex)
+                {
+                    StatusBarText = $"Lỗi hiển thị ảnh snapshot nấc #{slotIndex}: {ex.Message}";
+                }
+            }
+            else
+            {
+                HistoricalViewingStatusText = $"⚠️ Nấc #{slotIndex} ({item.StatusText}) lúc {item.FormattedTimestamp}: Không có ảnh lưu trữ";
+                StatusBarText = $"⚠️ Con hàng nấc #{slotIndex} không có tệp ảnh và không có snapshot trong RAM.";
+            }
+
+            UpdateRecentPartsVisuals();
+        }
+
+        [RelayCommand]
+        public void ExitRecentPartView()
+        {
+            IsViewingHistoricalRecentPart = false;
+            SelectedRecentSlotIndex = -1;
+            HistoricalViewingStatusText = string.Empty;
+
+            RefreshPreviewsNow();
+            UpdateRecentPartsVisuals();
+            StatusBarText = "▶ Đã quay lại màn hình kiểm tra hiện tại.";
+        }
+
+        [RelayCommand]
+        public void OpenRecentPartImageFolder()
+        {
+            if (SelectedRecentSlotIndex >= 0 && SelectedRecentSlotIndex < _recentPartItems.Count)
+            {
+                var item = _recentPartItems[SelectedRecentSlotIndex];
+                if (!string.IsNullOrEmpty(item.SavedImagePath) && System.IO.File.Exists(item.SavedImagePath))
+                {
+                    try
+                    {
+                        System.Diagnostics.Process.Start("explorer.exe", $"/select,\"{item.SavedImagePath}\"");
+                        return;
+                    }
+                    catch { }
+                }
+            }
+
+            var folder = _config?.ImageOutputs?.FirstOrDefault(x => !string.IsNullOrEmpty(x.SaveFolderPath))?.SaveFolderPath;
+            if (!string.IsNullOrEmpty(folder) && System.IO.Directory.Exists(folder))
+            {
+                try
+                {
+                    System.Diagnostics.Process.Start("explorer.exe", folder);
+                }
+                catch { }
             }
         }
 
@@ -3360,12 +3645,12 @@ namespace VisionInspectionApp.UI.ViewModels
         /// Trước đây việc đẩy nấc nằm trong UpdateResultSummary() — vốn là hàm render chạy 2 lần/lần kiểm tra
         /// => thanh 20 nấc bị nhảy 2 nấc mỗi lần Run Once.
         /// </summary>
-        private void PublishInspectionResult(InspectionResult? result)
+        private void PublishInspectionResult(InspectionResult? result, OpenCvSharp.Mat? currentFrame = null)
         {
             if (result is null) return;
 
             LogInspectionResultToHistory(result);
-            PushRecentPartInspectionResult(result.Pass);
+            PushRecentPartInspectionResult(result, currentFrame);
         }
 
         /// <summary>
@@ -3805,7 +4090,7 @@ namespace VisionInspectionApp.UI.ViewModels
                     ApplySourceAndPreprocessTimings(inspectionResult, sourceNodeName, imageSourceMs, configCopy);
 
                     // Đẩy kết quả vào Background Logging Worker + thanh 20 con hàng gần nhất (gọi 1 lần)
-                    PublishInspectionResult(inspectionResult);
+                    PublishInspectionResult(inspectionResult, frameMat);
                 }
                 else
                 {
@@ -4198,14 +4483,13 @@ namespace VisionInspectionApp.UI.ViewModels
                 inspectionResult = null;
                 _lastRunError = "Lỗi khi chạy Flow: " + ex.Message;
             }
-            finally
-            {
-                mat?.Dispose();
-            }
 
             _lastRun = inspectionResult;
-            // ✅ FIX: ghi vào Lịch sử kiểm tra + đẩy 1 nấc thanh 20 con hàng (trước đây luồng Folder bị bỏ qua)
-            PublishInspectionResult(inspectionResult);
+            // ✅ FIX: ghi vào Lịch sử kiểm tra + đẩy 1 nấc thanh 20 con hàng kèm ảnh snapshot
+            PublishInspectionResult(inspectionResult, mat);
+            mat?.Dispose();
+            mat = null;
+
             if (IsRunningFolderFlow)
             {
                 ProcessedImageCount++;
@@ -4492,8 +4776,8 @@ namespace VisionInspectionApp.UI.ViewModels
                     _lastRunError = "Lỗi khi chạy Flow: " + ex.Message;
                 }
                 _lastRun = inspectionResult;
-                // ✅ FIX: ghi Lịch sử kiểm tra + đẩy 1 nấc thanh 20 con hàng (Run Once / PLC Trigger)
-                PublishInspectionResult(inspectionResult);
+                // ✅ FIX: ghi Lịch sử kiểm tra + đẩy 1 nấc thanh 20 con hàng (Run Once / PLC Trigger) kèm ảnh snap
+                PublishInspectionResult(inspectionResult, snap);
                 UpdateNodeExecutionTimes();
                 if (IsRunningFolderFlow)
                 {

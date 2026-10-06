@@ -1,160 +1,143 @@
-# Sơ Đồ Thang Ladder Trực Quan (Visual Ladder Diagram)
-## Tương Thích: Mitsubishi GX Works 3 / GX Works 2 / FX5U / Q Series / iQ-R
+# Sơ Đồ Thang Ladder & Trình Tự Bắt Tay PLC FX5U (GX Works 3)
+## Kiến Trúc Dây Chuyền: Kiểm Tra Nối Tiếp (In-Flight) & Dừng Hàng NG Ngoài Buồng Kiểm Tra
 
 ---
 
-## 1. Bản Đồ Bộ Nhớ Kết Nối Vision PC $\leftrightarrow$ PLC (Memory Map)
+## 1. Bản Đồ Truyền Thông & I/O FX5U (MC Protocol / SLMP)
 
 ```mermaid
 graph LR
-    subgraph PLC["MITSUBISHI PLC (FX5U / Q-Series)"]
-        X0["X0 (PLC Heartbeat)"]
-        X1["X1 (PLC Ack)"]
-        M10["M10 (PLC Trigger)"]
-        M20["M20 (Latch S_trigger Encoder)"]
-        M30["M30 (Push Reject FIFO)"]
-        M31["M31 (Pop In-Flight Pass)"]
-        D1000["D1000 (Encoder Pulses)"]
-        D1002["D1002 (Line Speed)"]
-        D1004["D1004 (Position mm Float)"]
-        Y10["Y10 (Line Interlock / E-Stop)"]
-        Y20["Y20 (Reject Cylinder)"]
+    subgraph SENSORS_ACTUATORS["FIELD I/O (HIỆN TRƯỜNG FX5U)"]
+        X2["X2: Cảm biến phôi vào buồng chụp"]
+        X3["X3: Cảm biến trạm chỉ định ngoài buồng"]
+        X4["X4: Nút nhấn xác nhận đã lấy hàng NG"]
+        Y0["Y0: Động cơ băng tải chính (Run/Stop)"]
+        Y20["Y20: Xylanh gạt / Van thổi hàng NG"]
+        Y21["Y21: Stopper dừng hàng NG ngoài buồng"]
+        Y22["Y22: Đèn tháp & Còi báo động hàng NG"]
     end
 
-    subgraph VISION["VISION 2026 SYSTEM (PC)"]
-        Y0["Y0 (Vision Heartbeat)"]
-        Y1["Y1 (Vision Ready)"]
-        Y2["Y2 (Vision Busy)"]
-        Y3["Y3 (Vision Done)"]
-        Y4["Y4 (Vision Pass / OK)"]
-        Y5["Y5 (Vision NG / Lỗi)"]
-        D200["D200, D202, D204 (Tọa độ X, Y, Angle)"]
+    subgraph PLC_FX5U["MITSUBISHI PLC FX5U (GX WORKS 3)"]
+        M10["M10: Vision_Trigger (PLC -> PC)"]
+        M11["M11: PLC_Ack (PLC -> PC)"]
+        M20["M20: Nạp phôi vào In-Flight FIFO"]
+        M30["M30: Đánh dấu kết quả NG"]
+        M31["M31: Đánh dấu kết quả PASS"]
+        M120["M120: Tùy chọn dừng băng tải khi NG đến trạm"]
+        M215["M215: Cờ báo hàng NG đang dừng ngoài buồng"]
+        D100["D100: Khoảng cách Cam -> Trạm ngoài buồng (mm)"]
+        D1004["D1004: Tọa độ Encoder thực tế (mm)"]
     end
 
-    X0 -->|100ms Toggle| VISION
-    X1 -->|Handshake Ack| VISION
-    M10 -->|Capture Frame| VISION
-    D1000 -->|Motion Sync Pulses| VISION
-    D1004 -->|Absolute Position mm| VISION
+    subgraph VISION_PC["VISION INSPECTION APP (.NET 8 WPF)"]
+        M101["M101: Vision_Ready (PC -> PLC)"]
+        M102["M102: Vision_Busy (PC -> PLC)"]
+        M103["M103: Vision_Done (PC -> PLC)"]
+        M104["M104: Vision_Pass / OK (PC -> PLC)"]
+        M105["M105: Vision_NG / Lỗi (PC -> PLC)"]
+        D200["D200..D210: Tọa độ & Dữ liệu đo đạc"]
+    end
 
-    VISION -->|100ms Toggle| Y0
-    VISION -->|Ready for Trigger| Y1
-    VISION -->|Inspecting| Y2
-    VISION -->|Done Pulse| Y3
-    VISION -->|Pass Result| Y4
-    VISION -->|NG Result| Y5
-    VISION -->|Pose & Measurements| D200
+    X2 -->|Phôi vào buồng| M10
+    M10 -->|Trigger chụp| VISION_PC
+    VISION_PC -->|Ready=M101 / Busy=M102| PLC_FX5U
+    VISION_PC -->|Done=M103 / Pass=M104 / NG=M105| PLC_FX5U
+    PLC_FX5U -->|Xác nhận chốt kết quả M11| VISION_PC
+    
+    PLC_FX5U -->|Phôi NG đến trạm ngoài buồng| Y21
+    PLC_FX5U -->|Dừng băng tải khi có NG| Y0
+    PLC_FX5U -->|Còi đèn báo hàng NG| Y22
+    X4 -->|Công nhân gỡ hàng NG & bấm nút| PLC_FX5U
 ```
 
 ---
 
-## 2. Sơ Đồ Ladder Trực Quan Từng Mạng (Ladder Networks)
-
-### 🟢 MẠNG 1: Tạo Nhịp Tim PLC (PLC Heartbeat 100ms Toggle)
-*PLC phát nhịp tim đảo bit liên tục mỗi 100ms gửi sang Vision PC để xác nhận PLC đang hoạt động bình thường.*
+## 2. Biểu Đồ Thời Gian (Timing Diagram): Pipelined Inspection & Dừng Ngoài Buồng
 
 ```text
-  M8000 (Always ON)      T1 (100ms Timer)             +---[ T1 K1 ]---+ (Timer 100ms)
--------[ ]--------------------[/]--------------------+
-                                                      +---[ ALT X0 ]--+ (Đảo bit X0 mỗi 100ms)
+[Phôi 1 vào buồng]   ---> X2 Trigger ---> M101=1 ---> Vision phân tích ---> KẾT QUẢ: PHÔI 1 LỖI (NG)!
+                          (Băng tải Y0 vẫn chạy, phôi 1 di chuyển ra ngoài buồng, khoảng cách D100 mm)
+                          
+[Phôi 2 vào buồng]   ---> X2 Trigger ---> M101=1 ---> Vision phân tích ---> KẾT QUẢ: PHÔI 2 ĐẠT (OK)!
+                          (Phôi 2 được kiểm tra bình thường trong lúc phôi 1 đang di chuyển!)
+
+[Phôi 3 vào buồng]   ---> X2 Trigger ---> M101=1 ---> Vision phân tích ---> KẾT QUẢ: PHÔI 3 ĐẠT (OK)!
+                          (Tiếp tục kiểm tra nối tiếp không gián đoạn)
+
+[Phôi 1 đến trạm]    ---> Tọa độ = D100 (hoặc chạm cảm biến X3 ngoài buồng):
+                          • Bật Stopper chặn hàng: Y21 = ON
+                          • Dừng băng tải chính:   Y0  = OFF (nếu M120=ON)
+                          • Bật đèn còi báo NG:    Y22 = ON
+                          • Báo cờ HMI:            M215 = ON
+                          ===> Phôi 1 (NG) DỪNG CHÍNH XÁC TẠI TRẠM NGOÀI BUỒNG KIỂM TRA!
+
+[Xử lý hoàn tất]     ---> Công nhân lấy phôi 1 ra, bấm nút xác nhận X4 (hoặc M211):
+                          • Hạ Stopper:            Y21 = OFF
+                          • Khởi động lại băng tải: Y0  = ON
+                          • Tắt còi đèn:           Y22 = OFF
+                          • Xóa phôi 1 khỏi FIFO, Phôi 2 (OK) trôi qua bình thường!
 ```
 
 ---
 
-### 🟢 MẠNG 2: Watchdog Giám Sát Nhịp Tim Vision PC (300ms Timeout) & Liên Động An Toàn
-*Nếu Vision PC bị đơ, mất kết nối hoặc cáp Ethernet bị rút quá 300ms, PLC ngắt rơ-le an toàn `Y10` dừng băng tải ngay lập tức.*
+## 3. Sơ Đồ Thang Ladder (FX5U Networks)
+
+### 🟢 MẠNG 1: Bắt Tay Kích Hoạt Chụp Ảnh Trong Buồng (Handshake Trigger)
+*Khi phôi chạm cảm biến X2 và Vision PC sẵn sàng (M101), PLC phát xung M10 cho PC và chốt xung M20 nạp hàng đợi.*
 
 ```text
-  Y0 (Vision Heartbeat)
--------[ ]------------------------------------------------[ PLS M205 ]- (Bắt cạnh lên)
-
-  Y0 (Vision Heartbeat)
--------[/]------------------------------------------------[ PLS M206 ]- (Bắt cạnh xuống)
-
-
-  M8000          M205           M206
----[ ]------------[/]------------[/]----------------------[ T0 K3 ]---- (Watchdog 300ms)
-
-
-  T0 (Watchdog Timeout)
----[ ]------------------------------------------------+---[ SET M202 ]- (Cảnh báo lỗi Vision)
-                                                      |
-                                                      +---[ RST Y10 ]-- (Ngắt liên động chuyền)
-
-
-  M205 (Nhịp tim trở lại)
----[ ]------------------------------------------------+---[ RST M202 ]- (Xóa lỗi)
-  M206                                                |
----[ ]------------------------------------------------+---[ SET Y10 ]-- (Cho phép chạy chuyền)
+   X2 (Sensor buồng)   M101 (Ready)      M202 (No Fault)   M102 (Not Busy)
+-------[ ↑ ]----------------[ ]----------------[/]----------------[/]----+----[ PLS M10 ]- (Xung Trigger Vision)
+                                                                         |
+                                                                         +----[ PLS M20 ]- (Chốt tọa độ S_trigger)
 ```
 
----
-
-### 🟢 MẠNG 3: Bắt Tay Kích Hoạt Chụp Ảnh & Chốt Tọa Độ Encoder Lúc Chụp (In-Flight Latch)
-*Khi cảm biến phôi `X2` phát hiện hàng vào đúng vị trí và Vision PC sẵn sàng (`Y1=1`, `Y2=0`, không lỗi), PLC phát xung `M10` kích camera chụp và `M20` chốt ngay tọa độ $S_{\text{trigger}} = D1004$.*
+### 🟢 MẠNG 2: Nhận Kết Quả Kiểm Tra Từ Vision PC & Phản Hồi PLC Ack
+*Khi Vision PC tính toán xong (M103=1), PLC đọc M104/M105, cập nhật trạng thái vào FIFO và gửi M11 xác nhận.*
 
 ```text
-  X2 (Sensor)   Y1 (Vision Ready)  M202 (No Fault)  Y2 (Not Busy)
-------[ ]--------------[ ]---------------[/]--------------[/]----+----[ PLS M10 ]- (Bắn xung Trigger)
-                                                                 |
-                                                                 +----[ PLS M20 ]- (Chốt tọa độ S_trigger)
-```
-
----
-
-### 🟢 MẠNG 4: Nhận Kết Quả Kiểm Tra & Bắn Tín Hiệu PLC Ack (Handshake Complete)
-*Khi Vision hoàn thành tính toán (`Y3=1`), phân loại Pass/NG và bật `X1 (PLC Ack)` báo cho Vision PC biết PLC đã chốt kết quả.*
-
-```text
-  Y3 (Vision Done)
--------[ ]------------------------------------------------+-------[ OUT X1 ]- (Bật PLC Ack)
+   M103 (Vision Done)
+-------[ ]------------------------------------------------+--------------[ OUT M11 ]- (PLC Ack)
                                                           |
-                                           Y5 (Vision NG) |
-                                          -------[ ]------+-------[ PLS M30 ]- (Nạp Shift Register NG)
+                                           M105 (NG)      |
+                                          -------[ ]------+--------------[ PLS M30 ]- (Nạp kết quả NG vào FIFO)
                                                           |
-                                           Y4 (Vision OK) |
-                                          -------[ ]------+-------[ PLS M31 ]- (Giải phóng phôi Pass)
+                                           M104 (Pass)    |
+                                          -------[ ]------+--------------[ PLS M31 ]- (Nạp kết quả OK vào FIFO)
 
-
-  Y3 (Vision Done)
--------[/]--------------------------------------------------------[ RST X1 ]- (Hạ PLC Ack về 0)
+   M103 (Vision Done)
+-------[/]---------------------------------------------------------------[ RST M11 ]- (Hạ PLC Ack khi PC reset)
 ```
 
----
-
-### 🟢 MẠNG 5: Hàng Đợi Shift Register & Thổi Loại Bỏ Sản Phẩm NG (Reject Piston)
-*Khi phôi di chuyển trên băng tải tới đúng tọa độ $S_{\text{target}} = S_{\text{trigger}} + L_{\text{reject}}$ (dung sai $\pm 10\text{ mm}$), PLC kích van điện từ / vòi khí `Y20` trong 100ms để thổi sản phẩm lỗi vào thùng NG.*
+### 🟢 MẠNG 3: Dừng Đúng Sản Phẩm NG Tại Vị Trí Chỉ Định Ở Ngoài Buồng Kiểm Tra
+*Khi phôi đầu tiên trong hàng đợi là NG (Status = 2) và tọa độ thực tế D1004 đạt tới đích ngoài buồng:*
 
 ```text
-  [ D1004 >= (Target - Tol) ] (Vị trí mm >= Đích Reject)
---------------[ ]-----------------------------------------+-------[ OUT M40 ]- (Kích hoạt Reject)
-  [ D1004 <= (Target + Tol) ] (Vị trí mm <= Đích + Tol)   |
---------------[ ]-----------------------------------------+
-
-
-  M40                                                 +---[ OUT Y20 ]-+ (Van Xylanh Reject ON)
--------[ ]--------------------------------------------+
-                                                      +---[ T10 K1 ]--+ (Timer 100ms)
-
-
-  T10 (Sau 100ms)
--------[ ]--------------------------------------------+---[ RST Y20 ]-+ (Ngắt Van Xylanh)
-                                                      |
-                                                      +---[ RST M40 ]-+
+   [ FIFO_Head_Status == 2 ] (Phôi dẫn đầu là NG)
+---------------[ ]----------------------------------------+
+   [ D1004 >= (Target - Tol) ] OR [ X3 (Sensor ngoài) ]   |
+---------------[ ]----------------------------------------+--------------[ SET Y21 ]-- (Bật Stopper chặn hàng NG)
+                                                          |
+                                                          +--------------[ SET Y22 ]-- (Bật còi đèn báo hàng NG)
+                                                          |
+                                                          +--------------[ SET M215 ]- (Cờ HMI báo NG dừng ngoài trạm)
+                                                          |
+                                           M120 (StopConv)|
+                                          -------[ ]------+--------------[ RST Y0 ]--- (Dừng băng tải chính)
 ```
 
----
-
-### 🟢 MẠNG 6: Cộng Dồn Bộ Đếm Thống Kê Sản Lượng (Total / OK / NG)
-*Tự động tăng các thanh ghi 32-bit (Double Word DINT) lưu trong PLC khi hoàn thành kiểm tra từng sản phẩm.*
+### 🟢 MẠNG 4: Nút Nhấn Xác Nhận Đã Lấy Hàng NG Ra Khỏi Trạm Ngoài Buồng
+*Công nhân lấy hàng NG ra khỏi cữ chặn và bấm nút X4: giải phóng cơ cấu dừng, cho băng tải tiếp tục chạy.*
 
 ```text
-  Y3 (Vision Done)
--------[ ]------------------------------------------------[ DADD D300 K1 D300 ]- (Tổng kiểm tra)
-
-  Y4 (Vision Pass - OK)
--------[ ]------------------------------------------------[ DADD D302 K1 D302 ]- (Tổng OK)
-
-  Y5 (Vision NG - Lỗi)
--------[ ]------------------------------------------------[ DADD D304 K1 D304 ]- (Tổng NG)
+   X4 (Nút Ack công nhân) OR M211 (HMI Reset)       Y21 (Stopper đang giữ)
+-------------------[ ↑ ]------------------------------------[ ]----------+----[ RST Y21 ]-- (Hạ Stopper)
+                                                                         |
+                                                                         +----[ RST Y22 ]-- (Tắt còi đèn)
+                                                                         |
+                                                                         +----[ RST M215 ]- (Xóa cờ HMI)
+                                                                         |
+                                                                         +----[ SET Y0 ]--- (Khôi phục chạy băng tải)
+                                                                         |
+                                                                         +----[ Shift FIFO ] (Đẩy phôi tiếp theo lên)
 ```

@@ -104,13 +104,26 @@ public static class PlcTagCsvService
             var tokens = ParseCsvLine(line);
             if (tokens.Count < 3) continue;
 
-            // Format: "Class","Label Name","Data Type","Constant","Device","Address","Comment"
-            // Indices:   0          1            2          3         4        5         6
+            // Hỗ trợ cả 2 định dạng:
+            // 1. Chuẩn GX Works 3 (6 cột): "Class","Label Name","Data Type","Constant","Assign (Device/Label)","Comment"
+            // 2. Định dạng mở rộng (7 cột): "Class","Label Name","Data Type","Constant","Device","Address","Comment"
             string labelName = tokens.Count > 1 ? tokens[1].Trim() : string.Empty;
             string rawDataType = tokens.Count > 2 ? tokens[2].Trim() : string.Empty;
             string device = tokens.Count > 4 ? tokens[4].Trim() : string.Empty;
-            string address = tokens.Count > 5 ? tokens[5].Trim() : string.Empty;
-            string comment = tokens.Count > 6 ? tokens[6].Trim() : string.Empty;
+            string address = string.Empty;
+            string comment = string.Empty;
+
+            if (tokens.Count == 6)
+            {
+                // Chuẩn 6 cột GX Works 3: Cột 4 là Assign (Device), Cột 5 là Comment
+                comment = tokens[5].Trim();
+            }
+            else if (tokens.Count >= 7)
+            {
+                // 7 cột: Cột 4 là Device, Cột 5 là Address, Cột 6 là Comment
+                address = tokens[5].Trim();
+                comment = tokens[6].Trim();
+            }
 
             // Nếu device rỗng, thử lấy address
             string finalAddress = !string.IsNullOrWhiteSpace(device) ? device : address;
@@ -353,12 +366,12 @@ public static class PlcTagCsvService
     public static string ExportToGxWorksGlobalLabelsCsv(IEnumerable<PlcTag> tags)
     {
         var sb = new StringBuilder();
-        sb.AppendLine("\"Class\",\"Label Name\",\"Data Type\",\"Constant\",\"Device\",\"Address\",\"Comment\"");
+        sb.AppendLine("\"Class\",\"Label Name\",\"Data Type\",\"Constant\",\"Assign (Device/Label)\",\"Comment\"");
 
         foreach (var tag in tags)
         {
             string gxDataType = FormatGxWorksDataType(tag.DataType);
-            sb.AppendLine($"\"VAR_GLOBAL\",{EscapeCsvQuoted(tag.Name)},{EscapeCsvQuoted(gxDataType)},\"\",{EscapeCsvQuoted(tag.Address)},\"\",{EscapeCsvQuoted(tag.Description)}");
+            sb.AppendLine($"\"VAR_GLOBAL\",{EscapeCsvQuoted(tag.Name)},{EscapeCsvQuoted(gxDataType)},\"\",{EscapeCsvQuoted(tag.Address)},{EscapeCsvQuoted(tag.Description)}");
         }
 
         return sb.ToString();

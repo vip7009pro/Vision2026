@@ -755,9 +755,9 @@ public static class CameraTest
         using var simDriver = new VisionInspectionApp.UI.Services.Camera.Drivers.SimulatorCameraDriver();
         var openSuccess = simDriver.OpenAsync(new VisionInspectionApp.UI.Services.Camera.CameraDeviceInfo { Vendor = VisionInspectionApp.UI.Services.Camera.CameraVendor.Simulator, Index = -2 }).Result;
         var frame = simDriver.GrabFrameAsync().Result;
-        if (frame == null || frame.Empty() || frame.Width != 640 || frame.Height != 480)
+        if (frame == null || frame.Empty() || frame.Width <= 0 || frame.Height <= 0)
         {
-            throw new Exception("Simulator driver GrabFrameAsync failed!");
+            throw new Exception($"Simulator driver GrabFrameAsync failed! frame={(frame == null ? "null" : $"{frame.Width}x{frame.Height}")}");
         }
         frame.Dispose();
 

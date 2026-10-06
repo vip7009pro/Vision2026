@@ -78,15 +78,35 @@ public sealed class IndustrialHandshakeStateMachine
         _plcId = plcId;
     }
 
+    private string? ResolveTag(string primaryTagName, params string[] fallbacks)
+    {
+        if (_plcManager == null) return null;
+        if (!string.IsNullOrEmpty(primaryTagName) && _plcManager.GetTagValue(_plcId, primaryTagName) != null)
+            return primaryTagName;
+        foreach (var fb in fallbacks)
+        {
+            if (!string.IsNullOrEmpty(fb) && _plcManager.GetTagValue(_plcId, fb) != null)
+                return fb;
+        }
+        return null;
+    }
+
+    public string? GetEffectiveReadyTag() => ResolveTag(ReadyTagName, "M101_VisionReady", "M101", "VisionReady", "Y1_VisionReady");
+    public string? GetEffectiveBusyTag() => ResolveTag(BusyTagName, "M102_VisionBusy", "M102", "VisionBusy", "Y2_VisionBusy");
+    public string? GetEffectiveDoneTag() => ResolveTag(DoneTagName, "M103_VisionDone", "M103", "VisionDone", "Y3_VisionDone");
+    public string? GetEffectivePassTag() => ResolveTag(PassTagName, "M104_VisionPass", "M104", "VisionPass", "Y4_VisionPass");
+    public string? GetEffectiveNgTag() => ResolveTag(NgTagName, "M105_VisionNG", "M105", "VisionNG", "Y5_VisionNG");
+    public string? GetEffectivePlcAckTag() => ResolveTag(PlcAckTagName, "M10_PlcAck", "M10", "PlcAck", "X1_PlcAck");
+
     private bool HasConfiguredHandshakeTags()
     {
         if (_plcManager == null) return false;
-        return _plcManager.GetTagValue(_plcId, ReadyTagName) != null ||
-               _plcManager.GetTagValue(_plcId, BusyTagName) != null ||
-               _plcManager.GetTagValue(_plcId, DoneTagName) != null ||
-               _plcManager.GetTagValue(_plcId, PassTagName) != null ||
-               _plcManager.GetTagValue(_plcId, NgTagName) != null ||
-               _plcManager.GetTagValue(_plcId, PlcAckTagName) != null;
+        return GetEffectiveReadyTag() != null ||
+               GetEffectiveBusyTag() != null ||
+               GetEffectiveDoneTag() != null ||
+               GetEffectivePassTag() != null ||
+               GetEffectiveNgTag() != null ||
+               GetEffectivePlcAckTag() != null;
     }
 
     /// <summary>
@@ -101,17 +121,21 @@ public sealed class IndustrialHandshakeStateMachine
             return;
         }
 
-        if (!string.IsNullOrEmpty(ReadyTagName) && _plcManager.GetTagValue(_plcId, ReadyTagName) != null)
+        var readyTag = GetEffectiveReadyTag();
+        var busyTag = GetEffectiveBusyTag();
+        var doneTag = GetEffectiveDoneTag();
+
+        if (!string.IsNullOrEmpty(readyTag))
         {
-            await _plcManager.WriteTagValueAsync(_plcId, ReadyTagName, true, ct);
+            await _plcManager.WriteTagValueAsync(_plcId, readyTag, true, ct);
         }
-        if (!string.IsNullOrEmpty(BusyTagName) && _plcManager.GetTagValue(_plcId, BusyTagName) != null)
+        if (!string.IsNullOrEmpty(busyTag))
         {
-            await _plcManager.WriteTagValueAsync(_plcId, BusyTagName, false, ct);
+            await _plcManager.WriteTagValueAsync(_plcId, busyTag, false, ct);
         }
-        if (!string.IsNullOrEmpty(DoneTagName) && _plcManager.GetTagValue(_plcId, DoneTagName) != null)
+        if (!string.IsNullOrEmpty(doneTag))
         {
-            await _plcManager.WriteTagValueAsync(_plcId, DoneTagName, false, ct);
+            await _plcManager.WriteTagValueAsync(_plcId, doneTag, false, ct);
         }
         CurrentState = HandshakeState.Armed;
     }
@@ -127,13 +151,16 @@ public sealed class IndustrialHandshakeStateMachine
             return;
         }
 
-        if (!string.IsNullOrEmpty(BusyTagName) && _plcManager.GetTagValue(_plcId, BusyTagName) != null)
+        var busyTag = GetEffectiveBusyTag();
+        var readyTag = GetEffectiveReadyTag();
+
+        if (!string.IsNullOrEmpty(busyTag))
         {
-            await _plcManager.WriteTagValueAsync(_plcId, BusyTagName, true, ct);
+            await _plcManager.WriteTagValueAsync(_plcId, busyTag, true, ct);
         }
-        if (!string.IsNullOrEmpty(ReadyTagName) && _plcManager.GetTagValue(_plcId, ReadyTagName) != null)
+        if (!string.IsNullOrEmpty(readyTag))
         {
-            await _plcManager.WriteTagValueAsync(_plcId, ReadyTagName, false, ct);
+            await _plcManager.WriteTagValueAsync(_plcId, readyTag, false, ct);
         }
     }
 
@@ -155,38 +182,45 @@ public sealed class IndustrialHandshakeStateMachine
             return true;
         }
 
+        var passTag = GetEffectivePassTag();
+        var ngTag = GetEffectiveNgTag();
+        var doneTag = GetEffectiveDoneTag();
+        var ackTag = GetEffectivePlcAckTag();
+        var readyTag = GetEffectiveReadyTag();
+        var busyTag = GetEffectiveBusyTag();
+
         try
         {
             // 1. Ghi kết quả PASS/NG và DONE = 1
             if (isPass)
             {
-                if (!string.IsNullOrEmpty(PassTagName) && _plcManager.GetTagValue(_plcId, PassTagName) != null) 
-                    await _plcManager.WriteTagValueAsync(_plcId, PassTagName, true, ct);
-                if (!string.IsNullOrEmpty(NgTagName) && _plcManager.GetTagValue(_plcId, NgTagName) != null) 
-                    await _plcManager.WriteTagValueAsync(_plcId, NgTagName, false, ct);
+                if (!string.IsNullOrEmpty(passTag)) 
+                    await _plcManager.WriteTagValueAsync(_plcId, passTag, true, ct);
+                if (!string.IsNullOrEmpty(ngTag)) 
+                    await _plcManager.WriteTagValueAsync(_plcId, ngTag, false, ct);
             }
             else
             {
-                if (!string.IsNullOrEmpty(PassTagName) && _plcManager.GetTagValue(_plcId, PassTagName) != null) 
-                    await _plcManager.WriteTagValueAsync(_plcId, PassTagName, false, ct);
-                if (!string.IsNullOrEmpty(NgTagName) && _plcManager.GetTagValue(_plcId, NgTagName) != null) 
-                    await _plcManager.WriteTagValueAsync(_plcId, NgTagName, true, ct);
+                if (!string.IsNullOrEmpty(passTag)) 
+                    await _plcManager.WriteTagValueAsync(_plcId, passTag, false, ct);
+                if (!string.IsNullOrEmpty(ngTag)) 
+                    await _plcManager.WriteTagValueAsync(_plcId, ngTag, true, ct);
             }
 
-            if (!string.IsNullOrEmpty(DoneTagName) && _plcManager.GetTagValue(_plcId, DoneTagName) != null)
+            if (!string.IsNullOrEmpty(doneTag))
             {
-                await _plcManager.WriteTagValueAsync(_plcId, DoneTagName, true, ct);
+                await _plcManager.WriteTagValueAsync(_plcId, doneTag, true, ct);
             }
 
             // 2. Chờ PLC phản hồi tín hiệu ACK nếu có cấu hình PlcAckTagName hợp lệ
-            if (!string.IsNullOrEmpty(PlcAckTagName) && _plcManager.GetTagValue(_plcId, PlcAckTagName) != null)
+            if (!string.IsNullOrEmpty(ackTag))
             {
                 var sw = Stopwatch.StartNew();
                 bool ackReceived = false;
 
                 while (sw.ElapsedMilliseconds < HandshakeTimeoutMs && !ct.IsCancellationRequested)
                 {
-                    var tagVal = _plcManager.GetTagValue(_plcId, PlcAckTagName);
+                    var tagVal = _plcManager.GetTagValue(_plcId, ackTag);
                     var ackVal = tagVal?.CurrentValue;
                     if (ackVal is bool b && b)
                     {
@@ -205,7 +239,7 @@ public sealed class IndustrialHandshakeStateMachine
                 if (!ackReceived)
                 {
                     CurrentState = HandshakeState.TimeoutFault;
-                    OnHandshakeTimeout?.Invoke(this, $"PLC không phản hồi tín hiệu {PlcAckTagName} trong {HandshakeTimeoutMs}ms");
+                    OnHandshakeTimeout?.Invoke(this, $"PLC không phản hồi tín hiệu {ackTag} trong {HandshakeTimeoutMs}ms");
                     return false;
                 }
 
@@ -213,17 +247,17 @@ public sealed class IndustrialHandshakeStateMachine
             }
 
             // 3. Hạ bit DONE và BUSY xuống 0, đồng thời khôi phục READY = 1 cho chu trình tiếp theo
-            if (!string.IsNullOrEmpty(DoneTagName) && _plcManager.GetTagValue(_plcId, DoneTagName) != null)
+            if (!string.IsNullOrEmpty(doneTag))
             {
-                await _plcManager.WriteTagValueAsync(_plcId, DoneTagName, false, ct);
+                await _plcManager.WriteTagValueAsync(_plcId, doneTag, false, ct);
             }
-            if (!string.IsNullOrEmpty(BusyTagName) && _plcManager.GetTagValue(_plcId, BusyTagName) != null)
+            if (!string.IsNullOrEmpty(busyTag))
             {
-                await _plcManager.WriteTagValueAsync(_plcId, BusyTagName, false, ct);
+                await _plcManager.WriteTagValueAsync(_plcId, busyTag, false, ct);
             }
-            if (!string.IsNullOrEmpty(ReadyTagName) && _plcManager.GetTagValue(_plcId, ReadyTagName) != null)
+            if (!string.IsNullOrEmpty(readyTag))
             {
-                await _plcManager.WriteTagValueAsync(_plcId, ReadyTagName, true, ct);
+                await _plcManager.WriteTagValueAsync(_plcId, readyTag, true, ct);
             }
 
             // 4. Hoàn tất chu trình
@@ -249,11 +283,15 @@ public sealed class IndustrialHandshakeStateMachine
             return;
         }
 
+        var readyTag = GetEffectiveReadyTag();
+        var busyTag = GetEffectiveBusyTag();
+        var doneTag = GetEffectiveDoneTag();
+
         try
         {
-            if (!string.IsNullOrEmpty(ReadyTagName)) await _plcManager.WriteTagValueAsync(_plcId, ReadyTagName, false, ct);
-            if (!string.IsNullOrEmpty(BusyTagName)) await _plcManager.WriteTagValueAsync(_plcId, BusyTagName, false, ct);
-            if (!string.IsNullOrEmpty(DoneTagName)) await _plcManager.WriteTagValueAsync(_plcId, DoneTagName, false, ct);
+            if (!string.IsNullOrEmpty(readyTag)) await _plcManager.WriteTagValueAsync(_plcId, readyTag, false, ct);
+            if (!string.IsNullOrEmpty(busyTag)) await _plcManager.WriteTagValueAsync(_plcId, busyTag, false, ct);
+            if (!string.IsNullOrEmpty(doneTag)) await _plcManager.WriteTagValueAsync(_plcId, doneTag, false, ct);
         }
         catch { }
     }

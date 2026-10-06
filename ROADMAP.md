@@ -2,27 +2,20 @@
 
 ## Các nhiệm vụ gần đây & Đang triển khai
 
-- [x] Task 372: Nâng cấp hệ thống Calib sang cơ chế 2 trục độc lập ($X$ và $Y$), giải quyết triệt để lỗi đo phôi chữ nhật.
-- [x] Task 373: Tối ưu khối Timing Breakdown Tool Editor thành 1 hàng ngang cuộn ScrollViewer.
-- [x] Task 374: Khắc phục triệt để mất cấu hình OTA, OQC Scanner, Database & Toàn bộ cấu hình hệ thống khi build Release (AppStoragePaths & MSBuild Sync).
-- [x] Task 375: Bổ sung thao tác kéo chuột trực tiếp trên Canvas xem trước để Pan vùng hiển thị PDF (60 FPS in-memory, HUD, Esc cancel).
-- [x] Task 376: Tách ô nhập SỐ ĐO THỰC TẾ (mm) thành field riêng cạnh nút "Đặt Hệ Số Calib" để không ghi đè Spec (nhận dấu phẩy `50,02`, tự xóa khi đổi tool).
-- [x] Task 377: Sửa lỗi Copy/Paste nhiều node trong Tool Editor & thêm nút Auto Tune cho công cụ nhận diện (PreprocessAutoTuner).
-- [x] Task 378: Tối ưu hiệu năng/UX Tool Editor (cache preview Final, chống rò rỉ RAM Mat, thuật toán Coordinate Descent cho Auto Tune).
-- [x] Task 379: Tăng tốc Auto Tune bằng ĐA LUỒNG ĐA NHÂN (`Parallel.For`, cap 4-8 luồng, đếm tiến trình Interlocked).
-- [x] Task 380: OQC Scanner thao tác 1 nút Space / Ctrl+F8 luân phiên & Bật tắt Crosshair căn tâm trong Cửa sổ Cấu hình Camera/Đèn Job:
-  - [x] Thêm `TriggerInspectOrLiveCommand` vào `OqcScannerViewModel`:
-    - Khi đang Live View (`IsShowingLiveCamera = true`): phím `Space` hoặc `Ctrl + F8` kích hoạt kiểm tra hàng (`RunJob` hoặc `ScanFromCamera`).
-    - Khi đang hiển thị kết quả kiểm tra (`IsShowingLiveCamera = false`): bấm `Space` hoặc `Ctrl + F8` kích hoạt quay lại Live View (`EnableLiveCamera`).
-    - Kịch bản phối hợp: nếu vừa kiểm tra xong mà bấm `F5` về Live View rồi, thì lần bấm Space tiếp theo sẽ là kiểm tra hàng (không bị nhảy về Live View lần nữa).
-  - [x] Phím `F5` giữ nguyên chức năng chuyển về Live View.
-  - [x] Thêm tổ hợp phím `Ctrl + F8` với chức năng tương tự Space trên toàn màn hình OQC Scanner.
-  - [x] Cập nhật giao diện: Tooltip, ScanButtonText và PreviewHeaderTitle gợi ý phím tắt `SPACE / Ctrl+F8`.
-  - [x] Cửa sổ Cấu hình Camera & Đèn cho Job (`JobCameraSettingsWindow`):
-    - Bổ sung `ShowCrosshair` trong `JobCameraSettingsViewModel` (mặc định BẬT = `true`).
-    - Gắn `ShowCrosshair="{Binding ShowCrosshair}"` vào `ImageViewerControl`.
-    - Thêm ô tích chọn CheckBox `✛ Crosshair` (màu cyan `#00E5FF`) và nút `Fit View` trên thanh Floating Panel góc trên bên phải Live Preview.
-  - [x] Bổ sung kiểm thử tự động `TestOqcTriggerInspectOrLiveToggleSequence` và `TestJobCameraSettingsCrosshairDefaultAndToggle` — toàn bộ test suite PASS 100%.
+- [x] Task 376: Tách ô nhập SỐ ĐO THỰC TẾ (mm) thành field riêng cạnh nút "Đặt Hệ Số Calib" để không ghi đè Spec.
+- [x] Task 377: Sửa lỗi Copy/Paste nhiều node trong Tool Editor & thêm nút Auto Tune cho công cụ nhận diện.
+- [x] Task 378: Tối ưu hiệu năng/UX Tool Editor (cache preview Final, chống rò rỉ RAM Mat, thuật toán Coordinate Descent).
+- [x] Task 379: Tăng tốc Auto Tune bằng ĐA LUỒNG ĐA NHÂN (`Parallel.For`, cap 4-8 luồng).
+- [x] Task 380: OQC Scanner thao tác 1 nút Space / Ctrl+F8 luân phiên & Bật tắt Crosshair căn tâm trong Cửa sổ Cấu hình Camera/Đèn Job.
+- [x] Task 381: Rà soát & Chuẩn hóa Handshake PLC FX5U, Cơ chế Dừng NG Ngoài Buồng & Xem Lại Ảnh 20 Nấc:
+  - [x] Rà soát và sửa máy trạng thái Handshake FX5U: Khắc phục lỗi đọc/ghi vùng `X`/`Y`, chuyển sang bit nội bộ `M101`..`M105`, `M10`, `M11` giao thức MC Protocol.
+  - [x] Nâng cấp `IndustrialHandshakeStateMachine.cs`: Dynamic Tag Resolution tự động tương thích cả bit `M101`..`M105` và tag chuẩn `Y1`..`Y5`.
+  - [x] Lập trình `POU_04_ShiftRegister_Reject.st`: Hàng đợi tracking 20 phôi FIFO độc lập (In-Flight Pipelined Tracking). Hàng NG không dừng trong buồng; các phôi kế tiếp vẫn trigger kiểm tra bình thường; dừng chính xác phôi NG tại trạm chỉ định ngoài buồng bằng Stopper `Y21`, còi đèn `Y22`, dừng băng tải `Y0` (tùy chọn `M120`), reset tự động qua nút `X4`.
+  - [x] Cung cấp bản đồ bộ nhớ và sơ đồ Ladder logic mạng chi tiết trong `Ladder_Diagram_Visual.md` và `DeviceComments_GXWorks.csv`.
+  - [x] Giãn kích thước 20 nấc sản phẩm gần nhất lên `12x18px`, hỗ trợ hover và click chuột/cảm ứng mượt mà.
+  - [x] Bấm vào từng nấc trên thanh 20 nấc để xem lại ảnh OK/NG: Tự động phân giải ảnh từ tệp trên đĩa hoặc ảnh snapshot trong RAM khi Image Output đặt `OnFail`.
+  - [x] Thêm banner màu hổ phách khi xem ảnh lịch sử kèm nút "📁 Mở thư mục ảnh" và nút "✕ Quay lại Live".
+  - [x] Kiểm thử toàn bộ regression test suite: 100% test PASSED.
 
 ## Định hướng tiếp theo
 - [ ] Bổ sung tính năng tự động phát hiện khung tên bản vẽ kỹ thuật (Title Block) trên PDF.

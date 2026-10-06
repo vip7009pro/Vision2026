@@ -1,7 +1,8 @@
 (* ========================================================================== *)
 (* PROGRAM NAME: POU_02_Vision_Handshake                                     *)
 (* DESCRIPTION : 24/7 Robust Handshake State Machine with Vision System      *)
-(* PLATFORM    : Mitsubishi iQ-R / iQ-F (FX5U) / Q Series (GX Works 3 / 2)   *)
+(* PLATFORM    : Mitsubishi iQ-F (FX5U) / iQ-R Series (GX Works 3)          *)
+(* COMMUNICATION: Ethernet SLMP / MC Protocol 3E Frame                       *)
 (* ========================================================================== *)
 
 VAR
@@ -13,7 +14,7 @@ VAR
 END_VAR
 
 (* -------------------------------------------------------------------------- *)
-(* BẮT CẠNH CẢM BIẾN PHÔI ĐẾN VỊ TRÍ CHỤP (X2)                               *)
+(* BẮT CẠNH CẢM BIẾN PHÔI ĐẾN VỊ TRÍ CHỤP TRONG BUỒNG KIỂM TRA (X2)          *)
 (* -------------------------------------------------------------------------- *)
 fbPartSensorR_TRIG(CLK := X2);
 
@@ -30,50 +31,54 @@ IF tHandshakeTimeout.Q THEN
 END_IF;
 
 (* -------------------------------------------------------------------------- *)
-(* MÁY TRẠNG THÁI BẮT TAY CÔNG NGHIỆP 24/7 (STATE MACHINE)                    *)
+(* MÁY TRẠNG THÁI BẮT TAY CÔNG NGHIỆP 24/7 (STATE MACHINE - FX5U STANDARD)     *)
+(* Giao tiếp qua thanh ghi nội bộ M:                                         *)
+(* - PC -> PLC : M101 (Ready), M102 (Busy), M103 (Done), M104 (Pass), M105 (NG)*)
+(* - PLC -> PC : M10 (Trigger), M11 (PLC_Ack)                                *)
 (* -------------------------------------------------------------------------- *)
 CASE iState OF
-    0: (* TRẠNG THÁI IDLE: Chờ sản phẩm vào và Vision sẵn sàng (Y1 = 1) *)
-        M10 := FALSE; (* Xung trigger OFF *)
-        M20 := FALSE; (* Xung chốt tọa độ Encoder Trigger OFF *)
-        X1  := FALSE; (* Xung PLC Ack OFF *)
+    0: (* TRẠNG THÁI IDLE: Chờ sản phẩm vào và Vision PC sẵn sàng (M101 = 1) *)
+        M10 := FALSE; (* Xung trigger chụp ảnh OFF *)
+        M20 := FALSE; (* Xung chốt phôi mới vào hàng đợi Tracking OFF *)
+        M11 := FALSE; (* Xung PLC Ack OFF *)
         
-        IF fbPartSensorR_TRIG.Q AND Y1 (* Vision_Ready *) AND NOT M202 (* Không có lỗi *) THEN
-            M10 := TRUE;   (* Bắn xung Trigger cho Vision PC / Camera *)
-            M20 := TRUE;   (* Kích hoạt POU_04 chốt tọa độ Encoder S_trigger lúc chụp *)
+        (* Khi cảm biến buồng có phôi (X2) VÀ Vision PC sẵn sàng (M101) VÀ không có lỗi (NOT M202) *)
+        IF fbPartSensorR_TRIG.Q AND M101 (* Vision_Ready *) AND NOT M202 THEN
+            M10 := TRUE;   (* Phát xung Trigger M10 cho Vision PC / Camera *)
+            M20 := TRUE;   (* Kích hoạt POU_04 chốt phôi mới vào hàng đợi In-Flight Tracking *)
             iState := 10;
         END_IF;
 
-    10: (* TRẠNG THÁI TRIGGER SENT: Chờ Vision xác nhận nhận lệnh (Vision Busy Y2) *)
-        IF Y2 (* Vision_Busy *) THEN
-            M10 := FALSE;  (* Ngắt xung Trigger ngay khi Vision đã bận *)
+    10: (* TRẠNG THÁI TRIGGER SENT: Chờ Vision xác nhận nhận lệnh (Vision Busy M102) *)
+        IF M102 (* Vision_Busy *) THEN
+            M10 := FALSE;  (* Ngắt xung Trigger ngay khi Vision đã nhận lệnh *)
             M20 := FALSE;  (* Ngắt cờ chốt tọa độ *)
             iState := 20;
         END_IF;
 
-    20: (* TRẠNG THÁI INSPECTING: Chờ Vision phân tích xong (Vision Done Y3) *)
-        IF Y3 (* Vision_Done *) THEN
-            (* Chốt kết quả kiểm tra *)
-            bPartCapturedOk := Y4; (* Vision_Pass *)
-            bPartCapturedNg := Y5; (* Vision_NG *)
+    20: (* TRẠNG THÁI INSPECTING: Chờ Vision phân tích xong (Vision Done M103) *)
+        IF M103 (* Vision_Done *) THEN
+            (* Chốt kết quả kiểm tra từ Vision PC *)
+            bPartCapturedOk := M104; (* Vision_Pass *)
+            bPartCapturedNg := M105; (* Vision_NG *)
 
-            (* Phân luồng kết quả vào Shift Register *)
+            (* Phân luồng kết quả vào Hàng đợi Tracking phôi (POU_04) *)
             IF bPartCapturedNg THEN
-                M30 := TRUE; (* Kích hoạt nạp phôi lỗi vào hàng đợi Reject *)
+                M30 := TRUE; (* Kích hoạt nạp kết quả NG vào phôi đang theo dõi *)
             ELSE
-                M31 := TRUE; (* Kích hoạt giải phóng phôi đạt khỏi hàng đợi In-Flight *)
+                M31 := TRUE; (* Kích hoạt nạp kết quả OK vào phôi đang theo dõi *)
             END_IF;
 
-            X1 := TRUE; (* Gửi tín hiệu PLC_Ack (X1) xác nhận đã nhận kết quả *)
+            M11 := TRUE; (* Gửi tín hiệu PLC_Ack (M11) xác nhận PLC đã nhận kết quả *)
             iState := 30;
         END_IF;
 
-    30: (* TRẠNG THÁI WAIT VISION RESET: Chờ Vision hạ cờ Done (Y3) và đưa Y1 lên 1 *)
-        IF NOT Y3 (* Vision_Done hạ về 0 *) THEN
-            X1  := FALSE; (* PLC hạ cờ PLC_Ack (X1) hoàn tất chu trình *)
+    30: (* TRẠNG THÁI WAIT VISION RESET: Chờ Vision hạ cờ Done (M103) và khôi phục Ready (M101) *)
+        IF NOT M103 (* Vision_Done hạ về 0 *) THEN
+            M11 := FALSE; (* PLC hạ cờ PLC_Ack (M11) hoàn tất chu trình *)
             M30 := FALSE;
             M31 := FALSE;
-            iState := 0; (* Quay về IDLE sẵn sàng cho con hàng tiếp theo *)
+            iState := 0;  (* Quay về IDLE sẵn sàng ngay cho con hàng tiếp theo! *)
         END_IF;
 
     99: (* TRẠNG THÁI XỬ LÝ LỖI TIMEOUT *)
@@ -81,10 +86,10 @@ CASE iState OF
         M20 := FALSE;
         M30 := FALSE;
         M31 := FALSE;
-        X1  := FALSE;
+        M11 := FALSE;
         M210 := TRUE; (* Cảnh báo lỗi bắt tay Vision Timeout *)
         (* Tự phục hồi sau khi người dùng bấm Reset M211 hoặc Vision Ready trở lại *)
-        IF M211 OR Y1 THEN
+        IF M211 OR M101 THEN
             M210 := FALSE;
             M211 := FALSE;
             iState := 0;
