@@ -494,6 +494,48 @@
                 </StackPanel>
             </Button>
 
+            <!-- 4c. PLC Handshake Status Indicator (Deterministic 24/7 Protocol) -->
+            <Border DockPanel.Dock="Right"
+                    Background="{Binding HandshakeStatusBackgroundBrush}"
+                    BorderBrush="{Binding HandshakeStatusBorderBrush}"
+                    BorderThickness="1"
+                    CornerRadius="8"
+                    Padding="8,3"
+                    VerticalAlignment="Center"
+                    Margin="6,0,0,0"
+                    Cursor="Hand"
+                    ToolTip="{Binding HandshakeStatusToolTip}">
+                <Border.InputBindings>
+                    <MouseBinding MouseAction="LeftClick" Command="{Binding OpenPlcManagerCommand}"/>
+                </Border.InputBindings>
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <TextBlock Text="🤝" FontSize="11.5" VerticalAlignment="Center" Margin="0,0,4,0"/>
+                    <TextBlock Text="{Binding HandshakeStatusBadgeText}" FontWeight="Bold" FontSize="11" Foreground="{Binding HandshakeStatusForegroundBrush}" VerticalAlignment="Center" Margin="0,0,6,0"/>
+
+                    <!-- Mini Bit Indicators (RDY, BSY, DON, ACK) -->
+                    <Border Background="#15000000" CornerRadius="4" Padding="3,1" VerticalAlignment="Center">
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                            <!-- RDY (Ready) -->
+                            <Border Background="{Binding HandshakeRdyBrush}" CornerRadius="2" Padding="3,0.5" Margin="1,0" ToolTip="Vision Ready Tag (Y1/M101)">
+                                <TextBlock Text="RDY" FontSize="8.5" FontWeight="Bold" Foreground="{Binding HandshakeRdyForeBrush}"/>
+                            </Border>
+                            <!-- BSY (Busy) -->
+                            <Border Background="{Binding HandshakeBsyBrush}" CornerRadius="2" Padding="3,0.5" Margin="1,0" ToolTip="Vision Busy Tag (Y2/M102)">
+                                <TextBlock Text="BSY" FontSize="8.5" FontWeight="Bold" Foreground="{Binding HandshakeBsyForeBrush}"/>
+                            </Border>
+                            <!-- DON (Done) -->
+                            <Border Background="{Binding HandshakeDonBrush}" CornerRadius="2" Padding="3,0.5" Margin="1,0" ToolTip="Vision Done Tag (Y3/M103)">
+                                <TextBlock Text="DON" FontSize="8.5" FontWeight="Bold" Foreground="{Binding HandshakeDonForeBrush}"/>
+                            </Border>
+                            <!-- ACK (PLC Ack) -->
+                            <Border Background="{Binding HandshakeAckBrush}" CornerRadius="2" Padding="3,0.5" Margin="1,0" ToolTip="PLC Ack Tag (X1/M11)">
+                                <TextBlock Text="ACK" FontSize="8.5" FontWeight="Bold" Foreground="{Binding HandshakeAckForeBrush}"/>
+                            </Border>
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+            </Border>
+
             <!-- 5. System Monitor (RAM & Multi-Core CPU Performance) -->
             <Border DockPanel.Dock="Right" Background="{DynamicResource PanelBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="8" Padding="6,3" VerticalAlignment="Center" Margin="6,0,0,0" ToolTip="{Binding SystemMonitorToolTip}">
                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
@@ -5381,6 +5423,13 @@
         <StatusBar Grid.Row="2" Background="{DynamicResource DarkBackgroundBrush}" Foreground="{DynamicResource TextBrush}" BorderThickness="0,1,0,0" BorderBrush="{DynamicResource DarkBorderBrush}">
             <StatusBarItem>
                 <TextBlock Text="{Binding StatusBarText}" />
+            </StatusBarItem>
+            <StatusBarItem Margin="12,0,0,0">
+                <TextBlock Text="{Binding HandshakeStatusBarSummary}" FontSize="11" Foreground="{Binding HandshakeStatusForegroundBrush}" ToolTip="{Binding HandshakeStatusToolTip}" Cursor="Hand">
+                    <TextBlock.InputBindings>
+                        <MouseBinding MouseAction="LeftClick" Command="{Binding OpenPlcManagerCommand}"/>
+                    </TextBlock.InputBindings>
+                </TextBlock>
             </StatusBarItem>
             <StatusBarItem HorizontalAlignment="Right">
                 <TextBlock Text="{Binding TotalExecutionTimeMs, StringFormat='{}Total Time: {0} ms'}" Foreground="#4CAF50" FontWeight="SemiBold" />

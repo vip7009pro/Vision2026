@@ -2779,6 +2779,8 @@ namespace VisionInspectionApp.UI.ViewModels
                 UpdateQueueVisuals();
             }
 
+            RequestHandshakeUiUpdate();
+
             if (!_continuousStopwatch.IsRunning)
             {
                 ContinuousElapsedAndSpeedText = "Time: 00:00:00 (0.0 pcs/s • 0 EA/h • 0 EA/day)";

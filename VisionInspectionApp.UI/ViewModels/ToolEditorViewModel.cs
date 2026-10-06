@@ -234,6 +234,7 @@ namespace VisionInspectionApp.UI.ViewModels
             _shiftRegisterTracker = new Application.PLC.Services.ShiftRegisterTracker(null);
             _plcHeartbeatWatchdog = new Application.PLC.Services.PlcHeartbeatWatchdog(null);
             _handshakeStateMachine = new Application.PLC.Services.IndustrialHandshakeStateMachine(null);
+            InitHandshakeUiMonitoring();
             _autoSaveTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(2) };
             Nodes = new ObservableCollection<ToolGraphNodeViewModel>();
             Edges = new ObservableCollection<ToolGraphEdgeViewModel>();
@@ -293,6 +294,7 @@ namespace VisionInspectionApp.UI.ViewModels
             _plcManagerService.OnIndustrialConfigChanged += (_, cfg) => ApplyIndustrialConfig(cfg);
             _dbManagerService = dbManagerService;
             _plcManagerService.OnTagChanged += OnPlcTagChangedForTrigger;
+            InitHandshakeUiMonitoring();
             _autoSaveTimer = new DispatcherTimer
             {
                 Interval = TimeSpan.FromMilliseconds(400)

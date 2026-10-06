@@ -34,15 +34,17 @@
   - [x] Cung cấp mã Instruction List (IL / Mnemonic) chuẩn GX Works 3 trong [Ladder_Mnemonic_GXWorks.il](file:///g:/NODEJS/Vision2026/PLC_Programs/Mitsubishi_GXWorks3/Ladder_Mnemonic_GXWorks.il).
   - [x] Đầy đủ 9 Networks: Watchdog nhịp tim SM410/T0; Trigger bắt tay buồng chụp; Chốt kết quả Ack M11; Hàng đợi In-Flight FIFO dịch bước SFT; Dừng phôi NG ngoài buồng Stopper Y21/còi đèn Y22; Nút nhấn công nhân X4 giải phóng hàng; Bộ đếm sản lượng 32-bit DADD; Liên động băng tải an toàn Y0.
 
-- [x] Task 386: Hướng dẫn Thông số Cài Đặt Handshake & Tags trên App Vision WPF:
-  - [x] Xuất tài liệu hướng dẫn kỹ thuật chi tiết [Vision_App_Handshake_Settings_Guide.md](file:///g:/NODEJS/Vision2026/PLC_Programs/Mitsubishi_GXWorks3/Vision_App_Handshake_Settings_Guide.md) gồm 7 phần hoàn chỉnh.
-  - [x] Chuẩn hóa 2 cách thức cấu hình trên giao diện WPF: Nhập trực tiếp Device Bit (FX5U MC Protocol `M101`..`M105`, `M11`, `M108`) hoặc chọn Tên Nhãn từ Dropdown danh bạ (`Vision_Ready`, `PLC_Ack`...).
-  - [x] Lập bảng thông số cụ thể cho toàn bộ 5 Tab chức năng: Kết nối MC Protocol, Bắt tay Handshake 24/7, Watchdog Nhịp tim & Khóa liên động an toàn, Motion & Đọc xung Encoder, Shift Register kích hoạt cơ cấu Stopper ngoài buồng.
-  - [x] Hướng dẫn quy trình nạp danh bạ biến qua nút Import CSV và lưu cấu hình JSON tự động.
+- [x] Task 387: Hiển thị Trực Quan Trạng Thái PLC Handshake trên UI Tool Editor & Phân tích Trigger Flow:
+  - [x] Phân tích & làm rõ 2 luồng chụp ảnh: Hardware Trigger (Cảm biến/PLC kích xung chân vật lý LINE0 vào camera độ trễ micro-giây) vs Software Trigger qua mạng (PLC bật bit `M10` quét MC Protocol).
+  - [x] Thiết kế & triển khai [ToolEditorViewModel.HandshakeUi.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/ToolEditorViewModel.HandshakeUi.cs): module hóa logic giám sát trạng thái bắt tay, tự động cập nhật real-time theo sự kiện StateChanged, TagChanged, ConnectionStateChanged.
+  - [x] Bổ sung Widget PLC Handshake đa năng trên Top Toolbar [ToolEditorView.xaml](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/Views/ToolEditorView.xaml): Tên PLC, Trạng thái (ARMED/BUSY/CHỜ ACK/OFFLINE), 4 đèn LED mini (`RDY`, `BSY`, `DON`, `ACK`), ToolTip thông tin toàn diện và nhấp chuột mở ngay cửa sổ PLC Manager.
+  - [x] Bổ sung tóm tắt Handshake I/O tại thanh trạng thái StatusBar dòng dưới cùng.
+  - [x] Toàn bộ solution biên dịch 0 lỗi, kiểm thử tự động đạt 100%.
 
 ## Định hướng tiếp theo
 - [ ] Bổ sung tính năng tự động phát hiện khung tên bản vẽ kỹ thuật (Title Block) trên PDF.
 - [ ] Tích hợp trích xuất lớp vector nguyên bản từ PDF dạng DXF/SVG phục vụ so khớp đường biên CAD.
 - [ ] Tối ưu hóa render đa luồng (Multi-threaded Rendering) cho tài liệu PDF kích thước lớn >50MB.
+
 
 
