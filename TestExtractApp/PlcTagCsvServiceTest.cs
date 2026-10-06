@@ -176,6 +176,31 @@ public static class PlcTagCsvServiceTest
             Assert("Test 5.4: Semicolon delimiter parsed successfully", semiTags.Count == 1 && semiTags[0].Address == "X10");
         }
 
+        // -------------------------------------------------------------
+        // TEST 6: Import User Samples exported from GX Works 3 (1.080J)
+        // -------------------------------------------------------------
+        {
+            string sampleGlobalPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", "..", "..", "..", "PLC_Programs", "Mitsubishi_GXWorks3", "sample Global label.csv");
+            if (!File.Exists(sampleGlobalPath))
+            {
+                sampleGlobalPath = @"g:\NODEJS\Vision2026\PLC_Programs\Mitsubishi_GXWorks3\sample Global label.csv";
+            }
+
+            if (File.Exists(sampleGlobalPath))
+            {
+                string content = File.ReadAllText(sampleGlobalPath);
+                var format = PlcTagCsvService.DetectCsvFormat(content);
+                Assert("Test 6.1: Detect GX Works 3 sample Global label Format", format == PlcTagCsvFormat.GxWorks3GlobalLabels);
+
+                var tags = PlcTagCsvService.ParseCsv(content, "FX5U_SAMPLE");
+                Assert("Test 6.2: Parse sample Global label Count == 1", tags.Count == 1, $"Count = {tags.Count}");
+
+                var iStep = tags.FirstOrDefault(t => t.Name == "i_Step");
+                Assert("Test 6.3: sample Global label i_Step Address X0 & BOOL & English Comment",
+                    iStep != null && iStep.Address == "X0" && iStep.DataType == PlcDataType.Bool && iStep.Description == "Step");
+            }
+        }
+
         Console.WriteLine("====================================================");
         Console.WriteLine($"PLC TAG CSV TESTS SUMMARY: {passed} PASSED, {failed} FAILED");
         Console.WriteLine("====================================================");

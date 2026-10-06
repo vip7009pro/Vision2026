@@ -1,28 +1,30 @@
 (* ========================================================================== *)
 (* PROGRAM NAME: POU_01_Watchdog_Heartbeat                                   *)
 (* DESCRIPTION : 2-Way Heartbeat Watchdog & Line Safety Interlock (24/7)     *)
-(* PLATFORM    : Mitsubishi iQ-R / iQ-F (FX5U) / Q Series (GX Works 3 / 2)   *)
+(* PLATFORM    : Mitsubishi iQ-F (FX5U) / iQ-R / Q Series (GX Works 3)       *)
+(* -------------------------------------------------------------------------- *)
+(* LƯU Ý QUAN TRỌNG VỚI GX WORKS 3:                                          *)
+(* 1. GX Works 3 KHÔNG cho phép khối VAR...END_VAR nằm trong cửa sổ code ST.  *)
+(*    Các biến nội bộ cần được khai báo trong bảng [Local Label] của POU:    *)
+(*    - fbVisionHeartbeatR_TRIG : R_TRIG                                     *)
+(*    - fbVisionHeartbeatF_TRIG : F_TRIG                                     *)
+(*    - bVisionHeartbeatToggled : BOOL                                       *)
+(*    - bVisionHeartbeatPrev    : BOOL                                       *)
+(*    - tWatchdogTimer          : TON                                        *)
+(*    (Đã có sẵn file mẫu POU_01_LocalLabels.csv để nạp vào Local Label)    *)
+(* 2. Không được ghi vào thiết bị X (X0 là ngõ vào vật lý, cấm ghi).          *)
+(*    Nhịp tim PLC gửi cho PC được xuất qua bit nội bộ M108 hoặc bit Y.      *)
 (* ========================================================================== *)
-
-VAR
-    fbVisionHeartbeatR_TRIG : R_TRIG;
-    fbVisionHeartbeatF_TRIG : F_TRIG;
-    bVisionHeartbeatToggled : BOOL;
-    tWatchdogTimer : TON;
-    tPlcHeartbeatTimer : TON;
-END_VAR
 
 (* -------------------------------------------------------------------------- *)
 (* 1. TẠO NHỊP TIM PLC ĐẢO 0/1 CHU KỲ 100ms GỬI CHO VISION PC                 *)
+(* Sử dụng trực tiếp bit xung đồng hồ hệ thống SM410 (100ms clock) của FX5U   *)
 (* -------------------------------------------------------------------------- *)
-tPlcHeartbeatTimer(IN := NOT tPlcHeartbeatTimer.Q, PT := T#100ms);
-IF tPlcHeartbeatTimer.Q THEN
-    X0 := NOT X0; (* Đảo bit PLC Heartbeat X0 (hoặc M201) mỗi 100ms *)
-END_IF;
+M108 := SM410; (* PLC_Heartbeat xuất liên tục nhịp 100ms sang Vision PC *)
 
 (* -------------------------------------------------------------------------- *)
-(* 2. GIÁM SÁT NHỊP TIM TỪ VISION PC (Y0 hoặc M200)                            *)
-(* Phát hiện cạnh lên (R_TRIG) hoặc cạnh xuống (F_TRIG) của Vision_Heartbeat  *)
+(* 2. GIÁM SÁT NHỊP TIM TỪ VISION PC (Vision_Heartbeat: Y0 hoặc M100)         *)
+(* Phát hiện mỗi khi Vision PC đảo trạng thái (0 -> 1 hoặc 1 -> 0)           *)
 (* -------------------------------------------------------------------------- *)
 fbVisionHeartbeatR_TRIG(CLK := Y0);
 fbVisionHeartbeatF_TRIG(CLK := Y0);
@@ -33,7 +35,7 @@ bVisionHeartbeatToggled := fbVisionHeartbeatR_TRIG.Q OR fbVisionHeartbeatF_TRIG.
 (* -------------------------------------------------------------------------- *)
 tWatchdogTimer(
     IN := NOT bVisionHeartbeatToggled, 
-    PT := T#300ms
+    PT := T#300MS
 );
 
 IF tWatchdogTimer.Q THEN

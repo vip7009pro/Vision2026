@@ -37,14 +37,38 @@ public static class PlcTagCsvService
         var normalizedTokens = tokens.Select(t => t.Trim().Trim('"').ToLowerInvariant()).ToList();
 
         if (normalizedTokens.Contains("label name") || normalizedTokens.Contains("class") || 
-            (normalizedTokens.Contains("data type") && normalizedTokens.Contains("device")))
+            (normalizedTokens.Contains("data type") && (normalizedTokens.Contains("device") || normalizedTokens.Contains("assign (device/label)"))))
         {
             return PlcTagCsvFormat.GxWorks3GlobalLabels;
         }
 
-        if (normalizedTokens.Count == 2 && normalizedTokens.Contains("device") && normalizedTokens.Contains("comment"))
+        bool IsDeviceCommentTokens(List<string> tks)
+        {
+            var norm = tks.Select(t => t.Trim().Trim('"').ToLowerInvariant()).ToList();
+            return (norm.Contains("device") || norm.Contains("device name") || norm.Any(t => t.StartsWith("device"))) &&
+                   norm.Contains("comment");
+        }
+
+        if (IsDeviceCommentTokens(tokens))
         {
             return PlcTagCsvFormat.GxWorksDeviceComments;
+        }
+
+        // Kiểm tra dòng thứ 2 (khi dòng 1 là tên sheet POU, ví dụ "statemachineST" hoặc "COMMON")
+        string? secondLine = reader.ReadLine();
+        if (secondLine != null)
+        {
+            var secondTokens = ParseCsvLine(secondLine);
+            var secondNorm = secondTokens.Select(t => t.Trim().Trim('"').ToLowerInvariant()).ToList();
+            if (secondNorm.Contains("label name") || secondNorm.Contains("class") || 
+                (secondNorm.Contains("data type") && (secondNorm.Contains("device") || secondNorm.Contains("assign (device/label)"))))
+            {
+                return PlcTagCsvFormat.GxWorks3GlobalLabels;
+            }
+            if (IsDeviceCommentTokens(secondTokens))
+            {
+                return PlcTagCsvFormat.GxWorksDeviceComments;
+            }
         }
 
         return PlcTagCsvFormat.StandardCsv;
@@ -87,13 +111,22 @@ public static class PlcTagCsvService
     {
         if (lines.Count == 0) return;
 
-        // Bỏ qua dòng Header
+        // Bỏ qua dòng Sheet/Target Name và dòng Header
         int startIndex = 0;
         var firstTokens = ParseCsvLine(lines[0]);
         if (firstTokens.Any(t => t.Trim().Trim('"').Equals("Label Name", StringComparison.OrdinalIgnoreCase) ||
                                  t.Trim().Trim('"').Equals("Class", StringComparison.OrdinalIgnoreCase)))
         {
             startIndex = 1;
+        }
+        else if (lines.Count > 1)
+        {
+            var secondTokens = ParseCsvLine(lines[1]);
+            if (secondTokens.Any(t => t.Trim().Trim('"').Equals("Label Name", StringComparison.OrdinalIgnoreCase) ||
+                                     t.Trim().Trim('"').Equals("Class", StringComparison.OrdinalIgnoreCase)))
+            {
+                startIndex = 2; // Dòng 0 là tên sheet (ví dụ "statemachineST" hoặc "GlobalLabel1"), Dòng 1 là header
+            }
         }
 
         for (int i = startIndex; i < lines.Count; i++)
@@ -104,23 +137,35 @@ public static class PlcTagCsvService
             var tokens = ParseCsvLine(line);
             if (tokens.Count < 3) continue;
 
-            // Hỗ trợ cả 2 định dạng:
-            // 1. Chuẩn GX Works 3 (6 cột): "Class","Label Name","Data Type","Constant","Assign (Device/Label)","Comment"
-            // 2. Định dạng mở rộng (7 cột): "Class","Label Name","Data Type","Constant","Device","Address","Comment"
+            // Hỗ trợ các định dạng GX Works:
+            // 1. Chuẩn GX Works 3 28 cột (TSV xuất từ GX Works 3): Col 1: Label Name, Col 2: Data Type, Col 5: Assign (Device/Label), Col 7: Comment, Col 13: English
+            // 2. Định dạng ngắn 6 cột: "Class","Label Name","Data Type","Constant","Assign (Device/Label)","Comment"
+            // 3. Định dạng mở rộng 7 cột: "Class","Label Name","Data Type","Constant","Device","Address","Comment"
             string labelName = tokens.Count > 1 ? tokens[1].Trim() : string.Empty;
             string rawDataType = tokens.Count > 2 ? tokens[2].Trim() : string.Empty;
-            string device = tokens.Count > 4 ? tokens[4].Trim() : string.Empty;
+            string device = string.Empty;
             string address = string.Empty;
             string comment = string.Empty;
 
-            if (tokens.Count == 6)
+            if (tokens.Count >= 14)
+            {
+                // Chuẩn GX Works 3 (27-28 cột TSV)
+                device = tokens.Count > 5 ? tokens[5].Trim() : string.Empty;
+                address = tokens.Count > 6 ? tokens[6].Trim() : string.Empty;
+                string engComment = tokens.Count > 13 ? tokens[13].Trim() : string.Empty;
+                string genComment = tokens.Count > 7 ? tokens[7].Trim() : string.Empty;
+                comment = !string.IsNullOrWhiteSpace(engComment) ? engComment : genComment;
+            }
+            else if (tokens.Count == 6)
             {
                 // Chuẩn 6 cột GX Works 3: Cột 4 là Assign (Device), Cột 5 là Comment
+                device = tokens[4].Trim();
                 comment = tokens[5].Trim();
             }
             else if (tokens.Count >= 7)
             {
                 // 7 cột: Cột 4 là Device, Cột 5 là Address, Cột 6 là Comment
+                device = tokens[4].Trim();
                 address = tokens[5].Trim();
                 comment = tokens[6].Trim();
             }
@@ -159,11 +204,24 @@ public static class PlcTagCsvService
     {
         if (lines.Count == 0) return;
 
+        bool IsDevHeader(List<string> tokens) =>
+            tokens.Any(t => t.Trim().Trim('"').Equals("Device", StringComparison.OrdinalIgnoreCase) ||
+                            t.Trim().Trim('"').Equals("Device Name", StringComparison.OrdinalIgnoreCase) ||
+                            t.Trim().Trim('"').StartsWith("Device", StringComparison.OrdinalIgnoreCase));
+
         int startIndex = 0;
         var firstTokens = ParseCsvLine(lines[0]);
-        if (firstTokens.Any(t => t.Trim().Trim('"').Equals("Device", StringComparison.OrdinalIgnoreCase)))
+        if (IsDevHeader(firstTokens))
         {
             startIndex = 1;
+        }
+        else if (lines.Count > 1)
+        {
+            var secondTokens = ParseCsvLine(lines[1]);
+            if (IsDevHeader(secondTokens))
+            {
+                startIndex = 2; // Dòng 0 là tên sheet "COMMON"
+            }
         }
 
         for (int i = startIndex; i < lines.Count; i++)
@@ -461,7 +519,7 @@ public static class PlcTagCsvService
 
         var sb = new StringBuilder();
         bool inQuotes = false;
-        char delimiter = line.Contains(';') && !line.Contains(',') ? ';' : ',';
+        char delimiter = line.Contains('\t') ? '\t' : (line.Contains(';') && !line.Contains(',') ? ';' : ',');
 
         for (int i = 0; i < line.Length; i++)
         {
