@@ -16,6 +16,7 @@ namespace VisionInspectionApp.UI.ViewModels.HMI;
 public partial class HmiControlViewModel : ObservableObject
 {
     private readonly IPlcManagerService? _plcService;
+    private long _lastMomentaryPressTimestamp;
 
     [ObservableProperty]
     private HmiControlModel _model;
@@ -354,6 +355,15 @@ public partial class HmiControlViewModel : ObservableObject
         if ((Model.Type == HmiControlType.Button || Model.Type == HmiControlType.Switch) &&
             Model.ButtonBehavior == HmiButtonBehavior.Momentary)
         {
+            // Đảm bảo xung ON tồn tại tối thiểu 100ms trên PLC để lệnh bắt cạnh (LDP, PLS) không bị lỡ
+            // khi người dùng click chuột quá nhanh (<20ms).
+            long elapsed = Environment.TickCount64 - _lastMomentaryPressTimestamp;
+            const int minHoldMs = 100;
+            if (elapsed < minHoldMs)
+            {
+                await Task.Delay((int)(minHoldMs - elapsed));
+            }
+
             IsOn = false;
             object writeVal = ParseWriteValue(!string.IsNullOrWhiteSpace(Model.WriteValueOff) ? Model.WriteValueOff : "False");
             string writeAddr = EffectiveWriteAddress;
@@ -387,6 +397,7 @@ public partial class HmiControlViewModel : ObservableObject
         switch (Model.ButtonBehavior)
         {
             case HmiButtonBehavior.Momentary:
+                _lastMomentaryPressTimestamp = Environment.TickCount64;
                 IsOn = true;
                 object valOn = ParseWriteValue(!string.IsNullOrWhiteSpace(Model.WriteValueOn) ? Model.WriteValueOn : "True");
                 await _plcService.WriteTagValueAsync(EffectiveWritePlcId, writeAddr, valOn);

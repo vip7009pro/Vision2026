@@ -99,14 +99,37 @@ public sealed class IndustrialHandshakeStateMachine
     private string? ResolveTag(string primaryTagName, params string[] fallbacks)
     {
         if (_plcManager == null) return null;
-        if (!string.IsNullOrEmpty(primaryTagName) && _plcManager.GetTagValue(_plcId, primaryTagName) != null)
-            return primaryTagName;
+
+        // 1. Nếu người dùng đã chỉ định tường minh TagName hoặc địa chỉ Device (ví dụ: "M105", "Vision_NG"):
+        // Trả về ngay để WriteTagValueAsync thực hiện ghi trực tiếp theo địa chỉ.
+        if (!string.IsNullOrWhiteSpace(primaryTagName))
+        {
+            return primaryTagName.Trim();
+        }
+
+        // 2. Nếu người dùng để trống, tìm kiếm trong danh mục Tags và Cache xem có fallback nào khớp không
         foreach (var fb in fallbacks)
         {
-            if (!string.IsNullOrEmpty(fb) && _plcManager.GetTagValue(_plcId, fb) != null)
-                return fb;
+            if (string.IsNullOrWhiteSpace(fb)) continue;
+            var trimmed = fb.Trim();
+            if (_plcManager.GetTagValue(_plcId, trimmed) != null ||
+                _plcManager.Tags.Any(t => string.Equals(t.PlcId, _plcId, StringComparison.OrdinalIgnoreCase) &&
+                                          (string.Equals(t.Name, trimmed, StringComparison.OrdinalIgnoreCase) ||
+                                           string.Equals(t.Address, trimmed, StringComparison.OrdinalIgnoreCase))))
+            {
+                return trimmed;
+            }
         }
-        return null;
+
+        // 3. Fallback mặc định: ưu tiên địa chỉ thiết bị chuẩn (ví dụ "M105", "M101",...)
+        var deviceFallback = fallbacks.FirstOrDefault(fb => !string.IsNullOrWhiteSpace(fb) &&
+            System.Text.RegularExpressions.Regex.IsMatch(fb.Trim(), @"^[a-zA-Z]{1,2}\d+$"));
+        if (!string.IsNullOrWhiteSpace(deviceFallback))
+        {
+            return deviceFallback.Trim();
+        }
+
+        return fallbacks.FirstOrDefault(fb => !string.IsNullOrWhiteSpace(fb))?.Trim();
     }
 
     public string? GetEffectiveReadyTag() => ResolveTag(ReadyTagName, "M101_VisionReady", "M101", "VisionReady", "Y1_VisionReady");

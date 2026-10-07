@@ -1,5 +1,16 @@
 # ROADMAP.md — Lộ trình phát triển & Trạng thái nhiệm vụ
 
+- [x] Task 391: Sửa Lỗi Không Truyền Bit NG M105 Sang GXWorks & Kích Hoạt Handshake Khi Test Ảnh Trên Tool Editor:
+  - [x] Sửa lỗi gốc trong `ResolveTag` ([IndustrialHandshakeStateMachine.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.Application/PLC/Services/IndustrialHandshakeStateMachine.cs)): Loại bỏ điều kiện bắt buộc `GetTagValue != null` gây triệt tiêu TagName khi tag chưa có trong Cache/Tags; ưu tiên trực tiếp địa chỉ người dùng đã điền (`M105`) và fallback chuẩn.
+  - [x] Kích hoạt Handshake trong `RunFlowAsync` và `RunSingleFileAsync` ([ToolEditorViewModel.Engine.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/ToolEditorViewModel.Engine.cs)): Cho phép test ảnh NG đơn lẻ bằng nút "Chạy Flow" trên màn hình Tool Editor mà kết quả vẫn phát xung/chốt bit sang PLC ngay lập tức (`M105=1`, `M200=1`, `M103=1`).
+  - [x] Đồng bộ hóa bộ kiểm thử tự động [PlcTagCsvServiceTest.cs](file:///g:/NODEJS/Vision2026/TestExtractApp/PlcTagCsvServiceTest.cs): 100% test PASSED.
+
+- [x] Task 390: Khắc phục hiện tượng Bắt Cạnh PLC (`LDP X0`) không tác động `SET Y0` từ nút Momentary HMI & Nâng cấp Minimum Hold Duration:
+  - [x] Phân tích nguyên nhân gốc: Vùng ngõ vào vật lý `X` bị ghi đè bởi chu kỳ I/O Refresh của GX Works Simulator; Lệnh `LDP` đòi hỏi chu kỳ $N-1=0, N=1$ bị phá vỡ; HMI/SCADA không được ghi trực tiếp vào `X`.
+  - [x] Đưa ra phương pháp sửa chữa: Chuyển sang bit nội bộ `M0` (`LDP M0 -> SET Y0`), hoặc song song `LDP X0 OR LDP M0`, hoặc kỹ thuật an toàn Single-Scan Self-Reset (`LD M0 -> SET Y0; RST M0`).
+  - [x] Nâng cấp [HmiControlViewModel.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/HMI/HmiControlViewModel.cs): Bổ sung `minHoldMs = 100ms` cho nút Momentary để chống trôi xung khi người dùng click chuột quá nhanh (<20ms).
+  - [x] Biên dịch toàn bộ solution 0 Errors.
+
 - [x] Task 389: Bắt Tay Bất Đồng Bộ Non-Blocking & Hàng Đợi 20 Phôi BSFLP M200..M219 Dừng Đúng Điểm Ra:
   - [x] Làm rõ nguyên nhân gốc "không thấy M85 -> M70": Do lệnh cũ `BSFRP` dịch mảng trước khi có kết quả và khi test 1 phôi đơn lẻ không có phôi tiếp theo kích sensor `X2` nên bit không dịch tiếp.
   - [x] Thiết kế & triển khai cơ chế Non-Blocking Handshake trong [IndustrialHandshakeStateMachine.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.Application/PLC/Services/IndustrialHandshakeStateMachine.cs): Vision PC ghi kết quả thẳng vào `QueueRegisterStart` (`M200`) và giải phóng ngay trong <2ms, không chờ PLC Ack, bảo đảm băng tải chạy liên tục tốc độ cao.

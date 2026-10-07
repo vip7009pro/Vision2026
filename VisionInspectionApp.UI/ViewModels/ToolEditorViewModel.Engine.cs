@@ -4489,6 +4489,10 @@ namespace VisionInspectionApp.UI.ViewModels
             _lastRun = inspectionResult;
             // ✅ FIX: ghi vào Lịch sử kiểm tra + đẩy 1 nấc thanh 20 con hàng kèm ảnh snapshot
             PublishInspectionResult(inspectionResult, mat);
+            if (inspectionResult != null && _handshakeStateMachine != null && _handshakeStateMachine.IsEnabled)
+            {
+                _ = _handshakeStateMachine.CompleteHandshakeAsync(inspectionResult.Pass);
+            }
             mat?.Dispose();
             mat = null;
 
@@ -4780,6 +4784,10 @@ namespace VisionInspectionApp.UI.ViewModels
                 _lastRun = inspectionResult;
                 // ✅ FIX: ghi Lịch sử kiểm tra + đẩy 1 nấc thanh 20 con hàng (Run Once / PLC Trigger) kèm ảnh snap
                 PublishInspectionResult(inspectionResult, snap);
+                if (inspectionResult != null && _handshakeStateMachine != null && _handshakeStateMachine.IsEnabled)
+                {
+                    _ = _handshakeStateMachine.CompleteHandshakeAsync(inspectionResult.Pass);
+                }
                 UpdateNodeExecutionTimes();
                 if (IsRunningFolderFlow)
                 {

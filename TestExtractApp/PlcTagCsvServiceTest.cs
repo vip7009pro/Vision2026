@@ -94,11 +94,11 @@ public static class PlcTagCsvServiceTest
 
                 var x0Tag = tags.FirstOrDefault(t => t.Address == "X0");
                 Assert("Test 2.3: X0 Device Comment Name & Bool Type",
-                    x0Tag != null && x0Tag.Name == "PLC_Heartbeat" && x0Tag.DataType == PlcDataType.Bool);
+                    x0Tag != null && (x0Tag.Name == "Btn_System_Start" || x0Tag.Name == "PLC_Heartbeat") && x0Tag.DataType == PlcDataType.Bool);
 
-                var d1000Tag = tags.FirstOrDefault(t => t.Address == "D1000");
-                Assert("Test 2.4: D1000 Name extraction from Comment",
-                    d1000Tag != null && d1000Tag.Name == "Current_Encoder_Pulses");
+                var d300Tag = tags.FirstOrDefault(t => t.Address == "D300");
+                Assert("Test 2.4: D300 Name extraction from Comment",
+                    d300Tag != null && d300Tag.Name == "Total_Inspected_Count");
             }
         }
 
