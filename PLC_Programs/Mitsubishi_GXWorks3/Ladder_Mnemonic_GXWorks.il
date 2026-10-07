@@ -24,26 +24,25 @@ LD      SM410           ; Cờ xung clock 100ms phần cứng của FX5U
 OUT     M108            ; Xuất nhịp tim liên tục sang Vision PC qua MC Protocol
 
 ; ------------------------------------------------------------------------------
-; NETWORK 3: CẢM BIẾN BUỒNG CHỤP X2 TRIGGER CAMERA & DỊCH MẢNG HÀNG ĐỢI
+; NETWORK 3: CẢM BIẾN BUỒNG CHỤP X2 TRIGGER CAMERA
 ; ------------------------------------------------------------------------------
 LDP     X2              ; Cảm biến phôi vào buồng chụp (cạnh lên)
 AND     Y0              ; Điều kiện: Băng tải đang chạy
-PLS     M20             ; Xung kích dịch hàng đợi 20 nấc
 PLS     M10             ; Xung kích Trigger Vision PC qua mạng
 PLS     Y1              ; Xung kích phần cứng chân LINE0 tới Camera
 
-; Dịch mảng hàng đợi 20 nấc từ buồng chụp ra trạm dừng bằng lệnh BSFLP
-LD      M20
-BSFLP   M200    K20     ; Dịch trái 20 bit: M200 -> M201 -> M202 ... -> M219
-                        ; (Bit M200 tại buồng chụp tự động nhận giá trị 0 = Mặc định OK)
+; ------------------------------------------------------------------------------
+; NETWORK 4: NHẬN KẾT QUẢ TỪ VISION PC (M103 DONE) -> DỊCH HÀNG ĐỢI & NẠP M200
+; ------------------------------------------------------------------------------
+; Khi Vision kiểm tra xong -> Phát xung M103 Done -> Dịch mảng và nạp nhãn NG/OK
+LDP     M103            ; Xung cạnh lên Vision Done từ PC (hoàn tất kiểm tra)
+BSFLP   M200    K20     ; Dịch mảng 20 nấc: M200 -> M201 -> M202 ... -> M219
+                        ; (Nấc M200 tạm thời nhận 0 = Mặc định OK)
 
-; ------------------------------------------------------------------------------
-; NETWORK 4: NẠP KẾT QUẢ TỪ VISION PC VÀO NẤC BUỒNG CHỤP (M200) - NON-BLOCKING
-; ------------------------------------------------------------------------------
-; Khi Vision kiểm tra xong, nếu NG -> PC bật M105 hoặc ghi thẳng M200 = 1
-; Hoàn toàn không cần chờ Ack, băng tải tiếp tục chạy với tốc độ tối đa!
-LDP     M105            ; Xung báo kết quả NG từ Vision PC
-SET     M200            ; Đánh dấu phôi tại buồng chụp (M200) là hàng NG = 1
+; Nếu kết quả kiểm tra là NG (M105 = 1) -> Đánh dấu nấc M200 là 1
+LD      M103            ; Trong thời gian xung Done đang tích cực
+AND     M105            ; Và kết quả từ PC báo NG
+SET     M200            ; Đánh dấu phôi vừa kiểm tra tại buồng (M200) là hàng NG = 1
 
 ; ------------------------------------------------------------------------------
 ; NETWORK 5: PHÁT HIỆN PHÔI NG TẠI ĐIỂM RA CHỈ ĐỊNH (NẤC 10: M210) -> DỪNG BĂNG TẢI

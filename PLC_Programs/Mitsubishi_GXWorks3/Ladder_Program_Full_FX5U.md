@@ -131,38 +131,42 @@ Trong phiên bản cũ dùng lệnh `BSFRP M70 K16` (Dịch phải):
 
 ---
 
-### 🟢 MẠNG 3: CẢM BIẾN BUỒNG CHỤP X2 TRIGGER CAMERA & DỊCH MẢNG HÀNG ĐỢI
+### 🟢 MẠNG 3: CẢM BIẾN BUỒNG CHỤP X2 TRIGGER CAMERA
 * **Ý nghĩa**: Khi phôi chạm `X2`:
-  1. Kích xung `PLS M20` để dịch toàn bộ 20 nấc hàng đợi từ `M200` sang `M219` bằng lệnh **`[ BSFLP M200 K20 ]`**.
-  2. Nấc `M200` tại buồng chụp tự động nhận giá trị `0` (Mặc định coi là OK).
-  3. Kích ngõ ra `Y1` (Hardware Line0) bắn xung kích Camera chụp ảnh và kích `PLS M10` (Software Trigger).
+  1. Kích ngõ ra `Y1` (Hardware Line0) bắn xung phần cứng kích Camera chụp ảnh tức thì (< 5µs).
+  2. Kích `PLS M10` (Software Trigger qua MC Protocol).
+  3. **LƯU Ý**: Tại bước này **CHƯA DỊCH HÀNG ĐỢI**, vì Camera vừa bắt đầu chụp và Vision PC đang xử lý, chưa có kết quả OK/NG!
 
 ```text
 |   X2 (Sensor buồng chụp)   Y0 (Băng tải đang chạy)
-|-------[ ↑ ]--------------------------[ ]-------------------+----( PLS M20 ) (Xung dịch hàng đợi)
-|                                                            |
-|                                                            +----( PLS M10 ) (Xung Trigger PC)
+|-------[ ↑ ]--------------------------[ ]-------------------+----( PLS M10 ) (Xung Trigger PC)
 |                                                            |
 |                                                            +----( PLS Y1 )  (Xung chân cứng LINE0)
-
-Network 3.2: Dịch mảng hàng đợi 20 nấc thuận từ buồng chụp ra ngoài
-|   M20 (Xung dịch hàng đợi)
-|-------[ ]--------------------------------------------------[ BSFLP M200 K20 ] (Dịch M200 -> M219)
 ```
 
 ---
 
-### 🟢 MẠNG 4: NẠP KẾT QUẢ TỪ VISION PC VÀO NẤC BUỒNG CHỤP (M200) — NON-BLOCKING
+### 🟢 MẠNG 4: NHẬN KẾT QUẢ TỪ VISION PC (M103 DONE) ➔ DỊCH HÀNG ĐỢI & NẠP KẾT QUẢ VÀO M200
 * **Ý nghĩa**:
-  - Khi Vision PC kiểm tra xong ảnh:
-    - Nếu là **NG**: PC bật `M105 = 1` (hoặc PC ghi thẳng `M200 = 1` qua MC Protocol).
-    - Tiếp điểm `M105` kích hoạt **`SET M200`** (Đánh dấu nấc phôi vừa kiểm tra tại buồng là NG = 1).
-    - Nếu là **OK**: `M200` giữ nguyên giá trị `0`.
-  - **HOÀN TOÀN KHÔNG CHỜ ACK**: PC gửi xong là xong, sẵn sàng chụp phôi tiếp theo ngay lập tức!
+  - Khi Vision PC kiểm tra xong ảnh (mất ~15ms - 30ms):
+    1. Vision PC phát xung **`M103` (Vision Done = 1)** báo hiệu đã có kết quả.
+    2. Đồng thời nếu là **NG**: PC bật **`M105 = 1`** (nếu OK: `M104 = 1`, `M105 = 0`).
+  - **Logic trong PLC**:
+    - Ngay khi nhận xung hoàn tất `LDP M103`: PLC thực hiện lệnh **`[ BSFLP M200 K20 ]`** để dịch toàn bộ các phôi cũ trên băng tải tiến lên 1 nấc (`M200` $\rightarrow$ `M201`, `M201` $\rightarrow$ `M202`... và nấc `M200` tạm thời mang giá trị 0).
+    - Ngay sau đó, nếu kết quả là **NG (`M105 = 1`)**: PLC lập tức kích **`SET M200`** (Đánh dấu chính xác phôi vừa kiểm tra tại buồng mang giá trị NG = 1). Nếu là OK (`M105 = 0`), `M200` giữ nguyên giá trị `0`.
+  - **Ưu điểm vượt trội**:
+    - Luôn đồng bộ 100% giữa phôi thật và kết quả kiểm tra: Phôi kiểm tra xong lúc nào thì kết quả được đẩy vào hàng đợi đúng lúc đó!
+    - Không lo Vision xử lý chậm làm trôi phôi.
+    - Test 1 phôi đơn lẻ hay chạy cả nghìn phôi liên tục đều dịch bit chuẩn xác từng nấc!
 
 ```text
-|   M105 (Vision NG từ PC)
-|-------[ ↑ ]----------------------------------------------------------------( SET M200 )
+Network 4.1: Khi Vision PC hoàn tất kiểm tra (LDP M103) -> Dịch mảng hàng đợi 20 nấc BSFLP M200 K20
+|   M103 (Vision Done từ PC)
+|-------[ ↑ ]------------------------------------------------[ BSFLP M200 K20 ] (Dịch M200 -> M219)
+
+Network 4.2: Nếu kết quả kiểm tra là NG (M105 = 1) -> Nạp nhãn lỗi vào nấc đầu buồng chụp (SET M200)
+|   M103 (Vision Done)       M105 (Vision NG)
+|-------[ ]------------------------[ ]-----------------------( SET M200 )
 ```
 
 ---

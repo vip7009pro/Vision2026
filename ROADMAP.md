@@ -1,5 +1,10 @@
 # ROADMAP.md — Lộ trình phát triển & Trạng thái nhiệm vụ
 
+- [x] Task 392: Chuẩn Hóa Chu Trình Dịch Bit Hàng Đợi FX5U — Dịch Bit Theo Xung Kết Quả Vision Done (`M103`) Thay Vì Sensor `X2`:
+  - [x] Làm rõ bản chất timing: Cảm biến `X2` chỉ kích chụp Camera; dịch bit ngay tại `X2` làm dịch mảng trước khi có kết quả và gây kẹt bit khi test phôi đơn lẻ.
+  - [x] Chuẩn hóa kiến trúc Vision-Driven Shift: PLC nhận xung `M103` (Done) $\rightarrow$ `LDP M103` dịch mảng `BSFLP M200 K20` $\rightarrow$ `LD M103 AND M105` kích `SET M200` nếu là hàng NG (OK thì giữ 0).
+  - [x] Cập nhật toàn diện [Ladder_Program_Full_FX5U.md](file:///g:/NODEJS/Vision2026/PLC_Programs/Mitsubishi_GXWorks3/Ladder_Program_Full_FX5U.md) và [Ladder_Mnemonic_GXWorks.il](file:///g:/NODEJS/Vision2026/PLC_Programs/Mitsubishi_GXWorks3/Ladder_Mnemonic_GXWorks.il).
+
 - [x] Task 391: Sửa Lỗi Không Truyền Bit NG M105 Sang GXWorks & Kích Hoạt Handshake Khi Test Ảnh Trên Tool Editor:
   - [x] Sửa lỗi gốc trong `ResolveTag` ([IndustrialHandshakeStateMachine.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.Application/PLC/Services/IndustrialHandshakeStateMachine.cs)): Loại bỏ điều kiện bắt buộc `GetTagValue != null` gây triệt tiêu TagName khi tag chưa có trong Cache/Tags; ưu tiên trực tiếp địa chỉ người dùng đã điền (`M105`) và fallback chuẩn.
   - [x] Kích hoạt Handshake trong `RunFlowAsync` và `RunSingleFileAsync` ([ToolEditorViewModel.Engine.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/ToolEditorViewModel.Engine.cs)): Cho phép test ảnh NG đơn lẻ bằng nút "Chạy Flow" trên màn hình Tool Editor mà kết quả vẫn phát xung/chốt bit sang PLC ngay lập tức (`M105=1`, `M200=1`, `M103=1`).
