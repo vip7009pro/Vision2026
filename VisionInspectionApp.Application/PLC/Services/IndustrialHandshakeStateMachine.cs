@@ -51,6 +51,23 @@ public sealed class IndustrialHandshakeStateMachine
     public int HandshakeTimeoutMs { get; set; } = 500;
     public bool IsEnabled { get; set; } = true;
     public bool SimulatePlcAck { get; set; } = false;
+
+    /// <summary>
+    /// Chế độ bắt tay bất đồng bộ không chờ Ack (Non-blocking Pipelined Queue):
+    /// Băng tải chạy liên tục, Vision ghi kết quả vào hàng đợi rồi giải phóng ngay, không dừng luồng chờ Ack.
+    /// </summary>
+    public bool NonBlockingMode { get; set; } = true;
+
+    /// <summary>
+    /// Điểm ra chỉ định trên hàng đợi 20 sản phẩm (1..20): Nấc mà tại đó nếu là hàng NG thì băng tải sẽ dừng. Mặc định: 10
+    /// </summary>
+    public int TargetStopStationIndex { get; set; } = 10;
+
+    /// <summary>
+    /// Địa chỉ bắt đầu mảng hàng đợi trên PLC (Mặc định: M200 cho mảng M200..M219)
+    /// </summary>
+    public string QueueRegisterStart { get; set; } = "M200";
+
     public HandshakeState CurrentState
     {
         get
@@ -213,7 +230,39 @@ public sealed class IndustrialHandshakeStateMachine
                 await _plcManager.WriteTagValueAsync(_plcId, doneTag, true, ct);
             }
 
-            // 2. Chờ PLC phản hồi tín hiệu ACK nếu có cấu hình PlcAckTagName hợp lệ
+            // Ghi trực tiếp kết quả vào nấc buồng chụp của hàng đợi PLC (M200): NG = true (1), Pass = false (0)
+            if (!string.IsNullOrEmpty(QueueRegisterStart) && _plcManager != null)
+            {
+                try
+                {
+                    await _plcManager.WriteTagValueAsync(_plcId, QueueRegisterStart, !isPass, ct);
+                }
+                catch { }
+            }
+
+            // 2. Chế độ Bắt tay Bất Đồng Bộ Non-Blocking (Pipelined Continuous Conveyor):
+            // Vision trả kết quả trực tiếp vào hàng đợi PLC và giải phóng ngay để không làm chậm chuyền.
+            if (NonBlockingMode || string.IsNullOrEmpty(ackTag))
+            {
+                // Tự động hạ Done và Busy sau một khoảng xung ngắn 15ms trong background
+                _ = Task.Run(async () =>
+                {
+                    try
+                    {
+                        await Task.Delay(15);
+                        if (!string.IsNullOrEmpty(doneTag) && _plcManager != null)
+                            await _plcManager.WriteTagValueAsync(_plcId, doneTag, false);
+                        if (!string.IsNullOrEmpty(busyTag) && _plcManager != null)
+                            await _plcManager.WriteTagValueAsync(_plcId, busyTag, false);
+                    }
+                    catch { }
+                });
+
+                CurrentState = HandshakeState.Armed;
+                return true;
+            }
+
+            // 3. Chế độ đồng bộ truyền thống: Chờ PLC phản hồi tín hiệu ACK nếu có cấu hình PlcAckTagName hợp lệ
             if (!string.IsNullOrEmpty(ackTag))
             {
                 var sw = Stopwatch.StartNew();

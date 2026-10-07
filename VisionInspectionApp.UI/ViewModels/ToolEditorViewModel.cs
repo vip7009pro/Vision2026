@@ -1930,6 +1930,9 @@ namespace VisionInspectionApp.UI.ViewModels
                 _handshakeStateMachine.PlcAckTagName = config.Handshake.PlcAckTagName;
                 _handshakeStateMachine.HandshakeTimeoutMs = config.Handshake.HandshakeTimeoutMs;
                 _handshakeStateMachine.SimulatePlcAck = config.Handshake.SimulatePlcAck;
+                _handshakeStateMachine.NonBlockingMode = config.Handshake.NonBlockingMode;
+                _handshakeStateMachine.TargetStopStationIndex = config.Handshake.TargetStopStationIndex;
+                _handshakeStateMachine.QueueRegisterStart = config.Handshake.QueueRegisterStart;
             }
 
             if (config.Heartbeat != null)

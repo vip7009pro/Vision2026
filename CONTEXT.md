@@ -9,19 +9,22 @@ Hỗ trợ Camera GigE/USB3/USB/RTSP, nạp ảnh tệp/thư mục, bản vẽ k
 - **Biên dịch**: 0 Errors toàn solution (`VisionInspectionApp.slnx`) cả Debug lẫn Release.
 - **Kiểm thử tự động**: PASSED 100% (Toàn bộ test suite `TestExtractApp`, Continuous Flow, Pipeline Tracking, PLC Tags CSV, Handshake Bypass, OQC Scanner, Crosshair Overlay).
 
-## 3. Hoàn thành Task 388: Khắc phục Mất Cấu Hình PLC Khi Build & Cơ Chế Test Handshake Giả Lập GX Works 3
-1. **Tìm ra nguyên nhân gốc & Sửa triệt để lỗi mất cấu hình PLC khi build lại app**:
-   - *Nguyên nhân gốc*: Trong bộ test `TestExtractApp/SystemConfigBackupAndOqcDbMatchTests.cs` (Test 1 và Test 6), mã test khởi tạo `new PlcManagerService()` không cách ly đường dẫn. Khi test phục hồi cấu hình trống, nó đã gọi `SaveGlobalConfig()` và **ghi đè xóa trắng** tệp cấu hình thực của người dùng tại `%AppData%\Vision2026\plc_config.json` mỗi lần chạy build/test!
-   - *Khắc phục*: Cách ly 100% môi trường test sang thư mục tạm độc lập qua `TestPlcConfigHelper.CreateIsolatedPlcManager()`.
-   - *Tự động lưu*: Bổ sung `AutoSaveOnClose()` trong [PlcManagerViewModel.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/PLC/PlcManagerViewModel.cs) và override `OnClosing` trong [PlcManagerWindow.xaml.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/Views/PLC/PlcManagerWindow.xaml.cs).
-   - *Khôi phục dữ liệu*: Nạp lại toàn bộ cấu hình đầy đủ FX5U (`M101`..`M105`, `M10`, `M11`, `M100`, `M108`, `Y21`, `D1000`, `D1002`) vào `%AppData%\Vision2026\plc_config.json` và hạt giống `configs\system\plc_config.json`.
-2. **Giải pháp kiểm thử Handshake không cần PLC thật & Khắc phục giả lập GX Works 3**:
-   - *Bản chất GX Simulator 3*: Trình giả lập của Mitsubishi không mở TCP Socket vật lý trên Windows (Port 5000/5002) mà chỉ giao tiếp qua IPC nội bộ hoặc ActiveX MX Component. Nếu dùng driver MC Protocol trực tiếp, app sẽ không thấy PLC Ack.
-   - *Chế độ Mô phỏng PLC Auto-Ack tích hợp sẵn*: Thêm tùy chọn `SimulatePlcAck` vào [PlcIndustrialConfig.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.Models/PlcIndustrialConfig.cs) và [IndustrialHandshakeStateMachine.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.Application/PLC/Services/IndustrialHandshakeStateMachine.cs). Khi bật, app tự động đóng vai PLC phản hồi xung `M11` sau 20ms và tự động hạ `M11=0` khi Vision Done hạ, giúp test 100% flow offline mà không cần bất kỳ phần cứng hay giả lập ngoài.
-   - *Fast Direct Read*: Nâng cấp vòng lặp chờ Ack: nếu sau 30ms chưa có trong RAM Cache, State Machine tự động đọc trực tiếp từ Driver xuống PLC để triệt tiêu độ trễ Polling Engine.
-   - *Giao diện trực quan*: Thêm checkbox `🧪 Mô Phỏng PLC Tự Động Ack (Simulate Auto-Ack khi test offline)` nổi bật tại Tab 2 cửa sổ [PlcManagerWindow.xaml](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/Views/PLC/PlcManagerWindow.xaml).
+## 3. Hoàn thành Task 389: Bắt Tay Bất Đồng Bộ Non-Blocking & Hàng Đợi 20 Phôi BSFLP M200..M219 Dừng Đúng Điểm Ra
+1. **Làm rõ nguyên nhân "không thấy M85 -> M70"**:
+   - Lệnh cũ `BSFRP M70 K16` (dịch phải) chạy theo xung phôi `X2` buồng chụp trước khi PC có kết quả. Khi PC trả kết quả NG vào `M85`, phôi đã qua `X2`. Nếu không có phôi thứ 2 kích `X2`, lệnh dịch không bao giờ chạy lại, nên `M85` đứng yên. Ngoài ra lệnh dịch phải cố định cứng trạm ra ở nấc 16 (`M70`), không thể tùy biến điểm ra.
+2. **Kiến trúc Bắt tay Bất Đồng Bộ Non-Blocking (Pipelined Continuous Conveyor)**:
+   - Triệt tiêu hoàn toàn việc chờ đợi PLC Ack: Vision PC kiểm tra xong ghi thẳng kết quả vào PLC/Hàng đợi (`M200`) trong <2ms và giải phóng ngay, băng tải chạy liên tục tốc độ cao (không bao giờ nghẽn luồng).
+   - Thêm `NonBlockingMode`, `TargetStopStationIndex` (1..20, mặc định: 10), `QueueRegisterStart` (mặc định: `M200`) vào [PlcIndustrialConfig.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.Models/PlcIndustrialConfig.cs) và [IndustrialHandshakeStateMachine.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.Application/PLC/Services/IndustrialHandshakeStateMachine.cs).
+   - Bổ sung Card cấu hình Hàng đợi 20 sản phẩm và checkbox Non-blocking trực quan tại Tab 2 [PlcManagerWindow.xaml](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/Views/PLC/PlcManagerWindow.xaml).
+3. **Chương trình Ladder FX5U Hàng đợi 20 Nấc Thuận (`BSFLP M200 K20`)**:
+   - Dịch trái thuận tự nhiên từ Buồng chụp (`M200`) sang các nấc `M201..M219` mỗi khi phôi qua cảm biến `X2`. Nấc `M200` tự động nhận 0 (mặc định OK).
+   - Khi PC trả kết quả NG: PC ghi `M200 = 1` (hoặc `M105 = 1` kích `SET M200`).
+   - Khi bit tại **Điểm Ra Chỉ Định** (ví dụ Nấc 10 = `M210`) = 1: PLC lập tức dừng băng tải (`RST Y0`), bật Stopper `Y21`, còi đèn `Y22`, bật cờ `M220`.
+   - Nút nhấn **Reset / Start của công nhân (`X4`)**: Xóa bit NG tại trạm dừng (`RST M210`), hạ Stopper `Y21`, tắt còi đèn `Y22`, xóa cờ `M220`, và kích hoạt băng tải chạy tiếp (`SET Y0`). Toàn bộ phôi khác trong hàng đợi giữ nguyên!
+   - Cập nhật toàn bộ [Ladder_Program_Full_FX5U.md](file:///g:/NODEJS/Vision2026/PLC_Programs/Mitsubishi_GXWorks3/Ladder_Program_Full_FX5U.md), [Ladder_Mnemonic_GXWorks.il](file:///g:/NODEJS/Vision2026/PLC_Programs/Mitsubishi_GXWorks3/Ladder_Mnemonic_GXWorks.il), và [DeviceComments_GXWorks.csv](file:///g:/NODEJS/Vision2026/PLC_Programs/Mitsubishi_GXWorks3/DeviceComments_GXWorks.csv).
 
 ## 4. Các sự kiện & thay đổi gần đây
+- Task 389: Bắt tay Bất đồng bộ Non-blocking & Hàng đợi 20 phôi BSFLP M200..M219 dừng đúng Điểm Ra Chỉ Định ngoài buồng.
 - Task 388: Sửa lỗi mất cấu hình PLC khi build lại app & Thêm cơ chế Simulate PLC Auto-Ack và Fast Direct Read cho kiểm thử Handshake không cần PLC thật.
 - Task 387: Hiển thị Trực Quan Trạng Thái PLC Handshake trên UI Tool Editor & Phân tích Trigger Flow: Giải thích chi tiết 2 cơ chế chụp Hardware Line0 vs Software MC Protocol M10; Tạo [ToolEditorViewModel.HandshakeUi.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/ToolEditorViewModel.HandshakeUi.cs) giám sát tự động thời gian thực; Thêm Widget PLC Handshake đa năng trên Toolbar [ToolEditorView.xaml](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/Views/ToolEditorView.xaml) (Tên PLC, trạng thái, 4 đèn LED mini RDY/BSY/DON/ACK, click mở PLC Manager) và tóm tắt dưới StatusBar.
 - Task 386: Hướng dẫn Thông số Cài Đặt Handshake & Tags trên App Vision WPF: Xuất tài liệu [Vision_App_Handshake_Settings_Guide.md](file:///g:/NODEJS/Vision2026/PLC_Programs/Mitsubishi_GXWorks3/Vision_App_Handshake_Settings_Guide.md) chi tiết 7 phần; Hướng dẫn cả 2 cách cấu hình (nhập trực tiếp Device Bit MC Protocol M101..M105, M11, M108 hoặc chọn Tag Name danh bạ); Bảng tra cứu đầy đủ 5 Tab giao diện WPF (Kết nối, Handshake, Watchdog, Motion Encoder, Shift Register Reject); Bảng ánh xạ I/O FX5U.

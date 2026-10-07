@@ -17,6 +17,22 @@ public sealed class IndustrialHandshakeConfig
     public int HandshakeTimeoutMs { get; set; } = 500;
     public bool IsEnabled { get; set; } = true;
     public bool SimulatePlcAck { get; set; } = false;
+
+    /// <summary>
+    /// Chế độ bắt tay bất đồng bộ không chờ Ack (Non-blocking Pipelined Queue):
+    /// Băng tải chạy liên tục tốc độ cao, Vision ghi kết quả vào hàng đợi rồi giải phóng ngay, không dừng luồng chờ Ack.
+    /// </summary>
+    public bool NonBlockingMode { get; set; } = true;
+
+    /// <summary>
+    /// Điểm ra chỉ định trên hàng đợi 20 sản phẩm (1..20): Nấc mà tại đó nếu là hàng NG thì băng tải sẽ dừng. Mặc định: 10
+    /// </summary>
+    public int TargetStopStationIndex { get; set; } = 10;
+
+    /// <summary>
+    /// Địa chỉ bắt đầu mảng hàng đợi trên PLC (Mặc định: M200 cho mảng M200..M219)
+    /// </summary>
+    public string QueueRegisterStart { get; set; } = "M200";
 }
 
 /// <summary>

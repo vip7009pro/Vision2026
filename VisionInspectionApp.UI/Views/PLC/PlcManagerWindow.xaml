@@ -295,6 +295,41 @@
                                 <CheckBox Grid.Row="6" Grid.Column="2" Grid.ColumnSpan="2" Content="🧪 Mô Phỏng PLC Tự Động Ack (Simulate Auto-Ack khi test offline)" IsChecked="{Binding Handshake.SimulatePlcAck}" FontWeight="SemiBold" Margin="12,14,0,4" Foreground="#10B981" ToolTip="Tự động mô phỏng PLC phản hồi tín hiệu Ack (M11) sau 20ms khi Vision hoàn thành kiểm tra. Dùng để test chu trình handshake khi chưa có PLC thật hoặc đang giả lập trên máy tính!"/>
                             </Grid>
                         </Border>
+
+                        <!-- Card Cấu hình Bắt tay Bất đồng bộ & Hàng đợi 20 sản phẩm -->
+                        <Border Style="{StaticResource IndustrialCardBorder}" Margin="0,12,0,0">
+                            <StackPanel>
+                                <TextBlock Text="⚡ Bắt Tay Bất Đồng Bộ Non-Blocking &amp; Hàng Đợi 20 Sản Phẩm (Continuous Pipelined Queue)" FontWeight="Bold" FontSize="13" Foreground="#0EA5E9" Margin="0,0,0,6"/>
+                                <TextBlock Text="Băng tải chạy liên tục không dừng chờ Ack. Vision trả kết quả kiểm tra trực tiếp vào hàng đợi PLC (M200). Khi phôi NG dịch tới Điểm Ra Chỉ Định, PLC tự động dừng băng tải." FontSize="11.5" Foreground="{DynamicResource TextMutedBrush}" TextWrapping="Wrap" Margin="0,0,0,12"/>
+                                
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="230"/>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="230"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="Auto"/>
+                                    </Grid.RowDefinitions>
+
+                                    <!-- Non-blocking Checkbox -->
+                                    <CheckBox Grid.Row="0" Grid.Column="0" Grid.ColumnSpan="4" Content="⚡ Bắt tay Bất Đồng Bộ Non-Blocking (Không chờ Ack - Tối đa tốc độ băng tải)" IsChecked="{Binding Handshake.NonBlockingMode}" FontWeight="Bold" Foreground="#0EA5E9" Margin="0,2,0,12" ToolTip="Vision ghi kết quả vào PLC và giải phóng ngay (&lt;2ms), không chờ PLC Ack để băng tải chạy liên tục tối đa tốc độ!"/>
+
+                                    <!-- Target Stop Station Index -->
+                                    <TextBlock Grid.Row="1" Grid.Column="0" Text="Điểm ra chỉ định (Trạm dừng khi NG):" Style="{StaticResource IndustrialFieldLabel}"/>
+                                    <StackPanel Grid.Row="1" Grid.Column="1" Orientation="Horizontal" Margin="2">
+                                        <TextBox Text="{Binding Handshake.TargetStopStationIndex, UpdateSourceTrigger=PropertyChanged}" Width="70" Padding="4,2" HorizontalContentAlignment="Center" FontWeight="Bold"/>
+                                        <TextBlock Text=" (Nấc 1..20 trên hàng đợi)" VerticalAlignment="Center" Margin="6,0,0,0" Foreground="{DynamicResource TextMutedBrush}" FontSize="11"/>
+                                    </StackPanel>
+
+                                    <!-- Queue Register Start -->
+                                    <TextBlock Grid.Row="1" Grid.Column="2" Text="Ô nhớ hàng đợi trên PLC (Nấc 0):" Style="{StaticResource IndustrialFieldLabel}" Margin="12,4,8,4"/>
+                                    <TextBox Grid.Row="1" Grid.Column="3" Text="{Binding Handshake.QueueRegisterStart, UpdateSourceTrigger=PropertyChanged}" Margin="2" Padding="4,2" ToolTip="Địa chỉ bit buồng chụp camera trên PLC (Mặc định: M200, tương ứng mảng 20 nấc M200..M219)"/>
+                                </Grid>
+                            </StackPanel>
+                        </Border>
                     </StackPanel>
                 </ScrollViewer>
             </TabItem>

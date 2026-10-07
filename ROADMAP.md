@@ -1,5 +1,18 @@
 # ROADMAP.md — Lộ trình phát triển & Trạng thái nhiệm vụ
 
+- [x] Task 389: Bắt Tay Bất Đồng Bộ Non-Blocking & Hàng Đợi 20 Phôi BSFLP M200..M219 Dừng Đúng Điểm Ra:
+  - [x] Làm rõ nguyên nhân gốc "không thấy M85 -> M70": Do lệnh cũ `BSFRP` dịch mảng trước khi có kết quả và khi test 1 phôi đơn lẻ không có phôi tiếp theo kích sensor `X2` nên bit không dịch tiếp.
+  - [x] Thiết kế & triển khai cơ chế Non-Blocking Handshake trong [IndustrialHandshakeStateMachine.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.Application/PLC/Services/IndustrialHandshakeStateMachine.cs): Vision PC ghi kết quả thẳng vào `QueueRegisterStart` (`M200`) và giải phóng ngay trong <2ms, không chờ PLC Ack, bảo đảm băng tải chạy liên tục tốc độ cao.
+  - [x] Nâng cấp [PlcIndustrialConfig.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.Models/PlcIndustrialConfig.cs), [ToolEditorViewModel.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/ToolEditorViewModel.cs) và [PlcManagerWindow.xaml](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/Views/PLC/PlcManagerWindow.xaml): Thêm `NonBlockingMode`, `TargetStopStationIndex` (1..20, mặc định: 10), `QueueRegisterStart` (mặc định: `M200`), và card giao diện cấu hình trực quan tại Tab 2.
+  - [x] Viết lại toàn diện chương trình Ladder Diagram FX5U trong [Ladder_Program_Full_FX5U.md](file:///g:/NODEJS/Vision2026/PLC_Programs/Mitsubishi_GXWorks3/Ladder_Program_Full_FX5U.md) và [Ladder_Mnemonic_GXWorks.il](file:///g:/NODEJS/Vision2026/PLC_Programs/Mitsubishi_GXWorks3/Ladder_Mnemonic_GXWorks.il) dùng lệnh dịch trái chuẩn `BSFLP M200 K20`:
+    - [x] Mạng 1: Chạy / Dừng băng tải chính `Y0`.
+    - [x] Mạng 3: Sensor buồng `X2` kích Trigger Camera (Line0/`M10`) và phát xung `M20` dịch mảng `BSFLP M200 K20` (nấc `M200` tự nạp 0).
+    - [x] Mạng 4: Vision PC nạp kết quả NG `M105=1` $\rightarrow$ `SET M200` bất đồng bộ, không chờ Ack.
+    - [x] Mạng 5: Phôi NG tới Điểm Ra Chỉ Định (Nấc 10: `M210 = 1`) $\rightarrow$ Dừng băng tải ngay (`RST Y0`), bật Stopper `Y21`, còi đèn `Y22`, cờ `M220`.
+    - [x] Mạng 6: Công nhân xử lý hàng NG xong nhấn `X4` $\rightarrow$ Reset bit `M210 = 0`, hạ Stopper `Y21`, tắt còi đèn `Y22`, xóa cờ `M220`, và tiếp tục chạy băng tải `SET Y0`. Các phôi khác trong hàng đợi bảo lưu nguyên vẹn.
+  - [x] Cập nhật danh bạ [DeviceComments_GXWorks.csv](file:///g:/NODEJS/Vision2026/PLC_Programs/Mitsubishi_GXWorks3/DeviceComments_GXWorks.csv) chuẩn UTF-16 LE Tab-delimited cho toàn bộ dải `M200..M219`.
+  - [x] Toàn bộ solution biên dịch 0 lỗi, kiểm thử tự động PASSED 100%.
+
 - [x] Task 388: Khắc phục Mất Cấu Hình PLC Khi Build & Cơ Chế Test Handshake Giả Lập GX Works 3:
   - [x] Rà soát và tìm ra nguyên nhân gốc lỗi mất cấu hình PLC khi build lại app: Bộ test `SystemConfigBackupAndOqcDbMatchTests.cs` nạp cấu hình trống và ghi đè `%AppData%\Vision2026\plc_config.json`. Khắc phục bằng cách cô lập môi trường test sang thư mục tạm độc lập (`TestPlcConfigHelper.CreateIsolatedPlcManager()`).
   - [x] Bổ sung cơ chế tự động lưu an toàn `AutoSaveOnClose()` khi đóng cửa sổ PLC Manager và khôi phục 100% các giá trị Tag PLC FX5U chuẩn (`M101`..`M105`, `M10`, `M11`, `M100`, `M108`, `Y21`, `D1000`, `D1002`).

@@ -249,13 +249,17 @@ public sealed partial class ToolEditorViewModel : ObservableObject
                 break;
         }
 
-        HandshakeStatusBarSummary = $"🤝 PLC: {plcId} ({stateDesc}) | RDY:{(bitRdy ? 1 : 0)} BSY:{(bitBsy ? 1 : 0)} DON:{(bitDon ? 1 : 0)} ACK:{(bitAck ? 1 : 0)}";
+        bool isNonBlocking = _handshakeStateMachine?.NonBlockingMode ?? false;
+        string modeSuffix = isNonBlocking ? " [Non-blocking Queue]" : "";
+        HandshakeStatusBarSummary = $"🤝 PLC: {plcId} ({stateDesc}{modeSuffix}) | RDY:{(bitRdy ? 1 : 0)} BSY:{(bitBsy ? 1 : 0)} DON:{(bitDon ? 1 : 0)} ACK:{(bitAck ? 1 : 0)}";
 
         HandshakeStatusToolTip =
-            $"🤝 CHU TRÌNH BẮT TAY CÔNG NGHIỆP DETERMINISTIC 24/7\n" +
+            $"🤝 CHU TRÌNH BẮT TAY CÔNG NGHIỆP {(isNonBlocking ? "NON-BLOCKING HÀNG ĐỢI 20 NẤC" : "DETERMINISTIC 24/7")}\n" +
             $"──────────────────────────────────────────────────\n" +
             $"• PLC Mục Tiêu : {plcId} (Đã Kết Nối - Online)\n" +
+            $"• Chế Độ Bắt Tay: {(isNonBlocking ? "⚡ Bất đồng bộ (Không chờ Ack - Băng tải chạy liên tục)" : "Đồng bộ chờ Ack")}\n" +
             $"• Trạng Thái   : {stateDesc}\n" +
+            $"• Điểm Ra Chỉ Định: Nấc {_handshakeStateMachine?.TargetStopStationIndex ?? 10} / 20 (M200..M219)\n" +
             $"• Timeout Chờ  : {_handshakeStateMachine?.HandshakeTimeoutMs ?? 500} ms\n" +
             $"──────────────────────────────────────────────────\n" +
             $"Tín Hiệu I/O Hiện Tại (MC Protocol / Internal Bit):\n" +
