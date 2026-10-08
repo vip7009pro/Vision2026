@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using VisionInspectionApp.Application.Services;
+using VisionInspectionApp.Models;
 using VisionInspectionApp.Models.Ota;
 using VisionInspectionApp.UI.Services;
 
@@ -88,7 +89,9 @@ public partial class OtaUpdateViewModel : ObservableObject
 
         CurrentVersionText = $"v{_otaService.CurrentVersion}";
         var otaCfg = _settingsService.Settings.Ota;
-        ServerUrl = otaCfg.UpdateServerUrl;
+        ServerUrl = !string.IsNullOrWhiteSpace(otaCfg.UpdateServerUrl) 
+            ? otaCfg.UpdateServerUrl 
+            : OtaSettings.DefaultUpdateServerUrl;
         SelectedSourceType = otaCfg.UpdateSourceType;
         AutoCheckOnStartup = otaCfg.AutoCheckOnStartup;
 
@@ -307,6 +310,18 @@ public partial class OtaUpdateViewModel : ObservableObject
     {
         SaveAllSettings();
         StatusMessage = "✅ Đã lưu toàn bộ cài đặt OTA & Máy chủ phát hành thành công.";
+        StatusColorHex = "#4ADE80";
+    }
+
+    [RelayCommand]
+    public void ResetDefaultUrls()
+    {
+        ServerUrl = OtaSettings.DefaultUpdateServerUrl;
+        PublishServerUrl = OtaSettings.DefaultPublishServerUploadUrl;
+        PublishServerStorageFolder = OtaSettings.DefaultPublishServerStorageFolder;
+
+        SaveAllSettings();
+        StatusMessage = "✅ Đã khôi phục toàn bộ link máy chủ OTA mặc định xưởng (192.168.1.192).";
         StatusColorHex = "#4ADE80";
     }
 

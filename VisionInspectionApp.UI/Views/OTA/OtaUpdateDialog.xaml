@@ -219,7 +219,7 @@
                              Background="{DynamicResource InputBackgroundBrush}"
                              Foreground="{DynamicResource TextBrush}"
                              BorderBrush="{DynamicResource BorderBrush}"
-                             ToolTip="Ví dụ: http://192.168.1.100:8080/api/updates/version.json hoặc cmsvina/VisionInspectionApp"
+                             ToolTip="Ví dụ: http://192.168.1.192/update/version.json hoặc cmsvina/VisionInspectionApp"
                              Margin="0,0,0,12" />
 
                     <!-- CheckBox Auto check -->
@@ -229,12 +229,19 @@
                               FontSize="12"
                               Margin="0,0,0,16" />
 
-                    <!-- Nút Lưu Cài Đặt -->
-                    <Button Content="💾 Lưu Cấu Hình OTA"
-                            Command="{Binding SaveSettingsCommand}"
-                            HorizontalAlignment="Left"
-                            Padding="16,6"
-                            Height="32" />
+                    <!-- Hàng nút Lưu & Khôi Phục Cài Đặt -->
+                    <StackPanel Orientation="Horizontal" Margin="0,0,0,0">
+                        <Button Content="💾 Lưu Cấu Hình OTA"
+                                Command="{Binding SaveSettingsCommand}"
+                                Padding="16,6"
+                                Height="32" />
+                        <Button Content="↺ Khôi Phục Mặc Định (192.168.1.192)"
+                                Command="{Binding ResetDefaultUrlsCommand}"
+                                Margin="8,0,0,0"
+                                Padding="14,6"
+                                Height="32"
+                                ToolTip="Khôi phục lại đường dẫn server nội bộ chuẩn của xưởng: http://192.168.1.192/update/version.json" />
+                    </StackPanel>
                 </StackPanel>
             </TabItem>
 
@@ -350,7 +357,7 @@
                                              Background="{DynamicResource InputBackgroundBrush}"
                                              Foreground="{DynamicResource TextBrush}"
                                              BorderBrush="{DynamicResource BorderBrush}"
-                                             ToolTip="Ví dụ: http://192.168.1.100/ota_server.php" />
+                                             ToolTip="Ví dụ: http://192.168.1.192/ota_server.php" />
                                 </StackPanel>
 
                                 <!-- Thư mục lưu trữ trên server (yêu cầu người dùng) -->
@@ -361,7 +368,7 @@
                                              Background="{DynamicResource InputBackgroundBrush}"
                                              Foreground="{DynamicResource TextBrush}"
                                              BorderBrush="{DynamicResource BorderBrush}"
-                                             ToolTip="Thư mục trên server để chứa file zip, ví dụ: uploads/ota_packages hoặc updates/v1" />
+                                             ToolTip="Thư mục trên server để chứa file zip, ví dụ: update hoặc uploads/ota_packages" />
                                 </StackPanel>
 
                                 <!-- Khóa bảo mật API Token -->
@@ -448,6 +455,15 @@
                                             Height="34"
                                             DockPanel.Dock="Left" Margin="0,0,8,0"
                                             ToolTip="Lưu các thông tin cấu hình máy chủ phát hành, token, thư mục vào tệp cấu hình bền vững." />
+
+                                    <!-- Nút Khôi Phục URL Mặc Định -->
+                                    <Button Content="↺ Khôi Phục Mặc Định"
+                                            Command="{Binding ResetDefaultUrlsCommand}"
+                                            IsEnabled="{Binding IsBusyPublishingOrBuilding, Converter={StaticResource BoolToVis}, ConverterParameter=Invert}"
+                                            DockPanel.Dock="Left" Margin="0,0,8,0"
+                                            Padding="14,7"
+                                            Height="34"
+                                            ToolTip="Khôi phục lại URL script PHP (http://192.168.1.192/ota_server.php) và thư mục update chuẩn của xưởng." />
 
                                     <!-- Nút Hủy phát hành / build (khi đang chạy) -->
                                     <Button Content="⏹ Hủy Bỏ"

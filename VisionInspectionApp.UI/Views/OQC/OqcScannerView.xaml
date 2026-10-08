@@ -8,6 +8,7 @@
              d:DesignHeight="700" d:DesignWidth="1100">
 
     <UserControl.InputBindings>
+        <KeyBinding Key="Esc" Command="{Binding EscapeCloseJobAndClearTextCommand}" />
         <KeyBinding Key="F5" Command="{Binding EnableLiveCameraCommand}" />
         <KeyBinding Key="Space" Command="{Binding TriggerInspectOrLiveCommand}" />
         <KeyBinding Key="F8" Modifiers="Control" Command="{Binding TriggerInspectOrLiveCommand}" />
@@ -106,13 +107,13 @@
                                 FontSize="11.5" FontWeight="SemiBold"
                                 ToolTip="Mở tệp Vision Job (.job) thủ công từ máy tính." />
 
-                        <Button Content="🔒 Đóng Job"
+                        <Button Content="🔒 Đóng Job (ESC)"
                                 Command="{Binding CloseLoadedJobCommand}"
                                 Height="30" Padding="8,0" Margin="6,0,0,0"
                                 FontSize="11.5" FontWeight="SemiBold"
                                 Background="#B23A48" Foreground="White" BorderThickness="0"
-                                Visibility="{Binding IsJobLoadedFromManager, Converter={StaticResource BoolToVis}}"
-                                ToolTip="Đóng Job đang nạp và xóa các dòng lịch sử ở trạng thái 'Đã nạp Job' (nạp Job nhưng chưa từng được kiểm tra)." />
+                                Visibility="{Binding HasLoadedJob, Converter={StaticResource BoolToVis}}"
+                                ToolTip="Đóng Job đang nạp, hủy phiên làm việc và xóa ô nhập mã (Phím tắt ESC)." />
                     </StackPanel>
 
                     <!-- Center: Input Box & Mode Checkboxes -->
@@ -131,8 +132,11 @@
                                  Background="{DynamicResource InputBackgroundBrush}"
                                  Foreground="{DynamicResource TextBrush}"
                                  BorderBrush="{DynamicResource BorderBrush}"
-                                 Margin="0,0,8,0">
+                                 Margin="0,0,8,0"
+                                 GotKeyboardFocus="ScanInputTextBox_GotKeyboardFocus"
+                                 PreviewMouseLeftButtonDown="ScanInputTextBox_PreviewMouseLeftButtonDown">
                             <TextBox.InputBindings>
+                                <KeyBinding Key="Esc" Command="{Binding EscapeCloseJobAndClearTextCommand}" />
                                 <KeyBinding Key="Enter" Command="{Binding ScanCommand}" />
                                 <KeyBinding Key="F5" Command="{Binding EnableLiveCameraCommand}" />
                                 <KeyBinding Key="F8" Modifiers="Control" Command="{Binding TriggerInspectOrLiveCommand}" />

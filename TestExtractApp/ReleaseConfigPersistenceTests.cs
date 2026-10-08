@@ -136,32 +136,43 @@ public static class ReleaseConfigPersistenceTests
     {
         Console.WriteLine("\n--- Test 4: Cấu Hình Toàn Cục & OTA Không Bị Mất ---");
 
-        var settingsService = new GlobalAppSettingsService();
-        var ota = settingsService.Settings.Ota;
+        string tempTestDir = Path.Combine(Path.GetTempPath(), "VisionTest_Ota_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempTestDir);
+        string tempConfigFile = Path.Combine(tempTestDir, "global_settings.json");
 
-        if (ota == null)
-            throw new Exception("Settings.Ota bị null!");
+        try
+        {
+            var settingsService = new GlobalAppSettingsService(tempConfigFile, disableBackupSync: true);
+            var ota = settingsService.Settings.Ota;
 
-        string testUrl = "http://192.168.1.200:9090/updates/version.json";
-        ota.UpdateServerUrl = testUrl;
-        ota.PublishServerUploadUrl = "http://192.168.1.200/publish.php";
-        ota.PublishServerStorageFolder = "releases/v2";
+            if (ota == null)
+                throw new Exception("Settings.Ota bị null!");
 
-        settingsService.Save();
+            string testUrl = "http://192.168.1.200:9090/updates/version.json";
+            ota.UpdateServerUrl = testUrl;
+            ota.PublishServerUploadUrl = "http://192.168.1.200/publish.php";
+            ota.PublishServerStorageFolder = "releases/v2";
 
-        // Nạp lại từ đĩa
-        settingsService.Reload();
-        var reloadedOta = settingsService.Settings.Ota;
+            settingsService.Save();
 
-        if (reloadedOta.UpdateServerUrl != testUrl)
-            throw new Exception($"URL cập nhật không khớp sau khi lưu! Kỳ vọng {testUrl}, nhận được {reloadedOta.UpdateServerUrl}");
+            // Nạp lại từ đĩa
+            settingsService.Reload();
+            var reloadedOta = settingsService.Settings.Ota;
 
-        if (reloadedOta.PublishServerUploadUrl != "http://192.168.1.200/publish.php")
-            throw new Exception($"URL phát hành không khớp! Nhận được {reloadedOta.PublishServerUploadUrl}");
+            if (reloadedOta.UpdateServerUrl != testUrl)
+                throw new Exception($"URL cập nhật không khớp sau khi lưu! Kỳ vọng {testUrl}, nhận được {reloadedOta.UpdateServerUrl}");
 
-        Console.WriteLine($"  ✓ Đã lưu bền vững OTA URL: {reloadedOta.UpdateServerUrl}");
-        Console.WriteLine($"  ✓ Đã lưu bền vững Publish URL: {reloadedOta.PublishServerUploadUrl}");
-        Console.WriteLine("  ✓ Test 4 PASSED!");
+            if (reloadedOta.PublishServerUploadUrl != "http://192.168.1.200/publish.php")
+                throw new Exception($"URL phát hành không khớp! Nhận được {reloadedOta.PublishServerUploadUrl}");
+
+            Console.WriteLine($"  ✓ Đã lưu bền vững OTA URL (Isolated Sandbox): {reloadedOta.UpdateServerUrl}");
+            Console.WriteLine($"  ✓ Đã lưu bền vững Publish URL (Isolated Sandbox): {reloadedOta.PublishServerUploadUrl}");
+            Console.WriteLine("  ✓ Test 4 PASSED!");
+        }
+        finally
+        {
+            try { Directory.Delete(tempTestDir, true); } catch { }
+        }
     }
 
     private static void TestTwoWaySyncToAppBackup()
@@ -194,40 +205,51 @@ public static class ReleaseConfigPersistenceTests
     {
         Console.WriteLine("\n--- Test 6: OtaUpdateViewModel Lưu Toàn Diện (Receiver & Publisher) ---");
 
-        var settingsService = new GlobalAppSettingsService();
-        var otaService = new OtaUpdateService();
-        var publisherService = new OtaPublisherService();
+        string tempTestDir = Path.Combine(Path.GetTempPath(), "VisionTest_OtaVm_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempTestDir);
+        string tempConfigFile = Path.Combine(tempTestDir, "global_settings.json");
 
-        var vm = new OtaUpdateViewModel(otaService, settingsService, publisherService);
+        try
+        {
+            var settingsService = new GlobalAppSettingsService(tempConfigFile, disableBackupSync: true);
+            var otaService = new OtaUpdateService();
+            var publisherService = new OtaPublisherService();
 
-        // Chỉnh sửa các trường
-        vm.ServerUrl = "http://10.0.0.99:8080/manifest.json";
-        vm.PublishServerUrl = "http://10.0.0.99/upload_ota.php";
-        vm.PublishServerStorageFolder = "ota_storage_pkg";
-        vm.PublishApiToken = "MY_SUPER_SECRET_TOKEN";
-        vm.PublishReleaseChannel = "Hotfix";
+            var vm = new OtaUpdateViewModel(otaService, settingsService, publisherService);
 
-        // Gọi SaveAllSettings (giống như khi đóng dialog hoặc bấm nút Lưu)
-        vm.SaveAllSettings();
+            // Chỉnh sửa các trường
+            vm.ServerUrl = "http://10.0.0.99:8080/manifest.json";
+            vm.PublishServerUrl = "http://10.0.0.99/upload_ota.php";
+            vm.PublishServerStorageFolder = "ota_storage_pkg";
+            vm.PublishApiToken = "MY_SUPER_SECRET_TOKEN";
+            vm.PublishReleaseChannel = "Hotfix";
 
-        // Kiểm tra trong GlobalAppSettingsService
-        var cfg = settingsService.Settings.Ota;
-        if (cfg.UpdateServerUrl != "http://10.0.0.99:8080/manifest.json")
-            throw new Exception("ServerUrl không được lưu vào settings!");
+            // Gọi SaveAllSettings (giống như khi đóng dialog hoặc bấm nút Lưu)
+            vm.SaveAllSettings();
 
-        if (cfg.PublishServerUploadUrl != "http://10.0.0.99/upload_ota.php")
-            throw new Exception("PublishServerUrl không được lưu vào settings!");
+            // Kiểm tra trong GlobalAppSettingsService
+            var cfg = settingsService.Settings.Ota;
+            if (cfg.UpdateServerUrl != "http://10.0.0.99:8080/manifest.json")
+                throw new Exception("ServerUrl không được lưu vào settings!");
 
-        if (cfg.PublishApiToken != "MY_SUPER_SECRET_TOKEN")
-            throw new Exception("PublishApiToken không được lưu vào settings!");
+            if (cfg.PublishServerUploadUrl != "http://10.0.0.99/upload_ota.php")
+                throw new Exception("PublishServerUrl không được lưu vào settings!");
 
-        if (cfg.PublishReleaseChannel != "Hotfix")
-            throw new Exception("PublishReleaseChannel không được lưu vào settings!");
+            if (cfg.PublishApiToken != "MY_SUPER_SECRET_TOKEN")
+                throw new Exception("PublishApiToken không được lưu vào settings!");
 
-        Console.WriteLine($"  ✓ Receiver ServerUrl: {cfg.UpdateServerUrl}");
-        Console.WriteLine($"  ✓ Publisher ServerUrl: {cfg.PublishServerUploadUrl}");
-        Console.WriteLine($"  ✓ Publisher Token: {cfg.PublishApiToken}");
-        Console.WriteLine($"  ✓ Publisher Channel: {cfg.PublishReleaseChannel}");
-        Console.WriteLine("  ✓ Test 6 PASSED!");
+            if (cfg.PublishReleaseChannel != "Hotfix")
+                throw new Exception("PublishReleaseChannel không được lưu vào settings!");
+
+            Console.WriteLine($"  ✓ Receiver ServerUrl (Isolated Sandbox): {cfg.UpdateServerUrl}");
+            Console.WriteLine($"  ✓ Publisher ServerUrl (Isolated Sandbox): {cfg.PublishServerUploadUrl}");
+            Console.WriteLine($"  ✓ Publisher Token: {cfg.PublishApiToken}");
+            Console.WriteLine($"  ✓ Publisher Channel: {cfg.PublishReleaseChannel}");
+            Console.WriteLine("  ✓ Test 6 PASSED!");
+        }
+        finally
+        {
+            try { Directory.Delete(tempTestDir, true); } catch { }
+        }
     }
 }

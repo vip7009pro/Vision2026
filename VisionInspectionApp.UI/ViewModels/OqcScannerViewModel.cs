@@ -76,6 +76,17 @@ public partial class OqcScannerViewModel : ObservableObject
         return string.Equals(codeToCompare, CurrentSessionProductCode, StringComparison.OrdinalIgnoreCase);
     }
 
+    /// <summary>
+    /// Sự kiện yêu cầu View đưa focus về TextBox ô quét mã và bôi đen toàn bộ (SelectAll),
+    /// cho phép đầu quét barcode/QR tiếp theo tự động ghi đè mà không cần xóa tay.
+    /// </summary>
+    public event Action? RequestFocusAndSelectInput;
+
+    public void TriggerFocusAndSelectInput()
+    {
+        RequestFocusAndSelectInput?.Invoke();
+    }
+
     [ObservableProperty]
     private bool _isJobLoadedFromManager = false;
 
@@ -366,8 +377,11 @@ public partial class OqcScannerViewModel : ObservableObject
             _lastLoadedJobFilePath = value ?? "";
             CurrentJobTestedCount = 0;
         }
+        OnPropertyChanged(nameof(HasLoadedJob));
         OnPropertyChanged(nameof(ScanButtonText));
     }
+
+
 
     partial void OnUseExternalScannerChanged(bool value)
     {
@@ -412,6 +426,7 @@ public partial class OqcScannerViewModel : ObservableObject
 
     partial void OnIsJobLoadedFromManagerChanged(bool value)
     {
+        OnPropertyChanged(nameof(HasLoadedJob));
         OnPropertyChanged(nameof(ScanButtonText));
     }
 
@@ -464,6 +479,8 @@ public partial class OqcScannerViewModel : ObservableObject
         OnPropertyChanged(nameof(PreviewHeaderTitle));
         OnPropertyChanged(nameof(LiveToggleButtonText));
         OnPropertyChanged(nameof(ScanButtonText));
+
+        TriggerFocusAndSelectInput();
     }
 
     [RelayCommand]
@@ -632,6 +649,8 @@ public partial class OqcScannerViewModel : ObservableObject
         {
             SetWaitingForInspectionState();
         }
+
+        TriggerFocusAndSelectInput();
     }
 
     private void ToggleLiveCamera()
@@ -1184,7 +1203,7 @@ public partial class OqcScannerViewModel : ObservableObject
             OnPropertyChanged(nameof(PreviewHeaderTitle));
             OnPropertyChanged(nameof(LiveToggleButtonText));
 
-            // Auto select code in input field for quick re-scanning (khi không bật Cú đấm thép)
+            // Cập nhật giá trị chuỗi mã quét trên TextBox
             if (SteelPunchMode)
             {
                 ScannedCode = code; // Text scanned được cắt và hiển thị theo quy tắc quy định trong bảng cấu hình OQC, không tự xóa textbox
@@ -1193,6 +1212,9 @@ public partial class OqcScannerViewModel : ObservableObject
             {
                 ScannedCode = "";
             }
+
+            // Tự động bôi đen toàn bộ mã trong TextBox để lần scan tiếp theo tự động ghi đè
+            TriggerFocusAndSelectInput();
         }
         catch (Exception ex)
         {
@@ -1212,6 +1234,7 @@ public partial class OqcScannerViewModel : ObservableObject
         finally
         {
             IsScanning = false;
+            TriggerFocusAndSelectInput();
         }
     }
 
@@ -1356,6 +1379,8 @@ public partial class OqcScannerViewModel : ObservableObject
                 PreviewImage = _lastOqcPreviewImage;
                 UpdatePreviewOverlays();
             }
+
+            TriggerFocusAndSelectInput();
         });
 
         // Log result to Database if enabled
@@ -1613,7 +1638,7 @@ public partial class OqcScannerViewModel : ObservableObject
 
         HasLastNgDetails = false;
         LastNgDetails = "";
-        CurrentMeasurementDetails.Clear();
+        CurrentMeasurementDetails?.Clear();
     }
 
     private void AddHistory(OqcScanHistoryEntry entry)
@@ -1697,22 +1722,25 @@ public partial class OqcScannerViewModel : ObservableObject
 
     /// <summary>
     /// Nút "Đóng Job" trên tab OQC Scanner: đóng Job đang nạp và XÓA các dòng lịch sử
-    /// còn nằm ở trạng thái "Đã nạp Job" (nạp Job nhưng không bao giờ được kiểm tra).
+    /// <summary>
+    /// Đóng Job đang nạp, hủy phiên làm việc, xóa các dòng pending và xóa sạch ô nhập mã.
     /// </summary>
-    [RelayCommand]
-    public void CloseLoadedJob()
+    public void ExecuteCloseLoadedJob(bool askConfirmation = true)
     {
         var pendingEntries = FindPendingJobEntries(ScanHistory);
 
-        var confirmMessage = pendingEntries.Count > 0
-            ? $"Đóng Job đang nạp và xóa {pendingEntries.Count} dòng lịch sử ở trạng thái \"{PendingJobResultText}\"?\n\n" +
-              "Các dòng này sẽ bị xóa khỏi 'Lịch sử quét mã OQC'."
-            : "Đóng Job đang nạp?\n\n" +
-              $"(Hiện không có dòng lịch sử nào ở trạng thái \"{PendingJobResultText}\" để xóa.)";
-
-        if (MessageBox.Show(confirmMessage, "Xác Nhận Đóng Job", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes)
+        if (askConfirmation)
         {
-            return;
+            var confirmMessage = pendingEntries.Count > 0
+                ? $"Đóng Job đang nạp và xóa {pendingEntries.Count} dòng lịch sử ở trạng thái \"{PendingJobResultText}\"?\n\n" +
+                  "Các dòng này sẽ bị xóa khỏi 'Lịch sử quét mã OQC'."
+                : "Đóng Job đang nạp?\n\n" +
+                  $"(Hiện không có dòng lịch sử nào ở trạng thái \"{PendingJobResultText}\" để xóa.)";
+
+            if (MessageBox.Show(confirmMessage, "Xác Nhận Đóng Job", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes)
+            {
+                return;
+            }
         }
 
         if (pendingEntries.Count > 0)
@@ -1736,16 +1764,53 @@ public partial class OqcScannerViewModel : ObservableObject
         _lastScannedRawCode = null;
         CurrentSessionProductCode = "";
 
+        // Xóa sạch ô nhập mã ScannedCode trên TextBox theo yêu cầu
+        ScannedCode = "";
+
         SetWaitingForInspectionState("Sẵn sàng quét mã sản phẩm để bắt đầu đo kiểm.");
 
         StatusMessage = pendingEntries.Count > 0
             ? $"🔒 Đã đóng Job và xóa {pendingEntries.Count} dòng lịch sử \"{PendingJobResultText}\"."
-            : "🔒 Đã đóng Job đang nạp.";
+            : "🔒 Đã đóng Job đang nạp và xóa ô nhập mã.";
         StatusBrush = Brushes.Gray;
 
+        OnPropertyChanged(nameof(HasLoadedJob));
         OnPropertyChanged(nameof(ScanButtonText));
         OnPropertyChanged(nameof(PreviewHeaderTitle));
         OnPropertyChanged(nameof(LiveToggleButtonText));
+
+        TriggerFocusAndSelectInput();
+    }
+
+    /// <summary>
+    /// Nút "Đóng Job" trên tab OQC Scanner: đóng Job đang nạp và XÓA các dòng lịch sử
+    /// còn nằm ở trạng thái "Đã nạp Job" (nạp Job nhưng không bao giờ được kiểm tra).
+    /// </summary>
+    [RelayCommand]
+    public void CloseLoadedJob()
+    {
+        ExecuteCloseLoadedJob(askConfirmation: true);
+    }
+
+    /// <summary>
+    /// Phím tắt ESC: Đóng Job (không popup hỏi xác nhận để công nhân thao tác 1 chạm nhanh gọn)
+    /// và xóa sạch ô nhập mã Textbox (kể cả khi chưa nạp Job nhưng ô nhập đang có ký tự gõ dở).
+    /// </summary>
+    [RelayCommand]
+    public void EscapeCloseJobAndClearText()
+    {
+        if (HasLoadedJob)
+        {
+            ExecuteCloseLoadedJob(askConfirmation: false);
+        }
+        else
+        {
+            ScannedCode = "";
+            StatusMessage = "Sẵn sàng quét mã QR/Barcode sản phẩm.";
+            StatusBrush = Brushes.Gray;
+        }
+
+        TriggerFocusAndSelectInput();
     }
 
     /// <summary>

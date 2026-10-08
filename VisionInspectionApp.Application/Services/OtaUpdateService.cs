@@ -40,7 +40,7 @@ public class OtaUpdateService : IOtaUpdateService
         {
             string targetUrl = !string.IsNullOrWhiteSpace(serverUrl) 
                 ? serverUrl.Trim() 
-                : "http://192.168.1.100:8080/api/updates/version.json";
+                : "http://192.168.1.192/update/version.json";
 
             bool isGitHub = string.Equals(sourceType, "GitHub", StringComparison.OrdinalIgnoreCase) ||
                             targetUrl.Contains("github.com", StringComparison.OrdinalIgnoreCase);

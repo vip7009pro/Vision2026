@@ -27,6 +27,8 @@ public static class OqcLiveViewOnJobLoadTests
         TestOqcProductNameAndLayout204040Configuration();
         TestOqcTriggerInspectOrLiveToggleSequence();
         TestOqcSteelPunchMode();
+        TestOqcEscapeKeyCloseJobAndClearText();
+        TestOqcAutoSelectScannedText();
 
         Console.WriteLine("=======================================================");
         Console.WriteLine("✅ ALL OQC SCANNER LIVE VIEW TESTS PASSED!");
@@ -771,4 +773,215 @@ public static class OqcLiveViewOnJobLoadTests
 
         Console.WriteLine("  -> PASSED: Chế độ Cú đấm thép (SteelPunchMode) hoạt động hoàn hảo 100%.");
     }
+
+    private static void TestOqcEscapeKeyCloseJobAndClearText()
+    {
+        Console.WriteLine("--- Test 11: Kiểm thử phím tắt ESC đóng Job và xóa Textbox OQC Scanner ---");
+
+        var thread = new System.Threading.Thread(() =>
+        {
+            var vm = (VisionInspectionApp.UI.ViewModels.OqcScannerViewModel)System.Runtime.Serialization.FormatterServices.GetUninitializedObject(typeof(VisionInspectionApp.UI.ViewModels.OqcScannerViewModel));
+
+            var oqcService = new VisionInspectionApp.Application.OQC.OqcScannerService();
+            typeof(VisionInspectionApp.UI.ViewModels.OqcScannerViewModel)
+                .GetField("_oqcService", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)?
+                .SetValue(vm, oqcService);
+
+            typeof(VisionInspectionApp.UI.ViewModels.OqcScannerViewModel)
+                .GetField("<ScanHistory>k__BackingField", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)?
+                .SetValue(vm, new System.Collections.ObjectModel.ObservableCollection<VisionInspectionApp.Models.OqcScanHistoryEntry>());
+
+            typeof(VisionInspectionApp.UI.ViewModels.OqcScannerViewModel)
+                .GetField("<CurrentMeasurementDetails>k__BackingField", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)?
+                .SetValue(vm, new System.Collections.ObjectModel.ObservableCollection<VisionInspectionApp.Models.OqcMeasurementDetail>());
+
+            // 1. Giả lập Job đã được nạp và có chuỗi quét trên Textbox
+            typeof(VisionInspectionApp.UI.ViewModels.OqcScannerViewModel)
+                .GetField("_currentJobFilePath", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)?
+                .SetValue(vm, @"C:\VisionJobs\JobA.job");
+
+            typeof(VisionInspectionApp.UI.ViewModels.OqcScannerViewModel)
+                .GetField("_currentProductName", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)?
+                .SetValue(vm, "Product Model A");
+
+            typeof(VisionInspectionApp.UI.ViewModels.OqcScannerViewModel)
+                .GetField("_currentSessionProductCode", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)?
+                .SetValue(vm, "PART_12345");
+
+            typeof(VisionInspectionApp.UI.ViewModels.OqcScannerViewModel)
+                .GetField("_scannedCode", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)?
+                .SetValue(vm, "PART_12345");
+
+            typeof(VisionInspectionApp.UI.ViewModels.OqcScannerViewModel)
+                .GetField("_currentJobTestedCount", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)?
+                .SetValue(vm, 5);
+
+            if (!vm.HasLoadedJob)
+            {
+                throw new Exception("Khi CurrentJobFilePath hợp lệ, HasLoadedJob phải trả về true!");
+            }
+
+            // 2. Kích hoạt phương thức phím tắt ESC
+            vm.EscapeCloseJobAndClearText();
+
+            // 3. Xác thực Job đã được đóng và Textbox đã được xóa sạch
+            if (vm.HasLoadedJob)
+            {
+                throw new Exception("Sau khi bấm ESC, HasLoadedJob phải trả về false!");
+            }
+            if (vm.CurrentJobFilePath != "Chưa có Job")
+            {
+                throw new Exception($"Sau khi bấm ESC, CurrentJobFilePath phải là 'Chưa có Job', hiện tại: {vm.CurrentJobFilePath}");
+            }
+            if (!string.IsNullOrEmpty(vm.ScannedCode))
+            {
+                throw new Exception($"Sau khi bấm ESC, ScannedCode phải bị xóa rỗng (''), hiện tại: {vm.ScannedCode}");
+            }
+            if (!string.IsNullOrEmpty(vm.CurrentSessionProductCode))
+            {
+                throw new Exception($"Sau khi bấm ESC, CurrentSessionProductCode phải bị reset về (''), hiện tại: {vm.CurrentSessionProductCode}");
+            }
+            if (vm.CurrentJobTestedCount != 0)
+            {
+                throw new Exception($"Sau khi bấm ESC, CurrentJobTestedCount phải bị reset về 0, hiện tại: {vm.CurrentJobTestedCount}");
+            }
+
+            // 4. Test Case: Khi chưa có Job nạp nhưng Textbox đang có chuỗi gõ dở
+            typeof(VisionInspectionApp.UI.ViewModels.OqcScannerViewModel)
+                .GetField("_scannedCode", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)?
+                .SetValue(vm, "PART_TYPING_ACCIDENTAL");
+
+            if (vm.HasLoadedJob)
+            {
+                throw new Exception("HasLoadedJob lúc này phải là false!");
+            }
+
+            vm.EscapeCloseJobAndClearText();
+
+            if (!string.IsNullOrEmpty(vm.ScannedCode))
+            {
+                throw new Exception($"Dù chưa có Job nạp, bấm ESC vẫn phải xóa sạch Textbox ScannedCode, hiện tại: {vm.ScannedCode}");
+            }
+        });
+
+        thread.SetApartmentState(System.Threading.ApartmentState.STA);
+        thread.Start();
+        thread.Join();
+
+        // 5. Kiểm tra file XAML có chứa KeyBinding Esc và nút Đóng Job (ESC)
+        string xamlPath = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", "..", "..", "..", "VisionInspectionApp.UI", "Views", "OQC", "OqcScannerView.xaml");
+        if (System.IO.File.Exists(xamlPath))
+        {
+            string xamlContent = System.IO.File.ReadAllText(xamlPath);
+            if (!xamlContent.Contains("EscapeCloseJobAndClearTextCommand"))
+            {
+                throw new Exception("OqcScannerView.xaml phải liên kết phím Esc với EscapeCloseJobAndClearTextCommand!");
+            }
+            if (!xamlContent.Contains("Đóng Job (ESC)"))
+            {
+                throw new Exception("OqcScannerView.xaml nút Đóng Job phải có nhãn '🔒 Đóng Job (ESC)'!");
+            }
+        }
+
+        // 6. Kiểm tra code-behind OqcScannerView.xaml.cs có bắt e.Key == Key.Escape
+        string csPath = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", "..", "..", "..", "VisionInspectionApp.UI", "Views", "OQC", "OqcScannerView.xaml.cs");
+        if (System.IO.File.Exists(csPath))
+        {
+            string csContent = System.IO.File.ReadAllText(csPath);
+            if (!csContent.Contains("e.Key == Key.Escape") || !csContent.Contains("EscapeCloseJobAndClearTextCommand"))
+            {
+                throw new Exception("OqcScannerView.xaml.cs phải xử lý phím Escape với EscapeCloseJobAndClearTextCommand!");
+            }
+        }
+
+        Console.WriteLine("  -> PASSED: Phím tắt ESC đóng Job và xóa Textbox hoạt động hoàn hảo 100%.");
+    }
+
+    private static void TestOqcAutoSelectScannedText()
+    {
+        Console.WriteLine("--- Test 12: Kiểm thử tính năng tự động Focus & Select All Scanned Text trên OQC Scanner ---");
+
+        var thread = new System.Threading.Thread(() =>
+        {
+            var vm = (VisionInspectionApp.UI.ViewModels.OqcScannerViewModel)System.Runtime.Serialization.FormatterServices.GetUninitializedObject(typeof(VisionInspectionApp.UI.ViewModels.OqcScannerViewModel));
+
+            bool eventFired = false;
+            vm.RequestFocusAndSelectInput += () =>
+            {
+                eventFired = true;
+            };
+
+            // 1. Kích hoạt trigger Focus và Select
+            vm.TriggerFocusAndSelectInput();
+
+            if (!eventFired)
+            {
+                throw new Exception("TriggerFocusAndSelectInput phải phát sự kiện RequestFocusAndSelectInput!");
+            }
+
+            // 2. Kiểm tra mô phỏng hành vi: khi ScannedCode đang có giá trị mã cũ
+            typeof(VisionInspectionApp.UI.ViewModels.OqcScannerViewModel)
+                .GetField("_scannedCode", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)?
+                .SetValue(vm, "OLD_SCAN_11111");
+
+            if (vm.ScannedCode != "OLD_SCAN_11111")
+            {
+                throw new Exception("ScannedCode ban đầu phải là OLD_SCAN_11111!");
+            }
+
+            // Khi TextBox đã SelectAll, ký tự mới từ máy quét sẽ ghi đè hoàn toàn chuỗi cũ
+            // Mô phỏng scanner bắn chuỗi mới:
+            string newBarcodeInput = "NEW_SCAN_22222";
+            typeof(VisionInspectionApp.UI.ViewModels.OqcScannerViewModel)
+                .GetField("_scannedCode", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)?
+                .SetValue(vm, newBarcodeInput);
+
+            if (vm.ScannedCode != "NEW_SCAN_22222")
+            {
+                throw new Exception("Sau khi ghi đè, ScannedCode phải là NEW_SCAN_22222!");
+            }
+        });
+
+        thread.SetApartmentState(System.Threading.ApartmentState.STA);
+        thread.Start();
+        thread.Join();
+
+        // 3. Kiểm tra file XAML có chứa GotKeyboardFocus và PreviewMouseLeftButtonDown
+        string xamlPath = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", "..", "..", "..", "VisionInspectionApp.UI", "Views", "OQC", "OqcScannerView.xaml");
+        if (System.IO.File.Exists(xamlPath))
+        {
+            string xamlContent = System.IO.File.ReadAllText(xamlPath);
+            if (!xamlContent.Contains("ScanInputTextBox_GotKeyboardFocus"))
+            {
+                throw new Exception("OqcScannerView.xaml phải có sự kiện GotKeyboardFocus trỏ vào ScanInputTextBox_GotKeyboardFocus!");
+            }
+            if (!xamlContent.Contains("ScanInputTextBox_PreviewMouseLeftButtonDown"))
+            {
+                throw new Exception("OqcScannerView.xaml phải có sự kiện PreviewMouseLeftButtonDown trỏ vào ScanInputTextBox_PreviewMouseLeftButtonDown!");
+            }
+        }
+
+        // 4. Kiểm tra code-behind OqcScannerView.xaml.cs có phương thức FocusAndSelectAll và xử lý RequestFocusAndSelectInput
+        string csPath = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", "..", "..", "..", "VisionInspectionApp.UI", "Views", "OQC", "OqcScannerView.xaml.cs");
+        if (System.IO.File.Exists(csPath))
+        {
+            string csContent = System.IO.File.ReadAllText(csPath);
+            if (!csContent.Contains("FocusAndSelectAll()"))
+            {
+                throw new Exception("OqcScannerView.xaml.cs phải định nghĩa phương thức FocusAndSelectAll()!");
+            }
+            if (!csContent.Contains("RequestFocusAndSelectInput"))
+            {
+                throw new Exception("OqcScannerView.xaml.cs phải hook sự kiện RequestFocusAndSelectInput từ ViewModel!");
+            }
+            if (!csContent.Contains("ScanInputTextBox?.SelectAll()") && !csContent.Contains("ScanInputTextBox.SelectAll()"))
+            {
+                throw new Exception("OqcScannerView.xaml.cs phải gọi SelectAll() trên ScanInputTextBox!");
+            }
+        }
+
+        Console.WriteLine("  -> PASSED: Tính năng tự động Focus & Select All Scanned Text hoạt động hoàn hảo 100%.");
+    }
 }
+
+

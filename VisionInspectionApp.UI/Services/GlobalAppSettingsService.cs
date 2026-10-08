@@ -8,13 +8,34 @@ namespace VisionInspectionApp.UI.Services;
 public sealed class GlobalAppSettingsService
 {
     private readonly string _settingsFilePath;
+    private readonly bool _isIsolated;
+    private readonly bool _disableBackupSync;
 
     public event EventHandler? SettingsChanged;
 
-    public GlobalAppSettingsService()
+    public GlobalAppSettingsService() : this(null, false)
     {
-        AppStoragePaths.EnsureStorageStructureAndMigrate();
-        _settingsFilePath = AppStoragePaths.GlobalSettingsFilePath;
+    }
+
+    public GlobalAppSettingsService(string? customSettingsFilePath, bool disableBackupSync = false)
+    {
+        _isIsolated = !string.IsNullOrWhiteSpace(customSettingsFilePath);
+        _disableBackupSync = disableBackupSync || _isIsolated;
+
+        if (_isIsolated)
+        {
+            _settingsFilePath = customSettingsFilePath!;
+            string? dir = Path.GetDirectoryName(_settingsFilePath);
+            if (!string.IsNullOrWhiteSpace(dir) && !Directory.Exists(dir))
+            {
+                Directory.CreateDirectory(dir);
+            }
+        }
+        else
+        {
+            AppStoragePaths.EnsureStorageStructureAndMigrate();
+            _settingsFilePath = AppStoragePaths.GlobalSettingsFilePath;
+        }
 
         Settings = Load();
     }
@@ -44,7 +65,7 @@ public sealed class GlobalAppSettingsService
             {
                 loadPath = _settingsFilePath;
             }
-            else
+            else if (!_isIsolated)
             {
                 // Fallback 1: Thư mục cũ VisionInspectionApp
                 string legacyPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "VisionInspectionApp", "global_settings.json");
@@ -95,8 +116,18 @@ public sealed class GlobalAppSettingsService
                 result.Lighting.Patterns = VisionInspectionApp.Models.LightingPatternModel.CreateDefaultPatterns();
             }
 
+            // Đảm bảo cấu hình OTA không bị rỗng hoặc thiếu trường
+            if (result.Ota == null)
+            {
+                result.Ota = new OtaSettings();
+            }
+            else
+            {
+                result.Ota.SanitizeOrFallback();
+            }
+
             // Nếu load từ nguồn fallback, lưu ngay vào đường dẫn chuẩn
-            if (loadPath != _settingsFilePath)
+            if (loadPath != _settingsFilePath && !_isIsolated)
             {
                 Save(result);
             }
@@ -105,7 +136,9 @@ public sealed class GlobalAppSettingsService
         }
         catch
         {
-            return new GlobalAppSettings();
+            var fallback = new GlobalAppSettings();
+            fallback.Ota?.SanitizeOrFallback();
+            return fallback;
         }
     }
 
@@ -114,10 +147,23 @@ public sealed class GlobalAppSettingsService
         try
         {
             var target = settings ?? Settings;
+
+            // Safe Guard: Nếu không phải Isolated mode (tức đang lưu cho production hệ thống thật),
+            // bảo vệ không bao giờ cho phép lưu dummy test URL vào production
+            if (!_isIsolated && target.Ota != null)
+            {
+                target.Ota.SanitizeProductionUrls();
+            }
+
             var json = JsonSerializer.Serialize(target, new JsonSerializerOptions { WriteIndented = true });
             
-            // 1. Lưu vào thư mục chuẩn %AppData%\Vision2026
+            // 1. Lưu vào đường dẫn cài đặt
             File.WriteAllText(_settingsFilePath, json);
+
+            if (_isIsolated || _disableBackupSync)
+            {
+                return;
+            }
 
             // 2. Đồng bộ bản sao sang thư mục ứng dụng (configs\system) để phục vụ deploy/release
             AppStoragePaths.SyncConfigToAppBackup("global_settings.json", json);

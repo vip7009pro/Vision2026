@@ -27,13 +27,17 @@ public sealed class GlobalAppSettings
 
 public sealed class OtaSettings
 {
+    public const string DefaultUpdateServerUrl = "http://192.168.1.192/update/version.json";
+    public const string DefaultPublishServerUploadUrl = "http://192.168.1.192/ota_server.php";
+    public const string DefaultPublishServerStorageFolder = "update";
+
     public bool AutoCheckOnStartup { get; set; } = true;
     /// <summary>
     /// Nguồn kiểm tra: "Auto" (tự động nhận biết theo URL), "CustomManifest" (Local/HTTP Server), hoặc "GitHub" (GitHub Releases API)
     /// </summary>
     public string UpdateSourceType { get; set; } = "Auto";
     /// <summary>Đường dẫn API máy chủ nội bộ hoặc URL tệp version.json</summary>
-    public string UpdateServerUrl { get; set; } = "http://192.168.1.100:8080/api/updates/version.json";
+    public string UpdateServerUrl { get; set; } = DefaultUpdateServerUrl;
     /// <summary>Repository GitHub dạng "owner/repo" (ví dụ "cmsvina/VisionInspectionApp")</summary>
     public string GitHubRepo { get; set; } = "";
     /// <summary>Kênh cập nhật: "Stable" hoặc "Beta"</summary>
@@ -42,13 +46,66 @@ public sealed class OtaSettings
     public string IgnoredVersion { get; set; } = "";
 
     // Cấu hình đóng gói và phát hành OTA
-    public string PublishServerUploadUrl { get; set; } = "http://192.168.1.100/ota_server.php";
-    public string PublishServerStorageFolder { get; set; } = "uploads/ota_packages";
+    public string PublishServerUploadUrl { get; set; } = DefaultPublishServerUploadUrl;
+    public string PublishServerStorageFolder { get; set; } = DefaultPublishServerStorageFolder;
     public string PublishApiToken { get; set; } = "";
     public string PublishSourceDirectory { get; set; } = "";
     public bool PublishAutoUpdateCsproj { get; set; } = true;
     public bool PublishAutoBuildProject { get; set; } = true;
     public string PublishReleaseChannel { get; set; } = "Stable";
+
+    /// <summary>
+    /// Khôi phục toàn bộ đường dẫn OTA về cấu hình tiêu chuẩn của nhà xưởng (192.168.1.192)
+    /// </summary>
+    public void ResetToFactoryDefaults()
+    {
+        UpdateServerUrl = DefaultUpdateServerUrl;
+        PublishServerUploadUrl = DefaultPublishServerUploadUrl;
+        PublishServerStorageFolder = DefaultPublishServerStorageFolder;
+    }
+
+    /// <summary>
+    /// Bảo vệ cấu hình thực tế khỏi việc vô tình lưu dính URL giả lập hoặc giá trị rỗng
+    /// </summary>
+    public void SanitizeProductionUrls()
+    {
+        if (string.IsNullOrWhiteSpace(UpdateServerUrl) ||
+            UpdateServerUrl.Contains("10.0.0.99", StringComparison.OrdinalIgnoreCase) ||
+            UpdateServerUrl.Contains("192.168.1.200:9090", StringComparison.OrdinalIgnoreCase) ||
+            UpdateServerUrl.Contains("192.168.1.100:8080", StringComparison.OrdinalIgnoreCase))
+        {
+            UpdateServerUrl = DefaultUpdateServerUrl;
+        }
+
+        if (string.IsNullOrWhiteSpace(PublishServerUploadUrl) ||
+            PublishServerUploadUrl.Contains("10.0.0.99", StringComparison.OrdinalIgnoreCase) ||
+            PublishServerUploadUrl.Contains("192.168.1.200/publish", StringComparison.OrdinalIgnoreCase))
+        {
+            PublishServerUploadUrl = DefaultPublishServerUploadUrl;
+        }
+
+        if (string.IsNullOrWhiteSpace(PublishServerStorageFolder) ||
+            PublishServerStorageFolder.Equals("ota_storage_pkg", StringComparison.OrdinalIgnoreCase) ||
+            PublishServerStorageFolder.Equals("releases/v2", StringComparison.OrdinalIgnoreCase))
+        {
+            PublishServerStorageFolder = DefaultPublishServerStorageFolder;
+        }
+    }
+
+    /// <summary>
+    /// Đảm bảo các giá trị không bị null hoặc rỗng khi load từ file cấu hình cũ
+    /// </summary>
+    public void SanitizeOrFallback()
+    {
+        if (string.IsNullOrWhiteSpace(UpdateServerUrl))
+            UpdateServerUrl = DefaultUpdateServerUrl;
+
+        if (string.IsNullOrWhiteSpace(PublishServerUploadUrl))
+            PublishServerUploadUrl = DefaultPublishServerUploadUrl;
+
+        if (string.IsNullOrWhiteSpace(PublishServerStorageFolder))
+            PublishServerStorageFolder = DefaultPublishServerStorageFolder;
+    }
 }
 
 public sealed class LightingServerConfig

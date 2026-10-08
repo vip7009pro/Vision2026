@@ -1,5 +1,26 @@
 # ROADMAP.md — Lộ trình phát triển & Trạng thái nhiệm vụ
 
+- [x] Task 396: Khắc Phục Lỗi Mất Link Server OTA Khi Build App & Chạy Test:
+  - [x] Rà soát và tìm ra nguyên nhân gốc: Bài test `ReleaseConfigPersistenceTests.cs` (Test 4 & 6) và `ManualInspectionTest.cs` không được cô lập, ghi đè trực tiếp `%AppData%\Vision2026\global_settings.json` thành IP giả lập `10.0.0.99` và `192.168.1.200`; sau đó target `SyncReleaseConfigurations` của MSBuild copy file bị hỏng này vào output build.
+  - [x] Cô lập môi trường lưu trữ Unit Test (Isolated Sandbox): Nâng cấp `GlobalAppSettingsService` với constructor overload `customSettingsFilePath` kèm `disableBackupSync: true`; chuyển toàn bộ test sang thư mục tạm độc lập, triệt tiêu 100% việc can thiệp vào cấu hình máy thật.
+  - [x] Bổ sung Safe Guard bảo vệ cấu hình sản xuất: Tự động lọc bỏ các URL dummy từ test và phục hồi về chuẩn xưởng nếu vô tình lưu trong môi trường production.
+  - [x] Chuẩn hóa dải mạng nội bộ xưởng mặc định: Cập nhật `DefaultUpdateServerUrl = "http://192.168.1.192/update/version.json"`, `DefaultPublishServerUploadUrl = "http://192.168.1.192/ota_server.php"`, `DefaultPublishServerStorageFolder = "update"`.
+  - [x] Cập nhật UI `OtaUpdateDialog.xaml`: Thêm nút "↺ Khôi Phục Mặc Định (192.168.1.192)" trên cả 2 Tab (Kiểm tra cập nhật & Đóng gói phát hành); cập nhật ToolTip chỉ dẫn.
+  - [x] Kiểm thử tự động & bảo toàn cấu hình: 6/6 bài test độ bền vững vượt qua 100%, solution build 0 lỗi, file cấu hình AppData bảo toàn 100%.
+
+- [x] Task 395: Tự Động Focus & Select All Scanned Text Trên Tab OQC Scanner (Ghi Đè Tự Động):
+  - [x] Cơ chế ghi đè tự động: Toàn bộ chuỗi văn bản trong ô TextBox `ScanInputTextBox` luôn ở trạng thái được bôi đen (`SelectAll`) sau khi nạp Job, kiểm tra mẫu (Space / Ctrl+F8), chuyển Live View, hoặc click chuột. Ký tự đầu tiên từ đầu đọc quét mã tiếp theo sẽ lập tức ghi đè toàn bộ chuỗi cũ mà không bị nối chuỗi.
+  - [x] Triệt tiêu thao tác bàn phím: Công nhân không cần nhấn phím Backspace, Delete hay ESC để xóa ký tự cũ; hoàn toàn chỉ thao tác quét mã và bấm nút/bàn đạp kiểm tra.
+  - [x] Kiến trúc Event & UI Handlers: Bổ sung `RequestFocusAndSelectInput` trong `OqcScannerViewModel.cs`, hook trong `OqcScannerView.xaml.cs`, kèm các handler `GotKeyboardFocus` và `PreviewMouseLeftButtonDown` trong `OqcScannerView.xaml`.
+  - [x] Kiểm thử tự động: Bổ sung Test 12 trong [OqcLiveViewOnJobLoadTests.cs](file:///g:/NODEJS/Vision2026/TestExtractApp/OqcLiveViewOnJobLoadTests.cs), toàn bộ 12/12 tests PASSED 100%.
+
+- [x] Task 394: Thêm Phím Tắt ESC Để Đóng Job & Xóa TextBox Trên Tab OQC Scanner:
+  - [x] Phím tắt ESC 1 chạm dứt khoát: Nhấn phím `ESC` tại bất kỳ đâu (TextBox, Canvas, Nút...) lập tức giải phóng Job đang nạp, hủy phiên làm việc, xóa các dòng lịch sử pending và xóa sạch ô nhập mã (`ScannedCode = ""`), không pop-up modal cản trở thao tác.
+  - [x] Xử lý khi chưa nạp Job: Bấm ESC vẫn xóa sạch chuỗi mã trong ô nhập TextBox và phục hồi trạng thái sẵn sàng.
+  - [x] Cập nhật nút UI: Đổi nhãn thành `🔒 Đóng Job (ESC)`, mở rộng hiển thị theo `HasLoadedJob` (hiển thị bất kỳ khi nào có Job nạp thay vì chỉ khi mở từ Manager). Khi click chuột bằng nút, sau khi xác nhận cũng xóa sạch ô TextBox.
+  - [x] Bắt phím toàn diện: Thêm `KeyBinding Key="Esc"` ở `UserControl`, `ScanInputTextBox` và sự kiện `PreviewKeyDown` trong `OqcScannerView.xaml.cs`.
+  - [x] Kiểm thử tự động: Bổ sung Test 11 trong [OqcLiveViewOnJobLoadTests.cs](file:///g:/NODEJS/Vision2026/TestExtractApp/OqcLiveViewOnJobLoadTests.cs), toàn bộ 11/11 tests PASSED 100%.
+
 - [x] Task 393: Chuẩn Hóa Chu Trình 4 Bước Chế Độ "Cú đấm thép" Trên Tab OQC Scanner (Mặc Định Checked):
   - [x] Bước 1 (Mở Job & Tạo Phiên): Khi chưa có Job mở, scan label mở Job tương ứng trong DB, tạo phiên mới (`CurrentJobTestedCount = 0`). Text scanned được cắt và hiển thị theo quy tắc cấu hình OQC, không tự xóa textbox, giữ nguyên giá trị.
   - [x] Bước 2 & 3 (Kiểm tra mẫu & lặp phiên): Công nhân cho mẫu vào gá, bấm Space / Ctrl+F8 luân phiên kiểm tra mẫu và chuyển về Live View; kết quả hiển thị và lưu lịch sử; textbox giữ nguyên mã scan không bị xóa; phím Enter từ scanner (khi cùng mã phiên) bị triệt tiêu hoàn toàn tránh nạp lại/xóa text.

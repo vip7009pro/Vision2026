@@ -32,10 +32,10 @@ public partial class OtaUpdateViewModel
     private string _publishReleaseNotes = "Bản cập nhật tính năng mới và tối ưu hóa hệ thống.";
 
     [ObservableProperty]
-    private string _publishServerUrl = "http://192.168.1.100/ota_server.php";
+    private string _publishServerUrl = "http://192.168.1.192/ota_server.php";
 
     [ObservableProperty]
-    private string _publishServerStorageFolder = "uploads/ota_packages";
+    private string _publishServerStorageFolder = "update";
 
     [ObservableProperty]
     private string _publishApiToken = "";

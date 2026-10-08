@@ -22,11 +22,11 @@ public sealed class OtaPublishConfig
     /// <summary>Cờ bắt buộc cập nhật</summary>
     public bool IsMandatory { get; set; } = false;
 
-    /// <summary>Địa chỉ URL script PHP tiếp nhận upload trên máy chủ (ví dụ: http://192.168.1.100/ota_server.php)</summary>
-    public string ServerUploadUrl { get; set; } = "http://192.168.1.100/ota_server.php";
+    /// <summary>Địa chỉ URL script PHP tiếp nhận upload trên máy chủ (ví dụ: http://192.168.1.192/ota_server.php)</summary>
+    public string ServerUploadUrl { get; set; } = "http://192.168.1.192/ota_server.php";
 
-    /// <summary>Thư mục lưu trữ tệp zip trên server (ví dụ: uploads/ota_packages hoặc updates/v1)</summary>
-    public string ServerStorageFolder { get; set; } = "uploads/ota_packages";
+    /// <summary>Thư mục lưu trữ tệp zip trên server (ví dụ: update hoặc uploads/ota_packages)</summary>
+    public string ServerStorageFolder { get; set; } = "update";
 
     /// <summary>Khóa bí mật API Token (nếu máy chủ yêu cầu xác thực)</summary>
     public string ApiToken { get; set; } = "";
