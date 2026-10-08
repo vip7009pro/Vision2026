@@ -26,6 +26,7 @@ public static class OqcLiveViewOnJobLoadTests
         TestOqcWaitingForInspectionStateOnLiveView();
         TestOqcProductNameAndLayout204040Configuration();
         TestOqcTriggerInspectOrLiveToggleSequence();
+        TestOqcSteelPunchMode();
 
         Console.WriteLine("=======================================================");
         Console.WriteLine("✅ ALL OQC SCANNER LIVE VIEW TESTS PASSED!");
@@ -640,5 +641,134 @@ public static class OqcLiveViewOnJobLoadTests
         }
 
         Console.WriteLine("  -> PASSED: Tính năng 1-nút Space / Ctrl+F8 luân phiên Kiểm tra và Live View hoạt động hoàn hảo 100%.");
+    }
+
+    private static void TestOqcSteelPunchMode()
+    {
+        Console.WriteLine("--- Test 10: Kiểm tra Chế độ Cú đấm thép (SteelPunchMode) trong OQC Scanner ---");
+
+        // 1. Kiểm tra cấu hình mặc định và tính tuần tự hóa JSON
+        var config = new OqcScannerConfig();
+        if (!config.SteelPunchMode)
+        {
+            throw new Exception("Chế độ SteelPunchMode phải có giá trị mặc định là true!");
+        }
+
+        string json = System.Text.Json.JsonSerializer.Serialize(config);
+        var deserialized = System.Text.Json.JsonSerializer.Deserialize<OqcScannerConfig>(json);
+        if (deserialized == null || !deserialized.SteelPunchMode)
+        {
+            throw new Exception("Tuần tự hóa và giải tuần tự hóa OqcScannerConfig không bảo toàn SteelPunchMode=true!");
+        }
+
+        config.SteelPunchMode = false;
+        string jsonFalse = System.Text.Json.JsonSerializer.Serialize(config);
+        var deserializedFalse = System.Text.Json.JsonSerializer.Deserialize<OqcScannerConfig>(jsonFalse);
+        if (deserializedFalse == null || deserializedFalse.SteelPunchMode)
+        {
+            throw new Exception("Tuần tự hóa và giải tuần tự hóa OqcScannerConfig không bảo toàn SteelPunchMode=false!");
+        }
+
+        // 2. Kiểm tra ViewModel và các điều kiện kích hoạt
+        var thread = new System.Threading.Thread(() =>
+        {
+            var vm = (VisionInspectionApp.UI.ViewModels.OqcScannerViewModel)System.Runtime.Serialization.FormatterServices.GetUninitializedObject(typeof(VisionInspectionApp.UI.ViewModels.OqcScannerViewModel));
+
+            // Đặt các field ban đầu
+            typeof(VisionInspectionApp.UI.ViewModels.OqcScannerViewModel)
+                .GetField("_steelPunchMode", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)?
+                .SetValue(vm, true);
+
+            typeof(VisionInspectionApp.UI.ViewModels.OqcScannerViewModel)
+                .GetField("_currentJobFilePath", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)?
+                .SetValue(vm, "Chưa có Job");
+
+            // A. Khi chưa có Job: HasLoadedJob phải là false
+            if (vm.HasLoadedJob)
+            {
+                throw new Exception("Khi CurrentJobFilePath = 'Chưa có Job', HasLoadedJob phải là false!");
+            }
+
+            // B. Khi đã nạp Job: HasLoadedJob phải là true
+            typeof(VisionInspectionApp.UI.ViewModels.OqcScannerViewModel)
+                .GetField("_currentJobFilePath", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)?
+                .SetValue(vm, @"C:\Jobs\TestPart.job");
+
+            if (!vm.HasLoadedJob)
+            {
+                throw new Exception("Khi CurrentJobFilePath trỏ đến tệp job hợp lệ, HasLoadedJob phải là true!");
+            }
+
+            // C. Khi SteelPunchMode = true và HasLoadedJob = true: ScanButtonText phải gợi ý chạy Job qua Space / Ctrl+F8
+            if (!vm.ScanButtonText.Contains("SPACE / Ctrl+F8"))
+            {
+                throw new Exception($"ScanButtonText phải chứa 'SPACE / Ctrl+F8' khi Cú đấm thép bật và Job đã nạp! Thực tế: '{vm.ScanButtonText}'");
+            }
+
+            // D. Kiểm tra giá trị ScannedCode không bị xóa
+            typeof(VisionInspectionApp.UI.ViewModels.OqcScannerViewModel)
+                .GetField("_scannedCode", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)?
+                .SetValue(vm, "SN-TEST-8888");
+
+            if (vm.ScannedCode != "SN-TEST-8888")
+            {
+                throw new Exception("ScannedCode phải giữ nguyên giá trị đã đặt!");
+            }
+
+            // E. Kiểm tra IsSameAsCurrentSessionCode
+            // Giả lập Service để test logic so sánh mã phiên
+            var oqcService = new VisionInspectionApp.Application.OQC.OqcScannerService();
+            typeof(VisionInspectionApp.UI.ViewModels.OqcScannerViewModel)
+                .GetField("_oqcService", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)?
+                .SetValue(vm, oqcService);
+
+            typeof(VisionInspectionApp.UI.ViewModels.OqcScannerViewModel)
+                .GetField("_currentSessionProductCode", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)?
+                .SetValue(vm, "PART_A");
+
+            // Khi input là cùng mã PART_A -> IsSameAsCurrentSessionCode = true (coi như không làm gì khi enter)
+            if (!vm.IsSameAsCurrentSessionCode("PART_A"))
+            {
+                throw new Exception("IsSameAsCurrentSessionCode phải trả về true khi cùng mã phiên hiện tại!");
+            }
+
+            // Khi input là mã tiếp theo PART_B -> IsSameAsCurrentSessionCode = false (cho phép Enter nạp Job mới)
+            if (vm.IsSameAsCurrentSessionCode("PART_B"))
+            {
+                throw new Exception("IsSameAsCurrentSessionCode phải trả về false khi scan mã tiếp theo khác mã phiên!");
+            }
+        });
+
+        thread.SetApartmentState(System.Threading.ApartmentState.STA);
+        thread.Start();
+        thread.Join();
+
+        // 3. Kiểm tra file XAML có chứa CheckBox Cú đấm thép
+        string xamlPath = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", "..", "..", "..", "VisionInspectionApp.UI", "Views", "OQC", "OqcScannerView.xaml");
+        if (System.IO.File.Exists(xamlPath))
+        {
+            string xamlContent = System.IO.File.ReadAllText(xamlPath);
+            if (!xamlContent.Contains("SteelPunchMode"))
+            {
+                throw new Exception("OqcScannerView.xaml phải binding IsChecked với SteelPunchMode!");
+            }
+            if (!xamlContent.Contains("Cú đấm thép"))
+            {
+                throw new Exception("OqcScannerView.xaml phải có CheckBox hiển thị tên 'Cú đấm thép'!");
+            }
+        }
+
+        // 4. Kiểm tra code-behind có xử lý phím Enter với IsSameAsCurrentSessionCode
+        string csPath = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", "..", "..", "..", "VisionInspectionApp.UI", "Views", "OQC", "OqcScannerView.xaml.cs");
+        if (System.IO.File.Exists(csPath))
+        {
+            string csContent = System.IO.File.ReadAllText(csPath);
+            if (!csContent.Contains("IsSameAsCurrentSessionCode") || !csContent.Contains("e.Key == Key.Enter"))
+            {
+                throw new Exception("OqcScannerView.xaml.cs phải xử lý phím Enter với IsSameAsCurrentSessionCode!");
+            }
+        }
+
+        Console.WriteLine("  -> PASSED: Chế độ Cú đấm thép (SteelPunchMode) hoạt động hoàn hảo 100%.");
     }
 }

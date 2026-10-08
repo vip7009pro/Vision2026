@@ -146,6 +146,12 @@
                                       FontWeight="SemiBold" FontSize="11.5"
                                       Margin="0,0,10,0" VerticalAlignment="Center" />
 
+                            <CheckBox Content="🥊 Cú đấm thép"
+                                      IsChecked="{Binding SteelPunchMode, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                      ToolTip="Chế độ Cú đấm thép (mặc định bật): Với mỗi phiên mở Job, giá trị scan trên ô nhập không bị xóa và phím Enter từ scanner không có hiệu lực. Bấm Space / Ctrl+F8 để kiểm tra mẫu / về Live View mà không xóa scanned text."
+                                      FontWeight="SemiBold" FontSize="11.5"
+                                      Margin="0,0,10,0" VerticalAlignment="Center" />
+
                             <CheckBox Content="🔫 Đầu Scanner"
                                       IsChecked="{Binding UseExternalScanner, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                                       ToolTip="Khi bật: Dùng máy quét ngoài nhập mã. Lúc này phím SPACE dùng để RUN JOB."

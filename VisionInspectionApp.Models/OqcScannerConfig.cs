@@ -75,6 +75,7 @@ public class OqcScannerConfig
     public bool UseExternalScanner { get; set; } = false;
     public bool AutoRunJob { get; set; } = true;
     public bool OnlyOriginMode { get; set; } = true;
+    public bool SteelPunchMode { get; set; } = true;
 }
 
 public class OqcMeasurementDetail

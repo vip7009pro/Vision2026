@@ -1,5 +1,11 @@
 # ROADMAP.md — Lộ trình phát triển & Trạng thái nhiệm vụ
 
+- [x] Task 393: Chuẩn Hóa Chu Trình 4 Bước Chế Độ "Cú đấm thép" Trên Tab OQC Scanner (Mặc Định Checked):
+  - [x] Bước 1 (Mở Job & Tạo Phiên): Khi chưa có Job mở, scan label mở Job tương ứng trong DB, tạo phiên mới (`CurrentJobTestedCount = 0`). Text scanned được cắt và hiển thị theo quy tắc cấu hình OQC, không tự xóa textbox, giữ nguyên giá trị.
+  - [x] Bước 2 & 3 (Kiểm tra mẫu & lặp phiên): Công nhân cho mẫu vào gá, bấm Space / Ctrl+F8 luân phiên kiểm tra mẫu và chuyển về Live View; kết quả hiển thị và lưu lịch sử; textbox giữ nguyên mã scan không bị xóa; phím Enter từ scanner (khi cùng mã phiên) bị triệt tiêu hoàn toàn tránh nạp lại/xóa text.
+  - [x] Bước 4 (Scan mã tiếp theo & chu trình lặp lại): Hết mẫu của phiên, công nhân scan mã tiếp theo (mã khác), hệ thống tự động cắt chuỗi hiển thị lên textbox và load Job tiếp tương ứng, chu trình lặp lại trơn tru.
+  - [x] Kiểm thử tự động: Bổ sung Test 10 trong [OqcLiveViewOnJobLoadTests.cs](file:///g:/NODEJS/Vision2026/TestExtractApp/OqcLiveViewOnJobLoadTests.cs), toàn bộ test suite PASSED 100%.
+
 - [x] Task 392: Chuẩn Hóa Chu Trình Dịch Bit Hàng Đợi FX5U — Dịch Bit Theo Xung Kết Quả Vision Done (`M103`) Thay Vì Sensor `X2`:
   - [x] Làm rõ bản chất timing: Cảm biến `X2` chỉ kích chụp Camera; dịch bit ngay tại `X2` làm dịch mảng trước khi có kết quả và gây kẹt bit khi test phôi đơn lẻ.
   - [x] Chuẩn hóa kiến trúc Vision-Driven Shift: PLC nhận xung `M103` (Done) $\rightarrow$ `LDP M103` dịch mảng `BSFLP M200 K20` $\rightarrow$ `LD M103 AND M105` kích `SET M200` nếu là hàng NG (OK thì giữ 0).

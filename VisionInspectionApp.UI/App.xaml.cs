@@ -417,6 +417,7 @@ public partial class App : System.Windows.Application
                     {
                         oqcService.Config.AutoRunJob = oqcVm.AutoRunJob;
                         oqcService.Config.UseExternalScanner = oqcVm.UseExternalScanner;
+                        oqcService.Config.SteelPunchMode = oqcVm.SteelPunchMode;
                         oqcService.SaveConfig(oqcService.Config);
                     }
                 }

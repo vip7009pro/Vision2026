@@ -61,5 +61,19 @@ public partial class OqcScannerView : UserControl
                 e.Handled = true;
             }
         }
+        else if (e.Key == Key.Enter)
+        {
+            // Chế độ Cú đấm thép: Khi Job đã được mở trong phiên này:
+            // - Nếu Enter với cùng mã phiên hiện tại: vô hiệu hóa hoàn toàn phím Enter (coi như không làm gì khi Enter)
+            // - Nếu scan mã tiếp theo (mã khác): cho phép sự kiện Enter thực thi để nạp Job tiếp tương ứng và tạo phiên mới!
+            if (vm.SteelPunchMode && vm.HasLoadedJob)
+            {
+                string currentInput = ScanInputTextBox.Text?.Trim() ?? "";
+                if (vm.IsSameAsCurrentSessionCode(currentInput))
+                {
+                    e.Handled = true;
+                }
+            }
+        }
     }
 }

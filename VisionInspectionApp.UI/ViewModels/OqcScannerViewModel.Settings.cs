@@ -349,6 +349,7 @@ public partial class OqcScannerViewModel
             UseExternalScanner = cfg.UseExternalScanner;
             AutoRunJob = cfg.AutoRunJob;
             OnlyOriginMode = cfg.OnlyOriginMode;
+            SteelPunchMode = cfg.SteelPunchMode;
         }
         finally
         {
@@ -438,7 +439,8 @@ public partial class OqcScannerViewModel
             ScanTimeoutMs = ScanTimeoutMs > 0 ? ScanTimeoutMs : 3000,
             UseExternalScanner = UseExternalScanner,
             AutoRunJob = AutoRunJob,
-            OnlyOriginMode = OnlyOriginMode
+            OnlyOriginMode = OnlyOriginMode,
+            SteelPunchMode = SteelPunchMode
         };
 
         _oqcService.SaveConfig(cfg);
@@ -521,7 +523,8 @@ public partial class OqcScannerViewModel
                     ScanTimeoutMs = ScanTimeoutMs > 0 ? ScanTimeoutMs : 3000,
                     UseExternalScanner = UseExternalScanner,
                     AutoRunJob = AutoRunJob,
-                    OnlyOriginMode = OnlyOriginMode
+                    OnlyOriginMode = OnlyOriginMode,
+                    SteelPunchMode = SteelPunchMode
                 };
 
                 if (_oqcService.ExportConfigToFile(sfd.FileName, cfg))

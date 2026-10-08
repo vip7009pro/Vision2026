@@ -9,21 +9,17 @@ Hỗ trợ Camera GigE/USB3/USB/RTSP, nạp ảnh tệp/thư mục, bản vẽ k
 - **Biên dịch**: 0 Errors toàn solution (`VisionInspectionApp.slnx`) cả Debug lẫn Release.
 - **Kiểm thử tự động**: PASSED 100% (Toàn bộ test suite `TestExtractApp`, Continuous Flow, Pipeline Tracking, PLC Tags CSV, Handshake Bypass, OQC Scanner, Crosshair Overlay).
 
-## 3. Hoàn thành Task 389: Bắt Tay Bất Đồng Bộ Non-Blocking & Hàng Đợi 20 Phôi BSFLP M200..M219 Dừng Đúng Điểm Ra
-1. **Làm rõ nguyên nhân "không thấy M85 -> M70"**:
-   - Lệnh cũ `BSFRP M70 K16` (dịch phải) chạy theo xung phôi `X2` buồng chụp trước khi PC có kết quả. Khi PC trả kết quả NG vào `M85`, phôi đã qua `X2`. Nếu không có phôi thứ 2 kích `X2`, lệnh dịch không bao giờ chạy lại, nên `M85` đứng yên. Ngoài ra lệnh dịch phải cố định cứng trạm ra ở nấc 16 (`M70`), không thể tùy biến điểm ra.
-2. **Kiến trúc Bắt tay Bất Đồng Bộ Non-Blocking (Pipelined Continuous Conveyor)**:
-   - Triệt tiêu hoàn toàn việc chờ đợi PLC Ack: Vision PC kiểm tra xong ghi thẳng kết quả vào PLC/Hàng đợi (`M200`) trong <2ms và giải phóng ngay, băng tải chạy liên tục tốc độ cao (không bao giờ nghẽn luồng).
-   - Thêm `NonBlockingMode`, `TargetStopStationIndex` (1..20, mặc định: 10), `QueueRegisterStart` (mặc định: `M200`) vào [PlcIndustrialConfig.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.Models/PlcIndustrialConfig.cs) và [IndustrialHandshakeStateMachine.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.Application/PLC/Services/IndustrialHandshakeStateMachine.cs).
-   - Bổ sung Card cấu hình Hàng đợi 20 sản phẩm và checkbox Non-blocking trực quan tại Tab 2 [PlcManagerWindow.xaml](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/Views/PLC/PlcManagerWindow.xaml).
-3. **Chương trình Ladder FX5U Hàng đợi 20 Nấc Thuận (`BSFLP M200 K20`)**:
-   - Dịch trái thuận tự nhiên từ Buồng chụp (`M200`) sang các nấc `M201..M219` mỗi khi phôi qua cảm biến `X2`. Nấc `M200` tự động nhận 0 (mặc định OK).
-   - Khi PC trả kết quả NG: PC ghi `M200 = 1` (hoặc `M105 = 1` kích `SET M200`).
-   - Khi bit tại **Điểm Ra Chỉ Định** (ví dụ Nấc 10 = `M210`) = 1: PLC lập tức dừng băng tải (`RST Y0`), bật Stopper `Y21`, còi đèn `Y22`, bật cờ `M220`.
-   - Nút nhấn **Reset / Start của công nhân (`X4`)**: Xóa bit NG tại trạm dừng (`RST M210`), hạ Stopper `Y21`, tắt còi đèn `Y22`, xóa cờ `M220`, và kích hoạt băng tải chạy tiếp (`SET Y0`). Toàn bộ phôi khác trong hàng đợi giữ nguyên!
-   - Cập nhật toàn bộ [Ladder_Program_Full_FX5U.md](file:///g:/NODEJS/Vision2026/PLC_Programs/Mitsubishi_GXWorks3/Ladder_Program_Full_FX5U.md), [Ladder_Mnemonic_GXWorks.il](file:///g:/NODEJS/Vision2026/PLC_Programs/Mitsubishi_GXWorks3/Ladder_Mnemonic_GXWorks.il), và [DeviceComments_GXWorks.csv](file:///g:/NODEJS/Vision2026/PLC_Programs/Mitsubishi_GXWorks3/DeviceComments_GXWorks.csv).
+## 3. Hoàn thành Task 393: Chuẩn Hóa Chu Trình 4 Bước Chế Độ "Cú Đấm Thép" Trên Tab OQC Scanner (Mặc Định Bật)
+1. **Chu trình 4 bước chuẩn xác**:
+   - **Bước 1 (Mở Job & Tạo Phiên)**: Khi chưa có Job mở, scan label mở Job tương ứng trong DB, tạo phiên mới (`CurrentJobTestedCount = 0`). Text scanned được cắt và hiển thị theo quy tắc cấu hình OQC, không tự xóa textbox, giữ nguyên giá trị.
+   - **Bước 2 (Kiểm tra mẫu)**: Công nhân cho mẫu vào gá, bấm Space / Ctrl+F8 để kiểm tra; kết quả hiển thị và lưu lịch sử; textbox giữ nguyên mã scan không bị xóa.
+   - **Bước 3 (Lặp lại phiên)**: Bấm Space / Ctrl+F8 luân phiên kiểm tra mẫu và chuyển về Live View cho tới khi hết mẫu của phiên. Trong suốt phiên, phím Enter từ scanner (khi cùng mã phiên) bị triệt tiêu hoàn toàn tránh nạp lại/xóa text.
+   - **Bước 4 (Scan mã tiếp theo & chu trình lặp lại)**: Công nhân scan mã tiếp theo (mã khác), hệ thống tự động cắt chuỗi hiển thị lên textbox và load Job tiếp tương ứng, chu trình lặp lại trơn tru từ bước 1.
+2. **Kiểm thử tự động**:
+   - Bổ sung Test 10 trong [OqcLiveViewOnJobLoadTests.cs](file:///g:/NODEJS/Vision2026/TestExtractApp/OqcLiveViewOnJobLoadTests.cs) kiểm tra toàn diện Model, ViewModel, View KeyBinding, Text Retention, `IsSameAsCurrentSessionCode`; 100% test PASSED.
 
 ## 4. Các sự kiện & thay đổi gần đây
+- Task 393: Bổ sung Chế độ "Cú đấm thép" trên Tab OQC Scanner (mặc định Checked, bảo toàn chuỗi mã scan trên TextBox, vô hiệu hóa phím Enter từ scanner khi đã mở Job, luân phiên Space/Ctrl+F8 kiểm tra mẫu/Live View).
 - Task 392: Chuẩn hóa chu trình dịch bit hàng đợi FX5U theo xung kết quả Vision Done (`M103`) thay vì cảm biến `X2` ([Ladder_Program_Full_FX5U.md](file:///g:/NODEJS/Vision2026/PLC_Programs/Mitsubishi_GXWorks3/Ladder_Program_Full_FX5U.md) và [Ladder_Mnemonic_GXWorks.il](file:///g:/NODEJS/Vision2026/PLC_Programs/Mitsubishi_GXWorks3/Ladder_Mnemonic_GXWorks.il)).
 - Task 391: Sửa lỗi không truyền bit NG M105 sang GXWorks & Kích hoạt Handshake khi test ảnh trên Tool Editor ([IndustrialHandshakeStateMachine.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.Application/PLC/Services/IndustrialHandshakeStateMachine.cs) và [ToolEditorViewModel.Engine.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/ToolEditorViewModel.Engine.cs)).
 - Task 390: Giải quyết triệt để lỗi Bắt Cạnh PLC (`LDP X0`) không kích hoạt `SET Y0` từ nút Momentary HMI & Nâng cấp Minimum Hold Duration (100ms) trong [HmiControlViewModel.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/HMI/HmiControlViewModel.cs).

@@ -58,6 +58,25 @@ public partial class OqcScannerViewModel : ObservableObject
     private bool _autoRunJob = true;
 
     [ObservableProperty]
+    private bool _steelPunchMode = true;
+
+    [ObservableProperty]
+    private string _currentSessionProductCode = "";
+
+    public bool HasLoadedJob => IsJobLoadedFromManager || (!string.IsNullOrWhiteSpace(CurrentJobFilePath) && CurrentJobFilePath != "-" && CurrentJobFilePath != "Chưa có Job");
+
+    public bool IsSameAsCurrentSessionCode(string? input)
+    {
+        if (string.IsNullOrWhiteSpace(input)) return true;
+        if (string.IsNullOrWhiteSpace(CurrentSessionProductCode)) return false;
+
+        var (valid, processedCode, _, _) = _oqcService.ProcessRawCodeString(input);
+        string codeToCompare = valid ? processedCode : input.Trim();
+
+        return string.Equals(codeToCompare, CurrentSessionProductCode, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [ObservableProperty]
     private bool _isJobLoadedFromManager = false;
 
     [ObservableProperty]
@@ -179,6 +198,11 @@ public partial class OqcScannerViewModel : ObservableObject
                 return (UseExternalScanner || true) ? "▶ CHẠY JOB (SPACE / Ctrl+F8)" : "▶ CHẠY JOB";
             }
 
+            if (SteelPunchMode && HasLoadedJob)
+            {
+                return "▶ CHẠY JOB (SPACE / Ctrl+F8)";
+            }
+
             if (!AutoRunJob && !string.IsNullOrWhiteSpace(CurrentJobFilePath) && CurrentJobFilePath != "-" && CurrentJobFilePath != "Chưa có Job")
             {
                 return UseExternalScanner ? "▶ CHẠY JOB (SPACE / Ctrl+F8)" : "▶ CHẠY JOB";
@@ -220,6 +244,7 @@ public partial class OqcScannerViewModel : ObservableObject
         _lightingPatternService = lightingPatternService;
         _globalAppSettings = globalAppSettings;
         _showCrosshair = _globalAppSettings?.Settings.ShowCrosshair ?? false;
+        _steelPunchMode = _oqcService?.Config?.SteelPunchMode ?? true;
 
         ScanCommand = new AsyncRelayCommand(ExecuteScanAsync);
         ScanFromCameraCommand = new AsyncRelayCommand(ExecuteScanFromCameraAsync);
@@ -322,6 +347,16 @@ public partial class OqcScannerViewModel : ObservableObject
         OnPropertyChanged(nameof(ScanButtonText));
     }
 
+    partial void OnSteelPunchModeChanged(bool value)
+    {
+        if (!_isSuppressingConfigSave && _oqcService?.Config != null)
+        {
+            _oqcService.Config.SteelPunchMode = value;
+            _oqcService.SaveConfig(_oqcService.Config);
+        }
+        OnPropertyChanged(nameof(ScanButtonText));
+    }
+
     private string _lastLoadedJobFilePath = "";
 
     partial void OnCurrentJobFilePathChanged(string value)
@@ -389,6 +424,7 @@ public partial class OqcScannerViewModel : ObservableObject
         CurrentJobFilePath = jobPath;
         CurrentJobTestedCount = 0;
         CurrentProductName = !string.IsNullOrWhiteSpace(productName) ? productName : productCode;
+        CurrentSessionProductCode = productCode;
         ScannedCode = ""; // Để trống ô textfield theo yêu cầu của người dùng
         IsJobLoadedFromManager = true;
         _lastScannedProcessedCode = null;
@@ -439,10 +475,11 @@ public partial class OqcScannerViewModel : ObservableObject
     [RelayCommand]
     public void RunJob()
     {
+        string rawInput = ScannedCode?.Trim() ?? "";
+
         // Kiểm tra trường hợp Job mở từ danh sách Quản Lý Job
         if (IsJobLoadedFromManager)
         {
-            string rawInput = ScannedCode?.Trim() ?? "";
             if (string.IsNullOrWhiteSpace(_lastScannedProcessedCode))
             {
                 if (string.IsNullOrWhiteSpace(rawInput))
@@ -513,6 +550,56 @@ public partial class OqcScannerViewModel : ObservableObject
                 }
             }
         }
+        else if (SteelPunchMode && !string.IsNullOrWhiteSpace(rawInput))
+        {
+            // Chế độ Cú đấm thép: Đọc chuỗi scan trên textbox để cập nhật mã sản phẩm đang kiểm tra
+            if (rawInput != _lastScannedRawCode && rawInput != _lastScannedProcessedCode)
+            {
+                var (valid, processedCode, extractedRawCode, filterError) = _oqcService.ProcessRawCodeString(rawInput);
+                if (!valid)
+                {
+                    StatusMessage = $"❌ Mã quét '{extractedRawCode}' không hợp lệ: {filterError}";
+                    StatusBrush = Brushes.Red;
+                    return;
+                }
+
+                _lastScannedProcessedCode = processedCode;
+                _lastScannedRawCode = extractedRawCode;
+                _toolEditorViewModel.ProductCode = processedCode;
+                _inspectionViewModel.ProductCode = processedCode;
+
+                if (!ScanHistory.Any(e => e.ScannedCode == processedCode && e.InspectResult == "Đang kiểm tra..."))
+                {
+                    var historyEntry = new OqcScanHistoryEntry
+                    {
+                        Time = DateTime.Now,
+                        ScannedCode = processedCode,
+                        ProductName = CurrentProductName,
+                        JobFilePath = CurrentJobFilePath,
+                        InspectResult = "Đang kiểm tra...",
+                        ResultBrushHex = "#1E88E5",
+                        Success = true,
+                        Message = "OK"
+                    };
+                    AddHistory(historyEntry);
+                }
+            }
+            else if (_lastScannedProcessedCode != null && !ScanHistory.Any(e => e.ScannedCode == _lastScannedProcessedCode && e.InspectResult == "Đang kiểm tra..."))
+            {
+                var historyEntry = new OqcScanHistoryEntry
+                {
+                    Time = DateTime.Now,
+                    ScannedCode = _lastScannedProcessedCode,
+                    ProductName = CurrentProductName,
+                    JobFilePath = CurrentJobFilePath,
+                    InspectResult = "Đang kiểm tra...",
+                    ResultBrushHex = "#1E88E5",
+                    Success = true,
+                    Message = "OK"
+                };
+                AddHistory(historyEntry);
+            }
+        }
 
         if (!string.IsNullOrWhiteSpace(CurrentJobFilePath) && CurrentJobFilePath != "-" && CurrentJobFilePath != "Chưa có Job")
         {
@@ -567,7 +654,11 @@ public partial class OqcScannerViewModel : ObservableObject
         if (IsShowingLiveCamera)
         {
             // 1. Đang ở chế độ Live View -> Kích hoạt kiểm tra hàng
-            if (UseExternalScanner || IsJobLoadedFromManager || (!AutoRunJob && !string.IsNullOrWhiteSpace(CurrentJobFilePath) && CurrentJobFilePath != "-" && CurrentJobFilePath != "Chưa có Job"))
+            if (SteelPunchMode && HasLoadedJob)
+            {
+                RunJob();
+            }
+            else if (UseExternalScanner || IsJobLoadedFromManager || (!AutoRunJob && !string.IsNullOrWhiteSpace(CurrentJobFilePath) && CurrentJobFilePath != "-" && CurrentJobFilePath != "Chưa có Job"))
             {
                 RunJob();
             }
@@ -858,7 +949,19 @@ public partial class OqcScannerViewModel : ObservableObject
 
     private async Task ExecuteScanAsync()
     {
-        if (IsScanning) return;
+        if (IsScanning || _isOqcRunInProgress) return;
+
+        // Chế độ Cú đấm thép: Khi Job đã được mở trong phiên này, nếu phím Enter truyền sang
+        // với mã trùng với mã của phiên hiện tại thì coi như không thực hiện gì khi Enter.
+        // Chỉ khi scan mã tiếp theo (mã khác) thì mới tiến hành nạp Job tiếp tương ứng!
+        if (SteelPunchMode && HasLoadedJob)
+        {
+            string rawInput = ScannedCode?.Trim() ?? "";
+            if (IsSameAsCurrentSessionCode(rawInput))
+            {
+                return;
+            }
+        }
 
         IsScanning = true;
         try
@@ -979,6 +1082,14 @@ public partial class OqcScannerViewModel : ObservableObject
 
         _lastScannedProcessedCode = code;
         _lastScannedRawCode = rawCode;
+        CurrentSessionProductCode = code;
+
+        // Text scanned được cắt và hiển thị theo quy tắc quy định trong bảng cấu hình OQC, không xóa textbox
+        if (SteelPunchMode)
+        {
+            ScannedCode = code;
+        }
+
         StatusMessage = $"🔍 Đang tra cứu cơ sở dữ liệu cho mã '{code}'" + (code != rawCode ? $" (Mã gốc: '{rawCode}')" : "") + "...";
         StatusBrush = Brushes.DodgerBlue;
 
@@ -1073,8 +1184,15 @@ public partial class OqcScannerViewModel : ObservableObject
             OnPropertyChanged(nameof(PreviewHeaderTitle));
             OnPropertyChanged(nameof(LiveToggleButtonText));
 
-            // Auto select code in input field for quick re-scanning
-            ScannedCode = "";
+            // Auto select code in input field for quick re-scanning (khi không bật Cú đấm thép)
+            if (SteelPunchMode)
+            {
+                ScannedCode = code; // Text scanned được cắt và hiển thị theo quy tắc quy định trong bảng cấu hình OQC, không tự xóa textbox
+            }
+            else
+            {
+                ScannedCode = "";
+            }
         }
         catch (Exception ex)
         {
@@ -1220,9 +1338,12 @@ public partial class OqcScannerViewModel : ObservableObject
 
             if (IsJobLoadedFromManager)
             {
-                _lastScannedProcessedCode = null;
-                _lastScannedRawCode = null;
-                ScannedCode = ""; // Xóa ô nhập liệu để sẵn sàng cho lần quét LABEL ID tiếp theo
+                if (!SteelPunchMode)
+                {
+                    _lastScannedProcessedCode = null;
+                    _lastScannedRawCode = null;
+                    ScannedCode = ""; // Xóa ô nhập liệu để sẵn sàng cho lần quét LABEL ID tiếp theo
+                }
             }
 
             // Tự động tắt ROI và Crosshair sau khi chạy xong để người dùng dễ dàng quan sát kết quả
@@ -1613,6 +1734,7 @@ public partial class OqcScannerViewModel : ObservableObject
         CurrentJobTestedCount = 0;
         _lastScannedProcessedCode = null;
         _lastScannedRawCode = null;
+        CurrentSessionProductCode = "";
 
         SetWaitingForInspectionState("Sẵn sàng quét mã sản phẩm để bắt đầu đo kiểm.");
 
