@@ -719,7 +719,8 @@ public static class OqcLiveViewOnJobLoadTests
 
             // E. Kiểm tra IsSameAsCurrentSessionCode
             // Giả lập Service để test logic so sánh mã phiên
-            var oqcService = new VisionInspectionApp.Application.OQC.OqcScannerService();
+            var oqcService = new VisionInspectionApp.Application.OQC.OqcScannerService(
+                System.IO.Path.Combine(System.IO.Path.GetTempPath(), "dummy_oqc_test1.json"), disableBackupSync: true);
             typeof(VisionInspectionApp.UI.ViewModels.OqcScannerViewModel)
                 .GetField("_oqcService", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)?
                 .SetValue(vm, oqcService);
@@ -782,7 +783,8 @@ public static class OqcLiveViewOnJobLoadTests
         {
             var vm = (VisionInspectionApp.UI.ViewModels.OqcScannerViewModel)System.Runtime.Serialization.FormatterServices.GetUninitializedObject(typeof(VisionInspectionApp.UI.ViewModels.OqcScannerViewModel));
 
-            var oqcService = new VisionInspectionApp.Application.OQC.OqcScannerService();
+            var oqcService = new VisionInspectionApp.Application.OQC.OqcScannerService(
+                System.IO.Path.Combine(System.IO.Path.GetTempPath(), "dummy_oqc_test2.json"), disableBackupSync: true);
             typeof(VisionInspectionApp.UI.ViewModels.OqcScannerViewModel)
                 .GetField("_oqcService", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)?
                 .SetValue(vm, oqcService);

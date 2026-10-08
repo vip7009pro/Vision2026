@@ -18,13 +18,36 @@ public sealed class OqcScannerService : IOqcScannerService
 {
     private readonly string _configFilePath;
     private readonly string _historyFilePath;
+    private readonly bool _isIsolatedSandbox;
+    private readonly bool _disableBackupSync;
     public OqcScannerConfig Config { get; private set; } = new();
 
-    public OqcScannerService()
+    public OqcScannerService(string? customConfigFilePath = null, string? customHistoryFilePath = null, bool disableBackupSync = false)
     {
-        AppStoragePaths.EnsureStorageStructureAndMigrate();
-        _configFilePath = AppStoragePaths.OqcScannerConfigFilePath;
-        _historyFilePath = AppStoragePaths.OqcScanHistoryFilePath;
+        _isIsolatedSandbox = !string.IsNullOrWhiteSpace(customConfigFilePath);
+        _disableBackupSync = disableBackupSync || _isIsolatedSandbox;
+
+        if (_isIsolatedSandbox)
+        {
+            _configFilePath = customConfigFilePath!;
+            _historyFilePath = !string.IsNullOrWhiteSpace(customHistoryFilePath)
+                ? customHistoryFilePath
+                : Path.Combine(Path.GetDirectoryName(_configFilePath) ?? Path.GetTempPath(), "oqc_scan_history_temp.json");
+
+            var dir = Path.GetDirectoryName(_configFilePath);
+            if (!string.IsNullOrWhiteSpace(dir) && !Directory.Exists(dir))
+            {
+                Directory.CreateDirectory(dir);
+            }
+        }
+        else
+        {
+            AppStoragePaths.EnsureStorageStructureAndMigrate();
+            _configFilePath = AppStoragePaths.OqcScannerConfigFilePath;
+            _historyFilePath = !string.IsNullOrWhiteSpace(customHistoryFilePath)
+                ? customHistoryFilePath
+                : AppStoragePaths.OqcScanHistoryFilePath;
+        }
 
         LoadConfig();
     }
@@ -38,7 +61,7 @@ public sealed class OqcScannerService : IOqcScannerService
             {
                 loadPath = _configFilePath;
             }
-            else
+            else if (!_isIsolatedSandbox)
             {
                 // Fallback 1: Tìm trong thư mục hạt giống configs\system
                 string seedInConfigs = Path.Combine(AppStoragePaths.AppSeedConfigDirectory, "oqc_scanner_config.json");
@@ -68,10 +91,14 @@ public sealed class OqcScannerService : IOqcScannerService
                 {
                     Config = loaded;
 
-                    // Nếu nạp từ hạt giống fallback, lưu ngay vào đường dẫn chuẩn
-                    if (loadPath != _configFilePath)
+                    // Nếu ở chế độ sản xuất, thanh lọc các dummy test ID nếu có
+                    if (!_isIsolatedSandbox)
                     {
-                        SaveConfig(Config);
+                        bool sanitized = SanitizeProductionConfig(Config);
+                        if (sanitized || loadPath != _configFilePath)
+                        {
+                            SaveConfig(Config);
+                        }
                     }
                     return;
                 }
@@ -82,28 +109,149 @@ public sealed class OqcScannerService : IOqcScannerService
             // Fallback to default config on error
         }
 
-        Config = new OqcScannerConfig();
+        // Nếu file chưa có trên đĩa, nạp cấu hình chuẩn xưởng CMS_VINA
+        Config = !_isIsolatedSandbox ? OqcScannerConfig.CreateFactoryStandard() : new OqcScannerConfig();
+        if (!_isIsolatedSandbox)
+        {
+            SaveConfig(Config);
+        }
     }
 
     public void SaveConfig(OqcScannerConfig config)
     {
         if (config == null) return;
+
+        if (!_isIsolatedSandbox)
+        {
+            SanitizeProductionConfig(config);
+        }
+
         Config = config;
 
         try
         {
             var json = JsonSerializer.Serialize(Config, new JsonSerializerOptions { WriteIndented = true });
             
-            // 1. Lưu vào thư mục chuẩn %AppData%\Vision2026
+            // 1. Lưu vào đường dẫn cấu hình mục tiêu
             File.WriteAllText(_configFilePath, json);
 
-            // 2. Đồng bộ bản sao sang thư mục ứng dụng (configs\system) để phục vụ deploy/release
-            AppStoragePaths.SyncConfigToAppBackup("oqc_scanner_config.json", json);
+            // 2. Chỉ đồng bộ bản sao sang thư mục ứng dụng (configs\system) khi KHÔNG PHẢI sandbox
+            if (!_isIsolatedSandbox && !_disableBackupSync)
+            {
+                AppStoragePaths.SyncConfigToAppBackup("oqc_scanner_config.json", json);
+            }
         }
         catch (Exception ex)
         {
             System.Diagnostics.Debug.WriteLine($"Failed to save OQC config: {ex.Message}");
         }
+    }
+
+    /// <summary>
+    /// Safe Guard: Tự động loại bỏ các ID và chuỗi giả lập từ Unit Test, bảo toàn cấu hình chuẩn xưởng CMS_VINA.
+    /// </summary>
+    private static bool SanitizeProductionConfig(OqcScannerConfig cfg)
+    {
+        bool changed = false;
+        string defaultFactoryDbId = "6b50f44b-86cd-4c0e-91a8-9f385efbaf6d";
+        string defaultFactoryDbName = "CMS_VINA";
+
+        static bool IsDummy(string? val)
+        {
+            if (string.IsNullOrWhiteSpace(val)) return false;
+            return val.Contains("machine-a", StringComparison.OrdinalIgnoreCase)
+                || val.Contains("machine-b", StringComparison.OrdinalIgnoreCase)
+                || val.Contains("foreign-machine", StringComparison.OrdinalIgnoreCase)
+                || val.Contains("unknown-guid", StringComparison.OrdinalIgnoreCase)
+                || val.Contains("guid-111", StringComparison.OrdinalIgnoreCase)
+                || val.Contains("guid-222", StringComparison.OrdinalIgnoreCase);
+        }
+
+        if (IsDummy(cfg.LookupDbId) || string.IsNullOrWhiteSpace(cfg.LookupDbId))
+        {
+            cfg.LookupDbId = defaultFactoryDbId;
+            cfg.LookupDbName = defaultFactoryDbName;
+            changed = true;
+        }
+
+        if (IsDummy(cfg.ProductNameDbId) || string.IsNullOrWhiteSpace(cfg.ProductNameDbId))
+        {
+            cfg.ProductNameDbId = defaultFactoryDbId;
+            cfg.ProductNameDbName = defaultFactoryDbName;
+            changed = true;
+        }
+
+        if (IsDummy(cfg.ProductListDbId) || string.IsNullOrWhiteSpace(cfg.ProductListDbId))
+        {
+            cfg.ProductListDbId = defaultFactoryDbId;
+            cfg.ProductListDbName = defaultFactoryDbName;
+            changed = true;
+        }
+
+        if (IsDummy(cfg.AssignDbId) || string.IsNullOrWhiteSpace(cfg.AssignDbId))
+        {
+            cfg.AssignDbId = defaultFactoryDbId;
+            cfg.AssignDbName = defaultFactoryDbName;
+            changed = true;
+        }
+
+        if (IsDummy(cfg.UpdateTeachImageDbId) || string.IsNullOrWhiteSpace(cfg.UpdateTeachImageDbId))
+        {
+            cfg.UpdateTeachImageDbId = defaultFactoryDbId;
+            cfg.UpdateTeachImageDbName = defaultFactoryDbName;
+            changed = true;
+        }
+
+        if (IsDummy(cfg.JobManagerDbId) || string.IsNullOrWhiteSpace(cfg.JobManagerDbId))
+        {
+            cfg.JobManagerDbId = defaultFactoryDbId;
+            cfg.JobManagerDbName = defaultFactoryDbName;
+            changed = true;
+        }
+
+        if (IsDummy(cfg.LogResultDbId) || string.IsNullOrWhiteSpace(cfg.LogResultDbId))
+        {
+            cfg.LogResultDbId = defaultFactoryDbId;
+            cfg.LogResultDbName = defaultFactoryDbName;
+            changed = true;
+        }
+
+        if (IsDummy(cfg.LogDetailResultDbId) || string.IsNullOrWhiteSpace(cfg.LogDetailResultDbId))
+        {
+            cfg.LogDetailResultDbId = defaultFactoryDbId;
+            cfg.LogDetailResultDbName = defaultFactoryDbName;
+            changed = true;
+        }
+
+        // Tự động khôi phục câu lệnh tra cứu Job chuẩn xưởng nếu bị reset về query mặc định thô sơ
+        if (string.IsNullOrWhiteSpace(cfg.LookupQuery) || cfg.LookupQuery.Trim() == "SELECT JobFilePath FROM ProductJobs WHERE ProductCode = '{ScannedCode}'")
+        {
+            cfg.LookupQuery = "SELECT TOP 1 ZTBLOTPRINTHISTORYTB.G_CODE,ProductJobs.JobFilePath  FROM ZTBLOTPRINTHISTORYTB\r\nJOIN ProductJobs ON ProductJobs.CTR_CD = ZTBLOTPRINTHISTORYTB.CTR_CD AND ProductJobs.ProductCode = ZTBLOTPRINTHISTORYTB.G_CODE\r\nWHERE ZTBLOTPRINTHISTORYTB.LABEL_ID2='{ScannedCode}'";
+            changed = true;
+        }
+
+        // Tự động khôi phục câu lệnh tra cứu Tên sản phẩm chuẩn xưởng nếu bị reset
+        if (string.IsNullOrWhiteSpace(cfg.ProductNameQuery) || cfg.ProductNameQuery.Trim() == "SELECT G_NAME_KD FROM M100 WHERE G_CODE = '{ScannedCode}'")
+        {
+            cfg.ProductNameQuery = "SELECT M100.G_NAME_KD FROM ZTBLOTPRINTHISTORYTB\r\nJOIN M100 ON ZTBLOTPRINTHISTORYTB.CTR_CD = M100.CTR_CD AND ZTBLOTPRINTHISTORYTB.G_CODE = M100.G_CODE\r\nWHERE ZTBLOTPRINTHISTORYTB.LABEL_ID2 = '{ScannedCode}'";
+            changed = true;
+        }
+
+        // Tự động khôi phục Server API URL
+        if (string.IsNullOrWhiteSpace(cfg.ServerApiUrl) || cfg.ServerApiUrl.Contains("localhost", StringComparison.OrdinalIgnoreCase))
+        {
+            cfg.ServerApiUrl = "https://192.168.1.192/vision_upload.php";
+            changed = true;
+        }
+
+        // Tự động khôi phục JobManagerQuery chuẩn xưởng nếu bị reset
+        if (string.IsNullOrWhiteSpace(cfg.JobManagerQuery) || cfg.JobManagerQuery.Trim().StartsWith("SELECT ProductCode, ProductName, JobFilePath, TeachImagePath, UpdatedAt FROM ProductJobs WHERE"))
+        {
+            cfg.JobManagerQuery = "SELECT ProductCode, M100.G_NAME_KD as ProductName, JobFilePath, TeachImagePath, UpdatedAt FROM ProductJobs\r\nLEFT JOIN M100 ON M100.CTR_CD = ProductJobs.CTR_CD AND  M100.G_CODE = ProductJobs.ProductCode WHERE ProductCode LIKE '%{SearchText}%' OR M100.G_NAME_KD LIKE '%{SearchText}%' ORDER BY ProductCode OFFSET {Offset} ROWS FETCH NEXT {PageSize} ROWS ONLY";
+            changed = true;
+        }
+
+        return changed;
     }
 
     public bool ExportConfigToFile(string filePath, OqcScannerConfig config)

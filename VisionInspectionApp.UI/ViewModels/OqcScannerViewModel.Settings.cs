@@ -172,6 +172,7 @@ public partial class OqcScannerViewModel
     public IReadOnlyList<DbModel> AvailableDatabases => _dbManager.Databases;
 
     public IRelayCommand SaveConfigCommand { get; private set; } = null!;
+    public IRelayCommand ResetFactorySettingsCommand { get; private set; } = null!;
     public IRelayCommand ExportConfigCommand { get; private set; } = null!;
     public IRelayCommand ImportConfigCommand { get; private set; } = null!;
     public IAsyncRelayCommand PingServerCommand { get; private set; } = null!;
@@ -209,6 +210,7 @@ public partial class OqcScannerViewModel
     private void InitSettingsProperties()
     {
         SaveConfigCommand = new RelayCommand(SaveSettingsToConfig);
+        ResetFactorySettingsCommand = new RelayCommand(ResetFactorySettings);
         ExportConfigCommand = new RelayCommand(ExecuteExportConfig);
         ImportConfigCommand = new RelayCommand(ExecuteImportConfig);
         PingServerCommand = new AsyncRelayCommand(ExecutePingServerAsync);
@@ -446,6 +448,102 @@ public partial class OqcScannerViewModel
         _oqcService.SaveConfig(cfg);
         StatusMessage = "⚙ Đã lưu cấu hình OQC Scanner!";
         StatusBrush = Brushes.Green;
+    }
+
+    /// <summary>
+    /// Khôi phục toàn bộ thông tin tra cứu & CSDL về chuẩn cấu hình xưởng CMS_VINA.
+    /// </summary>
+    public void ResetFactorySettings()
+    {
+        // 1. Tìm hoặc khôi phục kết nối CSDL CMS_VINA nếu chưa có
+        string cmsDbId = "6b50f44b-86cd-4c0e-91a8-9f385efbaf6d";
+        var existingCms = _dbManager.GetDatabase(cmsDbId)
+            ?? _dbManager.Databases.FirstOrDefault(d => string.Equals(d.Name, "CMS_VINA", StringComparison.OrdinalIgnoreCase));
+
+        if (existingCms == null)
+        {
+            var defaultCmsDb = new DbModel
+            {
+                Id = cmsDbId,
+                Name = "CMS_VINA",
+                ProviderType = DbProviderType.SqlServer,
+                Server = "192.168.1.2",
+                Port = 6789,
+                DatabaseName = "CMS_VINA",
+                Username = "sa",
+                Password = "*11021201$",
+                IsEnabled = true
+            };
+            _dbManager.AddDatabase(defaultCmsDb);
+        }
+        else
+        {
+            cmsDbId = existingCms.Id;
+        }
+
+        // 2. Tạo cấu hình chuẩn xưởng CMS_VINA
+        var factory = OqcScannerConfig.CreateFactoryStandard(cmsDbId, "CMS_VINA");
+
+        LookupDbId = factory.LookupDbId;
+        LookupQuery = factory.LookupQuery;
+        JobFilePathColumn = factory.JobFilePathColumn;
+        JobRootDirectory = factory.JobRootDirectory;
+
+        EnableProductNameLookup = factory.EnableProductNameLookup;
+        ProductNameDbId = factory.ProductNameDbId;
+        ProductNameQuery = factory.ProductNameQuery;
+        ProductNameColumn = factory.ProductNameColumn;
+
+        ProductListDbId = factory.ProductListDbId;
+        ProductListQuery = factory.ProductListQuery;
+        ProductListCodeColumn = factory.ProductListCodeColumn;
+        ProductListNameColumn = factory.ProductListNameColumn;
+        ProductListPageSize = factory.ProductListPageSize;
+
+        AssignDbId = factory.AssignDbId;
+        AssignQuery = factory.AssignQuery;
+
+        UpdateTeachImageDbId = factory.UpdateTeachImageDbId;
+        UpdateTeachImageQuery = factory.UpdateTeachImageQuery;
+
+        ServerApiUrl = factory.ServerApiUrl;
+        TeachImageColumn = factory.TeachImageColumn;
+
+        JobManagerDbId = factory.JobManagerDbId;
+        JobManagerQuery = factory.JobManagerQuery;
+        JobManagerProductCodeColumn = factory.JobManagerProductCodeColumn;
+        JobManagerProductNameColumn = factory.JobManagerProductNameColumn;
+        JobManagerJobFileColumn = factory.JobManagerJobFileColumn;
+        JobManagerTeachImageColumn = factory.JobManagerTeachImageColumn;
+        JobManagerUpdatedColumn = factory.JobManagerUpdatedColumn;
+        JobManagerPageSize = factory.JobManagerPageSize;
+
+        LogResultToDb = factory.LogResultToDb;
+        LogResultDbId = factory.LogResultDbId;
+        LogResultQuery = factory.LogResultQuery;
+
+        LogDetailResultToDb = factory.LogDetailResultToDb;
+        LogDetailResultDbId = factory.LogDetailResultDbId;
+        LogDetailResultQuery = factory.LogDetailResultQuery;
+
+        EnableCameraBarcodeScan = factory.EnableCameraBarcodeScan;
+        TargetCodeType = factory.TargetCodeType;
+        EnableLengthFilter = factory.EnableLengthFilter;
+        RequiredCodeLength = factory.RequiredCodeLength;
+        EnableCodeCrop = factory.EnableCodeCrop;
+        CropStartIndex = factory.CropStartIndex;
+        CropLength = factory.CropLength;
+        ScanTimeoutMs = factory.ScanTimeoutMs;
+        UseExternalScanner = factory.UseExternalScanner;
+        AutoRunJob = factory.AutoRunJob;
+        OnlyOriginMode = factory.OnlyOriginMode;
+        SteelPunchMode = factory.SteelPunchMode;
+
+        // Lưu trực tiếp
+        SaveSettingsToConfig();
+
+        StatusMessage = "↺ Đã khôi phục cấu hình tra cứu xưởng CMS_VINA (192.168.1.2:6789)!";
+        StatusBrush = Brushes.DodgerBlue;
     }
 
     private void ExecuteExportConfig()

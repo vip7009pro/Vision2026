@@ -108,13 +108,14 @@ public static class SystemConfigBackupAndOqcDbMatchTests
             var exportFilePath = Path.Combine(tempDir, "BackupTest.viscfg");
 
             var dbConfigPath = Path.Combine(tempDir, "databases.json");
-            var dbService = new DbManagerService(dbConfigPath);
+            var dbService = new DbManagerService(dbConfigPath, disableBackupSync: true);
             dbService.LoadDatabases(new List<DbModel>
             {
                 new DbModel { Id = "db-01", Name = "DB_A", DatabaseName = "DbA_Catalog" }
             });
 
-            var oqcService = new OqcScannerService();
+            var oqcConfigPath = Path.Combine(tempDir, "oqc_test.json");
+            var oqcService = new OqcScannerService(oqcConfigPath, disableBackupSync: true);
             using var plcManager = TestPlcConfigHelper.CreateIsolatedPlcManager();
 
             var backupService = new SystemConfigBackupService(dbService, plcManager, oqcService);
@@ -208,8 +209,9 @@ public static class SystemConfigBackupAndOqcDbMatchTests
 
             // Môi trường máy B:
             var dbConfigBPath = Path.Combine(tempDir, "db_b.json");
-            var dbServiceB = new DbManagerService(dbConfigBPath);
-            var oqcServiceB = new OqcScannerService();
+            var dbServiceB = new DbManagerService(dbConfigBPath, disableBackupSync: true);
+            var oqcConfigBPath = Path.Combine(tempDir, "oqc_b.json");
+            var oqcServiceB = new OqcScannerService(oqcConfigBPath, disableBackupSync: true);
             using var plcManagerB = TestPlcConfigHelper.CreateIsolatedPlcManager();
             var backupServiceB = new SystemConfigBackupService(dbServiceB, plcManagerB, oqcServiceB);
 

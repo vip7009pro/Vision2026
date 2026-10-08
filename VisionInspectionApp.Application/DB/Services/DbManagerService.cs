@@ -17,14 +17,20 @@ public class DbManagerService : IDbManagerService
     private readonly ConcurrentDictionary<string, DbModel> _databases = new(StringComparer.OrdinalIgnoreCase);
     private readonly string _globalConfigFilePath;
 
+    private readonly bool _isIsolatedSandbox;
+    private readonly bool _disableBackupSync;
+
     public IReadOnlyList<DbModel> Databases => _databases.Values.ToList().AsReadOnly();
     public string ConfigFilePath => _globalConfigFilePath;
 
-    public DbManagerService(string? customConfigFilePath = null)
+    public DbManagerService(string? customConfigFilePath = null, bool disableBackupSync = false)
     {
-        if (!string.IsNullOrWhiteSpace(customConfigFilePath))
+        _isIsolatedSandbox = !string.IsNullOrWhiteSpace(customConfigFilePath);
+        _disableBackupSync = disableBackupSync || _isIsolatedSandbox;
+
+        if (_isIsolatedSandbox)
         {
-            _globalConfigFilePath = customConfigFilePath;
+            _globalConfigFilePath = customConfigFilePath!;
             var dir = Path.GetDirectoryName(_globalConfigFilePath);
             if (!string.IsNullOrWhiteSpace(dir)) Directory.CreateDirectory(dir);
         }
@@ -46,7 +52,7 @@ public class DbManagerService : IDbManagerService
             {
                 loadPath = _globalConfigFilePath;
             }
-            else
+            else if (!_isIsolatedSandbox)
             {
                 // Fallback 1: Tìm trong thư mục hạt giống configs\system
                 string seedInConfigs = Path.Combine(AppStoragePaths.AppSeedConfigDirectory, "databases_config.json");
@@ -94,19 +100,19 @@ public class DbManagerService : IDbManagerService
             System.Diagnostics.Debug.WriteLine($"[DB MANAGER] Error loading databases_config.json: {ex.Message}");
         }
 
-        // Initialize default database if file doesn't exist
+        // Initialize default database if file doesn't exist (chuẩn xưởng CMS_VINA)
         if (_databases.IsEmpty)
         {
             var defaultDb = new DbModel
             {
-                Id = Guid.NewGuid().ToString(),
-                Name = "MainDB",
+                Id = "6b50f44b-86cd-4c0e-91a8-9f385efbaf6d",
+                Name = "CMS_VINA",
                 ProviderType = DbProviderType.SqlServer,
-                Server = "localhost",
-                Port = 1433,
-                DatabaseName = "VisionDB",
+                Server = "192.168.1.2",
+                Port = 6789,
+                DatabaseName = "CMS_VINA",
                 Username = "sa",
-                Password = "",
+                Password = "*11021201$",
                 IsEnabled = true
             };
             _databases[defaultDb.Id] = defaultDb;
@@ -122,11 +128,14 @@ public class DbManagerService : IDbManagerService
             var options = new JsonSerializerOptions { WriteIndented = true };
             string json = JsonSerializer.Serialize(list, options);
 
-            // 1. Lưu vào thư mục chuẩn %AppData%\Vision2026
+            // 1. Lưu vào file cấu hình mục tiêu
             File.WriteAllText(_globalConfigFilePath, json);
 
-            // 2. Đồng bộ bản sao sang thư mục ứng dụng (configs\system) để phục vụ deploy/release
-            AppStoragePaths.SyncConfigToAppBackup("databases_config.json", json);
+            // 2. Chỉ đồng bộ bản sao sang thư mục ứng dụng (configs\system) khi KHÔNG PHẢI sandbox
+            if (!_isIsolatedSandbox && !_disableBackupSync)
+            {
+                AppStoragePaths.SyncConfigToAppBackup("databases_config.json", json);
+            }
         }
         catch (Exception ex)
         {

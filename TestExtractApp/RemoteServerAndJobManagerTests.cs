@@ -326,7 +326,8 @@ public static class RemoteServerAndJobManagerTests
         try
         {
             var remoteService = new RemoteServerService();
-            var oqcService = new OqcScannerService();
+            string tempOqcConfig = Path.Combine(testJobRoot, "oqc_test_config.json");
+            var oqcService = new OqcScannerService(tempOqcConfig, disableBackupSync: true);
             oqcService.Config.ServerApiUrl = $"{prefix}vision_upload.php";
             oqcService.Config.JobRootDirectory = testJobRoot;
 
@@ -524,7 +525,8 @@ public static class RemoteServerAndJobManagerTests
         string productCode = "GH63-22334A";
         string productName = "Galaxy S24 Ultra Titanium";
 
-        var oqcService = new VisionInspectionApp.Application.OQC.OqcScannerService();
+        var oqcService = new VisionInspectionApp.Application.OQC.OqcScannerService(
+            Path.Combine(Path.GetTempPath(), "dummy_oqc_jm.json"), disableBackupSync: true);
 
         // 1. Kiểm tra trạng thái khi mở Job từ danh sách:
         string currentJobFilePath = dummyJobPath;

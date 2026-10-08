@@ -70,7 +70,7 @@ public static class ReleaseConfigPersistenceTests
             if (File.Exists(targetConfig)) File.Delete(targetConfig);
 
             // Tạo service trỏ vào file đích chưa có
-            var dbService = new DbManagerService(targetConfig);
+            var dbService = new DbManagerService(targetConfig, disableBackupSync: true);
 
             // Kiểm tra: nếu file đích chưa có, service sẽ tự tạo hoặc nạp
             if (!File.Exists(targetConfig))
@@ -92,7 +92,7 @@ public static class ReleaseConfigPersistenceTests
             dbService.AddDatabase(testDb);
 
             // Khởi tạo lại service từ đĩa để kiểm tra độ bền vững
-            var dbServiceReloaded = new DbManagerService(targetConfig);
+            var dbServiceReloaded = new DbManagerService(targetConfig, disableBackupSync: true);
             var found = dbServiceReloaded.GetDatabase("db_test_mes");
 
             if (found == null || found.Server != "192.168.1.50" || found.Name != "MES_PRODUCTION")
@@ -111,25 +111,32 @@ public static class ReleaseConfigPersistenceTests
     {
         Console.WriteLine("\n--- Test 3: Độ Bền Vững & Lưu Trữ Cấu Hình OQC Scanner ---");
 
-        var oqcService = new OqcScannerService();
-        var origConfig = oqcService.Config;
+        string tempTestDir = Path.Combine(Path.GetTempPath(), "VisionTest_Oqc_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempTestDir);
+        string tempConfigFile = Path.Combine(tempTestDir, "oqc_scanner_config.json");
 
-        // Đảm bảo config nạp thành công
-        if (origConfig == null)
-            throw new Exception("Config của OqcScannerService bị null!");
-
-        // Kiểm tra đường dẫn lưu trữ chuẩn
-        if (!File.Exists(AppStoragePaths.OqcScannerConfigFilePath))
+        try
         {
-            // Nếu chưa có trên đĩa, lưu lại để kiểm tra
-            oqcService.SaveConfig(origConfig);
-            if (!File.Exists(AppStoragePaths.OqcScannerConfigFilePath))
-                throw new Exception($"File {AppStoragePaths.OqcScannerConfigFilePath} không được lưu!");
-        }
+            var oqcService = new OqcScannerService(tempConfigFile, disableBackupSync: true);
+            var origConfig = oqcService.Config;
 
-        Console.WriteLine($"  ✓ File OQC Scanner nằm tại: {AppStoragePaths.OqcScannerConfigFilePath}");
-        Console.WriteLine($"  ✓ Query tra cứu hiện tại: {(origConfig.LookupQuery?.Length > 30 ? origConfig.LookupQuery.Substring(0, 30) + "..." : origConfig.LookupQuery)}");
-        Console.WriteLine("  ✓ Test 3 PASSED!");
+            // Đảm bảo config nạp thành công
+            if (origConfig == null)
+                throw new Exception("Config của OqcScannerService bị null!");
+
+            // Lưu lại để kiểm tra
+            oqcService.SaveConfig(origConfig);
+            if (!File.Exists(tempConfigFile))
+                throw new Exception($"File {tempConfigFile} không được lưu!");
+
+            Console.WriteLine($"  ✓ File OQC Scanner (Isolated Sandbox): {tempConfigFile}");
+            Console.WriteLine($"  ✓ Query tra cứu hiện tại: {(origConfig.LookupQuery?.Length > 30 ? origConfig.LookupQuery.Substring(0, 30) + "..." : origConfig.LookupQuery)}");
+            Console.WriteLine("  ✓ Test 3 PASSED!");
+        }
+        finally
+        {
+            try { Directory.Delete(tempTestDir, true); } catch { }
+        }
     }
 
     private static void TestGlobalAppSettingsOtaPersistenceAndFallback()

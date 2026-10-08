@@ -419,6 +419,7 @@
         <Border Grid.Row="2" Margin="0,12,0,0" Padding="0,8,0,0" BorderThickness="0,1,0,0" BorderBrush="{DynamicResource BorderBrush}">
             <DockPanel LastChildFill="False">
                 <StackPanel Orientation="Horizontal" DockPanel.Dock="Left">
+                    <Button Content="↺ Khôi Phục Xưởng (CMS_VINA)" Command="{Binding ResetFactorySettingsCommand}" Height="28" Padding="12,2" Margin="0,0,8,0" Background="#2E7D32" Foreground="White" FontWeight="SemiBold" ToolTip="Khôi phục toàn bộ câu lệnh SQL tra cứu, Server API và CSDL CMS_VINA chuẩn xưởng" />
                     <Button Content="📤 Xuất Cấu Hình (Export)" Command="{Binding ExportConfigCommand}" Height="28" Padding="12,2" Margin="0,0,8,0" ToolTip="Lưu toàn bộ cấu hình OQC ra tệp JSON để sao lưu hoặc copy sang máy khác" />
                     <Button Content="📥 Nạp Cấu Hình (Import)" Command="{Binding ImportConfigCommand}" Height="28" Padding="12,2" ToolTip="Nạp cấu hình OQC từ tệp JSON đã lưu" />
                 </StackPanel>

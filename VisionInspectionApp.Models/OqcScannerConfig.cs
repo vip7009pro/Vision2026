@@ -37,7 +37,7 @@ public class OqcScannerConfig
     public string UpdateTeachImageQuery { get; set; } = "IF EXISTS (SELECT 1 FROM ProductJobs WHERE ProductCode = '{ProductCode}') UPDATE ProductJobs SET TeachImagePath = '{TeachImagePath}', UpdatedAt = GETDATE() WHERE ProductCode = '{ProductCode}' ELSE INSERT INTO ProductJobs (ProductCode, TeachImagePath, UpdatedAt) VALUES ('{ProductCode}', '{TeachImagePath}', GETDATE())";
 
     // ─── Cấu hình Máy Chủ Web (Server API / Upload Endpoint) ───
-    public string ServerApiUrl { get; set; } = "http://localhost/vision_upload.php";
+    public string ServerApiUrl { get; set; } = "https://192.168.1.192/vision_upload.php";
     public string TeachImageColumn { get; set; } = "TeachImagePath";
 
     // ─── Quản lý Job trên CSDL & Server (Job Manager Query) ───
@@ -76,6 +76,79 @@ public class OqcScannerConfig
     public bool AutoRunJob { get; set; } = true;
     public bool OnlyOriginMode { get; set; } = true;
     public bool SteelPunchMode { get; set; } = true;
+
+    /// <summary>
+    /// Tạo cấu hình chuẩn xưởng CMS_VINA đầy đủ câu lệnh SQL và endpoint server.
+    /// </summary>
+    public static OqcScannerConfig CreateFactoryStandard(string? dbId = null, string dbName = "CMS_VINA")
+    {
+        string actualDbId = !string.IsNullOrWhiteSpace(dbId) ? dbId : "6b50f44b-86cd-4c0e-91a8-9f385efbaf6d";
+        return new OqcScannerConfig
+        {
+            LookupDbId = actualDbId,
+            LookupDbName = dbName,
+            LookupQuery = "SELECT TOP 1 ZTBLOTPRINTHISTORYTB.G_CODE,ProductJobs.JobFilePath  FROM ZTBLOTPRINTHISTORYTB\r\nJOIN ProductJobs ON ProductJobs.CTR_CD = ZTBLOTPRINTHISTORYTB.CTR_CD AND ProductJobs.ProductCode = ZTBLOTPRINTHISTORYTB.G_CODE\r\nWHERE ZTBLOTPRINTHISTORYTB.LABEL_ID2='{ScannedCode}'",
+            JobFilePathColumn = "JobFilePath",
+            JobRootDirectory = @"C:\VisionJobs",
+
+            EnableProductNameLookup = true,
+            ProductNameDbId = actualDbId,
+            ProductNameDbName = dbName,
+            ProductNameQuery = "SELECT M100.G_NAME_KD FROM ZTBLOTPRINTHISTORYTB\r\nJOIN M100 ON ZTBLOTPRINTHISTORYTB.CTR_CD = M100.CTR_CD AND ZTBLOTPRINTHISTORYTB.G_CODE = M100.G_CODE\r\nWHERE ZTBLOTPRINTHISTORYTB.LABEL_ID2 = '{ScannedCode}'",
+            ProductNameColumn = "G_NAME_KD",
+
+            ProductListDbId = actualDbId,
+            ProductListDbName = dbName,
+            ProductListQuery = "SELECT G_CODE, G_NAME_KD, G_NAME FROM M100 WHERE G_CODE LIKE '%{SearchText}%' OR G_NAME_KD LIKE '%{SearchText}%' ORDER BY G_CODE OFFSET {Offset} ROWS FETCH NEXT {PageSize} ROWS ONLY",
+            ProductListCodeColumn = "G_CODE",
+            ProductListNameColumn = "G_NAME_KD",
+            ProductListPageSize = 50,
+
+            AssignDbId = actualDbId,
+            AssignDbName = dbName,
+            AssignQuery = "IF EXISTS (SELECT 1 FROM ProductJobs WHERE ProductCode = '{ProductCode}') UPDATE ProductJobs SET JobFilePath = '{JobFilePath}', UpdatedAt= GETDATE() WHERE ProductCode = '{ProductCode}' ELSE INSERT INTO ProductJobs (CTR_CD,ProductCode, JobFilePath, InsertedAt, UpdatedAt) VALUES ('002','{ProductCode}', '{JobFilePath}',GETDATE(), GETDATE())",
+
+            UpdateTeachImageDbId = actualDbId,
+            UpdateTeachImageDbName = dbName,
+            UpdateTeachImageQuery = "IF EXISTS (SELECT 1 FROM ProductJobs WHERE ProductCode = '{ProductCode}') UPDATE ProductJobs SET TeachImagePath = '{TeachImagePath}', UpdatedAt = GETDATE() WHERE ProductCode = '{ProductCode}' ELSE INSERT INTO ProductJobs (ProductCode, TeachImagePath, UpdatedAt) VALUES ('{ProductCode}', '{TeachImagePath}', GETDATE())",
+
+            ServerApiUrl = "https://192.168.1.192/vision_upload.php",
+            TeachImageColumn = "TeachImagePath",
+
+            JobManagerDbId = actualDbId,
+            JobManagerDbName = dbName,
+            JobManagerQuery = "SELECT ProductCode, M100.G_NAME_KD as ProductName, JobFilePath, TeachImagePath, UpdatedAt FROM ProductJobs\r\nLEFT JOIN M100 ON M100.CTR_CD = ProductJobs.CTR_CD AND  M100.G_CODE = ProductJobs.ProductCode WHERE ProductCode LIKE '%{SearchText}%' OR M100.G_NAME_KD LIKE '%{SearchText}%' ORDER BY ProductCode OFFSET {Offset} ROWS FETCH NEXT {PageSize} ROWS ONLY",
+            JobManagerProductCodeColumn = "ProductCode",
+            JobManagerProductNameColumn = "ProductName",
+            JobManagerJobFileColumn = "JobFilePath",
+            JobManagerTeachImageColumn = "TeachImagePath",
+            JobManagerUpdatedColumn = "UpdatedAt",
+            JobManagerPageSize = 50,
+
+            LogResultToDb = true,
+            LogResultDbId = actualDbId,
+            LogResultDbName = dbName,
+            LogResultQuery = "INSERT INTO OqcLogs (CTR_CD, ScannedCode, UUID, JobFilePath, Pass, NgReasons, InspectDateTime) VALUES ('002', '{ScannedCode}', '{UUID}', '{JobFilePath}', {PassBit}, N'{NgReasons}', GETDATE())",
+
+            LogDetailResultToDb = false,
+            LogDetailResultDbId = actualDbId,
+            LogDetailResultDbName = dbName,
+            LogDetailResultQuery = "INSERT INTO OqcInspectResult (CTR_CD, ScannedCode, UUID, ToolName, Spec, [Tol +], [Tol -], [Min], [Max], Result, Judge, InspectDateTime) VALUES ('002', '{ScannedCode}', '{UUID}', '{ToolName}', {Spec}, {TolPlus}, {TolMinus}, {Min}, {Max}, {Result}, '{Judge}', GETDATE())",
+
+            EnableCameraBarcodeScan = true,
+            TargetCodeType = "ALL",
+            EnableLengthFilter = false,
+            RequiredCodeLength = 0,
+            EnableCodeCrop = false,
+            CropStartIndex = 0,
+            CropLength = 0,
+            ScanTimeoutMs = 3000,
+            UseExternalScanner = false,
+            AutoRunJob = true,
+            OnlyOriginMode = true,
+            SteelPunchMode = true
+        };
+    }
 }
 
 public class OqcMeasurementDetail

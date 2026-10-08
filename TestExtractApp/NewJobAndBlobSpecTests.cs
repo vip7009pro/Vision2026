@@ -210,7 +210,8 @@ public static class NewJobAndBlobSpecTests
             MeasuredMaxLength: 10.0
         ));
 
-        var oqcService = new OqcScannerService();
+        var oqcService = new OqcScannerService(
+            Path.Combine(Path.GetTempPath(), "dummy_oqc_blob.json"), disableBackupSync: true);
         var details = oqcService.ExtractMeasurementDetails(result, config);
 
         var blobRow = details.FirstOrDefault(d => d.ToolName == "DefectCheck" && d.ToolType == "BlobDetection");
