@@ -7,30 +7,28 @@ Hỗ trợ Camera GigE/USB3/USB/RTSP, nạp ảnh tệp/thư mục, bản vẽ k
 ## 2. Trạng thái mã nguồn gần nhất
 - **Phiên bản hiện tại**: .NET 8 WPF, x64/x86 Multi-targeting, C# 12.
 - **Biên dịch**: 0 Errors toàn solution (`VisionInspectionApp.slnx`) cả Debug lẫn Release.
-- **Kiểm thử tự động**: PASSED 100% (Toàn bộ test suite `TestExtractApp`, SystemConfigBackup & OQC DB Match, Release Config Persistence, OQC Scanner Live View, Crosshair Overlay).
+- **Kiểm thử tự động**: PASSED 100% (Toàn bộ test suite `TestExtractApp`, Remote Server & Job Manager, OQC Scanner Live View, Config Persistence, SystemConfigBackup & OQC DB Match).
 - **Cấu hình chuẩn xưởng CMS_VINA**: 
   - Database: `CMS_VINA` (192.168.1.2:6789)
   - OQC Server API: `https://192.168.1.192/vision_upload.php`
   - OTA Update Server: `http://192.168.1.192/update/version.json` & `http://192.168.1.192/ota_server.php`
 
-## 3. Hoàn thành Task 397: Khắc Phục Lỗi Mất Dữ Liệu Cấu Hình OQC Scanner & Tra Cứu Database
-1. **Nguyên nhân gốc (Root Cause)**:
-   - Bài test `SystemConfigBackupAndOqcDbMatchTests.cs` (Test 6) restore cấu hình test giả lập (`machine-b-guid`, `OQC_MASTER`, query rỗng) qua `OqcScannerService.SaveConfig()`, ghi đè thẳng vào `%AppData%\Vision2026\oqc_scanner_config.json` và hạt giống `configs\system`.
-   - `DbManagerService.SaveToDisk()` luôn gọi `SyncConfigToAppBackup` ghi đè CSDL hạt giống thành dummy DB (`MES_PRODUCTION`, `machine-b-guid`).
-   - Target `SyncReleaseConfigurations` của MSBuild copy các file hỏng này vào bản build khiến app mở lên bị mất toàn bộ cấu hình CSDL và SQL queries thực tế của nhà máy CMS_VINA.
-2. **Giải pháp xử lý triệt để**:
-   - **Isolated Sandbox cho Test Suite**: Bổ sung constructor `OqcScannerService(string? customConfigFilePath, string? customHistoryFilePath, bool disableBackupSync = false)` và `DbManagerService(string? customConfigFilePath, bool disableBackupSync = false)`. Toàn bộ unit test chạy trên file tạm trong thư mục Temp, tuyệt đối không chạm vào AppData hay file hạt giống backup.
-   - **Production Safe Guard (`SanitizeProductionConfig`)**: Tự động phát hiện và thanh lọc các ID dummy test (`machine-a-guid`, `machine-b-guid`...), tự động bảo toàn kết nối CSDL và các câu lệnh SQL tra cứu thực tế của xưởng CMS_VINA.
-   - **Nút Khôi phục trên UI**: Bổ sung nút `↺ Khôi Phục Xưởng (CMS_VINA)` kèm lệnh `ResetFactorySettingsCommand` trên [OqcSettingsDialog.xaml](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/Views/OQC/OqcSettingsDialog.xaml) để phục hồi ngay toàn bộ cấu hình xưởng chỉ với 1 click.
-   - **Đồng bộ hạt giống sạch**: Khôi phục lại bản chuẩn xưởng CMS_VINA trên toàn bộ thư mục hạt giống `configs\system` và `%AppData%`.
-3. **Kiểm thử và xác thực**:
-   - `dotnet run --project TestExtractApp backup`: 6/6 tests PASSED 100%.
-   - `dotnet run --project TestExtractApp config-persist`: 6/6 tests PASSED 100%.
-   - `dotnet run --project TestExtractApp oqc`: 12/12 tests PASSED 100%.
-   - `dotnet build VisionInspectionApp.slnx`: 0 Error(s).
-   - Xác nhận dữ liệu trong AppData và build output giữ nguyên 100% CSDL `CMS_VINA` (192.168.1.2:6789), các câu truy vấn SQL thực tế và Server URL `https://192.168.1.192/vision_upload.php`.
+## 3. Hoàn thành Task 398: Tự Động Đóng Cửa Sổ Quản Lý Job Khi Bấm Huấn Luyện Từ Xa
+1. **Yêu cầu & Vấn đề**:
+   - Khi ở cửa sổ "Quản Lý Job & Huấn Luyện" (`JobManagerWindow`), chọn Job và bấm "Huấn Luyện Từ Xa (Remote Teach)", sau khi tải Job và ảnh mẫu thành công, cửa sổ Quản Lý Job vẫn hiển thị che khuất màn hình Tool Editor, người dùng phải mất thêm thao tác tắt cửa sổ thủ công.
+2. **Giải pháp đã thực hiện**:
+   - Trong `JobManagerViewModel.ExecuteRemoteTeachAsync()`:
+     - Thêm lệnh kích hoạt sự kiện `RequestClose?.Invoke()` ngay sau khi chuyển Tab sang Tool Editor (`_mainWindowViewModel.SelectedTabIndex = 0`).
+     - Handler `viewModel.RequestClose += () => Dispatcher.Invoke(Close);` trong [JobManagerWindow.xaml.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/Views/OQC/JobManagerWindow.xaml.cs) lập tức đóng cửa sổ Quản lý Job.
+     - Cập nhật thông báo trực tiếp lên thanh trạng thái chính `MainWindowViewModel.GlobalStatusMessage` và `GlobalStatusSeverity = "Success"`.
+   - Bổ sung kiểm thử `Test_JobManagerRemoteTeach_WindowCloseBehavior()` trong [RemoteServerAndJobManagerTests.cs](file:///g:/NODEJS/Vision2026/TestExtractApp/RemoteServerAndJobManagerTests.cs).
+3. **Kết quả xác thực**:
+   - Solution biên dịch 0 Errors.
+   - 13/13 tests Remote Server & Job Manager PASSED 100%.
+   - 12/12 tests OQC Scanner Live View PASSED 100%.
 
 ## 4. Các sự kiện & thay đổi gần đây
+- Task 398: Tự động đóng cửa sổ Quản lý Job & Huấn luyện khi bấm Huấn Luyện Từ Xa sau khi nạp xong Job và ảnh mẫu lên Tool Editor.
 - Task 397: Khắc phục triệt để lỗi mất dữ liệu cấu hình OQC Scanner & Tra cứu Database khi build app và chạy test; thiết lập Isolated Sandbox và Safe Guard bảo vệ CSDL xưởng CMS_VINA; thêm nút khôi phục xưởng trên UI.
 - Task 396: Khắc phục triệt để lỗi mất link Server OTA khi build app & chạy test suite; thiết lập Isolated Sandbox cho unit test và Safe Guard bảo vệ cấu hình sản xuất.
 - Task 395: Tự động Focus & Select All Scanned Text trên Tab OQC Scanner (ghi đè tự động chuỗi mã khi scan, không cần xóa thủ công, hạn chế tối đa chạm bàn phím).

@@ -779,8 +779,14 @@ public partial class JobManagerViewModel : ObservableObject
             // 6. Chuyển sang Tab Tool Editor
             _mainWindowViewModel.SelectedTabIndex = 0;
 
+            _mainWindowViewModel.GlobalStatusMessage = $"🌐 Đã nạp môi trường Huấn Luyện Từ Xa cho '{SelectedItem.ProductCode}' (Ảnh mẫu: {Path.GetFileName(fullTeachUrl)})";
+            _mainWindowViewModel.GlobalStatusSeverity = "Success";
+
             StatusMessage = $"✅ Đã chuẩn bị môi trường Huấn luyện từ xa cho '{SelectedItem.ProductCode}'!";
             StatusBrush = Brushes.Green;
+
+            // 7. Tự động đóng cửa sổ Quản Lý Job & Huấn Luyện sau khi nạp môi trường thành công
+            RequestClose?.Invoke();
 
             string jobInfo = localTeachingJobPath != null
                 ? $"\n- Tệp Job đã tải về: {localTeachingJobPath}"

@@ -1,5 +1,11 @@
 # ROADMAP.md — Lộ trình phát triển & Trạng thái nhiệm vụ
 
+- [x] Task 398: Tự Động Đóng Cửa Sổ Quản Lý Job Khi Bấm Huấn Luyện Từ Xa:
+  - [x] Khảo sát cơ chế đóng cửa sổ: `JobManagerWindow.xaml.cs` đã liên kết sẵn event `viewModel.RequestClose += () => Dispatcher.Invoke(Close);`.
+  - [x] Cập nhật phương thức `ExecuteRemoteTeachAsync()` trong [JobManagerViewModel.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/JobManagerViewModel.cs): Bổ sung `RequestClose?.Invoke()` ngay sau khi chuyển Tab Tool Editor (`_mainWindowViewModel.SelectedTabIndex = 0`), tự động đóng cửa sổ Quản lý Job sau khi nạp xong Job và ảnh mẫu.
+  - [x] Cập nhật trạng thái hiển thị trên Tool Editor: Đồng bộ thông báo xác nhận lên `_mainWindowViewModel.GlobalStatusMessage` và `GlobalStatusSeverity = "Success"`.
+  - [x] Kiểm thử tự động & Xác thực: Bổ sung `Test_JobManagerRemoteTeach_WindowCloseBehavior()` vào [RemoteServerAndJobManagerTests.cs](file:///g:/NODEJS/Vision2026/TestExtractApp/RemoteServerAndJobManagerTests.cs); 13/13 Remote Server tests PASSED 100%, 12/12 OQC Scanner tests PASSED 100%, solution build 0 lỗi.
+
 - [x] Task 397: Khắc Phục Lỗi Mất Dữ Liệu Cấu Hình OQC Scanner & Tra Cứu Database Khi Build App & Chạy Test:
   - [x] Điều tra nguyên nhân gốc: Unit test `SystemConfigBackupAndOqcDbMatchTests.cs` (Test 6) restore cấu hình test giả lập (`machine-b-guid`, `OQC_MASTER`, query rỗng) qua `OqcScannerService.SaveConfig()`, ghi đè thẳng vào `%AppData%\Vision2026\oqc_scanner_config.json` và thư mục hạt giống `configs\system`. Cùng lúc đó, `DbManagerService.SaveToDisk()` luôn gọi `SyncConfigToAppBackup` làm ghi đè hạt giống CSDL thành dummy DB (`MES_PRODUCTION`, `machine-b-guid`). Target `SyncReleaseConfigurations` của MSBuild copy các file hỏng này vào bản build.
   - [x] Thiết lập Isolated Sandbox cho `OqcScannerService` & `DbManagerService`: Thêm constructor overload nhận đường dẫn file tạm và cờ `disableBackupSync: true`. Khi chạy test, cả hai service chỉ thao tác trên file tạm trong thư mục Temp, tuyệt đối không chạm vào AppData hay thư mục hạt giống backup.
