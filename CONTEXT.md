@@ -7,31 +7,35 @@ Hỗ trợ Camera GigE/USB3/USB/RTSP, nạp ảnh tệp/thư mục, bản vẽ k
 ## 2. Trạng thái mã nguồn gần nhất
 - **Phiên bản hiện tại**: .NET 8 WPF, x64/x86 Multi-targeting, C# 12.
 - **Biên dịch**: 0 Errors toàn solution (`VisionInspectionApp.slnx`) cả Debug lẫn Release.
-- **Kiểm thử tự động**: PASSED 100% (Toàn bộ test suite `TestExtractApp`, Remote Server & Job Manager, OQC Scanner Live View, Config Persistence, SystemConfigBackup & OQC DB Match).
+- **Kiểm thử tự động**: PASSED 100% (Toàn bộ 13/13 test suite OQC Scanner Live View bao gồm Test 13 Multi-Inspect History Retention, Remote Server & Job Manager, Config Persistence, SystemConfigBackup & OQC DB Match).
 - **Cấu hình chuẩn xưởng CMS_VINA**: 
   - Database: `CMS_VINA` (192.168.1.2:6789)
   - OQC Server API: `https://192.168.1.192/vision_upload.php`
   - OTA Update Server: `http://192.168.1.192/update/version.json` & `http://192.168.1.192/ota_server.php`
 
-## 3. Hoàn thành Task 398: Tự Động Đóng Cửa Sổ Quản Lý Job Khi Bấm Huấn Luyện Từ Xa
+## 3. Hoàn thành Task 399: Sửa Lỗi Không Lưu Lịch Sử Kiểm Tra Khi Kiểm Tra Nhiều Lần Trong 1 Phiên Job
 1. **Yêu cầu & Vấn đề**:
-   - Khi ở cửa sổ "Quản Lý Job & Huấn Luyện" (`JobManagerWindow`), chọn Job và bấm "Huấn Luyện Từ Xa (Remote Teach)", sau khi tải Job và ảnh mẫu thành công, cửa sổ Quản Lý Job vẫn hiển thị che khuất màn hình Tool Editor, người dùng phải mất thêm thao tác tắt cửa sổ thủ công.
-2. **Giải pháp đã thực hiện**:
-   - Trong `JobManagerViewModel.ExecuteRemoteTeachAsync()`:
-     - Thêm lệnh kích hoạt sự kiện `RequestClose?.Invoke()` ngay sau khi chuyển Tab sang Tool Editor (`_mainWindowViewModel.SelectedTabIndex = 0`).
-     - Handler `viewModel.RequestClose += () => Dispatcher.Invoke(Close);` trong [JobManagerWindow.xaml.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/Views/OQC/JobManagerWindow.xaml.cs) lập tức đóng cửa sổ Quản lý Job.
-     - Cập nhật thông báo trực tiếp lên thanh trạng thái chính `MainWindowViewModel.GlobalStatusMessage` và `GlobalStatusSeverity = "Success"`.
-   - Bổ sung kiểm thử `Test_JobManagerRemoteTeach_WindowCloseBehavior()` trong [RemoteServerAndJobManagerTests.cs](file:///g:/NODEJS/Vision2026/TestExtractApp/RemoteServerAndJobManagerTests.cs).
-3. **Kết quả xác thực**:
-   - Solution biên dịch 0 Errors.
-   - 13/13 tests Remote Server & Job Manager PASSED 100%.
-   - 12/12 tests OQC Scanner Live View PASSED 100%.
+   - Khi mở 1 phiên Job trên màn hình Tab OQC Scanner, công nhân chụp và kiểm tra nhiều lần (nhiều sản phẩm/phôi liên tiếp bằng Space / Ctrl+F8 hoặc nút UI "Chạy Job"), bảng lịch sử OQC log chỉ lưu duy nhất 1 lần cho Job đó, các lần kiểm tra sau bị ghi đè lên dòng cũ hoặc không được ghi nhận vào CSDL.
+2. **Nguyên nhân gốc rễ**:
+   - Trong `OqcScannerViewModel.HandleInspectionCompletedAsync()`: code dùng `FirstOrDefault(e => e.ScannedCode == processedCode...)` tìm lại dòng đầu tiên và gán đè trực tiếp kết quả, khiến bảng `ScanHistory` luôn chỉ giữ 1 dòng của Job.
+   - Trong `RunJob()`: logic tạo dòng placeholder `"Đang kiểm tra..."` bị phân mảnh và chỉ tạo khi nạp Job từ barcode/label, ở các lần chạy thứ 2 trở đi hoặc khi nạp từ Job Manager thì không tạo dòng pending mới.
+   - Trong `ExecuteScanAsync()`: nhánh chặn mã trùng vô hiệu hóa nút bấm UI khi đã nạp Job thay vì gọi `RunJob()`.
+3. **Giải pháp đã thực hiện**:
+   - Chuẩn hóa `RunJob()`: Mỗi lần bấm kiểm tra (lần 1, 2, 3...) khi Job đang mở, nếu chưa có dòng pending thì tạo ngay một bản ghi mới `historyEntry` vào `ScanHistory` với trạng thái `"Đang kiểm tra..."` và thời gian hiện tại (`DateTime.Now`).
+   - Chuẩn hóa `HandleInspectionCompletedAsync()`: Tìm dòng pending (`"Đang kiểm tra..."` hoặc `"Đã nạp Job"`). Nếu có thì cập nhật kết quả (PASS/NG, Uuid, chi tiết đo), nếu không có thì tạo mới một bản ghi độc lập và đưa vào `ScanHistory`.
+   - Ghi log CSDL (`LogInspectionResultAsync`): Gán `currentEntry.DbLogStatus` trực tiếp lên đúng entry của lần kiểm tra đó.
+   - Chuẩn hóa `ExecuteTriggerInspectOrLiveAsync` và `ExecuteScanAsync`: Bấm nút UI hoặc Space/Ctrl+F8 luôn gọi `RunJob()` nếu đã nạp Job.
+   - Bổ sung Unit Test 13 trong [OqcLiveViewOnJobLoadTests.cs](file:///g:/NODEJS/Vision2026/TestExtractApp/OqcLiveViewOnJobLoadTests.cs) kiểm tra chạy liên tiếp 3 lần kiểm tra trong 1 phiên Job, xác nhận 3 bản ghi độc lập với Uuid và kết quả PASS/NG riêng biệt.
+4. **Kết quả xác thực**:
+   - 13/13 tests OQC Scanner PASSED 100%.
+   - Toàn bộ Solution biên dịch 0 Errors.
 
 ## 4. Các sự kiện & thay đổi gần đây
+- Task 399: Sửa lỗi không lưu lịch sử kiểm tra khi kiểm tra nhiều lần trong 1 phiên Job (mỗi lần kiểm tra đều lưu bản ghi lịch sử và log DB).
 - Task 398: Tự động đóng cửa sổ Quản lý Job & Huấn luyện khi bấm Huấn Luyện Từ Xa sau khi nạp xong Job và ảnh mẫu lên Tool Editor.
 - Task 397: Khắc phục triệt để lỗi mất dữ liệu cấu hình OQC Scanner & Tra cứu Database khi build app và chạy test; thiết lập Isolated Sandbox và Safe Guard bảo vệ CSDL xưởng CMS_VINA; thêm nút khôi phục xưởng trên UI.
 - Task 396: Khắc phục triệt để lỗi mất link Server OTA khi build app & chạy test suite; thiết lập Isolated Sandbox cho unit test và Safe Guard bảo vệ cấu hình sản xuất.
-- Task 395: Tự động Focus & Select All Scanned Text trên Tab OQC Scanner (ghi đè tự động chuỗi mã khi scan, không cần xóa thủ công, hạn chế tối đa chạm bàn phím).
+- Task 395: Tự động Focus & Select All Scanned Text trên Tab OQC Scanner (ghi đè tự động chuỗi mã khi scan, không cần xóa thủ công).
 - Task 394: Bổ sung phím tắt ESC đóng Job và xóa ô nhập mã TextBox trên Tab OQC Scanner (1 chạm không pop-up, đồng bộ nút UI "🔒 Đóng Job (ESC)").
 - Task 393: Bổ sung Chế độ "Cú đấm thép" trên Tab OQC Scanner (mặc định Checked, bảo toàn chuỗi mã scan trên TextBox, vô hiệu hóa phím Enter từ scanner khi đã mở Job, luân phiên Space/Ctrl+F8 kiểm tra mẫu/Live View).
 - Task 392: Chuẩn hóa chu trình dịch bit hàng đợi FX5U theo xung kết quả Vision Done (`M103`) thay vì cảm biến `X2`.
@@ -49,5 +53,3 @@ Hỗ trợ Camera GigE/USB3/USB/RTSP, nạp ảnh tệp/thư mục, bản vẽ k
 - Task 380: OQC Scanner 1 nút Space / Ctrl+F8 luân phiên Kiểm tra & Live View, Crosshair căn tâm mặc định bật cho Job Camera Settings.
 - Task 379: Tăng tốc Auto Tune bằng ĐA LUỒNG ĐA NHÂN (`Parallel.For`, cap 4-8 luồng).
 - Task 378: Tối ưu hiệu năng/UX Tool Editor (cache preview Final, chống rò rỉ RAM Mat, thuật toán Coordinate Descent cho Auto Tune).
-- Task 377: Sửa lỗi Copy/Paste nhiều node trong Tool Editor & thêm Preprocess Auto Tuner.
-- Task 376: Ô nhập SỐ ĐO THỰC TẾ (mm) riêng cạnh nút "Đặt Hệ Số Calib" (không ghi đè Spec).

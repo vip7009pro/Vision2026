@@ -518,22 +518,6 @@ public partial class OqcScannerViewModel : ObservableObject
                 _lastScannedRawCode = extractedRawCode;
                 _toolEditorViewModel.ProductCode = processedCode;
                 _inspectionViewModel.ProductCode = processedCode;
-
-                if (!ScanHistory.Any(e => e.ScannedCode == processedCode && e.InspectResult == "Đang kiểm tra..."))
-                {
-                    var historyEntry = new OqcScanHistoryEntry
-                    {
-                        Time = DateTime.Now,
-                        ScannedCode = processedCode,
-                        ProductName = CurrentProductName,
-                        JobFilePath = CurrentJobFilePath,
-                        InspectResult = "Đang kiểm tra...",
-                        ResultBrushHex = "#1E88E5",
-                        Success = true,
-                        Message = "OK"
-                    };
-                    AddHistory(historyEntry);
-                }
             }
             else if (!string.IsNullOrWhiteSpace(rawInput) && rawInput != _lastScannedRawCode && rawInput != _lastScannedProcessedCode)
             {
@@ -549,22 +533,6 @@ public partial class OqcScannerViewModel : ObservableObject
                 _lastScannedRawCode = extractedRawCode;
                 _toolEditorViewModel.ProductCode = processedCode;
                 _inspectionViewModel.ProductCode = processedCode;
-
-                if (!ScanHistory.Any(e => e.ScannedCode == processedCode && e.InspectResult == "Đang kiểm tra..."))
-                {
-                    var historyEntry = new OqcScanHistoryEntry
-                    {
-                        Time = DateTime.Now,
-                        ScannedCode = processedCode,
-                        ProductName = CurrentProductName,
-                        JobFilePath = CurrentJobFilePath,
-                        InspectResult = "Đang kiểm tra...",
-                        ResultBrushHex = "#1E88E5",
-                        Success = true,
-                        Message = "OK"
-                    };
-                    AddHistory(historyEntry);
-                }
             }
         }
         else if (SteelPunchMode && !string.IsNullOrWhiteSpace(rawInput))
@@ -584,29 +552,50 @@ public partial class OqcScannerViewModel : ObservableObject
                 _lastScannedRawCode = extractedRawCode;
                 _toolEditorViewModel.ProductCode = processedCode;
                 _inspectionViewModel.ProductCode = processedCode;
-
-                if (!ScanHistory.Any(e => e.ScannedCode == processedCode && e.InspectResult == "Đang kiểm tra..."))
+            }
+        }
+        else if (!string.IsNullOrWhiteSpace(rawInput))
+        {
+            if (rawInput != _lastScannedRawCode && rawInput != _lastScannedProcessedCode)
+            {
+                var (valid, processedCode, extractedRawCode, filterError) = _oqcService.ProcessRawCodeString(rawInput);
+                if (valid)
                 {
-                    var historyEntry = new OqcScanHistoryEntry
-                    {
-                        Time = DateTime.Now,
-                        ScannedCode = processedCode,
-                        ProductName = CurrentProductName,
-                        JobFilePath = CurrentJobFilePath,
-                        InspectResult = "Đang kiểm tra...",
-                        ResultBrushHex = "#1E88E5",
-                        Success = true,
-                        Message = "OK"
-                    };
-                    AddHistory(historyEntry);
+                    _lastScannedProcessedCode = processedCode;
+                    _lastScannedRawCode = extractedRawCode;
+                    _toolEditorViewModel.ProductCode = processedCode;
+                    _inspectionViewModel.ProductCode = processedCode;
                 }
             }
-            else if (_lastScannedProcessedCode != null && !ScanHistory.Any(e => e.ScannedCode == _lastScannedProcessedCode && e.InspectResult == "Đang kiểm tra..."))
+        }
+
+        if (!string.IsNullOrWhiteSpace(CurrentJobFilePath) && CurrentJobFilePath != "-" && CurrentJobFilePath != "Chưa có Job")
+        {
+            string effectiveCode = !string.IsNullOrWhiteSpace(_lastScannedProcessedCode)
+                ? _lastScannedProcessedCode
+                : (!string.IsNullOrWhiteSpace(_toolEditorViewModel.ProductCode)
+                    ? _toolEditorViewModel.ProductCode
+                    : CurrentProductName);
+
+            // Kiểm tra xem đã có dòng pending nào ("Đang kiểm tra..." hoặc "Đã nạp Job") cho mã này chưa
+            var existingPending = ScanHistory.FirstOrDefault(e =>
+                (string.Equals(e.ScannedCode, effectiveCode, StringComparison.OrdinalIgnoreCase) ||
+                 (!string.IsNullOrWhiteSpace(_lastScannedRawCode) && string.Equals(e.ScannedCode, _lastScannedRawCode, StringComparison.OrdinalIgnoreCase))) &&
+                (e.InspectResult == "Đang kiểm tra..." || e.InspectResult == "Đã nạp Job"));
+
+            if (existingPending != null)
             {
+                existingPending.Time = DateTime.Now;
+                existingPending.InspectResult = "Đang kiểm tra...";
+                existingPending.ResultBrushHex = "#1E88E5";
+            }
+            else
+            {
+                // Thêm dòng mới trạng thái "Đang kiểm tra..." cho lần kiểm tra này (đảm bảo mỗi lần kiểm tra đều có bản ghi lịch sử)
                 var historyEntry = new OqcScanHistoryEntry
                 {
                     Time = DateTime.Now,
-                    ScannedCode = _lastScannedProcessedCode,
+                    ScannedCode = effectiveCode,
                     ProductName = CurrentProductName,
                     JobFilePath = CurrentJobFilePath,
                     InspectResult = "Đang kiểm tra...",
@@ -616,10 +605,7 @@ public partial class OqcScannerViewModel : ObservableObject
                 };
                 AddHistory(historyEntry);
             }
-        }
 
-        if (!string.IsNullOrWhiteSpace(CurrentJobFilePath) && CurrentJobFilePath != "-" && CurrentJobFilePath != "Chưa có Job")
-        {
             IsShowingLiveCamera = false;
             StatusMessage = $"⌛ Đang chạy kiểm tra Job cho sản phẩm '{CurrentProductName}'...";
             StatusBrush = Brushes.DodgerBlue;
@@ -673,11 +659,7 @@ public partial class OqcScannerViewModel : ObservableObject
         if (IsShowingLiveCamera)
         {
             // 1. Đang ở chế độ Live View -> Kích hoạt kiểm tra hàng
-            if (SteelPunchMode && HasLoadedJob)
-            {
-                RunJob();
-            }
-            else if (UseExternalScanner || IsJobLoadedFromManager || (!AutoRunJob && !string.IsNullOrWhiteSpace(CurrentJobFilePath) && CurrentJobFilePath != "-" && CurrentJobFilePath != "Chưa có Job"))
+            if (HasLoadedJob)
             {
                 RunJob();
             }
@@ -970,14 +952,14 @@ public partial class OqcScannerViewModel : ObservableObject
     {
         if (IsScanning || _isOqcRunInProgress) return;
 
-        // Chế độ Cú đấm thép: Khi Job đã được mở trong phiên này, nếu phím Enter truyền sang
-        // với mã trùng với mã của phiên hiện tại thì coi như không thực hiện gì khi Enter.
-        // Chỉ khi scan mã tiếp theo (mã khác) thì mới tiến hành nạp Job tiếp tương ứng!
-        if (SteelPunchMode && HasLoadedJob)
+        // Khi Job đã nạp trong phiên này:
+        // Nếu nhấn nút "CHẠY JOB" trên giao diện (hoặc mã trống / cùng mã phiên hiện tại), thực thi chạy kiểm tra Job ngay lập tức!
+        if (HasLoadedJob)
         {
             string rawInput = ScannedCode?.Trim() ?? "";
-            if (IsSameAsCurrentSessionCode(rawInput))
+            if (string.IsNullOrWhiteSpace(rawInput) || IsSameAsCurrentSessionCode(rawInput))
             {
+                RunJob();
                 return;
             }
         }
@@ -1258,6 +1240,12 @@ public partial class OqcScannerViewModel : ObservableObject
 
         string rawCode = !string.IsNullOrWhiteSpace(_lastScannedRawCode) ? _lastScannedRawCode : processedCode;
 
+        if (string.IsNullOrWhiteSpace(_lastScannedProcessedCode))
+        {
+            _lastScannedProcessedCode = processedCode;
+            _lastScannedRawCode = rawCode;
+        }
+
         string productName = CurrentProductName;
         string path = CurrentJobFilePath;
         string uuid = Guid.NewGuid().ToString("N");
@@ -1297,30 +1285,64 @@ public partial class OqcScannerViewModel : ObservableObject
         string colorHex = effectivePass ? "#2E7D32" : "#D32F2F";
         Brush statusBrush = effectivePass ? Brushes.ForestGreen : Brushes.Crimson;
 
-        // Always update UI Scan History entry & Refresh Preview Image
-        System.Windows.Application.Current?.Dispatcher?.Invoke(() =>
+        OqcScanHistoryEntry currentEntry = null!;
+
+        void UpdateUiAndHistory()
         {
             CurrentJobTestedCount++;
-            if (ScanHistory.Count > 0)
+
+            // Tìm dòng pending (đang chờ kết quả) trong lịch sử:
+            // Là dòng có ScannedCode khớp với mã sản phẩm này VÀ có InspectResult là "Đang kiểm tra..." hoặc "Đã nạp Job"
+            var pendingEntry = ScanHistory.FirstOrDefault(e =>
+                (string.Equals(e.ScannedCode, processedCode, StringComparison.OrdinalIgnoreCase) ||
+                 (!string.IsNullOrWhiteSpace(rawCode) && string.Equals(e.ScannedCode, rawCode, StringComparison.OrdinalIgnoreCase))) &&
+                (e.InspectResult == "Đang kiểm tra..." || e.InspectResult == "Đã nạp Job"));
+
+            if (pendingEntry != null)
             {
-                var entry = ScanHistory.FirstOrDefault(e => string.Equals(e.ScannedCode, processedCode, StringComparison.OrdinalIgnoreCase) || string.Equals(e.ScannedCode, rawCode, StringComparison.OrdinalIgnoreCase)) 
-                            ?? ScanHistory[0];
-
-                entry.ScannedCode = processedCode;
-                entry.Uuid = uuid;
-                entry.InspectResult = statusStr;
-                entry.InspectDetails = details;
-                entry.ResultBrushHex = colorHex;
-                entry.OutputImagePath = outputImagePath;
-                entry.MeasurementDetails = measurementDetails;
-
-                StatusMessage = effectivePass
-                    ? $"✅ SẢN PHẨM '{productName}' ({processedCode}) -> KẾT QUẢ: PASS (OK)"
-                    : $"❌ SẢN PHẨM '{productName}' ({processedCode}) -> KẾT QUẢ: NG! Lý do: {details}";
-                StatusBrush = statusBrush;
-
-                LatestScanEntry = entry;
+                // Cập nhật kết quả vào dòng pending hiện có
+                pendingEntry.Time = DateTime.Now;
+                pendingEntry.ScannedCode = processedCode;
+                pendingEntry.ProductName = productName;
+                pendingEntry.JobFilePath = path;
+                pendingEntry.Uuid = uuid;
+                pendingEntry.InspectResult = statusStr;
+                pendingEntry.InspectDetails = details;
+                pendingEntry.ResultBrushHex = colorHex;
+                pendingEntry.OutputImagePath = outputImagePath;
+                pendingEntry.MeasurementDetails = measurementDetails;
+                pendingEntry.Success = true;
+                pendingEntry.Message = "OK";
+                currentEntry = pendingEntry;
             }
+            else
+            {
+                // Không có dòng pending (ví dụ: các lần chụp và kiểm tiếp theo cho cùng 1 phiên Job đang mở)
+                // BẮT BUỘC TẠO DÒNG MỚI ĐỂ LƯU TOÀN BỘ LỊCH SỬ TỪNG LẦN KIỂM TRA!
+                currentEntry = new OqcScanHistoryEntry
+                {
+                    Time = DateTime.Now,
+                    ScannedCode = processedCode,
+                    ProductName = productName,
+                    JobFilePath = path,
+                    Uuid = uuid,
+                    InspectResult = statusStr,
+                    InspectDetails = details,
+                    ResultBrushHex = colorHex,
+                    OutputImagePath = outputImagePath,
+                    MeasurementDetails = measurementDetails,
+                    Success = true,
+                    Message = "OK"
+                };
+                AddHistory(currentEntry);
+            }
+
+            StatusMessage = effectivePass
+                ? $"✅ SẢN PHẨM '{productName}' ({processedCode}) -> KẾT QUẢ: PASS (OK)"
+                : $"❌ SẢN PHẨM '{productName}' ({processedCode}) -> KẾT QUẢ: NG! Lý do: {details}";
+            StatusBrush = statusBrush;
+
+            LatestScanEntry = currentEntry;
 
             // Update Big Result Display & Measurement Details (50/50 Layout)
             BigResultStatusText = effectivePass ? "PASS" : "NG";
@@ -1353,10 +1375,13 @@ public partial class OqcScannerViewModel : ObservableObject
             // Đồng bộ kết quả chung của result theo effectivePass khi bật chế độ chỉ bắt Origin
             result.Pass = effectivePass;
 
-            CurrentMeasurementDetails.Clear();
-            foreach (var m in measurementDetails)
+            CurrentMeasurementDetails?.Clear();
+            if (CurrentMeasurementDetails != null)
             {
-                CurrentMeasurementDetails.Add(m);
+                foreach (var m in measurementDetails)
+                {
+                    CurrentMeasurementDetails.Add(m);
+                }
             }
 
             if (IsJobLoadedFromManager)
@@ -1381,18 +1406,27 @@ public partial class OqcScannerViewModel : ObservableObject
             }
 
             TriggerFocusAndSelectInput();
-        });
+        }
+
+        if (System.Windows.Application.Current?.Dispatcher != null)
+        {
+            System.Windows.Application.Current.Dispatcher.Invoke(UpdateUiAndHistory);
+        }
+        else
+        {
+            UpdateUiAndHistory();
+        }
 
         // Log result to Database if enabled
         if ((_oqcService.Config.LogResultToDb || _oqcService.Config.LogDetailResultToDb) && config != null)
         {
             var (dbSuccess, dbMsg) = await _oqcService.LogInspectionResultAsync(processedCode, uuid, path, result, config, _dbManager, measurementDetails, rawCode);
-            System.Windows.Application.Current?.Dispatcher?.Invoke(() =>
+
+            void UpdateDbStatus()
             {
-                if (ScanHistory.Count > 0)
+                if (currentEntry != null)
                 {
-                    var entry = ScanHistory.FirstOrDefault(e => string.Equals(e.ScannedCode, processedCode, StringComparison.OrdinalIgnoreCase)) ?? ScanHistory[0];
-                    entry.DbLogStatus = dbSuccess ? "DB: OK" : "DB: LỖI";
+                    currentEntry.DbLogStatus = dbSuccess ? "DB: OK" : "DB: LỖI";
                 }
                 if (!dbSuccess)
                 {
@@ -1403,7 +1437,16 @@ public partial class OqcScannerViewModel : ObservableObject
                     StatusMessage += $" | 💾 {dbMsg}";
                 }
                 _oqcService.SaveScanHistory(ScanHistory);
-            });
+            }
+
+            if (System.Windows.Application.Current?.Dispatcher != null)
+            {
+                System.Windows.Application.Current.Dispatcher.Invoke(UpdateDbStatus);
+            }
+            else
+            {
+                UpdateDbStatus();
+            }
         }
 
         // Kích hoạt kịch bản nháy đèn cảnh báo NG (NG Blink Pattern) nếu kết quả kiểm tra NG

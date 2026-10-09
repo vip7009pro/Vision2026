@@ -29,6 +29,7 @@ public static class OqcLiveViewOnJobLoadTests
         TestOqcSteelPunchMode();
         TestOqcEscapeKeyCloseJobAndClearText();
         TestOqcAutoSelectScannedText();
+        TestOqcMultiInspectHistoryRetention();
 
         Console.WriteLine("=======================================================");
         Console.WriteLine("✅ ALL OQC SCANNER LIVE VIEW TESTS PASSED!");
@@ -983,6 +984,143 @@ public static class OqcLiveViewOnJobLoadTests
         }
 
         Console.WriteLine("  -> PASSED: Tính năng tự động Focus & Select All Scanned Text hoạt động hoàn hảo 100%.");
+    }
+
+    private static void TestOqcMultiInspectHistoryRetention()
+    {
+        Console.WriteLine("--- Test 13: Kiểm tra lưu lịch sử kiểm tra cho mọi lần chụp và kiểm trong cùng 1 phiên Job ---");
+
+        var thread = new System.Threading.Thread(() =>
+        {
+            var vm = (VisionInspectionApp.UI.ViewModels.OqcScannerViewModel)System.Runtime.Serialization.FormatterServices.GetUninitializedObject(typeof(VisionInspectionApp.UI.ViewModels.OqcScannerViewModel));
+
+            var oqcService = new VisionInspectionApp.Application.OQC.OqcScannerService(
+                System.IO.Path.Combine(System.IO.Path.GetTempPath(), "dummy_oqc_test_hist.json"), disableBackupSync: true);
+            typeof(VisionInspectionApp.UI.ViewModels.OqcScannerViewModel)
+                .GetField("_oqcService", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)?
+                .SetValue(vm, oqcService);
+
+            var scanHistory = new System.Collections.ObjectModel.ObservableCollection<VisionInspectionApp.Models.OqcScanHistoryEntry>();
+            typeof(VisionInspectionApp.UI.ViewModels.OqcScannerViewModel)
+                .GetField("<ScanHistory>k__BackingField", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)?
+                .SetValue(vm, scanHistory);
+
+            typeof(VisionInspectionApp.UI.ViewModels.OqcScannerViewModel)
+                .GetField("_currentMeasurementDetails", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)?
+                .SetValue(vm, new System.Collections.ObjectModel.ObservableCollection<VisionInspectionApp.Models.OqcMeasurementDetail>());
+
+            // Cấu hình Job đang mở trong phiên
+            string jobPath = @"C:\VisionJobs\TestProduct.job";
+            string prodCode = "PROD_LOT_001";
+            string prodName = "Product Model Alpha";
+
+            typeof(VisionInspectionApp.UI.ViewModels.OqcScannerViewModel)
+                .GetField("_currentJobFilePath", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)?
+                .SetValue(vm, jobPath);
+
+            typeof(VisionInspectionApp.UI.ViewModels.OqcScannerViewModel)
+                .GetField("_currentProductName", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)?
+                .SetValue(vm, prodName);
+
+            typeof(VisionInspectionApp.UI.ViewModels.OqcScannerViewModel)
+                .GetField("_lastScannedProcessedCode", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)?
+                .SetValue(vm, prodCode);
+
+            typeof(VisionInspectionApp.UI.ViewModels.OqcScannerViewModel)
+                .GetField("_currentSessionProductCode", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)?
+                .SetValue(vm, prodCode);
+
+            typeof(VisionInspectionApp.UI.ViewModels.OqcScannerViewModel)
+                .GetField("_scannedCode", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)?
+                .SetValue(vm, prodCode);
+
+            // Giả lập ToolEditorViewModel
+            var toolEditorVm = (VisionInspectionApp.UI.ViewModels.ToolEditorViewModel)System.Runtime.Serialization.FormatterServices.GetUninitializedObject(typeof(VisionInspectionApp.UI.ViewModels.ToolEditorViewModel));
+            typeof(VisionInspectionApp.UI.ViewModels.OqcScannerViewModel)
+                .GetField("_toolEditorViewModel", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)?
+                .SetValue(vm, toolEditorVm);
+
+            var config = new VisionInspectionApp.Models.VisionConfig
+            {
+                ProductCode = prodCode,
+                ProductName = prodName
+            };
+
+            // 1. Lần kiểm tra 1: PASS
+            typeof(VisionInspectionApp.UI.ViewModels.OqcScannerViewModel)
+                .GetField("_isOqcRunInProgress", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)?
+                .SetValue(vm, true);
+
+            var res1 = new InspectionResult { Pass = true };
+            vm.HandleInspectionCompletedAsync(res1, config).GetAwaiter().GetResult();
+
+            if (vm.ScanHistory.Count != 1)
+            {
+                throw new Exception($"Sau lần kiểm tra 1, ScanHistory.Count phải là 1, hiện tại: {vm.ScanHistory.Count}");
+            }
+            if (!vm.ScanHistory[0].InspectResult.Contains("PASS"))
+            {
+                throw new Exception($"Lần kiểm tra 1 phải là PASS, hiện tại: {vm.ScanHistory[0].InspectResult}");
+            }
+            string uuid1 = vm.ScanHistory[0].Uuid;
+            if (string.IsNullOrEmpty(uuid1))
+            {
+                throw new Exception("Lần kiểm tra 1 phải có Uuid hợp lệ!");
+            }
+
+            // 2. Lần kiểm tra 2 trên cùng 1 phiên Job: NG
+            typeof(VisionInspectionApp.UI.ViewModels.OqcScannerViewModel)
+                .GetField("_isOqcRunInProgress", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)?
+                .SetValue(vm, true);
+
+            var res2 = new InspectionResult { Pass = false };
+            vm.HandleInspectionCompletedAsync(res2, config).GetAwaiter().GetResult();
+
+            if (vm.ScanHistory.Count != 2)
+            {
+                throw new Exception($"Sau lần kiểm tra 2 trên cùng phiên Job, ScanHistory.Count phải là 2 (không được ghi đè lần 1)! Hiện tại: {vm.ScanHistory.Count}");
+            }
+            if (!vm.ScanHistory[0].InspectResult.Contains("NG"))
+            {
+                throw new Exception($"Lần kiểm tra 2 (dòng mới nhất ở index 0) phải là NG, hiện tại: {vm.ScanHistory[0].InspectResult}");
+            }
+            if (!vm.ScanHistory[1].InspectResult.Contains("PASS"))
+            {
+                throw new Exception($"Lần kiểm tra 1 (ở index 1) phải được bảo toàn là PASS, hiện tại: {vm.ScanHistory[1].InspectResult}");
+            }
+            string uuid2 = vm.ScanHistory[0].Uuid;
+            if (uuid1 == uuid2)
+            {
+                throw new Exception("Lần kiểm tra 2 phải có Uuid mới, không được trùng với lần kiểm tra 1!");
+            }
+
+            // 3. Lần kiểm tra 3 trên cùng 1 phiên Job: PASS
+            typeof(VisionInspectionApp.UI.ViewModels.OqcScannerViewModel)
+                .GetField("_isOqcRunInProgress", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)?
+                .SetValue(vm, true);
+
+            var res3 = new InspectionResult { Pass = true };
+            vm.HandleInspectionCompletedAsync(res3, config).GetAwaiter().GetResult();
+
+            if (vm.ScanHistory.Count != 3)
+            {
+                throw new Exception($"Sau lần kiểm tra 3, ScanHistory.Count phải là 3, hiện tại: {vm.ScanHistory.Count}");
+            }
+            if (!vm.ScanHistory[0].InspectResult.Contains("PASS"))
+            {
+                throw new Exception($"Lần kiểm tra 3 phải là PASS, hiện tại: {vm.ScanHistory[0].InspectResult}");
+            }
+            if (vm.CurrentJobTestedCount != 3)
+            {
+                throw new Exception($"CurrentJobTestedCount phải là 3, hiện tại: {vm.CurrentJobTestedCount}");
+            }
+        });
+
+        thread.SetApartmentState(System.Threading.ApartmentState.STA);
+        thread.Start();
+        thread.Join();
+
+        Console.WriteLine("  -> PASSED: Lưu lịch sử kiểm tra cho mọi lần chụp và kiểm trong cùng 1 phiên Job hoạt động hoàn hảo 100%.");
     }
 }
 
