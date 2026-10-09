@@ -7,37 +7,37 @@ Hỗ trợ Camera GigE/USB3/USB/RTSP, nạp ảnh tệp/thư mục, bản vẽ k
 ## 2. Trạng thái mã nguồn gần nhất
 - **Phiên bản hiện tại**: .NET 8 WPF, x64/x86 Multi-targeting, C# 12.
 - **Biên dịch**: 0 Errors toàn solution (`VisionInspectionApp.slnx`) cả Debug lẫn Release.
-- **Kiểm thử tự động**: PASSED 100% (Toàn bộ 8/8 test suite [MvpShapeMatch2PreprocessTests.cs](file:///g:/NODEJS/Vision2026/TestExtractApp/MvpShapeMatch2PreprocessTests.cs) và 13/13 test suite OQC Scanner Live View).
+- **Kiểm thử tự động**: PASSED 100% (Toàn bộ 14/14 test suite OQC Scanner Live View, 8/8 test MvpShapeMatch2 Preprocess, 6/6 test Seeding Config).
 - **Cấu hình chuẩn xưởng CMS_VINA**: 
   - Database: `CMS_VINA` (192.168.1.2:6789)
   - OQC Server API: `https://192.168.1.192/vision_upload.php`
   - OTA Update Server: `http://192.168.1.192/update/version.json` & `http://192.168.1.192/ota_server.php`
 
-## 3. Hoàn thành Task 400: Khắc Phục Triệt Để Lỗi Khớp Điểm Origin MvpShapeMatch2 Với Ảnh Qua Tiền Xử Lý
-1. **Yêu cầu & Vấn đề**:
-   - Khi dùng ảnh tĩnh trong Tool Editor / Inspection Flow, đã train template rồi cho run bắt origin chính ảnh đó:
-   - Với ảnh không có xử lý gì (chỉ xám, hoặc nối trực tiếp ImageSource -> Origin): điểm số đạt 1.0 bình thường.
-   - Với ảnh qua tiền xử lý (Node Preprocess hoặc thiết lập tiền xử lý trong Settings): các thuật toán khác (`TemplateMatch`, `MvpShapeMatch`) ra 1.0, nhưng riêng `MvpShapeMatch2` điểm số chỉ đạt ~0.5 loanh quanh đó.
+## 3. Hoàn thành Task 401: Chuẩn Hóa Chu Trình 3 Bước Tab OQC Scanner Chế Độ Cú Đấm Thép
+1. **Yêu cầu & Phản ánh của công nhân**:
+   - Tuần tự chuẩn:
+     1. User scan load Job đầu tiên (có ký tự Enter).
+     2. Bấm Space hoặc Ctrl+F8 để kiểm tra, bấm lần nữa để Live View, luân phiên cho tới khi hết phiên.
+     3. User scan Job thứ 2 (có ký tự Enter) -> Nạp Job và reset counting mẫu về 0.
+   - Vấn đề: Scan Job thứ 2 không load được mà phải đóng Job đã rồi mới scan sang Job tiếp theo được.
 2. **Nguyên nhân gốc rễ**:
-   - *Bất đối xứng tiền xử lý*: Trong `OriginMatcher.MatchWithRotation()`, Search ROI được tiền xử lý thành `roiGray`, nhưng `templateGray` truyền vào `MvpShapeMatch2Engine.Match` bị bỏ qua không gọi `PreprocessTemplateForMatch(templateGray, preprocess)` như các thuật toán khác (`MatchByPyramid`, `TemplateMatch`), khiến ROI và Template lệch không gian biểu diễn ảnh.
-   - *Cache Key thiếu Checksum dữ liệu*: `cacheKey` của `_templateModelCache` trong `MvpShapeMatch2Engine.cs` chỉ chứa tên tool và kích thước mà không có hash nội dung pixel, khiến khi thay đổi tiền xử lý hoặc đổi ảnh bị dính lại mô hình vector của ảnh cũ.
-   - *Trượt biên 1px và Cực trị địa phương*:
-     - Vòng lặp dải góc Coarse Search bỏ qua mốc góc 0.0° khi `minAngle` và `angleStep` không chia hết cho nhau.
-     - `RefineSearchFast` ở các tầng pyramid trung gian thiếu Max Pooling 3x3, khiến cho ảnh đã qua tiền xử lý có đường biên sắc mảnh (độ rộng 1 pixel của Threshold/Canny) bị trượt gradient khi subsample, làm điểm số tụt xuống 0.5.
-     - Bán kính tìm kiếm `searchRadius: 2` và `angleRange: 0.8` ở Level 0 quá hẹp, không thể bù đắp sai số vị trí từ tầng thô của pyramid.
-     - Level 0 chỉ refine cho 1 candidate duy nhất ở tầng thô nên dễ rơi vào cực trị địa phương.
+   - Phím Enter bị chặn khi cùng mã phiên: Trong `OqcScannerView.xaml.cs`, `IsSameAsCurrentSessionCode` set `e.Handled = true` nuốt chửng Enter khi công nhân quét tem mở phiên mới cho cùng model/job.
+   - Cờ `IsJobLoadedFromManager == true` chặn không cho query DB khi quét mã mới, ép gọi `RunJob()`.
+   - Khi công nhân click chuột xem ảnh hay bảng kết quả ở bước 2, TextBox mất focus; ký tự từ máy quét barcode không vào được TextBox và phím Enter bị trượt vì `ScanCommand` chỉ nằm trong TextBox InputBindings.
+   - `ExecuteScanInternalAsync()` thiếu dòng lệnh `CurrentJobTestedCount = 0;` khi nạp Job mới.
 3. **Giải pháp đã thực hiện**:
-   - *Đồng bộ tiền xử lý*: Trong [OriginMatcher.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.VisionEngine/OriginMatcher.cs), bổ sung hàm `PrepareTemplateForMatchBorrowed(templateGray, preprocess)` để tiền xử lý template đối xứng tuyệt đối với ROI trước khi gọi `MvpShapeMatch2Engine.Match`.
-   - *Tự động làm mới cache*: Trong [MvpShapeMatch2Engine.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.VisionEngine/MvpShapeMatch2Engine.cs), bổ sung hàm băm siêu tốc FNV-1a `ComputeMatChecksum(templInput)` vào `cacheKey` của `_templateModelCache`.
-   - *Căn chỉnh góc 0.0°*: Căn chỉnh dải góc Coarse Search luôn chứa mốc góc 0.0° chính xác.
-   - *Max Pooling 3x3*: Tích hợp Max Pooling 3x3 vào `RefineSearchFast` cho các tầng pyramid trung gian.
-   - *Mở rộng bán kính Level 0 & Refine Đa Candidate*: Mở rộng `lvl0SearchRadius = Math.Max(5, (1 << maxPyramidLevel) * 2)` và `lvl0AngleRange = Math.Max(1.5, coarseAngleStep)`; refine đồng thời cho toàn bộ top 4 candidates ở Level 0 để tìm global maximum chuẩn xác.
-   - *Kiểm thử tự động*: Xây dựng test suite [MvpShapeMatch2PreprocessTests.cs](file:///g:/NODEJS/Vision2026/TestExtractApp/MvpShapeMatch2PreprocessTests.cs) kiểm thử tự động 8 kịch bản (Grayscale, Binary Threshold, Binary Inverted, Otsu, Canny Edge, Gaussian Blur, Runtime PreprocessSettings, Dynamic Cache Invalidation). Toàn bộ 8/8 tests PASSED 100% với Score = 1.0000, Pos sai số < 0.8px, Angle sai số <= 0.1°.
+   - **Tách biệt lệnh**: Bổ sung `ScanOrRunJobCommand` cho nút UI "CHẠY JOB (SPACE / Ctrl+F8)" (chạy kiểm tra khi có Job), dành riêng phím Enter cho `ScanCommand` (luôn nạp Job / tạo phiên mới / reset counting).
+   - **Global Barcode Input Routing**: Bổ sung `PreviewTextInput` tự động focus và `SelectAll()` ô nhập mã ngay khi ký tự đầu tiên từ đầu đọc barcode bắn tới, dù công nhân vừa click chuột vào ảnh hay bảng kết quả.
+   - **Xử lý nạp Job & Reset bộ đếm**:
+     - Khi scan mã mới: tự động giải phóng cờ `IsJobLoadedFromManager`, dọn pending cũ, nạp Job mới từ DB và reset `CurrentJobTestedCount = 0`.
+     - Khi scan lại cùng mã: tự động làm mới phiên Job, reset `CurrentJobTestedCount = 0`, chuyển về Live View camera sẵn sàng kiểm tra phiên mới.
+   - **Đồng bộ KeyBinding**: Thêm `KeyBinding Enter` vào `UserControl.InputBindings` để đảm bảo phím Enter luôn kích hoạt nạp Job.
 4. **Kết quả xác thực**:
-   - 8/8 tests MvpShapeMatch2 PASSED 100%.
-   - Toàn bộ Solution biên dịch 0 Errors cả Debug lẫn Release.
+   - Toàn bộ 14/14 tests OQC Scanner PASSED 100% (bổ sung Test 14 trong [OqcLiveViewOnJobLoadTests.cs](file:///g:/NODEJS/Vision2026/TestExtractApp/OqcLiveViewOnJobLoadTests.cs)).
+   - Solution biên dịch 0 Errors cả Debug và Release.
 
 ## 4. Các sự kiện & thay đổi gần đây
+- Task 401: Chuẩn hóa chu trình 3 bước OQC Scanner Cú đấm thép (tự động nạp Job thứ 2 & reset counting mẫu về 0, không cần đóng Job thủ công).
 - Task 400: Khắc phục triệt để lỗi khớp điểm Origin MvpShapeMatch2 với ảnh qua tiền xử lý (đồng bộ tiền xử lý template, FNV-1a cache key checksum, Max Pooling 3x3 pyramid, căn góc 0.0° và refine đa candidate Level 0).
 - Task 399: Sửa lỗi không lưu lịch sử kiểm tra khi kiểm tra nhiều lần trong 1 phiên Job (mỗi lần kiểm tra đều lưu bản ghi lịch sử và log DB).
 - Task 398: Tự động đóng cửa sổ Quản lý Job & Huấn luyện khi bấm Huấn Luyện Từ Xa sau khi nạp xong Job và ảnh mẫu lên Tool Editor.

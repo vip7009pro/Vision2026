@@ -1,5 +1,22 @@
 # ROADMAP.md — Lộ trình phát triển & Trạng thái nhiệm vụ
 
+- [x] Task 401: Chuẩn Hóa Chu Trình 3 Bước Tab OQC Scanner Chế Độ Cú Đấm Thép (Tự Động Nạp Job Thứ 2 & Reset Counting Mẫu Không Cần Đóng Job):
+  - [x] Phân tích nguyên nhân:
+    - Hiện tượng 1 (Enter bị chặn khi cùng mã phiên): Trong `OqcScannerView.xaml.cs`, `IsSameAsCurrentSessionCode` set `e.Handled = true` nuốt chửng phím Enter khi công nhân scan tem mở phiên mới cho cùng model/job -> scanner không nạp Job và không reset counting mẫu.
+    - Hiện tượng 2 (Chặn bởi cờ Manager): Nếu trước đó Job mở từ Job Manager, `IsJobLoadedFromManager == true` chặn việc nạp Job từ DB và chỉ gọi `RunJob()`.
+    - Hiện tượng 3 (Mất focus bàn phím sau khi thao tác/xem ảnh): Khi công nhân click xem ảnh preview hoặc bảng lịch sử ở bước 2, TextBox mất focus; scanner bắn mã tiếp theo không vào TextBox và phím Enter bị trượt vì `ScanCommand` chỉ gắn trên TextBox InputBindings.
+    - Hiện tượng 4 (Bộ đếm không reset): Trong `ExecuteScanInternalAsync()`, khi nạp Job mới từ barcode scanner, `CurrentJobTestedCount` bị thiếu lệnh reset về 0.
+  - [x] Nâng cấp `OqcScannerViewModel.cs`:
+    - Bổ sung `ScanOrRunJobCommand`: Phân tách rành mạch nút UI "CHẠY JOB (SPACE / Ctrl+F8)" (chạy kiểm tra) với phím Enter từ scanner (luôn nạp Job / tạo phiên mới / reset counting).
+    - Cập nhật `ExecuteScanAsync()` & `ExecuteScanInternalAsync()`: Khi nhận mã scan, tự động giải phóng cờ `IsJobLoadedFromManager`, dọn dẹp pending cũ, nạp Job mới và reset `CurrentJobTestedCount = 0`.
+    - Hỗ trợ quét lại cùng mã phiên: Tự động nhận diện bắt đầu phiên mới cho lô tiếp theo, reset `CurrentJobTestedCount = 0`, chuyển về Live View căn chỉnh sẵn sàng, bảo toàn mã trên ô nhập (Cú đấm thép).
+  - [x] Nâng cấp `OqcScannerView.xaml` & `OqcScannerView.xaml.cs`:
+    - Tích hợp **Global Barcode Input Routing**: Bắt sự kiện `PreviewTextInput` tự động đưa Focus và `SelectAll()` về `ScanInputTextBox` ngay khi ký tự đầu tiên từ máy quét gửi tới (dù công nhân vừa click chuột vào ảnh hay bảng đo).
+    - Cập nhật `PreviewKeyDown`: Phím Enter luôn kích hoạt `ScanCommand` nạp Job mượt mà, không bị chặn.
+    - Bổ sung `<KeyBinding Key="Enter" Command="{Binding ScanCommand}" />` vào `UserControl.InputBindings`.
+    - Nút UI "CHẠY JOB / QUÉT" liên kết với `ScanOrRunJobCommand`.
+  - [x] Kiểm thử tự động: Bổ sung Test 14 vào [OqcLiveViewOnJobLoadTests.cs](file:///g:/NODEJS/Vision2026/TestExtractApp/OqcLiveViewOnJobLoadTests.cs) kiểm thử toàn vẹn chu trình 3 bước (Scan Job 1 -> Luân phiên Space kiểm tra/Live View -> Scan Job 2 nạp & reset counting mẫu). Toàn bộ 14/14 tests PASSED 100%.
+
 - [x] Task 400: Khắc Phục Triệt Để Lỗi Khớp Điểm Origin Thuật Toán MvpShapeMatch2 Với Ảnh Qua Tiền Xử Lý:
   - [x] Nguyên nhân 1 (Bất đối xứng Preprocess): Trong `OriginMatcher.cs`, Search ROI được tiền xử lý thành `roiGray`, nhưng `templateGray` truyền vào `MvpShapeMatch2Engine.Match` bị bỏ qua không gọi `PreprocessTemplateForMatch(templateGray, preprocess)` như các thuật toán khác (`MatchByPyramid`, `TemplateMatch`).
   - [x] Nguyên nhân 2 (Stale Cache Key): `cacheKey` của `_templateModelCache` trong `MvpShapeMatch2Engine.cs` chỉ chứa tên tool và kích thước mà không có checksum dữ liệu pixel, dẫn đến khi thay đổi tiền xử lý bị dính lại mô hình vector của ảnh cũ.

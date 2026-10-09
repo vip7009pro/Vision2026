@@ -15,6 +15,18 @@ public partial class OqcScannerView : UserControl
         DataContextChanged += OqcScannerView_DataContextChanged;
         IsVisibleChanged += OqcScannerView_IsVisibleChanged;
         PreviewKeyDown += OqcScannerView_PreviewKeyDown;
+        PreviewTextInput += OqcScannerView_PreviewTextInput;
+    }
+
+    private void OqcScannerView_PreviewTextInput(object sender, TextCompositionEventArgs e)
+    {
+        // Khi đầu đọc barcode bắn chuỗi ký tự vào, tự động focus vào ScanInputTextBox
+        // để không bị mất ký tự nếu công nhân vừa click chuột vào ảnh hay bảng kết quả
+        if (ScanInputTextBox != null && !ScanInputTextBox.IsKeyboardFocusWithin)
+        {
+            ScanInputTextBox.Focus();
+            ScanInputTextBox.SelectAll();
+        }
     }
 
     private void OqcScannerView_DataContextChanged(object sender, DependencyPropertyChangedEventArgs e)
@@ -141,16 +153,15 @@ public partial class OqcScannerView : UserControl
         }
         else if (e.Key == Key.Enter)
         {
-            // Chế độ Cú đấm thép: Khi Job đã được mở trong phiên này:
-            // - Nếu Enter với cùng mã phiên hiện tại: vô hiệu hóa hoàn toàn phím Enter (coi như không làm gì khi Enter)
-            // - Nếu scan mã tiếp theo (mã khác): cho phép sự kiện Enter thực thi để nạp Job tiếp tương ứng và tạo phiên mới!
-            if (vm.SteelPunchMode && vm.HasLoadedJob)
+            // Chế độ Cú đấm thép: Xử lý sự kiện Enter khi quét mã từ đầu đọc hoặc bàn phím
+            // Quét mã mới hoặc quét lại mã phiên (IsSameAsCurrentSessionCode) đều kích hoạt ScanCommand để nạp Job và reset counting mẫu
+            string currentInput = ScanInputTextBox?.Text?.Trim() ?? "";
+            bool isSameCode = vm.IsSameAsCurrentSessionCode(currentInput);
+
+            if (vm.ScanCommand.CanExecute(null))
             {
-                string currentInput = ScanInputTextBox.Text?.Trim() ?? "";
-                if (vm.IsSameAsCurrentSessionCode(currentInput))
-                {
-                    e.Handled = true;
-                }
+                vm.ScanCommand.Execute(null);
+                e.Handled = true;
             }
 
             Dispatcher.BeginInvoke(new System.Action(() =>

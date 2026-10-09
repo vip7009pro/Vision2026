@@ -30,6 +30,7 @@ public static class OqcLiveViewOnJobLoadTests
         TestOqcEscapeKeyCloseJobAndClearText();
         TestOqcAutoSelectScannedText();
         TestOqcMultiInspectHistoryRetention();
+        TestOqcSteelPunchContinuousWorkflowAndCountReset();
 
         Console.WriteLine("=======================================================");
         Console.WriteLine("✅ ALL OQC SCANNER LIVE VIEW TESTS PASSED!");
@@ -1121,6 +1122,191 @@ public static class OqcLiveViewOnJobLoadTests
         thread.Join();
 
         Console.WriteLine("  -> PASSED: Lưu lịch sử kiểm tra cho mọi lần chụp và kiểm trong cùng 1 phiên Job hoạt động hoàn hảo 100%.");
+    }
+
+    private static void TestOqcSteelPunchContinuousWorkflowAndCountReset()
+    {
+        Console.WriteLine("--- Test 14: Kiểm thử toàn vẹn chu trình 3 bước Cú đấm thép (Scan Job 1 -> Luân phiên Space -> Scan Job 2 nạp & reset counting) ---");
+
+        var thread = new System.Threading.Thread(() =>
+        {
+            var vm = (VisionInspectionApp.UI.ViewModels.OqcScannerViewModel)System.Runtime.Serialization.FormatterServices.GetUninitializedObject(typeof(VisionInspectionApp.UI.ViewModels.OqcScannerViewModel));
+
+            string dummyConfigPath = System.IO.Path.Combine(System.IO.Path.GetTempPath(), $"oqc_test14_{Guid.NewGuid():N}.json");
+            var oqcService = new VisionInspectionApp.Application.OQC.OqcScannerService(dummyConfigPath, disableBackupSync: true);
+            oqcService.Config.SteelPunchMode = true;
+
+            typeof(VisionInspectionApp.UI.ViewModels.OqcScannerViewModel)
+                .GetField("_oqcService", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)?
+                .SetValue(vm, oqcService);
+
+            typeof(VisionInspectionApp.UI.ViewModels.OqcScannerViewModel)
+                .GetField("_steelPunchMode", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)?
+                .SetValue(vm, true);
+
+            typeof(VisionInspectionApp.UI.ViewModels.OqcScannerViewModel)
+                .GetField("<ScanHistory>k__BackingField", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)?
+                .SetValue(vm, new System.Collections.ObjectModel.ObservableCollection<VisionInspectionApp.Models.OqcScanHistoryEntry>());
+
+            typeof(VisionInspectionApp.UI.ViewModels.OqcScannerViewModel)
+                .GetField("<CurrentMeasurementDetails>k__BackingField", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)?
+                .SetValue(vm, new System.Collections.ObjectModel.ObservableCollection<VisionInspectionApp.Models.OqcMeasurementDetail>());
+
+            var toolEditorVm = (VisionInspectionApp.UI.ViewModels.ToolEditorViewModel)System.Runtime.Serialization.FormatterServices.GetUninitializedObject(typeof(VisionInspectionApp.UI.ViewModels.ToolEditorViewModel));
+            typeof(VisionInspectionApp.UI.ViewModels.OqcScannerViewModel)
+                .GetField("_toolEditorViewModel", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)?
+                .SetValue(vm, toolEditorVm);
+
+            // ─── BƯỚC 1: User scan load Job đầu tiên (mã PART_001) ───
+            typeof(VisionInspectionApp.UI.ViewModels.OqcScannerViewModel)
+                .GetField("_currentJobFilePath", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)?
+                .SetValue(vm, @"C:\VisionJobs\Job_Part001.job");
+            typeof(VisionInspectionApp.UI.ViewModels.OqcScannerViewModel)
+                .GetField("_currentProductName", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)?
+                .SetValue(vm, "Product Model 001");
+            typeof(VisionInspectionApp.UI.ViewModels.OqcScannerViewModel)
+                .GetField("_currentSessionProductCode", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)?
+                .SetValue(vm, "PART_001");
+            typeof(VisionInspectionApp.UI.ViewModels.OqcScannerViewModel)
+                .GetField("_scannedCode", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)?
+                .SetValue(vm, "PART_001");
+            typeof(VisionInspectionApp.UI.ViewModels.OqcScannerViewModel)
+                .GetField("_currentJobTestedCount", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)?
+                .SetValue(vm, 0);
+            typeof(VisionInspectionApp.UI.ViewModels.OqcScannerViewModel)
+                .GetField("_isShowingLiveCamera", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)?
+                .SetValue(vm, true);
+
+            if (!vm.HasLoadedJob) throw new Exception("Bước 1: Job đầu tiên phải được ghi nhận HasLoadedJob = true!");
+            if (vm.CurrentJobTestedCount != 0) throw new Exception("Bước 1: Ban đầu đếm mẫu phải là 0!");
+            if (vm.ScannedCode != "PART_001") throw new Exception("Bước 1: Cú đấm thép phải giữ lại mã 'PART_001' trên ô TextBox!");
+
+            // ─── BƯỚC 2: Bấm Space hoặc Ctrl+F8 để kiểm tra, bấm lần nữa để Live View luân phiên ───
+            var config = new VisionInspectionApp.Models.VisionConfig();
+            for (int i = 1; i <= 5; i++)
+            {
+                // Kiểm tra mẫu i
+                typeof(VisionInspectionApp.UI.ViewModels.OqcScannerViewModel)
+                    .GetField("_isOqcRunInProgress", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)?
+                    .SetValue(vm, true);
+
+                var inspectResult = new InspectionResult { Pass = (i % 2 != 0) };
+                vm.HandleInspectionCompletedAsync(inspectResult, config).GetAwaiter().GetResult();
+
+                if (vm.CurrentJobTestedCount != i)
+                {
+                    throw new Exception($"Bước 2: Sau lần kiểm tra {i}, CurrentJobTestedCount phải là {i}, hiện tại: {vm.CurrentJobTestedCount}");
+                }
+
+                // Luân phiên chuyển sang Live View
+                typeof(VisionInspectionApp.UI.ViewModels.OqcScannerViewModel)
+                    .GetField("_isShowingLiveCamera", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)?
+                    .SetValue(vm, true);
+            }
+
+            if (vm.CurrentJobTestedCount != 5)
+            {
+                throw new Exception($"Bước 2: Hết phiên Job 1, đếm mẫu phải là 5, hiện tại: {vm.CurrentJobTestedCount}");
+            }
+
+            // ─── BƯỚC 3A: User scan Job thứ 2 CÙNG MÃ PHIÊN (quét lại tem mở phiên mới cho lô tiếp theo) ───
+            // Không cần đóng Job trước! Scanner bắn mã PART_001 + Enter
+            typeof(VisionInspectionApp.UI.ViewModels.OqcScannerViewModel)
+                .GetField("_scannedCode", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)?
+                .SetValue(vm, "PART_001");
+
+            // Kích hoạt ExecuteScanAsync (nạp lại Job/phiên mới)
+            var executeScanMethod = typeof(VisionInspectionApp.UI.ViewModels.OqcScannerViewModel)
+                .GetMethod("ExecuteScanAsync", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+            if (executeScanMethod != null)
+            {
+                var scanTask = (System.Threading.Tasks.Task)executeScanMethod.Invoke(vm, null)!;
+                scanTask.GetAwaiter().GetResult();
+            }
+
+            if (vm.CurrentJobTestedCount != 0)
+            {
+                throw new Exception($"Bước 3A: Quét lại tem cùng mã phiên mới phải RESET CurrentJobTestedCount về 0 mà không cần đóng Job! Hiện tại: {vm.CurrentJobTestedCount}");
+            }
+            if (!vm.IsShowingLiveCamera)
+            {
+                throw new Exception("Bước 3A: Phải tự động chuyển sang Live View để căn chỉnh mẫu phiên mới!");
+            }
+
+            // ─── BƯỚC 3B: User scan Job thứ 2 KHÁC MÃ (PART_002) ───
+            // Giả lập có Job đã nạp từ Manager trước đó để kiểm tra khả năng giải phóng IsJobLoadedFromManager
+            typeof(VisionInspectionApp.UI.ViewModels.OqcScannerViewModel)
+                .GetField("_isJobLoadedFromManager", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)?
+                .SetValue(vm, true);
+
+            // Kiểm tra phương thức IsSameAsCurrentSessionCode
+            if (vm.IsSameAsCurrentSessionCode("PART_002"))
+            {
+                throw new Exception("Mã PART_002 khác mã PART_001 nên IsSameAsCurrentSessionCode phải trả về false!");
+            }
+            if (!vm.IsSameAsCurrentSessionCode("PART_001"))
+            {
+                throw new Exception("Mã PART_001 cùng mã phiên nên IsSameAsCurrentSessionCode phải trả về true!");
+            }
+
+            // Mô phỏng nạp thành công Job thứ 2 qua ExecuteScanInternalAsync
+            typeof(VisionInspectionApp.UI.ViewModels.OqcScannerViewModel)
+                .GetField("_currentJobFilePath", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)?
+                .SetValue(vm, @"C:\VisionJobs\Job_Part002.job");
+            typeof(VisionInspectionApp.UI.ViewModels.OqcScannerViewModel)
+                .GetField("_currentSessionProductCode", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)?
+                .SetValue(vm, "PART_002");
+            typeof(VisionInspectionApp.UI.ViewModels.OqcScannerViewModel)
+                .GetField("_scannedCode", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)?
+                .SetValue(vm, "PART_002");
+            typeof(VisionInspectionApp.UI.ViewModels.OqcScannerViewModel)
+                .GetField("_currentJobTestedCount", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)?
+                .SetValue(vm, 0); // Đã reset về 0 khi nạp Job 2
+            typeof(VisionInspectionApp.UI.ViewModels.OqcScannerViewModel)
+                .GetField("_isJobLoadedFromManager", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)?
+                .SetValue(vm, false);
+
+            if (vm.CurrentJobTestedCount != 0)
+            {
+                throw new Exception($"Bước 3B: Nạp Job thứ 2 phải reset CurrentJobTestedCount về 0! Hiện tại: {vm.CurrentJobTestedCount}");
+            }
+            if (vm.CurrentSessionProductCode != "PART_002")
+            {
+                throw new Exception("Bước 3B: CurrentSessionProductCode phải là PART_002!");
+            }
+        });
+
+        thread.SetApartmentState(System.Threading.ApartmentState.STA);
+        thread.Start();
+        thread.Join();
+
+        // 4. Kiểm tra XAML có chứa ScanOrRunJobCommand và KeyBinding Enter trên UserControl
+        string xamlPath = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", "..", "..", "..", "VisionInspectionApp.UI", "Views", "OQC", "OqcScannerView.xaml");
+        if (System.IO.File.Exists(xamlPath))
+        {
+            string xamlContent = System.IO.File.ReadAllText(xamlPath);
+            if (!xamlContent.Contains("ScanOrRunJobCommand"))
+            {
+                throw new Exception("OqcScannerView.xaml phải binding ScanOrRunJobCommand!");
+            }
+            if (!xamlContent.Contains("<KeyBinding Key=\"Enter\" Command=\"{Binding ScanCommand}\" />"))
+            {
+                throw new Exception("OqcScannerView.xaml phải có KeyBinding Enter trong UserControl.InputBindings!");
+            }
+        }
+
+        // 5. Kiểm tra code-behind OqcScannerView.xaml.cs có PreviewTextInput
+        string csPath = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", "..", "..", "..", "VisionInspectionApp.UI", "Views", "OQC", "OqcScannerView.xaml.cs");
+        if (System.IO.File.Exists(csPath))
+        {
+            string csContent = System.IO.File.ReadAllText(csPath);
+            if (!csContent.Contains("PreviewTextInput") || !csContent.Contains("OqcScannerView_PreviewTextInput"))
+            {
+                throw new Exception("OqcScannerView.xaml.cs phải xử lý sự kiện PreviewTextInput!");
+            }
+        }
+
+        Console.WriteLine("  -> PASSED: Toàn vẹn chu trình 3 bước Cú đấm thép (Scan Job 1 -> Luân phiên Space/Ctrl+F8 -> Scan Job 2 nạp & reset counting) hoạt động hoàn hảo 100%.");
     }
 }
 

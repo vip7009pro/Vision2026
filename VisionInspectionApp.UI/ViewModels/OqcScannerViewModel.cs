@@ -184,6 +184,7 @@ public partial class OqcScannerViewModel : ObservableObject
     public Action<int>? RequestSwitchTab { get; set; }
 
     public IAsyncRelayCommand ScanCommand { get; }
+    public IAsyncRelayCommand ScanOrRunJobCommand { get; }
     public IAsyncRelayCommand ScanFromCameraCommand { get; }
     public IAsyncRelayCommand TriggerInspectOrLiveCommand { get; }
     public IRelayCommand OpenSettingsCommand { get; }
@@ -258,6 +259,7 @@ public partial class OqcScannerViewModel : ObservableObject
         _steelPunchMode = _oqcService?.Config?.SteelPunchMode ?? true;
 
         ScanCommand = new AsyncRelayCommand(ExecuteScanAsync);
+        ScanOrRunJobCommand = new AsyncRelayCommand(ExecuteScanOrRunJobAsync);
         ScanFromCameraCommand = new AsyncRelayCommand(ExecuteScanFromCameraAsync);
         OpenSettingsCommand = new RelayCommand(OpenSettingsDialog);
         OpenProductAssignCommand = new RelayCommand(OpenProductAssignDialog);
@@ -412,12 +414,12 @@ public partial class OqcScannerViewModel : ObservableObject
             ShowRois = true;
             ShowCrosshair = true;
             OverlayItems = (_originLiveGuideOverlays.Count > 0) ? _originLiveGuideOverlays : null;
-            _ = _cameraService.RequestLiveStreamAsync("OQCScanner", true);
+            _ = _cameraService?.RequestLiveStreamAsync("OQCScanner", true);
             SetWaitingForInspectionState();
         }
         else
         {
-            _ = _cameraService.RequestLiveStreamAsync("OQCScanner", false);
+            _ = _cameraService?.RequestLiveStreamAsync("OQCScanner", false);
             PreviewImage = _lastOqcPreviewImage;
             _allOverlayItemsCache = _lastOqcOverlayItems != null ? new List<OverlayItem>(_lastOqcOverlayItems) : new List<OverlayItem>();
             UpdatePreviewOverlays();
@@ -948,21 +950,21 @@ public partial class OqcScannerViewModel : ObservableObject
         }
     }
 
+    private async Task ExecuteScanOrRunJobAsync()
+    {
+        if (HasLoadedJob)
+        {
+            RunJob();
+        }
+        else
+        {
+            await ExecuteScanAsync();
+        }
+    }
+
     private async Task ExecuteScanAsync()
     {
         if (IsScanning || _isOqcRunInProgress) return;
-
-        // Khi Job đã nạp trong phiên này:
-        // Nếu nhấn nút "CHẠY JOB" trên giao diện (hoặc mã trống / cùng mã phiên hiện tại), thực thi chạy kiểm tra Job ngay lập tức!
-        if (HasLoadedJob)
-        {
-            string rawInput = ScannedCode?.Trim() ?? "";
-            if (string.IsNullOrWhiteSpace(rawInput) || IsSameAsCurrentSessionCode(rawInput))
-            {
-                RunJob();
-                return;
-            }
-        }
 
         IsScanning = true;
         try
@@ -985,49 +987,6 @@ public partial class OqcScannerViewModel : ObservableObject
         // Dừng ngay kịch bản nháy đèn đang chạy (nếu có) để trả lại ánh sáng ổn định cho camera
         _lightingPatternService?.StopCurrentPattern();
 
-        // ─── ĐẶC BIỆT: TRƯỜNG HỢP MỞ JOB TỪ DANH SÁCH QUẢN LÝ JOB ───
-        if (IsJobLoadedFromManager && string.IsNullOrWhiteSpace(directProcessedCode))
-        {
-            string rawInput = ScannedCode?.Trim() ?? "";
-            if (string.IsNullOrWhiteSpace(rawInput))
-            {
-                StatusMessage = "⚠️ Hãy nhập LABEL ID trước khi chạy job.";
-                StatusBrush = Brushes.Orange;
-                return;
-            }
-
-            // Áp dụng bộ lọc độ dài và cắt chuỗi (nếu có cấu hình) cho mã LABEL ID
-            var (valid, processedCode, extractedRawCode, filterError) = _oqcService.ProcessRawCodeString(rawInput);
-            if (!valid)
-            {
-                StatusMessage = $"❌ Mã LABEL ID '{extractedRawCode}' không hợp lệ: {filterError}";
-                StatusBrush = Brushes.Red;
-                return;
-            }
-
-            _lastScannedProcessedCode = processedCode;
-            _lastScannedRawCode = extractedRawCode;
-            _toolEditorViewModel.ProductCode = processedCode;
-            _inspectionViewModel.ProductCode = processedCode;
-
-            var managerHistoryEntry = new OqcScanHistoryEntry
-            {
-                Time = DateTime.Now,
-                ScannedCode = processedCode,
-                ProductName = CurrentProductName,
-                JobFilePath = CurrentJobFilePath,
-                InspectResult = "Đang kiểm tra...",
-                ResultBrushHex = "#1E88E5",
-                Success = true,
-                Message = "OK"
-            };
-            AddHistory(managerHistoryEntry);
-
-            // Chạy Job trực tiếp - KHÔNG QUERY LẠI DATABASE TÌM JOB NỮA
-            RunJob();
-            return;
-        }
-
         string code;
         string rawCode;
 
@@ -1042,7 +1001,7 @@ public partial class OqcScannerViewModel : ObservableObject
             string rawInput = ScannedCode?.Trim() ?? "";
             if (string.IsNullOrWhiteSpace(rawInput))
             {
-                if (!AutoRunJob && !string.IsNullOrWhiteSpace(CurrentJobFilePath) && CurrentJobFilePath != "-" && CurrentJobFilePath != "Chưa có Job")
+                if (!AutoRunJob && HasLoadedJob)
                 {
                     RunJob();
                     return;
@@ -1081,9 +1040,79 @@ public partial class OqcScannerViewModel : ObservableObject
             rawCode = extractedRawCode;
         }
 
+        // ─── TRƯỜNG HỢP QUÉT LẠI MÃ TEM CÙNG PHIÊN ĐỂ BẮT ĐẦU PHIÊN MỚI / RESET COUNTING ───
+        if (HasLoadedJob && IsSameAsCurrentSessionCode(rawCode) && !string.IsNullOrWhiteSpace(CurrentJobFilePath) && CurrentJobFilePath != "-" && CurrentJobFilePath != "Chưa có Job")
+        {
+            // Reset số lượng mẫu đã kiểm tra về 0 cho phiên mới
+            CurrentJobTestedCount = 0;
+            _lastScannedProcessedCode = code;
+            _lastScannedRawCode = rawCode;
+            CurrentSessionProductCode = code;
+
+            if (SteelPunchMode)
+            {
+                ScannedCode = code;
+            }
+
+            // Dọn dẹp các dòng pending cũ nếu có
+            var pendingOld = ScanHistory.Where(e => e.InspectResult == "Đang kiểm tra..." || e.InspectResult == "Đã nạp Job").ToList();
+            if (pendingOld.Count > 0)
+            {
+                RemoveHistoryEntries(ScanHistory, pendingOld);
+            }
+
+            // Thêm bản ghi mới cho phiên làm việc mới
+            var resetHistoryEntry = new OqcScanHistoryEntry
+            {
+                Time = DateTime.Now,
+                ScannedCode = code,
+                ProductName = CurrentProductName,
+                JobFilePath = CurrentJobFilePath,
+                InspectResult = AutoRunJob ? "Đang kiểm tra..." : "Đã nạp Job",
+                ResultBrushHex = "#1E88E5",
+                Success = true,
+                Message = "OK"
+            };
+            AddHistory(resetHistoryEntry);
+
+            if (AutoRunJob)
+            {
+                IsShowingLiveCamera = false;
+                StatusMessage = $"📁 Đã làm mới phiên Job '{Path.GetFileName(CurrentJobFilePath)}' cho mã '{code}' và chạy kiểm tra...";
+                StatusBrush = Brushes.DodgerBlue;
+                _isOqcRunInProgress = true;
+                _toolEditorViewModel.LoadJobFromFile(CurrentJobFilePath, autoRun: true);
+            }
+            else
+            {
+                _isOqcRunInProgress = false;
+                ShowRois = true;
+                ShowCrosshair = true;
+                IsShowingLiveCamera = true;
+                SetWaitingForInspectionState($"Đã làm mới phiên Job '{Path.GetFileName(CurrentJobFilePath)}' cho mã '{code}'. Đã reset đếm mẫu về 0. Căn chỉnh sản phẩm và nhấn '▶ CHẠY JOB' (Space) để kiểm tra.");
+                StatusMessage = $"🔄 Đã nạp lại Job phiên mới cho mã '{code}'. Đã reset số đếm mẫu về 0. Bấm Space để kiểm tra.";
+                StatusBrush = Brushes.DodgerBlue;
+            }
+
+            OnPropertyChanged(nameof(ScanButtonText));
+            OnPropertyChanged(nameof(PreviewHeaderTitle));
+            OnPropertyChanged(nameof(LiveToggleButtonText));
+            TriggerFocusAndSelectInput();
+            return;
+        }
+
+        // ─── TRƯỜNG HỢP NẠP JOB MỚI (MÃ KHÁC HOẶC CHƯA CÓ JOB) ───
         _lastScannedProcessedCode = code;
         _lastScannedRawCode = rawCode;
         CurrentSessionProductCode = code;
+        IsJobLoadedFromManager = false; // Giải phóng cờ mở từ Manager khi scan mã mới
+
+        // Dọn dẹp các dòng pending cũ của Job trước (nếu có)
+        var oldPendingEntries = ScanHistory.Where(e => e.InspectResult == "Đang kiểm tra..." || e.InspectResult == "Đã nạp Job").ToList();
+        if (oldPendingEntries.Count > 0)
+        {
+            RemoveHistoryEntries(ScanHistory, oldPendingEntries);
+        }
 
         // Text scanned được cắt và hiển thị theo quy tắc quy định trong bảng cấu hình OQC, không xóa textbox
         if (SteelPunchMode)
@@ -1157,6 +1186,9 @@ public partial class OqcScannerViewModel : ObservableObject
             }
 
             _toolEditorViewModel.ProductCode = code;
+
+            // QUAN TRỌNG: Reset số lượng mẫu đã kiểm tra về 0 cho Job mới nạp
+            CurrentJobTestedCount = 0;
 
             if (AutoRunJob)
             {
