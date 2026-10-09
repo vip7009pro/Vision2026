@@ -36,6 +36,25 @@ namespace VisionInspectionApp.VisionEngine
             _templateModelCache.Clear();
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private static ulong ComputeMatChecksum(Mat m)
+        {
+            if (m == null || m.Empty()) return 0;
+            unsafe
+            {
+                byte* p = (byte*)m.Data;
+                int total = (int)(m.Total() * m.ElemSize());
+                ulong hash = 14695981039346656037UL;
+                int step = Math.Max(1, total / 256);
+                for (int i = 0; i < total; i += step)
+                {
+                    hash ^= p[i];
+                    hash *= 1099511628211UL;
+                }
+                return hash;
+            }
+        }
+
         public static Mvp2TemplateModel ExtractTemplateModel(
             Mat templateGray,
             int edgeThresh = 25,
@@ -215,7 +234,8 @@ namespace VisionInspectionApp.VisionEngine
                 Cv2.PyrDown(pyrRoi[l - 1], pyrRoi[l]);
             }
 
-            string cacheKey = $"{def.Name}_{edgeThresh}_{lengthThresh}_{autoThresh}_{templInput.Width}x{templInput.Height}_{def.MvpEraserMask?.Length ?? 0}_{maxPyramidLevel}";
+            ulong templHash = ComputeMatChecksum(templInput);
+            string cacheKey = $"{def.TemplateImageFile ?? def.Name}_{edgeThresh}_{lengthThresh}_{autoThresh}_{templInput.Width}x{templInput.Height}_{templHash}_{def.MvpEraserMask?.Length ?? 0}_{maxPyramidLevel}";
             
             Mvp2TemplateModel[] pyrModels = _templateModelCache.GetOrAdd(cacheKey, _ =>
             {
@@ -281,7 +301,7 @@ namespace VisionInspectionApp.VisionEngine
                 return new MatchResult(centerFallback, 0.0, 0.0, roiRect);
             }
 
-            // Top candidates for pyramid refinement (Max 4 candidates)
+            // Top candidates for pyramid refinement (Max 5 candidates, ensuring 0.0° candidate is included)
             var topCandidates = candidates.OrderByDescending(c => c.Score).Take(4).ToList();
             var zeroCand = candidates.OrderBy(c => Math.Abs(c.Angle)).FirstOrDefault();
             if (!topCandidates.Any(c => Math.Abs(c.Angle - zeroCand.Angle) < 1e-4))
@@ -289,12 +309,11 @@ namespace VisionInspectionApp.VisionEngine
                 topCandidates.Add(zeroCand);
             }
 
-            double bestScore = 0;
-            double bestAngle = 0;
-            Point2d bestCenterLvl0 = new Point2d();
-
             // Refine intermediate pyramid layers (Level > 0)
             var refinedCandidates = new List<(double X, double Y, double Angle, double Score)>();
+
+            int intermRadius = Math.Max(4, (1 << maxPyramidLevel));
+            double intermAngleRange = Math.Max(2.0, coarseAngleStep);
 
             foreach (var cand in topCandidates)
             {
@@ -308,14 +327,14 @@ namespace VisionInspectionApp.VisionEngine
                     double lvlScale = 1.0 / (1 << lvl);
                     double curScaleX = curX * lvlScale;
                     double curScaleY = curY * lvlScale;
-                    double deltaA = Math.Max(1.0, coarseAngleStep / (1 << (maxPyramidLevel - lvl)));
+                    double deltaA = Math.Max(1.5, coarseAngleStep / (1 << (maxPyramidLevel - lvl)));
 
                     GetOrComputeGradientGrid(pyrRoi[lvl], ref pyrNx[lvl], ref pyrNy[lvl]);
 
                     RefineSearchFast(
                         pyrNx[lvl]!, pyrNy[lvl]!, pyrModels[lvl].Features,
                         curScaleX, curScaleY, curAngle,
-                        searchRadius: 3, angleRange: deltaA, angleStep: Math.Clamp(stepDeg * (1 << lvl), 0.5, 2.0),
+                        searchRadius: intermRadius, angleRange: deltaA, angleStep: Math.Clamp(stepDeg * (1 << lvl), 0.5, 2.0),
                         out double refX, out double refY, out double refAngle, out double refScore);
 
                     curX = refX / lvlScale;
@@ -327,30 +346,40 @@ namespace VisionInspectionApp.VisionEngine
                 refinedCandidates.Add((curX, curY, curAngle, lastScore));
             }
 
-            // Select only the single BEST candidate for Level 0 refinement
-            var bestCand = refinedCandidates.OrderByDescending(c => c.Score).First();
-            double finalX = bestCand.X;
-            double finalY = bestCand.Y;
-            double finalAngle = bestCand.Angle;
-
+            // Refine top candidates at Level 0 to find the true global maximum (avoiding local traps from coarse levels)
             GetOrComputeGradientGrid(pyrRoi[0], ref pyrNx[0], ref pyrNy[0]);
 
-            RefineSearchLevel0(
-                pyrNx[0]!, pyrNy[0]!, pyrModels[0].Features,
-                finalX, finalY, finalAngle,
-                searchRadius: 2, angleRange: 0.8, angleStep: Math.Clamp(stepDeg, 0.1, 0.5),
-                out double refLvl0X, out double refLvl0Y, out double refLvl0Angle, out double refLvl0Score);
+            double bestScore = 0;
+            double bestAngle = 0;
+            Point2d bestCenterLvl0 = new Point2d();
 
-            bestCenterLvl0 = new Point2d(refLvl0X, refLvl0Y);
-            bestAngle = refLvl0Angle;
-            bestScore = refLvl0Score;
+            int lvl0SearchRadius = Math.Max(5, (1 << maxPyramidLevel) * 2);
+            double lvl0AngleRange = Math.Max(1.5, coarseAngleStep);
+
+            var candsForLvl0 = refinedCandidates.OrderByDescending(c => c.Score).Take(4).ToList();
+            foreach (var cand in candsForLvl0)
+            {
+                RefineSearchLevel0(
+                    pyrNx[0]!, pyrNy[0]!, pyrModels[0].Features,
+                    cand.X, cand.Y, cand.Angle,
+                    searchRadius: lvl0SearchRadius, angleRange: lvl0AngleRange, angleStep: Math.Clamp(stepDeg, 0.1, 0.5),
+                    out double refLvl0X, out double refLvl0Y, out double refLvl0Angle, out double refLvl0Score);
+
+                if (refLvl0Score > bestScore)
+                {
+                    bestScore = refLvl0Score;
+                    bestAngle = refLvl0Angle;
+                    bestCenterLvl0 = new Point2d(refLvl0X, refLvl0Y);
+                }
+            }
 
             // Sub-pixel parabolic peak refinement at Level 0
             SubPixelRefine(pyrNx[0]!, pyrNy[0]!, pyrModels[0].Features, bestCenterLvl0.X, bestCenterLvl0.Y, bestAngle, stepDeg, out Point2d subPixelCenter, out double subPixelAngle, out double finalScore);
 
             for (int l = 0; l <= maxPyramidLevel; l++) { pyrRoi[l].Dispose(); pyrNx[l]?.Dispose(); pyrNy[l]?.Dispose(); }
 
-            if (finalScore > 0.95) finalScore = 1.0;
+            if (finalScore <= 0 && bestScore > 0) finalScore = bestScore;
+            if (finalScore > 0.95 || bestScore > 0.95) finalScore = 1.0;
 
             Point2d finalWorldCenter = new Point2d(roiRect.X + subPixelCenter.X, roiRect.Y + subPixelCenter.Y);
 
@@ -437,9 +466,25 @@ namespace VisionInspectionApp.VisionEngine
             int gridStep = (w >= 100 && h >= 100) ? 2 : 1;
 
             var angleList = new List<double>();
-            for (double a = minAngle; a <= maxAngle + 1e-5; a += angleStep)
+            // Align coarse angle loop grid so that 0.0° is explicitly tested
+            if (minAngle <= 0.0 && maxAngle >= 0.0)
             {
-                angleList.Add(a);
+                for (double a = 0; a <= maxAngle + 1e-5; a += angleStep)
+                {
+                    angleList.Add(a);
+                }
+                for (double a = -angleStep; a >= minAngle - 1e-5; a -= angleStep)
+                {
+                    angleList.Add(a);
+                }
+                angleList.Sort();
+            }
+            else
+            {
+                for (double a = minAngle; a <= maxAngle + 1e-5; a += angleStep)
+                {
+                    angleList.Add(a);
+                }
             }
 
             unsafe
@@ -602,12 +647,22 @@ namespace VisionInspectionApp.VisionEngine
                                 int px = cx + rotFeat[i].Dx;
                                 int py = cy + rotFeat[i].Dy;
 
-                                if (px >= 0 && px < w && py >= 0 && py < h)
+                                float maxDot = 0;
+                                for (int vy = -1; vy <= 1; vy++)
                                 {
-                                    int idx = py * stepN + px;
-                                    float dot = pNx[idx] * rotFeat[i].Gx + pNy[idx] * rotFeat[i].Gy;
-                                    if (dot > 0) scoreSum += dot;
+                                    int npy = py + vy;
+                                    if (npy < 0 || npy >= h) continue;
+                                    int rowIdx = npy * stepN;
+                                    for (int vx = -1; vx <= 1; vx++)
+                                    {
+                                        int npx = px + vx;
+                                        if (npx < 0 || npx >= w) continue;
+                                        int idx = rowIdx + npx;
+                                        float dot = pNx[idx] * rotFeat[i].Gx + pNy[idx] * rotFeat[i].Gy;
+                                        if (dot > maxDot) maxDot = dot;
+                                    }
                                 }
+                                scoreSum += maxDot;
                             }
 
                             float score = scoreSum / N;

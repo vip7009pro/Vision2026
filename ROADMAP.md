@@ -1,5 +1,13 @@
 # ROADMAP.md — Lộ trình phát triển & Trạng thái nhiệm vụ
 
+- [x] Task 400: Khắc Phục Triệt Để Lỗi Khớp Điểm Origin Thuật Toán MvpShapeMatch2 Với Ảnh Qua Tiền Xử Lý:
+  - [x] Nguyên nhân 1 (Bất đối xứng Preprocess): Trong `OriginMatcher.cs`, Search ROI được tiền xử lý thành `roiGray`, nhưng `templateGray` truyền vào `MvpShapeMatch2Engine.Match` bị bỏ qua không gọi `PreprocessTemplateForMatch(templateGray, preprocess)` như các thuật toán khác (`MatchByPyramid`, `TemplateMatch`).
+  - [x] Nguyên nhân 2 (Stale Cache Key): `cacheKey` của `_templateModelCache` trong `MvpShapeMatch2Engine.cs` chỉ chứa tên tool và kích thước mà không có checksum dữ liệu pixel, dẫn đến khi thay đổi tiền xử lý bị dính lại mô hình vector của ảnh cũ.
+  - [x] Nguyên nhân 3 (Trượt biên 1px & Cực trị địa phương Pyramid): Coarse Search bỏ qua mốc góc 0.0°; `RefineSearchFast` thiếu Max Pooling 3x3 làm trượt bước nhảy bậc thang 1 pixel của ảnh nhị phân/cạnh; Level 0 có `searchRadius` quá nhỏ và chỉ refine 1 candidate duy nhất nên bị kẹt ở cực trị địa phương với điểm số chỉ 0.5.
+  - [x] Nâng cấp `OriginMatcher.cs`: Bổ sung `PrepareTemplateForMatchBorrowed(templateGray, preprocess)` tiền xử lý template đồng bộ với ROI trước khi gọi `MvpShapeMatch2Engine.Match`.
+  - [x] Nâng cấp `MvpShapeMatch2Engine.cs`: Thêm FNV-1a `ComputeMatChecksum(templInput)` vào `cacheKey`; căn chỉnh góc qua 0.0°; tích hợp Max Pooling 3x3 vào `RefineSearchFast`; mở rộng `lvl0SearchRadius` và refine đa candidate ở Level 0.
+  - [x] Kiểm thử tự động: Bổ sung [MvpShapeMatch2PreprocessTests.cs](file:///g:/NODEJS/Vision2026/TestExtractApp/MvpShapeMatch2PreprocessTests.cs) kiểm thử 8/8 kịch bản (Grayscale, Binary Threshold, Binary Inverted, Otsu, Canny Edge, Gaussian Blur, Runtime PreprocessSettings, Dynamic Cache Invalidation). Toàn bộ 8/8 tests PASSED 100% với Score = 1.0000, Pos sai số < 0.8px, Angle sai số <= 0.1°. Toàn solution build 0 Errors cả Debug và Release.
+
 - [x] Task 399: Lưu Lịch Sử Kiểm Tra Cho Mọi Lần Chụp Và Kiểm Tra Trong Cùng 1 Phiên Job Trên Tab OQC Scanner:
   - [x] Phân tích nguyên nhân: `HandleInspectionCompletedAsync()` trước đây sử dụng `FirstOrDefault(e => e.ScannedCode == processedCode...)` tìm lại dòng đầu tiên và ghi đè in-place kết quả lên dòng đó thay vì tạo bản ghi mới; `RunJob()` bị thiếu logic tạo dòng pending cho các lần kiểm tra thứ 2 trở đi hoặc khi nạp từ Job Manager; `ExecuteScanAsync()` bị chặn bởi nhánh so sánh mã phiên khiến nút UI không kích hoạt kiểm tra.
   - [x] Nâng cấp `RunJob()`: Tự động phát hiện nếu chưa có dòng pending thì lập tức tạo một bản ghi `OqcScanHistoryEntry` mới với trạng thái `"Đang kiểm tra..."` và thời gian hiện tại (`DateTime.Now`).

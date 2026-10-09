@@ -102,7 +102,9 @@ public sealed class OriginMatcher
             var baseAngle2 = definition.TemplateRoi.Angle;
             double searchMin2 = baseAngle2 + minAngleDeg;
             double searchMax2 = baseAngle2 + maxAngleDeg;
-            return MvpShapeMatch2Engine.Match(roiGray.Mat, templateGray, definition, searchMin2, searchMax2, effectiveStep, paddedRect);
+
+            using var templPrep = PrepareTemplateForMatchBorrowed(templateGray, preprocess);
+            return MvpShapeMatch2Engine.Match(roiGray.Mat, templPrep.Mat, definition, searchMin2, searchMax2, effectiveStep, paddedRect);
         }
 
         if (definition.OriginAlgorithm == OriginAlgorithm.FeatureBased)
@@ -755,6 +757,16 @@ public sealed class OriginMatcher
         var processedGray = new Mat();
         Cv2.CvtColor(processed, processedGray, ColorConversionCodes.BGR2GRAY);
         return processedGray;
+    }
+
+    private static GrayMat PrepareTemplateForMatchBorrowed(Mat templ, PreprocessSettings? preprocess)
+    {
+        if (preprocess != null && (preprocess.UseGaussianBlur || preprocess.UseThreshold || preprocess.UseCanny || preprocess.UseMorphology || preprocess.IlluminationCorrection != 0))
+        {
+            var processed = PreprocessTemplateForMatch(templ, preprocess);
+            return new GrayMat(processed, owned: processed);
+        }
+        return EnsureGrayBorrowed(templ);
     }
 
     private static Rect ToRect(Roi roi, int imgW, int imgH)

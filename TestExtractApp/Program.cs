@@ -12,6 +12,12 @@ class Program
             return;
         }
 
+        if (args.Length > 0 && args[0].Equals("mvp2", StringComparison.OrdinalIgnoreCase))
+        {
+            MvpShapeMatch2PreprocessTests.RunAllTests();
+            return;
+        }
+
         if (args.Length > 0 && (args[0].Equals("config", StringComparison.OrdinalIgnoreCase) || args[0].Equals("config-persist", StringComparison.OrdinalIgnoreCase)))
         {
             ReleaseConfigPersistenceTests.RunAllTests();
@@ -93,5 +99,6 @@ class Program
         SystemConfigBackupAndOqcDbMatchTests.RunAllTests();
         ToolCalibFactorTests.RunAllTests();
         ReleaseConfigPersistenceTests.RunAllTests();
+        MvpShapeMatch2PreprocessTests.RunAllTests();
     }
 }
