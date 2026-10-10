@@ -77,6 +77,9 @@ public class OqcScannerConfig
     public bool OnlyOriginMode { get; set; } = true;
     public bool SteelPunchMode { get; set; } = true;
 
+    // ─── Mật khẩu xóa dữ liệu lịch sử OQC ───
+    public string DeleteHistoryPassword { get; set; } = "1234";
+
     /// <summary>
     /// Tạo cấu hình chuẩn xưởng CMS_VINA đầy đủ câu lệnh SQL và endpoint server.
     /// </summary>
@@ -146,7 +149,8 @@ public class OqcScannerConfig
             UseExternalScanner = false,
             AutoRunJob = true,
             OnlyOriginMode = true,
-            SteelPunchMode = true
+            SteelPunchMode = true,
+            DeleteHistoryPassword = "1234"
         };
     }
 }

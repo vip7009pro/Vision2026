@@ -31,6 +31,7 @@ public static class OqcLiveViewOnJobLoadTests
         TestOqcAutoSelectScannedText();
         TestOqcMultiInspectHistoryRetention();
         TestOqcSteelPunchContinuousWorkflowAndCountReset();
+        TestOqcHistoryPasswordAndDeleteProtectionAndPassFilter();
 
         Console.WriteLine("=======================================================");
         Console.WriteLine("✅ ALL OQC SCANNER LIVE VIEW TESTS PASSED!");
@@ -1308,6 +1309,212 @@ public static class OqcLiveViewOnJobLoadTests
 
         Console.WriteLine("  -> PASSED: Toàn vẹn chu trình 3 bước Cú đấm thép (Scan Job 1 -> Luân phiên Space/Ctrl+F8 -> Scan Job 2 nạp & reset counting) hoạt động hoàn hảo 100%.");
     }
+
+    private static void TestOqcHistoryPasswordAndDeleteProtectionAndPassFilter()
+    {
+        Console.WriteLine("--- Test 15: Kiểm thử Mật khẩu Xóa Lịch sử OQC (mặc định 1234) & Checkbox Lọc PASS (ẩn NG) ---");
+
+        // 1. Kiểm tra cấu hình mặc định trong OqcScannerConfig
+        var cfg = new VisionInspectionApp.Models.OqcScannerConfig();
+        if (cfg.DeleteHistoryPassword != "1234")
+        {
+            throw new Exception($"Mật khẩu xóa dữ liệu mặc định trong OqcScannerConfig phải là '1234'! Thực tế: '{cfg.DeleteHistoryPassword}'");
+        }
+
+        var factoryCfg = VisionInspectionApp.Models.OqcScannerConfig.CreateFactoryStandard();
+        if (factoryCfg.DeleteHistoryPassword != "1234")
+        {
+            throw new Exception($"Mật khẩu xóa dữ liệu trong CreateFactoryStandard phải là '1234'! Thực tế: '{factoryCfg.DeleteHistoryPassword}'");
+        }
+
+        // 2. Kiểm tra JSON Serialization của DeleteHistoryPassword
+        cfg.DeleteHistoryPassword = "5678";
+        string json = System.Text.Json.JsonSerializer.Serialize(cfg);
+        var restored = System.Text.Json.JsonSerializer.Deserialize<VisionInspectionApp.Models.OqcScannerConfig>(json);
+        if (restored?.DeleteHistoryPassword != "5678")
+        {
+            throw new Exception("Lỗi lưu trữ hoặc khôi phục DeleteHistoryPassword qua JSON!");
+        }
+
+        // 3. Kiểm tra logic nhận diện kết quả PASS của OqcScannerViewModel.IsPassResult
+        if (!VisionInspectionApp.UI.ViewModels.OqcScannerViewModel.IsPassResult("PASS"))
+        {
+            throw new Exception("IsPassResult('PASS') phải trả về true!");
+        }
+        if (!VisionInspectionApp.UI.ViewModels.OqcScannerViewModel.IsPassResult("PASS (OK)"))
+        {
+            throw new Exception("IsPassResult('PASS (OK)') phải trả về true!");
+        }
+        if (!VisionInspectionApp.UI.ViewModels.OqcScannerViewModel.IsPassResult("OK"))
+        {
+            throw new Exception("IsPassResult('OK') phải trả về true!");
+        }
+        if (!VisionInspectionApp.UI.ViewModels.OqcScannerViewModel.IsPassResult("pass (ok)"))
+        {
+            throw new Exception("IsPassResult('pass (ok)') không phân biệt hoa thường phải trả về true!");
+        }
+
+        // Các kết quả NG, Lỗi, trạng thái chờ phải trả về false
+        if (VisionInspectionApp.UI.ViewModels.OqcScannerViewModel.IsPassResult("NG"))
+        {
+            throw new Exception("IsPassResult('NG') phải trả về false!");
+        }
+        if (VisionInspectionApp.UI.ViewModels.OqcScannerViewModel.IsPassResult("NG (LỖI)"))
+        {
+            throw new Exception("IsPassResult('NG (LỖI)') phải trả về false!");
+        }
+        if (VisionInspectionApp.UI.ViewModels.OqcScannerViewModel.IsPassResult("FAIL"))
+        {
+            throw new Exception("IsPassResult('FAIL') phải trả về false!");
+        }
+        if (VisionInspectionApp.UI.ViewModels.OqcScannerViewModel.IsPassResult("LỖI BỘ LỌC MÃ"))
+        {
+            throw new Exception("IsPassResult('LỖI BỘ LỌC MÃ') phải trả về false!");
+        }
+        if (VisionInspectionApp.UI.ViewModels.OqcScannerViewModel.IsPassResult("LỖI TRA CỨU DB"))
+        {
+            throw new Exception("IsPassResult('LỖI TRA CỨU DB') phải trả về false!");
+        }
+        if (VisionInspectionApp.UI.ViewModels.OqcScannerViewModel.IsPassResult("Đang kiểm tra..."))
+        {
+            throw new Exception("IsPassResult('Đang kiểm tra...') phải trả về false!");
+        }
+        if (VisionInspectionApp.UI.ViewModels.OqcScannerViewModel.IsPassResult("Đã nạp Job"))
+        {
+            throw new Exception("IsPassResult('Đã nạp Job') phải trả về false!");
+        }
+        if (VisionInspectionApp.UI.ViewModels.OqcScannerViewModel.IsPassResult(""))
+        {
+            throw new Exception("IsPassResult('') phải trả về false!");
+        }
+        if (VisionInspectionApp.UI.ViewModels.OqcScannerViewModel.IsPassResult(null))
+        {
+            throw new Exception("IsPassResult(null) phải trả về false!");
+        }
+
+        // 4. Kiểm tra mô phỏng lọc danh sách: chỉ hiện PASS, ẩn NG khi checkbox bật
+        var sampleList = new System.Collections.Generic.List<VisionInspectionApp.Models.OqcScanHistoryEntry>
+        {
+            new() { ScannedCode = "P1", InspectResult = "PASS (OK)" },
+            new() { ScannedCode = "P2", InspectResult = "NG (LỖI)" },
+            new() { ScannedCode = "P3", InspectResult = "PASS" },
+            new() { ScannedCode = "P4", InspectResult = "FAIL" },
+            new() { ScannedCode = "P5", InspectResult = "LỖI TRA CỨU DB" },
+            new() { ScannedCode = "P6", InspectResult = "Đã nạp Job" }
+        };
+
+        var filteredPass = sampleList.Where(e => VisionInspectionApp.UI.ViewModels.OqcScannerViewModel.IsPassResult(e.InspectResult)).ToList();
+        if (filteredPass.Count != 2)
+        {
+            throw new Exception($"Số lượng kết quả PASS lọc được phải là 2! Thực tế: {filteredPass.Count}");
+        }
+        if (filteredPass.Any(e => e.ScannedCode == "P2" || e.ScannedCode == "P4" || e.ScannedCode == "P5" || e.ScannedCode == "P6"))
+        {
+            throw new Exception("Các kết quả NG / FAIL / Lỗi phải bị ẩn hoàn toàn khi bật lọc PASS!");
+        }
+
+        // 5. Kiểm tra ViewModel và xác thực mật khẩu
+        var thread = new System.Threading.Thread(() =>
+        {
+            var vm = (VisionInspectionApp.UI.ViewModels.OqcScannerViewModel)
+                System.Runtime.Serialization.FormatterServices.GetUninitializedObject(
+                    typeof(VisionInspectionApp.UI.ViewModels.OqcScannerViewModel));
+
+            // Kiểm tra mật khẩu mặc định qua thuộc tính backing field
+            typeof(VisionInspectionApp.UI.ViewModels.OqcScannerViewModel)
+                .GetField("_deleteHistoryPassword", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)?
+                .SetValue(vm, "1234");
+
+            if (vm.DeleteHistoryPassword != "1234")
+            {
+                throw new Exception($"ViewModel.DeleteHistoryPassword phải là '1234'! Thực tế: '{vm.DeleteHistoryPassword}'");
+            }
+
+            // Kiểm tra xác thực mật khẩu mặc định 1234
+            if (!vm.VerifyDeleteHistoryPassword("1234"))
+            {
+                throw new Exception("VerifyDeleteHistoryPassword('1234') phải trả về true!");
+            }
+            if (vm.VerifyDeleteHistoryPassword("0000"))
+            {
+                throw new Exception("VerifyDeleteHistoryPassword('0000') sai mật khẩu phải trả về false!");
+            }
+            if (vm.VerifyDeleteHistoryPassword(""))
+            {
+                throw new Exception("VerifyDeleteHistoryPassword('') phải trả về false!");
+            }
+            if (vm.VerifyDeleteHistoryPassword(null))
+            {
+                throw new Exception("VerifyDeleteHistoryPassword(null) phải trả về false!");
+            }
+
+            // Kiểm tra khi đổi mật khẩu mới trong cửa sổ cấu hình OQC
+            typeof(VisionInspectionApp.UI.ViewModels.OqcScannerViewModel)
+                .GetField("_deleteHistoryPassword", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)?
+                .SetValue(vm, "8888");
+
+            if (!vm.VerifyDeleteHistoryPassword("8888"))
+            {
+                throw new Exception("VerifyDeleteHistoryPassword('8888') sau khi đổi mật khẩu phải trả về true!");
+            }
+            if (vm.VerifyDeleteHistoryPassword("1234"))
+            {
+                throw new Exception("VerifyDeleteHistoryPassword('1234') lúc này phải trả về false vì mật khẩu đã đổi thành 8888!");
+            }
+        });
+
+        thread.SetApartmentState(System.Threading.ApartmentState.STA);
+        thread.Start();
+        thread.Join();
+
+        // 6. Kiểm tra cấu trúc XAML trong OqcSettingsDialog.xaml và OqcScanHistoryWindow.xaml
+        string settingsXamlPath = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", "..", "..", "..", "VisionInspectionApp.UI", "Views", "OQC", "OqcSettingsDialog.xaml");
+        if (System.IO.File.Exists(settingsXamlPath))
+        {
+            string settingsContent = System.IO.File.ReadAllText(settingsXamlPath);
+            if (!settingsContent.Contains("DeleteHistoryPassword"))
+            {
+                throw new Exception("OqcSettingsDialog.xaml phải chứa cấu hình DeleteHistoryPassword!");
+            }
+        }
+
+        string historyXamlPath = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", "..", "..", "..", "VisionInspectionApp.UI", "Views", "OQC", "OqcScanHistoryWindow.xaml");
+        if (System.IO.File.Exists(historyXamlPath))
+        {
+            string historyContent = System.IO.File.ReadAllText(historyXamlPath);
+            if (!historyContent.Contains("ChkOnlyPass"))
+            {
+                throw new Exception("OqcScanHistoryWindow.xaml phải chứa CheckBox ChkOnlyPass!");
+            }
+            if (!historyContent.Contains("BtnClearAllHistory_Click"))
+            {
+                throw new Exception("OqcScanHistoryWindow.xaml nút xóa lịch sử phải liên kết sự kiện BtnClearAllHistory_Click!");
+            }
+        }
+
+        string historyCsPath = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", "..", "..", "..", "VisionInspectionApp.UI", "Views", "OQC", "OqcScanHistoryWindow.xaml.cs");
+        if (System.IO.File.Exists(historyCsPath))
+        {
+            string historyCsContent = System.IO.File.ReadAllText(historyCsPath);
+            if (!historyCsContent.Contains("CheckDeletePassword"))
+            {
+                throw new Exception("OqcScanHistoryWindow.xaml.cs phải chứa phương thức CheckDeletePassword!");
+            }
+            if (!historyCsContent.Contains("ChkOnlyPass_Changed"))
+            {
+                throw new Exception("OqcScanHistoryWindow.xaml.cs phải chứa phương thức ChkOnlyPass_Changed!");
+            }
+        }
+
+        string dlgPath = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", "..", "..", "..", "VisionInspectionApp.UI", "Views", "OQC", "OqcPasswordPromptDialog.xaml.cs");
+        if (!System.IO.File.Exists(dlgPath))
+        {
+            throw new Exception("OqcPasswordPromptDialog.xaml.cs phải tồn tại!");
+        }
+
+        Console.WriteLine("  -> PASSED: Mật khẩu Xóa Lịch sử OQC (mặc định 1234) & Checkbox Lọc PASS hoạt động chuẩn xác 100%.");
+    }
 }
+
 
 

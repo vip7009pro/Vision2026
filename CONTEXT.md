@@ -7,36 +7,37 @@ Hỗ trợ Camera GigE/USB3/USB/RTSP, nạp ảnh tệp/thư mục, bản vẽ k
 ## 2. Trạng thái mã nguồn gần nhất
 - **Phiên bản hiện tại**: .NET 8 WPF, x64/x86 Multi-targeting, C# 12.
 - **Biên dịch**: 0 Errors toàn solution (`VisionInspectionApp.slnx`) cả Debug lẫn Release.
-- **Kiểm thử tự động**: PASSED 100% (Toàn bộ 14/14 test suite OQC Scanner Live View, 8/8 test MvpShapeMatch2 Preprocess, 6/6 test Seeding Config).
+- **Kiểm thử tự động**: PASSED 100% (Toàn bộ 15/15 test suite OQC Scanner Live View, 8/8 test MvpShapeMatch2 Preprocess, 6/6 test Seeding Config, 6/6 test Backup & DB Match).
 - **Cấu hình chuẩn xưởng CMS_VINA**: 
   - Database: `CMS_VINA` (192.168.1.2:6789)
   - OQC Server API: `https://192.168.1.192/vision_upload.php`
   - OTA Update Server: `http://192.168.1.192/update/version.json` & `http://192.168.1.192/ota_server.php`
 
-## 3. Hoàn thành Task 401: Chuẩn Hóa Chu Trình 3 Bước Tab OQC Scanner Chế Độ Cú Đấm Thép
-1. **Yêu cầu & Phản ánh của công nhân**:
-   - Tuần tự chuẩn:
-     1. User scan load Job đầu tiên (có ký tự Enter).
-     2. Bấm Space hoặc Ctrl+F8 để kiểm tra, bấm lần nữa để Live View, luân phiên cho tới khi hết phiên.
-     3. User scan Job thứ 2 (có ký tự Enter) -> Nạp Job và reset counting mẫu về 0.
-   - Vấn đề: Scan Job thứ 2 không load được mà phải đóng Job đã rồi mới scan sang Job tiếp theo được.
-2. **Nguyên nhân gốc rễ**:
-   - Phím Enter bị chặn khi cùng mã phiên: Trong `OqcScannerView.xaml.cs`, `IsSameAsCurrentSessionCode` set `e.Handled = true` nuốt chửng Enter khi công nhân quét tem mở phiên mới cho cùng model/job.
-   - Cờ `IsJobLoadedFromManager == true` chặn không cho query DB khi quét mã mới, ép gọi `RunJob()`.
-   - Khi công nhân click chuột xem ảnh hay bảng kết quả ở bước 2, TextBox mất focus; ký tự từ máy quét barcode không vào được TextBox và phím Enter bị trượt vì `ScanCommand` chỉ nằm trong TextBox InputBindings.
-   - `ExecuteScanInternalAsync()` thiếu dòng lệnh `CurrentJobTestedCount = 0;` khi nạp Job mới.
-3. **Giải pháp đã thực hiện**:
-   - **Tách biệt lệnh**: Bổ sung `ScanOrRunJobCommand` cho nút UI "CHẠY JOB (SPACE / Ctrl+F8)" (chạy kiểm tra khi có Job), dành riêng phím Enter cho `ScanCommand` (luôn nạp Job / tạo phiên mới / reset counting).
-   - **Global Barcode Input Routing**: Bổ sung `PreviewTextInput` tự động focus và `SelectAll()` ô nhập mã ngay khi ký tự đầu tiên từ đầu đọc barcode bắn tới, dù công nhân vừa click chuột vào ảnh hay bảng kết quả.
-   - **Xử lý nạp Job & Reset bộ đếm**:
-     - Khi scan mã mới: tự động giải phóng cờ `IsJobLoadedFromManager`, dọn pending cũ, nạp Job mới từ DB và reset `CurrentJobTestedCount = 0`.
-     - Khi scan lại cùng mã: tự động làm mới phiên Job, reset `CurrentJobTestedCount = 0`, chuyển về Live View camera sẵn sàng kiểm tra phiên mới.
-   - **Đồng bộ KeyBinding**: Thêm `KeyBinding Enter` vào `UserControl.InputBindings` để đảm bảo phím Enter luôn kích hoạt nạp Job.
-4. **Kết quả xác thực**:
-   - Toàn bộ 14/14 tests OQC Scanner PASSED 100% (bổ sung Test 14 trong [OqcLiveViewOnJobLoadTests.cs](file:///g:/NODEJS/Vision2026/TestExtractApp/OqcLiveViewOnJobLoadTests.cs)).
-   - Solution biên dịch 0 Errors cả Debug và Release.
+## 3. Hoàn thành Task 402: Bảo Mật Mật Khẩu Xóa Lịch Sử OQC Log & Checkbox Lọc PASS
+1. **Yêu cầu & Mục tiêu**:
+   - Tab OQC Scanner, trong cửa sổ xem lịch sử OQC log (`OqcScanHistoryWindow`), nút xóa dữ liệu khi bấm vào phải nhập mật khẩu thì mới cho xóa (mặc định 1234), có thể cấu hình trong cửa sổ cấu hình OQC.
+   - Thêm 1 checkbox không tên, mặc định unchecked (khi checked, chỉ show các kết quả được đánh giá pass, các kết quả NG ẩn đi).
+2. **Giải pháp đã thực hiện**:
+   - **Cấu hình mật khẩu**:
+     - Thêm thuộc tính `DeleteHistoryPassword` (mặc định "1234") vào `OqcScannerConfig`, hỗ trợ serialization JSON và cấu hình xưởng `CreateFactoryStandard()`.
+     - Thêm binding `DeleteHistoryPassword` vào `OqcScannerViewModel.Settings.cs` (tự động nạp, lưu, khôi phục xưởng và xuất/nhập tệp JSON).
+     - Thêm mục GroupBox "8. Bảo mật & Mật khẩu Xóa Lịch Sử OQC (Delete History Password)" trong `OqcSettingsDialog.xaml`.
+   - **Hộp thoại xác thực mật khẩu**:
+     - Tạo `OqcPasswordPromptDialog` (.xaml/.xaml.cs) giao diện trực quan, tự động focus PasswordBox, phím tắt Enter/Esc, hiển thị cảnh báo lỗi màu đỏ khi sai mật khẩu.
+     - Hàm tĩnh tiện ích `OqcPasswordPromptDialog.PromptPassword(owner, expectedPassword)` kiểm soát chặt chẽ quyền xóa.
+   - **Bảo vệ thao tác xóa dữ liệu**:
+     - Trong `OqcScanHistoryWindow.xaml.cs`: Bổ sung kiểm tra mật khẩu trước khi cho phép xóa với tất cả các thao tác: Xóa toàn bộ lịch sử (`BtnClearAllHistory_Click`), Xóa các dòng đã chọn (`BtnDeleteSelected_Click`), và Xóa từng dòng (`DeleteRowBtn_Click`).
+   - **Checkbox không tên lọc PASS (ẩn NG)**:
+     - Thêm `<CheckBox x:Name="ChkOnlyPass">` không tên, mặc định `IsChecked="False"` trên thanh Top Header & Filter Bar cạnh ô tìm kiếm.
+     - Hàm nhận diện chuẩn `OqcScannerViewModel.IsPassResult()` (chấp nhận "PASS", "PASS (OK)", "OK").
+     - Khi `ChkOnlyPass` được tick: Bộ lọc `FilterHistory` chỉ giữ lại các bản ghi PASS, các bản ghi NG (NG (LỖI), FAIL, LỖI TRA CỨU DB, LỖI BỘ LỌC MÃ...) bị ẩn đi.
+     - Khi bỏ tick hoặc bấm "Xóa lọc": Hiển thị đầy đủ tất cả bản ghi.
+3. **Kết quả xác thực**:
+   - Bổ sung Test 15 vào `OqcLiveViewOnJobLoadTests.cs`: Kiểm thử toàn diện giá trị mặc định, đổi mật khẩu, xác thực đúng/sai, nhận diện chuỗi PASS/NG và lọc ẩn NG.
+   - 15/15 tests OQC Scanner PASSED 100%. Toàn solution build 0 Errors.
 
 ## 4. Các sự kiện & thay đổi gần đây
+- Task 402: Bảo mật mật khẩu xóa lịch sử OQC Log (mặc định 1234, cấu hình trong OQC Settings) & Checkbox không tên lọc PASS (ẩn NG).
 - Task 401: Chuẩn hóa chu trình 3 bước OQC Scanner Cú đấm thép (tự động nạp Job thứ 2 & reset counting mẫu về 0, không cần đóng Job thủ công).
 - Task 400: Khắc phục triệt để lỗi khớp điểm Origin MvpShapeMatch2 với ảnh qua tiền xử lý (đồng bộ tiền xử lý template, FNV-1a cache key checksum, Max Pooling 3x3 pyramid, căn góc 0.0° và refine đa candidate Level 0).
 - Task 399: Sửa lỗi không lưu lịch sử kiểm tra khi kiểm tra nhiều lần trong 1 phiên Job (mỗi lần kiểm tra đều lưu bản ghi lịch sử và log DB).
@@ -59,5 +60,3 @@ Hỗ trợ Camera GigE/USB3/USB/RTSP, nạp ảnh tệp/thư mục, bản vẽ k
 - Task 382: Chuẩn hóa 100% định dạng CSV GX Works 3 (1.080J) nạp Global Labels và Device Comments.
 - Task 381: PLC FX5U Handshake, cơ chế dừng NG ngoài buồng In-Flight Tracking & xem lại ảnh 20 nấc lịch sử.
 - Task 380: OQC Scanner 1 nút Space / Ctrl+F8 luân phiên Kiểm tra & Live View, Crosshair căn tâm mặc định bật cho Job Camera Settings.
-- Task 379: Tăng tốc Auto Tune bằng ĐA LUỒNG ĐA NHÂN (`Parallel.For`, cap 4-8 luồng).
-- Task 378: Tối ưu hiệu năng/UX Tool Editor (cache preview Final, chống rò rỉ RAM Mat, thuật toán Coordinate Descent cho Auto Tune).

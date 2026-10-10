@@ -34,6 +34,13 @@
                     <TextBlock Text="🔍 Lọc nhanh:" FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,8,0" Foreground="{DynamicResource TextBrush}" />
                     <TextBox x:Name="TxtSearchFilter" Width="240" Height="26" VerticalContentAlignment="Center" Padding="4,0" TextChanged="TxtSearchFilter_TextChanged" ToolTip="Nhập mã barcode hoặc tên sản phẩm để lọc nhanh" />
                     <Button Content="❌ Xóa lọc" Click="BtnClearFilter_Click" Margin="6,0,0,0" Padding="8,2" Height="26" />
+                    <CheckBox x:Name="ChkOnlyPass"
+                              IsChecked="False"
+                              Checked="ChkOnlyPass_Changed"
+                              Unchecked="ChkOnlyPass_Changed"
+                              VerticalAlignment="Center"
+                              Margin="12,0,0,0"
+                              ToolTip="Chỉ hiển thị các kết quả PASS (ẩn các kết quả NG)" />
                 </StackPanel>
 
                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center" DockPanel.Dock="Right">
@@ -41,7 +48,7 @@
                     <TextBlock x:Name="TxtRecordCount" Text="{Binding ScanHistory.Count, StringFormat='{}{0}'}" FontWeight="Bold" Foreground="#2196F3" VerticalAlignment="Center" Margin="0,0,12,0" />
                     <Button Content="📊 Xuất Excel (CSV)" Command="{Binding ExportToExcelCommand}" Padding="10,4" Height="26" Margin="0,0,6,0" ToolTip="Xuất toàn bộ lịch sử quét ra file CSV/Excel UTF-8" />
                     <Button Content="🗑️ Xóa Dòng Đã Chọn" Click="BtnDeleteSelected_Click" Padding="10,4" Height="26" Margin="0,0,6,0" Background="#E65100" Foreground="White" FontWeight="SemiBold" ToolTip="Chọn 1 hoặc nhiều dòng (giữ Ctrl / Shift để chọn nhiều) rồi bấm nút này để xóa đúng những dòng đã chọn" />
-                    <Button Content="🗑️ Xóa Lịch Sử" Command="{Binding ClearHistoryCommand}" Padding="10,4" Height="26" Background="#C62828" Foreground="White" FontWeight="SemiBold" ToolTip="Xóa toàn bộ lịch sử quét mã hiện tại" />
+                    <Button Content="🗑️ Xóa Lịch Sử" Click="BtnClearAllHistory_Click" Padding="10,4" Height="26" Background="#C62828" Foreground="White" FontWeight="SemiBold" ToolTip="Xóa toàn bộ lịch sử quét mã hiện tại" />
                 </StackPanel>
             </DockPanel>
         </Border>

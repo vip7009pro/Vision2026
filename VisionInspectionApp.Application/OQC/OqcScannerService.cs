@@ -251,6 +251,13 @@ public sealed class OqcScannerService : IOqcScannerService
             changed = true;
         }
 
+        // Tự động bảo toàn mật khẩu xóa lịch sử OQC (mặc định 1234)
+        if (string.IsNullOrWhiteSpace(cfg.DeleteHistoryPassword))
+        {
+            cfg.DeleteHistoryPassword = "1234";
+            changed = true;
+        }
+
         return changed;
     }
 

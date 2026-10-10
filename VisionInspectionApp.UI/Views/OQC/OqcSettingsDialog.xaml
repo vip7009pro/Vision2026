@@ -412,6 +412,24 @@
                     </StackPanel>
                 </GroupBox>
 
+                <!-- 8. Bảo mật & Mật khẩu Xóa Lịch Sử OQC -->
+                <GroupBox Header="8. Bảo mật &amp; Mật khẩu Xóa Lịch Sử OQC (Delete History Password)" Margin="0,0,0,8" Padding="8" Foreground="{DynamicResource TextBrush}">
+                    <StackPanel>
+                        <Grid Margin="0,0,0,6">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="220" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="Mật khẩu xóa dữ liệu lịch sử:" VerticalAlignment="Center" FontWeight="SemiBold" />
+                            <TextBox Grid.Column="1" Text="{Binding DeleteHistoryPassword, UpdateSourceTrigger=PropertyChanged}"
+                                     Height="28" Width="180" HorizontalAlignment="Left" VerticalContentAlignment="Center" FontWeight="Bold"
+                                     ToolTip="Mật khẩu yêu cầu nhập khi người dùng bấm nút xóa dữ liệu trong cửa sổ 'Lịch Sử Quét Mã OQC' (Mặc định: 1234)" />
+                        </Grid>
+                        <TextBlock Text="💡 Khi bấm nút xóa dữ liệu trong cửa sổ 'Lịch Sử Quét Mã OQC', người dùng phải nhập mật khẩu này thì mới cho phép xóa (Mặc định: 1234)."
+                                   FontSize="11" Foreground="{DynamicResource TextMutedBrush}" />
+                    </StackPanel>
+                </GroupBox>
+
             </StackPanel>
         </ScrollViewer>
 

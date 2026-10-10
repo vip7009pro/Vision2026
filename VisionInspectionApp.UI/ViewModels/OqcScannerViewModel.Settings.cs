@@ -153,6 +153,10 @@ public partial class OqcScannerViewModel
     [ObservableProperty]
     private bool _onlyOriginMode = true;
 
+    // ─── Mật khẩu xóa dữ liệu lịch sử OQC ───
+    [ObservableProperty]
+    private string _deleteHistoryPassword = "1234";
+
     private bool _isSuppressingConfigSave = false;
 
     public IReadOnlyList<string> AvailableCodeTypes { get; } = new List<string>
@@ -352,6 +356,7 @@ public partial class OqcScannerViewModel
             AutoRunJob = cfg.AutoRunJob;
             OnlyOriginMode = cfg.OnlyOriginMode;
             SteelPunchMode = cfg.SteelPunchMode;
+            DeleteHistoryPassword = !string.IsNullOrWhiteSpace(cfg.DeleteHistoryPassword) ? cfg.DeleteHistoryPassword : "1234";
         }
         finally
         {
@@ -442,7 +447,8 @@ public partial class OqcScannerViewModel
             UseExternalScanner = UseExternalScanner,
             AutoRunJob = AutoRunJob,
             OnlyOriginMode = OnlyOriginMode,
-            SteelPunchMode = SteelPunchMode
+            SteelPunchMode = SteelPunchMode,
+            DeleteHistoryPassword = !string.IsNullOrWhiteSpace(DeleteHistoryPassword) ? DeleteHistoryPassword : "1234"
         };
 
         _oqcService.SaveConfig(cfg);
@@ -538,6 +544,7 @@ public partial class OqcScannerViewModel
         AutoRunJob = factory.AutoRunJob;
         OnlyOriginMode = factory.OnlyOriginMode;
         SteelPunchMode = factory.SteelPunchMode;
+        DeleteHistoryPassword = factory.DeleteHistoryPassword;
 
         // Lưu trực tiếp
         SaveSettingsToConfig();
@@ -622,7 +629,8 @@ public partial class OqcScannerViewModel
                     UseExternalScanner = UseExternalScanner,
                     AutoRunJob = AutoRunJob,
                     OnlyOriginMode = OnlyOriginMode,
-                    SteelPunchMode = SteelPunchMode
+                    SteelPunchMode = SteelPunchMode,
+                    DeleteHistoryPassword = !string.IsNullOrWhiteSpace(DeleteHistoryPassword) ? DeleteHistoryPassword : "1234"
                 };
 
                 if (_oqcService.ExportConfigToFile(sfd.FileName, cfg))

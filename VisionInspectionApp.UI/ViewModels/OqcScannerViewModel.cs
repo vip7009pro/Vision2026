@@ -1726,26 +1726,57 @@ public partial class OqcScannerViewModel : ObservableObject
         _oqcService.SaveScanHistory(ScanHistory);
     }
 
+    /// <summary>
+    /// Kiểm tra xem mật khẩu nhập vào có trùng khớp với mật khẩu xóa dữ liệu lịch sử OQC đã cấu hình không.
+    /// Mặc định: "1234"
+    /// </summary>
+    public bool VerifyDeleteHistoryPassword(string? inputPassword)
+    {
+        string currentPwd = !string.IsNullOrWhiteSpace(DeleteHistoryPassword) ? DeleteHistoryPassword : "1234";
+        return string.Equals(currentPwd, inputPassword, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Kiểm tra kết quả kiểm tra có phải là PASS (đạt) hay không (phục vụ lọc PASS, ẩn NG).
+    /// Hỗ trợ các định dạng "PASS (OK)", "PASS", "OK" (không phân biệt hoa thường).
+    /// Các kết quả khác như "NG (LỖI)", "NG", "FAIL", "LỖI...", "Đang kiểm tra...", "Đã nạp Job" trả về false.
+    /// </summary>
+    public static bool IsPassResult(string? inspectResult)
+    {
+        if (string.IsNullOrWhiteSpace(inspectResult)) return false;
+        var trimmed = inspectResult.Trim();
+        return trimmed.StartsWith("PASS", StringComparison.OrdinalIgnoreCase)
+            || trimmed.Equals("OK", StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Thực hiện xóa sạch toàn bộ lịch sử quét sau khi đã xác thực mật khẩu.
+    /// </summary>
+    public void ClearScanHistoryDirect()
+    {
+        ScanHistory.Clear();
+        _oqcService.SaveScanHistory(ScanHistory);
+
+        CurrentMeasurementDetails?.Clear();
+        LatestScanEntry = null;
+        BigResultStatusText = "READY";
+        BigResultBackgroundBrush = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#1E293B"));
+        BigResultBorderBrush = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#334155"));
+        BigResultForegroundBrush = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#94A3B8"));
+        LastResultSummary = "Sẵn sàng quét mã sản phẩm để bắt đầu đo kiểm.";
+        HasLastNgDetails = false;
+        LastNgDetails = "";
+
+        StatusMessage = "🗑️ Đã xóa toàn bộ lịch sử quét OQC.";
+        StatusBrush = Brushes.Gray;
+    }
+
     private void ExecuteClearHistory()
     {
         if (ScanHistory.Count == 0) return;
         if (MessageBox.Show("Bạn có chắc chắn muốn xóa toàn bộ lịch sử quét mã không?", "Xác Nhận Xóa Lịch Sử", MessageBoxButton.YesNo, MessageBoxImage.Question) == MessageBoxResult.Yes)
         {
-            ScanHistory.Clear();
-            _oqcService.SaveScanHistory(ScanHistory);
-
-            CurrentMeasurementDetails.Clear();
-            LatestScanEntry = null;
-            BigResultStatusText = "READY";
-            BigResultBackgroundBrush = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#1E293B"));
-            BigResultBorderBrush = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#334155"));
-            BigResultForegroundBrush = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#94A3B8"));
-            LastResultSummary = "Sẵn sàng quét mã sản phẩm để bắt đầu đo kiểm.";
-            HasLastNgDetails = false;
-            LastNgDetails = "";
-
-            StatusMessage = "🗑️ Đã xóa toàn bộ lịch sử quét OQC.";
-            StatusBrush = Brushes.Gray;
+            ClearScanHistoryDirect();
         }
     }
 
