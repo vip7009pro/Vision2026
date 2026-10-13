@@ -557,7 +557,7 @@
                     <!-- Nút Bỏ Qua Phiên Bản Này -->
                     <Button Content="Bỏ Qua Bản Này"
                             Command="{Binding IgnoreThisVersionCommand}"
-                            Visibility="{Binding HasUpdate, Converter={StaticResource BoolToVis}}"
+                            Visibility="{Binding IsOptionalUpdate, Converter={StaticResource BoolToVis}}"
                             Background="Transparent"
                             BorderBrush="{DynamicResource BorderBrush}"
                             Foreground="{DynamicResource TextMutedBrush}"
@@ -576,6 +576,7 @@
                     <!-- Nút Đóng -->
                     <Button Content="Đóng"
                             Command="{Binding CloseCommand}"
+                            Visibility="{Binding IsOptionalUpdate, Converter={StaticResource BoolToVis}}"
                             Background="Transparent"
                             BorderBrush="{DynamicResource BorderBrush}"
                             Padding="12,5" Height="30" />

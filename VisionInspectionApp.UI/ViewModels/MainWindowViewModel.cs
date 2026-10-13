@@ -24,12 +24,6 @@ public sealed partial class MainWindowViewModel : ObservableObject
     private string _globalStatusSeverity = "Info"; // Info, Warning, Error, Success
 
     [ObservableProperty]
-    private bool _hasUpdateAvailable = false;
-
-    [ObservableProperty]
-    private string _updateBadgeText = "";
-
-    [ObservableProperty]
     private string _licenseBadgeText = "Bản Quyền";
 
     [ObservableProperty]
@@ -253,19 +247,19 @@ public sealed partial class MainWindowViewModel : ObservableObject
 
     private void ExecuteOpenOtaUpdateDialog()
     {
+        OpenOtaUpdateDialog(null);
+    }
+
+    private void OpenOtaUpdateDialog(VisionInspectionApp.Models.Ota.UpdateManifest? detectedManifest)
+    {
         if (_otaService == null || _settingsService == null) return;
 
-        var vm = new OtaUpdateViewModel(_otaService, _settingsService);
+        var vm = new OtaUpdateViewModel(_otaService, _settingsService, initialManifest: detectedManifest);
         var dialog = new Views.OTA.OtaUpdateDialog(vm)
         {
             Owner = System.Windows.Application.Current?.MainWindow
         };
         dialog.ShowDialog();
-
-        if (!vm.HasUpdate)
-        {
-            HasUpdateAvailable = false;
-        }
     }
 
     private void ExecuteOpenLicenseDialog()
@@ -363,13 +357,12 @@ public sealed partial class MainWindowViewModel : ObservableObject
 
             if (result.HasUpdate && result.Manifest != null)
             {
-                if (!string.Equals(result.Manifest.Version, otaCfg.IgnoredVersion, StringComparison.OrdinalIgnoreCase))
+                if (result.Manifest.IsMandatory || !string.Equals(result.Manifest.Version, otaCfg.IgnoredVersion, StringComparison.OrdinalIgnoreCase))
                 {
                     System.Windows.Application.Current?.Dispatcher.InvokeAsync(() =>
                     {
-                        HasUpdateAvailable = true;
-                        UpdateBadgeText = $"🚀 Có Bản Mới: v{result.Manifest.Version}";
-                        SetGlobalStatus($"🎉 Phát hiện bản cập nhật mới (v{result.Manifest.Version}). Nhấn menu Trợ Giúp để cập nhật.", "Info");
+                        SetGlobalStatus($"🎉 Phát hiện bản cập nhật mới (v{result.Manifest.Version}).", result.Manifest.IsMandatory ? "Warning" : "Info");
+                        OpenOtaUpdateDialog(result.Manifest);
                     });
                 }
             }

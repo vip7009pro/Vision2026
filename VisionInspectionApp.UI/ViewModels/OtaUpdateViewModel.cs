@@ -81,7 +81,16 @@ public partial class OtaUpdateViewModel : ObservableObject
 
     public event Action? RequestClose;
 
-    public OtaUpdateViewModel(IOtaUpdateService otaService, GlobalAppSettingsService settingsService, IOtaPublisherService? publisherService = null)
+    public bool IsUpdateInstalling { get; private set; }
+    public bool HasInitialManifest => _currentManifest != null;
+    public bool IsOptionalUpdate => !IsMandatory;
+
+    partial void OnIsMandatoryChanged(bool value)
+    {
+        OnPropertyChanged(nameof(IsOptionalUpdate));
+    }
+
+    public OtaUpdateViewModel(IOtaUpdateService otaService, GlobalAppSettingsService settingsService, IOtaPublisherService? publisherService = null, UpdateManifest? initialManifest = null)
     {
         _otaService = otaService;
         _settingsService = settingsService;
@@ -94,6 +103,11 @@ public partial class OtaUpdateViewModel : ObservableObject
             : OtaSettings.DefaultUpdateServerUrl;
         SelectedSourceType = otaCfg.UpdateSourceType;
         AutoCheckOnStartup = otaCfg.AutoCheckOnStartup;
+
+        if (initialManifest != null)
+        {
+            SetUpdateManifest(initialManifest);
+        }
 
         InitializePublisher();
         CheckLastUpdateError();
@@ -123,23 +137,16 @@ public partial class OtaUpdateViewModel : ObservableObject
             {
                 StatusMessage = $"⚠️ {result.ErrorMessage}";
                 StatusColorHex = "#F87171";
-                HasUpdate = false;
+                if (_currentManifest == null)
+                {
+                    HasUpdate = false;
+                }
                 return;
             }
 
             if (result.HasUpdate && result.Manifest != null)
             {
-                _currentManifest = result.Manifest;
-                LatestVersionText = $"v{result.Manifest.Version}";
-                ReleaseNotes = !string.IsNullOrWhiteSpace(result.Manifest.ReleaseNotes) 
-                    ? result.Manifest.ReleaseNotes 
-                    : "Bản cập nhật tính năng mới và tối ưu hiệu suất.";
-                ReleaseDateText = result.Manifest.ReleaseDate?.ToString("yyyy-MM-dd HH:mm") ?? "Mới nhất";
-                PackageSizeText = result.Manifest.FileSize > 0 
-                    ? $"{(result.Manifest.FileSize / (1024.0 * 1024.0)):F2} MB" 
-                    : "Không xác định";
-                IsMandatory = result.Manifest.IsMandatory;
-                HasUpdate = true;
+                SetUpdateManifest(result.Manifest);
                 IsDownloaded = false;
 
                 StatusMessage = result.Status == UpdateCheckStatus.MandatoryUpdate
@@ -165,6 +172,26 @@ public partial class OtaUpdateViewModel : ObservableObject
         {
             IsChecking = false;
         }
+    }
+
+    private void SetUpdateManifest(UpdateManifest manifest)
+    {
+        _currentManifest = manifest;
+        LatestVersionText = $"v{manifest.Version}";
+        ReleaseNotes = !string.IsNullOrWhiteSpace(manifest.ReleaseNotes)
+            ? manifest.ReleaseNotes
+            : "Bản cập nhật tính năng mới và tối ưu hiệu suất.";
+        ReleaseDateText = manifest.ReleaseDate?.ToString("yyyy-MM-dd HH:mm") ?? "Mới nhất";
+        PackageSizeText = manifest.FileSize > 0
+            ? $"{(manifest.FileSize / (1024.0 * 1024.0)):F2} MB"
+            : "Không xác định";
+        IsMandatory = manifest.IsMandatory;
+        HasUpdate = true;
+        IsDownloaded = false;
+        StatusMessage = IsMandatory
+            ? "🚨 CÓ BẢN CẬP NHẬT BẮT BUỘC! Vui lòng cập nhật ngay."
+            : "🎉 Đã phát hiện phiên bản mới! Bạn có thể tải về ngay.";
+        StatusColorHex = IsMandatory ? "#EF4444" : "#4ADE80";
     }
 
     [RelayCommand]
@@ -261,6 +288,7 @@ public partial class OtaUpdateViewModel : ObservableObject
 
         if (ok)
         {
+            IsUpdateInstalling = true;
             RequestClose?.Invoke();
             System.Windows.Application.Current.Shutdown();
         }
@@ -274,6 +302,11 @@ public partial class OtaUpdateViewModel : ObservableObject
     [RelayCommand]
     public void IgnoreThisVersion()
     {
+        if (IsMandatory)
+        {
+            return;
+        }
+
         if (_currentManifest != null)
         {
             _settingsService.Settings.Ota.IgnoredVersion = _currentManifest.Version;
@@ -393,6 +426,11 @@ public partial class OtaUpdateViewModel : ObservableObject
     [RelayCommand]
     public void Close()
     {
+        if (IsMandatory)
+        {
+            return;
+        }
+
         SaveAllSettings();
         RequestClose?.Invoke();
     }

@@ -16,15 +16,23 @@ public partial class OtaUpdateDialog : Window
             Dispatcher.Invoke(Close);
         };
 
-        Closing += (_, _) =>
+        Closing += (_, e) =>
         {
+            if (viewModel.IsMandatory && !viewModel.IsUpdateInstalling)
+            {
+                e.Cancel = true;
+                return;
+            }
+
             viewModel.SaveAllSettings();
         };
 
         Loaded += async (_, _) =>
         {
-            // Tự động kiểm tra bản cập nhật khi mở dialog
-            await viewModel.CheckForUpdateAsync();
+            if (!viewModel.HasInitialManifest)
+            {
+                await viewModel.CheckForUpdateAsync();
+            }
         };
     }
 }
