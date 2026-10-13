@@ -29,6 +29,46 @@ namespace VisionInspectionApp.UI.ViewModels
         [ObservableProperty]
         private bool _isDirty;
 
+        [ObservableProperty]
+        private bool _isToolboxColumnVisible = true;
+
+        [ObservableProperty]
+        private bool _isCanvasColumnVisible = true;
+
+        [ObservableProperty]
+        private bool _isDebugColumnVisible = true;
+
+        public GridLength ToolboxColumnWidth => IsToolboxColumnVisible ? new GridLength(340) : new GridLength(0);
+        public GridLength ToolboxSplitterWidth => IsToolboxColumnVisible ? new GridLength(4) : new GridLength(0);
+        public double ToolboxColumnMinWidth => IsToolboxColumnVisible ? 260 : 0;
+        public GridLength CanvasColumnWidth => IsCanvasColumnVisible ? new GridLength(3.5, GridUnitType.Star) : new GridLength(0);
+        public GridLength CanvasSplitterWidth => IsCanvasColumnVisible ? new GridLength(4) : new GridLength(0);
+        public double CanvasColumnMinWidth => IsCanvasColumnVisible ? 240 : 0;
+        public GridLength DebugColumnWidth => IsDebugColumnVisible ? new GridLength(3.5, GridUnitType.Star) : new GridLength(0);
+        public GridLength DebugSplitterWidth => IsDebugColumnVisible ? new GridLength(4) : new GridLength(0);
+        public double DebugColumnMinWidth => IsDebugColumnVisible ? 280 : 0;
+
+        partial void OnIsToolboxColumnVisibleChanged(bool value)
+        {
+            OnPropertyChanged(nameof(ToolboxColumnWidth));
+            OnPropertyChanged(nameof(ToolboxSplitterWidth));
+            OnPropertyChanged(nameof(ToolboxColumnMinWidth));
+        }
+
+        partial void OnIsCanvasColumnVisibleChanged(bool value)
+        {
+            OnPropertyChanged(nameof(CanvasColumnWidth));
+            OnPropertyChanged(nameof(CanvasSplitterWidth));
+            OnPropertyChanged(nameof(CanvasColumnMinWidth));
+        }
+
+        partial void OnIsDebugColumnVisibleChanged(bool value)
+        {
+            OnPropertyChanged(nameof(DebugColumnWidth));
+            OnPropertyChanged(nameof(DebugSplitterWidth));
+            OnPropertyChanged(nameof(DebugColumnMinWidth));
+        }
+
         // ==================== CACHE DỰNG LẠI PREVIEW ====================
         // Preview "Final" (toàn bộ Flow: ảnh + overlay tất cả tool) rất tốn kém trên ảnh 20MP
         // (clone ảnh + Global Preprocess + chạy nhận diện overlay cho mọi tool). Nó KHÔNG phụ thuộc
@@ -590,6 +630,7 @@ namespace VisionInspectionApp.UI.ViewModels
         }
     
         public bool IsBlobDetectionNode => SelectedNode is not null && string.Equals(SelectedNode.Type, "BlobDetection", StringComparison.OrdinalIgnoreCase);
+        public bool IsNodeSelected => SelectedNode is not null;
         public bool IsSurfaceCompareNode => SelectedNode is not null && string.Equals(SelectedNode.Type, "SurfaceCompare", StringComparison.OrdinalIgnoreCase);
         public bool IsContourCompareNode => SelectedNode is not null && string.Equals(SelectedNode.Type, "ContourCompare", StringComparison.OrdinalIgnoreCase);
         public bool IsLinePairDetectionNode => SelectedNode is not null && string.Equals(SelectedNode.Type, "LinePairDetection", StringComparison.OrdinalIgnoreCase);
@@ -1371,6 +1412,7 @@ namespace VisionInspectionApp.UI.ViewModels
             OnPropertyChanged(nameof(Blob_PassStatus));
             OnPropertyChanged(nameof(Blob_PassColor));
             OnPropertyChanged(nameof(IsSurfaceCompareNode));
+            OnPropertyChanged(nameof(IsNodeSelected));
             OnPropertyChanged(nameof(IsContourCompareNode));
             OnPropertyChanged(nameof(IsCodeDetectionNode));
             OnPropertyChanged(nameof(IsOcrNode));

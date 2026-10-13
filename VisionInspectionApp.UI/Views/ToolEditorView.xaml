@@ -88,68 +88,52 @@
     <Grid Margin="8">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
-        <DockPanel Grid.Row="0" LastChildFill="False" Margin="0,0,0,4">
+        <ScrollViewer Grid.Row="0" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled" Margin="0,0,0,4">
+            <StackPanel Orientation="Horizontal">
+                <Button Command="{Binding LoadPreviewImageCommand}" Margin="0,0,4,0" Padding="8,4" ToolTip="Tải ảnh xem trước từ file">
+                    <StackPanel Orientation="Horizontal"><TextBlock Text="🖼️" Margin="0,0,5,0"/><TextBlock Text="Tải ảnh"/></StackPanel>
+                </Button>
+                <Button Command="{Binding CaptureCameraImageCommand}" Margin="0,0,4,0" Padding="8,4" ToolTip="{Binding CaptureButtonText}">
+                    <StackPanel Orientation="Horizontal"><TextBlock Text="📷" Margin="0,0,5,0"/><TextBlock Text="Chụp camera"/></StackPanel>
+                </Button>
+                <Button Command="{Binding RunOnceCommand}" Margin="0,0,4,0" Padding="10,4" Background="#0F5FA8" Foreground="White" BorderThickness="0" ToolTip="Chạy Flow 1 lần duy nhất">
+                    <StackPanel Orientation="Horizontal"><TextBlock Text="▶" Margin="0,0,5,0"/><TextBlock Text="Chạy 1 lần"/></StackPanel>
+                </Button>
+                <Button Command="{Binding RunContinuousCommand}" Margin="0,0,4,0" Padding="10,4" Background="{Binding RunContinuousButtonBackgroundBrush}" Foreground="White" BorderThickness="0" ToolTip="{Binding RunContinuousButtonToolTip}">
+                    <StackPanel Orientation="Horizontal"><TextBlock Text="{Binding RunContinuousButtonIcon}" Margin="0,0,5,0"/><TextBlock Text="Chạy liên tục"/></StackPanel>
+                </Button>
+                <Button Command="{Binding OpenCalibrationDialogCommand}" Margin="0,0,4,0" Padding="8,4" Background="#E65100" Foreground="White" BorderThickness="0" ToolTip="Hiệu chuẩn tỉ lệ Pixels/mm">
+                    <StackPanel Orientation="Horizontal"><TextBlock Text="📐" Margin="0,0,5,0"/><TextBlock Text="Hiệu chuẩn"/></StackPanel>
+                </Button>
+                <Button Command="{Binding OpenChessboardCalibrationDialogCommand}" Margin="0,0,4,0" Padding="8,4" Background="#6A1B9A" Foreground="White" BorderThickness="0" ToolTip="Hiệu chuẩn camera bằng bảng Chessboard">
+                    <StackPanel Orientation="Horizontal"><TextBlock Text="♟" Margin="0,0,5,0"/><TextBlock Text="Chessboard"/></StackPanel>
+                </Button>
+                <Button Command="{Binding OpenProductAssignDialogCommand}" Margin="0,0,4,0" Padding="8,4" Background="#0288D1" Foreground="White" BorderThickness="0" ToolTip="Gán mã sản phẩm trong CSDL cho Job">
+                    <StackPanel Orientation="Horizontal"><TextBlock Text="🏷️" Margin="0,0,5,0"/><TextBlock Text="Gán mã SP"/></StackPanel>
+                </Button>
+                <Button Command="{Binding OpenJobManagerWindowCommand}" Margin="0,0,4,0" Padding="8,4" Background="#6A1B9A" Foreground="White" BorderThickness="0" ToolTip="Quản lý Job và huấn luyện từ xa">
+                    <StackPanel Orientation="Horizontal"><TextBlock Text="🌐" Margin="0,0,5,0"/><TextBlock Text="Quản lý Job"/></StackPanel>
+                </Button>
+                <Button Command="{Binding CaptureAndSaveImageCommand}" Margin="0,0,4,0" Padding="8,4" Background="#10B981" Foreground="White" BorderThickness="0" ToolTip="Chụp và lưu ảnh chất lượng cao">
+                    <StackPanel Orientation="Horizontal"><TextBlock Text="💾" Margin="0,0,5,0"/><TextBlock Text="Chụp &amp; lưu"/></StackPanel>
+                </Button>
+                <Button Command="{Binding OpenRollDefectMapCommand}" Margin="0,0,4,0" Padding="8,4" Background="#7C3AED" Foreground="White" BorderThickness="0" ToolTip="Mở bản đồ khuyết tật cuộn">
+                    <StackPanel Orientation="Horizontal"><TextBlock Text="📜" Margin="0,0,5,0"/><TextBlock Text="Bản đồ cuộn"/></StackPanel>
+                </Button>
+                <Button Command="{Binding OpenInspectionLogCommand}" Margin="0,0,4,0" Padding="8,4" Background="#00897B" Foreground="White" BorderThickness="0" ToolTip="Mở lịch sử kiểm tra và thống kê SPC/CPK">
+                    <StackPanel Orientation="Horizontal"><TextBlock Text="📊" Margin="0,0,5,0"/><TextBlock Text="Lịch sử / SPC"/></StackPanel>
+                </Button>
+            </StackPanel>
+        </ScrollViewer>
+
+        <DockPanel Grid.Row="1" LastChildFill="False" Margin="0,0,0,4">
             <TextBlock Text="Mã SP:" VerticalAlignment="Center" FontWeight="SemiBold" Margin="0,0,4,0" Foreground="{DynamicResource TextBrush}" />
             <TextBox Width="110" Text="{Binding ProductCode, UpdateSourceTrigger=LostFocus}" Margin="0,0,8,0" VerticalContentAlignment="Center" Padding="4,2" />
-
-            <!-- 1. Load Image Icon Button -->
-            <Button Command="{Binding LoadPreviewImageCommand}" Margin="0,0,4,0" Padding="8,4" ToolTip="Tải ảnh xem trước từ file (Load Image)">
-                <TextBlock Text="🖼️" FontSize="13" VerticalAlignment="Center"/>
-            </Button>
-
-            <!-- 2. Capture Camera Icon Button -->
-            <Button Command="{Binding CaptureCameraImageCommand}" Margin="0,0,8,0" Padding="8,4" ToolTip="{Binding CaptureButtonText}">
-                <TextBlock Text="📷" FontSize="13" VerticalAlignment="Center"/>
-            </Button>
-
-            <!-- 3. Run Once Icon Button -->
-            <Button Command="{Binding RunOnceCommand}" Margin="0,0,4,0" Padding="10,4" Background="#0F5FA8" Foreground="White" BorderThickness="0" ToolTip="Chạy Flow 1 lần duy nhất (Run Once)">
-                <TextBlock Text="▶" FontFamily="Segoe UI Emoji" FontSize="13" FontWeight="Bold" VerticalAlignment="Center"/>
-            </Button>
-
-            <!-- 4. Run Continuous Icon Button -->
-            <Button Command="{Binding RunContinuousCommand}" Margin="0,0,8,0" Padding="10,4" Background="{Binding RunContinuousButtonBackgroundBrush}" Foreground="White" BorderThickness="0" ToolTip="{Binding RunContinuousButtonToolTip}">
-                <TextBlock Text="{Binding RunContinuousButtonIcon}" FontFamily="Segoe UI Emoji" FontSize="13" FontWeight="Bold" VerticalAlignment="Center"/>
-            </Button>
-
-            <!-- 5. Calibration Icon Button -->
-            <Button Command="{Binding OpenCalibrationDialogCommand}" Margin="0,0,4,0" Padding="8,4" Background="#E65100" Foreground="White" BorderThickness="0" ToolTip="Hiệu chuẩn tỉ lệ Pixels/mm trực tiếp trên Job hiện tại (Calibration)">
-                <TextBlock Text="📐" FontSize="13" VerticalAlignment="Center"/>
-            </Button>
-
-            <!-- 6. Chessboard Calib Icon Button -->
-            <Button Command="{Binding OpenChessboardCalibrationDialogCommand}" Margin="0,0,4,0" Padding="8,4" Background="#6A1B9A" Foreground="White" BorderThickness="0" ToolTip="Hiệu chuẩn camera bằng bảng Chessboard (Chessboard Calib)">
-                <TextBlock Text="♟" FontSize="13" VerticalAlignment="Center"/>
-            </Button>
-
-            <!-- 7. Gán Mã - Job Icon Button -->
-            <Button Command="{Binding OpenProductAssignDialogCommand}" Margin="0,0,4,0" Padding="8,4" Background="#0288D1" Foreground="White" BorderThickness="0" ToolTip="Gán mã sản phẩm trong CSDL cho tệp Job đang mở (Assign Product - Job)">
-                <TextBlock Text="🏷️" FontSize="13" VerticalAlignment="Center"/>
-            </Button>
-
-            <!-- 7b. Quản Lý Job Server Icon Button -->
-            <Button Command="{Binding OpenJobManagerWindowCommand}" Margin="0,0,4,0" Padding="8,4" Background="#6A1B9A" Foreground="White" BorderThickness="0" ToolTip="Quản Lý Job &amp; Huấn Luyện Từ Xa qua Máy Chủ Web (Remote Job Manager)">
-                <TextBlock Text="🌐" FontSize="13" VerticalAlignment="Center"/>
-            </Button>
-
-            <!-- 8. Chụp & Lưu Ảnh Icon Button -->
-            <Button Command="{Binding CaptureAndSaveImageCommand}" Margin="0,0,4,0" Padding="8,4" Background="#10B981" Foreground="White" BorderThickness="0" ToolTip="Chụp 1 frame nguyên bản chất lượng cao từ Camera và lưu ra file ảnh PNG/BMP (Capture &amp; Save Image)">
-                <TextBlock Text="💾" FontSize="13" VerticalAlignment="Center"/>
-            </Button>
-
-            <!-- 9. Bản Đồ Cuộn Icon Button -->
-            <Button Command="{Binding OpenRollDefectMapCommand}" Margin="0,0,4,0" Padding="8,4" Background="#7C3AED" Foreground="White" BorderThickness="0" ToolTip="Mở giao diện Bản đồ khuyết tật cuộn thời gian thực &amp; Xuất báo cáo (Roll Defect Map)">
-                <TextBlock Text="📜" FontSize="13" VerticalAlignment="Center"/>
-            </Button>
-
-            <!-- 10. Nút Log Lịch Sử & Thống Kê SPC/CPK Icon Button -->
-            <Button Command="{Binding OpenInspectionLogCommand}" Margin="0,0,8,0" Padding="8,4" Background="#00897B" Foreground="White" BorderThickness="0" ToolTip="Mở giao diện Lịch sử kiểm tra chi tiết &amp; Biểu đồ thống kê SPC/CPK (Inspection Log &amp; SPC/CPK)">
-                <TextBlock Text="📊" FontSize="13" VerticalAlignment="Center"/>
-            </Button>
 
             <!-- 1. Result Badge (Right-Aligned) -->
             <Border DockPanel.Dock="Right" Background="{Binding ResultBackgroundBrush}" BorderBrush="{Binding ResultBorderBrush}" BorderThickness="1" CornerRadius="12" Padding="12,3" VerticalAlignment="Center" Margin="6,0,0,0">
@@ -624,18 +608,19 @@
         </DockPanel>
 
 
-        <Grid Grid.Row="1" Margin="0,4,0,0">
+        <Grid Grid.Row="2" Margin="0,4,0,0">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="340" MinWidth="260" />
-                <ColumnDefinition Width="4" />
-                <ColumnDefinition Width="3.5*" MinWidth="240" />
-                <ColumnDefinition Width="4" />
+                <ColumnDefinition Width="{Binding ToolboxColumnWidth}" MinWidth="{Binding ToolboxColumnMinWidth}" />
+                <ColumnDefinition Width="{Binding ToolboxSplitterWidth}" />
+                <ColumnDefinition Width="{Binding CanvasColumnWidth}" MinWidth="{Binding CanvasColumnMinWidth}" />
+                <ColumnDefinition Width="{Binding CanvasSplitterWidth}" />
                 <ColumnDefinition Width="4.5*" MinWidth="300" />
-                <ColumnDefinition Width="4" />
-                <ColumnDefinition Width="3.5*" MinWidth="280" />
+                <ColumnDefinition Width="{Binding DebugSplitterWidth}" />
+                <ColumnDefinition Width="{Binding DebugColumnWidth}" MinWidth="{Binding DebugColumnMinWidth}" />
             </Grid.ColumnDefinitions>
 
-            <Border Grid.Column="0" BorderBrush="{DynamicResource DarkBorderBrush}" BorderThickness="1" Padding="2" Margin="0,0,1,0">
+            <Border Grid.Column="0" BorderBrush="{DynamicResource DarkBorderBrush}" BorderThickness="1" Padding="2" Margin="0,0,1,0"
+                    Visibility="{Binding IsToolboxColumnVisible, Converter={StaticResource BoolToVis}}">
                 <Grid>
                     <Grid.RowDefinitions>
                         <RowDefinition Height="*" />
@@ -643,6 +628,16 @@
                     </Grid.RowDefinitions>
 
                     <Grid>
+                        <Grid.Style>
+                            <Style TargetType="Grid">
+                                <Setter Property="Grid.RowSpan" Value="1" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding IsNodeSelected}" Value="False">
+                                        <Setter Property="Grid.RowSpan" Value="2" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Grid.Style>
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto" />
                             <RowDefinition Height="Auto" />
@@ -701,7 +696,8 @@
                         </ListBox>
                     </Grid>
 
-                    <Border Grid.Row="1" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1,1,0,0" Padding="8" Margin="0,8,0,0">
+                    <Border Grid.Row="1" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1,1,0,0" Padding="8" Margin="0,8,0,0"
+                            Visibility="{Binding IsNodeSelected, Converter={StaticResource BoolToVis}}">
                         <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
                             <StackPanel>
                                 <StackPanel.Resources>
@@ -4835,9 +4831,11 @@
                 </Grid>
             </Border>
 
-            <GridSplitter Grid.Column="1" Width="5" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Background="{DynamicResource DarkBorderBrush}" />
+            <GridSplitter Grid.Column="1" Width="5" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Background="{DynamicResource DarkBorderBrush}"
+                          Visibility="{Binding IsToolboxColumnVisible, Converter={StaticResource BoolToVis}}" />
 
-            <Border Grid.Column="2" BorderBrush="{DynamicResource DarkBorderBrush}" BorderThickness="1" Padding="8" Margin="0,0,8,0">
+            <Border Grid.Column="2" BorderBrush="{DynamicResource DarkBorderBrush}" BorderThickness="1" Padding="8" Margin="0,0,8,0"
+                    Visibility="{Binding IsCanvasColumnVisible, Converter={StaticResource BoolToVis}}">
                 <Grid>
                     <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
@@ -4859,6 +4857,9 @@
                         </StackPanel>
 
                         <StackPanel Grid.Column="2" Orientation="Horizontal">
+                            <ToggleButton Content="◧" IsChecked="{Binding IsToolboxColumnVisible, Mode=TwoWay}" Width="28" Height="28" Padding="0" Margin="0,0,6,0"
+                                          Background="{DynamicResource ButtonBackgroundBrush}" Foreground="{DynamicResource TextBrush}" BorderBrush="{DynamicResource DarkBorderBrush}"
+                                          FontWeight="SemiBold" ToolTip="Ẩn hoặc hiện cột Toolbox" />
                             <Button Content="🎯 Fit View" Height="28" Padding="10,0" Margin="0,0,6,0" Click="BtnFitView_Click" Background="{DynamicResource ButtonBackgroundBrush}" Foreground="{DynamicResource TextBrush}" BorderBrush="{DynamicResource DarkBorderBrush}" FontWeight="SemiBold" ToolTip="Tự động cân chỉnh vị trí &amp; mức Zoom để xem toàn bộ Graph Nodes" />
                             <Button Content="⚙ Global Pre-processor" Height="28" Padding="12,0" Click="BtnGlobalPreprocess_Click" Background="{DynamicResource ButtonBackgroundBrush}" Foreground="{DynamicResource TextBrush}" BorderBrush="{DynamicResource DarkBorderBrush}" FontWeight="SemiBold" ToolTip="Open Global Image Pre-processor Settings" />
                         </StackPanel>
@@ -5018,7 +5019,8 @@
                 </Grid>
             </Border>
 
-            <GridSplitter Grid.Column="3" Width="4" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Background="{DynamicResource DarkBorderBrush}" />
+            <GridSplitter Grid.Column="3" Width="4" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Background="{DynamicResource DarkBorderBrush}"
+                          Visibility="{Binding IsCanvasColumnVisible, Converter={StaticResource BoolToVis}}" />
 
             <!-- Column 4: Single Image Preview Box -->
             <Border Grid.Column="4" BorderBrush="{DynamicResource DarkBorderBrush}" BorderThickness="1" Padding="8">
@@ -5054,6 +5056,8 @@
                         </StackPanel>
 
                         <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                            <ToggleButton Content="▦" IsChecked="{Binding IsCanvasColumnVisible, Mode=TwoWay}" Margin="0,0,6,0" Padding="0" Width="26" Height="24" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource TextBrush}" ToolTip="Ẩn hoặc hiện cột Canvas" VerticalAlignment="Center" />
+                            <ToggleButton Content="▤" IsChecked="{Binding IsDebugColumnVisible, Mode=TwoWay}" Margin="0,0,10,0" Padding="0" Width="26" Height="24" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource TextBrush}" ToolTip="Ẩn hoặc hiện cột Debug" VerticalAlignment="Center" />
                             <CheckBox Content="Render Canvas" IsChecked="{Binding EnableCanvasRendering, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,10,0" FontWeight="SemiBold" VerticalAlignment="Center" ToolTip="Bật/Tắt hoàn toàn việc chuyển đổi và vẽ ảnh + overlay lên Canvas (tối đa hóa hiệu năng cho ảnh 20MP)" />
                             <CheckBox Content="Show Results" IsChecked="{Binding ShowResultOverlay, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,10,0" VerticalAlignment="Center" />
                             <CheckBox Content="Show ROI" IsChecked="{Binding ShowRoisInSelectedPreview, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,10,0" VerticalAlignment="Center" />
@@ -5106,7 +5110,8 @@
             <GridSplitter Grid.Column="5" Width="4" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Background="{DynamicResource DarkBorderBrush}" />
 
             <!-- Column 6: Integrated Live Inspection Dashboard & Details -->
-            <Border Grid.Column="6" BorderBrush="{DynamicResource DarkBorderBrush}" BorderThickness="1" Padding="6">
+            <Border Grid.Column="6" BorderBrush="{DynamicResource DarkBorderBrush}" BorderThickness="1" Padding="6"
+                    Visibility="{Binding IsDebugColumnVisible, Converter={StaticResource BoolToVis}}">
                 <Grid>
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />
@@ -5359,8 +5364,9 @@
                                 </StackPanel>
                             </Border>
 
-                            <!-- Section 4: Code Detection & SurfaceCompare Debugger -->
-                            <Border Style="{StaticResource DashCardStyle}" Padding="6">
+                            <!-- Code Detection Debugger -->
+                            <Border Style="{StaticResource DashCardStyle}" Padding="6"
+                                    Visibility="{Binding IsCodeDetectionNode, Converter={StaticResource BoolToVis}}">
                                 <StackPanel>
                                     <Grid Margin="0,0,0,6">
                                         <Grid.ColumnDefinitions>
@@ -5368,7 +5374,7 @@
                                             <ColumnDefinition Width="*" />
                                         </Grid.ColumnDefinitions>
                                         <Border Grid.Column="0" Background="#9C27B0" CornerRadius="2" Margin="0,0,7,0" />
-                                        <TextBlock Grid.Column="1" Text="📷 ĐỌC MÃ VẠCH / QR &amp; SURFACE COMPARE DEBUG" Style="{StaticResource DashHeaderTextStyle}" />
+                                        <TextBlock Grid.Column="1" Text="📷 ĐỌC MÃ VẠCH / QR DEBUG" Style="{StaticResource DashHeaderTextStyle}" />
                                     </Grid>
                                     
                                     <ItemsControl ItemsSource="{Binding CodeDetectionResults}" Margin="0,0,0,6">
@@ -5384,8 +5390,24 @@
                                         </ItemsControl.ItemTemplate>
                                     </ItemsControl>
 
+                                </StackPanel>
+                            </Border>
+
+                            <!-- Surface Compare Debugger -->
+                            <Border Style="{StaticResource DashCardStyle}" Padding="6"
+                                    Visibility="{Binding IsSurfaceCompareNode, Converter={StaticResource BoolToVis}}">
+                                <StackPanel>
+                                    <Grid Margin="0,0,0,6">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="4" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <Border Grid.Column="0" Background="#03A9F4" CornerRadius="2" Margin="0,0,7,0" />
+                                        <TextBlock Grid.Column="1" Text="🔬 SURFACE COMPARE DEBUG" Style="{StaticResource DashHeaderTextStyle}" />
+                                    </Grid>
+
                                     <TextBlock Text="{Binding SelectedSurfaceCompareDebugPick.DisplayName, TargetNullValue='Chọn node Surface Compare trên canvas để xem debug'}" Margin="0,2,0,6" FontSize="10" Foreground="{DynamicResource TextMutedBrush}" TextTrimming="CharacterEllipsis" />
-                                    
+
                                     <UniformGrid Columns="2">
                                         <StackPanel Margin="2">
                                             <TextBlock Text="Template" FontSize="10" Foreground="{DynamicResource TextMutedBrush}"/>
@@ -5420,7 +5442,7 @@
             </Border>
         </Grid>
 
-        <StatusBar Grid.Row="2" Background="{DynamicResource DarkBackgroundBrush}" Foreground="{DynamicResource TextBrush}" BorderThickness="0,1,0,0" BorderBrush="{DynamicResource DarkBorderBrush}">
+        <StatusBar Grid.Row="3" Background="{DynamicResource DarkBackgroundBrush}" Foreground="{DynamicResource TextBrush}" BorderThickness="0,1,0,0" BorderBrush="{DynamicResource DarkBorderBrush}">
             <StatusBarItem>
                 <TextBlock Text="{Binding StatusBarText}" />
             </StatusBarItem>
