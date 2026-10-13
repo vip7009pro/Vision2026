@@ -46,10 +46,44 @@ namespace VisionInspectionApp.UI.ViewModels
                 return;
             }
     
-            if (!string.IsNullOrWhiteSpace(CurrentJobFilePath) && !string.IsNullOrWhiteSpace(CurrentTempWorkingDir))
+            if (!string.IsNullOrWhiteSpace(CurrentTempWorkingDir) && Directory.Exists(CurrentTempWorkingDir))
             {
-                SyncToolGraphToConfig();
-                _jobService.SaveJob(_config, CurrentTempWorkingDir, CurrentJobFilePath);
+                try
+                {
+                    SyncToolGraphToConfig();
+                    _jobService.SaveJob(_config, CurrentTempWorkingDir, GetAutoSaveFilePath());
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"[AutoSaveNow] {ex.Message}");
+                }
+            }
+        }
+
+        private string GetAutoSaveFilePath()
+        {
+            var workingDirectory = CurrentTempWorkingDir;
+            if (string.IsNullOrWhiteSpace(workingDirectory))
+                throw new InvalidOperationException("The current job has no working directory.");
+
+            var parentDirectory = Directory.GetParent(workingDirectory)?.FullName
+                ?? throw new InvalidOperationException("The current job working directory has no parent directory.");
+            return Path.Combine(parentDirectory, $"{Path.GetFileName(workingDirectory)}.autosave.job");
+        }
+
+        public void DiscardPendingAutoSave()
+        {
+            _autoSaveTimer.Stop();
+            _autoSavePending = false;
+            try
+            {
+                var autoSaveFilePath = GetAutoSaveFilePath();
+                if (File.Exists(autoSaveFilePath))
+                    File.Delete(autoSaveFilePath);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[DiscardPendingAutoSave] {ex.Message}");
             }
         }
     
@@ -77,6 +111,8 @@ namespace VisionInspectionApp.UI.ViewModels
     
         public void CloseJob()
         {
+            // Clear undo/redo history when closing current job to prevent stale commands.
+            UndoManager.Clear();
             // ✅ FIX: Chốt phiên Lịch sử kiểm tra (flush hết part còn trong hàng đợi xuống đĩa)
             // trước khi xoá Job, tránh mất kết quả của phiên đang mở.
             try { _ = _inspectionLogService?.EndSessionAsync(); } catch { }
@@ -163,6 +199,7 @@ namespace VisionInspectionApp.UI.ViewModels
 
             bool shouldRun = autoRun ?? (CheckShouldAutoRunOnJobLoad?.Invoke() ?? false);
 
+            DiscardPendingAutoSave();
             ClearActiveGraph();
             ClearAllImageSourceCache();
             try
@@ -466,6 +503,8 @@ namespace VisionInspectionApp.UI.ViewModels
         public void SaveJob()
         {
             CommitFocusedBinding();
+            _autoSaveTimer.Stop();
+            _autoSavePending = false;
             if (string.IsNullOrWhiteSpace(CurrentJobFilePath))
             {
                 SaveJobAs();
@@ -490,6 +529,7 @@ namespace VisionInspectionApp.UI.ViewModels
             {
                 EnsureTeachImageSavedToCacheAndPreview();
                 _jobService.SaveJob(_config, CurrentTempWorkingDir, CurrentJobFilePath);
+                DiscardPendingAutoSave();
                 IsDirty = false;
                 _recentJobsService?.AddRecentJob(CurrentJobFilePath);
             }

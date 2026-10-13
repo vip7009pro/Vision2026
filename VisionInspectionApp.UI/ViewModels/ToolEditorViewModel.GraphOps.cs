@@ -97,6 +97,7 @@ namespace VisionInspectionApp.UI.ViewModels
             SyncPreprocessChoices();
             SyncSelectedToolPreprocessChoiceFromGraph();
             SyncTextNodeConditionRows();
+            SelectSurfaceCompareDebugNode(value);
             RaiseToolPropertyPanelsChanged();
             // Dùng RefreshPreviews() (có cơ chế coalescing) thay vì RefreshSelectedPreview() đồng bộ:
             // nhờ đó thao tác chọn node + xóa node + đổi thuộc tính trong cùng 1 khoảng debounce
@@ -134,6 +135,20 @@ namespace VisionInspectionApp.UI.ViewModels
             ClearNodeSelection();
             node.IsSelected = true;
             SelectedNodes.Add(node);
+        }
+
+        public void SelectAllNodes()
+        {
+            ClearNodeSelection();
+            SelectedEdge = null;
+
+            foreach (var node in Nodes)
+            {
+                node.IsSelected = true;
+                SelectedNodes.Add(node);
+            }
+
+            SelectedNode = Nodes.FirstOrDefault();
         }
     
         public void ToggleNodeSelection(ToolGraphNodeViewModel node)
@@ -508,6 +523,9 @@ namespace VisionInspectionApp.UI.ViewModels
             }
         }
     
+        private sealed record NodeDefinitionSnapshot(System.Collections.IList Collection, object Definition);
+        private sealed record DeletedNodeSnapshot(ToolGraphNodeViewModel Node, NodeDefinitionSnapshot? Definition);
+
         private void DeleteSelection()
         {
             if (SelectedEdge != null)
@@ -515,21 +533,164 @@ namespace VisionInspectionApp.UI.ViewModels
                 DeleteSelectedEdge();
                 return;
             }
-            DeleteSelectedNode();
+
+            var nodesToDelete = SelectedNodes.Where(Nodes.Contains).ToList();
+            if (nodesToDelete.Count == 0 && SelectedNode is not null && Nodes.Contains(SelectedNode))
+            {
+                nodesToDelete.Add(SelectedNode);
+            }
+
+            if (nodesToDelete.Count == 0)
+                return;
+
+            DeleteNodesUndoably(nodesToDelete);
         }
 
         public void DeleteSelectedNode()
         {
-            if (SelectedNode is null)
+            var node = SelectedNode;
+            if (node is not null && Nodes.Contains(node))
+                DeleteNodesUndoably(new[] { node });
+        }
+
+        private void DeleteNodesUndoably(IReadOnlyList<ToolGraphNodeViewModel> nodes)
+        {
+            var nodeSnapshots = nodes.Select(node => new DeletedNodeSnapshot(node, CaptureNodeDefinition(node))).ToList();
+            var nodeIds = nodes.Select(node => node.Id).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            var connectedEdges = Edges.Where(edge => nodeIds.Contains(edge.FromNodeId) || nodeIds.Contains(edge.ToNodeId)).ToList();
+            var primaryNode = SelectedNode;
+
+            UndoManager.Execute(new UndoRedoManager.DelegateAction(
+                doAction: () => RemoveNodesFromGraph(nodes),
+                undoAction: () => RestoreDeletedNodes(nodeSnapshots, connectedEdges, primaryNode)));
+        }
+
+        private NodeDefinitionSnapshot? CaptureNodeDefinition(ToolGraphNodeViewModel node)
+        {
+            var collection = GetNodeDefinitionCollection(node.Type);
+            if (collection is null || string.IsNullOrWhiteSpace(node.RefName))
+                return null;
+
+            var definition = collection.Cast<object>().FirstOrDefault(item =>
+                string.Equals(GetDefinitionName(item), node.RefName, StringComparison.OrdinalIgnoreCase));
+            if (definition is null)
+                return null;
+
+            var definitionType = definition.GetType();
+            var json = System.Text.Json.JsonSerializer.Serialize(definition, definitionType);
+            var clone = System.Text.Json.JsonSerializer.Deserialize(json, definitionType);
+            return clone is null ? null : new NodeDefinitionSnapshot(collection, clone);
+        }
+
+        private System.Collections.IList? GetNodeDefinitionCollection(string type)
+        {
+            if (_config is null)
+                return null;
+
+            return type.ToUpperInvariant() switch
             {
-                return;
+                "PREPROCESS" => _config.PreprocessNodes,
+                "POINT" => _config.Points,
+                "LINE" => _config.Lines,
+                "CALIPER" => _config.Calipers,
+                "DISTANCE" => _config.Distances,
+                "LINELINEDISTANCE" => _config.LineToLineDistances,
+                "POINTLINEDISTANCE" => _config.PointToLineDistances,
+                "SEGMENTLINEDISTANCE" => _config.SegmentLineDistances,
+                "ANGLE" => _config.Angles,
+                "CONDITION" => _config.Conditions,
+                "IMAGESOURCE" => _config.ImageSources,
+                "IMAGEOUTPUT" or "OUTPUTIMAGE" => _config.ImageOutputs,
+                "TEXT" or "TEXTNODE" => _config.TextNodes,
+                "BLOBDETECTION" => _config.BlobDetections,
+                "SURFACECOMPARE" => _config.SurfaceCompares,
+                "CONTOURCOMPARE" => _config.ContourCompares,
+                "LINEPAIRDETECTION" => _config.LinePairDetections,
+                "EDGEPAIRDETECT" => _config.EdgePairDetections,
+                "CIRCLEFINDER" => _config.CircleFinders,
+                "DIAMETER" => _config.Diameters,
+                "EDGEPAIR" => _config.EdgePairs,
+                "CODEDETECTION" => _config.CodeDetections,
+                "OCR" => _config.Ocrs,
+                "CROP" => _config.Crops,
+                "COLORDIFF" => _config.ColorDiffs,
+                "IMGARITHMETIC" => _config.ImgArithmetics,
+                "CREATEPOINT" => _config.CreatePoints,
+                "CREATELINE" => _config.CreateLines,
+                "CREATERECT" => _config.CreateRects,
+                "CREATECIRCLE" => _config.CreateCircles,
+                "RESULTTRANSFER" => _config.ResultTransfers,
+                "PLCREAD" => _config.PlcReads,
+                "PLCWRITE" => _config.PlcWrites,
+                "PLCWAIT" => _config.PlcWaits,
+                "PLCTRIGGER" => _config.PlcTriggers,
+                "DBNODE" or "DATABASE" => _config.DbNodes,
+                _ => null
+            };
+        }
+
+        private static string? GetDefinitionName(object definition)
+        {
+            var type = definition.GetType();
+            return (type.GetProperty("Name") ?? type.GetProperty("RefName"))?.GetValue(definition) as string;
+        }
+
+        private void RemoveNodesFromGraph(IReadOnlyList<ToolGraphNodeViewModel> nodes)
+        {
+            foreach (var node in nodes)
+                RemoveNode(node);
+
+            ClearNodeSelection();
+            SelectedNode = null;
+            CompleteNodeDeletion();
+        }
+
+        private void RestoreDeletedNodes(
+            IReadOnlyList<DeletedNodeSnapshot> snapshots,
+            IReadOnlyList<ToolGraphEdgeViewModel> edges,
+            ToolGraphNodeViewModel? primaryNode)
+        {
+            foreach (var snapshot in snapshots)
+            {
+                if (snapshot.Definition is { } definition &&
+                    !definition.Collection.Cast<object>().Any(item =>
+                        string.Equals(GetDefinitionName(item), snapshot.Node.RefName, StringComparison.OrdinalIgnoreCase)))
+                {
+                    definition.Collection.Add(definition.Definition);
+                }
+
+                if (!Nodes.Contains(snapshot.Node))
+                {
+                    snapshot.Node.PropertyChanged += Node_PropertyChanged;
+                    Nodes.Add(snapshot.Node);
+                }
             }
-    
-            var toRemove = SelectedNode;
+
+            foreach (var edge in edges)
+            {
+                if (!Edges.Contains(edge))
+                    Edges.Add(edge);
+            }
+
+            ClearNodeSelection();
+            foreach (var snapshot in snapshots)
+            {
+                snapshot.Node.IsSelected = true;
+                SelectedNodes.Add(snapshot.Node);
+            }
+            SelectedNode = primaryNode is not null && Nodes.Contains(primaryNode)
+                ? primaryNode
+                : snapshots.FirstOrDefault()?.Node;
+            SelectedEdge = null;
+            CompleteNodeDeletion();
+        }
+
+        private bool RemoveNode(ToolGraphNodeViewModel toRemove)
+        {
             var idx = Nodes.IndexOf(toRemove);
             if (idx < 0)
             {
-                return;
+                return false;
             }
     
             if (_config is not null && !string.IsNullOrWhiteSpace(toRemove.RefName))
@@ -751,7 +912,11 @@ namespace VisionInspectionApp.UI.ViewModels
                 }
             }
     
-            SelectedNode = Nodes.Count > 0 ? Nodes[Math.Clamp(idx, 0, Nodes.Count - 1)] : null;
+            return true;
+        }
+
+        private void CompleteNodeDeletion()
+        {
             _lastRun = null;
             _lastRunError = null;
             SyncToolGraphToConfig();
@@ -774,12 +939,39 @@ namespace VisionInspectionApp.UI.ViewModels
                 X = Math.Round(canvasPosition.X / 10.0) * 10.0,
                 Y = Math.Round(canvasPosition.Y / 10.0) * 10.0
             };
+
+            UndoManager.Execute(new UndoRedoManager.DelegateAction(
+                doAction: () => AddNodeToGraph(node),
+                undoAction: () =>
+                {
+                    if (RemoveNode(node))
+                    {
+                        ClearNodeSelection();
+                        SelectedNode = null;
+                        CompleteNodeDeletion();
+                    }
+                }));
+        }
+
+        private void AddNodeToGraph(ToolGraphNodeViewModel node)
+        {
+            _config ??= new VisionConfig { ProductCode = ProductCode };
+            _config.ToolGraph ??= new ToolGraph();
             node.PropertyChanged += Node_PropertyChanged;
             Nodes.Add(node);
             // Ensure there is a backing definition in config so ROI overlays exist and can be taught immediately.
             EnsureDefinitionForNewNode(node);
             SelectedNode = node;
             RaiseToolPropertyPanelsChanged();
+            CompleteNodeDeletion();
+        }
+
+        public void NotifyCanvasNodesMoved()
+        {
+            _lastRun = null;
+            _lastRunError = null;
+            IsDirty = true;
+            RequestAutoSave();
             RefreshPreviews();
         }
     

@@ -496,6 +496,9 @@ public sealed partial class MainWindowViewModel : ObservableObject
 
     private void CloseJob()
     {
+        if (!ConfirmSaveChanges())
+            return;
+
         ToolEditor.CloseJob();
         Calibration.CloseJob();
         Inspection.CloseJob();
@@ -504,6 +507,37 @@ public sealed partial class MainWindowViewModel : ObservableObject
         {
             System.Windows.Application.Current.MainWindow.Title = "CMS VINA VISION SYSTEM";
         }
+    }
+
+    public bool ConfirmSaveChanges()
+    {
+        bool toolEditorDirty = ToolEditor.IsDirty;
+        bool calibrationDirty = Calibration.IsDirty;
+        if (!toolEditorDirty && !calibrationDirty)
+            return true;
+
+        var result = MessageBox.Show(
+            "Có thay đổi chưa lưu. Bạn có muốn lưu trước khi tiếp tục không?",
+            "Thay đổi chưa lưu",
+            MessageBoxButton.YesNoCancel,
+            MessageBoxImage.Warning);
+
+        if (result == MessageBoxResult.Cancel)
+            return false;
+
+        if (result == MessageBoxResult.No)
+        {
+            ToolEditor.DiscardPendingAutoSave();
+            return true;
+        }
+
+        if (toolEditorDirty)
+            ToolEditor.SaveJob();
+
+        if (calibrationDirty && Calibration.SaveJobCommand.CanExecute(null))
+            Calibration.SaveJobCommand.Execute(null);
+
+        return !ToolEditor.IsDirty && !Calibration.IsDirty;
     }
 
     public ToolEditorViewModel ToolEditor { get; }

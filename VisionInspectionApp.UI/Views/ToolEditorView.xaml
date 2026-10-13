@@ -694,7 +694,7 @@
                                 <DataTemplate>
                                     <StackPanel Orientation="Horizontal" Margin="2,1">
                                         <TextBlock Text="{Binding Icon}" Margin="0,0,6,0" FontSize="12" VerticalAlignment="Center" />
-                                        <TextBlock Text="{Binding Name}" FontSize="11.5" FontWeight="Medium" Foreground="{DynamicResource TextBrush}" VerticalAlignment="Center" />
+                                        <TextBlock Text="{Binding DisplayName}" FontSize="11.5" FontWeight="Medium" Foreground="{DynamicResource TextBrush}" VerticalAlignment="Center" />
                                     </StackPanel>
                                 </DataTemplate>
                             </ListBox.ItemTemplate>
@@ -5384,7 +5384,7 @@
                                         </ItemsControl.ItemTemplate>
                                     </ItemsControl>
 
-                                    <ComboBox ItemsSource="{Binding SurfaceCompareDebugItems}" SelectedItem="{Binding SelectedSurfaceCompareDebugPick}" DisplayMemberPath="DisplayName" Margin="0,2,0,6" />
+                                    <TextBlock Text="{Binding SelectedSurfaceCompareDebugPick.DisplayName, TargetNullValue='Chọn node Surface Compare trên canvas để xem debug'}" Margin="0,2,0,6" FontSize="10" Foreground="{DynamicResource TextMutedBrush}" TextTrimming="CharacterEllipsis" />
                                     
                                     <UniformGrid Columns="2">
                                         <StackPanel Margin="2">

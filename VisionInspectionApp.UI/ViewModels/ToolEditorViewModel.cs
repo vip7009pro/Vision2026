@@ -216,6 +216,11 @@ namespace VisionInspectionApp.UI.ViewModels
             UndoManager = new UndoRedoManager();
             UndoCommand = new RelayCommand(() => UndoManager.Undo(), () => UndoManager.CanUndo);
             RedoCommand = new RelayCommand(() => UndoManager.Redo(), () => UndoManager.CanRedo);
+            UndoManager.PropertyChanged += (_, _) =>
+            {
+                (UndoCommand as RelayCommand)?.NotifyCanExecuteChanged();
+                (RedoCommand as RelayCommand)?.NotifyCanExecuteChanged();
+            };
             _configService = null!;
             _storeOptions = null!;
             _sharedImage = new SharedImageContext();
@@ -328,28 +333,28 @@ namespace VisionInspectionApp.UI.ViewModels
             InitializeSystemMonitor();
             AllToolboxItems = new List<ToolboxItemModel>
             {
-                new ToolboxItemModel { Name = "ImageSource", Category = "📷 Nguồn & Định Vị", Icon = "📷" },
-                new ToolboxItemModel { Name = "Origin", Category = "📷 Nguồn & Định Vị", Icon = "🎯" },
-                new ToolboxItemModel { Name = "Preprocess", Category = "📷 Nguồn & Định Vị", Icon = "⚙️" },
+                new ToolboxItemModel { Name = "ImageSource", Shortcut = "Ctrl+0", Category = "📷 Nguồn & Định Vị", Icon = "📷" },
+                new ToolboxItemModel { Name = "Origin", Shortcut = "Ctrl+8", Category = "📷 Nguồn & Định Vị", Icon = "🎯" },
+                new ToolboxItemModel { Name = "Preprocess", Shortcut = "Ctrl+1", Category = "📷 Nguồn & Định Vị", Icon = "⚙️" },
 
                 new ToolboxItemModel { Name = "Point", Category = "🔍 Phát Hiện & Tìm Kiếm", Icon = "📍" },
                 new ToolboxItemModel { Name = "Line", Category = "🔍 Phát Hiện & Tìm Kiếm", Icon = "📏" },
-                new ToolboxItemModel { Name = "Caliper", Category = "🔍 Phát Hiện & Tìm Kiếm", Icon = "📐" },
-                new ToolboxItemModel { Name = "EdgePairDetect", Category = "🔍 Phát Hiện & Tìm Kiếm", Icon = "⏸️" },
+                new ToolboxItemModel { Name = "Caliper", Shortcut = "Ctrl+2", Category = "🔍 Phát Hiện & Tìm Kiếm", Icon = "📐" },
+                new ToolboxItemModel { Name = "EdgePairDetect", Shortcut = "Ctrl+9", Category = "🔍 Phát Hiện & Tìm Kiếm", Icon = "⏸️" },
                 new ToolboxItemModel { Name = "CircleFinder", Category = "🔍 Phát Hiện & Tìm Kiếm", Icon = "🔘" },
-                new ToolboxItemModel { Name = "BlobDetection", Category = "🔍 Phát Hiện & Tìm Kiếm", Icon = "🦠" },
-                new ToolboxItemModel { Name = "CodeDetection", Category = "🔍 Phát Hiện & Tìm Kiếm", Icon = "🔳" },
+                new ToolboxItemModel { Name = "BlobDetection", Shortcut = "Ctrl+5", Category = "🔍 Phát Hiện & Tìm Kiếm", Icon = "🦠" },
+                new ToolboxItemModel { Name = "CodeDetection", Shortcut = "Ctrl+4", Category = "🔍 Phát Hiện & Tìm Kiếm", Icon = "🔳" },
                 new ToolboxItemModel { Name = "OCR", Category = "🔍 Phát Hiện & Tìm Kiếm", Icon = "🔤" },
-                new ToolboxItemModel { Name = "SurfaceCompare", Category = "🔍 Phát Hiện & Tìm Kiếm", Icon = "🔍" },
+                new ToolboxItemModel { Name = "SurfaceCompare", Shortcut = "Ctrl+6", Category = "🔍 Phát Hiện & Tìm Kiếm", Icon = "🔍" },
                 new ToolboxItemModel { Name = "ContourCompare", Category = "🔍 Phát Hiện & Tìm Kiếm", Icon = "🌀" },
                 new ToolboxItemModel { Name = "Crop", Category = "🔍 Phát Hiện & Tìm Kiếm", Icon = "✂️" },
-                new ToolboxItemModel { Name = "ColorDiff", Category = "🔍 Phát Hiện & Tìm Kiếm", Icon = "🎨" },
+                new ToolboxItemModel { Name = "ColorDiff", Shortcut = "Ctrl+7", Category = "🔍 Phát Hiện & Tìm Kiếm", Icon = "🎨" },
                 new ToolboxItemModel { Name = "ImgArithmetic", Category = "🔍 Phát Hiện & Tìm Kiếm", Icon = "🧮" },
 
                 new ToolboxItemModel { Name = "Distance", Category = "📐 Đo Đạc & Kích Thước", Icon = "↔️" },
                 new ToolboxItemModel { Name = "LineLineDistance", Category = "📐 Đo Đạc & Kích Thước", Icon = "⏸️" },
                 new ToolboxItemModel { Name = "PointLineDistance", Category = "📐 Đo Đạc & Kích Thước", Icon = "⏯️" },
-                new ToolboxItemModel { Name = "SegmentLineDistance", Category = "📐 Đo Đạc & Kích Thước", Icon = "⏩" },
+                new ToolboxItemModel { Name = "SegmentLineDistance", Shortcut = "Ctrl+3", Category = "📐 Đo Đạc & Kích Thước", Icon = "⏩" },
                 new ToolboxItemModel { Name = "Angle", Category = "📐 Đo Đạc & Kích Thước", Icon = "∠" },
                 new ToolboxItemModel { Name = "Diameter", Category = "📐 Đo Đạc & Kích Thước", Icon = "⭕" },
                 new ToolboxItemModel { Name = "EdgePair", Category = "📐 Đo Đạc & Kích Thước", Icon = "⏸️" },
@@ -4269,6 +4274,9 @@ namespace VisionInspectionApp.UI.ViewModels
     
         private void ClearActiveGraph()
         {
+            // Clear undo/redo history when replacing current graph to prevent stale commands.
+            DiscardPendingAutoSave();
+            UndoManager.Clear();
             foreach (var n in Nodes)
             {
                 n.PropertyChanged -= Node_PropertyChanged;
@@ -5205,6 +5213,8 @@ namespace VisionInspectionApp.UI.ViewModels
     public sealed class ToolboxItemModel
     {
         public string Name { get; set; } = string.Empty;
+        public string Shortcut { get; set; } = string.Empty;
+        public string DisplayName => string.IsNullOrEmpty(Shortcut) ? Name : $"{Name} ({Shortcut})";
         public string Category { get; set; } = string.Empty;
         public string Icon { get; set; } = "🔧";
 

@@ -61,6 +61,35 @@ public partial class ToolEditorView : UserControl
 
     private void ToolEditorView_PreviewKeyDown(object sender, KeyEventArgs e)
     {
+        if (e.KeyboardDevice.Modifiers == ModifierKeys.Control &&
+            e.Key == Key.A &&
+            Keyboard.FocusedElement is not TextBoxBase &&
+            Keyboard.FocusedElement is not ComboBox { IsEditable: true } &&
+            DataContext is ToolEditorViewModel selectionVm)
+        {
+            selectionVm.SelectAllNodes();
+            e.Handled = true;
+            return;
+        }
+
+        if (e.KeyboardDevice.Modifiers == ModifierKeys.Control &&
+            Keyboard.FocusedElement is not TextBoxBase &&
+            Keyboard.FocusedElement is not ComboBox { IsEditable: true } &&
+            TryGetToolTypeFromShortcut(e.Key, out var toolType) &&
+            DataContext is ToolEditorViewModel vm)
+        {
+            var position = GraphCanvas.IsMouseOver
+                ? GetCanvasLogicalPosition(Mouse.GetPosition(EditorCanvas))
+                : new Point(0, 0);
+            position.X = Math.Round(position.X / GridSnapSize) * GridSnapSize;
+            position.Y = Math.Round(position.Y / GridSnapSize) * GridSnapSize;
+            vm.AddNode(toolType, position);
+            vm.IsDirty = true;
+            EditorCanvas.Focus();
+            e.Handled = true;
+            return;
+        }
+
         if (e.Key == Key.Enter && e.OriginalSource is TextBox tb && !tb.AcceptsReturn)
         {
             var be = BindingOperations.GetBindingExpression(tb, TextBox.TextProperty);
@@ -68,6 +97,26 @@ public partial class ToolEditorView : UserControl
             Keyboard.ClearFocus();
             e.Handled = true;
         }
+    }
+
+    private static bool TryGetToolTypeFromShortcut(Key key, out string toolType)
+    {
+        toolType = key switch
+        {
+            Key.D1 or Key.NumPad1 => "Preprocess",
+            Key.D2 or Key.NumPad2 => "Caliper",
+            Key.D3 or Key.NumPad3 => "SegmentLineDistance",
+            Key.D4 or Key.NumPad4 => "CodeDetection",
+            Key.D5 or Key.NumPad5 => "BlobDetection",
+            Key.D6 or Key.NumPad6 => "SurfaceCompare",
+            Key.D7 or Key.NumPad7 => "ColorDiff",
+            Key.D8 or Key.NumPad8 => "Origin",
+            Key.D9 or Key.NumPad9 => "EdgePairDetect",
+            Key.D0 or Key.NumPad0 => "ImageSource",
+            _ => string.Empty
+        };
+
+        return toolType.Length > 0;
     }
 
     private void ToolEditorView_PreviewMouseDown(object sender, MouseButtonEventArgs e)
@@ -582,7 +631,6 @@ public partial class ToolEditorView : UserControl
                 node.Y = Math.Round(node.Y / GridSnapSize) * GridSnapSize;
             }
 
-            vm.IsDirty = true;
             var startPositions = _multiDragStart;
             var endPositions = startPositions.Keys.ToDictionary(x => x, x => new Point(x.X, x.Y));
             bool hasMoved = startPositions.Any(kv => Math.Abs(kv.Value.X - endPositions[kv.Key].X) > 0.1 || Math.Abs(kv.Value.Y - endPositions[kv.Key].Y) > 0.1);
@@ -596,7 +644,7 @@ public partial class ToolEditorView : UserControl
                             node.X = pos.X;
                             node.Y = pos.Y;
                         }
-                        vm.IsDirty = true;
+                        vm.NotifyCanvasNodesMoved();
                     },
                     undoAction: () =>
                     {
@@ -605,7 +653,7 @@ public partial class ToolEditorView : UserControl
                             node.X = pos.X;
                             node.Y = pos.Y;
                         }
-                        vm.IsDirty = true;
+                        vm.NotifyCanvasNodesMoved();
                     }
                 ));
             }

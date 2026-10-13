@@ -832,29 +832,23 @@ namespace VisionInspectionApp.UI.ViewModels
             try
             {
                 SurfaceCompareDebugItems.Clear();
-                if (res?.SurfaceCompares is null) return;
-
-                int index = 0;
-                foreach (var sc in res.SurfaceCompares)
+                if (res?.SurfaceCompares is not null)
                 {
-                    SurfaceCompareDebugItems.Add(new SurfaceCompareDebugPick(index, sc.Name));
-                    index++;
+                    int index = 0;
+                    foreach (var sc in res.SurfaceCompares)
+                    {
+                        SurfaceCompareDebugItems.Add(new SurfaceCompareDebugPick(index, sc.Name));
+                        index++;
+                    }
                 }
 
-                if (SurfaceCompareDebugItems.Count > 0)
-                {
-                    SelectedSurfaceCompareDebugPick = SurfaceCompareDebugItems[0];
-                }
-                else
-                {
-                    SelectedSurfaceCompareDebugPick = null;
-                }
+                SelectedSurfaceCompareDebugPick = null;
             }
             finally
             {
                 _surfaceCompareDebugRebuildInProgress = false;
             }
-            UpdateSurfaceCompareDebugImages();
+            SelectSurfaceCompareDebugNode(SelectedNode);
         }
 
         private void UpdateSurfaceCompareDebugImages()
@@ -875,6 +869,13 @@ namespace VisionInspectionApp.UI.ViewModels
             DebugCurrent = ByteToBitmapSource(item.CurrentImage);
             DebugBinary = ByteToBitmapSource(item.BinaryImage);
             DebugDiff = ByteToBitmapSource(item.DiffImage);
+        }
+
+        private void SelectSurfaceCompareDebugNode(ToolGraphNodeViewModel? node)
+        {
+            SelectedSurfaceCompareDebugPick = node is not null && string.Equals(node.Type, "SurfaceCompare", StringComparison.OrdinalIgnoreCase)
+                ? SurfaceCompareDebugItems.FirstOrDefault(item => string.Equals(item.DisplayName, node.RefName, StringComparison.OrdinalIgnoreCase))
+                : null;
         }
 
         private static ImageSource? ByteToBitmapSource(byte[]? bytes)

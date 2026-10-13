@@ -2348,6 +2348,9 @@ namespace VisionInspectionApp.UI.ViewModels
         [ObservableProperty] private int _selectedRecentSlotIndex = -1;
         [ObservableProperty] private bool _isViewingHistoricalRecentPart = false;
         [ObservableProperty] private string _historicalViewingStatusText = string.Empty;
+        private bool _hasSavedHistoricalOverlayVisibility;
+        private bool _savedShowResultOverlay;
+        private bool _savedShowRoisInSelectedPreview;
 
         // 20 Slot Brushes cho 20 nấc con hàng (Background & Border)
         [ObservableProperty] private Brush _recentPartSlot0Bg = EmptySlotBrush;
@@ -2643,8 +2646,18 @@ namespace VisionInspectionApp.UI.ViewModels
                 return;
             }
 
+            if (!IsViewingHistoricalRecentPart)
+            {
+                _savedShowResultOverlay = ShowResultOverlay;
+                _savedShowRoisInSelectedPreview = ShowRoisInSelectedPreview;
+                _hasSavedHistoricalOverlayVisibility = true;
+            }
+
             SelectedRecentSlotIndex = slotIndex;
             IsViewingHistoricalRecentPart = true;
+            ShowResultOverlay = false;
+            ShowRoisInSelectedPreview = false;
+            SelectedNodeOverlayItems = new List<OverlayItem>();
 
             // Kiểm tra cấu hình Node Image Output
             var imageOutputDefs = _config?.ImageOutputs ?? new List<ImageOutputDefinition>();
@@ -2725,6 +2738,13 @@ namespace VisionInspectionApp.UI.ViewModels
             IsViewingHistoricalRecentPart = false;
             SelectedRecentSlotIndex = -1;
             HistoricalViewingStatusText = string.Empty;
+
+            if (_hasSavedHistoricalOverlayVisibility)
+            {
+                ShowResultOverlay = _savedShowResultOverlay;
+                ShowRoisInSelectedPreview = _savedShowRoisInSelectedPreview;
+                _hasSavedHistoricalOverlayVisibility = false;
+            }
 
             RefreshPreviewsNow();
             UpdateRecentPartsVisuals();
