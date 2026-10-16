@@ -151,6 +151,34 @@ namespace VisionInspectionApp.UI.ViewModels
         private readonly List<Mat> _passOwnedMats = new();
 
         private const int MaxBlobOverlayCount = 1000;
+
+        private static bool TryParseRoiLabel(string? labelRaw, out string name, out string kind)
+        {
+            name = string.Empty;
+            kind = string.Empty;
+            if (string.IsNullOrWhiteSpace(labelRaw))
+            {
+                return false;
+            }
+
+            var label = labelRaw.Trim();
+            var statusStart = label.IndexOf('[');
+            if (statusStart >= 0)
+            {
+                label = label[..statusStart].TrimEnd();
+            }
+
+            var separator = label.LastIndexOf(' ');
+            if (separator <= 0 || separator == label.Length - 1)
+            {
+                return false;
+            }
+
+            name = label[..separator].Trim();
+            kind = label[(separator + 1)..].Trim();
+            return name.Length > 0 && kind.Length > 0;
+        }
+
         private void OnRoiDeleted(string? labelRaw)
         {
             if (string.IsNullOrWhiteSpace(labelRaw) || _config is null)
@@ -161,14 +189,10 @@ namespace VisionInspectionApp.UI.ViewModels
             var label = labelRaw.Trim();
             // Defect / Origin / Point / Line deletes are not supported (for safety).
             // For BlobDetection we allow deleting: B (legacy inspect roi) and B#/BX# (multi rois).
-            var parts = label.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-            if (parts.Length != 2)
+            if (!TryParseRoiLabel(label, out var name, out var kind))
             {
                 return;
             }
-    
-            var name = parts[0];
-            var kind = parts[1];
             if (string.Equals(kind, "CIR", StringComparison.OrdinalIgnoreCase))
             {
                 var c = _config.CircleFinders.FirstOrDefault(x => string.Equals(x.Name, name, StringComparison.OrdinalIgnoreCase));
@@ -1051,14 +1075,10 @@ namespace VisionInspectionApp.UI.ViewModels
                 return;
             }
     
-            var parts = label.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-            if (parts.Length != 2)
+            if (!TryParseRoiLabel(label, out var name, out var kind))
             {
                 return;
             }
-    
-            var name = parts[0];
-            var kind = parts[1];
             if (string.Equals(kind, "S", StringComparison.OrdinalIgnoreCase))
             {
                 var p = _config.Points.FirstOrDefault(x => string.Equals(x.Name, name, StringComparison.OrdinalIgnoreCase));
@@ -1189,10 +1209,10 @@ namespace VisionInspectionApp.UI.ViewModels
                 {
                     return;
                 }
-    
-                while (b.Rois.Count <= idx)
+
+                if (idx >= b.Rois.Count)
                 {
-                    b.Rois.Add(new BlobRoiDefinition());
+                    return;
                 }
     
                 b.Rois[idx].Mode = isExclude ? BlobRoiMode.Exclude : BlobRoiMode.Include;
@@ -1243,14 +1263,9 @@ namespace VisionInspectionApp.UI.ViewModels
                 }
     
                 var idx = idx1 - 1;
-                if (idx < 0)
+                if (idx < 0 || idx >= sc.Rois.Count)
                 {
                     return;
-                }
-    
-                while (sc.Rois.Count <= idx)
-                {
-                    sc.Rois.Add(new SurfaceCompareRoiDefinition());
                 }
     
                 sc.Rois[idx].Mode = isExclude ? BlobRoiMode.Exclude : BlobRoiMode.Include;
@@ -1702,13 +1717,15 @@ namespace VisionInspectionApp.UI.ViewModels
         {
             if (_config is null || string.IsNullOrWhiteSpace(labelRaw)) return null;
             var label = labelRaw.Trim();
+            var statusStart = label.IndexOf('[');
+            if (statusStart >= 0)
+            {
+                label = label[..statusStart].TrimEnd();
+            }
             if (string.Equals(label, "DefectROI", StringComparison.OrdinalIgnoreCase)) return _config.DefectConfig.InspectRoi;
             if (string.Equals(label, "Origin S", StringComparison.OrdinalIgnoreCase)) return _config.Origin.SearchRoi;
             if (string.Equals(label, "Origin T", StringComparison.OrdinalIgnoreCase)) return _config.Origin.TemplateRoi;
-            var parts = label.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-            if (parts.Length != 2) return null;
-            var name = parts[0];
-            var kind = parts[1];
+            if (!TryParseRoiLabel(label, out var name, out var kind)) return null;
             if (string.Equals(kind, "Point", StringComparison.OrdinalIgnoreCase))
             {
                 var cp = _config.CreatePoints?.FirstOrDefault(x => string.Equals(x.Name, name, StringComparison.OrdinalIgnoreCase));
@@ -1756,9 +1773,27 @@ namespace VisionInspectionApp.UI.ViewModels
             if (string.Equals(kind, "Ref", StringComparison.OrdinalIgnoreCase)) return _config.ColorDiffs.FirstOrDefault(x => string.Equals(x.Name, name, StringComparison.OrdinalIgnoreCase))?.RefRoi;
             if (string.Equals(kind, "C", StringComparison.OrdinalIgnoreCase)) return _config.CodeDetections.FirstOrDefault(x => string.Equals(x.Name, name, StringComparison.OrdinalIgnoreCase))?.SearchRoi;
             if (string.Equals(kind, "OCR", StringComparison.OrdinalIgnoreCase)) return _config.Ocrs.FirstOrDefault(x => string.Equals(x.Name, name, StringComparison.OrdinalIgnoreCase))?.SearchRoi;
-            if (kind.StartsWith("B", StringComparison.OrdinalIgnoreCase)) return _config.BlobDetections.FirstOrDefault(x => string.Equals(x.Name, name, StringComparison.OrdinalIgnoreCase))?.InspectRoi;
+            if (kind.StartsWith("B", StringComparison.OrdinalIgnoreCase))
+            {
+                var blob = _config.BlobDetections.FirstOrDefault(x => string.Equals(x.Name, name, StringComparison.OrdinalIgnoreCase));
+                if (blob is null) return null;
+                if (string.Equals(kind, "B", StringComparison.OrdinalIgnoreCase)) return blob.InspectRoi;
+                var blobIndexText = kind.StartsWith("BX", StringComparison.OrdinalIgnoreCase) ? kind[2..] : kind[1..];
+                return int.TryParse(blobIndexText, out var blobIndex) && blobIndex > 0 && blobIndex <= blob.Rois.Count
+                    ? blob.Rois[blobIndex - 1].Roi
+                    : null;
+            }
             if (string.Equals(kind, "SCT", StringComparison.OrdinalIgnoreCase)) return _config.SurfaceCompares.FirstOrDefault(x => string.Equals(x.Name, name, StringComparison.OrdinalIgnoreCase))?.TemplateRoi;
-            if (kind.StartsWith("SC", StringComparison.OrdinalIgnoreCase)) return _config.SurfaceCompares.FirstOrDefault(x => string.Equals(x.Name, name, StringComparison.OrdinalIgnoreCase))?.InspectRoi;
+            if (kind.StartsWith("SC", StringComparison.OrdinalIgnoreCase))
+            {
+                var surface = _config.SurfaceCompares.FirstOrDefault(x => string.Equals(x.Name, name, StringComparison.OrdinalIgnoreCase));
+                if (surface is null) return null;
+                if (string.Equals(kind, "SC", StringComparison.OrdinalIgnoreCase)) return surface.InspectRoi;
+                var surfaceIndexText = kind.StartsWith("SCX", StringComparison.OrdinalIgnoreCase) ? kind[3..] : kind[2..];
+                return int.TryParse(surfaceIndexText, out var surfaceIndex) && surfaceIndex > 0 && surfaceIndex <= surface.Rois.Count
+                    ? surface.Rois[surfaceIndex - 1].Roi
+                    : null;
+            }
             if (string.Equals(kind, "CCT", StringComparison.OrdinalIgnoreCase)) return _config.ContourCompares.FirstOrDefault(x => string.Equals(x.Name, name, StringComparison.OrdinalIgnoreCase))?.TemplateRoi;
             if (kind.StartsWith("PR", StringComparison.OrdinalIgnoreCase))
             {
@@ -1836,8 +1871,9 @@ namespace VisionInspectionApp.UI.ViewModels
             }
 
             var rawLabel = sel.Label.Trim();
-            var label = rawLabel.Split('[')[0].Trim();
-            var oldRoi = GetRoiForLabel(rawLabel);
+            var statusStart = rawLabel.IndexOf('[');
+            var label = statusStart >= 0 ? rawLabel[..statusStart].TrimEnd() : rawLabel;
+            var oldRoi = GetRoiForLabel(label);
             var oldRoiCopy = oldRoi is not null ? new Roi { X = oldRoi.X, Y = oldRoi.Y, Width = oldRoi.Width, Height = oldRoi.Height, Angle = oldRoi.Angle } : null;
             var roi = UnTransformRoi(sel.Roi, label);
 
@@ -1889,11 +1925,8 @@ namespace VisionInspectionApp.UI.ViewModels
                 return;
             }
     
-            var parts = label.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-            if (parts.Length == 2)
+            if (TryParseRoiLabel(label, out var name, out var kind))
             {
-                var name = parts[0];
-                var kind = parts[1];
                 if (string.Equals(kind, "S", StringComparison.OrdinalIgnoreCase))
                 {
                     var p = _config.Points.FirstOrDefault(x => string.Equals(x.Name, name, StringComparison.OrdinalIgnoreCase));
@@ -1905,11 +1938,20 @@ namespace VisionInspectionApp.UI.ViewModels
                             p.TemplateRoi = roi;
                             p.WorldPosition = RoiCenterToWorld(roi);
                         }
-    
+
                         RefreshPreviews();
                         RequestAutoSave();
                         return;
                     }
+                }
+
+                if (string.Equals(kind, "Sample", StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(kind, "Ref", StringComparison.OrdinalIgnoreCase))
+                {
+                    ApplyRoiForLabel(label, roi);
+                    RefreshPreviews();
+                    RequestAutoSave();
+                    return;
                 }
     
                 if (string.Equals(kind, "T", StringComparison.OrdinalIgnoreCase))
@@ -7644,10 +7686,7 @@ namespace VisionInspectionApp.UI.ViewModels
         private PreprocessRoiDefinition? GetPreprocessRoiForLabel(string? label)
         {
             if (string.IsNullOrWhiteSpace(label) || _config?.PreprocessNodes is null) return null;
-            var parts = label.Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries);
-            if (parts.Length < 2) return null;
-            var name = parts[0];
-            var kind = parts[1];
+            if (!TryParseRoiLabel(label, out var name, out var kind)) return null;
 
             var preDef = _config.PreprocessNodes.FirstOrDefault(x => string.Equals(x.Name, name, StringComparison.OrdinalIgnoreCase));
             if (preDef is null || preDef.Rois is null) return null;

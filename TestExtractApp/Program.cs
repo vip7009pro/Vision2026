@@ -42,6 +42,12 @@ class Program
             return;
         }
 
+        if (args.Length > 0 && args[0].Equals("roi", StringComparison.OrdinalIgnoreCase))
+        {
+            PerformanceOptimizationTests.RunRoiEditRegressionTests();
+            return;
+        }
+
         if (args.Length > 0 && (args[0].Equals("oqc", StringComparison.OrdinalIgnoreCase) || args[0].Equals("crosshair", StringComparison.OrdinalIgnoreCase)))
         {
             OqcLiveViewOnJobLoadTests.RunTests();

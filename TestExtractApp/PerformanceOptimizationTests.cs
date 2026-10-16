@@ -29,6 +29,11 @@ public static class PerformanceOptimizationTests
 {
     private static string _tempDir = string.Empty;
 
+    public static void RunRoiEditRegressionTests()
+    {
+        Test_10_RoiEditCommit_MultiwordToolNames();
+    }
+
     public static void RunAllTests()
     {
         Console.WriteLine("\n=========================================================");
@@ -49,6 +54,7 @@ public static class PerformanceOptimizationTests
             Test_07_OverlayPolyline_GeometryCache_IsScaleAware();
             Test_08_PointMinScore_PipelineGating();
             Test_09_PreviewRefresh_BenchmarkSmokeTest();
+            Test_10_RoiEditCommit_MultiwordToolNames();
         }
         finally
         {
@@ -673,6 +679,78 @@ public static class PerformanceOptimizationTests
             $"Một lượt refresh Preview trên ảnh 2560x1920 mất quá lâu: {avgMs:F1} ms");
 
         Console.WriteLine($"PASSED (trung bình {avgMs:F1} ms / lượt, ảnh 2560x1920, {config.Points.Count} Point tool)");
+    }
+
+    private static void Test_10_RoiEditCommit_MultiwordToolNames()
+    {
+        Console.Write("--- ROI commit phải giữ tọa độ với tên node nhiều từ và nhãn trạng thái... ");
+
+        var config = new VisionConfig
+        {
+            ProductCode = "ROI_MULTIWORD_TEST",
+            ToolGraph = new ToolGraph
+            {
+                Nodes =
+                {
+                    Node("1", "ColorDiff", "Color Difference"),
+                    Node("2", "CodeDetection", "Code Detection"),
+                    Node("3", "BlobDetection", "Blob Detection"),
+                    Node("4", "SurfaceCompare", "Surface Compare")
+                }
+            }
+        };
+        config.ColorDiffs.Add(new ColorDiffDefinition
+        {
+            Name = "Color Difference",
+            InspectRoi = R(10, 10, 40, 40),
+            RefRoi = R(20, 20, 30, 30),
+            UseRefColor = false
+        });
+        config.CodeDetections.Add(new CodeDetectionDefinition
+        {
+            Name = "Code Detection",
+            SearchRoi = R(30, 30, 50, 50)
+        });
+        config.BlobDetections.Add(new BlobDetectionDefinition
+        {
+            Name = "Blob Detection",
+            InspectRoi = R(40, 40, 60, 60),
+            Rois = { new BlobRoiDefinition { Roi = R(40, 40, 60, 60) } }
+        });
+        config.SurfaceCompares.Add(new SurfaceCompareDefinition
+        {
+            Name = "Surface Compare",
+            InspectRoi = R(50, 50, 70, 70),
+            Rois = { new SurfaceCompareRoiDefinition { Roi = R(50, 50, 70, 70) } }
+        });
+
+        var vm = CreateVm(config);
+        void Edit(string nodeType, string label, Roi roi)
+        {
+            vm.SelectedNode = vm.Nodes.First(node => node.Type == nodeType);
+            vm.RoiEditedCommand.Execute(new RoiSelection(label, roi, ModifierKeys.None));
+        }
+
+        Edit("ColorDiff", "Color Difference Sample", R(110, 111, 41, 42));
+        Assert(config.ColorDiffs[0].InspectRoi.X == 110 && config.ColorDiffs[0].InspectRoi.Width == 41,
+            "ColorDiff Sample ROI did not commit for a multiword RefName");
+        Edit("ColorDiff", "Color Difference Ref", R(120, 121, 31, 32));
+        Assert(config.ColorDiffs[0].RefRoi.X == 120 && config.ColorDiffs[0].RefRoi.Width == 31,
+            "ColorDiff Ref ROI did not commit for a multiword RefName");
+
+        Edit("CodeDetection", "Code Detection C", R(130, 131, 51, 52));
+        Assert(config.CodeDetections[0].SearchRoi.X == 130 && config.CodeDetections[0].SearchRoi.Width == 51,
+            "CodeDetection ROI did not commit for a multiword RefName");
+
+        Edit("BlobDetection", "Blob Detection B1 [2/5 OK]", R(140, 141, 61, 62));
+        Assert(config.BlobDetections[0].Rois[0].Roi.X == 140 && config.BlobDetections[0].Rois[0].Roi.Width == 61,
+            "BlobDetection indexed ROI did not commit for a multiword RefName/status label");
+
+        Edit("SurfaceCompare", "Surface Compare SC1", R(150, 151, 71, 72));
+        Assert(config.SurfaceCompares[0].Rois[0].Roi.X == 150 && config.SurfaceCompares[0].Rois[0].Roi.Width == 71,
+            "SurfaceCompare indexed ROI did not commit for a multiword RefName");
+
+        Console.WriteLine("PASSED");
     }
 
     private static InspectionService CreateInspectionService()
