@@ -48,6 +48,13 @@ class Program
             return;
         }
 
+        if (args.Length > 0 && args[0].Equals("productassign", StringComparison.OrdinalIgnoreCase))
+        {
+            ProductAssignAndCodeSyncTest.RunTests();
+            RemoteServerAndJobManagerTests.RunTests();
+            return;
+        }
+
         if (args.Length > 0 && (args[0].Equals("oqc", StringComparison.OrdinalIgnoreCase) || args[0].Equals("crosshair", StringComparison.OrdinalIgnoreCase)))
         {
             OqcLiveViewOnJobLoadTests.RunTests();

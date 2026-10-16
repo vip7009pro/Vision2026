@@ -57,11 +57,15 @@
 
                 <!-- DataGrid (Virtualized for High Performance) -->
                 <DataGrid Grid.Row="1"
+                          x:Name="ProductsDataGrid"
                           ItemsSource="{Binding ProductListTable}"
                           SelectedItem="{Binding SelectedProductRow}"
+                          SelectionChanged="ProductsDataGrid_SelectionChanged"
+                          AutoGeneratingColumn="ProductsDataGrid_AutoGeneratingColumn"
                           AutoGenerateColumns="True"
-                          IsReadOnly="True"
-                          SelectionMode="Single"
+                          IsReadOnly="False"
+                          SelectionMode="Extended"
+                          SelectionUnit="FullRow"
                           CanUserAddRows="False"
                           CanUserDeleteRows="False"
                           EnableRowVirtualization="True"
@@ -72,6 +76,17 @@
                           HeadersVisibility="Column"
                           Background="{DynamicResource PanelBackgroundBrush}"
                           Foreground="{DynamicResource TextBrush}">
+                    <DataGrid.Columns>
+                        <DataGridTemplateColumn Header="Chọn" Width="55" IsReadOnly="False">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate>
+                                    <CheckBox HorizontalAlignment="Center" VerticalAlignment="Center"
+                                              IsChecked="{Binding RelativeSource={RelativeSource AncestorType={x:Type DataGridRow}}, Path=IsSelected, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                              PreviewMouseLeftButtonDown="ProductsDataGrid_CheckBoxPreviewMouseLeftButtonDown" />
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                    </DataGrid.Columns>
                 </DataGrid>
             </Grid>
         </GroupBox>

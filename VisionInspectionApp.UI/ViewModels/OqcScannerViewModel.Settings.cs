@@ -1,6 +1,8 @@
 using System;
+using System.Collections.ObjectModel;
 using System.Collections.Generic;
 using System.Data;
+using System.Linq;
 using System.Threading.Tasks;
 using System.Windows.Data;
 using System.Windows.Media;
@@ -199,6 +201,8 @@ public partial class OqcScannerViewModel
 
     [ObservableProperty]
     private DataRowView? _selectedProductRow;
+
+    public ObservableCollection<DataRowView> SelectedProductRows { get; } = new();
 
     [ObservableProperty]
     private string _assignStatusMessage = "";
@@ -705,6 +709,8 @@ public partial class OqcScannerViewModel
 
     private async Task FetchProductsPageAsync()
     {
+        SelectedProductRows.Clear();
+        SelectedProductRow = null;
         AssignStatusMessage = "🔍 Đang nạp danh sách sản phẩm...";
         AssignStatusBrush = Brushes.DodgerBlue;
 
@@ -727,9 +733,12 @@ public partial class OqcScannerViewModel
 
     private async Task ExecuteAssignProductAsync()
     {
-        if (SelectedProductRow == null)
+        var selectedRows = SelectedProductRows.Count > 0
+            ? SelectedProductRows.ToArray()
+            : SelectedProductRow is null ? Array.Empty<DataRowView>() : new[] { SelectedProductRow };
+        if (selectedRows.Length == 0)
         {
-            AssignStatusMessage = "⚠️ Vui lòng chọn một sản phẩm trong bảng!";
+            AssignStatusMessage = "⚠️ Vui lòng chọn ít nhất một sản phẩm trong bảng!";
             AssignStatusBrush = Brushes.Orange;
             return;
         }
@@ -741,72 +750,69 @@ public partial class OqcScannerViewModel
             return;
         }
 
-        // 1. Tìm mã sản phẩm (ProductCode) dùng để gán CSDL: Ưu tiên theo cấu hình ProductListCodeColumn
-        string productCode = "";
         var configuredCodeCol = !string.IsNullOrWhiteSpace(ProductListCodeColumn) ? ProductListCodeColumn.Trim() : "";
+        string productName = "";
+        var configuredNameCol = !string.IsNullOrWhiteSpace(ProductListNameColumn) ? ProductListNameColumn.Trim() : "";
 
-        if (!string.IsNullOrEmpty(configuredCodeCol) && SelectedProductRow.Row.Table.Columns.Contains(configuredCodeCol))
+        var products = ExtractProductAssignments(selectedRows, configuredCodeCol, configuredNameCol);
+        var invalidProducts = products.Where(product => string.IsNullOrWhiteSpace(product.Code)).ToList();
+        if (invalidProducts.Count > 0)
         {
-            productCode = SelectedProductRow[configuredCodeCol]?.ToString() ?? "";
-        }
-        else if (SelectedProductRow.Row.Table.Columns.Contains("G_CODE"))
-        {
-            productCode = SelectedProductRow["G_CODE"]?.ToString() ?? "";
-        }
-        else if (SelectedProductRow.Row.Table.Columns.Contains("ProductCode"))
-        {
-            productCode = SelectedProductRow["ProductCode"]?.ToString() ?? "";
-        }
-        else if (SelectedProductRow.Row.Table.Columns.Count > 0)
-        {
-            productCode = SelectedProductRow[0]?.ToString() ?? "";
-        }
-
-        if (string.IsNullOrWhiteSpace(productCode))
-        {
-            AssignStatusMessage = "⚠️ Sản phẩm được chọn không có mã sản phẩm (cột rỗng hoặc sai tên cột cấu hình mã SP)!";
+            AssignStatusMessage = $"⚠️ {invalidProducts.Count} sản phẩm được chọn không có mã sản phẩm hợp lệ.";
             AssignStatusBrush = Brushes.Red;
             return;
         }
 
-        // 2. Tìm tên sản phẩm (ProductName) dùng để auto-fill vào ô Mã SP trong Tool Editor: Ưu tiên theo cấu hình ProductListNameColumn
-        string productName = "";
-        var configuredNameCol = !string.IsNullOrWhiteSpace(ProductListNameColumn) ? ProductListNameColumn.Trim() : "";
-
-        if (!string.IsNullOrEmpty(configuredNameCol) && SelectedProductRow.Row.Table.Columns.Contains(configuredNameCol))
-        {
-            productName = SelectedProductRow[configuredNameCol]?.ToString() ?? "";
-        }
-        else if (SelectedProductRow.Row.Table.Columns.Contains("G_NAME_KD"))
-        {
-            productName = SelectedProductRow["G_NAME_KD"]?.ToString() ?? "";
-        }
-        else if (SelectedProductRow.Row.Table.Columns.Contains("ProductName"))
-        {
-            productName = SelectedProductRow["ProductName"]?.ToString() ?? "";
-        }
-
-        // Tên dùng để fill vào ô Mã SP trong Tool Editor: Ưu tiên productName, nếu rỗng thì fallback về productCode
-        var nameForToolEditor = !string.IsNullOrWhiteSpace(productName) ? productName : productCode;
-
-        AssignStatusMessage = $"⏳ Đang gán mã '{productCode}' → '{System.IO.Path.GetFileName(AssignJobFilePath)}'...";
+        AssignStatusMessage = $"⏳ Đang gán Job '{System.IO.Path.GetFileName(AssignJobFilePath)}' cho {products.Count} sản phẩm...";
         AssignStatusBrush = Brushes.DodgerBlue;
 
-        // Gán Job vào sản phẩm trong CSDL theo ProductCode
-        var (success, msg) = await _oqcService.AssignProductJobAsync(productCode, AssignJobFilePath, _dbManager);
-        if (success)
+        var failures = new List<string>();
+        foreach (var product in products)
         {
-            // TỰ ĐỘNG ĐIỀN VÀ LƯU VÀO Ô MÃ SP CỦA TOOL EDITOR THEO PRODUCTNAME
-            SyncProductCodeToToolEditor(nameForToolEditor, AssignJobFilePath);
+            var (success, msg) = await _oqcService.AssignProductJobAsync(product.Code, AssignJobFilePath, _dbManager);
+            if (!success) failures.Add($"{product.Code}: {msg}");
+        }
 
-            AssignStatusMessage = $"{msg} (Đã gán Mã SP: '{productCode}', Điền Tool Editor: '{nameForToolEditor}')";
+        if (failures.Count == 0)
+        {
+            if (products.Count == 1)
+            {
+                var product = products[0];
+                SyncProductCodeToToolEditor(!string.IsNullOrWhiteSpace(product.Name) ? product.Name : product.Code, AssignJobFilePath);
+            }
+            AssignStatusMessage = $"✅ Đã gán Job cho toàn bộ {products.Count} sản phẩm.";
             AssignStatusBrush = Brushes.Green;
         }
         else
         {
-            AssignStatusMessage = $"❌ {msg}";
-            AssignStatusBrush = Brushes.Red;
+            AssignStatusMessage = $"⚠️ Gán thành công {products.Count - failures.Count}/{products.Count}. Lỗi: {string.Join("; ", failures)}";
+            AssignStatusBrush = Brushes.Orange;
         }
+    }
+
+    public void SetSelectedProductRows(System.Collections.IList rows)
+    {
+        SelectedProductRows.Clear();
+        foreach (var item in rows)
+            if (item is DataRowView row) SelectedProductRows.Add(row);
+    }
+
+    public static List<(string Code, string Name)> ExtractProductAssignments(
+        IEnumerable<DataRowView> rows, string configuredCodeColumn, string configuredNameColumn)
+    {
+        string GetValue(DataRowView row, string preferredColumn, string fallbackColumn1, string fallbackColumn2, bool useFirstColumnFallback)
+        {
+            if (!string.IsNullOrWhiteSpace(preferredColumn) && row.Row.Table.Columns.Contains(preferredColumn))
+                return row[preferredColumn]?.ToString() ?? "";
+            if (row.Row.Table.Columns.Contains(fallbackColumn1)) return row[fallbackColumn1]?.ToString() ?? "";
+            if (row.Row.Table.Columns.Contains(fallbackColumn2)) return row[fallbackColumn2]?.ToString() ?? "";
+            return useFirstColumnFallback && row.Row.Table.Columns.Count > 0 ? row[0]?.ToString() ?? "" : "";
+        }
+
+        return rows.Select(row => (
+            Code: GetValue(row, configuredCodeColumn, "G_CODE", "ProductCode", true),
+            Name: GetValue(row, configuredNameColumn, "G_NAME_KD", "ProductName", false)))
+            .ToList();
     }
 
     /// <summary>

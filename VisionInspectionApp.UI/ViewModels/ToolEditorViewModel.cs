@@ -1406,6 +1406,7 @@ namespace VisionInspectionApp.UI.ViewModels
             OnPropertyChanged(nameof(Blob_MaxBlobWidth));
             OnPropertyChanged(nameof(Blob_MaxBlobLength));
             OnPropertyChanged(nameof(Blob_DistanceUnitText));
+            OnPropertyChanged(nameof(Blob_MaxSpecPreviewText));
             OnPropertyChanged(nameof(Blob_LastRunCount));
             OnPropertyChanged(nameof(Blob_LastRunMinDistanceText));
             OnPropertyChanged(nameof(Blob_LastRunMaxDimensionsText));
@@ -1655,6 +1656,12 @@ namespace VisionInspectionApp.UI.ViewModels
             OnPropertyChanged(nameof(SurfaceCompare_DiffThreshold));
             OnPropertyChanged(nameof(SurfaceCompare_MinBlobArea));
             OnPropertyChanged(nameof(SurfaceCompare_MaxBlobArea));
+            OnPropertyChanged(nameof(SurfaceCompare_MinAreaPreviewWidth));
+            OnPropertyChanged(nameof(SurfaceCompare_MinAreaPreviewHeight));
+            OnPropertyChanged(nameof(SurfaceCompare_MaxAreaPreviewWidth));
+            OnPropertyChanged(nameof(SurfaceCompare_MaxAreaPreviewHeight));
+            OnPropertyChanged(nameof(SurfaceCompare_MinAreaPreviewText));
+            OnPropertyChanged(nameof(SurfaceCompare_MaxAreaPreviewText));
             OnPropertyChanged(nameof(SurfaceCompare_MinCount));
             OnPropertyChanged(nameof(SurfaceCompare_MaxCount));
             OnPropertyChanged(nameof(SurfaceCompare_MorphKernel));

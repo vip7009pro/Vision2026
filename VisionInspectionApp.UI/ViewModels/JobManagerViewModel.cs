@@ -110,6 +110,7 @@ public partial class JobManagerViewModel : ObservableObject
     public IAsyncRelayCommand PingServerCommand { get; }
     public IAsyncRelayCommand UploadTeachFromCameraCommand { get; }
     public IAsyncRelayCommand UploadTeachFromFileCommand { get; }
+    public IAsyncRelayCommand UploadTeachAndJobCommand { get; }
     public IAsyncRelayCommand RemoteTeachCommand { get; }
     public IAsyncRelayCommand UploadCurrentJobCommand { get; }
     public IAsyncRelayCommand DownloadJobCommand { get; }
@@ -151,6 +152,7 @@ public partial class JobManagerViewModel : ObservableObject
         PingServerCommand = new AsyncRelayCommand(ExecutePingServerAsync);
         UploadTeachFromCameraCommand = new AsyncRelayCommand(ExecuteUploadTeachFromCameraAsync);
         UploadTeachFromFileCommand = new AsyncRelayCommand(ExecuteUploadTeachFromFileAsync);
+        UploadTeachAndJobCommand = new AsyncRelayCommand(ExecuteUploadTeachAndJobAsync);
         RemoteTeachCommand = new AsyncRelayCommand(ExecuteRemoteTeachAsync);
         UploadCurrentJobCommand = new AsyncRelayCommand(ExecuteUploadCurrentJobAsync);
         DownloadJobCommand = new AsyncRelayCommand(ExecuteDownloadJobAsync);
@@ -169,6 +171,148 @@ public partial class JobManagerViewModel : ObservableObject
             await ExecutePingServerAsync();
             await ExecuteRefreshListAsync();
         });
+    }
+
+    public async Task ExecuteUploadTeachAndJobAsync()
+    {
+        var selectedItem = SelectedItem;
+        if (selectedItem == null)
+        {
+            MessageBox.Show("Vui lòng chọn một sản phẩm trước khi tải ảnh và Job lên Server!", "Thông Báo", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        string? jobFilePath = _toolEditorViewModel.CurrentJobFilePath;
+        if (string.IsNullOrWhiteSpace(jobFilePath) || !File.Exists(jobFilePath))
+        {
+            MessageBox.Show("Không có Job hiện tại đang mở trong Tool Editor.", "Thiếu Job", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        byte[]? imageBytes = null;
+        if (_cameraService.IsRunning)
+        {
+            using var frame = _cameraService.TryGetLatestFrameClone();
+            if (frame != null && !frame.Empty()) imageBytes = frame.ToBytes(".png");
+        }
+        if (imageBytes == null || imageBytes.Length == 0)
+        {
+            using var snapshot = _sharedImage.GetSnapshot();
+            if (snapshot != null && !snapshot.Empty()) imageBytes = snapshot.ToBytes(".png");
+        }
+        if (imageBytes == null || imageBytes.Length == 0)
+        {
+            MessageBox.Show("Không lấy được ảnh mẫu từ Camera hoặc màn hình hiện tại.", "Thiếu ảnh", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        bool autoSwitchedToCamera = _toolEditorViewModel.PrepareJobForProductionUpload();
+        IsBusy = true;
+        BusyMessage = "Đang tải ảnh mẫu và Job hiện tại lên Server...";
+        StatusMessage = $"📤 Đang tải ảnh và Job cho '{SelectedItem.ProductCode}'...";
+        StatusBrush = Brushes.DodgerBlue;
+
+        try
+        {
+            string safeCode = RemoteServerService.SanitizeIdentifier(selectedItem.ProductCode);
+            string safeName = RemoteServerService.SanitizeIdentifier(selectedItem.ProductName);
+            string identifier = !string.IsNullOrWhiteSpace(safeName) ? $"{safeCode}_{safeName}" : safeCode;
+            string imageFileName = $"teach_{identifier}_{DateTime.Now:yyyyMMdd_HHmmss}.png";
+
+            var imageUploadTask = TryUploadTeachImageAsync(imageBytes, imageFileName, selectedItem);
+            var jobUploadTask = TryUploadJobAsync(jobFilePath, selectedItem);
+            await Task.WhenAll(imageUploadTask, jobUploadTask);
+
+            var imageUpload = await imageUploadTask;
+            var jobUpload = await jobUploadTask;
+            var messages = new List<string>();
+            bool databaseUpdatesSucceeded = true;
+
+            if (imageUpload.Success)
+            {
+                string teachPath = !string.IsNullOrWhiteSpace(imageUpload.RelativePath) ? imageUpload.RelativePath : imageUpload.Url;
+                var (updated, updateMessage) = await _oqcService.UpdateTeachImagePathAsync(selectedItem.ProductCode, teachPath, _dbManager);
+                if (updated)
+                {
+                    selectedItem.TeachImagePath = teachPath;
+                    selectedItem.HasTeachImage = true;
+                    await LoadTeachImagePreviewAsync(teachPath);
+                    messages.Add("Ảnh mẫu đã tải lên và cập nhật CSDL");
+                }
+                else
+                {
+                    databaseUpdatesSucceeded = false;
+                    messages.Add($"Ảnh đã tải lên nhưng cập nhật CSDL thất bại: {updateMessage}");
+                }
+            }
+            else messages.Add($"Tải ảnh thất bại: {imageUpload.ErrorMessage}");
+
+            if (jobUpload.Success)
+            {
+                string jobPath = !string.IsNullOrWhiteSpace(jobUpload.RelativePath) ? jobUpload.RelativePath : jobUpload.Url;
+                var (assigned, assignMessage) = await _oqcService.AssignProductJobAsync(
+                    selectedItem.ProductCode, jobPath, _dbManager, selectedItem.TeachImagePath);
+                if (assigned)
+                {
+                    selectedItem.JobFilePath = jobPath;
+                    selectedItem.HasJobFile = true;
+                    messages.Add("Job đã tải lên và cập nhật CSDL");
+                }
+                else
+                {
+                    databaseUpdatesSucceeded = false;
+                    messages.Add($"Job đã tải lên nhưng cập nhật CSDL thất bại: {assignMessage}");
+                }
+            }
+            else messages.Add($"Tải Job thất bại: {jobUpload.ErrorMessage}");
+
+            bool allSucceeded = imageUpload.Success && jobUpload.Success && databaseUpdatesSucceeded;
+            StatusMessage = $"{(allSucceeded ? "✅" : "⚠️")} {string.Join("; ", messages)}";
+            StatusBrush = allSucceeded ? Brushes.Green : Brushes.Orange;
+            string productionNotice = autoSwitchedToCamera
+                ? "\n\nNguồn ảnh của Job đã được chuyển về Camera OQC để dùng trong sản xuất."
+                : string.Empty;
+            MessageBox.Show($"{string.Join("\n", messages)}{productionNotice}", allSucceeded ? "Hoàn Tất" : "Kết Quả Tải Lên", MessageBoxButton.OK,
+                allSucceeded ? MessageBoxImage.Information : MessageBoxImage.Warning);
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = $"❌ Lỗi tải ảnh + Job: {ex.Message}";
+            StatusBrush = Brushes.Red;
+            MessageBox.Show(StatusMessage, "Lỗi Upload", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
+
+    private async Task<(bool Success, string Url, string RelativePath, string ErrorMessage)> TryUploadTeachImageAsync(
+        byte[] imageBytes, string fileName, JobManagerItem item)
+    {
+        try
+        {
+            return await _remoteServerService.UploadImageAsync(
+                imageBytes, fileName, item.ProductCode, _oqcService.Config.ServerApiUrl, item.ProductName);
+        }
+        catch (Exception ex)
+        {
+            return (false, string.Empty, string.Empty, ex.Message);
+        }
+    }
+
+    private async Task<(bool Success, string Url, string RelativePath, string ErrorMessage)> TryUploadJobAsync(
+        string jobFilePath, JobManagerItem item)
+    {
+        try
+        {
+            return await _remoteServerService.UploadJobAsync(
+                jobFilePath, item.ProductCode, _oqcService.Config.ServerApiUrl, item.ProductName);
+        }
+        catch (Exception ex)
+        {
+            return (false, string.Empty, string.Empty, ex.Message);
+        }
     }
 
     partial void OnSelectedItemChanged(JobManagerItem? value)

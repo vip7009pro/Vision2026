@@ -1,9 +1,12 @@
 using System;
 using System.Data;
 using System.IO;
+using System.Linq;
+using System.Collections;
 using System.Text.Json;
 using VisionInspectionApp.Models;
 using VisionInspectionApp.Persistence;
+using VisionInspectionApp.UI.ViewModels;
 
 namespace TestExtractApp;
 
@@ -97,6 +100,24 @@ public static class ProductAssignAndCodeSyncTest
 
             Assert(dbAssignCode == "GH63-22334A", "Test 2.1: Extracted DB Assign ProductCode -> 'GH63-22334A'");
             Assert(toolEditorName == "Cover Assembly S24", "Test 2.2: Extracted Tool Editor Auto-fill ProductName -> 'Cover Assembly S24'");
+
+            var selectedAssignments = OqcScannerViewModel.ExtractProductAssignments(
+                dt.DefaultView.Cast<DataRowView>(), "PART_NUMBER", "PART_DESC");
+            Assert(selectedAssignments.Count == 2, "Test 2.3: Multi-select resolves all selected products");
+            Assert(selectedAssignments[0].Code == "GH63-22334A" && selectedAssignments[1].Code == "GH63-99999B",
+                "Test 2.4: Multi-select preserves each configured product code");
+            Assert(selectedAssignments[0].Name == "Cover Assembly S24" && selectedAssignments[1].Name == "Front Bracket S24",
+                "Test 2.5: Multi-select preserves each configured product name");
+            var selectedRows = new ArrayList { dt.DefaultView[1], dt.DefaultView[0] };
+            Assert(selectedRows.Count == 2 && OqcScannerViewModel.ExtractProductAssignments(
+                    selectedRows.Cast<DataRowView>(), "PART_NUMBER", "PART_DESC").Count == 2,
+                "Test 2.6: Checkbox selection collection retains both clicked rows");
+            Assert(ToolEditorViewModel.CalculateAreaPreviewSide(0) == 3,
+                "Test 2.7: SurfaceCompare zero-area preview remains visible at minimum size");
+            Assert(Math.Abs(ToolEditorViewModel.CalculateAreaPreviewSide(400) - 13) < 0.001,
+                "Test 2.8: SurfaceCompare area preview scales by equivalent square-root area");
+            Assert(ToolEditorViewModel.CalculateAreaPreviewSide(100000) == 48,
+                "Test 2.9: SurfaceCompare area preview is capped to its preview frame");
 
             // Test 3: Fallback column extraction
             var dtFallback = new DataTable();

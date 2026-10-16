@@ -122,6 +122,12 @@ namespace VisionInspectionApp.UI.ViewModels
                 if (def.MaxBlobArea < def.MinBlobArea)
                     def.MaxBlobArea = def.MinBlobArea;
                 RaiseToolPropertyPanelsChanged();
+                OnPropertyChanged(nameof(SurfaceCompare_MinAreaPreviewWidth));
+                OnPropertyChanged(nameof(SurfaceCompare_MinAreaPreviewHeight));
+                OnPropertyChanged(nameof(SurfaceCompare_MaxAreaPreviewWidth));
+                OnPropertyChanged(nameof(SurfaceCompare_MaxAreaPreviewHeight));
+                OnPropertyChanged(nameof(SurfaceCompare_MinAreaPreviewText));
+                OnPropertyChanged(nameof(SurfaceCompare_MaxAreaPreviewText));
                 RefreshPreviews();
                 RequestAutoSave();
             }
@@ -142,9 +148,30 @@ namespace VisionInspectionApp.UI.ViewModels
                     return;
                 def.MaxBlobArea = v;
                 RaiseToolPropertyPanelsChanged();
+                OnPropertyChanged(nameof(SurfaceCompare_MinAreaPreviewWidth));
+                OnPropertyChanged(nameof(SurfaceCompare_MinAreaPreviewHeight));
+                OnPropertyChanged(nameof(SurfaceCompare_MaxAreaPreviewWidth));
+                OnPropertyChanged(nameof(SurfaceCompare_MaxAreaPreviewHeight));
+                OnPropertyChanged(nameof(SurfaceCompare_MinAreaPreviewText));
+                OnPropertyChanged(nameof(SurfaceCompare_MaxAreaPreviewText));
                 RefreshPreviews();
                 RequestAutoSave();
             }
+        }
+
+        public double SurfaceCompare_MinAreaPreviewWidth => CalculateAreaPreviewSide(SurfaceCompare_MinBlobArea);
+        public double SurfaceCompare_MinAreaPreviewHeight => CalculateAreaPreviewSide(SurfaceCompare_MinBlobArea);
+        public double SurfaceCompare_MaxAreaPreviewWidth => CalculateAreaPreviewSide(SurfaceCompare_MaxBlobArea);
+        public double SurfaceCompare_MaxAreaPreviewHeight => CalculateAreaPreviewSide(SurfaceCompare_MaxBlobArea);
+        public string SurfaceCompare_MinAreaPreviewText => GetAreaPreviewText("MinA", SurfaceCompare_MinBlobArea);
+        public string SurfaceCompare_MaxAreaPreviewText => GetAreaPreviewText("MaxA", SurfaceCompare_MaxBlobArea);
+
+        public static double CalculateAreaPreviewSide(int area) => Math.Clamp(Math.Sqrt(Math.Max(0, area)) * 0.65, 3, 48);
+
+        private static string GetAreaPreviewText(string label, int area)
+        {
+            var diameter = 2 * Math.Sqrt(Math.Max(0, area) / Math.PI);
+            return $"{label} {area:N0} px² ≈ Ø{diameter:0.#} px";
         }
     
         public int SurfaceCompare_MinCount

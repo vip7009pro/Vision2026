@@ -186,6 +186,16 @@
                                 </StackPanel>
                             </Button>
 
+                            <Button Command="{Binding UploadTeachAndJobCommand}"
+                                    Background="#AD1457" Foreground="White" FontWeight="Bold"
+                                    Padding="10,4" Margin="0,0,6,4" Height="30" Cursor="Hand"
+                                    ToolTip="Chụp ảnh mẫu hiện tại và tải đồng thời ảnh cùng Job đang mở lên Server">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="🚀 " />
+                                    <TextBlock Text="Up Ảnh + Job" />
+                                </StackPanel>
+                            </Button>
+
                             <!-- Download Job -->
                             <Button Command="{Binding DownloadJobCommand}"
                                     Padding="8,4" Margin="0,0,6,4" Height="30" Cursor="Hand"

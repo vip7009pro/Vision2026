@@ -31,6 +31,10 @@ namespace VisionInspectionApp.UI.ViewModels
                 return null;
             return _config.BlobDetections.FirstOrDefault(x => string.Equals(x.Name, SelectedNode.RefName, StringComparison.OrdinalIgnoreCase));
         }
+
+        public double Blob_MaxSpecPreviewWidth => GetMmPreviewSide(Blob_MaxBlobWidth);
+        public double Blob_MaxSpecPreviewHeight => GetMmPreviewSide(Blob_MaxBlobLength);
+        public bool Blob_HasMaxSpecPreview => Blob_MaxBlobWidth > 0 || Blob_MaxBlobLength > 0;
     
         public BlobPolarity Blob_Polarity
         {
@@ -48,6 +52,9 @@ namespace VisionInspectionApp.UI.ViewModels
                 OnPropertyChanged();
             }
         }
+
+        public bool Blob_HasMinDistancePreview => Blob_MinBlobDistance > 0;
+        public double Blob_MinDistancePreviewGap => GetMmPreviewSide(Blob_MinBlobDistance);
 
         public IReadOnlyList<string> AvailableBlobCountingModeNames { get; } = new[]
         {
@@ -123,6 +130,10 @@ namespace VisionInspectionApp.UI.ViewModels
                 RequestAutoSave();
                 OnPropertyChanged();
                 OnPropertyChanged(nameof(Blob_MaxBlobArea));
+                OnPropertyChanged(nameof(Blob_MinAreaPreviewSide));
+                OnPropertyChanged(nameof(Blob_MaxAreaPreviewSide));
+                OnPropertyChanged(nameof(Blob_MinAreaPreviewText));
+                OnPropertyChanged(nameof(Blob_MaxAreaPreviewText));
             }
         }
     
@@ -142,6 +153,10 @@ namespace VisionInspectionApp.UI.ViewModels
                 def.MaxBlobArea = v;
                 RequestAutoSave();
                 OnPropertyChanged();
+                OnPropertyChanged(nameof(Blob_MinAreaPreviewSide));
+                OnPropertyChanged(nameof(Blob_MaxAreaPreviewSide));
+                OnPropertyChanged(nameof(Blob_MinAreaPreviewText));
+                OnPropertyChanged(nameof(Blob_MaxAreaPreviewText));
             }
         }
     
@@ -172,6 +187,7 @@ namespace VisionInspectionApp.UI.ViewModels
                 def.MaxAllowedBlobs = v;
                 RequestAutoSave();
                 OnPropertyChanged();
+                OnPropertyChanged(nameof(Blob_MaxBlobCountPreview));
                 OnPropertyChanged(nameof(Blob_PassStatus));
                 OnPropertyChanged(nameof(Blob_PassColor));
                 RefreshPreviews();
@@ -192,6 +208,8 @@ namespace VisionInspectionApp.UI.ViewModels
                 def.MinBlobDistance = v;
                 RequestAutoSave();
                 OnPropertyChanged();
+                OnPropertyChanged(nameof(Blob_HasMinDistancePreview));
+                OnPropertyChanged(nameof(Blob_MinDistancePreviewGap));
                 OnPropertyChanged(nameof(Blob_PassStatus));
                 OnPropertyChanged(nameof(Blob_PassColor));
                 OnPropertyChanged(nameof(Blob_LastRunMinDistanceText));
@@ -213,9 +231,13 @@ namespace VisionInspectionApp.UI.ViewModels
                 def.MaxBlobWidth = v;
                 RequestAutoSave();
                 OnPropertyChanged();
+                OnPropertyChanged(nameof(Blob_HasMaxSpecPreview));
+                OnPropertyChanged(nameof(Blob_MaxSpecPreviewWidth));
+                OnPropertyChanged(nameof(Blob_MaxSpecPreviewHeight));
                 OnPropertyChanged(nameof(Blob_PassStatus));
                 OnPropertyChanged(nameof(Blob_PassColor));
                 OnPropertyChanged(nameof(Blob_LastRunMaxDimensionsText));
+                OnPropertyChanged(nameof(Blob_MaxSpecPreviewText));
                 RefreshPreviews();
             }
         }
@@ -234,11 +256,46 @@ namespace VisionInspectionApp.UI.ViewModels
                 def.MaxBlobLength = v;
                 RequestAutoSave();
                 OnPropertyChanged();
+                OnPropertyChanged(nameof(Blob_HasMaxSpecPreview));
+                OnPropertyChanged(nameof(Blob_MaxSpecPreviewWidth));
+                OnPropertyChanged(nameof(Blob_MaxSpecPreviewHeight));
                 OnPropertyChanged(nameof(Blob_PassStatus));
                 OnPropertyChanged(nameof(Blob_PassColor));
                 OnPropertyChanged(nameof(Blob_LastRunMaxDimensionsText));
+                OnPropertyChanged(nameof(Blob_MaxSpecPreviewText));
                 RefreshPreviews();
             }
+        }
+
+        public double Blob_MinAreaPreviewSide => CalculateAreaPreviewSide(Blob_MinBlobArea);
+        public double Blob_MinAreaPreviewHeight => Blob_MinAreaPreviewSide;
+        public double Blob_MaxAreaPreviewSide => CalculateAreaPreviewSide(Blob_MaxBlobArea);
+        public double Blob_MaxAreaPreviewHeight => Blob_MaxAreaPreviewSide;
+        public string Blob_MinAreaPreviewText => GetEquivalentCircleAreaText("MinA", Blob_MinBlobArea);
+        public string Blob_MaxAreaPreviewText => GetEquivalentCircleAreaText("MaxA", Blob_MaxBlobArea);
+        public string Blob_MaxSpecPreviewText => $"Tối đa {Blob_MaxBlobWidth:0.##} × {Blob_MaxBlobLength:0.##} {Blob_DistanceUnitText}";
+        public string Blob_MaxBlobCountPreview
+        {
+            get
+            {
+                var count = Blob_MaxAllowedBlobs <= 0 ? 5 : Math.Clamp(Blob_MaxAllowedBlobs, 1, 12);
+                var glyphs = string.Join(" ", Enumerable.Repeat("●", count));
+                var detail = Blob_MaxAllowedBlobs <= 0 ? "không giới hạn" : $"tối đa {Blob_MaxAllowedBlobs}";
+                return $"{glyphs}  ({detail})";
+            }
+        }
+
+        private static string GetEquivalentCircleAreaText(string label, int area)
+        {
+            var diameter = 2 * Math.Sqrt(Math.Max(0, area) / Math.PI);
+            return $"{label} {area:N0} px² ≈ Ø{diameter:0.#} px";
+        }
+
+        private double GetMmPreviewSide(double millimeters)
+        {
+            if (millimeters <= 0) return 1;
+            var pixelsPerMm = _config?.PixelsPerMm > 0 ? _config.PixelsPerMm : 1.0;
+            return Math.Clamp(millimeters * pixelsPerMm * 0.12, 2, 88);
         }
 
         public string Blob_DistanceUnitText
