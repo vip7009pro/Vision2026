@@ -418,6 +418,7 @@
                         <MenuItem Header="📋 Gán Mã Sản Phẩm ↔ Tệp Job (Product Assign...)" Command="{Binding OqcScanner.OpenProductAssignCommand}" />
                         <MenuItem Header="🗄️ Quản Lý Kết Nối Database (DB Manager...)" Command="{Binding ToolEditor.OpenDbManagerCommand}" />
                         <MenuItem Header="⚙️ Cấu Hình OQC Scanner &amp; Database..." Command="{Binding OqcScanner.OpenSettingsCommand}" />
+                        <MenuItem Header="📄 Cấu Hình Job Mặc Định..." Command="{Binding OpenDefaultJobTemplateSettingsCommand}" />
                         <Separator />
                         <MenuItem Header="📦 Cấu Hình..." Command="{Binding OpenSystemConfigBackupCommand}" ToolTip="Sao lưu và phục hồi toàn bộ cấu hình Hệ thống, PLC, Database, OQC, Camera sang máy khác chỉ bằng 1 lần nạp" />
                     </MenuItem>

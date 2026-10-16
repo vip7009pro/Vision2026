@@ -21,6 +21,8 @@ public sealed class GlobalAppSettings
     // Crosshair display on live camera preview
     public bool ShowCrosshair { get; set; } = false;
 
+    public string DefaultJobTemplatePath { get; set; } = string.Empty;
+
     // OTA Update Settings (Local Server / GitHub Releases)
     public OtaSettings Ota { get; set; } = new();
 }

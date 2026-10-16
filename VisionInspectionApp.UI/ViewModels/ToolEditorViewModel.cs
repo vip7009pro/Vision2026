@@ -4387,6 +4387,22 @@ namespace VisionInspectionApp.UI.ViewModels
     
         private void NewGraph()
         {
+            var settingsService = _serviceProvider?.GetService(typeof(GlobalAppSettingsService)) as GlobalAppSettingsService;
+            var templatePath = settingsService?.Settings.DefaultJobTemplatePath;
+            if (!string.IsNullOrWhiteSpace(templatePath) && File.Exists(templatePath))
+            {
+                LoadJobFromFile(templatePath, autoRun: false, createAsNewJob: true);
+                if (_config != null)
+                {
+                    return;
+                }
+            }
+
+            CreateStarterGraph();
+        }
+
+        private void CreateStarterGraph()
+        {
             ClearActiveGraph();
             _config = new VisionConfig
             {

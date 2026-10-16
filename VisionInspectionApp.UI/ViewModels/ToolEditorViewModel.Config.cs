@@ -190,7 +190,7 @@ namespace VisionInspectionApp.UI.ViewModels
     
         public Func<bool>? CheckShouldAutoRunOnJobLoad { get; set; }
 
-        public void LoadJobFromFile(string filePath, bool? autoRun = null)
+        public void LoadJobFromFile(string filePath, bool? autoRun = null, bool createAsNewJob = false)
         {
             if (string.IsNullOrWhiteSpace(filePath) || !File.Exists(filePath))
             {
@@ -205,7 +205,7 @@ namespace VisionInspectionApp.UI.ViewModels
             try
             {
                 _config = _jobService.LoadJob(filePath, out var tempDir);
-                CurrentJobFilePath = filePath;
+                CurrentJobFilePath = createAsNewJob ? null : filePath;
                 CurrentTempWorkingDir = tempDir;
                 ProductCode = _config.ProductCode;
                 EnsureTemplatePathsAbsolute(_config);
@@ -348,15 +348,26 @@ namespace VisionInspectionApp.UI.ViewModels
                     ScheduleAsyncUrlImageFetch(urlSrc.Name, urlSrc.ImageUrl);
                 }
 
+                if (createAsNewJob)
+                {
+                    ProductCode = "NewProduct";
+                    _config.ProductCode = ProductCode;
+                }
+
                 SelectedNode = Nodes.Count > 0 ? Nodes[0] : null;
                 RaiseToolPropertyPanelsChanged();
                 RefreshOriginTemplatePreview();
                 OnPropertyChanged(nameof(PixelsPerMm));
                 IsDirty = false;
-                _recentJobsService?.AddRecentJob(filePath);
+                if (!createAsNewJob)
+                {
+                    _recentJobsService?.AddRecentJob(filePath);
+                }
                 if (System.Windows.Application.Current?.MainWindow != null)
                 {
-                    System.Windows.Application.Current.MainWindow.Title = "CMS VINA VISION SYSTEM - " + Path.GetFileName(CurrentJobFilePath);
+                    System.Windows.Application.Current.MainWindow.Title = createAsNewJob
+                        ? "CMS VINA VISION SYSTEM - New Job"
+                        : "CMS VINA VISION SYSTEM - " + Path.GetFileName(CurrentJobFilePath);
                 }
 
                 TriggerAutoFitGraph();

@@ -159,6 +159,7 @@ public static class ReleaseConfigPersistenceTests
             ota.UpdateServerUrl = testUrl;
             ota.PublishServerUploadUrl = "http://192.168.1.200/publish.php";
             ota.PublishServerStorageFolder = "releases/v2";
+            settingsService.Settings.DefaultJobTemplatePath = Path.Combine(tempTestDir, "starter.job");
 
             settingsService.Save();
 
@@ -172,8 +173,12 @@ public static class ReleaseConfigPersistenceTests
             if (reloadedOta.PublishServerUploadUrl != "http://192.168.1.200/publish.php")
                 throw new Exception($"URL phát hành không khớp! Nhận được {reloadedOta.PublishServerUploadUrl}");
 
+            if (settingsService.Settings.DefaultJobTemplatePath != Path.Combine(tempTestDir, "starter.job"))
+                throw new Exception("Đường dẫn Job mẫu mặc định không được bảo toàn sau khi reload!");
+
             Console.WriteLine($"  ✓ Đã lưu bền vững OTA URL (Isolated Sandbox): {reloadedOta.UpdateServerUrl}");
             Console.WriteLine($"  ✓ Đã lưu bền vững Publish URL (Isolated Sandbox): {reloadedOta.PublishServerUploadUrl}");
+            Console.WriteLine($"  ✓ Đã lưu bền vững đường dẫn Job mặc định: {settingsService.Settings.DefaultJobTemplatePath}");
             Console.WriteLine("  ✓ Test 4 PASSED!");
         }
         finally

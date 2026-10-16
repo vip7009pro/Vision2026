@@ -36,6 +36,12 @@ class Program
             return;
         }
 
+        if (args.Length > 0 && args[0].Equals("newjob", StringComparison.OrdinalIgnoreCase))
+        {
+            NewJobDefaultToolsTests.RunAllTests();
+            return;
+        }
+
         if (args.Length > 0 && (args[0].Equals("oqc", StringComparison.OrdinalIgnoreCase) || args[0].Equals("crosshair", StringComparison.OrdinalIgnoreCase)))
         {
             OqcLiveViewOnJobLoadTests.RunTests();

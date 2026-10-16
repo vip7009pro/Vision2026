@@ -147,6 +147,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
         OpenDocsFolderCommand = new RelayCommand(ExecuteOpenDocsFolder);
         OpenLicenseDialogCommand = new RelayCommand(ExecuteOpenLicenseDialog);
         OpenSystemConfigBackupCommand = new RelayCommand(OpenSystemConfigBackup);
+        OpenDefaultJobTemplateSettingsCommand = new RelayCommand(OpenDefaultJobTemplateSettings);
 
         if (_selectedTabIndex == 3)
         {
@@ -174,6 +175,24 @@ public sealed partial class MainWindowViewModel : ObservableObject
     public ICommand OpenDocsFolderCommand { get; }
     public ICommand OpenLicenseDialogCommand { get; }
     public ICommand OpenSystemConfigBackupCommand { get; }
+    public ICommand OpenDefaultJobTemplateSettingsCommand { get; }
+
+    private void OpenDefaultJobTemplateSettings()
+    {
+        var settingsService = _settingsService ?? (_serviceProvider?.GetService(typeof(GlobalAppSettingsService)) as GlobalAppSettingsService);
+        if (settingsService == null)
+        {
+            MessageBox.Show("Dịch vụ cài đặt ứng dụng chưa được khởi tạo.", "Lỗi", MessageBoxButton.OK, MessageBoxImage.Error);
+            return;
+        }
+
+        var viewModel = new DefaultJobTemplateViewModel(settingsService);
+        var dialog = new Views.DefaultJobTemplateWindow(viewModel)
+        {
+            Owner = System.Windows.Application.Current?.MainWindow
+        };
+        dialog.ShowDialog();
+    }
 
     private static Views.SystemConfigBackupWindow? _systemConfigBackupWindowInstance;
 

@@ -1,7 +1,9 @@
 using System;
+using System.IO;
 using System.Linq;
 using System.Threading;
 using VisionInspectionApp.Models;
+using VisionInspectionApp.UI.Services;
 using VisionInspectionApp.UI.ViewModels;
 
 namespace TestExtractApp;
@@ -26,6 +28,7 @@ public static class NewJobDefaultToolsTests
                 Test_05_OriginAlgorithmDefaultsToMvpShapeMatch2();
                 Test_06_ImageSourceEnableUndistortDefaultsToTrue();
                 Test_07_OqcScannerTestedSampleCountTrackingAndReset();
+                Test_08_DefaultJobTemplateSettingPersists();
             }
             catch (Exception ex)
             {
@@ -265,5 +268,33 @@ public static class NewJobDefaultToolsTests
         Console.ForegroundColor = ConsoleColor.Green;
         Console.WriteLine("PASSED: Đếm mẫu & tự động reset khi nạp Job mới hoạt động chuẩn xác 100%");
         Console.ResetColor();
+    }
+
+    private static void Test_08_DefaultJobTemplateSettingPersists()
+    {
+        Console.Write("--- Test 8: Lưu và nạp lại đường dẫn Job mẫu mặc định... ");
+
+        string testDirectory = Path.Combine(Path.GetTempPath(), "VisionTest_DefaultJob_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(testDirectory);
+        try
+        {
+            string settingsPath = Path.Combine(testDirectory, "global_settings.json");
+            string templatePath = Path.Combine(testDirectory, "starter.job");
+            var settingsService = new GlobalAppSettingsService(settingsPath, disableBackupSync: true);
+            settingsService.Settings.DefaultJobTemplatePath = templatePath;
+            settingsService.Save();
+            settingsService.Reload();
+
+            if (settingsService.Settings.DefaultJobTemplatePath != templatePath)
+                throw new Exception("DefaultJobTemplatePath không được bảo toàn sau khi nạp lại cấu hình!");
+
+            Console.ForegroundColor = ConsoleColor.Green;
+            Console.WriteLine("PASSED: Đường dẫn Job mẫu được lưu bền vững");
+            Console.ResetColor();
+        }
+        finally
+        {
+            try { Directory.Delete(testDirectory, true); } catch { }
+        }
     }
 }
