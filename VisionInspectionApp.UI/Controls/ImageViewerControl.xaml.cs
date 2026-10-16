@@ -50,6 +50,12 @@ public partial class ImageViewerControl : UserControl
         typeof(ImageViewerControl),
         new PropertyMetadata(false));
 
+    public static readonly DependencyProperty CtrlDragDrawsTemplateRoiProperty = DependencyProperty.Register(
+        nameof(CtrlDragDrawsTemplateRoi),
+        typeof(bool),
+        typeof(ImageViewerControl),
+        new PropertyMetadata(false));
+
     public static readonly DependencyProperty RoiEditedCommandProperty = DependencyProperty.Register(
         nameof(RoiEditedCommand),
         typeof(ICommand),
@@ -772,6 +778,12 @@ public partial class ImageViewerControl : UserControl
         set => SetValue(EnableRoiEditingProperty, value);
     }
 
+    public bool CtrlDragDrawsTemplateRoi
+    {
+        get => (bool)GetValue(CtrlDragDrawsTemplateRoiProperty);
+        set => SetValue(CtrlDragDrawsTemplateRoiProperty, value);
+    }
+
     public ICommand? RoiEditedCommand
     {
         get => (ICommand?)GetValue(RoiEditedCommandProperty);
@@ -1048,6 +1060,7 @@ public partial class ImageViewerControl : UserControl
     }
 
     private bool _dragging;
+    private bool _isCtrlTemplateRoiDraw;
     private Point _start;
     private Rectangle? _rect;
     private Line? _dragCrosshairH;
@@ -1412,7 +1425,12 @@ public partial class ImageViewerControl : UserControl
             return;
         }
 
-        if (Keyboard.Modifiers.HasFlag(ModifierKeys.Control) && Keyboard.Modifiers.HasFlag(ModifierKeys.Shift))
+        _isCtrlTemplateRoiDraw = CtrlDragDrawsTemplateRoi
+            && Keyboard.Modifiers.HasFlag(ModifierKeys.Control);
+
+        if (!_isCtrlTemplateRoiDraw
+            && Keyboard.Modifiers.HasFlag(ModifierKeys.Control)
+            && Keyboard.Modifiers.HasFlag(ModifierKeys.Shift))
         {
             // Deferred gesture: a short Ctrl+Shift+Click sets the Point offset / Text position,
             // while Ctrl+Shift+Drag teaches the Template ROI. The decision is made on mouse-up
@@ -1430,7 +1448,7 @@ public partial class ImageViewerControl : UserControl
             && _activeRoiLabel!.Split(' ', StringSplitOptions.RemoveEmptyEntries) is { Length: 2 } parts
             && parts[1].StartsWith("B", StringComparison.OrdinalIgnoreCase);
 
-        _roiDrawKind = (!isBlobLabel && Keyboard.Modifiers.HasFlag(ModifierKeys.Shift))
+        _roiDrawKind = _isCtrlTemplateRoiDraw || (!isBlobLabel && Keyboard.Modifiers.HasFlag(ModifierKeys.Shift))
             ? RoiDrawKind.Template
             : RoiDrawKind.Search;
 
@@ -1575,6 +1593,8 @@ public partial class ImageViewerControl : UserControl
     {
         var deferredCtrlShiftClick = _ctrlShiftDeferredClick;
         _ctrlShiftDeferredClick = false;
+        var ctrlTemplateRoiDraw = _isCtrlTemplateRoiDraw;
+        _isCtrlTemplateRoiDraw = false;
 
         if (_isPdfDragging)
         {
@@ -1681,7 +1701,7 @@ public partial class ImageViewerControl : UserControl
         _dragCrosshairV = null;
 
         // Ctrl+Shift + click (barely any movement) => Point offset / Text position, not a ROI draw.
-        if (deferredCtrlShiftClick)
+        if (deferredCtrlShiftClick && !ctrlTemplateRoiDraw)
         {
             var upPos = e.GetPosition(PART_Overlay);
             var movedX = Math.Abs(upPos.X - _ctrlShiftStartScreen.X);
@@ -1721,6 +1741,18 @@ public partial class ImageViewerControl : UserControl
         }
 
         var roi = ConvertContentRoiToPixelRoi(bmp, x, y, w, h, 0);
+
+        if (ctrlTemplateRoiDraw && EnableRoiEditing)
+        {
+            var templateLabel = GetDesiredRoiLabelForDraw(RoiDrawKind.Template) ?? "Origin T";
+            var templateSelection = new RoiSelection(templateLabel, roi, ModifierKeys.Control);
+            if (RoiEditedCommand?.CanExecute(templateSelection) == true)
+            {
+                RoiEditedCommand.Execute(templateSelection);
+            }
+            RedrawOverlays();
+            return;
+        }
 
         object arg = roi;
         if (EnableRoiEditing)

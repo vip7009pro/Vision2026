@@ -5,6 +5,8 @@ using System.Text.Json;
 using OpenCvSharp;
 using VisionInspectionApp.Models;
 using VisionInspectionApp.Persistence;
+using VisionInspectionApp.UI.ViewModels;
+using VisionInspectionApp.UI.Controls;
 
 namespace TestExtractApp;
 
@@ -29,6 +31,8 @@ public static class OriginTemplateJobTest
         Console.WriteLine("\n========================================================");
         Console.WriteLine("🎯 RUNNING ORIGIN TEMPLATE JOB LOADING & RESOLUTION TESTS");
         Console.WriteLine("========================================================");
+
+        Test_OriginTemplateContourRotationTransform();
 
         var testBaseDir = Path.Combine(Path.GetTempPath(), "Vision2026_Test_Origin", Guid.NewGuid().ToString());
         Directory.CreateDirectory(testBaseDir);
@@ -211,5 +215,23 @@ public static class OriginTemplateJobTest
             }
             catch { }
         }
+    }
+
+    private static void Test_OriginTemplateContourRotationTransform()
+    {
+        Console.WriteLine("▶ Running Test_OriginTemplateContourRotationTransform...");
+
+        var unchanged = OriginTrainViewModel.TransformTemplatePointToImage(0, 0, 100, 80, 40, 20, 0);
+        Assert(unchanged.X == 80 && unchanged.Y == 70,
+            "Zero-degree template contour coordinates map to the unrotated ROI position");
+
+        var rotated = OriginTrainViewModel.TransformTemplatePointToImage(30, 10, 100, 80, 40, 20, 90);
+        Assert(rotated.X == 100 && rotated.Y == 90,
+            "Ninety-degree template rotation maps contour points around the ROI center");
+
+        var roi = new Roi { X = 10, Y = 20, Width = 60, Height = 40, Angle = 37 };
+        var selected = new RoiSelection("Origin T", roi, System.Windows.Input.ModifierKeys.Control);
+        Assert(selected.Label == "Origin T" && selected.Roi.Angle == 37,
+            "Ctrl-drawn template selection carries the Origin T label and ROI geometry");
     }
 }

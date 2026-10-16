@@ -34,10 +34,10 @@
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
 
     <!-- Application Version (Dùng cho OTA Update & Windows File Properties) -->
-    <Version>1.0.0.45</Version>
-    <AssemblyVersion>1.0.0.45</AssemblyVersion>
-    <FileVersion>1.0.0.45</FileVersion>
-    <InformationalVersion>1.0.0.45</InformationalVersion>
+    <Version>1.0.0.46</Version>
+    <AssemblyVersion>1.0.0.46</AssemblyVersion>
+    <FileVersion>1.0.0.46</FileVersion>
+    <InformationalVersion>1.0.0.46</InformationalVersion>
   </PropertyGroup>
 
   <ItemGroup>

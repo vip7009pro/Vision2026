@@ -382,17 +382,17 @@ namespace VisionInspectionApp.UI.ViewModels
                 // Render green overlay on full image
                 using var fullBgr = _rawFullMat.Channels() == 3 ? _rawFullMat.Clone() : _rawFullMat.CvtColor(ColorConversionCodes.GRAY2BGR);
 
-                var rx = (int)Math.Clamp(RoiX, 0, _rawFullMat.Width - 1);
-                var ry = (int)Math.Clamp(RoiY, 0, _rawFullMat.Height - 1);
+                var roiCenterX = curRoi.X + curRoi.Width / 2.0;
+                var roiCenterY = curRoi.Y + curRoi.Height / 2.0;
                 
-                // Shift contours to full image space
+                // Restore deskewed contour points to the rotated ROI's position in the source image.
                 var shiftedContours = new List<OpenCvSharp.Point[]>();
                 foreach (var c in contours)
                 {
                     var pts = new OpenCvSharp.Point[c.Length];
                     for (int i = 0; i < c.Length; i++)
                     {
-                        pts[i] = new OpenCvSharp.Point(c[i].X + rx, c[i].Y + ry);
+                        pts[i] = TransformTemplatePointToImage(c[i].X, c[i].Y, roiCenterX, roiCenterY, curRoi.Width, curRoi.Height, curRoi.Angle);
                     }
                     shiftedContours.Add(pts);
                 }
@@ -418,6 +418,20 @@ namespace VisionInspectionApp.UI.ViewModels
             {
                 System.Diagnostics.Debug.WriteLine($"ExecuteTrain exception: {ex.Message}");
             }
+        }
+
+        public static OpenCvSharp.Point TransformTemplatePointToImage(
+            double templateX, double templateY, double roiCenterX, double roiCenterY,
+            double roiWidth, double roiHeight, double angleDegrees)
+        {
+            var dx = templateX - roiWidth / 2.0;
+            var dy = templateY - roiHeight / 2.0;
+            var radians = angleDegrees * Math.PI / 180.0;
+            var cos = Math.Cos(radians);
+            var sin = Math.Sin(radians);
+            var imageX = roiCenterX + cos * dx - sin * dy;
+            var imageY = roiCenterY + sin * dx + cos * dy;
+            return new OpenCvSharp.Point((int)Math.Round(imageX), (int)Math.Round(imageY));
         }
 
         private void ExecuteSave()

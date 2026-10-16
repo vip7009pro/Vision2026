@@ -48,6 +48,12 @@ class Program
             return;
         }
 
+        if (args.Length > 0 && args[0].Equals("origin", StringComparison.OrdinalIgnoreCase))
+        {
+            OriginTemplateJobTest.RunTests();
+            return;
+        }
+
         if (args.Length > 0 && args[0].Equals("productassign", StringComparison.OrdinalIgnoreCase))
         {
             ProductAssignAndCodeSyncTest.RunTests();
