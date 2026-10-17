@@ -13,31 +13,35 @@ Hỗ trợ Camera GigE/USB3/USB/RTSP, nạp ảnh tệp/thư mục, bản vẽ k
   - OQC Server API: `https://192.168.1.192/vision_upload.php`
   - OTA Update Server: `http://192.168.1.192/update/version.json` & `http://192.168.1.192/ota_server.php`
 
-## 3. Hoàn thành Task 402: Bảo Mật Mật Khẩu Xóa Lịch Sử OQC Log & Checkbox Lọc PASS
+## 3. Hoàn thành Task 403: Tự Động Lưu Job Đang Mở Khi Có Thay Đổi Trước Khi Tải Lên Server (JobManager)
 1. **Yêu cầu & Mục tiêu**:
-   - Tab OQC Scanner, trong cửa sổ xem lịch sử OQC log (`OqcScanHistoryWindow`), nút xóa dữ liệu khi bấm vào phải nhập mật khẩu thì mới cho xóa (mặc định 1234), có thể cấu hình trong cửa sổ cấu hình OQC.
-   - Thêm 1 checkbox không tên, mặc định unchecked (khi checked, chỉ show các kết quả được đánh giá pass, các kết quả NG ẩn đi).
+   - Trong cửa sổ Quản lý Job và huấn luyện job (`JobManagerWindow`), có 3 nút có chức năng tải Job lên server:
+     - Nút 1: "📤 Tải Job Lên Server" trên Toolbar (`UploadCurrentJobCommand`).
+     - Nút 2: "🚀 Up Ảnh + Job" trên Toolbar (`UploadTeachAndJobCommand`).
+     - Nút 3: "📤 Tải Job Hiện Tại Lên Server" trong Panel Chi Tiết bên phải (`UploadCurrentJobCommand`).
+   - Nếu Job đang mở trong Tool Editor chưa được lưu (do có thay đổi - `IsDirty == true` hoặc chưa có file trên đĩa), phải lưu Job trước rồi mới up lên Server.
 2. **Giải pháp đã thực hiện**:
-   - **Cấu hình mật khẩu**:
-     - Thêm thuộc tính `DeleteHistoryPassword` (mặc định "1234") vào `OqcScannerConfig`, hỗ trợ serialization JSON và cấu hình xưởng `CreateFactoryStandard()`.
-     - Thêm binding `DeleteHistoryPassword` vào `OqcScannerViewModel.Settings.cs` (tự động nạp, lưu, khôi phục xưởng và xuất/nhập tệp JSON).
-     - Thêm mục GroupBox "8. Bảo mật & Mật khẩu Xóa Lịch Sử OQC (Delete History Password)" trong `OqcSettingsDialog.xaml`.
-   - **Hộp thoại xác thực mật khẩu**:
-     - Tạo `OqcPasswordPromptDialog` (.xaml/.xaml.cs) giao diện trực quan, tự động focus PasswordBox, phím tắt Enter/Esc, hiển thị cảnh báo lỗi màu đỏ khi sai mật khẩu.
-     - Hàm tĩnh tiện ích `OqcPasswordPromptDialog.PromptPassword(owner, expectedPassword)` kiểm soát chặt chẽ quyền xóa.
-   - **Bảo vệ thao tác xóa dữ liệu**:
-     - Trong `OqcScanHistoryWindow.xaml.cs`: Bổ sung kiểm tra mật khẩu trước khi cho phép xóa với tất cả các thao tác: Xóa toàn bộ lịch sử (`BtnClearAllHistory_Click`), Xóa các dòng đã chọn (`BtnDeleteSelected_Click`), và Xóa từng dòng (`DeleteRowBtn_Click`).
-   - **Checkbox không tên lọc PASS (ẩn NG)**:
-     - Thêm `<CheckBox x:Name="ChkOnlyPass">` không tên, mặc định `IsChecked="False"` trên thanh Top Header & Filter Bar cạnh ô tìm kiếm.
-     - Hàm nhận diện chuẩn `OqcScannerViewModel.IsPassResult()` (chấp nhận "PASS", "PASS (OK)", "OK").
-     - Khi `ChkOnlyPass` được tick: Bộ lọc `FilterHistory` chỉ giữ lại các bản ghi PASS, các bản ghi NG (NG (LỖI), FAIL, LỖI TRA CỨU DB, LỖI BỘ LỌC MÃ...) bị ẩn đi.
-     - Khi bỏ tick hoặc bấm "Xóa lọc": Hiển thị đầy đủ tất cả bản ghi.
+   - **Xây dựng phương thức cốt lõi `EnsureActiveJobSavedBeforeUploadAsync`**:
+     - Kiểm tra trạng thái Job đang mở trong Tool Editor (`hasActiveJob`).
+     - Xác định điều kiện cần lưu: `_toolEditorViewModel.IsDirty || !File.Exists(CurrentJobFilePath)`.
+     - Nếu Job mới chưa có đường dẫn: Tự động gán đường dẫn file mặc định `{ProductCode}.job` trong thư mục Jobs chuẩn (`JobRootDirectory` hoặc `AppStoragePaths.JobsDirectory`).
+     - Thực thi lưu Job trên UI Dispatcher: Chuẩn bị môi trường sản xuất (chuyển URL/File ảnh mẫu sang Camera OQC thực tế) qua `PrepareJobForProductionUpload()` và gọi `SaveJob()`.
+     - Cập nhật thông báo trạng thái `💾 Đã lưu Job '{Path.GetFileName(finalJobPath)}' thành công. Đang tải lên Server...`.
+   - **Tích hợp vào cả 3 nút tải Job lên Server**:
+     - `ExecuteUploadCurrentJobAsync` (Nút 1 & Nút 3): Tự động lưu Job đang mở trước khi upload; nếu Tool Editor không có Job nào đang mở thì mới cho phép người dùng chọn tệp từ đĩa qua `OpenFileDialog`.
+     - `ExecuteUploadTeachAndJobAsync` (Nút 2): Tự động lưu Job đang mở trước khi chụp ảnh mẫu và tải đồng thời ảnh + Job lên Server.
+   - **Module hóa theo Quy tắc 5**:
+     - Tách toàn bộ các phương thức Upload (`EnsureActiveJobSavedBeforeUploadAsync`, `ExecuteUploadCurrentJobAsync`, `ExecuteUploadTeachAndJobAsync`, `TryUploadTeachImageAsync`, `TryUploadJobAsync`, `ExecuteUploadTeachFromCameraAsync`, `ExecuteUploadTeachFromFileAsync`) sang partial class [JobManagerViewModel.Upload.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/JobManagerViewModel.Upload.cs).
+     - Giảm kích thước tệp [JobManagerViewModel.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/JobManagerViewModel.cs) từ gần 1.500 dòng về ~1.000 dòng.
 3. **Kết quả xác thực**:
-   - Bổ sung Test 15 vào `OqcLiveViewOnJobLoadTests.cs`: Kiểm thử toàn diện giá trị mặc định, đổi mật khẩu, xác thực đúng/sai, nhận diện chuỗi PASS/NG và lọc ẩn NG.
-   - 15/15 tests OQC Scanner PASSED 100%. Toàn solution build 0 Errors.
+   - Bổ sung test tự động `Test_JobManager_AutoSaveUnsavedJobBeforeUploadAsync` vào [RemoteServerAndJobManagerTests.cs](file:///g:/NODEJS/Vision2026/TestExtractApp/RemoteServerAndJobManagerTests.cs).
+   - Kiểm tra 3 kịch bản: Job có thay đổi `IsDirty = true`, Job mới chưa có đường dẫn tệp, và Tool Editor trống: Đều vượt qua 100%.
+   - Toàn solution build 0 Errors, 15/15 test OQC Scanner Live View PASSED 100%.
 
 ## 4. Các sự kiện & thay đổi gần đây
+- Task 403: Tự động lưu Job đang mở khi có thay đổi trước khi tải lên Server trong cửa sổ Quản lý Job & Huấn luyện (áp dụng cho cả 3 nút upload); module hóa `JobManagerViewModel.Upload.cs`.
 - Task 402: Bảo mật mật khẩu xóa lịch sử OQC Log (mặc định 1234, cấu hình trong OQC Settings) & Checkbox không tên lọc PASS (ẩn NG).
+
 - Task 401: Chuẩn hóa chu trình 3 bước OQC Scanner Cú đấm thép (tự động nạp Job thứ 2 & reset counting mẫu về 0, không cần đóng Job thủ công).
 - Task 400: Khắc phục triệt để lỗi khớp điểm Origin MvpShapeMatch2 với ảnh qua tiền xử lý (đồng bộ tiền xử lý template, FNV-1a cache key checksum, Max Pooling 3x3 pyramid, căn góc 0.0° và refine đa candidate Level 0).
 - Task 399: Sửa lỗi không lưu lịch sử kiểm tra khi kiểm tra nhiều lần trong 1 phiên Job (mỗi lần kiểm tra đều lưu bản ghi lịch sử và log DB).

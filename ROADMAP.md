@@ -1,5 +1,18 @@
 # ROADMAP.md — Lộ trình phát triển & Trạng thái nhiệm vụ
 
+- [x] Task 403: Tự Động Lưu Job Đang Mở Khi Có Thay Đổi Trước Khi Tải Lên Server (JobManager):
+  - [x] Nhận diện trạng thái Job đang mở chưa được lưu (`IsDirty == true` hoặc chưa có file trên đĩa).
+  - [x] Xây dựng phương thức `EnsureActiveJobSavedBeforeUploadAsync` trong [JobManagerViewModel.Upload.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/JobManagerViewModel.Upload.cs):
+    - Tự động gán đường dẫn file mặc định `{ProductCode}.job` nếu Job mới chưa có file trên đĩa.
+    - Chuẩn bị môi trường sản xuất (chuyển URL/File ảnh mẫu sang Camera OQC thực tế).
+    - Lưu file Job sạch sẽ và cập nhật `IsDirty = false`.
+  - [x] Tích hợp tự động lưu vào cả 3 nút tải Job lên Server:
+    - Nút 1: "📤 Tải Job Lên Server" trên Toolbar ([JobManagerWindow.xaml:179](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/Views/OQC/JobManagerWindow.xaml#L179)).
+    - Nút 2: "🚀 Up Ảnh + Job" trên Toolbar ([JobManagerWindow.xaml:189](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/Views/OQC/JobManagerWindow.xaml#L189)).
+    - Nút 3: "📤 Tải Job Hiện Tại Lên Server" trên Panel Chi Tiết ([JobManagerWindow.xaml:499](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/Views/OQC/JobManagerWindow.xaml#L499)).
+  - [x] Module hóa theo Quy tắc 5: Tách các phương thức Upload sang [JobManagerViewModel.Upload.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/JobManagerViewModel.Upload.cs), giảm [JobManagerViewModel.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/JobManagerViewModel.cs) từ ~1.500 dòng về ~1.000 dòng.
+  - [x] Kiểm thử tự động: Bổ sung `Test_JobManager_AutoSaveUnsavedJobBeforeUploadAsync` trong [RemoteServerAndJobManagerTests.cs](file:///g:/NODEJS/Vision2026/TestExtractApp/RemoteServerAndJobManagerTests.cs); 100% tests PASSED, build 0 lỗi.
+
 - [x] Task 402: Bảo Mật Mật Khẩu Xóa Lịch Sử OQC Log & Checkbox Không Tên Lọc PASS (Ẩn NG):
   - [x] Cấu hình mật khẩu xóa:
     - Bổ sung `DeleteHistoryPassword` (mặc định "1234") vào [OqcScannerConfig.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.Models/OqcScannerConfig.cs) và `CreateFactoryStandard()`.
