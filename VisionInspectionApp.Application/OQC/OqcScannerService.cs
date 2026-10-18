@@ -1835,23 +1835,72 @@ public sealed class OqcScannerService : IOqcScannerService
         // 13. ContourCompares
         foreach (var cc in result.ContourCompares)
         {
-            list.Add(new OqcMeasurementDetail
+            var def = config.ContourCompares?.FirstOrDefault(x => string.Equals(x.Name, cc.Name, StringComparison.OrdinalIgnoreCase));
+            var method = def?.MatchMethod ?? ContourMatchMethod.HuMoments;
+
+            if (method == ContourMatchMethod.HausdorffDistance)
             {
-                Index = idx++,
-                ToolName = cc.Name,
-                ToolType = "ContourCompare",
-                HasNumericSpec = false,
-                CustomSpecText = ">= 0.80",
-                CustomResultText = $"{cc.MatchScore:F3}",
-                Spec = 0.8,
-                TolPlus = 0,
-                TolMinus = 0,
-                Min = 0.8,
-                Max = 1.0,
-                Result = cc.MatchScore,
-                Unit = "",
-                Pass = cc.Pass
-            });
+                var tol = def?.MaxHausdorffDistPx ?? 4.0;
+                list.Add(new OqcMeasurementDetail
+                {
+                    Index = idx++,
+                    ToolName = cc.Name,
+                    ToolType = "ContourCompare",
+                    HasNumericSpec = false,
+                    CustomSpecText = $"<= {tol:F2} px",
+                    CustomResultText = $"{cc.MaxDistancePx:F2} px",
+                    Spec = 0,
+                    TolPlus = tol,
+                    TolMinus = 0,
+                    Min = 0,
+                    Max = tol,
+                    Result = cc.MaxDistancePx,
+                    Unit = "px",
+                    Pass = cc.Pass
+                });
+            }
+            else if (method == ContourMatchMethod.AreaPerimeterDiff)
+            {
+                var tol = def?.MaxAreaDiffPercent ?? 5.0;
+                list.Add(new OqcMeasurementDetail
+                {
+                    Index = idx++,
+                    ToolName = cc.Name,
+                    ToolType = "ContourCompare",
+                    HasNumericSpec = false,
+                    CustomSpecText = $"<= {tol:F2} %",
+                    CustomResultText = $"{cc.AreaDiffPercent:F2} %",
+                    Spec = 0,
+                    TolPlus = tol,
+                    TolMinus = 0,
+                    Min = 0,
+                    Max = tol,
+                    Result = cc.AreaDiffPercent,
+                    Unit = "%",
+                    Pass = cc.Pass
+                });
+            }
+            else
+            {
+                var tol = def?.MaxShapeMatchScore ?? 0.10;
+                list.Add(new OqcMeasurementDetail
+                {
+                    Index = idx++,
+                    ToolName = cc.Name,
+                    ToolType = "ContourCompare",
+                    HasNumericSpec = false,
+                    CustomSpecText = $"<= {tol:F3}",
+                    CustomResultText = $"{cc.MatchScore:F3}",
+                    Spec = 0,
+                    TolPlus = tol,
+                    TolMinus = 0,
+                    Min = 0,
+                    Max = tol,
+                    Result = cc.MatchScore,
+                    Unit = "",
+                    Pass = cc.Pass
+                });
+            }
         }
 
         // 14. BlobDetections

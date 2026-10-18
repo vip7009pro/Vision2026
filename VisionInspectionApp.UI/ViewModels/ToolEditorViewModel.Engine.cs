@@ -1290,6 +1290,7 @@ namespace VisionInspectionApp.UI.ViewModels
                 if (string.Equals(kind, "CCT", StringComparison.OrdinalIgnoreCase))
                 {
                     cc.TemplateRoi = roi;
+                    if (cc.InspectRoi.Width <= 0 || cc.InspectRoi.Height <= 0) cc.InspectRoi = roi;
                     TrySaveContourCompareTemplateImage(name, roi);
                     return;
                 }
@@ -1794,6 +1795,7 @@ namespace VisionInspectionApp.UI.ViewModels
                     ? surface.Rois[surfaceIndex - 1].Roi
                     : null;
             }
+            if (string.Equals(kind, "CC", StringComparison.OrdinalIgnoreCase)) return _config.ContourCompares.FirstOrDefault(x => string.Equals(x.Name, name, StringComparison.OrdinalIgnoreCase))?.InspectRoi;
             if (string.Equals(kind, "CCT", StringComparison.OrdinalIgnoreCase)) return _config.ContourCompares.FirstOrDefault(x => string.Equals(x.Name, name, StringComparison.OrdinalIgnoreCase))?.TemplateRoi;
             if (kind.StartsWith("PR", StringComparison.OrdinalIgnoreCase))
             {
@@ -2106,7 +2108,7 @@ namespace VisionInspectionApp.UI.ViewModels
                 if (kind.StartsWith("CC", StringComparison.OrdinalIgnoreCase))
                 {
                     ApplyRoiForLabel(label, roi);
-                    if (string.Equals(kind, "CCT", StringComparison.OrdinalIgnoreCase) || string.Equals(kind, "CC", StringComparison.OrdinalIgnoreCase))
+                    if (string.Equals(kind, "CCT", StringComparison.OrdinalIgnoreCase))
                     {
                         TrySaveContourCompareTemplateImage(name, roi, sel.Roi);
                     }
@@ -6203,7 +6205,7 @@ namespace VisionInspectionApp.UI.ViewModels
                                     Points = c.Select(p => new System.Windows.Point(p.X, p.Y)).ToList(),
                                     IsClosed = true,
                                     Stroke = Brushes.Gold,
-                                    StrokeThickness = 1.5,
+                                    StrokeThickness = 1.0,
                                     Label = string.Empty
                                 });
                             }
@@ -6221,7 +6223,7 @@ namespace VisionInspectionApp.UI.ViewModels
                                     Points = seg.Points.Select(p => new System.Windows.Point(p.X, p.Y)).ToList(),
                                     IsClosed = seg.IsClosed,
                                     Stroke = Brushes.Lime,
-                                    StrokeThickness = 2.0,
+                                    StrokeThickness = 1.8,
                                     Label = string.Empty
                                 });
                             }
@@ -6238,7 +6240,7 @@ namespace VisionInspectionApp.UI.ViewModels
                                     Points = c.Select(p => new System.Windows.Point(p.X, p.Y)).ToList(),
                                     IsClosed = true,
                                     Stroke = Brushes.Lime,
-                                    StrokeThickness = 2.0,
+                                    StrokeThickness = 1.8,
                                     Label = string.Empty
                                 });
                             }
@@ -6256,7 +6258,7 @@ namespace VisionInspectionApp.UI.ViewModels
                                     Points = seg.Points.Select(p => new System.Windows.Point(p.X, p.Y)).ToList(),
                                     IsClosed = seg.IsClosed,
                                     Stroke = Brushes.Red,
-                                    StrokeThickness = 2.0,
+                                    StrokeThickness = 2.8,
                                     Label = string.Empty
                                 });
                             }
@@ -7048,7 +7050,7 @@ namespace VisionInspectionApp.UI.ViewModels
                                 Points = c.Select(p => new System.Windows.Point(p.X, p.Y)).ToList(),
                                 IsClosed = true,
                                 Stroke = Brushes.Gold,
-                                StrokeThickness = 1.5,
+                                StrokeThickness = 1.0,
                                 Label = string.Empty
                             });
                         }
@@ -7066,7 +7068,7 @@ namespace VisionInspectionApp.UI.ViewModels
                                 Points = seg.Points.Select(p => new System.Windows.Point(p.X, p.Y)).ToList(),
                                 IsClosed = seg.IsClosed,
                                 Stroke = Brushes.Lime,
-                                StrokeThickness = 2.0,
+                                StrokeThickness = 1.8,
                                 Label = string.Empty
                             });
                         }
@@ -7083,7 +7085,7 @@ namespace VisionInspectionApp.UI.ViewModels
                                 Points = c.Select(p => new System.Windows.Point(p.X, p.Y)).ToList(),
                                 IsClosed = true,
                                 Stroke = Brushes.Lime,
-                                StrokeThickness = 2.0,
+                                StrokeThickness = 1.8,
                                 Label = string.Empty
                             });
                         }
@@ -7101,7 +7103,7 @@ namespace VisionInspectionApp.UI.ViewModels
                                 Points = seg.Points.Select(p => new System.Windows.Point(p.X, p.Y)).ToList(),
                                 IsClosed = seg.IsClosed,
                                 Stroke = Brushes.Red,
-                                StrokeThickness = 2.0,
+                                StrokeThickness = 2.8,
                                 Label = string.Empty
                             });
                         }

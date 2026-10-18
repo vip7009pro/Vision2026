@@ -1220,7 +1220,10 @@ public partial class InspectionService
                     Angle = templateRoiTeach.Angle
                 };
 
-                using var searchCropPadRaw = ExtractStraightRoi(matBgrOrGray, trPadTeach, originTeach, originFound, angleDeg, out _);
+                bool useInspectRoiSearch = inspectRoiTeach.Width >= templateRoiTeach.Width + 6 && inspectRoiTeach.Height >= templateRoiTeach.Height + 6;
+                Roi searchRoiToExtract = useInspectRoiSearch ? inspectRoiTeach : trPadTeach;
+
+                using var searchCropPadRaw = ExtractStraightRoi(matBgrOrGray, searchRoiToExtract, originTeach, originFound, angleDeg, out var centerFoundSearch);
                 if (searchCropPadRaw.Width <= 0 || searchCropPadRaw.Height <= 0)
                 {
                     return new ContourCompareResult(def.Name, false, false, 999.0, 999.0, 999.0, 999.0);
@@ -1232,7 +1235,26 @@ public partial class InspectionService
                 using var searchCropPad = preprocessor.Run(searchCropPadGray, settings);
                 using var templCrop = preprocessor.Run(templRaw, settings);
 
-                var testRect = new Rect(pad, pad, templCrop.Width, templCrop.Height).Intersect(new Rect(0, 0, searchCropPad.Width, searchCropPad.Height));
+                Rect testRect;
+                double matchCorrVal = 0.0;
+                if (searchCropPad.Width >= templCrop.Width && searchCropPad.Height >= templCrop.Height)
+                {
+                    using var matchRes = new Mat();
+                    Cv2.MatchTemplate(searchCropPad, templCrop, matchRes, TemplateMatchModes.CCoeffNormed);
+                    Cv2.MinMaxLoc(matchRes, out _, out matchCorrVal, out _, out Point maxLoc);
+                    testRect = new Rect(maxLoc.X, maxLoc.Y, templCrop.Width, templCrop.Height).Intersect(new Rect(0, 0, searchCropPad.Width, searchCropPad.Height));
+
+                    var offsetInSearch = new Point2d(
+                        maxLoc.X + templCrop.Width / 2.0 - searchRoiToExtract.Width / 2.0,
+                        maxLoc.Y + templCrop.Height / 2.0 - searchRoiToExtract.Height / 2.0);
+                    var offsetRot = Rotate(offsetInSearch, new Point2d(0, 0), angleDeg);
+                    centerFoundTemplate = new Point2d(centerFoundSearch.X + offsetRot.X, centerFoundSearch.Y + offsetRot.Y);
+                }
+                else
+                {
+                    testRect = new Rect(pad, pad, templCrop.Width, templCrop.Height).Intersect(new Rect(0, 0, searchCropPad.Width, searchCropPad.Height));
+                }
+
                 if (testRect.Width <= 0 || testRect.Height <= 0)
                 {
                     return new ContourCompareResult(def.Name, false, false, 999.0, 999.0, 999.0, 999.0);
@@ -1244,7 +1266,7 @@ public partial class InspectionService
                 {
                     using var canny = new Mat();
                     Cv2.Canny(img, canny, c1, c2);
-                    Cv2.FindContours(canny, out var contours, out _, RetrievalModes.External, ContourApproximationModes.ApproxSimple);
+                    Cv2.FindContours(canny, out var contours, out _, RetrievalModes.External, ContourApproximationModes.ApproxNone);
                     if (contours is null || contours.Length == 0) return new List<Point[]>();
                     return contours.Where(c => c.Length >= 4 && (Cv2.ContourArea(c) >= minArea || Cv2.ArcLength(c, true) >= minArea / 2.0)).OrderByDescending(c => Cv2.ArcLength(c, true)).ToList();
                 }
@@ -1268,43 +1290,70 @@ public partial class InspectionService
                 double maxAllowedAreaDiff = def.MaxAreaDiffPercent > 0 ? def.MaxAreaDiffPercent : 5.0;
                 double maxAllowedShapeScore = def.MaxShapeMatchScore > 0 ? def.MaxShapeMatchScore : 0.10;
 
-                // 1. Robust ICP Alignment: find optimal translation (alignDx, alignDy) in range [-15, 15]
+                // Chuẩn bị ma trận khoảng cách chuẩn xác siêu tốc DistanceTransform
+                using var edgeTpl = new Mat(templCrop.Size(), MatType.CV_8UC1, Scalar.All(0));
+                Cv2.DrawContours(edgeTpl, tplContours, -1, Scalar.All(255), 1);
+                using var invTpl = new Mat();
+                Cv2.BitwiseNot(edgeTpl, invTpl);
+                using var distMapTpl = new Mat();
+                Cv2.DistanceTransform(invTpl, distMapTpl, DistanceTypes.L2, DistanceTransformMasks.Mask5);
+
+                using var edgeTest = new Mat(testCrop.Size(), MatType.CV_8UC1, Scalar.All(0));
+                Cv2.DrawContours(edgeTest, testContours, -1, Scalar.All(255), 1);
+                using var invTest = new Mat();
+                Cv2.BitwiseNot(edgeTest, invTest);
+                using var distMapTest = new Mat();
+                Cv2.DistanceTransform(invTest, distMapTest, DistanceTypes.L2, DistanceTransformMasks.Mask5);
+
+                // 1. Robust ICP Alignment: find optimal translation (alignDx, alignDy)
                 double alignDx = 0.0, alignDy = 0.0;
-                double minError = double.MaxValue;
                 double clipThreshSq = maxAllowedDist * maxAllowedDist * 2.0;
 
-                for (double tX = -15; tX <= 15; tX += 1.0)
+                double EvalErr(double tX, double tY)
                 {
-                    for (double tY = -15; tY <= 15; tY += 1.0)
+                    double sum = 0.0;
+                    int step = Math.Max(1, allTestLocalPoints.Count / 100);
+                    for (int k = 0; k < allTestLocalPoints.Count; k += step)
                     {
-                        double errSum = 0.0;
-                        int sampleCount = 0;
-                        int step = Math.Max(1, allTestLocalPoints.Count / 100);
-
-                        for (int k = 0; k < allTestLocalPoints.Count; k += step)
+                        var p = allTestLocalPoints[k];
+                        int px = (int)Math.Round(p.X + tX);
+                        int py = (int)Math.Round(p.Y + tY);
+                        float d;
+                        if (px >= 0 && px < distMapTpl.Cols && py >= 0 && py < distMapTpl.Rows)
                         {
-                            var p = allTestLocalPoints[k];
-                            double px = p.X + tX;
-                            double py = p.Y + tY;
-                            double dMinSq = double.MaxValue;
-
-                            foreach (var q in allTplLocalPoints)
-                            {
-                                double dX = px - q.X;
-                                double dY = py - q.Y;
-                                double dSq = dX * dX + dY * dY;
-                                if (dSq < dMinSq) dMinSq = dSq;
-                            }
-
-                            errSum += Math.Min(clipThreshSq, dMinSq);
-                            sampleCount++;
+                            d = distMapTpl.At<float>(py, px);
                         }
-
-                        if (sampleCount > 0 && errSum < minError)
+                        else
                         {
-                            minError = errSum;
-                            alignDx = tX;
-                            alignDy = tY;
+                            d = (float)maxAllowedDist * 2f;
+                        }
+                        sum += Math.Min(clipThreshSq, d * d);
+                    }
+                    return sum;
+                }
+
+                // Nếu ảnh trùng khớp hoàn toàn (cùng 1 ảnh) hoặc tại (0, 0) đã khớp cực chuẩn, giữ nguyên tuyệt đối (0, 0)
+                if (matchCorrVal < 0.999)
+                {
+                    double zeroErr = EvalErr(0, 0);
+                    double minError = zeroErr;
+
+                    if (zeroErr > 1e-4)
+                    {
+                        for (double tX = -3; tX <= 3; tX += 1.0)
+                        {
+                            for (double tY = -3; tY <= 3; tY += 1.0)
+                            {
+                                if (tX == 0 && tY == 0) continue;
+                                double regPenalty = 5.0 * (tX * tX + tY * tY);
+                                double err = EvalErr(tX, tY) + regPenalty;
+                                if (err < minError)
+                                {
+                                    minError = err;
+                                    alignDx = tX;
+                                    alignDy = tY;
+                                }
+                            }
                         }
                     }
                 }
@@ -1397,21 +1446,24 @@ public partial class InspectionService
                     for (int k = 0; k < localPts.Count; k++)
                     {
                         var pt = localPts[k];
-                        double minDist = double.MaxValue;
-                        foreach (var q in allTplLocalPoints)
+                        int px = (int)Math.Round(pt.X);
+                        int py = (int)Math.Round(pt.Y);
+                        double minDist;
+                        if (px >= 0 && px < distMapTpl.Cols && py >= 0 && py < distMapTpl.Rows)
                         {
-                            double dX = pt.X - q.X;
-                            double dY = pt.Y - q.Y;
-                            double d = Math.Sqrt(dX * dX + dY * dY);
-                            if (d < minDist) minDist = d;
+                            minDist = distMapTpl.At<float>(py, px);
                         }
+                        else
+                        {
+                            minDist = 999.0;
+                        }
+
                         ptDistances[k] = minDist;
                         if (minDist > maxDistPx) maxDistPx = minDist;
                         if (minDist <= maxAllowedDist) okCount++;
                     }
 
-                    double okRatio = (double)okCount / localPts.Count;
-                    if (okRatio >= 0.80)
+                    if (okCount == localPts.Count)
                     {
                         var seg = new ContourSegment(globalPts, IsClosed: true);
                         passSegmentsList.Add(seg);
@@ -1431,7 +1483,7 @@ public partial class InspectionService
                     }
                 }
 
-                // 3. Classify Template Contours (Missing strokes)
+                // 3. Classify Template Contours (Missing strokes - Tô đỏ các đoạn mẫu chuẩn bị thiếu trên phôi thực tế)
                 foreach (var cTpl in tplContours)
                 {
                     var localPts = cTpl.Select(p => new Point2d(p.X, p.Y)).ToList();
@@ -1441,21 +1493,25 @@ public partial class InspectionService
                     for (int k = 0; k < localPts.Count; k++)
                     {
                         var pt = localPts[k];
-                        double minDist = double.MaxValue;
-                        foreach (var pTest in allTestLocalPoints)
+                        int px = (int)Math.Round(pt.X - alignDx);
+                        int py = (int)Math.Round(pt.Y - alignDy);
+                        double minDist;
+                        if (px >= 0 && px < distMapTest.Cols && py >= 0 && py < distMapTest.Rows)
                         {
-                            double dX = pt.X - (pTest.X + alignDx);
-                            double dY = pt.Y - (pTest.Y + alignDy);
-                            double d = Math.Sqrt(dX * dX + dY * dY);
-                            if (d < minDist) minDist = d;
+                            minDist = distMapTest.At<float>(py, px);
                         }
+                        else
+                        {
+                            minDist = 999.0;
+                        }
+
                         ptDistances[k] = minDist;
                         if (minDist > maxDistPx) maxDistPx = minDist;
                         if (minDist <= maxAllowedDist) okCount++;
                     }
 
-                    double okRatio = (double)okCount / localPts.Count;
-                    if (okRatio < 0.85)
+                    // Bất kỳ đoạn nào của mẫu chuẩn có khoảng cách > maxAllowedDist đều được trích xuất và TÔ ĐỎ vào failSegmentsList
+                    if (okCount < localPts.Count)
                     {
                         ClassifyAndAddSubSegments(
                             localPts,
@@ -2084,12 +2140,12 @@ public partial class InspectionService
                     .ToArray();
 
                 var contourCompareTasks = (config.ContourCompares ?? new List<ContourCompareDefinition>())
-                    .Where(cc => cc is not null && !string.IsNullOrWhiteSpace(cc.Name) && cc.InspectRoi.Width > 0 && cc.InspectRoi.Height > 0)
+                    .Where(cc => cc is not null && !string.IsNullOrWhiteSpace(cc.Name) && ((cc.InspectRoi.Width > 0 && cc.InspectRoi.Height > 0) || (cc.TemplateRoi.Width > 0 && cc.TemplateRoi.Height > 0)))
                     .Select(cc => RunHeavyTool($"ContourCompare:{cc.Name}", () =>
                     {
                         var __sw = System.Diagnostics.Stopwatch.StartNew();
-                        var (_, ccSettings) = ResolveToolPreprocess("ContourCompare", cc.Name);
-                        var res = RunContourCompare(image, originTeach, originFound, angleDeg, cc, _preprocessor, ccSettings);
+                        var (matForCc, ccSettings) = ResolveToolPreprocess("ContourCompare", cc.Name);
+                        var res = RunContourCompare(matForCc, originTeach, originFound, angleDeg, cc, _preprocessor, ccSettings);
                         __sw.Stop(); result.Timings.NodeTimings[cc.Name] = (int)__sw.ElapsedMilliseconds; return res;
                     }))
                     .ToArray();
@@ -3293,6 +3349,8 @@ public partial class InspectionService
             && result.Diameters.All(x => x.Pass)
             && result.BlobDetections.All(x => x.Pass)
             && result.SurfaceCompares.All(x => x.Pass)
+            && result.ContourCompares.All(x => x.Pass)
+            && result.ColorDiffs.All(x => x.Pass)
             && result.CodeDetections.All(x => x.Pass)
             && result.Ocrs.All(x => x.Pass)
             && result.Conditions.All(x => x.Pass)

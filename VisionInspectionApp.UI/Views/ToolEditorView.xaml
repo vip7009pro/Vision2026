@@ -2936,6 +2936,25 @@
                                     <Button Content="Set Template ROI" Command="{Binding ContourCompare_SetTemplateRoiCommand}" Width="100" />
                                 </StackPanel>
 
+                                <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" Padding="4" Margin="0,0,0,4" Background="{DynamicResource PanelAltBackgroundBrush}">
+                                    <Grid Height="120">
+                                        <Image Source="{Binding ContourCompare_TemplatePreviewImage}" Stretch="Uniform" RenderOptions.BitmapScalingMode="NearestNeighbor" />
+                                        <TextBlock Text="Chưa lưu template (Vẽ Template ROI rồi bấm Set Template)" VerticalAlignment="Center" HorizontalAlignment="Center" Foreground="{DynamicResource TextMutedBrush}" FontSize="11" TextWrapping="Wrap" TextAlignment="Center">
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock">
+                                                    <Setter Property="Visibility" Value="Collapsed" />
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding ContourCompare_TemplatePreviewImage}" Value="{x:Null}">
+                                                            <Setter Property="Visibility" Value="Visible" />
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
+                                        </TextBlock>
+                                    </Grid>
+                                </Border>
+                                <TextBlock Text="{Binding ContourCompare_TemplateInfoText}" FontSize="10" Foreground="{DynamicResource TextMutedBrush}" Margin="0,0,0,6" HorizontalAlignment="Center" TextTrimming="CharacterEllipsis" />
+
                                 <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
                                     <Grid>
                                         <Grid.ColumnDefinitions>
@@ -2961,7 +2980,17 @@
                                             <TextBlock Text="Canny Thr 1" VerticalAlignment="Center" Margin="4,2" FontSize="11" Foreground="{DynamicResource TextBrush}"/>
                                         </Border>
                                         <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
-                                            <TextBox Text="{Binding ContourCompare_CannyThreshold1, UpdateSourceTrigger=LostFocus}" Margin="2,1" FontSize="11" />
+                                            <Grid Margin="2,1">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="42" />
+                                                </Grid.ColumnDefinitions>
+                                                <Slider Minimum="1" Maximum="255" SmallChange="1" LargeChange="5" IsSnapToTickEnabled="True" TickFrequency="1"
+                                                        Value="{Binding ContourCompare_CannyThreshold1, UpdateSourceTrigger=PropertyChanged}"
+                                                        VerticalAlignment="Center" Margin="2,0,4,0" />
+                                                <TextBox Grid.Column="1" Text="{Binding ContourCompare_CannyThreshold1, UpdateSourceTrigger=LostFocus, StringFormat={}{0:0}}"
+                                                         FontSize="11" TextAlignment="Right" VerticalAlignment="Center" />
+                                            </Grid>
                                         </Border>
                                     </Grid>
                                 </Border>
@@ -2976,7 +3005,17 @@
                                             <TextBlock Text="Canny Thr 2" VerticalAlignment="Center" Margin="4,2" FontSize="11" Foreground="{DynamicResource TextBrush}"/>
                                         </Border>
                                         <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
-                                            <TextBox Text="{Binding ContourCompare_CannyThreshold2, UpdateSourceTrigger=LostFocus}" Margin="2,1" FontSize="11" />
+                                            <Grid Margin="2,1">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="42" />
+                                                </Grid.ColumnDefinitions>
+                                                <Slider Minimum="1" Maximum="255" SmallChange="1" LargeChange="5" IsSnapToTickEnabled="True" TickFrequency="1"
+                                                        Value="{Binding ContourCompare_CannyThreshold2, UpdateSourceTrigger=PropertyChanged}"
+                                                        VerticalAlignment="Center" Margin="2,0,4,0" />
+                                                <TextBox Grid.Column="1" Text="{Binding ContourCompare_CannyThreshold2, UpdateSourceTrigger=LostFocus, StringFormat={}{0:0}}"
+                                                         FontSize="11" TextAlignment="Right" VerticalAlignment="Center" />
+                                            </Grid>
                                         </Border>
                                     </Grid>
                                 </Border>
@@ -3048,6 +3087,28 @@
                                 <StackPanel Orientation="Horizontal" Margin="0,2,0,0">
                                     <TextBlock Text="Max Dist:" Foreground="{DynamicResource TextMutedBrush}" FontSize="11" Width="80" />
                                     <TextBlock Text="{Binding ContourCompare_LastRunMaxDist, TargetNullValue='-', StringFormat={}{0:0.##} px}" Width="80" FontSize="11" />
+                                </StackPanel>
+                                <StackPanel Orientation="Horizontal" Margin="0,2,0,0">
+                                    <TextBlock Text="Area Diff:" Foreground="{DynamicResource TextMutedBrush}" FontSize="11" Width="80" />
+                                    <TextBlock Text="{Binding ContourCompare_LastRunAreaDiff, TargetNullValue='-', StringFormat={}{0:0.##} %}" Width="80" FontSize="11" />
+                                </StackPanel>
+                                <StackPanel Orientation="Horizontal" Margin="0,2,0,0">
+                                    <TextBlock Text="Result:" Foreground="{DynamicResource TextMutedBrush}" FontSize="11" Width="80" />
+                                    <TextBlock Text="{Binding ContourCompare_LastRunStatus, TargetNullValue='-'}" FontWeight="Bold" FontSize="11" Width="80">
+                                        <TextBlock.Style>
+                                            <Style TargetType="TextBlock">
+                                                <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding ContourCompare_LastRunStatus}" Value="PASS (OK)">
+                                                        <Setter Property="Foreground" Value="LimeGreen" />
+                                                    </DataTrigger>
+                                                    <DataTrigger Binding="{Binding ContourCompare_LastRunStatus}" Value="NG (LỖI)">
+                                                        <Setter Property="Foreground" Value="#FF5252" />
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </TextBlock.Style>
+                                    </TextBlock>
                                 </StackPanel>
                             </StackPanel>
 

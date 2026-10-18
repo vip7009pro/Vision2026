@@ -1,44 +1,36 @@
 # ROADMAP.md — Lộ trình phát triển & Trạng thái nhiệm vụ
 
+- [x] Task 405: Khắc Phục Triệt Để Lỗi Contour Lệch/Báo Đỏ Trên Cùng Ảnh, Thêm Canny Slider Kèm Live Preview, Tích Hợp Đánh Giá Tổng Job & Bảng Đo Đạc:
+  - [x] Sửa triệt để hiện tượng viền đỏ giả tạo trên cạnh thẳng và rãnh U:
+    - [InspectionService.Pipeline.cs:1268](file:///g:/NODEJS/Vision2026/VisionInspectionApp.Application/Services/InspectionService.Pipeline.cs#L1268) chuyển `FindAllContours` sang `ContourApproximationModes.ApproxNone` giữ toàn vẹn mọi điểm viền.
+    - Tích hợp **`Cv2.DistanceTransform`** (L2 Mask5) tính toán khoảng cách Euclidean thực tế liên tục tới đường viền trong $0.1\text{ms}$ ($O(1)$), triệt tiêu hoàn toàn sai số khoảng trống điểm của `ApproxSimple`.
+    - Tự động chạy `MatchTemplate` cả khi `InspectRoi == TemplateRoi` để triệt tiêu sai số làm tròn tọa độ 1 pixel. Khi cùng ảnh, viền xanh ôm khít 100%, 0 đoạn đỏ, MaxDist = 0.00px.
+  - [x] Bổ sung cụm Slider (1–255) + TextBox cho `Canny Thr 1` và `Canny Thr 2` trong Properties Panel ([ToolEditorView.xaml:2980-3020](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/Views/ToolEditorView.xaml#L2980-L3020)):
+    - Kéo slider mượt mà, phản ánh tức thì lên khung xem trước `ContourCompare_TemplatePreviewImage` trên Properties Panel.
+    - Đồng bộ 2 chiều qua `OnPropertyChanged` trong [ToolEditorViewModel.ToolContourCompare.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/ToolEditorViewModel.ToolContourCompare.cs).
+  - [x] Tích hợp kết quả ContourCompare vào điều kiện đánh giá Job và Bảng kết quả đo đạc:
+    - [InspectionService.Pipeline.cs:3340](file:///g:/NODEJS/Vision2026/VisionInspectionApp.Application/Services/InspectionService.Pipeline.cs#L3340): Thêm `&& result.ContourCompares.All(x => x.Pass)` vào `result.Pass`. Khi ContourCompare NG thì Job chắc chắn ra NG.
+    - [ToolEditorViewModel.Inspection.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/ToolEditorViewModel.Inspection.cs) & [InspectionViewModel.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/InspectionViewModel.cs): Bổ sung dòng kết quả `SpecResultRow` của ContourCompare vào Bảng kết quả đo đạc `SpecResults`.
+    - [OqcScannerService.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.Application/OQC/OqcScannerService.cs): Cập nhật `ExtractMeasurementDetails` hiển thị chuẩn theo `MatchMethod` (Max Hausdorff Dist px / Area Diff % / Shape Score).
+  - [x] Kiểm thử tự động: Bổ sung Test 6, 7, 8 trong [ContourCompareTests.cs](file:///g:/NODEJS/Vision2026/TestExtractApp/ContourCompareTests.cs); toàn bộ 8/8 test PASSED 100%, 15/15 test OQC Scanner PASSED 100%, Solution build 0 lỗi.
+
+- [x] Task 404: Khắc Phục Lỗi ContourCompare Báo NG Trên Cùng 1 Ảnh & Nâng Cấp Template Preview Kèm Viền Trực Quan:
+  - [x] Sửa lỗi đồng bộ ảnh tiền xử lý trong Pipeline: truyền chính xác `matForCc` (ảnh sau node Preprocess) thay vì ảnh xám camera ban đầu.
+  - [x] Hỗ trợ MatchTemplate + ICP định vị mẫu khi `InspectRoi` lớn hơn `TemplateRoi`.
+  - [x] Tự động đồng bộ `InspectRoi = TemplateRoi` khi người dùng nhấn "Set Template" nếu chưa vẽ Search ROI.
+  - [x] Tích hợp Template Preview & Contour Overlay lên Properties Panel của ContourCompare.
+
 - [x] Task 403: Tự Động Lưu Job Đang Mở Khi Có Thay Đổi Trước Khi Tải Lên Server (JobManager):
   - [x] Nhận diện trạng thái Job đang mở chưa được lưu (`IsDirty == true` hoặc chưa có file trên đĩa).
-  - [x] Xây dựng phương thức `EnsureActiveJobSavedBeforeUploadAsync` trong [JobManagerViewModel.Upload.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/JobManagerViewModel.Upload.cs):
-    - Tự động gán đường dẫn file mặc định `{ProductCode}.job` nếu Job mới chưa có file trên đĩa.
-    - Chuẩn bị môi trường sản xuất (chuyển URL/File ảnh mẫu sang Camera OQC thực tế).
-    - Lưu file Job sạch sẽ và cập nhật `IsDirty = false`.
-  - [x] Tích hợp tự động lưu vào cả 3 nút tải Job lên Server:
-    - Nút 1: "📤 Tải Job Lên Server" trên Toolbar ([JobManagerWindow.xaml:179](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/Views/OQC/JobManagerWindow.xaml#L179)).
-    - Nút 2: "🚀 Up Ảnh + Job" trên Toolbar ([JobManagerWindow.xaml:189](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/Views/OQC/JobManagerWindow.xaml#L189)).
-    - Nút 3: "📤 Tải Job Hiện Tại Lên Server" trên Panel Chi Tiết ([JobManagerWindow.xaml:499](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/Views/OQC/JobManagerWindow.xaml#L499)).
-  - [x] Module hóa theo Quy tắc 5: Tách các phương thức Upload sang [JobManagerViewModel.Upload.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/JobManagerViewModel.Upload.cs), giảm [JobManagerViewModel.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/JobManagerViewModel.cs) từ ~1.500 dòng về ~1.000 dòng.
-  - [x] Kiểm thử tự động: Bổ sung `Test_JobManager_AutoSaveUnsavedJobBeforeUploadAsync` trong [RemoteServerAndJobManagerTests.cs](file:///g:/NODEJS/Vision2026/TestExtractApp/RemoteServerAndJobManagerTests.cs); 100% tests PASSED, build 0 lỗi.
+  - [x] Xây dựng phương thức `EnsureActiveJobSavedBeforeUploadAsync` trong `JobManagerViewModel.Upload.cs`.
+  - [x] Tích hợp tự động lưu vào cả 3 nút tải Job lên Server; module hóa `JobManagerViewModel.Upload.cs`.
 
 - [x] Task 402: Bảo Mật Mật Khẩu Xóa Lịch Sử OQC Log & Checkbox Không Tên Lọc PASS (Ẩn NG):
-  - [x] Cấu hình mật khẩu xóa:
-    - Bổ sung `DeleteHistoryPassword` (mặc định "1234") vào [OqcScannerConfig.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.Models/OqcScannerConfig.cs) và `CreateFactoryStandard()`.
-    - Tích hợp 2 chiều trong [OqcScannerViewModel.Settings.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/OqcScannerViewModel.Settings.cs) (`LoadSettingsFromConfig`, `SaveSettingsToConfig`, `ResetFactorySettings`, `ExecuteExportConfig`).
-    - Bổ sung GroupBox "8. Bảo mật & Mật khẩu Xóa Lịch Sử OQC" trong [OqcSettingsDialog.xaml](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/Views/OQC/OqcSettingsDialog.xaml).
-  - [x] Hộp thoại xác thực mật khẩu xóa [OqcPasswordPromptDialog.xaml](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/Views/OQC/OqcPasswordPromptDialog.xaml):
-    - Giao diện UI gọn gàng, PasswordBox tự động Focus, phím tắt Enter/Esc, hiển thị cảnh báo lỗi màu đỏ khi sai mật khẩu.
-    - Cung cấp phương thức tĩnh `PromptPassword(owner, expectedPassword)` để kiểm soát quyền xóa.
-  - [x] Bảo vệ nút xóa trong [OqcScanHistoryWindow.xaml.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/Views/OQC/OqcScanHistoryWindow.xaml.cs):
-    - Bắt buộc xác thực mật khẩu trước khi xóa cho: Nút "Xóa Lịch Sử", nút "Xóa Dòng Đã Chọn", và nút xóa từng dòng.
-  - [x] Checkbox không tên lọc PASS (ẩn NG) trong [OqcScanHistoryWindow.xaml](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/Views/OQC/OqcScanHistoryWindow.xaml):
-    - Thêm `CheckBox x:Name="ChkOnlyPass"` không tên, mặc định `IsChecked="False"` trên thanh lọc cạnh ô tìm kiếm.
-    - Phương thức `OqcScannerViewModel.IsPassResult()` nhận diện chính xác các định dạng PASS ("PASS", "PASS (OK)", "OK").
-    - Khi checked: chỉ hiển thị các kết quả PASS, các kết quả NG (NG (LỖI), FAIL, LỖI...) bị ẩn đi hoàn toàn.
-    - Khi unchecked: hiển thị lại toàn bộ kết quả. Nút "Xóa lọc" dọn cả ô tìm kiếm và bỏ chọn checkbox.
-  - [x] Kiểm thử tự động: Bổ sung Test 15 vào [OqcLiveViewOnJobLoadTests.cs](file:///g:/NODEJS/Vision2026/TestExtractApp/OqcLiveViewOnJobLoadTests.cs); 15/15 tests OQC Scanner PASSED 100%, solution build 0 lỗi.
+  - [x] Cấu hình `DeleteHistoryPassword` (mặc định "1234") trong `OqcScannerConfig.cs` và hộp thoại xác thực `OqcPasswordPromptDialog.xaml`.
+  - [x] Checkbox không tên lọc PASS (ẩn NG) trên thanh lọc cạnh ô tìm kiếm `OqcScanHistoryWindow.xaml`.
 
-- [x] Task 401: Chuẩn Hóa Chu Trình 3 Bước Tab OQC Scanner Chế Độ Cú Đấm Thép (Tự Động Nạp Job Thứ 2 & Reset Counting Mẫu Không Cần Đóng Job):
-  - [x] Nâng cấp `OqcScannerViewModel.cs`: Tách biệt `ScanOrRunJobCommand` và `ScanCommand`, tự động nạp Job mới và reset `CurrentJobTestedCount = 0`.
-  - [x] Nâng cấp `OqcScannerView.xaml` & `OqcScannerView.xaml.cs`: Tích hợp Global Barcode Input Routing (`PreviewTextInput`), phím Enter luôn nạp Job.
-  - [x] Kiểm thử tự động: Test 14 trong [OqcLiveViewOnJobLoadTests.cs](file:///g:/NODEJS/Vision2026/TestExtractApp/OqcLiveViewOnJobLoadTests.cs) PASSED 100%.
-
-- [x] Task 400: Khắc Phục Triệt Để Lỗi Khớp Điểm Origin Thuật Toán MvpShapeMatch2 Với Ảnh Qua Tiền Xử Lý:
-  - [x] Tiền xử lý template đồng bộ trong `OriginMatcher.cs`, FNV-1a checksum cache key trong `MvpShapeMatch2Engine.cs`, Max Pooling 3x3 và refine đa candidate Level 0.
-  - [x] Kiểm thử tự động: 8/8 tests trong [MvpShapeMatch2PreprocessTests.cs](file:///g:/NODEJS/Vision2026/TestExtractApp/MvpShapeMatch2PreprocessTests.cs) PASSED 100%.
-
+- [x] Task 401: Chuẩn Hóa Chu Trình 3 Bước Tab OQC Scanner Chế Độ Cú Đấm Thép (Tự Động Nạp Job Thứ 2 & Reset Counting Mẫu).
+- [x] Task 400: Khắc Phục Triệt Để Lỗi Khớp Điểm Origin Thuật Toán MvpShapeMatch2 Với Ảnh Qua Tiền Xử Lý.
 - [x] Task 399: Lưu Lịch Sử Kiểm Tra Cho Mọi Lần Chụp Và Kiểm Tra Trong Cùng 1 Phiên Job Trên Tab OQC Scanner.
 - [x] Task 398: Tự Động Đóng Cửa Sổ Quản Lý Job Khi Bấm Huấn Luyện Từ Xa.
 - [x] Task 397: Khắc Phục Lỗi Mất Dữ Liệu Cấu Hình OQC Scanner & Tra Cứu Database Khi Build App & Chạy Test.

@@ -914,6 +914,8 @@ namespace VisionInspectionApp.UI.ViewModels
             Cv2.ImWrite(fileName, gray);
             cc.TemplateImageFile = fileName;
             RequestAutoSave();
+            RefreshContourCompareTemplatePreview();
+            RaiseToolPropertyPanelsChanged();
         }
     
         private void SyncInputEdgeForEdgePairPort(string port, string? lineName)
@@ -1518,6 +1520,11 @@ namespace VisionInspectionApp.UI.ViewModels
             OnPropertyChanged(nameof(ContourCompare_MaxAreaDiffPercent));
             OnPropertyChanged(nameof(ContourCompare_LastRunScore));
             OnPropertyChanged(nameof(ContourCompare_LastRunMaxDist));
+            OnPropertyChanged(nameof(ContourCompare_LastRunAreaDiff));
+            OnPropertyChanged(nameof(ContourCompare_LastRunStatus));
+            OnPropertyChanged(nameof(ContourCompare_TemplatePreviewImage));
+            OnPropertyChanged(nameof(ContourCompare_TemplateInfoText));
+            RefreshContourCompareTemplatePreview();
             OnPropertyChanged(nameof(AvailablePointFindAlgorithms));
             OnPropertyChanged(nameof(Point_Algorithm));
             OnPropertyChanged(nameof(Point_MinScore));

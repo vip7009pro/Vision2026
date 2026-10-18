@@ -802,6 +802,61 @@ namespace VisionInspectionApp.UI.ViewModels
                     }
                 }
             }
+
+            if (res.ContourCompares != null)
+            {
+                foreach (var cc in res.ContourCompares)
+                {
+                    var def = _config?.ContourCompares?.FirstOrDefault(x => string.Equals(x.Name, cc.Name, StringComparison.OrdinalIgnoreCase));
+                    var method = def?.MatchMethod ?? ContourMatchMethod.HuMoments;
+
+                    if (method == ContourMatchMethod.HausdorffDistance)
+                    {
+                        var tol = def?.MaxHausdorffDistPx ?? 4.0;
+                        SpecResults.Add(new SpecResultRow(
+                            "ContourCompare",
+                            $"{cc.Name}.MaxDist",
+                            "-",
+                            "-",
+                            cc.MaxDistancePx,
+                            0.0,
+                            tol,
+                            0.0,
+                            cc.Pass,
+                            "px"));
+                    }
+                    else if (method == ContourMatchMethod.AreaPerimeterDiff)
+                    {
+                        var tol = def?.MaxAreaDiffPercent ?? 5.0;
+                        SpecResults.Add(new SpecResultRow(
+                            "ContourCompare",
+                            $"{cc.Name}.AreaDiff",
+                            "-",
+                            "-",
+                            cc.AreaDiffPercent,
+                            0.0,
+                            tol,
+                            0.0,
+                            cc.Pass,
+                            "%"));
+                    }
+                    else
+                    {
+                        var tol = def?.MaxShapeMatchScore ?? 0.10;
+                        SpecResults.Add(new SpecResultRow(
+                            "ContourCompare",
+                            $"{cc.Name}.Score",
+                            "-",
+                            "-",
+                            cc.MatchScore,
+                            0.0,
+                            tol,
+                            0.0,
+                            cc.Pass,
+                            "score"));
+                    }
+                }
+            }
         }
 
         private void RefreshCodeDetectionResults(InspectionResult? res)

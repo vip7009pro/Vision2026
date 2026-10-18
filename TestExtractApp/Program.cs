@@ -18,6 +18,12 @@ class Program
             return;
         }
 
+        if (args.Length > 0 && args[0].Equals("contour", StringComparison.OrdinalIgnoreCase))
+        {
+            ContourCompareTests.RunAllTests();
+            return;
+        }
+
         if (args.Length > 0 && (args[0].Equals("config", StringComparison.OrdinalIgnoreCase) || args[0].Equals("config-persist", StringComparison.OrdinalIgnoreCase)))
         {
             ReleaseConfigPersistenceTests.RunAllTests();
@@ -125,5 +131,6 @@ class Program
         ToolCalibFactorTests.RunAllTests();
         ReleaseConfigPersistenceTests.RunAllTests();
         MvpShapeMatch2PreprocessTests.RunAllTests();
+        ContourCompareTests.RunAllTests();
     }
 }
