@@ -81,6 +81,30 @@ namespace VisionInspectionApp.UI.ViewModels
             return _config.EdgePairDetections.FirstOrDefault(x => string.Equals(x.Name, SelectedNode.RefName, StringComparison.OrdinalIgnoreCase));
         }
     
+        public void SyncEpdStripsFromRoi(EdgePairDetectDefinition? d)
+        {
+            if (d is null || d.SearchRoi.Width <= 0 || d.SearchRoi.Height <= 0)
+                return;
+
+            var stripCount = Math.Clamp(d.StripCount, 1, 200);
+            var scanLength = d.Orientation == CaliperOrientation.Horizontal ? d.SearchRoi.Width : d.SearchRoi.Height;
+            var orthogonalSize = d.Orientation == CaliperOrientation.Horizontal ? d.SearchRoi.Height : d.SearchRoi.Width;
+
+            var newLength = Math.Max(3, scanLength);
+            var newWidth = Math.Max(1, (int)Math.Round((double)orthogonalSize / stripCount));
+
+            if (d.StripLength != newLength)
+            {
+                d.StripLength = newLength;
+                OnPropertyChanged(nameof(Epd_StripLength));
+            }
+            if (d.StripWidth != newWidth)
+            {
+                d.StripWidth = newWidth;
+                OnPropertyChanged(nameof(Epd_StripWidth));
+            }
+        }
+
         public CaliperOrientation Epd_Orientation
         {
             get => SelectedEdgePairDetectDef()?.Orientation ?? CaliperOrientation.Vertical;
@@ -92,12 +116,28 @@ namespace VisionInspectionApp.UI.ViewModels
                 if (d.Orientation == value)
                     return;
                 d.Orientation = value;
+
+                // Hoán đổi kích thước SearchRoi theo hướng quét mới để duy trì hình học nhất quán
+                if (d.SearchRoi.Width > 0 && d.SearchRoi.Height > 0)
+                {
+                    var cx = d.SearchRoi.X + d.SearchRoi.Width / 2.0;
+                    var cy = d.SearchRoi.Y + d.SearchRoi.Height / 2.0;
+                    var oldW = d.SearchRoi.Width;
+                    var oldH = d.SearchRoi.Height;
+                    d.SearchRoi.Width = oldH;
+                    d.SearchRoi.Height = oldW;
+                    d.SearchRoi.X = (int)Math.Round(cx - d.SearchRoi.Width / 2.0);
+                    d.SearchRoi.Y = (int)Math.Round(cy - d.SearchRoi.Height / 2.0);
+                }
+
+                SyncEpdStripsFromRoi(d);
                 RunFlow();
                 RequestAutoSave();
                 OnPropertyChanged();
+                RefreshPreviews();
             }
         }
-    
+
         public EdgePolarity Epd_Polarity
         {
             get => SelectedEdgePairDetectDef()?.Polarity ?? EdgePolarity.Any;
@@ -114,7 +154,7 @@ namespace VisionInspectionApp.UI.ViewModels
                 OnPropertyChanged();
             }
         }
-    
+
         public int Epd_StripCount
         {
             get => SelectedEdgePairDetectDef()?.StripCount ?? 0;
@@ -127,6 +167,7 @@ namespace VisionInspectionApp.UI.ViewModels
                 if (d.StripCount == v)
                     return;
                 d.StripCount = v;
+                SyncEpdStripsFromRoi(d);
                 RunFlow();
                 RequestAutoSave();
                 OnPropertyChanged();
@@ -202,6 +243,28 @@ namespace VisionInspectionApp.UI.ViewModels
                 RunFlow();
                 RequestAutoSave();
                 OnPropertyChanged();
+            }
+        }
+
+        /// <summary>
+        /// Phím tắt Ctrl + R: Chuyển qua lại Vertical và Horizontal cho tool EdgePairDetect và tool Caliper.
+        /// </summary>
+        public void ToggleToolOrientation()
+        {
+            if (SelectedNode is null)
+                return;
+
+            if (string.Equals(SelectedNode.Type, "EdgePairDetect", StringComparison.OrdinalIgnoreCase))
+            {
+                Epd_Orientation = Epd_Orientation == CaliperOrientation.Vertical
+                    ? CaliperOrientation.Horizontal
+                    : CaliperOrientation.Vertical;
+            }
+            else if (string.Equals(SelectedNode.Type, "Caliper", StringComparison.OrdinalIgnoreCase))
+            {
+                Caliper_Orientation = Caliper_Orientation == CaliperOrientation.Vertical
+                    ? CaliperOrientation.Horizontal
+                    : CaliperOrientation.Vertical;
             }
         }
     }

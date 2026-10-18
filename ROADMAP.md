@@ -1,5 +1,37 @@
 # ROADMAP.md — Lộ trình phát triển & Trạng thái nhiệm vụ
 
+- [x] Task 407: Bổ Sung Phím Tắt Ctrl + R (Đảo Hướng Quét Caliper & EdgePairDetect) và Ctrl + F4 (Đóng Job Đang Mở):
+  - [x] Phím tắt `Ctrl + R` cho Tool `EdgePairDetect` và `Caliper`:
+    - Chuyển đổi luân phiên giữa `Vertical` $\leftrightarrow$ `Horizontal` khi đang chọn node tương ứng.
+    - Tự động hoán đổi `Width` và `Height` của ROI quanh tâm (`SearchRoi`).
+    - Tự động tính toán lại `StripLength` và `StripWidth` phân bổ theo `StripCount` và hướng quét mới.
+    - Cập nhật overlay thời gian thực trên Canvas ảnh và đồng bộ các trường nhập liệu trên Properties Panel.
+    - Tích hợp InputBinding và bộ bắt phím `PreviewKeyDown` chống nuốt phím khi không focus vào ô nhập văn bản.
+    - Bổ sung ToolTip trực quan `[Ctrl+R]` trên nhãn và ComboBox Orientation.
+  - [x] Phím tắt `Ctrl + F4` đóng Job đang mở (`CloseJob`):
+    - Đăng ký phím tắt cấp Window và UserControl cho `CloseJobCommand`.
+    - Dọn dẹp an toàn các node, edge, preview overlay và reset đường dẫn file Job.
+    - Bổ sung `InputGestureText="Ctrl+F4"` trên MenuItem và ToolTip nút Đóng Job trên toolbar.
+  - [x] Kiểm thử tự động:
+    - Bổ sung `Test_12_ToggleToolOrientation_And_CloseJobCommand` trong [PerformanceOptimizationTests.cs](file:///g:/NODEJS/Vision2026/TestExtractApp/PerformanceOptimizationTests.cs).
+    - Toàn bộ bài kiểm thử PASSED 100%, solution build 0 lỗi.
+
+- [x] Task 406: Tự Động Co Giãn Strip Length & Strip Width Node EdgePairDetection Theo Kích Thước ROI:
+  - [x] Tự động đồng bộ `StripLength` theo chiều dài cạnh quét của SearchRoi:
+    - Nếu Vertical: `StripLength = Math.Max(3, SearchRoi.Height)`.
+    - Nếu Horizontal: `StripLength = Math.Max(3, SearchRoi.Width)`.
+  - [x] Tự động đồng bộ `StripWidth` theo kích thước cạnh ngang chia cho `StripCount`:
+    - Nếu Vertical: `StripWidth = Math.Max(1, (int)Math.Round((double)SearchRoi.Width / StripCount))`.
+    - Nếu Horizontal: `StripWidth = Math.Max(1, (int)Math.Round((double)SearchRoi.Height / StripCount))`.
+  - [x] Tích hợp `SyncEpdStripsFromRoi` vào các luồng thao tác trong Tool Editor:
+    - Kéo / co giãn ROI trên canvas ảnh (`OnRoiEditedCore`, `ApplyRoiForLabel`, Undo / Redo).
+    - Thay đổi hướng quét `Epd_Orientation` (hoán đổi kích thước ROI quanh tâm và đồng bộ lại strips).
+    - Thay đổi số lượng vạch `Epd_StripCount` (tính lại `StripWidth`).
+    - Khởi tạo node `EdgePairDetect` mới theo `DefaultRoi()`.
+    - Dựng overlay `AddEpdSearchStripsOverlay` (sửa lỗi thiếu vạch strip ở chế độ Horizontal).
+  - [x] Bổ sung ToolTip giải thích tự động co giãn theo ROI cho `Strip Width` và `Strip Length` trên Properties Panel.
+  - [x] Thêm bộ kiểm thử tự động `Test_11_EdgePairDetect_RoiAutoScaling` trong [PerformanceOptimizationTests.cs](file:///g:/NODEJS/Vision2026/TestExtractApp/PerformanceOptimizationTests.cs); toàn bộ kiểm thử PASSED 100%, solution build 0 lỗi.
+
 - [x] Task 405: Khắc Phục Triệt Để Lỗi Contour Lệch/Báo Đỏ Trên Cùng Ảnh, Thêm Canny Slider Kèm Live Preview, Tích Hợp Đánh Giá Tổng Job & Bảng Đo Đạc:
   - [x] Sửa triệt để hiện tượng viền đỏ giả tạo trên cạnh thẳng và rãnh U:
     - [InspectionService.Pipeline.cs:1268](file:///g:/NODEJS/Vision2026/VisionInspectionApp.Application/Services/InspectionService.Pipeline.cs#L1268) chuyển `FindAllContours` sang `ContourApproximationModes.ApproxNone` giữ toàn vẹn mọi điểm viền.
@@ -14,21 +46,9 @@
     - [OqcScannerService.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.Application/OQC/OqcScannerService.cs): Cập nhật `ExtractMeasurementDetails` hiển thị chuẩn theo `MatchMethod` (Max Hausdorff Dist px / Area Diff % / Shape Score).
   - [x] Kiểm thử tự động: Bổ sung Test 6, 7, 8 trong [ContourCompareTests.cs](file:///g:/NODEJS/Vision2026/TestExtractApp/ContourCompareTests.cs); toàn bộ 8/8 test PASSED 100%, 15/15 test OQC Scanner PASSED 100%, Solution build 0 lỗi.
 
-- [x] Task 404: Khắc Phục Lỗi ContourCompare Báo NG Trên Cùng 1 Ảnh & Nâng Cấp Template Preview Kèm Viền Trực Quan:
-  - [x] Sửa lỗi đồng bộ ảnh tiền xử lý trong Pipeline: truyền chính xác `matForCc` (ảnh sau node Preprocess) thay vì ảnh xám camera ban đầu.
-  - [x] Hỗ trợ MatchTemplate + ICP định vị mẫu khi `InspectRoi` lớn hơn `TemplateRoi`.
-  - [x] Tự động đồng bộ `InspectRoi = TemplateRoi` khi người dùng nhấn "Set Template" nếu chưa vẽ Search ROI.
-  - [x] Tích hợp Template Preview & Contour Overlay lên Properties Panel của ContourCompare.
-
-- [x] Task 403: Tự Động Lưu Job Đang Mở Khi Có Thay Đổi Trước Khi Tải Lên Server (JobManager):
-  - [x] Nhận diện trạng thái Job đang mở chưa được lưu (`IsDirty == true` hoặc chưa có file trên đĩa).
-  - [x] Xây dựng phương thức `EnsureActiveJobSavedBeforeUploadAsync` trong `JobManagerViewModel.Upload.cs`.
-  - [x] Tích hợp tự động lưu vào cả 3 nút tải Job lên Server; module hóa `JobManagerViewModel.Upload.cs`.
-
-- [x] Task 402: Bảo Mật Mật Khẩu Xóa Lịch Sử OQC Log & Checkbox Không Tên Lọc PASS (Ẩn NG):
-  - [x] Cấu hình `DeleteHistoryPassword` (mặc định "1234") trong `OqcScannerConfig.cs` và hộp thoại xác thực `OqcPasswordPromptDialog.xaml`.
-  - [x] Checkbox không tên lọc PASS (ẩn NG) trên thanh lọc cạnh ô tìm kiếm `OqcScanHistoryWindow.xaml`.
-
+- [x] Task 404: Khắc Phục Lỗi ContourCompare Báo NG Trên Cùng 1 Ảnh & Nâng Cấp Template Preview Kèm Viền Trực Quan.
+- [x] Task 403: Tự Động Lưu Job Đang Mở Khi Có Thay Đổi Trước Khi Tải Lên Server (JobManager).
+- [x] Task 402: Bảo Mật Mật Khẩu Xóa Lịch Sử OQC Log & Checkbox Không Tên Lọc PASS (Ẩn NG).
 - [x] Task 401: Chuẩn Hóa Chu Trình 3 Bước Tab OQC Scanner Chế Độ Cú Đấm Thép (Tự Động Nạp Job Thứ 2 & Reset Counting Mẫu).
 - [x] Task 400: Khắc Phục Triệt Để Lỗi Khớp Điểm Origin Thuật Toán MvpShapeMatch2 Với Ảnh Qua Tiền Xử Lý.
 - [x] Task 399: Lưu Lịch Sử Kiểm Tra Cho Mọi Lần Chụp Và Kiểm Tra Trong Cùng 1 Phiên Job Trên Tab OQC Scanner.

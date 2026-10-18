@@ -72,6 +72,36 @@ public partial class ToolEditorView : UserControl
             return;
         }
 
+        // Phím tắt Ctrl + R: Đổi hướng quét Vertical/Horizontal cho Caliper & EdgePairDetect
+        if (e.KeyboardDevice.Modifiers == ModifierKeys.Control &&
+            e.Key == Key.R &&
+            Keyboard.FocusedElement is not TextBoxBase &&
+            Keyboard.FocusedElement is not ComboBox { IsEditable: true } &&
+            DataContext is ToolEditorViewModel orientVm)
+        {
+            orientVm.ToggleToolOrientation();
+            e.Handled = true;
+            return;
+        }
+
+        // Phím tắt Ctrl + F4: Đóng Job đang mở
+        if (e.KeyboardDevice.Modifiers == ModifierKeys.Control && e.Key == Key.F4)
+        {
+            if (Window.GetWindow(this)?.DataContext is MainWindowViewModel mainVm && mainVm.CloseJobCommand.CanExecute(null))
+            {
+                mainVm.CloseJobCommand.Execute(null);
+                e.Handled = true;
+                return;
+            }
+
+            if (DataContext is ToolEditorViewModel closeVm)
+            {
+                closeVm.CloseJob();
+                e.Handled = true;
+                return;
+            }
+        }
+
         if (e.KeyboardDevice.Modifiers == ModifierKeys.Control &&
             Keyboard.FocusedElement is not TextBoxBase &&
             Keyboard.FocusedElement is not ComboBox { IsEditable: true } &&

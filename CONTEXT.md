@@ -7,31 +7,34 @@ Hỗ trợ Camera GigE/USB3/USB/RTSP, nạp ảnh tệp/thư mục, bản vẽ k
 ## 2. Trạng thái mã nguồn gần nhất
 - **Phiên bản hiện tại**: .NET 8 WPF, x64/x86 Multi-targeting, C# 12.
 - **Biên dịch**: 0 Errors toàn solution (`VisionInspectionApp.slnx`) cả Debug lẫn Release.
-- **Kiểm thử tự động**: PASSED 100% (Toàn bộ 8/8 test ContourCompare, 15/15 test OQC Scanner Live View, 8/8 test MvpShapeMatch2 Preprocess, 6/6 test Seeding Config, 6/6 test Backup & DB Match).
+- **Kiểm thử tự động**: PASSED 100% (Toàn bộ kiểm thử phím tắt Ctrl+R & Ctrl+F4, ROI Edit & Auto Scaling, 8/8 test ContourCompare, 12/12 test Tool Calib Factor, 15/15 test OQC Scanner Live View, 8/8 test MvpShapeMatch2 Preprocess, 6/6 test Seeding Config).
 - **Cấu hình chuẩn xưởng CMS_VINA**: 
   - Database: `CMS_VINA` (192.168.1.2:6789)
   - OQC Server API: `https://192.168.1.192/vision_upload.php`
   - OTA Update Server: `http://192.168.1.192/update/version.json` & `http://192.168.1.192/ota_server.php`
 
-## 3. Hoàn thành Task 405: Khắc Phục Triệt Để Lỗi Contour Lệch/Báo Đỏ Trên Cùng Ảnh, Thêm Canny Slider Kèm Live Preview, Tích Hợp Đánh Giá Tổng Job & Bảng Đo Đạc
-1. **Khắc phục triệt để hiện tượng cùng 1 mẫu 1 ảnh bắt ra contour lệch, báo đỏ, điểm cao và NG**:
-   - **Nguyên nhân gốc rễ**:
-     - `ApproxSimple` nén các cạnh thẳng dài hàng trăm pixel chỉ còn 2 đỉnh mút góc, tạo ra "khoảng trống điểm" lớn ở giữa cạnh.
-     - Vòng lặp so sánh điểm-điểm Euclidean đo khoảng cách từ điểm gợn giữa cạnh tới 2 đỉnh góc, khiến sai số vọt lên 50–200px $> \text{Max Hausdorff Dist}$, làm phát sinh các vệt đỏ ngắt quãng dọc cạnh thẳng và rãnh chữ U.
-     - Khi `InspectRoi == TemplateRoi`, hệ thống gán cố định `(pad, pad)` mà không chạy MatchTemplate, khiến sai số làm tròn tọa độ giữa `(int)roi.X` và `Math.Round` làm lệch viền 1 pixel.
-   - **Giải pháp chuẩn xác công nghiệp**:
-     - Chuyển `FindAllContours` sang `ContourApproximationModes.ApproxNone` giữ toàn vẹn mọi điểm viền.
-     - Tích hợp **`Cv2.DistanceTransform`** (L2 Mask5) trên ảnh Canny đảo ngược của cả mẫu và phôi: tính toán khoảng cách Euclidean thực tế liên tục tới đường viền trong $0.1\text{ms}$ ($O(1)$ tra bảng), triệt tiêu 100% hiện tượng đỏ giả tạo trên cạnh thẳng và rãnh cong.
-     - Tự động chạy `Cv2.MatchTemplate` để tìm vị trí tương quan cực đại `maxLoc`, triệt tiêu hoàn toàn sai số lệch toạ độ 1 pixel. Khi cùng ảnh, `maxVal \ge 0.999` lập tức giữ nguyên `(0, 0)` $\implies$ MaxDist = 0.00px, 0 đoạn lỗi.
-2. **Bổ sung Slider cho Canny Thr 1 & Canny Thr 2 trong Properties Panel kèm Live Preview**:
-   - Cập nhật giao diện trong [ToolEditorView.xaml](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/Views/ToolEditorView.xaml): Tích hợp cụm `Slider` (1–255, bước nhảy 1/5) song song với `TextBox` cho cả `Canny Thr 1` và `Canny Thr 2`.
-   - Trong [ToolEditorViewModel.ToolContourCompare.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/ToolEditorViewModel.ToolContourCompare.cs): Kích hoạt `OnPropertyChanged` đồng bộ 2 chiều tức thì giữa Slider và TextBox; mỗi khi kéo slider, khung xem trước `ContourCompare_TemplatePreviewImage` lập tức trích xuất lại viền contour và hiển thị sắc nét bằng màu Vàng kim 1px.
-3. **Đưa ContourCompare vào điều kiện đánh giá Job và Bảng kết quả đo đạc**:
-   - **Đánh giá tổng thể Job**: Trong [InspectionService.Pipeline.cs:3340](file:///g:/NODEJS/Vision2026/VisionInspectionApp.Application/Services/InspectionService.Pipeline.cs#L3340), bổ sung `&& result.ContourCompares.All(x => x.Pass)` và `&& result.ColorDiffs.All(x => x.Pass)`. Khi ContourCompare bị NG thì toàn bộ Job bắt buộc ra NG (`result.Pass = false`).
-   - **Bảng kết quả đo đạc Tool Editor**: Bổ sung các bản ghi `SpecResultRow` của `ContourCompare` vào `SpecResults` trong [ToolEditorViewModel.Inspection.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/ToolEditorViewModel.Inspection.cs) và [InspectionViewModel.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/InspectionViewModel.cs) (hiển thị MaxDist / AreaDiff / ShapeScore theo MatchMethod).
-   - **Bảng đo đạc OQC Scanner**: Cập nhật [OqcScannerService.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.Application/OQC/OqcScannerService.cs) hàm `ExtractMeasurementDetails` hiển thị đúng Spec, TolPlus, Result và đơn vị ("px", "%") theo MatchMethod.
+## 3. Hoàn thành Task 407: Bổ Sung Phím Tắt Ctrl + R (Đảo Hướng Quét Caliper & EdgePairDetect) và Ctrl + F4 (Đóng Job Đang Mở)
+1. **Phím tắt `Ctrl + R` (Toggle Tool Orientation)**:
+   - Hỗ trợ tức thì cho cả hai node `EdgePairDetect` và `Caliper` khi đang được chọn trên Canvas hoặc Properties Panel.
+   - **Cơ chế hoán đổi**:
+     - Chuyển luân phiên `Vertical` $\leftrightarrow$ `Horizontal`.
+     - Tự động hoán đổi kích thước `SearchRoi.Width` và `SearchRoi.Height` quanh tâm ROI để giữ hình học nhất quán.
+     - Tự động kích hoạt cơ chế `SyncEpdStripsFromRoi`: tính toán lại `StripLength` bám cạnh quét mới và `StripWidth` phân bổ theo số lượng vạch `StripCount`.
+     - Cập nhật tức thì overlay xem trước trên canvas và đồng bộ giá trị trên ComboBox / TextBox ở Properties Panel.
+   - Hiện thực phương thức `ToggleToolOrientation()` và `ToggleToolOrientationCommand` trong [ToolEditorViewModel.ToolEdgePair.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/ToolEditorViewModel.ToolEdgePair.cs), cấu hình InputBindings trong [ToolEditorView.xaml](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/Views/ToolEditorView.xaml), bắt phím cấp UserControl (`ToolEditorView.xaml.cs`) và cấp Window ([MainWindow.xaml.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/MainWindow.xaml.cs)).
+   - Bổ sung ToolTip trực quan `[Ctrl+R]` trên nhãn và ComboBox Orientation.
+2. **Phím tắt `Ctrl + F4` (Đóng Job Đang Mở)**:
+   - Bổ sung `CloseJobCommand` vào [MainWindowViewModel.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/MainWindowViewModel.cs) và [ToolEditorViewModel.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/ToolEditorViewModel.cs).
+   - Đăng ký `KeyBinding Key="F4" Modifiers="Control"` trên Menu và Window InputBindings của [MainWindow.xaml](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/MainWindow.xaml) và [ToolEditorView.xaml](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/Views/ToolEditorView.xaml).
+   - Xử lý `OnPreviewKeyDown` tại cấp Window và UserControl đảm bảo đóng Job an toàn, giải phóng nodes, edges, overlay và reset đường dẫn file.
+   - Thêm `InputGestureText="Ctrl+F4"` trên MenuItem "❌ Đóng Job (Close Job)" và ToolTip nút Đóng Job trên thanh công cụ.
+3. **Kiểm thử tự động**:
+   - Thêm `Test_12_ToggleToolOrientation_And_CloseJobCommand` trong [PerformanceOptimizationTests.cs](file:///g:/NODEJS/Vision2026/TestExtractApp/PerformanceOptimizationTests.cs).
+   - Xác nhận chuyển đổi 2 chiều Vertical $\leftrightarrow$ Horizontal, hoán đổi kích thước ROI, tính lại StripLength/StripWidth cho cả Caliper và EdgePairDetect, xác nhận `CloseJobCommand` dọn sạch nodes và path. Toàn bộ PASSED 100%.
 
 ## 4. Các sự kiện & thay đổi gần đây
+- Task 407: Bổ sung phím tắt Ctrl + R chuyển đổi hướng quét Vertical/Horizontal cho EdgePairDetect & Caliper (tự động hoán đổi ROI và strips); thêm phím tắt Ctrl + F4 đóng Job đang mở trên toàn ứng dụng; kiểm thử tự động PASSED 100%.
+- Task 406: Tự động co giãn StripLength và StripWidth của node EdgePairDetection theo ROI; người dùng không cần nhập số thủ công; hỗ trợ đổi Orientation & StripCount; sửa lỗi overlay Horizontal; kiểm thử tự động PASSED.
 - Task 405: Triệt tiêu lỗi lệch đỏ ContourCompare trên cùng ảnh bằng DistanceTransform + MatchTemplate + ApproxNone; thêm Canny Slider 1 & 2 kèm Live Preview tức thì trên Properties Panel; tích hợp ContourCompare vào result.Pass và Bảng kết quả đo đạc (SpecResults & OQC MeasurementDetails).
 - Task 404: Khắc phục lỗi ContourCompare báo NG trên cùng ảnh do lệch ảnh tiền xử lý; hỗ trợ MatchTemplate + ICP cho Search ROI; thêm Preview Template kèm viền contour trên Properties Panel; hiển thị Area Diff & Status; giải thích cơ chế 3 thuật toán và mã màu viền.
 - Task 403: Tự động lưu Job đang mở khi có thay đổi trước khi tải lên Server trong cửa sổ Quản lý Job & Huấn luyện (áp dụng cho cả 3 nút upload); module hóa `JobManagerViewModel.Upload.cs`.
@@ -50,11 +53,3 @@ Hỗ trợ Camera GigE/USB3/USB/RTSP, nạp ảnh tệp/thư mục, bản vẽ k
 - Task 390: Giải quyết triệt để lỗi Bắt Cạnh PLC (`LDP X0`) không kích hoạt `SET Y0` từ nút Momentary HMI & Nâng cấp Minimum Hold Duration (100ms).
 - Task 389: Bắt tay Bất đồng bộ Non-blocking & Hàng đợi 20 phôi BSFLP M200..M219 dừng đúng Điểm Ra Chỉ Định ngoài buồng.
 - Task 388: Sửa lỗi mất cấu hình PLC khi build lại app & Thêm cơ chế Simulate PLC Auto-Ack và Fast Direct Read cho kiểm thử Handshake.
-- Task 387: Hiển thị Trực Quan Trạng Thái PLC Handshake trên UI Tool Editor & Phân tích Trigger Flow.
-- Task 386: Hướng dẫn Thông số Cài Đặt Handshake & Tags trên App Vision WPF.
-- Task 385: Chuẩn hóa lệnh dịch bit `BSFRP` cho PLC FX5U (thay thế lệnh lỗi thời `SFT` của FX3U).
-- Task 384: Biên soạn bộ mã Ladder Diagram (LD) đầy đủ 9 Networks cho PLC FX5U.
-- Task 383: Sửa lỗi cú pháp Structured Text (ST) GX Works 3 `0x110E1A02`.
-- Task 382: Chuẩn hóa 100% định dạng CSV GX Works 3 (1.080J) nạp Global Labels và Device Comments.
-- Task 381: PLC FX5U Handshake, cơ chế dừng NG ngoài buồng In-Flight Tracking & xem lại ảnh 20 nấc lịch sử.
-- Task 380: OQC Scanner 1 nút Space / Ctrl+F8 luân phiên Kiểm tra & Live View, Crosshair căn tâm mặc định bật cho Job Camera Settings.

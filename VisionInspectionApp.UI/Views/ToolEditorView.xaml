@@ -83,6 +83,8 @@
         <KeyBinding Key="Y" Modifiers="Control" Command="{Binding RedoCommand}" />
         <KeyBinding Key="Z" Modifiers="Control+Shift" Command="{Binding RedoCommand}" />
         <KeyBinding Key="Delete" Command="{Binding DeleteSelectionCommand}" />
+        <KeyBinding Key="R" Modifiers="Control" Command="{Binding ToggleToolOrientationCommand}" />
+        <KeyBinding Key="F4" Modifiers="Control" Command="{Binding DataContext.CloseJobCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" />
     </UserControl.InputBindings>
 
     <Grid Margin="8">
@@ -131,7 +133,7 @@
                 <Button Command="{Binding OpenInspectionLogCommand}" Margin="0,0,4,0" Padding="8,4" Background="#00897B" Foreground="White" BorderThickness="0" ToolTip="Mở lịch sử kiểm tra và thống kê SPC/CPK">
                     <StackPanel Orientation="Horizontal"><TextBlock Text="📊" Margin="0,0,5,0"/><TextBlock Text="Lịch sử / SPC"/></StackPanel>
                 </Button>
-                <Button Command="{Binding DataContext.CloseJobCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Margin="0,0,4,0" Padding="8,4" Background="#C62828" Foreground="White" BorderThickness="0" ToolTip="Đóng Job đang mở">
+                <Button Command="{Binding DataContext.CloseJobCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Margin="0,0,4,0" Padding="8,4" Background="#C62828" Foreground="White" BorderThickness="0" ToolTip="Đóng Job đang mở (Ctrl+F4)">
                     <StackPanel Orientation="Horizontal"><TextBlock Text="✖" Margin="0,0,5,0"/><TextBlock Text="Đóng Job"/></StackPanel>
                 </Button>
             </StackPanel>
@@ -1174,10 +1176,10 @@
                                             <ColumnDefinition Width="*" />
                                         </Grid.ColumnDefinitions>
                                         <Border Background="{DynamicResource WindowBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
-                                            <TextBlock Text="Ori" VerticalAlignment="Center" Margin="4,2" FontSize="11" Foreground="{DynamicResource TextBrush}"/>
+                                            <TextBlock Text="Ori" VerticalAlignment="Center" Margin="4,2" FontSize="11" Foreground="{DynamicResource TextBrush}" ToolTip="Hướng quét: Vertical (Dọc) hoặc Horizontal (Ngang) [Ctrl+R]"/>
                                         </Border>
                                         <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
-                                            <ComboBox ItemsSource="{Binding AvailableCaliperOrientations}" SelectedItem="{Binding Caliper_Orientation, UpdateSourceTrigger=LostFocus}" Margin="2,1" FontSize="11" />
+                                            <ComboBox ItemsSource="{Binding AvailableCaliperOrientations}" SelectedItem="{Binding Caliper_Orientation, UpdateSourceTrigger=LostFocus}" ToolTip="Chuyển qua lại Vertical và Horizontal (Ctrl+R)" Margin="2,1" FontSize="11" />
                                         </Border>
                                     </Grid>
                                 </Border>
@@ -3630,10 +3632,10 @@
                                             <ColumnDefinition Width="*" />
                                         </Grid.ColumnDefinitions>
                                         <Border Background="{DynamicResource WindowBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
-                                            <TextBlock Text="Orientation" VerticalAlignment="Center" Margin="4,2" FontSize="11" Foreground="{DynamicResource TextBrush}"/>
+                                            <TextBlock Text="Orientation" VerticalAlignment="Center" Margin="4,2" FontSize="11" Foreground="{DynamicResource TextBrush}" ToolTip="Hướng quét: Vertical (Dọc) hoặc Horizontal (Ngang) [Ctrl+R]"/>
                                         </Border>
                                         <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
-                                            <ComboBox ItemsSource="{Binding AvailableCaliperOrientations}" SelectedItem="{Binding Epd_Orientation, UpdateSourceTrigger=LostFocus}" Margin="2,1" FontSize="11" />
+                                            <ComboBox ItemsSource="{Binding AvailableCaliperOrientations}" SelectedItem="{Binding Epd_Orientation, UpdateSourceTrigger=LostFocus}" ToolTip="Chuyển qua lại Vertical và Horizontal (Ctrl+R)" Margin="2,1" FontSize="11" />
                                         </Border>
                                     </Grid>
                                 </Border>
@@ -3678,7 +3680,7 @@
                                             <TextBlock Text="Strip Width" VerticalAlignment="Center" Margin="4,2" FontSize="11" Foreground="{DynamicResource TextBrush}"/>
                                         </Border>
                                         <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
-                                            <TextBox Text="{Binding Epd_StripWidth, UpdateSourceTrigger=LostFocus}" Margin="2,1" FontSize="11" />
+                                            <TextBox Text="{Binding Epd_StripWidth, UpdateSourceTrigger=LostFocus}" ToolTip="Tự động co giãn theo chiều ngang ROI / Strip Count (có thể nhập thủ công)" Margin="2,1" FontSize="11" />
                                         </Border>
                                     </Grid>
                                 </Border>
@@ -3693,7 +3695,7 @@
                                             <TextBlock Text="Strip Length" VerticalAlignment="Center" Margin="4,2" FontSize="11" Foreground="{DynamicResource TextBrush}"/>
                                         </Border>
                                         <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
-                                            <TextBox Text="{Binding Epd_StripLength, UpdateSourceTrigger=LostFocus}" Margin="2,1" FontSize="11" />
+                                            <TextBox Text="{Binding Epd_StripLength, UpdateSourceTrigger=LostFocus}" ToolTip="Tự động co giãn theo chiều dài quét ROI (có thể nhập thủ công)" Margin="2,1" FontSize="11" />
                                         </Border>
                                     </Grid>
                                 </Border>

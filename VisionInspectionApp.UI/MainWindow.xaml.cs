@@ -21,6 +21,36 @@ public partial class MainWindow : Window
         StateChanged += MainWindow_StateChanged;
     }
 
+    protected override void OnPreviewKeyDown(KeyEventArgs e)
+    {
+        base.OnPreviewKeyDown(e);
+
+        // Phím tắt Ctrl + F4: Đóng Job đang mở
+        if (e.KeyboardDevice.Modifiers == ModifierKeys.Control && e.Key == Key.F4)
+        {
+            if (DataContext is MainWindowViewModel vm && vm.CloseJobCommand.CanExecute(null))
+            {
+                vm.CloseJobCommand.Execute(null);
+                e.Handled = true;
+                return;
+            }
+        }
+
+        // Phím tắt Ctrl + R: Đổi hướng quét Vertical/Horizontal nếu đang chọn Caliper hoặc EdgePairDetect
+        if (e.KeyboardDevice.Modifiers == ModifierKeys.Control && e.Key == Key.R)
+        {
+            if (Keyboard.FocusedElement is not System.Windows.Controls.Primitives.TextBoxBase &&
+                Keyboard.FocusedElement is not ComboBox { IsEditable: true } &&
+                DataContext is MainWindowViewModel vm &&
+                (vm.ToolEditor.IsCaliperNode || vm.ToolEditor.IsEdgePairDetectNode))
+            {
+                vm.ToolEditor.ToggleToolOrientation();
+                e.Handled = true;
+                return;
+            }
+        }
+    }
+
     protected override void OnSourceInitialized(EventArgs e)
     {
         base.OnSourceInitialized(e);

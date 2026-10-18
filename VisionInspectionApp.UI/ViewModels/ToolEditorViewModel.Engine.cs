@@ -1128,7 +1128,10 @@ namespace VisionInspectionApp.UI.ViewModels
             {
                 var e = _config.EdgePairDetections.FirstOrDefault(x => string.Equals(x.Name, name, StringComparison.OrdinalIgnoreCase));
                 if (e is not null)
+                {
                     e.SearchRoi = roi;
+                    SyncEpdStripsFromRoi(e);
+                }
                 return;
             }
     
@@ -2043,6 +2046,7 @@ namespace VisionInspectionApp.UI.ViewModels
                     if (e is not null)
                     {
                         e.SearchRoi = roi;
+                        SyncEpdStripsFromRoi(e);
                         RefreshPreviews();
                         RequestAutoSave();
                         return;
@@ -8233,6 +8237,9 @@ namespace VisionInspectionApp.UI.ViewModels
 
             dst.Add(CreateRotatedRoiWithPose(e.SearchRoi, Brushes.MediumPurple, $"{e.Name} EPD"));
 
+            // Tự động đồng bộ StripLength và StripWidth theo kích thước SearchRoi
+            SyncEpdStripsFromRoi(e);
+
             var stripCount = Math.Clamp(e.StripCount, 1, 100);
             var stripLength = Math.Max(3, e.StripLength);
             if (stripCount <= 0)
@@ -8312,6 +8319,7 @@ namespace VisionInspectionApp.UI.ViewModels
                         p2 = TransformPose(p2, originTeach, originFound, originAngleDeg);
                     }
 
+                    dst.Add(new OverlayLineItem { X1 = p1.X, Y1 = p1.Y, X2 = p2.X, Y2 = p2.Y, Stroke = Brushes.MediumPurple, StrokeThickness = 1.0 });
                 }
             }
         }

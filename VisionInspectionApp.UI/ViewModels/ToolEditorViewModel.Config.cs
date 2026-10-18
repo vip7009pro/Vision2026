@@ -108,6 +108,8 @@ namespace VisionInspectionApp.UI.ViewModels
         public ICommand OpenJobCommand { get; }
         public ICommand SaveJobCommand { get; }
         public ICommand SaveJobAsCommand { get; }
+        public ICommand CloseJobCommand { get; }
+        public ICommand ToggleToolOrientationCommand { get; }
     
         public void CloseJob()
         {

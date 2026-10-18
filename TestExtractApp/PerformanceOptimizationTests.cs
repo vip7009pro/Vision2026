@@ -32,6 +32,8 @@ public static class PerformanceOptimizationTests
     public static void RunRoiEditRegressionTests()
     {
         Test_10_RoiEditCommit_MultiwordToolNames();
+        Test_11_EdgePairDetect_RoiAutoScaling();
+        Test_12_ToggleToolOrientation_And_CloseJobCommand();
     }
 
     public static void RunAllTests()
@@ -55,6 +57,8 @@ public static class PerformanceOptimizationTests
             Test_08_PointMinScore_PipelineGating();
             Test_09_PreviewRefresh_BenchmarkSmokeTest();
             Test_10_RoiEditCommit_MultiwordToolNames();
+            Test_11_EdgePairDetect_RoiAutoScaling();
+            Test_12_ToggleToolOrientation_And_CloseJobCommand();
         }
         finally
         {
@@ -749,6 +753,156 @@ public static class PerformanceOptimizationTests
         Edit("SurfaceCompare", "Surface Compare SC1", R(150, 151, 71, 72));
         Assert(config.SurfaceCompares[0].Rois[0].Roi.X == 150 && config.SurfaceCompares[0].Rois[0].Roi.Width == 71,
             "SurfaceCompare indexed ROI did not commit for a multiword RefName");
+
+        Console.WriteLine("PASSED");
+    }
+
+    private static void Test_11_EdgePairDetect_RoiAutoScaling()
+    {
+        Console.Write("--- EdgePairDetect StripLength & StripWidth tự động co giãn theo ROI... ");
+
+        var config = new VisionConfig
+        {
+            ProductCode = "EPD_AUTOSCALE_TEST",
+            ToolGraph = new ToolGraph
+            {
+                Nodes =
+                {
+                    Node("1", "EdgePairDetect", "EPD1")
+                }
+            }
+        };
+        var epd = new EdgePairDetectDefinition
+        {
+            Name = "EPD1",
+            Orientation = CaliperOrientation.Vertical,
+            StripCount = 10,
+            StripLength = 60,
+            StripWidth = 7,
+            SearchRoi = R(50, 50, 200, 100)
+        };
+        config.EdgePairDetections.Add(epd);
+
+        var vm = CreateVm(config);
+        vm.SelectedNode = vm.Nodes.First(n => n.Type == "EdgePairDetect");
+
+        // 1. Khi kéo ROI (Vertical: Width = 200, Height = 100, StripCount = 10)
+        vm.RoiEditedCommand.Execute(new RoiSelection("EPD1 EPD", R(50, 50, 200, 100), ModifierKeys.None));
+        Assert(epd.StripLength == 100, $"Expected StripLength 100, got {epd.StripLength}");
+        Assert(epd.StripWidth == 20, $"Expected StripWidth 20, got {epd.StripWidth}");
+        Assert(vm.Epd_StripLength == 100, $"Expected vm.Epd_StripLength 100, got {vm.Epd_StripLength}");
+        Assert(vm.Epd_StripWidth == 20, $"Expected vm.Epd_StripWidth 20, got {vm.Epd_StripWidth}");
+
+        // 2. Khi kéo dãn ROI (Width = 400, Height = 150)
+        vm.RoiEditedCommand.Execute(new RoiSelection("EPD1 EPD", R(50, 50, 400, 150), ModifierKeys.None));
+        Assert(epd.StripLength == 150, $"Expected StripLength 150, got {epd.StripLength}");
+        Assert(epd.StripWidth == 40, $"Expected StripWidth 40, got {epd.StripWidth}");
+        Assert(vm.Epd_StripLength == 150, $"Expected vm.Epd_StripLength 150, got {vm.Epd_StripLength}");
+        Assert(vm.Epd_StripWidth == 40, $"Expected vm.Epd_StripWidth 40, got {vm.Epd_StripWidth}");
+
+        // 3. Khi đổi Orientation sang Horizontal
+        vm.Epd_Orientation = CaliperOrientation.Horizontal;
+        Assert(epd.Orientation == CaliperOrientation.Horizontal, "Orientation should be Horizontal");
+        Assert(epd.SearchRoi.Width == 150 && epd.SearchRoi.Height == 400, $"SearchRoi dimensions should swap to 150x400, got {epd.SearchRoi.Width}x{epd.SearchRoi.Height}");
+        Assert(epd.StripLength == 150, $"Expected StripLength 150 in Horizontal, got {epd.StripLength}");
+        Assert(epd.StripWidth == 40, $"Expected StripWidth 40 (400 / 10), got {epd.StripWidth}");
+        Assert(vm.Epd_StripLength == 150, $"Expected vm.Epd_StripLength 150, got {vm.Epd_StripLength}");
+        Assert(vm.Epd_StripWidth == 40, $"Expected vm.Epd_StripWidth 40, got {vm.Epd_StripWidth}");
+
+        // 4. Khi đổi StripCount sang 20
+        vm.Epd_StripCount = 20;
+        Assert(epd.StripWidth == 20, $"Expected StripWidth 20 (400 / 20), got {epd.StripWidth}");
+        Assert(vm.Epd_StripWidth == 20, $"Expected vm.Epd_StripWidth 20, got {vm.Epd_StripWidth}");
+
+        // 5. Thử nghiệm Undo / Redo cho ROI của EdgePairDetect
+        vm.RoiEditedCommand.Execute(new RoiSelection("EPD1 EPD", R(50, 50, 300, 600), ModifierKeys.None));
+        Assert(epd.StripLength == 300 && epd.StripWidth == 30, $"Expected 300x30, got {epd.StripLength}x{epd.StripWidth}");
+
+        vm.UndoCommand.Execute(null);
+        Assert(epd.SearchRoi.Width == 150 && epd.SearchRoi.Height == 400, "Undo should restore 150x400");
+        Assert(epd.StripLength == 150 && epd.StripWidth == 20, $"Undo should restore StripLength 150 & StripWidth 20, got {epd.StripLength}x{epd.StripWidth}");
+
+        Console.WriteLine("PASSED");
+    }
+
+    private static void Test_12_ToggleToolOrientation_And_CloseJobCommand()
+    {
+        Console.Write("--- ToggleToolOrientationCommand (Ctrl+R) & CloseJobCommand (Ctrl+F4)... ");
+
+        var config = new VisionConfig
+        {
+            ProductCode = "SHORTCUT_TEST",
+            ToolGraph = new ToolGraph
+            {
+                Nodes =
+                {
+                    Node("1", "EdgePairDetect", "EPD_Shortcut"),
+                    Node("2", "Caliper", "Caliper_Shortcut")
+                }
+            }
+        };
+        var epd = new EdgePairDetectDefinition
+        {
+            Name = "EPD_Shortcut",
+            Orientation = CaliperOrientation.Vertical,
+            StripCount = 10,
+            StripLength = 100,
+            StripWidth = 20,
+            SearchRoi = R(50, 50, 200, 100)
+        };
+        config.EdgePairDetections.Add(epd);
+
+        var cal = new CaliperDefinition
+        {
+            Name = "Caliper_Shortcut",
+            Orientation = CaliperOrientation.Vertical,
+            SearchRoi = R(40, 40, 120, 60)
+        };
+        config.Calipers.Add(cal);
+
+        var vm = CreateVm(config);
+
+        // 1. Kiểm tra ToggleToolOrientation cho EdgePairDetect (Ctrl+R)
+        vm.SelectedNode = vm.Nodes.First(n => n.Type == "EdgePairDetect");
+        Assert(vm.Epd_Orientation == CaliperOrientation.Vertical, "Initial Epd_Orientation should be Vertical");
+        Assert(epd.SearchRoi.Width == 200 && epd.SearchRoi.Height == 100, "Initial ROI should be 200x100");
+
+        // Bấm Ctrl+R lần 1: Vertical -> Horizontal
+        vm.ToggleToolOrientationCommand.Execute(null);
+        Assert(vm.Epd_Orientation == CaliperOrientation.Horizontal, "Epd_Orientation should toggle to Horizontal");
+        Assert(epd.Orientation == CaliperOrientation.Horizontal, "Def Orientation should be Horizontal");
+        Assert(epd.SearchRoi.Width == 100 && epd.SearchRoi.Height == 200, $"ROI dimensions should swap to 100x200, got {epd.SearchRoi.Width}x{epd.SearchRoi.Height}");
+        Assert(epd.StripLength == 100, $"StripLength should be 100, got {epd.StripLength}");
+        Assert(epd.StripWidth == 20, $"StripWidth should be 20 (200 / 10), got {epd.StripWidth}");
+
+        // Bấm Ctrl+R lần 2: Horizontal -> Vertical
+        vm.ToggleToolOrientationCommand.Execute(null);
+        Assert(vm.Epd_Orientation == CaliperOrientation.Vertical, "Epd_Orientation should toggle back to Vertical");
+        Assert(epd.SearchRoi.Width == 200 && epd.SearchRoi.Height == 100, $"ROI dimensions should swap back to 200x100, got {epd.SearchRoi.Width}x{epd.SearchRoi.Height}");
+        Assert(epd.StripLength == 100, $"StripLength should be 100, got {epd.StripLength}");
+        Assert(epd.StripWidth == 20, $"StripWidth should be 20 (200 / 10), got {epd.StripWidth}");
+
+        // 2. Kiểm tra ToggleToolOrientation cho Caliper (Ctrl+R)
+        vm.SelectedNode = vm.Nodes.First(n => n.Type == "Caliper");
+        Assert(vm.Caliper_Orientation == CaliperOrientation.Vertical, "Initial Caliper_Orientation should be Vertical");
+        Assert(cal.SearchRoi.Width == 120 && cal.SearchRoi.Height == 60, "Initial Caliper ROI should be 120x60");
+
+        // Bấm Ctrl+R lần 1: Vertical -> Horizontal
+        vm.ToggleToolOrientationCommand.Execute(null);
+        Assert(vm.Caliper_Orientation == CaliperOrientation.Horizontal, "Caliper_Orientation should toggle to Horizontal");
+        Assert(cal.Orientation == CaliperOrientation.Horizontal, "Caliper def Orientation should be Horizontal");
+        Assert(cal.SearchRoi.Width == 60 && cal.SearchRoi.Height == 120, $"Caliper ROI dimensions should swap to 60x120, got {cal.SearchRoi.Width}x{cal.SearchRoi.Height}");
+
+        // Bấm Ctrl+R lần 2: Horizontal -> Vertical
+        vm.ToggleToolOrientationCommand.Execute(null);
+        Assert(vm.Caliper_Orientation == CaliperOrientation.Vertical, "Caliper_Orientation should toggle back to Vertical");
+        Assert(cal.SearchRoi.Width == 120 && cal.SearchRoi.Height == 60, $"Caliper ROI dimensions should swap back to 120x60, got {cal.SearchRoi.Width}x{cal.SearchRoi.Height}");
+
+        // 3. Kiểm tra CloseJobCommand (Ctrl+F4)
+        Assert(vm.Nodes.Count > 0, "Before CloseJob, nodes must exist");
+        vm.CloseJobCommand.Execute(null);
+        Assert(vm.Nodes.Count == 0, "After CloseJob, all nodes must be cleared");
+        Assert(string.IsNullOrEmpty(vm.CurrentJobFilePath), "CurrentJobFilePath should be empty after CloseJob");
 
         Console.WriteLine("PASSED");
     }

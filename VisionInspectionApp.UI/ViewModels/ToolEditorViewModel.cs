@@ -291,6 +291,8 @@ namespace VisionInspectionApp.UI.ViewModels
             ToolboxItems = new ObservableCollection<string>();
             ToolboxCollectionView = System.Windows.Data.CollectionViewSource.GetDefaultView(AllToolboxItems);
             NewGraphCommand = new RelayCommand(NewGraph);
+            CloseJobCommand = new RelayCommand(CloseJob);
+            ToggleToolOrientationCommand = new RelayCommand(ToggleToolOrientation);
         }
 
         public ToolEditorViewModel(IConfigService configService, ConfigStoreOptions storeOptions, SharedImageContext sharedImage, ImagePreprocessor preprocessor, LineDetector lineDetector, IInspectionService inspectionService, CameraService cameraService, IJobService jobService, UndoRedoManager undoManager, Application.PLC.Services.IPlcManagerService plcManagerService, Application.DB.Services.IDbManagerService dbManagerService, IRecentJobsService? recentJobsService = null, LightingControllerService? lightingControllerService = null, IServiceProvider? serviceProvider = null)
@@ -444,6 +446,8 @@ namespace VisionInspectionApp.UI.ViewModels
             OpenJobCommand = new RelayCommand(OpenJob);
             SaveJobCommand = new RelayCommand(SaveJob);
             SaveJobAsCommand = new RelayCommand(SaveJobAs);
+            CloseJobCommand = new RelayCommand(CloseJob);
+            ToggleToolOrientationCommand = new RelayCommand(ToggleToolOrientation);
             NewGraphCommand = new RelayCommand(NewGraph);
             DeleteSelectedNodeCommand = new RelayCommand(DeleteSelectedNode);
             DeleteSelectedEdgeCommand = new RelayCommand(DeleteSelectedEdge);
@@ -4731,6 +4735,7 @@ namespace VisionInspectionApp.UI.ViewModels
                         Name = node.RefName
                     };
                     def.SearchRoi = DefaultRoi();
+                    SyncEpdStripsFromRoi(def);
                     _config.EdgePairDetections.Add(def);
                 }
     

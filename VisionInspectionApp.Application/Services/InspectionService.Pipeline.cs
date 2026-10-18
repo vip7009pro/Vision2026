@@ -2294,8 +2294,10 @@ public partial class InspectionService
                 var rect = new Rect(0, 0, patch.Width, patch.Height);
 
                 var stripCount = Math.Clamp(def.StripCount, 1, 200);
-                var stripWidth = Math.Clamp(def.StripWidth, 1, Math.Max(1, Math.Min(rect.Width, rect.Height)));
-                var stripLength = Math.Clamp(def.StripLength, 3, Math.Max(3, Math.Max(rect.Width, rect.Height)));
+                var scanLength = def.Orientation == CaliperOrientation.Vertical ? rect.Height : rect.Width;
+                var orthogonalSize = def.Orientation == CaliperOrientation.Vertical ? rect.Width : rect.Height;
+                var stripWidth = Math.Clamp(def.StripWidth, 1, Math.Max(1, orthogonalSize));
+                var stripLength = Math.Clamp(def.StripLength, 3, Math.Max(3, scanLength));
                 var minSep = Math.Clamp(def.MinEdgeSeparationPx, 1, Math.Max(1, Math.Max(rect.Width, rect.Height)));
 
                 var e1 = new List<CaliperEdgePoint>(stripCount);
