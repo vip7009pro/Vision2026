@@ -800,27 +800,27 @@ public static class PerformanceOptimizationTests
         Assert(vm.Epd_StripLength == 150, $"Expected vm.Epd_StripLength 150, got {vm.Epd_StripLength}");
         Assert(vm.Epd_StripWidth == 40, $"Expected vm.Epd_StripWidth 40, got {vm.Epd_StripWidth}");
 
-        // 3. Khi đổi Orientation sang Horizontal
+        // 3. Khi đổi Orientation sang Horizontal (SearchRoi 400x150 giữ nguyên)
         vm.Epd_Orientation = CaliperOrientation.Horizontal;
         Assert(epd.Orientation == CaliperOrientation.Horizontal, "Orientation should be Horizontal");
-        Assert(epd.SearchRoi.Width == 150 && epd.SearchRoi.Height == 400, $"SearchRoi dimensions should swap to 150x400, got {epd.SearchRoi.Width}x{epd.SearchRoi.Height}");
-        Assert(epd.StripLength == 150, $"Expected StripLength 150 in Horizontal, got {epd.StripLength}");
-        Assert(epd.StripWidth == 40, $"Expected StripWidth 40 (400 / 10), got {epd.StripWidth}");
-        Assert(vm.Epd_StripLength == 150, $"Expected vm.Epd_StripLength 150, got {vm.Epd_StripLength}");
-        Assert(vm.Epd_StripWidth == 40, $"Expected vm.Epd_StripWidth 40, got {vm.Epd_StripWidth}");
+        Assert(epd.SearchRoi.Width == 400 && epd.SearchRoi.Height == 150, $"SearchRoi dimensions must stay intact at 400x150, got {epd.SearchRoi.Width}x{epd.SearchRoi.Height}");
+        Assert(epd.StripLength == 400, $"Expected StripLength 400 in Horizontal, got {epd.StripLength}");
+        Assert(epd.StripWidth == 15, $"Expected StripWidth 15 (150 / 10), got {epd.StripWidth}");
+        Assert(vm.Epd_StripLength == 400, $"Expected vm.Epd_StripLength 400, got {vm.Epd_StripLength}");
+        Assert(vm.Epd_StripWidth == 15, $"Expected vm.Epd_StripWidth 15, got {vm.Epd_StripWidth}");
 
-        // 4. Khi đổi StripCount sang 20
+        // 4. Khi đổi StripCount sang 20 (SearchRoi 400x150 giữ nguyên)
         vm.Epd_StripCount = 20;
-        Assert(epd.StripWidth == 20, $"Expected StripWidth 20 (400 / 20), got {epd.StripWidth}");
-        Assert(vm.Epd_StripWidth == 20, $"Expected vm.Epd_StripWidth 20, got {vm.Epd_StripWidth}");
+        Assert(epd.StripWidth == 8, $"Expected StripWidth 8 (150 / 20 = 7.5 -> 8), got {epd.StripWidth}");
+        Assert(vm.Epd_StripWidth == 8, $"Expected vm.Epd_StripWidth 8, got {vm.Epd_StripWidth}");
 
         // 5. Thử nghiệm Undo / Redo cho ROI của EdgePairDetect
         vm.RoiEditedCommand.Execute(new RoiSelection("EPD1 EPD", R(50, 50, 300, 600), ModifierKeys.None));
         Assert(epd.StripLength == 300 && epd.StripWidth == 30, $"Expected 300x30, got {epd.StripLength}x{epd.StripWidth}");
 
         vm.UndoCommand.Execute(null);
-        Assert(epd.SearchRoi.Width == 150 && epd.SearchRoi.Height == 400, "Undo should restore 150x400");
-        Assert(epd.StripLength == 150 && epd.StripWidth == 20, $"Undo should restore StripLength 150 & StripWidth 20, got {epd.StripLength}x{epd.StripWidth}");
+        Assert(epd.SearchRoi.Width == 400 && epd.SearchRoi.Height == 150, "Undo should restore 400x150");
+        Assert(epd.StripLength == 400 && epd.StripWidth == 8, $"Undo should restore StripLength 400 & StripWidth 8, got {epd.StripLength}x{epd.StripWidth}");
 
         Console.WriteLine("PASSED");
     }
@@ -867,19 +867,19 @@ public static class PerformanceOptimizationTests
         Assert(vm.Epd_Orientation == CaliperOrientation.Vertical, "Initial Epd_Orientation should be Vertical");
         Assert(epd.SearchRoi.Width == 200 && epd.SearchRoi.Height == 100, "Initial ROI should be 200x100");
 
-        // Bấm Ctrl+R lần 1: Vertical -> Horizontal
+        // Bấm Ctrl+R lần 1: Vertical -> Horizontal (SearchRoi 200x100 giữ nguyên)
         vm.ToggleToolOrientationCommand.Execute(null);
         Assert(vm.Epd_Orientation == CaliperOrientation.Horizontal, "Epd_Orientation should toggle to Horizontal");
         Assert(epd.Orientation == CaliperOrientation.Horizontal, "Def Orientation should be Horizontal");
-        Assert(epd.SearchRoi.Width == 100 && epd.SearchRoi.Height == 200, $"ROI dimensions should swap to 100x200, got {epd.SearchRoi.Width}x{epd.SearchRoi.Height}");
-        Assert(epd.StripLength == 100, $"StripLength should be 100, got {epd.StripLength}");
-        Assert(epd.StripWidth == 20, $"StripWidth should be 20 (200 / 10), got {epd.StripWidth}");
+        Assert(epd.SearchRoi.Width == 200 && epd.SearchRoi.Height == 100, $"ROI dimensions must remain intact at 200x100, got {epd.SearchRoi.Width}x{epd.SearchRoi.Height}");
+        Assert(epd.StripLength == 200, $"StripLength should be 200 (quét ngang), got {epd.StripLength}");
+        Assert(epd.StripWidth == 10, $"StripWidth should be 10 (100 / 10), got {epd.StripWidth}");
 
-        // Bấm Ctrl+R lần 2: Horizontal -> Vertical
+        // Bấm Ctrl+R lần 2: Horizontal -> Vertical (SearchRoi 200x100 giữ nguyên)
         vm.ToggleToolOrientationCommand.Execute(null);
         Assert(vm.Epd_Orientation == CaliperOrientation.Vertical, "Epd_Orientation should toggle back to Vertical");
-        Assert(epd.SearchRoi.Width == 200 && epd.SearchRoi.Height == 100, $"ROI dimensions should swap back to 200x100, got {epd.SearchRoi.Width}x{epd.SearchRoi.Height}");
-        Assert(epd.StripLength == 100, $"StripLength should be 100, got {epd.StripLength}");
+        Assert(epd.SearchRoi.Width == 200 && epd.SearchRoi.Height == 100, $"ROI dimensions must remain intact at 200x100, got {epd.SearchRoi.Width}x{epd.SearchRoi.Height}");
+        Assert(epd.StripLength == 100, $"StripLength should be 100 (quét dọc), got {epd.StripLength}");
         Assert(epd.StripWidth == 20, $"StripWidth should be 20 (200 / 10), got {epd.StripWidth}");
 
         // 2. Kiểm tra ToggleToolOrientation cho Caliper (Ctrl+R)
@@ -887,16 +887,18 @@ public static class PerformanceOptimizationTests
         Assert(vm.Caliper_Orientation == CaliperOrientation.Vertical, "Initial Caliper_Orientation should be Vertical");
         Assert(cal.SearchRoi.Width == 120 && cal.SearchRoi.Height == 60, "Initial Caliper ROI should be 120x60");
 
-        // Bấm Ctrl+R lần 1: Vertical -> Horizontal
+        // Bấm Ctrl+R lần 1: Vertical -> Horizontal (SearchRoi 120x60 giữ nguyên)
         vm.ToggleToolOrientationCommand.Execute(null);
         Assert(vm.Caliper_Orientation == CaliperOrientation.Horizontal, "Caliper_Orientation should toggle to Horizontal");
         Assert(cal.Orientation == CaliperOrientation.Horizontal, "Caliper def Orientation should be Horizontal");
-        Assert(cal.SearchRoi.Width == 60 && cal.SearchRoi.Height == 120, $"Caliper ROI dimensions should swap to 60x120, got {cal.SearchRoi.Width}x{cal.SearchRoi.Height}");
+        Assert(cal.SearchRoi.Width == 120 && cal.SearchRoi.Height == 60, $"Caliper ROI dimensions must remain intact at 120x60, got {cal.SearchRoi.Width}x{cal.SearchRoi.Height}");
+        Assert(cal.StripLength == 120, $"Caliper StripLength should be 120 (quét ngang), got {cal.StripLength}");
 
-        // Bấm Ctrl+R lần 2: Horizontal -> Vertical
+        // Bấm Ctrl+R lần 2: Horizontal -> Vertical (SearchRoi 120x60 giữ nguyên)
         vm.ToggleToolOrientationCommand.Execute(null);
         Assert(vm.Caliper_Orientation == CaliperOrientation.Vertical, "Caliper_Orientation should toggle back to Vertical");
-        Assert(cal.SearchRoi.Width == 120 && cal.SearchRoi.Height == 60, $"Caliper ROI dimensions should swap back to 120x60, got {cal.SearchRoi.Width}x{cal.SearchRoi.Height}");
+        Assert(cal.SearchRoi.Width == 120 && cal.SearchRoi.Height == 60, $"Caliper ROI dimensions must remain intact at 120x60, got {cal.SearchRoi.Width}x{cal.SearchRoi.Height}");
+        Assert(cal.StripLength == 60, $"Caliper StripLength should be 60 (quét dọc), got {cal.StripLength}");
 
         // 3. Kiểm tra CloseJobCommand (Ctrl+F4)
         Assert(vm.Nodes.Count > 0, "Before CloseJob, nodes must exist");

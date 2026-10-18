@@ -117,19 +117,7 @@ namespace VisionInspectionApp.UI.ViewModels
                     return;
                 d.Orientation = value;
 
-                // Hoán đổi kích thước SearchRoi theo hướng quét mới để duy trì hình học nhất quán
-                if (d.SearchRoi.Width > 0 && d.SearchRoi.Height > 0)
-                {
-                    var cx = d.SearchRoi.X + d.SearchRoi.Width / 2.0;
-                    var cy = d.SearchRoi.Y + d.SearchRoi.Height / 2.0;
-                    var oldW = d.SearchRoi.Width;
-                    var oldH = d.SearchRoi.Height;
-                    d.SearchRoi.Width = oldH;
-                    d.SearchRoi.Height = oldW;
-                    d.SearchRoi.X = (int)Math.Round(cx - d.SearchRoi.Width / 2.0);
-                    d.SearchRoi.Y = (int)Math.Round(cy - d.SearchRoi.Height / 2.0);
-                }
-
+                // Giữ nguyên ROI width & height, chỉ đảo chiều hướng quét của các strip bên trong ROI
                 SyncEpdStripsFromRoi(d);
                 RunFlow();
                 RequestAutoSave();

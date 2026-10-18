@@ -1112,7 +1112,10 @@ namespace VisionInspectionApp.UI.ViewModels
             {
                 var c = _config.Calipers.FirstOrDefault(x => string.Equals(x.Name, name, StringComparison.OrdinalIgnoreCase));
                 if (c is not null)
+                {
                     c.SearchRoi = roi;
+                    SyncCaliperStripsFromRoi(c);
+                }
                 return;
             }
     
@@ -2003,16 +2006,7 @@ namespace VisionInspectionApp.UI.ViewModels
                     if (c is not null)
                     {
                         c.SearchRoi = roi;
-                        // Tự động đồng bộ StripLength theo kích thước cạnh quét của khung ROI
-                        if (c.Orientation == CaliperOrientation.Horizontal)
-                        {
-                            c.StripLength = Math.Max(3, roi.Width);
-                        }
-                        else
-                        {
-                            c.StripLength = Math.Max(3, roi.Height);
-                        }
-                        OnPropertyChanged(nameof(Caliper_StripLength));
+                        SyncCaliperStripsFromRoi(c);
                         RefreshPreviews();
                         RequestAutoSave();
                         return;
@@ -2024,16 +2018,7 @@ namespace VisionInspectionApp.UI.ViewModels
                     var c = _config.Calipers.FirstOrDefault(x => string.Equals(x.Name, name, StringComparison.OrdinalIgnoreCase));
                     if (c is not null)
                     {
-                        if (c.Orientation == CaliperOrientation.Horizontal)
-                        {
-                            c.StripLength = Math.Max(3, roi.Width);
-                        }
-                        else
-                        {
-                            c.StripLength = Math.Max(3, roi.Height);
-                        }
-                        OnPropertyChanged(nameof(Caliper_StripLength));
-                        OnPropertyChanged(nameof(Caliper_StripWidth));
+                        SyncCaliperStripsFromRoi(c);
                         RefreshPreviews();
                         RequestAutoSave();
                         return;
