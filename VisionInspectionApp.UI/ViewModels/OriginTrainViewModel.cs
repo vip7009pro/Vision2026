@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.IO;
+using System.Linq;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
@@ -18,15 +19,11 @@ namespace VisionInspectionApp.UI.ViewModels
 {
     public sealed partial class OriginTrainViewModel : ObservableObject, IDisposable
     {
-        private const int MaxHistoryStates = 10;
         private Mat _rawFullMat;
         private Mat _globalPreprocessedMat;
-        private Mat? _eraserMaskMat; // 255 = keep edge, 0 = erased edge
-        private Stack<Mat> _undoStack = new();
-        private Stack<Mat> _redoStack = new();
-
         private readonly PointDefinition _originDef;
         private readonly string _workingDir;
+        private Func<Mat>? _refreshImageFunc;
 
         [ObservableProperty]
         private BitmapSource? _fullPreviewImage;
@@ -41,12 +38,6 @@ namespace VisionInspectionApp.UI.ViewModels
         private string _activeRoiLabel = "Origin T";
 
         [ObservableProperty]
-        private bool _isEraserActive;
-
-        [ObservableProperty]
-        private int _eraserBrushSize = 10;
-
-        [ObservableProperty]
         private bool _autoThresh = true;
 
         [ObservableProperty]
@@ -56,7 +47,7 @@ namespace VisionInspectionApp.UI.ViewModels
         private int _lengthThreshold = 13;
 
         [ObservableProperty]
-        private int _maxPyramidLayers = 6;
+        private int _maxPyramidLayers = 4;
 
         [ObservableProperty]
         private bool _lockOriginCenter = true;
@@ -66,12 +57,6 @@ namespace VisionInspectionApp.UI.ViewModels
 
         [ObservableProperty]
         private double _originY;
-
-        [ObservableProperty]
-        private bool _isPartGraph = true;
-
-        [ObservableProperty]
-        private bool _isFullGraph;
 
         [ObservableProperty]
         private double _minScore = 0.6;
@@ -101,17 +86,24 @@ namespace VisionInspectionApp.UI.ViewModels
         [ObservableProperty]
         private double _roiAngle;
 
+        // Information badges
+        [ObservableProperty]
+        private string _templateSizeText = "0 × 0 px";
+
+        [ObservableProperty]
+        private string _contourStatsText = "0 viền • 0 điểm";
+
+        [ObservableProperty]
+        private string _roiSummary = "Chưa xác định";
+
         public ICommand TrainCommand { get; }
         public ICommand SaveCommand { get; }
-        public ICommand UndoCommand { get; }
-        public ICommand RedoCommand { get; }
         public ICommand RefreshCurrentImageCommand { get; }
+        public ICommand CenterRoiCommand { get; }
         public ICommand OkCommand { get; }
         public ICommand RoiEditedCommand { get; }
 
         public event Action? RequestCloseDialog;
-
-        private Func<Mat>? _refreshImageFunc;
 
         public OriginTrainViewModel(Mat inputMat, PointDefinition originDef, string workingDir)
             : this(inputMat, inputMat, originDef, workingDir, null)
@@ -130,24 +122,13 @@ namespace VisionInspectionApp.UI.ViewModels
             _autoThresh = originDef.MvpAutoThresh;
             _edgeThreshold = originDef.MvpEdgeThreshold > 0 ? originDef.MvpEdgeThreshold : 19;
             _lengthThreshold = originDef.MvpLengthThreshold > 0 ? originDef.MvpLengthThreshold : 13;
-            _maxPyramidLayers = originDef.MvpMaxPyramidLayers > 0 ? originDef.MvpMaxPyramidLayers : 6;
+            _maxPyramidLayers = originDef.MvpMaxPyramidLayers > 0 ? originDef.MvpMaxPyramidLayers : 4;
             _lockOriginCenter = originDef.MvpLockOriginCenter;
 
             _minScore = originDef.MinScore > 0 ? originDef.MinScore : 0.6;
             _minAngle = originDef.MinAngle;
             _maxAngle = originDef.MaxAngle;
             _angleStep = originDef.AngleStep > 0 ? originDef.AngleStep : 1.0;
-
-            if (originDef.MvpDetectionRoiMode == DetectionRoiMode.FullGraph)
-            {
-                _isFullGraph = true;
-                _isPartGraph = false;
-            }
-            else
-            {
-                _isPartGraph = true;
-                _isFullGraph = false;
-            }
 
             var roi = originDef.TemplateRoi;
             if (roi.Width <= 0 || roi.Height <= 0 ||
@@ -183,39 +164,15 @@ namespace VisionInspectionApp.UI.ViewModels
                 _originY = _roiY + _roiHeight / 2.0;
             }
 
-            // Init Eraser mask
-            InitEraserMask();
-
             TrainCommand = new RelayCommand(ExecuteTrain);
             SaveCommand = new RelayCommand(ExecuteSave);
-            UndoCommand = new RelayCommand(ExecuteUndo);
-            RedoCommand = new RelayCommand(ExecuteRedo);
             RefreshCurrentImageCommand = new RelayCommand(ExecuteRefreshImage);
+            CenterRoiCommand = new RelayCommand(ExecuteCenterRoi);
             OkCommand = new RelayCommand(ExecuteOk);
             RoiEditedCommand = new RelayCommand<RoiSelection>(OnRoiEdited);
 
             RefreshOverlayItems();
             ExecuteTrain();
-        }
-
-        private void InitEraserMask()
-        {
-            _eraserMaskMat?.Dispose();
-            _eraserMaskMat = new Mat(_rawFullMat.Height, _rawFullMat.Width, MatType.CV_8UC1, Scalar.All(255));
-            if (_originDef.MvpEraserMask != null && _originDef.MvpEraserMask.Length > 0)
-            {
-                try
-                {
-                    using var decoded = Cv2.ImDecode(_originDef.MvpEraserMask, ImreadModes.Grayscale);
-                    if (decoded != null && !decoded.Empty() && decoded.Width == _rawFullMat.Width && decoded.Height == _rawFullMat.Height)
-                    {
-                        decoded.CopyTo(_eraserMaskMat);
-                    }
-                }
-                catch
-                {
-                }
-            }
         }
 
         private void OnRoiEdited(RoiSelection? sel)
@@ -242,88 +199,32 @@ namespace VisionInspectionApp.UI.ViewModels
             ExecuteTrain();
         }
 
+        private void ExecuteCenterRoi()
+        {
+            if (_rawFullMat == null || _rawFullMat.Empty()) return;
+            var w = Math.Clamp(RoiWidth > 0 ? RoiWidth : _rawFullMat.Width / 3.0, 10, _rawFullMat.Width);
+            var h = Math.Clamp(RoiHeight > 0 ? RoiHeight : _rawFullMat.Height / 3.0, 10, _rawFullMat.Height);
+            var x = Math.Max(0, (_rawFullMat.Width - w) / 2.0);
+            var y = Math.Max(0, (_rawFullMat.Height - h) / 2.0);
+            UpdateRoi(x, y, w, h, 0);
+        }
+
         private void RefreshOverlayItems()
         {
-            var list = new ObservableCollection<OverlayItem>();
-            list.Add(new OverlayRectItem
+            var list = new ObservableCollection<OverlayItem>
             {
-                X = (int)RoiX,
-                Y = (int)RoiY,
-                Width = (int)RoiWidth,
-                Height = (int)RoiHeight,
-                Angle = RoiAngle,
-                Stroke = Brushes.DeepSkyBlue,
-                Label = "Origin T"
-            });
+                new OverlayRectItem
+                {
+                    X = (int)RoiX,
+                    Y = (int)RoiY,
+                    Width = (int)RoiWidth,
+                    Height = (int)RoiHeight,
+                    Angle = RoiAngle,
+                    Stroke = Brushes.DeepSkyBlue,
+                    Label = "Origin T"
+                }
+            };
             OverlayItems = list;
-        }
-
-        public void ApplyEraserStroke(OpenCvSharp.Point startPt, OpenCvSharp.Point endPt)
-        {
-            if (_eraserMaskMat is null || _eraserMaskMat.Empty()) return;
-
-            SaveUndoState();
-            var radius = Math.Max(1, EraserBrushSize);
-            Cv2.Line(_eraserMaskMat, startPt, endPt, Scalar.All(0), radius * 2, LineTypes.Link8);
-            ExecuteTrain();
-        }
-
-        private void SaveUndoState()
-        {
-            if (_eraserMaskMat is not null)
-            {
-                TrimHistory(_undoStack, MaxHistoryStates - 1);
-                _undoStack.Push(_eraserMaskMat.Clone());
-                DisposeHistory(_redoStack);
-            }
-        }
-
-        private static void TrimHistory(Stack<Mat> history, int maxStates)
-        {
-            if (history.Count <= maxStates) return;
-
-            var newestFirst = history.ToArray();
-            history.Clear();
-            for (var index = Math.Min(maxStates, newestFirst.Length) - 1; index >= 0; index--)
-            {
-                history.Push(newestFirst[index]);
-            }
-            for (var index = maxStates; index < newestFirst.Length; index++)
-            {
-                newestFirst[index].Dispose();
-            }
-        }
-
-        private static void DisposeHistory(Stack<Mat> history)
-        {
-            while (history.Count > 0)
-            {
-                history.Pop().Dispose();
-            }
-        }
-
-        private void ExecuteUndo()
-        {
-            if (_undoStack.Count > 0 && _eraserMaskMat is not null)
-            {
-                TrimHistory(_redoStack, MaxHistoryStates - 1);
-                _redoStack.Push(_eraserMaskMat.Clone());
-                _eraserMaskMat.Dispose();
-                _eraserMaskMat = _undoStack.Pop();
-                ExecuteTrain();
-            }
-        }
-
-        private void ExecuteRedo()
-        {
-            if (_redoStack.Count > 0 && _eraserMaskMat is not null)
-            {
-                TrimHistory(_undoStack, MaxHistoryStates - 1);
-                _undoStack.Push(_eraserMaskMat.Clone());
-                _eraserMaskMat.Dispose();
-                _eraserMaskMat = _redoStack.Pop();
-                ExecuteTrain();
-            }
         }
 
         private void ExecuteRefreshImage()
@@ -340,7 +241,6 @@ namespace VisionInspectionApp.UI.ViewModels
                         _rawFullMat = freshMat.Clone();
                         _globalPreprocessedMat = freshMat.Clone();
                         freshMat.Dispose();
-                        InitEraserMask();
                     }
                 }
                 catch { }
@@ -367,24 +267,28 @@ namespace VisionInspectionApp.UI.ViewModels
                     Angle = RoiAngle
                 };
 
+                RoiSummary = $"X: {curRoi.X:F0}, Y: {curRoi.Y:F0} | W: {curRoi.Width:F0}, H: {curRoi.Height:F0} | Góc: {curRoi.Angle:F1}°";
+                TemplateSizeText = $"{curRoi.Width} × {curRoi.Height} px";
+
                 using var roiMat = ToolEditorViewModel.ExtractRoiPatch(_rawFullMat, curRoi);
                 if (roiMat.Empty() || roiMat.Width <= 0 || roiMat.Height <= 0)
                 {
                     FullPreviewImage = _rawFullMat.ToBitmapSourceForDisplay();
+                    ContourStatsText = "0 viền • 0 điểm";
                     return;
                 }
 
-                using var roiEraser = _eraserMaskMat != null ? ToolEditorViewModel.ExtractRoiPatch(_eraserMaskMat, curRoi) : null;
-
                 // Extract contours with MvpShapeTrainer
-                var contours = MvpShapeTrainer.ExtractContours(roiMat, EdgeThreshold, LengthThreshold, roiEraser);
+                var contours = MvpShapeTrainer.ExtractContours(roiMat, EdgeThreshold, LengthThreshold, null);
+                int totalPoints = contours.Sum(c => c.Length);
+                ContourStatsText = $"{contours.Count} viền • {totalPoints} điểm";
 
                 // Render green overlay on full image
                 using var fullBgr = _rawFullMat.Channels() == 3 ? _rawFullMat.Clone() : _rawFullMat.CvtColor(ColorConversionCodes.GRAY2BGR);
 
                 var roiCenterX = curRoi.X + curRoi.Width / 2.0;
                 var roiCenterY = curRoi.Y + curRoi.Height / 2.0;
-                
+
                 // Restore deskewed contour points to the rotated ROI's position in the source image.
                 var shiftedContours = new List<OpenCvSharp.Point[]>();
                 foreach (var c in contours)
@@ -399,14 +303,6 @@ namespace VisionInspectionApp.UI.ViewModels
 
                 // Render green contours
                 Cv2.DrawContours(fullBgr, shiftedContours, -1, Scalar.FromRgb(0, 255, 0), 1, LineTypes.AntiAlias);
-
-                // Render eraser mask overlay if active
-                if (_eraserMaskMat is not null)
-                {
-                    using var invMask = new Mat();
-                    Cv2.BitwiseNot(_eraserMaskMat, invMask);
-                    fullBgr.SetTo(new Scalar(0, 0, 180), invMask); // Translucent Red for erased areas
-                }
 
                 FullPreviewImage = fullBgr.ToBitmapSourceForDisplay();
 
@@ -467,7 +363,6 @@ namespace VisionInspectionApp.UI.ViewModels
             _originDef.MvpLockOriginCenter = LockOriginCenter;
             _originDef.MvpOriginX = OriginX;
             _originDef.MvpOriginY = OriginY;
-            _originDef.MvpDetectionRoiMode = IsFullGraph ? DetectionRoiMode.FullGraph : DetectionRoiMode.PartGraph;
 
             _originDef.MinScore = MinScore;
             _originDef.MinAngle = MinAngle;
@@ -475,9 +370,8 @@ namespace VisionInspectionApp.UI.ViewModels
             _originDef.AngleStep = AngleStep;
             _originDef.WorldPosition = new Point2dModel { X = OriginX, Y = OriginY };
 
-            if (IsFullGraph || _originDef.SearchRoi == null || _originDef.SearchRoi.Width <= 0 || _originDef.SearchRoi.Height <= 0 
-                || _originDef.SearchRoi.X + _originDef.SearchRoi.Width > _rawFullMat.Width 
-                || _originDef.SearchRoi.Y + _originDef.SearchRoi.Height > _rawFullMat.Height)
+            // Ensure SearchRoi is valid; preserve existing SearchRoi if it has positive dimensions
+            if (_originDef.SearchRoi == null || _originDef.SearchRoi.Width <= 0 || _originDef.SearchRoi.Height <= 0)
             {
                 _originDef.SearchRoi = new Roi
                 {
@@ -492,15 +386,7 @@ namespace VisionInspectionApp.UI.ViewModels
             OriginMatcher.ClearCache();
             MvpShapeMatch2Engine.ClearCache();
 
-            // Encode Eraser Mask
-            if (_eraserMaskMat is not null)
-            {
-                Cv2.ImEncode(".png", _eraserMaskMat, out var buf);
-                _originDef.MvpEraserMask = buf;
-            }
-
             // Crop & Save template image from Image 1 (Global Preprocess only)
-            // This file serves as the "base" that gets local-preprocessed at runtime
             var templateDir = Path.Combine(_workingDir, "templates");
             Directory.CreateDirectory(templateDir);
             var templateFile = Path.Combine(templateDir, "origin.png");
@@ -528,7 +414,6 @@ namespace VisionInspectionApp.UI.ViewModels
             _originDef.TemplateImageFile = templateFile;
 
             // Train ShapeModel from Image 2 (_rawFullMat = tool input after local preprocess)
-            // This matches the actual runtime pipeline: origin.png → PreprocessTemplateForMatch(localPre) = Image 2
             using var cropForModel = ToolEditorViewModel.ExtractRoiPatch(_rawFullMat, curRoi);
             if (!cropForModel.Empty() && cropForModel.Width > 0 && cropForModel.Height > 0)
             {
@@ -543,10 +428,6 @@ namespace VisionInspectionApp.UI.ViewModels
 
         public void Dispose()
         {
-            DisposeHistory(_undoStack);
-            DisposeHistory(_redoStack);
-            _eraserMaskMat?.Dispose();
-            _eraserMaskMat = null;
             _rawFullMat?.Dispose();
             _globalPreprocessedMat?.Dispose();
             FullPreviewImage = null;

@@ -1,5 +1,20 @@
 # ROADMAP.md — Lộ trình phát triển & Trạng thái nhiệm vụ
 
+- [x] Task 408: Rà Soát, Bỏ Control Vô Dụng và Tái Cấu Trúc Giao Diện Cửa Sổ Train Template (Tool Origin):
+  - [x] Rà soát và loại bỏ 100% các control vô dụng (dummy) tồn đọng từ mẫu thiết kế cũ:
+    - Loại bỏ checkbox `Eraser`, ô `Size`, nút `Undo`, nút `Redo` (không có cơ chế tẩy xóa đường biên).
+    - Loại bỏ nhóm radio `Detection Roi: Full graph / Part graph` (tránh gây ghi đè làm mất `SearchRoi` của Origin).
+    - Loại bỏ bảng `Shape Operations List Table` rác (No. 0, Rect, Add/Deduct, ParamSet tĩnh 100% không logic).
+    - Loại bỏ nút `Save` lơ lửng tại tiêu đề panel giữa (trùng lặp với nút OK tại footer).
+  - [x] Tái cấu trúc giao diện 2 cột hiện đại, khoa học, thẩm mỹ chuẩn công nghiệp:
+    - Cột trái (Chiếm phần lớn diện tích): Image Viewer với khung ROI tương tác 8 chốt co giãn + chốt xoay, viền contour xanh lá trực tiếp.
+    - Thanh công cụ trên ảnh: 🎯 `Fit View`, 🔄 `Nạp Lại Ảnh`, ⌖ `Căn Giữa ROI`, ⚡ `Huấn Luyện Mẫu` kèm huy hiệu hiển thị thông số ROI `[X, Y | W, H | Góc]`.
+    - Cột phải: 4 Card nhóm tham số trực quan (Mẫu Đã Huấn Luyện với kích thước & số lượng viền/điểm; Tham Số Trích Xuất Cạnh Canny/Pyramid; Tọa Độ Tâm Gốc Khóa/Mở Khóa; Cài Đặt Khớp Mẫu Min Score & Dải Góc Xoay).
+    - Chân trang (Footer): Gợi ý mẹo thao tác chuột (Ctrl + Kéo) và 2 nút chuẩn `💾 Áp Dụng & Lưu (OK)` và `Hủy Bỏ (Cancel)`.
+  - [x] Kiểm thử tự động:
+    - Bổ sung `Test_OriginTrainViewModel_LifecycleAndCommands` trong [OriginTemplateJobTest.cs](file:///g:/NODEJS/Vision2026/TestExtractApp/OriginTemplateJobTest.cs).
+    - Toàn bộ bài kiểm thử Origin và ROI regression PASSED 100%, solution build 0 lỗi.
+
 - [x] Task 407: Bổ Sung Phím Tắt Ctrl + R (Giữ Nguyên ROI Width/Height, Chỉ Xoay Strip Trong ROI) và Ctrl + F4 (Đóng Job Đang Mở):
   - [x] Phím tắt `Ctrl + R` cho Tool `EdgePairDetect` và `Caliper`:
     - Chuyển đổi luân phiên giữa `Vertical` $\leftrightarrow$ `Horizontal` khi đang chọn node tương ứng.

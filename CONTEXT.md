@@ -13,25 +13,27 @@ Hỗ trợ Camera GigE/USB3/USB/RTSP, nạp ảnh tệp/thư mục, bản vẽ k
   - OQC Server API: `https://192.168.1.192/vision_upload.php`
   - OTA Update Server: `http://192.168.1.192/update/version.json` & `http://192.168.1.192/ota_server.php`
 
-## 3. Hoàn thành Task 407: Phím Tắt Ctrl + R (Giữ Nguyên ROI Width/Height, Chỉ Đảo Chiều Strip) và Ctrl + F4 (Đóng Job Đang Mở)
-1. **Phím tắt `Ctrl + R` (Toggle Tool Orientation) — Giữ nguyên ROI Width/Height**:
-   - Áp dụng cho cả hai node `EdgePairDetect` và `Caliper` khi đang được chọn trên Canvas hoặc Properties Panel.
-   - **Giữ nguyên 100% kích thước & vị trí khung ROI**: Loại bỏ hoàn toàn việc hoán đổi `Width` và `Height` của `SearchRoi`. Khung chữ nhật bao quanh chi tiết giữ nguyên cố định như người dùng đã vẽ.
-   - **Chỉ đảo chiều các strip bên trong ROI**:
-     - Khi `Vertical`: Các strip quét theo chiều dọc $\implies \text{StripLength} = \text{SearchRoi.Height}$, $\text{StripWidth} = \text{SearchRoi.Width} / \text{StripCount}$.
-     - Khi `Horizontal`: Các strip quét theo chiều ngang $\implies \text{StripLength} = \text{SearchRoi.Width}$, $\text{StripWidth} = \text{SearchRoi.Height} / \text{StripCount}$.
-     - Cơ chế đồng bộ: `SyncEpdStripsFromRoi` trong [ToolEditorViewModel.ToolEdgePair.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/ToolEditorViewModel.ToolEdgePair.cs) và `SyncCaliperStripsFromRoi` trong [ToolEditorViewModel.ToolCaliper.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/ToolEditorViewModel.ToolCaliper.cs).
-     - Đồng bộ cả khi kéo dãn ROI trên canvas ảnh trong `OnRoiEditedCore` và `ApplyRoiForLabel` ([ToolEditorViewModel.Engine.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/ToolEditorViewModel.Engine.cs)).
-   - Cập nhật tức thì overlay xem trước (mũi tên hướng quét Cyan và các vạch strip Lime/MediumPurple xoay 90 độ mượt mà) và đồng bộ giá trị trên Properties Panel.
-2. **Phím tắt `Ctrl + F4` (Đóng Job Đang Mở)**:
-   - Bổ sung `CloseJobCommand` vào [MainWindowViewModel.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/MainWindowViewModel.cs) và [ToolEditorViewModel.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/ToolEditorViewModel.cs).
-   - Đăng ký `KeyBinding Key="F4" Modifiers="Control"` trên Menu và Window InputBindings của [MainWindow.xaml](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/MainWindow.xaml) và [ToolEditorView.xaml](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/Views/ToolEditorView.xaml).
-   - Bắt phím `OnPreviewKeyDown` cấp Window và UserControl đảm bảo đóng Job an toàn, dọn sạch nodes, edges, overlay và reset đường dẫn file.
+## 3. Hoàn thành Task 408: Rà Soát, Bỏ Control Vô Dụng và Tái Cấu Trúc Giao Diện Cửa Sổ Train Template (Tool Origin)
+1. **Rà soát & Loại bỏ 100% control vô dụng (dummy) tồn đọng**:
+   - Loại bỏ checkbox `Eraser`, ô nhập `Size`, nút `Undo` và `Redo` (tồn đọng từ mockup ảnh cũ, không có cơ chế tẩy xóa).
+   - Loại bỏ `Detection Roi: Full graph / Part graph` (tránh xung đột và tránh ghi đè làm mất `SearchRoi` của Origin).
+   - Loại bỏ hoàn toàn bảng `Shape Operations List Table` rác (No. 0, Rect, Add/Deduct, ParamSet tĩnh không logic).
+   - Loại bỏ nút `Save` lơ lửng tại tiêu đề panel giữa (trùng lặp với nút OK tại footer).
+2. **Tái cấu trúc giao diện 2 cột hiện đại, khoa học & gọn gàng**:
+   - Bố cục 2 cột chuyên nghiệp (`2.5* | 1.2*`) giúp vùng hiển thị ảnh kiểm tra chiếm không gian tối đa, rộng rãi.
+   - Thanh công cụ trên ảnh: 🎯 **Fit View**, 🔄 **Nạp Lại Ảnh (Refresh Image)**, ⌖ **Căn Giữa ROI (Center ROI)**, ⚡ **Huấn Luyện (Train)** kèm badge hiển thị kích thước/vị trí ROI trực quan (`[X, Y | W, H | Góc]`).
+   - Cột phải chia thành 4 Card nhóm tham số rõ ràng:
+     - **Card 1: Mẫu Đã Huấn Luyện**: Khung xem trước template sắc nét kèm kích thước $W \times H$ (px) và số lượng đường viền/điểm đặc trưng.
+     - **Card 2: Tham Số Trích Xuất Biên**: Auto Threshold checkbox, Edge Threshold Slider+TextBox, Length Threshold Slider+TextBox, Max Pyramid Layers.
+     - **Card 3: Tọa Độ Tâm Gốc (Origin Center)**: Khóa tâm vào giữa ROI (Lock), Origin X và Origin Y (chỉnh sửa khi mở khóa).
+     - **Card 4: Tiêu Chuẩn Khớp Mẫu (Matching Settings)**: Ngưỡng Min Score, Dải góc xoay (Min Angle, Max Angle, Angle Step).
+   - Chân trang (Footer): Gợi ý thao tác nhanh (Ctrl + Kéo chuột để vẽ ROI) và 2 nút chuẩn `💾 Áp Dụng & Lưu (OK)` và `Hủy Bỏ (Cancel)`.
 3. **Kiểm thử tự động**:
-   - Cập nhật `Test_11_EdgePairDetect_RoiAutoScaling` và `Test_12_ToggleToolOrientation_And_CloseJobCommand` trong [PerformanceOptimizationTests.cs](file:///g:/NODEJS/Vision2026/TestExtractApp/PerformanceOptimizationTests.cs).
-   - Khẳng định `SearchRoi.Width` và `SearchRoi.Height` giữ nguyên 100%, `StripLength` và `StripWidth` tự động xoay theo hướng quét mới cho cả EdgePairDetect và Caliper, xác nhận `CloseJobCommand` dọn sạch Job. Toàn bộ PASSED 100%.
+   - Thêm `Test_OriginTrainViewModel_LifecycleAndCommands` trong [OriginTemplateJobTest.cs](file:///g:/NODEJS/Vision2026/TestExtractApp/OriginTemplateJobTest.cs).
+   - Kiểm thử toàn bộ luồng huấn luyện mẫu, tính toán thống kê, căn giữa ROI, đổi ngưỡng và lưu cấu hình: PASSED 100%.
 
 ## 4. Các sự kiện & thay đổi gần đây
+- Task 408: Rà soát loại bỏ 100% control vô dụng trong cửa sổ Train Template Tool Origin (Eraser, Size, Undo, Redo, Detection Roi radio, Shape Operations Table, Save button lơ lửng); thiết kế lại layout 2 cột hiện đại chuẩn công nghiệp; kiểm thử tự động PASSED 100%.
 - Task 407: Bổ sung phím tắt Ctrl + R chuyển đổi hướng quét Vertical/Horizontal cho EdgePairDetect & Caliper (giữ nguyên ROI Width/Height, chỉ xoay các strip trong ROI); thêm phím tắt Ctrl + F4 đóng Job đang mở trên toàn ứng dụng; kiểm thử tự động PASSED 100%.
 - Task 406: Tự động co giãn StripLength và StripWidth của node EdgePairDetection theo ROI; người dùng không cần nhập số thủ công; hỗ trợ đổi Orientation & StripCount; sửa lỗi overlay Horizontal; kiểm thử tự động PASSED.
 - Task 405: Triệt tiêu lỗi lệch đỏ ContourCompare trên cùng ảnh bằng DistanceTransform + MatchTemplate + ApproxNone; thêm Canny Slider 1 & 2 kèm Live Preview tức thì trên Properties Panel; tích hợp ContourCompare vào result.Pass và Bảng kết quả đo đạc (SpecResults & OQC MeasurementDetails).

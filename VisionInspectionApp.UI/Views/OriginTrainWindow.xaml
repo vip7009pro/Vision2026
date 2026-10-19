@@ -5,11 +5,13 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:controls="clr-namespace:VisionInspectionApp.UI.Controls"
         mc:Ignorable="d"
-        Title="Train Template" Height="740" Width="1200"
+        Title="Huấn Luyện Template Mẫu (Origin Tool)" Height="760" Width="1240"
+        MinHeight="680" MinWidth="1050"
         WindowStartupLocation="CenterOwner"
-        Background="#1E1E1E" Foreground="White"
-        UseLayoutRounding="True">
-    
+        Background="#1E1E1E" Foreground="#E0E0E0"
+        UseLayoutRounding="True"
+        TextOptions.TextFormattingMode="Display">
+
     <Window.Resources>
         <Style TargetType="TextBlock">
             <Setter Property="Foreground" Value="#E0E0E0"/>
@@ -19,7 +21,7 @@
             <Setter Property="Background" Value="#2D2D30"/>
             <Setter Property="Foreground" Value="White"/>
             <Setter Property="BorderBrush" Value="#434346"/>
-            <Setter Property="Padding" Value="4,2"/>
+            <Setter Property="Padding" Value="6,3"/>
             <Setter Property="VerticalContentAlignment" Value="Center"/>
         </Style>
         <Style TargetType="Button">
@@ -33,9 +35,8 @@
             <Setter Property="Foreground" Value="White"/>
             <Setter Property="VerticalContentAlignment" Value="Center"/>
         </Style>
-        <Style TargetType="RadioButton">
-            <Setter Property="Foreground" Value="White"/>
-            <Setter Property="VerticalContentAlignment" Value="Center"/>
+        <Style TargetType="Slider">
+            <Setter Property="VerticalAlignment" Value="Center"/>
         </Style>
     </Window.Resources>
 
@@ -45,17 +46,16 @@
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
+        <!-- MAIN CONTENT (2 COLUMNS) -->
         <Grid Grid.Row="0">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="2.2*" />
-                <ColumnDefinition Width="8" />
-                <ColumnDefinition Width="1*" />
-                <ColumnDefinition Width="8" />
-                <ColumnDefinition Width="1.5*" />
+                <ColumnDefinition Width="2.5*" />
+                <ColumnDefinition Width="10" />
+                <ColumnDefinition Width="1.2*" MinWidth="340" />
             </Grid.ColumnDefinitions>
 
-            <!-- LEFT PANEL: Training Template -->
-            <Border Grid.Column="0" BorderBrush="#333337" BorderThickness="1" Background="#252526" Padding="8">
+            <!-- LEFT PANEL: Image Viewer & Interactive ROI -->
+            <Border Grid.Column="0" BorderBrush="#333337" BorderThickness="1" Background="#252526" CornerRadius="4" Padding="10">
                 <Grid>
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />
@@ -63,22 +63,30 @@
                         <RowDefinition Height="*" />
                     </Grid.RowDefinitions>
 
-                    <TextBlock Text="Training Template" FontWeight="Bold" FontSize="14" Margin="0,0,0,8" Foreground="#007ACC" />
+                    <!-- Header & Current ROI status badge -->
+                    <DockPanel Grid.Row="0" Margin="0,0,0,8">
+                        <Border DockPanel.Dock="Right" Background="#1B1B1C" BorderBrush="#333337" BorderThickness="1" CornerRadius="3" Padding="8,3">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="📐 " FontSize="11" VerticalAlignment="Center"/>
+                                <TextBlock Text="{Binding RoiSummary}" Foreground="#9CDCFE" FontSize="11" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </Border>
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                            <TextBlock Text="HUẤN LUYỆN TEMPLATE ORIGIN" FontWeight="Bold" FontSize="14" Foreground="#007ACC" VerticalAlignment="Center" />
+                            <TextBlock Text=" (Kéo khung viền hoặc xoay chốt tròn để chọn mẫu)" Foreground="#858585" FontSize="11" Margin="8,0,0,0" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </DockPanel>
 
-                    <!-- Toolbar -->
+                    <!-- Functional Toolbar -->
                     <WrapPanel Grid.Row="1" Margin="0,0,0,8" VerticalAlignment="Center">
-                        <CheckBox Content="Eraser" IsChecked="{Binding IsEraserActive}" Margin="0,0,8,0" VerticalAlignment="Center" />
-                        <TextBlock Text="Size:" VerticalAlignment="Center" Margin="0,0,4,0"/>
-                        <TextBox Text="{Binding EraserBrushSize, UpdateSourceTrigger=PropertyChanged}" Width="45" Margin="0,0,12,0" TextAlignment="Center"/>
-                        <Button Content="Undo" Command="{Binding UndoCommand}" Margin="0,0,6,0" />
-                        <Button Content="Redo" Command="{Binding RedoCommand}" Margin="0,0,12,0" />
-                        <Button Content="🎯 Fit View" Click="OnFitViewClicked" Margin="0,0,6,0" ToolTip="Cân chỉnh toàn bộ ảnh vừa khít khung nhìn" />
-                        <Button Content="Current Image" Command="{Binding RefreshCurrentImageCommand}" Margin="0,0,6,0" />
-                        <Button Content="Train" Command="{Binding TrainCommand}" Background="#007ACC" Foreground="White" FontWeight="SemiBold"/>
+                        <Button Content="🎯 Vừa Khung (Fit View)" Click="OnFitViewClicked" Margin="0,0,8,0" ToolTip="Cân chỉnh toàn bộ ảnh vừa khít khung nhìn" />
+                        <Button Content="🔄 Nạp Lại Ảnh" Command="{Binding RefreshCurrentImageCommand}" Margin="0,0,8,0" ToolTip="Nạp lại snapshot ảnh mới nhất từ Camera / Nguồn ảnh" />
+                        <Button Content="⌖ Căn Giữa ROI" Command="{Binding CenterRoiCommand}" Margin="0,0,8,0" ToolTip="Đưa khung viền mẫu về chính giữa ảnh" />
+                        <Button Content="⚡ Huấn Luyện Mẫu" Command="{Binding TrainCommand}" Background="#007ACC" Foreground="White" FontWeight="Bold" Padding="12,4" ToolTip="Trích xuất lại đường biên mẫu theo tham số hiện tại"/>
                     </WrapPanel>
 
-                    <!-- Preview Container with ImageViewerControl (Full handles: 8 resize handles + rotation handle) -->
-                    <Border Grid.Row="2" BorderBrush="#434346" BorderThickness="1" Background="#111111" ClipToBounds="True">
+                    <!-- Image Viewer Container with 8 handles + rotation handle -->
+                    <Border Grid.Row="2" BorderBrush="#434346" BorderThickness="1" Background="#111111" CornerRadius="2" ClipToBounds="True">
                         <controls:ImageViewerControl x:Name="OriginImageViewer"
                                                  ImageSource="{Binding FullPreviewImage}"
                                                  OverlayItems="{Binding OverlayItems}"
@@ -90,166 +98,166 @@
                 </Grid>
             </Border>
 
-            <!-- MIDDLE PANEL: Generated Template -->
-            <Border Grid.Column="2" BorderBrush="#333337" BorderThickness="1" Background="#252526" Padding="8">
-                <Grid>
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto" />
-                        <RowDefinition Height="Auto" />
-                        <RowDefinition Height="*" />
-                    </Grid.RowDefinitions>
-
-                    <DockPanel Grid.Row="0" Margin="0,0,0,8">
-                        <Button Content="Save" Command="{Binding SaveCommand}" DockPanel.Dock="Right" Padding="12,2" Background="#0E639C"/>
-                        <TextBlock Text="Generated Template" FontWeight="Bold" FontSize="13" VerticalAlignment="Center" Foreground="#007ACC"/>
-                    </DockPanel>
-
-                    <Border Grid.Row="2" BorderBrush="#434346" BorderThickness="1" Background="#111111" Margin="0,4,0,0">
-                        <Image Source="{Binding GeneratedTemplateImage}" Stretch="Uniform"/>
-                    </Border>
-                </Grid>
-            </Border>
-
-            <!-- RIGHT PANEL: Parameter Configuration & Shape Operations -->
-            <Grid Grid.Column="4">
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="1.4*" />
-                    <RowDefinition Height="8" />
-                    <RowDefinition Height="1*" />
-                </Grid.RowDefinitions>
-
-                <!-- Parameter Configuration -->
-                <Border Grid.Row="0" BorderBrush="#333337" BorderThickness="1" Background="#252526" Padding="10">
-                    <ScrollViewer VerticalScrollBarVisibility="Auto">
+            <!-- RIGHT PANEL: Parameters & Template Preview -->
+            <ScrollViewer Grid.Column="2" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                <StackPanel>
+                    <!-- Card 1: Generated Template Preview -->
+                    <Border BorderBrush="#333337" BorderThickness="1" Background="#252526" CornerRadius="4" Padding="10" Margin="0,0,0,10">
                         <StackPanel>
-                            <TextBlock Text="Parameter Configuration" FontWeight="Bold" FontSize="13" Margin="0,0,0,10" Foreground="#007ACC"/>
-
-                            <CheckBox Content="Auto Thresh" IsChecked="{Binding AutoThresh}" Margin="0,0,0,8"/>
-
-                            <TextBlock Text="Edge Threshold" Margin="0,4,0,2"/>
-                            <Grid Margin="0,0,0,6">
+                            <TextBlock Text="🖼️ Mẫu Đã Huấn Luyện" FontWeight="Bold" FontSize="13" Foreground="#007ACC" Margin="0,0,0,8"/>
+                            <Border BorderBrush="#434346" BorderThickness="1" Background="#111111" CornerRadius="2" Height="170">
+                                <Image Source="{Binding GeneratedTemplateImage}" Stretch="Uniform" Margin="4"/>
+                            </Border>
+                            <Grid Margin="0,6,0,0">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*" />
-                                    <ColumnDefinition Width="50" />
+                                    <ColumnDefinition Width="*" />
                                 </Grid.ColumnDefinitions>
-                                <Slider Minimum="1" Maximum="255" Value="{Binding EdgeThreshold}" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                                <StackPanel Grid.Column="0">
+                                    <TextBlock Text="Kích thước mẫu:" Foreground="#858585" FontSize="11"/>
+                                    <TextBlock Text="{Binding TemplateSizeText}" FontWeight="SemiBold" Foreground="#9CDCFE" FontSize="12" Margin="0,1,0,0"/>
+                                </StackPanel>
+                                <StackPanel Grid.Column="1">
+                                    <TextBlock Text="Đặc trưng biên:" Foreground="#858585" FontSize="11"/>
+                                    <TextBlock Text="{Binding ContourStatsText}" FontWeight="SemiBold" Foreground="#4EC9B0" FontSize="12" Margin="0,1,0,0"/>
+                                </StackPanel>
+                            </Grid>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Card 2: Edge Extraction Parameters -->
+                    <Border BorderBrush="#333337" BorderThickness="1" Background="#252526" CornerRadius="4" Padding="10" Margin="0,0,0,10">
+                        <StackPanel>
+                            <TextBlock Text="⚙️ Tham Số Trích Xuất Biên" FontWeight="Bold" FontSize="13" Foreground="#007ACC" Margin="0,0,0,8"/>
+
+                            <CheckBox Content="Tự động tính ngưỡng (Auto Threshold)" IsChecked="{Binding AutoThresh}" Margin="0,0,0,8" ToolTip="Hệ thống tự động phân tích độ tương phản ảnh để tối ưu ngưỡng cạnh"/>
+
+                            <DockPanel Margin="0,2,0,2">
+                                <TextBlock Text="Ngưỡng cạnh (Edge Threshold):" VerticalAlignment="Center"/>
+                            </DockPanel>
+                            <Grid Margin="0,0,0,8">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="48" />
+                                </Grid.ColumnDefinitions>
+                                <Slider Minimum="1" Maximum="255" Value="{Binding EdgeThreshold}" Margin="0,0,8,0" ToolTip="Độ nhạy phát hiện cạnh Canny"/>
                                 <TextBox Grid.Column="1" Text="{Binding EdgeThreshold, UpdateSourceTrigger=PropertyChanged}" TextAlignment="Center"/>
                             </Grid>
 
-                            <TextBlock Text="Length Threshold" Margin="0,4,0,2"/>
-                            <Grid Margin="0,0,0,6">
+                            <DockPanel Margin="0,2,0,2">
+                                <TextBlock Text="Độ dài viền tối thiểu (Length Threshold):" VerticalAlignment="Center"/>
+                            </DockPanel>
+                            <Grid Margin="0,0,0,8">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*" />
-                                    <ColumnDefinition Width="50" />
+                                    <ColumnDefinition Width="48" />
                                 </Grid.ColumnDefinitions>
-                                <Slider Minimum="1" Maximum="100" Value="{Binding LengthThreshold}" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                                <Slider Minimum="1" Maximum="100" Value="{Binding LengthThreshold}" Margin="0,0,8,0" ToolTip="Lọc bỏ các đường viền nhiễu ngắn hơn giá trị này"/>
                                 <TextBox Grid.Column="1" Text="{Binding LengthThreshold, UpdateSourceTrigger=PropertyChanged}" TextAlignment="Center"/>
                             </Grid>
 
-                            <Grid Margin="0,4,0,8">
+                            <DockPanel Margin="0,2,0,2">
+                                <TextBlock Text="Số tầng Pyramid tối đa (Max Layers):" VerticalAlignment="Center"/>
+                            </DockPanel>
+                            <Grid Margin="0,0,0,2">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*" />
-                                    <ColumnDefinition Width="60" />
+                                    <ColumnDefinition Width="48" />
                                 </Grid.ColumnDefinitions>
-                                <TextBlock Text="Max Pyramid Layer Number:" VerticalAlignment="Center"/>
-                                <TextBox Grid.Column="1" Text="{Binding MaxPyramidLayers}" TextAlignment="Center"/>
+                                <Slider Minimum="1" Maximum="4" Value="{Binding MaxPyramidLayers}" Margin="0,0,8,0" ToolTip="Số tầng tháp ảnh kim tự tháp phục vụ so khớp thô đa cấp"/>
+                                <TextBox Grid.Column="1" Text="{Binding MaxPyramidLayers, UpdateSourceTrigger=PropertyChanged}" TextAlignment="Center"/>
                             </Grid>
-
-                            <Border BorderBrush="#333337" BorderThickness="0,1,0,0" Margin="0,4,0,8" Padding="0,8,0,0">
-                                <StackPanel>
-                                    <DockPanel Margin="0,0,0,6">
-                                        <CheckBox Content="Lock" IsChecked="{Binding LockOriginCenter}" DockPanel.Dock="Right" VerticalAlignment="Center"/>
-                                        <TextBlock Text="Origin Center" FontWeight="SemiBold" VerticalAlignment="Center"/>
-                                    </DockPanel>
-
-                                    <Grid Margin="0,2,0,4">
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="70" />
-                                            <ColumnDefinition Width="*" />
-                                        </Grid.ColumnDefinitions>
-                                        <TextBlock Text="OriginX:" VerticalAlignment="Center"/>
-                                        <TextBox Grid.Column="1" Text="{Binding OriginX, StringFormat={}{0:F3}}" IsReadOnly="{Binding LockOriginCenter}"/>
-                                    </Grid>
-
-                                    <Grid Margin="0,2,0,4">
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="70" />
-                                            <ColumnDefinition Width="*" />
-                                        </Grid.ColumnDefinitions>
-                                        <TextBlock Text="OriginY:" VerticalAlignment="Center"/>
-                                        <TextBox Grid.Column="1" Text="{Binding OriginY, StringFormat={}{0:F3}}" IsReadOnly="{Binding LockOriginCenter}"/>
-                                    </Grid>
-                                </StackPanel>
-                            </Border>
                         </StackPanel>
-                    </ScrollViewer>
-                </Border>
+                    </Border>
 
-                <!-- Detection ROI & Shape Operation List Table -->
-                <Border Grid.Row="2" BorderBrush="#333337" BorderThickness="1" Background="#252526" Padding="10">
-                    <Grid>
-                        <Grid.RowDefinitions>
-                            <RowDefinition Height="Auto" />
-                            <RowDefinition Height="Auto" />
-                            <RowDefinition Height="*" />
-                        </Grid.RowDefinitions>
+                    <!-- Card 3: Origin Center Coordinates -->
+                    <Border BorderBrush="#333337" BorderThickness="1" Background="#252526" CornerRadius="4" Padding="10" Margin="0,0,0,10">
+                        <StackPanel>
+                            <DockPanel Margin="0,0,0,8">
+                                <CheckBox Content="Khóa vào tâm ROI" IsChecked="{Binding LockOriginCenter}" DockPanel.Dock="Right" VerticalAlignment="Center" ToolTip="Tự động neo tâm Origin tại chính giữa khung chữ nhật ROI"/>
+                                <TextBlock Text="📍 Tọa Độ Tâm Gốc (Origin)" FontWeight="Bold" FontSize="13" Foreground="#007ACC" VerticalAlignment="Center"/>
+                            </DockPanel>
 
-                        <TextBlock Text="Detection Roi" FontWeight="Bold" FontSize="13" Margin="0,0,0,6" Foreground="#007ACC"/>
-
-                        <WrapPanel Grid.Row="1" Margin="0,0,0,8">
-                            <RadioButton Content="Full graph" IsChecked="{Binding IsFullGraph}" Margin="0,0,16,0"/>
-                            <RadioButton Content="Part graph" IsChecked="{Binding IsPartGraph}"/>
-                        </WrapPanel>
-
-                        <!-- Shape Operations List Table -->
-                        <Border Grid.Row="2" BorderBrush="#434346" BorderThickness="1" Background="#1B1B1C">
-                            <Grid>
-                                <Grid.RowDefinitions>
-                                    <RowDefinition Height="24" />
-                                    <RowDefinition Height="*" />
-                                </Grid.RowDefinitions>
-
-                                <Grid Grid.Row="0" Background="#2D2D30">
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="40" />
-                                        <ColumnDefinition Width="60" />
-                                        <ColumnDefinition Width="110" />
-                                        <ColumnDefinition Width="*" />
-                                    </Grid.ColumnDefinitions>
-                                    <TextBlock Text="No." Grid.Column="0" VerticalAlignment="Center" HorizontalAlignment="Center" FontSize="11" FontWeight="Bold"/>
-                                    <TextBlock Text="Shape" Grid.Column="1" VerticalAlignment="Center" HorizontalAlignment="Center" FontSize="11" FontWeight="Bold"/>
-                                    <TextBlock Text="Operation type" Grid.Column="2" VerticalAlignment="Center" HorizontalAlignment="Center" FontSize="11" FontWeight="Bold"/>
-                                    <TextBlock Text="Operation" Grid.Column="3" VerticalAlignment="Center" HorizontalAlignment="Center" FontSize="11" FontWeight="Bold"/>
-                                </Grid>
-
-                                <Grid Grid.Row="1" Margin="4,2">
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="40" />
-                                        <ColumnDefinition Width="60" />
-                                        <ColumnDefinition Width="110" />
-                                        <ColumnDefinition Width="*" />
-                                    </Grid.ColumnDefinitions>
-                                    <TextBlock Text="0" Grid.Column="0" VerticalAlignment="Center" HorizontalAlignment="Center"/>
-                                    <TextBlock Text="Rect" Grid.Column="1" VerticalAlignment="Center" HorizontalAlignment="Center" Foreground="#007ACC"/>
-                                    <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Center">
-                                        <RadioButton Content="Add" IsChecked="True" FontSize="10" Margin="0,0,4,0"/>
-                                        <RadioButton Content="Deduct" FontSize="10"/>
-                                    </StackPanel>
-                                    <TextBlock Grid.Column="3" VerticalAlignment="Center" HorizontalAlignment="Center">
-                                        <Hyperlink Foreground="#007ACC">ParamSet</Hyperlink>
-                                    </TextBlock>
-                                </Grid>
+                            <Grid Margin="0,2,0,2">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="10" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Grid.Column="0">
+                                    <TextBlock Text="Origin X (px):" Foreground="#858585" FontSize="11" Margin="0,0,0,3"/>
+                                    <TextBox Text="{Binding OriginX, StringFormat={}{0:F2}}" IsReadOnly="{Binding LockOriginCenter}"/>
+                                </StackPanel>
+                                <StackPanel Grid.Column="2">
+                                    <TextBlock Text="Origin Y (px):" Foreground="#858585" FontSize="11" Margin="0,0,0,3"/>
+                                    <TextBox Text="{Binding OriginY, StringFormat={}{0:F2}}" IsReadOnly="{Binding LockOriginCenter}"/>
+                                </StackPanel>
                             </Grid>
-                        </Border>
-                    </Grid>
-                </Border>
-            </Grid>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Card 4: Matching Search Settings -->
+                    <Border BorderBrush="#333337" BorderThickness="1" Background="#252526" CornerRadius="4" Padding="10">
+                        <StackPanel>
+                            <TextBlock Text="🔍 Tiêu Chuẩn Khớp Mẫu (Matching)" FontWeight="Bold" FontSize="13" Foreground="#007ACC" Margin="0,0,0,8"/>
+
+                            <DockPanel Margin="0,2,0,2">
+                                <TextBlock Text="Độ tin cậy tối thiểu (Min Score):" VerticalAlignment="Center"/>
+                            </DockPanel>
+                            <Grid Margin="0,0,0,8">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="48" />
+                                </Grid.ColumnDefinitions>
+                                <Slider Minimum="0.10" Maximum="1.00" Value="{Binding MinScore}" Margin="0,0,8,0" SmallChange="0.05" LargeChange="0.1" ToolTip="Ngưỡng điểm tối thiểu để chấp nhận vị trí tìm thấy"/>
+                                <TextBox Grid.Column="1" Text="{Binding MinScore, StringFormat={}{0:F2}, UpdateSourceTrigger=PropertyChanged}" TextAlignment="Center"/>
+                            </Grid>
+
+                            <Grid Margin="0,2,0,2">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="6" />
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="6" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Grid.Column="0">
+                                    <TextBlock Text="Góc Min (°):" Foreground="#858585" FontSize="11" Margin="0,0,0,3"/>
+                                    <TextBox Text="{Binding MinAngle, UpdateSourceTrigger=PropertyChanged}" TextAlignment="Center"/>
+                                </StackPanel>
+                                <StackPanel Grid.Column="2">
+                                    <TextBlock Text="Góc Max (°):" Foreground="#858585" FontSize="11" Margin="0,0,0,3"/>
+                                    <TextBox Text="{Binding MaxAngle, UpdateSourceTrigger=PropertyChanged}" TextAlignment="Center"/>
+                                </StackPanel>
+                                <StackPanel Grid.Column="4">
+                                    <TextBlock Text="Bước góc (°):" Foreground="#858585" FontSize="11" Margin="0,0,0,3"/>
+                                    <TextBox Text="{Binding AngleStep, UpdateSourceTrigger=PropertyChanged}" TextAlignment="Center"/>
+                                </StackPanel>
+                            </Grid>
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+            </ScrollViewer>
         </Grid>
 
-        <!-- FOOTER: OK & Cancel -->
-        <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,12,0,0">
-            <Button Content="OK" Command="{Binding OkCommand}" Width="90" Margin="0,0,10,0" Background="#007ACC" Foreground="White" FontWeight="Bold"/>
-            <Button Content="Cancel" Click="CancelButton_Click" Width="90" Background="#3E3E42"/>
-        </StackPanel>
+        <!-- FOOTER BAR -->
+        <Grid Grid.Row="1" Margin="0,12,0,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+
+            <!-- Usage hint -->
+            <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                <TextBlock Text="💡 " FontSize="12" VerticalAlignment="Center"/>
+                <TextBlock Text="Mẹo: Giữ phím Ctrl + Kéo chuột trên ảnh để vẽ nhanh khung ROI, dùng 8 chốt để co giãn hoặc chốt tròn để xoay góc." Foreground="#858585" FontSize="11" VerticalAlignment="Center"/>
+            </StackPanel>
+
+            <!-- Action buttons -->
+            <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                <Button Content="💾 Áp Dụng &amp; Lưu (OK)" Command="{Binding OkCommand}" Width="150" Height="34" Margin="0,0,10,0" Background="#007ACC" Foreground="White" FontWeight="Bold" FontSize="12" ToolTip="Lưu lại mẫu huấn luyện và cập nhật vào Job"/>
+                <Button Content="Hủy Bỏ (Cancel)" Click="CancelButton_Click" Width="100" Height="34" Background="#3E3E42" FontSize="12"/>
+            </StackPanel>
+        </Grid>
     </Grid>
 </Window>

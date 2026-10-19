@@ -33,6 +33,7 @@ public static class OriginTemplateJobTest
         Console.WriteLine("========================================================");
 
         Test_OriginTemplateContourRotationTransform();
+        Test_OriginTrainViewModel_LifecycleAndCommands();
 
         var testBaseDir = Path.Combine(Path.GetTempPath(), "Vision2026_Test_Origin", Guid.NewGuid().ToString());
         Directory.CreateDirectory(testBaseDir);
@@ -233,5 +234,86 @@ public static class OriginTemplateJobTest
         var selected = new RoiSelection("Origin T", roi, System.Windows.Input.ModifierKeys.Control);
         Assert(selected.Label == "Origin T" && selected.Roi.Angle == 37,
             "Ctrl-drawn template selection carries the Origin T label and ROI geometry");
+    }
+
+    private static void Test_OriginTrainViewModel_LifecycleAndCommands()
+    {
+        Console.WriteLine("▶ Running Test_OriginTrainViewModel_LifecycleAndCommands...");
+
+        var tempDir = Path.Combine(Path.GetTempPath(), "OriginTrainVM_Test_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDir);
+
+        try
+        {
+            using var sampleMat = new Mat(480, 640, MatType.CV_8UC3, new Scalar(200, 200, 200));
+            // Draw a high contrast rectangle inside
+            Cv2.Rectangle(sampleMat, new Rect(100, 100, 150, 150), new Scalar(10, 10, 10), -1);
+
+            var originDef = new PointDefinition
+            {
+                Name = "Origin",
+                TemplateRoi = new Roi { X = 90, Y = 90, Width = 170, Height = 170, Angle = 0 },
+                MvpAutoThresh = true,
+                MvpEdgeThreshold = 25,
+                MvpLengthThreshold = 10,
+                MvpMaxPyramidLayers = 3,
+                MvpLockOriginCenter = true
+            };
+
+            Exception? threadEx = null;
+            var thread = new System.Threading.Thread(() =>
+            {
+                try
+                {
+                    using var vm = new OriginTrainViewModel(sampleMat, sampleMat, originDef, tempDir);
+
+                    Assert(vm.TemplateSizeText.Contains("170"), "ViewModel initializes TemplateSizeText correctly");
+                    Assert(!string.IsNullOrWhiteSpace(vm.ContourStatsText), "ViewModel computes ContourStatsText");
+                    Assert(!string.IsNullOrWhiteSpace(vm.RoiSummary), "ViewModel computes RoiSummary");
+                    Assert(vm.LockOriginCenter == true, "LockOriginCenter is true");
+                    Assert(Math.Abs(vm.OriginX - (90 + 170 / 2.0)) < 0.1, "OriginX locked to ROI center");
+
+                    // Test CenterRoiCommand
+                    vm.CenterRoiCommand.Execute(null);
+                    Assert(vm.RoiX > 0 && vm.RoiY > 0, "CenterRoi centers the ROI in the image");
+                    Assert(vm.LockOriginCenter == true, "LockOriginCenter remains true after center");
+
+                    // Test parameters change & re-train
+                    vm.EdgeThreshold = 30;
+                    vm.LengthThreshold = 15;
+                    vm.TrainCommand.Execute(null);
+                    Assert(!string.IsNullOrWhiteSpace(vm.ContourStatsText), "Re-train updates contour stats");
+
+                    // Test OkCommand saves to originDef
+                    vm.OkCommand.Execute(null);
+                    Assert(originDef.MvpEdgeThreshold == 30, "OriginDef edge threshold updated to 30");
+                    Assert(originDef.MvpLengthThreshold == 15, "OriginDef length threshold updated to 15");
+                    Assert(File.Exists(originDef.TemplateImageFile), "Template image file saved on disk");
+                }
+                catch (Exception ex)
+                {
+                    threadEx = ex;
+                }
+            });
+            thread.SetApartmentState(System.Threading.ApartmentState.STA);
+            thread.Start();
+            thread.Join();
+
+            if (threadEx != null)
+            {
+                throw threadEx;
+            }
+
+            Console.WriteLine("  ✅ PASS: OriginTrainViewModel lifecycle and commands executed successfully");
+        }
+        finally
+        {
+            try
+            {
+                if (Directory.Exists(tempDir))
+                    Directory.Delete(tempDir, recursive: true);
+            }
+            catch { }
+        }
     }
 }
