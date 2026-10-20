@@ -721,15 +721,38 @@ public partial class InspectionService
                     return new SurfaceCompareResult(def.Name, 0, 0.0, new List<SurfaceCompareDefect>(), false);
                 }
 
-                // Load and Preprocess template exactly like the current image (using RAM Cache)
+                // Load template image (using RAM Cache).
+                // Note: The template image file is already cropped from the tool's input image at teach time,
+                // which means any upstream preprocessing has already been applied. Re-running the preprocessor
+                // on templRaw is redundant and destructive (especially for range thresholding InRange).
                 using var templRaw = GetCachedSurfaceCompareTemplate(def.TemplateImageFile);
                 if (templRaw is null || templRaw.Empty())
                 {
                     return new SurfaceCompareResult(def.Name, 0, 0.0, new List<SurfaceCompareDefect>(), false);
                 }
 
-                // Apply the same preprocessing steps to the template crop.
-                using var templCrop0 = preprocessor.Run(templRaw, settings);
+                // Extract and match template crop
+                using var tplCrop = new Mat();
+                if (templRaw.Width == templateRoiTeach.Width && templRaw.Height == templateRoiTeach.Height)
+                {
+                    templRaw.CopyTo(tplCrop);
+                }
+                else if (templRaw.Width == inspectRoiTeach.Width && templRaw.Height == inspectRoiTeach.Height &&
+                         templateRoiTeach.X >= inspectRoiTeach.X && templateRoiTeach.Y >= inspectRoiTeach.Y &&
+                         templateRoiTeach.X + templateRoiTeach.Width <= inspectRoiTeach.X + inspectRoiTeach.Width &&
+                         templateRoiTeach.Y + templateRoiTeach.Height <= inspectRoiTeach.Y + inspectRoiTeach.Height)
+                {
+                    // Gracefully recover when template image was saved with InspectRoi dimensions
+                    int subX = templateRoiTeach.X - inspectRoiTeach.X;
+                    int subY = templateRoiTeach.Y - inspectRoiTeach.Y;
+                    using var subPatch = new Mat(templRaw, new Rect(subX, subY, templateRoiTeach.Width, templateRoiTeach.Height));
+                    subPatch.CopyTo(tplCrop);
+                }
+                else
+                {
+                    Cv2.Resize(templRaw, tplCrop, new Size(templateRoiTeach.Width, templateRoiTeach.Height), 0, 0, InterpolationFlags.Area);
+                }
+
                 // We need to un-rotate the target image to match the teach template orientation.
                 var trTeach = new Roi { X = templateRoiTeach.X, Y = templateRoiTeach.Y, Width = templateRoiTeach.Width, Height = templateRoiTeach.Height, Angle = templateRoiTeach.Angle };
                 using var testCropRaw = ExtractStraightRoi(matBgrOrGray, trTeach, originTeach, originFound, angleDeg, out var centerFoundTpl);
@@ -741,19 +764,22 @@ public partial class InspectionService
                 using var testCropGrayOwned = testCropRaw.Channels() == 1 ? null : testCropRaw.CvtColor(ColorConversionCodes.BGR2GRAY);
                 Mat testCropGray = testCropGrayOwned ?? testCropRaw;
 
-                // Apply the same preprocessing steps to the target crop.
-                using var testCrop = preprocessor.Run(testCropGray, settings);
+                // Apply any local preprocessing steps if needed (e.g. if matBgrOrGray was not preprocessed upstream)
+                bool hasActiveSettings = settings != null && (
+                    settings.UseGaussianBlur ||
+                    settings.UseMedianBlur ||
+                    settings.UseBilateralFilter ||
+                    settings.UseThreshold ||
+                    settings.UseMorphology ||
+                    settings.UseCanny ||
+                    settings.UseAutoEdge ||
+                    settings.IlluminationCorrection != IlluminationCorrectionPreset.None ||
+                    settings.GradientType != PreprocessGradientType.None ||
+                    settings.UseGamma);
 
-                // Make sure template crop has the exact size
-                using var tplCrop = new Mat();
-                if (templCrop0.Width != templateRoiTeach.Width || templCrop0.Height != templateRoiTeach.Height)
-                {
-                    Cv2.Resize(templCrop0, tplCrop, new Size(templateRoiTeach.Width, templateRoiTeach.Height), 0, 0, InterpolationFlags.Area);
-                }
-                else
-                {
-                    templCrop0.CopyTo(tplCrop);
-                }
+                using var testCrop = hasActiveSettings
+                    ? preprocessor.Run(testCropGray, settings!)
+                    : testCropGray.Clone();
 
                 if (def.AutoAlign && def.AutoAlignMaxShiftPx > 0 && testCrop.Width > def.AutoAlignMaxShiftPx * 2 && testCrop.Height > def.AutoAlignMaxShiftPx * 2)
                 {
@@ -2133,8 +2159,8 @@ public partial class InspectionService
                     .Select(sc => RunHeavyTool($"SurfaceCompare:{sc.Name}", () =>
                     {
                         var __sw = System.Diagnostics.Stopwatch.StartNew();
-                        var (matForSc, scSettings, scPreprocessor) = ResolveToolPreprocessForRoiFirst("SurfaceCompare", sc.Name);
-                        var res = RunSurfaceCompare(matForSc, originTeach, originFound, angleDeg, sc, scPreprocessor ?? _preprocessor, scSettings ?? new PreprocessSettings());
+                        var (matForSc, scSettings) = ResolveToolPreprocess("SurfaceCompare", sc.Name);
+                        var res = RunSurfaceCompare(matForSc, originTeach, originFound, angleDeg, sc, _preprocessor, scSettings ?? new PreprocessSettings());
                         __sw.Stop(); result.Timings.NodeTimings[sc.Name] = (int)__sw.ElapsedMilliseconds; return res;
                     }))
                     .ToArray();

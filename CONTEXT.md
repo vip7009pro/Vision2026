@@ -7,32 +7,30 @@ Hỗ trợ Camera GigE/USB3/USB/RTSP, nạp ảnh tệp/thư mục, bản vẽ k
 ## 2. Trạng thái mã nguồn gần nhất
 - **Phiên bản hiện tại**: .NET 8 WPF, x64/x86 Multi-targeting, C# 12.
 - **Biên dịch**: 0 Errors toàn solution (`VisionInspectionApp.slnx`) cả Debug lẫn Release.
-- **Kiểm thử tự động**: PASSED 100% (Toàn bộ kiểm thử phím tắt Ctrl+R & Ctrl+F4 với ROI cố định, ROI Edit & Auto Scaling, 8/8 test ContourCompare, 12/12 test Tool Calib Factor, 15/15 test OQC Scanner Live View, 8/8 test MvpShapeMatch2 Preprocess, 6/6 test Seeding Config).
+- **Kiểm thử tự động**: PASSED 100% (Toàn bộ 9/9 test SurfaceCompare & Caliper, regression test tệp Job `job_7A11034A_GH68-58216B`, Ctrl+R & Ctrl+F4 ROI, 8/8 test ContourCompare, 12/12 test Tool Calib Factor, 15/15 test OQC Scanner Live View, 8/8 test MvpShapeMatch2).
 - **Cấu hình chuẩn xưởng CMS_VINA**: 
   - Database: `CMS_VINA` (192.168.1.2:6789)
   - OQC Server API: `https://192.168.1.192/vision_upload.php`
   - OTA Update Server: `http://192.168.1.192/update/version.json` & `http://192.168.1.192/ota_server.php`
 
-## 3. Hoàn thành Task 408: Rà Soát, Bỏ Control Vô Dụng và Tái Cấu Trúc Giao Diện Cửa Sổ Train Template (Tool Origin)
-1. **Rà soát & Loại bỏ 100% control vô dụng (dummy) tồn đọng**:
-   - Loại bỏ checkbox `Eraser`, ô nhập `Size`, nút `Undo` và `Redo` (tồn đọng từ mockup ảnh cũ, không có cơ chế tẩy xóa).
-   - Loại bỏ `Detection Roi: Full graph / Part graph` (tránh xung đột và tránh ghi đè làm mất `SearchRoi` của Origin).
-   - Loại bỏ hoàn toàn bảng `Shape Operations List Table` rác (No. 0, Rect, Add/Deduct, ParamSet tĩnh không logic).
-   - Loại bỏ nút `Save` lơ lửng tại tiêu đề panel giữa (trùng lặp với nút OK tại footer).
-2. **Tái cấu trúc giao diện 2 cột hiện đại, khoa học & gọn gàng**:
-   - Bố cục 2 cột chuyên nghiệp (`2.5* | 1.2*`) giúp vùng hiển thị ảnh kiểm tra chiếm không gian tối đa, rộng rãi.
-   - Thanh công cụ trên ảnh: 🎯 **Fit View**, 🔄 **Nạp Lại Ảnh (Refresh Image)**, ⌖ **Căn Giữa ROI (Center ROI)**, ⚡ **Huấn Luyện (Train)** kèm badge hiển thị kích thước/vị trí ROI trực quan (`[X, Y | W, H | Góc]`).
-   - Cột phải chia thành 4 Card nhóm tham số rõ ràng:
-     - **Card 1: Mẫu Đã Huấn Luyện**: Khung xem trước template sắc nét kèm kích thước $W \times H$ (px) và số lượng đường viền/điểm đặc trưng.
-     - **Card 2: Tham Số Trích Xuất Biên**: Auto Threshold checkbox, Edge Threshold Slider+TextBox, Length Threshold Slider+TextBox, Max Pyramid Layers.
-     - **Card 3: Tọa Độ Tâm Gốc (Origin Center)**: Khóa tâm vào giữa ROI (Lock), Origin X và Origin Y (chỉnh sửa khi mở khóa).
-     - **Card 4: Tiêu Chuẩn Khớp Mẫu (Matching Settings)**: Ngưỡng Min Score, Dải góc xoay (Min Angle, Max Angle, Angle Step).
-   - Chân trang (Footer): Gợi ý thao tác nhanh (Ctrl + Kéo chuột để vẽ ROI) và 2 nút chuẩn `💾 Áp Dụng & Lưu (OK)` và `Hủy Bỏ (Cancel)`.
+## 3. Hoàn thành Task 409: Khắc Phục Triệt Để Lỗi Ảnh Template SurfaceCompare Bị Đen Ngòm (Job GH68-58216B)
+1. **Bản chất nguyên nhân gốc rễ**:
+   - *Nguyên nhân 1 (Tiền xử lý kép)*: File template `kt mat net_sc.png` khi teach đã được lưu từ ảnh sau node tiền xử lý `Nhi phan 4` (dùng `InRange(128, 246)` nên chỉ gồm pixel `0` và `255`). Tại runtime, pipeline lại gọi tiếp `preprocessor.Run(templRaw, settings)` một lần nữa. Vì `0 < 128` và `255 > 246`, không có pixel nào nằm trong $[128, 246]$, hàm `InRange` biến 100% pixel thành `0` (đen ngòm).
+   - *Nguyên nhân 2 (Ghi đè Search ROI)*: Trong `ToolEditorViewModel.Engine.cs`, khi người dùng kéo Search ROI (`SC`), code nhầm lẫn gọi hàm lưu template với kích thước $500 \times 284$ của Search ROI thay vì giữ $453 \times 39$ của Template ROI.
+2. **Các điểm sửa đổi cốt lõi**:
+   - `InspectionService.Pipeline.cs`:
+     - Bỏ tiền xử lý lần 2 trên `templRaw`, giữ nguyên dữ liệu gốc sắc nét của template đã huấn luyện.
+     - Cơ chế tự phục hồi thông minh: nếu file template trên đĩa có kích thước khớp `InspectRoi`, tự động trích xuất sub-patch tọa độ `TemplateRoi` thay vì méo hình bằng `Resize`.
+     - Đồng bộ `ResolveToolPreprocess("SurfaceCompare", sc.Name)` tương tự `ContourCompare` để nhận trọn vẹn chuỗi tiền xử lý đa tầng (`Den trang` $\rightarrow$ `Nhi phan 4`).
+   - `ToolEditorViewModel.Engine.cs`:
+     - Loại bỏ nhánh ghi đè template khi người dùng di chuyển hoặc co dãn Search ROI `SC`. Chỉ cập nhật template khi chủ động chỉnh sửa Template ROI `SCT`.
 3. **Kiểm thử tự động**:
-   - Thêm `Test_OriginTrainViewModel_LifecycleAndCommands` trong [OriginTemplateJobTest.cs](file:///g:/NODEJS/Vision2026/TestExtractApp/OriginTemplateJobTest.cs).
-   - Kiểm thử toàn bộ luồng huấn luyện mẫu, tính toán thống kê, căn giữa ROI, đổi ngưỡng và lưu cấu hình: PASSED 100%.
+   - Bổ sung `Test_ReproduceUserJobBlackTemplate` trong [SurfaceCompareAndCaliperRoiTests.cs](file:///g:/NODEJS\Vision2026\TestExtractApp\SurfaceCompareAndCaliperRoiTests.cs).
+   - Xác minh trên đúng file Job của người dùng: `Template Image: 453x39, MinVal: 0, MaxVal: 255`, `Pass: True, Count: 0, MaxArea: 0` (ảnh sáng rõ nét 100%, không còn đen ngòm).
+   - 9/9 test SurfaceCompare & Caliper PASSED 100%.
 
 ## 4. Các sự kiện & thay đổi gần đây
+- Task 409: Khắc phục triệt để lỗi ảnh template của node SurfaceCompare bị đen ngòm trên job `job_7A11034A_GH68-58216B` (triệt tiêu tiền xử lý kép, chống ghi đè Search ROI vào file template, tự phục hồi sub-patch cho Job cũ; kiểm thử tự động PASSED 100%).
 - Task 408: Rà soát loại bỏ 100% control vô dụng trong cửa sổ Train Template Tool Origin (Eraser, Size, Undo, Redo, Detection Roi radio, Shape Operations Table, Save button lơ lửng); thiết kế lại layout 2 cột hiện đại chuẩn công nghiệp; kiểm thử tự động PASSED 100%.
 - Task 407: Bổ sung phím tắt Ctrl + R chuyển đổi hướng quét Vertical/Horizontal cho EdgePairDetect & Caliper (giữ nguyên ROI Width/Height, chỉ xoay các strip trong ROI); thêm phím tắt Ctrl + F4 đóng Job đang mở trên toàn ứng dụng; kiểm thử tự động PASSED 100%.
 - Task 406: Tự động co giãn StripLength và StripWidth của node EdgePairDetection theo ROI; người dùng không cần nhập số thủ công; hỗ trợ đổi Orientation & StripCount; sửa lỗi overlay Horizontal; kiểm thử tự động PASSED.

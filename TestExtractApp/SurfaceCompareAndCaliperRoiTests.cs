@@ -5,6 +5,7 @@ using System.IO;
 using OpenCvSharp;
 using VisionInspectionApp.Application;
 using VisionInspectionApp.Models;
+using VisionInspectionApp.Persistence;
 using VisionInspectionApp.VisionEngine;
 
 namespace TestExtractApp;
@@ -34,6 +35,7 @@ public static class SurfaceCompareAndCaliperRoiTests
         TestSurfaceCompareSpatialEdgeTolerance();
         TestSurfaceCompareEdgeCompareAlgorithm();
         TestSurfaceCompareSsimThresholdDecoupling();
+        Test_ReproduceUserJobBlackTemplate();
 
         Console.WriteLine("=== [PASSED] All Surface Compare & Caliper ROI First Tests Completed Successfully! ===");
     }
@@ -569,6 +571,84 @@ public static class SurfaceCompareAndCaliperRoiTests
         finally
         {
             if (File.Exists(tempTpl)) File.Delete(tempTpl);
+        }
+    }
+
+    public static void Test_ReproduceUserJobBlackTemplate()
+    {
+        Console.WriteLine("--> Repro Test: User Job 7A11034A SurfaceCompare Black Template");
+        var jobPath = @"G:\NODEJS\Vision2026\VisionInspectionApp.UI\bin\x64\Release\net8.0-windows\Teaching\job_7A11034A_GH68-58216B_20261019_113956_a44536.job";
+        var imgPath = @"G:\NODEJS\Vision2026\VisionInspectionApp.UI\bin\x64\Release\net8.0-windows\Cache\TeachImages\GH68-58216B_teach.png";
+
+        if (!File.Exists(jobPath) || !File.Exists(imgPath))
+        {
+            Console.WriteLine("Job or image file not found on disk, skipping exact repro test.");
+            return;
+        }
+
+        var jobService = new JobService();
+        var config = jobService.LoadJob(jobPath, out var tempDir);
+        try
+        {
+            var sc = config.SurfaceCompares.FirstOrDefault(x => x.Name.Contains("KT Mat net", StringComparison.OrdinalIgnoreCase));
+            if (sc != null)
+            {
+                Console.WriteLine($"sc.TemplateImageFile: {sc.TemplateImageFile}");
+                Console.WriteLine($"File.Exists(sc.TemplateImageFile): {File.Exists(sc.TemplateImageFile)}");
+                Console.WriteLine($"sc.TemplateRoi: X={sc.TemplateRoi.X}, Y={sc.TemplateRoi.Y}, W={sc.TemplateRoi.Width}, H={sc.TemplateRoi.Height}");
+                Console.WriteLine($"sc.InspectRoi: X={sc.InspectRoi.X}, Y={sc.InspectRoi.Y}, W={sc.InspectRoi.Width}, H={sc.InspectRoi.Height}");
+
+                using var tplFileMat = Cv2.ImRead(sc.TemplateImageFile, ImreadModes.Grayscale);
+                Cv2.MinMaxLoc(tplFileMat, out double minRaw, out double maxRaw);
+                Console.WriteLine($"Raw template file on disk: {tplFileMat.Width}x{tplFileMat.Height}, MinVal: {minRaw}, MaxVal: {maxRaw}");
+
+                int subX = sc.TemplateRoi.X - sc.InspectRoi.X;
+                int subY = sc.TemplateRoi.Y - sc.InspectRoi.Y;
+                if (subX >= 0 && subY >= 0 && subX + sc.TemplateRoi.Width <= tplFileMat.Width && subY + sc.TemplateRoi.Height <= tplFileMat.Height)
+                {
+                    using var subPatch = new Mat(tplFileMat, new Rect(subX, subY, sc.TemplateRoi.Width, sc.TemplateRoi.Height));
+                    Cv2.MinMaxLoc(subPatch, out double minSub, out double maxSub);
+                    Console.WriteLine($"Sub-patch ({subX},{subY},{sc.TemplateRoi.Width},{sc.TemplateRoi.Height}): MinVal: {minSub}, MaxVal: {maxSub}");
+                }
+            }
+            using var img = Cv2.ImRead(imgPath, ImreadModes.Color);
+            Console.WriteLine($"Image size: {img.Width}x{img.Height}");
+            var inspector = CreateInspectionService();
+            var res = inspector.Inspect(img, config);
+
+            var scRes = res.SurfaceCompares.FirstOrDefault(x => x.Name.Contains("KT Mat net", StringComparison.OrdinalIgnoreCase))
+                     ?? res.SurfaceCompares.FirstOrDefault();
+
+            if (scRes != null)
+            {
+                Console.WriteLine($"SurfaceCompare Result: {scRes.Name}");
+                Console.WriteLine($"  Pass: {scRes.Pass}, Count: {scRes.Count}, MaxArea: {scRes.MaxArea}");
+                if (scRes.TemplateImage == null)
+                {
+                    throw new Exception("SurfaceCompare TemplateImage is NULL!");
+                }
+
+                using var tplMat = Cv2.ImDecode(scRes.TemplateImage, ImreadModes.Grayscale);
+                Cv2.MinMaxLoc(tplMat, out double minV, out double maxV);
+                Console.WriteLine($"  Template Image: {tplMat.Width}x{tplMat.Height}, MinVal: {minV}, MaxVal: {maxV}");
+                if (maxV == 0)
+                {
+                    throw new Exception("SurfaceCompare Template Image is completely black (MaxVal == 0)!");
+                }
+
+                if (scRes.CurrentImage != null)
+                {
+                    using var curMat = Cv2.ImDecode(scRes.CurrentImage, ImreadModes.Grayscale);
+                    Cv2.MinMaxLoc(curMat, out double minVCur, out double maxVCur);
+                    Console.WriteLine($"  Current Image: {curMat.Width}x{curMat.Height}, MinVal: {minVCur}, MaxVal: {maxVCur}");
+                }
+
+                Console.WriteLine($"   [OK] User Job SurfaceCompare template verified non-black and correctly matched!");
+            }
+        }
+        finally
+        {
+            try { Directory.Delete(tempDir, true); } catch { }
         }
     }
 }

@@ -1,54 +1,30 @@
 # ROADMAP.md — Lộ trình phát triển & Trạng thái nhiệm vụ
 
-- [x] Task 408: Rà Soát, Bỏ Control Vô Dụng và Tái Cấu Trúc Giao Diện Cửa Sổ Train Template (Tool Origin):
-  - [x] Rà soát và loại bỏ 100% các control vô dụng (dummy) tồn đọng từ mẫu thiết kế cũ:
-    - Loại bỏ checkbox `Eraser`, ô `Size`, nút `Undo`, nút `Redo` (không có cơ chế tẩy xóa đường biên).
-    - Loại bỏ nhóm radio `Detection Roi: Full graph / Part graph` (tránh gây ghi đè làm mất `SearchRoi` của Origin).
-    - Loại bỏ bảng `Shape Operations List Table` rác (No. 0, Rect, Add/Deduct, ParamSet tĩnh 100% không logic).
-    - Loại bỏ nút `Save` lơ lửng tại tiêu đề panel giữa (trùng lặp với nút OK tại footer).
-  - [x] Tái cấu trúc giao diện 2 cột hiện đại, khoa học, thẩm mỹ chuẩn công nghiệp:
-    - Cột trái (Chiếm phần lớn diện tích): Image Viewer với khung ROI tương tác 8 chốt co giãn + chốt xoay, viền contour xanh lá trực tiếp.
-    - Thanh công cụ trên ảnh: 🎯 `Fit View`, 🔄 `Nạp Lại Ảnh`, ⌖ `Căn Giữa ROI`, ⚡ `Huấn Luyện Mẫu` kèm huy hiệu hiển thị thông số ROI `[X, Y | W, H | Góc]`.
-    - Cột phải: 4 Card nhóm tham số trực quan (Mẫu Đã Huấn Luyện với kích thước & số lượng viền/điểm; Tham Số Trích Xuất Cạnh Canny/Pyramid; Tọa Độ Tâm Gốc Khóa/Mở Khóa; Cài Đặt Khớp Mẫu Min Score & Dải Góc Xoay).
-    - Chân trang (Footer): Gợi ý mẹo thao tác chuột (Ctrl + Kéo) và 2 nút chuẩn `💾 Áp Dụng & Lưu (OK)` và `Hủy Bỏ (Cancel)`.
+- [x] Task 409: Khắc Phục Triệt Để Lỗi Ảnh Template Của Node Tool SurfaceCompare Bị Đen Ngòm (Job GH68-58216B):
+  - [x] Điều tra & định vị 2 nguyên nhân gốc rễ trên tệp `job_7A11034A_GH68-58216B_20261019_113956_a44536.job`:
+    - Nguyên nhân 1 (Tiền xử lý kép): Template `kt mat net_sc.png` được lưu từ ảnh sau tiền xử lý `Nhi phan 4` (`InRange(128, 246)` nên chỉ gồm pixel `0` và `255`). Tại runtime, pipeline lại gọi tiếp `preprocessor.Run(templRaw, settings)`. Vì `0 < 128` và `255 > 246`, không có pixel nào trong $[128, 246]$, `Cv2.InRange` gán 100% pixel về `0` (Đen ngòm).
+    - Nguyên nhân 2 (Ghi đè Search ROI): Tại `ToolEditorViewModel.Engine.cs`, khi người dùng kéo Search ROI (`SC`), sự kiện nhầm lẫn gọi hàm lưu template đè kích thước $500 \times 284$ của Search ROI lên `sc.TemplateImageFile` thay vì giữ $453 \times 39$ của Template ROI.
+  - [x] Cải tiến & khắc phục triệt để:
+    - Bỏ tiền xử lý lần 2 trên `templRaw` trong `InspectionService.Pipeline.cs`, giữ nguyên dữ liệu gốc sắc nét của template đã huấn luyện.
+    - Cơ chế tự phục hồi thông minh: nếu file template trên đĩa có kích thước khớp `InspectRoi`, tự động trích xuất sub-patch tọa độ `TemplateRoi` thay vì méo hình bằng `Resize`.
+    - Đồng bộ `ResolveToolPreprocess("SurfaceCompare", sc.Name)` tương tự `ContourCompare` để nhận trọn vẹn chuỗi tiền xử lý đa tầng (`Den trang` $\rightarrow$ `Nhi phan 4`).
+    - Bỏ nhánh ghi đè template khi người dùng thao tác trên Search ROI `SC` tại `ToolEditorViewModel.Engine.cs`.
   - [x] Kiểm thử tự động:
-    - Bổ sung `Test_OriginTrainViewModel_LifecycleAndCommands` trong [OriginTemplateJobTest.cs](file:///g:/NODEJS/Vision2026/TestExtractApp/OriginTemplateJobTest.cs).
-    - Toàn bộ bài kiểm thử Origin và ROI regression PASSED 100%, solution build 0 lỗi.
+    - Thêm `Test_ReproduceUserJobBlackTemplate` trong [SurfaceCompareAndCaliperRoiTests.cs](file:///g:/NODEJS\Vision2026\TestExtractApp\SurfaceCompareAndCaliperRoiTests.cs).
+    - Xác minh trên đúng file Job của người dùng: `Template Image: 453x39, MinVal: 0, MaxVal: 255`, `Pass: True, Count: 0, MaxArea: 0` (ảnh sáng rõ nét 100%, không còn đen ngòm).
+    - Toàn bộ 9/9 test SurfaceCompare & Caliper PASSED 100%.
+
+- [x] Task 408: Rà Soát, Bỏ Control Vô Dụng và Tái Cấu Trúc Giao Diện Cửa Sổ Train Template (Tool Origin):
+  - [x] Rà soát và loại bỏ 100% các control vô dụng (dummy) tồn đọng từ mẫu thiết kế cũ (Eraser, Size, Undo, Redo, Detection Roi radio, Shape Operations Table, Save button lơ lửng).
+  - [x] Tái cấu trúc giao diện 2 cột hiện đại, khoa học, thẩm mỹ chuẩn công nghiệp.
+  - [x] Kiểm thử tự động `Test_OriginTrainViewModel_LifecycleAndCommands` PASSED 100%.
 
 - [x] Task 407: Bổ Sung Phím Tắt Ctrl + R (Giữ Nguyên ROI Width/Height, Chỉ Xoay Strip Trong ROI) và Ctrl + F4 (Đóng Job Đang Mở):
-  - [x] Phím tắt `Ctrl + R` cho Tool `EdgePairDetect` và `Caliper`:
-    - Chuyển đổi luân phiên giữa `Vertical` $\leftrightarrow$ `Horizontal` khi đang chọn node tương ứng.
-    - **Giữ nguyên 100% kích thước & vị trí ROI** (`SearchRoi.Width`, `SearchRoi.Height`, `X`, `Y` không đổi, không đảo width/height).
-    - **Chỉ đảo chiều các strip bên trong ROI**:
-      - Nếu Vertical: `StripLength = SearchRoi.Height`, `StripWidth = Math.Max(1, SearchRoi.Width / StripCount)`.
-      - Nếu Horizontal: `StripLength = SearchRoi.Width`, `StripWidth = Math.Max(1, SearchRoi.Height / StripCount)`.
-    - Tự động đồng bộ hai chiều `SyncEpdStripsFromRoi` và `SyncCaliperStripsFromRoi` (khi đổi Orientation, đổi StripCount, hoặc kéo dãn ROI trên Canvas).
-    - Cập nhật overlay tức thì trên Canvas ảnh: mũi tên hướng quét và các vạch strip xoay 90 độ mượt mà.
-    - Tích hợp InputBinding và `PreviewKeyDown` chống nuốt phím.
-    - Bổ sung ToolTip trực quan `[Ctrl+R]` trên nhãn và ComboBox Orientation.
-  - [x] Phím tắt `Ctrl + F4` đóng Job đang mở (`CloseJob`):
-    - Đăng ký phím tắt cấp Window và UserControl cho `CloseJobCommand`.
-    - Dọn dẹp an toàn các node, edge, preview overlay và reset đường dẫn file Job.
-    - Bổ sung `InputGestureText="Ctrl+F4"` trên MenuItem và ToolTip nút Đóng Job trên toolbar.
-  - [x] Kiểm thử tự động:
-    - Bổ sung và cập nhật `Test_11_EdgePairDetect_RoiAutoScaling` & `Test_12_ToggleToolOrientation_And_CloseJobCommand` trong [PerformanceOptimizationTests.cs](file:///g:/NODEJS/Vision2026/TestExtractApp/PerformanceOptimizationTests.cs).
-    - Toàn bộ bài kiểm thử PASSED 100%, solution build 0 lỗi.
+  - [x] Phím tắt `Ctrl + R` cho Tool `EdgePairDetect` và `Caliper`: Chuyển đổi luân phiên giữa `Vertical` $\leftrightarrow$ `Horizontal` khi đang chọn node tương ứng.
+  - [x] Phím tắt `Ctrl + F4` đóng Job đang mở (`CloseJob`).
+  - [x] Kiểm thử tự động PASSED 100%.
 
-- [x] Task 406: Tự Động Co Giãn Strip Length & Strip Width Node EdgePairDetection Theo Kích Thước ROI:
-  - [x] Tự động đồng bộ `StripLength` theo chiều dài cạnh quét của SearchRoi:
-    - Nếu Vertical: `StripLength = Math.Max(3, SearchRoi.Height)`.
-    - Nếu Horizontal: `StripLength = Math.Max(3, SearchRoi.Width)`.
-  - [x] Tự động đồng bộ `StripWidth` theo kích thước cạnh ngang chia cho `StripCount`:
-    - Nếu Vertical: `StripWidth = Math.Max(1, (int)Math.Round((double)SearchRoi.Width / StripCount))`.
-    - Nếu Horizontal: `StripWidth = Math.Max(1, (int)Math.Round((double)SearchRoi.Height / StripCount))`.
-  - [x] Tích hợp `SyncEpdStripsFromRoi` vào các luồng thao tác trong Tool Editor:
-    - Kéo / co giãn ROI trên canvas ảnh (`OnRoiEditedCore`, `ApplyRoiForLabel`, Undo / Redo).
-    - Thay đổi hướng quét `Epd_Orientation` và số lượng vạch `Epd_StripCount`.
-    - Khởi tạo node `EdgePairDetect` mới theo `DefaultRoi()`.
-    - Dựng overlay `AddEpdSearchStripsOverlay` (sửa lỗi thiếu vạch strip ở chế độ Horizontal).
-  - [x] Bổ sung ToolTip giải thích tự động co giãn theo ROI cho `Strip Width` và `Strip Length` trên Properties Panel.
-  - [x] Thêm bộ kiểm thử tự động `Test_11_EdgePairDetect_RoiAutoScaling` trong [PerformanceOptimizationTests.cs](file:///g:/NODEJS/Vision2026/TestExtractApp/PerformanceOptimizationTests.cs); toàn bộ kiểm thử PASSED 100%, solution build 0 lỗi.
-
+- [x] Task 406: Tự Động Co Giãn Strip Length & Strip Width Node EdgePairDetection Theo Kích Thước ROI.
 - [x] Task 405: Khắc Phục Triệt Để Lỗi Contour Lệch/Báo Đỏ Trên Cùng Ảnh, Thêm Canny Slider Kèm Live Preview, Tích Hợp Đánh Giá Tổng Job & Bảng Đo Đạc.
 - [x] Task 404: Khắc Phục Lỗi ContourCompare Báo NG Trên Cùng 1 Ảnh & Nâng Cấp Template Preview Kèm Viền Trực Quan.
 - [x] Task 403: Tự Động Lưu Job Đang Mở Khi Có Thay Đổi Trước Khi Tải Lên Server (JobManager).

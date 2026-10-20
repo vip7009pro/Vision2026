@@ -2085,10 +2085,6 @@ namespace VisionInspectionApp.UI.ViewModels
                 if (kind.StartsWith("SC", StringComparison.OrdinalIgnoreCase))
                 {
                     ApplyRoiForLabel(label, roi);
-                    if (string.Equals(kind, "SCT", StringComparison.OrdinalIgnoreCase) || string.Equals(kind, "SC", StringComparison.OrdinalIgnoreCase))
-                    {
-                        TrySaveSurfaceCompareTemplateImage(name, roi, sel.Roi);
-                    }
                     RefreshPreviews();
                     RequestAutoSave();
                     return;
