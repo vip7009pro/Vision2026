@@ -21,6 +21,12 @@ public class PlcItemDisplay
     public string DisplayName { get; set; } = "";
 }
 
+public class PlcDataTypeItem
+{
+    public PlcDataType Type { get; set; }
+    public string DisplayName { get; set; } = "";
+}
+
 public partial class HmiManagerViewModel : ObservableObject
 {
     private readonly IPlcManagerService? _plcService;
@@ -66,6 +72,18 @@ public partial class HmiManagerViewModel : ObservableObject
     public Array ValueDataTypes => Enum.GetValues(typeof(PlcDataType));
     public Array TextAlignments => Enum.GetValues(typeof(HmiTextAlignment));
 
+    public ObservableCollection<PlcDataTypeItem> AvailableDataTypes { get; } = new()
+    {
+        new PlcDataTypeItem { Type = PlcDataType.Int32, DisplayName = "Int32 (Double Word / DINT 32-bit: D300, D302...)" },
+        new PlcDataTypeItem { Type = PlcDataType.UInt32, DisplayName = "UInt32 (Double Word / UDINT 32-bit không dấu)" },
+        new PlcDataTypeItem { Type = PlcDataType.Int16, DisplayName = "Int16 (Word 16-bit có dấu: D0, D1...)" },
+        new PlcDataTypeItem { Type = PlcDataType.UInt16, DisplayName = "UInt16 (Word 16-bit không dấu)" },
+        new PlcDataTypeItem { Type = PlcDataType.Float, DisplayName = "Float (Số thực 32-bit REAL: D200...)" },
+        new PlcDataTypeItem { Type = PlcDataType.Double, DisplayName = "Double (Số thực 64-bit LREAL - Chiếm 4 thanh ghi)" },
+        new PlcDataTypeItem { Type = PlcDataType.Bool, DisplayName = "Bool (Bit ON/OFF: X, Y, M)" },
+        new PlcDataTypeItem { Type = PlcDataType.String, DisplayName = "String (Chuỗi ký tự ASCII)" }
+    };
+
     public string CurrentFileName => string.IsNullOrWhiteSpace(CurrentFilePath) ? "Untitled.hmi" : Path.GetFileName(CurrentFilePath);
 
     public string WindowTitle
@@ -82,48 +100,153 @@ public partial class HmiManagerViewModel : ObservableObject
     public bool CanUndo => _undoManager.CanUndo;
     public bool CanRedo => _undoManager.CanRedo;
 
+    private bool _isRefreshingPlcsAndTags = false;
+
     public ObservableCollection<PlcItemDisplay> AvailablePlcItems { get; } = new();
     public ObservableCollection<string> AvailableTags { get; } = new();
     public ObservableCollection<string> GlobalLibraryImages { get; } = new();
 
+    public void EnsurePlcItemRegistered(string plcId, string displayName)
+    {
+        if (string.IsNullOrWhiteSpace(plcId)) return;
+        string trimmedId = plcId.Trim();
+        bool exists = AvailablePlcItems.Any(p => string.Equals(p.Id, trimmedId, StringComparison.OrdinalIgnoreCase));
+        if (!exists)
+        {
+            AvailablePlcItems.Add(new PlcItemDisplay
+            {
+                Id = trimmedId,
+                DisplayName = displayName
+            });
+        }
+    }
+
+    public void EnsureTagRegistered(string tagName)
+    {
+        if (string.IsNullOrWhiteSpace(tagName)) return;
+        string trimmed = tagName.Trim();
+        bool exists = AvailableTags.Any(t => string.Equals(t, trimmed, StringComparison.OrdinalIgnoreCase));
+        if (!exists)
+        {
+            AvailableTags.Add(trimmed);
+        }
+    }
+
+    public void SyncPlcsAndTagsFromConfig(HmiScreenConfig? config)
+    {
+        if (config == null) return;
+
+        // 1. Đồng bộ PLC chính của màn hình
+        if (!string.IsNullOrWhiteSpace(config.TargetPlcId))
+        {
+            EnsurePlcItemRegistered(config.TargetPlcId, $"{config.TargetPlcId} (PLC chính tệp HMI)");
+        }
+
+        // 2. Đồng bộ PLC và Tags từ toàn bộ các controls trong cấu hình
+        if (config.Controls != null)
+        {
+            foreach (var ctrl in config.Controls)
+            {
+                if (!string.IsNullOrWhiteSpace(ctrl.ReadPlcId))
+                {
+                    EnsurePlcItemRegistered(ctrl.ReadPlcId, $"{ctrl.ReadPlcId} (Từ tệp HMI)");
+                }
+                if (!string.IsNullOrWhiteSpace(ctrl.WritePlcId))
+                {
+                    EnsurePlcItemRegistered(ctrl.WritePlcId, $"{ctrl.WritePlcId} (Từ tệp HMI)");
+                }
+
+                if (!string.IsNullOrWhiteSpace(ctrl.ReadTagName))
+                {
+                    EnsureTagRegistered(ctrl.ReadTagName);
+                }
+                if (!string.IsNullOrWhiteSpace(ctrl.WriteTagName))
+                {
+                    EnsureTagRegistered(ctrl.WriteTagName);
+                }
+            }
+        }
+    }
+
     public void RefreshAvailablePlcsAndTags()
     {
-        // 1. Refresh AvailablePlcItems
-        AvailablePlcItems.Clear();
-        AvailablePlcItems.Add(new PlcItemDisplay { Id = "", DisplayName = "(Mặc định dùng PLC chính của màn hình)" });
-        if (_plcService != null && _plcService.Plcs.Count > 0)
+        if (_isRefreshingPlcsAndTags) return;
+        _isRefreshingPlcsAndTags = true;
+
+        try
         {
-            foreach (var p in _plcService.Plcs)
+            string savedTargetPlc = ScreenConfig?.TargetPlcId ?? "";
+            string savedSelectedReadPlc = SelectedControl?.ReadPlcId ?? "";
+
+            // 1. Bảo đảm mục mặc định luôn tồn tại ở vị trí đầu tiên
+            if (AvailablePlcItems.Count == 0 || AvailablePlcItems[0].Id != "")
             {
-                string status = p.Enabled ? "⚡ Online" : "⚪ Disabled";
-                string name = string.IsNullOrWhiteSpace(p.Name) ? p.Id : p.Name;
-                AvailablePlcItems.Add(new PlcItemDisplay
+                if (!AvailablePlcItems.Any(p => p.Id == ""))
                 {
-                    Id = p.Id,
-                    DisplayName = $"{name} [{p.IPAddress}:{p.Port}] ({p.DriverType} - {status})"
-                });
+                    AvailablePlcItems.Insert(0, new PlcItemDisplay { Id = "", DisplayName = "(Mặc định dùng PLC chính của màn hình)" });
+                }
             }
-        }
-        else
-        {
-            AvailablePlcItems.Add(new PlcItemDisplay { Id = "PLC_01", DisplayName = "PLC_01 [192.168.1.10:502] (Mitsubishi - Simulation)" });
-        }
 
-        // 2. Refresh AvailableTags
-        AvailableTags.Clear();
-        var common = new[] { "X0", "X1", "X2", "Y0", "Y1", "Y2", "D0", "D10", "D100", "D200", "M0", "M1", "M10", "MW100" };
-        foreach (var addr in common)
-        {
-            AvailableTags.Add(addr);
-        }
-
-        if (_plcService != null && _plcService.Tags.Count > 0)
-        {
-            foreach (var t in _plcService.Tags)
+            // 2. Nạp/bổ sung các PLC từ _plcService
+            if (_plcService != null && _plcService.Plcs.Count > 0)
             {
-                if (!string.IsNullOrWhiteSpace(t.Name) && !AvailableTags.Contains(t.Name)) AvailableTags.Add(t.Name);
-                if (!string.IsNullOrWhiteSpace(t.Address) && !AvailableTags.Contains(t.Address)) AvailableTags.Add(t.Address);
+                foreach (var p in _plcService.Plcs)
+                {
+                    string status = p.Enabled ? "⚡ Online" : "⚪ Disabled";
+                    string name = string.IsNullOrWhiteSpace(p.Name) ? p.Id : p.Name;
+                    string disp = $"{name} [{p.IPAddress}:{p.Port}] ({p.DriverType} - {status})";
+                    var existing = AvailablePlcItems.FirstOrDefault(x => string.Equals(x.Id, p.Id, StringComparison.OrdinalIgnoreCase));
+                    if (existing != null)
+                    {
+                        existing.DisplayName = disp;
+                    }
+                    else
+                    {
+                        AvailablePlcItems.Add(new PlcItemDisplay { Id = p.Id, DisplayName = disp });
+                    }
+                }
             }
+            else
+            {
+                EnsurePlcItemRegistered("PLC_01", "PLC_01 [192.168.1.10:502] (Mitsubishi - Simulation)");
+            }
+
+            // 3. Bảo lưu các PLC và Tags từ ScreenConfig và Controls hiện tại
+            if (ScreenConfig != null)
+            {
+                SyncPlcsAndTagsFromConfig(ScreenConfig);
+            }
+
+            // 4. Bổ sung các Tags phổ biến công nghiệp
+            var common = new[] { "X0", "X1", "X2", "X3", "X4", "Y0", "Y1", "Y2", "Y3", "Y4", "D0", "D10", "D100", "D200", "M0", "M1", "M10", "M100", "MW100" };
+            foreach (var addr in common)
+            {
+                EnsureTagRegistered(addr);
+            }
+
+            // 5. Bổ sung các Tags từ _plcService
+            if (_plcService != null && _plcService.Tags.Count > 0)
+            {
+                foreach (var t in _plcService.Tags)
+                {
+                    if (!string.IsNullOrWhiteSpace(t.Name)) EnsureTagRegistered(t.Name);
+                    if (!string.IsNullOrWhiteSpace(t.Address)) EnsureTagRegistered(t.Address);
+                }
+            }
+
+            // 6. Phục hồi lại selection nếu cần
+            if (ScreenConfig != null && !string.IsNullOrWhiteSpace(savedTargetPlc) && ScreenConfig.TargetPlcId != savedTargetPlc)
+            {
+                ScreenConfig.TargetPlcId = savedTargetPlc;
+            }
+            if (SelectedControl != null && !string.IsNullOrWhiteSpace(savedSelectedReadPlc) && SelectedControl.ReadPlcId != savedSelectedReadPlc)
+            {
+                SelectedControl.ReadPlcId = savedSelectedReadPlc;
+            }
+        }
+        finally
+        {
+            _isRefreshingPlcsAndTags = false;
         }
     }
 
@@ -142,7 +265,14 @@ public partial class HmiManagerViewModel : ObservableObject
             };
             _plcService.Tags.CollectionChanged += (s, e) =>
             {
-                RefreshAvailablePlcsAndTags();
+                if (e.NewItems != null)
+                {
+                    foreach (PlcTag t in e.NewItems)
+                    {
+                        if (!string.IsNullOrWhiteSpace(t.Name)) EnsureTagRegistered(t.Name);
+                        if (!string.IsNullOrWhiteSpace(t.Address)) EnsureTagRegistered(t.Address);
+                    }
+                }
             };
 
             if (!_plcService.IsPollingActive)
@@ -254,6 +384,25 @@ public partial class HmiManagerViewModel : ObservableObject
     {
         HasSelectedControl = value != null;
         HasNoSelectedControl = value == null;
+        if (value != null)
+        {
+            if (!string.IsNullOrWhiteSpace(value.ReadPlcId))
+            {
+                EnsurePlcItemRegistered(value.ReadPlcId, $"{value.ReadPlcId} (Từ tệp HMI)");
+            }
+            if (!string.IsNullOrWhiteSpace(value.WritePlcId))
+            {
+                EnsurePlcItemRegistered(value.WritePlcId, $"{value.WritePlcId} (Từ tệp HMI)");
+            }
+            if (!string.IsNullOrWhiteSpace(value.ReadTagName))
+            {
+                EnsureTagRegistered(value.ReadTagName);
+            }
+            if (!string.IsNullOrWhiteSpace(value.WriteTagName))
+            {
+                EnsureTagRegistered(value.WriteTagName);
+            }
+        }
     }
 
     partial void OnSelectedGlobalLibraryImageChanged(string value)
@@ -610,7 +759,12 @@ public partial class HmiManagerViewModel : ObservableObject
         if (dlg.ShowDialog() == true)
         {
             CurrentFilePath = dlg.FileName;
-            ScreenConfig = HmiService.LoadHmiConfig(dlg.FileName);
+            var loadedConfig = HmiService.LoadHmiConfig(dlg.FileName);
+
+            // BƯỚC QUAN TRỌNG: Đồng bộ trước toàn bộ PLC & Tags từ tệp HMI vừa nạp
+            SyncPlcsAndTagsFromConfig(loadedConfig);
+
+            ScreenConfig = loadedConfig;
 
             Controls.Clear();
             foreach (var m in ScreenConfig.Controls)
@@ -621,6 +775,7 @@ public partial class HmiManagerViewModel : ObservableObject
             SelectControl(Controls.FirstOrDefault());
             IsDirty = false;
             _undoManager.Clear();
+            OnPropertyChanged(nameof(ScreenConfig));
             StatusMessage = $"📂 Đã nạp tệp HMI: '{CurrentFileName}'";
             StatusBrush = Brushes.DodgerBlue;
         }

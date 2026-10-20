@@ -3,6 +3,27 @@ using System;
 namespace VisionInspectionApp.Models;
 
 /// <summary>
+/// Kiểu dạng sóng / tín hiệu gửi sang PLC (Signal Waveform)
+/// </summary>
+public enum PlcSignalType
+{
+    /// <summary>
+    /// Giữ mức logic (Level): Duy trì ON khi kích hoạt và OFF khi xóa.
+    /// </summary>
+    Level = 0,
+
+    /// <summary>
+    /// Xung cạnh lên (Rising Edge): Mức tĩnh là 0, khi kích hoạt phát xung 0 -> 1 -> 0 theo thời gian PulseDurationMs.
+    /// </summary>
+    RisingEdge = 1,
+
+    /// <summary>
+    /// Xung cạnh xuống (Falling Edge / Active-Low): Mức tĩnh là 1, khi kích hoạt phát xung 1 -> 0 -> 1 theo thời gian PulseDurationMs.
+    /// </summary>
+    FallingEdge = 2
+}
+
+/// <summary>
 /// Cấu hình Máy trạng thái Bắt tay Công nghiệp 2 chiều (Deterministic Industrial Handshake 24/7)
 /// </summary>
 public sealed class IndustrialHandshakeConfig
@@ -17,6 +38,26 @@ public sealed class IndustrialHandshakeConfig
     public int HandshakeTimeoutMs { get; set; } = 500;
     public bool IsEnabled { get; set; } = true;
     public bool SimulatePlcAck { get; set; } = false;
+
+    /// <summary>
+    /// Kiểu tín hiệu gửi cho kết quả Pass (Mặc định: Level)
+    /// </summary>
+    public PlcSignalType PassSignalType { get; set; } = PlcSignalType.Level;
+
+    /// <summary>
+    /// Kiểu tín hiệu gửi cho kết quả NG (Mặc định: Level)
+    /// </summary>
+    public PlcSignalType NgSignalType { get; set; } = PlcSignalType.Level;
+
+    /// <summary>
+    /// Kiểu tín hiệu gửi cho tín hiệu Done (Mặc định: Level)
+    /// </summary>
+    public PlcSignalType DoneSignalType { get; set; } = PlcSignalType.Level;
+
+    /// <summary>
+    /// Độ rộng xung phát cho kiểu Edge (Rising Edge / Falling Edge) tính bằng ms (Mặc định: 100ms)
+    /// </summary>
+    public int PulseDurationMs { get; set; } = 100;
 
     /// <summary>
     /// Chế độ bắt tay bất đồng bộ không chờ Ack (Non-blocking Pipelined Queue):

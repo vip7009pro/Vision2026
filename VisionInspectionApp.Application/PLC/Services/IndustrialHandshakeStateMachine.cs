@@ -53,6 +53,26 @@ public sealed class IndustrialHandshakeStateMachine
     public bool SimulatePlcAck { get; set; } = false;
 
     /// <summary>
+    /// Kiểu tín hiệu gửi cho kết quả Pass (Mặc định: Level)
+    /// </summary>
+    public PlcSignalType PassSignalType { get; set; } = PlcSignalType.Level;
+
+    /// <summary>
+    /// Kiểu tín hiệu gửi cho kết quả NG (Mặc định: Level)
+    /// </summary>
+    public PlcSignalType NgSignalType { get; set; } = PlcSignalType.Level;
+
+    /// <summary>
+    /// Kiểu tín hiệu gửi cho tín hiệu Done (Mặc định: Level)
+    /// </summary>
+    public PlcSignalType DoneSignalType { get; set; } = PlcSignalType.Level;
+
+    /// <summary>
+    /// Độ rộng xung phát cho kiểu Edge (Rising Edge / Falling Edge) tính bằng ms (Mặc định: 100ms)
+    /// </summary>
+    public int PulseDurationMs { get; set; } = 100;
+
+    /// <summary>
     /// Chế độ bắt tay bất đồng bộ không chờ Ack (Non-blocking Pipelined Queue):
     /// Băng tải chạy liên tục, Vision ghi kết quả vào hàng đợi rồi giải phóng ngay, không dừng luồng chờ Ack.
     /// </summary>
@@ -151,6 +171,75 @@ public sealed class IndustrialHandshakeStateMachine
     }
 
     /// <summary>
+    /// Ghi tín hiệu gửi PLC theo dạng sóng đã cấu hình (Level, Rising Edge, Falling Edge)
+    /// </summary>
+    public async Task EmitSignalAsync(string? tagName, PlcSignalType signalType, bool isActive, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(tagName) || _plcManager == null || !_plcManager.IsPlcConnected(_plcId))
+            return;
+
+        int duration = Math.Max(20, PulseDurationMs);
+
+        switch (signalType)
+        {
+            case PlcSignalType.Level:
+                // Level: Duy trì trực tiếp mức logic (Active = true, Inactive = false)
+                await _plcManager.WriteTagValueAsync(_plcId, tagName, isActive, ct);
+                break;
+
+            case PlcSignalType.RisingEdge:
+                if (isActive)
+                {
+                    // Phát xung cạnh lên: 0 -> 1 -> giữ PulseDurationMs -> 0
+                    await _plcManager.WriteTagValueAsync(_plcId, tagName, true, ct);
+                    _ = Task.Run(async () =>
+                    {
+                        try
+                        {
+                            await Task.Delay(duration);
+                            if (_plcManager != null && _plcManager.IsPlcConnected(_plcId))
+                            {
+                                await _plcManager.WriteTagValueAsync(_plcId, tagName, false);
+                            }
+                        }
+                        catch { }
+                    });
+                }
+                else
+                {
+                    // Trạng thái tĩnh cạnh lên là 0
+                    await _plcManager.WriteTagValueAsync(_plcId, tagName, false, ct);
+                }
+                break;
+
+            case PlcSignalType.FallingEdge:
+                if (isActive)
+                {
+                    // Phát xung cạnh xuống: 1 -> 0 -> giữ PulseDurationMs -> 1
+                    await _plcManager.WriteTagValueAsync(_plcId, tagName, false, ct);
+                    _ = Task.Run(async () =>
+                    {
+                        try
+                        {
+                            await Task.Delay(duration);
+                            if (_plcManager != null && _plcManager.IsPlcConnected(_plcId))
+                            {
+                                await _plcManager.WriteTagValueAsync(_plcId, tagName, true);
+                            }
+                        }
+                        catch { }
+                    });
+                }
+                else
+                {
+                    // Trạng thái tĩnh cạnh xuống là 1
+                    await _plcManager.WriteTagValueAsync(_plcId, tagName, true, ct);
+                }
+                break;
+        }
+    }
+
+    /// <summary>
     /// Đưa Vision PC vào trạng thái sẵn sàng nhận Trigger (READY / ARMED)
     /// </summary>
     public async Task SetReadyAsync(CancellationToken ct = default)
@@ -165,6 +254,8 @@ public sealed class IndustrialHandshakeStateMachine
         var readyTag = GetEffectiveReadyTag();
         var busyTag = GetEffectiveBusyTag();
         var doneTag = GetEffectiveDoneTag();
+        var passTag = GetEffectivePassTag();
+        var ngTag = GetEffectiveNgTag();
 
         if (!string.IsNullOrEmpty(readyTag))
         {
@@ -176,8 +267,22 @@ public sealed class IndustrialHandshakeStateMachine
         }
         if (!string.IsNullOrEmpty(doneTag))
         {
-            await _plcManager.WriteTagValueAsync(_plcId, doneTag, false, ct);
+            bool doneInactive = DoneSignalType == PlcSignalType.FallingEdge ? true : false;
+            await _plcManager.WriteTagValueAsync(_plcId, doneTag, doneInactive, ct);
         }
+
+        // Đưa chân Pass / NG về trạng thái tĩnh phù hợp
+        if (!string.IsNullOrEmpty(passTag))
+        {
+            bool passInactive = PassSignalType == PlcSignalType.FallingEdge ? true : false;
+            await _plcManager.WriteTagValueAsync(_plcId, passTag, passInactive, ct);
+        }
+        if (!string.IsNullOrEmpty(ngTag))
+        {
+            bool ngInactive = NgSignalType == PlcSignalType.FallingEdge ? true : false;
+            await _plcManager.WriteTagValueAsync(_plcId, ngTag, ngInactive, ct);
+        }
+
         CurrentState = HandshakeState.Armed;
     }
 
@@ -207,11 +312,10 @@ public sealed class IndustrialHandshakeStateMachine
 
     /// <summary>
     /// Chốt kết quả kiểm tra (LATCH) và thực hiện bắt tay hoàn tất với PLC:
-    /// 1. Ghi bit PASS / NG
-    /// 2. Ghi bit DONE = 1
-    /// 3. Chờ PLC phản hồi tín hiệu ACK = 1
-    /// 4. Hạ bit DONE = 0, BUSY = 0
-    /// 5. Đưa hệ thống quay lại trạng thái READY
+    /// 1. Ghi bit PASS / NG theo kiểu tín hiệu cấu hình (Level / Rising Edge / Falling Edge)
+    /// 2. Ghi bit DONE theo kiểu tín hiệu cấu hình
+    /// 3. Chờ PLC phản hồi tín hiệu ACK = 1 (nếu chế độ đồng bộ)
+    /// 4. Hạ bit BUSY = 0, khôi phục READY = 1
     /// </summary>
     public async Task<bool> CompleteHandshakeAsync(bool isPass, CancellationToken ct = default)
     {
@@ -232,26 +336,12 @@ public sealed class IndustrialHandshakeStateMachine
 
         try
         {
-            // 1. Ghi kết quả PASS/NG và DONE = 1
-            if (isPass)
-            {
-                if (!string.IsNullOrEmpty(passTag)) 
-                    await _plcManager.WriteTagValueAsync(_plcId, passTag, true, ct);
-                if (!string.IsNullOrEmpty(ngTag)) 
-                    await _plcManager.WriteTagValueAsync(_plcId, ngTag, false, ct);
-            }
-            else
-            {
-                if (!string.IsNullOrEmpty(passTag)) 
-                    await _plcManager.WriteTagValueAsync(_plcId, passTag, false, ct);
-                if (!string.IsNullOrEmpty(ngTag)) 
-                    await _plcManager.WriteTagValueAsync(_plcId, ngTag, true, ct);
-            }
+            // 1. Ghi kết quả PASS/NG theo kiểu tín hiệu cấu hình
+            await EmitSignalAsync(passTag, PassSignalType, isPass, ct);
+            await EmitSignalAsync(ngTag, NgSignalType, !isPass, ct);
 
-            if (!string.IsNullOrEmpty(doneTag))
-            {
-                await _plcManager.WriteTagValueAsync(_plcId, doneTag, true, ct);
-            }
+            // Ghi tín hiệu DONE theo kiểu tín hiệu cấu hình
+            await EmitSignalAsync(doneTag, DoneSignalType, true, ct);
 
             // Ghi trực tiếp kết quả vào nấc buồng chụp của hàng đợi PLC (M200): NG = true (1), Pass = false (0)
             if (!string.IsNullOrEmpty(QueueRegisterStart) && _plcManager != null)
@@ -267,13 +357,13 @@ public sealed class IndustrialHandshakeStateMachine
             // Vision trả kết quả trực tiếp vào hàng đợi PLC và giải phóng ngay để không làm chậm chuyền.
             if (NonBlockingMode || string.IsNullOrEmpty(ackTag))
             {
-                // Tự động hạ Done và Busy sau một khoảng xung ngắn 15ms trong background
+                // Tự động hạ Busy (và hạ Done nếu là Level) sau một khoảng trễ ngắn 15ms trong background
                 _ = Task.Run(async () =>
                 {
                     try
                     {
                         await Task.Delay(15);
-                        if (!string.IsNullOrEmpty(doneTag) && _plcManager != null)
+                        if (DoneSignalType == PlcSignalType.Level && !string.IsNullOrEmpty(doneTag) && _plcManager != null)
                             await _plcManager.WriteTagValueAsync(_plcId, doneTag, false);
                         if (!string.IsNullOrEmpty(busyTag) && _plcManager != null)
                             await _plcManager.WriteTagValueAsync(_plcId, busyTag, false);
@@ -353,8 +443,8 @@ public sealed class IndustrialHandshakeStateMachine
                 CurrentState = HandshakeState.Acknowledged;
             }
 
-            // 3. Hạ bit DONE và BUSY xuống 0, đồng thời khôi phục READY = 1 cho chu trình tiếp theo
-            if (!string.IsNullOrEmpty(doneTag))
+            // 3. Hạ bit DONE (nếu Level) và BUSY xuống 0, đồng thời khôi phục READY = 1 cho chu trình tiếp theo
+            if (DoneSignalType == PlcSignalType.Level && !string.IsNullOrEmpty(doneTag))
             {
                 await _plcManager.WriteTagValueAsync(_plcId, doneTag, false, ct);
             }
@@ -399,12 +489,28 @@ public sealed class IndustrialHandshakeStateMachine
         var readyTag = GetEffectiveReadyTag();
         var busyTag = GetEffectiveBusyTag();
         var doneTag = GetEffectiveDoneTag();
+        var passTag = GetEffectivePassTag();
+        var ngTag = GetEffectiveNgTag();
 
         try
         {
             if (!string.IsNullOrEmpty(readyTag)) await _plcManager.WriteTagValueAsync(_plcId, readyTag, false, ct);
             if (!string.IsNullOrEmpty(busyTag)) await _plcManager.WriteTagValueAsync(_plcId, busyTag, false, ct);
-            if (!string.IsNullOrEmpty(doneTag)) await _plcManager.WriteTagValueAsync(_plcId, doneTag, false, ct);
+            if (!string.IsNullOrEmpty(doneTag))
+            {
+                bool doneInactive = DoneSignalType == PlcSignalType.FallingEdge ? true : false;
+                await _plcManager.WriteTagValueAsync(_plcId, doneTag, doneInactive, ct);
+            }
+            if (!string.IsNullOrEmpty(passTag))
+            {
+                bool passInactive = PassSignalType == PlcSignalType.FallingEdge ? true : false;
+                await _plcManager.WriteTagValueAsync(_plcId, passTag, passInactive, ct);
+            }
+            if (!string.IsNullOrEmpty(ngTag))
+            {
+                bool ngInactive = NgSignalType == PlcSignalType.FallingEdge ? true : false;
+                await _plcManager.WriteTagValueAsync(_plcId, ngTag, ngInactive, ct);
+            }
         }
         catch { }
     }

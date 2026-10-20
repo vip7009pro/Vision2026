@@ -1,5 +1,34 @@
 # ROADMAP.md — Lộ trình phát triển & Trạng thái nhiệm vụ
 
+- [x] Task 411: Bổ Sung Tùy Chọn Kiểu Tín Hiệu Gửi PLC (Level, Rising Edge, Falling Edge) Trong Cài Đặt Handshake PLC:
+  - [x] Thiết kế Enum `PlcSignalType` (`Level = 0`, `RisingEdge = 1`, `FallingEdge = 2`) và tích hợp vào `IndustrialHandshakeConfig` ([PlcIndustrialConfig.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.Models/PlcIndustrialConfig.cs)):
+    - Cấu hình riêng biệt cho từng tín hiệu: `PassSignalType` (M104 PLC OK), `NgSignalType` (M105 PLC NG), `DoneSignalType` (M103 Vision Done).
+    - Cấu hình độ rộng xung phát `PulseDurationMs` (mặc định 100ms) áp dụng cho các kiểu Edge.
+  - [x] Máy trạng thái phát xung [IndustrialHandshakeStateMachine.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.Application/PLC/Services/IndustrialHandshakeStateMachine.cs):
+    - Triển khai `EmitSignalAsync(...)`: Hỗ trợ Level (giữ mức), Rising Edge ($0 \rightarrow 1 \rightarrow 0$) và Falling Edge ($1 \rightarrow 0 \rightarrow 1$) với timer non-blocking không làm nghẽn chu trình.
+    - Cập nhật `SetReadyAsync` và `SetIdleAsync` đảm bảo đưa chân Falling Edge về mức tĩnh 1 và các chân khác về 0.
+  - [x] Đồng bộ ViewModel & Giao diện [PlcManagerWindow.xaml](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/Views/PLC/PlcManagerWindow.xaml):
+    - Tab 2 Bắt tay 24/7: Thêm menu ComboBox chọn kiểu tín hiệu cho Done, Pass (OK), NG (Lỗi) và ô nhập độ rộng xung Edge (ms).
+    - [PlcManagerViewModel.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/PLC/PlcManagerViewModel.cs): Expose danh sách `AvailableSignalTypes` với nhãn tiếng Việt rõ ràng.
+    - [ToolEditorViewModel.HandshakeUi.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/ToolEditorViewModel.HandshakeUi.cs): ToolTip hiển thị trực quan kiểu tín hiệu đã cài đặt.
+  - [x] Kiểm thử tự động [PlcSignalTypeTests.cs](file:///g:/NODEJS/Vision2026/TestExtractApp/PlcSignalTypeTests.cs):
+    - 5/5 test PASSED 100% (Serialization JSON, Rising Edge $0 \rightarrow 1 \rightarrow 0$, Falling Edge $1 \rightarrow 0 \rightarrow 1$, Level duy trì mức tĩnh, danh sách ViewModel).
+    - Toàn bộ solution biên dịch: 0 Errors.
+
+- [x] Task 410: Khắc Phục Triệt Để Lỗi Trắng Địa Chỉ, Mất Chọn PLC & Lỗi Hiển Thị Dãy Số Dài Ngoẵng D300, D302 Trên HMI Designer:
+  - [x] Điều tra & định vị nguyên nhân gốc rễ:
+    - Xung đột Two-Way Binding kép trên ComboBox Editable: bind cả `Text` lẫn `SelectedItem` Two-Way vào `ReadTagName` khiến khi gõ phím, `SelectedItem` tự động thành `null` và xóa trắng địa chỉ.
+    - Vòng lặp bão sự kiện `Clear()` tập dữ liệu: mỗi ký tự gõ vào gọi `EnsureDirectAddressRegistered()` $\rightarrow$ `_plcService.Tags.Add` $\rightarrow$ `Tags.CollectionChanged` $\rightarrow$ gọi `AvailablePlcItems.Clear()` và `AvailableTags.Clear()`, làm ComboBox PLC bị mất item và gán `SelectedValue = null`.
+    - Khi mở tệp `.hmi`: các PLC ID (như `PLC1`, `PLC_OSC`) không có sẵn trong `AvailablePlcItems` nên ComboBox hiển thị trắng trơn không tự chọn được; tương tự với các Tags chưa có sẵn.
+    - Hiện tượng dãy số dài ngoẵng `4.4E-323`: Các ô đếm sản phẩm `D300`, `D302`, `D304` trong GX Works 3 là **Double Word (DINT 32-bit Integer, chiếm 2 thanh ghi D)**. Khi người dùng chọn nhầm kiểu `Double` (vốn là 64-bit float IEEE 754 chiếm 4 thanh ghi), driver đọc 4 words và giải mã thành số thực subnormal $4.4 \times 10^{-323}$. Hơn nữa `HmiControlViewModel.cs` thiếu case format cho `Double` và `UInt32` khiến in thẳng chuỗi khoa học `E-323` ra ngoài viền.
+  - [x] Cải tiến & giải pháp triệt để:
+    - [HmiPropertyInspectorView.xaml](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/Views/HMI/HmiPropertyInspectorView.xaml): Loại bỏ `SelectedItem` và `PreviewMouseDown`, chỉ giữ `Text` binding giúp gõ địa chỉ mượt mà, tức thì, không bị xóa trắng. Thêm nhãn hướng dẫn trực quan: `Đếm sản phẩm (D300, D302...) trong GXWorks là DINT 32-bit -> Chọn 'Int32 (Double Word)'`.
+    - [HmiManagerViewModel.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/HMI/HmiManagerViewModel.cs): Tạo danh sách kiểu dữ liệu chuẩn hóa công nghiệp `AvailableDataTypes` đưa `Int32 (Double Word / DINT 32-bit: D300, D302...)` lên đầu; nâng cấp `RefreshAvailablePlcsAndTags()` và `SyncPlcsAndTagsFromConfig` nạp trước toàn bộ PLC ID và Tags.
+    - [HmiControlViewModel.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/HMI/HmiControlViewModel.cs): Bổ sung đầy đủ case `Double` và `UInt32`, khử sạch số rác subnormal $< 10^{-9}$ về 0, áp dụng format string gọn gàng, tự động cập nhật DataType của tag vào `_plcService.Tags`.
+  - [x] Kiểm thử tự động:
+    - Mở rộng [HmiDesignerPersistenceTests.cs](file:///g:/NODEJS/Vision2026/TestExtractApp/HmiDesignerPersistenceTests.cs) (Nạp tệp `.hmi` bảo toàn PLC & địa chỉ 100%, Nhập địa chỉ tự do không bị trắng, Lưu và nạp địa chỉ ghi riêng, Khử số mũ rác subnormal và format DINT 32-bit).
+    - Toàn bộ 4/4 test HMI PASSED 100%.
+
 - [x] Task 409: Khắc Phục Triệt Để Lỗi Ảnh Template Của Node Tool SurfaceCompare Bị Đen Ngòm (Job GH68-58216B):
   - [x] Điều tra & định vị 2 nguyên nhân gốc rễ trên tệp `job_7A11034A_GH68-58216B_20261019_113956_a44536.job`:
     - Nguyên nhân 1 (Tiền xử lý kép): Template `kt mat net_sc.png` được lưu từ ảnh sau tiền xử lý `Nhi phan 4` (`InRange(128, 246)` nên chỉ gồm pixel `0` và `255`). Tại runtime, pipeline lại gọi tiếp `preprocessor.Run(templRaw, settings)`. Vì `0 < 128` và `255 > 246`, không có pixel nào trong $[128, 246]$, `Cv2.InRange` gán 100% pixel về `0` (Đen ngòm).

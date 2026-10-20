@@ -265,10 +265,10 @@ public sealed partial class ToolEditorViewModel : ObservableObject
             $"Tín Hiệu I/O Hiện Tại (MC Protocol / Internal Bit):\n" +
             $"• [Y] Vision Ready ({rdyTag}) : {(bitRdy ? "ON (1) — Sẵn sàng chụp" : "OFF (0)")}\n" +
             $"• [Y] Vision Busy  ({bsyTag}) : {(bitBsy ? "ON (1) — Đang đo" : "OFF (0)")}\n" +
-            $"• [Y] Vision Done  ({donTag}) : {(bitDon ? "ON (1) — Đo xong" : "OFF (0)")}\n" +
+            $"• [Y] Vision Done  ({donTag}) : {(bitDon ? "ON (1) — Đo xong" : "OFF (0)")} [{_handshakeStateMachine?.DoneSignalType}]\n" +
             $"• [X] PLC Ack      ({ackTag}) : {(bitAck ? "ON (1) — PLC đã chốt" : "OFF (0)")}\n" +
-            $"• [Y] Vision Pass  ({passTag}) : {(bitPass ? "ON (1) — ĐẠT" : "OFF (0)")}\n" +
-            $"• [Y] Vision NG    ({ngTag}) : {(bitNg ? "ON (1) — LỖI" : "OFF (0)")}\n" +
+            $"• [Y] Vision Pass  ({passTag}) : {(bitPass ? "ON (1) — ĐẠT" : "OFF (0)")} [{_handshakeStateMachine?.PassSignalType}]\n" +
+            $"• [Y] Vision NG    ({ngTag}) : {(bitNg ? "ON (1) — LỖI" : "OFF (0)")} [{_handshakeStateMachine?.NgSignalType}]\n" +
             $"──────────────────────────────────────────────────\n" +
             $"👉 Bấm chuột vào đây để mở Cửa Sổ Cấu Hình & Chẩn Đoán PLC.";
     }

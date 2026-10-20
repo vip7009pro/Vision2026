@@ -86,6 +86,18 @@ class Program
             return;
         }
 
+        if (args.Length > 0 && (args[0].Equals("hmi", StringComparison.OrdinalIgnoreCase) || args[0].Equals("hmi-test", StringComparison.OrdinalIgnoreCase)))
+        {
+            HmiDesignerPersistenceTests.RunAllTests();
+            return;
+        }
+
+        if (args.Length > 0 && (args[0].Equals("signal", StringComparison.OrdinalIgnoreCase) || args[0].Equals("plc-signal", StringComparison.OrdinalIgnoreCase)))
+        {
+            PlcSignalTypeTests.RunAllTestsAsync().GetAwaiter().GetResult();
+            return;
+        }
+
         HikApiTest.PrintApi();
         CameraTest.TestCameraParametersJobSerialization();
         CameraTest.TestNativeMatPoolAndMetadata();
@@ -144,5 +156,7 @@ class Program
         ReleaseConfigPersistenceTests.RunAllTests();
         MvpShapeMatch2PreprocessTests.RunAllTests();
         ContourCompareTests.RunAllTests();
+        HmiDesignerPersistenceTests.RunAllTests();
+        PlcSignalTypeTests.RunAllTestsAsync().GetAwaiter().GetResult();
     }
 }

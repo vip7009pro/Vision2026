@@ -113,26 +113,58 @@ public partial class HmiControlViewModel : ObservableObject
 
     public string ReadPlcId
     {
-        get => Model.ReadPlcId;
-        set { if (Model.ReadPlcId != value) { Model.ReadPlcId = value; NotifyModelChanged(); } }
+        get => Model.ReadPlcId ?? "";
+        set
+        {
+            var val = value ?? "";
+            if (Model.ReadPlcId != val)
+            {
+                Model.ReadPlcId = val;
+                NotifyModelChanged();
+            }
+        }
     }
 
     public string ReadTagName
     {
-        get => Model.ReadTagName;
-        set { if (Model.ReadTagName != value) { Model.ReadTagName = value; NotifyModelChanged(); } }
+        get => Model.ReadTagName ?? "";
+        set
+        {
+            var val = value ?? "";
+            if (Model.ReadTagName != val)
+            {
+                Model.ReadTagName = val;
+                NotifyModelChanged();
+            }
+        }
     }
 
     public string WritePlcId
     {
-        get => Model.WritePlcId;
-        set { if (Model.WritePlcId != value) { Model.WritePlcId = value; NotifyModelChanged(); } }
+        get => Model.WritePlcId ?? "";
+        set
+        {
+            var val = value ?? "";
+            if (Model.WritePlcId != val)
+            {
+                Model.WritePlcId = val;
+                NotifyModelChanged();
+            }
+        }
     }
 
     public string WriteTagName
     {
-        get => Model.WriteTagName;
-        set { if (Model.WriteTagName != value) { Model.WriteTagName = value; NotifyModelChanged(); } }
+        get => Model.WriteTagName ?? "";
+        set
+        {
+            var val = value ?? "";
+            if (Model.WriteTagName != val)
+            {
+                Model.WriteTagName = val;
+                NotifyModelChanged();
+            }
+        }
     }
 
     public bool UseSeparateWriteAddress
@@ -167,7 +199,6 @@ public partial class HmiControlViewModel : ObservableObject
         _currentDisplayValue = model.DefaultText;
 
         UpdateVisualState();
-        EnsureDirectAddressRegistered(EffectiveReadAddress);
     }
 
     public void EnsureDirectAddressRegistered(string address)
@@ -181,11 +212,11 @@ public partial class HmiControlViewModel : ObservableObject
 
         string targetPlcId = realPlc != null ? realPlc.Id : (string.IsNullOrWhiteSpace(plcId) ? "PLC_01" : plcId);
 
-        bool exists = _plcService.Tags.Any(t =>
+        var existingTag = _plcService.Tags.FirstOrDefault(t =>
             (string.Equals(t.PlcId, targetPlcId, StringComparison.OrdinalIgnoreCase) || string.Equals(t.PlcId, plcId, StringComparison.OrdinalIgnoreCase)) &&
             (string.Equals(t.Name, address, StringComparison.OrdinalIgnoreCase) || string.Equals(t.Address, address, StringComparison.OrdinalIgnoreCase)));
 
-        if (!exists)
+        if (existingTag == null)
         {
             var tag = new PlcTag
             {
@@ -196,12 +227,27 @@ public partial class HmiControlViewModel : ObservableObject
             };
             _plcService.Tags.Add(tag);
         }
+        else if (existingTag.DataType != Model.ValueDataType)
+        {
+            existingTag.DataType = Model.ValueDataType;
+        }
     }
 
     public PlcDataType ValueDataType
     {
         get => Model.ValueDataType;
-        set { if (Model.ValueDataType != value) { Model.ValueDataType = value; NotifyModelChanged(); } }
+        set
+        {
+            if (Model.ValueDataType != value)
+            {
+                Model.ValueDataType = value;
+                NotifyModelChanged();
+                if (IsRunMode)
+                {
+                    EnsureDirectAddressRegistered(EffectiveReadAddress);
+                }
+            }
+        }
     }
 
     public string ValueFormat
@@ -247,12 +293,18 @@ public partial class HmiControlViewModel : ObservableObject
                         break;
 
                     case PlcDataType.Float:
+                    case PlcDataType.Double:
                         try
                         {
                             double dVal = Convert.ToDouble(newValue);
+                            // Triệt tiêu số mũ subnormal cực nhỏ (như 4.4E-323 khi đọc nhầm 32-bit DWord integer)
+                            if (double.IsNaN(dVal) || double.IsInfinity(dVal) || Math.Abs(dVal) < 1e-9)
+                            {
+                                dVal = 0;
+                            }
                             targetIsOn = Math.Abs(dVal) > 0.0001;
                             string fmt = !string.IsNullOrWhiteSpace(Model.ValueFormat) ? Model.ValueFormat : "0.##";
-                            targetDisplay = dVal.ToString(fmt);
+                            targetDisplay = dVal.ToString(fmt, System.Globalization.CultureInfo.InvariantCulture);
                         }
                         catch
                         {
@@ -263,11 +315,13 @@ public partial class HmiControlViewModel : ObservableObject
                     case PlcDataType.Int16:
                     case PlcDataType.UInt16:
                     case PlcDataType.Int32:
+                    case PlcDataType.UInt32:
                         try
                         {
                             long iVal = Convert.ToInt64(newValue);
                             targetIsOn = iVal != 0;
-                            targetDisplay = iVal.ToString();
+                            string fmt = !string.IsNullOrWhiteSpace(Model.ValueFormat) && !Model.ValueFormat.Contains('.') ? Model.ValueFormat : "0";
+                            targetDisplay = iVal.ToString(fmt);
                         }
                         catch
                         {
@@ -324,6 +378,15 @@ public partial class HmiControlViewModel : ObservableObject
     partial void OnIsOnChanged(bool value)
     {
         UpdateVisualState();
+    }
+
+    partial void OnIsRunModeChanged(bool value)
+    {
+        if (value)
+        {
+            if (!string.IsNullOrWhiteSpace(EffectiveReadAddress)) EnsureDirectAddressRegistered(EffectiveReadAddress);
+            if (!string.IsNullOrWhiteSpace(EffectiveWriteAddress)) EnsureDirectAddressRegistered(EffectiveWriteAddress);
+        }
     }
 
     public async Task HandleUserInteractionAsync()
@@ -447,7 +510,10 @@ public partial class HmiControlViewModel : ObservableObject
         OnPropertyChanged(nameof(EffectiveWritePlcId));
         OnPropertyChanged(nameof(EffectiveReadAddress));
         OnPropertyChanged(nameof(EffectiveWriteAddress));
-        EnsureDirectAddressRegistered(EffectiveReadAddress);
+        if (IsRunMode)
+        {
+            EnsureDirectAddressRegistered(EffectiveReadAddress);
+        }
     }
 
     private async Task PromptAndSetNumericValueAsync()

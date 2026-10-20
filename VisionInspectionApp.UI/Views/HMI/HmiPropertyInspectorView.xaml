@@ -102,11 +102,8 @@
                         <TextBlock Text="Địa chỉ / Tag PLC (Read &amp; Write):" FontSize="11" Margin="0,2,0,2" Foreground="{DynamicResource TextMutedBrush}" />
                         <ComboBox ItemsSource="{Binding AvailableTags}"
                                   Text="{Binding SelectedControl.ReadTagName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                                  SelectedItem="{Binding SelectedControl.ReadTagName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                                   IsEditable="True"
                                   IsTextSearchEnabled="True"
-                                  StaysOpenOnEdit="True"
-                                  PreviewMouseDown="ComboBox_PreviewMouseDown"
                                   MaxDropDownHeight="220"
                                   Padding="4,3" Margin="0,0,0,2"
                                   ToolTip="Nhập trực tiếp địa chỉ PLC (như X0, Y0, D100, M10, MW100) hoặc chọn Tag từ danh sách" />
@@ -121,11 +118,8 @@
                             <TextBlock Text="Địa chỉ / Tag Ghi riêng (Write Address / Tag):" FontSize="11" Margin="0,2,0,2" Foreground="{DynamicResource TextMutedBrush}" />
                             <ComboBox ItemsSource="{Binding AvailableTags}"
                                       Text="{Binding SelectedControl.WriteTagName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                                      SelectedItem="{Binding SelectedControl.WriteTagName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                                       IsEditable="True"
                                       IsTextSearchEnabled="True"
-                                      StaysOpenOnEdit="True"
-                                      PreviewMouseDown="ComboBox_PreviewMouseDown"
                                       MaxDropDownHeight="220"
                                       Padding="4,3" Margin="0,0,0,2"
                                       ToolTip="Địa chỉ Ghi riêng (Nếu khác địa chỉ Đọc ở trên)" />
@@ -156,11 +150,13 @@
                 <!-- 4. Data Type & Formatting Settings -->
                 <GroupBox Header="4. KIỂU DỮ LIỆU ĐỌC &amp; ĐỊNH DẠNG (DATA TYPE)" Margin="0,0,0,10" Foreground="{DynamicResource TextBrush}" FontWeight="SemiBold">
                     <StackPanel Margin="6">
-                        <TextBlock Text="Kiểu dữ liệu đọc từ PLC (Data Type):" FontSize="11" Margin="0,2,0,2" Foreground="{DynamicResource TextMutedBrush}" />
-                        <ComboBox ItemsSource="{Binding ValueDataTypes}"
-                                  SelectedItem="{Binding SelectedControl.ValueDataType, UpdateSourceTrigger=PropertyChanged}"
-                                  Padding="4,3" Margin="0,0,0,6"
-                                  ToolTip="Chọn kiểu dữ liệu đọc từ PLC (Ví dụ: Bool -> TRUE/FALSE, Float -> Số thực 32-bit D200+D201, Int16, Int32, String)" />
+                        <ComboBox ItemsSource="{Binding AvailableDataTypes}"
+                                  SelectedValue="{Binding SelectedControl.ValueDataType, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                  SelectedValuePath="Type"
+                                  DisplayMemberPath="DisplayName"
+                                  Padding="4,3" Margin="0,0,0,4"
+                                  ToolTip="Chọn kiểu dữ liệu đọc từ PLC. Lưu ý: Đếm sản phẩm D300, D302 trong PLC Mitsubishi là DINT (Double Word 32-bit), hãy chọn 'Int32'!" />
+                        <TextBlock Text="💡 Đếm sản phẩm (D300, D302...) trong GXWorks là DINT 32-bit -> Chọn 'Int32 (Double Word)'" FontSize="10" Foreground="#29B6F6" Margin="0,0,0,6" TextWrapping="Wrap" />
 
                         <TextBlock Text="Định dạng hiển thị số (Format String):" FontSize="11" Margin="0,2,0,2" Foreground="{DynamicResource TextMutedBrush}" />
                         <TextBox Text="{Binding SelectedControl.ValueFormat, UpdateSourceTrigger=PropertyChanged}" Padding="4,3" Margin="0,0,0,6"

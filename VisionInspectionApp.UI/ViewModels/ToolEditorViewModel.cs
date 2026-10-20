@@ -1998,6 +1998,10 @@ namespace VisionInspectionApp.UI.ViewModels
                 _handshakeStateMachine.NonBlockingMode = config.Handshake.NonBlockingMode;
                 _handshakeStateMachine.TargetStopStationIndex = config.Handshake.TargetStopStationIndex;
                 _handshakeStateMachine.QueueRegisterStart = config.Handshake.QueueRegisterStart;
+                _handshakeStateMachine.PassSignalType = config.Handshake.PassSignalType;
+                _handshakeStateMachine.NgSignalType = config.Handshake.NgSignalType;
+                _handshakeStateMachine.DoneSignalType = config.Handshake.DoneSignalType;
+                _handshakeStateMachine.PulseDurationMs = config.Handshake.PulseDurationMs;
             }
 
             if (config.Heartbeat != null)

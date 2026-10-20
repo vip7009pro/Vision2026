@@ -51,6 +51,15 @@ public partial class PlcManagerViewModel : ObservableObject
 
     public Array DataTypes => Enum.GetValues(typeof(PlcDataType));
 
+    public record PlcSignalTypeOption(PlcSignalType Value, string DisplayName);
+
+    public IReadOnlyList<PlcSignalTypeOption> AvailableSignalTypes { get; } = new List<PlcSignalTypeOption>
+    {
+        new(PlcSignalType.Level, "Level (Giữ mức logic)"),
+        new(PlcSignalType.RisingEdge, "Rising Edge (Cạnh lên: 0 ➔ 1 ➔ 0)"),
+        new(PlcSignalType.FallingEdge, "Falling Edge (Cạnh xuống: 1 ➔ 0 ➔ 1)")
+    };
+
     public PlcIndustrialConfig IndustrialConfig
     {
         get => _plcService.IndustrialConfig;

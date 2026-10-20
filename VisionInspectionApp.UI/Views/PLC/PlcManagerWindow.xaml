@@ -249,6 +249,8 @@
                                     <RowDefinition Height="Auto"/>
                                     <RowDefinition Height="Auto"/>
                                     <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
                                 </Grid.RowDefinitions>
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="180"/>
@@ -265,34 +267,45 @@
                                 <TextBlock Grid.Row="1" Grid.Column="2" Text="Timeout Bắt Tay (ms):" Style="{StaticResource IndustrialFieldLabel}" Margin="12,4,8,4"/>
                                 <TextBox Grid.Row="1" Grid.Column="3" Text="{Binding Handshake.HandshakeTimeoutMs, UpdateSourceTrigger=PropertyChanged}" Margin="2" Padding="4,2"/>
 
-                                <TextBlock Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="4" Text="🏷️ Cấu Hình Địa Chỉ Các Tag Bắt Tay I/O" Style="{StaticResource IndustrialSectionHeader}" Margin="0,14,0,8"/>
+                                <TextBlock Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="4" Text="🏷️ Cấu Hình Địa Chỉ Các Tag Bắt Tay I/O &amp; Kiểu Tín Hiệu (Level / Rising Edge / Falling Edge)" Style="{StaticResource IndustrialSectionHeader}" Margin="0,14,0,8"/>
 
-                                <!-- Vision Ready Tag -->
+                                <!-- 1. Vision Ready Tag & 2. Vision Busy Tag -->
                                 <TextBlock Grid.Row="3" Grid.Column="0" Text="1. Vision Ready Tag (Y):" Style="{StaticResource IndustrialFieldLabel}"/>
                                 <ComboBox Grid.Row="3" Grid.Column="1" ItemsSource="{Binding AvailableTagNames}" Text="{Binding Handshake.ReadyTagName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" SelectedItem="{Binding Handshake.ReadyTagName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" IsEditable="True" IsTextSearchEnabled="True" StaysOpenOnEdit="True" MaxDropDownHeight="220" PreviewMouseDown="ComboBox_PreviewMouseDown" ToolTip="Tín hiệu Vision PC sẵn sàng nhận Trigger (Mặc định: Y1_VisionReady)" Margin="2"/>
 
-                                <!-- Vision Busy Tag -->
                                 <TextBlock Grid.Row="3" Grid.Column="2" Text="2. Vision Busy Tag (Y):" Style="{StaticResource IndustrialFieldLabel}" Margin="12,4,8,4"/>
                                 <ComboBox Grid.Row="3" Grid.Column="3" ItemsSource="{Binding AvailableTagNames}" Text="{Binding Handshake.BusyTagName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" SelectedItem="{Binding Handshake.BusyTagName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" IsEditable="True" IsTextSearchEnabled="True" StaysOpenOnEdit="True" MaxDropDownHeight="220" PreviewMouseDown="ComboBox_PreviewMouseDown" ToolTip="Tín hiệu Vision PC đang xử lý ảnh (Mặc định: Y2_VisionBusy)" Margin="2"/>
 
-                                <!-- Vision Done Tag -->
-                                <TextBlock Grid.Row="4" Grid.Column="0" Text="3. Vision Done Tag (Y):" Style="{StaticResource IndustrialFieldLabel}"/>
-                                <ComboBox Grid.Row="4" Grid.Column="1" ItemsSource="{Binding AvailableTagNames}" Text="{Binding Handshake.DoneTagName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" SelectedItem="{Binding Handshake.DoneTagName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" IsEditable="True" IsTextSearchEnabled="True" StaysOpenOnEdit="True" MaxDropDownHeight="220" PreviewMouseDown="ComboBox_PreviewMouseDown" ToolTip="Tín hiệu Vision PC đã hoàn tất kiểm tra (Mặc định: Y3_VisionDone)" Margin="2"/>
+                                <!-- PLC Ack Tag & Độ Rộng Xung Edge -->
+                                <TextBlock Grid.Row="4" Grid.Column="0" Text="PLC Ack Tag (X):" Style="{StaticResource IndustrialFieldLabel}"/>
+                                <ComboBox Grid.Row="4" Grid.Column="1" ItemsSource="{Binding AvailableTagNames}" Text="{Binding Handshake.PlcAckTagName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" SelectedItem="{Binding Handshake.PlcAckTagName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" IsEditable="True" IsTextSearchEnabled="True" StaysOpenOnEdit="True" MaxDropDownHeight="220" PreviewMouseDown="ComboBox_PreviewMouseDown" ToolTip="Tín hiệu PLC xác nhận đã chốt dữ liệu kiểm tra (Mặc định: X1_PlcAck)" Margin="2"/>
 
-                                <!-- PLC Ack Tag -->
-                                <TextBlock Grid.Row="4" Grid.Column="2" Text="4. PLC Ack Tag (X):" Style="{StaticResource IndustrialFieldLabel}" Margin="12,4,8,4"/>
-                                <ComboBox Grid.Row="4" Grid.Column="3" ItemsSource="{Binding AvailableTagNames}" Text="{Binding Handshake.PlcAckTagName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" SelectedItem="{Binding Handshake.PlcAckTagName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" IsEditable="True" IsTextSearchEnabled="True" StaysOpenOnEdit="True" MaxDropDownHeight="220" PreviewMouseDown="ComboBox_PreviewMouseDown" ToolTip="Tín hiệu PLC xác nhận đã chốt dữ liệu kiểm tra (Mặc định: X1_PlcAck)" Margin="2"/>
+                                <TextBlock Grid.Row="4" Grid.Column="2" Text="⏱️ Độ Rộng Xung Edge (ms):" Style="{StaticResource IndustrialFieldLabel}" Margin="12,4,8,4"/>
+                                <TextBox Grid.Row="4" Grid.Column="3" Text="{Binding Handshake.PulseDurationMs, UpdateSourceTrigger=PropertyChanged}" Margin="2" Padding="4,2" ToolTip="Thời gian xung phát (ms) khi chọn kiểu tín hiệu Rising Edge (cạnh lên) hoặc Falling Edge (cạnh xuống). Mặc định: 100ms."/>
 
-                                <!-- Vision Pass Tag -->
-                                <TextBlock Grid.Row="5" Grid.Column="0" Text="5. Vision Pass (OK) Tag (Y):" Style="{StaticResource IndustrialFieldLabel}"/>
-                                <ComboBox Grid.Row="5" Grid.Column="1" ItemsSource="{Binding AvailableTagNames}" Text="{Binding Handshake.PassTagName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" SelectedItem="{Binding Handshake.PassTagName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" IsEditable="True" IsTextSearchEnabled="True" StaysOpenOnEdit="True" MaxDropDownHeight="220" PreviewMouseDown="ComboBox_PreviewMouseDown" ToolTip="Tín hiệu kết quả ĐẠT (OK) (Mặc định: Y4_VisionPass)" Margin="2"/>
+                                <!-- 3. Vision Done Tag & Kiểu Tín Hiệu Done -->
+                                <TextBlock Grid.Row="5" Grid.Column="0" Text="3. Vision Done Tag (Y):" Style="{StaticResource IndustrialFieldLabel}"/>
+                                <ComboBox Grid.Row="5" Grid.Column="1" ItemsSource="{Binding AvailableTagNames}" Text="{Binding Handshake.DoneTagName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" SelectedItem="{Binding Handshake.DoneTagName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" IsEditable="True" IsTextSearchEnabled="True" StaysOpenOnEdit="True" MaxDropDownHeight="220" PreviewMouseDown="ComboBox_PreviewMouseDown" ToolTip="Tín hiệu Vision PC đã hoàn tất kiểm tra (Mặc định: Y3_VisionDone)" Margin="2"/>
 
-                                <!-- Vision NG Tag -->
-                                <TextBlock Grid.Row="5" Grid.Column="2" Text="6. Vision NG (Lỗi) Tag (Y):" Style="{StaticResource IndustrialFieldLabel}" Margin="12,4,8,4"/>
-                                <ComboBox Grid.Row="5" Grid.Column="3" ItemsSource="{Binding AvailableTagNames}" Text="{Binding Handshake.NgTagName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" SelectedItem="{Binding Handshake.NgTagName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" IsEditable="True" IsTextSearchEnabled="True" StaysOpenOnEdit="True" MaxDropDownHeight="220" PreviewMouseDown="ComboBox_PreviewMouseDown" ToolTip="Tín hiệu kết quả LỖI (NG) (Mặc định: Y5_VisionNG)" Margin="2"/>
+                                <TextBlock Grid.Row="5" Grid.Column="2" Text="⚡ Kiểu Tín Hiệu Done:" Style="{StaticResource IndustrialFieldLabel}" Margin="12,4,8,4"/>
+                                <ComboBox Grid.Row="5" Grid.Column="3" ItemsSource="{Binding AvailableSignalTypes}" SelectedValuePath="Value" DisplayMemberPath="DisplayName" SelectedValue="{Binding Handshake.DoneSignalType, Mode=TwoWay}" Margin="2" Padding="4,2" ToolTip="Chọn kiểu tín hiệu Done: Level (Mức), Rising Edge (Cạnh lên 0->1->0) hoặc Falling Edge (Cạnh xuống 1->0->1)"/>
 
-                                <CheckBox Grid.Row="6" Grid.Column="0" Grid.ColumnSpan="2" Content="Kích hoạt Chu trình Bắt tay Công nghiệp (Handshake Enabled)" IsChecked="{Binding Handshake.IsEnabled}" FontWeight="SemiBold" Margin="0,14,0,4" Foreground="{DynamicResource TextBrush}"/>
-                                <CheckBox Grid.Row="6" Grid.Column="2" Grid.ColumnSpan="2" Content="🧪 Mô Phỏng PLC Tự Động Ack (Simulate Auto-Ack khi test offline)" IsChecked="{Binding Handshake.SimulatePlcAck}" FontWeight="SemiBold" Margin="12,14,0,4" Foreground="#10B981" ToolTip="Tự động mô phỏng PLC phản hồi tín hiệu Ack (M11) sau 20ms khi Vision hoàn thành kiểm tra. Dùng để test chu trình handshake khi chưa có PLC thật hoặc đang giả lập trên máy tính!"/>
+                                <!-- 4. Vision Pass (OK) Tag & Kiểu Tín Hiệu Pass -->
+                                <TextBlock Grid.Row="6" Grid.Column="0" Text="4. Vision Pass (OK) Tag (Y):" Style="{StaticResource IndustrialFieldLabel}"/>
+                                <ComboBox Grid.Row="6" Grid.Column="1" ItemsSource="{Binding AvailableTagNames}" Text="{Binding Handshake.PassTagName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" SelectedItem="{Binding Handshake.PassTagName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" IsEditable="True" IsTextSearchEnabled="True" StaysOpenOnEdit="True" MaxDropDownHeight="220" PreviewMouseDown="ComboBox_PreviewMouseDown" ToolTip="Tín hiệu kết quả ĐẠT (OK) gửi PLC (Mặc định: Y4_VisionPass / M104)" Margin="2"/>
+
+                                <TextBlock Grid.Row="6" Grid.Column="2" Text="⚡ Kiểu Tín Hiệu Pass (OK):" Style="{StaticResource IndustrialFieldLabel}" Margin="12,4,8,4"/>
+                                <ComboBox Grid.Row="6" Grid.Column="3" ItemsSource="{Binding AvailableSignalTypes}" SelectedValuePath="Value" DisplayMemberPath="DisplayName" SelectedValue="{Binding Handshake.PassSignalType, Mode=TwoWay}" Margin="2" Padding="4,2" ToolTip="Chọn kiểu tín hiệu Pass gửi PLC: Level (Mức), Rising Edge (LDP M104 cạnh lên 0->1->0) hoặc Falling Edge (LDF M104 cạnh xuống 1->0->1)"/>
+
+                                <!-- 5. Vision NG (Lỗi) Tag & Kiểu Tín Hiệu NG -->
+                                <TextBlock Grid.Row="7" Grid.Column="0" Text="5. Vision NG (Lỗi) Tag (Y):" Style="{StaticResource IndustrialFieldLabel}"/>
+                                <ComboBox Grid.Row="7" Grid.Column="1" ItemsSource="{Binding AvailableTagNames}" Text="{Binding Handshake.NgTagName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" SelectedItem="{Binding Handshake.NgTagName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" IsEditable="True" IsTextSearchEnabled="True" StaysOpenOnEdit="True" MaxDropDownHeight="220" PreviewMouseDown="ComboBox_PreviewMouseDown" ToolTip="Tín hiệu kết quả LỖI (NG) gửi PLC (Mặc định: Y5_VisionNG / M105)" Margin="2"/>
+
+                                <TextBlock Grid.Row="7" Grid.Column="2" Text="⚡ Kiểu Tín Hiệu NG (Lỗi):" Style="{StaticResource IndustrialFieldLabel}" Margin="12,4,8,4"/>
+                                <ComboBox Grid.Row="7" Grid.Column="3" ItemsSource="{Binding AvailableSignalTypes}" SelectedValuePath="Value" DisplayMemberPath="DisplayName" SelectedValue="{Binding Handshake.NgSignalType, Mode=TwoWay}" Margin="2" Padding="4,2" ToolTip="Chọn kiểu tín hiệu NG gửi PLC: Level (Mức), Rising Edge (LDP M105 cạnh lên 0->1->0) hoặc Falling Edge (LDF M105 cạnh xuống 1->0->1)"/>
+
+                                <CheckBox Grid.Row="8" Grid.Column="0" Grid.ColumnSpan="2" Content="Kích hoạt Chu trình Bắt tay Công nghiệp (Handshake Enabled)" IsChecked="{Binding Handshake.IsEnabled}" FontWeight="SemiBold" Margin="0,14,0,4" Foreground="{DynamicResource TextBrush}"/>
+                                <CheckBox Grid.Row="8" Grid.Column="2" Grid.ColumnSpan="2" Content="🧪 Mô Phỏng PLC Tự Động Ack (Simulate Auto-Ack khi test offline)" IsChecked="{Binding Handshake.SimulatePlcAck}" FontWeight="SemiBold" Margin="12,14,0,4" Foreground="#10B981" ToolTip="Tự động mô phỏng PLC phản hồi tín hiệu Ack (M11) sau 20ms khi Vision hoàn thành kiểm tra. Dùng để test chu trình handshake khi chưa có PLC thật hoặc đang giả lập trên máy tính!"/>
                             </Grid>
                         </Border>
 
