@@ -26,6 +26,10 @@ public sealed class PlcLogger : IPlcLogger
 
     public void LogTimeout(string plcId, string operation) => AddLog("WARN", plcId, $"PLC Timeout during [{operation}]");
 
+    public void LogInfo(string plcId, string message) => AddLog("INFO", plcId, message);
+
+    public void LogWarning(string plcId, string message) => AddLog("WARN", plcId, message);
+
     public void Clear()
     {
         while (_logs.TryDequeue(out _)) { }

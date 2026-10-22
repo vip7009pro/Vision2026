@@ -98,6 +98,12 @@ class Program
             return;
         }
 
+        if (args.Length > 0 && (args[0].Equals("handshake", StringComparison.OrdinalIgnoreCase) || args[0].Equals("plc-handshake", StringComparison.OrdinalIgnoreCase)))
+        {
+            PlcHandshakePersistenceTests.RunAllTests();
+            return;
+        }
+
         HikApiTest.PrintApi();
         CameraTest.TestCameraParametersJobSerialization();
         CameraTest.TestNativeMatPoolAndMetadata();
@@ -158,5 +164,6 @@ class Program
         ContourCompareTests.RunAllTests();
         HmiDesignerPersistenceTests.RunAllTests();
         PlcSignalTypeTests.RunAllTestsAsync().GetAwaiter().GetResult();
+        PlcHandshakePersistenceTests.RunAllTests();
     }
 }

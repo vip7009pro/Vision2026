@@ -74,6 +74,92 @@ public sealed class IndustrialHandshakeConfig
     /// Địa chỉ bắt đầu mảng hàng đợi trên PLC (Mặc định: M200 cho mảng M200..M219)
     /// </summary>
     public string QueueRegisterStart { get; set; } = "M200";
+
+    /// <summary>
+    /// Kiểm tra xem cấu hình Handshake có chứa ít nhất một TagName hợp lệ hay không.
+    /// </summary>
+    public bool HasConfiguredTags()
+    {
+        return !string.IsNullOrWhiteSpace(ReadyTagName) ||
+               !string.IsNullOrWhiteSpace(BusyTagName) ||
+               !string.IsNullOrWhiteSpace(DoneTagName) ||
+               !string.IsNullOrWhiteSpace(PassTagName) ||
+               !string.IsNullOrWhiteSpace(NgTagName) ||
+               !string.IsNullOrWhiteSpace(PlcAckTagName);
+    }
+
+    /// <summary>
+    /// Khôi phục cấu hình bắt tay chuẩn Mitsubishi FX5U (M101..M105, xung Rising Edge 20ms, hàng đợi M200).
+    /// </summary>
+    public void ApplyFx5uDefaults(string? targetPlcId = null)
+    {
+        if (!string.IsNullOrWhiteSpace(targetPlcId)) PlcId = targetPlcId;
+        ReadyTagName = "M101";
+        BusyTagName = "M102";
+        DoneTagName = "M103";
+        PassTagName = "M104";
+        NgTagName = "M105";
+        PlcAckTagName = "";
+        HandshakeTimeoutMs = 300;
+        IsEnabled = true;
+        SimulatePlcAck = false;
+        PassSignalType = PlcSignalType.RisingEdge;
+        NgSignalType = PlcSignalType.RisingEdge;
+        DoneSignalType = PlcSignalType.Level;
+        PulseDurationMs = 20;
+        NonBlockingMode = true;
+        TargetStopStationIndex = 10;
+        QueueRegisterStart = "M200";
+    }
+
+    /// <summary>
+    /// Khôi phục cấu hình bắt tay chuẩn I/O Công Nghiệp (Y1..Y5, X1 Ack, Level).
+    /// </summary>
+    public void ApplyStandardIoDefaults(string? targetPlcId = null)
+    {
+        if (!string.IsNullOrWhiteSpace(targetPlcId)) PlcId = targetPlcId;
+        ReadyTagName = "Y1_VisionReady";
+        BusyTagName = "Y2_VisionBusy";
+        DoneTagName = "Y3_VisionDone";
+        PassTagName = "Y4_VisionPass";
+        NgTagName = "Y5_VisionNG";
+        PlcAckTagName = "X1_PlcAck";
+        HandshakeTimeoutMs = 500;
+        IsEnabled = true;
+        SimulatePlcAck = false;
+        PassSignalType = PlcSignalType.Level;
+        NgSignalType = PlcSignalType.Level;
+        DoneSignalType = PlcSignalType.Level;
+        PulseDurationMs = 100;
+        NonBlockingMode = false;
+        TargetStopStationIndex = 10;
+        QueueRegisterStart = "M200";
+    }
+
+    /// <summary>
+    /// Sao chép giá trị từ cấu hình khác.
+    /// </summary>
+    public void CopyFrom(IndustrialHandshakeConfig other)
+    {
+        if (other == null) return;
+        if (!string.IsNullOrWhiteSpace(other.PlcId)) PlcId = other.PlcId;
+        ReadyTagName = other.ReadyTagName;
+        BusyTagName = other.BusyTagName;
+        DoneTagName = other.DoneTagName;
+        PassTagName = other.PassTagName;
+        NgTagName = other.NgTagName;
+        PlcAckTagName = other.PlcAckTagName;
+        HandshakeTimeoutMs = other.HandshakeTimeoutMs;
+        IsEnabled = other.IsEnabled;
+        SimulatePlcAck = other.SimulatePlcAck;
+        PassSignalType = other.PassSignalType;
+        NgSignalType = other.NgSignalType;
+        DoneSignalType = other.DoneSignalType;
+        PulseDurationMs = other.PulseDurationMs;
+        NonBlockingMode = other.NonBlockingMode;
+        TargetStopStationIndex = other.TargetStopStationIndex;
+        QueueRegisterStart = other.QueueRegisterStart;
+    }
 }
 
 /// <summary>

@@ -7,13 +7,37 @@ Hỗ trợ Camera GigE/USB3/USB/RTSP, nạp ảnh tệp/thư mục, bản vẽ k
 ## 2. Trạng thái mã nguồn gần nhất
 - **Phiên bản hiện tại**: .NET 8 WPF, x64/x86 Multi-targeting, C# 12.
 - **Biên dịch**: 0 Errors toàn solution (`VisionInspectionApp.slnx`) cả Debug lẫn Release.
-- **Kiểm thử tự động**: PASSED 100% (Toàn bộ 5/5 test PLC Signal Types, 4/4 test HMI Designer Persistence & DINT 32-bit, 10/10 test SurfaceCompare & Caliper, regression test tệp Job `job_7A11034A_GH68-58216B`, Ctrl+R & Ctrl+F4 ROI, 8/8 test ContourCompare, 12/12 test Tool Calib Factor, 15/15 test OQC Scanner Live View, 8/8 test MvpShapeMatch2).
+- **Kiểm thử tự động**: PASSED 100% (5/5 test PLC Handshake Persistence & Safe Guard, 5/5 test PLC Signal Types, 4/4 test HMI Designer Persistence & DINT 32-bit, 10/10 test SurfaceCompare & Caliper, regression test tệp Job `job_7A11034A_GH68-58216B`, Ctrl+R & Ctrl+F4 ROI, 8/8 test ContourCompare, 12/12 test Tool Calib Factor, 15/15 test OQC Scanner Live View, 8/8 test MvpShapeMatch2).
 - **Cấu hình chuẩn xưởng CMS_VINA**: 
   - Database: `CMS_VINA` (192.168.1.2:6789)
   - OQC Server API: `https://192.168.1.192/vision_upload.php`
   - OTA Update Server: `http://192.168.1.192/update/version.json` & `http://192.168.1.192/ota_server.php`
+  - PLC Handshake: `PLC_2` (Mitsubishi FX5U: Ready `M101`, Busy `M102`, Done `M103`, Pass `M104` RisingEdge 20ms, NG `M105` RisingEdge 20ms, Queue In `M200`).
 
-## 3. Hoàn thành Task 411: Tùy Chọn Kiểu Tín Hiệu Gửi PLC (Level, Rising Edge, Falling Edge) Trong Cài Đặt Handshake
+## 3. Hoàn thành Task 412: Khắc Phục Triệt Để Lỗi Mất Tag Handshake Khi Build Lại App & Cơ Chế Safe Guard / Auto-Recover
+1. **Bối cảnh & Nguyên nhân gốc rễ**:
+   - *Nguyên nhân 1 (Xung đột Two-Way Binding kép trên ComboBox Editable)*: Trong `PlcManagerWindow.xaml`, các ComboBox nhập tag đều bind cả `Text` lẫn `SelectedItem` Two-Way vào `Handshake.*TagName`. Khi mở tab, WPF ComboBox kiểm tra `SelectedItem` ("M101") trong `AvailableTagNames`. Do "M101" chưa có trong list, WPF tự gán `SelectedItem = null` $\rightarrow$ ghi đè `Handshake.ReadyTagName = ""` $\rightarrow$ khi đóng cửa sổ, `AutoSaveOnClose()` ghi đè chuỗi rỗng vào đĩa.
+   - *Nguyên nhân 2 (Target MSBuild lây lan file rỗng)*: `VisionInspectionApp.UI.csproj` có target `SyncReleaseConfigurations` copy `plc_config.json` từ `%APPDATA%` sang thư mục build. Khi AppData bị rỗng do bug ComboBox, thao tác build lại app copy file rỗng vào `bin\configs\system`, phá hủy luôn bản backup gốc.
+   - *Nguyên nhân 3 (Thiếu Safe Guard)*: `PlcManagerService.SaveGlobalConfig()` không kiểm tra tính hợp lệ của cấu hình trong RAM trước khi ghi, dẫn đến việc RAM bị rỗng là đè mất dữ liệu trên đĩa.
+2. **Các điểm sửa đổi cốt lõi**:
+   - `PlcIndustrialConfig.cs`: Bổ sung `HasConfiguredTags()`, `ApplyFx5uDefaults(plcId)`, `ApplyStandardIoDefaults(plcId)`, `CopyFrom(other)`.
+   - `PlcManagerService.cs`:
+     - **Safe Guard**: Trong `SaveGlobalConfig()`, nếu dữ liệu trong RAM bị rỗng nhưng trên đĩa hoặc backup có dữ liệu hợp lệ, tự động bảo tồn tag cũ không cho ghi đè rỗng; tự động tạo bản sao lưu an toàn `plc_config.json.backup`.
+     - **Auto-Recover**: Trong `LoadGlobalConfig()`, nếu file chính bị rỗng tag, tự động dò tìm và nạp từ `.backup`, `configs\system`, `BaseDirectory`; nếu không có bản nào thì tự động nạp chuẩn FX5U (`M101`..`M105`).
+     - **EnsureIndustrialTagsRegistered**: Tự động đăng ký các tag bắt tay vào danh mục `Tags` của PLC service để không bao giờ bị thiếu trong hệ thống.
+   - `PlcManagerWindow.xaml`:
+     - Loại bỏ toàn bộ `SelectedItem` và `PreviewMouseDown` trên tất cả ComboBox tag của Tab 2..5; chỉ dùng `Text="{Binding ..., UpdateSourceTrigger=PropertyChanged}"` với `IsEditable="True"`.
+     - Bổ sung thanh công cụ nạp nhanh 1 chạm: `↺ Chuẩn FX5U (M101..M105)` và `↺ Chuẩn I/O (Y1..Y5 / X1)`.
+   - `PlcManagerViewModel.cs`:
+     - Bổ sung `ResetHandshakeFx5uCommand` và `ResetHandshakeStandardIoCommand`.
+     - Nâng cấp `RefreshAvailableTagsAndPlcs()` bằng cơ chế merge không phá hủy (loại bỏ `Clear()` làm mất selection của ComboBox).
+     - Nạp sẵn các dải địa chỉ phổ biến: `M101`..`M105`, `M200`..`M219` vào `AvailableTagNames`.
+   - Khôi phục dữ liệu thực tế: Cập nhật `%APPDATA%\Vision2026\plc_config.json` và `.backup` về đúng chuẩn: `PLC_2`, `M101`..`M105`, `M200`, `PassSignalType = RisingEdge (1)`, `PulseDurationMs = 20`.
+3. **Kiểm thử tự động**:
+   - Tạo bộ test [PlcHandshakePersistenceTests.cs](file:///g:/NODEJS/Vision2026/TestExtractApp/PlcHandshakePersistenceTests.cs) gồm 5 unit tests: Khởi tạo FX5U mặc định, Chống ghi đè Safe Guard, Auto-Recover khi file rỗng/hỏng, Gõ địa chỉ tự do không bị null, Nạp chuẩn I/O.
+   - Toàn bộ 5/5 test PASSED 100%. Toàn bộ solution biên dịch: 0 Errors (Debug & Release).
+
+## 4. Hoàn thành Task 411: Tùy Chọn Kiểu Tín Hiệu Gửi PLC (Level, Rising Edge, Falling Edge) Trong Cài Đặt Handshake
 1. **Bối cảnh & Yêu cầu**:
    - Khi giao tiếp với PLC (FX5U, Q-Series...), các lập trình viên PLC có nhu cầu nhận tín hiệu kết quả theo nhiều dạng sóng khác nhau:
      - `Level`: Giữ mức logic cho đến chu trình kế tiếp.
@@ -59,7 +83,12 @@ Hỗ trợ Camera GigE/USB3/USB/RTSP, nạp ảnh tệp/thư mục, bản vẽ k
    - Xác minh trên đúng file Job của người dùng: `Template Image: 453x39, MinVal: 0, MaxVal: 255`, `Pass: True, Count: 0, MaxArea: 0` (ảnh sáng rõ nét 100%, không còn đen ngòm).
    - 9/9 test SurfaceCompare & Caliper PASSED 100%.
 
-## 5. Các sự kiện & thay đổi gần đây
+## 5. Hoàn thành Task 410: Khắc Phục Triệt Để Lỗi Trắng Địa Chỉ, Mất Chọn PLC & Dãy Số Dài Ngoẵng D300, D302 Trên HMI Designer
+
+## 6. Các sự kiện & thay đổi gần đây
+- Task 412: Khắc phục triệt để lỗi mất cấu hình tag bắt tay 24/7 khi build lại app & bổ sung Safe Guard, Auto-Recover, nạp nhanh chuẩn FX5U (M101..M105) 1 chạm; kiểm thử 5/5 PASSED 100%.
+- Task 411: Bổ sung tùy chọn kiểu tín hiệu gửi PLC (Level, Rising Edge, Falling Edge) kèm độ rộng xung PulseDurationMs trong cài đặt Handshake; kiểm thử 5/5 PASSED 100%.
+- Task 410: Khắc phục triệt để lỗi trắng địa chỉ, mất chọn PLC trên HMI Designer & hỗ trợ chuẩn DINT 32-bit (Int32 Double Word D300, D302...); kiểm thử 4/4 PASSED 100%.
 - Task 409: Khắc phục triệt để lỗi ảnh template của node SurfaceCompare bị đen ngòm trên job `job_7A11034A_GH68-58216B` (triệt tiêu tiền xử lý kép, chống ghi đè Search ROI vào file template, tự phục hồi sub-patch cho Job cũ; kiểm thử tự động PASSED 100%).
 - Task 408: Rà soát loại bỏ 100% control vô dụng trong cửa sổ Train Template Tool Origin (Eraser, Size, Undo, Redo, Detection Roi radio, Shape Operations Table, Save button lơ lửng); thiết kế lại layout 2 cột hiện đại chuẩn công nghiệp; kiểm thử tự động PASSED 100%.
 - Task 407: Bổ sung phím tắt Ctrl + R chuyển đổi hướng quét Vertical/Horizontal cho EdgePairDetect & Caliper (giữ nguyên ROI Width/Height, chỉ xoay các strip trong ROI); thêm phím tắt Ctrl + F4 đóng Job đang mở trên toàn ứng dụng; kiểm thử tự động PASSED 100%.
@@ -78,7 +107,4 @@ Hỗ trợ Camera GigE/USB3/USB/RTSP, nạp ảnh tệp/thư mục, bản vẽ k
 - Task 394: Bổ sung phím tắt ESC đóng Job và xóa ô nhập mã TextBox trên Tab OQC Scanner (1 chạm không pop-up, đồng bộ nút UI "🔒 Đóng Job (ESC)").
 - Task 393: Bổ sung Chế độ "Cú đấm thép" trên Tab OQC Scanner (mặc định Checked, bảo toàn chuỗi mã scan trên TextBox, luân phiên Space/Ctrl+F8 kiểm tra mẫu/Live View).
 - Task 392: Chuẩn hóa chu trình dịch bit hàng đợi FX5U theo xung kết quả Vision Done (`M103`) thay vì cảm biến `X2`.
-- Task 391: Sửa lỗi không truyền bit NG M105 sang GXWorks & Kích hoạt Handshake khi test ảnh trên Tool Editor.
-- Task 390: Giải quyết triệt để lỗi Bắt Cạnh PLC (`LDP X0`) không kích hoạt `SET Y0` từ nút Momentary HMI & Nâng cấp Minimum Hold Duration (100ms).
-- Task 389: Bắt tay Bất đồng bộ Non-blocking & Hàng đợi 20 phôi BSFLP M200..M219 dừng đúng Điểm Ra Chỉ Định ngoài buồng.
-- Task 388: Sửa lỗi mất cấu hình PLC khi build lại app & Thêm cơ chế Simulate PLC Auto-Ack và Fast Direct Read cho kiểm thử Handshake.
+

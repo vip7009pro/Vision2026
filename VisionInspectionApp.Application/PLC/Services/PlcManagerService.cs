@@ -129,6 +129,109 @@ public sealed class PlcManagerService : IPlcManagerService, IDisposable
 
     private readonly object _saveLock = new();
 
+    /// <summary>
+    /// Thử phục hồi cấu hình Handshake hợp lệ từ các tệp sao lưu hoặc thư mục gốc nếu RAM bị rỗng.
+    /// </summary>
+    private IndustrialHandshakeConfig? TryRecoverHandshakeFromDiskOrBackup(string configFilePath)
+    {
+        var candidates = new List<string>();
+
+        if (!string.IsNullOrWhiteSpace(configFilePath))
+        {
+            candidates.Add(configFilePath);
+            candidates.Add(configFilePath + ".backup");
+        }
+
+        candidates.Add(Path.Combine(AppStoragePaths.AppSeedConfigDirectory, "plc_config.json"));
+        candidates.Add(Path.Combine(AppStoragePaths.AppBaseDirectory, "plc_config.json"));
+
+        // Thêm các đường dẫn Debug/Release khi đang chạy trong môi trường phát triển
+        try
+        {
+            string baseDir = AppStoragePaths.AppBaseDirectory;
+            string debugCandidate = Path.Combine(baseDir, "..", "..", "..", "VisionInspectionApp.UI", "bin", "Debug", "net8.0-windows", "plc_config.json");
+            if (File.Exists(debugCandidate)) candidates.Add(Path.GetFullPath(debugCandidate));
+        }
+        catch { }
+
+        foreach (var path in candidates)
+        {
+            try
+            {
+                if (File.Exists(path))
+                {
+                    string text = File.ReadAllText(path);
+                    var parsed = JsonSerializer.Deserialize<PlcConfigContainer>(text);
+                    if (parsed?.IndustrialConfig?.Handshake != null && parsed.IndustrialConfig.Handshake.HasConfiguredTags())
+                    {
+                        return parsed.IndustrialConfig.Handshake;
+                    }
+                }
+            }
+            catch { }
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Đảm bảo các tag của cấu hình Bắt tay 24/7 (Ready, Busy, Done, Pass, Ng, Ack) được đăng ký đầy đủ vào danh mục Tags.
+    /// </summary>
+    public void EnsureIndustrialTagsRegistered()
+    {
+        if (_industrialConfig?.Handshake == null) return;
+        var handshake = _industrialConfig.Handshake;
+
+        var plcId = string.IsNullOrWhiteSpace(handshake.PlcId)
+            ? (Plcs.FirstOrDefault()?.Id ?? "PLC1")
+            : handshake.PlcId;
+
+        var targetPlcModel = Plcs.FirstOrDefault(p =>
+            string.Equals(p.Id, plcId, StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(p.Name, plcId, StringComparison.OrdinalIgnoreCase));
+        string finalPlcId = targetPlcModel?.Id ?? plcId;
+
+        var handshakeTags = new[]
+        {
+            (handshake.ReadyTagName, "Vision Ready (Sẵn sàng nhận trigger)"),
+            (handshake.BusyTagName, "Vision Busy (Đang xử lý ảnh)"),
+            (handshake.DoneTagName, "Vision Done (Hoàn tất kiểm tra)"),
+            (handshake.PassTagName, "Vision Pass (Kết quả ĐẠT/OK)"),
+            (handshake.NgTagName, "Vision NG (Kết quả LỖI/NG)"),
+            (handshake.PlcAckTagName, "PLC Ack (Xác nhận nhận kết quả)")
+        };
+
+        bool anyAdded = false;
+        foreach (var (addr, desc) in handshakeTags)
+        {
+            if (string.IsNullOrWhiteSpace(addr)) continue;
+            var trimmed = addr.Trim();
+            bool exists = Tags.Any(t =>
+                string.Equals(t.PlcId, finalPlcId, StringComparison.OrdinalIgnoreCase) &&
+                (string.Equals(t.Name, trimmed, StringComparison.OrdinalIgnoreCase) ||
+                 string.Equals(t.Address, trimmed, StringComparison.OrdinalIgnoreCase)));
+
+            if (!exists)
+            {
+                Tags.Add(new PlcTag
+                {
+                    PlcId = finalPlcId,
+                    Name = trimmed,
+                    Address = trimmed,
+                    DataType = InferDataTypeFromAddress(trimmed, null),
+                    Description = desc,
+                    Category = "Handshake"
+                });
+                anyAdded = true;
+            }
+        }
+
+        if (anyAdded && !_isLoading)
+        {
+            SaveGlobalConfig();
+        }
+    }
+
     public void SaveGlobalConfig()
     {
         if (_isLoading) return;
@@ -141,6 +244,21 @@ public sealed class PlcManagerService : IPlcManagerService, IDisposable
                 {
                     Directory.CreateDirectory(dir);
                 }
+
+                // SAFE GUARD CHO INDUSTRIAL HANDSHAKE:
+                // Nếu trong RAM _industrialConfig.Handshake bị rỗng (tất cả các tag đều null/empty)
+                // nhưng file trên đĩa hoặc file backup có cấu hình tag hợp lệ:
+                // Tự động khôi phục từ đĩa để chống ghi đè xóa sạch cấu hình!
+                if (_industrialConfig?.Handshake != null && !_industrialConfig.Handshake.HasConfiguredTags())
+                {
+                    var recoveredHandshake = TryRecoverHandshakeFromDiskOrBackup(_globalConfigFilePath);
+                    if (recoveredHandshake != null && recoveredHandshake.HasConfiguredTags())
+                    {
+                        _industrialConfig.Handshake.CopyFrom(recoveredHandshake);
+                        Logger.LogWarning("PLC", "Safe Guard kích hoạt: Bảo toàn tag Handshake hợp lệ từ đĩa trước khi ghi đè.");
+                    }
+                }
+
                 var container = new PlcConfigContainer
                 {
                     Plcs = Plcs.ToList(),
@@ -149,10 +267,21 @@ public sealed class PlcManagerService : IPlcManagerService, IDisposable
                 };
                 string json = JsonSerializer.Serialize(container, new JsonSerializerOptions { WriteIndented = true });
                 
-                // 1. Lưu vào thư mục chuẩn %AppData%\Vision2026
+                // 1. Tạo bản sao lưu dự phòng an toàn trước khi ghi đè file chính
+                if (File.Exists(_globalConfigFilePath))
+                {
+                    try
+                    {
+                        string backupPath = _globalConfigFilePath + ".backup";
+                        File.Copy(_globalConfigFilePath, backupPath, true);
+                    }
+                    catch { }
+                }
+
+                // 2. Lưu vào thư mục chuẩn %AppData%\Vision2026
                 File.WriteAllText(_globalConfigFilePath, json);
 
-                // 2. Đồng bộ bản sao sang thư mục ứng dụng (configs\system) để phục vụ deploy/release
+                // 3. Đồng bộ bản sao sang thư mục ứng dụng (configs\system) để phục vụ deploy/release
                 AppStoragePaths.SyncConfigToAppBackup("plc_config.json", json);
             }
             catch (Exception ex)
@@ -200,8 +329,33 @@ public sealed class PlcManagerService : IPlcManagerService, IDisposable
                     if (container.IndustrialConfig != null)
                     {
                         _industrialConfig = container.IndustrialConfig;
-                        OnIndustrialConfigChanged?.Invoke(this, _industrialConfig);
                     }
+                    else
+                    {
+                        _industrialConfig = new PlcIndustrialConfig();
+                    }
+
+                    // TỰ PHỤC HỒI HANDSHAKE NẾU BỊ RỖNG TAGS:
+                    if (_industrialConfig.Handshake == null || !_industrialConfig.Handshake.HasConfiguredTags())
+                    {
+                        var recovered = TryRecoverHandshakeFromDiskOrBackup(_globalConfigFilePath);
+                        if (recovered != null && recovered.HasConfiguredTags())
+                        {
+                            _industrialConfig.Handshake ??= new IndustrialHandshakeConfig();
+                            _industrialConfig.Handshake.CopyFrom(recovered);
+                            Logger.LogInfo("PLC", "Đã tự động phục hồi cấu hình Handshake 24/7 từ tệp backup/seed.");
+                        }
+                        else
+                        {
+                            // Nếu không có bản backup nào, tự động áp dụng cấu hình chuẩn FX5U (M101..M105)
+                            string defaultPlc = container.Plcs?.FirstOrDefault()?.Name ?? container.Plcs?.FirstOrDefault()?.Id ?? "PLC1";
+                            _industrialConfig.Handshake ??= new IndustrialHandshakeConfig();
+                            _industrialConfig.Handshake.ApplyFx5uDefaults(defaultPlc);
+                            Logger.LogInfo("PLC", "Áp dụng cấu hình Handshake chuẩn FX5U (M101..M105) cho lần đầu khởi tạo.");
+                        }
+                    }
+
+                    OnIndustrialConfigChanged?.Invoke(this, _industrialConfig);
 
                     if (container.Plcs != null && container.Plcs.Count > 0)
                     {
@@ -212,7 +366,10 @@ public sealed class PlcManagerService : IPlcManagerService, IDisposable
                         }
                         LoadConfigInternal(container.Plcs, container.Tags ?? new List<PlcTag>());
 
-                        // Nếu nạp từ hạt giống fallback, lưu ngay vào đường dẫn chuẩn
+                        // Đảm bảo các tag của Handshake được nhận diện trong danh bạ Tags
+                        EnsureIndustrialTagsRegistered();
+
+                        // Nếu nạp từ hạt giống fallback hoặc vừa phục hồi, lưu ngay vào đường dẫn chuẩn
                         if (loadPath != _globalConfigFilePath)
                         {
                             SaveGlobalConfig();
@@ -246,7 +403,12 @@ public sealed class PlcManagerService : IPlcManagerService, IDisposable
                 new PlcTag { PlcId = defaultPlc.Id, Name = "D100_Data", Address = "D100", DataType = PlcDataType.Int16 }
             };
 
+            // Khởi tạo Handshake FX5U chuẩn
+            _industrialConfig.Handshake ??= new IndustrialHandshakeConfig();
+            _industrialConfig.Handshake.ApplyFx5uDefaults(defaultPlc.Name);
+
             LoadConfigInternal(new[] { defaultPlc }, sampleTags);
+            EnsureIndustrialTagsRegistered();
             SaveGlobalConfig();
         }
     }

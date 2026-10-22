@@ -24,6 +24,8 @@ public interface IPlcManagerService : IDisposable
 
     string ConfigFilePath { get; }
 
+    void EnsureIndustrialTagsRegistered();
+
     void LoadConfig(IEnumerable<PlcModel> plcs, IEnumerable<PlcTag> tags);
 
     void SaveGlobalConfig();

@@ -32,5 +32,9 @@ public interface IPlcLogger
 
     void LogTimeout(string plcId, string operation);
 
+    void LogInfo(string plcId, string message);
+
+    void LogWarning(string plcId, string message);
+
     void Clear();
 }

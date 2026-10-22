@@ -1,5 +1,20 @@
 # ROADMAP.md — Lộ trình phát triển & Trạng thái nhiệm vụ
 
+- [x] Task 412: Khắc Phục Triệt Để Lỗi Mất Cấu Hình Tag Bắt Tay 24/7 Khi Build Lại App & Bổ Sung Safe Guard, Tự Phục Hồi, Nạp Nhanh Chuẩn FX5U:
+  - [x] Điều tra & định vị 3 nguyên nhân gốc rễ:
+    - Xung đột Two-Way Binding kép trên ComboBox Editable: bind cả `Text` lẫn `SelectedItem` Two-Way vào `Handshake.*TagName`. Khi mở tab, WPF gán `SelectedItem = null` do giá trị chưa có trong `AvailableTagNames`, xóa trắng chuỗi tag trong RAM $\rightarrow$ đóng cửa sổ tự động ghi đè chuỗi rỗng vào đĩa.
+    - MSBuild Target `SyncReleaseConfigurations` lây lan cấu hình rỗng: Khi AppData bị rỗng do bug UI, lệnh build copy đè cấu hình rỗng vào `bin\configs\system` làm mất luôn bản backup dự phòng.
+    - Thiếu Safe Guard & Auto-Recover ở tầng Service: `PlcManagerService.SaveGlobalConfig()` không kiểm tra tính hợp lệ trước khi ghi đĩa; `LoadGlobalConfig()` không tự động phục hồi từ backup/seed.
+  - [x] Cải tiến & giải pháp triệt để:
+    - [PlcIndustrialConfig.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.Models/PlcIndustrialConfig.cs): Thêm `HasConfiguredTags()`, `ApplyFx5uDefaults(...)`, `ApplyStandardIoDefaults(...)`, `CopyFrom(...)`.
+    - [PlcManagerService.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.Application/PLC/Services/PlcManagerService.cs): Safe Guard chặn ghi đè rỗng trong `SaveGlobalConfig()`, tự động sao lưu `.backup`; Auto-Recover trong `LoadGlobalConfig()` dò tìm backup/seed hoặc nạp FX5U chuẩn (`M101`..`M105`); hàm `EnsureIndustrialTagsRegistered()` tự động đăng ký tag vào PLC catalog.
+    - [PlcManagerWindow.xaml](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/Views/PLC/PlcManagerWindow.xaml): Bỏ hoàn toàn `SelectedItem` và `PreviewMouseDown` trên tất cả ComboBox tag của Tab 2..5; chỉ dùng `Text="{Binding ..., UpdateSourceTrigger=PropertyChanged}"`; thêm thanh công cụ nạp nhanh 1 chạm `↺ Chuẩn FX5U (M101..M105)` và `↺ Chuẩn I/O (Y1..Y5 / X1)`.
+    - [PlcManagerViewModel.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/PLC/PlcManagerViewModel.cs): Bổ sung `ResetHandshakeFx5uCommand`, `ResetHandshakeStandardIoCommand`; nâng cấp `RefreshAvailableTagsAndPlcs()` bằng cơ chế merge không phá hủy (bỏ `Clear()`); nạp sẵn các dải địa chỉ phổ biến `M101`..`M105`, `M200`..`M219`.
+    - Khôi phục dữ liệu thực tế tại `%APPDATA%\Vision2026\plc_config.json`: PLC_2, M101..M105, M200, Rising Edge 20ms.
+  - [x] Kiểm thử tự động [PlcHandshakePersistenceTests.cs](file:///g:/NODEJS/Vision2026/TestExtractApp/PlcHandshakePersistenceTests.cs):
+    - 5/5 test PASSED 100% (Khởi tạo FX5U mặc định, Chống ghi đè Safe Guard, Auto-Recover khi file rỗng/hỏng, Gõ địa chỉ tự do không bị null, Nạp chuẩn I/O).
+    - Toàn bộ solution biên dịch: 0 Errors (Debug & Release).
+
 - [x] Task 411: Bổ Sung Tùy Chọn Kiểu Tín Hiệu Gửi PLC (Level, Rising Edge, Falling Edge) Trong Cài Đặt Handshake PLC:
   - [x] Thiết kế Enum `PlcSignalType` (`Level = 0`, `RisingEdge = 1`, `FallingEdge = 2`) và tích hợp vào `IndustrialHandshakeConfig` ([PlcIndustrialConfig.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.Models/PlcIndustrialConfig.cs)):
     - Cấu hình riêng biệt cho từng tín hiệu: `PassSignalType` (M104 PLC OK), `NgSignalType` (M105 PLC NG), `DoneSignalType` (M103 Vision Done).

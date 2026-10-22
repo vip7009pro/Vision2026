@@ -84,32 +84,37 @@ public partial class PlcManagerViewModel : ObservableObject
 
     public void RefreshAvailableTagsAndPlcs()
     {
-        // 1. Refresh AvailablePlcNames
-        AvailablePlcNames.Clear();
+        // 1. Refresh AvailablePlcNames (Không Clear phá hủy)
+        var plcSet = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         if (_plcService.Plcs.Count > 0)
         {
             foreach (var p in _plcService.Plcs)
             {
                 string name = !string.IsNullOrWhiteSpace(p.Name) ? p.Name : p.Id;
-                if (!string.IsNullOrWhiteSpace(name) && !AvailablePlcNames.Contains(name))
-                {
-                    AvailablePlcNames.Add(name);
-                }
+                if (!string.IsNullOrWhiteSpace(name)) plcSet.Add(name);
+                if (!string.IsNullOrWhiteSpace(p.Id)) plcSet.Add(p.Id);
             }
         }
 
         // Bổ sung các ID PLC mặc định
-        var defaultPlcs = new[] { "PLC1", "PLC2", "PLC_MAIN", "PLC_01" };
+        var defaultPlcs = new[] { "PLC1", "PLC2", "PLC_MAIN", "PLC_01", "PLC_2" };
         foreach (var pName in defaultPlcs)
         {
-            if (!AvailablePlcNames.Contains(pName))
-            {
-                AvailablePlcNames.Add(pName);
-            }
+            plcSet.Add(pName);
         }
 
-        // 2. Refresh AvailableTagNames
-        AvailableTagNames.Clear();
+        if (!string.IsNullOrWhiteSpace(Handshake?.PlcId)) plcSet.Add(Handshake.PlcId);
+        if (!string.IsNullOrWhiteSpace(Heartbeat?.PlcId)) plcSet.Add(Heartbeat.PlcId);
+        if (!string.IsNullOrWhiteSpace(Motion?.PlcId)) plcSet.Add(Motion.PlcId);
+        if (!string.IsNullOrWhiteSpace(ShiftRegister?.PlcId)) plcSet.Add(ShiftRegister.PlcId);
+
+        foreach (var p in plcSet)
+        {
+            if (!AvailablePlcNames.Contains(p)) AvailablePlcNames.Add(p);
+        }
+
+        // 2. Refresh AvailableTagNames (Đồng bộ hợp nhất an toàn)
+        var tagSet = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         // Standard Common Addresses (Bit & Word)
         var commonAddresses = new[]
@@ -117,34 +122,31 @@ public partial class PlcManagerViewModel : ObservableObject
             "X0", "X1", "X2", "X3", "X4", "X5", "X6", "X7", "X10", "X11",
             "Y0", "Y1", "Y2", "Y3", "Y4", "Y5", "Y6", "Y7", "Y10", "Y11",
             "M0", "M1", "M2", "M10", "M100",
-            "D0", "D10", "D100", "D200", "D1000", "D1002", "D2000",
+            "M101", "M102", "M103", "M104", "M105",
+            "M200", "M201", "M202", "M203", "M204", "M205", "M210", "M219",
+            "D0", "D10", "D100", "D200", "D300", "D302", "D304", "D1000", "D1002", "D2000",
             "MW100", "MW102", "MW200"
         };
-        foreach (var addr in commonAddresses)
-        {
-            if (!AvailableTagNames.Contains(addr)) AvailableTagNames.Add(addr);
-        }
+        foreach (var addr in commonAddresses) tagSet.Add(addr);
 
         // Standard Industrial Tags
         var standardIndustrialTags = new[]
         {
             "Y0_VisionHeartbeat", "X0_PlcHeartbeat", "Y10_VisionFault",
             "Y1_VisionReady", "Y2_VisionBusy", "Y3_VisionDone", "Y4_VisionPass", "Y5_VisionNG", "X1_PlcAck",
+            "M101_VisionReady", "M102_VisionBusy", "M103_VisionDone", "M104_VisionPass", "M105_VisionNG",
             "D1000_EncoderPulses", "D1002_LineSpeed",
             "Y0_RejectPiston", "Y1_RejectMarker"
         };
-        foreach (var tag in standardIndustrialTags)
-        {
-            if (!AvailableTagNames.Contains(tag)) AvailableTagNames.Add(tag);
-        }
+        foreach (var tag in standardIndustrialTags) tagSet.Add(tag);
 
         // Tags from PLC Manager Service (Name and Address)
         if (_plcService.Tags.Count > 0)
         {
             foreach (var t in _plcService.Tags)
             {
-                if (!string.IsNullOrWhiteSpace(t.Name) && !AvailableTagNames.Contains(t.Name)) AvailableTagNames.Add(t.Name);
-                if (!string.IsNullOrWhiteSpace(t.Address) && !AvailableTagNames.Contains(t.Address)) AvailableTagNames.Add(t.Address);
+                if (!string.IsNullOrWhiteSpace(t.Name)) tagSet.Add(t.Name);
+                if (!string.IsNullOrWhiteSpace(t.Address)) tagSet.Add(t.Address);
             }
         }
 
@@ -158,10 +160,12 @@ public partial class PlcManagerViewModel : ObservableObject
         };
         foreach (var ct in configTags)
         {
-            if (!string.IsNullOrWhiteSpace(ct) && !AvailableTagNames.Contains(ct))
-            {
-                AvailableTagNames.Add(ct);
-            }
+            if (!string.IsNullOrWhiteSpace(ct)) tagSet.Add(ct);
+        }
+
+        foreach (var t in tagSet)
+        {
+            if (!AvailableTagNames.Contains(t)) AvailableTagNames.Add(t);
         }
     }
 
@@ -413,8 +417,57 @@ public partial class PlcManagerViewModel : ObservableObject
         System.Windows.MessageBox.Show("Toàn bộ Cấu hình Kết nối PLC, Danh bạ Tags và Thông số Công nghiệp (Handshake, Heartbeat, Motion, Shift Register) đã được lưu thành công!", "Lưu Cấu Hình PLC", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Information);
     }
 
+    [RelayCommand]
+    public void ResetHandshakeFx5u() => ExecuteResetHandshakeFx5u(showDialog: true);
+
+    public void ExecuteResetHandshakeFx5u(bool showDialog = true)
+    {
+        string plcId = SelectedPlc?.Name ?? SelectedPlc?.Id ?? AvailablePlcNames.FirstOrDefault() ?? "PLC1";
+        Handshake.ApplyFx5uDefaults(plcId);
+        _plcService.EnsureIndustrialTagsRegistered();
+        _plcService.SaveGlobalConfig();
+        RefreshAvailableTagsAndPlcs();
+        OnPropertyChanged(nameof(Handshake));
+        OnPropertyChanged(nameof(IndustrialConfig));
+        if (showDialog && System.Windows.Application.Current != null)
+        {
+            System.Windows.MessageBox.Show(
+                "Đã khôi phục cấu hình Bắt tay 24/7 theo chuẩn Mitsubishi FX5U:\n" +
+                "• PLC Đích: " + plcId + "\n" +
+                "• Ready: M101\n• Busy: M102\n• Done: M103\n• Pass (OK): M104 (Rising Edge 20ms)\n• NG (Lỗi): M105 (Rising Edge 20ms)\n• Hàng đợi: M200 (Non-Blocking, Trạm dừng 10)",
+                "Khôi Phục Chuẩn FX5U",
+                System.Windows.MessageBoxButton.OK,
+                System.Windows.MessageBoxImage.Information);
+        }
+    }
+
+    [RelayCommand]
+    public void ResetHandshakeStandardIo() => ExecuteResetHandshakeStandardIo(showDialog: true);
+
+    public void ExecuteResetHandshakeStandardIo(bool showDialog = true)
+    {
+        string plcId = SelectedPlc?.Name ?? SelectedPlc?.Id ?? AvailablePlcNames.FirstOrDefault() ?? "PLC1";
+        Handshake.ApplyStandardIoDefaults(plcId);
+        _plcService.EnsureIndustrialTagsRegistered();
+        _plcService.SaveGlobalConfig();
+        RefreshAvailableTagsAndPlcs();
+        OnPropertyChanged(nameof(Handshake));
+        OnPropertyChanged(nameof(IndustrialConfig));
+        if (showDialog && System.Windows.Application.Current != null)
+        {
+            System.Windows.MessageBox.Show(
+                "Đã khôi phục cấu hình Bắt tay 24/7 theo chuẩn I/O Công Nghiệp:\n" +
+                "• PLC Đích: " + plcId + "\n" +
+                "• Ready: Y1_VisionReady\n• Busy: Y2_VisionBusy\n• Done: Y3_VisionDone\n• Pass (OK): Y4_VisionPass\n• NG (Lỗi): Y5_VisionNG\n• Ack: X1_PlcAck",
+                "Khôi Phục Chuẩn I/O",
+                System.Windows.MessageBoxButton.OK,
+                System.Windows.MessageBoxImage.Information);
+        }
+    }
+
     public void AutoSaveOnClose()
     {
+        _plcService.EnsureIndustrialTagsRegistered();
         _plcService.SaveGlobalConfig();
     }
 
