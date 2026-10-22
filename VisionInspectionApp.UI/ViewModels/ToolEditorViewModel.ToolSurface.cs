@@ -27,6 +27,7 @@ namespace VisionInspectionApp.UI.ViewModels
 
         public ICommand SurfaceCompare_SetSearchRoiCommand { get; }
         public ICommand SurfaceCompare_SetTemplateRoiCommand { get; }
+        public ICommand SurfaceCompare_SetTemplateCommand { get; }
     
         private void SurfaceCompare_SetSearchRoi()
         {
@@ -40,6 +41,34 @@ namespace VisionInspectionApp.UI.ViewModels
             if (SelectedNode is null || !string.Equals(SelectedNode.Type, "SurfaceCompare", StringComparison.OrdinalIgnoreCase))
                 return;
             ActiveRoiLabel = $"{SelectedNode.RefName} SCT";
+        }
+
+        private void SurfaceCompare_SetTemplate()
+        {
+            if (SelectedNode is null || !string.Equals(SelectedNode.Type, "SurfaceCompare", StringComparison.OrdinalIgnoreCase))
+                return;
+            var def = SelectedSurfaceCompareDef();
+            if (def is null)
+                return;
+
+            if (def.TemplateRoi.Width <= 0 || def.TemplateRoi.Height <= 0)
+            {
+                if (def.InspectRoi.Width > 0 && def.InspectRoi.Height > 0)
+                {
+                    def.TemplateRoi = def.InspectRoi;
+                }
+                else
+                {
+                    StatusBarText = $"Vui lòng thiết lập Template ROI cho {def.Name} trước khi chốt ghi template.";
+                    return;
+                }
+            }
+
+            TrySaveSurfaceCompareTemplateImage(def.Name, def.TemplateRoi);
+            RefreshPreviews();
+            RaiseToolPropertyPanelsChanged();
+            RequestAutoSave();
+            StatusBarText = $"Đã chốt ghi template cho {def.Name} thành công ({def.TemplateRoi.Width}x{def.TemplateRoi.Height} px)";
         }
     
         private SurfaceCompareDefinition? SelectedSurfaceCompareDef()

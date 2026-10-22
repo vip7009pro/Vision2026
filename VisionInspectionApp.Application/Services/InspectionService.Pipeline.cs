@@ -33,6 +33,22 @@ public partial class InspectionService
 
     private static readonly ConcurrentDictionary<string, (DateTime LastModified, Mat Mat)> _surfaceCompareTemplateCache = new();
 
+    public static void ClearSurfaceCompareTemplateCache(string? filePath = null)
+    {
+        if (string.IsNullOrWhiteSpace(filePath))
+        {
+            foreach (var kvp in _surfaceCompareTemplateCache)
+            {
+                try { kvp.Value.Mat?.Dispose(); } catch { }
+            }
+            _surfaceCompareTemplateCache.Clear();
+        }
+        else if (_surfaceCompareTemplateCache.TryRemove(filePath, out var cached))
+        {
+            try { cached.Mat?.Dispose(); } catch { }
+        }
+    }
+
     private static Mat? GetCachedSurfaceCompareTemplate(string filePath)
     {
         if (string.IsNullOrWhiteSpace(filePath) || !File.Exists(filePath)) return null;

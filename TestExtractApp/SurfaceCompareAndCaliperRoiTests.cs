@@ -36,6 +36,7 @@ public static class SurfaceCompareAndCaliperRoiTests
         TestSurfaceCompareEdgeCompareAlgorithm();
         TestSurfaceCompareSsimThresholdDecoupling();
         Test_ReproduceUserJobBlackTemplate();
+        Test_SurfaceCompare_ExistingJob_TemplateShiftWithOriginOffset_Fixed();
 
         Console.WriteLine("=== [PASSED] All Surface Compare & Caliper ROI First Tests Completed Successfully! ===");
     }
@@ -649,6 +650,110 @@ public static class SurfaceCompareAndCaliperRoiTests
         finally
         {
             try { Directory.Delete(tempDir, true); } catch { }
+        }
+    }
+
+    public static void Test_SurfaceCompare_ExistingJob_TemplateShiftWithOriginOffset_Fixed()
+    {
+        Console.WriteLine("--> Test 11: SurfaceCompare Existing Job Origin Shift & Set Template Decoupling");
+
+        // 1. Setup synthetic image: part is at originFound (X=400, Y=450), while originTeach is (X=400, Y=400) -> shift dy = +50px
+        using var currentImg = new Mat(1000, 1000, MatType.CV_8UC1, Scalar.All(180));
+        // Draw Origin fiducial mark at Found position (400, 450)
+        Cv2.Circle(currentImg, new Point(400, 450), 20, Scalar.All(30), -1);
+
+        // Draw a distinct feature to be inspected by SurfaceCompare:
+        // Relative to Origin, feature is at dx = -200, dy = +100.
+        // So on currentImg, feature is at (400 - 200, 450 + 100) = (200, 550).
+        Cv2.Rectangle(currentImg, new Rect(170, 520, 60, 60), Scalar.All(50), -1);
+        Cv2.Circle(currentImg, new Point(200, 550), 15, Scalar.All(240), -1);
+
+        // In Teach reference frame:
+        // originTeach = (400, 400).
+        // feature center in Teach coordinates = (400 - 200, 400 + 100) = (200, 500).
+        // So TemplateRoi in Teach coordinates has center (200, 500) -> Rect(160, 460, 80, 80).
+        var scTemplateRoiTeach = new Roi { X = 160, Y = 460, Width = 80, Height = 80 };
+        var scSearchRoiTeach = new Roi { X = 140, Y = 440, Width = 120, Height = 120 };
+
+        var originTeach = new Point2d(400, 400);
+        var originFound = new Point2d(400, 450);
+        double originAngleDeg = 0.0;
+
+        // Verify: Extracting with ExtractStraightRoi using originTeach and originFound
+        // correctly targets the feature on currentImg at (200, 550)!
+        using var correctlyCroppedTemplate = Geometry2D.ExtractStraightRoi(currentImg, scTemplateRoiTeach, originTeach, originFound, originAngleDeg, out var centerFoundTpl);
+        if (Math.Abs(centerFoundTpl.X - 200) > 0.01 || Math.Abs(centerFoundTpl.Y - 550) > 0.01)
+        {
+            throw new Exception($"Expected centerFoundTpl to be (200, 550), but got ({centerFoundTpl.X}, {centerFoundTpl.Y})");
+        }
+
+        // Verify: The old buggy ExtractRoiPatch without origin pose would have cropped at (160, 460),
+        // which is 50px shifted up and misses the feature (only sees gray background)!
+        var oldBuggyRect = new Rect(scTemplateRoiTeach.X, scTemplateRoiTeach.Y, scTemplateRoiTeach.Width, scTemplateRoiTeach.Height);
+        using var oldBuggyCrop = new Mat(currentImg, oldBuggyRect);
+        Cv2.MinMaxLoc(oldBuggyCrop, out double minOld, out double maxOld);
+        Cv2.MinMaxLoc(correctlyCroppedTemplate, out double minCorrect, out double maxCorrect);
+        if (minCorrect > 60 || maxCorrect < 230)
+        {
+            throw new Exception($"Correct crop must capture the feature (pixel 50 and 240), but got min={minCorrect}, max={maxCorrect}");
+        }
+
+        // Save the correctly extracted template to disk
+        var tempTplPath = Path.Combine(Path.GetTempPath(), $"sc_test_shift_{Guid.NewGuid():N}.png");
+        var originTplPath = Path.Combine(Path.GetTempPath(), $"origin_test_shift_{Guid.NewGuid():N}.png");
+        try
+        {
+            Cv2.ImWrite(tempTplPath, correctlyCroppedTemplate);
+
+            // Create origin template for circle feature at (400, 450)
+            using var originTpl = new Mat(40, 40, MatType.CV_8UC1, Scalar.All(180));
+            Cv2.Circle(originTpl, new Point(20, 20), 20, Scalar.All(30), -1);
+            Cv2.ImWrite(originTplPath, originTpl);
+
+            var inspector = CreateInspectionService();
+            var config = new VisionConfig
+            {
+                Origin = new PointDefinition
+                {
+                    Name = "Origin",
+                    TemplateImageFile = originTplPath,
+                    WorldPosition = new Point2dModel { X = originTeach.X, Y = originTeach.Y },
+                    SearchRoi = new Roi { X = 300, Y = 350, Width = 200, Height = 200 },
+                    TemplateRoi = new Roi { X = 380, Y = 380, Width = 40, Height = 40 },
+                    MatchScoreThreshold = 0.5
+                },
+                SurfaceCompares = new List<SurfaceCompareDefinition>
+                {
+                    new SurfaceCompareDefinition
+                    {
+                        Name = "SC_ShiftTest",
+                        TemplateImageFile = tempTplPath,
+                        InspectRoi = scSearchRoiTeach,
+                        TemplateRoi = scTemplateRoiTeach,
+                        Algorithm = SurfaceCompareAlgorithm.AbsDiff,
+                        DiffThreshold = 20,
+                        MinBlobArea = 5,
+                        MaxBlobArea = 99999
+                    }
+                }
+            };
+
+            config.ToolGraph.Nodes.Add(new ToolGraphNode { Id = "originNode", Type = "Origin", RefName = "Origin" });
+            config.ToolGraph.Nodes.Add(new ToolGraphNode { Id = "scNode", Type = "SurfaceCompare", RefName = "SC_ShiftTest" });
+
+            var res = inspector.Inspect(currentImg, config);
+            var scRes = res.SurfaceCompares[0];
+            if (!scRes.Pass || scRes.Count > 0)
+            {
+                throw new Exception($"SurfaceCompare on existing job with origin offset must PASS with 0 defects! Actual: Pass={scRes.Pass}, Count={scRes.Count}, MaxArea={scRes.MaxArea}");
+            }
+
+            Console.WriteLine("   [OK] SurfaceCompare on existing job with Origin offset extracted template at correct location and PASSED 100%!");
+        }
+        finally
+        {
+            if (File.Exists(tempTplPath)) File.Delete(tempTplPath);
+            if (File.Exists(originTplPath)) File.Delete(originTplPath);
         }
     }
 }

@@ -492,6 +492,7 @@ namespace VisionInspectionApp.UI.ViewModels
             ImageSource_ReadLightingFromDeviceCommand = new RelayCommand(ImageSource_ReadLightingFromDevice);
             SurfaceCompare_SetSearchRoiCommand = new RelayCommand(SurfaceCompare_SetSearchRoi);
             SurfaceCompare_SetTemplateRoiCommand = new RelayCommand(SurfaceCompare_SetTemplateRoi);
+            SurfaceCompare_SetTemplateCommand = new RelayCommand(SurfaceCompare_SetTemplate);
             ContourCompare_SetSearchRoiCommand = new RelayCommand(ContourCompare_SetSearchRoi);
             ContourCompare_SetTemplateRoiCommand = new RelayCommand(ContourCompare_SetTemplateRoi);
             Origin_TeachTemplateCommand = new RelayCommand(Origin_TeachTemplate);
@@ -871,7 +872,10 @@ namespace VisionInspectionApp.UI.ViewModels
                 return;
             }
 
-            using var crop = ExtractRoiPatch(processedMat, targetRoi);
+            GetOriginPose(out var originTeach, out var originFound, out var originAngleDeg);
+            using var crop = cropRoi != null
+                ? Geometry2D.ExtractStraightRoi(processedMat, cropRoi, default, default, 0, out _)
+                : Geometry2D.ExtractStraightRoi(processedMat, targetRoi, originTeach, originFound, originAngleDeg, out _);
             if (crop.Empty() || crop.Width <= 0 || crop.Height <= 0)
             {
                 return;
@@ -885,6 +889,7 @@ namespace VisionInspectionApp.UI.ViewModels
 
             Cv2.ImWrite(fileName, gray);
             sc.TemplateImageFile = fileName;
+            InspectionService.ClearSurfaceCompareTemplateCache(fileName);
             RequestAutoSave();
         }
 
@@ -906,7 +911,10 @@ namespace VisionInspectionApp.UI.ViewModels
             using var processedMat = toolNode != null ? ResolveToolImageForPreview(snap, toolNode) : snap.Clone();
             if (processedMat.Empty()) return;
 
-            using var crop = ExtractRoiPatch(processedMat, targetRoi);
+            GetOriginPose(out var originTeach, out var originFound, out var originAngleDeg);
+            using var crop = cropRoi != null
+                ? Geometry2D.ExtractStraightRoi(processedMat, cropRoi, default, default, 0, out _)
+                : Geometry2D.ExtractStraightRoi(processedMat, targetRoi, originTeach, originFound, originAngleDeg, out _);
             if (crop.Empty() || crop.Width <= 0 || crop.Height <= 0) return;
 
             using var gray = crop.Channels() == 1 ? crop.Clone() : crop.CvtColor(ColorConversionCodes.BGR2GRAY);

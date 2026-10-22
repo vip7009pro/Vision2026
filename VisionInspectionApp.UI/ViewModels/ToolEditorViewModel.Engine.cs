@@ -800,14 +800,16 @@ namespace VisionInspectionApp.UI.ViewModels
                         }
                         else
                         {
-                            ApplyRoiForLabel(rs.Label, rs.Roi);
+                            var unTransformedRoi = UnTransformRoi(rs.Roi, rs.Label);
+                            ApplyRoiForLabel(rs.Label, unTransformedRoi);
                             def.InspectRoi = ComputeBlobInspectRoi(def);
                         }
                     }
                 }
                 else
                 {
-                    ApplyRoiForLabel(rs.Label, rs.Roi);
+                    var unTransformedRoi = UnTransformRoi(rs.Roi, rs.Label);
+                    ApplyRoiForLabel(rs.Label, unTransformedRoi);
                 }
     
                 RefreshPreviews();
@@ -1242,19 +1244,13 @@ namespace VisionInspectionApp.UI.ViewModels
                     {
                         sc.TemplateRoi = roi;
                     }
-    
-                    if (string.IsNullOrWhiteSpace(sc.TemplateImageFile))
-                    {
-                        TrySaveSurfaceCompareTemplateImage(name, sc.TemplateRoi);
-                    }
-    
+
                     return;
                 }
     
                 if (string.Equals(kind, "SCT", StringComparison.OrdinalIgnoreCase))
                 {
                     sc.TemplateRoi = roi;
-                    TrySaveSurfaceCompareTemplateImage(name, roi);
                     return;
                 }
     

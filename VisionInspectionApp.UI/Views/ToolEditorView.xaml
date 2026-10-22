@@ -2666,10 +2666,11 @@
                                     <TextBlock Text="Surface Compare" FontWeight="Bold" Foreground="{DynamicResource TextBrush}" />
                                 </Border>
 
-                                <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
                                     <Button Content="Set Search ROI" Command="{Binding SurfaceCompare_SetSearchRoiCommand}" Width="100" Margin="0,0,6,0" />
                                     <Button Content="Set Template ROI" Command="{Binding SurfaceCompare_SetTemplateRoiCommand}" Width="100" />
                                 </StackPanel>
+                                <Button Content="Set Template" Command="{Binding SurfaceCompare_SetTemplateCommand}" Margin="0,0,0,6" Height="26" FontWeight="SemiBold" ToolTip="Chốt ghi ảnh template từ vùng Template ROI hiện tại" />
 
                                 <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
                                     <Grid>
