@@ -1,5 +1,19 @@
 # ROADMAP.md — Lộ trình phát triển & Trạng thái nhiệm vụ
 
+- [x] Task 413: Khắc Phục Sự Cố Không Nhận Tín Hiệu Trigger PLC M10 Trên Tool ImageSource (Scan Cycle vs Polling & Tự Động Đăng Ký Tag):
+  - [x] Điều tra & định vị 3 nguyên nhân cốt lõi:
+    - *Nguyên nhân 1 (Độ rộng xung PLC Scan Cycle)*: Trong Ladder Network 42, `LDP X2`/`LDP M2` đưa vào cuộn dây `( M10 )`. Tiếp điểm `LDP` chỉ dẫn điện trong đúng 1 chu kỳ quét của CPU PLC (~1ms) $\rightarrow$ cuộn dây `OUT M10` trở về 0 sau 1ms. Trong khi đó máy tính giao tiếp qua mạng Ethernet với chu kỳ đọc `Interval (ms): 50` (50ms). Xung 1ms xuất hiện và kết thúc chớp nhoáng khiến gói tin polling của máy tính 99.9% đều đọc trượt lúc M10 = 0. Ngược lại, `X2` (cảm biến vật lý che lâu) và `M2` (nhấn HMI giữ lâu) hoặc `SET M15` (lệnh chốt giữ mức) đều duy trì mức 1 đủ lâu nên PC bắt được.
+    - *Nguyên nhân 2 (Chưa tự động đăng ký Tag Polling trên Vision App)*: Ô nhập `ImageSource_PlcTriggerTagName` không tự động đăng ký địa chỉ vào `_plcManagerService.Tags`, khiến bộ quét `PlcPollingEngine` không đưa `M10` vào danh sách đọc từ PLC nếu người dùng chưa khai báo trước.
+    - *Nguyên nhân 3 (Xung đột Binding trên UI)*: ComboBox `ImageSource_PlcTriggerTagName` trong [ToolEditorView.xaml](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/Views/ToolEditorView.xaml) bị Two-Way binding kép (`Text` và `SelectedItem`).
+  - [x] Cải tiến & giải pháp triệt để:
+    - [IPlcManagerService.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.Application/PLC/Services/IPlcManagerService.cs) & [PlcManagerService.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.Application/PLC/Services/PlcManagerService.cs): Bổ sung `EnsureTagRegistered(...)` tự động đăng ký và nạp ngay vào chu kỳ Polling Engine.
+    - [ToolEditorViewModel.ToolPreprocess.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/ToolEditorViewModel.ToolPreprocess.cs) & [ToolEditorViewModel.Engine.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/ToolEditorViewModel.Engine.cs): Tự động gọi `EnsureTagRegistered` khi cấu hình tag và khi bấm "Run Continuous".
+    - [ToolEditorView.xaml](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/Views/ToolEditorView.xaml): Gỡ bỏ `SelectedItem` và `PreviewMouseDown`, chỉ dùng `Text="{Binding ..., UpdateSourceTrigger=PropertyChanged}"`.
+    - Hướng dẫn giải pháp Ladder trên GX Works 3: Dùng Timer duy trì xung M10 từ 100ms..200ms hoặc chu trình bắt tay Handshake `SET M10` $\rightarrow$ `Vision Done M103` $\rightarrow$ `RST M10`.
+  - [x] Kiểm thử tự động [PlcHandshakePersistenceTests.cs](file:///g:/NODEJS/Vision2026/TestExtractApp/PlcHandshakePersistenceTests.cs):
+    - Toàn bộ 6/6 test PASSED 100% (Test 6 xác minh EnsureTagRegistered tự động đăng ký M10 và đưa vào PollingEngine chống trùng lặp).
+    - Toàn bộ solution biên dịch 0 Errors.
+
 - [x] Task 412: Khắc Phục Triệt Để Lỗi Mất Cấu Hình Tag Bắt Tay 24/7 Khi Build Lại App & Bổ Sung Safe Guard, Tự Phục Hồi, Nạp Nhanh Chuẩn FX5U:
   - [x] Điều tra & định vị 3 nguyên nhân gốc rễ:
     - Xung đột Two-Way Binding kép trên ComboBox Editable: bind cả `Text` lẫn `SelectedItem` Two-Way vào `Handshake.*TagName`. Khi mở tab, WPF gán `SelectedItem = null` do giá trị chưa có trong `AvailableTagNames`, xóa trắng chuỗi tag trong RAM $\rightarrow$ đóng cửa sổ tự động ghi đè chuỗi rỗng vào đĩa.

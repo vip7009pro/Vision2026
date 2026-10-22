@@ -7,14 +7,26 @@ Hỗ trợ Camera GigE/USB3/USB/RTSP, nạp ảnh tệp/thư mục, bản vẽ k
 ## 2. Trạng thái mã nguồn gần nhất
 - **Phiên bản hiện tại**: .NET 8 WPF, x64/x86 Multi-targeting, C# 12.
 - **Biên dịch**: 0 Errors toàn solution (`VisionInspectionApp.slnx`) cả Debug lẫn Release.
-- **Kiểm thử tự động**: PASSED 100% (5/5 test PLC Handshake Persistence & Safe Guard, 5/5 test PLC Signal Types, 4/4 test HMI Designer Persistence & DINT 32-bit, 10/10 test SurfaceCompare & Caliper, regression test tệp Job `job_7A11034A_GH68-58216B`, Ctrl+R & Ctrl+F4 ROI, 8/8 test ContourCompare, 12/12 test Tool Calib Factor, 15/15 test OQC Scanner Live View, 8/8 test MvpShapeMatch2).
+- **Kiểm thử tự động**: PASSED 100% (6/6 test PLC Handshake & Auto Register Tag, 5/5 test PLC Signal Types, 4/4 test HMI Designer Persistence & DINT 32-bit, 10/10 test SurfaceCompare & Caliper, regression test tệp Job `job_7A11034A_GH68-58216B`, Ctrl+R & Ctrl+F4 ROI, 8/8 test ContourCompare, 12/12 test Tool Calib Factor, 15/15 test OQC Scanner Live View, 8/8 test MvpShapeMatch2).
 - **Cấu hình chuẩn xưởng CMS_VINA**: 
   - Database: `CMS_VINA` (192.168.1.2:6789)
   - OQC Server API: `https://192.168.1.192/vision_upload.php`
   - OTA Update Server: `http://192.168.1.192/update/version.json` & `http://192.168.1.192/ota_server.php`
   - PLC Handshake: `PLC_2` (Mitsubishi FX5U: Ready `M101`, Busy `M102`, Done `M103`, Pass `M104` RisingEdge 20ms, NG `M105` RisingEdge 20ms, Queue In `M200`).
 
-## 3. Hoàn thành Task 412: Khắc Phục Triệt Để Lỗi Mất Tag Handshake Khi Build Lại App & Cơ Chế Safe Guard / Auto-Recover
+## 3. Hoàn thành Task 413: Khắc Phục Sự Cố Không Nhận Trigger PLC M10 Trên Tool ImageSource
+1. **Bối cảnh & Bản chất nguyên nhân**:
+   - *Nguyên nhân PLC Scan Cycle*: Trong Ladder FX5U Network 42, `LDP X2`/`LDP M2` đưa vào cuộn dây `( M10 )`. Tiếp điểm `LDP` chỉ ON trong đúng 1 chu kỳ quét CPU (~1ms) $\rightarrow$ `M10` tắt về 0 sau 1ms. Máy tính giao tiếp qua Ethernet với chu kỳ đọc `Interval: 50ms` nên 99.9% lần đọc rơi vào lúc M10 = 0. Ngược lại, `X2` (cảm biến cơ khí) và `M2` (nhấn HMI) giữ ON hàng trăm ms, hoặc lệnh `SET M15` giữ ON liên tục.
+   - *Nguyên nhân Vision App*: Ô nhập `ImageSource_PlcTriggerTagName` trước đây không tự động đăng ký địa chỉ vào `_plcManagerService.Tags`, khiến bộ quét `PlcPollingEngine` không đọc `M10` từ `PLC_2`. Đồng thời ComboBox trên UI bị Two-Way binding kép.
+2. **Các điểm sửa đổi cốt lõi**:
+   - `IPlcManagerService.cs` & `PlcManagerService.cs`: Bổ sung `EnsureTagRegistered(plcId, addressOrName, ...)` tự động đăng ký và nạp ngay vào chu kỳ Polling Engine.
+   - `ToolEditorViewModel.ToolPreprocess.cs` & `ToolEditorViewModel.Engine.cs`: Gọi `EnsureTagRegistered` khi cấu hình tag và khi bấm "Run Continuous".
+   - `ToolEditorView.xaml`: Bỏ `SelectedItem` và `PreviewMouseDown` trên ComboBox chọn `ImageSource_PlcTriggerTagName`.
+   - Hướng dẫn cấu hình Ladder: Thêm Timer duy trì `M10` 100ms..200ms hoặc chu trình bắt tay `SET M10` $\rightarrow$ `Vision Done M103` $\rightarrow$ `RST M10`.
+3. **Kiểm thử tự động**:
+   - Thêm Test 6 trong `PlcHandshakePersistenceTests.cs` xác minh `EnsureTagRegistered` hoạt động chuẩn 100%, chống trùng lặp. Toàn bộ 6/6 test PASSED.
+
+## 4. Hoàn thành Task 412: Khắc Phục Triệt Để Lỗi Mất Tag Handshake Khi Build Lại App & Cơ Chế Safe Guard / Auto-Recover
 1. **Bối cảnh & Nguyên nhân gốc rễ**:
    - *Nguyên nhân 1 (Xung đột Two-Way Binding kép trên ComboBox Editable)*: Trong `PlcManagerWindow.xaml`, các ComboBox nhập tag đều bind cả `Text` lẫn `SelectedItem` Two-Way vào `Handshake.*TagName`. Khi mở tab, WPF ComboBox kiểm tra `SelectedItem` ("M101") trong `AvailableTagNames`. Do "M101" chưa có trong list, WPF tự gán `SelectedItem = null` $\rightarrow$ ghi đè `Handshake.ReadyTagName = ""` $\rightarrow$ khi đóng cửa sổ, `AutoSaveOnClose()` ghi đè chuỗi rỗng vào đĩa.
    - *Nguyên nhân 2 (Target MSBuild lây lan file rỗng)*: `VisionInspectionApp.UI.csproj` có target `SyncReleaseConfigurations` copy `plc_config.json` từ `%APPDATA%` sang thư mục build. Khi AppData bị rỗng do bug ComboBox, thao tác build lại app copy file rỗng vào `bin\configs\system`, phá hủy luôn bản backup gốc.
@@ -86,6 +98,7 @@ Hỗ trợ Camera GigE/USB3/USB/RTSP, nạp ảnh tệp/thư mục, bản vẽ k
 ## 5. Hoàn thành Task 410: Khắc Phục Triệt Để Lỗi Trắng Địa Chỉ, Mất Chọn PLC & Dãy Số Dài Ngoẵng D300, D302 Trên HMI Designer
 
 ## 6. Các sự kiện & thay đổi gần đây
+- Task 413: Khắc phục sự cố không nhận tín hiệu Trigger PLC M10 trên tool ImageSource (phân tích Scan Cycle vs Polling, tự động đăng ký tag vào PollingEngine, sửa ComboBox binding); kiểm thử 6/6 PASSED 100%.
 - Task 412: Khắc phục triệt để lỗi mất cấu hình tag bắt tay 24/7 khi build lại app & bổ sung Safe Guard, Auto-Recover, nạp nhanh chuẩn FX5U (M101..M105) 1 chạm; kiểm thử 5/5 PASSED 100%.
 - Task 411: Bổ sung tùy chọn kiểu tín hiệu gửi PLC (Level, Rising Edge, Falling Edge) kèm độ rộng xung PulseDurationMs trong cài đặt Handshake; kiểm thử 5/5 PASSED 100%.
 - Task 410: Khắc phục triệt để lỗi trắng địa chỉ, mất chọn PLC trên HMI Designer & hỗ trợ chuẩn DINT 32-bit (Int32 Double Word D300, D302...); kiểm thử 4/4 PASSED 100%.

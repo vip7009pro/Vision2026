@@ -232,6 +232,50 @@ public sealed class PlcManagerService : IPlcManagerService, IDisposable
         }
     }
 
+    /// <summary>
+    /// Đảm bảo một tag/địa chỉ cụ thể (như Trigger tag M10, X2, Sensor...) được đăng ký vào Tags và tự động đọc Polling
+    /// </summary>
+    public bool EnsureTagRegistered(string? plcId, string? addressOrName, PlcDataType dataType = PlcDataType.Bool, string? description = null, string category = "Trigger")
+    {
+        if (string.IsNullOrWhiteSpace(addressOrName)) return false;
+        var trimmed = addressOrName.Trim();
+
+        var defaultPlcId = Plcs.FirstOrDefault()?.Id ?? "PLC1";
+        string targetPlc = string.IsNullOrWhiteSpace(plcId) ? defaultPlcId : plcId.Trim();
+        var targetPlcModel = Plcs.FirstOrDefault(p =>
+            string.Equals(p.Id, targetPlc, StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(p.Name, targetPlc, StringComparison.OrdinalIgnoreCase));
+        string finalPlcId = targetPlcModel?.Id ?? targetPlc;
+
+        bool exists = Tags.Any(t =>
+            (string.Equals(t.PlcId, finalPlcId, StringComparison.OrdinalIgnoreCase) ||
+             (targetPlcModel != null && string.Equals(t.PlcId, targetPlcModel.Name, StringComparison.OrdinalIgnoreCase))) &&
+            (string.Equals(t.Name, trimmed, StringComparison.OrdinalIgnoreCase) ||
+             string.Equals(t.Address, trimmed, StringComparison.OrdinalIgnoreCase)));
+
+        if (!exists)
+        {
+            Tags.Add(new PlcTag
+            {
+                Id = "tag_" + Guid.NewGuid().ToString("N")[..8],
+                PlcId = finalPlcId,
+                Name = trimmed,
+                Address = trimmed,
+                DataType = InferDataTypeFromAddress(trimmed, dataType),
+                Description = description ?? $"Tự động đăng ký ({trimmed})",
+                Category = category
+            });
+
+            if (!_isLoading)
+            {
+                SaveGlobalConfig();
+            }
+            return true;
+        }
+
+        return false;
+    }
+
     public void SaveGlobalConfig()
     {
         if (_isLoading) return;

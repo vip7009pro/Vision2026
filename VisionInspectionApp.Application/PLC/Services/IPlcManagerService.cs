@@ -72,6 +72,8 @@ public interface IPlcManagerService : IDisposable
 
     int GetEffectiveMinScanInterval(int baseScanMs);
 
+    bool EnsureTagRegistered(string? plcId, string? addressOrName, PlcDataType dataType = PlcDataType.Bool, string? description = null, string category = "Trigger");
+
     event EventHandler<TagChangedEventArgs>? OnTagChanged;
 
     event EventHandler<BatchPolledEventArgs>? OnBatchPolled;

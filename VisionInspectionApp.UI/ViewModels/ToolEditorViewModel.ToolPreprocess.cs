@@ -555,6 +555,10 @@ namespace VisionInspectionApp.UI.ViewModels
                 if (def is null) return;
                 def.PlcTriggerPlcId = value ?? "PLC1";
                 OnPropertyChanged();
+                if (!string.IsNullOrWhiteSpace(def.PlcTriggerTagName))
+                {
+                    _plcManagerService?.EnsureTagRegistered(def.PlcTriggerPlcId, def.PlcTriggerTagName, VisionInspectionApp.Models.PlcDataType.Bool, $"Trigger Tag ({def.PlcTriggerTagName})", "Trigger");
+                }
                 RequestAutoSave();
             }
         }
@@ -568,6 +572,10 @@ namespace VisionInspectionApp.UI.ViewModels
                 if (def is null) return;
                 def.PlcTriggerTagName = value ?? "X0_Trigger";
                 OnPropertyChanged();
+                if (!string.IsNullOrWhiteSpace(def.PlcTriggerTagName))
+                {
+                    _plcManagerService?.EnsureTagRegistered(def.PlcTriggerPlcId, def.PlcTriggerTagName, VisionInspectionApp.Models.PlcDataType.Bool, $"Trigger Tag ({def.PlcTriggerTagName})", "Trigger");
+                }
                 RequestAutoSave();
             }
         }

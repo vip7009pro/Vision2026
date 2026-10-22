@@ -2095,7 +2095,7 @@
                                                 <TextBlock Text="PLC Trigger Tag" VerticalAlignment="Center" Margin="4,2" FontSize="11" Foreground="{DynamicResource TextBrush}"/>
                                             </Border>
                                             <Border Grid.Column="1" Background="{DynamicResource PanelBackgroundBrush}">
-                                                <ComboBox ItemsSource="{Binding AvailablePlcTagNames}" Text="{Binding ImageSource_PlcTriggerTagName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" SelectedItem="{Binding ImageSource_PlcTriggerTagName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" IsEditable="True" IsTextSearchEnabled="True" StaysOpenOnEdit="True" MaxDropDownHeight="220" PreviewMouseDown="ComboBox_PreviewMouseDown" Margin="2,1" FontSize="11" />
+                                                <ComboBox ItemsSource="{Binding AvailablePlcTagNames}" Text="{Binding ImageSource_PlcTriggerTagName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" IsEditable="True" IsTextSearchEnabled="True" StaysOpenOnEdit="True" MaxDropDownHeight="220" Margin="2,1" FontSize="11" />
                                             </Border>
                                         </Grid>
                                     </Border>

@@ -3612,6 +3612,11 @@ namespace VisionInspectionApp.UI.ViewModels
                     else if (imgSourceDef.TriggerMode == ImageSourceTriggerMode.PlcTrigger)
                     {
                         IsRunningFolderFlow = true;
+                        _plcManagerService?.EnsureTagRegistered(imgSourceDef.PlcTriggerPlcId, imgSourceDef.PlcTriggerTagName, VisionInspectionApp.Models.PlcDataType.Bool, $"Trigger Tag ({imgSourceDef.PlcTriggerTagName})", "Trigger");
+                        if (_plcManagerService != null && !_plcManagerService.IsPollingActive)
+                        {
+                            _ = Task.Run(() => _plcManagerService.StartPollingAsync());
+                        }
                         // ✅ FIX: tạo phiên Lịch sử kiểm tra cho chế độ PLC Trigger
                         EnsureInspectionLogSession();
                         StatusBarText = $"Đang chạy liên tục chế độ PLC Trigger ({imgSourceDef.PlcTriggerPlcId}.{imgSourceDef.PlcTriggerTagName})...";

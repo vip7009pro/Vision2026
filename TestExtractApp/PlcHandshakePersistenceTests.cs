@@ -21,9 +21,10 @@ public static class PlcHandshakePersistenceTests
         Test3_LoadGlobalConfig_Auto_Recover_From_Backup_Or_Seed();
         Test4_EnsureIndustrialTagsRegistered_Populates_Tags();
         Test5_ViewModel_ResetCommands_And_TagList_Integrity();
+        Test6_EnsureTagRegistered_ImageSourceTriggerTag();
 
         Console.WriteLine("=======================================================");
-        Console.WriteLine("TẤT CẢ 5/5 TEST BẢO TOÀN CẤU HÌNH HANDSHAKE ĐÃ VƯỢT QUA (PASSED 100%)");
+        Console.WriteLine("TẤT CẢ 6/6 TEST BẢO TOÀN CẤU HÌNH HANDSHAKE & TRIGGER ĐÃ VƯỢT QUA (PASSED 100%)");
         Console.WriteLine("=======================================================\n");
     }
 
@@ -251,6 +252,60 @@ public static class PlcHandshakePersistenceTests
             }
 
             Console.WriteLine("    [OK] ViewModel Commands và AvailableTagNames bảo toàn danh mục và thiết lập chính xác 100%.");
+        }
+        finally
+        {
+            try { File.Delete(tempConfigPath); } catch { }
+            try { File.Delete(tempConfigPath + ".backup"); } catch { }
+        }
+    }
+
+    private static void Test6_EnsureTagRegistered_ImageSourceTriggerTag()
+    {
+        Console.WriteLine("--> Test 6: EnsureTagRegistered tự động đăng ký tag M10 vào danh mục Tags và Polling Engine");
+
+        string tempConfigPath = TestPlcConfigHelper.CreateIsolatedTestConfigPath();
+        try
+        {
+            using var service = new PlcManagerService(tempConfigPath);
+            service.Plcs.Add(new PlcModel { Id = "plc_2", Name = "PLC_2", DriverType = PlcDriverType.Mitsubishi, Enabled = true });
+
+            // 1. Kiểm tra ban đầu M10 chưa có trong Tags
+            bool initiallyHasM10 = service.Tags.Any(t => t.Address == "M10" && (t.PlcId == "PLC_2" || t.PlcId == "plc_2"));
+            if (initiallyHasM10)
+            {
+                throw new Exception("Lỗi test: M10 không nên có sẵn trong PLC_2");
+            }
+
+            // 2. Gọi EnsureTagRegistered cho M10 trên PLC_2
+            bool added = service.EnsureTagRegistered("PLC_2", "M10", PlcDataType.Bool, "ImageSource Trigger M10", "Trigger");
+            if (!added)
+            {
+                throw new Exception("EnsureTagRegistered trả về false khi thêm tag mới M10!");
+            }
+
+            // 3. Kiểm tra M10 đã có trong Tags
+            var registeredTag = service.Tags.FirstOrDefault(t => t.Address == "M10");
+            if (registeredTag == null || registeredTag.DataType != PlcDataType.Bool)
+            {
+                throw new Exception("Tag M10 chưa được thêm chính xác vào danh mục Tags!");
+            }
+
+            // 4. Kiểm tra GetAllTagsToPoll() tự động chứa M10
+            var allPollTags = service.GetAllTagsToPoll();
+            if (!allPollTags.Any(t => t.Address == "M10"))
+            {
+                throw new Exception("GetAllTagsToPoll() không chứa tag M10!");
+            }
+
+            // 5. Gọi lại EnsureTagRegistered lần 2: Không được trùng lặp
+            bool addedDuplicate = service.EnsureTagRegistered("PLC_2", "M10", PlcDataType.Bool);
+            if (addedDuplicate)
+            {
+                throw new Exception("EnsureTagRegistered không chống được trùng lặp tag M10!");
+            }
+
+            Console.WriteLine("    [OK] EnsureTagRegistered đăng ký M10 vào Tags và PollingEngine thành công 100%, chống trùng lặp hoàn hảo.");
         }
         finally
         {
