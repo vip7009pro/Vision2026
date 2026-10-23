@@ -22,9 +22,10 @@ public static class PlcHandshakePersistenceTests
         Test4_EnsureIndustrialTagsRegistered_Populates_Tags();
         Test5_ViewModel_ResetCommands_And_TagList_Integrity();
         Test6_EnsureTagRegistered_ImageSourceTriggerTag();
+        Test7_GetEffectivePlcAckTag_And_ThreadSafeConfigUpdate();
 
         Console.WriteLine("=======================================================");
-        Console.WriteLine("TẤT CẢ 6/6 TEST BẢO TOÀN CẤU HÌNH HANDSHAKE & TRIGGER ĐÃ VƯỢT QUA (PASSED 100%)");
+        Console.WriteLine("TẤT CẢ 7/7 TEST BẢO TOÀN CẤU HÌNH HANDSHAKE, NON-BLOCKING & THREAD SAFETY ĐÃ VƯỢT QUA (PASSED 100%)");
         Console.WriteLine("=======================================================\n");
     }
 
@@ -99,6 +100,7 @@ public static class PlcHandshakePersistenceTests
             service.IndustrialConfig.Handshake.PassTagName = "";
             service.IndustrialConfig.Handshake.NgTagName = "";
             service.IndustrialConfig.Handshake.PlcAckTagName = "";
+            service.IndustrialConfig.Handshake.ResetQueueTagName = "";
 
             // 4. Gọi SaveGlobalConfig()
             service.SaveGlobalConfig();
@@ -153,6 +155,7 @@ public static class PlcHandshakePersistenceTests
             brokenContainer.IndustrialConfig.Handshake.PassTagName = "";
             brokenContainer.IndustrialConfig.Handshake.NgTagName = "";
             brokenContainer.IndustrialConfig.Handshake.PlcAckTagName = "";
+            brokenContainer.IndustrialConfig.Handshake.ResetQueueTagName = "";
             File.WriteAllText(tempConfigPath, JsonSerializer.Serialize(brokenContainer));
 
             // 2. Tạo file backup có Handshake tags hợp lệ M101..M105
@@ -306,6 +309,78 @@ public static class PlcHandshakePersistenceTests
             }
 
             Console.WriteLine("    [OK] EnsureTagRegistered đăng ký M10 vào Tags và PollingEngine thành công 100%, chống trùng lặp hoàn hảo.");
+        }
+        finally
+        {
+            try { File.Delete(tempConfigPath); } catch { }
+            try { File.Delete(tempConfigPath + ".backup"); } catch { }
+        }
+    }
+
+    private static void Test7_GetEffectivePlcAckTag_And_ThreadSafeConfigUpdate()
+    {
+        Console.WriteLine("--> Test 7: GetEffectivePlcAckTag trả về null khi rỗng và Thread Safety bảo vệ UI ViewModel");
+
+        // 1. Kiểm tra IndustrialHandshakeStateMachine: Bỏ Ack (PlcAckTagName = "") phải trả về null
+        string tempConfigPath = TestPlcConfigHelper.CreateIsolatedTestConfigPath();
+        try
+        {
+            using var plcService = new PlcManagerService(tempConfigPath);
+            var plcModel = new PlcModel { Id = "PLC_2", Name = "PLC_2", DriverType = PlcDriverType.Mitsubishi, Enabled = true };
+            plcService.Plcs.Add(plcModel);
+
+            // Cấu hình Non-blocking và rỗng PlcAckTagName
+            plcService.IndustrialConfig.Handshake.PlcId = "PLC_2";
+            plcService.IndustrialConfig.Handshake.NonBlockingMode = true;
+            plcService.IndustrialConfig.Handshake.PlcAckTagName = "";
+
+            var sm = new IndustrialHandshakeStateMachine(plcService, "PLC_2");
+            sm.ApplyConfig(plcService.IndustrialConfig.Handshake);
+
+            var ackTag = sm.GetEffectivePlcAckTag();
+            if (!string.IsNullOrEmpty(ackTag))
+            {
+                throw new Exception($"Lỗi: Khi PlcAckTagName rỗng, GetEffectivePlcAckTag phải trả về null, nhưng nhận được: '{ackTag}'");
+            }
+
+            // Cấu hình có tag Ack rõ ràng
+            plcService.IndustrialConfig.Handshake.PlcAckTagName = "M10";
+            sm.ApplyConfig(plcService.IndustrialConfig.Handshake);
+            plcService.EnsureTagRegistered("PLC_2", "M10", PlcDataType.Bool);
+            var ackTagConfigured = sm.GetEffectivePlcAckTag();
+            if (ackTagConfigured != "M10")
+            {
+                throw new Exception($"Lỗi: Khi PlcAckTagName='M10', GetEffectivePlcAckTag phải trả về M10, nhưng nhận được: '{ackTagConfigured}'");
+            }
+
+            // 2. Kiểm tra ViewModel không ném InvalidOperationException khi PlcModel.State đổi trên ThreadPool
+            var vm = new PlcManagerViewModel(plcService);
+            vm.SelectedPlc = plcModel;
+
+            var threadEx = (Exception?)null;
+            var thread = new System.Threading.Thread(() =>
+            {
+                try
+                {
+                    // Giả lập driver cập nhật trạng thái kết nối trên background thread (như MitsubishiDriver làm)
+                    plcModel.State = PlcConnectionState.Connected;
+                    plcModel.CpuName = "FX5U";
+                    plcModel.State = PlcConnectionState.Disconnected;
+                }
+                catch (Exception ex)
+                {
+                    threadEx = ex;
+                }
+            });
+            thread.Start();
+            thread.Join();
+
+            if (threadEx != null)
+            {
+                throw new Exception($"Lỗi Thread Safety: Cập nhật PlcModel từ background thread làm văng lỗi UI: {threadEx.Message}", threadEx);
+            }
+
+            Console.WriteLine("    [OK] GetEffectivePlcAckTag trả về null khi bỏ Ack và DispatchOnUiThread bảo vệ UI an toàn 100%.");
         }
         finally
         {

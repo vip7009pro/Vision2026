@@ -201,6 +201,19 @@ public partial class HmiControlViewModel : ObservableObject
         UpdateVisualState();
     }
 
+    private static bool IsBitAddress(string address)
+    {
+        if (string.IsNullOrWhiteSpace(address)) return false;
+        string clean = address.Trim().ToUpperInvariant();
+        if (clean.StartsWith("SM") || clean.StartsWith("TS") || clean.StartsWith("TC") ||
+            clean.StartsWith("SS") || clean.StartsWith("SC") || clean.StartsWith("CS") ||
+            clean.StartsWith("CC") || clean.StartsWith("SB") || clean.StartsWith("DX") ||
+            clean.StartsWith("DY")) return true;
+
+        char first = clean[0];
+        return first == 'X' || first == 'Y' || first == 'M' || first == 'L' || first == 'F' || first == 'B';
+    }
+
     public void EnsureDirectAddressRegistered(string address)
     {
         if (_plcService == null || string.IsNullOrWhiteSpace(address)) return;
@@ -212,25 +225,10 @@ public partial class HmiControlViewModel : ObservableObject
 
         string targetPlcId = realPlc != null ? realPlc.Id : (string.IsNullOrWhiteSpace(plcId) ? "PLC_01" : plcId);
 
-        var existingTag = _plcService.Tags.FirstOrDefault(t =>
-            (string.Equals(t.PlcId, targetPlcId, StringComparison.OrdinalIgnoreCase) || string.Equals(t.PlcId, plcId, StringComparison.OrdinalIgnoreCase)) &&
-            (string.Equals(t.Name, address, StringComparison.OrdinalIgnoreCase) || string.Equals(t.Address, address, StringComparison.OrdinalIgnoreCase)));
+        // Chuẩn hóa DataType: Tiếp điểm Bit (X, Y, M, L, F, B...) bắt buộc là Bool để chống lỗi MC Protocol
+        PlcDataType targetDataType = IsBitAddress(address) ? PlcDataType.Bool : Model.ValueDataType;
 
-        if (existingTag == null)
-        {
-            var tag = new PlcTag
-            {
-                PlcId = targetPlcId,
-                Name = address,
-                Address = address,
-                DataType = Model.ValueDataType
-            };
-            _plcService.Tags.Add(tag);
-        }
-        else if (existingTag.DataType != Model.ValueDataType)
-        {
-            existingTag.DataType = Model.ValueDataType;
-        }
+        _plcService.EnsureTagRegistered(targetPlcId, address, targetDataType, $"HMI {Model.LabelText}", "HMI");
     }
 
     public PlcDataType ValueDataType

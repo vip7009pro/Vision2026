@@ -198,7 +198,8 @@ public sealed class PlcManagerService : IPlcManagerService, IDisposable
             (handshake.DoneTagName, "Vision Done (Hoàn tất kiểm tra)"),
             (handshake.PassTagName, "Vision Pass (Kết quả ĐẠT/OK)"),
             (handshake.NgTagName, "Vision NG (Kết quả LỖI/NG)"),
-            (handshake.PlcAckTagName, "PLC Ack (Xác nhận nhận kết quả)")
+            (handshake.PlcAckTagName, "PLC Ack (Xác nhận nhận kết quả)"),
+            (handshake.ResetQueueTagName, "Vision Reset Queue (Xóa sạch hàng đợi về 0)")
         };
 
         bool anyAdded = false;
@@ -465,47 +466,39 @@ public sealed class PlcManagerService : IPlcManagerService, IDisposable
 
     public static PlcDataType InferDataTypeFromAddress(string address, object? valueHint = null)
     {
-        if (valueHint is bool) return PlcDataType.Bool;
-        if (valueHint is short || valueHint is ushort || valueHint is int || valueHint is uint) return PlcDataType.Int16;
-        if (valueHint is float || valueHint is double) return PlcDataType.Float;
-        if (valueHint is string) return PlcDataType.String;
-
         if (string.IsNullOrWhiteSpace(address)) return PlcDataType.Bool;
 
         string trimmed = address.Trim();
         string upper = trimmed.ToUpperInvariant();
 
-        // 1. Explicit 2+ char word register prefixes
-        if (upper.StartsWith("MW") || upper.StartsWith("IW") || upper.StartsWith("QW") ||
-            upper.StartsWith("SW") || upper.StartsWith("ZR") || upper.StartsWith("TN") ||
-            upper.StartsWith("CN") || upper.StartsWith("SD") || upper.StartsWith("3X") ||
-            upper.StartsWith("4X") || upper.StartsWith("HOLDING") || upper.StartsWith("INPUT"))
-        {
-            return PlcDataType.Int16;
-        }
-
-        // 2. Explicit 2+ char bit prefixes
+        // 1. Bit prefixes - Luôn luôn là Bool vì PLC MC Protocol không thể đọc Float/Dword trên bit đơn
         if (upper.StartsWith("SM") || upper.StartsWith("TS") || upper.StartsWith("TC") ||
             upper.StartsWith("SS") || upper.StartsWith("SC") || upper.StartsWith("CS") ||
             upper.StartsWith("CC") || upper.StartsWith("DX") || upper.StartsWith("DY") ||
             upper.StartsWith("0X") || upper.StartsWith("1X") || upper.StartsWith("COIL") ||
-            upper.StartsWith("DISCRETE"))
-        {
-            return PlcDataType.Bool;
-        }
-
-        // 3. Single-char word prefixes (D, W, R, Z)
-        if (upper.StartsWith("D") || upper.StartsWith("W") || upper.StartsWith("R") || upper.StartsWith("Z"))
-        {
-            return PlcDataType.Int16;
-        }
-
-        // 4. Single-char bit prefixes (X, Y, M, L, B, F, S)
-        if (upper.StartsWith("X") || upper.StartsWith("Y") || upper.StartsWith("M") ||
+            upper.StartsWith("DISCRETE") ||
+            upper.StartsWith("X") || upper.StartsWith("Y") || upper.StartsWith("M") ||
             upper.StartsWith("L") || upper.StartsWith("B") || upper.StartsWith("F") ||
             upper.StartsWith("S"))
         {
             return PlcDataType.Bool;
+        }
+
+        // 2. Nếu có hint rõ ràng từ tham số (PlcDataType hoặc object type)
+        if (valueHint is PlcDataType pdt) return pdt;
+        if (valueHint is bool) return PlcDataType.Bool;
+        if (valueHint is short || valueHint is ushort || valueHint is int || valueHint is uint) return PlcDataType.Int16;
+        if (valueHint is float || valueHint is double) return PlcDataType.Float;
+        if (valueHint is string) return PlcDataType.String;
+
+        // 3. Mặc định cho Word register
+        if (upper.StartsWith("MW") || upper.StartsWith("IW") || upper.StartsWith("QW") ||
+            upper.StartsWith("SW") || upper.StartsWith("ZR") || upper.StartsWith("TN") ||
+            upper.StartsWith("CN") || upper.StartsWith("SD") || upper.StartsWith("3X") ||
+            upper.StartsWith("4X") || upper.StartsWith("HOLDING") || upper.StartsWith("INPUT") ||
+            upper.StartsWith("D") || upper.StartsWith("W") || upper.StartsWith("R") || upper.StartsWith("Z"))
+        {
+            return PlcDataType.Int16;
         }
 
         return PlcDataType.Bool;
@@ -556,16 +549,25 @@ public sealed class PlcManagerService : IPlcManagerService, IDisposable
             EnsureTagAddress(IndustrialConfig.Handshake.PlcId, IndustrialConfig.Handshake.PlcAckTagName, PlcDataType.Bool);
 
             // Heartbeat
-            EnsureTagAddress(IndustrialConfig.Heartbeat.PlcId, IndustrialConfig.Heartbeat.VisionHeartbeatTagName, PlcDataType.Bool);
-            EnsureTagAddress(IndustrialConfig.Heartbeat.PlcId, IndustrialConfig.Heartbeat.PlcHeartbeatTagName, PlcDataType.Bool);
-            EnsureTagAddress(IndustrialConfig.Heartbeat.PlcId, IndustrialConfig.Heartbeat.EmergencyStopTagName, PlcDataType.Bool);
+            if (IndustrialConfig.Heartbeat != null && IndustrialConfig.Heartbeat.IsEnabled)
+            {
+                EnsureTagAddress(IndustrialConfig.Heartbeat.PlcId, IndustrialConfig.Heartbeat.VisionHeartbeatTagName, PlcDataType.Bool);
+                EnsureTagAddress(IndustrialConfig.Heartbeat.PlcId, IndustrialConfig.Heartbeat.PlcHeartbeatTagName, PlcDataType.Bool);
+                EnsureTagAddress(IndustrialConfig.Heartbeat.PlcId, IndustrialConfig.Heartbeat.EmergencyStopTagName, PlcDataType.Bool);
+            }
 
             // Motion
-            EnsureTagAddress(IndustrialConfig.Motion.PlcId, IndustrialConfig.Motion.EncoderTagName, PlcDataType.Int32);
-            EnsureTagAddress(IndustrialConfig.Motion.PlcId, IndustrialConfig.Motion.SpeedTagName, PlcDataType.Float);
+            if (IndustrialConfig.Motion != null && IndustrialConfig.Motion.IsEnabled)
+            {
+                EnsureTagAddress(IndustrialConfig.Motion.PlcId, IndustrialConfig.Motion.EncoderTagName, PlcDataType.Int32);
+                EnsureTagAddress(IndustrialConfig.Motion.PlcId, IndustrialConfig.Motion.SpeedTagName, PlcDataType.Float);
+            }
 
             // Shift Register
-            EnsureTagAddress(IndustrialConfig.ShiftRegister.PlcId, IndustrialConfig.ShiftRegister.RejectTagName, PlcDataType.Bool);
+            if (IndustrialConfig.ShiftRegister != null && IndustrialConfig.ShiftRegister.IsEnabled)
+            {
+                EnsureTagAddress(IndustrialConfig.ShiftRegister.PlcId, IndustrialConfig.ShiftRegister.RejectTagName, PlcDataType.Bool);
+            }
         }
 
         // Dynamic Tag Providers (e.g. Oscilloscope channels, High-speed debug monitors)
@@ -894,8 +896,51 @@ public sealed class PlcManagerService : IPlcManagerService, IDisposable
             {
                 foreach (var t in tags)
                 {
+                    // Lọc bỏ tag ảo hệ thống không phải địa chỉ phần cứng thực tế
+                    if (string.Equals(t.Name, "Y0_VisionHeartbeat", StringComparison.OrdinalIgnoreCase) ||
+                        string.Equals(t.Address, "Y0_VisionHeartbeat", StringComparison.OrdinalIgnoreCase) ||
+                        string.Equals(t.Name, "X0_PlcHeartbeat", StringComparison.OrdinalIgnoreCase) ||
+                        string.Equals(t.Address, "X0_PlcHeartbeat", StringComparison.OrdinalIgnoreCase) ||
+                        string.Equals(t.Name, "Y10_VisionFault", StringComparison.OrdinalIgnoreCase) ||
+                        string.Equals(t.Address, "Y10_VisionFault", StringComparison.OrdinalIgnoreCase))
+                    {
+                        continue;
+                    }
+
                     t.PropertyChanged += Item_PropertyChanged;
                     Tags.Add(t);
+                }
+            }
+
+            // Tự động kiểm tra và làm sạch IndustrialConfig: nếu IsEnabled = true nhưng thiếu cấu hình tag thì tắt để tránh lỗi tranh chấp
+            if (IndustrialConfig != null)
+            {
+                if (IndustrialConfig.Heartbeat != null && IndustrialConfig.Heartbeat.IsEnabled)
+                {
+                    if (string.IsNullOrWhiteSpace(IndustrialConfig.Heartbeat.PlcId) ||
+                        string.IsNullOrWhiteSpace(IndustrialConfig.Heartbeat.VisionHeartbeatTagName) ||
+                        string.IsNullOrWhiteSpace(IndustrialConfig.Heartbeat.PlcHeartbeatTagName))
+                    {
+                        IndustrialConfig.Heartbeat.IsEnabled = false;
+                    }
+                }
+
+                if (IndustrialConfig.Motion != null && IndustrialConfig.Motion.IsEnabled)
+                {
+                    if (string.IsNullOrWhiteSpace(IndustrialConfig.Motion.PlcId) ||
+                        string.IsNullOrWhiteSpace(IndustrialConfig.Motion.EncoderTagName))
+                    {
+                        IndustrialConfig.Motion.IsEnabled = false;
+                    }
+                }
+
+                if (IndustrialConfig.ShiftRegister != null && IndustrialConfig.ShiftRegister.IsEnabled)
+                {
+                    if (string.IsNullOrWhiteSpace(IndustrialConfig.ShiftRegister.PlcId) ||
+                        string.IsNullOrWhiteSpace(IndustrialConfig.ShiftRegister.RejectTagName))
+                    {
+                        IndustrialConfig.ShiftRegister.IsEnabled = false;
+                    }
                 }
             }
 

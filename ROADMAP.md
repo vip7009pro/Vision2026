@@ -1,5 +1,55 @@
 # ROADMAP.md — Lộ trình phát triển & Trạng thái nhiệm vụ
 
+- [x] Task 417: Khắc Phục Triệt Để Tranh Chấp Kết Nối PLC Làm Đổi Trạng Thái Xanh Lá/Đỏ Liên Tục & Cô Lập Hoàn Toàn HMI Tool Editor:
+  - [x] **Nguyên nhân gốc rễ vòng lặp Xanh - Đỏ**:
+    - *Lệch byte stream MC Protocol (Socket Stream Desynchronization)*: Trước đây `ReadMcProtocolTagAsync` gửi 2 gói tin liên tiếp (Subcommand 0x0001 đọc bit, rồi fallback 0x0000 đọc word). Nếu gói 1 bị timeout hoặc PLC phản hồi chậm, việc gửi ngay gói 2 làm dòng byte phản hồi của gói 1 tràn sang gói 2, khiến socket đọc sai vị trí Header (11 byte) $\rightarrow$ Đọc dở $\rightarrow$ Timeout 2000ms $\rightarrow$ `CleanupSocket()` văng lỗi ĐỎ. Sau 2 giây PollingEngine reconnect thành công $\rightarrow$ XANH LÁ $\rightarrow$ Đọc lại lỗi $\rightarrow$ Lại ĐỎ (lặp vô tận).
+    - *Watchdog Heartbeat ngầm mặc định Bật & bắn lệnh liên tục*: `PlcHeartbeatWatchdog` được `Start()` ngay khi Tool Editor khởi tạo. Trong `plc_config.json`, `Heartbeat.IsEnabled = true` nhưng các tag và PlcId đều rỗng. Sau 500ms timeout, watchdog tự ý gửi lệnh ghi `true` vào `Y10_VisionFault` (parse thành thiết bị `Y0` của FX5U), gây tranh chấp trực tiếp với CPU PLC và luồng Polling Engine.
+    - *HMI Panel tự động kích hoạt Run Mode khi đang Ẩn*: `InitHmiPanelMonitoring()` khởi tạo `_hmiMonitorViewModel` với `IsRunMode = true` và nạp file HMI ngay khi mở app dù HMI đang Ẩn, chiếm dụng Polling Lock và đẩy tag vào PLC.
+    - *Sai lệch kiểu dữ liệu (Data Type Mismatch)*: HMI đẩy tag bit (`X0`, `X1`) với DataType = Float vào PLC catalog làm ô nhiễm cấu hình.
+  - [x] **Giải pháp triệt để**:
+    - [MitsubishiDriver.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.Application/PLC/Drivers/MitsubishiDriver.cs): Bỏ việc gửi đúp gói tin; chuẩn hóa đọc 1 lần theo Subcommand 0x0001 (Bit units) chuẩn MC Protocol 3E; drain sạch `dataLen - 2` byte khỏi socket; ném `IOException` khi socket đứt (`read == 0`) hoặc `readCount < 11` để socket được cleanup và reconnect mới sạch sẽ; cô lập `try/catch` từng tag không làm ngắt kết nối socket vật lý.
+    - [PlcHeartbeatWatchdog.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.Application/PLC/Services/PlcHeartbeatWatchdog.cs): Thắt chặt điều kiện: chỉ chạy khi `IsEnabled == true` VÀ có đầy đủ `VisionHeartbeatTagName` và `PlcHeartbeatTagName` hợp lệ; `ApplyConfig` tự động set `IsEnabled = false` nếu thiếu tag cấu hình; không bao giờ tự ý ghi tag lỗi `Y10_VisionFault`.
+    - [ToolEditorViewModel.HmiPanel.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/ToolEditorViewModel.HmiPanel.cs): `_hmiMonitorViewModel` mặc định `IsRunMode = false`. Khi HMI đang Ẩn: chỉ lưu đường dẫn tệp HMI, không nạp controls, không bật RunMode, giải phóng Polling Lock. Chỉ khi người dùng bấm "Hiện HMI" mới nạp controls, bật `IsRunMode = true` và acquire Polling Lock.
+    - [PlcManagerService.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.Application/PLC/Services/PlcManagerService.cs): `InferDataTypeFromAddress`: Bit device luôn là `PlcDataType.Bool`; `LoadConfigInternal`: tự động lọc bỏ các tag ảo tồn đọng `Y0_VisionHeartbeat`, `X0_PlcHeartbeat`, `Y10_VisionFault` khỏi danh mục `Tags` và tự động tắt `IsEnabled = false` cho các module công nghiệp rỗng cấu hình.
+  - [x] **Kiểm thử tự động**:
+    - [PlcConflictAndHmiIsolationTests.cs](file:///g:/NODEJS/Vision2026/TestExtractApp/PlcConflictAndHmiIsolationTests.cs) (4/4 test PASSED 100%).
+    - [PlcHandshakePersistenceTests.cs](file:///g:/NODEJS/Vision2026/TestExtractApp/PlcHandshakePersistenceTests.cs) (7/7 test PASSED 100%).
+    - [PlcResetQueueAndHmiTests.cs](file:///g:/NODEJS/Vision2026/TestExtractApp/PlcResetQueueAndHmiTests.cs) (5/5 test PASSED 100%).
+    - Toàn bộ solution biên dịch 0 Errors.
+
+- [x] Task 416: Khắc Phục Triệt Để Lỗi Thread Ownership Làm Ngắt Kết Nối PLC Ethernet & Chuẩn Hóa Chế Độ Bỏ PLC Ack / Non-Blocking:
+  - [x] **Nguyên nhân gốc rễ**:
+    - *Ngoại lệ đa luồng WPF (Thread Ownership Exception)*: Khi tab HMI nạp vào Tool Editor, `HmiManagerViewModel` tự kích hoạt Polling kết nối PLC ngầm trên ThreadPool. Khi kết nối thành công, `MitsubishiDriver` gán `Config.State = Connected` kích hoạt sự kiện `PropertyChanged` trên `PlcManagerViewModel`, gọi `NotifyCanExecuteChanged()` của WPF Button trên ThreadPool khiến WPF văng lỗi: `The calling thread cannot access this object because a different thread owns it.`. `ConnectAsync` tóm ngoại lệ này, hủy socket TCP ngắt kết nối Ethernet và báo lỗi đỏ lên UI.
+    - *Hiển thị "Chờ PLC Ack" dù Non-blocking & bỏ Ack*: `IndustrialHandshakeStateMachine.GetEffectivePlcAckTag()` tự động fallback về `M10` khi `PlcAckTagName = ""`. UI `ToolEditorViewModel.HandshakeUi.cs` gán cứng nhãn `CHỜ ACK (DONE)` và `ĐÃ ACK`.
+  - [x] **Giải pháp triệt để**:
+    - [MitsubishiDriver.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.Application/PLC/Drivers/MitsubishiDriver.cs) & [MitsubishiMxComponentDriver.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.Application/PLC/Drivers/MitsubishiMxComponentDriver.cs): Thêm hàm `UpdateConfigStatus(...)` bọc `try/catch` an toàn tuyệt đối, triệt tiêu việc ngắt socket do lỗi UI.
+    - [PlcManagerViewModel.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/PLC/PlcManagerViewModel.cs): Bổ sung `DispatchOnUiThread` bảo vệ toàn bộ `SelectedPlc_PropertyChanged`, `NotifyCanExecuteChanged()`, `Tags.CollectionChanged`, `Plcs.CollectionChanged`.
+    - [HmiManagerViewModel.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/HMI/HmiManagerViewModel.cs): Gỡ bỏ việc tự ý gọi `StartPollingAsync()` trong constructor; bảo vệ UI thread khi collection thay đổi; dùng `Controls.ToArray()` thread-safe.
+    - [IndustrialHandshakeStateMachine.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.Application/PLC/Services/IndustrialHandshakeStateMachine.cs): `GetEffectivePlcAckTag()` trả về `null` ngay lập tức khi chuỗi rỗng; thêm `ApplyConfig(...)`.
+    - [ToolEditorViewModel.HandshakeUi.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/ToolEditorViewModel.HandshakeUi.cs) & [ToolEditorView.xaml](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/Views/ToolEditorView.xaml): Chế độ Non-blocking/Bỏ Ack hiển thị `CHỐT KẾT QUẢ` và `HOÀN TẤT`, đèn LED Ack mờ kèm ToolTip "Đã bỏ qua (Chế độ Non-blocking - Không chờ Ack)".
+  - [x] **Kiểm thử tự động [PlcHandshakePersistenceTests.cs](file:///g:/NODEJS/Vision2026/TestExtractApp/PlcHandshakePersistenceTests.cs)**:
+    - 7/7 test PASSED 100% (bao gồm Test 7 xác minh `GetEffectivePlcAckTag` trả về `null` và thread-safety không gây crash UI). Solution biên dịch 0 Errors.
+
+- [x] Task 415: Chia Đôi Cột Preview Tool Editor Hiển Thị HMI & Bổ Sung Tag Reset Queue Vision Trong Cài Đặt Bắt Tay 24/7 Handshake (Cạnh Lên, Cạnh Xuống, Long Press, Duration):
+  - [x] **Yêu cầu 1: Tích hợp HMI tương tác trực tiếp trên Tool Editor**:
+    - Chia đôi Cột 4 (Preview Image) thành 2 hàng bằng Grid và `GridSplitter`: Hàng trên Preview Image hiện tại, Hàng dưới HMI Monitor tương tác trực tiếp với PLC.
+    - Đặt Canvas HMI trong `<Viewbox Stretch="Uniform">` đảm bảo co giãn mượt mà, không biến dạng và bắt trúng tương tác chuột vào các nút/switch HMI.
+    - Bổ sung nút bấm **"🖥️ Hiện HMI / Ẩn HMI"** trên thanh toolbar Tool Editor, đặt sát cạnh nút "Đóng Job". Trạng thái mặc định khi mở app là Ẩn (hàng Preview chiếm trọn 100% cột).
+    - Lưu và tự động nhớ đường dẫn tệp HMI đã chọn (`ToolEditorSelectedHmiPath`) qua `GlobalAppSettingsService`, tự động nạp lại khi bật lại app.
+    - Module hóa code quản lý HMI vào [ToolEditorViewModel.HmiPanel.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/ToolEditorViewModel.HmiPanel.cs) tuân thủ nghiêm ngặt quy tắc không tạo file quá dài.
+  - [x] **Yêu cầu 2: Tag Reset Queue Vision Trong Cài Đặt Bắt Tay 24/7 Handshake**:
+    - Bổ sung cấu hình `ResetQueueTagName`, `ResetQueueSignalType` (Enum `PlcInputSignalType`: Rising Edge, Falling Edge, Long Press) và `ResetQueueDurationMs` vào `IndustrialHandshakeConfig`.
+    - Mặc định FX5U: Tag `M106`, Rising Edge, 50ms. Mặc định Standard I/O: `X2_ResetQueue`, Rising Edge, 100ms.
+    - Tạo service [PlcInputSignalDetector.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.Application/PLC/Services/PlcInputSignalDetector.cs):
+      - Cạnh lên (Rising Edge: $0 \rightarrow 1$) kèm lockout debounce chống rung tiếp điểm.
+      - Cạnh xuống (Falling Edge: $1 \rightarrow 0$) kèm lockout debounce.
+      - Long Press (Nhấn giữ: duy trì mức 1 liên tục trong ít nhất khoảng thời gian cài đặt $\ge$ `DurationMs`) qua Timer bất đồng bộ non-blocking; nhả nút sớm hủy ngay lập tức, giữ lâu không bị kích hoạt lặp.
+    - Kết nối với [IndustrialHandshakeStateMachine.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.Application/PLC/Services/IndustrialHandshakeStateMachine.cs) và [ToolEditorViewModel.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/ViewModels/ToolEditorViewModel.cs): Khi nhận đúng tín hiệu Reset Queue từ PLC, tự động gọi `ResetQueueAndCounters()` xóa sạch hàng đợi frame và đưa các bộ đếm về 0.
+    - Đăng ký tag vào danh mục polling qua [PlcManagerService.cs](file:///g:/NODEJS/Vision2026/VisionInspectionApp.Application/PLC/Services/PlcManagerService.cs) và giao diện [PlcManagerWindow.xaml](file:///g:/NODEJS/Vision2026/VisionInspectionApp.UI/Views/PLC/PlcManagerWindow.xaml).
+  - [x] **Kiểm thử tự động [PlcResetQueueAndHmiTests.cs](file:///g:/NODEJS/Vision2026/TestExtractApp/PlcResetQueueAndHmiTests.cs)**:
+    - 5/5 test PASSED 100% (Rising Edge, Falling Edge, Long Press time threshold & debounce, IndustrialHandshakeConfig Serialization/Defaults, GlobalAppSettings HMI path persistence).
+    - Toàn bộ solution biên dịch 0 Errors.
+
 - [x] Task 414: Khắc Phục Triệt Để Lỗi Lệch Tịnh Tiến Ảnh Template Khi Sửa Job Cũ Trên Tool SurfaceCompare & Tách Nút "Set Template" Riêng Biệt:
   - [x] Điều tra & định vị 2 nguyên nhân cốt lõi:
     - *Nguyên nhân 1 (Lệch hệ tọa độ Teach vs Found khi lưu template)*: Trong Job có Origin, khi runtime chạy trên ảnh hiện tại `snap`, gốc Origin tìm được là `originFound` có độ lệch tọa độ so với gốc dạy ban đầu `originTeach` ($Y_f > Y_t$). Khi người dùng move/resize Template ROI (`SCT`) trên Canvas, tọa độ Canvas là tọa độ Found; hàm `UnTransformRoi` đưa về Teach coordinate ($Y_t$) và gán cho `sc.TemplateRoi`. Trước đây hàm lưu template `TrySaveSurfaceCompareTemplateImage` lại dùng `ExtractRoiPatch(processedMat, targetRoi)` cắt trực tiếp tọa độ Teach trên `processedMat` (vốn đang nằm ở tọa độ Found). Việc cắt này làm ảnh template bị tịnh tiến lên trên một đoạn $dy = Y_f - Y_t$, trong khi tại runtime `RunSurfaceCompare` lại dùng `ExtractStraightRoi` chuyển đúng $Y_t \rightarrow Y_f$ để cắt ô `DebugCurrent`. Sự lệch pha $dy$ pixel giữa Template và Current khiến diff luôn lớn và báo NG.

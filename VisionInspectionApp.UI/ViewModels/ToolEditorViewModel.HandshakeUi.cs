@@ -76,6 +76,9 @@ public sealed partial class ToolEditorViewModel : ObservableObject
     [ObservableProperty]
     private Brush _handshakeAckForeBrush = BrushLedOffText;
 
+    [ObservableProperty]
+    private string _handshakeAckToolTip = "PLC Ack Tag";
+
     #endregion
 
     /// <summary>
@@ -135,20 +138,24 @@ public sealed partial class ToolEditorViewModel : ObservableObject
         bool isPlcConnected = _plcManagerService?.IsPlcConnected(plcId) ?? false;
         var state = _handshakeStateMachine?.CurrentState ?? HandshakeState.Idle;
 
-        // 1. Đọc giá trị 4 bit tín hiệu từ PLC Cache
+        // 1. Đọc giá trị các bit tín hiệu từ PLC Cache
         string rdyTag = _handshakeStateMachine?.GetEffectiveReadyTag() ?? "M101";
         string bsyTag = _handshakeStateMachine?.GetEffectiveBusyTag() ?? "M102";
         string donTag = _handshakeStateMachine?.GetEffectiveDoneTag() ?? "M103";
-        string ackTag = _handshakeStateMachine?.GetEffectivePlcAckTag() ?? "M11";
+        string? ackTag = _handshakeStateMachine?.GetEffectivePlcAckTag();
         string passTag = _handshakeStateMachine?.GetEffectivePassTag() ?? "M104";
         string ngTag = _handshakeStateMachine?.GetEffectiveNgTag() ?? "M105";
 
         bool bitRdy = ReadTagBool(plcId, rdyTag);
         bool bitBsy = ReadTagBool(plcId, bsyTag);
         bool bitDon = ReadTagBool(plcId, donTag);
-        bool bitAck = ReadTagBool(plcId, ackTag);
+        bool bitAck = !string.IsNullOrWhiteSpace(ackTag) && ReadTagBool(plcId, ackTag);
         bool bitPass = ReadTagBool(plcId, passTag);
         bool bitNg = ReadTagBool(plcId, ngTag);
+
+        bool isNonBlocking = _handshakeStateMachine?.NonBlockingMode ?? false;
+        bool hasAckTag = !string.IsNullOrWhiteSpace(ackTag);
+        bool isNoAckMode = isNonBlocking || !hasAckTag;
 
         // 2. Cập nhật Mini LED Brushes cho 4 bit
         HandshakeRdyBrush = bitRdy ? BrushGreenBg : BrushLedOffBg;
@@ -160,8 +167,11 @@ public sealed partial class ToolEditorViewModel : ObservableObject
         HandshakeDonBrush = bitDon ? BrushAmberBg : BrushLedOffBg;
         HandshakeDonForeBrush = bitDon ? BrushAmberText : BrushLedOffText;
 
-        HandshakeAckBrush = bitAck ? BrushGreenBg : BrushLedOffBg;
-        HandshakeAckForeBrush = bitAck ? BrushGreenText : BrushLedOffText;
+        HandshakeAckBrush = hasAckTag ? (bitAck ? BrushGreenBg : BrushLedOffBg) : BrushLedOffBg;
+        HandshakeAckForeBrush = hasAckTag ? (bitAck ? BrushGreenText : BrushLedOffText) : BrushLedOffText;
+        HandshakeAckToolTip = hasAckTag
+            ? $"PLC Ack Tag ({ackTag}): {(bitAck ? "1 (Active - Đã nhận Ack)" : "0 (Inactive)")}"
+            : "PLC Ack: Đã bỏ qua (Chế độ Non-blocking - Không chờ Ack)";
 
         // 3. Phân loại trạng thái tổng thể Badge & Màu sắc
         if (!isHandshakeEnabled)
@@ -170,7 +180,8 @@ public sealed partial class ToolEditorViewModel : ObservableObject
             HandshakeStatusBackgroundBrush = BrushMutedBg;
             HandshakeStatusBorderBrush = BrushMutedBorder;
             HandshakeStatusForegroundBrush = BrushMutedText;
-            HandshakeStatusBarSummary = $"🤝 PLC: {plcId} (Tắt Handshake) | RDY:{(bitRdy ? 1 : 0)} BSY:{(bitBsy ? 1 : 0)} DON:{(bitDon ? 1 : 0)} ACK:{(bitAck ? 1 : 0)}";
+            string ackPart = hasAckTag ? $"ACK:{(bitAck ? 1 : 0)}" : "ACK:--";
+            HandshakeStatusBarSummary = $"🤝 PLC: {plcId} (Tắt Handshake) | RDY:{(bitRdy ? 1 : 0)} BSY:{(bitBsy ? 1 : 0)} DON:{(bitDon ? 1 : 0)} {ackPart}";
             HandshakeStatusToolTip = $"🤝 Chu Trình Bắt Tay PLC ({plcId})\n" +
                                      $"• Trạng thái: ĐÃ TẮT trong cài đặt Handshake\n" +
                                      $"• Bấm chuột vào đây để mở Cấu Hình PLC & Bắt Tay.";
@@ -183,7 +194,8 @@ public sealed partial class ToolEditorViewModel : ObservableObject
             HandshakeStatusBackgroundBrush = BrushRedBg;
             HandshakeStatusBorderBrush = BrushRedBorder;
             HandshakeStatusForegroundBrush = BrushRedText;
-            HandshakeStatusBarSummary = $"🤝 PLC: {plcId} (Mất kết nối Ethernet) | RDY:0 BSY:0 DON:0 ACK:0";
+            string ackPart = hasAckTag ? "ACK:0" : "ACK:--";
+            HandshakeStatusBarSummary = $"🤝 PLC: {plcId} (Mất kết nối Ethernet) | RDY:0 BSY:0 DON:0 {ackPart}";
             HandshakeStatusToolTip = $"🤝 Chu Trình Bắt Tay PLC ({plcId})\n" +
                                      $"• Trạng thái: CHƯA KẾT NỐI (Offline)\n" +
                                      $"• Giao thức: Mitsubishi MC Protocol / MX Component\n" +
@@ -215,20 +227,42 @@ public sealed partial class ToolEditorViewModel : ObservableObject
                 break;
 
             case HandshakeState.ResultLatched:
-                HandshakeStatusBadgeText = $"{plcId}: CHỜ ACK (DONE)";
-                HandshakeStatusBackgroundBrush = BrushAmberBg;
-                HandshakeStatusBorderBrush = BrushAmberBorder;
-                HandshakeStatusForegroundBrush = BrushAmberText;
-                stateDesc = "Đã Chốt Kết Quả — Chờ PLC Ack";
+                if (isNoAckMode)
+                {
+                    HandshakeStatusBadgeText = $"{plcId}: CHỐT KẾT QUẢ";
+                    HandshakeStatusBackgroundBrush = BrushAmberBg;
+                    HandshakeStatusBorderBrush = BrushAmberBorder;
+                    HandshakeStatusForegroundBrush = BrushAmberText;
+                    stateDesc = "Đã Chốt Kết Quả (Non-blocking)";
+                }
+                else
+                {
+                    HandshakeStatusBadgeText = $"{plcId}: CHỜ ACK (DONE)";
+                    HandshakeStatusBackgroundBrush = BrushAmberBg;
+                    HandshakeStatusBorderBrush = BrushAmberBorder;
+                    HandshakeStatusForegroundBrush = BrushAmberText;
+                    stateDesc = "Đã Chốt Kết Quả — Chờ PLC Ack";
+                }
                 break;
 
             case HandshakeState.Acknowledged:
             case HandshakeState.Complete:
-                HandshakeStatusBadgeText = $"{plcId}: ĐÃ ACK";
-                HandshakeStatusBackgroundBrush = BrushGreenBg;
-                HandshakeStatusBorderBrush = BrushGreenBorder;
-                HandshakeStatusForegroundBrush = BrushGreenText;
-                stateDesc = "PLC Đã Xác Nhận (Acked)";
+                if (isNoAckMode)
+                {
+                    HandshakeStatusBadgeText = $"{plcId}: HOÀN TẤT";
+                    HandshakeStatusBackgroundBrush = BrushGreenBg;
+                    HandshakeStatusBorderBrush = BrushGreenBorder;
+                    HandshakeStatusForegroundBrush = BrushGreenText;
+                    stateDesc = "Hoàn Tất Chu Trình (Non-blocking)";
+                }
+                else
+                {
+                    HandshakeStatusBadgeText = $"{plcId}: ĐÃ ACK";
+                    HandshakeStatusBackgroundBrush = BrushGreenBg;
+                    HandshakeStatusBorderBrush = BrushGreenBorder;
+                    HandshakeStatusForegroundBrush = BrushGreenText;
+                    stateDesc = "PLC Đã Xác Nhận (Acked)";
+                }
                 break;
 
             case HandshakeState.TimeoutFault:
@@ -236,7 +270,7 @@ public sealed partial class ToolEditorViewModel : ObservableObject
                 HandshakeStatusBackgroundBrush = BrushRedBg;
                 HandshakeStatusBorderBrush = BrushRedBorder;
                 HandshakeStatusForegroundBrush = BrushRedText;
-                stateDesc = "Lỗi Timeout (PLC không phản hồi Ack)";
+                stateDesc = isNoAckMode ? "Lỗi Bắt Tay Ghi PLC" : "Lỗi Timeout (PLC không phản hồi Ack)";
                 break;
 
             case HandshakeState.Idle:
@@ -249,15 +283,19 @@ public sealed partial class ToolEditorViewModel : ObservableObject
                 break;
         }
 
-        bool isNonBlocking = _handshakeStateMachine?.NonBlockingMode ?? false;
         string modeSuffix = isNonBlocking ? " [Non-blocking Queue]" : "";
-        HandshakeStatusBarSummary = $"🤝 PLC: {plcId} ({stateDesc}{modeSuffix}) | RDY:{(bitRdy ? 1 : 0)} BSY:{(bitBsy ? 1 : 0)} DON:{(bitDon ? 1 : 0)} ACK:{(bitAck ? 1 : 0)}";
+        string summaryAck = hasAckTag ? $"ACK:{(bitAck ? 1 : 0)}" : "ACK:--";
+        HandshakeStatusBarSummary = $"🤝 PLC: {plcId} ({stateDesc}{modeSuffix}) | RDY:{(bitRdy ? 1 : 0)} BSY:{(bitBsy ? 1 : 0)} DON:{(bitDon ? 1 : 0)} {summaryAck}";
+
+        string ackToolTipText = hasAckTag
+            ? $"• [X] PLC Ack      ({ackTag}) : {(bitAck ? "ON (1) — PLC đã chốt" : "OFF (0)")}\n"
+            : $"• [X] PLC Ack                 : Bỏ qua (Chế độ Non-blocking - Không chờ Ack)\n";
 
         HandshakeStatusToolTip =
             $"🤝 CHU TRÌNH BẮT TAY CÔNG NGHIỆP {(isNonBlocking ? "NON-BLOCKING HÀNG ĐỢI 20 NẤC" : "DETERMINISTIC 24/7")}\n" +
             $"──────────────────────────────────────────────────\n" +
             $"• PLC Mục Tiêu : {plcId} (Đã Kết Nối - Online)\n" +
-            $"• Chế Độ Bắt Tay: {(isNonBlocking ? "⚡ Bất đồng bộ (Không chờ Ack - Băng tải chạy liên tục)" : "Đồng bộ chờ Ack")}\n" +
+            $"• Chế Độ Bắt Tay: {(isNonBlocking ? "⚡ Bất đồng bộ (Không chờ Ack - Băng tải chạy liên tục)" : (hasAckTag ? "Đồng bộ chờ Ack" : "Non-blocking (Bỏ Ack)"))}\n" +
             $"• Trạng Thái   : {stateDesc}\n" +
             $"• Điểm Ra Chỉ Định: Nấc {_handshakeStateMachine?.TargetStopStationIndex ?? 10} / 20 (M200..M219)\n" +
             $"• Timeout Chờ  : {_handshakeStateMachine?.HandshakeTimeoutMs ?? 500} ms\n" +
@@ -266,7 +304,7 @@ public sealed partial class ToolEditorViewModel : ObservableObject
             $"• [Y] Vision Ready ({rdyTag}) : {(bitRdy ? "ON (1) — Sẵn sàng chụp" : "OFF (0)")}\n" +
             $"• [Y] Vision Busy  ({bsyTag}) : {(bitBsy ? "ON (1) — Đang đo" : "OFF (0)")}\n" +
             $"• [Y] Vision Done  ({donTag}) : {(bitDon ? "ON (1) — Đo xong" : "OFF (0)")} [{_handshakeStateMachine?.DoneSignalType}]\n" +
-            $"• [X] PLC Ack      ({ackTag}) : {(bitAck ? "ON (1) — PLC đã chốt" : "OFF (0)")}\n" +
+            ackToolTipText +
             $"• [Y] Vision Pass  ({passTag}) : {(bitPass ? "ON (1) — ĐẠT" : "OFF (0)")} [{_handshakeStateMachine?.PassSignalType}]\n" +
             $"• [Y] Vision NG    ({ngTag}) : {(bitNg ? "ON (1) — LỖI" : "OFF (0)")} [{_handshakeStateMachine?.NgSignalType}]\n" +
             $"──────────────────────────────────────────────────\n" +

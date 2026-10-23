@@ -6,6 +6,7 @@
              xmlns:controls="clr-namespace:VisionInspectionApp.UI.Controls"
              xmlns:models="clr-namespace:VisionInspectionApp.Models;assembly=VisionInspectionApp.Models"
              xmlns:converters="clr-namespace:VisionInspectionApp.UI.Converters"
+             xmlns:hmiViews="clr-namespace:VisionInspectionApp.UI.Views.HMI"
              mc:Ignorable="d"
              Focusable="True"
              Foreground="{DynamicResource TextBrush}">
@@ -132,6 +133,13 @@
                 </Button>
                 <Button Command="{Binding OpenInspectionLogCommand}" Margin="0,0,4,0" Padding="8,4" Background="#00897B" Foreground="White" BorderThickness="0" ToolTip="Mở lịch sử kiểm tra và thống kê SPC/CPK">
                     <StackPanel Orientation="Horizontal"><TextBlock Text="📊" Margin="0,0,5,0"/><TextBlock Text="Lịch sử / SPC"/></StackPanel>
+                </Button>
+                <!-- Nút Ẩn / Hiện HMI giám sát (hàng dưới cột Preview) -->
+                <Button Command="{Binding ToggleHmiPanelVisibilityCommand}" Margin="0,0,4,0" Padding="8,4" Background="{Binding HmiPanelToggleButtonBackground}" Foreground="White" BorderThickness="0" ToolTip="Ẩn / Hiện màn hình HMI giám sát ở hàng dưới cột Preview">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="🖥️" Margin="0,0,5,0"/>
+                        <TextBlock Text="{Binding HmiPanelToggleButtonText}"/>
+                    </StackPanel>
                 </Button>
                 <Button Command="{Binding DataContext.CloseJobCommand, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Margin="0,0,4,0" Padding="8,4" Background="#C62828" Foreground="White" BorderThickness="0" ToolTip="Đóng Job đang mở (Ctrl+F4)">
                     <StackPanel Orientation="Horizontal"><TextBlock Text="✖" Margin="0,0,5,0"/><TextBlock Text="Đóng Job"/></StackPanel>
@@ -520,7 +528,7 @@
                                 <TextBlock Text="DON" FontSize="8.5" FontWeight="Bold" Foreground="{Binding HandshakeDonForeBrush}"/>
                             </Border>
                             <!-- ACK (PLC Ack) -->
-                            <Border Background="{Binding HandshakeAckBrush}" CornerRadius="2" Padding="3,0.5" Margin="1,0" ToolTip="PLC Ack Tag (X1/M11)">
+                            <Border Background="{Binding HandshakeAckBrush}" CornerRadius="2" Padding="3,0.5" Margin="1,0" ToolTip="{Binding HandshakeAckToolTip}">
                                 <TextBlock Text="ACK" FontSize="8.5" FontWeight="Bold" Foreground="{Binding HandshakeAckForeBrush}"/>
                             </Border>
                         </StackPanel>
@@ -5176,89 +5184,183 @@
             <GridSplitter Grid.Column="3" Width="4" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Background="{DynamicResource DarkBorderBrush}"
                           Visibility="{Binding IsCanvasColumnVisible, Converter={StaticResource BoolToVis}}" />
 
-            <!-- Column 4: Single Image Preview Box -->
-            <Border Grid.Column="4" BorderBrush="{DynamicResource DarkBorderBrush}" BorderThickness="1" Padding="8">
-                <Grid>
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto" />
-                        <RowDefinition Height="Auto" />
-                        <RowDefinition Height="*" />
-                    </Grid.RowDefinitions>
+            <!-- Column 4: Split Preview & HMI Container (2 Hàng: Hàng trên Preview, Hàng dưới HMI) -->
+            <Grid Grid.Column="4">
+                <Grid.RowDefinitions>
+                    <!-- Hàng trên: Preview Image hiện tại -->
+                    <RowDefinition Height="{Binding PreviewImageRowHeight, Mode=TwoWay}" MinHeight="120" />
+                    <!-- GridSplitter ngăn cách giữa Preview và HMI -->
+                    <RowDefinition Height="Auto" />
+                    <!-- Hàng dưới: Màn hình HMI được chọn -->
+                    <RowDefinition Height="{Binding HmiPanelRowHeight, Mode=TwoWay}" />
+                </Grid.RowDefinitions>
 
-                    <Grid Grid.Row="0" Margin="0,0,0,6">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="Auto" />
-                        </Grid.ColumnDefinitions>
+                <!-- HÀNG TRÊN: PREVIEW IMAGE HIỆN TẠI -->
+                <Border Grid.Row="0" BorderBrush="{DynamicResource DarkBorderBrush}" BorderThickness="1" Padding="8">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                        </Grid.RowDefinitions>
 
-                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                            <TextBlock FontWeight="Bold" FontSize="13" Foreground="{DynamicResource TextBrush}">
-                                <TextBlock.Style>
-                                    <Style TargetType="TextBlock">
-                                        <Setter Property="Text" Value="{Binding SelectedNode.RefName, StringFormat='📌 Preview: {0}'}" />
-                                        <Style.Triggers>
-                                            <DataTrigger Binding="{Binding IsResultViewNode}" Value="True">
-                                                <Setter Property="Text" Value="📊 Preview: Result View (Final Output)" />
-                                            </DataTrigger>
-                                            <DataTrigger Binding="{Binding SelectedNode}" Value="{x:Null}">
-                                                <Setter Property="Text" Value="📌 Preview" />
-                                            </DataTrigger>
-                                        </Style.Triggers>
-                                    </Style>
-                                </TextBlock.Style>
-                            </TextBlock>
-                        </StackPanel>
+                        <Grid Grid.Row="0" Margin="0,0,0,6">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
 
-                        <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
-                            <ToggleButton Content="▦" IsChecked="{Binding IsCanvasColumnVisible, Mode=TwoWay}" Margin="0,0,6,0" Padding="0" Width="26" Height="24" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource TextBrush}" ToolTip="Ẩn hoặc hiện cột Canvas" VerticalAlignment="Center" />
-                            <ToggleButton Content="▤" IsChecked="{Binding IsDebugColumnVisible, Mode=TwoWay}" Margin="0,0,10,0" Padding="0" Width="26" Height="24" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource TextBrush}" ToolTip="Ẩn hoặc hiện cột Debug" VerticalAlignment="Center" />
-                            <CheckBox Content="Render Canvas" IsChecked="{Binding EnableCanvasRendering, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,10,0" FontWeight="SemiBold" VerticalAlignment="Center" ToolTip="Bật/Tắt hoàn toàn việc chuyển đổi và vẽ ảnh + overlay lên Canvas (tối đa hóa hiệu năng cho ảnh 20MP)" />
-                            <CheckBox Content="Show Results" IsChecked="{Binding ShowResultOverlay, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,10,0" VerticalAlignment="Center" />
-                            <CheckBox Content="Show ROI" IsChecked="{Binding ShowRoisInSelectedPreview, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,10,0" VerticalAlignment="Center" />
-                            <CheckBox Content="Ảnh gốc" IsChecked="{Binding IsOriginalQualityPreview, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,10,0" FontWeight="SemiBold" VerticalAlignment="Center" ToolTip="Chuyển đổi giữa Preview nguyên gốc (100% độ phân giải, sắc nét khi zoom) và Preview giảm chất lượng (tối ưu hiệu năng, mượt mà)" />
-                            <ToggleButton Content="🖐️ Pan PDF" IsChecked="{Binding ImageSource_PdfIsPanDragEnabled, Mode=TwoWay}" Visibility="{Binding ImageSource_IsPdf, Converter={StaticResource BoolToVis}}" Margin="0,0,10,0" Padding="6,1" Height="24" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource TextBrush}" ToolTip="Kéo chuột trực tiếp trên Canvas xem trước để Pan vùng hiển thị PDF (Esc để hủy)" VerticalAlignment="Center" />
-                            <Button Content="🎯 Fit View" Height="24" Padding="8,0" Click="BtnFitImagePreview_Click" Background="{DynamicResource ButtonBackgroundBrush}" Foreground="{DynamicResource TextBrush}" BorderBrush="{DynamicResource DarkBorderBrush}" FontWeight="SemiBold" ToolTip="Tự động cân chỉnh (Auto Fit) ảnh vừa vặn toàn bộ với khung Preview" VerticalAlignment="Center" />
-                        </StackPanel>
-                    </Grid>
-
-                    <!-- Banner trạng thái Xem lại ảnh lịch sử (OK/NG) từ thanh 20 nấc -->
-                    <Border Grid.Row="1" Background="#26F59E0B" BorderBrush="#F59E0B" BorderThickness="1" CornerRadius="6" Padding="10,6" Margin="0,0,0,6"
-                            Visibility="{Binding IsViewingHistoricalRecentPart, Converter={StaticResource BoolToVis}}">
-                        <DockPanel LastChildFill="True">
-                            <StackPanel Orientation="Horizontal" DockPanel.Dock="Right">
-                                <Button Content="📁 Mở thư mục ảnh" Command="{Binding OpenRecentPartImageFolderCommand}"
-                                        Margin="0,0,8,0" Padding="8,3" FontSize="11" FontWeight="SemiBold"
-                                        Background="{DynamicResource ButtonBackgroundBrush}" Foreground="{DynamicResource TextBrush}"
-                                        BorderBrush="{DynamicResource BorderBrush}"
-                                        ToolTip="Mở thư mục chứa ảnh chụp của con hàng này"/>
-                                <Button Content="✕ Quay lại Live" Command="{Binding ExitRecentPartViewCommand}"
-                                        Padding="10,3" FontSize="11" FontWeight="Bold"
-                                        Background="#DC2626" Foreground="White" BorderThickness="0"
-                                        ToolTip="Thoát xem lại ảnh lịch sử và quay về giám sát Live camera"/>
-                            </StackPanel>
                             <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                <TextBlock Text="🔍 " FontSize="13" VerticalAlignment="Center" Margin="0,0,4,0"/>
-                                <TextBlock Text="{Binding HistoricalViewingStatusText}" FontWeight="SemiBold" FontSize="11.5"
-                                           Foreground="{DynamicResource TextBrush}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                                <TextBlock FontWeight="Bold" FontSize="13" Foreground="{DynamicResource TextBrush}">
+                                    <TextBlock.Style>
+                                        <Style TargetType="TextBlock">
+                                            <Setter Property="Text" Value="{Binding SelectedNode.RefName, StringFormat='📌 Preview: {0}'}" />
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding IsResultViewNode}" Value="True">
+                                                    <Setter Property="Text" Value="📊 Preview: Result View (Final Output)" />
+                                                </DataTrigger>
+                                                <DataTrigger Binding="{Binding SelectedNode}" Value="{x:Null}">
+                                                    <Setter Property="Text" Value="📌 Preview" />
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                </TextBlock>
                             </StackPanel>
-                        </DockPanel>
-                    </Border>
 
-                    <Border Grid.Row="2" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" Background="Transparent">
-                        <controls:ImageViewerControl x:Name="PreviewImageViewer"
-                                                   ImageSource="{Binding SelectedNodePreviewImage}"
-                                                   OverlayItems="{Binding SelectedNodeOverlayItems}"
-                                                   EnableRoiEditing="{Binding EnableRoiEditingInPreview}" ActiveRoiLabel="{Binding ActiveRoiLabel, Mode=TwoWay}"
-                                                   EnablePdfPan="{Binding ImageSource_IsPdfPanActive}"
-                                                   PdfPanChangedCommand="{Binding ImageSource_PdfPanDragCommand}"
-                                                   RoiSelectedCommand="{Binding RoiSelectedCommand}"
-                                                   PointClickedCommand="{Binding PointClickedCommand}"
-                                                   PointDoubleClickedCommand="{Binding PointDoubleClickedCommand}"
-                                                   RoiEditedCommand="{Binding RoiEditedCommand}"
-                                                   RoiDeletedCommand="{Binding RoiDeletedCommand}" />
-                    </Border>
-                </Grid>
-            </Border>
+                            <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                                <ToggleButton Content="▦" IsChecked="{Binding IsCanvasColumnVisible, Mode=TwoWay}" Margin="0,0,6,0" Padding="0" Width="26" Height="24" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource TextBrush}" ToolTip="Ẩn hoặc hiện cột Canvas" VerticalAlignment="Center" />
+                                <ToggleButton Content="▤" IsChecked="{Binding IsDebugColumnVisible, Mode=TwoWay}" Margin="0,0,10,0" Padding="0" Width="26" Height="24" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource TextBrush}" ToolTip="Ẩn hoặc hiện cột Debug" VerticalAlignment="Center" />
+                                <CheckBox Content="Render Canvas" IsChecked="{Binding EnableCanvasRendering, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,10,0" FontWeight="SemiBold" VerticalAlignment="Center" ToolTip="Bật/Tắt hoàn toàn việc chuyển đổi và vẽ ảnh + overlay lên Canvas (tối đa hóa hiệu năng cho ảnh 20MP)" />
+                                <CheckBox Content="Show Results" IsChecked="{Binding ShowResultOverlay, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,10,0" VerticalAlignment="Center" />
+                                <CheckBox Content="Show ROI" IsChecked="{Binding ShowRoisInSelectedPreview, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,10,0" VerticalAlignment="Center" />
+                                <CheckBox Content="Ảnh gốc" IsChecked="{Binding IsOriginalQualityPreview, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,10,0" FontWeight="SemiBold" VerticalAlignment="Center" ToolTip="Chuyển đổi giữa Preview nguyên gốc (100% độ phân giải, sắc nét khi zoom) và Preview giảm chất lượng (tối ưu hiệu năng, mượt mà)" />
+                                <ToggleButton Content="🖐️ Pan PDF" IsChecked="{Binding ImageSource_PdfIsPanDragEnabled, Mode=TwoWay}" Visibility="{Binding ImageSource_IsPdf, Converter={StaticResource BoolToVis}}" Margin="0,0,10,0" Padding="6,1" Height="24" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource TextBrush}" ToolTip="Kéo chuột trực tiếp trên Canvas xem trước để Pan vùng hiển thị PDF (Esc để hủy)" VerticalAlignment="Center" />
+                                <Button Content="🎯 Fit View" Height="24" Padding="8,0" Click="BtnFitImagePreview_Click" Background="{DynamicResource ButtonBackgroundBrush}" Foreground="{DynamicResource TextBrush}" BorderBrush="{DynamicResource DarkBorderBrush}" FontWeight="SemiBold" ToolTip="Tự động cân chỉnh (Auto Fit) ảnh vừa vặn toàn bộ với khung Preview" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Grid>
+
+                        <!-- Banner trạng thái Xem lại ảnh lịch sử (OK/NG) từ thanh 20 nấc -->
+                        <Border Grid.Row="1" Background="#26F59E0B" BorderBrush="#F59E0B" BorderThickness="1" CornerRadius="6" Padding="10,6" Margin="0,0,0,6"
+                                Visibility="{Binding IsViewingHistoricalRecentPart, Converter={StaticResource BoolToVis}}">
+                            <DockPanel LastChildFill="True">
+                                <StackPanel Orientation="Horizontal" DockPanel.Dock="Right">
+                                    <Button Content="📁 Mở thư mục ảnh" Command="{Binding OpenRecentPartImageFolderCommand}"
+                                            Margin="0,0,8,0" Padding="8,3" FontSize="11" FontWeight="SemiBold"
+                                            Background="{DynamicResource ButtonBackgroundBrush}" Foreground="{DynamicResource TextBrush}"
+                                            BorderBrush="{DynamicResource BorderBrush}"
+                                            ToolTip="Mở thư mục chứa ảnh chụp của con hàng này"/>
+                                    <Button Content="✕ Quay lại Live" Command="{Binding ExitRecentPartViewCommand}"
+                                            Padding="10,3" FontSize="11" FontWeight="Bold"
+                                            Background="#DC2626" Foreground="White" BorderThickness="0"
+                                            ToolTip="Thoát xem lại ảnh lịch sử và quay về giám sát Live camera"/>
+                                </StackPanel>
+                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                    <TextBlock Text="🔍 " FontSize="13" VerticalAlignment="Center" Margin="0,0,4,0"/>
+                                    <TextBlock Text="{Binding HistoricalViewingStatusText}" FontWeight="SemiBold" FontSize="11.5"
+                                               Foreground="{DynamicResource TextBrush}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                                </StackPanel>
+                            </DockPanel>
+                        </Border>
+
+                        <Border Grid.Row="2" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" Background="Transparent">
+                            <controls:ImageViewerControl x:Name="PreviewImageViewer"
+                                                       ImageSource="{Binding SelectedNodePreviewImage}"
+                                                       OverlayItems="{Binding SelectedNodeOverlayItems}"
+                                                       EnableRoiEditing="{Binding EnableRoiEditingInPreview}" ActiveRoiLabel="{Binding ActiveRoiLabel, Mode=TwoWay}"
+                                                       EnablePdfPan="{Binding ImageSource_IsPdfPanActive}"
+                                                       PdfPanChangedCommand="{Binding ImageSource_PdfPanDragCommand}"
+                                                       RoiSelectedCommand="{Binding RoiSelectedCommand}"
+                                                       PointClickedCommand="{Binding PointClickedCommand}"
+                                                       PointDoubleClickedCommand="{Binding PointDoubleClickedCommand}"
+                                                       RoiEditedCommand="{Binding RoiEditedCommand}"
+                                                       RoiDeletedCommand="{Binding RoiDeletedCommand}" />
+                        </Border>
+                    </Grid>
+                </Border>
+
+                <!-- GRIDSPLITTER NGĂN CÁCH GIỮA PREVIEW VÀ HMI -->
+                <GridSplitter Grid.Row="1" Height="5" HorizontalAlignment="Stretch" VerticalAlignment="Center" Background="{DynamicResource DarkBorderBrush}"
+                              Visibility="{Binding IsHmiPanelVisible, Converter={StaticResource BoolToVis}}" />
+
+                <!-- HÀNG DƯỚI: MÀN HÌNH HMI ĐƯỢC CHỌN (Persisted, tương tác thời gian thực với PLC) -->
+                <Border Grid.Row="2" BorderBrush="{DynamicResource DarkBorderBrush}" BorderThickness="1" Padding="6"
+                        Visibility="{Binding IsHmiPanelVisible, Converter={StaticResource BoolToVis}}"
+                        Background="{DynamicResource PanelBackgroundBrush}">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                        </Grid.RowDefinitions>
+
+                        <!-- Header HMI Toolbar -->
+                        <Border Grid.Row="0" Margin="0,0,0,6" Padding="6,4" Background="{DynamicResource HeaderBackgroundBrush}" CornerRadius="4" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1">
+                            <DockPanel LastChildFill="True">
+                                <!-- Right Buttons -->
+                                <StackPanel Orientation="Horizontal" DockPanel.Dock="Right" VerticalAlignment="Center">
+                                    <Button Content="📂 Chọn .HMI" Command="{Binding BrowseHmiFileCommand}" Margin="0,0,4,0" Padding="8,3" FontSize="11" FontWeight="SemiBold" ToolTip="Chọn tệp thiết kế HMI (.hmi) khác từ máy tính" />
+                                    <Button Content="🔄 Tải lại" Command="{Binding ReloadHmiCommand}" Margin="0,0,4,0" Padding="8,3" FontSize="11" ToolTip="Tải lại giao diện HMI từ đĩa" />
+                                    <Button Content="🛠️ Thiết Kế" Command="{Binding OpenHmiManagerCommand}" Margin="0,0,4,0" Padding="8,3" FontSize="11" Background="#6A1B9A" Foreground="White" BorderThickness="0" ToolTip="Mở cửa sổ HMI Designer để chỉnh sửa giao diện &amp; gán địa chỉ PLC" />
+                                    <Button Content="✕" Command="{Binding CloseHmiPanelCommand}" Padding="6,2" FontSize="11" FontWeight="Bold" Background="#C62828" Foreground="White" BorderThickness="0" ToolTip="Ẩn hàng HMI giám sát" />
+                                </StackPanel>
+
+                                <!-- Left Title & Quick File Selector -->
+                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                    <TextBlock Text="🖥️ HMI:" FontWeight="Bold" FontSize="12" Foreground="{DynamicResource TextBrush}" VerticalAlignment="Center" Margin="0,0,6,0" />
+                                    <ComboBox ItemsSource="{Binding AvailableHmiFileItems}"
+                                              SelectedItem="{Binding SelectedHmiFileItem, Mode=TwoWay}"
+                                              DisplayMemberPath="DisplayName"
+                                              Width="200" MaxDropDownHeight="200" FontSize="11" VerticalAlignment="Center"
+                                              ToolTip="Chọn nhanh các tệp HMI có sẵn trong hệ thống" />
+                                    <Border Margin="8,0,0,0" Background="#1510B981" BorderBrush="#10B981" BorderThickness="1" CornerRadius="4" Padding="6,2" VerticalAlignment="Center">
+                                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                            <TextBlock Text="🟢 " FontSize="9" VerticalAlignment="Center" />
+                                            <TextBlock Text="LIVE (RUN)" FontWeight="Bold" FontSize="10" Foreground="#10B981" VerticalAlignment="Center" />
+                                        </StackPanel>
+                                    </Border>
+                                </StackPanel>
+                            </DockPanel>
+                        </Border>
+
+                        <!-- Body HMI Canvas Display -->
+                        <Border Grid.Row="1" Background="{Binding HmiMonitorScreenBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="4">
+                            <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto">
+                                <Viewbox Stretch="Uniform" Margin="4">
+                                    <Canvas Width="{Binding HmiMonitorViewModel.ScreenConfig.Width}"
+                                            Height="{Binding HmiMonitorViewModel.ScreenConfig.Height}"
+                                            Background="Transparent">
+                                        <ItemsControl ItemsSource="{Binding HmiMonitorViewModel.Controls}"
+                                                      Width="{Binding HmiMonitorViewModel.ScreenConfig.Width}"
+                                                      Height="{Binding HmiMonitorViewModel.ScreenConfig.Height}">
+                                            <ItemsControl.ItemsPanel>
+                                                <ItemsPanelTemplate>
+                                                    <Canvas Width="{Binding DataContext.HmiMonitorViewModel.ScreenConfig.Width, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                            Height="{Binding DataContext.HmiMonitorViewModel.ScreenConfig.Height, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                            Background="Transparent" />
+                                                </ItemsPanelTemplate>
+                                            </ItemsControl.ItemsPanel>
+                                            <ItemsControl.ItemContainerStyle>
+                                                <Style TargetType="ContentPresenter">
+                                                    <Setter Property="Canvas.Left" Value="{Binding Model.X}" />
+                                                    <Setter Property="Canvas.Top" Value="{Binding Model.Y}" />
+                                                    <Setter Property="Canvas.ZIndex" Value="{Binding Model.ZIndex}" />
+                                                    <Setter Property="Width" Value="{Binding Model.Width}" />
+                                                    <Setter Property="Height" Value="{Binding Model.Height}" />
+                                                </Style>
+                                            </ItemsControl.ItemContainerStyle>
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate>
+                                                    <hmiViews:HmiControlView />
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                    </Canvas>
+                                </Viewbox>
+                            </ScrollViewer>
+                        </Border>
+                    </Grid>
+                </Border>
+            </Grid>
 
             <!-- Column 5: GridSplitter -->
             <GridSplitter Grid.Column="5" Width="4" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Background="{DynamicResource DarkBorderBrush}" />

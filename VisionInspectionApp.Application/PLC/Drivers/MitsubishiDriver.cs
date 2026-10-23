@@ -37,6 +37,19 @@ public sealed class MitsubishiDriver : IPlcDriver
 
     private ushort _targetIo = 0x03FF;
 
+    private void UpdateConfigStatus(PlcConnectionState state, string? cpuName = null)
+    {
+        try
+        {
+            if (cpuName != null) Config.CpuName = cpuName;
+            Config.State = state;
+        }
+        catch
+        {
+            // Bảo vệ an toàn tuyệt đối không để ngoại lệ từ UI observer làm đứt kết nối socket PLC
+        }
+    }
+
     public async Task<bool> ConnectAsync(CancellationToken cancellationToken = default)
     {
         await _lock.WaitAsync(cancellationToken);
@@ -46,8 +59,7 @@ public sealed class MitsubishiDriver : IPlcDriver
 
             if (ForceSimulationMode)
             {
-                Config.CpuName = "Simulated MC Protocol";
-                Config.State = PlcConnectionState.Connected;
+                UpdateConfigStatus(PlcConnectionState.Connected, "Simulated MC Protocol");
                 return true;
             }
 
@@ -67,14 +79,12 @@ public sealed class MitsubishiDriver : IPlcDriver
                 if (string.IsNullOrWhiteSpace(cpuModel))
                 {
                     // Socket TCP mở được nhưng PLC không phản hồi gói tin MC Protocol (Port 5000 đang là MELSOFT port)
-                    Config.CpuName = $"Port {Config.Port} không phản hồi MC Protocol 3E";
-                    Config.State = PlcConnectionState.Error;
+                    UpdateConfigStatus(PlcConnectionState.Error, $"Port {Config.Port} không phản hồi MC Protocol 3E");
                     CleanupSocket();
                     return false;
                 }
 
-                Config.CpuName = cpuModel;
-                Config.State = PlcConnectionState.Connected;
+                UpdateConfigStatus(PlcConnectionState.Connected, cpuModel);
                 return true;
             }
             catch (Exception ex)
@@ -82,13 +92,11 @@ public sealed class MitsubishiDriver : IPlcDriver
                 CleanupSocket();
                 if (ForceSimulationMode)
                 {
-                    Config.CpuName = "Simulated MC Protocol";
-                    Config.State = PlcConnectionState.Connected;
+                    UpdateConfigStatus(PlcConnectionState.Connected, "Simulated MC Protocol");
                     return true;
                 }
 
-                Config.CpuName = $"Lỗi kết nối: {ex.Message}";
-                Config.State = PlcConnectionState.Error;
+                UpdateConfigStatus(PlcConnectionState.Error, $"Lỗi kết nối: {ex.Message}");
                 return false;
             }
         }
@@ -110,7 +118,7 @@ public sealed class MitsubishiDriver : IPlcDriver
         try
         {
             CleanupSocket();
-            Config.State = PlcConnectionState.Disconnected;
+            UpdateConfigStatus(PlcConnectionState.Disconnected, string.Empty);
         }
         finally
         {
@@ -156,25 +164,37 @@ public sealed class MitsubishiDriver : IPlcDriver
                 {
                     foreach (var tag in tagList)
                     {
-                        var rawValue = await ReadMcProtocolTagAsync(tag, cancellationToken);
-                        result[tag.Name] = ApplyScale(rawValue, tag.Scale);
+                        try
+                        {
+                            var rawValue = await ReadMcProtocolTagAsync(tag, cancellationToken);
+                            result[tag.Name] = ApplyScale(rawValue, tag.Scale);
+                        }
+                        catch (Exception ex) when (!(ex is SocketException || ex is IOException))
+                        {
+                            result[tag.Name] = tag.DefaultValue;
+                        }
                     }
                     return result;
                 }
-                catch
+                catch (Exception ex) when (ex is SocketException || ex is IOException || _tcpClient?.Connected != true)
                 {
                     CleanupSocket();
                     if (!ForceSimulationMode)
                     {
-                        Config.State = PlcConnectionState.Error;
+                        UpdateConfigStatus(PlcConnectionState.Error, $"Mất kết nối mạng: {ex.Message}");
                         return result;
                     }
+                }
+                catch
+                {
+                    // Lỗi phân tích tag đơn lẻ: Không hủy kết nối Socket vật lý!
+                    return result;
                 }
             }
 
             if (!ForceSimulationMode)
             {
-                Config.State = PlcConnectionState.Error;
+                UpdateConfigStatus(PlcConnectionState.Error);
                 return result;
             }
 
@@ -214,25 +234,36 @@ public sealed class MitsubishiDriver : IPlcDriver
                 {
                     foreach (var (tag, val) in values)
                     {
-                        await WriteMcProtocolTagAsync(tag, val, cancellationToken);
-                        _simulatedMemory[tag.Address] = val;
+                        try
+                        {
+                            await WriteMcProtocolTagAsync(tag, val, cancellationToken);
+                            _simulatedMemory[tag.Address] = val;
+                        }
+                        catch (Exception ex) when (!(ex is SocketException || ex is IOException))
+                        {
+                            // Bỏ qua lỗi ghi tag đơn lẻ, không làm gián đoạn các tag khác
+                        }
                     }
                     return true;
                 }
-                catch
+                catch (Exception ex) when (ex is SocketException || ex is IOException || _tcpClient?.Connected != true)
                 {
                     CleanupSocket();
                     if (!ForceSimulationMode)
                     {
-                        Config.State = PlcConnectionState.Error;
+                        UpdateConfigStatus(PlcConnectionState.Error, $"Mất kết nối mạng khi ghi: {ex.Message}");
                         return false;
                     }
+                }
+                catch
+                {
+                    return false;
                 }
             }
 
             if (!ForceSimulationMode)
             {
-                Config.State = PlcConnectionState.Error;
+                UpdateConfigStatus(PlcConnectionState.Error);
                 return false;
             }
 
@@ -465,84 +496,43 @@ public sealed class MitsubishiDriver : IPlcDriver
 
         if (isBit)
         {
-            // === ĐỌC BIT DEVICE ===
-            // Bước 1: Thử đọc Bit đơn lẻ (Command 0x0401, Subcommand 0x0001 - Bit units)
-            try
+            // === ĐỌC BIT DEVICE: Command 0x0401, Subcommand 0x0001 (Bit units) ===
+            byte[] requestPacket = Build3EHeader(command: 0x0401, subcommand: 0x0001, dataLength: 6);
+            byte[] payload = new byte[6];
+            payload[0] = (byte)(headNumber & 0xFF);
+            payload[1] = (byte)((headNumber >> 8) & 0xFF);
+            payload[2] = (byte)((headNumber >> 16) & 0xFF);
+            payload[3] = deviceCode;
+            payload[4] = 0x01; // 1 point (bit)
+            payload[5] = 0x00;
+
+            byte[] fullPacket = CombineArrays(requestPacket, payload);
+            await _stream.WriteAsync(fullPacket, 0, fullPacket.Length, cancellationToken);
+
+            byte[] headerBuffer = new byte[11];
+            int readCount = await ReadExactAsync(_stream, headerBuffer, 0, 11, cancellationToken);
+            if (readCount < 11)
             {
-                byte[] requestPacket = Build3EHeader(command: 0x0401, subcommand: 0x0001, dataLength: 6);
-                byte[] payload = new byte[6];
-                payload[0] = (byte)(headNumber & 0xFF);
-                payload[1] = (byte)((headNumber >> 8) & 0xFF);
-                payload[2] = (byte)((headNumber >> 16) & 0xFF);
-                payload[3] = deviceCode;
-                payload[4] = 0x01; // 1 point (bit)
-                payload[5] = 0x00;
-
-                byte[] fullPacket = CombineArrays(requestPacket, payload);
-                await _stream.WriteAsync(fullPacket, 0, fullPacket.Length, cancellationToken);
-
-                byte[] headerBuffer = new byte[11];
-                int readCount = await ReadExactAsync(_stream, headerBuffer, 0, 11, cancellationToken);
-                if (readCount >= 11)
-                {
-                    ushort returnCode = (ushort)(headerBuffer[9] | (headerBuffer[10] << 8));
-                    if (returnCode == 0)
-                    {
-                        ushort dataLen = (ushort)(headerBuffer[7] | (headerBuffer[8] << 8));
-                        int payloadLen = dataLen - 2;
-                        if (payloadLen > 0)
-                        {
-                            byte[] dataBuffer = new byte[payloadLen];
-                            await ReadExactAsync(_stream, dataBuffer, 0, payloadLen, cancellationToken);
-                            bool bitValue = dataBuffer.Length > 0 && (dataBuffer[0] != 0);
-                            return bitValue;
-                        }
-                    }
-                }
+                throw new IOException($"MC Protocol response incomplete: received {readCount} bytes, expected 11");
             }
-            catch { }
 
-            // Bước 2: Fallback đọc khối Word bao quanh bit (Command 0x0401, Subcommand 0x0000 - Word units)
-            try
+            ushort returnCode = (ushort)(headerBuffer[9] | (headerBuffer[10] << 8));
+            ushort dataLen = (ushort)(headerBuffer[7] | (headerBuffer[8] << 8));
+            int payloadLen = Math.Max(0, dataLen - 2);
+            byte[] dataBuffer = payloadLen > 0 ? new byte[payloadLen] : Array.Empty<byte>();
+            if (payloadLen > 0)
             {
-                int wordHeadNumber = (headNumber / 16) * 16;
-                int bitOffset = headNumber - wordHeadNumber;
-
-                byte[] requestPacket = Build3EHeader(command: 0x0401, subcommand: 0x0000, dataLength: 6);
-                byte[] payload = new byte[6];
-                payload[0] = (byte)(wordHeadNumber & 0xFF);
-                payload[1] = (byte)((wordHeadNumber >> 8) & 0xFF);
-                payload[2] = (byte)((wordHeadNumber >> 16) & 0xFF);
-                payload[3] = deviceCode;
-                payload[4] = 0x01; // 1 word
-                payload[5] = 0x00;
-
-                byte[] fullPacket = CombineArrays(requestPacket, payload);
-                await _stream.WriteAsync(fullPacket, 0, fullPacket.Length, cancellationToken);
-
-                byte[] headerBuffer = new byte[11];
-                int readCount = await ReadExactAsync(_stream, headerBuffer, 0, 11, cancellationToken);
-                if (readCount >= 11)
-                {
-                    ushort returnCode = (ushort)(headerBuffer[9] | (headerBuffer[10] << 8));
-                    if (returnCode == 0)
-                    {
-                        ushort dataLen = (ushort)(headerBuffer[7] | (headerBuffer[8] << 8));
-                        int payloadLen = dataLen - 2;
-                        if (payloadLen >= 2)
-                        {
-                            byte[] dataBuffer = new byte[payloadLen];
-                            await ReadExactAsync(_stream, dataBuffer, 0, payloadLen, cancellationToken);
-                            ushort wordVal = BitConverter.ToUInt16(dataBuffer, 0);
-                            bool bitValue = ((wordVal >> bitOffset) & 1) != 0;
-                            return bitValue;
-                        }
-                    }
-                }
+                await ReadExactAsync(_stream, dataBuffer, 0, payloadLen, cancellationToken);
             }
-            catch { }
 
-            return false;
+            if (returnCode == 0 && dataBuffer.Length > 0)
+            {
+                // Bit unit MC Protocol: 0x10 hoặc 0x01 là TRUE
+                bool bitValue = (dataBuffer[0] & 0x10) != 0 || (dataBuffer[0] & 0x01) != 0;
+                return bitValue;
+            }
+
+            return tag.DefaultValue ?? false;
         }
         else
         {
@@ -563,17 +553,21 @@ public sealed class MitsubishiDriver : IPlcDriver
 
             byte[] headerBuffer = new byte[11];
             int readCount = await ReadExactAsync(_stream, headerBuffer, 0, 11, cancellationToken);
-            if (readCount < 11) return tag.DefaultValue;
+            if (readCount < 11)
+            {
+                throw new IOException($"MC Protocol response incomplete: received {readCount} bytes, expected 11");
+            }
 
             ushort returnCode = (ushort)(headerBuffer[9] | (headerBuffer[10] << 8));
-            if (returnCode != 0) return tag.DefaultValue; // MC Protocol Error
-
             ushort dataLen = (ushort)(headerBuffer[7] | (headerBuffer[8] << 8));
-            int payloadLen = dataLen - 2;
-            if (payloadLen <= 0) return tag.DefaultValue;
+            int payloadLen = Math.Max(0, dataLen - 2);
+            byte[] dataBuffer = payloadLen > 0 ? new byte[payloadLen] : Array.Empty<byte>();
+            if (payloadLen > 0)
+            {
+                await ReadExactAsync(_stream, dataBuffer, 0, payloadLen, cancellationToken);
+            }
 
-            byte[] dataBuffer = new byte[payloadLen];
-            await ReadExactAsync(_stream, dataBuffer, 0, payloadLen, cancellationToken);
+            if (returnCode != 0) return tag.DefaultValue; // MC Protocol Error
 
             return DecodeDataBuffer(dataBuffer, tag.DataType);
         }
@@ -611,7 +605,19 @@ public sealed class MitsubishiDriver : IPlcDriver
             await _stream.WriteAsync(fullPacket, 0, fullPacket.Length, cancellationToken);
 
             byte[] respBuffer = new byte[11];
-            await ReadExactAsync(_stream, respBuffer, 0, 11, cancellationToken);
+            int readCount = await ReadExactAsync(_stream, respBuffer, 0, 11, cancellationToken);
+            if (readCount < 11)
+            {
+                throw new IOException($"MC Protocol write response incomplete: received {readCount} bytes, expected 11");
+            }
+
+            ushort dataLen = (ushort)(respBuffer[7] | (respBuffer[8] << 8));
+            int payloadLen = Math.Max(0, dataLen - 2);
+            if (payloadLen > 0)
+            {
+                byte[] drain = new byte[payloadLen];
+                await ReadExactAsync(_stream, drain, 0, payloadLen, cancellationToken);
+            }
         }
         else
         {
@@ -634,7 +640,19 @@ public sealed class MitsubishiDriver : IPlcDriver
             await _stream.WriteAsync(fullPacket, 0, fullPacket.Length, cancellationToken);
 
             byte[] respBuffer = new byte[11];
-            await ReadExactAsync(_stream, respBuffer, 0, 11, cancellationToken);
+            int readCount = await ReadExactAsync(_stream, respBuffer, 0, 11, cancellationToken);
+            if (readCount < 11)
+            {
+                throw new IOException($"MC Protocol write response incomplete: received {readCount} bytes, expected 11");
+            }
+
+            ushort dataLen = (ushort)(respBuffer[7] | (respBuffer[8] << 8));
+            int payloadLen = Math.Max(0, dataLen - 2);
+            if (payloadLen > 0)
+            {
+                byte[] drain = new byte[payloadLen];
+                await ReadExactAsync(_stream, drain, 0, payloadLen, cancellationToken);
+            }
         }
     }
 
@@ -820,7 +838,7 @@ public sealed class MitsubishiDriver : IPlcDriver
         while (totalRead < count)
         {
             int read = await stream.ReadAsync(buffer, offset + totalRead, count - totalRead, cancellationToken);
-            if (read == 0) break;
+            if (read == 0) throw new IOException("Remote PLC closed TCP socket stream (EOF)");
             totalRead += read;
         }
         return totalRead;

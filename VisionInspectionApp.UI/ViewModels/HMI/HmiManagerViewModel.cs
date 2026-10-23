@@ -250,6 +250,19 @@ public partial class HmiManagerViewModel : ObservableObject
         }
     }
 
+    private void DispatchOnUiThread(Action action)
+    {
+        if (System.Windows.Application.Current?.Dispatcher != null &&
+            !System.Windows.Application.Current.Dispatcher.CheckAccess())
+        {
+            System.Windows.Application.Current.Dispatcher.BeginInvoke(action);
+        }
+        else
+        {
+            action();
+        }
+    }
+
     public HmiManagerViewModel(IPlcManagerService? plcService = null)
     {
         _plcService = plcService;
@@ -261,24 +274,22 @@ public partial class HmiManagerViewModel : ObservableObject
             _plcService.OnTagChanged += PlcService_OnTagChanged;
             _plcService.Plcs.CollectionChanged += (s, e) =>
             {
-                RefreshAvailablePlcsAndTags();
+                DispatchOnUiThread(RefreshAvailablePlcsAndTags);
             };
             _plcService.Tags.CollectionChanged += (s, e) =>
             {
                 if (e.NewItems != null)
                 {
-                    foreach (PlcTag t in e.NewItems)
+                    DispatchOnUiThread(() =>
                     {
-                        if (!string.IsNullOrWhiteSpace(t.Name)) EnsureTagRegistered(t.Name);
-                        if (!string.IsNullOrWhiteSpace(t.Address)) EnsureTagRegistered(t.Address);
-                    }
+                        foreach (PlcTag t in e.NewItems)
+                        {
+                            if (!string.IsNullOrWhiteSpace(t.Name)) EnsureTagRegistered(t.Name);
+                            if (!string.IsNullOrWhiteSpace(t.Address)) EnsureTagRegistered(t.Address);
+                        }
+                    });
                 }
             };
-
-            if (!_plcService.IsPollingActive)
-            {
-                _ = _plcService.StartPollingAsync();
-            }
         }
 
         RefreshGlobalLibraryImages();
@@ -746,20 +757,15 @@ public partial class HmiManagerViewModel : ObservableObject
         StatusBrush = Brushes.DodgerBlue;
     }
 
-    [RelayCommand]
-    private void LoadHmiConfig()
+    public bool LoadFromFile(string filePath)
     {
-        var dlg = new OpenFileDialog
-        {
-            Filter = "HMI Design Files (*.hmi)|*.hmi|All Files (*.*)|*.*",
-            DefaultExt = ".hmi",
-            Title = "Mở tệp thiết kế HMI (.hmi)"
-        };
+        if (string.IsNullOrWhiteSpace(filePath) || !File.Exists(filePath))
+            return false;
 
-        if (dlg.ShowDialog() == true)
+        try
         {
-            CurrentFilePath = dlg.FileName;
-            var loadedConfig = HmiService.LoadHmiConfig(dlg.FileName);
+            CurrentFilePath = filePath;
+            var loadedConfig = HmiService.LoadHmiConfig(filePath);
 
             // BƯỚC QUAN TRỌNG: Đồng bộ trước toàn bộ PLC & Tags từ tệp HMI vừa nạp
             SyncPlcsAndTagsFromConfig(loadedConfig);
@@ -778,6 +784,29 @@ public partial class HmiManagerViewModel : ObservableObject
             OnPropertyChanged(nameof(ScreenConfig));
             StatusMessage = $"📂 Đã nạp tệp HMI: '{CurrentFileName}'";
             StatusBrush = Brushes.DodgerBlue;
+            return true;
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = $"❌ Lỗi khi nạp tệp HMI: {ex.Message}";
+            StatusBrush = Brushes.Red;
+            return false;
+        }
+    }
+
+    [RelayCommand]
+    private void LoadHmiConfig()
+    {
+        var dlg = new OpenFileDialog
+        {
+            Filter = "HMI Design Files (*.hmi)|*.hmi|All Files (*.*)|*.*",
+            DefaultExt = ".hmi",
+            Title = "Mở tệp thiết kế HMI (.hmi)"
+        };
+
+        if (dlg.ShowDialog() == true)
+        {
+            LoadFromFile(dlg.FileName);
         }
     }
 
@@ -829,7 +858,8 @@ public partial class HmiManagerViewModel : ObservableObject
     {
         if (!IsRunMode || e == null) return;
 
-        foreach (var ctrl in Controls)
+        var controlsCopy = Controls.ToArray();
+        foreach (var ctrl in controlsCopy)
         {
             ctrl.OnPlcTagUpdated(e.PlcId, e.TagName, e.NewValue);
         }

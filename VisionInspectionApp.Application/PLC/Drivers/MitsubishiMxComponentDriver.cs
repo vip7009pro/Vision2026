@@ -40,6 +40,19 @@ public sealed class MitsubishiMxComponentDriver : IPlcDriver
         Config = config ?? throw new ArgumentNullException(nameof(config));
     }
 
+    private void UpdateConfigStatus(PlcConnectionState state, string? cpuName = null)
+    {
+        try
+        {
+            if (cpuName != null) Config.CpuName = cpuName;
+            Config.State = state;
+        }
+        catch
+        {
+            // Bảo vệ an toàn tuyệt đối không để ngoại lệ từ UI observer làm đứt kết nối driver PLC
+        }
+    }
+
     public async Task<bool> ConnectAsync(CancellationToken cancellationToken = default)
     {
         using var timeoutCts = new CancellationTokenSource(8000);
@@ -51,7 +64,7 @@ public sealed class MitsubishiMxComponentDriver : IPlcDriver
         }
         catch
         {
-            Config.State = PlcConnectionState.Error;
+            UpdateConfigStatus(PlcConnectionState.Error);
             return false;
         }
 
@@ -61,8 +74,7 @@ public sealed class MitsubishiMxComponentDriver : IPlcDriver
 
             if (ForceSimulationMode)
             {
-                Config.CpuName = $"Simulated (St.{Config.LogicalStationNumber})";
-                Config.State = PlcConnectionState.Connected;
+                UpdateConfigStatus(PlcConnectionState.Connected, $"Simulated (St.{Config.LogicalStationNumber})");
                 return true;
             }
 
@@ -155,21 +167,18 @@ public sealed class MitsubishiMxComponentDriver : IPlcDriver
             var (success, cpuName, errMsg) = await _bridgeClient.ConnectAsync(Config.LogicalStationNumber, cancellationToken);
             if (success)
             {
-                Config.State = PlcConnectionState.Connected;
-                Config.CpuName = string.IsNullOrEmpty(cpuName) ? $"Mitsubishi PLC (St.{Config.LogicalStationNumber})" : cpuName;
+                UpdateConfigStatus(PlcConnectionState.Connected, string.IsNullOrEmpty(cpuName) ? $"Mitsubishi PLC (St.{Config.LogicalStationNumber})" : cpuName);
                 return true;
             }
             else
             {
-                Config.State = PlcConnectionState.Error;
-                Config.CpuName = errMsg ?? "Bridge Connection Failed";
+                UpdateConfigStatus(PlcConnectionState.Error, errMsg ?? "Bridge Connection Failed");
                 return false;
             }
         }
         catch (Exception ex)
         {
-            Config.State = PlcConnectionState.Error;
-            Config.CpuName = $"Bridge Error: {ex.Message}";
+            UpdateConfigStatus(PlcConnectionState.Error, $"Bridge Error: {ex.Message}");
             return false;
         }
     }
@@ -198,8 +207,7 @@ public sealed class MitsubishiMxComponentDriver : IPlcDriver
                 CleanupCom();
             }
 
-            Config.State = PlcConnectionState.Disconnected;
-            Config.CpuName = string.Empty;
+            UpdateConfigStatus(PlcConnectionState.Disconnected, string.Empty);
         }
         finally
         {

@@ -2,6 +2,7 @@ using System;
 using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
+using VisionInspectionApp.Models;
 
 namespace VisionInspectionApp.Application.PLC.Services;
 
@@ -28,6 +29,7 @@ public sealed class PlcHeartbeatWatchdog : IDisposable
     private object? _lastPlcValue;
     private long _lastPlcResponseTimestamp = Stopwatch.GetTimestamp();
 
+    public bool IsEnabled { get; set; } = false;
     public bool IsPlcAlive => _isPlcAlive;
     public string PlcId { get => _plcId; set => _plcId = value ?? "PLC1"; }
     public string VisionHeartbeatTagName { get => _visionHeartbeatTagName; set => _visionHeartbeatTagName = value ?? "Y0_VisionHeartbeat"; }
@@ -44,6 +46,24 @@ public sealed class PlcHeartbeatWatchdog : IDisposable
     {
         _plcManager = plcManager;
         _plcId = plcId;
+    }
+
+    /// <summary>
+    /// Đồng bộ cấu hình Heartbeat từ PlcHeartbeatConfig
+    /// </summary>
+    public void ApplyConfig(PlcHeartbeatConfig? config)
+    {
+        if (config == null) return;
+        bool hasValidTags = !string.IsNullOrWhiteSpace(config.VisionHeartbeatTagName) &&
+                            !string.IsNullOrWhiteSpace(config.PlcHeartbeatTagName);
+        IsEnabled = config.IsEnabled && hasValidTags;
+        PlcId = config.PlcId;
+        VisionHeartbeatTagName = config.VisionHeartbeatTagName;
+        PlcHeartbeatTagName = config.PlcHeartbeatTagName;
+        IntervalMs = config.IntervalMs;
+        TimeoutMs = config.TimeoutMs;
+        EnableEmergencyInterlock = config.EnableEmergencyInterlock;
+        EmergencyStopTagName = config.EmergencyStopTagName;
     }
 
     /// <summary>
@@ -66,34 +86,33 @@ public sealed class PlcHeartbeatWatchdog : IDisposable
 
         while (!token.IsCancellationRequested && await timer.WaitForNextTickAsync(token))
         {
-            if (_plcManager == null) continue;
+            if (!IsEnabled || _plcManager == null || 
+                string.IsNullOrWhiteSpace(_visionHeartbeatTagName) || 
+                string.IsNullOrWhiteSpace(_plcHeartbeatTagName))
+            {
+                continue;
+            }
 
             try
             {
                 // 1. Gửi tín hiệu Heartbeat từ Vision sang PLC (đảo bit 0 <-> 1)
-                if (!string.IsNullOrEmpty(_visionHeartbeatTagName))
-                {
-                    _heartbeatBit = !_heartbeatBit;
-                    await _plcManager.WriteTagValueAsync(_plcId, _visionHeartbeatTagName, _heartbeatBit, token);
-                }
+                _heartbeatBit = !_heartbeatBit;
+                await _plcManager.WriteTagValueAsync(_plcId, _visionHeartbeatTagName, _heartbeatBit, token);
 
                 // 2. Đọc tín hiệu Heartbeat từ PLC gửi về
-                if (!string.IsNullOrEmpty(_plcHeartbeatTagName))
+                var tagVal = _plcManager.GetTagValue(_plcId, _plcHeartbeatTagName);
+                var plcVal = tagVal?.CurrentValue;
+                if (plcVal != null)
                 {
-                    var tagVal = _plcManager.GetTagValue(_plcId, _plcHeartbeatTagName);
-                    var plcVal = tagVal?.CurrentValue;
-                    if (plcVal != null)
+                    if (_lastPlcValue == null || !plcVal.Equals(_lastPlcValue))
                     {
-                        if (_lastPlcValue == null || !plcVal.Equals(_lastPlcValue))
-                        {
-                            _lastPlcValue = plcVal;
-                            _lastPlcResponseTimestamp = Stopwatch.GetTimestamp();
+                        _lastPlcValue = plcVal;
+                        _lastPlcResponseTimestamp = Stopwatch.GetTimestamp();
 
-                            if (!_isPlcAlive)
-                            {
-                                _isPlcAlive = true;
-                                OnPlcHealthChanged?.Invoke(this, true);
-                            }
+                        if (!_isPlcAlive)
+                        {
+                            _isPlcAlive = true;
+                            OnPlcHealthChanged?.Invoke(this, true);
                         }
                     }
                 }
@@ -109,7 +128,7 @@ public sealed class PlcHeartbeatWatchdog : IDisposable
                         _isPlcAlive = false;
                         OnPlcHealthChanged?.Invoke(this, false);
 
-                        if (_enableEmergencyInterlock && !string.IsNullOrEmpty(_emergencyStopTagName))
+                        if (_enableEmergencyInterlock && !string.IsNullOrWhiteSpace(_emergencyStopTagName) && !string.IsNullOrWhiteSpace(_plcId))
                         {
                             // Kích hoạt tín hiệu lỗi liên động dừng máy kéo cuộn
                             await _plcManager.WriteTagValueAsync(_plcId, _emergencyStopTagName, true, token);

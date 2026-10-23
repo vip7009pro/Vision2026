@@ -6,6 +6,18 @@ class Program
 {
     static void Main(string[] args)
     {
+        if (args.Length > 0 && (args[0].Equals("reset-queue", StringComparison.OrdinalIgnoreCase) || args[0].Equals("hmi-queue", StringComparison.OrdinalIgnoreCase)))
+        {
+            PlcResetQueueAndHmiTests.RunAllTests();
+            return;
+        }
+
+        if (args.Length > 0 && (args[0].Equals("plc-isolation", StringComparison.OrdinalIgnoreCase) || args[0].Equals("plc-conflict", StringComparison.OrdinalIgnoreCase)))
+        {
+            PlcConflictAndHmiIsolationTests.RunAllTests();
+            return;
+        }
+
         if (args.Length > 0 && (args[0].Equals("sc", StringComparison.OrdinalIgnoreCase) || args[0].Equals("sc-roi", StringComparison.OrdinalIgnoreCase)))
         {
             SurfaceCompareAndCaliperRoiTests.RunTests();

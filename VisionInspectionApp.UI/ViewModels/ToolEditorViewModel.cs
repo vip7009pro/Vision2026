@@ -280,6 +280,7 @@ namespace VisionInspectionApp.UI.ViewModels
             _plcHeartbeatWatchdog = new Application.PLC.Services.PlcHeartbeatWatchdog(null);
             _handshakeStateMachine = new Application.PLC.Services.IndustrialHandshakeStateMachine(null);
             InitHandshakeUiMonitoring();
+            InitHmiPanelMonitoring();
             _autoSaveTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(2) };
             Nodes = new ObservableCollection<ToolGraphNodeViewModel>();
             Edges = new ObservableCollection<ToolGraphEdgeViewModel>();
@@ -342,6 +343,7 @@ namespace VisionInspectionApp.UI.ViewModels
             _dbManagerService = dbManagerService;
             _plcManagerService.OnTagChanged += OnPlcTagChangedForTrigger;
             InitHandshakeUiMonitoring();
+            InitHmiPanelMonitoring();
             _autoSaveTimer = new DispatcherTimer
             {
                 Interval = TimeSpan.FromMilliseconds(400)
@@ -1993,34 +1995,12 @@ namespace VisionInspectionApp.UI.ViewModels
 
             if (config.Handshake != null)
             {
-                _handshakeStateMachine.IsEnabled = config.Handshake.IsEnabled;
-                _handshakeStateMachine.PlcId = config.Handshake.PlcId;
-                _handshakeStateMachine.ReadyTagName = config.Handshake.ReadyTagName;
-                _handshakeStateMachine.BusyTagName = config.Handshake.BusyTagName;
-                _handshakeStateMachine.DoneTagName = config.Handshake.DoneTagName;
-                _handshakeStateMachine.PassTagName = config.Handshake.PassTagName;
-                _handshakeStateMachine.NgTagName = config.Handshake.NgTagName;
-                _handshakeStateMachine.PlcAckTagName = config.Handshake.PlcAckTagName;
-                _handshakeStateMachine.HandshakeTimeoutMs = config.Handshake.HandshakeTimeoutMs;
-                _handshakeStateMachine.SimulatePlcAck = config.Handshake.SimulatePlcAck;
-                _handshakeStateMachine.NonBlockingMode = config.Handshake.NonBlockingMode;
-                _handshakeStateMachine.TargetStopStationIndex = config.Handshake.TargetStopStationIndex;
-                _handshakeStateMachine.QueueRegisterStart = config.Handshake.QueueRegisterStart;
-                _handshakeStateMachine.PassSignalType = config.Handshake.PassSignalType;
-                _handshakeStateMachine.NgSignalType = config.Handshake.NgSignalType;
-                _handshakeStateMachine.DoneSignalType = config.Handshake.DoneSignalType;
-                _handshakeStateMachine.PulseDurationMs = config.Handshake.PulseDurationMs;
+                _handshakeStateMachine.ApplyConfig(config.Handshake);
             }
 
             if (config.Heartbeat != null)
             {
-                _plcHeartbeatWatchdog.PlcId = config.Heartbeat.PlcId;
-                _plcHeartbeatWatchdog.VisionHeartbeatTagName = config.Heartbeat.VisionHeartbeatTagName;
-                _plcHeartbeatWatchdog.PlcHeartbeatTagName = config.Heartbeat.PlcHeartbeatTagName;
-                _plcHeartbeatWatchdog.IntervalMs = config.Heartbeat.IntervalMs;
-                _plcHeartbeatWatchdog.TimeoutMs = config.Heartbeat.TimeoutMs;
-                _plcHeartbeatWatchdog.EnableEmergencyInterlock = config.Heartbeat.EnableEmergencyInterlock;
-                _plcHeartbeatWatchdog.EmergencyStopTagName = config.Heartbeat.EmergencyStopTagName;
+                _plcHeartbeatWatchdog.ApplyConfig(config.Heartbeat);
             }
 
             if (config.Motion != null)

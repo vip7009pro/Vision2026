@@ -47,6 +47,7 @@ public sealed class IndustrialHandshakeStateMachine
     public string PassTagName { get; set; } = "Y4_VisionPass";
     public string NgTagName { get; set; } = "Y5_VisionNG";
     public string PlcAckTagName { get; set; } = "X1_PlcAck";
+    public string ResetQueueTagName { get; set; } = "";
 
     public int HandshakeTimeoutMs { get; set; } = 500;
     public bool IsEnabled { get; set; } = true;
@@ -71,6 +72,26 @@ public sealed class IndustrialHandshakeStateMachine
     /// Độ rộng xung phát cho kiểu Edge (Rising Edge / Falling Edge) tính bằng ms (Mặc định: 100ms)
     /// </summary>
     public int PulseDurationMs { get; set; } = 100;
+
+    /// <summary>
+    /// Kiểu tín hiệu nhận cho lệnh Reset Queue từ PLC (Mặc định: RisingEdge)
+    /// </summary>
+    public PlcInputSignalType ResetQueueSignalType
+    {
+        get => _resetQueueDetector.SignalType;
+        set => _resetQueueDetector.SignalType = value;
+    }
+
+    /// <summary>
+    /// Thời gian giữ hoặc lọc xung debounce (ms) cho lệnh Reset Queue (Mặc định: 500ms)
+    /// </summary>
+    public int ResetQueueDurationMs
+    {
+        get => _resetQueueDetector.DurationMs;
+        set => _resetQueueDetector.DurationMs = value;
+    }
+
+    private readonly PlcInputSignalDetector _resetQueueDetector = new();
 
     /// <summary>
     /// Chế độ bắt tay bất đồng bộ không chờ Ack (Non-blocking Pipelined Queue):
@@ -110,10 +131,94 @@ public sealed class IndustrialHandshakeStateMachine
     public event EventHandler<HandshakeState>? OnStateChanged;
     public event EventHandler<string>? OnHandshakeTimeout;
 
+    /// <summary>
+    /// Sự kiện kích hoạt khi nhận được tín hiệu yêu cầu Reset Queue từ PLC
+    /// </summary>
+    public event EventHandler? OnResetQueueRequested;
+
     public IndustrialHandshakeStateMachine(IPlcManagerService? plcManager = null, string plcId = "PLC1")
     {
         _plcManager = plcManager;
         _plcId = plcId;
+
+        _resetQueueDetector.OnTriggered += (s, e) =>
+        {
+            OnResetQueueRequested?.Invoke(this, EventArgs.Empty);
+        };
+
+        if (_plcManager != null)
+        {
+            _plcManager.OnTagChanged += PlcManager_OnTagChanged;
+            if (_plcManager.IndustrialConfig?.Handshake != null)
+            {
+                ApplyConfig(_plcManager.IndustrialConfig.Handshake);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Đồng bộ toàn bộ thông số từ cấu hình IndustrialHandshakeConfig
+    /// </summary>
+    public void ApplyConfig(IndustrialHandshakeConfig? config)
+    {
+        if (config == null) return;
+        IsEnabled = config.IsEnabled;
+        PlcId = config.PlcId;
+        ReadyTagName = config.ReadyTagName;
+        BusyTagName = config.BusyTagName;
+        DoneTagName = config.DoneTagName;
+        PassTagName = config.PassTagName;
+        NgTagName = config.NgTagName;
+        PlcAckTagName = config.PlcAckTagName;
+        HandshakeTimeoutMs = config.HandshakeTimeoutMs;
+        SimulatePlcAck = config.SimulatePlcAck;
+        NonBlockingMode = config.NonBlockingMode;
+        TargetStopStationIndex = config.TargetStopStationIndex;
+        QueueRegisterStart = config.QueueRegisterStart;
+        PassSignalType = config.PassSignalType;
+        NgSignalType = config.NgSignalType;
+        DoneSignalType = config.DoneSignalType;
+        PulseDurationMs = config.PulseDurationMs;
+        ResetQueueTagName = config.ResetQueueTagName;
+        ResetQueueSignalType = config.ResetQueueSignalType;
+        ResetQueueDurationMs = config.ResetQueueDurationMs;
+    }
+
+    private void PlcManager_OnTagChanged(object? sender, TagChangedEventArgs e)
+    {
+        if (e == null || !IsEnabled) return;
+        if (!string.Equals(e.PlcId, _plcId, StringComparison.OrdinalIgnoreCase)) return;
+
+        if (IsMatchingResetQueueTag(e.TagName))
+        {
+            HandleResetQueueTagSample(e.TagName, e.NewValue, e.Timestamp);
+        }
+    }
+
+    public bool IsMatchingResetQueueTag(string tagName)
+    {
+        if (string.IsNullOrWhiteSpace(tagName)) return false;
+        string input = tagName.Trim();
+
+        if (!string.IsNullOrWhiteSpace(ResetQueueTagName) &&
+            string.Equals(ResetQueueTagName.Trim(), input, StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        var eff = GetEffectiveResetQueueTag();
+        if (!string.IsNullOrWhiteSpace(eff) &&
+            string.Equals(eff.Trim(), input, StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        return false;
+    }
+
+    public bool HandleResetQueueTagSample(string tagName, object? value, DateTime? timestamp = null)
+    {
+        return _resetQueueDetector.ProcessSample(value, timestamp);
     }
 
     private string? ResolveTag(string primaryTagName, params string[] fallbacks)
@@ -157,7 +262,25 @@ public sealed class IndustrialHandshakeStateMachine
     public string? GetEffectiveDoneTag() => ResolveTag(DoneTagName, "M103_VisionDone", "M103", "VisionDone", "Y3_VisionDone");
     public string? GetEffectivePassTag() => ResolveTag(PassTagName, "M104_VisionPass", "M104", "VisionPass", "Y4_VisionPass");
     public string? GetEffectiveNgTag() => ResolveTag(NgTagName, "M105_VisionNG", "M105", "VisionNG", "Y5_VisionNG");
-    public string? GetEffectivePlcAckTag() => ResolveTag(PlcAckTagName, "M10_PlcAck", "M10", "PlcAck", "X1_PlcAck");
+    public string? GetEffectivePlcAckTag()
+    {
+        // Khi người dùng chủ động bỏ Ack (để trống PlcAckTagName = ""):
+        // TUYỆT ĐỐI KHÔNG tự động fallback ép tag M10 hay bất kỳ địa chỉ nào khác!
+        if (string.IsNullOrWhiteSpace(PlcAckTagName))
+        {
+            return null;
+        }
+        return ResolveTag(PlcAckTagName, "M10_PlcAck", "M10", "PlcAck", "X1_PlcAck");
+    }
+
+    public string? GetEffectiveResetQueueTag()
+    {
+        if (string.IsNullOrWhiteSpace(ResetQueueTagName))
+        {
+            return null;
+        }
+        return ResolveTag(ResetQueueTagName, "M106_ResetQueue", "M106", "ResetQueue", "X2_ResetQueue");
+    }
 
     private bool HasConfiguredHandshakeTags()
     {
@@ -167,7 +290,8 @@ public sealed class IndustrialHandshakeStateMachine
                GetEffectiveDoneTag() != null ||
                GetEffectivePassTag() != null ||
                GetEffectiveNgTag() != null ||
-               GetEffectivePlcAckTag() != null;
+               GetEffectivePlcAckTag() != null ||
+               GetEffectiveResetQueueTag() != null;
     }
 
     /// <summary>

@@ -24,6 +24,27 @@ public enum PlcSignalType
 }
 
 /// <summary>
+/// Kiểu tín hiệu đầu vào nhận từ PLC (Input Trigger / Signal Detection)
+/// </summary>
+public enum PlcInputSignalType
+{
+    /// <summary>
+    /// Bắt cạnh lên (Rising Edge: 0 ➔ 1)
+    /// </summary>
+    RisingEdge = 0,
+
+    /// <summary>
+    /// Bắt cạnh xuống (Falling Edge: 1 ➔ 0)
+    /// </summary>
+    FallingEdge = 1,
+
+    /// <summary>
+    /// Nhấn giữ liên tục (Long Press: giữ ON liên tục trong ít nhất DurationMs)
+    /// </summary>
+    LongPress = 2
+}
+
+/// <summary>
 /// Cấu hình Máy trạng thái Bắt tay Công nghiệp 2 chiều (Deterministic Industrial Handshake 24/7)
 /// </summary>
 public sealed class IndustrialHandshakeConfig
@@ -71,9 +92,28 @@ public sealed class IndustrialHandshakeConfig
     public int TargetStopStationIndex { get; set; } = 10;
 
     /// <summary>
+    /// <summary>
     /// Địa chỉ bắt đầu mảng hàng đợi trên PLC (Mặc định: M200 cho mảng M200..M219)
     /// </summary>
     public string QueueRegisterStart { get; set; } = "M200";
+
+    /// <summary>
+    /// Tag nhận tín hiệu yêu cầu Reset Queue từ PLC (Mặc định: rỗng hoặc M106/X2_ResetQueue).
+    /// Khi nhận tín hiệu, Vision sẽ xóa sạch hàng đợi frame và đưa các bộ đếm về 0.
+    /// </summary>
+    public string ResetQueueTagName { get; set; } = "";
+
+    /// <summary>
+    /// Kiểu tín hiệu nhận cho lệnh Reset Queue: RisingEdge (0->1), FallingEdge (1->0), hoặc LongPress (Nhấn giữ liên tục)
+    /// </summary>
+    public PlcInputSignalType ResetQueueSignalType { get; set; } = PlcInputSignalType.RisingEdge;
+
+    /// <summary>
+    /// Thời gian giữ hoặc độ rộng xung lọc / debounce (ms) cho lệnh Reset Queue. Mặc định: 500ms.
+    /// Với Long Press: phải giữ liên tục ON trong ít nhất ResetQueueDurationMs.
+    /// Với Edge: dùng làm thời gian lọc chống rung (lockout debounce).
+    /// </summary>
+    public int ResetQueueDurationMs { get; set; } = 500;
 
     /// <summary>
     /// Kiểm tra xem cấu hình Handshake có chứa ít nhất một TagName hợp lệ hay không.
@@ -85,11 +125,12 @@ public sealed class IndustrialHandshakeConfig
                !string.IsNullOrWhiteSpace(DoneTagName) ||
                !string.IsNullOrWhiteSpace(PassTagName) ||
                !string.IsNullOrWhiteSpace(NgTagName) ||
-               !string.IsNullOrWhiteSpace(PlcAckTagName);
+               !string.IsNullOrWhiteSpace(PlcAckTagName) ||
+               !string.IsNullOrWhiteSpace(ResetQueueTagName);
     }
 
     /// <summary>
-    /// Khôi phục cấu hình bắt tay chuẩn Mitsubishi FX5U (M101..M105, xung Rising Edge 20ms, hàng đợi M200).
+    /// Khôi phục cấu hình bắt tay chuẩn Mitsubishi FX5U (M101..M106, xung Rising Edge 20ms, hàng đợi M200).
     /// </summary>
     public void ApplyFx5uDefaults(string? targetPlcId = null)
     {
@@ -100,6 +141,9 @@ public sealed class IndustrialHandshakeConfig
         PassTagName = "M104";
         NgTagName = "M105";
         PlcAckTagName = "";
+        ResetQueueTagName = "M106";
+        ResetQueueSignalType = PlcInputSignalType.RisingEdge;
+        ResetQueueDurationMs = 50;
         HandshakeTimeoutMs = 300;
         IsEnabled = true;
         SimulatePlcAck = false;
@@ -113,7 +157,7 @@ public sealed class IndustrialHandshakeConfig
     }
 
     /// <summary>
-    /// Khôi phục cấu hình bắt tay chuẩn I/O Công Nghiệp (Y1..Y5, X1 Ack, Level).
+    /// Khôi phục cấu hình bắt tay chuẩn I/O Công Nghiệp (Y1..Y5, X1 Ack, X2 Reset Queue, Level).
     /// </summary>
     public void ApplyStandardIoDefaults(string? targetPlcId = null)
     {
@@ -124,6 +168,9 @@ public sealed class IndustrialHandshakeConfig
         PassTagName = "Y4_VisionPass";
         NgTagName = "Y5_VisionNG";
         PlcAckTagName = "X1_PlcAck";
+        ResetQueueTagName = "X2_ResetQueue";
+        ResetQueueSignalType = PlcInputSignalType.RisingEdge;
+        ResetQueueDurationMs = 100;
         HandshakeTimeoutMs = 500;
         IsEnabled = true;
         SimulatePlcAck = false;
@@ -149,6 +196,9 @@ public sealed class IndustrialHandshakeConfig
         PassTagName = other.PassTagName;
         NgTagName = other.NgTagName;
         PlcAckTagName = other.PlcAckTagName;
+        ResetQueueTagName = other.ResetQueueTagName;
+        ResetQueueSignalType = other.ResetQueueSignalType;
+        ResetQueueDurationMs = other.ResetQueueDurationMs;
         HandshakeTimeoutMs = other.HandshakeTimeoutMs;
         IsEnabled = other.IsEnabled;
         SimulatePlcAck = other.SimulatePlcAck;
@@ -174,7 +224,7 @@ public sealed class PlcHeartbeatConfig
     public int TimeoutMs { get; set; } = 300;
     public bool EnableEmergencyInterlock { get; set; } = true;
     public string EmergencyStopTagName { get; set; } = "Y10_VisionFault";
-    public bool IsEnabled { get; set; } = true;
+    public bool IsEnabled { get; set; } = false;
 }
 
 /// <summary>
@@ -189,7 +239,7 @@ public sealed class PlcMotionConfig
     public double MmPerPixel { get; set; } = 0.05;
     public double NominalSpeedMpm { get; set; } = 30.0;
     public double BaseExposureTimeUs { get; set; } = 500.0;
-    public bool IsEnabled { get; set; } = true;
+    public bool IsEnabled { get; set; } = false;
 }
 
 /// <summary>

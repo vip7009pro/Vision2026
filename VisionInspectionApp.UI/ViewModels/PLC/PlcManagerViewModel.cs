@@ -60,6 +60,15 @@ public partial class PlcManagerViewModel : ObservableObject
         new(PlcSignalType.FallingEdge, "Falling Edge (Cạnh xuống: 1 ➔ 0 ➔ 1)")
     };
 
+    public record PlcInputSignalTypeOption(PlcInputSignalType Value, string DisplayName);
+
+    public IReadOnlyList<PlcInputSignalTypeOption> AvailableInputSignalTypes { get; } = new List<PlcInputSignalTypeOption>
+    {
+        new(PlcInputSignalType.RisingEdge, "Rising Edge (Cạnh lên: 0 ➔ 1)"),
+        new(PlcInputSignalType.FallingEdge, "Falling Edge (Cạnh xuống: 1 ➔ 0)"),
+        new(PlcInputSignalType.LongPress, "Long Press (Nhấn giữ liên tục)")
+    };
+
     public PlcIndustrialConfig IndustrialConfig
     {
         get => _plcService.IndustrialConfig;
@@ -122,7 +131,7 @@ public partial class PlcManagerViewModel : ObservableObject
             "X0", "X1", "X2", "X3", "X4", "X5", "X6", "X7", "X10", "X11",
             "Y0", "Y1", "Y2", "Y3", "Y4", "Y5", "Y6", "Y7", "Y10", "Y11",
             "M0", "M1", "M2", "M10", "M100",
-            "M101", "M102", "M103", "M104", "M105",
+            "M101", "M102", "M103", "M104", "M105", "M106",
             "M200", "M201", "M202", "M203", "M204", "M205", "M210", "M219",
             "D0", "D10", "D100", "D200", "D300", "D302", "D304", "D1000", "D1002", "D2000",
             "MW100", "MW102", "MW200"
@@ -134,7 +143,7 @@ public partial class PlcManagerViewModel : ObservableObject
         {
             "Y0_VisionHeartbeat", "X0_PlcHeartbeat", "Y10_VisionFault",
             "Y1_VisionReady", "Y2_VisionBusy", "Y3_VisionDone", "Y4_VisionPass", "Y5_VisionNG", "X1_PlcAck",
-            "M101_VisionReady", "M102_VisionBusy", "M103_VisionDone", "M104_VisionPass", "M105_VisionNG",
+            "M101_VisionReady", "M102_VisionBusy", "M103_VisionDone", "M104_VisionPass", "M105_VisionNG", "M106_ResetQueue", "X2_ResetQueue",
             "D1000_EncoderPulses", "D1002_LineSpeed",
             "Y0_RejectPiston", "Y1_RejectMarker"
         };
@@ -153,7 +162,7 @@ public partial class PlcManagerViewModel : ObservableObject
         // Tags from current Industrial Config
         var configTags = new[]
         {
-            Handshake?.ReadyTagName, Handshake?.BusyTagName, Handshake?.DoneTagName, Handshake?.PassTagName, Handshake?.NgTagName, Handshake?.PlcAckTagName,
+            Handshake?.ReadyTagName, Handshake?.BusyTagName, Handshake?.DoneTagName, Handshake?.PassTagName, Handshake?.NgTagName, Handshake?.PlcAckTagName, Handshake?.ResetQueueTagName,
             Heartbeat?.VisionHeartbeatTagName, Heartbeat?.PlcHeartbeatTagName, Heartbeat?.EmergencyStopTagName,
             Motion?.EncoderTagName, Motion?.SpeedTagName,
             ShiftRegister?.RejectTagName
@@ -173,6 +182,19 @@ public partial class PlcManagerViewModel : ObservableObject
     private readonly IDotnetRuntimeService _dotnetRuntimeService;
     private readonly GlobalAppSettingsService? _settingsService;
 
+    private void DispatchOnUiThread(Action action)
+    {
+        if (System.Windows.Application.Current?.Dispatcher != null &&
+            !System.Windows.Application.Current.Dispatcher.CheckAccess())
+        {
+            System.Windows.Application.Current.Dispatcher.BeginInvoke(action);
+        }
+        else
+        {
+            action();
+        }
+    }
+
     public PlcManagerViewModel(
         IPlcManagerService plcService,
         IDotnetRuntimeService? dotnetRuntimeService = null,
@@ -188,11 +210,11 @@ public partial class PlcManagerViewModel : ObservableObject
         FilteredTags.CollectionChanged += FilteredTags_CollectionChanged;
         _plcService.Tags.CollectionChanged += (s, e) =>
         {
-            RefreshAvailableTagsAndPlcs();
+            DispatchOnUiThread(RefreshAvailableTagsAndPlcs);
         };
         _plcService.Plcs.CollectionChanged += (s, e) =>
         {
-            RefreshAvailableTagsAndPlcs();
+            DispatchOnUiThread(RefreshAvailableTagsAndPlcs);
         };
 
         RefreshFilteredTags();
@@ -246,10 +268,13 @@ public partial class PlcManagerViewModel : ObservableObject
 
     public void UpdateConnectionCommandStates()
     {
-        OnPropertyChanged(nameof(CanConnectSelectedPlc));
-        OnPropertyChanged(nameof(CanDisconnectSelectedPlc));
-        ConnectSelectedPlcCommand.NotifyCanExecuteChanged();
-        DisconnectSelectedPlcCommand.NotifyCanExecuteChanged();
+        DispatchOnUiThread(() =>
+        {
+            OnPropertyChanged(nameof(CanConnectSelectedPlc));
+            OnPropertyChanged(nameof(CanDisconnectSelectedPlc));
+            ConnectSelectedPlcCommand.NotifyCanExecuteChanged();
+            DisconnectSelectedPlcCommand.NotifyCanExecuteChanged();
+        });
     }
 
     partial void OnSelectedPlcChanged(PlcModel? oldValue, PlcModel? newValue)
@@ -264,25 +289,31 @@ public partial class PlcManagerViewModel : ObservableObject
             newValue.PropertyChanged += SelectedPlc_PropertyChanged;
         }
 
-        OnPropertyChanged(nameof(IsMxComponent));
-        OnPropertyChanged(nameof(IsMissingDotnetX86));
-        OnPropertyChanged(nameof(IsMcProtocol));
-        UpdateConnectionCommandStates();
-        RefreshFilteredTags();
-    }
-
-    private void SelectedPlc_PropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
-    {
-        if (e.PropertyName == nameof(PlcModel.DriverType))
+        DispatchOnUiThread(() =>
         {
             OnPropertyChanged(nameof(IsMxComponent));
             OnPropertyChanged(nameof(IsMissingDotnetX86));
             OnPropertyChanged(nameof(IsMcProtocol));
-        }
-        if (e.PropertyName == nameof(PlcModel.State) || e.PropertyName == nameof(PlcModel.Enabled) || e.PropertyName == nameof(PlcModel.IsManuallyDisconnected))
-        {
             UpdateConnectionCommandStates();
-        }
+            RefreshFilteredTags();
+        });
+    }
+
+    private void SelectedPlc_PropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        DispatchOnUiThread(() =>
+        {
+            if (e.PropertyName == nameof(PlcModel.DriverType))
+            {
+                OnPropertyChanged(nameof(IsMxComponent));
+                OnPropertyChanged(nameof(IsMissingDotnetX86));
+                OnPropertyChanged(nameof(IsMcProtocol));
+            }
+            if (e.PropertyName == nameof(PlcModel.State) || e.PropertyName == nameof(PlcModel.Enabled) || e.PropertyName == nameof(PlcModel.IsManuallyDisconnected))
+            {
+                UpdateConnectionCommandStates();
+            }
+        });
     }
 
     private void RefreshFilteredTags()

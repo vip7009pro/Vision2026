@@ -262,6 +262,8 @@
                                     <RowDefinition Height="Auto"/>
                                     <RowDefinition Height="Auto"/>
                                     <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
                                 </Grid.RowDefinitions>
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="180"/>
@@ -315,8 +317,21 @@
                                 <TextBlock Grid.Row="7" Grid.Column="2" Text="⚡ Kiểu Tín Hiệu NG (Lỗi):" Style="{StaticResource IndustrialFieldLabel}" Margin="12,4,8,4"/>
                                 <ComboBox Grid.Row="7" Grid.Column="3" ItemsSource="{Binding AvailableSignalTypes}" SelectedValuePath="Value" DisplayMemberPath="DisplayName" SelectedValue="{Binding Handshake.NgSignalType, Mode=TwoWay}" Margin="2" Padding="4,2" ToolTip="Chọn kiểu tín hiệu NG gửi PLC: Level (Mức), Rising Edge (LDP M105 cạnh lên 0->1->0) hoặc Falling Edge (LDF M105 cạnh xuống 1->0->1)"/>
 
-                                <CheckBox Grid.Row="8" Grid.Column="0" Grid.ColumnSpan="2" Content="Kích hoạt Chu trình Bắt tay Công nghiệp (Handshake Enabled)" IsChecked="{Binding Handshake.IsEnabled}" FontWeight="SemiBold" Margin="0,14,0,4" Foreground="{DynamicResource TextBrush}"/>
-                                <CheckBox Grid.Row="8" Grid.Column="2" Grid.ColumnSpan="2" Content="🧪 Mô Phỏng PLC Tự Động Ack (Simulate Auto-Ack khi test offline)" IsChecked="{Binding Handshake.SimulatePlcAck}" FontWeight="SemiBold" Margin="12,14,0,4" Foreground="#10B981" ToolTip="Tự động mô phỏng PLC phản hồi tín hiệu Ack (M11) sau 20ms khi Vision hoàn thành kiểm tra. Dùng để test chu trình handshake khi chưa có PLC thật hoặc đang giả lập trên máy tính!"/>
+                                <!-- 6. Tag Reset Queue & Kiểu Tín Hiệu Reset Queue -->
+                                <TextBlock Grid.Row="8" Grid.Column="0" Text="6. Tag Reset Queue (X/M):" Style="{StaticResource IndustrialFieldLabel}"/>
+                                <ComboBox Grid.Row="8" Grid.Column="1" ItemsSource="{Binding AvailableTagNames}" Text="{Binding Handshake.ResetQueueTagName, UpdateSourceTrigger=PropertyChanged}" IsEditable="True" IsTextSearchEnabled="True" StaysOpenOnEdit="True" MaxDropDownHeight="220" ToolTip="Tag nhận tín hiệu từ PLC để reset hàng đợi vision về 0 (Mặc định: M106 hoặc X2_ResetQueue)" Margin="2"/>
+
+                                <TextBlock Grid.Row="8" Grid.Column="2" Text="⚡ Kiểu Tín Hiệu Reset Queue:" Style="{StaticResource IndustrialFieldLabel}" Margin="12,4,8,4"/>
+                                <ComboBox Grid.Row="8" Grid.Column="3" ItemsSource="{Binding AvailableInputSignalTypes}" SelectedValuePath="Value" DisplayMemberPath="DisplayName" SelectedValue="{Binding Handshake.ResetQueueSignalType, Mode=TwoWay}" Margin="2" Padding="4,2" ToolTip="Chọn kiểu tín hiệu nhận: Rising Edge (Cạnh lên 0->1), Falling Edge (Cạnh xuống 1->0) hoặc Long Press (Nhấn giữ liên tục)"/>
+
+                                <!-- 7. Duration cho Reset Queue -->
+                                <TextBlock Grid.Row="9" Grid.Column="0" Text="⏱️ Thời Gian Giữ / Xung (ms):" Style="{StaticResource IndustrialFieldLabel}"/>
+                                <TextBox Grid.Row="9" Grid.Column="1" Text="{Binding Handshake.ResetQueueDurationMs, UpdateSourceTrigger=PropertyChanged}" Margin="2" Padding="4,2" ToolTip="Thời gian giữ tối thiểu (với Long Press) hoặc thời gian lọc debounce (với Edge) tính bằng ms. Mặc định: 500ms."/>
+
+                                <TextBlock Grid.Row="9" Grid.Column="2" Grid.ColumnSpan="2" Text="ℹ️ Long Press: Giữ liên tục mức 1 đủ thời gian này mới reset; Edge: Thời gian lọc chống rung." Foreground="{DynamicResource TextMutedBrush}" FontSize="10.5" VerticalAlignment="Center" Margin="12,2,0,2" TextWrapping="Wrap"/>
+
+                                <CheckBox Grid.Row="10" Grid.Column="0" Grid.ColumnSpan="2" Content="Kích hoạt Chu trình Bắt tay Công nghiệp (Handshake Enabled)" IsChecked="{Binding Handshake.IsEnabled}" FontWeight="SemiBold" Margin="0,14,0,4" Foreground="{DynamicResource TextBrush}"/>
+                                <CheckBox Grid.Row="10" Grid.Column="2" Grid.ColumnSpan="2" Content="🧪 Mô Phỏng PLC Tự Động Ack (Simulate Auto-Ack khi test offline)" IsChecked="{Binding Handshake.SimulatePlcAck}" FontWeight="SemiBold" Margin="12,14,0,4" Foreground="#10B981" ToolTip="Tự động mô phỏng PLC phản hồi tín hiệu Ack (M11) sau 20ms khi Vision hoàn thành kiểm tra. Dùng để test chu trình handshake khi chưa có PLC thật hoặc đang giả lập trên máy tính!"/>
                             </Grid>
                         </Border>
 

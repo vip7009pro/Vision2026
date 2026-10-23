@@ -7,14 +7,55 @@ Hỗ trợ Camera GigE/USB3/USB/RTSP, nạp ảnh tệp/thư mục, bản vẽ k
 ## 2. Trạng thái mã nguồn gần nhất
 - **Phiên bản hiện tại**: .NET 8 WPF, x64/x86 Multi-targeting, C# 12.
 - **Biên dịch**: 0 Errors toàn solution (`VisionInspectionApp.slnx`) cả Debug lẫn Release.
-- **Kiểm thử tự động**: PASSED 100% (11/11 test SurfaceCompare & Caliper, 6/6 test PLC Handshake & Auto Register Tag, 5/5 test PLC Signal Types, 4/4 test HMI Designer Persistence & DINT 32-bit, regression test tệp Job `job_7A11034A_GH68-58216B`, Ctrl+R & Ctrl+F4 ROI, 8/8 test ContourCompare, 12/12 test Tool Calib Factor, 15/15 test OQC Scanner Live View, 8/8 test MvpShapeMatch2).
+- **Kiểm thử tự động**: PASSED 100% (7/7 test PLC Handshake, Non-blocking & Thread Safety, 5/5 test Reset Queue & HMI Persistence, 5/5 test PLC Signal Types, 4/4 test HMI Designer Persistence & DINT 32-bit, 11/11 test SurfaceCompare & Caliper, regression test tệp Job `job_7A11034A_GH68-58216B`, Ctrl+R & Ctrl+F4 ROI, 8/8 test ContourCompare, 12/12 test Tool Calib Factor, 15/15 test OQC Scanner Live View, 8/8 test MvpShapeMatch2).
 - **Cấu hình chuẩn xưởng CMS_VINA**: 
   - Database: `CMS_VINA` (192.168.1.2:6789)
   - OQC Server API: `https://192.168.1.192/vision_upload.php`
   - OTA Update Server: `http://192.168.1.192/update/version.json` & `http://192.168.1.192/ota_server.php`
-  - PLC Handshake: `PLC_2` (Mitsubishi FX5U: Ready `M101`, Busy `M102`, Done `M103`, Pass `M104` RisingEdge 20ms, NG `M105` RisingEdge 20ms, Queue In `M200`).
+  - PLC Handshake: `PLC_2` (Mitsubishi FX5U: Ready `M101`, Busy `M102`, Done `M103`, Pass `M104` RisingEdge 20ms, NG `M105` RisingEdge 20ms, PlcAck `""` Non-blocking, Queue In `M200`).
 
-## 3. Hoàn thành Task 414: Khắc Phục Lỗi Lệch Tịnh Tiến Ảnh Template Khi Sửa Job Cũ Trên Tool SurfaceCompare & Nút "Set Template"
+## 3. Hoàn thành Task 417: Khắc Phục Triệt Để Tranh Chấp Kết Nối PLC Làm Đổi Trạng Thái Xanh Lá/Đỏ Liên Tục & Cô Lập Hoàn Toàn HMI Tool Editor
+1. **Bối cảnh & 4 Nguyên nhân gốc rễ gây ra vòng lặp Xanh - Đỏ**:
+   - *Lệch byte stream MC Protocol (Socket Stream Desynchronization)*: Trước đây `ReadMcProtocolTagAsync` gửi 2 gói tin liên tiếp (Subcommand 0x0001 đọc bit, rồi fallback 0x0000 đọc word). Nếu gói 1 bị timeout hoặc PLC phản hồi chậm, việc gửi ngay gói 2 làm dòng byte phản hồi của gói 1 tràn sang gói 2, khiến socket đọc sai vị trí Header (11 byte) $\rightarrow$ Đọc dở $\rightarrow$ Timeout 2000ms $\rightarrow$ `CleanupSocket()` văng lỗi ĐỎ. Sau 2 giây PollingEngine reconnect thành công $\rightarrow$ XANH LÁ $\rightarrow$ Đọc lại lỗi $\rightarrow$ Lại ĐỎ (lặp vô tận).
+   - *Watchdog Heartbeat ngầm mặc định Bật & bắn lệnh liên tục*: `PlcHeartbeatWatchdog` được `Start()` ngay khi Tool Editor khởi tạo. Trong `plc_config.json`, `Heartbeat.IsEnabled = true` nhưng các tag và PlcId đều rỗng. Sau 500ms timeout, watchdog tự ý gửi lệnh ghi `true` vào `Y10_VisionFault` (parse thành thiết bị `Y0` của FX5U), gây tranh chấp trực tiếp với CPU PLC và luồng Polling Engine.
+   - *HMI Panel tự động kích hoạt Run Mode khi đang Ẩn*: `InitHmiPanelMonitoring()` khởi tạo `_hmiMonitorViewModel` với `IsRunMode = true` và nạp file HMI ngay khi mở app dù HMI đang Ẩn, chiếm dụng Polling Lock và đẩy tag vào PLC.
+   - *Sai lệch kiểu dữ liệu (Data Type Mismatch)*: HMI đẩy tag bit (`X0`, `X1`) với DataType = Float vào PLC catalog làm ô nhiễm cấu hình.
+2. **Các điểm sửa đổi cốt lõi**:
+   - `MitsubishiDriver.cs`:
+     - Bỏ việc gửi đúp gói tin trong `ReadMcProtocolTagAsync`, chuẩn hóa đọc 1 lần theo Subcommand 0x0001 (Bit units) chuẩn MC Protocol 3E; luôn drain sạch `dataLen - 2` byte khỏi socket stream kể cả khi returnCode != 0.
+     - `ReadExactAsync`: ném `IOException` ngay lập tức khi stream bị đóng (`read == 0`), không nuốt lỗi.
+     - Ném `IOException` khi `readCount < 11` trong `ReadMcProtocolTagAsync` và `WriteMcProtocolTagAsync` để socket được cleanup và reconnect mới sạch sẽ thay vì giữ socket lệch pha.
+     - Cô lập `try/catch` trên từng tag trong `ReadBatchAsync` và `WriteBatchAsync`: tag lỗi trả về default value, tuyệt đối không ngắt socket TCP vật lý.
+   - `PlcHeartbeatWatchdog.cs`:
+     - Thắt chặt điều kiện: chỉ chạy khi `IsEnabled == true` VÀ có đầy đủ `VisionHeartbeatTagName` và `PlcHeartbeatTagName` hợp lệ.
+     - `ApplyConfig`: tự động set `IsEnabled = false` nếu thiếu tag cấu hình; không bao giờ tự ý ghi tag lỗi `Y10_VisionFault`.
+   - `ToolEditorViewModel.HmiPanel.cs`:
+     - `_hmiMonitorViewModel` mặc định `IsRunMode = false`.
+     - Khi HMI đang Ẩn: chỉ lưu đường dẫn tệp HMI, không nạp controls, không bật RunMode, giải phóng Polling Lock.
+     - Chỉ khi người dùng bấm "Hiện HMI" (`IsHmiPanelVisible = true`): mới nạp controls, bật `IsRunMode = true` và acquire Polling Lock.
+   - `PlcManagerService.cs`:
+     - `InferDataTypeFromAddress`: Bit device (X, Y, M, L, B, F, S...) luôn là `PlcDataType.Bool`. Word device (D, W, R...) tôn trọng `PlcDataType.Float` / `Int32` nếu có hint.
+     - `LoadConfigInternal`: tự động lọc bỏ các tag ảo tồn đọng `Y0_VisionHeartbeat`, `X0_PlcHeartbeat`, `Y10_VisionFault` khỏi danh mục `Tags` và tự động tắt `IsEnabled = false` cho các module công nghiệp rỗng cấu hình.
+3. **Kiểm thử tự động**:
+   - Tạo bộ test `PlcConflictAndHmiIsolationTests.cs` (4/4 test PASSED 100%).
+   - `PlcHandshakePersistenceTests.cs` (7/7 test PASSED 100%).
+   - `PlcResetQueueAndHmiTests.cs` (5/5 test PASSED 100%).
+   - Toàn bộ solution biên dịch 0 Errors.
+
+## 4. Hoàn thành Task 416: Khắc Phục Triệt Để Lỗi Thread Ownership Ngắt Kết Nối PLC Ethernet & Chuẩn Hóa Chế Độ Bỏ PLC Ack / Non-Blocking
+1. **Bối cảnh & Nguyên nhân cốt lõi**:
+   - *Lỗi Thread Ownership Exception (`0x80131509`)*: Khi tab Tool Editor khởi tạo, HMI Panel tự kích hoạt Polling kết nối ngầm PLC trên background thread. Khi kết nối thành công, `MitsubishiDriver` gán `Config.State = Connected` kích hoạt sự kiện `PropertyChanged` trên `PlcManagerViewModel`, gọi `NotifyCanExecuteChanged()` của WPF Button trên ThreadPool. WPF văng ngoại lệ `The calling thread cannot access this object because a different thread owns it.`. Ngoại lệ này văng ngược lại khối `catch` của driver khiến driver gọi `CleanupSocket()` ngắt đứt cáp Ethernet và hiển thị khung đỏ báo lỗi kết nối.
+   - *Lỗi luôn hiển thị "Chờ PLC Ack" và "Đã Ack" dù cấu hình Non-blocking & bỏ Ack*: Hàm `IndustrialHandshakeStateMachine.GetEffectivePlcAckTag()` tự động fallback lấy `M10` khi người dùng để trống tag `PlcAckTagName = ""`. Giao diện `ToolEditorViewModel.HandshakeUi.cs` gán cứng chuỗi `CHỜ ACK (DONE)` và `ĐÃ ACK` cho mọi chu trình kết quả.
+2. **Các điểm sửa đổi cốt lõi**:
+   - `MitsubishiDriver.cs` & `MitsubishiMxComponentDriver.cs`: Thêm hàm `UpdateConfigStatus(state, cpuName)` bọc `try/catch` an toàn tuyệt đối, triệt tiêu hoàn toàn khả năng ngoại lệ từ UI observer làm gián đoạn socket TCP kết nối PLC.
+   - `PlcManagerViewModel.cs`: Bổ sung `DispatchOnUiThread` bảo vệ toàn bộ các truy cập UI từ background thread: `SelectedPlc_PropertyChanged`, `NotifyCanExecuteChanged()`, `Tags.CollectionChanged`, `Plcs.CollectionChanged`, `OnSelectedPlcChanged`.
+   - `HmiManagerViewModel.cs`: Gỡ bỏ việc tự ý gọi `StartPollingAsync()` trong constructor; bảo vệ UI thread khi cập nhật collection PLC/Tags; thread-safe với `Controls.ToArray()`.
+   - `IndustrialHandshakeStateMachine.cs`: Cập nhật `GetEffectivePlcAckTag()` và `GetEffectiveResetQueueTag()`: nếu rỗng lập tức trả về `null` thay vì fallback gán cứng `M10`; bổ sung phương thức `ApplyConfig(config)` đồng bộ toàn diện.
+   - `ToolEditorViewModel.HandshakeUi.cs` & `ToolEditorView.xaml`: Phân nhánh hiển thị theo `isNoAckMode = isNonBlocking || !hasAckTag`: Chế độ Non-blocking hiển thị `CHỐT KẾT QUẢ` và `HOÀN TẤT` thay vì `CHỜ ACK`; đèn LED Ack hiển thị mờ kèm ToolTip "Đã bỏ qua (Chế độ Non-blocking - Không chờ Ack)".
+3. **Kiểm thử tự động**:
+   - Bộ test `PlcHandshakePersistenceTests.cs` (7/7 test PASSED 100%, bao gồm Test 7 xác minh `GetEffectivePlcAckTag` trả về `null` và Thread Safety bảo vệ UI ViewModel). Solution biên dịch 0 Errors.
+
+## 4. Hoàn thành Task 414: Khắc Phục Lỗi Lệch Tịnh Tiến Ảnh Template Khi Sửa Job Cũ Trên Tool SurfaceCompare & Nút "Set Template"
 1. **Bối cảnh & Bản chất nguyên nhân**:
    - *Nguyên nhân 1 (Lệch tọa độ Teach vs Found)*: Trong job đã có Origin, khi runtime chạy trên ảnh hiện tại `snap`, vị trí Origin tìm thấy `originFound` lệch so với vị trí dạy ban đầu `originTeach` ($Y_f > Y_t$). Khi user move/resize Template ROI (`SCT`) trên canvas, tọa độ trên canvas là tọa độ Found; hàm `UnTransformRoi` đưa về Teach coordinate ($Y_t$) và lưu vào `sc.TemplateRoi`. Trước đây hàm lưu template `TrySaveSurfaceCompareTemplateImage` lại dùng `ExtractRoiPatch(processedMat, targetRoi)` cắt trực tiếp $Y_t$ trên ảnh `processedMat` (vốn đang ở Found coordinate $Y_f$). Do đó ảnh template bị tịnh tiến lên trên một đoạn $dy = Y_f - Y_t$. Trong khi đó, tại runtime `RunSurfaceCompare` lại dùng `ExtractStraightRoi` chuyển đúng $Y_t \rightarrow Y_f$ để cắt ô `DebugCurrent`. Sự lệch pha $dy$ pixel này khiến kết quả so sánh diff luôn bị NG.
    - *Nguyên nhân 2 (Gắn chặt Move/Resize với Ghi đè Template)*: Trước đây mỗi lần move/resize `SCT`, code gọi ngay hàm lưu template khiến template bị ghi đè liên tục, dễ nhầm lẫn và giảm hiệu năng.
